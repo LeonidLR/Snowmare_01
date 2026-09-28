@@ -135,6 +135,11 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-28 Claude: supply crates. `ALootCrateActor` (+ `LootRules`): intact crate opens without a menu and shows
+  the UMG loot dialog (items in 2 columns, «Забрать ВСЁ», «Закрыть»), trapped crate → defusal menu (2 s), detonation
+  burns the contents. Operatives now carry provisions, extra ammo per weapon id and bonus items. Test map: checkpoint
+  crate + trapped outpost crate. Deployable / loot smokes retry crouched defusal (Godot crouches the defuser, 87.5 %).
+  Docs: HANDOFF §5/§8/§9/§10. 103 tests, 11 smokes PASS (verify_all ALL GREEN).
 - 2026-09-28 Claude: barricades, mines, traps. Operatives carry turrets / barricades / mines (max 2 / 4 / 5) and
   grenades (2 of 4); role + luck drive defusal (35/45/60 + stance -15/+10/+25 + luck/2 - cold - 25 per failure).
   Deployable menus (pick up / defuse / relocate / «Заминировать»), dismantle 1.1 s with role routing, F set-up with

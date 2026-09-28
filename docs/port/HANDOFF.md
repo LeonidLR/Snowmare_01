@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-28 by Claude, after commit `11d7655`.
+Last update: 2026-09-28 by Claude, after the loot crates commit (see §10).
 
 ---
 
@@ -44,7 +44,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **100 automation tests, 10 smokes, all PASS.**
+State at last update: **103 automation tests, 11 smokes, all PASS** (`verify_all.ps1` → ALL GREEN).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -59,7 +59,8 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `StanceSmoke` | BP_Operative + Explorer mesh + ABP, capsule per stance |
 | `BarrelSmoke` | light a barrel (match), warmth, burn-out, burnt menu, no matches |
 | `RelocationSmoke` | «Вытолкать» a barrel 6 m, cold refusal, cancel |
-| `DeployableSmoke` | barricade pick-up → F set-up with hand-over, hidden mine spotted, sapper defusal, grenade trap, mine blast |
+| `DeployableSmoke` | barricade pick-up → F set-up with hand-over, hidden mine spotted, sapper defusal (retries), grenade trap, mine blast |
+| `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot |
 | `HudShot [close] [walk] [menu] [place]` | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
 | `FinishPrep` | dev: skip preparation, start the wave |
 
@@ -128,6 +129,12 @@ Module `CodexTactics` (runtime). Folder → class → Godot reference.
   routing. `BarricadeActor` (200 HP, tripwire on enemy contact 1.8 m). `ProximityMineActor` (trigger 1.6 m, blast
   120 / 3.5 m, arming 3 s for squad mines, hidden level mines spotted at 4.5 m / sapper 6 m).
   Godot `deployables/barricade.gd`, `mine.gd`.
+- `Interactables/LootCrateActor` + `LootRules` (`FLootContents`, `ELootItem`, `FLootEntry`) — supply crate: intact →
+  `HandleDirectInteraction` opens the lid (1.8 s) and the loot dialog, trapped → defusal menu (2 s crouched work),
+  detonation burns the contents, enemy contact 1.8 m, tiers Standard / Maximal, Godot colours. Items go to the
+  leader: provisions / matches / M16 reserve / deployables (no limit, as Godot) / `ExtraAmmo` for weapons not ported /
+  `BonusItems`. `UInteractionSubsystem::OpenLootDialog / LootItem / LootAll / CloseLootDialog`,
+  `UI/LootDialogWidget` (+ `ULootEntryButton`). Godot `loot_crate.gd`, `loot_dialog.gd`, `main.gd` loot handlers.
 - `Quests/QuestChain`, `QuestSubsystem`, `Interactables/GateActor`. Godot `quest_manager.gd`, `gate.gd`.
 
 **UI** — `UI/CodexTacticsHUD` (canvas: message feed, squad panel with supply, labels; owns the action menu widget),
@@ -135,7 +142,8 @@ Module `CodexTactics` (runtime). Folder → class → Godot reference.
 
 **Editor scripts** (`Scripts/Editor/`, run with `UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script=<abs path>`):
 `create_movement_test_map.py` (regenerates the test map — **overwrites manual edits, avoid**),
-`add_level_objects_to_movement_test.py` (adds barrel / barricades / mines by label, keeps edits),
+`add_level_objects_to_movement_test.py` (adds barrel / barricades / mines / supply crates by label, keeps edits;
+Python names drop the `b` prefix of bools: `bTrapped` → `trapped`),
 `create_operative_blueprint.py`, `import_operative_assets.py` (Explorer glb merged + root bone baked, M16, 60 FBX
 clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot). All are idempotent.
 
@@ -154,12 +162,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 ## 8. Next steps (in order)
 
-1. **Loot crates** — Godot `Scenes/movements/loot_crate.gd` (+ `main.gd` `_start_opening_crate`, `_open_loot_dialog`,
-   `LootDialogController`, `_on_loot_single_item_pressed` / `_on_loot_all_pressed`). Trapped crate
-   («Заминированный ящик аванпоста», turrets 1 / barricades 2 / mines 2) with defusal (2.0 s) — reuse the trap API
-   on `AInteractableActor`; loot dialog UMG; items into the operative inventory (matches, medkits, food, ammo, grenades,
-   deployables with limits). Add the two crates of `movements_demo.tscn` to the test map via
-   `add_level_objects_to_movement_test.py`.
+1. ~~Loot crates~~ — done (see §10).
 2. **Turrets** — Godot `deployables/turret.gd`: power from the generator, targeting enemies, repair (engineer 2 s /
    others 4 s), menus (broken / unpowered / trapped / pick-up). Add `TurretClass` to the game mode, deploy branch
    already routes `EDeployableType::Turret`.
@@ -180,11 +183,17 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Pushing / defusal / set-up animations: none (operatives only slow down / crouch).
 - Hidden mines are revealed by a distance scan in the mine's Tick (Godot scans from each operative) — same result.
 - Relocation ghost is opaque (swap `GhostBaseMaterial` for a translucent hologram).
+- Godot starts relocation directly when a relocatable object is clicked in the tactical pause / live combat
+  (`main.gd` click branch "is_relocatable_obj"); UE always goes through the action menu. Port with the pause UI.
+- Consumables (medkits, food) are collected but cannot be used yet (inventory drawer / use_squad_item not ported).
+- The squad panel does not list provisions / extra ammo yet (inventory drawer UI).
 
 ## 10. Change log (newest first)
 
 | Commit | What |
 |---|---|
+| (next commit) | Supply crates + loot dialog, provisions / extra ammo / bonus items on operatives, 2 crates on the test map, smoke retries for crouched defusal |
+| `d922e49` | Handoff documentation, `verify_all.ps1`, GEMINI.md |
 | `11d7655` | Barricades, proximity mines, grenade traps on any object, supply + F set-up, role / luck, SmokeUtils |
 | `ab0c046` | Object relocation (ghost placement, push task, pause planning, combat drop) |
 | `c098323` | Action menu (UMG), quest objects via menu, fuel barrels with matches |

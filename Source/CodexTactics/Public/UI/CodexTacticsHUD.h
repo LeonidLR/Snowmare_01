@@ -7,6 +7,8 @@
 
 class AOperativeCharacter;
 class UActionMenuWidget;
+class ULootDialogWidget;
+class ALootCrateActor;
 class UFont;
 
 /**
@@ -31,6 +33,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UActionMenuWidget> ActionMenuWidgetClass;
 
+	/** Loot dialog widget class (a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<ULootDialogWidget> LootDialogWidgetClass;
+
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
 	int32 MaxFeedMessages = 8;
@@ -52,6 +58,12 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UActionMenuWidget> ActionMenu;
+
+	UFUNCTION()
+	void HandleLootDialogChanged(bool bOpen, ALootCrateActor* Crate);
+
+	UPROPERTY(Transient)
+	TObjectPtr<ULootDialogWidget> LootDialog;
 
 	void DrawMessageFeed();
 	void DrawSquadPanel();

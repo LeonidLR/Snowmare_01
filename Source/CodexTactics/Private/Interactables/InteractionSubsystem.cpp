@@ -6,6 +6,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/DeployableActor.h"
 #include "Interactables/InteractableActor.h"
+#include "Interactables/LootCrateActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 
@@ -111,6 +112,10 @@ bool UInteractionSubsystem::TryOpenMenu()
 
 void UInteractionSubsystem::OpenMenuFor(AInteractableActor* Target, AOperativeCharacter* Leader)
 {
+	if (Target->HandleDirectInteraction(Leader))
+	{
+		return;
+	}
 	const FActionMenuRequest Request = Target->BuildActionMenu(Leader);
 	if (!Request.bOpenMenu)
 	{
@@ -171,6 +176,60 @@ void UInteractionSubsystem::RelocateActionMenu()
 	{
 		Relocation->StartRelocate(Target, Leader);
 	}
+}
+
+void UInteractionSubsystem::OpenLootDialog(ALootCrateActor* Crate)
+{
+	if (!Crate)
+	{
+		return;
+	}
+	CloseMenu();
+	LootCrate = Crate;
+	OnLootDialogChanged.Broadcast(true, Crate);
+}
+
+void UInteractionSubsystem::CloseLootDialog()
+{
+	ALootCrateActor* Crate = LootCrate.Get();
+	LootCrate.Reset();
+	OnLootDialogChanged.Broadcast(false, Crate);
+}
+
+void UInteractionSubsystem::LootItem(ELootItem Item)
+{
+	ALootCrateActor* Crate = LootCrate.Get();
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Crate || !Leader)
+	{
+		return;
+	}
+	const FText Taken = Crate->TakeItem(Item, Leader);
+	if (!Taken.IsEmpty())
+	{
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(Leader->DisplayName, FText::Format(NSLOCTEXT("InteractionSubsystem", "LootedOne", "📦 Забрал(а) из ящика: {0}"), Taken));
+		}
+	}
+	OnLootDialogChanged.Broadcast(true, Crate); // refresh the list
+}
+
+void UInteractionSubsystem::LootAll()
+{
+	ALootCrateActor* Crate = LootCrate.Get();
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (Crate && Leader)
+	{
+		Crate->TakeAll(Leader);
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(Leader->DisplayName, NSLOCTEXT("InteractionSubsystem", "LootedAll", "📦 Забрал(а) ВСЕ припасы из ящика снабжения!"));
+		}
+	}
+	CloseLootDialog();
 }
 
 void UInteractionSubsystem::CancelActionMenu()

@@ -10,6 +10,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "UI/ActionMenuWidget.h"
+#include "UI/LootDialogWidget.h"
 #include "HAL/IConsoleManager.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "UI/GameMessageSubsystem.h"
@@ -88,6 +89,7 @@ FString ACodexTacticsHUD::StripUnsupportedGlyphs(const FString& Text)
 ACodexTacticsHUD::ACodexTacticsHUD()
 {
 	ActionMenuWidgetClass = UActionMenuWidget::StaticClass();
+	LootDialogWidgetClass = ULootDialogWidget::StaticClass();
 }
 
 void ACodexTacticsHUD::BeginPlay()
@@ -102,9 +104,35 @@ void ACodexTacticsHUD::BeginPlay()
 			ActionMenu->HideMenu();
 		}
 	}
+	if (LootDialogWidgetClass && GetOwningPlayerController())
+	{
+		LootDialog = CreateWidget<ULootDialogWidget>(GetOwningPlayerController(), LootDialogWidgetClass);
+		if (LootDialog)
+		{
+			LootDialog->AddToViewport(11);
+			LootDialog->HideDialog();
+		}
+	}
 	if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
 	{
 		Interactions->OnActionMenuChanged.AddDynamic(this, &ACodexTacticsHUD::HandleActionMenuChanged);
+		Interactions->OnLootDialogChanged.AddDynamic(this, &ACodexTacticsHUD::HandleLootDialogChanged);
+	}
+}
+
+void ACodexTacticsHUD::HandleLootDialogChanged(bool bOpen, ALootCrateActor* Crate)
+{
+	if (!LootDialog)
+	{
+		return;
+	}
+	if (bOpen && Crate)
+	{
+		LootDialog->ShowCrate(Crate);
+	}
+	else
+	{
+		LootDialog->HideDialog();
 	}
 }
 

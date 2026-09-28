@@ -18,7 +18,9 @@ enum class ETrapFlavor : uint8
 {
 	Object,
 	Barricade,
-	Mine
+	Mine,
+	/** loot_crate.gd */
+	Crate
 };
 
 /**
@@ -45,6 +47,9 @@ public:
 	/** Runs the quest interaction for the operative that reached the object. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void Interact(AOperativeCharacter* User);
+
+	/** Acts at once without a menu when it returns true (e.g. opening an intact supply crate). */
+	virtual bool HandleDirectInteraction(AOperativeCharacter* Leader) { return false; }
 
 	/** Menu (or feed line) for the leader standing at the object. */
 	virtual FActionMenuRequest BuildActionMenu(const AOperativeCharacter* Leader) const;

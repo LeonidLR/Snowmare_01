@@ -45,6 +45,7 @@ namespace DeployableSmoke
 		bool bDefused = false;
 		bool bTrap = false;
 		bool bBlast = false;
+		int32 DefuseTries = 0;
 	};
 
 	AOperativeCharacter* FindRole(UWorld* World, EOperativeRole Role)
@@ -177,6 +178,9 @@ namespace DeployableSmoke
 		case EPhase::DefuseMenu:
 			if (Interactions->IsActionMenuOpen())
 			{
+				// Dismantling crouches the defuser (Godot): luck 100 keeps the odds at 99 %, failures are retried.
+				Medic->Luck = 100.f;
+				++State.DefuseTries;
 				Medic->SetStance(EOperativeStance::Prone);
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke mine menu \"%s\" / \"%s\""), *Interactions->GetActionMenu().Title.ToString(),
 					*Interactions->GetActionMenu().ConfirmText.ToString());
@@ -190,7 +194,13 @@ namespace DeployableSmoke
 			return true;
 
 		case EPhase::DefuseWait:
-			if (State.PhaseTime >= 2.f)
+			if (State.PhaseTime >= 2.f && State.Mine.IsValid() && State.DefuseTries < 4)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke defusal attempt %d did not clear the mine, retrying"), State.DefuseTries);
+				Interactions->RequestInteraction(State.Mine.Get());
+				Enter(State, EPhase::DefuseMenu);
+			}
+			else if (State.PhaseTime >= 2.f)
 			{
 				State.bDefused = !State.Mine.IsValid() && Medic->MinesCount == 1 && Medic->HealthComponent->GetCurrentHealth() >= Medic->HealthComponent->GetMaxHealth();
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke defused: mine gone=%d medic mines=%d hp=%.0f"), State.Mine.IsValid() ? 0 : 1,

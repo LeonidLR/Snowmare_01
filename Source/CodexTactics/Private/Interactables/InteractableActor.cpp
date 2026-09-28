@@ -126,7 +126,8 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 	const ETrapFlavor Flavor = GetTrapFlavor();
 	if (!bTrapped)
 	{
-		PostLine(Name, Flavor == ETrapFlavor::Mine ? LOCTEXT("MineSafe", "Мина уже обезврежена или безопасна.")
+		PostLine(Name, Flavor == ETrapFlavor::Crate ? LOCTEXT("CrateSafe", "Ящик безопасен — растяжек нет.")
+			: Flavor == ETrapFlavor::Mine ? LOCTEXT("MineSafe", "Мина уже обезврежена или безопасна.")
 			: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("BarricadeSafe", "Баррикада безопасна — мин-ловушек нет.")
 				: LOCTEXT("ObjectSafe", "Объект безопасен — мин-ловушек нет.")));
 		return EDefusalResult::Success;
@@ -142,7 +143,13 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 	case EDefusalResult::Warning:
 	{
 		const bool bCold = Odds.ColdPenalty > 0.f;
-		if (Flavor == ETrapFlavor::Mine)
+		if (Flavor == ETrapFlavor::Crate)
+		{
+			PostLine(Name, FText::Format(LOCTEXT("CrateWarn", "⚠️ {0}: «Разминирование ящика крайне рискованно! {1}, {2} — подорвёмся и спалим весь лут! Нужно согреться или хотя бы присесть!»"),
+				Name, bCold ? LOCTEXT("ColdFingers", "пальцы коченеют") : LOCTEXT("MineUnstable", "механизм слишком нестабилен"),
+				bStanding ? LOCTEXT("CrateStanding", "стоя к детонатору не подберусь") : LOCTEXT("PoseDanger", "в такой позе опасно")));
+		}
+		else if (Flavor == ETrapFlavor::Mine)
 		{
 			PostLine(Name, FText::Format(LOCTEXT("MineWarn", "⚠️ {0}: «Разминирование выглядит крайне опасным! {1}, {2} — подорвёмся! Нужно согреться или хотя бы лечь на землю!»"),
 				Name, bCold ? LOCTEXT("ColdFingers", "пальцы коченеют") : LOCTEXT("MineUnstable", "механизм слишком нестабилен"),
@@ -164,20 +171,25 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 	case EDefusalResult::Success:
 		bTrapped = false;
 		bDefused = true;
-		PostLine(Name, Flavor == ETrapFlavor::Mine
+		PostLine(Name, Flavor == ETrapFlavor::Crate
+			? FText::Format(LOCTEXT("CrateDefused", "✅ {0} успешно обезвредил(а) растяжку на ящике снабжения!"), Name)
+			: Flavor == ETrapFlavor::Mine
 			? FText::Format(LOCTEXT("MineDefused", "✅ {0} успешно обезвредил(а) мину!"), Name)
 			: (Flavor == ETrapFlavor::Barricade
 				? FText::Format(LOCTEXT("BarricadeDefused", "✅ {0} успешно обезвредил(а) растяжку на баррикаде!"), Name)
 				: FText::Format(LOCTEXT("ObjectDefused", "✅ {0} успешно обезвредил(а) растяжку на объекте ({1})!"), Name, DisplayName)));
 		break;
 	case EDefusalResult::Detonation:
-		PostLine(Name, Flavor == ETrapFlavor::Mine ? LOCTEXT("MineBoom", "💥 Срыв взрывателя! Мина сдетонировала при попытке разминирования!")
+		PostLine(Name, Flavor == ETrapFlavor::Crate ? LOCTEXT("CrateBoom", "💥 Срыв чеки растяжки! Ловушка на ящике сдетонировала, всё содержимое уничтожено!")
+			: Flavor == ETrapFlavor::Mine ? LOCTEXT("MineBoom", "💥 Срыв взрывателя! Мина сдетонировала при попытке разминирования!")
 			: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("BarricadeBoom", "💥 Срыв чеки на баррикаде! Ловушка сдетонировала!")
 				: LOCTEXT("ObjectBoom", "💥 Срыв чеки ловушки на объекте! Взрыв!")));
 		DetonateTrap(false, Name);
 		break;
 	default:
-		PostLine(Name, FText::Format(Flavor == ETrapFlavor::Mine
+		PostLine(Name, FText::Format(Flavor == ETrapFlavor::Crate
+			? LOCTEXT("CrateSlip", "⚠️ {0}: «Щёлк! Растяжка натянулась, но взрыватель не сработал! Следующий срыв подорвёт ящик!»")
+			: Flavor == ETrapFlavor::Mine
 			? LOCTEXT("MineSlip", "⚠️ {0}: «Щёлк! Детонатор заклинило, попытка сорвалась! Повторный срыв вызовет подрыв!»")
 			: (Flavor == ETrapFlavor::Barricade
 				? LOCTEXT("BarricadeSlip", "⚠️ {0}: «Щёлк! Растяжка сместилась, взрыватель уцелел! Осторожнее!»")

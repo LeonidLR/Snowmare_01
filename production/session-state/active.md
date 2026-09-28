@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: Phase 4/5 world systems — interaction, relocation, deployables
-Task: next = loot crates (docs/port/HANDOFF.md §8.1)
+Task: next = turrets (docs/port/HANDOFF.md §8.2)
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
@@ -15,7 +15,7 @@ Task: next = loot crates (docs/port/HANDOFF.md §8.1)
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-Commit `11d7655`: 100 automation tests, 10 smokes PASS (`Scripts/verify_all.ps1`).
+Loot crates commit: 103 automation tests, 11 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
 
 ## Open questions
 - PlayerStart of L_MovementTest moved to (-180, -1490) — intended? (HANDOFF §7)

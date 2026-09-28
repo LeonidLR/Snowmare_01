@@ -228,6 +228,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
 	void SetCarrying(bool bNewCarrying);
 
+	/** Provisions (Godot player.gd defaults for every role: medkit 1, canned food 2, chocolate 2, bread 0). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 MedkitsCount = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 CannedFoodCount = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 ChocolateCount = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 BreadCount = 0;
+
+	/** Ammo for weapons not ported yet, by Godot weapon id (pistol, shotgun, flamethrower, cryo_emitter, plasma_carbine). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory")
+	TMap<FName, int32> ExtraAmmo;
+
+	/** Bonus weapon / clothing ids found in crates (weapon switching comes with the weapon system). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory")
+	TArray<FString> BonusItems;
+
 	/** Personal matches for lighting barrels (Godot game_balance_config *_matches_count: 3 each). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
 	int32 MatchesCount = 3;

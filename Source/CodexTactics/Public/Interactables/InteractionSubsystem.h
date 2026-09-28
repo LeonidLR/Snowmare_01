@@ -2,13 +2,16 @@
 
 #include "CoreMinimal.h"
 #include "Interactables/ActionMenuTypes.h"
+#include "Interactables/LootRules.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "InteractionSubsystem.generated.h"
 
 class AInteractableActor;
 class AOperativeCharacter;
+class ALootCrateActor;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnActionMenuChanged, bool, bOpen, const FActionMenuSpec&, Menu);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnLootDialogChanged, bool, bOpen, ALootCrateActor*, Crate);
 
 /**
  * Object interaction flow: the squad leader walks to the clicked object; once within its InteractionDistance the
@@ -63,6 +66,27 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Interactables")
 	const FActionMenuSpec& GetActionMenu() const { return Menu; }
 
+	/** Shows the loot dialog of an opened crate (Godot _open_loot_dialog). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
+	void OpenLootDialog(ALootCrateActor* Crate);
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
+	void CloseLootDialog();
+
+	/** Loot button of one item: the leader takes it (Godot _on_loot_single_item_pressed). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
+	void LootItem(ELootItem Item);
+
+	/** «Забрать ВСЁ» (Godot _on_loot_all_pressed). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
+	void LootAll();
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Loot")
+	ALootCrateActor* GetLootCrate() const { return LootCrate.Get(); }
+
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Loot")
+	FOnLootDialogChanged OnLootDialogChanged;
+
 	/** Menu opened / closed (the HUD widget listens). */
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Interactables")
 	FOnActionMenuChanged OnActionMenuChanged;
@@ -77,5 +101,6 @@ private:
 
 	TWeakObjectPtr<AInteractableActor> Pending;
 	TWeakObjectPtr<AInteractableActor> MenuTarget;
+	TWeakObjectPtr<ALootCrateActor> LootCrate;
 	FActionMenuSpec Menu;
 };

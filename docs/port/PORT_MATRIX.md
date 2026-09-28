@@ -12,7 +12,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | 2 | Data: USTRUCT/DataAsset types + JSON → DataAsset importer | ⬜ |
 | 3 | Framework: EventBus, operative character, Enhanced Input, camera, squad formation | 🟨 all but EventBus ✅ |
 | 4 | Combat: exploration→combat transition, turn queue, commands, HUD, enemy AI | 🟨 flow, pause, waves, enemies, squad fire ✅; turn-based manager ⬜ |
-| 5 | World systems: mines, heat sources, loot, interactables, quests, dialogue, save | 🟨 heat, cold, quests, barrels, relocation, barricades, mines ✅; loot, turrets, dialogue, save ⬜ |
+| 5 | World systems: mines, heat sources, loot, interactables, quests, dialogue, save | 🟨 heat, cold, quests, barrels, relocation, barricades, mines, loot ✅; turrets, dialogue, save ⬜ |
 | 6 | Content: asset import (Nanite), animation, VFX, Stage 01 "Bunker Gate", UDS/UDW | 🟨 operative model + animations ✅ |
 
 ## Systems
@@ -59,7 +59,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/movements/enemy_base.gd` + `enemy_*.gd` | `AEnemyCharacter`, `AEnemyAIController`, `UEnemyArchetypeAsset` (Gemini) | 4 | 🟨 base archetypes | `CodexTactics.Combat.Enemy*`, `WaveCombatSmoke` |
 | `Scenes/movements/enemy_spawn_point.gd`, `mission_start_point.gd` | `AEnemySpawnPoint` (Gemini), `AMissionStartPoint` ⬜ | 4 | 🟨 | |
 | `Scenes/movements/deployables/turret.gd` | `AAutoTurretActor` (power, targeting, repair) | 5 | ⬜ | |
-| `Scenes/movements/loot_crate.gd`, `main.gd` loot dialog | `ALootCrateActor` + loot dialog UMG | 5 | ⬜ next | |
+| `Scenes/movements/loot_crate.gd`, `Scenes/ui/inventory/loot_dialog.gd`, `main.gd` loot handlers | `ALootCrateActor`, `LootRules`, `ULootDialogWidget`, `UInteractionSubsystem` loot API | 5 | ✅ (consumable use → inventory drawer) | `CodexTactics.Loot.*`, `CodexTactics.LootSmoke` |
 | `Scenes/movements/quest_manager.gd`, `narrative_element.gd`, `dialogue_trigger.gd`, `recruit_susanin.gd` | `UQuestSubsystem`, dialogue data | 5 | ⬜ | |
 | `Scenes/movements/autosave_trigger.gd`, `relocatable_object.gd` | `AAutosaveTrigger`, `ARelocatableObject` | 5 | ⬜ | |
 | `Scenes/weapons/**`, `resources/weapons/*.tres` | `UWeaponDataAsset` (Gemini, values hand-typed) | 2 | 🟨 | `CodexTactics.Combat.Data*` |
