@@ -52,6 +52,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Health")
 	void SetMaxHealth(float NewMax, bool bResetCurrent = true);
 
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Health")
+	EArmorTier GetArmorTier() const { return ArmorTier; }
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Health")
+	void SetArmorTier(EArmorTier NewTier) { ArmorTier = NewTier; }
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Health")
+	float GetBaseArmorReduction() const { return BaseArmorReduction; }
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Health")
+	void SetBaseArmorReduction(float Reduction) { BaseArmorReduction = Reduction; }
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Health")
+	float ApplyDamage(const FDamageSpec& Spec, AActor* SourceActor = nullptr) { return TakeDamage(Spec); }
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Health")
 	void SetDefenseMultiplier(float Multiplier) { DefenseMultiplier = Multiplier; }
 

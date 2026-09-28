@@ -14,9 +14,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## In progress
 
-| Agent | Task | Files | Since |
-|---|---|---|---|
-| Gemini | Sprint 03 Part 2 (c) & (d): Enemy Character (Hound/Spitter/Brute) & Wave Spawner Subsystem | `Source/CodexTactics/*/Characters/EnemyCharacter*`, `Source/CodexTactics/*/Combat/WaveSpawner*`, `CodexTacticsTests/Private/Combat/WaveSpawnerTest*` | 15:58 |
+*(empty — claim before editing)*
 
 ## Open questions — Sprint 03 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 
@@ -24,7 +22,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Status
 
-*Checkpoint quest chain completed, verified by 54/54 unit tests and in-game smoke test.*
+*Sprint 03 Part 2 (a), (b), (c), (d) completed: Combat Data/Types, Health/Armor/Elemental Component, Enemy Characters (Hound, Spitter, Brute, Frostbitten), Enemy AI Controller with Detour Crowd avoidance, and Wave Subsystem. Verified by 75/75 unit tests and 4 in-game smoke tests (WaveCombatSmoke, MovementSmoke, CombatFlowSmoke, QuestChainSmoke).*
 
 ---
 
@@ -173,7 +171,20 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
      - `FinishPrep` debug command hooked to `UGameFlowSubsystem::FinishPreparation()`.
   2. Created 11 new tests (`HealthComponentTest.cpp`, `CombatDataTest.cpp`): **70/70 PASS**.
   3. Ran in-game smokes: `CombatFlowSmoke` **RESULT: PASS**, `QuestChainSmoke` **RESULT: PASS** (100% non-regression).
-  4. Now implementing (c) & (d): `AEnemyCharacter` and `AWaveSpawnerActor` / Wave Subsystem.
+- 16:12 Gemini (Lead Architect):
+  1. Implemented Sprint 03 Part 2 (c) & (d):
+     - `AEnemyAIController` with Detour Crowd avoidance (UCrowdFollowingComponent, medium quality, separation weight 2.0).
+     - `AEnemyCharacter` with archetype stats (FrostHound: 45 HP / 5.4 m/s / 12 dmg; Spitter: 70 HP / 3.2 m/s / 18 dmg / 15m range; Brute: 220 HP / 1.8 m/s / 35 dmg / Heavy Armor 0.75 reduction / 2.4m range; Frostbitten: 60 HP / 2.8 m/s / 15 dmg).
+     - Visual dynamic tinted body mesh per archetype, target acquisition (closest living operative from USquadSubsystem), attack cadence & crit formula.
+     - `AEnemySpawnPoint` actor for lane placement.
+     - `UWaveSubsystem` world subsystem managing wave cycles, spawn queues, alive enemy tracking, and `Flow->NotifyWaveCleared()` invocation upon wave extermination.
+     - `WaveCombatSmokeCommand.cpp` in-game smoke validation command.
+  2. Created 5 new automation tests in `EnemyAndWaveTest.cpp`: **75/75 PASS**.
+  3. Ran in-game smoke tests:
+     - `CodexTactics.WaveCombatSmoke`: **RESULT: PASS** (spawned 3 archetypes, verified Enemy tags, CombatQueries detection, archetype stats, lethal kill & alive count pruning).
+     - `CodexTactics.CombatFlowSmoke`: **RESULT: PASS**.
+     - `CodexTactics.MovementSmoke`: **RESULT: PASS**.
+  4. Next up: Step (e) Squad Real-Time Combat Shooting (auto-fire cadence, ammo depletion, reload, and cold misfire $\ge 60\%$).
 
 ---
 
