@@ -6,6 +6,7 @@
 
 class UGorkyGridManager;
 class UWeaponDataAsset;
+class UGodotBalanceAsset;
 
 /**
  * Turn-based balance (Godot resources/game_balance_config.gd tactical_* exports; the defaults below are the Godot
@@ -52,6 +53,9 @@ struct CODEXTACTICS_API FTurnBasedAttackCell
  */
 namespace TurnBasedRules
 {
+	/** Turn-based balance from an imported Godot GameBalanceConfig (tactical_* keys; missing keys keep the defaults). */
+	CODEXTACTICS_API FTurnBasedBalance BalanceFromGodot(const UGodotBalanceAsset* Asset);
+
 	/** Distance in cells (Chebyshev, diagonals count as one). */
 	CODEXTACTICS_API int32 CellDistance(const FIntPoint& From, const FIntPoint& To);
 

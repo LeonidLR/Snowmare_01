@@ -1,4 +1,5 @@
 #include "Tactics/TurnBasedRules.h"
+#include "Data/GodotBalanceAsset.h"
 #include "Data/WeaponDataAsset.h"
 #include "Tactics/Gorky17Types.h"
 #include "Tactics/GorkyGridManager.h"
@@ -30,6 +31,34 @@ namespace
 			}
 		}
 	}
+}
+
+FTurnBasedBalance TurnBasedRules::BalanceFromGodot(const UGodotBalanceAsset* Asset)
+{
+	FTurnBasedBalance Balance;
+	if (!Asset)
+	{
+		return Balance;
+	}
+	Balance.SquadMaxAP = Asset->GetInt(TEXT("tactical_squad_max_ap"), Balance.SquadMaxAP);
+	Balance.EnemyMaxAP = Asset->GetInt(TEXT("tactical_enemy_max_ap"), Balance.EnemyMaxAP);
+	Balance.MoveAPCost = Asset->GetInt(TEXT("tactical_ap_cost_move"), Balance.MoveAPCost);
+	Balance.DiagonalAPCost = Asset->GetInt(TEXT("tactical_ap_cost_diagonal"), Balance.DiagonalAPCost);
+	Balance.AttackAPCost = Asset->GetInt(TEXT("tactical_ap_cost_attack"), Balance.AttackAPCost);
+	Balance.PushBarrelAPCost = Asset->GetInt(TEXT("tactical_ap_cost_push_barrel"), Balance.PushBarrelAPCost);
+	Balance.StanceAPCost = Asset->GetInt(TEXT("tactical_ap_cost_stance"), Balance.StanceAPCost);
+	Balance.CrouchAccuracyBonus = Asset->GetNumber(TEXT("tactical_stance_crouch_acc_bonus"), Balance.CrouchAccuracyBonus);
+	Balance.ProneAccuracyBonus = Asset->GetNumber(TEXT("tactical_stance_prone_acc_bonus"), Balance.ProneAccuracyBonus);
+	Balance.SquadBaseDamage = Asset->GetNumber(TEXT("tactical_squad_base_damage"), Balance.SquadBaseDamage);
+	Balance.EnemyBaseDamage = Asset->GetNumber(TEXT("tactical_enemy_base_damage"), Balance.EnemyBaseDamage);
+	Balance.TurretDamage = Asset->GetNumber(TEXT("tactical_turret_damage"), Balance.TurretDamage);
+	Balance.TurretRange = Asset->GetInt(TEXT("tactical_turret_range"), Balance.TurretRange);
+	Balance.BarrelDamage = Asset->GetNumber(TEXT("tactical_barrel_damage"), Balance.BarrelDamage);
+	Balance.CrouchDamageMultiplier = Asset->GetNumber(TEXT("tactical_stance_crouch_dmg_mult"), Balance.CrouchDamageMultiplier);
+	Balance.ProneDamageMultiplier = Asset->GetNumber(TEXT("tactical_stance_prone_dmg_mult"), Balance.ProneDamageMultiplier);
+	Balance.RearAttackMultiplier = Asset->GetNumber(TEXT("tactical_rear_attack_multiplier"), Balance.RearAttackMultiplier);
+	Balance.FlankAttackMultiplier = Asset->GetNumber(TEXT("tactical_flank_attack_multiplier"), Balance.FlankAttackMultiplier);
+	return Balance;
 }
 
 int32 TurnBasedRules::CellDistance(const FIntPoint& From, const FIntPoint& To)

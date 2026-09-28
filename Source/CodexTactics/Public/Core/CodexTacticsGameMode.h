@@ -5,6 +5,7 @@
 #include "Interactables/DeployableRules.h"
 class UDialogueSequenceAsset;
 class UWeaponDataAsset;
+class UGodotBalanceAsset;
 #include "CodexTacticsGameMode.generated.h"
 
 class AOperativeCharacter;
@@ -78,6 +79,14 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
 	TSubclassOf<ATurretActor> TurretClass;
+
+	/** Balance the turn-based combat reads (Godot turn_based_combat_manager loads resources/balance.tres first). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Balance")
+	TSoftObjectPtr<UGodotBalanceAsset> TurnBasedBalance;
+
+	/** Balance of camera, enemies and deployables (Godot resources/game_balance_config.tres). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Balance")
+	TSoftObjectPtr<UGodotBalanceAsset> GameBalanceConfig;
 
 	/** Weapon every spawned operative starts with (imported from Godot rifle_m16.tres by Scripts/Editor/import_weapons.py). */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")

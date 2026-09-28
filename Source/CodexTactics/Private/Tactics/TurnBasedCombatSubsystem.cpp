@@ -6,6 +6,8 @@
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/GodotBalanceAsset.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -88,6 +90,16 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		return;
 	}
 	++CombatId;
+	// Imported Godot balance (DA_Balance = resources/balance.tres).
+	if (const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>())
+	{
+		if (const UGodotBalanceAsset* BalanceAsset = GameMode->TurnBasedBalance.LoadSynchronous())
+		{
+			Balance = TurnBasedRules::BalanceFromGodot(BalanceAsset);
+			SquadStepDuration = BalanceAsset->GetNumber(TEXT("tactical_step_duration"), SquadStepDuration);
+			EnemyStepDuration = BalanceAsset->GetNumber(TEXT("tactical_enemy_step_duration"), EnemyStepDuration);
+		}
+	}
 	States.Reset();
 	Squad.Reset();
 	Enemies.Reset();

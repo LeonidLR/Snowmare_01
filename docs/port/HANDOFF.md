@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-29 by Claude, after commit `71f7cb0`.
+Last update: 2026-09-29 by Claude, after the balance import commit (see §10).
 
 ---
 
@@ -45,7 +45,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **114 automation tests, 19 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **115 automation tests, 19 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -272,7 +272,13 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    Done: weapons — `Scripts/Editor/import_weapons.py` → `/Game/Data/Weapons/DA_Weapon_<id>` (all 9; defaults parsed
    from weapon_data.gd, enums mapped by name, `EStatusEffect::Shocked` appended); the game mode equips
    `StartingWeapon` (DA_Weapon_m16) with `StartingReserveAmmo` 60 (Godot _init_weapons) → HUD «[30/60]» like the video.
-   Next: balance (below), enemies, levels.
+   Balance — `Scripts/Editor/import_balance.py` → `/Game/Data/Balance/DA_Balance` (balance.tres) and
+   `DA_GameBalanceConfig` (game_balance_config.tres): `UGodotBalanceAsset::Numbers` holds every numeric / bool export
+   by its Godot name (362; .gd defaults for fields a .tres omits). Wired so far: turn-based combat
+   (`TurnBasedRules::BalanceFromGodot(DA_Balance)` + step durations, loaded at combat start via the game mode's
+   `TurnBasedBalance`). Next: wire the other hand-typed values to `GameBalanceConfig` (operative health / fortitude /
+   speeds, cold, enemies, deployables, camera — look each Godot consumer up to pick the right file), then enemies
+   (`Scenes/movements/enemy_*.gd` exports) and levels (`data/configs/levels/*.json`).
    Source trap: Godot has TWO GameBalanceConfig files with different values. The turn-based manager loads
    `resources/balance.tres` first (squad 8 AP, enemy 6 AP — the UE `FTurnBasedBalance` defaults), while camera, enemies,
    turrets, mines, barricades load `resources/game_balance_config.tres` (e.g. tactical_squad_max_ap = 3, enemy 4,
@@ -306,6 +312,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
+| (balance import commit) | Both Godot balance files imported into data assets; turn-based combat reads DA_Balance |
 | `71f7cb0` | Godot weapons imported into data assets, operatives start with the imported M16 (30/60) |
 | `06a28ca` | Turn-based action panel (phase, unit, AP / HP, buttons) |
 | `8baa4d5` | Gorky 17 turn-based combat subsystem, grid overlay, controller input, TurnBasedSmoke |
