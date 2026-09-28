@@ -1,6 +1,7 @@
 ﻿"""Adds level objects to /Game/Maps/L_MovementTest without regenerating the map (keeps manual edits):
 a fuel barrel, two abandoned barricades, two hidden mines and two supply crates (Godot movements_demo.tscn:
-BarrelObject, AbandonedBarricadeEast / Generator, AbandonedMinePath / Alley, LootCrateObject, TrappedSupplyCrate).
+BarrelObject, AbandonedBarricadeEast / Generator, AbandonedMinePath / Alley, LootCrateObject, TrappedSupplyCrate),
+and the «Начать бой» squad spot behind the gate (TargetPoint tagged CombatStart; Godot main.gd _on_start_combat_pressed).
 Objects whose label already exists are skipped. They stand away from the routes of the automated checks.
 
 Run headless:
@@ -31,6 +32,11 @@ def trapped_crate(crate):
     crate.set_editor_property("contents", contents)
 
 
+def combat_start(point):
+    """UMissionSubsystem::CombatStartTag: the squad is placed here by «Начать бой»."""
+    point.set_editor_property("tags", ["CombatStart"])
+
+
 OBJECTS = [
     # label, class, location (actor centre), yaw, setup
     ("Barrel_Fuel_01", unreal.BarrelActor, unreal.Vector(-400, 1200, 70), 0, None),
@@ -40,6 +46,7 @@ OBJECTS = [
     ("Mine_Abandoned_Alley", unreal.ProximityMineActor, unreal.Vector(2400, -1400, 30), 0, None),
     ("Crate_Supply_Checkpoint", unreal.LootCrateActor, unreal.Vector(1200, 1200, 40), 0, checkpoint_crate),
     ("Crate_Supply_Trapped", unreal.LootCrateActor, unreal.Vector(1200, 900, 40), 0, trapped_crate),
+    ("CombatStart", unreal.TargetPoint, unreal.Vector(0, -2150, 0), -90, combat_start),
 ]
 
 level_editor = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)

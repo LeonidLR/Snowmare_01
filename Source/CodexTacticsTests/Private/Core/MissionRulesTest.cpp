@@ -43,4 +43,20 @@ bool FMissionFailureTest::RunTest(const FString&)
 	return true;
 }
 
+MISSION_TEST(FMissionStartModeTest, "StartModeAndMenu")
+bool FMissionStartModeTest::RunTest(const FString&)
+{
+	using namespace MissionRules;
+	TestTrue(TEXT("Fresh start opens the menu"), GetAutoStartMode(false, EMissionStartMode::Combat, false) == EMissionStartMode::None);
+	TestTrue(TEXT("Ctrl + X repeats the last mode"), GetAutoStartMode(true, EMissionStartMode::Combat, false) == EMissionStartMode::Combat);
+	TestTrue(TEXT("Quick restart without a mode shows the menu"), GetAutoStartMode(true, EMissionStartMode::None, false) == EMissionStartMode::None);
+	TestTrue(TEXT("Headless checks start the game"), GetAutoStartMode(false, EMissionStartMode::None, true) == EMissionStartMode::Game);
+	TestEqual(TEXT("Exploration objective"), GetModeObjective(EMissionStartMode::Exploration).ToString(),
+		FString(TEXT("Исследовать КПП (сбор канистры, топлива, запуск генератора)")));
+	TestEqual(TEXT("Exploration radio"), GetModeRadio(EMissionStartMode::Exploration).ToString(),
+		FString(TEXT("Режим исследования запущен. Осмотрите территорию перед воротами.")));
+	TestTrue(TEXT("Combat sets no objective itself"), GetModeObjective(EMissionStartMode::Combat).IsEmpty());
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

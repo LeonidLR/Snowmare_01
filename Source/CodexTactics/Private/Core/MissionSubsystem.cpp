@@ -1,5 +1,10 @@
 #include "Core/MissionSubsystem.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
+#include "Combat/HealthComponent.h"
+#include "Engine/GameInstance.h"
+#include "EngineUtils.h"
+#include "Misc/CommandLine.h"
 #include "CodexTactics.h"
 #include "Combat/WaveSubsystem.h"
 #include "Core/MissionRules.h"
@@ -15,6 +20,7 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
 	Objective = MissionRules::GetStartObjective();
+	StartMode = EMissionStartMode::None;
 	if (UQuestSubsystem* Quests = InWorld.GetSubsystem<UQuestSubsystem>())
 	{
 		Quests->OnObjectiveChanged.AddDynamic(this, &UMissionSubsystem::HandleQuestObjectiveChanged);
@@ -27,6 +33,107 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	if (UWaveSubsystem* Waves = InWorld.GetSubsystem<UWaveSubsystem>())
 	{
 		Waves->OnWaveStarted.AddDynamic(this, &UMissionSubsystem::HandleWaveStarted);
+	}
+
+	// Godot _ready: Ctrl + X repeats the last mode, otherwise the start menu.
+	UMissionSessionSubsystem* Session = InWorld.GetGameInstance() ? InWorld.GetGameInstance()->GetSubsystem<UMissionSessionSubsystem>() : nullptr;
+	const TCHAR* CommandLine = FCommandLine::Get();
+	const bool bSkipMenu = !FParse::Param(CommandLine, TEXT("ForceMainMenu"))
+		&& (FParse::Param(CommandLine, TEXT("NoMainMenu")) || FString(CommandLine).Contains(TEXT("-ExecCmds")));
+	const EMissionStartMode AutoMode = MissionRules::GetAutoStartMode(Session && Session->bQuickRestart,
+		Session ? Session->LastMode : EMissionStartMode::None, bSkipMenu);
+	if (Session)
+	{
+		Session->bQuickRestart = false;
+	}
+	if (AutoMode == EMissionStartMode::None)
+	{
+		OpenMainMenu();
+	}
+	else
+	{
+		StartMission(AutoMode);
+	}
+}
+
+void UMissionSubsystem::OpenMainMenu()
+{
+	bMainMenuOpen = true;
+	StartMode = EMissionStartMode::None;
+	UGameplayStatics::SetGamePaused(GetWorld(), true);
+	OnMainMenuChanged.Broadcast(true);
+}
+
+void UMissionSubsystem::StartMission(EMissionStartMode Mode)
+{
+	if (Mode == EMissionStartMode::None)
+	{
+		return;
+	}
+	StartMode = Mode;
+	if (UMissionSessionSubsystem* Session = GetWorld()->GetGameInstance() ? GetWorld()->GetGameInstance()->GetSubsystem<UMissionSessionSubsystem>() : nullptr)
+	{
+		Session->LastMode = Mode;
+	}
+	if (bMainMenuOpen)
+	{
+		bMainMenuOpen = false;
+		UGameplayStatics::SetGamePaused(GetWorld(), false);
+		OnMainMenuChanged.Broadcast(false);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Mission start mode: %s"), *UEnum::GetValueAsString(Mode));
+	if (Mode == EMissionStartMode::Combat)
+	{
+		StartCombatMode();
+		return;
+	}
+	SetObjective(MissionRules::GetModeObjective(Mode));
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(LOCTEXT("Commander", "Командир"), MissionRules::GetModeRadio(Mode));
+	}
+}
+
+void UMissionSubsystem::StartCombatMode()
+{
+	UWorld* World = GetWorld();
+	if (UQuestSubsystem* Quests = World->GetSubsystem<UQuestSubsystem>())
+	{
+		Quests->CompleteChainForCombat();
+	}
+	// Godot _on_start_combat_pressed: squad behind the gate, full health, no cold.
+	const AActor* CombatStart = nullptr;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		if (It->ActorHasTag(CombatStartTag))
+		{
+			CombatStart = *It;
+			break;
+		}
+	}
+	if (USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
+	{
+		TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+		Members.Sort([](const AOperativeCharacter& A, const AOperativeCharacter& B) { return A.SquadIndex < B.SquadIndex; });
+		// Godot offsets: commander (0, -18), engineer (-2.8, -20.5), medic (2.8, -20.5) -> 2.5 m behind, 2.8 m aside.
+		const FVector Offsets[] = { FVector::ZeroVector, FVector(-250.f, -280.f, 0.f), FVector(-250.f, 280.f, 0.f) };
+		for (int32 Index = 0; Index < Members.Num(); ++Index)
+		{
+			AOperativeCharacter* Member = Members[Index];
+			if (CombatStart)
+			{
+				const FRotator Facing(0.f, CombatStart->GetActorRotation().Yaw, 0.f);
+				Member->StopOperative();
+				Member->TeleportTo(CombatStart->GetActorLocation() + Facing.RotateVector(Offsets[Index % 3]) + FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight()),
+					Facing);
+			}
+			Member->HealthComponent->Heal(Member->HealthComponent->GetMaxHealth());
+			Member->ColdLevel = 0.f; // the cold component picks the tier up on its next step
+		}
+	}
+	if (UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>())
+	{
+		Flow->TriggerCombatZone();
 	}
 }
 
@@ -87,14 +194,18 @@ void UMissionSubsystem::TriggerMissionFailed(AOperativeCharacter* FallenOperativ
 	OnMissionFailed.Broadcast(FailureReason);
 }
 
-void UMissionSubsystem::RestartMission()
+void UMissionSubsystem::RestartMission(bool bQuick)
 {
 	UWorld* World = GetWorld();
 	if (!World)
 	{
 		return;
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("Mission restart"));
+	if (UMissionSessionSubsystem* Session = World->GetGameInstance() ? World->GetGameInstance()->GetSubsystem<UMissionSessionSubsystem>() : nullptr)
+	{
+		Session->bQuickRestart = bQuick;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Mission restart%s"), bQuick ? TEXT(" (quick)") : TEXT(""));
 	UGameplayStatics::OpenLevel(World, FName(*UGameplayStatics::GetCurrentLevelName(World, true)));
 }
 

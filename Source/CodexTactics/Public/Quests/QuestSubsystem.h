@@ -52,6 +52,12 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Quests")
 	FOnObjectiveChanged OnObjectiveChanged;
 
+	/**
+	 * «Начать бой» from the main menu: every chain step done at once (generator running, gate powered and open).
+	 * Godot _on_start_combat_pressed sets the quest_manager flags and calls _on_gate_opened.
+	 */
+	void CompleteChainForCombat();
+
 	/** Delay between opening the gate and the pre-combat cutscene, s (Godot: 1.0). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Quests", meta = (ClampMin = "0"))
 	float CutsceneDelayAfterGate = 1.f;

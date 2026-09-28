@@ -9,6 +9,7 @@ class AOperativeCharacter;
 class UActionMenuWidget;
 class ULootDialogWidget;
 class UMissionFailedWidget;
+class UMainMenuWidget;
 class ALootCrateActor;
 class UFont;
 
@@ -42,6 +43,10 @@ public:
 	/** Mission-failed screen class (a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UMissionFailedWidget> MissionFailedWidgetClass;
+
+	/** Start menu class (a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UMainMenuWidget> MainMenuWidgetClass;
 
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
@@ -84,6 +89,12 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMissionFailedWidget> MissionFailed;
+
+	UFUNCTION()
+	void HandleMainMenuChanged(bool bOpen);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMainMenuWidget> MainMenu;
 
 	void DrawMessageFeed();
 	/** Draws the objective banner; returns its bottom edge (Y). */

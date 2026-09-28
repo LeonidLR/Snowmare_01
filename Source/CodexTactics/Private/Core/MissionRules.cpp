@@ -7,6 +7,41 @@ FText MissionRules::GetStartObjective()
 	return LOCTEXT("Start", "Исследовать КПП и найти способ открыть гермоворота");
 }
 
+FText MissionRules::GetModeObjective(EMissionStartMode Mode)
+{
+	switch (Mode)
+	{
+	case EMissionStartMode::Game:
+		return GetStartObjective();
+	case EMissionStartMode::Exploration:
+		return LOCTEXT("ExplorationStart", "Исследовать КПП (сбор канистры, топлива, запуск генератора)");
+	default:
+		return FText::GetEmpty();
+	}
+}
+
+FText MissionRules::GetModeRadio(EMissionStartMode Mode)
+{
+	switch (Mode)
+	{
+	case EMissionStartMode::Game:
+		return LOCTEXT("GameRadio", "Мы у главных ворот карантинного КПП. Аномальный мороз посреди лета... Нужно запитать ворота и проникнуть внутрь.");
+	case EMissionStartMode::Exploration:
+		return LOCTEXT("ExplorationRadio", "Режим исследования запущен. Осмотрите территорию перед воротами.");
+	default:
+		return FText::GetEmpty();
+	}
+}
+
+EMissionStartMode MissionRules::GetAutoStartMode(bool bQuickRestart, EMissionStartMode LastMode, bool bSkipMenu)
+{
+	if (bQuickRestart && LastMode != EMissionStartMode::None)
+	{
+		return LastMode;
+	}
+	return bSkipMenu ? EMissionStartMode::Game : EMissionStartMode::None;
+}
+
 bool MissionRules::GetPhaseObjective(ECodexGamePhase Phase, int32 WaveIndex, float PreparationSeconds, bool bAfterCombat, FText& OutObjective)
 {
 	switch (Phase)

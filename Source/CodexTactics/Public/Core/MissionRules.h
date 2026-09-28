@@ -1,20 +1,33 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Core/MissionSessionSubsystem.h"
 #include "GameFlow/GameFlowTypes.h"
 
 /**
- * Pure mission texts: objective banner per game phase and mission-failed reasons.
- * Godot reference: Scenes/movements/main.gd update_objective calls (_on_start_game_pressed, preparation, wave start,
- * wave rest, victory) and _trigger_game_over; movements_demo.tscn GameOverPanel texts.
+ * Pure mission texts and start rules: objective banner per game phase / start mode, mission-failed reasons,
+ * whether the main menu opens.
+ * Godot reference: Scenes/movements/main.gd update_objective calls (_on_start_game_pressed, _on_start_exploration_pressed,
+ * preparation, wave start, wave rest, victory), _trigger_game_over, _ready quick restart; movements_demo.tscn
+ * GameOverPanel / StartMenu texts.
  */
 namespace MissionRules
 {
 	/** A fallen operative at or above this cold died of hypothermia (Godot cold_level >= 99). */
 	constexpr float FrozenDeathColdLevel = 99.f;
 
-	/** Objective when the mission starts (Godot _on_start_game_pressed). */
+	/** Objective when the mission starts in «Начать игру» (Godot _on_start_game_pressed). */
 	CODEXTACTICS_API FText GetStartObjective();
+
+	/** Objective and commander radio line for a start mode (Combat: empty, the flow sets the objective). */
+	CODEXTACTICS_API FText GetModeObjective(EMissionStartMode Mode);
+	CODEXTACTICS_API FText GetModeRadio(EMissionStartMode Mode);
+
+	/**
+	 * Mode to start at once without the menu, or None to show the main menu.
+	 * Quick restart (Ctrl + X) repeats the last mode; bSkipMenu (headless checks, -NoMainMenu) starts «Начать игру».
+	 */
+	CODEXTACTICS_API EMissionStartMode GetAutoStartMode(bool bQuickRestart, EMissionStartMode LastMode, bool bSkipMenu);
 
 	/**
 	 * Objective for a game phase change, false when the phase keeps the current objective.

@@ -135,6 +135,8 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: start menu (3 modes) + `UMissionSessionSubsystem`. Levels now open the menu unless the command
+  line has -ExecCmds / -NoMainMenu (all smokes unaffected) or after Ctrl + X. `smoke.ps1 -Extra` passes extra args.
 - 2026-09-28 Claude: mission shell — `UMissionSubsystem` (objective, failure, restart), objective banner, mission-failed
   screen, Ctrl + X. `AOperativeCharacter::HandleDied` now goes through the mission subsystem. Found and fixed: the
   tracer code crashed the worldless `SquadCombatTest` (engine crash was hidden: `verify_all` now checks the exit code).

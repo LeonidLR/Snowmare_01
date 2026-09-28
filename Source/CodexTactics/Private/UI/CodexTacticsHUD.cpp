@@ -12,6 +12,7 @@
 #include "Interactables/InteractionSubsystem.h"
 #include "UI/ActionMenuWidget.h"
 #include "UI/LootDialogWidget.h"
+#include "UI/MainMenuWidget.h"
 #include "UI/MissionFailedWidget.h"
 #include "HAL/IConsoleManager.h"
 #include "Survival/ColdSurvivalComponent.h"
@@ -81,6 +82,11 @@ FString ACodexTacticsHUD::StripUnsupportedGlyphs(const FString& Text)
 	{
 		const TCHAR Char = Text[Index];
 		const uint32 Code = static_cast<uint32>(Char);
+		if (Code == 0x2192 || Code == 0x2794 || Code == 0x279C || Code == 0x27A1)
+		{
+			Result.Append(TEXT("->")); // arrows («➔») keep their meaning
+			continue;
+		}
 		const bool bSurrogate = Code >= 0xD800 && Code <= 0xDFFF; // emoji outside the BMP
 		const bool bSymbol = (Code >= 0x2190 && Code <= 0x2BFF) || Code == 0xFE0F || Code == 0x200D || Code == 0x20E3; // 0x20E3: keycap «2️⃣»
 		if (!bSurrogate && !bSymbol)
@@ -97,6 +103,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	ActionMenuWidgetClass = UActionMenuWidget::StaticClass();
 	LootDialogWidgetClass = ULootDialogWidget::StaticClass();
 	MissionFailedWidgetClass = UMissionFailedWidget::StaticClass();
+	MainMenuWidgetClass = UMainMenuWidget::StaticClass();
 }
 
 void ACodexTacticsHUD::BeginPlay()
@@ -129,9 +136,20 @@ void ACodexTacticsHUD::BeginPlay()
 			MissionFailed->HideScreen();
 		}
 	}
+	if (MainMenuWidgetClass && GetOwningPlayerController())
+	{
+		MainMenu = CreateWidget<UMainMenuWidget>(GetOwningPlayerController(), MainMenuWidgetClass);
+		if (MainMenu)
+		{
+			MainMenu->AddToViewport(30);
+			MainMenu->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
 	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
 	{
 		Mission->OnMissionFailed.AddDynamic(this, &ACodexTacticsHUD::HandleMissionFailed);
+		Mission->OnMainMenuChanged.AddDynamic(this, &ACodexTacticsHUD::HandleMainMenuChanged);
+		HandleMainMenuChanged(Mission->IsMainMenuOpen()); // the mission decides before the HUD begins play
 	}
 	if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
 	{
@@ -161,6 +179,14 @@ void ACodexTacticsHUD::HandleMissionFailed(const FText& Reason)
 	if (MissionFailed)
 	{
 		MissionFailed->ShowFailure(Reason);
+	}
+}
+
+void ACodexTacticsHUD::HandleMainMenuChanged(bool bOpen)
+{
+	if (MainMenu)
+	{
+		MainMenu->SetVisibility(bOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 }
 

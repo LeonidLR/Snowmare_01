@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-28 by Claude, after commit `70ba255`.
+Last update: 2026-09-29 by Claude, after the main menu commit (see §10).
 
 ---
 
@@ -45,7 +45,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **107 automation tests, 14 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **108 automation tests, 15 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -62,10 +62,11 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `RelocationSmoke` | «Вытолкать» a barrel 6 m, cold refusal, cancel |
 | `DeployableSmoke` | barricade pick-up → F set-up with hand-over, hidden mine spotted, sapper defusal (retries), grenade trap, mine blast |
 | `TargetedShotSmoke` | Ctrl + click via `IssueTargetedShot`: barrel explodes (tracer + flash spawned), prone mine shot, trapped crate / barricade detonated, untrapped crate only pierced, 1 round each, priority enemy over a nearer one, pause-planned shot (with a plan marker) fires on release, markers cleared |
+| `MainMenuSmoke` (run with `-Extra "-ForceMainMenu"`, verify_all does it) | start menu open + world paused, «Начать бой» (quest chain done, squad healed / warmed, cutscene), Ctrl + X repeats the mode, «Начать заново» shows the menu |
 | `MissionSmoke` | objective banner texts (start → preparation → wave), an operative's death fails the mission (GameOver, reason, time stop), restart reloads a fresh exploration |
 | `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
 | `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot |
-| `HudShot [close] [walk] [menu] [place] [shoot] [failed]` (`shoot`: slowed-down barrel shot = tracer, target flash, plan marker; `failed`: mission-failed screen) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
+| `HudShot [close] [walk] [menu] [place] [shoot] [failed] [mainmenu]` (`shoot`: slowed-down barrel shot = tracer, target flash, plan marker; `failed`: mission-failed screen; `mainmenu`: needs `-ForceMainMenu`) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
 | `FinishPrep` | dev: skip preparation, start the wave |
 
 Parity tests live in `Source/CodexTacticsTests/Private/<System>/` named `CodexTactics.<System>.<Case>`; they mirror
@@ -163,6 +164,15 @@ Module `CodexTactics` (runtime). Folder → class → Godot reference.
   Starting the generator also powers all turrets. Godot `interactable.gd breakdown_generator / repair_generator`.
 - `Quests/QuestChain`, `QuestSubsystem`, `Interactables/GateActor`. Godot `quest_manager.gd`, `gate.gd`.
 
+**Start menu** — `UI/MainMenuWidget` + `Core/MissionSessionSubsystem` (GameInstance: last mode, quick-restart flag
+across level reloads). `UMissionSubsystem::StartMission(Game | Combat | Exploration)`: Game / Exploration set the
+objective and the commander line; Combat completes the quest chain (`UQuestSubsystem::CompleteChainForCombat`: generator
+running, gate open), heals / warms the squad, moves it to the actor tagged `CombatStart` (TargetPoint behind the gate on
+L_MovementTest) and starts the pre-combat cutscene. The menu opens on every level start (world paused) except after
+Ctrl + X (same mode again) or with `-ExecCmds` / `-NoMainMenu` on the command line (headless checks start Game);
+`-ForceMainMenu` keeps it. **Every new smoke / HudShot is therefore unaffected by the menu.** Godot `main.gd _ready`,
+`_on_start_game_pressed`, `_on_start_combat_pressed`, `_on_start_exploration_pressed`, StartMenu.
+
 **Mission** — `Core/MissionSubsystem` + `Core/MissionRules`: objective text (start «Исследовать КПП…», quest chain
 objectives, preparation / wave «ОБОРОНА: Отразить волну N! Врагов: M» / victory texts), mission failed on any
 operative death (reason hypothermia at cold ≥ 99 else wounds, HQ radio line, GameOver = time stop), `RestartMission`
@@ -193,6 +203,10 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 - PlayerStart moved to (-180, -1490): intended? (left as is, committed in `11d7655`).
 - `Config/DefaultEditor.ini` has local editor changes — never commit it unless asked.
+- «Начать исследование»: REFERENCE_PLAYTHROUGH says «exploration only … no combat», but Godot code only changes the
+  objective / radio line (the gate still starts combat). UE follows the Godot code — confirm with the user.
+- «Начать бой» position: Godot hard-codes the yard behind the gate; UE uses the `CombatStart` tag (test map: (0, −2150)).
+- The world is paused while the start menu is open (Godot keeps processing behind its menu) — cosmetic difference.
 
 ## 8. Next steps (in order)
 
@@ -200,8 +214,9 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 2. ~~Turrets~~, 3. ~~generator damage / repair~~ — done (see §10). Enemies do not attack turrets / barricades /
    the generator yet (Gemini's enemy AI targets operatives only) — add with the enemy AI pass.
 4. ~~Ctrl + click targeted shots~~ — done (see §10).
-5. UI shell from REFERENCE_PLAYTHROUGH: ~~objective banner, mission failed + Ctrl + X~~ (done, §10); next: main menu
-   (3 modes), dialogue window, bottom action bar, preparation / pause banners.
+5. UI shell from REFERENCE_PLAYTHROUGH: ~~objective banner, mission failed + Ctrl + X, start menu~~ (done, §10);
+   next: dialogue window (Godot `Scenes/ui/dialogue`, dialogue_mission_start etc. — the mode radio lines are the
+   Godot fallbacks until it exists), bottom action bar, preparation / pause banners.
 6. Turn-based combat manager on the Gorky grid (Godot `Scripts/tactics/turn_based_combat_manager.gd`).
 7. Phase 2 data importer (JSON / .tres → DataAssets) replacing hand-typed values (§9).
 8. Content: level, VFX, cutscene; character "twisted" look issue (§6).
@@ -232,6 +247,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
+| (main menu commit) | Start menu (3 modes), session subsystem, Ctrl + X repeats the mode, CombatStart point, arrows kept as «->» |
 | `70ba255` | Objective banner, mission failed screen + restart, Ctrl + X, Godot sRGB colours in UMG, `verify_all` catches test crashes |
 | `f987975` | Tracers + muzzle flash (operatives, turret), plan markers, Ctrl + click target flash, untrapped crate no longer explodes when shot, weapon `TracerColor`, `HudShot shoot` |
 | `fa4e66b` | Ctrl + click targeted shots (barrel, mine chance, crate, trapped object, priority enemy, pause planning), operative `Accuracy` |

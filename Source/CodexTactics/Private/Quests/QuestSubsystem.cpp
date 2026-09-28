@@ -51,6 +51,22 @@ void UQuestSubsystem::InteractWith(EInteractableType ObjectType, AActor* ObjectA
 	}
 }
 
+void UQuestSubsystem::CompleteChainForCombat()
+{
+	const FText ObjectiveBefore = State.GetObjective();
+	State.bHasEmptyCanister = true;
+	State.bHasFuelCanister = true;
+	State.bIsGeneratorRunning = true;
+	State.bIsGatePowered = true;
+	OnGeneratorStarted.Broadcast();
+	OnGateOpened.Broadcast();
+	const FText ObjectiveAfter = State.GetObjective();
+	if (!ObjectiveAfter.EqualTo(ObjectiveBefore))
+	{
+		OnObjectiveChanged.Broadcast(ObjectiveAfter);
+	}
+}
+
 void UQuestSubsystem::StartPreCombatCutscene()
 {
 	if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>())

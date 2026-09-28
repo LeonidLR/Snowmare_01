@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "failed": an operative dies -> mission-failed screen.
+// "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -50,6 +50,21 @@ namespace HudShot
 	{
 		if (!World)
 		{
+			return;
+		}
+		// "mainmenu" (run with -ForceMainMenu): the world is paused behind the start menu, so use real time.
+		if (Args.Contains(TEXT("mainmenu")))
+		{
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+			{
+				FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / TEXT("HudShot.png"), /*bShowUI*/ true, /*bAddFilenameSuffix*/ false);
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+				{
+					FPlatformMisc::RequestExit(false, TEXT("HudShot"));
+					return false;
+				}), 1.5f);
+				return false;
+			}), 4.f);
 			return;
 		}
 		// "close": zoom the tactical camera fully in to inspect characters.

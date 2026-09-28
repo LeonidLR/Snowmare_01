@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Core/MissionSessionSubsystem.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "MissionSubsystem.generated.h"
@@ -9,12 +10,17 @@ class AOperativeCharacter;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMissionObjectiveChanged, const FText&, Objective);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMissionFailed, const FText&, Reason);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMainMenuChanged, bool, bOpen);
 
 /**
- * Mission-level state: the objective banner text, mission failure and restart.
+ * Mission-level state: the main menu (start mode), the objective banner text, mission failure and restart.
+ * The menu opens when a level starts unless Ctrl + X restarted it (same mode again) or the command line skips it
+ * (-ExecCmds / -NoMainMenu: headless checks start «Начать игру»; -ForceMainMenu keeps it). The world is paused while
+ * the menu is open.
  * The objective follows the quest chain in exploration and the game flow in combat (preparation, wave, victory).
  * Godot reference: Scenes/movements/main.gd update_objective, _update_objective_by_state, _check_squad_vital_signs,
- * _trigger_game_over, _on_restart_pressed, _restart_current_test_mode (Ctrl + X).
+ * _trigger_game_over, _on_restart_pressed, _restart_current_test_mode (Ctrl + X), _ready (quick restart),
+ * _on_start_game_pressed / _on_start_combat_pressed / _on_start_exploration_pressed.
  */
 UCLASS()
 class CODEXTACTICS_API UMissionSubsystem : public UWorldSubsystem
@@ -23,6 +29,20 @@ class CODEXTACTICS_API UMissionSubsystem : public UWorldSubsystem
 
 public:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
+
+	/** Starts the mission in a mode (main menu buttons): closes the menu, unpauses, applies the mode. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Mission")
+	void StartMission(EMissionStartMode Mode);
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Mission")
+	bool IsMainMenuOpen() const { return bMainMenuOpen; }
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Mission")
+	EMissionStartMode GetStartMode() const { return StartMode; }
+
+	/** Tag of the actor marking where «Начать бой» puts the squad (behind the gate; Godot hard-coded (0, -18)). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Mission")
+	FName CombatStartTag = TEXT("CombatStart");
 
 	/** Objective banner text without the «ЦЕЛЬ: » prefix. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Mission")
@@ -41,15 +61,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Mission")
 	FText GetFailureReason() const { return FailureReason; }
 
-	/** Reloads the current level (Godot reload_current_scene; «Начать заново» and Ctrl + X). */
+	/**
+	 * Reloads the current level (Godot reload_current_scene). bQuick (Ctrl + X) starts the same mode again without
+	 * the menu; «Начать заново» shows the menu.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Mission")
-	void RestartMission();
+	void RestartMission(bool bQuick = false);
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Mission")
 	FOnMissionObjectiveChanged OnObjectiveChanged;
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Mission")
 	FOnMissionFailed OnMissionFailed;
+
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Mission")
+	FOnMainMenuChanged OnMainMenuChanged;
 
 private:
 	UFUNCTION()
@@ -61,7 +87,13 @@ private:
 	UFUNCTION()
 	void HandleWaveStarted(int32 WaveIndex, int32 TotalEnemies);
 
+	void OpenMainMenu();
+	/** «Начать бой»: quest chain done, gate open, squad healed / warmed behind the gate, pre-combat cutscene. */
+	void StartCombatMode();
+
 	FText Objective;
+	EMissionStartMode StartMode = EMissionStartMode::None;
+	bool bMainMenuOpen = false;
 	FText FailureReason;
 	ECodexGamePhase LastPhase = ECodexGamePhase::Exploration;
 	bool bCombatFinished = false;

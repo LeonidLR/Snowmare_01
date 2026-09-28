@@ -698,7 +698,7 @@ void ACodexTacticsPlayerController::RestartMission()
 {
 	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
 	{
-		Mission->RestartMission();
+		Mission->RestartMission(/*bQuick*/ true);
 	}
 }
 
