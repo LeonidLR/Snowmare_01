@@ -12,6 +12,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "Survival/ColdSurvivalComponent.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -72,6 +73,7 @@ AOperativeCharacter::AOperativeCharacter()
 		FacingMarker->SetMaterial(0, BaseMat.Object);
 	}
 
+	ColdSurvival = CreateDefaultSubobject<UColdSurvivalComponent>(TEXT("ColdSurvival"));
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	HealthComponent->MaxHealth = 100.0f;
 	HealthComponent->BaseArmorReduction = 0.10f;
@@ -291,7 +293,16 @@ bool AOperativeCharacter::CanSprint() const
 
 float AOperativeCharacter::GetMaxSpeed() const
 {
-	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, Stance, bSprinting, bWounded, bCarrying);
+	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, Stance, bSprinting, bWounded, bCarrying) * ColdSpeedMultiplier;
+}
+
+void AOperativeCharacter::SetColdSpeedMultiplier(float Multiplier)
+{
+	if (!FMath::IsNearlyEqual(ColdSpeedMultiplier, Multiplier))
+	{
+		ColdSpeedMultiplier = Multiplier;
+		ApplyMovementParams();
+	}
 }
 
 bool AOperativeCharacter::IsMoving() const
@@ -349,6 +360,11 @@ bool AOperativeCharacter::CanShoot() const
 		return false;
 	}
 	if (bSprinting || bCarrying || bIsReloading)
+	{
+		return false;
+	}
+	// Godot: a weapon frozen at >= 90 % cold cannot fire until it thaws.
+	if (ColdSurvival && ColdSurvival->IsWeaponFrozen())
 	{
 		return false;
 	}
@@ -481,22 +497,16 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target)
 
 	CurrentClip--;
 
-	// Check cold misfire (Godot parity: >= 60% cold, max 35% chance)
+	// Cold misfire (Godot player.gd `_shoot_at_target`, balance.tres: >= 60 %, linear up to 30 %, never near heat).
 	bool bMisfire = bForceMisfireForTesting;
-	if (!bMisfire && ColdLevel >= 60.0f)
+	if (!bMisfire && ColdSurvival && FMath::FRand() < ColdSurvival->GetMisfireChance())
 	{
-		const float Denom = FMath::Max(1.0f, 100.0f - 60.0f);
-		const float MisfireT = FMath::Clamp((ColdLevel - 60.0f) / Denom, 0.0f, 1.0f);
-		const float MisfireChance = 0.35f * MisfireT;
-		if (FMath::FRand() < MisfireChance)
-		{
-			bMisfire = true;
-		}
+		bMisfire = true;
 	}
 
 	if (bMisfire)
 	{
-		MisfireCooldownTimer = 1.5f;
+		MisfireCooldownTimer = ColdSurvival ? ColdSurvival->Config.MisfireDelay : 0.45f;
 		OnWeaponMisfired.Broadcast(this);
 		OnWeaponMisfiredNative.Broadcast(this);
 		return false;
@@ -509,10 +519,10 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target)
 	const int32 DistCells = FMath::Max(1, FMath::RoundToInt(DistM / 1.5f));
 
 	float HitChance = CurrentWeapon ? CurrentWeapon->GetHitChanceForDistance(DistCells) : 0.85f;
-	if (ColdLevel > 50.0f)
+	// Shivering hands above 50 % cold (Godot realtime_cold_aim_penalty_max 0.30).
+	if (ColdSurvival && ColdLevel > 50.0f)
 	{
-		const float ColdPenalty = 0.40f * ((ColdLevel - 50.0f) / 50.0f);
-		HitChance = FMath::Clamp(HitChance - ColdPenalty, 0.05f, 0.99f);
+		HitChance = FMath::Clamp(HitChance - ColdSurvival->GetAimPenalty(), 0.05f, 0.99f);
 	}
 
 	const bool bHit = bForceHitForTesting || (FMath::FRand() <= HitChance);

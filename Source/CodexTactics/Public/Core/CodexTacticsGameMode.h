@@ -22,6 +22,10 @@ struct CODEXTACTICS_API FSquadMemberSpawn
 	/** Spawn offset from the player start (X forward, Y right), cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
 	FVector Offset = FVector::ZeroVector;
+
+	/** Cold resistance (Godot player.gd fortitude: commander 15, engineer 25, medic-sapper 20). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	float Fortitude = 15.f;
 };
 
 /**

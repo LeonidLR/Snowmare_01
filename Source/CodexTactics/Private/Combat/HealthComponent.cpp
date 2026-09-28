@@ -24,6 +24,19 @@ void UHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 	}
 }
 
+void UHealthComponent::ApplyDirectHealthLoss(float Amount, const FString& Source)
+{
+	if (bIsDead || Amount <= 0.0f)
+	{
+		return;
+	}
+	CurrentHealth = FMath::Max(0.0f, CurrentHealth - Amount);
+	if (CurrentHealth <= 0.0f)
+	{
+		Die(Source);
+	}
+}
+
 float UHealthComponent::TakeDamage(const FDamageSpec& Spec)
 {
 	if (bIsDead || Spec.Amount <= 0.0f)

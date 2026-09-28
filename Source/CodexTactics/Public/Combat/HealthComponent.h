@@ -37,6 +37,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Health")
 	void Heal(float Amount);
 
+	/**
+	 * Health loss that ignores armour, affinities and the 1 HP minimum hit (per-frame freezing damage).
+	 * Godot reference: player.gd `current_health -= freeze_dmg` at 100 % cold. Kills at 0 HP.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Health")
+	void ApplyDirectHealthLoss(float Amount, const FString& Source);
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Health")
 	bool IsAlive() const { return CurrentHealth > 0.0f; }
 

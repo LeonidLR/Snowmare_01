@@ -49,7 +49,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `main.gd` `_on_quest_message` | `UGameMessageSubsystem` | 3 | ✅ logic (HUD panel → UI step) | via CameraZoneSmoke |
 | `quest_manager.gd`, `interactable.gd` (quest part), `gate.gd`, `warm_zone.gd` | `FQuestChainState`, `UQuestSubsystem`, `AInteractableActor`, `UInteractionSubsystem`, `AGateActor`, `UHeatSourceComponent` | 5 | ✅ (action menu UI, barrels, traps → later) | `CodexTactics.Quests.*` (8), `CodexTactics.QuestChainSmoke` |
 | `main.gd` KEY_SPACE tap / hold, pause orders (`planned_move_pos`) | `FSpaceInputTracker`, `ACodexTacticsPlayerController`, `USquadSubsystem::PlanMove` | 4 | ✅ input + planning (markers, hold sphere, command bar → UI step) | `CodexTactics.Combat.*` (5), `CodexTactics.CombatFlowSmoke` |
-| `Scenes/movements/warm_zone.gd` | `AHeatSourceActor` + `UColdSurvivalComponent` | 1/5 | ⬜ | |
+| `Scenes/movements/warm_zone.gd` + `player.gd _process_cold_system` | `UHeatSourceComponent` + `ColdRules` + `UColdSurvivalComponent` | 1/5 | ✅ real-time (turn-based per-round cold comes with the grid combat) | `CodexTactics.Cold.*`, `CodexTactics.ColdSmoke` |
 | `Scenes/movements/combat_manager.gd`, `combat_trigger.gd`, `combat_wave_controller.gd` | `UTacticalCombatSubsystem`, `ACombatTriggerVolume`, `UWaveController` | 4 | ⬜ | |
 | `Scenes/movements/enemy_base.gd` + `enemy_*.gd` (6 types) | `AEnemyCharacterBase` + `UEnemyDataAsset` per type | 4 | ⬜ | |
 | `Scenes/movements/enemy_spawn_point.gd`, `mission_start_point.gd` | `AEnemySpawnPoint`, `AMissionStartPoint` | 4 | ⬜ | |

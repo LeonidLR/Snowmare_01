@@ -16,6 +16,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 | Agent | Task | Files | Since |
 |---|---|---|---|
+| Claude | Blueprint-driven operatives (BP_Operative), stance body/capsule, on-screen HUD feed + squad status | `OperativeCharacter.*`, `Core/CodexTacticsGameMode.*`, new `UI/CodexTacticsHUD.*`, `Scripts/Editor/*` | now |
 
 ## Open questions — Sprint 03 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 
@@ -135,6 +136,11 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-28 Claude (Gemini unavailable): cold survival committed — `ColdRules` + `UColdSurvivalComponent`
+  (Godot `_process_cold_system`: 1 %/s × fortitude cut × stance × zone × elevated wind, warming 8 %/s, tiers
+  40/70/90/100 with speed ×0.7/0.45/0.25, weapon freeze 90 % with 5 % hysteresis, frostbite prone, freeze damage,
+  warm regen). Misfire now Godot values (30 % max, 0.45 s delay) — Gemini's 35 %/1.5 s test updated.
+  Tests: 4 `CodexTactics.Cold.*` + `CodexTactics.ColdSmoke` PASS; 91/91 tests, all smokes PASS.
 - 13:07 Claude: created this file; found Gemini's in-progress camera edits; waiting for them before building.
 - 13:52 Claude: Sprint 03 part 1 done and committed — Space tap (tactical pause, HQ messages from Godot) / hold
   (turn-based enter, exit to a free 20 s pause), pause orders planned and clamped to 12 m then executed on

@@ -117,6 +117,16 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	TObjectPtr<class UHealthComponent> HealthComponent;
 
+	/** Real-time cold (writes ColdLevel, speed tier, weapon freeze, frostbite). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
+	TObjectPtr<class UColdSurvivalComponent> ColdSurvival;
+
+	/** Speed multiplier of the current cold tier (Godot speed_multiplier 1 / 0.7 / 0.45 / 0.25). */
+	void SetColdSpeedMultiplier(float Multiplier);
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
+	float GetColdSpeedMultiplier() const { return ColdSpeedMultiplier; }
+
 	// --- Combat & Weapon System (Godot player.gd parity) ---
 
 	virtual void Tick(float DeltaTime) override;
@@ -192,6 +202,7 @@ private:
 	TObjectPtr<UMaterialInstanceDynamic> BodyMaterial;
 
 	EOperativeStance Stance = EOperativeStance::Standing;
+	float ColdSpeedMultiplier = 1.f;
 	bool bSprinting = false;
 	bool bHasMoveOrder = false;
 };

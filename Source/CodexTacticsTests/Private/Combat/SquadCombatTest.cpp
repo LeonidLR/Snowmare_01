@@ -71,7 +71,8 @@ bool FSquadCombatColdMisfireTest::RunTest(const FString&)
 
 	TestFalse(TEXT("Misfire does not hit"), bHit);
 	TestTrue(TEXT("Misfire event was broadcast"), bMisfireEventFired);
-	TestEqual(TEXT("Misfire sets 1.5s cooldown"), Operative->MisfireCooldownTimer, 1.5f);
+	// Godot player.gd misfire_delay 0.45 s (not the directive's 1.5 s).
+	TestEqual(TEXT("Misfire sets 0.45s cooldown"), Operative->MisfireCooldownTimer, 0.45f);
 	TestEqual(TEXT("Clip still decremented on misfire chamber attempt"), Operative->CurrentClip, 9);
 	TestEqual(TEXT("Target took no damage on misfire"), TargetHealth->GetCurrentHealth(), 100.0f);
 	return true;
