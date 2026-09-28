@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-29 by Claude, after the balance import commit (see §10).
+Last update: 2026-09-29 by Claude, after commit `2c54c20`.
 
 ---
 
@@ -312,7 +312,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (balance import commit) | Both Godot balance files imported into data assets; turn-based combat reads DA_Balance |
+| `2c54c20` | Both Godot balance files imported into data assets; turn-based combat reads DA_Balance |
 | `71f7cb0` | Godot weapons imported into data assets, operatives start with the imported M16 (30/60) |
 | `06a28ca` | Turn-based action panel (phase, unit, AP / HP, buttons) |
 | `8baa4d5` | Gorky 17 turn-based combat subsystem, grid overlay, controller input, TurnBasedSmoke |
