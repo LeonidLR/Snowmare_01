@@ -14,10 +14,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## In progress
 
-*Currently empty. Ready for Claude to commit camera step and claim Task 01 (Quests & Interactables).*
-
-| Agent | Task | Files | Since |
-|---|---|---|---|
+*Currently empty. Checkpoint quest chain completed, verified by 54/54 unit tests and in-game smoke test.*
 
 ---
 

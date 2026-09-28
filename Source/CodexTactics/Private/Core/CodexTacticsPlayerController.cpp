@@ -1,5 +1,7 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Camera/TacticalCameraPawn.h"
+#include "Interactables/InteractableActor.h"
+#include "Interactables/InteractionSubsystem.h"
 #include "InputActionValue.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -126,6 +128,22 @@ void ACodexTacticsPlayerController::OnClick()
 			LastClickTime = -1.0;
 			return;
 		}
+	}
+
+	UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>();
+	// Clicking a quest object sends the leader to it; the interaction runs on arrival.
+	if (AInteractableActor* Interactable = Cast<AInteractableActor>(Hit.GetActor()))
+	{
+		if (Interactions)
+		{
+			Interactions->RequestInteraction(Interactable);
+		}
+		LastClickTime = -1.0;
+		return;
+	}
+	if (Interactions)
+	{
+		Interactions->CancelInteraction();
 	}
 
 	FVector2D MousePosition;

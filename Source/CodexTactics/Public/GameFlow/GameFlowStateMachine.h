@@ -35,6 +35,7 @@ public:
 	float GetPauseCooldownRemaining() const { return PauseCooldownRemaining; }
 	float GetPauseTimeRemaining() const { return PauseTimeRemaining; }
 	float GetPreparationTimeRemaining() const { return PreparationTimeRemaining; }
+	float GetCutsceneTimeRemaining() const { return CutsceneTimeRemaining; }
 	int32 GetTurnBasedUsesThisWave() const { return TurnBasedUsesThisWave; }
 	bool IsCombatUnlocked() const { return bCombatUnlocked; }
 	/**
@@ -51,7 +52,7 @@ public:
 	// --- Requests ---
 	/** Exploration -> Cutscene when the squad enters the combat zone (once per mission). */
 	EGameFlowResult TriggerCombatZone();
-	/** Cutscene -> Preparation for wave 1. */
+	/** Cutscene -> Preparation for wave 1 (skip, or automatically after CutsceneDuration). */
 	EGameFlowResult FinishCutscene();
 	/** Preparation -> WaveCombat/RealTime (timer expired or player pressed "ready"). */
 	EGameFlowResult FinishPreparation();
@@ -91,6 +92,7 @@ private:
 	float PauseCooldownRemaining = 0.f;
 	float PauseTimeRemaining = 0.f;
 	float PreparationTimeRemaining = 0.f;
+	float CutsceneTimeRemaining = 0.f;
 	int32 TurnBasedUsesThisWave = 0;
 	bool bCombatUnlocked = false;
 };

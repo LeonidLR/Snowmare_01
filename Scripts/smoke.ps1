@@ -11,7 +11,7 @@ $ProjectDir = Split-Path $PSScriptRoot -Parent
 $Project = Join-Path $ProjectDir "CodexTactics.uproject"
 $LogFile = Join-Path $ProjectDir "Saved\Logs\Smoke.log"
 
-& "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $Project $Map -game -nullrhi -nosplash -nosound -unattended -windowed `
+& "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $Project $Map -game -nullrhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH `
     "-ExecCmds=$Command" "-abslog=$LogFile" | Out-Null
 
 $lines = Select-String -Path $LogFile -Pattern "Smoke|LogCodexTactics: (Error|Warning)|LogNavigation: (Error|Warning)" |

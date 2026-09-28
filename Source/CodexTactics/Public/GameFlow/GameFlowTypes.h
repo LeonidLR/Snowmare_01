@@ -73,6 +73,10 @@ struct CODEXTACTICS_API FGameFlowConfig
 {
 	GENERATED_BODY()
 
+	/** Real seconds the pre-combat cutscene lasts unless skipped (Godot main.gd cutscene_timer 4.0). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Flow", meta = (ClampMin = "0"))
+	float CutsceneDuration = 4.f;
+
 	/** Real seconds of preparation before the first wave. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Flow", meta = (ClampMin = "0"))
 	float PreparationDuration = 60.f;

@@ -15,6 +15,7 @@ void FGameFlowStateMachine::Reset(const FGameFlowConfig& InConfig)
 	PauseCooldownRemaining = 0.f;
 	PauseTimeRemaining = 0.f;
 	PreparationTimeRemaining = 0.f;
+	CutsceneTimeRemaining = 0.f;
 	TurnBasedUsesThisWave = 0;
 	bCombatUnlocked = false;
 }
@@ -44,6 +45,7 @@ EGameFlowResult FGameFlowStateMachine::TriggerCombatZone()
 		return EGameFlowResult::CombatAlreadyUnlocked;
 	}
 	bCombatUnlocked = true;
+	CutsceneTimeRemaining = Config.CutsceneDuration;
 	SetState(ECodexGamePhase::Cutscene, ECodexCombatMode::None);
 	return EGameFlowResult::Ok;
 }
@@ -55,6 +57,7 @@ EGameFlowResult FGameFlowStateMachine::FinishCutscene()
 		return EGameFlowResult::WrongPhase;
 	}
 	WaveIndex = 1;
+	CutsceneTimeRemaining = 0.f;
 	PreparationTimeRemaining = Config.PreparationDuration;
 	SetState(ECodexGamePhase::Preparation, ECodexCombatMode::None);
 	return EGameFlowResult::Ok;
@@ -199,6 +202,14 @@ void FGameFlowStateMachine::Tick(float RealDeltaSeconds)
 		if (PauseTimeRemaining <= 0.f)
 		{
 			ReleaseTacticalPause();
+		}
+	}
+	else if (Phase == ECodexGamePhase::Cutscene)
+	{
+		CutsceneTimeRemaining -= RealDeltaSeconds;
+		if (CutsceneTimeRemaining <= 0.f)
+		{
+			FinishCutscene();
 		}
 	}
 	else if (Phase == ECodexGamePhase::Preparation)

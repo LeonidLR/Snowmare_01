@@ -5,6 +5,7 @@ Layout (UE cm, X forward from the player start):
   - narrow corridor (1.8 m wide) at X 1200..2200 to trigger column mode
   - pillars and a low barricade as obstacles
   - bunker room with a CameraZoneVolume + fixed CameraActor (camera zone check)
+  - checkpoint quest objects (canister, APC, generator, gate terminal) and a gate in the south wall
   - PlayerStart at the origin facing +X, lights
   - NavMeshBoundsVolume over the arena; the NavMesh is built at load (RuntimeGeneration=Dynamic)
 
@@ -72,6 +73,30 @@ zone = spawn(unreal.CameraZoneVolume, bunker_center, label="CameraZone_Bunker")
 zone.set_actor_scale3d(unreal.Vector(0.95, 0.95, 1.0))
 zone.set_editor_property("target_camera", zone_camera)
 zone.set_editor_property("zone_name", "Сектор наблюдения 01")
+
+# Checkpoint quest chain: canister -> APC diesel -> generator -> gate terminal -> gate (south wall, y = -2000).
+for label, center, size in [
+    ("Wall_GateWest", (-1675, -2000, 150), (2650, 50, 300)),
+    ("Wall_GateEast", (1675, -2000, 150), (2650, 50, 300)),
+]:
+    block(label, center, size)
+gate = spawn(unreal.GateActor, unreal.Vector(0, -2000, 0), unreal.Rotator(0, 0, 90), label="Gate_Checkpoint")
+
+
+def interactable(label, kind, name, center, extent):
+    actor = spawn(unreal.InteractableActor, unreal.Vector(*center), label=label)
+    actor.set_editor_property("object_type", kind)
+    actor.set_editor_property("display_name", name)
+    actor.get_editor_property("box").set_box_extent(unreal.Vector(*extent))
+    # Placeholder cube (100 cm) fills the box; mirrors AInteractableActor::OnConstruction.
+    actor.get_editor_property("mesh").set_relative_scale3d(unreal.Vector(extent[0] / 50.0, extent[1] / 50.0, extent[2] / 50.0))
+    return actor
+
+
+interactable("Quest_Canister", unreal.InteractableType.CANISTER, "Пустая канистра", (500, -1000, 35), (25, 20, 35))
+interactable("Quest_APC", unreal.InteractableType.VEHICLE, "Брошенный БМП-2", (-1600, -400, 120), (300, 160, 120))
+interactable("Quest_Generator", unreal.InteractableType.GENERATOR, "Резервный генератор", (1300, -1300, 70), (80, 60, 70))
+interactable("Quest_GateTerminal", unreal.InteractableType.GATE_TERMINAL, "Пульт управления воротами", (600, -1850, 90), (30, 30, 90))
 
 spawn(unreal.PlayerStart, unreal.Vector(0, 0, 100), label="PlayerStart")
 spawn(unreal.DirectionalLight, unreal.Vector(0, 0, 1000), unreal.Rotator(0, -50, -30), label="Sun")
