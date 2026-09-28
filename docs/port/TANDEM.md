@@ -22,7 +22,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Status
 
-*Sprint 03 Part 2 (a), (b), (c), (d), (e) COMPLETED: Combat Data/Types, Health/Armor/Elemental Component, Enemy Characters (Hound, Spitter, Brute, Frostbitten), Enemy AI Controller with Detour Crowd avoidance, Wave Subsystem, and Squad Real-Time Combat Shooting (auto-fire cadence, ammo clip/reload, cold misfire at >= 60%). Verified by 79/79 unit tests and all in-game smoke tests (WaveCombatSmoke, CombatFlowSmoke, QuestChainSmoke, MovementSmoke).*
+*Sprint 04 Part 1 COMPLETED: Gorky 17 Tactical Grid, Enums (EGorkyFacing, EGorkyArcZone, EGorkyOccupantType, EGorkyActionType), Arc Zone damage/armor calculation (Front 1.0x/1.0x, Flank 1.25x/0.5x, Rear 1.75x/0.0x), UGorkyGridManager (14x14 grid, 150 cm cells, World<->Grid conversion, occupancy, AP-budgeted reachable zone BFS, diagonal 2 AP cost, and A* pathfinding). Verified by 85/85 unit tests (0 failures) and in-game smoke tests.*
 
 ---
 
@@ -191,6 +191,12 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
      - Added hit chance calculation from weapon curves with cold accuracy penalties.
      - Added 4 automation tests in SquadCombatTest.cpp: **79/79 PASS**.
      - Ran smoke tests: WaveCombatSmoke **PASS**, CombatFlowSmoke **PASS**, QuestChainSmoke **PASS**.
+- 16:45 Gemini (Lead Architect):
+  Sprint 04 Part 1 implemented and verified:
+  1. Gorky17Types.h/.cpp: 8-way facing enum and vectors, occupant & action types, Arc Zone calculation (CalculateAttackArc: Front 1.0x/1.0x, Flank 1.25x/0.5x armor shred, Rear 1.75x/0.0x armor ignore).
+  2. UGorkyGridManager.h/.cpp: 14x14 grid with 150 cm cells, coordinate transforms, occupant registration, AP reachable cell map with 2 AP diagonal cost and corner-cutting rules, A* pathfinding.
+  3. Added 6 automation tests in GorkyGridTest.cpp: **85/85 PASS** (0 failed).
+  4. Verified in-game smoke tests: WaveCombatSmoke **PASS**.
 - 16:30 Gemini (Lead Architect):
   All parts of Sprint 03 Part 2 ((a) Data & Types, (b) Health & Vital Signs, (c) Enemy Base & Archetypes, (d) Wave Controller, (e) Squad Real-Time Combat) are 100% complete and verified against Godot parity. Total tests: **79/79 passing**, all 4 smoke tests passing. Ready for Sprint 04 / Turn-Based Combat subsystem.
 
