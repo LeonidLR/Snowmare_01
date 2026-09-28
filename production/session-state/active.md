@@ -15,7 +15,7 @@ Task: next = wire hand-typed values to DA_GameBalanceConfig, import enemies / le
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-Balance import commit: 115 automation tests, 19 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
+Operative balance commit: 116 automation tests, 19 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
 
 ## Open questions
 - PlayerStart of L_MovementTest moved to (-180, -1490) — intended? (HANDOFF §7)

@@ -1,5 +1,6 @@
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/DialogueSequenceAsset.h"
+#include "Characters/OperativeBalance.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Data/WeaponDataAsset.h"
 #include "Camera/TacticalCameraPawn.h"
@@ -88,6 +89,11 @@ void ACodexTacticsGameMode::SpawnSquad()
 		Operative->SquadRole = Entry.Role;
 		Operative->Luck = Entry.Luck;
 		Operative->Accuracy = Entry.Accuracy;
+		// Godot apply_balance_config: health, speeds, matches... from game_balance_config.tres (before BeginPlay).
+		if (const UGodotBalanceAsset* Config = GameBalanceConfig.LoadSynchronous())
+		{
+			OperativeBalance::Apply(*Config, *Operative);
+		}
 		UGameplayStatics::FinishSpawningActor(Operative, FTransform(Facing, Location));
 		if (UWeaponDataAsset* Weapon = StartingWeapon.LoadSynchronous())
 		{
