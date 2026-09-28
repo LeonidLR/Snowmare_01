@@ -62,6 +62,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	float GetPreparationTimeRemaining() const { return Machine.GetPreparationTimeRemaining(); }
 
+	/** Real seconds left in the pre-combat cutscene. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
+	float GetCutsceneTimeRemaining() const { return Machine.GetCutsceneTimeRemaining(); }
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult TriggerCombatZone() { return Machine.TriggerCombatZone(); }
 

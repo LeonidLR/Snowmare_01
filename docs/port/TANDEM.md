@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: phase banners + cutscene card; `GameFlowSubsystem::GetCutsceneTimeRemaining` (additive); squad reset after the cutscene.
 - 2026-09-29 Claude: bottom action bar (`UActionBarWidget`), controller stance cycle / relocation pick mode.
 - 2026-09-29 Claude: dialogues — Godot .tres imported by script into `/Game/Data/Dialogues`, bottom dialogue window,
   feed dialogues on prep / wave rest / victory. Controller: Space / Enter / Esc drive the open dialogue.

@@ -190,7 +190,21 @@ void UMissionSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexComba
 		return;
 	}
 	bCombatFinished |= LastPhase == ECodexGamePhase::PostCombat;
+	const bool bCutsceneEnded = LastPhase == ECodexGamePhase::Cutscene && Phase == ECodexGamePhase::Preparation;
 	LastPhase = Phase;
+	if (bCutsceneEnded)
+	{
+		// Godot _end_cutscene_and_start_pause: every operative starts the preparation warm and at full health.
+		if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+		{
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->StopOperative();
+				Member->ColdLevel = 0.f;
+				Member->HealthComponent->Heal(Member->HealthComponent->GetMaxHealth());
+			}
+		}
+	}
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	FText PhaseObjective;
 	if (Flow && MissionRules::GetPhaseObjective(Phase, Flow->GetWaveIndex(), Flow->GetPreparationTimeRemaining(), bCombatFinished, PhaseObjective))

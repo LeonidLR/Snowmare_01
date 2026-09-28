@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: Phase 4/5 world systems — interaction, relocation, deployables
-Task: next = UI shell — preparation / pause banners, cutscene card (docs/port/HANDOFF.md §8.5)
+Task: next = turn-based combat manager (docs/port/HANDOFF.md §8.6); remaining UI pieces listed in §8.5
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
@@ -15,7 +15,7 @@ Task: next = UI shell — preparation / pause banners, cutscene card (docs/port/
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-Action bar commit: 110 automation tests, 17 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
+Banners commit: 110 automation tests, 18 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
 
 ## Open questions
 - PlayerStart of L_MovementTest moved to (-180, -1490) — intended? (HANDOFF §7)

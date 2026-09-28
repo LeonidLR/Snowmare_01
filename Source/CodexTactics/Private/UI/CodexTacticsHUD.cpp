@@ -13,6 +13,7 @@
 #include "UI/ActionMenuWidget.h"
 #include "UI/LootDialogWidget.h"
 #include "UI/ActionBarWidget.h"
+#include "UI/PhaseBannersWidget.h"
 #include "UI/DialogueSubsystem.h"
 #include "UI/DialogueWidget.h"
 #include "UI/MainMenuWidget.h"
@@ -109,6 +110,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	MainMenuWidgetClass = UMainMenuWidget::StaticClass();
 	DialogueWidgetClass = UDialogueWidget::StaticClass();
 	ActionBarWidgetClass = UActionBarWidget::StaticClass();
+	PhaseBannersWidgetClass = UPhaseBannersWidget::StaticClass();
 }
 
 void ACodexTacticsHUD::BeginPlay()
@@ -156,6 +158,15 @@ void ACodexTacticsHUD::BeginPlay()
 		if (ActionBar)
 		{
 			ActionBar->AddToViewport(5);
+		}
+	}
+	if (PhaseBannersWidgetClass && GetOwningPlayerController())
+	{
+		PhaseBanners = CreateWidget<UPhaseBannersWidget>(GetOwningPlayerController(), PhaseBannersWidgetClass);
+		if (PhaseBanners)
+		{
+			PhaseBanners->AddToViewport(8);
+			PhaseBanners->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		}
 	}
 	if (DialogueWidgetClass && GetOwningPlayerController())

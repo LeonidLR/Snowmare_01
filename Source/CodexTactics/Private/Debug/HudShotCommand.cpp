@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu.
+// "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -17,6 +17,7 @@
 #include "Combat/HealthComponent.h"
 #include "Data/DialogueSequenceAsset.h"
 #include "UI/DialogueSubsystem.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "Containers/Ticker.h"
 #include "GameFramework/WorldSettings.h"
 #include "CodexTactics.h"
@@ -86,6 +87,24 @@ namespace HudShot
 		const bool bPlace = Args.Contains(TEXT("place"));
 		const bool bShoot = Args.Contains(TEXT("shoot"));
 		const bool bFailed = Args.Contains(TEXT("failed"));
+		if (Args.Contains(TEXT("cutscene")) || Args.Contains(TEXT("prep")))
+		{
+			// The cutscene lasts 4 s: start it shortly before the screenshot (4.5 s).
+			const bool bPrep = Args.Contains(TEXT("prep"));
+			TWeakObjectPtr<UWorld> FlowWorld(World);
+			FTimerHandle FlowHandle;
+			World->GetTimerManager().SetTimer(FlowHandle, FTimerDelegate::CreateLambda([FlowWorld, bPrep]()
+			{
+				if (UGameFlowSubsystem* Flow = FlowWorld.IsValid() ? FlowWorld->GetSubsystem<UGameFlowSubsystem>() : nullptr)
+				{
+					Flow->TriggerCombatZone();
+					if (bPrep)
+					{
+						Flow->FinishCutscene();
+					}
+				}
+			}), 3.f, false);
+		}
 		if (Args.Contains(TEXT("dialogue")))
 		{
 			if (const UDialogueSequenceAsset* Intro = LoadObject<UDialogueSequenceAsset>(nullptr, TEXT("/Game/Data/Dialogues/DA_DialogueIntro.DA_DialogueIntro")))

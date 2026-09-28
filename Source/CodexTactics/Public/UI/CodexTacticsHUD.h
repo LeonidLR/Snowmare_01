@@ -12,6 +12,7 @@ class UMissionFailedWidget;
 class UMainMenuWidget;
 class UDialogueWidget;
 class UActionBarWidget;
+class UPhaseBannersWidget;
 class ALootCrateActor;
 class UFont;
 
@@ -57,6 +58,10 @@ public:
 	/** Bottom tactical bar class (a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UActionBarWidget> ActionBarWidgetClass;
+
+	/** Pause / preparation / wave banners and the cutscene card (a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UPhaseBannersWidget> PhaseBannersWidgetClass;
 
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
@@ -114,6 +119,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UActionBarWidget> ActionBar;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UPhaseBannersWidget> PhaseBanners;
 
 	void DrawMessageFeed();
 	/** Draws the objective banner; returns its bottom edge (Y). */

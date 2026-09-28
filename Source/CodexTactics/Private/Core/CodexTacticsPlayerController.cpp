@@ -206,6 +206,12 @@ void ACodexTacticsPlayerController::RotatePlacement()
 
 void ACodexTacticsPlayerController::SpacePressed()
 {
+	// Godot: any key skips the pre-combat cutscene.
+	if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->GetPhase() == ECodexGamePhase::Cutscene)
+	{
+		Flow->FinishCutscene();
+		return;
+	}
 	if (IsDialogueOpen())
 	{
 		DialogueNext(); // Godot: Space advances the dialogue instead of pausing
