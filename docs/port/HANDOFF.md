@@ -278,7 +278,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (turn-based rules commit) | Gorky line of sight, turn-based pure rules (hit chance, attack cells, balance struct) |
+| `87b4ae7` | Gorky line of sight, turn-based pure rules (hit chance, attack cells, balance struct) |
 | `444692c` | Pause / preparation / wave banners, cutscene card with skip, squad reset after the cutscene |
 | `5c317b5` | Bottom tactical bar (weapon, relocation pick mode, stance cycle, squad slots with HP / cold bars) |
 | `2b17909` | Dialogue assets imported from Godot, bottom dialogue window, feed dialogues for prep / wave rest / victory, input blocking |
