@@ -42,7 +42,9 @@ enum class EStatusEffect : uint8
 	Frozen UMETA(DisplayName = "Frozen"),
 	Stagger UMETA(DisplayName = "Stagger"),
 	Bleeding UMETA(DisplayName = "Bleeding"),
-	ArmorShred UMETA(DisplayName = "Armor Shred")
+	ArmorShred UMETA(DisplayName = "Armor Shred"),
+	/** Godot SHOCKED (plasma: interrupts attacks + micro-stun); imported, effect not simulated yet. Appended to keep saved values. */
+	Shocked UMETA(DisplayName = "Shocked")
 };
 
 /**

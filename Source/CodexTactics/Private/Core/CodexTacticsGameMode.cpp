@@ -1,5 +1,6 @@
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/DialogueSequenceAsset.h"
+#include "Data/WeaponDataAsset.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/OperativeCharacter.h"
 #include "Core/CodexTacticsGameState.h"
@@ -27,6 +28,7 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 	TurretClass = ATurretActor::StaticClass();
 	OperativeClass = AOperativeCharacter::StaticClass();
 	OperativeBlueprint = TSoftClassPtr<AOperativeCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Operatives/BP_Operative.BP_Operative_C")));
+	StartingWeapon = TSoftObjectPtr<UWeaponDataAsset>(FSoftObjectPath(TEXT("/Game/Data/Weapons/DA_Weapon_m16.DA_Weapon_m16")));
 	DialogueMissionStart = TSoftObjectPtr<UDialogueSequenceAsset>(FSoftObjectPath(TEXT("/Game/Data/Dialogues/DA_DialogueIntro.DA_DialogueIntro")));
 	DialoguePreparationStarted = TSoftObjectPtr<UDialogueSequenceAsset>(FSoftObjectPath(TEXT("/Game/Data/Dialogues/DA_DialoguePrep.DA_DialoguePrep")));
 	DialogueWaveRest = TSoftObjectPtr<UDialogueSequenceAsset>(FSoftObjectPath(TEXT("/Game/Data/Dialogues/DA_DialogueWaveRest.DA_DialogueWaveRest")));
@@ -84,6 +86,11 @@ void ACodexTacticsGameMode::SpawnSquad()
 		Operative->Luck = Entry.Luck;
 		Operative->Accuracy = Entry.Accuracy;
 		UGameplayStatics::FinishSpawningActor(Operative, FTransform(Facing, Location));
+		if (UWeaponDataAsset* Weapon = StartingWeapon.LoadSynchronous())
+		{
+			Operative->EquipWeapon(Weapon); // full clip
+			Operative->ReserveAmmo = StartingReserveAmmo;
+		}
 		Operative->ApplyBodyColor();
 	}
 }

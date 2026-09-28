@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: Phase 2 weapons importer; `EStatusEffect::Shocked` appended (Gemini enum, additive); game mode equips the imported M16.
 - 2026-09-29 Claude: turn-based combat subsystem + grid overlay. Additive edits on Gemini files: `UGorkyGridManager`
   (FindPathToAdjacent, FindPathClosestOutsideForbidden), `AEnemyCharacter::DoesFearFire`, `UWaveSubsystem::Tick` skips
   spawning in TurnBased. `M_CombatFeedback` now has the instanced-static-mesh usage flag.

@@ -4,6 +4,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "Interactables/DeployableRules.h"
 class UDialogueSequenceAsset;
+class UWeaponDataAsset;
 #include "CodexTacticsGameMode.generated.h"
 
 class AOperativeCharacter;
@@ -77,6 +78,14 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
 	TSubclassOf<ATurretActor> TurretClass;
+
+	/** Weapon every spawned operative starts with (imported from Godot rifle_m16.tres by Scripts/Editor/import_weapons.py). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
+	TSoftObjectPtr<UWeaponDataAsset> StartingWeapon;
+
+	/** Starting reserve of that weapon (Godot player.gd _init_weapons: m16 reserve 60). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad", meta = (ClampMin = "0"))
+	int32 StartingReserveAmmo = 60;
 
 	/** Story dialogues (imported from Godot by Scripts/Editor/import_dialogues.py; Godot main.gd dialogue_* exports). */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Dialogue")
