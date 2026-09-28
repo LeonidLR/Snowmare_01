@@ -29,9 +29,9 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 
 	// Godot squad: Commander leads (Blue), Engineer (Orange), Medic-sapper (Green) in triangle formation.
 	SquadRoster = {
-		{ LOCTEXT("Commander", "Командир"), FLinearColor::FromSRGBColor(FColor(0x20, 0x80, 0xEC)), FVector(0.f, 0.f, 0.f), 15.f, EOperativeRole::Commander, 25.f },
-		{ LOCTEXT("Engineer", "Инженер"), FLinearColor::FromSRGBColor(FColor(0xFF, 0x61, 0x0F)), FVector(-280.f, -260.f, 0.f), 25.f, EOperativeRole::Engineer, 30.f },
-		{ LOCTEXT("Medic", "Медик-сапёр"), FLinearColor::FromSRGBColor(FColor(0x1F, 0xB3, 0x33)), FVector(-280.f, 260.f, 0.f), 20.f, EOperativeRole::MedicSapper, 35.f } };
+		{ LOCTEXT("Commander", "Командир"), FLinearColor::FromSRGBColor(FColor(0x20, 0x80, 0xEC)), FVector(0.f, 0.f, 0.f), 15.f, EOperativeRole::Commander, 25.f, 90.f },
+		{ LOCTEXT("Engineer", "Инженер"), FLinearColor::FromSRGBColor(FColor(0xFF, 0x61, 0x0F)), FVector(-280.f, -260.f, 0.f), 25.f, EOperativeRole::Engineer, 30.f, 75.f },
+		{ LOCTEXT("Medic", "Медик-сапёр"), FLinearColor::FromSRGBColor(FColor(0x1F, 0xB3, 0x33)), FVector(-280.f, 260.f, 0.f), 20.f, EOperativeRole::MedicSapper, 35.f, 85.f } };
 }
 
 void ACodexTacticsGameMode::StartPlay()
@@ -77,6 +77,7 @@ void ACodexTacticsGameMode::SpawnSquad()
 		Operative->ColdSurvival->Fortitude = Entry.Fortitude;
 		Operative->SquadRole = Entry.Role;
 		Operative->Luck = Entry.Luck;
+		Operative->Accuracy = Entry.Accuracy;
 		UGameplayStatics::FinishSpawningActor(Operative, FTransform(Facing, Location));
 		Operative->ApplyBodyColor();
 	}

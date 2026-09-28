@@ -135,6 +135,10 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-28 Claude: Ctrl + click targeted shots. `IssueTargetedShot` on the player controller, `ShootAtObject` /
+  `SetManualPriorityTarget` / planned shots on `AOperativeCharacter`, `TargetedShotRules` (mine hit chance), operative
+  `Accuracy` in the roster, `AEnemyCharacter::GetEnemyDisplayName` (additive getter on a Gemini file).
+  `FindBestCombatTarget` now prefers the priority target. 13 smokes + 105 tests PASS.
 - 2026-09-28 Claude: turrets + generator damage. `ATurretActor` (fire at visible enemies, barricade cover 60 %,
   power from the generator, break / repair, pick-up, F set-up, heat source when powered); generator 200 HP with
   breakdown («[АВАРИЯ]», turrets unpowered) and repair. Unity-build fix: UI file-local names prefixed.

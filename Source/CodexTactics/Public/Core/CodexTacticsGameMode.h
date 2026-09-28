@@ -38,6 +38,10 @@ struct CODEXTACTICS_API FSquadMemberSpawn
 	/** Luck, % (Godot: commander 25, engineer 30, medic-sapper 35). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
 	float Luck = 25.f;
+
+	/** Marksmanship, % (Godot player.gd accuracy: commander 90, engineer 75, medic-sapper 85). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	float Accuracy = 90.f;
 };
 
 /**

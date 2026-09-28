@@ -15,6 +15,8 @@ class USquadSubsystem;
  * Click ground: leader moves there; double click: sprint; click an operative: make it leader;
  * 1..3: select leader; Z / C / X: stand / crouch / prone (with Alt: whole squad).
  * Camera: wheel zoom, Q/E or arrows rotate, RMB drag rotates, MMB drag pans (WASD / edges are polled by the camera).
+ * Ctrl + click: targeted shot by the leader — enemy = priority target, barrel = explode, mine = remote shot (hit chance),
+ * supply crate / trapped object = remote detonation; during the tactical pause the shot is planned instead.
  * Space: tap = tactical pause (during a wave), hold = enter / leave turn-based combat. During the pause, clicks
  * plan moves (executed together on release); during turn-based combat ground clicks do not issue real-time moves.
  * Input actions are created in code for now; they move to assets once the editor setup exists.
@@ -43,6 +45,12 @@ public:
 	/** Space pressed / released (public for headless checks that drive the same path as the keyboard). */
 	void SpacePressed();
 	void SpaceReleased();
+
+	/**
+	 * Ctrl + click on HitActor (Godot main.gd Ctrl branch): the leader shoots it now, or plans the shot during the
+	 * tactical pause. Clicking anything else posts the hint. Public for headless checks.
+	 */
+	void IssueTargetedShot(AActor* HitActor);
 
 protected:
 	virtual void BeginPlay() override;

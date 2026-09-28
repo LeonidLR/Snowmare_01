@@ -36,6 +36,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	EEnemyArchetype GetArchetype() const { return Archetype; }
 
+	/** Name used in radio lines (Godot enemy_name). */
+	const FString& GetEnemyDisplayName() const { return EnemyDisplayName; }
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
 

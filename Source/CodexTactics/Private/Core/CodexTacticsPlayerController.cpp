@@ -11,6 +11,7 @@
 
 #define LOCTEXT_NAMESPACE "CodexTacticsPlayerController"
 #include "InputActionValue.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "EnhancedInputComponent.h"
@@ -308,6 +309,17 @@ void ACodexTacticsPlayerController::OnClick()
 		return;
 	}
 
+	// Ctrl + click: targeted fire only, never a move or a selection.
+	if (IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl))
+	{
+		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		if (!Flow || Flow->GetCombatMode() != ECodexCombatMode::TurnBased)
+		{
+			IssueTargetedShot(Hit.GetActor());
+		}
+		return;
+	}
+
 	// 1. Direct hit check or owner check on operative
 	AOperativeCharacter* SelectedMember = nullptr;
 	if (AOperativeCharacter* HitOperative = Cast<AOperativeCharacter>(Hit.GetActor()))
@@ -573,6 +585,87 @@ USquadSubsystem* ACodexTacticsPlayerController::GetSquad() const
 {
 	const UWorld* World = GetWorld();
 	return World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+}
+
+
+void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	if (!Leader || !Messages)
+	{
+		return;
+	}
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const bool bPaused = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+	const ETargetedShotKind Kind = AOperativeCharacter::ClassifyShotTarget(HitActor);
+	if (bPaused && Kind != ETargetedShotKind::None)
+	{
+		Leader->PlanTargetedShot(HitActor);
+	}
+
+	switch (Kind)
+	{
+	case ETargetedShotKind::Enemy:
+	{
+		const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(HitActor);
+		const FText EnemyName = Enemy ? FText::FromString(Enemy->GetEnemyDisplayName()) : LOCTEXT("Enemy", "Враг");
+		if (bPaused)
+		{
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("PlanEnemy", "📋 [ПЛАН] Назначен прицельный огонь по: {0}!"), EnemyName));
+		}
+		else
+		{
+			Leader->SetManualPriorityTarget(HitActor);
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("PriorityEnemy", "🎯 Назначена приоритетная цель: {0}!"), EnemyName));
+		}
+		break;
+	}
+	case ETargetedShotKind::Barrel:
+		if (bPaused)
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanBarrel", "📋 [ПЛАН] Запланирован выстрел по горючей бочке! [ПРОБЕЛ — огонь]"));
+		}
+		else if (Leader->ShootAtObject(HitActor))
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("ShotBarrel", "💥 Прицельный выстрел по горючей бочке!"));
+		}
+		break;
+	case ETargetedShotKind::Mine:
+		if (bPaused)
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanMine", "📋 [ПЛАН] Запланирован прицельный выстрел по мине! [ПРОБЕЛ — огонь]"));
+		}
+		else
+		{
+			Leader->ShootAtObject(HitActor);
+		}
+		break;
+	case ETargetedShotKind::Crate:
+		if (bPaused)
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanCrate", "📋 [ПЛАН] Запланирован выстрел по ящику снабжения! [ПРОБЕЛ — огонь]"));
+		}
+		else
+		{
+			Leader->ShootAtObject(HitActor);
+		}
+		break;
+	case ETargetedShotKind::TrappedObject:
+		if (bPaused)
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanTrapped", "📋 [ПЛАН] Запланирован дистанционный подрыв растяжки! [ПРОБЕЛ — огонь]"));
+		}
+		else
+		{
+			Leader->ShootAtObject(HitActor);
+		}
+		break;
+	default:
+		Messages->PostMessage(Leader->DisplayName, LOCTEXT("TargetHint", "Укажите врага, бочку, мину или ящик для прицельной стрельбы [Ctrl+Клик]!"));
+		break;
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

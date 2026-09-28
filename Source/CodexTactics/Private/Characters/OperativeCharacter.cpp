@@ -11,6 +11,10 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Interactables/BarricadeActor.h"
+#include "Interactables/BarrelActor.h"
+#include "Interactables/LootCrateActor.h"
+#include "Interactables/ProximityMineActor.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Survival/ColdSurvivalComponent.h"
@@ -584,6 +588,20 @@ AActor* AOperativeCharacter::FindBestCombatTarget() const
 	const float MaxRange = CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.0f;
 	const FVector MyLoc = GetActorLocation();
 
+	// Godot _find_shoot_target step 1: the manual priority target (Ctrl + click) wins while it can be hit.
+	if (AActor* Priority = ManualPriorityTarget.Get())
+	{
+		const UHealthComponent* PriorityHealth = Priority->FindComponentByClass<UHealthComponent>();
+		if (!PriorityHealth || !PriorityHealth->IsAlive() || Priority->IsHidden())
+		{
+			ManualPriorityTarget.Reset();
+		}
+		else if (CanFireAtPriorityTarget(Priority, MaxRange))
+		{
+			return Priority;
+		}
+	}
+
 	AActor* BestTarget = nullptr;
 	float MinDistSq = MaxRange * MaxRange;
 
@@ -753,3 +771,220 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target)
 
 	return bHit;
 }
+
+// --- Ctrl + click targeted shots ---------------------------------------------------------------------------------
+
+#define LOCTEXT_NAMESPACE "OperativeTargetedShots"
+
+namespace
+{
+	void OperativeShotLine(const AOperativeCharacter& Operative, const FText& Text)
+	{
+		UWorld* World = Operative.GetWorld();
+		if (UGameMessageSubsystem* Messages = World ? World->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+		{
+			Messages->PostMessage(Operative.DisplayName, Text);
+		}
+	}
+}
+
+ETargetedShotKind AOperativeCharacter::ClassifyShotTarget(const AActor* Target)
+{
+	if (!IsValid(Target))
+	{
+		return ETargetedShotKind::None;
+	}
+	if (Target->ActorHasTag(FName(TEXT("Enemy"))))
+	{
+		const UHealthComponent* Health = Target->FindComponentByClass<UHealthComponent>();
+		return Health && Health->IsAlive() ? ETargetedShotKind::Enemy : ETargetedShotKind::None;
+	}
+	if (Target->IsA<ABarrelActor>())
+	{
+		return ETargetedShotKind::Barrel;
+	}
+	if (Target->IsA<AProximityMineActor>())
+	{
+		return ETargetedShotKind::Mine;
+	}
+	if (Target->IsA<ALootCrateActor>())
+	{
+		return ETargetedShotKind::Crate;
+	}
+	const AInteractableActor* Interactable = Cast<AInteractableActor>(Target);
+	return Interactable && Interactable->bTrapped ? ETargetedShotKind::TrappedObject : ETargetedShotKind::None;
+}
+
+bool AOperativeCharacter::CanBeginWeaponShot()
+{
+	if (!HealthComponent || !HealthComponent->IsAlive() || bIsReloading || MisfireCooldownTimer > 0.f)
+	{
+		return false;
+	}
+	if (ColdSurvival && ColdSurvival->IsWeaponFrozen())
+	{
+		OperativeShotLine(*this, LOCTEXT("WeaponFrozen", "🥶 ОРУЖИЕ ЗАМЁРЗЛО! Нужен источник тепла!"));
+		return false;
+	}
+	if (CurrentClip > 0)
+	{
+		return true;
+	}
+	StartReload();
+	return false;
+}
+
+void AOperativeCharacter::ConsumeAmmoAfterShot()
+{
+	CurrentClip = FMath::Max(0, CurrentClip - 1);
+	if (CurrentClip <= 0)
+	{
+		StartReload();
+	}
+}
+
+void AOperativeCharacter::StopAndFace(const FVector& Location)
+{
+	SetSprinting(false);
+	StopOperative();
+	const FVector Direction = (Location - GetActorLocation()).GetSafeNormal2D();
+	if (!Direction.IsNearlyZero())
+	{
+		SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
+	}
+}
+
+bool AOperativeCharacter::CanFireAtPriorityTarget(const AActor* Target, float MaxRange) const
+{
+	if (FVector::Dist(GetActorLocation(), Target->GetActorLocation()) > MaxRange)
+	{
+		return false;
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(PriorityTargetLine), false, this);
+	for (TActorIterator<AOperativeCharacter> It(GetWorld()); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
+	FHitResult Hit;
+	if (!GetWorld()->LineTraceSingleByChannel(Hit, GetActorLocation(), Target->GetActorLocation(), ECC_Visibility, Params))
+	{
+		return true;
+	}
+	const AActor* Blocker = Hit.GetActor();
+	if (!Blocker || Blocker == Target || Blocker->ActorHasTag(FName(TEXT("Enemy"))))
+	{
+		return true;
+	}
+	// Godot: a barricade in the line of fire blocks only a prone shooter (crouching = cover 0.8, standing = clear).
+	return Blocker->IsA<ABarricadeActor>() && Stance != EOperativeStance::Prone;
+}
+
+bool AOperativeCharacter::ShootAtObject(AActor* Target)
+{
+	const ETargetedShotKind Kind = ClassifyShotTarget(Target);
+	if (Kind == ETargetedShotKind::None || Kind == ETargetedShotKind::Enemy || !CanBeginWeaponShot())
+	{
+		return false;
+	}
+	StopAndFace(Target->GetActorLocation());
+
+	bool bHit = true;
+	FMineShotChance MineShot;
+	float DistanceM = 0.f;
+	if (Kind == ETargetedShotKind::Mine)
+	{
+		DistanceM = FVector::Dist(GetActorLocation(), Target->GetActorLocation()) / 100.f;
+		MineShot = TargetedShotRules::ComputeMineShotChance(Accuracy, ColdLevel, Stance, DistanceM);
+		bHit = bForceHitForTesting || FMath::FRand() * 100.f <= MineShot.Chance;
+	}
+	OnWeaponFired.Broadcast(this, Target, bHit);
+	OnWeaponFiredNative.Broadcast(this, Target, bHit);
+
+	switch (Kind)
+	{
+	case ETargetedShotKind::Barrel:
+		CastChecked<ABarrelActor>(Target)->Explode(DisplayName);
+		break;
+	case ETargetedShotKind::Mine:
+	{
+		const FText Chance = FText::AsNumber(FMath::TruncToInt(MineShot.Chance));
+		const FText Distance = FText::FromString(FString::Printf(TEXT("%.1f"), DistanceM));
+		if (bHit)
+		{
+			OperativeShotLine(*this, FText::Format(LOCTEXT("MineHit",
+				"💥 {0}: «Меткий выстрел (Шанс: {1}%, {2}, {3}м)! Мина ликвидирована дистанционно!»"),
+				DisplayName, Chance, MineShot.StanceName, Distance));
+			CastChecked<AProximityMineActor>(Target)->Detonate();
+		}
+		else
+		{
+			OperativeShotLine(*this, FText::Format(LOCTEXT("MineMiss",
+				"💨 {0}: «Промах! (Шанс был {1}%: дист. {2}м, {3}). {4} — присядьте или подойдите ближе!»"),
+				DisplayName, Chance, Distance, MineShot.StanceName, TargetedShotRules::GetMineMissReason(Stance, DistanceM, ColdLevel)));
+		}
+		break;
+	}
+	case ETargetedShotKind::Crate:
+	{
+		ALootCrateActor* Crate = CastChecked<ALootCrateActor>(Target);
+		if (Crate->bTrapped)
+		{
+			OperativeShotLine(*this, FText::Format(LOCTEXT("CrateTrapShot", "💥 {0}: «Выстрел по ловушке ящика! Дистанционный подрыв!»"), DisplayName));
+		}
+		// Godot quirk kept: loot_crate.gd always has detonate_trap, so a shot also blows up an untrapped crate.
+		Crate->DetonateTrap(true, DisplayName);
+		break;
+	}
+	case ETargetedShotKind::TrappedObject:
+		OperativeShotLine(*this, FText::Format(LOCTEXT("TrappedShot", "💥 {0}: «Выстрел по растяжке на объекте! Дистанционная детонация!»"), DisplayName));
+		CastChecked<AInteractableActor>(Target)->DetonateTrap(true, DisplayName);
+		break;
+	default:
+		break;
+	}
+	ConsumeAmmoAfterShot();
+	return true;
+}
+
+void AOperativeCharacter::SetManualPriorityTarget(AActor* Enemy)
+{
+	ManualPriorityTarget = Enemy;
+	if (Enemy)
+	{
+		const FVector Direction = (Enemy->GetActorLocation() - GetActorLocation()).GetSafeNormal2D();
+		if (!Direction.IsNearlyZero())
+		{
+			SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
+		}
+	}
+}
+
+void AOperativeCharacter::PlanTargetedShot(AActor* Target)
+{
+	const ETargetedShotKind Kind = ClassifyShotTarget(Target);
+	if (Kind != ETargetedShotKind::None)
+	{
+		PlannedShots.Add(Kind, Target);
+	}
+}
+
+void AOperativeCharacter::ExecutePlannedTargetedShots()
+{
+	TMap<ETargetedShotKind, TWeakObjectPtr<AActor>> Plans = MoveTemp(PlannedShots);
+	PlannedShots.Reset();
+	for (const ETargetedShotKind Kind : { ETargetedShotKind::Barrel, ETargetedShotKind::Mine, ETargetedShotKind::Crate, ETargetedShotKind::TrappedObject })
+	{
+		const TWeakObjectPtr<AActor>* Target = Plans.Find(Kind);
+		if (Target && Target->IsValid())
+		{
+			ShootAtObject(Target->Get());
+		}
+	}
+	const TWeakObjectPtr<AActor>* Enemy = Plans.Find(ETargetedShotKind::Enemy);
+	if (Enemy && Enemy->IsValid())
+	{
+		SetManualPriorityTarget(Enemy->Get());
+	}
+}
+
+#undef LOCTEXT_NAMESPACE

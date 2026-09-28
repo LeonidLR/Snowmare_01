@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-28 by Claude, after commit `d3c7480`.
+Last update: 2026-09-28 by Claude, after the targeted-shots commit (see §10).
 
 ---
 
@@ -45,7 +45,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **103 automation tests, 12 smokes, all PASS** (`verify_all.ps1` → ALL GREEN).
+State at last update: **105 automation tests, 13 smokes, all PASS** (`verify_all.ps1` → ALL GREEN).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -61,6 +61,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `BarrelSmoke` | light a barrel (match), warmth, burn-out, burnt menu, no matches |
 | `RelocationSmoke` | «Вытолкать» a barrel 6 m, cold refusal, cancel |
 | `DeployableSmoke` | barricade pick-up → F set-up with hand-over, hidden mine spotted, sapper defusal (retries), grenade trap, mine blast |
+| `TargetedShotSmoke` | Ctrl + click via `IssueTargetedShot`: barrel explodes, prone mine shot, trapped crate / barricade detonated, 1 round each, priority enemy over a nearer one, pause-planned shot fires on release |
 | `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
 | `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot |
 | `HudShot [close] [walk] [menu] [place]` | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
@@ -107,6 +108,13 @@ Module `CodexTactics` (runtime). Folder → class → Godot reference.
   carrying (`SetCarrying`), lift limits (80 % cold, 50 % HP), placement radius 15 m. Godot `player.gd`.
 - `Characters/OperativeAnimInstance` — state for AnimBP + native locomotion blend (proxy `Evaluate`) until the user's
   graph exists (`bUseNativeLocomotion`). Godot `locomotion_controller.gd`.
+- Ctrl + click targeted shots: `ACodexTacticsPlayerController::IssueTargetedShot` (Godot `main.gd` Ctrl branch:
+  enemy → `SetManualPriorityTarget`, barrel / mine / crate / trapped object → `AOperativeCharacter::ShootAtObject`;
+  in the tactical pause → `PlanTargetedShot`, run by `USquadSubsystem` on release before the planned moves).
+  `Combat/TargetedShotRules` = mine hit chance clamp(max(10, Accuracy − cold·0.25)·stance − m·perMetre, 0, 95),
+  stance 0.6/4.0, 1.0/1.8, 1.25/1.0; miss reasons. `Accuracy` per role 90 / 75 / 85 (roster). The priority target is
+  used first by `FindBestCombatTarget` while alive, in range and in the line of fire (barricade blocks prone only).
+  Godot `player.gd shoot_at_*`, `calculate_mine_shot_hit_chance`, `set_manual_priority_target`, `_find_shoot_target`.
 - `Characters/SquadSubsystem`, `SquadFormation`, `OperativeMovementRules`, `OperativeAIController`.
 - Assets: `/Game/Characters/Operatives/BP_Operative`, `ABP_Operative`, `Explorer/…`, `Animations/…`, `/Game/Weapons/M16`.
 
@@ -174,8 +182,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 1. ~~Loot crates~~ — done (see §10).
 2. ~~Turrets~~, 3. ~~generator damage / repair~~ — done (see §10). Enemies do not attack turrets / barricades /
    the generator yet (Gemini's enemy AI targets operatives only) — add with the enemy AI pass.
-4. Ctrl + click targeted shots (barrel explode, mine / trap detonation by shot) — Godot `main.gd` Ctrl branch,
-   `player.gd shoot_at_barrel_object`, `shoot_at_mine_object`, `shoot_at_trapped_object`.
+4. ~~Ctrl + click targeted shots~~ — done (see §10).
 5. UI shell from REFERENCE_PLAYTHROUGH: main menu, dialogue, objective banner, bottom action bar, mission failed.
 6. Turn-based combat manager on the Gorky grid (Godot `Scripts/tactics/turn_based_combat_manager.gd`).
 7. Phase 2 data importer (JSON / .tres → DataAssets) replacing hand-typed values (§9).
@@ -196,11 +203,17 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - The squad panel does not list provisions / extra ammo yet (inventory drawer UI).
 - Turret tracers / muzzle flash: only the `OnFired` / `ReceiveFired` hooks (Godot draws a green tracer + flash).
 - Deployable overhead labels (turret / generator HP and state texts) not ported (Godot Label3D).
+- Targeted shots: no tracer / waypoint marker / target highlight (only `OnWeaponFired`); crouching behind a barricade
+  does not apply Godot's 0.8 cover to the priority target (UE `ShootAtTarget` has no cover factor yet); rage / panic
+  refusal not ported (no rage / panic components). The barrel line «💥 Прицельный выстрел…» is posted only when the
+  shot actually fires (Godot posts it even when the weapon is frozen). Shooting an untrapped crate blows it up — Godot
+  quirk kept on purpose.
 
 ## 10. Change log (newest first)
 
 | Commit | What |
 |---|---|
+| (targeted-shots commit) | Ctrl + click targeted shots (barrel, mine chance, crate, trapped object, priority enemy, pause planning), operative `Accuracy` |
 | `d3c7480` | Turrets (fire, power, repair, pick-up, set-up), generator breakdown / repair, unity-build name fixes |
 | `d72d131` | Supply crates + loot dialog, provisions / extra ammo / bonus items on operatives, 2 crates on the test map, smoke retries for crouched defusal |
 | `d922e49` | Handoff documentation, `verify_all.ps1`, GEMINI.md |

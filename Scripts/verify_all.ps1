@@ -6,7 +6,7 @@ param([switch]$SkipBuild)
 $ProjectDir = Split-Path $PSScriptRoot -Parent
 $Smokes = @(
     "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
-    "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke"
+    "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke"
 )
 $Failed = @()
 

@@ -250,12 +250,21 @@ void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatM
 		// is followed by OnTacticalPauseReleased, which executes them.
 		PlannedOrders.Reset();
 		PauseOrigins.Reset();
+		for (AOperativeCharacter* Member : GetMembers())
+		{
+			Member->ClearPlannedTargetedShots();
+		}
 	}
 	LastCombatMode = CombatMode;
 }
 
 void USquadSubsystem::HandleTacticalPauseReleased()
 {
+	// Godot execute_planned_tactical_orders: targeted shots first, then moves.
+	for (AOperativeCharacter* Member : GetMembers())
+	{
+		Member->ExecutePlannedTargetedShots();
+	}
 	ExecutePlannedOrders();
 }
 
@@ -265,6 +274,7 @@ void USquadSubsystem::BeginOrderPlanning()
 	PauseOrigins.Reset();
 	for (AOperativeCharacter* Member : GetMembers())
 	{
+		Member->ClearPlannedTargetedShots();
 		PauseOrigins.Add(Member, Member->GetActorLocation());
 	}
 }

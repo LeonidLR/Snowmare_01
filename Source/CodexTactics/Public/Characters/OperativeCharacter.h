@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Combat/TargetedShotRules.h"
 #include "Interactables/DeployableRules.h"
 #include "OperativeCharacter.generated.h"
 
@@ -312,6 +313,42 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
 	bool ShootAtTarget(AActor* Target);
 
+	// --- Ctrl + click targeted shots (Godot main.gd Ctrl branch, player.gd shoot_at_* / set_manual_priority_target) ---
+
+	/** Marksmanship, % (Godot accuracy: commander 90, engineer 75, medic-sapper 85); drives remote mine shots. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "0", ClampMax = "100"))
+	float Accuracy = 90.f;
+
+	/** What a Ctrl + click on this actor aims at (None: not a valid target). */
+	static ETargetedShotKind ClassifyShotTarget(const AActor* Target);
+
+	/**
+	 * Fires one aimed round at a barrel (explodes), a mine (hit chance by stance / distance / cold), a supply crate or
+	 * a trapped object (remote detonation). Stops the operative and consumes ammo. False when the weapon cannot fire.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
+	bool ShootAtObject(AActor* Target);
+
+	/** Enemy fired at first while it is alive, in range and in the line of fire (Godot manual_priority_target). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
+	void SetManualPriorityTarget(AActor* Enemy);
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
+	AActor* GetManualPriorityTarget() const { return ManualPriorityTarget.Get(); }
+
+	/** Tactical pause: remembers a targeted shot (one per kind) executed when the pause is released. */
+	void PlanTargetedShot(AActor* Target);
+
+	/** Executes the planned shots in Godot order: barrel, mine, crate, trapped object, then the priority enemy. */
+	void ExecutePlannedTargetedShots();
+
+	void ClearPlannedTargetedShots() { PlannedShots.Reset(); }
+
+	int32 GetPlannedTargetedShotCount() const { return PlannedShots.Num(); }
+
+	/** Godot _can_begin_weapon_shot: alive, not reloading, no misfire delay, weapon not frozen, round in the clip. */
+	bool CanBeginWeaponShot();
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat")
 	TObjectPtr<class UWeaponDataAsset> CurrentWeapon;
 
@@ -360,6 +397,16 @@ private:
 	void UpdatePlaceholderVisibility();
 	/** Blends the placeholder body towards the stance shape (Alpha 1 = snap). */
 	void UpdatePlaceholderPose(float Alpha);
+
+	/** Godot _consume_ammo_after_shot: one round; reload when the clip runs dry. */
+	void ConsumeAmmoAfterShot();
+	/** Stops, drops the sprint and turns to face Location. */
+	void StopAndFace(const FVector& Location);
+	/** True when the priority target can be fired at now (range, line of fire; barricades block only prone shooters). */
+	bool CanFireAtPriorityTarget(const AActor* Target, float MaxRange) const;
+
+	mutable TWeakObjectPtr<AActor> ManualPriorityTarget;
+	TMap<ETargetedShotKind, TWeakObjectPtr<AActor>> PlannedShots;
 
 	/** Placeholder body; hidden automatically once the Blueprint assigns a skeletal mesh. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative", meta = (AllowPrivateAccess = "true"))
