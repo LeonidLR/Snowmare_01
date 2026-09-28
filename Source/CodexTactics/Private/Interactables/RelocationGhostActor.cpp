@@ -8,8 +8,11 @@ ARelocationGhostActor::ARelocationGhostActor()
 	PrimaryActorTick.bCanEverTick = false;
 	SetActorEnableCollision(false);
 
+	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	RootComponent = Root;
+
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
-	RootComponent = Mesh;
+	Mesh->SetupAttachment(Root);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Mesh->SetCastShadow(false);
 	Mesh->SetCanEverAffectNavigation(false);
@@ -25,9 +28,24 @@ void ARelocationGhostActor::CopyFrom(const UStaticMeshComponent* SourceMesh, con
 		return;
 	}
 	Mesh->SetStaticMesh(SourceMesh->GetStaticMesh());
-	// Keep the mesh offset / scale relative to the actor so the ghost matches the real object.
-	const FTransform Relative = SourceMesh->GetComponentTransform().GetRelativeTransform(SourceActor->GetActorTransform());
-	Mesh->SetWorldScale3D(Relative.GetScale3D());
+	// Keep the mesh offset / rotation / scale relative to the actor so the ghost matches the real object.
+	Mesh->SetRelativeTransform(SourceMesh->GetComponentTransform().GetRelativeTransform(SourceActor->GetActorTransform()));
+	ApplyMaterial();
+}
+
+void ARelocationGhostActor::CopyFromTemplate(const UStaticMeshComponent* TemplateMesh)
+{
+	if (!TemplateMesh)
+	{
+		return;
+	}
+	Mesh->SetStaticMesh(TemplateMesh->GetStaticMesh());
+	Mesh->SetRelativeTransform(TemplateMesh->GetRelativeTransform());
+	ApplyMaterial();
+}
+
+void ARelocationGhostActor::ApplyMaterial()
+{
 	Material = UMaterialInstanceDynamic::Create(GhostBaseMaterial, this);
 	for (int32 Slot = 0; Slot < Mesh->GetNumMaterials(); ++Slot)
 	{
@@ -36,8 +54,16 @@ void ARelocationGhostActor::CopyFrom(const UStaticMeshComponent* SourceMesh, con
 	SetValid(true);
 }
 
+void ARelocationGhostActor::SetColors(const FLinearColor& Valid, const FLinearColor& Invalid)
+{
+	ValidColor = Valid;
+	InvalidColor = Invalid;
+	SetValid(bLastValid);
+}
+
 void ARelocationGhostActor::SetValid(bool bValid)
 {
+	bLastValid = bValid;
 	if (Material)
 	{
 		Material->SetVectorParameterValue(TEXT("Color"), bValid ? ValidColor : InvalidColor);

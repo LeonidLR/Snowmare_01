@@ -74,6 +74,8 @@ private:
 	void OnMouseWheelUp();
 	/** R: rotate the object being placed by 45°. */
 	void RotatePlacement();
+	/** F: set up an engineering item from the leader's supply / switch type while placing. */
+	void DeployAbility();
 	/** Ground point under the cursor on the placement plane of the object being moved. */
 	bool GetPlacementPoint(FVector& OutPoint) const;
 	class URelocationSubsystem* GetPlacingRelocation() const;
@@ -117,6 +119,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> RotatePlacementAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> DeployAction;
 
 	FSpaceInputTracker SpaceInput;
 	double LastClickTime = -1.0;

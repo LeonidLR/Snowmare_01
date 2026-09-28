@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Interactables/DeployableRules.h"
 #include "OperativeCharacter.generated.h"
 
 class UStaticMeshComponent;
@@ -171,6 +172,45 @@ public:
 	/** Cold level in percent. Owned by the cold survival system once ported. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative", meta = (ClampMin = "0", ClampMax = "100"))
 	float ColdLevel = 0.f;
+
+	/** Squad role: defusal skill and which deployables this operative collects first. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative")
+	EOperativeRole SquadRole = EOperativeRole::Commander;
+
+	/** Luck, % (Godot luck: commander 25, engineer 30, medic-sapper 35); +0.5 % defusal chance per point. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative", meta = (ClampMin = "0", ClampMax = "100"))
+	float Luck = 25.f;
+
+	/** Carried engineering items (Godot turrets_count / barricades_count / mines_count; start 0, from loot / dismantling). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 TurretsCount = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 BarricadesCount = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 MinesCount = 0;
+
+	/** Hand grenades, used to trap objects (Godot starting_grenades 2, max_grenades 4). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 GrenadesCount = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 MaxGrenades = 4;
+
+	/** Deployable type the F key sets up next (Godot selected_deployable_type). */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Inventory")
+	EDeployableType SelectedDeployType = EDeployableType::Turret;
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Inventory")
+	int32 GetDeployableCount(EDeployableType Type) const;
+
+	/** Adds (or removes, negative Delta) carried items, clamped to 0..max. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Inventory")
+	void AddDeployable(EDeployableType Type, int32 Delta);
+
+	/** Next type in the Godot cycle order turret -> barricade -> mine (skips empty types when possible). */
+	EDeployableType CycleDeployableType();
 
 	/** Placement / relocation radius outside the pause and preparation, cm (Godot placement_radius 15 m). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))

@@ -254,8 +254,13 @@ FString ACodexTacticsHUD::DescribeOperative(const AOperativeCharacter& Operative
 			Line += TEXT("  ОРУЖИЕ ЗАМЁРЗЛО");
 		}
 	}
-	Line += FString::Printf(TEXT("  патроны %d/%d%s  спички %d"), Operative.CurrentClip, Operative.ReserveAmmo,
-		Operative.bIsReloading ? TEXT(" перезарядка") : TEXT(""), Operative.MatchesCount);
+	Line += FString::Printf(TEXT("  патроны %d/%d%s  спички %d  гранаты %d"), Operative.CurrentClip, Operative.ReserveAmmo,
+		Operative.bIsReloading ? TEXT(" перезарядка") : TEXT(""), Operative.MatchesCount, Operative.GrenadesCount);
+	if (Operative.TurretsCount + Operative.BarricadesCount + Operative.MinesCount > 0)
+	{
+		Line += FString::Printf(TEXT("  [турели %d, баррикады %d, мины %d]"), Operative.TurretsCount, Operative.BarricadesCount,
+			Operative.MinesCount);
+	}
 	return Line;
 }
 

@@ -5,6 +5,10 @@
 #include "Combat/HealthComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Interactables/BarricadeActor.h"
+#include "Interactables/DeployableActor.h"
+#include "Interactables/ProximityMineActor.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
@@ -21,6 +25,18 @@ namespace
 	/** Push follow speeds (Godot lerp 24 * dt for position, 16 * dt for yaw). */
 	constexpr float PushFollowSpeed = 24.f;
 	constexpr float PushTurnSpeed = 16.f;
+	/** Set-up arrival distance, cm (Godot 1.8 m; 3.2 m when stuck). */
+	constexpr float DeployArriveDistance = 180.f;
+	constexpr float DeployArriveDistanceStuck = 320.f;
+	/** Godot deploy ghost colours: valid (0.2, 0.95, 0.4), invalid (1.0, 0.2, 0.2). */
+	const FLinearColor DeployValidColor = FLinearColor::FromSRGBColor(FColor(51, 242, 102));
+	const FLinearColor DeployInvalidColor = FLinearColor::FromSRGBColor(FColor(255, 51, 51));
+
+	/** Worker step-back after setting up, cm (Godot: mine 2.2 m, barricade 1.6 m, turret 1.1 m). */
+	float DeployStepBack(EDeployableType Type)
+	{
+		return Type == EDeployableType::Mine ? 220.f : (Type == EDeployableType::Barricade ? 160.f : 110.f);
+	}
 
 	FText NameOf(const AInteractableActor* Object)
 	{
@@ -157,14 +173,275 @@ bool URelocationSubsystem::StartRelocate(AInteractableActor* Target, AOperativeC
 	return true;
 }
 
+float URelocationSubsystem::GetWorkerGroundZ(const AOperativeCharacter& Worker) const
+{
+	return Worker.GetActorLocation().Z - Worker.GetSimpleCollisionHalfHeight();
+}
+
 float URelocationSubsystem::GetPlacementGroundZ() const
 {
-	const AInteractableActor* Object = PlacingObject.Get();
-	return Object ? Object->GetActorLocation().Z - Object->Box->GetScaledBoxExtent().Z : 0.f;
+	if (const AInteractableActor* Object = PlacingObject.Get())
+	{
+		return Object->GetActorLocation().Z - Object->Box->GetScaledBoxExtent().Z;
+	}
+	const AOperativeCharacter* Worker = PlacingWorker.Get();
+	return Worker ? GetWorkerGroundZ(*Worker) : 0.f;
+}
+
+FText URelocationSubsystem::GetDeployableName(EDeployableType Type)
+{
+	switch (Type)
+	{
+	case EDeployableType::Turret: return LOCTEXT("TurretName", "Турель");
+	case EDeployableType::Barricade: return LOCTEXT("BarricadeName", "Баррикада");
+	default: return LOCTEXT("MineName", "Мина");
+	}
+}
+
+TSubclassOf<ADeployableActor> URelocationSubsystem::GetDeployableClass(EDeployableType Type) const
+{
+	const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
+	if (!GameMode)
+	{
+		return nullptr;
+	}
+	switch (Type)
+	{
+	case EDeployableType::Barricade: return GameMode->BarricadeClass;
+	case EDeployableType::Mine: return GameMode->MineClass;
+	default: return nullptr; // turrets come with the turret system
+	}
+}
+
+void URelocationSubsystem::SpawnGhostForType(EDeployableType Type)
+{
+	if (Ghost)
+	{
+		Ghost->Destroy();
+		Ghost = nullptr;
+	}
+	const TSubclassOf<ADeployableActor> Class = GetDeployableClass(Type);
+	if (!Class)
+	{
+		return;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Ghost = GetWorld()->SpawnActor<ARelocationGhostActor>(FVector::ZeroVector, FRotator(0.f, PlacingYaw, 0.f), Params);
+	if (Ghost)
+	{
+		Ghost->CopyFromTemplate(Class->GetDefaultObject<ADeployableActor>()->Mesh);
+		Ghost->SetColors(DeployValidColor, DeployInvalidColor);
+	}
+}
+
+void URelocationSubsystem::HandleDeployKey(AOperativeCharacter* Leader)
+{
+	if (!Leader)
+	{
+		return;
+	}
+	if (PlacingType.IsSet())
+	{
+		// Godot: F while placing switches to the next type.
+		const EDeployableType Next = Leader->CycleDeployableType();
+		PlacingType = Next;
+		DeployStage = 1;
+		SpawnGhostForType(Next);
+		Post(Leader->DisplayName, FText::Format(LOCTEXT("Switched", "🔄 Выбрано для установки: {0} ({1} шт.) [F — сменить]"),
+			GetDeployableName(Next), Leader->GetDeployableCount(Next)));
+		return;
+	}
+
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	const int32 Total = Leader->TurretsCount + Leader->BarricadesCount + Leader->MinesCount;
+	if (Total <= 0)
+	{
+		// Godot _on_ability_button_pressed: a squad mate hands one item over.
+		AOperativeCharacter* Carrier = nullptr;
+		EDeployableType CarrierType = EDeployableType::Turret;
+		for (EDeployableType Type : { EDeployableType::Turret, EDeployableType::Barricade, EDeployableType::Mine })
+		{
+			for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+			{
+				if (Member != Leader && Member->GetDeployableCount(Type) > 0)
+				{
+					Carrier = Member;
+					CarrierType = Type;
+					break;
+				}
+			}
+			if (Carrier)
+			{
+				break;
+			}
+		}
+		if (!Carrier)
+		{
+			Post(Leader->DisplayName, LOCTEXT("NoItems", "⚠️ У отряда нет инженерных средств для установки (Турели: 0, Баррикады: 0, Мины: 0)!"));
+			return;
+		}
+		Carrier->AddDeployable(CarrierType, -1);
+		Leader->AddDeployable(CarrierType, 1);
+		Leader->SelectedDeployType = CarrierType;
+		Post(Leader->DisplayName, FText::Format(LOCTEXT("HandOver", "🛠️ {0} передает снаряжение бойцу {1} для установки!"),
+			Carrier->DisplayName, Leader->DisplayName));
+	}
+	EDeployableType Type = Leader->SelectedDeployType;
+	if (Leader->GetDeployableCount(Type) <= 0)
+	{
+		Type = Leader->CycleDeployableType();
+	}
+	StartDeployPlacement(Type, Leader);
+}
+
+bool URelocationSubsystem::StartDeployPlacement(EDeployableType Type, AOperativeCharacter* Worker)
+{
+	if (!Worker || Worker->GetDeployableCount(Type) <= 0)
+	{
+		return false;
+	}
+	if (!GetDeployableClass(Type))
+	{
+		Post(Worker->DisplayName, FText::Format(LOCTEXT("NoClass", "⚠️ {0}: этот тип снаряжения пока нельзя установить."), GetDeployableName(Type)));
+		return false;
+	}
+	CancelPlacement();
+	PlacingType = Type;
+	PlacingWorker = Worker;
+	PlacingYaw = 0.f;
+	DeployStage = 1;
+	SpawnGhostForType(Type);
+	Post(LOCTEXT("Engineering", "Инженерия"), FText::Format(LOCTEXT("DeployPrompt",
+		"1️⃣ Кликните на карте для выбора позиции ({0}). 2️⃣ Колесиком поверните на 45°. 3️⃣ Кликните повторно для установки!"),
+		GetDeployableName(Type)));
+	if (Type == EDeployableType::Mine)
+	{
+		const bool bSapper = Worker->SquadRole == EOperativeRole::MedicSapper;
+		const float ColdPenalty = Worker->ColdLevel / 100.f * 20.f;
+		const FText ColdInfo = ColdPenalty > 0.1f
+			? FText::Format(LOCTEXT("FrostInfo", " (Мороз: +{0}%)"), FText::AsNumber(ColdPenalty, &FNumberFormattingOptions().SetMaximumFractionalDigits(1)))
+			: FText::GetEmpty();
+		Post(LOCTEXT("Engineering", "Инженерия"), FText::Format(LOCTEXT("MineRisk",
+			"💣 Риск детонации при установке: {0}% ({1}{2}). У сапёра базовая вероятность всего 2%, но холод увеличивает риск срыва!"),
+			FText::AsNumber(DeployableRules::GetMineMishapChance(bSapper, Worker->ColdLevel), &FNumberFormattingOptions().SetMaximumFractionalDigits(1)),
+			bSapper ? LOCTEXT("Sapper", "Сапёр") : LOCTEXT("Regular", "Обычный боец"), ColdInfo));
+	}
+	return true;
+}
+
+void URelocationSubsystem::ExecuteDeploy(AOperativeCharacter* Worker, EDeployableType Type, const FVector& GroundPoint, float Yaw)
+{
+	if (!Worker)
+	{
+		return;
+	}
+	FDeployTask& Task = DeployTasks.AddDefaulted_GetRef();
+	Task.Worker = Worker;
+	Task.Type = Type;
+	Task.Target = GroundPoint;
+	Task.Yaw = Yaw;
+	Worker->OrderMoveTo(GroundPoint, false);
+	Post(Worker->DisplayName, LOCTEXT("DeployMoving", "Выдвигаюсь на точку для установки!"));
+}
+
+bool URelocationSubsystem::TickDeploy(FDeployTask& Task, float DeltaTime)
+{
+	AOperativeCharacter* Worker = Task.Worker.Get();
+	if (!Worker)
+	{
+		return true;
+	}
+	Task.RetryTime -= DeltaTime;
+	const float Distance = FVector::Dist2D(Worker->GetActorLocation(), Task.Target);
+	const bool bStalled = !Worker->IsMoving();
+	if (Distance > DeployArriveDistance && !(bStalled && Distance <= DeployArriveDistanceStuck))
+	{
+		if (bStalled && Task.RetryTime <= 0.f)
+		{
+			Task.RetryTime = RetryInterval;
+			Worker->OrderMoveTo(Task.Target, false);
+		}
+		return false;
+	}
+
+	Worker->StopOperative();
+	const TSubclassOf<ADeployableActor> Class = GetDeployableClass(Task.Type);
+	if (!Class || Worker->GetDeployableCount(Task.Type) <= 0)
+	{
+		return true;
+	}
+	Worker->AddDeployable(Task.Type, -1);
+	const float HalfHeight = Class->GetDefaultObject<ADeployableActor>()->Box->GetUnscaledBoxExtent().Z;
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ADeployableActor* Placed = GetWorld()->SpawnActor<ADeployableActor>(Class, Task.Target + FVector(0.f, 0.f, HalfHeight),
+		FRotator(0.f, Task.Yaw, 0.f), Params);
+	const FText Name = Worker->DisplayName;
+
+	if (AProximityMineActor* Mine = Cast<AProximityMineActor>(Placed))
+	{
+		const bool bSapper = Worker->SquadRole == EOperativeRole::MedicSapper;
+		const float Chance = DeployableRules::GetMineMishapChance(bSapper, Worker->ColdLevel);
+		const FNumberFormattingOptions OneDigit = FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1);
+		if (FMath::FRand() * 100.f < Chance)
+		{
+			Post(Name, FText::Format(LOCTEXT("Mishap", "💥 ОШИБКА МИНИРОВАНИЯ! У {0} сорвался детонатор (Риск: {1}%, Холод: {2}%)! Мина сдетонировала при установке!"),
+				Name, FText::AsNumber(Chance, &OneDigit), FMath::FloorToInt(Worker->ColdLevel)));
+			Mine->Reveal();
+			Mine->Detonate();
+			return true;
+		}
+		Mine->SetPlacedBySquad();
+		const float ColdPenalty = Worker->ColdLevel / 100.f * 20.f;
+		Post(Name, FText::Format(LOCTEXT("MinePlaced", "💣 Противопехотная мина установлена (взведение 3.0с, риск срыва был {0}%{1})!"),
+			FText::AsNumber(Chance, &OneDigit),
+			ColdPenalty > 0.1f ? FText::Format(LOCTEXT("ColdInfo", " (Холод +{0}%)"), FText::AsNumber(ColdPenalty, &OneDigit)) : FText::GetEmpty()));
+	}
+	else if (Task.Type == EDeployableType::Barricade)
+	{
+		Post(Name, LOCTEXT("BarricadePlaced", "Баррикада собрана и установлена!"));
+	}
+	else
+	{
+		Post(Name, LOCTEXT("TurretPlaced", "Автоматическая турель развернута!"));
+	}
+
+	// Step back from the new object (Godot safe_dist), crouch behind a barricade once combat is unlocked.
+	FVector Away = (Worker->GetActorLocation() - Task.Target).GetSafeNormal2D();
+	if (Away.IsNearlyZero())
+	{
+		Away = -Worker->GetActorForwardVector();
+	}
+	const FVector Spot = Task.Target + Away * DeployStepBack(Task.Type);
+	Worker->TeleportTo(FVector(Spot.X, Spot.Y, Worker->GetActorLocation().Z), Worker->GetActorRotation(), false, true);
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	if (Task.Type == EDeployableType::Barricade && Flow && Flow->GetPhase() != ECodexGamePhase::Exploration)
+	{
+		Worker->SetStance(EOperativeStance::Crouching);
+	}
+	return true;
 }
 
 void URelocationSubsystem::UpdatePreview(const FVector& GroundPoint)
 {
+	if (PlacingType.IsSet())
+	{
+		const AOperativeCharacter* DeployWorker = PlacingWorker.Get();
+		const TSubclassOf<ADeployableActor> Class = GetDeployableClass(*PlacingType);
+		if (!DeployWorker || !Ghost || !Class)
+		{
+			return;
+		}
+		const FVector Point = DeployStage == 2 ? DeployAnchor : GroundPoint;
+		const float HalfHeight = Class->GetDefaultObject<ADeployableActor>()->Box->GetUnscaledBoxExtent().Z;
+		Ghost->SetActorLocationAndRotation(FVector(Point.X, Point.Y, GetWorkerGroundZ(*DeployWorker) + HalfHeight), FRotator(0.f, PlacingYaw, 0.f));
+		// Godot: validity only matters in the pause (tactical radius); a fixed spot is always shown valid.
+		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		const bool bPause = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+		Ghost->SetValid(DeployStage == 2 || !bPause || RelocationRules::IsWithinRadius(GetOrigin(*DeployWorker), Point, GetRadius(*DeployWorker)));
+		return;
+	}
 	const AInteractableActor* Object = PlacingObject.Get();
 	const AOperativeCharacter* Worker = PlacingWorker.Get();
 	if (!Object || !Worker || !Ghost)
@@ -186,6 +463,8 @@ void URelocationSubsystem::RotatePreview(int32 Steps)
 
 void URelocationSubsystem::CancelPlacement()
 {
+	PlacingType.Reset();
+	DeployStage = 1;
 	PlacingObject.Reset();
 	PlacingWorker.Reset();
 	if (Ghost)
@@ -197,6 +476,55 @@ void URelocationSubsystem::CancelPlacement()
 
 void URelocationSubsystem::ConfirmPlacement(const FVector& GroundPoint)
 {
+	if (PlacingType.IsSet())
+	{
+		AOperativeCharacter* DeployWorker = PlacingWorker.Get();
+		if (!DeployWorker)
+		{
+			CancelPlacement();
+			return;
+		}
+		const UGameFlowSubsystem* DeployFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		const bool bDeployPause = DeployFlow && DeployFlow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+		if (DeployStage == 1)
+		{
+			const float Radius = GetRadius(*DeployWorker);
+			if (bDeployPause && !RelocationRules::IsWithinRadius(GetOrigin(*DeployWorker), GroundPoint, Radius))
+			{
+				Post(DeployWorker->DisplayName, FText::Format(LOCTEXT("DeployTooFar",
+					"Слишком далеко! Устанавливать можно только внутри тактической зоны ({0} метров)."), FMath::FloorToInt(Radius / 100.f)));
+				return;
+			}
+			DeployAnchor = FVector(GroundPoint.X, GroundPoint.Y, GetWorkerGroundZ(*DeployWorker));
+			DeployStage = 2;
+			Post(LOCTEXT("Engineering", "Инженерия"), LOCTEXT("Anchored",
+				"📐 Позиция зафиксирована! Поверните колесиком мыши (45°) и кликните ЛКМ для подтверждения (ПКМ — сброс)."));
+			return;
+		}
+		const EDeployableType Type = *PlacingType;
+		if (bDeployPause)
+		{
+			PlannedDeploys.RemoveAll([DeployWorker](const FDeployTask& Plan) { return Plan.Worker.Get() == DeployWorker; });
+			FDeployTask& Plan = PlannedDeploys.AddDefaulted_GetRef();
+			Plan.Worker = DeployWorker;
+			Plan.Type = Type;
+			Plan.Target = DeployAnchor;
+			Plan.Yaw = PlacingYaw;
+			if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+			{
+				Squad->ClearPlannedOrder(DeployWorker);
+			}
+			Post(DeployWorker->DisplayName, FText::Format(LOCTEXT("DeployPlanned", "📋 [ПЛАН] Запланирована установка объекта ({0})!"),
+				GetDeployableName(Type)));
+		}
+		else
+		{
+			ExecuteDeploy(DeployWorker, Type, DeployAnchor, PlacingYaw);
+		}
+		CancelPlacement();
+		return;
+	}
+
 	AInteractableActor* Object = PlacingObject.Get();
 	AOperativeCharacter* Worker = PlacingWorker.Get();
 	if (!Object || !Worker)
@@ -275,6 +603,12 @@ void URelocationSubsystem::HandlePauseReleased()
 	{
 		ExecuteRelocate(Plan.Worker.Get(), Plan.Object.Get(), Plan.Target, Plan.TargetYaw);
 	}
+	TArray<FDeployTask> Deploys = MoveTemp(PlannedDeploys);
+	PlannedDeploys.Reset();
+	for (const FDeployTask& Plan : Deploys)
+	{
+		ExecuteDeploy(Plan.Worker.Get(), Plan.Type, Plan.Target, Plan.Yaw);
+	}
 }
 
 void URelocationSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)
@@ -282,8 +616,9 @@ void URelocationSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCo
 	if (CombatMode != ECodexCombatMode::TacticalPause && CombatMode != ECodexCombatMode::RealTime)
 	{
 		PlannedTasks.Reset();
+		PlannedDeploys.Reset();
 	}
-	if (!RelocationRules::CanRelocateNow(Phase, CombatMode))
+	if (!RelocationRules::CanRelocateNow(Phase, CombatMode) && PlacingObject.IsValid())
 	{
 		CancelPlacement();
 	}
@@ -385,7 +720,16 @@ bool URelocationSubsystem::TickTask(FRelocateTask& Task, float DeltaTime)
 	return false;
 }
 
-void URelocationSubsystem::DropAllTasks()
+void URelocationSubsystem::DropAllForMine()
+{
+	if (PlacingObject.IsValid())
+	{
+		CancelPlacement();
+	}
+	DropAllTasks(LOCTEXT("MineAhead", "⚠️ Впереди мина! Бросаю {0} и останавливаюсь!"));
+}
+
+void URelocationSubsystem::DropAllTasks(const FText& LineFormat)
 {
 	for (FRelocateTask& Task : Tasks)
 	{
@@ -404,7 +748,7 @@ void URelocationSubsystem::DropAllTasks()
 			{
 				StepBack(*Worker, *Object, RelocationRules::StepBackDropped);
 			}
-			Post(Worker->DisplayName, FText::Format(LOCTEXT("Alarm", "⚠️ Боевая тревога! Бросаю {0} и занимаю оборону!"), NameOf(Object)));
+			Post(Worker->DisplayName, FText::Format(LineFormat, NameOf(Object)));
 		}
 	}
 	Tasks.Reset();
@@ -413,6 +757,13 @@ void URelocationSubsystem::DropAllTasks()
 void URelocationSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	for (int32 Index = DeployTasks.Num() - 1; Index >= 0; --Index)
+	{
+		if (TickDeploy(DeployTasks[Index], DeltaTime))
+		{
+			DeployTasks.RemoveAt(Index);
+		}
+	}
 	if (Tasks.IsEmpty())
 	{
 		return;
@@ -420,7 +771,7 @@ void URelocationSubsystem::Tick(float DeltaTime)
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	if (Flow && !RelocationRules::CanRelocateNow(Flow->GetPhase(), Flow->GetCombatMode()))
 	{
-		DropAllTasks();
+		DropAllTasks(LOCTEXT("Alarm", "⚠️ Боевая тревога! Бросаю {0} и занимаю оборону!"));
 		return;
 	}
 	for (int32 Index = Tasks.Num() - 1; Index >= 0; --Index)

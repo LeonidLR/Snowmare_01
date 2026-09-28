@@ -79,6 +79,7 @@ void ACodexTacticsPlayerController::CreateInputActions()
 	CameraDragPanAction = MakeAction(TEXT("IA_CameraDragPan"), EKeys::MiddleMouseButton);
 	SpaceAction = MakeAction(TEXT("IA_Space"), EKeys::SpaceBar);
 	RotatePlacementAction = MakeAction(TEXT("IA_RotatePlacement"), EKeys::R);
+	DeployAction = MakeAction(TEXT("IA_Deploy"), EKeys::F);
 }
 
 void ACodexTacticsPlayerController::SetupInputComponent()
@@ -124,6 +125,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(SpaceAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SpacePressed);
 	Input->BindAction(SpaceAction, ETriggerEvent::Completed, this, &ACodexTacticsPlayerController::SpaceReleased);
 	Input->BindAction(RotatePlacementAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::RotatePlacement);
+	Input->BindAction(DeployAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::DeployAbility);
 }
 
 void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
@@ -172,6 +174,16 @@ bool ACodexTacticsPlayerController::GetPlacementPoint(FVector& OutPoint) const
 	}
 	OutPoint = Origin + Direction * Distance;
 	return true;
+}
+
+void ACodexTacticsPlayerController::DeployAbility()
+{
+	USquadSubsystem* Squad = GetSquad();
+	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+	if (Squad && Relocation && Squad->GetLeader())
+	{
+		Relocation->HandleDeployKey(Squad->GetLeader());
+	}
 }
 
 void ACodexTacticsPlayerController::RotatePlacement()

@@ -94,8 +94,9 @@ void UActionMenuWidget::BuildDefaultLayout()
 
 	ConfirmButton = MakeButton(TEXT("ConfirmButton"), ConfirmText);
 	RelocateButton = MakeButton(TEXT("RelocateButton"), RelocateText);
+	TrapButton = MakeButton(TEXT("TrapButton"), TrapText);
 	CancelButton = MakeButton(TEXT("CancelButton"), CancelText);
-	for (UButton* Button : { ConfirmButton.Get(), RelocateButton.Get(), CancelButton.Get() })
+	for (UButton* Button : { ConfirmButton.Get(), RelocateButton.Get(), TrapButton.Get(), CancelButton.Get() })
 	{
 		Buttons->AddChildToHorizontalBox(Button)->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
 	}
@@ -120,6 +121,10 @@ void UActionMenuWidget::NativeOnInitialized()
 	if (CancelButton)
 	{
 		CancelButton->OnClicked.AddDynamic(this, &UActionMenuWidget::HandleCancel);
+	}
+	if (TrapButton)
+	{
+		TrapButton->OnClicked.AddDynamic(this, &UActionMenuWidget::HandleTrap);
 	}
 }
 
@@ -153,6 +158,15 @@ void UActionMenuWidget::ShowMenu(const FActionMenuSpec& Menu)
 	{
 		RelocateText->SetText(Clean(Menu.RelocateText));
 	}
+	if (TrapButton)
+	{
+		TrapButton->SetVisibility(Menu.bAllowTrap ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		TrapButton->SetIsEnabled(!Menu.bTrapDisabled);
+	}
+	if (TrapText)
+	{
+		TrapText->SetText(Clean(Menu.TrapText));
+	}
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	ReceiveMenuShown(Menu);
 }
@@ -175,6 +189,14 @@ void UActionMenuWidget::HandleRelocate()
 	if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
 	{
 		Interactions->RelocateActionMenu();
+	}
+}
+
+void UActionMenuWidget::HandleTrap()
+{
+	if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+	{
+		Interactions->TrapActionMenu();
 	}
 }
 

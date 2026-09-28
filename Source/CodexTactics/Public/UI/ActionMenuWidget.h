@@ -12,7 +12,7 @@ class UTextBlock;
  * Object action menu: centred panel with title, description and confirm / relocate / cancel buttons, driven by
  * UInteractionSubsystem. Builds a default layout in C++; a Widget Blueprint subclass can supply its own design
  * by naming its widgets TitleText, DescriptionText, ConfirmButton, ConfirmText, RelocateButton, RelocateText,
- * CancelButton, CancelText.
+ * TrapButton, TrapText, CancelButton, CancelText.
  * Godot reference: movements_demo.tscn UI/ActionMenu (PanelContainer centred, 420 x 160), main.gd `_open_action_menu`.
  */
 UCLASS(Blueprintable)
@@ -55,6 +55,12 @@ protected:
 	TObjectPtr<UTextBlock> RelocateText;
 
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|ActionMenu", meta = (BindWidgetOptional))
+	TObjectPtr<UButton> TrapButton;
+
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|ActionMenu", meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> TrapText;
+
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|ActionMenu", meta = (BindWidgetOptional))
 	TObjectPtr<UButton> CancelButton;
 
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|ActionMenu", meta = (BindWidgetOptional))
@@ -72,4 +78,7 @@ private:
 
 	UFUNCTION()
 	void HandleCancel();
+
+	UFUNCTION()
+	void HandleTrap();
 };

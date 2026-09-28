@@ -12,6 +12,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
@@ -102,6 +103,15 @@ namespace CameraZoneSmoke
 		if (!World)
 		{
 			return;
+		}
+		// Test layout start; the squad settles into formation during the NavMesh warm-up.
+		{
+			FTimerHandle PlaceHandle;
+			TWeakObjectPtr<UWorld> PlaceWorld(World);
+			World->GetTimerManager().SetTimer(PlaceHandle, FTimerDelegate::CreateLambda([PlaceWorld]()
+			{
+				SmokeUtils::PlaceSquadAtTestStart(PlaceWorld.Get());
+			}), 0.5f, false);
 		}
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FTimerHandle Handle;

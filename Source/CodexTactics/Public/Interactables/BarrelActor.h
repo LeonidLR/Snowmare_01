@@ -28,7 +28,16 @@ public:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual FActionMenuRequest BuildActionMenu(const AOperativeCharacter* Leader) const override;
-	virtual void ExecuteAction(AOperativeCharacter* User) override;
+	virtual void PerformAction(AOperativeCharacter* User) override;
+	/** A trap on a fuel barrel blows the barrel itself (Godot detonate_trap -> shoot_and_explode). */
+	virtual void DetonateTrap(bool bByShot = false, const FText& InstigatorName = FText::GetEmpty()) override;
+
+	/**
+	 * Detonation (shot / trap): fast 10 s fire and a fire blast of 120 within 5.5 m on enemies (burning 4 s),
+	 * 80 on operatives. Returns false if it was already burning.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Barrel")
+	bool Explode(const FText& InstigatorName);
 
 	/** Lights the barrel with one of User's matches and posts the radio line. Returns true if it caught fire. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Barrel")
@@ -83,7 +92,6 @@ private:
 	void ApplyVisuals();
 	/** Shared switch-off: charred look, heat and light off, events. */
 	void HandleFireOut();
-	void PostLine(const FText& Speaker, const FText& Text) const;
 	/** Godot can_push: the barrel may be pushed to a new spot. */
 	bool CanPushNow() const;
 

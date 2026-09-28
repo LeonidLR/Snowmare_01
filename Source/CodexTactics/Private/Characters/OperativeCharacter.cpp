@@ -433,6 +433,36 @@ void AOperativeCharacter::HandleMoveFinished()
 	ApplyMovementParams();
 }
 
+int32 AOperativeCharacter::GetDeployableCount(EDeployableType Type) const
+{
+	switch (Type)
+	{
+	case EDeployableType::Turret: return TurretsCount;
+	case EDeployableType::Barricade: return BarricadesCount;
+	default: return MinesCount;
+	}
+}
+
+void AOperativeCharacter::AddDeployable(EDeployableType Type, int32 Delta)
+{
+	int32& Count = Type == EDeployableType::Turret ? TurretsCount : (Type == EDeployableType::Barricade ? BarricadesCount : MinesCount);
+	Count = FMath::Clamp(Count + Delta, 0, DeployableRules::GetMaxCarried(Type));
+}
+
+EDeployableType AOperativeCharacter::CycleDeployableType()
+{
+	for (int32 Step = 1; Step <= 3; ++Step)
+	{
+		const EDeployableType Next = static_cast<EDeployableType>((static_cast<int32>(SelectedDeployType) + Step) % 3);
+		if (GetDeployableCount(Next) > 0 || Step == 3)
+		{
+			SelectedDeployType = Next;
+			break;
+		}
+	}
+	return SelectedDeployType;
+}
+
 void AOperativeCharacter::SetCarrying(bool bNewCarrying)
 {
 	bCarrying = bNewCarrying;

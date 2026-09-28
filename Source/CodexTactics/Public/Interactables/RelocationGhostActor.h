@@ -9,9 +9,10 @@ class UMaterialInstanceDynamic;
 class UMaterialInterface;
 
 /**
- * Placement preview of an object being moved: a copy of its mesh that follows the cursor, cyan where the object
- * may go and red outside the allowed radius. No collision.
- * Godot reference: main.gd `_create_relocate_ghost_preview`, `_set_relocate_ghost_material_valid`.
+ * Placement preview: a copy of an object's mesh that follows the cursor, tinted by whether the spot is allowed
+ * (moving an object: cyan / red; setting up a deployable: green / red). No collision.
+ * Godot reference: main.gd `_create_relocate_ghost_preview`, `_set_relocate_ghost_material_valid`,
+ * `_create_ghost_preview`, `_set_ghost_material_valid`.
  */
 UCLASS(Blueprintable)
 class CODEXTACTICS_API ARelocationGhostActor : public AActor
@@ -21,10 +22,18 @@ class CODEXTACTICS_API ARelocationGhostActor : public AActor
 public:
 	ARelocationGhostActor();
 
-	/** Copies the source mesh (asset + transform relative to the source actor). */
+	/** Copies a placed object's mesh (asset + transform relative to the object). */
 	void CopyFrom(const UStaticMeshComponent* SourceMesh, const AActor* SourceActor);
 
+	/** Copies a class-default mesh (relative transform of the template component). */
+	void CopyFromTemplate(const UStaticMeshComponent* TemplateMesh);
+
+	void SetColors(const FLinearColor& Valid, const FLinearColor& Invalid);
+
 	void SetValid(bool bValid);
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Relocation")
+	TObjectPtr<USceneComponent> Root;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Relocation")
 	TObjectPtr<UStaticMeshComponent> Mesh;
@@ -41,6 +50,10 @@ public:
 	TObjectPtr<UMaterialInterface> GhostBaseMaterial;
 
 private:
+	void ApplyMaterial();
+
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> Material;
+
+	bool bLastValid = true;
 };

@@ -101,7 +101,7 @@ FActionMenuRequest ABarrelActor::BuildActionMenu(const AOperativeCharacter* Lead
 		Cancel, Matches <= 0, bCanPush, Push);
 }
 
-void ABarrelActor::ExecuteAction(AOperativeCharacter* User)
+void ABarrelActor::PerformAction(AOperativeCharacter* User)
 {
 	if (User)
 	{
@@ -200,12 +200,34 @@ void ABarrelActor::ApplyVisuals()
 	}
 }
 
-void ABarrelActor::PostLine(const FText& Speaker, const FText& Text) const
+void ABarrelActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
 {
-	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	if (!bTrapped && !bByShot)
 	{
-		Messages->PostMessage(Speaker, Text);
+		return;
 	}
+	bTrapped = false;
+	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Снайпер") : InstigatorName) : LOCTEXT("Blast", "ВЗРЫВ"),
+		bByShot ? LOCTEXT("ShotBoom", "💥 Взрыв растяжки на объекте от выстрела!") : LOCTEXT("TrapBoom", "💥 Растяжка на объекте сдетонировала!"));
+	Explode(InstigatorName.IsEmpty() ? LOCTEXT("TrapSource", "Ловушка") : InstigatorName);
+}
+
+bool ABarrelActor::Explode(const FText& InstigatorName)
+{
+	if (Burn.bBurning)
+	{
+		return false;
+	}
+	// Godot shoot_and_explode: instant fire burning out in 10 s.
+	Burn.bBurnt = true;
+	Burn.bBurning = true;
+	Burn.TimeLeft = 10.f;
+	ApplyVisuals();
+	OnBurningChanged.Broadcast(this, true);
+	ReceiveBurningChanged(true);
+	ApplyBlast(120.f, 80.f, 550.f, 0.40f, EDamageType::Fire, InstigatorName,
+		LOCTEXT("BarrelHit", "💥 Обожгло взрывом бочки (-{0} HP)!"), EStatusEffect::Burning, 4.f, 10.f);
+	return true;
 }
 
 #undef LOCTEXT_NAMESPACE

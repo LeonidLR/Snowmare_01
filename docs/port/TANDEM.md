@@ -135,6 +135,14 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-28 Claude: barricades, mines, traps. Operatives carry turrets / barricades / mines (max 2 / 4 / 5) and
+  grenades (2 of 4); role + luck drive defusal (35/45/60 + stance -15/+10/+25 + luck/2 - cold - 25 per failure).
+  Deployable menus (pick up / defuse / relocate / «Заминировать»), dismantle 1.1 s with role routing, F set-up with
+  two-click placement and mine mishap (2 % sapper / 10 % + cold). Hidden level mines spotted at 4.5 m (+1.5 sapper).
+  Any object can take a grenade trap; trapped barrel explodes. L_MovementTest gets 2 abandoned barricades + 2 hidden
+  mines (script). NOTE: `Documents/Codex/unreal` is a junction to this repo — another agent built / tested through it;
+  the level PlayerStart was moved to (-180, -1490) outside my changes, so layout-dependent smokes place the squad at
+  the test start (SmokeUtils). 100 tests, 10 smokes PASS.
 - 2026-09-28 Claude: object relocation. «Вытолкать» / «Переместить» opens placement: ghost follows the cursor
   (cyan / red by radius: pause 12 m from the pause origin, preparation unlimited, else 15 m), wheel / R rotate 45°,
   LMB confirm, RMB cancel. Worker walks up, pushes the object 1.35 m ahead at carry speed, sets it down, steps back.

@@ -34,6 +34,17 @@ struct CODEXTACTICS_API FActionMenuSpec
 
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|ActionMenu")
 	FText RelocateText;
+
+	/** «Заминировать (N)» button: the object can take a grenade trap. */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|ActionMenu")
+	bool bAllowTrap = false;
+
+	/** No grenades: «Нет гранат», greyed out. */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|ActionMenu")
+	bool bTrapDisabled = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|ActionMenu")
+	FText TrapText;
 };
 
 /** What an object answers to a menu request: open the menu, or just post a line to the feed. */

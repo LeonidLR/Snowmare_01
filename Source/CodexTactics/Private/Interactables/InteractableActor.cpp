@@ -1,5 +1,9 @@
 #include "Interactables/InteractableActor.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
+#include "Combat/HealthComponent.h"
+#include "EngineUtils.h"
+#include "UI/GameMessageSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -69,7 +73,207 @@ void AInteractableActor::Interact(AOperativeCharacter* User)
 
 void AInteractableActor::ExecuteAction(AOperativeCharacter* User)
 {
+	// Godot _on_action_confirmed: a trapped object is defused first (the operative crouches to work on it).
+	if (bTrapped && User)
+	{
+		if (User->GetStance() == EOperativeStance::Standing)
+		{
+			User->SetStance(EOperativeStance::Crouching);
+		}
+		AttemptDefusal(User);
+		return;
+	}
+	PerformAction(User);
+}
+
+void AInteractableActor::PerformAction(AOperativeCharacter* User)
+{
 	Interact(User);
+}
+
+void AInteractableActor::PostLine(const FText& Speaker, const FText& Text) const
+{
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(Speaker, Text);
+	}
+}
+
+FDefusalChance AInteractableActor::GetDefusalChance(const AOperativeCharacter* Operative) const
+{
+	if (!Operative)
+	{
+		return FDefusalChance();
+	}
+	return DeployableRules::CalculateDefusal(Operative->SquadRole, Operative->GetStance(), Operative->Luck, Operative->ColdLevel,
+		FailedDefusalAttempts, bDefusalWarned);
+}
+
+FText AInteractableActor::DescribeDefusal(const AOperativeCharacter* Operative) const
+{
+	const FDefusalChance Odds = GetDefusalChance(Operative);
+	const FText Status = Odds.bDangerous
+		? LOCTEXT("HighRisk", "⚠️ ВЫСОКИЙ РИСК ВЗРЫВА!")
+		: FText::Format(LOCTEXT("SuccessChance", "Шанс успеха: ~{0}%"), FMath::FloorToInt(Odds.Chance));
+	return FText::Format(LOCTEXT("Performer", "Исполнитель: {0} (Поза: {1}) | {2}"),
+		Operative ? Operative->DisplayName : LOCTEXT("Soldier", "Боец"),
+		DeployableRules::GetDefusalStanceName(Operative ? Operative->GetStance() : EOperativeStance::Standing), Status);
+}
+
+EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative)
+{
+	const FText Name = Operative ? Operative->DisplayName : LOCTEXT("Soldier", "Боец");
+	const ETrapFlavor Flavor = GetTrapFlavor();
+	if (!bTrapped)
+	{
+		PostLine(Name, Flavor == ETrapFlavor::Mine ? LOCTEXT("MineSafe", "Мина уже обезврежена или безопасна.")
+			: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("BarricadeSafe", "Баррикада безопасна — мин-ловушек нет.")
+				: LOCTEXT("ObjectSafe", "Объект безопасен — мин-ловушек нет.")));
+		return EDefusalResult::Success;
+	}
+
+	const FDefusalChance Odds = GetDefusalChance(Operative);
+	const EDefusalResult Result = DeployableRules::ResolveDefusal(Odds, bDefusalWarned, FailedDefusalAttempts,
+		FMath::FRand() * 100.f, FMath::FRand() * 100.f);
+	const bool bStanding = !Operative || Operative->GetStance() == EOperativeStance::Standing;
+
+	switch (Result)
+	{
+	case EDefusalResult::Warning:
+	{
+		const bool bCold = Odds.ColdPenalty > 0.f;
+		if (Flavor == ETrapFlavor::Mine)
+		{
+			PostLine(Name, FText::Format(LOCTEXT("MineWarn", "⚠️ {0}: «Разминирование выглядит крайне опасным! {1}, {2} — подорвёмся! Нужно согреться или хотя бы лечь на землю!»"),
+				Name, bCold ? LOCTEXT("ColdFingers", "пальцы коченеют") : LOCTEXT("MineUnstable", "механизм слишком нестабилен"),
+				bStanding ? LOCTEXT("MineStanding", "стоя к ней не подберусь") : LOCTEXT("PoseDanger", "в такой позе опасно")));
+		}
+		else
+		{
+			const FText ColdHint = bCold ? LOCTEXT("ColdFingers", "пальцы коченеют")
+				: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("WireTight", "проволока растяжки сильно натянута")
+					: LOCTEXT("WireArmed", "проволока растяжки взведена на корпусе"));
+			const FText Pose = bStanding ? LOCTEXT("ChargeStanding", "стоя к заряду не подобраться") : LOCTEXT("PoseDanger", "в такой позе опасно");
+			PostLine(Name, FText::Format(Flavor == ETrapFlavor::Barricade
+				? LOCTEXT("BarricadeWarn", "⚠️ {0}: «Баррикада заминирована растяжкой! {1}, {2} — подорвёмся! Нужно согреться или присесть!»")
+				: LOCTEXT("ObjectWarn", "⚠️ {0}: «Объект заминирован растяжкой! {1}, {2} — подорвёмся! Нужно согреться или присесть!»"),
+				Name, ColdHint, Pose));
+		}
+		break;
+	}
+	case EDefusalResult::Success:
+		bTrapped = false;
+		bDefused = true;
+		PostLine(Name, Flavor == ETrapFlavor::Mine
+			? FText::Format(LOCTEXT("MineDefused", "✅ {0} успешно обезвредил(а) мину!"), Name)
+			: (Flavor == ETrapFlavor::Barricade
+				? FText::Format(LOCTEXT("BarricadeDefused", "✅ {0} успешно обезвредил(а) растяжку на баррикаде!"), Name)
+				: FText::Format(LOCTEXT("ObjectDefused", "✅ {0} успешно обезвредил(а) растяжку на объекте ({1})!"), Name, DisplayName)));
+		break;
+	case EDefusalResult::Detonation:
+		PostLine(Name, Flavor == ETrapFlavor::Mine ? LOCTEXT("MineBoom", "💥 Срыв взрывателя! Мина сдетонировала при попытке разминирования!")
+			: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("BarricadeBoom", "💥 Срыв чеки на баррикаде! Ловушка сдетонировала!")
+				: LOCTEXT("ObjectBoom", "💥 Срыв чеки ловушки на объекте! Взрыв!")));
+		DetonateTrap(false, Name);
+		break;
+	default:
+		PostLine(Name, FText::Format(Flavor == ETrapFlavor::Mine
+			? LOCTEXT("MineSlip", "⚠️ {0}: «Щёлк! Детонатор заклинило, попытка сорвалась! Повторный срыв вызовет подрыв!»")
+			: (Flavor == ETrapFlavor::Barricade
+				? LOCTEXT("BarricadeSlip", "⚠️ {0}: «Щёлк! Растяжка сместилась, взрыватель уцелел! Осторожнее!»")
+				: LOCTEXT("ObjectSlip", "⚠️ {0}: «Щёлк! Растяжка сместилась, детонатор не сработал! Следующая оплошность вызовет подрыв!»")),
+			Name));
+		break;
+	}
+	return Result;
+}
+
+void AInteractableActor::ApplyBlast(float EnemyDamageBase, float SquadDamageBase, float Radius, float ArmorPenetration, EDamageType DamageType,
+	const FText& Source, const FText& SquadLine, EStatusEffect Status, float StatusDuration, float StatusTickDamage)
+{
+	const FVector Center = GetActorLocation();
+	// Enemies (Godot group "enemies"; UE actors tagged Enemy with a health component).
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		AActor* Candidate = *It;
+		if (!Candidate || !Candidate->ActorHasTag(FName(TEXT("Enemy"))))
+		{
+			continue;
+		}
+		UHealthComponent* Health = Candidate->FindComponentByClass<UHealthComponent>();
+		const float EnemyDamage = DeployableRules::GetBlastDamage(EnemyDamageBase, FVector::Dist(Center, Candidate->GetActorLocation()), Radius,
+			DeployableRules::EnemyFalloff);
+		if (Health && Health->IsAlive() && EnemyDamage > 0.f)
+		{
+			FDamageSpec Spec;
+			Spec.Amount = EnemyDamage;
+			Spec.DamageType = DamageType;
+			Spec.ArmorPenetration = ArmorPenetration;
+			Spec.AttackerSource = Source.ToString();
+			Spec.StatusEffect = Status;
+			Spec.StatusDuration = StatusDuration;
+			Spec.StatusTickDamage = StatusTickDamage;
+			Health->TakeDamage(Spec);
+		}
+	}
+	// Friendly fire on the squad.
+	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			UHealthComponent* Health = Member ? Member->HealthComponent.Get() : nullptr;
+			if (!Health || !Health->IsAlive())
+			{
+				continue;
+			}
+			const float SquadDamage = DeployableRules::GetBlastDamage(SquadDamageBase,
+				FVector::Dist(Center, Member->GetActorLocation()), Radius, DeployableRules::SquadFalloff);
+			if (SquadDamage > 0.f)
+			{
+				Health->ApplyDirectHealthLoss(SquadDamage, Source.ToString());
+				Member->StopOperative();
+				PostLine(Member->DisplayName, FText::Format(SquadLine, FMath::FloorToInt(SquadDamage)));
+			}
+		}
+	}
+	ReceiveExploded(Radius);
+}
+
+void AInteractableActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
+{
+	if (!bTrapped && !bByShot)
+	{
+		return;
+	}
+	bTrapped = false;
+	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Снайпер") : InstigatorName) : LOCTEXT("Blast", "ВЗРЫВ"),
+		bByShot ? LOCTEXT("ObjectShotBoom", "💥 Взрыв растяжки на объекте от выстрела!") : LOCTEXT("ObjectTrapBoom", "💥 Растяжка на объекте сдетонировала!"));
+	ApplyBlast(TrapDamage, TrapDamage * DeployableRules::SquadDamageScale, TrapRadius, 0.45f, EDamageType::Explosive,
+		LOCTEXT("ObjectTrapSource", "Ловушка объекта"),
+		LOCTEXT("ObjectTrapHit", "💥 Задело взрывом растяжки объекта (-{0} HP)!"));
+}
+
+bool AInteractableActor::TrapWithGrenade(AOperativeCharacter* Operative)
+{
+	if (!Operative || Operative->GrenadesCount <= 0)
+	{
+		PostLine(LOCTEXT("SquadSpeaker", "Отряд"), LOCTEXT("NeedGrenade", "Для минирования нужна граната в личном инвентаре выбранного бойца."));
+		return false;
+	}
+	if (!CanReceiveTrap())
+	{
+		return false;
+	}
+	// Godot grenade.gd: damage 85, effect_radius 4 m.
+	bTrapped = true;
+	bDefused = false;
+	FailedDefusalAttempts = 0;
+	TrapDamage = 85.f;
+	TrapRadius = 400.f;
+	--Operative->GrenadesCount;
+	PostLine(Operative->DisplayName, FText::Format(LOCTEXT("Trapped", "🧨 Объект заминирован гранатой. Осталось гранат: {0}."),
+		Operative->GrenadesCount));
+	return true;
 }
 
 FActionMenuRequest AInteractableActor::BuildActionMenu(const AOperativeCharacter* Leader) const

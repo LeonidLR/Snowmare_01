@@ -2,9 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "Interactables/DeployableRules.h"
 #include "CodexTacticsGameMode.generated.h"
 
 class AOperativeCharacter;
+class ABarricadeActor;
+class AProximityMineActor;
 
 /** One squad member spawned at mission start. */
 USTRUCT(BlueprintType)
@@ -26,6 +29,14 @@ struct CODEXTACTICS_API FSquadMemberSpawn
 	/** Cold resistance (Godot player.gd fortitude: commander 15, engineer 25, medic-sapper 20). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
 	float Fortitude = 15.f;
+
+	/** Squad role (defusal skill, deployable routing). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	EOperativeRole Role = EOperativeRole::Commander;
+
+	/** Luck, % (Godot: commander 25, engineer 30, medic-sapper 35). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	float Luck = 25.f;
 };
 
 /**
@@ -50,6 +61,13 @@ public:
 	/** Operative Blueprint (look, collision, animation are set up there). */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
 	TSoftClassPtr<AOperativeCharacter> OperativeBlueprint;
+
+	/** Classes spawned when operatives set up items from their supply (Blueprints may replace them). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
+	TSubclassOf<ABarricadeActor> BarricadeClass;
+
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
+	TSubclassOf<AProximityMineActor> MineClass;
 
 	/** Squad roster in selection order (keys 1..N). */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")

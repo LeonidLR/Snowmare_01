@@ -43,6 +43,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void RelocateActionMenu();
 
+	/** «Заминировать» button: trap the menu object with one of the leader's grenades. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
+	void TrapActionMenu();
+
 	/** Cancel / close button. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void CancelActionMenu();
@@ -68,6 +72,8 @@ private:
 	bool TryOpenMenu();
 	void OpenMenuFor(AInteractableActor* Target, AOperativeCharacter* Leader);
 	void CloseMenu();
+	/** Clears the «approaching defuser» mark of a mine (Godot _close_action_menu). */
+	void ClearDefuser(AInteractableActor* Target) const;
 
 	TWeakObjectPtr<AInteractableActor> Pending;
 	TWeakObjectPtr<AInteractableActor> MenuTarget;

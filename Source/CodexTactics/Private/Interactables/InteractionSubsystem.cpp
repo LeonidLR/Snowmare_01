@@ -4,6 +4,7 @@
 #include "CodexTactics.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/DeployableActor.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
@@ -27,7 +28,13 @@ bool UInteractionSubsystem::RequestInteraction(AInteractableActor* Target, bool 
 		return false;
 	}
 	CloseMenu();
+	ClearDefuser(Pending.Get());
 	Pending = Target;
+	// Godot: walking up to a mine with a single click marks the leader as the defuser (the mine ignores them).
+	if (ADeployableActor* Deployable = Cast<ADeployableActor>(Target))
+	{
+		Deployable->ApproachingDefuser = bSprint ? nullptr : Leader;
+	}
 	if (TryOpenMenu())
 	{
 		return true;
@@ -49,8 +56,29 @@ bool UInteractionSubsystem::RequestInteraction(AInteractableActor* Target, bool 
 
 void UInteractionSubsystem::CancelInteraction()
 {
+	ClearDefuser(Pending.Get());
 	Pending.Reset();
 	CloseMenu();
+}
+
+void UInteractionSubsystem::ClearDefuser(AInteractableActor* Target) const
+{
+	if (ADeployableActor* Deployable = Cast<ADeployableActor>(Target))
+	{
+		Deployable->ApproachingDefuser.Reset();
+	}
+}
+
+void UInteractionSubsystem::TrapActionMenu()
+{
+	AInteractableActor* Target = MenuTarget.Get();
+	CloseMenu();
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (Target && Leader)
+	{
+		Target->TrapWithGrenade(Leader);
+	}
 }
 
 void UInteractionSubsystem::Tick(float DeltaTime)
@@ -97,6 +125,12 @@ void UInteractionSubsystem::OpenMenuFor(AInteractableActor* Target, AOperativeCh
 	}
 	MenuTarget = Target;
 	Menu = Request.Menu;
+	// Godot _open_action_menu: any object that can carry a trap offers «Заминировать (N)» / «Нет гранат».
+	Menu.bAllowTrap = Target->CanReceiveTrap();
+	Menu.bTrapDisabled = Leader->GrenadesCount <= 0;
+	Menu.TrapText = Leader->GrenadesCount > 0
+		? FText::Format(NSLOCTEXT("InteractionSubsystem", "Trap", "Заминировать ({0})"), Leader->GrenadesCount)
+		: NSLOCTEXT("InteractionSubsystem", "NoGrenades", "Нет гранат");
 	UE_LOG(LogCodexTactics, Display, TEXT("Action menu: %s [%s%s]"), *Menu.Title.ToString(), *Menu.ConfirmText.ToString(),
 		Menu.bConfirmDisabled ? TEXT(", disabled") : TEXT(""));
 	OnActionMenuChanged.Broadcast(true, Menu);
@@ -122,9 +156,20 @@ void UInteractionSubsystem::RelocateActionMenu()
 	CloseMenu();
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (Target && Target->bTrapped)
+	{
+		// Godot _on_relocate_confirmed: moving a trapped object would set the wire off.
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(Leader ? Leader->DisplayName : NSLOCTEXT("InteractionSubsystem", "Soldier", "Боец"),
+				NSLOCTEXT("InteractionSubsystem", "TrappedMove", "⚠️ Объект заминирован растяжкой! Сначала обезвредьте ловушку, иначе перемещение вызовет взрыв!"));
+		}
+		return;
+	}
 	if (Target && Relocation)
 	{
-		Relocation->StartRelocate(Target, Squad ? Squad->GetLeader() : nullptr);
+		Relocation->StartRelocate(Target, Leader);
 	}
 }
 
@@ -137,6 +182,7 @@ void UInteractionSubsystem::CloseMenu()
 {
 	if (MenuTarget.IsValid())
 	{
+		ClearDefuser(MenuTarget.Get());
 		MenuTarget.Reset();
 		OnActionMenuChanged.Broadcast(false, Menu);
 	}
