@@ -274,8 +274,13 @@ void ACodexTacticsPlayerController::OnClick()
 		}
 	}
 
+	UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>();
 	if (SelectedMember)
 	{
+		if (Interactions)
+		{
+			Interactions->CancelInteraction();
+		}
 		Squad->SetLeader(SelectedMember);
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
@@ -286,22 +291,6 @@ void ACodexTacticsPlayerController::OnClick()
 		return;
 	}
 
-	UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>();
-	// Clicking a quest object sends the leader to it; the interaction runs on arrival.
-	if (AInteractableActor* Interactable = Cast<AInteractableActor>(Hit.GetActor()))
-	{
-		if (Interactions)
-		{
-			Interactions->RequestInteraction(Interactable);
-		}
-		LastClickTime = -1.0;
-		return;
-	}
-	if (Interactions)
-	{
-		Interactions->CancelInteraction();
-	}
-
 	FVector2D MousePosition;
 	GetMousePosition(MousePosition.X, MousePosition.Y);
 	const double Now = FPlatformTime::Seconds();
@@ -310,6 +299,20 @@ void ACodexTacticsPlayerController::OnClick()
 		&& FVector2D::Distance(MousePosition, LastClickPosition) <= DoubleClickPixels;
 	LastClickTime = bDoubleClick ? -1.0 : Now;
 	LastClickPosition = MousePosition;
+
+	// Clicking an object sends the leader to it (running on a double click); its action menu opens on arrival.
+	if (AInteractableActor* Interactable = Cast<AInteractableActor>(Hit.GetActor()))
+	{
+		if (Interactions)
+		{
+			Interactions->RequestInteraction(Interactable, bDoubleClick);
+		}
+		return;
+	}
+	if (Interactions)
+	{
+		Interactions->CancelInteraction();
+	}
 
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const ECodexCombatMode Mode = Flow ? Flow->GetCombatMode() : ECodexCombatMode::None;

@@ -1,6 +1,7 @@
 // Dev-only console command for a headless check of the checkpoint quest chain on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.QuestChainSmoke
-// Uses the player's click path (UInteractionSubsystem::RequestInteraction) for: APC without canister (refusal),
+// Uses the player's click path (UInteractionSubsystem::RequestInteraction + action menu buttons) for: APC without
+// canister (greyed-out menu, closed),
 // canister, APC, generator, gate terminal. Then checks the generator heat, the opened gate, the cutscene ->
 // preparation transition and that the leader can walk through the gate.
 
@@ -83,6 +84,21 @@ namespace QuestChainSmoke
 				Interactions->RequestInteraction(Target);
 				State.bRequested = true;
 				State.StepTime = 0.f;
+			}
+			else if (Interactions->IsActionMenuOpen())
+			{
+				// The player's menu buttons: a greyed-out action (e.g. «Нужна емкость») is closed, otherwise confirmed.
+				const FActionMenuSpec& Menu = Interactions->GetActionMenu();
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke menu \"%s\" button \"%s\"%s"), *Menu.Title.ToString(),
+					*Menu.ConfirmText.ToString(), Menu.bConfirmDisabled ? TEXT(" (disabled -> cancel)") : TEXT(""));
+				if (Menu.bConfirmDisabled)
+				{
+					Interactions->CancelActionMenu();
+				}
+				else
+				{
+					Interactions->ConfirmActionMenu();
+				}
 			}
 			else if (!Interactions->GetPendingInteraction())
 			{

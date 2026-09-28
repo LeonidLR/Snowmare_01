@@ -172,6 +172,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative", meta = (ClampMin = "0", ClampMax = "100"))
 	float ColdLevel = 0.f;
 
+	/** Personal matches for lighting barrels (Godot game_balance_config *_matches_count: 3 each). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 MatchesCount = 3;
+
 	/** Heavy wound flag. Owned by the health system once ported. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative")
 	bool bWounded = false;

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Interactables/ActionMenuTypes.h"
 #include "Quests/QuestChain.h"
 #include "InteractableActor.generated.h"
 
@@ -11,13 +12,13 @@ class UHeatSourceComponent;
 class UStaticMeshComponent;
 
 /**
- * Quest object of the checkpoint (gate terminal, canister, abandoned APC, backup generator, gate).
- * Clicking it sends the squad leader to it; once any living operative is within InteractionDistance of the
- * collision box, the interaction runs through UQuestSubsystem. A generator carries a heat source that turns on
- * when the generator starts.
- * Godot reference: Scenes/movements/interactable.gd (quest part; barrels, traps and repair come with their systems).
+ * Interactive object. Clicking it sends the squad leader to it; on arrival the object's action menu opens
+ * (BuildActionMenu) and the confirm button runs ExecuteAction. The base class is the checkpoint quest object
+ * (gate terminal, canister, abandoned APC, backup generator, gate) routed through UQuestSubsystem; a generator
+ * carries a heat source that turns on when it starts. Subclasses (barrels, deployables) override the menu.
+ * Godot reference: Scenes/movements/interactable.gd, main.gd `_trigger_menu_for_object` / `_on_action_confirmed`.
  */
-UCLASS()
+UCLASS(Blueprintable)
 class CODEXTACTICS_API AInteractableActor : public AActor
 {
 	GENERATED_BODY()
@@ -28,9 +29,19 @@ public:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 
-	/** Runs the interaction for the operative that reached the object. */
+	/** Runs the quest interaction for the operative that reached the object. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void Interact(AOperativeCharacter* User);
+
+	/** Menu (or feed line) for the leader standing at the object. */
+	virtual FActionMenuRequest BuildActionMenu(const AOperativeCharacter* Leader) const;
+
+	/** Confirm button of the menu. Default: the quest interaction. */
+	virtual void ExecuteAction(AOperativeCharacter* User);
+
+	/** Godot can_be_relocated: the object can be pushed / carried to a new spot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Interactables")
+	bool bCanBeRelocated = false;
 
 	/** Distance from Location to the object's collision box, cm (0 inside). */
 	float GetDistanceTo(const FVector& Location) const;

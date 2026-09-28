@@ -135,6 +135,12 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-28 Claude: action menu + fuel barrels. Clicking an object walks the leader to it (double click runs,
+  planned in the tactical pause); on arrival `BuildActionMenu` opens the centred UMG menu (Godot texts) or posts a
+  line; confirm runs `ExecuteAction`. Quest objects use it (greyed «Нужна емкость» etc.). `ABarrelActor`: 1 match,
+  35 s fire, fades last 7 s, heat 5.5 m, orange light 10 m, charred after, frozen in turn-based. Matches 3 each.
+  Relocate button hidden until relocation is ported. `add_barrels_to_movement_test.py` adds Barrel_Fuel_01 to the
+  map without regenerating it. 94 tests, 8 smokes PASS.
 - 2026-09-28 Claude: operative art + baseline animation. `Scripts/Editor/import_operative_assets.py` imports the
   Godot sources from Codex/ASSETS: Explorer glb (17 mesh nodes merged into one mesh, scene root made the `root` bone
   and its 0.01 scale baked so UE5 mannequin clips fit; coat on its own slot), M16, 60 rifle/prone/injured FBX clips

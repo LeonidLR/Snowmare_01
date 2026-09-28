@@ -14,6 +14,8 @@
 #include "CodexTactics.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
+#include "Interactables/BarrelActor.h"
+#include "Interactables/InteractionSubsystem.h"
 #include "Misc/Paths.h"
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
@@ -56,8 +58,9 @@ namespace HudShot
 		}
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		const bool bWalk = Args.Contains(TEXT("walk"));
+		const bool bMenu = Args.Contains(TEXT("menu"));
 		FTimerHandle PoseHandle;
-		World->GetTimerManager().SetTimer(PoseHandle, FTimerDelegate::CreateLambda([WeakWorld, bWalk]()
+		World->GetTimerManager().SetTimer(PoseHandle, FTimerDelegate::CreateLambda([WeakWorld, bWalk, bMenu]()
 		{
 			UWorld* W = WeakWorld.Get();
 			if (!W)
@@ -66,7 +69,18 @@ namespace HudShot
 			}
 			USquadSubsystem* Squad = W->GetSubsystem<USquadSubsystem>();
 			AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-			if (bWalk && Leader)
+			if (bMenu && Leader)
+			{
+				// "menu": a barrel right in front of the leader, its action menu opens at once.
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+				const FVector Spot = Leader->GetActorLocation() + Leader->GetActorForwardVector() * 190.f + FVector(0.f, 0.f, -20.f);
+				if (ABarrelActor* Barrel = W->SpawnActor<ABarrelActor>(Spot, FRotator::ZeroRotator, Params))
+				{
+					W->GetSubsystem<UInteractionSubsystem>()->RequestInteraction(Barrel);
+				}
+			}
+			else if (bWalk && Leader)
 			{
 				// "walk": the leader walks and the squad follows, to inspect locomotion.
 				Leader->OrderMoveTo(Leader->GetActorLocation() + Leader->GetActorForwardVector() * 1500.f, false);

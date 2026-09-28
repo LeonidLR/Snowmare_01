@@ -2,9 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
+#include "Interactables/ActionMenuTypes.h"
 #include "CodexTacticsHUD.generated.h"
 
 class AOperativeCharacter;
+class UActionMenuWidget;
 class UFont;
 
 /**
@@ -12,6 +14,7 @@ class UFont;
  * (top left: phase, mode, per-operative stance / health / cold / ammo) and labels above the operatives.
  * Godot reference: Scenes/movements/main.gd message panel (`_on_quest_message`) and squad status labels.
  * Toggle the status panel and labels with the console variable CodexTactics.HUD.ShowStatus.
+ * Also owns the object action menu widget (UMG) and shows it while UInteractionSubsystem has a menu open.
  */
 UCLASS(Blueprintable)
 class CODEXTACTICS_API ACodexTacticsHUD : public AHUD
@@ -19,7 +22,14 @@ class CODEXTACTICS_API ACodexTacticsHUD : public AHUD
 	GENERATED_BODY()
 
 public:
+	ACodexTacticsHUD();
+
+	virtual void BeginPlay() override;
 	virtual void DrawHUD() override;
+
+	/** Action menu widget class (a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UActionMenuWidget> ActionMenuWidgetClass;
 
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
@@ -37,6 +47,12 @@ public:
 	static FString StripUnsupportedGlyphs(const FString& Text);
 
 private:
+	UFUNCTION()
+	void HandleActionMenuChanged(bool bOpen, const FActionMenuSpec& Menu);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UActionMenuWidget> ActionMenu;
+
 	void DrawMessageFeed();
 	void DrawSquadPanel();
 	void DrawOperativeLabels();

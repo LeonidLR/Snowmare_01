@@ -8,6 +8,8 @@
 #include "Engine/Font.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/InteractionSubsystem.h"
+#include "UI/ActionMenuWidget.h"
 #include "HAL/IConsoleManager.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "UI/GameMessageSubsystem.h"
@@ -81,6 +83,45 @@ FString ACodexTacticsHUD::StripUnsupportedGlyphs(const FString& Text)
 	}
 	Result.TrimStartAndEndInline();
 	return Result;
+}
+
+ACodexTacticsHUD::ACodexTacticsHUD()
+{
+	ActionMenuWidgetClass = UActionMenuWidget::StaticClass();
+}
+
+void ACodexTacticsHUD::BeginPlay()
+{
+	Super::BeginPlay();
+	if (ActionMenuWidgetClass && GetOwningPlayerController())
+	{
+		ActionMenu = CreateWidget<UActionMenuWidget>(GetOwningPlayerController(), ActionMenuWidgetClass);
+		if (ActionMenu)
+		{
+			ActionMenu->AddToViewport(10);
+			ActionMenu->HideMenu();
+		}
+	}
+	if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+	{
+		Interactions->OnActionMenuChanged.AddDynamic(this, &ACodexTacticsHUD::HandleActionMenuChanged);
+	}
+}
+
+void ACodexTacticsHUD::HandleActionMenuChanged(bool bOpen, const FActionMenuSpec& Menu)
+{
+	if (!ActionMenu)
+	{
+		return;
+	}
+	if (bOpen)
+	{
+		ActionMenu->ShowMenu(Menu);
+	}
+	else
+	{
+		ActionMenu->HideMenu();
+	}
 }
 
 void ACodexTacticsHUD::DrawHUD()
@@ -213,8 +254,8 @@ FString ACodexTacticsHUD::DescribeOperative(const AOperativeCharacter& Operative
 			Line += TEXT("  ОРУЖИЕ ЗАМЁРЗЛО");
 		}
 	}
-	Line += FString::Printf(TEXT("  патроны %d/%d%s"), Operative.CurrentClip, Operative.ReserveAmmo,
-		Operative.bIsReloading ? TEXT(" перезарядка") : TEXT(""));
+	Line += FString::Printf(TEXT("  патроны %d/%d%s  спички %d"), Operative.CurrentClip, Operative.ReserveAmmo,
+		Operative.bIsReloading ? TEXT(" перезарядка") : TEXT(""), Operative.MatchesCount);
 	return Line;
 }
 
