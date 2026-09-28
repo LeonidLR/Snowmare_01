@@ -1,4 +1,5 @@
-# Creates /Game/VFX/Materials/M_CombatFeedback: unlit additive glow for tracers, plan markers and target flashes.
+# Creates /Game/VFX/Materials/M_CombatFeedback: unlit additive glow for tracers, plan markers, target flashes and
+# the turn-based grid overlay (instanced static meshes).
 # Parameters: Color (vector), Intensity (scalar; fade to 0). Used by UCombatFeedbackSubsystem (C++).
 # Run: UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script=<abs path to this file>
 # Result: Saved/Logs/create_feedback_material.txt
@@ -18,6 +19,8 @@ material = tools.create_asset(NAME, PATH, unreal.Material, unreal.MaterialFactor
 material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
 material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
 material.set_editor_property("two_sided", True)
+# Turn-based grid overlay tiles are instanced static meshes.
+material.set_editor_property("used_with_instanced_static_meshes", True)
 
 color = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -600, 0)
 color.set_editor_property("parameter_name", "Color")

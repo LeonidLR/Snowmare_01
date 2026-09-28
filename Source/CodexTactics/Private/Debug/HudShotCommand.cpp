@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu.
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -18,6 +18,9 @@
 #include "Data/DialogueSequenceAsset.h"
 #include "UI/DialogueSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Characters/EnemyCharacter.h"
+#include "Combat/WaveSubsystem.h"
+#include "EngineUtils.h"
 #include "Containers/Ticker.h"
 #include "GameFramework/WorldSettings.h"
 #include "CodexTactics.h"
@@ -87,6 +90,31 @@ namespace HudShot
 		const bool bPlace = Args.Contains(TEXT("place"));
 		const bool bShoot = Args.Contains(TEXT("shoot"));
 		const bool bFailed = Args.Contains(TEXT("failed"));
+		if (Args.Contains(TEXT("turnbased")))
+		{
+			TWeakObjectPtr<UWorld> TbWorld(World);
+			FTimerHandle TbHandle;
+			World->GetTimerManager().SetTimer(TbHandle, FTimerDelegate::CreateLambda([TbWorld]()
+			{
+				UWorld* W = TbWorld.Get();
+				USquadSubsystem* SquadSystem = W ? W->GetSubsystem<USquadSubsystem>() : nullptr;
+				AOperativeCharacter* Lead = SquadSystem ? SquadSystem->GetLeader() : nullptr;
+				if (!Lead)
+				{
+					return;
+				}
+				UGameFlowSubsystem* Flow = W->GetSubsystem<UGameFlowSubsystem>();
+				Flow->TriggerCombatZone();
+				Flow->FinishCutscene();
+				Flow->FinishPreparation();
+				for (TActorIterator<AEnemyCharacter> It(W); It; ++It)
+				{
+					It->Destroy();
+				}
+				W->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Brute, Lead->GetActorLocation() + Lead->GetActorForwardVector() * 600.f);
+				Flow->RequestEnterTurnBased(true);
+			}), 2.f, false);
+		}
 		if (Args.Contains(TEXT("cutscene")) || Args.Contains(TEXT("prep")))
 		{
 			// The cutscene lasts 4 s: start it shortly before the screenshot (4.5 s).

@@ -39,6 +39,9 @@ public:
 	/** Name used in radio lines (Godot enemy_name). */
 	const FString& GetEnemyDisplayName() const { return EnemyDisplayName; }
 
+	/** Avoids burning barrels (Godot fears_fire; turn-based enemies keep out of the 5 x 5 fire-fear area). */
+	bool DoesFearFire() const { return bFearsFire; }
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
 

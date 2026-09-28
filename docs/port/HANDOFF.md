@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-29 by Claude, after commit `444692c`.
+Last update: 2026-09-29 by Claude, after the turn-based combat commit (see §10).
 
 ---
 
@@ -45,7 +45,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **113 automation tests, 18 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **113 automation tests, 19 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -66,10 +66,11 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `DialogueSmoke` (`-ForceMainMenu`, verify_all does it) | «Начать игру» opens the 15-line intro briefing, Space advances (no pause), skip closes, preparation lines reach the feed with the Godot delay |
 | `ActionBarSmoke` | action bar stance slot cycles the squad, «ПЕР» pick mode on / off, squad slot 2 selects the engineer |
 | `BannersSmoke` | cutscene card + Space skip, squad warm / healed for the preparation, preparation / wave / pause banner texts |
+| `TurnBasedSmoke` | wave + one brute, enter turn-based: grid registration, 8 AP, stance 1 AP, enemy turn (walk, bite 13 on a crouched commander, step back), move into a fire lane + shot -> victory -> tactical pause |
 | `MissionSmoke` | objective banner texts (start → preparation → wave), an operative's death fails the mission (GameOver, reason, time stop), restart reloads a fresh exploration |
 | `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
 | `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot |
-| `HudShot [close] [walk] [menu] [place] [shoot] [failed] [mainmenu] [dialogue] [cutscene] [prep]` (`dialogue`: intro briefing window; `shoot`: slowed-down barrel shot = tracer, target flash, plan marker; `failed`: mission-failed screen; `mainmenu`: needs `-ForceMainMenu`) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
+| `HudShot [close] [walk] [menu] [place] [shoot] [failed] [mainmenu] [dialogue] [cutscene] [prep] [turnbased]` (`dialogue`: intro briefing window; `shoot`: slowed-down barrel shot = tracer, target flash, plan marker; `failed`: mission-failed screen; `mainmenu`: needs `-ForceMainMenu`) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
 | `FinishPrep` | dev: skip preparation, start the wave |
 
 Parity tests live in `Source/CodexTacticsTests/Private/<System>/` named `CodexTactics.<System>.<Case>`; they mirror
@@ -167,6 +168,19 @@ Module `CodexTactics` (runtime). Folder → class → Godot reference.
   Starting the generator also powers all turrets. Godot `interactable.gd breakdown_generator / repair_generator`.
 - `Quests/QuestChain`, `QuestSubsystem`, `Interactables/GateActor`. Godot `quest_manager.gd`, `gate.gd`.
 
+**Turn-based combat** — `Tactics/TurnBasedCombatSubsystem` (starts when the flow enters TurnBased, ends on victory /
+defeat / leaving): 14 x 14 grid (1.5 m) around the leader, floor traced under it, static colliders baked as obstacles,
+barricades / barrels / mines / turrets registered, everything else frozen (enemy / turret / mine ticks off, wave
+spawning paused in `UWaveSubsystem::Tick`). Squad round: 8 AP each — move 1 / diagonal 2 (reachable BFS, a mine on the
+path stops the walk and blows), stance 1, turn 90° 1, one attack 3 (fire lane, LoS, hit chance with stance bonus, arc
+damage − armour, barrel = 3 x 3 blast + 3 burning rounds with a 5 x 5 fire-fear area), Tab next operative, Enter
+end the squad turn. Turret phase (nearest enemy ≤ 45 m, fallback curve, 25 dmg). Enemy phase: nearest operative, path
+to an orthogonal neighbour (fire-fear aware), bite for 2 AP after a 1.3 s yellow warning (arc x stance multiplier),
+step back. Steps animate 0.52 s (enemy 0.48 s, x1.414 diagonal). Victory → «🏆 ПОБЕДА…», flow → tactical pause.
+`Tactics/TurnGridOverlayActor` (instanced glow tiles: grid, reachable, attack targets, enemy reach, active, warning,
+fear). Controller: clicks go to `HandleWorldClick`; 1..3 / Z C V / R / Tab / Enter as above. Grid manager gained
+`FindPathToAdjacent` / `FindPathClosestOutsideForbidden`; barrels `IgniteForTurnBased` / `ExtinguishNow`.
+
 **Phase banners** — `UI/PhaseBannersWidget`: pause banner «РЕЖИМ ПРИКАЗОВ | Зарядов… | Время планирования…»,
 combat banner «ПОДГОТОВКА К БОЮ: NN сек» + «Начать бой» (`FinishPreparation`) / «ВОЛНА N | ВРАГОВ ОСТАЛОСЬ: M»,
 pre-combat cutscene card (black screen, countdown; click or Space skips = `FinishCutscene`). The mission subsystem
@@ -231,6 +245,11 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - «Начать исследование»: REFERENCE_PLAYTHROUGH says «exploration only … no combat», but Godot code only changes the
   objective / radio line (the gate still starts combat). UE follows the Godot code — confirm with the user.
 - «Начать бой» position: Godot hard-codes the yard behind the gate; UE uses the `CombatStart` tag (test map: (0, −2150)).
+- Turn-based deviations: an operative that survives a mine ends its turn once (Godot schedules end_current_unit_turn
+  twice — from the move and from the blast — which skips the next operative; treated as a bug). Squad starts facing the
+  enemies' centroid (Godot hard-codes SOUTH = towards the enemies on its map). The attack line names the arc
+  (фронт / фланг / тыл; Godot prints the enum number). Trapped-barricade retaliation, frozen-enemy stasis look,
+  enemy idle variations not ported.
 - Godot `_apply_stage_exploration_resources` (combat loadout by start mode: collected vs starting set) is not ported.
 - `FString::ToLower` / `Contains(IgnoreCase)` do not fold Cyrillic: use `FText::ToLower` (see DialogueRules).
 - The world is paused while the start menu is open (Godot keeps processing behind its menu) — cosmetic difference.
@@ -245,10 +264,9 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    ~~dialogue window, bottom action bar, banners, cutscene card~~ (done); remaining UI: inventory drawer, transfer,
    guard, weapon selector, pause menu / save-load, radius rings (action bar slots are placeholders).
 6. Turn-based combat manager on the Gorky grid (Godot `Scripts/tactics/turn_based_combat_manager.gd`).
-   Done so far: `Tactics/GorkyLineOfSight` (gorky17_los.gd), `Tactics/TurnBasedRules` (FTurnBasedBalance = Godot
-   tactical_* defaults, hit chance with stance bonus, turret curve, damage by distance, weapon attack cells).
-   Next: `UTurnBasedCombatSubsystem` (start_combat registration, player turn: move / stance / facing / attack,
-   turret + enemy phases, barrels / mines, end conditions), then grid overlay + combat HUD, controller clicks.
+   Done: `GorkyLineOfSight`, `TurnBasedRules`, `UTurnBasedCombatSubsystem` + overlay + controller input (see §4).
+   Next: turn-based HUD panel («ХОД ОТРЯДА», AP, buttons — Godot `gorky17_combat_hud.gd`), grid deployables /
+   barricade relocation, exposed zones + reinforcements, weapon switching / grenades, companion drone, stasis look.
 7. Phase 2 data importer (JSON / .tres → DataAssets) replacing hand-typed values (§9).
 8. Content: level, VFX, cutscene; character "twisted" look issue (§6).
 
@@ -278,6 +296,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
+| (turn-based combat commit) | Gorky 17 turn-based combat subsystem, grid overlay, controller input, TurnBasedSmoke |
 | `87b4ae7` | Gorky line of sight, turn-based pure rules (hit chance, attack cells, balance struct) |
 | `444692c` | Pause / preparation / wave banners, cutscene card with skip, squad reset after the cutscene |
 | `5c317b5` | Bottom tactical bar (weapon, relocation pick mode, stance cycle, squad slots with HP / cold bars) |

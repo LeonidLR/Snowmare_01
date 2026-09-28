@@ -135,6 +135,9 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: turn-based combat subsystem + grid overlay. Additive edits on Gemini files: `UGorkyGridManager`
+  (FindPathToAdjacent, FindPathClosestOutsideForbidden), `AEnemyCharacter::DoesFearFire`, `UWaveSubsystem::Tick` skips
+  spawning in TurnBased. `M_CombatFeedback` now has the instanced-static-mesh usage flag.
 - 2026-09-29 Claude: phase banners + cutscene card; `GameFlowSubsystem::GetCutsceneTimeRemaining` (additive); squad reset after the cutscene.
 - 2026-09-29 Claude: bottom action bar (`UActionBarWidget`), controller stance cycle / relocation pick mode.
 - 2026-09-29 Claude: dialogues — Godot .tres imported by script into `/Game/Data/Dialogues`, bottom dialogue window,

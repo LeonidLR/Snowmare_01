@@ -419,3 +419,103 @@ FIntPoint UGorkyGridManager::FindNearestFreeCell(const FIntPoint& PreferredCell)
 
 	return PreferredCell;
 }
+
+TArray<FIntPoint> UGorkyGridManager::FindPathToAdjacent(const FIntPoint& StartPos, const FIntPoint& TargetPos, int32 APBudget, bool bOrthogonalOnly,
+	const TSet<FIntPoint>& ForbiddenCells) const
+{
+	TArray<FIntPoint> BestPath;
+	if (!IsValidCell(StartPos) || !IsValidCell(TargetPos))
+	{
+		return BestPath;
+	}
+	const int32 Manhattan = FMath::Abs(TargetPos.X - StartPos.X) + FMath::Abs(TargetPos.Y - StartPos.Y);
+	const int32 Chebyshev = FMath::Max(FMath::Abs(TargetPos.X - StartPos.X), FMath::Abs(TargetPos.Y - StartPos.Y));
+	if ((bOrthogonalOnly ? Manhattan : Chebyshev) <= 1)
+	{
+		return BestPath;
+	}
+
+	TArray<FIntPoint> Neighbours;
+	if (bOrthogonalOnly)
+	{
+		for (const FIntPoint& D : FGorky17Utils::GetCardinalDirections())
+		{
+			if (IsValidCell(TargetPos + D))
+			{
+				Neighbours.Add(TargetPos + D);
+			}
+		}
+	}
+	else
+	{
+		Neighbours = GetNeighbors(TargetPos);
+	}
+	auto DistanceToStart = [&StartPos, bOrthogonalOnly](const FIntPoint& Cell)
+	{
+		const int32 DX = FMath::Abs(Cell.X - StartPos.X);
+		const int32 DY = FMath::Abs(Cell.Y - StartPos.Y);
+		return bOrthogonalOnly ? DX + DY : FMath::Max(DX, DY);
+	};
+	Neighbours.StableSort([&DistanceToStart](const FIntPoint& A, const FIntPoint& B) { return DistanceToStart(A) < DistanceToStart(B); });
+
+	for (const FIntPoint& Cell : Neighbours)
+	{
+		if (ForbiddenCells.Contains(Cell) || !IsCellWalkable(Cell))
+		{
+			continue;
+		}
+		const TArray<FIntPoint> Path = FindPath(StartPos, Cell, APBudget, ForbiddenCells);
+		if (!Path.IsEmpty() && (BestPath.IsEmpty() || Path.Num() < BestPath.Num()))
+		{
+			BestPath = Path;
+			if (BestPath.Num() <= APBudget)
+			{
+				break;
+			}
+		}
+	}
+	if (BestPath.IsEmpty())
+	{
+		for (const int32 Budget : { APBudget + 4, APBudget + 8, 20 })
+		{
+			for (const FIntPoint& Cell : Neighbours)
+			{
+				if (ForbiddenCells.Contains(Cell) || !IsCellWalkable(Cell))
+				{
+					continue;
+				}
+				const TArray<FIntPoint> Path = FindPath(StartPos, Cell, Budget, ForbiddenCells);
+				if (!Path.IsEmpty() && (BestPath.IsEmpty() || Path.Num() < BestPath.Num()))
+				{
+					BestPath = Path;
+				}
+			}
+			if (!BestPath.IsEmpty())
+			{
+				break;
+			}
+		}
+	}
+	return BestPath;
+}
+
+TArray<FIntPoint> UGorkyGridManager::FindPathClosestOutsideForbidden(const FIntPoint& StartPos, const FIntPoint& TargetPos, int32 APBudget,
+	const TSet<FIntPoint>& ForbiddenCells) const
+{
+	FIntPoint BestCell = StartPos;
+	int32 BestDistance = TNumericLimits<int32>::Max();
+	for (const TPair<FIntPoint, int32>& Entry : GetReachableCells(StartPos, APBudget))
+	{
+		if (ForbiddenCells.Contains(Entry.Key))
+		{
+			continue;
+		}
+		const int32 Distance = FMath::Max(FMath::Abs(Entry.Key.X - TargetPos.X), FMath::Abs(Entry.Key.Y - TargetPos.Y));
+		if (Distance < BestDistance)
+		{
+			BestDistance = Distance;
+			BestCell = Entry.Key;
+		}
+	}
+	return BestCell == StartPos ? TArray<FIntPoint>() : FindPath(StartPos, BestCell, APBudget, ForbiddenCells);
+}

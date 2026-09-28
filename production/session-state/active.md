@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: Phase 4/5 world systems — interaction, relocation, deployables
-Task: next = turn-based combat manager (docs/port/HANDOFF.md §8.6); remaining UI pieces listed in §8.5
+Task: next = turn-based HUD panel, then the remaining turn-based features (docs/port/HANDOFF.md §8.6)
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
@@ -15,7 +15,7 @@ Task: next = turn-based combat manager (docs/port/HANDOFF.md §8.6); remaining U
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-Banners commit: 110 automation tests, 18 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
+Turn-based commit: 113 automation tests, 19 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
 
 ## Open questions
 - PlayerStart of L_MovementTest moved to (-180, -1490) — intended? (HANDOFF §7)

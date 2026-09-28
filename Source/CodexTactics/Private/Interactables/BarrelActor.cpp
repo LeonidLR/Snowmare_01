@@ -230,4 +230,30 @@ bool ABarrelActor::Explode(const FText& InstigatorName)
 	return true;
 }
 
+bool ABarrelActor::IgniteForTurnBased()
+{
+	if (Burn.bBurning)
+	{
+		return false;
+	}
+	Burn.bBurnt = true;
+	Burn.bBurning = true;
+	Burn.TimeLeft = 10.f;
+	ApplyVisuals();
+	OnBurningChanged.Broadcast(this, true);
+	ReceiveBurningChanged(true);
+	return true;
+}
+
+void ABarrelActor::ExtinguishNow()
+{
+	if (!Burn.bBurning)
+	{
+		return;
+	}
+	Burn.bBurning = false;
+	Burn.TimeLeft = 0.f;
+	HandleFireOut();
+}
+
 #undef LOCTEXT_NAMESPACE

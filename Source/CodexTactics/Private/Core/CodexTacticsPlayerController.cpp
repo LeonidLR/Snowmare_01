@@ -5,6 +5,7 @@
 #include "Combat/EncounterQueries.h"
 #include "Core/MissionSubsystem.h"
 #include "UI/DialogueSubsystem.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Interactables/LootCrateActor.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
@@ -109,7 +110,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &ACodexTacticsPlayerController::OnMouseWheelDown);
 	// Ctrl + X: quick restart, handled before every game mode (Godot main.gd _unhandled_input).
 	InputComponent->BindKey(FInputChord(EKeys::X, false, true, false, false), IE_Pressed, this, &ACodexTacticsPlayerController::RestartMission);
-	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACodexTacticsPlayerController::DialogueNext);
+	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACodexTacticsPlayerController::EnterPressed);
+	InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ACodexTacticsPlayerController::TabPressed);
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ACodexTacticsPlayerController::DialogueSkip);
 
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent);
@@ -201,6 +203,10 @@ void ACodexTacticsPlayerController::RotatePlacement()
 	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
 	{
 		Relocation->RotatePreview(+1);
+	}
+	else if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
+	{
+		TurnBased->RotateActiveUnitClockwise();
 	}
 }
 
@@ -322,6 +328,32 @@ void ACodexTacticsPlayerController::DialogueNext()
 	}
 }
 
+void ACodexTacticsPlayerController::EnterPressed()
+{
+	if (IsDialogueOpen())
+	{
+		DialogueNext();
+	}
+	else if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
+	{
+		TurnBased->PassSquadTurn();
+	}
+}
+
+void ACodexTacticsPlayerController::TabPressed()
+{
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
+	{
+		TurnBased->EndCurrentUnitTurn();
+	}
+}
+
+UTurnBasedCombatSubsystem* ACodexTacticsPlayerController::GetActiveTurnBased() const
+{
+	UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+	return TurnBased && TurnBased->IsActive() ? TurnBased : nullptr;
+}
+
 void ACodexTacticsPlayerController::DialogueSkip()
 {
 	if (UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>())
@@ -352,6 +384,13 @@ void ACodexTacticsPlayerController::OnClick()
 	FHitResult Hit;
 	if (!Leader || !GetHitResultUnderCursor(ECC_Visibility, false, Hit))
 	{
+		return;
+	}
+
+	// Turn-based combat: the grid handles every click (select, attack, walk).
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
+	{
+		TurnBased->HandleWorldClick(Hit.ImpactPoint, Hit.GetActor());
 		return;
 	}
 
@@ -478,6 +517,18 @@ void ACodexTacticsPlayerController::OnClick()
 
 void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 {
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
+	{
+		USquadSubsystem* SquadSystem = GetSquad();
+		for (AOperativeCharacter* Member : SquadSystem ? SquadSystem->GetMembers() : TArray<AOperativeCharacter*>())
+		{
+			if (Member->SquadIndex == RosterIndex)
+			{
+				TurnBased->SelectUnit(Member);
+			}
+		}
+		return;
+	}
 	if (USquadSubsystem* Squad = GetSquad())
 	{
 		if (Squad->SetLeaderByIndex(RosterIndex))
@@ -496,6 +547,11 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 
 void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 {
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
+	{
+		TurnBased->SetActiveUnitStance(Stance); // 1 AP, active operative only
+		return;
+	}
 	USquadSubsystem* Squad = GetSquad();
 	if (!Squad)
 	{

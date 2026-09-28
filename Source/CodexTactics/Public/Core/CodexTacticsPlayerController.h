@@ -19,6 +19,8 @@ class USquadSubsystem;
  * supply crate / trapped object = remote detonation; during the tactical pause the shot is planned instead.
  * Ctrl + X: restart the mission (Godot _restart_current_test_mode).
  * While the bottom dialogue is open, orders are blocked: Space / Enter = next line, Esc = skip.
+ * Turn-based combat (UTurnBasedCombatSubsystem): click = select / attack / walk, 1..3 select, Tab = next operative,
+ * Enter = end the squad turn, Z / C / V = stance (1 AP), R = turn 90° (1 AP).
  * Space: tap = tactical pause (during a wave), hold = enter / leave turn-based combat. During the pause, clicks
  * plan moves (executed together on release); during turn-based combat ground clicks do not issue real-time moves.
  * Input actions are created in code for now; they move to assets once the editor setup exists.
@@ -86,6 +88,12 @@ private:
 	/** True while a story dialogue blocks world orders (Godot _unhandled_input). */
 	bool IsDialogueOpen() const;
 	void DialogueNext();
+	/** Enter: next dialogue line, or end the squad turn in turn-based combat. */
+	void EnterPressed();
+	/** Tab: next operative in turn-based combat. */
+	void TabPressed();
+	/** Turn-based combat subsystem while a grid fight is running, else null. */
+	class UTurnBasedCombatSubsystem* GetActiveTurnBased() const;
 	void DialogueSkip();
 	void SelectMember1() { SelectMember(0); }
 	void SelectMember2() { SelectMember(1); }

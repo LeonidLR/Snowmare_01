@@ -30,6 +30,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/tactics/tactical_encounter_selector.gd` | `UTacticalEncounterSelector` | 4 | ⬜ | |
 | `Scripts/tactics/tactical_grid_overlay.gd` | `ATacticalGridOverlay` (ISM/decals) | 4 | ⬜ | |
 | `Scripts/tactics/tactical_hold_sphere.gd` | `ATacticalHoldSphere` | 4 | ⬜ | |
+| `Scripts/tactics/turn_based_combat_manager.gd` (core loop), `tactical_grid_overlay.gd` | `UTurnBasedCombatSubsystem`, `ATurnGridOverlayActor` | 4 | 🟨 (zones / reinforcements, drone, deployables on grid, weapon switch → next) | `CodexTactics.TurnBasedSmoke`, `HudShot turnbased` |
 | `Scripts/tactics/gorky17_combat_hud.gd` | UMG `WBP_CombatHUD` + `UCombatHUDWidget` | 4 | ⬜ | |
 | `Scripts/components/combat_component.gd` | `UCombatComponent` | 1/4 | ⬜ | |
 | `Scripts/components/movement_component.gd` | not ported: its stamina is unused by `player.gd` (user: no stamina) | — | ➖ | |

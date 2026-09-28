@@ -40,6 +40,11 @@ void UWaveSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
+	// Godot freezes the enemy spawners during turn-based combat.
+	if (const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased)
+	{
+		return;
+	}
 
 	ProcessPendingSpawns(DeltaTime);
 	CheckWaveCompletion();

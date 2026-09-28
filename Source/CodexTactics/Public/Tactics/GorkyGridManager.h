@@ -90,6 +90,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tactics|Grid")
 	FIntPoint FindNearestFreeCell(const FIntPoint& PreferredCell) const;
 
+	/**
+	 * Path to the free neighbour of TargetPos closest to StartPos (orthogonal neighbours only when bOrthogonalOnly);
+	 * empty when already adjacent. Retries with budgets +4, +8 and 20 AP when nothing fits (Godot find_path_to_adjacent).
+	 */
+	TArray<FIntPoint> FindPathToAdjacent(const FIntPoint& StartPos, const FIntPoint& TargetPos, int32 APBudget, bool bOrthogonalOnly = false,
+		const TSet<FIntPoint>& ForbiddenCells = TSet<FIntPoint>()) const;
+
+	/** Path to the reachable cell outside ForbiddenCells closest to TargetPos (Godot find_path_closest_to_target_outside_forbidden). */
+	TArray<FIntPoint> FindPathClosestOutsideForbidden(const FIntPoint& StartPos, const FIntPoint& TargetPos, int32 APBudget,
+		const TSet<FIntPoint>& ForbiddenCells) const;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tactics|Grid")
 	FIntPoint GridSize = FIntPoint(14, 14);
 

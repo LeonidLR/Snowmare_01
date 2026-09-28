@@ -71,6 +71,49 @@ float TurnBasedRules::GetDamageForDistance(const UWeaponDataAsset* Weapon, int32
 	return Weapon->BaseDamage * Multiplier;
 }
 
+bool TurnBasedRules::IsTargetInPattern(const UWeaponDataAsset* Weapon, const FIntPoint& Offset)
+{
+	if (Offset == FIntPoint::ZeroValue)
+	{
+		return false;
+	}
+	const int32 Distance = FMath::Max(FMath::Abs(Offset.X), FMath::Abs(Offset.Y));
+	const int32 MaxRange = Weapon ? Weapon->MaxRangeCells : 5;
+	if (Distance > MaxRange)
+	{
+		return false;
+	}
+	switch (Weapon ? Weapon->AttackShape : EAttackShape::Rays8)
+	{
+	case EAttackShape::Rays8:
+		return Offset.X == 0 || Offset.Y == 0 || FMath::Abs(Offset.X) == FMath::Abs(Offset.Y);
+	case EAttackShape::Rays4:
+		return Offset.X == 0 || Offset.Y == 0;
+	case EAttackShape::MeleeAdj:
+		return FMath::Abs(Offset.X) <= 1 && FMath::Abs(Offset.Y) <= 1;
+	case EAttackShape::FreeTarget:
+		return true;
+	default:
+		return false;
+	}
+}
+
+float TurnBasedRules::StanceDamageMultiplier(EOperativeStance Stance, const FTurnBasedBalance& Balance)
+{
+	return Stance == EOperativeStance::Crouching ? Balance.CrouchDamageMultiplier
+		: (Stance == EOperativeStance::Prone ? Balance.ProneDamageMultiplier : 1.f);
+}
+
+int32 TurnBasedRules::SquadAttackDamage(float BaseDamage, float ArcMultiplier, float Armor, float ArcArmorMultiplier)
+{
+	return FMath::Max(1, FMath::RoundToInt(BaseDamage * ArcMultiplier - Armor * ArcArmorMultiplier));
+}
+
+int32 TurnBasedRules::EnemyAttackDamage(float BaseDamage, float ArcMultiplier, float StanceMultiplier)
+{
+	return FMath::Max(1, FMath::RoundToInt(BaseDamage * ArcMultiplier * StanceMultiplier));
+}
+
 TMap<FIntPoint, FTurnBasedAttackCell> TurnBasedRules::GetWeaponAttackCells(const UGorkyGridManager& Grid, const FIntPoint& From,
 	const UWeaponDataAsset* Weapon, EOperativeStance Stance, const FTurnBasedBalance& Balance)
 {

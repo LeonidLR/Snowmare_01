@@ -66,6 +66,18 @@ namespace TurnBasedRules
 	/** Base damage x the weapon's distance multiplier (or FallbackDamage without weapon data). */
 	CODEXTACTICS_API float GetDamageForDistance(const UWeaponDataAsset* Weapon, int32 DistanceCells, float FallbackDamage);
 
+	/** Is the offset on the weapon's fire lanes (Godot weapon_data.gd is_target_in_pattern; no weapon = 8 rays of 5). */
+	CODEXTACTICS_API bool IsTargetInPattern(const UWeaponDataAsset* Weapon, const FIntPoint& Offset);
+
+	/** Incoming damage multiplier of the defender's stance (crouch 0.70, prone 0.50). */
+	CODEXTACTICS_API float StanceDamageMultiplier(EOperativeStance Stance, const FTurnBasedBalance& Balance);
+
+	/** Squad attack damage: max(1, round(base x arc multiplier - armour x arc armour multiplier)). */
+	CODEXTACTICS_API int32 SquadAttackDamage(float BaseDamage, float ArcMultiplier, float Armor, float ArcArmorMultiplier);
+
+	/** Enemy melee damage: max(1, round(base x arc multiplier x stance multiplier)). */
+	CODEXTACTICS_API int32 EnemyAttackDamage(float BaseDamage, float ArcMultiplier, float StanceMultiplier);
+
 	/**
 	 * Cells the weapon can target from From: 8 or 4 rays stopped by the first occupant that is not a mine (the
 	 * occupied cell itself is still a target), the 8 neighbours for melee, or any cell in range for free targeting.

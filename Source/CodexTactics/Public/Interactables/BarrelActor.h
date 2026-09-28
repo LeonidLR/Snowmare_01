@@ -39,6 +39,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Barrel")
 	bool Explode(const FText& InstigatorName);
 
+	/** Turn-based detonation: burning look and heat only, the grid applies the 3 x 3 damage (Godot _detonate_barrel). */
+	bool IgniteForTurnBased();
+
+	/** Puts the fire out now (turn-based: after 3 rounds; Godot extinguish_barrel). */
+	void ExtinguishNow();
+
 	/** Lights the barrel with one of User's matches and posts the radio line. Returns true if it caught fire. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Barrel")
 	bool Ignite(AOperativeCharacter* User);
