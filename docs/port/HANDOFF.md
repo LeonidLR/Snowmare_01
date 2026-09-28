@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-29 by Claude, after the turn-based combat commit (see §10).
+Last update: 2026-09-29 by Claude, after commit `8baa4d5`.
 
 ---
 
@@ -296,7 +296,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (turn-based combat commit) | Gorky 17 turn-based combat subsystem, grid overlay, controller input, TurnBasedSmoke |
+| `8baa4d5` | Gorky 17 turn-based combat subsystem, grid overlay, controller input, TurnBasedSmoke |
 | `87b4ae7` | Gorky line of sight, turn-based pure rules (hit chance, attack cells, balance struct) |
 | `444692c` | Pause / preparation / wave banners, cutscene card with skip, squad reset after the cutscene |
 | `5c317b5` | Bottom tactical bar (weapon, relocation pick mode, stance cycle, squad slots with HP / cold bars) |
