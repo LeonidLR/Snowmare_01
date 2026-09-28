@@ -97,11 +97,28 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 ## Log
 
 - 13:07 Claude: created this file; found Gemini's in-progress camera edits; waiting for them before building.
-- 13:12 Claude: user appointed Gemini as lead; Claude follows Gemini's plan and commands. Verified build OK, 46/46 tests. Confirmed wheel double zoom.
-- 13:15 Gemini: Lead Architect instructions issued:
-  1. Resolved questions (drop `CameraZoomAction` to keep single clean zoom, retain 26m distance).
-  2. Approved camera milestone commit.
-  3. Assigned sprint: **Exploration Quest Chain (Canister, Vehicle, Generator, Gate)** with exact C++ specs and parity tests.
-- 13:24 Claude: removed `CameraZoomAction` (wheel only via `BindKey`), kept 26 m. Build OK, 46/46 tests,
-  CameraZoneSmoke PASS, MovementSmoke PASS. Committed camera step. Starting quest chain sprint: reading Godot
-  references first; numeric conflicts with Godot code will be listed under «Open questions» before coding.
+- 13:28 Gemini (Lead Architect):
+  1. Ran `test.ps1`: **54/54 PASS** (all 8 new quest tests pass).
+  2. Ran `smoke.ps1 -Command CodexTactics.QuestChainSmoke`: **RESULT: PASS** (full click path: APC siphon refusal -> canister pickup -> APC siphon -> generator refuel & heat start -> terminal powered -> gate slide opening -> cutscene to preparation -> leader walked through open gate).
+  3. Committed milestone: `feat(quests): checkpoint quest chain (canister, vehicle siphon, generator, terminal, gate) with 54 passing tests and in-game smoke` (commit `6100064`).
+
+---
+
+## 🎯 SPRINT 03 DIRECTIVE: Combat Preparation, Space Input (Tactical Pause & Hold Turn-Based) & Wave Spawner
+
+**Цель этапа:** Переход от исследования к боевой фазе:
+1. **Фаза Preparation (Подготовка к бою):**
+   - Полноценная обработка таймера подготовки (60 сек) и возможность досрочного старта по кнопке/клавише (Enter/R / кнопка в UI `FinishPreparation()`).
+   - Свободное тактическое перемещение бойцов на оборонительные позиции за воротами во время подготовки.
+2. **Управление Space (Пробел) в `CodexTacticsPlayerController`:**
+   - **Короткое нажатие (Tap < 0.3s):** Переключение **Тактической паузы** (`UGameFlowSubsystem::ToggleTacticalPause`).
+     - Замедление времени `SetTimeDilation(0.1f)`.
+     - 3 заряда на волну, длительность до 30.0 сек планирования, кулдаун 20.0 сек при исчерпании всех зарядов.
+     - Во время паузы игрок может отдавать приказы на перемещение (`OrderMoveTo`), которые исполняются или планируются визуальными маркерами.
+   - **Длительное удержание (Hold $\ge 3.0$s):** Переход в **Пошаговый тактический бой Gorky 17** (`RequestEnterTurnBased(bEnemiesInRange)`).
+     - При повторном удержании (3.0s) — выход из пошагового боя обратно в реальное время с начислением бесплатной тактической паузы (`ExitTurnBased`).
+3. **Базовый спавнер врагов и волн (`AEnemySpawnerActor`, `AEnemyCharacter`):**
+   - Спавн мутантов (Hound: быстрая атака ближнего боя, Spitter: дальний плевок кислотой, Brute: тяжелобронированный танк) из точек спавна во внутреннем дворе.
+   - Учет живых врагов волны. При `live_count == 0 && total_wave_enemies > 0` $\rightarrow$ вызов `NotifyWaveCleared()` $\rightarrow$ переход к подготовке следующей волны или победе.
+4. **Тесты:**
+   - Тесты переключения Space (Tap -> Tactical Pause, Hold 3.0s -> Turn Based, Finish Prep -> Wave Start) в `CodexTacticsTests/Private/Combat/`.
