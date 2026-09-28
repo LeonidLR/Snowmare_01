@@ -51,6 +51,14 @@ Pure-logic systems get **parity tests** mirroring the Godot tests (same inputs â
 ## Workflow
 
 - Phase plan and status: `docs/port/PORT_MATRIX.md`. Session checkpoint: `production/session-state/active.md` â€” read it first.
-- Ask before writing files; show the changeset first. No commits without explicit user instruction.
-- Commits: Conventional Commits, body references the phase / Godot file.
-- A phase is done only when build + tests pass.
+- Goal: the complete Godot game working in UE with the same behaviour (user decision 2026-09-28).
+  Work autonomously through PORT_MATRIX in dependency order; no per-file approval needed.
+- Ask the user only for real forks: Godot code contradicts the design docs, or a choice changes gameplay.
+  Report per completed system/phase.
+- Commit each completed system once build, automation tests and (where relevant) the headless in-game
+  check pass. Conventional Commits, body references the phase / Godot file.
+- Godot project (`Codex/godot-test-01`) is read-only: read code/data, may run it for reference
+  screenshots/tests, never edit it. Nothing outside this repo is modified without an explicit request.
+- The user polishes Animation Blueprints and shaders; the port provides working baseline versions.
+- Headless in-game checks: dev console commands in `Source/CodexTactics/Private/Debug/`
+  (e.g. `CodexTactics.MovementSmoke` on `/Game/Maps/L_MovementTest`).

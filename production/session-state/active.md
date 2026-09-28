@@ -2,34 +2,36 @@
 
 <!-- STATUS -->
 Epic: Godot → UE port
-Feature: Phase 0 — Project skeleton
-Task: Phase 1 — next: tactical grid (gorky17_grid_manager.gd)
+Feature: Phase 3 — Framework
+Task: next: tactical grid / continue PORT_MATRIX in dependency order
 <!-- /STATUS -->
 
-## Current task
-Phase 0 DONE 2026-09-28: build OK (UBT, 94s), smoke test 1/1 pass, git init + LFS, committed.
+## Mode (user, 2026-09-28)
+Full port with identical behaviour; autonomous work through `docs/port/PORT_MATRIX.md`, commit each verified
+system, ask only on real design forks. Godot project is read-only (may be run for reference).
+
+## Done
+- Phase 0 skeleton (commit 2b3b110).
+- Game flow FSM (commit cf882c7): `GameFlow/`, 25 tests.
+- Squad movement: `Characters/`, `Camera/TacticalCameraPawn`, player controller input, GameMode squad spawn,
+  test map `/Game/Maps/L_MovementTest` (created by `Scripts/Editor/create_movement_test_map.py`),
+  headless check `Scripts/smoke.ps1` (`CodexTactics.MovementSmoke` → PASS), 39 automation tests pass.
+
+## How to verify
+- `Scripts/build.ps1`, `Scripts/test.ps1`, `Scripts/smoke.ps1` (editor must be closed to link).
+- NavMesh: `NavMeshBoundsVolume` in each level + `RuntimeGeneration=Dynamic` (no baked navmesh).
+- Unreal MCP: `.mcp.json` → http://127.0.0.1:8000/mcp, server autostarts with the editor.
 
 ## Decisions (2026-09-28)
-- Name: CodexTactics, at `Documents/Unreal Projects/CodexTactics` (`Codex/unreal` symlink points here).
-- Godot keeps evolving in parallel; its docs/design/data are the source of truth.
-- No GAS — plain C++ components.
-- Ultra Dynamic Sky/Weather available (Phase 6).
-- Rewrite, not convert; logic first with parity tests.
+- Name CodexTactics; no GAS; Ultra Dynamic Sky/Weather in Phase 6.
+- Turn-based only from WaveCombat/RealTime (deviation from Godot, see PORT_MATRIX).
+- Movement: NavMesh + Detour Crowd; formation numbers from Godot code (2.8 m back, 2.6 m side); no stamina.
+- Effective speeds from balance.tres: walk 2.2, run 7.25, crouch 1.25 m/s, prone x0.28.
 
-## Done in Phase 1
-- Game flow FSM: `Source/CodexTactics/*/GameFlow/`, 25 tests `CodexTactics.GameFlow.*`, all 26 tests pass (2026-09-28). Committed.
-
-## Next (after game flow)
-Phase 1 starts with the game flow FSM (replaces the placeholder `ECodexPlayMode`):
-`ECodexGamePhase` (Exploration, Cutscene, Preparation, WaveCombat, WaveCleared, PostCombat, GameOver) +
-`ECodexCombatMode` (RealTime, TacticalPause, TurnBased) in pure `FGameFlowStateMachine`, driven by `UGameFlowSubsystem`.
-Godot reference: `Scenes/movements/main.gd` (toggle_active_pause, _enter/_exit_turn_based_combat, Space tap/hold, waves).
-Then grid (`gorky17_grid_manager.gd`), LOS (`gorky17_los.gd`).
-
-## Game flow decisions (user, 2026-09-28)
-- Turn-based combat can be entered ONLY from WaveCombat/RealTime: not in Exploration, not in Preparation,
-  not during TacticalPause. DEVIATION from Godot (Godot allows entry from pause and outside waves) — intentional.
-- Wave rest between waves = Preparation phase with next wave index (Godot: is_wave_active + is_preparation_active both true). Same behaviour.
+## Next
+Remaining movement extras (vault, box select/group orders, idle roam, tactical-pause orders) come with their systems.
+Next systems in order: tactical grid + LOS (`gorky17_grid_manager.gd`, `gorky17_los.gd`, `gorky17_enums.gd`),
+then data import (Phase 2) so balance values stop living in C++ defaults.
 
 ## Open questions
 - none

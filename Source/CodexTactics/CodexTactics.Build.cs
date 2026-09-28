@@ -15,6 +15,7 @@ public class CodexTactics : ModuleRules
 			"EnhancedInput",
 			"GameplayTags",
 			"AIModule",
+			"GameplayTasks",
 			"NavigationSystem",
 			"Niagara"
 		});

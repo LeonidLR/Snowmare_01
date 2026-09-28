@@ -4,9 +4,30 @@
 #include "GameFramework/GameModeBase.h"
 #include "CodexTacticsGameMode.generated.h"
 
+class AOperativeCharacter;
+
+/** One squad member spawned at mission start. */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FSquadMemberSpawn
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	FText DisplayName;
+
+	/** Placeholder body tint. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	FLinearColor Color = FLinearColor::White;
+
+	/** Spawn offset from the player start (X forward, Y right), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	FVector Offset = FVector::ZeroVector;
+};
+
 /**
- * Root game mode. Wires the project's GameState and PlayerController.
- * Godot reference: Scenes/movements/main.gd (scene bootstrap).
+ * Root game mode: camera pawn for the player, squad spawned at the player start
+ * unless the level already contains operatives.
+ * Godot reference: Scenes/movements/main.gd (scene bootstrap, squad nodes Player/Follower1/Follower2).
  */
 UCLASS()
 class CODEXTACTICS_API ACodexTacticsGameMode : public AGameModeBase
@@ -15,4 +36,17 @@ class CODEXTACTICS_API ACodexTacticsGameMode : public AGameModeBase
 
 public:
 	ACodexTacticsGameMode();
+
+	virtual void StartPlay() override;
+
+	/** Operative class to spawn. */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
+	TSubclassOf<AOperativeCharacter> OperativeClass;
+
+	/** Squad roster in selection order (keys 1..N). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
+	TArray<FSquadMemberSpawn> SquadRoster;
+
+private:
+	void SpawnSquad();
 };

@@ -1,0 +1,18 @@
+{
+  "enabledMcpjsonServers": ["unreal"],
+  "permissions": {
+    "allow": [
+      "Edit(**)",
+      "Bash(git *)",
+      "PowerShell(git *)",
+      "Bash(powershell -ExecutionPolicy Bypass -File Scripts/*)",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File Scripts\\*)",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File \"C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics\\Scripts\\*)",
+      "PowerShell(& \"C:\\Program Files\\Epic Games\\UE_5.8\\Engine\\*)",
+      "Bash(\"/c/Program Files/Epic Games/UE_5.8/Engine/*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Zephyrus15Duo\\Documents\\Codex"
+    ]
+  }
+}
