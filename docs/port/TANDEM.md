@@ -135,6 +135,9 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-28 Claude: mission shell — `UMissionSubsystem` (objective, failure, restart), objective banner, mission-failed
+  screen, Ctrl + X. `AOperativeCharacter::HandleDied` now goes through the mission subsystem. Found and fixed: the
+  tracer code crashed the worldless `SquadCombatTest` (engine crash was hidden: `verify_all` now checks the exit code).
 - 2026-09-28 Claude: combat feedback — `UCombatFeedbackSubsystem` (tracers + muzzle flash for operatives and turrets,
   pause plan markers, target flash), `M_CombatFeedback`. Additive edits on Gemini files: `UWeaponDataAsset::TracerColor`,
   tracer in `AOperativeCharacter::ShootAtTarget`. User: shooting an untrapped crate must not blow it up (fixed).

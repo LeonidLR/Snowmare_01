@@ -3,6 +3,7 @@
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/EncounterQueries.h"
+#include "Core/MissionSubsystem.h"
 #include "Interactables/LootCrateActor.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
@@ -104,6 +105,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	// would fire every press twice.
 	InputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &ACodexTacticsPlayerController::OnMouseWheelUp);
 	InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &ACodexTacticsPlayerController::OnMouseWheelDown);
+	// Ctrl + X: quick restart, handled before every game mode (Godot main.gd _unhandled_input).
+	InputComponent->BindKey(FInputChord(EKeys::X, false, true, false, false), IE_Pressed, this, &ACodexTacticsPlayerController::RestartMission);
 
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!Input)
@@ -688,6 +691,14 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 	default:
 		Messages->PostMessage(Leader->DisplayName, LOCTEXT("TargetHint", "Укажите врага, бочку, мину или ящик для прицельной стрельбы [Ctrl+Клик]!"));
 		break;
+	}
+}
+
+void ACodexTacticsPlayerController::RestartMission()
+{
+	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
+	{
+		Mission->RestartMission();
 	}
 }
 

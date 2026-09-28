@@ -16,9 +16,9 @@
 
 namespace
 {
-	const FLinearColor MenuPanelColor(0.03f, 0.045f, 0.06f, 0.93f);
-	const FLinearColor MenuTitleColor(1.f, 0.85f, 0.35f);
-	const FLinearColor MenuBodyColor(0.9f, 0.92f, 0.95f);
+	const FLinearColor MenuPanelColor = ACodexTacticsHUD::GodotColor(0.03f, 0.045f, 0.06f, 0.93f);
+	const FLinearColor MenuTitleColor = ACodexTacticsHUD::GodotColor(1.f, 0.85f, 0.35f);
+	const FLinearColor MenuBodyColor = ACodexTacticsHUD::GodotColor(0.9f, 0.92f, 0.95f);
 
 	void MenuSetFontSize(UTextBlock* Text, int32 Size)
 	{

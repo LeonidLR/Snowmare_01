@@ -22,12 +22,12 @@
 namespace
 {
 	// Godot loot_dialog.gd style: dark green panel, green title.
-	const FLinearColor LootPanelColor(0.08f, 0.12f, 0.09f, 0.97f);
-	const FLinearColor LootFrameColor(0.2f, 0.85f, 0.35f, 1.f);
-	const FLinearColor LootTitleColor(0.3f, 1.f, 0.5f);
-	const FLinearColor LootHintColor(0.8f, 0.85f, 0.9f);
-	const FLinearColor LootEmptyColor(0.6f, 0.6f, 0.6f);
-	const FLinearColor LootButtonTextColor(0.05f, 0.05f, 0.05f);
+	const FLinearColor LootPanelColor = ACodexTacticsHUD::GodotColor(0.08f, 0.12f, 0.09f, 0.97f);
+	const FLinearColor LootFrameColor = ACodexTacticsHUD::GodotColor(0.2f, 0.85f, 0.35f, 1.f);
+	const FLinearColor LootTitleColor = ACodexTacticsHUD::GodotColor(0.3f, 1.f, 0.5f);
+	const FLinearColor LootHintColor = ACodexTacticsHUD::GodotColor(0.8f, 0.85f, 0.9f);
+	const FLinearColor LootEmptyColor = ACodexTacticsHUD::GodotColor(0.6f, 0.6f, 0.6f);
+	const FLinearColor LootButtonTextColor = ACodexTacticsHUD::GodotColor(0.05f, 0.05f, 0.05f);
 
 	FText LootClean(const FText& Text)
 	{

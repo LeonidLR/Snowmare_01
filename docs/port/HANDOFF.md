@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-28 by Claude, after the combat feedback commit (see §10).
+Last update: 2026-09-28 by Claude, after the mission shell commit (see §10).
 
 ---
 
@@ -45,7 +45,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **105 automation tests, 13 smokes, all PASS** (`verify_all.ps1` → ALL GREEN).
+State at last update: **107 automation tests, 14 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -62,9 +62,10 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `RelocationSmoke` | «Вытолкать» a barrel 6 m, cold refusal, cancel |
 | `DeployableSmoke` | barricade pick-up → F set-up with hand-over, hidden mine spotted, sapper defusal (retries), grenade trap, mine blast |
 | `TargetedShotSmoke` | Ctrl + click via `IssueTargetedShot`: barrel explodes (tracer + flash spawned), prone mine shot, trapped crate / barricade detonated, untrapped crate only pierced, 1 round each, priority enemy over a nearer one, pause-planned shot (with a plan marker) fires on release, markers cleared |
+| `MissionSmoke` | objective banner texts (start → preparation → wave), an operative's death fails the mission (GameOver, reason, time stop), restart reloads a fresh exploration |
 | `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
 | `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot |
-| `HudShot [close] [walk] [menu] [place] [shoot]` (`shoot`: slowed-down barrel shot = tracer, target flash, plan marker) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
+| `HudShot [close] [walk] [menu] [place] [shoot] [failed]` (`shoot`: slowed-down barrel shot = tracer, target flash, plan marker; `failed`: mission-failed screen) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
 | `FinishPrep` | dev: skip preparation, start the wave |
 
 Parity tests live in `Source/CodexTacticsTests/Private/<System>/` named `CodexTactics.<System>.<Case>`; they mirror
@@ -162,7 +163,15 @@ Module `CodexTactics` (runtime). Folder → class → Godot reference.
   Starting the generator also powers all turrets. Godot `interactable.gd breakdown_generator / repair_generator`.
 - `Quests/QuestChain`, `QuestSubsystem`, `Interactables/GateActor`. Godot `quest_manager.gd`, `gate.gd`.
 
-**UI** — `UI/CodexTacticsHUD` (canvas: message feed, squad panel with supply, labels; owns the action menu widget),
+**Mission** — `Core/MissionSubsystem` + `Core/MissionRules`: objective text (start «Исследовать КПП…», quest chain
+objectives, preparation / wave «ОБОРОНА: Отразить волну N! Врагов: M» / victory texts), mission failed on any
+operative death (reason hypothermia at cold ≥ 99 else wounds, HQ radio line, GameOver = time stop), `RestartMission`
+(reload level; «Начать заново» and Ctrl + X). Godot `main.gd update_objective`, `_trigger_game_over`,
+`_restart_current_test_mode`.
+
+**UI** — `UI/CodexTacticsHUD` (canvas: objective banner «ЦЕЛЬ: …» top left, message feed, squad panel with supply,
+labels; owns the action menu, loot dialog and `UI/MissionFailedWidget` «МИССИЯ ПРОВАЛЕНА»). Godot colours go
+through `ACodexTacticsHUD::GodotColor` (sRGB → linear) in UMG and canvas.
 `UI/GameMessageSubsystem` (feed, logs every line to `LogCodexTactics`).
 
 **Editor scripts** (`Scripts/Editor/`, run with `UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script=<abs path>`):
@@ -191,7 +200,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 2. ~~Turrets~~, 3. ~~generator damage / repair~~ — done (see §10). Enemies do not attack turrets / barricades /
    the generator yet (Gemini's enemy AI targets operatives only) — add with the enemy AI pass.
 4. ~~Ctrl + click targeted shots~~ — done (see §10).
-5. UI shell from REFERENCE_PLAYTHROUGH: main menu, dialogue, objective banner, bottom action bar, mission failed.
+5. UI shell from REFERENCE_PLAYTHROUGH: ~~objective banner, mission failed + Ctrl + X~~ (done, §10); next: main menu
+   (3 modes), dialogue window, bottom action bar, preparation / pause banners.
 6. Turn-based combat manager on the Gorky grid (Godot `Scripts/tactics/turn_based_combat_manager.gd`).
 7. Phase 2 data importer (JSON / .tres → DataAssets) replacing hand-typed values (§9).
 8. Content: level, VFX, cutscene; character "twisted" look issue (§6).
@@ -222,7 +232,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (combat feedback commit) | Tracers + muzzle flash (operatives, turret), plan markers, Ctrl + click target flash, untrapped crate no longer explodes when shot, weapon `TracerColor`, `HudShot shoot` |
+| (mission commit) | Objective banner, mission failed screen + restart, Ctrl + X, Godot sRGB colours in UMG, `verify_all` catches test crashes |
+| `f987975` | Tracers + muzzle flash (operatives, turret), plan markers, Ctrl + click target flash, untrapped crate no longer explodes when shot, weapon `TracerColor`, `HudShot shoot` |
 | `fa4e66b` | Ctrl + click targeted shots (barrel, mine chance, crate, trapped object, priority enemy, pause planning), operative `Accuracy` |
 | `d3c7480` | Turrets (fire, power, repair, pick-up, set-up), generator breakdown / repair, unity-build name fixes |
 | `d72d131` | Supply crates + loot dialog, provisions / extra ammo / bonus items on operatives, 2 crates on the test map, smoke retries for crouched defusal |

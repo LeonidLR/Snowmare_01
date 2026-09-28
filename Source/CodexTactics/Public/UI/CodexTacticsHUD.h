@@ -8,12 +8,14 @@
 class AOperativeCharacter;
 class UActionMenuWidget;
 class ULootDialogWidget;
+class UMissionFailedWidget;
 class ALootCrateActor;
 class UFont;
 
 /**
- * Baseline canvas HUD until the UMG interface is ported: message feed (top right), squad status panel
- * (top left: phase, mode, per-operative stance / health / cold / ammo) and labels above the operatives.
+ * Baseline canvas HUD until the UMG interface is ported: objective banner «ЦЕЛЬ: …» (top left, Godot ObjectivePanel),
+ * message feed (top right), squad status panel (below the objective: phase, mode, per-operative stance / health /
+ * cold / ammo) and labels above the operatives. Shows the mission-failed screen (UMG) when UMissionSubsystem fails.
  * Godot reference: Scenes/movements/main.gd message panel (`_on_quest_message`) and squad status labels.
  * Toggle the status panel and labels with the console variable CodexTactics.HUD.ShowStatus.
  * Also owns the object action menu widget (UMG) and shows it while UInteractionSubsystem has a menu open.
@@ -37,6 +39,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<ULootDialogWidget> LootDialogWidgetClass;
 
+	/** Mission-failed screen class (a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UMissionFailedWidget> MissionFailedWidgetClass;
+
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
 	int32 MaxFeedMessages = 8;
@@ -48,6 +54,14 @@ public:
 	/** Feed width as a fraction of the viewport width. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "0.1", ClampMax = "0.9"))
 	float FeedWidthFraction = 0.38f;
+
+	/** Godot Color (sRGB components 0..1) as a linear colour for UMG / canvas; alpha is kept as is. */
+	static FLinearColor GodotColor(float R, float G, float B, float A = 1.f)
+	{
+		FLinearColor Color = FLinearColor::FromSRGBColor(FColor(FMath::RoundToInt(R * 255.f), FMath::RoundToInt(G * 255.f), FMath::RoundToInt(B * 255.f)));
+		Color.A = A;
+		return Color;
+	}
 
 	/** Removes emoji and pictographs the default canvas font cannot render. */
 	static FString StripUnsupportedGlyphs(const FString& Text);
@@ -65,8 +79,16 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<ULootDialogWidget> LootDialog;
 
+	UFUNCTION()
+	void HandleMissionFailed(const FText& Reason);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMissionFailedWidget> MissionFailed;
+
 	void DrawMessageFeed();
-	void DrawSquadPanel();
+	/** Draws the objective banner; returns its bottom edge (Y). */
+	float DrawObjectiveBanner();
+	void DrawSquadPanel(float Top);
 	void DrawOperativeLabels();
 	/** Splits Text into lines no wider than MaxWidth pixels. */
 	TArray<FString> WrapText(const FString& Text, UFont* Font, float Scale, float MaxWidth) const;

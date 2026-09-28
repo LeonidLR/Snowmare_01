@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: Phase 4/5 world systems — interaction, relocation, deployables
-Task: next = UI shell (docs/port/HANDOFF.md §8.5)
+Task: next = UI shell — main menu, dialogue, action bar (docs/port/HANDOFF.md §8.5)
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
@@ -15,7 +15,7 @@ Task: next = UI shell (docs/port/HANDOFF.md §8.5)
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-Targeted-shots commit: 105 automation tests, 13 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
+Mission shell commit: 107 automation tests, 14 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
 
 ## Open questions
 - PlayerStart of L_MovementTest moved to (-180, -1490) — intended? (HANDOFF §7)

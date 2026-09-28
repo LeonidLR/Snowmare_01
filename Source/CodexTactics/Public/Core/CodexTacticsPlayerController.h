@@ -17,6 +17,7 @@ class USquadSubsystem;
  * Camera: wheel zoom, Q/E or arrows rotate, RMB drag rotates, MMB drag pans (WASD / edges are polled by the camera).
  * Ctrl + click: targeted shot by the leader — enemy = priority target, barrel = explode, mine = remote shot (hit chance),
  * supply crate / trapped object = remote detonation; during the tactical pause the shot is planned instead.
+ * Ctrl + X: restart the mission (Godot _restart_current_test_mode).
  * Space: tap = tactical pause (during a wave), hold = enter / leave turn-based combat. During the pause, clicks
  * plan moves (executed together on release); during turn-based combat ground clicks do not issue real-time moves.
  * Input actions are created in code for now; they move to assets once the editor setup exists.
@@ -66,6 +67,7 @@ private:
 
 	void CreateInputActions();
 	void OnClick();
+	void RestartMission();
 	void SelectMember1() { SelectMember(0); }
 	void SelectMember2() { SelectMember(1); }
 	void SelectMember3() { SelectMember(2); }

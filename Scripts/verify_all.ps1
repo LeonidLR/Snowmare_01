@@ -6,7 +6,7 @@ param([switch]$SkipBuild)
 $ProjectDir = Split-Path $PSScriptRoot -Parent
 $Smokes = @(
     "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
-    "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke"
+    "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke", "MissionSmoke"
 )
 $Failed = @()
 
@@ -21,8 +21,10 @@ if (-not $SkipBuild) {
 }
 
 $TestSummary = powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "test.ps1") | Select-Object -Last 1
+$TestExit = $LASTEXITCODE
 Write-Host "Tests: $TestSummary"
-if ($TestSummary -notmatch " 0 failed") { $Failed += "tests" }
+# A non-zero exit also catches an engine crash in the middle of the run (the summary then counts only the tests run).
+if ($TestSummary -notmatch " 0 failed" -or $TestExit -ne 0) { $Failed += "tests (exit $TestExit)" }
 
 foreach ($Smoke in $Smokes) {
     $null = powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "smoke.ps1") -Command "CodexTactics.$Smoke"

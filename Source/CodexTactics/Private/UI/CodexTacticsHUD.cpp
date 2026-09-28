@@ -6,11 +6,13 @@
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
+#include "Core/MissionSubsystem.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "UI/ActionMenuWidget.h"
 #include "UI/LootDialogWidget.h"
+#include "UI/MissionFailedWidget.h"
 #include "HAL/IConsoleManager.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "UI/GameMessageSubsystem.h"
@@ -27,6 +29,10 @@ namespace
 	const FLinearColor SpeakerColor(1.f, 0.85f, 0.35f);
 	const FLinearColor TextColor(0.92f, 0.94f, 0.96f);
 	const FLinearColor WarningColor(1.f, 0.45f, 0.35f);
+	// Godot StyleBoxFlat_obj + ObjectiveLabel.
+	const FLinearColor ObjectivePanelColor = ACodexTacticsHUD::GodotColor(0.05f, 0.06f, 0.08f, 0.8f);
+	const FLinearColor ObjectiveFrameColor = ACodexTacticsHUD::GodotColor(0.8f, 0.65f, 0.2f, 1.f);
+	const FLinearColor ObjectiveTextColor = ACodexTacticsHUD::GodotColor(1.f, 0.9f, 0.5f);
 
 	const TCHAR* PhaseName(ECodexGamePhase Phase)
 	{
@@ -90,6 +96,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 {
 	ActionMenuWidgetClass = UActionMenuWidget::StaticClass();
 	LootDialogWidgetClass = ULootDialogWidget::StaticClass();
+	MissionFailedWidgetClass = UMissionFailedWidget::StaticClass();
 }
 
 void ACodexTacticsHUD::BeginPlay()
@@ -113,6 +120,19 @@ void ACodexTacticsHUD::BeginPlay()
 			LootDialog->HideDialog();
 		}
 	}
+	if (MissionFailedWidgetClass && GetOwningPlayerController())
+	{
+		MissionFailed = CreateWidget<UMissionFailedWidget>(GetOwningPlayerController(), MissionFailedWidgetClass);
+		if (MissionFailed)
+		{
+			MissionFailed->AddToViewport(20);
+			MissionFailed->HideScreen();
+		}
+	}
+	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
+	{
+		Mission->OnMissionFailed.AddDynamic(this, &ACodexTacticsHUD::HandleMissionFailed);
+	}
 	if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
 	{
 		Interactions->OnActionMenuChanged.AddDynamic(this, &ACodexTacticsHUD::HandleActionMenuChanged);
@@ -133,6 +153,14 @@ void ACodexTacticsHUD::HandleLootDialogChanged(bool bOpen, ALootCrateActor* Crat
 	else
 	{
 		LootDialog->HideDialog();
+	}
+}
+
+void ACodexTacticsHUD::HandleMissionFailed(const FText& Reason)
+{
+	if (MissionFailed)
+	{
+		MissionFailed->ShowFailure(Reason);
 	}
 }
 
@@ -160,9 +188,10 @@ void ACodexTacticsHUD::DrawHUD()
 		return;
 	}
 	DrawMessageFeed();
+	const float ObjectiveBottom = DrawObjectiveBanner();
 	if (CVarShowStatus.GetValueOnGameThread())
 	{
-		DrawSquadPanel();
+		DrawSquadPanel(ObjectiveBottom + Margin * 0.5f);
 		DrawOperativeLabels();
 	}
 }
@@ -292,7 +321,31 @@ FString ACodexTacticsHUD::DescribeOperative(const AOperativeCharacter& Operative
 	return Line;
 }
 
-void ACodexTacticsHUD::DrawSquadPanel()
+float ACodexTacticsHUD::DrawObjectiveBanner()
+{
+	const UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
+	if (!Mission || Mission->GetObjective().IsEmpty())
+	{
+		return Margin;
+	}
+	// Godot ObjectivePanel: at (20, 20), gold 2 px frame, 12 x 8 padding, gold text.
+	UFont* Font = GEngine->GetMediumFont();
+	const float Scale = 1.f;
+	const FString Text = TEXT("ЦЕЛЬ: ") + StripUnsupportedGlyphs(Mission->GetObjective().ToString());
+	float W = 0.f;
+	float H = 0.f;
+	Canvas->StrLen(Font, Text, W, H);
+	const float Left = 20.f;
+	const float Top = 20.f;
+	const float Width = FMath::Max(430.f, W * Scale + 24.f);
+	const float Height = H * Scale + 16.f;
+	DrawRect(ObjectiveFrameColor, Left - 2.f, Top - 2.f, Width + 4.f, Height + 4.f);
+	DrawRect(ObjectivePanelColor, Left, Top, Width, Height);
+	DrawText(Text, ObjectiveTextColor, Left + 12.f, Top + 8.f, Font, Scale);
+	return Top + Height + 2.f;
+}
+
+void ACodexTacticsHUD::DrawSquadPanel(float Top)
 {
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
@@ -335,8 +388,8 @@ void ACodexTacticsHUD::DrawSquadPanel()
 		Canvas->StrLen(Font, Line.Key, W, H);
 		Width = FMath::Max(Width, W * Scale);
 	}
-	DrawRect(PanelColor, Margin, Margin, Width + 2.f * Margin, Lines.Num() * LineHeight + Margin);
-	float Y = Margin * 1.5f;
+	DrawRect(PanelColor, Margin, Top, Width + 2.f * Margin, Lines.Num() * LineHeight + Margin);
+	float Y = Top + Margin * 0.5f;
 	for (const TPair<FString, FLinearColor>& Line : Lines)
 	{
 		DrawText(Line.Key, Line.Value, Margin * 2.f, Y, Font, Scale);

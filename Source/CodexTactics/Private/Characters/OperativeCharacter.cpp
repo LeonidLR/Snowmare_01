@@ -5,6 +5,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Components/CapsuleComponent.h"
+#include "Core/MissionSubsystem.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/StaticMesh.h"
@@ -411,11 +412,12 @@ void AOperativeCharacter::UpdatePlaceholderPose(float Alpha)
 
 void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 {
-	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	// Godot _check_squad_vital_signs: any squad member down = mission failed (HQ line, time stop, failed screen).
+	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
 	{
-		Messages->PostMessage(FText::FromString(TEXT("ШТАБ")), FText::Format(FText::FromString(TEXT("{0} погиб в бою!")), DisplayName));
+		Mission->TriggerMissionFailed(this);
 	}
-	if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>())
+	else if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>())
 	{
 		Flow->TriggerGameOver();
 	}
