@@ -8,7 +8,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | # | Phase | Status |
 |---|---|---|
 | 0 | Project skeleton, modules, plugins, build/test scripts | ✅ |
-| 1 | Pure logic: Chebyshev grid, 8-way LOS, AP economy, damage, cold, panic/rage | ⬜ |
+| 1 | Pure logic: game flow FSM, Chebyshev grid, 8-way LOS, AP economy, damage, cold, panic/rage | 🟨 |
 | 2 | Data: USTRUCT/DataAsset types + JSON → DataAsset importer | ⬜ |
 | 3 | Framework: EventBus, operative character, Enhanced Input, camera, squad formation | ⬜ |
 | 4 | Combat: exploration→combat transition, turn queue, commands, HUD, enemy AI | ⬜ |
@@ -20,7 +20,8 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | Godot reference | UE target | Phase | Status | Tests |
 |---|---|---|---|---|
 | `Scenes/movements/main.gd` | `ACodexTacticsGameMode` | 0 | ✅ skeleton | `CodexTactics.Core.Smoke` |
-| `Scenes/movements/game_state.gd` | `ACodexTacticsGameState` (mode FSM) | 0/4 | 🟨 skeleton | `CodexTactics.Core.Smoke` |
+| `Scenes/movements/game_state.gd` | `ACodexTacticsGameState` (exposes flow to UI) | 0 | ✅ | `CodexTactics.Core.Smoke` |
+| `Scenes/movements/main.gd` mode flags: preparation, waves, tactical pause, turn-based enter/exit | `FGameFlowStateMachine` + `UGameFlowSubsystem` | 1 | ✅ logic (Space tap/hold input → Phase 3, encounter selection → Phase 4, config from balance → Phase 2) | `CodexTactics.GameFlow.*` (25) |
 | `Scripts/tactics/gorky17_enums.gd` | `Combat/TacticalTypes.h` (UENUMs) | 1 | ⬜ | |
 | `Scripts/tactics/gorky17_grid_manager.gd` | `UTacticalGridComponent` / `UGridManagerSubsystem` | 1 | ⬜ | |
 | `Scripts/tactics/gorky17_los.gd` | `FTacticalLineOfSight` | 1 | ⬜ | |
@@ -56,3 +57,10 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/ui/**` (inventory, pause, dialogue, profile) | UMG widgets | 5 | ⬜ | |
 | `*.gdshader` (silhouette, rings, AoE) | Materials | 6 | ⬜ | |
 | `tools/**`, `Scripts/editor/**`, `Scenes/tools/**`, `scratch/**` | — | — | ➖ | |
+
+## Intentional deviations from Godot
+
+| Where | Godot | UE | Decided |
+|---|---|---|---|
+| Turn-based entry | Allowed whenever enemies are within 15 m, incl. exploration, preparation and tactical pause | Only from WaveCombat/RealTime | User, 2026-09-28 |
+| Wave rest | `is_wave_active` and `is_preparation_active` both true | `Preparation` phase with next wave index | User, 2026-09-28 — same behaviour |

@@ -22,7 +22,8 @@ bool FCoreSmokeGameModeWiringTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("PlayerController class"), GameMode->PlayerControllerClass.Get(), ACodexTacticsPlayerController::StaticClass());
 
 	const ACodexTacticsGameState* GameState = GetDefault<ACodexTacticsGameState>();
-	TestEqual(TEXT("Game starts in Exploration"), GameState->GetPlayMode(), ECodexPlayMode::Exploration);
+	TestEqual(TEXT("Without a world the phase is Exploration"), GameState->GetGamePhase(), ECodexGamePhase::Exploration);
+	TestEqual(TEXT("Without a world there is no combat mode"), GameState->GetCombatMode(), ECodexCombatMode::None);
 	return true;
 }
 

@@ -2,20 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameFlow/GameFlowTypes.h"
 #include "CodexTacticsGameState.generated.h"
 
-/** Top-level play mode: free real-time exploration or turn-based tactical combat. */
-UENUM(BlueprintType)
-enum class ECodexPlayMode : uint8
-{
-	Exploration,
-	Combat
-};
-
 /**
- * Holds the global Exploration <-> Combat mode.
+ * Exposes the mission game flow to UI and Blueprints. The flow itself lives in UGameFlowSubsystem.
  * Godot reference: Scenes/movements/game_state.gd.
- * Transition logic arrives in Phase 4 (combat); for now this only stores the mode.
  */
 UCLASS()
 class CODEXTACTICS_API ACodexTacticsGameState : public AGameStateBase
@@ -23,11 +15,11 @@ class CODEXTACTICS_API ACodexTacticsGameState : public AGameStateBase
 	GENERATED_BODY()
 
 public:
-	/** Current top-level play mode. */
+	/** Current mission phase; Exploration when no game flow subsystem exists (e.g. editor worlds). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|State")
-	ECodexPlayMode GetPlayMode() const { return PlayMode; }
+	ECodexGamePhase GetGamePhase() const;
 
-private:
-	UPROPERTY(VisibleInstanceOnly, Category = "CodexTactics|State")
-	ECodexPlayMode PlayMode = ECodexPlayMode::Exploration;
+	/** Current combat sub-mode; None outside of a wave. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|State")
+	ECodexCombatMode GetCombatMode() const;
 };
