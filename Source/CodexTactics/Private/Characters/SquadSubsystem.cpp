@@ -104,6 +104,24 @@ void USquadSubsystem::SetSquadStance(EOperativeStance Stance)
 	}
 }
 
+void USquadSubsystem::SetFollowersHolding(bool bHold)
+{
+	if (bFollowersHolding == bHold)
+	{
+		return;
+	}
+	bFollowersHolding = bHold;
+	for (FFollowerState& Follower : Followers)
+	{
+		if (AOperativeCharacter* Operative = Follower.Operative.Get(); Operative && bHold)
+		{
+			Operative->StopOperative();
+		}
+		Follower.bParked = bHold;
+		Follower.RepathTimeRemaining = 0.f;
+	}
+}
+
 int32 USquadSubsystem::GetFormationSlot(const AOperativeCharacter* Operative) const
 {
 	for (const FFollowerState& Follower : Followers)
@@ -182,7 +200,7 @@ void USquadSubsystem::UpdateSlotSwap(float DeltaTime)
 void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime, float TimeSeconds)
 {
 	AOperativeCharacter* Operative = Follower.Operative.Get();
-	if (!Operative)
+	if (!Operative || bFollowersHolding)
 	{
 		return;
 	}

@@ -10,6 +10,7 @@ Godot repo root: `C:/Users/Zephyrus15Duo/Documents/Codex/godot-test-01/`
 | What | Where (Godot repo) |
 |---|---|
 | Port blueprint | `docs/CLAUDE_OPUS_UE58_HANDOFF.md` |
+| Architect Directive (Formulas & Parity) | `docs/port/ARCHITECT_SUPERVISOR_DIRECTIVE.md` (in this repo) |
 | Architecture / data contracts / combat spec | `docs/ARCHITECTURE.md`, `docs/DATA_CONTRACTS.md`, `docs/GAME_DESIGN_SPEC.md` |
 | ADRs | `docs/architecture/adr-*.md` |
 | GDDs | `design/gdd/*.md` |

@@ -47,6 +47,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	void SetSquadStance(EOperativeStance Stance);
 
+	/**
+	 * While holding, followers stop and keep their positions instead of following the leader
+	 * (Godot: perimeter hold while the leader explores a camera zone alone).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
+	void SetFollowersHolding(bool bHold);
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
+	bool AreFollowersHolding() const { return bFollowersHolding; }
+
 	/** Formation slot of a follower, or INDEX_NONE for the leader / unknown actors. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	int32 GetFormationSlot(const AOperativeCharacter* Operative) const;
@@ -78,4 +88,5 @@ private:
 	TArray<FFollowerState> Followers;
 	FVector FormationHeading = FVector::ZeroVector;
 	float SlotSwapCooldownRemaining = 0.f;
+	bool bFollowersHolding = false;
 };

@@ -2,13 +2,15 @@
 
 <!-- STATUS -->
 Epic: Godot → UE port
-Feature: Phase 3 — Framework
-Task: next: tactical grid / continue PORT_MATRIX in dependency order
+Feature: Phase 5 / Vertical Slice — Quests & Interactables (Canister, APC, Generator, Gate)
+Task: Implement QuestSubsystem, InteractableActor, GateActor and parity tests (per TANDEM.md directive)
 <!-- /STATUS -->
 
 ## Mode (user, 2026-09-28)
 Full port with identical behaviour; autonomous work through `docs/port/PORT_MATRIX.md`, commit each verified
 system, ask only on real design forks. Godot project is read-only (may be run for reference).
+Supervisor Directive (Gemini): consult `docs/port/ARCHITECT_SUPERVISOR_DIRECTIVE.md` for exact formulas & parity rules.
+
 
 ## Done
 - Phase 0 skeleton (commit 2b3b110).

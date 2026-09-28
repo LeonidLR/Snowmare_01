@@ -45,6 +45,9 @@ public:
 	int32 GetWaveIndex() const { return Machine.GetWaveIndex(); }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
+	bool IsWaveActive() const { return Machine.IsWaveActive(); }
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	int32 GetPauseCharges() const { return Machine.GetPauseCharges(); }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")

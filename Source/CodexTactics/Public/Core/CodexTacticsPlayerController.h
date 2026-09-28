@@ -13,6 +13,7 @@ class USquadSubsystem;
  * Squad orders from mouse and keyboard. The controller possesses the camera pawn, never an operative.
  * Click ground: leader moves there; double click: sprint; click an operative: make it leader;
  * 1..3: select leader; Z / C / X: stand / crouch / prone (with Alt: whole squad).
+ * Camera: wheel zoom, Q/E or arrows rotate, RMB drag rotates, MMB drag pans (WASD / edges are polled by the camera).
  * Input actions are created in code for now; they move to assets once the editor setup exists.
  * Godot reference: Scenes/movements/main.gd (_input, raycast_from_mouse, _select_squad_member_by_index).
  */
@@ -52,6 +53,17 @@ private:
 	void SelectMember(int32 RosterIndex);
 	void ApplyStance(EOperativeStance Stance);
 	USquadSubsystem* GetSquad() const;
+	class ATacticalCameraPawn* GetCameraPawn() const;
+
+	/** Mouse wheel via BindKey (MouseScrollUp/Down): deterministic with the Slate cursor (architect decision). */
+	void OnMouseWheelUp();
+	void OnMouseWheelDown();
+	void CameraRotateLeft();
+	void CameraRotateRight();
+	void CameraDragRotateStart();
+	void CameraDragRotateStop();
+	void CameraDragPanStart();
+	void CameraDragPanStop();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> MappingContext;
@@ -64,6 +76,18 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UInputAction>> StanceActions;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> CameraRotateLeftAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> CameraRotateRightAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> CameraDragRotateAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> CameraDragPanAction;
 
 	double LastClickTime = -1.0;
 	FVector2D LastClickPosition = FVector2D::ZeroVector;

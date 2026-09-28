@@ -37,6 +37,14 @@ public:
 	float GetPreparationTimeRemaining() const { return PreparationTimeRemaining; }
 	int32 GetTurnBasedUsesThisWave() const { return TurnBasedUsesThisWave; }
 	bool IsCombatUnlocked() const { return bCombatUnlocked; }
+	/**
+	 * Godot `is_wave_active`: true during a wave and during the rest before every following wave
+	 * (not during the first preparation, and not after a wave is cleared).
+	 */
+	bool IsWaveActive() const
+	{
+		return Phase == ECodexGamePhase::WaveCombat || (Phase == ECodexGamePhase::Preparation && WaveIndex > 1);
+	}
 	/** World time dilation the current state requires (0 = stopped). */
 	float GetTimeDilation() const;
 

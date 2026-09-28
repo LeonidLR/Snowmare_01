@@ -1,4 +1,6 @@
 #include "Core/CodexTacticsPlayerController.h"
+#include "Camera/TacticalCameraPawn.h"
+#include "InputActionValue.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "EnhancedInputComponent.h"
@@ -24,11 +26,14 @@ void ACodexTacticsPlayerController::BeginPlay()
 	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 	SetInputMode(InputMode);
 
-	if (ULocalPlayer* LocalPlayer = GetLocalPlayer())
+	if (MappingContext)
 	{
-		if (UEnhancedInputLocalPlayerSubsystem* InputSubsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+		if (ULocalPlayer* LocalPlayer = GetLocalPlayer())
 		{
-			InputSubsystem->AddMappingContext(MappingContext, 0);
+			if (UEnhancedInputLocalPlayerSubsystem* InputSubsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+			{
+				InputSubsystem->AddMappingContext(MappingContext, 0);
+			}
 		}
 	}
 }
@@ -54,12 +59,32 @@ void ACodexTacticsPlayerController::CreateInputActions()
 		MakeAction(TEXT("IA_StanceStand"), EKeys::Z),
 		MakeAction(TEXT("IA_StanceCrouch"), EKeys::C),
 		MakeAction(TEXT("IA_StanceProne"), EKeys::X) };
+
+	CameraRotateLeftAction = MakeAction(TEXT("IA_CameraRotateLeft"), EKeys::Q);
+	MappingContext->MapKey(CameraRotateLeftAction, EKeys::Left);
+	CameraRotateRightAction = MakeAction(TEXT("IA_CameraRotateRight"), EKeys::E);
+	MappingContext->MapKey(CameraRotateRightAction, EKeys::Right);
+	CameraDragRotateAction = MakeAction(TEXT("IA_CameraDragRotate"), EKeys::RightMouseButton);
+	CameraDragPanAction = MakeAction(TEXT("IA_CameraDragPan"), EKeys::MiddleMouseButton);
 }
 
 void ACodexTacticsPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 	CreateInputActions();
+
+	if (ULocalPlayer* LocalPlayer = GetLocalPlayer())
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* InputSubsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+		{
+			InputSubsystem->ClearAllMappings();
+			InputSubsystem->AddMappingContext(MappingContext, 0);
+		}
+	}
+
+	// Direct input bindings for mouse wheel (fail-safe for Slate cursor mode)
+	InputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &ACodexTacticsPlayerController::OnMouseWheelUp);
+	InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &ACodexTacticsPlayerController::OnMouseWheelDown);
 
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!Input)
@@ -73,6 +98,13 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(StanceActions[0], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceStand);
 	Input->BindAction(StanceActions[1], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceCrouch);
 	Input->BindAction(StanceActions[2], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceProne);
+
+	Input->BindAction(CameraRotateLeftAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::CameraRotateLeft);
+	Input->BindAction(CameraRotateRightAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::CameraRotateRight);
+	Input->BindAction(CameraDragRotateAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::CameraDragRotateStart);
+	Input->BindAction(CameraDragRotateAction, ETriggerEvent::Completed, this, &ACodexTacticsPlayerController::CameraDragRotateStop);
+	Input->BindAction(CameraDragPanAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::CameraDragPanStart);
+	Input->BindAction(CameraDragPanAction, ETriggerEvent::Completed, this, &ACodexTacticsPlayerController::CameraDragPanStop);
 }
 
 void ACodexTacticsPlayerController::OnClick()
@@ -130,6 +162,75 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 	else if (AOperativeCharacter* Leader = Squad->GetLeader())
 	{
 		Leader->SetStance(Stance);
+	}
+}
+
+ATacticalCameraPawn* ACodexTacticsPlayerController::GetCameraPawn() const
+{
+	return GetPawn<ATacticalCameraPawn>();
+}
+
+void ACodexTacticsPlayerController::OnMouseWheelUp()
+{
+	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
+	{
+		CameraPawn->AddZoomNotches(-1.f);
+	}
+}
+
+void ACodexTacticsPlayerController::OnMouseWheelDown()
+{
+	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
+	{
+		CameraPawn->AddZoomNotches(+1.f);
+	}
+}
+
+void ACodexTacticsPlayerController::CameraRotateLeft()
+{
+	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
+	{
+		CameraPawn->RotateStep(+1);
+	}
+}
+
+void ACodexTacticsPlayerController::CameraRotateRight()
+{
+	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
+	{
+		CameraPawn->RotateStep(-1);
+	}
+}
+
+void ACodexTacticsPlayerController::CameraDragRotateStart()
+{
+	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
+	{
+		CameraPawn->SetDragRotating(true);
+	}
+}
+
+void ACodexTacticsPlayerController::CameraDragRotateStop()
+{
+	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
+	{
+		CameraPawn->SetDragRotating(false);
+	}
+}
+
+void ACodexTacticsPlayerController::CameraDragPanStart()
+{
+	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
+	{
+		CameraPawn->SetDragPanning(true);
+	}
+}
+
+void ACodexTacticsPlayerController::CameraDragPanStop()
+{
+	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
+	{
+		CameraPawn->SetDragPanning(false);
 	}
 }
 

@@ -44,8 +44,9 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/movements/player.gd` — formation, `follower.gd` | `USquadSubsystem`, `SquadFormation` (slots, column, swap, wander, catch-up) | 3 | ✅ | `CodexTactics.Formation.*` (8), `CodexTactics.MovementSmoke` |
 | `main.gd` `_select_squad_member_by_index`, stance keys | `ACodexTacticsPlayerController` (1–3, Z/C/X, Alt = squad) | 3 | ✅ | manual |
 | `Scenes/movements/player.gd` — combat, cold, mines, deploy, animation | later phases | 4–6 | ⬜ | |
-| `Scenes/movements/camera.gd` (follow) | `ATacticalCameraPawn` | 3 | 🟨 follow only (zoom, zones, shake, lead → later) | manual |
-| `camera_zone_trigger.gd` | `ACameraZoneVolume` | 3 | ⬜ | |
+| `Scenes/movements/camera.gd` | `ATacticalCameraPawn` + `TacticalCameraRules` (WASD/edge pan, wheel zoom, Q/E + RMB rotate, MMB pan, turn-based deadzone) | 3 | ✅ (shake, smooth focus, dramatic shot → with combat) | `CodexTactics.Camera.*` (5) |
+| `camera_zone_trigger.gd` | `ACameraZoneVolume` (leader-only, followers hold, environment cold multiplier) | 3 | ✅ (perimeter patrol → with idle roam) | `CodexTactics.Camera.ZoneActivationRules`, `CodexTactics.CameraZoneSmoke` |
+| `main.gd` `_on_quest_message` | `UGameMessageSubsystem` | 3 | ✅ logic (HUD panel → UI step) | via CameraZoneSmoke |
 | `Scenes/movements/warm_zone.gd` | `AHeatSourceActor` + `UColdSurvivalComponent` | 1/5 | ⬜ | |
 | `Scenes/movements/combat_manager.gd`, `combat_trigger.gd`, `combat_wave_controller.gd` | `UTacticalCombatSubsystem`, `ACombatTriggerVolume`, `UWaveController` | 4 | ⬜ | |
 | `Scenes/movements/enemy_base.gd` + `enemy_*.gd` (6 types) | `AEnemyCharacterBase` + `UEnemyDataAsset` per type | 4 | ⬜ | |
