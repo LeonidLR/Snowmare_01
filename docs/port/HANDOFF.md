@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-28 by Claude, after commit `fa4e66b`.
+Last update: 2026-09-28 by Claude, after the combat feedback commit (see §10).
 
 ---
 
@@ -61,10 +61,10 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `BarrelSmoke` | light a barrel (match), warmth, burn-out, burnt menu, no matches |
 | `RelocationSmoke` | «Вытолкать» a barrel 6 m, cold refusal, cancel |
 | `DeployableSmoke` | barricade pick-up → F set-up with hand-over, hidden mine spotted, sapper defusal (retries), grenade trap, mine blast |
-| `TargetedShotSmoke` | Ctrl + click via `IssueTargetedShot`: barrel explodes, prone mine shot, trapped crate / barricade detonated, 1 round each, priority enemy over a nearer one, pause-planned shot fires on release |
+| `TargetedShotSmoke` | Ctrl + click via `IssueTargetedShot`: barrel explodes (tracer + flash spawned), prone mine shot, trapped crate / barricade detonated, untrapped crate only pierced, 1 round each, priority enemy over a nearer one, pause-planned shot (with a plan marker) fires on release, markers cleared |
 | `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
 | `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot |
-| `HudShot [close] [walk] [menu] [place]` | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
+| `HudShot [close] [walk] [menu] [place] [shoot]` (`shoot`: slowed-down barrel shot = tracer, target flash, plan marker) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
 | `FinishPrep` | dev: skip preparation, start the wave |
 
 Parity tests live in `Source/CodexTacticsTests/Private/<System>/` named `CodexTactics.<System>.<Case>`; they mirror
@@ -115,6 +115,14 @@ Module `CodexTactics` (runtime). Folder → class → Godot reference.
   stance 0.6/4.0, 1.0/1.8, 1.25/1.0; miss reasons. `Accuracy` per role 90 / 75 / 85 (roster). The priority target is
   used first by `FindBestCombatTarget` while alive, in range and in the line of fire (barricade blocks prone only).
   Godot `player.gd shoot_at_*`, `calculate_mine_shot_hit_chance`, `set_manual_priority_target`, `_find_shoot_target`.
+- `Combat/CombatFeedbackSubsystem` + `CombatFeedbackActor` — shot tracers with muzzle flash (operative: weapon
+  `TracerColor`, glow / fade by damage type, misses deflected; turret: green), cyan plan markers of the tactical pause
+  (planned moves, interaction approach, relocation / deploy targets, targeted shots; cleared on every combat-mode
+  change), Ctrl + click target flash (red light + glowing overlay on the target's meshes). Glow material
+  `/Game/VFX/Materials/M_CombatFeedback` (unlit additive, `Color` × `Intensity`) from
+  `Scripts/Editor/create_feedback_material.py`. Effects run on world time (slow down in the pause, as Godot tweens).
+  Godot `_spawn_muzzle_tracer` (player / turret), `_spawn_waypoint_marker`, `_clear_planned_markers`,
+  `_highlight_target_feedback`.
 - `Characters/SquadSubsystem`, `SquadFormation`, `OperativeMovementRules`, `OperativeAIController`.
 - Assets: `/Game/Characters/Operatives/BP_Operative`, `ABP_Operative`, `Explorer/…`, `Animations/…`, `/Game/Weapons/M16`.
 
@@ -201,18 +209,20 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   (`main.gd` click branch "is_relocatable_obj"); UE always goes through the action menu. Port with the pause UI.
 - Consumables (medkits, food) are collected but cannot be used yet (inventory drawer / use_squad_item not ported).
 - The squad panel does not list provisions / extra ammo yet (inventory drawer UI).
-- Turret tracers / muzzle flash: only the `OnFired` / `ReceiveFired` hooks (Godot draws a green tracer + flash).
 - Deployable overhead labels (turret / generator HP and state texts) not ported (Godot Label3D).
-- Targeted shots: no tracer / waypoint marker / target highlight (only `OnWeaponFired`); crouching behind a barricade
-  does not apply Godot's 0.8 cover to the priority target (UE `ShootAtTarget` has no cover factor yet); rage / panic
-  refusal not ported (no rage / panic components). The barrel line «💥 Прицельный выстрел…» is posted only when the
-  shot actually fires (Godot posts it even when the weapon is frozen). Shooting an untrapped crate blows it up — Godot
-  quirk kept on purpose.
+- Targeted shots: crouching behind a barricade does not apply Godot's 0.8 cover to the priority target (UE
+  `ShootAtTarget` has no cover factor yet); rage / panic refusal not ported (no rage / panic components). The barrel
+  line «💥 Прицельный выстрел…» is posted only when the shot actually fires (Godot posts it even when frozen).
+- **Deliberate deviation (user decision 2026-09-28):** a shot at an untrapped supply crate only posts «💥 Пуля пробила
+  ящик снабжения.» — Godot also detonates it (bug: `detonate_trap` always exists on loot_crate.gd).
+- Tracer muzzle = feet + stance height (1.4 / 0.85 / 0.25 m), not a weapon socket; light intensity mapping
+  (`FeedbackLightPerEnergy` 1500 per Godot light_energy) is a first guess for the user to tune.
 
 ## 10. Change log (newest first)
 
 | Commit | What |
 |---|---|
+| (combat feedback commit) | Tracers + muzzle flash (operatives, turret), plan markers, Ctrl + click target flash, untrapped crate no longer explodes when shot, weapon `TracerColor`, `HudShot shoot` |
 | `fa4e66b` | Ctrl + click targeted shots (barrel, mine chance, crate, trapped object, priority enemy, pause planning), operative `Accuracy` |
 | `d3c7480` | Turrets (fire, power, repair, pick-up, set-up), generator breakdown / repair, unity-build name fixes |
 | `d72d131` | Supply crates + loot dialog, provisions / extra ammo / bonus items on operatives, 2 crates on the test map, smoke retries for crouched defusal |

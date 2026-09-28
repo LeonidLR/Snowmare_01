@@ -1,4 +1,5 @@
 #include "Interactables/InteractionSubsystem.h"
+#include "Combat/CombatFeedbackSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -46,7 +47,11 @@ bool UInteractionSubsystem::RequestInteraction(AInteractableActor* Target, bool 
 	if (Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause)
 	{
 		// Godot: in the pause the approach is a planned move (clamped to the pause radius), run on release.
-		Squad->PlanMove(Leader, Approach, bSprint, Flow->GetConfig().PauseOrderRadius);
+		const FVector Planned = Squad->PlanMove(Leader, Approach, bSprint, Flow->GetConfig().PauseOrderRadius);
+		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+		{
+			Feedback->SpawnWaypointMarker(Planned);
+		}
 	}
 	else
 	{

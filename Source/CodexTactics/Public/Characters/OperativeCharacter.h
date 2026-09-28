@@ -346,6 +346,10 @@ public:
 
 	int32 GetPlannedTargetedShotCount() const { return PlannedShots.Num(); }
 
+	/** Tracer start: the feet plus the Godot muzzle height of the stance (1.4 / 0.85 / 0.25 m). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
+	FVector GetMuzzleLocation() const;
+
 	/** Godot _can_begin_weapon_shot: alive, not reloading, no misfire delay, weapon not frozen, round in the clip. */
 	bool CanBeginWeaponShot();
 

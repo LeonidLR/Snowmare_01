@@ -3,6 +3,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/CombatFeedbackSubsystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
@@ -749,6 +750,23 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target)
 	OnWeaponFired.Broadcast(this, Target, bHit);
 	OnWeaponFiredNative.Broadcast(this, Target, bHit);
 
+	// Godot _spawn_muzzle_tracer: to the target, or deflected next to it on a miss.
+	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
+	{
+		FVector End = Target->GetActorLocation();
+		if (!bHit)
+		{
+			FVector Offset(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(20.f, 120.f));
+			if (Offset.SizeSquared() < 50.f * 50.f)
+			{
+				Offset = FVector(100.f, 0.f, 50.f);
+			}
+			End += Offset;
+		}
+		Feedback->SpawnTracer(GetMuzzleLocation(), End, CurrentWeapon ? CurrentWeapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
+			CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic);
+	}
+
 	if (bHit)
 	{
 		FDamageSpec Spec;
@@ -813,6 +831,12 @@ ETargetedShotKind AOperativeCharacter::ClassifyShotTarget(const AActor* Target)
 	}
 	const AInteractableActor* Interactable = Cast<AInteractableActor>(Target);
 	return Interactable && Interactable->bTrapped ? ETargetedShotKind::TrappedObject : ETargetedShotKind::None;
+}
+
+FVector AOperativeCharacter::GetMuzzleLocation() const
+{
+	const float Height = Stance == EOperativeStance::Prone ? 25.f : (Stance == EOperativeStance::Crouching ? 85.f : 140.f);
+	return GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() - Height);
 }
 
 bool AOperativeCharacter::CanBeginWeaponShot()
@@ -900,6 +924,31 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 	OnWeaponFired.Broadcast(this, Target, bHit);
 	OnWeaponFiredNative.Broadcast(this, Target, bHit);
 
+	// Godot tracers: barrel = default green, explosive targets = orange, mine miss = grey into the snow nearby.
+	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
+	{
+		FVector End = Target->GetActorLocation();
+		FLinearColor Color(1.f, 0.45f, 0.15f);
+		EDamageType Style = EDamageType::Explosive;
+		if (Kind == ETargetedShotKind::Barrel)
+		{
+			Color = UCombatFeedbackSubsystem::DefaultTracerColor();
+			Style = EDamageType::Kinetic;
+		}
+		else if (Kind == ETargetedShotKind::Mine && bHit)
+		{
+			Color = FLinearColor(1.f, 0.5f, 0.15f);
+		}
+		else if (Kind == ETargetedShotKind::Mine)
+		{
+			const float Angle = FMath::FRandRange(0.f, 2.f * PI);
+			End += FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * FMath::FRandRange(80.f, 180.f);
+			Color = FLinearColor(0.7f, 0.7f, 0.8f, 0.65f);
+			Style = EDamageType::Kinetic;
+		}
+		Feedback->SpawnTracer(GetMuzzleLocation(), End, Color, Style);
+	}
+
 	switch (Kind)
 	{
 	case ETargetedShotKind::Barrel:
@@ -930,9 +979,13 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 		if (Crate->bTrapped)
 		{
 			OperativeShotLine(*this, FText::Format(LOCTEXT("CrateTrapShot", "💥 {0}: «Выстрел по ловушке ящика! Дистанционный подрыв!»"), DisplayName));
+			Crate->DetonateTrap(true, DisplayName);
 		}
-		// Godot quirk kept: loot_crate.gd always has detonate_trap, so a shot also blows up an untrapped crate.
-		Crate->DetonateTrap(true, DisplayName);
+		else
+		{
+			// Only a trap blows up (user decision 2026-09-28: Godot also detonating an untrapped crate is a bug).
+			OperativeShotLine(*this, LOCTEXT("CratePierced", "💥 Пуля пробила ящик снабжения."));
+		}
 		break;
 	}
 	case ETargetedShotKind::TrappedObject:

@@ -135,6 +135,9 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-28 Claude: combat feedback — `UCombatFeedbackSubsystem` (tracers + muzzle flash for operatives and turrets,
+  pause plan markers, target flash), `M_CombatFeedback`. Additive edits on Gemini files: `UWeaponDataAsset::TracerColor`,
+  tracer in `AOperativeCharacter::ShootAtTarget`. User: shooting an untrapped crate must not blow it up (fixed).
 - 2026-09-28 Claude: Ctrl + click targeted shots. `IssueTargetedShot` on the player controller, `ShootAtObject` /
   `SetManualPriorityTarget` / planned shots on `AOperativeCharacter`, `TargetedShotRules` (mine hit chance), operative
   `Accuracy` in the roster, `AEnemyCharacter::GetEnemyDisplayName` (additive getter on a Gemini file).

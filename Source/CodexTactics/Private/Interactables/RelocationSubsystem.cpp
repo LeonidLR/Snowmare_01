@@ -1,4 +1,5 @@
 #include "Interactables/RelocationSubsystem.h"
+#include "Combat/CombatFeedbackSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -511,6 +512,10 @@ void URelocationSubsystem::ConfirmPlacement(const FVector& GroundPoint)
 			Plan.Type = Type;
 			Plan.Target = DeployAnchor;
 			Plan.Yaw = PlacingYaw;
+			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+			{
+				Feedback->SpawnWaypointMarker(DeployAnchor);
+			}
 			if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 			{
 				Squad->ClearPlannedOrder(DeployWorker);
@@ -554,6 +559,10 @@ void URelocationSubsystem::ConfirmPlacement(const FVector& GroundPoint)
 		Plan.Target = Target;
 		Plan.TargetYaw = PlacingYaw;
 		Plan.GroundZ = Object->GetActorLocation().Z;
+		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+		{
+			Feedback->SpawnWaypointMarker(Target);
+		}
 		// Godot clears the planned move of the worker: the relocation replaces it.
 		if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 		{

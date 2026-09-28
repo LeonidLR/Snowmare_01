@@ -1,15 +1,18 @@
 // Dev-only console command for a headless Ctrl + click targeted-shot check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.TargetedShotSmoke
 // Drives ACodexTacticsPlayerController::IssueTargetedShot (the Ctrl + click path) for the commander:
-// 1. barrel explodes; 2. mine shot while prone detonates it; 3. trapped crate is blown up; 4. trapped barricade is
-// detonated (each shot costs one round); 5. an enemy becomes the priority target over a nearer one; 6. during a
-// tactical pause a barrel shot is only planned, and fires when the pause is released.
+// 1. barrel explodes (tracer + target flash); 2. mine shot while prone detonates it; 3. trapped crate is blown up,
+// an untrapped one is only pierced; 4. trapped barricade is detonated (each shot costs one round); 5. an enemy becomes the priority target over a nearer one; 6. during a
+// tactical pause a barrel shot is only planned (with a marker), and fires when the pause is released.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
 #include "Characters/EnemyCharacter.h"
+#include "Combat/CombatFeedbackActor.h"
+#include "Combat/CombatFeedbackSubsystem.h"
+#include "EngineUtils.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -43,6 +46,7 @@ namespace TargetedShotSmoke
 		TWeakObjectPtr<ABarrelActor> Barrel;
 		TWeakObjectPtr<AProximityMineActor> Mine;
 		TWeakObjectPtr<ALootCrateActor> Crate;
+		TWeakObjectPtr<ALootCrateActor> PlainCrate;
 		TWeakObjectPtr<ABarricadeActor> Barricade;
 		TWeakObjectPtr<AEnemyCharacter> NearEnemy;
 		TWeakObjectPtr<AEnemyCharacter> FarEnemy;
@@ -74,6 +78,16 @@ namespace TargetedShotSmoke
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		const FVector Spot = Feet(Commander) + Direction.GetSafeNormal2D() * Distance + FVector(0.f, 0.f, Z);
 		return World->SpawnActor<T>(Spot, FRotator::ZeroRotator, Params);
+	}
+
+	int32 CountFeedback(UWorld* World)
+	{
+		int32 Count = 0;
+		for (TActorIterator<ACombatFeedbackActor> It(World); It; ++It)
+		{
+			++Count;
+		}
+		return Count;
 	}
 
 	void Next(FState& State)
@@ -109,6 +123,7 @@ namespace TargetedShotSmoke
 			PC->IssueTargetedShot(State.Barrel.Get());
 			Check(State, State.Barrel.IsValid() && State.Barrel->IsBurning(), TEXT("barrel exploded"));
 			Check(State, Commander->CurrentClip == State.ClipBefore - 1, TEXT("barrel shot used one round"));
+			Check(State, CountFeedback(World) >= 2, TEXT("tracer and target flash spawned"));
 			Commander->SetStance(EOperativeStance::Prone);
 			Next(State);
 			break;
@@ -122,12 +137,14 @@ namespace TargetedShotSmoke
 		case 2: // Trapped crate: remote detonation destroys it.
 			PC->IssueTargetedShot(State.Crate.Get());
 			Check(State, State.Crate.IsValid() && State.Crate->IsDestroyed() && !State.Crate->bTrapped, TEXT("trapped crate blown up"));
+			PC->IssueTargetedShot(State.PlainCrate.Get());
+			Check(State, State.PlainCrate.IsValid() && !State.PlainCrate->IsDestroyed(), TEXT("untrapped crate only pierced"));
 			Next(State);
 			break;
 		case 3: // Trapped barricade: trap detonated, barricade stays.
 			PC->IssueTargetedShot(State.Barricade.Get());
 			Check(State, State.Barricade.IsValid() && !State.Barricade->bTrapped, TEXT("barricade trap detonated"));
-			Check(State, Commander->CurrentClip == State.ClipBefore - 4, TEXT("four object shots used four rounds"));
+			Check(State, Commander->CurrentClip == State.ClipBefore - 5, TEXT("five object shots used five rounds"));
 			PC->IssueTargetedShot(nullptr); // ground: hint only
 			Commander->SetStance(EOperativeStance::Standing);
 			Next(State);
@@ -156,6 +173,7 @@ namespace TargetedShotSmoke
 			PC->IssueTargetedShot(State.PauseBarrel.Get());
 			Check(State, State.PauseBarrel.IsValid() && !State.PauseBarrel->IsBurning(), TEXT("pause: barrel shot only planned"));
 			Check(State, Commander->GetPlannedTargetedShotCount() == 1, TEXT("one planned shot"));
+			Check(State, World->GetSubsystem<UCombatFeedbackSubsystem>()->GetPlannedMarkerCount() == 1, TEXT("plan marker shown"));
 			Next(State);
 			break;
 		case 6:
@@ -173,6 +191,7 @@ namespace TargetedShotSmoke
 		case 8:
 			Check(State, State.PauseBarrel.IsValid() && State.PauseBarrel->IsBurning(), TEXT("planned barrel shot fired on release"));
 			Check(State, Commander->GetPlannedTargetedShotCount() == 0, TEXT("plan consumed"));
+			Check(State, World->GetSubsystem<UCombatFeedbackSubsystem>()->GetPlannedMarkerCount() == 0, TEXT("plan markers cleared"));
 			Next(State);
 			Finish(State);
 			return false;
@@ -198,6 +217,7 @@ namespace TargetedShotSmoke
 		State->Barrel = SpawnAt<ABarrelActor>(World, Commander, Forward, TargetDistance, 60.f);
 		State->Mine = SpawnAt<AProximityMineActor>(World, Commander, Right, TargetDistance, 20.f);
 		State->Crate = SpawnAt<ALootCrateActor>(World, Commander, -Right, TargetDistance, 40.f);
+		State->PlainCrate = SpawnAt<ALootCrateActor>(World, Commander, -Right - Forward, TargetDistance, 40.f);
 		State->Barricade = SpawnAt<ABarricadeActor>(World, Commander, Right - Forward, TargetDistance, 50.f);
 		if (State->Mine.IsValid())
 		{

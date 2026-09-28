@@ -24,6 +24,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Damage")
 	EDamageType DamageType = EDamageType::Kinetic;
 
+	/** Shot tracer / muzzle flash colour (Godot WeaponData tracer_color; M16 = default). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
+	FLinearColor TracerColor = FLinearColor(0.2f, 1.f, 0.4f, 1.f);
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Damage")
 	float BaseDamage = 18.0f;
 

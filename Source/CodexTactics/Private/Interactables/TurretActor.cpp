@@ -1,4 +1,5 @@
 #include "Interactables/TurretActor.h"
+#include "Combat/CombatFeedbackSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
 #include "Components/BoxComponent.h"
@@ -204,6 +205,11 @@ void ATurretActor::Fire(AActor* Target, float Cover, const FVector& Aim)
 		Spec.ArmorPenetration = 0.20f;
 		Spec.AttackerSource = TEXT("Турель");
 		TargetHealth->TakeDamage(Spec);
+	}
+	// Godot turret.gd _spawn_muzzle_tracer: green tracer from 0.7 m above the turret, short flash.
+	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
+	{
+		Feedback->SpawnTurretTracer(GetActorLocation() + FVector(0.f, 0.f, 70.f), Aim);
 	}
 	OnFired.Broadcast(this, Target, Aim);
 	ReceiveFired(Target, Aim);

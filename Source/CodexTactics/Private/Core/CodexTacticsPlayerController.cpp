@@ -1,7 +1,9 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "CodexTactics.h"
+#include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/EncounterQueries.h"
+#include "Interactables/LootCrateActor.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/InteractionSubsystem.h"
@@ -405,6 +407,10 @@ void ACodexTacticsPlayerController::OnClick()
 	if (Mode == ECodexCombatMode::TacticalPause)
 	{
 		const FVector Planned = Squad->PlanMove(Leader, Hit.ImpactPoint, bDoubleClick, Flow->GetConfig().PauseOrderRadius);
+		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+		{
+			Feedback->SpawnWaypointMarker(Planned);
+		}
 		UE_LOG(LogCodexTactics, Log, TEXT("Planned move for %s to (%.0f, %.0f)%s"), *Leader->DisplayName.ToString(),
 			Planned.X, Planned.Y, bDoubleClick ? TEXT(" sprint") : TEXT(""));
 		return;
@@ -600,6 +606,23 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const bool bPaused = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
 	const ETargetedShotKind Kind = AOperativeCharacter::ClassifyShotTarget(HitActor);
+	UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>();
+	if (Kind != ETargetedShotKind::None && Feedback)
+	{
+		// Godot _highlight_target_feedback (not on destroyed crates) + a plan marker in the pause.
+		const ALootCrateActor* Crate = Cast<ALootCrateActor>(HitActor);
+		if (!Crate || !Crate->IsDestroyed())
+		{
+			Feedback->HighlightTarget(HitActor);
+		}
+		if (bPaused)
+		{
+			FVector Origin;
+			FVector Extent;
+			HitActor->GetActorBounds(true, Origin, Extent);
+			Feedback->SpawnWaypointMarker(FVector(Origin.X, Origin.Y, Origin.Z - Extent.Z));
+		}
+	}
 	if (bPaused && Kind != ETargetedShotKind::None)
 	{
 		Leader->PlanTargetedShot(HitActor);
