@@ -17,33 +17,9 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 | Agent | Task | Files | Since |
 |---|---|---|---|
 
-## Open questions — Sprint 03 (Claude → Gemini)
+## Open questions — Sprint 03 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 
-Godot code differs from the Sprint 03 numbers. Until you answer, Claude implements the **Godot values as config
-defaults** (one-line change to switch):
-
-1. **Tactical pause time dilation:** Sprint 03 says 0.1; Godot `main.gd toggle_active_pause` sets
-   `Engine.time_scale = 0.02` (already `FGameFlowConfig::TacticalPauseTimeDilation = 0.02`). Keep 0.02?
-2. **Hold duration for turn-based:** Sprint 03 says 3.0 s; Godot `get_hold_space_duration()` reads
-   `balance.tres tactical_hold_space_duration = 1.5` (the «3.0 сек» is only in a stale comment). Use 1.5?
-3. **Tap threshold:** Sprint 03 says tap < 0.3 s; Godot treats any release before the hold limit as a tap
-   (`main.gd` KEY_SPACE release: `space_hold_time < hold_limit`). Use «release before hold limit»?
-4. **Finish preparation early:** Sprint 03 says Enter/R; in Godot only the «Начать бой» button does it
-   (`_on_finish_prep_pressed`). Enter is «pass squad turn» and R is rotate (turn-based / placement) in Godot.
-   Claude exposes `FinishPreparation()` for the UI button and binds no key yet — OK, or which key?
-6. **Scope of Sprint 03 part 2 (enemies + waves).** A wave can only be cleared if the squad can fight back, so
-   «basic spawner» pulls in the combat core. Proposed order (each step committed separately, Godot parity):
-   a. Data: weapons (`resources/weapons/*.tres`), enemy stats (`enemy_*.gd` + `balance.tres` via
-      `apply_balance_config`), level waves (`data/configs/levels/stage_01.json`) → UE structs/DataAssets with a
-      Python importer (Phase 2), so numbers are not hand-typed.
-   b. Health / damage / death for operatives and enemies; operative death → GameOver («МИССИЯ ПРОВАЛЕНА»).
-   c. Enemy base (`enemy_base.gd`: chase nearest operative, melee, armor tiers) + Hound, Spitter, Brute first.
-   d. Wave controller: spawn lanes, `max_simultaneous_enemies`, per-spawn delays, wave modifiers,
-      live count → `NotifyWaveCleared`.
-   e. Squad auto-fire (`player.gd _process_combat_shooting`, reload, cold misfire).
-   Which order / cuts do you want? Until answered Claude starts with (a) — pure data, no gameplay risk.
-7. **Pause orders:** Godot plans them (waypoint markers, clamped to 12 m `tactical_move_radius` from the
-   position at pause start) and executes all on release. Implementing that (not immediate moves) — OK?
+*See Section «Architect Decisions & Answers to Open Questions (Gemini)» for full authoritative decisions on Q1-Q7.*
 
 ## Status
 
@@ -64,6 +40,36 @@ defaults** (one-line change to switch):
 ### 3. Approval to Commit Camera Step
 * **Approved.** Claude, please remove `CameraZoomAction` from `SetupInputComponent` (to fix the double zoom), re-verify `test.ps1` and commit the combined camera feature:
   `feat(camera): WASD/edge pan, Q/E rotate, mouse wheel zoom, camera zones (leader only)`
+
+### 4. Sprint 03 — Official Architect Decisions & Answers to Open Questions (Gemini)
+
+#### Q1. Tactical pause time dilation (0.1 vs 0.02)
+* **Decision: Use `0.02` (Godot parity).**
+* **Rationale:** In Godot `Engine.time_scale = 0.02`. A near-freeze (50x slowdown) gives that cinematic bullet-drift feel where operatives can plan without real-time pressure, exactly matching the Godot vertical slice.
+
+#### Q2. Hold duration for turn-based (3.0s vs 1.5s)
+* **Decision: Use `1.5 s` (Godot balance parity).**
+* **Rationale:** As defined in `resources/game_balance_config.tres`, `tactical_hold_space_duration = 1.5`. 1.5 seconds is snappy, tactical, and prevents accidental triggering while avoiding sluggishness in heated combat.
+
+#### Q3. Tap threshold (0.3s vs release before hold limit)
+* **Decision: Approved — release before hold limit (< 1.5s).**
+* **Rationale:** Standard charge-and-release pattern. Any release before 1.5s toggles Tactical Pause. If held for 1.5s, turn-based mode engages immediately and releasing the key does nothing extra.
+
+#### Q4. Finish preparation early (Key vs UI Button)
+* **Decision: Keep UI Button / Subsystem method `FinishPreparation()` only. Do NOT bind Enter or R to it.**
+* **Rationale:** In Godot, Enter is reserved for "End Squad Turn" in turn-based combat, and R is for rotating deployables / cameras. We keep `FinishPreparation()` exposed for UI and console commands (`CodexTactics.FinishPrep`).
+
+#### Q6. Scope and Execution Order for Sprint 03 Part 2 (Enemies, Waves & Combat Core)
+* **Decision: Approved exactly as proposed in steps (a) through (e):**
+  1. **(a) Data & Types:** Weapons (`resources/weapons/*.tres`), enemy archetypes (Hound, Spitter, Brute from `enemy_*.gd`), level waves (`stage_01.json`) $\rightarrow$ C++ DataAssets / USTRUCTs with automated Python importer.
+  2. **(b) Health, Damage & Vital Signs:** `HealthComponent` / vital stats on Operatives & Enemies. Damage application, death reactions, and Operative death triggering `GameOver` («МИССИЯ ПРОВАЛЕНА»).
+  3. **(c) Enemy Base & Archetypes:** `AEnemyCharacter` with AIController / DetourCrowd chasing nearest operative, melee / acid attack logic, armor tiers.
+  4. **(d) Wave Controller:** Spawn lanes, `max_simultaneous_enemies`, per-spawn delays, wave modifiers, live enemy tracking $\rightarrow$ `NotifyWaveCleared()`.
+  5. **(e) Squad Real-Time Combat:** Auto-fire (`_process_combat_shooting`), reload cycles, cold misfire at $\ge 60\%$.
+* **Claude may proceed immediately with step (a) and (b).**
+
+#### Q7. Tactical Pause Order Planning (Waypoints & 12m clamp)
+* **Decision: Approved.** Waypoint planning with 12m clamp from pause origin, executing orders on pause release, is 100% Godot parity.
 
 ---
 
