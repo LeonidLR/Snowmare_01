@@ -16,6 +16,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Interactables/BarrelActor.h"
 #include "Interactables/InteractionSubsystem.h"
+#include "Interactables/RelocationSubsystem.h"
 #include "Misc/Paths.h"
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
@@ -59,8 +60,9 @@ namespace HudShot
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		const bool bWalk = Args.Contains(TEXT("walk"));
 		const bool bMenu = Args.Contains(TEXT("menu"));
+		const bool bPlace = Args.Contains(TEXT("place"));
 		FTimerHandle PoseHandle;
-		World->GetTimerManager().SetTimer(PoseHandle, FTimerDelegate::CreateLambda([WeakWorld, bWalk, bMenu]()
+		World->GetTimerManager().SetTimer(PoseHandle, FTimerDelegate::CreateLambda([WeakWorld, bWalk, bMenu, bPlace]()
 		{
 			UWorld* W = WeakWorld.Get();
 			if (!W)
@@ -69,7 +71,20 @@ namespace HudShot
 			}
 			USquadSubsystem* Squad = W->GetSubsystem<USquadSubsystem>();
 			AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-			if (bMenu && Leader)
+			if (bPlace && Leader)
+			{
+				// "place": placement mode for a barrel, ghost 4 m to the side.
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+				const FVector Spot = Leader->GetActorLocation() + Leader->GetActorForwardVector() * 250.f + FVector(0.f, 0.f, -20.f);
+				if (ABarrelActor* Barrel = W->SpawnActor<ABarrelActor>(Spot, FRotator::ZeroRotator, Params))
+				{
+					URelocationSubsystem* Relocation = W->GetSubsystem<URelocationSubsystem>();
+					Relocation->StartRelocate(Barrel, Leader);
+					Relocation->UpdatePreview(Barrel->GetActorLocation() - Leader->GetActorRightVector() * 400.f);
+				}
+			}
+			else if (bMenu && Leader)
 			{
 				// "menu": a barrel right in front of the leader, its action menu opens at once.
 				FActorSpawnParameters Params;

@@ -135,6 +135,11 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-28 Claude: object relocation. «Вытолкать» / «Переместить» opens placement: ghost follows the cursor
+  (cyan / red by radius: pause 12 m from the pause origin, preparation unlimited, else 15 m), wheel / R rotate 45°,
+  LMB confirm, RMB cancel. Worker walks up, pushes the object 1.35 m ahead at carry speed, sets it down, steps back.
+  Pause: planned, runs on release (replaces the worker's planned move). Live combat drops tasks («Боевая тревога!»).
+  Lift blocked at >= 80 % cold or < 50 % HP. 97 tests, 9 smokes PASS.
 - 2026-09-28 Claude: action menu + fuel barrels. Clicking an object walks the leader to it (double click runs,
   planned in the tactical pause); on arrival `BuildActionMenu` opens the centred UMG menu (Godot texts) or posts a
   line; confirm runs `ExecuteAction`. Quest objects use it (greyed «Нужна емкость» etc.). `ABarrelActor`: 1 match,

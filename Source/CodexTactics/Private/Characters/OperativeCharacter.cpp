@@ -433,9 +433,19 @@ void AOperativeCharacter::HandleMoveFinished()
 	ApplyMovementParams();
 }
 
+void AOperativeCharacter::SetCarrying(bool bNewCarrying)
+{
+	bCarrying = bNewCarrying;
+	if (bCarrying)
+	{
+		bSprinting = false; // Godot can_sprint: no sprint while carrying
+	}
+	ApplyMovementParams();
+}
+
 bool AOperativeCharacter::CanSprint() const
 {
-	return OperativeMovementRules::CanSprint(MovementConfig, Stance, ColdLevel, bWounded);
+	return !bCarrying && OperativeMovementRules::CanSprint(MovementConfig, Stance, ColdLevel, bWounded);
 }
 
 float AOperativeCharacter::GetMaxSpeed() const

@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
+#include "Interactables/RelocationSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 
 bool UInteractionSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -112,6 +113,18 @@ void UInteractionSubsystem::ConfirmActionMenu()
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("Action confirmed on %s by %s"), *Target->GetName(), *Leader->DisplayName.ToString());
 		Target->ExecuteAction(Leader);
+	}
+}
+
+void UInteractionSubsystem::RelocateActionMenu()
+{
+	AInteractableActor* Target = MenuTarget.Get();
+	CloseMenu();
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+	if (Target && Relocation)
+	{
+		Relocation->StartRelocate(Target, Squad ? Squad->GetLeader() : nullptr);
 	}
 }
 

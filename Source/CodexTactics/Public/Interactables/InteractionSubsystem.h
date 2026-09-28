@@ -39,6 +39,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void ConfirmActionMenu();
 
+	/** Relocate button («Переместить» / «Вытолкать»): placement mode for the menu object with the leader. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
+	void RelocateActionMenu();
+
 	/** Cancel / close button. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void CancelActionMenu();

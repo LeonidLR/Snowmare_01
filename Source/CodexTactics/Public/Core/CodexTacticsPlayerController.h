@@ -72,6 +72,11 @@ private:
 
 	/** Mouse wheel via BindKey (MouseScrollUp/Down): deterministic with the Slate cursor (architect decision). */
 	void OnMouseWheelUp();
+	/** R: rotate the object being placed by 45°. */
+	void RotatePlacement();
+	/** Ground point under the cursor on the placement plane of the object being moved. */
+	bool GetPlacementPoint(FVector& OutPoint) const;
+	class URelocationSubsystem* GetPlacingRelocation() const;
 	void OnMouseWheelDown();
 	void CameraRotateLeft();
 	void CameraRotateRight();
@@ -109,6 +114,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> SpaceAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> RotatePlacementAction;
 
 	FSpaceInputTracker SpaceInput;
 	double LastClickTime = -1.0;

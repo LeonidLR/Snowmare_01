@@ -84,7 +84,7 @@ private:
 	/** Shared switch-off: charred look, heat and light off, events. */
 	void HandleFireOut();
 	void PostLine(const FText& Speaker, const FText& Text) const;
-	/** Pushing / carrying is available once the relocation system is ported. */
+	/** Godot can_push: the barrel may be pushed to a new spot. */
 	bool CanPushNow() const;
 
 	FBarrelBurnState Burn;

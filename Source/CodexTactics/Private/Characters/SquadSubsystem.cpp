@@ -283,6 +283,21 @@ FVector USquadSubsystem::PlanMove(AOperativeCharacter* Operative, const FVector&
 	return Planned;
 }
 
+bool USquadSubsystem::GetPauseOrigin(const AOperativeCharacter* Operative, FVector& OutOrigin) const
+{
+	const FVector* Origin = PauseOrigins.Find(TWeakObjectPtr<AOperativeCharacter>(const_cast<AOperativeCharacter*>(Operative)));
+	if (Origin)
+	{
+		OutOrigin = *Origin;
+	}
+	return Origin != nullptr;
+}
+
+void USquadSubsystem::ClearPlannedOrder(const AOperativeCharacter* Operative)
+{
+	PlannedOrders.Remove(TWeakObjectPtr<AOperativeCharacter>(const_cast<AOperativeCharacter*>(Operative)));
+}
+
 void USquadSubsystem::ExecutePlannedOrders()
 {
 	for (const TPair<TWeakObjectPtr<AOperativeCharacter>, FPlannedOrder>& Entry : PlannedOrders)

@@ -85,6 +85,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	FVector PlanMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius);
 
+	/** Where Operative stood when the current tactical pause began; false outside a pause. */
+	bool GetPauseOrigin(const AOperativeCharacter* Operative, FVector& OutOrigin) const;
+
+	/** Drops Operative's planned pause move (a planned relocation replaces it). */
+	void ClearPlannedOrder(const AOperativeCharacter* Operative);
+
 	/** Number of operatives with a planned pause order. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	int32 GetPlannedOrderCount() const { return PlannedOrders.Num(); }

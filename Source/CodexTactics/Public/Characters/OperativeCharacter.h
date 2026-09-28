@@ -172,6 +172,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative", meta = (ClampMin = "0", ClampMax = "100"))
 	float ColdLevel = 0.f;
 
+	/** Placement / relocation radius outside the pause and preparation, cm (Godot placement_radius 15 m). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	float PlacementRadius = 1500.f;
+
+	/** Cannot lift / push objects at or above this cold, % (Godot max_cold_to_lift_objects 80). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0", ClampMax = "100"))
+	float MaxColdToLiftObjects = 80.f;
+
+	/** Cannot lift / push objects below this health fraction (Godot min_health_percent_to_lift 0.5). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0", ClampMax = "1"))
+	float MinHealthFractionToLift = 0.5f;
+
+	/** Starts / stops carrying or pushing an object (carry speed, no sprint). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
+	void SetCarrying(bool bNewCarrying);
+
 	/** Personal matches for lighting barrels (Godot game_balance_config *_matches_count: 3 each). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
 	int32 MatchesCount = 3;

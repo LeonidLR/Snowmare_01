@@ -5,6 +5,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/InteractionSubsystem.h"
+#include "Interactables/RelocationSubsystem.h"
 #include "Misc/App.h"
 #include "UI/GameMessageSubsystem.h"
 
@@ -77,6 +78,7 @@ void ACodexTacticsPlayerController::CreateInputActions()
 	CameraDragRotateAction = MakeAction(TEXT("IA_CameraDragRotate"), EKeys::RightMouseButton);
 	CameraDragPanAction = MakeAction(TEXT("IA_CameraDragPan"), EKeys::MiddleMouseButton);
 	SpaceAction = MakeAction(TEXT("IA_Space"), EKeys::SpaceBar);
+	RotatePlacementAction = MakeAction(TEXT("IA_RotatePlacement"), EKeys::R);
 }
 
 void ACodexTacticsPlayerController::SetupInputComponent()
@@ -121,6 +123,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(CameraDragPanAction, ETriggerEvent::Completed, this, &ACodexTacticsPlayerController::CameraDragPanStop);
 	Input->BindAction(SpaceAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SpacePressed);
 	Input->BindAction(SpaceAction, ETriggerEvent::Completed, this, &ACodexTacticsPlayerController::SpaceReleased);
+	Input->BindAction(RotatePlacementAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::RotatePlacement);
 }
 
 void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
@@ -133,6 +136,49 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	if (SpaceInput.Tick(static_cast<float>(FApp::GetDeltaTime()), HoldDuration) == ESpaceInputAction::Hold)
 	{
 		HandleSpaceHold();
+	}
+
+	// Object placement: the ghost follows the cursor.
+	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
+	{
+		FVector Point;
+		if (GetPlacementPoint(Point))
+		{
+			Relocation->UpdatePreview(Point);
+		}
+	}
+}
+
+URelocationSubsystem* ACodexTacticsPlayerController::GetPlacingRelocation() const
+{
+	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+	return Relocation && Relocation->IsPlacing() ? Relocation : nullptr;
+}
+
+bool ACodexTacticsPlayerController::GetPlacementPoint(FVector& OutPoint) const
+{
+	const URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+	FVector Origin;
+	FVector Direction;
+	if (!Relocation || !DeprojectMousePositionToWorld(Origin, Direction) || FMath::IsNearlyZero(Direction.Z))
+	{
+		return false;
+	}
+	// Godot intersects the cursor ray with the ground plane (Plane(Vector3.UP, 0)); here: the object's floor height.
+	const float Distance = (Relocation->GetPlacementGroundZ() - Origin.Z) / Direction.Z;
+	if (Distance <= 0.f)
+	{
+		return false;
+	}
+	OutPoint = Origin + Direction * Distance;
+	return true;
+}
+
+void ACodexTacticsPlayerController::RotatePlacement()
+{
+	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
+	{
+		Relocation->RotatePreview(+1);
 	}
 }
 
@@ -231,6 +277,17 @@ void ACodexTacticsPlayerController::PostHeadquarters(const FText& Text) const
 
 void ACodexTacticsPlayerController::OnClick()
 {
+	// Placement mode: LMB sets the new spot of the object being moved.
+	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
+	{
+		FVector Point;
+		if (GetPlacementPoint(Point))
+		{
+			Relocation->ConfirmPlacement(Point);
+		}
+		return;
+	}
+
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	FHitResult Hit;
@@ -422,6 +479,11 @@ ATacticalCameraPawn* ACodexTacticsPlayerController::GetCameraPawn() const
 
 void ACodexTacticsPlayerController::OnMouseWheelUp()
 {
+	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
+	{
+		Relocation->RotatePreview(+1); // Godot: the wheel rotates the object being placed
+		return;
+	}
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->AddZoomNotches(-1.f);
@@ -430,6 +492,11 @@ void ACodexTacticsPlayerController::OnMouseWheelUp()
 
 void ACodexTacticsPlayerController::OnMouseWheelDown()
 {
+	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
+	{
+		Relocation->RotatePreview(-1);
+		return;
+	}
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->AddZoomNotches(+1.f);
@@ -454,6 +521,12 @@ void ACodexTacticsPlayerController::CameraRotateRight()
 
 void ACodexTacticsPlayerController::CameraDragRotateStart()
 {
+	// Godot: RMB cancels object placement.
+	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
+	{
+		Relocation->CancelPlacement();
+		return;
+	}
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->SetDragRotating(true);

@@ -172,8 +172,10 @@ void UActionMenuWidget::HandleConfirm()
 
 void UActionMenuWidget::HandleRelocate()
 {
-	// The relocation system is not ported yet; the button stays hidden until then.
-	HandleCancel();
+	if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+	{
+		Interactions->RelocateActionMenu();
+	}
 }
 
 void UActionMenuWidget::HandleCancel()

@@ -13,12 +13,6 @@
 
 #define LOCTEXT_NAMESPACE "BarrelActor"
 
-namespace
-{
-	/** Relocation (push / carry) is not ported yet: the menu hides «Вытолкать» until it is. */
-	constexpr bool bRelocationPorted = false;
-}
-
 ABarrelActor::ABarrelActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -63,7 +57,7 @@ void ABarrelActor::OnConstruction(const FTransform& Transform)
 
 bool ABarrelActor::CanPushNow() const
 {
-	return bCanBeRelocated && bRelocationPorted;
+	return bCanBeRelocated;
 }
 
 FActionMenuRequest ABarrelActor::BuildActionMenu(const AOperativeCharacter* Leader) const

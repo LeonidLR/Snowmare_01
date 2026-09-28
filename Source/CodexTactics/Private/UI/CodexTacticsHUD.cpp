@@ -75,7 +75,7 @@ FString ACodexTacticsHUD::StripUnsupportedGlyphs(const FString& Text)
 		const TCHAR Char = Text[Index];
 		const uint32 Code = static_cast<uint32>(Char);
 		const bool bSurrogate = Code >= 0xD800 && Code <= 0xDFFF; // emoji outside the BMP
-		const bool bSymbol = (Code >= 0x2190 && Code <= 0x2BFF) || Code == 0xFE0F || Code == 0x200D;
+		const bool bSymbol = (Code >= 0x2190 && Code <= 0x2BFF) || Code == 0xFE0F || Code == 0x200D || Code == 0x20E3; // 0x20E3: keycap «2️⃣»
 		if (!bSurrogate && !bSymbol)
 		{
 			Result.AppendChar(Char);

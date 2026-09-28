@@ -2,7 +2,8 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.BarrelSmoke
 // Spawns a barrel ahead of the leader and drives it through the player's path (click -> approach -> action menu):
 // light it (one match spent, heat + light on), the leader warms up next to it, it burns out (charred, heat off),
-// clicking the burnt barrel only posts the Godot line, and a leader without matches gets a greyed-out «Нет спичек».
+// clicking the burnt barrel opens «Сгоревшая бочка» (greyed «Пусто» + «Вытолкать»), and a leader without matches gets
+// a greyed-out «Нет спичек».
 
 #include "CoreMinimal.h"
 
@@ -131,8 +132,12 @@ namespace BarrelSmoke
 			return true;
 
 		case EPhase::ClickBurnt:
-			// Not relocatable yet -> Godot posts «Горючее в этой бочке уже полностью выгорело.» instead of a menu.
-			State.bBurntClickOk = !Interactions->IsActionMenuOpen() && !Interactions->GetPendingInteraction();
+			// Pushable burnt barrel: Godot menu «Сгоревшая бочка» with a greyed-out «Пусто» and «Вытолкать».
+			State.bBurntClickOk = Interactions->IsActionMenuOpen() && Interactions->GetActionMenu().bConfirmDisabled
+				&& Interactions->GetActionMenu().bAllowRelocate;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke burnt menu \"%s\" / \"%s\""), *Interactions->GetActionMenu().Title.ToString(),
+				*Interactions->GetActionMenu().ConfirmText.ToString());
+			Interactions->CancelActionMenu();
 			Leader->MatchesCount = 0;
 			State.SecondBarrel = SpawnBarrel(World, Leader, 300.f);
 			if (State.SecondBarrel.IsValid())
