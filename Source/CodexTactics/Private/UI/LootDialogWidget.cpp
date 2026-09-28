@@ -22,14 +22,14 @@
 namespace
 {
 	// Godot loot_dialog.gd style: dark green panel, green title.
-	const FLinearColor PanelColor(0.08f, 0.12f, 0.09f, 0.97f);
-	const FLinearColor FrameColor(0.2f, 0.85f, 0.35f, 1.f);
-	const FLinearColor TitleColor(0.3f, 1.f, 0.5f);
-	const FLinearColor HintColor(0.8f, 0.85f, 0.9f);
-	const FLinearColor EmptyColor(0.6f, 0.6f, 0.6f);
-	const FLinearColor ButtonTextColor(0.05f, 0.05f, 0.05f);
+	const FLinearColor LootPanelColor(0.08f, 0.12f, 0.09f, 0.97f);
+	const FLinearColor LootFrameColor(0.2f, 0.85f, 0.35f, 1.f);
+	const FLinearColor LootTitleColor(0.3f, 1.f, 0.5f);
+	const FLinearColor LootHintColor(0.8f, 0.85f, 0.9f);
+	const FLinearColor LootEmptyColor(0.6f, 0.6f, 0.6f);
+	const FLinearColor LootButtonTextColor(0.05f, 0.05f, 0.05f);
 
-	FText Clean(const FText& Text)
+	FText LootClean(const FText& Text)
 	{
 		return FText::FromString(ACodexTacticsHUD::StripUnsupportedGlyphs(Text.ToString()));
 	}
@@ -68,14 +68,14 @@ void ULootDialogWidget::BuildDefaultLayout()
 
 	// Green frame = outer border, panel = inner border (Godot StyleBoxFlat border 2 px).
 	UBorder* Frame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Frame"));
-	Frame->SetBrushColor(FrameColor);
+	Frame->SetBrushColor(LootFrameColor);
 	Frame->SetPadding(FMargin(2.f));
 	UOverlaySlot* FrameSlot = Root->AddChildToOverlay(Frame);
 	FrameSlot->SetHorizontalAlignment(HAlign_Center);
 	FrameSlot->SetVerticalAlignment(VAlign_Center);
 
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Panel"));
-	Panel->SetBrushColor(PanelColor);
+	Panel->SetBrushColor(LootPanelColor);
 	Panel->SetPadding(FMargin(16.f, 14.f));
 	Frame->SetContent(Panel);
 
@@ -87,11 +87,11 @@ void ULootDialogWidget::BuildDefaultLayout()
 	UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Column"));
 	Size->AddChild(Column);
 
-	TitleText = MakeText(TEXT("TitleText"), 16, TitleColor);
+	TitleText = MakeText(TEXT("TitleText"), 16, LootTitleColor);
 	TitleText->SetJustification(ETextJustify::Center);
 	Column->AddChildToVerticalBox(TitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	SubtitleText = MakeText(TEXT("SubtitleText"), 11, HintColor);
+	SubtitleText = MakeText(TEXT("SubtitleText"), 11, LootHintColor);
 	SubtitleText->SetJustification(ETextJustify::Center);
 	SubtitleText->SetAutoWrapText(true);
 	SubtitleText->SetText(LOCTEXT("Hint", "Кликните на конкретный ресурс, чтобы забрать его, или нажмите «Забрать всё»:"));
@@ -108,13 +108,13 @@ void ULootDialogWidget::BuildDefaultLayout()
 	Column->AddChildToVerticalBox(Buttons)->SetHorizontalAlignment(HAlign_Center);
 
 	LootAllButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("LootAllButton"));
-	LootAllText = MakeText(TEXT("LootAllText"), 12, ButtonTextColor);
+	LootAllText = MakeText(TEXT("LootAllText"), 12, LootButtonTextColor);
 	LootAllText->SetText(LOCTEXT("LootAll", "📦 Забрать ВСЁ"));
 	LootAllButton->AddChild(LootAllText);
 	Buttons->AddChildToHorizontalBox(LootAllButton)->SetPadding(FMargin(6.f, 10.f, 6.f, 0.f));
 
 	CloseButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CloseButton"));
-	CloseText = MakeText(TEXT("CloseText"), 12, ButtonTextColor);
+	CloseText = MakeText(TEXT("CloseText"), 12, LootButtonTextColor);
 	CloseText->SetText(LOCTEXT("Close", "✖ Закрыть"));
 	CloseButton->AddChild(CloseText);
 	Buttons->AddChildToHorizontalBox(CloseButton)->SetPadding(FMargin(6.f, 10.f, 6.f, 0.f));
@@ -137,11 +137,11 @@ void ULootDialogWidget::NativeOnInitialized()
 	}
 	if (LootAllText)
 	{
-		LootAllText->SetText(Clean(LootAllText->GetText()));
+		LootAllText->SetText(LootClean(LootAllText->GetText()));
 	}
 	if (CloseText)
 	{
-		CloseText->SetText(Clean(CloseText->GetText()));
+		CloseText->SetText(LootClean(CloseText->GetText()));
 	}
 }
 
@@ -154,7 +154,7 @@ void ULootDialogWidget::ShowCrate(ALootCrateActor* Crate)
 	}
 	if (TitleText)
 	{
-		TitleText->SetText(Clean(FText::FromString(Crate->CrateName.ToString().ToUpper())));
+		TitleText->SetText(LootClean(FText::FromString(Crate->CrateName.ToString().ToUpper())));
 	}
 	const TArray<FLootEntry> Items = Crate->GetItems();
 	if (ItemsGrid)
@@ -162,15 +162,15 @@ void ULootDialogWidget::ShowCrate(ALootCrateActor* Crate)
 		ItemsGrid->ClearChildren();
 		if (Items.IsEmpty())
 		{
-			UTextBlock* Empty = MakeText(NAME_None, 12, EmptyColor);
+			UTextBlock* Empty = MakeText(NAME_None, 12, LootEmptyColor);
 			Empty->SetText(LOCTEXT("Empty", "Ящик пуст. Все припасы забраны."));
 			ItemsGrid->AddChildToUniformGrid(Empty, 0, 0);
 		}
 		for (int32 Index = 0; Index < Items.Num(); ++Index)
 		{
 			ULootEntryButton* Button = WidgetTree->ConstructWidget<ULootEntryButton>(ULootEntryButton::StaticClass());
-			UTextBlock* Label = MakeText(NAME_None, 11, ButtonTextColor);
-			Label->SetText(Clean(Items[Index].GetLabel()));
+			UTextBlock* Label = MakeText(NAME_None, 11, LootButtonTextColor);
+			Label->SetText(LootClean(Items[Index].GetLabel()));
 			Button->AddChild(Label);
 			Button->Setup(this, Items[Index].Item);
 			ItemsGrid->AddChildToUniformGrid(Button, Index / 2, Index % 2); // Godot GridContainer columns = 2

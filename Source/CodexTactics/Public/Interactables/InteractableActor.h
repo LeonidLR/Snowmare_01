@@ -20,7 +20,9 @@ enum class ETrapFlavor : uint8
 	Barricade,
 	Mine,
 	/** loot_crate.gd */
-	Crate
+	Crate,
+	/** deployables/turret.gd */
+	Turret
 };
 
 /**
@@ -50,6 +52,26 @@ public:
 
 	/** Acts at once without a menu when it returns true (e.g. opening an intact supply crate). */
 	virtual bool HandleDirectInteraction(AOperativeCharacter* Leader) { return false; }
+
+	// --- Generator damage (Godot interactable.gd take_damage / breakdown_generator / repair_generator) ---
+
+	/** Generator durability (Godot max_health 200). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Generator", meta = (ClampMin = "1"))
+	float GeneratorMaxHealth = 200.f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Generator")
+	float GeneratorHealth = 200.f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Generator")
+	bool bGeneratorBroken = false;
+
+	/** Damage to a generator (enemies); at 0 it breaks down, heat and turret power go off. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Generator")
+	void TakeGeneratorDamage(float Amount);
+
+	/** Full repair: heat and turret power back on. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Generator")
+	void RepairGenerator();
 
 	/** Menu (or feed line) for the leader standing at the object. */
 	virtual FActionMenuRequest BuildActionMenu(const AOperativeCharacter* Leader) const;
@@ -154,4 +176,9 @@ public:
 private:
 	UFUNCTION()
 	void HandleGeneratorStarted();
+
+	void BreakdownGenerator();
+	void FinishGeneratorRepair(TWeakObjectPtr<AOperativeCharacter> WeakUser);
+	/** Generator is running (quest) and has not broken down. */
+	bool IsGeneratorWorking() const;
 };

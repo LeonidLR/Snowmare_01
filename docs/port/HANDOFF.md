@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-28 by Claude, after commit `d72d131`.
+Last update: 2026-09-28 by Claude, after the turrets commit (see §10).
 
 ---
 
@@ -32,6 +32,7 @@ The user's rule: **Godot code values win** (except explicit user decisions liste
 | Editing a Blueprint's inherited component via Python CDO | Use `set_editor_property` on the component template; `set_relative_transform` is NOT persisted. |
 | Git LFS for `.uasset/.umap` (no `lockable`) | `lockable` made maps read-only; keep it off. |
 | The level `L_MovementTest` PlayerStart was moved in the editor to (-180, -1490) | Layout-dependent smokes call `SmokeUtils::PlaceSquadAtTestStart` (squad at the origin, as the map script authored). Do not move the PlayerStart back without asking the user. |
+| Unity builds merge .cpp files | Anonymous-namespace names collide across files (`PanelColor`, `Clean`…): prefix file-local helpers (`Menu…`, `Loot…`). Names like `FItemInfo` can also clash with engine types. |
 | Default canvas / Slate fonts have no emoji | HUD / menu strip them (`ACodexTacticsHUD::StripUnsupportedGlyphs`); texts stay verbatim Godot with emoji in code. |
 | Bash heredocs with long / complex Python sometimes break in this harness | Write the Python to the scratchpad with the file tool and run `python <file>`. |
 
@@ -44,7 +45,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **103 automation tests, 11 smokes, all PASS** (`verify_all.ps1` → ALL GREEN).
+State at last update: **103 automation tests, 12 smokes, all PASS** (`verify_all.ps1` → ALL GREEN).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -60,6 +61,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `BarrelSmoke` | light a barrel (match), warmth, burn-out, burnt menu, no matches |
 | `RelocationSmoke` | «Вытолкать» a barrel 6 m, cold refusal, cancel |
 | `DeployableSmoke` | barricade pick-up → F set-up with hand-over, hidden mine spotted, sapper defusal (retries), grenade trap, mine blast |
+| `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
 | `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot |
 | `HudShot [close] [walk] [menu] [place]` | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
 | `FinishPrep` | dev: skip preparation, start the wave |
@@ -135,6 +137,13 @@ Module `CodexTactics` (runtime). Folder → class → Godot reference.
   leader: provisions / matches / M16 reserve / deployables (no limit, as Godot) / `ExtraAmmo` for weapons not ported /
   `BonusItems`. `UInteractionSubsystem::OpenLootDialog / LootItem / LootAll / CloseLootDialog`,
   `UI/LootDialogWidget` (+ `ULootEntryButton`). Godot `loot_crate.gd`, `loot_dialog.gd`, `main.gd` loot handlers.
+- `Interactables/TurretActor` — powered by default; fires at the nearest visible enemy (≤ 12 m, 16 dmg / 0.45 s,
+  barricade in the line of fire = 60 %, walls block); 120 HP, breaks at 0 (repair engineer 2 s / others 4 s);
+  menus broken / unpowered («Закрыть») / trapped / pick-up; powered turret is a heat source (4.5 m, Godot
+  heat_sources); `SetAllPowered`. Deploy / pick-up routed to the commander first. Godot `deployables/turret.gd`.
+- Generator damage on `AInteractableActor` (Generator type): `TakeGeneratorDamage` (200 HP) → breakdown (heat off,
+  turrets unpowered, «[АВАРИЯ]» menu), repair on confirm (engineer 2.5 s / others 5 s) → `RepairGenerator`.
+  Starting the generator also powers all turrets. Godot `interactable.gd breakdown_generator / repair_generator`.
 - `Quests/QuestChain`, `QuestSubsystem`, `Interactables/GateActor`. Godot `quest_manager.gd`, `gate.gd`.
 
 **UI** — `UI/CodexTacticsHUD` (canvas: message feed, squad panel with supply, labels; owns the action menu widget),
@@ -163,10 +172,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 ## 8. Next steps (in order)
 
 1. ~~Loot crates~~ — done (see §10).
-2. **Turrets** — Godot `deployables/turret.gd`: power from the generator, targeting enemies, repair (engineer 2 s /
-   others 4 s), menus (broken / unpowered / trapped / pick-up). Add `TurretClass` to the game mode, deploy branch
-   already routes `EDeployableType::Turret`.
-3. Generator damage / repair menu (Godot `interactable.gd breakdown_generator`, `repair_generator`).
+2. ~~Turrets~~, 3. ~~generator damage / repair~~ — done (see §10). Enemies do not attack turrets / barricades /
+   the generator yet (Gemini's enemy AI targets operatives only) — add with the enemy AI pass.
 4. Ctrl + click targeted shots (barrel explode, mine / trap detonation by shot) — Godot `main.gd` Ctrl branch,
    `player.gd shoot_at_barrel_object`, `shoot_at_mine_object`, `shoot_at_trapped_object`.
 5. UI shell from REFERENCE_PLAYTHROUGH: main menu, dialogue, objective banner, bottom action bar, mission failed.
@@ -187,11 +194,14 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   (`main.gd` click branch "is_relocatable_obj"); UE always goes through the action menu. Port with the pause UI.
 - Consumables (medkits, food) are collected but cannot be used yet (inventory drawer / use_squad_item not ported).
 - The squad panel does not list provisions / extra ammo yet (inventory drawer UI).
+- Turret tracers / muzzle flash: only the `OnFired` / `ReceiveFired` hooks (Godot draws a green tracer + flash).
+- Deployable overhead labels (turret / generator HP and state texts) not ported (Godot Label3D).
 
 ## 10. Change log (newest first)
 
 | Commit | What |
 |---|---|
+| (turrets commit) | Turrets (fire, power, repair, pick-up, set-up), generator breakdown / repair, unity-build name fixes |
 | `d72d131` | Supply crates + loot dialog, provisions / extra ammo / bonus items on operatives, 2 crates on the test map, smoke retries for crouched defusal |
 | `d922e49` | Handoff documentation, `verify_all.ps1`, GEMINI.md |
 | `11d7655` | Barricades, proximity mines, grenade traps on any object, supply + F set-up, role / luck, SmokeUtils |

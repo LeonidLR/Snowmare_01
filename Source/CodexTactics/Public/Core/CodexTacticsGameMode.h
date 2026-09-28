@@ -8,6 +8,7 @@
 class AOperativeCharacter;
 class ABarricadeActor;
 class AProximityMineActor;
+class ATurretActor;
 
 /** One squad member spawned at mission start. */
 USTRUCT(BlueprintType)
@@ -68,6 +69,9 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
 	TSubclassOf<AProximityMineActor> MineClass;
+
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
+	TSubclassOf<ATurretActor> TurretClass;
 
 	/** Squad roster in selection order (keys 1..N). */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")

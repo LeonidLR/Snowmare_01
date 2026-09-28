@@ -135,6 +135,10 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-28 Claude: turrets + generator damage. `ATurretActor` (fire at visible enemies, barricade cover 60 %,
+  power from the generator, break / repair, pick-up, F set-up, heat source when powered); generator 200 HP with
+  breakdown («[АВАРИЯ]», turrets unpowered) and repair. Unity-build fix: UI file-local names prefixed.
+  12 smokes + 103 tests PASS.
 - 2026-09-28 Claude: supply crates. `ALootCrateActor` (+ `LootRules`): intact crate opens without a menu and shows
   the UMG loot dialog (items in 2 columns, «Забрать ВСЁ», «Закрыть»), trapped crate → defusal menu (2 s), detonation
   burns the contents. Operatives now carry provisions, extra ammo per weapon id and bonus items. Test map: checkpoint

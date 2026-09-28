@@ -9,6 +9,7 @@
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/DeployableActor.h"
 #include "Interactables/ProximityMineActor.h"
+#include "Interactables/TurretActor.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
@@ -209,7 +210,7 @@ TSubclassOf<ADeployableActor> URelocationSubsystem::GetDeployableClass(EDeployab
 	{
 	case EDeployableType::Barricade: return GameMode->BarricadeClass;
 	case EDeployableType::Mine: return GameMode->MineClass;
-	default: return nullptr; // turrets come with the turret system
+	default: return GameMode->TurretClass;
 	}
 }
 

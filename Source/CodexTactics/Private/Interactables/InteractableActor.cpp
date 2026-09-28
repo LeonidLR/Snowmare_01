@@ -9,6 +9,8 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Interactables/HeatSourceComponent.h"
+#include "Interactables/TurretActor.h"
+#include "TimerManager.h"
 #include "Quests/QuestSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -53,6 +55,7 @@ void AInteractableActor::OnConstruction(const FTransform& Transform)
 void AInteractableActor::BeginPlay()
 {
 	Super::BeginPlay();
+	GeneratorHealth = GeneratorMaxHealth;
 
 	if (ObjectType == EInteractableType::Generator)
 	{
@@ -88,6 +91,24 @@ void AInteractableActor::ExecuteAction(AOperativeCharacter* User)
 
 void AInteractableActor::PerformAction(AOperativeCharacter* User)
 {
+	const UQuestSubsystem* Quests = GetWorld()->GetSubsystem<UQuestSubsystem>();
+	const bool bRunning = Quests && Quests->IsGeneratorRunning();
+	if (ObjectType == EInteractableType::Generator && User
+		&& (bGeneratorBroken || (GeneratorHealth < GeneratorMaxHealth && bRunning)))
+	{
+		// Godot _on_action_confirmed 1.6: repair the diesel generator (engineer 2.5 s, others 5 s).
+		const float Seconds = User->SquadRole == EOperativeRole::Engineer ? 2.5f : 5.f;
+		const FRotator Facing = (GetActorLocation() - User->GetActorLocation()).Rotation();
+		User->StopOperative();
+		User->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
+		User->SetStance(EOperativeStance::Crouching);
+		PostLine(User->DisplayName, FText::Format(LOCTEXT("GeneratorRepairing", "⚡ {0}: «Восстанавливаем топливную магистраль генератора ({1}с)...»"),
+			User->DisplayName, FText::AsNumber(Seconds, &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))));
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateUObject(this, &AInteractableActor::FinishGeneratorRepair,
+			TWeakObjectPtr<AOperativeCharacter>(User)), Seconds, false);
+		return;
+	}
 	Interact(User);
 }
 
@@ -126,7 +147,8 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 	const ETrapFlavor Flavor = GetTrapFlavor();
 	if (!bTrapped)
 	{
-		PostLine(Name, Flavor == ETrapFlavor::Crate ? LOCTEXT("CrateSafe", "Ящик безопасен — растяжек нет.")
+		PostLine(Name, Flavor == ETrapFlavor::Turret ? LOCTEXT("TurretSafe", "Турель безопасна — растяжек нет.")
+			: Flavor == ETrapFlavor::Crate ? LOCTEXT("CrateSafe", "Ящик безопасен — растяжек нет.")
 			: Flavor == ETrapFlavor::Mine ? LOCTEXT("MineSafe", "Мина уже обезврежена или безопасна.")
 			: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("BarricadeSafe", "Баррикада безопасна — мин-ловушек нет.")
 				: LOCTEXT("ObjectSafe", "Объект безопасен — мин-ловушек нет.")));
@@ -143,7 +165,13 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 	case EDefusalResult::Warning:
 	{
 		const bool bCold = Odds.ColdPenalty > 0.f;
-		if (Flavor == ETrapFlavor::Crate)
+		if (Flavor == ETrapFlavor::Turret)
+		{
+			PostLine(Name, FText::Format(LOCTEXT("TurretWarn", "⚠️ {0}: «Турель заминирована растяжкой! {1}, {2} — подорвёмся! Нужно согреться или присесть!»"),
+				Name, bCold ? LOCTEXT("ColdFingers", "пальцы коченеют") : LOCTEXT("WireHinge", "проволока растяжки взведена на шарнире"),
+				bStanding ? LOCTEXT("TurretStanding", "стоя к заряду не подберусь") : LOCTEXT("PoseDanger", "в такой позе опасно")));
+		}
+		else if (Flavor == ETrapFlavor::Crate)
 		{
 			PostLine(Name, FText::Format(LOCTEXT("CrateWarn", "⚠️ {0}: «Разминирование ящика крайне рискованно! {1}, {2} — подорвёмся и спалим весь лут! Нужно согреться или хотя бы присесть!»"),
 				Name, bCold ? LOCTEXT("ColdFingers", "пальцы коченеют") : LOCTEXT("MineUnstable", "механизм слишком нестабилен"),
@@ -171,7 +199,9 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 	case EDefusalResult::Success:
 		bTrapped = false;
 		bDefused = true;
-		PostLine(Name, Flavor == ETrapFlavor::Crate
+		PostLine(Name, Flavor == ETrapFlavor::Turret
+			? FText::Format(LOCTEXT("TurretDefused", "✅ {0} успешно обезвредил(а) растяжку на боевой турели!"), Name)
+			: Flavor == ETrapFlavor::Crate
 			? FText::Format(LOCTEXT("CrateDefused", "✅ {0} успешно обезвредил(а) растяжку на ящике снабжения!"), Name)
 			: Flavor == ETrapFlavor::Mine
 			? FText::Format(LOCTEXT("MineDefused", "✅ {0} успешно обезвредил(а) мину!"), Name)
@@ -180,14 +210,17 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 				: FText::Format(LOCTEXT("ObjectDefused", "✅ {0} успешно обезвредил(а) растяжку на объекте ({1})!"), Name, DisplayName)));
 		break;
 	case EDefusalResult::Detonation:
-		PostLine(Name, Flavor == ETrapFlavor::Crate ? LOCTEXT("CrateBoom", "💥 Срыв чеки растяжки! Ловушка на ящике сдетонировала, всё содержимое уничтожено!")
+		PostLine(Name, Flavor == ETrapFlavor::Turret ? LOCTEXT("TurretBoom", "💥 Срыв чеки ловушки на турели! Прогремел взрыв!")
+			: Flavor == ETrapFlavor::Crate ? LOCTEXT("CrateBoom", "💥 Срыв чеки растяжки! Ловушка на ящике сдетонировала, всё содержимое уничтожено!")
 			: Flavor == ETrapFlavor::Mine ? LOCTEXT("MineBoom", "💥 Срыв взрывателя! Мина сдетонировала при попытке разминирования!")
 			: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("BarricadeBoom", "💥 Срыв чеки на баррикаде! Ловушка сдетонировала!")
 				: LOCTEXT("ObjectBoom", "💥 Срыв чеки ловушки на объекте! Взрыв!")));
 		DetonateTrap(false, Name);
 		break;
 	default:
-		PostLine(Name, FText::Format(Flavor == ETrapFlavor::Crate
+		PostLine(Name, FText::Format(Flavor == ETrapFlavor::Turret
+			? LOCTEXT("TurretSlip", "⚠️ {0}: «Щёлк! Скоба сместилась, но детонатор не сработал! Следующая ошибка приведёт к взрыву!»")
+			: Flavor == ETrapFlavor::Crate
 			? LOCTEXT("CrateSlip", "⚠️ {0}: «Щёлк! Растяжка натянулась, но взрыватель не сработал! Следующий срыв подорвёт ящик!»")
 			: Flavor == ETrapFlavor::Mine
 			? LOCTEXT("MineSlip", "⚠️ {0}: «Щёлк! Детонатор заклинило, попытка сорвалась! Повторный срыв вызовет подрыв!»")
@@ -330,6 +363,16 @@ FActionMenuRequest AInteractableActor::BuildActionMenu(const AOperativeCharacter
 	case EInteractableType::Generator:
 	{
 		const FText Title = LOCTEXT("GeneratorTitle", "⚡ Резервный дизель-генератор");
+		if (bGeneratorBroken || (GeneratorHealth < GeneratorMaxHealth && Quests->IsGeneratorRunning()))
+		{
+			const bool bEngineer = Leader && Leader->SquadRole == EOperativeRole::Engineer;
+			return FActionMenuRequest::MakeMenu(LOCTEXT("GeneratorBrokenTitle", "⚡ Резервный дизель-генератор [АВАРИЯ]"),
+				FText::Format(LOCTEXT("GeneratorBrokenDesc", "⚠️ Дизель-генератор повреждён врагами ({0}/{1} HP)!\nПитание турелей отключено.\nИсполнитель: {2} ({3}, ремонт: {4}с)."),
+					FMath::FloorToInt(GeneratorHealth), FMath::FloorToInt(GeneratorMaxHealth), Leader ? Leader->DisplayName : LOCTEXT("Soldier", "Боец"),
+					bEngineer ? LOCTEXT("EngineerFast", "🛠️ Инженер (в 2 раза быстрее)") : LOCTEXT("RegularSoldier", "Обычный боец"),
+					FText::AsNumber(bEngineer ? 2.5f : 5.f, &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))),
+				LOCTEXT("GeneratorRepair", "🔧 Починить генератор"), Cancel, false);
+		}
 		if (Quests->IsGeneratorRunning())
 		{
 			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("GeneratorRunning", "Генератор уже запущен на полную мощность и обогревает территорию."));
@@ -390,6 +433,56 @@ FVector AInteractableActor::GetApproachPoint(const FVector& FromLocation) const
 void AInteractableActor::HandleGeneratorStarted()
 {
 	HeatSource->SetHeatActive(true);
+	// Godot activate_visuals (generator): every turret gets power.
+	ATurretActor::SetAllPowered(GetWorld(), true);
+}
+
+bool AInteractableActor::IsGeneratorWorking() const
+{
+	const UQuestSubsystem* Quests = GetWorld()->GetSubsystem<UQuestSubsystem>();
+	return Quests && Quests->IsGeneratorRunning() && !bGeneratorBroken;
+}
+
+void AInteractableActor::TakeGeneratorDamage(float Amount)
+{
+	if (ObjectType != EInteractableType::Generator || bGeneratorBroken || Amount <= 0.f)
+	{
+		return;
+	}
+	GeneratorHealth = FMath::Max(0.f, GeneratorHealth - Amount);
+	if (GeneratorHealth <= 0.f)
+	{
+		BreakdownGenerator();
+	}
+}
+
+void AInteractableActor::BreakdownGenerator()
+{
+	if (bGeneratorBroken)
+	{
+		return;
+	}
+	bGeneratorBroken = true;
+	GeneratorHealth = 0.f;
+	HeatSource->SetHeatActive(false);
+	ATurretActor::SetAllPowered(GetWorld(), false);
+	PostLine(LOCTEXT("Attention", "ВНИМАНИЕ"), LOCTEXT("GeneratorDown", "⚠️ Дизель-генератор повреждён врагами и заглох! Турели обесточены!"));
+}
+
+void AInteractableActor::RepairGenerator()
+{
+	GeneratorHealth = GeneratorMaxHealth;
+	bGeneratorBroken = false;
+	HeatSource->SetHeatActive(true);
+	ATurretActor::SetAllPowered(GetWorld(), true);
+	PostLine(LOCTEXT("EngineerSpeaker", "Инженер"), LOCTEXT("GeneratorBack", "⚡ Генератор восстановлен! Питание подано на все турели!"));
+}
+
+void AInteractableActor::FinishGeneratorRepair(TWeakObjectPtr<AOperativeCharacter> WeakUser)
+{
+	RepairGenerator();
+	PostLine(WeakUser.IsValid() ? WeakUser->DisplayName : LOCTEXT("Soldier", "Боец"),
+		LOCTEXT("GeneratorRepaired", "✅ Дизель-генератор снова запущен! Электросеть восстановлена!"));
 }
 
 #undef LOCTEXT_NAMESPACE

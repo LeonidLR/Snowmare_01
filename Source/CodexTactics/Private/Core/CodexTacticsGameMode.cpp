@@ -10,6 +10,7 @@
 #include "Survival/ColdSurvivalComponent.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/ProximityMineActor.h"
+#include "Interactables/TurretActor.h"
 #include "UI/CodexTacticsHUD.h"
 
 #define LOCTEXT_NAMESPACE "CodexTacticsGameMode"
@@ -22,6 +23,7 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 	HUDClass = ACodexTacticsHUD::StaticClass();
 	BarricadeClass = ABarricadeActor::StaticClass();
 	MineClass = AProximityMineActor::StaticClass();
+	TurretClass = ATurretActor::StaticClass();
 	OperativeClass = AOperativeCharacter::StaticClass();
 	OperativeBlueprint = TSoftClassPtr<AOperativeCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Operatives/BP_Operative.BP_Operative_C")));
 

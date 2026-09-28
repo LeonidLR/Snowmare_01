@@ -16,11 +16,11 @@
 
 namespace
 {
-	const FLinearColor PanelColor(0.03f, 0.045f, 0.06f, 0.93f);
-	const FLinearColor TitleColor(1.f, 0.85f, 0.35f);
-	const FLinearColor BodyColor(0.9f, 0.92f, 0.95f);
+	const FLinearColor MenuPanelColor(0.03f, 0.045f, 0.06f, 0.93f);
+	const FLinearColor MenuTitleColor(1.f, 0.85f, 0.35f);
+	const FLinearColor MenuBodyColor(0.9f, 0.92f, 0.95f);
 
-	void SetFontSize(UTextBlock* Text, int32 Size)
+	void MenuSetFontSize(UTextBlock* Text, int32 Size)
 	{
 		FSlateFontInfo Font = Text->GetFont();
 		Font.Size = Size;
@@ -28,7 +28,7 @@ namespace
 	}
 
 	/** Canvas / Slate default fonts have no emoji: drop them like the HUD feed does. */
-	FText Clean(const FText& Text)
+	FText MenuClean(const FText& Text)
 	{
 		return FText::FromString(ACodexTacticsHUD::StripUnsupportedGlyphs(Text.ToString()));
 	}
@@ -47,7 +47,7 @@ UButton* UActionMenuWidget::MakeButton(const FName& Name, TObjectPtr<UTextBlock>
 {
 	UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
 	OutLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *(Name.ToString() + TEXT("Label")));
-	SetFontSize(OutLabel, 12);
+	MenuSetFontSize(OutLabel, 12);
 	OutLabel->SetColorAndOpacity(FSlateColor(FLinearColor(0.05f, 0.05f, 0.05f)));
 	Button->AddChild(OutLabel);
 	return Button;
@@ -61,7 +61,7 @@ void UActionMenuWidget::BuildDefaultLayout()
 	WidgetTree->RootWidget = Root;
 
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Panel"));
-	Panel->SetBrushColor(PanelColor);
+	Panel->SetBrushColor(MenuPanelColor);
 	Panel->SetPadding(FMargin(18.f, 14.f));
 	UOverlaySlot* PanelSlot = Root->AddChildToOverlay(Panel);
 	PanelSlot->SetHorizontalAlignment(HAlign_Center);
@@ -77,13 +77,13 @@ void UActionMenuWidget::BuildDefaultLayout()
 	Size->AddChild(Column);
 
 	TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TitleText"));
-	SetFontSize(TitleText, 16);
-	TitleText->SetColorAndOpacity(FSlateColor(TitleColor));
+	MenuSetFontSize(TitleText, 16);
+	TitleText->SetColorAndOpacity(FSlateColor(MenuTitleColor));
 	Column->AddChildToVerticalBox(TitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
 	DescriptionText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("DescriptionText"));
-	SetFontSize(DescriptionText, 12);
-	DescriptionText->SetColorAndOpacity(FSlateColor(BodyColor));
+	MenuSetFontSize(DescriptionText, 12);
+	DescriptionText->SetColorAndOpacity(FSlateColor(MenuBodyColor));
 	DescriptionText->SetAutoWrapText(true);
 	UVerticalBoxSlot* DescSlot = Column->AddChildToVerticalBox(DescriptionText);
 	DescSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
@@ -132,15 +132,15 @@ void UActionMenuWidget::ShowMenu(const FActionMenuSpec& Menu)
 {
 	if (TitleText)
 	{
-		TitleText->SetText(Clean(Menu.Title));
+		TitleText->SetText(MenuClean(Menu.Title));
 	}
 	if (DescriptionText)
 	{
-		DescriptionText->SetText(Clean(Menu.Description));
+		DescriptionText->SetText(MenuClean(Menu.Description));
 	}
 	if (ConfirmText)
 	{
-		ConfirmText->SetText(Clean(Menu.ConfirmText));
+		ConfirmText->SetText(MenuClean(Menu.ConfirmText));
 	}
 	if (ConfirmButton)
 	{
@@ -148,7 +148,7 @@ void UActionMenuWidget::ShowMenu(const FActionMenuSpec& Menu)
 	}
 	if (CancelText)
 	{
-		CancelText->SetText(Clean(Menu.CancelText));
+		CancelText->SetText(MenuClean(Menu.CancelText));
 	}
 	if (RelocateButton)
 	{
@@ -156,7 +156,7 @@ void UActionMenuWidget::ShowMenu(const FActionMenuSpec& Menu)
 	}
 	if (RelocateText)
 	{
-		RelocateText->SetText(Clean(Menu.RelocateText));
+		RelocateText->SetText(MenuClean(Menu.RelocateText));
 	}
 	if (TrapButton)
 	{
@@ -165,7 +165,7 @@ void UActionMenuWidget::ShowMenu(const FActionMenuSpec& Menu)
 	}
 	if (TrapText)
 	{
-		TrapText->SetText(Clean(Menu.TrapText));
+		TrapText->SetText(MenuClean(Menu.TrapText));
 	}
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	ReceiveMenuShown(Menu);
