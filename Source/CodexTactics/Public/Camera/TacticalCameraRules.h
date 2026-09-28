@@ -21,9 +21,9 @@ struct CODEXTACTICS_API FTacticalCameraConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "View")
 	float Pitch = -35.26f;
 
-	/** Initial camera yaw, degrees. */
+	/** Initial camera yaw, degrees (45 deg = looking from top-left, matching Godot). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "View")
-	float BaseYaw = -45.f;
+	float BaseYaw = 45.f;
 
 	/** Distance from the focus in exploration, cm (Godot base distance: 26.1 m). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zoom", meta = (ClampMin = "0"))

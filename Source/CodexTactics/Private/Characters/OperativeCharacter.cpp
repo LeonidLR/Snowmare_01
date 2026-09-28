@@ -27,6 +27,7 @@ AOperativeCharacter::AOperativeCharacter()
 
 	// Godot capsule: radius 0.4 m, height 1.8 m.
 	GetCapsuleComponent()->InitCapsuleSize(40.f, 90.f);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 
 	AIControllerClass = AOperativeAIController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
@@ -40,14 +41,21 @@ AOperativeCharacter::AOperativeCharacter()
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> BaseMat(TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
 
 	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
 	BodyMesh->SetupAttachment(GetCapsuleComponent());
-	BodyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BodyMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	BodyMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+	BodyMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	BodyMesh->SetRelativeScale3D(FVector(0.7f, 0.7f, 1.8f));
 	if (CylinderMesh.Succeeded())
 	{
 		BodyMesh->SetStaticMesh(CylinderMesh.Object);
+	}
+	if (BaseMat.Succeeded())
+	{
+		BodyMesh->SetMaterial(0, BaseMat.Object);
 	}
 
 	FacingMarker = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("FacingMarker"));
@@ -59,6 +67,10 @@ AOperativeCharacter::AOperativeCharacter()
 	{
 		FacingMarker->SetStaticMesh(CubeMesh.Object);
 	}
+	if (BaseMat.Succeeded())
+	{
+		FacingMarker->SetMaterial(0, BaseMat.Object);
+	}
 
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	HealthComponent->MaxHealth = 100.0f;
@@ -68,6 +80,12 @@ AOperativeCharacter::AOperativeCharacter()
 void AOperativeCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	if (BodyMesh)
+	{
+		BodyMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	}
 
 	if (HealthComponent)
 	{
@@ -81,18 +99,64 @@ void AOperativeCharacter::BeginPlay()
 	Movement->GetNavMovementProperties()->FixedPathBrakingDistance = MovementConfig.PathBrakingDistance;
 	ApplyMovementParams();
 
-	if (BodyMesh->GetMaterial(0))
-	{
-		BodyMaterial = BodyMesh->CreateAndSetMaterialInstanceDynamic(0);
-		BodyMaterial->SetVectorParameterValue(TEXT("Color"), BodyColor);
-		FacingMarker->SetMaterial(0, BodyMaterial);
-	}
+	ApplyBodyColor();
 
 	if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 	{
 		Squad->RegisterOperative(this);
 	}
 }
+
+void AOperativeCharacter::SetSquadIdentity(int32 InSquadIndex, const FText& InName, const FLinearColor& InColor)
+{
+	SquadIndex = InSquadIndex;
+	DisplayName = InName;
+	BodyColor = InColor;
+	ApplyBodyColor();
+}
+
+void AOperativeCharacter::ApplyBodyColor()
+{
+	// Default color if unassigned: determine from SquadIndex (matching Godot)
+	if (BodyColor.IsAlmostBlack() || BodyColor.Equals(FLinearColor(0.2f, 0.5f, 1.f)))
+	{
+		switch (SquadIndex)
+		{
+		case 0: // Commander - Military Blue
+			BodyColor = FLinearColor::FromSRGBColor(FColor(0x20, 0x80, 0xEC));
+			if (DisplayName.IsEmpty()) DisplayName = NSLOCTEXT("CodexTactics", "Commander", "Командир");
+			break;
+		case 1: // Engineer - Hazard Orange
+			BodyColor = FLinearColor::FromSRGBColor(FColor(0xFF, 0x61, 0x0F));
+			if (DisplayName.IsEmpty()) DisplayName = NSLOCTEXT("CodexTactics", "Engineer", "Инженер");
+			break;
+		case 2: // Medic-Sapper - Field Medic Green
+			BodyColor = FLinearColor::FromSRGBColor(FColor(0x1F, 0xB3, 0x33));
+			if (DisplayName.IsEmpty()) DisplayName = NSLOCTEXT("CodexTactics", "Medic", "Медик-сапёр");
+			break;
+		default:
+			break;
+		}
+	}
+
+	if (BodyMesh)
+	{
+		BodyMaterial = BodyMesh->CreateAndSetMaterialInstanceDynamic(0);
+		if (BodyMaterial)
+		{
+			BodyMaterial->SetVectorParameterValue(TEXT("Color"), BodyColor);
+		}
+	}
+	if (FacingMarker)
+	{
+		UMaterialInstanceDynamic* MarkerMat = FacingMarker->CreateAndSetMaterialInstanceDynamic(0);
+		if (MarkerMat)
+		{
+			MarkerMat->SetVectorParameterValue(TEXT("Color"), BodyColor * 1.4f + FLinearColor(0.15f, 0.15f, 0.15f, 1.0f));
+		}
+	}
+}
+
 
 void AOperativeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {

@@ -14,7 +14,8 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## In progress
 
-*(No tasks currently in progress. Protocol clear for commit / new claim.)*
+| Agent | Task | Files | Since |
+|---|---|---|---|
 
 ## Open questions — Sprint 03 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 
@@ -197,6 +198,13 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
   2. UGorkyGridManager.h/.cpp: 14x14 grid with 150 cm cells, coordinate transforms, occupant registration, AP reachable cell map with 2 AP diagonal cost and corner-cutting rules, A* pathfinding.
   3. Added 6 automation tests in GorkyGridTest.cpp: **85/85 PASS** (0 failed).
   4. Verified in-game smoke tests: WaveCombatSmoke **PASS**.
+- Claude (next session): user reports Gemini is unavailable; Claude continues the port autonomously and keeps
+  logging here. Found Gemini's 17:35 task «Fix 5 Core Discrepancies» uncommitted. Verified against Godot
+  (main.gd: Z/C/V stances, B solo mode, 25 m leash; player.gd COLOR_LEADER #2080EC) and completed it:
+  removed duplicate `BindKey` bindings for Z/C/V/B/1-3 (each press fired twice alongside Enhanced Input; the
+  wheel stays on BindKey per decision 1); replaced the tautological role-colour test with a check of the
+  GameMode roster. Build OK, 87/87 tests, all 5 smokes PASS (Camera, CombatFlow, Movement, QuestChain,
+  WaveCombat). Committed; claim released.
 - 16:30 Gemini (Lead Architect):
   All parts of Sprint 03 Part 2 ((a) Data & Types, (b) Health & Vital Signs, (c) Enemy Base & Archetypes, (d) Wave Controller, (e) Squad Real-Time Combat) are 100% complete and verified against Godot parity. Total tests: **79/79 passing**, all 4 smoke tests passing. Ready for Sprint 04 / Turn-Based Combat subsystem.
 

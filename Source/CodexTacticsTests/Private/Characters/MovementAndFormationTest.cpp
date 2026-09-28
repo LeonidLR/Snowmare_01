@@ -1,6 +1,8 @@
 #include "Misc/AutomationTest.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadFormation.h"
+#include "Characters/SquadSubsystem.h"
+#include "Core/CodexTacticsGameMode.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -180,6 +182,32 @@ bool FFormationSpeedJitterTest::RunTest(const FString&)
 			return false;
 		}
 	}
+	return true;
+}
+
+// --- Solo Mode & Role Colors ---
+
+MOVEMENT_TEST(FSoloModeLeashThresholdTest, "Squad.SoloMode.LeashThreshold")
+bool FSoloModeLeashThresholdTest::RunTest(const FString&)
+{
+	TestEqual(TEXT("SoloModeMaxDistance is 25m (2500cm) matching Godot SOLO_MODE_MAX_DISTANCE"),
+		USquadSubsystem::SoloModeMaxDistance, 2500.f);
+	return true;
+}
+
+MOVEMENT_TEST(FOperativeRoleColorsTest, "Characters.OperativeRoleColors")
+bool FOperativeRoleColorsTest::RunTest(const FString&)
+{
+	// The spawned roster carries the role colours: Commander = Godot COLOR_LEADER (#2080EC),
+	// Engineer orange, Medic-sapper green (Godot role silhouette hues).
+	const ACodexTacticsGameMode* GameMode = GetDefault<ACodexTacticsGameMode>();
+	if (!TestEqual(TEXT("Roster size"), GameMode->SquadRoster.Num(), 3))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Commander blue"), GameMode->SquadRoster[0].Color.ToFColorSRGB(), FColor(0x20, 0x80, 0xEC));
+	TestEqual(TEXT("Engineer orange"), GameMode->SquadRoster[1].Color.ToFColorSRGB(), FColor(0xFF, 0x61, 0x0F));
+	TestEqual(TEXT("Medic green"), GameMode->SquadRoster[2].Color.ToFColorSRGB(), FColor(0x1F, 0xB3, 0x33));
 	return true;
 }
 

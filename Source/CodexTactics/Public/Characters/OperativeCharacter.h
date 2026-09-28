@@ -60,6 +60,14 @@ public:
 	/** Starts or stops sprinting; ignored when sprinting is not allowed. */
 	void SetSprinting(bool bNewSprinting);
 
+	/** Applies role body color and material tint to the operative mesh. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
+	void ApplyBodyColor();
+
+	/** Configures squad index, name, and role color, then applies visuals. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
+	void SetSquadIdentity(int32 InSquadIndex, const FText& InName, const FLinearColor& InColor);
+
 	/** Called by the AI controller when a move request finishes. */
 	void HandleMoveFinished();
 

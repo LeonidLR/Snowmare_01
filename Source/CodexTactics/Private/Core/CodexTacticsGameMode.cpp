@@ -17,12 +17,11 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 	DefaultPawnClass = ATacticalCameraPawn::StaticClass();
 	OperativeClass = AOperativeCharacter::StaticClass();
 
-	// Godot squad: Commander leads, Engineer and Medic-sapper follow in the triangle formation.
-	// Colors follow the Godot battle stats palette (#4db8ff, #ff704d, #5cd65c).
+	// Godot squad: Commander leads (Blue), Engineer (Orange), Medic-sapper (Green) in triangle formation.
 	SquadRoster = {
-		{ LOCTEXT("Commander", "Командир"), FLinearColor::FromSRGBColor(FColor(0x4D, 0xB8, 0xFF)), FVector(0.f, 0.f, 0.f) },
-		{ LOCTEXT("Engineer", "Инженер"), FLinearColor::FromSRGBColor(FColor(0xFF, 0x70, 0x4D)), FVector(-280.f, -260.f, 0.f) },
-		{ LOCTEXT("Medic", "Медик-сапёр"), FLinearColor::FromSRGBColor(FColor(0x5C, 0xD6, 0x5C)), FVector(-280.f, 260.f, 0.f) } };
+		{ LOCTEXT("Commander", "Командир"), FLinearColor::FromSRGBColor(FColor(0x20, 0x80, 0xEC)), FVector(0.f, 0.f, 0.f) },
+		{ LOCTEXT("Engineer", "Инженер"), FLinearColor::FromSRGBColor(FColor(0xFF, 0x61, 0x0F)), FVector(-280.f, -260.f, 0.f) },
+		{ LOCTEXT("Medic", "Медик-сапёр"), FLinearColor::FromSRGBColor(FColor(0x1F, 0xB3, 0x33)), FVector(-280.f, 260.f, 0.f) } };
 }
 
 void ACodexTacticsGameMode::StartPlay()
@@ -61,6 +60,7 @@ void ACodexTacticsGameMode::SpawnSquad()
 		Operative->DisplayName = Entry.DisplayName;
 		Operative->BodyColor = Entry.Color;
 		UGameplayStatics::FinishSpawningActor(Operative, FTransform(Facing, Location));
+		Operative->ApplyBodyColor();
 	}
 }
 

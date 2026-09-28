@@ -67,7 +67,8 @@ void ACodexTacticsPlayerController::CreateInputActions()
 	StanceActions = {
 		MakeAction(TEXT("IA_StanceStand"), EKeys::Z),
 		MakeAction(TEXT("IA_StanceCrouch"), EKeys::C),
-		MakeAction(TEXT("IA_StanceProne"), EKeys::X) };
+		MakeAction(TEXT("IA_StanceProne"), EKeys::V) };
+	SoloModeAction = MakeAction(TEXT("IA_SoloMode"), EKeys::B);
 
 	CameraRotateLeftAction = MakeAction(TEXT("IA_CameraRotateLeft"), EKeys::Q);
 	MappingContext->MapKey(CameraRotateLeftAction, EKeys::Left);
@@ -92,7 +93,9 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 		}
 	}
 
-	// Direct input bindings for mouse wheel (fail-safe for Slate cursor mode)
+	// Mouse wheel via BindKey (architect decision: MouseWheelAxis is unreliable with the Slate cursor).
+	// Keys (Z/C/V stances, B solo, 1-3 selection) go through Enhanced Input only; binding them here as well
+	// would fire every press twice.
 	InputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &ACodexTacticsPlayerController::OnMouseWheelUp);
 	InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &ACodexTacticsPlayerController::OnMouseWheelDown);
 
@@ -108,6 +111,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(StanceActions[0], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceStand);
 	Input->BindAction(StanceActions[1], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceCrouch);
 	Input->BindAction(StanceActions[2], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceProne);
+	Input->BindAction(SoloModeAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::ToggleSoloMode);
 
 	Input->BindAction(CameraRotateLeftAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::CameraRotateLeft);
 	Input->BindAction(CameraRotateRightAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::CameraRotateRight);
@@ -235,15 +239,51 @@ void ACodexTacticsPlayerController::OnClick()
 		return;
 	}
 
-	// Clicking on (or right next to) a squad member selects it.
-	for (AOperativeCharacter* Member : Squad->GetMembers())
+	// 1. Direct hit check or owner check on operative
+	AOperativeCharacter* SelectedMember = nullptr;
+	if (AOperativeCharacter* HitOperative = Cast<AOperativeCharacter>(Hit.GetActor()))
 	{
-		if (FVector::Dist2D(Member->GetActorLocation(), Hit.ImpactPoint) <= SelectRadius)
+		if (Squad->GetMembers().Contains(HitOperative))
 		{
-			Squad->SetLeader(Member);
-			LastClickTime = -1.0;
-			return;
+			SelectedMember = HitOperative;
 		}
+	}
+	else if (Hit.GetActor() && Hit.GetActor()->GetOwner())
+	{
+		if (AOperativeCharacter* OwnerOperative = Cast<AOperativeCharacter>(Hit.GetActor()->GetOwner()))
+		{
+			if (Squad->GetMembers().Contains(OwnerOperative))
+			{
+				SelectedMember = OwnerOperative;
+			}
+		}
+	}
+
+	// 2. Proximity check around cursor impact point
+	if (!SelectedMember)
+	{
+		float ClosestDist = SelectRadius;
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			const float Dist = FVector::Dist2D(Member->GetActorLocation(), Hit.ImpactPoint);
+			if (Dist <= ClosestDist)
+			{
+				ClosestDist = Dist;
+				SelectedMember = Member;
+			}
+		}
+	}
+
+	if (SelectedMember)
+	{
+		Squad->SetLeader(SelectedMember);
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(LOCTEXT("SquadSpeaker", "ОТРЯД"),
+				FText::Format(LOCTEXT("UnitSelected", "👤 Выбран боец: {0}"), SelectedMember->DisplayName));
+		}
+		LastClickTime = -1.0;
+		return;
 	}
 
 	UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>();
@@ -292,7 +332,17 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 {
 	if (USquadSubsystem* Squad = GetSquad())
 	{
-		Squad->SetLeaderByIndex(RosterIndex);
+		if (Squad->SetLeaderByIndex(RosterIndex))
+		{
+			if (AOperativeCharacter* NewLeader = Squad->GetLeader())
+			{
+				if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+				{
+					Messages->PostMessage(LOCTEXT("SquadSpeaker", "ОТРЯД"),
+						FText::Format(LOCTEXT("UnitSelected", "👤 Выбран боец: {0}"), NewLeader->DisplayName));
+				}
+			}
+		}
 	}
 }
 
@@ -303,13 +353,62 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 	{
 		return;
 	}
-	if (IsInputKeyDown(EKeys::LeftAlt) || IsInputKeyDown(EKeys::RightAlt))
+	AOperativeCharacter* Leader = Squad->GetLeader();
+	if (!Leader)
+	{
+		return;
+	}
+
+	// Godot check: cannot go prone while moving!
+	if (Stance == EOperativeStance::Prone && (Leader->IsMoving() || Leader->GetVelocity().SizeSquared2D() > 10.f))
+	{
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(Leader->DisplayName,
+				LOCTEXT("CannotProneWhileMoving", "⚠️ Нельзя лечь во время движения! Сначала полностью остановитесь."));
+		}
+		return;
+	}
+
+	const bool bSolo = Squad->IsSoloMode();
+	if (bSolo)
+	{
+		Leader->SetStance(Stance);
+	}
+	else
 	{
 		Squad->SetSquadStance(Stance);
 	}
-	else if (AOperativeCharacter* Leader = Squad->GetLeader())
+
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Leader->SetStance(Stance);
+		FText StanceName;
+		switch (Stance)
+		{
+		case EOperativeStance::Standing: StanceName = LOCTEXT("StanceStanding", "СТОЯ"); break;
+		case EOperativeStance::Crouching: StanceName = LOCTEXT("StanceCrouching", "ПРИСЕВ"); break;
+		case EOperativeStance::Prone: StanceName = LOCTEXT("StanceProne", "ЛЁЖА"); break;
+		default: break;
+		}
+
+		if (bSolo)
+		{
+			Messages->PostMessage(Leader->DisplayName,
+				FText::Format(LOCTEXT("SoloStanceFmt", "Стойка бойца {0}: {1}"), Leader->DisplayName, StanceName));
+		}
+		else
+		{
+			Messages->PostMessage(Leader->DisplayName,
+				FText::Format(LOCTEXT("SquadStanceFmt", "Стойка отряда: {0}"), StanceName));
+		}
+	}
+}
+
+void ACodexTacticsPlayerController::ToggleSoloMode()
+{
+	if (USquadSubsystem* Squad = GetSquad())
+	{
+		Squad->ToggleSoloMode();
 	}
 }
 

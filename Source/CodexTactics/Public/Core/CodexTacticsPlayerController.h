@@ -38,7 +38,7 @@ public:
 
 	/** A click this close to an operative (cm, on the ground plane) selects it instead of moving. */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Input", meta = (ClampMin = "0"))
-	float SelectRadius = 60.f;
+	float SelectRadius = 120.f;
 
 	/** Space pressed / released (public for headless checks that drive the same path as the keyboard). */
 	void SpacePressed();
@@ -64,6 +64,7 @@ private:
 	void StanceStand() { ApplyStance(EOperativeStance::Standing); }
 	void StanceCrouch() { ApplyStance(EOperativeStance::Crouching); }
 	void StanceProne() { ApplyStance(EOperativeStance::Prone); }
+	void ToggleSoloMode();
 	void SelectMember(int32 RosterIndex);
 	void ApplyStance(EOperativeStance Stance);
 	USquadSubsystem* GetSquad() const;
@@ -90,6 +91,9 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UInputAction>> StanceActions;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> SoloModeAction;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> CameraRotateLeftAction;

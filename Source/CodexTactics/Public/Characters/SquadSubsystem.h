@@ -58,6 +58,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool AreFollowersHolding() const { return bFollowersHolding; }
 
+	/** Toggles solo scout mode (Godot main.gd toggle_solo_mode on B key). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
+	void ToggleSoloMode();
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
+	void EnterSoloMode();
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
+	void ExitSoloMode(bool bCausedByLeash = false, float Distance = 0.f);
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
+	bool IsSoloMode() const { return bIsSoloMode; }
+
+	/** Max scout distance from followers in solo mode before auto-exit (cm, 25m matching Godot). */
+	static constexpr float SoloModeMaxDistance = 2500.f;
+
 	/** Formation slot of a follower, or INDEX_NONE for the leader / unknown actors. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	int32 GetFormationSlot(const AOperativeCharacter* Operative) const;
@@ -124,6 +140,7 @@ private:
 	FVector FormationHeading = FVector::ZeroVector;
 	float SlotSwapCooldownRemaining = 0.f;
 	bool bFollowersHolding = false;
+	bool bIsSoloMode = false;
 
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> PauseOrigins;
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FPlannedOrder> PlannedOrders;

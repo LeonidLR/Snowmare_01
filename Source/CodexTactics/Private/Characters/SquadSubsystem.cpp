@@ -4,6 +4,9 @@
 #include "CollisionQueryParams.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "UI/GameMessageSubsystem.h"
+
+#define LOCTEXT_NAMESPACE "SquadSubsystem"
 
 namespace
 {
@@ -78,6 +81,20 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader)
 		NewLeader->StopOperative();
 		FormationHeading = NewLeader->GetActorForwardVector();
 		RebuildFollowers();
+		if (bIsSoloMode)
+		{
+			// Reapply holding and crouch to followers in solo mode
+			for (FFollowerState& Follower : Followers)
+			{
+				if (AOperativeCharacter* Operative = Follower.Operative.Get())
+				{
+					Operative->StopOperative();
+					Operative->SetStance(EOperativeStance::Crouching);
+				}
+				Follower.bParked = true;
+				Follower.RepathTimeRemaining = 0.f;
+			}
+		}
 		UE_LOG(LogCodexTactics, Log, TEXT("Squad leader: %s"), *NewLeader->DisplayName.ToString());
 	}
 	OnLeaderChanged.Broadcast(NewLeader);
@@ -120,6 +137,87 @@ void USquadSubsystem::SetFollowersHolding(bool bHold)
 		}
 		Follower.bParked = bHold;
 		Follower.RepathTimeRemaining = 0.f;
+	}
+}
+
+void USquadSubsystem::ToggleSoloMode()
+{
+	if (bIsSoloMode)
+	{
+		ExitSoloMode(false, 0.f);
+	}
+	else
+	{
+		EnterSoloMode();
+	}
+}
+
+void USquadSubsystem::EnterSoloMode()
+{
+	AOperativeCharacter* LeaderRef = Leader.Get();
+	if (!LeaderRef)
+	{
+		return;
+	}
+
+	bIsSoloMode = true;
+	SetFollowersHolding(true);
+
+	// Followers crouch when holding in solo mode (Godot solo_wait_stance = 1 / CROUCHING)
+	for (FFollowerState& Follower : Followers)
+	{
+		if (AOperativeCharacter* Operative = Follower.Operative.Get())
+		{
+			Operative->SetStance(EOperativeStance::Crouching);
+		}
+	}
+
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(LeaderRef->DisplayName,
+			FText::Format(LOCTEXT("SoloModeOn", "👤 [РЕЖИМ СОЛО: ВКЛ] {0} идёт на разведку один (макс. 25м). Напарники закрепились на позициях в присядке!"),
+				LeaderRef->DisplayName));
+	}
+}
+
+void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
+{
+	if (!bIsSoloMode)
+	{
+		return;
+	}
+
+	bIsSoloMode = false;
+	SetFollowersHolding(false);
+
+	AOperativeCharacter* LeaderRef = Leader.Get();
+	const FText LeaderName = LeaderRef ? LeaderRef->DisplayName : LOCTEXT("SquadDefaultName", "Отряд");
+
+	// Followers sync stance to leader and resume formation
+	if (LeaderRef)
+	{
+		for (FFollowerState& Follower : Followers)
+		{
+			if (AOperativeCharacter* Operative = Follower.Operative.Get())
+			{
+				Operative->SetStance(LeaderRef->GetStance());
+			}
+		}
+	}
+
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		if (bCausedByLeash)
+		{
+			Messages->PostMessage(LeaderName,
+				FText::Format(LOCTEXT("SoloModeLeash", "⚠️ Превышена дистанция соло ({0} м > 25.0 м)! Напарники поднимаются и возвращаются в строй!"),
+					FText::AsNumber(FMath::RoundToFloat(Distance * 10.f) / 10.f)));
+		}
+		else
+		{
+			Messages->PostMessage(LeaderName,
+				LOCTEXT("SoloModeOff", "👥 [РЕЖИМ СОЛО: ВЫКЛ] Напарники выходят из укрытия и возвращаются в строй!"));
+		}
 	}
 }
 
@@ -221,6 +319,7 @@ void USquadSubsystem::RebuildFollowers()
 			FFollowerState& State = Followers.AddDefaulted_GetRef();
 			State.Operative = Member;
 			State.Slot = NextSlot++;
+			State.bParked = bFollowersHolding;
 		}
 	}
 	SlotSwapCooldownRemaining = 0.f;
@@ -234,6 +333,27 @@ void USquadSubsystem::Tick(float DeltaTime)
 	if (!LeaderRef)
 	{
 		return;
+	}
+
+	if (bIsSoloMode)
+	{
+		float MaxDist = 0.f;
+		for (const FFollowerState& Follower : Followers)
+		{
+			if (const AOperativeCharacter* Operative = Follower.Operative.Get())
+			{
+				const float Dist = FVector::Dist2D(LeaderRef->GetActorLocation(), Operative->GetActorLocation());
+				if (Dist > MaxDist)
+				{
+					MaxDist = Dist;
+				}
+			}
+		}
+
+		if (MaxDist > SoloModeMaxDistance)
+		{
+			ExitSoloMode(true, MaxDist / 100.f);
+		}
 	}
 
 	FormationHeading = SquadFormation::SmoothHeading(FormationConfig, FormationHeading, LeaderRef->GetActorForwardVector(), DeltaTime);
@@ -351,3 +471,5 @@ bool USquadSubsystem::IsSlotPathBlocked(const AOperativeCharacter& LeaderRef, co
 	FHitResult Hit;
 	return GetWorld()->LineTraceSingleByChannel(Hit, LeaderRef.GetActorLocation() + Offset, SlotLocation + Offset, ECC_Visibility, Params);
 }
+
+#undef LOCTEXT_NAMESPACE
