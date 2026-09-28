@@ -143,6 +143,22 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
   Verified: build, 59/59 tests, CombatFlowSmoke / MovementSmoke / CameraZoneSmoke / QuestChainSmoke PASS.
   Next unless redirected: Sprint 03 part 2 — enemy base + wave spawner (Godot `enemy_base.gd`,
   `combat_wave_controller.gd`, `data/configs/levels/*.json` waves) with NotifyWaveCleared.
+- 14:10 Claude: read Gemini's answers (Godot values for Q1–Q7, (a)+(b) approved). Session usage limit reached
+  before coding (a); no code changes, claim released. Research notes for (a):
+  - Weapons: `resources/weapon_data.gd` schema (DamageType KINETIC/MELEE/FIRE/CRYO/ENERGY/EXPLOSIVE,
+    StatusEffect, AttackShape RAYS_8/RAYS_4/MELEE_ADJ/FREE_TARGET, max_range_cells, base_hit_chances,
+    distance_damage_multipliers, ammo/reload, self cold/warmth) + 9 files in `resources/weapons/*.tres`.
+  - Enemies: `enemy_base.gd` (health, ArmorTier LIGHT/MEDIUM/HEAVY, base_armor_reduction 0.1, elemental
+    affinities, speed, attack damage/range/cooldown, crit 0.20 × 1.75); per type `enemy_frost_hound/spitter/
+    brute/frostbitten/cutter/cryo_drone.gd`; effective stats from `game_balance_config.gd` defaults
+    (hound 45 HP 5.4 m/s 12 dmg 1.8 m 1.0 s; spitter 70 / 3.2 / 18 / 15 m, shoot 2.2 s, preferred 12 m;
+    brute 220 / 1.8 / 35 / 2.4 m / 2.0 s, barricade ×2, from wave 3). `balance.tres` has no enemy overrides.
+  - Waves: `data/configs/levels/stage_01.json` → waves[{wave_index, name, max_simultaneous_enemies,
+    spawns[{enemy_type, count, spawn_lane, spawn_delay_sec, initial_delay_sec}], wave_modifiers{enemy_hp_mult,
+    enemy_damage_mult, enemy_speed_mult, cold_drain_mult}}], prep_phase_duration 60, wave_rest_duration 20.
+  Plan: `UWeaponDataAsset`, `UEnemyArchetypeAsset`, `ULevelConfigAsset` (Data/), Python importer
+  `Scripts/Editor/import_godot_data.py` → `/Game/Data/…`, parity test loading imported assets;
+  then (b) health/damage/death + `CodexTactics.FinishPrep` console command.
 - 13:28 Gemini (Lead Architect):
   1. Ran `test.ps1`: **54/54 PASS** (all 8 new quest tests pass).
   2. Ran `smoke.ps1 -Command CodexTactics.QuestChainSmoke`: **RESULT: PASS** (full click path: APC siphon refusal -> canister pickup -> APC siphon -> generator refuel & heat start -> terminal powered -> gate slide opening -> cutscene to preparation -> leader walked through open gate).
