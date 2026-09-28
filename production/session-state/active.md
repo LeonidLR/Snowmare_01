@@ -1,41 +1,21 @@
 # Session State — CodexTactics (UE 5.8 port)
 
 <!-- STATUS -->
-Epic: Godot → UE port
-Feature: Phase 5 / Vertical Slice — Quests & Interactables (Canister, APC, Generator, Gate)
-Task: Implement QuestSubsystem, InteractableActor, GateActor and parity tests (per TANDEM.md directive)
+Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
+Feature: Phase 4/5 world systems — interaction, relocation, deployables
+Task: next = loot crates (docs/port/HANDOFF.md §8.1)
 <!-- /STATUS -->
 
+**The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
+
 ## Mode (user, 2026-09-28)
-Full port with identical behaviour; autonomous work through `docs/port/PORT_MATRIX.md`, commit each verified
-system, ask only on real design forks. Godot project is read-only (may be run for reference).
-Supervisor Directive (Gemini): consult `docs/port/ARCHITECT_SUPERVISOR_DIRECTIVE.md` for exact formulas & parity rules.
+- Full port with identical behaviour; work autonomously through PORT_MATRIX / HANDOFF §8, commit each verified
+  system, ask only on real design forks. Godot project is read-only.
+- Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
+- The user may close / reopen the Unreal Editor for builds (graceful close only).
 
-
-## Done
-- Phase 0 skeleton (commit 2b3b110).
-- Game flow FSM (commit cf882c7): `GameFlow/`, 25 tests.
-- Squad movement: `Characters/`, `Camera/TacticalCameraPawn`, player controller input, GameMode squad spawn,
-  test map `/Game/Maps/L_MovementTest` (created by `Scripts/Editor/create_movement_test_map.py`),
-  headless check `Scripts/smoke.ps1` (`CodexTactics.MovementSmoke` → PASS), 39 automation tests pass.
-
-## How to verify
-- `Scripts/build.ps1`, `Scripts/test.ps1`, `Scripts/smoke.ps1` (editor must be closed to link).
-- NavMesh: `NavMeshBoundsVolume` in each level + `RuntimeGeneration=Dynamic` (no baked navmesh).
-- Unreal MCP: `.mcp.json` → http://127.0.0.1:8000/mcp, server autostarts with the editor.
-
-## Decisions (2026-09-28)
-- Name CodexTactics; no GAS; Ultra Dynamic Sky/Weather in Phase 6.
-- Turn-based only from WaveCombat/RealTime (deviation from Godot, see PORT_MATRIX).
-- Movement: NavMesh + Detour Crowd; formation numbers from Godot code (2.8 m back, 2.6 m side); no stamina.
-- Effective speeds from balance.tres: walk 2.2, run 7.25, crouch 1.25 m/s, prone x0.28.
-
-## Next
-Port order now follows the user's reference playthrough: `docs/port/REFERENCE_PLAYTHROUGH_01.md`
-(vertical slice: camera → UI shell → cold/heat → interactables/quests → mines → deployables →
-preparation/waves/combat → tactical pause UI → turn-based → content).
-Next task: camera controls (WASD pan, zoom, Q/E 45°) + camera trigger zones (leader only), from `camera.gd`,
-`camera_zone_trigger.gd`.
+## Last verified
+Commit `11d7655`: 100 automation tests, 10 smokes PASS (`Scripts/verify_all.ps1`).
 
 ## Open questions
-- none
+- PlayerStart of L_MovementTest moved to (-180, -1490) — intended? (HANDOFF §7)

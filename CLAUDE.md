@@ -51,6 +51,8 @@ Pure-logic systems get **parity tests** mirroring the Godot tests (same inputs �
 
 ## Workflow
 
+- Handoff (state, system map, traps, next steps, change log): `docs/port/HANDOFF.md` — read it first and keep it
+  current with every commit (any agent must be able to continue from it).
 - Phase plan and status: `docs/port/PORT_MATRIX.md`. Session checkpoint: `production/session-state/active.md` — read it first.
 - Goal: the complete Godot game working in UE with the same behaviour (user decision 2026-09-28).
   Work autonomously through PORT_MATRIX in dependency order; no per-file approval needed.
