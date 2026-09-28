@@ -7,6 +7,12 @@
 
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
+class AOperativeCharacter;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnWeaponFiredDynamic, AOperativeCharacter*, Operative, AActor*, Target, bool, bHit);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWeaponMisfiredDynamic, AOperativeCharacter*, Operative);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnWeaponFiredNative, AOperativeCharacter*, AActor*, bool);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnWeaponMisfiredNative, AOperativeCharacter*);
 
 /** Outcome of a move order. */
 UENUM(BlueprintType)
@@ -102,6 +108,64 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	TObjectPtr<class UHealthComponent> HealthComponent;
+
+	// --- Combat & Weapon System (Godot player.gd parity) ---
+
+	virtual void Tick(float DeltaTime) override;
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
+	void EquipWeapon(class UWeaponDataAsset* NewWeapon);
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
+	void StartReload();
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
+	bool CanShoot() const;
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
+	AActor* FindBestCombatTarget() const;
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
+	void ProcessCombatShooting(float DeltaTime);
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
+	bool ShootAtTarget(AActor* Target);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat")
+	TObjectPtr<class UWeaponDataAsset> CurrentWeapon;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat")
+	int32 CurrentClip = 30;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat")
+	int32 ReserveAmmo = 120;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Combat")
+	bool bIsReloading = false;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Combat")
+	float ReloadTimer = 0.0f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Combat")
+	float ShootTimer = 0.0f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Combat")
+	float MisfireCooldownTimer = 0.0f;
+
+	UPROPERTY(Transient)
+	bool bForceMisfireForTesting = false;
+
+	UPROPERTY(Transient)
+	bool bForceHitForTesting = false;
+
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Combat")
+	FOnWeaponFiredDynamic OnWeaponFired;
+
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Combat")
+	FOnWeaponMisfiredDynamic OnWeaponMisfired;
+
+	FOnWeaponFiredNative OnWeaponFiredNative;
+	FOnWeaponMisfiredNative OnWeaponMisfiredNative;
 
 private:
 	UFUNCTION()

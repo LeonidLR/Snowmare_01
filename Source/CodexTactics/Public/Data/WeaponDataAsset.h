@@ -77,4 +77,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|TurnBased")
 	TArray<float> DistanceDamageMultipliers;
+
+	UFUNCTION(BlueprintPure, Category = "Weapon|TurnBased")
+	float GetHitChanceForDistance(int32 DistanceCells) const
+	{
+		if (BaseHitChances.Num() == 0)
+		{
+			return 0.85f;
+		}
+		const int32 Index = FMath::Clamp(DistanceCells - 1, 0, BaseHitChances.Num() - 1);
+		return BaseHitChances[Index];
+	}
 };

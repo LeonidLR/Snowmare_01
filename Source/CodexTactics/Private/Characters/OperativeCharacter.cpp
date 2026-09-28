@@ -4,8 +4,10 @@
 #include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Data/WeaponDataAsset.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -21,7 +23,7 @@ namespace
 
 AOperativeCharacter::AOperativeCharacter()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 
 	// Godot capsule: radius 0.4 m, height 1.8 m.
 	GetCapsuleComponent()->InitCapsuleSize(40.f, 90.f);
@@ -238,4 +240,240 @@ void AOperativeCharacter::ApplyMovementParams(float SpeedOverride)
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	Movement->MaxWalkSpeed = SpeedOverride >= 0.f ? SpeedOverride : GetMaxSpeed();
 	Movement->RotationRate = FRotator(0.f, OperativeMovementRules::GetTurnRate(MovementConfig, Stance), 0.f);
+}
+
+void AOperativeCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+	ProcessCombatShooting(DeltaTime);
+}
+
+void AOperativeCharacter::EquipWeapon(UWeaponDataAsset* NewWeapon)
+{
+	CurrentWeapon = NewWeapon;
+	if (CurrentWeapon)
+	{
+		CurrentClip = CurrentWeapon->MaxClipSize;
+		ReserveAmmo = CurrentWeapon->DefaultReserveAmmo;
+	}
+	bIsReloading = false;
+	ReloadTimer = 0.0f;
+	ShootTimer = 0.0f;
+}
+
+void AOperativeCharacter::StartReload()
+{
+	if (bIsReloading || ReserveAmmo <= 0)
+	{
+		return;
+	}
+
+	const int32 MaxClip = CurrentWeapon ? CurrentWeapon->MaxClipSize : 30;
+	if (CurrentClip >= MaxClip)
+	{
+		return;
+	}
+
+	bIsReloading = true;
+	ReloadTimer = CurrentWeapon ? CurrentWeapon->ReloadTime : 2.0f;
+}
+
+bool AOperativeCharacter::CanShoot() const
+{
+	if (!HealthComponent || !HealthComponent->IsAlive())
+	{
+		return false;
+	}
+	if (bSprinting || bCarrying || bIsReloading)
+	{
+		return false;
+	}
+	return true;
+}
+
+AActor* AOperativeCharacter::FindBestCombatTarget() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	const float MaxRange = CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.0f;
+	const FVector MyLoc = GetActorLocation();
+
+	AActor* BestTarget = nullptr;
+	float MinDistSq = MaxRange * MaxRange;
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Candidate = *It;
+		if (!Candidate || !Candidate->ActorHasTag(FName(TEXT("Enemy"))) || Candidate->IsHidden())
+		{
+			continue;
+		}
+
+		if (UHealthComponent* HC = Candidate->FindComponentByClass<UHealthComponent>())
+		{
+			if (!HC->IsAlive())
+			{
+				continue;
+			}
+		}
+
+		const float DistSq = FVector::DistSquared2D(MyLoc, Candidate->GetActorLocation());
+		if (DistSq < MinDistSq)
+		{
+			MinDistSq = DistSq;
+			BestTarget = Candidate;
+		}
+	}
+
+	return BestTarget;
+}
+
+void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
+{
+	if (!HealthComponent || !HealthComponent->IsAlive())
+	{
+		return;
+	}
+
+	if (MisfireCooldownTimer > 0.0f)
+	{
+		MisfireCooldownTimer -= DeltaTime;
+	}
+
+	if (bIsReloading)
+	{
+		ReloadTimer -= DeltaTime;
+		if (ReloadTimer <= 0.0f)
+		{
+			bIsReloading = false;
+			const int32 MaxClip = CurrentWeapon ? CurrentWeapon->MaxClipSize : 30;
+			const int32 Needed = MaxClip - CurrentClip;
+			const int32 Added = FMath::Min(Needed, ReserveAmmo);
+			CurrentClip += Added;
+			ReserveAmmo -= Added;
+		}
+		return;
+	}
+
+	if (ShootTimer > 0.0f)
+	{
+		ShootTimer -= DeltaTime;
+	}
+
+	if (!CanShoot())
+	{
+		return;
+	}
+
+	// Only auto-shoot when in WaveCombat real-time mode (or if no game flow subsystem exists, e.g. standalone test)
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>())
+		{
+			if (Flow->GetPhase() != ECodexGamePhase::WaveCombat || Flow->GetCombatMode() != ECodexCombatMode::RealTime)
+			{
+				return;
+			}
+		}
+	}
+
+	if (CurrentClip <= 0)
+	{
+		if (ReserveAmmo > 0)
+		{
+			StartReload();
+		}
+		return;
+	}
+
+	AActor* Target = FindBestCombatTarget();
+	if (!Target)
+	{
+		return;
+	}
+
+	// Turn towards target smoothly
+	FRotator LookRot = (Target->GetActorLocation() - GetActorLocation()).Rotation();
+	LookRot.Pitch = 0.f;
+	LookRot.Roll = 0.f;
+	SetActorRotation(FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 12.0f));
+
+	if (ShootTimer <= 0.0f && MisfireCooldownTimer <= 0.0f)
+	{
+		ShootAtTarget(Target);
+	}
+}
+
+bool AOperativeCharacter::ShootAtTarget(AActor* Target)
+{
+	if (!Target || CurrentClip <= 0)
+	{
+		return false;
+	}
+
+	CurrentClip--;
+
+	// Check cold misfire (Godot parity: >= 60% cold, max 35% chance)
+	bool bMisfire = bForceMisfireForTesting;
+	if (!bMisfire && ColdLevel >= 60.0f)
+	{
+		const float Denom = FMath::Max(1.0f, 100.0f - 60.0f);
+		const float MisfireT = FMath::Clamp((ColdLevel - 60.0f) / Denom, 0.0f, 1.0f);
+		const float MisfireChance = 0.35f * MisfireT;
+		if (FMath::FRand() < MisfireChance)
+		{
+			bMisfire = true;
+		}
+	}
+
+	if (bMisfire)
+	{
+		MisfireCooldownTimer = 1.5f;
+		OnWeaponMisfired.Broadcast(this);
+		OnWeaponMisfiredNative.Broadcast(this);
+		return false;
+	}
+
+	ShootTimer = CurrentWeapon ? CurrentWeapon->FireRate : 0.65f;
+
+	const float Dist = FVector::Dist2D(GetActorLocation(), Target->GetActorLocation());
+	const float DistM = Dist / 100.0f;
+	const int32 DistCells = FMath::Max(1, FMath::RoundToInt(DistM / 1.5f));
+
+	float HitChance = CurrentWeapon ? CurrentWeapon->GetHitChanceForDistance(DistCells) : 0.85f;
+	if (ColdLevel > 50.0f)
+	{
+		const float ColdPenalty = 0.40f * ((ColdLevel - 50.0f) / 50.0f);
+		HitChance = FMath::Clamp(HitChance - ColdPenalty, 0.05f, 0.99f);
+	}
+
+	const bool bHit = bForceHitForTesting || (FMath::FRand() <= HitChance);
+	OnWeaponFired.Broadcast(this, Target, bHit);
+	OnWeaponFiredNative.Broadcast(this, Target, bHit);
+
+	if (bHit)
+	{
+		FDamageSpec Spec;
+		Spec.Amount = CurrentWeapon ? CurrentWeapon->BaseDamage : 18.0f;
+		Spec.DamageType = CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic;
+		Spec.ArmorPenetration = CurrentWeapon ? CurrentWeapon->ArmorPenetration : 0.20f;
+		Spec.AttackerSource = DisplayName.ToString();
+		if (CurrentWeapon)
+		{
+			Spec.StatusEffect = CurrentWeapon->StatusEffect;
+			Spec.StatusDuration = CurrentWeapon->StatusDuration;
+			Spec.StatusTickDamage = CurrentWeapon->StatusTickDamage;
+		}
+
+		if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
+		{
+			TargetHealth->TakeDamage(Spec);
+		}
+	}
+
+	return bHit;
 }
