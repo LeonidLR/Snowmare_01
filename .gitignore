@@ -1,0 +1,19 @@
+# Unreal generated
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+Build/
+.vs/
+.idea/
+*.sln
+*.slnx
+*.suo
+*.sdf
+*.VC.db
+*.opensdf
+*.code-workspace
+
+# Plugin build output (keep plugin sources)
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
