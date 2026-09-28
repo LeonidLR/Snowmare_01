@@ -11,6 +11,7 @@ class ULootDialogWidget;
 class UMissionFailedWidget;
 class UMainMenuWidget;
 class UDialogueWidget;
+class UActionBarWidget;
 class ALootCrateActor;
 class UFont;
 
@@ -52,6 +53,10 @@ public:
 	/** Bottom dialogue window class (a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UDialogueWidget> DialogueWidgetClass;
+
+	/** Bottom tactical bar class (a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UActionBarWidget> ActionBarWidgetClass;
 
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
@@ -106,6 +111,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UDialogueWidget> Dialogue;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UActionBarWidget> ActionBar;
 
 	void DrawMessageFeed();
 	/** Draws the objective banner; returns its bottom edge (Y). */

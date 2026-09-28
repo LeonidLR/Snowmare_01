@@ -54,6 +54,18 @@ public:
 	 */
 	void IssueTargetedShot(AActor* HitActor);
 
+	/** Action bar stance slot: Standing -> Crouching -> Prone (prone skipped while moving); the squad follows outside the
+	 * preparation unless in solo mode (Godot _cycle_leader_stance). */
+	void CycleLeaderStance();
+
+	/** Action bar «ПЕР»: toggles «click an object to move it» (cancels an active placement). Godot _on_relocate_slot_clicked. */
+	void ToggleRelocateSelectMode();
+
+	bool IsRelocateSelectMode() const { return bRelocateSelectMode; }
+
+	/** Action bar squad slot / keys 1..3. */
+	void SelectSquadMember(int32 RosterIndex) { SelectMember(RosterIndex); }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
@@ -69,6 +81,8 @@ private:
 	void CreateInputActions();
 	void OnClick();
 	void RestartMission();
+	/** Next object click starts its relocation (action bar «ПЕР»). */
+	bool bRelocateSelectMode = false;
 	/** True while a story dialogue blocks world orders (Godot _unhandled_input). */
 	bool IsDialogueOpen() const;
 	void DialogueNext();

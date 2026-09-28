@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-29 by Claude, after commit `2b17909`.
+Last update: 2026-09-29 by Claude, after the action bar commit (see §10).
 
 ---
 
@@ -45,7 +45,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **110 automation tests, 16 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **110 automation tests, 17 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -64,6 +64,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `TargetedShotSmoke` | Ctrl + click via `IssueTargetedShot`: barrel explodes (tracer + flash spawned), prone mine shot, trapped crate / barricade detonated, untrapped crate only pierced, 1 round each, priority enemy over a nearer one, pause-planned shot (with a plan marker) fires on release, markers cleared |
 | `MainMenuSmoke` (run with `-Extra "-ForceMainMenu"`, verify_all does it) | start menu open + world paused, «Начать бой» (quest chain done, squad healed / warmed, cutscene), Ctrl + X repeats the mode, «Начать заново» shows the menu |
 | `DialogueSmoke` (`-ForceMainMenu`, verify_all does it) | «Начать игру» opens the 15-line intro briefing, Space advances (no pause), skip closes, preparation lines reach the feed with the Godot delay |
+| `ActionBarSmoke` | action bar stance slot cycles the squad, «ПЕР» pick mode on / off, squad slot 2 selects the engineer |
 | `MissionSmoke` | objective banner texts (start → preparation → wave), an operative's death fails the mission (GameOver, reason, time stop), restart reloads a fresh exploration |
 | `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
 | `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot |
@@ -165,6 +166,13 @@ Module `CodexTactics` (runtime). Folder → class → Godot reference.
   Starting the generator also powers all turrets. Godot `interactable.gd breakdown_generator / repair_generator`.
 - `Quests/QuestChain`, `QuestSubsystem`, `Interactables/GateActor`. Godot `quest_manager.gd`, `gate.gd`.
 
+**Action bar** — `UI/ActionBarWidget` (Godot TacticalBar, bottom centre): «ПЕРЕД» / «ИНВ» (transfer, inventory —
+disabled until ported), weapon slot «M16 [clip/reserve] | [G] Граната» («Перезарядка...»), «ПЕР» (object-pick mode:
+`ACodexTacticsPlayerController::ToggleRelocateSelectMode`, next object click → `StartRelocate`; «АКТИВ» while
+picking / placing), stance letter С / П / Л (click → `CycleLeaderStance`), «ОБОР» (guard — disabled until ported),
+squad slots [1] КОМ [2] ИНЖ [3] МЕД + HP / cold bars, [4] РЕЗ locked. Hidden while the start menu is open. Godot
+`main.gd _update_tactical_command_bar`, `_cycle_leader_stance`, `_on_relocate_slot_clicked`.
+
 **Dialogues** — `Data/DialogueSequenceAsset` (lines: speaker, text, delay) imported from the Godot .tres by
 `Scripts/Editor/import_dialogues.py` into `/Game/Data/Dialogues/DA_*` (intro, prep, wave rest, victory, Susanin
 recruitment) — re-run it when Godot texts change, never hand-edit. `UI/DialogueSubsystem`: `StartDialogue` = bottom
@@ -227,7 +235,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    the generator yet (Gemini's enemy AI targets operatives only) — add with the enemy AI pass.
 4. ~~Ctrl + click targeted shots~~ — done (see §10).
 5. UI shell from REFERENCE_PLAYTHROUGH: ~~objective banner, mission failed + Ctrl + X, start menu~~ (done, §10);
-   ~~dialogue window~~ (done); next: bottom action bar, preparation / pause banners, pre-combat cutscene card.
+   ~~dialogue window, bottom action bar~~ (done); next: preparation / pause banners, pre-combat cutscene card,
+   then inventory drawer / transfer / guard (action bar slots are placeholders).
 6. Turn-based combat manager on the Gorky grid (Godot `Scripts/tactics/turn_based_combat_manager.gd`).
 7. Phase 2 data importer (JSON / .tres → DataAssets) replacing hand-typed values (§9).
 8. Content: level, VFX, cutscene; character "twisted" look issue (§6).
@@ -258,6 +267,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
+| (action bar commit) | Bottom tactical bar (weapon, relocation pick mode, stance cycle, squad slots with HP / cold bars) |
 | `2b17909` | Dialogue assets imported from Godot, bottom dialogue window, feed dialogues for prep / wave rest / victory, input blocking |
 | `d854fde` | Start menu (3 modes), session subsystem, Ctrl + X repeats the mode, CombatStart point, arrows kept as «->» |
 | `70ba255` | Objective banner, mission failed screen + restart, Ctrl + X, Godot sRGB colours in UMG, `verify_all` catches test crashes |

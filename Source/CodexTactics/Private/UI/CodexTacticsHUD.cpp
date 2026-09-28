@@ -12,6 +12,7 @@
 #include "Interactables/InteractionSubsystem.h"
 #include "UI/ActionMenuWidget.h"
 #include "UI/LootDialogWidget.h"
+#include "UI/ActionBarWidget.h"
 #include "UI/DialogueSubsystem.h"
 #include "UI/DialogueWidget.h"
 #include "UI/MainMenuWidget.h"
@@ -107,6 +108,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	MissionFailedWidgetClass = UMissionFailedWidget::StaticClass();
 	MainMenuWidgetClass = UMainMenuWidget::StaticClass();
 	DialogueWidgetClass = UDialogueWidget::StaticClass();
+	ActionBarWidgetClass = UActionBarWidget::StaticClass();
 }
 
 void ACodexTacticsHUD::BeginPlay()
@@ -146,6 +148,14 @@ void ACodexTacticsHUD::BeginPlay()
 		{
 			MainMenu->AddToViewport(30);
 			MainMenu->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+	if (ActionBarWidgetClass && GetOwningPlayerController())
+	{
+		ActionBar = CreateWidget<UActionBarWidget>(GetOwningPlayerController(), ActionBarWidgetClass);
+		if (ActionBar)
+		{
+			ActionBar->AddToViewport(5);
 		}
 	}
 	if (DialogueWidgetClass && GetOwningPlayerController())
@@ -211,6 +221,11 @@ void ACodexTacticsHUD::HandleMainMenuChanged(bool bOpen)
 	if (MainMenu)
 	{
 		MainMenu->SetVisibility(bOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+	// Godot: the tactical bar is hidden until the game starts.
+	if (ActionBar)
+	{
+		ActionBar->SetVisibility(bOpen ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible);
 	}
 }
 

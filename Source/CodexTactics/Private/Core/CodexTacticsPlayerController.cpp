@@ -9,6 +9,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/InteractionSubsystem.h"
+#include "Interactables/RelocationRules.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Misc/App.h"
 #include "UI/GameMessageSubsystem.h"
@@ -345,6 +346,20 @@ void ACodexTacticsPlayerController::OnClick()
 	FHitResult Hit;
 	if (!Leader || !GetHitResultUnderCursor(ECC_Visibility, false, Hit))
 	{
+		return;
+	}
+
+	// Action bar «ПЕР»: the clicked object is picked up for relocation.
+	if (bRelocateSelectMode)
+	{
+		if (AInteractableActor* Object = Cast<AInteractableActor>(Hit.GetActor()))
+		{
+			bRelocateSelectMode = false;
+			if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
+			{
+				Relocation->StartRelocate(Object, Leader);
+			}
+		}
 		return;
 	}
 
@@ -733,6 +748,62 @@ void ACodexTacticsPlayerController::RestartMission()
 	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
 	{
 		Mission->RestartMission(/*bQuick*/ true);
+	}
+}
+
+void ACodexTacticsPlayerController::CycleLeaderStance()
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader || IsDialogueOpen())
+	{
+		return;
+	}
+	EOperativeStance Next = static_cast<EOperativeStance>((static_cast<int32>(Leader->GetStance()) + 1) % 3);
+	if (Next == EOperativeStance::Prone && (Leader->IsMoving() || Leader->GetVelocity().SizeSquared2D() > 10.f))
+	{
+		Next = EOperativeStance::Standing; // Godot: prone is skipped while moving
+	}
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const bool bPreparation = Flow && Flow->GetPhase() == ECodexGamePhase::Preparation;
+	if (bPreparation || Squad->IsSoloMode())
+	{
+		Leader->SetStance(Next);
+	}
+	else
+	{
+		Squad->SetSquadStance(Next);
+	}
+}
+
+void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
+{
+	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	if (Flow && !RelocationRules::CanRelocateNow(Flow->GetPhase(), Flow->GetCombatMode()))
+	{
+		PostHeadquarters(LOCTEXT("RelocateCombat", "⚠️ Во время боя менять расположение объектов нельзя! Используйте тактическую паузу [ПРОБЕЛ]."));
+		return;
+	}
+	if (bRelocateSelectMode || (Relocation && Relocation->IsPlacing()))
+	{
+		bRelocateSelectMode = false;
+		if (Relocation && Relocation->IsPlacing())
+		{
+			Relocation->CancelPlacement();
+		}
+		if (Messages)
+		{
+			Messages->PostMessage(LOCTEXT("Engineering", "Инженерия"), LOCTEXT("RelocateCancelled", "Режим перемещения объектов отменен."));
+		}
+		return;
+	}
+	bRelocateSelectMode = true;
+	if (Messages)
+	{
+		Messages->PostMessage(LOCTEXT("Engineering", "Инженерия"),
+			LOCTEXT("RelocatePick", "📦 [ПЕРЕНОС] 1️⃣ Кликните на объект в сцене (бочка, баррикада, ящик, турель, мина), который хотите переместить."));
 	}
 }
 
