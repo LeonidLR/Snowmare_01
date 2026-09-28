@@ -29,9 +29,11 @@ system, ask only on real design forks. Godot project is read-only (may be run fo
 - Effective speeds from balance.tres: walk 2.2, run 7.25, crouch 1.25 m/s, prone x0.28.
 
 ## Next
-Remaining movement extras (vault, box select/group orders, idle roam, tactical-pause orders) come with their systems.
-Next systems in order: tactical grid + LOS (`gorky17_grid_manager.gd`, `gorky17_los.gd`, `gorky17_enums.gd`),
-then data import (Phase 2) so balance values stop living in C++ defaults.
+Port order now follows the user's reference playthrough: `docs/port/REFERENCE_PLAYTHROUGH_01.md`
+(vertical slice: camera → UI shell → cold/heat → interactables/quests → mines → deployables →
+preparation/waves/combat → tactical pause UI → turn-based → content).
+Next task: camera controls (WASD pan, zoom, Q/E 45°) + camera trigger zones (leader only), from `camera.gd`,
+`camera_zone_trigger.gd`.
 
 ## Open questions
 - none
