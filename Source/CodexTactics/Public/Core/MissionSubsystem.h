@@ -7,6 +7,8 @@
 #include "MissionSubsystem.generated.h"
 
 class AOperativeCharacter;
+class ACodexTacticsGameMode;
+class UDialogueSequenceAsset;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMissionObjectiveChanged, const FText&, Objective);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMissionFailed, const FText&, Reason);
@@ -88,12 +90,18 @@ private:
 	void HandleWaveStarted(int32 WaveIndex, int32 TotalEnemies);
 
 	void OpenMainMenu();
+	/** Story dialogue of the game mode (loads the soft reference), or null. */
+	const class UDialogueSequenceAsset* LoadDialogue(TSoftObjectPtr<UDialogueSequenceAsset> ACodexTacticsGameMode::* Member) const;
+	void PostRadio(const FText& Speaker, const FText& Text) const;
+	void HandleVictoryDialogueFinished();
 	/** «Начать бой»: quest chain done, gate open, squad healed / warmed behind the gate, pre-combat cutscene. */
 	void StartCombatMode();
 
 	FText Objective;
 	EMissionStartMode StartMode = EMissionStartMode::None;
 	bool bMainMenuOpen = false;
+	/** Headless checks (menu skipped by the command line) get the radio line instead of the blocking intro dialogue. */
+	bool bHeadlessStart = false;
 	FText FailureReason;
 	ECodexGamePhase LastPhase = ECodexGamePhase::Exploration;
 	bool bCombatFinished = false;

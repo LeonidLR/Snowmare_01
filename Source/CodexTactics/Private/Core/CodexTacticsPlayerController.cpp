@@ -4,6 +4,7 @@
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/EncounterQueries.h"
 #include "Core/MissionSubsystem.h"
+#include "UI/DialogueSubsystem.h"
 #include "Interactables/LootCrateActor.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
@@ -107,6 +108,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &ACodexTacticsPlayerController::OnMouseWheelDown);
 	// Ctrl + X: quick restart, handled before every game mode (Godot main.gd _unhandled_input).
 	InputComponent->BindKey(FInputChord(EKeys::X, false, true, false, false), IE_Pressed, this, &ACodexTacticsPlayerController::RestartMission);
+	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACodexTacticsPlayerController::DialogueNext);
+	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ACodexTacticsPlayerController::DialogueSkip);
 
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!Input)
@@ -202,6 +205,11 @@ void ACodexTacticsPlayerController::RotatePlacement()
 
 void ACodexTacticsPlayerController::SpacePressed()
 {
+	if (IsDialogueOpen())
+	{
+		DialogueNext(); // Godot: Space advances the dialogue instead of pausing
+		return;
+	}
 	SpaceInput.Press();
 }
 
@@ -293,8 +301,34 @@ void ACodexTacticsPlayerController::PostHeadquarters(const FText& Text) const
 	}
 }
 
+bool ACodexTacticsPlayerController::IsDialogueOpen() const
+{
+	const UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>();
+	return Dialogue && Dialogue->IsDialogueOpen();
+}
+
+void ACodexTacticsPlayerController::DialogueNext()
+{
+	if (UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>())
+	{
+		Dialogue->AdvanceLine();
+	}
+}
+
+void ACodexTacticsPlayerController::DialogueSkip()
+{
+	if (UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>())
+	{
+		Dialogue->SkipDialogue();
+	}
+}
+
 void ACodexTacticsPlayerController::OnClick()
 {
+	if (IsDialogueOpen())
+	{
+		return; // the dialogue panel handles its own clicks
+	}
 	// Placement mode: LMB sets the new spot of the object being moved.
 	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
 	{

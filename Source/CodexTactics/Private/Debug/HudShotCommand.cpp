@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu.
+// "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -15,6 +15,8 @@
 #include "Characters/SquadSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Data/DialogueSequenceAsset.h"
+#include "UI/DialogueSubsystem.h"
 #include "Containers/Ticker.h"
 #include "GameFramework/WorldSettings.h"
 #include "CodexTactics.h"
@@ -84,6 +86,14 @@ namespace HudShot
 		const bool bPlace = Args.Contains(TEXT("place"));
 		const bool bShoot = Args.Contains(TEXT("shoot"));
 		const bool bFailed = Args.Contains(TEXT("failed"));
+		if (Args.Contains(TEXT("dialogue")))
+		{
+			if (const UDialogueSequenceAsset* Intro = LoadObject<UDialogueSequenceAsset>(nullptr, TEXT("/Game/Data/Dialogues/DA_DialogueIntro.DA_DialogueIntro")))
+			{
+				World->GetSubsystem<UDialogueSubsystem>()->StartDialogue(Intro);
+				World->GetSubsystem<UDialogueSubsystem>()->AdvanceLine(); // the commander's line
+			}
+		}
 		FTimerHandle PoseHandle;
 		World->GetTimerManager().SetTimer(PoseHandle, FTimerDelegate::CreateLambda([WeakWorld, bWalk, bMenu, bPlace, bShoot, bFailed]()
 		{

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "Interactables/DeployableRules.h"
+class UDialogueSequenceAsset;
 #include "CodexTacticsGameMode.generated.h"
 
 class AOperativeCharacter;
@@ -76,6 +77,19 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
 	TSubclassOf<ATurretActor> TurretClass;
+
+	/** Story dialogues (imported from Godot by Scripts/Editor/import_dialogues.py; Godot main.gd dialogue_* exports). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Dialogue")
+	TSoftObjectPtr<UDialogueSequenceAsset> DialogueMissionStart;
+
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Dialogue")
+	TSoftObjectPtr<UDialogueSequenceAsset> DialoguePreparationStarted;
+
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Dialogue")
+	TSoftObjectPtr<UDialogueSequenceAsset> DialogueWaveRest;
+
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Dialogue")
+	TSoftObjectPtr<UDialogueSequenceAsset> DialogueVictory;
 
 	/** Squad roster in selection order (keys 1..N). */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")

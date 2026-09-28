@@ -6,7 +6,7 @@ param([switch]$SkipBuild)
 $ProjectDir = Split-Path $PSScriptRoot -Parent
 $Smokes = @(
     "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
-    "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke", "MissionSmoke", "MainMenuSmoke"
+    "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke", "MissionSmoke", "MainMenuSmoke", "DialogueSmoke"
 )
 $Failed = @()
 
@@ -29,7 +29,7 @@ if ($TestSummary -notmatch " 0 failed" -or $TestExit -ne 0) { $Failed += "tests 
 foreach ($Smoke in $Smokes) {
     # Headless checks skip the start menu; MainMenuSmoke forces it.
     $SmokeArgs = @("-ExecutionPolicy", "Bypass", "-File", (Join-Path $PSScriptRoot "smoke.ps1"), "-Command", "CodexTactics.$Smoke")
-    if ($Smoke -eq "MainMenuSmoke") { $SmokeArgs += @("-Extra", "-ForceMainMenu") }
+    if ($Smoke -in @("MainMenuSmoke", "DialogueSmoke")) { $SmokeArgs += @("-Extra", "-ForceMainMenu") }
     $null = powershell @SmokeArgs
     $Status = if ($LASTEXITCODE -eq 0) { "PASS" } else { "FAIL"; $Failed += $Smoke }
     Write-Host ("{0,-18} {1}" -f $Smoke, $Status)

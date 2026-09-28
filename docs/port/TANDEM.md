@@ -135,6 +135,8 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: dialogues — Godot .tres imported by script into `/Game/Data/Dialogues`, bottom dialogue window,
+  feed dialogues on prep / wave rest / victory. Controller: Space / Enter / Esc drive the open dialogue.
 - 2026-09-29 Claude: start menu (3 modes) + `UMissionSessionSubsystem`. Levels now open the menu unless the command
   line has -ExecCmds / -NoMainMenu (all smokes unaffected) or after Ctrl + X. `smoke.ps1 -Extra` passes extra args.
 - 2026-09-28 Claude: mission shell — `UMissionSubsystem` (objective, failure, restart), objective banner, mission-failed

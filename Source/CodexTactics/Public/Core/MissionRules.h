@@ -36,6 +36,13 @@ namespace MissionRules
 	 */
 	CODEXTACTICS_API bool GetPhaseObjective(ECodexGamePhase Phase, int32 WaveIndex, float PreparationSeconds, bool bAfterCombat, FText& OutObjective);
 
+	/** Radio lines used when a story dialogue asset is missing (Godot else branches) and after the victory dialogue. */
+	CODEXTACTICS_API FText GetPreparationRadio();
+	CODEXTACTICS_API FText GetWaveRestRadio(float PreparationSeconds);
+	CODEXTACTICS_API FText GetVictoryRadio();
+	/** Objective after the victory dialogue. */
+	CODEXTACTICS_API FText GetAfterVictoryObjective();
+
 	/** «ОБОРОНА: Отразить волну N! Врагов: M». */
 	CODEXTACTICS_API FText GetWaveObjective(int32 WaveIndex, int32 EnemyCount);
 

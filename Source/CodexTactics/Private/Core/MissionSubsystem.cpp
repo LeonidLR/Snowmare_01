@@ -7,7 +7,10 @@
 #include "Misc/CommandLine.h"
 #include "CodexTactics.h"
 #include "Combat/WaveSubsystem.h"
+#include "Core/CodexTacticsGameMode.h"
 #include "Core/MissionRules.h"
+#include "Data/DialogueSequenceAsset.h"
+#include "UI/DialogueSubsystem.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Kismet/GameplayStatics.h"
@@ -42,6 +45,7 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		&& (FParse::Param(CommandLine, TEXT("NoMainMenu")) || FString(CommandLine).Contains(TEXT("-ExecCmds")));
 	const EMissionStartMode AutoMode = MissionRules::GetAutoStartMode(Session && Session->bQuickRestart,
 		Session ? Session->LastMode : EMissionStartMode::None, bSkipMenu);
+	bHeadlessStart = bSkipMenu && !(Session && Session->bQuickRestart);
 	if (Session)
 	{
 		Session->bQuickRestart = false;
@@ -88,10 +92,37 @@ void UMissionSubsystem::StartMission(EMissionStartMode Mode)
 		return;
 	}
 	SetObjective(MissionRules::GetModeObjective(Mode));
+	// Godot: the intro briefing in the bottom dialogue window, the radio line only without it.
+	UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>();
+	const UDialogueSequenceAsset* Intro = bHeadlessStart ? nullptr : LoadDialogue(&ACodexTacticsGameMode::DialogueMissionStart);
+	if (Intro && Dialogue)
+	{
+		Dialogue->StartDialogue(Intro);
+	}
+	else
+	{
+		PostRadio(LOCTEXT("Commander", "Командир"), MissionRules::GetModeRadio(Mode));
+	}
+}
+
+const UDialogueSequenceAsset* UMissionSubsystem::LoadDialogue(TSoftObjectPtr<UDialogueSequenceAsset> ACodexTacticsGameMode::* Member) const
+{
+	const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
+	return GameMode ? (GameMode->*Member).LoadSynchronous() : nullptr;
+}
+
+void UMissionSubsystem::PostRadio(const FText& Speaker, const FText& Text) const
+{
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Messages->PostMessage(LOCTEXT("Commander", "Командир"), MissionRules::GetModeRadio(Mode));
+		Messages->PostMessage(Speaker, Text);
 	}
+}
+
+void UMissionSubsystem::HandleVictoryDialogueFinished()
+{
+	SetObjective(MissionRules::GetAfterVictoryObjective());
+	PostRadio(LOCTEXT("HQ", "ШТАБ"), MissionRules::GetVictoryRadio());
 }
 
 void UMissionSubsystem::StartCombatMode()
@@ -165,6 +196,37 @@ void UMissionSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexComba
 	if (Flow && MissionRules::GetPhaseObjective(Phase, Flow->GetWaveIndex(), Flow->GetPreparationTimeRemaining(), bCombatFinished, PhaseObjective))
 	{
 		SetObjective(PhaseObjective);
+	}
+	// Godot play_dialogue: story lines in the message feed (radio fallbacks without the assets).
+	UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>();
+	if (Phase == ECodexGamePhase::Preparation && Flow)
+	{
+		const bool bFirst = Flow->GetWaveIndex() <= 1;
+		const UDialogueSequenceAsset* Lines = LoadDialogue(bFirst ? &ACodexTacticsGameMode::DialoguePreparationStarted : &ACodexTacticsGameMode::DialogueWaveRest);
+		if (Lines && Dialogue)
+		{
+			Dialogue->PlayInFeed(Lines);
+		}
+		else if (bFirst)
+		{
+			PostRadio(LOCTEXT("Commander", "Командир"), MissionRules::GetPreparationRadio());
+		}
+		else
+		{
+			PostRadio(LOCTEXT("HQ", "ШТАБ"), MissionRules::GetWaveRestRadio(Flow->GetPreparationTimeRemaining()));
+		}
+	}
+	else if (Phase == ECodexGamePhase::PostCombat)
+	{
+		const UDialogueSequenceAsset* Lines = LoadDialogue(&ACodexTacticsGameMode::DialogueVictory);
+		if (Lines && Dialogue)
+		{
+			Dialogue->PlayInFeed(Lines, FSimpleDelegate::CreateUObject(this, &UMissionSubsystem::HandleVictoryDialogueFinished));
+		}
+		else
+		{
+			HandleVictoryDialogueFinished();
+		}
 	}
 }
 

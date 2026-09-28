@@ -58,13 +58,34 @@ bool MissionRules::GetPhaseObjective(ECodexGamePhase Phase, int32 WaveIndex, flo
 	case ECodexGamePhase::Exploration:
 		if (bAfterCombat)
 		{
-			OutObjective = LOCTEXT("Explore", "РУБЕЖ ЗАЧИЩЕН: Исследуйте территорию КПП");
+			OutObjective = GetAfterVictoryObjective();
 			return true;
 		}
 		return false;
 	default:
 		return false;
 	}
+}
+
+FText MissionRules::GetPreparationRadio()
+{
+	return LOCTEXT("PrepRadio", "Мы во внутреннем дворе КПП! Отряду держать позиции, приступаем к инженерной подготовке рубежа!");
+}
+
+FText MissionRules::GetWaveRestRadio(float PreparationSeconds)
+{
+	return FText::Format(LOCTEXT("RestRadio", "Необходимо подготовиться к следующей волне! У вас {0} секунд на перегруппировку."),
+		FMath::TruncToInt(PreparationSeconds));
+}
+
+FText MissionRules::GetVictoryRadio()
+{
+	return LOCTEXT("VictoryRadio", "Отличная работа, бойцы! Рубеж полностью в безопасности. Можете продолжить исследование.");
+}
+
+FText MissionRules::GetAfterVictoryObjective()
+{
+	return LOCTEXT("Explore", "РУБЕЖ ЗАЧИЩЕН: Исследуйте территорию КПП");
 }
 
 FText MissionRules::GetWaveObjective(int32 WaveIndex, int32 EnemyCount)

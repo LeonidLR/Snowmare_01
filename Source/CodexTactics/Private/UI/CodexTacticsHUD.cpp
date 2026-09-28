@@ -12,6 +12,8 @@
 #include "Interactables/InteractionSubsystem.h"
 #include "UI/ActionMenuWidget.h"
 #include "UI/LootDialogWidget.h"
+#include "UI/DialogueSubsystem.h"
+#include "UI/DialogueWidget.h"
 #include "UI/MainMenuWidget.h"
 #include "UI/MissionFailedWidget.h"
 #include "HAL/IConsoleManager.h"
@@ -104,6 +106,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	LootDialogWidgetClass = ULootDialogWidget::StaticClass();
 	MissionFailedWidgetClass = UMissionFailedWidget::StaticClass();
 	MainMenuWidgetClass = UMainMenuWidget::StaticClass();
+	DialogueWidgetClass = UDialogueWidget::StaticClass();
 }
 
 void ACodexTacticsHUD::BeginPlay()
@@ -145,6 +148,19 @@ void ACodexTacticsHUD::BeginPlay()
 			MainMenu->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
+	if (DialogueWidgetClass && GetOwningPlayerController())
+	{
+		Dialogue = CreateWidget<UDialogueWidget>(GetOwningPlayerController(), DialogueWidgetClass);
+		if (Dialogue)
+		{
+			Dialogue->AddToViewport(15);
+			Dialogue->Refresh();
+		}
+	}
+	if (UDialogueSubsystem* Dialogues = GetWorld()->GetSubsystem<UDialogueSubsystem>())
+	{
+		Dialogues->OnDialogueChanged.AddDynamic(this, &ACodexTacticsHUD::HandleDialogueChanged);
+	}
 	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
 	{
 		Mission->OnMissionFailed.AddDynamic(this, &ACodexTacticsHUD::HandleMissionFailed);
@@ -179,6 +195,14 @@ void ACodexTacticsHUD::HandleMissionFailed(const FText& Reason)
 	if (MissionFailed)
 	{
 		MissionFailed->ShowFailure(Reason);
+	}
+}
+
+void ACodexTacticsHUD::HandleDialogueChanged(bool bOpen)
+{
+	if (Dialogue)
+	{
+		Dialogue->Refresh();
 	}
 }
 
