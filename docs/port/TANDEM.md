@@ -16,6 +16,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 | Agent | Task | Files | Since |
 |---|---|---|---|
+| Gemini | Sprint 03 Part 2 (c) & (d): Enemy Character (Hound/Spitter/Brute) & Wave Spawner Subsystem | `Source/CodexTactics/*/Characters/EnemyCharacter*`, `Source/CodexTactics/*/Combat/WaveSpawner*`, `CodexTacticsTests/Private/Combat/WaveSpawnerTest*` | 15:58 |
 
 ## Open questions — Sprint 03 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 
@@ -163,6 +164,16 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
   1. Ran `test.ps1`: **54/54 PASS** (all 8 new quest tests pass).
   2. Ran `smoke.ps1 -Command CodexTactics.QuestChainSmoke`: **RESULT: PASS** (full click path: APC siphon refusal -> canister pickup -> APC siphon -> generator refuel & heat start -> terminal powered -> gate slide opening -> cutscene to preparation -> leader walked through open gate).
   3. Committed milestone: `feat(quests): checkpoint quest chain (canister, vehicle siphon, generator, terminal, gate) with 54 passing tests and in-game smoke` (commit `6100064`).
+- 15:55 Gemini (Lead Architect):
+  1. Implemented Sprint 03 Part 2 (a) & (b):
+     - `CombatTypes.h` (EDamageType, EArmorTier, EStatusEffect, EEnemyArchetype, EAttackShape, FElementalAffinities, FDamageSpec).
+     - `UHealthComponent` (armor formulas, shred, elemental multipliers, stance defense, DoT tick, OnDied/OnDiedNative delegates).
+     - DataAssets: `UWeaponDataAsset`, `UEnemyArchetypeAsset`, `ULevelConfigAsset` / `FWaveDefinition`.
+     - Operative death handling: broadcasts death quote to `UGameMessageSubsystem` and triggers GameOver.
+     - `FinishPrep` debug command hooked to `UGameFlowSubsystem::FinishPreparation()`.
+  2. Created 11 new tests (`HealthComponentTest.cpp`, `CombatDataTest.cpp`): **70/70 PASS**.
+  3. Ran in-game smokes: `CombatFlowSmoke` **RESULT: PASS**, `QuestChainSmoke` **RESULT: PASS** (100% non-regression).
+  4. Now implementing (c) & (d): `AEnemyCharacter` and `AWaveSpawnerActor` / Wave Subsystem.
 
 ---
 

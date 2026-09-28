@@ -1,13 +1,16 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/SquadSubsystem.h"
+#include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "UI/GameMessageSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
 
 namespace
@@ -54,11 +57,20 @@ AOperativeCharacter::AOperativeCharacter()
 	{
 		FacingMarker->SetStaticMesh(CubeMesh.Object);
 	}
+
+	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+	HealthComponent->MaxHealth = 100.0f;
+	HealthComponent->BaseArmorReduction = 0.10f;
 }
 
 void AOperativeCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (HealthComponent)
+	{
+		HealthComponent->OnDied.AddDynamic(this, &AOperativeCharacter::HandleDied);
+	}
 
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	Movement->MaxAcceleration = MovementConfig.Acceleration;
@@ -159,7 +171,34 @@ void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 	{
 		bSprinting = false;
 	}
+
+	if (HealthComponent)
+	{
+		float DefMult = 1.0f;
+		if (Stance == EOperativeStance::Crouching)
+		{
+			DefMult = 0.75f;
+		}
+		else if (Stance == EOperativeStance::Prone)
+		{
+			DefMult = 0.50f;
+		}
+		HealthComponent->SetDefenseMultiplier(DefMult);
+	}
+
 	ApplyMovementParams();
+}
+
+void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
+{
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(FText::FromString(TEXT("ШТАБ")), FText::Format(FText::FromString(TEXT("{0} погиб в бою!")), DisplayName));
+	}
+	if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>())
+	{
+		Flow->TriggerGameOver();
+	}
 }
 
 void AOperativeCharacter::SetSprinting(bool bNewSprinting)

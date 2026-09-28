@@ -100,7 +100,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative")
 	bool bCarrying = false;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
+	TObjectPtr<class UHealthComponent> HealthComponent;
+
 private:
+	UFUNCTION()
+	void HandleDied(AActor* Victim, const FString& AttackerSource);
 	/** Pushes max speed and turn rate for the current state into CharacterMovement. */
 	void ApplyMovementParams(float SpeedOverride = -1.f);
 	EOperativeOrderResult RequestMove(const FVector& Destination);
