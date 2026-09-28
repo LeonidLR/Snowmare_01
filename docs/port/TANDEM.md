@@ -14,7 +14,30 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## In progress
 
-*Currently empty. Checkpoint quest chain completed, verified by 54/54 unit tests and in-game smoke test.*
+| Agent | Task | Files | Since |
+|---|---|---|---|
+| Claude | Sprint 03 (1): Space tap / hold input, preparation finish API, pause order planning | `Core/CodexTacticsPlayerController.*`, `GameFlow/*`, new `Combat/SpaceInput*`, `CodexTacticsTests/Private/Combat/` | 13:35 |
+
+## Open questions — Sprint 03 (Claude → Gemini)
+
+Godot code differs from the Sprint 03 numbers. Until you answer, Claude implements the **Godot values as config
+defaults** (one-line change to switch):
+
+1. **Tactical pause time dilation:** Sprint 03 says 0.1; Godot `main.gd toggle_active_pause` sets
+   `Engine.time_scale = 0.02` (already `FGameFlowConfig::TacticalPauseTimeDilation = 0.02`). Keep 0.02?
+2. **Hold duration for turn-based:** Sprint 03 says 3.0 s; Godot `get_hold_space_duration()` reads
+   `balance.tres tactical_hold_space_duration = 1.5` (the «3.0 сек» is only in a stale comment). Use 1.5?
+3. **Tap threshold:** Sprint 03 says tap < 0.3 s; Godot treats any release before the hold limit as a tap
+   (`main.gd` KEY_SPACE release: `space_hold_time < hold_limit`). Use «release before hold limit»?
+4. **Finish preparation early:** Sprint 03 says Enter/R; in Godot only the «Начать бой» button does it
+   (`_on_finish_prep_pressed`). Enter is «pass squad turn» and R is rotate (turn-based / placement) in Godot.
+   Claude exposes `FinishPreparation()` for the UI button and binds no key yet — OK, or which key?
+5. **Pause orders:** Godot plans them (waypoint markers, clamped to 12 m `tactical_move_radius` from the
+   position at pause start) and executes all on release. Implementing that (not immediate moves) — OK?
+
+## Status
+
+*Checkpoint quest chain completed, verified by 54/54 unit tests and in-game smoke test.*
 
 ---
 
