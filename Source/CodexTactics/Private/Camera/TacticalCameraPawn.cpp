@@ -108,11 +108,30 @@ void ATacticalCameraPawn::RotateStep(int32 Direction)
 void ATacticalCameraPawn::SetDragRotating(bool bActive)
 {
 	bDragRotating = bActive;
+	bHasLastDragCursor = false;
+}
+
+FVector2D ATacticalCameraPawn::ConsumeCursorDelta()
+{
+	// Pixels, not GetInputMouseDelta: that one is raw mouse counts scaled by the input sensitivity (~0.07),
+	// which made drag rotation an order of magnitude slower than Godot.
+	const APlayerController* PC = GetController<APlayerController>();
+	FVector2D Cursor;
+	if (!PC || !PC->GetMousePosition(Cursor.X, Cursor.Y))
+	{
+		bHasLastDragCursor = false;
+		return FVector2D::ZeroVector;
+	}
+	const FVector2D Delta = bHasLastDragCursor ? Cursor - LastDragCursor : FVector2D::ZeroVector;
+	LastDragCursor = Cursor;
+	bHasLastDragCursor = true;
+	return Delta;
 }
 
 void ATacticalCameraPawn::SetDragPanning(bool bActive)
 {
 	bDragPanning = bActive;
+	bHasLastDragCursor = false;
 	if (bActive)
 	{
 		bPanReturning = false;
@@ -159,15 +178,13 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 
 	if (bDragPanning && PC)
 	{
-		float DeltaX = 0.f;
-		float DeltaY = 0.f;
-		PC->GetInputMouseDelta(DeltaX, DeltaY);
+		const FVector2D Delta = ConsumeCursorDelta();
 		const FRotator Yaw(0.f, CurrentYaw, 0.f);
 		const FVector Forward = Yaw.Vector();
 		const FVector Right = FRotationMatrix(Yaw).GetScaledAxis(EAxis::Y);
 		const float Scale = Config.DragPanSensitivity * (CurrentDistance / Config.BaseDistance);
-		// Grab-and-drag: the world follows the cursor (UE mouse delta Y is positive upwards).
-		TargetPanOffset += (-Right * DeltaX - Forward * DeltaY) * Scale;
+		// Grab-and-drag: the world follows the cursor (Godot: -right * relative.x + forward * relative.y).
+		TargetPanOffset += (-Right * Delta.X + Forward * Delta.Y) * Scale;
 		TargetPanOffset = TacticalCameraRules::ClampPan(TargetPanOffset, Config.MaxPanCombat);
 		PanOffset = FMath::Lerp(PanOffset, TargetPanOffset, PanAlpha);
 		return;
@@ -224,13 +241,7 @@ void ATacticalCameraPawn::UpdateRotation(float RealDelta)
 {
 	if (bDragRotating)
 	{
-		if (APlayerController* PC = GetController<APlayerController>())
-		{
-			float DeltaX = 0.f;
-			float DeltaY = 0.f;
-			PC->GetInputMouseDelta(DeltaX, DeltaY);
-			TargetYaw += DeltaX * Config.DragRotationSensitivity;
-		}
+		TargetYaw += ConsumeCursorDelta().X * Config.DragRotationSensitivity;
 	}
 	const float Alpha = FMath::Clamp(Config.RotationSmoothSpeed * RealDelta, 0.f, 1.f);
 	CurrentYaw += FMath::FindDeltaAngleDegrees(CurrentYaw, TargetYaw) * Alpha;
