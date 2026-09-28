@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-29 by Claude, after the operative balance commit (see §10).
+Last update: 2026-09-29 by Claude, after commit `b41a184`.
 
 ---
 
@@ -313,7 +313,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (operative balance commit) | Operatives take health / speeds / matches from the imported Godot config (Godot apply_balance_config) |
+| `b41a184` | Operatives take health / speeds / matches from the imported Godot config (Godot apply_balance_config) |
 | `2c54c20` | Both Godot balance files imported into data assets; turn-based combat reads DA_Balance |
 | `71f7cb0` | Godot weapons imported into data assets, operatives start with the imported M16 (30/60) |
 | `06a28ca` | Turn-based action panel (phase, unit, AP / HP, buttons) |
