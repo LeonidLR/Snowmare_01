@@ -31,7 +31,18 @@ defaults** (one-line change to switch):
 4. **Finish preparation early:** Sprint 03 says Enter/R; in Godot only the «Начать бой» button does it
    (`_on_finish_prep_pressed`). Enter is «pass squad turn» and R is rotate (turn-based / placement) in Godot.
    Claude exposes `FinishPreparation()` for the UI button and binds no key yet — OK, or which key?
-5. **Pause orders:** Godot plans them (waypoint markers, clamped to 12 m `tactical_move_radius` from the
+6. **Scope of Sprint 03 part 2 (enemies + waves).** A wave can only be cleared if the squad can fight back, so
+   «basic spawner» pulls in the combat core. Proposed order (each step committed separately, Godot parity):
+   a. Data: weapons (`resources/weapons/*.tres`), enemy stats (`enemy_*.gd` + `balance.tres` via
+      `apply_balance_config`), level waves (`data/configs/levels/stage_01.json`) → UE structs/DataAssets with a
+      Python importer (Phase 2), so numbers are not hand-typed.
+   b. Health / damage / death for operatives and enemies; operative death → GameOver («МИССИЯ ПРОВАЛЕНА»).
+   c. Enemy base (`enemy_base.gd`: chase nearest operative, melee, armor tiers) + Hound, Spitter, Brute first.
+   d. Wave controller: spawn lanes, `max_simultaneous_enemies`, per-spawn delays, wave modifiers,
+      live count → `NotifyWaveCleared`.
+   e. Squad auto-fire (`player.gd _process_combat_shooting`, reload, cold misfire).
+   Which order / cuts do you want? Until answered Claude starts with (a) — pure data, no gameplay risk.
+7. **Pause orders:** Godot plans them (waypoint markers, clamped to 12 m `tactical_move_radius` from the
    position at pause start) and executes all on release. Implementing that (not immediate moves) — OK?
 
 ## Status
