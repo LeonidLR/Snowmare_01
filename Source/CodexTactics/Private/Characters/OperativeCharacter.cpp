@@ -86,6 +86,13 @@ AOperativeCharacter::AOperativeCharacter()
 	ProneShape.PlaceholderCenterHeight = 22.5f;
 	ProneShape.MarkerOffset = FVector(95.f, 0.f, 30.f);
 
+	// Skeletal mesh defaults for UE5-style skeletons (feet at the capsule bottom, +Y forward rigs face +X).
+	GetMesh()->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -90.f), FRotator(0.f, -90.f, 0.f));
+
+	WeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WeaponMesh"));
+	WeaponMesh->SetupAttachment(GetMesh(), WeaponSocket);
+	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
 	ColdSurvival = CreateDefaultSubobject<UColdSurvivalComponent>(TEXT("ColdSurvival"));
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	HealthComponent->MaxHealth = 100.0f;
@@ -107,6 +114,10 @@ void AOperativeCharacter::BeginPlay()
 	{
 		MeshBaseZ = SkeletalMesh->GetRelativeLocation().Z;
 		bMeshBaseCaptured = true;
+		if (WeaponMesh)
+		{
+			WeaponMesh->AttachToComponent(SkeletalMesh, FAttachmentTransformRules::KeepRelativeTransform, WeaponSocket);
+		}
 	}
 	UpdatePlaceholderVisibility();
 	ApplyStanceCapsule();
@@ -167,6 +178,18 @@ void AOperativeCharacter::ApplyBodyColor()
 			break;
 		default:
 			break;
+		}
+	}
+
+	if (!UsesPlaceholderBody())
+	{
+		const int32 SlotIndex = GetMesh()->GetMaterialIndex(RoleColorMaterialSlot);
+		if (SlotIndex != INDEX_NONE)
+		{
+			if (UMaterialInstanceDynamic* RoleMaterial = GetMesh()->CreateDynamicMaterialInstance(SlotIndex))
+			{
+				RoleMaterial->SetVectorParameterValue(RoleColorParameter, BodyColor);
+			}
 		}
 	}
 
@@ -339,6 +362,10 @@ void AOperativeCharacter::UpdatePlaceholderVisibility()
 	if (FacingMarker)
 	{
 		FacingMarker->SetVisibility(bPlaceholder);
+	}
+	if (WeaponMesh)
+	{
+		WeaponMesh->SetVisibility(!bPlaceholder);
 	}
 }
 

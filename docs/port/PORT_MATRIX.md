@@ -36,6 +36,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/components/panic_component.gd` | `UPanicComponent` | 1 | ⬜ | |
 | `Scripts/components/rage_component.gd` | `URageComponent` | 1 | ⬜ | |
 | `Scripts/components/allegiance_component.gd` | `UAllegianceComponent` | 1 | ⬜ | |
+| `Scripts/components/locomotion_controller.gd` (stand / crouch / prone locomotion) | `UOperativeAnimInstance` native blend + `ABP_Operative` | 6 | 🟨 baseline (fire, reload, hit, death, grenade states → AnimBP graph) | `CodexTactics.StanceSmoke`, `HudShot close walk` |
 | `Scripts/components/cold_animation_controller.gd` | AnimBP layer | 6 | ⬜ | |
 | `Scripts/components/locomotion_controller.gd`, `Scripts/locomotion_v2/**` | AnimBP + `UOperativeAnimInstance` | 6 | ⬜ | |
 | `Scripts/events/event_bus.gd` | `UEventBusSubsystem` | 3 | ⬜ | |

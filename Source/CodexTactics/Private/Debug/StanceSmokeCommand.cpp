@@ -7,7 +7,10 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Components/CapsuleComponent.h"
@@ -39,9 +42,15 @@ namespace StanceSmoke
 			Leader->GetCapsuleComponent()->GetUnscaledCapsuleRadius());
 		const bool bOk = Leader->GetStance() == Expected && FMath::IsNearlyEqual(Half, ExpectedHalf, 0.5f)
 			&& FMath::IsNearlyEqual(FeetZ(Leader), State.StartFeetZ, FeetTolerance);
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke t=%ds stance=%s halfHeight=%.1f (expected %.1f) feetZ=%.1f (start %.1f) -> %s"),
+		FString Clips;
+		if (const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Leader->GetMesh()->GetAnimInstance()))
+		{
+			Clips = FString::Printf(TEXT(" clips idle=%.2f crouch=%.2f prone=%.2f"), Anim->GetClipWeight(EOperativeClip::Idle),
+				Anim->GetClipWeight(EOperativeClip::CrouchIdle), Anim->GetClipWeight(EOperativeClip::ProneIdle));
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke t=%ds stance=%s halfHeight=%.1f (expected %.1f) feetZ=%.1f (start %.1f)%s -> %s"),
 			State.Second, *AOperativeCharacter::GetStanceDisplayName(Leader->GetStance()).ToString(), Half, ExpectedHalf,
-			FeetZ(Leader), State.StartFeetZ, bOk ? TEXT("ok") : TEXT("BAD"));
+			FeetZ(Leader), State.StartFeetZ, *Clips, bOk ? TEXT("ok") : TEXT("BAD"));
 		State.bOk &= bOk;
 		return bOk;
 	}
@@ -86,8 +95,11 @@ namespace StanceSmoke
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->StartFeetZ = FeetZ(Leader);
 		const bool bBlueprint = Leader->GetClass()->ClassGeneratedBy != nullptr;
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke operative class=%s blueprint=%d placeholder=%d"),
-			*Leader->GetClass()->GetName(), bBlueprint ? 1 : 0, Leader->UsesPlaceholderBody() ? 1 : 0);
+		const UAnimInstance* Anim = Leader->GetMesh()->GetAnimInstance();
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke operative class=%s blueprint=%d placeholder=%d mesh=%s anim=%s weapon=%s"),
+			*Leader->GetClass()->GetName(), bBlueprint ? 1 : 0, Leader->UsesPlaceholderBody() ? 1 : 0,
+			*GetNameSafe(Leader->GetMesh()->GetSkeletalMeshAsset()), *GetNameSafe(Anim ? Anim->GetClass() : nullptr),
+			*GetNameSafe(Leader->WeaponMesh ? Leader->WeaponMesh->GetStaticMesh() : nullptr));
 		State->bOk = bBlueprint;
 
 		TWeakObjectPtr<UWorld> WeakWorld(World);

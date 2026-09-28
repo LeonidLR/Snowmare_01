@@ -135,6 +135,14 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-28 Claude: operative art + baseline animation. `Scripts/Editor/import_operative_assets.py` imports the
+  Godot sources from Codex/ASSETS: Explorer glb (17 mesh nodes merged into one mesh, scene root made the `root` bone
+  and its 0.01 scale baked so UE5 mannequin clips fit; coat on its own slot), M16, 60 rifle/prone/injured FBX clips
+  (classic FBX importer, animation only). `setup_operative_animation.py` creates `ABP_Operative` (parent
+  `UOperativeAnimInstance`) and wires BP_Operative (mesh, ABP, M16 offset converted from Godot M16_Socket).
+  `UOperativeAnimInstance` blends idle/walk/run, crouch, prone/crawl natively (proxy Evaluate) until the AnimBP
+  graph exists; exposes state for the graph. Coat tinted with the role colour (Godot material_override on Coat).
+  Camera drag fix committed separately (pixel deltas).
 - 2026-09-28 Claude: user feedback — no visible stance, no feedback. Operatives are now Blueprints
   (`/Game/Characters/Operatives/BP_Operative`, created by `Scripts/Editor/create_operative_blueprint.py`, spawned by
   the game mode; the user owns mesh/AnimBP/collision). Stance changes the capsule (Godot 2.0/1.3/0.7 m ratios, feet

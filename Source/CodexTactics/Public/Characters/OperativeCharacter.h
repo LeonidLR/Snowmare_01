@@ -183,6 +183,22 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	TObjectPtr<class UHealthComponent> HealthComponent;
 
+	/** Weapon visual on the skeletal mesh (the Blueprint sets the mesh and its offset from WeaponSocket). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
+	TObjectPtr<UStaticMeshComponent> WeaponMesh;
+
+	/** Skeletal mesh material slot tinted with the role colour (Godot tints only the coat). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Operative")
+	FName RoleColorMaterialSlot = TEXT("Explorer_Coat");
+
+	/** Vector parameter of that material receiving BodyColor (Interchange glTF materials: BaseColorFactor). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Operative")
+	FName RoleColorParameter = TEXT("BaseColorFactor");
+
+	/** Skeletal mesh bone or socket the weapon follows (Godot BoneAttachment3D hand_r). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Operative")
+	FName WeaponSocket = TEXT("hand_r");
+
 	/** Real-time cold (writes ColdLevel, speed tier, weapon freeze, frostbite). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	TObjectPtr<class UColdSurvivalComponent> ColdSurvival;

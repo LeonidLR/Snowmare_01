@@ -1,12 +1,15 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
-//   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds=CodexTactics.HudShot
+//   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
 // Puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "Camera/TacticalCameraPawn.h"
 #include "Characters/OperativeCharacter.h"
+#include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Engine/World.h"
@@ -40,11 +43,35 @@ namespace HudShot
 		{
 			return;
 		}
-		TWeakObjectPtr<UWorld> WeakWorld(World);
-		FTimerHandle PoseHandle;
-		World->GetTimerManager().SetTimer(PoseHandle, FTimerDelegate::CreateLambda([WeakWorld]()
+		// "close": zoom the tactical camera fully in to inspect characters.
+		if (Args.Contains(TEXT("close")))
 		{
-			if (UWorld* W = WeakWorld.Get())
+			if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
+			{
+				if (ATacticalCameraPawn* Camera = PC->GetPawn<ATacticalCameraPawn>())
+				{
+					Camera->AddZoomNotches(-30.f);
+				}
+			}
+		}
+		TWeakObjectPtr<UWorld> WeakWorld(World);
+		const bool bWalk = Args.Contains(TEXT("walk"));
+		FTimerHandle PoseHandle;
+		World->GetTimerManager().SetTimer(PoseHandle, FTimerDelegate::CreateLambda([WeakWorld, bWalk]()
+		{
+			UWorld* W = WeakWorld.Get();
+			if (!W)
+			{
+				return;
+			}
+			USquadSubsystem* Squad = W->GetSubsystem<USquadSubsystem>();
+			AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+			if (bWalk && Leader)
+			{
+				// "walk": the leader walks and the squad follows, to inspect locomotion.
+				Leader->OrderMoveTo(Leader->GetActorLocation() + Leader->GetActorForwardVector() * 1500.f, false);
+			}
+			else
 			{
 				Pose(W);
 			}
