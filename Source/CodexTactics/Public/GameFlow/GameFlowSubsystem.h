@@ -38,6 +38,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	ECodexGamePhase GetPhase() const { return Machine.GetPhase(); }
 
+	/** Tuning values of the flow (pause, turn-based, preparation). */
+	const FGameFlowConfig& GetConfig() const { return Machine.GetConfig(); }
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	ECodexCombatMode GetCombatMode() const { return Machine.GetCombatMode(); }
 

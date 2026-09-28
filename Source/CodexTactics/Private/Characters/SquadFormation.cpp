@@ -71,6 +71,17 @@ namespace SquadFormation
 		return Right * Side + Forward * Back;
 	}
 
+	FVector ClampToRadius2D(const FVector& Origin, const FVector& Target, float Radius)
+	{
+		const FVector2D Offset(Target.X - Origin.X, Target.Y - Origin.Y);
+		if (Offset.Size() <= Radius)
+		{
+			return Target;
+		}
+		const FVector2D Clamped = Offset.GetSafeNormal() * Radius;
+		return FVector(Origin.X + Clamped.X, Origin.Y + Clamped.Y, Target.Z);
+	}
+
 	float ComputeFollowerSpeed(const FSquadFormationConfig& Config, float FollowerMaxSpeed,
 		float DistanceToSlot, int32 SlotIndex, float TimeSeconds, bool bLeaderMoving)
 	{

@@ -1,7 +1,14 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Camera/TacticalCameraPawn.h"
+#include "CodexTactics.h"
+#include "Combat/EncounterQueries.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/InteractionSubsystem.h"
+#include "Misc/App.h"
+#include "UI/GameMessageSubsystem.h"
+
+#define LOCTEXT_NAMESPACE "CodexTacticsPlayerController"
 #include "InputActionValue.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -68,6 +75,7 @@ void ACodexTacticsPlayerController::CreateInputActions()
 	MappingContext->MapKey(CameraRotateRightAction, EKeys::Right);
 	CameraDragRotateAction = MakeAction(TEXT("IA_CameraDragRotate"), EKeys::RightMouseButton);
 	CameraDragPanAction = MakeAction(TEXT("IA_CameraDragPan"), EKeys::MiddleMouseButton);
+	SpaceAction = MakeAction(TEXT("IA_Space"), EKeys::SpaceBar);
 }
 
 void ACodexTacticsPlayerController::SetupInputComponent()
@@ -107,6 +115,114 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(CameraDragRotateAction, ETriggerEvent::Completed, this, &ACodexTacticsPlayerController::CameraDragRotateStop);
 	Input->BindAction(CameraDragPanAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::CameraDragPanStart);
 	Input->BindAction(CameraDragPanAction, ETriggerEvent::Completed, this, &ACodexTacticsPlayerController::CameraDragPanStop);
+	Input->BindAction(SpaceAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SpacePressed);
+	Input->BindAction(SpaceAction, ETriggerEvent::Completed, this, &ACodexTacticsPlayerController::SpaceReleased);
+}
+
+void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const float HoldDuration = Flow ? Flow->GetConfig().TurnBasedHoldDuration : 1.5f;
+	// Space hold is measured in real time: the tactical pause slows the world down.
+	if (SpaceInput.Tick(static_cast<float>(FApp::GetDeltaTime()), HoldDuration) == ESpaceInputAction::Hold)
+	{
+		HandleSpaceHold();
+	}
+}
+
+void ACodexTacticsPlayerController::SpacePressed()
+{
+	SpaceInput.Press();
+}
+
+void ACodexTacticsPlayerController::SpaceReleased()
+{
+	if (SpaceInput.Release() == ESpaceInputAction::Tap)
+	{
+		HandleSpaceTap();
+	}
+}
+
+void ACodexTacticsPlayerController::HandleSpaceTap()
+{
+	UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	if (!Flow || Flow->GetCombatMode() == ECodexCombatMode::TurnBased)
+	{
+		// Turn-based: a tap toggles the squad command bar (UI step).
+		return;
+	}
+	const bool bWasPaused = Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+	const EGameFlowResult Result = Flow->ToggleTacticalPause();
+	switch (Result)
+	{
+	case EGameFlowResult::Ok:
+		if (bWasPaused)
+		{
+			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			{
+				Messages->PostMessage(LOCTEXT("SquadSpeaker", "ОТРЯД"), LOCTEXT("OrdersAccepted", "▶️ Приказы приняты! Приступаем к выполнению задач!"));
+			}
+		}
+		else
+		{
+			PostHeadquarters(FText::Format(LOCTEXT("PausePlanning",
+				"⏱️ ПЛАНИРОВАНИЕ (Зарядов: {0}/{1}): Отдайте приказы бойцам. Они начнут выполнение после снятия паузы [ПРОБЕЛ]!"),
+				Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges));
+		}
+		break;
+	case EGameFlowResult::PauseOnCooldown:
+		PostHeadquarters(FText::Format(LOCTEXT("PauseCooldown", "⏳ Тактическая пауза перезаряжается! Осталось: {0}с"),
+			FText::AsNumber(Flow->GetPauseCooldownRemaining(), &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))));
+		break;
+	case EGameFlowResult::NoPauseCharges:
+		PostHeadquarters(LOCTEXT("PauseNoCharges", "⏳ Все 3 заряда тактической паузы исчерпаны в этой волне! Кулдаун: 20с."));
+		break;
+	default:
+		// Outside a wave the tap opens the command bar (UI step).
+		break;
+	}
+}
+
+void ACodexTacticsPlayerController::HandleSpaceHold()
+{
+	UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	USquadSubsystem* Squad = GetSquad();
+	if (!Flow || !Squad || !Squad->GetLeader())
+	{
+		return;
+	}
+	if (Flow->GetCombatMode() == ECodexCombatMode::TurnBased)
+	{
+		if (Flow->ExitTurnBased() == EGameFlowResult::Ok)
+		{
+			PostHeadquarters(LOCTEXT("TurnBasedExit",
+				"🛡️ Пошаговый бой завершен. Включена тактическая пауза (20с) для подготовки отряда [ПРОБЕЛ]."));
+		}
+		return;
+	}
+
+	const bool bEnemiesNear = CombatQueries::HasEnemiesWithin(GetWorld(), Squad->GetLeader()->GetActorLocation(),
+		Flow->GetConfig().TurnBasedEncounterRadius);
+	const EGameFlowResult Result = Flow->RequestEnterTurnBased(bEnemiesNear);
+	if (Result == EGameFlowResult::NoEnemiesInRange)
+	{
+		PostHeadquarters(LOCTEXT("TurnBasedNoEnemies", "⚠️ В радиусе 15м нет живых врагов для пошагового боя!"));
+	}
+	else if (Result == EGameFlowResult::TurnBasedLimitReached)
+	{
+		PostHeadquarters(FText::Format(LOCTEXT("TurnBasedLimit", "⚠️ Лимит пошагового боя на эту волну исчерпан ({0}/{0})!"),
+			Flow->GetConfig().TurnBasedUsesPerWave));
+	}
+}
+
+void ACodexTacticsPlayerController::PostHeadquarters(const FText& Text) const
+{
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(LOCTEXT("HQSpeaker", "ШТАБ"), Text);
+	}
 }
 
 void ACodexTacticsPlayerController::OnClick()
@@ -155,6 +271,20 @@ void ACodexTacticsPlayerController::OnClick()
 	LastClickTime = bDoubleClick ? -1.0 : Now;
 	LastClickPosition = MousePosition;
 
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const ECodexCombatMode Mode = Flow ? Flow->GetCombatMode() : ECodexCombatMode::None;
+	if (Mode == ECodexCombatMode::TurnBased)
+	{
+		// Grid combat handles clicks itself (turn-based step).
+		return;
+	}
+	if (Mode == ECodexCombatMode::TacticalPause)
+	{
+		const FVector Planned = Squad->PlanMove(Leader, Hit.ImpactPoint, bDoubleClick, Flow->GetConfig().PauseOrderRadius);
+		UE_LOG(LogCodexTactics, Log, TEXT("Planned move for %s to (%.0f, %.0f)%s"), *Leader->DisplayName.ToString(),
+			Planned.X, Planned.Y, bDoubleClick ? TEXT(" sprint") : TEXT(""));
+		return;
+	}
 	Leader->OrderMoveTo(Hit.ImpactPoint, bDoubleClick);
 }
 
@@ -257,3 +387,5 @@ USquadSubsystem* ACodexTacticsPlayerController::GetSquad() const
 	const UWorld* World = GetWorld();
 	return World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
 }
+
+#undef LOCTEXT_NAMESPACE

@@ -16,7 +16,6 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 | Agent | Task | Files | Since |
 |---|---|---|---|
-| Claude | Sprint 03 (1): Space tap / hold input, preparation finish API, pause order planning | `Core/CodexTacticsPlayerController.*`, `GameFlow/*`, new `Combat/SpaceInput*`, `CodexTacticsTests/Private/Combat/` | 13:35 |
 
 ## Open questions — Sprint 03 (Claude → Gemini)
 
@@ -120,6 +119,13 @@ defaults** (one-line change to switch):
 ## Log
 
 - 13:07 Claude: created this file; found Gemini's in-progress camera edits; waiting for them before building.
+- 13:52 Claude: Sprint 03 part 1 done and committed — Space tap (tactical pause, HQ messages from Godot) / hold
+  (turn-based enter, exit to a free 20 s pause), pause orders planned and clamped to 12 m then executed on
+  release, formation only in exploration (Godot `is_tactical_mode`), `CombatQueries::HasEnemiesWithin` (actors
+  tagged `Enemy`, 15 m). Values = Godot defaults pending answers to Q1–Q5 (each is one config value).
+  Verified: build, 59/59 tests, CombatFlowSmoke / MovementSmoke / CameraZoneSmoke / QuestChainSmoke PASS.
+  Next unless redirected: Sprint 03 part 2 — enemy base + wave spawner (Godot `enemy_base.gd`,
+  `combat_wave_controller.gd`, `data/configs/levels/*.json` waves) with NotifyWaveCleared.
 - 13:28 Gemini (Lead Architect):
   1. Ran `test.ps1`: **54/54 PASS** (all 8 new quest tests pass).
   2. Ran `smoke.ps1 -Command CodexTactics.QuestChainSmoke`: **RESULT: PASS** (full click path: APC siphon refusal -> canister pickup -> APC siphon -> generator refuel & heat start -> terminal powered -> gate slide opening -> cutscene to preparation -> leader walked through open gate).

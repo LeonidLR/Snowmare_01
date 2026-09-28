@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Combat/SpaceInput.h"
 #include "CodexTacticsPlayerController.generated.h"
 
 class UInputAction;
@@ -14,6 +15,8 @@ class USquadSubsystem;
  * Click ground: leader moves there; double click: sprint; click an operative: make it leader;
  * 1..3: select leader; Z / C / X: stand / crouch / prone (with Alt: whole squad).
  * Camera: wheel zoom, Q/E or arrows rotate, RMB drag rotates, MMB drag pans (WASD / edges are polled by the camera).
+ * Space: tap = tactical pause (during a wave), hold = enter / leave turn-based combat. During the pause, clicks
+ * plan moves (executed together on release); during turn-based combat ground clicks do not issue real-time moves.
  * Input actions are created in code for now; they move to assets once the editor setup exists.
  * Godot reference: Scenes/movements/main.gd (_input, raycast_from_mouse, _select_squad_member_by_index).
  */
@@ -37,11 +40,22 @@ public:
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Input", meta = (ClampMin = "0"))
 	float SelectRadius = 60.f;
 
+	/** Space pressed / released (public for headless checks that drive the same path as the keyboard). */
+	void SpacePressed();
+	void SpaceReleased();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
+	virtual void PlayerTick(float DeltaTime) override;
 
 private:
+	/** Tap: tactical pause on/off during a wave (Godot main.gd KEY_SPACE release). */
+	void HandleSpaceTap();
+	/** Hold: enter or leave Gorky 17 turn-based combat. */
+	void HandleSpaceHold();
+	void PostHeadquarters(const FText& Text) const;
+
 	void CreateInputActions();
 	void OnClick();
 	void SelectMember1() { SelectMember(0); }
@@ -89,6 +103,10 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> CameraDragPanAction;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> SpaceAction;
+
+	FSpaceInputTracker SpaceInput;
 	double LastClickTime = -1.0;
 	FVector2D LastClickPosition = FVector2D::ZeroVector;
 };

@@ -3,6 +3,7 @@
 #include "CodexTactics.h"
 #include "CollisionQueryParams.h"
 #include "Engine/World.h"
+#include "GameFlow/GameFlowSubsystem.h"
 
 namespace
 {
@@ -122,6 +123,81 @@ void USquadSubsystem::SetFollowersHolding(bool bHold)
 	}
 }
 
+void USquadSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+	if (UGameFlowSubsystem* Flow = InWorld.GetSubsystem<UGameFlowSubsystem>())
+	{
+		Flow->OnGameFlowChanged.AddDynamic(this, &USquadSubsystem::HandleGameFlowChanged);
+		Flow->OnTacticalPauseReleased.AddDynamic(this, &USquadSubsystem::HandleTacticalPauseReleased);
+	}
+}
+
+bool USquadSubsystem::IsFormationActive() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	// Godot: `is_tactical_mode` is set for everyone when preparation starts; formation only in exploration.
+	return !Flow || Flow->GetPhase() == ECodexGamePhase::Exploration;
+}
+
+void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)
+{
+	if (CombatMode == ECodexCombatMode::TacticalPause && LastCombatMode != ECodexCombatMode::TacticalPause)
+	{
+		BeginOrderPlanning();
+	}
+	else if (CombatMode != ECodexCombatMode::TacticalPause && CombatMode != ECodexCombatMode::RealTime)
+	{
+		// Leaving the pause into turn-based combat or out of the wave drops the plans; a release to real time
+		// is followed by OnTacticalPauseReleased, which executes them.
+		PlannedOrders.Reset();
+		PauseOrigins.Reset();
+	}
+	LastCombatMode = CombatMode;
+}
+
+void USquadSubsystem::HandleTacticalPauseReleased()
+{
+	ExecutePlannedOrders();
+}
+
+void USquadSubsystem::BeginOrderPlanning()
+{
+	PlannedOrders.Reset();
+	PauseOrigins.Reset();
+	for (AOperativeCharacter* Member : GetMembers())
+	{
+		PauseOrigins.Add(Member, Member->GetActorLocation());
+	}
+}
+
+FVector USquadSubsystem::PlanMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius)
+{
+	if (!Operative)
+	{
+		return Destination;
+	}
+	const FVector* Origin = PauseOrigins.Find(Operative);
+	const FVector Planned = SquadFormation::ClampToRadius2D(Origin ? *Origin : Operative->GetActorLocation(), Destination, Radius);
+	FPlannedOrder& Order = PlannedOrders.FindOrAdd(Operative);
+	Order.Destination = Planned;
+	Order.bSprint = bSprint;
+	return Planned;
+}
+
+void USquadSubsystem::ExecutePlannedOrders()
+{
+	for (const TPair<TWeakObjectPtr<AOperativeCharacter>, FPlannedOrder>& Entry : PlannedOrders)
+	{
+		if (AOperativeCharacter* Operative = Entry.Key.Get())
+		{
+			Operative->OrderMoveTo(Entry.Value.Destination, Entry.Value.bSprint);
+		}
+	}
+	PlannedOrders.Reset();
+	PauseOrigins.Reset();
+}
+
 int32 USquadSubsystem::GetFormationSlot(const AOperativeCharacter* Operative) const
 {
 	for (const FFollowerState& Follower : Followers)
@@ -162,6 +238,11 @@ void USquadSubsystem::Tick(float DeltaTime)
 
 	FormationHeading = SquadFormation::SmoothHeading(FormationConfig, FormationHeading, LeaderRef->GetActorForwardVector(), DeltaTime);
 	UpdateSlotSwap(DeltaTime);
+
+	if (!IsFormationActive())
+	{
+		return;
+	}
 
 	const bool bLeaderMoving = LeaderRef->IsMoving();
 	const float TimeSeconds = GetWorld()->GetTimeSeconds();

@@ -109,6 +109,18 @@ struct CODEXTACTICS_API FGameFlowConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based", meta = (ClampMin = "0"))
 	float PostTurnBasedPauseDuration = 20.f;
 
+	/** Holding Space this long enters / leaves turn-based combat, real s (Godot balance.tres: 1.5; see TANDEM Q2). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based", meta = (ClampMin = "0.1"))
+	float TurnBasedHoldDuration = 1.5f;
+
+	/** Enemies within this radius of the leader are needed to start turn-based combat, cm (Godot: 15 m). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based", meta = (ClampMin = "0"))
+	float TurnBasedEncounterRadius = 1500.f;
+
+	/** Pause orders are clamped to this distance from where each operative stood when the pause began, cm (Godot tactical_move_radius 12 m). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tactical Pause", meta = (ClampMin = "0"))
+	float PauseOrderRadius = 1200.f;
+
 	/** Turn-based entries allowed per wave; 0 or negative means unlimited. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based")
 	int32 TurnBasedUsesPerWave = -1;

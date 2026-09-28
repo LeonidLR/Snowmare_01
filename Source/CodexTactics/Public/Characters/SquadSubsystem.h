@@ -4,6 +4,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadFormation.h"
+#include "GameFlow/GameFlowTypes.h"
 #include "SquadSubsystem.generated.h"
 
 class AOperativeCharacter;
@@ -61,6 +62,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	int32 GetFormationSlot(const AOperativeCharacter* Operative) const;
 
+	/**
+	 * Tactical pause: plans a move for an operative, clamped to Radius around where it stood when the pause began.
+	 * Returns the planned (clamped) destination. Orders run together when the pause is released.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
+	FVector PlanMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius);
+
+	/** Number of operatives with a planned pause order. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
+	int32 GetPlannedOrderCount() const { return PlannedOrders.Num(); }
+
+	/** True while formation following is on (exploration only; from preparation on, operatives act individually). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
+	bool IsFormationActive() const;
+
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Squad")
 	FOnSquadLeaderChanged OnLeaderChanged;
 
@@ -68,7 +84,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Squad")
 	FSquadFormationConfig FormationConfig;
 
+protected:
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
+
 private:
+	struct FPlannedOrder
+	{
+		FVector Destination = FVector::ZeroVector;
+		bool bSprint = false;
+	};
+
+	UFUNCTION()
+	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);
+
+	UFUNCTION()
+	void HandleTacticalPauseReleased();
+
+	/** Remembers where every operative stands when a tactical pause begins and drops old plans. */
+	void BeginOrderPlanning();
+	void ExecutePlannedOrders();
+
 	struct FFollowerState
 	{
 		TWeakObjectPtr<AOperativeCharacter> Operative;
@@ -89,4 +124,8 @@ private:
 	FVector FormationHeading = FVector::ZeroVector;
 	float SlotSwapCooldownRemaining = 0.f;
 	bool bFollowersHolding = false;
+
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> PauseOrigins;
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FPlannedOrder> PlannedOrders;
+	ECodexCombatMode LastCombatMode = ECodexCombatMode::None;
 };

@@ -129,6 +129,9 @@ namespace SquadFormation
 	CODEXTACTICS_API FVector ComputeWanderOffset(const FSquadFormationConfig& Config, const FVector& FormationForward,
 		int32 SlotIndex, float TimeSeconds);
 
+	/** Clamps Target to within Radius of Origin on the ground plane (keeps Target.Z). Godot: tactical pause orders. */
+	CODEXTACTICS_API FVector ClampToRadius2D(const FVector& Origin, const FVector& Target, float Radius);
+
 	/**
 	 * Follower speed toward its slot, cm/s. FollowerMaxSpeed is the follower's own max speed
 	 * (stance, sprint, wounds applied). Returns 0 inside StopRadius.
