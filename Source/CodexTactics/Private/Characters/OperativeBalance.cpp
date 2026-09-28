@@ -2,6 +2,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
 #include "Data/GodotBalanceAsset.h"
+#include "Survival/ColdSurvivalComponent.h"
 
 void OperativeBalance::Apply(const UGodotBalanceAsset& Config, AOperativeCharacter& Operative)
 {
@@ -50,6 +51,20 @@ void OperativeBalance::Apply(const UGodotBalanceAsset& Config, AOperativeCharact
 	Movement.WoundedSpeedMultiplier = Config.GetNumber(TEXT("wounded_speed_multiplier"), Movement.WoundedSpeedMultiplier);
 	Movement.Acceleration = Config.GetNumber(TEXT("character_acceleration"), Movement.Acceleration / 100.f) * 100.f;
 	Movement.Deceleration = Config.GetNumber(TEXT("character_deceleration"), Movement.Deceleration / 100.f) * 100.f;
+	if (UColdSurvivalComponent* Cold = Operative.ColdSurvival)
+	{
+		FColdConfig& Rules = Cold->Config;
+		Rules.AccumulationRate = Config.GetNumber(TEXT("cold_accumulation_rate"), Rules.AccumulationRate);
+		Rules.WarmthRecoveryRate = Config.GetNumber(TEXT("cold_warmth_recovery_rate"), Rules.WarmthRecoveryRate);
+		Rules.StanceMultiplierStanding = Config.GetNumber(TEXT("stance_cold_multiplier_standing"), Rules.StanceMultiplierStanding);
+		Rules.StanceMultiplierCrouching = Config.GetNumber(TEXT("stance_cold_multiplier_crouching"), Rules.StanceMultiplierCrouching);
+		Rules.StanceMultiplierProne = Config.GetNumber(TEXT("stance_cold_multiplier_prone"), Rules.StanceMultiplierProne);
+		Rules.MisfireThreshold = Config.GetNumber(TEXT("realtime_cold_misfire_threshold"), Rules.MisfireThreshold);
+		Rules.MisfireMaxChance = Config.GetNumber(TEXT("realtime_cold_misfire_max_chance"), Rules.MisfireMaxChance);
+		Rules.WeaponFreezeThreshold = Config.GetNumber(TEXT("realtime_cold_weapon_freeze_threshold"), Rules.WeaponFreezeThreshold);
+		Rules.MisfireDelay = Config.GetNumber(TEXT("realtime_cold_misfire_delay"), Rules.MisfireDelay);
+		Rules.AimPenaltyMax = Config.GetNumber(TEXT("realtime_cold_aim_penalty_max"), Rules.AimPenaltyMax);
+	}
 	Operative.MaxColdToLiftObjects = Config.GetNumber(TEXT("max_cold_to_lift_objects"), Operative.MaxColdToLiftObjects);
 	Operative.MinHealthFractionToLift = Config.GetNumber(TEXT("min_health_percent_to_lift"), Operative.MinHealthFractionToLift);
 }

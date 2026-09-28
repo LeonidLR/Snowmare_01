@@ -2,6 +2,7 @@
 #include "Characters/OperativeBalance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
+#include "Survival/ColdSurvivalComponent.h"
 #include "Data/GodotBalanceAsset.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -18,7 +19,7 @@ bool FOperativeBalanceApplyTest::RunTest(const FString&)
 		{ TEXT("commander_max_health"), 140.f }, { TEXT("engineer_max_health"), 150.f }, { TEXT("medic_max_health"), 120.f },
 		{ TEXT("engineer_matches_count"), 5.f }, { TEXT("commander_prep_radius"), 15.f },
 		{ TEXT("anim_walk_speed"), 2.2f }, { TEXT("anim_run_speed"), 7.25f }, { TEXT("anim_crouch_speed"), 1.25f },
-		{ TEXT("character_acceleration"), 14.f }, { TEXT("max_cold_to_sprint"), 55.f } };
+		{ TEXT("character_acceleration"), 14.f }, { TEXT("max_cold_to_sprint"), 55.f }, { TEXT("cold_accumulation_rate"), 0.3f } };
 
 	AOperativeCharacter* Commander = NewObject<AOperativeCharacter>();
 	Commander->SquadRole = EOperativeRole::Commander;
@@ -30,6 +31,7 @@ bool FOperativeBalanceApplyTest::RunTest(const FString&)
 	TestEqual(TEXT("Crouch 1.25 m/s"), Commander->MovementConfig.CrouchSpeed, 125.f, 0.01f);
 	TestEqual(TEXT("Acceleration 14 m/s2"), Commander->MovementConfig.Acceleration, 1400.f, 0.01f);
 	TestEqual(TEXT("Sprint cold limit"), Commander->MovementConfig.MaxColdToSprint, 55.f);
+	TestEqual(TEXT("Cold rate"), Commander->ColdSurvival->Config.AccumulationRate, 0.3f, 0.0001f);
 
 	AOperativeCharacter* Engineer = NewObject<AOperativeCharacter>();
 	Engineer->SquadRole = EOperativeRole::Engineer;
