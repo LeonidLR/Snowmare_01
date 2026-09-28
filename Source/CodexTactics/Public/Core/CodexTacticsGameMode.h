@@ -43,9 +43,13 @@ public:
 
 	virtual void StartPlay() override;
 
-	/** Operative class to spawn. */
+	/** Fallback operative class, used when OperativeBlueprint is missing. */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
 	TSubclassOf<AOperativeCharacter> OperativeClass;
+
+	/** Operative Blueprint (look, collision, animation are set up there). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
+	TSoftClassPtr<AOperativeCharacter> OperativeBlueprint;
 
 	/** Squad roster in selection order (keys 1..N). */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")

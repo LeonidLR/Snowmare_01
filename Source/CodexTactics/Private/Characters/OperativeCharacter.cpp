@@ -1,6 +1,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/SquadSubsystem.h"
+#include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -49,7 +50,7 @@ AOperativeCharacter::AOperativeCharacter()
 	BodyMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	BodyMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
 	BodyMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
-	BodyMesh->SetRelativeScale3D(FVector(0.7f, 0.7f, 1.8f));
+	BodyMesh->SetRelativeScale3D(StandingShape.PlaceholderScale);
 	if (CylinderMesh.Succeeded())
 	{
 		BodyMesh->SetStaticMesh(CylinderMesh.Object);
@@ -62,7 +63,7 @@ AOperativeCharacter::AOperativeCharacter()
 	FacingMarker = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("FacingMarker"));
 	FacingMarker->SetupAttachment(GetCapsuleComponent());
 	FacingMarker->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	FacingMarker->SetRelativeLocation(FVector(40.f, 0.f, 50.f));
+	FacingMarker->SetRelativeLocation(StandingShape.MarkerOffset - FVector(0.f, 0.f, StandingShape.CapsuleHalfHeight));
 	FacingMarker->SetRelativeScale3D(FVector(0.3f, 0.15f, 0.15f));
 	if (CubeMesh.Succeeded())
 	{
@@ -73,15 +74,43 @@ AOperativeCharacter::AOperativeCharacter()
 		FacingMarker->SetMaterial(0, BaseMat.Object);
 	}
 
+	// Godot capsule 2.0 / 1.3 / 0.7 m -> 180 / 117 / 63 cm; prone is clamped to the capsule radius.
+	CrouchingShape.CapsuleHalfHeight = 58.5f;
+	CrouchingShape.PlaceholderScale = FVector(0.7f, 0.7f, 1.17f);
+	CrouchingShape.PlaceholderCenterHeight = 58.5f;
+	CrouchingShape.MarkerOffset = FVector(40.f, 0.f, 95.f);
+	// Placeholder lies along the facing direction so prone reads clearly from the tactical camera.
+	ProneShape.CapsuleHalfHeight = 40.f;
+	ProneShape.PlaceholderScale = FVector(0.45f, 0.7f, 1.6f);
+	ProneShape.PlaceholderRotation = FRotator(90.f, 0.f, 0.f);
+	ProneShape.PlaceholderCenterHeight = 22.5f;
+	ProneShape.MarkerOffset = FVector(95.f, 0.f, 30.f);
+
 	ColdSurvival = CreateDefaultSubobject<UColdSurvivalComponent>(TEXT("ColdSurvival"));
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	HealthComponent->MaxHealth = 100.0f;
 	HealthComponent->BaseArmorReduction = 0.10f;
 }
 
+void AOperativeCharacter::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+	UpdatePlaceholderVisibility();
+	UpdatePlaceholderPose(1.f);
+}
+
 void AOperativeCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
+	{
+		MeshBaseZ = SkeletalMesh->GetRelativeLocation().Z;
+		bMeshBaseCaptured = true;
+	}
+	UpdatePlaceholderVisibility();
+	ApplyStanceCapsule();
+	UpdatePlaceholderPose(1.f);
 
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	if (BodyMesh)
@@ -188,7 +217,11 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		bSprinting = false;
 	}
 	ApplyMovementParams();
-	return RequestMove(Destination);
+	const EOperativeOrderResult Result = RequestMove(Destination);
+	UE_LOG(LogCodexTactics, Display, TEXT("%s: move to (%.0f, %.0f)%s -> %s"), *DisplayName.ToString(), Destination.X, Destination.Y,
+		bSprinting ? TEXT(" sprint") : TEXT(""), Result == EOperativeOrderResult::Accepted ? TEXT("accepted")
+		: Result == EOperativeOrderResult::Unreachable ? TEXT("unreachable") : TEXT("no controller"));
+	return Result;
 }
 
 EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, float Speed)
@@ -234,6 +267,13 @@ void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 	{
 		return;
 	}
+	// Godot: a frostbitten operative physically cannot get up from the snow.
+	if (ColdSurvival && ColdSurvival->IsFrostbitten() && NewStance != EOperativeStance::Prone)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("%s: frostbitten, cannot leave prone"), *DisplayName.ToString());
+		return;
+	}
+	const EOperativeStance OldStance = Stance;
 	Stance = NewStance;
 	if (Stance != EOperativeStance::Standing)
 	{
@@ -254,7 +294,87 @@ void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 		HealthComponent->SetDefenseMultiplier(DefMult);
 	}
 
+	ApplyStanceCapsule();
 	ApplyMovementParams();
+	UE_LOG(LogCodexTactics, Display, TEXT("%s: stance %s -> %s"), *DisplayName.ToString(),
+		*GetStanceDisplayName(OldStance).ToString(), *GetStanceDisplayName(Stance).ToString());
+	OnStanceChanged.Broadcast(this, OldStance, Stance);
+	ReceiveStanceChanged(OldStance, Stance);
+}
+
+const FOperativeStanceShape& AOperativeCharacter::GetStanceShape(EOperativeStance InStance) const
+{
+	switch (InStance)
+	{
+	case EOperativeStance::Crouching: return CrouchingShape;
+	case EOperativeStance::Prone: return ProneShape;
+	default: return StandingShape;
+	}
+}
+
+FText AOperativeCharacter::GetStanceDisplayName(EOperativeStance InStance)
+{
+	switch (InStance)
+	{
+	case EOperativeStance::Crouching: return NSLOCTEXT("CodexTactics", "StanceCrouching", "СИДЯ");
+	case EOperativeStance::Prone: return NSLOCTEXT("CodexTactics", "StanceProne", "ЛЁЖА");
+	default: return NSLOCTEXT("CodexTactics", "StanceStanding", "СТОЯ");
+	}
+}
+
+bool AOperativeCharacter::UsesPlaceholderBody() const
+{
+	const USkeletalMeshComponent* SkeletalMesh = GetMesh();
+	return !SkeletalMesh || !SkeletalMesh->GetSkeletalMeshAsset();
+}
+
+void AOperativeCharacter::UpdatePlaceholderVisibility()
+{
+	const bool bPlaceholder = UsesPlaceholderBody();
+	if (BodyMesh)
+	{
+		BodyMesh->SetVisibility(bPlaceholder);
+		BodyMesh->SetCollisionEnabled(bPlaceholder ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+	}
+	if (FacingMarker)
+	{
+		FacingMarker->SetVisibility(bPlaceholder);
+	}
+}
+
+void AOperativeCharacter::ApplyStanceCapsule()
+{
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+	const float OldHalf = Capsule->GetUnscaledCapsuleHalfHeight();
+	const float NewHalf = FMath::Max(GetStanceShape(Stance).CapsuleHalfHeight, Capsule->GetUnscaledCapsuleRadius());
+	if (!FMath::IsNearlyEqual(OldHalf, NewHalf))
+	{
+		Capsule->SetCapsuleHalfHeight(NewHalf);
+		// Keep the feet where they were.
+		AddActorWorldOffset(FVector(0.f, 0.f, (NewHalf - OldHalf) * Capsule->GetShapeScale()), false, nullptr, ETeleportType::TeleportPhysics);
+	}
+	if (bMeshBaseCaptured)
+	{
+		FVector MeshLocation = GetMesh()->GetRelativeLocation();
+		MeshLocation.Z = MeshBaseZ + (StandingShape.CapsuleHalfHeight - NewHalf);
+		GetMesh()->SetRelativeLocation(MeshLocation);
+	}
+}
+
+void AOperativeCharacter::UpdatePlaceholderPose(float Alpha)
+{
+	if (!BodyMesh || !FacingMarker || !BodyMesh->IsVisible())
+	{
+		return;
+	}
+	const FOperativeStanceShape& Shape = GetStanceShape(Stance);
+	const float FeetZ = -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight();
+	const FVector BodyLocation(0.f, 0.f, FeetZ + Shape.PlaceholderCenterHeight);
+	const FVector MarkerLocation = Shape.MarkerOffset + FVector(0.f, 0.f, FeetZ);
+	const FQuat BodyRotation = FQuat::Slerp(BodyMesh->GetRelativeRotation().Quaternion(), Shape.PlaceholderRotation.Quaternion(), Alpha);
+	BodyMesh->SetRelativeLocationAndRotation(FMath::Lerp(BodyMesh->GetRelativeLocation(), BodyLocation, Alpha), BodyRotation);
+	BodyMesh->SetRelativeScale3D(FMath::Lerp(BodyMesh->GetRelativeScale3D(), Shape.PlaceholderScale, Alpha));
+	FacingMarker->SetRelativeLocation(FMath::Lerp(FacingMarker->GetRelativeLocation(), MarkerLocation, Alpha));
 }
 
 void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
@@ -320,6 +440,7 @@ void AOperativeCharacter::ApplyMovementParams(float SpeedOverride)
 void AOperativeCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	UpdatePlaceholderPose(1.f - FMath::Exp(-StanceBlendSpeed * DeltaTime));
 	ProcessCombatShooting(DeltaTime);
 }
 
@@ -351,6 +472,20 @@ void AOperativeCharacter::StartReload()
 
 	bIsReloading = true;
 	ReloadTimer = CurrentWeapon ? CurrentWeapon->ReloadTime : 2.0f;
+
+	// Godot start_reload: radio callout asking for cover.
+	static const TCHAR* Callouts[] = {
+		TEXT("🔄 Перезаряжаюсь! Прикройте меня!"),
+		TEXT("🔄 Пустой магазин! Прикройте сектор!"),
+		TEXT("🔄 Меняю обойму, держите их!"),
+		TEXT("🔄 Перезарядка! Прикройте спину!") };
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(DisplayName, FText::FromString(Callouts[FMath::RandHelper(UE_ARRAY_COUNT(Callouts))]));
+		}
+	}
 }
 
 bool AOperativeCharacter::CanShoot() const

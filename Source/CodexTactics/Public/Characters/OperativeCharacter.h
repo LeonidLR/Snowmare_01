@@ -13,6 +13,37 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnWeaponFiredDynamic, AOperative
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWeaponMisfiredDynamic, AOperativeCharacter*, Operative);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnWeaponFiredNative, AOperativeCharacter*, AActor*, bool);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnWeaponMisfiredNative, AOperativeCharacter*);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnOperativeStanceChanged, AOperativeCharacter*, Operative, EOperativeStance, OldStance, EOperativeStance, NewStance);
+
+/**
+ * Body shape of one stance. The capsule applies to every operative Blueprint; the placeholder fields only
+ * drive the built-in cylinder body, which is shown while the Blueprint has no skeletal mesh.
+ * Godot reference: player.gd `set_stance` (capsule height 2.0 / 1.3 / 0.7 m, placeholder mesh squash).
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FOperativeStanceShape
+{
+	GENERATED_BODY()
+
+	/** Collision capsule half height, cm (feet stay on the ground when it changes). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stance", meta = (ClampMin = "10"))
+	float CapsuleHalfHeight = 90.f;
+
+	/** Placeholder body scale (engine cylinder: 100 cm diameter, 100 cm tall). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stance|Placeholder")
+	FVector PlaceholderScale = FVector(0.7f, 0.7f, 1.8f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stance|Placeholder")
+	FRotator PlaceholderRotation = FRotator::ZeroRotator;
+
+	/** Height of the placeholder body centre above the feet, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stance|Placeholder")
+	float PlaceholderCenterHeight = 90.f;
+
+	/** Facing marker position: X forward, Z above the feet, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stance|Placeholder")
+	FVector MarkerOffset = FVector(40.f, 0.f, 140.f);
+};
 
 /** Outcome of a move order. */
 UENUM(BlueprintType)
@@ -29,9 +60,11 @@ enum class EOperativeOrderResult : uint8
  * A squad member. Always driven by an AOperativeAIController (NavMesh + crowd avoidance);
  * the player controller only issues orders. Leader/follower roles are managed by USquadSubsystem.
  * Godot reference: Scenes/movements/player.gd (set_target, stop_movement, set_stance, can_sprint,
- * _process_leader_movement). Placeholder body: capsule + tinted cylinder until art is imported.
+ * _process_leader_movement).
+ * Meant to be subclassed by a Blueprint (BP_Operative) that owns the look: skeletal mesh, AnimBP, materials,
+ * capsule and stance shapes. Without a skeletal mesh a tinted placeholder cylinder shows the stance.
  */
-UCLASS()
+UCLASS(Blueprintable)
 class CODEXTACTICS_API AOperativeCharacter : public ACharacter
 {
 	GENERATED_BODY()
@@ -39,6 +72,7 @@ class CODEXTACTICS_API AOperativeCharacter : public ACharacter
 public:
 	AOperativeCharacter();
 
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
@@ -101,6 +135,38 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	FOperativeMovementConfig MovementConfig;
+
+	/** Stance shapes (capsule; placeholder body). Godot heights 2.0 / 1.3 / 0.7 m scaled to the 1.8 m capsule. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance")
+	FOperativeStanceShape StandingShape;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance")
+	FOperativeStanceShape CrouchingShape;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance")
+	FOperativeStanceShape ProneShape;
+
+	/** How fast the placeholder body blends between stances (Godot tween 0.15 s). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance", meta = (ClampMin = "0.1"))
+	float StanceBlendSpeed = 15.f;
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Stance")
+	const FOperativeStanceShape& GetStanceShape(EOperativeStance InStance) const;
+
+	/** True while the Blueprint has no skeletal mesh and the placeholder cylinder is shown. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
+	bool UsesPlaceholderBody() const;
+
+	/** Fired after every stance change (AnimBP, sounds, UI). */
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Stance")
+	FOnOperativeStanceChanged OnStanceChanged;
+
+	/** Blueprint hook for stance changes. */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Stance", meta = (DisplayName = "On Stance Changed"))
+	void ReceiveStanceChanged(EOperativeStance OldStance, EOperativeStance NewStance);
+
+	/** Localised stance name («СТОЯ», «СИДЯ», «ЛЁЖА»). */
+	static FText GetStanceDisplayName(EOperativeStance InStance);
 
 	/** Cold level in percent. Owned by the cold survival system once ported. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative", meta = (ClampMin = "0", ClampMax = "100"))
@@ -191,12 +257,23 @@ private:
 	/** Pushes max speed and turn rate for the current state into CharacterMovement. */
 	void ApplyMovementParams(float SpeedOverride = -1.f);
 	EOperativeOrderResult RequestMove(const FVector& Destination);
+	/** Resizes the capsule for the stance, keeping the feet in place and the skeletal mesh on the ground. */
+	void ApplyStanceCapsule();
+	/** Shows the placeholder only without a skeletal mesh. */
+	void UpdatePlaceholderVisibility();
+	/** Blends the placeholder body towards the stance shape (Alpha 1 = snap). */
+	void UpdatePlaceholderPose(float Alpha);
 
-	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Operative")
+	/** Placeholder body; hidden automatically once the Blueprint assigns a skeletal mesh. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> BodyMesh;
 
-	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Operative")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> FacingMarker;
+
+	/** Skeletal mesh Z offset set by the Blueprint for the standing capsule. */
+	float MeshBaseZ = 0.f;
+	bool bMeshBaseCaptured = false;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> BodyMaterial;

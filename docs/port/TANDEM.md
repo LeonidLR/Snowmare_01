@@ -16,7 +16,6 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 | Agent | Task | Files | Since |
 |---|---|---|---|
-| Claude | Blueprint-driven operatives (BP_Operative), stance body/capsule, on-screen HUD feed + squad status | `OperativeCharacter.*`, `Core/CodexTacticsGameMode.*`, new `UI/CodexTacticsHUD.*`, `Scripts/Editor/*` | now |
 
 ## Open questions — Sprint 03 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 
@@ -136,6 +135,12 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-28 Claude: user feedback — no visible stance, no feedback. Operatives are now Blueprints
+  (`/Game/Characters/Operatives/BP_Operative`, created by `Scripts/Editor/create_operative_blueprint.py`, spawned by
+  the game mode; the user owns mesh/AnimBP/collision). Stance changes the capsule (Godot 2.0/1.3/0.7 m ratios, feet
+  kept) and a placeholder body shown only without a skeletal mesh; `OnStanceChanged` + BP event for AnimBP.
+  `ACodexTacticsHUD` (canvas baseline): message feed, squad status panel, labels over operatives; orders and
+  stances logged to LogCodexTactics. Reload radio callouts from Godot. `CodexTactics.StanceSmoke` PASS, `HudShot` visual.
 - 2026-09-28 Claude (Gemini unavailable): cold survival committed — `ColdRules` + `UColdSurvivalComponent`
   (Godot `_process_cold_system`: 1 %/s × fortitude cut × stance × zone × elevated wind, warming 8 %/s, tiers
   40/70/90/100 with speed ×0.7/0.45/0.25, weapon freeze 90 % with 5 % hysteresis, frostbite prone, freeze damage,

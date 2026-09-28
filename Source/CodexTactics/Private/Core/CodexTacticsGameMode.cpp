@@ -8,6 +8,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "Kismet/GameplayStatics.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "UI/CodexTacticsHUD.h"
 
 #define LOCTEXT_NAMESPACE "CodexTacticsGameMode"
 
@@ -16,7 +17,9 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 	GameStateClass = ACodexTacticsGameState::StaticClass();
 	PlayerControllerClass = ACodexTacticsPlayerController::StaticClass();
 	DefaultPawnClass = ATacticalCameraPawn::StaticClass();
+	HUDClass = ACodexTacticsHUD::StaticClass();
 	OperativeClass = AOperativeCharacter::StaticClass();
+	OperativeBlueprint = TSoftClassPtr<AOperativeCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Operatives/BP_Operative.BP_Operative_C")));
 
 	// Godot squad: Commander leads (Blue), Engineer (Orange), Medic-sapper (Green) in triangle formation.
 	SquadRoster = {
@@ -34,7 +37,12 @@ void ACodexTacticsGameMode::StartPlay()
 void ACodexTacticsGameMode::SpawnSquad()
 {
 	UWorld* World = GetWorld();
-	if (!World || !OperativeClass)
+	TSubclassOf<AOperativeCharacter> SpawnClass = OperativeBlueprint.IsNull() ? nullptr : OperativeBlueprint.LoadSynchronous();
+	if (!SpawnClass)
+	{
+		SpawnClass = OperativeClass;
+	}
+	if (!World || !SpawnClass)
 	{
 		return;
 	}
@@ -51,7 +59,7 @@ void ACodexTacticsGameMode::SpawnSquad()
 	{
 		const FSquadMemberSpawn& Entry = SquadRoster[Index];
 		const FVector Location = StartTransform.GetLocation() + Facing.RotateVector(Entry.Offset);
-		AOperativeCharacter* Operative = World->SpawnActorDeferred<AOperativeCharacter>(OperativeClass,
+		AOperativeCharacter* Operative = World->SpawnActorDeferred<AOperativeCharacter>(SpawnClass,
 			FTransform(Facing, Location), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 		if (!Operative)
 		{
