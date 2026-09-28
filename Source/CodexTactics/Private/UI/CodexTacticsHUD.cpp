@@ -14,6 +14,7 @@
 #include "UI/LootDialogWidget.h"
 #include "UI/ActionBarWidget.h"
 #include "UI/PhaseBannersWidget.h"
+#include "UI/TurnBasedHudWidget.h"
 #include "UI/DialogueSubsystem.h"
 #include "UI/DialogueWidget.h"
 #include "UI/MainMenuWidget.h"
@@ -111,6 +112,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	DialogueWidgetClass = UDialogueWidget::StaticClass();
 	ActionBarWidgetClass = UActionBarWidget::StaticClass();
 	PhaseBannersWidgetClass = UPhaseBannersWidget::StaticClass();
+	TurnBasedHudWidgetClass = UTurnBasedHudWidget::StaticClass();
 }
 
 void ACodexTacticsHUD::BeginPlay()
@@ -167,6 +169,14 @@ void ACodexTacticsHUD::BeginPlay()
 		{
 			PhaseBanners->AddToViewport(8);
 			PhaseBanners->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		}
+	}
+	if (TurnBasedHudWidgetClass && GetOwningPlayerController())
+	{
+		TurnBasedHud = CreateWidget<UTurnBasedHudWidget>(GetOwningPlayerController(), TurnBasedHudWidgetClass);
+		if (TurnBasedHud)
+		{
+			TurnBasedHud->AddToViewport(9); // shows itself while the grid fight runs
 		}
 	}
 	if (DialogueWidgetClass && GetOwningPlayerController())

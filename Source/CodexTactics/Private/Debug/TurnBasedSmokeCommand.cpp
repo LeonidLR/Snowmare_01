@@ -25,6 +25,9 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tactics/TurnBasedRules.h"
 #include "TimerManager.h"
+#include "Blueprint/UserWidget.h"
+#include "Kismet/GameplayStatics.h"
+#include "UI/TurnBasedHudWidget.h"
 
 namespace TurnBasedSmoke
 {
@@ -107,6 +110,11 @@ namespace TurnBasedSmoke
 				FString::Printf(TEXT("squad %d / enemies %d on the grid"), TurnBased->GetSquadCount(), TurnBased->GetEnemyCount()));
 			const FTurnUnitState* Active = TurnBased->GetUnitState(TurnBased->GetActiveUnit());
 			Check(State, Active && Active->AP == 8, TEXT("active operative has 8 AP"));
+			if (UTurnBasedHudWidget* Hud = CreateWidget<UTurnBasedHudWidget>(UGameplayStatics::GetPlayerController(World, 0), UTurnBasedHudWidget::StaticClass()))
+			{
+				Check(State, Hud->GetPhaseText().ToString() == TEXT("⚔️ ХОД ОТРЯДА") && Hud->GetApText().ToString() == TEXT("AP: 8/8"),
+					TEXT("turn-based panel: squad phase, AP 8/8"));
+			}
 			Check(State, TurnBased->SetActiveUnitStance(EOperativeStance::Crouching) && Active->AP == 7, TEXT("stance change costs 1 AP"));
 			State.EnemyCellBefore = TurnBased->GetUnitState(State.Enemy.Get())->GridPos;
 			State.SquadHealthBefore = SquadHealth(World);

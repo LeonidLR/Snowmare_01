@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: Phase 4/5 world systems — interaction, relocation, deployables
-Task: next = turn-based HUD panel, then the remaining turn-based features (docs/port/HANDOFF.md §8.6)
+Task: next = remaining turn-based features (docs/port/HANDOFF.md §8.6), then Phase 2 data importer (§8.7)
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**

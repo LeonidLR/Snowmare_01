@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-29 by Claude, after commit `8baa4d5`.
+Last update: 2026-09-29 by Claude, after the turn-based panel commit (see §10).
 
 ---
 
@@ -177,7 +177,8 @@ damage − armour, barrel = 3 x 3 blast + 3 burning rounds with a 5 x 5 fire-fea
 end the squad turn. Turret phase (nearest enemy ≤ 45 m, fallback curve, 25 dmg). Enemy phase: nearest operative, path
 to an orthogonal neighbour (fire-fear aware), bite for 2 AP after a 1.3 s yellow warning (arc x stance multiplier),
 step back. Steps animate 0.52 s (enemy 0.48 s, x1.414 diagonal). Victory → «🏆 ПОБЕДА…», flow → tactical pause.
-`Tactics/TurnGridOverlayActor` (instanced glow tiles: grid, reachable, attack targets, enemy reach, active, warning,
+`UI/TurnBasedHudWidget` (bottom-right panel «ХОД ОТРЯДА» / «ХОД ПРОТИВНИКА», unit, AP / HP, end squad turn, next
+operative, stance, turn; barrel push disabled — Godot `gorky17_combat_hud.gd`). `Tactics/TurnGridOverlayActor` (instanced glow tiles: grid, reachable, attack targets, enemy reach, active, warning,
 fear). Controller: clicks go to `HandleWorldClick`; 1..3 / Z C V / R / Tab / Enter as above. Grid manager gained
 `FindPathToAdjacent` / `FindPathClosestOutsideForbidden`; barrels `IgniteForTurnBased` / `ExtinguishNow`.
 
@@ -265,9 +266,14 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    guard, weapon selector, pause menu / save-load, radius rings (action bar slots are placeholders).
 6. Turn-based combat manager on the Gorky grid (Godot `Scripts/tactics/turn_based_combat_manager.gd`).
    Done: `GorkyLineOfSight`, `TurnBasedRules`, `UTurnBasedCombatSubsystem` + overlay + controller input (see §4).
-   Next: turn-based HUD panel («ХОД ОТРЯДА», AP, buttons — Godot `gorky17_combat_hud.gd`), grid deployables /
+   Next (panel done): grid deployables /
    barricade relocation, exposed zones + reinforcements, weapon switching / grenades, companion drone, stasis look.
 7. Phase 2 data importer (JSON / .tres → DataAssets) replacing hand-typed values (§9).
+   Source trap: Godot has TWO GameBalanceConfig files with different values. The turn-based manager loads
+   `resources/balance.tres` first (squad 8 AP, enemy 6 AP — the UE `FTurnBasedBalance` defaults), while camera, enemies,
+   turrets, mines, barricades load `resources/game_balance_config.tres` (e.g. tactical_squad_max_ap = 3, enemy 4,
+   turret_shot_delay 1.0). Import both and wire each consumer to the file its Godot counterpart loads. Weapons:
+   `resources/weapons/*.tres` → `UWeaponDataAsset` (same field names). Levels: `data/configs/levels/*.json`.
 8. Content: level, VFX, cutscene; character "twisted" look issue (§6).
 
 ## 9. Known gaps / tech debt
@@ -296,6 +302,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
+| (turn-based panel commit) | Turn-based action panel (phase, unit, AP / HP, buttons) |
 | `8baa4d5` | Gorky 17 turn-based combat subsystem, grid overlay, controller input, TurnBasedSmoke |
 | `87b4ae7` | Gorky line of sight, turn-based pure rules (hit chance, attack cells, balance struct) |
 | `444692c` | Pause / preparation / wave banners, cutscene card with skip, squad reset after the cutscene |

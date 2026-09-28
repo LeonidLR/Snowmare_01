@@ -13,6 +13,7 @@ class UMainMenuWidget;
 class UDialogueWidget;
 class UActionBarWidget;
 class UPhaseBannersWidget;
+class UTurnBasedHudWidget;
 class ALootCrateActor;
 class UFont;
 
@@ -62,6 +63,10 @@ public:
 	/** Pause / preparation / wave banners and the cutscene card (a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UPhaseBannersWidget> PhaseBannersWidgetClass;
+
+	/** Turn-based action panel class (a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UTurnBasedHudWidget> TurnBasedHudWidgetClass;
 
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
@@ -122,6 +127,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPhaseBannersWidget> PhaseBanners;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTurnBasedHudWidget> TurnBasedHud;
 
 	void DrawMessageFeed();
 	/** Draws the objective banner; returns its bottom edge (Y). */
