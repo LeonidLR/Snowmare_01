@@ -3,7 +3,7 @@
 **Purpose.** Any agent (Claude, Gemini, …) must be able to pick up the port from this file alone.
 Keep it current: every commit that adds / changes a system updates §5 (system map), §8 (next steps) and §10 (log).
 
-Last update: 2026-09-28 by Claude, after the loot crates commit (see §10).
+Last update: 2026-09-28 by Claude, after commit `d72d131`.
 
 ---
 
@@ -192,7 +192,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (next commit) | Supply crates + loot dialog, provisions / extra ammo / bonus items on operatives, 2 crates on the test map, smoke retries for crouched defusal |
+| `d72d131` | Supply crates + loot dialog, provisions / extra ammo / bonus items on operatives, 2 crates on the test map, smoke retries for crouched defusal |
 | `d922e49` | Handoff documentation, `verify_all.ps1`, GEMINI.md |
 | `11d7655` | Barricades, proximity mines, grenade traps on any object, supply + F set-up, role / luck, SmokeUtils |
 | `ab0c046` | Object relocation (ghost placement, push task, pause planning, combat drop) |
