@@ -24,7 +24,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/movements/main.gd` mode flags: preparation, waves, tactical pause, turn-based enter/exit | `FGameFlowStateMachine` + `UGameFlowSubsystem` | 1 | ✅ logic (Space tap/hold input → Phase 3, encounter selection → Phase 4, config from balance → Phase 2) | `CodexTactics.GameFlow.*` (25) |
 | `Scripts/tactics/gorky17_enums.gd` | `Tactics/Gorky17Types.h` (UENUMs, arc zones) | 1 | ✅ (Gemini) | `CodexTactics.Tactics.*` |
 | `Scripts/tactics/gorky17_grid_manager.gd` | `Tactics/UGorkyGridManager` (cells, occupancy, AP BFS, A*) | 1 | ✅ (Gemini) | `CodexTactics.Tactics.*` |
-| `Scripts/tactics/gorky17_los.gd` | `FTacticalLineOfSight` | 1 | ⬜ | |
+| `Scripts/tactics/gorky17_los.gd` | `GorkyLineOfSight::HasLineOfSight` | 1 | ✅ | `CodexTactics.Tactics.LineOfSight` |
 | `Scripts/tactics/turn_based_combat_manager.gd` | `UTacticalCombatSubsystem` | 1/4 | ⬜ | |
 | `Scripts/tactics/tactical_exposed_zones_manager.gd` | `UTacticalExposedZonesSubsystem` | 4 | ⬜ | |
 | `Scripts/tactics/tactical_encounter_selector.gd` | `UTacticalEncounterSelector` | 4 | ⬜ | |

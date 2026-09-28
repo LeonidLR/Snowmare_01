@@ -45,7 +45,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **110 automation tests, 18 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **113 automation tests, 18 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -245,6 +245,10 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    ~~dialogue window, bottom action bar, banners, cutscene card~~ (done); remaining UI: inventory drawer, transfer,
    guard, weapon selector, pause menu / save-load, radius rings (action bar slots are placeholders).
 6. Turn-based combat manager on the Gorky grid (Godot `Scripts/tactics/turn_based_combat_manager.gd`).
+   Done so far: `Tactics/GorkyLineOfSight` (gorky17_los.gd), `Tactics/TurnBasedRules` (FTurnBasedBalance = Godot
+   tactical_* defaults, hit chance with stance bonus, turret curve, damage by distance, weapon attack cells).
+   Next: `UTurnBasedCombatSubsystem` (start_combat registration, player turn: move / stance / facing / attack,
+   turret + enemy phases, barrels / mines, end conditions), then grid overlay + combat HUD, controller clicks.
 7. Phase 2 data importer (JSON / .tres → DataAssets) replacing hand-typed values (§9).
 8. Content: level, VFX, cutscene; character "twisted" look issue (§6).
 
@@ -274,6 +278,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
+| (turn-based rules commit) | Gorky line of sight, turn-based pure rules (hit chance, attack cells, balance struct) |
 | `444692c` | Pause / preparation / wave banners, cutscene card with skip, squad reset after the cutscene |
 | `5c317b5` | Bottom tactical bar (weapon, relocation pick mode, stance cycle, squad slots with HP / cold bars) |
 | `2b17909` | Dialogue assets imported from Godot, bottom dialogue window, feed dialogues for prep / wave rest / victory, input blocking |
