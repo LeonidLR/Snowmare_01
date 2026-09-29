@@ -11,6 +11,7 @@
 #include "AIController.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/ProgressionRules.h"
+#include "Combat/WaveVictorySubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Core/CodexTacticsGameMode.h"
@@ -714,7 +715,12 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 		C->StopMovement();
 	}
 
-	// Godot enemy_base.gd / enemy_cutter.gd death: every squad member gets the kill EXP.
+	// Godot enemy_base.gd / enemy_cutter.gd death: the kill goes into the squad statistics (last attacker) ...
+	if (UWaveVictorySubsystem* Victory = GetWorld() ? GetWorld()->GetSubsystem<UWaveVictorySubsystem>() : nullptr)
+	{
+		Victory->RegisterEnemyKill(Archetype, LastAttackerSource.IsEmpty() ? AttackerSource : LastAttackerSource);
+	}
+	// ... and every squad member gets the kill EXP.
 	if (USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)
 	{
 		for (AOperativeCharacter* Member : Squad->GetMembers())

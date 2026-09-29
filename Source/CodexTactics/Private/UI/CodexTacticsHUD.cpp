@@ -26,6 +26,7 @@
 #include "UI/InventoryDrawerWidget.h"
 #include "UI/TransferDialogWidget.h"
 #include "UI/ProfileDialogWidget.h"
+#include "UI/VictoryPanelWidget.h"
 #include "Combat/WaveSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -140,6 +141,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	InventoryDrawerWidgetClass = UInventoryDrawerWidget::StaticClass();
 	TransferDialogWidgetClass = UTransferDialogWidget::StaticClass();
 	ProfileDialogWidgetClass = UProfileDialogWidget::StaticClass();
+	VictoryPanelWidgetClass = UVictoryPanelWidget::StaticClass();
 	PauseMenuWidgetClass = UPauseMenuWidget::StaticClass();
 	SaveLoadDialogWidgetClass = USaveLoadDialogWidget::StaticClass();
 	PhaseBannersWidgetClass = UPhaseBannersWidget::StaticClass();
@@ -207,6 +209,15 @@ void ACodexTacticsHUD::BeginPlay()
 		if (TransferDialog)
 		{
 			TransferDialog->AddToViewport(6);
+		}
+	}
+	if (VictoryPanelWidgetClass && GetOwningPlayerController())
+	{
+		// Under the profile (Godot adds the profile dialog to the UI after the victory panel).
+		VictoryPanel = CreateWidget<UVictoryPanelWidget>(GetOwningPlayerController(), VictoryPanelWidgetClass);
+		if (VictoryPanel)
+		{
+			VictoryPanel->AddToViewport(11);
 		}
 	}
 	if (ProfileDialogWidgetClass && GetOwningPlayerController())

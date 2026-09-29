@@ -15,6 +15,7 @@ class UActionBarWidget;
 class UInventoryDrawerWidget;
 class UTransferDialogWidget;
 class UProfileDialogWidget;
+class UVictoryPanelWidget;
 class AOperativeCharacter;
 class UPauseMenuWidget;
 class USaveLoadDialogWidget;
@@ -95,6 +96,12 @@ public:
 	TSubclassOf<UProfileDialogWidget> ProfileDialogWidgetClass;
 
 	UProfileDialogWidget* GetProfileDialog() const { return ProfileDialog; }
+
+	/** Wave-cleared panel class (a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UVictoryPanelWidget> VictoryPanelWidgetClass;
+
+	UVictoryPanelWidget* GetVictoryPanel() const { return VictoryPanel; }
 
 	/** Key P (Godot _toggle_profile_dialog): the leader's profile opens, or the open one closes. */
 	void ToggleProfileDialog();
@@ -197,6 +204,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UProfileDialogWidget> ProfileDialog;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UVictoryPanelWidget> VictoryPanel;
 
 	/** Godot wave-clear victory: the profile of the first member with free points opens. */
 	UFUNCTION()

@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **133 automation tests, 45 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **134 automation tests, 46 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -81,6 +81,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `ExposedZonesSmoke [shot]` | turn-based with one hound; the squad passes 3 turns: warning (1), danger (2), breach of 1-2 hounds (non-elite pool), no second breach; `shot` (rendered, UnrealEditor.exe -game) saves `ExposedZones.png` at the danger state |
 | `NarrativeSmoke` | Level narrative elements (note, signpost, poster) and the dialogue trigger: marker only from afar, the note's text within 2 m, menu «Записка дежурного инженера» / «Прочитать вслух» reads it into the feed; the trigger plays the wave-rest dialogue once |
 | `HoldSphereSmoke` | Space hold: the dome grows (eased) and the squad holds fire; release hides it and lifts the cease fire |
+| `VictorySmoke` | All waves killed (commander / turret / mine sources): kill statistics, the panel per wave, «next wave (N/M)» starts the rest, «full victory» after the last; post-combat: squad at its preparation spots, commander leads, no enemies, a turret back in the supply |
 | `ProgressionSmoke` | +260 EXP -> level 2 (3 points, full heal, «УРОВЕНЬ 2»); a hound kill gives every member 15 EXP; P opens the profile, + / - spend and refund points within the bounds, paging, number keys, Esc, wave-clear auto open |
 | `ClickRulesSmoke` | Plain-click rules in a fight (Godot main.gd): an enemy becomes the priority target; a barrel / barricade can't be moved outside the pause and a ground click can't move the squad (HQ lines); in the pause a barrel is picked up for relocation and a barricade opens its menu at once |
 | `CutterSmoke` | Cutter (Godot enemy_cutter.gd): 75 HP / 18 damage; pounces from 6 m, the landing hurts the squad within 2.2 m («НАЛЁТ»), 6 s cooldown; shot down mid-leap it crashes («СБИТ В ВОЗДУХЕ», «КРАХ») |
@@ -432,6 +433,16 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   Blueprint hooks On Jump Attack Started / Impact for the clips. Godot only jumps when the model has the jump clip —
   UE jumps whenever the config enables it. Shot down mid-leap it keeps falling on the world and crashes («СБИТ В
   ВОЗДУХЕ», «КРАХ»). The airborne kill gives the cutter EXP (16); kill statistics are not ported.
+- Wave victory (`UWaveVictorySubsystem`, `UVictoryPanelWidget`; Godot main.gd): the panel shows while the flow is in
+  WaveCleared (time stopped), with Godot's title / subtitle, the kill statistics card and «Запустить следующую волну
+  (N/M)» / «Завершить бой и продолжить исследование» (-> `AdvanceAfterWave`) and «Перезапустить уровень (X)». The HUD
+  font has no emoji, so the statistics' 🐺 / 🏹 / ❄️ read «гончие / плевуны / громилы». Kills count per Godot
+  register_enemy_kill (last attacker; unknown sources go to the leader; the recruit has no entry; only hound / spitter /
+  brute per type). Post-combat: enemies removed, the squad teleported to where it stood when the cutscene ended
+  (Godot initial_prep_station; before that its position at the post-combat start, Godot: its spawn), orders dropped,
+  the commander leads, every bDeployable turret / barricade / mine (abandoned level ones too, as in Godot) goes into
+  the supply by Godot's member order and caps with the engineer's feed line. Not ported: deployables_combat_stats
+  damage and _record_telemetry (telemetry only); a carried object is not dropped explicitly.
 - Progression (Godot player.gd, profile_dialog.gd): kill EXP to every squad member (exp_reward_<type> from
   DA_GameBalanceConfig, cutter 16); level x 250 per level, cap 10; +3 points, full heal, floating text and radio line
   per level; + / - within [start value, cap] (HP +5 up to 200, luck 60, accuracy 100, fortitude 50). Profile on P, on
@@ -489,7 +500,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Progression (Godot player.gd add_exp / _on_level_up / increase_stat / decrease_stat, enemy kill and wave-clear EXP, profile_dialog.gd + main.gd profile handling): `ProgressionRules` + ProgressionRulesTest, `AOperativeCharacter` level / EXP / stat points, `AEnemyCharacter::KillExpReward`, `UProfileDialogWidget` (P, number keys, wave-clear auto open, Esc), save fields; ProgressionSmoke, `HudShot profile` |
+| (this) | Wave victory (Godot main.gd register_enemy_kill, _on_wave_cleared, _on_next_wave_pressed, _start_post_combat_sequence, _auto_recover_all_deployables; movements_demo.tscn VictoryPanel): `KillStatsRules` + KillStatsRulesTest, `UWaveVictorySubsystem`, `UVictoryPanelWidget`, `DeployableRules::PickRecoveryRecipient`; the flow no longer stops in WaveCleared; VictorySmoke, `HudShot victory` |
+| `2996631` | Progression (Godot player.gd add_exp / _on_level_up / increase_stat / decrease_stat, enemy kill and wave-clear EXP, profile_dialog.gd + main.gd profile handling): `ProgressionRules` + ProgressionRulesTest, `AOperativeCharacter` level / EXP / stat points, `AEnemyCharacter::KillExpReward`, `UProfileDialogWidget` (P, number keys, wave-clear auto open, Esc), save fields; ProgressionSmoke, `HudShot profile` |
 | `11990c4` | Narrative elements and dialogue triggers (Godot narrative_element.gd, dialogue_trigger.gd; placed on L_MovementTest by the level script), the Space-hold dome, cease fire and charge bar (Godot tactical_hold_sphere.gd, gorky17_combat_hud.gd); NarrativeSmoke, HoldSphereSmoke, `HudShot hold` |
 | `3985f6c` | Plain-click rules in a fight (Godot main.gd click branches 0 / 0.5): enemy priority target, no relocation outside the pause, immediate menu / relocation in the pause; `HandleWorldHit`, `UInteractionSubsystem::OpenMenuNow`, `AssignPriorityTarget`; ClickRulesSmoke |
 | `d081f34` | Cutter (Godot enemy_cutter.gd): own stats, the pounce with impact damage and cooldown, airborne death; enemy animation configs imported (`import_enemy_anim_configs.py`, DA_EnemyAnim_*); CutterSmoke |

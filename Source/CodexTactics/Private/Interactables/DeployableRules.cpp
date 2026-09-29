@@ -65,6 +65,18 @@ int32 DeployableRules::GetMaxCarried(EDeployableType Type)
 	}
 }
 
+int32 DeployableRules::PickRecoveryRecipient(const TArray<int32>& CarriedInOrder, int32 MaxCarried)
+{
+	for (int32 Index = 0; Index < CarriedInOrder.Num(); ++Index)
+	{
+		if (CarriedInOrder[Index] >= 0 && CarriedInOrder[Index] < MaxCarried)
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
 FText DeployableRules::GetDefusalStanceName(EOperativeStance Stance)
 {
 	switch (Stance)

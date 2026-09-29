@@ -73,6 +73,12 @@ namespace DeployableRules
 	/** Godot player.gd max_turrets 2, max_barricades 4, max_mines 5. */
 	CODEXTACTICS_API int32 GetMaxCarried(EDeployableType Type);
 
+	/**
+	 * Godot _auto_recover_all_deployables: the first member (in the given order) carrying fewer than the maximum gets
+	 * the recovered item; INDEX_NONE when all are full (the caller then gives it to the type's owner anyway).
+	 */
+	CODEXTACTICS_API int32 PickRecoveryRecipient(const TArray<int32>& CarriedInOrder, int32 MaxCarried);
+
 	/** «Стоя» / «Присев» / «Лёжа» (Godot defusal stance names). */
 	CODEXTACTICS_API FText GetDefusalStanceName(EOperativeStance Stance);
 

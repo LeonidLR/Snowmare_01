@@ -262,13 +262,7 @@ void UWaveSubsystem::CheckWaveCompletion()
 			Flow->NotifyWaveCleared();
 		}
 
-		if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
-		{
-			Msg->PostMessage(
-				FText::FromString(TEXT("Командир")),
-				FText::FromString(FString::Printf(TEXT("Волна %d успешно отбита! Всем перегруппироваться."), CurrentWaveIndex))
-			);
-		}
+		// The wave-cleared radio line (Godot _on_wave_cleared) is posted by UWaveVictorySubsystem.
 
 		// Godot main.gd _on_wave_cleared: every squad member gets exp_reward_wave_complete (before the profile opens).
 		const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();

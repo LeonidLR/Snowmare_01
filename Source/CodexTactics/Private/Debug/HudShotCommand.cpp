@@ -1,10 +1,11 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar. "profile": the commander levelled up, profile open.
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar. "profile": the commander levelled up, profile open. "victory": the wave-cleared panel with kill statistics.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
 #include "CoreMinimal.h"
+#include "Combat/WaveVictorySubsystem.h"
 
 #if !UE_BUILD_SHIPPING
 
@@ -385,6 +386,45 @@ namespace HudShot
 					}
 					return true;
 				}), 0.05f);
+			}), 3.5f, false);
+		}
+		if (Args.Contains(TEXT("victory")))
+		{
+			// Wave 1 cleared with a few kills in the statistics.
+			TWeakObjectPtr<UWorld> VictoryWorld(World);
+			FTimerHandle VictoryHandle;
+			World->GetTimerManager().SetTimer(VictoryHandle, FTimerDelegate::CreateLambda([VictoryWorld]()
+			{
+				UGameFlowSubsystem* Flow = VictoryWorld.IsValid() ? VictoryWorld->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+				UWaveVictorySubsystem* Victory = VictoryWorld.IsValid() ? VictoryWorld->GetSubsystem<UWaveVictorySubsystem>() : nullptr;
+				if (Flow && Victory)
+				{
+					Flow->TriggerCombatZone();
+					Flow->FinishCutscene();
+					Flow->FinishPreparation();
+					VictoryWorld->GetSubsystem<UWaveSubsystem>()->ClearAllEnemies();
+					Victory->RegisterEnemyKill(EEnemyArchetype::FrostHound, TEXT("Командир"));
+					Victory->RegisterEnemyKill(EEnemyArchetype::Spitter, TEXT("Турель"));
+					Victory->RegisterEnemyKill(EEnemyArchetype::Brute, TEXT("Инженер"));
+					Victory->RegisterEnemyKill(EEnemyArchetype::FrostHound, TEXT("Мина"));
+					Flow->NotifyWaveCleared();
+					// Time stands still while the panel is up: shoot and exit on real time.
+					TSharedRef<int32> Frames = MakeShared<int32>(0);
+					FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Frames](float)
+					{
+						++(*Frames);
+						if (*Frames == 30)
+						{
+							FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / TEXT("HudShot.png"), true, false);
+						}
+						if (*Frames >= 60)
+						{
+							FPlatformMisc::RequestExit(false, TEXT("HudShot"));
+							return false;
+						}
+						return true;
+					}));
+				}
 			}), 3.5f, false);
 		}
 		if (Args.Contains(TEXT("profile")))
