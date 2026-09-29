@@ -1,4 +1,5 @@
 #include "Survival/ColdSurvivalComponent.h"
+#include "Combat/WaveSubsystem.h"
 #include "Camera/CameraZoneVolume.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
@@ -83,6 +84,11 @@ FColdEnvironment UColdSurvivalComponent::GatherEnvironment() const
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	Environment.bPreparation = Flow && Flow->GetPhase() == ECodexGamePhase::Preparation;
 
+	// Godot cold_rate_modifier: the level wave's cold_drain_mult, overridden inside a camera zone.
+	if (const UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>())
+	{
+		Environment.ZoneMultiplier = Waves->GetColdDrainMultiplier();
+	}
 	const FVector Location = Operative->GetActorLocation();
 	for (TActorIterator<ACameraZoneVolume> It(GetWorld()); It; ++It)
 	{

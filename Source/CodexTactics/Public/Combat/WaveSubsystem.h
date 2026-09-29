@@ -18,7 +18,9 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FOnEnemySpawnedNative, AEnemyCharacter*, EE
 /**
  * World subsystem managing enemy waves, spawn queues, and pacing.
  * Bridges UGameFlowSubsystem combat phases with enemy lifecycle.
- * Godot reference: Scenes/movements/combat_wave_controller.gd.
+ * Godot reference: Scenes/movements/combat_wave_controller.gd; level waves: main.gd _spawn_custom_json_wave (the whole
+ * wave appears at once — spawn_delay_sec / max_simultaneous_enemies are ignored like in Godot, user decision
+ * 2026-09-29 — with the wave modifiers and custom_stats.health applied).
  */
 UCLASS()
 class CODEXTACTICS_API UWaveSubsystem : public UTickableWorldSubsystem
@@ -61,6 +63,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Wave")
 	bool IsWaveActive() const { return bWaveActive; }
 
+	/**
+	 * Cold drain multiplier of the current level wave (Godot wave_modifiers.cold_drain_mult written to every operative's
+	 * cold_rate_modifier); camera zones override it while an operative is inside. 1 without a level wave.
+	 */
+	float GetColdDrainMultiplier() const { return ColdDrainMultiplier; }
+
 	/** Finds an appropriate spawn location given a lane name. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Wave")
 	FVector GetSpawnLocationForLane(const FString& Lane) const;
@@ -88,6 +96,10 @@ private:
 	int32 MaxSimultaneousEnemies = 8;
 	bool bWaveActive = false;
 	float SpawnTimer = 0.0f;
+	float ColdDrainMultiplier = 1.0f;
+
+	/** Godot _spawn_custom_json_wave: every enemy of the wave at once, modifiers applied, radio line with counts. */
+	void SpawnLevelWave(const FWaveDefinition& Def);
 
 	UFUNCTION()
 	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);

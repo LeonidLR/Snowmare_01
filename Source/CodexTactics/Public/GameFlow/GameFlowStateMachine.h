@@ -25,6 +25,9 @@ public:
 	/** Replaces the config and resets to a fresh mission in Exploration. */
 	void Reset(const FGameFlowConfig& InConfig);
 
+	/** Replaces the config and keeps the current state (level data applied at mission start). */
+	void SetConfig(const FGameFlowConfig& InConfig) { Config = InConfig; }
+
 	// --- Queries ---
 	ECodexGamePhase GetPhase() const { return Phase; }
 	ECodexCombatMode GetCombatMode() const { return CombatMode; }

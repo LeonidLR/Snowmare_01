@@ -46,6 +46,12 @@ public:
 	 */
 	void ApplyBalance(const class UGodotBalanceAsset& Config);
 
+	/**
+	 * Level wave modifiers (Godot main.gd _spawn_custom_json_wave): max health = CustomHealth * HpMult when the spawn
+	 * has custom_stats.health, else max health * HpMult (full health); attack damage * DamageMult; speed * SpeedMult.
+	 */
+	void ApplyWaveModifiers(float HpMult, float DamageMult, float SpeedMult, float CustomHealth = 0.f);
+
 	/** Avoids burning barrels (Godot fears_fire; turn-based enemies keep out of the 5 x 5 fire-fear area). */
 	bool DoesFearFire() const { return bFearsFire; }
 

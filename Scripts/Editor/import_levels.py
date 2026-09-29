@@ -34,7 +34,8 @@ for path in sorted(glob.glob(os.path.join(GODOT, "data", "configs", "levels", "*
         config.set_editor_property("prep_phase_duration", float(data.get("prep_phase_duration", 60)))
         config.set_editor_property("wave_rest_duration", float(data.get("wave_rest_duration", 20)))
         waves = []
-        for wave in data.get("waves", []):
+        # main.gd _load_active_level_config keeps only waves without "is_active": false
+        for wave in [w for w in data.get("waves", []) if w.get("is_active", True) is not False]:
             definition = unreal.WaveDefinition()
             definition.set_editor_property("wave_index", int(wave.get("wave_index", len(waves) + 1)))
             definition.set_editor_property("name", unreal.Text(wave.get("name", "")))
@@ -48,7 +49,7 @@ for path in sorted(glob.glob(os.path.join(GODOT, "data", "configs", "levels", "*
                 entry.set_editor_property("spawn_lane", spawn.get("spawn_lane", "ANY"))
                 entry.set_editor_property("spawn_delay_sec", float(spawn.get("spawn_delay_sec", 1.0)))
                 entry.set_editor_property("initial_delay_sec", float(spawn.get("initial_delay_sec", 0.0)))
-                entry.set_editor_property("custom_health", float(spawn.get("custom_health", 0.0)))
+                entry.set_editor_property("custom_health", float(spawn.get("custom_stats", {}).get("health", spawn.get("custom_health", 0.0))))
                 spawns.append(entry)
             definition.set_editor_property("spawns", spawns)
             mods = wave.get("wave_modifiers", {})
@@ -64,7 +65,7 @@ for path in sorted(glob.glob(os.path.join(GODOT, "data", "configs", "levels", "*
             tools.create_asset(name, TARGET, unreal.LevelConfigAsset, unreal.DataAssetFactory())
         asset.set_editor_property("config", config)
         saved = unreal.EditorAssetLibrary.save_asset(full)
-        totals = [sum(s.get("count", 1) for s in w.get("spawns", [])) for w in data.get("waves", [])]
+        totals = [sum(s.get("count", 1) for s in w.get("spawns", [])) for w in data.get("waves", []) if w.get("is_active", True) is not False]
         log.append("%s <- %s: %d waves %s saved=%s" % (full, os.path.basename(path), len(waves), totals, saved))
     except Exception as error:
         log.append("FAILED %s: %s" % (full, error))

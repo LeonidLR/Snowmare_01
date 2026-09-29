@@ -9,7 +9,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 |---|---|---|
 | 0 | Project skeleton, modules, plugins, build/test scripts | ✅ |
 | 1 | Pure logic: game flow FSM, Gorky grid, LOS, AP economy, damage, cold, panic/rage | 🟨 FSM, grid, damage, cold ✅; LOS, panic/rage ⬜ |
-| 2 | Data: USTRUCT/DataAsset types + JSON → DataAsset importer | ⬜ |
+| 2 | Data: USTRUCT/DataAsset types + JSON → DataAsset importer | 🟨 weapons, balance, dialogues, levels ✅; camera user-tuned |
 | 3 | Framework: EventBus, operative character, Enhanced Input, camera, squad formation | 🟨 all but EventBus ✅ |
 | 4 | Combat: exploration→combat transition, turn queue, commands, HUD, enemy AI | 🟨 flow, pause, waves, enemies, squad fire ✅; turn-based manager ⬜ |
 | 5 | World systems: mines, heat sources, loot, interactables, quests, dialogue, save | 🟨 heat, cold, quests, barrels, relocation, barricades, mines, loot, turrets, generator damage ✅; dialogue, save ⬜ |
@@ -74,7 +74,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/movements/autosave_trigger.gd`, `relocatable_object.gd` | `AAutosaveTrigger`, `ARelocatableObject` | 5 | ⬜ | |
 | `Scenes/weapons/**`, `resources/weapons/*.tres` | `UWeaponDataAsset` (Gemini, values hand-typed) | 2 | 🟨 | `CodexTactics.Combat.Data*` |
 | `resources/characters/**`, `resources/enemies/**` | `UOperativeDataAsset`, `UEnemyDataAsset` | 2 | ⬜ | |
-| `data/configs/levels/*.json` | `ULevelConfigAsset` via importer | 2 | ⬜ | |
+| `data/configs/levels/*.json`, `main.gd _load_active_level_config`, `_get_enemy_spawn_pos` | `ULevelConfigAsset` DA_Level_* via `Scripts/Editor/import_levels.py`; game mode `LevelConfig` → `UWaveSubsystem::SetLevelConfig` + `LevelFlowRules::ApplyLevel` (prep / rest / wave count); `AEnemySpawnPoint` lanes | 2 | ✅ (spawn point type filter + dynamic breach → later) | `CodexTactics.Core.LevelFlow.*` (2), `Combat.Enemy.WaveModifiers`, `LevelWaveSmoke` |
 | `Scenes/ui/**` (inventory, pause, dialogue, profile) | UMG widgets | 5 | ⬜ | |
 | `*.gdshader` (silhouette, rings, AoE) | Materials | 6 | ⬜ | |
 | `tools/**`, `Scripts/editor/**`, `Scenes/tools/**`, `scratch/**` | — | — | ➖ | |

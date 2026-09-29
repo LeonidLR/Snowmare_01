@@ -32,7 +32,7 @@ The user's rule: **Godot code values win** (except explicit user decisions liste
 | Editing a Blueprint's inherited component via Python CDO | Use `set_editor_property` on the component template; `set_relative_transform` is NOT persisted. |
 | Git LFS for `.uasset/.umap` (no `lockable`) | `lockable` made maps read-only; keep it off. |
 | The user re-laid `L_MovementTest` in the editor (whole layout rotated 180° and moved to Floor (-800, 1130); PlayerStart (-180, -1490)) — user decision 2026-09-29: keep it | Smokes write points in the original design coordinates (map script, Floor at the origin, yaw 0) and map them with `SmokeUtils::LevelPoint` / `LayoutTransform` (the "Floor" actor's location + yaw); `PlaceSquadAtTestStart` puts the squad at the design origin facing design +X. Never hard-code world coordinates in a smoke. |
-| A saved `RecastNavMesh-Default` that is rotated / not tile-aligned stays empty at runtime ("Recreating dtNavMesh instance … not aligned with tile size", then nothing is built) | The map ships without a RecastNavMesh actor (auto-created and built at load, RuntimeGeneration=Dynamic). If the editor re-adds and saves one, keep it at (0,0,0) yaw 0 or delete it. |
+| A saved `RecastNavMesh-Default` that is rotated / not tile-aligned stays empty at runtime ("Recreating dtNavMesh instance … not aligned with tile size", then nothing is built) | The map ships without a RecastNavMesh actor; it is created and built at load (RuntimeGeneration=Dynamic). A commandlet that loads and saves the map re-creates an EMPTY one that also stays empty at runtime: editor scripts must destroy `RecastNavMesh` actors before saving (see add_level_objects_to_movement_test.py). If smokes suddenly cannot move the squad ("leader on navmesh=0"), check this first. |
 | Unity builds merge .cpp files | Anonymous-namespace names collide across files (`PanelColor`, `Clean`…): prefix file-local helpers (`Menu…`, `Loot…`). Names like `FItemInfo` can also clash with engine types. |
 | Default canvas / Slate fonts have no emoji | HUD / menu strip them (`ACodexTacticsHUD::StripUnsupportedGlyphs`); texts stay verbatim Godot with emoji in code. |
 | Bash heredocs with long / complex Python sometimes break in this harness | Write the Python to the scratchpad with the file tool and run `python <file>`. |
@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **117 automation tests, 19 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **120 automation tests, 20 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -67,6 +67,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `DialogueSmoke` (`-ForceMainMenu`, verify_all does it) | «Начать игру» opens the 15-line intro briefing, Space advances (no pause), skip closes, preparation lines reach the feed with the Godot delay |
 | `ActionBarSmoke` | action bar stance slot cycles the squad, «ПЕР» pick mode on / off, squad slot 2 selects the engineer |
 | `BannersSmoke` | cutscene card + Space skip, squad warm / healed for the preparation, preparation / wave / pause banner texts |
+| `LevelWaveSmoke` | imported level drives the flow (3 waves, 60 s / 20 s); wave 1 = 12 enemies at once at the 4 spawn points, cold drain 1.1 |
 | `TurnBasedSmoke` | wave + one brute, enter turn-based: grid registration, 8 AP, stance 1 AP, enemy turn (walk, bite 13 on a crouched commander, step back), move into a fire lane + shot -> victory -> tactical pause |
 | `MissionSmoke` | objective banner texts (start → preparation → wave), an operative's death fails the mission (GameOver, reason, time stop), restart reloads a fresh exploration |
 | `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
@@ -244,6 +245,11 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 - L_MovementTest re-laid by the user (rotated 180°, moved): kept (user decision 2026-09-29); smokes are layout-relative.
 - `Config/DefaultEditor.ini` has local editor changes — never commit it unless asked.
+- Level waves (user decision 2026-09-29): like the Godot code — `main.gd _spawn_custom_json_wave` spawns the whole wave
+  at once; `spawn_delay_sec`, `initial_delay_sec`, `max_simultaneous_enemies` (described in DATA_CONTRACTS.md) are
+  ignored. Wave modifiers apply (hp / damage / speed per enemy, `cold_drain_mult` → operatives' cold outside camera
+  zones, kept after the wave like Godot's cold_rate_modifier), `custom_stats.health` × hp_mult.
+- Monster models: the user imports them (GLB) personally — do not import enemy meshes / build enemy BPs.
 - Start menu (user decision 2026-09-29): only «Начать игру» (exploration → combat) and «Начать бой» (preparation);
   Godot's third mode «Начать исследование» is removed from UE (menu button, `EMissionStartMode::Exploration`, texts).
 - «Начать бой» position: Godot hard-codes the yard behind the gate; UE uses the `CombatStart` tag (test map: (0, −2150)).
@@ -285,8 +291,15 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    hound / spitter / brute health, speed, damage, range, cooldown). Deployables need nothing: Godot reads the config
    only when the inspector value is 0, and the UE values equal the Godot export defaults (mine 120 / 3.5 m, turret
    120 HP 16 dmg 0.45 s 12 m, barricade 200 HP). Camera NOT wired on purpose (UE distances were tuned with the user;
-   Godot distance semantics differ) — ask before changing. Next — look each Godot consumer up to pick the right file), then enemies
-   (`Scenes/movements/enemy_*.gd` exports) and levels (`data/configs/levels/*.json`).
+   Godot distance semantics differ) — ask before changing.
+   Levels — `Scripts/Editor/import_levels.py` → `/Game/Data/Levels/DA_Level_<file>` (level_01_outpost + stage_01..12;
+   waves with `is_active: false` dropped like main.gd). The game mode's `LevelConfig` (DA_Level_level_01_outpost = Godot
+   main.gd active_level_json_path) goes to `UWaveSubsystem::SetLevelConfig` and, through `LevelFlowRules::ApplyLevel`, to
+   the flow config: preparation 60 s, rest 20 s, TotalWaves = 3 (Godot max_waves = active waves; without a level Godot
+   uses preparation_phase_duration / max_campaign_waves from game_balance_config.tres). L_MovementTest has four
+   `AEnemySpawnPoint`s beyond the gate (NORTH_GATE, WEST_FLANK, EAST_FLANK, FAR_PERIMETER; added by
+   add_level_objects_to_movement_test.py, following the Floor transform). Lane matching = Godot _get_enemy_spawn_pos
+   (substring either way, else any point). Spawning = Godot _spawn_custom_json_wave (see §7).
    Source trap: Godot has TWO GameBalanceConfig files with different values. The turn-based manager loads
    `resources/balance.tres` first (squad 8 AP, enemy 6 AP — the UE `FTurnBasedBalance` defaults), while camera, enemies,
    turrets, mines, barricades load `resources/game_balance_config.tres` (e.g. tactical_squad_max_ap = 3, enemy 4,
@@ -296,6 +309,11 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 ## 9. Known gaps / tech debt
 
+- Enemy spawn points: Godot `allowed_enemy_type` filter and the dynamic flank breach (`is_dynamic`, activation chance,
+  warning) are not ported.
+- Level waves without a level config still use Gemini's built-in queued waves (Godot's fallback spawns balance-driven
+  counts at once: min_hounds_per_wave, base_wave_enemy_count, …) — port when a level ships without JSON waves.
+- Level spawn `custom_stats` damage / speed / attack_range / attack_cooldown are not imported (only health; no level uses them).
 - Still hand-typed (Phase 2 continues): camera (user-tuned, see §8.7), enemy visuals / capsules (Gemini). Imported and wired:
   weapons, turn-based balance, operative health / speeds / matches / lift & sprint limits (per role), cold rules, enemy stats and crit chances.
 - Deployable overhead labels (Godot Label3D «🧱 Баррикада: HP»), floating combat texts, mine "ВЗВЕДЕНА" text: not ported.
@@ -320,7 +338,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Smokes layout-relative (`SmokeUtils::LevelPoint`), L_MovementTest navmesh actor removed (rotated navmesh stayed empty) |
+| (this) | Godot levels imported (DA_Level_*); level_01_outpost drives waves (whole wave at once, modifiers, custom health, cold drain), preparation 60 s / rest 20 s and 3 waves; enemy spawn points beyond the gate; the wave clears only outside turn-based combat (Godot; fixes a crash when the last enemy of a wave dies on the grid); LevelWaveSmoke |
+| `93d94ad` | Smokes layout-relative (`SmokeUtils::LevelPoint`), L_MovementTest navmesh actor removed (rotated navmesh stayed empty) |
 | `f91f800` | Level importer script (Godot level JSON -> ULevelConfigAsset), not run / wired yet |
 | `2ca14b0` | Enemy crit chances and hound / spitter / brute stats from the imported Godot config |
 | `91ddb9d` | Cold rules (rates, stance multipliers, misfire / freeze / aim) read from the imported Godot config |

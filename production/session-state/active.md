@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: Phase 4/5 world systems — interaction, relocation, deployables
-Task: next = run + wire the level import (DA_Level_level_01_outpost -> WaveSubsystem / GameFlow), then turn-based features (HANDOFF §8.6 / §8.7)
+Task: next = remaining turn-based features (HANDOFF §8.6), then inventory / transfer / guard UI (§8.5)
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
@@ -15,7 +15,7 @@ Task: next = run + wire the level import (DA_Level_level_01_outpost -> WaveSubsy
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-Layout-relative smokes commit: 117 automation tests, 19 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
+Level import commit: 120 automation tests, 20 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)

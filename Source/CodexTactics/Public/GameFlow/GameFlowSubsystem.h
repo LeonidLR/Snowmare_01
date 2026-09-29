@@ -35,6 +35,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	void ResetFlow(const FGameFlowConfig& Config);
 
+	/** Replaces tuning values without touching the current phase (the game mode applies the level config at start). */
+	void SetConfig(const FGameFlowConfig& Config) { Machine.SetConfig(Config); }
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	ECodexGamePhase GetPhase() const { return Machine.GetPhase(); }
 

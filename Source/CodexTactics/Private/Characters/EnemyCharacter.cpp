@@ -163,6 +163,14 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 	}
 }
 
+void AEnemyCharacter::ApplyWaveModifiers(float HpMult, float DamageMult, float SpeedMult, float CustomHealth)
+{
+	const float BaseHealth = CustomHealth > 0.f ? CustomHealth : HealthComponent->GetMaxHealth();
+	HealthComponent->SetMaxHealth(BaseHealth * HpMult, /*bResetCurrent*/ true);
+	AttackDamage *= DamageMult;
+	GetCharacterMovement()->MaxWalkSpeed *= SpeedMult;
+}
+
 void AEnemyCharacter::ApplyBalance(const UGodotBalanceAsset& Config)
 {
 	CritChance = Config.GetNumber(TEXT("enemy_crit_chance"), CritChance);

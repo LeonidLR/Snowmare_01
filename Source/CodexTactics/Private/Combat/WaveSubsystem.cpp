@@ -71,18 +71,9 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 
 	if (LevelConfig && LevelConfig->Config.Waves.IsValidIndex(WaveIndex - 1))
 	{
-		const FWaveDefinition& Def = LevelConfig->Config.Waves[WaveIndex - 1];
-		MaxSimultaneousEnemies = Def.MaxSimultaneousEnemies;
-
-		for (const FEnemySpawnEntry& Entry : Def.Spawns)
-		{
-			for (int32 i = 0; i < Entry.Count; ++i)
-			{
-				FEnemySpawnEntry Single = Entry;
-				Single.Count = 1;
-				PendingSpawns.Add(Single);
-			}
-		}
+		SpawnLevelWave(LevelConfig->Config.Waves[WaveIndex - 1]);
+		OnWaveStarted.Broadcast(CurrentWaveIndex, TotalWaveEnemies);
+		return;
 	}
 	else
 	{
@@ -129,6 +120,38 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 	}
 
 	OnWaveStarted.Broadcast(CurrentWaveIndex, TotalWaveEnemies);
+}
+
+void UWaveSubsystem::SpawnLevelWave(const FWaveDefinition& Def)
+{
+	const FWaveModifiers& Mods = Def.Modifiers;
+	ColdDrainMultiplier = Mods.ColdDrainMult;
+
+	TMap<EEnemyArchetype, int32> Counts;
+	int32 Spawned = 0;
+	for (const FEnemySpawnEntry& Entry : Def.Spawns)
+	{
+		for (int32 Index = 0; Index < Entry.Count; ++Index)
+		{
+			if (AEnemyCharacter* Enemy = SpawnEnemy(Entry.EnemyType, GetSpawnLocationForLane(Entry.SpawnLane)))
+			{
+				Enemy->ApplyWaveModifiers(Mods.EnemyHpMult, Mods.EnemyDamageMult, Mods.EnemySpeedMult, Entry.CustomHealth);
+				Counts.FindOrAdd(Entry.EnemyType)++;
+				++Spawned;
+			}
+		}
+	}
+	TotalWaveEnemies = GetAliveEnemyCount();
+
+	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		const int32 Cutters = Counts.FindRef(EEnemyArchetype::Cutter);
+		const FString CutterPart = Cutters > 0 ? FString::Printf(TEXT("🐺 Cutter: %d, "), Cutters) : FString();
+		Msg->PostMessage(FText::FromString(TEXT("Командир")), FText::FromString(FString::Printf(
+			TEXT("Волна %d: Наступают враги (Всего: %d | %s🐺 Гончие: %d, 🏹 Стрелки: %d, ❄️ Громилы: %d)!"),
+			CurrentWaveIndex, Spawned, *CutterPart, Counts.FindRef(EEnemyArchetype::FrostHound),
+			Counts.FindRef(EEnemyArchetype::Spitter), Counts.FindRef(EEnemyArchetype::Brute))));
+	}
 }
 
 void UWaveSubsystem::ProcessPendingSpawns(float DeltaTime)
@@ -186,6 +209,12 @@ void UWaveSubsystem::HandleEnemyDied(AEnemyCharacter* Enemy)
 
 void UWaveSubsystem::CheckWaveCompletion()
 {
+	// Godot main.gd _process checks the wave only outside turn-based combat (is_wave_active and not
+	// is_gorky17_combat_active): the last kill on the grid first ends the turn-based fight, the wave clears afterwards.
+	if (const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased)
+	{
+		return;
+	}
 	AliveEnemies.RemoveAll([](const TWeakObjectPtr<AEnemyCharacter>& E) { return !E.IsValid() || E->IsDying(); });
 
 	if (bWaveActive && PendingSpawns.Num() == 0 && AliveEnemies.Num() == 0)
@@ -243,13 +272,26 @@ FVector UWaveSubsystem::GetSpawnLocationForLane(const FString& Lane) const
 		return FVector::ZeroVector;
 	}
 
+	// Godot main.gd _get_enemy_spawn_pos: lanes match when either name contains the other (case-insensitive); when no
+	// point matches the lane, any active point is used; the hard-coded yard is the last resort (no points in the level).
+	const bool bAnyLane = Lane.IsEmpty() || Lane.Equals(TEXT("ANY"), ESearchCase::IgnoreCase);
 	TArray<FVector> CandidateLocations;
+	TArray<FVector> AnyLocations;
 	for (TActorIterator<AEnemySpawnPoint> It(World); It; ++It)
 	{
-		if (It->bIsActive && (Lane.IsEmpty() || Lane.Equals(TEXT("ANY"), ESearchCase::IgnoreCase) || It->SpawnLane.Equals(Lane, ESearchCase::IgnoreCase)))
+		if (!It->bIsActive)
+		{
+			continue;
+		}
+		AnyLocations.Add(It->GetActorLocation());
+		if (bAnyLane || It->SpawnLane.Contains(Lane, ESearchCase::IgnoreCase) || Lane.Contains(It->SpawnLane, ESearchCase::IgnoreCase))
 		{
 			CandidateLocations.Add(It->GetActorLocation());
 		}
+	}
+	if (CandidateLocations.Num() == 0)
+	{
+		CandidateLocations = MoveTemp(AnyLocations);
 	}
 
 	if (CandidateLocations.Num() > 0)

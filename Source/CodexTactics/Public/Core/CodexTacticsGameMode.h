@@ -6,6 +6,7 @@
 class UDialogueSequenceAsset;
 class UWeaponDataAsset;
 class UGodotBalanceAsset;
+class ULevelConfigAsset;
 #include "CodexTacticsGameMode.generated.h"
 
 class AOperativeCharacter;
@@ -88,6 +89,14 @@ public:
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Balance")
 	TSoftObjectPtr<UGodotBalanceAsset> GameBalanceConfig;
 
+	/**
+	 * Level combat data (imported from the Godot level JSON by Scripts/Editor/import_levels.py; Godot main.gd
+	 * active_level_json_path = level_01_outpost.json): waves for the wave subsystem, preparation / rest durations and
+	 * the wave count for the game flow. Empty = built-in waves and the balance fallback (LevelFlowRules).
+	 */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Balance")
+	TSoftObjectPtr<ULevelConfigAsset> LevelConfig;
+
 	/** Weapon every spawned operative starts with (imported from Godot rifle_m16.tres by Scripts/Editor/import_weapons.py). */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
 	TSoftObjectPtr<UWeaponDataAsset> StartingWeapon;
@@ -115,4 +124,7 @@ public:
 
 private:
 	void SpawnSquad();
+
+	/** Hands LevelConfig to the wave subsystem and its durations / wave count to the game flow (before BeginPlay). */
+	void ApplyLevelConfig();
 };

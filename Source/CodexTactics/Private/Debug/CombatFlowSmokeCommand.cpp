@@ -10,12 +10,14 @@
 
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Characters/EnemyCharacter.h"
 #include "CodexTactics.h"
 #include "Debug/SmokeUtils.h"
 #include "Combat/EncounterQueries.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -77,6 +79,12 @@ namespace CombatFlowSmoke
 			Flow->FinishCutscene();
 			Flow->FinishPreparation();
 			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime, TEXT("wave started in real time"));
+			// The level wave spawns at the spawn points beyond the gate; freeze it there so the checks below control
+			// which enemies are near the squad.
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				It->CustomTimeDilation = 0.f;
+			}
 			State.LeaderStart = Leader->GetActorLocation();
 			State.FollowerStart = Follower->GetActorLocation();
 			Leader->OrderMoveTo(State.LeaderStart + FVector(0.f, 700.f, 0.f), false);

@@ -1,7 +1,12 @@
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/DialogueSequenceAsset.h"
 #include "Characters/OperativeBalance.h"
+#include "CodexTactics.h"
+#include "Combat/WaveSubsystem.h"
+#include "Core/LevelFlowRules.h"
 #include "Data/GodotBalanceAsset.h"
+#include "Data/WaveConfigTypes.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/OperativeCharacter.h"
@@ -32,6 +37,7 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 	OperativeBlueprint = TSoftClassPtr<AOperativeCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Operatives/BP_Operative.BP_Operative_C")));
 	TurnBasedBalance = TSoftObjectPtr<UGodotBalanceAsset>(FSoftObjectPath(TEXT("/Game/Data/Balance/DA_Balance.DA_Balance")));
 	GameBalanceConfig = TSoftObjectPtr<UGodotBalanceAsset>(FSoftObjectPath(TEXT("/Game/Data/Balance/DA_GameBalanceConfig.DA_GameBalanceConfig")));
+	LevelConfig = TSoftObjectPtr<ULevelConfigAsset>(FSoftObjectPath(TEXT("/Game/Data/Levels/DA_Level_level_01_outpost.DA_Level_level_01_outpost")));
 	StartingWeapon = TSoftObjectPtr<UWeaponDataAsset>(FSoftObjectPath(TEXT("/Game/Data/Weapons/DA_Weapon_m16.DA_Weapon_m16")));
 	DialogueMissionStart = TSoftObjectPtr<UDialogueSequenceAsset>(FSoftObjectPath(TEXT("/Game/Data/Dialogues/DA_DialogueIntro.DA_DialogueIntro")));
 	DialoguePreparationStarted = TSoftObjectPtr<UDialogueSequenceAsset>(FSoftObjectPath(TEXT("/Game/Data/Dialogues/DA_DialoguePrep.DA_DialoguePrep")));
@@ -47,8 +53,30 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 
 void ACodexTacticsGameMode::StartPlay()
 {
+	ApplyLevelConfig();
 	Super::StartPlay();
 	SpawnSquad();
+}
+
+void ACodexTacticsGameMode::ApplyLevelConfig()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	ULevelConfigAsset* Level = LevelConfig.IsNull() ? nullptr : LevelConfig.LoadSynchronous();
+	if (UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>())
+	{
+		Waves->SetLevelConfig(Level);
+	}
+	if (UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>())
+	{
+		Flow->SetConfig(LevelFlowRules::ApplyLevel(Flow->GetConfig(), Level ? &Level->Config : nullptr,
+			GameBalanceConfig.IsNull() ? nullptr : GameBalanceConfig.LoadSynchronous()));
+		UE_LOG(LogCodexTactics, Log, TEXT("Level config %s: %d waves, preparation %.0f s, rest %.0f s"), *GetNameSafe(Level),
+			Flow->GetConfig().TotalWaves, Flow->GetConfig().PreparationDuration, Flow->GetConfig().WaveRestDuration);
+	}
 }
 
 void ACodexTacticsGameMode::SpawnSquad()
