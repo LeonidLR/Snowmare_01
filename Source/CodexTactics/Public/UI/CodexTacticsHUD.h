@@ -13,6 +13,7 @@ class UMainMenuWidget;
 class UDialogueWidget;
 class UActionBarWidget;
 class UInventoryDrawerWidget;
+class UTransferDialogWidget;
 class UPhaseBannersWidget;
 class UTurnBasedHudWidget;
 class ALootCrateActor;
@@ -65,6 +66,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UInventoryDrawerWidget> InventoryDrawerWidgetClass;
 
+	/** «ПЕРЕД» hand-over dialog class (a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UTransferDialogWidget> TransferDialogWidgetClass;
+
 	/** Pause / preparation / wave banners and the cutscene card (a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UPhaseBannersWidget> PhaseBannersWidgetClass;
@@ -80,6 +85,11 @@ public:
 
 	/** Action bar «ИНВ» (Godot _toggle_inventory_drawer): opens / closes the drawer, the weapon selector closes. */
 	void ToggleInventoryDrawer();
+
+	UTransferDialogWidget* GetTransferDialog() const { return TransferDialog; }
+
+	/** Action bar «ПЕРЕД» (Godot _toggle_transfer_dialog): the drawer and the weapon selector close. */
+	void ToggleTransferDialog();
 
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
@@ -140,6 +150,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInventoryDrawerWidget> InventoryDrawer;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTransferDialogWidget> TransferDialog;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPhaseBannersWidget> PhaseBanners;

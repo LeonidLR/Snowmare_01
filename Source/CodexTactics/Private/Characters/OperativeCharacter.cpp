@@ -651,6 +651,43 @@ void AOperativeCharacter::AddAmmo(const FString& WeaponId, int32 Count)
 	}
 }
 
+int32 AOperativeCharacter::GetReserve(const FString& WeaponId) const
+{
+	if (CurrentWeapon && CurrentWeapon->WeaponId == WeaponId)
+	{
+		return ReserveAmmo;
+	}
+	if (const FWeaponAmmoState* Ammo = AmmoInventory.Find(WeaponId))
+	{
+		return Ammo->Reserve;
+	}
+	return ExtraAmmo.FindRef(FName(*WeaponId));
+}
+
+int32 AOperativeCharacter::TakeReserve(const FString& WeaponId, int32 Max)
+{
+	int32* Reserve = nullptr;
+	if (CurrentWeapon && CurrentWeapon->WeaponId == WeaponId)
+	{
+		Reserve = &ReserveAmmo;
+	}
+	else if (FWeaponAmmoState* Ammo = AmmoInventory.Find(WeaponId))
+	{
+		Reserve = &Ammo->Reserve;
+	}
+	else
+	{
+		Reserve = ExtraAmmo.Find(FName(*WeaponId));
+	}
+	if (!Reserve)
+	{
+		return 0;
+	}
+	const int32 Taken = FMath::Clamp(Max, 0, *Reserve);
+	*Reserve -= Taken;
+	return Taken;
+}
+
 bool AOperativeCharacter::UsesAmmo() const
 {
 	return !CurrentWeapon || CurrentWeapon->bUsesAmmo;

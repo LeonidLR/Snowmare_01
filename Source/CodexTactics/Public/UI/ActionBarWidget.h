@@ -105,6 +105,9 @@ private:
 	UFUNCTION()
 	void HandleInventory();
 
+	UFUNCTION()
+	void HandleTransfer();
+
 	UPROPERTY()
 	TObjectPtr<UTextBlock> BarGuardText;
 

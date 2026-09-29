@@ -345,6 +345,12 @@ public:
 	/** Clip / reserve of an arsenal weapon (the equipped one reports its live values). */
 	FWeaponAmmoState GetAmmoState(const FString& WeaponId) const;
 
+	/** Reserve rounds of a weapon: arsenal weapon (live if equipped) or ExtraAmmo. */
+	int32 GetReserve(const FString& WeaponId) const;
+
+	/** Removes up to Max reserve rounds of a weapon (arsenal or ExtraAmmo); returns how many. */
+	int32 TakeReserve(const FString& WeaponId, int32 Max);
+
 	/** Adds reserve rounds of a weapon: arsenal weapon (live if equipped) or ExtraAmmo. */
 	void AddAmmo(const FString& WeaponId, int32 Count);
 

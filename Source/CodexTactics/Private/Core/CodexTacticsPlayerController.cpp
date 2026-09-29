@@ -3,6 +3,7 @@
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/GrenadeSubsystem.h"
+#include "Characters/SquadTransferSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Combat/EncounterQueries.h"
 #include "Core/MissionSubsystem.h"
@@ -165,6 +166,16 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	if (SpaceInput.Tick(static_cast<float>(FApp::GetDeltaTime()), HoldDuration) == ESpaceInputAction::Hold)
 	{
 		HandleSpaceHold();
+	}
+
+	// Item hand-over: the ring follows the cursor / the hovered squad mate.
+	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring())
+	{
+		FHitResult Hit;
+		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		{
+			Transfer->UpdatePreview(Hit.ImpactPoint, Hit.GetActor());
+		}
 	}
 
 	// Grenade aim: rings and arc follow the cursor.
@@ -559,6 +570,11 @@ UTurnBasedCombatSubsystem* ACodexTacticsPlayerController::GetActiveTurnBased() c
 
 void ACodexTacticsPlayerController::DialogueSkip()
 {
+	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring())
+	{
+		Transfer->CancelTransferMode();
+		return;
+	}
 	if (CancelGrenadeAim())
 	{
 		return;
@@ -580,6 +596,16 @@ void ACodexTacticsPlayerController::OnClick()
 	if (IsDialogueOpen())
 	{
 		return; // the dialogue panel handles its own clicks
+	}
+	// Item hand-over: LMB on a squad mate (Godot _handle_transfer_click).
+	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring())
+	{
+		FHitResult Hit;
+		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		{
+			Transfer->HandleClick(Hit.ImpactPoint, Hit.GetActor());
+		}
+		return;
 	}
 	// Grenade aim: LMB throws (Godot _handle_grenade_throw_click).
 	if (UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>(); Grenades && Grenades->IsAiming())
@@ -934,7 +960,12 @@ void ACodexTacticsPlayerController::CameraRotateRight()
 
 void ACodexTacticsPlayerController::CameraDragRotateStart()
 {
-	// Godot: RMB cancels the grenade aim, object placement (and the turn-based relocation).
+	// Godot: RMB cancels the hand-over, the grenade aim, object placement (and the turn-based relocation).
+	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring())
+	{
+		Transfer->CancelTransferMode();
+		return;
+	}
 	if (CancelGrenadeAim())
 	{
 		return;

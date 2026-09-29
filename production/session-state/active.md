@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: Phase 4/5 world systems — interaction, relocation, deployables
-Task: next = transfer dialog (HANDOFF §8.5), then pause menu / save-load, radius rings
+Task: next = pause menu / save-load, radius rings (HANDOFF §8.5), then remaining gaps (§9)
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
@@ -15,7 +15,7 @@ Task: next = transfer dialog (HANDOFF §8.5), then pause menu / save-load, radiu
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-Inventory drawer commit: 126 automation tests, 28 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
+Transfer commit: 127 automation tests, 29 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)

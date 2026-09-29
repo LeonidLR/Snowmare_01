@@ -23,6 +23,7 @@
 #include "UI/GameMessageSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
 #include "UI/InventoryDrawerWidget.h"
+#include "UI/TransferDialogWidget.h"
 
 #define LOCTEXT_NAMESPACE "ActionBarWidget"
 
@@ -125,7 +126,11 @@ void UActionBarWidget::BuildDefaultLayout()
 		Button->SetIsEnabled(false);
 		Button->SetToolTipText(Tooltip);
 	};
-	Disabled(TEXT("BarTransferButton"), BarPurple, LOCTEXT("Transfer", "ПЕРЕД"), LOCTEXT("TransferTip", "Передача предметов (ещё не перенесено)"));
+	UTextBlock* TransferText = MakeText(NAME_None, 10, BarTextColor);
+	TransferText->SetText(LOCTEXT("Transfer", "ПЕРЕД"));
+	UButton* TransferButton = MakeSlotButton(TEXT("BarTransferButton"), BarPurple, 54.f, 56.f, TransferText, Row);
+	TransferButton->SetToolTipText(LOCTEXT("TransferTip", "Передача предметов и патронов соратнику"));
+	TransferButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleTransfer);
 	UTextBlock* InventoryText = MakeText(NAME_None, 10, BarTextColor);
 	InventoryText->SetText(LOCTEXT("Inventory", "ИНВ"));
 	UButton* InventoryButton = MakeSlotButton(TEXT("BarInventoryButton"), BarGreen, 54.f, 56.f, InventoryText, Row);
@@ -383,7 +388,11 @@ void UActionBarWidget::ToggleWeaponSelector()
 			const ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
 			if (UInventoryDrawerWidget* Drawer = Hud ? Hud->GetInventoryDrawer() : nullptr)
 			{
-				Drawer->Close(); // Godot: the selector hides the inventory drawer
+				Drawer->Close(); // Godot: the selector hides the inventory drawer and the transfer dialog
+			}
+			if (UTransferDialogWidget* Transfer = Hud ? Hud->GetTransferDialog() : nullptr)
+			{
+				Transfer->Close();
 			}
 		}
 		SelectorPanel->SetVisibility(IsWeaponSelectorOpen() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
@@ -427,6 +436,17 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 	}
 	Refresh();
 	return true;
+}
+
+void UActionBarWidget::HandleTransfer()
+{
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(PC->GetHUD()))
+		{
+			Hud->ToggleTransferDialog();
+		}
+	}
 }
 
 void UActionBarWidget::HandleInventory()

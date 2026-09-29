@@ -14,6 +14,7 @@
 #include "UI/LootDialogWidget.h"
 #include "UI/ActionBarWidget.h"
 #include "UI/InventoryDrawerWidget.h"
+#include "UI/TransferDialogWidget.h"
 #include "UI/PhaseBannersWidget.h"
 #include "UI/TurnBasedHudWidget.h"
 #include "UI/DialogueSubsystem.h"
@@ -118,6 +119,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	DialogueWidgetClass = UDialogueWidget::StaticClass();
 	ActionBarWidgetClass = UActionBarWidget::StaticClass();
 	InventoryDrawerWidgetClass = UInventoryDrawerWidget::StaticClass();
+	TransferDialogWidgetClass = UTransferDialogWidget::StaticClass();
 	PhaseBannersWidgetClass = UPhaseBannersWidget::StaticClass();
 	TurnBasedHudWidgetClass = UTurnBasedHudWidget::StaticClass();
 }
@@ -175,6 +177,14 @@ void ACodexTacticsHUD::BeginPlay()
 		if (InventoryDrawer)
 		{
 			InventoryDrawer->AddToViewport(6);
+		}
+	}
+	if (TransferDialogWidgetClass && GetOwningPlayerController())
+	{
+		TransferDialog = CreateWidget<UTransferDialogWidget>(GetOwningPlayerController(), TransferDialogWidgetClass);
+		if (TransferDialog)
+		{
+			TransferDialog->AddToViewport(6);
 		}
 	}
 	if (PhaseBannersWidgetClass && GetOwningPlayerController())
@@ -539,5 +549,29 @@ void ACodexTacticsHUD::ToggleInventoryDrawer()
 	if (InventoryDrawer->IsOpen() && ActionBar && ActionBar->IsWeaponSelectorOpen())
 	{
 		ActionBar->ToggleWeaponSelector();
+	}
+	if (InventoryDrawer->IsOpen() && TransferDialog)
+	{
+		TransferDialog->Close();
+	}
+}
+
+void ACodexTacticsHUD::ToggleTransferDialog()
+{
+	if (!TransferDialog)
+	{
+		return;
+	}
+	TransferDialog->Toggle();
+	if (TransferDialog->IsOpen())
+	{
+		if (InventoryDrawer)
+		{
+			InventoryDrawer->Close();
+		}
+		if (ActionBar && ActionBar->IsWeaponSelectorOpen())
+		{
+			ActionBar->ToggleWeaponSelector();
+		}
 	}
 }
