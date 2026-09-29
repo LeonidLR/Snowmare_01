@@ -31,7 +31,8 @@ The user's rule: **Godot code values win** (except explicit user decisions liste
 | `unreal.log()` in `-run=pythonscript` commandlets does not reach stdout | Editor scripts write their result to `Saved/Logs/*.txt` (see `add_level_objects_to_movement_test.py`). |
 | Editing a Blueprint's inherited component via Python CDO | Use `set_editor_property` on the component template; `set_relative_transform` is NOT persisted. |
 | Git LFS for `.uasset/.umap` (no `lockable`) | `lockable` made maps read-only; keep it off. |
-| The level `L_MovementTest` PlayerStart was moved in the editor to (-180, -1490) | Layout-dependent smokes call `SmokeUtils::PlaceSquadAtTestStart` (squad at the origin, as the map script authored). Do not move the PlayerStart back without asking the user. |
+| The user re-laid `L_MovementTest` in the editor (whole layout rotated 180° and moved to Floor (-800, 1130); PlayerStart (-180, -1490)) — user decision 2026-09-29: keep it | Smokes write points in the original design coordinates (map script, Floor at the origin, yaw 0) and map them with `SmokeUtils::LevelPoint` / `LayoutTransform` (the "Floor" actor's location + yaw); `PlaceSquadAtTestStart` puts the squad at the design origin facing design +X. Never hard-code world coordinates in a smoke. |
+| A saved `RecastNavMesh-Default` that is rotated / not tile-aligned stays empty at runtime ("Recreating dtNavMesh instance … not aligned with tile size", then nothing is built) | The map ships without a RecastNavMesh actor (auto-created and built at load, RuntimeGeneration=Dynamic). If the editor re-adds and saves one, keep it at (0,0,0) yaw 0 or delete it. |
 | Unity builds merge .cpp files | Anonymous-namespace names collide across files (`PanelColor`, `Clean`…): prefix file-local helpers (`Menu…`, `Loot…`). Names like `FItemInfo` can also clash with engine types. |
 | Default canvas / Slate fonts have no emoji | HUD / menu strip them (`ACodexTacticsHUD::StripUnsupportedGlyphs`); texts stay verbatim Godot with emoji in code. |
 | Bash heredocs with long / complex Python sometimes break in this harness | Write the Python to the scratchpad with the file tool and run `python <file>`. |
@@ -241,7 +242,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 ## 7. Open user decisions / questions
 
-- PlayerStart moved to (-180, -1490): intended? (left as is, committed in `11d7655`).
+- L_MovementTest re-laid by the user (rotated 180°, moved): kept (user decision 2026-09-29); smokes are layout-relative.
 - `Config/DefaultEditor.ini` has local editor changes — never commit it unless asked.
 - Start menu (user decision 2026-09-29): only «Начать игру» (exploration → combat) and «Начать бой» (preparation);
   Godot's third mode «Начать исследование» is removed from UE (menu button, `EMissionStartMode::Exploration`, texts).
@@ -319,6 +320,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
+| (this) | Smokes layout-relative (`SmokeUtils::LevelPoint`), L_MovementTest navmesh actor removed (rotated navmesh stayed empty) |
+| `f91f800` | Level importer script (Godot level JSON -> ULevelConfigAsset), not run / wired yet |
 | `2ca14b0` | Enemy crit chances and hound / spitter / brute stats from the imported Godot config |
 | `91ddb9d` | Cold rules (rates, stance multipliers, misfire / freeze / aim) read from the imported Godot config |
 | `b41a184` | Operatives take health / speeds / matches from the imported Godot config (Godot apply_balance_config) |

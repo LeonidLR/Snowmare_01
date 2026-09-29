@@ -10,6 +10,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "NavigationSystem.h"
@@ -19,7 +20,8 @@
 
 namespace MovementSmoke
 {
-	const FVector Goal(2600.f, 0.f, 100.f);
+	/** Corridor exit in L_MovementTest design coordinates (SmokeUtils::LevelPoint maps it onto the current layout). */
+	const FVector DesignGoal(2600.f, 0.f, 100.f);
 	constexpr float GoalTolerance = 60.f;
 	constexpr float FollowerTolerance = 700.f;
 	constexpr int32 DurationSeconds = 14;
@@ -49,7 +51,7 @@ namespace MovementSmoke
 		{
 			FNavLocation Projected;
 			const bool bLeaderOnNav = NavSys->ProjectPointToNavigation(LeaderLocation, Projected, FVector(100.f, 100.f, 300.f));
-			const bool bGoalOnNav = NavSys->ProjectPointToNavigation(Goal, Projected, FVector(100.f, 100.f, 300.f));
+			const bool bGoalOnNav = NavSys->ProjectPointToNavigation(SmokeUtils::LevelPoint(World, DesignGoal), Projected, FVector(100.f, 100.f, 300.f));
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke nav: leader on navmesh=%d goal on navmesh=%d"), bLeaderOnNav ? 1 : 0, bGoalOnNav ? 1 : 0);
 		}
 	}
@@ -58,7 +60,7 @@ namespace MovementSmoke
 	{
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		AOperativeCharacter* Leader = Squad->GetLeader();
-		bool bPass = Leader && FVector::Dist2D(Leader->GetActorLocation(), Goal) <= GoalTolerance;
+		bool bPass = Leader && FVector::Dist2D(Leader->GetActorLocation(), SmokeUtils::LevelPoint(World, DesignGoal)) <= GoalTolerance;
 		if (Leader)
 		{
 			for (AOperativeCharacter* Member : Squad->GetMembers())
@@ -84,8 +86,9 @@ namespace MovementSmoke
 			return;
 		}
 
+		SmokeUtils::PlaceSquadAtTestStart(World);
 		LogNavigationState(World, Leader->GetActorLocation());
-		const EOperativeOrderResult Order = Leader->OrderMoveTo(Goal, /*bSprint*/ true);
+		const EOperativeOrderResult Order = Leader->OrderMoveTo(SmokeUtils::LevelPoint(World, DesignGoal), /*bSprint*/ true);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: order result %s"), *UEnum::GetValueAsString(Order));
 
 		TSharedRef<int32> Second = MakeShared<int32>(0);

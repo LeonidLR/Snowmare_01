@@ -9,6 +9,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Debug/SmokeUtils.h"
 #include "Combat/EncounterQueries.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
@@ -66,9 +67,9 @@ namespace WaveCombatSmoke
 		{
 		case 0:
 			// Spawn 3 enemy archetypes: Hound, Spitter, Brute
-			State.Hound = WaveSub->SpawnEnemy(EEnemyArchetype::FrostHound, FVector(500.f, -2200.f, 100.f));
-			State.Spitter = WaveSub->SpawnEnemy(EEnemyArchetype::Spitter, FVector(600.f, -2200.f, 100.f));
-			State.Brute = WaveSub->SpawnEnemy(EEnemyArchetype::Brute, FVector(700.f, -2200.f, 100.f));
+			State.Hound = WaveSub->SpawnEnemy(EEnemyArchetype::FrostHound, SmokeUtils::LevelPoint(World, FVector(500.f, -2200.f, 100.f)));
+			State.Spitter = WaveSub->SpawnEnemy(EEnemyArchetype::Spitter, SmokeUtils::LevelPoint(World, FVector(600.f, -2200.f, 100.f)));
+			State.Brute = WaveSub->SpawnEnemy(EEnemyArchetype::Brute, SmokeUtils::LevelPoint(World, FVector(700.f, -2200.f, 100.f)));
 
 			Check(State, State.Hound.IsValid(), TEXT("Hound spawned"));
 			Check(State, State.Spitter.IsValid(), TEXT("Spitter spawned"));
@@ -83,7 +84,7 @@ namespace WaveCombatSmoke
 			Check(State, State.Hound->ActorHasTag(FName(TEXT("Enemy"))), TEXT("Hound tagged Enemy"));
 			Check(State, State.Spitter->ActorHasTag(FName(TEXT("Enemy"))), TEXT("Spitter tagged Enemy"));
 			Check(State, State.Brute->ActorHasTag(FName(TEXT("Enemy"))), TEXT("Brute tagged Enemy"));
-			Check(State, CombatQueries::HasEnemiesWithin(World, FVector(600.f, -2200.f, 100.f), 500.f), TEXT("CombatQueries detects spawned enemies"));
+			Check(State, CombatQueries::HasEnemiesWithin(World, SmokeUtils::LevelPoint(World, FVector(600.f, -2200.f, 100.f)), 500.f), TEXT("CombatQueries detects spawned enemies"));
 
 			NextStage(State);
 			break;

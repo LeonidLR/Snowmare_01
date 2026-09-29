@@ -12,6 +12,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -28,7 +29,8 @@ namespace QuestChainSmoke
 	constexpr float NavWarmupSeconds = 3.f;
 	constexpr float StepSeconds = 0.5f;
 	constexpr float StepTimeout = 25.f;
-	const FVector BeyondGate(0.f, -2600.f, 100.f);
+	/** Past the gate, in L_MovementTest design coordinates (SmokeUtils::LevelPoint maps it onto the current layout). */
+	const FVector DesignBeyondGate(0.f, -2600.f, 100.f);
 
 	struct FState
 	{
@@ -130,14 +132,14 @@ namespace QuestChainSmoke
 		if (bGateOpen && bPreparation && !State.bWalkOrdered)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke gate open, phase Preparation at %.1fs, heat=%d"), State.TotalTime, bHeat ? 1 : 0);
-			Leader->OrderMoveTo(BeyondGate, true);
+			Leader->OrderMoveTo(SmokeUtils::LevelPoint(World, DesignBeyondGate), true);
 			State.bWalkOrdered = true;
 			State.StepTime = 0.f;
 			return true;
 		}
 		if (State.bWalkOrdered)
 		{
-			if (FVector::Dist2D(Leader->GetActorLocation(), BeyondGate) < 60.f)
+			if (FVector::Dist2D(Leader->GetActorLocation(), SmokeUtils::LevelPoint(World, DesignBeyondGate)) < 60.f)
 			{
 				Finish(World, bHeat && bGateOpen && Quests->IsGatePowered(), TEXT("leader walked through the gate"));
 				return false;

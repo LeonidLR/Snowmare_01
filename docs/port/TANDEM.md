@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: L_MovementTest re-laid by the user (kept); smokes use `SmokeUtils::LevelPoint` (design coords -> Floor transform), map has no saved RecastNavMesh actor.
 - 2026-09-29 Claude: `AEnemyCharacter::ApplyBalance` (additive on the Gemini file) — crit chances per type from DA_GameBalanceConfig.
 - 2026-09-29 Claude: start menu reduced to two modes (user decision: «Начать исследование» removed).
 - 2026-09-29 Claude: operatives read DA_GameBalanceConfig (`OperativeBalance::Apply`): health 140 / 150 / 120 instead of 100.
