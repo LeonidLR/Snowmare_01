@@ -24,11 +24,11 @@ namespace
 	const FLinearColor VictoryDim = ACodexTacticsHUD::GodotColor(0.02f, 0.08f, 0.12f, 0.92f);
 	const FLinearColor VictoryBack = ACodexTacticsHUD::GodotColor(0.08f, 0.09f, 0.12f, 0.9f);
 	const FLinearColor VictoryFrame = ACodexTacticsHUD::GodotColor(0.3f, 0.4f, 0.55f);
-	const FLinearColor CardBack = ACodexTacticsHUD::GodotColor(0.1f, 0.12f, 0.16f, 0.9f);
-	const FLinearColor CardFrame = ACodexTacticsHUD::GodotColor(0.2f, 0.25f, 0.35f);
-	const FLinearColor TitleColor = ACodexTacticsHUD::GodotColor(0.3f, 1.f, 0.6f);
-	const FLinearColor SubtitleColor = ACodexTacticsHUD::GodotColor(0.9f, 0.95f, 1.f);
-	const FLinearColor ButtonText(0.05f, 0.05f, 0.05f);
+	const FLinearColor VictoryCardBack = ACodexTacticsHUD::GodotColor(0.1f, 0.12f, 0.16f, 0.9f);
+	const FLinearColor VictoryCardFrame = ACodexTacticsHUD::GodotColor(0.2f, 0.25f, 0.35f);
+	const FLinearColor VictoryTitleColor = ACodexTacticsHUD::GodotColor(0.3f, 1.f, 0.6f);
+	const FLinearColor VictorySubtitleColor = ACodexTacticsHUD::GodotColor(0.9f, 0.95f, 1.f);
+	const FLinearColor VictoryButtonText(0.05f, 0.05f, 0.05f);
 
 	FText VictoryClean(const FString& Text)
 	{
@@ -98,30 +98,30 @@ void UVictoryPanelWidget::BuildDefaultLayout()
 	UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("VictoryColumn"));
 	Size->AddChild(Column);
 
-	TitleText = MakeText(TEXT("VictoryTitle"), 20, TitleColor);
+	TitleText = MakeText(TEXT("VictoryTitle"), 20, VictoryTitleColor);
 	TitleText->SetJustification(ETextJustify::Center);
 	Column->AddChildToVerticalBox(TitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
-	SubtitleText = MakeText(TEXT("VictorySubtitle"), 13, SubtitleColor);
+	SubtitleText = MakeText(TEXT("VictorySubtitle"), 13, VictorySubtitleColor);
 	SubtitleText->SetJustification(ETextJustify::Center);
 	SubtitleText->SetAutoWrapText(true);
 	Column->AddChildToVerticalBox(SubtitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
-	UBorder* CardBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("StatsCardFrame"));
-	CardBorder->SetBrushColor(CardFrame);
-	CardBorder->SetPadding(FMargin(1.f));
+	UBorder* StatsCardBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("StatsCardFrame"));
+	StatsCardBorder->SetBrushColor(VictoryCardFrame);
+	StatsCardBorder->SetPadding(FMargin(1.f));
 	UBorder* Card = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("StatsCard"));
-	Card->SetBrushColor(CardBack);
+	Card->SetBrushColor(VictoryCardBack);
 	Card->SetPadding(FMargin(12.f, 8.f));
-	CardBorder->SetContent(Card);
-	StatsText = MakeText(TEXT("StatsLabel"), 12, SubtitleColor);
+	StatsCardBorder->SetContent(Card);
+	StatsText = MakeText(TEXT("StatsLabel"), 12, VictorySubtitleColor);
 	StatsText->SetAutoWrapText(true);
 	Card->SetContent(StatsText);
-	Column->AddChildToVerticalBox(CardBorder)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+	Column->AddChildToVerticalBox(StatsCardBorder)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 
 	auto MakeButton = [this, Column](const FName& Name, float Height, UTextBlock*& OutText)
 	{
 		UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
-		OutText = MakeText(NAME_None, 13, ButtonText);
+		OutText = MakeText(NAME_None, 13, VictoryButtonText);
 		OutText->SetJustification(ETextJustify::Center);
 		Button->AddChild(OutText);
 		USizeBox* ButtonSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
