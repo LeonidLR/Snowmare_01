@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-30 Claude: click rules — `ACodexTacticsPlayerController::HandleWorldHit(const FHitResult&)` (OnClick now resolves the cursor hit and calls it; smokes can call it directly), `UInteractionSubsystem::OpenMenuNow`, `AOperativeCharacter::AssignPriorityTarget`.
 - 2026-09-29 Claude: cutter pounce (`AEnemyCharacter::StartJumpAttack` / `TickJumpAttack`, BP events OnJumpAttackStarted / OnJumpAttackImpact, `Landed` crash); `import_enemy_anim_configs.py` -> /Game/Data/Enemies/DA_EnemyAnim_*.
 - 2026-09-29 Claude: **enemy AI parity** — `AEnemyCharacter::Tick` rewritten after Godot enemy_base.gd (new: `FindTarget`, `TickSpitter`, `AttackObject`, `AIConfig`, `EnemyAIRules`); per-type affinities / armor now applied in ApplyArchetypeDefaults. Gemini: enemy behaviour changes go through `EnemyAIRules` (pure, tested).
 - 2026-09-29 Claude: overhead labels (`FOverheadLabel`, virtual `AInteractableActor::GetOverheadLabel` + barricade / turret overrides, `AEnemyCharacter::GetOverheadLabel`, HUD `DrawWorldLabels`).

@@ -38,6 +38,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void CancelInteraction();
 
+	/** Godot _trigger_menu_for_object: opens Target's action menu for the leader at once (no walk-up). */
+	void OpenMenuNow(AInteractableActor* Target);
+
 	/** Confirm button: runs the object's action with the current leader. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void ConfirmActionMenu();

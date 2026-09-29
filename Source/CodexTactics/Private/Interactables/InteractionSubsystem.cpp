@@ -251,3 +251,13 @@ void UInteractionSubsystem::CloseMenu()
 		OnActionMenuChanged.Broadcast(false, Menu);
 	}
 }
+
+void UInteractionSubsystem::OpenMenuNow(AInteractableActor* Target)
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr; Leader && Target)
+	{
+		CancelInteraction();
+		OpenMenuFor(Target, Leader);
+	}
+}

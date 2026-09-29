@@ -70,6 +70,9 @@ public:
 	/** Action bar squad slot / keys 1..3. */
 	void SelectSquadMember(int32 RosterIndex) { SelectMember(RosterIndex); }
 
+	/** Everything a left click on the world does once the modes above had their say (select, move, interact, ...). */
+	void HandleWorldHit(const FHitResult& Hit);
+
 	/** Godot Alt + Z / C / V: the whole squad changes stance (prone refused while anyone moves). */
 	void SetEntireSquadStance(EOperativeStance Stance);
 

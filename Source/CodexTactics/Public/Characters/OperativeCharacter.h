@@ -512,6 +512,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
 	void SetManualPriorityTarget(AActor* Enemy);
 
+	/** Godot main.gd plain click on an enemy in a wave: current_leader.manual_priority_target = enemy (no checks, no turn). */
+	void AssignPriorityTarget(AActor* Enemy) { ManualPriorityTarget = Enemy; }
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
 	AActor* GetManualPriorityTarget() const { return ManualPriorityTarget.Get(); }
 

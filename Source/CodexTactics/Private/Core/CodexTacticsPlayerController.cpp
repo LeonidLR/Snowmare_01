@@ -1,6 +1,7 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/RecruitSubsystem.h"
+#include "Interactables/DeployableActor.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "CodexTactics.h"
@@ -675,10 +676,18 @@ void ACodexTacticsPlayerController::OnClick()
 		return;
 	}
 
+	FHitResult Hit;
+	if (GetSquad() && GetSquad()->GetLeader() && GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+	{
+		HandleWorldHit(Hit);
+	}
+}
+
+void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
+{
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	FHitResult Hit;
-	if (!Leader || !GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+	if (!Leader)
 	{
 		return;
 	}
@@ -713,6 +722,63 @@ void ACodexTacticsPlayerController::OnClick()
 			IssueTargetedShot(Hit.GetActor());
 		}
 		return;
+	}
+
+	// Godot main.gd plain-click rules during a fight (before the usual walk-up):
+	const UGameFlowSubsystem* ClickFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const bool bWave = ClickFlow && ClickFlow->GetPhase() == ECodexGamePhase::WaveCombat;
+	const bool bClickPause = ClickFlow && ClickFlow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+	const bool bPreparation = ClickFlow && ClickFlow->GetPhase() == ECodexGamePhase::Preparation;
+	UGameMessageSubsystem* ClickMessages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	// 0.5: a live enemy becomes the priority target (no Ctrl needed while a wave is on).
+	if (AActor* HitActor = Hit.GetActor(); bWave && HitActor && HitActor->ActorHasTag(FName(TEXT("Enemy"))))
+	{
+		const UHealthComponent* EnemyHealth = HitActor->FindComponentByClass<UHealthComponent>();
+		if (!EnemyHealth || EnemyHealth->IsAlive())
+		{
+			Leader->AssignPriorityTarget(HitActor);
+			if (ClickMessages)
+			{
+				const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(HitActor);
+				ClickMessages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🎯 Назначена приоритетная цель: %s!"),
+					Enemy ? *Enemy->GetEnemyDisplayName() : TEXT("Враг"))));
+			}
+			return;
+		}
+	}
+	// 0: set-up items and movable objects can't be moved mid-fight; in the pause / preparation a set-up item opens its
+	// menu at once and a movable object is picked up for relocation right away.
+	if (AInteractableActor* Object = Cast<AInteractableActor>(Hit.GetActor()))
+	{
+		const bool bDeployable = Object->IsA<ADeployableActor>();
+		if ((bDeployable || Object->bCanBeRelocated) && bWave && !bClickPause)
+		{
+			if (ClickMessages)
+			{
+				ClickMessages->PostMessage(LOCTEXT("HQ", "ШТАБ"), LOCTEXT("NoMoveInFight", "⚠️ Во время боя менять расположение объектов нельзя! Используйте тактическую паузу [ПРОБЕЛ]."));
+			}
+			if (UInteractionSubsystem* ClickInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+			{
+				ClickInteractions->CancelInteraction();
+			}
+			return;
+		}
+		if (bDeployable && (bPreparation || bClickPause))
+		{
+			if (UInteractionSubsystem* ClickInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+			{
+				ClickInteractions->OpenMenuNow(Object);
+			}
+			return;
+		}
+		if (!bDeployable && Object->bCanBeRelocated && bClickPause)
+		{
+			if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
+			{
+				Relocation->StartRelocate(Object, Leader);
+			}
+			return;
+		}
 	}
 
 	// Godot "is_unrecruited": a click on the recruit rescues / talks to him (or walks the leader up to him).

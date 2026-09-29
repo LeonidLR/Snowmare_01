@@ -8,11 +8,11 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | # | Phase | Status |
 |---|---|---|
 | 0 | Project skeleton, modules, plugins, build/test scripts | ✅ |
-| 1 | Pure logic: game flow FSM, Gorky grid, LOS, AP economy, damage, cold, panic/rage | 🟨 FSM, grid, damage, cold ✅; LOS, panic/rage ⬜ |
+| 1 | Pure logic: game flow FSM, Gorky grid, LOS, AP economy, damage, cold, panic/rage | ✅ (panic inert in Godot) |
 | 2 | Data: USTRUCT/DataAsset types + JSON → DataAsset importer | 🟨 weapons, balance, dialogues, levels ✅; camera user-tuned |
 | 3 | Framework: EventBus, operative character, Enhanced Input, camera, squad formation | 🟨 all but EventBus ✅ |
-| 4 | Combat: exploration→combat transition, turn queue, commands, HUD, enemy AI | 🟨 flow, pause, waves, enemies, squad fire ✅; turn-based manager ⬜ |
-| 5 | World systems: mines, heat sources, loot, interactables, quests, dialogue, save | 🟨 heat, cold, quests, barrels, relocation, barricades, mines, loot, turrets, generator damage ✅; dialogue, save ⬜ |
+| 4 | Combat: exploration→combat transition, turn queue, commands, HUD, enemy AI | 🟨 flow, pause, waves, turn-based, enemy AI, squad fire, rage, AI grenades ✅; hold sphere, turn-based HUD extras ⬜ |
+| 5 | World systems: mines, heat sources, loot, interactables, quests, dialogue, save | 🟨 heat, cold, quests, barrels, relocation, barricades, mines, loot, turrets, generator damage, dialogue, save, UI ✅; narrative elements in progress |
 | 6 | Content: asset import (Nanite), animation, VFX, Stage 01 "Bunker Gate", UDS/UDW | 🟨 operative model + animations ✅ |
 
 ## Systems
@@ -25,26 +25,25 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/tactics/gorky17_enums.gd` | `Tactics/Gorky17Types.h` (UENUMs, arc zones) | 1 | ✅ (Gemini) | `CodexTactics.Tactics.*` |
 | `Scripts/tactics/gorky17_grid_manager.gd` | `Tactics/UGorkyGridManager` (cells, occupancy, AP BFS, A*) | 1 | ✅ (Gemini) | `CodexTactics.Tactics.*` |
 | `Scripts/tactics/gorky17_los.gd` | `GorkyLineOfSight::HasLineOfSight` | 1 | ✅ | `CodexTactics.Tactics.LineOfSight` |
-| `Scripts/tactics/turn_based_combat_manager.gd` | `UTacticalCombatSubsystem` | 1/4 | ⬜ | |
-| `Scripts/tactics/tactical_exposed_zones_manager.gd` | `UTacticalExposedZonesSubsystem` | 4 | ⬜ | |
-| `Scripts/tactics/tactical_encounter_selector.gd` | `UTacticalEncounterSelector` | 4 | ⬜ | |
-| `Scripts/tactics/tactical_grid_overlay.gd` | `ATacticalGridOverlay` (ISM/decals) | 4 | ⬜ | |
+| `Scripts/tactics/turn_based_combat_manager.gd` | see `UTurnBasedCombatSubsystem` below | 1/4 | ➖ | |
+| `Scripts/tactics/tactical_exposed_zones_manager.gd` | `FExposedZones` in `UTurnBasedCombatSubsystem` | 4 | ✅ | ExposedZonesTest, ExposedZonesSmoke |
+| `Scripts/tactics/tactical_encounter_selector.gd` | — (not used by the Godot game) | 4 | ➖ | |
+| `Scripts/tactics/tactical_grid_overlay.gd` | `ATurnGridOverlayActor` | 4 | ✅ | TurnBasedSmoke |
 | `Scripts/tactics/tactical_hold_sphere.gd` | `ATacticalHoldSphere` | 4 | ⬜ | |
 | `Scripts/tactics/turn_based_combat_manager.gd` (core loop), `tactical_grid_overlay.gd` | `UTurnBasedCombatSubsystem`, `ATurnGridOverlayActor` | 4 | 🟨 (exposed zones ✅, barrel / turret / barricade relocation ✅, deployables on the grid ✅, weapon switch ✅, grenades ✅, stasis look ✅; companion drone: no-op in Godot) | `CodexTactics.TurnBasedSmoke`, `ExposedZonesSmoke`, `TurnBasedPushSmoke`, `TurnBasedBarricadeSmoke`, `TurnBasedDeploySmoke`, `WeaponSelectorSmoke`, `GrenadeSmoke`, `Combat.Grenade.Rules`, `Characters.Arsenal.InitAndSwitch`, `Tactics.ExposedZones.*` (3), `HudShot turnbased` |
 | `Scripts/tactics/gorky17_combat_hud.gd` | `UTurnBasedHudWidget` | 4 | 🟨 (hold-charge bar, message log panel → later) | `TurnBasedSmoke`, `HudShot turnbased` |
 | `Scripts/components/combat_component.gd` | `UCombatComponent` | 1/4 | ⬜ | |
 | `Scripts/components/movement_component.gd` | not ported: its stamina is unused by `player.gd` (user: no stamina) | — | ➖ | |
-| `Scripts/components/panic_component.gd` | `UPanicComponent` | 1 | ⬜ | |
+| `Scripts/components/panic_component.gd` | — (inert: enable_realtime_panic = false, turn-based never uses it) | 1 | ➖ | |
 | `enemy_cutter.gd`, `resources/enemies/anims/*.tres` | `AEnemyCharacter` cutter jump, `import_enemy_anim_configs.py` -> DA_EnemyAnim_* | 3 | ✅ | CutterSmoke |
 | `enemy_base.gd` behaviour, `enemy_frost_spitter.gd`, `enemy_frost_brute.gd`, affinities of all enemy scripts | `EnemyAIRules`, `AEnemyCharacter::Tick` / `FindTarget` / `TickSpitter` / `AttackObject` | 3 | ✅ (cryo drone later) | `CodexTactics.Characters.EnemyAI.Rules`, EnemyAISmoke |
 | `player.gd` `_evaluate_ai_grenade_opportunity`, `execute_ai_grenade_throw`, `_auto_switch_on_empty` | `AIGrenadeRules`, `AOperativeCharacter::TryAIGrenadeThrow` / `AutoSwitchOnEmpty` | 4 | ✅ | `CodexTactics.Combat.Grenade.AIRules`, AIGrenadeSmoke |
 | overhead Label3D (`enemy_base.gd`, `barricade.gd`, `turret.gd`, `interactable.gd` generator) | `FOverheadLabel`, `GetOverheadLabel`, HUD `DrawWorldLabels` | 5 | ✅ | `HudShot labels` |
-| `Scripts/components/rage_component.gd` | `URageComponent` | 1 | ⬜ | |
-| `Scripts/components/allegiance_component.gd` | `UAllegianceComponent` | 1 | ⬜ | |
+| `Scripts/components/allegiance_component.gd` | — (only used by Godot tests) | 1 | ➖ | |
 | `Scripts/components/locomotion_controller.gd` (stand / crouch / prone locomotion) | `UOperativeAnimInstance` native blend + `ABP_Operative` | 6 | 🟨 baseline (fire, reload, hit, death, grenade states → AnimBP graph) | `CodexTactics.StanceSmoke`, `HudShot close walk` |
 | `Scripts/components/cold_animation_controller.gd` | AnimBP layer | 6 | ⬜ | |
 | `Scripts/components/locomotion_controller.gd`, `Scripts/locomotion_v2/**` | AnimBP + `UOperativeAnimInstance` | 6 | ⬜ | |
-| `Scripts/events/event_bus.gd` | `UEventBusSubsystem` | 3 | ⬜ | |
+| `Scripts/events/event_bus.gd` | per-subsystem delegates (OnGameFlowChanged, OnWaveStarted, OnMessagePosted, ...) | 3 | ➖ | |
 | `Scripts/managers/save_manager.gd` | `USaveGameSubsystem` (JSON, Godot keys) + `SaveGameRules` | 5 | ✅ | `CodexTactics.Core.SaveGameRules.*`, SaveLoadSmoke, PauseMenuSmoke |
 | `main.gd` radius_ring | `URadiusRingSubsystem` + `ARadiusRingActor` | 5 | ✅ | RadiusRingSmoke |
 | `Scenes/movements/player.gd` — movement: click/double-click orders, speeds, stances, sprint rules | `AOperativeCharacter`, `OperativeMovementRules`, `AOperativeAIController` (NavMesh + Detour Crowd), `ACodexTacticsPlayerController` | 3 | ✅ (vault, phasing, box select, group orders, idle roam, pause orders, panic/rage refusal → later) | `CodexTactics.Movement.*` (5), `CodexTactics.MovementSmoke` |
@@ -77,7 +76,6 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/movements/loot_crate.gd`, `Scenes/ui/inventory/loot_dialog.gd`, `main.gd` loot handlers | `ALootCrateActor`, `LootRules`, `ULootDialogWidget`, `UInteractionSubsystem` loot API | 5 | ✅ (consumable use → inventory drawer) | `CodexTactics.Loot.*`, `CodexTactics.LootSmoke` |
 | `Scenes/movements/quest_manager.gd`, `narrative_element.gd`, `dialogue_trigger.gd` | `UQuestSubsystem`, dialogue data | 5 | ⬜ | |
 | `Scripts/components/rage_component.gd` | `URageComponent`, `RageRules` | 4 | ✅ (aura ring later) | `CodexTactics.Characters.Rage.Rules`, RageSmoke |
-| `Scripts/components/panic_component.gd`, `allegiance_component.gd` | — | 4 | ➖ inert in Godot (panic disabled, allegiance test-only) | |
 | `player.gd` `_find_shoot_target`, `_shoot_at_target`, `get_elevation_advantage`, `is_target_in_dead_zone` | `SquadFireRules`, `AOperativeCharacter::FindShootTarget` / `ShootAtTarget` | 4 | ✅ (rage / panic / AI grenade later) | `CodexTactics.Combat.SquadFire.Rules`, SquadFireSmoke |
 | `player.gd` / `enemy_base.gd` / `mine.gd` `_spawn_floating_combat_text`, `_spawn_heal_feedback`, player `take_damage` | `UFloatingTextSubsystem`, HUD `DrawFloatingTexts`, `AOperativeCharacter::TakeHit` | 5 | ✅ (texts of unported features pending) | FloatingTextSmoke |
 | `Scenes/movements/recruit_susanin.gd`, `main.gd` Susanin rescue event | `URecruitSubsystem`, `EOperativeRole::Recruit`, `AOperativeCharacter::bRecruited` | 5 | ✅ | SusaninSmoke |
