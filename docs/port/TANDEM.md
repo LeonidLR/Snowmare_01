@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: turn-based stasis look (`StasisMaterial`, M_TacticalStasis); the Godot companion-drone phase is a no-op hook, not ported.
 - 2026-09-29 Claude: hand grenades (`UGrenadeSubsystem`, `AGrenadeActor`, `GrenadeRules`); controller G / grenade aim click / RMB / Esc; operative `ReceiveGrenadeThrow`, `GrenadeThrowDuration`.
 - 2026-09-29 Claude: arsenal on `AOperativeCharacter` (AvailableWeapons, AmmoInventory, SwitchToWeaponById, UsesAmmo honoured in shooting); game mode `StartingArsenal` replaces `StartingWeapon`; weapon selector on the action bar.
 - 2026-09-29 Claude: turn-based deployables on the grid; `URelocationSubsystem` got `GetPlacingType` / `GetPlacingYaw`; F / action bar in turn-based use the active operative.

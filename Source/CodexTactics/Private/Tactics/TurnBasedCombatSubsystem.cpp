@@ -1,6 +1,8 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "AIController.h"
 #include "Components/BoxComponent.h"
+#include "Components/MeshComponent.h"
+#include "Materials/MaterialInterface.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -352,6 +354,11 @@ void UTurnBasedCombatSubsystem::FreezeWorld(const TSet<AActor*>& OnGrid)
 			FrozenActors.Add(Actor);
 		}
 	};
+	if (!StasisMaterial)
+	{
+		StasisMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/Materials/M_TacticalStasis.M_TacticalStasis"));
+	}
+	StasisMeshes.Reset();
 	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 	{
 		if (AController* Controller = It->GetController())
@@ -359,6 +366,22 @@ void UTurnBasedCombatSubsystem::FreezeWorld(const TSet<AActor*>& OnGrid)
 			Controller->StopMovement();
 		}
 		Freeze(*It);
+		// Godot: enemies outside the fight turn dark and translucent until it ends.
+		if (!OnGrid.Contains(*It) && StasisMaterial)
+		{
+			TArray<UMeshComponent*> Meshes;
+			It->GetComponents<UMeshComponent>(Meshes);
+			for (UMeshComponent* Mesh : Meshes)
+			{
+				FTurnStasisMesh& Entry = StasisMeshes.AddDefaulted_GetRef();
+				Entry.Mesh = Mesh;
+				for (int32 Slot = 0; Slot < Mesh->GetNumMaterials(); ++Slot)
+				{
+					Entry.Materials.Add(Mesh->GetMaterial(Slot));
+					Mesh->SetMaterial(Slot, StasisMaterial);
+				}
+			}
+		}
 	}
 	for (TActorIterator<ATurretActor> It(World); It; ++It)
 	{
@@ -380,6 +403,17 @@ void UTurnBasedCombatSubsystem::RestoreWorld()
 		}
 	}
 	FrozenActors.Reset();
+	for (const FTurnStasisMesh& Entry : StasisMeshes)
+	{
+		if (UMeshComponent* Mesh = Entry.Mesh.Get())
+		{
+			for (int32 Slot = 0; Slot < Entry.Materials.Num(); ++Slot)
+			{
+				Mesh->SetMaterial(Slot, Entry.Materials[Slot]);
+			}
+		}
+	}
+	StasisMeshes.Reset();
 }
 
 void UTurnBasedCombatSubsystem::BakeObstacles(const TArray<AActor*>& Ignore)

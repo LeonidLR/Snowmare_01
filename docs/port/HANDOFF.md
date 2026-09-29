@@ -74,7 +74,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `TurnBasedPushSmoke` | turn-based: the commander walks up to a barrel; click picks it up (3 target cells), cancel, panel «Бочка» picks it up, click on a cell pushes: barrel +1 cell, commander on its old cell, 2 AP |
 | `ExposedZonesSmoke [shot]` | turn-based with one hound; the squad passes 3 turns: warning (1), danger (2), breach of 1-2 hounds (non-elite pool), no second breach; `shot` (rendered, UnrealEditor.exe -game) saves `ExposedZones.png` at the danger state |
 | `LevelWaveSmoke` | imported level drives the flow (3 waves, 60 s / 20 s); wave 1 = 12 enemies at once at the 4 spawn points, cold drain 1.1 |
-| `TurnBasedSmoke` | wave + one brute, enter turn-based: grid registration, 8 AP, stance 1 AP, enemy turn (walk, bite 13 on a crouched commander, step back), move into a fire lane + shot -> victory -> tactical pause |
+| `TurnBasedSmoke` | wave + one brute (a far hound stays outside the fight in stasis), enter turn-based: grid registration, 8 AP, stance 1 AP, enemy turn (walk, bite 13 on a crouched commander, step back), move into a fire lane + shot -> victory -> tactical pause |
 | `MissionSmoke` | objective banner texts (start → preparation → wave), an operative's death fails the mission (GameOver, reason, time stop), restart reloads a fresh exploration |
 | `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
 | `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot |
@@ -293,7 +293,10 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    walking up first if needed; Q / E rotate the ghost). Weapon switching done (arsenal below). Grenades done (`UGrenadeSubsystem` aim /
    throw, `AGrenadeActor` flight / fuse / blast, `GrenadeRules`; G, the selector's grenade line, LMB throws, RMB / Esc
    cancel; in turn-based combat the grenade is a grid weapon like in Godot, entering it refunds grenades in flight).
-   Next: companion drone, stasis look.
+   Stasis look done (M_TacticalStasis from Scripts/Editor/create_stasis_material.py on every mesh of the enemies left
+   outside the fight, restored at the end). Companion drone: Godot _execute_companion_drone_phase only emits a request
+   that main.gd completes at once (no drone exists) — nothing to port. §8.6 is complete; next: §8.5 UI (inventory
+   drawer, transfer, guard).
 7. Phase 2 data importer (JSON / .tres → DataAssets) replacing hand-typed values (§9).
    Done: weapons — `Scripts/Editor/import_weapons.py` → `/Game/Data/Weapons/DA_Weapon_<id>` (all 9; defaults parsed
    from weapon_data.gd, enums mapped by name, `EStatusEffect::Shocked` appended); the game mode equips
@@ -369,7 +372,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Hand grenades (Godot grenade.gd + main.gd aim / throw / refund): aim rings and arc, range by stance, release at 70 % of the throw animation, arc flight, 1.2 s fuse, blast with falloff (operatives 65 %), barrels / traps go off; G key; GrenadeRulesTest, GrenadeSmoke, `HudShot grenade` |
+| (this) | Turn-based stasis look for enemies outside the fight (Godot _apply_stasis_visuals_to_enemy, tactical_stasis_enemy.gdshader); M_TacticalStasis script; TurnBasedSmoke checks it |
+| `4f4fef7` | Hand grenades (Godot grenade.gd + main.gd aim / throw / refund): aim rings and arc, range by stance, release at 70 % of the throw animation, arc flight, 1.2 s fuse, blast with falloff (operatives 65 %), barrels / traps go off; G key; GrenadeRulesTest, GrenadeSmoke, `HudShot grenade` |
 | `9bec55a` | Arsenal (Godot _init_weapons / switch_to_weapon_by_id / ammo_inventory): M16, pistol, grenade, knife per operative, ammo kept per weapon, loot to the right weapon, knife without ammo; weapon selector panel on the action bar; turn-based weapon switch; WeaponSelectorSmoke, `HudShot weapons` |
 | `3cd1474` | Turn-based deployables on the grid (Godot can_place_tactical_deployable, deploy_tactical_object, main.gd _handle_tactical_deployable_placement); TurnBasedDeploySmoke |
 | `b41448f` | Turn-based barricade relocation with 45° rotation (Godot relocate_barricade, can_place_barricade_at, get_barricade_cells_at, _register_barricade_cells); TurnBasedBarricadeSmoke |

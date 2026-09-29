@@ -11,6 +11,8 @@
 #include "TurnBasedCombatSubsystem.generated.h"
 
 class AOperativeCharacter;
+class UMaterialInterface;
+class UMeshComponent;
 class ABarricadeActor;
 class ATurnGridOverlayActor;
 class UGorkyGridManager;
@@ -63,13 +65,27 @@ struct CODEXTACTICS_API FTurnDeployCheck
 	FString Reason;
 };
 
+/** Original materials of one mesh of an enemy in stasis. */
+USTRUCT()
+struct FTurnStasisMesh
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TWeakObjectPtr<UMeshComponent> Mesh;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInterface>> Materials;
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTurnBasedStateChanged);
 
 /**
  * Gorky 17 turn-based combat on a 14 x 14 grid around the leader. Starts when the game flow enters TurnBased (Space
  * hold), ends on victory / defeat or when the player leaves it. Rounds: squad (each operative 8 AP: move 1 / diagonal
  * 2, stance 1, turn 1, one attack 3), turrets, enemies (walk to an orthogonal neighbour, bite for 2 AP, step back).
- * Everything outside the grid is frozen for the duration. Messages go to the feed as «GORKY 17».
+ * Everything outside the grid is frozen for the duration; enemies left outside the fight get the stasis look
+ * (M_TacticalStasis, Godot _apply_stasis_visuals_to_enemy). Messages go to the feed as «GORKY 17».
  * Godot reference: Scripts/tactics/turn_based_combat_manager.gd (start_combat, move_active_unit_to,
  * set_active_unit_stance, turn_active_unit_facing, attack_target_cell, end_current_unit_turn, _execute_turret_phase,
  * _execute_single_enemy_turn, _enemy_perform_attack / retreat, _detonate_barrel, _detonate_mine, end_combat;
@@ -107,6 +123,12 @@ public:
 	UGorkyGridManager* GetGrid() const { return Grid; }
 	int32 GetEnemyCount() const { return Enemies.Num(); }
 	int32 GetSquadCount() const { return Squad.Num(); }
+	/** Meshes currently shown with the stasis material (enemies outside the fight). */
+	int32 GetStasisMeshCount() const { return StasisMeshes.Num(); }
+
+	/** Material of enemies outside the fight (Godot Shaders/tactical_stasis_enemy.gdshader). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|TurnBased")
+	TObjectPtr<UMaterialInterface> StasisMaterial;
 	/** Exposed-zone counters of the running fight (quadrant turns, breaches). */
 	const FExposedZones& GetExposedZones() const { return Zones; }
 
@@ -291,6 +313,9 @@ private:
 	TArray<TWeakObjectPtr<AActor>> FrozenActors;
 	TArray<FMover> Movers;
 	FExposedZones Zones;
+
+	UPROPERTY(Transient)
+	TArray<FTurnStasisMesh> StasisMeshes;
 	TWeakObjectPtr<AActor> RelocateTarget;
 	FIntPoint RelocateOrigin = FIntPoint(-1, -1);
 	TMap<FIntPoint, int32> RelocateCells;

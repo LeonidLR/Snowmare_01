@@ -12,6 +12,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Components/MeshComponent.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
 #include "Containers/Ticker.h"
@@ -40,6 +41,7 @@ namespace TurnBasedSmoke
 		float StageTime = 0.f;
 		int32 Failures = 0;
 		TWeakObjectPtr<AEnemyCharacter> Enemy;
+		TWeakObjectPtr<AEnemyCharacter> FarEnemy;
 		FIntPoint EnemyCellBefore = FIntPoint::ZeroValue;
 		float SquadHealthBefore = 0.f;
 	};
@@ -61,6 +63,24 @@ namespace TurnBasedSmoke
 	{
 		++State.Stage;
 		State.StageTime = 0.f;
+	}
+
+	/** First mesh of the actor that has materials (the character mesh may be empty on placeholder enemies). */
+	const UMeshComponent* VisibleMesh(const AActor* Actor)
+	{
+		TArray<UMeshComponent*> Meshes;
+		if (Actor)
+		{
+			Actor->GetComponents<UMeshComponent>(Meshes);
+		}
+		for (const UMeshComponent* Mesh : Meshes)
+		{
+			if (Mesh->GetNumMaterials() > 0)
+			{
+				return Mesh;
+			}
+		}
+		return nullptr;
 	}
 
 	float SquadHealth(UWorld* World)
@@ -104,8 +124,17 @@ namespace TurnBasedSmoke
 			AOperativeCharacter* Leader = Squad->GetLeader();
 			State.Enemy = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Brute,
 				Leader->GetActorLocation() + Leader->GetActorForwardVector() * 600.f + FVector(0.f, 0.f, 20.f));
+			// A hound 20 m behind stays outside the fight (stasis look).
+			State.FarEnemy = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::FrostHound,
+				Leader->GetActorLocation() - Leader->GetActorForwardVector() * 2000.f + FVector(0.f, 0.f, 20.f));
 			const EGameFlowResult Result = Flow->RequestEnterTurnBased(true);
 			Check(State, Result == EGameFlowResult::Ok && TurnBased->IsActive(), TEXT("turn-based combat started"));
+			{
+				const UMeshComponent* FarMesh = VisibleMesh(State.FarEnemy.Get());
+				const UMeshComponent* GridMesh = VisibleMesh(State.Enemy.Get());
+				Check(State, TurnBased->StasisMaterial && FarMesh && FarMesh->GetMaterial(0) == TurnBased->StasisMaterial
+					&& GridMesh && GridMesh->GetMaterial(0) != TurnBased->StasisMaterial, TEXT("the enemy outside the fight is in stasis, the grid enemy is not"));
+			}
 			Check(State, TurnBased->GetSquadCount() == 3 && TurnBased->GetEnemyCount() == 1,
 				FString::Printf(TEXT("squad %d / enemies %d on the grid"), TurnBased->GetSquadCount(), TurnBased->GetEnemyCount()));
 			const FTurnUnitState* Active = TurnBased->GetUnitState(TurnBased->GetActiveUnit());
@@ -178,6 +207,9 @@ namespace TurnBasedSmoke
 				Check(State, Attack.bSuccess && Attack.bHit && Attack.Damage > 0, FString::Printf(TEXT("shot hits for %d (reason %s)"), Attack.Damage, *Attack.Reason));
 				Check(State, !TurnBased->IsActive(), TEXT("last enemy down -> combat over"));
 				Check(State, Flow->GetCombatMode() == ECodexCombatMode::TacticalPause, TEXT("victory returns to the tactical pause"));
+				const UMeshComponent* FarMesh = VisibleMesh(State.FarEnemy.Get());
+				Check(State, TurnBased->GetStasisMeshCount() == 0 && FarMesh && FarMesh->GetMaterial(0) != TurnBased->StasisMaterial,
+					TEXT("stasis look restored after the fight"));
 			}
 			return Finish(State, true);
 		default:
