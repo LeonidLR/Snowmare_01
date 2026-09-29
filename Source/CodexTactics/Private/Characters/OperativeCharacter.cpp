@@ -531,9 +531,107 @@ void AOperativeCharacter::EquipWeapon(UWeaponDataAsset* NewWeapon)
 	ShootTimer = 0.0f;
 }
 
+void AOperativeCharacter::InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, int32 RifleReserve)
+{
+	AvailableWeapons.Reset();
+	AmmoInventory.Reset();
+	for (UWeaponDataAsset* Weapon : Weapons)
+	{
+		if (!Weapon)
+		{
+			continue;
+		}
+		AvailableWeapons.Add(Weapon);
+		FWeaponAmmoState& Ammo = AmmoInventory.Add(Weapon->WeaponId);
+		if (Weapon->WeaponId == TEXT("grenade"))
+		{
+			Ammo.Clip = GrenadesCount > 0 ? 1 : 0;
+			Ammo.Reserve = FMath::Max(0, GrenadesCount - 1);
+		}
+		else
+		{
+			Ammo.Clip = Weapon->MaxClipSize;
+			Ammo.Reserve = Weapon->WeaponId == TEXT("m16") ? RifleReserve : (Weapon->WeaponId == TEXT("pistol") ? 24 : 0);
+		}
+	}
+	// Rounds picked up before the arsenal existed (loot) join their weapon.
+	for (auto It = ExtraAmmo.CreateIterator(); It; ++It)
+	{
+		if (FWeaponAmmoState* Ammo = AmmoInventory.Find(It.Key().ToString()))
+		{
+			Ammo->Reserve += It.Value();
+			It.RemoveCurrent();
+		}
+	}
+	CurrentWeapon = nullptr;
+	if (!AvailableWeapons.IsEmpty())
+	{
+		SwitchToWeaponById(AvailableWeapons[0]->WeaponId);
+	}
+}
+
+bool AOperativeCharacter::SwitchToWeaponById(const FString& WeaponId)
+{
+	const TObjectPtr<UWeaponDataAsset>* Found = AvailableWeapons.FindByPredicate([&WeaponId](const UWeaponDataAsset* Weapon)
+	{
+		return Weapon && Weapon->WeaponId == WeaponId;
+	});
+	if (!Found)
+	{
+		return false;
+	}
+	if (CurrentWeapon)
+	{
+		AmmoInventory.FindOrAdd(CurrentWeapon->WeaponId) = { CurrentClip, ReserveAmmo };
+	}
+	CurrentWeapon = *Found;
+	FWeaponAmmoState Ammo = AmmoInventory.FindRef(WeaponId);
+	if (WeaponId == TEXT("grenade"))
+	{
+		// Grenades are also spent on traps: the count is the truth.
+		Ammo = { GrenadesCount > 0 ? 1 : 0, FMath::Max(0, GrenadesCount - 1) };
+	}
+	CurrentClip = Ammo.Clip;
+	ReserveAmmo = Ammo.Reserve;
+	bIsReloading = false;
+	ReloadTimer = 0.0f;
+	ShootTimer = 0.0f;
+	return true;
+}
+
+FWeaponAmmoState AOperativeCharacter::GetAmmoState(const FString& WeaponId) const
+{
+	if (CurrentWeapon && CurrentWeapon->WeaponId == WeaponId)
+	{
+		return { CurrentClip, ReserveAmmo };
+	}
+	return AmmoInventory.FindRef(WeaponId);
+}
+
+void AOperativeCharacter::AddAmmo(const FString& WeaponId, int32 Count)
+{
+	if (CurrentWeapon && CurrentWeapon->WeaponId == WeaponId)
+	{
+		ReserveAmmo += Count;
+	}
+	else if (FWeaponAmmoState* Ammo = AmmoInventory.Find(WeaponId))
+	{
+		Ammo->Reserve += Count;
+	}
+	else
+	{
+		ExtraAmmo.FindOrAdd(FName(*WeaponId)) += Count;
+	}
+}
+
+bool AOperativeCharacter::UsesAmmo() const
+{
+	return !CurrentWeapon || CurrentWeapon->bUsesAmmo;
+}
+
 void AOperativeCharacter::StartReload()
 {
-	if (bIsReloading || ReserveAmmo <= 0)
+	if (bIsReloading || ReserveAmmo <= 0 || !UsesAmmo())
 	{
 		return;
 	}
@@ -684,7 +782,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		}
 	}
 
-	if (CurrentClip <= 0)
+	if (UsesAmmo() && CurrentClip <= 0)
 	{
 		if (ReserveAmmo > 0)
 		{
@@ -713,12 +811,15 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 
 bool AOperativeCharacter::ShootAtTarget(AActor* Target)
 {
-	if (!Target || CurrentClip <= 0)
+	if (!Target || (UsesAmmo() && CurrentClip <= 0))
 	{
 		return false;
 	}
 
-	CurrentClip--;
+	if (UsesAmmo())
+	{
+		CurrentClip--;
+	}
 
 	// Cold misfire (Godot player.gd `_shoot_at_target`, balance.tres: >= 60 %, linear up to 30 %, never near heat).
 	bool bMisfire = bForceMisfireForTesting;
@@ -852,7 +953,7 @@ bool AOperativeCharacter::CanBeginWeaponShot()
 		OperativeShotLine(*this, LOCTEXT("WeaponFrozen", "🥶 ОРУЖИЕ ЗАМЁРЗЛО! Нужен источник тепла!"));
 		return false;
 	}
-	if (CurrentClip > 0)
+	if (CurrentClip > 0 || !UsesAmmo())
 	{
 		return true;
 	}
@@ -862,6 +963,10 @@ bool AOperativeCharacter::CanBeginWeaponShot()
 
 void AOperativeCharacter::ConsumeAmmoAfterShot()
 {
+	if (!UsesAmmo())
+	{
+		return;
+	}
 	CurrentClip = FMath::Max(0, CurrentClip - 1);
 	if (CurrentClip <= 0)
 	{

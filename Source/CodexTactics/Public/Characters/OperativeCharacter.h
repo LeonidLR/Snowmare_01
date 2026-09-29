@@ -8,6 +8,20 @@
 #include "OperativeCharacter.generated.h"
 
 class UStaticMeshComponent;
+class UWeaponDataAsset;
+
+/** Clip / reserve of one weapon of the arsenal (Godot ammo_inventory entry). */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FWeaponAmmoState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
+	int32 Clip = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
+	int32 Reserve = 0;
+};
 class UMaterialInstanceDynamic;
 class AOperativeCharacter;
 
@@ -242,7 +256,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
 	int32 BreadCount = 0;
 
-	/** Ammo for weapons not ported yet, by Godot weapon id (pistol, shotgun, flamethrower, cryo_emitter, plasma_carbine). */
+	/** Ammo for weapons outside the arsenal, by Godot weapon id (shotgun, flamethrower, cryo_emitter, plasma_carbine). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory")
 	TMap<FName, int32> ExtraAmmo;
 
@@ -297,6 +311,45 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
 	void EquipWeapon(class UWeaponDataAsset* NewWeapon);
+
+	// --- Arsenal (Godot player.gd available_weapons / ammo_inventory / switch_to_weapon_by_id) ---
+
+	/**
+	 * Godot _init_weapons: every operative carries the arsenal (M16, pistol, grenade, knife); full clips, reserve M16
+	 * RifleReserve (60), pistol 24, others 0; the grenade clip is 1 while grenades are left. The first weapon is equipped.
+	 */
+	void InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, int32 RifleReserve);
+
+	/** Godot switch_to_weapon_by_id: the current clip / reserve go back to the inventory, the new ones come out. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
+	bool SwitchToWeaponById(const FString& WeaponId);
+
+	/** Clip / reserve of an arsenal weapon (the equipped one reports its live values). */
+	FWeaponAmmoState GetAmmoState(const FString& WeaponId) const;
+
+	/** Adds reserve rounds of a weapon: arsenal weapon (live if equipped) or ExtraAmmo. */
+	void AddAmmo(const FString& WeaponId, int32 Count);
+
+	/** False for melee weapons (Godot uses_ammo). */
+	bool UsesAmmo() const;
+
+	/** Weapons this operative can switch to (Godot available_weapons). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat")
+	TArray<TObjectPtr<UWeaponDataAsset>> AvailableWeapons;
+
+	/** Clip / reserve of the weapons not in hands, by Godot weapon id. */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Combat")
+	TMap<FString, FWeaponAmmoState> AmmoInventory;
+
+	/** Godot grenade_damage / grenade_effect_radius / grenade_throw_range exports (85, 4 m, 12 m). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "0"))
+	float GrenadeDamage = 85.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "0"))
+	float GrenadeEffectRadius = 400.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "0"))
+	float GrenadeThrowRange = 1200.f;
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
 	void StartReload();

@@ -56,6 +56,25 @@ public:
 	/** Label of squad slot Index (0..3). */
 	FText GetSlotText(int32 Index) const;
 
+	// --- Weapon selector (Godot main.gd _create_weapon_selector_panel / _select_weapon_from_selector) ---
+
+	/** Click on the weapon slot: opens / closes «ВЫБОР ВООРУЖЕНИЯ» above the bar. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|ActionBar")
+	void ToggleWeaponSelector();
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|ActionBar")
+	bool IsWeaponSelectorOpen() const;
+
+	/** Line of selector button Index (0 M16, 1 pistol, 2 grenade, 3 knife) for the leader / active operative. */
+	FText GetSelectorText(int32 Index) const;
+
+	/**
+	 * Takes weapon WeaponId: in turn-based combat through the combat (active operative), otherwise the leader; posts
+	 * «Экипировано» and closes the selector. The grenade needs the throw mode (not ported yet) and is refused.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|ActionBar")
+	bool SelectWeapon(const FString& WeaponId);
+
 protected:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
@@ -76,6 +95,30 @@ private:
 
 	UFUNCTION()
 	void HandleRelocate();
+
+	UFUNCTION()
+	void HandleWeaponSlot();
+
+	UFUNCTION()
+	void HandleSelectM16();
+
+	UFUNCTION()
+	void HandleSelectPistol();
+
+	UFUNCTION()
+	void HandleSelectGrenade();
+
+	UFUNCTION()
+	void HandleSelectKnife();
+
+	UPROPERTY()
+	TObjectPtr<UWidget> SelectorPanel;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UButton>> SelectorButtons;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UTextBlock>> SelectorTexts;
 
 	UFUNCTION()
 	void HandleStance();

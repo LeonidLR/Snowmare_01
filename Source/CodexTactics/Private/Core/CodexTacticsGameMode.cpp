@@ -38,7 +38,10 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 	TurnBasedBalance = TSoftObjectPtr<UGodotBalanceAsset>(FSoftObjectPath(TEXT("/Game/Data/Balance/DA_Balance.DA_Balance")));
 	GameBalanceConfig = TSoftObjectPtr<UGodotBalanceAsset>(FSoftObjectPath(TEXT("/Game/Data/Balance/DA_GameBalanceConfig.DA_GameBalanceConfig")));
 	LevelConfig = TSoftObjectPtr<ULevelConfigAsset>(FSoftObjectPath(TEXT("/Game/Data/Levels/DA_Level_level_01_outpost.DA_Level_level_01_outpost")));
-	StartingWeapon = TSoftObjectPtr<UWeaponDataAsset>(FSoftObjectPath(TEXT("/Game/Data/Weapons/DA_Weapon_m16.DA_Weapon_m16")));
+	for (const TCHAR* Id : { TEXT("m16"), TEXT("pistol"), TEXT("grenade"), TEXT("knife") })
+	{
+		StartingArsenal.Add(TSoftObjectPtr<UWeaponDataAsset>(FSoftObjectPath(FString::Printf(TEXT("/Game/Data/Weapons/DA_Weapon_%s.DA_Weapon_%s"), Id, Id))));
+	}
 	DialogueMissionStart = TSoftObjectPtr<UDialogueSequenceAsset>(FSoftObjectPath(TEXT("/Game/Data/Dialogues/DA_DialogueIntro.DA_DialogueIntro")));
 	DialoguePreparationStarted = TSoftObjectPtr<UDialogueSequenceAsset>(FSoftObjectPath(TEXT("/Game/Data/Dialogues/DA_DialoguePrep.DA_DialoguePrep")));
 	DialogueWaveRest = TSoftObjectPtr<UDialogueSequenceAsset>(FSoftObjectPath(TEXT("/Game/Data/Dialogues/DA_DialogueWaveRest.DA_DialogueWaveRest")));
@@ -123,11 +126,15 @@ void ACodexTacticsGameMode::SpawnSquad()
 			OperativeBalance::Apply(*Config, *Operative);
 		}
 		UGameplayStatics::FinishSpawningActor(Operative, FTransform(Facing, Location));
-		if (UWeaponDataAsset* Weapon = StartingWeapon.LoadSynchronous())
+		TArray<UWeaponDataAsset*> Arsenal;
+		for (const TSoftObjectPtr<UWeaponDataAsset>& Weapon : StartingArsenal)
 		{
-			Operative->EquipWeapon(Weapon); // full clip
-			Operative->ReserveAmmo = StartingReserveAmmo;
+			if (UWeaponDataAsset* Loaded = Weapon.LoadSynchronous())
+			{
+				Arsenal.Add(Loaded);
+			}
 		}
+		Operative->InitArsenal(Arsenal, StartingReserveAmmo); // full clips, M16 in hands
 		Operative->ApplyBodyColor();
 	}
 }

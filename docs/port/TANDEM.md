@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: arsenal on `AOperativeCharacter` (AvailableWeapons, AmmoInventory, SwitchToWeaponById, UsesAmmo honoured in shooting); game mode `StartingArsenal` replaces `StartingWeapon`; weapon selector on the action bar.
 - 2026-09-29 Claude: turn-based deployables on the grid; `URelocationSubsystem` got `GetPlacingType` / `GetPlacingYaw`; F / action bar in turn-based use the active operative.
 - 2026-09-29 Claude: turn-based barricade relocation; barricade grid footprint switched to Godot's sampling; Q / E / R / wheel rotate while relocating.
 - 2026-09-29 Claude: turn-based barrel / turret relocation; `HandleWorldClick` gained a Shift flag, `TurnBasedHudWidget` «Бочка» button enabled.

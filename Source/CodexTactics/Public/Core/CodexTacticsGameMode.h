@@ -97,11 +97,14 @@ public:
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Balance")
 	TSoftObjectPtr<ULevelConfigAsset> LevelConfig;
 
-	/** Weapon every spawned operative starts with (imported from Godot rifle_m16.tres by Scripts/Editor/import_weapons.py). */
+	/**
+	 * Arsenal of every spawned operative, the first one in hands (Godot player.gd _init_weapons: M16, pistol, grenade,
+	 * knife; assets imported by Scripts/Editor/import_weapons.py).
+	 */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
-	TSoftObjectPtr<UWeaponDataAsset> StartingWeapon;
+	TArray<TSoftObjectPtr<UWeaponDataAsset>> StartingArsenal;
 
-	/** Starting reserve of that weapon (Godot player.gd _init_weapons: m16 reserve 60). */
+	/** Starting M16 reserve (Godot player.gd _init_weapons: m16 reserve 60). */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad", meta = (ClampMin = "0"))
 	int32 StartingReserveAmmo = 60;
 

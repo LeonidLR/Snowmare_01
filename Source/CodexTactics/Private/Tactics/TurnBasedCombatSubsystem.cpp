@@ -999,6 +999,20 @@ void UTurnBasedCombatSubsystem::EndCurrentUnitTurn()
 	EndSquadPhase();
 }
 
+bool UTurnBasedCombatSubsystem::SwitchActiveUnitWeapon(const FString& WeaponId)
+{
+	AOperativeCharacter* Unit = GetActiveUnit();
+	if (!Unit || !Unit->SwitchToWeaponById(WeaponId))
+	{
+		return false;
+	}
+	const FString Name = Unit->CurrentWeapon && !Unit->CurrentWeapon->WeaponName.IsEmpty() ? Unit->CurrentWeapon->WeaponName.ToString() : WeaponId;
+	Log(FString::Printf(TEXT("🔫 %s выбрал(а) оружие: %s"), *NameOf(Unit), *Name));
+	RefreshOverlay();
+	Changed();
+	return true;
+}
+
 void UTurnBasedCombatSubsystem::PassSquadTurn()
 {
 	if (bSquadUnitMoving || Phase != ETurnPhase::Squad)

@@ -68,6 +68,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UTurnBasedHudWidget> TurnBasedHudWidgetClass;
 
+	/** The bottom action bar (with the weapon selector); null before BeginPlay. */
+	UActionBarWidget* GetActionBar() const { return ActionBar; }
+
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
 	int32 MaxFeedMessages = 8;

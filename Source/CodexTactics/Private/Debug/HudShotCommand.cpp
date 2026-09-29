@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu.
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -32,6 +32,8 @@
 #include "Misc/Paths.h"
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
+#include "UI/ActionBarWidget.h"
+#include "UI/CodexTacticsHUD.h"
 #include "UnrealClient.h"
 
 namespace HudShot
@@ -132,6 +134,21 @@ namespace HudShot
 					}
 				}
 			}), 3.f, false);
+		}
+		if (Args.Contains(TEXT("weapons")))
+		{
+			// The weapon selector above the action bar.
+			TWeakObjectPtr<UWorld> WeaponWorld(World);
+			FTimerHandle WeaponHandle;
+			World->GetTimerManager().SetTimer(WeaponHandle, FTimerDelegate::CreateLambda([WeaponWorld]()
+			{
+				APlayerController* PC = WeaponWorld.IsValid() ? UGameplayStatics::GetPlayerController(WeaponWorld.Get(), 0) : nullptr;
+				const ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
+				if (UActionBarWidget* Bar = Hud ? Hud->GetActionBar() : nullptr)
+				{
+					Bar->ToggleWeaponSelector();
+				}
+			}), 3.5f, false);
 		}
 		if (Args.Contains(TEXT("dialogue")))
 		{

@@ -92,6 +92,11 @@ FString ACodexTacticsHUD::StripUnsupportedGlyphs(const FString& Text)
 			Result.Append(TEXT("->")); // arrows («➔») keep their meaning
 			continue;
 		}
+		if (Code == 0x25C0)
+		{
+			Result.AppendChar(TEXT('<')); // «◀ В РУКАХ»
+			continue;
+		}
 		const bool bSurrogate = Code >= 0xD800 && Code <= 0xDFFF; // emoji outside the BMP
 		const bool bSymbol = (Code >= 0x2190 && Code <= 0x2BFF) || Code == 0xFE0F || Code == 0x200D || Code == 0x20E3; // 0x20E3: keycap «2️⃣»
 		if (!bSurrogate && !bSymbol)

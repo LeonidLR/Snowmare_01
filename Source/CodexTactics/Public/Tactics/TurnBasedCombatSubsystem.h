@@ -124,6 +124,8 @@ public:
 	void EndCurrentUnitTurn();
 	/** Enter: the whole squad ends its turn. */
 	void PassSquadTurn();
+	/** Godot switch_active_unit_weapon_to: the active operative takes another arsenal weapon (free); attack cells follow. */
+	bool SwitchActiveUnitWeapon(const FString& WeaponId);
 
 	/**
 	 * Mouse click in turn-based mode (Godot main.gd _handle_gorky17_tactical_click): select an operative, attack an

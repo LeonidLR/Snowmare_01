@@ -236,14 +236,14 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 	case ELootItem::Bread: Collector->BreadCount += Count; break;
 	case ELootItem::Chocolate: Collector->ChocolateCount += Count; break;
 	case ELootItem::Matches: Collector->MatchesCount += Count; break;
-	case ELootItem::RifleAmmo: Collector->ReserveAmmo += Count; break; // the M16 reserve
+	case ELootItem::RifleAmmo: Collector->AddAmmo(TEXT("m16"), Count); break;
 	// Godot adds engineering items without the carry limit.
 	case ELootItem::Turret: Collector->TurretsCount += Count; break;
 	case ELootItem::Barricade: Collector->BarricadesCount += Count; break;
 	case ELootItem::Mine: Collector->MinesCount += Count; break;
 	case ELootItem::BonusWeapon:
 	case ELootItem::BonusClothing: Collector->BonusItems.Add(Id); break;
-	default: Collector->ExtraAmmo.FindOrAdd(AmmoKey(Item)) += Count; break;
+	default: Collector->AddAmmo(AmmoKey(Item).ToString(), Count); break;
 	}
 	if (Contents.IsEmpty())
 	{
