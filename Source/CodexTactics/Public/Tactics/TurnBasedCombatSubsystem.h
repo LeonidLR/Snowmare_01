@@ -10,6 +10,7 @@
 #include "TurnBasedCombatSubsystem.generated.h"
 
 class AOperativeCharacter;
+class ABarricadeActor;
 class ATurnGridOverlayActor;
 class UGorkyGridManager;
 class UWeaponDataAsset;
@@ -119,13 +120,18 @@ public:
 	 */
 	void HandleWorldClick(const FVector& WorldPoint, AActor* HitActor, bool bShift = false);
 
-	// --- Object relocation (barrels, turrets) ---
+	// --- Object relocation (barrels, turrets, barricades) ---
 
 	/**
-	 * Godot _start_tactical_relocate: the object waits for a target cell among its free orthogonal neighbours
-	 * (PushBarrelAPCost each, shown as the reachable layer). Needs that many AP.
+	 * Godot _start_tactical_relocate: the object waits for a target cell (shown as the reachable layer, PushBarrelAPCost
+	 * each; needs that many AP). Barrels / turrets: free orthogonal neighbours. Barricades: every cell within 2 of the
+	 * operative where the barricade fits at the current rotation (RotateRelocation, 45° steps).
 	 */
 	bool StartRelocate(AActor* Object);
+	/** Godot R / E (+45°) and Q (-45°) while relocating; barricades refresh their target cells. */
+	void RotateRelocation(int32 Steps);
+	float GetRelocateYaw() const { return RelocateYaw; }
+	bool IsRelocatingBarricade() const;
 	/** Godot _cancel_tactical_relocate (Esc / RMB / click on the object's own cell). */
 	void CancelRelocate();
 	bool IsRelocating() const { return RelocateTarget.IsValid(); }
@@ -141,6 +147,16 @@ public:
 	bool TryPushAdjacentBarrel();
 	/** Godot is_unit_adjacent_to_object: Chebyshev distance 1 to any cell of the object. */
 	bool IsUnitAdjacentToObject(const AActor* Unit, const AActor* Object) const;
+
+	/**
+	 * Godot get_barricade_cells_at: five samples along the barricade's long axis (±0.48 of its length, halves, centre)
+	 * around the centre of Cell, rotated by Yaw.
+	 */
+	TArray<FIntPoint> GetBarricadeCellsAt(const AActor* Barricade, const FIntPoint& Cell, float Yaw) const;
+	/** Godot can_place_barricade_at: a cell of the new footprint next to the operative, none on him or on another occupant. */
+	bool CanPlaceBarricadeAt(const AActor* Barricade, const FIntPoint& Cell, float Yaw) const;
+	/** Godot relocate_barricade: moves / rotates the barricade in one action (CustomAPCost < 0 = PushBarrelAPCost). */
+	bool RelocateBarricade(AActor* Barricade, const FIntPoint& Cell, float Yaw, int32 CustomAPCost = -1);
 
 	/** Turn-based balance (Godot tactical_* defaults). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|TurnBased")
@@ -199,6 +215,10 @@ private:
 	void EndSquadPhase();
 	/** Godot _end_squad_phase zone check: counters, warnings, overlay outlines, reinforcements. */
 	void UpdateExposedZones();
+	/** Godot _register_barricade_cells: the footprint samples at the barricade's current place and rotation. */
+	void RegisterBarricadeCells(AActor* Barricade);
+	/** Godot _refresh_tactical_barricade_cost_map. */
+	void RefreshBarricadeTargets();
 	/** Free cells of a quadrant for a reinforcement group, outer edge first (Godot find_spawn_cells_in_quadrant). */
 	TArray<FIntPoint> FindSpawnCells(int32 Quadrant, int32 Count) const;
 	/** Godot _register_reinforcement_enemy. */
@@ -242,6 +262,7 @@ private:
 	TWeakObjectPtr<AActor> RelocateTarget;
 	FIntPoint RelocateOrigin = FIntPoint(-1, -1);
 	TMap<FIntPoint, int32> RelocateCells;
+	float RelocateYaw = 0.f;
 
 	ETurnPhase Phase = ETurnPhase::Inactive;
 	int32 ActiveIndex = 0;

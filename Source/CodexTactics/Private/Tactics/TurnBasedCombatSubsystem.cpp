@@ -1,5 +1,6 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "AIController.h"
+#include "Components/BoxComponent.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -185,26 +186,7 @@ void UTurnBasedCombatSubsystem::StartCombat()
 
 	for (AActor* Barricade : GridBarricades)
 	{
-		// A barricade covers every cell whose centre lies inside its footprint (Godot _register_barricade_cells).
-		FVector Origin, Extent;
-		Barricade->GetActorBounds(true, Origin, Extent);
-		bool bAny = false;
-		for (int32 X = 0; X < TurnGridCells; ++X)
-		{
-			for (int32 Y = 0; Y < TurnGridCells; ++Y)
-			{
-				const FVector CellCenter = Grid->GridToWorld(FIntPoint(X, Y));
-				if (FMath::Abs(CellCenter.X - Origin.X) <= Extent.X && FMath::Abs(CellCenter.Y - Origin.Y) <= Extent.Y)
-				{
-					Grid->SetOccupant(FIntPoint(X, Y), Barricade, EGorkyOccupantType::Barricade);
-					bAny = true;
-				}
-			}
-		}
-		if (!bAny)
-		{
-			Grid->SetOccupant(Grid->WorldToGrid(Barricade->GetActorLocation()), Barricade, EGorkyOccupantType::Barricade);
-		}
+		RegisterBarricadeCells(Barricade);
 	}
 	for (AActor* Barrel : GridBarrels)
 	{
@@ -1046,6 +1028,37 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 		{
 			Cell = Grid->WorldToGrid(HitActor->GetActorLocation());
 		}
+		if (IsRelocatingBarricade())
+		{
+			AActor* Barricade = RelocateTarget.Get();
+			if (Grid->IsValidCell(Cell) && CanPlaceBarricadeAt(Barricade, Cell, RelocateYaw))
+			{
+				const int32* Cost = RelocateCells.Find(Cell);
+				const int32 APCost = Cost ? *Cost : Balance.PushBarrelAPCost;
+				const float Yaw = RelocateYaw;
+				RelocateTarget.Reset();
+				RelocateCells.Reset();
+				if (RelocateBarricade(Barricade, Cell, Yaw, APCost))
+				{
+					Highlight(Barricade);
+					Post(TEXT("ТАКТИКА"), FString::Printf(TEXT("✅ Баррикада успешно развернута (-%d AP)."), APCost));
+				}
+				else
+				{
+					Post(TEXT("ТАКТИКА"), TEXT("⚠️ Ошибка при установке баррикады!"));
+					RefreshOverlay();
+				}
+			}
+			else if (Cell == RelocateOrigin && FMath::IsNearlyZero(FRotator::NormalizeAxis(RelocateYaw - Barricade->GetActorRotation().Yaw), 0.5f))
+			{
+				CancelRelocate();
+			}
+			else
+			{
+				Post(TEXT("ТАКТИКА"), TEXT("⚠️ Нельзя установить баррикаду в этой клетке с текущим углом поворота (или не хватает AP)!"));
+			}
+			return;
+		}
 		if (const int32* Cost = RelocateCells.Find(Cell))
 		{
 			const int32 APCost = *Cost;
@@ -1133,8 +1146,27 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 		}
 		break;
 	}
-	case EGorkyOccupantType::Enemy:
 	case EGorkyOccupantType::Barricade:
+	{
+		// Godot: an adjacent barricade is relocated (with rotation), Shift attacks it.
+		AActor* Barricade = Grid->GetOccupant(Cell);
+		if (!bShift)
+		{
+			Highlight(Barricade);
+			if (IsUnitAdjacentToObject(GetActiveUnit(), Barricade))
+			{
+				StartRelocate(Barricade);
+			}
+			else
+			{
+				Post(TEXT("ТАКТИКА"), TEXT("⚠️ Боец должен подойти вплотную к баррикаде, чтобы переместить её (или зажмите Shift для атаки)!"));
+			}
+			return;
+		}
+		AttackCell(Cell);
+		break;
+	}
+	case EGorkyOccupantType::Enemy:
 		AttackCell(Cell);
 		break;
 	case EGorkyOccupantType::Squad:
@@ -1185,7 +1217,8 @@ bool UTurnBasedCombatSubsystem::StartRelocate(AActor* Object)
 {
 	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
 	const FTurnUnitState* ObjectState = GetUnitState(Object);
-	if (Phase != ETurnPhase::Squad || bSquadUnitMoving || !UnitState || !ObjectState || !Grid)
+	const bool bBarricade = IsValid(Object) && Object->IsA<ABarricadeActor>();
+	if (Phase != ETurnPhase::Squad || bSquadUnitMoving || !UnitState || (!ObjectState && !bBarricade) || !Grid)
 	{
 		return false;
 	}
@@ -1196,8 +1229,17 @@ bool UTurnBasedCombatSubsystem::StartRelocate(AActor* Object)
 		return false;
 	}
 	RelocateTarget = Object;
-	RelocateOrigin = ObjectState->GridPos;
+	RelocateOrigin = ObjectState ? ObjectState->GridPos : Grid->WorldToGrid(Object->GetActorLocation());
+	RelocateYaw = Object->GetActorRotation().Yaw;
 	RelocateCells.Reset();
+	if (bBarricade)
+	{
+		RefreshBarricadeTargets();
+		RefreshOverlay();
+		Post(TEXT("ТАКТИКА"), TEXT("🧱 Размещение баррикады: [Колёсико мыши/Q/E — поворот на 45°, ЛКМ — подтвердить, ПКМ/[Esc] — отмена]"));
+		Changed();
+		return true;
+	}
 	// Godot: reachable in one step (orthogonal; a diagonal costs 2) and walkable.
 	for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(RelocateOrigin, 1))
 	{
@@ -1209,6 +1251,173 @@ bool UTurnBasedCombatSubsystem::StartRelocate(AActor* Object)
 	RefreshOverlay();
 	Post(TEXT("ТАКТИКА"), FString::Printf(TEXT("📦 Выберите соседнюю свободную клетку для перемещения %s (1 деление = %d AP) [ЛКМ — подтвердить, ПКМ/[Esc] — отмена]"),
 		Object->IsA<ABarrelActor>() ? TEXT("бочки") : TEXT("объекта"), CostPerStep));
+	Changed();
+	return true;
+}
+
+bool UTurnBasedCombatSubsystem::IsRelocatingBarricade() const
+{
+	return IsRelocating() && RelocateTarget->IsA<ABarricadeActor>();
+}
+
+void UTurnBasedCombatSubsystem::RotateRelocation(int32 Steps)
+{
+	if (!IsRelocating())
+	{
+		return;
+	}
+	RelocateYaw = FRotator::ClampAxis(RelocateYaw + 45.f * Steps);
+	if (IsRelocatingBarricade())
+	{
+		RefreshBarricadeTargets();
+		RefreshOverlay();
+		Changed();
+	}
+}
+
+void UTurnBasedCombatSubsystem::RefreshBarricadeTargets()
+{
+	RelocateCells.Reset();
+	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
+	AActor* Barricade = RelocateTarget.Get();
+	if (!UnitState || !Barricade || UnitState->AP < Balance.PushBarrelAPCost)
+	{
+		return;
+	}
+	for (int32 DX = -2; DX <= 2; ++DX)
+	{
+		for (int32 DY = -2; DY <= 2; ++DY)
+		{
+			const FIntPoint Candidate = UnitState->GridPos + FIntPoint(DX, DY);
+			if (Grid->IsValidCell(Candidate) && CanPlaceBarricadeAt(Barricade, Candidate, RelocateYaw))
+			{
+				RelocateCells.Add(Candidate, Balance.PushBarrelAPCost);
+			}
+		}
+	}
+}
+
+TArray<FIntPoint> UTurnBasedCombatSubsystem::GetBarricadeCellsAt(const AActor* Barricade, const FIntPoint& Cell, float Yaw) const
+{
+	TArray<FIntPoint> Result;
+	if (!Grid || !Grid->IsValidCell(Cell))
+	{
+		return Result;
+	}
+	// Godot: half extent = 0.48 of the collision box length (default 1.45 m).
+	float HalfExtent = 145.f;
+	if (const UBoxComponent* Box = Barricade ? Barricade->FindComponentByClass<UBoxComponent>() : nullptr)
+	{
+		HalfExtent = Box->GetScaledBoxExtent().X * 2.f * 0.48f;
+	}
+	const FVector Center = Grid->GridToWorld(Cell);
+	const FRotator Rotation(0.f, Yaw, 0.f);
+	for (const float Offset : { -HalfExtent, -HalfExtent * 0.5f, 0.f, HalfExtent * 0.5f, HalfExtent })
+	{
+		const FIntPoint Sample = Grid->WorldToGrid(Center + Rotation.RotateVector(FVector(Offset, 0.f, 0.f)));
+		if (Grid->IsValidCell(Sample))
+		{
+			Result.AddUnique(Sample);
+		}
+	}
+	return Result;
+}
+
+void UTurnBasedCombatSubsystem::RegisterBarricadeCells(AActor* Barricade)
+{
+	if (!IsValid(Barricade) || !Grid)
+	{
+		return;
+	}
+	float HalfExtent = 145.f;
+	if (const UBoxComponent* Box = Barricade->FindComponentByClass<UBoxComponent>())
+	{
+		HalfExtent = Box->GetScaledBoxExtent().X * 2.f * 0.48f;
+	}
+	const FVector Center = Barricade->GetActorLocation();
+	const FRotator Rotation(0.f, Barricade->GetActorRotation().Yaw, 0.f);
+	for (const float Offset : { -HalfExtent, -HalfExtent * 0.5f, 0.f, HalfExtent * 0.5f, HalfExtent })
+	{
+		const FIntPoint Sample = Grid->WorldToGrid(Center + Rotation.RotateVector(FVector(Offset, 0.f, 0.f)));
+		if (Grid->IsValidCell(Sample))
+		{
+			Grid->SetOccupant(Sample, Barricade, EGorkyOccupantType::Barricade);
+		}
+	}
+}
+
+bool UTurnBasedCombatSubsystem::CanPlaceBarricadeAt(const AActor* Barricade, const FIntPoint& Cell, float Yaw) const
+{
+	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
+	if (!Grid || !Grid->IsValidCell(Cell) || !UnitState)
+	{
+		return false;
+	}
+	const TArray<FIntPoint> Cells = GetBarricadeCellsAt(Barricade, Cell, Yaw);
+	if (Cells.IsEmpty())
+	{
+		return false;
+	}
+	const FIntPoint UnitPos = UnitState->GridPos;
+	const bool bNearSoldier = Cells.ContainsByPredicate([&UnitPos](const FIntPoint& C)
+	{
+		return FMath::Max(FMath::Abs(UnitPos.X - C.X), FMath::Abs(UnitPos.Y - C.Y)) <= 1;
+	});
+	if (!bNearSoldier)
+	{
+		return false;
+	}
+	for (const FIntPoint& C : Cells)
+	{
+		const AActor* Occupant = Grid->GetOccupant(C);
+		if (C == UnitPos || (Occupant && Occupant != Barricade) || (!Grid->IsCellWalkable(C) && Occupant != Barricade))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool UTurnBasedCombatSubsystem::RelocateBarricade(AActor* Barricade, const FIntPoint& Cell, float Yaw, int32 CustomAPCost)
+{
+	AOperativeCharacter* Unit = GetActiveUnit();
+	FTurnUnitState* UnitState = States.Find(Unit);
+	if (bSquadUnitMoving || !UnitState || !IsValid(Barricade))
+	{
+		return false;
+	}
+	if (!CanPlaceBarricadeAt(Barricade, Cell, Yaw))
+	{
+		Log(TEXT("⚠️ Нельзя установить баррикаду в этой позиции!"));
+		return false;
+	}
+	const int32 TotalAP = CustomAPCost >= 0 ? CustomAPCost : Balance.PushBarrelAPCost;
+	if (UnitState->AP < TotalAP)
+	{
+		Log(FString::Printf(TEXT("⚠️ Недостаточно AP для перемещения баррикады (требуется %d AP, доступно %d AP)!"), TotalAP, UnitState->AP));
+		return false;
+	}
+	UnitState->AP -= TotalAP;
+	for (int32 X = 0; X < Grid->GridSize.X; ++X)
+	{
+		for (int32 Y = 0; Y < Grid->GridSize.Y; ++Y)
+		{
+			if (Grid->GetOccupant(FIntPoint(X, Y)) == Barricade)
+			{
+				Grid->ClearOccupant(FIntPoint(X, Y));
+			}
+		}
+	}
+	const FVector Target = Grid->GridToWorld(Cell);
+	Barricade->SetActorLocationAndRotation(FVector(Target.X, Target.Y, Barricade->GetActorLocation().Z), FRotator(0.f, Yaw, 0.f),
+		false, nullptr, ETeleportType::TeleportPhysics);
+	RegisterBarricadeCells(Barricade);
+	// The operative turns to face the barricade.
+	UnitState->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Cell - UnitState->GridPos));
+	AlignFacing(Unit, UnitState->Facing);
+	Log(FString::Printf(TEXT("🧱 %s развернул(а) баррикаду (поворот %d°, потрачено %d AP)."), *NameOf(Unit),
+		FMath::RoundToInt(FRotator::ClampAxis(Yaw)), TotalAP));
+	RefreshOverlay();
 	Changed();
 	return true;
 }

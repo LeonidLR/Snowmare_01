@@ -206,7 +206,14 @@ void ACodexTacticsPlayerController::RotatePlacement()
 	}
 	else if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 	{
-		TurnBased->RotateActiveUnitClockwise();
+		if (TurnBased->IsRelocating())
+		{
+			TurnBased->RotateRelocation(+1);
+		}
+		else
+		{
+			TurnBased->RotateActiveUnitClockwise();
+		}
 	}
 }
 
@@ -629,6 +636,11 @@ ATacticalCameraPawn* ACodexTacticsPlayerController::GetCameraPawn() const
 
 void ACodexTacticsPlayerController::OnMouseWheelUp()
 {
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
+	{
+		TurnBased->RotateRelocation(+1); // Godot: the wheel rotates the barricade being relocated
+		return;
+	}
 	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
 	{
 		Relocation->RotatePreview(+1); // Godot: the wheel rotates the object being placed
@@ -642,6 +654,11 @@ void ACodexTacticsPlayerController::OnMouseWheelUp()
 
 void ACodexTacticsPlayerController::OnMouseWheelDown()
 {
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
+	{
+		TurnBased->RotateRelocation(-1);
+		return;
+	}
 	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
 	{
 		Relocation->RotatePreview(-1);
@@ -655,6 +672,12 @@ void ACodexTacticsPlayerController::OnMouseWheelDown()
 
 void ACodexTacticsPlayerController::CameraRotateLeft()
 {
+	// Godot: Q turns the object being relocated by -45° instead of the camera.
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
+	{
+		TurnBased->RotateRelocation(-1);
+		return;
+	}
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->RotateStep(+1);
@@ -663,6 +686,12 @@ void ACodexTacticsPlayerController::CameraRotateLeft()
 
 void ACodexTacticsPlayerController::CameraRotateRight()
 {
+	// Godot: E (and R) turn the object being relocated by +45°.
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
+	{
+		TurnBased->RotateRelocation(+1);
+		return;
+	}
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->RotateStep(-1);
