@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/PersonalItemRules.h"
+#include "Characters/ProgressionRules.h"
 #include "Combat/TargetedShotRules.h"
 #include "Interactables/DeployableRules.h"
 #include "OperativeCharacter.generated.h"
@@ -222,6 +223,65 @@ public:
 	/** Luck, % (Godot luck: commander 25, engineer 30, medic-sapper 35); +0.5 % defusal chance per point. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative", meta = (ClampMin = "0", ClampMax = "100"))
 	float Luck = 25.f;
+
+	// --- Progression (Godot player.gd level / current_exp / unspent_stat_points) ---
+
+	/** Level 1..10 (Godot MAX_LEVEL). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Progression", meta = (ClampMin = "1", ClampMax = "10"))
+	int32 Level = 1;
+
+	/** EXP towards the next level. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Progression", meta = (ClampMin = "0"))
+	int32 CurrentExp = 0;
+
+	/** Free stat points (+3 per level). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Progression", meta = (ClampMin = "0"))
+	int32 UnspentStatPoints = 0;
+
+	/** Stats at BeginPlay (Godot initial_base_*): points taken back cannot go below them. */
+	UPROPERTY(VisibleInstanceOnly, Transient, Category = "CodexTactics|Progression")
+	float InitialBaseHealth = 130.f;
+
+	UPROPERTY(VisibleInstanceOnly, Transient, Category = "CodexTactics|Progression")
+	float InitialBaseLuck = 25.f;
+
+	UPROPERTY(VisibleInstanceOnly, Transient, Category = "CodexTactics|Progression")
+	float InitialBaseAccuracy = 90.f;
+
+	UPROPERTY(VisibleInstanceOnly, Transient, Category = "CodexTactics|Progression")
+	float InitialBaseFortitude = 15.f;
+
+	/** EXP the next level needs (Godot get_next_level_exp). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Progression")
+	int32 GetNextLevelExp() const;
+
+	/**
+	 * Godot add_exp: EXP with overflow into the next levels; each level-up gives +3 points, heals fully, floats
+	 * «⭐ УРОВЕНЬ N!» and posts the radio line.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Progression")
+	void AddExp(int32 Amount);
+
+	/** Max health, luck, accuracy or fortitude. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Progression")
+	float GetStatValue(EProgressStat Stat) const;
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Progression")
+	bool CanIncreaseStat(EProgressStat Stat) const;
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Progression")
+	bool CanDecreaseStat(EProgressStat Stat) const;
+
+	/** Spends a point: +5 max health (and +5 health) or +1 of the stat. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Progression")
+	bool IncreaseStat(EProgressStat Stat);
+
+	/** Takes a point back (health clamps to the new maximum). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Progression")
+	bool DecreaseStat(EProgressStat Stat);
+
+	/** Stores the current stats as the floor for DecreaseStat (BeginPlay, after the balance config). */
+	void CaptureProgressionBases();
 
 	/** Carried engineering items (Godot turrets_count / barricades_count / mines_count; start 0, from loot / dismantling). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))

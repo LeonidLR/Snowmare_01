@@ -145,6 +145,7 @@ void AOperativeCharacter::BeginPlay()
 		HealthComponent->OnDied.AddDynamic(this, &AOperativeCharacter::HandleDied);
 		HealthComponent->OnHealthChanged.AddDynamic(this, &AOperativeCharacter::HandleHealthChanged);
 	}
+	CaptureProgressionBases();
 
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	Movement->MaxAcceleration = MovementConfig.Acceleration;
@@ -1634,4 +1635,119 @@ void AOperativeCharacter::AutoSwitchOnEmpty()
 		TryAIGrenadeThrow();
 	}
 	SwitchToWeaponById(TEXT("knife")); // Godot _switch_to_melee_knife: the last-chance weapon
+}
+
+int32 AOperativeCharacter::GetNextLevelExp() const
+{
+	return ProgressionRules::NextLevelExp(Level);
+}
+
+void AOperativeCharacter::AddExp(int32 Amount)
+{
+	const int32 FirstLevel = Level;
+	const int32 Gained = ProgressionRules::AddExp(Level, CurrentExp, Amount);
+	for (int32 NewLevel = FirstLevel + 1; NewLevel <= FirstLevel + Gained; ++NewLevel)
+	{
+		// Godot _on_level_up: +3 points, full heal, floating «⭐ УРОВЕНЬ N!», radio line.
+		UnspentStatPoints += ProgressionRules::PointsPerLevel;
+		if (HealthComponent)
+		{
+			HealthComponent->Heal(HealthComponent->GetMaxHealth() - HealthComponent->GetCurrentHealth());
+		}
+		UFloatingTextSubsystem::SpawnAboveOperative(this, FString::Printf(TEXT("⭐ УРОВЕНЬ %d!"), NewLevel), FLinearColor(1.f, 0.85f, 0.1f));
+		if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+		{
+			Messages->PostMessage(DisplayName, FText::FromString(FString::Printf(
+				TEXT("⭐ НОВЫЙ УРОВЕНЬ %d! Доступно +3 очка характеристик для распределения!"), NewLevel)));
+		}
+		UE_LOG(LogCodexTactics, Log, TEXT("%s reached level %d"), *DisplayName.ToString(), NewLevel);
+	}
+}
+
+float AOperativeCharacter::GetStatValue(EProgressStat Stat) const
+{
+	switch (Stat)
+	{
+	case EProgressStat::Health: return HealthComponent ? HealthComponent->GetMaxHealth() : 100.f;
+	case EProgressStat::Luck: return Luck;
+	case EProgressStat::Accuracy: return Accuracy;
+	default: return ColdSurvival ? ColdSurvival->Fortitude : 15.f;
+	}
+}
+
+bool AOperativeCharacter::CanIncreaseStat(EProgressStat Stat) const
+{
+	return ProgressionRules::CanIncrease(Stat, GetStatValue(Stat), UnspentStatPoints);
+}
+
+bool AOperativeCharacter::CanDecreaseStat(EProgressStat Stat) const
+{
+	const float Base = Stat == EProgressStat::Health ? InitialBaseHealth
+		: (Stat == EProgressStat::Luck ? InitialBaseLuck : (Stat == EProgressStat::Accuracy ? InitialBaseAccuracy : InitialBaseFortitude));
+	return ProgressionRules::CanDecrease(Stat, GetStatValue(Stat), Base);
+}
+
+bool AOperativeCharacter::IncreaseStat(EProgressStat Stat)
+{
+	if (!CanIncreaseStat(Stat))
+	{
+		return false;
+	}
+	const float Step = ProgressionRules::StatStep(Stat);
+	switch (Stat)
+	{
+	case EProgressStat::Health:
+		if (HealthComponent)
+		{
+			HealthComponent->SetMaxHealth(HealthComponent->GetMaxHealth() + Step, false);
+			HealthComponent->Heal(Step);
+		}
+		break;
+	case EProgressStat::Luck: Luck += Step; break;
+	case EProgressStat::Accuracy: Accuracy += Step; break;
+	default:
+		if (ColdSurvival)
+		{
+			ColdSurvival->Fortitude += Step;
+		}
+		break;
+	}
+	--UnspentStatPoints;
+	return true;
+}
+
+bool AOperativeCharacter::DecreaseStat(EProgressStat Stat)
+{
+	if (!CanDecreaseStat(Stat))
+	{
+		return false;
+	}
+	const float Step = ProgressionRules::StatStep(Stat);
+	switch (Stat)
+	{
+	case EProgressStat::Health:
+		if (HealthComponent)
+		{
+			HealthComponent->SetMaxHealth(HealthComponent->GetMaxHealth() - Step, false);
+		}
+		break;
+	case EProgressStat::Luck: Luck -= Step; break;
+	case EProgressStat::Accuracy: Accuracy -= Step; break;
+	default:
+		if (ColdSurvival)
+		{
+			ColdSurvival->Fortitude -= Step;
+		}
+		break;
+	}
+	++UnspentStatPoints;
+	return true;
+}
+
+void AOperativeCharacter::CaptureProgressionBases()
+{
+	InitialBaseHealth = GetStatValue(EProgressStat::Health);
+	InitialBaseLuck = Luck;
+	InitialBaseAccuracy = Accuracy;
+	InitialBaseFortitude = GetStatValue(EProgressStat::Fortitude);
 }

@@ -118,7 +118,6 @@ private:
 	void StanceCrouch() { ApplyStance(EOperativeStance::Crouching); }
 	void StanceProne() { ApplyStance(EOperativeStance::Prone); }
 	void ToggleSoloMode();
-	void SelectMember(int32 RosterIndex);
 	void ApplyStance(EOperativeStance Stance);
 	USquadSubsystem* GetSquad() const;
 	class ATacticalCameraPawn* GetCameraPawn() const;
@@ -146,6 +145,12 @@ public:
 	 * one over when the leader has none, then the placement ghost starts.
 	 */
 	void StartPlacementForType(EDeployableType Type);
+
+	/** Key P: character profile (Godot main.gd KEY_P -> _toggle_profile_dialog). */
+	void ProfilePressed();
+
+	/** Keys 1-4: that member leads (turn-based: the active unit); the leader's own number opens his profile. */
+	void SelectMember(int32 RosterIndex);
 
 private:
 	/** Ground point under the cursor for the grenade aim (hit, else the thrower's floor plane). */

@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar.
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar. "profile": the commander levelled up, profile open.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -385,6 +385,25 @@ namespace HudShot
 					}
 					return true;
 				}), 0.05f);
+			}), 3.5f, false);
+		}
+		if (Args.Contains(TEXT("profile")))
+		{
+			// Level 2 with one point in luck, then the profile (Godot key P).
+			TWeakObjectPtr<UWorld> ProfileWorld(World);
+			FTimerHandle ProfileHandle;
+			World->GetTimerManager().SetTimer(ProfileHandle, FTimerDelegate::CreateLambda([ProfileWorld]()
+			{
+				USquadSubsystem* Squad = ProfileWorld.IsValid() ? ProfileWorld->GetSubsystem<USquadSubsystem>() : nullptr;
+				AOperativeCharacter* Lead = Squad ? Squad->GetLeader() : nullptr;
+				APlayerController* PC = ProfileWorld.IsValid() ? UGameplayStatics::GetPlayerController(ProfileWorld.Get(), 0) : nullptr;
+				ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
+				if (Lead && Hud)
+				{
+					Lead->AddExp(320);
+					Lead->IncreaseStat(EProgressStat::Luck);
+					Hud->ToggleProfileDialog();
+				}
 			}), 3.5f, false);
 		}
 		if (Args.Contains(TEXT("transfer")))

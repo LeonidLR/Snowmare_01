@@ -25,6 +25,10 @@
 #include "UI/ActionBarWidget.h"
 #include "UI/InventoryDrawerWidget.h"
 #include "UI/TransferDialogWidget.h"
+#include "UI/ProfileDialogWidget.h"
+#include "Combat/WaveSubsystem.h"
+#include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
 #include "UI/PauseMenuWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "UI/SaveLoadDialogWidget.h"
@@ -135,6 +139,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	ActionBarWidgetClass = UActionBarWidget::StaticClass();
 	InventoryDrawerWidgetClass = UInventoryDrawerWidget::StaticClass();
 	TransferDialogWidgetClass = UTransferDialogWidget::StaticClass();
+	ProfileDialogWidgetClass = UProfileDialogWidget::StaticClass();
 	PauseMenuWidgetClass = UPauseMenuWidget::StaticClass();
 	SaveLoadDialogWidgetClass = USaveLoadDialogWidget::StaticClass();
 	PhaseBannersWidgetClass = UPhaseBannersWidget::StaticClass();
@@ -204,6 +209,14 @@ void ACodexTacticsHUD::BeginPlay()
 			TransferDialog->AddToViewport(6);
 		}
 	}
+	if (ProfileDialogWidgetClass && GetOwningPlayerController())
+	{
+		ProfileDialog = CreateWidget<UProfileDialogWidget>(GetOwningPlayerController(), ProfileDialogWidgetClass);
+		if (ProfileDialog)
+		{
+			ProfileDialog->AddToViewport(12);
+		}
+	}
 	if (PauseMenuWidgetClass && GetOwningPlayerController())
 	{
 		PauseMenu = CreateWidget<UPauseMenuWidget>(GetOwningPlayerController(), PauseMenuWidgetClass);
@@ -260,6 +273,47 @@ void ACodexTacticsHUD::BeginPlay()
 	{
 		Interactions->OnActionMenuChanged.AddDynamic(this, &ACodexTacticsHUD::HandleActionMenuChanged);
 		Interactions->OnLootDialogChanged.AddDynamic(this, &ACodexTacticsHUD::HandleLootDialogChanged);
+	}
+	if (UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>())
+	{
+		Waves->OnWaveCleared.AddDynamic(this, &ACodexTacticsHUD::HandleWaveCleared);
+	}
+}
+
+void ACodexTacticsHUD::ToggleProfileDialog()
+{
+	if (!ProfileDialog)
+	{
+		return;
+	}
+	if (ProfileDialog->IsOpen())
+	{
+		ProfileDialog->Close();
+	}
+	else
+	{
+		ProfileDialog->Open(nullptr);
+	}
+}
+
+void ACodexTacticsHUD::OpenProfileDialog(AOperativeCharacter* Member)
+{
+	if (ProfileDialog)
+	{
+		ProfileDialog->Open(Member);
+	}
+}
+
+void ACodexTacticsHUD::HandleWaveCleared(int32 WaveIndex)
+{
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+	{
+		if (Member->UnspentStatPoints > 0)
+		{
+			OpenProfileDialog(Member);
+			return;
+		}
 	}
 }
 
@@ -847,6 +901,11 @@ bool ACodexTacticsHUD::HandleEscape()
 	if (InventoryDrawer && InventoryDrawer->IsOpen())
 	{
 		InventoryDrawer->Close();
+		return true;
+	}
+	if (ProfileDialog && ProfileDialog->IsOpen())
+	{
+		ProfileDialog->Close();
 		return true;
 	}
 	if (TransferDialog && TransferDialog->IsOpen())

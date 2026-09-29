@@ -10,6 +10,7 @@
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "AIController.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/ProgressionRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Core/CodexTacticsGameMode.h"
@@ -193,6 +194,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 	HealthComponent->ElementalAffinities = EnemyAIRules::GetAffinities(Archetype);
 	HealthComponent->SetBaseArmorReduction(EnemyAIRules::GetBaseArmor(Archetype));
 
+	KillExpReward = ProgressionRules::KillReward(Archetype, nullptr);
 	// Godot enemies re-read their stats from game_balance_config.tres (imported DA_GameBalanceConfig).
 	if (const ACodexTacticsGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>() : nullptr)
 	{
@@ -200,6 +202,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		{
 			ApplyBalance(*Config);
 			AIConfig = EnemyAIRules::ConfigFromBalance(Config);
+			KillExpReward = ProgressionRules::KillReward(Archetype, Config);
 		}
 	}
 	BaseWalkSpeed = GetCharacterMovement()->MaxWalkSpeed;
@@ -709,6 +712,15 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 	if (AController* C = GetController())
 	{
 		C->StopMovement();
+	}
+
+	// Godot enemy_base.gd / enemy_cutter.gd death: every squad member gets the kill EXP.
+	if (USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Member->AddExp(KillExpReward);
+		}
 	}
 
 	OnEnemyDied.Broadcast(this);

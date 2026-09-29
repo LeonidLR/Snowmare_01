@@ -138,6 +138,9 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 		Soldier->SetNumberField(TEXT("current_health"), Current);
 		Soldier->SetNumberField(TEXT("max_health"), Max);
 		Soldier->SetNumberField(TEXT("cold_level"), Member->ColdLevel);
+		Soldier->SetNumberField(TEXT("level"), Member->Level);
+		Soldier->SetNumberField(TEXT("current_exp"), Member->CurrentExp);
+		Soldier->SetNumberField(TEXT("unspent_stat_points"), Member->UnspentStatPoints);
 		Soldier->SetNumberField(TEXT("accuracy"), Member->Accuracy);
 		Soldier->SetNumberField(TEXT("luck"), Member->Luck);
 		Soldier->SetNumberField(TEXT("fortitude"), Member->ColdSurvival ? Member->ColdSurvival->Fortitude : 15.f);
@@ -307,6 +310,9 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			Member->StopOperative();
 			Member->TeleportTo(LoadVector(Info, TEXT("pos"), Member->GetActorLocation()),
 				FRotator(0.f, SaveFloat(Info, TEXT("rot_y"), Member->GetActorRotation().Yaw), 0.f), false, true);
+			Member->Level = SaveInt(Info, TEXT("level"), 1);
+			Member->CurrentExp = SaveInt(Info, TEXT("current_exp"), 0);
+			Member->UnspentStatPoints = SaveInt(Info, TEXT("unspent_stat_points"), 0);
 			Member->Accuracy = SaveFloat(Info, TEXT("accuracy"), Member->Accuracy);
 			Member->Luck = SaveFloat(Info, TEXT("luck"), Member->Luck);
 			if (Member->ColdSurvival)

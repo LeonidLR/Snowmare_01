@@ -14,6 +14,8 @@ class UDialogueWidget;
 class UActionBarWidget;
 class UInventoryDrawerWidget;
 class UTransferDialogWidget;
+class UProfileDialogWidget;
+class AOperativeCharacter;
 class UPauseMenuWidget;
 class USaveLoadDialogWidget;
 enum class ESaveDialogMode : uint8;
@@ -88,6 +90,18 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UTurnBasedHudWidget> TurnBasedHudWidgetClass;
 
+	/** Character profile class (key P; a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UProfileDialogWidget> ProfileDialogWidgetClass;
+
+	UProfileDialogWidget* GetProfileDialog() const { return ProfileDialog; }
+
+	/** Key P (Godot _toggle_profile_dialog): the leader's profile opens, or the open one closes. */
+	void ToggleProfileDialog();
+
+	/** Godot _open_profile_dialog: shows Member's profile (the leader when null). */
+	void OpenProfileDialog(AOperativeCharacter* Member);
+
 	/** The bottom action bar (with the weapon selector); null before BeginPlay. */
 	UActionBarWidget* GetActionBar() const { return ActionBar; }
 
@@ -113,7 +127,7 @@ public:
 
 	/**
 	 * Esc (Godot main.gd KEY_ESCAPE): the overwrite confirmation, the save / load dialog, the pause menu, the inventory
-	 * drawer, the transfer dialog close in that order; with nothing open the pause menu opens (not over the start menu).
+	 * drawer, the profile, the transfer dialog close in that order; with nothing open the pause menu opens (not over the start menu).
 	 * Returns false when Esc should go on (e.g. to the dialogue).
 	 */
 	bool HandleEscape();
@@ -180,6 +194,13 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTransferDialogWidget> TransferDialog;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UProfileDialogWidget> ProfileDialog;
+
+	/** Godot wave-clear victory: the profile of the first member with free points opens. */
+	UFUNCTION()
+	void HandleWaveCleared(int32 WaveIndex);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPauseMenuWidget> PauseMenu;

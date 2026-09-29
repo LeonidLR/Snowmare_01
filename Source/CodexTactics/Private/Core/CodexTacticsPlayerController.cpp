@@ -16,6 +16,7 @@
 #include "UI/SaveLoadDialogWidget.h"
 #include "UI/PauseMenuWidget.h"
 #include "UI/CodexTacticsHUD.h"
+#include "UI/ProfileDialogWidget.h"
 #include "UI/DialogueSubsystem.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Interactables/LootCrateActor.h"
@@ -133,6 +134,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(FInputChord(EKeys::X, false, true, false, false), IE_Pressed, this, &ACodexTacticsPlayerController::RestartMission);
 	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACodexTacticsPlayerController::EnterPressed);
 	InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ACodexTacticsPlayerController::TabPressed);
+	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ACodexTacticsPlayerController::ProfilePressed);
 	// Esc also closes the pause menu, so it runs while the world is paused.
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ACodexTacticsPlayerController::DialogueSkip).bExecuteWhenPaused = true;
 
@@ -611,6 +613,14 @@ void ACodexTacticsPlayerController::EnterPressed()
 	}
 }
 
+void ACodexTacticsPlayerController::ProfilePressed()
+{
+	if (ACodexTacticsHUD* Hud = GetHUD<ACodexTacticsHUD>())
+	{
+		Hud->ToggleProfileDialog();
+	}
+}
+
 void ACodexTacticsPlayerController::TabPressed()
 {
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
@@ -1016,8 +1026,25 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 	}
 	if (USquadSubsystem* Squad = GetSquad())
 	{
+		// Godot _select_squad_member_by_index: the leader's own number opens the profile; another member takes the
+		// lead and an open profile follows him.
+		const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+		AOperativeCharacter* Target = Members.IsValidIndex(RosterIndex) ? Members[RosterIndex] : nullptr;
+		ACodexTacticsHUD* Hud = GetHUD<ACodexTacticsHUD>();
+		if (Target && Target == Squad->GetLeader())
+		{
+			if (Hud)
+			{
+				Hud->OpenProfileDialog(Target);
+			}
+			return;
+		}
 		if (Squad->SetLeaderByIndex(RosterIndex))
 		{
+			if (Hud && Hud->GetProfileDialog() && Hud->GetProfileDialog()->IsOpen())
+			{
+				Hud->OpenProfileDialog(Squad->GetLeader());
+			}
 			if (AOperativeCharacter* NewLeader = Squad->GetLeader())
 			{
 				if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())

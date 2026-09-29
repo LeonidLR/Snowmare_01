@@ -84,7 +84,8 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/weapons/**`, `resources/weapons/*.tres` | `UWeaponDataAsset` (Gemini, values hand-typed) | 2 | 🟨 | `CodexTactics.Combat.Data*` |
 | `resources/characters/**`, `resources/enemies/**` | `UOperativeDataAsset`, `UEnemyDataAsset` | 2 | ⬜ | |
 | `data/configs/levels/*.json`, `main.gd _load_active_level_config`, `_get_enemy_spawn_pos` | `ULevelConfigAsset` DA_Level_* via `Scripts/Editor/import_levels.py`; game mode `LevelConfig` → `UWaveSubsystem::SetLevelConfig` + `LevelFlowRules::ApplyLevel` (prep / rest / wave count); `AEnemySpawnPoint` lanes | 2 | ✅ | `CodexTactics.Core.LevelFlow.*` (2), `Combat.Enemy.WaveModifiers`, `LevelWaveSmoke` |
-| `Scenes/ui/**` (inventory, pause, dialogue, profile) | UMG widgets | 5 | ⬜ | |
+| `Scenes/ui/**` (inventory, pause, dialogue, profile) | UMG widgets (loot, inventory drawer, transfer, pause, save / load, dialogue, profile) | 5 | ✅ | |
+| `player.gd` level / EXP / stat points, `Scenes/ui/profile/profile_dialog.gd`, `enemy_base.gd` kill EXP | `ProgressionRules`, `AOperativeCharacter::AddExp` / `IncreaseStat`, `UProfileDialogWidget` | 5 | ✅ | `CodexTactics.Characters.Progression.Rules`, ProgressionSmoke, `HudShot profile` |
 | `*.gdshader` (silhouette, rings, AoE) | Materials | 6 | ⬜ | |
 | `tools/**`, `Scripts/editor/**`, `Scenes/tools/**`, `scratch/**` | — | — | ➖ | |
 

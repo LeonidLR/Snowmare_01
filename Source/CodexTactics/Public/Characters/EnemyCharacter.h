@@ -60,6 +60,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
 
+	/** EXP every squad member gets for this kill. */
+	int32 GetKillExpReward() const { return KillExpReward; }
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	bool IsDying() const { return bIsDying; }
 
@@ -157,6 +160,10 @@ protected:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Enemy")
 	bool bIsDying = false;
+
+	/** EXP every squad member gets for this kill (Godot exp_reward_<type>; ProgressionRules::KillReward). */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Enemy")
+	int32 KillExpReward = 9;
 
 	float AttackTimer = 0.0f;
 

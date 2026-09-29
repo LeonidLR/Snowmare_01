@@ -3,6 +3,9 @@
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/ProgressionRules.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/GodotBalanceAsset.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/EnemySpawnPoint.h"
 #include "Data/EnemyArchetypeAsset.h"
@@ -265,6 +268,17 @@ void UWaveSubsystem::CheckWaveCompletion()
 				FText::FromString(TEXT("Командир")),
 				FText::FromString(FString::Printf(TEXT("Волна %d успешно отбита! Всем перегруппироваться."), CurrentWaveIndex))
 			);
+		}
+
+		// Godot main.gd _on_wave_cleared: every squad member gets exp_reward_wave_complete (before the profile opens).
+		const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
+		const int32 WaveExp = ProgressionRules::WaveClearReward(GameMode ? GameMode->GameBalanceConfig.LoadSynchronous() : nullptr);
+		if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+		{
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->AddExp(WaveExp);
+			}
 		}
 
 		OnWaveCleared.Broadcast(CurrentWaveIndex);
