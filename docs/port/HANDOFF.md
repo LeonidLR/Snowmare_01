@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **130 automation tests, 38 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **131 automation tests, 39 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -79,6 +79,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `TurnBasedBarricadeSmoke` | turn-based: barricade footprint = Godot samples; the commander walks up, click picks it up, two 45° steps (target cells recomputed), click places it: new footprint, rotation, 2 AP |
 | `TurnBasedPushSmoke` | turn-based: the commander walks up to a barrel; click picks it up (3 target cells), cancel, panel «Бочка» picks it up, click on a cell pushes: barrel +1 cell, commander on its old cell, 2 AP |
 | `ExposedZonesSmoke [shot]` | turn-based with one hound; the squad passes 3 turns: warning (1), danger (2), breach of 1-2 hounds (non-elite pool), no second breach; `shot` (rendered, UnrealEditor.exe -game) saves `ExposedZones.png` at the danger state |
+| `AIGrenadeSmoke` | A pack of three hounds 9 m ahead in the fight draws autonomous grenades with a radio callout; an empty M16 switches to the pistol, an empty pistol to the knife |
 | `SquadControlSmoke` | Wounded below 50 % (no sprint, slower, speed follows the health), healed sprints again; Alt + C crouches the squad («👥 ОТРЯД: ПРИСЕВ», order line); Shift + click faces the point; Alt + V refused while someone moves; an operative arriving within 2.2 m of a barricade in combat crouches in cover («В УКРЫТИИ») |
 | `RageSmoke` | Rage (Godot rage_component.gd): commander config 2 crits / 9 s; one crit no rage, the second from the same hound (forced roll) enters rage with «В ЯРОСТИ!» and the shout; orders refused «НЕ ПОДЧИНЯЕТСЯ»; in the fight the enemies in reach are sprayed without spending rounds; the calm line when it wears off |
 | `SquadFireSmoke` | Real-time squad fire (Godot _find_shoot_target / _shoot_at_target): prone behind a barricade blocked + text, crouched cover 0.8, standing cover 1; flank hound taken only after the standing 0.15 s delay; crouched crit = 2.5 x a standing plain shot + «КРИТ x2!» |
@@ -374,7 +375,11 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   way becomes the target; target memory with the stance switch delay / ratio from game_balance_config; damage = weapon
   x stance (1 / 1.25 / 1.6) x cover x crit (luck %, x2) x elevation (1.15) x the weapon's distance factor; cryo / fire
   weapons chill / warm the shooter. Before, the nearest enemy in range was shot for flat weapon damage. Not ported:
-  panic refusal, the AI grenade throw, reload_after_shots (user decision: 30 rounds).
+  panic refusal, reload_after_shots (user decision: 30 rounds).
+- Autonomous grenades (`AIGrenadeRules`, `AOperativeCharacter::TryAIGrenadeThrow`; Godot _evaluate_ai_grenade_opportunity):
+  in the real-time fight (not raging / reloading, 3 s cooldown) an operative throws at the biggest cluster of 3+ enemies
+  in its stance range, 5 m+ away, with no squad member / turret within 5 m of the aim point; the empty-weapon switch
+  (Godot _auto_switch_on_empty: M16 with rounds -> pistol -> a grenade at a cluster -> knife) replaces «out of ammo».
 - Rage (`URageComponent`, `RageRules`; Godot rage_component.gd): crits per attacker (real-time 25 s memory), chance decays
   with the component's lifetime like Godot's combat_time_elapsed, per-role keys (<role>_rage_*) for the squad, general
   keys for Susanin (Godot re-applies only the general ones to a recruit spawned later). Raging: chaotic target (random
@@ -404,8 +409,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Weapon switching does not change the weapon mesh (the operative Blueprint owns WeaponMesh) and has no holster
   animation. X (Godot switch_weapon cycle) is not bound.
 - Grenades: placeholder sphere mesh, no explosion VFX / sound (Godot has none either) — `AGrenadeActor` Blueprint events
-  On Landed / On Detonated and the operative's On Grenade Throw + GrenadeThrowDuration are the hooks. The AI grenade
-  throwers (Godot ai_grenade_*) are not ported.
+  On Landed / On Detonated and the operative's On Grenade Throw + GrenadeThrowDuration are the hooks.
 - Turn-based set-up: no assembly animation / grow-in tween (Godot play_action_animation "working_device", scale 0.05 -> 1);
   a squad mine placed in turn-based skips the real-time mishap roll like Godot.
 - Turn-based relocation: no hologram ghost of the object under the cursor (Godot _create_relocate_ghost_preview);
@@ -436,7 +440,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Squad control parity (Godot player.gd is_wounded / is_behind_barricade / _on_movement_destination_reached / set_facing_point, main.gd _set_entire_squad_stance and the ground-click rules): health-driven wounded state, Alt squad stance, Shift facing, auto-cover, real-time move refusal, sprint lines, slot 4 «ИВАН»; SquadControlSmoke |
+| (this) | Autonomous grenades and the empty-weapon switch (Godot player.gd _evaluate_ai_grenade_opportunity / execute_ai_grenade_throw / _auto_switch_on_empty): `AIGrenadeRules` + AIGrenadeRulesTest, `TryAIGrenadeThrow`, `AutoSwitchOnEmpty`; AIGrenadeSmoke |
+| `96d90e1` | Squad control parity (Godot player.gd is_wounded / is_behind_barricade / _on_movement_destination_reached / set_facing_point, main.gd _set_entire_squad_stance and the ground-click rules): health-driven wounded state, Alt squad stance, Shift facing, auto-cover, real-time move refusal, sprint lines, slot 4 «ИВАН»; SquadControlSmoke |
 | `0fe6e46` | Rage (`URageComponent`, `RageRules` + RageRulesTest; Godot rage_component.gd and its player.gd hooks): two crits from one enemy, chaotic fire, refused orders, HUD badge; `AOperativeCharacter::TakeHit` takes the attacker; `EOperativeOrderResult::Refused`; RageSmoke, `HudShot rage` |
 | `9a6bd37` | Real-time squad fire parity (`SquadFireRules` + SquadFireRulesTest, `FindShootTarget`, damage multipliers; SquadFireSmoke). Floating combat texts (`UFloatingTextSubsystem`, HUD `DrawFloatingTexts`; Godot _spawn_floating_combat_text / _spawn_heal_feedback) wired across combat, cold, mines, repairs, squad modes; operative hit formula `AOperativeCharacter::TakeHit` (Godot player.gd take_damage) for enemy attacks, grenades, traps and turn-based bites; turn-based / turret grid damage through the enemy's armor; headless checks (-ExecCmds) run without random wave events; FloatingTextSmoke, `HudShot floating`. Random wave events. Susanin rescue (Godot main.gd _check_susanin_rescue_event / _trigger_susanin_rescue_event, click branch "is_unrecruited", recruit_susanin.gd, save_manager.gd "susanin"): `URecruitSubsystem`, `EOperativeRole::Recruit`, `AOperativeCharacter::bRecruited`, game mode `SpawnOperative` / `RecruitSusanin`, key 4, HUD prompt, SusaninSpawn point; dialogue buttons widen for long finish labels; SusaninSmoke, `HudShot susanin`. Spawn point type filter and dynamic flank breach (Godot enemy_spawn_point.gd, main.gd _get_enemy_spawn_pos, _check_dynamic_flank_spawners, _pending_random_events): `AEnemySpawnPoint::AllowedEnemyType` / `bIsDynamic` + breach fields, random event waves, breach pack + camera focus, deferral past turn-based; L_MovementTest points get the Godot lane names / filters; `ATacticalCameraPawn::GetFollowTarget`; FlankBreachSmoke |
 | `e66e2fb` | Radius rings (Godot main.gd radius_ring, _update_relocate_radius_ring, _set_ghost_material_valid): 12 m green order ring in the tactical pause, worker radius while placing in the pause (cyan relocation / green set-up / red outside); `URelocationSubsystem::GetPlacingWorker` / `IsGhostValid`, public `GetRadius` / `GetOrigin`; RadiusRingSmoke, `HudShot ring` |

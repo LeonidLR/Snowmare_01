@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Combat/AIGrenadeRules.h"
 #include "Combat/SquadFireRules.h"
 #include "GameFramework/Character.h"
 #include "Characters/OperativeMovementRules.h"
@@ -471,6 +472,21 @@ public:
 
 	/** Target switching per stance (Godot stance_target_switch_delay_* / stance_switch_distance_ratio_*; set from the balance). */
 	FSquadFireConfig FireConfig;
+
+	/** Autonomous grenade throws (Godot ai_grenade_*; set from the balance). */
+	FAIGrenadeConfig AIGrenadeConfig;
+
+	/** Godot ai_grenade_cooldown: seconds until the next autonomous throw. */
+	float AIGrenadeCooldown = 0.f;
+
+	/**
+	 * Godot _evaluate_ai_grenade_opportunity + execute_ai_grenade_throw: throws at the biggest safe enemy cluster in
+	 * range (not while the player aims a grenade or in turn-based combat). True when a grenade left the hand.
+	 */
+	bool TryAIGrenadeThrow();
+
+	/** Godot _auto_switch_on_empty: M16 with rounds, else the pistol, else a grenade at a cluster, else the knife. */
+	void AutoSwitchOnEmpty();
 
 	/** Forces the crit roll of the next hit (smokes): 1 crits, 0 never. Negative = random. */
 	UPROPERTY(Transient)

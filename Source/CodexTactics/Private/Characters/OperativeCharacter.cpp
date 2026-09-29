@@ -2,6 +2,7 @@
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/RageComponent.h"
+#include "Combat/GrenadeSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
@@ -1086,6 +1087,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 	}
 	WeaponFreezeNotifyTimer = FMath::Max(0.f, WeaponFreezeNotifyTimer - DeltaTime);
 	BarricadeBlockNotifyTimer = FMath::Max(0.f, BarricadeBlockNotifyTimer - DeltaTime);
+	AIGrenadeCooldown = FMath::Max(0.f, AIGrenadeCooldown - DeltaTime);
 
 	if (!CanShoot())
 	{
@@ -1112,12 +1114,23 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		}
 	}
 
+	// Godot: a clustered pack gets a grenade before the rifle (not while raging or reloading).
+	if (!bRaging && !bIsReloading && GrenadesCount > 0 && AIGrenadeCooldown <= 0.f && TryAIGrenadeThrow())
+	{
+		ShootTimer = 1.f;
+		return;
+	}
+
 	const bool bInfiniteRageAmmo = bRaging && RageComponent->Config.bInfiniteAmmo;
 	if (UsesAmmo() && CurrentClip <= 0 && !bInfiniteRageAmmo)
 	{
 		if (ReserveAmmo > 0)
 		{
 			StartReload();
+		}
+		else
+		{
+			AutoSwitchOnEmpty();
 		}
 		return;
 	}
@@ -1544,4 +1557,81 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 		RageComponent->OnIncomingHit(AttackerActor, bCrit);
 	}
 	return Final;
+}
+
+bool AOperativeCharacter::TryAIGrenadeThrow()
+{
+	UWorld* World = GetWorld();
+	UGrenadeSubsystem* Grenades = World ? World->GetSubsystem<UGrenadeSubsystem>() : nullptr;
+	const UGameFlowSubsystem* Flow = World ? World->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	if (!Grenades || GrenadesCount <= 0 || AIGrenadeCooldown > 0.f || !HealthComponent || !HealthComponent->IsAlive()
+		|| Grenades->IsAiming() || (Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased))
+	{
+		return false;
+	}
+	// Godot global_position: operatives at their centre (1 m above the feet), enemies at their feet.
+	auto Centre = [](const AActor* Actor) { return Actor->GetActorLocation() - FVector(0.f, 0.f, Actor->GetSimpleCollisionHalfHeight() - 100.f); };
+	TArray<FVector> Enemies;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		if (IsLiveEnemy(*It))
+		{
+			Enemies.Add(ShotFeet(*It));
+		}
+	}
+	TArray<FVector> Allies;
+	if (const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
+	{
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (Member->HealthComponent && Member->HealthComponent->IsAlive())
+			{
+				Allies.Add(Centre(Member));
+			}
+		}
+	}
+	for (TActorIterator<ATurretActor> It(World); It; ++It)
+	{
+		Allies.Add(It->GetActorLocation()); // Godot "allies"
+	}
+	const FAIGrenadeOpportunity Opportunity = AIGrenadeRules::Evaluate(AIGrenadeConfig, Centre(this), Stance, GrenadeThrowRange,
+		GrenadeEffectRadius, Enemies, Allies);
+	if (!Opportunity.bCanThrow)
+	{
+		return false;
+	}
+	AIGrenadeCooldown = AIGrenadeConfig.Cooldown;
+	AGrenadeActor* Grenade = Grenades->ThrowAt(this, Opportunity.Target);
+	if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
+	{
+		const TCHAR* Callouts[] = { TEXT("💣 Бросаю гранату! Ложись!"), TEXT("🧨 Враги скучились! Ловите подарок!"),
+			TEXT("💣 Граната пошла! Пригнитесь!"), TEXT("🧨 Лови гранату, гады!") };
+		Messages->PostMessage(DisplayName, FText::FromString(Callouts[FMath::RandRange(0, 3)]));
+	}
+	return Grenade != nullptr;
+}
+
+void AOperativeCharacter::AutoSwitchOnEmpty()
+{
+	auto Usable = [this](const TCHAR* Id)
+	{
+		const bool bOwned = AvailableWeapons.ContainsByPredicate([Id](const UWeaponDataAsset* Weapon) { return Weapon && Weapon->WeaponId == Id; });
+		const FWeaponAmmoState Ammo = GetAmmoState(Id);
+		return bOwned && (Ammo.Clip > 0 || Ammo.Reserve > 0 || Ammo.Reserve == -1);
+	};
+	if (Usable(TEXT("m16")))
+	{
+		SwitchToWeaponById(TEXT("m16"));
+		return;
+	}
+	if (Usable(TEXT("pistol")))
+	{
+		SwitchToWeaponById(TEXT("pistol"));
+		return;
+	}
+	if (GrenadesCount > 0 && AIGrenadeCooldown <= 0.f)
+	{
+		TryAIGrenadeThrow();
+	}
+	SwitchToWeaponById(TEXT("knife")); // Godot _switch_to_melee_knife: the last-chance weapon
 }

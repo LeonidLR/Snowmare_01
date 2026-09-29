@@ -35,6 +35,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/components/combat_component.gd` | `UCombatComponent` | 1/4 | ⬜ | |
 | `Scripts/components/movement_component.gd` | not ported: its stamina is unused by `player.gd` (user: no stamina) | — | ➖ | |
 | `Scripts/components/panic_component.gd` | `UPanicComponent` | 1 | ⬜ | |
+| `player.gd` `_evaluate_ai_grenade_opportunity`, `execute_ai_grenade_throw`, `_auto_switch_on_empty` | `AIGrenadeRules`, `AOperativeCharacter::TryAIGrenadeThrow` / `AutoSwitchOnEmpty` | 4 | ✅ | `CodexTactics.Combat.Grenade.AIRules`, AIGrenadeSmoke |
 | `Scripts/components/rage_component.gd` | `URageComponent` | 1 | ⬜ | |
 | `Scripts/components/allegiance_component.gd` | `UAllegianceComponent` | 1 | ⬜ | |
 | `Scripts/components/locomotion_controller.gd` (stand / crouch / prone locomotion) | `UOperativeAnimInstance` native blend + `ABP_Operative` | 6 | 🟨 baseline (fire, reload, hit, death, grenade states → AnimBP graph) | `CodexTactics.StanceSmoke`, `HudShot close walk` |

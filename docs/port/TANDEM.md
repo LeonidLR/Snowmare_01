@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: autonomous grenades (`AIGrenadeRules`, `AOperativeCharacter::TryAIGrenadeThrow` / `AIGrenadeConfig` / `AIGrenadeCooldown`) and `AutoSwitchOnEmpty` in ProcessCombatShooting.
 - 2026-09-29 Claude: squad control; `AOperativeCharacter::IsWounded` (health-driven; use it instead of `bWounded`), `IsBehindBarricade` / `IsInBarricadeCover`, `SetFacingPoint`, `HandleHealthChanged`; `FOperativeMovementConfig::WoundedHealthThreshold`; controller `SetEntireSquadStance`; `UHealthComponent::ApplyDirectHealthLoss` now broadcasts OnHealthChanged.
 - 2026-09-29 Claude: rage (`URageComponent` on every operative, `RageRules`); `TakeHit(..., AttackerActor)`, `EOperativeOrderResult::Refused` (OrderMoveTo refuses while raging), `AOperativeCharacter::IsRaging`.
 - 2026-09-29 Claude: real-time squad fire (`SquadFireRules`, `AOperativeCharacter::FindShootTarget` / `EvaluateShotLine`, `ShootAtTarget(Target, Cover)`, `FireConfig`); `CanFireAtPriorityTarget` removed (EvaluateShotLine covers it).
