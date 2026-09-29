@@ -1055,7 +1055,7 @@ void AOperativeCharacter::NotifyBarricadeBlocked()
 
 void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 {
-	if (!bRecruited || !HealthComponent || !HealthComponent->IsAlive()) // Godot can_shoot = false until recruited
+	if (!bRecruited || bTacticalCeaseFire || !HealthComponent || !HealthComponent->IsAlive()) // Godot can_shoot = false
 	{
 		return;
 	}

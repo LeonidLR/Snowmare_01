@@ -70,6 +70,13 @@ public:
 	/** Action bar squad slot / keys 1..3. */
 	void SelectSquadMember(int32 RosterIndex) { SelectMember(RosterIndex); }
 
+	/** Space held now and for how long (the HUD charge bar; Godot gorky17_combat_hud.update_charge_progress). */
+	bool IsSpaceHeld() const { return SpaceInput.IsPressed(); }
+	float GetSpaceHeldTime() const { return SpaceInput.GetHeldTime(); }
+
+	/** The Space-hold dome / rings (Godot tactical_hold_sphere.gd). */
+	class AHoldSphereActor* GetHoldSphere() const { return HoldSphere; }
+
 	/** Everything a left click on the world does once the modes above had their say (select, move, interact, ...). */
 	void HandleWorldHit(const FHitResult& Hit);
 
@@ -213,6 +220,13 @@ private:
 	void UseChocolate() { UseSquadItem(EPersonalItem::Chocolate); }
 
 	FSpaceInputTracker SpaceInput;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class AHoldSphereActor> HoldSphere;
+
+	/** Godot _set_squad_tactical_cease_fire. */
+	void SetSquadCeaseFire(bool bCease);
+	bool bCeaseFireSet = false;
 	double LastClickTime = -1.0;
 	FVector2D LastClickPosition = FVector2D::ZeroVector;
 };

@@ -470,6 +470,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
 	bool ShootAtTarget(AActor* Target, float Cover = 1.f);
 
+	/** Godot _set_squad_tactical_cease_fire: nobody shoots while Space is held for the turn-based switch. */
+	bool bTacticalCeaseFire = false;
+
 	/** Target switching per stance (Godot stance_target_switch_delay_* / stance_switch_distance_ratio_*; set from the balance). */
 	FSquadFireConfig FireConfig;
 

@@ -11,8 +11,8 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | 1 | Pure logic: game flow FSM, Gorky grid, LOS, AP economy, damage, cold, panic/rage | ✅ (panic inert in Godot) |
 | 2 | Data: USTRUCT/DataAsset types + JSON → DataAsset importer | 🟨 weapons, balance, dialogues, levels ✅; camera user-tuned |
 | 3 | Framework: EventBus, operative character, Enhanced Input, camera, squad formation | 🟨 all but EventBus ✅ |
-| 4 | Combat: exploration→combat transition, turn queue, commands, HUD, enemy AI | 🟨 flow, pause, waves, turn-based, enemy AI, squad fire, rage, AI grenades ✅; hold sphere, turn-based HUD extras ⬜ |
-| 5 | World systems: mines, heat sources, loot, interactables, quests, dialogue, save | 🟨 heat, cold, quests, barrels, relocation, barricades, mines, loot, turrets, generator damage, dialogue, save, UI ✅; narrative elements in progress |
+| 4 | Combat: exploration→combat transition, turn queue, commands, HUD, enemy AI | 🟨 flow, pause, waves, turn-based, enemy AI, squad fire, rage, AI grenades, hold sphere ✅; turn-based HUD message log ⬜ |
+| 5 | World systems: mines, heat sources, loot, interactables, quests, dialogue, save | ✅ |
 | 6 | Content: asset import (Nanite), animation, VFX, Stage 01 "Bunker Gate", UDS/UDW | 🟨 operative model + animations ✅ |
 
 ## Systems
@@ -29,7 +29,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/tactics/tactical_exposed_zones_manager.gd` | `FExposedZones` in `UTurnBasedCombatSubsystem` | 4 | ✅ | ExposedZonesTest, ExposedZonesSmoke |
 | `Scripts/tactics/tactical_encounter_selector.gd` | — (not used by the Godot game) | 4 | ➖ | |
 | `Scripts/tactics/tactical_grid_overlay.gd` | `ATurnGridOverlayActor` | 4 | ✅ | TurnBasedSmoke |
-| `Scripts/tactics/tactical_hold_sphere.gd` | `ATacticalHoldSphere` | 4 | ⬜ | |
+| `Scripts/tactics/tactical_hold_sphere.gd` | `AHoldSphereActor`, controller cease fire, HUD `DrawSpaceCharge` | 4 | ✅ | HoldSphereSmoke, `HudShot hold` |
 | `Scripts/tactics/turn_based_combat_manager.gd` (core loop), `tactical_grid_overlay.gd` | `UTurnBasedCombatSubsystem`, `ATurnGridOverlayActor` | 4 | 🟨 (exposed zones ✅, barrel / turret / barricade relocation ✅, deployables on the grid ✅, weapon switch ✅, grenades ✅, stasis look ✅; companion drone: no-op in Godot) | `CodexTactics.TurnBasedSmoke`, `ExposedZonesSmoke`, `TurnBasedPushSmoke`, `TurnBasedBarricadeSmoke`, `TurnBasedDeploySmoke`, `WeaponSelectorSmoke`, `GrenadeSmoke`, `Combat.Grenade.Rules`, `Characters.Arsenal.InitAndSwitch`, `Tactics.ExposedZones.*` (3), `HudShot turnbased` |
 | `Scripts/tactics/gorky17_combat_hud.gd` | `UTurnBasedHudWidget` | 4 | 🟨 (hold-charge bar, message log panel → later) | `TurnBasedSmoke`, `HudShot turnbased` |
 | `Scripts/components/combat_component.gd` | `UCombatComponent` | 1/4 | ⬜ | |
@@ -74,7 +74,8 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/movements/enemy_spawn_point.gd`, `mission_start_point.gd` | `AEnemySpawnPoint` (lane, type filter, dynamic breach), `AMissionStartPoint` ⬜ | 4 | 🟨 (start point) | FlankBreachSmoke |
 | `Scenes/movements/deployables/turret.gd`, `interactable.gd` generator damage / repair | `ATurretActor`, generator part of `AInteractableActor` | 5 | ✅ (enemies attacking objects → enemy AI; tracers → VFX) | `CodexTactics.TurretSmoke` |
 | `Scenes/movements/loot_crate.gd`, `Scenes/ui/inventory/loot_dialog.gd`, `main.gd` loot handlers | `ALootCrateActor`, `LootRules`, `ULootDialogWidget`, `UInteractionSubsystem` loot API | 5 | ✅ (consumable use → inventory drawer) | `CodexTactics.Loot.*`, `CodexTactics.LootSmoke` |
-| `Scenes/movements/quest_manager.gd`, `narrative_element.gd`, `dialogue_trigger.gd` | `UQuestSubsystem`, dialogue data | 5 | ⬜ | |
+| `Scenes/movements/quest_manager.gd` | `UQuestSubsystem`, `QuestChain` | 5 | ✅ | QuestChainSmoke |
+| `Scenes/movements/narrative_element.gd`, `dialogue_trigger.gd` | `ANarrativeElementActor`, `ADialogueTriggerVolume` | 5 | ✅ | NarrativeSmoke |
 | `Scripts/components/rage_component.gd` | `URageComponent`, `RageRules` | 4 | ✅ (aura ring later) | `CodexTactics.Characters.Rage.Rules`, RageSmoke |
 | `player.gd` `_find_shoot_target`, `_shoot_at_target`, `get_elevation_advantage`, `is_target_in_dead_zone` | `SquadFireRules`, `AOperativeCharacter::FindShootTarget` / `ShootAtTarget` | 4 | ✅ (rage / panic / AI grenade later) | `CodexTactics.Combat.SquadFire.Rules`, SquadFireSmoke |
 | `player.gd` / `enemy_base.gd` / `mine.gd` `_spawn_floating_combat_text`, `_spawn_heal_feedback`, player `take_damage` | `UFloatingTextSubsystem`, HUD `DrawFloatingTexts`, `AOperativeCharacter::TakeHit` | 5 | ✅ (texts of unported features pending) | FloatingTextSmoke |

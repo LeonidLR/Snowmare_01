@@ -3,6 +3,7 @@
 #include "CanvasItem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/OverheadLabel.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "GameFramework/Character.h"
 #include "EngineUtils.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
@@ -335,6 +336,7 @@ void ACodexTacticsHUD::DrawHUD()
 		DrawOperativeLabels();
 	}
 	DrawWorldLabels();
+	DrawSpaceCharge();
 	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
 	DrawMessageFeed();
 	const float ObjectiveBottom = DrawObjectiveBanner();
@@ -373,6 +375,38 @@ TArray<FString> ACodexTacticsHUD::WrapText(const FString& Text, UFont* Font, flo
 	return Lines;
 }
 
+void ACodexTacticsHUD::DrawSpaceCharge()
+{
+	const ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayerController());
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	if (!PC || !Flow || !PC->IsSpaceHeld() || PC->GetSpaceHeldTime() < 0.15f)
+	{
+		return;
+	}
+	// Godot: 300 x 80 in the centre, a 14 px label over a 280 x 22 bar.
+	const float Held = PC->GetSpaceHeldTime();
+	const float Limit = Flow->GetConfig().TurnBasedHoldDuration;
+	const bool bEntering = Flow->GetCombatMode() != ECodexCombatMode::TurnBased;
+	const FString Raw = bEntering ? FString::Printf(TEXT("⚔️ ВХОД В ПОШАГОВЫЙ БОЙ (GORKY 17): %.1fc / %.1fc"), Held, Limit)
+		: FString::Printf(TEXT("🛡️ ВОЗВРАТ В ТАКТИЧЕСКУЮ ПАУЗУ: %.1fc / %.1fc"), Held, Limit);
+	const FString Label = StripUnsupportedGlyphs(Raw).TrimStartAndEnd();
+	UFont* Font = GEngine->GetSmallFont();
+	float W = 0.f;
+	float H = 0.f;
+	Canvas->StrLen(Font, Label, W, H);
+	const float X = Canvas->SizeX * 0.5f;
+	const float Y = Canvas->SizeY * 0.5f - 40.f;
+	FCanvasTextItem Item(FVector2D(X - W * 0.55f, Y), FText::FromString(Label), Font,
+		bEntering ? FLinearColor(0.2f, 0.9f, 1.f) : FLinearColor(1.f, 0.8f, 0.2f));
+	Item.Scale = FVector2D(1.1f, 1.1f);
+	Item.bOutlined = true;
+	Item.OutlineColor = FLinearColor::Black;
+	Canvas->DrawItem(Item);
+	const float BarY = Y + H * 1.1f + 6.f;
+	DrawRect(FLinearColor(0.1f, 0.1f, 0.12f, 0.85f), X - 140.f, BarY, 280.f, 22.f);
+	DrawRect(FLinearColor(0.3f, 0.55f, 0.85f, 0.95f), X - 138.f, BarY + 2.f, 276.f * FMath::Clamp(Held / FMath::Max(0.01f, Limit), 0.f, 1.f), 18.f);
+}
+
 void ACodexTacticsHUD::DrawWorldLabels()
 {
 	UWorld* World = GetWorld();
@@ -394,6 +428,10 @@ void ACodexTacticsHUD::DrawWorldLabels()
 		}
 		TArray<FString> Lines;
 		StripUnsupportedGlyphs(Label.Text).TrimStartAndEnd().ParseIntoArrayLines(Lines);
+		if (Lines.IsEmpty() && Label.bHasMarker)
+		{
+			Lines.Add(FString()); // marker only (a narrative element seen from afar)
+		}
 		float LineHeight = 0.f;
 		float Width = 0.f;
 		for (const FString& Line : Lines)
@@ -403,6 +441,10 @@ void ACodexTacticsHUD::DrawWorldLabels()
 			Canvas->StrLen(Font, Line.TrimStartAndEnd(), W, H);
 			Width = FMath::Max(Width, W);
 			LineHeight = FMath::Max(LineHeight, H);
+		}
+		if (LineHeight <= 0.f)
+		{
+			LineHeight = Font->GetMaxCharHeight();
 		}
 		const float Marker = Label.bHasMarker ? LineHeight * 0.7f + 4.f : 0.f;
 		float Y = Screen.Y - LineHeight * Lines.Num();

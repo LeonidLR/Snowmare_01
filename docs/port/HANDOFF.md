@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **132 automation tests, 42 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **132 automation tests, 44 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -79,6 +79,8 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `TurnBasedBarricadeSmoke` | turn-based: barricade footprint = Godot samples; the commander walks up, click picks it up, two 45° steps (target cells recomputed), click places it: new footprint, rotation, 2 AP |
 | `TurnBasedPushSmoke` | turn-based: the commander walks up to a barrel; click picks it up (3 target cells), cancel, panel «Бочка» picks it up, click on a cell pushes: barrel +1 cell, commander on its old cell, 2 AP |
 | `ExposedZonesSmoke [shot]` | turn-based with one hound; the squad passes 3 turns: warning (1), danger (2), breach of 1-2 hounds (non-elite pool), no second breach; `shot` (rendered, UnrealEditor.exe -game) saves `ExposedZones.png` at the danger state |
+| `NarrativeSmoke` | Level narrative elements (note, signpost, poster) and the dialogue trigger: marker only from afar, the note's text within 2 m, menu «Записка дежурного инженера» / «Прочитать вслух» reads it into the feed; the trigger plays the wave-rest dialogue once |
+| `HoldSphereSmoke` | Space hold: the dome grows (eased) and the squad holds fire; release hides it and lifts the cease fire |
 | `ClickRulesSmoke` | Plain-click rules in a fight (Godot main.gd): an enemy becomes the priority target; a barrel / barricade can't be moved outside the pause and a ground click can't move the squad (HQ lines); in the pause a barrel is picked up for relocation and a barricade opens its menu at once |
 | `CutterSmoke` | Cutter (Godot enemy_cutter.gd): 75 HP / 18 damage; pounces from 6 m, the landing hurts the squad within 2.2 m («НАЛЁТ»), 6 s cooldown; shot down mid-leap it crashes («СБИТ В ВОЗДУХЕ», «КРАХ») |
 | `EnemyAISmoke` | Enemy AI (Godot enemy_base.gd / enemy_frost_*.gd): brute affinities (kinetic 0.25, energy 2); frost halves the speed; a hound 3 m from a burning barrel flees («СТРАХ ОГНЯ»); a hound picks a close turret (level generator set aside — it outranks everything for small enemies); a brute smashes a barricade in its way; a spitter 10 m out shoots the squad |
@@ -431,6 +433,15 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   ВОЗДУХЕ», «КРАХ»). The airborne-kill EXP / kill statistics are not ported (no EXP system).
 - Panic (Godot panic_component.gd) is inert in Godot (enable_realtime_panic = false; turn-based never uses it) and the
   allegiance component is only used by tests — neither is ported.
+- Narrative elements (`ANarrativeElementActor`; Godot narrative_element.gd) and dialogue triggers (`ADialogueTriggerVolume`;
+  dialogue_trigger.gd): L_MovementTest gets the Godot note (by the generator), signpost (central road), poster (gate wall)
+  and the wave-rest trigger (right side, midway) at semantic spots — the Godot scene coordinates don't map onto the UE
+  layout. The type emoji marker is a small square (no emoji in the HUD font); in-world text wraps at 48 characters and
+  is not occluded by walls (Godot Label3D no_depth_test = false). has_been_read is not saved (Godot neither).
+- Space hold (Godot main.gd + tactical_hold_sphere.gd + gorky17_combat_hud charge bar): `AHoldSphereActor` (additive dome
+  + growing ring + 15 m boundary ring, eased p x (2 - p)), the squad holds fire while Space is held
+  (`AOperativeCharacter::bTacticalCeaseFire`), HUD `DrawSpaceCharge` («ВХОД В ПОШАГОВЫЙ БОЙ (GORKY 17): x.xc / y.yc» /
+  «ВОЗВРАТ В ТАКТИЧЕСКУЮ ПАУЗУ»). The dome centre is the leader's feet (Godot ray-casts the floor below the leader).
 - Barricade contact damage (spikes / fire / cryo / energy) not ported (Godot default is NONE).
 - Pushing / defusal / set-up animations: none (operatives only slow down / crouch).
 - Hidden mines are revealed by a distance scan in the mine's Tick (Godot scans from each operative) — same result.
@@ -469,7 +480,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Plain-click rules in a fight (Godot main.gd click branches 0 / 0.5): enemy priority target, no relocation outside the pause, immediate menu / relocation in the pause; `HandleWorldHit`, `UInteractionSubsystem::OpenMenuNow`, `AssignPriorityTarget`; ClickRulesSmoke |
+| (this) | Narrative elements and dialogue triggers (Godot narrative_element.gd, dialogue_trigger.gd; placed on L_MovementTest by the level script), the Space-hold dome, cease fire and charge bar (Godot tactical_hold_sphere.gd, gorky17_combat_hud.gd); NarrativeSmoke, HoldSphereSmoke, `HudShot hold` |
+| `3985f6c` | Plain-click rules in a fight (Godot main.gd click branches 0 / 0.5): enemy priority target, no relocation outside the pause, immediate menu / relocation in the pause; `HandleWorldHit`, `UInteractionSubsystem::OpenMenuNow`, `AssignPriorityTarget`; ClickRulesSmoke |
 | `d081f34` | Cutter (Godot enemy_cutter.gd): own stats, the pounce with impact damage and cooldown, airborne death; enemy animation configs imported (`import_enemy_anim_configs.py`, DA_EnemyAnim_*); CutterSmoke |
 | `cd3d61c` | Enemy AI parity (Godot enemy_base.gd, enemy_frost_spitter.gd, enemy_frost_brute.gd): affinities / armor per type, stagger / frost, fire fear, target weights (generator / turrets / squad), obstacle smashing, spitter ranged behaviour; `EnemyAIRules` + EnemyAIRulesTest, EnemyAISmoke |
 | `6569254` | Overhead labels of enemies, barricades, turrets and the generator (Godot overhead Label3D: enemy_base.gd, barricade.gd, turret.gd, interactable.gd); `HudShot labels` |

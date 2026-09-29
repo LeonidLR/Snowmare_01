@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables.
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -25,6 +25,7 @@
 #include "Debug/SmokeUtils.h"
 #include "Characters/RecruitSubsystem.h"
 #include "Characters/RageComponent.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Interactables/TurretActor.h"
 #include "Interactables/BarricadeActor.h"
@@ -163,6 +164,19 @@ namespace HudShot
 					Grenades->UpdateAim(Lead->GetActorLocation() + Lead->GetActorForwardVector() * 700.f);
 				}
 			}), 3.5f, false);
+		}
+		if (Args.Contains(TEXT("hold")))
+		{
+			// Space held ~0.9 s at the regular 4.5 s shot: the dome, the rings and the charge bar.
+			TWeakObjectPtr<UWorld> HoldWorld(World);
+			FTimerHandle HoldHandle;
+			World->GetTimerManager().SetTimer(HoldHandle, FTimerDelegate::CreateLambda([HoldWorld]()
+			{
+				if (ACodexTacticsPlayerController* HoldPC = HoldWorld.IsValid() ? Cast<ACodexTacticsPlayerController>(UGameplayStatics::GetPlayerController(HoldWorld.Get(), 0)) : nullptr)
+				{
+					HoldPC->SpacePressed();
+				}
+			}), 3.6f, false);
 		}
 		if (Args.Contains(TEXT("labels")))
 		{

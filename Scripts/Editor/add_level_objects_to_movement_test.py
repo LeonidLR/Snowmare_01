@@ -4,7 +4,9 @@ BarrelObject, AbandonedBarricadeEast / Generator, AbandonedMinePath / Alley, Loo
 the «Начать бой» squad spot behind the gate (TargetPoint tagged CombatStart; Godot main.gd _on_start_combat_pressed)
 and four enemy spawn points in the yard beyond the gate (Godot EnemySpawnPoints: north gate, west flank, east flank,
 far perimeter; Godot lane names and allowed_enemy_type) and Ivan Susanin's rescue spot (TargetPoint tagged
-SusaninSpawn, on the west side of the yard; Godot _spawn_susanin_for_rescue). Objects whose label already exists are skipped (spawn points
+SusaninSpawn, on the west side of the yard; Godot _spawn_susanin_for_rescue), the three narrative elements (note by the
+generator, signpost on the central road, poster on the gate wall) and the wave-rest dialogue trigger (Godot
+movements_demo.tscn NarrativeNote_Generator / NarrativeSignpost_Crossroads / NarrativePoster_BunkerWall / Area3D). Objects whose label already exists are skipped (spawn points
 get their lane / type refreshed). They stand away from the routes of the automated checks.
 Locations are design coordinates (layout at the origin, yaw 0); they follow the "Floor" actor when the user moves or
 rotates the layout (same mapping as SmokeUtils::LevelPoint).
@@ -47,6 +49,22 @@ def spawn_lane(lane, allowed="ALL"):
     return setup
 
 
+def narrative(kind, distance, title, text, source):
+    """Godot movements_demo.tscn NarrativeNote_Generator / NarrativeSignpost_Crossroads / NarrativePoster_BunkerWall."""
+    def setup(element):
+        element.set_editor_property("narrative_type", getattr(unreal.NarrativeType, kind))
+        element.set_editor_property("readable_distance", distance)
+        element.set_editor_property("title", title)
+        element.set_editor_property("content_text", text)
+        element.set_editor_property("author_or_source", source)
+    return setup
+
+
+def wave_rest_trigger(volume):
+    """Godot movements_demo.tscn Area3D DialogueTrigger3D with dialogue_wave_rest.tres."""
+    volume.set_editor_property("dialogue", unreal.load_asset("/Game/Data/Dialogues/DA_DialogueWaveRest"))
+
+
 def susanin_spawn(point):
     """URecruitSubsystem::SpawnTag: Ivan Susanin appears here in the rescue wave (Godot _spawn_susanin_for_rescue)."""
     point.set_editor_property("tags", ["SusaninSpawn"])
@@ -67,6 +85,18 @@ OBJECTS = [
     ("Crate_Supply_Checkpoint", unreal.LootCrateActor, unreal.Vector(1200, 1200, 40), 0, checkpoint_crate),
     ("Crate_Supply_Trapped", unreal.LootCrateActor, unreal.Vector(1200, 900, 40), 0, trapped_crate),
     ("CombatStart", unreal.TargetPoint, unreal.Vector(0, -2150, 0), -90, combat_start),
+    ("Narrative_NoteGenerator", unreal.NarrativeElementActor, unreal.Vector(1150, -1150, 40), 0, narrative(
+        "NOTE", 200.0, "Записка дежурного инженера",
+        "Гермоворота обесточены из-за аварии. Резервный дизель-генератор пуст. Слейте дизель из бака брошенного БМП в "
+        "канистру и заправьте станцию!", "Инженер 2-й смены Сергеев")),
+    ("Narrative_SignpostCrossroads", unreal.NarrativeElementActor, unreal.Vector(0, -900, 120), 0, narrative(
+        "SIGNPOST", 1000.0, "Уличный указатель путей КПП",
+        "⬆️ СЕКТОР А: ГЕРМОВОРОТА И БУНКЕР\n➡️ СЕКТОР B: ДИЗЕЛЬ-ГЕНЕРАТОР\n⬅️ СЕКТОР C: СКЛАД СНАБЖЕНИЯ", "Комендатура КПП")),
+    ("Narrative_PosterBunkerWall", unreal.NarrativeElementActor, unreal.Vector(-500, -1960, 250), 0, narrative(
+        "POSTER", 2000.0, "Приказ ГО и ЧС: Карантинный рубеж",
+        "ВНИМАНИЕ: ЗОНА АНОМАЛЬНОГО ХОЛОДА!\nВЫХОД ЗА ПЕРИМЕТР БЕЗ ТЕРМОЗАЩИТЫ СТРОГО ВОСПРЕЩЁН!\n"
+        "ПРИ ПРОРЫВЕ МУТАНТОВ — НЕМЕДЛЕННО ЗАНЯТЬ ОБОРОНУ У ГЕРМОВОРОТ.", "Штаб Северного Округа")),
+    ("DialogueTrigger_WaveRest", unreal.DialogueTriggerVolume, unreal.Vector(700, -700, 116), 0, wave_rest_trigger),
     ("SusaninSpawn", unreal.TargetPoint, unreal.Vector(-900, -2300, 0), 60, susanin_spawn),
     ("EnemySpawn_NorthGate", unreal.EnemySpawnPoint, unreal.Vector(0, -2600, 100), 90, spawn_lane("Северные ворота")),
     ("EnemySpawn_WestFlank", unreal.EnemySpawnPoint, unreal.Vector(-1400, -2400, 100), 90, spawn_lane("Левый фланг (Прорыв)", "HOUND")),

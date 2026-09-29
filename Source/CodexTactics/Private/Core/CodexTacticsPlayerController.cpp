@@ -1,6 +1,7 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/RecruitSubsystem.h"
+#include "Combat/HoldSphereActor.h"
 #include "Interactables/DeployableActor.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -176,8 +177,38 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const float HoldDuration = Flow ? Flow->GetConfig().TurnBasedHoldDuration : 1.5f;
 	// Space hold is measured in real time: the tactical pause slows the world down.
+	const bool bTurnBasedNow = Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased;
+	if (SpaceInput.IsPressed())
+	{
+		// Godot: while Space is held the squad holds fire and (outside turn-based combat) the dome grows.
+		SetSquadCeaseFire(!bTurnBasedNow);
+		const AOperativeCharacter* HoldLeader = GetSquad() ? GetSquad()->GetLeader() : nullptr;
+		if (!bTurnBasedNow && HoldLeader)
+		{
+			if (!HoldSphere)
+			{
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				HoldSphere = GetWorld()->SpawnActor<AHoldSphereActor>(FVector::ZeroVector, FRotator::ZeroRotator, Params);
+			}
+			if (HoldSphere)
+			{
+				const FVector Ground = HoldLeader->GetActorLocation() - FVector(0.f, 0.f, HoldLeader->GetSimpleCollisionHalfHeight());
+				HoldSphere->UpdateProgress(Ground, SpaceInput.GetHeldTime(), HoldDuration);
+			}
+		}
+		else if (HoldSphere)
+		{
+			HoldSphere->HideSphere();
+		}
+	}
 	if (SpaceInput.Tick(static_cast<float>(FApp::GetDeltaTime()), HoldDuration) == ESpaceInputAction::Hold)
 	{
+		SetSquadCeaseFire(false);
+		if (HoldSphere)
+		{
+			HoldSphere->HideSphere();
+		}
 		HandleSpaceHold();
 	}
 
@@ -463,6 +494,11 @@ void ACodexTacticsPlayerController::SpacePressed()
 
 void ACodexTacticsPlayerController::SpaceReleased()
 {
+	SetSquadCeaseFire(false);
+	if (HoldSphere)
+	{
+		HoldSphere->HideSphere();
+	}
 	if (SpaceInput.Release() == ESpaceInputAction::Tap)
 	{
 		HandleSpaceTap();
@@ -1370,3 +1406,19 @@ void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
 }
 
 #undef LOCTEXT_NAMESPACE
+
+void ACodexTacticsPlayerController::SetSquadCeaseFire(bool bCease)
+{
+	if (bCeaseFireSet == bCease)
+	{
+		return;
+	}
+	bCeaseFireSet = bCease;
+	if (USquadSubsystem* Squad = GetSquad())
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Member->bTacticalCeaseFire = bCease;
+		}
+	}
+}
