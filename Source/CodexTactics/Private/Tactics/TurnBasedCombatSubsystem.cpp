@@ -6,6 +6,7 @@
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/WaveSubsystem.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Data/WeaponDataAsset.h"
@@ -276,6 +277,18 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		State.BaseDamage = Balance.EnemyBaseDamage;
 		State.Facing = FacingTowards(Enemy->GetActorLocation(), Center, EGorkyFacing::North);
 		AlignFacing(Enemy, State.Facing);
+	}
+
+	// Godot start_combat: zones_manager.setup + evaluate_wave_roster (the grid's enemies).
+	Zones.Reset();
+	{
+		TArray<FExposedZones::FRosterEntry> Roster;
+		for (AEnemyCharacter* Enemy : GridEnemies)
+		{
+			Roster.Add({ Enemy->GetArchetype(), Enemy->GetHealthComponent()->GetMaxHealth(), Enemy->GetAttackDamage(),
+				static_cast<float>(Balance.EnemyMaxAP) });
+		}
+		Zones.EvaluateRoster(Roster);
 	}
 
 	TSet<AActor*> OnGridSet;
@@ -1027,7 +1040,149 @@ void UTurnBasedCombatSubsystem::EndSquadPhase()
 		Overlay->ClearLayer(ETurnOverlayLayer::Attack);
 		Overlay->ClearLayer(ETurnOverlayLayer::Active);
 	}
+	if (IsActive() && Grid)
+	{
+		UpdateExposedZones();
+	}
 	ExecuteTurretPhase();
+}
+
+void UTurnBasedCombatSubsystem::UpdateExposedZones()
+{
+	bool Covered[FExposedZones::NumQuadrants] = { false, false, false, false };
+	for (const TWeakObjectPtr<AOperativeCharacter>& Weak : Squad)
+	{
+		const FTurnUnitState* State = GetUnitState(Weak.Get());
+		if (State && !IsDead(Weak.Get()))
+		{
+			Covered[FExposedZones::GetQuadrant(State->GridPos, Grid->GridSize)] = true;
+		}
+	}
+	for (const TWeakObjectPtr<AActor>& Weak : Turrets)
+	{
+		const ATurretActor* Turret = Cast<ATurretActor>(Weak.Get());
+		const FTurnUnitState* State = GetUnitState(Turret);
+		if (Turret && State && !Turret->IsBroken() && GetHealth(Turret) > 0.f)
+		{
+			Covered[FExposedZones::GetQuadrant(State->GridPos, Grid->GridSize)] = true;
+		}
+	}
+	int32 Alive = 0;
+	for (const TWeakObjectPtr<AActor>& Weak : Enemies)
+	{
+		Alive += Weak.IsValid() && !IsDead(Weak.Get()) ? 1 : 0;
+	}
+
+	TArray<TPair<AActor*, FIntPoint>> Arrived;
+	UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>();
+	const FExposedZones::FTurnResult Result = Zones.EndSquadTurn(Covered, Alive,
+		[]() { return FMath::RandRange(1, 2); },
+		[this, Waves, &Arrived](int32 Quadrant, int32 Count)
+		{
+			TArray<EEnemyArchetype> Pool = Zones.GetPool();
+			if (Pool.IsEmpty())
+			{
+				Pool.Add(EEnemyArchetype::FrostHound);
+			}
+			// Godot: variety — the non-elite types are shuffled.
+			for (int32 Index = Pool.Num() - 1; Index > 0; --Index)
+			{
+				Pool.Swap(Index, FMath::RandRange(0, Index));
+			}
+			const TArray<FIntPoint> Cells = FindSpawnCells(Quadrant, Count);
+			for (int32 Index = 0; Waves && Index < Cells.Num(); ++Index)
+			{
+				if (AEnemyCharacter* Enemy = Waves->SpawnEnemy(Pool[Index % Pool.Num()], Grid->GridToWorld(Cells[Index]) + FVector(0.f, 0.f, 100.f)))
+				{
+					Arrived.Emplace(Enemy, Cells[Index]);
+				}
+			}
+			return Arrived.Num();
+		});
+
+	TArray<int32> Turns;
+	for (int32 Quadrant = 0; Quadrant < FExposedZones::NumQuadrants; ++Quadrant)
+	{
+		Turns.Add(Result.Turns[Quadrant]);
+		const FString Name = FExposedZones::GetQuadrantName(Quadrant);
+		if (Result.Turns[Quadrant] == 1)
+		{
+			Log(FString::Printf(TEXT("⚠️ Внимание: Сектор [%s] оголён (1 ход без прикрытия)!"), *Name));
+		}
+		else if (Result.Turns[Quadrant] == 2)
+		{
+			Log(FString::Printf(TEXT("🚨 ОПАСНОСТЬ: Сектор [%s] оголён 2 хода! На следующем ходу возможен прорыв врага!"), *Name));
+		}
+	}
+	if (Overlay)
+	{
+		Overlay->SetExposedZones(Turns);
+	}
+	for (const TPair<AActor*, FIntPoint>& Entry : Arrived)
+	{
+		RegisterReinforcement(Entry.Key, Entry.Value, FExposedZones::GetQuadrantName(Result.BreachQuadrant));
+	}
+}
+
+TArray<FIntPoint> UTurnBasedCombatSubsystem::FindSpawnCells(int32 Quadrant, int32 Count) const
+{
+	const FIntRect Rect = FExposedZones::GetQuadrantRect(Quadrant, Grid->GridSize);
+	TArray<FIntPoint> Edge, Interior;
+	for (int32 Y = Rect.Min.Y; Y < Rect.Max.Y; ++Y)
+	{
+		for (int32 X = Rect.Min.X; X < Rect.Max.X; ++X)
+		{
+			const FIntPoint Cell(X, Y);
+			if (!Grid->IsCellWalkable(Cell))
+			{
+				continue;
+			}
+			const bool bOuter = X == 0 || Y == 0 || X == Grid->GridSize.X - 1 || Y == Grid->GridSize.Y - 1;
+			(bOuter ? Edge : Interior).Add(Cell);
+		}
+	}
+	auto Shuffle = [](TArray<FIntPoint>& Cells)
+	{
+		for (int32 Index = Cells.Num() - 1; Index > 0; --Index)
+		{
+			Cells.Swap(Index, FMath::RandRange(0, Index));
+		}
+	};
+	Shuffle(Edge);
+	Shuffle(Interior);
+	Edge.Append(Interior);
+	Edge.SetNum(FMath::Min(Count, Edge.Num()));
+	return Edge;
+}
+
+void UTurnBasedCombatSubsystem::RegisterReinforcement(AActor* Enemy, const FIntPoint& Cell, const FString& QuadrantName)
+{
+	if (!IsValid(Enemy) || !Grid)
+	{
+		return;
+	}
+	Enemies.AddUnique(Enemy);
+	Grid->SetOccupant(Cell, Enemy, EGorkyOccupantType::Enemy);
+	PlaceOnCell(Enemy, Cell);
+	// Frozen outside its turns like the enemies the fight started with.
+	if (APawn* Pawn = Cast<APawn>(Enemy); Pawn && Pawn->GetController())
+	{
+		Pawn->GetController()->StopMovement();
+	}
+	if (Enemy->IsActorTickEnabled())
+	{
+		Enemy->SetActorTickEnabled(false);
+		FrozenActors.Add(Enemy);
+	}
+	FTurnUnitState& State = States.Add(Enemy);
+	State.Actor = Enemy;
+	State.GridPos = Cell;
+	State.MaxAP = State.AP = Balance.EnemyMaxAP;
+	State.Armor = 2.f;
+	State.BaseDamage = Balance.EnemyBaseDamage;
+	State.Facing = EGorkyFacing::North;
+	AlignFacing(Enemy, State.Facing);
+	Log(FString::Printf(TEXT("🚨 ПРОРЫВ! Оголённая зона [%s] осталась без прикрытия! Прибыло подкрепление: %s!"), *QuadrantName, *NameOf(Enemy)));
 }
 
 void UTurnBasedCombatSubsystem::ExecuteTurretPhase()

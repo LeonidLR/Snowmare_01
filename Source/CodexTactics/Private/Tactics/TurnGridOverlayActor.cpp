@@ -2,6 +2,7 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Tactics/ExposedZones.h"
 #include "Tactics/GorkyGridManager.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -31,6 +32,8 @@ ATurnGridOverlayActor::ATurnGridOverlayActor()
 		{ ETurnOverlayLayer::Fear, TEXT("FearLayer"), FLinearColor(1.f, 0.45f, 0.1f), 0.5f, 4.5f },
 		{ ETurnOverlayLayer::Active, TEXT("ActiveLayer"), FLinearColor(0.2f, 0.9f, 1.f), 1.2f, 5.f },
 		{ ETurnOverlayLayer::Warning, TEXT("WarningLayer"), FLinearColor(1.f, 0.9f, 0.2f), 1.5f, 5.5f },
+		{ ETurnOverlayLayer::ExposedWarning, TEXT("ExposedWarningLayer"), FLinearColor(1.f, 0.85f, 0.2f), 2.5f, 6.f },
+		{ ETurnOverlayLayer::ExposedDanger, TEXT("ExposedDangerLayer"), FLinearColor(1.f, 0.05f, 0.05f), 3.f, 6.5f },
 	};
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Plane(TEXT("/Engine/BasicShapes/Plane.Plane"));
 	for (const FLayerSpec& Spec : Specs)
@@ -107,4 +110,66 @@ int32 ATurnGridOverlayActor::GetCellCount(ETurnOverlayLayer Layer) const
 {
 	const UInstancedStaticMeshComponent* Mesh = OverlayLayers.FindRef(Layer);
 	return Mesh ? Mesh->GetInstanceCount() : 0;
+}
+
+void ATurnGridOverlayActor::SetExposedZones(const TArray<int32>& TurnsByQuadrant)
+{
+	UInstancedStaticMeshComponent* WarningMesh = OverlayLayers.FindRef(ETurnOverlayLayer::ExposedWarning);
+	UInstancedStaticMeshComponent* DangerMesh = OverlayLayers.FindRef(ETurnOverlayLayer::ExposedDanger);
+	const UGorkyGridManager* GridManager = Grid.Get();
+	if (!WarningMesh || !DangerMesh)
+	{
+		return;
+	}
+	WarningMesh->ClearInstances();
+	DangerMesh->ClearInstances();
+	if (!GridManager)
+	{
+		return;
+	}
+	constexpr float LineWidth = 14.f;
+	const float Half = GridManager->CellSize * 0.5f;
+	// A line is the 100 x 100 cm engine plane stretched along the segment.
+	auto AddLine = [LineWidth](TArray<FTransform>& Out, const FVector& A, const FVector& B)
+	{
+		const FVector Delta = B - A;
+		Out.Add(FTransform(Delta.Rotation(), (A + B) * 0.5f, FVector(Delta.Size() / 100.f, LineWidth / 100.f, 1.f)));
+	};
+	TArray<FTransform> Warning, Danger;
+	for (int32 Quadrant = 0; Quadrant < TurnsByQuadrant.Num() && Quadrant < FExposedZones::NumQuadrants; ++Quadrant)
+	{
+		const int32 Turns = TurnsByQuadrant[Quadrant];
+		if (Turns <= 0)
+		{
+			continue;
+		}
+		const FIntRect Rect = FExposedZones::GetQuadrantRect(Quadrant, GridManager->GridSize);
+		const float Height = LayerHeights[Turns == 1 ? ETurnOverlayLayer::ExposedWarning : ETurnOverlayLayer::ExposedDanger];
+		const FVector First = GridManager->GridToWorld(Rect.Min);
+		const FVector Last = GridManager->GridToWorld(Rect.Max - FIntPoint(1, 1));
+		const FVector Lo(FMath::Min(First.X, Last.X) - Half, FMath::Min(First.Y, Last.Y) - Half, First.Z + Height);
+		const FVector Hi(FMath::Max(First.X, Last.X) + Half, FMath::Max(First.Y, Last.Y) + Half, First.Z + Height);
+		const FVector Corners[] = { Lo, FVector(Hi.X, Lo.Y, Lo.Z), FVector(Hi.X, Hi.Y, Lo.Z), FVector(Lo.X, Hi.Y, Lo.Z) };
+		TArray<FTransform>& Out = Turns == 1 ? Warning : Danger;
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			AddLine(Out, Corners[Index], Corners[(Index + 1) % 4]);
+		}
+		if (Turns >= 2)
+		{
+			// Godot corner marks: short brackets pointing inwards (min(1.2 m, 0.8 cell)).
+			const float Mark = FMath::Min(120.f, GridManager->CellSize * 0.8f);
+			for (int32 Index = 0; Index < 4; ++Index)
+			{
+				const FVector& Corner = Corners[Index];
+				const float SignX = Corner.X <= Lo.X ? 1.f : -1.f;
+				const float SignY = Corner.Y <= Lo.Y ? 1.f : -1.f;
+				const FVector Inset(SignX * LineWidth * 2.f, SignY * LineWidth * 2.f, 0.f);
+				AddLine(Out, Corner + Inset, Corner + Inset + FVector(SignX * Mark, 0.f, 0.f));
+				AddLine(Out, Corner + Inset, Corner + Inset + FVector(0.f, SignY * Mark, 0.f));
+			}
+		}
+	}
+	WarningMesh->AddInstances(Warning, false, true);
+	DangerMesh->AddInstances(Danger, false, true);
 }

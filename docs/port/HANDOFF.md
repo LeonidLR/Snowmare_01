@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **120 automation tests, 20 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **123 automation tests, 21 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -67,6 +67,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `DialogueSmoke` (`-ForceMainMenu`, verify_all does it) | «Начать игру» opens the 15-line intro briefing, Space advances (no pause), skip closes, preparation lines reach the feed with the Godot delay |
 | `ActionBarSmoke` | action bar stance slot cycles the squad, «ПЕР» pick mode on / off, squad slot 2 selects the engineer |
 | `BannersSmoke` | cutscene card + Space skip, squad warm / healed for the preparation, preparation / wave / pause banner texts |
+| `ExposedZonesSmoke [shot]` | turn-based with one hound; the squad passes 3 turns: warning (1), danger (2), breach of 1-2 hounds (non-elite pool), no second breach; `shot` (rendered, UnrealEditor.exe -game) saves `ExposedZones.png` at the danger state |
 | `LevelWaveSmoke` | imported level drives the flow (3 waves, 60 s / 20 s); wave 1 = 12 enemies at once at the 4 spawn points, cold drain 1.1 |
 | `TurnBasedSmoke` | wave + one brute, enter turn-based: grid registration, 8 AP, stance 1 AP, enemy turn (walk, bite 13 on a crouched commander, step back), move into a fire lane + shot -> victory -> tactical pause |
 | `MissionSmoke` | objective banner texts (start → preparation → wave), an operative's death fails the mission (GameOver, reason, time stop), restart reloads a fresh exploration |
@@ -273,8 +274,10 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    guard, weapon selector, pause menu / save-load, radius rings (action bar slots are placeholders).
 6. Turn-based combat manager on the Gorky grid (Godot `Scripts/tactics/turn_based_combat_manager.gd`).
    Done: `GorkyLineOfSight`, `TurnBasedRules`, `UTurnBasedCombatSubsystem` + overlay + controller input (see §4).
-   Next (panel done): grid deployables /
-   barricade relocation, exposed zones + reinforcements, weapon switching / grenades, companion drone, stasis look.
+   Exposed zones done (`FExposedZones` pure rules + `UpdateExposedZones` at the end of the squad phase, overlay
+   outlines `ATurnGridOverlayActor::SetExposedZones`, reinforcements via `UWaveSubsystem::SpawnEnemy`, armor 2, facing
+   north, frozen outside their turns). Next: grid deployables / barricade relocation, weapon switching / grenades,
+   companion drone, stasis look.
 7. Phase 2 data importer (JSON / .tres → DataAssets) replacing hand-typed values (§9).
    Done: weapons — `Scripts/Editor/import_weapons.py` → `/Game/Data/Weapons/DA_Weapon_<id>` (all 9; defaults parsed
    from weapon_data.gd, enums mapped by name, `EStatusEffect::Shocked` appended); the game mode equips
@@ -320,6 +323,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Barricade contact damage (spikes / fire / cryo / energy) not ported (Godot default is NONE).
 - Pushing / defusal / set-up animations: none (operatives only slow down / crouch).
 - Hidden mines are revealed by a distance scan in the mine's Tick (Godot scans from each operative) — same result.
+- Exposed-zone outlines: no pulse (Godot alpha 0.65 ± 0.35); the additive M_CombatFeedback glow reads pink-white on the
+  light floor instead of red — a material for the user to tune (layer colours / intensity in TurnGridOverlayActor.cpp).
 - Relocation ghost is opaque (swap `GhostBaseMaterial` for a translucent hologram).
 - Godot starts relocation directly when a relocatable object is clicked in the tactical pause / live combat
   (`main.gd` click branch "is_relocatable_obj"); UE always goes through the action menu. Port with the pause UI.
@@ -338,7 +343,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Godot levels imported (DA_Level_*); level_01_outpost drives waves (whole wave at once, modifiers, custom health, cold drain), preparation 60 s / rest 20 s and 3 waves; enemy spawn points beyond the gate; the wave clears only outside turn-based combat (Godot; fixes a crash when the last enemy of a wave dies on the grid); LevelWaveSmoke |
+| (this) | Turn-based exposed zones: quadrant counters, warnings, overlay outlines, one breach of 1-2 non-elite reinforcements per fight (Godot tactical_exposed_zones_manager.gd); ExposedZonesSmoke |
+| `dbf4d29` | Godot levels imported (DA_Level_*); level_01_outpost drives waves (whole wave at once, modifiers, custom health, cold drain), preparation 60 s / rest 20 s and 3 waves; enemy spawn points beyond the gate; the wave clears only outside turn-based combat (Godot; fixes a crash when the last enemy of a wave dies on the grid); LevelWaveSmoke |
 | `93d94ad` | Smokes layout-relative (`SmokeUtils::LevelPoint`), L_MovementTest navmesh actor removed (rotated navmesh stayed empty) |
 | `f91f800` | Level importer script (Godot level JSON -> ULevelConfigAsset), not run / wired yet |
 | `2ca14b0` | Enemy crit chances and hound / spitter / brute stats from the imported Godot config |

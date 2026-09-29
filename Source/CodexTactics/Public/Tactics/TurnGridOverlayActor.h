@@ -26,13 +26,17 @@ enum class ETurnOverlayLayer : uint8
 	/** A squad member an enemy is about to attack (yellow). */
 	Warning,
 	/** Fire-fear cells around burning barrels (orange). */
-	Fear
+	Fear,
+	/** Outline of a quadrant uncovered for one turn (yellow; SetExposedZones, not SetCells). */
+	ExposedWarning,
+	/** Outline + corner marks of a quadrant uncovered for two turns or more (red). */
+	ExposedDanger
 };
 
 /**
  * Glowing floor tiles of the Gorky 17 tactical grid (one instanced mesh per layer, M_CombatFeedback glow).
  * Godot reference: Scripts/tactics/tactical_grid_overlay.gd (update_reachable_cells, attack cells, fear zones,
- * show_target_warning, active unit marker).
+ * show_target_warning, active unit marker, update_exposed_zone_warning). The Godot outline pulse is not ported.
  */
 UCLASS(NotBlueprintable)
 class CODEXTACTICS_API ATurnGridOverlayActor : public AActor
@@ -50,6 +54,12 @@ public:
 	void ClearLayer(ETurnOverlayLayer Layer) { SetCells(Layer, TArray<FIntPoint>()); }
 
 	int32 GetCellCount(ETurnOverlayLayer Layer) const;
+
+	/**
+	 * Outlines of exposed quadrants (Godot update_exposed_zone_warning): TurnsByQuadrant[Q] uncovered turns; 1 = yellow
+	 * outline, 2+ = red outline with corner marks, 0 = none.
+	 */
+	void SetExposedZones(const TArray<int32>& TurnsByQuadrant);
 
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|Tactics")
 	TObjectPtr<UMaterialInterface> GlowMaterial;

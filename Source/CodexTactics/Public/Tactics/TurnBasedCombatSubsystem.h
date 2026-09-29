@@ -4,6 +4,7 @@
 #include "Characters/OperativeMovementRules.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "Tactics/ExposedZones.h"
 #include "Tactics/Gorky17Types.h"
 #include "Tactics/TurnBasedRules.h"
 #include "TurnBasedCombatSubsystem.generated.h"
@@ -58,8 +59,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTurnBasedStateChanged);
  * Everything outside the grid is frozen for the duration. Messages go to the feed as «GORKY 17».
  * Godot reference: Scripts/tactics/turn_based_combat_manager.gd (start_combat, move_active_unit_to,
  * set_active_unit_stance, turn_active_unit_facing, attack_target_cell, end_current_unit_turn, _execute_turret_phase,
- * _execute_single_enemy_turn, _enemy_perform_attack / retreat, _detonate_barrel, _detonate_mine, end_combat).
- * Not ported yet: exposed-zone reinforcements, companion drone phase, barricade relocation / deployables on the grid,
+ * _execute_single_enemy_turn, _enemy_perform_attack / retreat, _detonate_barrel, _detonate_mine, end_combat;
+ * exposed zones: _end_squad_phase, _on_zone_warning_updated, _register_reinforcement_enemy + FExposedZones).
+ * Not ported yet: companion drone phase, barricade relocation / deployables on the grid,
  * weapon switching, grenades, enemy cold / DoT, cinematic cameras.
  */
 UCLASS()
@@ -92,6 +94,8 @@ public:
 	UGorkyGridManager* GetGrid() const { return Grid; }
 	int32 GetEnemyCount() const { return Enemies.Num(); }
 	int32 GetSquadCount() const { return Squad.Num(); }
+	/** Exposed-zone counters of the running fight (quadrant turns, breaches). */
+	const FExposedZones& GetExposedZones() const { return Zones; }
 
 	// --- Player orders (active operative) ---
 
@@ -161,6 +165,12 @@ private:
 	void StartPlayerTurn();
 	void RefreshOverlay();
 	void EndSquadPhase();
+	/** Godot _end_squad_phase zone check: counters, warnings, overlay outlines, reinforcements. */
+	void UpdateExposedZones();
+	/** Free cells of a quadrant for a reinforcement group, outer edge first (Godot find_spawn_cells_in_quadrant). */
+	TArray<FIntPoint> FindSpawnCells(int32 Quadrant, int32 Count) const;
+	/** Godot _register_reinforcement_enemy. */
+	void RegisterReinforcement(AActor* Enemy, const FIntPoint& Cell, const FString& QuadrantName);
 	void ExecuteTurretPhase();
 	void ProcessNextTurret();
 	void ExecuteEnemyPhase();
@@ -196,6 +206,7 @@ private:
 	TMap<TWeakObjectPtr<AActor>, int32> BurningBarrels;
 	TArray<TWeakObjectPtr<AActor>> FrozenActors;
 	TArray<FMover> Movers;
+	FExposedZones Zones;
 
 	ETurnPhase Phase = ETurnPhase::Inactive;
 	int32 ActiveIndex = 0;
