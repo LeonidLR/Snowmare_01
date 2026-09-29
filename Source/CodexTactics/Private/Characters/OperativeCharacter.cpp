@@ -1,6 +1,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeAIController.h"
+#include "Characters/RageComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
@@ -102,6 +103,7 @@ AOperativeCharacter::AOperativeCharacter()
 	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	ColdSurvival = CreateDefaultSubobject<UColdSurvivalComponent>(TEXT("ColdSurvival"));
+	RageComponent = CreateDefaultSubobject<URageComponent>(TEXT("RageComponent"));
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	HealthComponent->MaxHealth = 100.0f;
 	HealthComponent->BaseArmorReduction = 0.10f;
@@ -233,8 +235,18 @@ void AOperativeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+bool AOperativeCharacter::IsRaging() const
+{
+	return RageComponent && RageComponent->IsRaging();
+}
+
 EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destination, bool bSprint)
 {
+	if (IsRaging())
+	{
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ЯРОСТИ! НЕ ПОДЧИНЯЕТСЯ!"), FLinearColor(1.f, 0.4f, 0.1f));
+		return EOperativeOrderResult::Refused;
+	}
 	if (bSprint && CanSprint())
 	{
 		// A sprint order stands a crouching operative up (Godot set_target).
@@ -415,6 +427,10 @@ void AOperativeCharacter::UpdatePlaceholderPose(float Alpha)
 
 void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 {
+	if (RageComponent)
+	{
+		RageComponent->ExitRage(TEXT("Погиб"));
+	}
 	// Godot _check_squad_vital_signs: any squad member down = mission failed (HQ line, time stop, failed screen).
 	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
 	{
@@ -740,7 +756,7 @@ bool AOperativeCharacter::CanShoot() const
 	{
 		return false;
 	}
-	if (bSprinting || bCarrying || bIsReloading)
+	if (bSprinting || bCarrying || (bIsReloading && !IsRaging())) // Godot: rage ignores the reload
 	{
 		return false;
 	}
@@ -974,7 +990,8 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		MisfireCooldownTimer -= DeltaTime;
 	}
 
-	if (bIsReloading)
+	const bool bRaging = IsRaging();
+	if (bIsReloading && !bRaging) // Godot: no reloading while raging
 	{
 		ReloadTimer -= DeltaTime;
 		if (ReloadTimer <= 0.0f)
@@ -1021,7 +1038,8 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		}
 	}
 
-	if (UsesAmmo() && CurrentClip <= 0)
+	const bool bInfiniteRageAmmo = bRaging && RageComponent->Config.bInfiniteAmmo;
+	if (UsesAmmo() && CurrentClip <= 0 && !bInfiniteRageAmmo)
 	{
 		if (ReserveAmmo > 0)
 		{
@@ -1030,7 +1048,16 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		return;
 	}
 
-	const FShootCandidate Shot = FindShootTarget(DeltaTime);
+	// Raging: a random enemy in reach is sprayed (Godot rage_comp.get_chaotic_target, cover 1).
+	FShootCandidate Shot;
+	if (AActor* Chaotic = bRaging ? RageComponent->GetChaoticTarget() : nullptr)
+	{
+		Shot.Enemy = Chaotic;
+	}
+	else
+	{
+		Shot = FindShootTarget(DeltaTime);
+	}
 	AActor* Target = Shot.Enemy;
 	if (!Target)
 	{
@@ -1056,7 +1083,8 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		return false;
 	}
 
-	if (UsesAmmo())
+	const bool bRagingShot = IsRaging();
+	if (UsesAmmo() && !(bRagingShot && RageComponent->Config.bInfiniteAmmo))
 	{
 		CurrentClip--;
 	}
@@ -1077,7 +1105,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		return false;
 	}
 
-	ShootTimer = CurrentWeapon ? CurrentWeapon->FireRate : 0.65f;
+	ShootTimer = FMath::Max(0.08f, (CurrentWeapon ? CurrentWeapon->FireRate : 0.65f) * (bRagingShot ? RageComponent->Config.FireRateMultiplier : 1.f));
 
 	const float Dist = FVector::Dist2D(GetActorLocation(), Target->GetActorLocation());
 	const float DistM = Dist / 100.0f;
@@ -1120,7 +1148,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		// Godot _shoot_at_target: crit on luck (x2), elevation (+15 %), stance, cover and distance factors.
 		const float CritRoll = ForcedCritRollForTesting >= 0.f ? (ForcedCritRollForTesting >= 1.f ? 0.f : 1.f) : FMath::FRand();
 		ForcedCritRollForTesting = -1.f;
-		const bool bCrit = SquadFireRules::IsCrit(Luck, CritRoll);
+		const bool bCrit = SquadFireRules::IsCrit(Luck + (bRagingShot ? 30.f : 0.f), CritRoll); // rage: +30 luck
 		const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(
 			GetActorLocation().Z - GetSimpleCollisionHalfHeight(), Target->GetActorLocation().Z - Target->GetSimpleCollisionHalfHeight());
 		float DistanceMultiplier = 1.f;
@@ -1138,7 +1166,8 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		}
 
 		FDamageSpec Spec;
-		Spec.Amount = SquadFireRules::ComputeShotDamage(CurrentWeapon ? CurrentWeapon->BaseDamage : 18.0f, Stance, Cover, bCrit, Elevation, DistanceMultiplier);
+		Spec.Amount = SquadFireRules::ComputeShotDamage(CurrentWeapon ? CurrentWeapon->BaseDamage : 18.0f, Stance, Cover, bCrit, Elevation, DistanceMultiplier)
+			* (bRagingShot ? RageComponent->Config.DamageMultiplier : 1.f);
 		Spec.bIsCritical = bCrit;
 		Spec.DamageType = CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic;
 		Spec.ArmorPenetration = CurrentWeapon ? CurrentWeapon->ArmorPenetration : 0.20f;
@@ -1361,6 +1390,11 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 
 void AOperativeCharacter::SetManualPriorityTarget(AActor* Enemy)
 {
+	if (IsRaging())
+	{
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ЯРОСТИ! НЕ ПОДЧИНЯЕТСЯ!"), FLinearColor(1.f, 0.4f, 0.1f));
+		return;
+	}
 	ManualPriorityTarget = Enemy;
 	if (Enemy)
 	{
@@ -1408,7 +1442,7 @@ void AOperativeCharacter::NotifyWeaponFrozen()
 	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🥶 ОРУЖИЕ ЗАМЁРЗЛО! Нужен источник тепла!"), FLinearColor(0.4f, 0.85f, 1.f));
 }
 
-float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool bCrit, bool bBypassAvoidance)
+float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool bCrit, bool bBypassAvoidance, AActor* AttackerActor)
 {
 	if (!HealthComponent || !HealthComponent->IsAlive())
 	{
@@ -1430,5 +1464,10 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	HealthComponent->ApplyDirectHealthLoss(Final, Attacker);
 	UFloatingTextSubsystem::SpawnAboveOperative(this, bCrit ? FString::Printf(TEXT("💥 КРИТИЧЕСКИЙ УДАР! -%d"), FMath::FloorToInt(Final))
 		: FString::Printf(TEXT("-%d"), FMath::FloorToInt(Final)), bCrit ? FLinearColor(1.f, 0.25f, 0.1f) : FLinearColor(1.f, 0.3f, 0.3f));
+	// Godot rage_comp.on_incoming_hit(attacker_node, is_crit, final_incoming).
+	if (RageComponent && HealthComponent->IsAlive())
+	{
+		RageComponent->OnIncomingHit(AttackerActor, bCrit);
+	}
 	return Final;
 }

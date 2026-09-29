@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: rage (`URageComponent` on every operative, `RageRules`); `TakeHit(..., AttackerActor)`, `EOperativeOrderResult::Refused` (OrderMoveTo refuses while raging), `AOperativeCharacter::IsRaging`.
 - 2026-09-29 Claude: real-time squad fire (`SquadFireRules`, `AOperativeCharacter::FindShootTarget` / `EvaluateShotLine`, `ShootAtTarget(Target, Cover)`, `FireConfig`); `CanFireAtPriorityTarget` removed (EvaluateShotLine covers it).
 - 2026-09-29 Claude: floating combat texts (`UFloatingTextSubsystem`); `AOperativeCharacter::TakeHit` (enemy attacks on operatives no longer go through UHealthComponent::ApplyDamage — Gemini's enemy AI calls it now); `UTurnBasedCombatSubsystem::ApplyEnemyHit` / `ApplySquadHit`; `UHealthComponent` floats enemy numbers (owners tagged Enemy); `UColdSurvivalComponent::PostOperativeMessage` removed (floating texts instead).
 - 2026-09-29 Claude: Susanin rescue (`URecruitSubsystem`); additive: `EOperativeRole::Recruit`, `AOperativeCharacter::bRecruited` (unrecruited operatives do not register with the squad / shoot), `ACodexTacticsGameMode::SpawnOperative` / `RecruitSusanin`, `UGameFlowSubsystem::ApplyTimeDilation` public, `UWaveSubsystem::GetTotalWaveEnemies`, key 4.

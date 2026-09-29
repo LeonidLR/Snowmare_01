@@ -72,6 +72,8 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/movements/deployables/turret.gd`, `interactable.gd` generator damage / repair | `ATurretActor`, generator part of `AInteractableActor` | 5 | ✅ (enemies attacking objects → enemy AI; tracers → VFX) | `CodexTactics.TurretSmoke` |
 | `Scenes/movements/loot_crate.gd`, `Scenes/ui/inventory/loot_dialog.gd`, `main.gd` loot handlers | `ALootCrateActor`, `LootRules`, `ULootDialogWidget`, `UInteractionSubsystem` loot API | 5 | ✅ (consumable use → inventory drawer) | `CodexTactics.Loot.*`, `CodexTactics.LootSmoke` |
 | `Scenes/movements/quest_manager.gd`, `narrative_element.gd`, `dialogue_trigger.gd` | `UQuestSubsystem`, dialogue data | 5 | ⬜ | |
+| `Scripts/components/rage_component.gd` | `URageComponent`, `RageRules` | 4 | ✅ (aura ring later) | `CodexTactics.Characters.Rage.Rules`, RageSmoke |
+| `Scripts/components/panic_component.gd` | — | 4 | ⬜ (real-time panic disabled in Godot) | |
 | `player.gd` `_find_shoot_target`, `_shoot_at_target`, `get_elevation_advantage`, `is_target_in_dead_zone` | `SquadFireRules`, `AOperativeCharacter::FindShootTarget` / `ShootAtTarget` | 4 | ✅ (rage / panic / AI grenade later) | `CodexTactics.Combat.SquadFire.Rules`, SquadFireSmoke |
 | `player.gd` / `enemy_base.gd` / `mine.gd` `_spawn_floating_combat_text`, `_spawn_heal_feedback`, player `take_damage` | `UFloatingTextSubsystem`, HUD `DrawFloatingTexts`, `AOperativeCharacter::TakeHit` | 5 | ✅ (texts of unported features pending) | FloatingTextSmoke |
 | `Scenes/movements/recruit_susanin.gd`, `main.gd` Susanin rescue event | `URecruitSubsystem`, `EOperativeRole::Recruit`, `AOperativeCharacter::bRecruited` | 5 | ✅ | SusaninSmoke |

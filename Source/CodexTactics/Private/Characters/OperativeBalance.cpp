@@ -1,5 +1,6 @@
 #include "Characters/OperativeBalance.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/RageComponent.h"
 #include "Combat/HealthComponent.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Survival/ColdSurvivalComponent.h"
@@ -77,6 +78,12 @@ void OperativeBalance::Apply(const UGodotBalanceAsset& Config, AOperativeCharact
 		Rules.AimPenaltyMax = Config.GetNumber(TEXT("realtime_cold_aim_penalty_max"), Rules.AimPenaltyMax);
 	}
 	Operative.FireConfig = SquadFireRules::ConfigFromBalance(&Config);
+	if (Operative.RageComponent)
+	{
+		// Godot: the squad gets its own <role>_rage_* keys from main.gd; a recruit spawned later keeps the general ones.
+		Operative.RageComponent->Config = RageRules::ConfigFromBalance(&Config, Operative.SquadRole == EOperativeRole::Recruit ? FString()
+			: FString(Prefix).LeftChop(1));
+	}
 	Operative.MaxColdToLiftObjects = Config.GetNumber(TEXT("max_cold_to_lift_objects"), Operative.MaxColdToLiftObjects);
 	Operative.MinHealthFractionToLift = Config.GetNumber(TEXT("min_health_percent_to_lift"), Operative.MinHealthFractionToLift);
 }

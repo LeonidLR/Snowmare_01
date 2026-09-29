@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **129 automation tests, 36 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **130 automation tests, 37 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -79,6 +79,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `TurnBasedBarricadeSmoke` | turn-based: barricade footprint = Godot samples; the commander walks up, click picks it up, two 45° steps (target cells recomputed), click places it: new footprint, rotation, 2 AP |
 | `TurnBasedPushSmoke` | turn-based: the commander walks up to a barrel; click picks it up (3 target cells), cancel, panel «Бочка» picks it up, click on a cell pushes: barrel +1 cell, commander on its old cell, 2 AP |
 | `ExposedZonesSmoke [shot]` | turn-based with one hound; the squad passes 3 turns: warning (1), danger (2), breach of 1-2 hounds (non-elite pool), no second breach; `shot` (rendered, UnrealEditor.exe -game) saves `ExposedZones.png` at the danger state |
+| `RageSmoke` | Rage (Godot rage_component.gd): commander config 2 crits / 9 s; one crit no rage, the second from the same hound (forced roll) enters rage with «В ЯРОСТИ!» and the shout; orders refused «НЕ ПОДЧИНЯЕТСЯ»; in the fight the enemies in reach are sprayed without spending rounds; the calm line when it wears off |
 | `SquadFireSmoke` | Real-time squad fire (Godot _find_shoot_target / _shoot_at_target): prone behind a barricade blocked + text, crouched cover 0.8, standing cover 1; flank hound taken only after the standing 0.15 s delay; crouched crit = 2.5 x a standing plain shot + «КРИТ x2!» |
 | `FloatingTextSmoke` | Operative hit formula (Godot player.gd take_damage): forced dodge «УКЛОНЕНИЕ» costs nothing, crouched hit = 40 × 0.75 × (1 − fortitude × 1.5 %) with «-N», crit text, bypass hit ignores dodge / cuts; medkit «+N HP»; guard texts; brute armor number «🛡️ -N»; texts expire |
 | `SusaninSmoke` | Rescue on wave 1: Susanin appears 3 s into the wave at the SusaninSpawn point outside the squad (cold 85, civilian kit), narrative pause + camera + distress dialogue; closing it restores time / camera, HQ line and objective; an operative within 2.8 m opens the recruitment dialogue (Susanin faces him); accepting adds him as member 4 (key 4, cold 0, radio lines, wave objective); load toggles him out of / back into the squad |
@@ -352,7 +353,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   (pink tint via BodyColor — the user's BP decides the real look; Godot swaps the Explorer_Coat material). The spot is a
   TargetPoint tagged `SusaninSpawn` on the west side of the yard (Godot uses a hard-coded (-8.2, 18.0) in its own
   layout). The narrative pause uses the minimum world time dilation, restored with `UGameFlowSubsystem::ApplyTimeDilation`.
-  Panic / rage components (susanin_* stress keys) are not ported.
+  Rage uses the general keys (see Rage below); panic (susanin_* stress keys) is not ported.
   The Godot `dialogue_susanin_recruitment.tres` export is unused by Godot's code (it builds both dialogues inline) — same here.
 - Level waves without a level config still use Gemini's built-in queued waves (Godot's fallback spawns balance-driven
   counts at once: min_hounds_per_wave, base_wave_enemy_count, …) — port when a level ships without JSON waves.
@@ -363,7 +364,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   dodge / crit, misses, misfires, frozen / thawed weapon, frostbite, enemy numbers (type prefix, armor «🛡️», immunity,
   burn / bleed ticks), turn-based turret miss, mine armed / spotted / set-up / mishap, barricade cover, repairs, solo
   mode, guard, heal, Susanin, breach. Not wired (feature not ported): Alt + stance squad order «👥 ОТРЯД», Shift + click
-  «👁️ СЕКТОР ОБЗОРА», auto-cover behind a barricade (player.gd 2541), rage / panic / allegiance texts, crit / height
+  «👁️ СЕКТОР ОБЗОРА», auto-cover behind a barricade (player.gd 2541), panic / allegiance texts,
   enemy fear of fire, cutter texts, solo frost-crawl. Godot moved the weapon-frozen / frostbite lines
   from the feed to floating texts; UE now does the same (they no longer appear in the message feed).
 - **Parity fix:** real-time squad fire follows Godot player.gd (`SquadFireRules`, `AOperativeCharacter::FindShootTarget`):
@@ -371,8 +372,15 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   enemy (+0.8 m) — walls block, barricades block prone shooters and give crouched ones cover 0.8, another enemy in the
   way becomes the target; target memory with the stance switch delay / ratio from game_balance_config; damage = weapon
   x stance (1 / 1.25 / 1.6) x cover x crit (luck %, x2) x elevation (1.15) x the weapon's distance factor; cryo / fire
-  weapons chill / warm the shooter. Before, the nearest enemy in range was shot for flat weapon damage. Not ported: rage
-  (chaotic target, fire rate / damage), panic refusal, the AI grenade throw, reload_after_shots (user decision: 30 rounds).
+  weapons chill / warm the shooter. Before, the nearest enemy in range was shot for flat weapon damage. Not ported:
+  panic refusal, the AI grenade throw, reload_after_shots (user decision: 30 rounds).
+- Rage (`URageComponent`, `RageRules`; Godot rage_component.gd): crits per attacker (real-time 25 s memory), chance decays
+  with the component's lifetime like Godot's combat_time_elapsed, per-role keys (<role>_rage_*) for the squad, general
+  keys for Susanin (Godot re-applies only the general ones to a recruit spawned later). Raging: chaotic target (random
+  enemy within 25 m every 0.55 s), fire rate / damage multipliers, +30 luck, no ammo spent, reload paused, OrderMoveTo /
+  SetManualPriorityTarget refused. HUD badge «ЯРОСТЬ!»; the fiery aura ring under the feet is not ported.
+  movement_speed_multiplier is exported but unused in Godot — not applied. Panic: Godot's enable_realtime_panic is false
+  (a test pins it), so real-time panic does nothing in Godot — not ported; check its turn-based use before porting.
 - **Parity fix:** enemy attacks on operatives now use Godot player.gd take_damage (dodge luck × 0.4 %, stance defense,
   fortitude cut clamp(f × 1.5 %, 0, 50 %)); before, the enemy armor formula was used (no dodge / fortitude). Grenades /
   traps on the squad use the bypass path (max(1, amount)). Godot also drops a carried object on a hit — not ported.
@@ -400,8 +408,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Godot starts relocation directly when a relocatable object is clicked in the tactical pause / live combat
   (`main.gd` click branch "is_relocatable_obj"); UE always goes through the action menu. Port with the pause UI.
 - Deployable overhead labels (turret / generator HP and state texts) not ported (Godot Label3D).
-- Targeted shots: crouching behind a barricade does not apply Godot's 0.8 cover to the priority target (UE
-  `ShootAtTarget` has no cover factor yet); rage / panic refusal not ported (no rage / panic components). The barrel
+- Targeted shots: the priority target now gets the barricade cover / blocking of `EvaluateShotLine` and is refused
+  while raging (panic refusal: panic not ported). The barrel
   line «💥 Прицельный выстрел…» is posted only when the shot actually fires (Godot posts it even when frozen).
 - Save / load differences: a load resumes an active wave from its preparation (Godot only flips flags; neither saves
   enemies); «В главное меню» restarts the level with the start menu (Godot shows the menu over the running scene);
@@ -419,7 +427,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Real-time squad fire parity (`SquadFireRules` + SquadFireRulesTest, `FindShootTarget`, damage multipliers; SquadFireSmoke). Floating combat texts (`UFloatingTextSubsystem`, HUD `DrawFloatingTexts`; Godot _spawn_floating_combat_text / _spawn_heal_feedback) wired across combat, cold, mines, repairs, squad modes; operative hit formula `AOperativeCharacter::TakeHit` (Godot player.gd take_damage) for enemy attacks, grenades, traps and turn-based bites; turn-based / turret grid damage through the enemy's armor; headless checks (-ExecCmds) run without random wave events; FloatingTextSmoke, `HudShot floating`. Random wave events. Susanin rescue (Godot main.gd _check_susanin_rescue_event / _trigger_susanin_rescue_event, click branch "is_unrecruited", recruit_susanin.gd, save_manager.gd "susanin"): `URecruitSubsystem`, `EOperativeRole::Recruit`, `AOperativeCharacter::bRecruited`, game mode `SpawnOperative` / `RecruitSusanin`, key 4, HUD prompt, SusaninSpawn point; dialogue buttons widen for long finish labels; SusaninSmoke, `HudShot susanin`. Spawn point type filter and dynamic flank breach (Godot enemy_spawn_point.gd, main.gd _get_enemy_spawn_pos, _check_dynamic_flank_spawners, _pending_random_events): `AEnemySpawnPoint::AllowedEnemyType` / `bIsDynamic` + breach fields, random event waves, breach pack + camera focus, deferral past turn-based; L_MovementTest points get the Godot lane names / filters; `ATacticalCameraPawn::GetFollowTarget`; FlankBreachSmoke |
+| (this) | Rage (`URageComponent`, `RageRules` + RageRulesTest; Godot rage_component.gd and its player.gd hooks): two crits from one enemy, chaotic fire, refused orders, HUD badge; `AOperativeCharacter::TakeHit` takes the attacker; `EOperativeOrderResult::Refused`; RageSmoke, `HudShot rage` |
+| `9a6bd37` | Real-time squad fire parity (`SquadFireRules` + SquadFireRulesTest, `FindShootTarget`, damage multipliers; SquadFireSmoke). Floating combat texts (`UFloatingTextSubsystem`, HUD `DrawFloatingTexts`; Godot _spawn_floating_combat_text / _spawn_heal_feedback) wired across combat, cold, mines, repairs, squad modes; operative hit formula `AOperativeCharacter::TakeHit` (Godot player.gd take_damage) for enemy attacks, grenades, traps and turn-based bites; turn-based / turret grid damage through the enemy's armor; headless checks (-ExecCmds) run without random wave events; FloatingTextSmoke, `HudShot floating`. Random wave events. Susanin rescue (Godot main.gd _check_susanin_rescue_event / _trigger_susanin_rescue_event, click branch "is_unrecruited", recruit_susanin.gd, save_manager.gd "susanin"): `URecruitSubsystem`, `EOperativeRole::Recruit`, `AOperativeCharacter::bRecruited`, game mode `SpawnOperative` / `RecruitSusanin`, key 4, HUD prompt, SusaninSpawn point; dialogue buttons widen for long finish labels; SusaninSmoke, `HudShot susanin`. Spawn point type filter and dynamic flank breach (Godot enemy_spawn_point.gd, main.gd _get_enemy_spawn_pos, _check_dynamic_flank_spawners, _pending_random_events): `AEnemySpawnPoint::AllowedEnemyType` / `bIsDynamic` + breach fields, random event waves, breach pack + camera focus, deferral past turn-based; L_MovementTest points get the Godot lane names / filters; `ATacticalCameraPawn::GetFollowTarget`; FlankBreachSmoke |
 | `e66e2fb` | Radius rings (Godot main.gd radius_ring, _update_relocate_radius_ring, _set_ghost_material_valid): 12 m green order ring in the tactical pause, worker radius while placing in the pause (cyan relocation / green set-up / red outside); `URelocationSubsystem::GetPlacingWorker` / `IsGhostValid`, public `GetRadius` / `GetOrigin`; RadiusRingSmoke, `HudShot ring` |
 | `d220bc2` | Save / load (Godot save_manager.gd: JSON slots in Saved/SaveGames with the Godot keys; squad, game state, quest chain, crates), F5 quicksave, Esc pause menu (Godot pause_menu_dialog.gd) and the save / load dialog (save_load_dialog.gd: suggested name, cards, overwrite confirmation, load, delete); SaveGameRulesTest, SaveLoadSmoke, PauseMenuSmoke, `HudShot pause / saves` |
 | `2528c03` | Item hand-over («ПЕРЕД»; Godot transfer_dialog.gd + main.gd transfer mode): dialog, purple ring cursor, click on a mate / within 2.2 m, engineering items up to the mate's max, provisions, ammo packs; TransferRulesTest, TransferSmoke, `HudShot transfer` |

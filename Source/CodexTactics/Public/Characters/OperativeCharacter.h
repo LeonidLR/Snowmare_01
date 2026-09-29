@@ -71,7 +71,9 @@ enum class EOperativeOrderResult : uint8
 	/** No AI controller possesses the operative. */
 	NoController,
 	/** No navigable path to the destination. */
-	Unreachable
+	Unreachable,
+	/** Raging: player orders are ignored (Godot set_target «В ЯРОСТИ! НЕ ПОДЧИНЯЕТСЯ!»). */
+	Refused
 };
 
 /** A target the operative can shoot now (Godot _find_shoot_target result). */
@@ -335,6 +337,14 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	TObjectPtr<class UColdSurvivalComponent> ColdSurvival;
 
+	/** Rage after repeated crits from one enemy (Godot RageComponent). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
+	TObjectPtr<class URageComponent> RageComponent;
+
+	/** Raging now (orders refused, chaotic fire). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
+	bool IsRaging() const;
+
 	/** Speed multiplier of the current cold tier (Godot speed_multiplier 1 / 0.7 / 0.45 / 0.25). */
 	void SetColdSpeedMultiplier(float Multiplier);
 
@@ -416,7 +426,7 @@ public:
 	 * on the squad) skips both and takes max(1, Amount). Floating «💨 УКЛОНЕНИЕ!», «-N» or «💥 КРИТИЧЕСКИЙ УДАР! -N».
 	 * Returns the health taken.
 	 */
-	float TakeHit(float Amount, const FString& Attacker, bool bCrit = false, bool bBypassAvoidance = false);
+	float TakeHit(float Amount, const FString& Attacker, bool bCrit = false, bool bBypassAvoidance = false, AActor* AttackerActor = nullptr);
 
 	/** Forces the next TakeHit dodge roll (smokes): 1 dodges, 0 never. Negative = random. */
 	UPROPERTY(Transient)

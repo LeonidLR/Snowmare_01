@@ -599,6 +599,16 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 		const bool bLeader = Member == Squad->GetLeader();
 		DrawRect(PanelColor, Screen.X - W * 0.5f - 4.f, Screen.Y - 2.f, W + 8.f, H + 4.f);
 		DrawText(Label, bLeader ? SpeakerColor : TextColor, Screen.X - W * 0.5f, Screen.Y, Font);
+		if (Member->IsRaging())
+		{
+			// Godot RageBadge «🔥 ЯРОСТЬ!» above the head.
+			const FString Badge = StripUnsupportedGlyphs(TEXT("🔥 ЯРОСТЬ!"));
+			float BW = 0.f;
+			float BH = 0.f;
+			Canvas->StrLen(Font, Badge, BW, BH);
+			DrawRect(PanelColor, Screen.X - BW * 0.5f - 4.f, Screen.Y - BH - 8.f, BW + 8.f, BH + 4.f);
+			DrawText(Badge, FLinearColor(1.f, 0.35f, 0.05f), Screen.X - BW * 0.5f, Screen.Y - BH - 6.f, Font);
+		}
 	}
 
 	// Godot recruit_susanin.gd OverheadPrompt: «[Клик] Поговорить», blue «[Клик] Подойти и спасти» while freezing.

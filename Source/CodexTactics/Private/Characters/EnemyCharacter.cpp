@@ -305,7 +305,7 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	// Godot _attack_target -> player.gd take_damage (dodge, stance, fortitude) for operatives.
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Target))
 	{
-		Operative->TakeHit(FinalDamage, EnemyDisplayName, bIsCrit);
+		Operative->TakeHit(FinalDamage, EnemyDisplayName, bIsCrit, false, this);
 	}
 	else if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 	{
