@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first).
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -22,6 +22,7 @@
 #include "Combat/WaveSubsystem.h"
 #include "EngineUtils.h"
 #include "Containers/Ticker.h"
+#include "Debug/SmokeUtils.h"
 #include "GameFramework/WorldSettings.h"
 #include "CodexTactics.h"
 #include "Engine/World.h"
@@ -154,6 +155,50 @@ namespace HudShot
 					Grenades->StartAim(Lead);
 					Grenades->UpdateAim(Lead->GetActorLocation() + Lead->GetActorForwardVector() * 700.f);
 				}
+			}), 3.5f, false);
+		}
+		if (Args.Contains(TEXT("ring")))
+		{
+			// Tactical pause + barricade placement: the leader's radius ring (the pause slows the world: shoot on real time).
+			TWeakObjectPtr<UWorld> RingWorld(World);
+			FTimerHandle RingHandle;
+			World->GetTimerManager().SetTimer(RingHandle, FTimerDelegate::CreateLambda([RingWorld]()
+			{
+				USquadSubsystem* Squad = RingWorld.IsValid() ? RingWorld->GetSubsystem<USquadSubsystem>() : nullptr;
+				AOperativeCharacter* Lead = Squad ? Squad->GetLeader() : nullptr;
+				if (!Lead)
+				{
+					return;
+				}
+				UGameFlowSubsystem* Flow = RingWorld->GetSubsystem<UGameFlowSubsystem>();
+				Flow->TriggerCombatZone();
+				Flow->FinishCutscene();
+				Flow->FinishPreparation();
+				for (TActorIterator<AEnemyCharacter> It(RingWorld.Get()); It; ++It)
+				{
+					It->CustomTimeDilation = 0.f; // killing the wave would end the fight (and the pause)
+				}
+				Flow->ToggleTacticalPause();
+				URelocationSubsystem* Relocation = RingWorld->GetSubsystem<URelocationSubsystem>();
+				Lead->BarricadesCount = FMath::Max(Lead->BarricadesCount, 1);
+				Relocation->StartDeployPlacement(EDeployableType::Barricade, Lead);
+				const FVector ToFloor = (SmokeUtils::LevelPoint(RingWorld.Get(), FVector::ZeroVector) - Lead->GetActorLocation()).GetSafeNormal2D();
+				Relocation->UpdatePreview(Lead->GetActorLocation() + (ToFloor.IsNearlyZero() ? Lead->GetActorForwardVector() : ToFloor) * 400.f);
+				TSharedRef<int32> Frames = MakeShared<int32>(0);
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Frames](float)
+				{
+					++(*Frames);
+					if (*Frames == 10)
+					{
+						FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / TEXT("HudShot.png"), true, false);
+					}
+					if (*Frames >= 40)
+					{
+						FPlatformMisc::RequestExit(false, TEXT("HudShot"));
+						return false;
+					}
+					return true;
+				}), 0.05f);
 			}), 3.5f, false);
 		}
 		if (Args.Contains(TEXT("pause")) || Args.Contains(TEXT("saves")))

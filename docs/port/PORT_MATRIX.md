@@ -41,7 +41,8 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/components/cold_animation_controller.gd` | AnimBP layer | 6 | ⬜ | |
 | `Scripts/components/locomotion_controller.gd`, `Scripts/locomotion_v2/**` | AnimBP + `UOperativeAnimInstance` | 6 | ⬜ | |
 | `Scripts/events/event_bus.gd` | `UEventBusSubsystem` | 3 | ⬜ | |
-| `Scripts/managers/save_manager.gd` | `USaveGame` + `USaveSubsystem` | 5 | ⬜ | |
+| `Scripts/managers/save_manager.gd` | `USaveGameSubsystem` (JSON, Godot keys) + `SaveGameRules` | 5 | ✅ | `CodexTactics.Core.SaveGameRules.*`, SaveLoadSmoke, PauseMenuSmoke |
+| `main.gd` radius_ring | `URadiusRingSubsystem` + `ARadiusRingActor` | 5 | ✅ | RadiusRingSmoke |
 | `Scenes/movements/player.gd` — movement: click/double-click orders, speeds, stances, sprint rules | `AOperativeCharacter`, `OperativeMovementRules`, `AOperativeAIController` (NavMesh + Detour Crowd), `ACodexTacticsPlayerController` | 3 | ✅ (vault, phasing, box select, group orders, idle roam, pause orders, panic/rage refusal → later) | `CodexTactics.Movement.*` (5), `CodexTactics.MovementSmoke` |
 | `Scenes/movements/player.gd` — formation, `follower.gd` | `USquadSubsystem`, `SquadFormation` (slots, column, swap, wander, catch-up) | 3 | ✅ | `CodexTactics.Formation.*` (8), `CodexTactics.MovementSmoke` |
 | `main.gd` `_select_squad_member_by_index`, stance keys | `ACodexTacticsPlayerController` (1–3, Z/C/X, Alt = squad) | 3 | ✅ | manual |

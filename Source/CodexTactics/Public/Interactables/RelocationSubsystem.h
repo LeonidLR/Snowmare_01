@@ -50,6 +50,16 @@ public:
 	EDeployableType GetPlacingType() const { return PlacingType.Get(EDeployableType::Turret); }
 	float GetPlacingYaw() const { return PlacingYaw; }
 
+	/** Operative placing the object / deployable (radius ring, Godot relocate_worker). */
+	AOperativeCharacter* GetPlacingWorker() const { return PlacingWorker.Get(); }
+	/** The ghost stood on a valid spot at the last preview update (ring colour, Godot _set_ghost_material_valid). */
+	bool IsGhostValid() const { return bGhostValid; }
+
+	/** Placement radius of Worker now (tactical pause 12 m, else 15 m; Godot _get_relocate_radius_for_worker). */
+	float GetRadius(const AOperativeCharacter& Worker) const;
+	/** Where the radius is measured from (the spot at the start of the pause; Godot _get_relocate_origin_for_worker). */
+	FVector GetOrigin(const AOperativeCharacter& Worker) const;
+
 	/** F key: start setting up an item from Leader's supply, or switch the type while placing. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Relocation")
 	void HandleDeployKey(AOperativeCharacter* Leader);
@@ -153,8 +163,7 @@ private:
 	TArray<FDeployTask> DeployTasks;
 	TArray<FDeployTask> PlannedDeploys;
 	bool CheckLift(const AOperativeCharacter& Worker, const AInteractableActor* Object) const;
-	float GetRadius(const AOperativeCharacter& Worker) const;
-	FVector GetOrigin(const AOperativeCharacter& Worker) const;
+	bool bGhostValid = true;
 	void Post(const FText& Speaker, const FText& Text) const;
 
 	TWeakObjectPtr<AInteractableActor> PlacingObject;

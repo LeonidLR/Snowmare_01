@@ -441,7 +441,8 @@ void URelocationSubsystem::UpdatePreview(const FVector& GroundPoint)
 		// Godot: validity only matters in the pause (tactical radius); a fixed spot is always shown valid.
 		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 		const bool bPause = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
-		Ghost->SetValid(DeployStage == 2 || !bPause || RelocationRules::IsWithinRadius(GetOrigin(*DeployWorker), Point, GetRadius(*DeployWorker)));
+		bGhostValid = DeployStage == 2 || !bPause || RelocationRules::IsWithinRadius(GetOrigin(*DeployWorker), Point, GetRadius(*DeployWorker));
+		Ghost->SetValid(bGhostValid);
 		return;
 	}
 	const AInteractableActor* Object = PlacingObject.Get();
@@ -451,7 +452,8 @@ void URelocationSubsystem::UpdatePreview(const FVector& GroundPoint)
 		return;
 	}
 	Ghost->SetActorLocationAndRotation(FVector(GroundPoint.X, GroundPoint.Y, Object->GetActorLocation().Z), FRotator(0.f, PlacingYaw, 0.f));
-	Ghost->SetValid(RelocationRules::IsWithinRadius(GetOrigin(*Worker), GroundPoint, GetRadius(*Worker)));
+	bGhostValid = RelocationRules::IsWithinRadius(GetOrigin(*Worker), GroundPoint, GetRadius(*Worker));
+	Ghost->SetValid(bGhostValid);
 }
 
 void URelocationSubsystem::RotatePreview(int32 Steps)

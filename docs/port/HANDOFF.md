@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **128 automation tests, 31 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **128 automation tests, 32 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -68,6 +68,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `ActionBarSmoke` | action bar stance slot cycles the squad, «ПЕР» pick mode on / off, squad slot 2 selects the engineer |
 | `BannersSmoke` | cutscene card + Space skip, squad warm / healed for the preparation, preparation / wave / pause banner texts |
 | `SaveLoadSmoke` | (Saved/SmokeSaves) known squad / quest / crate state saved to «Леонид_01», changed, loaded back (health, cold, position, items, pistol clip, guard, quest chain, looted crate); F5 quicksave; slot list, metadata, next name, delete |
+| `RadiusRingSmoke` | Ring hidden outside the pause; tactical pause: green 12 m order ring; barricade set-up in the pause: worker radius green inside / red outside; barrel relocation: cyan; released pause hides it |
 | `PauseMenuSmoke` | Esc: pause menu (world paused, «Загрузить» off without saves); save dialog (suggested name, card added, overwrite confirmation, Esc closes it only), back to the menu, load closes everything and restores the squad, delete, Esc closes the menu |
 | `TransferSmoke` | «ПЕРЕД» dialog (title, M16 60, hidden plasma; the drawer closes it); medkit: hand-over mode with the ring, click on himself refused, click on the engineer hands it over; M16 pack of 30 by a click near the engineer; cancel hides the ring |
 | `InventorySmoke` | «ИНВ» opens the drawer (title, lines; the weapon selector closes it); H medkit +80 HP, drawer canned food -25 cold; drawer turret with none on the commander: a squad mate hands one over, placement starts |
@@ -283,7 +284,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 4. ~~Ctrl + click targeted shots~~ — done (see §10).
 5. UI shell from REFERENCE_PLAYTHROUGH: ~~objective banner, mission failed + Ctrl + X, start menu~~ (done, §10);
    ~~dialogue window, bottom action bar, banners, cutscene card~~ (done); remaining UI: ~~inventory drawer~~ (done: `UInventoryDrawerWidget`, H / J / K / L, `UsePersonalItem`), ~~transfer~~ (done: `UTransferDialogWidget`, `USquadTransferSubsystem`, `TransferRules`),
-   ~~guard~~ (done: T / «ОБОР», `USquadSubsystem::ToggleGuard`, `AOperativeCharacter::bGuarding`), ~~weapon selector~~ (done), ~~pause menu / save-load~~ (done: `UPauseMenuWidget`, `USaveLoadDialogWidget`, `USaveGameSubsystem`, F5), radius rings (action bar slots are placeholders).
+   ~~guard~~ (done: T / «ОБОР», `USquadSubsystem::ToggleGuard`, `AOperativeCharacter::bGuarding`), ~~weapon selector~~ (done), ~~pause menu / save-load~~ (done: `UPauseMenuWidget`, `USaveLoadDialogWidget`, `USaveGameSubsystem`, F5), ~~radius rings~~ (done: `URadiusRingSubsystem` + `ARadiusRingActor`, M_CombatFeedback segments). §8.5 is complete; next: §9 gaps.
 6. Turn-based combat manager on the Gorky grid (Godot `Scripts/tactics/turn_based_combat_manager.gd`).
    Done: `GorkyLineOfSight`, `TurnBasedRules`, `UTurnBasedCombatSubsystem` + overlay + controller input (see §4).
    Exposed zones done (`FExposedZones` pure rules + `UpdateExposedZones` at the end of the squad phase, overlay
@@ -383,7 +384,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Save / load (Godot save_manager.gd: JSON slots in Saved/SaveGames with the Godot keys; squad, game state, quest chain, crates), F5 quicksave, Esc pause menu (Godot pause_menu_dialog.gd) and the save / load dialog (save_load_dialog.gd: suggested name, cards, overwrite confirmation, load, delete); SaveGameRulesTest, SaveLoadSmoke, PauseMenuSmoke, `HudShot pause / saves` |
+| (this) | Radius rings (Godot main.gd radius_ring, _update_relocate_radius_ring, _set_ghost_material_valid): 12 m green order ring in the tactical pause, worker radius while placing in the pause (cyan relocation / green set-up / red outside); `URelocationSubsystem::GetPlacingWorker` / `IsGhostValid`, public `GetRadius` / `GetOrigin`; RadiusRingSmoke, `HudShot ring` |
+| `d220bc2` | Save / load (Godot save_manager.gd: JSON slots in Saved/SaveGames with the Godot keys; squad, game state, quest chain, crates), F5 quicksave, Esc pause menu (Godot pause_menu_dialog.gd) and the save / load dialog (save_load_dialog.gd: suggested name, cards, overwrite confirmation, load, delete); SaveGameRulesTest, SaveLoadSmoke, PauseMenuSmoke, `HudShot pause / saves` |
 | `2528c03` | Item hand-over («ПЕРЕД»; Godot transfer_dialog.gd + main.gd transfer mode): dialog, purple ring cursor, click on a mate / within 2.2 m, engineering items up to the mate's max, provisions, ammo packs; TransferRulesTest, TransferSmoke, `HudShot transfer` |
 | `c44c273` | Personal inventory drawer («ИНВ»; Godot inventory_drawer.gd) with provisions (H / J / K / L, player.gd heal_with_item) and set-up from the drawer (_start_placement_for_type with hand-over); PersonalItemTest, InventorySmoke, `HudShot inventory` |
 | `72d23ef` | Guard mode (Godot toggle_soldier_guard): T / action bar «ОБОР» / «ЗАФИК», guards leave the formation and hold their spot; GuardSmoke |
