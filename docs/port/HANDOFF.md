@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **131 automation tests, 39 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **132 automation tests, 40 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -79,6 +79,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `TurnBasedBarricadeSmoke` | turn-based: barricade footprint = Godot samples; the commander walks up, click picks it up, two 45° steps (target cells recomputed), click places it: new footprint, rotation, 2 AP |
 | `TurnBasedPushSmoke` | turn-based: the commander walks up to a barrel; click picks it up (3 target cells), cancel, panel «Бочка» picks it up, click on a cell pushes: barrel +1 cell, commander on its old cell, 2 AP |
 | `ExposedZonesSmoke [shot]` | turn-based with one hound; the squad passes 3 turns: warning (1), danger (2), breach of 1-2 hounds (non-elite pool), no second breach; `shot` (rendered, UnrealEditor.exe -game) saves `ExposedZones.png` at the danger state |
+| `EnemyAISmoke` | Enemy AI (Godot enemy_base.gd / enemy_frost_*.gd): brute affinities (kinetic 0.25, energy 2); frost halves the speed; a hound 3 m from a burning barrel flees («СТРАХ ОГНЯ»); a hound picks a close turret (level generator set aside — it outranks everything for small enemies); a brute smashes a barricade in its way; a spitter 10 m out shoots the squad |
 | `AIGrenadeSmoke` | A pack of three hounds 9 m ahead in the fight draws autonomous grenades with a radio callout; an empty M16 switches to the pistol, an empty pistol to the knife |
 | `SquadControlSmoke` | Wounded below 50 % (no sprint, slower, speed follows the health), healed sprints again; Alt + C crouches the squad («👥 ОТРЯД: ПРИСЕВ», order line); Shift + click faces the point; Alt + V refused while someone moves; an operative arriving within 2.2 m of a barricade in combat crouches in cover («В УКРЫТИИ») |
 | `RageSmoke` | Rage (Godot rage_component.gd): commander config 2 crits / 9 s; one crit no rage, the second from the same hound (forced roll) enters rage with «В ЯРОСТИ!» and the shout; orders refused «НЕ ПОДЧИНЯЕТСЯ»; in the fight the enemies in reach are sprayed without spending rounds; the calm line when it wears off |
@@ -286,8 +287,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 ## 8. Next steps (in order)
 
 1. ~~Loot crates~~ — done (see §10).
-2. ~~Turrets~~, 3. ~~generator damage / repair~~ — done (see §10). Enemies do not attack turrets / barricades /
-   the generator yet (Gemini's enemy AI targets operatives only) — add with the enemy AI pass.
+2. ~~Turrets~~, 3. ~~generator damage / repair~~ — done (see §10). Enemies attack turrets / barricades / the generator
+   since the enemy AI pass (see §9 Enemy AI).
 4. ~~Ctrl + click targeted shots~~ — done (see §10).
 5. UI shell from REFERENCE_PLAYTHROUGH: ~~objective banner, mission failed + Ctrl + X, start menu~~ (done, §10);
    ~~dialogue window, bottom action bar, banners, cutscene card~~ (done); remaining UI: ~~inventory drawer~~ (done: `UInventoryDrawerWidget`, H / J / K / L, `UsePersonalItem`), ~~transfer~~ (done: `UTransferDialogWidget`, `USquadTransferSubsystem`, `TransferRules`),
@@ -404,7 +405,21 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Overhead labels (`FOverheadLabel`, `AEnemyCharacter` / `AInteractableActor::GetOverheadLabel`, HUD `DrawWorldLabels`;
   Godot Label3D): enemies (armor-tier square instead of 🟢🟡🔴, name, statuses as words — ГОРИТ / ЛЁД / ОГЛУШЁН / БРОНЯ-,
   the font has no emoji — HP; hidden for stasis enemies outside a turn-based fight), barricade, turret, generator with
-  the Godot texts / colours. The enemy fire-fear flag (😱🔥) comes with the enemy AI pass.
+  the Godot texts / colours.
+- **Enemy AI (parity pass; Gemini's AEnemyCharacter::Tick replaced):** `EnemyAIRules` + `AEnemyCharacter::Tick` / `FindTarget`
+  / `TickSpitter` (Godot enemy_base.gd _physics_process / _process_enemy_behavior / _find_closest_squad_member /
+  _find_blocking_barricade / _find_nearest_active_fire_source, enemy_frost_spitter.gd, enemy_frost_brute.gd):
+  per-type affinities and base armor (brute kinetic 0.25!, spitter 0.6, hound melee 1.3 …); stagger stops, frost halves
+  the speed; hounds / cutters / frostbitten flee burning barrels and active heat sources within 6 m (x1.2 speed,
+  «СТРАХ ОГНЯ»); target weights — small enemies: generator 0.4 x, turret 0.5 x, squad 1 x (so hounds rush the generator
+  from the start of a wave, like Godot: the generator is always in the "generators" group); large: squad 0.7 x, turrets
+  0.85 x (0.6 x after a turret hit) and any turret within 10 m; a barricade / turret within 2.2 m towards the target is
+  smashed (brutes double on barricades; an enemy blow sets off a trap); melee needs range and <= 1.2 m height difference;
+  spitters pick targets by 100 - distance (+50 elevated), approach / back off around 12 m, shoot only with a line of
+  fire (prone behind a barricade hidden, crouched cover 0.65), red tracer. Movement stays on the navmesh (UE AI
+  MoveTo) — Godot's ramp routing, wall-slide / stuck avoidance and flocking separation are covered by navigation /
+  crowd avoidance. Not ported: the cutter's flying / dive behaviour (enemy_cutter.gd, 634 lines) and the cryo drone
+  (UE maps them to hound / spitter stats), frostbitten push-back, attack animation locks (is_attacking), damage flash.
 - Panic (Godot panic_component.gd) is inert in Godot (enable_realtime_panic = false; turn-based never uses it) and the
   allegiance component is only used by tests — neither is ported.
 - Barricade contact damage (spikes / fire / cryo / energy) not ported (Godot default is NONE).
@@ -443,7 +458,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Overhead labels of enemies, barricades, turrets and the generator (Godot overhead Label3D: enemy_base.gd, barricade.gd, turret.gd, interactable.gd); `HudShot labels` |
+| (this) | Enemy AI parity (Godot enemy_base.gd, enemy_frost_spitter.gd, enemy_frost_brute.gd): affinities / armor per type, stagger / frost, fire fear, target weights (generator / turrets / squad), obstacle smashing, spitter ranged behaviour; `EnemyAIRules` + EnemyAIRulesTest, EnemyAISmoke |
+| `6569254` | Overhead labels of enemies, barricades, turrets and the generator (Godot overhead Label3D: enemy_base.gd, barricade.gd, turret.gd, interactable.gd); `HudShot labels` |
 | `b049423` | Autonomous grenades and the empty-weapon switch (Godot player.gd _evaluate_ai_grenade_opportunity / execute_ai_grenade_throw / _auto_switch_on_empty): `AIGrenadeRules` + AIGrenadeRulesTest, `TryAIGrenadeThrow`, `AutoSwitchOnEmpty`; AIGrenadeSmoke |
 | `96d90e1` | Squad control parity (Godot player.gd is_wounded / is_behind_barricade / _on_movement_destination_reached / set_facing_point, main.gd _set_entire_squad_stance and the ground-click rules): health-driven wounded state, Alt squad stance, Shift facing, auto-cover, real-time move refusal, sprint lines, slot 4 «ИВАН»; SquadControlSmoke |
 | `0fe6e46` | Rage (`URageComponent`, `RageRules` + RageRulesTest; Godot rage_component.gd and its player.gd hooks): two crits from one enemy, chaotic fire, refused orders, HUD badge; `AOperativeCharacter::TakeHit` takes the attacker; `EOperativeOrderResult::Refused`; RageSmoke, `HudShot rage` |

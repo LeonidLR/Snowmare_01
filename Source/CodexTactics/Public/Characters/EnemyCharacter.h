@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Characters/EnemyAIRules.h"
 #include "GameFramework/Character.h"
 #include "Data/CombatTypes.h"
 #include "EnemyCharacter.generated.h"
@@ -85,6 +86,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	AActor* FindClosestSquadMember() const;
 
+	/**
+	 * Godot _find_closest_squad_member: operatives, turrets and the generator weighted by EnemyAIRules::SelectTarget
+	 * (small enemies go for the generator / turrets first, large ones for the squad).
+	 */
+	AActor* FindTarget() const;
+
+	/** Godot is_fleeing_fire: running from a burning barrel / warm zone. */
+	bool IsFleeingFire() const { return bFleeingFire; }
+
+	/** Current victim (operative, turret or generator). */
+	AActor* GetCurrentTarget() const { return CurrentTarget.Get(); }
+
+	/** Shared enemy tuning (Godot enemy_* / spitter_preferred_range keys). */
+	FEnemyAIConfig AIConfig;
+
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Enemy")
 	FOnEnemyDiedDynamic OnEnemyDied;
 
@@ -128,6 +144,27 @@ protected:
 	bool bIsDying = false;
 
 	float AttackTimer = 0.0f;
+
+	/** Walk speed before frost / fear factors (archetype, balance, wave modifiers). */
+	float BaseWalkSpeed = 300.f;
+	bool bFleeingFire = false;
+	/** Godot last_attacker_source (a turret hit pulls large enemies to turrets). */
+	FString LastAttackerSource;
+	TWeakObjectPtr<AActor> CurrentTarget;
+
+	/** Nearest burning barrel / active heat source within the fear radius (Godot _find_nearest_active_fire_source). */
+	bool FindNearestFire(FVector& OutFire) const;
+	/** Barricade / turret in the way within 2.2 m (Godot _find_blocking_barricade). */
+	AActor* FindBlockingObstacle(const AActor* Target) const;
+	/** Godot _attack_barricade (brutes hit twice as hard) and melee on turrets / the generator. */
+	void AttackObject(AActor* Object);
+	/** Godot enemy_frost_spitter.gd _process_enemy_behavior. */
+	void TickSpitter(float DeltaTime);
+	/** Godot position of a target: operatives at their centre, objects at their base. */
+	static FVector GodotPosition(const AActor* Actor);
+
+	UFUNCTION()
+	void HandleDamaged(const FDamageSpec& Spec, float FinalDamage);
 
 	UFUNCTION()
 	void HandleDied(AActor* Victim, const FString& AttackerSource);

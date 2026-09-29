@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: **enemy AI parity** — `AEnemyCharacter::Tick` rewritten after Godot enemy_base.gd (new: `FindTarget`, `TickSpitter`, `AttackObject`, `AIConfig`, `EnemyAIRules`); per-type affinities / armor now applied in ApplyArchetypeDefaults. Gemini: enemy behaviour changes go through `EnemyAIRules` (pure, tested).
 - 2026-09-29 Claude: overhead labels (`FOverheadLabel`, virtual `AInteractableActor::GetOverheadLabel` + barricade / turret overrides, `AEnemyCharacter::GetOverheadLabel`, HUD `DrawWorldLabels`).
 - 2026-09-29 Claude: autonomous grenades (`AIGrenadeRules`, `AOperativeCharacter::TryAIGrenadeThrow` / `AIGrenadeConfig` / `AIGrenadeCooldown`) and `AutoSwitchOnEmpty` in ProcessCombatShooting.
 - 2026-09-29 Claude: squad control; `AOperativeCharacter::IsWounded` (health-driven; use it instead of `bWounded`), `IsBehindBarricade` / `IsInBarricadeCover`, `SetFacingPoint`, `HandleHealthChanged`; `FOperativeMovementConfig::WoundedHealthThreshold`; controller `SetEntireSquadStance`; `UHealthComponent::ApplyDirectHealthLoss` now broadcasts OnHealthChanged.

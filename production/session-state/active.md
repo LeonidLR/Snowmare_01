@@ -15,7 +15,7 @@ Task: next = remaining gaps (HANDOFF §9)
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-Overhead labels commit: 131 automation tests, 39 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
+Enemy AI commit: 132 automation tests, 40 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)

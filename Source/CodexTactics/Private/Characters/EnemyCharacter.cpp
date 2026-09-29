@@ -1,6 +1,14 @@
 #include "Characters/EnemyCharacter.h"
 #include "UI/OverheadLabel.h"
 #include "Characters/EnemyAIController.h"
+#include "UI/FloatingTextSubsystem.h"
+#include "Interactables/TurretActor.h"
+#include "Interactables/HeatSourceComponent.h"
+#include "Interactables/BarricadeActor.h"
+#include "Interactables/BarrelActor.h"
+#include "EngineUtils.h"
+#include "Combat/CombatFeedbackSubsystem.h"
+#include "AIController.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -54,6 +62,7 @@ void AEnemyCharacter::BeginPlay()
 	if (HealthComponent)
 	{
 		HealthComponent->OnDiedNative.AddUObject(this, &AEnemyCharacter::HandleDied);
+		HealthComponent->OnDamaged.AddDynamic(this, &AEnemyCharacter::HandleDamaged);
 	}
 
 	ApplyArchetypeDefaults();
@@ -154,14 +163,20 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		}
 	}
 
+	// Godot per-type elemental_affinities / base_armor_reduction (enemy_frost_*.gd, enemy_cutter.gd, enemy_cryo_drone.gd).
+	HealthComponent->ElementalAffinities = EnemyAIRules::GetAffinities(Archetype);
+	HealthComponent->SetBaseArmorReduction(EnemyAIRules::GetBaseArmor(Archetype));
+
 	// Godot enemies re-read their stats from game_balance_config.tres (imported DA_GameBalanceConfig).
 	if (const ACodexTacticsGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>() : nullptr)
 	{
 		if (const UGodotBalanceAsset* Config = GameMode->GameBalanceConfig.LoadSynchronous())
 		{
 			ApplyBalance(*Config);
+			AIConfig = EnemyAIRules::ConfigFromBalance(Config);
 		}
 	}
+	BaseWalkSpeed = GetCharacterMovement()->MaxWalkSpeed;
 }
 
 void AEnemyCharacter::ApplyWaveModifiers(float HpMult, float DamageMult, float SpeedMult, float CustomHealth)
@@ -170,6 +185,7 @@ void AEnemyCharacter::ApplyWaveModifiers(float HpMult, float DamageMult, float S
 	HealthComponent->SetMaxHealth(BaseHealth * HpMult, /*bResetCurrent*/ true);
 	AttackDamage *= DamageMult;
 	GetCharacterMovement()->MaxWalkSpeed *= SpeedMult;
+	BaseWalkSpeed = GetCharacterMovement()->MaxWalkSpeed;
 }
 
 void AEnemyCharacter::ApplyBalance(const UGodotBalanceAsset& Config)
@@ -207,46 +223,350 @@ void AEnemyCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (bIsDying)
+	if (bIsDying || !HealthComponent || !HealthComponent->IsAlive())
 	{
 		return;
 	}
+	AAIController* AIC = Cast<AAIController>(GetController());
 
+	// Godot: stagger freezes the enemy.
+	if (HealthComponent->HasStatusEffect(EStatusEffect::Stagger))
+	{
+		if (AIC)
+		{
+			AIC->StopMovement();
+		}
+		return;
+	}
 	if (AttackTimer > 0.0f)
 	{
 		AttackTimer -= DeltaTime;
 	}
+	// Godot current_max_speed: frost halves the speed; fleeing from fire speeds it up.
+	GetCharacterMovement()->MaxWalkSpeed = BaseWalkSpeed * (HealthComponent->HasStatusEffect(EStatusEffect::Frozen) ? 0.5f : 1.f)
+		* (bFleeingFire ? AIConfig.FireFearFleeSpeedMultiplier : 1.f);
 
-	AActor* Target = FindClosestSquadMember();
-	if (!Target)
+	// 0. Panic fear of fire (hounds, cutters, frostbitten).
+	FVector Fire;
+	if (bFearsFire && AIConfig.bFireFearEnabled && FindNearestFire(Fire))
 	{
+		const AActor* Victim = CurrentTarget.Get();
+		const FVector VictimLocation = Victim ? Victim->GetActorLocation() : FVector::ZeroVector;
+		const FVector Direction = EnemyAIRules::FleeDirection(GetActorLocation(), Fire, Victim ? &VictimLocation : nullptr);
+		if (AIC)
+		{
+			AIC->MoveToLocation(GetActorLocation() + Direction * 300.f, 50.f, false, true);
+		}
+		if (!bFleeingFire)
+		{
+			bFleeingFire = true;
+			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("🔥😱 СТРАХ ОГНЯ!"), FLinearColor(1.f, 0.45f, 0.1f));
+		}
+		return;
+	}
+	bFleeingFire = false;
+
+	if (Archetype == EEnemyArchetype::Spitter || Archetype == EEnemyArchetype::CryoDrone)
+	{
+		TickSpitter(DeltaTime);
 		return;
 	}
 
-	const float Dist = FVector::Dist2D(GetActorLocation(), Target->GetActorLocation());
-	if (Dist <= AttackRange)
+	AActor* Target = FindTarget();
+	CurrentTarget = Target;
+	if (!Target)
 	{
-		if (AController* C = GetController())
+		if (AIC)
 		{
-			C->StopMovement();
+			AIC->StopMovement();
 		}
+		return;
+	}
 
-		FRotator LookRot = (Target->GetActorLocation() - GetActorLocation()).Rotation();
-		LookRot.Pitch = 0.f;
-		LookRot.Roll = 0.f;
-		SetActorRotation(FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 10.0f));
+	auto Face = [this, DeltaTime](const AActor* Actor)
+	{
+		FRotator LookRot = (Actor->GetActorLocation() - GetActorLocation()).Rotation();
+		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, LookRot.Yaw, 0.f), DeltaTime, 10.0f));
+	};
 
+	// 1. A barricade / turret in the way is smashed first.
+	if (AActor* Obstacle = FindBlockingObstacle(Target))
+	{
+		if (AIC)
+		{
+			AIC->StopMovement();
+		}
+		Face(Obstacle);
+		if (AttackTimer <= 0.f)
+		{
+			AttackObject(Obstacle);
+		}
+		return;
+	}
+
+	// 2. Melee reach (Godot: attack range and at most 1.2 m of height difference), else close in.
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const FVector TargetPosition = GodotPosition(Target);
+	if (EnemyAIRules::CanMelee(FVector::Dist(Feet, TargetPosition), FMath::Abs(TargetPosition.Z - Feet.Z), AttackRange))
+	{
+		if (AIC)
+		{
+			AIC->StopMovement();
+		}
+		Face(Target);
 		if (AttackTimer <= 0.0f)
 		{
-			AttackTarget(Target);
+			if (Target->IsA<AOperativeCharacter>())
+			{
+				AttackTarget(Target);
+			}
+			else
+			{
+				AttackObject(Target);
+			}
 		}
+	}
+	else if (AIC)
+	{
+		AIC->MoveToActor(Target, AttackRange * 0.5f);
+	}
+}
+
+FVector AEnemyCharacter::GodotPosition(const AActor* Actor)
+{
+	if (const ACharacter* Character = Cast<ACharacter>(Actor))
+	{
+		return Actor->GetActorLocation() - FVector(0.f, 0.f, Character->GetSimpleCollisionHalfHeight() - 100.f);
+	}
+	FVector Origin;
+	FVector Extent;
+	Actor->GetActorBounds(true, Origin, Extent);
+	return FVector(Actor->GetActorLocation().X, Actor->GetActorLocation().Y, Origin.Z - Extent.Z);
+}
+
+AActor* AEnemyCharacter::FindTarget() const
+{
+	UWorld* World = GetWorld();
+	const USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (!Squad)
+	{
+		return nullptr;
+	}
+	TArray<AActor*> Actors;
+	TArray<FEnemyTargetCandidate> Candidates;
+	for (AOperativeCharacter* Member : Squad->GetMembers())
+	{
+		if (Member->HealthComponent && Member->HealthComponent->IsAlive())
+		{
+			Actors.Add(Member);
+			Candidates.Add({ EEnemyTargetKind::Operative, GodotPosition(Member), true });
+		}
+	}
+	for (TActorIterator<ATurretActor> It(World); It; ++It)
+	{
+		const UHealthComponent* TurretHealth = It->FindComponentByClass<UHealthComponent>();
+		Actors.Add(*It);
+		Candidates.Add({ EEnemyTargetKind::Turret, GodotPosition(*It), !It->IsBroken() && TurretHealth && TurretHealth->IsAlive() });
+	}
+	for (TActorIterator<AInteractableActor> It(World); It; ++It)
+	{
+		if (It->ObjectType == EInteractableType::Generator)
+		{
+			Actors.Add(*It);
+			Candidates.Add({ EEnemyTargetKind::Generator, GodotPosition(*It), !It->bGeneratorBroken && It->GeneratorHealth > 0.f });
+		}
+	}
+	const bool bTurretHit = LastAttackerSource.Contains(TEXT("Турель")) || LastAttackerSource.Contains(TEXT("Turret"));
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const int32 Index = EnemyAIRules::SelectTarget(AIConfig, EnemyAIRules::IsSmallEnemy(Archetype), Feet, Candidates, bTurretHit);
+	return Actors.IsValidIndex(Index) ? Actors[Index] : nullptr;
+}
+
+bool AEnemyCharacter::FindNearestFire(FVector& OutFire) const
+{
+	UWorld* World = GetWorld();
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	float MinDistance = AIConfig.FireFearRadius;
+	bool bFound = false;
+	for (TActorIterator<ABarrelActor> It(World); It; ++It)
+	{
+		const float Distance = FVector::Dist(Feet, It->GetActorLocation());
+		if (It->IsBurning() && Distance < MinDistance)
+		{
+			MinDistance = Distance;
+			OutFire = It->GetActorLocation();
+			bFound = true;
+		}
+	}
+	for (const TWeakObjectPtr<UHeatSourceComponent>& Source : UHeatSourceComponent::GetAllSources())
+	{
+		if (!Source.IsValid() || Source->GetWorld() != World || !Source->IsHeatActive())
+		{
+			continue;
+		}
+		const float Distance = FVector::Dist(Feet, Source->GetComponentLocation());
+		if (Distance < FMath::Max(AIConfig.FireFearRadius, Source->Radius) && Distance < MinDistance)
+		{
+			MinDistance = Distance;
+			OutFire = Source->GetComponentLocation();
+			bFound = true;
+		}
+	}
+	return bFound;
+}
+
+AActor* AEnemyCharacter::FindBlockingObstacle(const AActor* Target) const
+{
+	UWorld* World = GetWorld();
+	TArray<AActor*> Actors;
+	TArray<FVector> Obstacles;
+	for (TActorIterator<ABarricadeActor> It(World); It; ++It)
+	{
+		const UHealthComponent* BarricadeHealth = It->FindComponentByClass<UHealthComponent>();
+		if (BarricadeHealth && BarricadeHealth->IsAlive())
+		{
+			Actors.Add(*It);
+			Obstacles.Add(GodotPosition(*It));
+		}
+	}
+	if (AIConfig.bCanTargetTurrets)
+	{
+		for (TActorIterator<ATurretActor> It(World); It; ++It)
+		{
+			const UHealthComponent* TurretHealth = It->FindComponentByClass<UHealthComponent>();
+			if (*It != Target && TurretHealth && TurretHealth->IsAlive())
+			{
+				Actors.Add(*It);
+				Obstacles.Add(GodotPosition(*It));
+			}
+		}
+	}
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const FVector TargetPosition = Target ? GodotPosition(Target) : FVector::ZeroVector;
+	const int32 Index = EnemyAIRules::SelectBlockingObstacle(Feet, Target ? &TargetPosition : nullptr, Obstacles);
+	return Actors.IsValidIndex(Index) ? Actors[Index] : nullptr;
+}
+
+void AEnemyCharacter::AttackObject(AActor* Object)
+{
+	AttackTimer = AttackCooldown;
+	if (AInteractableActor* Interactable = Cast<AInteractableActor>(Object);
+		Interactable && Interactable->ObjectType == EInteractableType::Generator && !Object->IsA<ADeployableActor>())
+	{
+		Interactable->TakeGeneratorDamage(AttackDamage);
+		return;
+	}
+	UHealthComponent* ObjectHealth = Object->FindComponentByClass<UHealthComponent>();
+	if (!ObjectHealth)
+	{
+		return;
+	}
+	// Godot barricade / turret take_damage: raw damage; an enemy blow sets off a trap. Brutes hit barricades twice.
+	const bool bBarricade = Object->IsA<ABarricadeActor>();
+	ObjectHealth->ApplyDirectHealthLoss(AttackDamage * (bBarricade && Archetype == EEnemyArchetype::Brute ? 2.f : 1.f), EnemyDisplayName);
+	if (AInteractableActor* Trapped = Cast<AInteractableActor>(Object); Trapped && Trapped->bTrapped && IsValid(Trapped))
+	{
+		Trapped->DetonateTrap(false, NSLOCTEXT("EnemyCharacter", "EnemyBlow", "Удар противника"));
+	}
+}
+
+void AEnemyCharacter::TickSpitter(float DeltaTime)
+{
+	UWorld* World = GetWorld();
+	AAIController* AIC = Cast<AAIController>(GetController());
+	const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+	TArray<AOperativeCharacter*> Members;
+	TArray<FVector> Positions;
+	TArray<bool> Elevated;
+	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+	{
+		if (Member->HealthComponent && Member->HealthComponent->IsAlive())
+		{
+			Members.Add(Member);
+			Positions.Add(GodotPosition(Member));
+			Elevated.Add(GodotPosition(Member).Z >= 240.f); // Godot: y >= 2.4 m counts as elevated ground
+		}
+	}
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const int32 Index = EnemyAIRules::SelectSpitterTarget(Feet, Positions, Elevated);
+	AOperativeCharacter* Target = Members.IsValidIndex(Index) ? Members[Index] : Cast<AOperativeCharacter>(FindClosestSquadMember());
+	CurrentTarget = Target;
+	if (!Target)
+	{
+		if (AIC)
+		{
+			AIC->StopMovement();
+		}
+		return;
+	}
+	// Line of fire: from 0.4 m above the feet to the target's stance height (Godot _check_line_of_sight).
+	const FVector Start = Feet + FVector(0.f, 0.f, 40.f);
+	const float TargetHeight = Target->GetStance() == EOperativeStance::Prone ? 30.f : (Target->GetStance() == EOperativeStance::Crouching ? 90.f : 150.f);
+	const FVector End = GodotPosition(Target) - FVector(0.f, 0.f, 100.f - TargetHeight);
+	FSpitterLine Line;
+	if (End.Z - Feet.Z >= 180.f && FVector::Dist2D(End, Feet) <= 220.f)
+	{
+		Line.bHasLos = false; // under the platform
 	}
 	else
 	{
-		if (AAIController* AIC = Cast<AAIController>(GetController()))
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(SpitterLine), false, this);
+		Params.AddIgnoredActor(Target);
+		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 		{
-			AIC->MoveToActor(Target, AttackRange * 0.75f);
+			Params.AddIgnoredActor(*It); // Godot mask: walls and barricades only
 		}
+		FHitResult Hit;
+		EShotLineHit Kind = EShotLineHit::Clear;
+		if (World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params) && Hit.GetActor() && !Hit.GetActor()->IsA<AOperativeCharacter>())
+		{
+			Kind = Hit.GetActor()->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
+		}
+		Line = EnemyAIRules::JudgeSpitterLine(Kind, Target->GetStance(), AIConfig.CrouchCoverReduction);
+	}
+	const float Distance = FVector::Dist(Feet, GodotPosition(Target));
+	FRotator LookRot = (Target->GetActorLocation() - GetActorLocation()).Rotation();
+	SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, LookRot.Yaw, 0.f), DeltaTime, 8.0f));
+	switch (EnemyAIRules::SpitterMove(Line.bHasLos, Distance, AIConfig.SpitterPreferredRange))
+	{
+	case ESpitterMove::Approach:
+		if (AIC)
+		{
+			AIC->MoveToActor(Target, AIConfig.SpitterPreferredRange * 0.5f);
+		}
+		break;
+	case ESpitterMove::Retreat:
+		if (AIC)
+		{
+			const FVector Back = (GetActorLocation() - Target->GetActorLocation()).GetSafeNormal2D();
+			AIC->MoveToLocation(GetActorLocation() + Back * 300.f, 50.f, false, true);
+		}
+		break;
+	default:
+		if (AIC)
+		{
+			AIC->StopMovement();
+		}
+		break;
+	}
+	// Fires only with a clear line (Godot _shoot_at_target: crit, cover, red tracer).
+	if (Line.bHasLos && Distance <= AttackRange && AttackTimer <= 0.f)
+	{
+		AttackTimer = AttackCooldown;
+		const bool bIsCrit = FMath::FRand() < CritChance;
+		Target->TakeHit(AttackDamage * (bIsCrit ? CritMultiplier : 1.f) * Line.Cover, EnemyDisplayName, bIsCrit, false, this);
+		if (UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
+		{
+			Feedback->SpawnTracer(Feet + FVector(0.f, 0.f, 90.f), End, FLinearColor(1.f, 0.2f, 0.2f));
+		}
+	}
+}
+
+void AEnemyCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDamage)
+{
+	if (!Spec.AttackerSource.IsEmpty())
+	{
+		LastAttackerSource = Spec.AttackerSource;
 	}
 }
 

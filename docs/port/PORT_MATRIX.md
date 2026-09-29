@@ -35,6 +35,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/components/combat_component.gd` | `UCombatComponent` | 1/4 | ⬜ | |
 | `Scripts/components/movement_component.gd` | not ported: its stamina is unused by `player.gd` (user: no stamina) | — | ➖ | |
 | `Scripts/components/panic_component.gd` | `UPanicComponent` | 1 | ⬜ | |
+| `enemy_base.gd` behaviour, `enemy_frost_spitter.gd`, `enemy_frost_brute.gd`, affinities of all enemy scripts | `EnemyAIRules`, `AEnemyCharacter::Tick` / `FindTarget` / `TickSpitter` / `AttackObject` | 3 | ✅ (cutter flight / cryo drone later) | `CodexTactics.Characters.EnemyAI.Rules`, EnemyAISmoke |
 | `player.gd` `_evaluate_ai_grenade_opportunity`, `execute_ai_grenade_throw`, `_auto_switch_on_empty` | `AIGrenadeRules`, `AOperativeCharacter::TryAIGrenadeThrow` / `AutoSwitchOnEmpty` | 4 | ✅ | `CodexTactics.Combat.Grenade.AIRules`, AIGrenadeSmoke |
 | overhead Label3D (`enemy_base.gd`, `barricade.gd`, `turret.gd`, `interactable.gd` generator) | `FOverheadLabel`, `GetOverheadLabel`, HUD `DrawWorldLabels` | 5 | ✅ | `HudShot labels` |
 | `Scripts/components/rage_component.gd` | `URageComponent` | 1 | ⬜ | |
