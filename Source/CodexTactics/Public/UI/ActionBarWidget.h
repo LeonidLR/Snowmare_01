@@ -70,7 +70,7 @@ public:
 
 	/**
 	 * Takes weapon WeaponId: in turn-based combat through the combat (active operative), otherwise the leader; posts
-	 * «Экипировано» and closes the selector. The grenade needs the throw mode (not ported yet) and is refused.
+	 * «Экипировано» and closes the selector. Outside turn-based combat the grenade starts the throw aim.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|ActionBar")
 	bool SelectWeapon(const FString& WeaponId);

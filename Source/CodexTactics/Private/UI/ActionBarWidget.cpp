@@ -19,6 +19,7 @@
 #include "Engine/World.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Combat/GrenadeSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
 
@@ -250,11 +251,11 @@ void UActionBarWidget::Refresh()
 		{
 			SelectorTexts[Index]->SetText(GetSelectorText(Index));
 		}
-		if (SelectorButtons.IsValidIndex(2))
+		const USquadSubsystem* BarSquad = GetWorld()->GetSubsystem<USquadSubsystem>();
+		const AOperativeCharacter* BarLeader = BarSquad ? BarSquad->GetLeader() : nullptr;
+		if (SelectorButtons.IsValidIndex(2) && BarLeader)
 		{
-			// Godot disables the grenade without grenades; the throw mode itself is the next port step.
-			SelectorButtons[2]->SetIsEnabled(false);
-			SelectorButtons[2]->SetToolTipText(LOCTEXT("GrenadeLater", "Бросок гранаты — ещё не перенесён"));
+			SelectorButtons[2]->SetIsEnabled(BarLeader->GrenadesCount > 0); // Godot b_grenade.disabled = count <= 0
 		}
 	}
 	if (BarRelocateText)
@@ -368,9 +369,9 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 {
 	USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	if (!Leader || WeaponId == TEXT("grenade"))
+	if (!Leader || (WeaponId == TEXT("grenade") && Leader->GrenadesCount <= 0))
 	{
-		return false; // the grenade opens the throw mode in Godot (next port step)
+		return false;
 	}
 	UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
 	const bool bSwitched = TurnBased && TurnBased->IsActive() ? TurnBased->SwitchActiveUnitWeapon(WeaponId) : Leader->SwitchToWeaponById(WeaponId);
@@ -387,6 +388,16 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 		const FText Name = Leader->CurrentWeapon ? Leader->CurrentWeapon->WeaponName : FText::FromString(WeaponId);
 		const int32 Damage = Leader->CurrentWeapon ? FMath::FloorToInt(Leader->CurrentWeapon->BaseDamage) : 0;
 		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Equipped", "🔫 Экипировано: {0} (Урон: {1})"), Name, Damage));
+	}
+	// Godot: the grenade starts the throw aim (outside turn-based combat the grid does not take the click).
+	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
+	if (Grenades && WeaponId == TEXT("grenade") && !(TurnBased && TurnBased->IsActive()))
+	{
+		Grenades->StartAim(Leader);
+	}
+	else if (Grenades && Grenades->IsAiming())
+	{
+		Grenades->CancelAim(false);
 	}
 	Refresh();
 	return true;

@@ -113,6 +113,15 @@ private:
 	void RotatePlacement();
 	/** F: set up an engineering item from the leader's supply / switch type while placing. */
 	void DeployAbility();
+	/**
+	 * G (Godot main.gd KEY_G): grenade in hands -> back to the rifle (or cancel the aim); otherwise take a grenade and
+	 * start the throw aim (turn-based combat: the grid weapon switch only).
+	 */
+	void GrenadeKey();
+	/** Ground point under the cursor for the grenade aim (hit, else the thrower's floor plane). */
+	bool GetGrenadeAimPoint(FVector& OutPoint) const;
+	/** RMB / Esc while aiming a grenade (Godot «Бросок отменён.»). Returns true if an aim was cancelled. */
+	bool CancelGrenadeAim();
 	/** Ground point under the cursor on the placement plane of the object being moved. */
 	bool GetPlacementPoint(FVector& OutPoint) const;
 	class URelocationSubsystem* GetPlacingRelocation() const;
@@ -159,6 +168,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> DeployAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> GrenadeAction;
 
 	FSpaceInputTracker SpaceInput;
 	double LastClickTime = -1.0;

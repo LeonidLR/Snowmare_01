@@ -2,7 +2,7 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.WeaponSelectorSmoke
 // 1. the squad carries the Godot arsenal (M16 in hands, pistol, grenade, knife); 2. the weapon slot opens
 // «ВЫБОР ВООРУЖЕНИЯ» with the M16 line marked «В РУКАХ»; 3. the pistol / knife are taken (slot text follows, the
-// selector closes), the grenade is refused until the throw mode is ported; 4. in turn-based combat the selector
+// selector closes), the grenade starts the throw aim (cancel: the rifle comes back); 4. in turn-based combat the selector
 // switches the active operative's weapon (Godot main.gd _select_weapon_from_selector, switch_active_unit_weapon_to).
 
 #include "CoreMinimal.h"
@@ -14,6 +14,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/GrenadeSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Containers/Ticker.h"
 #include "Data/WeaponDataAsset.h"
@@ -90,7 +91,11 @@ namespace WeaponSelectorSmoke
 
 		Check(State, Bar->SelectWeapon(TEXT("pistol")) && WeaponId(Leader) == TEXT("pistol"), TEXT("pistol taken"));
 		Check(State, !Bar->IsWeaponSelectorOpen(), TEXT("selector closes after the choice"));
-		Check(State, !Bar->SelectWeapon(TEXT("grenade")) && WeaponId(Leader) == TEXT("pistol"), TEXT("grenade refused (throw mode not ported)"));
+		UGrenadeSubsystem* Grenades = World->GetSubsystem<UGrenadeSubsystem>();
+		Check(State, Bar->SelectWeapon(TEXT("grenade")) && WeaponId(Leader) == TEXT("grenade") && Grenades->IsAiming(),
+			TEXT("grenade taken: throw aim starts"));
+		Grenades->CancelAim(true);
+		Check(State, !Grenades->IsAiming() && WeaponId(Leader) == TEXT("m16"), TEXT("cancelled aim: the rifle is back"));
 		const bool bKnife = Bar->SelectWeapon(TEXT("knife"));
 		const FString KnifeSlot = Bar->GetWeaponText().ToString();
 		Check(State, bKnife && KnifeSlot.StartsWith(TEXT("Нож")), FString::Printf(TEXT("knife taken, slot: %s"), *KnifeSlot.Replace(TEXT("\n"), TEXT(" / "))));

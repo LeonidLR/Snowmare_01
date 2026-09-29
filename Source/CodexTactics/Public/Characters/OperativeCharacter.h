@@ -351,6 +351,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "0"))
 	float GrenadeThrowRange = 1200.f;
 
+	/**
+	 * Length of the throw animation, s; the grenade leaves the hand at 70 % of it (Godot get_grenade_throw_duration,
+	 * 2.0 without an animation). The Blueprint sets it to its montage length.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "0"))
+	float GrenadeThrowDuration = 2.f;
+
+	/** The operative throws a grenade now (AnimBP / montage hook; Godot play_grenade_throw). */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Combat", meta = (DisplayName = "On Grenade Throw"))
+	void ReceiveGrenadeThrow();
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
 	void StartReload();
 

@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open.
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -33,6 +33,7 @@
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UI/ActionBarWidget.h"
+#include "Combat/GrenadeSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
 #include "UnrealClient.h"
 
@@ -134,6 +135,24 @@ namespace HudShot
 					}
 				}
 			}), 3.f, false);
+		}
+		if (Args.Contains(TEXT("grenade")))
+		{
+			// Grenade aim 7 m ahead of the commander (the controller keeps it on the cursor afterwards).
+			TWeakObjectPtr<UWorld> AimWorld(World);
+			FTimerHandle AimHandle;
+			World->GetTimerManager().SetTimer(AimHandle, FTimerDelegate::CreateLambda([AimWorld]()
+			{
+				USquadSubsystem* Squad = AimWorld.IsValid() ? AimWorld->GetSubsystem<USquadSubsystem>() : nullptr;
+				AOperativeCharacter* Lead = Squad ? Squad->GetLeader() : nullptr;
+				UGrenadeSubsystem* Grenades = AimWorld.IsValid() ? AimWorld->GetSubsystem<UGrenadeSubsystem>() : nullptr;
+				if (Lead && Grenades)
+				{
+					Lead->SwitchToWeaponById(TEXT("grenade"));
+					Grenades->StartAim(Lead);
+					Grenades->UpdateAim(Lead->GetActorLocation() + Lead->GetActorForwardVector() * 700.f);
+				}
+			}), 3.5f, false);
 		}
 		if (Args.Contains(TEXT("weapons")))
 		{

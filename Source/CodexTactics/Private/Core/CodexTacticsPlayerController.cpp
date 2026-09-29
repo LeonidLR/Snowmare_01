@@ -2,6 +2,8 @@
 #include "Camera/TacticalCameraPawn.h"
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
+#include "Combat/GrenadeSubsystem.h"
+#include "Data/WeaponDataAsset.h"
 #include "Combat/EncounterQueries.h"
 #include "Core/MissionSubsystem.h"
 #include "UI/DialogueSubsystem.h"
@@ -87,6 +89,7 @@ void ACodexTacticsPlayerController::CreateInputActions()
 	SpaceAction = MakeAction(TEXT("IA_Space"), EKeys::SpaceBar);
 	RotatePlacementAction = MakeAction(TEXT("IA_RotatePlacement"), EKeys::R);
 	DeployAction = MakeAction(TEXT("IA_Deploy"), EKeys::F);
+	GrenadeAction = MakeAction(TEXT("IA_Grenade"), EKeys::G);
 }
 
 void ACodexTacticsPlayerController::SetupInputComponent()
@@ -138,6 +141,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(SpaceAction, ETriggerEvent::Completed, this, &ACodexTacticsPlayerController::SpaceReleased);
 	Input->BindAction(RotatePlacementAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::RotatePlacement);
 	Input->BindAction(DeployAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::DeployAbility);
+	Input->BindAction(GrenadeAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::GrenadeKey);
 }
 
 void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
@@ -150,6 +154,16 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	if (SpaceInput.Tick(static_cast<float>(FApp::GetDeltaTime()), HoldDuration) == ESpaceInputAction::Hold)
 	{
 		HandleSpaceHold();
+	}
+
+	// Grenade aim: rings and arc follow the cursor.
+	if (UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>(); Grenades && Grenades->IsAiming())
+	{
+		FVector Point;
+		if (GetGrenadeAimPoint(Point))
+		{
+			Grenades->UpdateAim(Point);
+		}
 	}
 
 	// Object placement: the ghost follows the cursor.
@@ -167,6 +181,101 @@ URelocationSubsystem* ACodexTacticsPlayerController::GetPlacingRelocation() cons
 {
 	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
 	return Relocation && Relocation->IsPlacing() ? Relocation : nullptr;
+}
+
+bool ACodexTacticsPlayerController::GetGrenadeAimPoint(FVector& OutPoint) const
+{
+	const UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
+	const AOperativeCharacter* Thrower = Grenades ? Grenades->GetThrower() : nullptr;
+	if (!Thrower)
+	{
+		return false;
+	}
+	// Godot: the cursor ray hit, else the floor plane at the thrower.
+	FHitResult Hit;
+	if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+	{
+		OutPoint = Hit.ImpactPoint;
+		return true;
+	}
+	FVector Origin;
+	FVector Direction;
+	if (!DeprojectMousePositionToWorld(Origin, Direction) || FMath::IsNearlyZero(Direction.Z))
+	{
+		return false;
+	}
+	const float FloorZ = Thrower->GetActorLocation().Z - Thrower->GetSimpleCollisionHalfHeight();
+	const float Distance = (FloorZ - Origin.Z) / Direction.Z;
+	if (Distance <= 0.f)
+	{
+		return false;
+	}
+	OutPoint = Origin + Direction * Distance;
+	return true;
+}
+
+bool ACodexTacticsPlayerController::CancelGrenadeAim()
+{
+	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
+	if (!Grenades || !Grenades->IsAiming())
+	{
+		return false;
+	}
+	Grenades->CancelAim(true);
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(LOCTEXT("GrenadeSpeaker", "Граната"), LOCTEXT("GrenadeCancelled", "Бросок отменён."));
+	}
+	return true;
+}
+
+void ACodexTacticsPlayerController::GrenadeKey()
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	if (!Leader || !Grenades || !Messages)
+	{
+		return;
+	}
+	UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased();
+	const bool bGrenadeInHands = Leader->CurrentWeapon && Leader->CurrentWeapon->WeaponId == TEXT("grenade");
+	if (bGrenadeInHands)
+	{
+		if (Grenades->IsAiming())
+		{
+			Grenades->CancelAim(true);
+			return;
+		}
+		const bool bSwitched = TurnBased ? (TurnBased->SwitchActiveUnitWeapon(TEXT("m16")) || TurnBased->SwitchActiveUnitWeapon(TEXT("pistol")))
+			: (Leader->SwitchToWeaponById(TEXT("m16")) || Leader->SwitchToWeaponById(TEXT("pistol")) || Leader->SwitchToWeaponById(TEXT("knife")));
+		if (bSwitched)
+		{
+			const FString Ammo = Leader->UsesAmmo() ? FString::Printf(TEXT("%d / %d"), Leader->CurrentClip, Leader->ReserveAmmo) : TEXT("∞");
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("WeaponBack", "🔫 Оружие: {0} [{1}] (Урон: {2})"),
+				Leader->CurrentWeapon ? Leader->CurrentWeapon->WeaponName : FText::GetEmpty(), FText::FromString(Ammo),
+				Leader->CurrentWeapon ? FMath::FloorToInt(Leader->CurrentWeapon->BaseDamage) : 0));
+		}
+		return;
+	}
+	if (Leader->GrenadesCount <= 0)
+	{
+		Messages->PostMessage(Leader->DisplayName, LOCTEXT("NoGrenade", "🧨 У бойца нет гранат!"));
+		return;
+	}
+	if (TurnBased)
+	{
+		TurnBased->SwitchActiveUnitWeapon(TEXT("grenade")); // a grid weapon in turn-based combat
+	}
+	else
+	{
+		Leader->SwitchToWeaponById(TEXT("grenade"));
+		Grenades->StartAim(Leader);
+	}
+	Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("GrenadeTaken", "🧨 Выбрана граната [{0} шт.] (Урон: {1}, Радиус: {2}m)"),
+		Leader->GrenadesCount, FMath::FloorToInt(Leader->GrenadeDamage),
+		FText::AsNumber(Leader->GrenadeEffectRadius / 100.f, &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))));
 }
 
 bool ACodexTacticsPlayerController::GetPlacementPoint(FVector& OutPoint) const
@@ -366,6 +475,10 @@ UTurnBasedCombatSubsystem* ACodexTacticsPlayerController::GetActiveTurnBased() c
 
 void ACodexTacticsPlayerController::DialogueSkip()
 {
+	if (CancelGrenadeAim())
+	{
+		return;
+	}
 	// Godot: Esc cancels the turn-based object relocation first.
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
 	{
@@ -383,6 +496,16 @@ void ACodexTacticsPlayerController::OnClick()
 	if (IsDialogueOpen())
 	{
 		return; // the dialogue panel handles its own clicks
+	}
+	// Grenade aim: LMB throws (Godot _handle_grenade_throw_click).
+	if (UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>(); Grenades && Grenades->IsAiming())
+	{
+		FVector Point;
+		if (GetGrenadeAimPoint(Point))
+		{
+			Grenades->ThrowAtCursor(Point);
+		}
+		return;
 	}
 	// Turn-based combat: a turret / barricade / mine is set up on the clicked cell at once (Godot
 	// _handle_tactical_deployable_placement), the operative walks up and pays AP.
@@ -727,7 +850,11 @@ void ACodexTacticsPlayerController::CameraRotateRight()
 
 void ACodexTacticsPlayerController::CameraDragRotateStart()
 {
-	// Godot: RMB cancels object placement (and the turn-based relocation).
+	// Godot: RMB cancels the grenade aim, object placement (and the turn-based relocation).
+	if (CancelGrenadeAim())
+	{
+		return;
+	}
 	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
 	{
 		Relocation->CancelPlacement();

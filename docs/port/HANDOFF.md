@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **124 automation tests, 25 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **125 automation tests, 26 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -67,6 +67,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `DialogueSmoke` (`-ForceMainMenu`, verify_all does it) | «Начать игру» opens the 15-line intro briefing, Space advances (no pause), skip closes, preparation lines reach the feed with the Godot delay |
 | `ActionBarSmoke` | action bar stance slot cycles the squad, «ПЕР» pick mode on / off, squad slot 2 selects the engineer |
 | `BannersSmoke` | cutscene card + Space skip, squad warm / healed for the preparation, preparation / wave / pause banner texts |
+| `GrenadeSmoke` | grenade aim (indicators, 20 m clamped to 12 m, crouching 9 m); throw at a frozen brute: one grenade spent, release + flight + 1.2 s fuse, brute hurt, barrel in the blast burns; a grenade thrown just before turn-based combat is refunded, no grenade in hands |
 | `WeaponSelectorSmoke` | arsenal on every operative (4 weapons, M16 30 / 60); weapon slot opens «ВЫБОР ВООРУЖЕНИЯ» (M16 marked «В РУКАХ»); pistol / knife taken, grenade refused (throw mode next); turn-based switch of the active operative, no AP |
 | `TurnBasedDeploySmoke` | turn-based: turret on a neighbour cell (3 AP, grid + unit state, item spent); a squad mate hands a mine over, mine 3 cells away: the commander walks up, walk + 2 AP |
 | `TurnBasedBarricadeSmoke` | turn-based: barricade footprint = Godot samples; the commander walks up, click picks it up, two 45° steps (target cells recomputed), click places it: new footprint, rotation, 2 AP |
@@ -77,7 +78,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `MissionSmoke` | objective banner texts (start → preparation → wave), an operative's death fails the mission (GameOver, reason, time stop), restart reloads a fresh exploration |
 | `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
 | `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot |
-| `HudShot [close] [walk] [menu] [place] [shoot] [failed] [mainmenu] [dialogue] [cutscene] [prep] [turnbased] [weapons]` (`dialogue`: intro briefing window; `shoot`: slowed-down barrel shot = tracer, target flash, plan marker; `failed`: mission-failed screen; `mainmenu`: needs `-ForceMainMenu`) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
+| `HudShot [close] [walk] [menu] [place] [shoot] [failed] [mainmenu] [dialogue] [cutscene] [prep] [turnbased] [weapons] [grenade]` (`dialogue`: intro briefing window; `shoot`: slowed-down barrel shot = tracer, target flash, plan marker; `failed`: mission-failed screen; `mainmenu`: needs `-ForceMainMenu`) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
 | `FinishPrep` | dev: skip preparation, start the wave |
 
 Parity tests live in `Source/CodexTacticsTests/Private/<System>/` named `CodexTactics.<System>.<Case>`; they mirror
@@ -289,8 +290,10 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    samples along the long axis, `RegisterBarricadeCells`; Q -45°, E / R / wheel ±45° while relocating; targets within
    2 cells of the operative). Deployables on the grid done (`CanPlaceDeployable` / `DeployObject` /
    `HandleDeployPlacement`: the action-bar / F placement ghost works in turn-based, a click sets the item up on the cell,
-   walking up first if needed; Q / E rotate the ghost). Weapon switching done (arsenal below). Next: grenades (Godot
-   main.gd _start_grenade_throw_mode / throw arc / AoE, also in turn-based), companion drone, stasis look.
+   walking up first if needed; Q / E rotate the ghost). Weapon switching done (arsenal below). Grenades done (`UGrenadeSubsystem` aim /
+   throw, `AGrenadeActor` flight / fuse / blast, `GrenadeRules`; G, the selector's grenade line, LMB throws, RMB / Esc
+   cancel; in turn-based combat the grenade is a grid weapon like in Godot, entering it refunds grenades in flight).
+   Next: companion drone, stasis look.
 7. Phase 2 data importer (JSON / .tres → DataAssets) replacing hand-typed values (§9).
    Done: weapons — `Scripts/Editor/import_weapons.py` → `/Game/Data/Weapons/DA_Weapon_<id>` (all 9; defaults parsed
    from weapon_data.gd, enums mapped by name, `EStatusEffect::Shocked` appended); the game mode equips
@@ -337,7 +340,10 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Pushing / defusal / set-up animations: none (operatives only slow down / crouch).
 - Hidden mines are revealed by a distance scan in the mine's Tick (Godot scans from each operative) — same result.
 - Weapon switching does not change the weapon mesh (the operative Blueprint owns WeaponMesh) and has no holster
-  animation; the grenade line of the selector is disabled until the throw mode is ported.
+  animation. X (Godot switch_weapon cycle) is not bound.
+- Grenades: placeholder sphere mesh, no explosion VFX / sound (Godot has none either) — `AGrenadeActor` Blueprint events
+  On Landed / On Detonated and the operative's On Grenade Throw + GrenadeThrowDuration are the hooks. The AI grenade
+  throwers (Godot ai_grenade_*) are not ported.
 - Turn-based set-up: no assembly animation / grow-in tween (Godot play_action_animation "working_device", scale 0.05 -> 1);
   a squad mine placed in turn-based skips the real-time mishap roll like Godot.
 - Turn-based relocation: no hologram ghost of the object under the cursor (Godot _create_relocate_ghost_preview);
@@ -363,7 +369,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Arsenal (Godot _init_weapons / switch_to_weapon_by_id / ammo_inventory): M16, pistol, grenade, knife per operative, ammo kept per weapon, loot to the right weapon, knife without ammo; weapon selector panel on the action bar; turn-based weapon switch; WeaponSelectorSmoke, `HudShot weapons` |
+| (this) | Hand grenades (Godot grenade.gd + main.gd aim / throw / refund): aim rings and arc, range by stance, release at 70 % of the throw animation, arc flight, 1.2 s fuse, blast with falloff (operatives 65 %), barrels / traps go off; G key; GrenadeRulesTest, GrenadeSmoke, `HudShot grenade` |
+| `9bec55a` | Arsenal (Godot _init_weapons / switch_to_weapon_by_id / ammo_inventory): M16, pistol, grenade, knife per operative, ammo kept per weapon, loot to the right weapon, knife without ammo; weapon selector panel on the action bar; turn-based weapon switch; WeaponSelectorSmoke, `HudShot weapons` |
 | `3cd1474` | Turn-based deployables on the grid (Godot can_place_tactical_deployable, deploy_tactical_object, main.gd _handle_tactical_deployable_placement); TurnBasedDeploySmoke |
 | `b41448f` | Turn-based barricade relocation with 45° rotation (Godot relocate_barricade, can_place_barricade_at, get_barricade_cells_at, _register_barricade_cells); TurnBasedBarricadeSmoke |
 | `afbdedd` | Turn-based barrel / turret relocation (Godot relocate_object, _start_tactical_relocate, _try_push_adjacent_barrel): click rules with Shift, target cells, cancel, panel «Бочка»; TurnBasedPushSmoke |
