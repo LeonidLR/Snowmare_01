@@ -39,6 +39,13 @@ public:
 	/** Name used in radio lines (Godot enemy_name). */
 	const FString& GetEnemyDisplayName() const { return EnemyDisplayName; }
 
+	/**
+	 * Godot apply_balance_config (enemy_base.gd + enemy_frost_hound / spitter / brute.gd): crit chance / multiplier and,
+	 * for hounds, spitters and brutes, health / speed / damage / range / cooldown from the imported game_balance_config.
+	 * Called at the end of ApplyArchetypeDefaults with the game mode's GameBalanceConfig.
+	 */
+	void ApplyBalance(const class UGodotBalanceAsset& Config);
+
 	/** Avoids burning barrels (Godot fears_fire; turn-based enemies keep out of the 5 x 5 fire-fear area). */
 	bool DoesFearFire() const { return bFearsFire; }
 

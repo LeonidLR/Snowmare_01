@@ -3,6 +3,8 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/GodotBalanceAsset.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -150,6 +152,46 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 			BodyMaterial->SetVectorParameterValue(TEXT("Color"), TintColor);
 		}
 	}
+
+	// Godot enemies re-read their stats from game_balance_config.tres (imported DA_GameBalanceConfig).
+	if (const ACodexTacticsGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>() : nullptr)
+	{
+		if (const UGodotBalanceAsset* Config = GameMode->GameBalanceConfig.LoadSynchronous())
+		{
+			ApplyBalance(*Config);
+		}
+	}
+}
+
+void AEnemyCharacter::ApplyBalance(const UGodotBalanceAsset& Config)
+{
+	CritChance = Config.GetNumber(TEXT("enemy_crit_chance"), CritChance);
+	CritMultiplier = Config.GetNumber(TEXT("enemy_crit_multiplier"), CritMultiplier);
+	const TCHAR* Prefix = nullptr;
+	switch (Archetype)
+	{
+	case EEnemyArchetype::FrostHound: Prefix = TEXT("hound_"); break;
+	case EEnemyArchetype::Spitter: Prefix = TEXT("spitter_"); break;
+	case EEnemyArchetype::Brute: Prefix = TEXT("brute_"); break;
+	case EEnemyArchetype::Frostbitten:
+		CritChance = Config.GetNumber(TEXT("frostbitten_crit_chance"), CritChance);
+		return;
+	case EEnemyArchetype::Cutter:
+		CritChance = Config.GetNumber(TEXT("hound_crit_chance"), CritChance); // Godot enemy_cutter.gd
+		return;
+	default:
+		return;
+	}
+	auto Key = [Prefix](const TCHAR* Name) { return FName(FString(Prefix) + Name); };
+	CritChance = Config.GetNumber(Key(TEXT("crit_chance")), CritChance);
+	if (HealthComponent)
+	{
+		HealthComponent->SetMaxHealth(Config.GetNumber(Key(TEXT("health")), HealthComponent->GetMaxHealth()), true);
+	}
+	GetCharacterMovement()->MaxWalkSpeed = Config.GetNumber(Key(TEXT("speed")), GetCharacterMovement()->MaxWalkSpeed / 100.f) * 100.f;
+	AttackDamage = Config.GetNumber(Key(TEXT("damage")), AttackDamage);
+	AttackRange = Config.GetNumber(Key(TEXT("attack_range")), AttackRange / 100.f) * 100.f;
+	AttackCooldown = Config.GetNumber(Archetype == EEnemyArchetype::Spitter ? Key(TEXT("shoot_interval")) : Key(TEXT("attack_cooldown")), AttackCooldown);
 }
 
 void AEnemyCharacter::Tick(float DeltaTime)
