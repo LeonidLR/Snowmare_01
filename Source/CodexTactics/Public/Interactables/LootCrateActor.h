@@ -63,6 +63,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Loot")
 	bool IsDestroyed() const { return bDestroyed; }
 
+	/** Save-game load (Godot _deserialize_world_state crates): looted -> empty, defused -> no trap, destroyed -> gone. */
+	void RestoreSaved(bool bInLooted, bool bInDefused, bool bInDestroyed);
+
 	/** «📦 Армейский ящик снабжения» (Godot crate_name). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Loot")
 	FText CrateName;

@@ -47,6 +47,12 @@ void UGameFlowSubsystem::ResetFlow(const FGameFlowConfig& Config)
 	HandleStateChanged(Machine.GetPhase(), Machine.GetCombatMode());
 }
 
+void UGameFlowSubsystem::RestoreForLoad(bool bCombatUnlocked, bool bCombatPhase, int32 WaveIndex)
+{
+	Machine.RestoreForLoad(bCombatUnlocked, bCombatPhase, WaveIndex);
+	HandleStateChanged(Machine.GetPhase(), Machine.GetCombatMode());
+}
+
 void UGameFlowSubsystem::HandleStateChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)
 {
 	UE_LOG(LogCodexTactics, Log, TEXT("GameFlow: %s / %s (wave %d)"),

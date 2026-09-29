@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **127 automation tests, 29 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **128 automation tests, 31 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -67,6 +67,8 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `DialogueSmoke` (`-ForceMainMenu`, verify_all does it) | «Начать игру» opens the 15-line intro briefing, Space advances (no pause), skip closes, preparation lines reach the feed with the Godot delay |
 | `ActionBarSmoke` | action bar stance slot cycles the squad, «ПЕР» pick mode on / off, squad slot 2 selects the engineer |
 | `BannersSmoke` | cutscene card + Space skip, squad warm / healed for the preparation, preparation / wave / pause banner texts |
+| `SaveLoadSmoke` | (Saved/SmokeSaves) known squad / quest / crate state saved to «Леонид_01», changed, loaded back (health, cold, position, items, pistol clip, guard, quest chain, looted crate); F5 quicksave; slot list, metadata, next name, delete |
+| `PauseMenuSmoke` | Esc: pause menu (world paused, «Загрузить» off without saves); save dialog (suggested name, card added, overwrite confirmation, Esc closes it only), back to the menu, load closes everything and restores the squad, delete, Esc closes the menu |
 | `TransferSmoke` | «ПЕРЕД» dialog (title, M16 60, hidden plasma; the drawer closes it); medkit: hand-over mode with the ring, click on himself refused, click on the engineer hands it over; M16 pack of 30 by a click near the engineer; cancel hides the ring |
 | `InventorySmoke` | «ИНВ» opens the drawer (title, lines; the weapon selector closes it); H medkit +80 HP, drawer canned food -25 cold; drawer turret with none on the commander: a squad mate hands one over, placement starts |
 | `GuardSmoke` | T fixes the engineer on its spot (out of the formation): the commander leads 8 m away, the engineer stays, the medic follows; T again returns it |
@@ -81,7 +83,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `MissionSmoke` | objective banner texts (start → preparation → wave), an operative's death fails the mission (GameOver, reason, time stop), restart reloads a fresh exploration |
 | `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
 | `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot |
-| `HudShot [close] [walk] [menu] [place] [shoot] [failed] [mainmenu] [dialogue] [cutscene] [prep] [turnbased] [weapons] [grenade] [inventory] [transfer]` (`dialogue`: intro briefing window; `shoot`: slowed-down barrel shot = tracer, target flash, plan marker; `failed`: mission-failed screen; `mainmenu`: needs `-ForceMainMenu`) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
+| `HudShot [close] [walk] [menu] [place] [shoot] [failed] [mainmenu] [dialogue] [cutscene] [prep] [turnbased] [weapons] [grenade] [inventory] [transfer] [pause] [saves]` (`dialogue`: intro briefing window; `shoot`: slowed-down barrel shot = tracer, target flash, plan marker; `failed`: mission-failed screen; `mainmenu`: needs `-ForceMainMenu`) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
 | `FinishPrep` | dev: skip preparation, start the wave |
 
 Parity tests live in `Source/CodexTacticsTests/Private/<System>/` named `CodexTactics.<System>.<Case>`; they mirror
@@ -281,7 +283,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 4. ~~Ctrl + click targeted shots~~ — done (see §10).
 5. UI shell from REFERENCE_PLAYTHROUGH: ~~objective banner, mission failed + Ctrl + X, start menu~~ (done, §10);
    ~~dialogue window, bottom action bar, banners, cutscene card~~ (done); remaining UI: ~~inventory drawer~~ (done: `UInventoryDrawerWidget`, H / J / K / L, `UsePersonalItem`), ~~transfer~~ (done: `UTransferDialogWidget`, `USquadTransferSubsystem`, `TransferRules`),
-   ~~guard~~ (done: T / «ОБОР», `USquadSubsystem::ToggleGuard`, `AOperativeCharacter::bGuarding`), ~~weapon selector~~ (done), pause menu / save-load, radius rings (action bar slots are placeholders).
+   ~~guard~~ (done: T / «ОБОР», `USquadSubsystem::ToggleGuard`, `AOperativeCharacter::bGuarding`), ~~weapon selector~~ (done), ~~pause menu / save-load~~ (done: `UPauseMenuWidget`, `USaveLoadDialogWidget`, `USaveGameSubsystem`, F5), radius rings (action bar slots are placeholders).
 6. Turn-based combat manager on the Gorky grid (Godot `Scripts/tactics/turn_based_combat_manager.gd`).
    Done: `GorkyLineOfSight`, `TurnBasedRules`, `UTurnBasedCombatSubsystem` + overlay + controller input (see §4).
    Exposed zones done (`FExposedZones` pure rules + `UpdateExposedZones` at the end of the squad phase, overlay
@@ -365,6 +367,11 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Targeted shots: crouching behind a barricade does not apply Godot's 0.8 cover to the priority target (UE
   `ShootAtTarget` has no cover factor yet); rage / panic refusal not ported (no rage / panic components). The barrel
   line «💥 Прицельный выстрел…» is posted only when the shot actually fires (Godot posts it even when frozen).
+- Save / load differences: a load resumes an active wave from its preparation (Godot only flips flags; neither saves
+  enemies); «В главное меню» restarts the level with the start menu (Godot shows the menu over the running scene);
+  `AAutosaveTrigger` is not ported — Godot's only trigger (gate_kpp.tscn AutosaveTrigger_Gate) has no collision shape
+  and never fires; the start menu has no «Загрузить» (Godot neither). The save file stores the weapon id (Godot:
+  current_weapon_idx) and grenades / ExtraAmmo in addition.
 - **Deliberate deviation:** the «Патроны 9мм (12 шт.)» hand-over works (Godot shows the button but _transfer_item_to_target
   has no PISTOL_AMMO branch). Ammo handed to a mate without that weapon is kept in ExtraAmmo (Godot drops it).
 - **Deliberate deviation (user decision 2026-09-28):** a shot at an untrapped supply crate only posts «💥 Пуля пробила
@@ -376,7 +383,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Item hand-over («ПЕРЕД»; Godot transfer_dialog.gd + main.gd transfer mode): dialog, purple ring cursor, click on a mate / within 2.2 m, engineering items up to the mate's max, provisions, ammo packs; TransferRulesTest, TransferSmoke, `HudShot transfer` |
+| (this) | Save / load (Godot save_manager.gd: JSON slots in Saved/SaveGames with the Godot keys; squad, game state, quest chain, crates), F5 quicksave, Esc pause menu (Godot pause_menu_dialog.gd) and the save / load dialog (save_load_dialog.gd: suggested name, cards, overwrite confirmation, load, delete); SaveGameRulesTest, SaveLoadSmoke, PauseMenuSmoke, `HudShot pause / saves` |
+| `2528c03` | Item hand-over («ПЕРЕД»; Godot transfer_dialog.gd + main.gd transfer mode): dialog, purple ring cursor, click on a mate / within 2.2 m, engineering items up to the mate's max, provisions, ammo packs; TransferRulesTest, TransferSmoke, `HudShot transfer` |
 | `c44c273` | Personal inventory drawer («ИНВ»; Godot inventory_drawer.gd) with provisions (H / J / K / L, player.gd heal_with_item) and set-up from the drawer (_start_placement_for_type with hand-over); PersonalItemTest, InventorySmoke, `HudShot inventory` |
 | `72d23ef` | Guard mode (Godot toggle_soldier_guard): T / action bar «ОБОР» / «ЗАФИК», guards leave the formation and hold their spot; GuardSmoke |
 | `f23c23f` | Turn-based stasis look for enemies outside the fight (Godot _apply_stasis_visuals_to_enemy, tactical_stasis_enemy.gdshader); M_TacticalStasis script; TurnBasedSmoke checks it |

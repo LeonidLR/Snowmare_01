@@ -177,6 +177,24 @@ EGameFlowResult FGameFlowStateMachine::FinishPostCombat()
 	return EGameFlowResult::Ok;
 }
 
+void FGameFlowStateMachine::RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex)
+{
+	const FGameFlowConfig Saved = Config;
+	Reset(Saved);
+	bCombatUnlocked = bInCombatUnlocked;
+	if (bInCombatUnlocked && bInCombatPhase)
+	{
+		WaveIndex = FMath::Max(1, InWaveIndex);
+		PreparationTimeRemaining = WaveIndex > 1 ? Config.WaveRestDuration : Config.PreparationDuration;
+		SetState(ECodexGamePhase::Preparation, ECodexCombatMode::None);
+	}
+	else
+	{
+		WaveIndex = FMath::Max(0, InWaveIndex);
+		SetState(ECodexGamePhase::Exploration, ECodexCombatMode::None);
+	}
+}
+
 void FGameFlowStateMachine::TriggerGameOver()
 {
 	PauseTimeRemaining = 0.f;

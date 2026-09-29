@@ -69,6 +69,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	void ToggleGuard(AOperativeCharacter* Operative);
 
+	/** Re-assigns the formation slots (after a save-game load changed leaders / guards). */
+	void RefreshFormation() { RebuildFollowers(); }
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	void EnterSoloMode();
 

@@ -38,6 +38,9 @@ public:
 	/** Replaces tuning values without touching the current phase (the game mode applies the level config at start). */
 	void SetConfig(const FGameFlowConfig& Config) { Machine.SetConfig(Config); }
 
+	/** Save-game load: see FGameFlowStateMachine::RestoreForLoad. */
+	void RestoreForLoad(bool bCombatUnlocked, bool bCombatPhase, int32 WaveIndex);
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	ECodexGamePhase GetPhase() const { return Machine.GetPhase(); }
 
@@ -49,6 +52,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	int32 GetWaveIndex() const { return Machine.GetWaveIndex(); }
+
+	/** The combat zone was triggered this mission (Godot is_combat_phase_unlocked). */
+	bool IsCombatUnlocked() const { return Machine.IsCombatUnlocked(); }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	bool IsWaveActive() const { return Machine.IsWaveActive(); }

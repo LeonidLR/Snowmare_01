@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open.
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first).
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -33,6 +33,8 @@
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UI/ActionBarWidget.h"
+#include "UI/PauseMenuWidget.h"
+#include "Core/SaveGameSubsystem.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
 #include "UnrealClient.h"
@@ -152,6 +154,49 @@ namespace HudShot
 					Grenades->StartAim(Lead);
 					Grenades->UpdateAim(Lead->GetActorLocation() + Lead->GetActorForwardVector() * 700.f);
 				}
+			}), 3.5f, false);
+		}
+		if (Args.Contains(TEXT("pause")) || Args.Contains(TEXT("saves")))
+		{
+			// The pause stops the world timers: open it last, shoot and quit on the real-time ticker.
+			const bool bSaves = Args.Contains(TEXT("saves"));
+			TWeakObjectPtr<UWorld> PauseWorld(World);
+			FTimerHandle PauseHandle;
+			World->GetTimerManager().SetTimer(PauseHandle, FTimerDelegate::CreateLambda([PauseWorld, bSaves]()
+			{
+				APlayerController* PC = PauseWorld.IsValid() ? UGameplayStatics::GetPlayerController(PauseWorld.Get(), 0) : nullptr;
+				ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
+				if (!Hud)
+				{
+					return;
+				}
+				if (bSaves)
+				{
+					if (USaveGameSubsystem* Saves = PauseWorld->GetSubsystem<USaveGameSubsystem>())
+					{
+						Saves->QuickSave(); // at least one card
+					}
+				}
+				Hud->HandleEscape();
+				if (bSaves && Hud->GetPauseMenu())
+				{
+					Hud->GetPauseMenu()->OpenSave();
+				}
+				TSharedRef<int32> Frames = MakeShared<int32>(0);
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Frames](float)
+				{
+					++(*Frames);
+					if (*Frames == 10)
+					{
+						FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / TEXT("HudShot.png"), true, false);
+					}
+					if (*Frames >= 40)
+					{
+						FPlatformMisc::RequestExit(false, TEXT("HudShot"));
+						return false;
+					}
+					return true;
+				}), 0.05f);
 			}), 3.5f, false);
 		}
 		if (Args.Contains(TEXT("transfer")))

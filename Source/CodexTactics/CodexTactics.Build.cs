@@ -23,6 +23,6 @@ public class CodexTactics : ModuleRules
 			"SlateCore"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.AddRange(new string[] { "Json" });
 	}
 }

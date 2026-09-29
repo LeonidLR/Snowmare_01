@@ -58,6 +58,15 @@ public:
 	 */
 	void CompleteChainForCombat();
 
+	/** Chain flags as saved (Godot SaveManager _serialize_quests). */
+	const FQuestChainState& GetState() const { return State; }
+
+	/**
+	 * Save-game load (Godot _deserialize_quests): the flags come back; a running generator starts its heat and look,
+	 * a powered gate opens — without the cutscene.
+	 */
+	void RestoreState(const FQuestChainState& Saved);
+
 	/** Delay between opening the gate and the pre-combat cutscene, s (Godot: 1.0). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Quests", meta = (ClampMin = "0"))
 	float CutsceneDelayAfterGate = 1.f;

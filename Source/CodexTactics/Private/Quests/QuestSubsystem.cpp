@@ -67,6 +67,20 @@ void UQuestSubsystem::CompleteChainForCombat()
 	}
 }
 
+void UQuestSubsystem::RestoreState(const FQuestChainState& Saved)
+{
+	State = Saved;
+	if (State.bIsGeneratorRunning)
+	{
+		OnGeneratorStarted.Broadcast();
+	}
+	if (State.bIsGatePowered)
+	{
+		OnGateOpened.Broadcast(); // the gate actor opens; the cutscene only follows a terminal interaction
+	}
+	OnObjectiveChanged.Broadcast(State.GetObjective());
+}
+
 void UQuestSubsystem::StartPreCombatCutscene()
 {
 	if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>())

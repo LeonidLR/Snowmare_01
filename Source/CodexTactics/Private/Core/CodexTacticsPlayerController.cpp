@@ -7,6 +7,10 @@
 #include "Data/WeaponDataAsset.h"
 #include "Combat/EncounterQueries.h"
 #include "Core/MissionSubsystem.h"
+#include "Core/SaveGameSubsystem.h"
+#include "UI/SaveLoadDialogWidget.h"
+#include "UI/PauseMenuWidget.h"
+#include "UI/CodexTacticsHUD.h"
 #include "UI/DialogueSubsystem.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Interactables/LootCrateActor.h"
@@ -97,6 +101,7 @@ void ACodexTacticsPlayerController::CreateInputActions()
 		MakeAction(TEXT("IA_UseCannedFood"), EKeys::J),
 		MakeAction(TEXT("IA_UseBread"), EKeys::K),
 		MakeAction(TEXT("IA_UseChocolate"), EKeys::L) };
+	QuickSaveAction = MakeAction(TEXT("IA_QuickSave"), EKeys::F5);
 }
 
 void ACodexTacticsPlayerController::SetupInputComponent()
@@ -122,7 +127,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(FInputChord(EKeys::X, false, true, false, false), IE_Pressed, this, &ACodexTacticsPlayerController::RestartMission);
 	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACodexTacticsPlayerController::EnterPressed);
 	InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ACodexTacticsPlayerController::TabPressed);
-	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ACodexTacticsPlayerController::DialogueSkip);
+	// Esc also closes the pause menu, so it runs while the world is paused.
+	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ACodexTacticsPlayerController::DialogueSkip).bExecuteWhenPaused = true;
 
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!Input)
@@ -154,6 +160,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(ItemActions[1], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseCannedFood);
 	Input->BindAction(ItemActions[2], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseBread);
 	Input->BindAction(ItemActions[3], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseChocolate);
+	Input->BindAction(QuickSaveAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::QuickSaveKey);
 }
 
 void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
@@ -260,6 +267,14 @@ void ACodexTacticsPlayerController::GuardKey()
 	if (USquadSubsystem* Squad = GetSquad(); Squad && Squad->GetLeader())
 	{
 		Squad->ToggleGuard(Squad->GetLeader());
+	}
+}
+
+void ACodexTacticsPlayerController::QuickSaveKey()
+{
+	if (USaveGameSubsystem* Saves = GetWorld()->GetSubsystem<USaveGameSubsystem>())
+	{
+		Saves->QuickSave();
 	}
 }
 
@@ -570,6 +585,13 @@ UTurnBasedCombatSubsystem* ACodexTacticsPlayerController::GetActiveTurnBased() c
 
 void ACodexTacticsPlayerController::DialogueSkip()
 {
+	ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(GetHUD());
+	// Pause menu windows first (they are open while the world is paused).
+	if (Hud && ((Hud->GetPauseMenu() && Hud->GetPauseMenu()->IsOpen()) || (Hud->GetSaveLoadDialog() && Hud->GetSaveLoadDialog()->IsOpen())))
+	{
+		Hud->HandleEscape();
+		return;
+	}
 	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring())
 	{
 		Transfer->CancelTransferMode();
@@ -585,9 +607,15 @@ void ACodexTacticsPlayerController::DialogueSkip()
 		TurnBased->CancelRelocate();
 		return;
 	}
-	if (UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>())
+	if (UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>(); Dialogue && Dialogue->IsDialogueOpen())
 	{
 		Dialogue->SkipDialogue();
+		return;
+	}
+	// Godot: other windows close, otherwise the pause menu opens.
+	if (Hud)
+	{
+		Hud->HandleEscape();
 	}
 }
 

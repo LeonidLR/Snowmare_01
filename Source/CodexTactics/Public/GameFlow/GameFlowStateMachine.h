@@ -74,6 +74,13 @@ public:
 	/** Any phase -> GameOver. */
 	void TriggerGameOver();
 
+	/**
+	 * Save-game load (Godot SaveManager _deserialize_game_state sets is_combat_phase_unlocked / is_preparation_active /
+	 * is_wave_active / current_wave_index): Exploration before the combat, otherwise the preparation of the saved wave
+	 * (an active wave is resumed from its preparation — enemies are not saved, like in Godot).
+	 */
+	void RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex);
+
 	/** Advances real-time timers: pause cooldown, tactical pause, preparation. */
 	void Tick(float RealDeltaSeconds);
 

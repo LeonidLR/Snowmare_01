@@ -14,6 +14,9 @@ class UDialogueWidget;
 class UActionBarWidget;
 class UInventoryDrawerWidget;
 class UTransferDialogWidget;
+class UPauseMenuWidget;
+class USaveLoadDialogWidget;
+enum class ESaveDialogMode : uint8;
 class UPhaseBannersWidget;
 class UTurnBasedHudWidget;
 class ALootCrateActor;
@@ -70,6 +73,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UTransferDialogWidget> TransferDialogWidgetClass;
 
+	/** Pause menu / save-load dialog classes (Widget Blueprint subclasses can restyle them). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UPauseMenuWidget> PauseMenuWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<USaveLoadDialogWidget> SaveLoadDialogWidgetClass;
+
 	/** Pause / preparation / wave banners and the cutscene card (a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UPhaseBannersWidget> PhaseBannersWidgetClass;
@@ -90,6 +100,23 @@ public:
 
 	/** Action bar «ПЕРЕД» (Godot _toggle_transfer_dialog): the drawer and the weapon selector close. */
 	void ToggleTransferDialog();
+
+	UPauseMenuWidget* GetPauseMenu() const { return PauseMenu; }
+	USaveLoadDialogWidget* GetSaveLoadDialog() const { return SaveLoadDialog; }
+
+	/** Pause menu -> save / load dialog (the world stays paused). */
+	void OpenSaveLoadDialog(ESaveDialogMode Mode);
+	/** «Назад в меню»: the dialog closes, the pause menu opens again. */
+	void CloseSaveLoadDialog();
+	/** Both closed, the world runs again (after a load). */
+	void ClosePauseMenus();
+
+	/**
+	 * Esc (Godot main.gd KEY_ESCAPE): the overwrite confirmation, the save / load dialog, the pause menu, the inventory
+	 * drawer, the transfer dialog close in that order; with nothing open the pause menu opens (not over the start menu).
+	 * Returns false when Esc should go on (e.g. to the dialogue).
+	 */
+	bool HandleEscape();
 
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
@@ -153,6 +180,12 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTransferDialogWidget> TransferDialog;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UPauseMenuWidget> PauseMenu;
+
+	UPROPERTY(Transient)
+	TObjectPtr<USaveLoadDialogWidget> SaveLoadDialog;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPhaseBannersWidget> PhaseBanners;

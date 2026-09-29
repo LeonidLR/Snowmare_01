@@ -15,6 +15,11 @@
 #include "UI/ActionBarWidget.h"
 #include "UI/InventoryDrawerWidget.h"
 #include "UI/TransferDialogWidget.h"
+#include "UI/PauseMenuWidget.h"
+#include "Kismet/GameplayStatics.h"
+#include "UI/SaveLoadDialogWidget.h"
+#include "UI/DialogueSubsystem.h"
+#include "Core/MissionSubsystem.h"
 #include "UI/PhaseBannersWidget.h"
 #include "UI/TurnBasedHudWidget.h"
 #include "UI/DialogueSubsystem.h"
@@ -120,6 +125,8 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	ActionBarWidgetClass = UActionBarWidget::StaticClass();
 	InventoryDrawerWidgetClass = UInventoryDrawerWidget::StaticClass();
 	TransferDialogWidgetClass = UTransferDialogWidget::StaticClass();
+	PauseMenuWidgetClass = UPauseMenuWidget::StaticClass();
+	SaveLoadDialogWidgetClass = USaveLoadDialogWidget::StaticClass();
 	PhaseBannersWidgetClass = UPhaseBannersWidget::StaticClass();
 	TurnBasedHudWidgetClass = UTurnBasedHudWidget::StaticClass();
 }
@@ -185,6 +192,22 @@ void ACodexTacticsHUD::BeginPlay()
 		if (TransferDialog)
 		{
 			TransferDialog->AddToViewport(6);
+		}
+	}
+	if (PauseMenuWidgetClass && GetOwningPlayerController())
+	{
+		PauseMenu = CreateWidget<UPauseMenuWidget>(GetOwningPlayerController(), PauseMenuWidgetClass);
+		if (PauseMenu)
+		{
+			PauseMenu->AddToViewport(40);
+		}
+	}
+	if (SaveLoadDialogWidgetClass && GetOwningPlayerController())
+	{
+		SaveLoadDialog = CreateWidget<USaveLoadDialogWidget>(GetOwningPlayerController(), SaveLoadDialogWidgetClass);
+		if (SaveLoadDialog)
+		{
+			SaveLoadDialog->AddToViewport(41);
 		}
 	}
 	if (PhaseBannersWidgetClass && GetOwningPlayerController())
@@ -574,4 +597,81 @@ void ACodexTacticsHUD::ToggleTransferDialog()
 			ActionBar->ToggleWeaponSelector();
 		}
 	}
+}
+
+void ACodexTacticsHUD::OpenSaveLoadDialog(ESaveDialogMode Mode)
+{
+	if (PauseMenu)
+	{
+		PauseMenu->Close(false);
+	}
+	UGameplayStatics::SetGamePaused(GetWorld(), true);
+	if (SaveLoadDialog)
+	{
+		SaveLoadDialog->Open(Mode);
+	}
+}
+
+void ACodexTacticsHUD::CloseSaveLoadDialog()
+{
+	if (SaveLoadDialog)
+	{
+		SaveLoadDialog->Close();
+	}
+	if (PauseMenu)
+	{
+		PauseMenu->Open();
+	}
+}
+
+void ACodexTacticsHUD::ClosePauseMenus()
+{
+	if (SaveLoadDialog)
+	{
+		SaveLoadDialog->Close();
+	}
+	if (PauseMenu)
+	{
+		PauseMenu->Close(true);
+	}
+	UGameplayStatics::SetGamePaused(GetWorld(), false);
+}
+
+bool ACodexTacticsHUD::HandleEscape()
+{
+	if (SaveLoadDialog && SaveLoadDialog->IsOpen())
+	{
+		if (SaveLoadDialog->IsConfirmOpen())
+		{
+			SaveLoadDialog->CancelConfirmation();
+		}
+		else
+		{
+			CloseSaveLoadDialog();
+		}
+		return true;
+	}
+	if (PauseMenu && PauseMenu->IsOpen())
+	{
+		PauseMenu->Close(true);
+		return true;
+	}
+	if (InventoryDrawer && InventoryDrawer->IsOpen())
+	{
+		InventoryDrawer->Close();
+		return true;
+	}
+	if (TransferDialog && TransferDialog->IsOpen())
+	{
+		TransferDialog->Close();
+		return true;
+	}
+	const UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
+	const UDialogueSubsystem* Dialogues = GetWorld()->GetSubsystem<UDialogueSubsystem>();
+	if ((Mission && Mission->IsMainMenuOpen()) || (Dialogues && Dialogues->IsDialogueOpen()) || !PauseMenu)
+	{
+		return false;
+	}
+	PauseMenu->Open();
+	return true;
 }

@@ -285,4 +285,26 @@ void ALootCrateActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
 		LOCTEXT("Source", "Ловушка ящика"), LOCTEXT("SquadHit", "💥 Задело взрывом растяжки ящика (-{0} HP)!"));
 }
 
+void ALootCrateActor::RestoreSaved(bool bInLooted, bool bInDefused, bool bInDestroyed)
+{
+	bLooted = bInLooted || bInDestroyed;
+	bDestroyed = bInDestroyed;
+	if (bInDefused || bInDestroyed)
+	{
+		bDefused = bInDefused;
+		bTrapped = false;
+	}
+	if (bLooted)
+	{
+		Contents.DestroyAll();
+	}
+	UpdateVisuals();
+	if (bDestroyed)
+	{
+		// Godot: a destroyed crate is hidden and has no collision after a load.
+		SetActorHiddenInGame(true);
+		SetActorEnableCollision(false);
+	}
+}
+
 #undef LOCTEXT_NAMESPACE

@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: save / load (`USaveGameSubsystem`, `SaveGameRules`), pause menu + save dialog widgets, F5 / Esc; additive: `FGameFlowStateMachine::RestoreForLoad`, `UQuestSubsystem::RestoreState` / `GetState`, `ALootCrateActor::RestoreSaved`, `USquadSubsystem::RefreshFormation`, `UGameFlowSubsystem::IsCombatUnlocked`; module Json.
 - 2026-09-29 Claude: item hand-over (`USquadTransferSubsystem`, `UTransferDialogWidget`, `TransferRules`); operative `GetReserve` / `TakeReserve`; HUD `ToggleTransferDialog`, action bar «ПЕРЕД».
 - 2026-09-29 Claude: inventory drawer (`UInventoryDrawerWidget`, HUD `ToggleInventoryDrawer`), `AOperativeCharacter::UsePersonalItem`, controller `UseSquadItem` / `StartPlacementForType`, H J K L keys.
 - 2026-09-29 Claude: guard mode (`bGuarding`, `USquadSubsystem::ToggleGuard` — `RebuildFollowers` skips guards), T key, action bar «ОБОР».

@@ -194,6 +194,12 @@ private:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UInputAction>> ItemActions;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> QuickSaveAction;
+
+	/** F5 (Godot _perform_quick_save). */
+	void QuickSaveKey();
+
 	void UseMedkit() { UseSquadItem(EPersonalItem::Medkit); }
 	void UseCannedFood() { UseSquadItem(EPersonalItem::CannedFood); }
 	void UseBread() { UseSquadItem(EPersonalItem::Bread); }
