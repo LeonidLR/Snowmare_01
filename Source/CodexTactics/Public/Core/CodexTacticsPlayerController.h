@@ -70,6 +70,9 @@ public:
 	/** Action bar squad slot / keys 1..3. */
 	void SelectSquadMember(int32 RosterIndex) { SelectMember(RosterIndex); }
 
+	/** Godot Alt + Z / C / V: the whole squad changes stance (prone refused while anyone moves). */
+	void SetEntireSquadStance(EOperativeStance Stance);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;

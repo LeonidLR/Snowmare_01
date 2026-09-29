@@ -134,8 +134,21 @@ public:
 	/** Called by the AI controller when a move request finishes. */
 	void HandleMoveFinished();
 
+	/** Godot is_behind_barricade: a standing barricade within 2.2 m (centre 1 m above the feet to the barricade's base). */
+	bool IsBehindBarricade() const;
+
+	/** Godot is_in_barricade_cover: crouched behind a barricade (action bar shield). */
+	bool IsInBarricadeCover() const { return Stance == EOperativeStance::Crouching && IsBehindBarricade(); }
+
+	/** Godot set_facing_point (Shift + click): stops and turns towards Point. */
+	void SetFacingPoint(const FVector& Point);
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
 	bool CanSprint() const;
+
+	/** Godot is_wounded: health below MovementConfig.WoundedHealthThreshold (or bWounded forced). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
+	bool IsWounded() const;
 
 	/** Max ground speed for the current stance/sprint/wound/carry state, cm/s. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
@@ -524,6 +537,9 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Combat")
 	float MisfireCooldownTimer = 0.0f;
 
+	/** Godot cover_chatter_timer: the «Занял укрытие» radio line at most every 5 s. */
+	double LastCoverChatterTime = -100.0;
+
 	/** Godot weapon_freeze_notify_timer: «ОРУЖИЕ ЗАМЁРЗЛО» at most every 2.5 s. */
 	float WeaponFreezeNotifyTimer = 0.f;
 	void NotifyWeaponFrozen();
@@ -544,6 +560,9 @@ public:
 	FOnWeaponMisfiredNative OnWeaponMisfiredNative;
 
 private:
+	UFUNCTION()
+	void HandleHealthChanged(float NewHealth, float MaxHealth, float Delta);
+
 	UFUNCTION()
 	void HandleDied(AActor* Victim, const FString& AttackerSource);
 	/** Pushes max speed and turn rate for the current state into CharacterMovement. */

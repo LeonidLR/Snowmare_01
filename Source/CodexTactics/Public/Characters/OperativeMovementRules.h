@@ -41,6 +41,10 @@ struct CODEXTACTICS_API FOperativeMovementConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Speed", meta = (ClampMin = "0", ClampMax = "1"))
 	float ProneSpeedMultiplier = 0.28f;
 
+	/** Wounded below this health fraction (Godot wounded_health_threshold_percent). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Speed", meta = (ClampMin = "0", ClampMax = "1"))
+	float WoundedHealthThreshold = 0.5f;
+
 	/** Speed multiplier while badly wounded. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Speed", meta = (ClampMin = "0", ClampMax = "1"))
 	float WoundedSpeedMultiplier = 0.65f;

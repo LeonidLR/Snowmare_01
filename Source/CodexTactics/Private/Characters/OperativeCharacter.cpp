@@ -142,6 +142,7 @@ void AOperativeCharacter::BeginPlay()
 	if (HealthComponent)
 	{
 		HealthComponent->OnDied.AddDynamic(this, &AOperativeCharacter::HandleDied);
+		HealthComponent->OnHealthChanged.AddDynamic(this, &AOperativeCharacter::HandleHealthChanged);
 	}
 
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
@@ -457,6 +458,63 @@ void AOperativeCharacter::HandleMoveFinished()
 	bHasMoveOrder = false;
 	bSprinting = false;
 	ApplyMovementParams();
+
+	// Godot _on_movement_destination_reached: behind a barricade in combat (not frostbitten) the operative takes cover.
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	const bool bCombat = (Flow && Flow->GetPhase() != ECodexGamePhase::Exploration) || CurrentCombatTarget.IsValid();
+	if (!bCombat || Stance == EOperativeStance::Crouching || (ColdSurvival && ColdSurvival->IsFrostbitten()) || !IsBehindBarricade())
+	{
+		return;
+	}
+	SetStance(EOperativeStance::Crouching);
+	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🛡️ В УКРЫТИИ (-35% урона)"), FLinearColor(0.3f, 0.9f, 1.f));
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - LastCoverChatterTime >= 5.0)
+	{
+		LastCoverChatterTime = Now;
+		const TCHAR* Callouts[] = { TEXT("🛡️ Занял укрытие!"), TEXT("🛡️ В укрытии, сектор держу!"),
+			TEXT("🛡️ Укрылся за баррикадой, готов к бою!"), TEXT("🛡️ На позиции за щитом, веду наблюдение!") };
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(DisplayName, FText::FromString(Callouts[FMath::RandRange(0, 3)]));
+		}
+	}
+}
+
+bool AOperativeCharacter::IsBehindBarricade() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	const FVector Centre = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() - 100.f);
+	for (TActorIterator<ABarricadeActor> It(World); It; ++It)
+	{
+		const UHealthComponent* Health = It->FindComponentByClass<UHealthComponent>();
+		if (!IsValid(*It) || (Health && !Health->IsAlive()))
+		{
+			continue;
+		}
+		FVector Origin;
+		FVector Extent;
+		It->GetActorBounds(true, Origin, Extent);
+		if (FVector::Dist(Centre, FVector(Origin.X, Origin.Y, Origin.Z - Extent.Z)) <= 220.f)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void AOperativeCharacter::SetFacingPoint(const FVector& Point)
+{
+	StopOperative();
+	const FVector Direction = (Point - GetActorLocation()).GetSafeNormal2D();
+	if (!Direction.IsNearlyZero())
+	{
+		SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
+	}
 }
 
 int32 AOperativeCharacter::GetItemCount(EPersonalItem Item) const
@@ -533,14 +591,30 @@ void AOperativeCharacter::SetCarrying(bool bNewCarrying)
 	ApplyMovementParams();
 }
 
+bool AOperativeCharacter::IsWounded() const
+{
+	// Godot is_wounded: below the wounded threshold of max health (bWounded forces it, e.g. in tests).
+	return bWounded || (HealthComponent && HealthComponent->GetMaxHealth() > 0.f
+		&& HealthComponent->GetCurrentHealth() / HealthComponent->GetMaxHealth() < MovementConfig.WoundedHealthThreshold);
+}
+
 bool AOperativeCharacter::CanSprint() const
 {
-	return !bCarrying && OperativeMovementRules::CanSprint(MovementConfig, Stance, ColdLevel, bWounded);
+	return !bCarrying && OperativeMovementRules::CanSprint(MovementConfig, Stance, ColdLevel, IsWounded());
 }
 
 float AOperativeCharacter::GetMaxSpeed() const
 {
-	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, Stance, bSprinting, bWounded, bCarrying) * ColdSpeedMultiplier;
+	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, Stance, bSprinting, IsWounded(), bCarrying) * ColdSpeedMultiplier;
+}
+
+void AOperativeCharacter::HandleHealthChanged(float NewHealth, float MaxHealth, float Delta)
+{
+	if (bSprinting && !CanSprint())
+	{
+		bSprinting = false;
+	}
+	ApplyMovementParams(); // the wounded speed follows the health
 }
 
 void AOperativeCharacter::SetColdSpeedMultiplier(float Multiplier)

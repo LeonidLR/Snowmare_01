@@ -1,6 +1,8 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/RecruitSubsystem.h"
+#include "UI/FloatingTextSubsystem.h"
+#include "Combat/HealthComponent.h"
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/GrenadeSubsystem.h"
@@ -806,6 +808,47 @@ void ACodexTacticsPlayerController::OnClick()
 		// Grid combat handles clicks itself (turn-based step).
 		return;
 	}
+	// Godot Shift + click on the ground: turn the leader and fix the observation sector.
+	if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
+	{
+		Leader->SetFacingPoint(Hit.ImpactPoint);
+		UFloatingTextSubsystem::SpawnAboveOperative(Leader, TEXT("👁️ СЕКТОР ОБЗОРА"), FLinearColor(0.2f, 0.9f, 1.f));
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Сектор наблюдения зафиксирован!"), Leader->DisplayName));
+		}
+		return;
+	}
+	// Godot: during an active wave the squad moves only through the tactical pause.
+	if (Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Mode == ECodexCombatMode::RealTime)
+	{
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(LOCTEXT("HQ", "ШТАБ"), LOCTEXT("MoveOnlyInPause", "Перемещение во время боя возможно только в режиме тактической паузы [ПРОБЕЛ]!"));
+		}
+		return;
+	}
+	// Godot double click: sprint, or why not.
+	if (bDoubleClick)
+	{
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			if (!Leader->CanSprint() && Leader->ColdLevel >= Leader->MovementConfig.MaxColdToSprint)
+			{
+				Messages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🥶 %s замерз(ла) (%d%% холода) и не может бежать! Иду шагом."),
+					*Leader->DisplayName.ToString(), FMath::FloorToInt(Leader->ColdLevel))));
+			}
+			else if (!Leader->CanSprint() && Leader->IsWounded() && Leader->HealthComponent)
+			{
+				Messages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🩹 %s тяжело ранен(а) (%d/%d HP) и не может бежать! Иду шагом."),
+					*Leader->DisplayName.ToString(), FMath::FloorToInt(Leader->HealthComponent->GetCurrentHealth()), FMath::FloorToInt(Leader->HealthComponent->GetMaxHealth()))));
+			}
+			else if (Leader->CanSprint())
+			{
+				Messages->PostMessage(Leader->DisplayName, LOCTEXT("SprintOrder", "🏃 Бегом к позиции!"));
+			}
+		}
+	}
 	if (Mode == ECodexCombatMode::TacticalPause)
 	{
 		const FVector Planned = Squad->PlanMove(Leader, Hit.ImpactPoint, bDoubleClick, Flow->GetConfig().PauseOrderRadius);
@@ -818,6 +861,41 @@ void ACodexTacticsPlayerController::OnClick()
 		return;
 	}
 	Leader->OrderMoveTo(Hit.ImpactPoint, bDoubleClick);
+}
+
+void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance)
+{
+	USquadSubsystem* Squad = GetSquad();
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	if (!Squad)
+	{
+		return;
+	}
+	// Godot _set_entire_squad_stance: nobody lies down while the squad moves.
+	if (Stance == EOperativeStance::Prone)
+	{
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (Member->IsMoving() || Member->GetVelocity().SizeSquared2D() > 100.f)
+			{
+				if (Messages)
+				{
+					Messages->PostMessage(LOCTEXT("HQ", "ШТАБ"), LOCTEXT("SquadProneMoving", "⚠️ Нельзя перевести отряд в положение лёжа во время движения! Сначала полностью остановитесь."));
+				}
+				return;
+			}
+		}
+	}
+	const TCHAR* Name = Stance == EOperativeStance::Prone ? TEXT("ЛЁЖА") : (Stance == EOperativeStance::Crouching ? TEXT("ПРИСЕВ") : TEXT("СТОЯ"));
+	for (AOperativeCharacter* Member : Squad->GetMembers())
+	{
+		Member->SetStance(Stance);
+		UFloatingTextSubsystem::SpawnAboveOperative(Member, FString::Printf(TEXT("👥 ОТРЯД: %s"), Name), FLinearColor(0.3f, 0.95f, 1.f));
+	}
+	if (Messages)
+	{
+		Messages->PostMessage(LOCTEXT("SquadSpeaker", "ОТРЯД"), FText::FromString(FString::Printf(TEXT("📢 [ПРИКАЗ ОТРЯДУ]: Все бойцы переходят в положение %s!"), Name)));
+	}
 }
 
 void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
@@ -860,6 +938,11 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 	USquadSubsystem* Squad = GetSquad();
 	if (!Squad)
 	{
+		return;
+	}
+	if (IsInputKeyDown(EKeys::LeftAlt) || IsInputKeyDown(EKeys::RightAlt))
+	{
+		SetEntireSquadStance(Stance); // Godot Alt + Z / C / V
 		return;
 	}
 	AOperativeCharacter* Leader = Squad->GetLeader();

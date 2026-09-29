@@ -54,8 +54,8 @@ namespace
 	const FLinearColor SelectorButtonColor = ACodexTacticsHUD::GodotColor(0.2f, 0.22f, 0.27f);
 	const TCHAR* const SelectorIds[] = { TEXT("m16"), TEXT("pistol"), TEXT("grenade"), TEXT("knife") };
 
-	/** Godot role tags (second line of «КУБ\nКОМ» etc.; the shape names were placeholder art). */
-	const TCHAR* const BarRoleTags[] = { TEXT("КОМ"), TEXT("ИНЖ"), TEXT("МЕД"), TEXT("РЕЗ") };
+	/** Godot role tags (second line of «КУБ\nКОМ» etc.; the shape names were placeholder art; slot 4 «СУС\nИВАН»). */
+	const TCHAR* const BarRoleTags[] = { TEXT("КОМ"), TEXT("ИНЖ"), TEXT("МЕД"), TEXT("ИВАН") };
 
 	UProgressBar* BarMakeProgress(UWidgetTree* Tree, const FLinearColor& Fill, const FLinearColor& Back)
 	{

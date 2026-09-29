@@ -40,7 +40,9 @@ void UHealthComponent::ApplyDirectHealthLoss(float Amount, const FString& Source
 	{
 		return;
 	}
+	const float OldHealth = CurrentHealth;
 	CurrentHealth = FMath::Max(0.0f, CurrentHealth - Amount);
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, CurrentHealth - OldHealth);
 	if (CurrentHealth <= 0.0f)
 	{
 		Die(Source);

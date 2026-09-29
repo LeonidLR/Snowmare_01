@@ -61,6 +61,7 @@ void OperativeBalance::Apply(const UGodotBalanceAsset& Config, AOperativeCharact
 	Movement.MaxColdToSprint = Config.GetNumber(TEXT("max_cold_to_sprint"), Movement.MaxColdToSprint);
 	Movement.CarryingSpeedMultiplier = Config.GetNumber(TEXT("carrying_speed_multiplier"), Movement.CarryingSpeedMultiplier);
 	Movement.WoundedSpeedMultiplier = Config.GetNumber(TEXT("wounded_speed_multiplier"), Movement.WoundedSpeedMultiplier);
+	Movement.WoundedHealthThreshold = Config.GetNumber(TEXT("wounded_health_threshold_percent"), Movement.WoundedHealthThreshold);
 	Movement.Acceleration = Config.GetNumber(TEXT("character_acceleration"), Movement.Acceleration / 100.f) * 100.f;
 	Movement.Deceleration = Config.GetNumber(TEXT("character_deceleration"), Movement.Deceleration / 100.f) * 100.f;
 	if (UColdSurvivalComponent* Cold = Operative.ColdSurvival)
