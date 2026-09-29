@@ -103,8 +103,6 @@ void UMainMenuWidget::BuildDefaultLayout()
 		LOCTEXT("Game", "🎮 1. Начать игру (Исследование ➔ Бой)"), MenuGameText, Column);
 	MenuCombatButton = MakeButton(TEXT("MenuCombatButton"), TEXT("MenuCombatText"),
 		LOCTEXT("Combat", "⚔️ 2. Начать бой (Тактическая подготовка)"), MenuCombatText, Column);
-	MenuExplorationButton = MakeButton(TEXT("MenuExplorationButton"), TEXT("MenuExplorationText"),
-		LOCTEXT("Exploration", "🔍 3. Начать исследование (Квесты и холод)"), MenuExplorationText, Column);
 }
 
 void UMainMenuWidget::NativeOnInitialized()
@@ -122,11 +120,7 @@ void UMainMenuWidget::NativeOnInitialized()
 	{
 		MenuCombatButton->OnClicked.AddDynamic(this, &UMainMenuWidget::HandleCombat);
 	}
-	if (MenuExplorationButton)
-	{
-		MenuExplorationButton->OnClicked.AddDynamic(this, &UMainMenuWidget::HandleExploration);
-	}
-	for (UTextBlock* Text : { MenuTitleText.Get(), MenuGameText.Get(), MenuCombatText.Get(), MenuExplorationText.Get() })
+	for (UTextBlock* Text : { MenuTitleText.Get(), MenuGameText.Get(), MenuCombatText.Get() })
 	{
 		if (Text)
 		{
@@ -151,12 +145,5 @@ void UMainMenuWidget::HandleCombat()
 	}
 }
 
-void UMainMenuWidget::HandleExploration()
-{
-	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
-	{
-		Mission->StartMission(EMissionStartMode::Exploration);
-	}
-}
 
 #undef LOCTEXT_NAMESPACE

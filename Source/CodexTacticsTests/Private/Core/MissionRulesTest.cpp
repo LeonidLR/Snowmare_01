@@ -51,10 +51,8 @@ bool FMissionStartModeTest::RunTest(const FString&)
 	TestTrue(TEXT("Ctrl + X repeats the last mode"), GetAutoStartMode(true, EMissionStartMode::Combat, false) == EMissionStartMode::Combat);
 	TestTrue(TEXT("Quick restart without a mode shows the menu"), GetAutoStartMode(true, EMissionStartMode::None, false) == EMissionStartMode::None);
 	TestTrue(TEXT("Headless checks start the game"), GetAutoStartMode(false, EMissionStartMode::None, true) == EMissionStartMode::Game);
-	TestEqual(TEXT("Exploration objective"), GetModeObjective(EMissionStartMode::Exploration).ToString(),
-		FString(TEXT("Исследовать КПП (сбор канистры, топлива, запуск генератора)")));
-	TestEqual(TEXT("Exploration radio"), GetModeRadio(EMissionStartMode::Exploration).ToString(),
-		FString(TEXT("Режим исследования запущен. Осмотрите территорию перед воротами.")));
+	TestEqual(TEXT("Game objective"), GetModeObjective(EMissionStartMode::Game).ToString(),
+		FString(TEXT("Исследовать КПП и найти способ открыть гермоворота")));
 	TestTrue(TEXT("Combat sets no objective itself"), GetModeObjective(EMissionStartMode::Combat).IsEmpty());
 	return true;
 }

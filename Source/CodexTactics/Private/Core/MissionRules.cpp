@@ -13,8 +13,6 @@ FText MissionRules::GetModeObjective(EMissionStartMode Mode)
 	{
 	case EMissionStartMode::Game:
 		return GetStartObjective();
-	case EMissionStartMode::Exploration:
-		return LOCTEXT("ExplorationStart", "Исследовать КПП (сбор канистры, топлива, запуск генератора)");
 	default:
 		return FText::GetEmpty();
 	}
@@ -26,8 +24,6 @@ FText MissionRules::GetModeRadio(EMissionStartMode Mode)
 	{
 	case EMissionStartMode::Game:
 		return LOCTEXT("GameRadio", "Мы у главных ворот карантинного КПП. Аномальный мороз посреди лета... Нужно запитать ворота и проникнуть внутрь.");
-	case EMissionStartMode::Exploration:
-		return LOCTEXT("ExplorationRadio", "Режим исследования запущен. Осмотрите территорию перед воротами.");
 	default:
 		return FText::GetEmpty();
 	}

@@ -19,7 +19,7 @@ namespace MissionRules
 	/** Objective when the mission starts in «Начать игру» (Godot _on_start_game_pressed). */
 	CODEXTACTICS_API FText GetStartObjective();
 
-	/** Objective and commander radio line for a start mode (Combat: empty, the flow sets the objective). */
+	/** Objective and commander radio line for a start mode (Game; Combat: empty, the flow sets the objective). */
 	CODEXTACTICS_API FText GetModeObjective(EMissionStartMode Mode);
 	CODEXTACTICS_API FText GetModeRadio(EMissionStartMode Mode);
 

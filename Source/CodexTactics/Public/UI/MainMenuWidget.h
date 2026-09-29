@@ -8,10 +8,10 @@ class UButton;
 class UTextBlock;
 
 /**
- * Start menu «❄️ COLD GRAD: ТАКТИЧЕСКИЙ РЕЖИМ ❄️» with three modes: «Начать игру» (exploration → combat),
- * «Начать бой» (tactical preparation), «Начать исследование» (quests and cold).
+ * Start menu «❄️ COLD GRAD: ТАКТИЧЕСКИЙ РЕЖИМ ❄️» with two modes: «Начать игру» (exploration → combat) and
+ * «Начать бой» (tactical preparation). Godot's third button «Начать исследование» is left out (user decision 2026-09-29).
  * Built in C++; a Widget Blueprint subclass can restyle it by naming its widgets MenuTitleText, MenuSubtitleText,
- * MenuGameButton, MenuCombatButton, MenuExplorationButton (+ …Text labels).
+ * MenuGameButton, MenuCombatButton (+ …Text labels).
  * Godot reference: Scenes/movements/movements_demo.tscn UI/StartMenu, main.gd _on_start_*_pressed.
  */
 UCLASS(Blueprintable)
@@ -40,12 +40,6 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Menu", meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> MenuCombatText;
 
-	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Menu", meta = (BindWidgetOptional))
-	TObjectPtr<UButton> MenuExplorationButton;
-
-	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Menu", meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> MenuExplorationText;
-
 private:
 	void BuildDefaultLayout();
 	UTextBlock* MakeText(const FName& Name, int32 Size, const FLinearColor& Color);
@@ -56,7 +50,4 @@ private:
 
 	UFUNCTION()
 	void HandleCombat();
-
-	UFUNCTION()
-	void HandleExploration();
 };

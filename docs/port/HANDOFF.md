@@ -205,7 +205,7 @@ Exploration: intro window; headless starts get the radio line instead), first pr
 no UE font glyphs → role tags КОМ / ИНЖ / МЕД / ЖИТ / ?. Godot `bottom_dialogue_dialog.gd`, `main.gd play_dialogue`.
 
 **Start menu** — `UI/MainMenuWidget` + `Core/MissionSessionSubsystem` (GameInstance: last mode, quick-restart flag
-across level reloads). `UMissionSubsystem::StartMission(Game | Combat | Exploration)`: Game / Exploration set the
+across level reloads). `UMissionSubsystem::StartMission(Game | Combat)` (two modes — user decision): Game sets the
 objective and the commander line; Combat completes the quest chain (`UQuestSubsystem::CompleteChainForCombat`: generator
 running, gate open), heals / warms the squad, moves it to the actor tagged `CombatStart` (TargetPoint behind the gate on
 L_MovementTest) and starts the pre-combat cutscene. The menu opens on every level start (world paused) except after
@@ -243,8 +243,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 - PlayerStart moved to (-180, -1490): intended? (left as is, committed in `11d7655`).
 - `Config/DefaultEditor.ini` has local editor changes — never commit it unless asked.
-- «Начать исследование»: REFERENCE_PLAYTHROUGH says «exploration only … no combat», but Godot code only changes the
-  objective / radio line (the gate still starts combat). UE follows the Godot code — confirm with the user.
+- Start menu (user decision 2026-09-29): only «Начать игру» (exploration → combat) and «Начать бой» (preparation);
+  Godot's third mode «Начать исследование» is removed from UE (menu button, `EMissionStartMode::Exploration`, texts).
 - «Начать бой» position: Godot hard-codes the yard behind the gate; UE uses the `CombatStart` tag (test map: (0, −2150)).
 - Turn-based deviations: an operative that survives a mine ends its turn once (Godot schedules end_current_unit_turn
   twice — from the move and from the blast — which skips the next operative; treated as a bug). Squad starts facing the
