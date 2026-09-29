@@ -86,8 +86,34 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 
 	switch (Archetype)
 	{
-	case EEnemyArchetype::FrostHound:
 	case EEnemyArchetype::Cutter:
+		// Godot enemy_cutter.gd _ready: 75 HP, 6.2 m/s, 18 damage, 2 m, 1.1 s, crit 0.25 x1.75.
+		EnemyDisplayName = TEXT("Механо-гончая Cutter");
+		HealthComponent->SetMaxHealth(75.0f);
+		HealthComponent->SetArmorTier(EArmorTier::Light);
+		GetCharacterMovement()->MaxWalkSpeed = 620.0f;
+		AttackDamage = 18.0f;
+		AttackRange = 200.0f;
+		AttackCooldown = 1.1f;
+		CritChance = 0.25f;
+		CritMultiplier = 1.75f;
+		bFearsFire = true;
+		TintColor = FLinearColor(0.35f, 0.4f, 0.45f);
+		MeshScale = 0.85f;
+		GetCapsuleComponent()->SetCapsuleSize(35.f, 60.f);
+		if (const UGodotBalanceAsset* Jump = LoadObject<UGodotBalanceAsset>(nullptr, TEXT("/Game/Data/Enemies/DA_EnemyAnim_cutter.DA_EnemyAnim_cutter")))
+		{
+			bJumpAttackEnabled = Jump->GetNumber(TEXT("enable_jump_attack"), 0.f) > 0.5f;
+			JumpAttackSpeed = Jump->GetNumber(TEXT("jump_attack_speed"), JumpAttackSpeed);
+			JumpMinDistance = Jump->GetNumber(TEXT("jump_min_distance"), JumpMinDistance / 100.f) * 100.f;
+			JumpMaxDistance = Jump->GetNumber(TEXT("jump_max_distance"), JumpMaxDistance / 100.f) * 100.f;
+			JumpCooldown = Jump->GetNumber(TEXT("jump_cooldown"), JumpCooldown);
+			JumpAttackDamage = Jump->GetNumber(TEXT("jump_attack_damage"), JumpAttackDamage);
+			JumpDamageRadius = Jump->GetNumber(TEXT("jump_damage_radius"), JumpDamageRadius / 100.f) * 100.f;
+		}
+		break;
+
+	case EEnemyArchetype::FrostHound:
 		EnemyDisplayName = TEXT("Ледяная гончая");
 		HealthComponent->SetMaxHealth(45.0f);
 		HealthComponent->SetArmorTier(EArmorTier::Light);
@@ -229,6 +255,16 @@ void AEnemyCharacter::Tick(float DeltaTime)
 	}
 	AAIController* AIC = Cast<AAIController>(GetController());
 
+	if (JumpCooldownTimer > 0.f)
+	{
+		JumpCooldownTimer -= DeltaTime;
+	}
+	if (IsJumpAttacking())
+	{
+		TickJumpAttack(DeltaTime);
+		return;
+	}
+
 	// Godot: stagger freezes the enemy.
 	if (HealthComponent->HasStatusEffect(EStatusEffect::Stagger))
 	{
@@ -288,6 +324,19 @@ void AEnemyCharacter::Tick(float DeltaTime)
 		FRotator LookRot = (Actor->GetActorLocation() - GetActorLocation()).Rotation();
 		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, LookRot.Yaw, 0.f), DeltaTime, 10.0f));
 	};
+
+	// Godot enemy_cutter.gd _process_enemy_behavior: a pounce at 3.5-9 m (at most 2.5 m of height difference).
+	if (Archetype == EEnemyArchetype::Cutter && bJumpAttackEnabled && JumpCooldownTimer <= 0.f)
+	{
+		const FVector JumpFeet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		const FVector JumpTargetPosition = GodotPosition(Target);
+		const float JumpDistance = FVector::Dist(JumpFeet, JumpTargetPosition);
+		if (JumpDistance >= JumpMinDistance && JumpDistance <= JumpMaxDistance && FMath::Abs(JumpTargetPosition.Z - JumpFeet.Z) <= 250.f
+			&& StartJumpAttack(Target))
+		{
+			return;
+		}
+	}
 
 	// 1. A barricade / turret in the way is smashed first.
 	if (AActor* Obstacle = FindBlockingObstacle(Target))
@@ -644,7 +693,19 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 	bIsDying = true;
 	Tags.Remove(FName(TEXT("Enemy")));
 
-	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	// Godot enemy_cutter.gd _start_airborne_death: shot down mid-leap it keeps flying and crashes on the ground.
+	if (Archetype == EEnemyArchetype::Cutter && (IsJumpAttacking() || GetCharacterMovement()->IsFalling()))
+	{
+		bAirborneDeath = true;
+		JumpPhase = ECutterJumpPhase::None;
+		GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Ignore);
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("💀 СБИТ В ВОЗДУХЕ"), FLinearColor(1.f, 0.25f, 0.25f));
+	}
+	else
+	{
+		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
 	if (AController* C = GetController())
 	{
 		C->StopMovement();
@@ -689,4 +750,132 @@ bool AEnemyCharacter::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	OutLabel.MarkerColor = Archetype == EEnemyArchetype::Brute ? FLinearColor(0.95f, 0.2f, 0.2f)
 		: (Archetype == EEnemyArchetype::Spitter ? FLinearColor(0.95f, 0.85f, 0.2f) : FLinearColor(0.25f, 0.9f, 0.3f));
 	return true;
+}
+
+bool AEnemyCharacter::StartJumpAttack(AActor* Target)
+{
+	if (bIsDying || IsJumpAttacking() || !IsValid(Target))
+	{
+		return false;
+	}
+	JumpTarget = Target;
+	JumpPhase = ECutterJumpPhase::Windup;
+	JumpPhaseTimer = 0.f;
+	bJumpDamageDealt = false;
+	if (AAIController* AIC = Cast<AAIController>(GetController()))
+	{
+		AIC->StopMovement();
+	}
+	OnJumpAttackStarted();
+	return true;
+}
+
+void AEnemyCharacter::TickJumpAttack(float DeltaTime)
+{
+	JumpPhaseTimer += DeltaTime;
+	AActor* Target = JumpTarget.Get();
+	switch (JumpPhase)
+	{
+	case ECutterJumpPhase::Windup:
+	{
+		if (Target)
+		{
+			const FRotator Look = (Target->GetActorLocation() - GetActorLocation()).Rotation();
+			SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Look.Yaw, 0.f), DeltaTime, 24.f));
+		}
+		if (JumpPhaseTimer < 0.4f / JumpAttackSpeed) // Godot JUMP_ORIG_WINDUP_TIME
+		{
+			return;
+		}
+		// Godot _launch_jump_flight: a ballistic arc landing on the target within 1.3 s / speed, at most JumpMaxDistance.
+		JumpPhase = ECutterJumpPhase::Airborne;
+		JumpPhaseTimer = 0.f;
+		JumpFlightDuration = 1.3f / JumpAttackSpeed;
+		const FVector Start = GetActorLocation();
+		FVector Landing = Target ? GodotPosition(Target) + FVector(0.f, 0.f, GetSimpleCollisionHalfHeight()) : Start + GetActorForwardVector() * 500.f;
+		FVector Horizontal(Landing.X - Start.X, Landing.Y - Start.Y, 0.f);
+		if (Horizontal.Size() > JumpMaxDistance)
+		{
+			Horizontal = Horizontal.GetSafeNormal() * JumpMaxDistance;
+		}
+		const float Gravity = -GetCharacterMovement()->GetGravityZ();
+		const float DeltaZ = Landing.Z - Start.Z;
+		const FVector Velocity = Horizontal / FMath::Max(0.05f, JumpFlightDuration)
+			+ FVector(0.f, 0.f, (DeltaZ + 0.5f * Gravity * JumpFlightDuration * JumpFlightDuration) / FMath::Max(0.05f, JumpFlightDuration));
+		LaunchCharacter(Velocity, true, true);
+		return;
+	}
+	case ECutterJumpPhase::Airborne:
+		// Impact at the end of the flight, or on touching the ground in its second half.
+		if (JumpPhaseTimer >= JumpFlightDuration || (JumpPhaseTimer >= JumpFlightDuration * 0.7f && !GetCharacterMovement()->IsFalling()))
+		{
+			JumpPhase = ECutterJumpPhase::Impact;
+			JumpPhaseTimer = 0.f;
+			GetCharacterMovement()->StopMovementImmediately();
+			if (!bJumpDamageDealt)
+			{
+				bJumpDamageDealt = true;
+				ApplyJumpImpactDamage();
+			}
+			OnJumpAttackImpact();
+		}
+		return;
+	case ECutterJumpPhase::Impact:
+		if (JumpPhaseTimer >= 0.75f / JumpAttackSpeed) // Godot JUMP_ORIG_RECOVERY_TIME
+		{
+			JumpPhase = ECutterJumpPhase::None;
+			JumpPhaseTimer = 0.f;
+			JumpCooldownTimer = JumpCooldown;
+			AttackTimer = AttackCooldown;
+		}
+		return;
+	default:
+		return;
+	}
+}
+
+void AEnemyCharacter::ApplyJumpImpactDamage()
+{
+	UWorld* World = GetWorld();
+	const bool bIsCrit = FMath::FRand() < CritChance;
+	const float Damage = JumpAttackDamage * (bIsCrit ? CritMultiplier : 1.f);
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	bool bHitAny = false;
+	if (const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			const FVector Position = GodotPosition(Member);
+			if (FVector::Dist(Feet, Position) <= JumpDamageRadius && FMath::Abs(Feet.Z - Position.Z) <= 150.f)
+			{
+				Member->TakeHit(Damage, EnemyDisplayName, bIsCrit, false, this);
+				bHitAny = true;
+			}
+		}
+	}
+	for (TActorIterator<ABarricadeActor> It(World); It; ++It)
+	{
+		UHealthComponent* BarricadeHealth = It->FindComponentByClass<UHealthComponent>();
+		if (BarricadeHealth && BarricadeHealth->IsAlive() && FVector::Dist(Feet, GodotPosition(*It)) <= JumpDamageRadius)
+		{
+			BarricadeHealth->ApplyDirectHealthLoss(Damage, EnemyDisplayName);
+			bHitAny = true;
+		}
+	}
+	if (bHitAny)
+	{
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, FString::Printf(TEXT("💥 НАЛЁТ %d"), FMath::FloorToInt(Damage)), FLinearColor(1.f, 0.35f, 0.1f));
+	}
+}
+
+void AEnemyCharacter::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+	if (bAirborneDeath)
+	{
+		// Godot _process_airborne_death: crash landing.
+		bAirborneDeath = false;
+		GetCharacterMovement()->StopMovementImmediately();
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("💥 КРАХ"), FLinearColor(0.9f, 0.5f, 0.2f));
+	}
 }

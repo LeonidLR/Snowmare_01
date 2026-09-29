@@ -92,6 +92,21 @@ public:
 	 */
 	AActor* FindTarget() const;
 
+	/** Cutter pounce (Godot enemy_cutter.gd): windup, ballistic flight, impact, recovery. */
+	enum class ECutterJumpPhase : uint8 { None, Windup, Airborne, Impact };
+
+	/** Godot start_jump_attack: the cutter leaps at Target (3.5-9 m, jump config from DA_EnemyAnim_cutter). */
+	bool StartJumpAttack(AActor* Target);
+	bool IsJumpAttacking() const { return JumpPhase != ECutterJumpPhase::None; }
+	/** Seconds until the next pounce. */
+	float GetJumpCooldown() const { return JumpCooldownTimer; }
+
+	/** Blueprint hooks for the jump animation (the cutter Blueprint plays its clips). */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Enemy")
+	void OnJumpAttackStarted();
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Enemy")
+	void OnJumpAttackImpact();
+
 	/** Godot is_fleeing_fire: running from a burning barrel / warm zone. */
 	bool IsFleeingFire() const { return bFleeingFire; }
 
@@ -144,6 +159,25 @@ protected:
 	bool bIsDying = false;
 
 	float AttackTimer = 0.0f;
+
+	// --- Cutter jump (Godot enemy_cutter.gd; numbers from /Game/Data/Enemies/DA_EnemyAnim_cutter) ---
+	bool bJumpAttackEnabled = false;
+	float JumpAttackSpeed = 1.85f;
+	float JumpMinDistance = 350.f;
+	float JumpMaxDistance = 900.f;
+	float JumpCooldown = 6.f;
+	float JumpAttackDamage = 28.f;
+	float JumpDamageRadius = 220.f;
+	ECutterJumpPhase JumpPhase = ECutterJumpPhase::None;
+	float JumpPhaseTimer = 0.f;
+	float JumpCooldownTimer = 0.f;
+	float JumpFlightDuration = 0.7f;
+	bool bJumpDamageDealt = false;
+	bool bAirborneDeath = false;
+	TWeakObjectPtr<AActor> JumpTarget;
+	void TickJumpAttack(float DeltaTime);
+	void ApplyJumpImpactDamage();
+	virtual void Landed(const FHitResult& Hit) override;
 
 	/** Walk speed before frost / fear factors (archetype, balance, wave modifiers). */
 	float BaseWalkSpeed = 300.f;

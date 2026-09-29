@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **132 automation tests, 40 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **132 automation tests, 41 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -79,6 +79,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `TurnBasedBarricadeSmoke` | turn-based: barricade footprint = Godot samples; the commander walks up, click picks it up, two 45° steps (target cells recomputed), click places it: new footprint, rotation, 2 AP |
 | `TurnBasedPushSmoke` | turn-based: the commander walks up to a barrel; click picks it up (3 target cells), cancel, panel «Бочка» picks it up, click on a cell pushes: barrel +1 cell, commander on its old cell, 2 AP |
 | `ExposedZonesSmoke [shot]` | turn-based with one hound; the squad passes 3 turns: warning (1), danger (2), breach of 1-2 hounds (non-elite pool), no second breach; `shot` (rendered, UnrealEditor.exe -game) saves `ExposedZones.png` at the danger state |
+| `CutterSmoke` | Cutter (Godot enemy_cutter.gd): 75 HP / 18 damage; pounces from 6 m, the landing hurts the squad within 2.2 m («НАЛЁТ»), 6 s cooldown; shot down mid-leap it crashes («СБИТ В ВОЗДУХЕ», «КРАХ») |
 | `EnemyAISmoke` | Enemy AI (Godot enemy_base.gd / enemy_frost_*.gd): brute affinities (kinetic 0.25, energy 2); frost halves the speed; a hound 3 m from a burning barrel flees («СТРАХ ОГНЯ»); a hound picks a close turret (level generator set aside — it outranks everything for small enemies); a brute smashes a barricade in its way; a spitter 10 m out shoots the squad |
 | `AIGrenadeSmoke` | A pack of three hounds 9 m ahead in the fight draws autonomous grenades with a radio callout; an empty M16 switches to the pistol, an empty pistol to the knife |
 | `SquadControlSmoke` | Wounded below 50 % (no sprint, slower, speed follows the health), healed sprints again; Alt + C crouches the squad («👥 ОТРЯД: ПРИСЕВ», order line); Shift + click faces the point; Alt + V refused while someone moves; an operative arriving within 2.2 m of a barricade in combat crouches in cover («В УКРЫТИИ») |
@@ -418,8 +419,15 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   spitters pick targets by 100 - distance (+50 elevated), approach / back off around 12 m, shoot only with a line of
   fire (prone behind a barricade hidden, crouched cover 0.65), red tracer. Movement stays on the navmesh (UE AI
   MoveTo) — Godot's ramp routing, wall-slide / stuck avoidance and flocking separation are covered by navigation /
-  crowd avoidance. Not ported: the cutter's flying / dive behaviour (enemy_cutter.gd, 634 lines) and the cryo drone
-  (UE maps them to hound / spitter stats), frostbitten push-back, attack animation locks (is_attacking), damage flash.
+  crowd avoidance. Not ported: the cryo drone (UE maps it to spitter stats), frostbitten push-back, attack animation
+  locks (is_attacking), damage flash.
+- Cutter (Godot enemy_cutter.gd): own stats (75 HP, 6.2 m/s, 18 damage, 2 m, 1.1 s, crit 0.25 x1.75), the pounce at
+  3.5-9 m (windup 0.4 / 1.85 s, ballistic LaunchCharacter flight 1.3 / 1.85 s capped at 9 m, impact damage 28 within
+  2.2 m on the squad and barricades, «💥 НАЛЁТ N», recovery 0.75 / 1.85 s, 6 s cooldown) with the numbers imported from
+  resources/enemies/anims/cutter.tres (`Scripts/Editor/import_enemy_anim_configs.py` -> /Game/Data/Enemies/DA_EnemyAnim_*);
+  Blueprint hooks On Jump Attack Started / Impact for the clips. Godot only jumps when the model has the jump clip —
+  UE jumps whenever the config enables it. Shot down mid-leap it keeps falling on the world and crashes («СБИТ В
+  ВОЗДУХЕ», «КРАХ»). The airborne-kill EXP / kill statistics are not ported (no EXP system).
 - Panic (Godot panic_component.gd) is inert in Godot (enable_realtime_panic = false; turn-based never uses it) and the
   allegiance component is only used by tests — neither is ported.
 - Barricade contact damage (spikes / fire / cryo / energy) not ported (Godot default is NONE).
@@ -458,7 +466,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Enemy AI parity (Godot enemy_base.gd, enemy_frost_spitter.gd, enemy_frost_brute.gd): affinities / armor per type, stagger / frost, fire fear, target weights (generator / turrets / squad), obstacle smashing, spitter ranged behaviour; `EnemyAIRules` + EnemyAIRulesTest, EnemyAISmoke |
+| (this) | Cutter (Godot enemy_cutter.gd): own stats, the pounce with impact damage and cooldown, airborne death; enemy animation configs imported (`import_enemy_anim_configs.py`, DA_EnemyAnim_*); CutterSmoke |
+| `cd3d61c` | Enemy AI parity (Godot enemy_base.gd, enemy_frost_spitter.gd, enemy_frost_brute.gd): affinities / armor per type, stagger / frost, fire fear, target weights (generator / turrets / squad), obstacle smashing, spitter ranged behaviour; `EnemyAIRules` + EnemyAIRulesTest, EnemyAISmoke |
 | `6569254` | Overhead labels of enemies, barricades, turrets and the generator (Godot overhead Label3D: enemy_base.gd, barricade.gd, turret.gd, interactable.gd); `HudShot labels` |
 | `b049423` | Autonomous grenades and the empty-weapon switch (Godot player.gd _evaluate_ai_grenade_opportunity / execute_ai_grenade_throw / _auto_switch_on_empty): `AIGrenadeRules` + AIGrenadeRulesTest, `TryAIGrenadeThrow`, `AutoSwitchOnEmpty`; AIGrenadeSmoke |
 | `96d90e1` | Squad control parity (Godot player.gd is_wounded / is_behind_barricade / _on_movement_destination_reached / set_facing_point, main.gd _set_entire_squad_stance and the ground-click rules): health-driven wounded state, Alt squad stance, Shift facing, auto-cover, real-time move refusal, sprint lines, slot 4 «ИВАН»; SquadControlSmoke |
