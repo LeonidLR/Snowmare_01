@@ -1,4 +1,5 @@
 #include "Characters/EnemyCharacter.h"
+#include "UI/OverheadLabel.h"
 #include "Characters/EnemyAIController.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -333,4 +334,39 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 	OnEnemyDiedNative.Broadcast(this);
 
 	SetLifeSpan(2.0f);
+}
+
+bool AEnemyCharacter::GetOverheadLabel(FOverheadLabel& OutLabel) const
+{
+	if (bIsDying || !HealthComponent || !HealthComponent->IsAlive() || IsHidden())
+	{
+		return false;
+	}
+	FString Status;
+	if (HealthComponent->HasStatusEffect(EStatusEffect::Burning))
+	{
+		Status += TEXT(" ГОРИТ");
+	}
+	if (HealthComponent->HasStatusEffect(EStatusEffect::Frozen))
+	{
+		Status += TEXT(" ЛЁД");
+	}
+	if (HealthComponent->HasStatusEffect(EStatusEffect::Stagger))
+	{
+		Status += TEXT(" ОГЛУШЁН");
+	}
+	if (HealthComponent->HasStatusEffect(EStatusEffect::ArmorShred))
+	{
+		Status += TEXT(" БРОНЯ-");
+	}
+	OutLabel.Text = FString::Printf(TEXT("%s%s\n%d/%d"), *EnemyDisplayName, *Status,
+		FMath::FloorToInt(FMath::Max(0.f, HealthComponent->GetCurrentHealth())), FMath::FloorToInt(HealthComponent->GetMaxHealth()));
+	OutLabel.Color = FLinearColor(1.f, 0.4f, 0.4f);
+	OutLabel.HeightCm = Archetype == EEnemyArchetype::FrostHound || Archetype == EEnemyArchetype::Cutter ? 115.f
+		: (Archetype == EEnemyArchetype::Brute ? 240.f : 180.f);
+	// Godot armor_tier: brute heavy (red), spitter medium (yellow), the rest light (green).
+	OutLabel.bHasMarker = true;
+	OutLabel.MarkerColor = Archetype == EEnemyArchetype::Brute ? FLinearColor(0.95f, 0.2f, 0.2f)
+		: (Archetype == EEnemyArchetype::Spitter ? FLinearColor(0.95f, 0.85f, 0.2f) : FLinearColor(0.25f, 0.9f, 0.3f));
+	return true;
 }

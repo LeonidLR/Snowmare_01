@@ -17,6 +17,9 @@ class CODEXTACTICS_API ABarricadeActor : public ADeployableActor
 	GENERATED_BODY()
 
 public:
+	/** Godot barricade.gd _update_overhead_ui: «🧱 Баррикада [ЛОВУШКА]: HP/max» 1.35 m up. */
+	virtual bool GetOverheadLabel(FOverheadLabel& OutLabel) const override;
+
 	ABarricadeActor();
 
 	virtual void BeginPlay() override;

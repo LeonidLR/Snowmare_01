@@ -1,4 +1,5 @@
 #include "Interactables/TurretActor.h"
+#include "UI/OverheadLabel.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -340,3 +341,28 @@ void ATurretActor::DescribeForMenu(const AOperativeCharacter* Leader, FText& Out
 }
 
 #undef LOCTEXT_NAMESPACE
+
+bool ATurretActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
+{
+	const UHealthComponent* TurretHealth = FindComponentByClass<UHealthComponent>();
+	const float Max = TurretHealth ? TurretHealth->GetMaxHealth() : 0.f;
+	const float Current = TurretHealth ? TurretHealth->GetCurrentHealth() : 0.f;
+	const TCHAR* Trap = bTrapped ? TEXT(" [⚠️ ЛОВУШКА]") : TEXT("");
+	OutLabel.HeightCm = 160.f;
+	if (bBroken || Current <= 0.f)
+	{
+		OutLabel.Text = FString::Printf(TEXT("⚠️ Турель%s: СЛОМАНА [0/%d HP]\n(Нужен ремонт)"), Trap, FMath::FloorToInt(Max));
+		OutLabel.Color = FLinearColor(1.f, 0.25f, 0.25f);
+	}
+	else if (!bPowered)
+	{
+		OutLabel.Text = FString::Printf(TEXT("⚡ Турель%s: ОБЕСТОЧЕНА [%d/%d HP]\n(Запустите генератор)"), Trap, FMath::FloorToInt(Current), FMath::FloorToInt(Max));
+		OutLabel.Color = FLinearColor(1.f, 0.75f, 0.2f);
+	}
+	else
+	{
+		OutLabel.Text = FString::Printf(TEXT("🎯 Турель%s: %d/%d HP"), Trap, FMath::FloorToInt(Current), FMath::FloorToInt(Max));
+		OutLabel.Color = FLinearColor(0.2f, 0.9f, 0.4f);
+	}
+	return true;
+}

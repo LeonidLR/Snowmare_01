@@ -385,8 +385,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   keys for Susanin (Godot re-applies only the general ones to a recruit spawned later). Raging: chaotic target (random
   enemy within 25 m every 0.55 s), fire rate / damage multipliers, +30 luck, no ammo spent, reload paused, OrderMoveTo /
   SetManualPriorityTarget refused. HUD badge «ЯРОСТЬ!»; the fiery aura ring under the feet is not ported.
-  movement_speed_multiplier is exported but unused in Godot — not applied. Panic: Godot's enable_realtime_panic is false
-  (a test pins it), so real-time panic does nothing in Godot — not ported; check its turn-based use before porting.
+  movement_speed_multiplier is exported but unused in Godot — not applied.
 - **Parity fix:** enemy attacks on operatives now use Godot player.gd take_damage (dodge luck × 0.4 %, stance defense,
   fortitude cut clamp(f × 1.5 %, 0, 50 %)); before, the enemy armor formula was used (no dodge / fortitude). Grenades /
   traps on the squad use the bypass path (max(1, amount)). Godot also drops a carried object on a hit — not ported.
@@ -402,7 +401,12 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   stance, Shift + click sector facing (no facing indicator arrow; UE has no persistent fixed-facing, the operative just
   turns), auto-cover crouch on arrival next to a barricade in combat with the radio callout. Not ported: box selection
   of several operatives (group moves), the action bar «🛡️» cover / holding tag and its tooltips.
-- Deployable overhead labels (Godot Label3D «🧱 Баррикада: HP»): not ported.
+- Overhead labels (`FOverheadLabel`, `AEnemyCharacter` / `AInteractableActor::GetOverheadLabel`, HUD `DrawWorldLabels`;
+  Godot Label3D): enemies (armor-tier square instead of 🟢🟡🔴, name, statuses as words — ГОРИТ / ЛЁД / ОГЛУШЁН / БРОНЯ-,
+  the font has no emoji — HP; hidden for stasis enemies outside a turn-based fight), barricade, turret, generator with
+  the Godot texts / colours. The enemy fire-fear flag (😱🔥) comes with the enemy AI pass.
+- Panic (Godot panic_component.gd) is inert in Godot (enable_realtime_panic = false; turn-based never uses it) and the
+  allegiance component is only used by tests — neither is ported.
 - Barricade contact damage (spikes / fire / cryo / energy) not ported (Godot default is NONE).
 - Pushing / defusal / set-up animations: none (operatives only slow down / crouch).
 - Hidden mines are revealed by a distance scan in the mine's Tick (Godot scans from each operative) — same result.
@@ -420,7 +424,6 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Relocation ghost is opaque (swap `GhostBaseMaterial` for a translucent hologram).
 - Godot starts relocation directly when a relocatable object is clicked in the tactical pause / live combat
   (`main.gd` click branch "is_relocatable_obj"); UE always goes through the action menu. Port with the pause UI.
-- Deployable overhead labels (turret / generator HP and state texts) not ported (Godot Label3D).
 - Targeted shots: the priority target now gets the barricade cover / blocking of `EvaluateShotLine` and is refused
   while raging (panic refusal: panic not ported). The barrel
   line «💥 Прицельный выстрел…» is posted only when the shot actually fires (Godot posts it even when frozen).
@@ -440,7 +443,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Autonomous grenades and the empty-weapon switch (Godot player.gd _evaluate_ai_grenade_opportunity / execute_ai_grenade_throw / _auto_switch_on_empty): `AIGrenadeRules` + AIGrenadeRulesTest, `TryAIGrenadeThrow`, `AutoSwitchOnEmpty`; AIGrenadeSmoke |
+| (this) | Overhead labels of enemies, barricades, turrets and the generator (Godot overhead Label3D: enemy_base.gd, barricade.gd, turret.gd, interactable.gd); `HudShot labels` |
+| `b049423` | Autonomous grenades and the empty-weapon switch (Godot player.gd _evaluate_ai_grenade_opportunity / execute_ai_grenade_throw / _auto_switch_on_empty): `AIGrenadeRules` + AIGrenadeRulesTest, `TryAIGrenadeThrow`, `AutoSwitchOnEmpty`; AIGrenadeSmoke |
 | `96d90e1` | Squad control parity (Godot player.gd is_wounded / is_behind_barricade / _on_movement_destination_reached / set_facing_point, main.gd _set_entire_squad_stance and the ground-click rules): health-driven wounded state, Alt squad stance, Shift facing, auto-cover, real-time move refusal, sprint lines, slot 4 «ИВАН»; SquadControlSmoke |
 | `0fe6e46` | Rage (`URageComponent`, `RageRules` + RageRulesTest; Godot rage_component.gd and its player.gd hooks): two crits from one enemy, chaotic fire, refused orders, HUD badge; `AOperativeCharacter::TakeHit` takes the attacker; `EOperativeOrderResult::Refused`; RageSmoke, `HudShot rage` |
 | `9a6bd37` | Real-time squad fire parity (`SquadFireRules` + SquadFireRulesTest, `FindShootTarget`, damage multipliers; SquadFireSmoke). Floating combat texts (`UFloatingTextSubsystem`, HUD `DrawFloatingTexts`; Godot _spawn_floating_combat_text / _spawn_heal_feedback) wired across combat, cold, mines, repairs, squad modes; operative hit formula `AOperativeCharacter::TakeHit` (Godot player.gd take_damage) for enemy attacks, grenades, traps and turn-based bites; turn-based / turret grid damage through the enemy's armor; headless checks (-ExecCmds) run without random wave events; FloatingTextSmoke, `HudShot floating`. Random wave events. Susanin rescue (Godot main.gd _check_susanin_rescue_event / _trigger_susanin_rescue_event, click branch "is_unrecruited", recruit_susanin.gd, save_manager.gd "susanin"): `URecruitSubsystem`, `EOperativeRole::Recruit`, `AOperativeCharacter::bRecruited`, game mode `SpawnOperative` / `RecruitSusanin`, key 4, HUD prompt, SusaninSpawn point; dialogue buttons widen for long finish labels; SusaninSmoke, `HudShot susanin`. Spawn point type filter and dynamic flank breach (Godot enemy_spawn_point.gd, main.gd _get_enemy_spawn_pos, _check_dynamic_flank_spawners, _pending_random_events): `AEnemySpawnPoint::AllowedEnemyType` / `bIsDynamic` + breach fields, random event waves, breach pack + camera focus, deferral past turn-based; L_MovementTest points get the Godot lane names / filters; `ATacticalCameraPawn::GetFollowTarget`; FlankBreachSmoke |

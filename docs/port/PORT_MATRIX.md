@@ -36,6 +36,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/components/movement_component.gd` | not ported: its stamina is unused by `player.gd` (user: no stamina) | — | ➖ | |
 | `Scripts/components/panic_component.gd` | `UPanicComponent` | 1 | ⬜ | |
 | `player.gd` `_evaluate_ai_grenade_opportunity`, `execute_ai_grenade_throw`, `_auto_switch_on_empty` | `AIGrenadeRules`, `AOperativeCharacter::TryAIGrenadeThrow` / `AutoSwitchOnEmpty` | 4 | ✅ | `CodexTactics.Combat.Grenade.AIRules`, AIGrenadeSmoke |
+| overhead Label3D (`enemy_base.gd`, `barricade.gd`, `turret.gd`, `interactable.gd` generator) | `FOverheadLabel`, `GetOverheadLabel`, HUD `DrawWorldLabels` | 5 | ✅ | `HudShot labels` |
 | `Scripts/components/rage_component.gd` | `URageComponent` | 1 | ⬜ | |
 | `Scripts/components/allegiance_component.gd` | `UAllegianceComponent` | 1 | ⬜ | |
 | `Scripts/components/locomotion_controller.gd` (stand / crouch / prone locomotion) | `UOperativeAnimInstance` native blend + `ABP_Operative` | 6 | 🟨 baseline (fire, reload, hit, death, grenade states → AnimBP graph) | `CodexTactics.StanceSmoke`, `HudShot close walk` |
@@ -74,7 +75,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/movements/loot_crate.gd`, `Scenes/ui/inventory/loot_dialog.gd`, `main.gd` loot handlers | `ALootCrateActor`, `LootRules`, `ULootDialogWidget`, `UInteractionSubsystem` loot API | 5 | ✅ (consumable use → inventory drawer) | `CodexTactics.Loot.*`, `CodexTactics.LootSmoke` |
 | `Scenes/movements/quest_manager.gd`, `narrative_element.gd`, `dialogue_trigger.gd` | `UQuestSubsystem`, dialogue data | 5 | ⬜ | |
 | `Scripts/components/rage_component.gd` | `URageComponent`, `RageRules` | 4 | ✅ (aura ring later) | `CodexTactics.Characters.Rage.Rules`, RageSmoke |
-| `Scripts/components/panic_component.gd` | — | 4 | ⬜ (real-time panic disabled in Godot) | |
+| `Scripts/components/panic_component.gd`, `allegiance_component.gd` | — | 4 | ➖ inert in Godot (panic disabled, allegiance test-only) | |
 | `player.gd` `_find_shoot_target`, `_shoot_at_target`, `get_elevation_advantage`, `is_target_in_dead_zone` | `SquadFireRules`, `AOperativeCharacter::FindShootTarget` / `ShootAtTarget` | 4 | ✅ (rage / panic / AI grenade later) | `CodexTactics.Combat.SquadFire.Rules`, SquadFireSmoke |
 | `player.gd` / `enemy_base.gd` / `mine.gd` `_spawn_floating_combat_text`, `_spawn_heal_feedback`, player `take_damage` | `UFloatingTextSubsystem`, HUD `DrawFloatingTexts`, `AOperativeCharacter::TakeHit` | 5 | ✅ (texts of unported features pending) | FloatingTextSmoke |
 | `Scenes/movements/recruit_susanin.gd`, `main.gd` Susanin rescue event | `URecruitSubsystem`, `EOperativeRole::Recruit`, `AOperativeCharacter::bRecruited` | 5 | ✅ | SusaninSmoke |

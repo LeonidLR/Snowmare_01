@@ -2,6 +2,12 @@
 #include "Characters/RecruitSubsystem.h"
 #include "CanvasItem.h"
 #include "UI/FloatingTextSubsystem.h"
+#include "UI/OverheadLabel.h"
+#include "GameFramework/Character.h"
+#include "EngineUtils.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Interactables/InteractableActor.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -328,6 +334,7 @@ void ACodexTacticsHUD::DrawHUD()
 	{
 		DrawOperativeLabels();
 	}
+	DrawWorldLabels();
 	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
 	DrawMessageFeed();
 	const float ObjectiveBottom = DrawObjectiveBanner();
@@ -364,6 +371,76 @@ TArray<FString> ACodexTacticsHUD::WrapText(const FString& Text, UFont* Font, flo
 		Lines.Add(Current);
 	}
 	return Lines;
+}
+
+void ACodexTacticsHUD::DrawWorldLabels()
+{
+	UWorld* World = GetWorld();
+	const UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
+	const bool bTurnBased = TurnBased && TurnBased->IsActive();
+	UFont* Font = GEngine->GetSmallFont();
+	auto Draw = [this, Font](const AActor* Actor, const FOverheadLabel& Label)
+	{
+		FVector Origin;
+		FVector Extent;
+		Actor->GetActorBounds(true, Origin, Extent);
+		const ACharacter* Character = Cast<ACharacter>(Actor);
+		const FVector Base = Character ? Actor->GetActorLocation() - FVector(0.f, 0.f, Character->GetSimpleCollisionHalfHeight())
+			: FVector(Actor->GetActorLocation().X, Actor->GetActorLocation().Y, Origin.Z - Extent.Z);
+		const FVector Screen = Project(Base + FVector(0.f, 0.f, Label.HeightCm), true);
+		if (Screen.Z <= 0.f)
+		{
+			return;
+		}
+		TArray<FString> Lines;
+		StripUnsupportedGlyphs(Label.Text).TrimStartAndEnd().ParseIntoArrayLines(Lines);
+		float LineHeight = 0.f;
+		float Width = 0.f;
+		for (const FString& Line : Lines)
+		{
+			float W = 0.f;
+			float H = 0.f;
+			Canvas->StrLen(Font, Line.TrimStartAndEnd(), W, H);
+			Width = FMath::Max(Width, W);
+			LineHeight = FMath::Max(LineHeight, H);
+		}
+		const float Marker = Label.bHasMarker ? LineHeight * 0.7f + 4.f : 0.f;
+		float Y = Screen.Y - LineHeight * Lines.Num();
+		for (int32 Index = 0; Index < Lines.Num(); ++Index)
+		{
+			const FString Line = Lines[Index].TrimStartAndEnd();
+			float W = 0.f;
+			float H = 0.f;
+			Canvas->StrLen(Font, Line, W, H);
+			const float X = Screen.X - (W + (Index == 0 ? Marker : 0.f)) * 0.5f;
+			if (Index == 0 && Label.bHasMarker)
+			{
+				DrawRect(Label.MarkerColor, X, Y + LineHeight * 0.15f, LineHeight * 0.7f, LineHeight * 0.7f);
+			}
+			FCanvasTextItem Item(FVector2D(X + (Index == 0 ? Marker : 0.f), Y), FText::FromString(Line), Font, Label.Color);
+			Item.bOutlined = true;
+			Item.OutlineColor = FLinearColor::Black;
+			Canvas->DrawItem(Item);
+			Y += LineHeight;
+		}
+	};
+	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	{
+		// Godot: the enemies left in stasis outside a turn-based fight hide their plates.
+		FOverheadLabel Label;
+		if ((!bTurnBased || TurnBased->GetUnitState(*It)) && It->GetOverheadLabel(Label))
+		{
+			Draw(*It, Label);
+		}
+	}
+	for (TActorIterator<AInteractableActor> It(World); It; ++It)
+	{
+		FOverheadLabel Label;
+		if (!It->IsHidden() && It->GetOverheadLabel(Label))
+		{
+			Draw(*It, Label);
+		}
+	}
 }
 
 void ACodexTacticsHUD::DrawFloatingTexts()

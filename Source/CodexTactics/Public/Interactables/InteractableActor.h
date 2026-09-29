@@ -10,6 +10,7 @@
 
 class AOperativeCharacter;
 class UBoxComponent;
+struct FOverheadLabel;
 class UHeatSourceComponent;
 class UStaticMeshComponent;
 
@@ -119,6 +120,9 @@ public:
 
 	/** Can a grenade trap be set here now («Заминировать» button). */
 	virtual bool CanReceiveTrap() const { return !bTrapped; }
+
+	/** World label above the object (Godot overhead Label3D); false = none. The generator shows its state and HP. */
+	virtual bool GetOverheadLabel(FOverheadLabel& OutLabel) const;
 
 	virtual ETrapFlavor GetTrapFlavor() const { return ETrapFlavor::Object; }
 

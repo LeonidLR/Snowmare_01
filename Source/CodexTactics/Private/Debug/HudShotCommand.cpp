@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage.
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -25,7 +25,11 @@
 #include "Debug/SmokeUtils.h"
 #include "Characters/RecruitSubsystem.h"
 #include "Characters/RageComponent.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Interactables/TurretActor.h"
+#include "Interactables/BarricadeActor.h"
 #include "UI/FloatingTextSubsystem.h"
+#include "UI/OverheadLabel.h"
 #include "GameFramework/WorldSettings.h"
 #include "CodexTactics.h"
 #include "Engine/World.h"
@@ -159,6 +163,48 @@ namespace HudShot
 					Grenades->UpdateAim(Lead->GetActorLocation() + Lead->GetActorForwardVector() * 700.f);
 				}
 			}), 3.5f, false);
+		}
+		if (Args.Contains(TEXT("labels")))
+		{
+			// Overhead labels: three enemy types, a barricade and a turret in front of the commander.
+			TWeakObjectPtr<UWorld> LabelWorld(World);
+			FTimerHandle LabelHandle;
+			World->GetTimerManager().SetTimer(LabelHandle, FTimerDelegate::CreateLambda([LabelWorld]()
+			{
+				USquadSubsystem* Squad = LabelWorld.IsValid() ? LabelWorld->GetSubsystem<USquadSubsystem>() : nullptr;
+				AOperativeCharacter* Lead = Squad ? Squad->GetLeader() : nullptr;
+				if (!Lead)
+				{
+					return;
+				}
+				// Around the leader as the camera sees it (screen up / right).
+				const APlayerController* PC = UGameplayStatics::GetPlayerController(LabelWorld.Get(), 0);
+				const FRotator View = PC && PC->PlayerCameraManager ? PC->PlayerCameraManager->GetCameraRotation() : Lead->GetActorRotation();
+				const FVector Forward = FRotator(0.f, View.Yaw, 0.f).Vector();
+				const FVector Right = FRotator(0.f, View.Yaw + 90.f, 0.f).Vector();
+				UWaveSubsystem* Waves = LabelWorld->GetSubsystem<UWaveSubsystem>();
+				const EEnemyArchetype Types[] = { EEnemyArchetype::FrostHound, EEnemyArchetype::Spitter, EEnemyArchetype::Brute };
+				for (int32 Index = 0; Index < 3; ++Index)
+				{
+					if (AEnemyCharacter* Enemy = Waves->SpawnEnemy(Types[Index], Lead->GetActorLocation() + Forward * 230.f + Right * (Index - 1) * 260.f))
+					{
+						Enemy->CustomTimeDilation = 0.f;
+					}
+				}
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				const FVector Ground = Lead->GetActorLocation() - FVector(0.f, 0.f, Lead->GetSimpleCollisionHalfHeight());
+				LabelWorld->SpawnActor<ABarricadeActor>(Ground - Forward * 180.f - Right * 330.f + FVector(0.f, 0.f, 50.f), FRotator(0.f, View.Yaw, 0.f), Params);
+				for (TActorIterator<AEnemyCharacter> It(LabelWorld.Get()); It; ++It)
+				{
+					FOverheadLabel Label;
+					const bool bLabel = It->GetOverheadLabel(Label);
+					UE_LOG(LogCodexTactics, Display, TEXT("HudShot label: %s at (%.0f, %.0f, %.0f) label=%d '%s' leader (%.0f, %.0f)"), *It->GetName(),
+						It->GetActorLocation().X, It->GetActorLocation().Y, It->GetActorLocation().Z, bLabel ? 1 : 0, *Label.Text,
+						Lead->GetActorLocation().X, Lead->GetActorLocation().Y);
+				}
+				LabelWorld->SpawnActor<ATurretActor>(Ground - Forward * 180.f + Right * 330.f + FVector(0.f, 0.f, 60.f), FRotator(0.f, View.Yaw, 0.f), Params);
+			}), 3.f, false);
 		}
 		if (Args.Contains(TEXT("rage")))
 		{

@@ -1,4 +1,5 @@
 #include "Interactables/InteractableActor.h"
+#include "UI/OverheadLabel.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -488,3 +489,29 @@ void AInteractableActor::FinishGeneratorRepair(TWeakObjectPtr<AOperativeCharacte
 }
 
 #undef LOCTEXT_NAMESPACE
+
+bool AInteractableActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
+{
+	if (ObjectType != EInteractableType::Generator)
+	{
+		return false;
+	}
+	// Godot interactable.gd _update_generator_overhead_ui (2.4 m).
+	OutLabel.HeightCm = 240.f;
+	if (bGeneratorBroken)
+	{
+		OutLabel.Text = FString::Printf(TEXT("⚡ Генератор: ВЫВЕДЕН ИЗ СТРОЯ [0/%d HP]\n(Нужен ремонт)"), FMath::FloorToInt(GeneratorMaxHealth));
+		OutLabel.Color = FLinearColor(1.f, 0.25f, 0.25f);
+	}
+	else if (IsGeneratorWorking())
+	{
+		OutLabel.Text = FString::Printf(TEXT("⚡ Генератор: РАБОТАЕТ [%d/%d HP]\n(Питание подано)"), FMath::FloorToInt(GeneratorHealth), FMath::FloorToInt(GeneratorMaxHealth));
+		OutLabel.Color = FLinearColor(0.2f, 0.9f, 0.4f);
+	}
+	else
+	{
+		OutLabel.Text = FString::Printf(TEXT("⚡ Резервный генератор [%d/%d HP]"), FMath::FloorToInt(GeneratorHealth), FMath::FloorToInt(GeneratorMaxHealth));
+		OutLabel.Color = FLinearColor(0.9f, 0.8f, 0.3f);
+	}
+	return true;
+}

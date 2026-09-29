@@ -200,6 +200,8 @@ private:
 	void DrawOperativeLabels();
 	/** Floating combat texts (UFloatingTextSubsystem; Godot Label3D _spawn_floating_combat_text). */
 	void DrawFloatingTexts();
+	/** Overhead labels of enemies and deployables / the generator (Godot overhead Label3D). */
+	void DrawWorldLabels();
 	/** Splits Text into lines no wider than MaxWidth pixels. */
 	TArray<FString> WrapText(const FString& Text, UFont* Font, float Scale, float MaxWidth) const;
 	FString DescribeOperative(const AOperativeCharacter& Operative, bool bLeader) const;

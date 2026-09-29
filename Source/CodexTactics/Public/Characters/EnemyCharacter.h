@@ -6,6 +6,7 @@
 #include "EnemyCharacter.generated.h"
 
 class UHealthComponent;
+struct FOverheadLabel;
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 
@@ -60,6 +61,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	bool IsDying() const { return bIsDying; }
+
+	/**
+	 * Godot enemy_base.gd _update_overhead_ui: armor tier marker, name, statuses, HP (hound / cutter 1.15 m, brute 2.4 m,
+	 * others 1.8 m up). The status emoji the HUD font lacks are written as words.
+	 */
+	bool GetOverheadLabel(FOverheadLabel& OutLabel) const;
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	float GetAttackDamage() const { return AttackDamage; }

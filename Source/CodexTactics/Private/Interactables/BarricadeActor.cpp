@@ -1,4 +1,5 @@
 #include "Interactables/BarricadeActor.h"
+#include "UI/OverheadLabel.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
 #include "Components/BoxComponent.h"
@@ -122,3 +123,17 @@ void ABarricadeActor::DescribeForMenu(const AOperativeCharacter* Leader, FText& 
 }
 
 #undef LOCTEXT_NAMESPACE
+
+bool ABarricadeActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
+{
+	const UHealthComponent* BarricadeHealth = FindComponentByClass<UHealthComponent>();
+	if (!BarricadeHealth || !BarricadeHealth->IsAlive())
+	{
+		return false;
+	}
+	OutLabel.Text = FString::Printf(TEXT("🧱 Баррикада%s: %d/%d"), bTrapped ? TEXT(" [⚠️ ЛОВУШКА]") : TEXT(""),
+		FMath::FloorToInt(FMath::Max(0.f, BarricadeHealth->GetCurrentHealth())), FMath::FloorToInt(BarricadeHealth->GetMaxHealth()));
+	OutLabel.Color = FLinearColor(0.9f, 0.75f, 0.3f);
+	OutLabel.HeightCm = 135.f; // obstacle 1 m + 0.35
+	return true;
+}

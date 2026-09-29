@@ -21,6 +21,9 @@ class CODEXTACTICS_API ATurretActor : public ADeployableActor
 	GENERATED_BODY()
 
 public:
+	/** Godot turret.gd _update_overhead_ui: broken / unpowered / HP, 1.6 m up. */
+	virtual bool GetOverheadLabel(FOverheadLabel& OutLabel) const override;
+
 	ATurretActor();
 
 	virtual void BeginPlay() override;
