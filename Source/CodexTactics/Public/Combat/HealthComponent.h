@@ -76,6 +76,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Health")
 	void SetDefenseMultiplier(float Multiplier) { DefenseMultiplier = Multiplier; }
+	float GetDefenseMultiplier() const { return DefenseMultiplier; }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Health")
 	bool HasStatusEffect(EStatusEffect Effect) const;

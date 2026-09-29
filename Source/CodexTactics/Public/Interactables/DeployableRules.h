@@ -10,7 +10,9 @@ enum class EOperativeRole : uint8
 {
 	Commander,
 	Engineer,
-	MedicSapper
+	MedicSapper,
+	/** Civilian recruit (Godot recruit_susanin.gd «Иван Сусанин»; balance prefix susanin_, defusal base 35). */
+	Recruit
 };
 
 /** Engineering items an operative carries and sets up. Godot: "TURRET" / "BARRICADE" / "MINE". */

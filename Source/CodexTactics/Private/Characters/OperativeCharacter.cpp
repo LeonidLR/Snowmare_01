@@ -1,4 +1,5 @@
 #include "Characters/OperativeCharacter.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -17,6 +18,7 @@
 #include "Interactables/BarrelActor.h"
 #include "Interactables/LootCrateActor.h"
 #include "Interactables/ProximityMineActor.h"
+#include "Interactables/TurretActor.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Survival/ColdSurvivalComponent.h"
@@ -149,7 +151,8 @@ void AOperativeCharacter::BeginPlay()
 
 	ApplyBodyColor();
 
-	if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	if (Squad && bRecruited)
 	{
 		Squad->RegisterOperative(this);
 	}
@@ -459,7 +462,14 @@ bool AOperativeCharacter::UsePersonalItem(EPersonalItem Item)
 		return false;
 	}
 	const FPersonalItemEffect Effect = PersonalItemRules::GetEffect(Item);
+	const float HealthBefore = HealthComponent->GetCurrentHealth();
 	HealthComponent->Heal(Effect.Heal);
+	const int32 Gained = FMath::FloorToInt(HealthComponent->GetCurrentHealth() - HealthBefore);
+	if (UFloatingTextSubsystem* Floating = Gained > 0 && GetWorld() ? GetWorld()->GetSubsystem<UFloatingTextSubsystem>() : nullptr)
+	{
+		Floating->Spawn(GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() - 210.f), FString::Printf(TEXT("+%d HP"), Gained),
+			FLinearColor(0.2f, 1.f, 0.4f), 0.9f, 70.f);
+	}
 	ColdLevel = FMath::Max(0.f, ColdLevel - Effect.Warmth);
 	int32& Count = Item == EPersonalItem::Medkit ? MedkitsCount
 		: (Item == EPersonalItem::CannedFood ? CannedFoodCount : (Item == EPersonalItem::Bread ? BreadCount : ChocolateCount));
@@ -742,6 +752,83 @@ bool AOperativeCharacter::CanShoot() const
 	return true;
 }
 
+namespace
+{
+	FVector ShotFeet(const AActor* Actor)
+	{
+		const ACharacter* Character = Cast<ACharacter>(Actor);
+		return Actor->GetActorLocation() - FVector(0.f, 0.f, Character ? Character->GetSimpleCollisionHalfHeight() : 0.f);
+	}
+
+	bool IsLiveEnemy(const AActor* Actor)
+	{
+		if (!IsValid(Actor) || !Actor->ActorHasTag(FName(TEXT("Enemy"))) || Actor->IsHidden())
+		{
+			return false;
+		}
+		const UHealthComponent* Health = Actor->FindComponentByClass<UHealthComponent>();
+		return !Health || Health->IsAlive();
+	}
+}
+
+bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FShootCandidate& Out, bool& bOutBarricadeBlocked) const
+{
+	bOutBarricadeBlocked = false;
+	UWorld* World = GetWorld();
+	const FVector MyFeet = ShotFeet(this);
+	const FVector EnemyFeet = ShotFeet(Enemy);
+	if (!World || SquadFireRules::IsInDeadZone(MyFeet, EnemyFeet))
+	{
+		return false;
+	}
+	const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(MyFeet.Z, EnemyFeet.Z);
+	const float Range = (CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f) * SquadFireRules::GetPostureRangeMultiplier(Stance)
+		* (Elevation.bElevated ? Elevation.RangeMultiplier : 1.f);
+	// Godot: from the operative's centre (1 m above the feet) to the enemy's feet.
+	const float Distance = FVector::Dist(MyFeet + FVector(0.f, 0.f, 100.f), EnemyFeet);
+	if (Distance > Range)
+	{
+		return false;
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(SquadShotLine), false, this);
+	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+	{
+		Params.AddIgnoredActor(*It); // the squad
+	}
+	for (TActorIterator<ATurretActor> It(World); It; ++It)
+	{
+		Params.AddIgnoredActor(*It); // Godot "allies"
+	}
+	EShotLineHit Kind = EShotLineHit::Clear;
+	AActor* HitEnemy = Enemy;
+	FHitResult Hit;
+	if (World->LineTraceSingleByChannel(Hit, GetMuzzleLocation(), EnemyFeet + FVector(0.f, 0.f, 80.f), ECC_Visibility, Params))
+	{
+		AActor* Blocker = Hit.GetActor();
+		if (Blocker && Blocker != Enemy)
+		{
+			if (Blocker->ActorHasTag(FName(TEXT("Enemy"))))
+			{
+				HitEnemy = bKeepTarget ? Enemy : Blocker;
+			}
+			else
+			{
+				Kind = Blocker->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
+			}
+		}
+	}
+	const FShotLineVerdict Verdict = SquadFireRules::JudgeLine(Kind, Stance, Elevation);
+	bOutBarricadeBlocked = Verdict.bBarricadeBlocked;
+	if (!Verdict.bCanHit)
+	{
+		return false;
+	}
+	Out.Enemy = HitEnemy;
+	Out.Distance = Distance;
+	Out.Cover = Verdict.Cover;
+	return true;
+}
+
 AActor* AOperativeCharacter::FindBestCombatTarget() const
 {
 	UWorld* World = GetWorld();
@@ -749,57 +836,135 @@ AActor* AOperativeCharacter::FindBestCombatTarget() const
 	{
 		return nullptr;
 	}
-
-	const float MaxRange = CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.0f;
-	const FVector MyLoc = GetActorLocation();
-
-	// Godot _find_shoot_target step 1: the manual priority target (Ctrl + click) wins while it can be hit.
+	FShootCandidate Candidate;
+	bool bBlocked = false;
 	if (AActor* Priority = ManualPriorityTarget.Get())
 	{
-		const UHealthComponent* PriorityHealth = Priority->FindComponentByClass<UHealthComponent>();
-		if (!PriorityHealth || !PriorityHealth->IsAlive() || Priority->IsHidden())
+		if (!IsLiveEnemy(Priority))
 		{
 			ManualPriorityTarget.Reset();
 		}
-		else if (CanFireAtPriorityTarget(Priority, MaxRange))
+		else if (EvaluateShotLine(Priority, true, Candidate, bBlocked))
 		{
 			return Priority;
 		}
 	}
-
-	AActor* BestTarget = nullptr;
-	float MinDistSq = MaxRange * MaxRange;
-
+	AActor* Best = nullptr;
+	float BestDistance = TNumericLimits<float>::Max();
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
-		AActor* Candidate = *It;
-		if (!Candidate || !Candidate->ActorHasTag(FName(TEXT("Enemy"))) || Candidate->IsHidden())
+		if (IsLiveEnemy(*It) && EvaluateShotLine(*It, false, Candidate, bBlocked) && Candidate.Distance < BestDistance)
+		{
+			BestDistance = Candidate.Distance;
+			Best = Candidate.Enemy;
+		}
+	}
+	return Best;
+}
+
+FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime)
+{
+	UWorld* World = GetWorld();
+	FShootCandidate Candidate;
+	bool bBlocked = false;
+	// 1. The manual priority target (Ctrl + click) while it can be hit.
+	if (AActor* Priority = ManualPriorityTarget.Get())
+	{
+		if (!IsLiveEnemy(Priority))
+		{
+			ManualPriorityTarget.Reset();
+		}
+		else if (EvaluateShotLine(Priority, true, Candidate, bBlocked))
+		{
+			CurrentCombatTarget = Priority;
+			PendingFlankTarget.Reset();
+			TargetSwitchTimer = 0.f;
+			return Candidate;
+		}
+		else if (bBlocked)
+		{
+			NotifyBarricadeBlocked();
+		}
+	}
+	// 2. Visible enemies, closest first.
+	TArray<FShootCandidate> Visible;
+	int32 BarricadeBlocked = 0;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		if (!IsLiveEnemy(*It))
 		{
 			continue;
 		}
-
-		if (UHealthComponent* HC = Candidate->FindComponentByClass<UHealthComponent>())
+		if (EvaluateShotLine(*It, false, Candidate, bBlocked))
 		{
-			if (!HC->IsAlive())
-			{
-				continue;
-			}
+			Visible.Add(Candidate);
 		}
-
-		const float DistSq = FVector::DistSquared2D(MyLoc, Candidate->GetActorLocation());
-		if (DistSq < MinDistSq)
+		else if (bBlocked)
 		{
-			MinDistSq = DistSq;
-			BestTarget = Candidate;
+			++BarricadeBlocked;
 		}
 	}
+	if (Visible.IsEmpty())
+	{
+		CurrentCombatTarget.Reset();
+		PendingFlankTarget.Reset();
+		TargetSwitchTimer = 0.f;
+		if (Stance == EOperativeStance::Prone && BarricadeBlocked > 0)
+		{
+			NotifyBarricadeBlocked();
+		}
+		return FShootCandidate();
+	}
+	Visible.Sort([](const FShootCandidate& A, const FShootCandidate& B) { return A.Distance < B.Distance; });
+	const FShootCandidate& Closest = Visible[0];
+	const FShootCandidate* Current = IsLiveEnemy(CurrentCombatTarget.Get())
+		? Visible.FindByPredicate([this](const FShootCandidate& Entry) { return Entry.Enemy == CurrentCombatTarget.Get(); }) : nullptr;
+	if (!Current)
+	{
+		CurrentCombatTarget = Closest.Enemy;
+		PendingFlankTarget.Reset();
+		TargetSwitchTimer = 0.f;
+		return Closest;
+	}
+	// A much closer enemy (flank) takes over after the stance's reaction delay.
+	const int32 StanceIndex = Stance == EOperativeStance::Prone ? 2 : (Stance == EOperativeStance::Crouching ? 1 : 0);
+	if (Closest.Enemy != CurrentCombatTarget.Get() && SquadFireRules::IsSignificantlyCloser(Closest.Distance, Current->Distance, FireConfig.SwitchRatio[StanceIndex]))
+	{
+		if (PendingFlankTarget.Get() != Closest.Enemy)
+		{
+			PendingFlankTarget = Closest.Enemy;
+			TargetSwitchTimer = FireConfig.SwitchDelay[StanceIndex];
+		}
+		TargetSwitchTimer -= DeltaTime;
+		if (TargetSwitchTimer <= 0.f)
+		{
+			CurrentCombatTarget = PendingFlankTarget;
+			PendingFlankTarget.Reset();
+			TargetSwitchTimer = 0.f;
+			return Closest;
+		}
+	}
+	else
+	{
+		PendingFlankTarget.Reset();
+		TargetSwitchTimer = 0.f;
+	}
+	return *Current;
+}
 
-	return BestTarget;
+void AOperativeCharacter::NotifyBarricadeBlocked()
+{
+	if (BarricadeBlockNotifyTimer > 0.f)
+	{
+		return;
+	}
+	BarricadeBlockNotifyTimer = 3.5f;
+	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🚫 Баррикада блокирует огонь (нужно сесть)!"), FLinearColor(1.f, 0.75f, 0.2f));
 }
 
 void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 {
-	if (!HealthComponent || !HealthComponent->IsAlive())
+	if (!bRecruited || !HealthComponent || !HealthComponent->IsAlive()) // Godot can_shoot = false until recruited
 	{
 		return;
 	}
@@ -828,9 +993,19 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 	{
 		ShootTimer -= DeltaTime;
 	}
+	WeaponFreezeNotifyTimer = FMath::Max(0.f, WeaponFreezeNotifyTimer - DeltaTime);
+	BarricadeBlockNotifyTimer = FMath::Max(0.f, BarricadeBlockNotifyTimer - DeltaTime);
 
 	if (!CanShoot())
 	{
+		// Godot _can_fire: a frozen weapon says so while there is something to shoot at.
+		const UGameFlowSubsystem* FrozenFlow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+		if (ColdSurvival && ColdSurvival->IsWeaponFrozen() && WeaponFreezeNotifyTimer <= 0.f && FrozenFlow
+			&& FrozenFlow->GetPhase() == ECodexGamePhase::WaveCombat && FrozenFlow->GetCombatMode() == ECodexCombatMode::RealTime
+			&& FindBestCombatTarget())
+		{
+			NotifyWeaponFrozen();
+		}
 		return;
 	}
 
@@ -855,7 +1030,8 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		return;
 	}
 
-	AActor* Target = FindBestCombatTarget();
+	const FShootCandidate Shot = FindShootTarget(DeltaTime);
+	AActor* Target = Shot.Enemy;
 	if (!Target)
 	{
 		return;
@@ -869,11 +1045,11 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 
 	if (ShootTimer <= 0.0f && MisfireCooldownTimer <= 0.0f)
 	{
-		ShootAtTarget(Target);
+		ShootAtTarget(Target, Shot.Cover);
 	}
 }
 
-bool AOperativeCharacter::ShootAtTarget(AActor* Target)
+bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 {
 	if (!Target || (UsesAmmo() && CurrentClip <= 0))
 	{
@@ -895,6 +1071,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target)
 	if (bMisfire)
 	{
 		MisfireCooldownTimer = ColdSurvival ? ColdSurvival->Config.MisfireDelay : 0.45f;
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("❄️ ОСЕЧКА! (Затвор заклинил)"), FLinearColor(0.4f, 0.85f, 1.f));
 		OnWeaponMisfired.Broadcast(this);
 		OnWeaponMisfiredNative.Broadcast(this);
 		return false;
@@ -914,6 +1091,10 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target)
 	}
 
 	const bool bHit = bForceHitForTesting || (FMath::FRand() <= HitChance);
+	if (!bHit)
+	{
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("ПРОМАХ!"), FLinearColor(0.75f, 0.75f, 0.75f));
+	}
 	OnWeaponFired.Broadcast(this, Target, bHit);
 	OnWeaponFiredNative.Broadcast(this, Target, bHit);
 
@@ -936,8 +1117,29 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target)
 
 	if (bHit)
 	{
+		// Godot _shoot_at_target: crit on luck (x2), elevation (+15 %), stance, cover and distance factors.
+		const float CritRoll = ForcedCritRollForTesting >= 0.f ? (ForcedCritRollForTesting >= 1.f ? 0.f : 1.f) : FMath::FRand();
+		ForcedCritRollForTesting = -1.f;
+		const bool bCrit = SquadFireRules::IsCrit(Luck, CritRoll);
+		const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(
+			GetActorLocation().Z - GetSimpleCollisionHalfHeight(), Target->GetActorLocation().Z - Target->GetSimpleCollisionHalfHeight());
+		float DistanceMultiplier = 1.f;
+		if (CurrentWeapon && !CurrentWeapon->DistanceDamageMultipliers.IsEmpty())
+		{
+			DistanceMultiplier = CurrentWeapon->DistanceDamageMultipliers[FMath::Clamp(DistCells - 1, 0, CurrentWeapon->DistanceDamageMultipliers.Num() - 1)];
+		}
+		if (bCrit)
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🎯 КРИТ x2!"), FLinearColor(1.f, 0.85f, 0.1f));
+		}
+		else if (Elevation.bElevated)
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⛰️ +15% ВЫСОТА"), FLinearColor(0.35f, 0.9f, 1.f));
+		}
+
 		FDamageSpec Spec;
-		Spec.Amount = CurrentWeapon ? CurrentWeapon->BaseDamage : 18.0f;
+		Spec.Amount = SquadFireRules::ComputeShotDamage(CurrentWeapon ? CurrentWeapon->BaseDamage : 18.0f, Stance, Cover, bCrit, Elevation, DistanceMultiplier);
+		Spec.bIsCritical = bCrit;
 		Spec.DamageType = CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic;
 		Spec.ArmorPenetration = CurrentWeapon ? CurrentWeapon->ArmorPenetration : 0.20f;
 		Spec.AttackerSource = DisplayName.ToString();
@@ -951,6 +1153,15 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target)
 		if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 		{
 			TargetHealth->TakeDamage(Spec);
+		}
+		// Cryo weapons chill the shooter, fire weapons warm him (Godot self_cold / self_warmth_generation).
+		if (CurrentWeapon && CurrentWeapon->SelfColdGeneration > 0.f)
+		{
+			ColdLevel = FMath::Min(100.f, ColdLevel + CurrentWeapon->SelfColdGeneration);
+		}
+		if (CurrentWeapon && CurrentWeapon->SelfWarmthGeneration > 0.f)
+		{
+			ColdLevel = FMath::Max(0.f, ColdLevel - CurrentWeapon->SelfWarmthGeneration);
 		}
 	}
 
@@ -1014,7 +1225,10 @@ bool AOperativeCharacter::CanBeginWeaponShot()
 	}
 	if (ColdSurvival && ColdSurvival->IsWeaponFrozen())
 	{
-		OperativeShotLine(*this, LOCTEXT("WeaponFrozen", "🥶 ОРУЖИЕ ЗАМЁРЗЛО! Нужен источник тепла!"));
+		if (WeaponFreezeNotifyTimer <= 0.f)
+		{
+			NotifyWeaponFrozen();
+		}
 		return false;
 	}
 	if (CurrentClip > 0 || !UsesAmmo())
@@ -1047,31 +1261,6 @@ void AOperativeCharacter::StopAndFace(const FVector& Location)
 	{
 		SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
 	}
-}
-
-bool AOperativeCharacter::CanFireAtPriorityTarget(const AActor* Target, float MaxRange) const
-{
-	if (FVector::Dist(GetActorLocation(), Target->GetActorLocation()) > MaxRange)
-	{
-		return false;
-	}
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(PriorityTargetLine), false, this);
-	for (TActorIterator<AOperativeCharacter> It(GetWorld()); It; ++It)
-	{
-		Params.AddIgnoredActor(*It);
-	}
-	FHitResult Hit;
-	if (!GetWorld()->LineTraceSingleByChannel(Hit, GetActorLocation(), Target->GetActorLocation(), ECC_Visibility, Params))
-	{
-		return true;
-	}
-	const AActor* Blocker = Hit.GetActor();
-	if (!Blocker || Blocker == Target || Blocker->ActorHasTag(FName(TEXT("Enemy"))))
-	{
-		return true;
-	}
-	// Godot: a barricade in the line of fire blocks only a prone shooter (crouching = cover 0.8, standing = clear).
-	return Blocker->IsA<ABarricadeActor>() && Stance != EOperativeStance::Prone;
 }
 
 bool AOperativeCharacter::ShootAtObject(AActor* Target)
@@ -1212,3 +1401,34 @@ void AOperativeCharacter::ExecutePlannedTargetedShots()
 }
 
 #undef LOCTEXT_NAMESPACE
+
+void AOperativeCharacter::NotifyWeaponFrozen()
+{
+	WeaponFreezeNotifyTimer = 2.5f;
+	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🥶 ОРУЖИЕ ЗАМЁРЗЛО! Нужен источник тепла!"), FLinearColor(0.4f, 0.85f, 1.f));
+}
+
+float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool bCrit, bool bBypassAvoidance)
+{
+	if (!HealthComponent || !HealthComponent->IsAlive())
+	{
+		return 0.f;
+	}
+	// 1. Dodge on luck (Godot: luck 25 -> 10 %).
+	const float DodgeRoll = ForcedDodgeRollForTesting >= 0.f ? (ForcedDodgeRollForTesting >= 1.f ? -1.f : 101.f) : FMath::FRand() * 100.f;
+	ForcedDodgeRollForTesting = -1.f;
+	if (!bBypassAvoidance && DodgeRoll < Luck * 0.4f)
+	{
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("💨 УКЛОНЕНИЕ!"), FLinearColor(0.3f, 0.9f, 1.f));
+		return 0.f;
+	}
+	// 2. Stance defense and fortitude cut (Godot: 15 fortitude = 22.5 %, at most 50 %).
+	const float Fortitude = ColdSurvival ? ColdSurvival->Fortitude : 15.f;
+	const float FortitudeCut = FMath::Clamp(Fortitude * 0.015f, 0.f, 0.5f);
+	const float Final = bBypassAvoidance ? FMath::Max(1.f, Amount)
+		: FMath::Max(1.f, Amount * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut));
+	HealthComponent->ApplyDirectHealthLoss(Final, Attacker);
+	UFloatingTextSubsystem::SpawnAboveOperative(this, bCrit ? FString::Printf(TEXT("💥 КРИТИЧЕСКИЙ УДАР! -%d"), FMath::FloorToInt(Final))
+		: FString::Printf(TEXT("-%d"), FMath::FloorToInt(Final)), bCrit ? FLinearColor(1.f, 0.25f, 0.1f) : FLinearColor(1.f, 0.3f, 0.3f));
+	return Final;
+}

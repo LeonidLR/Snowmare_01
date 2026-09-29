@@ -135,6 +135,10 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: real-time squad fire (`SquadFireRules`, `AOperativeCharacter::FindShootTarget` / `EvaluateShotLine`, `ShootAtTarget(Target, Cover)`, `FireConfig`); `CanFireAtPriorityTarget` removed (EvaluateShotLine covers it).
+- 2026-09-29 Claude: floating combat texts (`UFloatingTextSubsystem`); `AOperativeCharacter::TakeHit` (enemy attacks on operatives no longer go through UHealthComponent::ApplyDamage — Gemini's enemy AI calls it now); `UTurnBasedCombatSubsystem::ApplyEnemyHit` / `ApplySquadHit`; `UHealthComponent` floats enemy numbers (owners tagged Enemy); `UColdSurvivalComponent::PostOperativeMessage` removed (floating texts instead).
+- 2026-09-29 Claude: Susanin rescue (`URecruitSubsystem`); additive: `EOperativeRole::Recruit`, `AOperativeCharacter::bRecruited` (unrecruited operatives do not register with the squad / shoot), `ACodexTacticsGameMode::SpawnOperative` / `RecruitSusanin`, `UGameFlowSubsystem::ApplyTimeDilation` public, `UWaveSubsystem::GetTotalWaveEnemies`, key 4.
+- 2026-09-29 Claude: spawn point type filter + dynamic flank breach; additive: `AEnemySpawnPoint` fields (`AllowedEnemyType`, `bIsDynamic`, breach settings), `UWaveSubsystem::GetSpawnLocationForLane(Lane, Type)`, `CheckDynamicFlankSpawners`, `TriggerBreach`, `RunOrDeferRandomEvent`, `ATacticalCameraPawn::GetFollowTarget`.
 - 2026-09-29 Claude: radius rings (`URadiusRingSubsystem`, `ARadiusRingActor`); additive: `URelocationSubsystem::GetPlacingWorker` / `IsGhostValid`, `GetRadius` / `GetOrigin` now public.
 - 2026-09-29 Claude: save / load (`USaveGameSubsystem`, `SaveGameRules`), pause menu + save dialog widgets, F5 / Esc; additive: `FGameFlowStateMachine::RestoreForLoad`, `UQuestSubsystem::RestoreState` / `GetState`, `ALootCrateActor::RestoreSaved`, `USquadSubsystem::RefreshFormation`, `UGameFlowSubsystem::IsCombatUnlocked`; module Json.
 - 2026-09-29 Claude: item hand-over (`USquadTransferSubsystem`, `UTransferDialogWidget`, `TransferRules`); operative `GetReserve` / `TakeReserve`; HUD `ToggleTransferDialog`, action bar «ПЕРЕД».

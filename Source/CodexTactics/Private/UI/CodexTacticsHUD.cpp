@@ -1,4 +1,7 @@
 #include "UI/CodexTacticsHUD.h"
+#include "Characters/RecruitSubsystem.h"
+#include "CanvasItem.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -321,12 +324,16 @@ void ACodexTacticsHUD::DrawHUD()
 	{
 		return;
 	}
+	if (CVarShowStatus.GetValueOnGameThread())
+	{
+		DrawOperativeLabels();
+	}
+	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
 	DrawMessageFeed();
 	const float ObjectiveBottom = DrawObjectiveBanner();
 	if (CVarShowStatus.GetValueOnGameThread())
 	{
 		DrawSquadPanel(ObjectiveBottom + Margin * 0.5f);
-		DrawOperativeLabels();
 	}
 }
 
@@ -357,6 +364,39 @@ TArray<FString> ACodexTacticsHUD::WrapText(const FString& Text, UFont* Font, flo
 		Lines.Add(Current);
 	}
 	return Lines;
+}
+
+void ACodexTacticsHUD::DrawFloatingTexts()
+{
+	UFloatingTextSubsystem* Floating = GetWorld()->GetSubsystem<UFloatingTextSubsystem>();
+	if (!Floating)
+	{
+		return;
+	}
+	// Godot Label3D: font 20 at pixel_size 0.007, black outline, rising and fading out.
+	UFont* Font = GEngine->GetSmallFont();
+	const double Now = GetWorld()->GetTimeSeconds();
+	for (const FCombatFloatingText& Entry : Floating->GetTexts())
+	{
+		const float Progress = FMath::Clamp(Entry.GetProgress(Now), 0.f, 1.f);
+		const FVector Screen = Project(Entry.Start + FVector(0.f, 0.f, Entry.Rise * Progress), true);
+		if (Screen.Z <= 0.f)
+		{
+			continue;
+		}
+		const FString Text = StripUnsupportedGlyphs(Entry.Text);
+		float W = 0.f;
+		float H = 0.f;
+		Canvas->StrLen(Font, Text, W, H);
+		FLinearColor Color = Entry.Color;
+		Color.A *= 1.f - Progress;
+		FCanvasTextItem Item(FVector2D(Screen.X - W * 0.65f, Screen.Y - H * 0.65f), FText::FromString(Text), Font, Color);
+		Item.Scale = FVector2D(1.3f, 1.3f);
+		Item.bOutlined = true;
+		Item.OutlineColor = FLinearColor(0.f, 0.f, 0.f, Color.A);
+		Item.BlendMode = SE_BLEND_Translucent;
+		Canvas->DrawItem(Item);
+	}
 }
 
 void ACodexTacticsHUD::DrawMessageFeed()
@@ -559,6 +599,25 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 		const bool bLeader = Member == Squad->GetLeader();
 		DrawRect(PanelColor, Screen.X - W * 0.5f - 4.f, Screen.Y - 2.f, W + 8.f, H + 4.f);
 		DrawText(Label, bLeader ? SpeakerColor : TextColor, Screen.X - W * 0.5f, Screen.Y, Font);
+	}
+
+	// Godot recruit_susanin.gd OverheadPrompt: «[Клик] Поговорить», blue «[Клик] Подойти и спасти» while freezing.
+	const URecruitSubsystem* Recruits = GetWorld()->GetSubsystem<URecruitSubsystem>();
+	const AOperativeCharacter* Recruit = Recruits ? Recruits->GetSusanin() : nullptr;
+	if (Recruit && Recruits->IsRecruit(Recruit))
+	{
+		const FVector Screen = Project(Recruit->GetActorLocation() + FVector(0.f, 0.f, Recruit->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 60.f), true);
+		if (Screen.Z > 0.f)
+		{
+			const bool bDistress = Recruits->IsInColdDistress();
+			const FString Label = StripUnsupportedGlyphs(bDistress ? FString::Printf(TEXT("❄️ [Клик] Подойти и спасти: %s"), *Recruit->DisplayName.ToString())
+				: FString(TEXT("💬 [Клик] Поговорить")));
+			float W = 0.f;
+			float H = 0.f;
+			Canvas->StrLen(Font, Label, W, H);
+			DrawRect(PanelColor, Screen.X - W * 0.5f - 4.f, Screen.Y - 2.f, W + 8.f, H + 4.f);
+			DrawText(Label, bDistress ? FLinearColor(0.4f, 0.8f, 1.f) : FLinearColor(0.4f, 1.f, 0.7f, 0.95f), Screen.X - W * 0.5f, Screen.Y, Font);
+		}
 	}
 }
 

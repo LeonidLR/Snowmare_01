@@ -189,7 +189,7 @@ void AGrenadeActor::ApplyAreaEffect()
 		}
 		else if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Candidate); Operative && Squad && Squad->GetMembers().Contains(Operative))
 		{
-			Health->ApplyDirectHealthLoss(Applied * GrenadeRules::SquadDamageScale, Source.ToString());
+			Operative->TakeHit(Applied * GrenadeRules::SquadDamageScale, Source.ToString(), false, true); // Godot bypass_avoidance
 		}
 		else
 		{

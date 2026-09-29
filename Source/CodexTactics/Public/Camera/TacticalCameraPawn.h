@@ -30,6 +30,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Camera")
 	void SetFollowTarget(AActor* NewTarget);
 
+	AActor* GetFollowTarget() const { return FollowTarget.Get(); }
+
 	/** Mouse wheel: positive notches zoom out, negative zoom in. */
 	void AddZoomNotches(float Notches);
 

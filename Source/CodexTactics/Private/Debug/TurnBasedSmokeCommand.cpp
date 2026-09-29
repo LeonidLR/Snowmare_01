@@ -201,7 +201,7 @@ namespace TurnBasedSmoke
 			}
 			{
 				const FTurnUnitState* EnemyState = TurnBased->GetUnitState(State.Enemy.Get());
-				State.Enemy->GetHealthComponent()->ApplyDirectHealthLoss(State.Enemy->GetHealthComponent()->GetCurrentHealth() - 5.f, TEXT("Smoke"));
+				State.Enemy->GetHealthComponent()->ApplyDirectHealthLoss(State.Enemy->GetHealthComponent()->GetCurrentHealth() - 1.f, TEXT("Smoke")); // 1 HP: the brute's own armor cuts grid damage (Godot take_damage)
 				TurnBased->bGuaranteeAllHits = true;
 				const FTurnAttackResult Attack = TurnBased->AttackCell(EnemyState->GridPos);
 				Check(State, Attack.bSuccess && Attack.bHit && Attack.Damage > 0, FString::Printf(TEXT("shot hits for %d (reason %s)"), Attack.Damage, *Attack.Reason));

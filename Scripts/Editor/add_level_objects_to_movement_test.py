@@ -3,7 +3,9 @@ a fuel barrel, two abandoned barricades, two hidden mines and two supply crates 
 BarrelObject, AbandonedBarricadeEast / Generator, AbandonedMinePath / Alley, LootCrateObject, TrappedSupplyCrate),
 the «Начать бой» squad spot behind the gate (TargetPoint tagged CombatStart; Godot main.gd _on_start_combat_pressed)
 and four enemy spawn points in the yard beyond the gate (Godot EnemySpawnPoints: north gate, west flank, east flank,
-far perimeter). Objects whose label already exists are skipped. They stand away from the routes of the automated checks.
+far perimeter; Godot lane names and allowed_enemy_type) and Ivan Susanin's rescue spot (TargetPoint tagged
+SusaninSpawn, on the west side of the yard; Godot _spawn_susanin_for_rescue). Objects whose label already exists are skipped (spawn points
+get their lane / type refreshed). They stand away from the routes of the automated checks.
 Locations are design coordinates (layout at the origin, yaw 0); they follow the "Floor" actor when the user moves or
 rotates the layout (same mapping as SmokeUtils::LevelPoint).
 
@@ -37,10 +39,17 @@ def trapped_crate(crate):
     crate.set_editor_property("contents", contents)
 
 
-def spawn_lane(lane):
+def spawn_lane(lane, allowed="ALL"):
+    """Godot enemy_spawn_point.gd lane_name / allowed_enemy_type (movements_demo.tscn values)."""
     def setup(point):
         point.set_editor_property("spawn_lane", lane)
+        point.set_editor_property("allowed_enemy_type", getattr(unreal.EnemySpawnFilter, allowed))
     return setup
+
+
+def susanin_spawn(point):
+    """URecruitSubsystem::SpawnTag: Ivan Susanin appears here in the rescue wave (Godot _spawn_susanin_for_rescue)."""
+    point.set_editor_property("tags", ["SusaninSpawn"])
 
 
 def combat_start(point):
@@ -58,10 +67,11 @@ OBJECTS = [
     ("Crate_Supply_Checkpoint", unreal.LootCrateActor, unreal.Vector(1200, 1200, 40), 0, checkpoint_crate),
     ("Crate_Supply_Trapped", unreal.LootCrateActor, unreal.Vector(1200, 900, 40), 0, trapped_crate),
     ("CombatStart", unreal.TargetPoint, unreal.Vector(0, -2150, 0), -90, combat_start),
-    ("EnemySpawn_NorthGate", unreal.EnemySpawnPoint, unreal.Vector(0, -2600, 100), 90, spawn_lane("NORTH_GATE")),
-    ("EnemySpawn_WestFlank", unreal.EnemySpawnPoint, unreal.Vector(-1400, -2400, 100), 90, spawn_lane("WEST_FLANK")),
-    ("EnemySpawn_EastFlank", unreal.EnemySpawnPoint, unreal.Vector(1400, -2400, 100), 90, spawn_lane("EAST_FLANK")),
-    ("EnemySpawn_FarPerimeter", unreal.EnemySpawnPoint, unreal.Vector(0, -2850, 100), 90, spawn_lane("FAR_PERIMETER")),
+    ("SusaninSpawn", unreal.TargetPoint, unreal.Vector(-900, -2300, 0), 60, susanin_spawn),
+    ("EnemySpawn_NorthGate", unreal.EnemySpawnPoint, unreal.Vector(0, -2600, 100), 90, spawn_lane("Северные ворота")),
+    ("EnemySpawn_WestFlank", unreal.EnemySpawnPoint, unreal.Vector(-1400, -2400, 100), 90, spawn_lane("Левый фланг (Прорыв)", "HOUND")),
+    ("EnemySpawn_EastFlank", unreal.EnemySpawnPoint, unreal.Vector(1400, -2400, 100), 90, spawn_lane("Правый фланг", "SPITTER")),
+    ("EnemySpawn_FarPerimeter", unreal.EnemySpawnPoint, unreal.Vector(0, -2850, 100), 90, spawn_lane("Дальний периметр")),
 ]
 
 level_editor = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
@@ -81,8 +91,17 @@ def to_level(point):
     return unreal.Vector(point.x * c - point.y * s + floor_loc.x, point.x * s + point.y * c + floor_loc.y, point.z)
 
 added = []
+by_label = {a.get_actor_label(): a for a in level_actors}
 for label, cls, location, yaw, setup in OBJECTS:
     if label in existing:
+        # Spawn points already placed get their lane / type filter refreshed (Godot names and filters).
+        point = by_label[label]
+        if setup and isinstance(point, unreal.EnemySpawnPoint):
+            setup(point)
+            added.append(label + " (updated)")
+        elif label == "SusaninSpawn" and (point.get_actor_location() - to_level(location)).length() > 1:
+            point.set_actor_location(to_level(location), False, False)  # first placement stood in Wall_GateWest
+            added.append(label + " (moved)")
         continue
     actor = actors.spawn_actor_from_class(cls, to_level(location), unreal.Rotator(0, 0, yaw + floor_yaw))
     actor.set_actor_label(label)

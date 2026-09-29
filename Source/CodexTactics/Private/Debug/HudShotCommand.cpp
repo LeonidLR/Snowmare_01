@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring.
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -23,6 +23,8 @@
 #include "EngineUtils.h"
 #include "Containers/Ticker.h"
 #include "Debug/SmokeUtils.h"
+#include "Characters/RecruitSubsystem.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "GameFramework/WorldSettings.h"
 #include "CodexTactics.h"
 #include "Engine/World.h"
@@ -155,6 +157,72 @@ namespace HudShot
 					Grenades->StartAim(Lead);
 					Grenades->UpdateAim(Lead->GetActorLocation() + Lead->GetActorForwardVector() * 700.f);
 				}
+			}), 3.5f, false);
+		}
+		if (Args.Contains(TEXT("floating")))
+		{
+			// Floating combat texts over the squad and an enemy, shot while they rise.
+			TWeakObjectPtr<UWorld> FloatWorld(World);
+			FTimerHandle FloatHandle;
+			World->GetTimerManager().SetTimer(FloatHandle, FTimerDelegate::CreateLambda([FloatWorld]()
+			{
+				USquadSubsystem* Squad = FloatWorld.IsValid() ? FloatWorld->GetSubsystem<USquadSubsystem>() : nullptr;
+				if (!Squad || Squad->GetMembers().Num() < 3)
+				{
+					return;
+				}
+				TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+				Members[0]->ForcedDodgeRollForTesting = 0.f;
+				Members[0]->TakeHit(24.f, TEXT("HudShot"), true);
+				Members[1]->ForcedDodgeRollForTesting = 1.f;
+				Members[1]->TakeHit(20.f, TEXT("HudShot"));
+				UFloatingTextSubsystem::SpawnAboveOperative(Members[2], TEXT("❄️ ОСЕЧКА! (Затвор заклинил)"), FLinearColor(0.4f, 0.85f, 1.f));
+				if (AEnemyCharacter* Brute = FloatWorld->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Brute,
+					Members[0]->GetActorLocation() + Members[0]->GetActorForwardVector() * 500.f))
+				{
+					Brute->CustomTimeDilation = 0.f;
+					FDamageSpec Spec;
+					Spec.Amount = 60.f;
+					Brute->FindComponentByClass<UHealthComponent>()->TakeDamage(Spec);
+				}
+			}), 4.3f, false); // the regular shot at 4.5 s catches them rising
+		}
+		if (Args.Contains(TEXT("susanin")))
+		{
+			// The rescue event: Susanin freezing at his spot with the distress dialogue (narrative pause: real-time shot).
+			TWeakObjectPtr<UWorld> SusWorld(World);
+			FTimerHandle SusHandle;
+			World->GetTimerManager().SetTimer(SusHandle, FTimerDelegate::CreateLambda([SusWorld]()
+			{
+				URecruitSubsystem* Recruits = SusWorld.IsValid() ? SusWorld->GetSubsystem<URecruitSubsystem>() : nullptr;
+				if (!Recruits)
+				{
+					return;
+				}
+				UGameFlowSubsystem* Flow = SusWorld->GetSubsystem<UGameFlowSubsystem>();
+				Flow->TriggerCombatZone();
+				Flow->FinishCutscene();
+				Flow->FinishPreparation();
+				for (TActorIterator<AEnemyCharacter> It(SusWorld.Get()); It; ++It)
+				{
+					It->CustomTimeDilation = 0.f;
+				}
+				Recruits->TriggerRescueEvent();
+				TSharedRef<int32> Frames = MakeShared<int32>(0);
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Frames](float)
+				{
+					++(*Frames);
+					if (*Frames == 30)
+					{
+						FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / TEXT("HudShot.png"), true, false);
+					}
+					if (*Frames >= 60)
+					{
+						FPlatformMisc::RequestExit(false, TEXT("HudShot"));
+						return false;
+					}
+					return true;
+				}), 0.05f);
 			}), 3.5f, false);
 		}
 		if (Args.Contains(TEXT("ring")))

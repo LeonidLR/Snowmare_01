@@ -63,15 +63,48 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Wave")
 	bool IsWaveActive() const { return bWaveActive; }
 
+	/** Enemies of the current wave when it started (Godot total_wave_enemies). */
+	int32 GetTotalWaveEnemies() const { return TotalWaveEnemies; }
+
 	/**
 	 * Cold drain multiplier of the current level wave (Godot wave_modifiers.cold_drain_mult written to every operative's
 	 * cold_rate_modifier); camera zones override it while an operative is inside. 1 without a level wave.
 	 */
 	float GetColdDrainMultiplier() const { return ColdDrainMultiplier; }
 
-	/** Finds an appropriate spawn location given a lane name. */
+	/**
+	 * Spawn location for an enemy of Type on Lane (Godot _get_enemy_spawn_pos): a random active, non-dynamic point whose
+	 * lane matches and whose allowed type accepts Type; else any non-dynamic point; else any point; else the yard.
+	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Wave")
-	FVector GetSpawnLocationForLane(const FString& Lane) const;
+	FVector GetSpawnLocationForLane(const FString& Lane, EEnemyArchetype Type = EEnemyArchetype::Base) const;
+
+	/** Wave (1-3) of the mission's flank breach (Godot dynamic_breach_wave: [1, 2, 3] shuffled, Susanin takes one first). */
+	int32 GetDynamicBreachWave() const { return DynamicBreachWave; }
+	/** Wave of the Susanin rescue event (Godot susanin_rescue_wave). */
+	int32 GetSusaninRescueWave() const { return SusaninRescueWave; }
+	void SetRandomEventWaves(int32 BreachWave, int32 SusaninWave) { DynamicBreachWave = BreachWave; SusaninRescueWave = SusaninWave; }
+	bool IsDynamicBreachTriggered() const { return bDynamicBreachTriggered; }
+	int32 GetPendingRandomEventCount() const { return PendingRandomEvents.Num(); }
+
+	/**
+	 * Godot _check_dynamic_flank_spawners: in the breach wave the first dynamic point that passes its activation roll
+	 * breaks through 4-7 s later (at once with bInstantRandomEvents); during turn-based combat the breach waits for
+	 * the fight to end.
+	 */
+	void CheckDynamicFlankSpawners(int32 WaveNum);
+
+	/**
+	 * Godot EnemySpawnPoint.trigger_breach: the pack spawns at once around the point with the HQ radio line; after
+	 * CameraDelay the camera shows the point for 1.8 s with the squad's line, then returns to the leader.
+	 */
+	void TriggerBreach(AEnemySpawnPoint* Point, float CameraDelay = 1.f);
+
+	/** Queues Event until turn-based combat ends (Godot _pending_random_events), or runs it now outside a fight. */
+	void RunOrDeferRandomEvent(TFunction<void()> Event);
+
+	/** Godot is_headless_test_mode: random events fire without their delays (smokes). */
+	bool bInstantRandomEvents = false;
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Wave")
 	FOnWaveStartedDynamic OnWaveStarted;
@@ -97,6 +130,15 @@ private:
 	bool bWaveActive = false;
 	float SpawnTimer = 0.0f;
 	float ColdDrainMultiplier = 1.0f;
+
+	int32 DynamicBreachWave = -1;
+	int32 SusaninRescueWave = -1;
+	bool bDynamicBreachTriggered = false;
+	/** Godot _pending_random_events: run when turn-based combat ends. */
+	TArray<TFunction<void()>> PendingRandomEvents;
+
+	bool IsTurnBased() const;
+	void SpawnBreachPack(const AEnemySpawnPoint& Point);
 
 	/** Godot _spawn_custom_json_wave: every enemy of the wave at once, modifiers applied, radio line with counts. */
 	void SpawnLevelWave(const FWaveDefinition& Def);

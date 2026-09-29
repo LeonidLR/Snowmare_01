@@ -1,4 +1,5 @@
 #include "Characters/SquadSubsystem.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
 #include "CollisionQueryParams.h"
@@ -169,8 +170,10 @@ void USquadSubsystem::EnterSoloMode()
 		if (AOperativeCharacter* Operative = Follower.Operative.Get())
 		{
 			Operative->SetStance(EOperativeStance::Crouching);
+			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🛡️ ОБОРОНА: ПРИСЕВ"), FLinearColor(0.3f, 0.9f, 0.4f));
 		}
 	}
+	UFloatingTextSubsystem::SpawnAboveOperative(LeaderRef, TEXT("👤 РЕЖИМ СОЛО [B]"), FLinearColor(0.2f, 0.9f, 1.f));
 
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
@@ -201,6 +204,7 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 			if (AOperativeCharacter* Operative = Follower.Operative.Get())
 			{
 				Operative->SetStance(LeaderRef->GetStance());
+				UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🏃 ВОЗВРАТ В СТРОЙ"), FLinearColor(1.f, 0.85f, 0.2f));
 			}
 		}
 	}
@@ -346,6 +350,8 @@ void USquadSubsystem::ToggleGuard(AOperativeCharacter* Operative)
 		Operative->StopOperative();
 	}
 	RebuildFollowers(); // Godot assign_formation_slots skips guards
+	UFloatingTextSubsystem::SpawnAboveOperative(Operative, Operative->bGuarding ? TEXT("🛡️ ОБОРОНА: ФИКСАЦИЯ") : TEXT("🏃 В СТРОЙ"),
+		Operative->bGuarding ? FLinearColor(0.3f, 0.9f, 0.5f) : FLinearColor(1.f, 0.85f, 0.2f));
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Messages->PostMessage(Name, FText::Format(Operative->bGuarding

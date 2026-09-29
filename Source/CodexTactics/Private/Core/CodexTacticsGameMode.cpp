@@ -52,6 +52,7 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 		{ LOCTEXT("Commander", "Командир"), FLinearColor::FromSRGBColor(FColor(0x20, 0x80, 0xEC)), FVector(0.f, 0.f, 0.f), 15.f, EOperativeRole::Commander, 25.f, 90.f },
 		{ LOCTEXT("Engineer", "Инженер"), FLinearColor::FromSRGBColor(FColor(0xFF, 0x61, 0x0F)), FVector(-280.f, -260.f, 0.f), 25.f, EOperativeRole::Engineer, 30.f, 75.f },
 		{ LOCTEXT("Medic", "Медик-сапёр"), FLinearColor::FromSRGBColor(FColor(0x1F, 0xB3, 0x33)), FVector(-280.f, 260.f, 0.f), 20.f, EOperativeRole::MedicSapper, 35.f, 85.f } };
+	RecruitSusanin = { LOCTEXT("Susanin", "Иван Сусанин"), FLinearColor(0.95f, 0.28f, 0.72f), FVector::ZeroVector, 20.f, EOperativeRole::Recruit, 45.f, 70.f };
 }
 
 void ACodexTacticsGameMode::StartPlay()
@@ -106,14 +107,32 @@ void ACodexTacticsGameMode::SpawnSquad()
 	for (int32 Index = 0; Index < SquadRoster.Num(); ++Index)
 	{
 		const FSquadMemberSpawn& Entry = SquadRoster[Index];
-		const FVector Location = StartTransform.GetLocation() + Facing.RotateVector(Entry.Offset);
+		SpawnOperative(Entry, Index, StartTransform.GetLocation() + Facing.RotateVector(Entry.Offset), Facing);
+	}
+}
+
+AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpawn& Entry, int32 SquadIndex, const FVector& Location,
+	const FRotator& Facing, bool bRecruited)
+{
+	UWorld* World = GetWorld();
+	TSubclassOf<AOperativeCharacter> SpawnClass = OperativeBlueprint.IsNull() ? nullptr : OperativeBlueprint.LoadSynchronous();
+	if (!SpawnClass)
+	{
+		SpawnClass = OperativeClass;
+	}
+	if (!World || !SpawnClass)
+	{
+		return nullptr;
+	}
+	{
 		AOperativeCharacter* Operative = World->SpawnActorDeferred<AOperativeCharacter>(SpawnClass,
 			FTransform(Facing, Location), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 		if (!Operative)
 		{
-			continue;
+			return nullptr;
 		}
-		Operative->SquadIndex = Index;
+		Operative->bRecruited = bRecruited;
+		Operative->SquadIndex = SquadIndex;
 		Operative->DisplayName = Entry.DisplayName;
 		Operative->BodyColor = Entry.Color;
 		Operative->ColdSurvival->Fortitude = Entry.Fortitude;
@@ -136,6 +155,7 @@ void ACodexTacticsGameMode::SpawnSquad()
 		}
 		Operative->InitArsenal(Arsenal, StartingReserveAmmo); // full clips, M16 in hands
 		Operative->ApplyBodyColor();
+		return Operative;
 	}
 }
 

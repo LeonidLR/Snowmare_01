@@ -302,7 +302,12 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	Spec.DamageType = EDamageType::Kinetic;
 	Spec.AttackerSource = EnemyDisplayName;
 
-	if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
+	// Godot _attack_target -> player.gd take_damage (dodge, stance, fortitude) for operatives.
+	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Target))
+	{
+		Operative->TakeHit(FinalDamage, EnemyDisplayName, bIsCrit);
+	}
+	else if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 	{
 		TargetHealth->ApplyDamage(Spec, this);
 	}

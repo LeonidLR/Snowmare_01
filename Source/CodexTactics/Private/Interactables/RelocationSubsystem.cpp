@@ -1,4 +1,5 @@
 #include "Interactables/RelocationSubsystem.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -390,11 +391,13 @@ bool URelocationSubsystem::TickDeploy(FDeployTask& Task, float DeltaTime)
 		{
 			Post(Name, FText::Format(LOCTEXT("Mishap", "💥 ОШИБКА МИНИРОВАНИЯ! У {0} сорвался детонатор (Риск: {1}%, Холод: {2}%)! Мина сдетонировала при установке!"),
 				Name, FText::AsNumber(Chance, &OneDigit), FMath::FloorToInt(Worker->ColdLevel)));
+			UFloatingTextSubsystem::SpawnAboveOperative(Worker, TEXT("💥 СРЫВ ВЗРЫВАТЕЛЯ!"), FLinearColor(1.f, 0.2f, 0.1f));
 			Mine->Reveal();
 			Mine->Detonate();
 			return true;
 		}
 		Mine->SetPlacedBySquad();
+		UFloatingTextSubsystem::SpawnAboveOperative(Worker, TEXT("💣 МИНА УСТАНОВЛЕНА"), FLinearColor(0.3f, 0.9f, 0.4f));
 		const float ColdPenalty = Worker->ColdLevel / 100.f * 20.f;
 		Post(Name, FText::Format(LOCTEXT("MinePlaced", "💣 Противопехотная мина установлена (взведение 3.0с, риск срыва был {0}%{1})!"),
 			FText::AsNumber(Chance, &OneDigit),
@@ -421,6 +424,7 @@ bool URelocationSubsystem::TickDeploy(FDeployTask& Task, float DeltaTime)
 	if (Task.Type == EDeployableType::Barricade && Flow && Flow->GetPhase() != ECodexGamePhase::Exploration)
 	{
 		Worker->SetStance(EOperativeStance::Crouching);
+		UFloatingTextSubsystem::SpawnAboveOperative(Worker, TEXT("🛡️ В УКРЫТИИ (-35% урона)"), FLinearColor(0.3f, 0.9f, 1.f));
 	}
 	return true;
 }

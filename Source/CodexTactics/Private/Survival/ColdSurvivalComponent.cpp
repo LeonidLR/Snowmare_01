@@ -1,4 +1,5 @@
 #include "Survival/ColdSurvivalComponent.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Camera/CameraZoneVolume.h"
 #include "Characters/OperativeCharacter.h"
@@ -141,7 +142,8 @@ void UColdSurvivalComponent::StepCold(float DeltaSeconds)
 	{
 		bFrostbitten = true;
 		Owner->SetStance(EOperativeStance::Prone);
-		PostOperativeMessage(LOCTEXT("Frostbite", "❄️ ОБМОРОЖЕНИЕ! ПАДАЕТ НА СНЕГ!"));
+		// Godot floats these over the operative (no radio line).
+		UFloatingTextSubsystem::SpawnAboveOperative(Owner, TEXT("❄️ ОБМОРОЖЕНИЕ! ПАДАЕТ НА СНЕГ!"), FLinearColor(0.4f, 0.8f, 1.f));
 	}
 	else if (bFrostbitten
 		&& (NewTier == EColdTier::Normal
@@ -155,7 +157,8 @@ void UColdSurvivalComponent::StepCold(float DeltaSeconds)
 	bWeaponFrozen = ColdRules::UpdateWeaponFrozen(Config, bWeaponFrozen, Cold, Environment.bWarm);
 	if (bWeaponFrozen != bWasFrozen)
 	{
-		PostOperativeMessage(bWeaponFrozen ? LOCTEXT("WeaponFrozen", "🥶 ОРУЖИЕ ЗАМЁРЗЛО!") : LOCTEXT("WeaponThawed", "🔥 ОРУЖИЕ ОТОГРЕЛОСЬ!"));
+		UFloatingTextSubsystem::SpawnAboveOperative(Owner, bWeaponFrozen ? TEXT("🥶 ОРУЖИЕ ЗАМЁРЗЛО!") : TEXT("🔥 ОРУЖИЕ ОТОГРЕЛОСЬ!"),
+			bWeaponFrozen ? FLinearColor(0.4f, 0.85f, 1.f) : FLinearColor(1.f, 0.6f, 0.2f));
 	}
 
 	if (NewTier != Tier)
@@ -171,14 +174,6 @@ void UColdSurvivalComponent::ApplyTierEffects(EColdTier NewTier)
 	{
 		Owner->SetColdSpeedMultiplier(ColdRules::GetSpeedMultiplier(NewTier));
 		OnTierChanged.Broadcast(Owner, NewTier);
-	}
-}
-
-void UColdSurvivalComponent::PostOperativeMessage(const FText& Text) const
-{
-	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
-	{
-		Messages->PostMessage(Operative.IsValid() ? Operative->DisplayName : FText::GetEmpty(), Text);
 	}
 }
 

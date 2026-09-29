@@ -1,4 +1,5 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "AIController.h"
 #include "Components/BoxComponent.h"
 #include "Components/MeshComponent.h"
@@ -461,6 +462,29 @@ void UTurnBasedCombatSubsystem::ApplyDamage(AActor* Victim, float Amount, const 
 	{
 		Health->ApplyDirectHealthLoss(Amount, Source);
 	}
+}
+
+void UTurnBasedCombatSubsystem::ApplyEnemyHit(AActor* Enemy, float Amount, const FString& Source)
+{
+	if (UHealthComponent* Health = Enemy ? Enemy->FindComponentByClass<UHealthComponent>() : nullptr)
+	{
+		FDamageSpec Spec;
+		Spec.Amount = Amount;
+		Spec.DamageType = EDamageType::Kinetic;
+		Spec.ArmorPenetration = 0.f;
+		Spec.AttackerSource = Source;
+		Health->TakeDamage(Spec);
+	}
+}
+
+void UTurnBasedCombatSubsystem::ApplySquadHit(AActor* Victim, float Amount, const FString& Source)
+{
+	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Victim))
+	{
+		Operative->TakeHit(Amount, Source, false, true);
+		return;
+	}
+	ApplyDamage(Victim, Amount, Source);
 }
 
 bool UTurnBasedCombatSubsystem::IsDead(const AActor* Actor) const
@@ -972,7 +996,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::AttackCell(const FIntPoint& Cell, b
 			const FGorkyArcResult Arc = FGorky17Utils::CalculateAttackArc(State->GridPos, Cell, EnemyState->Facing);
 			const float Base = TurnBasedRules::GetDamageForDistance(Weapon, Distance, State->BaseDamage);
 			Result.Damage = TurnBasedRules::SquadAttackDamage(Base, Arc.DamageMultiplier, EnemyState->Armor, Arc.EffectiveArmorMultiplier);
-			ApplyDamage(Target, Result.Damage, NameOf(Unit));
+			ApplyEnemyHit(Target, Result.Damage, NameOf(Unit));
 			Log(FString::Printf(TEXT("💥 Атака по %s: %d урона (%s, x%.2f) [Меткость: %d%%]"), *NameOf(Target), Result.Damage, TurnArcName(Arc.Arc),
 				Arc.DamageMultiplier, FMath::RoundToInt(Chance * 100.f)));
 			if (IsDead(Target))
@@ -2181,7 +2205,7 @@ void UTurnBasedCombatSubsystem::ProcessNextTurret()
 	if (bHit)
 	{
 		const int32 Damage = FMath::RoundToInt(Balance.TurretDamage);
-		ApplyDamage(Best, Damage, TEXT("Турель"));
+		ApplyEnemyHit(Best, Damage, TEXT("Турель"));
 		Log(FString::Printf(TEXT("🔫 Турель произвела залп по %s (-%d HP)! [Меткость: %d%%]"), *NameOf(Best), Damage, FMath::RoundToInt(Chance * 100.f)));
 		if (IsDead(Best) && EnemyState)
 		{
@@ -2190,6 +2214,7 @@ void UTurnBasedCombatSubsystem::ProcessNextTurret()
 	}
 	else
 	{
+		UFloatingTextSubsystem::SpawnAboveEnemy(Best, TEXT("ПРОМАХ!"), FLinearColor(0.85f, 0.85f, 0.85f));
 		Log(FString::Printf(TEXT("❌ Промах турели по %s! Шанс: %d%% (выпало: %d%%)"), *NameOf(Best), FMath::RoundToInt(Chance * 100.f),
 			FMath::RoundToInt(Roll * 100.f)));
 	}
@@ -2437,7 +2462,7 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 		AActor* Victim = WeakTarget.Get();
 		if (Attacker && Victim && States.Contains(Victim))
 		{
-			ApplyDamage(Victim, Damage, NameOf(Attacker));
+			ApplySquadHit(Victim, Damage, NameOf(Attacker));
 			Log(FString::Printf(TEXT("🐺 Враг %s атаковал %s: %d урона!"), *NameOf(Attacker), *NameOf(Victim), Damage));
 			if (IsDead(Victim))
 			{

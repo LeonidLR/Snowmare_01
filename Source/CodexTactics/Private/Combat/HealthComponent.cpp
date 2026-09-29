@@ -1,5 +1,15 @@
 #include "Combat/HealthComponent.h"
 #include "GameFramework/Actor.h"
+#include "UI/FloatingTextSubsystem.h"
+
+namespace
+{
+	/** Godot enemy_base.gd floats its own numbers; operatives (UOperativeCharacter::TakeHit) and objects do not use these. */
+	bool FloatsEnemyNumbers(const AActor* Owner)
+	{
+		return Owner && Owner->ActorHasTag(FName(TEXT("Enemy")));
+	}
+}
 
 UHealthComponent::UHealthComponent()
 {
@@ -48,6 +58,10 @@ float UHealthComponent::TakeDamage(const FDamageSpec& Spec)
 	// Absolute elemental immunity (e.g. Cryo on ice creatures)
 	if (ElementMult <= 0.001f)
 	{
+		if (FloatsEnemyNumbers(GetOwner()))
+		{
+			UFloatingTextSubsystem::SpawnAboveEnemy(GetOwner(), TEXT("❄️ ИММУНИТЕТ"), FLinearColor(0.3f, 0.8f, 1.f));
+		}
 		return 0.0f;
 	}
 
@@ -64,6 +78,33 @@ float UHealthComponent::TakeDamage(const FDamageSpec& Spec)
 
 	const float OldHealth = CurrentHealth;
 	CurrentHealth = FMath::Max(0.0f, CurrentHealth - FinalDamage);
+
+	// Godot enemy_base.gd take_damage: the number with the damage type's prefix / colour.
+	if (FloatsEnemyNumbers(GetOwner()))
+	{
+		FString Prefix = TEXT("-");
+		FLinearColor Color = FLinearColor::White;
+		switch (Spec.DamageType)
+		{
+		case EDamageType::Fire: Prefix = TEXT("🔥 -"); Color = FLinearColor(1.f, 0.45f, 0.1f); break;
+		case EDamageType::Cryo: Prefix = TEXT("❄️ -"); Color = FLinearColor(0.2f, 0.85f, 1.f); break;
+		case EDamageType::Energy: Prefix = TEXT("⚡ -"); Color = FLinearColor(0.75f, 0.3f, 1.f); break;
+		case EDamageType::Explosive: Prefix = TEXT("💥 -"); Color = FLinearColor(1.f, 0.8f, 0.2f); break;
+		default:
+			if (ElementMult > 1.2f)
+			{
+				Prefix = TEXT("🎯 -");
+				Color = FLinearColor(1.f, 0.2f, 0.2f);
+			}
+			else if (EffectiveArmor > 0.4f)
+			{
+				Prefix = TEXT("🛡️ -");
+				Color = FLinearColor(0.7f, 0.75f, 0.8f);
+			}
+			break;
+		}
+		UFloatingTextSubsystem::SpawnAboveEnemy(GetOwner(), FString::Printf(TEXT("%s%d"), *Prefix, FMath::FloorToInt(FinalDamage)), Color);
+	}
 
 	// Status effects
 	switch (Spec.StatusEffect)
@@ -161,6 +202,10 @@ void UHealthComponent::ProcessStatusEffects(float DeltaSeconds)
 		{
 			BurningTickAccum = 0.0f;
 			CurrentHealth = FMath::Max(0.0f, CurrentHealth - BurningTickDamage);
+			if (FloatsEnemyNumbers(GetOwner()))
+			{
+				UFloatingTextSubsystem::SpawnAboveEnemy(GetOwner(), FString::Printf(TEXT("🔥 -%d"), FMath::FloorToInt(BurningTickDamage)), FLinearColor(1.f, 0.45f, 0.1f));
+			}
 			OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, -BurningTickDamage);
 			if (CurrentHealth <= 0.0f)
 			{
@@ -178,6 +223,10 @@ void UHealthComponent::ProcessStatusEffects(float DeltaSeconds)
 		{
 			BleedingTickAccum = 0.0f;
 			CurrentHealth = FMath::Max(0.0f, CurrentHealth - BleedingTickDamage);
+			if (FloatsEnemyNumbers(GetOwner()))
+			{
+				UFloatingTextSubsystem::SpawnAboveEnemy(GetOwner(), FString::Printf(TEXT("🩸 -%d"), FMath::FloorToInt(BleedingTickDamage)), FLinearColor(0.9f, 0.1f, 0.1f));
+			}
 			OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, -BleedingTickDamage);
 			if (CurrentHealth <= 0.0f)
 			{

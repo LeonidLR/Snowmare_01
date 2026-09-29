@@ -140,9 +140,10 @@ void UDialogueWidget::BuildDefaultLayout()
 		UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
 		UTextBlock* Text = MakeText(TextName, 12, DialogButtonTextColor, true);
 		Text->SetText(DialogClean(Label));
+		Text->SetAutoWrapText(false); // long finish labels («Держись! Идём на помощь! ▶») widen the button
 		Button->AddChild(Text);
 		USizeBox* Size = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		Size->SetWidthOverride(Width);
+		Size->SetMinDesiredWidth(Width);
 		Size->SetHeightOverride(30.f);
 		Size->AddChild(Button);
 		BottomBar->AddChildToHorizontalBox(Size)->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));

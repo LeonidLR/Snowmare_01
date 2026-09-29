@@ -1,4 +1,5 @@
 #include "Core/SaveGameSubsystem.h"
+#include "Characters/RecruitSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -219,6 +220,13 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	Data->SetObjectField(TEXT("game_state"), GameState);
 	Data->SetObjectField(TEXT("quest_state"), QuestState);
 	Data->SetObjectField(TEXT("world_state"), WorldState);
+	// Godot save_manager.gd: "susanin" only once he exists.
+	if (const URecruitSubsystem* Recruits = GetWorld()->GetSubsystem<URecruitSubsystem>(); Recruits && Recruits->GetSusanin())
+	{
+		const TSharedRef<FJsonObject> SusaninState = MakeShared<FJsonObject>();
+		SusaninState->SetBoolField(TEXT("is_recruited"), Recruits->IsSusaninRecruited());
+		Data->SetObjectField(TEXT("susanin"), SusaninState);
+	}
 	return Data;
 }
 
@@ -262,6 +270,13 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 {
 	UWorld* World = GetWorld();
 	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+
+	// 0. Susanin first, so a recruited Susanin takes his squad entry below.
+	const TSharedPtr<FJsonObject>* SusaninState = nullptr;
+	if (URecruitSubsystem* Recruits = World->GetSubsystem<URecruitSubsystem>(); Recruits && Data->TryGetObjectField(TEXT("susanin"), SusaninState))
+	{
+		Recruits->RestoreRecruited(SaveBool(*SusaninState, TEXT("is_recruited"), false));
+	}
 
 	// 1. Squad.
 	AOperativeCharacter* NewLeader = nullptr;

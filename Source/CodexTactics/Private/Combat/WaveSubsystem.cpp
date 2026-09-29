@@ -1,16 +1,38 @@
 #include "Combat/WaveSubsystem.h"
+#include "UI/FloatingTextSubsystem.h"
+#include "Camera/TacticalCameraPawn.h"
 #include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
 #include "Combat/EnemySpawnPoint.h"
 #include "Data/EnemyArchetypeAsset.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Kismet/GameplayStatics.h"
+#include "Misc/CommandLine.h"
+#include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
 
 void UWaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	Collection.InitializeDependency(UGameFlowSubsystem::StaticClass());
+	// Godot main.gd _ready: the flank breach and the Susanin rescue fall on different waves of [1, 2, 3].
+	TArray<int32> EventWaves = { 1, 2, 3 };
+	for (int32 Index = EventWaves.Num() - 1; Index > 0; --Index)
+	{
+		EventWaves.Swap(Index, FMath::RandRange(0, Index));
+	}
+	SusaninRescueWave = EventWaves.Pop();
+	DynamicBreachWave = EventWaves.Pop();
+	// Headless checks (-ExecCmds, like UMissionSubsystem's menu skip) run without random wave events; the smokes that
+	// test them pick the waves with SetRandomEventWaves.
+	if (FString(FCommandLine::Get()).Contains(TEXT("-ExecCmds")))
+	{
+		SusaninRescueWave = -1;
+		DynamicBreachWave = -1;
+	}
 }
 
 void UWaveSubsystem::Deinitialize()
@@ -41,9 +63,19 @@ void UWaveSubsystem::Tick(float DeltaTime)
 		return;
 	}
 	// Godot freezes the enemy spawners during turn-based combat.
-	if (const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased)
+	if (IsTurnBased())
 	{
 		return;
+	}
+	// Godot _on_gorky17_combat_ended: the random events that fell during the fight run now.
+	if (!PendingRandomEvents.IsEmpty())
+	{
+		TArray<TFunction<void()>> Pending = MoveTemp(PendingRandomEvents);
+		PendingRandomEvents.Reset();
+		for (const TFunction<void()>& Event : Pending)
+		{
+			Event();
+		}
 	}
 
 	ProcessPendingSpawns(DeltaTime);
@@ -68,6 +100,7 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 
 	PendingSpawns.Empty();
 	AliveEnemies.RemoveAll([](const TWeakObjectPtr<AEnemyCharacter>& E) { return !E.IsValid() || E->IsDying(); });
+	CheckDynamicFlankSpawners(WaveIndex); // Godot _start_next_wave
 
 	if (LevelConfig && LevelConfig->Config.Waves.IsValidIndex(WaveIndex - 1))
 	{
@@ -133,7 +166,7 @@ void UWaveSubsystem::SpawnLevelWave(const FWaveDefinition& Def)
 	{
 		for (int32 Index = 0; Index < Entry.Count; ++Index)
 		{
-			if (AEnemyCharacter* Enemy = SpawnEnemy(Entry.EnemyType, GetSpawnLocationForLane(Entry.SpawnLane)))
+			if (AEnemyCharacter* Enemy = SpawnEnemy(Entry.EnemyType, GetSpawnLocationForLane(Entry.SpawnLane, Entry.EnemyType)))
 			{
 				Enemy->ApplyWaveModifiers(Mods.EnemyHpMult, Mods.EnemyDamageMult, Mods.EnemySpeedMult, Entry.CustomHealth);
 				Counts.FindOrAdd(Entry.EnemyType)++;
@@ -169,7 +202,7 @@ void UWaveSubsystem::ProcessPendingSpawns(float DeltaTime)
 		FEnemySpawnEntry NextSpawn = PendingSpawns[0];
 		PendingSpawns.RemoveAt(0);
 
-		FVector Loc = GetSpawnLocationForLane(NextSpawn.SpawnLane);
+		FVector Loc = GetSpawnLocationForLane(NextSpawn.SpawnLane, NextSpawn.EnemyType);
 		SpawnEnemy(NextSpawn.EnemyType, Loc);
 
 		SpawnTimer = FMath::Max(0.2f, NextSpawn.SpawnDelaySec);
@@ -264,7 +297,7 @@ int32 UWaveSubsystem::GetAliveEnemyCount() const
 	return Count;
 }
 
-FVector UWaveSubsystem::GetSpawnLocationForLane(const FString& Lane) const
+FVector UWaveSubsystem::GetSpawnLocationForLane(const FString& Lane, EEnemyArchetype Type) const
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -272,10 +305,12 @@ FVector UWaveSubsystem::GetSpawnLocationForLane(const FString& Lane) const
 		return FVector::ZeroVector;
 	}
 
-	// Godot main.gd _get_enemy_spawn_pos: lanes match when either name contains the other (case-insensitive); when no
-	// point matches the lane, any active point is used; the hard-coded yard is the last resort (no points in the level).
+	// Godot main.gd _get_enemy_spawn_pos: dynamic points are skipped; a point matches when its allowed type accepts
+	// Type and the lanes match (either name contains the other, case-insensitive; "ANY" matches every point). Without
+	// a match any non-dynamic point is used, then any point; the hard-coded yard is the last resort.
 	const bool bAnyLane = Lane.IsEmpty() || Lane.Equals(TEXT("ANY"), ESearchCase::IgnoreCase);
 	TArray<FVector> CandidateLocations;
+	TArray<FVector> StaticLocations;
 	TArray<FVector> AnyLocations;
 	for (TActorIterator<AEnemySpawnPoint> It(World); It; ++It)
 	{
@@ -284,14 +319,20 @@ FVector UWaveSubsystem::GetSpawnLocationForLane(const FString& Lane) const
 			continue;
 		}
 		AnyLocations.Add(It->GetActorLocation());
-		if (bAnyLane || It->SpawnLane.Contains(Lane, ESearchCase::IgnoreCase) || Lane.Contains(It->SpawnLane, ESearchCase::IgnoreCase))
+		if (It->bIsDynamic)
+		{
+			continue;
+		}
+		StaticLocations.Add(It->GetActorLocation());
+		const bool bLaneOk = bAnyLane || It->SpawnLane.Contains(Lane, ESearchCase::IgnoreCase) || Lane.Contains(It->SpawnLane, ESearchCase::IgnoreCase);
+		if (bLaneOk && It->Accepts(Type))
 		{
 			CandidateLocations.Add(It->GetActorLocation());
 		}
 	}
 	if (CandidateLocations.Num() == 0)
 	{
-		CandidateLocations = MoveTemp(AnyLocations);
+		CandidateLocations = StaticLocations.Num() > 0 ? MoveTemp(StaticLocations) : MoveTemp(AnyLocations);
 	}
 
 	if (CandidateLocations.Num() > 0)
@@ -314,5 +355,138 @@ void UWaveSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMo
 		{
 			StartWave(FlowWave);
 		}
+	}
+}
+
+bool UWaveSubsystem::IsTurnBased() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	return Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased;
+}
+
+void UWaveSubsystem::RunOrDeferRandomEvent(TFunction<void()> Event)
+{
+	if (IsTurnBased())
+	{
+		PendingRandomEvents.Add(MoveTemp(Event));
+		return;
+	}
+	Event();
+}
+
+void UWaveSubsystem::CheckDynamicFlankSpawners(int32 WaveNum)
+{
+	UWorld* World = GetWorld();
+	if (!World || WaveNum != DynamicBreachWave || bDynamicBreachTriggered)
+	{
+		return;
+	}
+	for (TActorIterator<AEnemySpawnPoint> It(World); It; ++It)
+	{
+		if (!It->bIsDynamic || FMath::FRand() > It->ActivationChance)
+		{
+			continue;
+		}
+		bDynamicBreachTriggered = true;
+		TWeakObjectPtr<AEnemySpawnPoint> WeakPoint(*It);
+		TWeakObjectPtr<UWaveSubsystem> WeakThis(this);
+		auto ExecuteBreach = [WeakThis, WeakPoint]()
+		{
+			UWaveSubsystem* Self = WeakThis.Get();
+			if (!Self || !Self->bWaveActive || !WeakPoint.IsValid())
+			{
+				return;
+			}
+			Self->RunOrDeferRandomEvent([WeakThis, WeakPoint]()
+			{
+				if (WeakThis.IsValid() && WeakThis->bWaveActive && WeakPoint.IsValid())
+				{
+					WeakThis->TriggerBreach(WeakPoint.Get());
+				}
+			});
+		};
+		const float Delay = bInstantRandomEvents ? 0.f : FMath::FRandRange(4.f, 7.f);
+		if (Delay > 0.f)
+		{
+			FTimerHandle Handle;
+			World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda(ExecuteBreach), Delay, false);
+		}
+		else
+		{
+			ExecuteBreach();
+		}
+		break;
+	}
+}
+
+void UWaveSubsystem::SpawnBreachPack(const AEnemySpawnPoint& Point)
+{
+	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Msg->PostMessage(FText::FromString(TEXT("ШТАБ")), FText::FromString(FString::Printf(
+			TEXT("💥 ПРОРЫВ ВО ФЛАНГЕ! Враги пробили переборку на рубеже «%s»!"), *Point.SpawnLane)));
+	}
+	// Godot's match spawns hounds for any other type (FROSTBITTEN included).
+	const EEnemyArchetype Type = Point.BreachEnemyType == EEnemyArchetype::Spitter || Point.BreachEnemyType == EEnemyArchetype::Brute
+		|| Point.BreachEnemyType == EEnemyArchetype::Cutter ? Point.BreachEnemyType : EEnemyArchetype::FrostHound;
+	for (int32 Index = 0; Index < Point.EnemyCount; ++Index)
+	{
+		const FVector Offset(FMath::FRandRange(-150.f, 150.f), FMath::FRandRange(-150.f, 150.f), 0.f);
+		SpawnEnemy(Type, Point.GetActorLocation() + Offset);
+	}
+}
+
+void UWaveSubsystem::TriggerBreach(AEnemySpawnPoint* Point, float CameraDelay)
+{
+	UWorld* World = GetWorld();
+	if (!World || !Point || IsTurnBased())
+	{
+		return;
+	}
+	SpawnBreachPack(*Point);
+
+	TWeakObjectPtr<UWaveSubsystem> WeakThis(this);
+	TWeakObjectPtr<AEnemySpawnPoint> WeakPoint(Point);
+	auto FocusCamera = [WeakThis, WeakPoint]()
+	{
+		UWaveSubsystem* Self = WeakThis.Get();
+		if (!Self || !WeakPoint.IsValid() || Self->IsTurnBased())
+		{
+			return;
+		}
+		UWorld* PointWorld = Self->GetWorld();
+		ATacticalCameraPawn* Camera = Cast<ATacticalCameraPawn>(UGameplayStatics::GetPlayerPawn(PointWorld, 0));
+		if (Camera)
+		{
+			Camera->SetFollowTarget(WeakPoint.Get());
+		}
+		if (UGameMessageSubsystem* Msg = PointWorld->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Msg->PostMessage(FText::FromString(TEXT("ОТРЯД")), FText::FromString(TEXT("💥 Чёрт подери, откуда они взялись? Приготовиться к отражению атаки!")));
+		}
+		if (const USquadSubsystem* Squad = PointWorld->GetSubsystem<USquadSubsystem>(); Squad && Squad->GetLeader())
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(), TEXT("💥 ЧЁРТ ПОДЕРИ, ОТКУДА ОНИ?!"), FLinearColor(1.f, 0.3f, 0.3f));
+		}
+		// Back to the squad 1.8 s after the breach was shown.
+		TWeakObjectPtr<ATacticalCameraPawn> WeakCamera(Camera);
+		FTimerHandle ReturnHandle;
+		PointWorld->GetTimerManager().SetTimer(ReturnHandle, FTimerDelegate::CreateLambda([WeakThis, WeakCamera]()
+		{
+			const USquadSubsystem* Squad = WeakThis.IsValid() ? WeakThis->GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+			if (WeakCamera.IsValid() && Squad && Squad->GetLeader())
+			{
+				WeakCamera->SetFollowTarget(Squad->GetLeader());
+			}
+		}), 1.8f, false);
+	};
+	if (CameraDelay <= 0.f)
+	{
+		FocusCamera();
+	}
+	else
+	{
+		FTimerHandle Handle;
+		World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda(FocusCamera), CameraDelay, false);
 	}
 }

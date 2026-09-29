@@ -100,6 +100,7 @@ private:
 	void SelectMember1() { SelectMember(0); }
 	void SelectMember2() { SelectMember(1); }
 	void SelectMember3() { SelectMember(2); }
+	void SelectMember4() { SelectMember(3); } // Godot KEY_4: Ivan Susanin once recruited
 	void StanceStand() { ApplyStance(EOperativeStance::Standing); }
 	void StanceCrouch() { ApplyStance(EOperativeStance::Crouching); }
 	void StanceProne() { ApplyStance(EOperativeStance::Prone); }

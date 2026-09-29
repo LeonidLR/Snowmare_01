@@ -87,6 +87,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult ToggleTacticalPause() { return Machine.ToggleTacticalPause(); }
 
+	/** Sets the world time dilation of the current state (1, the tactical pause's 0.02, 0 after a wave / game over). */
+	void ApplyTimeDilation() const;
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult RequestEnterTurnBased(bool bEnemiesInRange) { return Machine.RequestEnterTurnBased(bEnemiesInRange); }
 
@@ -116,7 +119,6 @@ public:
 private:
 	void HandleStateChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);
 	void HandlePauseReleased();
-	void ApplyTimeDilation() const;
 
 	FGameFlowStateMachine Machine;
 	FDelegateHandle StateChangedHandle;

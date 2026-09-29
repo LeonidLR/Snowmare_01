@@ -1,4 +1,5 @@
 #include "Interactables/ProximityMineActor.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -98,7 +99,8 @@ void AProximityMineActor::Tick(float DeltaSeconds)
 		ArmingTimeLeft -= DeltaSeconds;
 		if (ArmingTimeLeft <= 0.f)
 		{
-			UE_LOG(LogCodexTactics, Display, TEXT("%s armed"), *GetName()); // Godot floating «⚠️ ВЗВЕДЕНА!»
+			UE_LOG(LogCodexTactics, Display, TEXT("%s armed"), *GetName());
+			UFloatingTextSubsystem::SpawnAboveMine(this, TEXT("⚠️ ВЗВЕДЕНА!"), FLinearColor(1.f, 0.3f, 0.2f)); // Godot _on_mine_armed_feedback
 		}
 		return;
 	}
@@ -184,6 +186,7 @@ void AProximityMineActor::HandleSpotted(AOperativeCharacter* Spotter)
 	}
 	const FRotator Facing = (GetActorLocation() - Spotter->GetActorLocation()).Rotation();
 	Spotter->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
+	UFloatingTextSubsystem::SpawnAboveOperative(Spotter, TEXT("⚠️ МИНА ОБНАРУЖЕНА!"), FLinearColor(1.f, 0.85f, 0.1f));
 	PostLine(Spotter->DisplayName, LOCTEXT("Spotted", "⚠️ Внимание, мина! Всем остановиться!"));
 	if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
 	{

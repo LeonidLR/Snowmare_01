@@ -7,7 +7,8 @@
 void OperativeBalance::Apply(const UGodotBalanceAsset& Config, AOperativeCharacter& Operative)
 {
 	const TCHAR* Prefix = Operative.SquadRole == EOperativeRole::Engineer ? TEXT("engineer_")
-		: (Operative.SquadRole == EOperativeRole::MedicSapper ? TEXT("medic_") : TEXT("commander_"));
+		: (Operative.SquadRole == EOperativeRole::MedicSapper ? TEXT("medic_")
+		: (Operative.SquadRole == EOperativeRole::Recruit ? TEXT("susanin_") : TEXT("commander_")));
 	auto Key = [Prefix](const TCHAR* Name) { return FName(FString(Prefix) + Name); };
 
 	if (Operative.HealthComponent)
@@ -23,6 +24,16 @@ void OperativeBalance::Apply(const UGodotBalanceAsset& Config, AOperativeCharact
 	else if (Operative.SquadRole == EOperativeRole::MedicSapper)
 	{
 		Operative.MinesCount = Config.GetInt(TEXT("medic_mines_count"), Operative.MinesCount);
+	}
+	else if (Operative.SquadRole == EOperativeRole::Recruit)
+	{
+		// Godot recruit_susanin.gd apply_balance_config: accuracy, luck, fortitude from susanin_* (health above).
+		Operative.Accuracy = Config.GetNumber(TEXT("susanin_accuracy"), Operative.Accuracy);
+		Operative.Luck = Config.GetNumber(TEXT("susanin_luck"), Operative.Luck);
+		if (Operative.ColdSurvival)
+		{
+			Operative.ColdSurvival->Fortitude = Config.GetNumber(TEXT("susanin_fortitude"), Operative.ColdSurvival->Fortitude);
+		}
 	}
 	else
 	{
@@ -65,6 +76,7 @@ void OperativeBalance::Apply(const UGodotBalanceAsset& Config, AOperativeCharact
 		Rules.MisfireDelay = Config.GetNumber(TEXT("realtime_cold_misfire_delay"), Rules.MisfireDelay);
 		Rules.AimPenaltyMax = Config.GetNumber(TEXT("realtime_cold_aim_penalty_max"), Rules.AimPenaltyMax);
 	}
+	Operative.FireConfig = SquadFireRules::ConfigFromBalance(&Config);
 	Operative.MaxColdToLiftObjects = Config.GetNumber(TEXT("max_cold_to_lift_objects"), Operative.MaxColdToLiftObjects);
 	Operative.MinHealthFractionToLift = Config.GetNumber(TEXT("min_health_percent_to_lift"), Operative.MinHealthFractionToLift);
 }

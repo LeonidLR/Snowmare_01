@@ -1,4 +1,5 @@
 #include "Interactables/InteractableActor.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -102,6 +103,7 @@ void AInteractableActor::PerformAction(AOperativeCharacter* User)
 		User->StopOperative();
 		User->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 		User->SetStance(EOperativeStance::Crouching);
+		UFloatingTextSubsystem::SpawnAboveOperative(User, TEXT("⚡ РЕМОНТ ГЕНЕРАТОРА..."), FLinearColor(0.2f, 0.9f, 0.4f));
 		PostLine(User->DisplayName, FText::Format(LOCTEXT("GeneratorRepairing", "⚡ {0}: «Восстанавливаем топливную магистраль генератора ({1}с)...»"),
 			User->DisplayName, FText::AsNumber(Seconds, &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))));
 		FTimerHandle Handle;
@@ -275,7 +277,7 @@ void AInteractableActor::ApplyBlast(float EnemyDamageBase, float SquadDamageBase
 				FVector::Dist(Center, Member->GetActorLocation()), Radius, DeployableRules::SquadFalloff);
 			if (SquadDamage > 0.f)
 			{
-				Health->ApplyDirectHealthLoss(SquadDamage, Source.ToString());
+				Member->TakeHit(SquadDamage, Source.ToString(), false, true); // Godot take_damage(..., bypass_avoidance)
 				Member->StopOperative();
 				PostLine(Member->DisplayName, FText::Format(SquadLine, FMath::FloorToInt(SquadDamage)));
 			}

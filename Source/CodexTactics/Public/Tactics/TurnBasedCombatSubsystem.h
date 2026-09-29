@@ -253,6 +253,13 @@ private:
 	void AlignFacing(AActor* Actor, EGorkyFacing Facing) const;
 	float GetHealth(const AActor* Actor) const;
 	void ApplyDamage(AActor* Victim, float Amount, const FString& Source);
+	/**
+	 * Godot occ.take_damage(final_dmg, KINETIC, 0.0, source) on an enemy: the enemy's own armor / affinity cut applies on
+	 * top of the grid damage, with the floating number (squad shots, the turret).
+	 */
+	void ApplyEnemyHit(AActor* Enemy, float Amount, const FString& Source);
+	/** Godot target_squad.take_damage(dmg, name, false, en, true): bypasses dodge / fortitude, floats «-N». */
+	void ApplySquadHit(AActor* Victim, float Amount, const FString& Source);
 	bool IsDead(const AActor* Actor) const;
 	FString NameOf(const AActor* Actor) const;
 	const UWeaponDataAsset* WeaponOf(const AActor* Actor) const;

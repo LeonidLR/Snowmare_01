@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Combat/SquadFireRules.h"
 #include "GameFramework/Character.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/PersonalItemRules.h"
@@ -71,6 +72,15 @@ enum class EOperativeOrderResult : uint8
 	NoController,
 	/** No navigable path to the destination. */
 	Unreachable
+};
+
+/** A target the operative can shoot now (Godot _find_shoot_target result). */
+struct FShootCandidate
+{
+	AActor* Enemy = nullptr;
+	float Distance = 0.f;
+	/** 0.8 crouched behind a barricade. */
+	float Cover = 1.f;
 };
 
 /**
@@ -220,6 +230,14 @@ public:
 	 */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Squad")
 	bool bGuarding = false;
+
+	/**
+	 * Squad member (Godot group "squad"). A recruit spawned with false (Godot recruit_susanin.gd is_recruited) stays out
+	 * of the squad subsystem — no selection, no formation, no targeting by enemies, no shooting — until
+	 * URecruitSubsystem recruits it.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative")
+	bool bRecruited = true;
 
 	/** Deployable type the F key sets up next (Godot selected_deployable_type). */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Inventory")
@@ -392,14 +410,48 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
 	bool CanShoot() const;
 
+	/**
+	 * An attack on this operative (Godot player.gd take_damage): dodge with luck * 0.4 %, then
+	 * max(1, Amount * stance defense * (1 - clamp(fortitude * 1.5 %, 0, 50 %))); bBypassAvoidance (grenades, traps
+	 * on the squad) skips both and takes max(1, Amount). Floating «💨 УКЛОНЕНИЕ!», «-N» or «💥 КРИТИЧЕСКИЙ УДАР! -N».
+	 * Returns the health taken.
+	 */
+	float TakeHit(float Amount, const FString& Attacker, bool bCrit = false, bool bBypassAvoidance = false);
+
+	/** Forces the next TakeHit dodge roll (smokes): 1 dodges, 0 never. Negative = random. */
+	UPROPERTY(Transient)
+	float ForcedDodgeRollForTesting = -1.f;
+
+	/**
+	 * The enemy this operative would shoot now, without the target-switch memory (Godot _find_shoot_target: the manual
+	 * priority target while it can be hit, else the closest enemy in range with a line of fire).
+	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
 	AActor* FindBestCombatTarget() const;
+
+	/**
+	 * Godot _find_shoot_target(delta): priority target, else the closest visible enemy; a current target is kept until a
+	 * much closer one (stance ratio, or within 3.5 m) stays closer for the stance's reaction delay. Barricade rules
+	 * decide cover (0.8 crouched) and block prone shooters («🚫 Баррикада блокирует огонь»).
+	 */
+	FShootCandidate FindShootTarget(float DeltaTime);
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
 	void ProcessCombatShooting(float DeltaTime);
 
+	/**
+	 * Godot _shoot_at_target: misfire, hit roll, then weapon damage * stance * Cover * crit (luck %, x2) * elevation
+	 * (+15 %) * distance factor; cryo / fire weapons chill / warm the shooter.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
-	bool ShootAtTarget(AActor* Target);
+	bool ShootAtTarget(AActor* Target, float Cover = 1.f);
+
+	/** Target switching per stance (Godot stance_target_switch_delay_* / stance_switch_distance_ratio_*; set from the balance). */
+	FSquadFireConfig FireConfig;
+
+	/** Forces the crit roll of the next hit (smokes): 1 crits, 0 never. Negative = random. */
+	UPROPERTY(Transient)
+	float ForcedCritRollForTesting = -1.f;
 
 	// --- Ctrl + click targeted shots (Godot main.gd Ctrl branch, player.gd shoot_at_* / set_manual_priority_target) ---
 
@@ -462,6 +514,10 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Combat")
 	float MisfireCooldownTimer = 0.0f;
 
+	/** Godot weapon_freeze_notify_timer: «ОРУЖИЕ ЗАМЁРЗЛО» at most every 2.5 s. */
+	float WeaponFreezeNotifyTimer = 0.f;
+	void NotifyWeaponFrozen();
+
 	UPROPERTY(Transient)
 	bool bForceMisfireForTesting = false;
 
@@ -494,8 +550,17 @@ private:
 	void ConsumeAmmoAfterShot();
 	/** Stops, drops the sprint and turns to face Location. */
 	void StopAndFace(const FVector& Location);
-	/** True when the priority target can be fired at now (range, line of fire; barricades block only prone shooters). */
-	bool CanFireAtPriorityTarget(const AActor* Target, float MaxRange) const;
+	/**
+	 * Range (weapon x stance x elevation), dead zone and line of fire to Enemy (Godot _find_shoot_target ray: walls block,
+	 * barricades by SquadFireRules::JudgeLine, another enemy in the way becomes the target unless bKeepTarget).
+	 */
+	bool EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FShootCandidate& Out, bool& bOutBarricadeBlocked) const;
+	/** Godot _notify_barricade_blocked (every 3.5 s at most). */
+	void NotifyBarricadeBlocked();
+	float BarricadeBlockNotifyTimer = 0.f;
+	TWeakObjectPtr<AActor> CurrentCombatTarget;
+	TWeakObjectPtr<AActor> PendingFlankTarget;
+	float TargetSwitchTimer = 0.f;
 
 	mutable TWeakObjectPtr<AActor> ManualPriorityTarget;
 	TMap<ETargetedShotKind, TWeakObjectPtr<AActor>> PlannedShots;

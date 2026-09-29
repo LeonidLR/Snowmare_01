@@ -125,6 +125,20 @@ public:
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
 	TArray<FSquadMemberSpawn> SquadRoster;
 
+	/**
+	 * Ivan Susanin, the recruit of the rescue event (Godot recruit_susanin.gd: pink coat, fortitude 20 -> balance
+	 * susanin_*; joins as member 4). Spawned by URecruitSubsystem.
+	 */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
+	FSquadMemberSpawn RecruitSusanin;
+
+	/**
+	 * Spawns one operative of the operative Blueprint with Entry's identity, the balance config and the starting
+	 * arsenal (Godot player.gd _ready + apply_balance_config + _init_weapons). bRecruited false keeps it out of the squad.
+	 */
+	AOperativeCharacter* SpawnOperative(const FSquadMemberSpawn& Entry, int32 SquadIndex, const FVector& Location,
+		const FRotator& Facing, bool bRecruited = true);
+
 private:
 	void SpawnSquad();
 

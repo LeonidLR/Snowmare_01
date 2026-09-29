@@ -198,6 +198,8 @@ private:
 	float DrawObjectiveBanner();
 	void DrawSquadPanel(float Top);
 	void DrawOperativeLabels();
+	/** Floating combat texts (UFloatingTextSubsystem; Godot Label3D _spawn_floating_combat_text). */
+	void DrawFloatingTexts();
 	/** Splits Text into lines no wider than MaxWidth pixels. */
 	TArray<FString> WrapText(const FString& Text, UFont* Font, float Scale, float MaxWidth) const;
 	FString DescribeOperative(const AOperativeCharacter& Operative, bool bLeader) const;

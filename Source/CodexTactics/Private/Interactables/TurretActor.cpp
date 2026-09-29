@@ -1,4 +1,5 @@
 #include "Interactables/TurretActor.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
@@ -229,6 +230,7 @@ void ATurretActor::ExecuteAction(AOperativeCharacter* User)
 		User->StopOperative();
 		User->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 		User->SetStance(EOperativeStance::Crouching);
+		UFloatingTextSubsystem::SpawnAboveOperative(User, TEXT("🔧 РЕМОНТ ТУРЕЛИ..."), FLinearColor(0.2f, 0.9f, 0.4f));
 		PostLine(User->DisplayName, FText::Format(LOCTEXT("Repairing", "🔧 {0}: «Чистим контакты и восстанавливаем сервоприводы турели ({1}с)...»"),
 			User->DisplayName, FText::AsNumber(Seconds, &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))));
 		FTimerHandle Handle;

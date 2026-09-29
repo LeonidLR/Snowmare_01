@@ -63,7 +63,6 @@ public:
 private:
 	FColdEnvironment GatherEnvironment() const;
 	void ApplyTierEffects(EColdTier NewTier);
-	void PostOperativeMessage(const FText& Text) const;
 
 	TWeakObjectPtr<AOperativeCharacter> Operative;
 	EColdTier Tier = EColdTier::Normal;

@@ -1,5 +1,6 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Camera/TacticalCameraPawn.h"
+#include "Characters/RecruitSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/GrenadeSubsystem.h"
@@ -78,7 +79,8 @@ void ACodexTacticsPlayerController::CreateInputActions()
 	SelectActions = {
 		MakeAction(TEXT("IA_SelectMember1"), EKeys::One),
 		MakeAction(TEXT("IA_SelectMember2"), EKeys::Two),
-		MakeAction(TEXT("IA_SelectMember3"), EKeys::Three) };
+		MakeAction(TEXT("IA_SelectMember3"), EKeys::Three),
+		MakeAction(TEXT("IA_SelectMember4"), EKeys::Four) };
 	StanceActions = {
 		MakeAction(TEXT("IA_StanceStand"), EKeys::Z),
 		MakeAction(TEXT("IA_StanceCrouch"), EKeys::C),
@@ -139,6 +141,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(SelectActions[0], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SelectMember1);
 	Input->BindAction(SelectActions[1], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SelectMember2);
 	Input->BindAction(SelectActions[2], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SelectMember3);
+	Input->BindAction(SelectActions[3], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SelectMember4);
 	Input->BindAction(StanceActions[0], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceStand);
 	Input->BindAction(StanceActions[1], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceCrouch);
 	Input->BindAction(StanceActions[2], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StanceProne);
@@ -707,6 +710,17 @@ void ACodexTacticsPlayerController::OnClick()
 		{
 			IssueTargetedShot(Hit.GetActor());
 		}
+		return;
+	}
+
+	// Godot "is_unrecruited": a click on the recruit rescues / talks to him (or walks the leader up to him).
+	if (URecruitSubsystem* Recruits = GetWorld()->GetSubsystem<URecruitSubsystem>(); Recruits && Recruits->IsRecruit(Hit.GetActor()))
+	{
+		if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+		{
+			Interactions->CancelInteraction();
+		}
+		Recruits->HandleRecruitClicked(false);
 		return;
 	}
 
