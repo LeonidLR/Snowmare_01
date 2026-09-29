@@ -118,6 +118,11 @@ private:
 	 * start the throw aim (turn-based combat: the grid weapon switch only).
 	 */
 	void GrenadeKey();
+public:
+	/** T / action bar «ОБОР» (Godot _on_guard_slot_clicked): the leader holds its spot or rejoins the formation. */
+	void GuardKey();
+
+private:
 	/** Ground point under the cursor for the grenade aim (hit, else the thrower's floor plane). */
 	bool GetGrenadeAimPoint(FVector& OutPoint) const;
 	/** RMB / Esc while aiming a grenade (Godot «Бросок отменён.»). Returns true if an aim was cancelled. */
@@ -171,6 +176,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> GrenadeAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> GuardAction;
 
 	FSpaceInputTracker SpaceInput;
 	double LastClickTime = -1.0;

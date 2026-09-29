@@ -100,6 +100,15 @@ private:
 	void HandleWeaponSlot();
 
 	UFUNCTION()
+	void HandleGuard();
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> BarGuardText;
+
+	UPROPERTY()
+	TObjectPtr<UButton> GuardButton;
+
+	UFUNCTION()
 	void HandleSelectM16();
 
 	UFUNCTION()

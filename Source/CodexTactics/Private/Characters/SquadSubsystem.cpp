@@ -333,13 +333,34 @@ int32 USquadSubsystem::GetFormationSlot(const AOperativeCharacter* Operative) co
 	return INDEX_NONE;
 }
 
+void USquadSubsystem::ToggleGuard(AOperativeCharacter* Operative)
+{
+	if (!Operative)
+	{
+		return;
+	}
+	Operative->bGuarding = !Operative->bGuarding;
+	const FText Name = Operative->DisplayName;
+	if (Operative->bGuarding)
+	{
+		Operative->StopOperative();
+	}
+	RebuildFollowers(); // Godot assign_formation_slots skips guards
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(Name, FText::Format(Operative->bGuarding
+			? NSLOCTEXT("SquadSubsystem", "GuardOn", "🛡️ [{0}]: Точка обороны зафиксирована! Держу позицию сектора.")
+			: NSLOCTEXT("SquadSubsystem", "GuardOff", "👥 [{0}]: Снят(а) с позиции обороны, возвращается в строй!"), Name));
+	}
+}
+
 void USquadSubsystem::RebuildFollowers()
 {
 	Followers.Reset();
 	int32 NextSlot = 0;
 	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
 	{
-		if (Member.IsValid() && Member != Leader)
+		if (Member.IsValid() && Member != Leader && !Member->bGuarding)
 		{
 			FFollowerState& State = Followers.AddDefaulted_GetRef();
 			State.Operative = Member;

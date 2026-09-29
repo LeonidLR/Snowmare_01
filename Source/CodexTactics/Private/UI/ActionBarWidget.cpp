@@ -140,7 +140,11 @@ void UActionBarWidget::BuildDefaultLayout()
 	UButton* StanceButton = MakeSlotButton(TEXT("BarStanceButton"), BarWhite, 54.f, 56.f, BarStanceText, Row);
 	StanceButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleStance);
 
-	Disabled(TEXT("BarGuardButton"), BarWhite * 0.6f, LOCTEXT("Guard", "ОБОР"), LOCTEXT("GuardTip", "Зафиксировать позицию (Охрана фланга/тыла) [T] — ещё не перенесено"));
+	BarGuardText = MakeText(TEXT("BarGuardText"), 10, BarTextColor);
+	BarGuardText->SetText(LOCTEXT("Guard", "ОБОР"));
+	GuardButton = MakeSlotButton(TEXT("BarGuardButton"), BarWhite * 0.6f, 54.f, 56.f, BarGuardText, Row);
+	GuardButton->SetToolTipText(LOCTEXT("GuardTip", "Зафиксировать позицию (Охрана фланга/тыла) [T]"));
+	GuardButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleGuard);
 
 	for (int32 Index = 0; Index < 4; ++Index)
 	{
@@ -244,6 +248,14 @@ void UActionBarWidget::Refresh()
 	if (BarWeaponText)
 	{
 		BarWeaponText->SetText(FText::FromString(ACodexTacticsHUD::StripUnsupportedGlyphs(GetWeaponText().ToString())));
+	}
+	if (BarGuardText && GuardButton)
+	{
+		// Godot: «ЗАФИК» (green) while the leader guards its spot.
+		BarGuardText->SetText(Leader->bGuarding ? LOCTEXT("GuardOn", "ЗАФИК") : LOCTEXT("Guard", "ОБОР"));
+		GuardButton->SetBackgroundColor(Leader->bGuarding ? BarGreen : BarWhite * 0.6f);
+		GuardButton->SetToolTipText(Leader->bGuarding ? LOCTEXT("GuardOnTip", "Боец на точке обороны! Нажмите [T] для возврата в строй")
+			: LOCTEXT("GuardTip", "Зафиксировать позицию (Охрана фланга/тыла) [T]"));
 	}
 	if (IsWeaponSelectorOpen())
 	{
@@ -401,6 +413,14 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 	}
 	Refresh();
 	return true;
+}
+
+void UActionBarWidget::HandleGuard()
+{
+	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
+	{
+		PC->GuardKey();
+	}
 }
 
 void UActionBarWidget::HandleWeaponSlot()

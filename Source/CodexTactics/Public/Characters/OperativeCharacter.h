@@ -213,6 +213,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
 	int32 MaxGrenades = 4;
 
+	/**
+	 * Holds its position as a guard (Godot is_guarding): out of the formation, keeps facing, orders still move it.
+	 * Toggled by USquadSubsystem::ToggleGuard (T / action bar «ОБОР»).
+	 */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Squad")
+	bool bGuarding = false;
+
 	/** Deployable type the F key sets up next (Godot selected_deployable_type). */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Inventory")
 	EDeployableType SelectedDeployType = EDeployableType::Turret;

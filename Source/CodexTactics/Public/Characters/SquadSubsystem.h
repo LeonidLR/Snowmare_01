@@ -62,6 +62,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	void ToggleSoloMode();
 
+	/**
+	 * Godot toggle_soldier_guard: the operative holds its spot (stops, keeps facing, leaves the formation) or returns to
+	 * the formation; posts the radio line.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
+	void ToggleGuard(AOperativeCharacter* Operative);
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	void EnterSoloMode();
 

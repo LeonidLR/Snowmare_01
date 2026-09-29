@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **125 automation tests, 26 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **125 automation tests, 27 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -67,6 +67,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `DialogueSmoke` (`-ForceMainMenu`, verify_all does it) | «Начать игру» opens the 15-line intro briefing, Space advances (no pause), skip closes, preparation lines reach the feed with the Godot delay |
 | `ActionBarSmoke` | action bar stance slot cycles the squad, «ПЕР» pick mode on / off, squad slot 2 selects the engineer |
 | `BannersSmoke` | cutscene card + Space skip, squad warm / healed for the preparation, preparation / wave / pause banner texts |
+| `GuardSmoke` | T fixes the engineer on its spot (out of the formation): the commander leads 8 m away, the engineer stays, the medic follows; T again returns it |
 | `GrenadeSmoke` | grenade aim (indicators, 20 m clamped to 12 m, crouching 9 m); throw at a frozen brute: one grenade spent, release + flight + 1.2 s fuse, brute hurt, barrel in the blast burns; a grenade thrown just before turn-based combat is refunded, no grenade in hands |
 | `WeaponSelectorSmoke` | arsenal on every operative (4 weapons, M16 30 / 60); weapon slot opens «ВЫБОР ВООРУЖЕНИЯ» (M16 marked «В РУКАХ»); pistol / knife taken, grenade refused (throw mode next); turn-based switch of the active operative, no AP |
 | `TurnBasedDeploySmoke` | turn-based: turret on a neighbour cell (3 AP, grid + unit state, item spent); a squad mate hands a mine over, mine 3 cells away: the commander walks up, walk + 2 AP |
@@ -278,7 +279,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 4. ~~Ctrl + click targeted shots~~ — done (see §10).
 5. UI shell from REFERENCE_PLAYTHROUGH: ~~objective banner, mission failed + Ctrl + X, start menu~~ (done, §10);
    ~~dialogue window, bottom action bar, banners, cutscene card~~ (done); remaining UI: inventory drawer, transfer,
-   guard, weapon selector, pause menu / save-load, radius rings (action bar slots are placeholders).
+   ~~guard~~ (done: T / «ОБОР», `USquadSubsystem::ToggleGuard`, `AOperativeCharacter::bGuarding`), ~~weapon selector~~ (done), pause menu / save-load, radius rings (action bar slots are placeholders).
 6. Turn-based combat manager on the Gorky grid (Godot `Scripts/tactics/turn_based_combat_manager.gd`).
    Done: `GorkyLineOfSight`, `TurnBasedRules`, `UTurnBasedCombatSubsystem` + overlay + controller input (see §4).
    Exposed zones done (`FExposedZones` pure rules + `UpdateExposedZones` at the end of the squad phase, overlay
@@ -372,7 +373,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Turn-based stasis look for enemies outside the fight (Godot _apply_stasis_visuals_to_enemy, tactical_stasis_enemy.gdshader); M_TacticalStasis script; TurnBasedSmoke checks it |
+| (this) | Guard mode (Godot toggle_soldier_guard): T / action bar «ОБОР» / «ЗАФИК», guards leave the formation and hold their spot; GuardSmoke |
+| `f23c23f` | Turn-based stasis look for enemies outside the fight (Godot _apply_stasis_visuals_to_enemy, tactical_stasis_enemy.gdshader); M_TacticalStasis script; TurnBasedSmoke checks it |
 | `4f4fef7` | Hand grenades (Godot grenade.gd + main.gd aim / throw / refund): aim rings and arc, range by stance, release at 70 % of the throw animation, arc flight, 1.2 s fuse, blast with falloff (operatives 65 %), barrels / traps go off; G key; GrenadeRulesTest, GrenadeSmoke, `HudShot grenade` |
 | `9bec55a` | Arsenal (Godot _init_weapons / switch_to_weapon_by_id / ammo_inventory): M16, pistol, grenade, knife per operative, ammo kept per weapon, loot to the right weapon, knife without ammo; weapon selector panel on the action bar; turn-based weapon switch; WeaponSelectorSmoke, `HudShot weapons` |
 | `3cd1474` | Turn-based deployables on the grid (Godot can_place_tactical_deployable, deploy_tactical_object, main.gd _handle_tactical_deployable_placement); TurnBasedDeploySmoke |

@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: Phase 4/5 world systems — interaction, relocation, deployables
-Task: next = inventory drawer / transfer / guard UI (HANDOFF §8.5)
+Task: next = inventory drawer (use items), then transfer dialog (HANDOFF §8.5)
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
@@ -15,7 +15,7 @@ Task: next = inventory drawer / transfer / guard UI (HANDOFF §8.5)
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-Stasis commit: 125 automation tests, 26 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
+Guard commit: 125 automation tests, 27 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)

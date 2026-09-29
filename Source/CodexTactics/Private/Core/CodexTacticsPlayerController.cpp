@@ -90,6 +90,7 @@ void ACodexTacticsPlayerController::CreateInputActions()
 	RotatePlacementAction = MakeAction(TEXT("IA_RotatePlacement"), EKeys::R);
 	DeployAction = MakeAction(TEXT("IA_Deploy"), EKeys::F);
 	GrenadeAction = MakeAction(TEXT("IA_Grenade"), EKeys::G);
+	GuardAction = MakeAction(TEXT("IA_Guard"), EKeys::T);
 }
 
 void ACodexTacticsPlayerController::SetupInputComponent()
@@ -142,6 +143,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(RotatePlacementAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::RotatePlacement);
 	Input->BindAction(DeployAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::DeployAbility);
 	Input->BindAction(GrenadeAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::GrenadeKey);
+	Input->BindAction(GuardAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::GuardKey);
 }
 
 void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
@@ -227,6 +229,18 @@ bool ACodexTacticsPlayerController::CancelGrenadeAim()
 		Messages->PostMessage(LOCTEXT("GrenadeSpeaker", "Граната"), LOCTEXT("GrenadeCancelled", "Бросок отменён."));
 	}
 	return true;
+}
+
+void ACodexTacticsPlayerController::GuardKey()
+{
+	if (const UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsUnitMoving())
+	{
+		return;
+	}
+	if (USquadSubsystem* Squad = GetSquad(); Squad && Squad->GetLeader())
+	{
+		Squad->ToggleGuard(Squad->GetLeader());
+	}
 }
 
 void ACodexTacticsPlayerController::GrenadeKey()
