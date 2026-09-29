@@ -46,6 +46,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Relocation")
 	bool IsPlacingDeployable() const { return PlacingType.IsSet(); }
 
+	/** Type / yaw of the deployable being placed (turn-based combat places it itself). */
+	EDeployableType GetPlacingType() const { return PlacingType.Get(EDeployableType::Turret); }
+	float GetPlacingYaw() const { return PlacingYaw; }
+
 	/** F key: start setting up an item from Leader's supply, or switch the type while placing. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Relocation")
 	void HandleDeployKey(AOperativeCharacter* Leader);

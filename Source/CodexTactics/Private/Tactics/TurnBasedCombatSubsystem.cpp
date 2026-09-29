@@ -15,6 +15,8 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/BarricadeActor.h"
+#include "Interactables/DeployableActor.h"
+#include "Interactables/RelocationSubsystem.h"
 #include "Interactables/BarrelActor.h"
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TurretActor.h"
@@ -1551,6 +1553,361 @@ bool UTurnBasedCombatSubsystem::RelocateObject(const FIntPoint& ObjectCell, cons
 	Log(FString::Printf(TEXT("📦 %s переместил(а) %s на новую позицию (потрачено %d AP)."), *NameOf(Unit), ObjectName, TotalAP));
 	Changed();
 	return true;
+}
+
+// --- Deployables on the grid ----------------------------------------------------------------------------------------
+
+FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType Type, const FIntPoint& Cell, float Yaw) const
+{
+	FTurnDeployCheck Check;
+	if (!Grid || !Grid->IsValidCell(Cell))
+	{
+		Check.Reason = TEXT("Клетка вне тактической сетки");
+		return Check;
+	}
+	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
+	if (!UnitState)
+	{
+		Check.Reason = TEXT("Нет активного бойца");
+		return Check;
+	}
+	const int32 DeployCost = Type == EDeployableType::Mine ? 2 : 3;
+	Check.APCost = DeployCost;
+	if (UnitState->AP < DeployCost)
+	{
+		Check.Reason = FString::Printf(TEXT("Недостаточно AP для сборки (требуется %d, есть %d)"), DeployCost, UnitState->AP);
+		return Check;
+	}
+	const FIntPoint UnitPos = UnitState->GridPos;
+
+	// 1. The object's cells must be free.
+	TArray<FIntPoint> Cells;
+	if (Type == EDeployableType::Barricade)
+	{
+		Cells = GetBarricadeCellsAt(nullptr, Cell, Yaw);
+		if (Cells.IsEmpty())
+		{
+			Check.Reason = TEXT("Недопустимое положение баррикады");
+			return Check;
+		}
+		for (const FIntPoint& C : Cells)
+		{
+			if (!Grid->IsValidCell(C))
+			{
+				Check.Reason = TEXT("Баррикада выходит за границы сетки");
+				return Check;
+			}
+			if (C == UnitPos)
+			{
+				Check.Reason = TEXT("Баррикада задевает самого бойца");
+				return Check;
+			}
+			if (Grid->GetOccupant(C))
+			{
+				Check.Reason = FString::Printf(TEXT("Клетка (%d, %d) занята"), C.X, C.Y);
+				return Check;
+			}
+			if (!Grid->IsCellWalkable(C))
+			{
+				Check.Reason = FString::Printf(TEXT("Препятствие на клетке (%d, %d)"), C.X, C.Y);
+				return Check;
+			}
+		}
+	}
+	else
+	{
+		Cells = { Cell };
+		if (!Grid->IsCellWalkable(Cell))
+		{
+			Check.Reason = TEXT("Клетка заблокирована препятствием");
+			return Check;
+		}
+		if (Grid->GetOccupant(Cell))
+		{
+			Check.Reason = TEXT("Клетка уже занята");
+			return Check;
+		}
+	}
+
+	// 2. Already next to it: set up in place.
+	auto Chebyshev = [](const FIntPoint& A, const FIntPoint& B) { return FMath::Max(FMath::Abs(A.X - B.X), FMath::Abs(A.Y - B.Y)); };
+	for (const FIntPoint& C : Cells)
+	{
+		if (Chebyshev(UnitPos, C) <= 1)
+		{
+			Check.bCanPlace = true;
+			Check.StandCell = UnitPos;
+			Check.Reason = TEXT("OK");
+			return Check;
+		}
+	}
+
+	// 3. Otherwise walk to the cheapest free cell next to it.
+	TArray<FIntPoint> Candidates;
+	for (const FIntPoint& C : Cells)
+	{
+		for (int32 DX = -1; DX <= 1; ++DX)
+		{
+			for (int32 DY = -1; DY <= 1; ++DY)
+			{
+				const FIntPoint Near = C + FIntPoint(DX, DY);
+				if ((DX == 0 && DY == 0) || !Grid->IsValidCell(Near) || Cells.Contains(Near) || !Grid->IsCellWalkable(Near))
+				{
+					continue;
+				}
+				const AActor* Occupant = Grid->GetOccupant(Near);
+				if (Occupant && Occupant != GetActiveUnit())
+				{
+					continue;
+				}
+				Candidates.AddUnique(Near);
+			}
+		}
+	}
+	if (Candidates.IsEmpty())
+	{
+		Check.Reason = TEXT("Нет свободных клеток рядом с объектом для сборки");
+		return Check;
+	}
+	const int32 MaxWalkAP = UnitState->AP - DeployCost;
+	const TMap<FIntPoint, int32> Reach = Grid->GetReachableCells(UnitPos, MaxWalkAP);
+	Candidates.StableSort([&UnitPos, &Chebyshev](const FIntPoint& A, const FIntPoint& B) { return Chebyshev(A, UnitPos) < Chebyshev(B, UnitPos); });
+	int32 BestCost = MAX_int32;
+	for (const FIntPoint& Candidate : Candidates)
+	{
+		const int32* Cost = Reach.Find(Candidate);
+		if (Cost && *Cost < BestCost)
+		{
+			TArray<FIntPoint> Path = Grid->FindPath(UnitPos, Candidate, MaxWalkAP);
+			if (!Path.IsEmpty())
+			{
+				BestCost = *Cost;
+				Check.StandCell = Candidate;
+				Check.Path = MoveTemp(Path);
+			}
+		}
+	}
+	if (Check.Path.IsEmpty())
+	{
+		Check.Reason = TEXT("Слишком далеко для перехода и установки за текущий ход");
+		return Check;
+	}
+	Check.bCanPlace = true;
+	Check.APCost = BestCost + DeployCost;
+	Check.Reason = TEXT("OK");
+	return Check;
+}
+
+void UTurnBasedCombatSubsystem::RegisterDeployable(EDeployableType Type, AActor* Object, const FIntPoint& Cell, float Yaw)
+{
+	if (!IsValid(Object) || !Grid)
+	{
+		return;
+	}
+	const FVector World = Grid->GridToWorld(Cell);
+	Object->SetActorLocation(FVector(World.X, World.Y, Object->GetActorLocation().Z), false, nullptr, ETeleportType::TeleportPhysics);
+	switch (Type)
+	{
+	case EDeployableType::Turret:
+	{
+		Turrets.AddUnique(Object);
+		Grid->SetOccupant(Cell, Object, EGorkyOccupantType::Turret);
+		FTurnUnitState& State = States.Add(Object);
+		State.Actor = Object;
+		State.GridPos = Cell;
+		break;
+	}
+	case EDeployableType::Barricade:
+		Object->SetActorRotation(FRotator(0.f, Yaw, 0.f));
+		RegisterBarricadeCells(Object);
+		break;
+	case EDeployableType::Mine:
+		Grid->SetOccupant(Cell, Object, EGorkyOccupantType::Mine);
+		break;
+	}
+	// Frozen like everything else off the grid's turns (Godot set_physics_process(false)).
+	if (Object->IsActorTickEnabled())
+	{
+		Object->SetActorTickEnabled(false);
+		FrozenActors.Add(Object);
+	}
+	Object->SetActorHiddenInGame(false);
+}
+
+bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoint& Cell, float Yaw, AActor* Spawned)
+{
+	const FTurnDeployCheck Check = CanPlaceDeployable(Type, Cell, Yaw);
+	AOperativeCharacter* Unit = GetActiveUnit();
+	FTurnUnitState* UnitState = States.Find(Unit);
+	if (!Check.bCanPlace || !UnitState || bSquadUnitMoving || !IsValid(Spawned))
+	{
+		return false;
+	}
+	const FString Name = Type == EDeployableType::Turret ? TEXT("Турель") : (Type == EDeployableType::Barricade ? TEXT("Баррикада") : TEXT("Мина"));
+	const int32 TotalAP = Check.APCost;
+	auto FaceTarget = [this, Unit, Cell](FTurnUnitState& State)
+	{
+		const FIntPoint Dir = Cell - State.GridPos;
+		if (Dir != FIntPoint::ZeroValue)
+		{
+			State.Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Dir));
+			AlignFacing(Unit, State.Facing);
+		}
+	};
+
+	// Case 1: already next to the spot.
+	if (Check.Path.IsEmpty() || Check.StandCell == UnitState->GridPos)
+	{
+		UnitState->AP -= TotalAP;
+		FaceTarget(*UnitState);
+		RegisterDeployable(Type, Spawned, Cell, Yaw);
+		Log(FString::Printf(TEXT("🛠️ %s собрал(а) и установил(а) %s (-%d AP)."), *NameOf(Unit), *Name, TotalAP));
+		RefreshOverlay();
+		Changed();
+		return true;
+	}
+
+	// Case 2: walk up first (a mine on the way stops the walk and the object is lost).
+	const FIntPoint From = UnitState->GridPos;
+	Grid->ClearOccupant(From);
+	TArray<FIntPoint> Actual;
+	FIntPoint MineCell(-999, -999);
+	AActor* Mine = nullptr;
+	for (const FIntPoint& Step : Check.Path)
+	{
+		Actual.Add(Step);
+		if (Grid->GetOccupantType(Step) == EGorkyOccupantType::Mine)
+		{
+			MineCell = Step;
+			Mine = Grid->GetOccupant(Step);
+			break;
+		}
+	}
+	Spawned->SetActorHiddenInGame(true);
+	bSquadUnitMoving = true;
+	RefreshOverlay();
+	TWeakObjectPtr<AOperativeCharacter> WeakUnit(Unit);
+	TWeakObjectPtr<AActor> WeakSpawned(Spawned);
+	TWeakObjectPtr<AActor> WeakMine(Mine);
+	const FIntPoint StandCell = Check.StandCell;
+	StartMover(Unit, From, Actual, SquadStepDuration, nullptr, [this, WeakUnit, WeakSpawned, WeakMine, MineCell, StandCell, Cell, Yaw, Type, Name, TotalAP, FaceTarget]()
+	{
+		AOperativeCharacter* Moved = WeakUnit.Get();
+		FTurnUnitState* State = States.Find(Moved);
+		if (!Moved || !State)
+		{
+			bSquadUnitMoving = false;
+			return;
+		}
+		if (MineCell.X != -999)
+		{
+			bSquadUnitMoving = false;
+			if (AActor* Lost = WeakSpawned.Get())
+			{
+				Lost->Destroy();
+			}
+			State->GridPos = MineCell;
+			State->AP = 0;
+			DetonateMine(MineCell, WeakMine.Get(), Moved);
+			if (IsActive() && !IsDead(Moved))
+			{
+				Grid->SetOccupant(MineCell, Moved, EGorkyOccupantType::Squad);
+			}
+			After(0.75f, [this]() { EndCurrentUnitTurn(); });
+			return;
+		}
+		State->GridPos = StandCell;
+		Grid->SetOccupant(StandCell, Moved, EGorkyOccupantType::Squad);
+		FaceTarget(*State);
+		RegisterDeployable(Type, WeakSpawned.Get(), Cell, Yaw);
+		State->AP -= TotalAP;
+		Log(FString::Printf(TEXT("🛠️ %s подошел(а) и установил(а) %s (-%d AP)."), *NameOf(Moved), *Name, TotalAP));
+		Changed();
+		// Godot: 0.85 s of assembly before the next order.
+		After(0.85f, [this]()
+		{
+			bSquadUnitMoving = false;
+			RefreshOverlay();
+			Changed();
+		});
+	});
+	Changed();
+	return true;
+}
+
+bool UTurnBasedCombatSubsystem::HandleDeployPlacement(EDeployableType Type, const FVector& WorldPoint, float Yaw)
+{
+	if (!IsActive() || Phase != ETurnPhase::Squad || bSquadUnitMoving || !Grid)
+	{
+		return false;
+	}
+	const FVector Local = WorldPoint - Grid->OriginWorld;
+	const bool bOnGrid = Local.X >= 0.f && Local.Y >= 0.f && Local.X < TurnGridCells * TurnCellSize && Local.Y < TurnGridCells * TurnCellSize;
+	if (!bOnGrid)
+	{
+		Post(TEXT("Инженерия"), TEXT("⚠️ Точка установки вне тактической зоны!"));
+		return false;
+	}
+	const FIntPoint Cell = Grid->WorldToGrid(WorldPoint);
+	AOperativeCharacter* Unit = GetActiveUnit();
+	if (!Unit)
+	{
+		Post(TEXT("Инженерия"), TEXT("⚠️ Нет активного бойца для установки объекта!"));
+		return false;
+	}
+	// Godot: a squad mate hands the item over when the active operative has none.
+	if (Unit->GetDeployableCount(Type) <= 0)
+	{
+		for (const TWeakObjectPtr<AOperativeCharacter>& Weak : Squad)
+		{
+			AOperativeCharacter* Carrier = Weak.Get();
+			if (Carrier && Carrier != Unit && Carrier->GetDeployableCount(Type) > 0)
+			{
+				Carrier->AddDeployable(Type, -1);
+				Unit->AddDeployable(Type, 1);
+				break;
+			}
+		}
+	}
+	if (Unit->GetDeployableCount(Type) <= 0)
+	{
+		Post(Unit->DisplayName.ToString(), FString::Printf(TEXT("⚠️ У отряда нет в наличии: %s!"), *URelocationSubsystem::GetDeployableName(Type).ToString()));
+		return true; // placement ends (Godot _cancel_placement_mode)
+	}
+	const FTurnDeployCheck Check = CanPlaceDeployable(Type, Cell, Yaw);
+	if (!Check.bCanPlace)
+	{
+		Post(TEXT("Инженерия"), FString::Printf(TEXT("⚠️ %s!"), *Check.Reason));
+		return false;
+	}
+	const URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+	const TSubclassOf<ADeployableActor> Class = Relocation ? Relocation->GetDeployableClass(Type) : nullptr;
+	AActor* Spawned = nullptr;
+	if (Class)
+	{
+		const float HalfHeight = Class->GetDefaultObject<ADeployableActor>()->Box->GetUnscaledBoxExtent().Z;
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Spawned = GetWorld()->SpawnActor<ADeployableActor>(Class, Grid->GridToWorld(Cell) + FVector(0.f, 0.f, HalfHeight), FRotator(0.f, Yaw, 0.f), Params);
+	}
+	if (!Spawned)
+	{
+		Post(TEXT("Инженерия"), TEXT("⚠️ Не удалось создать объект на сцене!"));
+		return false;
+	}
+	if (AProximityMineActor* PlacedMine = Cast<AProximityMineActor>(Spawned))
+	{
+		PlacedMine->SetPlacedBySquad();
+	}
+	if (DeployObject(Type, Cell, Yaw, Spawned))
+	{
+		Unit->AddDeployable(Type, -1);
+		Highlight(Spawned);
+		return true;
+	}
+	Spawned->Destroy();
+	Post(TEXT("Инженерия"), TEXT("⚠️ Ошибка при установке объекта на тактической сетке!"));
+	return false;
 }
 
 // --- Turrets and enemies ------------------------------------------------------------------------------------------

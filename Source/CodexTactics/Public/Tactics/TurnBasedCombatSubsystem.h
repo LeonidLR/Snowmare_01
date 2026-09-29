@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Interactables/DeployableRules.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Tactics/ExposedZones.h"
@@ -48,6 +49,17 @@ struct CODEXTACTICS_API FTurnAttackResult
 	int32 Damage = 0;
 	float HitChance = 0.f;
 	bool bBarrelExploded = false;
+	FString Reason;
+};
+
+/** Godot can_place_tactical_deployable result. */
+struct CODEXTACTICS_API FTurnDeployCheck
+{
+	bool bCanPlace = false;
+	/** Walk + assembly (turret / barricade 3, mine 2). */
+	int32 APCost = 0;
+	TArray<FIntPoint> Path;
+	FIntPoint StandCell = FIntPoint(-1, -1);
 	FString Reason;
 };
 
@@ -158,6 +170,22 @@ public:
 	/** Godot relocate_barricade: moves / rotates the barricade in one action (CustomAPCost < 0 = PushBarrelAPCost). */
 	bool RelocateBarricade(AActor* Barricade, const FIntPoint& Cell, float Yaw, int32 CustomAPCost = -1);
 
+	// --- Deployables on the grid ---
+
+	/**
+	 * Godot can_place_tactical_deployable: free cells (barricade: its rotated footprint), assembly 3 AP (mine 2) and, when
+	 * the operative is not next to it yet, the cheapest walk to a free neighbour cell within the AP left.
+	 */
+	FTurnDeployCheck CanPlaceDeployable(EDeployableType Type, const FIntPoint& Cell, float Yaw) const;
+	/** Godot deploy_tactical_object: walk up if needed, then register the spawned object on the grid and pay the AP. */
+	bool DeployObject(EDeployableType Type, const FIntPoint& Cell, float Yaw, AActor* Spawned);
+	/**
+	 * Godot main.gd _handle_tactical_deployable_placement: click while placing a turret / barricade / mine in turn-based
+	 * combat. A squad mate hands the item over when the active operative has none; the item is spent on success.
+	 * Returns true when the placement mode should end.
+	 */
+	bool HandleDeployPlacement(EDeployableType Type, const FVector& WorldPoint, float Yaw);
+
 	/** Turn-based balance (Godot tactical_* defaults). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|TurnBased")
 	FTurnBasedBalance Balance;
@@ -219,6 +247,8 @@ private:
 	void RegisterBarricadeCells(AActor* Barricade);
 	/** Godot _refresh_tactical_barricade_cost_map. */
 	void RefreshBarricadeTargets();
+	/** Godot register_tactical_turret / _barricade / _mine. */
+	void RegisterDeployable(EDeployableType Type, AActor* Object, const FIntPoint& Cell, float Yaw);
 	/** Free cells of a quadrant for a reinforcement group, outer edge first (Godot find_spawn_cells_in_quadrant). */
 	TArray<FIntPoint> FindSpawnCells(int32 Quadrant, int32 Count) const;
 	/** Godot _register_reinforcement_enemy. */

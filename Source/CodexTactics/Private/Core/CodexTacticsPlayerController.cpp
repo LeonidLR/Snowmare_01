@@ -192,9 +192,12 @@ void ACodexTacticsPlayerController::DeployAbility()
 {
 	USquadSubsystem* Squad = GetSquad();
 	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
-	if (Squad && Relocation && Squad->GetLeader())
+	// Turn-based combat: the active operative sets it up (Godot current_leader follows the selected unit).
+	const UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased();
+	AOperativeCharacter* Worker = TurnBased && TurnBased->GetActiveUnit() ? TurnBased->GetActiveUnit() : (Squad ? Squad->GetLeader() : nullptr);
+	if (Relocation && Worker)
 	{
-		Relocation->HandleDeployKey(Squad->GetLeader());
+		Relocation->HandleDeployKey(Worker);
 	}
 }
 
@@ -380,6 +383,20 @@ void ACodexTacticsPlayerController::OnClick()
 	if (IsDialogueOpen())
 	{
 		return; // the dialogue panel handles its own clicks
+	}
+	// Turn-based combat: a turret / barricade / mine is set up on the clicked cell at once (Godot
+	// _handle_tactical_deployable_placement), the operative walks up and pays AP.
+	if (URelocationSubsystem* Relocation = GetPlacingRelocation(); Relocation && Relocation->IsPlacingDeployable())
+	{
+		if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
+		{
+			FVector Point;
+			if (GetPlacementPoint(Point) && TurnBased->HandleDeployPlacement(Relocation->GetPlacingType(), Point, Relocation->GetPlacingYaw()))
+			{
+				Relocation->CancelPlacement();
+			}
+			return;
+		}
 	}
 	// Placement mode: LMB sets the new spot of the object being moved.
 	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
@@ -672,10 +689,15 @@ void ACodexTacticsPlayerController::OnMouseWheelDown()
 
 void ACodexTacticsPlayerController::CameraRotateLeft()
 {
-	// Godot: Q turns the object being relocated by -45° instead of the camera.
+	// Godot: Q turns the object being relocated / placed by -45° instead of the camera.
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
 	{
 		TurnBased->RotateRelocation(-1);
+		return;
+	}
+	if (URelocationSubsystem* Relocation = GetPlacingRelocation(); Relocation && Relocation->IsPlacingDeployable() && GetActiveTurnBased())
+	{
+		Relocation->RotatePreview(-1);
 		return;
 	}
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
@@ -686,10 +708,15 @@ void ACodexTacticsPlayerController::CameraRotateLeft()
 
 void ACodexTacticsPlayerController::CameraRotateRight()
 {
-	// Godot: E (and R) turn the object being relocated by +45°.
+	// Godot: E (and R) turn the object being relocated / placed by +45°.
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
 	{
 		TurnBased->RotateRelocation(+1);
+		return;
+	}
+	if (URelocationSubsystem* Relocation = GetPlacingRelocation(); Relocation && Relocation->IsPlacingDeployable() && GetActiveTurnBased())
+	{
+		Relocation->RotatePreview(+1);
 		return;
 	}
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())

@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **123 automation tests, 23 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **123 automation tests, 24 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -67,6 +67,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `DialogueSmoke` (`-ForceMainMenu`, verify_all does it) | «Начать игру» opens the 15-line intro briefing, Space advances (no pause), skip closes, preparation lines reach the feed with the Godot delay |
 | `ActionBarSmoke` | action bar stance slot cycles the squad, «ПЕР» pick mode on / off, squad slot 2 selects the engineer |
 | `BannersSmoke` | cutscene card + Space skip, squad warm / healed for the preparation, preparation / wave / pause banner texts |
+| `TurnBasedDeploySmoke` | turn-based: turret on a neighbour cell (3 AP, grid + unit state, item spent); a squad mate hands a mine over, mine 3 cells away: the commander walks up, walk + 2 AP |
 | `TurnBasedBarricadeSmoke` | turn-based: barricade footprint = Godot samples; the commander walks up, click picks it up, two 45° steps (target cells recomputed), click places it: new footprint, rotation, 2 AP |
 | `TurnBasedPushSmoke` | turn-based: the commander walks up to a barrel; click picks it up (3 target cells), cancel, panel «Бочка» picks it up, click on a cell pushes: barrel +1 cell, commander on its old cell, 2 AP |
 | `ExposedZonesSmoke [shot]` | turn-based with one hound; the squad passes 3 turns: warning (1), danger (2), breach of 1-2 hounds (non-elite pool), no second breach; `shot` (rendered, UnrealEditor.exe -game) saves `ExposedZones.png` at the danger state |
@@ -283,7 +284,9 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    barrel shoots, Esc / RMB / click on its own cell cancels, panel «📦 Бочка»). Barricade relocation done
    (`GetBarricadeCellsAt` / `CanPlaceBarricadeAt` / `RelocateBarricade`; footprints on the grid now use Godot's five
    samples along the long axis, `RegisterBarricadeCells`; Q -45°, E / R / wheel ±45° while relocating; targets within
-   2 cells of the operative). Next: deployables on the grid (deploy_tactical_object), weapon switching / grenades, companion drone, stasis look.
+   2 cells of the operative). Deployables on the grid done (`CanPlaceDeployable` / `DeployObject` /
+   `HandleDeployPlacement`: the action-bar / F placement ghost works in turn-based, a click sets the item up on the cell,
+   walking up first if needed; Q / E rotate the ghost). Next: weapon switching / grenades, companion drone, stasis look.
 7. Phase 2 data importer (JSON / .tres → DataAssets) replacing hand-typed values (§9).
    Done: weapons — `Scripts/Editor/import_weapons.py` → `/Game/Data/Weapons/DA_Weapon_<id>` (all 9; defaults parsed
    from weapon_data.gd, enums mapped by name, `EStatusEffect::Shocked` appended); the game mode equips
@@ -329,6 +332,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Barricade contact damage (spikes / fire / cryo / energy) not ported (Godot default is NONE).
 - Pushing / defusal / set-up animations: none (operatives only slow down / crouch).
 - Hidden mines are revealed by a distance scan in the mine's Tick (Godot scans from each operative) — same result.
+- Turn-based set-up: no assembly animation / grow-in tween (Godot play_action_animation "working_device", scale 0.05 -> 1);
+  a squad mine placed in turn-based skips the real-time mishap roll like Godot.
 - Turn-based relocation: no hologram ghost of the object under the cursor (Godot _create_relocate_ghost_preview);
   target cells use the reachable layer (for barricades: cells valid at the current angle). The barricade jumps to
   its new place (Godot tweens 0.25 s).
@@ -352,7 +357,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Turn-based barricade relocation with 45° rotation (Godot relocate_barricade, can_place_barricade_at, get_barricade_cells_at, _register_barricade_cells); TurnBasedBarricadeSmoke |
+| (this) | Turn-based deployables on the grid (Godot can_place_tactical_deployable, deploy_tactical_object, main.gd _handle_tactical_deployable_placement); TurnBasedDeploySmoke |
+| `b41448f` | Turn-based barricade relocation with 45° rotation (Godot relocate_barricade, can_place_barricade_at, get_barricade_cells_at, _register_barricade_cells); TurnBasedBarricadeSmoke |
 | `afbdedd` | Turn-based barrel / turret relocation (Godot relocate_object, _start_tactical_relocate, _try_push_adjacent_barrel): click rules with Shift, target cells, cancel, panel «Бочка»; TurnBasedPushSmoke |
 | `bb6bec0` | Turn-based exposed zones: quadrant counters, warnings, overlay outlines, one breach of 1-2 non-elite reinforcements per fight (Godot tactical_exposed_zones_manager.gd); ExposedZonesSmoke |
 | `dbf4d29` | Godot levels imported (DA_Level_*); level_01_outpost drives waves (whole wave at once, modifiers, custom health, cold drain), preparation 60 s / rest 20 s and 3 waves; enemy spawn points beyond the gate; the wave clears only outside turn-based combat (Godot; fixes a crash when the last enemy of a wave dies on the grid); LevelWaveSmoke |
