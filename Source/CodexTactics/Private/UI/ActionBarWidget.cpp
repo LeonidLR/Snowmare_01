@@ -22,6 +22,7 @@
 #include "Combat/GrenadeSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
+#include "UI/InventoryDrawerWidget.h"
 
 #define LOCTEXT_NAMESPACE "ActionBarWidget"
 
@@ -125,7 +126,11 @@ void UActionBarWidget::BuildDefaultLayout()
 		Button->SetToolTipText(Tooltip);
 	};
 	Disabled(TEXT("BarTransferButton"), BarPurple, LOCTEXT("Transfer", "ПЕРЕД"), LOCTEXT("TransferTip", "Передача предметов (ещё не перенесено)"));
-	Disabled(TEXT("BarInventoryButton"), BarGreen, LOCTEXT("Inventory", "ИНВ"), LOCTEXT("InventoryTip", "Личный инвентарь (ещё не перенесено)"));
+	UTextBlock* InventoryText = MakeText(NAME_None, 10, BarTextColor);
+	InventoryText->SetText(LOCTEXT("Inventory", "ИНВ"));
+	UButton* InventoryButton = MakeSlotButton(TEXT("BarInventoryButton"), BarGreen, 54.f, 56.f, InventoryText, Row);
+	InventoryButton->SetToolTipText(LOCTEXT("InventoryTip", "Личный инвентарь оперативника"));
+	InventoryButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleInventory);
 
 	BarWeaponText = MakeText(TEXT("BarWeaponText"), 11, BarTextColor);
 	UButton* WeaponButton = MakeSlotButton(TEXT("BarWeaponButton"), BarBlue, 160.f, 56.f, BarWeaponText, Row);
@@ -372,6 +377,15 @@ void UActionBarWidget::ToggleWeaponSelector()
 {
 	if (SelectorPanel)
 	{
+		if (!IsWeaponSelectorOpen())
+		{
+			const APlayerController* PC = GetOwningPlayer();
+			const ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
+			if (UInventoryDrawerWidget* Drawer = Hud ? Hud->GetInventoryDrawer() : nullptr)
+			{
+				Drawer->Close(); // Godot: the selector hides the inventory drawer
+			}
+		}
 		SelectorPanel->SetVisibility(IsWeaponSelectorOpen() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 		Refresh();
 	}
@@ -413,6 +427,17 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 	}
 	Refresh();
 	return true;
+}
+
+void UActionBarWidget::HandleInventory()
+{
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(PC->GetHUD()))
+		{
+			Hud->ToggleInventoryDrawer();
+		}
+	}
 }
 
 void UActionBarWidget::HandleGuard()

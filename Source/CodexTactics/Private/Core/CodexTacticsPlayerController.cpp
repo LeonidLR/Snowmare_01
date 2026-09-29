@@ -91,6 +91,11 @@ void ACodexTacticsPlayerController::CreateInputActions()
 	DeployAction = MakeAction(TEXT("IA_Deploy"), EKeys::F);
 	GrenadeAction = MakeAction(TEXT("IA_Grenade"), EKeys::G);
 	GuardAction = MakeAction(TEXT("IA_Guard"), EKeys::T);
+	ItemActions = {
+		MakeAction(TEXT("IA_UseMedkit"), EKeys::H),
+		MakeAction(TEXT("IA_UseCannedFood"), EKeys::J),
+		MakeAction(TEXT("IA_UseBread"), EKeys::K),
+		MakeAction(TEXT("IA_UseChocolate"), EKeys::L) };
 }
 
 void ACodexTacticsPlayerController::SetupInputComponent()
@@ -144,6 +149,10 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(DeployAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::DeployAbility);
 	Input->BindAction(GrenadeAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::GrenadeKey);
 	Input->BindAction(GuardAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::GuardKey);
+	Input->BindAction(ItemActions[0], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseMedkit);
+	Input->BindAction(ItemActions[1], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseCannedFood);
+	Input->BindAction(ItemActions[2], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseBread);
+	Input->BindAction(ItemActions[3], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseChocolate);
 }
 
 void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
@@ -241,6 +250,67 @@ void ACodexTacticsPlayerController::GuardKey()
 	{
 		Squad->ToggleGuard(Squad->GetLeader());
 	}
+}
+
+void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	if (!Leader || !Messages)
+	{
+		return;
+	}
+	if (Leader->UsePersonalItem(Item))
+	{
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("ItemUsed", "Использован(а) {0} (+HP / согрев)! (Осталось: {1} шт.)"),
+			PersonalItemRules::GetName(Item), Leader->GetItemCount(Item)));
+	}
+	else if (Leader->GetItemCount(Item) <= 0)
+	{
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("ItemMissing", "У {0} нет {1} в личном инвентаре!"),
+			Leader->DisplayName, PersonalItemRules::GetMissingName(Item)));
+	}
+	else
+	{
+		Messages->PostMessage(Leader->DisplayName, LOCTEXT("ItemFull", "Здоровье и тепло бойца уже 100%!"));
+	}
+}
+
+void ACodexTacticsPlayerController::StartPlacementForType(EDeployableType Type)
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	if (!Leader || !Relocation || !Messages)
+	{
+		return;
+	}
+	Leader->SelectedDeployType = Type;
+	const FText Name = URelocationSubsystem::GetDeployableName(Type);
+	if (Leader->GetDeployableCount(Type) <= 0)
+	{
+		AOperativeCharacter* Carrier = nullptr;
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (Member != Leader && Member->GetDeployableCount(Type) > 0)
+			{
+				Carrier = Member;
+				break;
+			}
+		}
+		if (!Carrier)
+		{
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("NoneInSquad", "⚠️ У отряда нет в наличии: {0}!"), Name));
+			return;
+		}
+		Carrier->AddDeployable(Type, -1);
+		Leader->AddDeployable(Type, 1);
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("HandsOver", "🛠️ {0} передает {1} бойцу {2} для установки!"),
+			Carrier->DisplayName, Name, Leader->DisplayName));
+	}
+	Relocation->StartDeployPlacement(Type, Leader);
 }
 
 void ACodexTacticsPlayerController::GrenadeKey()

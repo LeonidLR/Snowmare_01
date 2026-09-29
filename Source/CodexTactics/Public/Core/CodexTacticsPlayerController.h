@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Characters/PersonalItemRules.h"
+#include "Interactables/DeployableRules.h"
 #include "Combat/SpaceInput.h"
 #include "CodexTacticsPlayerController.generated.h"
 
@@ -122,6 +124,15 @@ public:
 	/** T / action bar «ОБОР» (Godot _on_guard_slot_clicked): the leader holds its spot or rejoins the formation. */
 	void GuardKey();
 
+	/** H / J / K / L and the inventory drawer (Godot use_squad_item): the leader uses a provision, feed line. */
+	void UseSquadItem(EPersonalItem Item);
+
+	/**
+	 * Inventory drawer turret / barricade / mine (Godot _start_placement_for_type): selects the type, a squad mate hands
+	 * one over when the leader has none, then the placement ghost starts.
+	 */
+	void StartPlacementForType(EDeployableType Type);
+
 private:
 	/** Ground point under the cursor for the grenade aim (hit, else the thrower's floor plane). */
 	bool GetGrenadeAimPoint(FVector& OutPoint) const;
@@ -179,6 +190,14 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> GuardAction;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UInputAction>> ItemActions;
+
+	void UseMedkit() { UseSquadItem(EPersonalItem::Medkit); }
+	void UseCannedFood() { UseSquadItem(EPersonalItem::CannedFood); }
+	void UseBread() { UseSquadItem(EPersonalItem::Bread); }
+	void UseChocolate() { UseSquadItem(EPersonalItem::Chocolate); }
 
 	FSpaceInputTracker SpaceInput;
 	double LastClickTime = -1.0;

@@ -13,6 +13,7 @@
 #include "UI/ActionMenuWidget.h"
 #include "UI/LootDialogWidget.h"
 #include "UI/ActionBarWidget.h"
+#include "UI/InventoryDrawerWidget.h"
 #include "UI/PhaseBannersWidget.h"
 #include "UI/TurnBasedHudWidget.h"
 #include "UI/DialogueSubsystem.h"
@@ -116,6 +117,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	MainMenuWidgetClass = UMainMenuWidget::StaticClass();
 	DialogueWidgetClass = UDialogueWidget::StaticClass();
 	ActionBarWidgetClass = UActionBarWidget::StaticClass();
+	InventoryDrawerWidgetClass = UInventoryDrawerWidget::StaticClass();
 	PhaseBannersWidgetClass = UPhaseBannersWidget::StaticClass();
 	TurnBasedHudWidgetClass = UTurnBasedHudWidget::StaticClass();
 }
@@ -165,6 +167,14 @@ void ACodexTacticsHUD::BeginPlay()
 		if (ActionBar)
 		{
 			ActionBar->AddToViewport(5);
+		}
+	}
+	if (InventoryDrawerWidgetClass && GetOwningPlayerController())
+	{
+		InventoryDrawer = CreateWidget<UInventoryDrawerWidget>(GetOwningPlayerController(), InventoryDrawerWidgetClass);
+		if (InventoryDrawer)
+		{
+			InventoryDrawer->AddToViewport(6);
 		}
 	}
 	if (PhaseBannersWidgetClass && GetOwningPlayerController())
@@ -516,5 +526,18 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 		const bool bLeader = Member == Squad->GetLeader();
 		DrawRect(PanelColor, Screen.X - W * 0.5f - 4.f, Screen.Y - 2.f, W + 8.f, H + 4.f);
 		DrawText(Label, bLeader ? SpeakerColor : TextColor, Screen.X - W * 0.5f, Screen.Y, Font);
+	}
+}
+
+void ACodexTacticsHUD::ToggleInventoryDrawer()
+{
+	if (!InventoryDrawer)
+	{
+		return;
+	}
+	InventoryDrawer->Toggle();
+	if (InventoryDrawer->IsOpen() && ActionBar && ActionBar->IsWeaponSelectorOpen())
+	{
+		ActionBar->ToggleWeaponSelector();
 	}
 }

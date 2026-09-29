@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Characters/PersonalItemRules.h"
 #include "Combat/TargetedShotRules.h"
 #include "Interactables/DeployableRules.h"
 #include "OperativeCharacter.generated.h"
@@ -262,6 +263,16 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
 	int32 BreadCount = 0;
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Inventory")
+	int32 GetItemCount(EPersonalItem Item) const;
+
+	/**
+	 * Godot use_personal_item / heal_with_item: spends one item for its health / warmth. False without the item or at
+	 * full health with no cold.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Inventory")
+	bool UsePersonalItem(EPersonalItem Item);
 
 	/** Ammo for weapons outside the arsenal, by Godot weapon id (shotgun, flamethrower, cryo_emitter, plasma_carbine). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory")

@@ -12,6 +12,7 @@ class UMissionFailedWidget;
 class UMainMenuWidget;
 class UDialogueWidget;
 class UActionBarWidget;
+class UInventoryDrawerWidget;
 class UPhaseBannersWidget;
 class UTurnBasedHudWidget;
 class ALootCrateActor;
@@ -60,6 +61,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UActionBarWidget> ActionBarWidgetClass;
 
+	/** Personal inventory drawer class (action bar «ИНВ»; a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UInventoryDrawerWidget> InventoryDrawerWidgetClass;
+
 	/** Pause / preparation / wave banners and the cutscene card (a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UPhaseBannersWidget> PhaseBannersWidgetClass;
@@ -70,6 +75,11 @@ public:
 
 	/** The bottom action bar (with the weapon selector); null before BeginPlay. */
 	UActionBarWidget* GetActionBar() const { return ActionBar; }
+
+	UInventoryDrawerWidget* GetInventoryDrawer() const { return InventoryDrawer; }
+
+	/** Action bar «ИНВ» (Godot _toggle_inventory_drawer): opens / closes the drawer, the weapon selector closes. */
+	void ToggleInventoryDrawer();
 
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
@@ -127,6 +137,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UActionBarWidget> ActionBar;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInventoryDrawerWidget> InventoryDrawer;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPhaseBannersWidget> PhaseBanners;

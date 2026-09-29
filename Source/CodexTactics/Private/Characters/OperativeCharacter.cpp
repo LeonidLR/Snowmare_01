@@ -440,6 +440,33 @@ void AOperativeCharacter::HandleMoveFinished()
 	ApplyMovementParams();
 }
 
+int32 AOperativeCharacter::GetItemCount(EPersonalItem Item) const
+{
+	switch (Item)
+	{
+	case EPersonalItem::Medkit: return MedkitsCount;
+	case EPersonalItem::CannedFood: return CannedFoodCount;
+	case EPersonalItem::Bread: return BreadCount;
+	default: return ChocolateCount;
+	}
+}
+
+bool AOperativeCharacter::UsePersonalItem(EPersonalItem Item)
+{
+	if (GetItemCount(Item) <= 0 || !HealthComponent
+		|| !PersonalItemRules::CanUse(HealthComponent->GetCurrentHealth(), HealthComponent->GetMaxHealth(), ColdLevel))
+	{
+		return false;
+	}
+	const FPersonalItemEffect Effect = PersonalItemRules::GetEffect(Item);
+	HealthComponent->Heal(Effect.Heal);
+	ColdLevel = FMath::Max(0.f, ColdLevel - Effect.Warmth);
+	int32& Count = Item == EPersonalItem::Medkit ? MedkitsCount
+		: (Item == EPersonalItem::CannedFood ? CannedFoodCount : (Item == EPersonalItem::Bread ? BreadCount : ChocolateCount));
+	--Count;
+	return true;
+}
+
 int32 AOperativeCharacter::GetDeployableCount(EDeployableType Type) const
 {
 	switch (Type)
