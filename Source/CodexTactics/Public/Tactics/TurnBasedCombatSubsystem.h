@@ -112,8 +112,35 @@ public:
 	/** Enter: the whole squad ends its turn. */
 	void PassSquadTurn();
 
-	/** Mouse click in turn-based mode: select an operative, attack an enemy / barrel / barricade, or walk. */
-	void HandleWorldClick(const FVector& WorldPoint, AActor* HitActor);
+	/**
+	 * Mouse click in turn-based mode (Godot main.gd _handle_gorky17_tactical_click): select an operative, attack an
+	 * enemy / barricade, walk; a barrel next to the operative (or an adjacent turret) is picked up for relocation unless
+	 * Shift is held (Shift + barrel = shot). While relocating, the click picks the target cell.
+	 */
+	void HandleWorldClick(const FVector& WorldPoint, AActor* HitActor, bool bShift = false);
+
+	// --- Object relocation (barrels, turrets) ---
+
+	/**
+	 * Godot _start_tactical_relocate: the object waits for a target cell among its free orthogonal neighbours
+	 * (PushBarrelAPCost each, shown as the reachable layer). Needs that many AP.
+	 */
+	bool StartRelocate(AActor* Object);
+	/** Godot _cancel_tactical_relocate (Esc / RMB / click on the object's own cell). */
+	void CancelRelocate();
+	bool IsRelocating() const { return RelocateTarget.IsValid(); }
+	AActor* GetRelocatingObject() const { return RelocateTarget.Get(); }
+	/** Target cells of the running relocation and their AP cost. */
+	const TMap<FIntPoint, int32>& GetRelocateCells() const { return RelocateCells; }
+	/**
+	 * Godot relocate_object: the active operative, standing next to the object (diagonal counts), pushes it along the
+	 * grid path to Target; the operative takes the object's previous cells. CustomAPCost < 0 = PushBarrelAPCost per step.
+	 */
+	bool RelocateObject(const FIntPoint& ObjectCell, const FIntPoint& Target, int32 CustomAPCost = -1);
+	/** Godot _try_push_adjacent_barrel (panel «Бочка»): relocation of an orthogonally adjacent barrel. */
+	bool TryPushAdjacentBarrel();
+	/** Godot is_unit_adjacent_to_object: Chebyshev distance 1 to any cell of the object. */
+	bool IsUnitAdjacentToObject(const AActor* Unit, const AActor* Object) const;
 
 	/** Turn-based balance (Godot tactical_* defaults). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|TurnBased")
@@ -142,6 +169,8 @@ private:
 		FVector From = FVector::ZeroVector;
 		TFunction<bool(int32)> OnStep;
 		TFunction<void()> OnDone;
+		/** Units turn towards each step; pushed objects keep their rotation. */
+		bool bFaceSteps = true;
 	};
 
 	UFUNCTION()
@@ -160,6 +189,9 @@ private:
 	FString NameOf(const AActor* Actor) const;
 	const UWeaponDataAsset* WeaponOf(const AActor* Actor) const;
 	void Log(const FString& Message) const;
+	/** Feed line from another sender (Godot _on_quest_message("ТАКТИКА", ...)). */
+	void Post(const FString& Sender, const FString& Message) const;
+	void Highlight(AActor* Target) const;
 	void Changed();
 
 	void StartPlayerTurn();
@@ -188,7 +220,7 @@ private:
 	bool CheckBattleEnd();
 
 	void StartMover(AActor* Actor, const FIntPoint& From, const TArray<FIntPoint>& Path, float StepDuration, TFunction<bool(int32)> OnStep,
-		TFunction<void()> OnDone);
+		TFunction<void()> OnDone, bool bFaceSteps = true);
 	void After(float Seconds, TFunction<void()> Callback);
 
 	UPROPERTY(Transient)
@@ -207,6 +239,9 @@ private:
 	TArray<TWeakObjectPtr<AActor>> FrozenActors;
 	TArray<FMover> Movers;
 	FExposedZones Zones;
+	TWeakObjectPtr<AActor> RelocateTarget;
+	FIntPoint RelocateOrigin = FIntPoint(-1, -1);
+	TMap<FIntPoint, int32> RelocateCells;
 
 	ETurnPhase Phase = ETurnPhase::Inactive;
 	int32 ActiveIndex = 0;

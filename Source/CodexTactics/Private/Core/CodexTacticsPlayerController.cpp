@@ -356,6 +356,12 @@ UTurnBasedCombatSubsystem* ACodexTacticsPlayerController::GetActiveTurnBased() c
 
 void ACodexTacticsPlayerController::DialogueSkip()
 {
+	// Godot: Esc cancels the turn-based object relocation first.
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
+	{
+		TurnBased->CancelRelocate();
+		return;
+	}
 	if (UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>())
 	{
 		Dialogue->SkipDialogue();
@@ -390,7 +396,7 @@ void ACodexTacticsPlayerController::OnClick()
 	// Turn-based combat: the grid handles every click (select, attack, walk).
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 	{
-		TurnBased->HandleWorldClick(Hit.ImpactPoint, Hit.GetActor());
+		TurnBased->HandleWorldClick(Hit.ImpactPoint, Hit.GetActor(), IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift));
 		return;
 	}
 
@@ -665,10 +671,15 @@ void ACodexTacticsPlayerController::CameraRotateRight()
 
 void ACodexTacticsPlayerController::CameraDragRotateStart()
 {
-	// Godot: RMB cancels object placement.
+	// Godot: RMB cancels object placement (and the turn-based relocation).
 	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
 	{
 		Relocation->CancelPlacement();
+		return;
+	}
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
+	{
+		TurnBased->CancelRelocate();
 		return;
 	}
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())

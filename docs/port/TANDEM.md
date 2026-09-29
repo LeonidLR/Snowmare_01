@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-29 Claude: turn-based barrel / turret relocation; `HandleWorldClick` gained a Shift flag, `TurnBasedHudWidget` «Бочка» button enabled.
 - 2026-09-29 Claude: turn-based exposed zones (`FExposedZones`, `ATurnGridOverlayActor::SetExposedZones`, new overlay layers ExposedWarning / ExposedDanger).
 - 2026-09-29 Claude: levels imported and wired (game mode `LevelConfig`, `LevelFlowRules`). Edits on Gemini files: `UWaveSubsystem` level waves now spawn at once like Godot _spawn_custom_json_wave (user decision; delays / cap ignored) with modifiers, `GetSpawnLocationForLane` uses Godot lane matching + any-point fallback, `GetColdDrainMultiplier` feeds the cold; `AEnemyCharacter::ApplyWaveModifiers`; `FGameFlowStateMachine::SetConfig`.
 - 2026-09-29 Claude: L_MovementTest re-laid by the user (kept); smokes use `SmokeUtils::LevelPoint` (design coords -> Floor transform), map has no saved RecastNavMesh actor.

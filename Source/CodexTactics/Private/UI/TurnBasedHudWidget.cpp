@@ -122,9 +122,8 @@ void UTurnBasedHudWidget::BuildDefaultLayout()
 	Column->AddChildToVerticalBox(Row);
 	TbTurnButton = MakeButton(TEXT("TbTurnButton"), LOCTEXT("Turn", "🔄 Поворот [R]"), 26.f, Row);
 	TbTurnButton->SetToolTipText(LOCTEXT("TurnTip", "Повернуть бойца на 90 градусов (1 AP) [R]"));
-	UButton* Barrel = MakeButton(TEXT("TbBarrelButton"), LOCTEXT("Barrel", "📦 Бочка [F]"), 26.f, Row);
-	Barrel->SetToolTipText(LOCTEXT("BarrelTip", "Толкнуть соседнюю бочку (2 AP) [F] — ещё не перенесено"));
-	Barrel->SetIsEnabled(false);
+	TbBarrelButton = MakeButton(TEXT("TbBarrelButton"), LOCTEXT("Barrel", "📦 Бочка [F]"), 26.f, Row);
+	TbBarrelButton->SetToolTipText(LOCTEXT("BarrelTip", "Толкнуть соседнюю бочку (2 AP) [F]"));
 }
 
 void UTurnBasedHudWidget::NativeOnInitialized()
@@ -149,6 +148,10 @@ void UTurnBasedHudWidget::NativeOnInitialized()
 	if (TbTurnButton)
 	{
 		TbTurnButton->OnClicked.AddDynamic(this, &UTurnBasedHudWidget::HandleTurn);
+	}
+	if (TbBarrelButton)
+	{
+		TbBarrelButton->OnClicked.AddDynamic(this, &UTurnBasedHudWidget::HandleBarrel);
 	}
 	if (UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr)
 	{
@@ -252,6 +255,14 @@ void UTurnBasedHudWidget::HandleTurn()
 	if (UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>())
 	{
 		TurnBased->RotateActiveUnitClockwise();
+	}
+}
+
+void UTurnBasedHudWidget::HandleBarrel()
+{
+	if (UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>())
+	{
+		TurnBased->TryPushAdjacentBarrel();
 	}
 }
 

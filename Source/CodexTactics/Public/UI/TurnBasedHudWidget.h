@@ -56,6 +56,10 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|TurnBased", meta = (BindWidgetOptional))
 	TObjectPtr<UButton> TbTurnButton;
 
+	/** «Бочка»: push the adjacent barrel (Godot push_barrel_pressed -> _try_push_adjacent_barrel). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|TurnBased", meta = (BindWidgetOptional))
+	TObjectPtr<UButton> TbBarrelButton;
+
 private:
 	void BuildDefaultLayout();
 	UTextBlock* MakeText(const FName& Name, int32 Size, const FLinearColor& Color);
@@ -75,4 +79,7 @@ private:
 
 	UFUNCTION()
 	void HandleTurn();
+
+	UFUNCTION()
+	void HandleBarrel();
 };

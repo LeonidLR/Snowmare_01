@@ -323,6 +323,9 @@ void UTurnBasedCombatSubsystem::EndCombat(bool bVictory, bool bLeaveFlow)
 	Phase = ETurnPhase::Inactive;
 	++CombatId;
 	Movers.Reset();
+	RelocateTarget.Reset();
+	RelocateCells.Reset();
+
 	bSquadUnitMoving = false;
 	RestoreWorld();
 	if (Overlay)
@@ -475,6 +478,22 @@ void UTurnBasedCombatSubsystem::Log(const FString& Message) const
 	}
 }
 
+void UTurnBasedCombatSubsystem::Post(const FString& Sender, const FString& Message) const
+{
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(FText::FromString(Sender), FText::FromString(Message));
+	}
+}
+
+void UTurnBasedCombatSubsystem::Highlight(AActor* Target) const
+{
+	if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+	{
+		Feedback->HighlightTarget(Target);
+	}
+}
+
 void UTurnBasedCombatSubsystem::Changed()
 {
 	OnStateChanged.Broadcast();
@@ -507,10 +526,11 @@ void UTurnBasedCombatSubsystem::After(float Seconds, TFunction<void()> Callback)
 // --- Movement animation -----------------------------------------------------------------------------------------
 
 void UTurnBasedCombatSubsystem::StartMover(AActor* Actor, const FIntPoint& From, const TArray<FIntPoint>& Path, float StepDuration,
-	TFunction<bool(int32)> OnStep, TFunction<void()> OnDone)
+	TFunction<bool(int32)> OnStep, TFunction<void()> OnDone, bool bFaceSteps)
 {
 	FMover& Mover = Movers.AddDefaulted_GetRef();
 	Mover.Actor = Actor;
+	Mover.bFaceSteps = bFaceSteps;
 	Mover.StepDuration = StepDuration;
 	Mover.From = Actor->GetActorLocation();
 	Mover.OnStep = MoveTemp(OnStep);
@@ -533,7 +553,10 @@ void UTurnBasedCombatSubsystem::StartMover(AActor* Actor, const FIntPoint& From,
 		}
 		return;
 	}
-	AlignFacing(Actor, Mover.Facings[0]);
+	if (bFaceSteps)
+	{
+		AlignFacing(Actor, Mover.Facings[0]);
+	}
 }
 
 void UTurnBasedCombatSubsystem::Tick(float DeltaTime)
@@ -564,7 +587,7 @@ void UTurnBasedCombatSubsystem::Tick(float DeltaTime)
 				++Mover.Index;
 				Mover.Alpha = 0.f;
 				bFinished = !bContinue || Mover.Index >= Mover.Points.Num();
-				if (!bFinished)
+				if (!bFinished && Mover.bFaceSteps)
 				{
 					AlignFacing(Actor, Mover.Facings[Mover.Index]);
 				}
@@ -660,6 +683,15 @@ void UTurnBasedCombatSubsystem::RefreshOverlay()
 		return;
 	}
 	Overlay->SetCells(ETurnOverlayLayer::Active, { State->GridPos });
+	if (IsRelocating())
+	{
+		// Godot: the relocation targets replace the walk cells, no attack preview meanwhile.
+		TArray<FIntPoint> Targets;
+		RelocateCells.GetKeys(Targets);
+		Overlay->SetCells(ETurnOverlayLayer::Reachable, Targets);
+		Overlay->ClearLayer(ETurnOverlayLayer::Attack);
+		return;
+	}
 	TArray<FIntPoint> Reach;
 	for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(State->GridPos, State->AP))
 	{
@@ -692,6 +724,8 @@ bool UTurnBasedCombatSubsystem::SelectUnit(AOperativeCharacter* Unit)
 	{
 		return false;
 	}
+	RelocateTarget.Reset();
+	RelocateCells.Reset();
 	const int32 Index = Squad.IndexOfByKey(Unit);
 	if (Index == INDEX_NONE)
 	{
@@ -961,6 +995,8 @@ void UTurnBasedCombatSubsystem::EndCurrentUnitTurn()
 	{
 		return;
 	}
+	RelocateTarget.Reset();
+	RelocateCells.Reset();
 	++ActiveIndex;
 	if (Squad.IsValidIndex(ActiveIndex))
 	{
@@ -989,35 +1025,115 @@ void UTurnBasedCombatSubsystem::PassSquadTurn()
 	EndSquadPhase();
 }
 
-void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AActor* HitActor)
+void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AActor* HitActor, bool bShift)
 {
 	if (!IsActive() || Phase != ETurnPhase::Squad || bSquadUnitMoving || !Grid)
 	{
 		return;
 	}
+	FIntPoint Cell(-1, -1);
+	const FVector Local = WorldPoint - Grid->OriginWorld;
+	const bool bOnGrid = Local.X >= 0.f && Local.Y >= 0.f && Local.X < TurnGridCells * TurnCellSize && Local.Y < TurnGridCells * TurnCellSize;
+
+	// Godot 0.1: relocation mode — the click picks the target cell (floor point, else the clicked body's cell).
+	if (IsRelocating())
+	{
+		if (bOnGrid)
+		{
+			Cell = Grid->WorldToGrid(WorldPoint);
+		}
+		else if (HitActor)
+		{
+			Cell = Grid->WorldToGrid(HitActor->GetActorLocation());
+		}
+		if (const int32* Cost = RelocateCells.Find(Cell))
+		{
+			const int32 APCost = *Cost;
+			AActor* Moved = RelocateTarget.Get();
+			const FIntPoint From = RelocateOrigin;
+			RelocateTarget.Reset();
+			RelocateCells.Reset();
+			if (RelocateObject(From, Cell, APCost))
+			{
+				Highlight(Moved);
+				Post(TEXT("ТАКТИКА"), FString::Printf(TEXT("✅ Объект успешно перемещен (-%d AP)."), APCost));
+			}
+			else
+			{
+				Post(TEXT("ТАКТИКА"), TEXT("⚠️ Ошибка при перемещении объекта!"));
+				RefreshOverlay();
+			}
+		}
+		else if (Cell == RelocateOrigin)
+		{
+			CancelRelocate();
+		}
+		else
+		{
+			Post(TEXT("ТАКТИКА"), TEXT("⚠️ Выбранная клетка недоступна для перемещения (вне радиуса AP или занята)!"));
+		}
+		return;
+	}
+
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(HitActor); Operative && Squad.Contains(Operative))
 	{
 		SelectUnit(Operative);
 		return;
 	}
-	FIntPoint Cell;
 	if (const FTurnUnitState* State = GetUnitState(HitActor))
 	{
 		Cell = State->GridPos;
 	}
-	else
+	else if (bOnGrid)
 	{
-		const FVector Local = WorldPoint - Grid->OriginWorld;
-		if (Local.X < 0.f || Local.Y < 0.f || Local.X >= TurnGridCells * TurnCellSize || Local.Y >= TurnGridCells * TurnCellSize)
-		{
-			return;
-		}
 		Cell = Grid->WorldToGrid(WorldPoint);
 	}
+	else
+	{
+		return;
+	}
+	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
 	switch (Grid->GetOccupantType(Cell))
 	{
-	case EGorkyOccupantType::Enemy:
 	case EGorkyOccupantType::Barrel:
+	{
+		// Godot: an orthogonally adjacent barrel is pushed, Shift shoots it; a distant one needs Shift.
+		AActor* Barrel = Grid->GetOccupant(Cell);
+		const FIntPoint Diff = UnitState ? Cell - UnitState->GridPos : FIntPoint(99, 99);
+		if (!bShift)
+		{
+			Highlight(Barrel);
+			if (FMath::Abs(Diff.X) + FMath::Abs(Diff.Y) == 1)
+			{
+				StartRelocate(Barrel);
+			}
+			else
+			{
+				Post(TEXT("ТАКТИКА"), TEXT("⚠️ Боец должен подойти вплотную к бочке, чтобы переместить её (или зажмите Shift для выстрела)!"));
+			}
+			return;
+		}
+		AttackCell(Cell);
+		break;
+	}
+	case EGorkyOccupantType::Turret:
+	{
+		AActor* Turret = Grid->GetOccupant(Cell);
+		if (!bShift)
+		{
+			Highlight(Turret);
+			if (IsUnitAdjacentToObject(GetActiveUnit(), Turret))
+			{
+				StartRelocate(Turret);
+			}
+			else
+			{
+				Post(TEXT("ТАКТИКА"), TEXT("⚠️ Боец должен подойти вплотную к турели, чтобы переместить её!"));
+			}
+		}
+		break;
+	}
+	case EGorkyOccupantType::Enemy:
 	case EGorkyOccupantType::Barricade:
 		AttackCell(Cell);
 		break;
@@ -1030,10 +1146,210 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 	}
 }
 
+// --- Object relocation ----------------------------------------------------------------------------------------------
+
+bool UTurnBasedCombatSubsystem::IsUnitAdjacentToObject(const AActor* Unit, const AActor* Object) const
+{
+	const FTurnUnitState* UnitState = GetUnitState(Unit);
+	if (!UnitState || !IsValid(Object) || !Grid)
+	{
+		return false;
+	}
+	TArray<FIntPoint> ObjectCells;
+	for (int32 X = 0; X < Grid->GridSize.X; ++X)
+	{
+		for (int32 Y = 0; Y < Grid->GridSize.Y; ++Y)
+		{
+			if (Grid->GetOccupant(FIntPoint(X, Y)) == Object)
+			{
+				ObjectCells.Add(FIntPoint(X, Y));
+			}
+		}
+	}
+	if (ObjectCells.IsEmpty())
+	{
+		const FTurnUnitState* ObjectState = GetUnitState(Object);
+		ObjectCells.Add(ObjectState ? ObjectState->GridPos : Grid->WorldToGrid(Object->GetActorLocation()));
+	}
+	for (const FIntPoint& Cell : ObjectCells)
+	{
+		if (FMath::Max(FMath::Abs(UnitState->GridPos.X - Cell.X), FMath::Abs(UnitState->GridPos.Y - Cell.Y)) <= 1)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UTurnBasedCombatSubsystem::StartRelocate(AActor* Object)
+{
+	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
+	const FTurnUnitState* ObjectState = GetUnitState(Object);
+	if (Phase != ETurnPhase::Squad || bSquadUnitMoving || !UnitState || !ObjectState || !Grid)
+	{
+		return false;
+	}
+	const int32 CostPerStep = Balance.PushBarrelAPCost;
+	if (UnitState->AP < CostPerStep)
+	{
+		Post(TEXT("ТАКТИКА"), FString::Printf(TEXT("⚠️ Недостаточно очков действия для перемещения (нужно минимум %d AP)!"), CostPerStep));
+		return false;
+	}
+	RelocateTarget = Object;
+	RelocateOrigin = ObjectState->GridPos;
+	RelocateCells.Reset();
+	// Godot: reachable in one step (orthogonal; a diagonal costs 2) and walkable.
+	for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(RelocateOrigin, 1))
+	{
+		if (Entry.Value == 1 && Entry.Key != RelocateOrigin && Grid->IsCellWalkable(Entry.Key))
+		{
+			RelocateCells.Add(Entry.Key, CostPerStep);
+		}
+	}
+	RefreshOverlay();
+	Post(TEXT("ТАКТИКА"), FString::Printf(TEXT("📦 Выберите соседнюю свободную клетку для перемещения %s (1 деление = %d AP) [ЛКМ — подтвердить, ПКМ/[Esc] — отмена]"),
+		Object->IsA<ABarrelActor>() ? TEXT("бочки") : TEXT("объекта"), CostPerStep));
+	Changed();
+	return true;
+}
+
+void UTurnBasedCombatSubsystem::CancelRelocate()
+{
+	if (!IsRelocating())
+	{
+		return;
+	}
+	RelocateTarget.Reset();
+	RelocateOrigin = FIntPoint(-1, -1);
+	RelocateCells.Reset();
+	RefreshOverlay();
+	Post(TEXT("ТАКТИКА"), TEXT("Перемещение объекта отменено."));
+	Changed();
+}
+
+bool UTurnBasedCombatSubsystem::TryPushAdjacentBarrel()
+{
+	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
+	if (!IsActive() || Phase != ETurnPhase::Squad || !UnitState)
+	{
+		return false;
+	}
+	for (const TPair<TWeakObjectPtr<AActor>, FTurnUnitState>& Entry : States)
+	{
+		AActor* Barrel = Entry.Key.Get();
+		const FIntPoint Diff = Entry.Value.GridPos - UnitState->GridPos;
+		if (Barrel && Barrel->IsA<ABarrelActor>() && FMath::Abs(Diff.X) + FMath::Abs(Diff.Y) == 1)
+		{
+			Highlight(Barrel);
+			return StartRelocate(Barrel);
+		}
+	}
+	Log(TEXT("⚠️ Рядом нет горючей бочки!"));
+	return false;
+}
+
+bool UTurnBasedCombatSubsystem::RelocateObject(const FIntPoint& ObjectCell, const FIntPoint& Target, int32 CustomAPCost)
+{
+	AOperativeCharacter* Unit = GetActiveUnit();
+	FTurnUnitState* UnitState = States.Find(Unit);
+	if (bSquadUnitMoving || !UnitState || !Grid || !Grid->IsValidCell(ObjectCell) || !Grid->IsValidCell(Target)
+		|| ObjectCell == Target || !Grid->IsCellWalkable(Target))
+	{
+		return false;
+	}
+	AActor* Object = Grid->GetOccupant(ObjectCell);
+	const EGorkyOccupantType Type = Grid->GetOccupantType(ObjectCell);
+	if (!IsValid(Object) || (Type != EGorkyOccupantType::Barrel && Type != EGorkyOccupantType::Turret))
+	{
+		return false; // barricades move with their footprint and rotation (Godot relocate_barricade)
+	}
+	if (!IsUnitAdjacentToObject(Unit, Object))
+	{
+		Log(TEXT("⚠️ Боец должен стоять вплотную к объекту, чтобы переместить его!"));
+		return false;
+	}
+	TArray<FIntPoint> Path = Grid->FindPath(ObjectCell, Target, 20);
+	if (Path.IsEmpty())
+	{
+		const FIntPoint Step = Target - ObjectCell;
+		if (Step.X * Step.X + Step.Y * Step.Y != 1)
+		{
+			Log(TEXT("⚠️ Нет проходимого пути к выбранной клетке!"));
+			return false;
+		}
+		Path = { Target };
+	}
+	const int32 CostPerStep = Balance.PushBarrelAPCost;
+	int32 TotalAP = CustomAPCost >= 0 ? CustomAPCost : Path.Num() * CostPerStep;
+	if (TotalAP <= 0)
+	{
+		TotalAP = CostPerStep;
+	}
+	if (UnitState->AP < TotalAP)
+	{
+		Log(FString::Printf(TEXT("⚠️ Недостаточно AP для перемещения объекта (требуется %d AP, доступно %d AP)!"), TotalAP, UnitState->AP));
+		return false;
+	}
+	// The operative first steps onto the object's cell, then onto each cell the object leaves.
+	TArray<FIntPoint> SoldierPath;
+	for (int32 Index = 0; Index < Path.Num(); ++Index)
+	{
+		SoldierPath.Add(Index == 0 ? ObjectCell : Path[Index - 1]);
+	}
+	const FIntPoint SoldierFinal = SoldierPath.Last();
+	const EGorkyFacing FinalFacing = FGorky17Utils::VectorToFacing(TurnStepDir(Target - SoldierFinal));
+	const FIntPoint UnitStart = UnitState->GridPos;
+
+	UnitState->AP -= TotalAP;
+	Grid->ClearOccupant(UnitStart);
+	Grid->ClearOccupant(ObjectCell);
+	Grid->SetOccupant(Target, Object, Type);
+	if (FTurnUnitState* ObjectState = States.Find(Object))
+	{
+		ObjectState->GridPos = Target;
+	}
+	Grid->SetOccupant(SoldierFinal, Unit, EGorkyOccupantType::Squad);
+	UnitState->GridPos = SoldierFinal;
+	UnitState->Facing = FinalFacing;
+
+	// Mines under the operative's steps (Godot checks the soldier path).
+	for (const FIntPoint& Step : SoldierPath)
+	{
+		if (Grid->GetOccupantType(Step) == EGorkyOccupantType::Mine)
+		{
+			DetonateMine(Step, Grid->GetOccupant(Step), Unit);
+		}
+	}
+
+	bSquadUnitMoving = true;
+	RefreshOverlay();
+	StartMover(Object, ObjectCell, Path, SquadStepDuration, nullptr, nullptr, /*bFaceSteps*/ false);
+	TWeakObjectPtr<AOperativeCharacter> WeakUnit(Unit);
+	StartMover(Unit, UnitStart, SoldierPath, SquadStepDuration, nullptr, [this, WeakUnit, FinalFacing]()
+	{
+		bSquadUnitMoving = false;
+		if (AOperativeCharacter* Moved = WeakUnit.Get())
+		{
+			AlignFacing(Moved, FinalFacing);
+		}
+		if (IsActive())
+		{
+			RefreshOverlay();
+			Changed();
+		}
+	});
+	const TCHAR* ObjectName = Type == EGorkyOccupantType::Barrel ? TEXT("бочку") : TEXT("турель");
+	Log(FString::Printf(TEXT("📦 %s переместил(а) %s на новую позицию (потрачено %d AP)."), *NameOf(Unit), ObjectName, TotalAP));
+	Changed();
+	return true;
+}
+
 // --- Turrets and enemies ------------------------------------------------------------------------------------------
 
 void UTurnBasedCombatSubsystem::EndSquadPhase()
 {
+	RelocateTarget.Reset();
+	RelocateCells.Reset();
 	if (Overlay)
 	{
 		Overlay->ClearLayer(ETurnOverlayLayer::Reachable);
