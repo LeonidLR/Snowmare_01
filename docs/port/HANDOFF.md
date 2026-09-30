@@ -39,6 +39,14 @@ The user's rule: **Godot code values win** (except explicit user decisions liste
 
 ## 3. Build, test, verify
 
+**Unreal MCP (AI access to the open editor):** plugins ModelContextProtocol + toolsets are enabled and the server
+auto-starts with the CodexTactics editor at `http://127.0.0.1:8000/mcp` (`.mcp.json` server `unreal`). A Claude
+session connects at its start, so open the editor first. Tools: `list_toolsets`, `describe_toolset`, `call_tool`;
+project toolset `CodexTacticsEditor.BlueprintGraphToolset` (read any Blueprint / AnimBP graph as text, paste nodes,
+compile; pasted changes are never saved automatically). An open CodexTactics editor locks the DLLs: close it before
+`build.ps1` / `verify_all.ps1` (another project's editor may stay open). Note: ABP_Operative's AnimGraph holds only the
+Output Pose — the pose is blended natively in `UOperativeAnimInstance`.
+
 ```
 powershell -ExecutionPolicy Bypass -File Scripts/verify_all.ps1              # build + all tests + all smokes, summary
 powershell -ExecutionPolicy Bypass -File Scripts/build.ps1
@@ -46,7 +54,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **136 automation tests, 49 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **137 automation tests, 49 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -532,7 +540,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | See-through silhouette (Godot player.gd _check_silhouette_occlusion + silhouette.gdshader): `M_Silhouette` (Scripts/Editor/create_silhouette_material.py, unlit translucent, no depth test, fresnel alpha), `AOperativeCharacter::UpdateSilhouette` (20 Hz camera ray, overlay material, role colours); SilhouetteSmoke |
+| (this) | Editor module `CodexTacticsEditor` with `UBlueprintGraphToolset` (FindBlueprints, DescribeBlueprint, DumpBlueprintGraph, Export / ImportGraphNodesText, CompileBlueprint) registered in the ToolsetRegistry, served by the Unreal MCP plugin; test `CodexTactics.Editor.BlueprintTools.ReadProjectBlueprints`. `7aa7deb`: UE 5.8 agent skills in .claude/skills + .agents/ue-project-context.md |
+| `8d64c5a` | See-through silhouette (Godot player.gd _check_silhouette_occlusion + silhouette.gdshader): `M_Silhouette` (Scripts/Editor/create_silhouette_material.py, unlit translucent, no depth test, fresnel alpha), `AOperativeCharacter::UpdateSilhouette` (20 Hz camera ray, overlay material, role colours); SilhouetteSmoke |
 | `b800bde` | Stage loadout (Godot main.gd _apply_stage_exploration_resources): `LoadoutRules` + LoadoutRulesTest, level JSON squad_loadout imported into `FLevelCombatConfig::SquadLoadout` (import_levels.py, DA_Level_* re-imported), `UMissionSubsystem::ApplyStageLoadout` at the end of the cutscene; VictorySmoke checks it |
 | `ef5f5bd` | Event bus (Godot Scripts/events/event_bus.gd): `UCodexEventBus` game-instance subsystem with the signals the game emits (squad member selected, stats updated, item used, mine spotted, soldier downed, feed line, dialogue finished, rage started / ended, generator state, game saved / loaded), broadcast from the matching UE systems; EventBusSmoke |
 | `04373d1` | Turn-based camera choreography (user decision 2026-09-30; Godot camera.gd smooth_focus_on_target / _position, dramatic_action_cam_focus; main.gd _enter_turn_based_combat, _on_gorky17_turn_changed, _on_gorky17_enemy_movement_started / _finished, _perform_dramatic_tactical_attack, _on_gorky17_turret_shot_requested): `ATacticalCameraPawn` SmoothFocusOnTarget / SmoothFocusOnPosition / DramaticActionFocus / EnterTurnBasedZoom, `UTurnBasedCombatSubsystem::AttackCellCinematic` + cinematic turret volley, `IsBusy`; TurnBasedCameraSmoke, `HudShot turnbased duel` |

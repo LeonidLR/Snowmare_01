@@ -13,6 +13,11 @@
                         "Name":  "CodexTacticsTests",
                         "Type":  "DeveloperTool",
                         "LoadingPhase":  "Default"
+                    },
+                    {
+                        "Name":  "CodexTacticsEditor",
+                        "Type":  "Editor",
+                        "LoadingPhase":  "PostEngineInit"
                     }
                 ],
     "Plugins":  [
@@ -64,6 +69,13 @@
                     {
                         "Name":  "ModelContextProtocol",
                         "Enabled":  true
+                    },
+                    {
+                        "Name":  "ToolsetRegistry",
+                        "Enabled":  true,
+                        "TargetAllowList":  [
+                                                "Editor"
+                                            ]
                     },
                     {
                         "Name":  "EditorToolset",

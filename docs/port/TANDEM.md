@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-30 Claude: module `CodexTacticsEditor` (Editor, PostEngineInit) — `UBlueprintGraphToolset` for the Unreal MCP server; UE agent skills in `.claude/skills`, project context `.agents/ue-project-context.md`.
 - 2026-09-30 Claude: `M_Silhouette` + create_silhouette_material.py; `AOperativeCharacter` bEnableSilhouette / bSilhouetteOcclusionOnly / SilhouetteMaterial / GetSilhouetteColor / IsSilhouetteVisible.
 - 2026-09-30 Claude: `FSquadLoadout` in `FLevelCombatConfig` (import_levels.py reads squad_loadout; re-run it after Godot level edits), `LoadoutRules`, `UMissionSubsystem::ApplyStageLoadout`.
 - 2026-09-30 Claude: `UCodexEventBus` (Subsystems/), `UCodexEventBus::Get(Context)`; broadcasts in SquadSubsystem::SetLeader, ProfileDialogWidget::ClickStat, InventoryDrawerWidget::Activate, ProximityMineActor::HandleSpotted, OperativeCharacter::HandleDied, GameMessageSubsystem::PostMessage, DialogueSubsystem::Close, RageComponent, InteractableActor generator, SaveGameSubsystem.
