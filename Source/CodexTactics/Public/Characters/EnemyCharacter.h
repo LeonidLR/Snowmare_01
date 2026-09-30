@@ -104,6 +104,14 @@ public:
 	/** Seconds until the next pounce. */
 	float GetJumpCooldown() const { return JumpCooldownTimer; }
 
+	/** Blueprint hooks for animations / effects (the enemy's AnimBP can also read UEnemyAnimInstance). */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Enemy")
+	void OnAttackStarted(AActor* Target);
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Enemy")
+	void OnHitReaction(float Damage);
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Enemy")
+	void OnDeath();
+
 	/** Blueprint hooks for the jump animation (the cutter Blueprint plays its clips). */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Enemy")
 	void OnJumpAttackStarted();
@@ -167,6 +175,13 @@ protected:
 
 	float AttackTimer = 0.0f;
 
+	/** Seconds the attack clip still plays: the enemy stands and faces AttackLockTarget (Godot is_attacking). */
+	float AttackLockTimer = 0.0f;
+	TWeakObjectPtr<AActor> AttackLockTarget;
+
+	/** Starts the attack clip and the stand-still lock; the cooldown lasts at least the clip (Godot _play_attack_animation). */
+	void StartAttackAnimation(AActor* Target);
+
 	// --- Cutter jump (Godot enemy_cutter.gd; numbers from /Game/Data/Enemies/DA_EnemyAnim_cutter) ---
 	bool bJumpAttackEnabled = false;
 	float JumpAttackSpeed = 1.85f;
@@ -193,8 +208,19 @@ protected:
 	FString LastAttackerSource;
 	TWeakObjectPtr<AActor> CurrentTarget;
 
+	/** Targets it could not get closer to (no path): skipped until the time (world seconds). */
+	TMap<TWeakObjectPtr<AActor>, double> UnreachableUntil;
+	/** Progress towards the current target (stuck detection). */
+	TWeakObjectPtr<AActor> ProgressTarget;
+	FVector ProgressLocation = FVector::ZeroVector;
+	float ProgressTimer = 0.f;
+
 	/** Nearest burning barrel / active heat source within the fear radius (Godot _find_nearest_active_fire_source). */
 	bool FindNearestFire(FVector& OutFire) const;
+	/** Nearest burning barrel / active heat zone whose fear radius (OutRadius) reaches within Extra of the feet. */
+	bool FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius) const;
+	/** Location inside a burning barrel's / active heat zone's fear radius (the heat of Candidate itself excluded). */
+	bool IsInFearZone(const FVector& Location, const AActor* Candidate) const;
 	/** Barricade / turret in the way within 2.2 m (Godot _find_blocking_barricade). */
 	AActor* FindBlockingObstacle(const AActor* Target) const;
 	/** Godot _attack_barricade (brutes hit twice as hard) and melee on turrets / the generator. */

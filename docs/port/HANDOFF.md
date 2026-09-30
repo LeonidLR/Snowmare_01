@@ -48,7 +48,7 @@ compile; pasted changes are never saved automatically). An open CodexTactics edi
 Output Pose — the pose is blended natively in `UOperativeAnimInstance`.
 
 ```
-powershell -ExecutionPolicy Bypass -File Scripts/verify_all.ps1              # build + all tests + all smokes, summary
+powershell -ExecutionPolicy Bypass -File Scripts/verify_all.ps1              # build + all tests + all smokes (3 at a time, -Parallel N; save-slot checks and parallel failures re-run alone; logs Saved/Logs/Smoke-<Name>.log)
 powershell -ExecutionPolicy Bypass -File Scripts/build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.Cold]
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
@@ -272,8 +272,24 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 ## 6. Data / content status
 
-- Operative art imported from `Documents/Codex/ASSETS` (same as Godot). No textures exist for Explorer; the coat is
-  tinted with the role colour (Godot `material_override` on the coat).
+- Operatives (user art, 2026-09-30): BP_Operative uses the user's `/Game/Post_Apo_Survivor` mesh (UE4 mannequin rig) and
+  the `/Game/RifleAnims` pack. `Scripts/Editor/setup_operative_rifle_animation.py` makes the two UE4_Mannequin_Skeleton
+  assets compatible, builds ABP_Operative's graph with `UOperativeAnimGraphLibrary` (editor module: stand / crouch / aim
+  blend spaces by Direction + speed axis, prone = crouch set for now, cached locomotion, upper-body Layered blend from
+  spine_01 with the pack's "Fire" montage slot; fire montages and the reload clip stretched to the reload time are
+  played by `UOperativeAnimInstance`) and sets `AOperativeCharacter::SquadOutfits` (hoodie + pants: base / _Inst_2nd /
+  _Inst_3rd for commander / engineer / medic-sapper). Re-running keeps hand edits: the graph is built only while empty (`CountAnimGraphNodes`; CODEX_REBUILD_ANIM_GRAPHS=1 forces it), clips / outfits only while unset.
+  The old Explorer clips were deleted by the user; the M16 offset on hand_r is still the Explorer one.
+- Enemies (user art, 2026-09-30): `Scripts/Editor/setup_enemy_animation.py` builds `/Game/Characters/Enemies/<Type>/`
+  ABP_Enemy_* (graph: idle / walk / run sequence players + full-body slot; clips on the class defaults) and BP_Enemy_*
+  for HOUND = Combat_Dog, BRUTE = Mutant_monster_1, FROSTBITTEN = mutant_monster_2, CUTTER = Biochemical_Monster_2 (ue4
+  set, the only one with a death clip) — the mapping follows the clip names in Godot resources/enemies/anims/*.tres.
+  `UEnemyAnimInstance` plays attacks / hits / the pounce / the held death; `ACodexTacticsGameMode::EnemyClasses` spawns
+  them. The Blueprints own their look (user decision 2026-09-30): capsule, mesh offset / rotation / scale are authored in
+  BP_Enemy_* (the script wrote the Godot per-type values once — hound / cutter 35/60 cm, frostbitten 40/90, brute 60/120,
+  model scale 0.8 / 0.85 / 1.0 / 1.4 — and tags the CDO `LookAuthored`); `AEnemyCharacter::ApplyArchetypeDefaults` only
+  sizes the C++ placeholder body. Stats stay Godot balance data. Re-running the script keeps every hand edit. With a death
+  clip the body stays `DeathDecayDelay` 5 s (Godot death_decay_delay), otherwise 2 s.
 - Placeholder meshes (engine shapes) for barrels, barricades, mines, quest objects; the user will replace them.
 - The user reported the character looks "перекручено" (twisted) — not investigated yet (ask what exactly: spine /
   hands / pose), see §8.
@@ -288,7 +304,11 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   at once; `spawn_delay_sec`, `initial_delay_sec`, `max_simultaneous_enemies` (described in DATA_CONTRACTS.md) are
   ignored. Wave modifiers apply (hp / damage / speed per enemy, `cold_drain_mult` → operatives' cold outside camera
   zones, kept after the wave like Godot's cold_rate_modifier), `custom_stats.health` × hp_mult.
-- Monster models: the user imports them (GLB) personally — do not import enemy meshes / build enemy BPs.
+- L_MovementTest (user, 2026-09-30): PlayerStart moved ~170 m south of the gate; the four EnemySpawn_* points were moved
+  next to it on the user's request (same 20-28 m spread, north of the start — the south wall is 9 m behind it). Smokes
+  anchor the layout on the checkpoint gate (`SmokeUtils::LayoutTransform`) since the floor was stretched.
+- Monster models: the user imports them personally; the enemy BPs / AnimBPs are generated from them by
+  setup_enemy_animation.py (user request 2026-09-30). Spitter / cryo drone have no art yet (C++ placeholder body).
 - Start menu (user decision 2026-09-29): only «Начать игру» (exploration → combat) and «Начать бой» (preparation);
   Godot's third mode «Начать исследование» is removed from UE (menu button, `EMissionStartMode::Exploration`, texts).
 - «Начать бой» position: Godot hard-codes the yard behind the gate; UE uses the `CombatStart` tag (test map: (0, −2150)).
@@ -302,6 +322,10 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   «Начать бой» turns EXPLORE_AND_COLLECT into STARTING_UNIQUE (at least 1 / 2 / 2; level_01_outpost already says
   STARTING_UNIQUE); EDITOR_PRESET tiers from the level JSON. Godot quirk kept: the specialist gets the squad total
   while the others keep theirs (items double up) — kept as in Godot (user decision 2026-09-30). The --bot-loadout CLI override is not ported.
+- Turn-based entry on flat ground only (user decision 2026-09-30; Godot allows platforms): the controller samples the floor
+  under the future grid (7 x 7 over 21 m, `CombatQueries::SampleGroundHeights`) and refuses when a living operative's feet
+  are more than 50 cm from the median («⚠️ Пошаговый бой можно начать только на ровной поверхности…»). A plateau wider
+  than the grid counts as flat. Smokes call `RequestEnterTurnBased` directly and are not affected.
 - `FString::ToLower` / `Contains(IgnoreCase)` do not fold Cyrillic: use `FText::ToLower` (see DialogueRules).
 - The world is paused while the start menu is open (Godot keeps processing behind its menu) — cosmetic difference.
 
@@ -379,8 +403,9 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   layout). The narrative pause uses the minimum world time dilation, restored with `UGameFlowSubsystem::ApplyTimeDilation`.
   Rage uses the general keys (see Rage below); panic (susanin_* stress keys) is not ported.
   The Godot `dialogue_susanin_recruitment.tres` export is unused by Godot's code (it builds both dialogues inline) — same here.
-- Level waves without a level config still use Gemini's built-in queued waves (Godot's fallback spawns balance-driven
-  counts at once: min_hounds_per_wave, base_wave_enemy_count, …) — port when a level ships without JSON waves.
+- Waves beyond the level config (or without one) follow Godot's fallback (`FallbackWaveRules` + test,
+  `UWaveSubsystem::StartWave`): balance-driven hound / spitter / brute counts from DA_GameBalanceConfig, the whole wave
+  at once at the type-filtered spawn points (Gemini's queued built-in waves are gone).
 - Level spawn `custom_stats` damage / speed / attack_range / attack_cooldown are not imported (only health; no level uses them).
 - Still hand-typed (Phase 2 continues): camera (user-tuned, see §8.7), enemy visuals / capsules (Gemini). Imported and wired:
   weapons, turn-based balance, operative health / speeds / matches / lift & sprint limits (per role), cold rules, enemy stats and crit chances.
@@ -413,16 +438,24 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   traps on the squad use the bypass path (max(1, amount)). A hit on a carrier drops every carried object (`URelocationSubsystem::DropAllForCombat`, alarm line).
 - **Parity fix:** turn-based squad shots and turret shots on enemies go through the enemy's own armor / affinity
   (Godot occ.take_damage(final_dmg, KINETIC, 0.0)) — a brute (75 % armor) takes a quarter of the grid damage.
-  Turn-based barrel / mine damage still applies directly (Godot mixes the grid hp with take_damage there; review with
-  the turn-based parity pass).
+  Turn-based barrel / mine blasts (`ApplyBlast`, Godot _detonate_barrel / _detonate_mine): the unit's own hit rules
+  (enemy armor; operative dodge / stance / fortitude on top of the grid stance multiplier), and an enemy dies when its
+  health could not take the raw blast (Godot grid hp decides the kill and calls die()). **Deviation:** operatives die by
+  real health only — Godot's grid hp would drop a living operative from the fight.
 - **Parity fixes (squad control):** operatives are wounded below `wounded_health_threshold_percent` of max health
   (Godot is_wounded; before, `bWounded` was never set, so the wounded speed / no-sprint rules never applied — the speed
   now follows every health change; `UHealthComponent::ApplyDirectHealthLoss` broadcasts OnHealthChanged); a ground click
   during an active wave outside the tactical pause is refused («Перемещение во время боя возможно только в режиме
   тактической паузы»); double-click sprint lines (frozen / wounded / «Бегом к позиции!»). New: Alt + Z / C / V squad
   stance, Shift + click sector facing (no facing indicator arrow; UE has no persistent fixed-facing, the operative just
-  turns), auto-cover crouch on arrival next to a barricade in combat with the radio callout. Not ported: box selection
-  of several operatives (group moves), the action bar «🛡️» cover / holding tag and its tooltips.
+  turns), auto-cover crouch on arrival next to a barricade in combat with the radio callout. Box selection (Godot
+  _perform_box_selection / _set_selected_squad / _get_group_target_positions): LMB acts on release; a drag past 12 px
+  draws the cyan box (HUD `DrawSelectionBox`) and selects the living members whose feet / centre / head fall inside
+  (`ACodexTacticsPlayerController::SelectInBox`, `USquadSubsystem::SetSelectedGroup`); rings under them (gold leader
+  only in a group); ground orders move / plan the whole group in Godot's slots around the click (`OrderGroupMove`,
+  `SquadFormation::ComputeGroupTargets`); picking a leader by number drops the group; not in the grid fight (clicks are
+  grid orders there). In exploration the formation still pulls followers (as in Godot). Not ported: the action bar
+  «🛡️» cover / holding tag and its tooltips.
 - Overhead labels (`FOverheadLabel`, `AEnemyCharacter` / `AInteractableActor::GetOverheadLabel`, HUD `DrawWorldLabels`;
   Godot Label3D): enemies (armor-tier square instead of 🟢🟡🔴, name, statuses as words — ГОРИТ / ЛЁД / ОГЛУШЁН / БРОНЯ-,
   the font has no emoji — HP; hidden for stasis enemies outside a turn-based fight), barricade, turret, generator with
@@ -508,19 +541,28 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   «ВОЗВРАТ В ТАКТИЧЕСКУЮ ПАУЗУ»). The dome centre is the leader's feet (Godot ray-casts the floor below the leader).
 - Barricade contact damage (spikes / fire / cryo / energy) not ported (Godot default is NONE).
 - Pushing / defusal / set-up animations: none (operatives only slow down / crouch).
+- **Deliberate deviation (user request 2026-09-30):** enemies that fear fire walk round burning barrels / active heat zones on an arc (35° steps on a circle 1 m outside the zone, `FireDetourWaypoint`) and wait at the edge for a target inside one (the running generator); once panicking they calm down 1 m past the edge. Godot only flees, which made them shake at the edge.
+- Turn-based walk: units and pushed objects follow one continuous speed profile over the path (accelerate over the first cell, cruise, decelerate over the last) in Godot's total time; Godot eases each step (first in, last out, middle linear) and snaps the facing per step — UE turns smoothly (~0.15 s).
+- Vault (Godot locomotion_controller.gd check_vault_obstacle / start_vault, player.gd try_vault_obstacle; `VaultRules` + test,
+  `AOperativeCharacter::TryVault` / `UpdateVault`, `VaultNavigation`): barricades (`bVaultable`, on by default like Godot)
+  and level objects tagged `Vault` stop cutting the navmesh and get a `UNavArea_Vault` (cost 3) instead — operatives path
+  across and vault (knee-height probe 1.25 m ahead, 25..105 cm, landing 1.35 m behind within ±1 m, arc apex height + 15 cm,
+  0.83 s running / 1.09 s walking, collision off, 1.2 s cooldown, the walk resumes); not on the run unless stopped, followers
+  only when blocked, never prone or in the grid fight. Enemies use `UNavFilter_NoVault` (they go round / smash, as in Godot).
+  No vault clips yet: the anim instance exposes `bIsVaulting` and feeds the arc speed to the locomotion (VaultSmoke).
 - Hidden mines are revealed by a distance scan in the mine's Tick (Godot scans from each operative) — same result.
 - Weapon switching does not change the weapon mesh (the operative Blueprint owns WeaponMesh) and has no holster
   animation. X (Godot switch_weapon cycle) is not bound.
 - Grenades: placeholder sphere mesh, no explosion VFX / sound (Godot has none either) — `AGrenadeActor` Blueprint events
   On Landed / On Detonated and the operative's On Grenade Throw + GrenadeThrowDuration are the hooks.
-- Turn-based set-up: no assembly animation / grow-in tween (Godot play_action_animation "working_device", scale 0.05 -> 1);
+- Turn-based set-up: the item grows in like Godot (0.2 s, then scale 0.05 -> 1 in 0.45 s, back ease-out; `StartGrowIn`); no assembly animation (Godot play_action_animation "working_device" — no clip yet);
   a squad mine placed in turn-based skips the real-time mishap roll like Godot.
 - Turn-based relocation: no hologram ghost of the object under the cursor (Godot _create_relocate_ghost_preview);
-  target cells use the reachable layer (for barricades: cells valid at the current angle). The barricade jumps to
-  its new place (Godot tweens 0.25 s).
-- Exposed-zone outlines: no pulse (Godot alpha 0.65 ± 0.35); the additive M_CombatFeedback glow reads pink-white on the
+  target cells use the reachable layer (for barricades: cells valid at the current angle). The barricade glides to
+  its new place in 0.25 s like Godot (quad ease-out; instant headless).
+- Exposed-zone outlines pulse like Godot (alpha 0.65 ± 0.35 at 6 rad/s as glow brightness; the target warning blinks 0.25..0.95 at 9 rad/s, `ATurnGridOverlayActor::Tick`); the additive M_CombatFeedback glow reads pink-white on the
   light floor instead of red — a material for the user to tune (layer colours / intensity in TurnGridOverlayActor.cpp).
-- Relocation ghost is opaque (swap `GhostBaseMaterial` for a translucent hologram).
+- Relocation / placement ghost: `M_GhostHologram` (create_ghost_hologram_material.py; unlit translucent, opacity 0.65, emission x2 like Godot's ghost material).
 - Click rules (Godot main.gd plain click, `ACodexTacticsPlayerController::HandleWorldHit`): in a wave a live enemy becomes
   the priority target (direct assignment, no Ctrl); set-up items / movable objects are refused outside the pause; in
   the pause / preparation a set-up item opens its menu at once, in the pause a movable object is picked up for
@@ -544,7 +586,12 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Frost vignette (Godot UI/FrostOverlay + frost_vignette.gdshader): `M_FrostVignette` (create_frost_vignette_material.py: UI material, the Godot math in a Custom node returning edge / alpha, colour and opacity as nodes) on `UFrostVignetteWidget` (full-screen UMG image, Z 1) fed by `ACodexTacticsHUD::UpdateFrostVignette` with the coldest operative; ColdSmoke checks it, `HudShot frost`. Fix: M_Silhouette and M_TacticalStasis had an unconnected Clamp input (default material in game) — scripts fixed, assets regenerated; test `CodexTactics.Editor.Materials.VfxGraphsConnected` |
+| (this) | Turn-based fixes from the user's playtest: `UGorkyGridManager::FindPath` returns the steps without the start cell like Godot find_path (the start cell made every walk begin with an empty step — half a second of walking on the spot, then a snap turn — and cost enemies 1 AP); one continuous speed profile over the whole path (`SampleWalkProfile`, Godot total time) with the anim speed = the body's speed and smooth turns (TurnWalkSmoke, WalkProfile test); encounter selection like Godot TacticalEncounterSelector (15 m, cap 6, one per species first; `TacticalEncounterRules` + test) with idle variation per type; crash fix — a blast / bite that kills an operative ends the mission and the fight mid-call, every such path now stops when the fight is over (TurnBlastDeathSmoke); enemies go round fire / heat zones (`EnemyAIRules::FireDetourWaypoint` + test, fear hysteresis 1 m) instead of shaking at the edge — **deviation** (user request: Godot only flees) |
+| (this) | Parity pass items: turn-based barrel / mine blasts by Godot's rules (`ApplyBlast`), fallback waves (`FallbackWaveRules` + test), cold animation layer (`ColdAnimationRules` + test, `UOperativeAnimInstance` cold state, cold blend in ABP_Operative), box selection and group orders (`SelectInBox`, `SetSelectedGroup`, `OrderGroupMove`, `SquadFormation::ComputeGroupTargets` + test, selection rings, HUD box; GroupSelectSmoke), exposed-zone / warning pulses, barricade glide and set-up grow-in, `M_GhostHologram`; enemy attack lock (Godot is_attacking) and turn-based idle reset; SquadFireSmoke keeps the frozen hound's feet level with the commander (the line over the barricade was 0.1 cm from the top) |
+| (this) | Turn-based walk animation (Godot turn_based_combat_manager.gd start_tactical_walk before the path tween, per-step easing: first step ease-in, middle linear, last ease-out): `UTurnBasedCombatSubsystem::GetTacticalMoveSpeed` feeds both anim instances a constant speed over the whole path (the actor is moved directly, so it has no velocity), steps eased like Godot instead of a smoothstep per cell |
+| (this) | Operative and enemy animation on the user's art: `UOperativeAnimGraphLibrary` (editor module; builds the operative and enemy AnimGraphs), ABP_Operative on RifleAnims, per-member outfits (`FOperativeOutfit`), `UEnemyAnimInstance` clips / one-shots, four enemy Blueprints, `EnemyClasses` per type (setup_operative_rifle_animation.py, setup_enemy_animation.py) |
+| (this) | Turn-based attack mode (Godot is_attack_mode, tactical_grid_overlay.gd update_attack_pattern + hit_chance_label, main.gd KEY_F / RMB / Esc): `EnterAttackMode` / `ExitAttackMode` / `ToggleAttackMode`, `M_WeaponMatrixDots` with the distance falloff, HUD `DrawHitChanceLabel`, action-bar «ХОД»; grenade blast zone `M_AoeBlast`; enemy target fresnel `M_TargetFresnel`; AttackModeSmoke |
+| `2671ff1` | Frost vignette (Godot UI/FrostOverlay + frost_vignette.gdshader): `M_FrostVignette` (create_frost_vignette_material.py: UI material, the Godot math in a Custom node returning edge / alpha, colour and opacity as nodes) on `UFrostVignetteWidget` (full-screen UMG image, Z 1) fed by `ACodexTacticsHUD::UpdateFrostVignette` with the coldest operative; ColdSmoke checks it, `HudShot frost`. Fix: M_Silhouette and M_TacticalStasis had an unconnected Clamp input (default material in game) — scripts fixed, assets regenerated; test `CodexTactics.Editor.Materials.VfxGraphsConnected` |
 | `0d91711` | Editor module `CodexTacticsEditor` with `UBlueprintGraphToolset` (FindBlueprints, DescribeBlueprint, DumpBlueprintGraph, Export / ImportGraphNodesText, CompileBlueprint) registered in the ToolsetRegistry, served by the Unreal MCP plugin; test `CodexTactics.Editor.BlueprintTools.ReadProjectBlueprints`. `7aa7deb`: UE 5.8 agent skills in .claude/skills + .agents/ue-project-context.md |
 | `8d64c5a` | See-through silhouette (Godot player.gd _check_silhouette_occlusion + silhouette.gdshader): `M_Silhouette` (Scripts/Editor/create_silhouette_material.py, unlit translucent, no depth test, fresnel alpha), `AOperativeCharacter::UpdateSilhouette` (20 Hz camera ray, overlay material, role colours); SilhouetteSmoke |
 | `b800bde` | Stage loadout (Godot main.gd _apply_stage_exploration_resources): `LoadoutRules` + LoadoutRulesTest, level JSON squad_loadout imported into `FLevelCombatConfig::SquadLoadout` (import_levels.py, DA_Level_* re-imported), `UMissionSubsystem::ApplyStageLoadout` at the end of the cutscene; VictorySmoke checks it |

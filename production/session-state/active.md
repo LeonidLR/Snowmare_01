@@ -2,8 +2,8 @@
 
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
-Feature: Phase 4/5 world systems — interaction, relocation, deployables
-Task: next = remaining gaps (HANDOFF §9)
+Feature: user art wired (operative / enemy AnimBPs), turn-based attack mode and walk animation
+Task: next = remaining gaps (HANDOFF §9), then the cold animation layer (Phase 6)
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
@@ -15,7 +15,7 @@ Task: next = remaining gaps (HANDOFF §9)
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-Frost vignette commit: 138 automation tests, 49 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
+2026-09-30: 138 tests + 49 / 50 smokes on the art build (SquadFireSmoke fixed); full re-run pending for the parity batch.
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)

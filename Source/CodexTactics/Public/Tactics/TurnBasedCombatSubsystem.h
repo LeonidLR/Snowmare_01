@@ -116,12 +116,50 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
 	bool IsUnitMoving() const { return bSquadUnitMoving; }
 
+	/**
+	 * Ground speed of Actor while it walks a turn-based path (cell size / step duration, the same for the whole path),
+	 * or -1 when it is not walking one. The anim instances use it: the walk plays once over the whole path
+	 * (Godot start_tactical_walk before the tween, force_idle after it), not per cell.
+	 */
+	float GetTacticalMoveSpeed(const AActor* Actor) const;
+
+	/**
+	 * Distance travelled and speed at Time on a trapezoid profile: accelerate over FirstLength, cruise, decelerate over
+	 * LastLength, Total in TotalTime (the Godot sum of step durations). Pure; used by the movers and the tests.
+	 */
+	static void SampleWalkProfile(float Total, float FirstLength, float LastLength, float TotalTime, float Time,
+		float& OutDistance, float& OutSpeed);
+
 	/** An operative walks or a cinematic shot plays: player orders wait (Godot is_squad_unit_moving / is_dramatic_shot_active). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
 	bool IsBusy() const { return bSquadUnitMoving || bDramaticShotActive; }
 
 	/** A cinematic squad shot or turret volley is playing. */
 	bool IsDramaticShotActive() const { return bDramaticShotActive; }
+
+	// --- Attack mode (Godot is_attack_mode: F / the weapon selector; RMB, Esc, «ХОД» or a finished shot leave it) ---
+
+	/** Weapon aim: the dot matrix of the weapon's cells replaces the green walk cells; empty cells do not walk. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
+	bool IsAttackMode() const { return bAttackMode; }
+
+	/** Godot enter_attack_mode: «🎯 Режим прицеливания: <weapon>». */
+	void EnterAttackMode();
+
+	/** Godot exit_attack_mode; Line (if any) goes to the feed as «ТАКТИКА». */
+	void ExitAttackMode(const FString& Line = FString());
+
+	/** Godot toggle_attack_mode (F); true when the mode is now on. */
+	bool ToggleAttackMode();
+
+	/** Cursor ground point (Godot set_hovered_cell). */
+	void SetHoveredPoint(const FVector& WorldPoint);
+
+	/**
+	 * Godot _update_hit_chance_label: over a hovered cell of the attack matrix «🎯 N% | 💥 D», 1.6 m above the cell.
+	 * False when nothing shows.
+	 */
+	bool GetHoverHitChance(FVector& OutWorld, FString& OutText) const;
 
 	/** Shots play as camera sequences (off in headless runs, like Godot's can_tween). */
 	bool AreCinematicsActive() const { return bCinematics; }
@@ -247,6 +285,22 @@ public:
 	FOnTurnBasedStateChanged OnStateChanged;
 
 private:
+	/** A relocated object gliding to its new transform (Godot tween, visual only). */
+	struct FObjectGlide
+	{
+		TWeakObjectPtr<AActor> Actor;
+		FTransform From;
+		FTransform To;
+		float Duration = 0.25f;
+		float Delay = 0.f;
+		float Elapsed = 0.f;
+		bool bBackEase = false;
+	};
+	TArray<FObjectGlide> Glides;
+
+	/** Grow-in of an item set up on the grid (visual only, skipped headless). */
+	void StartGrowIn(AActor* Object);
+
 	struct FMover
 	{
 		TWeakObjectPtr<AActor> Actor;
@@ -255,7 +309,25 @@ private:
 		int32 Index = 0;
 		float Alpha = 0.f;
 		float StepDuration = 0.5f;
+		/** Nominal ground speed over the path (cell size / step duration), cm/s. */
+		float Speed = 0.f;
+		/** Ground speed this frame, cm/s (what the anim instances read). */
+		float CurrentSpeed = 0.f;
+		/** Yaw the unit turns to (smoothly) for the current step. */
+		float TargetYaw = 0.f;
 		FVector From = FVector::ZeroVector;
+		/**
+		 * Paths of 2+ cells (units and pushed objects) follow one continuous speed profile over its whole length: accelerate over the first
+		 * cell, cruise, decelerate over the last, in Godot's total time (sum of the step durations).
+		 */
+		bool bProfile = false;
+		FVector Origin = FVector::ZeroVector;
+		TArray<float> CumulativeLength;
+		float Cruise = 0.f;
+		float AccelTime = 0.f;
+		float CruiseTime = 0.f;
+		float DecelTime = 0.f;
+		float Time = 0.f;
 		TFunction<bool(int32)> OnStep;
 		TFunction<void()> OnDone;
 		/** Units turn towards each step; pushed objects keep their rotation. */
@@ -279,6 +351,8 @@ private:
 	 * top of the grid damage, with the floating number (squad shots, the turret).
 	 */
 	void ApplyEnemyHit(AActor* Enemy, float Amount, const FString& Source);
+	/** Barrel / mine blast on a grid unit (Godot detonation damage rules, see the .cpp). */
+	void ApplyBlast(AActor* Victim, bool bSquad, float Amount, const FString& Source);
 	/** Godot target_squad.take_damage(dmg, name, false, en, true): bypasses dodge / fortitude, floats «-N». */
 	void ApplySquadHit(AActor* Victim, float Amount, const FString& Source);
 	bool IsDead(const AActor* Actor) const;
@@ -295,6 +369,8 @@ private:
 	FVector GetSquadOverviewCenter() const;
 	/** Godot _on_gorky17_turn_changed for an operative: the camera glides to it (0.75 s, 16 m). */
 	void FocusSquadTurn(AActor* Unit) const;
+	/** The shot itself (AttackCell adds the attack-mode exit around it). */
+	FTurnAttackResult ResolveAttackCell(const FIntPoint& Cell, bool bGuaranteeHit, bool bSkipShake);
 	/** Godot _on_gorky17_enemy_movement_started: the camera follows the walking enemy (0.35 s, 11.5 m). */
 	void FocusMovingEnemy(AActor* Enemy) const;
 	/** The shot the cinematic would fire is valid (no warnings; AttackCell repeats the checks with them). */
@@ -367,6 +443,9 @@ private:
 	int32 Round = 0;
 	bool bSquadUnitMoving = false;
 	bool bDramaticShotActive = false;
+	bool bAttackMode = false;
+	FIntPoint HoveredCell = FIntPoint(-999, -999);
+	TMap<FIntPoint, FTurnBasedAttackCell> AttackCells;
 	bool bCinematics = false;
 	/** Invalidates pending timers of a finished combat. */
 	int32 CombatId = 0;

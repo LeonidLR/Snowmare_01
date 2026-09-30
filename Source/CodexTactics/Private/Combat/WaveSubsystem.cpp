@@ -1,4 +1,6 @@
 #include "Combat/WaveSubsystem.h"
+#include "Combat/FallbackWaveRules.h"
+#include "Math/RandomStream.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/EnemyCharacter.h"
@@ -111,48 +113,28 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 		OnWaveStarted.Broadcast(CurrentWaveIndex, TotalWaveEnemies);
 		return;
 	}
-	else
+	// Godot _start_next_wave without a level wave: balance-driven counts, the whole wave at once.
+	const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
+	FRandomStream Random(FMath::Rand());
+	const FFallbackWaveCounts Counts = FallbackWaveRules::Compute(GameMode ? GameMode->GameBalanceConfig.LoadSynchronous() : nullptr,
+		WaveIndex, Random);
+	auto SpawnType = [this](EEnemyArchetype Type, int32 Count)
 	{
-		// Default wave setup matching Godot stage 01 progression
-		MaxSimultaneousEnemies = 8;
-		int32 HoundCount = 3 + (WaveIndex - 1) * 2;
-		int32 SpitterCount = 1 + (WaveIndex - 1);
-		int32 BruteCount = (WaveIndex >= 3) ? (WaveIndex - 2) : 0;
-
-		for (int32 i = 0; i < HoundCount; ++i)
+		for (int32 Index = 0; Index < Count; ++Index)
 		{
-			FEnemySpawnEntry E;
-			E.EnemyType = EEnemyArchetype::FrostHound;
-			E.Count = 1;
-			E.SpawnDelaySec = 0.8f;
-			PendingSpawns.Add(E);
+			SpawnEnemy(Type, GetSpawnLocationForLane(FString(), Type));
 		}
-		for (int32 i = 0; i < SpitterCount; ++i)
-		{
-			FEnemySpawnEntry E;
-			E.EnemyType = EEnemyArchetype::Spitter;
-			E.Count = 1;
-			E.SpawnDelaySec = 1.2f;
-			PendingSpawns.Add(E);
-		}
-		for (int32 i = 0; i < BruteCount; ++i)
-		{
-			FEnemySpawnEntry E;
-			E.EnemyType = EEnemyArchetype::Brute;
-			E.Count = 1;
-			E.SpawnDelaySec = 2.0f;
-			PendingSpawns.Add(E);
-		}
-	}
-
-	TotalWaveEnemies = PendingSpawns.Num() + AliveEnemies.Num();
+	};
+	SpawnType(EEnemyArchetype::FrostHound, Counts.Hounds);
+	SpawnType(EEnemyArchetype::Spitter, Counts.Spitters);
+	SpawnType(EEnemyArchetype::Brute, Counts.Brutes);
+	TotalWaveEnemies = GetAliveEnemyCount();
 
 	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Msg->PostMessage(
-			FText::FromString(TEXT("Командир")),
-			FText::FromString(FString::Printf(TEXT("Волна %d: Наступают враги (Всего: %d)! Занять оборону!"), CurrentWaveIndex, TotalWaveEnemies))
-		);
+		Msg->PostMessage(FText::FromString(TEXT("Командир")), FText::FromString(FString::Printf(
+			TEXT("Волна %d: Наступают враги (Всего: %d | 🐺 Гончие: %d, 🏹 Стрелки: %d, ❄️ Громилы: %d)!"),
+			CurrentWaveIndex, Counts.Total(), Counts.Hounds, Counts.Spitters, Counts.Brutes)));
 	}
 
 	OnWaveStarted.Broadcast(CurrentWaveIndex, TotalWaveEnemies);
@@ -223,7 +205,19 @@ AEnemyCharacter* UWaveSubsystem::SpawnEnemy(EEnemyArchetype Archetype, const FVe
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-	AEnemyCharacter* Enemy = World->SpawnActor<AEnemyCharacter>(AEnemyCharacter::StaticClass(), Location, Rotation, Params);
+	// The type's Blueprint (mesh + AnimBP) from the game mode, else the C++ class with the placeholder body.
+	UClass* EnemyClass = AEnemyCharacter::StaticClass();
+	if (const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>())
+	{
+		if (const TSoftClassPtr<AEnemyCharacter>* Soft = GameMode->EnemyClasses.Find(Archetype))
+		{
+			if (UClass* Loaded = Soft->LoadSynchronous())
+			{
+				EnemyClass = Loaded;
+			}
+		}
+	}
+	AEnemyCharacter* Enemy = World->SpawnActor<AEnemyCharacter>(EnemyClass, Location, Rotation, Params);
 	if (Enemy)
 	{
 		Enemy->InitializeArchetype(Archetype);

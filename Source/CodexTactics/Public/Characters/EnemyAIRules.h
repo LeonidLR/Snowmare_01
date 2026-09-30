@@ -90,6 +90,16 @@ namespace EnemyAIRules
 	/** Godot fire fear steering: away from the fire, bent 0.5 towards the side of the target (when there is one). */
 	CODEXTACTICS_API FVector FleeDirection(const FVector& Enemy, const FVector& Fire, const FVector* Target);
 
+	/**
+	 * Detour around a fire / heat zone (user request 2026-09-30; Godot only flees, which makes the enemy shake at the
+	 * edge). When the straight way from Enemy to Target crosses the circle of AvoidRadius around Fire, OutWaypoint is
+	 * the next point on the circle (AvoidRadius + 1 m) at most StepDegrees further round towards the Target side;
+	 * a Target inside the zone (a running generator) is waited for at the nearest point of the edge.
+	 * @return false when the way is clear (walk straight).
+	 */
+	CODEXTACTICS_API bool FireDetourWaypoint(const FVector& Enemy, const FVector& Fire, float AvoidRadius, const FVector& Target,
+		FVector& OutWaypoint, float StepDegrees = 35.f);
+
 	/** Godot _find_spitter_target score: 100 - distance (m) + 50 on elevated ground; under a platform (dead zone) skipped. */
 	CODEXTACTICS_API int32 SelectSpitterTarget(const FVector& Spitter, const TArray<FVector>& Operatives, const TArray<bool>& Elevated);
 

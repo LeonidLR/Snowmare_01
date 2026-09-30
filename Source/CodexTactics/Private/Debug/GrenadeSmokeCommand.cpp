@@ -106,6 +106,7 @@ namespace GrenadeSmoke
 			Leader->SwitchToWeaponById(TEXT("grenade"));
 			Check(State, Grenades->StartAim(Leader) && Grenades->IsAiming(), TEXT("aim started"));
 			Check(State, Grenades->GetAimActor() && Grenades->GetAimActor()->GetSegmentCount() > 100, TEXT("range ring, blast ring and arc drawn"));
+			Check(State, Grenades->GetAimActor() && Grenades->GetAimActor()->IsBlastZoneShown(), TEXT("blast zone fill + crosshair (M_AoeBlast) at the aim point"));
 			const FGrenadeAimInfo Far = Grenades->GetAimInfo(Leader->GetActorLocation() + Forward * 2000.f);
 			Check(State, Far.bValid && !Far.bInRange && FMath::IsNearlyEqual(FVector::Dist2D(Far.Target, Leader->GetActorLocation()), 1200.f, 1.f),
 				TEXT("20 m point clamped to 12 m standing"));

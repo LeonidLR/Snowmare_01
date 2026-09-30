@@ -258,6 +258,10 @@ void UActionBarWidget::Refresh()
 	if (BarWeaponText)
 	{
 		BarWeaponText->SetText(FText::FromString(ACodexTacticsHUD::StripUnsupportedGlyphs(GetWeaponText().ToString())));
+		// Godot: the weapon slot turns red (modulate 1.5, 0.4, 0.4) while the turn-based attack mode is on.
+		const UTurnBasedCombatSubsystem* AimTurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+		const bool bAiming = AimTurnBased && AimTurnBased->IsActive() && AimTurnBased->IsAttackMode();
+		BarWeaponText->SetColorAndOpacity(FSlateColor(bAiming ? FLinearColor(1.f, 0.4f, 0.4f) : BarTextColor));
 	}
 	if (BarGuardText && GuardButton)
 	{
@@ -285,7 +289,18 @@ void UActionBarWidget::Refresh()
 		const URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
 		const ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer());
 		const bool bActive = (Relocation && Relocation->IsPlacing()) || (PC && PC->IsRelocateSelectMode());
-		BarRelocateText->SetText(bActive ? LOCTEXT("RelocateActive", "АКТИВ") : LOCTEXT("Relocate", "ПЕР"));
+		const UTurnBasedCombatSubsystem* BarTurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+		if (BarTurnBased && BarTurnBased->IsActive())
+		{
+			// Godot: «🟢 ХОД» (move mode, green) / «⚪ ХОД» (attack mode).
+			BarRelocateText->SetText(LOCTEXT("MoveMode", "ХОД"));
+			BarRelocateText->SetColorAndOpacity(FSlateColor(BarTurnBased->IsAttackMode() ? FLinearColor::White : FLinearColor(0.4f, 1.f, 0.4f)));
+		}
+		else
+		{
+			BarRelocateText->SetText(bActive ? LOCTEXT("RelocateActive", "АКТИВ") : LOCTEXT("Relocate", "ПЕР"));
+			BarRelocateText->SetColorAndOpacity(FSlateColor(BarTextColor));
+		}
 	}
 	if (BarStanceText)
 	{
@@ -410,6 +425,10 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 	}
 	UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
 	const bool bSwitched = TurnBased && TurnBased->IsActive() ? TurnBased->SwitchActiveUnitWeapon(WeaponId) : Leader->SwitchToWeaponById(WeaponId);
+	if (TurnBased && TurnBased->IsActive() && !TurnBased->IsAttackMode())
+	{
+		TurnBased->EnterAttackMode(); // Godot _select_weapon_from_selector in the turn-based fight
+	}
 	if (!bSwitched)
 	{
 		return false;
@@ -495,6 +514,12 @@ void UActionBarWidget::HandleSelectKnife()
 
 void UActionBarWidget::HandleRelocate()
 {
+	// Godot _on_relocate_slot_clicked in the turn-based fight: «ХОД» leaves the attack mode (nothing else there).
+	if (UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>(); TurnBased && TurnBased->IsActive())
+	{
+		TurnBased->ExitAttackMode(TEXT("🟢 Режим перемещения активен (отображается только зелёное поле)."));
+		return;
+	}
 	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
 	{
 		PC->ToggleRelocateSelectMode();

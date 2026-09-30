@@ -98,13 +98,22 @@ void ACombatFeedbackActor::SetupLight(const FLinearColor& Color, float Intensity
 	LightFade = FadeTime;
 }
 
-void ACombatFeedbackActor::SetupOverlayFlash(AActor* Target, const FLinearColor& Color, float Intensity, float FadeTime)
+void ACombatFeedbackActor::SetupOverlayFlash(AActor* Target, const FLinearColor& Color, float Intensity, float FadeTime, UMaterialInterface* Material)
 {
 	if (!Target)
 	{
 		return;
 	}
-	OverlayGlow = MakeGlow(Color, Intensity);
+	if (Material)
+	{
+		OverlayGlow = UMaterialInstanceDynamic::Create(Material, this);
+		OverlayGlow->SetVectorParameterValue(FeedbackColorParam, Color);
+		OverlayGlow->SetScalarParameterValue(FeedbackIntensityParam, Intensity);
+	}
+	else
+	{
+		OverlayGlow = MakeGlow(Color, Intensity);
+	}
 	if (!OverlayGlow)
 	{
 		return;

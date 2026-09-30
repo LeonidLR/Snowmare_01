@@ -11,6 +11,18 @@
 #include "Interactables/DeployableRules.h"
 #include "OperativeCharacter.generated.h"
 
+class UMaterialInterface;
+
+/** Materials of one squad member's outfit, by skeletal mesh material slot name. */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FOperativeOutfit
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outfit")
+	TMap<FName, TObjectPtr<UMaterialInterface>> SlotMaterials;
+};
+
 class UStaticMeshComponent;
 class UWeaponDataAsset;
 
@@ -129,6 +141,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
 	void ApplyBodyColor();
 
+	/** Box selection mark (Godot player.gd set_group_selected): a ring under the feet, gold for the leader. */
+	void SetGroupSelected(bool bSelected, bool bInMultiSelection);
+	bool IsSelectionRingShown() const;
+
 	/** Configures squad index, name, and role color, then applies visuals. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
 	void SetSquadIdentity(int32 InSquadIndex, const FText& InName, const FLinearColor& InColor);
@@ -165,6 +181,17 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
 	bool IsSprinting() const { return bSprinting; }
+
+	/**
+	 * Vaults a low obstacle ahead (barricade / "Vault" object, 25..105 cm, a landing spot behind it) — Godot
+	 * try_vault_obstacle: not while sprinting at speed, followers only when blocked. Returns true when a vault starts.
+	 */
+	bool TryVault(const FVector& Direction, bool bForceWhenBlocked);
+
+	bool IsVaulting() const { return bVaulting; }
+
+	/** Ground speed of the current vault (the animation reads it). */
+	float GetVaultSpeed() const;
 
 	/** Position in the squad roster (0 = commander); selection keys 1..N map to it. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
@@ -427,6 +454,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	FName RoleColorParameter = TEXT("BaseColorFactor");
 
+	/**
+	 * Outfit per squad member, indexed by SquadIndex (wraps for recruits) so the operatives look different
+	 * (the Godot role tint's job on the new art): material slot name -> material.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Operative")
+	TArray<FOperativeOutfit> SquadOutfits;
+
 	/** Skeletal mesh bone or socket the weapon follows (Godot BoneAttachment3D hand_r). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	FName WeaponSocket = TEXT("hand_r");
@@ -676,6 +710,30 @@ public:
 	FOnWeaponMisfiredNative OnWeaponMisfiredNative;
 
 private:
+	/** Shows the selection ring when selected and not the leader, or the leader of a multi-selection. */
+	void UpdateSelectionRing();
+
+	/** Vault in progress (Godot is_vaulting): kinematic arc, collision off, the walk resumes after it. */
+	void UpdateVault(float DeltaTime);
+	/** Tries a vault while walking a path (leader always, followers when blocked). */
+	void UpdateVaultTrigger(float DeltaTime);
+	bool bVaulting = false;
+	float VaultTimer = 0.f;
+	float VaultDuration = 1.f;
+	float VaultHeight = 100.f;
+	float VaultCooldown = 0.f;
+	float BlockedTimer = 0.f;
+	FVector VaultStart = FVector::ZeroVector;
+	FVector VaultLanding = FVector::ZeroVector;
+	FVector VaultResumeTarget = FVector::ZeroVector;
+	bool bVaultResume = false;
+
+	bool bGroupSelected = false;
+	bool bInMultiSelection = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class ARadiusRingActor> SelectionRing;
+
 	UFUNCTION()
 	void HandleHealthChanged(float NewHealth, float MaxHealth, float Delta);
 

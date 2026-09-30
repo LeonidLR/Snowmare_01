@@ -56,10 +56,24 @@ public:
 	int32 GetCellCount(ETurnOverlayLayer Layer) const;
 
 	/**
+	 * Attack mode (Godot update_attack_pattern): the weapon's cells as the red-orange dot matrix (M_WeaponMatrixDots),
+	 * Falloff per cell (1 at the first cell down to 0.25 at the weapon's range).
+	 */
+	void SetAttackCells(const TArray<FIntPoint>& Cells, const TArray<float>& Falloff);
+
+	/** Falloff of an attack cell as drawn (-1 when the cell is not shown). */
+	float GetAttackCellFalloff(const FIntPoint& Cell) const;
+
+	/**
 	 * Outlines of exposed quadrants (Godot update_exposed_zone_warning): TurnsByQuadrant[Q] uncovered turns; 1 = yellow
 	 * outline, 2+ = red outline with corner marks, 0 = none.
 	 */
 	void SetExposedZones(const TArray<int32>& TurnsByQuadrant);
+
+	virtual void Tick(float DeltaSeconds) override;
+
+	/** Current glow intensity of a layer (pulses included; tests). */
+	float GetLayerIntensity(ETurnOverlayLayer Layer) const;
 
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|Tactics")
 	TObjectPtr<UMaterialInterface> GlowMaterial;
@@ -77,6 +91,14 @@ private:
 
 	UPROPERTY()
 	TMap<ETurnOverlayLayer, float> LayerHeights;
+
+	TMap<FIntPoint, float> AttackFalloff;
+
+	UPROPERTY(Transient)
+	TMap<ETurnOverlayLayer, TObjectPtr<UMaterialInstanceDynamic>> LayerInstances;
+
+	float ExposedPulseTime = 0.f;
+	float WarningPulseTime = 0.f;
 
 	TWeakObjectPtr<const UGorkyGridManager> Grid;
 };

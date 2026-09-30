@@ -1,8 +1,11 @@
 #include "Characters/OperativeCharacter.h"
+#include "Interactables/RadiusRingSubsystem.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/RageComponent.h"
+#include "Characters/VaultRules.h"
+#include "Interactables/VaultNavigation.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -199,6 +202,18 @@ void AOperativeCharacter::ApplyBodyColor()
 		}
 	}
 
+	if (!UsesPlaceholderBody() && !SquadOutfits.IsEmpty())
+	{
+		for (const TPair<FName, TObjectPtr<UMaterialInterface>>& Entry : SquadOutfits[FMath::Max(SquadIndex, 0) % SquadOutfits.Num()].SlotMaterials)
+		{
+			const int32 OutfitSlot = GetMesh()->GetMaterialIndex(Entry.Key);
+			if (OutfitSlot != INDEX_NONE && Entry.Value)
+			{
+				GetMesh()->SetMaterial(OutfitSlot, Entry.Value);
+			}
+		}
+	}
+
 	if (!UsesPlaceholderBody())
 	{
 		const int32 SlotIndex = GetMesh()->GetMaterialIndex(RoleColorMaterialSlot);
@@ -232,6 +247,11 @@ void AOperativeCharacter::ApplyBodyColor()
 
 void AOperativeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (SelectionRing)
+	{
+		SelectionRing->Destroy();
+		SelectionRing = nullptr;
+	}
 	if (UWorld* World = GetWorld())
 	{
 		if (USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
@@ -652,8 +672,213 @@ void AOperativeCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	UpdatePlaceholderPose(1.f - FMath::Exp(-StanceBlendSpeed * DeltaTime));
-	ProcessCombatShooting(DeltaTime);
+	if (bVaulting)
+	{
+		UpdateVault(DeltaTime);
+	}
+	else
+	{
+		UpdateVaultTrigger(DeltaTime);
+		ProcessCombatShooting(DeltaTime);
+	}
 	UpdateSilhouette(DeltaTime);
+	UpdateSelectionRing();
+}
+
+float AOperativeCharacter::GetVaultSpeed() const
+{
+	return bVaulting ? FVector::Dist2D(VaultStart, VaultLanding) / FMath::Max(VaultDuration, 0.1f) : 0.f;
+}
+
+void AOperativeCharacter::UpdateVaultTrigger(float DeltaTime)
+{
+	VaultCooldown = FMath::Max(0.f, VaultCooldown - DeltaTime);
+	const AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
+	const UPathFollowingComponent* PathFollowing = AIController ? AIController->GetPathFollowingComponent() : nullptr;
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	if (!PathFollowing || PathFollowing->GetStatus() != EPathFollowingStatus::Moving || Stance == EOperativeStance::Prone
+		|| VaultCooldown > 0.f || (Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased))
+	{
+		BlockedTimer = 0.f;
+		return;
+	}
+	// Godot is_blocked: wanting to move but hardly moving.
+	BlockedTimer = GetVelocity().Size2D() < 25.f ? BlockedTimer + DeltaTime : 0.f;
+	const bool bBlocked = BlockedTimer > 0.2f;
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	const bool bLeader = !Squad || Squad->GetLeader() == this;
+	// Followers climb only when their way is blocked (Godot follower_vault_only_when_blocked).
+	if (!bLeader && !bBlocked)
+	{
+		return;
+	}
+	FVector Direction = PathFollowing->GetCurrentDirection();
+	if (Direction.IsNearlyZero())
+	{
+		Direction = GetActorForwardVector();
+	}
+	TryVault(Direction, bBlocked);
+}
+
+bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBlocked)
+{
+	UWorld* World = GetWorld();
+	if (bVaulting || !World || !HealthComponent || !HealthComponent->IsAlive())
+	{
+		return false;
+	}
+	// Godot: no vaulting on the run — a running operative goes round, unless it has come to a stop.
+	if (bSprinting && GetVelocity().Size2D() > 20.f && !bForceWhenBlocked)
+	{
+		return false;
+	}
+	const FVector Direction = FVector(InDirection.X, InDirection.Y, 0.f).GetSafeNormal();
+	if (Direction.IsNearlyZero())
+	{
+		return false;
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(OperativeVault), false, this);
+	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
+	const FVector Location = GetActorLocation();
+	const float HalfHeight = GetSimpleCollisionHalfHeight();
+	float GroundZ = Location.Z - HalfHeight;
+	FHitResult GroundHit;
+	if (World->LineTraceSingleByChannel(GroundHit, Location, Location - FVector(0.f, 0.f, HalfHeight + 250.f), ECC_Visibility, Params))
+	{
+		GroundZ = GroundHit.ImpactPoint.Z;
+	}
+	// 1. Something within reach at knee height, marked vaultable.
+	FCollisionObjectQueryParams Objects;
+	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
+	const FVector ProbeStart(Location.X, Location.Y, GroundZ + VaultRules::ProbeHeight);
+	FHitResult Front;
+	if (!World->LineTraceSingleByObjectType(Front, ProbeStart, ProbeStart + Direction * VaultRules::ApproachDistance, Objects, Params)
+		|| !VaultNavigation::IsVaultable(Front.GetActor()))
+	{
+		return false;
+	}
+	// 2. Its height.
+	const FVector TopProbe = Front.ImpactPoint + Direction * 20.f;
+	FHitResult Top;
+	if (!World->LineTraceSingleByObjectType(Top, FVector(TopProbe.X, TopProbe.Y, GroundZ + 200.f), FVector(TopProbe.X, TopProbe.Y, GroundZ - 20.f),
+		Objects, Params))
+	{
+		return false;
+	}
+	const float Height = Top.ImpactPoint.Z - GroundZ;
+	// 3. Firm ground behind it.
+	const FVector LandingXY = Front.ImpactPoint + Direction * VaultRules::LandingDistance;
+	FCollisionQueryParams LandParams = Params;
+	LandParams.AddIgnoredActor(Front.GetActor());
+	FHitResult Land;
+	const bool bLanding = World->LineTraceSingleByChannel(Land, FVector(LandingXY.X, LandingXY.Y, GroundZ + 200.f),
+		FVector(LandingXY.X, LandingXY.Y, GroundZ - 200.f), ECC_Visibility, LandParams);
+	if (!VaultRules::CanVault(Height, bLanding, bLanding ? Land.ImpactPoint.Z - GroundZ : 0.f))
+	{
+		return false;
+	}
+
+	// Go: remember where the walk was heading, fly the arc with the collision off.
+	bVaultResume = false;
+	if (const AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController()))
+	{
+		if (const UPathFollowingComponent* PathFollowing = AIController->GetPathFollowingComponent(); PathFollowing && PathFollowing->GetPath().IsValid())
+		{
+			VaultResumeTarget = PathFollowing->GetPath()->GetDestinationLocation();
+			bVaultResume = true;
+		}
+	}
+	if (AController* OwnerController = GetController())
+	{
+		OwnerController->StopMovement();
+	}
+	const bool bRunning = bSprinting || GetVelocity().Size2D() > MovementConfig.WalkSpeed * 1.1f;
+	GetCharacterMovement()->StopMovementImmediately();
+	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
+	SetActorEnableCollision(false);
+	bVaulting = true;
+	VaultTimer = 0.f;
+	VaultDuration = VaultRules::Duration(bRunning);
+	VaultHeight = FMath::Max(30.f, Height);
+	VaultStart = Location;
+	VaultLanding = FVector(LandingXY.X, LandingXY.Y, Land.ImpactPoint.Z + HalfHeight);
+	SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
+	UE_LOG(LogCodexTactics, Log, TEXT("%s vaults over %s (%.0f cm)"), *DisplayName.ToString(), *Front.GetActor()->GetName(), Height);
+	return true;
+}
+
+void AOperativeCharacter::UpdateVault(float DeltaTime)
+{
+	VaultTimer += DeltaTime;
+	const float Alpha = FMath::Clamp(VaultTimer / FMath::Max(VaultDuration, 0.1f), 0.f, 1.f);
+	SetActorLocation(VaultRules::Position(VaultStart, VaultLanding, VaultHeight, Alpha));
+	if (Alpha < 1.f)
+	{
+		return;
+	}
+	bVaulting = false;
+	VaultCooldown = VaultRules::Cooldown;
+	SetActorLocation(VaultLanding);
+	SetActorEnableCollision(true);
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	// Godot vault_resume_target: carry on unless the destination was the landing spot (or behind it).
+	const FVector VaultDirection = (VaultLanding - VaultStart).GetSafeNormal2D();
+	const FVector ToTarget = VaultResumeTarget - VaultLanding;
+	if (bVaultResume && ToTarget.Size2D() > 60.f && FVector::DotProduct(VaultDirection, ToTarget.GetSafeNormal2D()) >= 0.1f)
+	{
+		ApplyMovementParams();
+		RequestMove(VaultResumeTarget);
+	}
+	else
+	{
+		bHasMoveOrder = false;
+	}
+	bVaultResume = false;
+}
+
+void AOperativeCharacter::SetGroupSelected(bool bSelected, bool bInMultiSelectionIn)
+{
+	bGroupSelected = bSelected;
+	bInMultiSelection = bSelected && bInMultiSelectionIn;
+	UpdateSelectionRing();
+}
+
+bool AOperativeCharacter::IsSelectionRingShown() const
+{
+	return SelectionRing && !SelectionRing->IsHidden();
+}
+
+void AOperativeCharacter::UpdateSelectionRing()
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	const bool bLeader = Squad && Squad->GetLeader() == this;
+	const bool bShow = bGroupSelected && (!bLeader || bInMultiSelection) && HealthComponent && HealthComponent->IsAlive();
+	if (!bShow)
+	{
+		if (SelectionRing)
+		{
+			SelectionRing->SetActorHiddenInGame(true);
+		}
+		return;
+	}
+	if (!SelectionRing)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		SelectionRing = GetWorld()->SpawnActor<ARadiusRingActor>(Params);
+	}
+	if (SelectionRing)
+	{
+		// Godot torus 0.55..0.65 m, 5 cm above the feet; leader gold (1, 0.85, 0.2), others cyan (0.3, 0.9, 1).
+		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() - 5.f);
+		const FLinearColor Color = bLeader ? FLinearColor(1.f, 0.85f, 0.2f) : FLinearColor(0.3f, 0.9f, 1.f);
+		SelectionRing->ShowRing(Feet, 60.f, Color, 10.f);
+		SelectionRing->SetActorHiddenInGame(false);
+	}
 }
 
 FLinearColor AOperativeCharacter::GetSilhouetteColor() const

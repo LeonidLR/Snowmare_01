@@ -35,8 +35,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	bool SetLeaderByIndex(int32 RosterIndex);
 
+	/** Makes NewLeader the leader; bResetGroup drops a box-selected group to the leader alone (Godot select_new_leader). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
-	bool SetLeader(AOperativeCharacter* NewLeader);
+	bool SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup = true);
+
+	/**
+	 * Box selection (Godot main.gd _set_selected_squad): marks the group (rings under the non-leaders, and under the
+	 * leader too when more than one is selected); bSwitchLeader makes its first member the leader unless the leader is in it.
+	 */
+	void SetSelectedGroup(const TArray<AOperativeCharacter*>& Group, bool bSwitchLeader = true);
+
+	/** The box-selected operatives (just the leader when none). */
+	TArray<AOperativeCharacter*> GetSelectedGroup() const;
+
+	bool IsGroupSelected(const AOperativeCharacter* Operative) const;
+
+	/** More than one operative selected: ground orders move them all (Godot moving_group). */
+	bool HasMultiSelection() const;
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	AOperativeCharacter* GetLeader() const { return Leader.Get(); }
@@ -152,6 +167,7 @@ private:
 
 	TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
 	TWeakObjectPtr<AOperativeCharacter> Leader;
+	TArray<TWeakObjectPtr<AOperativeCharacter>> SelectedGroup;
 	TArray<FFollowerState> Followers;
 	FVector FormationHeading = FVector::ZeroVector;
 	float SlotSwapCooldownRemaining = 0.f;

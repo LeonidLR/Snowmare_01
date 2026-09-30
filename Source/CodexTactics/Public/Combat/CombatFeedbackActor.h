@@ -38,7 +38,8 @@ public:
 	void SetupLight(const FLinearColor& Color, float Intensity, float Radius, float FadeTime);
 
 	/** Glowing overlay on every mesh of Target, restored after FadeTime s. */
-	void SetupOverlayFlash(AActor* Target, const FLinearColor& Color, float Intensity, float FadeTime);
+	/** Overlay on Target's meshes fading its "Intensity" to 0; Material overrides the glow (e.g. M_TargetFresnel). */
+	void SetupOverlayFlash(AActor* Target, const FLinearColor& Color, float Intensity, float FadeTime, UMaterialInterface* Material = nullptr);
 
 	/** Glow material (M_CombatFeedback: Color, Intensity). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|Feedback")

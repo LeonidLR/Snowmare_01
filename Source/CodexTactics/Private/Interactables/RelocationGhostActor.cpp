@@ -17,8 +17,11 @@ ARelocationGhostActor::ARelocationGhostActor()
 	Mesh->SetCastShadow(false);
 	Mesh->SetCanEverAffectNavigation(false);
 
+	// Godot _set_ghost_material_valid: a see-through glowing hologram (M_GhostHologram from
+	// Scripts/Editor/create_ghost_hologram_material.py); the opaque engine material when it is missing.
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Hologram(TEXT("/Game/VFX/Materials/M_GhostHologram.M_GhostHologram"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> BaseMaterial(TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
-	GhostBaseMaterial = BaseMaterial.Object;
+	GhostBaseMaterial = Hologram.Succeeded() ? Hologram.Object : BaseMaterial.Object;
 }
 
 void ARelocationGhostActor::CopyFrom(const UStaticMeshComponent* SourceMesh, const AActor* SourceActor)

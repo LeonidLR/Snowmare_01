@@ -171,12 +171,14 @@ bool FGorkyGridAStarPathfindingTest::RunTest(const FString& Parameters)
 
 	// Straight path without obstacles
 	TArray<FIntPoint> StraightPath = Grid->FindPath(Start, Target, 5);
-	TestEqual(TEXT("Straight path has 4 waypoints"), StraightPath.Num(), 4);
-	if (StraightPath.Num() == 4)
+	// Godot find_path: the steps without the start cell.
+	TestEqual(TEXT("Straight path has 3 steps"), StraightPath.Num(), 3);
+	if (StraightPath.Num() == 3)
 	{
-		TestEqual(TEXT("Path start"), StraightPath[0], FIntPoint(5, 5));
-		TestEqual(TEXT("Path end"), StraightPath[3], FIntPoint(5, 8));
+		TestEqual(TEXT("First step"), StraightPath[0], FIntPoint(5, 6));
+		TestEqual(TEXT("Path end"), StraightPath[2], FIntPoint(5, 8));
 	}
+	TestTrue(TEXT("No path to the own cell"), Grid->FindPath(Start, Start, 5).IsEmpty());
 
 	// Place obstacle at (5, 6)
 	Grid->SetOccupant(FIntPoint(5, 6), nullptr, EGorkyOccupantType::Obstacle);

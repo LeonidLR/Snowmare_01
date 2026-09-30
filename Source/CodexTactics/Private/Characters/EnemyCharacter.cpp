@@ -1,4 +1,5 @@
 #include "Characters/EnemyCharacter.h"
+#include "CodexTactics.h"
 #include "UI/OverheadLabel.h"
 #include "Characters/EnemyAIController.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -10,6 +11,7 @@
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "AIController.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/EnemyAnimInstance.h"
 #include "Characters/ProgressionRules.h"
 #include "Combat/WaveVictorySubsystem.h"
 #include "Characters/SquadSubsystem.h"
@@ -85,6 +87,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 
 	FLinearColor TintColor = FLinearColor(0.6f, 0.6f, 0.7f);
 	float MeshScale = 1.0f;
+	FVector2D Capsule(40.f, 90.f); // radius, half height
 
 	switch (Archetype)
 	{
@@ -102,7 +105,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		bFearsFire = true;
 		TintColor = FLinearColor(0.35f, 0.4f, 0.45f);
 		MeshScale = 0.85f;
-		GetCapsuleComponent()->SetCapsuleSize(35.f, 60.f);
+		Capsule = FVector2D(35.f, 60.f);
 		if (const UGodotBalanceAsset* Jump = LoadObject<UGodotBalanceAsset>(nullptr, TEXT("/Game/Data/Enemies/DA_EnemyAnim_cutter.DA_EnemyAnim_cutter")))
 		{
 			bJumpAttackEnabled = Jump->GetNumber(TEXT("enable_jump_attack"), 0.f) > 0.5f;
@@ -127,7 +130,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		bFearsFire = true;
 		TintColor = FLinearColor(0.2f, 0.65f, 0.95f);
 		MeshScale = 0.8f;
-		GetCapsuleComponent()->SetCapsuleSize(35.f, 60.f);
+		Capsule = FVector2D(35.f, 60.f);
 		break;
 
 	case EEnemyArchetype::Spitter:
@@ -143,7 +146,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		bFearsFire = false;
 		TintColor = FLinearColor(0.85f, 0.95f, 1.0f);
 		MeshScale = 1.0f;
-		GetCapsuleComponent()->SetCapsuleSize(40.f, 85.f);
+		Capsule = FVector2D(40.f, 85.f);
 		break;
 
 	case EEnemyArchetype::Brute:
@@ -158,7 +161,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		bFearsFire = false;
 		TintColor = FLinearColor(0.15f, 0.35f, 0.65f);
 		MeshScale = 1.4f;
-		GetCapsuleComponent()->SetCapsuleSize(60.f, 120.f);
+		Capsule = FVector2D(60.f, 120.f);
 		break;
 
 	case EEnemyArchetype::Frostbitten:
@@ -174,20 +177,34 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		bFearsFire = true;
 		TintColor = FLinearColor(0.6f, 0.6f, 0.7f);
 		MeshScale = 1.0f;
-		GetCapsuleComponent()->SetCapsuleSize(40.f, 90.f);
+		Capsule = FVector2D(40.f, 90.f);
 		break;
 	}
 
-	if (BodyMesh)
+	// An art Blueprint (skeletal mesh set, e.g. BP_Enemy_Hound) owns its look: capsule, mesh offset / rotation / scale
+	// are authored in the Blueprint (Scripts/Editor/setup_enemy_animation.py filled them once with these per-type
+	// values) and are left alone here. The C++ placeholder body gets the per-type capsule and size.
+	if (GetMesh() && GetMesh()->GetSkeletalMeshAsset())
 	{
-		BodyMesh->SetRelativeScale3D(FVector(0.7f * MeshScale, 0.7f * MeshScale, 1.8f * MeshScale));
-		if (!BodyMaterial)
+		if (BodyMesh)
 		{
-			BodyMaterial = BodyMesh->CreateDynamicMaterialInstance(0);
+			BodyMesh->SetVisibility(false);
 		}
-		if (BodyMaterial)
+	}
+	else
+	{
+		GetCapsuleComponent()->SetCapsuleSize(Capsule.X, Capsule.Y);
+		if (BodyMesh)
 		{
-			BodyMaterial->SetVectorParameterValue(TEXT("Color"), TintColor);
+			BodyMesh->SetRelativeScale3D(FVector(0.7f * MeshScale, 0.7f * MeshScale, 1.8f * MeshScale));
+			if (!BodyMaterial)
+			{
+				BodyMaterial = BodyMesh->CreateDynamicMaterialInstance(0);
+			}
+			if (BodyMaterial)
+			{
+				BodyMaterial->SetVectorParameterValue(TEXT("Color"), TintColor);
+			}
 		}
 	}
 
@@ -282,13 +299,35 @@ void AEnemyCharacter::Tick(float DeltaTime)
 	{
 		AttackTimer -= DeltaTime;
 	}
+	// Godot is_attacking: while the attack clip plays the enemy stands and turns to its target.
+	if (AttackLockTimer > 0.f)
+	{
+		AttackLockTimer -= DeltaTime;
+		if (AIC)
+		{
+			AIC->StopMovement();
+		}
+		if (const AActor* LockTarget = AttackLockTarget.Get())
+		{
+			const FVector ToTarget = LockTarget->GetActorLocation() - GetActorLocation();
+			if (!ToTarget.IsNearlyZero(1.f))
+			{
+				const FRotator Facing(0.f, ToTarget.Rotation().Yaw, 0.f);
+				SetActorRotation(FMath::RInterpTo(GetActorRotation(), Facing, DeltaTime, 10.f));
+			}
+		}
+		return;
+	}
 	// Godot current_max_speed: frost halves the speed; fleeing from fire speeds it up.
 	GetCharacterMovement()->MaxWalkSpeed = BaseWalkSpeed * (HealthComponent->HasStatusEffect(EStatusEffect::Frozen) ? 0.5f : 1.f)
 		* (bFleeingFire ? AIConfig.FireFearFleeSpeedMultiplier : 1.f);
 
-	// 0. Panic fear of fire (hounds, cutters, frostbitten).
+	// 0. Panic fear of fire (hounds, cutters, frostbitten). Once fleeing, the enemy calms down only 1 m past the edge
+	// (without it the fear switched on and off every frame at the edge and the enemy shook on the spot).
 	FVector Fire;
-	if (bFearsFire && AIConfig.bFireFearEnabled && FindNearestFire(Fire))
+	float FireRadius = 0.f;
+	const bool bNearFire = bFearsFire && AIConfig.bFireFearEnabled && FindNearestFireZone(bFleeingFire ? 100.f : 0.f, Fire, FireRadius);
+	if (bNearFire)
 	{
 		const AActor* Victim = CurrentTarget.Get();
 		const FVector VictimLocation = Victim ? Victim->GetActorLocation() : FVector::ZeroVector;
@@ -381,7 +420,40 @@ void AEnemyCharacter::Tick(float DeltaTime)
 	}
 	else if (AIC)
 	{
-		AIC->MoveToActor(Target, AttackRange * 0.5f);
+		// Stuck (no path to the target, or blocked): after 3 s without 1 m of progress the target is skipped for 8 s.
+		if (Target != ProgressTarget.Get() || FVector::Dist2D(Feet, ProgressLocation) > 100.f)
+		{
+			ProgressTarget = Target;
+			ProgressLocation = Feet;
+			ProgressTimer = 0.f;
+		}
+		else if ((ProgressTimer += DeltaTime) > 3.f)
+		{
+			UnreachableUntil.Add(Target, GetWorld()->GetTimeSeconds() + 8.0);
+			ProgressTimer = 0.f;
+			UE_LOG(LogCodexTactics, Log, TEXT("%s: no way to %s, picking another target"), *EnemyDisplayName, *Target->GetName());
+		}
+		// Around a fire / heat zone instead of into it (and back out, and in again).
+		FVector Zone;
+		float ZoneRadius = 0.f;
+		FVector Waypoint;
+		if (bFearsFire && AIConfig.bFireFearEnabled && FindNearestFireZone(800.f, Zone, ZoneRadius)
+			&& EnemyAIRules::FireDetourWaypoint(Feet, Zone, ZoneRadius + 50.f, TargetPosition, Waypoint))
+		{
+			if (FVector::Dist2D(Feet, Waypoint) > 60.f)
+			{
+				AIC->MoveToLocation(Waypoint, 30.f, false, true);
+			}
+			else
+			{
+				AIC->StopMovement(); // waiting at the edge for a target inside the zone
+				Face(Target);
+			}
+		}
+		else
+		{
+			AIC->MoveToActor(Target, AttackRange * 0.5f);
+		}
 	}
 }
 
@@ -429,10 +501,102 @@ AActor* AEnemyCharacter::FindTarget() const
 			Candidates.Add({ EEnemyTargetKind::Generator, GodotPosition(*It), !It->bGeneratorBroken && It->GeneratorHealth > 0.f });
 		}
 	}
+	// Targets it could not get closer to recently (no path on the navmesh) are skipped for a while, and an enemy that
+	// fears fire prefers targets outside fire / heat zones (it would only wait at their edge).
+	const double Now = World->GetTimeSeconds();
+	const TArray<FEnemyTargetCandidate> AllCandidates = Candidates;
+	bool bAnyUsable = false;
+	for (int32 Index = 0; Index < Actors.Num(); ++Index)
+	{
+		const double* Until = UnreachableUntil.Find(Actors[Index]);
+		if ((Until && *Until > Now) || (bFearsFire && AIConfig.bFireFearEnabled && IsInFearZone(Candidates[Index].Location, Actors[Index])))
+		{
+			Candidates[Index].bUsable = false;
+		}
+		bAnyUsable |= Candidates[Index].bUsable;
+	}
+	if (!bAnyUsable)
+	{
+		// Every target is in a warm zone or out of reach: fall back to the plain choice (wait at the edge).
+		Candidates = AllCandidates;
+	}
 	const bool bTurretHit = LastAttackerSource.Contains(TEXT("Турель")) || LastAttackerSource.Contains(TEXT("Turret"));
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 	const int32 Index = EnemyAIRules::SelectTarget(AIConfig, EnemyAIRules::IsSmallEnemy(Archetype), Feet, Candidates, bTurretHit);
-	return Actors.IsValidIndex(Index) ? Actors[Index] : nullptr;
+	if (Actors.IsValidIndex(Index))
+	{
+		return Actors[Index];
+	}
+	// Everything skipped: never stand idle — hunt the nearest living operative.
+	AActor* Nearest = nullptr;
+	float NearestDistance = TNumericLimits<float>::Max();
+	for (AOperativeCharacter* Member : Squad->GetMembers())
+	{
+		if (Member->HealthComponent && Member->HealthComponent->IsAlive() && FVector::Dist(Feet, Member->GetActorLocation()) < NearestDistance)
+		{
+			NearestDistance = FVector::Dist(Feet, Member->GetActorLocation());
+			Nearest = Member;
+		}
+	}
+	return Nearest;
+}
+
+bool AEnemyCharacter::IsInFearZone(const FVector& Location, const AActor* Candidate) const
+{
+	UWorld* World = GetWorld();
+	for (TActorIterator<ABarrelActor> It(World); It; ++It)
+	{
+		if (It->IsBurning() && FVector::Dist2D(Location, It->GetActorLocation()) < AIConfig.FireFearRadius)
+		{
+			return true;
+		}
+	}
+	for (const TWeakObjectPtr<UHeatSourceComponent>& Source : UHeatSourceComponent::GetAllSources())
+	{
+		if (Source.IsValid() && Source->GetWorld() == World && Source->IsHeatActive() && Source->GetOwner() != Candidate
+			&& FVector::Dist2D(Location, Source->GetComponentLocation()) < FMath::Max(AIConfig.FireFearRadius, Source->Radius))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius) const
+{
+	UWorld* World = GetWorld();
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	float BestMargin = TNumericLimits<float>::Max();
+	bool bFound = false;
+	auto Consider = [&](const FVector& Location, float Radius)
+	{
+		const float Distance = FVector::Dist2D(Feet, Location);
+		if (Distance < Radius + Extra && Distance - Radius < BestMargin)
+		{
+			BestMargin = Distance - Radius;
+			OutFire = Location;
+			OutRadius = Radius;
+			bFound = true;
+		}
+	};
+	for (TActorIterator<ABarrelActor> It(World); It; ++It)
+	{
+		if (It->IsBurning())
+		{
+			Consider(It->GetActorLocation(), AIConfig.FireFearRadius);
+		}
+	}
+	const AActor* OwnTarget = CurrentTarget.Get();
+	for (const TWeakObjectPtr<UHeatSourceComponent>& Source : UHeatSourceComponent::GetAllSources())
+	{
+		// The warm zone of the generator this enemy is sent to break does not stop it (small enemies go for the
+		// generator first; otherwise they froze at its edge).
+		if (Source.IsValid() && Source->GetWorld() == World && Source->IsHeatActive() && Source->GetOwner() != OwnTarget)
+		{
+			Consider(Source->GetComponentLocation(), FMath::Max(AIConfig.FireFearRadius, Source->Radius));
+		}
+	}
+	return bFound;
 }
 
 bool AEnemyCharacter::FindNearestFire(FVector& OutFire) const
@@ -503,6 +667,8 @@ AActor* AEnemyCharacter::FindBlockingObstacle(const AActor* Target) const
 void AEnemyCharacter::AttackObject(AActor* Object)
 {
 	AttackTimer = AttackCooldown;
+	StartAttackAnimation(Object);
+	OnAttackStarted(Object);
 	if (AInteractableActor* Interactable = Cast<AInteractableActor>(Object);
 		Interactable && Interactable->ObjectType == EInteractableType::Generator && !Object->IsA<ADeployableActor>())
 	{
@@ -617,6 +783,11 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 
 void AEnemyCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDamage)
 {
+	if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+	{
+		Anim->NotifyHit();
+	}
+	OnHitReaction(FinalDamage);
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
 	{
 		Feedback->FlashEnemyHit(this); // Godot _flash_hit
@@ -663,6 +834,15 @@ AActor* AEnemyCharacter::FindClosestSquadMember() const
 	return Closest;
 }
 
+void AEnemyCharacter::StartAttackAnimation(AActor* Target)
+{
+	UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	const float ClipSeconds = Anim ? Anim->NotifyAttack() : 0.f;
+	AttackLockTimer = ClipSeconds;
+	AttackLockTarget = Target;
+	AttackTimer = FMath::Max(AttackTimer, ClipSeconds);
+}
+
 void AEnemyCharacter::AttackTarget(AActor* Target)
 {
 	if (!Target || bIsDying)
@@ -671,6 +851,8 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	}
 
 	AttackTimer = AttackCooldown;
+	StartAttackAnimation(Target);
+	OnAttackStarted(Target);
 
 	const bool bIsCrit = (FMath::FRand() < CritChance);
 	const float FinalDamage = AttackDamage * (bIsCrit ? CritMultiplier : 1.0f);
@@ -742,8 +924,16 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 
 	OnEnemyDied.Broadcast(this);
 	OnEnemyDiedNative.Broadcast(this);
+	OnDeath();
 
-	SetLifeSpan(2.0f);
+	// Godot enemy_base.gd _die: with a death clip the body stays death_decay_delay seconds, otherwise it goes quickly.
+	float LifeSpan = 2.0f;
+	if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+	{
+		Anim->NotifyDeath();
+		LifeSpan = Anim->HasDeathAnimation() ? Anim->DeathDecayDelay : LifeSpan;
+	}
+	SetLifeSpan(LifeSpan);
 }
 
 bool AEnemyCharacter::GetOverheadLabel(FOverheadLabel& OutLabel) const

@@ -300,7 +300,7 @@ TArray<FIntPoint> UGorkyGridManager::FindPath(
 
 	if (StartPos == TargetPos)
 	{
-		return { StartPos };
+		return EmptyPath; // Godot find_path: nothing to walk
 	}
 
 	TArray<FIntPoint> Frontier;
@@ -383,7 +383,8 @@ TArray<FIntPoint> UGorkyGridManager::FindPath(
 		Path.Add(Curr);
 		Curr = CameFrom[Curr];
 	}
-	Path.Add(StartPos);
+	// Godot find_path: the steps only, without the start cell (a start cell here made every walk begin with an empty
+	// step — half a second of walking on the spot — and cost enemies an extra AP).
 	Algo::Reverse(Path);
 
 	return Path;

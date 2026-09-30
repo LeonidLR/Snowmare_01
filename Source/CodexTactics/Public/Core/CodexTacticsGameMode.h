@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "Interactables/DeployableRules.h"
+#include "Data/CombatTypes.h"
 class UDialogueSequenceAsset;
 class UWeaponDataAsset;
 class UGodotBalanceAsset;
@@ -96,6 +97,13 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Balance")
 	TSoftObjectPtr<ULevelConfigAsset> LevelConfig;
+
+	/**
+	 * Enemy Blueprint per type (the art: skeletal mesh + AnimBP). A type without an entry, or whose Blueprint is missing,
+	 * spawns the C++ AEnemyCharacter with the placeholder body. Default: the hound = /Game/Characters/Enemies/Hound/BP_Enemy_Hound.
+	 */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Enemies")
+	TMap<EEnemyArchetype, TSoftClassPtr<class AEnemyCharacter>> EnemyClasses;
 
 	/**
 	 * Arsenal of every spawned operative, the first one in hands (Godot player.gd _init_weapons: M16, pistol, grenade,

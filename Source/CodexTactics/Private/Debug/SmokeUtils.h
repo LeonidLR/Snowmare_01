@@ -10,17 +10,31 @@
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Interactables/GateActor.h"
 #include "Engine/StaticMeshActor.h"
 
 namespace SmokeUtils
 {
 	/**
-	 * Transform of the L_MovementTest layout: the "Floor" actor, created at the origin with yaw 0 by
+	 * Transform of the L_MovementTest layout, from the checkpoint gate (else the "Floor" actor), created by
 	 * create_movement_test_map.py. The user may move / rotate the whole layout in the editor; smokes express their
 	 * points in the original design coordinates and map them through this transform. Identity when there is no Floor.
 	 */
 	inline FTransform LayoutTransform(const UWorld* World)
 	{
+		// Anchor on the checkpoint gate (design (0, -2000), yaw 90): the floor may be resized for play-testing
+		// (e.g. stretched to a far PlayerStart), which moves its centre but not the gate.
+		if (World)
+		{
+			for (TActorIterator<AGateActor> It(const_cast<UWorld*>(World)); It; ++It)
+			{
+				const float Yaw = It->GetActorRotation().Yaw - 90.f;
+				const FRotator LayoutRotation(0.f, Yaw, 0.f);
+				const FVector Gate = It->GetActorLocation();
+				const FVector Origin = FVector(Gate.X, Gate.Y, 0.f) - LayoutRotation.RotateVector(FVector(0.f, -2000.f, 0.f));
+				return FTransform(LayoutRotation, Origin);
+			}
+		}
 		if (World)
 		{
 			for (TActorIterator<AStaticMeshActor> It(const_cast<UWorld*>(World)); It; ++It)

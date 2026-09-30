@@ -44,6 +44,22 @@ public:
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Input", meta = (ClampMin = "0"))
 	float DoubleClickPixels = 30.f;
 
+	/** Cursor travel with LMB held that turns a click into a selection box, pixels (Godot DRAG_THRESHOLD 12). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Input", meta = (ClampMin = "0"))
+	float BoxSelectThreshold = 12.f;
+
+	/** The selection box being dragged, in viewport pixels (false when none). */
+	bool GetSelectionBox(FVector2D& OutMin, FVector2D& OutMax) const;
+
+	/**
+	 * Selects the living squad members whose feet, centre or head (1.8 m) project into the box
+	 * (Godot main.gd _perform_box_selection). Nothing inside: the selection stays. Returns how many were selected.
+	 */
+	int32 SelectInBox(const FVector2D& Min, const FVector2D& Max);
+
+	/** Ground order for the leader or the box-selected group (Godot moving_group / _get_group_target_positions). */
+	void OrderGroupMove(const FVector& Destination, bool bSprint, bool bPlan);
+
 	/** A click this close to an operative (cm, on the ground plane) selects it instead of moving. */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Input", meta = (ClampMin = "0"))
 	float SelectRadius = 120.f;
@@ -97,6 +113,8 @@ private:
 
 	void CreateInputActions();
 	void OnClick();
+	/** LMB released: ends a selection box, or performs the click on the world (Godot acts on release). */
+	void OnClickReleased();
 	void RestartMission();
 	/** Next object click starts its relocation (action bar «ПЕР»). */
 	bool bRelocateSelectMode = false;
@@ -234,4 +252,10 @@ private:
 	bool bCeaseFireSet = false;
 	double LastClickTime = -1.0;
 	FVector2D LastClickPosition = FVector2D::ZeroVector;
+
+	/** LMB held on the world (not consumed by a mode on press) and the box drag from BoxStart. */
+	bool bLmbDown = false;
+	bool bBoxSelecting = false;
+	FVector2D BoxStart = FVector2D::ZeroVector;
+	FVector2D BoxCurrent = FVector2D::ZeroVector;
 };

@@ -413,6 +413,8 @@ void ACodexTacticsHUD::DrawHUD()
 	}
 	DrawWorldLabels();
 	DrawSpaceCharge();
+	DrawHitChanceLabel();
+	DrawSelectionBox();
 	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
 	DrawMessageFeed();
 	const float ObjectiveBottom = DrawObjectiveBanner();
@@ -421,6 +423,65 @@ void ACodexTacticsHUD::DrawHUD()
 		DrawSquadPanel(ObjectiveBottom + Margin * 0.5f);
 	}
 	UpdateFrostVignette();
+}
+
+void ACodexTacticsHUD::DrawSelectionBox()
+{
+	// Godot main.gd _on_selection_box_draw: cyan fill 0.18, border 1.5 px, 12 px corner marks.
+	const ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayerController());
+	FVector2D Min;
+	FVector2D Max;
+	if (!PC || !PC->GetSelectionBox(Min, Max))
+	{
+		return;
+	}
+	const FVector2D Size = Max - Min;
+	FCanvasTileItem Fill(Min, Size, FLinearColor(0.2f, 0.75f, 1.f, 0.18f));
+	Fill.BlendMode = SE_BLEND_Translucent;
+	Canvas->DrawItem(Fill);
+	FCanvasBoxItem Border(Min, Size);
+	Border.SetColor(FLinearColor(0.3f, 0.9f, 1.f, 0.9f));
+	Border.LineThickness = 1.5f;
+	Canvas->DrawItem(Border);
+	const float Corner = FMath::Min(12.f, FMath::Min(Size.X, Size.Y) * 0.3f);
+	if (Corner > 3.f)
+	{
+		const FLinearColor CornerColor(0.6f, 1.f, 1.f, 1.f);
+		for (const FVector2D& Point : { Min, FVector2D(Max.X, Min.Y), FVector2D(Min.X, Max.Y), Max })
+		{
+			const float DirX = Point.X == Min.X ? 1.f : -1.f;
+			const float DirY = Point.Y == Min.Y ? 1.f : -1.f;
+			DrawLine(Point.X, Point.Y, Point.X + DirX * Corner, Point.Y, CornerColor, 2.5f);
+			DrawLine(Point.X, Point.Y, Point.X, Point.Y + DirY * Corner, CornerColor, 2.5f);
+		}
+	}
+}
+
+void ACodexTacticsHUD::DrawHitChanceLabel()
+{
+	// Godot tactical_grid_overlay.gd hit_chance_label: yellow «🎯 N% | 💥 D» 1.6 m above the hovered attack cell.
+	const UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+	FVector World;
+	FString Text;
+	if (!TurnBased || !TurnBased->IsActive() || !TurnBased->GetHoverHitChance(World, Text))
+	{
+		return;
+	}
+	const FVector Screen = Project(World);
+	if (Screen.Z <= 0.f)
+	{
+		return;
+	}
+	UFont* Font = GEngine->GetLargeFont();
+	const FString Clean = StripUnsupportedGlyphs(Text);
+	float W = 0.f;
+	float H = 0.f;
+	Canvas->StrLen(Font, Clean, W, H);
+	FCanvasTextItem Item(FVector2D(Screen.X - W * 0.5f, Screen.Y - H * 0.5f), FText::FromString(Clean), Font, FLinearColor(1.f, 0.9f, 0.2f));
+	Item.EnableShadow(FLinearColor(0.1f, 0.1f, 0.1f, 0.95f));
+	Item.bOutlined = true;
+	Item.OutlineColor = FLinearColor(0.1f, 0.1f, 0.1f, 0.95f);
+	Canvas->DrawItem(Item);
 }
 
 float ACodexTacticsHUD::GetSquadMaxCold() const
@@ -675,7 +736,10 @@ void ACodexTacticsHUD::DrawMessageFeed()
 
 FString ACodexTacticsHUD::DescribeOperative(const AOperativeCharacter& Operative, bool bLeader) const
 {
-	FString Line = FString::Printf(TEXT("[%d] %s%s  %s"), Operative.SquadIndex + 1, *Operative.DisplayName.ToString(),
+	// Godot squad HUD: ▶ leader, ★ box-selected member.
+	const USquadSubsystem* SquadSystem = GetWorld()->GetSubsystem<USquadSubsystem>();
+	const bool bSelected = !bLeader && SquadSystem && SquadSystem->HasMultiSelection() && SquadSystem->IsGroupSelected(&Operative);
+	FString Line = FString::Printf(TEXT("%s[%d] %s%s  %s"), bSelected ? TEXT("★ ") : TEXT(""), Operative.SquadIndex + 1, *Operative.DisplayName.ToString(),
 		bLeader ? TEXT(" <ЛИДЕР>") : TEXT(""), *AOperativeCharacter::GetStanceDisplayName(Operative.GetStance()).ToString());
 	if (Operative.IsSprinting())
 	{

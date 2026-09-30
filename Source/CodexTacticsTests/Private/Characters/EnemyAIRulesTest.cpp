@@ -59,6 +59,22 @@ bool FEnemyAIRulesTest::RunTest(const FString&)
 	TestEqual(TEXT("Hound melee 1.3"), EnemyAIRules::GetAffinities(EEnemyArchetype::FrostHound).Melee, 1.3f);
 	TestEqual(TEXT("Frostbitten armor 0.15"), EnemyAIRules::GetBaseArmor(EEnemyArchetype::Frostbitten), 0.15f);
 	TestTrue(TEXT("Small enemies"), EnemyAIRules::IsSmallEnemy(EEnemyArchetype::Frostbitten) && !EnemyAIRules::IsSmallEnemy(EEnemyArchetype::Spitter));
+	// Fire zone detour: around the zone, not into it and back (no shaking at the edge).
+	{
+		const FVector Fire(0.f, 0.f, 0.f);
+		FVector Waypoint;
+		TestFalse(TEXT("Detour: clear way, walk straight"),
+			EnemyAIRules::FireDetourWaypoint(FVector(-1000.f, 900.f, 0.f), Fire, 600.f, FVector(1000.f, 900.f, 0.f), Waypoint));
+		TestTrue(TEXT("Detour: the way crosses the zone"),
+			EnemyAIRules::FireDetourWaypoint(FVector(-900.f, 100.f, 0.f), Fire, 600.f, FVector(900.f, 100.f, 0.f), Waypoint));
+		TestTrue(TEXT("Detour: the waypoint is outside the zone"), FVector::Dist2D(Waypoint, Fire) > 600.f);
+		TestTrue(TEXT("Detour: it goes round on the target's side (+Y), 35 degrees at most"), Waypoint.Y > 100.f
+			&& FMath::Abs(FMath::RadiansToDegrees(FMath::Atan2(Waypoint.Y, Waypoint.X)) - FMath::RadiansToDegrees(FMath::Atan2(100.f, -900.f))) <= 35.5f);
+		// A target inside the zone (the running generator): wait at the nearest edge point.
+		TestTrue(TEXT("Detour: target inside the zone"),
+			EnemyAIRules::FireDetourWaypoint(FVector(750.f, 0.f, 0.f), Fire, 600.f, FVector(100.f, 0.f, 0.f), Waypoint));
+		TestTrue(TEXT("Detour: waits at the edge facing the target"), Waypoint.Equals(FVector(700.f, 0.f, 0.f), 1.f));
+	}
 	return true;
 }
 

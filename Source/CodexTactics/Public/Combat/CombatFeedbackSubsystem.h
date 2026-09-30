@@ -35,7 +35,8 @@ public:
 
 	int32 GetPlannedMarkerCount() const;
 
-	/** Red aim flash: light above the target (4.5 m, 0.45 s) and a glowing overlay on its meshes (0.4 s). */
+	/** Red aim flash: light above the target (4.5 m, 0.45 s) and an overlay on its meshes (0.4 s): the red see-through
+	 *  fresnel edge on enemies (M_TargetFresnel, Godot tactical_target_fresnel.gdshader), a glow on objects. */
 	void HighlightTarget(AActor* Target);
 
 	/** Godot player.gd _spawn_damage_flash: red light 1.2 m above the operative's centre, 3.5 m, fading in 0.12 s. */

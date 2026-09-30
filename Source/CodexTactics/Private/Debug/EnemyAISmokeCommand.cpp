@@ -12,6 +12,8 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Materials/Material.h"
+#include "Components/MeshComponent.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
@@ -220,6 +222,16 @@ namespace EnemyAISmoke
 				Spec.Amount = 5.f;
 				Frostbitten->GetHealthComponent()->TakeDamage(Spec);
 				Check(State, Feedback->GetDamageFlashCount() >= Flashes + 2, TEXT("damage flashes: operative light and enemy glow"));
+				// Godot _apply_enemy_target_fresnel: an enemy picked as a target gets the see-through red fresnel edge.
+				Feedback->HighlightTarget(Frostbitten);
+				bool bFresnel = false;
+				TInlineComponentArray<UMeshComponent*> TargetMeshes(Frostbitten);
+				for (const UMeshComponent* TargetMesh : TargetMeshes)
+				{
+					const UMaterialInterface* Overlay = TargetMesh->GetOverlayMaterial();
+					bFresnel |= Overlay && Overlay->GetMaterial() && Overlay->GetMaterial()->GetName() == TEXT("M_TargetFresnel");
+				}
+				Check(State, bFresnel, TEXT("target highlight: M_TargetFresnel overlay on the enemy"));
 			}
 			else
 			{

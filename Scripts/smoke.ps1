@@ -1,16 +1,18 @@
 # Runs a headless in-game check (dev console command) on a map and prints its log lines.
-# Usage: powershell -ExecutionPolicy Bypass -File Scripts\smoke.ps1 [-Command CodexTactics.MovementSmoke] [-Map /Game/Maps/L_MovementTest] [-Extra "-ForceMainMenu"]
+# Usage: powershell -ExecutionPolicy Bypass -File Scripts\smoke.ps1 [-Command CodexTactics.MovementSmoke] [-Map /Game/Maps/L_MovementTest] [-Extra "-ForceMainMenu"] [-Log Smoke.log]
+# -Log names the log file in Saved\Logs (verify_all.ps1 gives every check its own so they can run side by side).
 param(
     [string]$Command = "CodexTactics.MovementSmoke",
     [string]$Map = "/Game/Maps/L_MovementTest",
-    [string]$Extra = ""
+    [string]$Extra = "",
+    [string]$Log = "Smoke.log"
 )
 
 $ErrorActionPreference = "Stop"
 $EngineRoot = "C:\Program Files\Epic Games\UE_5.8"
 $ProjectDir = Split-Path $PSScriptRoot -Parent
 $Project = Join-Path $ProjectDir "CodexTactics.uproject"
-$LogFile = Join-Path $ProjectDir "Saved\Logs\Smoke.log"
+$LogFile = Join-Path $ProjectDir (Join-Path "Saved\Logs" $Log)
 
 & "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $Project $Map -game -nullrhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH `
     "-ExecCmds=$Command" "-abslog=$LogFile" $Extra | Out-Null

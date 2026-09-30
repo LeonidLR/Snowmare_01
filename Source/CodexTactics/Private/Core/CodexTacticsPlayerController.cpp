@@ -1,4 +1,5 @@
 #include "Core/CodexTacticsPlayerController.h"
+#include "Characters/SquadFormation.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/RecruitSubsystem.h"
 #include "Combat/HoldSphereActor.h"
@@ -144,6 +145,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 		return;
 	}
 	Input->BindAction(ClickAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::OnClick);
+	Input->BindAction(ClickAction, ETriggerEvent::Completed, this, &ACodexTacticsPlayerController::OnClickReleased);
 	Input->BindAction(SelectActions[0], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SelectMember1);
 	Input->BindAction(SelectActions[1], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SelectMember2);
 	Input->BindAction(SelectActions[2], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::SelectMember3);
@@ -175,6 +177,16 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+
+	// Selection box: LMB held and dragged past the threshold (not in the grid fight, where clicks are grid orders).
+	if (bLmbDown)
+	{
+		GetMousePosition(BoxCurrent.X, BoxCurrent.Y);
+		if (!bBoxSelecting && FVector2D::Distance(BoxStart, BoxCurrent) > BoxSelectThreshold && !GetActiveTurnBased())
+		{
+			bBoxSelecting = true;
+		}
+	}
 
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const float HoldDuration = Flow ? Flow->GetConfig().TurnBasedHoldDuration : 1.5f;
@@ -212,6 +224,16 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 			HoldSphere->HideSphere();
 		}
 		HandleSpaceHold();
+	}
+
+	// Turn-based attack mode: the hovered cell's hit chance (Godot set_hovered_cell).
+	if (UTurnBasedCombatSubsystem* HoverTurnBased = GetActiveTurnBased(); HoverTurnBased && HoverTurnBased->IsAttackMode())
+	{
+		FHitResult Hit;
+		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		{
+			HoverTurnBased->SetHoveredPoint(Hit.ImpactPoint);
+		}
 	}
 
 	// Item hand-over: the ring follows the cursor / the hovered squad mate.
@@ -448,6 +470,15 @@ bool ACodexTacticsPlayerController::GetPlacementPoint(FVector& OutPoint) const
 
 void ACodexTacticsPlayerController::DeployAbility()
 {
+	// Godot main.gd KEY_F in the turn-based fight: the weapon aim mode (the deployables come from the action bar there).
+	if (UTurnBasedCombatSubsystem* AttackTurnBased = GetActiveTurnBased())
+	{
+		if (!AttackTurnBased->IsBusy())
+		{
+			AttackTurnBased->ToggleAttackMode();
+		}
+		return;
+	}
 	USquadSubsystem* Squad = GetSquad();
 	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
 	// Turn-based combat: the active operative sets it up (Godot current_leader follows the selected unit).
@@ -565,6 +596,26 @@ void ACodexTacticsPlayerController::HandleSpaceHold()
 		return;
 	}
 
+	// User decision 2026-09-30: only on flat ground — no fight started up on a platform or down in a pit.
+	if (Flow->GetCombatMode() != ECodexCombatMode::TurnBased)
+	{
+		TArray<float> Feet;
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (Member->HealthComponent && Member->HealthComponent->IsAlive())
+			{
+				Feet.Add(Member->GetActorLocation().Z - Member->GetSimpleCollisionHalfHeight());
+			}
+		}
+		float Ground = 0.f;
+		const TArray<float> Samples = CombatQueries::SampleGroundHeights(GetWorld(), Squad->GetLeader()->GetActorLocation(), 1050.f);
+		if (!CombatQueries::IsSquadOnFlatGround(Samples, Feet, 50.f, Ground))
+		{
+			PostHeadquarters(LOCTEXT("TurnBasedNotFlat",
+				"⚠️ Пошаговый бой можно начать только на ровной поверхности — не на возвышенности и не в низине!"));
+			return;
+		}
+	}
 	const bool bEnemiesNear = CombatQueries::HasEnemiesWithin(GetWorld(), Squad->GetLeader()->GetActorLocation(),
 		Flow->GetConfig().TurnBasedEncounterRadius);
 	const EGameFlowResult Result = Flow->RequestEnterTurnBased(bEnemiesNear);
@@ -653,10 +704,15 @@ void ACodexTacticsPlayerController::DialogueSkip()
 	{
 		return;
 	}
-	// Godot: Esc cancels the turn-based object relocation first.
+	// Godot: Esc cancels the turn-based object relocation first, then the attack mode.
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
 	{
 		TurnBased->CancelRelocate();
+		return;
+	}
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsAttackMode())
+	{
+		TurnBased->ExitAttackMode(TEXT("🟢 Прицеливание отменено (возврат в режим перемещения)."));
 		return;
 	}
 	if (UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>(); Dialogue && Dialogue->IsDialogueOpen())
@@ -722,10 +778,129 @@ void ACodexTacticsPlayerController::OnClick()
 		return;
 	}
 
+	// A world click happens on release, unless the cursor was dragged into a selection box (Godot main.gd LMB).
+	bLmbDown = true;
+	bBoxSelecting = false;
+	GetMousePosition(BoxStart.X, BoxStart.Y);
+	BoxCurrent = BoxStart;
+}
+
+void ACodexTacticsPlayerController::OnClickReleased()
+{
+	if (!bLmbDown)
+	{
+		return;
+	}
+	bLmbDown = false;
+	if (bBoxSelecting)
+	{
+		bBoxSelecting = false;
+		SelectInBox(FVector2D::Min(BoxStart, BoxCurrent), FVector2D::Max(BoxStart, BoxCurrent));
+		return;
+	}
 	FHitResult Hit;
 	if (GetSquad() && GetSquad()->GetLeader() && GetHitResultUnderCursor(ECC_Visibility, false, Hit))
 	{
 		HandleWorldHit(Hit);
+	}
+}
+
+bool ACodexTacticsPlayerController::GetSelectionBox(FVector2D& OutMin, FVector2D& OutMax) const
+{
+	if (!bBoxSelecting)
+	{
+		return false;
+	}
+	OutMin = FVector2D::Min(BoxStart, BoxCurrent);
+	OutMax = FVector2D::Max(BoxStart, BoxCurrent);
+	return true;
+}
+
+int32 ACodexTacticsPlayerController::SelectInBox(const FVector2D& Min, const FVector2D& Max)
+{
+	USquadSubsystem* Squad = GetSquad();
+	if (!Squad)
+	{
+		return 0;
+	}
+	const FBox2D Box(Min, Max);
+	TArray<AOperativeCharacter*> Selected;
+	for (AOperativeCharacter* Member : Squad->GetMembers())
+	{
+		if (!Member || !Member->HealthComponent || !Member->HealthComponent->IsAlive())
+		{
+			continue;
+		}
+		const FVector Feet = Member->GetActorLocation() - FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight());
+		for (const float Height : { 0.f, 90.f, 180.f })
+		{
+			FVector2D Screen;
+			if (ProjectWorldLocationToScreen(Feet + FVector(0.f, 0.f, Height), Screen) && Box.IsInside(Screen))
+			{
+				Selected.Add(Member);
+				break;
+			}
+		}
+	}
+	if (Selected.IsEmpty())
+	{
+		return 0;
+	}
+	Squad->SetSelectedGroup(Selected);
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(LOCTEXT("SquadSender", "ОТРЯД"), Selected.Num() == 1
+			? FText::Format(LOCTEXT("UnitSelected", "👤 Выбран боец: {0}"), Selected[0]->DisplayName)
+			: FText::Format(LOCTEXT("GroupSelected", "👥 Выбрана группа: {0} бойцов"), Selected.Num()));
+	}
+	return Selected.Num();
+}
+
+void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, bool bSprint, bool bPlan)
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader)
+	{
+		return;
+	}
+	// The leader first, then the others in selection order (Godot sorted_group).
+	TArray<AOperativeCharacter*> Group = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
+	Group.Remove(Leader);
+	Group.Insert(Leader, 0);
+	FVector Average = FVector::ZeroVector;
+	for (const AOperativeCharacter* Member : Group)
+	{
+		Average += Member->GetActorLocation();
+	}
+	Average /= Group.Num();
+	const FVector CameraForward = PlayerCameraManager ? PlayerCameraManager->GetCameraRotation().Vector() : FVector::ForwardVector;
+	const TArray<FVector> Targets = SquadFormation::ComputeGroupTargets(Destination, Average, CameraForward, Group.Num());
+
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	for (int32 Index = 0; Index < Group.Num(); ++Index)
+	{
+		if (bPlan)
+		{
+			const FVector Planned = Squad->PlanMove(Group[Index], Targets[Index], bSprint, Flow ? Flow->GetConfig().PauseOrderRadius : 1200.f);
+			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+			{
+				Feedback->SpawnWaypointMarker(Planned);
+			}
+		}
+		else
+		{
+			Group[Index]->OrderMoveTo(Targets[Index], bSprint);
+		}
+	}
+	if (Messages && Group.Num() > 1)
+	{
+		const FText Line = bPlan
+			? FText::Format(bSprint ? LOCTEXT("GroupPlanSprint", "🏃 [ПЛАН] Запланирован групповой рывок ({0} бойцов)!")
+				: LOCTEXT("GroupPlanMove", "📋 [ПЛАН] Запланировано групповое перемещение ({0} бойцов)!"), Group.Num())
+			: FText::Format(LOCTEXT("GroupMove", "🏃 Группа ({0} бойцов) выдвигается на позиции!"), Group.Num());
+		Messages->PostMessage(LOCTEXT("SquadSender", "ОТРЯД"), Line);
 	}
 }
 
@@ -963,18 +1138,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 			}
 		}
 	}
-	if (Mode == ECodexCombatMode::TacticalPause)
-	{
-		const FVector Planned = Squad->PlanMove(Leader, Hit.ImpactPoint, bDoubleClick, Flow->GetConfig().PauseOrderRadius);
-		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
-		{
-			Feedback->SpawnWaypointMarker(Planned);
-		}
-		UE_LOG(LogCodexTactics, Log, TEXT("Planned move for %s to (%.0f, %.0f)%s"), *Leader->DisplayName.ToString(),
-			Planned.X, Planned.Y, bDoubleClick ? TEXT(" sprint") : TEXT(""));
-		return;
-	}
-	Leader->OrderMoveTo(Hit.ImpactPoint, bDoubleClick);
+	OrderGroupMove(Hit.ImpactPoint, bDoubleClick, Mode == ECodexCombatMode::TacticalPause);
 }
 
 void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance)
@@ -1216,6 +1380,9 @@ void ACodexTacticsPlayerController::CameraRotateRight()
 
 void ACodexTacticsPlayerController::CameraDragRotateStart()
 {
+	// Godot: RMB drops a selection box being dragged.
+	bLmbDown = false;
+	bBoxSelecting = false;
 	// Godot: RMB cancels the hand-over, the grenade aim, object placement (and the turn-based relocation).
 	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring())
 	{
@@ -1234,6 +1401,11 @@ void ACodexTacticsPlayerController::CameraDragRotateStart()
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
 	{
 		TurnBased->CancelRelocate();
+		return;
+	}
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsAttackMode())
+	{
+		TurnBased->ExitAttackMode(TEXT("🟢 Прицеливание отменено (возврат в режим перемещения)."));
 		return;
 	}
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())

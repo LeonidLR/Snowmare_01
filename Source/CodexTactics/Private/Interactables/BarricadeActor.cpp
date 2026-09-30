@@ -5,6 +5,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "EngineUtils.h"
+#include "Interactables/VaultNavigation.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -42,6 +43,10 @@ void ABarricadeActor::BeginPlay()
 {
 	Super::BeginPlay();
 	Health->OnDied.AddDynamic(this, &ABarricadeActor::HandleDestroyed);
+	if (bVaultable)
+	{
+		VaultNavigation::MakeVaultable(this);
+	}
 }
 
 void ABarricadeActor::HandleDestroyed(AActor* Victim, const FString& AttackerSource)

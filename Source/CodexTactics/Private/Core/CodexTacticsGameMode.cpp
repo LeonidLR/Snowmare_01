@@ -1,4 +1,5 @@
 #include "Core/CodexTacticsGameMode.h"
+#include "Characters/EnemyCharacter.h"
 #include "Data/DialogueSequenceAsset.h"
 #include "Characters/OperativeBalance.h"
 #include "CodexTactics.h"
@@ -20,6 +21,7 @@
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TurretActor.h"
+#include "Interactables/VaultNavigation.h"
 #include "UI/CodexTacticsHUD.h"
 
 #define LOCTEXT_NAMESPACE "CodexTacticsGameMode"
@@ -37,6 +39,15 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 	OperativeBlueprint = TSoftClassPtr<AOperativeCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Operatives/BP_Operative.BP_Operative_C")));
 	TurnBasedBalance = TSoftObjectPtr<UGodotBalanceAsset>(FSoftObjectPath(TEXT("/Game/Data/Balance/DA_Balance.DA_Balance")));
 	GameBalanceConfig = TSoftObjectPtr<UGodotBalanceAsset>(FSoftObjectPath(TEXT("/Game/Data/Balance/DA_GameBalanceConfig.DA_GameBalanceConfig")));
+	// Enemy art per type (Scripts/Editor/setup_enemy_animation.py); Godot resources/enemies/anims/*.tres picks the same clips.
+	EnemyClasses.Add(EEnemyArchetype::FrostHound,
+		TSoftClassPtr<AEnemyCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Enemies/Hound/BP_Enemy_Hound.BP_Enemy_Hound_C"))));
+	EnemyClasses.Add(EEnemyArchetype::Brute,
+		TSoftClassPtr<AEnemyCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Enemies/Brute/BP_Enemy_Brute.BP_Enemy_Brute_C"))));
+	EnemyClasses.Add(EEnemyArchetype::Frostbitten,
+		TSoftClassPtr<AEnemyCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Enemies/Frostbitten/BP_Enemy_Frostbitten.BP_Enemy_Frostbitten_C"))));
+	EnemyClasses.Add(EEnemyArchetype::Cutter,
+		TSoftClassPtr<AEnemyCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Enemies/Cutter/BP_Enemy_Cutter.BP_Enemy_Cutter_C"))));
 	LevelConfig = TSoftObjectPtr<ULevelConfigAsset>(FSoftObjectPath(TEXT("/Game/Data/Levels/DA_Level_level_01_outpost.DA_Level_level_01_outpost")));
 	for (const TCHAR* Id : { TEXT("m16"), TEXT("pistol"), TEXT("grenade"), TEXT("knife") })
 	{
@@ -60,6 +71,14 @@ void ACodexTacticsGameMode::StartPlay()
 	ApplyLevelConfig();
 	Super::StartPlay();
 	SpawnSquad();
+	// Level objects tagged "Vault" (Godot "vault" group): the squad paths across and vaults them (barricades do it themselves).
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		if (It->ActorHasTag(VaultNavigation::VaultTag))
+		{
+			VaultNavigation::MakeVaultable(*It);
+		}
+	}
 }
 
 void ACodexTacticsGameMode::ApplyLevelConfig()

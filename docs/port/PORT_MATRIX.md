@@ -27,7 +27,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/tactics/gorky17_los.gd` | `GorkyLineOfSight::HasLineOfSight` | 1 | ✅ | `CodexTactics.Tactics.LineOfSight` |
 | `Scripts/tactics/turn_based_combat_manager.gd` | see `UTurnBasedCombatSubsystem` below | 1/4 | ➖ | |
 | `Scripts/tactics/tactical_exposed_zones_manager.gd` | `FExposedZones` in `UTurnBasedCombatSubsystem` | 4 | ✅ | ExposedZonesTest, ExposedZonesSmoke |
-| `Scripts/tactics/tactical_encounter_selector.gd` | — (not used by the Godot game) | 4 | ➖ | |
+| `Scripts/tactics/tactical_encounter_selector.gd` | `TacticalEncounterRules::SelectEnemies` in `UTurnBasedCombatSubsystem::StartCombat` (15 m, cap 6, diversity first; the rest in stasis) | 4 | ✅ (was wrongly marked unused: main.gd _enter_turn_based_combat calls it) | `CodexTactics.Tactics.Encounter.SelectEnemies` |
 | `Scripts/tactics/tactical_grid_overlay.gd` | `ATurnGridOverlayActor` | 4 | ✅ | TurnBasedSmoke |
 | `Scripts/tactics/tactical_hold_sphere.gd` | `AHoldSphereActor`, controller cease fire, HUD `DrawSpaceCharge` | 4 | ✅ | HoldSphereSmoke, `HudShot hold` |
 | `Scripts/tactics/turn_based_combat_manager.gd` (core loop), `tactical_grid_overlay.gd` | `UTurnBasedCombatSubsystem`, `ATurnGridOverlayActor` | 4 | ✅ (exposed zones, barrel / turret / barricade relocation, deployables on the grid, weapon switch, grenades, stasis look; companion drone: no-op in Godot) | `CodexTactics.TurnBasedSmoke`, `ExposedZonesSmoke`, `TurnBasedPushSmoke`, `TurnBasedBarricadeSmoke`, `TurnBasedDeploySmoke`, `WeaponSelectorSmoke`, `GrenadeSmoke`, `Combat.Grenade.Rules`, `Characters.Arsenal.InitAndSwitch`, `Tactics.ExposedZones.*` (3), `HudShot turnbased` |
@@ -41,12 +41,12 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | overhead Label3D (`enemy_base.gd`, `barricade.gd`, `turret.gd`, `interactable.gd` generator) | `FOverheadLabel`, `GetOverheadLabel`, HUD `DrawWorldLabels` | 5 | ✅ | `HudShot labels` |
 | `Scripts/components/allegiance_component.gd` | — (only used by Godot tests) | 1 | ➖ | |
 | `Scripts/components/locomotion_controller.gd` (stand / crouch / prone locomotion) | `UOperativeAnimInstance` native blend + `ABP_Operative` | 6 | 🟨 baseline (fire, reload, hit, death, grenade states → AnimBP graph) | `CodexTactics.StanceSmoke`, `HudShot close walk` |
-| `Scripts/components/cold_animation_controller.gd` | AnimBP layer | 6 | ⬜ | |
+| `Scripts/components/cold_animation_controller.gd` | `ColdAnimationRules` + `UOperativeAnimInstance` cold state (tier, weight, clips per level) + the ABP_Operative cold blend | 6 | ✅ logic + graph (cold clips: user art, empty = layer off) | `CodexTactics.Characters.ColdAnimation.Rules` |
 | `Scripts/components/locomotion_controller.gd`, `Scripts/locomotion_v2/**` | AnimBP + `UOperativeAnimInstance` | 6 | ⬜ | |
 | `Scripts/events/event_bus.gd` | `UCodexEventBus` (the emitted signals) + per-subsystem delegates (OnGameFlowChanged, OnWaveStarted, ...) | 3 | ✅ | EventBusSmoke |
 | `Scripts/managers/save_manager.gd` | `USaveGameSubsystem` (JSON, Godot keys) + `SaveGameRules` | 5 | ✅ | `CodexTactics.Core.SaveGameRules.*`, SaveLoadSmoke, PauseMenuSmoke |
 | `main.gd` radius_ring | `URadiusRingSubsystem` + `ARadiusRingActor` | 5 | ✅ | RadiusRingSmoke |
-| `Scenes/movements/player.gd` — movement: click/double-click orders, speeds, stances, sprint rules | `AOperativeCharacter`, `OperativeMovementRules`, `AOperativeAIController` (NavMesh + Detour Crowd), `ACodexTacticsPlayerController` | 3 | ✅ (vault, phasing, box select, group orders, idle roam, pause orders, panic/rage refusal → later) | `CodexTactics.Movement.*` (5), `CodexTactics.MovementSmoke` |
+| `Scenes/movements/player.gd` — movement: click/double-click orders, speeds, stances, sprint rules | `AOperativeCharacter`, `OperativeMovementRules`, `AOperativeAIController` (NavMesh + Detour Crowd), `ACodexTacticsPlayerController` | 3 | ✅ (vault ✅ `VaultRules` / VaultSmoke; box select + group orders ✅ GroupSelectSmoke; phasing, idle roam → navmesh / later) | `CodexTactics.Movement.*` (5), `CodexTactics.MovementSmoke` |
 | `Scenes/movements/player.gd` — formation, `follower.gd` | `USquadSubsystem`, `SquadFormation` (slots, column, swap, wander, catch-up) | 3 | ✅ | `CodexTactics.Formation.*` (8), `CodexTactics.MovementSmoke` |
 | `main.gd` `_select_squad_member_by_index`, stance keys | `ACodexTacticsPlayerController` (1–3, Z/C/X, Alt = squad) | 3 | ✅ | manual |
 | `resources/balance.tres`, `resources/game_balance_config.tres` (GameBalanceConfig) | `UGodotBalanceAsset` DA_Balance / DA_GameBalanceConfig via `Scripts/Editor/import_balance.py` | 2 | 🟨 (turn-based, operatives, cold, enemies wired; deployables need none; camera kept user-tuned) | `CodexTactics.Data.BalanceImportParity` |
@@ -98,3 +98,11 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | Wave rest | `is_wave_active` and `is_preparation_active` both true | `Preparation` phase with next wave index | User, 2026-09-28 — same behaviour |
 | Pathing | Straight line to target, wall sliding, whisker steering, leader breadcrumbs, collider phasing | NavMesh pathfinding + Detour Crowd avoidance | User, 2026-09-28 |
 | Stamina | Described in GDD / unused `movement_component.gd`; not active in `player.gd` | No stamina; sprint limited by cold and wounds only | User, 2026-09-28 |
+
+## 2026-09-30 — user art wired
+- Operatives: ABP_Operative on RifleAnims (stand / crouch / aim blend spaces, fire / reload on the upper body), outfits per member.
+- Enemies: HOUND / BRUTE / FROSTBITTEN / CUTTER Blueprints + AnimBPs from the user's monster packs (setup_enemy_animation.py).
+- Turn-based: walk animation over the whole path, Godot per-step easing; attack mode with the weapon matrix and hit chance.
+- Open: prone clips (crouch stands in), spitter / cryo drone art, M16 offset on the new hand, cold animation layer (Phase 6).
+- Parity items: fallback waves (`FallbackWaveRules`), turn-based blasts (`ApplyBlast`), cold animation layer, box selection + group orders, grid pulses, barricade glide / grow-in, ghost hologram.
+- Weapon model switching: not in Godot either (only M16_Visual) — nothing to port.

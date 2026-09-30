@@ -1,4 +1,6 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Characters/EnemyAnimInstance.h"
+#include "Tactics/TacticalEncounterRules.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "GameFramework/PlayerController.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -36,6 +38,9 @@ namespace
 {
 	constexpr int32 TurnGridCells = 14;
 	constexpr float TurnCellSize = 150.f; // Godot tactical_cell_size 1.5 m
+	/** Godot main.gd _enter_turn_based_combat: select_participants(centre, 15.0, tree, 6). */
+	constexpr float TurnEncounterRadius = 1500.f;
+	constexpr int32 TurnEncounterMaxEnemies = 6;
 	constexpr float TurnMineDamage = 50.f; // Godot _detonate_mine base_mine_dmg
 	constexpr float TurnTurretSupportDistance = 4500.f; // Godot max_support_dist 45 m
 	constexpr int32 TurnBarrelBurnRounds = 3;
@@ -144,13 +149,13 @@ void UTurnBasedCombatSubsystem::StartCombat()
 			Ignore.Add(Member);
 		}
 	}
-	TArray<AEnemyCharacter*> GridEnemies;
+	TArray<AEnemyCharacter*> LivingEnemies;
 	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 	{
 		Ignore.Add(*It);
-		if (!It->IsDying() && !IsDead(*It) && OnGrid(*It))
+		if (!It->IsDying() && !IsDead(*It))
 		{
-			GridEnemies.Add(*It);
+			LivingEnemies.Add(*It);
 		}
 	}
 	TArray<AActor*> GridBarrels, GridMines, GridTurrets, GridBarricades;
@@ -195,6 +200,23 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	if (World->LineTraceSingleByChannel(FloorHit, Center + FVector(0.f, 0.f, 50.f), Center - FVector(0.f, 0.f, 2000.f), ECC_Visibility, Params))
 	{
 		GroundZ = FloorHit.ImpactPoint.Z;
+	}
+	// Godot TacticalEncounterSelector.select_participants(centre, 15 m, 6): at most six enemies fight on the grid,
+	// every species within reach keeps a slot; the others wait in stasis.
+	TArray<AEnemyCharacter*> GridEnemies;
+	{
+		const FVector CentreFloor(Center.X, Center.Y, GroundZ);
+		TArray<TacticalEncounterRules::FCandidate> Candidates;
+		for (const AEnemyCharacter* Enemy : LivingEnemies)
+		{
+			const FVector Feet = Enemy->GetActorLocation() - FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight());
+			Candidates.Add({ FName(*StaticEnum<EEnemyArchetype>()->GetNameStringByValue(static_cast<int64>(Enemy->GetArchetype()))),
+				static_cast<float>(FVector::Dist(Feet, CentreFloor)) });
+		}
+		for (const int32 Index : TacticalEncounterRules::SelectEnemies(Candidates, TurnEncounterRadius, TurnEncounterMaxEnemies))
+		{
+			GridEnemies.Add(LivingEnemies[Index]);
+		}
 	}
 	Grid = NewObject<UGorkyGridManager>(this);
 	Grid->Setup(FVector(Center.X, Center.Y, GroundZ), FIntPoint(TurnGridCells, TurnGridCells), TurnCellSize, GroundZ);
@@ -262,8 +284,14 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		State.Facing = GridEnemies.IsEmpty() ? EGorkyFacing::South : FacingTowards(Member->GetActorLocation(), EnemyCentroid, EGorkyFacing::South);
 		AlignFacing(Member, State.Facing);
 	}
+	TMap<EEnemyArchetype, int32> TypeCounts;
 	for (AEnemyCharacter* Enemy : GridEnemies)
 	{
+		// Godot: same-type enemies get different idle clips (type index cycles through the idles).
+		if (UEnemyAnimInstance* Anim = Enemy->GetMesh() ? Cast<UEnemyAnimInstance>(Enemy->GetMesh()->GetAnimInstance()) : nullptr)
+		{
+			Anim->SetIdleVariation(TypeCounts.FindOrAdd(Enemy->GetArchetype())++);
+		}
 		const FIntPoint Cell = Grid->FindNearestFreeCell(Grid->WorldToGrid(Enemy->GetActorLocation()));
 		Grid->SetOccupant(Cell, Enemy, EGorkyOccupantType::Enemy);
 		PlaceOnCell(Enemy, Cell);
@@ -513,6 +541,31 @@ void UTurnBasedCombatSubsystem::ApplySquadHit(AActor* Victim, float Amount, cons
 	ApplyDamage(Victim, Amount, Source);
 }
 
+void UTurnBasedCombatSubsystem::ApplyBlast(AActor* Victim, bool bSquad, float Amount, const FString& Source)
+{
+	// Godot _detonate_barrel / _detonate_mine: the unit's own take_damage(amount) (enemy armor; operative dodge,
+	// stance, fortitude), while the grid hp loses the raw amount and decides the kill. An enemy whose health could not
+	// take the raw blast dies (Godot _on_enemy_killed -> die()). Operatives die by their real health only: Godot would
+	// drop a still-living operative from the fight (grid hp) — treated as a bug.
+	if (bSquad)
+	{
+		if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Victim))
+		{
+			Operative->TakeHit(Amount, Source);
+			return;
+		}
+		ApplyDamage(Victim, Amount, Source);
+		return;
+	}
+	UHealthComponent* Health = Victim ? Victim->FindComponentByClass<UHealthComponent>() : nullptr;
+	const float HealthBefore = Health ? Health->GetCurrentHealth() : 0.f;
+	ApplyEnemyHit(Victim, Amount, Source);
+	if (Health && Health->IsAlive() && HealthBefore - Amount <= 0.f)
+	{
+		Health->ApplyDirectHealthLoss(Health->GetCurrentHealth(), Source);
+	}
+}
+
 bool UTurnBasedCombatSubsystem::IsDead(const AActor* Actor) const
 {
 	const UHealthComponent* Health = IsValid(Actor) ? Actor->FindComponentByClass<UHealthComponent>() : nullptr;
@@ -643,6 +696,7 @@ void UTurnBasedCombatSubsystem::StartMover(AActor* Actor, const FIntPoint& From,
 	Mover.Actor = Actor;
 	Mover.bFaceSteps = bFaceSteps;
 	Mover.StepDuration = StepDuration;
+	Mover.Speed = Grid ? Grid->CellSize / FMath::Max(StepDuration, 0.01f) : 0.f;
 	Mover.From = Actor->GetActorLocation();
 	Mover.OnStep = MoveTemp(OnStep);
 	Mover.OnDone = MoveTemp(OnDone);
@@ -666,12 +720,94 @@ void UTurnBasedCombatSubsystem::StartMover(AActor* Actor, const FIntPoint& From,
 	}
 	if (bFaceSteps)
 	{
-		AlignFacing(Actor, Mover.Facings[0]);
+		const FIntPoint Dir = FGorky17Utils::FacingToVector(Mover.Facings[0]);
+		Mover.TargetYaw = FMath::RadiansToDegrees(FMath::Atan2(static_cast<float>(Dir.Y), static_cast<float>(Dir.X)));
 	}
+	// Paths of 2+ cells (units and the objects they push, in step) share one continuous profile.
+	if (Mover.Points.Num() >= 2)
+	{
+		Mover.bProfile = true;
+		Mover.Origin = Mover.From;
+		float Total = 0.f;
+		FVector Previous3D = Mover.From;
+		for (const FVector& Point : Mover.Points)
+		{
+			Total += FVector::Dist2D(Previous3D, Point);
+			Mover.CumulativeLength.Add(Total);
+			Previous3D = Point;
+		}
+		Mover.Time = 0.f;
+	}
+}
+
+void UTurnBasedCombatSubsystem::SampleWalkProfile(float Total, float FirstLength, float LastLength, float TotalTime, float Time,
+	float& OutDistance, float& OutSpeed)
+{
+	// Same total time as Godot: the cruise speed covers the distance plus half of the ramps, v = (D + d0 + dl) / T.
+	const float Cruise = (Total + FirstLength + LastLength) / FMath::Max(TotalTime, KINDA_SMALL_NUMBER);
+	const float AccelTime = 2.f * FirstLength / Cruise;
+	const float DecelTime = 2.f * LastLength / Cruise;
+	const float CruiseTime = FMath::Max(0.f, (Total - FirstLength - LastLength) / Cruise);
+	if (Time <= 0.f)
+	{
+		OutDistance = 0.f;
+		OutSpeed = 0.f;
+	}
+	else if (Time < AccelTime)
+	{
+		OutSpeed = Cruise * Time / AccelTime;
+		OutDistance = 0.5f * OutSpeed * Time;
+	}
+	else if (Time < AccelTime + CruiseTime)
+	{
+		OutSpeed = Cruise;
+		OutDistance = FirstLength + Cruise * (Time - AccelTime);
+	}
+	else
+	{
+		const float Tail = FMath::Min(Time - AccelTime - CruiseTime, DecelTime);
+		OutSpeed = Cruise * (1.f - Tail / DecelTime);
+		OutDistance = FirstLength + Cruise * CruiseTime + Cruise * Tail - 0.5f * (Cruise / DecelTime) * Tail * Tail;
+	}
+	OutDistance = FMath::Min(OutDistance, Total);
+}
+
+float UTurnBasedCombatSubsystem::GetTacticalMoveSpeed(const AActor* Actor) const
+{
+	for (const FMover& Mover : Movers)
+	{
+		if (Mover.bFaceSteps && Mover.Actor.Get() == Actor)
+		{
+			return Mover.CurrentSpeed;
+		}
+	}
+	return -1.f;
 }
 
 void UTurnBasedCombatSubsystem::Tick(float DeltaTime)
 {
+	for (int32 Index = Glides.Num() - 1; Index >= 0; --Index)
+	{
+		FObjectGlide& Glide = Glides[Index];
+		AActor* Actor = Glide.Actor.Get();
+		Glide.Elapsed += DeltaTime;
+		const float Alpha = FMath::Clamp((Glide.Elapsed - Glide.Delay) / Glide.Duration, 0.f, 1.f);
+		// Quad ease-out, or back ease-out (Godot TRANS_BACK, overshoot 1.70158) for the grow-in.
+		constexpr float Overshoot = 1.70158f;
+		const float Eased = Glide.bBackEase
+			? 1.f + (Overshoot + 1.f) * FMath::Pow(Alpha - 1.f, 3.f) + Overshoot * FMath::Square(Alpha - 1.f)
+			: 1.f - FMath::Square(1.f - Alpha);
+		if (Actor)
+		{
+			FTransform Blended;
+			Blended.Blend(Glide.From, Glide.To, Eased);
+			Actor->SetActorTransform(Blended, false, nullptr, ETeleportType::TeleportPhysics);
+		}
+		if (!Actor || Alpha >= 1.f)
+		{
+			Glides.RemoveAtSwap(Index);
+		}
+	}
 	for (int32 Index = Movers.Num() - 1; Index >= 0; --Index)
 	{
 		if (!Movers.IsValidIndex(Index))
@@ -681,12 +817,98 @@ void UTurnBasedCombatSubsystem::Tick(float DeltaTime)
 		FMover& Mover = Movers[Index];
 		AActor* Actor = Mover.Actor.Get();
 		bool bFinished = !Actor;
-		if (Actor)
+		if (Actor && Mover.bFaceSteps)
 		{
+			// Units turn to each step smoothly (~0.15 s) instead of Godot's snap.
+			const FRotator Facing(0.f, Mover.TargetYaw, 0.f);
+			Actor->SetActorRotation(FMath::RInterpTo(Actor->GetActorRotation(), Facing, DeltaTime, 15.f));
+		}
+		if (Actor && Mover.bProfile)
+		{
+			const int32 Steps = Mover.Points.Num();
+			const float Total = Mover.CumulativeLength.Last();
+			const float First = Mover.CumulativeLength[0];
+			const float Last = Total - Mover.CumulativeLength[Steps - 2];
+			const float TotalTime = Total / FMath::Max(Mover.Speed, 1.f);
+			Mover.Time += DeltaTime;
+			float Distance = 0.f;
+			SampleWalkProfile(Total, First, Last, TotalTime, Mover.Time, Distance, Mover.CurrentSpeed);
+			// Cells passed this frame: their callbacks in order (a mine stops the walk on its cell).
+			bool bStopped = false;
+			while (Mover.Index < Steps && Distance >= Mover.CumulativeLength[Mover.Index] - 0.5f)
+			{
+				const int32 Passed = Mover.Index;
+				const bool bContinue = !Mover.OnStep || Mover.OnStep(Passed);
+				if (!Movers.IsValidIndex(Index) || !Mover.Actor.IsValid())
+				{
+					bStopped = true;
+					break; // combat ended from the step callback
+				}
+				++Mover.Index;
+				if (!bContinue)
+				{
+					Actor->SetActorLocation(Mover.Points[Passed]);
+					Mover.CurrentSpeed = 0.f;
+					bFinished = true;
+					bStopped = true;
+					break;
+				}
+				if (Mover.Index < Steps)
+				{
+					const FIntPoint Dir = FGorky17Utils::FacingToVector(Mover.Facings[Mover.Index]);
+					Mover.TargetYaw = FMath::RadiansToDegrees(FMath::Atan2(static_cast<float>(Dir.Y), static_cast<float>(Dir.X)));
+				}
+			}
+			if (!Movers.IsValidIndex(Index))
+			{
+				continue;
+			}
+			if (!bStopped)
+			{
+				if (Mover.Index >= Steps)
+				{
+					Actor->SetActorLocation(Mover.Points.Last());
+					Mover.CurrentSpeed = 0.f;
+					bFinished = true;
+				}
+				else
+				{
+					const float SegmentStart = Mover.Index > 0 ? Mover.CumulativeLength[Mover.Index - 1] : 0.f;
+					const FVector SegmentFrom = Mover.Index > 0 ? Mover.Points[Mover.Index - 1] : Mover.Origin;
+					const float SegmentLength = FMath::Max(Mover.CumulativeLength[Mover.Index] - SegmentStart, 1.f);
+					Actor->SetActorLocation(FMath::Lerp(SegmentFrom, Mover.Points[Mover.Index],
+						FMath::Clamp((Distance - SegmentStart) / SegmentLength, 0.f, 1.f)));
+				}
+			}
+		}
+		else if (Actor)
+		{
+			const FVector Before = Actor->GetActorLocation();
 			const FIntPoint Dir = FGorky17Utils::FacingToVector(Mover.Facings[Mover.Index]);
 			const float Duration = Mover.StepDuration * (Dir.X != 0 && Dir.Y != 0 ? 1.414f : 1.f);
 			Mover.Alpha = FMath::Min(1.f, Mover.Alpha + DeltaTime / Duration);
-			Actor->SetActorLocation(FMath::Lerp(Mover.From, Mover.Points[Mover.Index], FMath::SmoothStep(0.f, 1.f, Mover.Alpha)));
+			// Godot tween per step: one step sine in-out; on a path the first step eases in, the last eases out and the
+			// middle ones are linear, so the unit walks the whole path without stopping on every cell.
+			// Pushed objects move linearly (Godot TRANS_LINEAR).
+			float Eased = Mover.Alpha;
+			const int32 Steps = Mover.Points.Num();
+			if (Mover.bFaceSteps)
+			{
+				if (Steps == 1)
+				{
+					Eased = 0.5f - 0.5f * FMath::Cos(PI * Mover.Alpha);
+				}
+				else if (Mover.Index == 0)
+				{
+					Eased = 1.f - FMath::Cos(HALF_PI * Mover.Alpha);
+				}
+				else if (Mover.Index == Steps - 1)
+				{
+					Eased = FMath::Sin(HALF_PI * Mover.Alpha);
+				}
+			}
+			Actor->SetActorLocation(FMath::Lerp(Mover.From, Mover.Points[Mover.Index], Eased));
+			Mover.CurrentSpeed = DeltaTime > 0.f ? FVector::Dist2D(Before, Actor->GetActorLocation()) / DeltaTime : 0.f;
 			if (Mover.Alpha >= 1.f)
 			{
 				const bool bContinue = !Mover.OnStep || Mover.OnStep(Mover.Index);
@@ -700,7 +922,8 @@ void UTurnBasedCombatSubsystem::Tick(float DeltaTime)
 				bFinished = !bContinue || Mover.Index >= Mover.Points.Num();
 				if (!bFinished && Mover.bFaceSteps)
 				{
-					AlignFacing(Actor, Mover.Facings[Mover.Index]);
+					const FIntPoint Next = FGorky17Utils::FacingToVector(Mover.Facings[Mover.Index]);
+					Mover.TargetYaw = FMath::RadiansToDegrees(FMath::Atan2(static_cast<float>(Next.Y), static_cast<float>(Next.X)));
 				}
 			}
 		}
@@ -722,6 +945,7 @@ void UTurnBasedCombatSubsystem::StartPlayerTurn()
 {
 	Phase = ETurnPhase::Squad;
 	bSquadUnitMoving = false;
+	bAttackMode = false;
 
 	// Burning barrels count their rounds down (Godot _start_player_turn).
 	TArray<TWeakObjectPtr<AActor>> BurntOut;
@@ -812,22 +1036,87 @@ void UTurnBasedCombatSubsystem::RefreshOverlay()
 			Reach.Add(Entry.Key);
 		}
 	}
-	Overlay->SetCells(ETurnOverlayLayer::Reachable, Reach);
-	// Attack preview: targets the weapon can reach now (enemies, barrels, barricades).
-	TArray<FIntPoint> Targets;
-	if (!State->bHasAttacked && State->AP >= Balance.AttackAPCost)
+	// Godot _update_reachable_overlay_for_active_unit: the attack mode shows only the weapon's dot matrix, the move mode
+	// only the green walk cells.
+	if (bAttackMode)
 	{
-		for (const TPair<FIntPoint, FTurnBasedAttackCell>& Entry : TurnBasedRules::GetWeaponAttackCells(*Grid, State->GridPos, WeaponOf(Unit), State->Stance, Balance))
+		Overlay->ClearLayer(ETurnOverlayLayer::Reachable);
+		AttackCells = TurnBasedRules::GetWeaponAttackCells(*Grid, State->GridPos, WeaponOf(Unit), State->Stance, Balance);
+		TArray<FIntPoint> Cells;
+		TArray<float> Falloff;
+		for (const TPair<FIntPoint, FTurnBasedAttackCell>& Entry : AttackCells)
 		{
-			const EGorkyOccupantType Type = Grid->GetOccupantType(Entry.Key);
-			if ((Type == EGorkyOccupantType::Enemy || Type == EGorkyOccupantType::Barrel || Type == EGorkyOccupantType::Barricade)
-				&& GorkyLineOfSight::HasLineOfSight(State->GridPos, Entry.Key, *Grid))
-			{
-				Targets.Add(Entry.Key);
-			}
+			// Godot: lerp(1.0, 0.25, (distance - 1) / max(1, max_range - 1)).
+			const float Span = FMath::Max(1.f, static_cast<float>(Entry.Value.MaxRange - 1));
+			Cells.Add(Entry.Key);
+			Falloff.Add(FMath::Lerp(1.f, 0.25f, static_cast<float>(Entry.Value.Distance - 1) / Span));
 		}
+		Overlay->SetAttackCells(Cells, Falloff);
+		return;
 	}
-	Overlay->SetCells(ETurnOverlayLayer::Attack, Targets);
+	AttackCells.Reset();
+	Overlay->SetAttackCells(TArray<FIntPoint>(), TArray<float>());
+	Overlay->SetCells(ETurnOverlayLayer::Reachable, Reach);
+}
+
+void UTurnBasedCombatSubsystem::EnterAttackMode()
+{
+	if (Phase != ETurnPhase::Squad || !GetActiveUnit())
+	{
+		return;
+	}
+	bAttackMode = true;
+	const UWeaponDataAsset* Weapon = WeaponOf(GetActiveUnit());
+	Log(FString::Printf(TEXT("🎯 Режим прицеливания: %s"), Weapon && !Weapon->WeaponName.IsEmpty() ? *Weapon->WeaponName.ToString() : TEXT("МТКМ-16")));
+	RefreshOverlay();
+	Changed();
+}
+
+void UTurnBasedCombatSubsystem::ExitAttackMode(const FString& Line)
+{
+	if (!bAttackMode)
+	{
+		return;
+	}
+	bAttackMode = false;
+	if (!Line.IsEmpty())
+	{
+		Post(TEXT("ТАКТИКА"), Line);
+	}
+	RefreshOverlay();
+	Changed();
+}
+
+bool UTurnBasedCombatSubsystem::ToggleAttackMode()
+{
+	if (bAttackMode)
+	{
+		ExitAttackMode();
+		return false;
+	}
+	EnterAttackMode();
+	return bAttackMode;
+}
+
+void UTurnBasedCombatSubsystem::SetHoveredPoint(const FVector& WorldPoint)
+{
+	HoveredCell = Grid ? Grid->WorldToGrid(WorldPoint) : FIntPoint(-999, -999);
+}
+
+bool UTurnBasedCombatSubsystem::GetHoverHitChance(FVector& OutWorld, FString& OutText) const
+{
+	const FTurnBasedAttackCell* Info = bAttackMode && Grid ? AttackCells.Find(HoveredCell) : nullptr;
+	if (!Info)
+	{
+		return false;
+	}
+	OutWorld = Grid->GridToWorld(HoveredCell) + FVector(0.f, 0.f, 160.f);
+	OutText = FString::Printf(TEXT("🎯 %d%%"), FMath::RoundToInt(Info->HitChance * 100.f));
+	if (Info->ProjectedDamage > 0.f)
+	{
+		OutText += FString::Printf(TEXT(" | 💥 %d"), FMath::RoundToInt(Info->ProjectedDamage));
+	}
+	return true;
 }
 
 bool UTurnBasedCombatSubsystem::SelectUnit(AOperativeCharacter* Unit)
@@ -854,6 +1143,7 @@ bool UTurnBasedCombatSubsystem::SelectUnit(AOperativeCharacter* Unit)
 		return true;
 	}
 	ActiveIndex = Index;
+	bAttackMode = false; // Godot select_squad_unit
 	if (USquadSubsystem* SquadSystem = GetWorld()->GetSubsystem<USquadSubsystem>())
 	{
 		SquadSystem->SetLeader(Unit);
@@ -1003,6 +1293,18 @@ bool UTurnBasedCombatSubsystem::RotateActiveUnitClockwise()
 
 FTurnAttackResult UTurnBasedCombatSubsystem::AttackCell(const FIntPoint& Cell, bool bGuaranteeHit, bool bSkipShake)
 {
+	const FTurnAttackResult Result = ResolveAttackCell(Cell, bGuaranteeHit, bSkipShake);
+	if (Result.bSuccess && bAttackMode && IsActive())
+	{
+		bAttackMode = false; // Godot attack_target_cell -> exit_attack_mode after a shot
+		RefreshOverlay();
+		Changed();
+	}
+	return Result;
+}
+
+FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& Cell, bool bGuaranteeHit, bool bSkipShake)
+{
 	FTurnAttackResult Result;
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* State = States.Find(Unit);
@@ -1100,6 +1402,10 @@ FTurnAttackResult UTurnBasedCombatSubsystem::AttackCell(const FIntPoint& Cell, b
 			Feedback->SpawnTracer(Unit->GetMuzzleLocation(), Target->GetActorLocation(), UCombatFeedbackSubsystem::DefaultTracerColor());
 		}
 		DetonateBarrel(Cell, Target);
+		if (!IsActive())
+		{
+			return Result; // the blast ended the fight
+		}
 	}
 	else if (Type == EGorkyOccupantType::Barricade)
 	{
@@ -1197,6 +1503,7 @@ void UTurnBasedCombatSubsystem::EndCurrentUnitTurn()
 	}
 	RelocateTarget.Reset();
 	RelocateCells.Reset();
+	bAttackMode = false; // Godot end_current_unit_turn
 	++ActiveIndex;
 	if (Squad.IsValidIndex(ActiveIndex))
 	{
@@ -1406,6 +1713,12 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 		SelectUnit(Cast<AOperativeCharacter>(Grid->GetOccupant(Cell)));
 		break;
 	default:
+		if (bAttackMode)
+		{
+			// Godot main.gd: in the attack mode an empty cell is no walk order.
+			Post(TEXT("ТАКТИКА"), TEXT("⚠️ В этой клетке нет цели для выстрела! (ПКМ / Esc для возврата к перемещению)"));
+			break;
+		}
 		MoveActiveUnitTo(Cell);
 		break;
 	}
@@ -1642,9 +1955,19 @@ bool UTurnBasedCombatSubsystem::RelocateBarricade(AActor* Barricade, const FIntP
 		}
 	}
 	const FVector Target = Grid->GridToWorld(Cell);
+	const FTransform Before = Barricade->GetActorTransform();
 	Barricade->SetActorLocationAndRotation(FVector(Target.X, Target.Y, Barricade->GetActorLocation().Z), FRotator(0.f, Yaw, 0.f),
 		false, nullptr, ETeleportType::TeleportPhysics);
 	RegisterBarricadeCells(Barricade);
+	if (bCinematics)
+	{
+		// Godot: the barricade glides to its new place and turn in 0.25 s (quad ease-out); the grid already has it.
+		FObjectGlide& Glide = Glides.AddDefaulted_GetRef();
+		Glide.Actor = Barricade;
+		Glide.From = Before;
+		Glide.To = Barricade->GetActorTransform();
+		Barricade->SetActorTransform(Before, false, nullptr, ETeleportType::TeleportPhysics);
+	}
 	// The operative turns to face the barricade.
 	UnitState->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Cell - UnitState->GridPos));
 	AlignFacing(Unit, UnitState->Facing);
@@ -1760,6 +2083,10 @@ bool UTurnBasedCombatSubsystem::RelocateObject(const FIntPoint& ObjectCell, cons
 		if (Grid->GetOccupantType(Step) == EGorkyOccupantType::Mine)
 		{
 			DetonateMine(Step, Grid->GetOccupant(Step), Unit);
+			if (!IsActive())
+			{
+				return true; // the mine ended the fight
+			}
 		}
 	}
 
@@ -1904,21 +2231,23 @@ FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType T
 	const TMap<FIntPoint, int32> Reach = Grid->GetReachableCells(UnitPos, MaxWalkAP);
 	Candidates.StableSort([&UnitPos, &Chebyshev](const FIntPoint& A, const FIntPoint& B) { return Chebyshev(A, UnitPos) < Chebyshev(B, UnitPos); });
 	int32 BestCost = MAX_int32;
+	bool bFoundStand = false;
 	for (const FIntPoint& Candidate : Candidates)
 	{
 		const int32* Cost = Reach.Find(Candidate);
 		if (Cost && *Cost < BestCost)
 		{
 			TArray<FIntPoint> Path = Grid->FindPath(UnitPos, Candidate, MaxWalkAP);
-			if (!Path.IsEmpty())
+			if (!Path.IsEmpty() || Candidate == UnitPos) // already standing there: no walk
 			{
 				BestCost = *Cost;
 				Check.StandCell = Candidate;
 				Check.Path = MoveTemp(Path);
+				bFoundStand = true;
 			}
 		}
 	}
-	if (Check.Path.IsEmpty())
+	if (!bFoundStand)
 	{
 		Check.Reason = TEXT("Слишком далеко для перехода и установки за текущий ход");
 		return Check;
@@ -1927,6 +2256,24 @@ FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType T
 	Check.APCost = BestCost + DeployCost;
 	Check.Reason = TEXT("OK");
 	return Check;
+}
+
+void UTurnBasedCombatSubsystem::StartGrowIn(AActor* Object)
+{
+	// Godot _handle_tactical_deployable_placement: after 0.2 s the item grows from 0.05 to full size in 0.45 s (back ease-out).
+	if (!bCinematics || !IsValid(Object))
+	{
+		return;
+	}
+	FObjectGlide& Glide = Glides.AddDefaulted_GetRef();
+	Glide.Actor = Object;
+	Glide.To = Object->GetActorTransform();
+	Glide.From = Glide.To;
+	Glide.From.SetScale3D(Glide.To.GetScale3D() * 0.05f);
+	Glide.Duration = 0.45f;
+	Glide.Delay = 0.2f;
+	Glide.bBackEase = true;
+	Object->SetActorScale3D(Glide.From.GetScale3D());
 }
 
 void UTurnBasedCombatSubsystem::RegisterDeployable(EDeployableType Type, AActor* Object, const FIntPoint& Cell, float Yaw)
@@ -1992,6 +2339,7 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 		UnitState->AP -= TotalAP;
 		FaceTarget(*UnitState);
 		RegisterDeployable(Type, Spawned, Cell, Yaw);
+		StartGrowIn(Spawned);
 		Log(FString::Printf(TEXT("🛠️ %s собрал(а) и установил(а) %s (-%d AP)."), *NameOf(Unit), *Name, TotalAP));
 		RefreshOverlay();
 		Changed();
@@ -2051,6 +2399,7 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 		Grid->SetOccupant(StandCell, Moved, EGorkyOccupantType::Squad);
 		FaceTarget(*State);
 		RegisterDeployable(Type, WeakSpawned.Get(), Cell, Yaw);
+		StartGrowIn(WeakSpawned.Get());
 		State->AP -= TotalAP;
 		Log(FString::Printf(TEXT("🛠️ %s подошел(а) и установил(а) %s (-%d AP)."), *NameOf(Moved), *Name, TotalAP));
 		Changed();
@@ -2690,6 +3039,10 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 		{
 			ApplySquadHit(Victim, Damage, NameOf(Attacker));
 			Log(FString::Printf(TEXT("🐺 Враг %s атаковал %s: %d урона!"), *NameOf(Attacker), *NameOf(Victim), Damage));
+			if (!IsActive())
+			{
+				return; // the bite killed an operative: mission failed, the fight is over
+			}
 			if (IsDead(Victim))
 			{
 				OnSquadMemberKilled(Victim, TargetPos);
@@ -2841,13 +3194,18 @@ void UTurnBasedCombatSubsystem::DetonateBarrel(const FIntPoint& Cell, AActor* Ba
 			{
 				continue;
 			}
-			const float Damage = State->bSquad
+			const bool bSquadMember = State->bSquad;
+			const float Damage = bSquadMember
 				? FMath::Max(1, FMath::RoundToInt(Balance.BarrelDamage * TurnBasedRules::StanceDamageMultiplier(State->Stance, Balance)))
 				: Balance.BarrelDamage;
-			ApplyDamage(Occupant, Damage, TEXT("Бочка"));
+			ApplyBlast(Occupant, bSquadMember, Damage, TEXT("Бочка"));
+			if (!IsActive())
+			{
+				return; // an operative's death failed the mission: the grid and the unit states are gone
+			}
 			if (IsDead(Occupant))
 			{
-				if (State->bSquad)
+				if (bSquadMember)
 				{
 					OnSquadMemberKilled(Occupant, HitCell);
 				}
@@ -2887,10 +3245,15 @@ void UTurnBasedCombatSubsystem::DetonateMine(const FIntPoint& Cell, AActor* Mine
 	State->AP = 0;
 	State->GridPos = Cell;
 	PlaceOnCell(Victim, Cell);
-	ApplyDamage(Victim, Damage, TEXT("Мина"));
+	const bool bSquadMember = State->bSquad;
+	ApplyBlast(Victim, bSquadMember, Damage, TEXT("Мина"));
+	if (!IsActive())
+	{
+		return; // the blast ended the fight (mission failed / wave cleared): the states are gone
+	}
 	if (IsDead(Victim))
 	{
-		if (State->bSquad)
+		if (bSquadMember)
 		{
 			OnSquadMemberKilled(Victim, Cell);
 		}
@@ -2911,6 +3274,10 @@ void UTurnBasedCombatSubsystem::DetonateMine(const FIntPoint& Cell, AActor* Mine
 void UTurnBasedCombatSubsystem::OnEnemyKilled(AActor* Enemy, const FIntPoint& Cell)
 {
 	Log(FString::Printf(TEXT("☠️ Враг %s уничтожен!"), *NameOf(Enemy)));
+	if (!Grid)
+	{
+		return; // the fight already ended (e.g. the kill cleared the wave)
+	}
 	if (const FTurnUnitState* State = GetUnitState(Enemy))
 	{
 		Grid->ClearOccupant(State->GridPos);
@@ -2924,6 +3291,10 @@ void UTurnBasedCombatSubsystem::OnEnemyKilled(AActor* Enemy, const FIntPoint& Ce
 void UTurnBasedCombatSubsystem::OnSquadMemberKilled(AActor* Member, const FIntPoint& Cell)
 {
 	Log(FString::Printf(TEXT("⚰️ Боец %s пал в бою!"), *NameOf(Member)));
+	if (!Grid)
+	{
+		return; // the death already ended the mission and the fight with it
+	}
 	Grid->ClearOccupant(Cell);
 	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Member);
 	Squad.RemoveAll([Operative](const TWeakObjectPtr<AOperativeCharacter>& Weak) { return Weak.Get() == Operative || !Weak.IsValid(); });

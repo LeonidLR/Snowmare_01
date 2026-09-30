@@ -233,6 +233,10 @@ private:
 	TObjectPtr<UTurnBasedHudWidget> TurnBasedHud;
 
 	void DrawMessageFeed();
+	/** Turn-based attack mode: the hovered cell's hit chance (Godot hit_chance_label). */
+	void DrawHitChanceLabel();
+	/** The box being dragged to select squad members (Godot selection_box_canvas). */
+	void DrawSelectionBox();
 	UPROPERTY(Transient)
 	TObjectPtr<class UFrostVignetteWidget> FrostVignette;
 	/** Draws the objective banner; returns its bottom edge (Y). */

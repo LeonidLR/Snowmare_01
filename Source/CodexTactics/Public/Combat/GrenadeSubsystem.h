@@ -11,7 +11,8 @@ class UInstancedStaticMeshComponent;
 
 /**
  * Aim indicators of a grenade throw: the range ring around the thrower (by stance), the blast ring at the aim point and
- * the arc (glowing segments, M_CombatFeedback). Godot reference: main.gd _create_grenade_aim_indicators /
+ * the arc (glowing segments, M_CombatFeedback), and under the blast ring the pulsing blast zone with the epicentre
+ * crosshair (M_AoeBlast, Godot aoe_blast_ring.gdshader). Godot reference: main.gd _create_grenade_aim_indicators /
  * _update_grenade_aim_preview (range ring (1, 0.72, 0.15), AoE ring (1, 0.3, 0.15), arc (1, 0.82, 0.25)).
  */
 UCLASS(NotBlueprintable)
@@ -27,6 +28,9 @@ public:
 
 	int32 GetSegmentCount() const;
 
+	/** The blast-zone plane (fill + crosshair) is placed and shown. */
+	bool IsBlastZoneShown() const;
+
 private:
 	void SetupMaterials();
 	static void AddCircle(TArray<FTransform>& Out, const FVector& Center, float Radius, int32 Segments, float Width);
@@ -39,6 +43,10 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UInstancedStaticMeshComponent> Arc;
+
+	/** Godot aoe plane: 8.2 m for the 4 m blast (UV 0.5 = radius x 1.025). */
+	UPROPERTY()
+	TObjectPtr<class UStaticMeshComponent> BlastZone;
 
 	bool bMaterialsReady = false;
 };

@@ -8,7 +8,8 @@
 
 ATurnGridOverlayActor::ATurnGridOverlayActor()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	// Ticks for the pulses (Godot tactical_grid_overlay.gd _process).
+	PrimaryActorTick.bCanEverTick = true;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Glow(TEXT("/Game/VFX/Materials/M_CombatFeedback.M_CombatFeedback"));
 	if (Glow.Succeeded())
@@ -59,12 +60,23 @@ void ATurnGridOverlayActor::SetGrid(const UGorkyGridManager* InGrid)
 	Grid = InGrid;
 	for (const TPair<ETurnOverlayLayer, TObjectPtr<UInstancedStaticMeshComponent>>& Entry : OverlayLayers)
 	{
+		if (Entry.Key == ETurnOverlayLayer::Attack && Entry.Value)
+		{
+			// Godot tactical_weapon_matrix_dots.gdshader; the falloff rides in per-instance custom data 0.
+			if (UMaterialInterface* Dots = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/Materials/M_WeaponMatrixDots.M_WeaponMatrixDots")))
+			{
+				Entry.Value->SetMaterial(0, Dots);
+				Entry.Value->SetNumCustomDataFloats(1);
+				continue;
+			}
+		}
 		if (GlowMaterial && Entry.Value)
 		{
 			UMaterialInstanceDynamic* Instance = UMaterialInstanceDynamic::Create(GlowMaterial, this);
 			Instance->SetVectorParameterValue(TEXT("Color"), LayerColors[Entry.Key]);
 			Instance->SetScalarParameterValue(TEXT("Intensity"), LayerIntensity[Entry.Key]);
 			Entry.Value->SetMaterial(0, Instance);
+			LayerInstances.Add(Entry.Key, Instance);
 		}
 	}
 	TArray<FIntPoint> All;
@@ -104,6 +116,38 @@ void ATurnGridOverlayActor::SetCells(ETurnOverlayLayer Layer, const TArray<FIntP
 			FVector(Scale, Scale, 1.f)));
 	}
 	Mesh->AddInstances(Transforms, false, true);
+}
+
+void ATurnGridOverlayActor::SetAttackCells(const TArray<FIntPoint>& Cells, const TArray<float>& Falloff)
+{
+	UInstancedStaticMeshComponent* Mesh = OverlayLayers.FindRef(ETurnOverlayLayer::Attack);
+	const UGorkyGridManager* GridManager = Grid.Get();
+	AttackFalloff.Reset();
+	if (!Mesh)
+	{
+		return;
+	}
+	Mesh->ClearInstances();
+	if (!GridManager)
+	{
+		return;
+	}
+	// Godot: a quad inset 4 cm from each cell edge, just above the other layers.
+	const float Scale = (GridManager->CellSize - 8.f) / 100.f;
+	for (int32 Index = 0; Index < Cells.Num(); ++Index)
+	{
+		const int32 Instance = Mesh->AddInstance(FTransform(FRotator::ZeroRotator,
+			GridManager->GridToWorld(Cells[Index]) + FVector(0.f, 0.f, LayerHeights[ETurnOverlayLayer::Attack]), FVector(Scale, Scale, 1.f)), true);
+		const float Value = Falloff.IsValidIndex(Index) ? Falloff[Index] : 1.f;
+		Mesh->SetCustomDataValue(Instance, 0, Value, true);
+		AttackFalloff.Add(Cells[Index], Value);
+	}
+}
+
+float ATurnGridOverlayActor::GetAttackCellFalloff(const FIntPoint& Cell) const
+{
+	const float* Value = AttackFalloff.Find(Cell);
+	return Value ? *Value : -1.f;
 }
 
 int32 ATurnGridOverlayActor::GetCellCount(ETurnOverlayLayer Layer) const
@@ -172,4 +216,42 @@ void ATurnGridOverlayActor::SetExposedZones(const TArray<int32>& TurnsByQuadrant
 	}
 	WarningMesh->AddInstances(Warning, false, true);
 	DangerMesh->AddInstances(Danger, false, true);
+}
+
+void ATurnGridOverlayActor::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	// Godot _process: exposed-zone outlines pulse at alpha 0.65 +- 0.35 (6 rad/s); the enemy target warning blinks
+	// between 0.25 and 0.95 (9 rad/s). The additive glow takes the alpha as brightness.
+	auto HasInstances = [this](ETurnOverlayLayer Layer)
+	{
+		const UInstancedStaticMeshComponent* Mesh = OverlayLayers.FindRef(Layer);
+		return Mesh && Mesh->GetInstanceCount() > 0;
+	};
+	auto SetPulse = [this](ETurnOverlayLayer Layer, float Alpha)
+	{
+		if (UMaterialInstanceDynamic* Instance = LayerInstances.FindRef(Layer))
+		{
+			Instance->SetScalarParameterValue(TEXT("Intensity"), LayerIntensity[Layer] * Alpha);
+		}
+	};
+	if (HasInstances(ETurnOverlayLayer::ExposedWarning) || HasInstances(ETurnOverlayLayer::ExposedDanger))
+	{
+		ExposedPulseTime += DeltaSeconds * 6.f;
+		const float Pulse = 0.65f + 0.35f * FMath::Sin(ExposedPulseTime);
+		SetPulse(ETurnOverlayLayer::ExposedWarning, Pulse);
+		SetPulse(ETurnOverlayLayer::ExposedDanger, Pulse);
+	}
+	if (HasInstances(ETurnOverlayLayer::Warning))
+	{
+		WarningPulseTime += DeltaSeconds * 9.f;
+		SetPulse(ETurnOverlayLayer::Warning, FMath::Lerp(0.25f, 0.95f, 0.5f + 0.5f * FMath::Sin(WarningPulseTime)));
+	}
+}
+
+float ATurnGridOverlayActor::GetLayerIntensity(ETurnOverlayLayer Layer) const
+{
+	float Value = 0.f;
+	const UMaterialInstanceDynamic* Instance = LayerInstances.FindRef(Layer);
+	return Instance && Instance->GetScalarParameterValue(TEXT("Intensity"), Value) ? Value : 0.f;
 }

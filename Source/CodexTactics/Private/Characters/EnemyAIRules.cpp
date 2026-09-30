@@ -153,6 +153,31 @@ FVector EnemyAIRules::FleeDirection(const FVector& Enemy, const FVector& Fire, c
 	return (Away * 0.7f + Tangent * 0.5f).GetSafeNormal();
 }
 
+bool EnemyAIRules::FireDetourWaypoint(const FVector& Enemy, const FVector& Fire, float AvoidRadius, const FVector& Target,
+	FVector& OutWaypoint, float StepDegrees)
+{
+	const FVector2D E(Enemy.X - Fire.X, Enemy.Y - Fire.Y);
+	const FVector2D T(Target.X - Fire.X, Target.Y - Fire.Y);
+	const FVector2D Segment = T - E;
+	// Closest approach of the straight way to the fire.
+	const float Along = Segment.SizeSquared() > KINDA_SMALL_NUMBER
+		? FMath::Clamp(-FVector2D::DotProduct(E, Segment) / Segment.SizeSquared(), 0.f, 1.f) : 0.f;
+	const float Closest = (E + Segment * Along).Size();
+	const bool bTargetInside = T.Size() < AvoidRadius;
+	if (Closest >= AvoidRadius && !bTargetInside)
+	{
+		return false;
+	}
+	const float EnemyAngle = FMath::Atan2(E.Y, E.X);
+	const float TargetAngle = FMath::Atan2(T.Y, T.X);
+	const float Delta = FMath::UnwindRadians(TargetAngle - EnemyAngle);
+	const float Step = FMath::Sign(Delta) * FMath::Min(FMath::Abs(Delta), FMath::DegreesToRadians(StepDegrees));
+	const float Orbit = AvoidRadius + 100.f;
+	const float Angle = EnemyAngle + Step;
+	OutWaypoint = FVector(Fire.X + Orbit * FMath::Cos(Angle), Fire.Y + Orbit * FMath::Sin(Angle), Enemy.Z);
+	return true;
+}
+
 int32 EnemyAIRules::SelectSpitterTarget(const FVector& Spitter, const TArray<FVector>& Operatives, const TArray<bool>& Elevated)
 {
 	int32 Best = INDEX_NONE;

@@ -1,4 +1,5 @@
 #include "Combat/CombatFeedbackSubsystem.h"
+#include "Characters/EnemyCharacter.h"
 #include "Combat/CombatFeedbackActor.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -132,6 +133,18 @@ void UCombatFeedbackSubsystem::HighlightTarget(AActor* Target)
 	if (ACombatFeedbackActor* Flash = SpawnFeedback(Target->GetActorLocation() + FVector(0.f, 0.f, 120.f)))
 	{
 		Flash->SetupLight(FLinearColor(1.f, 0.25f, 0.2f), 6.f * FeedbackLightPerEnergy, 450.f, 0.45f);
-		Flash->SetupOverlayFlash(Target, FLinearColor(1.f, 0.25f, 0.15f), 4.f, 0.4f);
+		// Godot _apply_enemy_target_fresnel: an enemy gets the red see-through fresnel edge (flash_alpha 1 -> 0 in 0.4 s).
+		UMaterialInterface* Fresnel = Target->IsA<AEnemyCharacter>()
+			? LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/Materials/M_TargetFresnel.M_TargetFresnel")) : nullptr;
+		if (Fresnel)
+		{
+			FLinearColor Red = FLinearColor::FromSRGBColor(FColor(255, 38, 26));
+			Red.A = 0.95f;
+			Flash->SetupOverlayFlash(Target, Red, 1.f, 0.4f, Fresnel);
+		}
+		else
+		{
+			Flash->SetupOverlayFlash(Target, FLinearColor(1.f, 0.25f, 0.15f), 4.f, 0.4f);
+		}
 	}
 }

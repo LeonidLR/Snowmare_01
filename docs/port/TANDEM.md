@@ -338,3 +338,10 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
    - Учет живых врагов волны. При `live_count == 0 && total_wave_enemies > 0` $\rightarrow$ вызов `NotifyWaveCleared()` $\rightarrow$ переход к подготовке следующей волны или победе.
 4. **Тесты:**
    - Тесты переключения Space (Tap -> Tactical Pause, Hold 3.0s -> Turn Based, Finish Prep -> Wave Start) в `CodexTacticsTests/Private/Combat/`.
+
+## 2026-09-30 (Claude)
+- Animation is generated, not hand-built: `Scripts/Editor/setup_operative_rifle_animation.py` and
+  `setup_enemy_animation.py` call `unreal.OperativeAnimGraphLibrary` (Source/CodexTacticsEditor) to rebuild the AnimGraphs.
+  The scripts only fill what is empty (graphs built while empty; CODEX_REBUILD_ANIM_GRAPHS=1 forces a rebuild): edit clips / look in the Blueprints — enemy BPs own capsule and mesh transform.
+- Turn-based movers set the actor location directly: anything reading movement must use
+  `UTurnBasedCombatSubsystem::GetTacticalMoveSpeed`, not the velocity.

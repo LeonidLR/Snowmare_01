@@ -138,4 +138,12 @@ namespace SquadFormation
 	 */
 	CODEXTACTICS_API float ComputeFollowerSpeed(const FSquadFormationConfig& Config, float FollowerMaxSpeed,
 		float DistanceToSlot, int32 SlotIndex, float TimeSeconds, bool bLeaderMoving);
+
+	/**
+	 * Targets of a box-selected group ordered to Center (Godot main.gd _get_group_target_positions): index 0 (the
+	 * leader) on the click, 1 / 2 to the right / left 1.8 m and 0.8 m back, 3 2.2 m behind, further ones in rows of
+	 * two 1.5 m apart. The heading is from the group's average position to Center (FallbackForward when too close).
+	 */
+	CODEXTACTICS_API TArray<FVector> ComputeGroupTargets(const FVector& Center, const FVector& GroupAverage,
+		const FVector& FallbackForward, int32 Count);
 }

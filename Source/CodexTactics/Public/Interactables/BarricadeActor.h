@@ -35,6 +35,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Barricade", meta = (ClampMin = "0"))
 	float TrapContactDistance = 180.f;
 
+	/** The squad may vault over it (Godot barricade.gd vault, on by default); enemies never do. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Barricade")
+	bool bVaultable = true;
+
 	/** Placeholder colour (Godot albedo 0.85 / 0.65 / 0.25). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Barricade")
 	FLinearColor BodyColor = FLinearColor::FromSRGBColor(FColor(217, 166, 64));

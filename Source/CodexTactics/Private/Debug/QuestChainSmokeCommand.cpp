@@ -163,6 +163,8 @@ namespace QuestChainSmoke
 
 	void Start(UWorld* World)
 	{
+		// The squad starts at the layout's test start, not at the (play-testing) PlayerStart.
+		SmokeUtils::PlaceSquadAtTestStart(World);
 		TSharedRef<FState> State = MakeShared<FState>();
 		TSharedRef<FTimerHandle> Handle = MakeShared<FTimerHandle>();
 		TWeakObjectPtr<UWorld> WeakWorld(World);

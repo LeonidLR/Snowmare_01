@@ -90,6 +90,15 @@ namespace SquadFireSmoke
 			return true;
 		}
 		State.StageTime = 0.f;
+		// The hound is frozen in the air (no time): once the commander has landed, keep its feet level with the
+		// commander's, as on flat ground, so the line over the barricade does not depend on the floor under him.
+		if (State.Stage >= 1 && State.Stage <= 3 && State.Far.IsValid())
+		{
+			AEnemyCharacter* Hound = State.Far.Get();
+			FVector HoundLocation = Hound->GetActorLocation();
+			HoundLocation.Z = Commander->GetActorLocation().Z - Commander->GetSimpleCollisionHalfHeight() + Hound->GetSimpleCollisionHalfHeight();
+			Hound->SetActorLocation(HoundLocation, false, nullptr, ETeleportType::TeleportPhysics);
+		}
 		switch (State.Stage++)
 		{
 		case 0:
@@ -126,7 +135,12 @@ namespace SquadFireSmoke
 		case 2:
 		{
 			const FShootCandidate Crouched = Commander->FindShootTarget(0.1f);
-			Check(State, Crouched.Enemy == State.Far.Get() && FMath::IsNearlyEqual(Crouched.Cover, 0.8f), FString::Printf(TEXT("crouched: cover %.2f"), Crouched.Cover));
+			const AEnemyCharacter* Hound = State.Far.Get();
+			const FVector HoundFeet = Hound ? Hound->GetActorLocation() - FVector(0.f, 0.f, Hound->GetSimpleCollisionHalfHeight()) : FVector::ZeroVector;
+			const FVector BarricadeTop = State.Barricade.IsValid() ? State.Barricade->GetComponentsBoundingBox().Max : FVector::ZeroVector;
+			Check(State, Crouched.Enemy == State.Far.Get() && FMath::IsNearlyEqual(Crouched.Cover, 0.8f), FString::Printf(
+				TEXT("crouched: cover %.2f (muzzle z %.0f, hound feet z %.0f, barricade top z %.0f)"), Crouched.Cover,
+				Commander->GetMuzzleLocation().Z, HoundFeet.Z, BarricadeTop.Z));
 			Commander->SetStance(EOperativeStance::Standing);
 			return true;
 		}

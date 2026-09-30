@@ -1,4 +1,5 @@
 #include "Combat/GrenadeSubsystem.h"
+#include "Components/StaticMeshComponent.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/GrenadeActor.h"
@@ -52,6 +53,16 @@ AGrenadeAimActor::AGrenadeAimActor()
 	RangeRing = Make(TEXT("RangeRing"));
 	BlastRing = Make(TEXT("BlastRing"));
 	Arc = Make(TEXT("Arc"));
+	BlastZone = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BlastZone"));
+	BlastZone->SetupAttachment(GetRootComponent());
+	BlastZone->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BlastZone->SetCastShadow(false);
+	BlastZone->SetCanEverAffectNavigation(false);
+	BlastZone->SetVisibility(false);
+	if (PlaneMesh)
+	{
+		BlastZone->SetStaticMesh(PlaneMesh);
+	}
 }
 
 void AGrenadeAimActor::SetupMaterials()
@@ -76,6 +87,10 @@ void AGrenadeAimActor::SetupMaterials()
 		Instance->SetVectorParameterValue(TEXT("Color"), Spec.Value);
 		Instance->SetScalarParameterValue(TEXT("Intensity"), 2.5f);
 		Spec.Key->SetMaterial(0, Instance);
+	}
+	if (UMaterialInterface* Blast = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/Materials/M_AoeBlast.M_AoeBlast")))
+	{
+		BlastZone->SetMaterial(0, Blast);
 	}
 }
 
@@ -111,6 +126,15 @@ void AGrenadeAimActor::Show(const FVector& ThrowerGround, float MaxRange, const 
 	RangeRing->AddInstances(Range, false, true);
 	BlastRing->AddInstances(Blast, false, true);
 	Arc->AddInstances(ArcSegments, false, true);
+	// Godot plane 8.2 m for the 4 m radius: the engine plane is 100 cm.
+	BlastZone->SetWorldLocationAndRotation(Target + FVector(0.f, 0.f, 3.f), FRotator::ZeroRotator);
+	BlastZone->SetWorldScale3D(FVector(BlastRadius * 2.05f / 100.f, BlastRadius * 2.05f / 100.f, 1.f));
+	BlastZone->SetVisibility(true);
+}
+
+bool AGrenadeAimActor::IsBlastZoneShown() const
+{
+	return BlastZone && BlastZone->IsVisible() && BlastZone->GetMaterial(0) && BlastZone->GetMaterial(0)->GetName() == TEXT("M_AoeBlast");
 }
 
 int32 AGrenadeAimActor::GetSegmentCount() const

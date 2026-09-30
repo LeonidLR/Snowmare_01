@@ -2,6 +2,7 @@
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
+#include "Combat/HealthComponent.h"
 #include "CodexTactics.h"
 #include "CollisionQueryParams.h"
 #include "Engine/World.h"
@@ -70,12 +71,69 @@ bool USquadSubsystem::SetLeaderByIndex(int32 RosterIndex)
 	return Members.IsValidIndex(RosterIndex) && SetLeader(Members[RosterIndex].Get());
 }
 
-bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader)
+void USquadSubsystem::SetSelectedGroup(const TArray<AOperativeCharacter*>& Group, bool bSwitchLeader)
+{
+	for (const TWeakObjectPtr<AOperativeCharacter>& Old : SelectedGroup)
+	{
+		if (AOperativeCharacter* Operative = Old.Get())
+		{
+			Operative->SetGroupSelected(false, false);
+		}
+	}
+	SelectedGroup.Reset();
+	for (AOperativeCharacter* Operative : Group)
+	{
+		if (Operative)
+		{
+			SelectedGroup.Add(Operative);
+		}
+	}
+	const bool bMulti = SelectedGroup.Num() > 1;
+	for (const TWeakObjectPtr<AOperativeCharacter>& Selected : SelectedGroup)
+	{
+		Selected->SetGroupSelected(true, bMulti);
+	}
+	if (bSwitchLeader && !SelectedGroup.IsEmpty() && !SelectedGroup.Contains(Leader))
+	{
+		SetLeader(SelectedGroup[0].Get(), false);
+	}
+}
+
+TArray<AOperativeCharacter*> USquadSubsystem::GetSelectedGroup() const
+{
+	TArray<AOperativeCharacter*> Result;
+	for (const TWeakObjectPtr<AOperativeCharacter>& Selected : SelectedGroup)
+	{
+		AOperativeCharacter* Operative = Selected.Get();
+		if (Operative && Operative->HealthComponent && Operative->HealthComponent->IsAlive())
+		{
+			Result.Add(Operative);
+		}
+	}
+	if (Result.IsEmpty() && Leader.IsValid())
+	{
+		Result.Add(Leader.Get());
+	}
+	return Result;
+}
+
+bool USquadSubsystem::IsGroupSelected(const AOperativeCharacter* Operative) const
+{
+	return Operative && SelectedGroup.ContainsByPredicate([Operative](const TWeakObjectPtr<AOperativeCharacter>& Selected) { return Selected.Get() == Operative; });
+}
+
+bool USquadSubsystem::HasMultiSelection() const
+{
+	return GetSelectedGroup().Num() > 1;
+}
+
+bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup)
 {
 	if (!NewLeader || !Members.Contains(NewLeader))
 	{
 		return false;
 	}
+	const bool bDropGroup = bResetGroup && (SelectedGroup.Num() > 1 || (SelectedGroup.Num() == 1 && SelectedGroup[0].Get() != NewLeader));
 	if (Leader.Get() != NewLeader)
 	{
 		Leader = NewLeader;
@@ -98,6 +156,10 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader)
 			}
 		}
 		UE_LOG(LogCodexTactics, Log, TEXT("Squad leader: %s"), *NewLeader->DisplayName.ToString());
+	}
+	if (bDropGroup)
+	{
+		SetSelectedGroup({ NewLeader }, false); // after the switch, so the rings see the new leader
 	}
 	OnLeaderChanged.Broadcast(NewLeader);
 	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))

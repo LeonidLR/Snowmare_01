@@ -112,3 +112,42 @@ namespace SquadFormation
 		return Speed;
 	}
 }
+
+TArray<FVector> SquadFormation::ComputeGroupTargets(const FVector& Center, const FVector& GroupAverage,
+	const FVector& FallbackForward, int32 Count)
+{
+	FVector Dir = Center - GroupAverage;
+	Dir.Z = 0.f;
+	if (Dir.SizeSquared() < 100.f) // Godot: < 0.01 m²
+	{
+		Dir = FVector(FallbackForward.X, FallbackForward.Y, 0.f); // a direction (unit scale), not a distance
+		if (Dir.SizeSquared() < 0.01f)
+		{
+			Dir = FVector::ForwardVector;
+		}
+	}
+	Dir.Normalize();
+	const FVector Right(-Dir.Y, Dir.X, 0.f);
+
+	TArray<FVector> Targets;
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		FVector Offset = FVector::ZeroVector;
+		switch (Index)
+		{
+		case 0: break;
+		case 1: Offset = Right * 180.f - Dir * 80.f; break;
+		case 2: Offset = -Right * 180.f - Dir * 80.f; break;
+		case 3: Offset = -Dir * 220.f; break;
+		default:
+		{
+			const int32 Row = Index / 2;
+			const float Side = Index % 2 == 1 ? 1.f : -1.f;
+			Offset = Right * (180.f * Side) - Dir * (150.f * Row);
+			break;
+		}
+		}
+		Targets.Add(FVector(Center.X + Offset.X, Center.Y + Offset.Y, Center.Z));
+	}
+	return Targets;
+}
