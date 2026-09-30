@@ -745,6 +745,15 @@ void URelocationSubsystem::DropAllForMine()
 	DropAllTasks(LOCTEXT("MineAhead", "⚠️ Впереди мина! Бросаю {0} и останавливаюсь!"));
 }
 
+void URelocationSubsystem::DropAllForCombat()
+{
+	if (PlacingObject.IsValid())
+	{
+		CancelPlacement();
+	}
+	DropAllTasks(LOCTEXT("Alarm", "⚠️ Боевая тревога! Бросаю {0} и занимаю оборону!"));
+}
+
 void URelocationSubsystem::DropAllTasks(const FText& LineFormat)
 {
 	for (FRelocateTask& Task : Tasks)

@@ -78,6 +78,9 @@ public:
 	/** A mine was spotted: drop pushed objects and cancel placement (Godot _cancel_or_finalize_active_relocates_for_mine). */
 	void DropAllForMine();
 
+	/** An operative carrying something was hit: everything carried drops (Godot _cancel_or_finalize_active_relocates_for_combat). */
+	void DropAllForCombat();
+
 	/** Spawn class for a deployable type (game mode settings). */
 	TSubclassOf<ADeployableActor> GetDeployableClass(EDeployableType Type) const;
 

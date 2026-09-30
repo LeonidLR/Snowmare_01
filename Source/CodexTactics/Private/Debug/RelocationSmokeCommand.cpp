@@ -2,7 +2,8 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.RelocationSmoke
 // Spawns a barrel ahead of the leader, opens its action menu, presses «Вытолкать», places it 6 m to the side:
 // the leader walks up, pushes it (carry speed) and sets it down there with collision restored. Then a frozen leader
-// (85 % cold) is refused, and placement can be cancelled.
+// (85 % cold) is refused, and placement can be cancelled. Last, a hit while pushing drops the barrel (Godot
+// take_damage -> _cancel_or_finalize_active_relocates_for_combat).
 
 #include "CoreMinimal.h"
 
@@ -26,7 +27,7 @@ namespace RelocationSmoke
 	constexpr float Timeout = 45.f;
 	constexpr float PlaceTolerance = 30.f;
 
-	enum class EPhase : uint8 { OpenMenu, Moving, Done };
+	enum class EPhase : uint8 { OpenMenu, Moving, HitDrop, Done };
 
 	struct FState
 	{
@@ -36,6 +37,7 @@ namespace RelocationSmoke
 		TWeakObjectPtr<ABarrelActor> Barrel;
 		bool bMenuOk = false;
 		bool bCarrySeen = false;
+		bool bFirstPassOk = false;
 	};
 
 	void Finish(bool bPass, const TCHAR* Reason)
@@ -110,7 +112,27 @@ namespace RelocationSmoke
 			const bool bCancelled = bStarted && !Relocation->IsPlacing();
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke menu=%d placed=%d pushed=%d coldRefused=%d cancel=%d"), State.bMenuOk ? 1 : 0,
 				bPlaced ? 1 : 0, State.bCarrySeen ? 1 : 0, bColdRefused ? 1 : 0, bCancelled ? 1 : 0);
-			Finish(State.bMenuOk && bPlaced && State.bCarrySeen && bColdRefused && bCancelled, TEXT("relocation finished"));
+			State.bFirstPassOk = State.bMenuOk && bPlaced && State.bCarrySeen && bColdRefused && bCancelled;
+			// Push it back to the start; the hit comes while the leader carries it.
+			Relocation->StartRelocate(Barrel, Leader);
+			State.Target = Barrel->GetActorLocation() - Leader->GetActorRightVector() * 600.f;
+			Relocation->UpdatePreview(State.Target);
+			Relocation->ConfirmPlacement(State.Target);
+			State.Phase = EPhase::HitDrop;
+			return true;
+		}
+
+		if (State.Phase == EPhase::HitDrop)
+		{
+			if (!Leader->bCarrying)
+			{
+				return true;
+			}
+			Leader->ForcedDodgeRollForTesting = 0.f; // no dodge
+			Leader->TakeHit(5.f, TEXT("Smoke"), false);
+			const bool bDropped = !Leader->bCarrying && Relocation->GetActiveTaskCount() == 0 && Barrel->Box->IsCollisionEnabled();
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke hit while pushing: dropped=%d"), bDropped ? 1 : 0);
+			Finish(State.bFirstPassOk && bDropped, TEXT("relocation finished"));
 			State.Phase = EPhase::Done;
 			return false;
 		}

@@ -20,6 +20,7 @@
 #include "Interactables/BarrelActor.h"
 #include "Interactables/LootCrateActor.h"
 #include "Interactables/ProximityMineActor.h"
+#include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TurretActor.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Navigation/PathFollowingComponent.h"
@@ -1550,6 +1551,15 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	const float Final = bBypassAvoidance ? FMath::Max(1.f, Amount)
 		: FMath::Max(1.f, Amount * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut));
 	HealthComponent->ApplyDirectHealthLoss(Final, Attacker);
+	// Godot take_damage: a hit makes the carrier drop what the squad is carrying.
+	if (bCarrying)
+	{
+		if (URelocationSubsystem* Relocation = GetWorld() ? GetWorld()->GetSubsystem<URelocationSubsystem>() : nullptr)
+		{
+			Relocation->DropAllForCombat();
+		}
+		SetCarrying(false);
+	}
 	UFloatingTextSubsystem::SpawnAboveOperative(this, bCrit ? FString::Printf(TEXT("💥 КРИТИЧЕСКИЙ УДАР! -%d"), FMath::FloorToInt(Final))
 		: FString::Printf(TEXT("-%d"), FMath::FloorToInt(Final)), bCrit ? FLinearColor(1.f, 0.25f, 0.1f) : FLinearColor(1.f, 0.3f, 0.3f));
 	// Godot rage_comp.on_incoming_hit(attacker_node, is_crit, final_incoming).
