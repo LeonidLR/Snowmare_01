@@ -3,6 +3,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/RelocationSubsystem.h"
 #include "Interactables/RelocationRules.h"
 #include "TimerManager.h"
 
@@ -55,8 +56,8 @@ void ADeployableActor::GetLeaderSupply(const AOperativeCharacter* Leader, int32&
 
 FActionMenuRequest ADeployableActor::BuildActionMenu(const AOperativeCharacter* Leader) const
 {
-	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	if (Flow && !RelocationRules::CanRelocateNow(Flow->GetPhase(), Flow->GetCombatMode()))
+	const URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+	if (Relocation && !Relocation->CanRelocateNow())
 	{
 		return FActionMenuRequest::MakeMessage(LOCTEXT("HQ", "ШТАБ"),
 			LOCTEXT("NotInCombat", "⚠️ Во время боя менять расположение объектов нельзя! Используйте тактическую паузу [ПРОБЕЛ]."));
@@ -118,8 +119,8 @@ void ADeployableActor::ExecuteAction(AOperativeCharacter* User)
 	{
 		return;
 	}
-	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	if (Flow && !RelocationRules::CanRelocateNow(Flow->GetPhase(), Flow->GetCombatMode()))
+	const URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+	if (Relocation && !Relocation->CanRelocateNow())
 	{
 		return;
 	}

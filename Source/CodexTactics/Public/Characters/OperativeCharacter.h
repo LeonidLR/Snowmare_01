@@ -224,6 +224,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative", meta = (ClampMin = "0", ClampMax = "100"))
 	float Luck = 25.f;
 
+	/** Exploring a camera zone alone (Godot is_in_camera_zone; set by ACameraZoneVolume). */
+	UPROPERTY(VisibleInstanceOnly, Transient, BlueprintReadOnly, Category = "CodexTactics|Operative")
+	bool bInCameraZone = false;
+
 	// --- Progression (Godot player.gd level / current_exp / unspent_stat_points) ---
 
 	/** Level 1..10 (Godot MAX_LEVEL). */

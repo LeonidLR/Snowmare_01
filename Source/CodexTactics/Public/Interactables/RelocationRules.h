@@ -34,8 +34,11 @@ namespace RelocationRules
 	/** Radius used where Godot has no limit (preparation: 9999 m). */
 	constexpr float UnlimitedRadius = 999900.f;
 
-	/** Objects can be moved outside a wave, in preparation and in the tactical pause (not in live combat). */
-	CODEXTACTICS_API bool CanRelocateNow(ECodexGamePhase Phase, ECodexCombatMode Mode);
+	/**
+	 * Objects can be moved outside a wave, in preparation and in the tactical pause (not in live combat) — and by a
+	 * leader exploring a camera zone alone (Godot is_in_camera_zone "zone solo").
+	 */
+	CODEXTACTICS_API bool CanRelocateNow(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo = false);
 
 	/** Placement radius for the current mode, cm. */
 	CODEXTACTICS_API float GetPlacementRadius(ECodexGamePhase Phase, ECodexCombatMode Mode, float PauseRadius, float WorkerPlacementRadius);

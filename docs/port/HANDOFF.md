@@ -485,7 +485,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Click rules (Godot main.gd plain click, `ACodexTacticsPlayerController::HandleWorldHit`): in a wave a live enemy becomes
   the priority target (direct assignment, no Ctrl); set-up items / movable objects are refused outside the pause; in
   the pause / preparation a set-up item opens its menu at once, in the pause a movable object is picked up for
-  relocation at once. The "solo in a camera zone" exception (is_in_camera_zone) is not ported.
+  relocation at once. A leader alone in a camera zone may move / pick up objects mid-wave (Godot is_zone_solo; `bInCameraZone`).
 - Targeted shots: the priority target now gets the barricade cover / blocking of `EvaluateShotLine` and is refused
   while raging (panic refusal: panic not ported). The barrel
   line «💥 Прицельный выстрел…» is posted only when the shot actually fires (Godot posts it even when frozen).
@@ -505,7 +505,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Frostbitten shove (Godot enemy_frostbitten.gd _attack_target: +2.5 m/s away, `LaunchCharacter`) and damage flashes (Godot player.gd _spawn_damage_flash red light 0.12 s, enemy_base.gd _flash_hit red glow 0.08 s): `UCombatFeedbackSubsystem::SpawnDamageFlash` / `FlashEnemyHit`; EnemyAISmoke checks both |
+| (this) | Camera-zone solo (Godot is_in_camera_zone / is_zone_solo in main.gd): `AOperativeCharacter::bInCameraZone` (set by `ACameraZoneVolume`), `RelocationRules::CanRelocateNow(..., bLeaderZoneSolo)`, `URelocationSubsystem::CanRelocateNow()` used by the controller, deployables and relocation; RelocationRulesTest, CameraZoneSmoke |
+| `038d016` | Frostbitten shove (Godot enemy_frostbitten.gd _attack_target: +2.5 m/s away, `LaunchCharacter`) and damage flashes (Godot player.gd _spawn_damage_flash red light 0.12 s, enemy_base.gd _flash_hit red glow 0.08 s): `UCombatFeedbackSubsystem::SpawnDamageFlash` / `FlashEnemyHit`; EnemyAISmoke checks both |
 | `fc3b672` | Rage aura (Godot rage_component.gd RageAura torus 0.75..1.05 m): an `ARadiusRingActor` (new `ShowRing` width parameter) follows the raging operative's feet; RageSmoke checks it, `HudShot rage` shows it |
 | `e7c58cd` | A hit on an operative carrying / pushing an object drops everything the squad carries (Godot player.gd take_damage -> main.gd _cancel_or_finalize_active_relocates_for_combat): `URelocationSubsystem::DropAllForCombat`; RelocationSmoke checks it |
 | `7607c2d` | Turn-based camera shake (Godot camera.gd add_trauma / trigger_weapon_shake / _process_shake; main.gd squad attack and turret volley): `CameraShakeRules` + CameraShakeRulesTest, `ATacticalCameraPawn::TriggerWeaponShake`, `UTurnBasedCombatSubsystem::ShakeCamera`; TurnBasedSmoke checks the trauma. `1615b89`: unity-build name fix in the victory panel |

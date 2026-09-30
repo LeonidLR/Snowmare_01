@@ -19,6 +19,7 @@ bool FRelocationWhenTest::RunTest(const FString&)
 	TestTrue(TEXT("Tactical pause"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause));
 	TestFalse(TEXT("Live combat"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime));
 	TestFalse(TEXT("Turn-based combat"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::TurnBased));
+	TestTrue(TEXT("Leader alone in a camera zone (Godot is_zone_solo)"), CanRelocateNow(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, true));
 	return true;
 }
 

@@ -110,6 +110,10 @@ void ACameraZoneVolume::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ACameraZoneVolume::Activate(AOperativeCharacter* Explorer)
 {
 	ActiveExplorer = Explorer;
+	if (Explorer)
+	{
+		Explorer->bInCameraZone = true;
+	}
 
 	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
 	if (PC && TargetCamera)
@@ -129,6 +133,10 @@ void ACameraZoneVolume::Activate(AOperativeCharacter* Explorer)
 
 void ACameraZoneVolume::Deactivate()
 {
+	if (AOperativeCharacter* Explorer = ActiveExplorer.Get())
+	{
+		Explorer->bInCameraZone = false;
+	}
 	ActiveExplorer.Reset();
 
 	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);

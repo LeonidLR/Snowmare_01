@@ -797,7 +797,9 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 	if (AInteractableActor* Object = Cast<AInteractableActor>(Hit.GetActor()))
 	{
 		const bool bDeployable = Object->IsA<ADeployableActor>();
-		if ((bDeployable || Object->bCanBeRelocated) && bWave && !bClickPause)
+		// Godot is_zone_solo: the leader alone in a camera zone may move / take objects mid-wave.
+		const bool bZoneSolo = Leader && Leader->bInCameraZone;
+		if ((bDeployable || Object->bCanBeRelocated) && bWave && !bClickPause && !bZoneSolo)
 		{
 			if (ClickMessages)
 			{
@@ -817,7 +819,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 			}
 			return;
 		}
-		if (!bDeployable && Object->bCanBeRelocated && bClickPause)
+		if (!bDeployable && Object->bCanBeRelocated && (bClickPause || (bWave && bZoneSolo)))
 		{
 			if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
 			{
@@ -1406,7 +1408,7 @@ void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
 	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
-	if (Flow && !RelocationRules::CanRelocateNow(Flow->GetPhase(), Flow->GetCombatMode()))
+	if (Relocation && !Relocation->CanRelocateNow())
 	{
 		PostHeadquarters(LOCTEXT("RelocateCombat", "⚠️ Во время боя менять расположение объектов нельзя! Используйте тактическую паузу [ПРОБЕЛ]."));
 		return;

@@ -136,7 +136,7 @@ bool URelocationSubsystem::StartRelocate(AInteractableActor* Target, AOperativeC
 		return false;
 	}
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	if (Flow && !RelocationRules::CanRelocateNow(Flow->GetPhase(), Flow->GetCombatMode()))
+	if (Flow && !CanRelocateNow())
 	{
 		Post(LOCTEXT("HQ", "ШТАБ"), LOCTEXT("NotInCombat",
 			"⚠️ Во время боя менять расположение объектов нельзя! Используйте тактическую паузу [ПРОБЕЛ]."));
@@ -577,7 +577,7 @@ void URelocationSubsystem::ConfirmPlacement(const FVector& GroundPoint)
 		Post(Worker->DisplayName, FText::Format(LOCTEXT("Planned", "📋 [ПЛАН] {0}: Запланирован перенос ({1}) на новую позицию! [ПРОБЕЛ — исполнить]"),
 			Worker->DisplayName, NameOf(Object)));
 	}
-	else if (!Flow || RelocationRules::CanRelocateNow(Flow->GetPhase(), Flow->GetCombatMode()))
+	else if (CanRelocateNow())
 	{
 		ExecuteRelocate(Worker, Object, Target, PlacingYaw);
 	}
@@ -634,7 +634,7 @@ void URelocationSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCo
 		PlannedTasks.Reset();
 		PlannedDeploys.Reset();
 	}
-	if (!RelocationRules::CanRelocateNow(Phase, CombatMode) && PlacingObject.IsValid())
+	if (!CanRelocateNow() && PlacingObject.IsValid())
 	{
 		CancelPlacement();
 	}
@@ -745,6 +745,14 @@ void URelocationSubsystem::DropAllForMine()
 	DropAllTasks(LOCTEXT("MineAhead", "⚠️ Впереди мина! Бросаю {0} и останавливаюсь!"));
 }
 
+bool URelocationSubsystem::CanRelocateNow() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	return !Flow || RelocationRules::CanRelocateNow(Flow->GetPhase(), Flow->GetCombatMode(), Leader && Leader->bInCameraZone);
+}
+
 void URelocationSubsystem::DropAllForCombat()
 {
 	if (PlacingObject.IsValid())
@@ -794,7 +802,7 @@ void URelocationSubsystem::Tick(float DeltaTime)
 		return;
 	}
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	if (Flow && !RelocationRules::CanRelocateNow(Flow->GetPhase(), Flow->GetCombatMode()))
+	if (Flow && !CanRelocateNow())
 	{
 		DropAllTasks(LOCTEXT("Alarm", "⚠️ Боевая тревога! Бросаю {0} и занимаю оборону!"));
 		return;

@@ -81,6 +81,9 @@ public:
 	/** An operative carrying something was hit: everything carried drops (Godot _cancel_or_finalize_active_relocates_for_combat). */
 	void DropAllForCombat();
 
+	/** RelocationRules::CanRelocateNow for the current flow and the leader's camera-zone solo. */
+	bool CanRelocateNow() const;
+
 	/** Spawn class for a deployable type (game mode settings). */
 	TSubclassOf<ADeployableActor> GetDeployableClass(EDeployableType Type) const;
 

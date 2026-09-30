@@ -61,12 +61,12 @@ namespace CameraZoneSmoke
 
 		if (State.Second == EnterCheckSecond)
 		{
-			State.bEnterOk = bViewOnZone && Squad->AreFollowersHolding() && FollowersInside == 0;
+			State.bEnterOk = bViewOnZone && Squad->AreFollowersHolding() && FollowersInside == 0 && Leader->bInCameraZone;
 			Leader->OrderMoveTo(FVector::ZeroVector, false);
 		}
 		if (State.Second == ExitCheckSecond)
 		{
-			const bool bExitOk = PC && PC->GetViewTarget() == PC->GetPawn() && !Squad->AreFollowersHolding();
+			const bool bExitOk = PC && PC->GetViewTarget() == PC->GetPawn() && !Squad->AreFollowersHolding() && !Leader->bInCameraZone;
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke enter=%d exit=%d"), State.bEnterOk ? 1 : 0, bExitOk ? 1 : 0);
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.bEnterOk && bExitOk ? TEXT("PASS") : TEXT("FAIL"));
 			FPlatformMisc::RequestExit(false, TEXT("CameraZoneSmoke"));

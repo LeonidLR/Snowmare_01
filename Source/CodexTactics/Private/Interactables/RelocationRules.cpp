@@ -1,8 +1,8 @@
 #include "Interactables/RelocationRules.h"
 
-bool RelocationRules::CanRelocateNow(ECodexGamePhase Phase, ECodexCombatMode Mode)
+bool RelocationRules::CanRelocateNow(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo)
 {
-	return Phase != ECodexGamePhase::WaveCombat || Mode == ECodexCombatMode::TacticalPause;
+	return Phase != ECodexGamePhase::WaveCombat || Mode == ECodexCombatMode::TacticalPause || bLeaderZoneSolo;
 }
 
 float RelocationRules::GetPlacementRadius(ECodexGamePhase Phase, ECodexCombatMode Mode, float PauseRadius, float WorkerPlacementRadius)
