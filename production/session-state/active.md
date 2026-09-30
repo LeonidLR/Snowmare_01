@@ -15,7 +15,7 @@ Task: next = remaining gaps (HANDOFF §9), then the cold animation layer (Phase 
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-2026-09-30: 138 tests + 49 / 50 smokes on the art build (SquadFireSmoke fixed); full re-run pending for the parity batch.
+2026-09-30 evening: 145 automation tests, 56 smokes ALL GREEN (`verify_all.ps1 -SkipBuild`, parallel x3, 16.5 min).
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)

@@ -553,12 +553,12 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   No vault clips yet: the anim instance exposes `bIsVaulting` and feeds the arc speed to the locomotion (VaultSmoke).
 - Hidden mines are revealed by a distance scan in the mine's Tick (Godot scans from each operative) — same result.
 - Weapon switching does not change the weapon mesh (the operative Blueprint owns WeaponMesh) and has no holster
-  animation. X (Godot switch_weapon cycle) is not bound.
+  animation. X cycles the arsenal like Godot switch_weapon (grenade -> aim, «🔫 Оружие: …»), R reloads outside placement / the grid fight (Godot KEY_R, «🔄 Перезаряжаю …»).
 - Grenades: placeholder sphere mesh, no explosion VFX / sound (Godot has none either) — `AGrenadeActor` Blueprint events
   On Landed / On Detonated and the operative's On Grenade Throw + GrenadeThrowDuration are the hooks.
 - Turn-based set-up: the item grows in like Godot (0.2 s, then scale 0.05 -> 1 in 0.45 s, back ease-out; `StartGrowIn`); no assembly animation (Godot play_action_animation "working_device" — no clip yet);
   a squad mine placed in turn-based skips the real-time mishap roll like Godot.
-- Turn-based relocation: no hologram ghost of the object under the cursor (Godot _create_relocate_ghost_preview);
+- Turn-based relocation: a hologram of the object follows the hovered cell (Godot _create_relocate_ghost_preview; `SetRelocationHover`, green on a target cell, red elsewhere);
   target cells use the reachable layer (for barricades: cells valid at the current angle). The barricade glides to
   its new place in 0.25 s like Godot (quad ease-out; instant headless).
 - Exposed-zone outlines pulse like Godot (alpha 0.65 ± 0.35 at 6 rad/s as glow brightness; the target warning blinks 0.25..0.95 at 9 rad/s, `ATurnGridOverlayActor::Tick`); the additive M_CombatFeedback glow reads pink-white on the

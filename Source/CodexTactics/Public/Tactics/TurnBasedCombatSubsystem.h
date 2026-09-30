@@ -230,6 +230,13 @@ public:
 	/** Godot _cancel_tactical_relocate (Esc / RMB / click on the object's own cell). */
 	void CancelRelocate();
 	bool IsRelocating() const { return RelocateTarget.IsValid(); }
+
+	/**
+	 * Hologram of the object being moved over the hovered cell (Godot _create_relocate_ghost_preview + the mouse-motion
+	 * branch): green on a valid target cell, red elsewhere; removed when the relocation ends.
+	 */
+	void SetRelocationHover(const FVector& WorldPoint);
+	bool IsRelocationGhostShown() const { return RelocateGhost != nullptr; }
 	AActor* GetRelocatingObject() const { return RelocateTarget.Get(); }
 	/** Target cells of the running relocation and their AP cost. */
 	const TMap<FIntPoint, int32>& GetRelocateCells() const { return RelocateCells; }
@@ -434,6 +441,10 @@ private:
 	UPROPERTY(Transient)
 	TArray<FTurnStasisMesh> StasisMeshes;
 	TWeakObjectPtr<AActor> RelocateTarget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class ARelocationGhostActor> RelocateGhost;
+	TWeakObjectPtr<AActor> RelocateGhostSource;
 	FIntPoint RelocateOrigin = FIntPoint(-1, -1);
 	TMap<FIntPoint, int32> RelocateCells;
 	float RelocateYaw = 0.f;

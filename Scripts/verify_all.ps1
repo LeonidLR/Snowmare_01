@@ -41,7 +41,9 @@ function Get-SmokeArgs([string]$Smoke, [string]$Suffix = "") {
 
 function Invoke-SmokeAlone([string]$Smoke) {
     # A re-run keeps the parallel run's log (Smoke-<Name>.log) for comparison.
-    $SmokeArgs = Get-SmokeArgs $Smoke $(if ($Smoke -in $Exclusive) { "" } else { "-alone" })
+    $Suffix = $(if ($Smoke -in $Exclusive) { "" } else { "-alone" })
+    Remove-Item (Join-Path $ProjectDir "Saved\Logs\Smoke-$Smoke$Suffix.log") -ErrorAction SilentlyContinue
+    $SmokeArgs = Get-SmokeArgs $Smoke $Suffix
     $null = powershell @SmokeArgs
     return $LASTEXITCODE -eq 0
 }
@@ -54,7 +56,11 @@ $Retry = @()
 while ($Queue.Count -gt 0 -or $Running.Count -gt 0) {
     while ($Running.Count -lt [Math]::Max(1, $Parallel) -and $Queue.Count -gt 0) {
         $Smoke = $Queue.Dequeue()
-        $Running[$Smoke] = Start-Process powershell -ArgumentList (Get-SmokeArgs $Smoke) -WindowStyle Hidden -PassThru
+        # A stale log must never pass for this run's result.
+        Remove-Item (Join-Path $ProjectDir "Saved\Logs\Smoke-$Smoke.log") -ErrorAction SilentlyContinue
+        # Start-Process joins the arguments with spaces: quote the ones with spaces (the project path has one).
+        $QuotedArgs = Get-SmokeArgs $Smoke | ForEach-Object { if ($_ -match '\s') { "`"$_`"" } else { $_ } }
+        $Running[$Smoke] = Start-Process powershell -ArgumentList $QuotedArgs -WindowStyle Hidden -PassThru
     }
     Start-Sleep -Milliseconds 500
     foreach ($Smoke in @($Running.Keys)) {

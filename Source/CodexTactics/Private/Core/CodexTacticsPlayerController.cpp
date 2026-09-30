@@ -133,6 +133,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &ACodexTacticsPlayerController::OnMouseWheelDown);
 	// Ctrl + X: quick restart, handled before every game mode (Godot main.gd _unhandled_input).
 	InputComponent->BindKey(FInputChord(EKeys::X, false, true, false, false), IE_Pressed, this, &ACodexTacticsPlayerController::RestartMission);
+	// Plain X (the chord without Ctrl): Godot switch_weapon cycle.
+	InputComponent->BindKey(FInputChord(EKeys::X), IE_Pressed, this, &ACodexTacticsPlayerController::CycleWeaponKey);
 	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACodexTacticsPlayerController::EnterPressed);
 	InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ACodexTacticsPlayerController::TabPressed);
 	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ACodexTacticsPlayerController::ProfilePressed);
@@ -233,6 +235,15 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
 		{
 			HoverTurnBased->SetHoveredPoint(Hit.ImpactPoint);
+		}
+	}
+	// Turn-based relocation: the object's hologram follows the hovered cell.
+	if (UTurnBasedCombatSubsystem* GhostTurnBased = GetActiveTurnBased(); GhostTurnBased && GhostTurnBased->IsRelocating())
+	{
+		FHitResult Hit;
+		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		{
+			GhostTurnBased->SetRelocationHover(Hit.ImpactPoint);
 		}
 	}
 
@@ -506,6 +517,63 @@ void ACodexTacticsPlayerController::RotatePlacement()
 		{
 			TurnBased->RotateActiveUnitClockwise();
 		}
+	}
+	else if (IsDialogueOpen())
+	{
+		return;
+	}
+	else if (AOperativeCharacter* Leader = GetSquad() ? GetSquad()->GetLeader() : nullptr)
+	{
+		// Godot main.gd KEY_R outside placement / the grid fight: reload.
+		Leader->StartReload();
+		if (Leader->bIsReloading)
+		{
+			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			{
+				Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Reloading", "🔄 Перезаряжаю {0}..."),
+					Leader->CurrentWeapon ? Leader->CurrentWeapon->WeaponName : FText::GetEmpty()));
+			}
+		}
+	}
+}
+
+void ACodexTacticsPlayerController::CycleWeaponKey()
+{
+	// Godot main.gd KEY_X -> player.gd switch_weapon: the next arsenal weapon, with the grenade aim when it is the grenade.
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader || Leader->AvailableWeapons.IsEmpty() || GetActiveTurnBased() || IsDialogueOpen())
+	{
+		return;
+	}
+	const int32 Current = Leader->AvailableWeapons.IndexOfByKey(Leader->CurrentWeapon);
+	const UWeaponDataAsset* Next = Leader->AvailableWeapons[(Current + 1) % Leader->AvailableWeapons.Num()];
+	if (!Next || !Leader->SwitchToWeaponById(Next->WeaponId))
+	{
+		return;
+	}
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
+	if (Messages)
+	{
+		const FString Ammo = Leader->UsesAmmo() ? FString::Printf(TEXT("%d / %d"), Leader->CurrentClip, Leader->ReserveAmmo) : TEXT("∞");
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("WeaponCycle", "🔫 Оружие: {0} [{1}] (Урон: {2})"),
+			Next->WeaponName, FText::FromString(Ammo), FMath::FloorToInt(Next->BaseDamage)));
+	}
+	if (Next->WeaponId == TEXT("grenade"))
+	{
+		if (Leader->GrenadesCount > 0 && Grenades)
+		{
+			Grenades->StartAim(Leader);
+		}
+		else if (Messages)
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("GrenadesOut", "🧨 Гранаты закончились!"));
+		}
+	}
+	else if (Grenades && Grenades->IsAiming())
+	{
+		Grenades->CancelAim(false);
 	}
 }
 

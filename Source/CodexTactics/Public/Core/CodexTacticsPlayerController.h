@@ -151,6 +151,8 @@ private:
 	 * start the throw aim (turn-based combat: the grid weapon switch only).
 	 */
 	void GrenadeKey();
+	/** X (Godot switch_weapon): the leader's next arsenal weapon, outside the grid fight. */
+	void CycleWeaponKey();
 public:
 	/** T / action bar «ОБОР» (Godot _on_guard_slot_clicked): the leader holds its spot or rejoins the formation. */
 	void GuardKey();

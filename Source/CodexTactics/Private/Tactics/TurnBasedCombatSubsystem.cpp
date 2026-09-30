@@ -23,6 +23,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/DeployableActor.h"
+#include "Interactables/RelocationGhostActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/BarrelActor.h"
 #include "Interactables/ProximityMineActor.h"
@@ -784,8 +785,50 @@ float UTurnBasedCombatSubsystem::GetTacticalMoveSpeed(const AActor* Actor) const
 	return -1.f;
 }
 
+void UTurnBasedCombatSubsystem::SetRelocationHover(const FVector& WorldPoint)
+{
+	AActor* Object = RelocateTarget.Get();
+	if (!Object || !Grid)
+	{
+		return;
+	}
+	if (!RelocateGhost || RelocateGhostSource.Get() != Object)
+	{
+		if (RelocateGhost)
+		{
+			RelocateGhost->Destroy();
+		}
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		RelocateGhost = GetWorld()->SpawnActor<ARelocationGhostActor>(Object->GetActorLocation(), Object->GetActorRotation(), Params);
+		RelocateGhostSource = Object;
+		if (RelocateGhost)
+		{
+			RelocateGhost->CopyFrom(Object->FindComponentByClass<UStaticMeshComponent>(), Object);
+			// Godot _set_relocate_ghost_material_valid: green / red.
+			RelocateGhost->SetColors(FLinearColor::FromSRGBColor(FColor(51, 242, 102)), FLinearColor::FromSRGBColor(FColor(255, 51, 51)));
+		}
+	}
+	if (!RelocateGhost)
+	{
+		return;
+	}
+	const FIntPoint Cell = Grid->WorldToGrid(WorldPoint);
+	const FVector CellWorld = Grid->GridToWorld(Cell);
+	const float Yaw = IsRelocatingBarricade() ? RelocateYaw : Object->GetActorRotation().Yaw;
+	RelocateGhost->SetActorLocationAndRotation(FVector(CellWorld.X, CellWorld.Y, Object->GetActorLocation().Z), FRotator(0.f, Yaw, 0.f));
+	RelocateGhost->SetValid(RelocateCells.Contains(Cell));
+}
+
 void UTurnBasedCombatSubsystem::Tick(float DeltaTime)
 {
+	// The relocation hologram goes with the relocation (it ends in many places: confirm, cancel, turn end, combat end).
+	if (RelocateGhost && (!RelocateTarget.IsValid() || RelocateGhostSource.Get() != RelocateTarget.Get()))
+	{
+		RelocateGhost->Destroy();
+		RelocateGhost = nullptr;
+		RelocateGhostSource.Reset();
+	}
 	for (int32 Index = Glides.Num() - 1; Index >= 0; --Index)
 	{
 		FObjectGlide& Glide = Glides[Index];

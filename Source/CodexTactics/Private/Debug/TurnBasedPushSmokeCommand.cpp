@@ -144,6 +144,9 @@ namespace TurnBasedPushSmoke
 				State.Target = Cells[0];
 			}
 			State.APBefore = LeaderState->AP;
+			// Godot _create_relocate_ghost_preview: a hologram over the hovered cell.
+			TurnBased->SetRelocationHover(TurnBased->GetGrid()->GridToWorld(State.Target));
+			Check(State, TurnBased->IsRelocationGhostShown(), TEXT("hologram of the barrel over the hovered cell"));
 			TurnBased->HandleWorldClick(TurnBased->GetGrid()->GridToWorld(State.Target), nullptr, false);
 			Check(State, !TurnBased->IsRelocating() && TurnBased->IsUnitMoving(), TEXT("click on a target cell pushes"));
 			State.Stage = 2;
@@ -164,6 +167,7 @@ namespace TurnBasedPushSmoke
 			Check(State, LeaderState && LeaderState->AP == State.APBefore - 2, TEXT("2 AP spent"));
 			const FVector Expected = Grid->GridToWorld(State.Target);
 			Check(State, FVector::Dist2D(State.Barrel->GetActorLocation(), Expected) < 5.f, TEXT("barrel actor moved with the grid"));
+			Check(State, !TurnBased->IsRelocationGhostShown(), TEXT("hologram gone after the push"));
 			return Finish(State, true);
 		}
 		default:
