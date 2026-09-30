@@ -139,6 +139,14 @@ public:
 	 */
 	bool HandleEscape();
 
+	/** Cold of the coldest squad member, 0..100 (Godot max_squad_cold, drives the frost vignette). */
+	float GetSquadMaxCold() const;
+
+	/** Godot UI/FrostOverlay: feeds the coldest operative's cold to the full-screen frost vignette (every frame). */
+	void UpdateFrostVignette();
+
+	class UFrostVignetteWidget* GetFrostVignette() const { return FrostVignette; }
+
 	/** Messages shown in the feed. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD", meta = (ClampMin = "1"))
 	int32 MaxFeedMessages = 8;
@@ -225,6 +233,8 @@ private:
 	TObjectPtr<UTurnBasedHudWidget> TurnBasedHud;
 
 	void DrawMessageFeed();
+	UPROPERTY(Transient)
+	TObjectPtr<class UFrostVignetteWidget> FrostVignette;
 	/** Draws the objective banner; returns its bottom edge (Y). */
 	float DrawObjectiveBanner();
 	void DrawSquadPanel(float Top);

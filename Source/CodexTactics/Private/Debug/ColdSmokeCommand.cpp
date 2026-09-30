@@ -8,6 +8,9 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Characters/OperativeCharacter.h"
+#include "Kismet/GameplayStatics.h"
+#include "UI/CodexTacticsHUD.h"
+#include "UI/FrostVignetteWidget.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Engine/World.h"
@@ -27,7 +30,21 @@ namespace ColdSmoke
 		float NormalSpeed = 0.f;
 		bool bAccumulateOk = false;
 		bool bFreezingOk = false;
+		bool bVignetteHiddenWhenWarm = false;
 	};
+
+	/** 1 = the HUD frost vignette is up, 0 = hidden, -1 = no HUD. */
+	int32 VignetteShown(UWorld* World)
+	{
+		APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+		ACodexTacticsHUD* Hud = PC ? PC->GetHUD<ACodexTacticsHUD>() : nullptr;
+		if (!Hud || !Hud->GetFrostVignette())
+		{
+			return -1;
+		}
+		Hud->UpdateFrostVignette(); // DrawHUD does not run headless
+		return Hud->GetFrostVignette()->IsShown() ? 1 : 0;
+	}
 
 	void Finish(bool bFrostbiteOk, const FState& State)
 	{
@@ -61,6 +78,7 @@ namespace ColdSmoke
 			const float Gained = Leader->ColdLevel - State.StartCold;
 			State.bAccumulateOk = !Cold->IsNearHeatSource() && Gained > 0.5f * 0.88f * (AccumulateSeconds - 1);
 			State.NormalSpeed = Leader->GetMaxSpeed();
+			State.bVignetteHiddenWhenWarm = VignetteShown(World) == 0;
 			Leader->ColdLevel = 75.f;
 		}
 		else if (State.Second == AccumulateSeconds + 1)
@@ -73,8 +91,12 @@ namespace ColdSmoke
 		}
 		else if (State.Second == AccumulateSeconds + 2)
 		{
+			// Godot UI/FrostOverlay: the frost vignette follows the coldest operative (hidden up to 35 %).
+			const bool bVignetteOk = State.bVignetteHiddenWhenWarm && VignetteShown(World) == 1;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke frost vignette: hidden when warm %d, shown at 100 %% %d"),
+				State.bVignetteHiddenWhenWarm ? 1 : 0, VignetteShown(World));
 			const bool bFrostbiteOk = Cold->GetTier() == EColdTier::Frostbite && Cold->IsFrostbitten()
-				&& Leader->GetStance() == EOperativeStance::Prone && Cold->IsWeaponFrozen() && !Leader->CanShoot();
+				&& Leader->GetStance() == EOperativeStance::Prone && Cold->IsWeaponFrozen() && !Leader->CanShoot() && bVignetteOk;
 			Finish(bFrostbiteOk, State);
 			return true;
 		}

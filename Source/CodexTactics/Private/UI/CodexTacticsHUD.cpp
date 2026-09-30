@@ -1,4 +1,5 @@
 #include "UI/CodexTacticsHUD.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Characters/RecruitSubsystem.h"
 #include "CanvasItem.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -26,6 +27,7 @@
 #include "UI/InventoryDrawerWidget.h"
 #include "UI/TransferDialogWidget.h"
 #include "UI/ProfileDialogWidget.h"
+#include "UI/FrostVignetteWidget.h"
 #include "UI/VictoryPanelWidget.h"
 #include "Combat/WaveSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -209,6 +211,15 @@ void ACodexTacticsHUD::BeginPlay()
 		if (TransferDialog)
 		{
 			TransferDialog->AddToViewport(6);
+		}
+	}
+	if (GetOwningPlayerController())
+	{
+		// Under every other widget, over the game view (Godot FrostOverlay sits under the later UI panels).
+		FrostVignette = CreateWidget<UFrostVignetteWidget>(GetOwningPlayerController(), UFrostVignetteWidget::StaticClass());
+		if (FrostVignette)
+		{
+			FrostVignette->AddToViewport(1);
 		}
 	}
 	if (VictoryPanelWidgetClass && GetOwningPlayerController())
@@ -408,6 +419,27 @@ void ACodexTacticsHUD::DrawHUD()
 	if (CVarShowStatus.GetValueOnGameThread())
 	{
 		DrawSquadPanel(ObjectiveBottom + Margin * 0.5f);
+	}
+	UpdateFrostVignette();
+}
+
+float ACodexTacticsHUD::GetSquadMaxCold() const
+{
+	float MaxCold = 0.f;
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	for (const AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+	{
+		MaxCold = FMath::Max(MaxCold, Member->ColdLevel);
+	}
+	return MaxCold;
+}
+
+void ACodexTacticsHUD::UpdateFrostVignette()
+{
+	// Godot UI/FrostOverlay (frost_vignette.gdshader): cold_pct = the coldest operative.
+	if (FrostVignette)
+	{
+		FrostVignette->SetColdPct(GetSquadMaxCold());
 	}
 }
 

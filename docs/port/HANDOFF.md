@@ -54,7 +54,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **137 automation tests, 49 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **138 automation tests, 49 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -449,6 +449,10 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   Blueprint hooks On Jump Attack Started / Impact for the clips. Godot only jumps when the model has the jump clip —
   UE jumps whenever the config enables it. Shot down mid-leap it keeps falling on the world and crashes («СБИТ В
   ВОЗДУХЕ», «КРАХ»). The airborne kill gives the cutter EXP (16); kill statistics are not ported.
+- Frost vignette: drawn with UMG (a UI material drawn by the canvas HUD ignores its opacity). Canvas HUD texts sit under
+  it, like Godot's squad HUD under the FrostOverlay. Material traps met on the way (see the script): in a Custom node
+  the float3 colour path rendered nothing — keep Custom nodes to scalar math and do colour / opacity with nodes; with
+  MaterialEditingLibrary connect a Clamp's first input with the pin name "" (not "Input").
 - Silhouette (Godot player.gd + silhouette.gdshader): every operative traces the Visibility channel from the camera to
   its centre (feet + 1 m) 20 times a second; a hit more than 35 cm short puts `M_Silhouette` (colour per role, leader
   cyan) as the overlay material of its visible meshes. Other characters block the ray too (Godot's mask 1 | 2 includes
@@ -540,7 +544,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Editor module `CodexTacticsEditor` with `UBlueprintGraphToolset` (FindBlueprints, DescribeBlueprint, DumpBlueprintGraph, Export / ImportGraphNodesText, CompileBlueprint) registered in the ToolsetRegistry, served by the Unreal MCP plugin; test `CodexTactics.Editor.BlueprintTools.ReadProjectBlueprints`. `7aa7deb`: UE 5.8 agent skills in .claude/skills + .agents/ue-project-context.md |
+| (this) | Frost vignette (Godot UI/FrostOverlay + frost_vignette.gdshader): `M_FrostVignette` (create_frost_vignette_material.py: UI material, the Godot math in a Custom node returning edge / alpha, colour and opacity as nodes) on `UFrostVignetteWidget` (full-screen UMG image, Z 1) fed by `ACodexTacticsHUD::UpdateFrostVignette` with the coldest operative; ColdSmoke checks it, `HudShot frost`. Fix: M_Silhouette and M_TacticalStasis had an unconnected Clamp input (default material in game) — scripts fixed, assets regenerated; test `CodexTactics.Editor.Materials.VfxGraphsConnected` |
+| `0d91711` | Editor module `CodexTacticsEditor` with `UBlueprintGraphToolset` (FindBlueprints, DescribeBlueprint, DumpBlueprintGraph, Export / ImportGraphNodesText, CompileBlueprint) registered in the ToolsetRegistry, served by the Unreal MCP plugin; test `CodexTactics.Editor.BlueprintTools.ReadProjectBlueprints`. `7aa7deb`: UE 5.8 agent skills in .claude/skills + .agents/ue-project-context.md |
 | `8d64c5a` | See-through silhouette (Godot player.gd _check_silhouette_occlusion + silhouette.gdshader): `M_Silhouette` (Scripts/Editor/create_silhouette_material.py, unlit translucent, no depth test, fresnel alpha), `AOperativeCharacter::UpdateSilhouette` (20 Hz camera ray, overlay material, role colours); SilhouetteSmoke |
 | `b800bde` | Stage loadout (Godot main.gd _apply_stage_exploration_resources): `LoadoutRules` + LoadoutRulesTest, level JSON squad_loadout imported into `FLevelCombatConfig::SquadLoadout` (import_levels.py, DA_Level_* re-imported), `UMissionSubsystem::ApplyStageLoadout` at the end of the cutscene; VictorySmoke checks it |
 | `ef5f5bd` | Event bus (Godot Scripts/events/event_bus.gd): `UCodexEventBus` game-instance subsystem with the signals the game emits (squad member selected, stats updated, item used, mine spotted, soldier downed, feed line, dialogue finished, rage started / ended, generator state, game saved / loaded), broadcast from the matching UE systems; EventBusSmoke |

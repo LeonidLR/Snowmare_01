@@ -43,7 +43,7 @@ mel.connect_material_expressions(base, "", alpha, "B")
 clamp = mel.create_material_expression(material, unreal.MaterialExpressionClamp, -150, 100)
 clamp.set_editor_property("min_default", 0.0)
 clamp.set_editor_property("max_default", 0.85)
-mel.connect_material_expressions(alpha, "", clamp, "Input")
+mel.connect_material_expressions(alpha, "", clamp, "")
 mel.connect_material_property(clamp, "", unreal.MaterialProperty.MP_OPACITY)
 
 mel.recompile_material(material)

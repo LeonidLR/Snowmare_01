@@ -87,7 +87,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/ui/**` (inventory, pause, dialogue, profile) | UMG widgets (loot, inventory drawer, transfer, pause, save / load, dialogue, profile) | 5 | ✅ | |
 | `main.gd` register_enemy_kill, _on_wave_cleared, _on_next_wave_pressed, _start_post_combat_sequence, _auto_recover_all_deployables; VictoryPanel | `KillStatsRules`, `UWaveVictorySubsystem`, `UVictoryPanelWidget` | 4 | ✅ | `CodexTactics.Combat.KillStats.Rules`, VictorySmoke, `HudShot victory` |
 | `player.gd` level / EXP / stat points, `Scenes/ui/profile/profile_dialog.gd`, `enemy_base.gd` kill EXP | `ProgressionRules`, `AOperativeCharacter::AddExp` / `IncreaseStat`, `UProfileDialogWidget` | 5 | ✅ | `CodexTactics.Characters.Progression.Rules`, ProgressionSmoke, `HudShot profile` |
-| `*.gdshader` (silhouette, rings, AoE) | Materials: M_Silhouette ✅, M_TacticalStasis ✅, rings via M_CombatFeedback ✅; frost vignette / AoE ring / target fresnel / weapon matrix dots — next | 6 | 🟨 | SilhouetteSmoke |
+| `*.gdshader` (silhouette, rings, AoE) | Materials: M_Silhouette ✅, M_TacticalStasis ✅, rings via M_CombatFeedback ✅, M_FrostVignette ✅; AoE ring / target fresnel / weapon matrix dots — next | 6 | 🟨 | SilhouetteSmoke, ColdSmoke, `Editor.Materials.VfxGraphsConnected` |
 | `tools/**`, `Scripts/editor/**`, `Scenes/tools/**`, `scratch/**` | — | — | ➖ | |
 
 ## Intentional deviations from Godot

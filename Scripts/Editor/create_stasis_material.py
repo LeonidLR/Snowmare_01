@@ -48,7 +48,7 @@ mel.connect_material_expressions(fresnel_025, "", add, "A")
 clamp = mel.create_material_expression(material, unreal.MaterialExpressionClamp, -250, 200)
 clamp.set_editor_property("min_default", 0.20)
 clamp.set_editor_property("max_default", 0.60)
-mel.connect_material_expressions(add, "", clamp, "Input")
+mel.connect_material_expressions(add, "", clamp, "")
 mel.connect_material_property(clamp, "", unreal.MaterialProperty.MP_OPACITY)
 
 roughness = mel.create_material_expression(material, unreal.MaterialExpressionConstant, -250, 350)
