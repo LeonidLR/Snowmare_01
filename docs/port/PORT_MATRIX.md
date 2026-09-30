@@ -42,7 +42,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/components/allegiance_component.gd` | — (only used by Godot tests) | 1 | ➖ | |
 | `Scripts/components/locomotion_controller.gd` (stand / crouch / prone locomotion) | `UOperativeAnimInstance` native blend + `ABP_Operative` | 6 | 🟨 baseline (fire, reload, hit, death, grenade states → AnimBP graph) | `CodexTactics.StanceSmoke`, `HudShot close walk` |
 | `Scripts/components/cold_animation_controller.gd` | `ColdAnimationRules` + `UOperativeAnimInstance` cold state (tier, weight, clips per level) + the ABP_Operative cold blend | 6 | ✅ logic + graph (cold clips: user art, empty = layer off) | `CodexTactics.Characters.ColdAnimation.Rules` |
-| `Scripts/components/locomotion_controller.gd`, `Scripts/locomotion_v2/**` | AnimBP + `UOperativeAnimInstance` | 6 | ⬜ | |
+| `Scripts/components/locomotion_controller.gd`, `Scripts/locomotion_v2/**` | AnimBP + `UOperativeAnimInstance` | 6 | 🟨 | Locomotion / aim / crouch / cold blend, fire / reload montages, one-shots (hit per stance / pistol, grenade throw, death on the FullBody slot, working_device when deploying) in code; hit / death / grenade / device / prone / vault / cold clips wait for the user's retargeted art (slots are empty until assigned) |
 | `Scripts/events/event_bus.gd` | `UCodexEventBus` (the emitted signals) + per-subsystem delegates (OnGameFlowChanged, OnWaveStarted, ...) | 3 | ✅ | EventBusSmoke |
 | `Scripts/managers/save_manager.gd` | `USaveGameSubsystem` (JSON, Godot keys) + `SaveGameRules` | 5 | ✅ | `CodexTactics.Core.SaveGameRules.*`, SaveLoadSmoke, PauseMenuSmoke |
 | `main.gd` radius_ring | `URadiusRingSubsystem` + `ARadiusRingActor` | 5 | ✅ | RadiusRingSmoke |
@@ -87,7 +87,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scenes/ui/**` (inventory, pause, dialogue, profile) | UMG widgets (loot, inventory drawer, transfer, pause, save / load, dialogue, profile) | 5 | ✅ | |
 | `main.gd` register_enemy_kill, _on_wave_cleared, _on_next_wave_pressed, _start_post_combat_sequence, _auto_recover_all_deployables; VictoryPanel | `KillStatsRules`, `UWaveVictorySubsystem`, `UVictoryPanelWidget` | 4 | ✅ | `CodexTactics.Combat.KillStats.Rules`, VictorySmoke, `HudShot victory` |
 | `player.gd` level / EXP / stat points, `Scenes/ui/profile/profile_dialog.gd`, `enemy_base.gd` kill EXP | `ProgressionRules`, `AOperativeCharacter::AddExp` / `IncreaseStat`, `UProfileDialogWidget` | 5 | ✅ | `CodexTactics.Characters.Progression.Rules`, ProgressionSmoke, `HudShot profile` |
-| `*.gdshader` (silhouette, rings, AoE) | Materials: M_Silhouette ✅, M_TacticalStasis ✅, rings via M_CombatFeedback ✅, M_FrostVignette ✅; AoE ring / target fresnel / weapon matrix dots — next | 6 | 🟨 | SilhouetteSmoke, ColdSmoke, `Editor.Materials.VfxGraphsConnected` |
+| `*.gdshader` (silhouette, rings, AoE) | Materials: M_Silhouette ✅, M_TacticalStasis ✅, rings via M_CombatFeedback ✅, M_FrostVignette ✅; M_AoeBlast ✅, M_TargetFresnel ✅, M_WeaponMatrixDots ✅ | 6 | ✅ | SilhouetteSmoke, ColdSmoke, `Editor.Materials.VfxGraphsConnected` |
 | `tools/**`, `Scripts/editor/**`, `Scenes/tools/**`, `scratch/**` | — | — | ➖ | |
 
 ## Intentional deviations from Godot

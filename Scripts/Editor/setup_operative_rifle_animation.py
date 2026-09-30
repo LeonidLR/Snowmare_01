@@ -50,8 +50,12 @@ else:
     abp = tools.create_asset("ABP_Operative", ROOT, unreal.AnimBlueprint, factory)
     log.append(f"created {abp_path}")
 
-# The graph is built only while empty — the user polishes it by hand (CODEX_REBUILD_ANIM_GRAPHS=1 forces a rebuild).
-if os.environ.get("CODEX_REBUILD_ANIM_GRAPHS") == "1" or unreal.OperativeAnimGraphLibrary.count_anim_graph_nodes(abp) == 0:
+# The graph is built only while empty â€” the user polishes it by hand (CODEX_REBUILD_ANIM_GRAPHS=1 forces a rebuild).
+# Node counts of graphs this script generated earlier (left as generated -> safe to regenerate with the new layout):
+# 41 = before the FullBody slot (commit 8a56896), 43 = with it.
+GENERATED_NODE_COUNTS = (41, 43)
+node_count = unreal.OperativeAnimGraphLibrary.count_anim_graph_nodes(abp)
+if os.environ.get("CODEX_REBUILD_ANIM_GRAPHS") == "1" or node_count == 0 or node_count in GENERATED_NODE_COUNTS:
     result = unreal.OperativeAnimGraphLibrary.build_operative_locomotion_graph(
         abp, stand,
         library.load_asset(f"{RIFLE}/BlendSpaces/Standing_IdleWalk_Aim/BS_Rifle_Aim"),

@@ -271,7 +271,7 @@ bool UOperativeAnimGraphLibrary::BuildOperativeLocomotionGraph(UAnimBlueprint* A
 		return false;
 	}
 	UEdGraph* AnimGraph = Root->GetGraph();
-	Root->NodePosX = 10 * ColumnWidth;
+	Root->NodePosX = 11 * ColumnWidth;
 	Root->NodePosY = 2 * RowHeight;
 
 	FBuilder Build{AnimGraph, OutReport};
@@ -338,7 +338,14 @@ bool UOperativeAnimGraphLibrary::BuildOperativeLocomotionGraph(UAnimBlueprint* A
 	};
 	UEdGraphNode* ColdPose = TwoWay(8, 5, TEXT("ColdMoveBlend"), ColdIdle, ColdWalk);
 	UEdGraphNode* WithCold = TwoWay(9, 2, TEXT("ColdVisualWeight"), UpperBody, ColdPose);
-	Build.LinkPose(WithCold, Root, TEXT("Result"));
+
+	// Full-body one-shots on top of everything (death; UOperativeAnimInstance::FullBodySlot).
+	UAnimGraphNode_Slot* FullBody = Build.Spawn<UAnimGraphNode_Slot>(10, 2, [](UAnimGraphNode_Slot& Node)
+	{
+		Node.Node.SlotName = TEXT("FullBody");
+	});
+	Build.LinkPose(WithCold, FullBody, TEXT("Source"));
+	Build.LinkPose(FullBody, Root, TEXT("Result"));
 
 	return Build.bOk && CompileAndReport(AnimBlueprint, AnimGraph, OutReport);
 }

@@ -308,6 +308,9 @@ private:
 	/** Grow-in of an item set up on the grid (visual only, skipped headless). */
 	void StartGrowIn(AActor* Object);
 
+	/** The assembling operative's working-device clip (when the AnimBP has one). */
+	void PlayWorkingDevice(AActor* Unit);
+
 	struct FMover
 	{
 		TWeakObjectPtr<AActor> Actor;

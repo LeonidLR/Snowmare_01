@@ -148,6 +148,61 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation")
 	FName UpperBodySlot = TEXT("DefaultSlot");
 
+	/** Full-body slot (death) of the graph. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation")
+	FName FullBodySlot = TEXT("FullBody");
+
+	// --- One-shots (Godot locomotion_controller.gd play_hit_reaction / play_grenade_throw / play_death, character
+	// animation config hit_* / grenade_throw_* / death_*). Empty = nothing plays (no clips in the pack yet). ---
+
+	/** Upper-body hit reaction per stance (Godot hit_stand / hit_crouch / hit_prone) and with the pistol in hands. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> HitStandAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> HitCrouchAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> HitProneAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> PistolHitAnimation;
+
+	/** Upper-body grenade throw: walking, running, crouched, prone (Godot grenade_throw_*); its length sets the release time. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> GrenadeThrowWalkAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> GrenadeThrowRunAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> GrenadeThrowCrouchAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> GrenadeThrowProneAnimation;
+
+	/** Full-body death: one of the standing variations at random, or the crouched / prone one (held on its last frame). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TArray<TObjectPtr<UAnimSequenceBase>> DeathStandAnimations;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> DeathCrouchAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> DeathProneAnimation;
+
+	/** Godot death_start_offset. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float DeathStartOffset = 0.f;
+
+	/** Upper-body "working device" (set-up / repair / defusal; Godot action_working_device). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> WorkingDeviceAnimation;
+
+	/** Plays the working-device clip for Seconds (Godot play_action_animation("working_device", 0.8)). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Animation")
+	void PlayWorkingDevice(float Seconds);
+
 	/** Cold presentation layer (Godot character_animation_config.gd cold_*): levels start at these cold values. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cold Animation")
 	TArray<float> ColdThresholds = { 25.f, 40.f, 70.f, 90.f };
@@ -260,6 +315,11 @@ private:
 	void UpdateUpperBody(float DeltaSeconds);
 	void UpdateColdLayer(float DeltaSeconds);
 	void HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit);
+	void HandleGrenadeThrow();
+	UFUNCTION()
+	void HandleHealthChanged(float NewHealth, float MaxHealth, float Delta);
+	UFUNCTION()
+	void HandleDied(AActor* Victim, const FString& AttackerSource);
 	void UpdateNativeBlend(float DeltaSeconds);
 	UAnimSequence* GetClip(EOperativeClip Clip) const;
 
@@ -272,6 +332,8 @@ private:
 
 	TWeakObjectPtr<AOperativeCharacter> BoundOperative;
 	FDelegateHandle FiredHandle;
+	FDelegateHandle GrenadeHandle;
+	bool bDeathPlayed = false;
 	float AimTimer = 0.f;
 	bool bWasReloading = false;
 };

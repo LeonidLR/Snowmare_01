@@ -5,6 +5,7 @@
 #include "Characters/ColdAnimationRules.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
+#include "Data/WeaponDataAsset.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
@@ -34,6 +35,12 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 	{
 		BoundOperative = Operative;
 		FiredHandle = Operative->OnWeaponFiredNative.AddUObject(this, &UOperativeAnimInstance::HandleWeaponFired);
+		GrenadeHandle = Operative->OnGrenadeThrowNative.AddUObject(this, &UOperativeAnimInstance::HandleGrenadeThrow);
+		if (UHealthComponent* Health = Operative->HealthComponent)
+		{
+			Health->OnHealthChanged.AddUniqueDynamic(this, &UOperativeAnimInstance::HandleHealthChanged);
+			Health->OnDied.AddUniqueDynamic(this, &UOperativeAnimInstance::HandleDied);
+		}
 	}
 }
 
@@ -42,6 +49,12 @@ void UOperativeAnimInstance::NativeUninitializeAnimation()
 	if (AOperativeCharacter* Operative = BoundOperative.Get())
 	{
 		Operative->OnWeaponFiredNative.Remove(FiredHandle);
+		Operative->OnGrenadeThrowNative.Remove(GrenadeHandle);
+		if (UHealthComponent* Health = Operative->HealthComponent)
+		{
+			Health->OnHealthChanged.RemoveDynamic(this, &UOperativeAnimInstance::HandleHealthChanged);
+			Health->OnDied.RemoveDynamic(this, &UOperativeAnimInstance::HandleDied);
+		}
 	}
 	BoundOperative.Reset();
 	Super::NativeUninitializeAnimation();
@@ -90,6 +103,86 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 	if (Montage && !bIsReloading)
 	{
 		Montage_Play(Montage);
+	}
+}
+
+void UOperativeAnimInstance::HandleHealthChanged(float NewHealth, float MaxHealth, float Delta)
+{
+	// Godot play_hit_reaction: per stance, the pistol one with the pistol in hands; not over a throw or while dead.
+	const AOperativeCharacter* Operative = BoundOperative.Get();
+	if (Delta >= 0.f || NewHealth <= 0.f || !Operative || bIsDead)
+	{
+		return;
+	}
+	UAnimSequenceBase* Clip = HitStandAnimation;
+	if (Operative->CurrentWeapon && Operative->CurrentWeapon->WeaponId == TEXT("pistol") && PistolHitAnimation)
+	{
+		Clip = PistolHitAnimation;
+	}
+	else if (Operative->GetStance() == EOperativeStance::Crouching)
+	{
+		Clip = HitCrouchAnimation;
+	}
+	else if (Operative->GetStance() == EOperativeStance::Prone)
+	{
+		Clip = HitProneAnimation;
+	}
+	if (Clip && !IsPlayingSlotAnimation(GrenadeThrowWalkAnimation, UpperBodySlot))
+	{
+		PlaySlotAnimationAsDynamicMontage(Clip, UpperBodySlot, 0.1f, 0.2f);
+	}
+}
+
+void UOperativeAnimInstance::HandleGrenadeThrow()
+{
+	// Godot play_grenade_throw: prone / crouch / run / walk by the stance and speed; the grenade leaves the hand at 70 %
+	// of the clip (Godot get_grenade_throw_duration), so the throw duration follows the clip.
+	AOperativeCharacter* Operative = BoundOperative.Get();
+	if (!Operative)
+	{
+		return;
+	}
+	UAnimSequenceBase* Clip = Operative->GetStance() == EOperativeStance::Prone ? GrenadeThrowProneAnimation
+		: Operative->GetStance() == EOperativeStance::Crouching ? GrenadeThrowCrouchAnimation
+		: (Operative->IsSprinting() || Operative->GetVelocity().Size2D() > 300.f) ? GrenadeThrowRunAnimation : GrenadeThrowWalkAnimation;
+	if (!Clip)
+	{
+		return;
+	}
+	Operative->GrenadeThrowDuration = Clip->GetPlayLength();
+	PlaySlotAnimationAsDynamicMontage(Clip, UpperBodySlot, 0.1f, 0.2f);
+}
+
+void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerSource)
+{
+	// Godot play_death: a random standing variation, or the crouched / prone death; full body, held at the end.
+	const AOperativeCharacter* Operative = BoundOperative.Get();
+	if (bDeathPlayed || !Operative)
+	{
+		return;
+	}
+	bDeathPlayed = true;
+	UAnimSequenceBase* Clip = Operative->GetStance() == EOperativeStance::Crouching ? DeathCrouchAnimation.Get()
+		: Operative->GetStance() == EOperativeStance::Prone ? DeathProneAnimation.Get()
+		: DeathStandAnimations.IsEmpty() ? nullptr : DeathStandAnimations[FMath::RandRange(0, DeathStandAnimations.Num() - 1)].Get();
+	if (!Clip)
+	{
+		return;
+	}
+	StopSlotAnimation(0.1f, UpperBodySlot);
+	if (UAnimMontage* Montage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, 0.15f, 0.f, 1.f, 1, -1.f,
+		FMath::Min(DeathStartOffset, Clip->GetPlayLength() * 0.9f)))
+	{
+		Montage->bEnableAutoBlendOut = false;
+	}
+}
+
+void UOperativeAnimInstance::PlayWorkingDevice(float Seconds)
+{
+	if (WorkingDeviceAnimation && !bIsDead)
+	{
+		PlaySlotAnimationAsDynamicMontage(WorkingDeviceAnimation, UpperBodySlot, 0.15f, 0.2f,
+			WorkingDeviceAnimation->GetPlayLength() / FMath::Max(Seconds, 0.1f));
 	}
 }
 

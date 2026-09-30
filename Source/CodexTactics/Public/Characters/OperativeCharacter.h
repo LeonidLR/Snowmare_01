@@ -556,6 +556,9 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Combat", meta = (DisplayName = "On Grenade Throw"))
 	void ReceiveGrenadeThrow();
 
+	/** Native twin of On Grenade Throw (the anim instance plays the throw clip and may set GrenadeThrowDuration from it). */
+	FSimpleMulticastDelegate OnGrenadeThrowNative;
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
 	void StartReload();
 

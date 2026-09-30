@@ -23,6 +23,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/DeployableActor.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Interactables/RelocationGhostActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/BarrelActor.h"
@@ -2301,6 +2302,16 @@ FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType T
 	return Check;
 }
 
+void UTurnBasedCombatSubsystem::PlayWorkingDevice(AActor* Unit)
+{
+	// Godot play_action_animation("working_device", 0.8) while the item is assembled.
+	const ACharacter* Character = Cast<ACharacter>(Unit);
+	if (UOperativeAnimInstance* Anim = Character && Character->GetMesh() ? Cast<UOperativeAnimInstance>(Character->GetMesh()->GetAnimInstance()) : nullptr)
+	{
+		Anim->PlayWorkingDevice(0.8f);
+	}
+}
+
 void UTurnBasedCombatSubsystem::StartGrowIn(AActor* Object)
 {
 	// Godot _handle_tactical_deployable_placement: after 0.2 s the item grows from 0.05 to full size in 0.45 s (back ease-out).
@@ -2383,6 +2394,7 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 		FaceTarget(*UnitState);
 		RegisterDeployable(Type, Spawned, Cell, Yaw);
 		StartGrowIn(Spawned);
+		PlayWorkingDevice(Unit);
 		Log(FString::Printf(TEXT("🛠️ %s собрал(а) и установил(а) %s (-%d AP)."), *NameOf(Unit), *Name, TotalAP));
 		RefreshOverlay();
 		Changed();
@@ -2443,6 +2455,7 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 		FaceTarget(*State);
 		RegisterDeployable(Type, WeakSpawned.Get(), Cell, Yaw);
 		StartGrowIn(WeakSpawned.Get());
+		PlayWorkingDevice(Moved);
 		State->AP -= TotalAP;
 		Log(FString::Printf(TEXT("🛠️ %s подошел(а) и установил(а) %s (-%d AP)."), *NameOf(Moved), *Name, TotalAP));
 		Changed();

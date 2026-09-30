@@ -296,6 +296,7 @@ AGrenadeActor* UGrenadeSubsystem::ThrowAt(AOperativeCharacter* InThrower, const 
 	{
 		return nullptr;
 	}
+	InThrower->OnGrenadeThrowNative.Broadcast();
 	InThrower->ReceiveGrenadeThrow();
 	Grenade->ConfigureFrom(InThrower, InThrower->GrenadeThrowDuration * GrenadeRules::ReleaseAnimRatio);
 	Grenade->ThrowTo(Target + FVector(0.f, 0.f, 12.f));

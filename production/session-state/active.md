@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: user art wired (operative / enemy AnimBPs), turn-based attack mode and walk animation
-Task: next = remaining gaps (HANDOFF §9), then the cold animation layer (Phase 6)
+Task: operative one-shot anims done (clips await the user's retarget); next = remaining HANDOFF §8 / §9 items that don't need new art
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
@@ -15,7 +15,7 @@ Task: next = remaining gaps (HANDOFF §9), then the cold animation layer (Phase 
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-2026-09-30 evening: 145 automation tests, 56 smokes ALL GREEN (`verify_all.ps1 -SkipBuild`, parallel x3, 16.5 min).
+2026-09-30 night: 145 automation tests, 56 smokes ALL GREEN (`verify_all.ps1 -SkipBuild`, parallel x3) after the operative one-shot anims.
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)
