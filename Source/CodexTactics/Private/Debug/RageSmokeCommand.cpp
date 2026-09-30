@@ -37,6 +37,7 @@ namespace RageSmoke
 		int32 Failures = 0;
 		int32 Clip = 0;
 		float HoundHealth = 0.f;
+		bool bAuraSeen = false;
 		TWeakObjectPtr<AEnemyCharacter> Hound;
 	};
 
@@ -144,10 +145,12 @@ namespace RageSmoke
 			return true;
 		}
 		case 2:
+			State.bAuraSeen |= Rage->IsAuraShown();
 			if (Commander->IsRaging() && State.StageTime < 10.f)
 			{
 				return true;
 			}
+			Check(State, State.bAuraSeen && !Rage->IsAuraShown(), TEXT("fiery aura under the feet while raging, gone after"));
 			Check(State, !Commander->IsRaging() && HasMessage(World, TEXT("ярость отпустила")), TEXT("rage wears off with the calm line"));
 			return Finish(State, true);
 		default:

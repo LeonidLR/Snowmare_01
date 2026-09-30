@@ -4,6 +4,7 @@
 #include "Combat/HealthComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Interactables/RadiusRingSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 
@@ -53,6 +54,7 @@ void URageComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 	{
 		return;
 	}
+	UpdateAura(true);
 	RageTimer -= DeltaTime;
 	if (RageTimer <= 0.f)
 	{
@@ -137,6 +139,7 @@ void URageComponent::ExitRage(const FString& Reason)
 		RagePost(Operative, FString::Printf(TEXT("😮‍💨 %s: «Фух... ярость отпустила. Держим строй!»"), *Operative->DisplayName.ToString()));
 		UE_LOG(LogCodexTactics, Log, TEXT("%s leaves rage (%s)"), *Operative->DisplayName.ToString(), *Reason);
 	}
+	UpdateAura(false);
 	OnRageChanged.Broadcast(false);
 }
 
@@ -166,4 +169,45 @@ AActor* URageComponent::FindAnyEnemyInReach() const
 		}
 	}
 	return InReach.IsEmpty() ? nullptr : InReach[FMath::RandRange(0, InReach.Num() - 1)];
+}
+
+void URageComponent::UpdateAura(bool bShow)
+{
+	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(GetOwner());
+	if (!bShow || !Operative)
+	{
+		if (Aura)
+		{
+			Aura->SetActorHiddenInGame(true);
+		}
+		return;
+	}
+	UWorld* World = GetWorld();
+	if (!Aura && World)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Aura = World->SpawnActor<ARadiusRingActor>(Params);
+	}
+	if (Aura)
+	{
+		// Godot torus inner 0.75 / outer 1.05 m at 0.08 m above the feet, albedo (1, 0.3, 0.05) with emission x4.
+		const FVector Feet = Operative->GetActorLocation() - FVector(0.f, 0.f, Operative->GetSimpleCollisionHalfHeight() - 6.f);
+		Aura->ShowRing(Feet, 90.f, FLinearColor::FromSRGBColor(FColor(255, 77, 13)), 30.f);
+	}
+}
+
+void URageComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (Aura)
+	{
+		Aura->Destroy();
+		Aura = nullptr;
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+bool URageComponent::IsAuraShown() const
+{
+	return Aura && !Aura->IsHidden();
 }

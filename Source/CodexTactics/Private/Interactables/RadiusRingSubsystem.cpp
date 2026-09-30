@@ -30,7 +30,7 @@ ARadiusRingActor::ARadiusRingActor()
 	}
 }
 
-void ARadiusRingActor::ShowRing(const FVector& Ground, float Radius, const FLinearColor& Color)
+void ARadiusRingActor::ShowRing(const FVector& Ground, float Radius, const FLinearColor& Color, float Width)
 {
 	SetActorHiddenInGame(false);
 	if (!Material)
@@ -48,12 +48,13 @@ void ARadiusRingActor::ShowRing(const FVector& Ground, float Radius, const FLine
 		ShownColor = Color;
 	}
 	const FVector Center = Ground + FVector(0.f, 0.f, 2.f); // Godot y 0.02
-	if (Center.Equals(ShownCenter, 1.f) && FMath::IsNearlyEqual(Radius, ShownRadius, 1.f))
+	if (Center.Equals(ShownCenter, 1.f) && FMath::IsNearlyEqual(Radius, ShownRadius, 1.f) && FMath::IsNearlyEqual(Width, ShownWidth))
 	{
 		return;
 	}
 	ShownCenter = Center;
 	ShownRadius = Radius;
+	ShownWidth = Width;
 	TArray<FTransform> Segments;
 	constexpr int32 Count = 72;
 	for (int32 Index = 0; Index < Count; ++Index)
@@ -63,7 +64,7 @@ void ARadiusRingActor::ShowRing(const FVector& Ground, float Radius, const FLine
 		const FVector P0 = Center + FVector(FMath::Cos(A0), FMath::Sin(A0), 0.f) * Radius;
 		const FVector P1 = Center + FVector(FMath::Cos(A1), FMath::Sin(A1), 0.f) * Radius;
 		const FVector Delta = P1 - P0;
-		Segments.Add(FTransform(Delta.Rotation(), (P0 + P1) * 0.5f, FVector(Delta.Size() / 100.f, 0.12f, 1.f)));
+		Segments.Add(FTransform(Delta.Rotation(), (P0 + P1) * 0.5f, FVector(Delta.Size() / 100.f, Width / 100.f, 1.f)));
 	}
 	Ring->ClearInstances();
 	Ring->AddInstances(Segments, false, true);

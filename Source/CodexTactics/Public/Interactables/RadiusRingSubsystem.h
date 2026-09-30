@@ -17,7 +17,8 @@ class CODEXTACTICS_API ARadiusRingActor : public AActor
 public:
 	ARadiusRingActor();
 
-	void ShowRing(const FVector& Ground, float Radius, const FLinearColor& Color);
+	/** Width: band width, cm (12 = the placement ring's line). */
+	void ShowRing(const FVector& Ground, float Radius, const FLinearColor& Color, float Width = 12.f);
 
 	float GetRadius() const { return ShownRadius; }
 	FLinearColor GetColor() const { return ShownColor; }
@@ -31,6 +32,7 @@ private:
 
 	FVector ShownCenter = FVector(FLT_MAX);
 	float ShownRadius = -1.f;
+	float ShownWidth = -1.f;
 	FLinearColor ShownColor = FLinearColor::Transparent;
 };
 

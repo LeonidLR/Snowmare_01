@@ -15,7 +15,7 @@ Task: next = remaining gaps (HANDOFF §9)
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-Carry-drop commit: 135 automation tests, 46 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
+Rage aura commit: 135 automation tests, 46 smokes PASS (`Scripts/verify_all.ps1` ALL GREEN).
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)

@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-30 Claude: `ARadiusRingActor::ShowRing` got an optional Width (cm, default 12); `URageComponent` aura (`IsAuraShown`, EndPlay destroys it).
 - 2026-09-30 Claude: `URelocationSubsystem::DropAllForCombat`, called from `AOperativeCharacter::TakeHit` while `bCarrying`.
 - 2026-09-30 Claude: `CameraShakeRules`, `ATacticalCameraPawn::TriggerWeaponShake` / `GetShakeTrauma` / `ShakeConfig`, `UTurnBasedCombatSubsystem::ShakeCamera`.
 - 2026-09-30 Claude: `KillStatsRules`, `UWaveVictorySubsystem` (RegisterEnemyKill, ContinueAfterWave, post-combat sequence, prep stations), `UVictoryPanelWidget` (HUD `GetVictoryPanel`), `DeployableRules::PickRecoveryRecipient`; the wave-cleared radio line moved from `UWaveSubsystem` to the victory subsystem (Godot text).

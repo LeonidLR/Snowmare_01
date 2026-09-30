@@ -24,6 +24,7 @@ public:
 	URageComponent();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	/** Godot on_incoming_hit: counts crits per attacker, may start the rage. */
@@ -37,6 +38,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Rage")
 	bool IsRaging() const { return bRaging; }
+
+	/** The fiery ring under the feet is visible (while raging). */
+	bool IsAuraShown() const;
 
 	/** Godot get_chaotic_target: the current random target, re-picked when it died. */
 	AActor* GetChaoticTarget();
@@ -69,4 +73,10 @@ private:
 	/** Godot combat_time_elapsed: counts from the component's start. */
 	float CombatTimeElapsed = 0.f;
 	TWeakObjectPtr<AActor> ChaoticTarget;
+
+	/** Godot RageAura: fiery torus (0.75..1.05 m) under the feet while raging. */
+	void UpdateAura(bool bShow);
+
+	UPROPERTY(Transient)
+	TObjectPtr<class ARadiusRingActor> Aura;
 };

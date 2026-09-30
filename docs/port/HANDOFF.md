@@ -391,7 +391,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   with the component's lifetime like Godot's combat_time_elapsed, per-role keys (<role>_rage_*) for the squad, general
   keys for Susanin (Godot re-applies only the general ones to a recruit spawned later). Raging: chaotic target (random
   enemy within 25 m every 0.55 s), fire rate / damage multipliers, +30 luck, no ammo spent, reload paused, OrderMoveTo /
-  SetManualPriorityTarget refused. HUD badge «ЯРОСТЬ!»; the fiery aura ring under the feet is not ported.
+  SetManualPriorityTarget refused. HUD badge «ЯРОСТЬ!»; the fiery aura is an orange 30 cm band at 0.9 m radius under the feet (`URageComponent::UpdateAura`, M_CombatFeedback segments).
   movement_speed_multiplier is exported but unused in Godot — not applied.
 - **Parity fix:** enemy attacks on operatives now use Godot player.gd take_damage (dodge luck × 0.4 %, stance defense,
   fortitude cut clamp(f × 1.5 %, 0, 50 %)); before, the enemy armor formula was used (no dodge / fortitude). Grenades /
@@ -504,7 +504,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | A hit on an operative carrying / pushing an object drops everything the squad carries (Godot player.gd take_damage -> main.gd _cancel_or_finalize_active_relocates_for_combat): `URelocationSubsystem::DropAllForCombat`; RelocationSmoke checks it |
+| (this) | Rage aura (Godot rage_component.gd RageAura torus 0.75..1.05 m): an `ARadiusRingActor` (new `ShowRing` width parameter) follows the raging operative's feet; RageSmoke checks it, `HudShot rage` shows it |
+| `e7c58cd` | A hit on an operative carrying / pushing an object drops everything the squad carries (Godot player.gd take_damage -> main.gd _cancel_or_finalize_active_relocates_for_combat): `URelocationSubsystem::DropAllForCombat`; RelocationSmoke checks it |
 | `7607c2d` | Turn-based camera shake (Godot camera.gd add_trauma / trigger_weapon_shake / _process_shake; main.gd squad attack and turret volley): `CameraShakeRules` + CameraShakeRulesTest, `ATacticalCameraPawn::TriggerWeaponShake`, `UTurnBasedCombatSubsystem::ShakeCamera`; TurnBasedSmoke checks the trauma. `1615b89`: unity-build name fix in the victory panel |
 | `10f1bb9` | Wave victory (Godot main.gd register_enemy_kill, _on_wave_cleared, _on_next_wave_pressed, _start_post_combat_sequence, _auto_recover_all_deployables; movements_demo.tscn VictoryPanel): `KillStatsRules` + KillStatsRulesTest, `UWaveVictorySubsystem`, `UVictoryPanelWidget`, `DeployableRules::PickRecoveryRecipient`; the flow no longer stops in WaveCleared; VictorySmoke, `HudShot victory` |
 | `2996631` | Progression (Godot player.gd add_exp / _on_level_up / increase_stat / decrease_stat, enemy kill and wave-clear EXP, profile_dialog.gd + main.gd profile handling): `ProgressionRules` + ProgressionRulesTest, `AOperativeCharacter` level / EXP / stat points, `AEnemyCharacter::KillExpReward`, `UProfileDialogWidget` (P, number keys, wave-clear auto open, Esc), save fields; ProgressionSmoke, `HudShot profile` |
