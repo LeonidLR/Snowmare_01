@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **136 automation tests, 48 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **136 automation tests, 49 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -83,6 +83,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `HoldSphereSmoke` | Space hold: the dome grows (eased) and the squad holds fire; release hides it and lifts the cease fire |
 | `TurnBasedCameraSmoke` | Cinematics forced on: 16 m on the operative's turn, the camera on the enemy during its turn and back on the active operative, the dramatic shot (framing 10..19 m, the round lands at 0.75 s, orders wait), the glide back at the combat distance, the pre-combat zoom restored |
 | `EventBusSmoke` | A listener hears every `UCodexEventBus` event from its real emitter (leader change, profile point, drawer medkit, feed line, dialogue close, rage, generator down / repaired, save / load, a fallen operative) |
+| `SilhouetteSmoke` | A block between the camera and the leader turns his cyan see-through overlay on; removing it turns it off |
 | `VictorySmoke` | All waves killed (commander / turret / mine sources): kill statistics, the panel per wave, «next wave (N/M)» starts the rest, «full victory» after the last; post-combat: squad at its preparation spots, commander leads, no enemies, a turret back in the supply |
 | `ProgressionSmoke` | +260 EXP -> level 2 (3 points, full heal, «УРОВЕНЬ 2»); a hound kill gives every member 15 EXP; P opens the profile, + / - spend and refund points within the bounds, paging, number keys, Esc, wave-clear auto open |
 | `ClickRulesSmoke` | Plain-click rules in a fight (Godot main.gd): an enemy becomes the priority target; a barrel / barricade can't be moved outside the pause and a ground click can't move the squad (HQ lines); in the pause a barrel is picked up for relocation and a barricade opens its menu at once |
@@ -440,6 +441,10 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   Blueprint hooks On Jump Attack Started / Impact for the clips. Godot only jumps when the model has the jump clip —
   UE jumps whenever the config enables it. Shot down mid-leap it keeps falling on the world and crashes («СБИТ В
   ВОЗДУХЕ», «КРАХ»). The airborne kill gives the cutter EXP (16); kill statistics are not ported.
+- Silhouette (Godot player.gd + silhouette.gdshader): every operative traces the Visibility channel from the camera to
+  its centre (feet + 1 m) 20 times a second; a hit more than 35 cm short puts `M_Silhouette` (colour per role, leader
+  cyan) as the overlay material of its visible meshes. Other characters block the ray too (Godot's mask 1 | 2 includes
+  bodies on layer 1).
 - Event bus (`UCodexEventBus`, Godot event_bus.gd): a hook point for Blueprints / audio / VFX; systems still call each
   other directly (Godot's bus mostly fed the UI). Only the signals Godot actually emits are there; declared-but-never-
   emitted ones, panic / allegiance ones (not ported) and camera_shake_requested (a fallback; the camera is called
@@ -527,7 +532,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Stage loadout (Godot main.gd _apply_stage_exploration_resources): `LoadoutRules` + LoadoutRulesTest, level JSON squad_loadout imported into `FLevelCombatConfig::SquadLoadout` (import_levels.py, DA_Level_* re-imported), `UMissionSubsystem::ApplyStageLoadout` at the end of the cutscene; VictorySmoke checks it |
+| (this) | See-through silhouette (Godot player.gd _check_silhouette_occlusion + silhouette.gdshader): `M_Silhouette` (Scripts/Editor/create_silhouette_material.py, unlit translucent, no depth test, fresnel alpha), `AOperativeCharacter::UpdateSilhouette` (20 Hz camera ray, overlay material, role colours); SilhouetteSmoke |
+| `b800bde` | Stage loadout (Godot main.gd _apply_stage_exploration_resources): `LoadoutRules` + LoadoutRulesTest, level JSON squad_loadout imported into `FLevelCombatConfig::SquadLoadout` (import_levels.py, DA_Level_* re-imported), `UMissionSubsystem::ApplyStageLoadout` at the end of the cutscene; VictorySmoke checks it |
 | `ef5f5bd` | Event bus (Godot Scripts/events/event_bus.gd): `UCodexEventBus` game-instance subsystem with the signals the game emits (squad member selected, stats updated, item used, mine spotted, soldier downed, feed line, dialogue finished, rage started / ended, generator state, game saved / loaded), broadcast from the matching UE systems; EventBusSmoke |
 | `04373d1` | Turn-based camera choreography (user decision 2026-09-30; Godot camera.gd smooth_focus_on_target / _position, dramatic_action_cam_focus; main.gd _enter_turn_based_combat, _on_gorky17_turn_changed, _on_gorky17_enemy_movement_started / _finished, _perform_dramatic_tactical_attack, _on_gorky17_turret_shot_requested): `ATacticalCameraPawn` SmoothFocusOnTarget / SmoothFocusOnPosition / DramaticActionFocus / EnterTurnBasedZoom, `UTurnBasedCombatSubsystem::AttackCellCinematic` + cinematic turret volley, `IsBusy`; TurnBasedCameraSmoke, `HudShot turnbased duel` |
 | `4a80593` | Camera-zone solo (Godot is_in_camera_zone / is_zone_solo in main.gd): `AOperativeCharacter::bInCameraZone` (set by `ACameraZoneVolume`), `RelocationRules::CanRelocateNow(..., bLeaderZoneSolo)`, `URelocationSubsystem::CanRelocateNow()` used by the controller, deployables and relocation; RelocationRulesTest, CameraZoneSmoke |

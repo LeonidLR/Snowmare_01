@@ -228,6 +228,26 @@ public:
 	UPROPERTY(VisibleInstanceOnly, Transient, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	bool bInCameraZone = false;
 
+	// --- See-through silhouette (Godot player.gd enable_silhouette / _check_silhouette_occlusion, silhouette.gdshader) ---
+
+	/** Show the coloured outline through walls when the camera cannot see this operative. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Silhouette")
+	bool bEnableSilhouette = true;
+
+	/** Only while hidden (true, Godot default); false shows it all the time. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Silhouette")
+	bool bSilhouetteOcclusionOnly = true;
+
+	/** /Game/VFX/Materials/M_Silhouette (Scripts/Editor/create_silhouette_material.py); parameter "Color". */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Silhouette")
+	TObjectPtr<UMaterialInterface> SilhouetteMaterial;
+
+	/** Godot get_silhouette_color: leader cyan, engineer amber, medic-sapper green, recruit olive (alpha 0.55). */
+	FLinearColor GetSilhouetteColor() const;
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Silhouette")
+	bool IsSilhouetteVisible() const { return bSilhouetteVisible; }
+
 	// --- Progression (Godot player.gd level / current_exp / unspent_stat_points) ---
 
 	/** Level 1..10 (Godot MAX_LEVEL). */
@@ -432,6 +452,16 @@ public:
 	// --- Combat & Weapon System (Godot player.gd parity) ---
 
 	virtual void Tick(float DeltaTime) override;
+
+	/** Godot _check_silhouette_occlusion (20 Hz): a ray from the camera to the body centre, a hit 35 cm short = hidden. */
+	void UpdateSilhouette(float DeltaTime);
+	void SetSilhouetteVisible(bool bVisible);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> SilhouetteMID;
+
+	bool bSilhouetteVisible = false;
+	float SilhouetteCheckTimer = 0.f;
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
 	void EquipWeapon(class UWeaponDataAsset* NewWeapon);

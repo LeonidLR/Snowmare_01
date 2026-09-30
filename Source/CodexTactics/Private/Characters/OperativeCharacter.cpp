@@ -24,6 +24,8 @@
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TurretActor.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Camera/PlayerCameraManager.h"
+#include "GameFramework/PlayerController.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "UI/GameMessageSubsystem.h"
@@ -651,6 +653,94 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	UpdatePlaceholderPose(1.f - FMath::Exp(-StanceBlendSpeed * DeltaTime));
 	ProcessCombatShooting(DeltaTime);
+	UpdateSilhouette(DeltaTime);
+}
+
+FLinearColor AOperativeCharacter::GetSilhouetteColor() const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	auto Godot = [](float R, float G, float B, float A)
+	{
+		FLinearColor Color = FLinearColor::FromSRGBColor(FColor(FMath::RoundToInt(R * 255.f), FMath::RoundToInt(G * 255.f), FMath::RoundToInt(B * 255.f)));
+		Color.A = A;
+		return Color;
+	};
+	if (Squad && Squad->GetLeader() == this)
+	{
+		return Godot(0.2f, 0.85f, 1.f, 0.55f);
+	}
+	switch (SquadRole)
+	{
+	case EOperativeRole::Engineer: return Godot(1.f, 0.55f, 0.15f, 0.55f);
+	case EOperativeRole::MedicSapper: return Godot(0.2f, 0.9f, 0.35f, 0.55f);
+	case EOperativeRole::Recruit: return Godot(0.3f, 0.9f, 0.5f, 0.55f);
+	default: return Godot(1.f, 0.45f, 0.18f, 0.5f);
+	}
+}
+
+void AOperativeCharacter::UpdateSilhouette(float DeltaTime)
+{
+	if (!bEnableSilhouette || !HealthComponent || !HealthComponent->IsAlive())
+	{
+		SetSilhouetteVisible(false);
+		return;
+	}
+	if (!bSilhouetteOcclusionOnly)
+	{
+		SetSilhouetteVisible(true);
+		return;
+	}
+	SilhouetteCheckTimer -= DeltaTime;
+	if (SilhouetteCheckTimer > 0.f)
+	{
+		return;
+	}
+	SilhouetteCheckTimer = 0.05f;
+	const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	if (!PC || !PC->PlayerCameraManager)
+	{
+		return;
+	}
+	const FVector CameraLocation = PC->PlayerCameraManager->GetCameraLocation();
+	// Godot global_position + 1 m: the operative's centre is 1 m above the feet.
+	const FVector Centre = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() - 100.f);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(OperativeSilhouette), false, this);
+	FHitResult Hit;
+	const bool bBlocked = GetWorld()->LineTraceSingleByChannel(Hit, CameraLocation, Centre, ECC_Visibility, Params)
+		&& FVector::Dist(CameraLocation, Hit.ImpactPoint) < FVector::Dist(CameraLocation, Centre) - 35.f;
+	SetSilhouetteVisible(bBlocked);
+	if (bBlocked && SilhouetteMID)
+	{
+		SilhouetteMID->SetVectorParameterValue(TEXT("Color"), GetSilhouetteColor()); // the leader may change
+	}
+}
+
+void AOperativeCharacter::SetSilhouetteVisible(bool bVisible)
+{
+	if (bSilhouetteVisible == bVisible)
+	{
+		return;
+	}
+	if (bVisible && !SilhouetteMID)
+	{
+		UMaterialInterface* Base = SilhouetteMaterial ? SilhouetteMaterial.Get()
+			: LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/Materials/M_Silhouette.M_Silhouette"));
+		if (!Base)
+		{
+			return;
+		}
+		SilhouetteMID = UMaterialInstanceDynamic::Create(Base, this);
+		SilhouetteMID->SetVectorParameterValue(TEXT("Color"), GetSilhouetteColor());
+	}
+	bSilhouetteVisible = bVisible;
+	TInlineComponentArray<UMeshComponent*> Meshes(this);
+	for (UMeshComponent* MeshComponent : Meshes)
+	{
+		if (MeshComponent && MeshComponent->IsVisible())
+		{
+			MeshComponent->SetOverlayMaterial(bVisible ? SilhouetteMID.Get() : nullptr);
+		}
+	}
 }
 
 void AOperativeCharacter::EquipWeapon(UWeaponDataAsset* NewWeapon)
