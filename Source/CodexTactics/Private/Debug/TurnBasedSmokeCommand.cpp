@@ -8,6 +8,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Camera/TacticalCameraPawn.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -205,6 +206,9 @@ namespace TurnBasedSmoke
 				TurnBased->bGuaranteeAllHits = true;
 				const FTurnAttackResult Attack = TurnBased->AttackCell(EnemyState->GridPos);
 				Check(State, Attack.bSuccess && Attack.bHit && Attack.Damage > 0, FString::Printf(TEXT("shot hits for %d (reason %s)"), Attack.Damage, *Attack.Reason));
+				const APlayerController* ShotPC = UGameplayStatics::GetPlayerController(World, 0);
+				const ATacticalCameraPawn* ShotCamera = ShotPC ? Cast<ATacticalCameraPawn>(ShotPC->GetPawn()) : nullptr;
+				Check(State, ShotCamera && ShotCamera->GetShakeTrauma() > 0.3f, TEXT("the shot shakes the camera (Godot trigger_weapon_shake)"));
 				Check(State, !TurnBased->IsActive(), TEXT("last enemy down -> combat over"));
 				Check(State, Flow->GetCombatMode() == ECodexCombatMode::TacticalPause, TEXT("victory returns to the tactical pause"));
 				const UMeshComponent* FarMesh = VisibleMesh(State.FarEnemy.Get());

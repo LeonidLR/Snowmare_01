@@ -264,6 +264,8 @@ private:
 	FString NameOf(const AActor* Actor) const;
 	const UWeaponDataAsset* WeaponOf(const AActor* Actor) const;
 	void Log(const FString& Message) const;
+	/** Godot camera.trigger_weapon_shake from the turn-based shots (the camera ignores it outside turn-based combat). */
+	void ShakeCamera(const FString& WeaponType) const;
 	/** Feed line from another sender (Godot _on_quest_message("ТАКТИКА", ...)). */
 	void Post(const FString& Sender, const FString& Message) const;
 	void Highlight(AActor* Target) const;

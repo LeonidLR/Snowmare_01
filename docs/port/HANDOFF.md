@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **134 automation tests, 46 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **135 automation tests, 46 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -433,6 +433,10 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   Blueprint hooks On Jump Attack Started / Impact for the clips. Godot only jumps when the model has the jump clip —
   UE jumps whenever the config enables it. Shot down mid-leap it keeps falling on the world and crashes («СБИТ В
   ВОЗДУХЕ», «КРАХ»). The airborne kill gives the cutter EXP (16); kill statistics are not ported.
+- Camera shake (Godot camera.gd): only in turn-based combat, trauma from the squad attack (pistol 0.20 / rifle 0.35)
+  and each turret volley (0.28), decay 4 / s, offset = amplitude 0.18 m x trauma² x Perlin noise along the view's right
+  / up axes (Godot FastNoiseLite simplex; UE FMath::PerlinNoise1D), values from DA_GameBalanceConfig camera_shake_*.
+  The offset is taken off before the follow smoothing so it never drifts the camera.
 - Wave victory (`UWaveVictorySubsystem`, `UVictoryPanelWidget`; Godot main.gd): the panel shows while the flow is in
   WaveCleared (time stopped), with Godot's title / subtitle, the kill statistics card and «Запустить следующую волну
   (N/M)» / «Завершить бой и продолжить исследование» (-> `AdvanceAfterWave`) and «Перезапустить уровень (X)». The HUD
@@ -500,7 +504,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Wave victory (Godot main.gd register_enemy_kill, _on_wave_cleared, _on_next_wave_pressed, _start_post_combat_sequence, _auto_recover_all_deployables; movements_demo.tscn VictoryPanel): `KillStatsRules` + KillStatsRulesTest, `UWaveVictorySubsystem`, `UVictoryPanelWidget`, `DeployableRules::PickRecoveryRecipient`; the flow no longer stops in WaveCleared; VictorySmoke, `HudShot victory` |
+| (this) | Turn-based camera shake (Godot camera.gd add_trauma / trigger_weapon_shake / _process_shake; main.gd squad attack and turret volley): `CameraShakeRules` + CameraShakeRulesTest, `ATacticalCameraPawn::TriggerWeaponShake`, `UTurnBasedCombatSubsystem::ShakeCamera`; TurnBasedSmoke checks the trauma. `1615b89`: unity-build name fix in the victory panel |
+| `10f1bb9` | Wave victory (Godot main.gd register_enemy_kill, _on_wave_cleared, _on_next_wave_pressed, _start_post_combat_sequence, _auto_recover_all_deployables; movements_demo.tscn VictoryPanel): `KillStatsRules` + KillStatsRulesTest, `UWaveVictorySubsystem`, `UVictoryPanelWidget`, `DeployableRules::PickRecoveryRecipient`; the flow no longer stops in WaveCleared; VictorySmoke, `HudShot victory` |
 | `2996631` | Progression (Godot player.gd add_exp / _on_level_up / increase_stat / decrease_stat, enemy kill and wave-clear EXP, profile_dialog.gd + main.gd profile handling): `ProgressionRules` + ProgressionRulesTest, `AOperativeCharacter` level / EXP / stat points, `AEnemyCharacter::KillExpReward`, `UProfileDialogWidget` (P, number keys, wave-clear auto open, Esc), save fields; ProgressionSmoke, `HudShot profile` |
 | `11990c4` | Narrative elements and dialogue triggers (Godot narrative_element.gd, dialogue_trigger.gd; placed on L_MovementTest by the level script), the Space-hold dome, cease fire and charge bar (Godot tactical_hold_sphere.gd, gorky17_combat_hud.gd); NarrativeSmoke, HoldSphereSmoke, `HudShot hold` |
 | `3985f6c` | Plain-click rules in a fight (Godot main.gd click branches 0 / 0.5): enemy priority target, no relocation outside the pause, immediate menu / relocation in the pause; `HandleWorldHit`, `UInteractionSubsystem::OpenMenuNow`, `AssignPriorityTarget`; ClickRulesSmoke |

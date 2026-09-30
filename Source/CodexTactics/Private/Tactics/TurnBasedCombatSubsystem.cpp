@@ -1,4 +1,6 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Camera/TacticalCameraPawn.h"
+#include "GameFramework/PlayerController.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "AIController.h"
 #include "Components/BoxComponent.h"
@@ -512,6 +514,15 @@ const UWeaponDataAsset* UTurnBasedCombatSubsystem::WeaponOf(const AActor* Actor)
 	return Operative ? Operative->CurrentWeapon.Get() : nullptr;
 }
 
+void UTurnBasedCombatSubsystem::ShakeCamera(const FString& WeaponType) const
+{
+	const APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (ATacticalCameraPawn* Camera = PC ? Cast<ATacticalCameraPawn>(PC->GetPawn()) : nullptr)
+	{
+		Camera->TriggerWeaponShake(WeaponType);
+	}
+}
+
 void UTurnBasedCombatSubsystem::Log(const FString& Message) const
 {
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
@@ -966,6 +977,8 @@ FTurnAttackResult UTurnBasedCombatSubsystem::AttackCell(const FIntPoint& Cell, b
 
 	State->AP -= Balance.AttackAPCost;
 	State->bHasAttacked = true;
+	// Godot main.gd squad attack: the camera shakes by the weapon (pistol / rifle).
+	ShakeCamera(Weapon && Weapon->WeaponId == TEXT("pistol") ? TEXT("pistol") : TEXT("rifle"));
 	State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Offset));
 	AlignFacing(Unit, State->Facing);
 	const int32 Distance = TurnBasedRules::CellDistance(State->GridPos, Cell);
@@ -2202,6 +2215,7 @@ void UTurnBasedCombatSubsystem::ProcessNextTurret()
 	{
 		Feedback->SpawnTurretTracer(Turret->GetActorLocation() + FVector(0.f, 0.f, 70.f), Best->GetActorLocation());
 	}
+	ShakeCamera(TEXT("turret")); // Godot _on_gorky17_turret_shot_requested
 	if (bHit)
 	{
 		const int32 Damage = FMath::RoundToInt(Balance.TurretDamage);

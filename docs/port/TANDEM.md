@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-30 Claude: `CameraShakeRules`, `ATacticalCameraPawn::TriggerWeaponShake` / `GetShakeTrauma` / `ShakeConfig`, `UTurnBasedCombatSubsystem::ShakeCamera`.
 - 2026-09-30 Claude: `KillStatsRules`, `UWaveVictorySubsystem` (RegisterEnemyKill, ContinueAfterWave, post-combat sequence, prep stations), `UVictoryPanelWidget` (HUD `GetVictoryPanel`), `DeployableRules::PickRecoveryRecipient`; the wave-cleared radio line moved from `UWaveSubsystem` to the victory subsystem (Godot text).
 - 2026-09-30 Claude: `ProgressionRules`, `AOperativeCharacter` Level / CurrentExp / UnspentStatPoints / AddExp / IncreaseStat / DecreaseStat, `AEnemyCharacter::KillExpReward`, `UProfileDialogWidget`, HUD `ToggleProfileDialog` / `OpenProfileDialog`, controller `ProfilePressed` (P), save fields level / current_exp / unspent_stat_points.
 - 2026-09-30 Claude: `ANarrativeElementActor`, `ADialogueTriggerVolume` (L_MovementTest via add_level_objects_to_movement_test.py), `AHoldSphereActor`, controller `IsSpaceHeld` / `GetSpaceHeldTime` / `GetHoldSphere`, `AOperativeCharacter::bTacticalCeaseFire`, HUD `DrawSpaceCharge`.

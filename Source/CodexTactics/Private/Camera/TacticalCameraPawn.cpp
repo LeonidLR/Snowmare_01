@@ -2,6 +2,8 @@
 #include "Camera/CameraComponent.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/GodotBalanceAsset.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/PlayerController.h"
@@ -39,6 +41,11 @@ void ATacticalCameraPawn::BeginPlay()
 	UserDistanceCombat = Config.DistanceCombat;
 	bCombatView = IsCombatView();
 	CurrentDistance = TargetDistance = bCombatView ? UserDistanceCombat : UserDistanceExploration;
+
+	if (const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>())
+	{
+		ShakeConfig = CameraShakeRules::ConfigFromBalance(GameMode->GameBalanceConfig.LoadSynchronous());
+	}
 
 	if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 	{
@@ -81,8 +88,33 @@ void ATacticalCameraPawn::Tick(float DeltaSeconds)
 		return;
 	}
 	const float FollowSpeed = IsTurnBased() ? Config.TacticalFollowSpeed : Config.FollowSpeed;
-	const FVector NewLocation = FMath::Lerp(GetActorLocation(), Desired, FMath::Clamp(FollowSpeed * RealDelta, 0.f, 1.f));
-	SetActorLocationAndRotation(NewLocation, ViewRotation);
+	// The shake offset rides on top of the follow position (removed before smoothing so it never accumulates).
+	const FVector NewLocation = FMath::Lerp(GetActorLocation() - ShakeOffset, Desired, FMath::Clamp(FollowSpeed * RealDelta, 0.f, 1.f));
+	ShakeOffset = UpdateShake(RealDelta, ViewRotation);
+	SetActorLocationAndRotation(NewLocation + ShakeOffset, ViewRotation);
+}
+
+void ATacticalCameraPawn::TriggerWeaponShake(const FString& WeaponType)
+{
+	if (IsTurnBased())
+	{
+		ShakeTrauma = CameraShakeRules::AddTrauma(ShakeTrauma, CameraShakeRules::GetPower(ShakeConfig, WeaponType));
+	}
+}
+
+FVector ATacticalCameraPawn::UpdateShake(float RealDelta, const FRotator& ViewRotation)
+{
+	if (!IsTurnBased() || ShakeTrauma <= 0.f)
+	{
+		ShakeTrauma = 0.f;
+		return FVector::ZeroVector;
+	}
+	ShakeTrauma = CameraShakeRules::Decay(ShakeConfig, ShakeTrauma, RealDelta);
+	ShakeNoiseTime += RealDelta * ShakeConfig.Frequency;
+	const float Scale = CameraShakeRules::GetOffsetScale(ShakeConfig, ShakeTrauma) * 100.f; // m -> cm
+	const FRotationMatrix View(ViewRotation);
+	return View.GetUnitAxis(EAxis::Y) * FMath::PerlinNoise1D(ShakeNoiseTime) * Scale
+		+ View.GetUnitAxis(EAxis::Z) * FMath::PerlinNoise1D(ShakeNoiseTime + 57.3f) * Scale;
 }
 
 void ATacticalCameraPawn::SetFollowTarget(AActor* NewTarget)

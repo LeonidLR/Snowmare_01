@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "Camera/CameraShakeRules.h"
 #include "Camera/TacticalCameraRules.h"
 #include "TacticalCameraPawn.generated.h"
 
@@ -13,7 +14,8 @@ class UCameraComponent;
  * Controls: WASD / screen edges pan, mouse wheel zooms, Q/E (or arrows) rotate 45 deg,
  * right-mouse drag rotates, middle-mouse drag pans. Exploration and combat keep separate zoom levels.
  * Runs on real (undilated) time so it keeps working during a tactical pause.
- * Godot reference: Scenes/movements/camera.gd (shake, smooth focus and dramatic shots come with combat).
+ * Turn-based shots shake the view (trauma, Godot trigger_weapon_shake).
+ * Godot reference: Scenes/movements/camera.gd.
  */
 UCLASS()
 class CODEXTACTICS_API ATacticalCameraPawn : public APawn
@@ -47,6 +49,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Camera")
 	FTacticalCameraConfig Config;
 
+	/**
+	 * Godot trigger_weapon_shake: a turn-based shot adds trauma by weapon type («rifle», «pistol», «turret»); outside
+	 * turn-based combat nothing happens.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Camera")
+	void TriggerWeaponShake(const FString& WeaponType);
+
+	/** Current shake trauma 0..1. */
+	float GetShakeTrauma() const { return ShakeTrauma; }
+
+	/** Shake tuning (DA_GameBalanceConfig camera_shake_* at BeginPlay). */
+	FCameraShakeConfig ShakeConfig;
+
 private:
 	UFUNCTION()
 	void HandleLeaderChanged(AOperativeCharacter* NewLeader);
@@ -58,6 +73,12 @@ private:
 	void UpdatePan(float RealDelta);
 	void UpdateRotation(float RealDelta);
 	FVector ComputeFocus(float RealDelta);
+	/** Advances the trauma and returns this frame's view-plane offset, cm (Godot _process_shake h / v offsets). */
+	FVector UpdateShake(float RealDelta, const FRotator& ViewRotation);
+
+	float ShakeTrauma = 0.f;
+	float ShakeNoiseTime = 0.f;
+	FVector ShakeOffset = FVector::ZeroVector;
 
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Camera")
 	TObjectPtr<UCameraComponent> Camera;
