@@ -38,10 +38,20 @@ public:
 	/** Red aim flash: light above the target (4.5 m, 0.45 s) and a glowing overlay on its meshes (0.4 s). */
 	void HighlightTarget(AActor* Target);
 
+	/** Godot player.gd _spawn_damage_flash: red light 1.2 m above the operative's centre, 3.5 m, fading in 0.12 s. */
+	void SpawnDamageFlash(AActor* Operative);
+
+	/** Godot enemy_base.gd _flash_hit: red glow on the enemy's meshes for 0.08 s. */
+	void FlashEnemyHit(AActor* Enemy);
+
+	/** Damage flashes spawned so far (checks). */
+	int32 GetDamageFlashCount() const { return DamageFlashCount; }
+
 	/** Godot default tracer colour (weapon_tracer_color / rifle_m16.tres). */
 	static FLinearColor DefaultTracerColor() { return FLinearColor(0.2f, 1.f, 0.4f); }
 
 private:
+	int32 DamageFlashCount = 0;
 	UFUNCTION()
 	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);
 

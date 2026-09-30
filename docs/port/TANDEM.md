@@ -135,6 +135,7 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-09-30 Claude: `UCombatFeedbackSubsystem::SpawnDamageFlash` / `FlashEnemyHit` / `GetDamageFlashCount`; frostbitten shove in `AEnemyCharacter::AttackTarget`.
 - 2026-09-30 Claude: `ARadiusRingActor::ShowRing` got an optional Width (cm, default 12); `URageComponent` aura (`IsAuraShown`, EndPlay destroys it).
 - 2026-09-30 Claude: `URelocationSubsystem::DropAllForCombat`, called from `AOperativeCharacter::TakeHit` while `bCarrying`.
 - 2026-09-30 Claude: `CameraShakeRules`, `ATacticalCameraPawn::TriggerWeaponShake` / `GetShakeTrauma` / `ShakeConfig`, `UTurnBasedCombatSubsystem::ShakeCamera`.

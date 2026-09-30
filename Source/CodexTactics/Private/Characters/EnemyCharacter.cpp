@@ -617,6 +617,10 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 
 void AEnemyCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDamage)
 {
+	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
+	{
+		Feedback->FlashEnemyHit(this); // Godot _flash_hit
+	}
 	if (!Spec.AttackerSource.IsEmpty())
 	{
 		LastAttackerSource = Spec.AttackerSource;
@@ -680,6 +684,13 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Target))
 	{
 		Operative->TakeHit(FinalDamage, EnemyDisplayName, bIsCrit, false, this);
+		// Godot enemy_frostbitten.gd _attack_target: the blow shoves the operative 2.5 m/s away (velocity added).
+		FVector Push = Operative->GetActorLocation() - GetActorLocation();
+		Push.Z = 0.f;
+		if (Archetype == EEnemyArchetype::Frostbitten && Push.SizeSquared() > 0.001f * 10000.f)
+		{
+			Operative->LaunchCharacter(Push.GetSafeNormal() * 250.f, false, false);
+		}
 	}
 	else if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 	{

@@ -12,6 +12,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
 #include "Containers/Ticker.h"
@@ -203,6 +204,27 @@ namespace EnemyAISmoke
 				bAnyHit |= Member->HealthComponent->GetCurrentHealth() < Member->HealthComponent->GetMaxHealth();
 			}
 			Check(State, bAnyHit || Floating->HasShown(TEXT("УКЛОНЕНИЕ")), TEXT("spitter with a clear line shoots the squad"));
+
+			// Frostbitten blow: the leader is shoved away and flashes red; a hit on the enemy flashes it.
+			UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>();
+			AEnemyCharacter* Frostbitten = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Frostbitten,
+				Leader->GetActorLocation() + Leader->GetActorForwardVector() * 120.f, FRotator::ZeroRotator);
+			if (Frostbitten && Feedback)
+			{
+				const int32 Flashes = Feedback->GetDamageFlashCount();
+				Leader->ForcedDodgeRollForTesting = 0.f; // no dodge
+				Frostbitten->AttackTarget(Leader);
+				Check(State, Leader->GetCharacterMovement()->PendingLaunchVelocity.Size2D() > 200.f,
+					FString::Printf(TEXT("frostbitten shoves the leader (%.0f cm/s)"), Leader->GetCharacterMovement()->PendingLaunchVelocity.Size2D()));
+				FDamageSpec Spec;
+				Spec.Amount = 5.f;
+				Frostbitten->GetHealthComponent()->TakeDamage(Spec);
+				Check(State, Feedback->GetDamageFlashCount() >= Flashes + 2, TEXT("damage flashes: operative light and enemy glow"));
+			}
+			else
+			{
+				Check(State, false, TEXT("frostbitten spawned"));
+			}
 			return Finish(State, true);
 		}
 		default:

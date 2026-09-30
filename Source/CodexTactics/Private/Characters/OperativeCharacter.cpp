@@ -1551,6 +1551,10 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	const float Final = bBypassAvoidance ? FMath::Max(1.f, Amount)
 		: FMath::Max(1.f, Amount * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut));
 	HealthComponent->ApplyDirectHealthLoss(Final, Attacker);
+	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
+	{
+		Feedback->SpawnDamageFlash(this); // Godot _spawn_damage_flash
+	}
 	// Godot take_damage: a hit makes the carrier drop what the squad is carrying.
 	if (bCarrying)
 	{

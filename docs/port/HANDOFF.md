@@ -424,8 +424,9 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   spitters pick targets by 100 - distance (+50 elevated), approach / back off around 12 m, shoot only with a line of
   fire (prone behind a barricade hidden, crouched cover 0.65), red tracer. Movement stays on the navmesh (UE AI
   MoveTo) — Godot's ramp routing, wall-slide / stuck avoidance and flocking separation are covered by navigation /
-  crowd avoidance. Not ported: the cryo drone (UE maps it to spitter stats), frostbitten push-back, attack animation
-  locks (is_attacking), damage flash.
+  crowd avoidance. Frostbitten blows shove the operative (+2.5 m/s); hits flash (operative: red light, enemy: red
+  overlay; burning ticks do not flash, Godot does). Not ported: the cryo drone (UE maps it to spitter stats), attack
+  animation locks (is_attacking; with the AnimBP).
 - Cutter (Godot enemy_cutter.gd): own stats (75 HP, 6.2 m/s, 18 damage, 2 m, 1.1 s, crit 0.25 x1.75), the pounce at
   3.5-9 m (windup 0.4 / 1.85 s, ballistic LaunchCharacter flight 1.3 / 1.85 s capped at 9 m, impact damage 28 within
   2.2 m on the squad and barricades, «💥 НАЛЁТ N», recovery 0.75 / 1.85 s, 6 s cooldown) with the numbers imported from
@@ -504,7 +505,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Rage aura (Godot rage_component.gd RageAura torus 0.75..1.05 m): an `ARadiusRingActor` (new `ShowRing` width parameter) follows the raging operative's feet; RageSmoke checks it, `HudShot rage` shows it |
+| (this) | Frostbitten shove (Godot enemy_frostbitten.gd _attack_target: +2.5 m/s away, `LaunchCharacter`) and damage flashes (Godot player.gd _spawn_damage_flash red light 0.12 s, enemy_base.gd _flash_hit red glow 0.08 s): `UCombatFeedbackSubsystem::SpawnDamageFlash` / `FlashEnemyHit`; EnemyAISmoke checks both |
+| `fc3b672` | Rage aura (Godot rage_component.gd RageAura torus 0.75..1.05 m): an `ARadiusRingActor` (new `ShowRing` width parameter) follows the raging operative's feet; RageSmoke checks it, `HudShot rage` shows it |
 | `e7c58cd` | A hit on an operative carrying / pushing an object drops everything the squad carries (Godot player.gd take_damage -> main.gd _cancel_or_finalize_active_relocates_for_combat): `URelocationSubsystem::DropAllForCombat`; RelocationSmoke checks it |
 | `7607c2d` | Turn-based camera shake (Godot camera.gd add_trauma / trigger_weapon_shake / _process_shake; main.gd squad attack and turret volley): `CameraShakeRules` + CameraShakeRulesTest, `ATacticalCameraPawn::TriggerWeaponShake`, `UTurnBasedCombatSubsystem::ShakeCamera`; TurnBasedSmoke checks the trauma. `1615b89`: unity-build name fix in the victory panel |
 | `10f1bb9` | Wave victory (Godot main.gd register_enemy_kill, _on_wave_cleared, _on_next_wave_pressed, _start_post_combat_sequence, _auto_recover_all_deployables; movements_demo.tscn VictoryPanel): `KillStatsRules` + KillStatsRulesTest, `UWaveVictorySubsystem`, `UVictoryPanelWidget`, `DeployableRules::PickRecoveryRecipient`; the flow no longer stops in WaveCleared; VictorySmoke, `HudShot victory` |

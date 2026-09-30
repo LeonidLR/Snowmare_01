@@ -96,6 +96,33 @@ int32 UCombatFeedbackSubsystem::GetPlannedMarkerCount() const
 	return Count;
 }
 
+void UCombatFeedbackSubsystem::SpawnDamageFlash(AActor* Operative)
+{
+	if (!IsValid(Operative))
+	{
+		return;
+	}
+	// Godot global_position is the operative's centre (1 m above the feet); UE's capsule centre is close to it.
+	if (ACombatFeedbackActor* Flash = SpawnFeedback(Operative->GetActorLocation() + FVector(0.f, 0.f, 120.f)))
+	{
+		Flash->SetupLight(FLinearColor(1.f, 0.15f, 0.1f), 3.5f * FeedbackLightPerEnergy, 350.f, 0.12f);
+		++DamageFlashCount;
+	}
+}
+
+void UCombatFeedbackSubsystem::FlashEnemyHit(AActor* Enemy)
+{
+	if (!IsValid(Enemy))
+	{
+		return;
+	}
+	if (ACombatFeedbackActor* Flash = SpawnFeedback(Enemy->GetActorLocation()))
+	{
+		Flash->SetupOverlayFlash(Enemy, FLinearColor(1.f, 0.2f, 0.2f), 5.f, 0.08f);
+		++DamageFlashCount;
+	}
+}
+
 void UCombatFeedbackSubsystem::HighlightTarget(AActor* Target)
 {
 	if (!IsValid(Target))
