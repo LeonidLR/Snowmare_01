@@ -78,6 +78,42 @@ struct CODEXTACTICS_API FWaveDefinition
 	}
 };
 
+/**
+ * Combat supply of a level (Godot level JSON "squad_loadout"; main.gd _apply_stage_exploration_resources).
+ * Defaults are Godot's .get() fallbacks for a level without the block.
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FSquadLoadout
+{
+	GENERATED_BODY()
+
+	/** EXPLORE_AND_COLLECT (what the squad collected), STARTING_UNIQUE (the role starting set) or EDITOR_PRESET. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	FString SimulationMode = TEXT("EXPLORE_AND_COLLECT");
+
+	/** EDITOR_PRESET tier: MINIMAL, STANDARD, MAXIMAL or CUSTOM (the numbers below). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	FString PresetTier = TEXT("STANDARD");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	int32 TurretsCount = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	int32 BarricadesCount = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	int32 MinesCount = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	int32 MedkitsCount = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	int32 M16Ammo = 120;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	int32 PistolAmmo = 48;
+};
+
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FLevelCombatConfig
 {
@@ -97,6 +133,9 @@ struct CODEXTACTICS_API FLevelCombatConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	TArray<FWaveDefinition> Waves;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	FSquadLoadout SquadLoadout;
 };
 
 UCLASS(BlueprintType)

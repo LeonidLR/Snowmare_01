@@ -1,6 +1,6 @@
 """Imports the Godot level configs (data/configs/levels/*.json) into ULevelConfigAsset data assets
 /Game/Data/Levels/DA_Level_<file name> (e.g. DA_Level_level_01_outpost — the one Godot main.gd loads by default,
-active_level_json_path). Waves, spawns (enemy type by name), modifiers, preparation / rest durations.
+active_level_json_path). Waves, spawns (enemy type by name), modifiers, preparation / rest durations, squad_loadout.
 Re-run after the Godot levels change; existing assets are updated in place. stage_template.json is skipped.
 
 Run headless:
@@ -61,6 +61,16 @@ for path in sorted(glob.glob(os.path.join(GODOT, "data", "configs", "levels", "*
             definition.set_editor_property("modifiers", modifiers)
             waves.append(definition)
         config.set_editor_property("waves", waves)
+        # main.gd _apply_stage_exploration_resources reads "squad_loadout" with these .get() fallbacks.
+        loadout_data = data.get("squad_loadout", {})
+        loadout = unreal.SquadLoadout()
+        loadout.set_editor_property("simulation_mode", loadout_data.get("simulation_mode", "EXPLORE_AND_COLLECT"))
+        loadout.set_editor_property("preset_tier", loadout_data.get("preset_tier", "STANDARD"))
+        for field, key, default in (("turrets_count", "turrets_count", 1), ("barricades_count", "barricades_count", 2),
+                                    ("mines_count", "mines_count", 2), ("medkits_count", "medkits_count", 2),
+                                    ("m16_ammo", "m16_ammo", 120), ("pistol_ammo", "pistol_ammo", 48)):
+            loadout.set_editor_property(field, int(loadout_data.get(key, default)))
+        config.set_editor_property("squad_loadout", loadout)
         asset = unreal.load_asset(full) if unreal.EditorAssetLibrary.does_asset_exist(full) else \
             tools.create_asset(name, TARGET, unreal.LevelConfigAsset, unreal.DataAssetFactory())
         asset.set_editor_property("config", config)

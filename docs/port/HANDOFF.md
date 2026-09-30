@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **135 automation tests, 48 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **136 automation tests, 48 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -286,9 +286,13 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Turn-based deviations: an operative that survives a mine ends its turn once (Godot schedules end_current_unit_turn
   twice — from the move and from the blast — which skips the next operative; treated as a bug). Squad starts facing the
   enemies' centroid (Godot hard-codes SOUTH = towards the enemies on its map). The attack line names the arc
-  (фронт / фланг / тыл; Godot prints the enum number). Trapped-barricade retaliation, frozen-enemy stasis look,
-  enemy idle variations not ported.
-- Godot `_apply_stage_exploration_resources` (combat loadout by start mode: collected vs starting set) is not ported.
+  (фронт / фланг / тыл; Godot prints the enum number). Trapped-barricade retaliation: Godot _damage_barricade checks `is_mined`, which
+  nothing ever sets — dead code, not ported. Enemy idle variations: with the AnimBP.
+- Stage loadout (Godot _apply_stage_exploration_resources, `LoadoutRules`): when the cutscene ends, «Начать игру» keeps
+  what the squad collected (turrets to the commander ≤ 2, barricades to the engineer ≤ 4, mines to the medic-sapper ≤ 5);
+  «Начать бой» turns EXPLORE_AND_COLLECT into STARTING_UNIQUE (at least 1 / 2 / 2; level_01_outpost already says
+  STARTING_UNIQUE); EDITOR_PRESET tiers from the level JSON. Godot quirk kept: the specialist gets the squad total
+  while the others keep theirs (items double up) — kept as in Godot (user decision 2026-09-30). The --bot-loadout CLI override is not ported.
 - `FString::ToLower` / `Contains(IgnoreCase)` do not fold Cyrillic: use `FText::ToLower` (see DialogueRules).
 - The world is paused while the start menu is open (Godot keeps processing behind its menu) — cosmetic difference.
 
@@ -523,7 +527,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Event bus (Godot Scripts/events/event_bus.gd): `UCodexEventBus` game-instance subsystem with the signals the game emits (squad member selected, stats updated, item used, mine spotted, soldier downed, feed line, dialogue finished, rage started / ended, generator state, game saved / loaded), broadcast from the matching UE systems; EventBusSmoke |
+| (this) | Stage loadout (Godot main.gd _apply_stage_exploration_resources): `LoadoutRules` + LoadoutRulesTest, level JSON squad_loadout imported into `FLevelCombatConfig::SquadLoadout` (import_levels.py, DA_Level_* re-imported), `UMissionSubsystem::ApplyStageLoadout` at the end of the cutscene; VictorySmoke checks it |
+| `ef5f5bd` | Event bus (Godot Scripts/events/event_bus.gd): `UCodexEventBus` game-instance subsystem with the signals the game emits (squad member selected, stats updated, item used, mine spotted, soldier downed, feed line, dialogue finished, rage started / ended, generator state, game saved / loaded), broadcast from the matching UE systems; EventBusSmoke |
 | `04373d1` | Turn-based camera choreography (user decision 2026-09-30; Godot camera.gd smooth_focus_on_target / _position, dramatic_action_cam_focus; main.gd _enter_turn_based_combat, _on_gorky17_turn_changed, _on_gorky17_enemy_movement_started / _finished, _perform_dramatic_tactical_attack, _on_gorky17_turret_shot_requested): `ATacticalCameraPawn` SmoothFocusOnTarget / SmoothFocusOnPosition / DramaticActionFocus / EnterTurnBasedZoom, `UTurnBasedCombatSubsystem::AttackCellCinematic` + cinematic turret volley, `IsBusy`; TurnBasedCameraSmoke, `HudShot turnbased duel` |
 | `4a80593` | Camera-zone solo (Godot is_in_camera_zone / is_zone_solo in main.gd): `AOperativeCharacter::bInCameraZone` (set by `ACameraZoneVolume`), `RelocationRules::CanRelocateNow(..., bLeaderZoneSolo)`, `URelocationSubsystem::CanRelocateNow()` used by the controller, deployables and relocation; RelocationRulesTest, CameraZoneSmoke |
 | `038d016` | Frostbitten shove (Godot enemy_frostbitten.gd _attack_target: +2.5 m/s away, `LaunchCharacter`) and damage flashes (Godot player.gd _spawn_damage_flash red light 0.12 s, enemy_base.gd _flash_hit red glow 0.08 s): `UCombatFeedbackSubsystem::SpawnDamageFlash` / `FlashEnemyHit`; EnemyAISmoke checks both |

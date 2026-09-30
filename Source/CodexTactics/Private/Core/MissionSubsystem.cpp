@@ -9,6 +9,7 @@
 #include "Combat/WaveSubsystem.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Core/MissionRules.h"
+#include "Core/LoadoutRules.h"
 #include "Data/DialogueSequenceAsset.h"
 #include "UI/DialogueSubsystem.h"
 #include "Engine/World.h"
@@ -205,6 +206,7 @@ void UMissionSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexComba
 			}
 		}
 	}
+		ApplyStageLoadout();
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	FText PhaseObjective;
 	if (Flow && MissionRules::GetPhaseObjective(Phase, Flow->GetWaveIndex(), Flow->GetPreparationTimeRemaining(), bCombatFinished, PhaseObjective))
@@ -283,6 +285,68 @@ void UMissionSubsystem::RestartMission(bool bQuick)
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Mission restart%s"), bQuick ? TEXT(" (quick)") : TEXT(""));
 	UGameplayStatics::OpenLevel(World, FName(*UGameplayStatics::GetCurrentLevelName(World, true)));
+}
+
+void UMissionSubsystem::ApplyStageLoadout()
+{
+	// Godot _apply_stage_exploration_resources: the combat supply by the level's squad_loadout and the start mode.
+	const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
+	const ULevelConfigAsset* Level = GameMode ? GameMode->LevelConfig.LoadSynchronous() : nullptr;
+	const FSquadLoadout Loadout = Level ? Level->Config.SquadLoadout : FSquadLoadout();
+	const ELoadoutMode Mode = LoadoutRules::ResolveMode(Loadout.SimulationMode, StartMode);
+	AOperativeCharacter* Roles[3] = { nullptr, nullptr, nullptr };
+	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			const int32 Slot = Member->SquadRole == EOperativeRole::Commander ? 0
+				: (Member->SquadRole == EOperativeRole::Engineer ? 1 : (Member->SquadRole == EOperativeRole::MedicSapper ? 2 : -1));
+			if (Slot >= 0 && !Roles[Slot])
+			{
+				Roles[Slot] = Member;
+			}
+		}
+	}
+	FLoadoutSupply Supply[3];
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		if (const AOperativeCharacter* Member = Roles[Index])
+		{
+			Supply[Index] = { Member->TurretsCount, Member->BarricadesCount, Member->MinesCount, -1 };
+		}
+	}
+	int32 RifleReserve = -1;
+	int32 PistolReserve = -1;
+	LoadoutRules::Apply(Mode, Loadout, Supply[0], Supply[1], Supply[2], RifleReserve, PistolReserve);
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		AOperativeCharacter* Member = Roles[Index];
+		if (!Member)
+		{
+			continue;
+		}
+		Member->TurretsCount = Supply[Index].Turrets;
+		Member->BarricadesCount = Supply[Index].Barricades;
+		Member->MinesCount = Supply[Index].Mines;
+		if (Supply[Index].Medkits >= 0)
+		{
+			Member->MedkitsCount = Supply[Index].Medkits;
+		}
+		// Godot sets ammo_inventory["m16" / "pistol"].reserve (the weapons not in hands) for the commander.
+		if (Index == 0 && RifleReserve >= 0)
+		{
+			if (FWeaponAmmoState* Rifle = Member->AmmoInventory.Find(TEXT("m16")))
+			{
+				Rifle->Reserve = RifleReserve;
+			}
+			if (FWeaponAmmoState* Pistol = Member->AmmoInventory.Find(TEXT("pistol")))
+			{
+				Pistol->Reserve = PistolReserve;
+			}
+		}
+	}
+	UE_LOG(LogCodexTactics, Log, TEXT("Stage loadout %d: turrets %d, barricades %d, mines %d"), static_cast<int32>(Mode),
+		Roles[0] ? Roles[0]->TurretsCount : 0, Roles[1] ? Roles[1]->BarricadesCount : 0, Roles[2] ? Roles[2]->MinesCount : 0);
 }
 
 #undef LOCTEXT_NAMESPACE

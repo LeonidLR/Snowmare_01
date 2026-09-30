@@ -103,8 +103,41 @@ namespace VictorySmoke
 		switch (State.Stage)
 		{
 		case 0:
+		{
+			// Godot _apply_stage_exploration_resources at the end of the cutscene («Начать игру»: what was collected,
+			// gathered on the specialists, capped 2 / 4 / 5).
+			int32 Totals[3] = { 0, 0, 0 };
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				// A collected supply spread over the squad: 3 turrets, 2 barricades, 3 mines.
+				Member->TurretsCount = Member->SquadRole == EOperativeRole::Recruit ? 0 : 1;
+				Member->BarricadesCount = Member->SquadRole == EOperativeRole::Engineer ? 2 : 0;
+				Member->MinesCount = Member->SquadRole == EOperativeRole::MedicSapper ? 3 : 0;
+				if (Member->SquadRole != EOperativeRole::Recruit)
+				{
+					Totals[0] += Member->TurretsCount;
+					Totals[1] += Member->BarricadesCount;
+					Totals[2] += Member->MinesCount;
+				}
+			}
 			Flow->TriggerCombatZone();
 			Flow->FinishCutscene();
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Member->SquadRole == EOperativeRole::Commander)
+				{
+					Check(State, Member->TurretsCount == FMath::Min(Totals[0], 2), FString::Printf(TEXT("loadout: commander turrets %d of %d"), Member->TurretsCount, Totals[0]));
+				}
+				else if (Member->SquadRole == EOperativeRole::Engineer)
+				{
+					Check(State, Member->BarricadesCount == FMath::Min(Totals[1], 4), FString::Printf(TEXT("loadout: engineer barricades %d of %d"), Member->BarricadesCount, Totals[1]));
+				}
+				else if (Member->SquadRole == EOperativeRole::MedicSapper)
+				{
+					Check(State, Member->MinesCount == FMath::Min(Totals[2], 5), FString::Printf(TEXT("loadout: medic mines %d of %d"), Member->MinesCount, Totals[2]));
+				}
+			}
+		}
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				State.Stations.Add(Member, Member->GetActorLocation());

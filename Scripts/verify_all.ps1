@@ -10,7 +10,8 @@ $Smokes = @(
 )
 $Failed = @()
 
-if (Get-Process UnrealEditor -ErrorAction SilentlyContinue) {
+# Only an editor of this project locks our DLLs (another project's editor may stay open).
+if (Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor%'" | Where-Object { $_.CommandLine -like "*CodexTactics.uproject*" }) {
     Write-Host "Unreal Editor is running: close it first (it locks the DLLs)." -ForegroundColor Yellow
     exit 2
 }

@@ -98,6 +98,9 @@ private:
 	void StartCombatMode();
 
 	FText Objective;
+	/** Godot _apply_stage_exploration_resources at the end of the cutscene (LoadoutRules). */
+	void ApplyStageLoadout();
+
 	EMissionStartMode StartMode = EMissionStartMode::None;
 	bool bMainMenuOpen = false;
 	/** Headless checks (menu skipped by the command line) get the radio line instead of the blocking intro dialogue. */
