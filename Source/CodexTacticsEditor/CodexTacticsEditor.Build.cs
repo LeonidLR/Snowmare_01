@@ -15,7 +15,9 @@ public class CodexTacticsEditor : ModuleRules
 			"BlueprintGraph",
 			"Kismet",
 			"AssetRegistry",
-			"ToolsetRegistry"
+			"ToolsetRegistry",
+			"AnimGraph",
+			"AnimGraphRuntime"
 		});
 	}
 }

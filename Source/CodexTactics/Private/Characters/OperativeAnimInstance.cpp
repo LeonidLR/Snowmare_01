@@ -1,9 +1,12 @@
 #include "Characters/OperativeAnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
 #include "AnimationRuntime.h"
+#include "Characters/ColdAnimationRules.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
 
 namespace
 {
@@ -24,11 +27,101 @@ FAnimInstanceProxy* UOperativeAnimInstance::CreateAnimInstanceProxy()
 	return new FOperativeAnimInstanceProxy(this);
 }
 
+void UOperativeAnimInstance::NativeInitializeAnimation()
+{
+	Super::NativeInitializeAnimation();
+	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner()))
+	{
+		BoundOperative = Operative;
+		FiredHandle = Operative->OnWeaponFiredNative.AddUObject(this, &UOperativeAnimInstance::HandleWeaponFired);
+	}
+}
+
+void UOperativeAnimInstance::NativeUninitializeAnimation()
+{
+	if (AOperativeCharacter* Operative = BoundOperative.Get())
+	{
+		Operative->OnWeaponFiredNative.Remove(FiredHandle);
+	}
+	BoundOperative.Reset();
+	Super::NativeUninitializeAnimation();
+}
+
 void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeUpdateAnimation(DeltaSeconds);
 	UpdateState();
+	UpdateUpperBody(DeltaSeconds);
+	UpdateColdLayer(DeltaSeconds);
 	UpdateNativeBlend(DeltaSeconds);
+}
+
+void UOperativeAnimInstance::UpdateColdLayer(float DeltaSeconds)
+{
+	// Godot cold_animation_controller.gd: presentation only. Eligible = standing locomotion, not aiming / sprinting /
+	// reloading, alive (locomotion_controller.gd cold_eligible).
+	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner());
+	ColdVisualTier = ColdAnimationRules::SelectTier(ColdVisualTier, Operative ? Operative->ColdLevel : 0.f, ColdThresholds, ColdHysteresis);
+	auto Resolve = [this](const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) -> UAnimSequenceBase*
+	{
+		TArray<bool> Set;
+		for (const TObjectPtr<UAnimSequenceBase>& Clip : Clips)
+		{
+			Set.Add(Clip != nullptr);
+		}
+		const int32 Index = ColdAnimationRules::ResolveClipIndex(Set, ColdVisualTier);
+		return Clips.IsValidIndex(Index) ? Clips[Index].Get() : nullptr;
+	};
+	if (ColdVisualTier > 0)
+	{
+		ColdIdleAnimation = Resolve(ColdIdleClips);
+		ColdWalkAnimation = Resolve(ColdWalkClips);
+		ColdMoveBlend = FMath::Clamp(Speed / ColdWalkFullSpeed, 0.f, 1.f);
+	}
+	const bool bHasPose = ColdIdleAnimation && ColdWalkAnimation;
+	const bool bEligible = bHasPose && Stance == EOperativeStance::Standing && !bIsAiming && !bIsSprinting && !bIsReloading && !bIsDead;
+	ColdVisualWeight = ColdAnimationRules::StepWeight(ColdVisualWeight, ColdVisualTier, bEligible, DeltaSeconds);
+}
+
+void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit)
+{
+	AimTimer = AimHoldAfterShot;
+	UAnimMontage* Montage = bIsAiming && FireAimMontage ? FireAimMontage : FireMontage;
+	if (Montage && !bIsReloading)
+	{
+		Montage_Play(Montage);
+	}
+}
+
+void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
+{
+	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner());
+	AimTimer = FMath::Max(0.f, AimTimer - DeltaSeconds);
+	bool bAttackMode = false;
+	if (Operative && Operative->GetWorld())
+	{
+		const UTurnBasedCombatSubsystem* TurnBased = Operative->GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+		bAttackMode = TurnBased && TurnBased->IsActive() && TurnBased->IsAttackMode() && TurnBased->GetActiveUnit() == Operative;
+	}
+	bIsAiming = !bIsDead && (bAttackMode || AimTimer > 0.f);
+
+	// Blend-space axes: the speed inside the samples' range, the rest as a faster play rate (no foot sliding).
+	StandBlendSpeed = FMath::Min(Speed, StandBlendSpaceMaxSpeed);
+	StandPlayRate = FMath::Max(1.f, Speed / StandBlendSpaceMaxSpeed);
+	SlowBlendSpeed = FMath::Min(Speed, SlowBlendSpaceMaxSpeed);
+	SlowPlayRate = FMath::Max(1.f, Speed / SlowBlendSpaceMaxSpeed);
+
+	// Reload: one clip per reload, stretched to the reload time left.
+	if (bIsReloading && !bWasReloading && ReloadAnimation && Operative)
+	{
+		const float Duration = FMath::Max(0.1f, Operative->ReloadTimer);
+		PlaySlotAnimationAsDynamicMontage(ReloadAnimation, UpperBodySlot, 0.2f, 0.2f, ReloadAnimation->GetPlayLength() / Duration);
+	}
+	else if (!bIsReloading && bWasReloading && ReloadAnimation)
+	{
+		StopSlotAnimation(0.2f, UpperBodySlot);
+	}
+	bWasReloading = bIsReloading;
 }
 
 void UOperativeAnimInstance::UpdateState()
@@ -43,6 +136,20 @@ void UOperativeAnimInstance::UpdateState()
 	Direction = Speed > 1.f
 		? FRotator::NormalizeAxis(Velocity.Rotation().Yaw - Operative->GetActorRotation().Yaw)
 		: 0.f;
+	// Turn-based steps move the actor directly (no velocity): walk forward over the whole path.
+	const UTurnBasedCombatSubsystem* TurnBased = Operative->GetWorld() ? Operative->GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	if (const float TacticalSpeed = TurnBased ? TurnBased->GetTacticalMoveSpeed(Operative) : -1.f; TacticalSpeed >= 0.f)
+	{
+		Speed = TacticalSpeed;
+		Direction = 0.f;
+	}
+	// A vault moves the actor directly too (Godot "Vault" state; the graph may play its own clip on bIsVaulting).
+	bIsVaulting = Operative->IsVaulting();
+	if (bIsVaulting)
+	{
+		Speed = Operative->GetVaultSpeed();
+		Direction = 0.f;
+	}
 	bIsMoving = Speed > 5.f;
 	bIsSprinting = Operative->IsSprinting();
 	Stance = Operative->GetStance();
