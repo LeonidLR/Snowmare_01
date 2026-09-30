@@ -21,7 +21,7 @@ Godot repo root: `C:/Users/Zephyrus15Duo/Documents/Codex/godot-test-01/`
 Balance values are imported from the Godot JSON by script (Phase 2) — never hand-typed into C++.
 If Godot behaviour and a GDD disagree, stop and ask the user.
 
-UE skills: `C:/Users/Zephyrus15Duo/Documents/Codex/godot-test-01/.agents/skills/ue-*` and `tactical-turn-based-combat`.
+UE skills: `.claude/skills/ue-*` (31 UE 5.8 C++ skills, quodsoler/unreal-engine-skills, MIT); every skill reads the project context `.agents/ue-project-context.md` first — keep it current when modules / plugins change.
 Source art: `C:/Users/Zephyrus15Duo/Documents/Codex/ASSETS/` (import FBX/glTF, not Godot `.res`).
 
 ## Tech decisions
