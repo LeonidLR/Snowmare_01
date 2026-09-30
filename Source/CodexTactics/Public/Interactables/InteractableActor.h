@@ -178,6 +178,9 @@ public:
 	TObjectPtr<UHeatSourceComponent> HeatSource;
 
 private:
+	/** Godot EventBus.generator_state_changed. */
+	void BroadcastGeneratorState(bool bPowered) const;
+
 	UFUNCTION()
 	void HandleGeneratorStarted();
 

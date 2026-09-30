@@ -1,4 +1,5 @@
 #include "Core/SaveGameSubsystem.h"
+#include "Subsystems/CodexEventBus.h"
 #include "Characters/RecruitSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -250,7 +251,13 @@ bool USaveGameSubsystem::SaveGame(const FString& SlotName, const FString& Custom
 		return false;
 	}
 	IFileManager::Get().MakeDirectory(*GetSaveDirectory(), true);
-	return FFileHelper::SaveStringToFile(Json, *GetSavePath(Slot), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	const bool bSaved = FFileHelper::SaveStringToFile(Json, *GetSavePath(Slot), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	UCodexEventBus* Bus = UCodexEventBus::Get(this);
+	if (bSaved && Bus)
+	{
+		Bus->OnGameSaved.Broadcast(Slot, Type == TEXT("autosave"));
+	}
+	return bSaved;
 }
 
 bool USaveGameSubsystem::LoadGame(const FString& SlotName)
@@ -266,6 +273,10 @@ bool USaveGameSubsystem::LoadGame(const FString& SlotName)
 		return false;
 	}
 	ApplySaveData(Data.ToSharedRef());
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnGameLoaded.Broadcast(SaveGameRules::SanitizeSlotName(SlotName));
+	}
 	return true;
 }
 

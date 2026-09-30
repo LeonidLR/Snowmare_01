@@ -1,4 +1,5 @@
 #include "Characters/RageComponent.h"
+#include "Subsystems/CodexEventBus.h"
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
@@ -122,6 +123,10 @@ void URageComponent::EnterRage(AActor* Offender)
 	RagePost(Operative, FString::Printf(TEXT("🔥 %s: «Ах вы твари! Я вас всех на куски порву!»"), *Operative->DisplayName.ToString()));
 	UE_LOG(LogCodexTactics, Log, TEXT("%s enters rage for %.1f s"), *Operative->DisplayName.ToString(), Config.Duration);
 	OnRageChanged.Broadcast(true);
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnRageStarted.Broadcast(Operative);
+	}
 }
 
 void URageComponent::ExitRage(const FString& Reason)
@@ -141,6 +146,10 @@ void URageComponent::ExitRage(const FString& Reason)
 	}
 	UpdateAura(false);
 	OnRageChanged.Broadcast(false);
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnRageEnded.Broadcast(const_cast<AOperativeCharacter*>(Operative));
+	}
 }
 
 AActor* URageComponent::GetChaoticTarget()

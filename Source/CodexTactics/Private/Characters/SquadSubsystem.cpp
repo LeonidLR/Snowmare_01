@@ -1,4 +1,5 @@
 #include "Characters/SquadSubsystem.h"
+#include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
@@ -99,6 +100,10 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader)
 		UE_LOG(LogCodexTactics, Log, TEXT("Squad leader: %s"), *NewLeader->DisplayName.ToString());
 	}
 	OnLeaderChanged.Broadcast(NewLeader);
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnSquadMemberSelected.Broadcast(NewLeader);
+	}
 	return true;
 }
 

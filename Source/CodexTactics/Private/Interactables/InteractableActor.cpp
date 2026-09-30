@@ -1,4 +1,5 @@
 #include "Interactables/InteractableActor.h"
+#include "Subsystems/CodexEventBus.h"
 #include "UI/OverheadLabel.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -438,6 +439,7 @@ void AInteractableActor::HandleGeneratorStarted()
 	HeatSource->SetHeatActive(true);
 	// Godot activate_visuals (generator): every turret gets power.
 	ATurretActor::SetAllPowered(GetWorld(), true);
+	BroadcastGeneratorState(true); // Godot EventBus.generator_state_changed
 }
 
 bool AInteractableActor::IsGeneratorWorking() const
@@ -469,6 +471,7 @@ void AInteractableActor::BreakdownGenerator()
 	GeneratorHealth = 0.f;
 	HeatSource->SetHeatActive(false);
 	ATurretActor::SetAllPowered(GetWorld(), false);
+	BroadcastGeneratorState(false); // Godot EventBus.generator_state_changed
 	PostLine(LOCTEXT("Attention", "ВНИМАНИЕ"), LOCTEXT("GeneratorDown", "⚠️ Дизель-генератор повреждён врагами и заглох! Турели обесточены!"));
 }
 
@@ -478,6 +481,7 @@ void AInteractableActor::RepairGenerator()
 	bGeneratorBroken = false;
 	HeatSource->SetHeatActive(true);
 	ATurretActor::SetAllPowered(GetWorld(), true);
+	BroadcastGeneratorState(true); // Godot EventBus.generator_state_changed
 	PostLine(LOCTEXT("EngineerSpeaker", "Инженер"), LOCTEXT("GeneratorBack", "⚡ Генератор восстановлен! Питание подано на все турели!"));
 }
 
@@ -514,4 +518,12 @@ bool AInteractableActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
 		OutLabel.Color = FLinearColor(0.9f, 0.8f, 0.3f);
 	}
 	return true;
+}
+
+void AInteractableActor::BroadcastGeneratorState(bool bPowered) const
+{
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnGeneratorStateChanged.Broadcast(bPowered);
+	}
 }

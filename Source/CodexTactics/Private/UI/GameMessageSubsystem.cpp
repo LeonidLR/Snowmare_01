@@ -1,9 +1,14 @@
 #include "UI/GameMessageSubsystem.h"
+#include "Subsystems/CodexEventBus.h"
 #include "CodexTactics.h"
 #include "Engine/World.h"
 
 void UGameMessageSubsystem::PostMessage(const FText& Speaker, const FText& Text)
 {
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnDialogueLineDisplayed.Broadcast(Speaker.ToString(), Text.ToString()); // Godot _on_quest_message
+	}
 	FGameMessage& Message = History.AddDefaulted_GetRef();
 	Message.Speaker = Speaker;
 	Message.Text = Text;

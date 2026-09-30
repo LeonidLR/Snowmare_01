@@ -1,4 +1,5 @@
 #include "UI/ProfileDialogWidget.h"
+#include "Subsystems/CodexEventBus.h"
 #include "Blueprint/WidgetTree.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -302,6 +303,10 @@ void UProfileDialogWidget::ClickStat(EProgressStat Stat, int32 Direction)
 	else
 	{
 		Operative->DecreaseStat(Stat);
+	}
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnSoldierStatsUpdated.Broadcast(Operative);
 	}
 	Refresh();
 }

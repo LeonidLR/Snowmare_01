@@ -1,4 +1,5 @@
 #include "Interactables/ProximityMineActor.h"
+#include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -188,6 +189,10 @@ void AProximityMineActor::HandleSpotted(AOperativeCharacter* Spotter)
 	Spotter->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 	UFloatingTextSubsystem::SpawnAboveOperative(Spotter, TEXT("⚠️ МИНА ОБНАРУЖЕНА!"), FLinearColor(1.f, 0.85f, 0.1f));
 	PostLine(Spotter->DisplayName, LOCTEXT("Spotted", "⚠️ Внимание, мина! Всем остановиться!"));
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnMineSpotted.Broadcast(this, Spotter);
+	}
 	if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
 	{
 		Relocation->DropAllForMine();

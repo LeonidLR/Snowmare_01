@@ -10,7 +10,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | 0 | Project skeleton, modules, plugins, build/test scripts | ✅ |
 | 1 | Pure logic: game flow FSM, Gorky grid, LOS, AP economy, damage, cold, panic/rage | ✅ (panic inert in Godot) |
 | 2 | Data: USTRUCT/DataAsset types + JSON → DataAsset importer | 🟨 weapons, balance, dialogues, levels ✅; camera user-tuned |
-| 3 | Framework: EventBus, operative character, Enhanced Input, camera, squad formation | 🟨 all but EventBus ✅ |
+| 3 | Framework: EventBus, operative character, Enhanced Input, camera, squad formation | ✅ (`UCodexEventBus`) |
 | 4 | Combat: exploration→combat transition, turn queue, commands, HUD, enemy AI | ✅ flow, pause, waves, turn-based, enemy AI, squad fire, rage, AI grenades, hold sphere, wave victory ✅ |
 | 5 | World systems: mines, heat sources, loot, interactables, quests, dialogue, save | ✅ |
 | 6 | Content: asset import (Nanite), animation, VFX, Stage 01 "Bunker Gate", UDS/UDW | 🟨 operative model + animations ✅ |
@@ -43,7 +43,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/components/locomotion_controller.gd` (stand / crouch / prone locomotion) | `UOperativeAnimInstance` native blend + `ABP_Operative` | 6 | 🟨 baseline (fire, reload, hit, death, grenade states → AnimBP graph) | `CodexTactics.StanceSmoke`, `HudShot close walk` |
 | `Scripts/components/cold_animation_controller.gd` | AnimBP layer | 6 | ⬜ | |
 | `Scripts/components/locomotion_controller.gd`, `Scripts/locomotion_v2/**` | AnimBP + `UOperativeAnimInstance` | 6 | ⬜ | |
-| `Scripts/events/event_bus.gd` | per-subsystem delegates (OnGameFlowChanged, OnWaveStarted, OnMessagePosted, ...) | 3 | ➖ | |
+| `Scripts/events/event_bus.gd` | `UCodexEventBus` (the emitted signals) + per-subsystem delegates (OnGameFlowChanged, OnWaveStarted, ...) | 3 | ✅ | EventBusSmoke |
 | `Scripts/managers/save_manager.gd` | `USaveGameSubsystem` (JSON, Godot keys) + `SaveGameRules` | 5 | ✅ | `CodexTactics.Core.SaveGameRules.*`, SaveLoadSmoke, PauseMenuSmoke |
 | `main.gd` radius_ring | `URadiusRingSubsystem` + `ARadiusRingActor` | 5 | ✅ | RadiusRingSmoke |
 | `Scenes/movements/player.gd` — movement: click/double-click orders, speeds, stances, sprint rules | `AOperativeCharacter`, `OperativeMovementRules`, `AOperativeAIController` (NavMesh + Detour Crowd), `ACodexTacticsPlayerController` | 3 | ✅ (vault, phasing, box select, group orders, idle roam, pause orders, panic/rage refusal → later) | `CodexTactics.Movement.*` (5), `CodexTactics.MovementSmoke` |

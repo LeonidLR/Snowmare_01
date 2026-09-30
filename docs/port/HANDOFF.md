@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **135 automation tests, 47 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **135 automation tests, 48 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -82,6 +82,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `NarrativeSmoke` | Level narrative elements (note, signpost, poster) and the dialogue trigger: marker only from afar, the note's text within 2 m, menu «Записка дежурного инженера» / «Прочитать вслух» reads it into the feed; the trigger plays the wave-rest dialogue once |
 | `HoldSphereSmoke` | Space hold: the dome grows (eased) and the squad holds fire; release hides it and lifts the cease fire |
 | `TurnBasedCameraSmoke` | Cinematics forced on: 16 m on the operative's turn, the camera on the enemy during its turn and back on the active operative, the dramatic shot (framing 10..19 m, the round lands at 0.75 s, orders wait), the glide back at the combat distance, the pre-combat zoom restored |
+| `EventBusSmoke` | A listener hears every `UCodexEventBus` event from its real emitter (leader change, profile point, drawer medkit, feed line, dialogue close, rage, generator down / repaired, save / load, a fallen operative) |
 | `VictorySmoke` | All waves killed (commander / turret / mine sources): kill statistics, the panel per wave, «next wave (N/M)» starts the rest, «full victory» after the last; post-combat: squad at its preparation spots, commander leads, no enemies, a turret back in the supply |
 | `ProgressionSmoke` | +260 EXP -> level 2 (3 points, full heal, «УРОВЕНЬ 2»); a hound kill gives every member 15 EXP; P opens the profile, + / - spend and refund points within the bounds, paging, number keys, Esc, wave-clear auto open |
 | `ClickRulesSmoke` | Plain-click rules in a fight (Godot main.gd): an enemy becomes the priority target; a barrel / barricade can't be moved outside the pause and a ground click can't move the squad (HQ lines); in the pause a barrel is picked up for relocation and a barricade opens its menu at once |
@@ -435,6 +436,10 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   Blueprint hooks On Jump Attack Started / Impact for the clips. Godot only jumps when the model has the jump clip —
   UE jumps whenever the config enables it. Shot down mid-leap it keeps falling on the world and crashes («СБИТ В
   ВОЗДУХЕ», «КРАХ»). The airborne kill gives the cutter EXP (16); kill statistics are not ported.
+- Event bus (`UCodexEventBus`, Godot event_bus.gd): a hook point for Blueprints / audio / VFX; systems still call each
+  other directly (Godot's bus mostly fed the UI). Only the signals Godot actually emits are there; declared-but-never-
+  emitted ones, panic / allegiance ones (not ported) and camera_shake_requested (a fallback; the camera is called
+  directly) are left out. item_used fires from the inventory drawer only (as in Godot; H / J / K / L do not).
 - Turn-based camera choreography (user decision 2026-09-30, Godot main.gd + camera.gd): entering zooms to 14 m; each
   operative's turn / selection glides to it (0.75 s, 16 m); the active operative's own number / a click on it glides
   there (0.85 s) with «🎥 Фокус камеры на бойце»; an enemy's turn glides to it (0.4 s, 11.5 m), its walk (0.35 s,
@@ -518,7 +523,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Turn-based camera choreography (user decision 2026-09-30; Godot camera.gd smooth_focus_on_target / _position, dramatic_action_cam_focus; main.gd _enter_turn_based_combat, _on_gorky17_turn_changed, _on_gorky17_enemy_movement_started / _finished, _perform_dramatic_tactical_attack, _on_gorky17_turret_shot_requested): `ATacticalCameraPawn` SmoothFocusOnTarget / SmoothFocusOnPosition / DramaticActionFocus / EnterTurnBasedZoom, `UTurnBasedCombatSubsystem::AttackCellCinematic` + cinematic turret volley, `IsBusy`; TurnBasedCameraSmoke, `HudShot turnbased duel` |
+| (this) | Event bus (Godot Scripts/events/event_bus.gd): `UCodexEventBus` game-instance subsystem with the signals the game emits (squad member selected, stats updated, item used, mine spotted, soldier downed, feed line, dialogue finished, rage started / ended, generator state, game saved / loaded), broadcast from the matching UE systems; EventBusSmoke |
+| `04373d1` | Turn-based camera choreography (user decision 2026-09-30; Godot camera.gd smooth_focus_on_target / _position, dramatic_action_cam_focus; main.gd _enter_turn_based_combat, _on_gorky17_turn_changed, _on_gorky17_enemy_movement_started / _finished, _perform_dramatic_tactical_attack, _on_gorky17_turret_shot_requested): `ATacticalCameraPawn` SmoothFocusOnTarget / SmoothFocusOnPosition / DramaticActionFocus / EnterTurnBasedZoom, `UTurnBasedCombatSubsystem::AttackCellCinematic` + cinematic turret volley, `IsBusy`; TurnBasedCameraSmoke, `HudShot turnbased duel` |
 | `4a80593` | Camera-zone solo (Godot is_in_camera_zone / is_zone_solo in main.gd): `AOperativeCharacter::bInCameraZone` (set by `ACameraZoneVolume`), `RelocationRules::CanRelocateNow(..., bLeaderZoneSolo)`, `URelocationSubsystem::CanRelocateNow()` used by the controller, deployables and relocation; RelocationRulesTest, CameraZoneSmoke |
 | `038d016` | Frostbitten shove (Godot enemy_frostbitten.gd _attack_target: +2.5 m/s away, `LaunchCharacter`) and damage flashes (Godot player.gd _spawn_damage_flash red light 0.12 s, enemy_base.gd _flash_hit red glow 0.08 s): `UCombatFeedbackSubsystem::SpawnDamageFlash` / `FlashEnemyHit`; EnemyAISmoke checks both |
 | `fc3b672` | Rage aura (Godot rage_component.gd RageAura torus 0.75..1.05 m): an `ARadiusRingActor` (new `ShowRing` width parameter) follows the raging operative's feet; RageSmoke checks it, `HudShot rage` shows it |

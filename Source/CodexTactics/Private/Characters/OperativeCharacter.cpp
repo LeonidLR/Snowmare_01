@@ -1,4 +1,5 @@
 #include "Characters/OperativeCharacter.h"
+#include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/RageComponent.h"
@@ -431,6 +432,10 @@ void AOperativeCharacter::UpdatePlaceholderPose(float Alpha)
 
 void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 {
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnSoldierDowned.Broadcast(this); // Godot EventBus.soldier_downed
+	}
 	if (RageComponent)
 	{
 		RageComponent->ExitRage(TEXT("Погиб"));

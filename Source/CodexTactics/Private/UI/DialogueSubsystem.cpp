@@ -1,4 +1,5 @@
 #include "UI/DialogueSubsystem.h"
+#include "Subsystems/CodexEventBus.h"
 #include "CodexTactics.h"
 #include "Data/DialogueSequenceAsset.h"
 #include "Engine/World.h"
@@ -47,6 +48,10 @@ void UDialogueSubsystem::Close()
 	Current = nullptr;
 	LineIndex = 0;
 	OnDialogueChanged.Broadcast(false);
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnDialogueFinished.Broadcast(); // Godot dialogue_box.gd
+	}
 	FSimpleDelegate Finished = OnCurrentFinished;
 	OnCurrentFinished.Unbind();
 	Finished.ExecuteIfBound();

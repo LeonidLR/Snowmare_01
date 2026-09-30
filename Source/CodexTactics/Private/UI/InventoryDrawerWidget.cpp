@@ -1,4 +1,5 @@
 #include "UI/InventoryDrawerWidget.h"
+#include "Subsystems/CodexEventBus.h"
 #include "Blueprint/WidgetTree.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -273,6 +274,15 @@ void UInventoryDrawerWidget::Activate(EInventoryDrawerSlot Line)
 	case EInventoryDrawerSlot::Bread: PC->UseSquadItem(EPersonalItem::Bread); break;
 	case EInventoryDrawerSlot::Chocolate: PC->UseSquadItem(EPersonalItem::Chocolate); break;
 	default: break;
+	}
+	// Godot inventory_drawer.gd: EventBus.item_used(target_soldier, "MEDKIT" / ...).
+	const TCHAR* ItemId = Line == EInventoryDrawerSlot::Medkit ? TEXT("MEDKIT") : (Line == EInventoryDrawerSlot::CannedFood ? TEXT("CANNED_FOOD")
+		: (Line == EInventoryDrawerSlot::Bread ? TEXT("BREAD") : (Line == EInventoryDrawerSlot::Chocolate ? TEXT("CHOCOLATE") : nullptr)));
+	UCodexEventBus* Bus = UCodexEventBus::Get(this);
+	const USquadSubsystem* ItemSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (ItemId && Bus && ItemSquad && ItemSquad->GetLeader())
+	{
+		Bus->OnItemUsed.Broadcast(ItemSquad->GetLeader(), ItemId);
 	}
 	Refresh();
 }
