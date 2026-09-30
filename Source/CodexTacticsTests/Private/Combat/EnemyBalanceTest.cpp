@@ -2,6 +2,7 @@
 #include "Characters/EnemyCharacter.h"
 #include "Combat/HealthComponent.h"
 #include "Data/GodotBalanceAsset.h"
+#include "Data/WaveConfigTypes.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -54,6 +55,23 @@ bool FEnemyWaveModifiersTest::RunTest(const FString&)
 	Brute->InitializeArchetype(EEnemyArchetype::Brute);
 	Brute->ApplyWaveModifiers(1.1f, 1.f, 1.f, 100.f);
 	TestEqual(TEXT("custom_stats.health x hp_mult"), Brute->GetHealthComponent()->GetMaxHealth(), 110.f, 0.01f);
+
+	// The other custom_stats (Godot units: m/s, m, s): damage / speed times the wave multiplier, range / cooldown as given.
+	AEnemyCharacter* Custom = NewObject<AEnemyCharacter>();
+	Custom->InitializeArchetype(EEnemyArchetype::Frostbitten);
+	FWaveModifiers Mods;
+	Mods.EnemyDamageMult = 1.5f;
+	Mods.EnemySpeedMult = 2.f;
+	FEnemySpawnEntry Entry;
+	Entry.CustomDamage = 20.f;
+	Entry.CustomSpeed = 3.f;
+	Entry.CustomAttackRange = 2.5f;
+	Entry.CustomAttackCooldown = 0.8f;
+	Custom->ApplySpawnEntry(Mods, Entry);
+	TestEqual(TEXT("custom_stats.damage x damage_mult"), Custom->GetAttackDamage(), 30.f, 0.01f);
+	TestEqual(TEXT("custom_stats.speed (m/s) x speed_mult"), Custom->GetCharacterMovement()->MaxWalkSpeed, 600.f, 0.01f);
+	TestEqual(TEXT("custom_stats.attack_range (m)"), Custom->GetAttackRange(), 250.f, 0.01f);
+	TestEqual(TEXT("custom_stats.attack_cooldown (s)"), Custom->GetAttackCooldown(), 0.8f, 0.001f);
 	return true;
 }
 

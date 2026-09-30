@@ -54,6 +54,9 @@ public:
 	 */
 	void ApplyWaveModifiers(float HpMult, float DamageMult, float SpeedMult, float CustomHealth = 0.f);
 
+	/** The wave modifiers plus the spawn's custom_stats (health, damage, speed, attack range / cooldown). */
+	void ApplySpawnEntry(const struct FWaveModifiers& Mods, const struct FEnemySpawnEntry& Entry);
+
 	/** Avoids burning barrels (Godot fears_fire; turn-based enemies keep out of the 5 x 5 fire-fear area). */
 	bool DoesFearFire() const { return bFearsFire; }
 

@@ -153,7 +153,7 @@ void UWaveSubsystem::SpawnLevelWave(const FWaveDefinition& Def)
 		{
 			if (AEnemyCharacter* Enemy = SpawnEnemy(Entry.EnemyType, GetSpawnLocationForLane(Entry.SpawnLane, Entry.EnemyType)))
 			{
-				Enemy->ApplyWaveModifiers(Mods.EnemyHpMult, Mods.EnemyDamageMult, Mods.EnemySpeedMult, Entry.CustomHealth);
+				Enemy->ApplySpawnEntry(Mods, Entry);
 				Counts.FindOrAdd(Entry.EnemyType)++;
 				++Spawned;
 			}

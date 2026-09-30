@@ -18,6 +18,7 @@
 #include "Combat/HealthComponent.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/GodotBalanceAsset.h"
+#include "Data/WaveConfigTypes.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -233,6 +234,30 @@ void AEnemyCharacter::ApplyWaveModifiers(float HpMult, float DamageMult, float S
 	AttackDamage *= DamageMult;
 	GetCharacterMovement()->MaxWalkSpeed *= SpeedMult;
 	BaseWalkSpeed = GetCharacterMovement()->MaxWalkSpeed;
+}
+
+void AEnemyCharacter::ApplySpawnEntry(const FWaveModifiers& Mods, const FEnemySpawnEntry& Entry)
+{
+	// Godot _spawn_custom_json_wave: custom_stats replace the type's value (health / damage / speed times the wave
+	// multiplier; range and cooldown as given), the multipliers alone apply otherwise.
+	ApplyWaveModifiers(Mods.EnemyHpMult, Mods.EnemyDamageMult, Mods.EnemySpeedMult, Entry.CustomHealth);
+	if (Entry.CustomDamage > 0.f)
+	{
+		AttackDamage = Entry.CustomDamage * Mods.EnemyDamageMult;
+	}
+	if (Entry.CustomSpeed > 0.f)
+	{
+		GetCharacterMovement()->MaxWalkSpeed = Entry.CustomSpeed * 100.f * Mods.EnemySpeedMult;
+		BaseWalkSpeed = GetCharacterMovement()->MaxWalkSpeed;
+	}
+	if (Entry.CustomAttackRange > 0.f)
+	{
+		AttackRange = Entry.CustomAttackRange * 100.f;
+	}
+	if (Entry.CustomAttackCooldown > 0.f)
+	{
+		AttackCooldown = Entry.CustomAttackCooldown;
+	}
 }
 
 void AEnemyCharacter::ApplyBalance(const UGodotBalanceAsset& Config)

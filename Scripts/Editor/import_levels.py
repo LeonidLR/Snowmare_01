@@ -49,7 +49,13 @@ for path in sorted(glob.glob(os.path.join(GODOT, "data", "configs", "levels", "*
                 entry.set_editor_property("spawn_lane", spawn.get("spawn_lane", "ANY"))
                 entry.set_editor_property("spawn_delay_sec", float(spawn.get("spawn_delay_sec", 1.0)))
                 entry.set_editor_property("initial_delay_sec", float(spawn.get("initial_delay_sec", 0.0)))
-                entry.set_editor_property("custom_health", float(spawn.get("custom_stats", {}).get("health", spawn.get("custom_health", 0.0))))
+                stats = spawn.get("custom_stats", {}) or {}
+                entry.set_editor_property("custom_health", float(stats.get("health", spawn.get("custom_health", 0.0))))
+                # Godot units (m, m/s, s); AEnemyCharacter::ApplySpawnEntry converts.
+                entry.set_editor_property("custom_damage", float(stats.get("damage", 0.0)))
+                entry.set_editor_property("custom_speed", float(stats.get("speed", 0.0)))
+                entry.set_editor_property("custom_attack_range", float(stats.get("attack_range", 0.0)))
+                entry.set_editor_property("custom_attack_cooldown", float(stats.get("attack_cooldown", 0.0)))
                 spawns.append(entry)
             definition.set_editor_property("spawns", spawns)
             mods = wave.get("wave_modifiers", {})

@@ -54,7 +54,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **138 automation tests, 49 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **145 automation tests, 56 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -406,7 +406,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Waves beyond the level config (or without one) follow Godot's fallback (`FallbackWaveRules` + test,
   `UWaveSubsystem::StartWave`): balance-driven hound / spitter / brute counts from DA_GameBalanceConfig, the whole wave
   at once at the type-filtered spawn points (Gemini's queued built-in waves are gone).
-- Level spawn `custom_stats` damage / speed / attack_range / attack_cooldown are not imported (only health; no level uses them).
+- Level spawn `custom_stats` are all imported (health, damage, speed m/s, attack_range m, attack_cooldown s; `AEnemyCharacter::ApplySpawnEntry`, Godot _spawn_custom_json_wave; no Godot level sets them yet).
 - Still hand-typed (Phase 2 continues): camera (user-tuned, see §8.7), enemy visuals / capsules (Gemini). Imported and wired:
   weapons, turn-based balance, operative health / speeds / matches / lift & sprint limits (per role), cold rules, enemy stats and crit chances.
 - Floating combat texts (`UFloatingTextSubsystem`, drawn by the HUD over the name plates): wired for operative hits /
@@ -454,8 +454,9 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   (`ACodexTacticsPlayerController::SelectInBox`, `USquadSubsystem::SetSelectedGroup`); rings under them (gold leader
   only in a group); ground orders move / plan the whole group in Godot's slots around the click (`OrderGroupMove`,
   `SquadFormation::ComputeGroupTargets`); picking a leader by number drops the group; not in the grid fight (clicks are
-  grid orders there). In exploration the formation still pulls followers (as in Godot). Not ported: the action bar
-  «🛡️» cover / holding tag and its tooltips.
+  grid orders there). In exploration the formation still pulls followers (as in Godot). The action bar marks
+  a squad slot in barricade cover (green frame) or holding (guard / solo; blue) with « ●» (no emoji in the UI font) and
+  Godot's tooltips.
 - Overhead labels (`FOverheadLabel`, `AEnemyCharacter` / `AInteractableActor::GetOverheadLabel`, HUD `DrawWorldLabels`;
   Godot Label3D): enemies (armor-tier square instead of 🟢🟡🔴, name, statuses as words — ГОРИТ / ЛЁД / ОГЛУШЁН / БРОНЯ-,
   the font has no emoji — HP; hidden for stasis enemies outside a turn-based fight), barricade, turret, generator with

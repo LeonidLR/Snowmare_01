@@ -25,8 +25,25 @@ struct CODEXTACTICS_API FEnemySpawnEntry
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Spawn", meta = (ClampMin = "0.0"))
 	float InitialDelaySec = 0.0f;
 
+	/** custom_stats.health (0 = the type's own). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Spawn")
 	float CustomHealth = 0.0f;
+
+	/** custom_stats.damage (0 = the type's own), times the wave's damage multiplier like Godot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Spawn")
+	float CustomDamage = 0.0f;
+
+	/** custom_stats.speed in m/s (0 = the type's own), times the wave's speed multiplier. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Spawn")
+	float CustomSpeed = 0.0f;
+
+	/** custom_stats.attack_range in m (0 = the type's own). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Spawn")
+	float CustomAttackRange = 0.0f;
+
+	/** custom_stats.attack_cooldown in s (0 = the type's own). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Spawn")
+	float CustomAttackCooldown = 0.0f;
 };
 
 USTRUCT(BlueprintType)

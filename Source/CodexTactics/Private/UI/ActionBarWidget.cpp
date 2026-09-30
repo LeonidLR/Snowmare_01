@@ -324,9 +324,23 @@ void UActionBarWidget::Refresh()
 			continue;
 		}
 		const bool bLeader = Member == Leader;
-		SquadSlot.Button->SetBackgroundColor(bLeader ? BarLeaderOrange : BarOrange);
-		SquadSlot.Frame->SetBrushColor(bLeader ? BarLeaderBorder : BarSlotBorder);
-		SquadSlot.Frame->SetPadding(FMargin(bLeader ? 3.f : 1.f));
+		// Godot _update_tactical_command_bar: the shield tag, a green frame in barricade cover, blue while holding.
+		const bool bInCover = Member->IsInBarricadeCover();
+		const bool bHolding = Member->bGuarding || (Squad->IsSoloMode() && !bLeader);
+		if (bInCover || bHolding)
+		{
+			SquadSlot.Label->SetText(FText::FromString(GetSlotText(Index).ToString() + TEXT(" ●")));
+		}
+		SquadSlot.Button->SetToolTipText(Member->bGuarding
+			? LOCTEXT("SlotGuardTip", "ТОЧКА ОБОРОНЫ: Позиция зафиксирована [T]")
+			: bHolding ? LOCTEXT("SlotHoldTip", "ОБОРОНА: Боец закрепился в укрытии в режиме соло [B]")
+			: bInCover ? LOCTEXT("SlotCoverTip", "В укрытии за баррикадой (-35% входящего урона, +15% меткости)")
+			: bLeader && Squad->IsSoloMode() ? LOCTEXT("SlotSoloTip", "СОЛО-РАЗВЕДКА [B]")
+			: FText::Format(LOCTEXT("SlotSelectTip", "Выбрать бойца [{0}]"), Index + 1));
+		SquadSlot.Button->SetBackgroundColor(bLeader ? BarLeaderOrange : bHolding ? FLinearColor::FromSRGBColor(FColor(46, 89, 166)) : BarOrange);
+		SquadSlot.Frame->SetBrushColor(bInCover ? FLinearColor::FromSRGBColor(FColor(77, 255, 128)) : bLeader ? BarLeaderBorder
+			: bHolding ? FLinearColor::FromSRGBColor(FColor(51, 230, 255)) : BarSlotBorder);
+		SquadSlot.Frame->SetPadding(FMargin(bLeader ? 3.f : (bInCover || bHolding ? 2.f : 1.f)));
 		SquadSlot.HealthBar->SetPercent(Member->HealthComponent ? Member->HealthComponent->GetHealthFraction() : 0.f);
 		SquadSlot.ColdBar->SetPercent(Member->ColdLevel / 100.f);
 	}
