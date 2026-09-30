@@ -56,6 +56,35 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Camera")
 	void TriggerWeaponShake(const FString& WeaponType);
 
+	// --- Turn-based choreography (Godot camera.gd smooth_focus_on_target / _position, dramatic_action_cam_focus) ---
+
+	/**
+	 * Glides focus (and, with TargetDistance > 0, the distance, cm) to Target over Duration with a smoothstep; the pan
+	 * offset returns to zero. The camera then follows Target.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Camera")
+	void SmoothFocusOnTarget(AActor* Target, float Duration = 0.85f, float TargetDistance = -1.f);
+
+	/** Same glide to a world point (the follow target is kept for afterwards). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Camera")
+	void SmoothFocusOnPosition(const FVector& WorldPosition, float Duration = 0.85f, float TargetDistance = -1.f);
+
+	/** Frames shooter and target together: their midpoint at TacticalCameraRules::ComputeDramaticDistance. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Camera")
+	void DramaticActionFocus(const AActor* From, const AActor* To, float Duration = 0.4f);
+
+	/** While a dramatic shot runs the camera holds its framing (Godot main.gd is_dramatic_shot_active). */
+	void SetDramaticShotActive(bool bActive) { bDramaticShot = bActive; }
+
+	/** Entering turn-based combat zooms to Distance (Godot 14 m); leaving restores the previous zoom. */
+	void EnterTurnBasedZoom(float Distance);
+	void ExitTurnBasedZoom();
+
+	bool IsSmoothFocusing() const { return bSmoothFocusing; }
+	float GetCurrentDistance() const { return CurrentDistance; }
+	float GetTargetDistance() const { return TargetDistance; }
+	FVector GetFocus() const { return Focus; }
+
 	/** Current shake trauma 0..1. */
 	float GetShakeTrauma() const { return ShakeTrauma; }
 
@@ -75,6 +104,24 @@ private:
 	FVector ComputeFocus(float RealDelta);
 	/** Advances the trauma and returns this frame's view-plane offset, cm (Godot _process_shake h / v offsets). */
 	FVector UpdateShake(float RealDelta, const FRotator& ViewRotation);
+
+	/** Advances a running smooth focus (Godot _update_smooth_focus). */
+	void UpdateSmoothFocus(float RealDelta);
+	void BeginSmoothFocus(float Duration, float TargetDist);
+	bool IsFollowingLeader() const;
+
+	bool bSmoothFocusing = false;
+	float SmoothTime = 0.f;
+	float SmoothDuration = 0.85f;
+	FVector SmoothStartFocus = FVector::ZeroVector;
+	FVector SmoothStartPan = FVector::ZeroVector;
+	float SmoothStartDistance = 0.f;
+	float SmoothTargetDistance = -1.f;
+	bool bSmoothToPosition = false;
+	FVector SmoothPosition = FVector::ZeroVector;
+	bool bDramaticShot = false;
+	bool bTurnBasedZoom = false;
+	float PreTurnBasedDistance = 0.f;
 
 	float ShakeTrauma = 0.f;
 	float ShakeNoiseTime = 0.f;

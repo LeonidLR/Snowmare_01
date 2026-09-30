@@ -75,9 +75,18 @@ void ATacticalCameraPawn::Tick(float DeltaSeconds)
 	UpdateZoomMode();
 	UpdatePan(RealDelta);
 	UpdateRotation(RealDelta);
-	CurrentDistance = FMath::Lerp(CurrentDistance, TargetDistance, FMath::Clamp(Config.ZoomSmoothSpeed * RealDelta, 0.f, 1.f));
+	// Godot: a smooth focus with its own distance or a dramatic shot owns the zoom.
+	if (!(bSmoothFocusing && SmoothTargetDistance > 0.f) && !bDramaticShot)
+	{
+		CurrentDistance = FMath::Lerp(CurrentDistance, TargetDistance, FMath::Clamp(Config.ZoomSmoothSpeed * RealDelta, 0.f, 1.f));
+	}
+	const bool bWasGliding = bSmoothFocusing || bDramaticShot;
+	UpdateSmoothFocus(RealDelta);
 
-	Focus = ComputeFocus(RealDelta);
+	if (!bWasGliding)
+	{
+		Focus = ComputeFocus(RealDelta);
+	}
 	const FVector Desired = Focus + TacticalCameraRules::ComputeViewOffset(CurrentYaw, Config.Pitch, CurrentDistance) + PanOffset;
 	const FRotator ViewRotation(Config.Pitch, CurrentYaw, 0.f);
 
@@ -88,8 +97,11 @@ void ATacticalCameraPawn::Tick(float DeltaSeconds)
 		return;
 	}
 	const float FollowSpeed = IsTurnBased() ? Config.TacticalFollowSpeed : Config.FollowSpeed;
+	// Godot: gliding, a dramatic shot or a turn-based non-leader target (an enemy moving) place the camera exactly.
+	const bool bSnap = bWasGliding || (IsTurnBased() && !IsFollowingLeader());
 	// The shake offset rides on top of the follow position (removed before smoothing so it never accumulates).
-	const FVector NewLocation = FMath::Lerp(GetActorLocation() - ShakeOffset, Desired, FMath::Clamp(FollowSpeed * RealDelta, 0.f, 1.f));
+	const FVector NewLocation = bSnap ? Desired
+		: FMath::Lerp(GetActorLocation() - ShakeOffset, Desired, FMath::Clamp(FollowSpeed * RealDelta, 0.f, 1.f));
 	ShakeOffset = UpdateShake(RealDelta, ViewRotation);
 	SetActorLocationAndRotation(NewLocation + ShakeOffset, ViewRotation);
 }
@@ -282,9 +294,129 @@ void ATacticalCameraPawn::UpdateRotation(float RealDelta)
 FVector ATacticalCameraPawn::ComputeFocus(float RealDelta)
 {
 	const FVector TargetLocation = FollowTarget->GetActorLocation();
-	if (IsTurnBased())
+	// Godot: a turn-based target that is not the leader (an enemy on its turn) sits exactly in the centre.
+	if (IsTurnBased() && IsFollowingLeader())
 	{
 		return TacticalCameraRules::FollowWithDeadzone(Focus, TargetLocation, Config.TacticalDeadzone, Config.TacticalFollowSpeed, RealDelta);
 	}
 	return TargetLocation;
+}
+
+bool ATacticalCameraPawn::IsFollowingLeader() const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	return !Squad || FollowTarget.Get() == Squad->GetLeader();
+}
+
+void ATacticalCameraPawn::BeginSmoothFocus(float Duration, float TargetDist)
+{
+	bSmoothFocusing = true;
+	SmoothTime = 0.f;
+	SmoothDuration = FMath::Max(0.1f, Duration);
+	SmoothStartFocus = Focus;
+	SmoothStartPan = PanOffset;
+	SmoothStartDistance = CurrentDistance;
+	SmoothTargetDistance = TargetDist;
+	TargetPanOffset = FVector::ZeroVector;
+	bDragPanning = false;
+	bPanReturning = false;
+}
+
+void ATacticalCameraPawn::SmoothFocusOnTarget(AActor* Target, float Duration, float TargetDist)
+{
+	if (!IsValid(Target))
+	{
+		return;
+	}
+	FollowTarget = Target;
+	bSmoothToPosition = false;
+	BeginSmoothFocus(Duration, TargetDist);
+}
+
+void ATacticalCameraPawn::SmoothFocusOnPosition(const FVector& WorldPosition, float Duration, float TargetDist)
+{
+	bSmoothToPosition = true;
+	SmoothPosition = WorldPosition;
+	BeginSmoothFocus(Duration, TargetDist);
+}
+
+void ATacticalCameraPawn::DramaticActionFocus(const AActor* From, const AActor* To, float Duration)
+{
+	if (!IsValid(From) || !IsValid(To))
+	{
+		return;
+	}
+	const FVector A = From->GetActorLocation();
+	const FVector B = To->GetActorLocation();
+	SmoothFocusOnPosition((A + B) * 0.5f, Duration, TacticalCameraRules::ComputeDramaticDistance(FVector::Dist(A, B)));
+}
+
+void ATacticalCameraPawn::EnterTurnBasedZoom(float Distance)
+{
+	if (!bTurnBasedZoom)
+	{
+		PreTurnBasedDistance = TargetDistance;
+		bTurnBasedZoom = true;
+	}
+	TargetDistance = Distance;
+}
+
+void ATacticalCameraPawn::ExitTurnBasedZoom()
+{
+	bDramaticShot = false;
+	if (bTurnBasedZoom)
+	{
+		TargetDistance = PreTurnBasedDistance;
+		bTurnBasedZoom = false;
+	}
+	// Godot: the camera goes back to the leader after the fight.
+	if (const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)
+	{
+		SetFollowTarget(Squad->GetLeader());
+	}
+}
+
+void ATacticalCameraPawn::UpdateSmoothFocus(float RealDelta)
+{
+	if (!bSmoothFocusing)
+	{
+		return;
+	}
+	FVector End;
+	if (bSmoothToPosition)
+	{
+		End = SmoothPosition;
+	}
+	else if (FollowTarget.IsValid())
+	{
+		End = FollowTarget->GetActorLocation();
+	}
+	else
+	{
+		bSmoothFocusing = false;
+		return;
+	}
+	SmoothTime += RealDelta;
+	const float T = FMath::Clamp(SmoothTime / SmoothDuration, 0.f, 1.f);
+	const float Ease = TacticalCameraRules::Smoothstep(T);
+	Focus = FMath::Lerp(SmoothStartFocus, End, Ease);
+	PanOffset = FMath::Lerp(SmoothStartPan, FVector::ZeroVector, Ease);
+	TargetPanOffset = PanOffset;
+	if (SmoothTargetDistance > 0.f)
+	{
+		CurrentDistance = FMath::Lerp(SmoothStartDistance, SmoothTargetDistance, Ease);
+		TargetDistance = SmoothTargetDistance;
+	}
+	if (T >= 1.f)
+	{
+		bSmoothFocusing = false;
+		Focus = End;
+		bSmoothToPosition = false;
+		PanOffset = TargetPanOffset = FVector::ZeroVector;
+		if (SmoothTargetDistance > 0.f)
+		{
+			CurrentDistance = TargetDistance = SmoothTargetDistance;
+			SmoothTargetDistance = -1.f;
+		}
+	}
 }

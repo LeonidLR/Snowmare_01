@@ -123,6 +123,12 @@ namespace TacticalCameraRules
 	/** Clamps a pan offset to a maximum length. */
 	CODEXTACTICS_API FVector ClampPan(const FVector& Pan, float MaxDistance);
 
+	/** Smoothstep t²(3 - 2t), 0..1 (Godot _update_smooth_focus). */
+	CODEXTACTICS_API float Smoothstep(float T);
+
+	/** Godot dramatic_action_cam_focus: distance framing both duelists, clamp(span x 1.35 + 4 m, 10 m, 19 m), cm. */
+	CODEXTACTICS_API float ComputeDramaticDistance(float SpanCm);
+
 	/** Cubic ease-out, 0..1. */
 	CODEXTACTICS_API float CubicEaseOut(float T);
 

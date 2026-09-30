@@ -25,6 +25,7 @@
 #include "Interactables/BarrelActor.h"
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TurretActor.h"
+#include "Misc/App.h"
 #include "Tactics/GorkyGridManager.h"
 #include "Tactics/GorkyLineOfSight.h"
 #include "Tactics/TurnGridOverlayActor.h"
@@ -62,6 +63,15 @@ namespace
 }
 
 // --- Lifecycle ----------------------------------------------------------------------------------------------------
+
+namespace
+{
+	// Godot main.gd camera choreography distances (camera.gd metres; UE camera distance is the same view distance in cm).
+	constexpr float TurnEntryDistance = 1400.f;
+	constexpr float SquadTurnDistance = 1600.f;
+	constexpr float EnemyFocusDistance = 1150.f;
+	constexpr float OverviewDistance = 1700.f;
+}
 
 void UTurnBasedCombatSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
@@ -295,6 +305,15 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		Overlay->SetGrid(Grid);
 	}
 
+	// Godot _enter_turn_based_combat: the camera zooms in to 14 m on the leader; shots play as camera sequences
+	// unless the run is headless (Godot can_tween).
+	bCinematics = FApp::CanEverRender() || bForceCinematicsForTesting;
+	bDramaticShotActive = false;
+	if (ATacticalCameraPawn* Camera = GetCamera())
+	{
+		Camera->EnterTurnBasedZoom(TurnEntryDistance);
+	}
+
 	Phase = ETurnPhase::Squad;
 	ActiveIndex = 0;
 	Round = 1;
@@ -316,6 +335,11 @@ void UTurnBasedCombatSubsystem::EndCombat(bool bVictory, bool bLeaveFlow)
 	RelocateCells.Reset();
 
 	bSquadUnitMoving = false;
+	bDramaticShotActive = false;
+	if (ATacticalCameraPawn* Camera = GetCamera())
+	{
+		Camera->ExitTurnBasedZoom(); // Godot _on_gorky17_combat_ended: the pre-combat zoom comes back
+	}
 	RestoreWorld();
 	if (Overlay)
 	{
@@ -547,6 +571,40 @@ void UTurnBasedCombatSubsystem::Highlight(AActor* Target) const
 	}
 }
 
+ATacticalCameraPawn* UTurnBasedCombatSubsystem::GetCamera() const
+{
+	const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	return PC ? Cast<ATacticalCameraPawn>(PC->GetPawn()) : nullptr;
+}
+
+FVector UTurnBasedCombatSubsystem::GetSquadOverviewCenter() const
+{
+	FVector Sum = FVector::ZeroVector;
+	int32 Count = 0;
+	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Squad)
+	{
+		if (Member.IsValid() && States.Contains(Member.Get()))
+		{
+			Sum += Member->GetActorLocation();
+			++Count;
+		}
+	}
+	if (Count > 0)
+	{
+		return Sum / Count;
+	}
+	const AOperativeCharacter* Unit = GetActiveUnit();
+	return Unit ? Unit->GetActorLocation() : FVector::ZeroVector;
+}
+
+void UTurnBasedCombatSubsystem::FocusSquadTurn(AActor* Unit) const
+{
+	if (ATacticalCameraPawn* Camera = GetCamera())
+	{
+		Camera->SmoothFocusOnTarget(Unit, 0.75f, SquadTurnDistance);
+	}
+}
+
 void UTurnBasedCombatSubsystem::Changed()
 {
 	OnStateChanged.Broadcast();
@@ -712,6 +770,7 @@ void UTurnBasedCombatSubsystem::StartPlayerTurn()
 	{
 		SquadSystem->SetLeader(GetActiveUnit()); // the camera follows the active operative
 	}
+	FocusSquadTurn(GetActiveUnit()); // Godot _start_player_turn -> turn_changed
 	RefreshOverlay();
 	Changed();
 }
@@ -773,7 +832,7 @@ void UTurnBasedCombatSubsystem::RefreshOverlay()
 
 bool UTurnBasedCombatSubsystem::SelectUnit(AOperativeCharacter* Unit)
 {
-	if (bSquadUnitMoving || Phase != ETurnPhase::Squad)
+	if (IsBusy() || Phase != ETurnPhase::Squad)
 	{
 		return false;
 	}
@@ -784,11 +843,22 @@ bool UTurnBasedCombatSubsystem::SelectUnit(AOperativeCharacter* Unit)
 	{
 		return false;
 	}
+	if (Index == ActiveIndex)
+	{
+		// Godot: the active operative's own number or a click on him brings the camera to him from anywhere.
+		if (ATacticalCameraPawn* Camera = GetCamera())
+		{
+			Camera->SmoothFocusOnTarget(Unit);
+		}
+		Post(TEXT("КАМЕРА"), FString::Printf(TEXT("🎥 Фокус камеры на бойце: %s"), *NameOf(Unit)));
+		return true;
+	}
 	ActiveIndex = Index;
 	if (USquadSubsystem* SquadSystem = GetWorld()->GetSubsystem<USquadSubsystem>())
 	{
 		SquadSystem->SetLeader(Unit);
 	}
+	FocusSquadTurn(Unit); // Godot select_squad_unit -> turn_changed
 	RefreshOverlay();
 	Changed();
 	return true;
@@ -798,7 +868,7 @@ bool UTurnBasedCombatSubsystem::MoveActiveUnitTo(const FIntPoint& Cell)
 {
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* State = States.Find(Unit);
-	if (bSquadUnitMoving || Phase != ETurnPhase::Squad || !State || State->GridPos == Cell)
+	if (IsBusy() || Phase != ETurnPhase::Squad || !State || State->GridPos == Cell)
 	{
 		return false;
 	}
@@ -875,7 +945,7 @@ bool UTurnBasedCombatSubsystem::SetActiveUnitStance(EOperativeStance NewStance)
 {
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* State = States.Find(Unit);
-	if (bSquadUnitMoving || Phase != ETurnPhase::Squad || !State)
+	if (IsBusy() || Phase != ETurnPhase::Squad || !State)
 	{
 		return false;
 	}
@@ -912,7 +982,7 @@ bool UTurnBasedCombatSubsystem::TurnActiveUnitFacing(EGorkyFacing NewFacing)
 {
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* State = States.Find(Unit);
-	if (bSquadUnitMoving || Phase != ETurnPhase::Squad || !State || State->AP < 1 || State->Facing == NewFacing)
+	if (IsBusy() || Phase != ETurnPhase::Squad || !State || State->AP < 1 || State->Facing == NewFacing)
 	{
 		return false;
 	}
@@ -931,12 +1001,12 @@ bool UTurnBasedCombatSubsystem::RotateActiveUnitClockwise()
 	return State && TurnActiveUnitFacing(static_cast<EGorkyFacing>((static_cast<int32>(State->Facing) + 1) % 4));
 }
 
-FTurnAttackResult UTurnBasedCombatSubsystem::AttackCell(const FIntPoint& Cell, bool bGuaranteeHit)
+FTurnAttackResult UTurnBasedCombatSubsystem::AttackCell(const FIntPoint& Cell, bool bGuaranteeHit, bool bSkipShake)
 {
 	FTurnAttackResult Result;
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* State = States.Find(Unit);
-	if (bSquadUnitMoving || Phase != ETurnPhase::Squad || !State)
+	if (IsBusy() || Phase != ETurnPhase::Squad || !State)
 	{
 		Result.Reason = TEXT("no_unit");
 		return Result;
@@ -978,7 +1048,10 @@ FTurnAttackResult UTurnBasedCombatSubsystem::AttackCell(const FIntPoint& Cell, b
 	State->AP -= Balance.AttackAPCost;
 	State->bHasAttacked = true;
 	// Godot main.gd squad attack: the camera shakes by the weapon (pistol / rifle).
-	ShakeCamera(Weapon && Weapon->WeaponId == TEXT("pistol") ? TEXT("pistol") : TEXT("rifle"));
+	if (!bSkipShake)
+	{
+		ShakeCamera(Weapon && Weapon->WeaponId == TEXT("pistol") ? TEXT("pistol") : TEXT("rifle"));
+	}
 	State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Offset));
 	AlignFacing(Unit, State->Facing);
 	const int32 Distance = TurnBasedRules::CellDistance(State->GridPos, Cell);
@@ -1044,9 +1117,81 @@ FTurnAttackResult UTurnBasedCombatSubsystem::AttackCell(const FIntPoint& Cell, b
 	return Result;
 }
 
+bool UTurnBasedCombatSubsystem::CanAttackQuietly(const FIntPoint& Cell) const
+{
+	const AOperativeCharacter* Unit = GetActiveUnit();
+	const FTurnUnitState* State = GetUnitState(Unit);
+	if (IsBusy() || Phase != ETurnPhase::Squad || !State || State->bHasAttacked || State->AP < Balance.AttackAPCost || !Grid
+		|| !Grid->GetOccupant(Cell))
+	{
+		return false;
+	}
+	return TurnBasedRules::IsTargetInPattern(WeaponOf(Unit), Cell - State->GridPos) && GorkyLineOfSight::HasLineOfSight(State->GridPos, Cell, *Grid);
+}
+
+void UTurnBasedCombatSubsystem::AttackCellCinematic(const FIntPoint& Cell)
+{
+	AOperativeCharacter* Unit = GetActiveUnit();
+	AActor* Target = Grid ? Grid->GetOccupant(Cell) : nullptr;
+	ATacticalCameraPawn* Camera = GetCamera();
+	if (!bCinematics || !Camera || !Unit || !Target || !CanAttackQuietly(Cell))
+	{
+		AttackCell(Cell);
+		return;
+	}
+	// Phase 1: the shooter turns to the target, the camera frames both.
+	bDramaticShotActive = true;
+	Camera->SetDramaticShotActive(true);
+	Highlight(Target);
+	if (FTurnUnitState* State = States.Find(Unit))
+	{
+		State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Cell - State->GridPos));
+		AlignFacing(Unit, State->Facing);
+	}
+	Camera->DramaticActionFocus(Unit, Target, 0.4f);
+	RefreshOverlay();
+	Changed();
+	TWeakObjectPtr<AOperativeCharacter> WeakUnit(Unit);
+	After(0.4f, [this, WeakUnit, Cell]()
+	{
+		// Phase 2: the shot fires (fire animation: the AnimBP) and shakes the camera.
+		const UWeaponDataAsset* Weapon = WeaponOf(WeakUnit.Get());
+		ShakeCamera(Weapon && Weapon->WeaponId == TEXT("pistol") ? TEXT("pistol") : TEXT("rifle"));
+		After(0.35f, [this, WeakUnit, Cell]()
+		{
+			// Phase 3: the round lands.
+			bDramaticShotActive = false;
+			AttackCell(Cell, false, /*bSkipShake*/ true);
+			if (!IsActive())
+			{
+				return; // the last enemy fell: EndCombat reset the camera
+			}
+			bDramaticShotActive = true;
+			After(0.65f, [this, WeakUnit]()
+			{
+				// Phase 4: back to the tactical view on the shooter.
+				if (ATacticalCameraPawn* Cam = GetCamera())
+				{
+					Cam->SmoothFocusOnTarget(WeakUnit.Get(), 1.1f, Cam->Config.DistanceCombat);
+				}
+				After(1.1f, [this]()
+				{
+					bDramaticShotActive = false;
+					if (ATacticalCameraPawn* Cam = GetCamera())
+					{
+						Cam->SetDramaticShotActive(false);
+					}
+					RefreshOverlay();
+					Changed();
+				});
+			});
+		});
+	});
+}
+
 void UTurnBasedCombatSubsystem::EndCurrentUnitTurn()
 {
-	if (bSquadUnitMoving || Phase != ETurnPhase::Squad)
+	if (IsBusy() || Phase != ETurnPhase::Squad)
 	{
 		return;
 	}
@@ -1063,6 +1208,7 @@ void UTurnBasedCombatSubsystem::EndCurrentUnitTurn()
 		{
 			SquadSystem->SetLeader(GetActiveUnit());
 		}
+		FocusSquadTurn(GetActiveUnit()); // Godot end_current_unit_turn -> turn_changed
 		RefreshOverlay();
 		Changed();
 		return;
@@ -1086,7 +1232,7 @@ bool UTurnBasedCombatSubsystem::SwitchActiveUnitWeapon(const FString& WeaponId)
 
 void UTurnBasedCombatSubsystem::PassSquadTurn()
 {
-	if (bSquadUnitMoving || Phase != ETurnPhase::Squad)
+	if (IsBusy() || Phase != ETurnPhase::Squad)
 	{
 		return;
 	}
@@ -1096,7 +1242,7 @@ void UTurnBasedCombatSubsystem::PassSquadTurn()
 
 void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AActor* HitActor, bool bShift)
 {
-	if (!IsActive() || Phase != ETurnPhase::Squad || bSquadUnitMoving || !Grid)
+	if (!IsActive() || Phase != ETurnPhase::Squad || IsBusy() || !Grid)
 	{
 		return;
 	}
@@ -1213,7 +1359,7 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 			}
 			return;
 		}
-		AttackCell(Cell);
+		AttackCellCinematic(Cell);
 		break;
 	}
 	case EGorkyOccupantType::Turret:
@@ -1250,11 +1396,11 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 			}
 			return;
 		}
-		AttackCell(Cell);
+		AttackCellCinematic(Cell);
 		break;
 	}
 	case EGorkyOccupantType::Enemy:
-		AttackCell(Cell);
+		AttackCellCinematic(Cell);
 		break;
 	case EGorkyOccupantType::Squad:
 		SelectUnit(Cast<AOperativeCharacter>(Grid->GetOccupant(Cell)));
@@ -1305,7 +1451,7 @@ bool UTurnBasedCombatSubsystem::StartRelocate(AActor* Object)
 	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
 	const FTurnUnitState* ObjectState = GetUnitState(Object);
 	const bool bBarricade = IsValid(Object) && Object->IsA<ABarricadeActor>();
-	if (Phase != ETurnPhase::Squad || bSquadUnitMoving || !UnitState || (!ObjectState && !bBarricade) || !Grid)
+	if (Phase != ETurnPhase::Squad || IsBusy() || !UnitState || (!ObjectState && !bBarricade) || !Grid)
 	{
 		return false;
 	}
@@ -1469,7 +1615,7 @@ bool UTurnBasedCombatSubsystem::RelocateBarricade(AActor* Barricade, const FIntP
 {
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* UnitState = States.Find(Unit);
-	if (bSquadUnitMoving || !UnitState || !IsValid(Barricade))
+	if (IsBusy() || !UnitState || !IsValid(Barricade))
 	{
 		return false;
 	}
@@ -1548,7 +1694,7 @@ bool UTurnBasedCombatSubsystem::RelocateObject(const FIntPoint& ObjectCell, cons
 {
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* UnitState = States.Find(Unit);
-	if (bSquadUnitMoving || !UnitState || !Grid || !Grid->IsValidCell(ObjectCell) || !Grid->IsValidCell(Target)
+	if (IsBusy() || !UnitState || !Grid || !Grid->IsValidCell(ObjectCell) || !Grid->IsValidCell(Target)
 		|| ObjectCell == Target || !Grid->IsCellWalkable(Target))
 	{
 		return false;
@@ -1824,7 +1970,7 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 	const FTurnDeployCheck Check = CanPlaceDeployable(Type, Cell, Yaw);
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* UnitState = States.Find(Unit);
-	if (!Check.bCanPlace || !UnitState || bSquadUnitMoving || !IsValid(Spawned))
+	if (!Check.bCanPlace || !UnitState || IsBusy() || !IsValid(Spawned))
 	{
 		return false;
 	}
@@ -1922,7 +2068,7 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 
 bool UTurnBasedCombatSubsystem::HandleDeployPlacement(EDeployableType Type, const FVector& WorldPoint, float Yaw)
 {
-	if (!IsActive() || Phase != ETurnPhase::Squad || bSquadUnitMoving || !Grid)
+	if (!IsActive() || Phase != ETurnPhase::Squad || IsBusy() || !Grid)
 	{
 		return false;
 	}
@@ -2211,28 +2357,88 @@ void UTurnBasedCombatSubsystem::ProcessNextTurret()
 	const float Chance = TurnBasedRules::CalculateTurretHitChance(Cells);
 	const float Roll = FMath::FRand();
 	const bool bHit = bGuaranteeAllHits || Roll <= Chance;
+	ATacticalCameraPawn* Camera = GetCamera();
+	if (!bCinematics || !Camera)
+	{
+		ResolveTurretShot(Turret, Best, bHit, Chance, Roll);
+		After(0.55f, [this]() { ProcessNextTurret(); });
+		return;
+	}
+	// Godot _on_gorky17_turret_shot_requested: the camera frames turret and target (0.4 s), the head turns (0.25 s),
+	// the volley flies (0.15 s), the hit / miss reads (0.65 s), the camera glides to the squad overview (0.85 s).
+	bDramaticShotActive = true;
+	Camera->SetDramaticShotActive(true);
+	Highlight(Best);
+	Camera->DramaticActionFocus(Turret, Best, 0.4f);
+	TWeakObjectPtr<AActor> WeakTurret(Turret), WeakTarget(Best);
+	After(0.4f, [this, WeakTurret, WeakTarget, bHit, Chance, Roll]()
+	{
+		if (ATurretActor* TurretActor = Cast<ATurretActor>(WeakTurret.Get()); TurretActor && WeakTarget.IsValid() && TurretActor->Head)
+		{
+			const FVector Aim = WeakTarget->GetActorLocation() - TurretActor->GetActorLocation();
+			TurretActor->Head->SetWorldRotation(FRotator(0.f, Aim.Rotation().Yaw, 0.f));
+		}
+		After(0.25f, [this, WeakTurret, WeakTarget, bHit, Chance, Roll]()
+		{
+			ResolveTurretShot(WeakTurret.Get(), WeakTarget.Get(), bHit, Chance, Roll);
+			After(0.65f, [this]()
+			{
+				if (ATacticalCameraPawn* Cam = GetCamera())
+				{
+					Cam->SmoothFocusOnPosition(GetSquadOverviewCenter(), 0.85f, Cam->Config.DistanceCombat);
+				}
+				After(0.85f, [this]()
+				{
+					bDramaticShotActive = false;
+					if (ATacticalCameraPawn* Cam = GetCamera())
+					{
+						Cam->SetDramaticShotActive(false);
+					}
+					ProcessNextTurret();
+				});
+			});
+		});
+	});
+}
+
+void UTurnBasedCombatSubsystem::ResolveTurretShot(AActor* Turret, AActor* Target, bool bHit, float Chance, float Roll)
+{
+	if (!Turret || !Target || !States.Contains(Target))
+	{
+		return;
+	}
+	// Godot _spawn_muzzle_tracer: at the target, or up to 1.6 m beside it on a miss.
+	FVector End = Target->GetActorLocation();
+	if (!bHit)
+	{
+		FVector Miss(FMath::FRandRange(-160.f, 160.f), FMath::FRandRange(-160.f, 160.f), FMath::FRandRange(-30.f, 60.f));
+		if (Miss.SizeSquared() < 60.f * 100.f)
+		{
+			Miss = Miss.GetSafeNormal() * 120.f;
+		}
+		End += Miss;
+	}
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
 	{
-		Feedback->SpawnTurretTracer(Turret->GetActorLocation() + FVector(0.f, 0.f, 70.f), Best->GetActorLocation());
+		Feedback->SpawnTurretTracer(Turret->GetActorLocation() + FVector(0.f, 0.f, 70.f), End);
 	}
 	ShakeCamera(TEXT("turret")); // Godot _on_gorky17_turret_shot_requested
 	if (bHit)
 	{
 		const int32 Damage = FMath::RoundToInt(Balance.TurretDamage);
-		ApplyEnemyHit(Best, Damage, TEXT("Турель"));
-		Log(FString::Printf(TEXT("🔫 Турель произвела залп по %s (-%d HP)! [Меткость: %d%%]"), *NameOf(Best), Damage, FMath::RoundToInt(Chance * 100.f)));
-		if (IsDead(Best) && EnemyState)
+		ApplyEnemyHit(Target, Damage, TEXT("Турель"));
+		Log(FString::Printf(TEXT("🔫 Турель произвела залп по %s (-%d HP)! [Меткость: %d%%]"), *NameOf(Target), Damage, FMath::RoundToInt(Chance * 100.f)));
+		if (IsDead(Target))
 		{
-			OnEnemyKilled(Best, EnemyState->GridPos);
+			OnEnemyKilled(Target, States[Target].GridPos);
 		}
 	}
 	else
 	{
-		UFloatingTextSubsystem::SpawnAboveEnemy(Best, TEXT("ПРОМАХ!"), FLinearColor(0.85f, 0.85f, 0.85f));
-		Log(FString::Printf(TEXT("❌ Промах турели по %s! Шанс: %d%% (выпало: %d%%)"), *NameOf(Best), FMath::RoundToInt(Chance * 100.f),
+		UFloatingTextSubsystem::SpawnAboveEnemy(Target, TEXT("ПРОМАХ!"), FLinearColor(0.85f, 0.85f, 0.85f));
+		Log(FString::Printf(TEXT("❌ Промах турели по %s! Шанс: %d%% (выпало: %d%%)"), *NameOf(Target), FMath::RoundToInt(Chance * 100.f),
 			FMath::RoundToInt(Roll * 100.f)));
 	}
-	After(0.55f, [this]() { ProcessNextTurret(); });
 }
 
 void UTurnBasedCombatSubsystem::ExecuteEnemyPhase()
@@ -2307,6 +2513,11 @@ TSet<FIntPoint> UTurnBasedCombatSubsystem::GetFearCells() const
 void UTurnBasedCombatSubsystem::ExecuteEnemyTurn(AActor* Enemy)
 {
 	FTurnUnitState* State = States.Find(Enemy);
+	// Godot _on_gorky17_turn_changed (enemy): the camera glides to it.
+	if (ATacticalCameraPawn* Camera = GetCamera())
+	{
+		Camera->SmoothFocusOnTarget(Enemy, 0.4f, EnemyFocusDistance);
+	}
 	const FIntPoint Pos = State->GridPos;
 	const AEnemyCharacter* EnemyCharacter = Cast<AEnemyCharacter>(Enemy);
 	const bool bFearsFire = EnemyCharacter && EnemyCharacter->DoesFearFire();
@@ -2406,6 +2617,7 @@ void UTurnBasedCombatSubsystem::ExecuteEnemyTurn(AActor* Enemy)
 			State->AP -= Spent;
 			State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Destination - (Actual.Num() > 1 ? Actual[Actual.Num() - 2] : Pos)));
 			TWeakObjectPtr<AActor> WeakEnemy(Enemy), WeakTarget(Target), WeakMine(MineActor);
+			FocusMovingEnemy(Enemy);
 			StartMover(Enemy, Pos, Actual, EnemyStepDuration, nullptr,
 				[this, WeakEnemy, WeakTarget, WeakMine, bMine, bStoppedByFear, Destination, TargetPos]()
 			{
@@ -2551,6 +2763,7 @@ void UTurnBasedCombatSubsystem::EnemyRetreat(AActor* Enemy, const FIntPoint& Tar
 	State->GridPos = Found;
 	State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Found - Pos));
 	TWeakObjectPtr<AActor> WeakEnemy(Enemy), WeakMine(MineActor);
+	FocusMovingEnemy(Enemy);
 	StartMover(Enemy, Pos, { Found }, EnemyStepDuration, nullptr, [this, WeakEnemy, WeakMine, bMine, Found]()
 	{
 		if (bMine && WeakEnemy.IsValid())
@@ -2577,7 +2790,39 @@ void UTurnBasedCombatSubsystem::FinishEnemyTurn(float Delay)
 	{
 		return;
 	}
-	After(Delay, [this]() { ProcessNextEnemy(); });
+	if (!EnemyQueue.IsEmpty())
+	{
+		After(Delay, [this]() { ProcessNextEnemy(); });
+		return;
+	}
+	// Godot: after the last enemy the camera glides to the squad overview (17 m, 0.85 s) and the player turn follows.
+	const bool bFly = bCinematics;
+	After(Delay, [this, bFly]()
+	{
+		if (ATacticalCameraPawn* Camera = GetCamera())
+		{
+			const USquadSubsystem* SquadSystem = GetWorld()->GetSubsystem<USquadSubsystem>();
+			Camera->SetFollowTarget(SquadSystem ? SquadSystem->GetLeader() : nullptr);
+			Camera->SmoothFocusOnPosition(GetSquadOverviewCenter(), 0.85f, OverviewDistance);
+		}
+		if (bFly)
+		{
+			After(0.85f, [this]() { ProcessNextEnemy(); });
+		}
+		else
+		{
+			ProcessNextEnemy();
+		}
+	});
+}
+
+void UTurnBasedCombatSubsystem::FocusMovingEnemy(AActor* Enemy) const
+{
+	// Godot _on_gorky17_enemy_movement_started.
+	if (ATacticalCameraPawn* Camera = GetCamera())
+	{
+		Camera->SmoothFocusOnTarget(Enemy, 0.35f, EnemyFocusDistance);
+	}
 }
 
 // --- Explosions, deaths, end --------------------------------------------------------------------------------------

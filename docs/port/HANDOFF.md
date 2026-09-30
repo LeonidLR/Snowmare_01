@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 [-Filter CodexTactics.
 powershell -ExecutionPolicy Bypass -File Scripts/smoke.ps1 -Command CodexTactics.DeployableSmoke
 ```
 
-State at last update: **135 automation tests, 46 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
+State at last update: **135 automation tests, 47 smokes, all PASS** (`verify_all.ps1` → ALL GREEN; it also fails on an engine crash during the tests now).
 
 Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headless on `/Game/Maps/L_MovementTest`):
 
@@ -81,6 +81,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `ExposedZonesSmoke [shot]` | turn-based with one hound; the squad passes 3 turns: warning (1), danger (2), breach of 1-2 hounds (non-elite pool), no second breach; `shot` (rendered, UnrealEditor.exe -game) saves `ExposedZones.png` at the danger state |
 | `NarrativeSmoke` | Level narrative elements (note, signpost, poster) and the dialogue trigger: marker only from afar, the note's text within 2 m, menu «Записка дежурного инженера» / «Прочитать вслух» reads it into the feed; the trigger plays the wave-rest dialogue once |
 | `HoldSphereSmoke` | Space hold: the dome grows (eased) and the squad holds fire; release hides it and lifts the cease fire |
+| `TurnBasedCameraSmoke` | Cinematics forced on: 16 m on the operative's turn, the camera on the enemy during its turn and back on the active operative, the dramatic shot (framing 10..19 m, the round lands at 0.75 s, orders wait), the glide back at the combat distance, the pre-combat zoom restored |
 | `VictorySmoke` | All waves killed (commander / turret / mine sources): kill statistics, the panel per wave, «next wave (N/M)» starts the rest, «full victory» after the last; post-combat: squad at its preparation spots, commander leads, no enemies, a turret back in the supply |
 | `ProgressionSmoke` | +260 EXP -> level 2 (3 points, full heal, «УРОВЕНЬ 2»); a hound kill gives every member 15 EXP; P opens the profile, + / - spend and refund points within the bounds, paging, number keys, Esc, wave-clear auto open |
 | `ClickRulesSmoke` | Plain-click rules in a fight (Godot main.gd): an enemy becomes the priority target; a barrel / barricade can't be moved outside the pause and a ground click can't move the squad (HQ lines); in the pause a barrel is picked up for relocation and a barricade opens its menu at once |
@@ -434,6 +435,18 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   Blueprint hooks On Jump Attack Started / Impact for the clips. Godot only jumps when the model has the jump clip —
   UE jumps whenever the config enables it. Shot down mid-leap it keeps falling on the world and crashes («СБИТ В
   ВОЗДУХЕ», «КРАХ»). The airborne kill gives the cutter EXP (16); kill statistics are not ported.
+- Turn-based camera choreography (user decision 2026-09-30, Godot main.gd + camera.gd): entering zooms to 14 m; each
+  operative's turn / selection glides to it (0.75 s, 16 m); the active operative's own number / a click on it glides
+  there (0.85 s) with «🎥 Фокус камеры на бойце»; an enemy's turn glides to it (0.4 s, 11.5 m), its walk (0.35 s,
+  11.5 m); after the last enemy the camera glides to the squad centre (0.85 s, 17 m) and waits that long before the
+  squad turn. A squad shot (click on an enemy / Shift + barrel / barricade) plays `AttackCellCinematic`: frame both
+  (mid-point, clamp(span x 1.35 + 4 m, 10, 19 m), 0.4 s), shot + shake, the round lands 0.35 s later (`AttackCell`),
+  0.65 s to read it, glide back to the shooter at `Config.DistanceCombat` (1.1 s). A turret volley: frame both 0.4 s,
+  head turn (snapped, Godot tweens 0.25 s), volley + shake, 0.65 s, glide to the squad centre 0.85 s. Meanwhile
+  `IsBusy()` holds every player order. Godot distances are view distances in m; UE uses the same distance in cm. In
+  headless runs (no rendering, like Godot's can_tween) the delays are skipped — smokes set
+  `bForceCinematicsForTesting` to check them. A turn-based non-leader follow target (enemy) is framed exactly, the
+  leader with the deadzone.
 - Camera shake (Godot camera.gd): only in turn-based combat, trauma from the squad attack (pistol 0.20 / rifle 0.35)
   and each turret volley (0.28), decay 4 / s, offset = amplitude 0.18 m x trauma² x Perlin noise along the view's right
   / up axes (Godot FastNoiseLite simplex; UE FMath::PerlinNoise1D), values from DA_GameBalanceConfig camera_shake_*.
@@ -505,7 +518,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 | Commit | What |
 |---|---|
-| (this) | Camera-zone solo (Godot is_in_camera_zone / is_zone_solo in main.gd): `AOperativeCharacter::bInCameraZone` (set by `ACameraZoneVolume`), `RelocationRules::CanRelocateNow(..., bLeaderZoneSolo)`, `URelocationSubsystem::CanRelocateNow()` used by the controller, deployables and relocation; RelocationRulesTest, CameraZoneSmoke |
+| (this) | Turn-based camera choreography (user decision 2026-09-30; Godot camera.gd smooth_focus_on_target / _position, dramatic_action_cam_focus; main.gd _enter_turn_based_combat, _on_gorky17_turn_changed, _on_gorky17_enemy_movement_started / _finished, _perform_dramatic_tactical_attack, _on_gorky17_turret_shot_requested): `ATacticalCameraPawn` SmoothFocusOnTarget / SmoothFocusOnPosition / DramaticActionFocus / EnterTurnBasedZoom, `UTurnBasedCombatSubsystem::AttackCellCinematic` + cinematic turret volley, `IsBusy`; TurnBasedCameraSmoke, `HudShot turnbased duel` |
+| `4a80593` | Camera-zone solo (Godot is_in_camera_zone / is_zone_solo in main.gd): `AOperativeCharacter::bInCameraZone` (set by `ACameraZoneVolume`), `RelocationRules::CanRelocateNow(..., bLeaderZoneSolo)`, `URelocationSubsystem::CanRelocateNow()` used by the controller, deployables and relocation; RelocationRulesTest, CameraZoneSmoke |
 | `038d016` | Frostbitten shove (Godot enemy_frostbitten.gd _attack_target: +2.5 m/s away, `LaunchCharacter`) and damage flashes (Godot player.gd _spawn_damage_flash red light 0.12 s, enemy_base.gd _flash_hit red glow 0.08 s): `UCombatFeedbackSubsystem::SpawnDamageFlash` / `FlashEnemyHit`; EnemyAISmoke checks both |
 | `fc3b672` | Rage aura (Godot rage_component.gd RageAura torus 0.75..1.05 m): an `ARadiusRingActor` (new `ShowRing` width parameter) follows the raging operative's feet; RageSmoke checks it, `HudShot rage` shows it |
 | `e7c58cd` | A hit on an operative carrying / pushing an object drops everything the squad carries (Godot player.gd take_damage -> main.gd _cancel_or_finalize_active_relocates_for_combat): `URelocationSubsystem::DropAllForCombat`; RelocationSmoke checks it |

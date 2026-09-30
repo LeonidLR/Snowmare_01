@@ -299,7 +299,7 @@ bool ACodexTacticsPlayerController::CancelGrenadeAim()
 
 void ACodexTacticsPlayerController::GuardKey()
 {
-	if (const UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsUnitMoving())
+	if (const UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsBusy())
 	{
 		return;
 	}

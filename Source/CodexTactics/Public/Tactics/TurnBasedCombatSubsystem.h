@@ -116,6 +116,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
 	bool IsUnitMoving() const { return bSquadUnitMoving; }
 
+	/** An operative walks or a cinematic shot plays: player orders wait (Godot is_squad_unit_moving / is_dramatic_shot_active). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
+	bool IsBusy() const { return bSquadUnitMoving || bDramaticShotActive; }
+
+	/** A cinematic squad shot or turret volley is playing. */
+	bool IsDramaticShotActive() const { return bDramaticShotActive; }
+
+	/** Shots play as camera sequences (off in headless runs, like Godot's can_tween). */
+	bool AreCinematicsActive() const { return bCinematics; }
+
+	/** Checks: run the cinematic sequences in a headless run too (read at combat start). */
+	bool bForceCinematicsForTesting = false;
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
 	int32 GetRound() const { return Round; }
 
@@ -141,7 +154,15 @@ public:
 	bool TurnActiveUnitFacing(EGorkyFacing NewFacing);
 	/** R: turn 90° clockwise (1 AP). */
 	bool RotateActiveUnitClockwise();
-	FTurnAttackResult AttackCell(const FIntPoint& Cell, bool bGuaranteeHit = false);
+	/** bSkipShake: the cinematic sequence already shook the camera when the shot fired. */
+	FTurnAttackResult AttackCell(const FIntPoint& Cell, bool bGuaranteeHit = false, bool bSkipShake = false);
+
+	/**
+	 * Godot main.gd _perform_dramatic_tactical_attack: the camera frames shooter and target (0.4 s), the shot fires and
+	 * shakes, 0.35 s later it lands (AttackCell), 0.65 s to read it, then the camera glides back to the shooter (1.1 s).
+	 * An invalid shot, or cinematics off, goes straight to AttackCell (its warnings).
+	 */
+	void AttackCellCinematic(const FIntPoint& Cell);
 	/** Tab: next operative (the last one ends the squad phase). */
 	void EndCurrentUnitTurn();
 	/** Enter: the whole squad ends its turn. */
@@ -269,6 +290,17 @@ private:
 	/** Feed line from another sender (Godot _on_quest_message("ТАКТИКА", ...)). */
 	void Post(const FString& Sender, const FString& Message) const;
 	void Highlight(AActor* Target) const;
+	class ATacticalCameraPawn* GetCamera() const;
+	/** Godot get_squad_overview_center: the mean position of the squad on the grid. */
+	FVector GetSquadOverviewCenter() const;
+	/** Godot _on_gorky17_turn_changed for an operative: the camera glides to it (0.75 s, 16 m). */
+	void FocusSquadTurn(AActor* Unit) const;
+	/** Godot _on_gorky17_enemy_movement_started: the camera follows the walking enemy (0.35 s, 11.5 m). */
+	void FocusMovingEnemy(AActor* Enemy) const;
+	/** The shot the cinematic would fire is valid (no warnings; AttackCell repeats the checks with them). */
+	bool CanAttackQuietly(const FIntPoint& Cell) const;
+	/** Turret volley outcome (damage / miss, feed line, kill); shared by the plain and the cinematic volley. */
+	void ResolveTurretShot(AActor* Turret, AActor* Target, bool bHit, float Chance, float Roll);
 	void Changed();
 
 	void StartPlayerTurn();
@@ -334,6 +366,8 @@ private:
 	int32 ActiveIndex = 0;
 	int32 Round = 0;
 	bool bSquadUnitMoving = false;
+	bool bDramaticShotActive = false;
+	bool bCinematics = false;
 	/** Invalidates pending timers of a finished combat. */
 	int32 CombatId = 0;
 };

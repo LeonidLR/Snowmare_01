@@ -59,6 +59,17 @@ namespace TacticalCameraRules
 		return Pan.Size() > MaxDistance ? Pan.GetSafeNormal() * MaxDistance : Pan;
 	}
 
+	float Smoothstep(float T)
+	{
+		const float Clamped = FMath::Clamp(T, 0.f, 1.f);
+		return Clamped * Clamped * (3.f - 2.f * Clamped);
+	}
+
+	float ComputeDramaticDistance(float SpanCm)
+	{
+		return FMath::Clamp(SpanCm * 1.35f + 400.f, 1000.f, 1900.f);
+	}
+
 	float CubicEaseOut(float T)
 	{
 		const float Clamped = FMath::Clamp(T, 0.f, 1.f);

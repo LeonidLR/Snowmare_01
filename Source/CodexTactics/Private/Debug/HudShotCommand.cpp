@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar. "profile": the commander levelled up, profile open. "victory": the wave-cleared panel with kill statistics.
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar. "profile": the commander levelled up, profile open. "victory": the wave-cleared panel with kill statistics. "duel" (with "turnbased"): the dramatic shot framing.
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -41,6 +41,7 @@
 #include "Interactables/RelocationSubsystem.h"
 #include "Misc/Paths.h"
 #include "TimerManager.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UI/ActionBarWidget.h"
 #include "UI/PauseMenuWidget.h"
@@ -129,6 +130,28 @@ namespace HudShot
 				W->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Brute, Lead->GetActorLocation() + Lead->GetActorForwardVector() * 600.f);
 				Flow->RequestEnterTurnBased(true);
 			}), 2.f, false);
+		}
+		if (Args.Contains(TEXT("duel")))
+		{
+			// Godot _perform_dramatic_tactical_attack: the shot 0.5 s before the screenshot (framing done, round in flight).
+			TWeakObjectPtr<UWorld> DuelWorld(World);
+			FTimerHandle DuelHandle;
+			World->GetTimerManager().SetTimer(DuelHandle, FTimerDelegate::CreateLambda([DuelWorld]()
+			{
+				UTurnBasedCombatSubsystem* TurnBased = DuelWorld.IsValid() ? DuelWorld->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+				if (!TurnBased || !TurnBased->IsActive())
+				{
+					return;
+				}
+				for (TActorIterator<AEnemyCharacter> It(DuelWorld.Get()); It; ++It)
+				{
+					if (const FTurnUnitState* EnemyState = TurnBased->GetUnitState(*It))
+					{
+						TurnBased->AttackCellCinematic(EnemyState->GridPos);
+						break;
+					}
+				}
+			}), 4.0f, false);
 		}
 		if (Args.Contains(TEXT("cutscene")) || Args.Contains(TEXT("prep")))
 		{
