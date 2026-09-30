@@ -6,6 +6,17 @@
 
 class UHealthComponent;
 
+/** Godot barricade.gd ContactType: what touching / hitting the barricade does to an enemy. */
+UENUM(BlueprintType)
+enum class EBarricadeContact : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Physical UMETA(DisplayName = "Physical (spikes, barbed wire)"),
+	Fire UMETA(DisplayName = "Fire"),
+	Cryo UMETA(DisplayName = "Cryo"),
+	Energy UMETA(DisplayName = "Energy")
+};
+
 /**
  * Tactical barricade: 3 x 0.6 x 1 m cover with 200 HP. Can carry a tripwire that goes off when an enemy comes
  * within 1.8 m, is hit by an enemy or a defusal fails; the blast also wrecks the barricade.
@@ -39,6 +50,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Barricade")
 	bool bVaultable = true;
 
+	/**
+	 * Contact damage (Godot contact_type / contact_damage / contact_tick_interval): every interval enemies within
+	 * 2.2 m take half of it, an enemy striking the barricade takes all of it; fire burns 3 s, cryo freezes 2.5 s,
+	 * energy staggers 1 s. None by default (Godot); the generator barricade of movements_demo has spikes 5.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Barricade")
+	EBarricadeContact ContactType = EBarricadeContact::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Barricade", meta = (ClampMin = "0"))
+	float ContactDamage = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Barricade", meta = (ClampMin = "0.1"))
+	float ContactTickInterval = 1.f;
+
+	/** Godot take_damage retaliation: an enemy that strikes it gets the full contact effect. */
+	void RetaliateAgainst(AActor* Attacker);
+
+	/** Godot _apply_contact_effect_to_enemy. */
+	void ApplyContactTo(AActor* Enemy, float Damage);
+
 	/** Placeholder colour (Godot albedo 0.85 / 0.65 / 0.25). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Barricade")
 	FLinearColor BodyColor = FLinearColor::FromSRGBColor(FColor(217, 166, 64));
@@ -50,4 +81,6 @@ protected:
 private:
 	UFUNCTION()
 	void HandleDestroyed(AActor* Victim, const FString& AttackerSource);
+
+	float ContactTimer = 0.f;
 };

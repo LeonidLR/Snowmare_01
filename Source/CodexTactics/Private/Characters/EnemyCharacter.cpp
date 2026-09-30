@@ -712,6 +712,10 @@ void AEnemyCharacter::AttackObject(AActor* Object)
 	{
 		Trapped->DetonateTrap(false, NSLOCTEXT("EnemyCharacter", "EnemyBlow", "Удар противника"));
 	}
+	else if (ABarricadeActor* Barricade = Cast<ABarricadeActor>(Object); Barricade && IsValid(Barricade))
+	{
+		Barricade->RetaliateAgainst(this); // Godot barricade.gd take_damage: spikes / fire / cryo / energy strike back
+	}
 }
 
 void AEnemyCharacter::TickSpitter(float DeltaTime)

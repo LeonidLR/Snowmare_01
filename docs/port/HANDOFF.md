@@ -482,7 +482,7 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   resources/enemies/anims/cutter.tres (`Scripts/Editor/import_enemy_anim_configs.py` -> /Game/Data/Enemies/DA_EnemyAnim_*);
   Blueprint hooks On Jump Attack Started / Impact for the clips. Godot only jumps when the model has the jump clip —
   UE jumps whenever the config enables it. Shot down mid-leap it keeps falling on the world and crashes («СБИТ В
-  ВОЗДУХЕ», «КРАХ»). The airborne kill gives the cutter EXP (16); kill statistics are not ported.
+  ВОЗДУХЕ», «КРАХ»). The airborne kill gives the cutter EXP (16) and counts in the kill statistics (every death goes through HandleDied).
 - Frost vignette: drawn with UMG (a UI material drawn by the canvas HUD ignores its opacity). Canvas HUD texts sit under
   it, like Godot's squad HUD under the FrostOverlay. Material traps met on the way (see the script): in a Custom node
   the float3 colour path rendered nothing — keep Custom nodes to scalar math and do colour / opacity with nodes; with
@@ -540,7 +540,11 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   + growing ring + 15 m boundary ring, eased p x (2 - p)), the squad holds fire while Space is held
   (`AOperativeCharacter::bTacticalCeaseFire`), HUD `DrawSpaceCharge` («ВХОД В ПОШАГОВЫЙ БОЙ (GORKY 17): x.xc / y.yc» /
   «ВОЗВРАТ В ТАКТИЧЕСКУЮ ПАУЗУ»). The dome centre is the leader's feet (Godot ray-casts the floor below the leader).
-- Barricade contact damage (spikes / fire / cryo / energy) not ported (Godot default is NONE).
+- Barricade contact damage (Godot barricade.gd contact_*; `ABarricadeActor::ContactType / ContactDamage`): every interval
+  enemies within 2.2 m take half of it, a striking enemy takes all of it (not when trapped — the trap goes off), fire
+  burns 3 s (tick max(1, dmg / 4)), cryo freezes 2.5 s, energy staggers 1 s, 15 % armour pen, source «Баррикада»; the
+  label adds [шипы] / [огонь] / [холод] / [ток]. L_MovementTest's generator barricade (Barricade_Abandoned_West, Godot
+  AbandonedBarricadeGenerator) has spikes 5 and vault off, like Godot (BarricadeContactSmoke).
 - Pushing / defusal / set-up animations: none (operatives only slow down / crouch).
 - **Deliberate deviation (user request 2026-09-30):** enemies that fear fire walk round burning barrels / active heat zones on an arc (35° steps on a circle 1 m outside the zone, `FireDetourWaypoint`) and wait at the edge for a target inside one (the running generator); once panicking they calm down 1 m past the edge. Godot only flees, which made them shake at the edge.
 - Turn-based walk: units and pushed objects follow one continuous speed profile over the path (accelerate over the first cell, cruise, decelerate over the last) in Godot's total time; Godot eases each step (first in, last out, middle linear) and snaps the facing per step — UE turns smoothly (~0.15 s).

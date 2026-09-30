@@ -21,6 +21,13 @@ import unreal
 MAP_PATH = "/Game/Maps/L_MovementTest"
 
 
+def generator_barricade(barricade):
+    """Godot AbandonedBarricadeGenerator: vault = false, contact_type = PHYSICAL (spikes), contact_damage = 5."""
+    barricade.set_editor_property("vaultable", False)
+    barricade.set_editor_property("contact_type", unreal.BarricadeContact.PHYSICAL)
+    barricade.set_editor_property("contact_damage", 5.0)
+
+
 def checkpoint_crate(crate):
     """Godot LootCrateObject: medkits 2, food 2, no bread / matches / shotgun / fuel / cryo / plasma."""
     crate.set_editor_property("crate_name", "📦 Армейский ящик снабжения (КПП)")
@@ -79,7 +86,7 @@ OBJECTS = [
     # label, class, location (actor centre), yaw, setup
     ("Barrel_Fuel_01", unreal.BarrelActor, unreal.Vector(-400, 1200, 70), 0, None),
     ("Barricade_Abandoned_East", unreal.BarricadeActor, unreal.Vector(2000, 1500, 50), 0, None),
-    ("Barricade_Abandoned_West", unreal.BarricadeActor, unreal.Vector(-2300, 700, 50), 90, None),
+    ("Barricade_Abandoned_West", unreal.BarricadeActor, unreal.Vector(-2300, 700, 50), 90, generator_barricade),
     ("Mine_Abandoned_Path", unreal.ProximityMineActor, unreal.Vector(2300, 2400, 30), 0, None),
     ("Mine_Abandoned_Alley", unreal.ProximityMineActor, unreal.Vector(2400, -1400, 30), 0, None),
     ("Crate_Supply_Checkpoint", unreal.LootCrateActor, unreal.Vector(1200, 1200, 40), 0, checkpoint_crate),
