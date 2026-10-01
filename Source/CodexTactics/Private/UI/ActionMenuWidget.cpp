@@ -2,6 +2,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
+#include "UI/CodexButtonFocus.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Overlay.h"
@@ -46,6 +47,7 @@ TSharedRef<SWidget> UActionMenuWidget::RebuildWidget()
 UButton* UActionMenuWidget::MakeButton(const FName& Name, TObjectPtr<UTextBlock>& OutLabel)
 {
 	UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
+	CodexButtonFocus::Disable(Button); // a focused HUD button would swallow the game keys
 	OutLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *(Name.ToString() + TEXT("Label")));
 	MenuSetFontSize(OutLabel, 12);
 	OutLabel->SetColorAndOpacity(FSlateColor(FLinearColor(0.05f, 0.05f, 0.05f)));

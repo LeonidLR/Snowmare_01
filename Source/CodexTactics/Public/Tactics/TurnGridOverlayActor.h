@@ -30,7 +30,11 @@ enum class ETurnOverlayLayer : uint8
 	/** Outline of a quadrant uncovered for one turn (yellow; SetExposedZones, not SetCells). */
 	ExposedWarning,
 	/** Outline + corner marks of a quadrant uncovered for two turns or more (red). */
-	ExposedDanger
+	ExposedDanger,
+	/** Frame of the hovered cell (yellow; SetCursorCell). */
+	CursorMove,
+	/** Frame + corner brackets of a hovered enemy cell (red; SetCursorCell). */
+	CursorEnemy
 };
 
 /**
@@ -70,6 +74,16 @@ public:
 	 */
 	void SetExposedZones(const TArray<int32>& TurnsByQuadrant);
 
+	/**
+	 * Godot set_hovered_cell / _rebuild_cursor_mesh: a frame around the cell under the mouse — yellow, or red with corner
+	 * brackets over an enemy. An invalid cell hides it.
+	 */
+	void SetCursorCell(const FIntPoint& Cell, bool bEnemy);
+
+	/** Cell the cursor frame is drawn on (-999 when hidden) and whether it is the enemy frame (tests). */
+	FIntPoint GetCursorCell() const { return CursorCell; }
+	bool IsCursorOnEnemy() const { return bCursorEnemy; }
+
 	virtual void Tick(float DeltaSeconds) override;
 
 	/** Current glow intensity of a layer (pulses included; tests). */
@@ -98,6 +112,8 @@ private:
 	TMap<ETurnOverlayLayer, TObjectPtr<UMaterialInstanceDynamic>> LayerInstances;
 
 	float ExposedPulseTime = 0.f;
+	FIntPoint CursorCell = FIntPoint(-999, -999);
+	bool bCursorEnemy = false;
 	float WarningPulseTime = 0.f;
 
 	TWeakObjectPtr<const UGorkyGridManager> Grid;

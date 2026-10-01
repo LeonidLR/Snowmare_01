@@ -5,6 +5,7 @@
 #include "Combat/HealthComponent.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
+#include "UI/CodexButtonFocus.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
@@ -83,6 +84,7 @@ UTextBlock* UActionBarWidget::MakeText(const FName& Name, int32 Size, const FLin
 UButton* UActionBarWidget::MakeSlotButton(const FName& Name, const FLinearColor& Color, float Width, float Height, UTextBlock* Label, UHorizontalBox* Row)
 {
 	UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
+	CodexButtonFocus::Disable(Button); // a focused HUD button would swallow the game keys
 	Button->SetBackgroundColor(Color);
 	Button->AddChild(Label);
 	USizeBox* Size = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
@@ -173,6 +175,7 @@ void UActionBarWidget::BuildDefaultLayout()
 		Column->AddChildToVerticalBox(Size)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
 
 		SquadSlot.Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
+		CodexButtonFocus::Disable(SquadSlot.Button); // a focused HUD button would swallow the game keys
 		SquadSlot.Label = MakeText(NAME_None, 11, BarTextColor);
 		SquadSlot.Button->AddChild(SquadSlot.Label);
 		SquadSlot.Frame->SetContent(SquadSlot.Button);
@@ -211,6 +214,7 @@ void UActionBarWidget::BuildDefaultLayout()
 	for (const TCHAR* Id : SelectorIds)
 	{
 		UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), FName(FString::Printf(TEXT("BtnWep_%s"), Id)));
+		CodexButtonFocus::Disable(Button); // a focused HUD button would swallow the game keys
 		Button->SetBackgroundColor(SelectorButtonColor); // Godot default dark theme buttons
 		UTextBlock* Label = MakeText(NAME_None, 11, BarTextColor);
 		Label->SetJustification(ETextJustify::Left);

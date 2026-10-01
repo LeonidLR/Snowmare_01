@@ -228,13 +228,13 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		HandleSpaceHold();
 	}
 
-	// Turn-based attack mode: the hovered cell's hit chance (Godot set_hovered_cell).
-	if (UTurnBasedCombatSubsystem* HoverTurnBased = GetActiveTurnBased(); HoverTurnBased && HoverTurnBased->IsAttackMode())
+	// Turn-based: the cursor frame on the hovered cell and, in attack mode, its hit chance (Godot set_hovered_cell).
+	if (UTurnBasedCombatSubsystem* HoverTurnBased = GetActiveTurnBased())
 	{
 		FHitResult Hit;
 		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
 		{
-			HoverTurnBased->SetHoveredPoint(Hit.ImpactPoint);
+			HoverTurnBased->SetHoveredPoint(Hit.ImpactPoint, Hit.GetActor());
 		}
 	}
 	// Turn-based relocation: the object's hologram follows the hovered cell.

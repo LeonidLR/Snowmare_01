@@ -35,6 +35,8 @@ ATurnGridOverlayActor::ATurnGridOverlayActor()
 		{ ETurnOverlayLayer::Warning, TEXT("WarningLayer"), FLinearColor(1.f, 0.9f, 0.2f), 1.5f, 5.5f },
 		{ ETurnOverlayLayer::ExposedWarning, TEXT("ExposedWarningLayer"), FLinearColor(1.f, 0.85f, 0.2f), 2.5f, 6.f },
 		{ ETurnOverlayLayer::ExposedDanger, TEXT("ExposedDangerLayer"), FLinearColor(1.f, 0.05f, 0.05f), 3.f, 6.5f },
+		{ ETurnOverlayLayer::CursorMove, TEXT("CursorMoveLayer"), FLinearColor(1.f, 0.8f, 0.1f), 3.f, 7.f },
+		{ ETurnOverlayLayer::CursorEnemy, TEXT("CursorEnemyLayer"), FLinearColor(1.f, 0.15f, 0.15f), 3.5f, 7.f },
 	};
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Plane(TEXT("/Engine/BasicShapes/Plane.Plane"));
 	for (const FLayerSpec& Spec : Specs)
@@ -216,6 +218,56 @@ void ATurnGridOverlayActor::SetExposedZones(const TArray<int32>& TurnsByQuadrant
 	}
 	WarningMesh->AddInstances(Warning, false, true);
 	DangerMesh->AddInstances(Danger, false, true);
+}
+
+void ATurnGridOverlayActor::SetCursorCell(const FIntPoint& Cell, bool bEnemy)
+{
+	UInstancedStaticMeshComponent* MoveMesh = OverlayLayers.FindRef(ETurnOverlayLayer::CursorMove);
+	UInstancedStaticMeshComponent* EnemyMesh = OverlayLayers.FindRef(ETurnOverlayLayer::CursorEnemy);
+	const UGorkyGridManager* GridManager = Grid.Get();
+	const bool bValid = GridManager && GridManager->IsValidCell(Cell);
+	if (!MoveMesh || !EnemyMesh || (bValid && Cell == CursorCell && bEnemy == bCursorEnemy))
+	{
+		return;
+	}
+	MoveMesh->ClearInstances();
+	EnemyMesh->ClearInstances();
+	CursorCell = bValid ? Cell : FIntPoint(-999, -999);
+	bCursorEnemy = bValid && bEnemy;
+	if (!bValid)
+	{
+		return;
+	}
+	// Godot: the square just inside the cell (cell - 6 cm), lines of the outline width; over an enemy the corner
+	// brackets (0.45 of the half side) mark the target.
+	constexpr float LineWidth = 8.f;
+	const float Half = (GridManager->CellSize - 6.f) * 0.5f;
+	const FVector Center = GridManager->GridToWorld(Cell) + FVector(0.f, 0.f, LayerHeights[bEnemy ? ETurnOverlayLayer::CursorEnemy : ETurnOverlayLayer::CursorMove]);
+	const FVector Corners[] = { Center + FVector(-Half, -Half, 0.f), Center + FVector(Half, -Half, 0.f), Center + FVector(Half, Half, 0.f),
+		Center + FVector(-Half, Half, 0.f) };
+	auto AddLine = [LineWidth](TArray<FTransform>& Out, const FVector& A, const FVector& B)
+	{
+		const FVector Delta = B - A;
+		Out.Add(FTransform(Delta.Rotation(), (A + B) * 0.5f, FVector(Delta.Size() / 100.f, LineWidth / 100.f, 1.f)));
+	};
+	TArray<FTransform> Lines;
+	for (int32 Index = 0; Index < 4; ++Index)
+	{
+		AddLine(Lines, Corners[Index], Corners[(Index + 1) % 4]);
+	}
+	if (bEnemy)
+	{
+		const float Mark = Half * 0.45f;
+		for (const FVector& Corner : Corners)
+		{
+			const float SignX = Corner.X < Center.X ? 1.f : -1.f;
+			const float SignY = Corner.Y < Center.Y ? 1.f : -1.f;
+			const FVector Inset(SignX * LineWidth * 1.5f, SignY * LineWidth * 1.5f, 0.f);
+			AddLine(Lines, Corner + Inset, Corner + Inset + FVector(SignX * Mark, 0.f, 0.f));
+			AddLine(Lines, Corner + Inset, Corner + Inset + FVector(0.f, SignY * Mark, 0.f));
+		}
+	}
+	(bEnemy ? EnemyMesh : MoveMesh)->AddInstances(Lines, false, true);
 }
 
 void ATurnGridOverlayActor::Tick(float DeltaSeconds)

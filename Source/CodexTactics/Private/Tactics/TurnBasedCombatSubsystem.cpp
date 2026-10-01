@@ -1198,9 +1198,18 @@ bool UTurnBasedCombatSubsystem::ToggleAttackMode()
 	return bAttackMode;
 }
 
-void UTurnBasedCombatSubsystem::SetHoveredPoint(const FVector& WorldPoint)
+void UTurnBasedCombatSubsystem::SetHoveredPoint(const FVector& WorldPoint, const AActor* HitActor)
 {
-	HoveredCell = Grid ? Grid->WorldToGrid(WorldPoint) : FIntPoint(-999, -999);
+	// The mouse over a unit's body (the hit point may lie over the next cell) means that unit's own cell.
+	const FTurnUnitState* HitState = HitActor ? GetUnitState(HitActor) : nullptr;
+	HoveredCell = HitState ? HitState->GridPos : (Grid ? Grid->WorldToGrid(WorldPoint) : FIntPoint(-999, -999));
+	// Godot set_hovered_cell: the cursor frame on the hovered cell during the squad's turn (red over an enemy).
+	if (Overlay)
+	{
+		const bool bShow = IsActive() && Phase == ETurnPhase::Squad && Grid && Grid->IsValidCell(HoveredCell);
+		Overlay->SetCursorCell(bShow ? HoveredCell : FIntPoint(-999, -999),
+			bShow && Grid->GetOccupantType(HoveredCell) == EGorkyOccupantType::Enemy);
+	}
 }
 
 bool UTurnBasedCombatSubsystem::GetHoverHitChance(FVector& OutWorld, FString& OutText) const

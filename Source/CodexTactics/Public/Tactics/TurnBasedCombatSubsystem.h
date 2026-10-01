@@ -153,7 +153,7 @@ public:
 	bool ToggleAttackMode();
 
 	/** Cursor ground point (Godot set_hovered_cell). */
-	void SetHoveredPoint(const FVector& WorldPoint);
+	void SetHoveredPoint(const FVector& WorldPoint, const AActor* HitActor = nullptr);
 
 	/**
 	 * Godot _update_hit_chance_label: over a hovered cell of the attack matrix «🎯 N% | 💥 D», 1.6 m above the cell.
@@ -173,6 +173,9 @@ public:
 	const FTurnUnitState* GetUnitState(const AActor* Actor) const;
 	UGorkyGridManager* GetGrid() const { return Grid; }
 	int32 GetEnemyCount() const { return Enemies.Num(); }
+
+	/** The grid overlay actor of the fight (tests). */
+	const ATurnGridOverlayActor* GetOverlay() const { return Overlay; }
 	int32 GetSquadCount() const { return Squad.Num(); }
 	/** Meshes currently shown with the stasis material (enemies outside the fight). */
 	int32 GetStasisMeshCount() const { return StasisMeshes.Num(); }

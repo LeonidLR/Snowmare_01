@@ -3,6 +3,7 @@
 #include "Combat/WaveSubsystem.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
+#include "UI/CodexButtonFocus.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
@@ -106,6 +107,7 @@ void UPhaseBannersWidget::BuildDefaultLayout()
 	TextSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	TextSlot->SetVerticalAlignment(VAlign_Center);
 	FinishPrepButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("FinishPrepButton"));
+	CodexButtonFocus::Disable(FinishPrepButton); // a focused HUD button would swallow the game keys
 	UTextBlock* ButtonText = MakeText(TEXT("FinishPrepText"), 12, BannerButtonText);
 	ButtonText->SetText(BannerClean(LOCTEXT("FinishPrep", "⚔️ Начать бой")));
 	FinishPrepButton->AddChild(ButtonText);

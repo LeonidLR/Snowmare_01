@@ -3,6 +3,7 @@
 #include "Combat/WaveVictorySubsystem.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
+#include "UI/CodexButtonFocus.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/SizeBox.h"
@@ -121,6 +122,7 @@ void UVictoryPanelWidget::BuildDefaultLayout()
 	auto MakeButton = [this, Column](const FName& Name, float Height, UTextBlock*& OutText)
 	{
 		UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
+		CodexButtonFocus::Disable(Button); // a focused HUD button would swallow the game keys
 		OutText = MakeText(NAME_None, 13, VictoryButtonText);
 		OutText->SetJustification(ETextJustify::Center);
 		Button->AddChild(OutText);

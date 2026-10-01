@@ -5,6 +5,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
+#include "UI/CodexButtonFocus.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/SizeBox.h"
@@ -91,6 +92,7 @@ void UInventoryDrawerWidget::BuildDefaultLayout()
 	auto MakeButton = [this](const FName& Name, UTextBlock*& OutText)
 	{
 		UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
+		CodexButtonFocus::Disable(Button); // a focused HUD button would swallow the game keys
 		Button->SetBackgroundColor(DrawerButton);
 		OutText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 		FSlateFontInfo Font = OutText->GetFont();
