@@ -30,11 +30,24 @@ namespace StanceSmoke
 		int32 Second = 0;
 		float StartFeetZ = 0.f;
 		bool bOk = true;
+		/** Pelvis height range while prone and firing / aiming (a jump to a standing pose shows as > ProneMaxPelvis). */
+		float FireMinPelvis = TNumericLimits<float>::Max();
+		float FireMaxPelvis = 0.f;
+		FString FireSamples;
 	};
+
+	/** Pelvis above the feet stays below this while lying (lying ~15 cm, crouched ~50, standing ~90). */
+	constexpr float ProneMaxPelvis = 40.f;
 
 	float FeetZ(const AOperativeCharacter* Operative)
 	{
 		return Operative->GetActorLocation().Z - Operative->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	}
+
+	/** Pelvis bone above the feet, cm: the pose the graph really outputs (prone ~15, crouched ~50, standing ~90). */
+	float PelvisHeight(const AOperativeCharacter* Operative)
+	{
+		return Operative->GetMesh()->GetBoneLocation(TEXT("pelvis")).Z - FeetZ(Operative);
 	}
 
 	bool Check(FState& State, AOperativeCharacter* Leader, EOperativeStance Expected)
@@ -47,8 +60,9 @@ namespace StanceSmoke
 		FString Clips;
 		if (const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Leader->GetMesh()->GetAnimInstance()))
 		{
-			Clips = FString::Printf(TEXT(" clips idle=%.2f crouch=%.2f prone=%.2f"), Anim->GetClipWeight(EOperativeClip::Idle),
-				Anim->GetClipWeight(EOperativeClip::CrouchIdle), Anim->GetClipWeight(EOperativeClip::ProneIdle));
+			Clips = FString::Printf(TEXT(" clips idle=%.2f crouch=%.2f prone=%.2f pelvis=%.0fcm transition=%d"),
+				Anim->GetClipWeight(EOperativeClip::Idle), Anim->GetClipWeight(EOperativeClip::CrouchIdle),
+				Anim->GetClipWeight(EOperativeClip::ProneIdle), PelvisHeight(Leader), Anim->IsPlayingStanceTransition() ? 1 : 0);
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke t=%ds stance=%s halfHeight=%.1f (expected %.1f) feetZ=%.1f (start %.1f)%s -> %s"),
 			State.Second, *AOperativeCharacter::GetStanceDisplayName(Leader->GetStance()).ToString(), Half, ExpectedHalf,
@@ -96,18 +110,56 @@ namespace StanceSmoke
 			Check(State, Leader, EOperativeStance::Prone);
 			return false;
 		case 4:
-			// After the lying-down clip: a shot plays the prone fire clip.
+		{
+			// After the lying-down clip: a burst of shots plays the prone fire clip, and the body stays down through the
+			// burst, the aim hold after it and the return to the idle (sampled every 0.05 s).
+			Check(State, Leader, EOperativeStance::Prone);
 			Leader->OnWeaponFiredNative.Broadcast(Leader, nullptr, false);
 			CheckFullBodyClipSoon(World, State, Leader, TEXT("prone fire"),
 				[](const UOperativeAnimInstance& Anim) { return Anim.FireProneAnimation.Get(); });
+			TWeakObjectPtr<AOperativeCharacter> WeakLeader(Leader);
+			TSharedRef<int32> Ticks = MakeShared<int32>(0);
+			TSharedRef<FTimerHandle> Sampler = MakeShared<FTimerHandle>();
+			World->GetTimerManager().SetTimer(*Sampler, FTimerDelegate::CreateLambda([&State, WeakLeader, Ticks, Sampler, World]()
+			{
+				AOperativeCharacter* L = WeakLeader.Get();
+				if (!L || ++*Ticks > 80)
+				{
+					World->GetTimerManager().ClearTimer(*Sampler);
+					return;
+				}
+				if (*Ticks % 3 == 0 && *Ticks <= 36) // a shot every 0.15 s for 1.8 s
+				{
+					L->OnWeaponFiredNative.Broadcast(L, nullptr, false);
+				}
+				const float Pelvis = PelvisHeight(L);
+				State.FireMinPelvis = FMath::Min(State.FireMinPelvis, Pelvis);
+				State.FireMaxPelvis = FMath::Max(State.FireMaxPelvis, Pelvis);
+				if (*Ticks % 4 == 0)
+				{
+					const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(L->GetMesh()->GetAnimInstance());
+					State.FireSamples += FString::Printf(TEXT(" %.2fs:%.0f%s"), *Ticks * 0.05f, Pelvis, Anim && Anim->bIsAiming ? TEXT("a") : TEXT(""));
+				}
+			}), 0.05f, true);
 			return false;
+		}
 		case 5:
+		case 6:
+		case 7:
+			return false;
+		case 8:
+		{
+			const bool bDown = State.FireMaxPelvis <= ProneMaxPelvis;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke prone burst pelvis %.0f..%.0f cm (a = aiming):%s -> %s"),
+				State.FireMinPelvis, State.FireMaxPelvis, *State.FireSamples, bDown ? TEXT("ok") : TEXT("BAD"));
+			State.bOk &= bDown;
 			Check(State, Leader, EOperativeStance::Prone);
 			Leader->SetStance(EOperativeStance::Standing);
 			CheckFullBodyClipSoon(World, State, Leader, TEXT("prone->standing"),
 				[](const UOperativeAnimInstance& Anim) { return Anim.ProneToStandAnimation.Get(); });
 			return false;
-		case 6:
+		}
+		case 9:
 			return false;
 		default:
 			Check(State, Leader, EOperativeStance::Standing);
@@ -136,6 +188,8 @@ namespace StanceSmoke
 			*GetNameSafe(Leader->GetMesh()->GetSkeletalMeshAsset()), *GetNameSafe(Anim ? Anim->GetClass() : nullptr),
 			*GetNameSafe(Leader->WeaponMesh ? Leader->WeaponMesh->GetStaticMesh() : nullptr));
 		State->bOk = bBlueprint;
+		// Headless (-nullrhi) nothing is rendered: refresh the bones anyway so the pelvis height is the real pose.
+		Leader->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FTimerHandle> Handle = MakeShared<FTimerHandle>();

@@ -405,7 +405,10 @@ bool UOperativeAnimGraphLibrary::FillDirectionalBlendSpace(UBlendSpace* BlendSpa
 			BlendSpace->AddSample(Clip, FVector(-180.f, MaxSpeed, 0.f));
 		}
 	}
+	// PostEditChange alone does not rebuild the runtime triangulation (it only reacts to named property edits); without
+	// ResampleData the player outputs the reference pose.
 	BlendSpace->ValidateSampleData();
+	BlendSpace->ResampleData();
 	BlendSpace->PostEditChange();
 	BlendSpace->MarkPackageDirty();
 	OutReport = FString::Printf(TEXT("%s: %d samples, speed 0..%.0f"), *BlendSpace->GetName(), BlendSpace->GetNumberOfBlendSamples(), MaxSpeed);
