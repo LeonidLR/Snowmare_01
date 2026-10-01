@@ -230,6 +230,7 @@ void UActionBarWidget::BuildDefaultLayout()
 	Slots[0].Button->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSlot0);
 	Slots[1].Button->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSlot1);
 	Slots[2].Button->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSlot2);
+	Slots[3].Button->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSlot3); // the recruit (Susanin)
 }
 
 void UActionBarWidget::NativeOnInitialized()
@@ -569,6 +570,11 @@ void UActionBarWidget::HandleSlot1()
 void UActionBarWidget::HandleSlot2()
 {
 	SelectSlot(2);
+}
+
+void UActionBarWidget::HandleSlot3()
+{
+	SelectSlot(3);
 }
 
 #undef LOCTEXT_NAMESPACE

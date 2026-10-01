@@ -1,7 +1,9 @@
 // Dev-only console command for a headless action bar check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.ActionBarSmoke
 // 1. the stance slot cycles Standing -> Crouching -> Prone -> Standing for the whole squad; 2. «ПЕР» toggles the
-// object-pick mode on and off; 3. squad slot 2 makes the engineer the leader.
+// object-pick mode on and off; 3. squad slot 2 makes the engineer the leader; 4. in the preparation each operative
+// keeps a stance of his own (Godot has_custom_stance: medic prone, engineer crouched, commander standing), the squad
+// stance sync leaves them alone.
 
 #include "CoreMinimal.h"
 
@@ -9,6 +11,7 @@
 
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "CodexTactics.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Engine/World.h"
@@ -62,6 +65,28 @@ namespace ActionBarSmoke
 				Check(!PC->IsRelocateSelectMode(), TEXT("relocate slot: pick mode off"));
 				PC->SelectSquadMember(1);
 				Check(Squad->GetLeader() && Squad->GetLeader()->SquadRole == EOperativeRole::Engineer, TEXT("slot 2 selects the engineer"));
+
+				UGameFlowSubsystem* Flow = W->GetSubsystem<UGameFlowSubsystem>();
+				Flow->TriggerCombatZone();
+				Flow->FinishCutscene();
+				Check(Flow->GetPhase() == ECodexGamePhase::Preparation, TEXT("preparation"));
+				TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+				Members.Sort([](const AOperativeCharacter& A, const AOperativeCharacter& B) { return A.SquadIndex < B.SquadIndex; });
+				for (AOperativeCharacter* Member : Members)
+				{
+					Member->StopOperative();
+				}
+				PC->SelectSquadMember(2);
+				PC->CycleLeaderStance();
+				PC->CycleLeaderStance();
+				PC->SelectSquadMember(1);
+				PC->CycleLeaderStance();
+				PC->SelectSquadMember(0);
+				Squad->SyncSquadStance(EOperativeStance::Standing);
+				Check(Members[0]->GetStance() == EOperativeStance::Standing && Members[1]->GetStance() == EOperativeStance::Crouching
+					&& Members[2]->GetStance() == EOperativeStance::Prone && Members[2]->bHasCustomStance,
+					*FString::Printf(TEXT("preparation: own stances kept (commander %d, engineer %d, medic %d)"), static_cast<int32>(Members[0]->GetStance()),
+						static_cast<int32>(Members[1]->GetStance()), static_cast<int32>(Members[2]->GetStance())));
 			}
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), Failures == 0 ? TEXT("PASS") : TEXT("FAIL"));
 			FPlatformMisc::RequestExit(false, TEXT("ActionBarSmoke"));

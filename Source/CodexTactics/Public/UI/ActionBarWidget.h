@@ -147,6 +147,9 @@ private:
 	UFUNCTION()
 	void HandleSlot2();
 
+	UFUNCTION()
+	void HandleSlot3();
+
 	void SelectSlot(int32 Index);
 
 	UPROPERTY()

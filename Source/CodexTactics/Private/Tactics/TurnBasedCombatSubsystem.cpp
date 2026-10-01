@@ -125,6 +125,9 @@ void UTurnBasedCombatSubsystem::StartCombat()
 			Balance = TurnBasedRules::BalanceFromGodot(BalanceAsset);
 			SquadStepDuration = BalanceAsset->GetNumber(TEXT("tactical_step_duration"), SquadStepDuration);
 			EnemyStepDuration = BalanceAsset->GetNumber(TEXT("tactical_enemy_step_duration"), EnemyStepDuration);
+			EnemyHitDelay = BalanceAsset->GetNumber(TEXT("tactical_enemy_hit_delay"), EnemyHitDelay);
+			EnemyAttackDuration = BalanceAsset->GetNumber(TEXT("tactical_enemy_attack_duration"), EnemyAttackDuration);
+			EnemyRetreatDelay = BalanceAsset->GetNumber(TEXT("tactical_enemy_retreat_delay"), EnemyRetreatDelay);
 		}
 	}
 	States.Reset();
@@ -3145,38 +3148,81 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 		TurnBasedRules::StanceDamageMultiplier(TargetState->Stance, Balance));
 	Changed();
 	TWeakObjectPtr<AActor> WeakEnemy(Enemy), WeakTarget(Target);
-	// Godot: 1.3 s of the yellow warning square, then the bite; the step back follows 0.35 s later.
+	// Godot turn_based_combat_manager.gd: 1.3 s of the yellow warning square, then the enemy plays its attack clip
+	// (play_tactical_attack; tactical_enemy_attack_duration overrides its length), the bite lands tactical_enemy_hit_delay
+	// into it (or at its end), the enemy goes back to the idle (force_idle_animation) and steps back
+	// tactical_enemy_retreat_delay later.
 	After(1.3f, [this, WeakEnemy, WeakTarget, Damage, TargetPos]()
 	{
 		AActor* Attacker = WeakEnemy.Get();
-		AActor* Victim = WeakTarget.Get();
-		if (Attacker && Victim && States.Contains(Victim))
+		UEnemyAnimInstance* Anim = nullptr;
+		if (const AEnemyCharacter* EnemyCharacter = Cast<AEnemyCharacter>(Attacker))
 		{
-			ApplySquadHit(Victim, Damage, NameOf(Attacker));
-			Log(FString::Printf(TEXT("🐺 Враг %s атаковал %s: %d урона!"), *NameOf(Attacker), *NameOf(Victim), Damage));
+			Anim = EnemyCharacter->GetMesh() ? Cast<UEnemyAnimInstance>(EnemyCharacter->GetMesh()->GetAnimInstance()) : nullptr;
+		}
+		float AttackSeconds = 0.8f;
+		if (Anim)
+		{
+			if (const float ClipSeconds = Anim->NotifyAttack(); ClipSeconds > 0.f)
+			{
+				AttackSeconds = ClipSeconds;
+			}
+		}
+		if (EnemyAttackDuration > 0.f)
+		{
+			AttackSeconds = EnemyAttackDuration;
+		}
+		TSharedRef<bool> bApplied = MakeShared<bool>(false);
+		auto ApplyBite = [this, WeakEnemy, WeakTarget, Damage, TargetPos, bApplied]()
+		{
+			if (*bApplied)
+			{
+				return;
+			}
+			*bApplied = true;
+			AActor* Biter = WeakEnemy.Get();
+			AActor* Victim = WeakTarget.Get();
+			if (Biter && Victim && States.Contains(Victim))
+			{
+				ApplySquadHit(Victim, Damage, NameOf(Biter));
+				Log(FString::Printf(TEXT("🐺 Враг %s атаковал %s: %d урона!"), *NameOf(Biter), *NameOf(Victim), Damage));
+				if (IsActive() && IsDead(Victim))
+				{
+					OnSquadMemberKilled(Victim, TargetPos);
+				}
+			}
+		};
+		if (EnemyHitDelay > 0.f && EnemyHitDelay < AttackSeconds)
+		{
+			After(EnemyHitDelay, ApplyBite);
+		}
+		TWeakObjectPtr<UEnemyAnimInstance> WeakAnim(Anim);
+		After(AttackSeconds, [this, WeakEnemy, WeakAnim, TargetPos, ApplyBite]()
+		{
+			ApplyBite();
 			if (!IsActive())
 			{
 				return; // the bite killed an operative: mission failed, the fight is over
 			}
-			if (IsDead(Victim))
+			if (UEnemyAnimInstance* EnemyAnim = WeakAnim.Get())
 			{
-				OnSquadMemberKilled(Victim, TargetPos);
+				EnemyAnim->StopSlotAnimation(0.2f, EnemyAnim->OneShotSlot);
 			}
-		}
-		if (CheckBattleEnd())
-		{
-			return;
-		}
-		After(0.35f, [this, WeakEnemy, TargetPos]()
-		{
-			if (AActor* Attacker2 = WeakEnemy.Get())
+			if (CheckBattleEnd())
 			{
-				EnemyRetreat(Attacker2, TargetPos);
+				return;
 			}
-			else
+			After(EnemyRetreatDelay, [this, WeakEnemy, TargetPos]()
 			{
-				FinishEnemyTurn(0.25f);
-			}
+				if (AActor* Attacker2 = WeakEnemy.Get())
+				{
+					EnemyRetreat(Attacker2, TargetPos);
+				}
+				else
+				{
+					FinishEnemyTurn(0.25f);
+				}
+			});
 		});
 	});
 }

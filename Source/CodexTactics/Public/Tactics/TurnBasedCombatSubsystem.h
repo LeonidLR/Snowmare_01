@@ -286,6 +286,10 @@ public:
 	/** Steps are animated over this many seconds (Godot tactical_step_duration 0.52 / enemy 0.48; x1.414 diagonal). */
 	float SquadStepDuration = 0.52f;
 	float EnemyStepDuration = 0.48f;
+	/** Godot tactical_enemy_hit_delay / _attack_duration (0 = the clip's length) / _retreat_delay, s. */
+	float EnemyHitDelay = 0.45f;
+	float EnemyAttackDuration = 0.f;
+	float EnemyRetreatDelay = 0.35f;
 
 	/** Something changed (HUD refresh). */
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|TurnBased")

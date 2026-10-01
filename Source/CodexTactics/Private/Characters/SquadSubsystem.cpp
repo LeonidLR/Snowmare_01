@@ -190,6 +190,22 @@ void USquadSubsystem::SetSquadStance(EOperativeStance Stance)
 	}
 }
 
+void USquadSubsystem::SyncSquadStance(EOperativeStance Stance)
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	if (bIsSoloMode || (Flow && Flow->GetPhase() == ECodexGamePhase::Preparation))
+	{
+		return;
+	}
+	for (AOperativeCharacter* Member : GetMembers())
+	{
+		if (Member != GetLeader() && !Member->bGuarding && !Member->bHasCustomStance)
+		{
+			Member->SetStance(Stance);
+		}
+	}
+}
+
 void USquadSubsystem::SetFollowersHolding(bool bHold)
 {
 	if (bFollowersHolding == bHold)
@@ -525,8 +541,10 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		return;
 	}
 
-	// Followers copy the moving leader's stance and sprint (Godot: can_sync_stance, leader_sprinting).
-	if (bLeaderMoving)
+	// Followers copy the moving leader's stance and sprint (Godot player.gd can_sync_stance: not guarding, no stance of
+	// their own, not in the preparation).
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	if (bLeaderMoving && !Operative->bGuarding && !Operative->bHasCustomStance && !(Flow && Flow->GetPhase() == ECodexGamePhase::Preparation))
 	{
 		Operative->SetStance(LeaderRef.GetStance());
 	}

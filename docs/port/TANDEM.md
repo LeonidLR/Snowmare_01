@@ -135,6 +135,8 @@ User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Syste
 
 ## Log
 
+- 2026-10-01 Claude: `AOperativeCharacter::bHasCustomStance`, `USquadSubsystem::SyncSquadStance` (use it instead of SetSquadStance for leader-driven stance orders), `UActionBarWidget::HandleSlot3`, turn-based EnemyHitDelay / EnemyAttackDuration / EnemyRetreatDelay.
+
 - 2026-10-01 Claude: `UTurnBasedCombatSubsystem::PrepareSquadWalk` / `StartMoverAfter` (all squad walks go through them); `AOperativeCharacter::UpdateCombatFacing`, `GetWeaponMuzzleLocation`, `MuzzleOffset`, `bAlignBarrelWithTarget`, `IsFacingCombatTarget`, `GetBarrelYawOffset`; tracers use GetWeaponMuzzleLocation (GetMuzzleLocation stays the line-of-fire origin).
 
 - 2026-10-01 Claude: `UOperativeAnimInstance` FireProneAnimation / ReloadProneAnimation, Stance Transitions (StandToProne / ProneToStand / CrouchToProne / ProneToCrouch / StandToCrouch / CrouchToStand, StanceTransitionBlendTime / PlayRate), `IsPlayingStanceTransition`, ProneBlendSpeed / PronePlayRate / ProneBlendSpaceMaxSpeed; `UOperativeAnimGraphLibrary::BuildOperativeLocomotionGraph` gained ProneAimBlendSpace, new `FillDirectionalBlendSpace`.

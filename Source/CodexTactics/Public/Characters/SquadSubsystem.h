@@ -61,6 +61,12 @@ public:
 
 	/** Sets the stance of every squad member (Alt + stance key). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
+	/**
+	 * Godot _sync_squad_stances: the other members without a stance of their own (not guarding) take the leader's stance;
+	 * nobody does during the preparation or in solo mode.
+	 */
+	void SyncSquadStance(EOperativeStance Stance);
+
 	void SetSquadStance(EOperativeStance Stance);
 
 	/**

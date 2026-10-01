@@ -1,7 +1,8 @@
 // Dev-only console command for a headless Gorky 17 turn-based check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.TurnBasedSmoke
 // 1. a wave starts, one brute 6 m ahead; Space-hold equivalent enters turn-based: squad and enemy on the grid, overlay;
-// 2. stance change costs 1 AP; 3. the squad passes the turn: the enemy walks up, bites, steps back, round 2 starts;
+// 2. stance change costs 1 AP; 3. the squad passes the turn: the enemy walks up, bites (attack clip), steps back,
+// round 2 starts;
 // 4. an operative moves into a fire lane and shoots the (weakened) enemy -> victory -> tactical pause.
 
 #include "CoreMinimal.h"
@@ -9,7 +10,9 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Camera/TacticalCameraPawn.h"
+#include "Characters/EnemyAnimInstance.h"
 #include "Characters/EnemyCharacter.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -45,6 +48,8 @@ namespace TurnBasedSmoke
 		TWeakObjectPtr<AEnemyCharacter> FarEnemy;
 		FIntPoint EnemyCellBefore = FIntPoint::ZeroValue;
 		float SquadHealthBefore = 0.f;
+		/** The biting enemy played its attack clip (Godot play_tactical_attack). */
+		bool bAttackClipSeen = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -153,11 +158,19 @@ namespace TurnBasedSmoke
 			Next(State);
 			return true;
 		}
-		case 1: // Enemy phase runs (walk, bite, step back), then round 2.
+		case 1: // Enemy phase runs (walk, bite with its attack clip, step back), then round 2.
+			if (const AEnemyCharacter* Biter = State.Enemy.Get())
+			{
+				if (const UEnemyAnimInstance* Anim = Cast<UEnemyAnimInstance>(Biter->GetMesh()->GetAnimInstance()))
+				{
+					State.bAttackClipSeen |= Anim->bIsAttacking && Anim->GetSlotMontageGlobalWeight(Anim->OneShotSlot) > 0.5f;
+				}
+			}
 			if (TurnBased->GetRound() < 2 || TurnBased->GetPhase() != ETurnPhase::Squad || TurnBased->IsUnitMoving())
 			{
 				return true;
 			}
+			Check(State, State.bAttackClipSeen, TEXT("the enemy played its attack clip for the bite"));
 			{
 				const FTurnUnitState* EnemyState = TurnBased->GetUnitState(State.Enemy.Get());
 				Check(State, EnemyState && EnemyState->GridPos != State.EnemyCellBefore, TEXT("the enemy moved on its turn"));

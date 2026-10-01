@@ -359,6 +359,13 @@ public:
 	bool bGuarding = false;
 
 	/**
+	 * Godot has_custom_stance: the player set this operative's own stance (preparation / solo, or as the leader); it is
+	 * then kept — neither the squad stance sync nor the moving leader's stance overrides it — until a whole-squad
+	 * stance order (Alt + Z / C / V) clears it.
+	 */
+	bool bHasCustomStance = false;
+
+	/**
 	 * Squad member (Godot group "squad"). A recruit spawned with false (Godot recruit_susanin.gd is_recruited) stays out
 	 * of the squad subsystem — no selection, no formation, no targeting by enemies, no shooting — until
 	 * URecruitSubsystem recruits it.

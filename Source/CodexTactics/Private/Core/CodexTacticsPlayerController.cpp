@@ -1236,6 +1236,7 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
 		Member->SetStance(Stance);
+		Member->bHasCustomStance = false;
 		UFloatingTextSubsystem::SpawnAboveOperative(Member, FString::Printf(TEXT("👥 ОТРЯД: %s"), Name), FLinearColor(0.3f, 0.95f, 1.f));
 	}
 	if (Messages)
@@ -1325,15 +1326,13 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 		return;
 	}
 
-	const bool bSolo = Squad->IsSoloMode();
-	if (bSolo)
-	{
-		Leader->SetStance(Stance);
-	}
-	else
-	{
-		Squad->SetSquadStance(Stance);
-	}
+	// Godot _on_stance_*_pressed: the selected operative takes the stance as his own; outside the preparation / solo
+	// mode the members without a stance of their own follow (_sync_squad_stances).
+	const UGameFlowSubsystem* StanceFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const bool bSolo = Squad->IsSoloMode() || (StanceFlow && StanceFlow->GetPhase() == ECodexGamePhase::Preparation);
+	Leader->SetStance(Stance);
+	Leader->bHasCustomStance = true;
+	Squad->SyncSquadStance(Stance);
 
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
@@ -1631,16 +1630,10 @@ void ACodexTacticsPlayerController::CycleLeaderStance()
 	{
 		Next = EOperativeStance::Standing; // Godot: prone is skipped while moving
 	}
-	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	const bool bPreparation = Flow && Flow->GetPhase() == ECodexGamePhase::Preparation;
-	if (bPreparation || Squad->IsSoloMode())
-	{
-		Leader->SetStance(Next);
-	}
-	else
-	{
-		Squad->SetSquadStance(Next);
-	}
+	// Godot _cycle_leader_stance: the leader's own stance; the others follow outside the preparation / solo mode.
+	Leader->SetStance(Next);
+	Leader->bHasCustomStance = true;
+	Squad->SyncSquadStance(Next);
 }
 
 void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
