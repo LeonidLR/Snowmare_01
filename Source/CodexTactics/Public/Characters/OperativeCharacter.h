@@ -484,6 +484,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
 	bool IsRaging() const;
 
+	/** Stress and panic in the real-time fight (Godot PanicComponent). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Panic")
+	TObjectPtr<class UPanicComponent> PanicComponent;
+
+	/** Panicking: does not shoot, reload or obey orders (Godot panic_comp.is_panicking). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Panic")
+	bool IsPanicking() const;
+
+	/** Max speed / turn rate from the stance, sprint, wounds and carrying (SpeedOverride >= 0 replaces the speed). */
+	void ApplyMovementParams(float SpeedOverride = -1.f);
+
 	/** Speed multiplier of the current cold tier (Godot speed_multiplier 1 / 0.7 / 0.45 / 0.25). */
 	void SetColdSpeedMultiplier(float Multiplier);
 
@@ -771,7 +782,6 @@ private:
 	UFUNCTION()
 	void HandleDied(AActor* Victim, const FString& AttackerSource);
 	/** Pushes max speed and turn rate for the current state into CharacterMovement. */
-	void ApplyMovementParams(float SpeedOverride = -1.f);
 	EOperativeOrderResult RequestMove(const FVector& Destination);
 	/** Resizes the capsule for the stance, keeping the feet in place and the skeletal mesh on the ground. */
 	void ApplyStanceCapsule();

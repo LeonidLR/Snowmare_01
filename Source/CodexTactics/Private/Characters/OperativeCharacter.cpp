@@ -3,6 +3,7 @@
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeAIController.h"
+#include "Characters/PanicComponent.h"
 #include "Characters/RageComponent.h"
 #include "Characters/VaultRules.h"
 #include "Interactables/VaultNavigation.h"
@@ -113,6 +114,7 @@ AOperativeCharacter::AOperativeCharacter()
 
 	ColdSurvival = CreateDefaultSubobject<UColdSurvivalComponent>(TEXT("ColdSurvival"));
 	RageComponent = CreateDefaultSubobject<URageComponent>(TEXT("RageComponent"));
+	PanicComponent = CreateDefaultSubobject<UPanicComponent>(TEXT("PanicComponent"));
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	HealthComponent->MaxHealth = 100.0f;
 	HealthComponent->BaseArmorReduction = 0.10f;
@@ -268,11 +270,21 @@ bool AOperativeCharacter::IsRaging() const
 	return RageComponent && RageComponent->IsRaging();
 }
 
+bool AOperativeCharacter::IsPanicking() const
+{
+	return PanicComponent && PanicComponent->IsPanicking();
+}
+
 EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destination, bool bSprint)
 {
 	if (IsRaging())
 	{
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ЯРОСТИ! НЕ ПОДЧИНЯЕТСЯ!"), FLinearColor(1.f, 0.4f, 0.1f));
+		return EOperativeOrderResult::Refused;
+	}
+	if (IsPanicking())
+	{
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ПАНИКЕ! НЕ ПОДЧИНЯЕТСЯ!"), FLinearColor(1.f, 0.3f, 0.3f));
 		return EOperativeOrderResult::Refused;
 	}
 	if (bSprint && CanSprint())
@@ -298,6 +310,10 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 
 EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, float Speed)
 {
+	if (IsPanicking())
+	{
+		return EOperativeOrderResult::Refused; // the panic moves him (Godot _process_panic_movement)
+	}
 	ApplyMovementParams(Speed);
 	return RequestMove(Destination);
 }
@@ -462,6 +478,10 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 	if (RageComponent)
 	{
 		RageComponent->ExitRage(TEXT("Погиб"));
+	}
+	if (PanicComponent)
+	{
+		PanicComponent->RecoverFromPanic(TEXT("Погиб"), true);
 	}
 	// Godot _check_squad_vital_signs: any squad member down = mission failed (HQ line, time stop, failed screen).
 	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
@@ -1151,7 +1171,7 @@ void AOperativeCharacter::StartReload()
 
 bool AOperativeCharacter::CanShoot() const
 {
-	if (!HealthComponent || !HealthComponent->IsAlive())
+	if (!HealthComponent || !HealthComponent->IsAlive() || (IsPanicking() && !IsRaging())) // Godot panic: can_shoot = false
 	{
 		return false;
 	}
@@ -1379,7 +1399,8 @@ void AOperativeCharacter::NotifyBarricadeBlocked()
 
 void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 {
-	if (!bRecruited || bTacticalCeaseFire || !HealthComponent || !HealthComponent->IsAlive()) // Godot can_shoot = false
+	// Godot: a panicking soldier neither shoots nor reloads (can_shoot = false, _process_reloading skipped).
+	if (!bRecruited || bTacticalCeaseFire || !HealthComponent || !HealthComponent->IsAlive() || (IsPanicking() && !IsRaging()))
 	{
 		return;
 	}
@@ -1448,6 +1469,10 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 	const bool bInfiniteRageAmmo = bRaging && RageComponent->Config.bInfiniteAmmo;
 	if (UsesAmmo() && CurrentClip <= 0 && !bInfiniteRageAmmo)
 	{
+		if (PanicComponent)
+		{
+			PanicComponent->OnLowAmmo(); // Godot: the clip ran dry under fire
+		}
 		if (ReserveAmmo > 0)
 		{
 			StartReload();
@@ -1675,7 +1700,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
 	const bool bRealTimeFight = !Flow || (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime);
 	AActor* Target = CurrentCombatTarget.Get();
-	if (bRealTimeFight && !bSprinting && !bCarrying && Target && IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
+	if (bRealTimeFight && !bSprinting && !bCarrying && !IsPanicking() && Target && IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
 	{
 		bFacingCombatTarget = true;
 		const float Yaw = (Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw - BarrelYawOffset;
@@ -1849,6 +1874,11 @@ void AOperativeCharacter::SetManualPriorityTarget(AActor* Enemy)
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ЯРОСТИ! НЕ ПОДЧИНЯЕТСЯ!"), FLinearColor(1.f, 0.4f, 0.1f));
 		return;
 	}
+	if (IsPanicking())
+	{
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ПАНИКЕ! НЕ СТРЕЛЯЕТ!"), FLinearColor(1.f, 0.3f, 0.3f));
+		return;
+	}
 	ManualPriorityTarget = Enemy;
 	if (Enemy)
 	{
@@ -1935,6 +1965,11 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	if (RageComponent && HealthComponent->IsAlive())
 	{
 		RageComponent->OnIncomingHit(AttackerActor, bCrit);
+	}
+	// Godot panic_comp.on_damage_taken(final_incoming).
+	if (PanicComponent && HealthComponent->IsAlive())
+	{
+		PanicComponent->OnDamageTaken(Final);
 	}
 	return Final;
 }

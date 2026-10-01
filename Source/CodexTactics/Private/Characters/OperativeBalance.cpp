@@ -1,5 +1,6 @@
 #include "Characters/OperativeBalance.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/PanicComponent.h"
 #include "Characters/RageComponent.h"
 #include "Combat/HealthComponent.h"
 #include "Data/GodotBalanceAsset.h"
@@ -84,6 +85,12 @@ void OperativeBalance::Apply(const UGodotBalanceAsset& Config, AOperativeCharact
 	{
 		// Godot: the squad gets its own <role>_rage_* keys from main.gd; a recruit spawned later keeps the general ones.
 		Operative.RageComponent->Config = RageRules::ConfigFromBalance(&Config, Operative.SquadRole == EOperativeRole::Recruit ? FString()
+			: FString(Prefix).LeftChop(1));
+	}
+	if (Operative.PanicComponent)
+	{
+		// Godot: the squad applies its <role>_* panic keys (main.gd), the recruit Susanin his susanin_* ones.
+		Operative.PanicComponent->Config = PanicRules::ConfigFromBalance(&Config, Operative.SquadRole == EOperativeRole::Recruit ? FString(TEXT("susanin"))
 			: FString(Prefix).LeftChop(1));
 	}
 	Operative.MaxColdToLiftObjects = Config.GetNumber(TEXT("max_cold_to_lift_objects"), Operative.MaxColdToLiftObjects);

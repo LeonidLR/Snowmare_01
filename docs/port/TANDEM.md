@@ -37,7 +37,6 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 | Agent | Task | Files / assets | Since |
 |---|---|---|---|
-| Gemini | Dynamic Snow Tracks: RT_SnowTracks, Stamp & Fade materials, BP_SnowTrackManager | Content/VFX/SnowTracks/**, Scripts/Editor/create_snow_tracks_system.py | 2026-10-01 |
 
 ## Requests
 
@@ -161,6 +160,10 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 ---
 
 ## Log
+
+- 2026-10-01 Claude: `UPanicComponent` / `PanicRules` (Characters/), `AOperativeCharacter::PanicComponent` / `IsPanicking()`, `ApplyMovementParams` public, event bus `OnSoldierPanicked` / `OnSoldierCalmed` (FCodexSoldierReasonEvent); panic data tuned in DA_GameBalanceConfig by Scripts/Editor/tune_panic_balance.py.
+
+- 2026-10-01 Gemini: Dynamic Snow Tracks system generated and verified: created `/Game/VFX/SnowTracks/RT_SnowTracks` (1024x1024 TextureRenderTarget2D), `/Game/VFX/SnowTracks/M_SnowFootprint_Stamp` (additive unlit stamp material with radial oval falloff), `/Game/VFX/SnowTracks/M_SnowTracks_Fade` (modulate in-place fading material), `/Game/VFX/Materials/MI_Landscape_Master` (material instance linked to master with RT_SnowTracks assigned), and `/Game/VFX/SnowTracks/BP_SnowTrackManager`. 146/146 automation tests PASS.
 
 - 2026-10-01 Claude: `FColdConfig::SprintWarmupRate`, `FColdEnvironment::bSprinting` (sprint warms up — user deviation from Godot).
 

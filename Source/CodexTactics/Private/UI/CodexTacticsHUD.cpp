@@ -10,6 +10,7 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Characters/EnemyCharacter.h"
+#include "Characters/PanicComponent.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -879,6 +880,26 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 		const bool bLeader = Member == Squad->GetLeader();
 		DrawRect(PanelColor, Screen.X - W * 0.5f - 4.f, Screen.Y - 2.f, W + 8.f, H + 4.f);
 		DrawText(Label, bLeader ? SpeakerColor : TextColor, Screen.X - W * 0.5f, Screen.Y, Font);
+		// Godot PanicIndicator: «ПАНИКА!» with the phase while panicking, «СТРЕСС: n%» from 50 % stress.
+		const UPanicComponent* Panic = Member->PanicComponent;
+		FString PanicBadge;
+		if (Panic && Panic->IsPanicking())
+		{
+			PanicBadge = Panic->GetPhase() == EPanicPhase::Cowering ? TEXT("ПАНИКА! [СЖАЛСЯ В СТРАХЕ]") : TEXT("ПАНИКА! [ОТБЕГАЕТ]");
+		}
+		else if (Panic && Panic->IsCombatActive() && Panic->GetStress() >= 50.f)
+		{
+			PanicBadge = FString::Printf(TEXT("СТРЕСС: %d%%"), FMath::FloorToInt(Panic->GetStress()));
+		}
+		if (!PanicBadge.IsEmpty() && !Member->IsRaging())
+		{
+			float BW = 0.f;
+			float BH = 0.f;
+			Canvas->StrLen(Font, PanicBadge, BW, BH);
+			const FLinearColor BadgeColor = Panic->IsPanicking() ? FLinearColor(1.f, 0.2f, 0.2f) : FLinearColor(1.f, 0.65f, 0.15f);
+			DrawRect(PanelColor, Screen.X - BW * 0.5f - 4.f, Screen.Y - BH - 8.f, BW + 8.f, BH + 4.f);
+			DrawText(PanicBadge, BadgeColor, Screen.X - BW * 0.5f, Screen.Y - BH - 6.f, Font);
+		}
 		if (Member->IsRaging())
 		{
 			// Godot RageBadge «🔥 ЯРОСТЬ!» above the head.

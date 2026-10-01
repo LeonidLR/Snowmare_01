@@ -14,6 +14,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCodexSimpleEvent);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCodexPowerEvent, bool, bPowered);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexGameSavedEvent, const FString&, SlotName, bool, bAutosave);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCodexGameLoadedEvent, const FString&, SlotName);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexSoldierReasonEvent, AOperativeCharacter*, Soldier, const FString&, Reason);
 
 /**
  * Global game events for Blueprints, audio, VFX and UI hooks: the Godot EventBus signals the game actually emits.
@@ -66,6 +67,13 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
 	FCodexSoldierEvent OnRageEnded;
+
+	/** Godot EventBus.soldier_panicked / soldier_calmed (PanicComponent). */
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
+	FCodexSoldierReasonEvent OnSoldierPanicked;
+
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
+	FCodexSoldierReasonEvent OnSoldierCalmed;
 
 	/** The generator started / broke down / was repaired (Godot interactable.gd). */
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
