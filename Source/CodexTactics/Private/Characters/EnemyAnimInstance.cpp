@@ -130,8 +130,11 @@ void UEnemyAnimInstance::PlayOneShot(UAnimSequenceBase* Clip, float PlayRate, fl
 		return;
 	}
 	UAnimMontage* Montage = PlaySlotAnimationAsDynamicMontage(Clip, OneShotSlot, 0.15f, bHold ? 0.f : 0.2f, PlayRate, 1, -1.f, StartTime);
-	if (Montage && bHold)
+	// Stay on the last frame: the running instance copied bEnableAutoBlendOut from the montage when it started, so the
+	// flag is cleared on the instance (as the engine does for Sequencer montages); on the asset it had no effect and the
+	// body got back up into the idle after the clip.
+	if (FAnimMontageInstance* Instance = Montage && bHold ? GetActiveInstanceForMontage(Montage) : nullptr)
 	{
-		Montage->bEnableAutoBlendOut = false; // stay on the last frame
+		Instance->bEnableAutoBlendOut = false;
 	}
 }

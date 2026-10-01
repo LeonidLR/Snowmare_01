@@ -235,7 +235,11 @@ void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerS
 	if (UAnimMontage* Montage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, 0.15f, 0.f, 1.f, 1, -1.f,
 		Stance == EOperativeStance::Standing ? FMath::Min(DeathStartOffset, Clip->GetPlayLength() * 0.9f) : 0.f))
 	{
-		Montage->bEnableAutoBlendOut = false;
+		// Held on the last frame (the running instance's flag; the montage asset's is copied only at the start).
+		if (FAnimMontageInstance* Instance = GetActiveInstanceForMontage(Montage))
+		{
+			Instance->bEnableAutoBlendOut = false;
+		}
 	}
 }
 
