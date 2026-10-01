@@ -91,8 +91,8 @@ if crawl_ok:
 # The graph is built only while empty â€” the user polishes it by hand (CODEX_REBUILD_ANIM_GRAPHS=1 forces a rebuild).
 # Node counts of graphs this script generated earlier (left as generated -> safe to regenerate with the new layout):
 # CountAnimGraphNodes (without the output node): 41 = before the FullBody slot (commit 8a56896), 42 = with it,
-# 48 = with the prone blend spaces and the prone aim switch.
-GENERATED_NODE_COUNTS = (41, 42, 48)
+# 48 = with the prone blend spaces and the prone aim switch, 52 = with the aim layered over the standing legs.
+GENERATED_NODE_COUNTS = (41, 42, 48, 52)
 node_count = unreal.OperativeAnimGraphLibrary.count_anim_graph_nodes(abp)
 if os.environ.get("CODEX_REBUILD_ANIM_GRAPHS") == "1" or node_count == 0 or node_count in GENERATED_NODE_COUNTS:
     result = unreal.OperativeAnimGraphLibrary.build_operative_locomotion_graph(

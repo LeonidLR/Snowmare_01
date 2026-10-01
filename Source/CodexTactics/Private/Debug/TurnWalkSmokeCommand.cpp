@@ -2,14 +2,18 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.TurnWalkSmoke
 // The speed the anim instances read (UTurnBasedCombatSubsystem::GetTacticalMoveSpeed) must follow the body's real speed
 // over the whole path: starting from rest (no running on the spot), no stop at the cells, arriving at rest in Godot's
-// total time (sum of tactical_step_duration, diagonals x1.414).
+// total time (sum of tactical_step_duration, diagonals x1.414). Then (deviation, user decision 2026-10-01) the operative
+// lies down and is ordered two cells on: he rises to crouching first (the walk waits for the rising clip) and walks the
+// crouched steps slower by the real-time crouch / walk speed ratio.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
 #include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/WaveSubsystem.h"
@@ -43,6 +47,10 @@ namespace TurnWalkSmoke
 		float MinMidSpeed = 1.e6f;
 		int32 Samples = 0;
 		float ExpectedSeconds = 0.f;
+		// Prone walk.
+		float RiseDelay = 0.f;
+		FVector ProneStart = FVector::ZeroVector;
+		float MovedDuringRise = 0.f;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -116,13 +124,13 @@ namespace TurnWalkSmoke
 			{
 				return Finish(State, false);
 			}
-			// The farthest free reachable cell (a path of several cells).
+			// The farthest free reachable cell (a path of several cells), keeping AP for the prone walk below.
 			UGorkyGridManager* Grid = TurnBased->GetGrid();
 			FIntPoint Best = UnitState->GridPos;
 			int32 BestCost = 0;
 			for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(UnitState->GridPos, UnitState->AP))
 			{
-				if (Entry.Value > BestCost && Grid->GetOccupantType(Entry.Key) == EGorkyOccupantType::None)
+				if (Entry.Value > BestCost && Entry.Value <= UnitState->AP - 3 && Grid->GetOccupantType(Entry.Key) == EGorkyOccupantType::None)
 				{
 					Best = Entry.Key;
 					BestCost = Entry.Value;
@@ -194,6 +202,70 @@ namespace TurnWalkSmoke
 			Check(State, FMath::Abs(Took - State.ExpectedSeconds) < 0.25f, FString::Printf(TEXT("Godot total time %.2f s (took %.2f s)"),
 				State.ExpectedSeconds, Took));
 			Check(State, TurnBased->GetTacticalMoveSpeed(Unit) < 0.f, TEXT("idle after the walk"));
+
+			// Lie down (1 AP), then a two-cell order.
+			Check(State, TurnBased->SetActiveUnitStance(EOperativeStance::Prone) && Unit->GetStance() == EOperativeStance::Prone, TEXT("lay down"));
+			const FTurnUnitState* UnitState = TurnBased->GetUnitState(Unit);
+			UGorkyGridManager* Grid = TurnBased->GetGrid();
+			FIntPoint Target(-999, -999);
+			for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(UnitState->GridPos, UnitState->AP))
+			{
+				if (Entry.Value == 2 && Grid->GetOccupantType(Entry.Key) == EGorkyOccupantType::None
+					&& Grid->FindPath(UnitState->GridPos, Entry.Key, UnitState->AP).Num() == 2)
+				{
+					Target = Entry.Key;
+					break;
+				}
+			}
+			if (Target.X == -999)
+			{
+				Check(State, false, TEXT("a free two-cell walk for the prone check"));
+				return Finish(State, false);
+			}
+			const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Unit->GetMesh()->GetAnimInstance());
+			State.RiseDelay = Anim && Anim->ProneToCrouchAnimation
+				? FMath::Max(0.f, Anim->ProneToCrouchAnimation->GetPlayLength() / Anim->StanceTransitionPlayRate - Anim->StanceTransitionBlendTime) : 0.f;
+			const float Step = TurnBased->SquadStepDuration
+				/ FMath::Clamp(OperativeMovementRules::GetStanceSpeedMultiplier(Unit->MovementConfig, EOperativeStance::Crouching), 0.2f, 1.f);
+			State.ExpectedSeconds = State.RiseDelay;
+			FIntPoint Previous = UnitState->GridPos;
+			for (const FIntPoint& Cell : Grid->FindPath(UnitState->GridPos, Target, UnitState->AP))
+			{
+				const FIntPoint Delta = Cell - Previous;
+				State.ExpectedSeconds += Step * (Delta.X != 0 && Delta.Y != 0 ? 1.414f : 1.f);
+				Previous = Cell;
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Prone walk: rise %.2f s, crouched step %.2f s (standing %.2f), expected %.2f s"),
+				State.RiseDelay, Step, TurnBased->SquadStepDuration, State.ExpectedSeconds);
+			State.ProneStart = Unit->GetActorLocation();
+			State.WalkStart = World->GetTimeSeconds();
+			TurnBased->HandleWorldClick(Grid->GridToWorld(Target), nullptr, false);
+			State.Stage = 2;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 2:
+		{
+			AOperativeCharacter* Unit = State.Walker.Get();
+			if (!Unit)
+			{
+				return Finish(State, false);
+			}
+			const float Elapsed = static_cast<float>(World->GetTimeSeconds() - State.WalkStart);
+			if (Elapsed < State.RiseDelay - 0.1f)
+			{
+				State.MovedDuringRise = FMath::Max(State.MovedDuringRise, static_cast<float>(FVector::Dist2D(Unit->GetActorLocation(), State.ProneStart)));
+			}
+			if (TurnBased->IsUnitMoving())
+			{
+				return true;
+			}
+			const FTurnUnitState* UnitState = TurnBased->GetUnitState(Unit);
+			Check(State, Unit->GetStance() == EOperativeStance::Crouching && UnitState && UnitState->Stance == EOperativeStance::Crouching,
+				TEXT("prone order: rose to crouching (operative and turn state)"));
+			Check(State, State.MovedDuringRise < 5.f, FString::Printf(TEXT("prone order: stays put while rising (moved %.0f cm)"), State.MovedDuringRise));
+			Check(State, FMath::Abs(Elapsed - State.ExpectedSeconds) < 0.35f, FString::Printf(TEXT("prone order: rise + slower crouched steps %.2f s (took %.2f s)"),
+				State.ExpectedSeconds, Elapsed));
 			return Finish(State, true);
 		}
 		default:

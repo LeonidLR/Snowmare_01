@@ -258,7 +258,12 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 		const UTurnBasedCombatSubsystem* TurnBased = Operative->GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
 		bAttackMode = TurnBased && TurnBased->IsActive() && TurnBased->IsAttackMode() && TurnBased->GetActiveUnit() == Operative;
 	}
-	bIsAiming = !bIsDead && (bAttackMode || AimTimer > 0.f);
+	// Godot: a sprinting operative does not shoot (and runs with the rifle down) — no aim pose while sprinting.
+	if (bIsSprinting)
+	{
+		AimTimer = 0.f;
+	}
+	bIsAiming = !bIsDead && !bIsSprinting && (bAttackMode || AimTimer > 0.f);
 
 	// Blend-space axes: the speed inside the samples' range, the rest as a faster play rate (no foot sliding).
 	StandBlendSpeed = FMath::Min(Speed, StandBlendSpaceMaxSpeed);

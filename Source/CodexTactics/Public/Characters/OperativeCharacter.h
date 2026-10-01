@@ -662,9 +662,30 @@ public:
 
 	int32 GetPlannedTargetedShotCount() const { return PlannedShots.Num(); }
 
-	/** Tracer start: the feet plus the Godot muzzle height of the stance (1.4 / 0.85 / 0.25 m). */
+	/** Line-of-fire origin: the feet plus the Godot muzzle height of the stance (1.4 / 0.85 / 0.25 m). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
 	FVector GetMuzzleLocation() const;
+
+	/** Where tracers leave: the weapon mesh's "Muzzle" socket, else MuzzleOffset on it, else GetMuzzleLocation. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
+	FVector GetWeaponMuzzleLocation() const;
+
+	/** Muzzle in the weapon mesh's own space when it has no "Muzzle" socket (m16_01: the barrel runs along +Z, 98 cm). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Combat")
+	FVector MuzzleOffset = FVector(0.f, 0.f, 98.f);
+
+	/**
+	 * Turn the body so the barrel (not the chest) points at the target while aiming: the aim pose holds the rifle at an
+	 * angle to the actor's forward, measured from the weapon mesh (barrel = MuzzleOffset direction).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Combat")
+	bool bAlignBarrelWithTarget = true;
+
+	/** True while the operative keeps facing its combat target (moving sideways / backwards instead of turning). */
+	bool IsFacingCombatTarget() const { return bFacingCombatTarget; }
+
+	/** Current barrel-to-body yaw correction, degrees. */
+	float GetBarrelYawOffset() const { return BarrelYawOffset; }
 
 	/** Godot _can_begin_weapon_shot: alive, not reloading, no misfire delay, weapon not frozen, round in the clip. */
 	bool CanBeginWeaponShot();
@@ -765,6 +786,11 @@ private:
 	void NotifyBarricadeBlocked();
 	float BarricadeBlockNotifyTimer = 0.f;
 	TWeakObjectPtr<AActor> CurrentCombatTarget;
+
+	/** Godot combat_facing_direction: real-time fight, not sprinting, a live target -> face it, no turn to the movement. */
+	void UpdateCombatFacing(float DeltaTime);
+	bool bFacingCombatTarget = false;
+	float BarrelYawOffset = 0.f;
 	TWeakObjectPtr<AActor> PendingFlankTarget;
 	float TargetSwitchTimer = 0.f;
 

@@ -424,6 +424,18 @@ private:
 		TFunction<void()> OnDone, bool bFaceSteps = true);
 	void After(float Seconds, TFunction<void()> Callback);
 
+	/**
+	 * Deviation from Godot (user decision 2026-10-01; Godot crawls from cell to cell): an operative ordered to walk while
+	 * prone first rises to crouching (free; the turn state stance follows), and a crouched walk is slower by the
+	 * real-time crouch / walk speed ratio. Returns the seconds the walk waits for the rising clip; OutStepDuration is the
+	 * squad step duration for the unit's stance.
+	 */
+	float PrepareSquadWalk(AOperativeCharacter* Unit, float& OutStepDuration);
+
+	/** StartMover after Delay seconds (the squad stays busy meanwhile); now when Delay is 0. */
+	void StartMoverAfter(float Delay, AActor* Actor, const FIntPoint& From, const TArray<FIntPoint>& Path, float StepDuration,
+		TFunction<void()> OnDone, bool bFaceSteps = true);
+
 	UPROPERTY(Transient)
 	TObjectPtr<UGorkyGridManager> Grid;
 

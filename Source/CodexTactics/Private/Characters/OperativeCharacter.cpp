@@ -18,6 +18,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interactables/BarricadeActor.h"
@@ -679,6 +680,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	else
 	{
 		UpdateVaultTrigger(DeltaTime);
+		UpdateCombatFacing(DeltaTime);
 		ProcessCombatShooting(DeltaTime);
 	}
 	UpdateSilhouette(DeltaTime);
@@ -1473,10 +1475,8 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		return;
 	}
 
-	// Turn towards target smoothly
-	FRotator LookRot = (Target->GetActorLocation() - GetActorLocation()).Rotation();
-	LookRot.Pitch = 0.f;
-	LookRot.Roll = 0.f;
+	// Turn towards target smoothly (the barrel onto it, see UpdateCombatFacing).
+	const FRotator LookRot(0.f, (Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw - BarrelYawOffset, 0.f);
 	SetActorRotation(FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 12.0f));
 
 	if (ShootTimer <= 0.0f && MisfireCooldownTimer <= 0.0f)
@@ -1548,7 +1548,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 			}
 			End += Offset;
 		}
-		Feedback->SpawnTracer(GetMuzzleLocation(), End, CurrentWeapon ? CurrentWeapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
+		Feedback->SpawnTracer(GetWeaponMuzzleLocation(), End, CurrentWeapon ? CurrentWeapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
 			CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic);
 	}
 
@@ -1655,6 +1655,51 @@ FVector AOperativeCharacter::GetMuzzleLocation() const
 	return GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() - Height);
 }
 
+FVector AOperativeCharacter::GetWeaponMuzzleLocation() const
+{
+	if (WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible())
+	{
+		static const FName MuzzleSocket(TEXT("Muzzle"));
+		return WeaponMesh->DoesSocketExist(MuzzleSocket) ? WeaponMesh->GetSocketLocation(MuzzleSocket)
+			: WeaponMesh->GetComponentTransform().TransformPosition(MuzzleOffset);
+	}
+	return GetMuzzleLocation();
+}
+
+void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
+{
+	// Godot player.gd: combat_facing_direction (_process_combat_shooting) wins over the movement heading
+	// (_face_movement_target) while not sprinting, so a single-click move walks sideways / backs off facing the enemy;
+	// a sprint turns to the movement and stops the fire.
+	bFacingCombatTarget = false;
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	const bool bRealTimeFight = !Flow || (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime);
+	AActor* Target = CurrentCombatTarget.Get();
+	if (bRealTimeFight && !bSprinting && !bCarrying && Target && IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
+	{
+		bFacingCombatTarget = true;
+		const float Yaw = (Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw - BarrelYawOffset;
+		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Yaw, 0.f), DeltaTime, 12.f));
+	}
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->bOrientRotationToMovement = !bFacingCombatTarget;
+	}
+
+	// Barrel vs body yaw in the current aim pose (the rifle is held across the chest); 0 when not aiming.
+	float Offset = 0.f;
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	if (bAlignBarrelWithTarget && Anim && Anim->bIsAiming && WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible())
+	{
+		const FVector Barrel = WeaponMesh->GetComponentTransform().TransformVectorNoScale(MuzzleOffset.GetSafeNormal());
+		if (FMath::Abs(Barrel.Z) < 0.7f) // roughly level, i.e. really aimed
+		{
+			Offset = FMath::Clamp(FRotator::NormalizeAxis(Barrel.Rotation().Yaw - GetActorRotation().Yaw), -45.f, 45.f);
+		}
+	}
+	BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, Offset, DeltaTime, 6.f);
+}
+
 bool AOperativeCharacter::CanBeginWeaponShot()
 {
 	if (!HealthComponent || !HealthComponent->IsAlive() || bIsReloading || MisfireCooldownTimer > 0.f)
@@ -1744,7 +1789,7 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 			Color = FLinearColor(0.7f, 0.7f, 0.8f, 0.65f);
 			Style = EDamageType::Kinetic;
 		}
-		Feedback->SpawnTracer(GetMuzzleLocation(), End, Color, Style);
+		Feedback->SpawnTracer(GetWeaponMuzzleLocation(), End, Color, Style);
 	}
 
 	switch (Kind)

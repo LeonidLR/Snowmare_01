@@ -289,7 +289,35 @@ bool UOperativeAnimGraphLibrary::BuildOperativeLocomotionGraph(UAnimBlueprint* A
 	UEdGraphNode* Prone = Build.BlendSpace(ProneBlendSpace, 4, ProneSpeed, ProneRate);
 	UEdGraphNode* ProneAim = Build.BlendSpace(ProneAimBlendSpace, 5, ProneSpeed, ProneRate);
 
-	UEdGraphNode* Standing = Build.ByBool(TEXT("bIsAiming"), 2, 0, 0.2f, StandAim, Stand);
+	// Aiming while walking / strafing: the legs keep the standing blend space (its own speed and direction, no
+	// fast-forwarded aim walk), the aim blend space only drives the upper body.
+	UAnimGraphNode_SaveCachedPose* SaveStand = Build.Spawn<UAnimGraphNode_SaveCachedPose>(1, -2, [](UAnimGraphNode_SaveCachedPose& Node)
+	{
+		Node.CacheName = TEXT("StandLocomotion");
+	});
+	Build.LinkPose(Stand, SaveStand, TEXT("Pose"));
+	auto UseStand = [&Build, SaveStand](int32 Row)
+	{
+		return Build.Spawn<UAnimGraphNode_UseCachedPose>(2, Row, [SaveStand](UAnimGraphNode_UseCachedPose& Node)
+		{
+			Node.SaveCachedPoseNode = SaveStand;
+		});
+	};
+	UAnimGraphNode_LayeredBoneBlend* AimOverLegs = Build.Spawn<UAnimGraphNode_LayeredBoneBlend>(2, 1, [UpperBodyBone](UAnimGraphNode_LayeredBoneBlend& Node)
+	{
+		Node.Node.bMeshSpaceRotationBlend = true;
+		if (Node.Node.LayerSetup.IsEmpty())
+		{
+			Node.Node.LayerSetup.AddDefaulted();
+		}
+		FBranchFilter Filter;
+		Filter.BoneName = UpperBodyBone;
+		Filter.BlendDepth = 0;
+		Node.Node.LayerSetup[0].BranchFilters = {Filter};
+	});
+	Build.LinkPose(UseStand(-1), AimOverLegs, TEXT("BasePose"));
+	Build.LinkPose(StandAim, AimOverLegs, TEXT("BlendPoses_0"));
+	UEdGraphNode* Standing = Build.ByBool(TEXT("bIsAiming"), 3, 0, 0.2f, AimOverLegs, UseStand(0));
 	UEdGraphNode* Crouching = Build.ByBool(TEXT("bIsAiming"), 2, 2, 0.2f, CrouchAim, Crouch);
 	UEdGraphNode* Lying = Build.ByBool(TEXT("bIsAiming"), 2, 4, 0.2f, ProneAim, Prone);
 	UEdGraphNode* Upright = Build.ByBool(TEXT("bIsCrouching"), 3, 1, StanceBlendTime, Crouching, Standing);

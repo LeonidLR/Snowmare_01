@@ -15,7 +15,7 @@ Task: prone animation from the user's Crawl_MocapAnimPack done; next = more anim
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-2026-10-01: 145 automation tests, 56 smokes ALL GREEN (`verify_all.ps1 -SkipBuild`, parallel x3) after the prone animation (Crawl_MocapAnimPack).
+2026-10-01: 145 automation tests, 57 smokes ALL GREEN (`verify_all.ps1 -SkipBuild`, parallel x3) after the combat movement fixes (CombatMoveSmoke added).
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)

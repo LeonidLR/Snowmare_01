@@ -24,6 +24,7 @@
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/DeployableActor.h"
 #include "Characters/OperativeAnimInstance.h"
+#include "Characters/OperativeMovementRules.h"
 #include "Interactables/RelocationGhostActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/BarrelActor.h"
@@ -691,6 +692,58 @@ void UTurnBasedCombatSubsystem::After(float Seconds, TFunction<void()> Callback)
 
 // --- Movement animation -----------------------------------------------------------------------------------------
 
+float UTurnBasedCombatSubsystem::PrepareSquadWalk(AOperativeCharacter* Unit, float& OutStepDuration)
+{
+	OutStepDuration = SquadStepDuration;
+	if (!Unit)
+	{
+		return 0.f;
+	}
+	float Delay = 0.f;
+	if (Unit->GetStance() == EOperativeStance::Prone)
+	{
+		Unit->SetStance(EOperativeStance::Crouching);
+		if (Unit->GetStance() == EOperativeStance::Crouching) // a frostbitten operative cannot get up
+		{
+			if (FTurnUnitState* State = States.Find(Unit))
+			{
+				State->Stance = EOperativeStance::Crouching;
+			}
+			Log(FString::Printf(TEXT("🧍 %s поднимается в присед, чтобы перейти"), *NameOf(Unit)));
+			const UOperativeAnimInstance* Anim = Unit->GetMesh() ? Cast<UOperativeAnimInstance>(Unit->GetMesh()->GetAnimInstance()) : nullptr;
+			if (Anim && Anim->ProneToCrouchAnimation)
+			{
+				Delay = Anim->ProneToCrouchAnimation->GetPlayLength() / FMath::Max(Anim->StanceTransitionPlayRate, 0.1f)
+					- Anim->StanceTransitionBlendTime;
+			}
+		}
+	}
+	if (Unit->GetStance() != EOperativeStance::Standing)
+	{
+		const float Ratio = OperativeMovementRules::GetStanceSpeedMultiplier(Unit->MovementConfig, Unit->GetStance());
+		OutStepDuration = SquadStepDuration / FMath::Clamp(Ratio, 0.2f, 1.f);
+	}
+	return FMath::Max(0.f, Delay);
+}
+
+void UTurnBasedCombatSubsystem::StartMoverAfter(float Delay, AActor* Actor, const FIntPoint& From, const TArray<FIntPoint>& Path,
+	float StepDuration, TFunction<void()> OnDone, bool bFaceSteps)
+{
+	if (Delay <= 0.f)
+	{
+		StartMover(Actor, From, Path, StepDuration, nullptr, MoveTemp(OnDone), bFaceSteps);
+		return;
+	}
+	TWeakObjectPtr<AActor> WeakActor(Actor);
+	After(Delay, [this, WeakActor, From, Path, StepDuration, OnDone = MoveTemp(OnDone), bFaceSteps]() mutable
+	{
+		if (AActor* Moving = WeakActor.Get(); Moving && IsActive())
+		{
+			StartMover(Moving, From, Path, StepDuration, nullptr, MoveTemp(OnDone), bFaceSteps);
+		}
+	});
+}
+
 void UTurnBasedCombatSubsystem::StartMover(AActor* Actor, const FIntPoint& From, const TArray<FIntPoint>& Path, float StepDuration,
 	TFunction<bool(int32)> OnStep, TFunction<void()> OnDone, bool bFaceSteps)
 {
@@ -1247,10 +1300,12 @@ bool UTurnBasedCombatSubsystem::MoveActiveUnitTo(const FIntPoint& Cell)
 	Grid->SetOccupant(Final, Unit, EGorkyOccupantType::Squad);
 
 	bSquadUnitMoving = true;
+	float StepDuration = SquadStepDuration;
+	const float RiseDelay = PrepareSquadWalk(Unit, StepDuration);
 	RefreshOverlay();
 	TWeakObjectPtr<AOperativeCharacter> WeakUnit(Unit);
 	TWeakObjectPtr<AActor> WeakMine(Mine);
-	StartMover(Unit, From, Actual, SquadStepDuration, nullptr, [this, WeakUnit, WeakMine, MineCell]()
+	StartMoverAfter(RiseDelay, Unit, From, Actual, StepDuration, [this, WeakUnit, WeakMine, MineCell]()
 	{
 		bSquadUnitMoving = false;
 		AOperativeCharacter* Moved = WeakUnit.Get();
@@ -1416,7 +1471,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 			{
 				End += FVector(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(20.f, 120.f));
 			}
-			Feedback->SpawnTracer(Unit->GetMuzzleLocation(), End, Weapon ? Weapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
+			Feedback->SpawnTracer(Unit->GetWeaponMuzzleLocation(), End, Weapon ? Weapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
 				Weapon ? Weapon->DamageType : EDamageType::Kinetic);
 		}
 		if (!Result.bHit)
@@ -1443,7 +1498,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 		Result.bBarrelExploded = true;
 		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
 		{
-			Feedback->SpawnTracer(Unit->GetMuzzleLocation(), Target->GetActorLocation(), UCombatFeedbackSubsystem::DefaultTracerColor());
+			Feedback->SpawnTracer(Unit->GetWeaponMuzzleLocation(), Target->GetActorLocation(), UCombatFeedbackSubsystem::DefaultTracerColor());
 		}
 		DetonateBarrel(Cell, Target);
 		if (!IsActive())
@@ -2135,10 +2190,12 @@ bool UTurnBasedCombatSubsystem::RelocateObject(const FIntPoint& ObjectCell, cons
 	}
 
 	bSquadUnitMoving = true;
+	float StepDuration = SquadStepDuration;
+	const float RiseDelay = PrepareSquadWalk(Unit, StepDuration);
 	RefreshOverlay();
-	StartMover(Object, ObjectCell, Path, SquadStepDuration, nullptr, nullptr, /*bFaceSteps*/ false);
+	StartMoverAfter(RiseDelay, Object, ObjectCell, Path, StepDuration, nullptr, /*bFaceSteps*/ false);
 	TWeakObjectPtr<AOperativeCharacter> WeakUnit(Unit);
-	StartMover(Unit, UnitStart, SoldierPath, SquadStepDuration, nullptr, [this, WeakUnit, FinalFacing]()
+	StartMoverAfter(RiseDelay, Unit, UnitStart, SoldierPath, StepDuration, [this, WeakUnit, FinalFacing]()
 	{
 		bSquadUnitMoving = false;
 		if (AOperativeCharacter* Moved = WeakUnit.Get())
@@ -2424,7 +2481,9 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 	TWeakObjectPtr<AActor> WeakSpawned(Spawned);
 	TWeakObjectPtr<AActor> WeakMine(Mine);
 	const FIntPoint StandCell = Check.StandCell;
-	StartMover(Unit, From, Actual, SquadStepDuration, nullptr, [this, WeakUnit, WeakSpawned, WeakMine, MineCell, StandCell, Cell, Yaw, Type, Name, TotalAP, FaceTarget]()
+	float StepDuration = SquadStepDuration;
+	const float RiseDelay = PrepareSquadWalk(Unit, StepDuration);
+	StartMoverAfter(RiseDelay, Unit, From, Actual, StepDuration, [this, WeakUnit, WeakSpawned, WeakMine, MineCell, StandCell, Cell, Yaw, Type, Name, TotalAP, FaceTarget]()
 	{
 		AOperativeCharacter* Moved = WeakUnit.Get();
 		FTurnUnitState* State = States.Find(Moved);
