@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: user art wired (operative / enemy AnimBPs), turn-based attack mode and walk animation
-Task: operative one-shot anims done (clips await the user's retarget); next = remaining HANDOFF §8 / §9 items that don't need new art
+Task: prone animation from the user's Crawl_MocapAnimPack done; next = more animation packs from the user (standing hit / death / grenade / cold / vault)
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
@@ -15,7 +15,7 @@ Task: operative one-shot anims done (clips await the user's retarget); next = re
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-2026-10-01 morning: 145 automation tests, 56 smokes ALL GREEN (`verify_all.ps1 -SkipBuild`, parallel x3) after the Unreal-editable balance (UGameBalanceConfig).
+2026-10-01: 145 automation tests, 56 smokes ALL GREEN (`verify_all.ps1 -SkipBuild`, parallel x3) after the prone animation (Crawl_MocapAnimPack).
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)

@@ -64,6 +64,7 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeUpdateAnimation(DeltaSeconds);
 	UpdateState();
+	UpdateStanceTransition();
 	UpdateUpperBody(DeltaSeconds);
 	UpdateColdLayer(DeltaSeconds);
 	UpdateNativeBlend(DeltaSeconds);
@@ -99,11 +100,67 @@ void UOperativeAnimInstance::UpdateColdLayer(float DeltaSeconds)
 void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit)
 {
 	AimTimer = AimHoldAfterShot;
+	if (bIsProne)
+	{
+		// Godot ProneFire: the prone body shoots full body; the standing fire montage is not layered over it.
+		if (FireProneAnimation && !bIsReloading && !IsPlayingStanceTransition())
+		{
+			PlaySlotAnimationAsDynamicMontage(FireProneAnimation, FullBodySlot, 0.05f, 0.15f);
+		}
+		return;
+	}
 	UAnimMontage* Montage = bIsAiming && FireAimMontage ? FireAimMontage : FireMontage;
 	if (Montage && !bIsReloading)
 	{
 		Montage_Play(Montage);
 	}
+}
+
+bool UOperativeAnimInstance::IsPlayingStanceTransition() const
+{
+	const UAnimMontage* Montage = StanceTransitionMontage.Get();
+	return Montage && Montage_IsPlaying(Montage);
+}
+
+void UOperativeAnimInstance::UpdateStanceTransition()
+{
+	// Godot locomotion_controller.gd: ProneStart when the stance becomes prone, ProneEnd when it leaves it (auto-advance
+	// at the clip's end); here the clip plays on the full-body slot over the already switched locomotion.
+	if (!BoundOperative.IsValid())
+	{
+		return;
+	}
+	const EOperativeStance From = PreviousStance.Get(Stance);
+	PreviousStance = Stance;
+	if (From == Stance || bIsDead)
+	{
+		return;
+	}
+	UAnimSequenceBase* Clip = nullptr;
+	switch (Stance)
+	{
+	case EOperativeStance::Prone:
+		Clip = From == EOperativeStance::Crouching ? CrouchToProneAnimation.Get() : StandToProneAnimation.Get();
+		break;
+	case EOperativeStance::Crouching:
+		Clip = From == EOperativeStance::Prone ? ProneToCrouchAnimation.Get() : StandToCrouchAnimation.Get();
+		break;
+	default:
+		Clip = From == EOperativeStance::Prone ? ProneToStandAnimation.Get() : CrouchToStandAnimation.Get();
+		break;
+	}
+	if (!Clip)
+	{
+		// No clip: the graph's crossfade; drop a transition still playing so it does not hold the old stance.
+		if (IsPlayingStanceTransition())
+		{
+			StopSlotAnimation(StanceTransitionBlendTime, FullBodySlot);
+		}
+		return;
+	}
+	StopSlotAnimation(StanceTransitionBlendTime, UpperBodySlot);
+	StanceTransitionMontage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, StanceTransitionBlendTime,
+		StanceTransitionBlendTime, StanceTransitionPlayRate);
 }
 
 void UOperativeAnimInstance::HandleHealthChanged(float NewHealth, float MaxHealth, float Delta)
@@ -125,7 +182,12 @@ void UOperativeAnimInstance::HandleHealthChanged(float NewHealth, float MaxHealt
 	}
 	else if (Operative->GetStance() == EOperativeStance::Prone)
 	{
-		Clip = HitProneAnimation;
+		// The prone body reacts as a whole (Godot hit_prone), unless it is still lying down / getting up.
+		if (HitProneAnimation && !IsPlayingStanceTransition())
+		{
+			PlaySlotAnimationAsDynamicMontage(HitProneAnimation, FullBodySlot, 0.1f, 0.2f);
+		}
+		return;
 	}
 	if (Clip && !IsPlayingSlotAnimation(GrenadeThrowWalkAnimation, UpperBodySlot))
 	{
@@ -171,7 +233,7 @@ void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerS
 	}
 	StopSlotAnimation(0.1f, UpperBodySlot);
 	if (UAnimMontage* Montage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, 0.15f, 0.f, 1.f, 1, -1.f,
-		FMath::Min(DeathStartOffset, Clip->GetPlayLength() * 0.9f)))
+		Stance == EOperativeStance::Standing ? FMath::Min(DeathStartOffset, Clip->GetPlayLength() * 0.9f) : 0.f))
 	{
 		Montage->bEnableAutoBlendOut = false;
 	}
@@ -203,16 +265,21 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 	StandPlayRate = FMath::Max(1.f, Speed / StandBlendSpaceMaxSpeed);
 	SlowBlendSpeed = FMath::Min(Speed, SlowBlendSpaceMaxSpeed);
 	SlowPlayRate = FMath::Max(1.f, Speed / SlowBlendSpaceMaxSpeed);
+	ProneBlendSpeed = FMath::Min(Speed, ProneBlendSpaceMaxSpeed);
+	PronePlayRate = FMath::Max(1.f, Speed / ProneBlendSpaceMaxSpeed);
 
 	// Reload: one clip per reload, stretched to the reload time left.
-	if (bIsReloading && !bWasReloading && ReloadAnimation && Operative)
+	// Prone: its own full-body clip (Godot ProneReload) or nothing.
+	UAnimSequenceBase* Reload = bIsProne ? ReloadProneAnimation.Get() : ReloadAnimation.Get();
+	const FName ReloadSlot = bIsProne ? FullBodySlot : UpperBodySlot;
+	if (bIsReloading && !bWasReloading && Reload && Operative && !IsPlayingStanceTransition())
 	{
 		const float Duration = FMath::Max(0.1f, Operative->ReloadTimer);
-		PlaySlotAnimationAsDynamicMontage(ReloadAnimation, UpperBodySlot, 0.2f, 0.2f, ReloadAnimation->GetPlayLength() / Duration);
+		PlaySlotAnimationAsDynamicMontage(Reload, ReloadSlot, 0.2f, 0.2f, Reload->GetPlayLength() / Duration);
 	}
-	else if (!bIsReloading && bWasReloading && ReloadAnimation)
+	else if (!bIsReloading && bWasReloading && Reload)
 	{
-		StopSlotAnimation(0.2f, UpperBodySlot);
+		StopSlotAnimation(0.2f, ReloadSlot);
 	}
 	bWasReloading = bIsReloading;
 }

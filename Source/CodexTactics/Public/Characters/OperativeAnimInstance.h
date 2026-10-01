@@ -129,6 +129,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation", meta = (ClampMin = "1"))
 	float SlowBlendSpaceMaxSpeed = 120.f;
 
+	/** Top speed axis of the prone blend spaces (the crawl clips' own speed), cm/s; faster crawling raises PronePlayRate. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation", meta = (ClampMin = "1"))
+	float ProneBlendSpaceMaxSpeed = 21.f;
+
 	/** Seconds the rifle stays raised (bIsAiming) after a shot. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation", meta = (ClampMin = "0"))
 	float AimHoldAfterShot = 1.5f;
@@ -139,6 +143,47 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation")
 	TObjectPtr<UAnimMontage> FireAimMontage;
+
+	/** Full-body shot while prone (Godot ProneFire / fire_prone_animation); nothing plays prone when unset. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation")
+	TObjectPtr<UAnimSequenceBase> FireProneAnimation;
+
+	/** Full-body reload while prone (Godot ProneReload); the standing reload is not layered over a prone body. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation")
+	TObjectPtr<UAnimSequenceBase> ReloadProneAnimation;
+
+	// --- Stance transitions (Godot ProneStart / ProneEnd between the locomotion states), full body. Empty = the
+	// graph's stance crossfade only. ---
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
+	TObjectPtr<UAnimSequenceBase> StandToProneAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
+	TObjectPtr<UAnimSequenceBase> ProneToStandAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
+	TObjectPtr<UAnimSequenceBase> CrouchToProneAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
+	TObjectPtr<UAnimSequenceBase> ProneToCrouchAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
+	TObjectPtr<UAnimSequenceBase> StandToCrouchAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
+	TObjectPtr<UAnimSequenceBase> CrouchToStandAnimation;
+
+	/** Blend in / out of a transition clip, s (Godot xfade 0.15). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions", meta = (ClampMin = "0"))
+	float StanceTransitionBlendTime = 0.15f;
+
+	/** Play-rate multiplier of the transition clips (1 = the clip's own speed). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions", meta = (ClampMin = "0.1"))
+	float StanceTransitionPlayRate = 1.f;
+
+	/** True while a stance transition clip plays. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Animation")
+	bool IsPlayingStanceTransition() const;
 
 	/** Played on UpperBodySlot when a reload starts, stretched to the weapon's reload time. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation")
@@ -155,7 +200,8 @@ public:
 	// --- One-shots (Godot locomotion_controller.gd play_hit_reaction / play_grenade_throw / play_death, character
 	// animation config hit_* / grenade_throw_* / death_*). Empty = nothing plays (no clips in the pack yet). ---
 
-	/** Upper-body hit reaction per stance (Godot hit_stand / hit_crouch / hit_prone) and with the pistol in hands. */
+	/** Hit reaction per stance (Godot hit_stand / hit_crouch / hit_prone) and with the pistol in hands; upper body,
+	 * the prone one full body. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
 	TObjectPtr<UAnimSequenceBase> HitStandAnimation;
 
@@ -191,7 +237,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
 	TObjectPtr<UAnimSequenceBase> DeathProneAnimation;
 
-	/** Godot death_start_offset. */
+	/** Godot death_start_offset (tuned for the standing variations; crouched / prone deaths start at 0). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
 	float DeathStartOffset = 0.f;
 
@@ -257,6 +303,13 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
 	float SlowPlayRate = 1.f;
 
+	/** Prone blend-space speed axis (capped at ProneBlendSpaceMaxSpeed) and the play rate for faster crawling. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
+	float ProneBlendSpeed = 0.f;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
+	float PronePlayRate = 1.f;
+
 	/** Vaulting over an obstacle (Godot "Vault" state). */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
 	bool bIsVaulting = false;
@@ -321,6 +374,7 @@ private:
 	UFUNCTION()
 	void HandleDied(AActor* Victim, const FString& AttackerSource);
 	void UpdateNativeBlend(float DeltaSeconds);
+	void UpdateStanceTransition();
 	UAnimSequence* GetClip(EOperativeClip Clip) const;
 
 	/** Stance weights (standing, crouching, prone), crossfaded. */
@@ -336,4 +390,7 @@ private:
 	bool bDeathPlayed = false;
 	float AimTimer = 0.f;
 	bool bWasReloading = false;
+	/** Stance seen last update (transitions start on a change); unset until the first update. */
+	TOptional<EOperativeStance> PreviousStance;
+	TWeakObjectPtr<UAnimMontage> StanceTransitionMontage;
 };

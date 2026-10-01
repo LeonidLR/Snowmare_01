@@ -254,7 +254,7 @@ bool UOperativeAnimGraphLibrary::BuildEnemyLocomotionGraph(UAnimBlueprint* AnimB
 
 bool UOperativeAnimGraphLibrary::BuildOperativeLocomotionGraph(UAnimBlueprint* AnimBlueprint, UBlendSpace* StandBlendSpace,
 	UBlendSpace* StandAimBlendSpace, UBlendSpace* CrouchBlendSpace, UBlendSpace* CrouchAimBlendSpace, UBlendSpace* ProneBlendSpace,
-	FName SlotName, FName UpperBodyBone, float StanceBlendTime, FString& OutReport)
+	UBlendSpace* ProneAimBlendSpace, FName SlotName, FName UpperBodyBone, float StanceBlendTime, FString& OutReport)
 {
 	using namespace OperativeAnimGraph;
 	OutReport.Reset();
@@ -263,7 +263,12 @@ bool UOperativeAnimGraphLibrary::BuildOperativeLocomotionGraph(UAnimBlueprint* A
 		OutReport = TEXT("missing AnimBlueprint or blend space");
 		return false;
 	}
-	ProneBlendSpace = ProneBlendSpace ? ProneBlendSpace : CrouchBlendSpace;
+	// Without prone clips the crouch blend spaces stand in (with the crouch speed axis).
+	const bool bHasProne = ProneBlendSpace != nullptr;
+	ProneAimBlendSpace = ProneAimBlendSpace ? ProneAimBlendSpace : (bHasProne ? ProneBlendSpace : CrouchAimBlendSpace);
+	ProneBlendSpace = bHasProne ? ProneBlendSpace : CrouchBlendSpace;
+	const FName ProneSpeed = bHasProne ? FName(TEXT("ProneBlendSpeed")) : FName(TEXT("SlowBlendSpeed"));
+	const FName ProneRate = bHasProne ? FName(TEXT("PronePlayRate")) : FName(TEXT("SlowPlayRate"));
 
 	UAnimGraphNode_Root* Root = ResetAnimGraph(AnimBlueprint, OutReport);
 	if (!Root)
@@ -281,12 +286,14 @@ bool UOperativeAnimGraphLibrary::BuildOperativeLocomotionGraph(UAnimBlueprint* A
 	UEdGraphNode* StandAim = Build.BlendSpace(StandAimBlendSpace, 1, TEXT("SlowBlendSpeed"), TEXT("SlowPlayRate"));
 	UEdGraphNode* Crouch = Build.BlendSpace(CrouchBlendSpace, 2, TEXT("SlowBlendSpeed"), TEXT("SlowPlayRate"));
 	UEdGraphNode* CrouchAim = Build.BlendSpace(CrouchAimBlendSpace, 3, TEXT("SlowBlendSpeed"), TEXT("SlowPlayRate"));
-	UEdGraphNode* Prone = Build.BlendSpace(ProneBlendSpace, 4, TEXT("SlowBlendSpeed"), TEXT("SlowPlayRate"));
+	UEdGraphNode* Prone = Build.BlendSpace(ProneBlendSpace, 4, ProneSpeed, ProneRate);
+	UEdGraphNode* ProneAim = Build.BlendSpace(ProneAimBlendSpace, 5, ProneSpeed, ProneRate);
 
 	UEdGraphNode* Standing = Build.ByBool(TEXT("bIsAiming"), 2, 0, 0.2f, StandAim, Stand);
 	UEdGraphNode* Crouching = Build.ByBool(TEXT("bIsAiming"), 2, 2, 0.2f, CrouchAim, Crouch);
+	UEdGraphNode* Lying = Build.ByBool(TEXT("bIsAiming"), 2, 4, 0.2f, ProneAim, Prone);
 	UEdGraphNode* Upright = Build.ByBool(TEXT("bIsCrouching"), 3, 1, StanceBlendTime, Crouching, Standing);
-	UEdGraphNode* Locomotion = Build.ByBool(TEXT("bIsProne"), 4, 2, StanceBlendTime, Prone, Upright);
+	UEdGraphNode* Locomotion = Build.ByBool(TEXT("bIsProne"), 4, 2, StanceBlendTime, Lying, Upright);
 
 	// Cache the locomotion so the montage slot and the lower body share one evaluation.
 	UAnimGraphNode_SaveCachedPose* Save = Build.Spawn<UAnimGraphNode_SaveCachedPose>(5, 2, [](UAnimGraphNode_SaveCachedPose& Node)
@@ -348,4 +355,59 @@ bool UOperativeAnimGraphLibrary::BuildOperativeLocomotionGraph(UAnimBlueprint* A
 	Build.LinkPose(FullBody, Root, TEXT("Result"));
 
 	return Build.bOk && CompileAndReport(AnimBlueprint, AnimGraph, OutReport);
+}
+
+bool UOperativeAnimGraphLibrary::FillDirectionalBlendSpace(UBlendSpace* BlendSpace, UAnimSequence* Idle,
+	const TArray<UAnimSequence*>& Moves, float MaxSpeed, FString& OutReport)
+{
+	OutReport.Reset();
+	if (!BlendSpace || !Idle || Moves.IsEmpty() || !Moves[0] || MaxSpeed <= 0.f)
+	{
+		OutReport = TEXT("missing blend space, idle or forward clip");
+		return false;
+	}
+	BlendSpace->Modify();
+
+	// Axes like the RifleAnims blend spaces (BlendParameters is protected: set it the way the details panel does).
+	if (const FStructProperty* Property = CastField<FStructProperty>(UBlendSpace::StaticClass()->FindPropertyByName(TEXT("BlendParameters"))))
+	{
+		FBlendParameter* Parameters = Property->ContainerPtrToValuePtr<FBlendParameter>(BlendSpace);
+		Parameters[0].DisplayName = TEXT("Direction");
+		Parameters[0].Min = -180.f;
+		Parameters[0].Max = 180.f;
+		Parameters[0].GridNum = 8;
+		Parameters[1].DisplayName = TEXT("Speed");
+		Parameters[1].Min = 0.f;
+		Parameters[1].Max = MaxSpeed;
+		Parameters[1].GridNum = 1;
+	}
+	else
+	{
+		OutReport = TEXT("BlendParameters not found");
+		return false;
+	}
+
+	while (BlendSpace->GetNumberOfBlendSamples() > 0)
+	{
+		BlendSpace->DeleteSample(BlendSpace->GetNumberOfBlendSamples() - 1);
+	}
+	static const float Directions[] = {0.f, 45.f, 90.f, 135.f, 180.f, -135.f, -90.f, -45.f};
+	for (const float Direction : {-180.f, -135.f, -90.f, -45.f, 0.f, 45.f, 90.f, 135.f, 180.f})
+	{
+		BlendSpace->AddSample(Idle, FVector(Direction, 0.f, 0.f));
+	}
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Directions); ++Index)
+	{
+		UAnimSequence* Clip = Moves.IsValidIndex(Index) && Moves[Index] ? Moves[Index] : Moves[0];
+		BlendSpace->AddSample(Clip, FVector(Directions[Index], MaxSpeed, 0.f));
+		if (Directions[Index] == 180.f)
+		{
+			BlendSpace->AddSample(Clip, FVector(-180.f, MaxSpeed, 0.f));
+		}
+	}
+	BlendSpace->ValidateSampleData();
+	BlendSpace->PostEditChange();
+	BlendSpace->MarkPackageDirty();
+	OutReport = FString::Printf(TEXT("%s: %d samples, speed 0..%.0f"), *BlendSpace->GetName(), BlendSpace->GetNumberOfBlendSamples(), MaxSpeed);
+	return true;
 }

@@ -33,7 +33,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
 	static bool BuildOperativeLocomotionGraph(UAnimBlueprint* AnimBlueprint, UBlendSpace* StandBlendSpace,
 		UBlendSpace* StandAimBlendSpace, UBlendSpace* CrouchBlendSpace, UBlendSpace* CrouchAimBlendSpace,
-		UBlendSpace* ProneBlendSpace, FName SlotName, FName UpperBodyBone, float StanceBlendTime, FString& OutReport);
+		UBlendSpace* ProneBlendSpace, UBlendSpace* ProneAimBlendSpace, FName SlotName, FName UpperBodyBone, float StanceBlendTime,
+		FString& OutReport);
+
+	/**
+	 * Fills a Direction (-180..180) x Speed (0..MaxSpeed) blend space like the RifleAnims ones: Idle on the zero-speed
+	 * row, the moving clips at MaxSpeed in the order F, 45R, R, 135R, B, 135L, L, 45L (B also at -180). Existing samples
+	 * are replaced; a missing moving clip falls back to Forward.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static bool FillDirectionalBlendSpace(UBlendSpace* BlendSpace, UAnimSequence* Idle, const TArray<UAnimSequence*>& Moves,
+		float MaxSpeed, FString& OutReport);
 
 	/**
 	 * Replaces the AnimGraph of an enemy AnimBlueprint (parent UEnemyAnimInstance) and compiles it:

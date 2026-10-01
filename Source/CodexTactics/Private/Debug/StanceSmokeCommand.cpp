@@ -1,7 +1,9 @@
 // Dev-only console command for headless stance checks on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.StanceSmoke
 // The squad must be spawned from BP_Operative. The leader goes crouch -> prone -> standing: the capsule takes the
-// stance height (Godot 1.3 / 0.7 / 2.0 m ratios) while the feet stay on the ground.
+// stance height (Godot 1.3 / 0.7 / 2.0 m ratios) while the feet stay on the ground. With prone clips set in
+// ABP_Operative, crouch -> prone and prone -> standing play their transition clips and a prone shot plays the
+// full-body prone fire clip.
 
 #include "CoreMinimal.h"
 
@@ -55,6 +57,24 @@ namespace StanceSmoke
 		return bOk;
 	}
 
+	/** 0.2 s after a stance change / shot: Clip (when set in the AnimBP) must be playing on the full-body slot. */
+	void CheckFullBodyClipSoon(UWorld* World, FState& State, AOperativeCharacter* Leader, const TCHAR* What,
+		TFunction<UAnimSequenceBase*(const UOperativeAnimInstance&)> GetClip)
+	{
+		TWeakObjectPtr<AOperativeCharacter> WeakLeader(Leader);
+		FTimerHandle Handle;
+		World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([&State, WeakLeader, What, GetClip]()
+		{
+			const AOperativeCharacter* L = WeakLeader.Get();
+			const UOperativeAnimInstance* Anim = L ? Cast<UOperativeAnimInstance>(L->GetMesh()->GetAnimInstance()) : nullptr;
+			UAnimSequenceBase* Clip = Anim ? GetClip(*Anim) : nullptr;
+			const bool bOk = !Clip || Anim->IsPlayingSlotAnimation(Clip, Anim->FullBodySlot);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s clip=%s full-body playing=%d -> %s"), What, *GetNameSafe(Clip),
+				Clip && Anim->IsPlayingSlotAnimation(Clip, Anim->FullBodySlot) ? 1 : 0, bOk ? TEXT("ok") : TEXT("BAD"));
+			State.bOk &= bOk;
+		}), 0.2f, false);
+	}
+
 	/** Returns true when finished. */
 	bool Step(UWorld* World, FState& State)
 	{
@@ -69,10 +89,25 @@ namespace StanceSmoke
 		case 2:
 			Check(State, Leader, EOperativeStance::Crouching);
 			Leader->SetStance(EOperativeStance::Prone);
+			CheckFullBodyClipSoon(World, State, Leader, TEXT("crouch->prone"),
+				[](const UOperativeAnimInstance& Anim) { return Anim.CrouchToProneAnimation.Get(); });
 			return false;
 		case 3:
 			Check(State, Leader, EOperativeStance::Prone);
+			return false;
+		case 4:
+			// After the lying-down clip: a shot plays the prone fire clip.
+			Leader->OnWeaponFiredNative.Broadcast(Leader, nullptr, false);
+			CheckFullBodyClipSoon(World, State, Leader, TEXT("prone fire"),
+				[](const UOperativeAnimInstance& Anim) { return Anim.FireProneAnimation.Get(); });
+			return false;
+		case 5:
+			Check(State, Leader, EOperativeStance::Prone);
 			Leader->SetStance(EOperativeStance::Standing);
+			CheckFullBodyClipSoon(World, State, Leader, TEXT("prone->standing"),
+				[](const UOperativeAnimInstance& Anim) { return Anim.ProneToStandAnimation.Get(); });
+			return false;
+		case 6:
 			return false;
 		default:
 			Check(State, Leader, EOperativeStance::Standing);
