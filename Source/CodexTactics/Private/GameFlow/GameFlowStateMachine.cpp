@@ -108,6 +108,7 @@ EGameFlowResult FGameFlowStateMachine::RequestEnterTurnBased(bool bEnemiesInRang
 	{
 		return EGameFlowResult::NotInWave;
 	}
+	// Only from the real-time fight: never from the tactical pause (TANDEM request 2; release the pause first).
 	if (CombatMode != ECodexCombatMode::RealTime)
 	{
 		return EGameFlowResult::NotInRealTime;
@@ -204,7 +205,9 @@ void FGameFlowStateMachine::TriggerGameOver()
 
 void FGameFlowStateMachine::Tick(float RealDeltaSeconds)
 {
-	if (PauseCooldownRemaining > 0.f)
+	// User / Gemini decision 2026-10-01 (TANDEM request 2): the turn-based fight freezes the pause charges and their
+	// cooldown — leaving it gives back exactly what there was before entering, no free refill by waiting in the grid.
+	if (PauseCooldownRemaining > 0.f && CombatMode != ECodexCombatMode::TurnBased)
 	{
 		PauseCooldownRemaining -= RealDeltaSeconds;
 		if (PauseCooldownRemaining <= 0.f)

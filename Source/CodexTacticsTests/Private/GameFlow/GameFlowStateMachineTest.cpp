@@ -386,6 +386,37 @@ bool FGameFlowStateChangedEventTest::RunTest(const FString&)
 	return true;
 }
 
+GAMEFLOW_TEST(FGameFlowTurnBasedKeepsPauseChargesTest, "TurnBased.KeepsPauseChargesAndCooldown")
+bool FGameFlowTurnBasedKeepsPauseChargesTest::RunTest(const FString&)
+{
+	// TANDEM request 2 (user + Gemini 2026-10-01): no turn-based fight from the tactical pause; the fight neither
+	// refills the pause charges nor runs their cooldown down.
+	FGameFlowStateMachine Machine;
+	EnterFirstWave(Machine);
+	const int32 MaxCharges = Machine.GetPauseCharges();
+	TestEqual(TEXT("Pause"), Machine.ToggleTacticalPause(), EGameFlowResult::Ok);
+	TestEqual(TEXT("No turn-based from the pause"), Machine.RequestEnterTurnBased(true), EGameFlowResult::NotInRealTime);
+	Machine.ToggleTacticalPause();
+	for (int32 Use = 1; Use < MaxCharges; ++Use)
+	{
+		Machine.ToggleTacticalPause();
+		Machine.ToggleTacticalPause();
+	}
+	TestEqual(TEXT("All charges spent"), Machine.GetPauseCharges(), 0);
+	const float Cooldown = Machine.GetPauseCooldownRemaining();
+	TestTrue(TEXT("Cooldown running"), Cooldown > 0.f);
+	Machine.Tick(1.f);
+	const float BeforeFight = Machine.GetPauseCooldownRemaining();
+	TestEqual(TEXT("Turn-based from real time"), Machine.RequestEnterTurnBased(true), EGameFlowResult::Ok);
+	Machine.Tick(600.f); // a long grid fight
+	TestEqual(TEXT("Charges frozen in the fight"), Machine.GetPauseCharges(), 0);
+	TestEqual(TEXT("Cooldown frozen in the fight"), Machine.GetPauseCooldownRemaining(), BeforeFight, 0.001f);
+	TestEqual(TEXT("Exit"), Machine.ExitTurnBased(), EGameFlowResult::Ok);
+	TestEqual(TEXT("Charges after the fight"), Machine.GetPauseCharges(), 0);
+	TestEqual(TEXT("Cooldown after the fight"), Machine.GetPauseCooldownRemaining(), BeforeFight, 0.001f);
+	return true;
+}
+
 #undef GAMEFLOW_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS
