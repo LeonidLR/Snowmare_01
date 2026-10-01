@@ -46,6 +46,24 @@ bool FColdWarmingTest::RunTest(const FString&)
 	return true;
 }
 
+COLD_TEST(FColdSprintWarmupTest, "SprintWarmsUp")
+bool FColdSprintWarmupTest::RunTest(const FString&)
+{
+	// Deviation from Godot (user decision 2026-10-01): a sprint in the open lowers the cold instead of raising it.
+	const FColdConfig Config;
+	FColdEnvironment Sprint;
+	Sprint.bSprinting = true;
+	// 1.5 %/s * (1 + 15 * 0.01) = 1.725 %/s.
+	TestEqual(TEXT("Commander sprints 10 s"), ColdRules::StepCold(Config, 50.f, 10.f, Sprint, EOperativeStance::Standing, 15.f), 32.75f, 0.001f);
+	TestEqual(TEXT("Not below 0"), ColdRules::StepCold(Config, 1.f, 10.f, Sprint, EOperativeStance::Standing, 0.f), 0.f);
+	Sprint.ZoneMultiplier = 2.5f;
+	Sprint.bElevated = true;
+	TestTrue(TEXT("Warms up in a blizzard too"), ColdRules::StepCold(Config, 50.f, 1.f, Sprint, EOperativeStance::Standing, 0.f) < 50.f);
+	FColdEnvironment Walk;
+	TestTrue(TEXT("Walking still cools down"), ColdRules::StepCold(Config, 50.f, 1.f, Walk, EOperativeStance::Standing, 0.f) > 50.f);
+	return true;
+}
+
 COLD_TEST(FColdTiersTest, "TiersSpeedAndActionPoints")
 bool FColdTiersTest::RunTest(const FString&)
 {

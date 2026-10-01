@@ -39,6 +39,14 @@ struct CODEXTACTICS_API FColdConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold")
 	float WarmthRecoveryRate = 8.f;
 
+	/**
+	 * Cold loss while sprinting in the cold, %/s (the run warms the body up; fortitude speeds it up like the warmth
+	 * recovery). Not in Godot — user decision 2026-10-01. Sprinting itself stops at MaxColdToSprint (60 %) or with a heavy
+	 * wound, so the run only helps before the operative is chilled.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0"))
+	float SprintWarmupRate = 1.5f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold")
 	float StanceMultiplierStanding = 1.f;
 
@@ -117,6 +125,8 @@ struct CODEXTACTICS_API FColdEnvironment
 	/** Zone multiplier: 0 closed bunker, 0.5 shelter, 1 open, 2.5 blizzard. */
 	float ZoneMultiplier = 1.f;
 	bool bElevated = false;
+	/** Actually running in a sprint (not just the sprint order while standing). */
+	bool bSprinting = false;
 };
 
 /** Pure cold formulas. Godot reference: Scenes/movements/player.gd `_process_cold_system`, `_shoot_at_target`. */

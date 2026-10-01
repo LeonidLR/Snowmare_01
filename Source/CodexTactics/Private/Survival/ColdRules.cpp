@@ -23,6 +23,12 @@ namespace ColdRules
 			const float Boost = 1.f + Fortitude * Config.FortitudeWarmupPerPoint;
 			return FMath::Max(0.f, Cold - Config.WarmthRecoveryRate * Boost * DeltaSeconds);
 		}
+		if (Environment.bSprinting)
+		{
+			// Deviation (user decision 2026-10-01): the sprint warms the body up instead of letting it cool down.
+			const float Boost = 1.f + Fortitude * Config.FortitudeWarmupPerPoint;
+			return FMath::Max(0.f, Cold - Config.SprintWarmupRate * Boost * DeltaSeconds);
+		}
 		const float FortitudeCut = FMath::Clamp(Fortitude * Config.FortitudeCutPerPoint, 0.f, Config.MaxFortitudeCut);
 		const float Wind = Environment.bElevated ? Config.ElevatedWindMultiplier : 1.f;
 		const float Rate = Environment.ZoneMultiplier * GetStanceMultiplier(Config, Stance) * Wind;

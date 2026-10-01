@@ -102,6 +102,7 @@ FColdEnvironment UColdSurvivalComponent::GatherEnvironment() const
 
 	const float FeetZ = Location.Z - Operative->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	Environment.bElevated = FeetZ >= Config.ElevatedHeight;
+	Environment.bSprinting = Operative->IsSprinting() && Operative->GetVelocity().Size2D() > 150.f;
 	return Environment;
 }
 

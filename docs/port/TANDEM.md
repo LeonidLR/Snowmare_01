@@ -37,7 +37,7 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 | Agent | Task | Files / assets | Since |
 |---|---|---|---|
-| Gemini | Scalability configuration & Landscape Master Material with Snow Tracks | Config/DefaultScalability.ini, Scripts/Editor/create_landscape_master_material.py, Content/VFX/Materials/M_Landscape_Master | 2026-10-01 |
+| Gemini | Dynamic Snow Tracks: RT_SnowTracks, Stamp & Fade materials, BP_SnowTrackManager | Content/VFX/SnowTracks/**, Scripts/Editor/create_snow_tracks_system.py | 2026-10-01 |
 
 ## Requests
 
@@ -161,6 +161,10 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 ---
 
 ## Log
+
+- 2026-10-01 Claude: `FColdConfig::SprintWarmupRate`, `FColdEnvironment::bSprinting` (sprint warms up — user deviation from Godot).
+
+- 2026-10-01 Gemini: `Config/DefaultScalability.ini` created and tuned for budget GPUs (GTX 1060 / 1650, Steam Deck) targeting 60-90+ FPS without Nanite/Lumen overhead (UE 5.8 `r.TranslucencyLightingVolume.Dim` compliant); `M_Landscape_Master` generated via `Scripts/Editor/create_landscape_master_material.py` featuring 3 PBR sets (Rocks, Snow, Ice), procedural slope masking (>45° rocks), procedural height masking (Z <= IceLevel ice), and dynamic snow tracks (WorldPosition.XY projected onto RenderTarget with WPO depth indentation & wet roughness); editor shortcut `X` bound to `GenericCommands -> Delete` in `EditorKeyBindings.ini`. All 145 automation tests PASS (0 failed).
 
 - 2026-10-01 Claude: `AOperativeCharacter::bHasCustomStance`, `USquadSubsystem::SyncSquadStance` (use it instead of SetSquadStance for leader-driven stance orders), `UActionBarWidget::HandleSlot3`, turn-based EnemyHitDelay / EnemyAttackDuration / EnemyRetreatDelay.
 
