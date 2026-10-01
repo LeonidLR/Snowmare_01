@@ -14,8 +14,14 @@ $ProjectDir = Split-Path $PSScriptRoot -Parent
 $Project = Join-Path $ProjectDir "CodexTactics.uproject"
 $LogFile = Join-Path $ProjectDir (Join-Path "Saved\Logs" $Log)
 
-& "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $Project $Map -game -nullrhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH `
-    "-ExecCmds=$Command" "-abslog=$LogFile" $Extra | Out-Null
+. (Join-Path $PSScriptRoot "agent_lock.ps1")
+$Owned = Enter-AgentLock "smoke $Command"
+try {
+    & "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $Project $Map -game -nullrhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH `
+        "-ExecCmds=$Command" "-abslog=$LogFile" $Extra | Out-Null
+} finally {
+    if ($Owned) { Exit-AgentLock }
+}
 
 $lines = Select-String -Path $LogFile -Pattern "Smoke|LogCodexTactics: (Error|Warning)|LogNavigation: (Error|Warning)" |
     ForEach-Object { $_.Line -replace '^\[[^\]]*\]\[[^\]]*\]', '' }

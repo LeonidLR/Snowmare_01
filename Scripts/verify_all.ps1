@@ -20,9 +20,14 @@ if (-not $SkipBuild -and (Get-CimInstance Win32_Process -Filter "Name like 'Unre
     exit 2
 }
 
+# The shared build lock for the whole run (build, tests, every smoke); the child scripts inherit it.
+. (Join-Path $PSScriptRoot "agent_lock.ps1")
+$OwnedLock = Enter-AgentLock "verify_all"
+Register-EngineEvent PowerShell.Exiting -Action { if ($OwnedLock) { Exit-AgentLock } } | Out-Null
+
 if (-not $SkipBuild) {
     powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build.ps1") | Select-Object -Last 2
-    if ($LASTEXITCODE -ne 0) { Write-Host "BUILD FAILED" -ForegroundColor Red; exit 1 }
+    if ($LASTEXITCODE -ne 0) { Write-Host "BUILD FAILED" -ForegroundColor Red; if ($OwnedLock) { Exit-AgentLock }; exit 1 }
 }
 
 $TestSummary = powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "test.ps1") | Select-Object -Last 1
@@ -89,7 +94,9 @@ foreach ($Smoke in ($Exclusive + $Retry)) {
 
 if ($Failed.Count -gt 0) {
     Write-Host "FAILED: $($Failed -join ', ')  (details: Saved\Logs\Smoke-<Name>.log, Saved\TestReport)" -ForegroundColor Red
+    if ($OwnedLock) { Exit-AgentLock }
     exit 1
 }
 Write-Host "ALL GREEN" -ForegroundColor Green
+if ($OwnedLock) { Exit-AgentLock }
 exit 0

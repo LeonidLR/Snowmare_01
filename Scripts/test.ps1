@@ -11,14 +11,19 @@ $Project = Join-Path $ProjectDir "CodexTactics.uproject"
 $ReportDir = Join-Path $ProjectDir "Saved\TestReport"
 $LogFile = Join-Path $ProjectDir "Saved\Logs\AutomationTests.log"
 
-& "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $Project `
-    "-ExecCmds=Automation RunTests $Filter" `
-    "-TestExit=Automation Test Queue Empty" `
-    "-ReportExportPath=$ReportDir" `
-    "-abslog=$LogFile" `
-    -unattended -nullrhi -nosplash -nosound -nopause | Out-Null
-
-$code = $LASTEXITCODE
+. (Join-Path $PSScriptRoot "agent_lock.ps1")
+$Owned = Enter-AgentLock "tests $Filter"
+try {
+    & "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $Project `
+        "-ExecCmds=Automation RunTests $Filter" `
+        "-TestExit=Automation Test Queue Empty" `
+        "-ReportExportPath=$ReportDir" `
+        "-abslog=$LogFile" `
+        -unattended -nullrhi -nosplash -nosound -nopause | Out-Null
+    $code = $LASTEXITCODE
+} finally {
+    if ($Owned) { Exit-AgentLock }
+}
 $results = Select-String -Path $LogFile -Pattern "Test Completed\. Result=\{(\w+)\}.*Path=\{([^}]+)\}"
 if (-not $results) {
     Write-Host "No tests matched '$Filter' (engine exit code $code). Log: $LogFile"

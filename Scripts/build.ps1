@@ -1,6 +1,7 @@
 # Builds the CodexTactics editor target (Development, Win64) via UnrealBuildTool.
 # Full UBT output goes to Saved\Logs\Build.log; the console gets the result line,
 # project-code warnings/errors (engine-header deprecation noise excluded), and the log path.
+# Takes the shared build lock (Scripts\agent_lock.ps1) and refuses while this project's Unreal Editor is open.
 # Usage: powershell -ExecutionPolicy Bypass -File Scripts\build.ps1 [-Target CodexTacticsEditor] [-Config Development]
 param(
     [string]$Target = "CodexTacticsEditor",
@@ -14,8 +15,19 @@ $Project = Join-Path $ProjectDir "CodexTactics.uproject"
 $LogFile = Join-Path $ProjectDir "Saved\Logs\Build.log"
 New-Item -ItemType Directory -Force (Split-Path $LogFile) | Out-Null
 
-& "$EngineRoot\Engine\Build\BatchFiles\Build.bat" $Target Win64 $Config "-Project=$Project" -WaitMutex -NoHotReloadFromIDE *> $LogFile
-$code = $LASTEXITCODE
+# Only an editor of this project locks our DLLs (another project's editor may stay open).
+if (Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor.exe'" | Where-Object { $_.CommandLine -like "*CodexTactics.uproject*" }) {
+    Write-Host "Unreal Editor (CodexTactics) is running: close it first (it locks the DLLs)." -ForegroundColor Yellow
+    exit 2
+}
+. (Join-Path $PSScriptRoot "agent_lock.ps1")
+$Owned = Enter-AgentLock "build $Target"
+try {
+    & "$EngineRoot\Engine\Build\BatchFiles\Build.bat" $Target Win64 $Config "-Project=$Project" -WaitMutex -NoHotReloadFromIDE *> $LogFile
+    $code = $LASTEXITCODE
+} finally {
+    if ($Owned) { Exit-AgentLock }
+}
 
 $lines = Get-Content $LogFile
 $issues = $lines | Where-Object { $_ -match "(error|warning)" -and $_ -notmatch "Epic Games\\UE_5\.8\\Engine\\" -and $_ -notmatch "not a preferred version|has not been heavily tested" }

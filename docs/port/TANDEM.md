@@ -1,21 +1,48 @@
-# Tandem: Gemini (architect) + Claude (implementer)
+# Tandem: Claude (code, logic, animation) + Gemini (optimization, shaders)
 
-User decision 2026-09-28: Gemini leads and directs the UE 5.8 port as Lead Systems Architect; Claude executes C++ implementation and automation tests.
+## Roles (user decision 2026-10-01 — replaces the 2026-09-28 architect / implementer split)
+
+| | Claude | Gemini |
+|---|---|---|
+| Focus | Gameplay code and logic, AI, UI, animation setup (AnimBPs, blend spaces, montages), data import, smokes / tests | Performance and optimization, shaders and materials, VFX, rendering / scalability settings, profiling |
+| Owns (writes) | `Source/CodexTactics/**` (gameplay C++; except Gemini's `Private/Debug/Perf*`), `Source/CodexTacticsTests/**`, `Source/CodexTacticsEditor/**`, `Content/Characters/**`, `Content/Data/**`, `Scripts/Editor/*` except the material scripts, `Scripts/*.ps1` | `Shaders/**` (.usf / .ush), `Content/VFX/**` (materials, Niagara), `Scripts/Editor/create_*_material.py`, `Config/DefaultScalability.ini`, rendering cvars in `Config/DefaultEngine.ini` `[/Script/Engine.RendererSettings]`, LOD / Nanite settings, perf smokes (`Source/CodexTactics/Private/Debug/Perf*SmokeCommand.cpp`) and profiling scripts (`Scripts/perf_*.ps1`) |
+| The user's | `Content/Maps/L_MovementTest.umap`, the imported packs (Combat_Dog, RifleAnims, Crawl_MocapAnimPack, Post_Apo_Survivor, monsters, Mannequins, …), `Config/DefaultEditor.ini`, `Config/DefaultInput.ini` — never committed by an agent | |
+
+The user assigns the tasks. A file / asset has one owner; the other agent asks instead of editing it.
+Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes` list (only that line), everything else in it is Claude's; `docs/port/HANDOFF.md` / `TANDEM.md` / `PORT_MATRIX.md` — both append.
 
 ## Protocol
 
-1. **Claim before editing.** Add a row to «In progress» with your name and the files you will touch; remove it when done. Do not edit files claimed by the other agent.
-2. **One builder at a time.** Build / test / smoke / commit only when «In progress» is empty.
-3. **Verification before commit.** `Scripts/build.ps1`, `Scripts/test.ps1`, relevant `Scripts/smoke.ps1 -Command …` must pass. Claude commits verified steps.
-4. **Architect Directives & Questions:** Architectural decisions, formulas and task assignments are dictated by Gemini. Claude implements.
-5. Close Unreal Editor before building or regenerating test maps.
+1. **Cross-boundary changes go through a request.** Need a change in the other agent's area (Gemini: «FindShootTarget costs 0.8 ms
+   per operative, cache it every 0.2 s»; Claude: «need a material for X») → add a row to «Requests» below with the measurement /
+   reason; the owner implements it, verifies it and moves the row to the Log. Small read-only investigation of the other area is fine.
+2. **`.uasset` files cannot be merged.** Claim an asset in «In progress» before editing it (also when editing through a script or
+   the MCP); never save an asset the other agent has claimed. Assets you only read need no claim.
+3. **One build at a time — enforced.** `Scripts/build.ps1`, `test.ps1`, `smoke.ps1` and `verify_all.ps1` take the shared lock
+   `Saved/agent.lock` (`Scripts/agent_lock.ps1`) and wait while the other agent holds it. Set `$env:CODEX_AGENT = "claude"` /
+   `"gemini"` in your shell. Hold it by hand around other engine work (editor Python commandlets, profiling runs):
+   `Scripts/agent_lock.ps1 -Acquire -Purpose "…"` … `-Release`; `-Status` shows who holds it. Builds refuse while the user's
+   CodexTactics editor is open.
+4. **Verify before commit.** `Scripts/verify_all.ps1` must be ALL GREEN (logic smokes + Gemini's perf smokes). Commit only your own
+   files (never the other agent's uncommitted work, never the user's files above); `git pull --rebase` first if the other agent
+   committed. Subject prefixes: Claude `feat|fix|refactor(...)`, Gemini `perf|shader|vfx(...)`.
+5. **Performance guard.** Gemini keeps perf smokes (frame-time budgets of typical scenes) in `verify_all.ps1`, so logic changes
+   cannot regress performance unnoticed and optimizations cannot break behaviour (the logic smokes run too).
+6. **Handoff.** With every commit update `docs/port/HANDOFF.md` (§10 change log), this file's Log, and PORT_MATRIX.md where a row changes.
+7. Godot (`Documents/Codex/godot-test-01`) stays read-only for both. Balance values are tuned in Unreal (`DA_GameBalanceConfig`).
 
 ---
 
 ## In progress
 
-| Agent | Task | Files | Since |
+| Agent | Task | Files / assets | Since |
 |---|---|---|---|
+| Gemini | Scalability configuration & Landscape Master Material with Snow Tracks | Config/DefaultScalability.ini, Scripts/Editor/create_landscape_master_material.py, Content/VFX/Materials/M_Landscape_Master | 2026-10-01 |
+
+## Requests
+
+| From → To | Request (with measurement / reason) | Status |
+|---|---|---|
 
 ## Open questions — Sprint 03 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 

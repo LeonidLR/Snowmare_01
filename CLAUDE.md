@@ -52,6 +52,12 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Filter CodexTactics.G
 
 Pure-logic systems get **parity tests** mirroring the Godot tests (same inputs → same outputs).
 
+## Roles with Gemini (user decision 2026-10-01)
+
+Claude: gameplay code / logic, AI, UI, animation setup, data, tests. Gemini: optimization, shaders / materials, VFX, rendering
+settings, profiling. Ownership table, request flow and the shared build lock (`Scripts/agent_lock.ps1`, `$env:CODEX_AGENT = "claude"`)
+are in `docs/port/TANDEM.md` — read it before editing; claim `.uasset`s there; changes in Gemini's area go through «Requests».
+
 ## Workflow
 
 - Handoff (state, system map, traps, next steps, change log): `docs/port/HANDOFF.md` — read it first and keep it
