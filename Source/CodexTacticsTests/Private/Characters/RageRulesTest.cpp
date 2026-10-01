@@ -1,4 +1,5 @@
 #include "Misc/AutomationTest.h"
+#include "../GodotBalanceFixture.h"
 #include "Characters/RageRules.h"
 #include "Data/GodotBalanceAsset.h"
 
@@ -24,7 +25,7 @@ bool FRageRulesTest::RunTest(const FString&)
 	TestFalse(TEXT("Too few rounds"), RageRules::CanEnterRage(Defaults, 0.7f, 5, 0.5f, 0.8f));
 	TestFalse(TEXT("Roll above the chance"), RageRules::CanEnterRage(Defaults, 0.7f, 10, 0.81f, 0.8f));
 
-	const UGodotBalanceAsset* Config = LoadObject<UGodotBalanceAsset>(nullptr, TEXT("/Game/Data/Balance/DA_GameBalanceConfig.DA_GameBalanceConfig"));
+	const UGodotBalanceAsset* Config = GodotBalanceFixture::MakeGameBalanceConfig();
 	if (!TestNotNull(TEXT("DA_GameBalanceConfig"), Config))
 	{
 		return false;

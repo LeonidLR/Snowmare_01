@@ -1,11 +1,12 @@
 #include "Misc/AutomationTest.h"
+#include "../GodotBalanceFixture.h"
 #include "Characters/ProgressionRules.h"
 #include "Data/GodotBalanceAsset.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 // Godot Scenes/movements/player.gd parity: level thresholds, EXP overflow, level cap, stat point bounds; kill rewards
-// from the imported DA_GameBalanceConfig (enemy_base.gd / enemy_cutter.gd).
+// from the Godot balance fixture (enemy_base.gd / enemy_cutter.gd).
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProgressionRulesTest, "CodexTactics.Characters.Progression.Rules",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -47,7 +48,7 @@ bool FProgressionRulesTest::RunTest(const FString&)
 
 	TestEqual(TEXT("Default hound reward"), ProgressionRules::KillReward(EEnemyArchetype::FrostHound, nullptr), 9);
 	TestEqual(TEXT("Cutter 16"), ProgressionRules::KillReward(EEnemyArchetype::Cutter, nullptr), 16);
-	const UGodotBalanceAsset* Config = LoadObject<UGodotBalanceAsset>(nullptr, TEXT("/Game/Data/Balance/DA_GameBalanceConfig.DA_GameBalanceConfig"));
+	const UGodotBalanceAsset* Config = GodotBalanceFixture::MakeGameBalanceConfig();
 	if (!TestNotNull(TEXT("DA_GameBalanceConfig"), Config))
 	{
 		return false;

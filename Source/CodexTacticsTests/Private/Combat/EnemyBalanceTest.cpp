@@ -1,4 +1,5 @@
 #include "Misc/AutomationTest.h"
+#include "../GodotBalanceFixture.h"
 #include "Characters/EnemyCharacter.h"
 #include "Combat/HealthComponent.h"
 #include "Data/GodotBalanceAsset.h"
@@ -7,14 +8,14 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// Godot enemy_base.gd / enemy_frost_*.gd apply_balance_config parity against the imported DA_GameBalanceConfig.
+// Godot enemy_base.gd / enemy_frost_*.gd apply_balance_config parity against the Godot balance fixture (GodotBalanceFixture.h).
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyBalanceApplyTest, "CodexTactics.Combat.Enemy.BalanceApply",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FEnemyBalanceApplyTest::RunTest(const FString&)
 {
-	const UGodotBalanceAsset* Config = LoadObject<UGodotBalanceAsset>(nullptr, TEXT("/Game/Data/Balance/DA_GameBalanceConfig.DA_GameBalanceConfig"));
+	const UGodotBalanceAsset* Config = GodotBalanceFixture::MakeGameBalanceConfig();
 	if (!TestNotNull(TEXT("DA_GameBalanceConfig"), Config))
 	{
 		return false;

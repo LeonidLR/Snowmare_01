@@ -1,4 +1,5 @@
 #include "Misc/AutomationTest.h"
+#include "../GodotBalanceFixture.h"
 #include "Camera/CameraShakeRules.h"
 #include "Data/GodotBalanceAsset.h"
 
@@ -25,7 +26,7 @@ bool FCameraShakeRulesTest::RunTest(const FString&)
 	TestEqual(TEXT("Never below 0"), CameraShakeRules::Decay(Defaults, 0.1f, 1.f), 0.f);
 	TestEqual(TEXT("Offset scale = amplitude x trauma²"), CameraShakeRules::GetOffsetScale(Defaults, 0.5f), 0.18f * 0.25f, 0.0001f);
 
-	const UGodotBalanceAsset* Config = LoadObject<UGodotBalanceAsset>(nullptr, TEXT("/Game/Data/Balance/DA_GameBalanceConfig.DA_GameBalanceConfig"));
+	const UGodotBalanceAsset* Config = GodotBalanceFixture::MakeGameBalanceConfig();
 	if (!TestNotNull(TEXT("DA_GameBalanceConfig"), Config))
 	{
 		return false;

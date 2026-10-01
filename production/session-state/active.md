@@ -15,7 +15,7 @@ Task: operative one-shot anims done (clips await the user's retarget); next = re
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-2026-09-30 night: 145 automation tests, 56 smokes ALL GREEN (`verify_all.ps1 -SkipBuild`, parallel x3) after the operative one-shot anims.
+2026-10-01 morning: 145 automation tests, 56 smokes ALL GREEN (`verify_all.ps1 -SkipBuild`, parallel x3) after the Unreal-editable balance (UGameBalanceConfig).
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)
