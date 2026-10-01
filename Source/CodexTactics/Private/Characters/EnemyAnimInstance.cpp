@@ -49,10 +49,13 @@ void UEnemyAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		StopSlotAnimation(0.2f, OneShotSlot);
 	}
 	bWasTurnBased = bTurnBased;
-	bIsMoving = Speed > 5.f;
-	bIsRunning = (RunAnimation && Speed > RunSpeedThreshold) || !WalkAnimation;
-	WalkPlayRate = bIsMoving ? FMath::Clamp(Speed / WalkClipSpeed, MinEnemyLocomotionRate, MaxEnemyLocomotionRate) : 1.f;
-	RunPlayRate = bIsMoving ? FMath::Clamp(Speed / RunClipSpeed, MinEnemyLocomotionRate, MaxEnemyLocomotionRate) : 1.f;
+	// Smoothed speed with hysteresis: starts walking above 25 cm/s, stops below 8 — crowd separation nudges and the
+	// braking no longer flicker the idle / walk clips (user report 2026-10-01).
+	SmoothedSpeed = FMath::FInterpTo(SmoothedSpeed, Speed, DeltaSeconds, 8.f);
+	bIsMoving = bIsMoving ? SmoothedSpeed > 8.f : SmoothedSpeed > 25.f;
+	bIsRunning = (RunAnimation && SmoothedSpeed > RunSpeedThreshold * (bIsRunning ? 0.85f : 1.f)) || !WalkAnimation;
+	WalkPlayRate = bIsMoving ? FMath::Clamp(SmoothedSpeed / WalkClipSpeed, MinEnemyLocomotionRate, MaxEnemyLocomotionRate) : 1.f;
+	RunPlayRate = bIsMoving ? FMath::Clamp(SmoothedSpeed / RunClipSpeed, MinEnemyLocomotionRate, MaxEnemyLocomotionRate) : 1.f;
 
 	const UHealthComponent* Health = Enemy->GetHealthComponent();
 	bIsDead = Enemy->IsDying() || (Health && !Health->IsAlive());
@@ -96,7 +99,16 @@ void UEnemyAnimInstance::NotifyHit()
 	bIsHit = true;
 	if (!bIsDead && !bIsJumping)
 	{
-		PlayOneShot(PickClip(HitAnimations, HitVariant), HitPlayRate);
+		// Moving: the upper body flinches, the legs keep running (no sliding full-body hit; TANDEM request 1).
+		UAnimSequenceBase* Clip = PickClip(HitAnimations, HitVariant);
+		if (bUpperBodyHitReactions && bIsMoving && Clip)
+		{
+			PlaySlotAnimationAsDynamicMontage(Clip, UpperBodySlot, 0.1f, 0.2f, HitPlayRate);
+		}
+		else
+		{
+			PlayOneShot(Clip, HitPlayRate);
+		}
 	}
 }
 

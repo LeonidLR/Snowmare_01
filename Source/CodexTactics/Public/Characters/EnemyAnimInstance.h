@@ -105,6 +105,16 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Enemy Clips")
 	FName OneShotSlot = TEXT("DefaultSlot");
 
+	/**
+	 * Slot of the upper-body layer (above the spine / neck, set up by Scripts/Editor/setup_enemy_animation.py): hit
+	 * reactions while moving play there so the legs keep running (TANDEM request 1). Off = full-body hits.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation")
+	FName UpperBodySlot = TEXT("UpperBody");
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation")
+	bool bUpperBodyHitReactions = false;
+
 	/** Seconds bIsAttacking / bIsHit stay true after the event. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Enemy Animation", meta = (ClampMin = "0.05"))
 	float AttackHoldTime = 0.35f;
@@ -133,6 +143,10 @@ public:
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Enemy State")
 	float WalkPlayRate = 1.f;
+
+	/** Speed smoothed for the idle / walk / run choice and the play rates (no flicker on crowd nudges). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Animation")
+	float SmoothedSpeed = 0.f;
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Enemy State")
 	float RunPlayRate = 1.f;

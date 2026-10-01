@@ -129,6 +129,21 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation", meta = (ClampMin = "1"))
 	float SlowBlendSpaceMaxSpeed = 120.f;
 
+	/** Speed of the walk samples of the standing / crouch blend spaces (RifleAnims: 120 cm/s); slower walking slows the clip. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation", meta = (ClampMin = "1"))
+	float WalkSampleSpeed = 120.f;
+
+	/** The legs start walking above / stop below these smoothed speeds, cm/s (dead zone against creeping / restarts). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation", meta = (ClampMin = "0"))
+	float LocomotionStartSpeed = 25.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation", meta = (ClampMin = "0"))
+	float LocomotionStopSpeed = 10.f;
+
+	/** Slowest play rate of a slow walk. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation", meta = (ClampMin = "0.05"))
+	float MinWalkPlayRate = 0.3f;
+
 	/** Top speed axis of the prone blend spaces (the crawl clips' own speed), cm/s; faster crawling raises PronePlayRate. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation", meta = (ClampMin = "1"))
 	float ProneBlendSpaceMaxSpeed = 21.f;
@@ -184,6 +199,9 @@ public:
 	/** True while a stance transition clip plays. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Animation")
 	bool IsPlayingStanceTransition() const;
+
+	/** Seconds left of the stance clip playing (0 when none). */
+	float GetStanceTransitionTimeLeft() const;
 
 	/** Played on UpperBodySlot when a reload starts, stretched to the weapon's reload time. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Animation")
@@ -393,4 +411,8 @@ private:
 	/** Stance seen last update (transitions start on a change); unset until the first update. */
 	TOptional<EOperativeStance> PreviousStance;
 	TWeakObjectPtr<UAnimMontage> StanceTransitionMontage;
+	float StateDeltaSeconds = 0.f;
+	/** Smoothed speed and moving state driving the blend-space axes. */
+	float LocomotionSpeed = 0.f;
+	bool bLocomotionMoving = false;
 };

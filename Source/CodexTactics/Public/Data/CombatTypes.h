@@ -59,7 +59,9 @@ enum class EEnemyArchetype : uint8
 	Brute UMETA(DisplayName = "Brute"),
 	Frostbitten UMETA(DisplayName = "Frostbitten"),
 	Cutter UMETA(DisplayName = "Cutter"),
-	CryoDrone UMETA(DisplayName = "Cryo Drone")
+	CryoDrone UMETA(DisplayName = "Cryo Drone"),
+	/** UE-only scoped-rifle tactician (AMarksmanEnemyCharacter; Gemini spec, TANDEM request 3). */
+	Marksman UMETA(DisplayName = "Marksman")
 };
 
 /**

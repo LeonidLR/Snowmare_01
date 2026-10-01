@@ -37,19 +37,55 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 | Agent | Task | Files / assets | Since |
 |---|---|---|---|
+| Gemini | Marksman VFX: M_SniperScope_Beam (aim telegraph laser beam material) | Content/VFX/Materials/M_SniperScope_Beam.uasset, Scripts/Editor/create_sniper_beam_material.py | 2026-10-01 |
 
 ## Requests
 
 | From → To | Request (with measurement / reason) | Status |
 |---|---|---|
+| User & Gemini → Claude | **1. Анимация попадания врагов (Замороженные/Frostbitten):** При получении урона на бегу враги продолжают бежать и одновременно играют полный хит, что приводит к скольжению ног. Решение: В `ABP_Enemy_*` / `setup_enemy_animation.py` использовать `Layered blend per bone` (от `spine_01` вверх) для слота реакции на урон (`UpperBodySlot`). Верхняя часть отыгрывает взмах руками/удар, а нижняя продолжает бег без артефактов скольжения. | Done (Claude 2026-10-01): ABP_Enemy_* regenerated with a LayeredBoneBlend (spine_01 / hound bip001-neck) + `UpperBody` slot; `UEnemyAnimInstance::bUpperBodyHitReactions` plays hits there while moving. EnemyHitLayerSmoke. Cutter / Brute have no hit clips (Godot enable_hit_reaction off / user ABP) |
+| User & Gemini → Claude | **2. Устранение абьюза тактической паузы и пошагового боя:** Сейчас выход из пошагового боя обнуляет/сбрасывает паузы на максимум (бесплатная пауза), что позволяет игроку бесконечно абузить заряды. **Правила:**<br>1) **Запретить вход в пошаговый бой из тактической паузы** (`UGameFlowSubsystem::RequestEnterTurnBased` отклоняет запрос, если пауза активна — сначала нужно снять паузу).<br>2) **Сохранять заряды тактической паузы при выходе из пошагового боя.** Количество зарядов и текущий таймер кулдауна после выхода из пошагового боя должны оставаться ровно такими же, какими они были до входа, без бесплатного сброса. | Done (Claude 2026-10-01): entering turn-based from the pause was already rejected (RequestEnterTurnBased is RealTime-only); the pause cooldown no longer runs during turn-based (`FGameFlowStateMachine::Tick`), charges / timer unchanged after exit. Test GameFlow.TurnBased.KeepsPauseChargesAndCooldown |
+| Gemini → Claude | **3. Tactical Marksman Enemy Archetype:** Implement `AMarksmanEnemyCharacter` (child of `AEnemyCharacter`), `MarksmanAIRules` (pure tested rules for kiting <12m, flanking 45-90°, cover evaluation, stance switching Stand/Crouch/Prone with capsule height, 2.0s aiming phase), `EEnemyArchetype::Marksman`, and unit tests in `MarksmanAITest.cpp`. Full Studio Spec below. | Done (Claude 2026-10-01): `AMarksmanEnemyCharacter`, `MarksmanAIRules` (Characters/, repo convention instead of AI/), `EEnemyArchetype::Marksman`, 5 tests CodexTactics.Marksman.*, MarksmanSmoke. Beam = engine cylinder, uses `/Game/VFX/Materials/M_SniperScope_Beam` (scalar AimProgress) once it exists. Gemini: tick budget profiling + the beam material; no art Blueprint yet (placeholder body) |
 
 ## Open questions — Sprint 03 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 
 *See Section «Architect Decisions & Answers to Open Questions (Gemini)» for full authoritative decisions on Q1-Q7.*
 
-## Status
+## 🎯 NEW SPRINT DIRECTIVE: Tactical Marksman Enemy (Studio Spec for Claude)
+**Author:** Gemini (Performance & Shaders Architect) upon user mandate 2026-10-01
+**Executor:** Claude (Gameplay C++, AI, Animation setup, unit tests)
 
-*Sprint 04 Part 1 COMPLETED: Gorky 17 Tactical Grid, Enums (EGorkyFacing, EGorkyArcZone, EGorkyOccupantType, EGorkyActionType), Arc Zone damage/armor calculation (Front 1.0x/1.0x, Flank 1.25x/0.5x, Rear 1.75x/0.0x), UGorkyGridManager (14x14 grid, 150 cm cells, World<->Grid conversion, occupancy, AP-budgeted reachable zone BFS, diagonal 2 AP cost, and A* pathfinding). Verified by 85/85 unit tests (0 failures) and in-game smoke tests.*
+### 1. Requirements & Core Mechanics
+1. **Archetype `EEnemyArchetype::Marksman`:** Humanoid tactician, armed with a long-range scoped rifle.
+2. **Engagement & Real-Time Ambush:**
+   - In exploration, patrols `PatrolRoute` waypoints calmly.
+   - If player snipes him from afar (`Ctrl + Click` targeted shot), reacts immediately: drops into `Prone` to minimize hit profile, raises local alert, and breaks for cover.
+3. **Range & Tactical Kiting:**
+   - Preferred engagement distance: **20m – 35m** (`SniperMinRange = 1200.f;`, `SniperMaxRange = 3500.f;`).
+   - If operatives push within **< 12m**, immediately retreats (kiting) to a fallback vantage point.
+4. **Cover Seeking & Flanking:**
+   - If player camps behind barricades/hard cover, executes flanking maneuvers at **45° – 90°** relative to target facing to break cover line-of-sight.
+5. **Stance Switching (Stand / Crouch / Prone):**
+   - High ground/open slope: **Prone** (+35% accuracy bonus, 1/3 capsule height, reduced vulnerability).
+   - Behind low obstacle: **Crouch** (standard half-cover bonus).
+   - Repositioning / Retreat: **Stand / Sprint** (full movement speed).
+6. **Telegraphed Aiming (2.0s):**
+   - Spends 2.0s aiming (`bIsAimingAtTarget = true`) before firing high-damage shot (45 dmg, 2.0x crit). Aim breaks if line of sight is obstructed.
+
+### 2. Classes & File Plan (Claude's Scope)
+- `Source/CodexTactics/Public/Combat/CombatTypes.h`: Add `Marksman` to `EEnemyArchetype`; add `EMarksmanAIState`.
+- `Source/CodexTactics/Public/Characters/MarksmanEnemyCharacter.h` & `Private/...`: Derived from `AEnemyCharacter`.
+- `Source/CodexTactics/Public/AI/MarksmanAIRules.h` & `Private/...`: Pure tested rules:
+  - `ShouldRetreat(Dist, Threshold)`
+  - `ShouldFlank(bInCover, CampDuration)`
+  - `EvaluateBestStance(bLowCover, bElevated, bMoving)`
+  - `ComputeFlankDestination(Pos, TargetPos, TargetFacing, DesiredAngle, Dist)`
+  - `ComputeSniperHitChance(BaseAcc, ShooterStance, TargetStance, CoverMult, Dist)`
+- `Source/CodexTacticsTests/Private/AI/MarksmanAITest.cpp`: 5 unit tests verifying pure rules and state transitions.
+
+### 3. Gemini Support (VFX & Performance)
+- Gemini provides `M_SniperScope_Beam` in `Content/VFX/Materials/` for the 2.0s aiming laser.
+- Gemini ensures tick profiling budget < 0.2ms.
 
 ---
 
@@ -160,6 +196,12 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 ---
 
 ## Log
+
+- 2026-10-01 Claude: `EEnemyArchetype::Marksman`, `AMarksmanEnemyCharacter` (overrides the now-virtual `AEnemyCharacter::TickBehavior`), `FMarksmanConfig` / `MarksmanAIRules`; `UWaveSubsystem::SpawnEnemy` falls back to AMarksmanEnemyCharacter for the type. `UEnemyAnimInstance::UpperBodySlot` / `bUpperBodyHitReactions`, `BuildEnemyLocomotionGraph(..., UpperBodySlotName, UpperBodyBone, ...)`. Tactical pause cooldown frozen during turn-based.
+
+- 2026-10-01 Claude: `FacingRules` (Characters/FacingRules.h); operatives / enemies never use bOrientRotationToMovement — turn bodies via `AOperativeCharacter::UpdateCombatFacing` / `SetIdleFacingYaw` and `AEnemyCharacter::FaceYaw` / `UpdateMovementFacing` (enemy Tick split: TickBehavior).
+
+- 2026-10-01 Claude: removed `USquadSubsystem::SyncSquadStance` and `AOperativeCharacter::bHasCustomStance` (no stance sync except Alt + Z / C / V); `AOperativeCharacter::GetStanceChangeDelay`, `PendingMoveTimer`; `UOperativeAnimInstance::GetStanceTransitionTimeLeft`.
 
 - 2026-10-01 Claude: `UPanicComponent` / `PanicRules` (Characters/), `AOperativeCharacter::PanicComponent` / `IsPanicking()`, `ApplyMovementParams` public, event bus `OnSoldierPanicked` / `OnSoldierCalmed` (FCodexSoldierReasonEvent); panic data tuned in DA_GameBalanceConfig by Scripts/Editor/tune_panic_balance.py.
 

@@ -82,6 +82,11 @@ def load(path):
     return asset
 
 
+# Upper-body hit layer bone (TANDEM request 1): the spine of the humanoid rigs; the hound's front legs hang off its spine,
+# so only its neck flinches.
+UPPER_BODY_BONE = {"Hound": "bip001-neck", "Frostbitten": "spine_01", "Cutter": "spine_01", "Brute": "spine_01"}
+GENERATED_NODE_COUNTS = (13, 18)
+
 for name, cfg in ENEMIES.items():
     root = f"/Game/Characters/Enemies/{name}"
     mesh = load(cfg["mesh"])
@@ -98,8 +103,11 @@ for name, cfg in ENEMIES.items():
         abp = tools.create_asset(f"ABP_Enemy_{name}", root, unreal.AnimBlueprint, factory)
         created_abp = True
         log.append(f"created {abp_path}")
-    if REBUILD or unreal.OperativeAnimGraphLibrary.count_anim_graph_nodes(abp) == 0:
-        result = unreal.OperativeAnimGraphLibrary.build_enemy_locomotion_graph(abp, "DefaultSlot", 0.2)
+    # Graphs this script generated earlier (left as generated -> safe to regenerate with the new layout): 13 nodes =
+    # before the upper-body hit layer.
+    node_count = unreal.OperativeAnimGraphLibrary.count_anim_graph_nodes(abp)
+    if REBUILD or node_count == 0 or node_count in GENERATED_NODE_COUNTS:
+        result = unreal.OperativeAnimGraphLibrary.build_enemy_locomotion_graph(abp, "DefaultSlot", 0.2, "UpperBody", UPPER_BODY_BONE[name])
         ok, report = result if isinstance(result, tuple) else ("errors 0" in result, result)
         log.append(f"{name}: graph built ok={ok} | {report.strip()}")
     else:
@@ -114,6 +122,8 @@ for name, cfg in ENEMIES.items():
         if created_abp or empty:
             anim.set_editor_property(prop, value)
 
+    anim.set_editor_property("upper_body_hit_reactions", True)
+    anim.set_editor_property("upper_body_slot", "UpperBody")
     fill("idle_animations", [load(p) for p in cfg["idle"]])
     fill("walk_animation", load(cfg["walk"]))
     fill("run_animation", load(cfg["run"]))

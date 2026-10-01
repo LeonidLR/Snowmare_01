@@ -3,7 +3,8 @@
 // The squad must be spawned from BP_Operative. The leader goes crouch -> prone -> standing: the capsule takes the
 // stance height (Godot 1.3 / 0.7 / 2.0 m ratios) while the feet stay on the ground. With prone clips set in
 // ABP_Operative, crouch -> prone and prone -> standing play their transition clips and a prone shot plays the
-// full-body prone fire clip.
+// full-body prone fire clip. Then (user decision 2026-10-01): a crawling operative told to crouch stops first and
+// rises in place; a sprint order (double click) to a prone operative stands him up in place, then he runs.
 
 #include "CoreMinimal.h"
 
@@ -30,6 +31,8 @@ namespace StanceSmoke
 		int32 Second = 0;
 		float StartFeetZ = 0.f;
 		bool bOk = true;
+		FVector CrawlStart = FVector::ZeroVector;
+		bool bRiseOk = false;
 		/** Pelvis height range while prone and firing / aiming (a jump to a standing pose shows as > ProneMaxPelvis). */
 		float FireMinPelvis = TNumericLimits<float>::Max();
 		float FireMaxPelvis = 0.f;
@@ -160,6 +163,52 @@ namespace StanceSmoke
 			return false;
 		}
 		case 9:
+			return false;
+		case 10:
+			Check(State, Leader, EOperativeStance::Standing);
+			Leader->SetStance(EOperativeStance::Prone);
+			return false;
+		case 12:
+			// Crawl 6 m.
+			State.CrawlStart = Leader->GetActorLocation();
+			Leader->OrderMoveTo(Leader->GetActorLocation() + Leader->GetActorForwardVector() * 600.f, false);
+			return false;
+		case 13:
+		{
+			const bool bCrawling = Leader->GetStance() == EOperativeStance::Prone && FVector::Dist2D(Leader->GetActorLocation(), State.CrawlStart) > 20.f;
+			Leader->SetStance(EOperativeStance::Crouching);
+			const bool bStopped = Leader->GetVelocity().Size2D() < 1.f && !Leader->IsMoving();
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke crawl -> crouch: crawling %d, stopped at once %d -> %s"), bCrawling ? 1 : 0, bStopped ? 1 : 0,
+				bCrawling && bStopped ? TEXT("ok") : TEXT("BAD"));
+			State.bOk &= bCrawling && bStopped;
+			return false;
+		}
+		case 14:
+			Leader->SetStance(EOperativeStance::Prone);
+			return false;
+		case 16:
+			// A sprint order from prone: up first (in place), then the run.
+			State.CrawlStart = Leader->GetActorLocation();
+			Leader->OrderMoveTo(Leader->GetActorLocation() - Leader->GetActorForwardVector() * 900.f, true);
+			State.bRiseOk = Leader->GetStance() == EOperativeStance::Standing && Leader->GetVelocity().Size2D() < 1.f;
+			return false;
+		case 17:
+			// 1 s in: still getting up (the clip is ~1.85 s), not moving yet.
+			State.bRiseOk &= FVector::Dist2D(Leader->GetActorLocation(), State.CrawlStart) < 30.f;
+			return false;
+		case 19:
+		{
+			const float Moved = FVector::Dist2D(Leader->GetActorLocation(), State.CrawlStart);
+			const bool bRunning = Leader->IsSprinting() && Moved > 150.f;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke prone sprint order: stood up in place %d, then running %d (moved %.0f cm) -> %s"),
+				State.bRiseOk ? 1 : 0, bRunning ? 1 : 0, Moved, State.bRiseOk && bRunning ? TEXT("ok") : TEXT("BAD"));
+			State.bOk &= State.bRiseOk && bRunning;
+			Leader->StopOperative();
+			return false;
+		}
+		case 11:
+		case 15:
+		case 18:
 			return false;
 		default:
 			Check(State, Leader, EOperativeStance::Standing);

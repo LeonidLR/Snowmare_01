@@ -15,8 +15,8 @@ namespace
 {
 	/** Height above the actor origin for the slot visibility trace, cm (Godot: 0.6 m). */
 	constexpr float SlotTraceHeight = 60.f;
-	/** Yaw interpolation speed for parked followers turning with the leader. */
-	constexpr float ParkedAlignSpeed = 4.f;
+	/** A parked follower stays parked until its slot is this much farther than StopRadius, cm. */
+	constexpr float ParkedRestartMargin = 40.f;
 }
 
 bool USquadSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -187,22 +187,6 @@ void USquadSubsystem::SetSquadStance(EOperativeStance Stance)
 	for (AOperativeCharacter* Member : GetMembers())
 	{
 		Member->SetStance(Stance);
-	}
-}
-
-void USquadSubsystem::SyncSquadStance(EOperativeStance Stance)
-{
-	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	if (bIsSoloMode || (Flow && Flow->GetPhase() == ECodexGamePhase::Preparation))
-	{
-		return;
-	}
-	for (AOperativeCharacter* Member : GetMembers())
-	{
-		if (Member != GetLeader() && !Member->bGuarding && !Member->bHasCustomStance)
-		{
-			Member->SetStance(Stance);
-		}
 	}
 }
 
@@ -541,13 +525,8 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		return;
 	}
 
-	// Followers copy the moving leader's stance and sprint (Godot player.gd can_sync_stance: not guarding, no stance of
-	// their own, not in the preparation).
-	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	if (bLeaderMoving && !Operative->bGuarding && !Operative->bHasCustomStance && !(Flow && Flow->GetPhase() == ECodexGamePhase::Preparation))
-	{
-		Operative->SetStance(LeaderRef.GetStance());
-	}
+	// Followers copy the moving leader's sprint. Deviation (user decision 2026-10-01): every operative keeps the stance
+	// he was given — no copy of the leader's stance (Godot can_sync_stance); only Alt + Z / C / V sets the whole squad.
 	Operative->SetSprinting(LeaderRef.IsSprinting());
 
 	Follower.RepathTimeRemaining -= DeltaTime;
@@ -575,7 +554,13 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	SlotLocation.Z = Operative->GetActorLocation().Z;
 
 	const float Distance = FVector::Dist2D(Operative->GetActorLocation(), SlotLocation);
-	const float Speed = SquadFormation::ComputeFollowerSpeed(FormationConfig, Operative->GetMaxSpeed(), Distance, Follower.Slot, TimeSeconds, bLeaderMoving);
+	float Speed = SquadFormation::ComputeFollowerSpeed(FormationConfig, Operative->GetMaxSpeed(), Distance, Follower.Slot, TimeSeconds, bLeaderMoving);
+	// A parked follower restarts only once the slot (it wanders) is clearly away: stopping and restarting every repath
+	// made the legs tremble between the idle and the walk (user report 2026-10-01).
+	if (Follower.bParked && Distance < FormationConfig.StopRadius + ParkedRestartMargin)
+	{
+		Speed = 0.f;
+	}
 
 	if (Speed <= 0.f)
 	{
@@ -584,9 +569,9 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 			Operative->StopOperative();
 			Follower.bParked = true;
 		}
-		// Parked followers face where the leader faces (Godot _align_rotation_with_leader).
-		const FRotator Target(0.f, LeaderRef.GetActorRotation().Yaw, 0.f);
-		Operative->SetActorRotation(FMath::RInterpTo(Operative->GetActorRotation(), Target, FormationConfig.RepathInterval, ParkedAlignSpeed));
+		// Parked followers face where the leader faces (Godot _align_rotation_with_leader), turned every frame by the
+		// operative's facing (FacingRules).
+		Operative->SetIdleFacingYaw(LeaderRef.GetActorRotation().Yaw);
 		return;
 	}
 

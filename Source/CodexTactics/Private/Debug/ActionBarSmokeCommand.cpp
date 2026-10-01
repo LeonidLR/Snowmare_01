@@ -1,6 +1,7 @@
 // Dev-only console command for a headless action bar check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.ActionBarSmoke
-// 1. the stance slot cycles Standing -> Crouching -> Prone -> Standing for the whole squad; 2. «ПЕР» toggles the
+// 1. the stance slot cycles Standing -> Crouching -> Prone -> Standing for the selected operative only (user decision
+// 2026-10-01), Alt + Z / C / V (SetEntireSquadStance) sets the whole squad; 2. «ПЕР» toggles the
 // object-pick mode on and off; 3. squad slot 2 makes the engineer the leader; 4. in the preparation each operative
 // keeps a stance of his own (Godot has_custom_stance: medic prone, engineer crouched, commander standing), the squad
 // stance sync leaves them alone.
@@ -53,12 +54,20 @@ namespace ActionBarSmoke
 			{
 				Leader->StopOperative();
 				PC->CycleLeaderStance();
-				Check(Leader->GetStance() == EOperativeStance::Crouching && Squad->GetMembers()[2]->GetStance() == EOperativeStance::Crouching,
-					TEXT("stance slot: squad crouches"));
+				Check(Leader->GetStance() == EOperativeStance::Crouching && Squad->GetMembers()[2]->GetStance() == EOperativeStance::Standing,
+					TEXT("stance slot: only the selected operative crouches"));
 				PC->CycleLeaderStance();
 				Check(Leader->GetStance() == EOperativeStance::Prone, TEXT("stance slot: prone"));
 				PC->CycleLeaderStance();
 				Check(Leader->GetStance() == EOperativeStance::Standing, TEXT("stance slot: back to standing"));
+				PC->SetEntireSquadStance(EOperativeStance::Crouching);
+				bool bAllCrouched = true;
+				for (const AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					bAllCrouched &= Member->GetStance() == EOperativeStance::Crouching;
+				}
+				Check(bAllCrouched, TEXT("Alt + C: the whole squad crouches"));
+				PC->SetEntireSquadStance(EOperativeStance::Standing);
 				PC->ToggleRelocateSelectMode();
 				Check(PC->IsRelocateSelectMode(), TEXT("relocate slot: pick mode on"));
 				PC->ToggleRelocateSelectMode();
@@ -82,9 +91,8 @@ namespace ActionBarSmoke
 				PC->SelectSquadMember(1);
 				PC->CycleLeaderStance();
 				PC->SelectSquadMember(0);
-				Squad->SyncSquadStance(EOperativeStance::Standing);
 				Check(Members[0]->GetStance() == EOperativeStance::Standing && Members[1]->GetStance() == EOperativeStance::Crouching
-					&& Members[2]->GetStance() == EOperativeStance::Prone && Members[2]->bHasCustomStance,
+					&& Members[2]->GetStance() == EOperativeStance::Prone,
 					*FString::Printf(TEXT("preparation: own stances kept (commander %d, engineer %d, medic %d)"), static_cast<int32>(Members[0]->GetStance()),
 						static_cast<int32>(Members[1]->GetStance()), static_cast<int32>(Members[2]->GetStance())));
 			}

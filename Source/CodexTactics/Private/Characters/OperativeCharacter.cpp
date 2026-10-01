@@ -19,6 +19,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Characters/FacingRules.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -55,7 +56,8 @@ AOperativeCharacter::AOperativeCharacter()
 	bUseControllerRotationYaw = false;
 
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
-	Movement->bOrientRotationToMovement = true;
+	// The body is turned by UpdateCombatFacing (Godot lerp_angle), not by the movement component.
+	Movement->bOrientRotationToMovement = false;
 	Movement->bUseControllerDesiredRotation = false;
 	Movement->GetNavAgentPropertiesRef().bCanCrouch = true;
 	Movement->GetNavAgentPropertiesRef().bCanJump = false;
@@ -130,6 +132,8 @@ void AOperativeCharacter::OnConstruction(const FTransform& Transform)
 void AOperativeCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	// Blueprints made before the switch may still carry the engine's orient-to-movement: the facing code turns the body.
+	GetCharacterMovement()->bOrientRotationToMovement = false;
 
 	if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
 	{
@@ -287,6 +291,34 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ПАНИКЕ! НЕ ПОДЧИНЯЕТСЯ!"), FLinearColor(1.f, 0.3f, 0.3f));
 		return EOperativeOrderResult::Refused;
 	}
+	// User decision 2026-10-01: a sprint order (double click) stands a prone operative up — he rises in place, then runs;
+	// any move ordered while he is getting up starts once he is up.
+	UOperativeAnimInstance* StanceAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	float RiseDelay = 0.f;
+	if (bSprint && Stance == EOperativeStance::Prone && !bCarrying
+		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded()))
+	{
+		RiseDelay = GetStanceChangeDelay(EOperativeStance::Prone, EOperativeStance::Standing);
+		SetStance(EOperativeStance::Standing);
+	}
+	else if (StanceAnim && StanceAnim->IsPlayingStanceTransition() && !bPendingMoveReplay)
+	{
+		RiseDelay = StanceAnim->GetStanceTransitionTimeLeft();
+	}
+	if (RiseDelay > 0.05f && GetWorld())
+	{
+		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
+		GetWorld()->GetTimerManager().SetTimer(PendingMoveTimer, FTimerDelegate::CreateLambda([WeakThis, Destination, bSprint]()
+		{
+			if (AOperativeCharacter* Self = WeakThis.Get())
+			{
+				TGuardValue<bool> Replay(Self->bPendingMoveReplay, true);
+				Self->OrderMoveTo(Destination, bSprint);
+			}
+		}), RiseDelay, false);
+		bHasMoveOrder = true;
+		return EOperativeOrderResult::Accepted;
+	}
 	if (bSprint && CanSprint())
 	{
 		// A sprint order stands a crouching operative up (Godot set_target).
@@ -320,6 +352,7 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 
 EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& Destination)
 {
+	ClearIdleFacing();
 	AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
 	if (!AIController)
 	{
@@ -346,7 +379,25 @@ void AOperativeCharacter::StopOperative()
 	GetCharacterMovement()->StopMovementImmediately();
 	bHasMoveOrder = false;
 	bSprinting = false;
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(PendingMoveTimer);
+	}
 	ApplyMovementParams();
+}
+
+float AOperativeCharacter::GetStanceChangeDelay(EOperativeStance From, EOperativeStance To) const
+{
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	if (!Anim || From == To)
+	{
+		return 0.f;
+	}
+	const UAnimSequenceBase* Clip = From == EOperativeStance::Prone
+		? (To == EOperativeStance::Crouching ? Anim->ProneToCrouchAnimation.Get() : Anim->ProneToStandAnimation.Get())
+		: To == EOperativeStance::Prone ? (From == EOperativeStance::Crouching ? Anim->CrouchToProneAnimation.Get() : Anim->StandToProneAnimation.Get())
+		: To == EOperativeStance::Crouching ? Anim->StandToCrouchAnimation.Get() : Anim->CrouchToStandAnimation.Get();
+	return Clip ? FMath::Max(0.f, Clip->GetPlayLength() / FMath::Max(Anim->StanceTransitionPlayRate, 0.1f) - Anim->StanceTransitionBlendTime) : 0.f;
 }
 
 void AOperativeCharacter::SetStance(EOperativeStance NewStance)
@@ -360,6 +411,12 @@ void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("%s: frostbitten, cannot leave prone"), *DisplayName.ToString());
 		return;
+	}
+	// User decision 2026-10-01: getting up from prone needs a full stop — a crawling operative stops, then rises in place.
+	if (Stance == EOperativeStance::Prone && NewStance != EOperativeStance::Prone
+		&& (bHasMoveOrder || GetVelocity().SizeSquared2D() > 100.f))
+	{
+		StopOperative();
 	}
 	const EOperativeStance OldStance = Stance;
 	Stance = NewStance;
@@ -1706,9 +1763,18 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		const float Yaw = (Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw - BarrelYawOffset;
 		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Yaw, 0.f), DeltaTime, 12.f));
 	}
-	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	// Godot _face_movement_target / _safe_look_at: otherwise the body turns to the (smoothed) movement above 0.35 m/s
+	// with lerp_angle(turn_speed of the stance) and holds still below it — no trembling while braking at the goal.
+	SmoothedVelocity = FacingRules::SmoothVelocity(SmoothedVelocity, GetVelocity(), DeltaTime);
+	const float TurnSpeed = OperativeMovementRules::GetTurnRate(MovementConfig, Stance) / 57.2958f; // stored as deg/s, Godot rad/s
+	if (!bFacingCombatTarget && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f)
 	{
-		Movement->bOrientRotationToMovement = !bFacingCombatTarget;
+		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, SmoothedVelocity.Rotation().Yaw, TurnSpeed, DeltaTime), 0.f));
+	}
+	else if (!bFacingCombatTarget && bHasIdleFacing && GetVelocity().SizeSquared2D() < 10.f * 10.f)
+	{
+		// Every frame (it used to step only with the formation repath, every 0.2 s, and looked jerky).
+		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, IdleFacingYaw, TurnSpeed, DeltaTime), 0.f));
 	}
 
 	// Barrel vs body yaw in the current aim pose (the rifle is held across the chest); 0 when not aiming.

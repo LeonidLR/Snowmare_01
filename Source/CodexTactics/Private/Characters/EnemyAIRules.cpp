@@ -34,6 +34,8 @@ FElementalAffinities EnemyAIRules::GetAffinities(EEnemyArchetype Archetype)
 	case EEnemyArchetype::Frostbitten: A.Kinetic = 1.f; A.Melee = 1.2f; A.Fire = 1.8f; A.Cryo = 0.f; A.Energy = 1.f; A.Explosive = 1.3f; break;
 	case EEnemyArchetype::Cutter: A.Kinetic = 1.f; A.Melee = 1.1f; A.Fire = 1.4f; A.Cryo = 0.2f; A.Energy = 1.5f; A.Explosive = 1.3f; break;
 	case EEnemyArchetype::CryoDrone: A.Kinetic = 1.25f; A.Melee = 0.5f; A.Fire = 2.f; A.Cryo = 0.f; A.Energy = 1.2f; A.Explosive = 1.5f; break;
+	// UE-only Marksman (no Godot reference): a humanoid in winter gear, weak to fire and melee up close.
+	case EEnemyArchetype::Marksman: A.Kinetic = 1.f; A.Melee = 1.3f; A.Fire = 1.6f; A.Cryo = 0.3f; A.Energy = 1.2f; A.Explosive = 1.3f; break;
 	default: break;
 	}
 	return A;
@@ -46,7 +48,8 @@ float EnemyAIRules::GetBaseArmor(EEnemyArchetype Archetype)
 	case EEnemyArchetype::Spitter: return 0.4f;
 	case EEnemyArchetype::Brute: return 0.75f;
 	case EEnemyArchetype::Frostbitten:
-	case EEnemyArchetype::Cutter: return 0.15f;
+	case EEnemyArchetype::Cutter:
+	case EEnemyArchetype::Marksman: return 0.15f;
 	case EEnemyArchetype::CryoDrone: return 0.05f;
 	default: return 0.1f;
 	}

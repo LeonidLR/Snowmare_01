@@ -1,4 +1,5 @@
 #include "Characters/EnemyCharacter.h"
+#include "Characters/FacingRules.h"
 #include "CodexTactics.h"
 #include "UI/OverheadLabel.h"
 #include "Characters/EnemyAIController.h"
@@ -39,7 +40,8 @@ AEnemyCharacter::AEnemyCharacter()
 	bUseControllerRotationYaw = false;
 
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
-	Movement->bOrientRotationToMovement = true;
+	// The body is turned by UpdateMovementFacing (Godot lerp_angle), not by the movement component.
+	Movement->bOrientRotationToMovement = false;
 	Movement->bUseControllerDesiredRotation = false;
 	Movement->MaxWalkSpeed = 300.f;
 
@@ -61,6 +63,8 @@ AEnemyCharacter::AEnemyCharacter()
 void AEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	// Blueprints made before the switch may still carry the engine's orient-to-movement: the facing code turns the body.
+	GetCharacterMovement()->bOrientRotationToMovement = false;
 
 	Tags.AddUnique(FName(TEXT("Enemy")));
 
@@ -163,6 +167,23 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		TintColor = FLinearColor(0.15f, 0.35f, 0.65f);
 		MeshScale = 1.4f;
 		Capsule = FVector2D(60.f, 120.f);
+		break;
+
+	case EEnemyArchetype::Marksman:
+		// UE-only archetype (TANDEM request 3): the shot itself is tuned in AMarksmanEnemyCharacter::MarksmanConfig.
+		EnemyDisplayName = TEXT("Снайпер");
+		HealthComponent->SetMaxHealth(80.0f);
+		HealthComponent->SetArmorTier(EArmorTier::Medium);
+		GetCharacterMovement()->MaxWalkSpeed = 320.0f;
+		AttackDamage = 45.0f;
+		AttackRange = 3500.0f;
+		AttackCooldown = 2.5f;
+		CritChance = 0.25f;
+		CritMultiplier = 2.0f;
+		bFearsFire = false;
+		TintColor = FLinearColor(0.35f, 0.4f, 0.25f);
+		MeshScale = 1.0f;
+		Capsule = FVector2D(40.f, 90.f);
 		break;
 
 	case EEnemyArchetype::Frostbitten:
@@ -294,7 +315,29 @@ void AEnemyCharacter::ApplyBalance(const UGodotBalanceAsset& Config)
 void AEnemyCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	bFacedThisTick = false;
+	TickBehavior(DeltaTime);
+	UpdateMovementFacing(DeltaTime);
+}
 
+void AEnemyCharacter::FaceYaw(float Yaw, float DeltaTime, float InterpSpeed)
+{
+	SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Yaw, 0.f), DeltaTime, InterpSpeed));
+	bFacedThisTick = true;
+}
+
+void AEnemyCharacter::UpdateMovementFacing(float DeltaTime)
+{
+	SmoothedVelocity = FacingRules::SmoothVelocity(SmoothedVelocity, GetVelocity(), DeltaTime);
+	if (bFacedThisTick || bIsDying || IsJumpAttacking() || SmoothedVelocity.SizeSquared2D() < 20.f * 20.f)
+	{
+		return;
+	}
+	SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, SmoothedVelocity.Rotation().Yaw, TurnSpeed, DeltaTime), 0.f));
+}
+
+void AEnemyCharacter::TickBehavior(float DeltaTime)
+{
 	if (bIsDying || !HealthComponent || !HealthComponent->IsAlive())
 	{
 		return;
@@ -337,8 +380,7 @@ void AEnemyCharacter::Tick(float DeltaTime)
 			const FVector ToTarget = LockTarget->GetActorLocation() - GetActorLocation();
 			if (!ToTarget.IsNearlyZero(1.f))
 			{
-				const FRotator Facing(0.f, ToTarget.Rotation().Yaw, 0.f);
-				SetActorRotation(FMath::RInterpTo(GetActorRotation(), Facing, DeltaTime, 10.f));
+				FaceYaw(ToTarget.Rotation().Yaw, DeltaTime, 10.f);
 			}
 		}
 		return;
@@ -389,8 +431,7 @@ void AEnemyCharacter::Tick(float DeltaTime)
 
 	auto Face = [this, DeltaTime](const AActor* Actor)
 	{
-		FRotator LookRot = (Actor->GetActorLocation() - GetActorLocation()).Rotation();
-		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, LookRot.Yaw, 0.f), DeltaTime, 10.0f));
+		FaceYaw((Actor->GetActorLocation() - GetActorLocation()).Rotation().Yaw, DeltaTime, 10.f);
 	};
 
 	// Godot enemy_cutter.gd _process_enemy_behavior: a pounce at 3.5-9 m (at most 2.5 m of height difference).
@@ -773,8 +814,7 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 		Line = EnemyAIRules::JudgeSpitterLine(Kind, Target->GetStance(), AIConfig.CrouchCoverReduction);
 	}
 	const float Distance = FVector::Dist(Feet, GodotPosition(Target));
-	FRotator LookRot = (Target->GetActorLocation() - GetActorLocation()).Rotation();
-	SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, LookRot.Yaw, 0.f), DeltaTime, 8.0f));
+	FaceYaw((Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw, DeltaTime, 8.f);
 	switch (EnemyAIRules::SpitterMove(Line.bHasLos, Distance, AIConfig.SpitterPreferredRange))
 	{
 	case ESpitterMove::Approach:
@@ -1028,8 +1068,7 @@ void AEnemyCharacter::TickJumpAttack(float DeltaTime)
 	{
 		if (Target)
 		{
-			const FRotator Look = (Target->GetActorLocation() - GetActorLocation()).Rotation();
-			SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Look.Yaw, 0.f), DeltaTime, 24.f));
+			FaceYaw((Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw, DeltaTime, 24.f);
 		}
 		if (JumpPhaseTimer < 0.4f / JumpAttackSpeed) // Godot JUMP_ORIG_WINDUP_TIME
 		{

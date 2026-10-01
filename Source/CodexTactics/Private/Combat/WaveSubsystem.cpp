@@ -4,6 +4,7 @@
 #include "UI/FloatingTextSubsystem.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/EnemyCharacter.h"
+#include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/ProgressionRules.h"
 #include "Core/CodexTacticsGameMode.h"
@@ -206,7 +207,7 @@ AEnemyCharacter* UWaveSubsystem::SpawnEnemy(EEnemyArchetype Archetype, const FVe
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
 	// The type's Blueprint (mesh + AnimBP) from the game mode, else the C++ class with the placeholder body.
-	UClass* EnemyClass = AEnemyCharacter::StaticClass();
+	UClass* EnemyClass = Archetype == EEnemyArchetype::Marksman ? AMarksmanEnemyCharacter::StaticClass() : AEnemyCharacter::StaticClass();
 	if (const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>())
 	{
 		if (const TSoftClassPtr<AEnemyCharacter>* Soft = GameMode->EnemyClasses.Find(Archetype))

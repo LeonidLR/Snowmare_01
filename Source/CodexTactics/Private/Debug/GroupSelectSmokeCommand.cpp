@@ -2,13 +2,16 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.GroupSelectSmoke
 // Godot main.gd _perform_box_selection / _set_selected_squad / _get_group_target_positions, player.gd set_group_selected:
 // rings under the selected (the leader's only in a group), the group walks to its formation around the click,
-// picking a leader by number drops the group.
+// picking a leader by number drops the group. In the fight's tactical pause a screen box selects all three and a ground
+// click plans a move for each; all of them walk once the pause ends.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
 #include "Characters/OperativeCharacter.h"
+#include "EngineUtils.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/SquadFormation.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -28,6 +31,7 @@ namespace GroupSelectSmoke
 
 	struct FState
 	{
+		TArray<FVector> PauseStarts;
 		float Time = 0.f;
 		float StageTime = 0.f;
 		int32 Stage = 0;
@@ -119,6 +123,68 @@ namespace GroupSelectSmoke
 			FVector2D Min;
 			FVector2D Max;
 			Check(State, !PC->GetSelectionBox(Min, Max), TEXT("no box without a drag"));
+			// The fight: a real-time wave (its enemies parked far away), then the tactical pause.
+			Flow->FinishPreparation();
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				It->CustomTimeDilation = 0.f;
+				It->SetActorLocation(It->GetActorLocation() + FVector(0.f, 0.f, -5000.f), false, nullptr, ETeleportType::TeleportPhysics);
+			}
+			Check(State, Flow->ToggleTacticalPause() == EGameFlowResult::Ok && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause,
+				TEXT("tactical pause"));
+			State.Stage = 2;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 2:
+		{
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			// A box over the whole screen selects all three; a click on the ground plans a move for each of them.
+			int32 SizeX = 0;
+			int32 SizeY = 0;
+			PC->GetViewportSize(SizeX, SizeY);
+			// Headless there is no viewport to project into: then the box result is set directly.
+			const int32 Boxed = SizeX > 0 ? PC->SelectInBox(FVector2D::ZeroVector, FVector2D(SizeX, SizeY)) : 0;
+			if (SizeX <= 0)
+			{
+				Squad->SetSelectedGroup({ Members[0], Members[1], Members[2] });
+			}
+			Check(State, (SizeX <= 0 || Boxed == 3) && Squad->HasMultiSelection(), FString::Printf(TEXT("pause: all three selected (box %d, viewport %dx%d)"), Boxed, SizeX, SizeY));
+			FVector Average = FVector::ZeroVector;
+			for (const AOperativeCharacter* Member : Members)
+			{
+				Average += Member->GetActorLocation() / Members.Num();
+				State.PauseStarts.Add(Member->GetActorLocation());
+			}
+			FHitResult Hit;
+			// The click lands right next to the engineer: with a group selected that is still the group's move order.
+			Hit.ImpactPoint = Hit.Location = Members[1]->GetActorLocation() + Members[1]->GetActorForwardVector() * 80.f;
+			PC->HandleWorldHit(Hit);
+			Check(State, Squad->GetPlannedOrderCount() == 3 && Squad->HasMultiSelection(),
+				FString::Printf(TEXT("pause: the click planned %d moves, group kept %d"), Squad->GetPlannedOrderCount(), Squad->HasMultiSelection() ? 1 : 0));
+			// A second click 5 m ahead replaces the plans: all three must walk once the pause ends.
+			FHitResult Far;
+			Far.ImpactPoint = Far.Location = Average + Squad->GetLeader()->GetActorForwardVector() * 500.f;
+			PC->HandleWorldHit(Far);
+			Flow->ToggleTacticalPause();
+			State.Stage = 3;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 3:
+		{
+			if (State.StageTime < 4.f)
+			{
+				return true;
+			}
+			for (int32 Index = 0; Index < Members.Num() && Index < State.PauseStarts.Num(); ++Index)
+			{
+				const float Moved = FVector::Dist2D(Members[Index]->GetActorLocation(), State.PauseStarts[Index]);
+				Check(State, Moved > 150.f, FString::Printf(TEXT("after the pause %s moved %.0f cm"), *Members[Index]->DisplayName.ToString(), Moved));
+			}
 			return Finish(State, true);
 		}
 		default:

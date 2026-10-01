@@ -1103,8 +1103,9 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		}
 	}
 
-	// 2. Proximity check around cursor impact point
-	if (!SelectedMember)
+	// 2. Proximity check around cursor impact point (not with a group selected: a click next to one of them is the
+	// group's move order — only a click on an operative's body picks him).
+	if (!SelectedMember && !Squad->HasMultiSelection())
 	{
 		float ClosestDist = SelectRadius;
 		for (AOperativeCharacter* Member : Squad->GetMembers())
@@ -1236,7 +1237,6 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
 		Member->SetStance(Stance);
-		Member->bHasCustomStance = false;
 		UFloatingTextSubsystem::SpawnAboveOperative(Member, FString::Printf(TEXT("👥 ОТРЯД: %s"), Name), FLinearColor(0.3f, 0.95f, 1.f));
 	}
 	if (Messages)
@@ -1326,13 +1326,9 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 		return;
 	}
 
-	// Godot _on_stance_*_pressed: the selected operative takes the stance as his own; outside the preparation / solo
-	// mode the members without a stance of their own follow (_sync_squad_stances).
-	const UGameFlowSubsystem* StanceFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	const bool bSolo = Squad->IsSoloMode() || (StanceFlow && StanceFlow->GetPhase() == ECodexGamePhase::Preparation);
+	// Deviation (user decision 2026-10-01; Godot _sync_squad_stances made the others follow): only the selected
+	// operative changes his stance — the whole squad only with Alt + Z / C / V (SetEntireSquadStance).
 	Leader->SetStance(Stance);
-	Leader->bHasCustomStance = true;
-	Squad->SyncSquadStance(Stance);
 
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
@@ -1345,16 +1341,8 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 		default: break;
 		}
 
-		if (bSolo)
-		{
-			Messages->PostMessage(Leader->DisplayName,
-				FText::Format(LOCTEXT("SoloStanceFmt", "Стойка бойца {0}: {1}"), Leader->DisplayName, StanceName));
-		}
-		else
-		{
-			Messages->PostMessage(Leader->DisplayName,
-				FText::Format(LOCTEXT("SquadStanceFmt", "Стойка отряда: {0}"), StanceName));
-		}
+		Messages->PostMessage(Leader->DisplayName,
+			FText::Format(LOCTEXT("SoloStanceFmt", "Стойка бойца {0}: {1}"), Leader->DisplayName, StanceName));
 	}
 }
 
@@ -1630,10 +1618,8 @@ void ACodexTacticsPlayerController::CycleLeaderStance()
 	{
 		Next = EOperativeStance::Standing; // Godot: prone is skipped while moving
 	}
-	// Godot _cycle_leader_stance: the leader's own stance; the others follow outside the preparation / solo mode.
+	// Godot _cycle_leader_stance, without the squad sync (user decision 2026-10-01): the selected operative only.
 	Leader->SetStance(Next);
-	Leader->bHasCustomStance = true;
-	Squad->SyncSquadStance(Next);
 }
 
 void ACodexTacticsPlayerController::ToggleRelocateSelectMode()

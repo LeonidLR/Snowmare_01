@@ -1,4 +1,6 @@
 #include "Characters/OperativeAnimInstance.h"
+#include "CodexTactics.h"
+#include "HAL/IConsoleManager.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
 #include "AnimationRuntime.h"
@@ -16,6 +18,10 @@ namespace
 	constexpr float MaxPlayRate = 2.2f;
 	/** Clips below this weight are not sampled. */
 	constexpr float MinSampleWeight = 0.005f;
+
+	/** Dev trace of what the AnimBP gets every frame (CodexTactics.AnimTrace 1). */
+	TAutoConsoleVariable<int32> CVarAnimTrace(TEXT("CodexTactics.AnimTrace"), 0,
+		TEXT("1 = log the operative / enemy anim inputs every frame (speed, direction, blend axes, play rates)."));
 
 	int32 Slot(EOperativeClip Clip)
 	{
@@ -63,11 +69,22 @@ void UOperativeAnimInstance::NativeUninitializeAnimation()
 void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeUpdateAnimation(DeltaSeconds);
+	StateDeltaSeconds = DeltaSeconds;
 	UpdateState();
 	UpdateStanceTransition();
 	UpdateUpperBody(DeltaSeconds);
 	UpdateColdLayer(DeltaSeconds);
 	UpdateNativeBlend(DeltaSeconds);
+	if (CVarAnimTrace.GetValueOnGameThread() > 0 && (Speed > 0.f || TryGetPawnOwner() && TryGetPawnOwner()->GetVelocity().SizeSquared2D() > 0.f))
+	{
+		if (const APawn* Pawn = TryGetPawnOwner())
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("AnimTrace %s t=%.3f dt=%.3f vel=%.0f speed=%.0f dir=%.0f stand=%.0f/%.2f slow=%.0f/%.2f moving=%d aim=%d crouch=%d prone=%d slots=%.2f/%.2f"),
+				*Pawn->GetName(), Pawn->GetWorld()->GetTimeSeconds(), DeltaSeconds, Pawn->GetVelocity().Size2D(), Speed, Direction,
+				StandBlendSpeed, StandPlayRate, SlowBlendSpeed, SlowPlayRate, bIsMoving ? 1 : 0, bIsAiming ? 1 : 0, bIsCrouching ? 1 : 0,
+				bIsProne ? 1 : 0, GetSlotMontageGlobalWeight(UpperBodySlot), GetSlotMontageGlobalWeight(FullBodySlot));
+		}
+	}
 }
 
 void UOperativeAnimInstance::UpdateColdLayer(float DeltaSeconds)
@@ -120,6 +137,17 @@ bool UOperativeAnimInstance::IsPlayingStanceTransition() const
 {
 	const UAnimMontage* Montage = StanceTransitionMontage.Get();
 	return Montage && Montage_IsPlaying(Montage);
+}
+
+float UOperativeAnimInstance::GetStanceTransitionTimeLeft() const
+{
+	const UAnimMontage* Montage = StanceTransitionMontage.Get();
+	if (!Montage || !Montage_IsPlaying(Montage))
+	{
+		return 0.f;
+	}
+	return FMath::Max(0.f, (Montage->GetPlayLength() - Montage_GetPosition(Montage)) / FMath::Max(StanceTransitionPlayRate, 0.1f)
+		- StanceTransitionBlendTime);
 }
 
 void UOperativeAnimInstance::UpdateStanceTransition()
@@ -269,13 +297,33 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 	}
 	bIsAiming = !bIsDead && !bIsSprinting && (bAttackMode || AimTimer > 0.f);
 
-	// Blend-space axes: the speed inside the samples' range, the rest as a faster play rate (no foot sliding).
-	StandBlendSpeed = FMath::Min(Speed, StandBlendSpaceMaxSpeed);
-	StandPlayRate = FMath::Max(1.f, Speed / StandBlendSpaceMaxSpeed);
-	SlowBlendSpeed = FMath::Min(Speed, SlowBlendSpaceMaxSpeed);
-	SlowPlayRate = FMath::Max(1.f, Speed / SlowBlendSpaceMaxSpeed);
-	ProneBlendSpeed = FMath::Min(Speed, ProneBlendSpaceMaxSpeed);
-	PronePlayRate = FMath::Max(1.f, Speed / ProneBlendSpaceMaxSpeed);
+	// Blend-space axes (user report 2026-10-01: legs and arms trembled while slowing down). The speed is smoothed and
+	// has a dead zone with hysteresis (formation followers stop / restart and creep at 10-25 cm/s, and the raw speed
+	// flicked the blend space between the idle and the walk); slower than the walk samples the pose stays the walk and
+	// the clip slows down instead of mixing in the idle; above the samples' range the clip speeds up (no foot sliding).
+	LocomotionSpeed = FMath::FInterpTo(LocomotionSpeed, Speed, DeltaSeconds, 8.f);
+	bLocomotionMoving = bLocomotionMoving ? LocomotionSpeed > LocomotionStopSpeed : LocomotionSpeed > LocomotionStartSpeed;
+	auto Axis = [this](float WalkSampleSpeed, float MaxSpeed, float& OutBlend, float& OutRate)
+	{
+		if (!bLocomotionMoving)
+		{
+			OutBlend = 0.f;
+			OutRate = 1.f;
+		}
+		else if (LocomotionSpeed < WalkSampleSpeed)
+		{
+			OutBlend = WalkSampleSpeed;
+			OutRate = FMath::Max(MinWalkPlayRate, LocomotionSpeed / WalkSampleSpeed);
+		}
+		else
+		{
+			OutBlend = FMath::Min(LocomotionSpeed, MaxSpeed);
+			OutRate = FMath::Max(1.f, LocomotionSpeed / MaxSpeed);
+		}
+	};
+	Axis(FMath::Min(WalkSampleSpeed, StandBlendSpaceMaxSpeed), StandBlendSpaceMaxSpeed, StandBlendSpeed, StandPlayRate);
+	Axis(FMath::Min(WalkSampleSpeed, SlowBlendSpaceMaxSpeed), SlowBlendSpaceMaxSpeed, SlowBlendSpeed, SlowPlayRate);
+	Axis(ProneBlendSpaceMaxSpeed, ProneBlendSpaceMaxSpeed, ProneBlendSpeed, PronePlayRate);
 
 	// Reload: one clip per reload, stretched to the reload time left.
 	// Prone: its own full-body clip (Godot ProneReload) or nothing.
@@ -302,9 +350,14 @@ void UOperativeAnimInstance::UpdateState()
 	}
 	const FVector Velocity = Operative->GetVelocity();
 	Speed = Velocity.Size2D();
-	Direction = Speed > 1.f
-		? FRotator::NormalizeAxis(Velocity.Rotation().Yaw - Operative->GetActorRotation().Yaw)
-		: 0.f;
+	// The blend-space direction follows the movement smoothly and is held below 30 cm/s: braking at the goal made the
+	// raw velocity direction flip and the legs jump between the forward / side / back clips.
+	if (Speed > 30.f)
+	{
+		const float RawDirection = FRotator::NormalizeAxis(Velocity.Rotation().Yaw - Operative->GetActorRotation().Yaw);
+		const float Alpha = 1.f - FMath::Exp(-12.f * StateDeltaSeconds);
+		Direction = FRotator::NormalizeAxis(Direction + FRotator::NormalizeAxis(RawDirection - Direction) * Alpha);
+	}
 	// Turn-based steps move the actor directly (no velocity): walk forward over the whole path.
 	const UTurnBasedCombatSubsystem* TurnBased = Operative->GetWorld() ? Operative->GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
 	if (const float TacticalSpeed = TurnBased ? TurnBased->GetTacticalMoveSpeed(Operative) : -1.f; TacticalSpeed >= 0.f)

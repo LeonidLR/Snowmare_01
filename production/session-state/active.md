@@ -2,8 +2,8 @@
 
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
-Feature: user art wired (operative / enemy AnimBPs), turn-based attack mode and walk animation
-Task: prone animation from the user's Crawl_MocapAnimPack done; next = more animation packs from the user (standing hit / death / grenade / cold / vault)
+Feature: playtest fixes (tremor / facing / stances) + Gemini's TANDEM requests 1-3 (enemy upper-body hits, pause abuse, Marksman enemy)
+Task: all done and verified; next = user playtest feedback (morning 2026-10-02), Marksman art Blueprint when the user provides a model, Gemini beam material / profiling
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
@@ -15,7 +15,7 @@ Task: prone animation from the user's Crawl_MocapAnimPack done; next = more anim
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
-2026-10-01: 145 automation tests, 58 smokes ALL GREEN (`verify_all.ps1`, parallel x3) after the death-hold fix (EnemyDeathSmoke added).
+2026-10-01: 155 automation tests, all smokes ALL GREEN (`verify_all.ps1`, parallel x3) after the Marksman / enemy hit layer / pause cooldown work.
 
 ## Open questions
 - none (L_MovementTest re-laid by the user is kept; smokes are layout-relative)

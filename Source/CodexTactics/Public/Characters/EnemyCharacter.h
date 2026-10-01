@@ -230,6 +230,23 @@ protected:
 	void AttackObject(AActor* Object);
 	/** Godot enemy_frost_spitter.gd _process_enemy_behavior. */
 	void TickSpitter(float DeltaTime);
+
+	/**
+	 * The behaviour part of Tick (targets, attacks, movement); Tick then turns the body (UpdateMovementFacing).
+	 * Archetypes with their own brain (AMarksmanEnemyCharacter) override it.
+	 */
+	virtual void TickBehavior(float DeltaTime);
+
+	/** Turn towards Yaw this frame (attack lock, aiming, pounce windup): the movement facing then stays out of it. */
+	void FaceYaw(float Yaw, float DeltaTime, float InterpSpeed);
+
+	/** Godot enemy_base.gd: face the (smoothed) velocity above 0.2 m/s with lerp_angle(turn_speed), else keep. */
+	void UpdateMovementFacing(float DeltaTime);
+
+	/** Godot enemy_base.gd turn_speed (lerp factor, 1/s). */
+	float TurnSpeed = 8.f;
+	FVector SmoothedVelocity = FVector::ZeroVector;
+	bool bFacedThisTick = false;
 	/** Godot position of a target: operatives at their centre, objects at their base. */
 	static FVector GodotPosition(const AActor* Actor);
 

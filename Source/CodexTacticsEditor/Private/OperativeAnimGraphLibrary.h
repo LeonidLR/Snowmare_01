@@ -56,5 +56,6 @@ public:
 	static int32 CountAnimGraphNodes(UAnimBlueprint* AnimBlueprint);
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
-	static bool BuildEnemyLocomotionGraph(UAnimBlueprint* AnimBlueprint, FName SlotName, float BlendTime, FString& OutReport);
+	static bool BuildEnemyLocomotionGraph(UAnimBlueprint* AnimBlueprint, FName SlotName, float BlendTime, FName UpperBodySlotName,
+		FName UpperBodyBone, FString& OutReport);
 };

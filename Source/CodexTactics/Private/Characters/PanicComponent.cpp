@@ -20,7 +20,7 @@ namespace
 {
 	const FLinearColor PanicRed(1.f, 0.2f, 0.2f);
 
-	void PanicPost(const AOperativeCharacter* Operative, const FString& Text)
+	void PanicLinePost(const AOperativeCharacter* Operative, const FString& Text)
 	{
 		UWorld* World = Operative ? Operative->GetWorld() : nullptr;
 		if (UGameMessageSubsystem* Messages = World ? World->GetSubsystem<UGameMessageSubsystem>() : nullptr)
@@ -29,7 +29,7 @@ namespace
 		}
 	}
 
-	bool IsLiveEnemy(const AActor* Actor)
+	bool IsLivePanicThreat(const AActor* Actor)
 	{
 		if (!IsValid(Actor) || !Actor->ActorHasTag(FName(TEXT("Enemy"))))
 		{
@@ -39,7 +39,7 @@ namespace
 		return !Health || Health->IsAlive();
 	}
 
-	float FortitudeOf(const AOperativeCharacter* Operative)
+	float PanicFortitudeOf(const AOperativeCharacter* Operative)
 	{
 		return Operative && Operative->ColdSurvival ? Operative->ColdSurvival->Fortitude : 5.f; // Godot default 5
 	}
@@ -118,7 +118,7 @@ void UPanicComponent::ProcessStress(float DeltaSeconds)
 	const UHealthComponent* Health = Operative->HealthComponent;
 	const int32 Ammo = Operative->UsesAmmo() ? Operative->ReserveAmmo : 999;
 	const float Growth = PanicRules::GetStressGrowth(Config, Health->GetCurrentHealth() / FMath::Max(1.f, Health->GetMaxHealth()),
-		Operative->ColdLevel / 100.f, Ammo, GetNearestEnemyDistance(), FortitudeOf(Operative));
+		Operative->ColdLevel / 100.f, Ammo, GetNearestEnemyDistance(), PanicFortitudeOf(Operative));
 	Stress = PanicRules::StepStress(Config, Stress, Growth, DeltaSeconds);
 	bStressShown = Stress >= 50.f;
 	if (Stress >= 100.f)
@@ -134,7 +134,7 @@ void UPanicComponent::OnDamageTaken(float FinalDamage)
 	{
 		return;
 	}
-	Stress = FMath::Min(100.f, Stress + PanicRules::GetDamageStress(Config, FinalDamage, FortitudeOf(Operative)));
+	Stress = FMath::Min(100.f, Stress + PanicRules::GetDamageStress(Config, FinalDamage, PanicFortitudeOf(Operative)));
 	bStressShown = Stress >= 50.f;
 	if (Stress >= 100.f)
 	{
@@ -149,7 +149,7 @@ void UPanicComponent::OnLowAmmo()
 	{
 		return;
 	}
-	Stress = FMath::Min(100.f, Stress + PanicRules::GetLowAmmoStress(Config, FortitudeOf(Operative)));
+	Stress = FMath::Min(100.f, Stress + PanicRules::GetLowAmmoStress(Config, PanicFortitudeOf(Operative)));
 	if (Stress >= 100.f)
 	{
 		AttemptTriggerPanic();
@@ -220,7 +220,7 @@ void UPanicComponent::TriggerPanic(const FString& Reason, bool bForce)
 		TEXT("😱 Отступаем, отходим! Нас сомнут!"),
 		TEXT("😱 Оружие заклинило! Я ухожу из сектора!"),
 		TEXT("😱 Назад, назад к теплу! Спасайтесь!") };
-	PanicPost(Operative, Phrases[FMath::RandRange(0, UE_ARRAY_COUNT(Phrases) - 1)]);
+	PanicLinePost(Operative, Phrases[FMath::RandRange(0, UE_ARRAY_COUNT(Phrases) - 1)]);
 	UE_LOG(LogCodexTactics, Display, TEXT("%s panics (%s)"), *Operative->DisplayName.ToString(), *Reason);
 	UpdateAura(true);
 	OnPanicChanged.Broadcast(true);
@@ -270,7 +270,7 @@ void UPanicComponent::RecoverFromPanic(const FString& Reason, bool bSilent)
 				TEXT("😮‍💨 Взял себя в руки! Возвращаюсь в строй!"),
 				TEXT("😮‍💨 Согрелся, дыхание ровное, готов к бою!"),
 				TEXT("😮‍💨 Паника отступила. Сектор чист, держу позицию!") };
-			PanicPost(Operative, Phrases[FMath::RandRange(0, UE_ARRAY_COUNT(Phrases) - 1)]);
+			PanicLinePost(Operative, Phrases[FMath::RandRange(0, UE_ARRAY_COUNT(Phrases) - 1)]);
 			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("😮‍💨 ПРИШЕЛ В СЕБЯ"), FLinearColor(0.3f, 1.f, 0.5f));
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("%s recovers from panic (%s)"), *Operative->DisplayName.ToString(), *Reason);
@@ -300,7 +300,6 @@ void UPanicComponent::ProcessPanicState(float DeltaSeconds)
 		if (Movement)
 		{
 			Movement->MaxWalkSpeed = Config.FleeSpeed > 0.f ? Config.FleeSpeed * 100.f : Movement->MaxWalkSpeed * Config.SpeedMultiplier;
-			Movement->bOrientRotationToMovement = true;
 		}
 		Operative->AddMovementInput(Direction);
 		if (FVector::Dist2D(Operative->GetActorLocation(), PanicOrigin) >= Config.FleeDistance * 100.f || FleePhaseTimer >= Config.FleeMaxTime)
@@ -341,7 +340,7 @@ FVector UPanicComponent::GetFleeDirection()
 	FVector Repulsion = FVector::ZeroVector;
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
-		if (IsLiveEnemy(*It))
+		if (IsLivePanicThreat(*It))
 		{
 			const float Distance = FVector::Dist2D(Here, It->GetActorLocation()) / 100.f;
 			if (Distance < 20.f && Distance > 0.01f)
@@ -420,7 +419,7 @@ float UPanicComponent::GetNearestEnemyDistance() const
 	float Nearest = TNumericLimits<float>::Max();
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
-		if (IsLiveEnemy(*It))
+		if (IsLivePanicThreat(*It))
 		{
 			Nearest = FMath::Min(Nearest, static_cast<float>(FVector::Dist(Owner->GetActorLocation(), It->GetActorLocation())));
 		}

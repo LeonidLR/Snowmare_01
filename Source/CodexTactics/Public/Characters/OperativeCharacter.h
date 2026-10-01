@@ -358,12 +358,6 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Squad")
 	bool bGuarding = false;
 
-	/**
-	 * Godot has_custom_stance: the player set this operative's own stance (preparation / solo, or as the leader); it is
-	 * then kept — neither the squad stance sync nor the moving leader's stance overrides it — until a whole-squad
-	 * stance order (Alt + Z / C / V) clears it.
-	 */
-	bool bHasCustomStance = false;
 
 	/**
 	 * Squad member (Godot group "squad"). A recruit spawned with false (Godot recruit_susanin.gd is_recruited) stays out
@@ -702,6 +696,13 @@ public:
 	/** True while the operative keeps facing its combat target (moving sideways / backwards instead of turning). */
 	bool IsFacingCombatTarget() const { return bFacingCombatTarget; }
 
+	/**
+	 * Yaw a standing-still operative turns to every frame (Godot _align_rotation_with_leader: parked followers face where
+	 * the leader faces); cleared by any move.
+	 */
+	void SetIdleFacingYaw(float Yaw) { IdleFacingYaw = Yaw; bHasIdleFacing = true; }
+	void ClearIdleFacing() { bHasIdleFacing = false; }
+
 	/** Current barrel-to-body yaw correction, degrees. */
 	float GetBarrelYawOffset() const { return BarrelYawOffset; }
 
@@ -808,6 +809,10 @@ private:
 	void UpdateCombatFacing(float DeltaTime);
 	bool bFacingCombatTarget = false;
 	float BarrelYawOffset = 0.f;
+	/** Planar velocity smoothed for the movement facing (FacingRules). */
+	FVector SmoothedVelocity = FVector::ZeroVector;
+	float IdleFacingYaw = 0.f;
+	bool bHasIdleFacing = false;
 	TWeakObjectPtr<AActor> PendingFlankTarget;
 	float TargetSwitchTimer = 0.f;
 
@@ -832,4 +837,11 @@ private:
 	float ColdSpeedMultiplier = 1.f;
 	bool bSprinting = false;
 	bool bHasMoveOrder = false;
+
+	/** A move waiting for the stand-up clip (OrderMoveTo from prone / during a stance clip). */
+	FTimerHandle PendingMoveTimer;
+	bool bPendingMoveReplay = false;
+
+	/** Seconds until a stance clip that starts now / is playing lets the operative walk (0 without a clip). */
+	float GetStanceChangeDelay(EOperativeStance From, EOperativeStance To) const;
 };

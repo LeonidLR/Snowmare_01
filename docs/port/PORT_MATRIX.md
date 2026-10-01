@@ -36,6 +36,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | `Scripts/components/movement_component.gd` | not ported: its stamina is unused by `player.gd` (user: no stamina) | — | ➖ | |
 | `Scripts/components/panic_component.gd` | `PanicRules`, `UPanicComponent` (on by the user decision 2026-10-01; one panicking member, resistant core squad) | 1 | ✅ | PanicRulesTest, PanicSmoke |
 | `enemy_cutter.gd`, `resources/enemies/anims/*.tres` | `AEnemyCharacter` cutter jump, `import_enemy_anim_configs.py` -> DA_EnemyAnim_* | 3 | ✅ | CutterSmoke |
+| — (UE-only, Gemini spec TANDEM request 3) | Marksman: `AMarksmanEnemyCharacter`, `MarksmanAIRules`, `EEnemyArchetype::Marksman` | 4 | ✅ (placeholder body, beam material from Gemini pending) | `CodexTactics.Marksman.*`, MarksmanSmoke |
 | `enemy_base.gd` behaviour, `enemy_frost_spitter.gd`, `enemy_frost_brute.gd`, affinities of all enemy scripts | `EnemyAIRules`, `AEnemyCharacter::Tick` / `FindTarget` / `TickSpitter` / `AttackObject` | 3 | ✅ (cryo drone later) | `CodexTactics.Characters.EnemyAI.Rules`, EnemyAISmoke |
 | `player.gd` `_evaluate_ai_grenade_opportunity`, `execute_ai_grenade_throw`, `_auto_switch_on_empty` | `AIGrenadeRules`, `AOperativeCharacter::TryAIGrenadeThrow` / `AutoSwitchOnEmpty` | 4 | ✅ | `CodexTactics.Combat.Grenade.AIRules`, AIGrenadeSmoke |
 | overhead Label3D (`enemy_base.gd`, `barricade.gd`, `turret.gd`, `interactable.gd` generator) | `FOverheadLabel`, `GetOverheadLabel`, HUD `DrawWorldLabels` | 5 | ✅ | `HudShot labels` |

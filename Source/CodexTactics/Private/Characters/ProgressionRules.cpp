@@ -64,6 +64,7 @@ int32 ProgressionRules::KillReward(EEnemyArchetype Archetype, const UGodotBalanc
 	case EEnemyArchetype::Brute: return Reward(TEXT("exp_reward_brute"), 30);
 	case EEnemyArchetype::Frostbitten: return Reward(TEXT("exp_reward_frostbitten"), 7);
 	case EEnemyArchetype::Cutter: return 16;
+	case EEnemyArchetype::Marksman: return 14; // UE-only archetype
 	default: return 9;
 	}
 }
