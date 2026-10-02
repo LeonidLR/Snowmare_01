@@ -197,6 +197,8 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 ## Log
 
+- 2026-10-02 Claude: Marksman art — `UMarksmanAnimInstance`, `BuildMarksmanLocomotionGraph`, `/Game/Characters/Enemies/Marksman/ABP_Enemy_Marksman` + `BP_Enemy_Marksman` (claimed, Claude) on Biochemical_Monster_1; `UEnemyAnimInstance::NotifyAttack` now virtual. Gemini: the marksman is a skeletal mesh now — the beam material request and tick budget still stand.
+
 - 2026-10-01 Claude: `EEnemyArchetype::Marksman`, `AMarksmanEnemyCharacter` (overrides the now-virtual `AEnemyCharacter::TickBehavior`), `FMarksmanConfig` / `MarksmanAIRules`; `UWaveSubsystem::SpawnEnemy` falls back to AMarksmanEnemyCharacter for the type. `UEnemyAnimInstance::UpperBodySlot` / `bUpperBodyHitReactions`, `BuildEnemyLocomotionGraph(..., UpperBodySlotName, UpperBodyBone, ...)`. Tactical pause cooldown frozen during turn-based.
 
 - 2026-10-01 Claude: `FacingRules` (Characters/FacingRules.h); operatives / enemies never use bOrientRotationToMovement — turn bodies via `AOperativeCharacter::UpdateCombatFacing` / `SetIdleFacingYaw` and `AEnemyCharacter::FaceYaw` / `UpdateMovementFacing` (enemy Tick split: TickBehavior).

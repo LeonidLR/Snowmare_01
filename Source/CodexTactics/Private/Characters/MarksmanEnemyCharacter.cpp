@@ -1,11 +1,13 @@
 #include "Characters/MarksmanEnemyCharacter.h"
 
 #include "AIController.h"
+#include "Characters/EnemyAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -282,6 +284,10 @@ void AMarksmanEnemyCharacter::Fire(AOperativeCharacter* Target, const FMarksmanL
 {
 	++ShotsFired;
 	OnAttackStarted(Target);
+	if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+	{
+		Anim->NotifyAttack(); // the stance's fire clip (UMarksmanAnimInstance)
+	}
 	const float Chance = MarksmanAIRules::ComputeSniperHitChance(MarksmanConfig, Stance, Target->GetStance(), Line.Cover, Distance);
 	const bool bHit = FMath::FRand() < Chance;
 	FVector End = Line.End;

@@ -223,6 +223,65 @@ int32 UOperativeAnimGraphLibrary::CountAnimGraphNodes(UAnimBlueprint* AnimBluepr
 	return 0;
 }
 
+namespace OperativeAnimGraph
+{
+	/**
+	 * The enemy graph tail after Locomotion: the upper-body slot layered above UpperBodyBone (when both are set; the
+	 * locomotion is cached once for the base and the slot), the full-body Slot, the Output Pose; then compiles.
+	 */
+	bool FinishEnemyGraph(FBuilder& Build, UAnimBlueprint* AnimBlueprint, UAnimGraphNode_Root* Root, UEdGraphNode* Locomotion,
+		int32 Column, FName SlotName, FName UpperBodySlotName, FName UpperBodyBone, FString& OutReport)
+	{
+		UEdGraphNode* BeforeFullBody = Locomotion;
+		Root->NodePosX = (Column + 2) * ColumnWidth;
+		if (!UpperBodySlotName.IsNone() && !UpperBodyBone.IsNone())
+		{
+			// Hit reactions while running play above UpperBodyBone only: the legs keep running (TANDEM request 1, no foot
+			// sliding).
+			Root->NodePosX = (Column + 5) * ColumnWidth;
+			UAnimGraphNode_SaveCachedPose* Save = Build.Spawn<UAnimGraphNode_SaveCachedPose>(Column + 1, 1, [](UAnimGraphNode_SaveCachedPose& Node)
+			{
+				Node.CacheName = TEXT("EnemyLocomotion");
+			});
+			Build.LinkPose(Locomotion, Save, TEXT("Pose"));
+			auto UseCache = [&Build, Save, Column](int32 Row)
+			{
+				return Build.Spawn<UAnimGraphNode_UseCachedPose>(Column + 2, Row, [Save](UAnimGraphNode_UseCachedPose& Node)
+				{
+					Node.SaveCachedPoseNode = Save;
+				});
+			};
+			UAnimGraphNode_Slot* UpperSlot = Build.Spawn<UAnimGraphNode_Slot>(Column + 3, 2, [UpperBodySlotName](UAnimGraphNode_Slot& Node)
+			{
+				Node.Node.SlotName = UpperBodySlotName;
+			});
+			Build.LinkPose(UseCache(2), UpperSlot, TEXT("Source"));
+			UAnimGraphNode_LayeredBoneBlend* Layered = Build.Spawn<UAnimGraphNode_LayeredBoneBlend>(Column + 3, 0, [UpperBodyBone](UAnimGraphNode_LayeredBoneBlend& Node)
+			{
+				Node.Node.bMeshSpaceRotationBlend = true;
+				if (Node.Node.LayerSetup.IsEmpty())
+				{
+					Node.Node.LayerSetup.AddDefaulted();
+				}
+				FBranchFilter Filter;
+				Filter.BoneName = UpperBodyBone;
+				Filter.BlendDepth = 0;
+				Node.Node.LayerSetup[0].BranchFilters = {Filter};
+			});
+			Build.LinkPose(UseCache(0), Layered, TEXT("BasePose"));
+			Build.LinkPose(UpperSlot, Layered, TEXT("BlendPoses_0"));
+			BeforeFullBody = Layered;
+		}
+		UAnimGraphNode_Slot* Slot = Build.Spawn<UAnimGraphNode_Slot>(Root->NodePosX / ColumnWidth - 1, 1, [SlotName](UAnimGraphNode_Slot& Node)
+		{
+			Node.Node.SlotName = SlotName;
+		});
+		Build.LinkPose(BeforeFullBody, Slot, TEXT("Source"));
+		Build.LinkPose(Slot, Root, TEXT("Result"));
+		return Build.bOk && CompileAndReport(AnimBlueprint, Root->GetGraph(), OutReport);
+	}
+}
+
 bool UOperativeAnimGraphLibrary::BuildEnemyLocomotionGraph(UAnimBlueprint* AnimBlueprint, FName SlotName, float BlendTime, FName UpperBodySlotName,
 	FName UpperBodyBone, FString& OutReport)
 {
@@ -234,62 +293,47 @@ bool UOperativeAnimGraphLibrary::BuildEnemyLocomotionGraph(UAnimBlueprint* AnimB
 		OutReport = OutReport.IsEmpty() ? TEXT("missing AnimBlueprint") : OutReport;
 		return false;
 	}
-	UEdGraph* AnimGraph = Root->GetGraph();
-	Root->NodePosX = 5 * ColumnWidth;
 	Root->NodePosY = RowHeight;
-
-	FBuilder Build{AnimGraph, OutReport};
+	FBuilder Build{Root->GetGraph(), OutReport};
 	UEdGraphNode* Idle = Build.Sequence(0, TEXT("IdleAnimation"), NAME_None);
 	UEdGraphNode* Walk = Build.Sequence(1, TEXT("WalkAnimation"), TEXT("WalkPlayRate"));
 	UEdGraphNode* Run = Build.Sequence(2, TEXT("RunAnimation"), TEXT("RunPlayRate"));
 	UEdGraphNode* Moving = Build.ByBool(TEXT("bIsRunning"), 2, 2, BlendTime, Run, Walk);
 	UEdGraphNode* Locomotion = Build.ByBool(TEXT("bIsMoving"), 3, 1, BlendTime, Moving, Idle);
-	UEdGraphNode* BeforeFullBody = Locomotion;
-	if (!UpperBodySlotName.IsNone() && !UpperBodyBone.IsNone())
+	return FinishEnemyGraph(Build, AnimBlueprint, Root, Locomotion, 3, SlotName, UpperBodySlotName, UpperBodyBone, OutReport);
+}
+
+bool UOperativeAnimGraphLibrary::BuildMarksmanLocomotionGraph(UAnimBlueprint* AnimBlueprint, FName SlotName, float BlendTime,
+	float StanceBlendTime, FName UpperBodySlotName, FName UpperBodyBone, FString& OutReport)
+{
+	using namespace OperativeAnimGraph;
+	OutReport.Reset();
+	UAnimGraphNode_Root* Root = AnimBlueprint ? ResetAnimGraph(AnimBlueprint, OutReport) : nullptr;
+	if (!Root)
 	{
-		// Hit reactions while running play above UpperBodyBone only: the legs keep running (TANDEM request 1, no foot
-		// sliding). The locomotion is cached once for the base and the upper-body slot.
-		Root->NodePosX = 8 * ColumnWidth;
-		UAnimGraphNode_SaveCachedPose* Save = Build.Spawn<UAnimGraphNode_SaveCachedPose>(4, 1, [](UAnimGraphNode_SaveCachedPose& Node)
-		{
-			Node.CacheName = TEXT("EnemyLocomotion");
-		});
-		Build.LinkPose(Locomotion, Save, TEXT("Pose"));
-		auto UseCache = [&Build, Save](int32 Row)
-		{
-			return Build.Spawn<UAnimGraphNode_UseCachedPose>(5, Row, [Save](UAnimGraphNode_UseCachedPose& Node)
-			{
-				Node.SaveCachedPoseNode = Save;
-			});
-		};
-		UAnimGraphNode_Slot* UpperSlot = Build.Spawn<UAnimGraphNode_Slot>(6, 2, [UpperBodySlotName](UAnimGraphNode_Slot& Node)
-		{
-			Node.Node.SlotName = UpperBodySlotName;
-		});
-		Build.LinkPose(UseCache(2), UpperSlot, TEXT("Source"));
-		UAnimGraphNode_LayeredBoneBlend* Layered = Build.Spawn<UAnimGraphNode_LayeredBoneBlend>(6, 0, [UpperBodyBone](UAnimGraphNode_LayeredBoneBlend& Node)
-		{
-			Node.Node.bMeshSpaceRotationBlend = true;
-			if (Node.Node.LayerSetup.IsEmpty())
-			{
-				Node.Node.LayerSetup.AddDefaulted();
-			}
-			FBranchFilter Filter;
-			Filter.BoneName = UpperBodyBone;
-			Filter.BlendDepth = 0;
-			Node.Node.LayerSetup[0].BranchFilters = {Filter};
-		});
-		Build.LinkPose(UseCache(0), Layered, TEXT("BasePose"));
-		Build.LinkPose(UpperSlot, Layered, TEXT("BlendPoses_0"));
-		BeforeFullBody = Layered;
+		OutReport = OutReport.IsEmpty() ? TEXT("missing AnimBlueprint") : OutReport;
+		return false;
 	}
-	UAnimGraphNode_Slot* Slot = Build.Spawn<UAnimGraphNode_Slot>(7, 1, [SlotName](UAnimGraphNode_Slot& Node)
-	{
-		Node.Node.SlotName = SlotName;
-	});
-	Build.LinkPose(BeforeFullBody, Slot, TEXT("Source"));
-	Build.LinkPose(Slot, Root, TEXT("Result"));
-	return Build.bOk && CompileAndReport(AnimBlueprint, AnimGraph, OutReport);
+	Root->NodePosY = RowHeight;
+	FBuilder Build{Root->GetGraph(), OutReport};
+	// Still poses: per stance, relaxed / aiming.
+	UEdGraphNode* StandIdle = Build.Sequence(0, TEXT("IdleAnimation"), NAME_None);
+	UEdGraphNode* StandAim = Build.Sequence(1, TEXT("StandAimAnimation"), NAME_None);
+	UEdGraphNode* CrouchIdle = Build.Sequence(2, TEXT("CrouchIdleAnimation"), NAME_None);
+	UEdGraphNode* CrouchAim = Build.Sequence(3, TEXT("CrouchAimAnimation"), NAME_None);
+	UEdGraphNode* ProneIdle = Build.Sequence(4, TEXT("ProneIdleAnimation"), NAME_None);
+	UEdGraphNode* ProneAim = Build.Sequence(5, TEXT("ProneAimAnimation"), NAME_None);
+	UEdGraphNode* Stand = Build.ByBool(TEXT("bIsAiming"), 2, 0, StanceBlendTime, StandAim, StandIdle);
+	UEdGraphNode* Crouch = Build.ByBool(TEXT("bIsAiming"), 2, 2, StanceBlendTime, CrouchAim, CrouchIdle);
+	UEdGraphNode* Prone = Build.ByBool(TEXT("bIsAiming"), 2, 4, StanceBlendTime, ProneAim, ProneIdle);
+	UEdGraphNode* Low = Build.ByBool(TEXT("bIsCrouched"), 3, 1, StanceBlendTime, Crouch, Stand);
+	UEdGraphNode* Still = Build.ByBool(TEXT("bIsProne"), 4, 2, StanceBlendTime, Prone, Low);
+	// Moving (always standing).
+	UEdGraphNode* Walk = Build.Sequence(6, TEXT("WalkAnimation"), TEXT("WalkPlayRate"));
+	UEdGraphNode* Run = Build.Sequence(7, TEXT("RunAnimation"), TEXT("RunPlayRate"));
+	UEdGraphNode* Moving = Build.ByBool(TEXT("bIsRunning"), 4, 6, BlendTime, Run, Walk);
+	UEdGraphNode* Locomotion = Build.ByBool(TEXT("bIsMoving"), 5, 3, BlendTime, Moving, Still);
+	return FinishEnemyGraph(Build, AnimBlueprint, Root, Locomotion, 5, SlotName, UpperBodySlotName, UpperBodyBone, OutReport);
 }
 
 bool UOperativeAnimGraphLibrary::BuildOperativeLocomotionGraph(UAnimBlueprint* AnimBlueprint, UBlendSpace* StandBlendSpace,

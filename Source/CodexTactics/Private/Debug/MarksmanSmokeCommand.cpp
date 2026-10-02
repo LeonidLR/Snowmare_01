@@ -7,7 +7,11 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Animation/AnimMontage.h"
+#include "Animation/AnimSequenceBase.h"
+#include "Characters/MarksmanAnimInstance.h"
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -87,6 +91,13 @@ namespace MarksmanSmoke
 				return Finish(State, false);
 			}
 			State.Marksman = Marksman;
+			// Headless: refresh the bones so the pelvis height can be measured.
+			Marksman->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+			{
+				const UMarksmanAnimInstance* Anim = Cast<UMarksmanAnimInstance>(Marksman->GetMesh()->GetAnimInstance());
+				Check(State, Anim != nullptr && Marksman->GetMesh()->GetSkeletalMeshAsset() != nullptr,
+					FString::Printf(TEXT("art Blueprint %s with UMarksmanAnimInstance"), *Marksman->GetClass()->GetName()));
+			}
 			State.Stage = 1;
 			State.Time = 0.f;
 			return true;
@@ -106,6 +117,22 @@ namespace MarksmanSmoke
 			Check(State, State.bSawAim, TEXT("aimed (telegraph) before the shot"));
 			Check(State, State.bSawFiringStance, TEXT("aimed crouched / prone with the lowered capsule"));
 			Check(State, Marksman->GetShotsFired() >= 1, FString::Printf(TEXT("fired (%.1f s)"), State.Time));
+			if (const UMarksmanAnimInstance* Anim = Cast<UMarksmanAnimInstance>(Marksman->GetMesh()->GetAnimInstance()))
+			{
+				// The stance's look: the transition clip into it, the fire clip, the pelvis height of a lying body.
+				const float Pelvis = Marksman->GetMesh()->GetBoneLocation(TEXT("pelvis")).Z
+					- (Marksman->GetActorLocation().Z - Marksman->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+				const bool bProne = Marksman->GetStance() == EOperativeStance::Prone;
+				// The shot's montage (fire clip) is the active one on the stance's slot.
+				const UAnimMontage* Montage = Anim->GetCurrentActiveMontage();
+				const bool bFireClip = Montage && Montage->SlotAnimTracks.Num() > 0 && !Montage->SlotAnimTracks[0].AnimTrack.AnimSegments.IsEmpty()
+					&& (Anim->AttackAnimations.Contains(Montage->SlotAnimTracks[0].AnimTrack.AnimSegments[0].GetAnimReference())
+						|| Montage->SlotAnimTracks[0].AnimTrack.AnimSegments[0].GetAnimReference() == Anim->CrouchFireAnimation);
+				Check(State, Anim->bIsProne == bProne && (!bProne || (Anim->GetLastTransition() != nullptr && Pelvis < 45.f)) && bFireClip,
+					FString::Printf(TEXT("animation: stance %d, transition %s, fire clip playing %d, pelvis %.0f cm above the feet"),
+						static_cast<int32>(Marksman->GetStance()), Anim->GetLastTransition() ? *Anim->GetLastTransition()->GetName() : TEXT("-"),
+						bFireClip ? 1 : 0, Pelvis));
+			}
 			{
 				// A hit from afar: ambush reaction.
 				FDamageSpec Spec;

@@ -58,4 +58,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
 	static bool BuildEnemyLocomotionGraph(UAnimBlueprint* AnimBlueprint, FName SlotName, float BlendTime, FName UpperBodySlotName,
 		FName UpperBodyBone, FString& OutReport);
+
+	/**
+	 * Replaces the AnimGraph of the Marksman's AnimBlueprint (parent UMarksmanAnimInstance) and compiles it: the enemy
+	 * graph whose standing idle is a stance / aim pose — IdleAnimation / StandAimAnimation, CrouchIdleAnimation /
+	 * CrouchAimAnimation, ProneIdleAnimation / ProneAimAnimation switched by bIsAiming, bIsCrouched and bIsProne with
+	 * StanceBlendTime crossfades — then walk / run, the upper-body slot over UpperBodyBone and the full-body slot.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static bool BuildMarksmanLocomotionGraph(UAnimBlueprint* AnimBlueprint, FName SlotName, float BlendTime, float StanceBlendTime,
+		FName UpperBodySlotName, FName UpperBodyBone, FString& OutReport);
 };

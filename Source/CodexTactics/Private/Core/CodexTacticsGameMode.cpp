@@ -48,6 +48,9 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 		TSoftClassPtr<AEnemyCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Enemies/Frostbitten/BP_Enemy_Frostbitten.BP_Enemy_Frostbitten_C"))));
 	EnemyClasses.Add(EEnemyArchetype::Cutter,
 		TSoftClassPtr<AEnemyCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Enemies/Cutter/BP_Enemy_Cutter.BP_Enemy_Cutter_C"))));
+	// Biochemical_Monster_1 (Scripts/Editor/setup_marksman_animation.py); missing -> the C++ AMarksmanEnemyCharacter.
+	EnemyClasses.Add(EEnemyArchetype::Marksman,
+		TSoftClassPtr<AEnemyCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Enemies/Marksman/BP_Enemy_Marksman.BP_Enemy_Marksman_C"))));
 	LevelConfig = TSoftObjectPtr<ULevelConfigAsset>(FSoftObjectPath(TEXT("/Game/Data/Levels/DA_Level_level_01_outpost.DA_Level_level_01_outpost")));
 	for (const TCHAR* Id : { TEXT("m16"), TEXT("pistol"), TEXT("grenade"), TEXT("knife") })
 	{

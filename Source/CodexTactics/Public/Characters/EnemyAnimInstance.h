@@ -29,7 +29,7 @@ public:
 	 * @return seconds the attack clip plays (0 without one) — the enemy stands still that long (Godot is_attacking).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Enemy Animation")
-	float NotifyAttack();
+	virtual float NotifyAttack();
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Enemy Animation")
 	void NotifyHit();
@@ -177,9 +177,11 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Enemy State")
 	bool bIsFleeing = false;
 
-private:
+protected:
 	/** Plays Clip on OneShotSlot; bHold keeps the last frame (death). */
 	void PlayOneShot(UAnimSequenceBase* Clip, float PlayRate, float StartTime = 0.f, bool bHold = false);
+
+private:
 
 	float AttackTimer = 0.f;
 	float HitTimer = 0.f;

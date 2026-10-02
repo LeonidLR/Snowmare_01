@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: playtest fixes (tremor / facing / stances) + Gemini's TANDEM requests 1-3 (enemy upper-body hits, pause abuse, Marksman enemy)
-Task: all done and verified; next = user playtest feedback (morning 2026-10-02), Marksman art Blueprint when the user provides a model, Gemini beam material / profiling
+Task: Marksman art on Biochemical_Monster_1 done (setup_marksman_animation.py); next = user feedback on the marksman look, Gemini beam material / profiling
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
