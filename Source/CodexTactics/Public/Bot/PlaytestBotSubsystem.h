@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "Bot/PlaytestBotRules.h"
+#include "Bot/SpatialTelemetryRecorder.h"
+#include "Data/CombatTypes.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "PlaytestBotSubsystem.generated.h"
 
@@ -43,6 +45,7 @@ public:
 	int32 GetDeploysOrdered() const { return DeploysOrdered; }
 	int32 GetItemsUsed() const { return ItemsUsed; }
 	int32 GetStallHunts() const { return StallHunts; }
+	const FSpatialTelemetryRecorder& GetSpatialRecorder() const { return Spatial; }
 
 private:
 	void TickExplore(float DeltaTime);
@@ -57,6 +60,12 @@ private:
 	FVector GetFrontDirection() const;
 	TArray<AActor*> LiveEnemies() const;
 	AOperativeCharacter* Member(int32 Index) const;
+	void HandleEnemySpawned(class AEnemyCharacter* Enemy, EEnemyArchetype Archetype);
+	void HandleEnemyDied(AActor* Victim, const FString& Source);
+
+	/** Godot spatial_telemetry_recorder: frames / events of the fight for the editor's replay player. */
+	FSpatialTelemetryRecorder Spatial;
+	bool bSpatialStarted = false;
 
 	EBotProfile Profile = EBotProfile::Normal;
 	FBotProfileConfig Config;

@@ -8,7 +8,11 @@
 #include "Combat/EnemySpawnPoint.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/WaveSubsystem.h"
 #include "Combat/WaveVictorySubsystem.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/WaveConfigTypes.h"
+#include "Dom/JsonObject.h"
 #include "Core/MissionSessionSubsystem.h"
 #include "Core/MissionSubsystem.h"
 #include "Engine/World.h"
@@ -93,6 +97,10 @@ void UPlaytestBotSubsystem::StartBot(EBotProfile InProfile, bool bQuitAtEnd, boo
 	for (TActorIterator<ADeployableActor> It(GetWorld()); It; ++It)
 	{
 		ExploreTargets.Add(*It);
+	}
+	if (UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>())
+	{
+		Waves->OnEnemySpawnedNative.AddUObject(this, &UPlaytestBotSubsystem::HandleEnemySpawned);
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Started: profile %s, collect %d (%d targets), timeout %.0f s"),
 		*PlaytestBotRules::ProfileName(Profile), bCollect ? 1 : 0, ExploreTargets.Num(), TimeoutSeconds);
@@ -179,6 +187,16 @@ void UPlaytestBotSubsystem::Tick(float DeltaTime)
 		Stage = EBotStage::Fight;
 		return;
 	case EBotStage::Fight:
+		if (!bSpatialStarted)
+		{
+			// bot_driver: spatial_recorder.start_recording when the fight starts.
+			bSpatialStarted = true;
+			const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
+			const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
+			Spatial.Start(GetWorld(), Level && !Level->Config.LevelId.IsEmpty() ? Level->Config.LevelId : FString(TEXT("outpost_gate_01")),
+				PlaytestBotRules::ProfileName(Profile));
+		}
+		Spatial.Tick(DeltaTime);
 		TickFight(DeltaTime);
 		return;
 	default:
@@ -529,6 +547,9 @@ void UPlaytestBotSubsystem::SmartTactics(float DeltaTime)
 			{
 				++GrenadesThrown;
 				GrenadeCooldown = 4.5f;
+				TSharedRef<FJsonObject> Details = MakeShared<FJsonObject>();
+				Details->SetNumberField(TEXT("cluster"), Count);
+				Spatial.RecordEvent(TEXT("GRENADE_THROWN"), Leader->DisplayName.ToString(), FString(), Center, Details);
 				UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Grenade at a cluster of %d"), Count);
 				return;
 			}
@@ -557,6 +578,10 @@ void UPlaytestBotSubsystem::SmartTactics(float DeltaTime)
 		{
 			Leader->OrderMoveTo(PlaytestBotRules::FallbackPosition(Leader->GetActorLocation(), Closest->GetActorLocation(), -GetFrontDirection()), false);
 			MoveCooldown = 2.f;
+			TSharedRef<FJsonObject> Details = MakeShared<FJsonObject>();
+			Details->SetStringField(TEXT("reason"), TEXT("TACTICAL_RETREAT"));
+			Details->SetNumberField(TEXT("threat_dist"), ClosestDistance / 100.f);
+			Spatial.RecordEvent(TEXT("COVER_LEAVE"), Leader->DisplayName.ToString(), FString(), Leader->GetActorLocation(), Details);
 			return;
 		}
 	}
@@ -571,6 +596,7 @@ void UPlaytestBotSubsystem::SmartTactics(float DeltaTime)
 		Threat /= Positions.Num();
 		float BestScore = -TNumericLimits<float>::Max();
 		FVector BestStand = FVector::ZeroVector;
+		FString BestId;
 		for (TActorIterator<ABarricadeActor> It(GetWorld()); It; ++It)
 		{
 			const UHealthComponent* Health = It->FindComponentByClass<UHealthComponent>();
@@ -586,12 +612,16 @@ void UPlaytestBotSubsystem::SmartTactics(float DeltaTime)
 			{
 				BestScore = Score;
 				BestStand = Stand;
+				BestId = It->GetName();
 			}
 		}
 		if (BestScore > -TNumericLimits<float>::Max())
 		{
 			Leader->OrderMoveTo(BestStand, false);
 			MoveCooldown = 3.f;
+			TSharedRef<FJsonObject> Details = MakeShared<FJsonObject>();
+			Details->SetNumberField(TEXT("tps_score"), BestScore);
+			Spatial.RecordEvent(TEXT("COVER_ENTER"), Leader->DisplayName.ToString(), BestId, BestStand, Details);
 			return;
 		}
 	}
@@ -632,9 +662,47 @@ void UPlaytestBotSubsystem::UpdateStances()
 	}
 }
 
+void UPlaytestBotSubsystem::HandleEnemySpawned(AEnemyCharacter* Enemy, EEnemyArchetype Archetype)
+{
+	if (UHealthComponent* Health = Enemy ? Enemy->GetHealthComponent() : nullptr)
+	{
+		Health->OnDiedNative.AddUObject(this, &UPlaytestBotSubsystem::HandleEnemyDied);
+	}
+}
+
+void UPlaytestBotSubsystem::HandleEnemyDied(AActor* Victim, const FString& Source)
+{
+	if (!Victim || !Spatial.IsRecording())
+	{
+		return;
+	}
+	// The killer's height above the victim (Godot killer_height: kills from elevated ground).
+	float KillerHeight = 0.f;
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		if (const AOperativeCharacter* Each = Member(Index); Each && Each->DisplayName.ToString() == Source)
+		{
+			KillerHeight = (Each->GetActorLocation().Z - Each->GetSimpleCollisionHalfHeight() - (Victim->GetActorLocation().Z - Victim->GetSimpleCollisionHalfHeight())) / 100.f;
+		}
+	}
+	TSharedRef<FJsonObject> Details = MakeShared<FJsonObject>();
+	Details->SetNumberField(TEXT("killer_height"), KillerHeight);
+	Spatial.RecordEvent(TEXT("ENEMY_DEATH"), Source, Victim->GetName(), Victim->GetActorLocation(), Details);
+}
+
 void UPlaytestBotSubsystem::Finish(const TCHAR* Result, int32 ExitCode)
 {
 	bActive = false;
+	{
+		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		const int32 Wave = Flow ? Flow->GetWaveIndex() : 0;
+		const bool bVictory = FCString::Strcmp(Result, TEXT("VICTORY")) == 0;
+		const URunTelemetrySubsystem* Telemetry = GetWorld()->GetSubsystem<URunTelemetrySubsystem>();
+		if (Spatial.IsRecording() && (!Telemetry || Telemetry->IsEnabled()))
+		{
+			Spatial.Finish(Result, bVictory ? Wave : FMath::Max(0, Wave - 1), Flow ? Flow->GetConfig().TotalWaves : 0);
+		}
+	}
 	Stage = EBotStage::Done;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] RESULT %s (profile %s, %.1f s real, grenades %d, deploys %d, items %d)"), Result,
 		*PlaytestBotRules::ProfileName(Profile), FPlatformTime::Seconds() - StartRealTime, GrenadesThrown, DeploysOrdered, ItemsUsed);
