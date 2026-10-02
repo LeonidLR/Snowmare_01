@@ -542,12 +542,42 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 		PanicComponent->RecoverFromPanic(TEXT("Погиб"), true);
 	}
 	// Godot _check_squad_vital_signs / _handle_expendable_member_death: an expendable member (the recruit) only leaves
-	// the squad (the leader passes on); the body search for his supplies (Godot corpse_loot) is not ported yet.
+	// the squad (the leader passes on) and his body can be searched for his supplies (Godot corpse_loot,
+	// player.gd get_items_list: ammo, medkits, food; grenades / the weapon have no loot stack here).
 	if (IsExpendable())
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(FText::FromString(TEXT("ШТАБ")), FText::FromString(FString::Printf(TEXT("⚠️ %s погиб в бою!"), *DisplayName.ToString())));
+			Messages->PostMessage(FText::FromString(TEXT("ШТАБ")), FText::FromString(FString::Printf(
+				TEXT("⚠️ %s погиб в бою! Обыщите останки, чтобы забрать припасы и снаряжение."), *DisplayName.ToString())));
+		}
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		if (ALootCrateActor* Remains = GetWorld()->SpawnActor<ALootCrateActor>(Feet + FVector(0.f, 0.f, 40.f), GetActorRotation(), Params))
+		{
+			Remains->CrateName = FText::FromString(FString::Printf(TEXT("Останки: %s"), *DisplayName.ToString()));
+			FLootContents Contents;
+			auto Ammo = [this](const TCHAR* Id)
+			{
+				const FWeaponAmmoState* State = AmmoInventory.Find(Id);
+				return State ? State->Clip + FMath::Max(0, State->Reserve) : 0;
+			};
+			Contents.Medkits = MedkitsCount;
+			Contents.CannedFood = CannedFoodCount;
+			Contents.Bread = BreadCount;
+			Contents.Chocolate = ChocolateCount;
+			Contents.Matches = 0;
+			Contents.RifleAmmo = Ammo(TEXT("m16"));
+			Contents.PistolAmmo = Ammo(TEXT("pistol"));
+			Contents.ShotgunAmmo = 0;
+			Contents.FlameFuel = 0;
+			Contents.CryoAmmo = 0;
+			Contents.PlasmaAmmo = 0;
+			Remains->Contents = Contents;
+			Remains->OpenSeconds = 0.6f; // searching a body, no lid
+			Remains->SetActorHiddenInGame(true); // the body is what the player sees and clicks; the crate is its hit box
+			Remains->Tags.Add(TEXT("CorpseLoot"));
 		}
 		USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 		if (Squad)
