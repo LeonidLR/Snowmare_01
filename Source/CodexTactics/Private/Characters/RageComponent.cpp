@@ -1,4 +1,5 @@
 #include "Characters/RageComponent.h"
+#include "Misc/App.h"
 #include "Subsystems/CodexEventBus.h"
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
@@ -45,8 +46,8 @@ void URageComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	CombatTimeElapsed += DeltaTime;
-	// Godot _clean_expired_enemy_crits (real time).
-	const double Now = FPlatformTime::Seconds();
+	// Godot _clean_expired_enemy_crits (real time = FApp time: the bot's fixed-step runs advance it with the game).
+	const double Now = FApp::GetCurrentTime(); // real time, but follows a fixed-step (bot) run
 	CritTracker.RemoveAll([this, Now](const FCritRecord& Record)
 	{
 		return Now - Record.LastTime > Config.CritMemoryWindow || !Record.Enemy.IsValid();
@@ -76,7 +77,7 @@ void URageComponent::OnIncomingHit(AActor* Attacker, bool bCrit)
 	{
 		return;
 	}
-	const double Now = FPlatformTime::Seconds();
+	const double Now = FApp::GetCurrentTime(); // real time, but follows a fixed-step (bot) run
 	FCritRecord* Record = CritTracker.FindByPredicate([Attacker](const FCritRecord& Entry) { return Entry.Enemy.Get() == Attacker; });
 	if (!Record)
 	{

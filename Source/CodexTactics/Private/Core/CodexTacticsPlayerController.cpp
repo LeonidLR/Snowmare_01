@@ -1138,7 +1138,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 
 	FVector2D MousePosition;
 	GetMousePosition(MousePosition.X, MousePosition.Y);
-	const double Now = FPlatformTime::Seconds();
+	const double Now = FApp::GetCurrentTime(); // real time, but follows a fixed-step (bot) run
 	const bool bDoubleClick = LastClickTime >= 0.0
 		&& Now - LastClickTime <= DoubleClickSeconds
 		&& FVector2D::Distance(MousePosition, LastClickPosition) <= DoubleClickPixels;

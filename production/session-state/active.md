@@ -3,7 +3,7 @@
 <!-- STATUS -->
 Epic: Godot → UE port (vertical slice per docs/port/REFERENCE_PLAYTHROUGH_01.md)
 Feature: playtest fixes (tremor / facing / stances) + Gemini's TANDEM requests 1-3 (enemy upper-body hits, pause abuse, Marksman enemy)
-Task: Unreal is the reference (2026-10-02): level JSON at runtime + Wave Editor in Tools/WaveEditor (done); next = real-time timers -> game time, then the C++ playtest bot (Scripts/run_simulations.bat, telemetry Saved/Telemetry)
+Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveEditor, bot-safe timers (done); next = the C++ playtest bot (fixed-step runs, Scripts/run_simulations.bat, telemetry Saved/Telemetry by the Godot schemas)
 <!-- /STATUS -->
 
 **The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
