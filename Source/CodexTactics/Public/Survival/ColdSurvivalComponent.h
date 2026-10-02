@@ -50,6 +50,10 @@ public:
 	/** Advances cold by DeltaSeconds (also used by headless checks). */
 	void StepCold(float DeltaSeconds);
 
+	/** Run telemetry (Godot cold_damage_taken / extreme_cold_time_sec): HP lost to freezing, seconds spent at 100 %. */
+	float GetColdDamageTaken() const { return ColdDamageTaken; }
+	float GetExtremeColdTime() const { return ExtremeColdTimeSec; }
+
 	/** Cold resistance of this operative (Godot fortitude: commander 15, engineer 25, medic 20). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cold")
 	float Fortitude = 15.f;
@@ -68,4 +72,6 @@ private:
 	EColdTier Tier = EColdTier::Normal;
 	bool bWeaponFrozen = false;
 	bool bFrostbitten = false;
+	float ColdDamageTaken = 0.f;
+	float ExtremeColdTimeSec = 0.f;
 };

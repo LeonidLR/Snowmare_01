@@ -11,6 +11,7 @@ public class CodexTacticsTests : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"Json",
 			"CodexTactics"
 		});
 	}

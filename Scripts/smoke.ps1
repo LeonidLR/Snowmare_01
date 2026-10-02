@@ -20,7 +20,7 @@ $LogFile = Join-Path $ProjectDir (Join-Path "Saved\Logs" $Log)
 $Owned = Enter-AgentLock "smoke $Command"
 try {
     # Start-Process takes one argument string: quote the paths (the project path has a space).
-    $GameArgs = "`"$Project`" $Map -game -nullrhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH `"-ExecCmds=$Command`" `"-abslog=$LogFile`" $Extra"
+    $GameArgs = "`"$Project`" $Map -game -nullrhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=$Command`" `"-abslog=$LogFile`" $Extra"
     $Game = Start-Process "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" -ArgumentList $GameArgs -WindowStyle Hidden -PassThru
     if (-not $Game.WaitForExit($TimeoutSeconds * 1000)) {
         Stop-Process -Id $Game.Id -Force -ErrorAction SilentlyContinue

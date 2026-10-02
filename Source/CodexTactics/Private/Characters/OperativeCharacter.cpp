@@ -1,4 +1,5 @@
 #include "Characters/OperativeCharacter.h"
+#include "Telemetry/RunTelemetrySubsystem.h"
 #include "Interactables/RadiusRingSubsystem.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -539,6 +540,29 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 	if (PanicComponent)
 	{
 		PanicComponent->RecoverFromPanic(TEXT("Погиб"), true);
+	}
+	// Godot _check_squad_vital_signs / _handle_expendable_member_death: an expendable member (the recruit) only leaves
+	// the squad (the leader passes on); the body search for his supplies (Godot corpse_loot) is not ported yet.
+	if (IsExpendable())
+	{
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(FText::FromString(TEXT("ШТАБ")), FText::FromString(FString::Printf(TEXT("⚠️ %s погиб в бою!"), *DisplayName.ToString())));
+		}
+		USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+		if (Squad)
+		{
+			Squad->UnregisterOperative(this);
+		}
+		bool bAnyAlive = false;
+		for (const AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+		{
+			bAnyAlive |= Member && Member != this && Member->HealthComponent && Member->HealthComponent->IsAlive();
+		}
+		if (bAnyAlive)
+		{
+			return;
+		}
 	}
 	// Godot _check_squad_vital_signs: any squad member down = mission failed (HQ line, time stop, failed screen).
 	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
@@ -1673,6 +1697,11 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 		{
 			TargetHealth->TakeDamage(Spec);
+		}
+		// Run telemetry (Godot _record_weapon_shot: hits with their damage, per wave and weapon).
+		if (URunTelemetrySubsystem* Telemetry = GetWorld() ? GetWorld()->GetSubsystem<URunTelemetrySubsystem>() : nullptr)
+		{
+			Telemetry->RecordWeaponHit(this, CurrentWeapon ? CurrentWeapon->WeaponId : FString(TEXT("m16")), Spec.Amount);
 		}
 		// Cryo weapons chill the shooter, fire weapons warm him (Godot self_cold / self_warmth_generation).
 		if (CurrentWeapon && CurrentWeapon->SelfColdGeneration > 0.f)

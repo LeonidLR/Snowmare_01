@@ -132,7 +132,10 @@ void UColdSurvivalComponent::StepCold(float DeltaSeconds)
 			const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 			const bool bCombat = Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat;
 			const float Multiplier = bCombat ? Config.CombatFreezeDamageMultiplier : 1.f;
-			Health->ApplyDirectHealthLoss(Config.FreezeDamagePerSecond * Multiplier * DeltaSeconds, TEXT("Холод"));
+			const float FreezeDamage = Config.FreezeDamagePerSecond * Multiplier * DeltaSeconds;
+			Health->ApplyDirectHealthLoss(FreezeDamage, TEXT("Холод"));
+			ColdDamageTaken += FreezeDamage;
+			ExtremeColdTimeSec += DeltaSeconds;
 		}
 	}
 

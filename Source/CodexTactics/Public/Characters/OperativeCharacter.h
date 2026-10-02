@@ -367,6 +367,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Operative")
 	bool bRecruited = true;
 
+	/**
+	 * Godot is_expendable (recruit_susanin.gd): the death of such a member (the recruit) does not fail the mission — he
+	 * leaves the squad and the HQ reports it; the recruit role is always expendable.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Squad")
+	bool bExpendable = false;
+
+	bool IsExpendable() const { return bExpendable || SquadRole == EOperativeRole::Recruit; }
+
 	/** Deployable type the F key sets up next (Godot selected_deployable_type). */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Inventory")
 	EDeployableType SelectedDeployType = EDeployableType::Turret;
