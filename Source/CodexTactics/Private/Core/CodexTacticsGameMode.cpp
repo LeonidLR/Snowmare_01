@@ -1,4 +1,5 @@
 #include "Core/CodexTacticsGameMode.h"
+#include "Data/LevelJsonRules.h"
 #include "Characters/EnemyCharacter.h"
 #include "Data/DialogueSequenceAsset.h"
 #include "Characters/OperativeBalance.h"
@@ -91,7 +92,27 @@ void ACodexTacticsGameMode::ApplyLevelConfig()
 	{
 		return;
 	}
-	ULevelConfigAsset* Level = LevelConfig.IsNull() ? nullptr : LevelConfig.LoadSynchronous();
+	// The level JSON (Wave Editor) first, the imported asset as the fallback.
+	ULevelConfigAsset* Level = nullptr;
+	if (!LevelJsonFile.IsEmpty())
+	{
+		FLevelCombatConfig Parsed;
+		FString Error;
+		if (LevelJsonRules::LoadLevel(LevelJsonFile, Parsed, Error))
+		{
+			Level = NewObject<ULevelConfigAsset>(this, TEXT("LevelFromJson"));
+			Level->Config = MoveTemp(Parsed);
+		}
+		else
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Level JSON %s: %s — using %s"), *LevelJsonFile, *Error, *LevelConfig.ToString());
+		}
+	}
+	if (!Level && !LevelConfig.IsNull())
+	{
+		Level = LevelConfig.LoadSynchronous();
+	}
+	ActiveLevelConfig = Level;
 	if (UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>())
 	{
 		Waves->SetLevelConfig(Level);

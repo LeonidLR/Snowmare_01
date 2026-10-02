@@ -1,0 +1,149 @@
+{
+  "$schema": "../../schemas/level_config.schema.json",
+  "level_id": "stage_12",
+  "level_name": "Бой 12: Сердцевина Ядра (Финальный босс)",
+  "stage_number": 12,
+  "act": 3,
+  "biome_id": "core_citadel",
+  "description": "Финальная битва кампании. Многофазный бой с Первородным Ледяным Колоссом.",
+  "prep_phase_duration": 45.0,
+  "wave_rest_duration": 15.0,
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Волна 1",
+      "max_simultaneous_enemies": 8,
+      "spawns": [
+        {
+          "enemy_type": "HOUND",
+          "count": 5,
+          "spawn_lane": "WEST_FLANK",
+          "spawn_delay_sec": 1.0,
+          "initial_delay_sec": 0.0
+        },
+        {
+          "enemy_type": "SPITTER",
+          "count": 3,
+          "spawn_lane": "EAST_FLANK",
+          "spawn_delay_sec": 1.2,
+          "initial_delay_sec": 1.5
+        },
+        {
+          "enemy_type": "BRUTE",
+          "count": 1,
+          "spawn_lane": "NORTH_GATE",
+          "spawn_delay_sec": 2.0,
+          "initial_delay_sec": 3.0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1.3,
+        "enemy_damage_mult": 1.24,
+        "enemy_speed_mult": 1.0,
+        "cold_drain_mult": 1.5
+      }
+    },
+    {
+      "wave_index": 2,
+      "name": "Волна 2",
+      "max_simultaneous_enemies": 10,
+      "spawns": [
+        {
+          "enemy_type": "HOUND",
+          "count": 6,
+          "spawn_lane": "WEST_FLANK",
+          "spawn_delay_sec": 1.0,
+          "initial_delay_sec": 0.0
+        },
+        {
+          "enemy_type": "SPITTER",
+          "count": 4,
+          "spawn_lane": "EAST_FLANK",
+          "spawn_delay_sec": 1.2,
+          "initial_delay_sec": 1.5
+        },
+        {
+          "enemy_type": "BRUTE",
+          "count": 1,
+          "spawn_lane": "NORTH_GATE",
+          "spawn_delay_sec": 2.0,
+          "initial_delay_sec": 3.0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1.35,
+        "enemy_damage_mult": 1.29,
+        "enemy_speed_mult": 1.0,
+        "cold_drain_mult": 1.5
+      }
+    },
+    {
+      "wave_index": 3,
+      "name": "Волна 3",
+      "max_simultaneous_enemies": 12,
+      "spawns": [
+        {
+          "enemy_type": "HOUND",
+          "count": 7,
+          "spawn_lane": "WEST_FLANK",
+          "spawn_delay_sec": 1.0,
+          "initial_delay_sec": 0.0
+        },
+        {
+          "enemy_type": "SPITTER",
+          "count": 4,
+          "spawn_lane": "EAST_FLANK",
+          "spawn_delay_sec": 1.2,
+          "initial_delay_sec": 1.5
+        },
+        {
+          "enemy_type": "BRUTE",
+          "count": 2,
+          "spawn_lane": "NORTH_GATE",
+          "spawn_delay_sec": 2.0,
+          "initial_delay_sec": 3.0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1.4,
+        "enemy_damage_mult": 1.34,
+        "enemy_speed_mult": 1.0,
+        "cold_drain_mult": 1.5
+      }
+    },
+    {
+      "wave_index": 4,
+      "name": "Волна 4",
+      "max_simultaneous_enemies": 14,
+      "spawns": [
+        {
+          "enemy_type": "HOUND",
+          "count": 8,
+          "spawn_lane": "WEST_FLANK",
+          "spawn_delay_sec": 1.0,
+          "initial_delay_sec": 0.0
+        },
+        {
+          "enemy_type": "SPITTER",
+          "count": 5,
+          "spawn_lane": "EAST_FLANK",
+          "spawn_delay_sec": 1.2,
+          "initial_delay_sec": 1.5
+        },
+        {
+          "enemy_type": "BRUTE",
+          "count": 2,
+          "spawn_lane": "NORTH_GATE",
+          "spawn_delay_sec": 2.0,
+          "initial_delay_sec": 3.0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1.45,
+        "enemy_damage_mult": 1.39,
+        "enemy_speed_mult": 1.0,
+        "cold_drain_mult": 1.5
+      }
+    }
+  ]
+}

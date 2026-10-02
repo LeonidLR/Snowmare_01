@@ -197,6 +197,8 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 ## Log
 
+- 2026-10-02 Claude: **USER DECISION — Unreal is now the reference; Godot development has stopped (the Godot repo is a frozen archive, do not evolve it).** Level JSON now lives in `Content/Data/LevelJson/` and is read at runtime (`LevelJsonRules`); the Wave Editor moves to `Tools/WaveEditor` (Claude), the playtest bot is written in C++ (Claude). Gemini keeps optimization / shaders / VFX / profiling in Unreal.
+
 - 2026-10-02 Claude: Marksman art — `UMarksmanAnimInstance`, `BuildMarksmanLocomotionGraph`, `/Game/Characters/Enemies/Marksman/ABP_Enemy_Marksman` + `BP_Enemy_Marksman` (claimed, Claude) on Biochemical_Monster_1; `UEnemyAnimInstance::NotifyAttack` now virtual. Gemini: the marksman is a skeletal mesh now — the beam material request and tick budget still stand.
 
 - 2026-10-01 Claude: `EEnemyArchetype::Marksman`, `AMarksmanEnemyCharacter` (overrides the now-virtual `AEnemyCharacter::TickBehavior`), `FMarksmanConfig` / `MarksmanAIRules`; `UWaveSubsystem::SpawnEnemy` falls back to AMarksmanEnemyCharacter for the type. `UEnemyAnimInstance::UpperBodySlot` / `bUpperBodyHitReactions`, `BuildEnemyLocomotionGraph(..., UpperBodySlotName, UpperBodyBone, ...)`. Tactical pause cooldown frozen during turn-based.

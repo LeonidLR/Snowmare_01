@@ -291,7 +291,7 @@ void UMissionSubsystem::ApplyStageLoadout()
 {
 	// Godot _apply_stage_exploration_resources: the combat supply by the level's squad_loadout and the start mode.
 	const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
-	const ULevelConfigAsset* Level = GameMode ? GameMode->LevelConfig.LoadSynchronous() : nullptr;
+	const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
 	const FSquadLoadout Loadout = Level ? Level->Config.SquadLoadout : FSquadLoadout();
 	const ELoadoutMode Mode = LoadoutRules::ResolveMode(Loadout.SimulationMode, StartMode);
 	AOperativeCharacter* Roles[3] = { nullptr, nullptr, nullptr };

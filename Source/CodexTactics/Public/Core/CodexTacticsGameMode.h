@@ -91,12 +91,22 @@ public:
 	TSoftObjectPtr<UGodotBalanceAsset> GameBalanceConfig;
 
 	/**
-	 * Level combat data (imported from the Godot level JSON by Scripts/Editor/import_levels.py; Godot main.gd
-	 * active_level_json_path = level_01_outpost.json): waves for the wave subsystem, preparation / rest durations and
-	 * the wave count for the game flow. Empty = built-in waves and the balance fallback (LevelFlowRules).
+	 * Level combat data file in Content/Data/LevelJson (edited with the Wave Editor, Tools/WaveEditor; read at the start
+	 * by LevelJsonRules — Unreal is the reference since 2026-10-02): waves for the wave subsystem, preparation / rest
+	 * durations and the wave count for the game flow. Unreadable / empty -> LevelConfig.
+	 */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Balance")
+	FString LevelJsonFile = TEXT("level_01_outpost.json");
+
+	/**
+	 * Fallback level data asset (imported once from the Godot archive by Scripts/Editor/import_levels.py). Both empty =
+	 * built-in waves and the balance fallback (LevelFlowRules).
 	 */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Balance")
 	TSoftObjectPtr<ULevelConfigAsset> LevelConfig;
+
+	/** The level data in use (from LevelJsonFile, else LevelConfig; nullptr = built-in waves). */
+	const ULevelConfigAsset* GetActiveLevelConfig() const { return ActiveLevelConfig; }
 
 	/**
 	 * Enemy Blueprint per type (the art: skeletal mesh + AnimBP). A type without an entry, or whose Blueprint is missing,
@@ -152,4 +162,7 @@ private:
 
 	/** Hands LevelConfig to the wave subsystem and its durations / wave count to the game flow (before BeginPlay). */
 	void ApplyLevelConfig();
+
+	UPROPERTY(Transient)
+	TObjectPtr<ULevelConfigAsset> ActiveLevelConfig;
 };

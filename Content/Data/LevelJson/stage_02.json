@@ -1,0 +1,67 @@
+{
+  "$schema": "../../schemas/level_config.schema.json",
+  "level_id": "stage_02",
+  "level_name": "Бой 2: Складской терминал",
+  "stage_number": 2,
+  "act": 1,
+  "biome_id": "bunker_industrial",
+  "description": "Зачистка ангара снабжения внутри отапливаемого периметра.",
+  "prep_phase_duration": 45.0,
+  "wave_rest_duration": 15.0,
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Волна 1",
+      "max_simultaneous_enemies": 8,
+      "spawns": [
+        {
+          "enemy_type": "HOUND",
+          "count": 3,
+          "spawn_lane": "WEST_FLANK",
+          "spawn_delay_sec": 1.0,
+          "initial_delay_sec": 0.0
+        },
+        {
+          "enemy_type": "SPITTER",
+          "count": 1,
+          "spawn_lane": "EAST_FLANK",
+          "spawn_delay_sec": 1.2,
+          "initial_delay_sec": 1.5
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1.0,
+        "enemy_damage_mult": 1.0,
+        "enemy_speed_mult": 1.0,
+        "cold_drain_mult": 0.0
+      }
+    },
+    {
+      "wave_index": 2,
+      "name": "Волна 2",
+      "max_simultaneous_enemies": 10,
+      "spawns": [
+        {
+          "enemy_type": "HOUND",
+          "count": 4,
+          "spawn_lane": "WEST_FLANK",
+          "spawn_delay_sec": 1.0,
+          "initial_delay_sec": 0.0
+        },
+        {
+          "enemy_type": "SPITTER",
+          "count": 2,
+          "spawn_lane": "EAST_FLANK",
+          "spawn_delay_sec": 1.2,
+          "initial_delay_sec": 1.5
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1.05,
+        "enemy_damage_mult": 1.05,
+        "enemy_speed_mult": 1.0,
+        "cold_drain_mult": 0.0
+      }
+    }
+  ]
+}
