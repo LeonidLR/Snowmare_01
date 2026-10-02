@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/level_config.schema.json",
+  "$schema": "../Schemas/level_config.schema.json",
   "level_id": "stage_08",
   "level_name": "Бой 8: Насосная станция",
   "stage_number": 8,

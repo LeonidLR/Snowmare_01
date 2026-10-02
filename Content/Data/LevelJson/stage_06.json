@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/level_config.schema.json",
+  "$schema": "../Schemas/level_config.schema.json",
   "level_id": "stage_06",
   "level_name": "Бой 6: Технический коллектор",
   "stage_number": 6,

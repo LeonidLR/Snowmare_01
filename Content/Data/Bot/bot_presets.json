@@ -1,0 +1,34 @@
+﻿[
+  {
+    "id": "short_check",
+    "name": "Короткая проверка",
+    "description": "1 забег, NORMAL, скорость 5.0x — быстрая проверка механик",
+    "runs": 1,
+    "profile": "NORMAL",
+    "speed": 5.0
+  },
+  {
+    "id": "fast_test",
+    "name": "Быстрый тест",
+    "description": "5 забегов, NORMAL, скорость 8.0x",
+    "runs": 5,
+    "profile": "NORMAL",
+    "speed": 8.0
+  },
+  {
+    "id": "standard_eval",
+    "name": "Стандартный прогон",
+    "description": "20 забегов, NORMAL, скорость 8.0x — статистическая оценка",
+    "runs": 20,
+    "profile": "NORMAL",
+    "speed": 8.0
+  },
+  {
+    "id": "veteran_stress",
+    "name": "Стресс-тест ветерана",
+    "description": "50 забегов, VETERAN, скорость 10.0x",
+    "runs": 50,
+    "profile": "VETERAN",
+    "speed": 10.0
+  }
+]

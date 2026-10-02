@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpatialTelemetryRun",
+  "description": "Схема пространственно-временной телеметрии симуляции для 2D Тактического Плеера и 3D Blender Bridge",
+  "type": "object",
+  "required": [
+    "session_id",
+    "timestamp_utc",
+    "level_id",
+    "tester_profile",
+    "duration_sec",
+    "tick_rate_hz",
+    "level_layout",
+    "frames",
+    "events",
+    "summary"
+  ],
+  "properties": {
+    "session_id": { "type": "string" },
+    "timestamp_utc": { "type": "string" },
+    "level_id": { "type": "string" },
+    "tester_profile": { "type": "string" },
+    "duration_sec": { "type": "number" },
+    "tick_rate_hz": { "type": "number" },
+    "level_layout": {
+      "type": "object",
+      "required": ["bounds", "covers", "elevations", "spawn_points"],
+      "properties": {
+        "bounds": {
+          "type": "object",
+          "required": ["min_x", "max_x", "min_z", "max_z"],
+          "properties": {
+            "min_x": { "type": "number" },
+            "max_x": { "type": "number" },
+            "min_z": { "type": "number" },
+            "max_z": { "type": "number" }
+          }
+        },
+        "obstacles": {
+          "type": "array",
+          "description": "Статические коллайдеры зданий, кубов и крупных препятствий",
+          "items": {
+            "type": "object",
+            "required": ["id", "position", "size"],
+            "properties": {
+              "id": { "type": "string" },
+              "type": { "type": "string" },
+              "shape": { "type": "string" },
+              "position": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+              "size": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+              "rotation_y": { "type": "number" }
+            }
+          }
+        },
+        "covers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "position"],
+            "properties": {
+              "id": { "type": "string" },
+              "type": { "type": "string" },
+              "position": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+              "rotation_y": { "type": "number" },
+              "size": { "type": "array", "items": { "type": "number" } },
+              "max_health": { "type": "number" }
+            }
+          }
+        },
+        "elevations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "height"],
+            "properties": {
+              "id": { "type": "string" },
+              "height": { "type": "number" },
+              "polygon": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": { "type": "number" },
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              }
+            }
+          }
+        },
+        "spawn_points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "position"],
+            "properties": {
+              "id": { "type": "string" },
+              "position": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+              "lane": { "type": "string" }
+            }
+          }
+        },
+        "defend_points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "position": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+              "radius": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "frames": {
+      "type": "array",
+      "description": "Временные снимки симуляции с частотой tick_rate_hz",
+      "items": {
+        "type": "object",
+        "required": ["t", "squad", "enemies"],
+        "properties": {
+          "t": { "type": "number", "description": "Время в секундах от начала боя" },
+          "squad": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "x", "y", "z", "hp"],
+              "properties": {
+                "id": { "type": "string" },
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "z": { "type": "number" },
+                "hp": { "type": "number" },
+                "stance": { "type": "integer" },
+                "in_cover": { "type": "boolean" },
+                "cover_id": { "type": ["string", "null"] },
+                "weapon": { "type": "string" },
+                "cold": { "type": "number" }
+              }
+            }
+          },
+          "enemies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "type", "x", "y", "z", "hp"],
+              "properties": {
+                "id": { "type": "string" },
+                "type": { "type": "string" },
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "z": { "type": "number" },
+                "hp": { "type": "number" },
+                "vx": { "type": "number" },
+                "vz": { "type": "number" },
+                "target_id": { "type": ["string", "null"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "description": "Ключевые тактические и боевые события симуляции",
+      "items": {
+        "type": "object",
+        "required": ["t", "type"],
+        "properties": {
+          "t": { "type": "number" },
+          "type": {
+            "type": "string",
+            "enum": [
+              "SHOT",
+              "GRENADE_THROWN",
+              "EXPLOSION",
+              "HIT",
+              "SQUAD_DEATH",
+              "ENEMY_DEATH",
+              "COVER_ENTER",
+              "COVER_LEAVE",
+              "COVER_DAMAGED",
+              "COVER_DESTROYED",
+              "CHOKE_CONGESTION"
+            ]
+          },
+          "actor_id": { "type": "string" },
+          "target_id": { "type": "string" },
+          "position": { "type": "array", "items": { "type": "number" } },
+          "details": { "type": "object" }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["result"],
+      "properties": {
+        "result": { "type": "string", "enum": ["VICTORY", "DEFEAT", "ABORTED"] },
+        "waves_cleared": { "type": "integer" },
+        "total_waves": { "type": "integer" },
+        "cover_metrics": {
+          "type": "object",
+          "description": "Сводка по каждому укрытию: время использования, заблокированный урон, статус"
+        },
+        "choke_points_detected": {
+          "type": "array",
+          "description": "Узкие места, выявленные во время симуляции",
+          "items": {
+            "type": "object",
+            "properties": {
+              "position": { "type": "array", "items": { "type": "number" } },
+              "congestion_score": { "type": "number" },
+              "enemy_count_peak": { "type": "integer" },
+              "duration_sec": { "type": "number" },
+              "stuck_type": { "type": "string" }
+            }
+          }
+        },
+        "height_metrics": {
+          "type": "object",
+          "properties": {
+            "elevation_usage_time_sec": { "type": "number" },
+            "kills_from_height": { "type": "integer" }
+          }
+        }
+      }
+    }
+  }
+}

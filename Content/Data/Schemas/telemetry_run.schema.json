@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TelemetryRun",
+  "description": "Схема записи результатов тестового или игрового забега (JSONL)",
+  "type": "object",
+  "required": ["session_id", "timestamp_utc", "tester_profile", "level_id", "result", "waves_cleared", "total_waves", "run_duration_sec"],
+  "properties": {
+    "session_id": { "type": "string", "description": "UUID забега" },
+    "timestamp_utc": { "type": "string", "description": "ISO-8601 дата и время" },
+    "tester_profile": { 
+      "type": "string", 
+      "enum": ["HUMAN", "BOT_CASUAL", "BOT_VETERAN", "BOT_AGGRESSIVE"],
+      "description": "Профиль тестера" 
+    },
+    "level_id": { "type": "string" },
+    "result": { "type": "string", "enum": ["VICTORY", "DEFEAT"] },
+    "waves_cleared": { "type": "integer" },
+    "total_waves": { "type": "integer" },
+    "run_duration_sec": { "type": "number" },
+    "death_context": {
+      "type": ["object", "null"],
+      "properties": {
+        "failed_wave": { "type": "integer" },
+        "wave_time_elapsed": { "type": "number" },
+        "cause": { "type": "string", "enum": ["HP_DEPLETED", "FROSTBITE", "OUTPOST_DESTROYED"] },
+        "primary_killer": { "type": "string" }
+      }
+    },
+    "squad_performance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "character": { "type": "string" },
+          "damage_dealt": { "type": "number" },
+          "damage_taken": { "type": "number" },
+          "kills": { "type": "integer" },
+          "accuracy_pct": { "type": "number" },
+          "cold_level_final": { "type": "number" },
+          "ammo_spent": { "type": "integer" }
+        }
+      }
+    },
+    "wave_metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "wave_index": { "type": "integer" },
+          "duration_sec": { "type": "number" },
+          "tactical_pauses_used": { "type": "integer" },
+          "turrets_placed": { "type": "integer" },
+          "mines_placed": { "type": "integer" },
+          "barricades_destroyed": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

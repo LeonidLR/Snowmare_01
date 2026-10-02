@@ -17,3 +17,7 @@ Build/
 # Plugin build output (keep plugin sources)
 Plugins/**/Binaries/
 Plugins/**/Intermediate/
+
+# Wave Editor (Tools/WaveEditor): npm dependencies and build output
+Tools/WaveEditor/node_modules/
+Tools/WaveEditor/dist/

@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/stage_config.schema.json",
+  "$schema": "../Schemas/stage_config.schema.json",
   "stage_id": "stage_01_outpost_gate",
   "stage_number": 1,
   "act": 1,

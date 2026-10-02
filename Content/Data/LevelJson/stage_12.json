@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/level_config.schema.json",
+  "$schema": "../Schemas/level_config.schema.json",
   "level_id": "stage_12",
   "level_name": "Бой 12: Сердцевина Ядра (Финальный босс)",
   "stage_number": 12,

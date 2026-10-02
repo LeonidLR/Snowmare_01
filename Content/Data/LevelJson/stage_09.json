@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/level_config.schema.json",
+  "$schema": "../Schemas/level_config.schema.json",
   "level_id": "stage_09",
   "level_name": "Бой 9: Гермошлюз Цитадели",
   "stage_number": 9,

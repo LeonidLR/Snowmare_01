@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/level_config.schema.json",
+  "$schema": "../Schemas/level_config.schema.json",
   "level_id": "stage_11",
   "level_name": "Бой 11: Криокамера реактора",
   "stage_number": 11,

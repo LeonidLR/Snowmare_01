@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/level_config.schema.json",
+  "$schema": "../Schemas/level_config.schema.json",
   "level_id": "stage_04",
   "level_name": "Бой 4: Дизельный узел (Мини-босс)",
   "stage_number": 4,

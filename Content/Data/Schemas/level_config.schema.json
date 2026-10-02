@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LevelConfig",
+  "description": "Схема конфигурации уровня и боевых волн для тактического экшена",
+  "type": "object",
+  "required": ["level_id", "level_name", "prep_phase_duration", "wave_rest_duration", "waves"],
+  "properties": {
+    "level_id": { "type": "string", "description": "Уникальный строковый идентификатор уровня" },
+    "level_name": { "type": "string", "description": "Отображаемое название локации" },
+    "description": { "type": "string", "description": "Краткое описание задачи на рубеже" },
+    "prep_phase_duration": { "type": "number", "minimum": 0, "default": 60.0, "description": "Длительность начальной подготовки к обороне в секундах" },
+    "wave_rest_duration": { "type": "number", "minimum": 0, "default": 20.0, "description": "Длительность передышки между волнами в секундах" },
+    "waves": {
+      "type": "array",
+      "description": "Список последовательных боевых волн",
+      "items": {
+        "type": "object",
+        "required": ["wave_index", "spawns"],
+        "properties": {
+          "wave_index": { "type": "integer", "minimum": 1 },
+          "max_simultaneous_enemies": { "type": "integer", "default": 12, "description": "Лимит одновременно живых врагов" },
+          "spawns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["enemy_type", "count", "spawn_lane"],
+              "properties": {
+                "enemy_type": { 
+                  "type": "string", 
+                  "enum": ["HOUND", "SPITTER", "BRUTE", "FROSTBITTEN", "CUTTER", "MARKSMAN"],
+                  "description": "Тип монстра" 
+                },
+                "count": { "type": "integer", "minimum": 1, "description": "Количество противников данного типа" },
+                "spawn_lane": { 
+                  "type": "string", 
+                  "enum": ["NORTH_GATE", "WEST_FLANK", "EAST_FLANK", "ANY"],
+                  "default": "ANY",
+                  "description": "Линия / фланг появления на карте" 
+                },
+                "spawn_delay_sec": { "type": "number", "default": 1.0, "description": "Интервал между появлением единиц" },
+                "initial_delay_sec": { "type": "number", "default": 0.0, "description": "Задержка перед первой группой" }
+              }
+            }
+          },
+          "wave_modifiers": {
+            "type": "object",
+            "properties": {
+              "enemy_hp_mult": { "type": "number", "default": 1.0, "description": "Множитель здоровья врагов волны" },
+              "enemy_damage_mult": { "type": "number", "default": 1.0, "description": "Множитель урона врагов волны" },
+              "enemy_speed_mult": { "type": "number", "default": 1.0, "description": "Множитель скорости перемещения" },
+              "cold_drain_mult": { "type": "number", "default": 1.0, "description": "Множитель нарастания холода" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

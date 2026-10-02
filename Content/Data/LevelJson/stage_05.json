@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/level_config.schema.json",
+  "$schema": "../Schemas/level_config.schema.json",
   "level_id": "stage_05",
   "level_name": "Бой 5: Затопленный тоннель",
   "stage_number": 5,
