@@ -393,7 +393,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	// (without it the fear switched on and off every frame at the edge and the enemy shook on the spot).
 	FVector Fire;
 	float FireRadius = 0.f;
-	const bool bNearFire = bFearsFire && AIConfig.bFireFearEnabled && FindNearestFireZone(bFleeingFire ? 100.f : 0.f, Fire, FireRadius);
+	const bool bNearFire = bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire && FindNearestFireZone(bFleeingFire ? 100.f : 0.f, Fire, FireRadius);
 	if (bNearFire)
 	{
 		const AActor* Victim = CurrentTarget.Get();
@@ -503,7 +503,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		FVector Zone;
 		float ZoneRadius = 0.f;
 		FVector Waypoint;
-		if (bFearsFire && AIConfig.bFireFearEnabled && FindNearestFireZone(800.f, Zone, ZoneRadius)
+		if (bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire && FindNearestFireZone(800.f, Zone, ZoneRadius)
 			&& EnemyAIRules::FireDetourWaypoint(Feet, Zone, ZoneRadius + 50.f, TargetPosition, Waypoint))
 		{
 			if (FVector::Dist2D(Feet, Waypoint) > 60.f)
@@ -581,9 +581,27 @@ AActor* AEnemyCharacter::FindTarget() const
 		}
 		bAnyUsable |= Candidates[Index].bUsable;
 	}
+	bBravingFire = false;
 	if (!bAnyUsable)
 	{
-		// Every target is in a warm zone or out of reach: fall back to the plain choice (wait at the edge).
+		// Every target is in a warm zone or out of reach: go for the nearest operative and brave the fire (user decision
+		// 2026-10-02 — waiting at the edge of the generator's warm zone stalled the waves).
+		AActor* Nearest = nullptr;
+		float NearestDistance = TNumericLimits<float>::Max();
+		const FVector From = GetActorLocation();
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (Member->HealthComponent && Member->HealthComponent->IsAlive() && FVector::Dist(From, Member->GetActorLocation()) < NearestDistance)
+			{
+				NearestDistance = FVector::Dist(From, Member->GetActorLocation());
+				Nearest = Member;
+			}
+		}
+		if (Nearest)
+		{
+			bBravingFire = true;
+			return Nearest;
+		}
 		Candidates = AllCandidates;
 	}
 	const bool bTurretHit = LastAttackerSource.Contains(TEXT("Турель")) || LastAttackerSource.Contains(TEXT("Turret"));

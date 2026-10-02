@@ -124,6 +124,12 @@ public:
 	/** Godot is_fleeing_fire: running from a burning barrel / warm zone. */
 	bool IsFleeingFire() const { return bFleeingFire; }
 
+	/**
+	 * No usable target (all in fire / heat zones or out of reach): the enemy goes for the nearest operative and ignores
+	 * its fear of fire until a usable target appears (user decision 2026-10-02; it used to wait at the zone's edge).
+	 */
+	bool IsBravingFire() const { return bBravingFire; }
+
 	/** Current victim (operative, turret or generator). */
 	AActor* GetCurrentTarget() const { return CurrentTarget.Get(); }
 
@@ -207,6 +213,8 @@ protected:
 	/** Walk speed before frost / fear factors (archetype, balance, wave modifiers). */
 	float BaseWalkSpeed = 300.f;
 	bool bFleeingFire = false;
+	/** Set by FindTarget (see IsBravingFire). */
+	mutable bool bBravingFire = false;
 	/** Godot last_attacker_source (a turret hit pulls large enemies to turrets). */
 	FString LastAttackerSource;
 	TWeakObjectPtr<AActor> CurrentTarget;

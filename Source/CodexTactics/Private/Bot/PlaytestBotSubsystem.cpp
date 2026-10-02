@@ -17,6 +17,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/DeployableActor.h"
+#include "Interactables/HeatSourceComponent.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/LootCrateActor.h"
@@ -330,9 +331,13 @@ void UPlaytestBotSubsystem::TickFight(float DeltaTime)
 			for (const AActor* Enemy : Enemies)
 			{
 				const AEnemyCharacter* Typed = Cast<AEnemyCharacter>(Enemy);
-				UE_LOG(LogCodexTactics, Display, TEXT("   -> %s HP %.0f at %s, %.0f cm/s, target %s"), *Enemy->GetName(),
+				const AActor* Target = Typed ? Typed->GetCurrentTarget() : nullptr;
+				const float EnemyFeet = Enemy->GetActorLocation().Z - Enemy->GetSimpleCollisionHalfHeight();
+				const float TargetFeet = Target ? Target->GetActorLocation().Z - Target->GetSimpleCollisionHalfHeight() : 0.f;
+				UE_LOG(LogCodexTactics, Display, TEXT("   -> %s HP %.0f at %s, %.0f cm/s, target %s %.0f cm away, feet dz %.0f"), *Enemy->GetName(),
 					Typed ? Typed->GetHealthComponent()->GetCurrentHealth() : 0.f, *Enemy->GetActorLocation().ToCompactString(),
-					Enemy->GetVelocity().Size2D(), Typed && Typed->GetCurrentTarget() ? *Typed->GetCurrentTarget()->GetName() : TEXT("-"));
+					Enemy->GetVelocity().Size2D(), Target ? *Target->GetName() : TEXT("-"),
+					Target ? FVector::Dist2D(Enemy->GetActorLocation(), Target->GetActorLocation()) : 0.f, TargetFeet - EnemyFeet);
 			}
 		}
 	}
@@ -441,6 +446,8 @@ void UPlaytestBotSubsystem::CombatAssist()
 {
 	// _veteran_combat_assist / _normal_combat_assist with the real supplies (deviation: Godot healed with pause charges
 	// and lowered the cold by decree).
+	WarmMoveCooldown = FMath::Max(0.f, WarmMoveCooldown - BotDecisionInterval);
+	bool bNeedsWarmth = false;
 	for (int32 Index = 0; Index < 3; ++Index)
 	{
 		AOperativeCharacter* Each = Member(Index);
@@ -456,13 +463,41 @@ void UPlaytestBotSubsystem::CombatAssist()
 			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] %s: medkit"), *Each->DisplayName.ToString());
 			return;
 		}
-		if (Each->ColdLevel > Config.WarmAboveCold
-			&& (Each->UsePersonalItem(EPersonalItem::Chocolate) || Each->UsePersonalItem(EPersonalItem::CannedFood)))
+		if (Each->ColdLevel > Config.WarmAboveCold)
 		{
-			++ItemsUsed;
-			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] %s: warming food (cold %.0f%%)"), *Each->DisplayName.ToString(), Each->ColdLevel);
-			return;
+			if (Each->UsePersonalItem(EPersonalItem::Chocolate) || Each->UsePersonalItem(EPersonalItem::CannedFood))
+			{
+				++ItemsUsed;
+				UE_LOG(LogCodexTactics, Display, TEXT("[Bot] %s: warming food (cold %.0f%%)"), *Each->DisplayName.ToString(), Each->ColdLevel);
+				return;
+			}
+			bNeedsWarmth = true;
 		}
+	}
+	// No food left: the squad steps into the nearest active heat zone (as a player would; Godot's bot had no need).
+	AOperativeCharacter* Leader = Member(0);
+	if (bNeedsWarmth && Leader && WarmMoveCooldown <= 0.f)
+	{
+		const UHeatSourceComponent* Best = nullptr;
+		float BestDistance = 4000.f;
+		for (const TWeakObjectPtr<UHeatSourceComponent>& Source : UHeatSourceComponent::GetAllSources())
+		{
+			const float Distance = Source.IsValid() && Source->GetWorld() == GetWorld() && Source->IsHeatActive()
+				? FVector::Dist2D(Source->GetComponentLocation(), Leader->GetActorLocation()) : BestDistance;
+			if (Distance < BestDistance)
+			{
+				BestDistance = Distance;
+				Best = Source.Get();
+			}
+		}
+		if (Best && BestDistance > Best->Radius * 0.5f)
+		{
+			Leader->OrderMoveTo(Best->GetComponentLocation() + (Leader->GetActorLocation() - Best->GetComponentLocation()).GetSafeNormal2D() * Best->Radius * 0.4f, false);
+			++WarmMoves;
+			MoveCooldown = 10.f;
+			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] No warming food: the squad goes to the heat at %.0f m"), BestDistance / 100.f);
+		}
+		WarmMoveCooldown = 10.f;
 	}
 }
 

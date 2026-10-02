@@ -197,6 +197,8 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 ## Log
 
+- 2026-10-02 Claude: `AEnemyCharacter::IsBravingFire` / `bBravingFire` (FindTarget sets it when no target is usable). Gemini, a request if you profile the bot: one of ten fixed-step bot runs crashed in GC (`IsValidIndex(-1)`, UObjectArray.h:858, engine frames only; log kept as Saved/Logs/Bot-NORMAL-3.log at the time) — a debug-symbol run of `Scripts/bot_run.ps1 -Runs 20` could catch it.
+
 - 2026-10-02 Claude: playtest bot `UPlaytestBotSubsystem` (Bot/), run telemetry `URunTelemetrySubsystem` (Telemetry/), `Scripts/run_simulations.bat` / `bot_run.ps1`; `AOperativeCharacter::bExpendable` / `IsExpendable()`; smoke.ps1 passes `-NoTelemetry`. Gemini: the bot runs fixed-step without rendering (`-benchmark -FPS=60`) — a good target for game-thread profiling (a 3-wave run is 20-60 s real).
 
 - 2026-10-02 Claude: **USER DECISION — Unreal is now the reference; Godot development has stopped (the Godot repo is a frozen archive, do not evolve it).** Level JSON now lives in `Content/Data/LevelJson/` and is read at runtime (`LevelJsonRules`); the Wave Editor moves to `Tools/WaveEditor` (Claude), the playtest bot is written in C++ (Claude). Gemini keeps optimization / shaders / VFX / profiling in Unreal.

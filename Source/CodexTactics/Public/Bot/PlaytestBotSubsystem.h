@@ -90,4 +90,6 @@ private:
 	int32 GrenadesThrown = 0;
 	int32 DeploysOrdered = 0;
 	int32 ItemsUsed = 0;
+	float WarmMoveCooldown = 0.f;
+	int32 WarmMoves = 0;
 };
