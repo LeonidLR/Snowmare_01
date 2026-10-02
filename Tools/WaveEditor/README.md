@@ -9,7 +9,7 @@
 ### Вариант 1 (В один клик из корня проекта):
 Запустите файл:
 ```bat
-Scriptsun_wave_editor.bat
+Scripts/run_wave_editor.bat
 ```
 
 ### Вариант 2 (Через терминал):
