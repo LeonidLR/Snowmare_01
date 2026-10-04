@@ -363,6 +363,14 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 	{
 		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("ItemUsed", "Использован(а) {0} (+HP / согрев)! (Осталось: {1} шт.)"),
 			PersonalItemRules::GetName(Item), Leader->GetItemCount(Item)));
+		// Turn-based: a medkit ends the operative's turn (user decision 2026-10-04).
+		if (Item == EPersonalItem::Medkit)
+		{
+			if (UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>(); TurnBased && TurnBased->IsActive())
+			{
+				TurnBased->EndTurnAfterMedkit(Leader);
+			}
+		}
 	}
 	else if (Leader->GetItemCount(Item) <= 0)
 	{

@@ -25,6 +25,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Tactics/GorkyGridManager.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Tactics/TurnBasedRules.h"
 #include "TimerManager.h"
 
 namespace TurnWalkSmoke
@@ -207,11 +208,14 @@ namespace TurnWalkSmoke
 			Check(State, TurnBased->SetActiveUnitStance(EOperativeStance::Prone) && Unit->GetStance() == EOperativeStance::Prone, TEXT("lay down"));
 			const FTurnUnitState* UnitState = TurnBased->GetUnitState(Unit);
 			UGorkyGridManager* Grid = TurnBased->GetGrid();
+			// Prone / crouched a step costs double (user decision 2026-10-04): two cells when the AP allow, else one.
 			FIntPoint Target(-999, -999);
-			for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(UnitState->GridPos, UnitState->AP))
+			const int32 StepBudget = UnitState->AP / TurnBasedRules::MoveCostMultiplier(EOperativeStance::Prone, FTurnBasedBalance());
+			const int32 Cells = FMath::Clamp(StepBudget, 1, 2);
+			for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(UnitState->GridPos, StepBudget))
 			{
-				if (Entry.Value == 2 && Grid->GetOccupantType(Entry.Key) == EGorkyOccupantType::None
-					&& Grid->FindPath(UnitState->GridPos, Entry.Key, UnitState->AP).Num() == 2)
+				if (Entry.Value == Cells && Grid->GetOccupantType(Entry.Key) == EGorkyOccupantType::None
+					&& Grid->FindPath(UnitState->GridPos, Entry.Key, StepBudget).Num() == Cells)
 				{
 					Target = Entry.Key;
 					break;
@@ -229,7 +233,7 @@ namespace TurnWalkSmoke
 				/ FMath::Clamp(OperativeMovementRules::GetStanceSpeedMultiplier(Unit->MovementConfig, EOperativeStance::Crouching), 0.2f, 1.f);
 			State.ExpectedSeconds = State.RiseDelay;
 			FIntPoint Previous = UnitState->GridPos;
-			for (const FIntPoint& Cell : Grid->FindPath(UnitState->GridPos, Target, UnitState->AP))
+			for (const FIntPoint& Cell : Grid->FindPath(UnitState->GridPos, Target, StepBudget))
 			{
 				const FIntPoint Delta = Cell - Previous;
 				State.ExpectedSeconds += Step * (Delta.X != 0 && Delta.Y != 0 ? 1.414f : 1.f);

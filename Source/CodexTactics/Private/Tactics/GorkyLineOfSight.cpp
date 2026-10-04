@@ -4,18 +4,28 @@
 
 namespace
 {
-	bool GorkyLosBlocks(const UGorkyGridManager& Grid, const FIntPoint& Cell, const FIntPoint& Start, const FIntPoint& End)
+	bool GorkyLosBlocks(const UGorkyGridManager& Grid, const FIntPoint& Cell, const FIntPoint& Start, const FIntPoint& End,
+		bool* OutThroughCover = nullptr)
 	{
 		if (Cell == Start || Cell == End)
 		{
 			return false;
 		}
 		const EGorkyOccupantType Type = Grid.GetOccupantType(Cell);
+		if (OutThroughCover && Type == EGorkyOccupantType::Barricade)
+		{
+			const auto Chebyshev = [](const FIntPoint& A, const FIntPoint& B) { return FMath::Max(FMath::Abs(A.X - B.X), FMath::Abs(A.Y - B.Y)); };
+			if (Chebyshev(Cell, Start) <= 1 || Chebyshev(Cell, End) <= 1)
+			{
+				*OutThroughCover = true; // the shooter's / the target's own cover: lower accuracy, no block
+				return false;
+			}
+		}
 		return Type != EGorkyOccupantType::None && Type != EGorkyOccupantType::Mine;
 	}
 }
 
-bool GorkyLineOfSight::HasLineOfSight(const FIntPoint& Start, const FIntPoint& End, const UGorkyGridManager& Grid)
+static bool GorkyWalk(const FIntPoint& Start, const FIntPoint& End, const UGorkyGridManager& Grid, bool* OutThroughCover)
 {
 	if (!Grid.IsValidCell(Start) || !Grid.IsValidCell(End))
 	{
@@ -45,7 +55,7 @@ bool GorkyLineOfSight::HasLineOfSight(const FIntPoint& Start, const FIntPoint& E
 				Y += SY;
 				Error += DX;
 			}
-			if (GorkyLosBlocks(Grid, FIntPoint(X, Y), Start, End))
+			if (GorkyLosBlocks(Grid, FIntPoint(X, Y), Start, End, OutThroughCover))
 			{
 				return false;
 			}
@@ -63,11 +73,23 @@ bool GorkyLineOfSight::HasLineOfSight(const FIntPoint& Start, const FIntPoint& E
 				X += SX;
 				Error += DY;
 			}
-			if (GorkyLosBlocks(Grid, FIntPoint(X, Y), Start, End))
+			if (GorkyLosBlocks(Grid, FIntPoint(X, Y), Start, End, OutThroughCover))
 			{
 				return false;
 			}
 		}
 	}
 	return true;
+}
+
+bool GorkyLineOfSight::HasLineOfSight(const FIntPoint& Start, const FIntPoint& End, const UGorkyGridManager& Grid)
+{
+	return GorkyWalk(Start, End, Grid, nullptr);
+}
+
+bool GorkyLineOfSight::HasLineOfFireThroughCover(const FIntPoint& Start, const FIntPoint& End, const UGorkyGridManager& Grid,
+	bool& bOutThroughCover)
+{
+	bOutThroughCover = false;
+	return GorkyWalk(Start, End, Grid, &bOutThroughCover);
 }

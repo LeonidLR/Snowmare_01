@@ -33,6 +33,10 @@ struct CODEXTACTICS_API FTurnBasedBalance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float BarrelDamage = 80.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float CrouchDamageMultiplier = 0.70f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float ProneDamageMultiplier = 0.50f;
+	/** UE-only (user decision 2026-10-04): a step on the grid costs this many times more crouched (prone walks crouched). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") int32 CrouchMoveCostMultiplier = 2;
+	/** UE-only (user decision 2026-10-04): shooting past a barricade next to the shooter or the target. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float CoverFireAccuracyMultiplier = 0.75f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float RearAttackMultiplier = 1.75f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float FlankAttackMultiplier = 1.25f;
 };
@@ -44,6 +48,8 @@ struct CODEXTACTICS_API FTurnBasedAttackCell
 	int32 MaxRange = 1;
 	float HitChance = 0.f;
 	float ProjectedDamage = 0.f;
+	/** The ray passed the shooter's own barricade (HitChance already lowered). */
+	bool bThroughCover = false;
 };
 
 /**
@@ -75,6 +81,9 @@ namespace TurnBasedRules
 
 	/** Incoming damage multiplier of the defender's stance (crouch 0.70, prone 0.50). */
 	CODEXTACTICS_API float StanceDamageMultiplier(EOperativeStance Stance, const FTurnBasedBalance& Balance);
+
+	/** AP multiplier of a walk on the grid: CrouchMoveCostMultiplier unless standing. */
+	CODEXTACTICS_API int32 MoveCostMultiplier(EOperativeStance Stance, const FTurnBasedBalance& Balance);
 
 	/** Squad attack damage: max(1, round(base x arc multiplier - armour x arc armour multiplier)). */
 	CODEXTACTICS_API int32 SquadAttackDamage(float BaseDamage, float ArcMultiplier, float Armor, float ArcArmorMultiplier);

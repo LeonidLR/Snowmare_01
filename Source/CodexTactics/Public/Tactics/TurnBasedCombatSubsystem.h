@@ -209,6 +209,11 @@ public:
 	void EndCurrentUnitTurn();
 	/** Enter: the whole squad ends its turn. */
 	void PassSquadTurn();
+	/**
+	 * UE rule (user decision 2026-10-04): a medkit used by the active operative in the squad phase ends his turn (the
+	 * next operative takes over). Call after the item was used; false when it does not apply.
+	 */
+	bool EndTurnAfterMedkit(AOperativeCharacter* Unit);
 	/** Godot switch_active_unit_weapon_to: the active operative takes another arsenal weapon (free); attack cells follow. */
 	bool SwitchActiveUnitWeapon(const FString& WeaponId);
 

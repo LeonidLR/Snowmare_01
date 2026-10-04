@@ -1143,7 +1143,9 @@ void UTurnBasedCombatSubsystem::RefreshOverlay()
 		return;
 	}
 	TArray<FIntPoint> Reach;
-	for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(State->GridPos, State->AP))
+	// Crouched (and prone: he walks crouched) every step costs CrouchMoveCostMultiplier times more (user decision 2026-10-04).
+	const int32 WalkMultiplier = TurnBasedRules::MoveCostMultiplier(State->Stance, Balance);
+	for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(State->GridPos, State->AP / WalkMultiplier))
 	{
 		if (Entry.Key != State->GridPos)
 		{
@@ -1285,10 +1287,13 @@ bool UTurnBasedCombatSubsystem::MoveActiveUnitTo(const FIntPoint& Cell)
 	{
 		return false;
 	}
-	// Only highlighted cells (Godot: reachable with the AP left).
-	const TMap<FIntPoint, int32> Reach = Grid->GetReachableCells(State->GridPos, State->AP);
-	const int32* Cost = Reach.Find(Cell);
-	const TArray<FIntPoint> Path = Grid->FindPath(State->GridPos, Cell, State->AP);
+	// Only highlighted cells (Godot: reachable with the AP left); crouched / prone a step costs double (user decision 2026-10-04).
+	const int32 WalkMultiplier = TurnBasedRules::MoveCostMultiplier(State->Stance, Balance);
+	const TMap<FIntPoint, int32> Reach = Grid->GetReachableCells(State->GridPos, State->AP / WalkMultiplier);
+	const int32* StepCost = Reach.Find(Cell);
+	const TArray<FIntPoint> Path = Grid->FindPath(State->GridPos, Cell, State->AP / WalkMultiplier);
+	const int32 WalkCost = StepCost ? *StepCost * WalkMultiplier : 0;
+	const int32* Cost = StepCost ? &WalkCost : nullptr;
 	if (!Cost || Path.IsEmpty() || *Cost > State->AP)
 	{
 		return false;
@@ -1465,7 +1470,8 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 		Result.Reason = TEXT("not_in_fire_lane");
 		return Result;
 	}
-	if (!GorkyLineOfSight::HasLineOfSight(State->GridPos, Cell, *Grid))
+	bool bThroughCover = false;
+	if (!GorkyLineOfSight::HasLineOfFireThroughCover(State->GridPos, Cell, *Grid, bThroughCover))
 	{
 		Log(TEXT("⚠️ Нет прямой видимости (LoS) до цели!"));
 		Result.Reason = TEXT("no_los");
@@ -1485,7 +1491,13 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 
 	if (Type == EGorkyOccupantType::Enemy)
 	{
-		const float Chance = TurnBasedRules::CalculateHitChance(Weapon, Distance, State->Stance, Balance);
+		// Past a barricade next to him or the target: less accurate (user decision 2026-10-04).
+		const float Chance = TurnBasedRules::CalculateHitChance(Weapon, Distance, State->Stance, Balance)
+			* (bThroughCover ? Balance.CoverFireAccuracyMultiplier : 1.f);
+		if (bThroughCover)
+		{
+			Log(FString::Printf(TEXT("🧱 Огонь из-за баррикады: меткость x%.2f"), Balance.CoverFireAccuracyMultiplier));
+		}
 		const float Roll = FMath::FRand();
 		Result.bSuccess = true;
 		Result.HitChance = Chance;
@@ -1659,6 +1671,19 @@ bool UTurnBasedCombatSubsystem::SwitchActiveUnitWeapon(const FString& WeaponId)
 	Log(FString::Printf(TEXT("🔫 %s выбрал(а) оружие: %s"), *NameOf(Unit), *Name));
 	RefreshOverlay();
 	Changed();
+	return true;
+}
+
+bool UTurnBasedCombatSubsystem::EndTurnAfterMedkit(AOperativeCharacter* Unit)
+{
+	FTurnUnitState* State = States.Find(Unit);
+	if (!State || Phase != ETurnPhase::Squad || IsBusy() || GetActiveUnit() != Unit)
+	{
+		return false;
+	}
+	State->AP = 0;
+	Log(FString::Printf(TEXT("💊 %s применил(а) аптечку — ход окончен."), *NameOf(Unit)));
+	EndCurrentUnitTurn();
 	return true;
 }
 
@@ -2354,7 +2379,9 @@ FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType T
 		Check.Reason = TEXT("Нет свободных клеток рядом с объектом для сборки");
 		return Check;
 	}
-	const int32 MaxWalkAP = UnitState->AP - DeployCost;
+	// Crouched / prone the walk to the stand cell costs double (user decision 2026-10-04): the budget in steps.
+	const int32 WalkMultiplier = TurnBasedRules::MoveCostMultiplier(UnitState->Stance, Balance);
+	const int32 MaxWalkAP = (UnitState->AP - DeployCost) / WalkMultiplier;
 	const TMap<FIntPoint, int32> Reach = Grid->GetReachableCells(UnitPos, MaxWalkAP);
 	Candidates.StableSort([&UnitPos, &Chebyshev](const FIntPoint& A, const FIntPoint& B) { return Chebyshev(A, UnitPos) < Chebyshev(B, UnitPos); });
 	int32 BestCost = MAX_int32;
@@ -2380,7 +2407,7 @@ FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType T
 		return Check;
 	}
 	Check.bCanPlace = true;
-	Check.APCost = BestCost + DeployCost;
+	Check.APCost = BestCost * WalkMultiplier + DeployCost;
 	Check.Reason = TEXT("OK");
 	return Check;
 }
@@ -3496,7 +3523,8 @@ void UTurnBasedCombatSubsystem::ExecuteRangedEnemyTurn(AActor* Enemy, AActor* Ta
 		Cell.Cell = Entry.Key;
 		Cell.PathCost = Entry.Value;
 		Cell.Distance = TurnBasedRules::CellDistance(Entry.Key, TargetPos);
-		Cell.bLineOfFire = GorkyLineOfSight::HasLineOfSight(Entry.Key, TargetPos, *Grid);
+		bool bPastCover = false;
+		Cell.bLineOfFire = GorkyLineOfSight::HasLineOfFireThroughCover(Entry.Key, TargetPos, *Grid, bPastCover);
 		Cell.bNextToOperative = NextToOperative(Entry.Key);
 		Cell.HitChance = EnemyTurnRules::RangedHitChance(Profile, Cell.Distance, TargetState->Stance, IsCoveredFrom(TargetPos, Entry.Key));
 	}

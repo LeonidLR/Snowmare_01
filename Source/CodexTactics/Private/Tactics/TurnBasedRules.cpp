@@ -1,4 +1,5 @@
 #include "Tactics/TurnBasedRules.h"
+#include "Tactics/GorkyLineOfSight.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Data/WeaponDataAsset.h"
 #include "Tactics/Gorky17Types.h"
@@ -12,6 +13,7 @@ namespace
 	void TurnCastRay(const UGorkyGridManager& Grid, const FIntPoint& From, const FIntPoint& Dir, int32 MaxRange, const UWeaponDataAsset* Weapon,
 		EOperativeStance Stance, const FTurnBasedBalance& Balance, TMap<FIntPoint, FTurnBasedAttackCell>& Out)
 	{
+		bool bThroughCover = false;
 		for (int32 Step = 1; Step <= MaxRange; ++Step)
 		{
 			const FIntPoint Cell = From + Dir * Step;
@@ -19,12 +21,19 @@ namespace
 			{
 				break;
 			}
+			const EGorkyOccupantType Type = Grid.GetOccupantType(Cell);
+			// The shooter's own barricade right next to him: he fires past it, less accurately (user decision 2026-10-04).
+			if (Step == 1 && Type == EGorkyOccupantType::Barricade)
+			{
+				bThroughCover = true;
+				continue;
+			}
 			FTurnBasedAttackCell& Info = Out.Add(Cell);
 			Info.Distance = Step;
 			Info.MaxRange = MaxRange;
-			Info.HitChance = TurnBasedRules::CalculateHitChance(Weapon, Step, Stance, Balance);
+			Info.bThroughCover = bThroughCover;
+			Info.HitChance = TurnBasedRules::CalculateHitChance(Weapon, Step, Stance, Balance) * (bThroughCover ? Balance.CoverFireAccuracyMultiplier : 1.f);
 			Info.ProjectedDamage = TurnBasedRules::GetDamageForDistance(Weapon, Step, Balance.SquadBaseDamage);
-			const EGorkyOccupantType Type = Grid.GetOccupantType(Cell);
 			if (Type != EGorkyOccupantType::None && Type != EGorkyOccupantType::Mine)
 			{
 				break; // an obstacle or another unit stops the ray
@@ -127,6 +136,11 @@ bool TurnBasedRules::IsTargetInPattern(const UWeaponDataAsset* Weapon, const FIn
 	}
 }
 
+int32 TurnBasedRules::MoveCostMultiplier(EOperativeStance Stance, const FTurnBasedBalance& Balance)
+{
+	return Stance == EOperativeStance::Standing ? 1 : FMath::Max(1, Balance.CrouchMoveCostMultiplier);
+}
+
 float TurnBasedRules::StanceDamageMultiplier(EOperativeStance Stance, const FTurnBasedBalance& Balance)
 {
 	return Stance == EOperativeStance::Crouching ? Balance.CrouchDamageMultiplier
@@ -191,7 +205,10 @@ TMap<FIntPoint, FTurnBasedAttackCell> TurnBasedRules::GetWeaponAttackCells(const
 				FTurnBasedAttackCell& Info = Result.Add(Cell);
 				Info.Distance = Distance;
 				Info.MaxRange = MaxRange;
-				Info.HitChance = CalculateHitChance(Weapon, Distance, Stance, Balance);
+				bool bThroughCover = false;
+				GorkyLineOfSight::HasLineOfFireThroughCover(From, Cell, Grid, bThroughCover);
+				Info.bThroughCover = bThroughCover;
+				Info.HitChance = CalculateHitChance(Weapon, Distance, Stance, Balance) * (bThroughCover ? Balance.CoverFireAccuracyMultiplier : 1.f);
 				Info.ProjectedDamage = GetDamageForDistance(Weapon, Distance, Balance.SquadBaseDamage);
 			}
 		}
