@@ -1,4 +1,5 @@
 #include "Characters/EnemyCharacter.h"
+#include "Characters/EnemyTacticsSubsystem.h"
 #include "Characters/FacingRules.h"
 #include "CodexTactics.h"
 #include "UI/OverheadLabel.h"
@@ -419,6 +420,30 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	}
 
 	AActor* Target = FindTarget();
+	// Pack tactics (EnemyTacticsSubsystem): another operative (surround / the wounded / the straggler), a flank route
+	// or a morale fall-back. A turret / generator target of the Godot rules is kept.
+	FEnemyTacticOrder Order;
+	UEnemyTacticsSubsystem* Tactics = GetWorld()->GetSubsystem<UEnemyTacticsSubsystem>();
+	const bool bHasOrder = Target && Target->IsA<AOperativeCharacter>() && Tactics && Tactics->GetOrder(this, Order);
+	if (bHasOrder && Order.Role == EEnemyTacticRole::FallBack)
+	{
+		if (!bFallingBack)
+		{
+			bFallingBack = true;
+			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("↩ ОТХОД"), FLinearColor(0.7f, 0.85f, 1.f));
+		}
+		if (AIC)
+		{
+			AIC->MoveToLocation(Order.MovePoint, 80.f, false, true);
+		}
+		CurrentTarget = nullptr;
+		return;
+	}
+	bFallingBack = false;
+	if (bHasOrder && Order.Target.IsValid())
+	{
+		Target = Order.Target.Get();
+	}
 	CurrentTarget = Target;
 	if (!Target)
 	{
@@ -516,6 +541,11 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 				Face(Target);
 			}
 		}
+		else if (bHasOrder && Order.Role == EEnemyTacticRole::Flank && FVector::Dist2D(Feet, TargetPosition) > 500.f
+			&& FVector::Dist2D(Feet, Order.MovePoint) > 150.f)
+		{
+			AIC->MoveToLocation(Order.MovePoint, 60.f, false, true); // round his side, then in
+		}
 		else
 		{
 			AIC->MoveToActor(Target, AttackRange * 0.5f);
@@ -533,6 +563,20 @@ FVector AEnemyCharacter::GodotPosition(const AActor* Actor)
 	FVector Extent;
 	Actor->GetActorBounds(true, Origin, Extent);
 	return FVector(Actor->GetActorLocation().X, Actor->GetActorLocation().Y, Origin.Z - Extent.Z);
+}
+
+bool AEnemyCharacter::IsTargetUsableForTactics(const AActor* Candidate) const
+{
+	if (!Candidate)
+	{
+		return false;
+	}
+	const double* Until = UnreachableUntil.Find(Candidate);
+	if (Until && *Until > GetWorld()->GetTimeSeconds())
+	{
+		return false;
+	}
+	return !(bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire && IsInFearZone(GodotPosition(Candidate), Candidate));
 }
 
 AActor* AEnemyCharacter::FindTarget() const
@@ -940,6 +984,13 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	AttackTimer = AttackCooldown;
 	StartAttackAnimation(Target);
 	OnAttackStarted(Target);
+	if (UEnemyTacticsSubsystem* Tactics = GetWorld()->GetSubsystem<UEnemyTacticsSubsystem>())
+	{
+		if (Target->IsA<AOperativeCharacter>() && EnemyTacticsRules::IsBehind(Target->GetActorLocation(), Target->GetActorForwardVector(), GetActorLocation()))
+		{
+			Tactics->NotifyBackstab();
+		}
+	}
 
 	const bool bIsCrit = (FMath::FRand() < CritChance);
 	const float FinalDamage = AttackDamage * (bIsCrit ? CritMultiplier : 1.0f);
@@ -976,6 +1027,10 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 
 	bIsDying = true;
 	Tags.Remove(FName(TEXT("Enemy")));
+	if (UEnemyTacticsSubsystem* Tactics = GetWorld()->GetSubsystem<UEnemyTacticsSubsystem>())
+	{
+		Tactics->NotifyEnemyDied(GetActorLocation()); // the pack mates' morale
+	}
 
 	// Godot enemy_cutter.gd _start_airborne_death: shot down mid-leap it keeps flying and crashes on the ground.
 	if (Archetype == EEnemyArchetype::Cutter && (IsJumpAttacking() || GetCharacterMovement()->IsFalling()))
