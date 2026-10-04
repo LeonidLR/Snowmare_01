@@ -302,6 +302,9 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 ## 7. Open user decisions / questions
 
+- 2026-10-04 bot balance batch (25 runs, level_01_outpost / stage_01 data): NORMAL 2/10, VETERAN 4/10, CASUAL 1/5 victories; 16 of 19 defeats are FREEZING_FATIGUE, almost all in wave 3 (squad cold at the end 72-97 %), the medic freezes most often. Open for the user: tune the cold (e.g. wave 3 cold_drain_mult in the Wave Editor / cold rates in DA_GameBalanceConfig) or keep it.
+- Spawn lanes never match (114 of 126 level spawns name NORTH_GATE / WEST_FLANK / EAST_FLANK, the map's points carry Godot's Russian lane names — as in Godot); open for the user: rename the points' SpawnLane so the Wave Editor lanes work.
+
 - L_MovementTest re-laid by the user (rotated 180°, moved): kept (user decision 2026-09-29); smokes are layout-relative.
 - `Config/DefaultEditor.ini` has local editor changes — never commit it unless asked.
 - M16 clip (user decision 2026-09-29): 30 for every operative like the reference video. The current Godot scene sets
@@ -413,7 +416,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   (pink tint via BodyColor — the user's BP decides the real look; Godot swaps the Explorer_Coat material). The spot is a
   TargetPoint tagged `SusaninSpawn` on the west side of the yard (Godot uses a hard-coded (-8.2, 18.0) in its own
   layout). The narrative pause uses the minimum world time dilation, restored with `UGameFlowSubsystem::ApplyTimeDilation`.
-  Rage uses the general keys (see Rage below); panic (susanin_* stress keys) is not ported.
+  Rage uses the general keys (see Rage below); panic uses the susanin_* stress keys (ordinary susceptibility, user
+  decision 2026-10-01). His death does not fail the mission (expendable) and leaves searchable remains (§10).
   The Godot `dialogue_susanin_recruitment.tres` export is unused by Godot's code (it builds both dialogues inline) — same here.
 - Waves beyond the level config (or without one) follow Godot's fallback (`FallbackWaveRules` + test,
   `UWaveSubsystem::StartWave`): balance-driven hound / spitter / brute counts from DA_GameBalanceConfig, the whole wave
@@ -568,7 +572,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   only when blocked, never prone or in the grid fight. Enemies use `UNavFilter_NoVault` (they go round / smash, as in Godot).
   No vault clips yet: the anim instance exposes `bIsVaulting` and feeds the arc speed to the locomotion (VaultSmoke).
 - Hidden mines are revealed by a distance scan in the mine's Tick (Godot scans from each operative) — same result.
-- Weapon switching does not change the weapon mesh (the operative Blueprint owns WeaponMesh) and has no holster
+- Weapon switching does not change the weapon mesh (no pistol / shotgun / knife models in the art yet — ASSETS has only
+  pistol animations) (the operative Blueprint owns WeaponMesh) and has no holster
   animation. X cycles the arsenal like Godot switch_weapon (grenade -> aim, «🔫 Оружие: …»), R reloads outside placement / the grid fight (Godot KEY_R, «🔄 Перезаряжаю …»).
 - Grenades: placeholder sphere mesh, no explosion VFX / sound (Godot has none either) — `AGrenadeActor` Blueprint events
   On Landed / On Detonated and the operative's On Grenade Throw + GrenadeThrowDuration are the hooks.
@@ -596,7 +601,8 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
   has no PISTOL_AMMO branch). Ammo handed to a mate without that weapon is kept in ExtraAmmo (Godot drops it).
 - **Deliberate deviation (user decision 2026-09-28):** a shot at an untrapped supply crate only posts «💥 Пуля пробила
   ящик снабжения.» — Godot also detonates it (bug: `detonate_trap` always exists on loot_crate.gd).
-- Tracer muzzle = feet + stance height (1.4 / 0.85 / 0.25 m), not a weapon socket; light intensity mapping
+- Tracers leave `GetWeaponMuzzleLocation` (the weapon's "Muzzle" socket or `MuzzleOffset`); the line of fire keeps
+  Godot's stance heights (1.4 / 0.85 / 0.25 m). Light intensity mapping
   (`FeedbackLightPerEnergy` 1500 per Godot light_energy) is a first guess for the user to tune.
 
 ## 10. Change log (newest first)
