@@ -781,6 +781,10 @@ private:
 	FVector VaultLanding = FVector::ZeroVector;
 	FVector VaultResumeTarget = FVector::ZeroVector;
 	bool bVaultResume = false;
+	/** Seconds standing on a barricade / barrel top (VaultNavigation::IsStandingOnObstacle). */
+	float ObstacleTopTime = 0.f;
+	/** Jumps down off an obstacle top after 0.3 s there; true while starting that jump. */
+	bool UpdateObstacleStepOff(float DeltaTime);
 
 	bool bGroupSelected = false;
 	bool bInMultiSelection = false;
@@ -848,6 +852,8 @@ private:
 	float ColdSpeedMultiplier = 1.f;
 	bool bSprinting = false;
 	bool bHasMoveOrder = false;
+	/** The last RequestMove destination (the walk resumes there after jumping off an obstacle top). */
+	FVector LastMoveDestination = FVector::ZeroVector;
 
 	/** A move waiting for the stand-up clip (OrderMoveTo from prone / during a stance clip). */
 	FTimerHandle PendingMoveTimer;

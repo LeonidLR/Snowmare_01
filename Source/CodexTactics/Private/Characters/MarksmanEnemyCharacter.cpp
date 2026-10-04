@@ -1,4 +1,5 @@
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Data/WeaponTuning.h"
 
 #include "AIController.h"
 #include "Characters/EnemyAnimInstance.h"
@@ -93,6 +94,7 @@ bool AMarksmanEnemyCharacter::CanKite() const
 void AMarksmanEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	WeaponTuning::ApplyMarksmanRifle(MarksmanConfig); // Wave Editor «Оружие врагов»; the Codex.Marksman.* overrides win
 	ApplyTuningOverrides();
 	SpawnLocation = GetActorLocation();
 	// Waypoints are authored relative to the actor.

@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { SquadLoadoutConfig, SimulationMode, PresetTier } from '../types';
 import { Shield, Compass, Sliders, Box, Crosshair, Wrench, Bomb, Heart, Flame } from 'lucide-react';
 
@@ -18,6 +18,7 @@ const DEFAULT_LOADOUT: SquadLoadoutConfig = {
   pistol_ammo: 48,
   canned_food: 4,
   matches: 3,
+  grenades_count: 2,
 };
 
 export const SquadLoadoutControls: React.FC<SquadLoadoutControlsProps> = ({
@@ -37,13 +38,14 @@ export const SquadLoadoutControls: React.FC<SquadLoadoutControlsProps> = ({
     let med = current.medkits_count;
     let m16 = current.m16_ammo;
     let p = current.pistol_ammo;
+    let g = current.grenades_count ?? 2;
 
     if (tier === 'MINIMAL') {
-      t = 0; b = 0; m = 0; med = 0; m16 = 60; p = 24;
+      t = 0; b = 0; m = 0; med = 0; m16 = 60; p = 24; g = 1;
     } else if (tier === 'STANDARD') {
-      t = 1; b = 2; m = 2; med = 2; m16 = 120; p = 48;
+      t = 1; b = 2; m = 2; med = 2; m16 = 120; p = 48; g = 2;
     } else if (tier === 'MAXIMAL') {
-      t = 2; b = 4; m = 5; med = 4; m16 = 240; p = 96;
+      t = 2; b = 4; m = 5; med = 4; m16 = 240; p = 96; g = 4;
     }
 
     onChange({
@@ -55,6 +57,7 @@ export const SquadLoadoutControls: React.FC<SquadLoadoutControlsProps> = ({
       medkits_count: med,
       m16_ammo: m16,
       pistol_ammo: p,
+      grenades_count: g,
     });
   };
 
@@ -276,6 +279,23 @@ export const SquadLoadoutControls: React.FC<SquadLoadoutControlsProps> = ({
               className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-500"
             />
             <span className="text-[10px] text-slate-500 block mt-1">Пистолет</span>
+          </div>
+
+          {/* Гранаты (на каждого бойца) */}
+          <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700/60">
+            <div className="flex items-center gap-1.5 text-xs text-lime-400 mb-1 font-medium">
+              <Bomb className="w-3.5 h-3.5" />
+              <span>Гранаты</span>
+            </div>
+            <input
+              type="number"
+              min="0"
+              max="10"
+              value={current.grenades_count ?? 2}
+              onChange={(e) => updateField('grenades_count', parseInt(e.target.value) || 0)}
+              className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-500"
+            />
+            <span className="text-[10px] text-slate-500 block mt-1">У каждого бойца (лимит переноски — вкладка «Оружие»)</span>
           </div>
 
           {/* Консервы */}

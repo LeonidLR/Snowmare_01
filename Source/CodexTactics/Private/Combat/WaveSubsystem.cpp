@@ -1,4 +1,5 @@
 #include "Combat/WaveSubsystem.h"
+#include "CodexTactics.h"
 #include "Combat/FallbackWaveRules.h"
 #include "Math/RandomStream.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -18,6 +19,8 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CommandLine.h"
+#include "NavigationSystem.h"
+#include "CollisionQueryParams.h"
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
 
@@ -124,7 +127,7 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 	{
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
-			SpawnEnemy(Type, GetSpawnLocationForLane(FString(), Type));
+			SpawnEnemy(Type, FindFreeSpawnSpot(GetSpawnLocationForLane(FString(), Type)));
 		}
 	};
 	SpawnType(EEnemyArchetype::FrostHound, Counts.Hounds);
@@ -153,7 +156,7 @@ void UWaveSubsystem::SpawnLevelWave(const FWaveDefinition& Def)
 	{
 		for (int32 Index = 0; Index < Entry.Count; ++Index)
 		{
-			if (AEnemyCharacter* Enemy = SpawnEnemy(Entry.EnemyType, GetSpawnLocationForLane(Entry.SpawnLane, Entry.EnemyType)))
+			if (AEnemyCharacter* Enemy = SpawnEnemy(Entry.EnemyType, FindFreeSpawnSpot(GetSpawnLocationForLane(Entry.SpawnLane, Entry.EnemyType))))
 			{
 				Enemy->ApplySpawnEntry(Mods, Entry);
 				Counts.FindOrAdd(Entry.EnemyType)++;
@@ -189,7 +192,7 @@ void UWaveSubsystem::ProcessPendingSpawns(float DeltaTime)
 		FEnemySpawnEntry NextSpawn = PendingSpawns[0];
 		PendingSpawns.RemoveAt(0);
 
-		FVector Loc = GetSpawnLocationForLane(NextSpawn.SpawnLane, NextSpawn.EnemyType);
+		FVector Loc = FindFreeSpawnSpot(GetSpawnLocationForLane(NextSpawn.SpawnLane, NextSpawn.EnemyType));
 		SpawnEnemy(NextSpawn.EnemyType, Loc);
 
 		SpawnTimer = FMath::Max(0.2f, NextSpawn.SpawnDelaySec);
@@ -350,6 +353,67 @@ FVector UWaveSubsystem::GetSpawnLocationForLane(const FString& Lane, EEnemyArche
 	return FVector(FMath::RandRange(-600.f, 600.f), -2600.f, 100.f);
 }
 
+FVector UWaveSubsystem::FindFreeSpawnSpot(const FVector& Point) const
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	if (!World)
+	{
+		return Point;
+	}
+	// The biggest enemy capsule (brute) with a little margin; centre 1 m above the ground like the spawn points.
+	const FCollisionShape Capsule = FCollisionShape::MakeCapsule(55.f, 95.f);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(EnemySpawnSpot), false);
+	auto TrySpot = [&](const FVector& Candidate, FVector& Out) -> bool
+	{
+		FVector Ground = Candidate;
+		if (Nav)
+		{
+			FNavLocation OnNav;
+			if (!Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(120.f, 120.f, 400.f)))
+			{
+				return false;
+			}
+			Ground = OnNav.Location;
+		}
+		const FVector Centre = Ground + FVector(0.f, 0.f, 100.f);
+		if (World->OverlapAnyTestByChannel(Centre, FQuat::Identity, ECC_Pawn, Capsule, Params))
+		{
+			return false;
+		}
+		Out = Centre;
+		return true;
+	};
+	FVector Spot;
+	if (TrySpot(Point, Spot))
+	{
+		return Spot;
+	}
+	const float StartAngle = FMath::FRandRange(0.f, 360.f);
+	// Up to ~130 free spots per point (the Wave Editor allows 100 of a type per wave).
+	const float Radii[] = { 150.f, 300.f, 450.f, 600.f, 750.f, 900.f };
+	for (const float Radius : Radii)
+	{
+		const int32 Samples = FMath::RoundToInt(Radius / 150.f) * 6;
+		for (int32 Index = 0; Index < Samples; ++Index)
+		{
+			const FVector Offset = FVector(Radius, 0.f, 0.f).RotateAngleAxis(StartAngle + Index * 360.f / Samples, FVector::UpVector);
+			if (TrySpot(Point + Offset, Spot))
+			{
+				return Spot;
+			}
+		}
+	}
+	FNavLocation OnNav;
+	const bool bOnNav = Nav && Nav->ProjectPointToNavigation(Point, OnNav, FVector(600.f, 600.f, 600.f));
+	if (!bOnNav && !WarnedSpawnPoints.Contains(Point))
+	{
+		WarnedSpawnPoints.Add(Point);
+		UE_LOG(LogCodexTactics, Warning, TEXT("[Wave] spawn point %s is off the navmesh (> 6 m): enemies spawned there cannot walk"), *Point.ToCompactString());
+	}
+	return bOnNav ? OnNav.Location + FVector(0.f, 0.f, 100.f) : Point;
+}
+
 void UWaveSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)
 {
 	if (Phase == ECodexGamePhase::WaveCombat)
@@ -436,8 +500,7 @@ void UWaveSubsystem::SpawnBreachPack(const AEnemySpawnPoint& Point)
 		|| Point.BreachEnemyType == EEnemyArchetype::Cutter ? Point.BreachEnemyType : EEnemyArchetype::FrostHound;
 	for (int32 Index = 0; Index < Point.EnemyCount; ++Index)
 	{
-		const FVector Offset(FMath::FRandRange(-150.f, 150.f), FMath::FRandRange(-150.f, 150.f), 0.f);
-		SpawnEnemy(Type, Point.GetActorLocation() + Offset);
+		SpawnEnemy(Type, FindFreeSpawnSpot(Point.GetActorLocation()));
 	}
 }
 

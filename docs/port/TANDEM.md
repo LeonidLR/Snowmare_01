@@ -6,7 +6,7 @@
 |---|---|---|
 | Focus | Gameplay code and logic, AI, UI, animation setup (AnimBPs, blend spaces, montages), data import, smokes / tests | Performance and optimization, shaders and materials, VFX, rendering / scalability settings, profiling |
 | Owns (writes) | `Source/CodexTactics/**` (gameplay C++; except Gemini's `Private/Debug/Perf*`), `Source/CodexTacticsTests/**`, `Source/CodexTacticsEditor/**`, `Content/Characters/**`, `Content/Data/**`, `Scripts/Editor/*` except the material scripts, `Scripts/*.ps1` | `Shaders/**` (.usf / .ush), `Content/VFX/**` (materials, Niagara), `Scripts/Editor/create_*_material.py`, `Config/DefaultScalability.ini`, rendering cvars in `Config/DefaultEngine.ini` `[/Script/Engine.RendererSettings]`, LOD / Nanite settings, perf smokes (`Source/CodexTactics/Private/Debug/Perf*SmokeCommand.cpp`) and profiling scripts (`Scripts/perf_*.ps1`) |
-| The user's | `Content/Maps/L_MovementTest.umap`, the imported packs (Combat_Dog, RifleAnims, Crawl_MocapAnimPack, Post_Apo_Survivor, monsters, Mannequins, …), `Config/DefaultEditor.ini`, `Config/DefaultInput.ini` — never committed by an agent | |
+| The user's | `Content/Maps/L_MovementTest.umap`, the imported packs (Combat_Dog, RifleAnims, Crawl_MocapAnimPack, Post_Apo_Survivor, monsters, Mannequins, …), `Config/DefaultEditor.ini`, `Config/DefaultInput.ini` — never committed by an agent (the map only on the user's word: committed 2026-10-04 as the standard layout; never reset / checkout it) | |
 
 The user assigns the tasks. A file / asset has one owner; the other agent asks instead of editing it.
 Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes` list (only that line), everything else in it is Claude's; `docs/port/HANDOFF.md` / `TANDEM.md` / `PORT_MATRIX.md` — both append.
@@ -230,7 +230,7 @@ Claude (Opus 5.5) **MUST** strictly adhere to the following rules to conserve to
 2. **Mandatory Pre-Commit Boundary Audit:**
    Before staging and committing, run:
    `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude`
-   If Jev detects boundary violations (e.g. accidental changes to `L_MovementTest.umap` or `DefaultEditor.ini`), run `git checkout -- Content/Maps/L_MovementTest.umap Config/DefaultEditor.ini` to restore them before committing.
+   If Jev detects boundary violations (e.g. accidental changes to `L_MovementTest.umap` or `DefaultEditor.ini`), unstage them (`git restore --staged <file>`); restore only `Config/DefaultEditor.ini` with `git checkout`. **Never reset `L_MovementTest.umap`** — the user's edited map is the standard (user decision 2026-10-04).
 3. **Zero Raw Telemetry in Context:**
    Never read large `runs.jsonl` files into context. Use `python Scripts/Tools/typesafe_triage.py --telemetry <path>` or `--early-stop`.
 4. **Lock Protocol:**

@@ -265,7 +265,7 @@ export const WaveEditorCard: React.FC<Props> = ({
                 <input
                   type="range"
                   min={0}
-                  max={type === 'BRUTE' ? 8 : 20}
+                  max={100}
                   step={1}
                   value={count}
                   onChange={(e) => handleUpdateSpawnCount(type, Number(e.target.value))}

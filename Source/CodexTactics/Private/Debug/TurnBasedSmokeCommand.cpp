@@ -128,8 +128,9 @@ namespace TurnBasedSmoke
 				It->Destroy(); // keep the fight to our own brute
 			}
 			AOperativeCharacter* Leader = Squad->GetLeader();
+			// 3 cells out: the brute (5 AP, a 3 AP blow — EnemyTurnRules) walks 2 and still hits on its first turn.
 			State.Enemy = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Brute,
-				Leader->GetActorLocation() + Leader->GetActorForwardVector() * 600.f + FVector(0.f, 0.f, 20.f));
+				Leader->GetActorLocation() + Leader->GetActorForwardVector() * 450.f + FVector(0.f, 0.f, 20.f));
 			// A hound 20 m behind stays outside the fight (stasis look).
 			State.FarEnemy = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::FrostHound,
 				Leader->GetActorLocation() - Leader->GetActorForwardVector() * 2000.f + FVector(0.f, 0.f, 20.f));

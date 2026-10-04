@@ -41,4 +41,11 @@ namespace LoadoutRules
 	 */
 	CODEXTACTICS_API void Apply(ELoadoutMode Mode, const FSquadLoadout& Loadout, FLoadoutSupply& Commander, FLoadoutSupply& Engineer,
 		FLoadoutSupply& Medic, int32& OutM16Reserve, int32& OutPistolReserve);
+
+	/**
+	 * Grenades each operative starts with (UE-only, Wave Editor): EDITOR_PRESET tiers MINIMAL 1 / STANDARD 2 / MAXIMAL 4,
+	 * CUSTOM the level's grenades_count; the other modes the level's grenades_count when set. -1: keep the operatives' own.
+	 * Clamped to MaxCarried.
+	 */
+	CODEXTACTICS_API int32 GrenadesFor(ELoadoutMode Mode, const FSquadLoadout& Loadout, int32 MaxCarried);
 }

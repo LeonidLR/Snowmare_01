@@ -50,6 +50,59 @@ export interface SquadLoadoutConfig {
   pistol_ammo: number;
   canned_food: number;
   matches: number;
+  /** Grenades per operative (the game reads it; -1 / absent: the operatives keep their own). */
+  grenades_count?: number;
+}
+
+/** Content/Data/Weapons/weapons_tuning.json (the game applies it at start). Metres / seconds. */
+export interface WeaponTuningEntry {
+  name?: string;
+  base_damage: number;
+  attack_range_m: number;
+  fire_rate: number;
+  armor_penetration: number;
+  max_clip_size: number;
+  default_reserve_ammo: number;
+  reload_time: number;
+  status_duration: number;
+  status_tick_damage: number;
+  max_range_cells: number;
+  base_hit_chances: number[];
+  distance_damage_multipliers: number[];
+}
+
+export interface GrenadeTuning {
+  damage: number;
+  effect_radius_m: number;
+  throw_range_m: number;
+  max_carried: number;
+}
+
+/** An enemy's ranged weapon (enemy_weapons.<id>): real time + turn based (tb_*). Metres / seconds / cells. */
+export interface EnemyRangedWeapon {
+  damage: number;
+  base_accuracy: number;
+  aim_duration: number;
+  shot_cooldown: number;
+  crit_chance: number;
+  crit_multiplier: number;
+  prone_accuracy_bonus: number;
+  crouch_accuracy_bonus: number;
+  preferred_min_range_m: number;
+  preferred_max_range_m: number;
+  tb_damage_scale: number;
+  tb_attack_ap: number;
+  tb_min_range_cells: number;
+  tb_max_range_cells: number;
+  tb_base_hit_chance: number;
+  tb_hit_falloff_per_cell: number;
+}
+
+export interface WeaponTuningFile {
+  comment?: string;
+  weapons: Record<string, WeaponTuningEntry>;
+  grenade: GrenadeTuning;
+  enemy_weapons?: Record<string, EnemyRangedWeapon>;
 }
 
 export interface LevelConfig {

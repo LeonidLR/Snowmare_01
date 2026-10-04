@@ -11,6 +11,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Data/AITuning.h"
+#include "Data/WeaponTuning.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Camera/TacticalCameraPawn.h"
@@ -76,6 +77,7 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 void ACodexTacticsGameMode::StartPlay()
 {
 	AITuning::ApplyFile(AITuning::GetDefaultPath()); // before any actor's BeginPlay reads a Codex.* tunable
+	WeaponTuning::ApplyFile(WeaponTuning::GetDefaultPath()); // Wave Editor weapon power onto DA_Weapon_* (in memory)
 	ApplyLevelConfig();
 	Super::StartPlay();
 	SpawnSquad();
@@ -194,6 +196,7 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 		{
 			OperativeBalance::Apply(*Config, *Operative);
 		}
+		WeaponTuning::ApplyGrenades(*Operative);
 		UGameplayStatics::FinishSpawningActor(Operative, FTransform(Facing, Location));
 		TArray<UWeaponDataAsset*> Arsenal;
 		for (const TSoftObjectPtr<UWeaponDataAsset>& Weapon : StartingArsenal)

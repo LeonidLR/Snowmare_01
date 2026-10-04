@@ -51,6 +51,22 @@ bool FLoadoutRulesTest::RunTest(const FString&)
 			&& C.Medkits == 4 && Rifle == 240 && Pistol == 96);
 	}
 
+	{
+		// Grenades per operative (Wave Editor): preset tiers, CUSTOM / other modes take grenades_count, -1 keeps, clamp.
+		FSquadLoadout Custom;
+		Custom.PresetTier = TEXT("CUSTOM");
+		Custom.GrenadesCount = 3;
+		TestEqual(TEXT("CUSTOM preset: grenades_count"), GrenadesFor(ELoadoutMode::EditorPreset, Custom, 4), 3);
+		Custom.PresetTier = TEXT("MAXIMAL");
+		TestEqual(TEXT("MAXIMAL preset: 4"), GrenadesFor(ELoadoutMode::EditorPreset, Custom, 4), 4);
+		Custom.PresetTier = TEXT("MINIMAL");
+		TestEqual(TEXT("MINIMAL preset: 1"), GrenadesFor(ELoadoutMode::EditorPreset, Custom, 4), 1);
+		Custom.GrenadesCount = 9;
+		TestEqual(TEXT("explore mode: grenades_count clamped to the carry limit"), GrenadesFor(ELoadoutMode::ExploreAndCollect, Custom, 4), 4);
+		Custom.GrenadesCount = -1;
+		TestEqual(TEXT("not set: keep"), GrenadesFor(ELoadoutMode::StartingUnique, Custom, 4), -1);
+	}
+
 	const ULevelConfigAsset* Level = LoadObject<ULevelConfigAsset>(nullptr, TEXT("/Game/Data/Levels/DA_Level_level_01_outpost.DA_Level_level_01_outpost"));
 	if (!TestNotNull(TEXT("DA_Level_level_01_outpost"), Level))
 	{

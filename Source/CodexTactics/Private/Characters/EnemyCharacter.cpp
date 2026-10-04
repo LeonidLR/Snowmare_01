@@ -1,4 +1,5 @@
 #include "Characters/EnemyCharacter.h"
+#include "Interactables/VaultNavigation.h"
 #include "Characters/EnemyTacticsSubsystem.h"
 #include "Characters/FacingRules.h"
 #include "CodexTactics.h"
@@ -317,6 +318,15 @@ void AEnemyCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	bFacedThisTick = false;
+	// Landed on a barricade / barrel top (a pounce): off it after 0.3 s, it cannot walk up there (no navmesh).
+	ObstacleTopTime = !bIsDying && VaultNavigation::IsStandingOnObstacle(*this) ? ObstacleTopTime + DeltaTime : 0.f;
+	FVector StepOff;
+	if (ObstacleTopTime >= 0.3f && VaultNavigation::FindStepOffSpot(*this, StepOff))
+	{
+		ObstacleTopTime = 0.f;
+		SetActorLocation(StepOff, false, nullptr, ETeleportType::TeleportPhysics);
+		UE_LOG(LogCodexTactics, Display, TEXT("[Vault] %s jumped off an obstacle top"), *GetName());
+	}
 	TickBehavior(DeltaTime);
 	UpdateMovementFacing(DeltaTime);
 }
@@ -334,7 +344,15 @@ void AEnemyCharacter::UpdateMovementFacing(float DeltaTime)
 	{
 		return;
 	}
-	SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, SmoothedVelocity.Rotation().Yaw, TurnSpeed, DeltaTime), 0.f));
+	// Jostling in a crowd close to its prey (slow, within 6 m): it keeps its eyes on the prey instead of turning with every
+	// avoidance nudge (FacingSmoke: a flanker squeezing into the pack weaved its body back and forth).
+	float WantedYaw = SmoothedVelocity.Rotation().Yaw;
+	if (const AActor* Prey = CurrentTarget.Get(); Prey && SmoothedVelocity.SizeSquared2D() < 200.f * 200.f
+		&& FVector::DistSquared2D(Prey->GetActorLocation(), GetActorLocation()) < 600.f * 600.f)
+	{
+		WantedYaw = (Prey->GetActorLocation() - GetActorLocation()).Rotation().Yaw;
+	}
+	SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, WantedYaw, TurnSpeed, DeltaTime), 0.f));
 }
 
 void AEnemyCharacter::TickBehavior(float DeltaTime)
@@ -444,6 +462,16 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	{
 		Target = Order.Target.Get();
 	}
+	// Flank hysteresis: once round (at the point or within 5 m of him) it goes straight in at that target for good —
+	// no switching back to the detour at the 5 m edge (FacingSmoke: crowding hounds turned back and forth).
+	if (bHasOrder && Order.Role == EEnemyTacticRole::Flank && Target && FlankDoneTarget.Get() != Target)
+	{
+		const FVector MyFeet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		if (FVector::Dist2D(MyFeet, GodotPosition(Target)) <= 500.f || FVector::Dist2D(MyFeet, Order.MovePoint) <= 150.f)
+		{
+			FlankDoneTarget = Target;
+		}
+	}
 	CurrentTarget = Target;
 	if (!Target)
 	{
@@ -541,8 +569,8 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 				Face(Target);
 			}
 		}
-		else if (bHasOrder && Order.Role == EEnemyTacticRole::Flank && FVector::Dist2D(Feet, TargetPosition) > 500.f
-			&& FVector::Dist2D(Feet, Order.MovePoint) > 150.f)
+		else if (bHasOrder && Order.Role == EEnemyTacticRole::Flank && FlankDoneTarget.Get() != Target
+			&& FVector::Dist2D(Feet, TargetPosition) > 500.f && FVector::Dist2D(Feet, Order.MovePoint) > 150.f)
 		{
 			AIC->MoveToLocation(Order.MovePoint, 60.f, false, true); // round his side, then in
 		}

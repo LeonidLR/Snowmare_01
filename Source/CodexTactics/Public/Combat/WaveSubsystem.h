@@ -79,6 +79,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Wave")
 	FVector GetSpawnLocationForLane(const FString& Lane, EEnemyArchetype Type = EEnemyArchetype::Base) const;
 
+	/**
+	 * A free spot for one more enemy near Point (UE-only; user report 2026-10-04: a whole wave spawned into one point,
+	 * the capsules inside each other, and stood there — Godot's physics pushed overlapping bodies apart, UE's does not):
+	 * Point itself, else rings of 1.5 / 3 / 4.5 / 6 m, each spot projected onto the navmesh and free of pawns and walls.
+	 * Point (projected if possible) when nothing is free; a spawn point far off the navmesh is logged once.
+	 */
+	FVector FindFreeSpawnSpot(const FVector& Point) const;
+	/** Spawn points already reported as off the navmesh. */
+	mutable TSet<FVector> WarnedSpawnPoints;
+
 	/** Wave (1-3) of the mission's flank breach (Godot dynamic_breach_wave: [1, 2, 3] shuffled, Susanin takes one first). */
 	int32 GetDynamicBreachWave() const { return DynamicBreachWave; }
 	/** Wave of the Susanin rescue event (Godot susanin_rescue_wave). */

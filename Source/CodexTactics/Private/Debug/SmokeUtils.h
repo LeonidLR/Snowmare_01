@@ -12,6 +12,8 @@
 #include "EngineUtils.h"
 #include "Interactables/GateActor.h"
 #include "Engine/StaticMeshActor.h"
+#include "NavigationSystem.h"
+#include "NavigationPath.h"
 
 namespace SmokeUtils
 {
@@ -52,6 +54,74 @@ namespace SmokeUtils
 			}
 		}
 		return FTransform::Identity;
+	}
+
+	/**
+	 * Desired if a straight, fully pathed walk from From reaches it on the navmesh; else the same distance turned by
+	 * +-30 / 60 / 90 ... degrees, the first clear one (the user re-lays L_MovementTest — user decision 2026-10-04: the
+	 * map is the standard, the smokes adapt). Desired when nothing is clear.
+	 */
+	inline FVector ClearPoint(UWorld* World, const FVector& From, const FVector& Desired)
+	{
+		UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+		if (!Nav)
+		{
+			return Desired;
+		}
+		const FVector Offset = FVector(Desired.X - From.X, Desired.Y - From.Y, 0.f);
+		for (const float Turn : { 0.f, 30.f, -30.f, 60.f, -60.f, 90.f, -90.f, 120.f, -120.f, 150.f, -150.f, 180.f })
+		{
+			const FVector Candidate = From + Offset.RotateAngleAxis(Turn, FVector::UpVector) + FVector(0.f, 0.f, Desired.Z - From.Z);
+			FNavLocation OnNav;
+			if (!Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(80.f, 80.f, 300.f)))
+			{
+				continue;
+			}
+			FVector HitLocation;
+			if (Nav->NavigationRaycast(World, From, OnNav.Location, HitLocation))
+			{
+				continue; // blocked on the way
+			}
+			const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, From, OnNav.Location);
+			if (Path && Path->IsValid() && !Path->IsPartial())
+			{
+				return FVector(OnNav.Location.X, OnNav.Location.Y, Desired.Z);
+			}
+		}
+		return Desired;
+	}
+
+	/**
+	 * The nearest spot to Point (rings up to 6 m) on the navmesh where a 45 / 90 cm capsule is free of geometry and pawns
+	 * (a teleport into a prop the user placed leaves the unit stuck). Centre height = ground + 92 cm. Point when none.
+	 */
+	inline FVector FreeSpot(UWorld* World, const FVector& Point, const AActor* Ignore = nullptr)
+	{
+		UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+		if (!World)
+		{
+			return Point;
+		}
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(SmokeFreeSpot), false, Ignore);
+		for (const float Radius : { 0.f, 100.f, 200.f, 300.f, 450.f, 600.f })
+		{
+			const int32 Samples = Radius <= 0.f ? 1 : 12;
+			for (int32 Step = 0; Step < Samples; ++Step)
+			{
+				const FVector Candidate = Point + FVector(Radius, 0.f, 0.f).RotateAngleAxis(Step * 30.f, FVector::UpVector);
+				FNavLocation OnNav;
+				if (Nav && !Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(60.f, 60.f, 300.f)))
+				{
+					continue;
+				}
+				const FVector Centre = (Nav ? OnNav.Location : Candidate) + FVector(0.f, 0.f, 92.f);
+				if (!World->OverlapAnyTestByChannel(Centre, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(45.f, 90.f), Params))
+				{
+					return Centre;
+				}
+			}
+		}
+		return Point;
 	}
 
 	/** Design-coordinate point of L_MovementTest (layout at the origin, yaw 0) -> world point of the current layout. */

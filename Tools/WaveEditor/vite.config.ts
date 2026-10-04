@@ -6,6 +6,8 @@ import { spawn } from 'child_process'
 
 const PROJECT_PATH = path.resolve(__dirname, '../../')
 const LEVELS_DIR = path.resolve(__dirname, '../../Content/Data/LevelJson')
+// Weapon power (the «Оружие» tab); the game applies it at start (Source/.../Data/WeaponTuning.h).
+const WEAPONS_FILE = path.resolve(__dirname, '../../Content/Data/Weapons/weapons_tuning.json')
 const TELEMETRY_DIR = path.resolve(__dirname, '../../Saved/Telemetry')
 const RAW_RUNS_FILE = path.join(TELEMETRY_DIR, 'raw_runs', 'runs.jsonl')
 const BOT_PRESETS_FILE = path.resolve(__dirname, '../../Content/Data/Bot/bot_presets.json')
@@ -115,6 +117,49 @@ const setupApiMiddlewares = (middlewares: any) => {
     } else if (typeof next === 'function') {
       next()
     }
+  })
+
+  // Weapon tuning: read / write Content/Data/Weapons/weapons_tuning.json
+  middlewares.use('/api/get-weapons', (req: any, res: any) => {
+    addCors(res)
+    if (fs.existsSync(WEAPONS_FILE)) {
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'application/json; charset=utf-8')
+      res.end(fs.readFileSync(WEAPONS_FILE, 'utf-8').replace(/^﻿/, ''))
+    } else {
+      res.statusCode = 404
+      res.end(JSON.stringify({ error: 'weapons_tuning.json not found: run the game once with CodexTactics.DumpWeaponTuning' }))
+    }
+  })
+
+  middlewares.use('/api/save-weapons', (req: any, res: any, next: any) => {
+    addCors(res)
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204
+      res.end()
+      return
+    }
+    if (req.method !== 'POST') {
+      if (typeof next === 'function') next()
+      return
+    }
+    let body = ''
+    req.on('data', (chunk: any) => { body += chunk })
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body)
+        if (!data || typeof data.weapons !== 'object' || typeof data.grenade !== 'object') {
+          throw new Error('expected { weapons: {...}, grenade: {...} }')
+        }
+        fs.writeFileSync(WEAPONS_FILE, JSON.stringify(data, null, 2), 'utf-8')
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ success: true }))
+      } catch (e: any) {
+        res.statusCode = 500
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    })
   })
 
   // 4. Fallback: старый get-config

@@ -345,6 +345,14 @@ void UMissionSubsystem::ApplyStageLoadout()
 			}
 		}
 	}
+	for (AOperativeCharacter* Member : Roles)
+	{
+		const int32 Grenades = Member ? LoadoutRules::GrenadesFor(Mode, Loadout, Member->MaxGrenades) : -1;
+		if (Grenades >= 0)
+		{
+			Member->GrenadesCount = Grenades;
+		}
+	}
 	UE_LOG(LogCodexTactics, Log, TEXT("Stage loadout %d: turrets %d, barricades %d, mines %d"), static_cast<int32>(Mode),
 		Roles[0] ? Roles[0]->TurretsCount : 0, Roles[1] ? Roles[1]->BarricadesCount : 0, Roles[2] ? Roles[2]->MinesCount : 0);
 }

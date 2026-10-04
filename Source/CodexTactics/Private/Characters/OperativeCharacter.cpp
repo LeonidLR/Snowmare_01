@@ -353,6 +353,7 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 
 EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& Destination)
 {
+	LastMoveDestination = Destination;
 	ClearIdleFacing();
 	AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
 	if (!AIController)
@@ -808,6 +809,10 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	{
 		UpdateVault(DeltaTime);
 	}
+	else if (UpdateObstacleStepOff(DeltaTime))
+	{
+		// jumping down off a barricade / barrel top this frame
+	}
 	else
 	{
 		UpdateVaultTrigger(DeltaTime);
@@ -903,14 +908,27 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 		return false;
 	}
 	const float Height = Top.ImpactPoint.Z - GroundZ;
-	// 3. Firm ground behind it.
-	const FVector LandingXY = Front.ImpactPoint + Direction * VaultRules::LandingDistance;
-	FCollisionQueryParams LandParams = Params;
-	LandParams.AddIgnoredActor(Front.GetActor());
+	// 3. Firm ground behind it, where the capsule fits: further out while the spot is still on / in the obstacle (user
+	// report 2026-10-04: vaulting along a 3 m barricade landed inside it, he was pushed up and stuck on top).
+	FVector LandingXY = Front.ImpactPoint + Direction * VaultRules::LandingDistance;
 	FHitResult Land;
-	const bool bLanding = World->LineTraceSingleByChannel(Land, FVector(LandingXY.X, LandingXY.Y, GroundZ + 200.f),
-		FVector(LandingXY.X, LandingXY.Y, GroundZ - 200.f), ECC_Visibility, LandParams);
-	if (!VaultRules::CanVault(Height, bLanding, bLanding ? Land.ImpactPoint.Z - GroundZ : 0.f))
+	bool bLanding = false;
+	bool bLandingFree = false;
+	FCollisionQueryParams FitParams(SCENE_QUERY_STAT(OperativeVaultLanding), false, this);
+	for (float Extra = 0.f; Extra <= 240.f && !bLandingFree; Extra += 60.f)
+	{
+		LandingXY = Front.ImpactPoint + Direction * (VaultRules::LandingDistance + Extra);
+		bLanding = World->LineTraceSingleByChannel(Land, FVector(LandingXY.X, LandingXY.Y, GroundZ + 200.f),
+			FVector(LandingXY.X, LandingXY.Y, GroundZ - 200.f), ECC_Visibility, Params);
+		if (!bLanding || VaultNavigation::IsVaultable(Land.GetActor()) || Land.GetActor() == Front.GetActor())
+		{
+			continue; // the trace stops on the obstacle itself: still above it
+		}
+		const FVector Centre(LandingXY.X, LandingXY.Y, Land.ImpactPoint.Z + HalfHeight + 2.f);
+		bLandingFree = !World->OverlapAnyTestByChannel(Centre, FQuat::Identity, ECC_Pawn,
+			FCollisionShape::MakeCapsule(GetCapsuleComponent()->GetScaledCapsuleRadius(), HalfHeight), FitParams);
+	}
+	if (!bLandingFree || !VaultRules::CanVault(Height, bLanding, bLanding ? Land.ImpactPoint.Z - GroundZ : 0.f))
 	{
 		return false;
 	}
@@ -941,6 +959,35 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	VaultLanding = FVector(LandingXY.X, LandingXY.Y, Land.ImpactPoint.Z + HalfHeight);
 	SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
 	UE_LOG(LogCodexTactics, Log, TEXT("%s vaults over %s (%.0f cm)"), *DisplayName.ToString(), *Front.GetActor()->GetName(), Height);
+	return true;
+}
+
+bool AOperativeCharacter::UpdateObstacleStepOff(float DeltaTime)
+{
+	// Safety net: standing on an obstacle top for 0.3 s -> a short vault arc down to the nearest free ground.
+	ObstacleTopTime = VaultNavigation::IsStandingOnObstacle(*this) ? ObstacleTopTime + DeltaTime : 0.f;
+	FVector Spot;
+	if (ObstacleTopTime < 0.3f || !VaultNavigation::FindStepOffSpot(*this, Spot))
+	{
+		return false;
+	}
+	ObstacleTopTime = 0.f;
+	bVaultResume = bHasMoveOrder;
+	VaultResumeTarget = LastMoveDestination;
+	if (AController* OwnerController = GetController())
+	{
+		OwnerController->StopMovement();
+	}
+	GetCharacterMovement()->StopMovementImmediately();
+	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
+	SetActorEnableCollision(false);
+	bVaulting = true;
+	VaultTimer = 0.f;
+	VaultDuration = 0.5f;
+	VaultHeight = 30.f;
+	VaultStart = GetActorLocation();
+	VaultLanding = Spot;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Vault] %s stepped off an obstacle top"), *DisplayName.ToString());
 	return true;
 }
 

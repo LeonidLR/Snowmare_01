@@ -16,6 +16,17 @@ ELoadoutMode LoadoutRules::ResolveMode(const FString& LevelMode, EMissionStartMo
 	return Mode;
 }
 
+int32 LoadoutRules::GrenadesFor(ELoadoutMode Mode, const FSquadLoadout& Loadout, int32 MaxCarried)
+{
+	int32 Grenades = Loadout.GrenadesCount;
+	if (Mode == ELoadoutMode::EditorPreset)
+	{
+		Grenades = Loadout.PresetTier == TEXT("MINIMAL") ? 1 : (Loadout.PresetTier == TEXT("STANDARD") ? 2
+			: (Loadout.PresetTier == TEXT("MAXIMAL") ? 4 : Loadout.GrenadesCount));
+	}
+	return Grenades < 0 ? -1 : FMath::Clamp(Grenades, 0, FMath::Max(MaxCarried, 0));
+}
+
 void LoadoutRules::Apply(ELoadoutMode Mode, const FSquadLoadout& Loadout, FLoadoutSupply& Commander, FLoadoutSupply& Engineer,
 	FLoadoutSupply& Medic, int32& OutM16Reserve, int32& OutPistolReserve)
 {

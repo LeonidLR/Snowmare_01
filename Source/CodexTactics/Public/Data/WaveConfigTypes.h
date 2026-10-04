@@ -129,6 +129,10 @@ struct CODEXTACTICS_API FSquadLoadout
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	int32 PistolAmmo = 48;
+
+	/** Grenades per operative (UE-only, Wave Editor «Гранаты», user request 2026-10-04); -1: the operatives keep their own. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	int32 GrenadesCount = -1;
 };
 
 USTRUCT(BlueprintType)

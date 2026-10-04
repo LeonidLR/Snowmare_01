@@ -33,6 +33,9 @@
 #include "Misc/App.h"
 #include "Tactics/GorkyGridManager.h"
 #include "Tactics/GorkyLineOfSight.h"
+#include "Tactics/EnemyTurnRules.h"
+#include "Data/WeaponTuning.h"
+#include "Characters/EnemyTacticsRules.h"
 #include "Tactics/TurnGridOverlayActor.h"
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
@@ -62,6 +65,15 @@ namespace
 	FIntPoint TurnStepDir(const FIntPoint& Delta)
 	{
 		return FIntPoint(FMath::Clamp(Delta.X, -1, 1), FMath::Clamp(Delta.Y, -1, 1));
+	}
+
+	FEnemyTurnProfile TurnProfileOf(const AActor* Enemy)
+	{
+		const AEnemyCharacter* Character = Cast<AEnemyCharacter>(Enemy);
+		const EEnemyArchetype Archetype = Character ? Character->GetArchetype() : EEnemyArchetype::Base;
+		FEnemyTurnProfile Profile = EnemyTurnRules::ProfileFor(Archetype);
+		WeaponTuning::ApplyEnemyTurnWeapon(Archetype, Profile); // Wave Editor «Оружие врагов»
+		return Profile;
 	}
 
 	int32 TurnManhattan(const FIntPoint& A, const FIntPoint& B)
@@ -305,9 +317,10 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		FTurnUnitState& State = States.Add(Enemy);
 		State.Actor = Enemy;
 		State.GridPos = Cell;
-		State.MaxAP = State.AP = Balance.EnemyMaxAP;
+		const FEnemyTurnProfile TurnProfile = TurnProfileOf(Enemy);
+		State.MaxAP = State.AP = EnemyTurnRules::MaxAP(TurnProfile, Balance.EnemyMaxAP);
 		State.Armor = 3.f;
-		State.BaseDamage = Balance.EnemyBaseDamage;
+		State.BaseDamage = EnemyTurnRules::BaseDamage(TurnProfile, Balance.EnemyBaseDamage);
 		State.Facing = FacingTowards(Enemy->GetActorLocation(), Center, EGorkyFacing::North);
 		AlignFacing(Enemy, State.Facing);
 	}
@@ -2767,9 +2780,10 @@ void UTurnBasedCombatSubsystem::RegisterReinforcement(AActor* Enemy, const FIntP
 	FTurnUnitState& State = States.Add(Enemy);
 	State.Actor = Enemy;
 	State.GridPos = Cell;
-	State.MaxAP = State.AP = Balance.EnemyMaxAP;
+	const FEnemyTurnProfile TurnProfile = TurnProfileOf(Enemy);
+	State.MaxAP = State.AP = EnemyTurnRules::MaxAP(TurnProfile, Balance.EnemyMaxAP);
 	State.Armor = 2.f;
-	State.BaseDamage = Balance.EnemyBaseDamage;
+	State.BaseDamage = EnemyTurnRules::BaseDamage(TurnProfile, Balance.EnemyBaseDamage);
 	State.Facing = EGorkyFacing::North;
 	AlignFacing(Enemy, State.Facing);
 	Log(FString::Printf(TEXT("🚨 ПРОРЫВ! Оголённая зона [%s] осталась без прикрытия! Прибыло подкрепление: %s!"), *QuadrantName, *NameOf(Enemy)));
@@ -2922,6 +2936,7 @@ void UTurnBasedCombatSubsystem::ExecuteEnemyPhase()
 {
 	Phase = ETurnPhase::Enemies;
 	EnemyQueue.Reset();
+	EnemyPhaseTargets.Reset();
 	for (const TWeakObjectPtr<AActor>& Enemy : Enemies)
 	{
 		if (FTurnUnitState* State = States.Find(Enemy.Get()))
@@ -3020,42 +3035,22 @@ void UTurnBasedCombatSubsystem::ExecuteEnemyTurn(AActor* Enemy)
 		Overlay->SetCells(ETurnOverlayLayer::EnemyReach, Reach);
 	}
 
-	// Nearest living operative (Chebyshev).
-	AActor* Target = nullptr;
+	const FEnemyTurnProfile Profile = TurnProfileOf(Enemy);
 	FIntPoint TargetPos = FIntPoint::ZeroValue;
-	int32 BestDistance = TNumericLimits<int32>::Max();
-	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Squad)
-	{
-		const FTurnUnitState* MemberState = GetUnitState(Member.Get());
-		if (MemberState && !IsDead(Member.Get()))
-		{
-			const int32 Distance = TurnBasedRules::CellDistance(Pos, MemberState->GridPos);
-			if (Distance < BestDistance)
-			{
-				BestDistance = Distance;
-				Target = Member.Get();
-				TargetPos = MemberState->GridPos;
-			}
-		}
-	}
+	AActor* Target = ChooseEnemyTarget(Enemy, Profile.bRanged, Fear, TargetPos);
 	if (!Target)
 	{
 		FinishEnemyTurn(0.25f);
 		return;
 	}
-	// Fire blocks the way to the nearest one: look for another operative it can reach.
-	if (!Fear.IsEmpty() && Grid->FindPathToAdjacent(Pos, TargetPos, State->AP + 8, true, Fear).IsEmpty())
+	if (Profile.bRanged)
 	{
-		for (const TWeakObjectPtr<AOperativeCharacter>& Member : Squad)
+		if (Overlay)
 		{
-			const FTurnUnitState* MemberState = GetUnitState(Member.Get());
-			if (Member.Get() != Target && MemberState && !Grid->FindPathToAdjacent(Pos, MemberState->GridPos, State->AP + 8, true, Fear).IsEmpty())
-			{
-				Target = Member.Get();
-				TargetPos = MemberState->GridPos;
-				break;
-			}
+			Overlay->SetCells(ETurnOverlayLayer::Warning, { TargetPos });
 		}
+		ExecuteRangedEnemyTurn(Enemy, Target, TargetPos, Fear);
+		return;
 	}
 
 	const bool bOrthogonal = TurnManhattan(Pos, TargetPos) == 1;
@@ -3064,10 +3059,55 @@ void UTurnBasedCombatSubsystem::ExecuteEnemyTurn(AActor* Enemy)
 		Overlay->SetCells(ETurnOverlayLayer::Warning, { TargetPos }); // Godot show_target_warning
 	}
 
-	bool bStoppedByFear = false;
-	if (!bOrthogonal && State->AP > 0)
+	// The orthogonal cell to bite from: the archetype weighs the back / flank arc against the walk (EnemyTurnRules).
+	TArray<FIntPoint> ChosenPath;
+	bool bHasChoice = false;
+	if (const FTurnUnitState* TargetState = GetUnitState(Target))
 	{
-		TArray<FIntPoint> Path = Grid->FindPathToAdjacent(Pos, TargetPos, State->AP, true, Fear);
+		TArray<FEnemyMeleeCell> Cells;
+		TArray<TArray<FIntPoint>> Paths;
+		const FIntPoint Offsets[] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+		for (const FIntPoint& Offset : Offsets)
+		{
+			const FIntPoint Cell = TargetPos + Offset;
+			TArray<FIntPoint> Path;
+			int32 Cost = 0;
+			if (Cell != Pos)
+			{
+				if (!Grid->IsValidCell(Cell) || !Grid->IsCellWalkable(Cell) || Fear.Contains(Cell))
+				{
+					continue;
+				}
+				Path = Grid->FindPath(Pos, Cell, State->AP + 8, Fear);
+				if (Path.IsEmpty())
+				{
+					continue;
+				}
+				FIntPoint Current = Pos;
+				for (const FIntPoint& Step : Path)
+				{
+					Cost += (Step.X != Current.X && Step.Y != Current.Y) ? Grid->DiagonalAPCost : 1;
+					Current = Step;
+				}
+			}
+			FEnemyMeleeCell& Candidate = Cells.AddDefaulted_GetRef();
+			Candidate.Cell = Cell;
+			Candidate.PathCost = Cost;
+			Candidate.ArcMultiplier = FGorky17Utils::CalculateAttackArc(Cell, TargetPos, FGorky17Utils::FacingToVector(TargetState->Facing)).DamageMultiplier;
+			Paths.Add(Path);
+		}
+		const int32 Chosen = EnemyTurnRules::ChooseMeleeCell(Profile, Cells, State->AP);
+		if (Chosen != INDEX_NONE)
+		{
+			bHasChoice = true;
+			ChosenPath = Paths[Chosen];
+		}
+	}
+
+	bool bStoppedByFear = false;
+	if ((bHasChoice ? !ChosenPath.IsEmpty() : !bOrthogonal) && State->AP > 0)
+	{
+		TArray<FIntPoint> Path = bHasChoice ? ChosenPath : Grid->FindPathToAdjacent(Pos, TargetPos, State->AP, true, Fear);
 		if (Path.IsEmpty() && !Fear.IsEmpty())
 		{
 			Path = Grid->FindPathClosestOutsideForbidden(Pos, TargetPos, State->AP, Fear);
@@ -3158,12 +3198,25 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 	}
 	// Enemies bite only orthogonally (front, back, side) for 2 AP.
 	const FTurnUnitState* TargetState = GetUnitState(Target);
-	if (TurnManhattan(State->GridPos, TargetPos) != 1 || State->AP < 2 || !TargetState || IsDead(Target))
+	const FEnemyTurnProfile Profile = TurnProfileOf(Enemy);
+	if (TurnManhattan(State->GridPos, TargetPos) != 1 || !TargetState || IsDead(Target))
 	{
-		EnemyRetreat(Enemy, TargetPos);
+		FinishEnemyTurn(0.25f); // still on the way (UE: no pointless step back after the approach)
 		return;
 	}
-	State->AP -= 2;
+	if (State->AP < Profile.AttackAPCost)
+	{
+		if (Profile.bHitAndRun)
+		{
+			EnemyRetreat(Enemy, TargetPos);
+		}
+		else
+		{
+			FinishEnemyTurn(0.25f);
+		}
+		return;
+	}
+	State->AP -= Profile.AttackAPCost;
 	State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(TargetPos - State->GridPos));
 	AlignFacing(Enemy, State->Facing);
 	const FGorkyArcResult Arc = FGorky17Utils::CalculateAttackArc(State->GridPos, TargetPos, TargetState->Facing);
@@ -3237,7 +3290,12 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 			}
 			After(EnemyRetreatDelay, [this, WeakEnemy, TargetPos]()
 			{
-				if (AActor* Attacker2 = WeakEnemy.Get())
+				AActor* Attacker2 = WeakEnemy.Get();
+				if (Attacker2 && !TurnProfileOf(Attacker2).bHitAndRun)
+				{
+					FinishEnemyTurn(0.25f); // frostbitten / brutes stay on their victim
+				}
+				else if (Attacker2)
 				{
 					EnemyRetreat(Attacker2, TargetPos);
 				}
@@ -3246,6 +3304,318 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 					FinishEnemyTurn(0.25f);
 				}
 			});
+		});
+	});
+}
+
+AActor* UTurnBasedCombatSubsystem::ChooseEnemyTarget(AActor* Enemy, bool bRanged, const TSet<FIntPoint>& Fear, FIntPoint& OutTargetPos)
+{
+	const FTurnUnitState* State = States.Find(Enemy);
+	if (!State)
+	{
+		return nullptr;
+	}
+	const AEnemyCharacter* Character = Cast<AEnemyCharacter>(Enemy);
+	const FEnemyTacticsProfile Tactics = EnemyTacticsRules::ProfileFor(Character ? Character->GetArchetype() : EEnemyArchetype::Base);
+	TArray<AOperativeCharacter*> Operatives;
+	TArray<FIntPoint> Cells;
+	TArray<FEnemyTacticsTarget> Targets;
+	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Squad)
+	{
+		const FTurnUnitState* MemberState = GetUnitState(Member.Get());
+		if (!MemberState || IsDead(Member.Get()))
+		{
+			continue;
+		}
+		const FIntPoint Facing = FGorky17Utils::FacingToVector(MemberState->Facing);
+		FEnemyTacticsTarget& Target = Targets.AddDefaulted_GetRef();
+		Target.Location = Grid->GridToWorld(MemberState->GridPos);
+		Target.Forward = (Grid->GridToWorld(MemberState->GridPos + Facing) - Target.Location).GetSafeNormal2D();
+		const UHealthComponent* Health = Member->HealthComponent;
+		Target.HealthFraction = Health ? Health->GetCurrentHealth() / FMath::Max(Health->GetMaxHealth(), 1.f) : 1.f;
+		Target.bInCover = MemberState->Stance != EOperativeStance::Standing && IsCoveredFrom(MemberState->GridPos, State->GridPos);
+		Target.Attackers = EnemyPhaseTargets.FindRef(Member.Get());
+		// Melee: only the ones it can get to (fire blocks the way).
+		Target.bUsable = bRanged || Fear.IsEmpty()
+			|| TurnManhattan(State->GridPos, MemberState->GridPos) == 1
+			|| !Grid->FindPathToAdjacent(State->GridPos, MemberState->GridPos, State->AP + 8, true, Fear).IsEmpty();
+		Operatives.Add(Member.Get());
+		Cells.Add(MemberState->GridPos);
+	}
+	for (int32 Index = 0; Index < Targets.Num(); ++Index)
+	{
+		Targets[Index].NearestMateDistance = 100000.f;
+		for (int32 Other = 0; Other < Targets.Num(); ++Other)
+		{
+			if (Other != Index)
+			{
+				Targets[Index].NearestMateDistance = FMath::Min(Targets[Index].NearestMateDistance,
+					static_cast<float>(FVector::Dist2D(Targets[Index].Location, Targets[Other].Location)));
+			}
+		}
+	}
+	int32 Chosen = EnemyTacticsRules::ChooseTarget(Tactics, Grid->GridToWorld(State->GridPos), Targets);
+	if (Chosen == INDEX_NONE)
+	{
+		// Nobody reachable: the nearest one (it walks to the fire's edge and growls, Godot).
+		int32 BestDistance = TNumericLimits<int32>::Max();
+		for (int32 Index = 0; Index < Cells.Num(); ++Index)
+		{
+			const int32 Distance = TurnBasedRules::CellDistance(State->GridPos, Cells[Index]);
+			if (Distance < BestDistance)
+			{
+				BestDistance = Distance;
+				Chosen = Index;
+			}
+		}
+	}
+	if (Chosen == INDEX_NONE)
+	{
+		return nullptr;
+	}
+	EnemyPhaseTargets.FindOrAdd(Operatives[Chosen])++;
+	OutTargetPos = Cells[Chosen];
+	return Operatives[Chosen];
+}
+
+bool UTurnBasedCombatSubsystem::IsCoveredFrom(const FIntPoint& TargetCell, const FIntPoint& Shooter) const
+{
+	const FIntPoint Dir = TurnStepDir(Shooter - TargetCell);
+	const FIntPoint Checks[] = { FIntPoint(Dir.X, 0), FIntPoint(0, Dir.Y), Dir };
+	for (const FIntPoint& Check : Checks)
+	{
+		if (Check != FIntPoint::ZeroValue && Grid->GetOccupantType(TargetCell + Check) == EGorkyOccupantType::Barricade)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UTurnBasedCombatSubsystem::WalkEnemy(AActor* Enemy, const TArray<FIntPoint>& Path, TFunction<void(AActor*)> OnArrived)
+{
+	FTurnUnitState* State = States.Find(Enemy);
+	if (!State)
+	{
+		return false;
+	}
+	const FIntPoint Pos = State->GridPos;
+	TArray<FIntPoint> Actual;
+	int32 Spent = 0;
+	FIntPoint Current = Pos;
+	bool bMine = false;
+	for (const FIntPoint& Step : Path)
+	{
+		const int32 Cost = (Step.X != Current.X && Step.Y != Current.Y) ? Grid->DiagonalAPCost : 1;
+		if (Spent + Cost > State->AP)
+		{
+			break;
+		}
+		Actual.Add(Step);
+		Spent += Cost;
+		Current = Step;
+		if (Grid->GetOccupantType(Step) == EGorkyOccupantType::Mine)
+		{
+			bMine = true;
+			break;
+		}
+	}
+	if (Actual.IsEmpty())
+	{
+		return false;
+	}
+	const FIntPoint Destination = Actual.Last();
+	AActor* MineActor = bMine ? Grid->GetOccupant(Destination) : nullptr;
+	Grid->ClearOccupant(Pos);
+	if (!bMine)
+	{
+		Grid->SetOccupant(Destination, Enemy, EGorkyOccupantType::Enemy);
+	}
+	State->GridPos = Destination;
+	State->AP -= Spent;
+	State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Destination - (Actual.Num() > 1 ? Actual[Actual.Num() - 2] : Pos)));
+	TWeakObjectPtr<AActor> WeakEnemy(Enemy), WeakMine(MineActor);
+	FocusMovingEnemy(Enemy);
+	StartMover(Enemy, Pos, Actual, EnemyStepDuration, nullptr, [this, WeakEnemy, WeakMine, bMine, Destination, OnArrived]()
+	{
+		AActor* Moved = WeakEnemy.Get();
+		if (!Moved || !States.Contains(Moved))
+		{
+			FinishEnemyTurn(0.45f);
+			return;
+		}
+		AlignFacing(Moved, States[Moved].Facing);
+		if (bMine)
+		{
+			DetonateMine(Destination, WeakMine.Get(), Moved);
+			if (FTurnUnitState* MovedState = States.Find(Moved))
+			{
+				MovedState->AP = 0;
+			}
+			FinishEnemyTurn(1.2f);
+			return;
+		}
+		OnArrived(Moved);
+	});
+	return true;
+}
+
+void UTurnBasedCombatSubsystem::ExecuteRangedEnemyTurn(AActor* Enemy, AActor* Target, const FIntPoint& TargetPos, const TSet<FIntPoint>& Fear)
+{
+	FTurnUnitState* State = States.Find(Enemy);
+	const FTurnUnitState* TargetState = GetUnitState(Target);
+	if (!State || !TargetState)
+	{
+		FinishEnemyTurn(0.25f);
+		return;
+	}
+	const FEnemyTurnProfile Profile = TurnProfileOf(Enemy);
+	const FIntPoint Pos = State->GridPos;
+	TMap<FIntPoint, int32> Reach = Grid->GetReachableCells(Pos, FMath::Max(0, State->AP), Fear);
+	Reach.Add(Pos, 0);
+	auto NextToOperative = [this](const FIntPoint& Cell)
+	{
+		for (const TWeakObjectPtr<AOperativeCharacter>& Member : Squad)
+		{
+			const FTurnUnitState* MemberState = GetUnitState(Member.Get());
+			if (MemberState && !IsDead(Member.Get()) && TurnBasedRules::CellDistance(Cell, MemberState->GridPos) <= 1)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	TArray<FEnemyFiringCell> Cells;
+	for (const TPair<FIntPoint, int32>& Entry : Reach)
+	{
+		if (Entry.Key != Pos && Grid->GetOccupantType(Entry.Key) == EGorkyOccupantType::Mine)
+		{
+			continue; // it does not stop on a mine on purpose
+		}
+		FEnemyFiringCell& Cell = Cells.AddDefaulted_GetRef();
+		Cell.Cell = Entry.Key;
+		Cell.PathCost = Entry.Value;
+		Cell.Distance = TurnBasedRules::CellDistance(Entry.Key, TargetPos);
+		Cell.bLineOfFire = GorkyLineOfSight::HasLineOfSight(Entry.Key, TargetPos, *Grid);
+		Cell.bNextToOperative = NextToOperative(Entry.Key);
+		Cell.HitChance = EnemyTurnRules::RangedHitChance(Profile, Cell.Distance, TargetState->Stance, IsCoveredFrom(TargetPos, Entry.Key));
+	}
+	const int32 Chosen = EnemyTurnRules::ChooseFiringCell(Profile, Cells, State->AP);
+	TWeakObjectPtr<AActor> WeakTarget(Target);
+	if (Chosen != INDEX_NONE)
+	{
+		const FIntPoint Cell = Cells[Chosen].Cell;
+		auto Shoot = [this, WeakTarget, TargetPos](AActor* Shooter)
+		{
+			EnemyRangedAttack(Shooter, WeakTarget.Get(), TargetPos);
+		};
+		if (Cell == Pos || !WalkEnemy(Enemy, Grid->FindPath(Pos, Cell, State->AP, Fear), Shoot))
+		{
+			EnemyRangedAttack(Enemy, Target, TargetPos);
+		}
+		return;
+	}
+	// No shot this turn: the cell with a line of fire nearest to the preferred band, else the one closest to the target.
+	int32 Best = INDEX_NONE;
+	float BestScore = TNumericLimits<float>::Max();
+	for (int32 Index = 0; Index < Cells.Num(); ++Index)
+	{
+		const FEnemyFiringCell& Cell = Cells[Index];
+		const float Band = Cell.Distance < Profile.PreferredMin ? Profile.PreferredMin - Cell.Distance
+			: (Cell.Distance > Profile.PreferredMax ? Cell.Distance - Profile.PreferredMax : 0.f);
+		const float Score = Band + (Cell.bLineOfFire ? 0.f : 3.f) + (Cell.bNextToOperative ? 5.f : 0.f) + 0.05f * Cell.PathCost;
+		if (Score < BestScore)
+		{
+			BestScore = Score;
+			Best = Index;
+		}
+	}
+	if (Best == INDEX_NONE || Cells[Best].Cell == Pos
+		|| !WalkEnemy(Enemy, Grid->FindPath(Pos, Cells[Best].Cell, State->AP, Fear), [this](AActor*) { FinishEnemyTurn(0.35f); }))
+	{
+		FinishEnemyTurn(0.35f);
+	}
+}
+
+void UTurnBasedCombatSubsystem::EnemyRangedAttack(AActor* Enemy, AActor* Target, const FIntPoint& TargetPos)
+{
+	FTurnUnitState* State = States.Find(Enemy);
+	const FTurnUnitState* TargetState = GetUnitState(Target);
+	const FEnemyTurnProfile Profile = TurnProfileOf(Enemy);
+	if (!State || !TargetState || IsDead(Target) || State->AP < Profile.AttackAPCost)
+	{
+		FinishEnemyTurn(0.25f);
+		return;
+	}
+	State->AP -= Profile.AttackAPCost;
+	State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(TargetPos - State->GridPos));
+	AlignFacing(Enemy, State->Facing);
+	const int32 Distance = TurnBasedRules::CellDistance(State->GridPos, TargetPos);
+	const float Chance = EnemyTurnRules::RangedHitChance(Profile, Distance, TargetState->Stance, IsCoveredFrom(TargetPos, State->GridPos));
+	const int32 Damage = TurnBasedRules::EnemyAttackDamage(State->BaseDamage, 1.f, TurnBasedRules::StanceDamageMultiplier(TargetState->Stance, Balance));
+	if (Overlay)
+	{
+		Overlay->SetCells(ETurnOverlayLayer::Warning, { TargetPos });
+	}
+	Changed();
+	TWeakObjectPtr<AActor> WeakEnemy(Enemy), WeakTarget(Target);
+	// The warning square, then the shot (attack clip), the roll, then (hit and run, next to an operative) a step back.
+	After(1.0f, [this, WeakEnemy, WeakTarget, TargetPos, Chance, Damage, Distance]()
+	{
+		AActor* Shooter = WeakEnemy.Get();
+		AActor* Victim = WeakTarget.Get();
+		if (!Shooter || !Victim || !States.Contains(Victim))
+		{
+			FinishEnemyTurn(0.25f);
+			return;
+		}
+		if (const AEnemyCharacter* EnemyCharacter = Cast<AEnemyCharacter>(Shooter))
+		{
+			if (UEnemyAnimInstance* Anim = EnemyCharacter->GetMesh() ? Cast<UEnemyAnimInstance>(EnemyCharacter->GetMesh()->GetAnimInstance()) : nullptr)
+			{
+				Anim->NotifyAttack();
+			}
+		}
+		const bool bHit = FMath::FRand() < Chance;
+		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+		{
+			const FVector Miss(FMath::FRandRange(-90.f, 90.f), FMath::FRandRange(-90.f, 90.f), 40.f);
+			Feedback->SpawnTracer(Shooter->GetActorLocation() + FVector(0.f, 0.f, 60.f), Victim->GetActorLocation() + (bHit ? FVector::ZeroVector : Miss),
+				FLinearColor(0.4f, 0.8f, 1.f), EDamageType::Cryo);
+		}
+		if (bHit)
+		{
+			ApplySquadHit(Victim, Damage, NameOf(Shooter));
+			Log(FString::Printf(TEXT("🎯 %s стреляет в %s с %d клеток (шанс %d%%): %d урона!"), *NameOf(Shooter), *NameOf(Victim), Distance,
+				FMath::RoundToInt(Chance * 100.f), Damage));
+			if (IsActive() && IsDead(Victim))
+			{
+				OnSquadMemberKilled(Victim, TargetPos);
+			}
+		}
+		else
+		{
+			Log(FString::Printf(TEXT("💨 %s стреляет в %s с %d клеток (шанс %d%%): промах."), *NameOf(Shooter), *NameOf(Victim), Distance,
+				FMath::RoundToInt(Chance * 100.f)));
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[EnemyTurn] %s ranged at %s: %d cells, chance %.2f, %s"), *NameOf(Shooter), *NameOf(Victim),
+			Distance, Chance, bHit ? TEXT("hit") : TEXT("miss"));
+		if (!IsActive() || CheckBattleEnd())
+		{
+			return;
+		}
+		After(0.6f, [this, WeakEnemy, TargetPos]()
+		{
+			AActor* Attacker = WeakEnemy.Get();
+			const FTurnUnitState* AttackerState = Attacker ? States.Find(Attacker) : nullptr;
+			if (AttackerState && TurnProfileOf(Attacker).bHitAndRun && TurnBasedRules::CellDistance(AttackerState->GridPos, TargetPos) <= 1)
+			{
+				EnemyRetreat(Attacker, TargetPos);
+			}
+			else
+			{
+				FinishEnemyTurn(0.25f);
+			}
 		});
 	});
 }

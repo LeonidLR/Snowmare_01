@@ -16,6 +16,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Debug/SmokeUtils.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
@@ -189,7 +190,7 @@ namespace StanceSmoke
 		case 16:
 			// A sprint order from prone: up first (in place), then the run.
 			State.CrawlStart = Leader->GetActorLocation();
-			Leader->OrderMoveTo(Leader->GetActorLocation() - Leader->GetActorForwardVector() * 900.f, true);
+			Leader->OrderMoveTo(SmokeUtils::ClearPoint(Leader->GetWorld(), Leader->GetActorLocation(), Leader->GetActorLocation() - Leader->GetActorForwardVector() * 900.f), true);
 			State.bRiseOk = Leader->GetStance() == EOperativeStance::Standing && Leader->GetVelocity().Size2D() < 1.f;
 			return false;
 		case 17:

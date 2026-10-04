@@ -229,6 +229,10 @@ protected:
 	float ProgressTimer = 0.f;
 	/** Running a morale fall-back (the floating text once per fall-back). */
 	bool bFallingBack = false;
+	/** The target this enemy already went round (flank done: straight in from now on). */
+	TWeakObjectPtr<AActor> FlankDoneTarget;
+	/** Seconds standing on a barricade / barrel top (VaultNavigation::IsStandingOnObstacle). */
+	float ObstacleTopTime = 0.f;
 
 	/** Nearest burning barrel / active heat source within the fear radius (Godot _find_nearest_active_fire_source). */
 	bool FindNearestFire(FVector& OutFire) const;

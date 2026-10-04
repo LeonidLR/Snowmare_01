@@ -19,6 +19,11 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Debug/SmokeUtils.h"
+#include "Navigation/PathFollowingComponent.h"
+#include "AIController.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -132,9 +137,11 @@ namespace CombatMoveSmoke
 					Member->bTacticalCeaseFire = true;
 				}
 			}
-			Commander->TeleportTo(SmokeUtils::LevelPoint(World, FVector(0.f, 0.f, 100.f)), Layout.Rotator(), false, true);
+			// On a free spot near the design start (the user's layout may put a prop there), the brute 8 m ahead of him.
+			const FVector CommanderSpot = SmokeUtils::FreeSpot(World, SmokeUtils::LevelPoint(World, FVector(0.f, 0.f, 100.f)), Commander);
+			Commander->TeleportTo(CommanderSpot, Layout.Rotator(), false, true);
 			State.Brute = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Brute,
-				SmokeUtils::LevelPoint(World, FVector(800.f, 0.f, 100.f)), Layout.Rotator() + FRotator(0.f, 180.f, 0.f));
+				SmokeUtils::FreeSpot(World, CommanderSpot + Layout.Rotator().Vector() * 800.f), Layout.Rotator() + FRotator(0.f, 180.f, 0.f));
 			if (!State.Brute.IsValid())
 			{
 				Check(State, false, TEXT("brute spawned"));
@@ -169,11 +176,31 @@ namespace CombatMoveSmoke
 					FVector::Dist(Muzzle, Commander->GetMuzzleLocation())));
 			}
 			// A plain order 5 m to the side.
-			Commander->OrderMoveTo(SmokeUtils::LevelPoint(World, FVector(0.f, 500.f, 100.f)), false);
+			{
+				UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+				FNavLocation OnNav;
+				const FVector Feet = Commander->GetActorLocation() - FVector(0.f, 0.f, Commander->GetSimpleCollisionHalfHeight());
+				const bool bOnNav = Nav && Nav->ProjectPointToNavigation(Feet, OnNav, FVector(50.f, 50.f, 150.f));
+				const FVector Side = SmokeUtils::LevelPoint(World, FVector(0.f, 500.f, 100.f));
+				const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, Commander->GetActorLocation(), Side) : nullptr;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: commander at %s on navmesh %d, path to the side %d (partial %d), movement mode %d"),
+					*Commander->GetActorLocation().ToCompactString(), bOnNav ? 1 : 0, Path && Path->IsValid() ? 1 : 0, Path && Path->IsPartial() ? 1 : 0,
+					static_cast<int32>(Commander->GetCharacterMovement()->MovementMode));
+			}
+			Commander->OrderMoveTo(SmokeUtils::ClearPoint(World, Commander->GetActorLocation(), SmokeUtils::LevelPoint(World, FVector(0.f, 500.f, 100.f))), false);
 			NextStage(State);
 			return true;
 		case 2:
 			Sample(State, Commander);
+			if (State.StageTime > 0.45f && State.StageTime < 0.55f)
+			{
+				const AAIController* AIC = Cast<AAIController>(Commander->GetController());
+				const UPathFollowingComponent* Follow = AIC ? AIC->GetPathFollowingComponent() : nullptr;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag 0.5 s: speed %.0f, max walk %.0f, path status %d, controller %s, ground %d"),
+					Commander->GetVelocity().Size2D(), Commander->GetCharacterMovement()->MaxWalkSpeed,
+					Follow ? static_cast<int32>(Follow->GetStatus()) : -1, AIC ? *AIC->GetClass()->GetName() : TEXT("none"),
+					Commander->GetCharacterMovement()->IsMovingOnGround() ? 1 : 0);
+			}
 			if (State.StageTime < 2.f)
 			{
 				return true;
@@ -185,7 +212,7 @@ namespace CombatMoveSmoke
 			Check(State, State.MaxBarrelError <= 15.f && State.MaxPlayRate <= 1.5f, FString::Printf(
 				TEXT("walk order: barrel on the brute (max error %.1f deg), legs play rate %.2f"), State.MaxBarrelError, State.MaxPlayRate));
 			// A sprint order back past the start.
-			Commander->OrderMoveTo(SmokeUtils::LevelPoint(World, FVector(0.f, -500.f, 100.f)), true);
+			Commander->OrderMoveTo(SmokeUtils::ClearPoint(World, Commander->GetActorLocation(), SmokeUtils::LevelPoint(World, FVector(0.f, -500.f, 100.f))), true);
 			NextStage(State);
 			return true;
 		case 3:

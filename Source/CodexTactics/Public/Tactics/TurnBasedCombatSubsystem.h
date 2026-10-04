@@ -419,6 +419,21 @@ private:
 	void ExecuteEnemyTurn(AActor* Enemy);
 	void EnemyAttack(AActor* Enemy, AActor* Target, const FIntPoint& TargetPos);
 	void EnemyRetreat(AActor* Enemy, const FIntPoint& TargetPos);
+	/**
+	 * Enemy tactics (EnemyTurnRules / EnemyTacticsRules, user decisions 2026-10-04): the operative to go for - the
+	 * archetype's preferences (wounded, straggler, exposed, turned away), the attackers already sent at each this
+	 * phase, the ones melee enemies can reach. nullptr: none left.
+	 */
+	AActor* ChooseEnemyTarget(AActor* Enemy, bool bRanged, const TSet<FIntPoint>& Fear, FIntPoint& OutTargetPos);
+	/** A ranged enemy's turn: walk to the best firing cell and shoot (hit roll), else close in for the next turn. */
+	void ExecuteRangedEnemyTurn(AActor* Enemy, AActor* Target, const FIntPoint& TargetPos, const TSet<FIntPoint>& Fear);
+	void EnemyRangedAttack(AActor* Enemy, AActor* Target, const FIntPoint& TargetPos);
+	/** Walks Enemy along Path as far as its AP pays (stops on a mine and detonates it); OnArrived after the walk. False: no step. */
+	bool WalkEnemy(AActor* Enemy, const TArray<FIntPoint>& Path, TFunction<void(AActor*)> OnArrived);
+	/** Target stands next to a barricade on Shooter's side. */
+	bool IsCoveredFrom(const FIntPoint& TargetCell, const FIntPoint& Shooter) const;
+	/** Operatives targeted this enemy phase (the focus cap of the pack). */
+	TMap<TWeakObjectPtr<AActor>, int32> EnemyPhaseTargets;
 	void FinishEnemyTurn(float Delay);
 	TSet<FIntPoint> GetFearCells() const;
 

@@ -9,6 +9,8 @@ import { SquadLoadoutControls } from './components/SquadLoadoutControls';
 import { TelemetryAnalytics } from './components/TelemetryAnalytics';
 import { BotStatusBar } from './components/BotStatusBar';
 import { LiveBalanceAdvisor } from './components/LiveBalanceAdvisor';
+import { WeaponTuningPanel } from './components/WeaponTuningPanel';
+import { EnemyWeaponsPanel } from './components/EnemyWeaponsPanel';
 import { Activity, Terminal, Loader2, Swords, Plus, Snowflake, X, Wifi, WifiOff } from 'lucide-react';
 import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2 } from 'lucide-react';
 
@@ -141,7 +143,7 @@ export const App: React.FC = () => {
   };
 
   const [selectedWaveIndex, setSelectedWaveIndex] = useState<number>(1);
-  const [activeTab, setActiveTab] = useState<'waves' | 'telemetry'>('waves');
+  const [activeTab, setActiveTab] = useState<'waves' | 'telemetry' | 'weapons' | 'enemyWeapons'>('waves');
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [isServerConnected, setIsServerConnected] = useState<boolean | null>(null);
 
@@ -657,6 +659,28 @@ export const App: React.FC = () => {
               <Activity className="w-3.5 h-3.5" />
               Телеметрия симуляций и боты
             </button>
+            <button
+              onClick={() => setActiveTab('weapons')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'weapons'
+                  ? 'bg-rose-500 text-slate-950 shadow-md shadow-rose-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Swords className="w-3.5 h-3.5" />
+              Оружие отряда
+            </button>
+            <button
+              onClick={() => setActiveTab('enemyWeapons')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'enemyWeapons'
+                  ? 'bg-orange-500 text-slate-950 shadow-md shadow-orange-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Swords className="w-3.5 h-3.5" />
+              Оружие врагов
+            </button>
           </div>
 
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 font-mono">
@@ -669,6 +693,10 @@ export const App: React.FC = () => {
       <main className="flex-1 p-6 max-w-7xl mx-auto w-full flex flex-col gap-6">
         {activeTab === 'telemetry' ? (
           <TelemetryAnalytics />
+        ) : activeTab === 'weapons' ? (
+          <WeaponTuningPanel />
+        ) : activeTab === 'enemyWeapons' ? (
+          <EnemyWeaponsPanel />
         ) : (
           <>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
