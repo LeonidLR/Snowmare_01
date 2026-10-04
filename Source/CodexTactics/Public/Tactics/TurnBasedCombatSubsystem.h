@@ -169,6 +169,7 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
 	int32 GetRound() const { return Round; }
+	int32 GetContactHitsThisFight() const { return ContactHitsThisFight; }
 
 	const FTurnUnitState* GetUnitState(const AActor* Actor) const;
 	UGorkyGridManager* GetGrid() const { return Grid; }
@@ -474,6 +475,8 @@ private:
 	ETurnPhase Phase = ETurnPhase::Inactive;
 	int32 ActiveIndex = 0;
 	int32 Round = 0;
+	/** Turn-based barricade contact hits this fight (Sprint 06-C). */
+	int32 ContactHitsThisFight = 0;
 	bool bSquadUnitMoving = false;
 	bool bDramaticShotActive = false;
 	bool bAttackMode = false;

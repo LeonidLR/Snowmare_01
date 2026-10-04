@@ -960,6 +960,11 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 		else
 		{
 			Group[Index]->OrderMoveTo(Targets[Index], bSprint);
+			// Sprint 06-B: where each operative was sent (a fading ping; the new order replaces the old pings).
+			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+			{
+				Feedback->SpawnMovePing(Targets[Index], Index == 0);
+			}
 		}
 	}
 	if (Messages && Group.Num() > 1)

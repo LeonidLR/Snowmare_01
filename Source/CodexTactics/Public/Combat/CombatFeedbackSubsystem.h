@@ -33,6 +33,15 @@ public:
 
 	void ClearPlannedMarkers();
 
+	/**
+	 * Sprint 06-B: a short ping where a real-time / preparation move order sends an operative — a cyan disc fading in
+	 * Duration s; a new order clears the previous pings.
+	 */
+	void SpawnMovePing(const FVector& GroundLocation, bool bClearPrevious, float Duration = 1.75f);
+
+	/** Live move pings (smokes). */
+	int32 GetMovePingCount() const;
+
 	int32 GetPlannedMarkerCount() const;
 
 	/** Red aim flash: light above the target (4.5 m, 0.45 s) and an overlay on its meshes (0.4 s): the red see-through
@@ -59,4 +68,6 @@ private:
 	ACombatFeedbackActor* SpawnFeedback(const FVector& Location) const;
 
 	TArray<TWeakObjectPtr<ACombatFeedbackActor>> PlannedMarkers;
+
+	TArray<TWeakObjectPtr<ACombatFeedbackActor>> MovePings;
 };

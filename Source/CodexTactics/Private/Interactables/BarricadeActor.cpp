@@ -1,4 +1,5 @@
 #include "Interactables/BarricadeActor.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "UI/OverheadLabel.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
@@ -57,8 +58,12 @@ void ABarricadeActor::HandleDestroyed(AActor* Victim, const FString& AttackerSou
 void ABarricadeActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	// Godot _tick_contact_area_damage: every contact_tick_interval, enemies within 2.2 m take half the contact damage.
-	if (ContactType != EBarricadeContact::None && ContactDamage > 0.f && (ContactTimer -= DeltaSeconds) <= 0.f)
+	// Godot _tick_contact_area_damage: every contact_tick_interval, enemies within 2.2 m take half the contact damage —
+	// real time only: in turn-based combat the timer stands still (it hurt every second of the planning; Sprint 06-C)
+	// and UTurnBasedCombatSubsystem applies ApplyTurnContact once per enemy turn.
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	const bool bTurnBased = Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased;
+	if (!bTurnBased && ContactType != EBarricadeContact::None && ContactDamage > 0.f && (ContactTimer -= DeltaSeconds) <= 0.f)
 	{
 		ContactTimer = ContactTickInterval;
 		TArray<AActor*> Touching;
@@ -93,6 +98,18 @@ void ABarricadeActor::Tick(float DeltaSeconds)
 			return;
 		}
 	}
+}
+
+bool ABarricadeActor::ApplyTurnContact(AActor* Enemy)
+{
+	const UHealthComponent* EnemyHealth = Enemy ? Enemy->FindComponentByClass<UHealthComponent>() : nullptr;
+	if (bTrapped || ContactType == EBarricadeContact::None || ContactDamage <= 0.f || !EnemyHealth || !EnemyHealth->IsAlive()
+		|| !Health || !Health->IsAlive() || FVector::Dist(GetActorLocation(), Enemy->GetActorLocation()) > 220.f)
+	{
+		return false;
+	}
+	ApplyContactTo(Enemy, ContactDamage * 0.5f);
+	return true;
 }
 
 void ABarricadeActor::RetaliateAgainst(AActor* Attacker)

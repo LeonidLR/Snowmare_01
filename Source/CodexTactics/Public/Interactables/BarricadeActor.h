@@ -70,6 +70,12 @@ public:
 	/** Godot _apply_contact_effect_to_enemy. */
 	void ApplyContactTo(AActor* Enemy, float Damage);
 
+	/**
+	 * Turn-based contact (Sprint 06-C): the real-time contact timer stands still in turn-based combat; instead an enemy
+	 * starting its turn within 2.2 m takes the area contact damage (half of ContactDamage) once. True if it applied.
+	 */
+	bool ApplyTurnContact(AActor* Enemy);
+
 	/** Placeholder colour (Godot albedo 0.85 / 0.65 / 0.25). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Barricade")
 	FLinearColor BodyColor = FLinearColor::FromSRGBColor(FColor(217, 166, 64));

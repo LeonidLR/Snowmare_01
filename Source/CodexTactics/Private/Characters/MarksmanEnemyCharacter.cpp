@@ -12,6 +12,9 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interactables/BarricadeActor.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -145,6 +148,82 @@ void AMarksmanEnemyCharacter::HandleMarksmanDamaged(const FDamageSpec& Spec, flo
 			}
 		}
 	}
+}
+
+bool AMarksmanEnemyCharacter::FindFiringPosition(const AOperativeCharacter* Target, FVector& OutPosition) const
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	if (!Target || !Nav)
+	{
+		return false;
+	}
+	const float TargetHeight = Target->GetStance() == EOperativeStance::Prone ? 30.f : (Target->GetStance() == EOperativeStance::Crouching ? 90.f : 150.f);
+	const FVector Aim = Target->GetActorLocation() - FVector(0.f, 0.f, Target->GetSimpleCollisionHalfHeight() - TargetHeight);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MarksmanFiringPosition), false, this);
+	Params.AddIgnoredActor(Target);
+	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
+	const float Radii[] = { MarksmanConfig.PreferredMinRange + 200.f, (MarksmanConfig.PreferredMinRange + MarksmanConfig.PreferredMaxRange) * 0.5f,
+		MarksmanConfig.PreferredMaxRange - 200.f };
+	float BestCost = TNumericLimits<float>::Max();
+	bool bFound = false;
+	for (const float Radius : Radii)
+	{
+		for (int32 Step = 0; Step < 16; ++Step)
+		{
+			const FVector Sample = Target->GetActorLocation() + FVector(1.f, 0.f, 0.f).RotateAngleAxis(Step * 22.5f, FVector::UpVector) * Radius;
+			FNavLocation OnNav;
+			if (!Nav->ProjectPointToNavigation(Sample, OnNav, FVector(150.f, 150.f, 400.f)))
+			{
+				continue;
+			}
+			// A standing scope there sees the target (the stance chosen there only lowers it behind low cover).
+			FHitResult Hit;
+			const FVector Scope = OnNav.Location + FVector(0.f, 0.f, 150.f);
+			if (World->LineTraceSingleByChannel(Hit, Scope, Aim, ECC_Visibility, Params) && Hit.GetActor()
+				&& !Hit.GetActor()->IsA<AOperativeCharacter>())
+			{
+				continue;
+			}
+			const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, GetActorLocation(), OnNav.Location, const_cast<AMarksmanEnemyCharacter*>(this));
+			if (!Path || !Path->IsValid() || Path->IsPartial())
+			{
+				continue;
+			}
+			const float Cost = Path->GetPathLength();
+			if (Cost < BestCost)
+			{
+				BestCost = Cost;
+				OutPosition = OnNav.Location;
+				bFound = true;
+			}
+		}
+	}
+	return bFound;
+}
+
+bool AMarksmanEnemyCharacter::HasLineOfFireTo(const AOperativeCharacter* Target) const
+{
+	return Target && TraceLine(Target).bHasLos;
+}
+
+FVector AMarksmanEnemyCharacter::GetSquadCentroid(const FVector& Fallback) const
+{
+	FVector Sum = FVector::ZeroVector;
+	int32 Count = 0;
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	for (const AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+	{
+		if (Member && Member->HealthComponent && Member->HealthComponent->IsAlive())
+		{
+			Sum += Member->GetActorLocation();
+			++Count;
+		}
+	}
+	return Count > 0 ? Sum / Count : Fallback;
 }
 
 AOperativeCharacter* AMarksmanEnemyCharacter::FindClosestOperative(float& OutDistance) const
@@ -355,8 +434,9 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 		return;
 	case EMarksmanAIState::Retreat:
 	case EMarksmanAIState::Flank:
-		// Done on arrival, after 8 s, or (retreating) once back in the band.
+		// Done on arrival, after 8 s, once stuck for 1.5 s (no way there) or (retreating) once back in the band.
 		if (FVector::Dist2D(GetActorLocation(), MoveGoal) < 120.f || StateTimer > 8.f
+			|| (StateTimer > 1.5f && GetVelocity().Size2D() < 20.f)
 			|| (AIState == EMarksmanAIState::Retreat && Distance >= MarksmanConfig.PreferredMinRange))
 		{
 			AIState = EMarksmanAIState::Engage;
@@ -374,7 +454,11 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 
 void AMarksmanEnemyCharacter::TickPatrol(float DeltaTime, AOperativeCharacter* Target, float Distance)
 {
-	if (Target && Distance <= MarksmanConfig.DetectionRange && TraceLine(Target).bHasLos)
+	// Sprint 06-D: a wave (or its preparation) is on — the fight is known, no more patrolling; otherwise an operative
+	// in sight within the detection range wakes him.
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const bool bFight = Flow && (Flow->GetPhase() == ECodexGamePhase::WaveCombat || Flow->GetPhase() == ECodexGamePhase::Preparation);
+	if (bFight || (Target && Distance <= MarksmanConfig.DetectionRange && TraceLine(Target).bHasLos))
 	{
 		AIState = EMarksmanAIState::Engage;
 		return;
@@ -428,13 +512,40 @@ void AMarksmanEnemyCharacter::TickEngage(float DeltaTime, AOperativeCharacter* T
 		StartRetreat(Target);
 		return;
 	case EMarksmanMove::Approach:
+	{
+		// Sprint 06-D: beyond 35 m, or no line of fire (then to a firing position 20-33 m out) -> advance over the navmesh
+		// (never idle); with a line of fire inside the band he settles, aims and fires.
 		CancelAim();
 		bHolding = false;
-		if (!MoveGoal.Equals(Target->GetActorLocation(), 200.f) || GetVelocity().IsNearlyZero())
+		// Without a line of fire: a firing position (searched every 3 s), else the squad's centre.
+		FiringSearchCooldown -= DeltaTime;
+		if (!Line.bHasLos && FiringSearchCooldown <= 0.f)
 		{
-			MoveTo(Target->GetActorLocation(), false);
+			FiringSearchCooldown = 3.f;
+			bHasFiringPosition = FindFiringPosition(Target, FiringPosition);
+		}
+		const FVector Goal = !Line.bHasLos && bHasFiringPosition ? FiringPosition : GetSquadCentroid(Target->GetActorLocation());
+		// No progress towards the goal for 3 s (the navmesh path ended short, e.g. at a wall): flank round it instead.
+		const float GoalDistance = FVector::Dist2D(GetActorLocation(), Goal);
+		if (GoalDistance < ApproachBestDistance - 50.f)
+		{
+			ApproachBestDistance = GoalDistance;
+			ApproachStallTime = 0.f;
+		}
+		else if ((ApproachStallTime += DeltaTime) > 3.f)
+		{
+			ApproachStallTime = 0.f;
+			ApproachBestDistance = TNumericLimits<float>::Max();
+			FiringSearchCooldown = 0.f; // look for another firing position next time
+			StartFlank(Target);
+			return;
+		}
+		if (!MoveGoal.Equals(Goal, 200.f) || GetVelocity().IsNearlyZero())
+		{
+			MoveTo(Goal, false);
 		}
 		return;
+	}
 	case EMarksmanMove::BackOff:
 		CancelAim();
 		bHolding = false;

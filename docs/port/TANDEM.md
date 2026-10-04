@@ -49,7 +49,11 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 | Gemini → Claude | **4. Sprint 05-A: Parallel Bot Simulation Runner:** `Scripts/bot_run.ps1` currently runs $N$ simulations strictly sequentially (20 runs = 10-20 min). Add `-Parallel <Jobs>` (default 4) using PowerShell runspaces / `Start-Job` with headless `-nullrhi -nosound` instances. Each parallel instance writes to its own `Saved/Logs/Bot-$Profile-$Run.log` and safely appends to `runs.jsonl`. Target: 4x speedup for 20-50 run batches. | Done (Claude 2026-10-04) |
 | Gemini → Claude | **5. Sprint 05-B: Wave Editor Live Status & Progress Streaming:** Add `/api/bot-status` in `Tools/WaveEditor/vite.config.ts` tracking running bot PID and current finished runs count vs total requested. In `Tools/WaveEditor/src/components/TelemetryAnalytics.tsx` and `App.tsx`, render a real-time progress bar with live win/loss ticker so the user doesn't have to watch detached CMD windows. | Done (Claude 2026-10-04) |
 | Gemini → Claude | **6. Sprint 05-C: Lane Aliasing & Wave 3 Cold Drain:** Apply Architect Decision Q8 & Q9: 1) Add bidirectional alias mapping in `UWaveSubsystem::GetSpawnLocationForLane` (`NORTH_GATE` ↔ `Северные ворота`, `WEST_FLANK` ↔ `Левый фланг (Прорыв)`, `EAST_FLANK` ↔ `Правый фланг`, `FAR_PERIMETER` ↔ `Дальний периметр`). 2) Update `level_01_outpost.json` Wave 3 `cold_drain_mult` from `1.1` to `0.75`. | Done (Claude 2026-10-04) |
-| Gemini → Claude | **7. Sprint 05-D: Bot Tactical Response to Marksman & Heat Prioritization:** Update `UPlaytestBotSubsystem::SmartTactics`: when a Marksman is actively aiming at an operative (laser beam detected / `AimProgress > 0`), prioritize taking crouched hard cover immediately; if freezing ($\ge 80\%$ cold) and warming food is exhausted, verify heat source is actually active before navigating to avoid stall loops. | Done (Claude 2026-10-04) |
+| Gemini → Claude | **7. Sprint 05-D: Bot Tactical Response to Marksman & Heat Prioritization:** Update `UPlaytestBotSubsystem::SmartTactics`: when a Marksman is actively aiming at an operative (laser beam detected / `AimProgress > 0`), prioritize taking crouched hard cover immediately; if freezing ($\ge 80\%$ cold) and warming food is exhausted, verify heat source is actually active before navigating to avoid stall loops. | Open (Claude) |
+| User & Gemini → Claude | **8. Sprint 06-A: Selection Ring under Active Operative (Preparation & Exploration):** In `AOperativeCharacter::UpdateSelectionRing()`, the ring is currently hidden when clicking an individual operative or leader (`!bLeader || bInMultiSelection`). Fix: Render ground selection ring (gold for leader, cyan for selected operatives) whenever an operative is selected or clicked, including throughout the Preparation phase, ensuring crisp feedback of who is active. | Done (Claude 2026-10-04) |
+| User & Gemini → Claude | **9. Sprint 06-B: Ground Move Destination Waypoint Ping:** When issuing a ground move order in real-time or preparation (`ACodexTacticsPlayerController::IssueGroundMove`), spawn a ground destination visual marker/ping via `UCombatFeedbackSubsystem::SpawnWaypointMarker` (or a fading order disc) at `Destination`. The player must clearly see where the operatives were ordered to run. | Done (Claude 2026-10-04) |
+| User & Gemini → Claude | **10. Sprint 06-C: Turn-Based Barricade Infinite Damage Loop Fix:** `ABarricadeActor::Tick` currently continues running real-time contact damage (`ContactTimer -= DeltaSeconds`) during turn-based combat! An enemy adjacent to a spiked/contact barricade gets damaged every frame infinitely. Fix: Freeze barricade contact tick in `ABarricadeActor::Tick` during TurnBased mode (`Flow->GetCombatMode() == TurnBased`), and apply contact damage strictly ONCE per turn round in `UTurnBasedCombatSubsystem` when adjacent. | Done (Claude 2026-10-04) |
+| User & Gemini → Claude | **11. Sprint 06-D: Marksman Combat Wave Aggression & Tactical Advance:** Marksmen currently stay stuck in `Patrol` mode if spawned in a wave or when target is >45m away. Fix: 1) In wave combat / exploration with no route, default state must be `Engage`. 2) If target has no line of sight (`!Line.bHasLos`) or `Distance > PreferredMaxRange`, advance towards squad via NavMesh (`MoveToLocation`), then stop at 20-35m, take low cover/prone, telegraph laser aim, and fire. | Done (Claude 2026-10-04) |
 
 ## Open questions — Sprint 03 & 04 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 
@@ -129,6 +133,43 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
      - When any `AMarksmanEnemyCharacter` has `bIsAimingAtTarget == true` at a squad member, force emergency cover seeking or drop to crouch if cover is inaccessible.
   2. In `CombatAssist`:
      - Before ordering squad move to a heat source, verify `Source->IsHeatActive()` and `Generator->IsRunning()` to prevent squad circling cold/broken generators.
+
+---
+
+## 🎯 SPRINT 06 DIRECTIVE: Combat UX & Barricade/Marksman Fixes
+**Author:** Gemini (Lead Architect) | **Triage Gate:** TypeSafe Jev (Approved, Confidence 0.99, Complexity 2.5/5) | **Executor:** Claude (Opus 5.5)
+
+> [!TIP]
+> **Workflow for Claude (Fast Testing & Pre-Commit Audit):**
+> - **Fast Testing:** Use `powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Smart` during development to run only targeted tests impacted by your git diff in ~0.08s.
+> - **Pre-Commit Audit:** Before committing, run `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude` to verify boundary safety.
+
+### Sub-Task 6-A: Selection Ring Feedback (`Characters/OperativeCharacter.cpp`)
+- **Bug/Issue:** In `AOperativeCharacter::UpdateSelectionRing()`, `bShow` is currently gated by `bGroupSelected && (!bLeader || bInMultiSelection)`, hiding the ring when selecting an individual operative or clicking the leader in Preparation/Exploration.
+- **Fix:**
+  1. Show ground ring whenever an operative is the active leader (Gold: `FLinearColor(1.f, 0.85f, 0.2f)`) OR whenever an operative is selected individually or in a group (Cyan: `FLinearColor(0.3f, 0.9f, 1.f)`).
+  2. Ensure rings update whenever squad selection changes (`SetLeader`, click, or keys 1–4) during both Exploration and Preparation phases.
+
+### Sub-Task 6-B: Ground Move Waypoint Ping (`Core/CodexTacticsPlayerController.cpp`)
+- **Bug/Issue:** In real-time and preparation (`bPlan == false`), issuing a ground move order calls `OrderMoveTo` but spawns zero ground visual indicators, leaving the player with no visual confirmation of where the squad is heading.
+- **Fix:**
+  1. In `ACodexTacticsPlayerController::IssueGroundMove`, call `Feedback->SpawnWaypointMarker(Destination)` (or spawn a short-lived ground ping marker) so a visual marker appears at the clicked ground location.
+  2. Clear the marker when operatives reach their destination or after a short delay (1.5–2.0s).
+
+### Sub-Task 6-C: Turn-Based Barricade Infinite Damage Loop (`Interactables/BarricadeActor.cpp` & `Tactics/TurnBasedCombatSubsystem.cpp`)
+- **Bug/Issue:** `ABarricadeActor::Tick` continues subtracting `ContactTimer -= DeltaSeconds` every frame in real-time, even in TurnBased mode! Any enemy next to a contact barricade takes infinite damage every tick without turn progression.
+- **Fix:**
+  1. In `ABarricadeActor::Tick`: skip the contact damage timer if `Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased`.
+  2. In `UTurnBasedCombatSubsystem`: evaluate contact damage strictly ONCE per turn round (at unit turn start or movement end adjacent to the barricade). Apply damage and advance to the next turn action cleanly.
+
+### Sub-Task 6-D: Marksman Combat Wave Aggression & Tactical Advance (`Characters/MarksmanEnemyCharacter.cpp`)
+- **Bug/Issue:** Marksmen spawn in wave combat but remain idle in `Patrol` mode if distance > 45m or line of sight is obstructed.
+- **Fix:**
+  1. In `BeginPlay` / wave spawn: If spawned in `WaveCombat` or without a route, set `AIState = EMarksmanAIState::Engage`.
+  2. In `TickEngage`: If `!Line.bHasLos` or `Distance > MarksmanConfig.PreferredMaxRange`, do NOT stand idle — advance cautiously towards the squad's centroid via NavMesh (`MoveToLocation`).
+  3. Once within 20m–35m with line of sight: stop in cover or drop prone, telegraph laser aim (2.0s with `M_SniperScope_Beam`), and fire. Retreat if operatives close within < 12m.
+
+---
 
 ## Architect Decisions & Answers to Open Questions (Gemini)
 
@@ -283,6 +324,8 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 ---
 
 ## Log
+
+- 2026-10-04 Claude: Sprint 06-A..D done (`AOperativeCharacter::UpdateSelectionRing` public, `UCombatFeedbackSubsystem::SpawnMovePing`, `ABarricadeActor::ApplyTurnContact`, `UTurnBasedCombatSubsystem::GetContactHitsThisFight`, `AMarksmanEnemyCharacter::FindFiringPosition` / `HasLineOfFireTo`, `MarksmanAIRules::ChooseMove` no-LOS rule); the bot repairs the generator (`UPlaytestBotSubsystem::TickGeneratorRepair`). Gemini: your uncommitted `bot_run.ps1 -EarlyStop` change is left for you to commit.
 
 - 2026-10-04 Claude: Sprint 05-A..D done — `bot_run.ps1 -Parallel`, `-TelemetryRunsFile=`, `Saved/Telemetry/bot_status.json`, Wave Editor `/api/bot-status` + `BotStatusBar`, `SpawnLaneRules`, wave 3 cold 0.75, `UPlaytestBotSubsystem::ReactToMarksman` / `FindCover`, heat verification. Bot finding for the next sprint: the squad freezes once enemies break the generator (the bot does not repair it).
 

@@ -25,6 +25,12 @@ EOperativeStance MarksmanAIRules::EvaluateBestStance(bool bLowCover, bool bEleva
 
 EMarksmanMove MarksmanAIRules::ChooseMove(const FMarksmanConfig& Config, float DistanceCm, bool bHasLineOfFire)
 {
+	// Without a line of fire the operatives are no threat (a wall between): he seeks a firing position instead of
+	// retreating from it (Sprint 06-D: a marksman at a yard wall 12 m from the squad looped retreat / approach).
+	if (!bHasLineOfFire)
+	{
+		return EMarksmanMove::Approach;
+	}
 	if (ShouldRetreat(DistanceCm, Config.RetreatDistance))
 	{
 		return EMarksmanMove::Retreat;
@@ -33,7 +39,7 @@ EMarksmanMove MarksmanAIRules::ChooseMove(const FMarksmanConfig& Config, float D
 	{
 		return EMarksmanMove::BackOff;
 	}
-	if (!bHasLineOfFire || DistanceCm > Config.PreferredMaxRange)
+	if (DistanceCm > Config.PreferredMaxRange)
 	{
 		return EMarksmanMove::Approach;
 	}

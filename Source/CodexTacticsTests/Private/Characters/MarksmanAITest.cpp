@@ -18,7 +18,7 @@ bool FMarksmanRetreatTest::RunTest(const FString&)
 	TestTrue(TEXT("25 m clear -> Hold"), MarksmanAIRules::ChooseMove(Config, 2500.f, true) == EMarksmanMove::Hold);
 	TestTrue(TEXT("25 m blocked -> Approach"), MarksmanAIRules::ChooseMove(Config, 2500.f, false) == EMarksmanMove::Approach);
 	TestTrue(TEXT("40 m -> Approach"), MarksmanAIRules::ChooseMove(Config, 4000.f, true) == EMarksmanMove::Approach);
-	TestTrue(TEXT("8 m blocked still retreats"), MarksmanAIRules::ChooseMove(Config, 800.f, false) == EMarksmanMove::Retreat);
+	TestTrue(TEXT("8 m behind a wall: seeks a firing position"), MarksmanAIRules::ChooseMove(Config, 800.f, false) == EMarksmanMove::Approach);
 	return true;
 }
 

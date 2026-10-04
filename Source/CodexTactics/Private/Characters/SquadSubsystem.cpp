@@ -161,6 +161,14 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 	{
 		SetSelectedGroup({ NewLeader }, false); // after the switch, so the rings see the new leader
 	}
+	// The old leader loses, the new one gets the gold ring at once (Sprint 06-A).
+	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
+	{
+		if (AOperativeCharacter* Operative = Member.Get())
+		{
+			Operative->UpdateSelectionRing();
+		}
+	}
 	OnLeaderChanged.Broadcast(NewLeader);
 	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
 	{

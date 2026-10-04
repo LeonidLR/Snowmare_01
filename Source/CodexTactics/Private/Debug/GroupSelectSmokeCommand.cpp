@@ -1,7 +1,7 @@
 // Dev-only console command for a headless check of box selection and group orders on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.GroupSelectSmoke
 // Godot main.gd _perform_box_selection / _set_selected_squad / _get_group_target_positions, player.gd set_group_selected:
-// rings under the selected (the leader's only in a group), the group walks to its formation around the click,
+// rings under the selected and always under the leader (Sprint 06-A), the group walks to its formation around the click,
 // picking a leader by number drops the group. In the fight's tactical pause a screen box selects all three and a ground
 // click plans a move for each; all of them walk once the pause ends.
 
@@ -15,6 +15,7 @@
 #include "Characters/SquadFormation.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/CombatFeedbackSubsystem.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Debug/SmokeUtils.h"
@@ -88,6 +89,11 @@ namespace GroupSelectSmoke
 			Squad->SetSelectedGroup({ Members[0], Members[1], Members[2] });
 			const FVector Destination = Members[1]->GetActorLocation() + Members[1]->GetActorForwardVector() * 600.f;
 			PC->OrderGroupMove(Destination, false, false);
+			if (const UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
+			{
+				Check(State, Feedback->GetMovePingCount() == 3, FString::Printf(TEXT("a move ping at each operative's target (Sprint 06-B): %d"),
+					Feedback->GetMovePingCount()));
+			}
 			const UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>();
 			Check(State, Messages && !Messages->GetHistory().IsEmpty()
 				&& Messages->GetHistory().Last().Text.ToString().Contains(TEXT("Группа (3 бойцов)")), TEXT("group order line"));
@@ -118,8 +124,9 @@ namespace GroupSelectSmoke
 			}
 			// Choosing a leader by number drops the group.
 			Squad->SetLeader(Members[2]);
+			// Sprint 06-A: the active leader always keeps his gold ring.
 			Check(State, !Squad->HasMultiSelection() && !Members[0]->IsSelectionRingShown() && !Members[1]->IsSelectionRingShown()
-				&& !Members[2]->IsSelectionRingShown(), TEXT("a new leader drops the group and its rings"));
+				&& Members[2]->IsSelectionRingShown(), TEXT("a new leader drops the group's rings, keeps his own"));
 			FVector2D Min;
 			FVector2D Max;
 			Check(State, !PC->GetSelectionBox(Min, Max), TEXT("no box without a drag"));

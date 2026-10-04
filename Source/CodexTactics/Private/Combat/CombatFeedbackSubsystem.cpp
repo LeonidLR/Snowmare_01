@@ -75,6 +75,38 @@ void UCombatFeedbackSubsystem::SpawnWaypointMarker(const FVector& GroundLocation
 	}
 }
 
+void UCombatFeedbackSubsystem::SpawnMovePing(const FVector& GroundLocation, bool bClearPrevious, float Duration)
+{
+	if (bClearPrevious)
+	{
+		for (const TWeakObjectPtr<ACombatFeedbackActor>& Ping : MovePings)
+		{
+			if (Ping.IsValid())
+			{
+				Ping->Destroy();
+			}
+		}
+		MovePings.Reset();
+	}
+	MovePings.RemoveAll([](const TWeakObjectPtr<ACombatFeedbackActor>& Ping) { return !Ping.IsValid(); });
+	const FVector Location = GroundLocation + FVector(0.f, 0.f, 5.f);
+	if (ACombatFeedbackActor* Ping = SpawnFeedback(Location))
+	{
+		Ping->SetupDisc(Location, 45.f, 4.f, FLinearColor(0.2f, 0.9f, 1.f), 3.f, Duration);
+		MovePings.Add(Ping);
+	}
+}
+
+int32 UCombatFeedbackSubsystem::GetMovePingCount() const
+{
+	int32 Count = 0;
+	for (const TWeakObjectPtr<ACombatFeedbackActor>& Ping : MovePings)
+	{
+		Count += Ping.IsValid() ? 1 : 0;
+	}
+	return Count;
+}
+
 void UCombatFeedbackSubsystem::ClearPlannedMarkers()
 {
 	for (const TWeakObjectPtr<ACombatFeedbackActor>& Marker : PlannedMarkers)

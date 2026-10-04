@@ -57,6 +57,9 @@ public:
 	/** Sets the stance and the capsule height (prone = 1/3), keeping the feet on the ground. */
 	void SetMarksmanStance(EOperativeStance NewStance);
 
+	/** Line of fire from his scope to Target right now (smokes / debugging). */
+	bool HasLineOfFireTo(const AOperativeCharacter* Target) const;
+
 	/** Patrol -> Engage (another marksman's ambush alert, smokes). */
 	void Alert();
 
@@ -90,6 +93,19 @@ private:
 	FVector GetFeet() const;
 
 	AOperativeCharacter* FindClosestOperative(float& OutDistance) const;
+	/** Centre of the living squad (Fallback without one). */
+	FVector GetSquadCentroid(const FVector& Fallback) const;
+	/** Seconds the advance has made no progress (a partial path ended at an obstacle): then he flanks round it. */
+	float ApproachStallTime = 0.f;
+	float ApproachBestDistance = TNumericLimits<float>::Max();
+	/**
+	 * Sprint 06-D: a reachable point 20-33 m from Target with a line of fire from the scope (a ring of samples, the
+	 * shortest full navmesh path wins). False: none found.
+	 */
+	bool FindFiringPosition(const AOperativeCharacter* Target, FVector& OutPosition) const;
+	FVector FiringPosition = FVector::ZeroVector;
+	bool bHasFiringPosition = false;
+	float FiringSearchCooldown = 0.f;
 	void TickPatrol(float DeltaTime, AOperativeCharacter* Target, float Distance);
 	void TickEngage(float DeltaTime, AOperativeCharacter* Target, float Distance);
 	void MoveTo(const FVector& Goal, bool bSprint);

@@ -143,6 +143,9 @@ public:
 
 	/** Box selection mark (Godot player.gd set_group_selected): a ring under the feet, gold for the leader. */
 	void SetGroupSelected(bool bSelected, bool bInMultiSelection);
+
+	/** Gold ring under the active leader, cyan under every selected operative (Sprint 06-A). */
+	void UpdateSelectionRing();
 	bool IsSelectionRingShown() const;
 
 	/** Configures squad index, name, and role color, then applies visuals. */
@@ -763,7 +766,6 @@ public:
 
 private:
 	/** Shows the selection ring when selected and not the leader, or the leader of a multi-selection. */
-	void UpdateSelectionRing();
 
 	/** Vault in progress (Godot is_vaulting): kinematic arc, collision off, the walk resumes after it. */
 	void UpdateVault(float DeltaTime);

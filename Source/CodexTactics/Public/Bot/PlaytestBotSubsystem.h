@@ -46,6 +46,7 @@ public:
 	int32 GetItemsUsed() const { return ItemsUsed; }
 	int32 GetStallHunts() const { return StallHunts; }
 	int32 GetMarksmanReactions() const { return MarksmanReactions; }
+	int32 GetGeneratorRepairs() const { return GeneratorRepairs; }
 
 	/** Sprint 05-D: a marksman aiming at a squad member -> crouch, the leader into cover at once. True when it reacted. */
 	bool ReactToMarksman();
@@ -63,6 +64,12 @@ private:
 
 	/** Point on the navigation mesh near Point (false: none within 2 m). */
 	bool ProjectToNav(const FVector& Point, FVector& OutPoint) const;
+	/**
+	 * The broken diesel generator (its heat and the turrets' power): the engineer (else anyone) walks up and repairs it —
+	 * in the preparation, or in a wave with no enemy within 12 m of it. True while the repair is under way.
+	 */
+	bool TickGeneratorRepair(float DeltaTime, bool bInWave);
+	class AInteractableActor* FindBrokenGenerator() const;
 	void Finish(const TCHAR* Result, int32 ExitCode);
 	FVector GetFrontDirection() const;
 	TArray<AActor*> LiveEnemies() const;
@@ -108,6 +115,11 @@ private:
 	int32 ItemsUsed = 0;
 	float WarmMoveCooldown = 0.f;
 	int32 MarksmanReactions = 0;
+	int32 GeneratorRepairs = 0;
+	TWeakObjectPtr<class AInteractableActor> RepairTarget;
+	TWeakObjectPtr<AOperativeCharacter> RepairWorker;
+	float RepairTime = 0.f;
+	float RepairCooldown = 0.f;
 	/** Heat sources a warm-up trip did not help (cold not dropping): skipped until the world time. */
 	TMap<TWeakObjectPtr<const UObject>, double> ColdHeatUntil;
 	TWeakObjectPtr<const UObject> WarmTarget;

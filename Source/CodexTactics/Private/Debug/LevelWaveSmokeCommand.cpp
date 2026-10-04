@@ -1,7 +1,7 @@
 // Dev-only console command for a headless level-wave check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.LevelWaveSmoke
 // 1. the game flow took the imported level (DA_Level_level_01_outpost: 3 waves, preparation 60 s, rest 20 s);
-// 2. «Начать бой» -> wave 1 appears at once like Godot _spawn_custom_json_wave (12 enemies, nothing queued), at the
+// 2. «Начать бой» -> wave 1 appears at once like Godot _spawn_custom_json_wave (the level's wave 1 count, nothing queued), at the
 // level's enemy spawn points, and the wave's cold_drain_mult (1.1) reaches the squad's cold.
 
 #include "CoreMinimal.h"
@@ -10,6 +10,8 @@
 
 #include "Characters/EnemyCharacter.h"
 #include "CodexTactics.h"
+#include "Data/WaveConfigTypes.h"
+#include "Core/CodexTacticsGameMode.h"
 #include "Combat/EnemySpawnPoint.h"
 #include "Combat/WaveSubsystem.h"
 #include "Containers/Ticker.h"
@@ -72,7 +74,11 @@ namespace LevelWaveSmoke
 		Flow->FinishCutscene();
 		Flow->FinishPreparation();
 		Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat, TEXT("wave 1 started"));
-		Check(State, Waves->GetAliveEnemyCount() == 12 && Waves->GetRemainingSpawnCount() == 0,
+		// The wave 1 size comes from the level data (edited in the Wave Editor; 12 in the Godot archive).
+		const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
+		const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
+		const int32 Expected = Level && Level->Config.Waves.Num() > 0 ? Level->Config.Waves[0].GetTotalEnemyCount() : 12;
+		Check(State, Waves->GetAliveEnemyCount() == Expected && Waves->GetRemainingSpawnCount() == 0,
 			FString::Printf(TEXT("whole wave at once: alive %d, queued %d"), Waves->GetAliveEnemyCount(), Waves->GetRemainingSpawnCount()));
 		Check(State, FMath::IsNearlyEqual(Waves->GetColdDrainMultiplier(), 1.1f),
 			FString::Printf(TEXT("cold drain multiplier %.2f"), Waves->GetColdDrainMultiplier()));

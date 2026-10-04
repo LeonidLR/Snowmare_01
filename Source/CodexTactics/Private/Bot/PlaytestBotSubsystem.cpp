@@ -282,6 +282,10 @@ void UPlaytestBotSubsystem::TickFight(float DeltaTime)
 		Flow->FinishCutscene();
 		return;
 	case ECodexGamePhase::Preparation:
+		if (TickGeneratorRepair(DeltaTime, false))
+		{
+			return; // the preparation waits for the repair
+		}
 		if (!bDeployed && Flow->GetWaveIndex() <= 1)
 		{
 			DeployDefences();
@@ -393,6 +397,10 @@ void UPlaytestBotSubsystem::TickFight(float DeltaTime)
 	{
 		DecisionTimer = 0.f;
 		CombatAssist();
+	}
+	if (TickGeneratorRepair(DeltaTime, true))
+	{
+		return; // the repair walk owns the moves for now
 	}
 	SmartTactics(DeltaTime);
 }
@@ -701,6 +709,99 @@ bool UPlaytestBotSubsystem::ReactToMarksman()
 		return bReacted;
 	}
 	return false;
+}
+
+AInteractableActor* UPlaytestBotSubsystem::FindBrokenGenerator() const
+{
+	for (TActorIterator<AInteractableActor> It(GetWorld()); It; ++It)
+	{
+		if (It->ObjectType == EInteractableType::Generator && It->bGeneratorBroken)
+		{
+			return *It;
+		}
+	}
+	return nullptr;
+}
+
+bool UPlaytestBotSubsystem::TickGeneratorRepair(float DeltaTime, bool bInWave)
+{
+	RepairCooldown = FMath::Max(0.f, RepairCooldown - DeltaTime);
+	UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>();
+	USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	AInteractableActor* Generator = RepairTarget.Get();
+	if (Generator)
+	{
+		RepairTime += DeltaTime;
+		// The repair menu opened on arrival: confirm it (the worker crouches and repairs, 2.5 s for the engineer).
+		if (Interactions && Interactions->IsActionMenuOpen())
+		{
+			Interactions->ConfirmActionMenu();
+		}
+		const bool bDone = !Generator->bGeneratorBroken;
+		if (bDone || RepairTime > 30.f || !RepairWorker.IsValid() || !BotIsAlive(RepairWorker.Get()))
+		{
+			if (bDone)
+			{
+				++GeneratorRepairs;
+				UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Generator repaired by %s (%.1f s)"),
+					RepairWorker.IsValid() ? *RepairWorker->DisplayName.ToString() : TEXT("?"), RepairTime);
+			}
+			else
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Generator repair given up after %.1f s"), RepairTime);
+				RepairCooldown = 20.f;
+			}
+			RepairTarget.Reset();
+			RepairWorker.Reset();
+			if (Squad && Member(0))
+			{
+				Squad->SetLeader(Member(0)); // the commander leads again
+			}
+			return false;
+		}
+		return true;
+	}
+	if (RepairCooldown > 0.f || !Interactions || !Squad)
+	{
+		return false;
+	}
+	Generator = FindBrokenGenerator();
+	if (!Generator)
+	{
+		return false;
+	}
+	if (bInWave)
+	{
+		for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+		{
+			if (!It->IsDying() && BotIsAlive(*It) && FVector::Dist2D(It->GetActorLocation(), Generator->GetActorLocation()) < 1200.f)
+			{
+				return false; // not under the enemies' noses
+			}
+		}
+	}
+	AOperativeCharacter* Worker = Member(1) ? Member(1) : Member(0); // the engineer repairs twice as fast
+	if (!Worker)
+	{
+		return false;
+	}
+	if (Worker->bGuarding)
+	{
+		Squad->ToggleGuard(Worker);
+	}
+	Squad->SetLeader(Worker);
+	if (!Interactions->RequestInteraction(Generator))
+	{
+		Squad->SetLeader(Member(0));
+		RepairCooldown = 10.f;
+		return false;
+	}
+	RepairTarget = Generator;
+	RepairWorker = Worker;
+	RepairTime = 0.f;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Generator broken: %s goes to repair it (%s)"), *Worker->DisplayName.ToString(),
+		bInWave ? TEXT("during the wave") : TEXT("in the preparation"));
+	return true;
 }
 
 bool UPlaytestBotSubsystem::ProjectToNav(const FVector& Point, FVector& OutPoint) const

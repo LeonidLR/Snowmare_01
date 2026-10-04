@@ -56,19 +56,20 @@ bool FLevelJsonParseTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelJsonFilesMatchAssetsTest, "CodexTactics.LevelJson.FilesMatchImportedAssets",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelJsonFilesParseTest, "CodexTactics.LevelJson.AllFilesParse",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FLevelJsonFilesMatchAssetsTest::RunTest(const FString&)
+bool FLevelJsonFilesParseTest::RunTest(const FString&)
 {
-	// Every migrated level file parses and equals what import_levels.py put into DA_Level_<name> (the fallback).
+	// Every level file the game / Wave Editor uses parses and has waves with enemies. (Until 2026-10-04 this compared
+	// the files with the DA_Level_* assets imported from the Godot archive; the JSON is the reference now and is edited
+	// in the Wave Editor, the assets are only the fallback.)
 	TArray<FString> Files;
 	IFileManager::Get().FindFiles(Files, *(LevelJsonRules::GetLevelsDirectory() / TEXT("*.json")), true, false);
 	TestTrue(TEXT("Level files present"), Files.Num() >= 13);
 	for (const FString& File : Files)
 	{
-		const FString Base = FPaths::GetBaseFilename(File);
-		if (Base == TEXT("stage_template"))
+		if (FPaths::GetBaseFilename(File) == TEXT("stage_template"))
 		{
 			continue;
 		}
@@ -78,24 +79,11 @@ bool FLevelJsonFilesMatchAssetsTest::RunTest(const FString&)
 		{
 			continue;
 		}
-		const FString AssetPath = FString::Printf(TEXT("/Game/Data/Levels/DA_Level_%s.DA_Level_%s"), *Base, *Base);
-		const ULevelConfigAsset* Asset = LoadObject<ULevelConfigAsset>(nullptr, *AssetPath);
-		if (!Asset)
+		TestTrue(FString::Printf(TEXT("%s has waves"), *File), Config.Waves.Num() > 0);
+		for (const FWaveDefinition& Wave : Config.Waves)
 		{
-			continue;
+			TestTrue(FString::Printf(TEXT("%s wave %d has enemies"), *File, Wave.WaveIndex), Wave.GetTotalEnemyCount() > 0);
 		}
-		const FLevelCombatConfig& Old = Asset->Config;
-		TestEqual(FString::Printf(TEXT("%s waves"), *Base), Config.Waves.Num(), Old.Waves.Num());
-		TestEqual(FString::Printf(TEXT("%s prep"), *Base), Config.PrepPhaseDuration, Old.PrepPhaseDuration);
-		TestEqual(FString::Printf(TEXT("%s rest"), *Base), Config.WaveRestDuration, Old.WaveRestDuration);
-		for (int32 Index = 0; Index < FMath::Min(Config.Waves.Num(), Old.Waves.Num()); ++Index)
-		{
-			TestEqual(FString::Printf(TEXT("%s wave %d enemies"), *Base, Index + 1), Config.Waves[Index].GetTotalEnemyCount(),
-				Old.Waves[Index].GetTotalEnemyCount());
-			TestEqual(FString::Printf(TEXT("%s wave %d HP mult"), *Base, Index + 1), Config.Waves[Index].Modifiers.EnemyHpMult,
-				Old.Waves[Index].Modifiers.EnemyHpMult);
-		}
-		TestEqual(FString::Printf(TEXT("%s loadout mode"), *Base), Config.SquadLoadout.SimulationMode, Old.SquadLoadout.SimulationMode);
 	}
 	return true;
 }

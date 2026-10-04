@@ -351,6 +351,7 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	Phase = ETurnPhase::Squad;
 	ActiveIndex = 0;
 	Round = 1;
+	ContactHitsThisFight = 0;
 	UE_LOG(LogCodexTactics, Display, TEXT("Turn-based combat: %d operatives, %d enemies, %d barrels, %d mines, %d turrets"),
 		Squad.Num(), Enemies.Num(), GridBarrels.Num(), GridMines.Num(), GridTurrets.Num());
 	StartPlayerTurn();
@@ -2954,6 +2955,19 @@ void UTurnBasedCombatSubsystem::ProcessNextEnemy()
 	AActor* Enemy = EnemyQueue[0].Get();
 	EnemyQueue.RemoveAt(0);
 	if (!Enemy || !States.Contains(Enemy) || IsDead(Enemy))
+	{
+		ProcessNextEnemy();
+		return;
+	}
+	// Sprint 06-C: contact barricades hurt an adjacent enemy once per its turn (their real-time timer stands still).
+	for (TActorIterator<ABarricadeActor> It(GetWorld()); It; ++It)
+	{
+		if (It->ApplyTurnContact(Enemy))
+		{
+			++ContactHitsThisFight;
+		}
+	}
+	if (IsDead(Enemy))
 	{
 		ProcessNextEnemy();
 		return;

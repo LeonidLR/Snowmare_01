@@ -104,7 +104,7 @@ namespace MarksmanAIRules
 	/** Moving -> stand (full speed); behind a low obstacle -> crouch; elevated / open ground -> prone. */
 	CODEXTACTICS_API EOperativeStance EvaluateBestStance(bool bLowCover, bool bElevated, bool bMoving);
 
-	/** Retreat below RetreatDistance, back off below the band, close in above it or without a line of fire. */
+	/** Without a line of fire: close in (seek a firing position). Else retreat below RetreatDistance, back off below the band, close in above it. */
 	CODEXTACTICS_API EMarksmanMove ChooseMove(const FMarksmanConfig& Config, float DistanceCm, bool bHasLineOfFire);
 
 	/**

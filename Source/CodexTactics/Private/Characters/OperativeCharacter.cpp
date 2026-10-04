@@ -989,7 +989,9 @@ void AOperativeCharacter::UpdateSelectionRing()
 {
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	const bool bLeader = Squad && Squad->GetLeader() == this;
-	const bool bShow = bGroupSelected && (!bLeader || bInMultiSelection) && HealthComponent && HealthComponent->IsAlive();
+	// Sprint 06-A (user / architect 2026-10-04; Godot showed it only on group members): the active leader always has
+	// his gold ring, every selected operative a cyan one — in exploration, preparation and the fight.
+	const bool bShow = (bLeader || bGroupSelected) && bRecruited && HealthComponent && HealthComponent->IsAlive();
 	if (!bShow)
 	{
 		if (SelectionRing)
