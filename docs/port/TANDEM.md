@@ -169,7 +169,71 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
   2. In `TickEngage`: If `!Line.bHasLos` or `Distance > MarksmanConfig.PreferredMaxRange`, do NOT stand idle — advance cautiously towards the squad's centroid via NavMesh (`MoveToLocation`).
   3. Once within 20m–35m with line of sight: stop in cover or drop prone, telegraph laser aim (2.0s with `M_SniperScope_Beam`), and fire. Retreat if operatives close within < 12m.
 
+### Sub-Task 6-E: RMB Cancellation for Relocation & Deploy Tasks (`Interactables/RelocationSubsystem.h/.cpp` & `Core/CodexTacticsPlayerController.cpp`) — **Done (Claude 2026-10-04)**
+- **Bug/Issue:** Once placement is confirmed and the worker begins moving towards or pushing the barricade/barrel (`Tasks`), pressing RMB does nothing because `Relocation->IsPlacing()` is false. The action cannot be aborted until finished.
+- **Fix:**
+  1. In `URelocationSubsystem`: Add `bool CancelActiveTask(AOperativeCharacter* Worker = nullptr)`.
+     - If the object was being pushed (`Task.Stage == 2`): drop object at current location with its ground Z, restore collision and nav obstacle (`SetObjectCarried(*Object, false)`), reset `Worker->SetCarrying(false)`, stop operative (`StopOperative()`), and execute `StepBack(*Worker, *Object, RelocationRules::StepBackDropped)`.
+     - If worker was approaching (`Task.Stage == 1`): stop operative (`StopOperative()`).
+     - Clear task from `Tasks` and post HUD notification: `Post(Worker->DisplayName, LOCTEXT("Cancelled", "❌ Доставка объекта отменена."))`.
+  2. In `ACodexTacticsPlayerController::CameraDragRotateStart()`:
+     - Check `if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())`:
+       - If `Relocation->CancelActiveTask(GetSelectedWorkerOrLeader())` returns true -> return immediately (do not engage drag rotation).
+
+### Sub-Task 6-F: Object-Aware Dynamic PushOffset & Anti-Clipping (`Interactables/RelocationSubsystem.cpp`) — **Done (Claude 2026-10-04)**
+- **Bug/Issue:** When pushing a barricade (`ABarricadeActor`), the operative partially clips inside the mesh. `PushOffset` is hardcoded to `135.f`, while the barricade half-extent is `150.f`! When oriented along movement, the worker center is 15 cm *inside* the barricade. Furthermore, position lerp lag pulls the mesh even closer during acceleration.
+- **Fix:**
+  1. In `URelocationSubsystem::TickTask`: Compute dynamic, bounds-aware push offset:
+     ```cpp
+     float Offset = RelocationRules::PushOffset; // baseline 135 cm
+     if (Object && Object->Box)
+     {
+         const FVector BoxExtent = Object->Box->GetScaledBoxExtent();
+         const float HorizontalExtent = FMath::Max(BoxExtent.X, BoxExtent.Y);
+         const float CapsuleRadius = Worker->GetCapsuleComponent() ? Worker->GetCapsuleComponent()->GetScaledCapsuleRadius() : 40.f;
+         Offset = CapsuleRadius + HorizontalExtent + 25.f; // 25 cm safety margin
+     }
+     ```
+  2. Anti-clipping enforcement: If `FVector::Dist2D(Worker->GetActorLocation(), Next) < Offset`, clamp `Next` forward along `Forward` vector so the worker can never penetrate the carried object under any acceleration or turn rate.
+
+### Sub-Task 6-G: Marksman Combat Wave Awakening & Damage Reaction (`Characters/MarksmanEnemyCharacter.cpp`) — **Done (Claude 2026-10-04)**
+- **Bug/Issue:** Marksmen spawned with waves remain in `Patrol`. When shot by the squad, they lay prone in `Ambushed` for 1.5s ignoring damage, or blind-flank 22m away without turning or returning fire.
+- **Fix:**
+  1. Combat wave check: In `BeginPlay()` and `TickPatrol()`, check `(WaveSubsystem && WaveSubsystem->IsWaveActive()) || (Flow && (Flow->GetPhase() == ECodexGamePhase::WaveCombat || Flow->GetPhase() == ECodexGamePhase::Preparation))`. If true, set `AIState = EMarksmanAIState::Engage`.
+  2. Damage reaction in `HandleMarksmanDamaged()`:
+     - Do NOT freeze in blind Ambushed state if already in combat.
+     - Immediately rotate towards attacker (`FaceYaw` towards `Spec.AttackerSource` or closest operative).
+     - Seek nearest cover (Crouch if low obstacle present, Prone if open ground).
+     - If distance is 20m–35m with LOS: immediately target the shooter, begin telegraph aim (`StartAim`), and return fire!
+     - If distance < 12m: kite/retreat (`StartRetreat`).
+     - Alert all nearby enemies within `MarksmanConfig.AlertRadius`.
+
+### Sub-Task 6-H: Marksman Prone-to-Move Stance Transition / Anti-Sliding (`Characters/MarksmanEnemyCharacter.cpp`) — **Done (Claude 2026-10-04)**
+- **Bug/Issue:** When a marksman is in `Prone` and receives a move order (`MoveTo`), `MoveToLocation` is called in the exact same tick as `SetMarksmanStance(Standing)`. The marksman slides on his stomach at 520 cm/s across the ground while slowly rising up.
+- **Fix:**
+  1. Follow the `AOperativeCharacter` rise-delay pattern:
+     - If `Stance == EOperativeStance::Prone` when `MoveTo` is called:
+       - Immediately stop any active movement: `if (AAIController* AIC = Cast<AAIController>(GetController())) AIC->StopMovement();`
+       - Switch stance to `Standing`: `SetMarksmanStance(EOperativeStance::Standing);`
+       - Store destination `MoveGoal = Goal; bPendingSprint = bSprint;`
+       - Start a `RiseTimerHandle` for `0.45f` seconds (`RiseDelay`).
+     - Only when the rise timer expires (or if already standing), call `ExecuteMoveTo(Goal, bSprint)` which issues `AIC->MoveToLocation(Goal, 60.f, false, true)`.
+
 ---
+
+## ⚡ MANDATORY TYPESAFE (JEV) & TOKEN ECONOMY RULES FOR CLAUDE (Sprint 06)
+
+Claude (Opus 5.5) **MUST** strictly adhere to the following rules to conserve tokens and maintain stability:
+1. **Never run the full test suite during development:**
+   Use `powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Smart`. Jev System One evaluates `git diff` in 0.08s and executes only the impacted tests (e.g. `CodexTactics.Marksman` or `CodexTactics.Interactable`).
+2. **Mandatory Pre-Commit Boundary Audit:**
+   Before staging and committing, run:
+   `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude`
+   If Jev detects boundary violations (e.g. accidental changes to `L_MovementTest.umap` or `DefaultEditor.ini`), run `git checkout -- Content/Maps/L_MovementTest.umap Config/DefaultEditor.ini` to restore them before committing.
+3. **Zero Raw Telemetry in Context:**
+   Never read large `runs.jsonl` files into context. Use `python Scripts/Tools/typesafe_triage.py --telemetry <path>` or `--early-stop`.
+4. **Lock Protocol:**
+   Always run under `powershell -ExecutionPolicy Bypass -File Scripts/agent_lock.ps1 -Take claude -Task "<task_name>"` during builds/smokes and `-Release` upon completion.
 
 ## Architect Decisions & Answers to Open Questions (Gemini)
 
@@ -325,6 +389,7 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-10-04 Claude: Sprint 06-E..H done — `URelocationSubsystem::CancelActiveTask` (RMB in `CameraDragRotateStart`, leader / selected group, relocation and deploy walks), `URelocationSubsystem::GetPushOffset` (capsule + box extent along the push + 25 cm, floor 135; the lerp is clamped out to it), marksman: `IsFightOn` Engage at spawn, damage in a fight -> face the shooter, alert, retreat < 12 m or firing stance + aim back (shooter targeted 6 s), `MoveTo` from prone waits `RiseDelay` 0.45 s (`ExecuteMoveTo`). Also: the marksman targets the closest operative in his line of fire (else the closest), retreats to a firing position, re-searches it on arrival / stall (MarksmanAdvanceSmoke failed on HEAD already: the squad split by the yard wall).
 - 2026-10-04 Claude: Sprint 06-A..D done (`AOperativeCharacter::UpdateSelectionRing` public, `UCombatFeedbackSubsystem::SpawnMovePing`, `ABarricadeActor::ApplyTurnContact`, `UTurnBasedCombatSubsystem::GetContactHitsThisFight`, `AMarksmanEnemyCharacter::FindFiringPosition` / `HasLineOfFireTo`, `MarksmanAIRules::ChooseMove` no-LOS rule); the bot repairs the generator (`UPlaytestBotSubsystem::TickGeneratorRepair`). Gemini: your uncommitted `bot_run.ps1 -EarlyStop` change is left for you to commit.
 
 - 2026-10-04 Claude: Sprint 05-A..D done — `bot_run.ps1 -Parallel`, `-TelemetryRunsFile=`, `Saved/Telemetry/bot_status.json`, Wave Editor `/api/bot-status` + `BotStatusBar`, `SpawnLaneRules`, wave 3 cold 0.75, `UPlaytestBotSubsystem::ReactToMarksman` / `FindCover`, heat verification. Bot finding for the next sprint: the squad freezes once enemies break the generator (the bot does not repair it).

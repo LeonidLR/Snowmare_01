@@ -1,7 +1,8 @@
 // Dev-only console command for a headless check of the Marksman enemy (TANDEM request 3) on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.MarksmanSmoke
 // A marksman spawned 25 m ahead of the (unkillable) squad settles into a firing stance, aims with the beam and fires;
-// a hit from afar drops him prone (ambush), then he relocates (flank); put 8 m from the squad he retreats at a sprint.
+// hit in the fight while turned away (Sprint 06-G) he faces the shooter, takes a firing stance and fires back; put 8 m
+// from the squad he retreats at a sprint.
 
 #include "CoreMinimal.h"
 
@@ -35,6 +36,7 @@ namespace MarksmanSmoke
 		bool bSawFiringStance = false;
 		float RetreatStartDistance = 0.f;
 		bool bSawSprint = false;
+		int32 ShotsBeforeHit = 0;
 		TWeakObjectPtr<AMarksmanEnemyCharacter> Marksman;
 	};
 
@@ -134,25 +136,31 @@ namespace MarksmanSmoke
 						bFireClip ? 1 : 0, Pelvis));
 			}
 			{
-				// A hit from afar: ambush reaction.
+				// A hit in the fight while turned away: he answers (no blind ambush).
+				Marksman->SetActorRotation(Marksman->GetActorRotation() + FRotator(0.f, 150.f, 0.f));
+				State.ShotsBeforeHit = Marksman->GetShotsFired();
 				FDamageSpec Spec;
 				Spec.Amount = 5.f;
 				Spec.AttackerSource = TEXT("smoke");
 				Marksman->GetHealthComponent()->ApplyDamage(Spec);
 			}
-			Check(State, Marksman->GetAIState() == EMarksmanAIState::Ambushed && Marksman->GetStance() == EOperativeStance::Prone,
-				FString::Printf(TEXT("hit from afar: ambushed and prone (%s)"), StateName(Marksman->GetAIState())));
+			{
+				const float Yaw = (Leader->GetActorLocation() - Marksman->GetActorLocation()).Rotation().Yaw;
+				const float Off = FMath::Abs(FRotator::NormalizeAxis(Marksman->GetActorRotation().Yaw - Yaw));
+				Check(State, Off < 15.f && Marksman->IsAimingAtTarget() && Marksman->GetStance() != EOperativeStance::Standing,
+					FString::Printf(TEXT("hit in the fight: faces the shooter (%.0f deg off), aims back (%s), stance %d"), Off,
+						StateName(Marksman->GetAIState()), static_cast<int32>(Marksman->GetStance())));
+			}
 			State.Stage = 2;
 			State.Time = 0.f;
 			return true;
 		case 2:
-			if (State.Time < 2.2f)
+			if (Marksman->GetShotsFired() == State.ShotsBeforeHit && State.Time < 4.f)
 			{
 				return true;
 			}
-			Check(State, Marksman->GetAIState() == EMarksmanAIState::Flank && Marksman->GetStance() == EOperativeStance::Standing,
-				FString::Printf(TEXT("after the ambush: relocates on a flank (%s, %.0f cm/s)"), StateName(Marksman->GetAIState()),
-					Marksman->GetVelocity().Size2D()));
+			Check(State, Marksman->GetShotsFired() > State.ShotsBeforeHit,
+				FString::Printf(TEXT("returned fire %.1f s after the hit (%s)"), State.Time, StateName(Marksman->GetAIState())));
 			State.Stage = 3;
 			State.Time = 0.f;
 			return true;

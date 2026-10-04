@@ -1,4 +1,6 @@
 #include "Interactables/RelocationSubsystem.h"
+#include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -693,8 +695,9 @@ bool URelocationSubsystem::TickTask(FRelocateTask& Task, float DeltaTime)
 			SetObjectCarried(*Object, true);
 			Worker->SetCarrying(true);
 			const FVector Forward = Worker->GetActorForwardVector().GetSafeNormal2D();
-			const FVector Push = Worker->GetActorLocation() + Forward * RelocationRules::PushOffset;
-			Object->SetActorLocationAndRotation(FVector(Push.X, Push.Y, Task.GroundZ), FRotator(0.f, Worker->GetActorRotation().Yaw, 0.f));
+			Object->SetActorRotation(FRotator(0.f, Worker->GetActorRotation().Yaw, 0.f));
+			const FVector Push = Worker->GetActorLocation() + Forward * GetPushOffset(*Worker, *Object, Forward);
+			Object->SetActorLocation(FVector(Push.X, Push.Y, Task.GroundZ));
 			Worker->OrderMoveTo(Task.Target, false);
 			Post(Worker->DisplayName, FText::Format(LOCTEXT("Pushing", "Уперся в {0}, толкаю на новую позицию!"), NameOf(Object)));
 		}
@@ -708,9 +711,19 @@ bool URelocationSubsystem::TickTask(FRelocateTask& Task, float DeltaTime)
 
 	// Stage 2: the object rides in front of the worker.
 	const FVector Forward = Worker->GetActorForwardVector().GetSafeNormal2D();
-	const FVector Push = Worker->GetActorLocation() + Forward * RelocationRules::PushOffset;
+	const float Offset = GetPushOffset(*Worker, *Object, Forward);
+	const FVector Push = Worker->GetActorLocation() + Forward * Offset;
 	const FVector Current = Object->GetActorLocation();
-	const FVector Next = FMath::Lerp(Current, FVector(Push.X, Push.Y, Task.GroundZ), FMath::Clamp(PushFollowSpeed * DeltaTime, 0.f, 1.f));
+	FVector Next = FMath::Lerp(Current, FVector(Push.X, Push.Y, Task.GroundZ), FMath::Clamp(PushFollowSpeed * DeltaTime, 0.f, 1.f));
+	// Anti-clipping (Sprint 06-F): the follow lag must never let the object close in on the worker — clamp it out to the
+	// push distance along the worker's facing.
+	const FVector ToNext = FVector(Next.X - Worker->GetActorLocation().X, Next.Y - Worker->GetActorLocation().Y, 0.f);
+	if (FVector::DotProduct(ToNext, Forward) < Offset)
+	{
+		const FVector Side = ToNext - Forward * FVector::DotProduct(ToNext, Forward);
+		const FVector Clamped = Worker->GetActorLocation() + Forward * Offset + Side;
+		Next = FVector(Clamped.X, Clamped.Y, Task.GroundZ);
+	}
 	const float Yaw = FMath::Lerp(Object->GetActorRotation().Yaw,
 		Object->GetActorRotation().Yaw + FMath::FindDeltaAngleDegrees(Object->GetActorRotation().Yaw, Worker->GetActorRotation().Yaw),
 		FMath::Clamp(PushTurnSpeed * DeltaTime, 0.f, 1.f));
@@ -760,6 +773,71 @@ void URelocationSubsystem::DropAllForCombat()
 		CancelPlacement();
 	}
 	DropAllTasks(LOCTEXT("Alarm", "⚠️ Боевая тревога! Бросаю {0} и занимаю оборону!"));
+}
+
+bool URelocationSubsystem::CancelActiveTask(AOperativeCharacter* Worker)
+{
+	if (!Worker)
+	{
+		return false;
+	}
+	bool bCancelled = false;
+	for (int32 Index = Tasks.Num() - 1; Index >= 0; --Index)
+	{
+		FRelocateTask& Task = Tasks[Index];
+		if (Task.Worker.Get() != Worker)
+		{
+			continue;
+		}
+		AInteractableActor* Object = Task.Object.Get();
+		if (Task.Stage == 2 && Object)
+		{
+			// Pushing: set it down here, on its ground.
+			const FVector Location = Object->GetActorLocation();
+			Object->SetActorLocation(FVector(Location.X, Location.Y, Task.GroundZ));
+			SetObjectCarried(*Object, false);
+			Worker->SetCarrying(false);
+			Worker->StopOperative();
+			StepBack(*Worker, *Object, RelocationRules::StepBackDropped);
+		}
+		else
+		{
+			Worker->SetCarrying(false);
+			Worker->StopOperative();
+		}
+		Tasks.RemoveAt(Index);
+		bCancelled = true;
+	}
+	for (int32 Index = DeployTasks.Num() - 1; Index >= 0; --Index)
+	{
+		if (DeployTasks[Index].Worker.Get() == Worker)
+		{
+			Worker->StopOperative();
+			DeployTasks.RemoveAt(Index);
+			bCancelled = true;
+		}
+	}
+	if (bCancelled)
+	{
+		Post(Worker->DisplayName, LOCTEXT("Cancelled", "❌ Доставка объекта отменена."));
+		UE_LOG(LogCodexTactics, Display, TEXT("%s: relocation / deploy cancelled (RMB)"), *Worker->DisplayName.ToString());
+	}
+	return bCancelled;
+}
+
+float URelocationSubsystem::GetPushOffset(const AOperativeCharacter& Worker, const AInteractableActor& Object, const FVector& Forward)
+{
+	// Sprint 06-F: the fixed 135 cm put the worker 15 cm inside a 150 cm barricade. The box's extent along the push
+	// direction (in its own frame) + the capsule radius + a 25 cm margin; the old value is the floor.
+	if (!Object.Box)
+	{
+		return RelocationRules::PushOffset;
+	}
+	const FVector Extent = Object.Box->GetScaledBoxExtent();
+	const FVector Local = Object.GetActorRotation().UnrotateVector(Forward.GetSafeNormal2D());
+	const float Along = FMath::Abs(Local.X) * Extent.X + FMath::Abs(Local.Y) * Extent.Y;
+	const float Radius = Worker.GetCapsuleComponent() ? Worker.GetCapsuleComponent()->GetScaledCapsuleRadius() : 40.f;
+	return FMath::Max(RelocationRules::PushOffset, Radius + Along + 25.f);
 }
 
 void URelocationSubsystem::DropAllTasks(const FText& LineFormat)

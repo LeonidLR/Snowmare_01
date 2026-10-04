@@ -108,7 +108,23 @@ private:
 	float FiringSearchCooldown = 0.f;
 	void TickPatrol(float DeltaTime, AOperativeCharacter* Target, float Distance);
 	void TickEngage(float DeltaTime, AOperativeCharacter* Target, float Distance);
+	/**
+	 * Sprint 06-H: from prone he first stands up (RiseDelay, movement stopped) and only then runs — no sliding on his
+	 * stomach. Standing or crouching he moves at once.
+	 */
 	void MoveTo(const FVector& Goal, bool bSprint);
+	void ExecuteMoveTo(const FVector& Goal, bool bSprint);
+	void FinishRise();
+	FTimerHandle RiseTimerHandle;
+	bool bPendingSprint = false;
+	/** Seconds from prone to standing before the run starts. */
+	static constexpr float RiseDelay = 0.45f;
+	/** A wave (or its preparation) is on: no patrolling. */
+	bool IsFightOn() const;
+	/** Sprint 06-G: the operative who shot him; he answers that one (not the closest) for RetaliationSeconds. */
+	TWeakObjectPtr<AOperativeCharacter> RetaliationTarget;
+	float RetaliationTime = 0.f;
+	static constexpr float RetaliationSeconds = 6.f;
 	void StartRetreat(const AOperativeCharacter* Target);
 	void StartFlank(const AOperativeCharacter* Target);
 	void StartAim();

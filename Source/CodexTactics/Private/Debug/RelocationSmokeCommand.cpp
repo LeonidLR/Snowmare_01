@@ -3,7 +3,8 @@
 // Spawns a barrel ahead of the leader, opens its action menu, presses «Вытолкать», places it 6 m to the side:
 // the leader walks up, pushes it (carry speed) and sets it down there with collision restored. Then a frozen leader
 // (85 % cold) is refused, and placement can be cancelled. Last, a hit while pushing drops the barrel (Godot
-// take_damage -> _cancel_or_finalize_active_relocates_for_combat).
+// take_damage -> _cancel_or_finalize_active_relocates_for_combat). Sprint 06-E/F: while pushing the barrel never comes
+// inside the push distance (no clipping), and RMB (CancelActiveTask) sets it down mid-push.
 
 #include "CoreMinimal.h"
 
@@ -27,7 +28,7 @@ namespace RelocationSmoke
 	constexpr float Timeout = 45.f;
 	constexpr float PlaceTolerance = 30.f;
 
-	enum class EPhase : uint8 { OpenMenu, Moving, HitDrop, Done };
+	enum class EPhase : uint8 { OpenMenu, Moving, HitDrop, CancelPush, Done };
 
 	struct FState
 	{
@@ -38,6 +39,9 @@ namespace RelocationSmoke
 		bool bMenuOk = false;
 		bool bCarrySeen = false;
 		bool bFirstPassOk = false;
+		bool bHitOk = false;
+		float MinGap = TNumericLimits<float>::Max();
+		int32 PushSteps = 0;
 	};
 
 	void Finish(bool bPass, const TCHAR* Reason)
@@ -132,7 +136,40 @@ namespace RelocationSmoke
 			Leader->TakeHit(5.f, TEXT("Smoke"), false);
 			const bool bDropped = !Leader->bCarrying && Relocation->GetActiveTaskCount() == 0 && Barrel->Box->IsCollisionEnabled();
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke hit while pushing: dropped=%d"), bDropped ? 1 : 0);
-			Finish(State.bFirstPassOk && bDropped, TEXT("relocation finished"));
+			State.bHitOk = bDropped;
+			// Push it again; RMB cancels after a second of pushing.
+			Relocation->StartRelocate(Barrel, Leader);
+			State.Target = Barrel->GetActorLocation() + Leader->GetActorRightVector() * 900.f;
+			Relocation->UpdatePreview(State.Target);
+			Relocation->ConfirmPlacement(State.Target);
+			State.Phase = EPhase::CancelPush;
+			return true;
+		}
+
+		if (State.Phase == EPhase::CancelPush)
+		{
+			if (!Leader->bCarrying)
+			{
+				return true;
+			}
+			const FVector Forward = Leader->GetActorForwardVector().GetSafeNormal2D();
+			const float Along = FVector::DotProduct(Barrel->GetActorLocation() - Leader->GetActorLocation(), Forward);
+			State.MinGap = FMath::Min(State.MinGap, Along - URelocationSubsystem::GetPushOffset(*Leader, *Barrel, Forward));
+			if (++State.PushSteps < 4)
+			{
+				return true;
+			}
+			const bool bCancelled = Relocation->CancelActiveTask(Leader);
+			const bool bCancelOk = bCancelled && !Leader->bCarrying && Relocation->GetActiveTaskCount() == 0
+				&& Barrel->Box->IsCollisionEnabled() && FVector::Dist2D(Barrel->GetActorLocation(), State.Target) > 100.f;
+			// One frame of the worker's walk may come after the object's tick.
+			const bool bGapOk = State.MinGap >= -20.f;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: RMB cancel mid-push (cancelled=%d carrying=%d tasks=%d collision=%d)"),
+				bCancelOk ? TEXT("ok  ") : TEXT("FAIL"), bCancelled ? 1 : 0, Leader->bCarrying ? 1 : 0, Relocation->GetActiveTaskCount(),
+				Barrel->Box->IsCollisionEnabled() ? 1 : 0);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: push gap min %.1f cm past the push distance"), bGapOk ? TEXT("ok  ") : TEXT("FAIL"),
+				State.MinGap);
+			Finish(State.bFirstPassOk && State.bHitOk && bCancelOk && bGapOk, TEXT("relocation finished"));
 			State.Phase = EPhase::Done;
 			return false;
 		}

@@ -1458,6 +1458,24 @@ void ACodexTacticsPlayerController::CameraDragRotateStart()
 		Relocation->CancelPlacement();
 		return;
 	}
+	// Sprint 06-E: RMB aborts a running relocation / deploy walk of the leader or the selected group.
+	if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
+	{
+		bool bCancelled = false;
+		if (USquadSubsystem* Squad = GetSquad())
+		{
+			TArray<AOperativeCharacter*> Workers = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>();
+			Workers.AddUnique(Squad->GetLeader());
+			for (AOperativeCharacter* Worker : Workers)
+			{
+				bCancelled |= Relocation->CancelActiveTask(Worker);
+			}
+		}
+		if (bCancelled)
+		{
+			return;
+		}
+	}
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
 	{
 		TurnBased->CancelRelocate();

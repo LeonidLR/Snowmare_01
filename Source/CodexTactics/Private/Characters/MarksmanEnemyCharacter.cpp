@@ -6,6 +6,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/WaveSubsystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -19,6 +20,7 @@
 #include "Interactables/BarricadeActor.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UI/FloatingTextSubsystem.h"
+#include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
 AMarksmanEnemyCharacter::AMarksmanEnemyCharacter()
@@ -52,7 +54,8 @@ void AMarksmanEnemyCharacter::BeginPlay()
 	{
 		Point = GetActorTransform().TransformPosition(Point);
 	}
-	AIState = PatrolRoute.IsEmpty() ? EMarksmanAIState::Engage : EMarksmanAIState::Patrol;
+	// Sprint 06-G: spawned by a wave (or during its preparation) he fights at once.
+	AIState = PatrolRoute.IsEmpty() || IsFightOn() ? EMarksmanAIState::Engage : EMarksmanAIState::Patrol;
 	if (HealthComponent)
 	{
 		HealthComponent->OnDamaged.AddDynamic(this, &AMarksmanEnemyCharacter::HandleMarksmanDamaged);
@@ -120,6 +123,15 @@ void AMarksmanEnemyCharacter::Alert()
 	}
 }
 
+bool AMarksmanEnemyCharacter::IsFightOn() const
+{
+	const UWorld* World = GetWorld();
+	const UWaveSubsystem* Waves = World ? World->GetSubsystem<UWaveSubsystem>() : nullptr;
+	const UGameFlowSubsystem* Flow = World ? World->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	return (Waves && Waves->IsWaveActive())
+		|| (Flow && (Flow->GetPhase() == ECodexGamePhase::WaveCombat || Flow->GetPhase() == ECodexGamePhase::Preparation));
+}
+
 void AMarksmanEnemyCharacter::HandleMarksmanDamaged(const FDamageSpec& Spec, float FinalDamage)
 {
 	if (bIsDying || AIState == EMarksmanAIState::Ambushed || AIState == EMarksmanAIState::Retreat)
@@ -127,8 +139,65 @@ void AMarksmanEnemyCharacter::HandleMarksmanDamaged(const FDamageSpec& Spec, flo
 		return;
 	}
 	float Distance = 0.f;
-	FindClosestOperative(Distance);
-	// Shot from afar while patrolling / aiming: down at once (smaller profile), alert the others, then relocate.
+	AOperativeCharacter* Attacker = FindClosestOperative(Distance);
+	// The shooter by name (a grenade / turret source falls back to the closest operative).
+	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (Member && Member->HealthComponent && Member->HealthComponent->IsAlive() && Member->DisplayName.ToString() == Spec.AttackerSource)
+			{
+				Attacker = Member;
+				Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
+				break;
+			}
+		}
+	}
+	// Sprint 06-G: in a fight he answers instead of lying blind — face the shooter, alert the others, then kite
+	// (too close), take cover and return fire (line of fire in range), or seek a firing position.
+	if (Attacker && (AIState != EMarksmanAIState::Patrol || IsFightOn()))
+	{
+		SetActorRotation(FRotator(0.f, (Attacker->GetActorLocation() - GetActorLocation()).Rotation().Yaw, 0.f));
+		RetaliationTarget = Attacker;
+		RetaliationTime = RetaliationSeconds;
+		for (TActorIterator<AMarksmanEnemyCharacter> It(GetWorld()); It; ++It)
+		{
+			if (*It != this && FVector::Dist(It->GetActorLocation(), GetActorLocation()) <= MarksmanConfig.AlertRadius)
+			{
+				It->Alert();
+			}
+		}
+		if (MarksmanAIRules::ShouldRetreat(Distance, MarksmanConfig.RetreatDistance))
+		{
+			StartRetreat(Attacker);
+			return;
+		}
+		AIState = EMarksmanAIState::Engage;
+		if (Distance <= MarksmanConfig.PreferredMaxRange + 300.f && TraceLine(Attacker).bHasLos)
+		{
+			if (AAIController* AIC = Cast<AAIController>(GetController()))
+			{
+				AIC->StopMovement();
+			}
+			GetWorldTimerManager().ClearTimer(RiseTimerHandle);
+			const bool bElevated = GetFeet().Z - (Attacker->GetActorLocation().Z - Attacker->GetSimpleCollisionHalfHeight()) >= 150.f;
+			SetMarksmanStance(MarksmanAIRules::EvaluateBestStance(HasLowCoverTowards(Attacker), bElevated, false));
+			bHolding = true;
+			AttackTimer = 0.f;
+			if (!bIsAimingAtTarget || CurrentTarget.Get() != Attacker)
+			{
+				CancelAim();
+				StartAim();
+			}
+			CurrentTarget = Attacker;
+		}
+		else
+		{
+			FiringSearchCooldown = 0.f; // seek a firing position on the next tick
+		}
+		return;
+	}
+	// Shot from afar while patrolling: down at once (smaller profile), alert the others, then relocate.
 	if (AIState == EMarksmanAIState::Patrol || Distance > MarksmanConfig.RetreatDistance)
 	{
 		CancelAim();
@@ -290,6 +359,38 @@ bool AMarksmanEnemyCharacter::HasLowCoverTowards(const AActor* Target) const
 
 void AMarksmanEnemyCharacter::MoveTo(const FVector& Goal, bool bSprint)
 {
+	MoveGoal = Goal;
+	bPendingSprint = bSprint;
+	if (GetWorldTimerManager().IsTimerActive(RiseTimerHandle))
+	{
+		return; // still getting up: the run starts towards the latest goal
+	}
+	if (Stance == EOperativeStance::Prone)
+	{
+		if (AAIController* AIC = Cast<AAIController>(GetController()))
+		{
+			AIC->StopMovement();
+		}
+		SetMarksmanStance(EOperativeStance::Standing);
+		GetCharacterMovement()->MaxWalkSpeed = 0.f; // no creeping while the get-up plays
+		GetWorldTimerManager().SetTimer(RiseTimerHandle, this, &AMarksmanEnemyCharacter::FinishRise, RiseDelay, false);
+		return;
+	}
+	ExecuteMoveTo(Goal, bSprint);
+}
+
+void AMarksmanEnemyCharacter::FinishRise()
+{
+	// Dropped again (hit and took cover) or dying meanwhile: no run.
+	if (bIsDying || Stance != EOperativeStance::Standing || bHolding)
+	{
+		return;
+	}
+	ExecuteMoveTo(MoveGoal, bPendingSprint);
+}
+
+void AMarksmanEnemyCharacter::ExecuteMoveTo(const FVector& Goal, bool bSprint)
+{
 	SetMarksmanStance(EOperativeStance::Standing);
 	GetCharacterMovement()->MaxWalkSpeed = bSprint ? MarksmanConfig.SprintSpeed : MarksmanConfig.WalkSpeed;
 	MoveGoal = Goal;
@@ -306,9 +407,15 @@ void AMarksmanEnemyCharacter::StartRetreat(const AOperativeCharacter* Target)
 	const FVector Away = (GetActorLocation() - Target->GetActorLocation()).GetSafeNormal2D();
 	AIState = EMarksmanAIState::Retreat;
 	StateTimer = 0.f;
-	// Back to the middle of the band.
+	// Back to the middle of the band; a firing position (reachable, with a line of fire) first — the straight-away point
+	// may lie behind a wall with no path, which left him standing 4 m from the squad in a retreat / engage loop.
 	const float Wanted = (MarksmanConfig.PreferredMinRange + MarksmanConfig.PreferredMaxRange) * 0.5f;
-	MoveTo(Target->GetActorLocation() + Away * Wanted, true);
+	FVector Goal = Target->GetActorLocation() + Away * Wanted;
+	if (FindFiringPosition(Target, FiringPosition))
+	{
+		Goal = FiringPosition;
+	}
+	MoveTo(Goal, true);
 }
 
 void AMarksmanEnemyCharacter::StartFlank(const AOperativeCharacter* Target)
@@ -411,6 +518,34 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 
 	float Distance = 0.f;
 	AOperativeCharacter* Target = FindClosestOperative(Distance);
+	// The closest one behind a wall is no target while another stands in his line of fire (a squad split by the yard
+	// wall flipped him between the two sides).
+	if (Target && AIState != EMarksmanAIState::Patrol && !TraceLine(Target).bHasLos)
+	{
+		float BestDistance = MarksmanConfig.PreferredMaxRange * 1.5f;
+		if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+		{
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				const float MemberDistance = Member ? FVector::Dist(GetActorLocation(), Member->GetActorLocation()) : 0.f;
+				if (Member && Member != Target && Member->HealthComponent && Member->HealthComponent->IsAlive()
+					&& MemberDistance < BestDistance && TraceLine(Member).bHasLos)
+				{
+					BestDistance = MemberDistance;
+					Target = Member;
+					Distance = MemberDistance;
+				}
+			}
+		}
+	}
+	// Sprint 06-G: for a while after being hit he answers the shooter, not the closest operative.
+	RetaliationTime -= DeltaTime;
+	AOperativeCharacter* Shooter = RetaliationTarget.Get();
+	if (RetaliationTime > 0.f && Shooter && Shooter->HealthComponent && Shooter->HealthComponent->IsAlive())
+	{
+		Target = Shooter;
+		Distance = FVector::Dist(GetActorLocation(), Shooter->GetActorLocation());
+	}
 	CurrentTarget = Target;
 
 	switch (AIState)
@@ -456,9 +591,7 @@ void AMarksmanEnemyCharacter::TickPatrol(float DeltaTime, AOperativeCharacter* T
 {
 	// Sprint 06-D: a wave (or its preparation) is on — the fight is known, no more patrolling; otherwise an operative
 	// in sight within the detection range wakes him.
-	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	const bool bFight = Flow && (Flow->GetPhase() == ECodexGamePhase::WaveCombat || Flow->GetPhase() == ECodexGamePhase::Preparation);
-	if (bFight || (Target && Distance <= MarksmanConfig.DetectionRange && TraceLine(Target).bHasLos))
+	if (IsFightOn() || (Target && Distance <= MarksmanConfig.DetectionRange && TraceLine(Target).bHasLos))
 	{
 		AIState = EMarksmanAIState::Engage;
 		return;
@@ -519,6 +652,11 @@ void AMarksmanEnemyCharacter::TickEngage(float DeltaTime, AOperativeCharacter* T
 		bHolding = false;
 		// Without a line of fire: a firing position (searched every 3 s), else the squad's centre.
 		FiringSearchCooldown -= DeltaTime;
+		// At the firing position and still no line of fire (the target moved): look again at once.
+		if (bHasFiringPosition && FVector::Dist2D(GetActorLocation(), FiringPosition) < 150.f)
+		{
+			FiringSearchCooldown = 0.f;
+		}
 		if (!Line.bHasLos && FiringSearchCooldown <= 0.f)
 		{
 			FiringSearchCooldown = 3.f;
@@ -537,8 +675,12 @@ void AMarksmanEnemyCharacter::TickEngage(float DeltaTime, AOperativeCharacter* T
 			ApproachStallTime = 0.f;
 			ApproachBestDistance = TNumericLimits<float>::Max();
 			FiringSearchCooldown = 0.f; // look for another firing position next time
-			StartFlank(Target);
-			return;
+			// A reachable firing position: keep on to it (re-searched); none: flank round the obstacle.
+			if (!bHasFiringPosition || Line.bHasLos)
+			{
+				StartFlank(Target);
+				return;
+			}
 		}
 		if (!MoveGoal.Equals(Goal, 200.f) || GetVelocity().IsNearlyZero())
 		{
@@ -562,6 +704,7 @@ void AMarksmanEnemyCharacter::TickEngage(float DeltaTime, AOperativeCharacter* T
 	if (!bHolding)
 	{
 		bHolding = true;
+		GetWorldTimerManager().ClearTimer(RiseTimerHandle);
 		if (AIC)
 		{
 			AIC->StopMovement();

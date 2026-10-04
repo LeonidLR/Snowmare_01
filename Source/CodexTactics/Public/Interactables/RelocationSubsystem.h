@@ -115,6 +115,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Relocation")
 	int32 GetActiveTaskCount() const { return Tasks.Num(); }
 
+	/**
+	 * Sprint 06-E: RMB aborts Worker's running relocation (pushing: the object is set down where it is, collision and the
+	 * nav obstacle back, the worker steps back; still walking up: he stops) or his walk to set a deployable up.
+	 * True when something was cancelled.
+	 */
+	bool CancelActiveTask(AOperativeCharacter* Worker);
+
+	/** Push distance from the worker's centre for Object in direction Forward: capsule + the box's extent there + 25 cm. */
+	static float GetPushOffset(const AOperativeCharacter& Worker, const AInteractableActor& Object, const FVector& Forward);
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Relocation")
 	bool HasPlannedTask(const AOperativeCharacter* Worker) const;
 

@@ -15,6 +15,7 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Last verified
+2026-10-04: Sprint 06-E..H — build OK, `test.ps1 -Smart` 162/0, smokes Relocation / Deployable / TurnBasedDeploy / BarricadeTurnContact / Marksman / MarksmanAdvance / BotMarksman / LevelWave PASS.
 2026-10-01: 155 automation tests, all smokes ALL GREEN (`verify_all.ps1`, parallel x3) after the Marksman / enemy hit layer / pause cooldown work.
 
 ## Open questions
