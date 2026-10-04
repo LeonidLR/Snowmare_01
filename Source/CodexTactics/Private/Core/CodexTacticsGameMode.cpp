@@ -10,6 +10,7 @@
 #include "Data/WaveConfigTypes.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Data/WeaponDataAsset.h"
+#include "Data/AITuning.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Camera/TacticalCameraPawn.h"
@@ -74,6 +75,7 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 
 void ACodexTacticsGameMode::StartPlay()
 {
+	AITuning::ApplyFile(AITuning::GetDefaultPath()); // before any actor's BeginPlay reads a Codex.* tunable
 	ApplyLevelConfig();
 	Super::StartPlay();
 	SpawnSquad();

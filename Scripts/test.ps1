@@ -1,7 +1,6 @@
-# Runs Automation tests headless (no rendering). Report goes to Saved\TestReport.
-# Usage: powershell -ExecutionPolicy Bypass -File Scripts\test.ps1 [-Filter CodexTactics]
 param(
-    [string]$Filter = "CodexTactics"
+    [string]$Filter = "CodexTactics",
+    [switch]$Smart
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +9,16 @@ $ProjectDir = Split-Path $PSScriptRoot -Parent
 $Project = Join-Path $ProjectDir "CodexTactics.uproject"
 $ReportDir = Join-Path $ProjectDir "Saved\TestReport"
 $LogFile = Join-Path $ProjectDir "Saved\Logs\AutomationTests.log"
+
+if ($Smart) {
+    Write-Host "[Jev] Resolving smart test filter via TypeSafe System One..."
+    $triageOutput = python (Join-Path $PSScriptRoot "Tools\typesafe_triage.py") --smart-test
+    $filterLine = $triageOutput | Select-String -Pattern "FILTER=(.+)"
+    if ($filterLine) {
+        $Filter = $filterLine.Matches[0].Groups[1].Value.Trim()
+        Write-Host ("[Jev] Selected targeted filter: {0}" -f $Filter)
+    }
+}
 
 . (Join-Path $PSScriptRoot "agent_lock.ps1")
 $Owned = Enter-AgentLock "tests $Filter"

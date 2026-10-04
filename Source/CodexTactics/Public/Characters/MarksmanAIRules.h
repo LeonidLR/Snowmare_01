@@ -16,6 +16,15 @@ struct CODEXTACTICS_API FMarksmanConfig
 	/** Operatives closer than this make him retreat at a sprint (kiting). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
 	float RetreatDistance = 1200.f;
+	/**
+	 * Kiting is limited (user decision 2026-10-04): after a retreat / back-off he cannot break off again for this long -
+	 * an operative who caught up with him is fought where he stands (the squad's rifles reach 14-19 m, his band 20-35 m).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
+	float RetreatCooldownSeconds = 10.f;
+	/** One dash: a retreat ends after this long at the latest. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
+	float RetreatMaxSeconds = 3.5f;
 	/** Preferred engagement band: closer -> steps back, farther (or no line of fire) -> closes in. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
 	float PreferredMinRange = 2000.f;
@@ -104,8 +113,11 @@ namespace MarksmanAIRules
 	/** Moving -> stand (full speed); behind a low obstacle -> crouch; elevated / open ground -> prone. */
 	CODEXTACTICS_API EOperativeStance EvaluateBestStance(bool bLowCover, bool bElevated, bool bMoving);
 
-	/** Without a line of fire: close in (seek a firing position). Else retreat below RetreatDistance, back off below the band, close in above it. */
-	CODEXTACTICS_API EMarksmanMove ChooseMove(const FMarksmanConfig& Config, float DistanceCm, bool bHasLineOfFire);
+	/**
+	 * Without a line of fire: close in (seek a firing position). Else retreat below RetreatDistance, back off below the
+	 * band, close in above it; while kiting is on cooldown (!bCanKite) he holds and fires at any distance below the band.
+	 */
+	CODEXTACTICS_API EMarksmanMove ChooseMove(const FMarksmanConfig& Config, float DistanceCm, bool bHasLineOfFire, bool bCanKite = true);
 
 	/**
 	 * Flank point DistanceCm from TargetPos, DesiredAngle (clamped 45-90) off the target's facing, on the side nearer

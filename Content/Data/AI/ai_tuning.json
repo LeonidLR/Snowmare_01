@@ -1,0 +1,11 @@
+{
+  "comment": "Written by Scripts/Tools/jev_ai_coach.py; applied at game start (Data/AITuning.h), a -dpcvars= value wins, -NoAITuning skips it. Review before committing.",
+  "updated": "2026-10-04T13:35:42",
+  "profile": "VETERAN",
+  "runs_per_batch": 8,
+  "baseline_score": 0.094,
+  "best_score": 0.231,
+  "cvars": {
+    "Codex.Bot.AssaultStopDistance": "750"
+  }
+}

@@ -78,6 +78,9 @@ protected:
 private:
 	UFUNCTION()
 	void HandleMarksmanDamaged(const FDamageSpec& Spec, float FinalDamage);
+	/** One log line per death for the AI coach: the range to the closest operative. */
+	UFUNCTION()
+	void HandleMarksmanDied(AActor* Victim, const FString& AttackerSource);
 
 	/** Line of fire from the scope (stance height) to the target's stance height; Cover < 1 behind a barricade. */
 	struct FMarksmanLine
@@ -121,6 +124,11 @@ private:
 	static constexpr float RiseDelay = 0.45f;
 	/** A wave (or its preparation) is on: no patrolling. */
 	bool IsFightOn() const;
+	/** World time of the last retreat / back-off (kiting cooldown). */
+	float LastKiteTime = -1000.f;
+	bool CanKite() const;
+	/** Codex.Marksman.* console variables (the AI coach's experiments, -dpcvars=) override MarksmanConfig at BeginPlay. */
+	void ApplyTuningOverrides();
 	/** Sprint 06-G: the operative who shot him; he answers that one (not the closest) for RetaliationSeconds. */
 	TWeakObjectPtr<AOperativeCharacter> RetaliationTarget;
 	float RetaliationTime = 0.f;

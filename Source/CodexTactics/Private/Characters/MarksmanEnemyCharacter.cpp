@@ -4,6 +4,7 @@
 #include "Characters/EnemyAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
@@ -17,6 +18,7 @@
 #include "NavigationSystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "HAL/IConsoleManager.h"
 #include "Interactables/BarricadeActor.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -45,9 +47,53 @@ AMarksmanEnemyCharacter::AMarksmanEnemyCharacter()
 	BeamMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/VFX/Materials/M_SniperScope_Beam.M_SniperScope_Beam")));
 }
 
+namespace MarksmanTuning
+{
+	// -1 keeps the asset value. Set by Scripts/Tools/jev_ai_coach.py through -dpcvars= for its experiments.
+	static TAutoConsoleVariable<float> CVarRetreatCooldown(TEXT("Codex.Marksman.RetreatCooldown"), -1.f, TEXT("Marksman kiting cooldown, s (-1: asset)"));
+	static TAutoConsoleVariable<float> CVarRetreatMax(TEXT("Codex.Marksman.RetreatMaxSeconds"), -1.f, TEXT("Marksman longest retreat, s (-1: asset)"));
+	static TAutoConsoleVariable<float> CVarShotDamage(TEXT("Codex.Marksman.ShotDamage"), -1.f, TEXT("Marksman shot damage (-1: asset)"));
+	static TAutoConsoleVariable<float> CVarAccuracy(TEXT("Codex.Marksman.BaseAccuracy"), -1.f, TEXT("Marksman base hit chance (-1: asset)"));
+	static TAutoConsoleVariable<float> CVarAim(TEXT("Codex.Marksman.AimDuration"), -1.f, TEXT("Marksman aim before a shot, s (-1: asset)"));
+	static TAutoConsoleVariable<float> CVarCooldown(TEXT("Codex.Marksman.ShotCooldown"), -1.f, TEXT("Marksman pause after a shot, s (-1: asset)"));
+
+	void Override(float& Value, const TAutoConsoleVariable<float>& CVar)
+	{
+		const float Tuned = CVar.GetValueOnGameThread();
+		if (Tuned >= 0.f)
+		{
+			Value = Tuned;
+		}
+	}
+}
+
+void AMarksmanEnemyCharacter::ApplyTuningOverrides()
+{
+	using namespace MarksmanTuning;
+	Override(MarksmanConfig.RetreatCooldownSeconds, CVarRetreatCooldown);
+	Override(MarksmanConfig.RetreatMaxSeconds, CVarRetreatMax);
+	Override(MarksmanConfig.ShotDamage, CVarShotDamage);
+	Override(MarksmanConfig.BaseAccuracy, CVarAccuracy);
+	Override(MarksmanConfig.AimDuration, CVarAim);
+	Override(MarksmanConfig.ShotCooldown, CVarCooldown);
+}
+
+void AMarksmanEnemyCharacter::HandleMarksmanDied(AActor* Victim, const FString& AttackerSource)
+{
+	float Distance = 0.f;
+	FindClosestOperative(Distance);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Marksman] %s dies at %.0f m (by %s)"), *GetName(), Distance / 100.f, *AttackerSource);
+}
+
+bool AMarksmanEnemyCharacter::CanKite() const
+{
+	return GetWorld()->GetTimeSeconds() - LastKiteTime >= MarksmanConfig.RetreatCooldownSeconds;
+}
+
 void AMarksmanEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	ApplyTuningOverrides();
 	SpawnLocation = GetActorLocation();
 	// Waypoints are authored relative to the actor.
 	for (FVector& Point : PatrolRoute)
@@ -59,6 +105,7 @@ void AMarksmanEnemyCharacter::BeginPlay()
 	if (HealthComponent)
 	{
 		HealthComponent->OnDamaged.AddDynamic(this, &AMarksmanEnemyCharacter::HandleMarksmanDamaged);
+		HealthComponent->OnDied.AddDynamic(this, &AMarksmanEnemyCharacter::HandleMarksmanDied);
 	}
 	UMaterialInterface* Material = BeamMaterial.IsNull() ? nullptr : BeamMaterial.LoadSynchronous();
 	if (Material)
@@ -167,7 +214,7 @@ void AMarksmanEnemyCharacter::HandleMarksmanDamaged(const FDamageSpec& Spec, flo
 				It->Alert();
 			}
 		}
-		if (MarksmanAIRules::ShouldRetreat(Distance, MarksmanConfig.RetreatDistance))
+		if (CanKite() && MarksmanAIRules::ShouldRetreat(Distance, MarksmanConfig.RetreatDistance))
 		{
 			StartRetreat(Attacker);
 			return;
@@ -407,6 +454,9 @@ void AMarksmanEnemyCharacter::StartRetreat(const AOperativeCharacter* Target)
 	const FVector Away = (GetActorLocation() - Target->GetActorLocation()).GetSafeNormal2D();
 	AIState = EMarksmanAIState::Retreat;
 	StateTimer = 0.f;
+	LastKiteTime = GetWorld()->GetTimeSeconds();
+	UE_LOG(LogCodexTactics, Display, TEXT("[Marksman] %s retreats from %s (%.0f m)"), *GetName(), *Target->DisplayName.ToString(),
+		FVector::Dist(GetActorLocation(), Target->GetActorLocation()) / 100.f);
 	// Back to the middle of the band; a firing position (reachable, with a line of fire) first — the straight-away point
 	// may lie behind a wall with no path, which left him standing 4 m from the squad in a retreat / engage loop.
 	const float Wanted = (MarksmanConfig.PreferredMinRange + MarksmanConfig.PreferredMaxRange) * 0.5f;
@@ -487,6 +537,9 @@ void AMarksmanEnemyCharacter::Fire(AOperativeCharacter* Target, const FMarksmanL
 		End += FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(0.f, 1.f)).GetSafeNormal() * 120.f;
 		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("ПРОМАХ"), FLinearColor(0.8f, 0.8f, 0.8f));
 	}
+	// One line per shot for the AI coach (Scripts/Tools/jev_ai_coach.py).
+	UE_LOG(LogCodexTactics, Display, TEXT("[Marksman] %s fires at %s: %.0f m, chance %.2f, %s"), *GetName(), *Target->DisplayName.ToString(),
+		Distance / 100.f, Chance, bHit ? TEXT("hit") : TEXT("miss"));
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
 	{
 		Feedback->SpawnTracer(Line.Start, End, FLinearColor(1.f, 0.85f, 0.3f));
@@ -571,6 +624,7 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 	case EMarksmanAIState::Flank:
 		// Done on arrival, after 8 s, once stuck for 1.5 s (no way there) or (retreating) once back in the band.
 		if (FVector::Dist2D(GetActorLocation(), MoveGoal) < 120.f || StateTimer > 8.f
+			|| (AIState == EMarksmanAIState::Retreat && StateTimer > MarksmanConfig.RetreatMaxSeconds)
 			|| (StateTimer > 1.5f && GetVelocity().Size2D() < 20.f)
 			|| (AIState == EMarksmanAIState::Retreat && Distance >= MarksmanConfig.PreferredMinRange))
 		{
@@ -632,7 +686,7 @@ void AMarksmanEnemyCharacter::TickEngage(float DeltaTime, AOperativeCharacter* T
 		StartFlank(Target);
 		return;
 	}
-	EMarksmanMove Move = MarksmanAIRules::ChooseMove(MarksmanConfig, Distance, Line.bHasLos);
+	EMarksmanMove Move = MarksmanAIRules::ChooseMove(MarksmanConfig, Distance, Line.bHasLos, CanKite());
 	// Hysteresis: a holding marksman tolerates 3 m past the band edges (no stand / prone flicker at the edge).
 	if (bHolding && Line.bHasLos && ((Move == EMarksmanMove::Approach && Distance < MarksmanConfig.PreferredMaxRange + 300.f)
 		|| (Move == EMarksmanMove::BackOff && Distance > MarksmanConfig.PreferredMinRange - 300.f)))
@@ -691,6 +745,7 @@ void AMarksmanEnemyCharacter::TickEngage(float DeltaTime, AOperativeCharacter* T
 	case EMarksmanMove::BackOff:
 		CancelAim();
 		bHolding = false;
+		LastKiteTime = GetWorld()->GetTimeSeconds();
 		if (GetVelocity().IsNearlyZero() || FVector::Dist2D(GetActorLocation(), MoveGoal) < 150.f)
 		{
 			MoveTo(GetActorLocation() + (GetActorLocation() - Target->GetActorLocation()).GetSafeNormal2D() * 400.f, false);

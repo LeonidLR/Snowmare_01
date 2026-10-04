@@ -18,6 +18,9 @@ bool FMarksmanRetreatTest::RunTest(const FString&)
 	TestTrue(TEXT("25 m clear -> Hold"), MarksmanAIRules::ChooseMove(Config, 2500.f, true) == EMarksmanMove::Hold);
 	TestTrue(TEXT("25 m blocked -> Approach"), MarksmanAIRules::ChooseMove(Config, 2500.f, false) == EMarksmanMove::Approach);
 	TestTrue(TEXT("40 m -> Approach"), MarksmanAIRules::ChooseMove(Config, 4000.f, true) == EMarksmanMove::Approach);
+	TestTrue(TEXT("8 m, kiting on cooldown -> Hold"), MarksmanAIRules::ChooseMove(Config, 800.f, true, false) == EMarksmanMove::Hold);
+	TestTrue(TEXT("15 m, kiting on cooldown -> Hold"), MarksmanAIRules::ChooseMove(Config, 1500.f, true, false) == EMarksmanMove::Hold);
+	TestTrue(TEXT("40 m, kiting on cooldown -> Approach"), MarksmanAIRules::ChooseMove(Config, 4000.f, true, false) == EMarksmanMove::Approach);
 	TestTrue(TEXT("8 m behind a wall: seeks a firing position"), MarksmanAIRules::ChooseMove(Config, 800.f, false) == EMarksmanMove::Approach);
 	return true;
 }

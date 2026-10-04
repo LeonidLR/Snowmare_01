@@ -13,6 +13,7 @@
 #include "Combat/WaveVictorySubsystem.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/WaveConfigTypes.h"
+#include "Data/WeaponDataAsset.h"
 #include "Dom/JsonObject.h"
 #include "Core/MissionSessionSubsystem.h"
 #include "Core/MissionSubsystem.h"
@@ -558,8 +559,8 @@ void UPlaytestBotSubsystem::SmartTactics(float DeltaTime)
 	{
 		Positions.Add(Enemy->GetActorLocation());
 	}
-	// 0. A marksman's telegraphed aim at a squad member comes first (Sprint 05-D).
-	if (ReactToMarksman())
+	// 0. A lone marksman out of reach: storm him; else his telegraphed aim at a squad member comes first (Sprint 05-D).
+	if (AssaultMarksman() || ReactToMarksman())
 	{
 		return;
 	}
@@ -663,6 +664,66 @@ bool UPlaytestBotSubsystem::FindCover(const AOperativeCharacter* Leader, const F
 		}
 	}
 	return OutScore > -TNumericLimits<float>::Max();
+}
+
+namespace BotTuning
+{
+	// Set by Scripts/Tools/jev_ai_coach.py through -dpcvars= for its experiments.
+	static TAutoConsoleVariable<int32> CVarAssault(TEXT("Codex.Bot.MarksmanAssault"), 1, TEXT("Bot storms lone marksmen (0 / 1)"));
+	static TAutoConsoleVariable<float> CVarClearRadius(TEXT("Codex.Bot.AssaultClearRadius"), 1500.f,
+		TEXT("No other enemy this close to the leader (cm) before the bot storms a marksman"));
+	static TAutoConsoleVariable<float> CVarStopDistance(TEXT("Codex.Bot.AssaultStopDistance"), 900.f,
+		TEXT("The storming squad stops this far from the marksman (cm)"));
+}
+
+bool UPlaytestBotSubsystem::AssaultMarksman()
+{
+	using namespace BotTuning;
+	AOperativeCharacter* Leader = Member(0);
+	if (!Leader || CVarAssault.GetValueOnGameThread() == 0 || MoveCooldown > 0.f)
+	{
+		return false;
+	}
+	const float Reach = Leader->CurrentWeapon ? Leader->CurrentWeapon->AttackRangeCm : 1400.f;
+	const float ClearRadius = CVarClearRadius.GetValueOnGameThread();
+	const AMarksmanEnemyCharacter* Nearest = nullptr;
+	float NearestDistance = TNumericLimits<float>::Max();
+	for (AActor* Enemy : LiveEnemies())
+	{
+		const float Distance = FVector::Dist2D(Enemy->GetActorLocation(), Leader->GetActorLocation());
+		const AMarksmanEnemyCharacter* Marksman = Cast<AMarksmanEnemyCharacter>(Enemy);
+		if (!Marksman && Distance < ClearRadius)
+		{
+			return false; // the melee fight comes first
+		}
+		if (Marksman && Distance < NearestDistance)
+		{
+			NearestDistance = Distance;
+			Nearest = Marksman;
+		}
+	}
+	if (!Nearest || NearestDistance <= Reach)
+	{
+		return false;
+	}
+	const FVector Target = Nearest->GetActorLocation();
+	const FVector Back = (Leader->GetActorLocation() - Target).GetSafeNormal2D();
+	const float Stop = CVarStopDistance.GetValueOnGameThread();
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		AOperativeCharacter* Each = Member(Index);
+		if (Each && BotIsAlive(Each))
+		{
+			// Fanned out: the middle one straight on, the others 35 deg to either side.
+			const float Angle = Index == 0 ? 0.f : (Index == 1 ? 35.f : -35.f);
+			Each->OrderMoveTo(Target + Back.RotateAngleAxis(Angle, FVector::UpVector) * Stop, true);
+		}
+	}
+	MoveCooldown = 2.5f;
+	++MarksmanAssaults;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Assault marksman %s at %.0f m (reach %.0f m)"), *Nearest->GetName(), NearestDistance / 100.f,
+		Reach / 100.f);
+	return true;
 }
 
 bool UPlaytestBotSubsystem::ReactToMarksman()

@@ -37,7 +37,8 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 | Agent | Task | Files / assets | Since |
 |---|---|---|---|
-| Gemini | Architecture Leadership & Bot Telemetry Distillation (Jev System One) | Scripts/Tools/typesafe_triage.py, docs/port/TANDEM.md | 2026-10-04 |
+| Gemini | Architecture Leadership & Bot Telemetry Distillation (Jev System One) | Scripts/Tools/typesafe_triage.py | 2026-10-04 |
+| Claude | Jev AI coach (taken over from Gemini on the user's word, 2026-10-04): marksman kiting limit, bot marksman assault, `Codex.*` tunables, `AITuning` | Scripts/Tools/jev_ai_coach.py, Content/Data/AI/ai_tuning.json, Marksman*, PlaytestBotSubsystem | 2026-10-04 |
 
 ## Requests
 
@@ -389,6 +390,8 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-10-04 Claude: marksman kiting limit (user decision), bot `AssaultMarksman`, `Codex.Marksman.*` / `Codex.Bot.*` tuning cvars, `Scripts/Tools/jev_ai_coach.py` (Jev-driven AI training loop; enemy knobs only with `--tune-enemies`). Gemini/Jev owners: `typesafe_triage.py --telemetry` ignores the runs file (hard-coded sample_summary) — worth fixing on your side.
+- 2026-10-04 Claude: took over Gemini's uncommitted AI-coach work (user decision): `MarksmanAIRules::ChooseMove(..., bCanKite)` + `RetreatCooldownSeconds` 10 / `RetreatMaxSeconds` 3.5, `UPlaytestBotSubsystem::AssaultMarksman`, `Codex.Marksman.*` / `Codex.Bot.*` console variables, `Scripts/Tools/jev_ai_coach.py` (Gemini's hill-climber + registry key lookup, worded summaries for Jev, noise margin 0.1, `-NoAITuning` batches, writes `Content/Data/AI/ai_tuning.json`), `AITuning` applies that file at StartPlay. Finding for Gemini: `typesafe_triage.py --telemetry` sends a hard-coded sample (not the runs) and the triage commands fall back to the offline heuristic when the key is only in the registry.
 - 2026-10-04 Claude: Sprint 06-E..H done — `URelocationSubsystem::CancelActiveTask` (RMB in `CameraDragRotateStart`, leader / selected group, relocation and deploy walks), `URelocationSubsystem::GetPushOffset` (capsule + box extent along the push + 25 cm, floor 135; the lerp is clamped out to it), marksman: `IsFightOn` Engage at spawn, damage in a fight -> face the shooter, alert, retreat < 12 m or firing stance + aim back (shooter targeted 6 s), `MoveTo` from prone waits `RiseDelay` 0.45 s (`ExecuteMoveTo`). Also: the marksman targets the closest operative in his line of fire (else the closest), retreats to a firing position, re-searches it on arrival / stall (MarksmanAdvanceSmoke failed on HEAD already: the squad split by the yard wall).
 - 2026-10-04 Claude: Sprint 06-A..D done (`AOperativeCharacter::UpdateSelectionRing` public, `UCombatFeedbackSubsystem::SpawnMovePing`, `ABarricadeActor::ApplyTurnContact`, `UTurnBasedCombatSubsystem::GetContactHitsThisFight`, `AMarksmanEnemyCharacter::FindFiringPosition` / `HasLineOfFireTo`, `MarksmanAIRules::ChooseMove` no-LOS rule); the bot repairs the generator (`UPlaytestBotSubsystem::TickGeneratorRepair`). Gemini: your uncommitted `bot_run.ps1 -EarlyStop` change is left for you to commit.
 

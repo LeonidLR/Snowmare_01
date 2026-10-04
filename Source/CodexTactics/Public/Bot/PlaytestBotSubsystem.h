@@ -46,10 +46,16 @@ public:
 	int32 GetItemsUsed() const { return ItemsUsed; }
 	int32 GetStallHunts() const { return StallHunts; }
 	int32 GetMarksmanReactions() const { return MarksmanReactions; }
+	int32 GetMarksmanAssaults() const { return MarksmanAssaults; }
 	int32 GetGeneratorRepairs() const { return GeneratorRepairs; }
 
 	/** Sprint 05-D: a marksman aiming at a squad member -> crouch, the leader into cover at once. True when it reacted. */
 	bool ReactToMarksman();
+	/**
+	 * A marksman out of the rifles' reach with no other enemy near the squad: the squad sprints at him (from the sides)
+	 * and stops inside rifle range — he can no longer kite away (user decision 2026-10-04). Codex.Bot.* tunables.
+	 */
+	bool AssaultMarksman();
 	const FSpatialTelemetryRecorder& GetSpatialRecorder() const { return Spatial; }
 
 private:
@@ -115,6 +121,7 @@ private:
 	int32 ItemsUsed = 0;
 	float WarmMoveCooldown = 0.f;
 	int32 MarksmanReactions = 0;
+	int32 MarksmanAssaults = 0;
 	int32 GeneratorRepairs = 0;
 	TWeakObjectPtr<class AInteractableActor> RepairTarget;
 	TWeakObjectPtr<AOperativeCharacter> RepairWorker;

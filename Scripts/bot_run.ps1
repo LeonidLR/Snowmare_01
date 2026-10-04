@@ -14,7 +14,8 @@ param(
     [int]$TimeoutSeconds = 600,
     [string]$Map = "/Game/Maps/L_MovementTest",
     # Extra game command-line arguments (e.g. -dpcvars=gc.TimeBetweenPurgingPendingKillObjects=1 for GC stress runs).
-    [string]$Extra = ""
+    [string]$Extra = "",
+    [switch]$EarlyStop = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -88,6 +89,18 @@ while ($Pending.Count -gt 0 -or $Active.Count -gt 0) {
             [void]$Active.Remove($Job)
             Complete-Run $Job
             Write-Status ($Pending.Count -gt 0 -or $Active.Count -gt 0)
+
+            # Jev-driven Early Stop check (Sprint 05-A / Fast Test pipeline)
+            if ($EarlyStop -and $script:Finished -ge 3 -and ($script:Finished % 2 -eq 1)) {
+                $TriagePy = Join-Path $PSScriptRoot "Tools\typesafe_triage.py"
+                if (Test-Path $TriagePy) {
+                    & python $TriagePy --early-stop 2>$null
+                    if ($LASTEXITCODE -eq 2) {
+                        Write-Warning "[Jev EarlyStop] High systemic failure rate detected (>= 85%). Stopping remaining pending runs to conserve CPU time."
+                        $Pending.Clear()
+                    }
+                }
+            }
         }
     }
 }
