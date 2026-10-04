@@ -8,7 +8,9 @@ param(
     [string]$Profile = "NORMAL",
     [string]$Loadout = "COLLECT",
     [int]$TimeoutSeconds = 600,
-    [string]$Map = "/Game/Maps/L_MovementTest"
+    [string]$Map = "/Game/Maps/L_MovementTest",
+    # Extra game command-line arguments (e.g. -dpcvars=gc.TimeBetweenPurgingPendingKillObjects=1 for GC stress runs).
+    [string]$Extra = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,7 +26,7 @@ for ($Run = 1; $Run -le $Runs; $Run++) {
     Write-Host ("[{0} {1}/{2}] simulating..." -f $Profile, $Run, $Runs)
     $Watch = [Diagnostics.Stopwatch]::StartNew()
     $GameArgs = "`"$Project`" $Map -game -nullrhi -nosound -nosplash -unattended -windowed -benchmark -FPS=60 -CodexBot " +
-        "-BotProfile=$Profile -BotLoadout=$Loadout -BotTimeout=$TimeoutSeconds `"-abslog=$Log`""
+        "-BotProfile=$Profile -BotLoadout=$Loadout -BotTimeout=$TimeoutSeconds `"-abslog=$Log`" $Extra"
     $Process = Start-Process -FilePath $Editor -ArgumentList $GameArgs -PassThru -WindowStyle Hidden
     if (-not $Process.WaitForExit(($TimeoutSeconds + 120) * 1000)) {
         $Process.Kill()

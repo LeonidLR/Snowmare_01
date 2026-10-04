@@ -41,6 +41,9 @@ public:
 	/** Overlay on Target's meshes fading its "Intensity" to 0; Material overrides the glow (e.g. M_TargetFresnel). */
 	void SetupOverlayFlash(AActor* Target, const FLinearColor& Color, float Intensity, float FadeTime, UMaterialInterface* Material = nullptr);
 
+	/** The overlay TargetMesh had before this flash (nullptr if this flash does not cover it). */
+	UMaterialInterface* GetSavedOverlay(const UMeshComponent* TargetMesh) const;
+
 	/** Glow material (M_CombatFeedback: Color, Intensity). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|Feedback")
 	TObjectPtr<UMaterialInterface> GlowMaterial;
@@ -62,6 +65,8 @@ private:
 	TObjectPtr<UMaterialInstanceDynamic> OverlayGlow;
 
 	TArray<TWeakObjectPtr<UMeshComponent>> OverlaidMeshes;
+	/** The meshes' own overlays (never another flash's glow, which dies with its actor), kept alive for the restore. */
+	UPROPERTY(Transient)
 	TArray<TObjectPtr<UMaterialInterface>> PreviousOverlays;
 
 	float GlowIntensity = 0.f;

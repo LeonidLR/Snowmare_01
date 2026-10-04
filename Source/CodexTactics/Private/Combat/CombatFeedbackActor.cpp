@@ -126,12 +126,31 @@ void ACombatFeedbackActor::SetupOverlayFlash(AActor* Target, const FLinearColor&
 		{
 			continue;
 		}
+		// Overlapping flashes on one mesh: remember the mesh's own overlay, not the running flash's glow — that glow is
+		// destroyed with its flash actor, and restoring it later left the mesh pointing at a freed material (GC crash).
+		UMaterialInterface* Previous = TargetMesh->GetOverlayMaterial();
+		if (const ACombatFeedbackActor* Running = Previous ? Cast<ACombatFeedbackActor>(Previous->GetOuter()) : nullptr)
+		{
+			Previous = Running->GetSavedOverlay(TargetMesh);
+		}
 		OverlaidMeshes.Add(TargetMesh);
-		PreviousOverlays.Add(TargetMesh->GetOverlayMaterial());
+		PreviousOverlays.Add(Previous);
 		TargetMesh->SetOverlayMaterial(OverlayGlow);
 	}
 	OverlayIntensity = Intensity;
 	OverlayFade = FadeTime;
+}
+
+UMaterialInterface* ACombatFeedbackActor::GetSavedOverlay(const UMeshComponent* TargetMesh) const
+{
+	for (int32 Index = 0; Index < OverlaidMeshes.Num(); ++Index)
+	{
+		if (OverlaidMeshes[Index].Get() == TargetMesh)
+		{
+			return PreviousOverlays[Index];
+		}
+	}
+	return nullptr;
 }
 
 void ACombatFeedbackActor::RestoreOverlays()
