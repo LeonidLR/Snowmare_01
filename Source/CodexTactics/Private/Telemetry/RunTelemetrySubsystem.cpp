@@ -37,6 +37,12 @@ void URunTelemetrySubsystem::OnWorldBeginPlay(UWorld& InWorld)
 
 FString URunTelemetrySubsystem::GetRunsFilePath()
 {
+	// Parallel bot runs (Scripts/bot_run.ps1 -Parallel) each write their own file the script then appends to runs.jsonl.
+	FString Override;
+	if (FParse::Value(FCommandLine::Get(), TEXT("TelemetryRunsFile="), Override) && !Override.IsEmpty())
+	{
+		return Override;
+	}
 	return FPaths::ProjectSavedDir() / TEXT("Telemetry/raw_runs/runs.jsonl");
 }
 
@@ -121,7 +127,8 @@ FString URunTelemetrySubsystem::RecordRun(bool bVictory)
 	const int32 Wave = Flow ? FMath::Max(1, Flow->GetWaveIndex()) : 1;
 
 	FRunRecord Record;
-	Record.SessionId = FString::Printf(TEXT("%u_%.3f"), FMath::Rand(), FDateTime::UtcNow().ToUnixTimestampDecimal());
+	// A GUID: parallel bot runs start at the same moment with the same unseeded FMath::Rand.
+	Record.SessionId = FString::Printf(TEXT("%s_%.3f"), *FGuid::NewGuid().ToString(EGuidFormats::Short), FDateTime::UtcNow().ToUnixTimestampDecimal());
 	Record.TimestampUtc = FDateTime::UtcNow().ToString(TEXT("%Y-%m-%dT%H:%M:%S"));
 	Record.TesterProfile = TesterProfile;
 	const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();

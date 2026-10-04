@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BotStatusBar } from './BotStatusBar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ShieldAlert, Trophy, Skull, Activity, FileText, Upload, Users, RefreshCw, Trash2, Snowflake, Crosshair, Bomb, Shield, Wrench, BarChart2 } from 'lucide-react';
 
@@ -248,6 +249,9 @@ export const TelemetryAnalytics: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Live progress of a running bot batch (Sprint 05-B); reloads the analytics when it ends. */}
+      <BotStatusBar onFinished={loadLatestTelemetry} />
+
       {/* Top Banner & Actions */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-slate-800/80 p-5 rounded-2xl border border-slate-700/60 shadow-xl backdrop-blur-md">
         <div>
@@ -256,7 +260,7 @@ export const TelemetryAnalytics: React.FC = () => {
             Аналитика телеметрии автономных симуляций
           </h2>
           <p className="text-sm text-slate-400 mt-1">
-            Анализ реальных логов забегов ботов (<code>data/telemetry/raw_runs/runs.jsonl</code>)
+            Анализ реальных логов забегов ботов (<code>Saved/Telemetry/raw_runs/runs.jsonl</code>)
           </p>
         </div>
 
@@ -272,7 +276,7 @@ export const TelemetryAnalytics: React.FC = () => {
           <button
             onClick={loadLatestTelemetry}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition-all shadow-md hover:shadow-emerald-600/30"
-            title="Автоматически прочитать свежие логи забегов из data/telemetry/raw_runs/runs.jsonl"
+            title="Автоматически прочитать свежие логи забегов из Saved/Telemetry/raw_runs/runs.jsonl"
           >
             <RefreshCw className="w-4 h-4" />
             Обновить из игры

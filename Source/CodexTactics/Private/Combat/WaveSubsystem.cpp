@@ -5,6 +5,7 @@
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Combat/SpawnLaneRules.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/ProgressionRules.h"
 #include "Core/CodexTacticsGameMode.h"
@@ -309,7 +310,8 @@ FVector UWaveSubsystem::GetSpawnLocationForLane(const FString& Lane, EEnemyArche
 	}
 
 	// Godot main.gd _get_enemy_spawn_pos: dynamic points are skipped; a point matches when its allowed type accepts
-	// Type and the lanes match (either name contains the other, case-insensitive; "ANY" matches every point). Without
+	// Type and the lanes match (SpawnLaneRules: either name contains the other, case-insensitive, or they are aliases —
+	// Sprint 05-C; "ANY" matches every point). Without
 	// a match any non-dynamic point is used, then any point; the hard-coded yard is the last resort.
 	const bool bAnyLane = Lane.IsEmpty() || Lane.Equals(TEXT("ANY"), ESearchCase::IgnoreCase);
 	TArray<FVector> CandidateLocations;
@@ -327,7 +329,7 @@ FVector UWaveSubsystem::GetSpawnLocationForLane(const FString& Lane, EEnemyArche
 			continue;
 		}
 		StaticLocations.Add(It->GetActorLocation());
-		const bool bLaneOk = bAnyLane || It->SpawnLane.Contains(Lane, ESearchCase::IgnoreCase) || Lane.Contains(It->SpawnLane, ESearchCase::IgnoreCase);
+		const bool bLaneOk = bAnyLane || SpawnLaneRules::LanesMatch(It->SpawnLane, Lane); // + NORTH_GATE <-> «Северные ворота» aliases
 		if (bLaneOk && It->Accepts(Type))
 		{
 			CandidateLocations.Add(It->GetActorLocation());

@@ -153,6 +153,38 @@ const setupApiMiddlewares = (middlewares: any) => {
     }
   })
 
+  // 5a. Live bot batch status (Sprint 05-B): Scripts/bot_run.ps1 keeps Saved/Telemetry/bot_status.json current.
+  middlewares.use('/api/bot-status', (req: any, res: any) => {
+    addCors(res)
+    const idle = { isRunning: false, currentRun: 0, totalRuns: 0, activeRuns: 0, victories: 0, defeats: 0, aborted: 0, errors: 0, elapsedSec: 0, profile: '' }
+    try {
+      const statusPath = path.join(TELEMETRY_DIR, 'bot_status.json')
+      if (!fs.existsSync(statusPath)) {
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify(idle))
+        return
+      }
+      const status = JSON.parse(fs.readFileSync(statusPath, 'utf-8').replace(/^﻿/, ''))
+      // A runner that died (window closed) leaves isRunning true: check its process.
+      if (status.isRunning && status.pid) {
+        try {
+          process.kill(status.pid, 0)
+        } catch {
+          status.isRunning = false
+          status.stale = true
+        }
+      }
+      if (status.isRunning && status.startedAtUtc) {
+        status.elapsedSec = Math.round((Date.now() - Date.parse(status.startedAtUtc)) / 1000)
+      }
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ ...idle, ...status }))
+    } catch (e: any) {
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ ...idle, error: e.message }))
+    }
+  })
+
   // 5. Автоматическое чтение свежих логов телеметрии
   middlewares.use('/api/get-telemetry', (req: any, res: any) => {
     addCors(res)

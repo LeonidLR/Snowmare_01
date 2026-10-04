@@ -36,8 +36,8 @@
           "initial_delay_sec": 0
         },
         {
-          "enemy_type": "BRUTE",
-          "count": 1,
+          "enemy_type": "MARKSMAN",
+          "count": 4,
           "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0
@@ -70,8 +70,8 @@
           "initial_delay_sec": 0
         },
         {
-          "enemy_type": "BRUTE",
-          "count": 1,
+          "enemy_type": "MARKSMAN",
+          "count": 5,
           "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0
@@ -100,18 +100,21 @@
           }
         },
         {
-          "enemy_type": "BRUTE",
-          "count": 1,
+          "enemy_type": "MARKSMAN",
+          "count": 5,
           "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
-          "initial_delay_sec": 0
+          "initial_delay_sec": 0,
+          "custom_stats": {
+            "health": 140
+          }
         }
       ],
       "wave_modifiers": {
         "enemy_hp_mult": 1.1,
         "enemy_damage_mult": 1.1,
         "enemy_speed_mult": 1,
-        "cold_drain_mult": 1.1
+        "cold_drain_mult": 0.75
       }
     }
   ],

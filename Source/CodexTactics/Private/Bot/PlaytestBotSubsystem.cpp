@@ -1,6 +1,7 @@
 #include "Bot/PlaytestBotSubsystem.h"
 
 #include "Characters/EnemyCharacter.h"
+#include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/PersonalItemRules.h"
 #include "Characters/SquadSubsystem.h"
@@ -498,10 +499,23 @@ void UPlaytestBotSubsystem::CombatAssist()
 	{
 		const UHeatSourceComponent* Best = nullptr;
 		float BestDistance = 4000.f;
+		const double Now = GetWorld()->GetTimeSeconds();
+		// The last trip did not warm the leader (cold not lower): that heat is skipped for 30 s (no stall loops).
+		if (WarmTarget.IsValid() && Leader->ColdLevel >= WarmStartCold)
+		{
+			ColdHeatUntil.Add(WarmTarget, Now + 30.0);
+		}
+		WarmTarget.Reset();
 		for (const TWeakObjectPtr<UHeatSourceComponent>& Source : UHeatSourceComponent::GetAllSources())
 		{
-			const float Distance = Source.IsValid() && Source->GetWorld() == GetWorld() && Source->IsHeatActive()
-				? FVector::Dist2D(Source->GetComponentLocation(), Leader->GetActorLocation()) : BestDistance;
+			// Only a heat that really warms: active, and a generator neither broken nor drained (Sprint 05-D).
+			const AInteractableActor* Generator = Source.IsValid() ? Cast<AInteractableActor>(Source->GetOwner()) : nullptr;
+			const bool bGeneratorDown = Generator && Generator->ObjectType == EInteractableType::Generator
+				&& (Generator->bGeneratorBroken || Generator->GeneratorHealth <= 0.f);
+			const double* Skip = Source.IsValid() ? ColdHeatUntil.Find(Source.Get()) : nullptr;
+			const bool bUsable = Source.IsValid() && Source->GetWorld() == GetWorld() && Source->IsHeatActive() && !bGeneratorDown
+				&& !(Skip && *Skip > Now);
+			const float Distance = bUsable ? FVector::Dist2D(Source->GetComponentLocation(), Leader->GetActorLocation()) : BestDistance;
 			if (Distance < BestDistance)
 			{
 				BestDistance = Distance;
@@ -512,6 +526,8 @@ void UPlaytestBotSubsystem::CombatAssist()
 		{
 			Leader->OrderMoveTo(Best->GetComponentLocation() + (Leader->GetActorLocation() - Best->GetComponentLocation()).GetSafeNormal2D() * Best->Radius * 0.4f, false);
 			++WarmMoves;
+			WarmTarget = Best;
+			WarmStartCold = Leader->ColdLevel;
 			MoveCooldown = 10.f;
 			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] No warming food: the squad goes to the heat at %.0f m"), BestDistance / 100.f);
 		}
@@ -533,6 +549,11 @@ void UPlaytestBotSubsystem::SmartTactics(float DeltaTime)
 	for (const AActor* Enemy : Enemies)
 	{
 		Positions.Add(Enemy->GetActorLocation());
+	}
+	// 0. A marksman's telegraphed aim at a squad member comes first (Sprint 05-D).
+	if (ReactToMarksman())
+	{
+		return;
 	}
 	// 1. A grenade at a cluster.
 	if (GrenadeCooldown <= 0.f && Leader->GrenadesCount > 0)
@@ -594,28 +615,10 @@ void UPlaytestBotSubsystem::SmartTactics(float DeltaTime)
 			Threat += Position;
 		}
 		Threat /= Positions.Num();
-		float BestScore = -TNumericLimits<float>::Max();
-		FVector BestStand = FVector::ZeroVector;
+		FVector BestStand;
 		FString BestId;
-		for (TActorIterator<ABarricadeActor> It(GetWorld()); It; ++It)
-		{
-			const UHealthComponent* Health = It->FindComponentByClass<UHealthComponent>();
-			if (!Health || !Health->IsAlive() || FVector::Dist2D(It->GetActorLocation(), Leader->GetActorLocation()) > BotCoverSearchRadius)
-			{
-				continue;
-			}
-			const FVector Stand = PlaytestBotRules::CoverStandPoint(It->GetActorLocation(), Threat);
-			const float Score = PlaytestBotRules::CoverScore(FVector::Dist2D(Leader->GetActorLocation(), Stand),
-				Health->GetMaxHealth() > 0.f ? Health->GetCurrentHealth() / Health->GetMaxHealth() : 1.f,
-				It->GetActorLocation().Z - Leader->GetActorLocation().Z >= 150.f);
-			if (Score > BestScore)
-			{
-				BestScore = Score;
-				BestStand = Stand;
-				BestId = It->GetName();
-			}
-		}
-		if (BestScore > -TNumericLimits<float>::Max())
+		float BestScore = 0.f;
+		if (FindCover(Leader, Threat, BestStand, BestId, BestScore))
 		{
 			Leader->OrderMoveTo(BestStand, false);
 			MoveCooldown = 3.f;
@@ -627,6 +630,77 @@ void UPlaytestBotSubsystem::SmartTactics(float DeltaTime)
 	}
 	// 4. Stances: crouch behind a barricade, stand up when out of it.
 	UpdateStances();
+}
+
+bool UPlaytestBotSubsystem::FindCover(const AOperativeCharacter* Leader, const FVector& Threat, FVector& OutStand, FString& OutId,
+	float& OutScore) const
+{
+	OutScore = -TNumericLimits<float>::Max();
+	for (TActorIterator<ABarricadeActor> It(GetWorld()); It; ++It)
+	{
+		const UHealthComponent* Health = It->FindComponentByClass<UHealthComponent>();
+		if (!Health || !Health->IsAlive() || FVector::Dist2D(It->GetActorLocation(), Leader->GetActorLocation()) > BotCoverSearchRadius)
+		{
+			continue;
+		}
+		const FVector Stand = PlaytestBotRules::CoverStandPoint(It->GetActorLocation(), Threat);
+		const float Score = PlaytestBotRules::CoverScore(FVector::Dist2D(Leader->GetActorLocation(), Stand),
+			Health->GetMaxHealth() > 0.f ? Health->GetCurrentHealth() / Health->GetMaxHealth() : 1.f,
+			It->GetActorLocation().Z - Leader->GetActorLocation().Z >= 150.f);
+		if (Score > OutScore)
+		{
+			OutScore = Score;
+			OutStand = Stand;
+			OutId = It->GetName();
+		}
+	}
+	return OutScore > -TNumericLimits<float>::Max();
+}
+
+bool UPlaytestBotSubsystem::ReactToMarksman()
+{
+	// A marksman whose telegraphed aim (the beam) is on a squad member: the squad crouches, the leader takes the nearest
+	// barricade at once (no move cooldown); without a reachable cover they stay crouched.
+	AOperativeCharacter* Leader = Member(0);
+	for (TActorIterator<AMarksmanEnemyCharacter> It(GetWorld()); It; ++It)
+	{
+		const AOperativeCharacter* Target = Cast<AOperativeCharacter>(It->GetCurrentTarget());
+		if (!It->IsAimingAtTarget() || It->IsDying() || !Target || !BotIsAlive(Target))
+		{
+			continue;
+		}
+		bool bReacted = false;
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			AOperativeCharacter* Each = Member(Index);
+			if (Each && Each->GetStance() == EOperativeStance::Standing && !Each->IsMoving())
+			{
+				Each->SetStance(EOperativeStance::Crouching);
+				bReacted = true;
+			}
+		}
+		FVector Stand;
+		FString CoverId;
+		float Score = 0.f;
+		if (Leader && !Leader->IsBehindBarricade() && FindCover(Leader, It->GetActorLocation(), Stand, CoverId, Score))
+		{
+			Leader->OrderMoveTo(Stand, false);
+			MoveCooldown = 3.f;
+			bReacted = true;
+			TSharedRef<FJsonObject> Details = MakeShared<FJsonObject>();
+			Details->SetStringField(TEXT("reason"), TEXT("MARKSMAN_AIM"));
+			Details->SetNumberField(TEXT("aim_progress"), It->GetAimProgress());
+			Spatial.RecordEvent(TEXT("COVER_ENTER"), Leader->DisplayName.ToString(), CoverId, Stand, Details);
+		}
+		if (bReacted)
+		{
+			++MarksmanReactions;
+			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Marksman %s aims at %s (%.0f%%): crouch%s"), *It->GetName(),
+				*Target->DisplayName.ToString(), It->GetAimProgress() * 100.f, CoverId.IsEmpty() ? TEXT("") : TEXT(", leader to cover"));
+		}
+		return bReacted;
+	}
+	return false;
 }
 
 bool UPlaytestBotSubsystem::ProjectToNav(const FVector& Point, FVector& OutPoint) const

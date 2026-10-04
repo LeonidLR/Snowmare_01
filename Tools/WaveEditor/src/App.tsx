@@ -7,6 +7,7 @@ import { WaveEditorCard } from './components/WaveEditorCard';
 import { WaveToggleGrid } from './components/WaveToggleGrid';
 import { SquadLoadoutControls } from './components/SquadLoadoutControls';
 import { TelemetryAnalytics } from './components/TelemetryAnalytics';
+import { BotStatusBar } from './components/BotStatusBar';
 import { LiveBalanceAdvisor } from './components/LiveBalanceAdvisor';
 import { Activity, Terminal, Loader2, Swords, Plus, Snowflake, X, Wifi, WifiOff } from 'lucide-react';
 import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2 } from 'lucide-react';
@@ -613,6 +614,9 @@ export const App: React.FC = () => {
               </>
             )}
           </button>
+
+          {/* Live progress of the Unreal bot batch (Sprint 05-B). */}
+          <BotStatusBar compact />
 
           <button
             onClick={() => {

@@ -56,7 +56,7 @@ void FSpatialTelemetryRecorder::Start(UWorld* World, const FString& InLevelId, c
 	WorldPtr = World;
 	LevelId = InLevelId;
 	Profile = InProfile;
-	SessionId = FString::Printf(TEXT("%u_%lld"), FMath::Rand(), FDateTime::UtcNow().ToUnixTimestamp());
+	SessionId = FString::Printf(TEXT("%s_%lld"), *FGuid::NewGuid().ToString(EGuidFormats::Short), FDateTime::UtcNow().ToUnixTimestamp());
 	SimTime = 0.0;
 	TimeAccum = 0.0;
 	Frames.Reset();

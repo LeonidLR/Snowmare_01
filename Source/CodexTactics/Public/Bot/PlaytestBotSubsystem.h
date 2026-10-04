@@ -45,6 +45,10 @@ public:
 	int32 GetDeploysOrdered() const { return DeploysOrdered; }
 	int32 GetItemsUsed() const { return ItemsUsed; }
 	int32 GetStallHunts() const { return StallHunts; }
+	int32 GetMarksmanReactions() const { return MarksmanReactions; }
+
+	/** Sprint 05-D: a marksman aiming at a squad member -> crouch, the leader into cover at once. True when it reacted. */
+	bool ReactToMarksman();
 	const FSpatialTelemetryRecorder& GetSpatialRecorder() const { return Spatial; }
 
 private:
@@ -54,6 +58,9 @@ private:
 	void CombatAssist();
 	void SmartTactics(float DeltaTime);
 	void UpdateStances();
+	/** The best barricade cover for Leader against Threat within 20 m (false: none). */
+	bool FindCover(const AOperativeCharacter* Leader, const FVector& Threat, FVector& OutStand, FString& OutId, float& OutScore) const;
+
 	/** Point on the navigation mesh near Point (false: none within 2 m). */
 	bool ProjectToNav(const FVector& Point, FVector& OutPoint) const;
 	void Finish(const TCHAR* Result, int32 ExitCode);
@@ -100,5 +107,10 @@ private:
 	int32 DeploysOrdered = 0;
 	int32 ItemsUsed = 0;
 	float WarmMoveCooldown = 0.f;
+	int32 MarksmanReactions = 0;
+	/** Heat sources a warm-up trip did not help (cold not dropping): skipped until the world time. */
+	TMap<TWeakObjectPtr<const UObject>, double> ColdHeatUntil;
+	TWeakObjectPtr<const UObject> WarmTarget;
+	float WarmStartCold = 0.f;
 	int32 WarmMoves = 0;
 };

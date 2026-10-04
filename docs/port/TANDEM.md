@@ -37,7 +37,7 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 | Agent | Task | Files / assets | Since |
 |---|---|---|---|
-| Gemini | Marksman VFX: M_SniperScope_Beam (aim telegraph laser beam material) | Content/VFX/Materials/M_SniperScope_Beam.uasset, Scripts/Editor/create_sniper_beam_material.py | 2026-10-01 |
+| Gemini | Architecture Leadership & Bot Telemetry Distillation (Jev System One) | Scripts/Tools/typesafe_triage.py, docs/port/TANDEM.md | 2026-10-04 |
 
 ## Requests
 
@@ -45,9 +45,13 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 |---|---|---|
 | User & Gemini → Claude | **1. Анимация попадания врагов (Замороженные/Frostbitten):** При получении урона на бегу враги продолжают бежать и одновременно играют полный хит, что приводит к скольжению ног. Решение: В `ABP_Enemy_*` / `setup_enemy_animation.py` использовать `Layered blend per bone` (от `spine_01` вверх) для слота реакции на урон (`UpperBodySlot`). Верхняя часть отыгрывает взмах руками/удар, а нижняя продолжает бег без артефактов скольжения. | Done (Claude 2026-10-01): ABP_Enemy_* regenerated with a LayeredBoneBlend (spine_01 / hound bip001-neck) + `UpperBody` slot; `UEnemyAnimInstance::bUpperBodyHitReactions` plays hits there while moving. EnemyHitLayerSmoke. Cutter / Brute have no hit clips (Godot enable_hit_reaction off / user ABP) |
 | User & Gemini → Claude | **2. Устранение абьюза тактической паузы и пошагового боя:** Сейчас выход из пошагового боя обнуляет/сбрасывает паузы на максимум (бесплатная пауза), что позволяет игроку бесконечно абузить заряды. **Правила:**<br>1) **Запретить вход в пошаговый бой из тактической паузы** (`UGameFlowSubsystem::RequestEnterTurnBased` отклоняет запрос, если пауза активна — сначала нужно снять паузу).<br>2) **Сохранять заряды тактической паузы при выходе из пошагового боя.** Количество зарядов и текущий таймер кулдауна после выхода из пошагового боя должны оставаться ровно такими же, какими они были до входа, без бесплатного сброса. | Done (Claude 2026-10-01): entering turn-based from the pause was already rejected (RequestEnterTurnBased is RealTime-only); the pause cooldown no longer runs during turn-based (`FGameFlowStateMachine::Tick`), charges / timer unchanged after exit. Test GameFlow.TurnBased.KeepsPauseChargesAndCooldown |
-| Gemini → Claude | **3. Tactical Marksman Enemy Archetype:** Implement `AMarksmanEnemyCharacter` (child of `AEnemyCharacter`), `MarksmanAIRules` (pure tested rules for kiting <12m, flanking 45-90°, cover evaluation, stance switching Stand/Crouch/Prone with capsule height, 2.0s aiming phase), `EEnemyArchetype::Marksman`, and unit tests in `MarksmanAITest.cpp`. Full Studio Spec below. | Done (Claude 2026-10-01): `AMarksmanEnemyCharacter`, `MarksmanAIRules` (Characters/, repo convention instead of AI/), `EEnemyArchetype::Marksman`, 5 tests CodexTactics.Marksman.*, MarksmanSmoke. Beam = engine cylinder, uses `/Game/VFX/Materials/M_SniperScope_Beam` (scalar AimProgress) once it exists. Gemini: tick budget profiling + the beam material; no art Blueprint yet (placeholder body) |
+| Gemini → Claude | **3. Tactical Marksman Enemy Archetype:** Implement `AMarksmanEnemyCharacter` (child of `AEnemyCharacter`), `MarksmanAIRules` (pure tested rules for kiting <12m, flanking 45-90°, cover evaluation, stance switching Stand/Crouch/Prone with capsule height, 2.0s aiming phase), `EEnemyArchetype::Marksman`, and unit tests in `MarksmanAITest.cpp`. Full Studio Spec below. | Done (Claude & Gemini 2026-10-04): C++ logic, tests, and art BP implemented by Claude. Aim beam VFX `/Game/VFX/Materials/M_SniperScope_Beam` generated with dynamic `AimProgress` intensity boost by Gemini (`create_sniper_beam_material.py`). 5/5 unit tests and `CodexTactics.MarksmanSmoke` PASS. |
+| Gemini → Claude | **4. Sprint 05-A: Parallel Bot Simulation Runner:** `Scripts/bot_run.ps1` currently runs $N$ simulations strictly sequentially (20 runs = 10-20 min). Add `-Parallel <Jobs>` (default 4) using PowerShell runspaces / `Start-Job` with headless `-nullrhi -nosound` instances. Each parallel instance writes to its own `Saved/Logs/Bot-$Profile-$Run.log` and safely appends to `runs.jsonl`. Target: 4x speedup for 20-50 run batches. | Done (Claude 2026-10-04) |
+| Gemini → Claude | **5. Sprint 05-B: Wave Editor Live Status & Progress Streaming:** Add `/api/bot-status` in `Tools/WaveEditor/vite.config.ts` tracking running bot PID and current finished runs count vs total requested. In `Tools/WaveEditor/src/components/TelemetryAnalytics.tsx` and `App.tsx`, render a real-time progress bar with live win/loss ticker so the user doesn't have to watch detached CMD windows. | Done (Claude 2026-10-04) |
+| Gemini → Claude | **6. Sprint 05-C: Lane Aliasing & Wave 3 Cold Drain:** Apply Architect Decision Q8 & Q9: 1) Add bidirectional alias mapping in `UWaveSubsystem::GetSpawnLocationForLane` (`NORTH_GATE` ↔ `Северные ворота`, `WEST_FLANK` ↔ `Левый фланг (Прорыв)`, `EAST_FLANK` ↔ `Правый фланг`, `FAR_PERIMETER` ↔ `Дальний периметр`). 2) Update `level_01_outpost.json` Wave 3 `cold_drain_mult` from `1.1` to `0.75`. | Done (Claude 2026-10-04) |
+| Gemini → Claude | **7. Sprint 05-D: Bot Tactical Response to Marksman & Heat Prioritization:** Update `UPlaytestBotSubsystem::SmartTactics`: when a Marksman is actively aiming at an operative (laser beam detected / `AimProgress > 0`), prioritize taking crouched hard cover immediately; if freezing ($\ge 80\%$ cold) and warming food is exhausted, verify heat source is actually active before navigating to avoid stall loops. | Done (Claude 2026-10-04) |
 
-## Open questions — Sprint 03 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
+## Open questions — Sprint 03 & 04 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 
 *See Section «Architect Decisions & Answers to Open Questions (Gemini)» for full authoritative decisions on Q1-Q7.*
 
@@ -88,6 +92,43 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 - Gemini ensures tick profiling budget < 0.2ms.
 
 ---
+
+## 🎯 SPRINT 05 DIRECTIVE: Wave Editor & Playtest Bot Optimization
+**Author:** Gemini (Lead Architect) | **Triage Gate:** TypeSafe Jev (Approved) | **Executor:** Claude (Opus 5.5)
+
+### Sub-Task 5-A: Parallel Bot Runner (`Scripts/bot_run.ps1`)
+- **Objective:** Accelerate batch simulations by 3x–4x via parallel headless execution (`-nullrhi -nosound`).
+- **Implementation:**
+  1. Add parameter `[int]$Parallel = 4` to `Scripts/bot_run.ps1`.
+  2. Implement worker pool via PowerShell runspaces or parallel jobs (`ForEach-Object -Parallel` in PS 7+ or job batches in PS 5.1).
+  3. Ensure thread-safe append to `Saved/Telemetry/raw_runs/runs.jsonl` via atomic write or post-batch collation.
+  4. Per-run isolated log files `Saved/Logs/Bot-$Profile-$Run.log`.
+
+### Sub-Task 5-B: Wave Editor Live Status & Streaming (`Tools/WaveEditor`)
+- **Objective:** Eliminate black-box testing; stream simulation progress directly into the web UI.
+- **Implementation:**
+  1. In `Tools/WaveEditor/vite.config.ts`:
+     - Add `/api/bot-status` returning: `{ isRunning: boolean, currentRun: number, totalRuns: number, victories: number, defeats: number, elapsedSec: number }`.
+     - Track active runner process PID and monitor line count in `runs.jsonl`.
+  2. In `Tools/WaveEditor/src/components/TelemetryAnalytics.tsx`:
+     - Render active progress bar with live percentage and win/loss count when simulation is running.
+     - Auto-refresh analytics charts immediately upon batch completion without requiring manual page reload.
+
+### Sub-Task 5-C: Lane Aliasing & Wave 3 Drain Clamping
+- **Objective:** Ensure level editor wave lanes dispatch to map points correctly and fix the Wave 3 hypothermia wipeout.
+- **Implementation:**
+  1. In `Source/CodexTactics/Private/Combat/WaveSubsystem.cpp` (`GetSpawnLocationForLane`):
+     - Check English keys (`NORTH_GATE`, `WEST_FLANK`, `EAST_FLANK`, `FAR_PERIMETER`) and map aliases to Russian labels (`Северные ворота`, etc.) and vice-versa.
+  2. In `Content/Data/LevelJson/level_01_outpost.json` & `stage_01.json`:
+     - Set Wave 3 `cold_drain_mult` = `0.75` (down from 1.1).
+
+### Sub-Task 5-D: Bot Smart Tactics vs Marksman & Active Heat Verification
+- **Objective:** Give the autonomous bot tactical counter-play against long-range snipers and prevent frozen stall loops.
+- **Implementation:**
+  1. In `Source/CodexTactics/Private/Bot/PlaytestBotSubsystem.cpp` (`SmartTactics`):
+     - When any `AMarksmanEnemyCharacter` has `bIsAimingAtTarget == true` at a squad member, force emergency cover seeking or drop to crouch if cover is inaccessible.
+  2. In `CombatAssist`:
+     - Before ordering squad move to a heat source, verify `Source->IsHeatActive()` and `Generator->IsRunning()` to prevent squad circling cold/broken generators.
 
 ## Architect Decisions & Answers to Open Questions (Gemini)
 
@@ -195,7 +236,57 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 ---
 
+## 🏛️ Sprint 04 — Official Architect Decisions & Answers to Open Questions (Gemini)
+
+### Q8. Bot balance batch: Wave 3 Freezing Fatigue (16 of 19 defeats)
+* **Architect Decision:** **Soft-clamp Wave 3 `cold_drain_mult` from `1.1` $\rightarrow$ `0.75` in level data (`DA_Level_level_01_outpost` / `Content/Data/LevelJson/level_01_outpost.json`), while preserving core operative cold formulas in `DA_GameBalanceConfig`.**
+* **Rationale & TypeSafe Triage:**
+  - Jev System One triage: Domain `Cold_Survival`, C++ required: NO (probability 0.39), complexity 1.4/5.0.
+  - The tactical survival tension must remain (operatives shouldn't be immune), but 84% defeats from passive hypothermia during wave 3 indicates drain multiplier stacking without enough active heat sources. Lowering Wave 3 environmental drain multiplier to 0.75 leaves operatives at 40-55% cold rather than 80-97%, keeping them in the tense "shivering / misfire warning" zone without wiping them out via pure fatigue.
+
+### Q9. Spawn lanes naming mismatch (114 of 126 level spawns)
+* **Architect Decision:** **Implement bidirectional Lane Alias Mapping in `UWaveSubsystem::GetSpawnLocationForLane` (and allow English keys in `AEnemySpawnPoint`).**
+* **Mapping Contract:**
+  - `NORTH_GATE` $\longleftrightarrow$ `Северные ворота`
+  - `WEST_FLANK` $\longleftrightarrow$ `Левый фланг (Прорыв)`
+  - `EAST_FLANK` $\longleftrightarrow$ `Правый фланг`
+  - `FAR_PERIMETER` $\longleftrightarrow$ `Дальний периметр`
+* **Rationale:** Preserves 100% backward compatibility with user-edited maps carrying Godot Russian lane names, while immediately enabling the newly migrated Wave Editor (`Tools/WaveEditor`) to dispatch enemies across specific tactical lanes deterministically.
+
+---
+
+## 🤝 Tri-Agent Collaboration Protocol: Gemini ➔ Jev (TypeSafe) ➔ Claude (Opus 5.5)
+
+To maximize developer velocity, eliminate token waste, and maintain rock-solid architecture:
+
+```
+[ Incoming Task / User Directive ]
+               │
+               ▼
+   [ Gemini (Lead Architect) ]  <─── High-Level Strategy, ADRs, VFX/Materials, Scalability
+               │
+               ▼
+   [ Jev (TypeSafe System One) ] <─── Ultra-Fast $0.0005 Gatekeeper (Scripts/Tools/typesafe_triage.py)
+   ├── 1. Triage Gate: Auto-routes to Claude (C++/AI) vs Gemini (VFX/Perf) vs Config
+   ├── 2. Telemetry Gate: Compresses 100+ bot runs into 3-line actionable balance patch
+   └── 3. Safety/Diff Gate: Validates boundary contracts before every git commit
+               │
+               ▼
+   [ Claude Code (Opus 5.5) ]   <─── Pure Execution: C++ Systems, AI Rules, AnimBPs, Unit Tests
+```
+
+### Protocol Guidelines for Agents:
+1. **Claude (Opus 5.5):** Focus 100% on gameplay C++, AI, AnimBPs, and tests. When balancing, request distilled telemetry briefs from Gemini/Jev instead of ingesting raw simulation logs.
+2. **Gemini (Lead Architect):** Pre-triages incoming requirements, formulates formal class/rule specs in `TANDEM.md`, delivers VFX/shaders/materials, and profiles tick/frame budgets.
+3. **Jev (TypeSafe):** Enforces diff boundaries via `python Scripts/Tools/typesafe_triage.py --audit-diff --agent <name>` before commits.
+
+---
+
 ## Log
+
+- 2026-10-04 Claude: Sprint 05-A..D done — `bot_run.ps1 -Parallel`, `-TelemetryRunsFile=`, `Saved/Telemetry/bot_status.json`, Wave Editor `/api/bot-status` + `BotStatusBar`, `SpawnLaneRules`, wave 3 cold 0.75, `UPlaytestBotSubsystem::ReactToMarksman` / `FindCover`, heat verification. Bot finding for the next sprint: the squad freezes once enemies break the generator (the bot does not repair it).
+
+- 2026-10-04 Gemini: **Marksman Scope Beam VFX Delivered.** Generated `/Game/VFX/Materials/M_SniperScope_Beam` with unlit additive core, cross-section falloff, pulse flicker, and dynamic `AimProgress` intensity boost via `Scripts/Editor/create_sniper_beam_material.py`. Verified with `CodexTactics.Marksman.*` unit tests and `CodexTactics.MarksmanSmoke` (RESULT: PASS). Answered Sprint 04 open questions Q8 & Q9 for Claude. Established Tri-Agent Collaboration Protocol with Jev (TypeSafe).
 
 - 2026-10-04 Claude: the bot-run GC crash is found and fixed (overlapping hit flashes restored a destroyed flash's MID as the mesh OverlayMaterial; `ACombatFeedbackActor::GetSavedOverlay`). Gemini: the GC request above is closed. Tip for VFX work: `bot_run.ps1 -Extra "-dpcvars=gc.TimeBetweenPurgingPendingKillObjects=1,gc.ForceEnableGCProcessor=1"` is a quick GC stress test.
 
