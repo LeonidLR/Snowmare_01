@@ -7,6 +7,7 @@ class FJsonObject;
 class UWeaponDataAsset;
 struct FMarksmanConfig;
 struct FEnemyTurnProfile;
+struct FTurnBasedBalance;
 enum class EEnemyArchetype : uint8;
 
 /**
@@ -42,6 +43,11 @@ namespace WeaponTuning
 	CODEXTACTICS_API void ApplyGrenades(AOperativeCharacter& Operative);
 	/** The file's enemy_weapons.marksman_rifle onto a marksman's config (BeginPlay, before the Codex.Marksman.* overrides). */
 	CODEXTACTICS_API void ApplyMarksmanRifle(FMarksmanConfig& Config);
+	/**
+	 * The file's turn_based_rules onto the turn-based balance (user decisions 2026-10-04): crouch_move_cost_multiplier,
+	 * cover_fire_accuracy_multiplier, enemy_fire_at_cover_multiplier.
+	 */
+	CODEXTACTICS_API void ApplyTurnRules(FTurnBasedBalance& Balance);
 	/** The file's turn-based values of the archetype's ranged weapon onto its turn profile. */
 	CODEXTACTICS_API void ApplyEnemyTurnWeapon(EEnemyArchetype Archetype, FEnemyTurnProfile& Profile);
 

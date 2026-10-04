@@ -65,11 +65,12 @@ float EnemyTurnRules::BaseDamage(const FEnemyTurnProfile& Profile, float Balance
 	return BalanceBaseDamage * Profile.DamageScale;
 }
 
-float EnemyTurnRules::RangedHitChance(const FEnemyTurnProfile& Profile, int32 DistanceCells, EOperativeStance TargetStance, bool bTargetInCover)
+float EnemyTurnRules::RangedHitChance(const FEnemyTurnProfile& Profile, int32 DistanceCells, EOperativeStance TargetStance, bool bTargetInCover,
+	float CoverMultiplier)
 {
 	float Chance = Profile.BaseHitChance - Profile.HitFalloffPerCell * FMath::Max(0, DistanceCells - Profile.MinRange);
 	Chance *= TargetStance == EOperativeStance::Prone ? 0.6f : (TargetStance == EOperativeStance::Crouching ? 0.8f : 1.f);
-	Chance *= bTargetInCover ? 0.6f : 1.f;
+	Chance *= bTargetInCover ? CoverMultiplier : 1.f;
 	return FMath::Clamp(Chance, 0.1f, 0.9f);
 }
 

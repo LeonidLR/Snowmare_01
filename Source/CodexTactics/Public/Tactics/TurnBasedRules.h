@@ -37,6 +37,8 @@ struct CODEXTACTICS_API FTurnBasedBalance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") int32 CrouchMoveCostMultiplier = 2;
 	/** UE-only (user decision 2026-10-04): shooting past a barricade next to the shooter or the target. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float CoverFireAccuracyMultiplier = 0.75f;
+	/** UE-only (user decision 2026-10-04): an enemy's ranged hit chance at an operative behind a barricade on its side. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float EnemyFireAtCoverMultiplier = 0.6f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float RearAttackMultiplier = 1.75f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float FlankAttackMultiplier = 1.25f;
 };

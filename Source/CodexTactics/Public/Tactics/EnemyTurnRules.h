@@ -63,8 +63,9 @@ namespace EnemyTurnRules
 	CODEXTACTICS_API int32 MaxAP(const FEnemyTurnProfile& Profile, int32 BalanceMaxAP);
 	CODEXTACTICS_API float BaseDamage(const FEnemyTurnProfile& Profile, float BalanceBaseDamage);
 
-	/** Ranged hit chance: falls off beyond MinRange, x0.8 crouched / x0.6 prone, x0.6 behind a barricade; 0.1-0.9. */
-	CODEXTACTICS_API float RangedHitChance(const FEnemyTurnProfile& Profile, int32 DistanceCells, EOperativeStance TargetStance, bool bTargetInCover);
+	/** Ranged hit chance: falls off beyond MinRange, x0.8 crouched / x0.6 prone, x CoverMultiplier behind a barricade; 0.1-0.9. */
+	CODEXTACTICS_API float RangedHitChance(const FEnemyTurnProfile& Profile, int32 DistanceCells, EOperativeStance TargetStance, bool bTargetInCover,
+		float CoverMultiplier = 0.6f);
 
 	/**
 	 * The cell to bite from: among those it reaches with AP left for the bite, the best arc (weighted by the profile)

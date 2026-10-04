@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Crosshair, Bomb, Save, RotateCcw, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { WeaponTuningFile, WeaponTuningEntry, GrenadeTuning } from '../types';
+import { WeaponTuningFile, WeaponTuningEntry, GrenadeTuning, TurnBasedRulesTuning } from '../types';
 
 // Tab order and labels (weapon ids = WeaponId of DA_Weapon_*); ids not listed here are appended.
 const WEAPON_LABELS: Record<string, string> = {
@@ -36,6 +36,18 @@ const GRENADE_FIELDS: { key: keyof GrenadeTuning; label: string; hint: string; s
   { key: 'effect_radius_m', label: 'Радиус взрыва, м', hint: 'радиус поражения', step: 0.25, min: 0.5, max: 15 },
   { key: 'throw_range_m', label: 'Дальность броска, м', hint: 'как далеко боец бросает (лёжа меньше)', step: 0.5, min: 2, max: 40 },
   { key: 'max_carried', label: 'Лимит переноски', hint: 'сколько гранат боец может нести', step: 1, min: 1, max: 20 },
+];
+
+const RULES_TAB = '__rules__';
+const DEFAULT_RULES: TurnBasedRulesTuning = {
+  crouch_move_cost_multiplier: 2,
+  cover_fire_accuracy_multiplier: 0.75,
+  enemy_fire_at_cover_multiplier: 0.6,
+};
+const RULE_FIELDS: { key: keyof TurnBasedRulesTuning; label: string; hint: string; step: number; min: number; max: number }[] = [
+  { key: 'crouch_move_cost_multiplier', label: 'Цена шага в присядку / лёжа, ×', hint: 'во сколько раз дороже AP за клетку, чем стоя (целое)', step: 1, min: 1, max: 4 },
+  { key: 'cover_fire_accuracy_multiplier', label: 'Меткость из-за баррикады, ×', hint: 'боец стреляет мимо своей баррикады (1 — без штрафа)', step: 0.05, min: 0.1, max: 1 },
+  { key: 'enemy_fire_at_cover_multiplier', label: 'Попадание врагов по бойцу за баррикадой, ×', hint: 'шанс дальнобойных врагов (1 — баррикада не мешает)', step: 0.05, min: 0, max: 1 },
 ];
 
 const listToText = (values: number[]) => values.join(', ');
@@ -85,6 +97,9 @@ export const WeaponTuningPanel: React.FC = () => {
   const setWeapon = (id: string, patch: Partial<WeaponTuningEntry>) =>
     setData({ ...data, weapons: { ...data.weapons, [id]: { ...data.weapons[id], ...patch } } });
   const setGrenade = (patch: Partial<GrenadeTuning>) => setData({ ...data, grenade: { ...data.grenade, ...patch } });
+  const rules = { ...DEFAULT_RULES, ...(data.turn_based_rules || {}) };
+  const savedRules = { ...DEFAULT_RULES, ...(saved?.turn_based_rules || {}) };
+  const setRules = (patch: Partial<TurnBasedRulesTuning>) => setData({ ...data, turn_based_rules: { ...rules, ...patch } });
 
   const save = async () => {
     setStatus({ kind: 'saving' });
@@ -177,6 +192,14 @@ export const WeaponTuningPanel: React.FC = () => {
         >
           <Bomb className="w-3.5 h-3.5" /> Гранаты
         </button>
+        <button
+          onClick={() => setTab(RULES_TAB)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+            tab === RULES_TAB ? 'bg-sky-400 text-slate-950 border-sky-300' : 'bg-slate-800/60 text-slate-300 border-slate-700 hover:bg-slate-800'
+          }`}
+        >
+          Правила пошагового боя
+        </button>
       </div>
 
       {weapon && (
@@ -211,6 +234,17 @@ export const WeaponTuningPanel: React.FC = () => {
             </div>
           </div>
         </>
+      )}
+
+      {tab === RULES_TAB && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {RULE_FIELDS.map((f) =>
+            field(f.label, f.hint, rules[f.key], f.step, f.min, f.max, (v) => setRules({ [f.key]: v } as Partial<TurnBasedRulesTuning>),
+              savedRules[f.key] !== rules[f.key]))}
+          <div className="col-span-1 md:col-span-3 text-[11px] text-slate-500">
+            Применяется при начале пошагового боя. Урон по сидящему (×0.70) и лежащему (×0.50) задаётся в балансе игры (DA_Balance).
+          </div>
+        </div>
       )}
 
       {tab === GRENADE_TAB && (

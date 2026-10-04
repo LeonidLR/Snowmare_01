@@ -230,5 +230,10 @@
       "tb_base_hit_chance": 0.8,
       "tb_hit_falloff_per_cell": 0.03
     }
+  },
+  "turn_based_rules": {
+    "crouch_move_cost_multiplier": 2,
+    "cover_fire_accuracy_multiplier": 0.75,
+    "enemy_fire_at_cover_multiplier": 0.6
   }
 }

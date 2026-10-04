@@ -135,6 +135,7 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		if (const UGodotBalanceAsset* BalanceAsset = GameMode->TurnBasedBalance.LoadSynchronous())
 		{
 			Balance = TurnBasedRules::BalanceFromGodot(BalanceAsset);
+			WeaponTuning::ApplyTurnRules(Balance); // Wave Editor «Правила пошагового боя»
 			SquadStepDuration = BalanceAsset->GetNumber(TEXT("tactical_step_duration"), SquadStepDuration);
 			EnemyStepDuration = BalanceAsset->GetNumber(TEXT("tactical_enemy_step_duration"), EnemyStepDuration);
 			EnemyHitDelay = BalanceAsset->GetNumber(TEXT("tactical_enemy_hit_delay"), EnemyHitDelay);
@@ -3526,7 +3527,8 @@ void UTurnBasedCombatSubsystem::ExecuteRangedEnemyTurn(AActor* Enemy, AActor* Ta
 		bool bPastCover = false;
 		Cell.bLineOfFire = GorkyLineOfSight::HasLineOfFireThroughCover(Entry.Key, TargetPos, *Grid, bPastCover);
 		Cell.bNextToOperative = NextToOperative(Entry.Key);
-		Cell.HitChance = EnemyTurnRules::RangedHitChance(Profile, Cell.Distance, TargetState->Stance, IsCoveredFrom(TargetPos, Entry.Key));
+		Cell.HitChance = EnemyTurnRules::RangedHitChance(Profile, Cell.Distance, TargetState->Stance, IsCoveredFrom(TargetPos, Entry.Key),
+			Balance.EnemyFireAtCoverMultiplier);
 	}
 	const int32 Chosen = EnemyTurnRules::ChooseFiringCell(Profile, Cells, State->AP);
 	TWeakObjectPtr<AActor> WeakTarget(Target);
@@ -3579,7 +3581,8 @@ void UTurnBasedCombatSubsystem::EnemyRangedAttack(AActor* Enemy, AActor* Target,
 	State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(TargetPos - State->GridPos));
 	AlignFacing(Enemy, State->Facing);
 	const int32 Distance = TurnBasedRules::CellDistance(State->GridPos, TargetPos);
-	const float Chance = EnemyTurnRules::RangedHitChance(Profile, Distance, TargetState->Stance, IsCoveredFrom(TargetPos, State->GridPos));
+	const float Chance = EnemyTurnRules::RangedHitChance(Profile, Distance, TargetState->Stance, IsCoveredFrom(TargetPos, State->GridPos),
+		Balance.EnemyFireAtCoverMultiplier);
 	const int32 Damage = TurnBasedRules::EnemyAttackDamage(State->BaseDamage, 1.f, TurnBasedRules::StanceDamageMultiplier(TargetState->Stance, Balance));
 	if (Overlay)
 	{

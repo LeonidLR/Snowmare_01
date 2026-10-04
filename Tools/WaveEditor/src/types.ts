@@ -98,10 +98,18 @@ export interface EnemyRangedWeapon {
   tb_hit_falloff_per_cell: number;
 }
 
+/** turn_based_rules: multipliers of the turn-based combat (the game applies them when a fight starts). */
+export interface TurnBasedRulesTuning {
+  crouch_move_cost_multiplier: number;
+  cover_fire_accuracy_multiplier: number;
+  enemy_fire_at_cover_multiplier: number;
+}
+
 export interface WeaponTuningFile {
   comment?: string;
   weapons: Record<string, WeaponTuningEntry>;
   grenade: GrenadeTuning;
+  turn_based_rules?: TurnBasedRulesTuning;
   enemy_weapons?: Record<string, EnemyRangedWeapon>;
 }
 

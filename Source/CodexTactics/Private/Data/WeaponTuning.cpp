@@ -6,6 +6,7 @@
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Tactics/EnemyTurnRules.h"
+#include "Tactics/TurnBasedRules.h"
 #include "CodexTactics.h"
 #include "Data/WeaponDataAsset.h"
 #include "Dom/JsonObject.h"
@@ -24,6 +25,7 @@ namespace WeaponTuning
 	{
 		TSharedPtr<FJsonObject> GrenadeBlock;
 		TSharedPtr<FJsonObject> MarksmanRifleBlock;
+		TSharedPtr<FJsonObject> TurnRulesBlock;
 
 		void Number(const FJsonObject& Json, const TCHAR* Key, float& Value, float Scale = 1.f)
 		{
@@ -133,6 +135,7 @@ namespace WeaponTuning
 	{
 		GrenadeBlock.Reset();
 		MarksmanRifleBlock.Reset();
+		TurnRulesBlock.Reset();
 		FString Text;
 		TSharedPtr<FJsonObject> Root;
 		if (!FFileHelper::LoadFileToString(Text, *Path) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid())
@@ -143,6 +146,11 @@ namespace WeaponTuning
 		if (Root->TryGetObjectField(TEXT("grenade"), Grenade) && Grenade)
 		{
 			GrenadeBlock = *Grenade;
+		}
+		const TSharedPtr<FJsonObject>* TurnRules = nullptr;
+		if (Root->TryGetObjectField(TEXT("turn_based_rules"), TurnRules) && TurnRules)
+		{
+			TurnRulesBlock = *TurnRules;
 		}
 		const TSharedPtr<FJsonObject>* EnemyWeapons = nullptr;
 		const TSharedPtr<FJsonObject>* Rifle = nullptr;
@@ -201,6 +209,18 @@ namespace WeaponTuning
 		Number(Json, TEXT("preferred_max_range_m"), Config.PreferredMaxRange, 100.f);
 	}
 
+	void ApplyTurnRules(FTurnBasedBalance& Balance)
+	{
+		if (!TurnRulesBlock.IsValid())
+		{
+			return;
+		}
+		Integer(*TurnRulesBlock, TEXT("crouch_move_cost_multiplier"), Balance.CrouchMoveCostMultiplier);
+		Number(*TurnRulesBlock, TEXT("cover_fire_accuracy_multiplier"), Balance.CoverFireAccuracyMultiplier);
+		Number(*TurnRulesBlock, TEXT("enemy_fire_at_cover_multiplier"), Balance.EnemyFireAtCoverMultiplier);
+		Balance.CrouchMoveCostMultiplier = FMath::Max(1, Balance.CrouchMoveCostMultiplier);
+	}
+
 	void ApplyEnemyTurnWeapon(EEnemyArchetype Archetype, FEnemyTurnProfile& Profile)
 	{
 		if (Archetype != EEnemyArchetype::Marksman || !MarksmanRifleBlock.IsValid())
@@ -257,6 +277,12 @@ namespace WeaponTuning
 		Rifle->SetNumberField(TEXT("tb_max_range_cells"), Round4(Turn.MaxRange));
 		Rifle->SetNumberField(TEXT("tb_base_hit_chance"), Round4(Turn.BaseHitChance));
 		Rifle->SetNumberField(TEXT("tb_hit_falloff_per_cell"), Round4(Turn.HitFalloffPerCell));
+		const FTurnBasedBalance Rules;
+		TSharedRef<FJsonObject> TurnRules = MakeShared<FJsonObject>();
+		TurnRules->SetNumberField(TEXT("crouch_move_cost_multiplier"), Round4(Rules.CrouchMoveCostMultiplier));
+		TurnRules->SetNumberField(TEXT("cover_fire_accuracy_multiplier"), Round4(Rules.CoverFireAccuracyMultiplier));
+		TurnRules->SetNumberField(TEXT("enemy_fire_at_cover_multiplier"), Round4(Rules.EnemyFireAtCoverMultiplier));
+		Root->SetObjectField(TEXT("turn_based_rules"), TurnRules);
 		TSharedRef<FJsonObject> EnemyWeapons = MakeShared<FJsonObject>();
 		EnemyWeapons->SetObjectField(TEXT("marksman_rifle"), Rifle);
 		Root->SetObjectField(TEXT("enemy_weapons"), EnemyWeapons);
