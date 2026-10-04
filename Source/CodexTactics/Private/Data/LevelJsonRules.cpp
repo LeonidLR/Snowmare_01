@@ -131,7 +131,8 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 
 bool LevelJsonRules::LoadLevel(const FString& FileName, FLevelCombatConfig& OutConfig, FString& OutError)
 {
-	const FString Path = GetLevelsDirectory() / FileName;
+	// A bare name is looked up in the level folder; an absolute path (the -LevelJson= override) is used as it is.
+	const FString Path = FPaths::IsRelative(FileName) ? GetLevelsDirectory() / FileName : FileName;
 	FString Json;
 	if (!FFileHelper::LoadFileToString(Json, *Path))
 	{

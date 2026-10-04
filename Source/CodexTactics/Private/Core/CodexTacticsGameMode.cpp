@@ -10,6 +10,8 @@
 #include "Data/WaveConfigTypes.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Data/WeaponDataAsset.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/OperativeCharacter.h"
 #include "Core/CodexTacticsGameState.h"
@@ -94,18 +96,21 @@ void ACodexTacticsGameMode::ApplyLevelConfig()
 	}
 	// The level JSON (Wave Editor) first, the imported asset as the fallback.
 	ULevelConfigAsset* Level = nullptr;
-	if (!LevelJsonFile.IsEmpty())
+	// -LevelJson=<file name or absolute path> replaces the map's level for a run (bot A / B batches on other waves).
+	FString JsonFile = LevelJsonFile;
+	FParse::Value(FCommandLine::Get(), TEXT("LevelJson="), JsonFile);
+	if (!JsonFile.IsEmpty())
 	{
 		FLevelCombatConfig Parsed;
 		FString Error;
-		if (LevelJsonRules::LoadLevel(LevelJsonFile, Parsed, Error))
+		if (LevelJsonRules::LoadLevel(JsonFile, Parsed, Error))
 		{
 			Level = NewObject<ULevelConfigAsset>(this, TEXT("LevelFromJson"));
 			Level->Config = MoveTemp(Parsed);
 		}
 		else
 		{
-			UE_LOG(LogCodexTactics, Warning, TEXT("Level JSON %s: %s — using %s"), *LevelJsonFile, *Error, *LevelConfig.ToString());
+			UE_LOG(LogCodexTactics, Warning, TEXT("Level JSON %s: %s — using %s"), *JsonFile, *Error, *LevelConfig.ToString());
 		}
 	}
 	if (!Level && !LevelConfig.IsNull())
