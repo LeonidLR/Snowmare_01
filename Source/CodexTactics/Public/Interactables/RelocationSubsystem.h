@@ -41,7 +41,23 @@ public:
 	bool StartRelocate(AInteractableActor* Target, AOperativeCharacter* Worker = nullptr);
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Relocation")
-	bool IsPlacing() const { return PlacingObject.IsValid() || PlacingType.IsSet(); }
+	bool IsPlacing() const { return PlacingObject.IsValid() || PlacingType.IsSet() || bPlacingTripwire; }
+
+	// --- Tripwire «Растяжка» (Sprint 09): two clicks, anchor A then B; ConfirmPlacement / UpdatePreview route here ---
+
+	/**
+	 * Starts the tripwire placement for Worker: refused (feed line) without 2 grenades in the squad or in the turn-based
+	 * fight. Click 1 fixes anchor A (a bracket when an object stands there, else a ground peg), the cyan / red wire
+	 * follows the cursor, click 2 anchor B; a medic-sapper (else Worker) then rigs it.
+	 */
+	bool StartTripwirePlacement(AOperativeCharacter* Worker);
+	bool IsPlacingTripwire() const { return bPlacingTripwire; }
+	/** Grenades the whole squad carries. */
+	int32 GetSquadGrenades() const;
+	/** Rigging tasks running (smokes). */
+	int32 GetTripwireTaskCount() const { return TripwireTasks.Num(); }
+	/** Starts the walk + 2 s rig right away (no placement UI; smokes / the pause release). */
+	void ExecuteTripwire(AOperativeCharacter* Worker, const FVector& GroundA, const FVector& GroundB, bool bAOnObject, bool bBOnObject, bool bSprint);
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Relocation")
 	bool IsPlacingDeployable() const { return PlacingType.IsSet(); }
@@ -176,6 +192,41 @@ private:
 
 	/** Returns true when the task finished. */
 	bool TickDeploy(FDeployTask& Task, float DeltaTime);
+
+	struct FTripwireTask
+	{
+		TWeakObjectPtr<AOperativeCharacter> Worker;
+		FVector A = FVector::ZeroVector;
+		FVector B = FVector::ZeroVector;
+		bool bAOnObject = false;
+		bool bBOnObject = false;
+		bool bSprint = false;
+		/** Where he works from: beside the middle of the wire. */
+		FVector WorkPoint = FVector::ZeroVector;
+		float RetryTime = 0.f;
+		/** < 0: walking; else seconds of rigging left. */
+		float RigLeft = -1.f;
+	};
+	bool TickTripwire(FTripwireTask& Task, float DeltaTime);
+	void UpdateTripwirePreview(const FVector& GroundPoint);
+	void ConfirmTripwirePoint(const FVector& GroundPoint);
+	/** Something to tie the wire onto stands at Point (a bracket instead of a peg). */
+	bool HasAnchorObject(const FVector& GroundPoint) const;
+	/** Span 1-5 m and no wall across it. */
+	bool IsTripwireValid(const FVector& A, const FVector& B) const;
+	/** Takes Count grenades from the squad (First first); false (nothing taken) when the squad has fewer. */
+	bool TakeSquadGrenades(AOperativeCharacter* First, int32 Count);
+
+	bool bPlacingTripwire = false;
+	int32 TripwireStage = 1;
+	FVector TripwireA = FVector::ZeroVector;
+	bool bTripwireAOnObject = false;
+	bool bTripwireValid = false;
+	TArray<FTripwireTask> TripwireTasks;
+	TArray<FTripwireTask> PlannedTripwires;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class ATripwireActor> TripwirePreview;
 	void SpawnGhostForType(EDeployableType Type);
 	/** Feet height of the placing worker (ground plane for the cursor). */
 	float GetWorkerGroundZ(const AOperativeCharacter& Worker) const;

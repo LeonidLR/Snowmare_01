@@ -584,6 +584,17 @@ void ACodexTacticsPlayerController::StartPlacementForType(EDeployableType Type)
 	Relocation->StartDeployPlacement(Type, Leader);
 }
 
+void ACodexTacticsPlayerController::StartTripwirePlacement()
+{
+	USquadSubsystem* Squad = GetSquad();
+	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
+	if (!Squad || !Squad->GetLeader() || !Relocation || BlockRealTimeOrder())
+	{
+		return;
+	}
+	Relocation->StartTripwirePlacement(Squad->GetLeader());
+}
+
 void ACodexTacticsPlayerController::GrenadeKey()
 {
 	USquadSubsystem* Squad = GetSquad();

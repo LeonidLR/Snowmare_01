@@ -378,7 +378,58 @@ Eliminate the unrealistic God-view where all actors across the map are perpetual
 
 ---
 
-## ⚡ MANDATORY TYPESAFE (JEV) & TOKEN ECONOMY RULES FOR CLAUDE (Sprint 08)
+## 🎯 SPRINT 09 DIRECTIVE: Military Tripwire Mine ("Растяжка" MUV-3 & F-1 Grenades)
+**Author:** Gemini (Lead Architect) | **Triage Gate:** TypeSafe Jev (Approved, Confidence 0.99, Complexity 3.5/5) | **Executor:** Claude (Opus 5.5)
+
+### Concept Overview:
+An iconic Soviet engineering tripwire mine rigged between two anchors using MUV-3 pull fuses and F-1 fragmentation grenades. Used to secure chokepoints, protect squad flanks, and lay traps for charging mutants.
+
+### Sub-Task 9-A: Resource Cost & Physical Span Parameters
+- **Inventory Cost:** Consumes **2 grenades** (F-1 / RGD-5) from the squad inventory. Refused with HUD feedback if total squad grenades $< 2$.
+- **Span Range:** Min distance: **1.0 m** (100 cm), Max distance: **5.0 m** (500 cm).
+- **Wire Height:** Stretched taut at **~25–35 cm** above the ground surface.
+
+### Sub-Task 9-B: Two-Click Placement & Smart Anchor System
+- **Implementation in `URelocationSubsystem` / Placement Flow:**
+  1. Click 1 (Anchor A): Player selects first anchor point.
+     - If clicked on static geometry (tree trunk, pole, wall, barricade): wire bracket mounts directly to the object.
+     - If clicked on open ground/snow: automatically places/drives a ground peg (wooden/metal stake, as shown in MUV-3 schematic).
+  2. Dragging Wire: Stretches a holographic wire preview (Ghost Wire):
+     - Cyan / Valid: Distance $\le 5.0$ m and line trace is unobstructed.
+     - Red / Invalid: Distance $> 5.0$ m or wire collides with solid walls.
+  3. Click 2 (Anchor B): Sets second anchor (geometry bracket or ground peg).
+  4. Execution: Designated operative (prefer Sapper/Medic) approaches and performs a 2.0s rigging animation.
+
+### Sub-Task 9-C: Triggering Physics, Symmetrical Friendly Fire & Prone Crawl Under
+- **Detection Volume:** A narrow trigger volume along the wire span at $Z = 30$ cm.
+- **Symmetrical Friendly Fire:**
+  - Any walking or running actor (enemy OR squad operative) crossing the wire trips the pull fuse and detonates it.
+  - Autonomous squad pathfinding considers active friendly tripwires as hazardous cost obstacles (avoids walking across).
+- **Prone Crawl-Under Mechanic (Physical Synergy with Sprint 08):**
+  - An operative in `Prone` stance (height ~25 cm) can **safely crawl UNDER the 30 cm tripwire** without triggering it! This enables laying traps and escaping beneath them.
+
+### Sub-Task 9-D: Detonation, Audio & Combat Effects
+- **Trigger Event:** Instant metallic pin release click ("ЩЁЛК!" of MUV-3 pull pin), followed by a 0.25s fuse pause.
+- **Dual F-1 Blast:**
+  - Massive high-explosive shrapnel damage: **140 dmg** in a **4.5 m** radius.
+  - 100% Armor Shred on close targets.
+  - Knockdown / ragdoll stagger on charging Hounds / Brutes.
+  - Shrapnel dirt kickup and lingering smoke/scorch decal on snow.
+
+### Sub-Task 9-E: Disarming by Sapper / Medic
+- **Objective:** Salvage active traps.
+- **Implementation:**
+  - Operative with Medic/Sapper role can interact with an active tripwire to disarm it (3.0s interaction).
+  - Successful disarm destroys the tripwire and returns **2 grenades** (or 1 on fumble) to the squad inventory.
+
+### ✅ Sprint 09 status (Claude, 2026-10-05): DONE — see HANDOFF §10
+- 9-A..9-E: `TripwireRules`, `ATripwireActor`, `URelocationSubsystem::StartTripwirePlacement` (inventory «🪤 Растяжка»); smoke `CodexTactics.TripwireSmoke`.
+- Interpretation: the «Dual F-1 Blast» is one `ApplyBlast` of 140 at the wire's middle (not 2 x 140). No new `EDeployableType` (many switches fall back to Mine): the tripwire is its own placement mode and an `AInteractableActor`.
+- Not in scope: turn-based placement / grid occupancy; sound and VFX (Blueprint events only).
+
+---
+
+## ⚡ MANDATORY TYPESAFE (JEV) & TOKEN ECONOMY RULES FOR CLAUDE (Sprint 09)
 
 Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
 1. **Fast Smart Testing Only:**
@@ -387,7 +438,7 @@ Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
    Before staging, run `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude`.
    If violations are found, unstage them (`git restore --staged <file>`); restore only `Config/DefaultEditor.ini` with `git checkout`. **Never reset `L_MovementTest.umap`**.
 3. **Agent Lock:**
-   Always claim lock before builds/smokes: `powershell -ExecutionPolicy Bypass -File Scripts/agent_lock.ps1 -Take claude -Task "Sprint08_SightOcclusion"` and release upon completion.
+   Always claim lock before builds/smokes: `powershell -ExecutionPolicy Bypass -File Scripts/agent_lock.ps1 -Take claude -Task "Sprint09_TripwireMine"` and release upon completion.
 
 ---
 

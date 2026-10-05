@@ -1,4 +1,5 @@
 #include "Interactables/VaultNavigation.h"
+#include "Interactables/TripwireActor.h"
 #include "Components/PrimitiveComponent.h"
 #include "GameFramework/Actor.h"
 #include "Interactables/BarricadeActor.h"
@@ -22,6 +23,11 @@ UNavFilter_NoVault::UNavFilter_NoVault()
 	FNavigationFilterArea& Area = Areas.AddDefaulted_GetRef();
 	Area.AreaClass = UNavArea_Vault::StaticClass();
 	Area.bIsExcluded = true;
+	// Sprint 09: the squad's tripwires cost the operatives a detour, not the enemies (they do not know where they are).
+	FNavigationFilterArea& Wire = Areas.AddDefaulted_GetRef();
+	Wire.AreaClass = UNavArea_Tripwire::StaticClass();
+	Wire.bOverrideTravelCost = true;
+	Wire.TravelCostOverride = 1.f;
 }
 
 namespace VaultNavigation

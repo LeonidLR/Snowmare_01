@@ -15,10 +15,14 @@
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TurretActor.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/RelocationGhostActor.h"
 #include "Interactables/RelocationRules.h"
+#include "Interactables/TripwireActor.h"
+#include "Interactables/TripwireRules.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "RelocationSubsystem"
@@ -480,6 +484,11 @@ bool URelocationSubsystem::TickDeploy(FDeployTask& Task, float DeltaTime)
 
 void URelocationSubsystem::UpdatePreview(const FVector& GroundPoint)
 {
+	if (bPlacingTripwire)
+	{
+		UpdateTripwirePreview(GroundPoint);
+		return;
+	}
 	if (PlacingType.IsSet())
 	{
 		const AOperativeCharacter* DeployWorker = PlacingWorker.Get();
@@ -520,6 +529,13 @@ void URelocationSubsystem::RotatePreview(int32 Steps)
 
 void URelocationSubsystem::CancelPlacement()
 {
+	bPlacingTripwire = false;
+	TripwireStage = 1;
+	if (TripwirePreview)
+	{
+		TripwirePreview->Destroy();
+		TripwirePreview = nullptr;
+	}
 	PlacingType.Reset();
 	DeployStage = 1;
 	PlacingObject.Reset();
@@ -533,6 +549,11 @@ void URelocationSubsystem::CancelPlacement()
 
 void URelocationSubsystem::ConfirmPlacement(const FVector& GroundPoint)
 {
+	if (bPlacingTripwire)
+	{
+		ConfirmTripwirePoint(GroundPoint);
+		return;
+	}
 	if (PlacingType.IsSet())
 	{
 		AOperativeCharacter* DeployWorker = PlacingWorker.Get();
@@ -679,6 +700,12 @@ void URelocationSubsystem::HandlePauseReleased()
 	{
 		ExecuteDeploy(Plan.Worker.Get(), Plan.Type, Plan.Target, Plan.Yaw);
 	}
+	TArray<FTripwireTask> Wires = MoveTemp(PlannedTripwires);
+	PlannedTripwires.Reset();
+	for (const FTripwireTask& Plan : Wires)
+	{
+		ExecuteTripwire(Plan.Worker.Get(), Plan.A, Plan.B, Plan.bAOnObject, Plan.bBOnObject, false);
+	}
 }
 
 void URelocationSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)
@@ -687,6 +714,7 @@ void URelocationSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCo
 	{
 		PlannedTasks.Reset();
 		PlannedDeploys.Reset();
+		PlannedTripwires.Reset();
 	}
 	if (!CanRelocateNow() && PlacingObject.IsValid())
 	{
@@ -927,6 +955,13 @@ void URelocationSubsystem::Tick(float DeltaTime)
 			DeployTasks.RemoveAt(Index);
 		}
 	}
+	for (int32 Index = TripwireTasks.Num() - 1; Index >= 0; --Index)
+	{
+		if (TickTripwire(TripwireTasks[Index], DeltaTime))
+		{
+			TripwireTasks.RemoveAt(Index);
+		}
+	}
 	if (Tasks.IsEmpty())
 	{
 		return;
@@ -944,6 +979,270 @@ void URelocationSubsystem::Tick(float DeltaTime)
 			Tasks.RemoveAt(Index);
 		}
 	}
+}
+
+// --- Tripwire «Растяжка» (Sprint 09) ---
+
+int32 URelocationSubsystem::GetSquadGrenades() const
+{
+	int32 Total = 0;
+	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	{
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Total += Member->HealthComponent && Member->HealthComponent->IsAlive() ? FMath::Max(0, Member->GrenadesCount) : 0;
+		}
+	}
+	return Total;
+}
+
+bool URelocationSubsystem::TakeSquadGrenades(AOperativeCharacter* First, int32 Count)
+{
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	if (!Squad || GetSquadGrenades() < Count)
+	{
+		return false;
+	}
+	TArray<AOperativeCharacter*> Order = Squad->GetMembers();
+	if (First)
+	{
+		Order.Remove(First);
+		Order.Insert(First, 0);
+	}
+	for (AOperativeCharacter* Member : Order)
+	{
+		const int32 Taken = FMath::Min(Count, FMath::Max(0, Member->GrenadesCount));
+		Member->GrenadesCount -= Taken;
+		Count -= Taken;
+		if (Count <= 0)
+		{
+			break;
+		}
+	}
+	return true;
+}
+
+bool URelocationSubsystem::StartTripwirePlacement(AOperativeCharacter* Worker)
+{
+	if (!Worker)
+	{
+		return false;
+	}
+	const UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+	if (TurnBased && TurnBased->IsActive())
+	{
+		Post(Worker->DisplayName, LOCTEXT("TripwireTurnBased", "⚠️ В пошаговом бою растяжку не поставить."));
+		return false;
+	}
+	if (GetSquadGrenades() < TripwireRules::GrenadeCost)
+	{
+		Post(Worker->DisplayName, LOCTEXT("TripwireNoGrenades", "⚠️ Для растяжки нужны 2 гранаты в отряде!"));
+		return false;
+	}
+	CancelPlacement();
+	bPlacingTripwire = true;
+	TripwireStage = 1;
+	PlacingWorker = Worker;
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	TripwirePreview = GetWorld()->SpawnActor<ATripwireActor>(Worker->GetActorLocation(), FRotator::ZeroRotator, Params);
+	if (TripwirePreview)
+	{
+		TripwirePreview->SetActorHiddenInGame(true); // shown once the first anchor is set
+	}
+	Post(LOCTEXT("Engineering", "Инженерия"), LOCTEXT("TripwirePrompt",
+		"🪤 Растяжка (2 гранаты): 1️⃣ клик — первый крепёж (на объекте — скоба, на снегу — колышек), 2️⃣ клик — второй крепёж (1–5 м)."));
+	return true;
+}
+
+bool URelocationSubsystem::HasAnchorObject(const FVector& GroundPoint) const
+{
+	// Something blocking at wire height right there (a tree, a pole, a wall, a barricade): the bracket goes on it.
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(TripwireAnchor), false);
+	for (TActorIterator<APawn> It(GetWorld()); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
+	if (TripwirePreview)
+	{
+		Params.AddIgnoredActor(TripwirePreview);
+	}
+	return GetWorld()->OverlapAnyTestByChannel(GroundPoint + FVector(0.f, 0.f, TripwireRules::WireHeightCm), FQuat::Identity, ECC_Visibility,
+		FCollisionShape::MakeSphere(25.f), Params);
+}
+
+bool URelocationSubsystem::IsTripwireValid(const FVector& A, const FVector& B) const
+{
+	if (!TripwireRules::IsSpanValid(FVector::Dist2D(A, B)))
+	{
+		return false;
+	}
+	// A wall across the span (anchor objects at the very ends are fine: the trace stops 30 cm short of them).
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(TripwireSpan), false);
+	for (TActorIterator<APawn> It(GetWorld()); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
+	if (TripwirePreview)
+	{
+		Params.AddIgnoredActor(TripwirePreview);
+	}
+	const FVector Up(0.f, 0.f, TripwireRules::WireHeightCm);
+	const FVector Dir = (B - A).GetSafeNormal2D();
+	FHitResult Hit;
+	return !GetWorld()->LineTraceSingleByChannel(Hit, A + Up + Dir * 30.f, B + Up - Dir * 30.f, ECC_Visibility, Params);
+}
+
+void URelocationSubsystem::UpdateTripwirePreview(const FVector& GroundPoint)
+{
+	const AOperativeCharacter* Worker = PlacingWorker.Get();
+	if (!Worker || !TripwirePreview)
+	{
+		return;
+	}
+	const FVector Point(GroundPoint.X, GroundPoint.Y, GetWorkerGroundZ(*Worker));
+	if (TripwireStage == 1)
+	{
+		// Before the first anchor: a short stub at the cursor.
+		TripwirePreview->SetActorHiddenInGame(false);
+		TripwirePreview->Setup(Point - FVector(5.f, 0.f, 0.f), Point + FVector(5.f, 0.f, 0.f), HasAnchorObject(Point), false, true);
+		return;
+	}
+	bTripwireValid = IsTripwireValid(TripwireA, Point);
+	TripwirePreview->Setup(TripwireA, Point, bTripwireAOnObject, HasAnchorObject(Point), true);
+	TripwirePreview->SetPreviewValid(bTripwireValid);
+}
+
+void URelocationSubsystem::ConfirmTripwirePoint(const FVector& GroundPoint)
+{
+	AOperativeCharacter* Worker = PlacingWorker.Get();
+	if (!Worker)
+	{
+		CancelPlacement();
+		return;
+	}
+	const FVector Point(GroundPoint.X, GroundPoint.Y, GetWorkerGroundZ(*Worker));
+	if (TripwireStage == 1)
+	{
+		TripwireA = Point;
+		bTripwireAOnObject = HasAnchorObject(Point);
+		TripwireStage = 2;
+		return;
+	}
+	if (!IsTripwireValid(TripwireA, Point))
+	{
+		Post(Worker->DisplayName, LOCTEXT("TripwireInvalid", "⚠️ Растяжка: от 1 до 5 м, и чтобы стена не мешала."));
+		return;
+	}
+	const bool bBOnObject = HasAnchorObject(Point);
+	// Rigged by the medic-sapper when he is there and free (Sprint 09-B), else by the one who opened it.
+	AOperativeCharacter* Rigger = Worker;
+	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			const bool bBusy = TripwireTasks.ContainsByPredicate([Member](const FTripwireTask& Task) { return Task.Worker.Get() == Member; });
+			if (Member->SquadRole == EOperativeRole::MedicSapper && Member->HealthComponent && Member->HealthComponent->IsAlive() && !bBusy
+				&& !Member->IsPanicking() && !Member->IsRaging())
+			{
+				Rigger = Member;
+			}
+		}
+	}
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const FVector A = TripwireA;
+	const bool bAOnObject = bTripwireAOnObject;
+	CancelPlacement();
+	if (Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause)
+	{
+		FTripwireTask& Plan = PlannedTripwires.AddDefaulted_GetRef();
+		Plan.Worker = Rigger;
+		Plan.A = A;
+		Plan.B = Point;
+		Plan.bAOnObject = bAOnObject;
+		Plan.bBOnObject = bBOnObject;
+		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+		{
+			Feedback->SpawnWaypointMarker((A + Point) * 0.5f);
+		}
+		Post(Rigger->DisplayName, LOCTEXT("TripwirePlanned", "📋 [ПЛАН] Растяжка будет поставлена после паузы."));
+		return;
+	}
+	ExecuteTripwire(Rigger, A, Point, bAOnObject, bBOnObject, Flow && Flow->GetPhase() == ECodexGamePhase::Preparation);
+}
+
+void URelocationSubsystem::ExecuteTripwire(AOperativeCharacter* Worker, const FVector& GroundA, const FVector& GroundB, bool bAOnObject,
+	bool bBOnObject, bool bSprint)
+{
+	if (!Worker)
+	{
+		return;
+	}
+	FTripwireTask& Task = TripwireTasks.AddDefaulted_GetRef();
+	Task.Worker = Worker;
+	Task.A = GroundA;
+	Task.B = GroundB;
+	Task.bAOnObject = bAOnObject;
+	Task.bBOnObject = bBOnObject;
+	Task.bSprint = bSprint;
+	// He works from beside the middle of the wire, on his own side (never astride it).
+	const FVector Mid = (GroundA + GroundB) * 0.5f;
+	FVector Side = FVector::CrossProduct((GroundB - GroundA).GetSafeNormal2D(), FVector::UpVector);
+	if (FVector::DotProduct(Side, Worker->GetActorLocation() - Mid) < 0.f)
+	{
+		Side = -Side;
+	}
+	Task.WorkPoint = Mid + Side * 90.f;
+	Worker->OrderMoveTo(Task.WorkPoint, bSprint);
+	Post(Worker->DisplayName, LOCTEXT("TripwireMoving", "🪤 Иду ставить растяжку!"));
+}
+
+bool URelocationSubsystem::TickTripwire(FTripwireTask& Task, float DeltaTime)
+{
+	AOperativeCharacter* Worker = Task.Worker.Get();
+	if (!Worker || !Worker->HealthComponent || !Worker->HealthComponent->IsAlive())
+	{
+		return true;
+	}
+	if (Task.RigLeft < 0.f)
+	{
+		Task.RetryTime -= DeltaTime;
+		const float Distance = FVector::Dist2D(Worker->GetActorLocation(), Task.WorkPoint);
+		if (Distance > 120.f && !(Distance <= 250.f && !Worker->IsMoving()))
+		{
+			if (!Worker->IsMoving() && Task.RetryTime <= 0.f)
+			{
+				Task.RetryTime = 1.f;
+				Worker->OrderMoveTo(Task.WorkPoint, Task.bSprint);
+			}
+			return false;
+		}
+		Worker->StopOperative();
+		Worker->SetFacingPoint((Task.A + Task.B) * 0.5f);
+		Worker->SetStance(EOperativeStance::Crouching);
+		Task.RigLeft = TripwireRules::RigSeconds;
+		Post(Worker->DisplayName, LOCTEXT("TripwireRigging", "🪤 Натягиваю проволоку, вкручиваю МУВ…"));
+		return false;
+	}
+	Task.RigLeft -= DeltaTime;
+	if (Task.RigLeft > 0.f)
+	{
+		return false;
+	}
+	if (!TakeSquadGrenades(Worker, TripwireRules::GrenadeCost))
+	{
+		Post(Worker->DisplayName, LOCTEXT("TripwireNoGrenadesLate", "⚠️ Гранат не хватило — растяжку не поставить."));
+		return true;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	if (ATripwireActor* Wire = GetWorld()->SpawnActor<ATripwireActor>((Task.A + Task.B) * 0.5f, FRotator::ZeroRotator, Params))
+	{
+		Wire->Setup(Task.A, Task.B, Task.bAOnObject, Task.bBOnObject, false, Worker);
+		Post(Worker->DisplayName, LOCTEXT("TripwireDone", "🪤 Растяжка установлена (взвод 1.5 с). Ползком под ней пройти можно."));
+		UE_LOG(LogCodexTactics, Display, TEXT("Tripwire rigged by %s: %.1f m"), *Worker->DisplayName.ToString(), FVector::Dist2D(Task.A, Task.B) / 100.f);
+	}
+	return true;
 }
 
 #undef LOCTEXT_NAMESPACE

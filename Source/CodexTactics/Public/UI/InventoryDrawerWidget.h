@@ -18,7 +18,9 @@ enum class EInventoryDrawerSlot : uint8
 	CannedFood,
 	Bread,
 	Chocolate,
-	Matches
+	Matches,
+	/** Sprint 09: tripwire mine, 2 grenades of the squad. */
+	Tripwire
 };
 
 /**
@@ -70,6 +72,7 @@ private:
 	UFUNCTION() void HandleCannedFood();
 	UFUNCTION() void HandleBread();
 	UFUNCTION() void HandleChocolate();
+	UFUNCTION() void HandleTripwire();
 	UFUNCTION() void HandleClose();
 
 	UPROPERTY()

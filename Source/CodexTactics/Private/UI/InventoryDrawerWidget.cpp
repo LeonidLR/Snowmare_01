@@ -1,4 +1,5 @@
 #include "UI/InventoryDrawerWidget.h"
+#include "Interactables/RelocationSubsystem.h"
 #include "Subsystems/CodexEventBus.h"
 #include "Blueprint/WidgetTree.h"
 #include "Characters/OperativeCharacter.h"
@@ -103,8 +104,8 @@ void UInventoryDrawerWidget::BuildDefaultLayout()
 		return Button;
 	};
 	const TCHAR* Names[] = { TEXT("BtnInvTurret"), TEXT("BtnInvBarricade"), TEXT("BtnInvMine"), TEXT("BtnInvMedkit"),
-		TEXT("BtnInvCan"), TEXT("BtnInvBread"), TEXT("BtnInvChoco"), TEXT("BtnInvMatch") };
-	for (int32 Index = 0; Index < 8; ++Index)
+		TEXT("BtnInvCan"), TEXT("BtnInvBread"), TEXT("BtnInvChoco"), TEXT("BtnInvMatch"), TEXT("BtnInvTripwire") };
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Names); ++Index)
 	{
 		UTextBlock* Text = nullptr;
 		UButton* Button = MakeButton(Names[Index], Text);
@@ -130,6 +131,7 @@ void UInventoryDrawerWidget::BuildDefaultLayout()
 	SlotButtons[4]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleCannedFood);
 	SlotButtons[5]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleBread);
 	SlotButtons[6]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleChocolate);
+	SlotButtons[8]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleTripwire);
 }
 
 void UInventoryDrawerWidget::NativeOnInitialized()
@@ -216,6 +218,11 @@ FText UInventoryDrawerWidget::GetSlotText(EInventoryDrawerSlot Line) const
 	case EInventoryDrawerSlot::CannedFood: return DrawerClean(FString::Printf(TEXT("🥫 Консервы [J]: %d шт."), Leader->CannedFoodCount));
 	case EInventoryDrawerSlot::Bread: return DrawerClean(FString::Printf(TEXT("🍞 Хлеб [K]: %d шт."), Leader->BreadCount));
 	case EInventoryDrawerSlot::Chocolate: return DrawerClean(FString::Printf(TEXT("🍫 Шоколад [L]: %d шт."), Leader->ChocolateCount));
+	case EInventoryDrawerSlot::Tripwire:
+	{
+		const URelocationSubsystem* Relocation = GetWorld() ? GetWorld()->GetSubsystem<URelocationSubsystem>() : nullptr;
+		return DrawerClean(FString::Printf(TEXT("🪤 Растяжка (2 гранаты): в отряде %d"), Relocation ? Relocation->GetSquadGrenades() : 0));
+	}
 	default: return DrawerClean(FString::Printf(TEXT("🪵 Спички: %d шт."), Leader->MatchesCount));
 	}
 }
@@ -236,6 +243,11 @@ bool UInventoryDrawerWidget::IsSlotEnabled(EInventoryDrawerSlot Line) const
 	case EInventoryDrawerSlot::CannedFood: return Leader->CannedFoodCount > 0;
 	case EInventoryDrawerSlot::Bread: return Leader->BreadCount > 0;
 	case EInventoryDrawerSlot::Chocolate: return Leader->ChocolateCount > 0;
+	case EInventoryDrawerSlot::Tripwire:
+	{
+		const URelocationSubsystem* Relocation = GetWorld() ? GetWorld()->GetSubsystem<URelocationSubsystem>() : nullptr;
+		return Relocation && Relocation->GetSquadGrenades() >= 2;
+	}
 	default: return Leader->MatchesCount > 0; // Godot: a disabled label-like button
 	}
 }
@@ -275,6 +287,10 @@ void UInventoryDrawerWidget::Activate(EInventoryDrawerSlot Line)
 	case EInventoryDrawerSlot::CannedFood: PC->UseSquadItem(EPersonalItem::CannedFood); break;
 	case EInventoryDrawerSlot::Bread: PC->UseSquadItem(EPersonalItem::Bread); break;
 	case EInventoryDrawerSlot::Chocolate: PC->UseSquadItem(EPersonalItem::Chocolate); break;
+	case EInventoryDrawerSlot::Tripwire:
+		Close();
+		PC->StartTripwirePlacement();
+		break;
 	default: break;
 	}
 	// Godot inventory_drawer.gd: EventBus.item_used(target_soldier, "MEDKIT" / ...).
@@ -296,6 +312,7 @@ void UInventoryDrawerWidget::HandleMedkit() { Activate(EInventoryDrawerSlot::Med
 void UInventoryDrawerWidget::HandleCannedFood() { Activate(EInventoryDrawerSlot::CannedFood); }
 void UInventoryDrawerWidget::HandleBread() { Activate(EInventoryDrawerSlot::Bread); }
 void UInventoryDrawerWidget::HandleChocolate() { Activate(EInventoryDrawerSlot::Chocolate); }
+void UInventoryDrawerWidget::HandleTripwire() { Activate(EInventoryDrawerSlot::Tripwire); }
 void UInventoryDrawerWidget::HandleClose() { Close(); }
 
 #undef LOCTEXT_NAMESPACE

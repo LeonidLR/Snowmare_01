@@ -193,6 +193,9 @@ public:
 	 */
 	void StartPlacementForType(EDeployableType Type);
 
+	/** Inventory «Растяжка» (Sprint 09): two-click tripwire placement for the leader (2 grenades of the squad). */
+	void StartTripwirePlacement();
+
 	/** Key P: character profile (Godot main.gd KEY_P -> _toggle_profile_dialog). */
 	void ProfilePressed();
 
