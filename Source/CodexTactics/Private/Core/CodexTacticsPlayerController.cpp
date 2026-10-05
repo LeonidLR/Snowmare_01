@@ -1,4 +1,6 @@
 #include "Core/CodexTacticsPlayerController.h"
+#include "Combat/EnemyGhostActor.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Widgets/SWindow.h"
 #include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
@@ -1201,6 +1203,29 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 			}
 		}
 		return;
+	}
+
+	// Sprint 08-F: a click on a silhouette (last known / heard position) orders blind fire at it (-80 % accuracy); the
+	// hidden enemy itself cannot be clicked.
+	if (UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>(); Sight && Sight->IsActive())
+	{
+		if (AEnemyGhostActor* Ghost = Sight->FindGhostNear(Hit.ImpactPoint, 150.f))
+		{
+			TArray<AOperativeCharacter*> Shooters = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
+			for (AOperativeCharacter* Shooter : Shooters)
+			{
+				Shooter->SetBlindFireTarget(Ghost);
+			}
+			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			{
+				Messages->PostMessage(Leader->DisplayName, LOCTEXT("BlindFire", "🎯 Огонь вслепую по силуэту (точность −80%)!"));
+			}
+			return;
+		}
+		if (AActor* HitActor = Hit.GetActor(); HitActor && HitActor->ActorHasTag(FName(TEXT("Enemy"))) && !Sight->IsVisibleToSquad(HitActor))
+		{
+			return;
+		}
 	}
 
 	// Ctrl + click: targeted fire only, never a move or a selection.

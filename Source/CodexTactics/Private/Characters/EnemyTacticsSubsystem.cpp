@@ -7,6 +7,7 @@
 #include "Combat/HealthComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "HAL/IConsoleManager.h"
 
 namespace EnemyTacticsTuning
@@ -205,6 +206,13 @@ void UEnemyTacticsSubsystem::Refresh()
 		for (int32 Index = 0; Index < Mine.Num(); ++Index)
 		{
 			Mine[Index].bUsable = Enemy->IsTargetUsableForTactics(Operatives[Index]);
+			// Sprint 08: where this enemy believes him to be (last known spot when unperceived).
+			FVector Belief;
+			if (const UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>();
+				Sight && Sight->GetBelief(Enemy, Operatives[Index], Belief))
+			{
+				Mine[Index].Location = Belief;
+			}
 			const FEnemyTacticOrder* Old = Previous.Find(Enemy);
 			Mine[Index].bCurrent = Old && Old->Target.Get() == Operatives[Index];
 		}

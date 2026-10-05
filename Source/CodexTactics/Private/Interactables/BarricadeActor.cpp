@@ -18,9 +18,10 @@ ABarricadeActor::ABarricadeActor()
 	DeployableType = EDeployableType::Barricade;
 	DisplayName = LOCTEXT("Name", "Тактическая баррикада");
 
-	// Godot box 3 x 1 x 0.6 m (X along the wall).
-	Box->SetBoxExtent(FVector(150.f, 30.f, 50.f));
-	Mesh->SetRelativeScale3D(FVector(3.f, 0.6f, 1.f)); // also on the class default: placement ghosts copy it
+	// 3 m along the wall x 0.6 m deep x 0.6 m high (Godot: 1 m high; user decision 2026-10-05, Sprint 08: a 60 cm cover a
+	// crouched operative sees over and a prone one hides behind).
+	Box->SetBoxExtent(FVector(150.f, 30.f, HeightCm * 0.5f));
+	Mesh->SetRelativeScale3D(FVector(3.f, 0.6f, HeightCm / 100.f)); // also on the class default: placement ghosts copy it
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> BaseMaterial(TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
 	if (BaseMaterial.Succeeded())
 	{
@@ -43,10 +44,33 @@ void ABarricadeActor::OnConstruction(const FTransform& Transform)
 void ABarricadeActor::BeginPlay()
 {
 	Super::BeginPlay();
+	SettleOnGround();
 	Health->OnDied.AddDynamic(this, &ABarricadeActor::HandleDestroyed);
 	if (bVaultable)
 	{
 		VaultNavigation::MakeVaultable(this);
+	}
+}
+
+void ABarricadeActor::SettleOnGround()
+{
+	// Barricades laid out on a map at the old 1 m height float 20 cm above the ground now: set them down.
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const float Bottom = GetActorLocation().Z - Box->GetScaledBoxExtent().Z;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(BarricadeSettle), false, this);
+	FHitResult Hit;
+	const FVector Start(GetActorLocation().X, GetActorLocation().Y, Bottom + 1.f);
+	if (World->LineTraceSingleByChannel(Hit, Start, Start - FVector(0.f, 0.f, 60.f), ECC_WorldStatic, Params))
+	{
+		const float Gap = Bottom - Hit.ImpactPoint.Z;
+		if (Gap > 2.f && Gap < 45.f)
+		{
+			SetActorLocation(GetActorLocation() - FVector(0.f, 0.f, Gap));
+		}
 	}
 }
 
@@ -227,6 +251,6 @@ bool ABarricadeActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	OutLabel.Text = FString::Printf(TEXT("🧱 Баррикада%s%s: %d/%d"), Contact, bTrapped ? TEXT(" [⚠️ ЛОВУШКА]") : TEXT(""),
 		FMath::FloorToInt(FMath::Max(0.f, BarricadeHealth->GetCurrentHealth())), FMath::FloorToInt(BarricadeHealth->GetMaxHealth()));
 	OutLabel.Color = FLinearColor(0.9f, 0.75f, 0.3f);
-	OutLabel.HeightCm = 135.f; // obstacle 1 m + 0.35
+	OutLabel.HeightCm = HeightCm + 35.f;
 	return true;
 }

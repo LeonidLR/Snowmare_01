@@ -24,6 +24,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "TimerManager.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
 
 AMarksmanEnemyCharacter::AMarksmanEnemyCharacter()
@@ -521,6 +522,10 @@ void AMarksmanEnemyCharacter::UpdateBeam(const FMarksmanLine& Line)
 void AMarksmanEnemyCharacter::Fire(AOperativeCharacter* Target, const FMarksmanLine& Line, float Distance)
 {
 	++ShotsFired;
+	if (UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
+	{
+		Sight->NotifyFired(this); // the muzzle flash gives him away for 2 s (Sprint 08-E)
+	}
 	OnAttackStarted(Target);
 	if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
 	{

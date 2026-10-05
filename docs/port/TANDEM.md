@@ -322,6 +322,75 @@ Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
 
 ---
 
+## 🎯 SPRINT 08 DIRECTIVE: Tactical Line of Sight, Cover Occlusion & Ghost Silhouette System (LKP & Stealth)
+**Author:** Gemini (Lead Architect) | **Triage Gate:** TypeSafe Jev (Approved, Confidence 0.99, Complexity 3.5/5) | **Executor:** Claude (Opus 5.5)
+
+### Concept Overview:
+Eliminate the unrealistic God-view where all actors across the map are perpetually visible. Implement a physical, symmetrical Stance & Cover Occlusion system, allowing stealth crawling in `Prone` behind low obstacles, paired with a Last Known Position (LKP) Ghost Silhouette system and muzzle flash demasking.
+
+### Sub-Task 8-A: Physical Height Geometry & Raycast Visibility
+- **Objective:** Physical LoS calculation based on actual stance eye heights and target profile heights against 60cm barricades.
+- **Physical Heights:**
+  - Barricade / low obstacle: **60 cm**.
+  - Observer Eye Heights: `Standing` = **160 cm**, `Crouching` = **95 cm**, `Prone` = **25 cm**.
+  - Target Profile Heights: `Standing` = **150 cm**, `Crouching` = **90 cm**, `Prone` = **25 cm**.
+- **Rules:**
+  1. An observer in `Crouch` behind a barricade (eyes at 95 cm) sees targets who are `Standing` (150 cm) or `Crouching` (90 cm) over the rim of the 60 cm cover.
+  2. If the target drops to `Prone` (profile at 25 cm), the barricade blocks the line of sight (`LineTraceSingleByChannel` hits `ABarricadeActor`). The direct visual contact is lost, and the target's live mesh is hidden (`SetActorHiddenInGame(true)`).
+  3. To peer over the barricade and visually acquire a prone target, the observer must rise to full height (`Standing`, eyes at 160 cm), providing a steep downward viewing angle.
+
+### Sub-Task 8-B: Symmetrical Occlusion & Squad Stealth (Prone Crawl)
+- **Objective:** Symmetrical physics apply to enemy AI (patrols, snipers).
+- **Rules:**
+  1. Enemies cannot see squad operatives crawling in `Prone` behind 60 cm barricades.
+  2. Operatives can stealthily crawl up to enemy fortified lines, position themselves for flanking maneuvers, or escape sniper sights without triggering combat alerts.
+
+### Sub-Task 8-C: Last Known Position (LKP) Ghost Silhouette
+- **Objective:** Prevent jarring disappearance by anchoring a translucent ghost silhouette at the last confirmed location.
+- **Rules:**
+  1. At the moment direct LoS breaks, the live enemy actor is hidden, and a translucent ghost silhouette is spawned or enabled at `LastKnownLocation` using `StasisMaterial` (the same translucent ghost shader used for enemies outside the turn-based queue).
+  2. The ghost silhouette stays **STRICTLY FIXED AT THE LAST KNOWN POSITION**. It NEVER moves through walls following the live actor.
+  3. When an operative rises or flanks to re-establish LoS, the ghost silhouette dissolves/destroys and the live enemy becomes visible at their actual location.
+
+### Sub-Task 8-D: Auditory & Proximity Contact (< 12 Meters)
+- **Objective:** "Sixth sense" auditory detection through snow crunching and enemy growls.
+- **Rules:**
+  1. If an operative crawls towards an occluded enemy behind a barricade and distance closes within `< 10–12 meters`, auditory contact is established.
+  2. A faint, translucent sound silhouette / shimmer appears at the audio source, confirming an enemy presence without full direct identification.
+
+### Sub-Task 8-E: Muzzle Flash Demasking (2.0 Seconds Reveal Window)
+- **Objective:** Firing a weapon instantly gives away the shooter's position.
+- **Rules:**
+  1. When an operative or enemy fires their weapon from any stance (including `Prone` behind cover), the muzzle blast and tracer report immediately demask the shooter for **2.0 seconds** (`DemaskTimer = 2.0f`).
+  2. During this 2.0-second window, the shooter is fully visible (`SetActorHiddenInGame(false)`), allowing return fire.
+  3. If no further shots are fired within 2.0 seconds and line of sight is obstructed, the actor conceals again, leaving an updated LKP ghost at their firing spot.
+
+### Sub-Task 8-F: Blind Fire / Suppression Penalty (-40% Accuracy)
+- **Objective:** Allow shooting at ghost silhouettes with a penalty.
+- **Rules:**
+  1. Operatives and players can issue targeted attack orders at an LKP Ghost Silhouette (blind fire into suspected cover).
+  2. Shots fired at an unconfirmed ghost suffer a flat `-40% accuracy penalty`.
+
+### ✅ Sprint 08 status (Claude, 2026-10-05): DONE — see HANDOFF §10
+- User decisions: barricade physically 60 cm (`ABarricadeActor::HeightCm`); enemies that lose an operative go to his last known spot.
+- 8-A..8-F in `SightRules` + `UTacticalSightSubsystem` + `AEnemyGhostActor` (stasis material); tests `Combat.Sight.*`, smoke `CodexTactics.SightSmoke`; `Codex.Sight 0` disables.
+- Not in scope: turn-based grid fight keeps its own grid line of sight (no hiding there).
+
+---
+
+## ⚡ MANDATORY TYPESAFE (JEV) & TOKEN ECONOMY RULES FOR CLAUDE (Sprint 08)
+
+Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
+1. **Fast Smart Testing Only:**
+   Execute tests **strictly** via `powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Smart`. Jev evaluates your git diff and selects only impacted tests in 0.08s.
+2. **Mandatory Pre-Commit Boundary Audit:**
+   Before staging, run `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude`.
+   If violations are found, unstage them (`git restore --staged <file>`); restore only `Config/DefaultEditor.ini` with `git checkout`. **Never reset `L_MovementTest.umap`**.
+3. **Agent Lock:**
+   Always claim lock before builds/smokes: `powershell -ExecutionPolicy Bypass -File Scripts/agent_lock.ps1 -Take claude -Task "Sprint08_SightOcclusion"` and release upon completion.
+
+---
+
 ## Architect Decisions & Answers to Open Questions (Gemini)
 
 ### 1. Wheel Zoom binding (Duplicate call)

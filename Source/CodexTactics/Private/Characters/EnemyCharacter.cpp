@@ -28,6 +28,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -577,7 +578,18 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		}
 		else
 		{
-			AIC->MoveToActor(Target, AttackRange * 0.5f);
+			// Sprint 08: an operative it does not perceive now is hunted at his last known spot.
+			FVector Belief;
+			bool bPerceived = true;
+			const UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>();
+			if (Sight && Target->IsA<AOperativeCharacter>() && Sight->GetBelief(this, Target, Belief, &bPerceived) && !bPerceived)
+			{
+				AIC->MoveToLocation(Belief, 50.f, false, true);
+			}
+			else
+			{
+				AIC->MoveToActor(Target, AttackRange * 0.5f);
+			}
 		}
 	}
 }
@@ -623,6 +635,13 @@ bool AEnemyCharacter::IsTargetUsableForTactics(const AActor* Candidate) const
 	{
 		return false;
 	}
+	// Sprint 08: an operative it neither perceives nor remembers is no target.
+	FVector Belief;
+	if (const UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>();
+		Sight && Candidate->IsA<AOperativeCharacter>() && !Sight->GetBelief(this, Candidate, Belief))
+	{
+		return false;
+	}
 	return !(bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire && IsInFearZone(GodotPosition(Candidate), Candidate));
 }
 
@@ -636,12 +655,17 @@ AActor* AEnemyCharacter::FindTarget() const
 	}
 	TArray<AActor*> Actors;
 	TArray<FEnemyTargetCandidate> Candidates;
+	// Sprint 08: operatives where it believes them (seen / heard / remembered); unknown ones are no candidates.
+	const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+	TArray<AOperativeCharacter*> Known;
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
-		if (Member->HealthComponent && Member->HealthComponent->IsAlive())
+		FVector Belief = Member->GetActorLocation();
+		if (Member->HealthComponent && Member->HealthComponent->IsAlive() && (!Sight || Sight->GetBelief(this, Member, Belief)))
 		{
+			Known.Add(Member);
 			Actors.Add(Member);
-			Candidates.Add({ EEnemyTargetKind::Operative, GodotPosition(Member), true });
+			Candidates.Add({ EEnemyTargetKind::Operative, Belief - FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight() - 100.f), true });
 		}
 	}
 	for (TActorIterator<ATurretActor> It(World); It; ++It)
@@ -680,9 +704,9 @@ AActor* AEnemyCharacter::FindTarget() const
 		AActor* Nearest = nullptr;
 		float NearestDistance = TNumericLimits<float>::Max();
 		const FVector From = GetActorLocation();
-		for (AOperativeCharacter* Member : Squad->GetMembers())
+		for (AOperativeCharacter* Member : Known)
 		{
-			if (Member->HealthComponent && Member->HealthComponent->IsAlive() && FVector::Dist(From, Member->GetActorLocation()) < NearestDistance)
+			if (FVector::Dist(From, Member->GetActorLocation()) < NearestDistance)
 			{
 				NearestDistance = FVector::Dist(From, Member->GetActorLocation());
 				Nearest = Member;
@@ -702,12 +726,12 @@ AActor* AEnemyCharacter::FindTarget() const
 	{
 		return Actors[Index];
 	}
-	// Everything skipped: never stand idle — hunt the nearest living operative.
+	// Everything skipped: never stand idle — hunt the nearest living operative it knows about.
 	AActor* Nearest = nullptr;
 	float NearestDistance = TNumericLimits<float>::Max();
-	for (AOperativeCharacter* Member : Squad->GetMembers())
+	for (AOperativeCharacter* Member : Known)
 	{
-		if (Member->HealthComponent && Member->HealthComponent->IsAlive() && FVector::Dist(Feet, Member->GetActorLocation()) < NearestDistance)
+		if (FVector::Dist(Feet, Member->GetActorLocation()) < NearestDistance)
 		{
 			NearestDistance = FVector::Dist(Feet, Member->GetActorLocation());
 			Nearest = Member;
@@ -876,9 +900,11 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 	TArray<AOperativeCharacter*> Members;
 	TArray<FVector> Positions;
 	TArray<bool> Elevated;
+	const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
 	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
 	{
-		if (Member->HealthComponent && Member->HealthComponent->IsAlive())
+		FVector Belief;
+		if (Member->HealthComponent && Member->HealthComponent->IsAlive() && (!Sight || Sight->GetBelief(this, Member, Belief)))
 		{
 			Members.Add(Member);
 			Positions.Add(GodotPosition(Member));
@@ -887,7 +913,8 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 	}
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 	const int32 Index = EnemyAIRules::SelectSpitterTarget(Feet, Positions, Elevated);
-	AOperativeCharacter* Target = Members.IsValidIndex(Index) ? Members[Index] : Cast<AOperativeCharacter>(FindClosestSquadMember());
+	AOperativeCharacter* Target = Members.IsValidIndex(Index) ? Members[Index]
+		: (Sight && Sight->IsActive() ? nullptr : Cast<AOperativeCharacter>(FindClosestSquadMember()));
 	CurrentTarget = Target;
 	if (!Target)
 	{
@@ -929,7 +956,16 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 	case ESpitterMove::Approach:
 		if (AIC)
 		{
-			AIC->MoveToActor(Target, AIConfig.SpitterPreferredRange * 0.5f);
+			FVector Belief;
+			bool bPerceived = true;
+			if (Sight && Sight->GetBelief(this, Target, Belief, &bPerceived) && !bPerceived)
+			{
+				AIC->MoveToLocation(Belief, 50.f, false, true); // to where it last knew him
+			}
+			else
+			{
+				AIC->MoveToActor(Target, AIConfig.SpitterPreferredRange * 0.5f);
+			}
 		}
 		break;
 	case ESpitterMove::Retreat:
@@ -950,6 +986,10 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 	if (Line.bHasLos && Distance <= AttackRange && AttackTimer <= 0.f)
 	{
 		AttackTimer = AttackCooldown;
+		if (UTacticalSightSubsystem* FireSight = World->GetSubsystem<UTacticalSightSubsystem>())
+		{
+			FireSight->NotifyFired(this); // the acid spit gives it away (Sprint 08-E)
+		}
 		const bool bIsCrit = FMath::FRand() < CritChance;
 		Target->TakeHit(AttackDamage * (bIsCrit ? CritMultiplier : 1.f) * Line.Cover, EnemyDisplayName, bIsCrit, false, this);
 		if (UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
@@ -1026,6 +1066,10 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	if (!Target || bIsDying)
 	{
 		return;
+	}
+	if (UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
+	{
+		Sight->NotifyFired(this); // a blow gives it away (Sprint 08-E)
 	}
 
 	AttackTimer = AttackCooldown;

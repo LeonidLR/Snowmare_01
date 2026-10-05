@@ -17,6 +17,10 @@
 #include "Core/MissionSubsystem.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/SquadROE.h"
+#include "Characters/EnemyCharacter.h"
+#include "Combat/EnemyGhostActor.h"
+#include "Combat/SightRules.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -1376,6 +1380,12 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 {
 	bOutBarricadeBlocked = false;
 	UWorld* World = GetWorld();
+	// Sprint 08: an enemy the squad does not see is not aimed at (blind fire at its silhouette is an order).
+	if (const UTacticalSightSubsystem* Sight = World ? World->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
+		Sight && Enemy && !Sight->IsVisibleToSquad(Enemy))
+	{
+		return false;
+	}
 	const FVector MyFeet = ShotFeet(this);
 	const FVector EnemyFeet = ShotFeet(Enemy);
 	if (!World || SquadFireRules::IsInDeadZone(MyFeet, EnemyFeet))
@@ -1428,6 +1438,67 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	Out.Distance = Distance;
 	Out.Cover = Verdict.Cover;
 	return true;
+}
+
+void AOperativeCharacter::SetBlindFireTarget(AEnemyGhostActor* Ghost)
+{
+	BlindFireGhost = Ghost;
+	BlindFireSource = Ghost ? Ghost->GetSource() : nullptr;
+	if (Ghost)
+	{
+		ManualPriorityTarget.Reset();
+	}
+}
+
+AEnemyGhostActor* AOperativeCharacter::GetBlindFireTarget() const
+{
+	return BlindFireGhost.Get();
+}
+
+bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShootCandidate& Out) const
+{
+	UWorld* World = GetWorld();
+	const FVector MyFeet = ShotFeet(this);
+	const FVector GhostFeet = Ghost.GetLastKnownFeet();
+	if (!World || SquadFireRules::IsInDeadZone(MyFeet, GhostFeet))
+	{
+		return false;
+	}
+	const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(MyFeet.Z, GhostFeet.Z);
+	const float Range = (CurrentWeapon ? CurrentWeapon->AttackRangeCm : 1400.f) * SquadFireRules::GetPostureRangeMultiplier(Stance)
+		* (Elevation.bElevated ? Elevation.RangeMultiplier : 1.f);
+	const float Distance = FVector::Dist(MyFeet + FVector(0.f, 0.f, 100.f), GhostFeet);
+	if (Distance > Range)
+	{
+		return false;
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(BlindShotLine), false, this);
+	for (TActorIterator<APawn> It(World); It; ++It)
+	{
+		Params.AddIgnoredActor(*It); // fired into the suspected spot: pawns do not stop the line check
+	}
+	for (TActorIterator<ATurretActor> It(World); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
+	EShotLineHit Kind = EShotLineHit::Clear;
+	FHitResult Hit;
+	if (World->LineTraceSingleByChannel(Hit, GetMuzzleLocation(), Ghost.GetAimPoint(), ECC_Visibility, Params) && Hit.GetActor())
+	{
+		Kind = Hit.GetActor()->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
+	}
+	// Suppression into cover: a barricade at the silhouette does not stop a standing / crouched shooter (JudgeLine).
+	const FShotLineVerdict Verdict = SquadFireRules::JudgeLine(Kind, Stance, Elevation);
+	if (!Verdict.bCanHit)
+	{
+		return false;
+	}
+	Out.Enemy = Ghost.GetSource();
+	Out.Distance = Distance;
+	Out.Cover = Verdict.Cover;
+	Out.bBlind = true;
+	Out.AimPoint = Ghost.GetAimPoint();
+	return Out.Enemy != nullptr;
 }
 
 AActor* AOperativeCharacter::FindBestCombatTarget() const
@@ -1521,6 +1592,32 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime)
 		else if (bBlocked)
 		{
 			NotifyBarricadeBlocked();
+		}
+	}
+	// 1a. Blind fire at a silhouette (Sprint 08-F); once the enemy is seen again it becomes the priority target.
+	if (BlindFireSource.IsValid() || BlindFireGhost.IsValid())
+	{
+		AEnemyGhostActor* Ghost = BlindFireGhost.Get();
+		AActor* Source = BlindFireSource.Get();
+		if (!Ghost)
+		{
+			if (Source && IsLiveEnemy(Source))
+			{
+				ManualPriorityTarget = Source;
+			}
+			BlindFireSource.Reset();
+		}
+		else if (!Source || !IsLiveEnemy(Source))
+		{
+			BlindFireGhost.Reset();
+			BlindFireSource.Reset();
+		}
+		else if (EvaluateBlindLine(*Ghost, Candidate))
+		{
+			CurrentCombatTarget = Source;
+			PendingFlankTarget.Reset();
+			TargetSwitchTimer = 0.f;
+			return Candidate;
 		}
 	}
 	// 1b. Commander Mode: the target the ROE policy picked (Sprint 07-C).
@@ -1718,11 +1815,14 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 	}
 
 	// Turn towards target smoothly (the barrel onto it, see UpdateCombatFacing).
-	const FRotator LookRot(0.f, (Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw - BarrelYawOffset, 0.f);
+	const FVector LookAt = Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation();
+	const FRotator LookRot(0.f, (LookAt - GetActorLocation()).Rotation().Yaw - BarrelYawOffset, 0.f);
 	SetActorRotation(FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 12.0f));
 
 	if (ShootTimer <= 0.0f && MisfireCooldownTimer <= 0.0f)
 	{
+		TGuardValue<bool> Blind(bBlindShot, Shot.bBlind);
+		TGuardValue<FVector> Aim(BlindAimPoint, Shot.AimPoint);
 		ShootAtTarget(Target, Shot.Cover);
 	}
 }
@@ -1757,6 +1857,11 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	}
 
 	ShootTimer = FMath::Max(0.08f, (CurrentWeapon ? CurrentWeapon->FireRate : 0.65f) * (bRagingShot ? RageComponent->Config.FireRateMultiplier : 1.f));
+	// Sprint 08-E: the muzzle flash gives the shooter away for 2 s.
+	if (UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
+	{
+		Sight->NotifyFired(this);
+	}
 
 	const float Dist = FVector::Dist2D(GetActorLocation(), Target->GetActorLocation());
 	const float DistM = Dist / 100.0f;
@@ -1767,6 +1872,12 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	if (ColdSurvival && ColdLevel > 50.0f)
 	{
 		HitChance = FMath::Clamp(HitChance - ColdSurvival->GetAimPenalty(), 0.05f, 0.99f);
+	}
+	// Blind fire at a silhouette: -80 %, and nothing to hit once the enemy left that spot (Sprint 08-F).
+	if (bBlindShot)
+	{
+		HitChance = SightRules::BlindFireHitChance(HitChance,
+			FVector::Dist2D(ShotFeet(Target), BlindAimPoint));
 	}
 
 	const bool bHit = bForceHitForTesting || (FMath::FRand() <= HitChance);
@@ -1780,7 +1891,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	// Godot _spawn_muzzle_tracer: to the target, or deflected next to it on a miss.
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
 	{
-		FVector End = Target->GetActorLocation();
+		FVector End = bBlindShot ? BlindAimPoint : Target->GetActorLocation();
 		if (!bHit)
 		{
 			FVector Offset(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(20.f, 120.f));

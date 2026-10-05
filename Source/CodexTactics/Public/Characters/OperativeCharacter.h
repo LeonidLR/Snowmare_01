@@ -98,6 +98,9 @@ struct FShootCandidate
 	float Distance = 0.f;
 	/** 0.8 crouched behind a barricade. */
 	float Cover = 1.f;
+	/** Blind fire at a last known position silhouette (Sprint 08-F): aimed at AimPoint, hit chance x0.2. */
+	bool bBlind = false;
+	FVector AimPoint = FVector::ZeroVector;
 };
 
 /**
@@ -683,6 +686,13 @@ public:
 	void SetAutonomyTarget(AActor* Enemy) { AutonomyTarget = Enemy; }
 	AActor* GetAutonomyTarget() const { return AutonomyTarget.Get(); }
 
+	/**
+	 * Blind fire (Sprint 08-F): the operative fires at the silhouette (last known position) of an enemy he cannot see,
+	 * -80 % accuracy, until the silhouette goes (the enemy is seen again: it becomes the priority target) or it dies.
+	 */
+	void SetBlindFireTarget(class AEnemyGhostActor* Ghost);
+	class AEnemyGhostActor* GetBlindFireTarget() const;
+
 	/** The enemy the operative shot at last (real-time fire). */
 	AActor* GetCurrentCombatTarget() const { return CurrentCombatTarget.Get(); }
 
@@ -861,6 +871,13 @@ private:
 
 	mutable TWeakObjectPtr<AActor> ManualPriorityTarget;
 	mutable TWeakObjectPtr<AActor> AutonomyTarget;
+	TWeakObjectPtr<class AEnemyGhostActor> BlindFireGhost;
+	TWeakObjectPtr<AActor> BlindFireSource;
+	/** Set around ShootAtTarget for a blind shot. */
+	bool bBlindShot = false;
+	FVector BlindAimPoint = FVector::ZeroVector;
+	/** Range and line of fire to a silhouette's aim point (barricades by SquadFireRules::JudgeLine). */
+	bool EvaluateBlindLine(const class AEnemyGhostActor& Ghost, FShootCandidate& Out) const;
 	/** Set while AutonomousMoveTo runs: the move does not re-pin the anchor. */
 	bool bAutonomousOrder = false;
 	TMap<ETargetedShotKind, TWeakObjectPtr<AActor>> PlannedShots;

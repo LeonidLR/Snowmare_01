@@ -1,7 +1,7 @@
 // Dev-only console command for a headless real-time squad fire check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.SquadFireSmoke
 // Godot player.gd _find_shoot_target / _shoot_at_target: a barricade between the commander and a hound blocks a prone
-// shot («Баррикада блокирует огонь»), gives cover 0.8 crouched and 1 standing; a current target is kept until a much
+// shot («Баррикада блокирует огонь»); crouched and standing fire over the 60 cm barricade (Sprint 08); a current target is kept until a much
 // closer hound has been closer for the stance delay (0.15 s standing); a crouched crit hits for 2.5x a standing plain
 // shot («КРИТ x2!»).
 
@@ -138,7 +138,9 @@ namespace SquadFireSmoke
 			const AEnemyCharacter* Hound = State.Far.Get();
 			const FVector HoundFeet = Hound ? Hound->GetActorLocation() - FVector(0.f, 0.f, Hound->GetSimpleCollisionHalfHeight()) : FVector::ZeroVector;
 			const FVector BarricadeTop = State.Barricade.IsValid() ? State.Barricade->GetComponentsBoundingBox().Max : FVector::ZeroVector;
-			Check(State, Crouched.Enemy == State.Far.Get() && FMath::IsNearlyEqual(Crouched.Cover, 0.8f), FString::Printf(
+			// Sprint 08 (user decision 2026-10-05): the barricade is 60 cm, the crouched muzzle (85 cm) fires over it — the
+			// x0.8 of a line grazing the cover no longer applies here.
+			Check(State, Crouched.Enemy == State.Far.Get() && Crouched.Cover >= 0.8f, FString::Printf(
 				TEXT("crouched: cover %.2f (muzzle z %.0f, hound feet z %.0f, barricade top z %.0f)"), Crouched.Cover,
 				Commander->GetMuzzleLocation().Z, HoundFeet.Z, BarricadeTop.Z));
 			Commander->SetStance(EOperativeStance::Standing);

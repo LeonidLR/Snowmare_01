@@ -629,7 +629,7 @@ void ACodexTacticsHUD::DrawWorldLabels()
 	{
 		// Godot: the enemies left in stasis outside a turn-based fight hide their plates.
 		FOverheadLabel Label;
-		if ((!bTurnBased || TurnBased->GetUnitState(*It)) && It->GetOverheadLabel(Label))
+		if (!It->IsHidden() && (!bTurnBased || TurnBased->GetUnitState(*It)) && It->GetOverheadLabel(Label))
 		{
 			Draw(*It, Label);
 		}

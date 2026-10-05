@@ -34,6 +34,12 @@ public:
 	ABarricadeActor();
 
 	virtual void BeginPlay() override;
+
+	/** Barricade height, cm (Sprint 08: 60, SightRules::CoverHeightCm). */
+	static constexpr float HeightCm = 60.f;
+
+	/** Sets a map-placed barricade down onto the ground below it (they were laid out 1 m high). */
+	void SettleOnGround();
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void DetonateTrap(bool bByShot = false, const FText& InstigatorName = FText::GetEmpty()) override;
