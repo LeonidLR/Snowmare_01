@@ -75,6 +75,12 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	UpdateUpperBody(DeltaSeconds);
 	UpdateColdLayer(DeltaSeconds);
 	UpdateNativeBlend(DeltaSeconds);
+	if (bUseRifle2Locomotion)
+	{
+		const AOperativeCharacter* Rifle2Owner = Cast<AOperativeCharacter>(TryGetPawnOwner());
+		UpdateRifle2Locomotion(DeltaSeconds, Rifle2Owner && Rifle2Owner->IsMoving(), Speed, Direction,
+			Rifle2Owner ? Rifle2Owner->GetActorRotation().Yaw : 0.f);
+	}
 	if (CVarAnimTrace.GetValueOnGameThread() > 0 && (Speed > 0.f || TryGetPawnOwner() && TryGetPawnOwner()->GetVelocity().SizeSquared2D() > 0.f))
 	{
 		if (const APawn* Pawn = TryGetPawnOwner())
@@ -84,6 +90,162 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 				StandBlendSpeed, StandPlayRate, SlowBlendSpeed, SlowPlayRate, bIsMoving ? 1 : 0, bIsAiming ? 1 : 0, bIsCrouching ? 1 : 0,
 				bIsProne ? 1 : 0, GetSlotMontageGlobalWeight(UpperBodySlot), GetSlotMontageGlobalWeight(FullBodySlot));
 		}
+	}
+}
+
+void UOperativeAnimInstance::EnterRifleLocoState(ERifleLocoState NewState, UAnimSequence* Clip)
+{
+	LocoState = NewState;
+	LocoStateTime = 0.f;
+	LocoClipLength = Clip ? Clip->GetPlayLength() : 0.f;
+	bLocoIdle = NewState == ERifleLocoState::Idle;
+	bLocoIdleBreak = NewState == ERifleLocoState::IdleBreak;
+	bLocoTurn = NewState == ERifleLocoState::Turn;
+	bLocoStart = NewState == ERifleLocoState::Start;
+	bLocoWalk = NewState == ERifleLocoState::Walk;
+	bLocoStop = NewState == ERifleLocoState::Stop;
+	switch (NewState)
+	{
+	case ERifleLocoState::IdleBreak: LocoBreakClip = Clip; break;
+	case ERifleLocoState::Turn: LocoTurnClip = Clip; LocoTurnEased = 0.f; break;
+	case ERifleLocoState::Start: LocoStartClip = Clip; break;
+	case ERifleLocoState::Stop: LocoStopClip = Clip; break;
+	case ERifleLocoState::Walk: LocoWalkSeconds = 0.f; break;
+	default: LocoIdleSeconds = 0.f; break;
+	}
+}
+
+void UOperativeAnimInstance::UpdateRifle2Locomotion(float DeltaSeconds, bool bMoveIntent, float InSpeed, float InDirection, float ActorYaw)
+{
+	using namespace RifleLocomotionRules;
+	LocoIdleClip = Rifle2IdleLoop;
+	Rifle2BlendSpeed = FMath::Min(InSpeed, Rifle2WalkClipSpeed);
+	Rifle2PlayRate = FMath::Max(1.f, InSpeed / FMath::Max(1.f, Rifle2WalkClipSpeed));
+	LocoStateTime += DeltaSeconds;
+
+	// The root yaw offset: standing still the body keeps its world facing while the actor turns; moving it catches up.
+	const float ActorDelta = bLocoHasYaw ? DeltaYaw(LocoLastActorYaw, ActorYaw) : 0.f;
+	LocoLastActorYaw = ActorYaw;
+	bLocoHasYaw = true;
+	const bool bStill = LocoState == ERifleLocoState::Idle || LocoState == ERifleLocoState::IdleBreak || LocoState == ERifleLocoState::Turn;
+	if (bStill)
+	{
+		RootYawOffset = FMath::UnwindDegrees(RootYawOffset - ActorDelta);
+	}
+	else
+	{
+		RootYawOffset = FMath::FInterpTo(RootYawOffset, 0.f, DeltaSeconds, 10.f);
+	}
+
+	auto PickClip = [](const TArray<TObjectPtr<UAnimSequence>>& Clips, int32 Index) -> UAnimSequence*
+	{
+		if (Clips.IsValidIndex(Index) && Clips[Index])
+		{
+			return Clips[Index];
+		}
+		// The other foot of the same sector, else nothing (the state is skipped).
+		const int32 Other = Index ^ 1;
+		return Clips.IsValidIndex(Other) ? Clips[Other].Get() : nullptr;
+	};
+
+	switch (LocoState)
+	{
+	case ERifleLocoState::Idle:
+	case ERifleLocoState::IdleBreak:
+	{
+		if (ShouldStart(InSpeed, bMoveIntent))
+		{
+			const int32 Sector = DirectionSector(InDirection);
+			UAnimSequence* Clip = PickClip(Rifle2Starts, ClipIndex(Sector, StartFoot(Sector)));
+			EnterRifleLocoState(Clip ? ERifleLocoState::Start : ERifleLocoState::Walk, Clip);
+			break;
+		}
+		if (ShouldTurnInPlace(RootYawOffset, InSpeed, bMoveIntent))
+		{
+			bool bRight = false;
+			const int32 Bucket = TurnBucket(RootYawOffset, bRight);
+			const TArray<TObjectPtr<UAnimSequence>>& Turns = bRight ? Rifle2TurnRight : Rifle2TurnLeft;
+			if (UAnimSequence* Clip = Turns.IsValidIndex(Bucket) ? Turns[Bucket].Get() : nullptr)
+			{
+				LocoTurnDegrees = BucketDegrees(Bucket);
+				bLocoTurnRight = bRight;
+				EnterRifleLocoState(ERifleLocoState::Turn, Clip);
+				break;
+			}
+		}
+		if (LocoState == ERifleLocoState::IdleBreak)
+		{
+			if (LocoStateTime >= LocoClipLength - 0.25f)
+			{
+				EnterRifleLocoState(ERifleLocoState::Idle, nullptr);
+				LocoNextBreak = FMath::FRandRange(Rifle2IdleBreakMinSeconds, Rifle2IdleBreakMaxSeconds);
+			}
+			break;
+		}
+		// A small leftover offset (under the turn trigger) settles slowly; now and then an idle break.
+		RootYawOffset = FMath::FInterpTo(RootYawOffset, 0.f, DeltaSeconds, 1.5f);
+		LocoIdleSeconds += DeltaSeconds;
+		if (LocoIdleSeconds >= LocoNextBreak && Rifle2IdleBreaks.Num() > 0)
+		{
+			if (UAnimSequence* Break = Rifle2IdleBreaks[FMath::RandRange(0, Rifle2IdleBreaks.Num() - 1)])
+			{
+				EnterRifleLocoState(ERifleLocoState::IdleBreak, Break);
+			}
+		}
+		break;
+	}
+	case ERifleLocoState::Turn:
+	{
+		// The clip turns the body: the offset closes by the bucket's degrees over the clip (eased).
+		const float Progress = LocoClipLength > 0.f ? FMath::Clamp(LocoStateTime / LocoClipLength, 0.f, 1.f) : 1.f;
+		const float Eased = FMath::InterpEaseInOut(0.f, 1.f, Progress, 2.f);
+		RootYawOffset = FMath::UnwindDegrees(RootYawOffset + (bLocoTurnRight ? 1.f : -1.f) * LocoTurnDegrees * (Eased - LocoTurnEased));
+		LocoTurnEased = Eased;
+		if (ShouldStart(InSpeed, bMoveIntent))
+		{
+			const int32 Sector = DirectionSector(InDirection);
+			UAnimSequence* Clip = PickClip(Rifle2Starts, ClipIndex(Sector, StartFoot(Sector)));
+			EnterRifleLocoState(Clip ? ERifleLocoState::Start : ERifleLocoState::Walk, Clip);
+		}
+		else if (Progress >= 1.f)
+		{
+			EnterRifleLocoState(ERifleLocoState::Idle, nullptr);
+		}
+		break;
+	}
+	case ERifleLocoState::Start:
+		if (ShouldStop(bMoveIntent))
+		{
+			const int32 Sector = DirectionSector(InDirection);
+			UAnimSequence* Clip = PickClip(Rifle2Stops, ClipIndex(Sector, StartFoot(Sector)));
+			EnterRifleLocoState(Clip ? ERifleLocoState::Stop : ERifleLocoState::Idle, Clip);
+		}
+		else if (LocoStateTime >= FMath::Max(0.f, LocoClipLength - StartBlendOut))
+		{
+			EnterRifleLocoState(ERifleLocoState::Walk, nullptr);
+		}
+		break;
+	case ERifleLocoState::Walk:
+		LocoWalkSeconds += DeltaSeconds;
+		if (ShouldStop(bMoveIntent))
+		{
+			const int32 Sector = DirectionSector(InDirection);
+			UAnimSequence* Clip = PickClip(Rifle2Stops, ClipIndex(Sector, StopFoot(LocoWalkSeconds, Rifle2WalkCycleSeconds)));
+			EnterRifleLocoState(Clip ? ERifleLocoState::Stop : ERifleLocoState::Idle, Clip);
+		}
+		break;
+	case ERifleLocoState::Stop:
+		if (ShouldStart(InSpeed, bMoveIntent))
+		{
+			const int32 Sector = DirectionSector(InDirection);
+			UAnimSequence* Clip = PickClip(Rifle2Starts, ClipIndex(Sector, StartFoot(Sector)));
+			EnterRifleLocoState(Clip ? ERifleLocoState::Start : ERifleLocoState::Walk, Clip);
+		}
+		else if (LocoStateTime >= LocoClipLength)
+		{
+			EnterRifleLocoState(ERifleLocoState::Idle, nullptr);
+		}
+		break;
 	}
 }
 

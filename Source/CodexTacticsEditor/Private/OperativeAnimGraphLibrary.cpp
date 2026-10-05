@@ -4,6 +4,16 @@
 #include "AnimGraphNode_BlendSpacePlayer.h"
 #include "AnimGraphNode_LayeredBoneBlend.h"
 #include "AnimGraphNode_Root.h"
+#include "AnimGraphNode_RotateRootBone.h"
+#include "AnimGraphNode_StateMachine.h"
+#include "AnimGraphNode_StateResult.h"
+#include "AnimGraphNode_TransitionResult.h"
+#include "AnimStateEntryNode.h"
+#include "AnimStateNode.h"
+#include "AnimStateTransitionNode.h"
+#include "AnimationStateGraph.h"
+#include "AnimationStateMachineGraph.h"
+#include "AnimationTransitionGraph.h"
 #include "AnimGraphNode_SaveCachedPose.h"
 #include "AnimGraphNode_SequencePlayer.h"
 #include "AnimGraphNode_TwoWayBlend.h"
@@ -280,6 +290,152 @@ namespace OperativeAnimGraph
 		Build.LinkPose(Slot, Root, TEXT("Result"));
 		return Build.bOk && CompileAndReport(AnimBlueprint, Root->GetGraph(), OutReport);
 	}
+}
+
+bool UOperativeAnimGraphLibrary::BuildRifle2LocomotionGraph(UAnimBlueprint* AnimBlueprint, UBlendSpace* WalkBlendSpace, FName FullBodySlotName,
+	FName UpperBodySlotName, FName UpperBodyBone, FString& OutReport)
+{
+	using namespace OperativeAnimGraph;
+	OutReport.Reset();
+	UAnimGraphNode_Root* Root = AnimBlueprint && WalkBlendSpace ? ResetAnimGraph(AnimBlueprint, OutReport) : nullptr;
+	if (!Root)
+	{
+		OutReport = OutReport.IsEmpty() ? TEXT("missing AnimBlueprint / walk blend space") : OutReport;
+		return false;
+	}
+	Root->NodePosY = RowHeight;
+	FBuilder Build{Root->GetGraph(), OutReport};
+
+	// The state machine node; PostPlacedNewNode creates its graph with the entry node.
+	UAnimGraphNode_StateMachine* Machine = Build.Spawn<UAnimGraphNode_StateMachine>(1, 1, [](UAnimGraphNode_StateMachine&) {});
+	UAnimationStateMachineGraph* MachineGraph = Machine->EditorStateMachineGraph;
+	if (!MachineGraph || !MachineGraph->EntryNode)
+	{
+		OutReport += TEXT("the state machine has no graph / entry node");
+		return false;
+	}
+	Machine->OnRenameNode(TEXT("Rifle2Locomotion"));
+
+	// One state: a node created in the machine graph (it creates its own state graph), named, at a grid spot.
+	auto AddState = [&](const TCHAR* Name, int32 X, int32 Y) -> UAnimStateNode*
+	{
+		FGraphNodeCreator<UAnimStateNode> Creator(*MachineGraph);
+		UAnimStateNode* State = Creator.CreateNode();
+		State->NodePosX = X * 320;
+		State->NodePosY = Y * 200;
+		Creator.Finalize();
+		State->OnRenameNode(Name);
+		return State;
+	};
+	// A sequence player in the state, its clip from an anim instance variable; one-shot clips do not loop.
+	auto FillWithClip = [&](UAnimStateNode* State, FName ClipVariable, bool bLoop)
+	{
+		UAnimationStateGraph* StateGraph = Cast<UAnimationStateGraph>(State->BoundGraph);
+		if (!StateGraph || !StateGraph->GetResultNode())
+		{
+			OutReport += FString::Printf(TEXT("state %s has no graph\n"), *State->GetStateName());
+			Build.bOk = false;
+			return;
+		}
+		FBuilder Sub{StateGraph, OutReport};
+		UAnimGraphNode_SequencePlayer* Player = Sub.Sequence(0, ClipVariable, NAME_None, -1);
+		if (const FBoolProperty* Loop = CastField<FBoolProperty>(FAnimNode_SequencePlayer::StaticStruct()->FindPropertyByName(TEXT("bLoopAnimation"))))
+		{
+			Loop->SetPropertyValue_InContainer(&Player->Node, bLoop);
+		}
+		else
+		{
+			OutReport += TEXT("no bLoopAnimation on the sequence player\n");
+		}
+		Sub.Link(Sub.Pin(Player, TEXT("Pose"), EGPD_Output), Sub.Pin(StateGraph->GetResultNode(), TEXT("Result"), EGPD_Input));
+		Build.bOk &= Sub.bOk;
+	};
+
+	UAnimStateNode* Idle = AddState(TEXT("Idle"), 2, 2);
+	UAnimStateNode* IdleBreak = AddState(TEXT("IdleBreak"), 2, 0);
+	UAnimStateNode* Turn = AddState(TEXT("TurnInPlace"), 2, 4);
+	UAnimStateNode* Start = AddState(TEXT("WalkStart"), 4, 1);
+	UAnimStateNode* Walk = AddState(TEXT("Walk"), 6, 2);
+	UAnimStateNode* Stop = AddState(TEXT("WalkStop"), 4, 3);
+	FillWithClip(Idle, TEXT("LocoIdleClip"), true);
+	FillWithClip(IdleBreak, TEXT("LocoBreakClip"), false);
+	FillWithClip(Turn, TEXT("LocoTurnClip"), false);
+	FillWithClip(Start, TEXT("LocoStartClip"), false);
+	FillWithClip(Stop, TEXT("LocoStopClip"), false);
+	// Walk: the 8-way blend space.
+	if (UAnimationStateGraph* WalkGraph = Cast<UAnimationStateGraph>(Walk->BoundGraph))
+	{
+		FBuilder Sub{WalkGraph, OutReport};
+		UAnimGraphNode_BlendSpacePlayer* Player = Sub.BlendSpace(WalkBlendSpace, 0, TEXT("Rifle2BlendSpeed"), TEXT("Rifle2PlayRate"));
+		Sub.Link(Sub.Pin(Player, TEXT("Pose"), EGPD_Output), Sub.Pin(WalkGraph->GetResultNode(), TEXT("Result"), EGPD_Input));
+		Build.bOk &= Sub.bOk;
+	}
+
+	// Entry -> Idle.
+	UEdGraphPin* EntryOut = nullptr;
+	for (UEdGraphPin* Each : MachineGraph->EntryNode->Pins)
+	{
+		EntryOut = Each->Direction == EGPD_Output ? Each : EntryOut;
+	}
+	if (EntryOut)
+	{
+		EntryOut->MakeLinkTo(Idle->GetInputPin());
+	}
+	else
+	{
+		OutReport += TEXT("entry node without an output pin\n");
+		Build.bOk = false;
+	}
+
+	// A transition whose rule is one bool of the anim instance (the C++ machine sets exactly one state flag).
+	int32 Transitions = 0;
+	auto AddTransition = [&](UAnimStateNode* From, UAnimStateNode* To, FName Flag, float Crossfade)
+	{
+		FGraphNodeCreator<UAnimStateTransitionNode> Creator(*MachineGraph);
+		UAnimStateTransitionNode* Transition = Creator.CreateNode();
+		Transition->NodePosX = (From->NodePosX + To->NodePosX) / 2;
+		Transition->NodePosY = (From->NodePosY + To->NodePosY) / 2;
+		Creator.Finalize();
+		Transition->CreateConnections(From, To);
+		Transition->CrossfadeDuration = Crossfade;
+		UAnimationTransitionGraph* RuleGraph = Cast<UAnimationTransitionGraph>(Transition->BoundGraph);
+		if (!RuleGraph || !RuleGraph->GetResultNode())
+		{
+			OutReport += FString::Printf(TEXT("transition %s -> %s has no rule graph\n"), *From->GetStateName(), *To->GetStateName());
+			Build.bOk = false;
+			return;
+		}
+		FBuilder Rule{RuleGraph, OutReport};
+		Rule.BindVariable(Flag, RuleGraph->GetResultNode(), TEXT("bCanEnterTransition"));
+		Build.bOk &= Rule.bOk;
+		++Transitions;
+	};
+	AddTransition(Idle, IdleBreak, TEXT("bLocoIdleBreak"), 0.25f);
+	AddTransition(IdleBreak, Idle, TEXT("bLocoIdle"), 0.3f);
+	AddTransition(Idle, Turn, TEXT("bLocoTurn"), 0.15f);
+	AddTransition(IdleBreak, Turn, TEXT("bLocoTurn"), 0.15f);
+	AddTransition(Turn, Idle, TEXT("bLocoIdle"), 0.2f);
+	AddTransition(Idle, Start, TEXT("bLocoStart"), 0.15f);
+	AddTransition(IdleBreak, Start, TEXT("bLocoStart"), 0.15f);
+	AddTransition(Turn, Start, TEXT("bLocoStart"), 0.2f);
+	AddTransition(Start, Walk, TEXT("bLocoWalk"), 0.2f);
+	AddTransition(Start, Stop, TEXT("bLocoStop"), 0.2f);
+	AddTransition(Walk, Stop, TEXT("bLocoStop"), 0.2f);
+	AddTransition(Stop, Idle, TEXT("bLocoIdle"), 0.25f);
+	AddTransition(Stop, Start, TEXT("bLocoStart"), 0.2f);
+	// Missing clips (a start / stop the pack lacks): straight between idle and walk.
+	AddTransition(Idle, Walk, TEXT("bLocoWalk"), 0.25f);
+	AddTransition(Turn, Walk, TEXT("bLocoWalk"), 0.25f);
+	AddTransition(Stop, Walk, TEXT("bLocoWalk"), 0.25f);
+	AddTransition(Walk, Idle, TEXT("bLocoIdle"), 0.3f);
+	AddTransition(Start, Idle, TEXT("bLocoIdle"), 0.25f);
+
+	// Turn-in-place: the root counter-rotated by RootYawOffset.
+	UAnimGraphNode_RotateRootBone* Rotate = Build.Spawn<UAnimGraphNode_RotateRootBone>(2, 1, [](UAnimGraphNode_RotateRootBone&) {});
+	Build.LinkPose(Machine, Rotate, TEXT("BasePose"));
+	Build.BindVariable(TEXT("RootYawOffset"), Rotate, TEXT("Yaw"));
+	OutReport += FString::Printf(TEXT("state machine: 6 states, %d transitions\n"), Transitions);
+	return FinishEnemyGraph(Build, AnimBlueprint, Root, Rotate, 2, FullBodySlotName, UpperBodySlotName, UpperBodyBone, OutReport);
 }
 
 bool UOperativeAnimGraphLibrary::BuildEnemyLocomotionGraph(UAnimBlueprint* AnimBlueprint, FName SlotName, float BlendTime, FName UpperBodySlotName,

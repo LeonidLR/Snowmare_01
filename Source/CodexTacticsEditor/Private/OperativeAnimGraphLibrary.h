@@ -55,6 +55,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
 	static int32 CountAnimGraphNodes(UAnimBlueprint* AnimBlueprint);
 
+	/**
+	 * Replaces the AnimGraph of ABP_Operative_Rifle2 (parent UOperativeAnimInstance, bUseRifle2Locomotion) and compiles
+	 * it: a State Machine «Rifle2Locomotion» — Idle (LocoIdleClip, loop), IdleBreak (LocoBreakClip), Turn (LocoTurnClip),
+	 * Start (LocoStartClip), Walk (WalkBlendSpace: Direction x Rifle2BlendSpeed, Rifle2PlayRate), Stop (LocoStopClip) —
+	 * whose transitions read the anim instance's bLoco* flags (RifleLocomotionRules decide them in C++), then Rotate
+	 * Root Bone by RootYawOffset (turn-in-place), the upper-body slot over UpperBodyBone and the full-body slot.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static bool BuildRifle2LocomotionGraph(UAnimBlueprint* AnimBlueprint, UBlendSpace* WalkBlendSpace, FName FullBodySlotName,
+		FName UpperBodySlotName, FName UpperBodyBone, FString& OutReport);
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
 	static bool BuildEnemyLocomotionGraph(UAnimBlueprint* AnimBlueprint, FName SlotName, float BlendTime, FName UpperBodySlotName,
 		FName UpperBodyBone, FString& OutReport);

@@ -4,6 +4,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Characters/RifleLocomotionRules.h"
 #include "Survival/ColdRules.h"
 #include "OperativeAnimInstance.generated.h"
 
@@ -376,6 +377,88 @@ public:
 	/** Current native blend weight of a clip (debug / tests). */
 	float GetClipWeight(EOperativeClip Clip) const { return ClipWeights[static_cast<int32>(Clip)]; }
 
+	// --- Rifle_2 locomotion (ABP_Operative_Rifle2, Scripts/Editor/setup_operative_rifle2_animation.py; RifleLocomotionRules) ---
+
+	/** Runs the Idle / Turn / Start / Walk / Stop machine below (set on ABP_Operative_Rifle2's defaults). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Rifle2 Locomotion")
+	bool bUseRifle2Locomotion = false;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Rifle2 Locomotion")
+	TObjectPtr<UAnimSequence> Rifle2IdleLoop;
+
+	/** Idle breaks played now and then (M_Neutral_Stand_Idle_Break_v01..06). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Rifle2 Locomotion")
+	TArray<TObjectPtr<UAnimSequence>> Rifle2IdleBreaks;
+
+	/** Stand turns 45 / 90 / 135 / 180 to the left and to the right (4 each). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Rifle2 Locomotion", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequence>> Rifle2TurnLeft;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Rifle2 Locomotion", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequence>> Rifle2TurnRight;
+
+	/** Walk starts / stops: 16 each, sector * 2 + foot (sectors F, FR, RR, BR, B, BL, LL, FL; foot 0 left, 1 right). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Rifle2 Locomotion", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequence>> Rifle2Starts;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Rifle2 Locomotion", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequence>> Rifle2Stops;
+
+	/** Ground speed of the walk loops (the blend space's top row), cm/s; faster walking speeds the loop up. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Rifle2 Locomotion", meta = (ClampMin = "1"))
+	float Rifle2WalkClipSpeed = 150.f;
+
+	/** One walk cycle (two steps), s: the stop clip's foot follows the half cycle. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Rifle2 Locomotion", meta = (ClampMin = "0.1"))
+	float Rifle2WalkCycleSeconds = 1.1f;
+
+	/** An idle break every this many seconds (random in the range). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Rifle2 Locomotion", meta = (ClampMin = "1"))
+	float Rifle2IdleBreakMinSeconds = 8.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Rifle2 Locomotion", meta = (ClampMin = "1"))
+	float Rifle2IdleBreakMaxSeconds = 16.f;
+
+	/** The machine's state as flags for the AnimGraph state machine transitions (exactly one is true). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	bool bLocoIdle = true;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	bool bLocoIdleBreak = false;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	bool bLocoTurn = false;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	bool bLocoStart = false;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	bool bLocoWalk = false;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	bool bLocoStop = false;
+
+	/** The clips the state players read (chosen on entering the state). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	TObjectPtr<UAnimSequence> LocoIdleClip;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	TObjectPtr<UAnimSequence> LocoBreakClip;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	TObjectPtr<UAnimSequence> LocoTurnClip;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	TObjectPtr<UAnimSequence> LocoStartClip;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	TObjectPtr<UAnimSequence> LocoStopClip;
+
+	/** Mesh yaw against the actor's, degrees (Rotate Root Bone): the body keeps facing while the actor turns, a turn clip catches up. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	float RootYawOffset = 0.f;
+
+	/** Walk blend space speed axis (capped at Rifle2WalkClipSpeed) and play rate above it. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	float Rifle2BlendSpeed = 0.f;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Rifle2 State")
+	float Rifle2PlayRate = 1.f;
+
+	ERifleLocoState GetRifleLocoState() const { return LocoState; }
+	/** Feeds one frame of the Rifle_2 machine (also used by tests / smokes with a stand-in intent). */
+	void UpdateRifle2Locomotion(float DeltaSeconds, bool bMoveIntent, float InSpeed, float InDirection, float ActorYaw);
+
 protected:
 	virtual FAnimInstanceProxy* CreateAnimInstanceProxy() override;
 
@@ -415,4 +498,19 @@ private:
 	/** Smoothed speed and moving state driving the blend-space axes. */
 	float LocomotionSpeed = 0.f;
 	bool bLocomotionMoving = false;
+
+	// Rifle_2 machine.
+	void EnterRifleLocoState(ERifleLocoState NewState, UAnimSequence* Clip);
+	ERifleLocoState LocoState = ERifleLocoState::Idle;
+	float LocoStateTime = 0.f;
+	float LocoClipLength = 0.f;
+	float LocoWalkSeconds = 0.f;
+	float LocoIdleSeconds = 0.f;
+	float LocoNextBreak = 10.f;
+	float LocoLastActorYaw = 0.f;
+	bool bLocoHasYaw = false;
+	/** Turn in progress: degrees and direction it rotates the mesh. */
+	float LocoTurnDegrees = 0.f;
+	bool bLocoTurnRight = false;
+	float LocoTurnEased = 0.f;
 };

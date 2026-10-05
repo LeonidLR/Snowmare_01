@@ -11,6 +11,7 @@
 
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Characters/SquadSubsystem.h"
@@ -368,6 +369,84 @@ namespace HudShot
 					return true;
 				}), 0.05f);
 			}), 3.5f, false);
+		}
+		if (Args.Contains(TEXT("rifle2")))
+		{
+			// Rifle_2 locomotion check: the leader gets ABP_Operative_Rifle2 for this run, walks off, stops, turns about;
+			// HudShot_Rifle2_{start,walk,stop,turn}.png with the machine's state logged at each shot.
+			TWeakObjectPtr<UWorld> RifleWorld(World);
+			FTimerHandle RifleHandle;
+			World->GetTimerManager().SetTimer(RifleHandle, FTimerDelegate::CreateLambda([RifleWorld]()
+			{
+				USquadSubsystem* Squad = RifleWorld.IsValid() ? RifleWorld->GetSubsystem<USquadSubsystem>() : nullptr;
+				AOperativeCharacter* Lead = Squad ? Squad->GetLeader() : nullptr;
+				UClass* Rifle2 = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Characters/Operatives/ABP_Operative_Rifle2.ABP_Operative_Rifle2_C"));
+				if (!Lead || !Rifle2)
+				{
+					UE_LOG(LogCodexTactics, Error, TEXT("HudShot rifle2: no leader / ABP_Operative_Rifle2"));
+					FPlatformMisc::RequestExit(false, TEXT("HudShot"));
+					return;
+				}
+				Lead->GetMesh()->SetAnimInstanceClass(Rifle2);
+				TWeakObjectPtr<AOperativeCharacter> WeakLead(Lead);
+				TSharedRef<int32> Frames = MakeShared<int32>(0);
+				const FVector Start = Lead->GetActorLocation();
+				const FVector Forward = Lead->GetActorForwardVector().GetSafeNormal2D();
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Frames, WeakLead, Start, Forward](float)
+				{
+					AOperativeCharacter* L = WeakLead.Get();
+					if (!L)
+					{
+						FPlatformMisc::RequestExit(false, TEXT("HudShot"));
+						return false;
+					}
+					const int32 F = ++(*Frames);
+					auto Shot = [L](const TCHAR* Name)
+					{
+						const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(L->GetMesh()->GetAnimInstance());
+						UE_LOG(LogCodexTactics, Display, TEXT("HudShot rifle2 %s: state %d, speed %.0f, dir %.0f, root yaw %.0f, start %s, stop %s, turn %s"), Name,
+							Anim ? static_cast<int32>(Anim->GetRifleLocoState()) : -1, Anim ? Anim->Speed : 0.f, Anim ? Anim->Direction : 0.f,
+							Anim ? Anim->RootYawOffset : 0.f, Anim && Anim->LocoStartClip ? *Anim->LocoStartClip->GetName() : TEXT("-"),
+							Anim && Anim->LocoStopClip ? *Anim->LocoStopClip->GetName() : TEXT("-"), Anim && Anim->LocoTurnClip ? *Anim->LocoTurnClip->GetName() : TEXT("-"));
+						FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / FString::Printf(TEXT("HudShot_Rifle2_%s.png"), Name), true, false);
+					};
+					if (F == 10)
+					{
+						L->OrderMoveTo(Start + Forward * 700.f, false);
+					}
+					else if (F == 17)
+					{
+						Shot(TEXT("start"));
+					}
+					else if (F == 50)
+					{
+						Shot(TEXT("walk"));
+					}
+					else if (F == 70)
+					{
+						L->StopOperative();
+					}
+					else if (F == 77)
+					{
+						Shot(TEXT("stop"));
+					}
+					else if (F == 130)
+					{
+						L->SetFacingPoint(L->GetActorLocation() - L->GetActorForwardVector() * 500.f);
+					}
+					else if (F == 140)
+					{
+						Shot(TEXT("turn"));
+					}
+					else if (F >= 190)
+					{
+						FPlatformMisc::RequestExit(false, TEXT("HudShot"));
+						return false;
+					}
+					return true;
+				}), 0.05f);
+			}), 3.5f, false);
+	return; // its own timeline: no stance pose, no default shot / exit
 		}
 		if (Args.Contains(TEXT("defend")))
 		{
