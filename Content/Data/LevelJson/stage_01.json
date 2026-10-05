@@ -15,29 +15,15 @@
       "max_simultaneous_enemies": 8,
       "spawns": [
         {
-          "enemy_type": "CUTTER",
-          "count": 3,
-          "spawn_lane": "WEST_FLANK",
-          "spawn_delay_sec": 1,
-          "initial_delay_sec": 0
-        },
-        {
           "enemy_type": "HOUND",
-          "count": 6,
+          "count": 45,
           "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0
         },
         {
           "enemy_type": "FROSTBITTEN",
-          "count": 2,
-          "spawn_lane": "ANY",
-          "spawn_delay_sec": 1,
-          "initial_delay_sec": 0
-        },
-        {
-          "enemy_type": "MARKSMAN",
-          "count": 4,
+          "count": 10,
           "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0
@@ -47,7 +33,7 @@
         "enemy_hp_mult": 1,
         "enemy_damage_mult": 1,
         "enemy_speed_mult": 1,
-        "cold_drain_mult": 1.1
+        "cold_drain_mult": 1
       }
     },
     {
@@ -57,21 +43,28 @@
       "spawns": [
         {
           "enemy_type": "HOUND",
-          "count": 15,
+          "count": 40,
           "spawn_lane": "WEST_FLANK",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0
         },
         {
           "enemy_type": "CUTTER",
-          "count": 4,
+          "count": 5,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        },
+        {
+          "enemy_type": "FROSTBITTEN",
+          "count": 10,
           "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0
         },
         {
           "enemy_type": "MARKSMAN",
-          "count": 5,
+          "count": 2,
           "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0
@@ -81,7 +74,7 @@
         "enemy_hp_mult": 1.05,
         "enemy_damage_mult": 1.05,
         "enemy_speed_mult": 1,
-        "cold_drain_mult": 1.1
+        "cold_drain_mult": 1
       }
     },
     {
@@ -100,21 +93,28 @@
           }
         },
         {
-          "enemy_type": "MARKSMAN",
-          "count": 5,
+          "enemy_type": "CUTTER",
+          "count": 6,
           "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0,
           "custom_stats": {
-            "health": 140
+            "health": 200
           }
+        },
+        {
+          "enemy_type": "MARKSMAN",
+          "count": 6,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
         }
       ],
       "wave_modifiers": {
         "enemy_hp_mult": 1.1,
         "enemy_damage_mult": 1.1,
         "enemy_speed_mult": 1,
-        "cold_drain_mult": 0.75
+        "cold_drain_mult": 1
       }
     }
   ],

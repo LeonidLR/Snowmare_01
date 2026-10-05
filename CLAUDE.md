@@ -50,17 +50,26 @@ Source art: `C:/Users/Zephyrus15Duo/Documents/Codex/ASSETS/` (import FBX/glTF, n
 
 ```
 powershell -ExecutionPolicy Bypass -File Scripts/build.ps1
-powershell -ExecutionPolicy Bypass -File Scripts/test.ps1            # all CodexTactics.* tests
+powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Smart    # Jev-driven smart triage: runs only tests impacted by current git diff (~0.08s)
+powershell -ExecutionPolicy Bypass -File Scripts/test.ps1           # all CodexTactics.* tests
 powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Filter CodexTactics.Grid
 ```
 
 Pure-logic systems get **parity tests** mirroring the Godot tests (same inputs → same outputs).
 
-## Roles with Gemini (user decision 2026-10-01)
+## Roles with Gemini & TypeSafe Jev (user decision 2026-10-04)
 
-Claude: gameplay code / logic, AI, UI, animation setup, data, tests. Gemini: optimization, shaders / materials, VFX, rendering
-settings, profiling. Ownership table, request flow and the shared build lock (`Scripts/agent_lock.ps1`, `$env:CODEX_AGENT = "claude"`)
-are in `docs/port/TANDEM.md` — read it before editing; claim `.uasset`s there; changes in Gemini's area go through «Requests».
+- **Gemini**: Lead Architect & Technical Director (ADR, shaders / materials, VFX, rendering / scalability, profiling). Formulates specs in `docs/port/TANDEM.md`.
+- **Claude**: Gameplay code / logic, AI, UI, animation setup, data, tests, Wave Editor.
+- **TypeSafe (Jev System One)** (`Scripts/Tools/typesafe_triage.py`, skill `.claude/skills/typesafe-ai`):
+  - **WHEN to use Jev:**
+    1. **Pre-commit safety audit:** Run `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude` before committing to verify changes stay strictly inside Claude's domain (no touching user maps, DefaultScalability.ini, or Content/VFX).
+    2. **Telemetry distillation:** Never ingest massive raw `runs.jsonl` logs into context; use `python Scripts/Tools/typesafe_triage.py --telemetry <path>` to compress 100+ runs into an actionable 3-line balance patch.
+    3. **Tool features:** When implementing automated advice features (e.g. Wave Editor `LiveBalanceAdvisor` / `/api/balance-advice`), query Jev via the TypeSafe API.
+    4. **Fast Testing & Early-Stop:** Use `Scripts/test.ps1 -Smart` for instant focused regression testing. In `Scripts/bot_run.ps1`, Jev automatically stops long runs early if systemic breakage occurs.
+  - **WHEN NOT to use Jev:**
+    Do NOT query Jev for C++ syntax, header structure, class boilerplate, or Unreal compilation. Claude Opus 5.5 executes gameplay C++ and AnimBP logic directly.
+- Ownership table, request flow and the shared build lock (`Scripts/agent_lock.ps1`, `$env:CODEX_AGENT = "claude"`) are in `docs/port/TANDEM.md` — read it before editing; claim `.uasset`s there; cross-boundary requests go through «Requests».
 
 ## Workflow
 

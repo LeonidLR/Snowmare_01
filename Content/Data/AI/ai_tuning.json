@@ -1,11 +1,29 @@
 {
   "comment": "Written by Scripts/Tools/jev_ai_coach.py; applied at game start (Data/AITuning.h), a -dpcvars= value wins, -NoAITuning skips it. Review before committing.",
-  "updated": "2026-10-04T13:35:42",
+  "updated": "2026-10-04T15:05:29",
   "profile": "VETERAN",
   "runs_per_batch": 8,
-  "baseline_score": 0.094,
-  "best_score": 0.231,
+  "win_band": [
+    0.4,
+    0.75
+  ],
+  "result": {
+    "runs": 8,
+    "victories": 4,
+    "win_rate": 0.5,
+    "avg_waves_cleared": 2.38,
+    "deaths_by_freezing": 0,
+    "marksman_hit_rate": 0.667,
+    "marksman_shots_per_run": 16.5,
+    "marksman_retreats_per_run": 7.6,
+    "marksman_kill_share": 0.767,
+    "bot_assaults_per_run": 8.6,
+    "flank_orders_per_run": 183.5,
+    "fallbacks_per_run": 33.8,
+    "backstabs_per_run": 3.8,
+    "avg_real_seconds": 48.1
+  },
   "cvars": {
-    "Codex.Bot.AssaultStopDistance": "750"
+    "Codex.Bot.AssaultClearRadius": "1800"
   }
 }

@@ -233,8 +233,87 @@ Claude (Opus 5.5) **MUST** strictly adhere to the following rules to conserve to
    If Jev detects boundary violations (e.g. accidental changes to `L_MovementTest.umap` or `DefaultEditor.ini`), unstage them (`git restore --staged <file>`); restore only `Config/DefaultEditor.ini` with `git checkout`. **Never reset `L_MovementTest.umap`** — the user's edited map is the standard (user decision 2026-10-04).
 3. **Zero Raw Telemetry in Context:**
    Never read large `runs.jsonl` files into context. Use `python Scripts/Tools/typesafe_triage.py --telemetry <path>` or `--early-stop`.
-4. **Lock Protocol:**
-   Always run under `powershell -ExecutionPolicy Bypass -File Scripts/agent_lock.ps1 -Take claude -Task "<task_name>"` during builds/smokes and `-Release` upon completion.
+## 🎯 SPRINT 07 DIRECTIVE: Autonomous Squad Combat (Commander Mode & Tactical ROE)
+**Author:** Gemini (Lead Architect) | **Triage Gate:** TypeSafe Jev (Approved, Confidence 0.99, Complexity 3.5/5) | **Executor:** Claude (Opus 5.5)
+
+### Concept Overview:
+Transition from real-time micro-management to a high-level tactical **Commander & Autonomous Squad** model (*Full Spectrum Warrior*, *Dragon Age Tactics*, *SWAT 4*).
+In Real-Time combat, operatives autonomously execute tactical priorities within a defined anchor zone. In Tactical Pause (`Space`), the Commander reassesses the situation and issues overrides.
+
+### Sub-Task 7-A: Dual-Mode Combat Switch (100% Backward Compatibility)
+- **Objective:** Allow switching between Autonomous Squad Combat and legacy manual control without breaking existing tests.
+- **Implementation:**
+  1. In `USquadSubsystem` & `UGameFlowSubsystem`: Add `bool bAutonomousSquadCombat = false;` (default `false` to maintain 100% backward compatibility and test stability).
+  2. Console Command: Register `CodexTactics.AutonomousSquad [0|1]` and `CodexTactics.ToggleAutonomousCombat`.
+  3. Keybinding & HUD: Add `Ctrl + T` toggle shortcut and display current mode indicator in `ACodexTacticsHUD` / Action Bar (*«АВТОНОМИЯ: ВКЛ/ВЫКЛ»*).
+  4. In `ACodexTacticsPlayerController`: Tactical pause (`Space`) immediately halts autonomous micro-actions and restores full manual control override.
+
+### Sub-Task 7-B: Tactical Anchor & Leash Movement (7.0m Radius)
+- **Objective:** Prevent chaotic wandering by tethering autonomous behavior to commander-designated locations.
+- **Implementation:**
+  1. Define `struct FTacticalAnchor`:
+     - `FVector Location;`
+     - `float Radius = 700.f;` (7.0 meters baseline anchor radius).
+     - `FRotator GuardFacing;`
+     - `bool bIsActive;`
+  2. When an operative is ordered to move, the destination becomes their active `TacticalAnchor`.
+  3. Inside Real-Time combat, the operative seeks cover, shifts angles, and repositions **strictly within the 7.0m anchor radius**. They NEVER abandon their designated sector to chase distant enemies across the level.
+
+### Sub-Task 7-C: Operative Tactical Micro-Decisions (Cover, Stance, Elevation, Weapons)
+- **Implementation (Reusing `UPlaytestBotSubsystem` primitives):**
+  1. **Cover & Stances:**
+     - Behind low obstacle/barricade: enter `Crouching` (half-cover defense).
+     - On open ground: default to `Crouching`; drop `Prone` immediately if targeted by long-range sniper beam (`AMarksmanEnemyCharacter::bIsAimingAtTarget`).
+     - Within anchor radius: prefer high ground / elevated objects (+15% elevation damage advantage).
+  2. **Target Prioritization (ROE Policy):**
+     - Prioritize high-threat targets (`ThreatLevel`: snipers/spitters first, then leaping hounds), closest threats, or focus on leader's target according to configuration.
+     - Detect flanking threats (> 75° from facing); dynamically pivot behind cover to deny rear armor-penetrating shots.
+  3. **Weapon & Ammo Management:**
+     - Auto-reload behind cover when current magazine falls below 25%.
+     - Switch to sidearm / shotgun if enemy is within close quarters (< 3.5m) and primary magazine is depleted.
+
+### Sub-Task 7-D: Field Medic & Safe Aid (Buddy Revive)
+- **Objective:** Operatives assist heavily wounded or downed comrades intelligently without suicidal charges.
+- **Implementation:**
+  1. Trigger aid when teammate HP drops below configured threshold (default < 25% HP or Downed).
+  2. **Safe Aid Evaluation:** Operative only initiates medical aid if the route is deemed safe (no sniper aiming down the path, and no active enemies within 6 meters of the patient).
+  3. Keep personal medkit reserved if the rescuer's own health is below 50%.
+  4. Once healed, the operative returns immediately to their tactical anchor.
+
+### Sub-Task 7-E: Wave Editor Integration (Tactical ROE Config Panel)
+- **Objective:** Expose all Autonomous Squad Combat parameters directly in Wave Editor for live balance tuning.
+- **Parameters to Expose (in `GameBalanceConfig.h`, `types.ts`, and Wave Editor UI):**
+  - `anchor_radius_meters` (float, default: `7.0`)
+  - `leash_strictness` (enum: `Flexible` [allows up to 10m for emergency aid] / `Strict` [hard 7m clamp])
+  - `prefer_high_ground` (bool, default: `true`)
+  - `open_ground_stance` (enum: `Crouch` / `Prone` / `Standing`, default: `Crouch`)
+  - `cover_stance` (enum: `Crouch` / `Standing`, default: `Crouch`)
+  - `sniper_reaction` (enum: `DiveToCover` / `DropProne`, default: `DiveToCover`)
+  - `target_priority_policy` (enum: `ThreatLevel` / `ClosestFirst` / `LowestHP` / `AssistLeader`, default: `ThreatLevel`)
+  - `flank_defense_angle_deg` (float, default: `75.0`)
+  - `aid_health_threshold_pct` (float, default: `25.0`)
+  - `require_safe_route_for_aid` (bool, default: `true`)
+  - `reserve_personal_medkit` (bool, default: `true`)
+  - `auto_reload_threshold_pct` (float, default: `25.0`)
+  - `emergency_sidearm_dist_m` (float, default: `3.5`)
+- Expose endpoints in `Tools/WaveEditor/vite.config.ts` (`/api/squad-roe`) and UI controls in `SquadLoadoutControls.tsx` or a new `CommanderROEPanel.tsx`.
+
+---
+
+## ⚡ MANDATORY TYPESAFE (JEV) & TOKEN ECONOMY RULES FOR CLAUDE (Sprint 07)
+
+Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
+1. **TypeSafe Jev for Tactical Judgments:**
+   Use TypeSafe System One (via `Scripts/Tools/typesafe_triage.py` / `.claude/skills/typesafe-ai`) when designing complex heuristic evaluations (e.g. evaluating Safe Aid route threat score or multi-factor target selection).
+2. **Fast Smart Testing Only:**
+   Execute tests **strictly** via `powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Smart`. Jev evaluates your git diff and selects only impacted tests in 0.08s. Never run the full test suite during intermediate iterations.
+3. **Mandatory Pre-Commit Boundary Audit:**
+   Before staging, run `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude`.
+   If violations are found, unstage them (`git restore --staged <file>`); restore only `Config/DefaultEditor.ini` with `git checkout`. **Never reset `L_MovementTest.umap`** — user edited map is reference.
+4. **Agent Lock:**
+   Always claim lock before builds/smokes: `powershell -ExecutionPolicy Bypass -File Scripts/agent_lock.ps1 -Take claude -Task "Sprint07_AutonomousSquad"` and release upon completion.
+
+---
 
 ## Architect Decisions & Answers to Open Questions (Gemini)
 
