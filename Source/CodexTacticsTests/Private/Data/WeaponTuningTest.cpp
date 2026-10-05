@@ -49,13 +49,15 @@ bool FWeaponTuningTurnRulesTest::RunTest(const FString& Parameters)
 {
 	// A file with only the rules block (no weapons: no asset is touched).
 	const FString Path = FPaths::ProjectSavedDir() / TEXT("Automation/turn_rules_test.json");
-	FFileHelper::SaveStringToFile(TEXT("{\"turn_based_rules\": {\"crouch_move_cost_multiplier\": 3, \"cover_fire_accuracy_multiplier\": 0.5, \"enemy_fire_at_cover_multiplier\": 0.4}}"), *Path);
+	FFileHelper::SaveStringToFile(TEXT("{\"turn_based_rules\": {\"crouch_move_cost_multiplier\": 3, \"cover_fire_accuracy_multiplier\": 0.5, \"enemy_fire_at_cover_multiplier\": 0.4, \"crouch_damage_multiplier\": 0.8, \"prone_damage_multiplier\": 0.3}}"), *Path);
 	WeaponTuning::ApplyFile(Path);
 	FTurnBasedBalance Balance;
 	WeaponTuning::ApplyTurnRules(Balance);
 	TestEqual(TEXT("crouched step x3"), Balance.CrouchMoveCostMultiplier, 3);
 	TestEqual(TEXT("fire past cover x0.5"), Balance.CoverFireAccuracyMultiplier, 0.5f);
 	TestEqual(TEXT("enemy fire at cover x0.4"), Balance.EnemyFireAtCoverMultiplier, 0.4f);
+	TestEqual(TEXT("crouched damage x0.8"), Balance.CrouchDamageMultiplier, 0.8f);
+	TestEqual(TEXT("prone damage x0.3"), Balance.ProneDamageMultiplier, 0.3f);
 	// Back to the project's file for the rest of the session.
 	WeaponTuning::ApplyFile(WeaponTuning::GetDefaultPath());
 	return true;

@@ -9,6 +9,7 @@
 #include "Tactics/TurnBasedRules.h"
 #include "CodexTactics.h"
 #include "Data/WeaponDataAsset.h"
+#include "Data/GodotBalanceAsset.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -218,6 +219,9 @@ namespace WeaponTuning
 		Integer(*TurnRulesBlock, TEXT("crouch_move_cost_multiplier"), Balance.CrouchMoveCostMultiplier);
 		Number(*TurnRulesBlock, TEXT("cover_fire_accuracy_multiplier"), Balance.CoverFireAccuracyMultiplier);
 		Number(*TurnRulesBlock, TEXT("enemy_fire_at_cover_multiplier"), Balance.EnemyFireAtCoverMultiplier);
+		// Damage an operative takes crouched / prone (user decision 2026-10-04: tuned in the Wave Editor, over DA_Balance).
+		Number(*TurnRulesBlock, TEXT("crouch_damage_multiplier"), Balance.CrouchDamageMultiplier);
+		Number(*TurnRulesBlock, TEXT("prone_damage_multiplier"), Balance.ProneDamageMultiplier);
 		Balance.CrouchMoveCostMultiplier = FMath::Max(1, Balance.CrouchMoveCostMultiplier);
 	}
 
@@ -238,7 +242,8 @@ namespace WeaponTuning
 		Profile.PreferredMax = FMath::Clamp(Profile.PreferredMax, Profile.PreferredMin, Profile.MaxRange);
 	}
 
-	bool Dump(const FString& Path, const AOperativeCharacter* GrenadeDefaults, const FMarksmanConfig* MarksmanDefaults)
+	bool Dump(const FString& Path, const AOperativeCharacter* GrenadeDefaults, const FMarksmanConfig* MarksmanDefaults,
+		const FTurnBasedBalance* TurnBalanceDefaults)
 	{
 		TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
 		Root->SetStringField(TEXT("comment"), TEXT("Weapon power (Wave Editor «Оружие»). Applied at game start onto DA_Weapon_* and the squad's grenades. Metres / seconds."));
@@ -277,11 +282,18 @@ namespace WeaponTuning
 		Rifle->SetNumberField(TEXT("tb_max_range_cells"), Round4(Turn.MaxRange));
 		Rifle->SetNumberField(TEXT("tb_base_hit_chance"), Round4(Turn.BaseHitChance));
 		Rifle->SetNumberField(TEXT("tb_hit_falloff_per_cell"), Round4(Turn.HitFalloffPerCell));
-		const FTurnBasedBalance Rules;
+		// The turn-based balance the game uses (DA_Balance through the game mode), else the C++ defaults.
+		FTurnBasedBalance Rules;
+		if (TurnBalanceDefaults)
+		{
+			Rules = *TurnBalanceDefaults;
+		}
 		TSharedRef<FJsonObject> TurnRules = MakeShared<FJsonObject>();
 		TurnRules->SetNumberField(TEXT("crouch_move_cost_multiplier"), Round4(Rules.CrouchMoveCostMultiplier));
 		TurnRules->SetNumberField(TEXT("cover_fire_accuracy_multiplier"), Round4(Rules.CoverFireAccuracyMultiplier));
 		TurnRules->SetNumberField(TEXT("enemy_fire_at_cover_multiplier"), Round4(Rules.EnemyFireAtCoverMultiplier));
+		TurnRules->SetNumberField(TEXT("crouch_damage_multiplier"), Round4(Rules.CrouchDamageMultiplier));
+		TurnRules->SetNumberField(TEXT("prone_damage_multiplier"), Round4(Rules.ProneDamageMultiplier));
 		Root->SetObjectField(TEXT("turn_based_rules"), TurnRules);
 		TSharedRef<FJsonObject> EnemyWeapons = MakeShared<FJsonObject>();
 		EnemyWeapons->SetObjectField(TEXT("marksman_rifle"), Rifle);
@@ -320,7 +332,17 @@ namespace WeaponTuning
 					}
 				}
 			}
+			// The turn-based balance from the game mode's DA_Balance (BalanceFromGodot), the stance damage values with it.
+			TOptional<FTurnBasedBalance> TurnBalance;
+			if (const ACodexTacticsGameMode* GameMode = World ? World->GetAuthGameMode<ACodexTacticsGameMode>() : nullptr)
+			{
+				if (const UGodotBalanceAsset* BalanceAsset = GameMode->TurnBasedBalance.LoadSynchronous())
+				{
+					TurnBalance = TurnBasedRules::BalanceFromGodot(BalanceAsset);
+				}
+			}
 			const FString Path = Args.Num() > 0 ? Args[0] : GetDefaultPath();
-			UE_LOG(LogCodexTactics, Display, TEXT("Weapon tuning dump -> %s: %s"), *Path, Dump(Path, Operative, Marksman) ? TEXT("ok") : TEXT("FAILED"));
+			UE_LOG(LogCodexTactics, Display, TEXT("Weapon tuning dump -> %s: %s"), *Path,
+				Dump(Path, Operative, Marksman, TurnBalance.IsSet() ? &TurnBalance.GetValue() : nullptr) ? TEXT("ok") : TEXT("FAILED"));
 		}));
 }

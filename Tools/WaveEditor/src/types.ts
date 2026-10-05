@@ -103,6 +103,8 @@ export interface TurnBasedRulesTuning {
   crouch_move_cost_multiplier: number;
   cover_fire_accuracy_multiplier: number;
   enemy_fire_at_cover_multiplier: number;
+  crouch_damage_multiplier: number;
+  prone_damage_multiplier: number;
 }
 
 export interface WeaponTuningFile {

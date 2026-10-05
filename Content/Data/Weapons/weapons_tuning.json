@@ -234,6 +234,8 @@
   "turn_based_rules": {
     "crouch_move_cost_multiplier": 2,
     "cover_fire_accuracy_multiplier": 0.75,
-    "enemy_fire_at_cover_multiplier": 0.6
+    "enemy_fire_at_cover_multiplier": 0.6,
+    "crouch_damage_multiplier": 0.7,
+    "prone_damage_multiplier": 0.5
   }
 }

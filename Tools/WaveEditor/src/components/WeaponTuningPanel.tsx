@@ -43,11 +43,15 @@ const DEFAULT_RULES: TurnBasedRulesTuning = {
   crouch_move_cost_multiplier: 2,
   cover_fire_accuracy_multiplier: 0.75,
   enemy_fire_at_cover_multiplier: 0.6,
+  crouch_damage_multiplier: 0.7,
+  prone_damage_multiplier: 0.5,
 };
 const RULE_FIELDS: { key: keyof TurnBasedRulesTuning; label: string; hint: string; step: number; min: number; max: number }[] = [
   { key: 'crouch_move_cost_multiplier', label: 'Цена шага в присядку / лёжа, ×', hint: 'во сколько раз дороже AP за клетку, чем стоя (целое)', step: 1, min: 1, max: 4 },
   { key: 'cover_fire_accuracy_multiplier', label: 'Меткость из-за баррикады, ×', hint: 'боец стреляет мимо своей баррикады (1 — без штрафа)', step: 0.05, min: 0.1, max: 1 },
   { key: 'enemy_fire_at_cover_multiplier', label: 'Попадание врагов по бойцу за баррикадой, ×', hint: 'шанс дальнобойных врагов (1 — баррикада не мешает)', step: 0.05, min: 0, max: 1 },
+  { key: 'crouch_damage_multiplier', label: 'Урон по бойцу в присядку, ×', hint: 'доля урона, которую получает сидящий (1 — как стоя)', step: 0.05, min: 0, max: 1.5 },
+  { key: 'prone_damage_multiplier', label: 'Урон по бойцу лёжа, ×', hint: 'доля урона, которую получает лежащий (1 — как стоя)', step: 0.05, min: 0, max: 1.5 },
 ];
 
 const listToText = (values: number[]) => values.join(', ');
@@ -237,12 +241,12 @@ export const WeaponTuningPanel: React.FC = () => {
       )}
 
       {tab === RULES_TAB && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {RULE_FIELDS.map((f) =>
             field(f.label, f.hint, rules[f.key], f.step, f.min, f.max, (v) => setRules({ [f.key]: v } as Partial<TurnBasedRulesTuning>),
               savedRules[f.key] !== rules[f.key]))}
-          <div className="col-span-1 md:col-span-3 text-[11px] text-slate-500">
-            Применяется при начале пошагового боя. Урон по сидящему (×0.70) и лежащему (×0.50) задаётся в балансе игры (DA_Balance).
+          <div className="col-span-1 md:col-span-3 lg:col-span-5 text-[11px] text-slate-500">
+            Применяется при начале пошагового боя (поверх баланса игры DA_Balance).
           </div>
         </div>
       )}

@@ -45,12 +45,14 @@ namespace WeaponTuning
 	CODEXTACTICS_API void ApplyMarksmanRifle(FMarksmanConfig& Config);
 	/**
 	 * The file's turn_based_rules onto the turn-based balance (user decisions 2026-10-04): crouch_move_cost_multiplier,
-	 * cover_fire_accuracy_multiplier, enemy_fire_at_cover_multiplier.
+	 * cover_fire_accuracy_multiplier, enemy_fire_at_cover_multiplier, crouch_damage_multiplier, prone_damage_multiplier
+	 * (the last two over DA_Balance's tactical_stance_*_dmg_mult).
 	 */
 	CODEXTACTICS_API void ApplyTurnRules(FTurnBasedBalance& Balance);
 	/** The file's turn-based values of the archetype's ranged weapon onto its turn profile. */
 	CODEXTACTICS_API void ApplyEnemyTurnWeapon(EEnemyArchetype Archetype, FEnemyTurnProfile& Profile);
 
 	/** Writes the current values of every weapon asset, an operative's grenades and the marksman's rifle to Path. */
-	CODEXTACTICS_API bool Dump(const FString& Path, const AOperativeCharacter* GrenadeDefaults, const FMarksmanConfig* MarksmanDefaults = nullptr);
+	CODEXTACTICS_API bool Dump(const FString& Path, const AOperativeCharacter* GrenadeDefaults, const FMarksmanConfig* MarksmanDefaults = nullptr,
+		const FTurnBasedBalance* TurnBalanceDefaults = nullptr);
 }
