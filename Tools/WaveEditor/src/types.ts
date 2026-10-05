@@ -298,4 +298,9 @@ export interface SquadROE {
   reserve_personal_medkit: boolean;
   auto_reload_threshold_pct: number;
   emergency_sidearm_dist_m: number;
+  // Sprint 10: defense line («Рубеж обороны»).
+  defense_intercept_radius_m: number;
+  defense_leash_strictness: LeashStrictness;
+  defense_body_block_priority: boolean;
+  defense_ignore_distant_aid: boolean;
 }

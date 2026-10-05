@@ -193,6 +193,13 @@ public:
 	 */
 	void StartPlacementForType(EDeployableType Type);
 
+	/**
+	 * Sprint 10: Shift + RMB — the leader (or the selected group) holds the object under the cursor (generator, terminal,
+	 * gate, barricade) or that spot at all costs. Refused in the real-time fight (orders only in the pause, user decision
+	 * 2026-10-05) and in the turn-based fight.
+	 */
+	void AssignDefenseUnderCursor();
+
 	/** Inventory «Растяжка» (Sprint 09): two-click tripwire placement for the leader (2 grenades of the squad). */
 	void StartTripwirePlacement();
 

@@ -162,6 +162,102 @@ int32 SquadAutonomyRules::ChooseTarget(const FSquadROE& ROE, const TArray<FAuton
 	return Best;
 }
 
+FDefenseDirective SquadAutonomyRules::MakeDefense(const FSquadROE& ROE, AActor* DefendedActor, const FVector& Location)
+{
+	FDefenseDirective Defense;
+	Defense.DefendedActor = DefendedActor;
+	Defense.DefendedLocation = Location;
+	Defense.bHoldAtAllCosts = true;
+	Defense.InterceptRadiusCm = FMath::Max(0.f, ROE.DefenseInterceptRadiusMeters) * 100.f;
+	Defense.MaxDefenseLeashCm = 500.f;
+	return Defense;
+}
+
+bool SquadAutonomyRules::IsIntruder(const FDefenseDirective& Defense, const FAutonomyTargetCandidate& Candidate)
+{
+	return Defense.IsActive() && (Candidate.bAttackingDefended || Candidate.DistanceToDefendedCm <= Defense.InterceptRadiusCm);
+}
+
+float SquadAutonomyRules::DefenseTargetScore(const FSquadROE& ROE, const FDefenseDirective& Defense, const FAutonomyTargetCandidate& Candidate)
+{
+	// Tiers (Jev check 2026-10-05: «closest to the object first» must beat the threat tiers): body-block (point-blank,
+	// defense_body_block_priority) > intruders, 500 per metre closer to the object > the ROE policy (< 11000).
+	float Score = TargetScore(ROE, Candidate);
+	if (!Defense.IsActive())
+	{
+		return Score;
+	}
+	if (ROE.bDefenseBodyBlockPriority && Candidate.DistanceCm < ROE.EmergencySidearmDistMeters * 100.f)
+	{
+		Score += 1000000.f;
+	}
+	if (IsIntruder(Defense, Candidate))
+	{
+		const float InterceptM = Defense.InterceptRadiusCm / 100.f;
+		const float ToObjectM = FMath::Min(Candidate.DistanceToDefendedCm, Defense.InterceptRadiusCm) / 100.f;
+		Score += 100000.f + 500.f * (InterceptM - ToObjectM);
+	}
+	return Score;
+}
+
+int32 SquadAutonomyRules::PickTarget(const FSquadROE& ROE, const FDefenseDirective& Defense, const TArray<FAutonomyTargetCandidate>& Candidates)
+{
+	int32 Best = INDEX_NONE;
+	float BestScore = -TNumericLimits<float>::Max();
+	for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+	{
+		if (!Candidates[Index].bCanHit)
+		{
+			continue;
+		}
+		const float Score = DefenseTargetScore(ROE, Defense, Candidates[Index]);
+		if (Score > BestScore)
+		{
+			BestScore = Score;
+			Best = Index;
+		}
+	}
+	return Best;
+}
+
+float SquadAutonomyRules::DefenseLeashRadius(const FSquadROE& ROE, const FDefenseDirective& Defense, bool bForAid)
+{
+	const float Leash = Defense.MaxDefenseLeashCm;
+	return bForAid && ROE.DefenseLeashStrictness == ELeashStrictness::Flexible ? FMath::Max(Leash, FlexibleAidLeashCm) : Leash;
+}
+
+bool SquadAutonomyRules::CanGiveSafeAid(const FSquadROE& ROE, const FDefenseDirective& Defense, bool bSniperAimingOnRoute,
+	float NearestEnemyToPatientCm, bool bIntruderPresent, float PatientDistanceToDefendedCm)
+{
+	if (Defense.IsActive())
+	{
+		if (bIntruderPresent)
+		{
+			return false; // the line comes first
+		}
+		if (ROE.bDefenseIgnoreDistantAid && PatientDistanceToDefendedCm > DefenseLeashRadius(ROE, Defense, true))
+		{
+			return false;
+		}
+	}
+	return IsSafeAidRoute(ROE, bSniperAimingOnRoute, NearestEnemyToPatientCm);
+}
+
+bool SquadAutonomyRules::AllowsRetreat(const FDefenseDirective& Defense)
+{
+	return !Defense.IsActive();
+}
+
+bool SquadAutonomyRules::HoldsGround(const FSquadROE& ROE, const FDefenseDirective& Defense, float NearestEnemyCm)
+{
+	return Defense.IsActive() && NearestEnemyCm <= ROE.EmergencySidearmDistMeters * 100.f;
+}
+
+bool SquadAutonomyRules::ShouldDrawMelee(const FSquadROE& ROE, const FDefenseDirective& Defense, float NearestEnemyCm)
+{
+	return Defense.IsActive() && ROE.bDefenseBodyBlockPriority && NearestEnemyCm <= ROE.EmergencySidearmDistMeters * 50.f;
+}
+
 bool SquadAutonomyRules::NeedsAid(const FSquadROE& ROE, float PatientHealthFraction, bool bDowned)
 {
 	return bDowned || (PatientHealthFraction > 0.f && PatientHealthFraction * 100.f < ROE.AidHealthThresholdPct);

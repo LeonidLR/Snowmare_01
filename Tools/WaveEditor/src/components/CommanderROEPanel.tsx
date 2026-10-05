@@ -19,6 +19,10 @@ const DEFAULTS: SquadROE = {
   reserve_personal_medkit: true,
   auto_reload_threshold_pct: 25,
   emergency_sidearm_dist_m: 3.5,
+  defense_intercept_radius_m: 12,
+  defense_leash_strictness: 'Strict',
+  defense_body_block_priority: true,
+  defense_ignore_distant_aid: true,
 };
 
 type NumberField = { kind: 'number'; key: keyof SquadROE; label: string; hint: string; step: number; min: number; max: number };
@@ -64,6 +68,16 @@ const SECTIONS: { title: string; fields: Field[] }[] = [
       { kind: 'number', key: 'aid_health_threshold_pct', label: 'Помощь раненому ниже, % HP', hint: 'союзник с меньшим здоровьем получает аптечку', step: 5, min: 0, max: 100 },
       { kind: 'bool', key: 'require_safe_route_for_aid', label: 'Только безопасный маршрут', hint: 'нет лазера снайпера и врагов ближе 6 м к раненому' },
       { kind: 'bool', key: 'reserve_personal_medkit', label: 'Беречь свою аптечку', hint: 'при своём HP ниже 50 % последнюю аптечку не отдаёт' },
+    ],
+  },
+  {
+    title: 'Рубеж обороны (Shift + ПКМ в паузе)',
+    fields: [
+      { kind: 'number', key: 'defense_intercept_radius_m', label: 'Радиус перехвата, м', hint: 'враги ближе к защищаемому объекту — цель №1', step: 1, min: 2, max: 40 },
+      { kind: 'choice', key: 'defense_leash_strictness', label: 'Поводок защитника', hint: 'строгий — никогда дальше 5 м от рубежа', options: [
+        { value: 'Strict', label: 'Строгий (5 м)' }, { value: 'Flexible', label: 'Гибкий (до 10 м для помощи)' } ] },
+      { kind: 'bool', key: 'defense_body_block_priority', label: 'Сначала враг вплотную', hint: 'враг в упор важнее прорвавшихся к объекту (нож, удержание места)' },
+      { kind: 'bool', key: 'defense_ignore_distant_aid', label: 'Не уходить лечить далёких', hint: 'раненые дальше поводка рубежа — без помощи' },
     ],
   },
 ];

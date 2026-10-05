@@ -442,6 +442,87 @@ Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
 
 ---
 
+## 🎯 SPRINT 10 DIRECTIVE: Squad Autonomy Defense Line ("Рубеж обороны" / Hold at all costs)
+**Author:** Gemini (Lead Architect) | **Triage Gate:** TypeSafe Jev (Approved, Confidence 0.99, Complexity 3.5/5) | **Executor:** Claude (Opus 5.5)
+
+### Concept Overview:
+Similar to how mutant swarms relentlessly assault the generator to freeze the squad, the commander can assign any operative a designated Defense Line / Hold Objective directive («Рубеж обороны / Ни шагу назад»).
+The operative holds the position or defended object (Generator, Terminal, Gate, Barricade, Chokepoint) at all costs, prioritizing interception of approaching breachers, body-blocking incoming enemies, clamping kiting/retreat, and refusing non-urgent distant actions.
+
+### Sub-Task 10-A: Defense Directive Data & Tactical Anchor Extension
+- **Files:** `Source/CodexTactics/Public/Characters/SquadAutonomyRules.h`, `Source/CodexTactics/Public/Characters/OperativeCharacter.h`
+- **Specification:**
+  1. Add `struct FDefenseDirective`:
+     - `TWeakObjectPtr<AActor> DefendedActor;` (e.g. `AGeneratorActor`, `ABarricadeActor`, `AGateActor`).
+     - `FVector DefendedLocation = FVector::ZeroVector;` (fallback or direct ground position).
+     - `bool bHoldAtAllCosts = false;`
+     - `float InterceptRadiusCm = 1200.f;` (12.0m zone of active interception).
+     - `float MaxDefenseLeashCm = 500.f;` (5.0m strict hold tether from the objective).
+  2. Embed `FDefenseDirective DefenseDirective` inside `FTacticalAnchor` (or directly on `AOperativeCharacter`).
+
+### Sub-Task 10-B: Target Interception Priority & Threat Evaluation
+- **Files:** `Source/CodexTactics/Public/Characters/SquadAutonomyRules.h` & `Private/.../SquadAutonomyRules.cpp`
+- **Rules:**
+  1. In `SquadAutonomyRules::PickTarget`:
+     - When `bHoldAtAllCosts` is active:
+       - Any enemy whose distance to `DefendedLocation` is $\le InterceptRadiusCm$ (or who is actively attacking `DefendedActor`) receives top-tier threat priority (`ThreatScore += 5000.f`), overriding standard ROE distance/tier weights.
+       - If multiple enemies enter the interception perimeter, sort by distance to the **defended objective** (closest to the generator dies first).
+  2. In `SquadAutonomyRules::CanGiveSafeAid`:
+     - If `bHoldAtAllCosts` is active and any enemy is within `InterceptRadiusCm` of the defense line, return `false` (`AidRefusedUnsafe` / Defender refuses to abandon post).
+
+### Sub-Task 10-C: Zero-Retreat & Body-Blocking Mechanics
+- **Files:** `Source/CodexTactics/Private/Characters/SquadAutonomySubsystem.cpp`, `Source/CodexTactics/Private/Characters/OperativeCharacter.cpp`
+- **Rules:**
+  1. **Strict Leash Clamp:** Operatives assigned to a defense objective are clamped to `MaxDefenseLeashCm` (default 5.0m). They never chase runners or wander off.
+  2. **No Kiting / Body-Block:** When melee enemies (Hounds, Brutes, Cutters) close into point-blank range, defender DOES NOT retreat or kite. They stand their ground, switch to close-quarters weapons (shotgun/sidearm) and body-block the path to the defended objective.
+
+### Sub-Task 10-D: Player Controls & HUD Feedback
+- **Files:** `Source/CodexTactics/Public/Core/CodexTacticsPlayerController.h` & `.cpp`, `Source/CodexTactics/Public/UI/CodexTacticsHUD.h`
+- **Controls & UX:**
+  1. Command assignment: In Tactical Pause or Real-Time, `Shift + RMB` on an interactable actor (Generator, Barricade, Gate) or ground point assigns the selected operative(s) to defend that target (`USquadAutonomySubsystem::SetDefenseObjective`).
+  2. Action Bar button or shortcut: «РУБЕЖ» / «ОБОРОНА».
+  3. Visual feedback: Render a defensive shield marker / icon over the defended objective while held; display status in squad panel (`[РУБЕЖ: Защита]`).
+
+### Sub-Task 10-E: Wave Editor ROE Parameters & JSON Integration
+- **Files:** `Content/Data/AI/squad_roe.json`, `Tools/WaveEditor/src/components/CommanderROEPanel.tsx`
+- **Parameters:**
+  - `defense_intercept_radius_m` (float, default: `12.0`)
+  - `defense_leash_strictness` (enum: `"Strict"` / `"Flexible"`, default: `"Strict"`)
+  - `defense_body_block_priority` (bool, default: `true`)
+  - `defense_ignore_distant_aid` (bool, default: `true`)
+
+### Sub-Task 10-F: Verification with TypeSafe Jev & Unit Tests
+- **Files:** `Source/CodexTacticsTests/Private/Characters/SquadAutonomyTest.cpp`, `Scripts/Tools/jev_validate_roe.py`
+- **Tests:**
+  1. `SquadAutonomy.DefendObjective.PrioritizesGeneratorAttackers`
+  2. `SquadAutonomy.DefendObjective.RefusesDistantAidWhenUnderThreat`
+  3. `SquadAutonomy.DefendObjective.ZeroRetreatHold`
+  4. Run `python Scripts/Tools/jev_validate_roe.py` to ensure common-sense tactical alignment with Jev.
+
+---
+
+## ⚡ MANDATORY TYPESAFE (JEV) & TOKEN ECONOMY RULES FOR CLAUDE (Sprint 10)
+
+Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
+1. **Always Inspect Existing Code First (Anti-Stale Rule):**
+   DO NOT rely solely on historical assumptions or stale summaries. Always read current on-disk definitions of `SquadAutonomyRules.h/.cpp`, `SquadAutonomySubsystem.h/.cpp`, and `OperativeCharacter.h/.cpp` before modifying them.
+2. **TypeSafe Jev Validation:**
+   Validate tactical rules via `python Scripts/Tools/jev_validate_roe.py` and run boundary audit:
+   `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude`.
+3. **Fast Smart Testing Only:**
+   Execute tests **strictly** via `powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Smart`. Jev evaluates git diff and executes only affected tests in < 0.1s.
+4. **Agent Lock:**
+   Always claim lock before builds/smokes: `powershell -ExecutionPolicy Bypass -File Scripts/agent_lock.ps1 -Take claude -Task "Sprint10_DefenseLine"` and release upon completion.
+5. **Never Commit User Assets:**
+   Never commit or reset `Content/Maps/L_MovementTest.umap` or `Config/DefaultEditor.ini`.
+
+---
+
+## ✅ Sprint 10 «Рубеж обороны» (Claude, 2026-10-05): DONE — see HANDOFF §10
+- Spec names mapped to the code: «PickTarget» = `SquadAutonomyRules::PickTarget` (new, with `FDefenseDirective`), «CanGiveSafeAid» = new `CanGiveSafeAid` (wraps `IsSafeAidRoute`).
+- User decision: Shift + RMB assigns a defense line only in the tactical pause / outside the fight (the real-time order lock stays).
+- Jev validation 13/16 (81 %) after fixing the intruder ordering it exposed.
+
 ## Architect Decisions & Answers to Open Questions (Gemini)
 
 ### 1. Wheel Zoom binding (Duplicate call)

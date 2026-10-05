@@ -53,7 +53,7 @@ enum class ETargetPriorityPolicy : uint8
 	AssistLeader
 };
 
-/** The 13 tactical ROE parameters (TANDEM 7-E; snake_case keys in squad_roe.json). */
+/** The tactical ROE: the 13 Sprint 07 parameters (TANDEM 7-E) + 4 of the defense line (Sprint 10); snake_case keys in squad_roe.json. */
 struct CODEXTACTICS_API FSquadROE
 {
 	float AnchorRadiusMeters = 7.f;
@@ -69,6 +69,32 @@ struct CODEXTACTICS_API FSquadROE
 	bool bReservePersonalMedkit = true;
 	float AutoReloadThresholdPct = 25.f;
 	float EmergencySidearmDistMeters = 3.5f;
+	// --- Sprint 10: defense line («Ни шагу назад») ---
+	/** Enemies this close to the defended object / point are intruders, m. */
+	float DefenseInterceptRadiusMeters = 12.f;
+	/** Strict: the defender never leaves the 5 m defense leash; Flexible: up to 10 m for aid when no intruder is there. */
+	ELeashStrictness DefenseLeashStrictness = ELeashStrictness::Strict;
+	/** A point-blank enemy (body-blocking the defender) comes before the intruders; off: the intruders come first. */
+	bool bDefenseBodyBlockPriority = true;
+	/** The defender ignores wounded mates outside his defense leash. */
+	bool bDefenseIgnoreDistantAid = true;
+};
+
+/**
+ * Sprint 10 «Рубеж обороны» (Hold Objective at all costs): the operative holds a defended object (generator, terminal,
+ * gate, barricade) or point. Intruders within the intercept radius of it come first, he never leaves the 5 m defense
+ * leash, never retreats from a point-blank enemy (fires on the spot, draws the knife) and does not run off to aid
+ * while intruders are there.
+ */
+struct CODEXTACTICS_API FDefenseDirective
+{
+	TWeakObjectPtr<AActor> DefendedActor;
+	FVector DefendedLocation = FVector::ZeroVector;
+	bool bHoldAtAllCosts = false;
+	float InterceptRadiusCm = 1200.f;
+	float MaxDefenseLeashCm = 500.f;
+
+	bool IsActive() const { return bHoldAtAllCosts; }
 };
 
 /** The point a move order pinned the operative to (TANDEM 7-B). */
@@ -80,6 +106,8 @@ struct CODEXTACTICS_API FTacticalAnchor
 	/** Facing when the order was given (towards the destination): the side the operative guards. */
 	FRotator GuardFacing = FRotator::ZeroRotator;
 	bool bIsActive = false;
+	/** Sprint 10: a defense line on this anchor (a new move order clears it: MakeAnchor builds a plain anchor). */
+	FDefenseDirective Defense;
 };
 
 /** What the autonomy knows about one enemy when it picks a target. */
@@ -96,6 +124,10 @@ struct CODEXTACTICS_API FAutonomyTargetCandidate
 	bool bAimingAtSquad = false;
 	/** In range and in the line of fire. */
 	bool bCanHit = true;
+	/** Sprint 10: distance to the defended object / point (huge without a defense line), cm. */
+	float DistanceToDefendedCm = TNumericLimits<float>::Max();
+	/** Sprint 10: it attacks the defended object. */
+	bool bAttackingDefended = false;
 };
 
 namespace SquadAutonomyRules
@@ -152,6 +184,43 @@ namespace SquadAutonomyRules
 
 	/** Best candidate it can hit; INDEX_NONE when none. */
 	CODEXTACTICS_API int32 ChooseTarget(const FSquadROE& ROE, const TArray<FAutonomyTargetCandidate>& Candidates);
+
+	// --- Sprint 10: defense line ---
+
+	/** A directive on Location (actor optional) with the ROE intercept radius and the 5 m leash. */
+	CODEXTACTICS_API FDefenseDirective MakeDefense(const FSquadROE& ROE, AActor* DefendedActor, const FVector& Location);
+
+	/** The candidate is an intruder: within the intercept radius of the defended spot or attacking the object. */
+	CODEXTACTICS_API bool IsIntruder(const FDefenseDirective& Defense, const FAutonomyTargetCandidate& Candidate);
+
+	/**
+	 * Target score with a defense line, in tiers: a point-blank enemy first (defense_body_block_priority), then the
+	 * intruders — the one closest to the defended object first (500 per metre, beats any threat tier) — then the ROE
+	 * policy. Without an active directive it is TargetScore.
+	 */
+	CODEXTACTICS_API float DefenseTargetScore(const FSquadROE& ROE, const FDefenseDirective& Defense, const FAutonomyTargetCandidate& Candidate);
+
+	/** ChooseTarget with a defense line (Sprint 10-1; the directive's «PickTarget»). */
+	CODEXTACTICS_API int32 PickTarget(const FSquadROE& ROE, const FDefenseDirective& Defense, const TArray<FAutonomyTargetCandidate>& Candidates);
+
+	/** Defense leash, cm: Strict 5 m; Flexible 5 m, for aid up to the flexible aid leash (10 m). */
+	CODEXTACTICS_API float DefenseLeashRadius(const FSquadROE& ROE, const FDefenseDirective& Defense, bool bForAid);
+
+	/**
+	 * Safe Aid with a defense line: the Safe Aid Check (IsSafeAidRoute) and — while the line is held — no intruder
+	 * inside the intercept radius, and (defense_ignore_distant_aid) the patient within the defense leash of the spot.
+	 */
+	CODEXTACTICS_API bool CanGiveSafeAid(const FSquadROE& ROE, const FDefenseDirective& Defense, bool bSniperAimingOnRoute,
+		float NearestEnemyToPatientCm, bool bIntruderPresent, float PatientDistanceToDefendedCm);
+
+	/** «Ни шагу назад»: a defender never withdraws (no retreat / kiting step away from an enemy). */
+	CODEXTACTICS_API bool AllowsRetreat(const FDefenseDirective& Defense);
+
+	/** He holds the spot (no walking at all) while an enemy is inside the emergency (point-blank) distance. */
+	CODEXTACTICS_API bool HoldsGround(const FSquadROE& ROE, const FDefenseDirective& Defense, float NearestEnemyCm);
+
+	/** Body-blocking: the knife at half the emergency distance (defense_body_block_priority). */
+	CODEXTACTICS_API bool ShouldDrawMelee(const FSquadROE& ROE, const FDefenseDirective& Defense, float NearestEnemyCm);
 
 	/** A mate needs aid: downed, or health share below the ROE threshold. */
 	CODEXTACTICS_API bool NeedsAid(const FSquadROE& ROE, float PatientHealthFraction, bool bDowned);

@@ -1,4 +1,5 @@
 #include "Core/CodexTacticsPlayerController.h"
+#include "Characters/SquadAutonomySubsystem.h"
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Widgets/SWindow.h"
@@ -1640,8 +1641,42 @@ void ACodexTacticsPlayerController::CameraRotateRight()
 	}
 }
 
+void ACodexTacticsPlayerController::AssignDefenseUnderCursor()
+{
+	USquadSubsystem* Squad = GetSquad();
+	USquadAutonomySubsystem* Autonomy = GetWorld()->GetSubsystem<USquadAutonomySubsystem>();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader || !Autonomy || GetActiveTurnBased() || BlockRealTimeOrder())
+	{
+		return;
+	}
+	FHitResult Hit;
+	if (!GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+	{
+		return;
+	}
+	AInteractableActor* Object = Cast<AInteractableActor>(Hit.GetActor());
+	TArray<AOperativeCharacter*> Defenders = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
+	for (AOperativeCharacter* Defender : Defenders)
+	{
+		Autonomy->SetDefenseObjective(Defender, Object, Hit.ImpactPoint);
+	}
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("DefenseLine", "🛡 [РУБЕЖ] {0}: держать любой ценой!{1}"),
+			Object ? Object->DisplayName : LOCTEXT("DefensePoint", "Точка"),
+			Squad->IsAutonomousSquadCombat() ? FText::GetEmpty() : LOCTEXT("DefenseNeedsAuto", " (включите автономию [Ctrl+T] — бойцы будут держать рубеж сами)")));
+	}
+}
+
 void ACodexTacticsPlayerController::CameraDragRotateStart()
 {
+	// Sprint 10: Shift + RMB assigns a defense line instead of the camera drag.
+	if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
+	{
+		AssignDefenseUnderCursor();
+		return;
+	}
 	// Godot: RMB drops a selection box being dragged.
 	bLmbDown = false;
 	bBoxSelecting = false;

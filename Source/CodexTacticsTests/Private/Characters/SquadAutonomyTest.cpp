@@ -186,3 +186,100 @@ bool FSquadROEJsonTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("round trip stance"), Back.OpenGroundStance == ROE.OpenGroundStance);
 	return true;
 }
+
+// --- Sprint 10: defense line («Рубеж обороны», Hold Objective at all costs) ---
+
+namespace DefenseTest
+{
+	FAutonomyTargetCandidate Make(EEnemyArchetype Archetype, float DistanceCm, float ToDefendedCm, bool bAttacking = false)
+	{
+		FAutonomyTargetCandidate Candidate;
+		Candidate.Archetype = Archetype;
+		Candidate.DistanceCm = DistanceCm;
+		Candidate.DistanceToDefendedCm = ToDefendedCm;
+		Candidate.bAttackingDefended = bAttacking;
+		return Candidate;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefendPrioritizesTest, "CodexTactics.Characters.SquadAutonomy.DefendObjective.PrioritizesGeneratorAttackers",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDefendPrioritizesTest::RunTest(const FString& Parameters)
+{
+	using namespace SquadAutonomyRules;
+	FSquadROE ROE;
+	const FDefenseDirective Defense = MakeDefense(ROE, nullptr, FVector::ZeroVector);
+	TestTrue(TEXT("active"), Defense.IsActive());
+	TestEqual(TEXT("intercept 12 m from the ROE"), Defense.InterceptRadiusCm, 1200.f);
+	TestEqual(TEXT("defense leash 5 m"), Defense.MaxDefenseLeashCm, 500.f);
+	// A marksman far off (ThreatLevel tier 3) against a hound at the generator: the hound.
+	TArray<FAutonomyTargetCandidate> Candidates = {
+		DefenseTest::Make(EEnemyArchetype::Marksman, 2000.f, 3000.f), DefenseTest::Make(EEnemyArchetype::FrostHound, 900.f, 200.f) };
+	TestEqual(TEXT("without a line: the marksman"), ChooseTarget(ROE, Candidates), 0);
+	TestEqual(TEXT("holding the generator: the hound at it"), PickTarget(ROE, Defense, Candidates), 1);
+	// Two intruders: the one closer to the object first, though farther from the defender.
+	TArray<FAutonomyTargetCandidate> Two = {
+		DefenseTest::Make(EEnemyArchetype::Brute, 600.f, 1000.f), DefenseTest::Make(EEnemyArchetype::Frostbitten, 1100.f, 150.f) };
+	TestEqual(TEXT("closest to the generator first"), PickTarget(ROE, Defense, Two), 1);
+	// Attacking the object counts even from beyond the intercept radius (a spitter lobbing at it).
+	TArray<FAutonomyTargetCandidate> Lob = {
+		DefenseTest::Make(EEnemyArchetype::Marksman, 1500.f, 2500.f), DefenseTest::Make(EEnemyArchetype::Spitter, 1800.f, 1600.f, true) };
+	TestEqual(TEXT("the one attacking the object"), PickTarget(ROE, Defense, Lob), 1);
+	// Body-block: a point-blank enemy stays first (defense_body_block_priority), else the intruder.
+	TArray<FAutonomyTargetCandidate> Close = {
+		DefenseTest::Make(EEnemyArchetype::FrostHound, 200.f, 1500.f), DefenseTest::Make(EEnemyArchetype::Cutter, 1000.f, 100.f) };
+	TestEqual(TEXT("point-blank first"), PickTarget(ROE, Defense, Close), 0);
+	ROE.bDefenseBodyBlockPriority = false;
+	TestEqual(TEXT("no body-block priority: the intruder"), PickTarget(ROE, Defense, Close), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefendRefusesAidTest, "CodexTactics.Characters.SquadAutonomy.DefendObjective.RefusesDistantAidWhenUnderThreat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDefendRefusesAidTest::RunTest(const FString& Parameters)
+{
+	using namespace SquadAutonomyRules;
+	FSquadROE ROE;
+	const FDefenseDirective Defense = MakeDefense(ROE, nullptr, FVector::ZeroVector);
+	const FDefenseDirective None;
+	TestTrue(TEXT("no line: plain Safe Aid"), CanGiveSafeAid(ROE, None, false, 1000.f, true, 3000.f));
+	TestFalse(TEXT("intruders at the generator: he stays"), CanGiveSafeAid(ROE, Defense, false, 1000.f, true, 300.f));
+	TestFalse(TEXT("quiet, but the patient is 15 m off: ignored"), CanGiveSafeAid(ROE, Defense, false, 1000.f, false, 1500.f));
+	TestTrue(TEXT("quiet, patient within the 5 m leash"), CanGiveSafeAid(ROE, Defense, false, 1000.f, false, 400.f));
+	TestFalse(TEXT("quiet, near, but a sniper aims: Safe Aid fails"), CanGiveSafeAid(ROE, Defense, true, 1000.f, false, 400.f));
+	ROE.bDefenseIgnoreDistantAid = false;
+	TestTrue(TEXT("distant aid allowed by the ROE"), CanGiveSafeAid(ROE, Defense, false, 1000.f, false, 1500.f));
+	TestEqual(TEXT("strict defense leash for aid: 5 m"), DefenseLeashRadius(ROE, Defense, true), 500.f);
+	ROE.DefenseLeashStrictness = ELeashStrictness::Flexible;
+	TestEqual(TEXT("flexible: 10 m for aid"), DefenseLeashRadius(ROE, Defense, true), 1000.f);
+	TestEqual(TEXT("flexible: still 5 m for the fight"), DefenseLeashRadius(ROE, Defense, false), 500.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefendZeroRetreatTest, "CodexTactics.Characters.SquadAutonomy.DefendObjective.ZeroRetreatHold",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDefendZeroRetreatTest::RunTest(const FString& Parameters)
+{
+	using namespace SquadAutonomyRules;
+	FSquadROE ROE;
+	const FDefenseDirective Defense = MakeDefense(ROE, nullptr, FVector::ZeroVector);
+	const FDefenseDirective None;
+	TestFalse(TEXT("a defender never retreats"), AllowsRetreat(Defense));
+	TestTrue(TEXT("without a line he may"), AllowsRetreat(None));
+	TestTrue(TEXT("enemy at 2 m: holds the spot"), HoldsGround(ROE, Defense, 200.f));
+	TestFalse(TEXT("enemy at 6 m: may reposition inside the leash"), HoldsGround(ROE, Defense, 600.f));
+	TestFalse(TEXT("no line: no hold"), HoldsGround(ROE, None, 200.f));
+	TestTrue(TEXT("knife at 1.5 m"), ShouldDrawMelee(ROE, Defense, 150.f));
+	TestFalse(TEXT("no knife at 3 m"), ShouldDrawMelee(ROE, Defense, 300.f));
+	// The leash: the anchor at the object, 5 m — a point 6 m off is outside.
+	FTacticalAnchor Anchor = MakeAnchor(ROE, FVector::ZeroVector, FVector::ZeroVector, FRotator::ZeroRotator);
+	Anchor.Defense = Defense;
+	Anchor.Radius = DefenseLeashRadius(ROE, Defense, false);
+	TestFalse(TEXT("6 m from the object: outside the defense leash"), IsInsideLeash(Anchor, FVector(600.f, 0.f, 0.f), Anchor.Radius));
+	// A new player order (MakeAnchor) clears the line.
+	TestFalse(TEXT("a new anchor has no line"), MakeAnchor(ROE, FVector::ZeroVector, FVector(100.f, 0.f, 0.f), FRotator::ZeroRotator).Defense.IsActive());
+	return true;
+}

@@ -742,6 +742,10 @@ FString ACodexTacticsHUD::DescribeOperative(const AOperativeCharacter& Operative
 	const bool bSelected = !bLeader && SquadSystem && SquadSystem->HasMultiSelection() && SquadSystem->IsGroupSelected(&Operative);
 	FString Line = FString::Printf(TEXT("%s[%d] %s%s  %s"), bSelected ? TEXT("★ ") : TEXT(""), Operative.SquadIndex + 1, *Operative.DisplayName.ToString(),
 		bLeader ? TEXT(" <ЛИДЕР>") : TEXT(""), *AOperativeCharacter::GetStanceDisplayName(Operative.GetStance()).ToString());
+	if (Operative.TacticalAnchor.Defense.IsActive())
+	{
+		Line += TEXT("  [РУБЕЖ: Защита]"); // Sprint 10
+	}
 	if (Operative.IsSprinting())
 	{
 		Line += TEXT(" бег");

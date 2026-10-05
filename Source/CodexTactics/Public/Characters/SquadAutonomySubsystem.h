@@ -25,6 +25,10 @@ struct CODEXTACTICS_API FSquadAutonomyStats
 	int32 AidRefusedUnsafe = 0;
 	int32 TargetPicks = 0;
 	int32 Freezes = 0;
+	// Sprint 10: defense line.
+	int32 DefenseHolds = 0;
+	int32 AidRefusedDefense = 0;
+	int32 MeleeDraws = 0;
 };
 
 /**
@@ -51,6 +55,13 @@ public:
 
 	/** Stops the autonomous walks and drops the autonomy targets (pause, mode off). */
 	void Freeze();
+
+	/**
+	 * Sprint 10 «Рубеж обороны»: Operative holds TargetObject (generator, terminal, gate, barricade; nullptr: Point) at all
+	 * costs — his anchor moves next to it with the 5 m defense leash and the directive (SquadAutonomyRules::MakeDefense),
+	 * and he walks there. A later player move order clears it. False without an operative.
+	 */
+	bool SetDefenseObjective(AOperativeCharacter* Operative, AActor* TargetObject, FVector Point);
 
 	const FSquadAutonomyStats& GetStats() const { return Stats; }
 
@@ -98,7 +109,8 @@ private:
 		float Elapsed);
 	bool UpdateTask(AOperativeCharacter& Operative, FOperativeState& State, const TArray<FEnemyView>& Enemies, float Elapsed);
 	void UpdateWeapons(AOperativeCharacter& Operative, FOperativeState& State, float NearestEnemyCm);
-	bool TryAid(AOperativeCharacter& Operative, FOperativeState& State, const TArray<FEnemyView>& Enemies, const TArray<AOperativeCharacter*>& Squad);
+	bool TryAid(AOperativeCharacter& Operative, FOperativeState& State, const TArray<FEnemyView>& Enemies, const TArray<AOperativeCharacter*>& Squad,
+		bool bIntruderPresent);
 	void ChooseTarget(AOperativeCharacter& Operative, const TArray<FEnemyView>& Enemies, const AOperativeCharacter* Leader);
 	/** Best barricade stand point against Threat whose stand lies inside the leash; false without one. */
 	bool FindCoverInLeash(const AOperativeCharacter& Operative, const FVector& Threat, FVector& OutStand) const;

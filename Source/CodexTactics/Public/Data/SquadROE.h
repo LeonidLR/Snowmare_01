@@ -7,7 +7,7 @@ class FJsonObject;
 
 /**
  * The Commander Mode tactical ROE (Sprint 07-E, UE-only): Content/Data/AI/squad_roe.json, written by the Wave Editor's
- * «Тактика отряда (ROE)» tab (/api/squad-roe), read by the game mode at StartPlay. The file holds the 13 parameters
+ * «Тактика отряда (ROE)» tab (/api/squad-roe), read by the game mode at StartPlay. The file holds the 13 + 4 (Sprint 10) parameters
  * under their snake_case names (anchor_radius_meters, leash_strictness "Flexible" | "Strict", ...); a missing key keeps
  * the default. Kept out of GameBalanceConfig: that header is generated from Godot and the editor cannot write assets.
  */

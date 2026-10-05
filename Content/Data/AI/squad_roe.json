@@ -11,5 +11,9 @@
   "require_safe_route_for_aid": true,
   "reserve_personal_medkit": true,
   "auto_reload_threshold_pct": 25,
-  "emergency_sidearm_dist_m": 3.5
+  "emergency_sidearm_dist_m": 3.5,
+  "defense_intercept_radius_m": 12.0,
+  "defense_leash_strictness": "Strict",
+  "defense_body_block_priority": true,
+  "defense_ignore_distant_aid": true
 }

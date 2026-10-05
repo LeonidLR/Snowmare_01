@@ -15,6 +15,8 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/BarricadeActor.h"
+#include "Interactables/InteractableActor.h"
+#include "Quests/QuestChain.h"
 #include "NavigationSystem.h"
 
 namespace SquadAutonomy
@@ -182,7 +184,22 @@ void USquadAutonomySubsystem::Decide(AOperativeCharacter& Operative, FOperativeS
 		// No order yet this fight: he guards where he stands.
 		Operative.TacticalAnchor = MakeAnchor(ROE, Operative.GetActorLocation(), Operative.GetActorLocation(), Operative.GetActorRotation());
 	}
-	Operative.TacticalAnchor.Radius = LeashRadius(ROE, false);
+	// Sprint 10: a defense line keeps him on the 5 m defense leash around the defended object.
+	FDefenseDirective& Defense = Operative.TacticalAnchor.Defense;
+	Operative.TacticalAnchor.Radius = Defense.IsActive() ? DefenseLeashRadius(ROE, Defense, false) : LeashRadius(ROE, false);
+	bool bIntruderPresent = false;
+	if (Defense.IsActive())
+	{
+		if (const AActor* Object = Defense.DefendedActor.Get())
+		{
+			Defense.DefendedLocation = Object->GetActorLocation();
+		}
+		for (const FEnemyView& View : Enemies)
+		{
+			bIntruderPresent |= FVector::Dist2D(View.Location, Defense.DefendedLocation) <= Defense.InterceptRadiusCm
+				|| (Defense.DefendedActor.IsValid() && View.Enemy->GetCurrentTarget() == Defense.DefendedActor.Get());
+		}
+	}
 
 	const FVector Position = Operative.GetActorLocation();
 	const FEnemyView* Nearest = nullptr;
@@ -207,6 +224,19 @@ void USquadAutonomySubsystem::Decide(AOperativeCharacter& Operative, FOperativeS
 	const AOperativeCharacter* Leader = GetWorld()->GetSubsystem<USquadSubsystem>()->GetLeader();
 	ChooseTarget(Operative, Enemies, Leader);
 
+	// «Ни шагу назад»: an enemy at point-blank range — the defender stays where he is and fires (no walk at all).
+	if (HoldsGround(ROE, Defense, NearestCm))
+	{
+		if (State.Task != ETask::None && Operative.TacticalAnchor.Location.Equals(State.TaskAnchor, 1.f))
+		{
+			Operative.StopOperative();
+			State.Task = ETask::None;
+			State.Patient.Reset();
+		}
+		++Stats.DefenseHolds;
+		return;
+	}
+
 	if (UpdateTask(Operative, State, Enemies, Elapsed))
 	{
 		return; // an autonomous walk is under way
@@ -217,7 +247,7 @@ void USquadAutonomySubsystem::Decide(AOperativeCharacter& Operative, FOperativeS
 	}
 
 	// Field aid (7-D) before anything else that moves him.
-	if (TryAid(Operative, State, Enemies, Squad))
+	if (TryAid(Operative, State, Enemies, Squad, bIntruderPresent))
 	{
 		return;
 	}
@@ -388,6 +418,16 @@ void USquadAutonomySubsystem::UpdateWeapons(AOperativeCharacter& Operative, FOpe
 	{
 		return;
 	}
+	// Sprint 10: a defender body-blocks a point-blank enemy with the knife.
+	if (!bOnSidearm && ShouldDrawMelee(ROE, Operative.TacticalAnchor.Defense, NearestEnemyCm) && State.PrimaryWeaponId != TEXT("knife")
+		&& SquadAutonomy::HasWeapon(Operative, TEXT("knife")) && Operative.SwitchToWeaponById(TEXT("knife")))
+	{
+		State.bOnAutoSidearm = true;
+		++Stats.MeleeDraws;
+		UE_LOG(LogCodexTactics, Display, TEXT("Commander Mode: %s holds the line with the knife (enemy at %.1f m)"), *Operative.DisplayName.ToString(),
+			NearestEnemyCm / 100.f);
+		return;
+	}
 	if (!bOnSidearm)
 	{
 		// Point-blank with an empty / reloading primary: pistol, else shotgun (7-C).
@@ -446,10 +486,16 @@ void USquadAutonomySubsystem::ChooseTarget(AOperativeCharacter& Operative, const
 		Candidate.bCurrent = View.Enemy == Current;
 		Candidate.bAimingAtSquad = View.AimTarget != nullptr;
 		Candidate.bCanHit = Operative.CanHitEnemy(View.Enemy);
+		const FDefenseDirective& Defense = Operative.TacticalAnchor.Defense;
+		if (Defense.IsActive())
+		{
+			Candidate.DistanceToDefendedCm = FVector::Dist2D(View.Location, Defense.DefendedLocation);
+			Candidate.bAttackingDefended = Defense.DefendedActor.IsValid() && View.Enemy->GetCurrentTarget() == Defense.DefendedActor.Get();
+		}
 		Candidates.Add(Candidate);
 		Actors.Add(View.Enemy);
 	}
-	const int32 Best = SquadAutonomyRules::ChooseTarget(ROE, Candidates);
+	const int32 Best = SquadAutonomyRules::PickTarget(ROE, Operative.TacticalAnchor.Defense, Candidates);
 	AActor* Chosen = Best == INDEX_NONE ? nullptr : Actors[Best];
 	if (Chosen != Current)
 	{
@@ -459,7 +505,7 @@ void USquadAutonomySubsystem::ChooseTarget(AOperativeCharacter& Operative, const
 }
 
 bool USquadAutonomySubsystem::TryAid(AOperativeCharacter& Operative, FOperativeState& State, const TArray<FEnemyView>& Enemies,
-	const TArray<AOperativeCharacter*>& Squad)
+	const TArray<AOperativeCharacter*>& Squad, bool bIntruderPresent)
 {
 	using namespace SquadAutonomyRules;
 	const FSquadROE& ROE = SquadROE::Get();
@@ -467,7 +513,8 @@ bool USquadAutonomySubsystem::TryAid(AOperativeCharacter& Operative, FOperativeS
 	{
 		return false;
 	}
-	const float AidLeash = LeashRadius(ROE, true);
+	const FDefenseDirective& Defense = Operative.TacticalAnchor.Defense;
+	const float AidLeash = Defense.IsActive() ? DefenseLeashRadius(ROE, Defense, true) : LeashRadius(ROE, true);
 	AOperativeCharacter* Patient = nullptr;
 	float PatientHealth = 1.f;
 	for (AOperativeCharacter* Mate : Squad)
@@ -501,9 +548,11 @@ bool USquadAutonomySubsystem::TryAid(AOperativeCharacter& Operative, FOperativeS
 		bSniper |= View.AimTarget == &Operative || View.AimTarget == Patient;
 		NearestToPatient = FMath::Min(NearestToPatient, static_cast<float>(FVector::Dist2D(View.Location, Patient->GetActorLocation())));
 	}
-	if (!IsSafeAidRoute(ROE, bSniper, NearestToPatient))
+	const float PatientToDefended = Defense.IsActive() ? static_cast<float>(FVector::Dist2D(Patient->GetActorLocation(), Defense.DefendedLocation)) : 0.f;
+	if (!CanGiveSafeAid(ROE, Defense, bSniper, NearestToPatient, bIntruderPresent, PatientToDefended))
 	{
-		++Stats.AidRefusedUnsafe;
+		// Sprint 10: a defender does not leave the line while intruders are there (or for a mate beyond his leash).
+		++(IsSafeAidRoute(ROE, bSniper, NearestToPatient) ? Stats.AidRefusedDefense : Stats.AidRefusedUnsafe);
 		return false;
 	}
 	State.Patient = Patient;
@@ -553,6 +602,41 @@ bool USquadAutonomySubsystem::FindCoverInLeash(const AOperativeCharacter& Operat
 	return BestScore > -TNumericLimits<float>::Max();
 }
 
+bool USquadAutonomySubsystem::SetDefenseObjective(AOperativeCharacter* Operative, AActor* TargetObject, FVector Point)
+{
+	using namespace SquadAutonomyRules;
+	if (!Operative)
+	{
+		return false;
+	}
+	const FSquadROE& ROE = SquadROE::Get();
+	const FVector Spot = TargetObject ? TargetObject->GetActorLocation() : Point;
+	// He stands next to the object: the closest walkable point (objects such as the generator sit on top of the navmesh hole).
+	FVector Stand = Spot;
+	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	FNavLocation Projected;
+	if (Nav && Nav->ProjectPointToNavigation(Spot, Projected, FVector(400.f, 400.f, 400.f)))
+	{
+		Stand = Projected.Location;
+	}
+	FTacticalAnchor Anchor = MakeAnchor(ROE, Operative->GetActorLocation(), Stand, Operative->GetActorRotation());
+	Anchor.Defense = MakeDefense(ROE, TargetObject, Spot);
+	Anchor.Radius = DefenseLeashRadius(ROE, Anchor.Defense, false);
+	Operative->TacticalAnchor = Anchor;
+	if (FOperativeState* State = States.Find(Operative))
+	{
+		State->Task = ETask::None;
+		State->Patient.Reset();
+	}
+	if (FVector::Dist2D(Operative->GetActorLocation(), Stand) > Anchor.Radius)
+	{
+		Operative->AutonomousMoveTo(Stand);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Commander Mode: %s holds the line at %s (%s), intercept %.0f m"), *Operative->DisplayName.ToString(),
+		TargetObject ? *TargetObject->GetName() : TEXT("a point"), *Spot.ToCompactString(), Anchor.Defense.InterceptRadiusCm / 100.f);
+	return true;
+}
+
 bool USquadAutonomySubsystem::ProjectToNav(const FVector& Point, FVector& OutPoint) const
 {
 	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
@@ -595,4 +679,46 @@ namespace SquadAutonomy
 
 	static FAutoConsoleCommandWithWorldAndArgs ToggleAutonomy(TEXT("CodexTactics.ToggleAutonomousCombat"),
 		TEXT("Flips Commander Mode (Ctrl + T)."), FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ToggleCommand));
+
+	static void DefendCommand(const TArray<FString>& Args, UWorld* World)
+	{
+		USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+		USquadAutonomySubsystem* Autonomy = World ? World->GetSubsystem<USquadAutonomySubsystem>() : nullptr;
+		if (!Squad || !Autonomy)
+		{
+			return;
+		}
+		const int32 Index = Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 0;
+		AOperativeCharacter* Operative = nullptr;
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Operative = Member->SquadIndex == Index ? Member : Operative;
+		}
+		if (!Operative)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("CodexTactics.DefendObjective: no operative %d"), Index);
+			return;
+		}
+		// The nearest objective (generator / terminal / gate) within 40 m, else the nearest barricade, else where he stands;
+		// «here» as the second argument: where he stands.
+		AActor* Target = nullptr;
+		float Best = 4000.f;
+		const bool bHere = Args.Num() > 1 && Args[1].Equals(TEXT("here"), ESearchCase::IgnoreCase);
+		for (TActorIterator<AInteractableActor> It(World); It && !bHere; ++It)
+		{
+			const bool bObjective = It->ObjectType == EInteractableType::Generator || It->ObjectType == EInteractableType::GateTerminal
+				|| It->ObjectType == EInteractableType::Gate;
+			const float Distance = FVector::Dist2D(It->GetActorLocation(), Operative->GetActorLocation()) * (bObjective ? 1.f : 3.f);
+			if ((bObjective || It->IsA<ABarricadeActor>()) && Distance < Best)
+			{
+				Best = Distance;
+				Target = *It;
+			}
+		}
+		Autonomy->SetDefenseObjective(Operative, Target, Operative->GetActorLocation());
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs DefendObjective(TEXT("CodexTactics.DefendObjective"),
+		TEXT("Sprint 10: operative [index] holds the nearest objective (generator / terminal / gate, else a barricade) at all costs; «here»: his spot."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&DefendCommand));
 }

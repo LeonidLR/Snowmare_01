@@ -112,6 +112,10 @@ FSquadROE SquadROE::FromJson(const FJsonObject& Json, const FSquadROE& Base)
 	ReadBool(Json, TEXT("reserve_personal_medkit"), ROE.bReservePersonalMedkit);
 	ReadNumber(Json, TEXT("auto_reload_threshold_pct"), ROE.AutoReloadThresholdPct, 0.f, 100.f);
 	ReadNumber(Json, TEXT("emergency_sidearm_dist_m"), ROE.EmergencySidearmDistMeters, 0.f, 15.f);
+	ReadNumber(Json, TEXT("defense_intercept_radius_m"), ROE.DefenseInterceptRadiusMeters, 2.f, 40.f);
+	ReadEnum(Json, TEXT("defense_leash_strictness"), LeashNames, ROE.DefenseLeashStrictness);
+	ReadBool(Json, TEXT("defense_body_block_priority"), ROE.bDefenseBodyBlockPriority);
+	ReadBool(Json, TEXT("defense_ignore_distant_aid"), ROE.bDefenseIgnoreDistantAid);
 	return ROE;
 }
 
@@ -131,6 +135,10 @@ TSharedRef<FJsonObject> SquadROE::ToJson(const FSquadROE& ROE)
 	Json->SetBoolField(TEXT("reserve_personal_medkit"), ROE.bReservePersonalMedkit);
 	Json->SetNumberField(TEXT("auto_reload_threshold_pct"), ROE.AutoReloadThresholdPct);
 	Json->SetNumberField(TEXT("emergency_sidearm_dist_m"), ROE.EmergencySidearmDistMeters);
+	Json->SetNumberField(TEXT("defense_intercept_radius_m"), ROE.DefenseInterceptRadiusMeters);
+	Json->SetStringField(TEXT("defense_leash_strictness"), EnumToName(ROE.DefenseLeashStrictness, LeashNames));
+	Json->SetBoolField(TEXT("defense_body_block_priority"), ROE.bDefenseBodyBlockPriority);
+	Json->SetBoolField(TEXT("defense_ignore_distant_aid"), ROE.bDefenseIgnoreDistantAid);
 	return Json;
 }
 

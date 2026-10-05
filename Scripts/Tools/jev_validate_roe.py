@@ -72,6 +72,59 @@ TARGETS = [
 ]
 
 
+# --- Sprint 10: defense line («Рубеж обороны»), mirror of SquadAutonomyRules::PickTarget / CanGiveSafeAid -----------
+INTERCEPT_M = 12.0
+DEFENSE_LEASH_M = 5.0
+
+
+def code_defense_aid(s):
+    if s["intruders"]:
+        return False
+    return s["patient_to_generator_m"] <= DEFENSE_LEASH_M  # defense_ignore_distant_aid
+
+
+def code_defense_target(enemies):
+    def score(e):
+        value = -e["distance_m"] + 100 * (TIERS[e["type"]] + (1 if e.get("aiming") else 0))
+        if e["distance_m"] < EMERGENCY_M:
+            value += 10000 + 1000000  # body-block tier (defense_body_block_priority)
+        if e.get("attacking") or e["to_generator_m"] <= INTERCEPT_M:
+            value += 100000 + 500 * (INTERCEPT_M - min(e["to_generator_m"], INTERCEPT_M))
+        return value
+    return max(enemies, key=score)["id"]
+
+
+DEFENSE_AID = [
+    {"id": "def_aid_far_under_attack", "intruders": True, "patient_to_generator_m": 15,
+     "note": "hounds are tearing at the generator while a badly wounded mate lies far off across the yard"},
+    {"id": "def_aid_near_quiet", "intruders": False, "patient_to_generator_m": 3,
+     "note": "nothing threatens the generator right now; a badly wounded mate lies right next to it"},
+    {"id": "def_aid_far_quiet", "intruders": False, "patient_to_generator_m": 15,
+     "note": "nothing threatens the generator right now; a badly wounded mate lies far off across the yard"},
+]
+
+DEFENSE_TARGETS = [
+    {"id": "def_t_generator_vs_sniper", "enemies": [
+        {"id": "A", "type": "marksman", "distance_m": 20, "to_generator_m": 30, "aiming": True},
+        {"id": "B", "type": "frost hound", "distance_m": 9, "to_generator_m": 2, "attacking": True}]},
+    {"id": "def_t_two_at_generator", "enemies": [
+        {"id": "A", "type": "brute", "distance_m": 6, "to_generator_m": 10},
+        {"id": "B", "type": "frostbitten", "distance_m": 11, "to_generator_m": 1.5, "attacking": True}]},
+    {"id": "def_t_point_blank", "enemies": [
+        {"id": "A", "type": "frost hound", "distance_m": 2, "to_generator_m": 6},
+        {"id": "B", "type": "cutter", "distance_m": 10, "to_generator_m": 1, "attacking": True}]},
+]
+
+
+def describe_defense_enemy(e):
+    text = "%s, %s from the defender, %s from the generator" % (e["type"], distance_words(e["distance_m"]), distance_words(e["to_generator_m"]))
+    if e.get("attacking"):
+        text += ", attacking the generator"
+    if e.get("aiming"):
+        text += ", its laser sight aimed at the squad"
+    return text
+
+
 def describe_enemy(e):
     text = "%s, %s" % (e["type"], distance_words(e["distance_m"]))
     return text + (", its laser sight aimed at the squad" if e.get("aiming") else "")
@@ -97,6 +150,19 @@ def build():
                               "Look at `targets.%s`: the enemies a soldier behind a barricade can shoot right now. Which "
                               "one should he shoot first to protect the squad?" % s["id"],
                               "criteria": {e["id"]: describe_enemy(e) for e in s["enemies"]}}
+    state["defense"] = {}
+    defender = ("A soldier ordered to hold the squad's generator at all costs (it keeps the squad from freezing); "
+                "he stays within a few strides of it.")
+    for s in DEFENSE_AID:
+        state["defense"][s["id"]] = {"order": defender, "situation": s["note"]}
+        questions[s["id"]] = {"type": "noul", "instructions":
+                              "Look at `defense.%s`. Should the defender go and patch up the wounded mate now (for a mate "
+                              "right at the generator that means a couple of steps without leaving it)?" % s["id"]}
+    for s in DEFENSE_TARGETS:
+        state["defense"][s["id"]] = {"order": defender, "enemies": {e["id"]: describe_defense_enemy(e) for e in s["enemies"]}}
+        questions[s["id"]] = {"type": "choice", "instructions":
+                              "Look at `defense.%s`. Which enemy should the defender shoot first to hold the generator?" % s["id"],
+                              "criteria": {e["id"]: describe_defense_enemy(e) for e in s["enemies"]}}
     return state, questions
 
 
@@ -117,6 +183,20 @@ def main():
     for s in TARGETS:
         jev, confidence = jev_client.choice(answers, s["id"])
         code = code_target(s["enemies"])
+        ok = jev == code
+        agree += ok
+        total += 1
+        print("%-26s code %-5s Jev %-3s (%.2f) %s" % (s["id"], code, jev, confidence or 0.0, "" if ok else "<-- DISAGREE"))
+    for s in DEFENSE_AID:
+        jev = jev_client.noul(answers, s["id"], -1)
+        code = code_defense_aid(s)
+        ok = jev >= 0 and (jev >= 0.5) == code
+        agree += ok
+        total += 1
+        print("%-26s code %-5s Jev %.2f %s" % (s["id"], "aid" if code else "hold", jev, "" if ok else "<-- DISAGREE"))
+    for s in DEFENSE_TARGETS:
+        jev, confidence = jev_client.choice(answers, s["id"])
+        code = code_defense_target(s["enemies"])
         ok = jev == code
         agree += ok
         total += 1
