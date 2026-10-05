@@ -45,5 +45,11 @@ namespace RelocationRules
 
 	CODEXTACTICS_API bool IsWithinRadius(const FVector& Origin, const FVector& Point, float Radius);
 
+	/**
+	 * User decision 2026-10-05: in the preparation the squad's set-up items are shared and the free operative closest to
+	 * the marked spot (planar) runs to set it up. Index into Positions, INDEX_NONE when nobody is available.
+	 */
+	CODEXTACTICS_API int32 ChooseNearestWorker(const TArray<FVector>& Positions, const TArray<bool>& Available, const FVector& Target);
+
 	CODEXTACTICS_API ELiftBlocker GetLiftBlocker(float ColdLevel, float HealthFraction, float MaxColdToLift, float MinHealthFractionToLift);
 }

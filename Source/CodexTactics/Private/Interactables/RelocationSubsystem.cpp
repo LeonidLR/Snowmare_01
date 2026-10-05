@@ -335,7 +335,7 @@ bool URelocationSubsystem::StartDeployPlacement(EDeployableType Type, AOperative
 	return true;
 }
 
-void URelocationSubsystem::ExecuteDeploy(AOperativeCharacter* Worker, EDeployableType Type, const FVector& GroundPoint, float Yaw)
+void URelocationSubsystem::ExecuteDeploy(AOperativeCharacter* Worker, EDeployableType Type, const FVector& GroundPoint, float Yaw, bool bSprint)
 {
 	if (!Worker)
 	{
@@ -346,8 +346,55 @@ void URelocationSubsystem::ExecuteDeploy(AOperativeCharacter* Worker, EDeployabl
 	Task.Type = Type;
 	Task.Target = GroundPoint;
 	Task.Yaw = Yaw;
-	Worker->OrderMoveTo(GroundPoint, false);
-	Post(Worker->DisplayName, LOCTEXT("DeployMoving", "Выдвигаюсь на точку для установки!"));
+	Task.bSprint = bSprint;
+	Worker->OrderMoveTo(GroundPoint, bSprint);
+	Post(Worker->DisplayName, bSprint ? LOCTEXT("DeployRunning", "Бегу на точку для установки!") : LOCTEXT("DeployMoving", "Выдвигаюсь на точку для установки!"));
+}
+
+AOperativeCharacter* URelocationSubsystem::PickPreparationWorker(AOperativeCharacter* Fallback, EDeployableType Type, const FVector& GroundPoint)
+{
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	if (!Squad)
+	{
+		return Fallback;
+	}
+	const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+	TArray<FVector> Positions;
+	TArray<bool> Available;
+	for (const AOperativeCharacter* Member : Members)
+	{
+		const bool bBusy = DeployTasks.ContainsByPredicate([Member](const FDeployTask& Task) { return Task.Worker.Get() == Member; });
+		Positions.Add(Member->GetActorLocation());
+		Available.Add(Member->HealthComponent && Member->HealthComponent->IsAlive() && !Member->bCarrying && !Member->IsVaulting()
+			&& !Member->IsPanicking() && !Member->IsRaging() && !bBusy);
+	}
+	const int32 Index = RelocationRules::ChooseNearestWorker(Positions, Available, GroundPoint);
+	AOperativeCharacter* Chosen = Members.IsValidIndex(Index) ? Members[Index] : nullptr;
+	if (!Chosen || Chosen == Fallback)
+	{
+		return Fallback;
+	}
+	if (Chosen->GetDeployableCount(Type) <= 0)
+	{
+		// The squad's items are shared: the one who opened the inventory (or whoever carries one) hands it over.
+		AOperativeCharacter* Carrier = Fallback && Fallback->GetDeployableCount(Type) > 0 ? Fallback : nullptr;
+		for (AOperativeCharacter* Member : Members)
+		{
+			if (!Carrier && Member->GetDeployableCount(Type) > 0)
+			{
+				Carrier = Member;
+			}
+		}
+		if (!Carrier)
+		{
+			return Fallback;
+		}
+		Carrier->AddDeployable(Type, -1);
+		Chosen->AddDeployable(Type, 1);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Preparation: %s (closest, %.1f m) sets up the %s"), *Chosen->DisplayName.ToString(),
+		FVector::Dist2D(Chosen->GetActorLocation(), GroundPoint) / 100.f, *GetDeployableName(Type).ToString());
+	return Chosen;
 }
 
 bool URelocationSubsystem::TickDeploy(FDeployTask& Task, float DeltaTime)
@@ -365,7 +412,7 @@ bool URelocationSubsystem::TickDeploy(FDeployTask& Task, float DeltaTime)
 		if (bStalled && Task.RetryTime <= 0.f)
 		{
 			Task.RetryTime = RetryInterval;
-			Worker->OrderMoveTo(Task.Target, false);
+			Worker->OrderMoveTo(Task.Target, Task.bSprint);
 		}
 		return false;
 	}
@@ -530,6 +577,11 @@ void URelocationSubsystem::ConfirmPlacement(const FVector& GroundPoint)
 			}
 			Post(DeployWorker->DisplayName, FText::Format(LOCTEXT("DeployPlanned", "📋 [ПЛАН] Запланирована установка объекта ({0})!"),
 				GetDeployableName(Type)));
+		}
+		else if (DeployFlow && DeployFlow->GetPhase() == ECodexGamePhase::Preparation)
+		{
+			// User decision 2026-10-05: saving preparation time — the closest free operative runs there.
+			ExecuteDeploy(PickPreparationWorker(DeployWorker, Type, DeployAnchor), Type, DeployAnchor, PlacingYaw, true);
 		}
 		else
 		{

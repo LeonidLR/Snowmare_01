@@ -23,6 +23,22 @@ bool RelocationRules::IsWithinRadius(const FVector& Origin, const FVector& Point
 	return FVector::Dist2D(Origin, Point) <= Radius;
 }
 
+int32 RelocationRules::ChooseNearestWorker(const TArray<FVector>& Positions, const TArray<bool>& Available, const FVector& Target)
+{
+	int32 Best = INDEX_NONE;
+	double BestDistance = TNumericLimits<double>::Max();
+	for (int32 Index = 0; Index < Positions.Num(); ++Index)
+	{
+		const double Distance = FVector::Dist2D(Positions[Index], Target);
+		if (Available.IsValidIndex(Index) && Available[Index] && Distance < BestDistance)
+		{
+			BestDistance = Distance;
+			Best = Index;
+		}
+	}
+	return Best;
+}
+
 ELiftBlocker RelocationRules::GetLiftBlocker(float ColdLevel, float HealthFraction, float MaxColdToLift, float MinHealthFractionToLift)
 {
 	if (ColdLevel >= MaxColdToLift)

@@ -52,3 +52,19 @@ bool FRelocationLiftTest::RunTest(const FString&)
 #undef RELOCATION_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRelocationNearestWorkerTest, "CodexTactics.Interactables.RelocationRules.NearestWorker",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FRelocationNearestWorkerTest::RunTest(const FString& Parameters)
+{
+	// Left flank barricade: the operative on the left runs (user decision 2026-10-05).
+	const TArray<FVector> Positions = { FVector(0.f, 0.f, 0.f), FVector(0.f, -1500.f, 0.f), FVector(0.f, 1500.f, 0.f) };
+	const FVector LeftEdge(200.f, -2000.f, 0.f);
+	TestEqual(TEXT("closest to the left edge"), RelocationRules::ChooseNearestWorker(Positions, { true, true, true }, LeftEdge), 1);
+	TestEqual(TEXT("busy one skipped"), RelocationRules::ChooseNearestWorker(Positions, { true, false, true }, LeftEdge), 0);
+	TestEqual(TEXT("height ignored"), RelocationRules::ChooseNearestWorker({ FVector(0.f, 0.f, 900.f), FVector(500.f, 0.f, 0.f) }, { true, true },
+		FVector(0.f, 0.f, 0.f)), 0);
+	TestEqual(TEXT("nobody free"), RelocationRules::ChooseNearestWorker(Positions, { false, false, false }, LeftEdge), INDEX_NONE);
+	return true;
+}

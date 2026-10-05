@@ -68,9 +68,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Relocation")
 	bool StartDeployPlacement(EDeployableType Type, AOperativeCharacter* Worker);
 
-	/** Starts a set-up task right away (no placement UI). */
+	/** Starts a set-up task right away (no placement UI); bSprint: the worker runs there (preparation). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Relocation")
-	void ExecuteDeploy(AOperativeCharacter* Worker, EDeployableType Type, const FVector& GroundPoint, float Yaw);
+	void ExecuteDeploy(AOperativeCharacter* Worker, EDeployableType Type, const FVector& GroundPoint, float Yaw, bool bSprint = false);
+
+	/**
+	 * Preparation (user decision 2026-10-05): the free squad member closest to GroundPoint (alive, not carrying /
+	 * vaulting / panicking / raging, no set-up task yet); the shared item is handed to him from Fallback if he has
+	 * none. Returns Fallback when nobody else fits.
+	 */
+	AOperativeCharacter* PickPreparationWorker(AOperativeCharacter* Fallback, EDeployableType Type, const FVector& GroundPoint);
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Relocation")
 	int32 GetActiveDeployCount() const { return DeployTasks.Num(); }
@@ -164,6 +171,7 @@ private:
 		FVector Target = FVector::ZeroVector;
 		float Yaw = 0.f;
 		float RetryTime = 0.f;
+		bool bSprint = false;
 	};
 
 	/** Returns true when the task finished. */
