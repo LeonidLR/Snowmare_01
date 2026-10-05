@@ -116,6 +116,8 @@ private:
 	/** LMB released: ends a selection box, or performs the click on the world (Godot acts on release). */
 	void OnClickReleased();
 	void RestartMission();
+	/** Ctrl + T: Commander Mode (autonomous squad combat) on / off. */
+	void ToggleAutonomyKey();
 	/** Next object click starts its relocation (action bar «ПЕР»). */
 	bool bRelocateSelectMode = false;
 	/** True while a story dialogue blocks world orders (Godot _unhandled_input). */

@@ -1,0 +1,15 @@
+{
+  "anchor_radius_meters": 7,
+  "leash_strictness": "Flexible",
+  "prefer_high_ground": true,
+  "open_ground_stance": "Crouch",
+  "cover_stance": "Crouch",
+  "sniper_reaction": "DiveToCover",
+  "target_priority_policy": "ThreatLevel",
+  "flank_defense_angle_deg": 75,
+  "aid_health_threshold_pct": 25,
+  "require_safe_route_for_aid": true,
+  "reserve_personal_medkit": true,
+  "auto_reload_threshold_pct": 25,
+  "emergency_sidearm_dist_m": 3.5
+}

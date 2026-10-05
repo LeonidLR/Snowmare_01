@@ -11,6 +11,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Data/AITuning.h"
+#include "Data/SquadROE.h"
 #include "Data/WeaponTuning.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -78,6 +79,7 @@ void ACodexTacticsGameMode::StartPlay()
 {
 	AITuning::ApplyFile(AITuning::GetDefaultPath()); // before any actor's BeginPlay reads a Codex.* tunable
 	WeaponTuning::ApplyFile(WeaponTuning::GetDefaultPath()); // Wave Editor weapon power onto DA_Weapon_* (in memory)
+	SquadROE::ApplyFile(SquadROE::GetDefaultPath()); // Commander Mode tactical ROE (Wave Editor «Тактика отряда»)
 	ApplyLevelConfig();
 	Super::StartPlay();
 	SpawnSquad();

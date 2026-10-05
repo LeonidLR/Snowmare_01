@@ -11,6 +11,7 @@ import { BotStatusBar } from './components/BotStatusBar';
 import { LiveBalanceAdvisor } from './components/LiveBalanceAdvisor';
 import { WeaponTuningPanel } from './components/WeaponTuningPanel';
 import { EnemyWeaponsPanel } from './components/EnemyWeaponsPanel';
+import { CommanderROEPanel } from './components/CommanderROEPanel';
 import { Activity, Terminal, Loader2, Swords, Plus, Snowflake, X, Wifi, WifiOff } from 'lucide-react';
 import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2 } from 'lucide-react';
 
@@ -143,7 +144,7 @@ export const App: React.FC = () => {
   };
 
   const [selectedWaveIndex, setSelectedWaveIndex] = useState<number>(1);
-  const [activeTab, setActiveTab] = useState<'waves' | 'telemetry' | 'weapons' | 'enemyWeapons'>('waves');
+  const [activeTab, setActiveTab] = useState<'waves' | 'telemetry' | 'weapons' | 'enemyWeapons' | 'squadRoe'>('waves');
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [isServerConnected, setIsServerConnected] = useState<boolean | null>(null);
 
@@ -681,6 +682,17 @@ export const App: React.FC = () => {
               <Swords className="w-3.5 h-3.5" />
               Оружие врагов
             </button>
+            <button
+              onClick={() => setActiveTab('squadRoe')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'squadRoe'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Swords className="w-3.5 h-3.5" />
+              Тактика отряда (ROE)
+            </button>
           </div>
 
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 font-mono">
@@ -697,6 +709,8 @@ export const App: React.FC = () => {
           <WeaponTuningPanel />
         ) : activeTab === 'enemyWeapons' ? (
           <EnemyWeaponsPanel />
+        ) : activeTab === 'squadRoe' ? (
+          <CommanderROEPanel />
         ) : (
           <>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">

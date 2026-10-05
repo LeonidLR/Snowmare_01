@@ -1,4 +1,6 @@
 #include "GameFlow/GameFlowSubsystem.h"
+
+#include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -73,4 +75,15 @@ void UGameFlowSubsystem::ApplyTimeDilation() const
 	{
 		UGameplayStatics::SetGlobalTimeDilation(World, Machine.GetTimeDilation());
 	}
+}
+
+bool UGameFlowSubsystem::IsAutonomousSquadCombat() const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	return Squad && Squad->IsAutonomousSquadCombat();
+}
+
+bool UGameFlowSubsystem::IsSquadAutonomyActive() const
+{
+	return IsAutonomousSquadCombat() && GetPhase() == ECodexGamePhase::WaveCombat && GetCombatMode() == ECodexCombatMode::RealTime;
 }

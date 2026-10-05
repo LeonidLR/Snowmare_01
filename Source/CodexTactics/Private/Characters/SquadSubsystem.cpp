@@ -228,6 +228,28 @@ void USquadSubsystem::ToggleSoloMode()
 	}
 }
 
+void USquadSubsystem::SetAutonomousSquadCombat(bool bEnabled)
+{
+	if (bAutonomousSquadCombat == bEnabled)
+	{
+		return;
+	}
+	bAutonomousSquadCombat = bEnabled;
+	UE_LOG(LogCodexTactics, Display, TEXT("Commander Mode (autonomous squad combat): %s"), bEnabled ? TEXT("ON") : TEXT("OFF"));
+	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+	{
+		Messages->PostMessage(FText::FromString(TEXT("Командир")), FText::FromString(bEnabled
+			? TEXT("Автономия: ВКЛ. Бойцы сами держат позиции в 7 м от точки приказа (Ctrl + T — выключить).")
+			: TEXT("Автономия: ВЫКЛ. Полный ручной контроль.")));
+	}
+}
+
+bool USquadSubsystem::ToggleAutonomousSquadCombat()
+{
+	SetAutonomousSquadCombat(!bAutonomousSquadCombat);
+	return bAutonomousSquadCombat;
+}
+
 void USquadSubsystem::EnterSoloMode()
 {
 	AOperativeCharacter* LeaderRef = Leader.Get();

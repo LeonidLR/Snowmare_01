@@ -16,6 +16,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Core/MissionSubsystem.h"
 #include "Components/StaticMeshComponent.h"
+#include "Data/SquadROE.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -291,6 +292,11 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	{
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ПАНИКЕ! НЕ ПОДЧИНЯЕТСЯ!"), FLinearColor(1.f, 0.3f, 0.3f));
 		return EOperativeOrderResult::Refused;
+	}
+	// Commander Mode (Sprint 07-B): every player move order pins the anchor the autonomy fights around.
+	if (!bAutonomousOrder && !bPendingMoveReplay)
+	{
+		TacticalAnchor = SquadAutonomyRules::MakeAnchor(SquadROE::Get(), GetActorLocation(), Destination, GetActorRotation());
 	}
 	// User decision 2026-10-01: a sprint order (double click) stands a prone operative up — he rises in place, then runs;
 	// any move ordered while he is getting up starts once he is up.
@@ -1457,6 +1463,42 @@ AActor* AOperativeCharacter::FindBestCombatTarget() const
 	return Best;
 }
 
+bool AOperativeCharacter::CanHitEnemy(AActor* Enemy) const
+{
+	FShootCandidate Candidate;
+	bool bBlocked = false;
+	return IsLiveEnemy(Enemy) && EvaluateShotLine(Enemy, true, Candidate, bBlocked);
+}
+
+EOperativeOrderResult AOperativeCharacter::AutonomousMoveTo(const FVector& Destination)
+{
+	TGuardValue<bool> Autonomous(bAutonomousOrder, true);
+	return OrderMoveTo(Destination, false);
+}
+
+bool AOperativeCharacter::HealAlly(AOperativeCharacter& Patient)
+{
+	UHealthComponent* PatientHealth = Patient.HealthComponent;
+	if (MedkitsCount <= 0 || &Patient == this || !PatientHealth || !PatientHealth->IsAlive()
+		|| PatientHealth->GetCurrentHealth() >= PatientHealth->GetMaxHealth()
+		|| FVector::Dist2D(GetActorLocation(), Patient.GetActorLocation()) > AidReachCm)
+	{
+		return false;
+	}
+	const float HealthBefore = PatientHealth->GetCurrentHealth();
+	PatientHealth->Heal(PersonalItemRules::GetEffect(EPersonalItem::Medkit).Heal);
+	--MedkitsCount;
+	const int32 Gained = FMath::FloorToInt(PatientHealth->GetCurrentHealth() - HealthBefore);
+	if (UFloatingTextSubsystem* Floating = GetWorld() ? GetWorld()->GetSubsystem<UFloatingTextSubsystem>() : nullptr)
+	{
+		Floating->Spawn(Patient.GetActorLocation() - FVector(0.f, 0.f, Patient.GetSimpleCollisionHalfHeight() - 210.f),
+			FString::Printf(TEXT("🩹 +%d HP"), Gained), FLinearColor(0.2f, 1.f, 0.4f), 0.9f, 70.f);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("%s gives first aid to %s: +%d HP (%d medkits left)"), *DisplayName.ToString(),
+		*Patient.DisplayName.ToString(), Gained, MedkitsCount);
+	return true;
+}
+
 FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime)
 {
 	UWorld* World = GetWorld();
@@ -1479,6 +1521,21 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime)
 		else if (bBlocked)
 		{
 			NotifyBarricadeBlocked();
+		}
+	}
+	// 1b. Commander Mode: the target the ROE policy picked (Sprint 07-C).
+	if (AActor* Chosen = AutonomyTarget.Get())
+	{
+		if (!IsLiveEnemy(Chosen))
+		{
+			AutonomyTarget.Reset();
+		}
+		else if (EvaluateShotLine(Chosen, true, Candidate, bBlocked))
+		{
+			CurrentCombatTarget = Chosen;
+			PendingFlankTarget.Reset();
+			TargetSwitchTimer = 0.f;
+			return Candidate;
 		}
 	}
 	// 2. Visible enemies, closest first.

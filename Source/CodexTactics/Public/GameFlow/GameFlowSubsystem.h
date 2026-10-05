@@ -50,6 +50,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	ECodexCombatMode GetCombatMode() const { return Machine.GetCombatMode(); }
 
+	/** Commander Mode is on (USquadSubsystem's flag, Sprint 07-A). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
+	bool IsAutonomousSquadCombat() const;
+
+	/** Commander Mode acts now: on, in a wave, real-time (a tactical pause or turn-based fight freezes it). */
+	bool IsSquadAutonomyActive() const;
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	int32 GetWaveIndex() const { return Machine.GetWaveIndex(); }
 

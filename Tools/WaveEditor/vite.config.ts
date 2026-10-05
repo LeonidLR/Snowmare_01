@@ -8,6 +8,7 @@ const PROJECT_PATH = path.resolve(__dirname, '../../')
 const LEVELS_DIR = path.resolve(__dirname, '../../Content/Data/LevelJson')
 // Weapon power (the «Оружие» tab); the game applies it at start (Source/.../Data/WeaponTuning.h).
 const WEAPONS_FILE = path.resolve(__dirname, '../../Content/Data/Weapons/weapons_tuning.json')
+const SQUAD_ROE_FILE = path.resolve(__dirname, '../../Content/Data/AI/squad_roe.json')
 const TELEMETRY_DIR = path.resolve(__dirname, '../../Saved/Telemetry')
 const RAW_RUNS_FILE = path.join(TELEMETRY_DIR, 'raw_runs', 'runs.jsonl')
 const BOT_PRESETS_FILE = path.resolve(__dirname, '../../Content/Data/Bot/bot_presets.json')
@@ -130,6 +131,49 @@ const setupApiMiddlewares = (middlewares: any) => {
       res.statusCode = 404
       res.end(JSON.stringify({ error: 'weapons_tuning.json not found: run the game once with CodexTactics.DumpWeaponTuning' }))
     }
+  })
+
+  // Commander Mode ROE (Sprint 07-E): GET reads, POST writes Content/Data/AI/squad_roe.json.
+  middlewares.use('/api/squad-roe', (req: any, res: any) => {
+    addCors(res)
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204
+      res.end()
+      return
+    }
+    if (req.method === 'GET') {
+      if (fs.existsSync(SQUAD_ROE_FILE)) {
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'application/json; charset=utf-8')
+        res.end(fs.readFileSync(SQUAD_ROE_FILE, 'utf-8').replace(/^﻿/, ''))
+      } else {
+        res.statusCode = 404
+        res.end(JSON.stringify({ error: 'squad_roe.json not found (Content/Data/AI)' }))
+      }
+      return
+    }
+    if (req.method !== 'POST') {
+      res.statusCode = 405
+      res.end()
+      return
+    }
+    let body = ''
+    req.on('data', (chunk: any) => { body += chunk })
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body)
+        if (!data || typeof data.anchor_radius_meters !== 'number' || typeof data.target_priority_policy !== 'string') {
+          throw new Error('expected the 13 ROE parameters ({ anchor_radius_meters, ..., emergency_sidearm_dist_m })')
+        }
+        fs.writeFileSync(SQUAD_ROE_FILE, JSON.stringify(data, null, 2) + '\n', 'utf-8')
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ success: true }))
+      } catch (e: any) {
+        res.statusCode = 500
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    })
   })
 
   middlewares.use('/api/save-weapons', (req: any, res: any, next: any) => {

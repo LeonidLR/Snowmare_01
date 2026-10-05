@@ -298,6 +298,13 @@ In Real-Time combat, operatives autonomously execute tactical priorities within 
   - `emergency_sidearm_dist_m` (float, default: `3.5`)
 - Expose endpoints in `Tools/WaveEditor/vite.config.ts` (`/api/squad-roe`) and UI controls in `SquadLoadoutControls.tsx` or a new `CommanderROEPanel.tsx`.
 
+### ✅ Sprint 07 status (Claude, 2026-10-05): DONE — see HANDOFF §10 for the details
+- 7-A: `USquadSubsystem::bAutonomousSquadCombat` (default false) + `UGameFlowSubsystem::IsAutonomousSquadCombat / IsSquadAutonomyActive`; `CodexTactics.AutonomousSquad [0|1]`, `CodexTactics.ToggleAutonomousCombat`; Ctrl + T (plain T stays the guard); HUD squad panel «АВТОНОМИЯ: ВКЛ / ВЫКЛ / ВКЛ (пауза) [Ctrl+T]». A tactical pause / turn-based fight freezes it (autonomous walks stop, its targets dropped); it resumes on release, the orders given in the pause become the new anchors.
+- 7-B: `FTacticalAnchor` on `AOperativeCharacter`, set by every player `OrderMoveTo` (`AutonomousMoveTo` keeps it).
+- 7-C / 7-D: `USquadAutonomySubsystem` (0.3 s decisions) over pure `SquadAutonomyRules` (tests `Characters.SquadAutonomy.*`), reusing `PlaytestBotRules::CoverStandPoint / CoverScore`.
+- 7-E deviation (Claude decision, reported to the user): the 13 parameters live in `Content/Data/AI/squad_roe.json` (`SquadROE` loader at StartPlay, `CodexTactics.DumpSquadROE`), **not** `GameBalanceConfig.h` — that header is generated from Godot and the Wave Editor cannot write `.uasset`s; same pattern as `weapons_tuning.json`. Editor tab «Тактика отряда (ROE)» (`CommanderROEPanel.tsx`, GET / POST `/api/squad-roe`).
+- Jev: not called at run time (network, non-deterministic); `Scripts/Tools/jev_validate_roe.py` checks the Safe Aid and ThreatLevel rules against Jev on worded scenarios at design time (8 / 10 agree; the 2 low-confidence disagreements prefer a close slow walker over a far hound / drone, against this directive's tier order — rule kept).
+
 ---
 
 ## ⚡ MANDATORY TYPESAFE (JEV) & TOKEN ECONOMY RULES FOR CLAUDE (Sprint 07)

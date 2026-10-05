@@ -96,6 +96,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool IsSoloMode() const { return bIsSoloMode; }
 
+	/**
+	 * Commander Mode (Sprint 07-A): squad members fight on their own around their move-order anchors
+	 * (USquadAutonomySubsystem). Off by default: the classic fully manual control is unchanged.
+	 */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
+	bool IsAutonomousSquadCombat() const { return bAutonomousSquadCombat; }
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
+	void SetAutonomousSquadCombat(bool bEnabled);
+
+	/** Flips Commander Mode (Ctrl + T, CodexTactics.ToggleAutonomousCombat); returns the new state. */
+	bool ToggleAutonomousSquadCombat();
+
 	/** Max scout distance from followers in solo mode before auto-exit (cm, 25m matching Godot). */
 	static constexpr float SoloModeMaxDistance = 2500.f;
 
@@ -173,6 +186,7 @@ private:
 	float SlotSwapCooldownRemaining = 0.f;
 	bool bFollowersHolding = false;
 	bool bIsSoloMode = false;
+	bool bAutonomousSquadCombat = false;
 
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> PauseOrigins;
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FPlannedOrder> PlannedOrders;

@@ -133,6 +133,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &ACodexTacticsPlayerController::OnMouseWheelDown);
 	// Ctrl + X: quick restart, handled before every game mode (Godot main.gd _unhandled_input).
 	InputComponent->BindKey(FInputChord(EKeys::X, false, true, false, false), IE_Pressed, this, &ACodexTacticsPlayerController::RestartMission);
+	// Ctrl + T: Commander Mode on / off (Sprint 07-A); plain T stays the guard toggle (GuardKey skips it with Ctrl).
+	InputComponent->BindKey(FInputChord(EKeys::T, false, true, false, false), IE_Pressed, this, &ACodexTacticsPlayerController::ToggleAutonomyKey);
 	// Plain X (the chord without Ctrl): Godot switch_weapon cycle.
 	InputComponent->BindKey(FInputChord(EKeys::X), IE_Pressed, this, &ACodexTacticsPlayerController::CycleWeaponKey);
 	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACodexTacticsPlayerController::EnterPressed);
@@ -330,8 +332,20 @@ bool ACodexTacticsPlayerController::CancelGrenadeAim()
 	return true;
 }
 
+void ACodexTacticsPlayerController::ToggleAutonomyKey()
+{
+	if (USquadSubsystem* Squad = GetSquad())
+	{
+		Squad->ToggleAutonomousSquadCombat();
+	}
+}
+
 void ACodexTacticsPlayerController::GuardKey()
 {
+	if (IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl))
+	{
+		return; // Ctrl + T is Commander Mode
+	}
 	if (const UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsBusy())
 	{
 		return;

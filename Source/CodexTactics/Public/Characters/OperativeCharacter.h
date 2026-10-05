@@ -7,6 +7,7 @@
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/PersonalItemRules.h"
 #include "Characters/ProgressionRules.h"
+#include "Characters/SquadAutonomyRules.h"
 #include "Combat/TargetedShotRules.h"
 #include "Interactables/DeployableRules.h"
 #include "OperativeCharacter.generated.h"
@@ -676,6 +677,33 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
 	AActor* GetManualPriorityTarget() const { return ManualPriorityTarget.Get(); }
 
+	// --- Commander Mode (Sprint 07; USquadAutonomySubsystem drives these) ---
+
+	/** The target the autonomy picked (ROE policy): fired at after the manual priority target, before the closest enemy. */
+	void SetAutonomyTarget(AActor* Enemy) { AutonomyTarget = Enemy; }
+	AActor* GetAutonomyTarget() const { return AutonomyTarget.Get(); }
+
+	/** The enemy the operative shot at last (real-time fire). */
+	AActor* GetCurrentCombatTarget() const { return CurrentCombatTarget.Get(); }
+
+	/** A live enemy in range and in the line of fire now (the fire's own check, Godot _find_shoot_target ray). */
+	bool CanHitEnemy(AActor* Enemy) const;
+
+	/** A move by the autonomy: walks like a player order but keeps the tactical anchor. */
+	EOperativeOrderResult AutonomousMoveTo(const FVector& Destination);
+
+	/**
+	 * Field aid (Sprint 07-D): spends one of this operative's medkits on Patient (the medkit's heal, Godot
+	 * heal_with_item amounts). False without a medkit, when Patient is dead / at full health or out of reach (2.5 m).
+	 */
+	bool HealAlly(AOperativeCharacter& Patient);
+
+	/** Field aid reach, cm. */
+	static constexpr float AidReachCm = 250.f;
+
+	/** The point the last player move order pinned this operative to (TANDEM 7-B); the autonomy stays on its leash. */
+	FTacticalAnchor TacticalAnchor;
+
 	/** Tactical pause: remembers a targeted shot (one per kind) executed when the pause is released. */
 	void PlanTargetedShot(AActor* Target);
 
@@ -832,6 +860,9 @@ private:
 	float TargetSwitchTimer = 0.f;
 
 	mutable TWeakObjectPtr<AActor> ManualPriorityTarget;
+	mutable TWeakObjectPtr<AActor> AutonomyTarget;
+	/** Set while AutonomousMoveTo runs: the move does not re-pin the anchor. */
+	bool bAutonomousOrder = false;
 	TMap<ETargetedShotKind, TWeakObjectPtr<AActor>> PlannedShots;
 
 	/** Placeholder body; hidden automatically once the Blueprint assigns a skeletal mesh. */

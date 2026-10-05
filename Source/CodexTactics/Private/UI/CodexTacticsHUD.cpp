@@ -822,6 +822,11 @@ void ACodexTacticsHUD::DrawSquadPanel(float Top)
 	if (Squad)
 	{
 		Lines.Emplace(Squad->IsSoloMode() ? TEXT("Режим: ОДИНОЧНЫЙ [B]") : TEXT("Режим: отряд [B]"), TextColor);
+		// Commander Mode (Sprint 07-A): «на паузе» while a tactical pause / turn-based fight freezes it.
+		const bool bAutonomy = Squad->IsAutonomousSquadCombat();
+		const bool bFrozenAutonomy = bAutonomy && Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && !Flow->IsSquadAutonomyActive();
+		Lines.Emplace(FString::Printf(TEXT("АВТОНОМИЯ: %s [Ctrl+T]"), !bAutonomy ? TEXT("ВЫКЛ") : (bFrozenAutonomy ? TEXT("ВКЛ (пауза)") : TEXT("ВКЛ"))),
+			bAutonomy ? FLinearColor(0.35f, 1.f, 0.55f) : TextColor);
 		TArray<AOperativeCharacter*> Members = Squad->GetMembers();
 		Members.Sort([](const AOperativeCharacter& A, const AOperativeCharacter& B) { return A.SquadIndex < B.SquadIndex; });
 		for (const AOperativeCharacter* Member : Members)

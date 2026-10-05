@@ -276,3 +276,26 @@ export interface TelemetryRun {
     squad_cold_at_death?: number;
   } | null;
 }
+
+// Commander Mode tactical ROE (Sprint 07-E): Content/Data/AI/squad_roe.json, read by the game at StartPlay (SquadROE).
+export type LeashStrictness = 'Flexible' | 'Strict';
+export type OpenGroundStance = 'Crouch' | 'Prone' | 'Standing';
+export type CoverStance = 'Crouch' | 'Standing';
+export type SniperReaction = 'DiveToCover' | 'DropProne';
+export type TargetPriorityPolicy = 'ThreatLevel' | 'ClosestFirst' | 'LowestHP' | 'AssistLeader';
+
+export interface SquadROE {
+  anchor_radius_meters: number;
+  leash_strictness: LeashStrictness;
+  prefer_high_ground: boolean;
+  open_ground_stance: OpenGroundStance;
+  cover_stance: CoverStance;
+  sniper_reaction: SniperReaction;
+  target_priority_policy: TargetPriorityPolicy;
+  flank_defense_angle_deg: number;
+  aid_health_threshold_pct: number;
+  require_safe_route_for_aid: boolean;
+  reserve_personal_medkit: boolean;
+  auto_reload_threshold_pct: number;
+  emergency_sidearm_dist_m: number;
+}
