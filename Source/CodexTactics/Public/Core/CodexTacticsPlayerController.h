@@ -96,6 +96,12 @@ public:
 	/** Commander Mode on / off (Ctrl + T, the action bar «АВТО» button). */
 	void ToggleAutonomy();
 
+	/**
+	 * Keys 1-4 caught by a Slate input pre-processor before any widget (user report 2026-10-05: in the fight most
+	 * presses never reached the game — a widget with the keyboard focus took them). True when it selected.
+	 */
+	bool HandleSquadNumberKey(const FKey& Key);
+
 	/** Action bar squad slot / keys 1..3. */
 	void SelectSquadMember(int32 RosterIndex) { SelectMember(RosterIndex); }
 
@@ -114,6 +120,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void SetupInputComponent() override;
 	virtual void PlayerTick(float DeltaTime) override;
 
@@ -134,6 +141,8 @@ private:
 	/** The squad member a world click hit (body / owned actor, else the closest within SelectRadius); nullptr when none. */
 	class AOperativeCharacter* FindClickedMember(const FHitResult& Hit) const;
 	double LastOrderLockHintTime = -100.0;
+	/** The Slate pre-processor for the keys 1-4 (registered while the controller plays). */
+	TSharedPtr<class IInputProcessor> SquadKeyProcessor;
 	/** Next object click starts its relocation (action bar «ПЕР»). */
 	bool bRelocateSelectMode = false;
 	/** True while a story dialogue blocks world orders (Godot _unhandled_input). */

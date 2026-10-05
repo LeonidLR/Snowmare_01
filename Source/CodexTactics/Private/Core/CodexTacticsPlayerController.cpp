@@ -1,4 +1,8 @@
 #include "Core/CodexTacticsPlayerController.h"
+#include "Widgets/SWindow.h"
+#include "Engine/GameViewportClient.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Framework/Application/IInputProcessor.h"
 #include "Characters/SquadFormation.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/RecruitSubsystem.h"
@@ -48,9 +52,83 @@ ACodexTacticsPlayerController::ACodexTacticsPlayerController()
 	bShowMouseCursor = true;
 }
 
+namespace SquadKeys
+{
+	/** Slate pre-processor: keys 1-4 reach the squad selection whatever widget holds the keyboard focus. */
+	class FSquadKeyProcessor : public IInputProcessor
+	{
+	public:
+		explicit FSquadKeyProcessor(ACodexTacticsPlayerController* InController) : Controller(InController) {}
+
+		virtual void Tick(const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor) override {}
+
+		virtual bool HandleKeyDownEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
+		{
+			ACodexTacticsPlayerController* PC = Controller.Get();
+			if (!PC || InKeyEvent.IsRepeat() || InKeyEvent.IsControlDown() || InKeyEvent.IsAltDown())
+			{
+				return false;
+			}
+			const FKey Key = InKeyEvent.GetKey();
+			if (Key != EKeys::One && Key != EKeys::Two && Key != EKeys::Three && Key != EKeys::Four)
+			{
+				return false;
+			}
+			// Only for the game's window, never while typing (a save name) or with the game paused (menu).
+			const UGameViewportClient* Viewport = PC->GetWorld() ? PC->GetWorld()->GetGameViewport() : nullptr;
+			const TSharedPtr<SWindow> GameWindow = Viewport ? Viewport->GetWindow() : nullptr;
+			if (!GameWindow.IsValid() || SlateApp.GetActiveTopLevelWindow() != GameWindow || PC->IsPaused())
+			{
+				return false;
+			}
+			const TSharedPtr<SWidget> Focused = SlateApp.GetKeyboardFocusedWidget();
+			const FName FocusType = Focused.IsValid() ? Focused->GetType() : NAME_None;
+			if (FocusType == TEXT("SEditableText") || FocusType == TEXT("SMultiLineEditableText"))
+			{
+				return false;
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Select key %s (keyboard focus: %s)"), *Key.ToString(), *FocusType.ToString());
+			return PC->HandleSquadNumberKey(Key);
+		}
+
+		virtual const TCHAR* GetDebugName() const override { return TEXT("CodexSquadKeys"); }
+
+	private:
+		TWeakObjectPtr<ACodexTacticsPlayerController> Controller;
+	};
+}
+
+bool ACodexTacticsPlayerController::HandleSquadNumberKey(const FKey& Key)
+{
+	const int32 Index = Key == EKeys::One ? 0 : (Key == EKeys::Two ? 1 : (Key == EKeys::Three ? 2 : (Key == EKeys::Four ? 3 : INDEX_NONE)));
+	if (Index == INDEX_NONE)
+	{
+		return false;
+	}
+	SelectMember(Index);
+	return true;
+}
+
+void ACodexTacticsPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (SquadKeyProcessor.IsValid() && FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().UnregisterInputPreProcessor(SquadKeyProcessor);
+	}
+	SquadKeyProcessor.Reset();
+	Super::EndPlay(EndPlayReason);
+}
+
 void ACodexTacticsPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Keys 1-4 before any widget (the Enhanced Input binding stays for simulated input: the smokes).
+	if (IsLocalController() && FSlateApplication::IsInitialized())
+	{
+		SquadKeyProcessor = MakeShared<SquadKeys::FSquadKeyProcessor>(this);
+		FSlateApplication::Get().RegisterInputPreProcessor(SquadKeyProcessor);
+	}
 
 	FInputModeGameAndUI InputMode;
 	InputMode.SetHideCursorDuringCapture(false);
@@ -1336,7 +1414,6 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 
 void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 {
-	UE_LOG(LogCodexTactics, Display, TEXT("Select key %d"), RosterIndex + 1);
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 	{
 		USquadSubsystem* SquadSystem = GetSquad();
