@@ -14,6 +14,7 @@
 #include "CodexTactics.h"
 #include "Debug/SmokeUtils.h"
 #include "Combat/EncounterQueries.h"
+#include "Combat/EnemySpawnPoint.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
@@ -35,6 +36,8 @@ namespace CombatFlowSmoke
 		int32 Stage = 0;
 		float StageTime = 0.f;
 		FVector LeaderStart = FVector::ZeroVector;
+		/** The leader at the wave start: enemies spawned near it are removed. */
+		FVector SquadStart = FVector::ZeroVector;
 		FVector FollowerStart = FVector::ZeroVector;
 		FVector Planned = FVector::ZeroVector;
 		int32 ChargesBeforeTurnBased = 0;
@@ -72,6 +75,23 @@ namespace CombatFlowSmoke
 			return false;
 		}
 
+		// The level wave spawns in batches beyond the gate: every enemy (late ones too) stays frozen there, so the checks
+		// below control which enemies are near the squad (before the crowd limit was raised to 250 the late ones never
+		// moved; since then a free one reached the leader and broke the run).
+		// The user's L_MovementTest has its 4 spawn points 2-15 m around the squad start (spawn lane ANY): every enemy of the
+		// wave, late ones too, is parked frozen 40 m away (the wave stays alive; the checks need no enemy near the squad).
+		if (State.Stage > 0)
+		{
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				It->CustomTimeDilation = 0.f;
+				if (FVector::Dist2D(It->GetActorLocation(), State.SquadStart) < 3000.f)
+				{
+					It->SetActorLocation(State.SquadStart + FVector(4000.f, 4000.f, 2000.f), false, nullptr, ETeleportType::TeleportPhysics);
+				}
+			}
+		}
+
 		switch (State.Stage)
 		{
 		case 0: // Start a wave the same way the flow does after the gate.
@@ -81,6 +101,12 @@ namespace CombatFlowSmoke
 			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime, TEXT("wave started in real time"));
 			// The level wave spawns at the spawn points beyond the gate; freeze it there so the checks below control
 			// which enemies are near the squad.
+			State.SquadStart = Leader->GetActorLocation();
+			for (TActorIterator<AEnemySpawnPoint> It(World); It; ++It)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: spawn point %s at %s, %.1f m from the leader"), *It->GetName(),
+					*It->GetActorLocation().ToCompactString(), FVector::Dist2D(It->GetActorLocation(), Leader->GetActorLocation()) / 100.f);
+			}
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
 				It->CustomTimeDilation = 0.f;
@@ -126,6 +152,16 @@ namespace CombatFlowSmoke
 			if (State.StageTime >= 7.f)
 			{
 				Check(State, FVector::Dist2D(Leader->GetActorLocation(), State.Planned) < 80.f, TEXT("leader reached the planned point"));
+				{
+					float NearestEnemy = TNumericLimits<float>::Max();
+					for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+					{
+						NearestEnemy = FMath::Min(NearestEnemy, static_cast<float>(FVector::Dist2D(It->GetActorLocation(), Leader->GetActorLocation())));
+					}
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: leader start %s, planned %s, now %s (%.0f cm off), moving %d, nearest enemy %.1f m"),
+						*State.LeaderStart.ToCompactString(), *State.Planned.ToCompactString(), *Leader->GetActorLocation().ToCompactString(),
+						FVector::Dist2D(Leader->GetActorLocation(), State.Planned), Leader->IsMoving() ? 1 : 0, NearestEnemy / 100.f);
+				}
 				PC->SpacePressed(); // hold without enemies
 				NextStage(State);
 			}
