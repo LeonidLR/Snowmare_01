@@ -114,6 +114,16 @@ private:
 	UPROPERTY()
 	TObjectPtr<UButton> GuardButton;
 
+	/** Commander Mode switch «АВТО ВКЛ / ВЫКЛ» (Ctrl + T on screen). */
+	UFUNCTION()
+	void HandleAutonomy();
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> BarAutonomyText;
+
+	UPROPERTY()
+	TObjectPtr<UButton> AutonomyButton;
+
 	UFUNCTION()
 	void HandleSelectM16();
 

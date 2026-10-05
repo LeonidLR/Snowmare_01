@@ -83,6 +83,19 @@ public:
 
 	bool IsRelocateSelectMode() const { return bRelocateSelectMode; }
 
+	/**
+	 * User decision 2026-10-05: in a real-time wave fight the player gives no orders (moves, stances, weapons, grenades,
+	 * items, objects, targets) — only the tactical pause (Space), Commander Mode (Ctrl + T) and picking the operative /
+	 * the camera. True (with a throttled hint) when an order is refused now. Codex.RealTimeOrders 1 restores the old
+	 * real-time control (smokes, bot).
+	 */
+	bool BlockRealTimeOrder();
+	/** Real-time wave fight with Codex.RealTimeOrders 0 (no hint). */
+	bool IsRealTimeOrderLocked() const;
+
+	/** Commander Mode on / off (Ctrl + T, the action bar «АВТО» button). */
+	void ToggleAutonomy();
+
 	/** Action bar squad slot / keys 1..3. */
 	void SelectSquadMember(int32 RosterIndex) { SelectMember(RosterIndex); }
 
@@ -117,7 +130,10 @@ private:
 	void OnClickReleased();
 	void RestartMission();
 	/** Ctrl + T: Commander Mode (autonomous squad combat) on / off. */
-	void ToggleAutonomyKey();
+	void ToggleAutonomyKey() { ToggleAutonomy(); }
+	/** The squad member a world click hit (body / owned actor, else the closest within SelectRadius); nullptr when none. */
+	class AOperativeCharacter* FindClickedMember(const FHitResult& Hit) const;
+	double LastOrderLockHintTime = -100.0;
 	/** Next object click starts its relocation (action bar «ПЕР»). */
 	bool bRelocateSelectMode = false;
 	/** True while a story dialogue blocks world orders (Godot _unhandled_input). */

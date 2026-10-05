@@ -1,4 +1,5 @@
 #include "UI/LootDialogWidget.h"
+#include "UI/CodexButtonFocus.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/HorizontalBox.h"
@@ -108,12 +109,14 @@ void ULootDialogWidget::BuildDefaultLayout()
 	Column->AddChildToVerticalBox(Buttons)->SetHorizontalAlignment(HAlign_Center);
 
 	LootAllButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("LootAllButton"));
+	CodexButtonFocus::Disable(LootAllButton); // a focused HUD button would swallow the game keys (1-4, ...)
 	LootAllText = MakeText(TEXT("LootAllText"), 12, LootButtonTextColor);
 	LootAllText->SetText(LOCTEXT("LootAll", "📦 Забрать ВСЁ"));
 	LootAllButton->AddChild(LootAllText);
 	Buttons->AddChildToHorizontalBox(LootAllButton)->SetPadding(FMargin(6.f, 10.f, 6.f, 0.f));
 
 	CloseButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CloseButton"));
+	CodexButtonFocus::Disable(CloseButton); // a focused HUD button would swallow the game keys (1-4, ...)
 	CloseText = MakeText(TEXT("CloseText"), 12, LootButtonTextColor);
 	CloseText->SetText(LOCTEXT("Close", "✖ Закрыть"));
 	CloseButton->AddChild(CloseText);

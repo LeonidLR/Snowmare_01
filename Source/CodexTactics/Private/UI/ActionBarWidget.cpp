@@ -158,6 +158,11 @@ void UActionBarWidget::BuildDefaultLayout()
 	GuardButton->SetToolTipText(LOCTEXT("GuardTip", "Зафиксировать позицию (Охрана фланга/тыла) [T]"));
 	GuardButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleGuard);
 
+	// Commander Mode switch (user request 2026-10-05: an on-screen toggle next to Ctrl + T).
+	BarAutonomyText = MakeText(TEXT("BarAutonomyText"), 10, BarTextColor);
+	AutonomyButton = MakeSlotButton(TEXT("BarAutonomyButton"), BarWhite * 0.6f, 54.f, 56.f, BarAutonomyText, Row);
+	AutonomyButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleAutonomy);
+
 	for (int32 Index = 0; Index < 4; ++Index)
 	{
 		FActionBarSquadSlot& SquadSlot = Slots.AddDefaulted_GetRef();
@@ -275,6 +280,15 @@ void UActionBarWidget::Refresh()
 		GuardButton->SetBackgroundColor(Leader->bGuarding ? BarGreen : BarWhite * 0.6f);
 		GuardButton->SetToolTipText(Leader->bGuarding ? LOCTEXT("GuardOnTip", "Боец на точке обороны! Нажмите [T] для возврата в строй")
 			: LOCTEXT("GuardTip", "Зафиксировать позицию (Охрана фланга/тыла) [T]"));
+	}
+	if (BarAutonomyText && AutonomyButton)
+	{
+		const bool bAutonomy = Squad->IsAutonomousSquadCombat();
+		BarAutonomyText->SetText(bAutonomy ? LOCTEXT("AutoOn", "АВТО\nВКЛ") : LOCTEXT("AutoOff", "АВТО\nВЫКЛ"));
+		AutonomyButton->SetBackgroundColor(bAutonomy ? BarGreen : BarWhite * 0.6f);
+		AutonomyButton->SetToolTipText(bAutonomy
+			? LOCTEXT("AutoOnTip", "Автономия ВКЛ: бойцы сами ведут бой в 7 м от точки приказа. Клик — ручное управление [Ctrl+T]")
+			: LOCTEXT("AutoOffTip", "Автономия ВЫКЛ: ручное управление. Клик — бойцы сами ведут бой у точки приказа [Ctrl+T]"));
 	}
 	if (IsWeaponSelectorOpen())
 	{
@@ -443,6 +457,11 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 		return false;
 	}
 	UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+	ACodexTacticsPlayerController* OrderPC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer());
+	if (!(TurnBased && TurnBased->IsActive()) && OrderPC && OrderPC->BlockRealTimeOrder())
+	{
+		return false;
+	}
 	const bool bSwitched = TurnBased && TurnBased->IsActive() ? TurnBased->SwitchActiveUnitWeapon(WeaponId) : Leader->SwitchToWeaponById(WeaponId);
 	if (TurnBased && TurnBased->IsActive() && !TurnBased->IsAttackMode())
 	{
@@ -478,7 +497,7 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 
 void UActionBarWidget::HandleTransfer()
 {
-	if (APlayerController* PC = GetOwningPlayer())
+	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()); PC && !PC->BlockRealTimeOrder())
 	{
 		if (ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(PC->GetHUD()))
 		{
@@ -496,6 +515,15 @@ void UActionBarWidget::HandleInventory()
 			Hud->ToggleInventoryDrawer();
 		}
 	}
+}
+
+void UActionBarWidget::HandleAutonomy()
+{
+	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
+	{
+		PC->ToggleAutonomy();
+	}
+	Refresh();
 }
 
 void UActionBarWidget::HandleGuard()

@@ -332,7 +332,36 @@ bool ACodexTacticsPlayerController::CancelGrenadeAim()
 	return true;
 }
 
-void ACodexTacticsPlayerController::ToggleAutonomyKey()
+namespace OrderLock
+{
+	static TAutoConsoleVariable<int32> CVarRealTimeOrders(TEXT("Codex.RealTimeOrders"), 0,
+		TEXT("1: orders are allowed in a real-time wave fight (old control); 0: only in the tactical pause (user decision 2026-10-05)"));
+}
+
+bool ACodexTacticsPlayerController::IsRealTimeOrderLocked() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	return Flow && OrderLock::CVarRealTimeOrders.GetValueOnGameThread() == 0 && Flow->GetPhase() == ECodexGamePhase::WaveCombat
+		&& Flow->GetCombatMode() == ECodexCombatMode::RealTime;
+}
+
+bool ACodexTacticsPlayerController::BlockRealTimeOrder()
+{
+	if (!IsRealTimeOrderLocked())
+	{
+		return false;
+	}
+	const double Now = FPlatformTime::Seconds();
+	if (Now - LastOrderLockHintTime > 2.0)
+	{
+		LastOrderLockHintTime = Now;
+		PostHeadquarters(LOCTEXT("OrdersLocked",
+			"⏸ В бою приказы отдаются только в тактической паузе [ПРОБЕЛ]. В реальном времени — автономия отряда [Ctrl+T]."));
+	}
+	return true;
+}
+
+void ACodexTacticsPlayerController::ToggleAutonomy()
 {
 	if (USquadSubsystem* Squad = GetSquad())
 	{
@@ -340,11 +369,53 @@ void ACodexTacticsPlayerController::ToggleAutonomyKey()
 	}
 }
 
+AOperativeCharacter* ACodexTacticsPlayerController::FindClickedMember(const FHitResult& Hit) const
+{
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	if (!Squad)
+	{
+		return nullptr;
+	}
+	const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+	// 1. Direct hit check or owner check on operative
+	AActor* HitActor = Hit.GetActor();
+	AOperativeCharacter* HitOperative = Cast<AOperativeCharacter>(HitActor);
+	if (!HitOperative && HitActor)
+	{
+		HitOperative = Cast<AOperativeCharacter>(HitActor->GetOwner());
+	}
+	if (HitOperative && Members.Contains(HitOperative))
+	{
+		return HitOperative;
+	}
+	// 2. Proximity check around cursor impact point (not with a group selected: a click next to one of them is the
+	// group's move order — only a click on an operative's body picks him).
+	AOperativeCharacter* Closest = nullptr;
+	if (!Squad->HasMultiSelection())
+	{
+		float ClosestDist = SelectRadius;
+		for (AOperativeCharacter* Member : Members)
+		{
+			const float Dist = FVector::Dist2D(Member->GetActorLocation(), Hit.ImpactPoint);
+			if (Dist <= ClosestDist)
+			{
+				ClosestDist = Dist;
+				Closest = Member;
+			}
+		}
+	}
+	return Closest;
+}
+
 void ACodexTacticsPlayerController::GuardKey()
 {
 	if (IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl))
 	{
 		return; // Ctrl + T is Commander Mode
+	}
+	if (!GetActiveTurnBased() && BlockRealTimeOrder())
+	{
+		return;
 	}
 	if (const UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsBusy())
 	{
@@ -369,7 +440,7 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
-	if (!Leader || !Messages)
+	if (!Leader || !Messages || BlockRealTimeOrder())
 	{
 		return;
 	}
@@ -403,7 +474,7 @@ void ACodexTacticsPlayerController::StartPlacementForType(EDeployableType Type)
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
-	if (!Leader || !Relocation || !Messages)
+	if (!Leader || !Relocation || !Messages || BlockRealTimeOrder())
 	{
 		return;
 	}
@@ -439,7 +510,7 @@ void ACodexTacticsPlayerController::GrenadeKey()
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
-	if (!Leader || !Grenades || !Messages)
+	if (!Leader || !Grenades || !Messages || BlockRealTimeOrder())
 	{
 		return;
 	}
@@ -512,6 +583,10 @@ void ACodexTacticsPlayerController::DeployAbility()
 		}
 		return;
 	}
+	if (BlockRealTimeOrder())
+	{
+		return;
+	}
 	USquadSubsystem* Squad = GetSquad();
 	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
 	// Turn-based combat: the active operative sets it up (Godot current_leader follows the selected unit).
@@ -564,7 +639,7 @@ void ACodexTacticsPlayerController::CycleWeaponKey()
 	// Godot main.gd KEY_X -> player.gd switch_weapon: the next arsenal weapon, with the grenade aim when it is the grenade.
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	if (!Leader || Leader->AvailableWeapons.IsEmpty() || GetActiveTurnBased() || IsDialogueOpen())
+	if (!Leader || Leader->AvailableWeapons.IsEmpty() || GetActiveTurnBased() || IsDialogueOpen() || BlockRealTimeOrder())
 	{
 		return;
 	}
@@ -823,8 +898,10 @@ void ACodexTacticsPlayerController::OnClick()
 	{
 		return; // the dialogue panel handles its own clicks
 	}
+	// Real-time fight without orders (user decision 2026-10-05): a click only picks an operative.
+	const bool bOrdersLocked = IsRealTimeOrderLocked();
 	// Item hand-over: LMB on a squad mate (Godot _handle_transfer_click).
-	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring())
+	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring() && !bOrdersLocked)
 	{
 		FHitResult Hit;
 		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
@@ -834,7 +911,7 @@ void ACodexTacticsPlayerController::OnClick()
 		return;
 	}
 	// Grenade aim: LMB throws (Godot _handle_grenade_throw_click).
-	if (UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>(); Grenades && Grenades->IsAiming())
+	if (UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>(); Grenades && Grenades->IsAiming() && !bOrdersLocked)
 	{
 		FVector Point;
 		if (GetGrenadeAimPoint(Point))
@@ -858,7 +935,7 @@ void ACodexTacticsPlayerController::OnClick()
 		}
 	}
 	// Placement mode: LMB sets the new spot of the object being moved.
-	if (URelocationSubsystem* Relocation = GetPlacingRelocation())
+	if (URelocationSubsystem* Relocation = bOrdersLocked ? nullptr : GetPlacingRelocation())
 	{
 		FVector Point;
 		if (GetPlacementPoint(Point))
@@ -1015,6 +1092,25 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		return;
 	}
 
+	// Real-time fight (user decision 2026-10-05): a click picks an operative (leader + camera), nothing else.
+	if (IsRealTimeOrderLocked())
+	{
+		bRelocateSelectMode = false;
+		if (AOperativeCharacter* Picked = FindClickedMember(Hit))
+		{
+			Squad->SetLeader(Picked);
+			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			{
+				Messages->PostMessage(LOCTEXT("SquadSpeaker", "ОТРЯД"), FText::Format(LOCTEXT("UnitSelected", "👤 Выбран боец: {0}"), Picked->DisplayName));
+			}
+		}
+		else
+		{
+			BlockRealTimeOrder();
+		}
+		return;
+	}
+
 	// Action bar «ПЕР»: the clicked object is picked up for relocation.
 	if (bRelocateSelectMode)
 	{
@@ -1110,41 +1206,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		return;
 	}
 
-	// 1. Direct hit check or owner check on operative
-	AOperativeCharacter* SelectedMember = nullptr;
-	if (AOperativeCharacter* HitOperative = Cast<AOperativeCharacter>(Hit.GetActor()))
-	{
-		if (Squad->GetMembers().Contains(HitOperative))
-		{
-			SelectedMember = HitOperative;
-		}
-	}
-	else if (Hit.GetActor() && Hit.GetActor()->GetOwner())
-	{
-		if (AOperativeCharacter* OwnerOperative = Cast<AOperativeCharacter>(Hit.GetActor()->GetOwner()))
-		{
-			if (Squad->GetMembers().Contains(OwnerOperative))
-			{
-				SelectedMember = OwnerOperative;
-			}
-		}
-	}
-
-	// 2. Proximity check around cursor impact point (not with a group selected: a click next to one of them is the
-	// group's move order — only a click on an operative's body picks him).
-	if (!SelectedMember && !Squad->HasMultiSelection())
-	{
-		float ClosestDist = SelectRadius;
-		for (AOperativeCharacter* Member : Squad->GetMembers())
-		{
-			const float Dist = FVector::Dist2D(Member->GetActorLocation(), Hit.ImpactPoint);
-			if (Dist <= ClosestDist)
-			{
-				ClosestDist = Dist;
-				SelectedMember = Member;
-			}
-		}
-	}
+	AOperativeCharacter* SelectedMember = FindClickedMember(Hit);
 
 	UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>();
 	if (SelectedMember)
@@ -1274,6 +1336,7 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 
 void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 {
+	UE_LOG(LogCodexTactics, Display, TEXT("Select key %d"), RosterIndex + 1);
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 	{
 		USquadSubsystem* SquadSystem = GetSquad();
@@ -1375,6 +1438,10 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 
 void ACodexTacticsPlayerController::ToggleSoloMode()
 {
+	if (BlockRealTimeOrder())
+	{
+		return;
+	}
 	if (USquadSubsystem* Squad = GetSquad())
 	{
 		Squad->ToggleSoloMode();
@@ -1654,7 +1721,7 @@ void ACodexTacticsPlayerController::CycleLeaderStance()
 {
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	if (!Leader || IsDialogueOpen())
+	if (!Leader || IsDialogueOpen() || BlockRealTimeOrder())
 	{
 		return;
 	}
@@ -1672,6 +1739,10 @@ void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
 	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	if (BlockRealTimeOrder())
+	{
+		return;
+	}
 	if (Relocation && !Relocation->CanRelocateNow())
 	{
 		PostHeadquarters(LOCTEXT("RelocateCombat", "⚠️ Во время боя менять расположение объектов нельзя! Используйте тактическую паузу [ПРОБЕЛ]."));

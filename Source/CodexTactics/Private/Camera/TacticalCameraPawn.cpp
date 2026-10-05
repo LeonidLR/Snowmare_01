@@ -191,6 +191,14 @@ void ATacticalCameraPawn::SetDragPanning(bool bActive)
 void ATacticalCameraPawn::HandleLeaderChanged(AOperativeCharacter* NewLeader)
 {
 	SetFollowTarget(NewLeader);
+	// User report 2026-10-05: picking an operative (1-4, a click) centres the camera on him — a WASD / drag pan kept
+	// in the fight view used to leave him off screen.
+	if (!bDragPanning && !PanOffset.IsNearlyZero(1.f))
+	{
+		bPanReturning = true;
+		PanReturnStart = PanOffset;
+		PanReturnTime = 0.f;
+	}
 }
 
 bool ATacticalCameraPawn::IsCombatView() const

@@ -1,8 +1,10 @@
 #include "UI/TransferDialogWidget.h"
+#include "UI/CodexButtonFocus.h"
 #include "Blueprint/WidgetTree.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
@@ -78,6 +80,7 @@ void UTransferDialogWidget::BuildDefaultLayout()
 	auto MakeButton = [this](const FName& Name, UTextBlock*& OutText)
 	{
 		UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
+		CodexButtonFocus::Disable(Button); // a focused HUD button would swallow the game keys (1-4, ...)
 		Button->SetBackgroundColor(TransferButton);
 		OutText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 		FSlateFontInfo Font = OutText->GetFont();
@@ -247,6 +250,10 @@ void UTransferDialogWidget::Refresh()
 void UTransferDialogWidget::Choose(ETransferItem Item)
 {
 	Close();
+	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()); PC && PC->BlockRealTimeOrder())
+	{
+		return;
+	}
 	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>())
 	{
 		Transfer->StartTransferMode(Item);

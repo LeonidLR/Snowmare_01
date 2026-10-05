@@ -1,4 +1,5 @@
 #include "UI/DialogueWidget.h"
+#include "UI/CodexButtonFocus.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -138,6 +139,7 @@ void UDialogueWidget::BuildDefaultLayout()
 	auto AddButton = [this, BottomBar](const TCHAR* Name, const TCHAR* TextName, const FText& Label, float Width, UTextBlock** OutText) -> UButton*
 	{
 		UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
+		CodexButtonFocus::Disable(Button); // a focused HUD button would swallow the game keys (1-4, ...)
 		UTextBlock* Text = MakeText(TextName, 12, DialogButtonTextColor, true);
 		Text->SetText(DialogClean(Label));
 		Text->SetAutoWrapText(false); // long finish labels («Держись! Идём на помощь! ▶») widen the button

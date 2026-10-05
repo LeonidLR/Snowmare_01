@@ -137,6 +137,12 @@ namespace ClickRulesSmoke
 		{
 			return;
 		}
+		// The click rules of the real-time fight (Godot main.gd): with the orders unlocked there (user decision 2026-10-05
+		// locked them by default; RealtimeSelectSmoke checks the lock).
+		if (IConsoleVariable* Orders = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.RealTimeOrders")))
+		{
+			Orders->Set(1, ECVF_SetByConsole);
+		}
 		{
 			FTimerHandle PlaceHandle;
 			TWeakObjectPtr<UWorld> PlaceWorld(World);

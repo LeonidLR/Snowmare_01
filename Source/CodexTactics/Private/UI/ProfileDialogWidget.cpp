@@ -1,4 +1,5 @@
 #include "UI/ProfileDialogWidget.h"
+#include "UI/CodexButtonFocus.h"
 #include "Subsystems/CodexEventBus.h"
 #include "Blueprint/WidgetTree.h"
 #include "Characters/OperativeCharacter.h"
@@ -155,6 +156,7 @@ void UProfileDialogWidget::BuildDefaultLayout()
 	auto MakeButton = [this](const FName& Name, const FString& Label, float Width)
 	{
 		UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
+		CodexButtonFocus::Disable(Button); // a focused HUD button would swallow the game keys (1-4, ...)
 		UTextBlock* Text = MakeText(NAME_None, 11, ButtonText);
 		Text->SetText(FText::FromString(Label));
 		Text->SetJustification(ETextJustify::Center);
