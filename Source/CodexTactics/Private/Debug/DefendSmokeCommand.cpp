@@ -10,7 +10,10 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Characters/EnemyCharacter.h"
+#include "Characters/DefenseMarkerSubsystem.h"
 #include "Characters/OperativeCharacter.h"
+#include "Components/MeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Characters/SquadAutonomySubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -153,6 +156,15 @@ namespace DefendSmoke
 			}
 			const float ToObject = FVector::Dist2D(Defender->GetActorLocation(), State.Object);
 			Check(State, ToObject <= 650.f, FString::Printf(TEXT("he went to the object: %.1f m from it"), ToObject / 100.f));
+			// The visuals: one marker, faded in, the green fresnel overlay on the barricade's mesh.
+			const UDefenseMarkerSubsystem* Markers = World->GetSubsystem<UDefenseMarkerSubsystem>();
+			const UMeshComponent* Mesh = State.Barricade.IsValid() ? State.Barricade->FindComponentByClass<UMeshComponent>() : nullptr;
+			const bool bOverlay = Mesh && Cast<UMaterialInstanceDynamic>(Mesh->GetOverlayMaterial())
+				&& Mesh->GetOverlayMaterial()->GetMaterial()->GetName().Contains(TEXT("TargetFresnel"));
+			Check(State, Markers && Markers->GetMarkerCount() == 1 && Markers->GetMarkerAlpha(State.Barricade.Get()) >= 0.99f && bOverlay
+				&& Markers->GetMarkers().Num() == 1 && Markers->GetMarkers()[0].Defenders == 1,
+				FString::Printf(TEXT("visuals: marker %d, alpha %.2f, green fresnel overlay %d"), Markers ? Markers->GetMarkerCount() : -1,
+					Markers ? Markers->GetMarkerAlpha(State.Barricade.Get()) : -1.f, bOverlay ? 1 : 0));
 			// The hound right at the object (an intruder), the marksman farther off to the side (tier 3, not an intruder).
 			const FVector Side = FVector::CrossProduct(FVector::UpVector, State.Away);
 			State.Hound = SpawnFrozen(World, EEnemyArchetype::FrostHound, State.Object + State.Away * 250.f);
@@ -196,7 +208,7 @@ namespace DefendSmoke
 			State.Time = 0.f;
 			return true;
 		}
-		default:
+		case 3:
 		{
 			if (State.Time < 2.f)
 			{
@@ -209,6 +221,36 @@ namespace DefendSmoke
 			Check(State, bKnife || !bHasKnife, FString::Printf(TEXT("body-block: the knife drawn (%s)"),
 				Defender->CurrentWeapon ? *Defender->CurrentWeapon->WeaponId : TEXT("-")));
 			Check(State, State.WorstLeashCm <= 550.f, FString::Printf(TEXT("never beyond the 5 m defense leash (worst %.1f m)"), State.WorstLeashCm / 100.f));
+			// A new player order lifts the line: the marker fades out.
+			if (AEnemyCharacter* Hound = State.Hound.Get())
+			{
+				Hound->Destroy();
+			}
+			Defender->OrderMoveTo(State.Start, false);
+			Check(State, !Defender->TacticalAnchor.Defense.IsActive(), TEXT("a move order lifts the line"));
+			State.Stage = 4;
+			State.Time = 0.f;
+			return true;
+		}
+		default:
+		{
+			const UDefenseMarkerSubsystem* Markers = World->GetSubsystem<UDefenseMarkerSubsystem>();
+			if (State.Time < 0.4f)
+			{
+				return true;
+			}
+			if (State.Stage == 4 && State.Time < 0.5f)
+			{
+				const float Alpha = Markers ? Markers->GetMarkerAlpha(State.Barricade.Get()) : -1.f;
+				Check(State, Alpha > 0.f && Alpha < 1.f, FString::Printf(TEXT("the marker fades out softly (alpha %.2f after 0.4 s)"), Alpha));
+			}
+			if (State.Time < 2.f)
+			{
+				return true;
+			}
+			const UMeshComponent* Mesh = State.Barricade.IsValid() ? State.Barricade->FindComponentByClass<UMeshComponent>() : nullptr;
+			Check(State, Markers && Markers->GetMarkerCount() == 0 && Mesh && !Mesh->GetOverlayMaterial(),
+				TEXT("faded out after the order: no marker, the overlay removed"));
 			return Finish(State);
 		}
 		}

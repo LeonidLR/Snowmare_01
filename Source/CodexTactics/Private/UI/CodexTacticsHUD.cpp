@@ -2,6 +2,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Characters/RecruitSubsystem.h"
 #include "CanvasItem.h"
+#include "Characters/DefenseMarkerSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/OverheadLabel.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -16,6 +17,7 @@
 #include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/Canvas.h"
+#include "Engine/Texture2D.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
 #include "Core/MissionSubsystem.h"
@@ -413,6 +415,7 @@ void ACodexTacticsHUD::DrawHUD()
 		DrawOperativeLabels();
 	}
 	DrawWorldLabels();
+	DrawDefenseMarkers();
 	DrawSpaceCharge();
 	DrawHitChanceLabel();
 	DrawSelectionBox();
@@ -424,6 +427,62 @@ void ACodexTacticsHUD::DrawHUD()
 		DrawSquadPanel(ObjectiveBottom + Margin * 0.5f);
 	}
 	UpdateFrostVignette();
+}
+
+void ACodexTacticsHUD::DrawDefenseMarkers()
+{
+	const UDefenseMarkerSubsystem* Markers = GetWorld()->GetSubsystem<UDefenseMarkerSubsystem>();
+	if (!Markers)
+	{
+		return;
+	}
+	for (const FDefenseMarkerView& Marker : Markers->GetMarkers())
+	{
+		const FVector Screen = Project(Marker.IconLocation, true);
+		if (Screen.Z <= 0.f || Marker.Alpha <= 0.01f)
+		{
+			continue;
+		}
+		// A shield: a rounded-top body (rectangle) over a point (triangle), green fill, light rim; it scales in with the fade.
+		const float Scale = FMath::Lerp(0.6f, 1.f, Marker.Alpha);
+		const float W = 26.f * Scale;
+		const float Top = 18.f * Scale;
+		const float Tip = 16.f * Scale;
+		const FVector2D C(Screen.X, Screen.Y);
+		const FLinearColor Fill(0.1f, 0.85f, 0.35f, 0.75f * Marker.Alpha);
+		const FLinearColor Rim(0.85f, 1.f, 0.9f, Marker.Alpha);
+		auto Shape = [&](float Grow, const FLinearColor& Color)
+		{
+			const FVector2D TL(C.X - W * 0.5f - Grow, C.Y - Top - Grow);
+			FCanvasTileItem Body(TL, FVector2D(W + Grow * 2.f, Top + Grow), Color);
+			Body.BlendMode = SE_BLEND_Translucent;
+			Canvas->DrawItem(Body);
+			FCanvasTriangleItem Point(FVector2D(C.X - W * 0.5f - Grow, C.Y), FVector2D(C.X + W * 0.5f + Grow, C.Y),
+				FVector2D(C.X, C.Y + Tip + Grow * 1.6f), Canvas->DefaultTexture ? Canvas->DefaultTexture->GetResource() : nullptr);
+			Point.SetColor(Color);
+			Point.BlendMode = SE_BLEND_Translucent;
+			Canvas->DrawItem(Point);
+		};
+		Shape(2.f, Rim);
+		Shape(0.f, Fill);
+		// A white cross-bar on the shield (the «guard» mark).
+		FCanvasTileItem Bar(FVector2D(C.X - W * 0.3f, C.Y - Top * 0.55f), FVector2D(W * 0.6f, 3.f * Scale), Rim);
+		Bar.BlendMode = SE_BLEND_Translucent;
+		Canvas->DrawItem(Bar);
+		FCanvasTileItem Post(FVector2D(C.X - 1.5f * Scale, C.Y - Top * 0.8f), FVector2D(3.f * Scale, Top * 0.8f + Tip * 0.6f), Rim);
+		Post.BlendMode = SE_BLEND_Translucent;
+		Canvas->DrawItem(Post);
+		// «РУБЕЖ ×N» under it.
+		UFont* Font = GEngine->GetSmallFont();
+		const FString Text = Marker.Defenders > 1 ? FString::Printf(TEXT("РУБЕЖ x%d"), Marker.Defenders) : FString(TEXT("РУБЕЖ"));
+		float TW = 0.f;
+		float TH = 0.f;
+		Canvas->StrLen(Font, Text, TW, TH);
+		FCanvasTextItem Label(FVector2D(C.X - TW * 0.5f, C.Y + Tip + 6.f), FText::FromString(Text), Font, FLinearColor(0.6f, 1.f, 0.7f, Marker.Alpha));
+		Label.bOutlined = true;
+		Label.OutlineColor = FLinearColor(0.f, 0.f, 0.f, Marker.Alpha);
+		Canvas->DrawItem(Label);
+	}
 }
 
 void ACodexTacticsHUD::DrawSelectionBox()

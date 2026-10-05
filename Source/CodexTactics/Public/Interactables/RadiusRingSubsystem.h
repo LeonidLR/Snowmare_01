@@ -21,6 +21,8 @@ public:
 	void ShowRing(const FVector& Ground, float Radius, const FLinearColor& Color, float Width = 12.f);
 
 	float GetRadius() const { return ShownRadius; }
+	/** Glow strength of the band (2 by default; lower keeps a saturated colour from washing out to white). */
+	void SetIntensity(float Intensity);
 	FLinearColor GetColor() const { return ShownColor; }
 
 private:
@@ -34,6 +36,7 @@ private:
 	float ShownRadius = -1.f;
 	float ShownWidth = -1.f;
 	FLinearColor ShownColor = FLinearColor::Transparent;
+	float ShownIntensity = 2.f;
 };
 
 /** What the ring shows now. */

@@ -30,6 +30,15 @@ ARadiusRingActor::ARadiusRingActor()
 	}
 }
 
+void ARadiusRingActor::SetIntensity(float Intensity)
+{
+	ShownIntensity = Intensity;
+	if (Material)
+	{
+		Material->SetScalarParameterValue(TEXT("Intensity"), Intensity);
+	}
+}
+
 void ARadiusRingActor::ShowRing(const FVector& Ground, float Radius, const FLinearColor& Color, float Width)
 {
 	SetActorHiddenInGame(false);
@@ -38,7 +47,7 @@ void ARadiusRingActor::ShowRing(const FVector& Ground, float Radius, const FLine
 		if (UMaterialInterface* Glow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/Materials/M_CombatFeedback.M_CombatFeedback")))
 		{
 			Material = UMaterialInstanceDynamic::Create(Glow, this);
-			Material->SetScalarParameterValue(TEXT("Intensity"), 2.f);
+			Material->SetScalarParameterValue(TEXT("Intensity"), ShownIntensity);
 			Ring->SetMaterial(0, Material);
 		}
 	}

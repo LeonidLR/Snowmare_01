@@ -237,6 +237,8 @@ private:
 	void DrawHitChanceLabel();
 	/** The box being dragged to select squad members (Godot selection_box_canvas). */
 	void DrawSelectionBox();
+	/** Sprint 10: a green shield «РУБЕЖ» over every defended object / point (UDefenseMarkerSubsystem). */
+	void DrawDefenseMarkers();
 	UPROPERTY(Transient)
 	TObjectPtr<class UFrostVignetteWidget> FrostVignette;
 	/** Draws the objective banner; returns its bottom edge (Y). */

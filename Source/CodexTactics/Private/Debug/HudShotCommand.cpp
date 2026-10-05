@@ -14,6 +14,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Characters/SquadSubsystem.h"
+#include "Characters/SquadAutonomySubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Data/DialogueSequenceAsset.h"
@@ -360,6 +361,56 @@ namespace HudShot
 						FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / TEXT("HudShot.png"), true, false);
 					}
 					if (*Frames >= 40)
+					{
+						FPlatformMisc::RequestExit(false, TEXT("HudShot"));
+						return false;
+					}
+					return true;
+				}), 0.05f);
+			}), 3.5f, false);
+		}
+		if (Args.Contains(TEXT("defend")))
+		{
+			// Sprint 10 visuals: tactical pause, the leader holds a barricade 5 m ahead — green fresnel, the ring, the shield.
+			TWeakObjectPtr<UWorld> DefendWorld(World);
+			FTimerHandle DefendHandle;
+			World->GetTimerManager().SetTimer(DefendHandle, FTimerDelegate::CreateLambda([DefendWorld]()
+			{
+				USquadSubsystem* Squad = DefendWorld.IsValid() ? DefendWorld->GetSubsystem<USquadSubsystem>() : nullptr;
+				AOperativeCharacter* Lead = Squad ? Squad->GetLeader() : nullptr;
+				if (!Lead)
+				{
+					return;
+				}
+				UGameFlowSubsystem* Flow = DefendWorld->GetSubsystem<UGameFlowSubsystem>();
+				Flow->TriggerCombatZone();
+				Flow->FinishCutscene();
+				Flow->FinishPreparation();
+				for (TActorIterator<AEnemyCharacter> It(DefendWorld.Get()); It; ++It)
+				{
+					It->CustomTimeDilation = 0.f;
+					It->SetActorLocation(Lead->GetActorLocation() + FVector(4000.f, 4000.f, 2000.f));
+				}
+				Flow->ToggleTacticalPause();
+				const FVector Ground = Lead->GetActorLocation() - FVector(0.f, 0.f, Lead->GetSimpleCollisionHalfHeight());
+				const FVector Spot = SmokeUtils::ClearPoint(DefendWorld.Get(), Ground, Ground + Lead->GetActorForwardVector().GetSafeNormal2D() * 500.f);
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				ABarricadeActor* Barricade = DefendWorld->SpawnActor<ABarricadeActor>(FVector(Spot.X, Spot.Y, Ground.Z + ABarricadeActor::HeightCm * 0.5f),
+					FRotator(0.f, Lead->GetActorRotation().Yaw + 90.f, 0.f), Params);
+				if (USquadAutonomySubsystem* Autonomy = DefendWorld->GetSubsystem<USquadAutonomySubsystem>(); Autonomy && Barricade)
+				{
+					Autonomy->SetDefenseObjective(Lead, Barricade, Spot);
+				}
+				TSharedRef<int32> Frames = MakeShared<int32>(0);
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Frames](float)
+				{
+					++(*Frames);
+					if (*Frames == 30)
+					{
+						FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / TEXT("HudShot.png"), true, false);
+					}
+					if (*Frames >= 60)
 					{
 						FPlatformMisc::RequestExit(false, TEXT("HudShot"));
 						return false;
