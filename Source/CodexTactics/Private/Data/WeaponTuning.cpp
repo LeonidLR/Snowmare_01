@@ -165,14 +165,33 @@ namespace WeaponTuning
 		{
 			return 0;
 		}
+		// By name (DA_Weapon_<id>): at StartPlay of an uncooked game the asset registry may still be scanning, so a folder
+		// listing can come back empty (it did: «0 weapons», the editor's tuning never reached the game).
 		int32 Applied = 0;
-		for (UWeaponDataAsset* Weapon : LoadWeapons())
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*Weapons)->Values)
 		{
-			const TSharedPtr<FJsonObject>* Entry = nullptr;
-			if ((*Weapons)->TryGetObjectField(Weapon->WeaponId, Entry) && Entry)
+			const TSharedPtr<FJsonObject>* Object = nullptr;
+			if (!Entry.Value.IsValid() || !Entry.Value->TryGetObject(Object) || !Object)
 			{
-				ApplyWeapon(**Entry, *Weapon);
+				continue;
+			}
+			const FString Name = FString::Printf(TEXT("DA_Weapon_%s"), *Entry.Key);
+			UWeaponDataAsset* Weapon = LoadObject<UWeaponDataAsset>(nullptr, *FString::Printf(TEXT("/Game/Data/Weapons/%s.%s"), *Name, *Name));
+			if (!Weapon)
+			{
+				for (UWeaponDataAsset* Candidate : LoadWeapons())
+				{
+					Weapon = Candidate->WeaponId == Entry.Key ? Candidate : Weapon;
+				}
+			}
+			if (Weapon)
+			{
+				ApplyWeapon(**Object, *Weapon);
 				++Applied;
+			}
+			else
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: no weapon asset for \"%s\""), *Entry.Key);
 			}
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Weapon tuning: %d weapons%s from %s"), Applied, GrenadeBlock.IsValid() ? TEXT(" + grenades") : TEXT(""), *Path);

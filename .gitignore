@@ -21,3 +21,6 @@ Plugins/**/Intermediate/
 # Wave Editor (Tools/WaveEditor): npm dependencies and build output
 Tools/WaveEditor/node_modules/
 Tools/WaveEditor/dist/
+
+# Claude Code personal settings
+.claude/settings.local.json

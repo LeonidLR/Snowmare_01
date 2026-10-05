@@ -13,6 +13,7 @@
 #include "EngineUtils.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "AIController.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/EnemyAnimInstance.h"
 #include "Characters/ProgressionRules.h"
@@ -591,6 +592,24 @@ FVector AEnemyCharacter::GodotPosition(const AActor* Actor)
 	FVector Extent;
 	Actor->GetActorBounds(true, Origin, Extent);
 	return FVector(Actor->GetActorLocation().X, Actor->GetActorLocation().Y, Origin.Z - Extent.Z);
+}
+
+FString AEnemyCharacter::GetDebugState() const
+{
+	const AAIController* AIC = Cast<AAIController>(GetController());
+	const UPathFollowingComponent* Follow = AIC ? AIC->GetPathFollowingComponent() : nullptr;
+	int32 DeadEnds = 0;
+	for (const TPair<TWeakObjectPtr<AActor>, double>& Entry : UnreachableUntil)
+	{
+		DeadEnds += Entry.Value > GetWorld()->GetTimeSeconds() ? 1 : 0;
+	}
+	FVector Fire;
+	float Radius = 0.f;
+	return FString::Printf(TEXT("ctrl %s, follow %d, progress %.1f s, fear-zone near %d, braving %d, fleeing %d, falling back %d, dead ends %d, stagger %d, attacking %d, mode %d, maxspeed %.0f"),
+		AIC ? *AIC->GetClass()->GetName() : TEXT("none"), Follow ? static_cast<int32>(Follow->GetStatus()) : -1, ProgressTimer,
+		bFearsFire && FindNearestFireZone(800.f, Fire, Radius) ? 1 : 0, bBravingFire ? 1 : 0, bFleeingFire ? 1 : 0, bFallingBack ? 1 : 0, DeadEnds,
+		HealthComponent && HealthComponent->HasStatusEffect(EStatusEffect::Stagger) ? 1 : 0, AttackTimer > 0.f ? 1 : 0,
+		static_cast<int32>(GetCharacterMovement()->MovementMode), GetCharacterMovement()->MaxWalkSpeed);
 }
 
 bool AEnemyCharacter::IsTargetUsableForTactics(const AActor* Candidate) const

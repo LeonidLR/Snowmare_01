@@ -64,6 +64,8 @@ public:
 	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
 	/** The pack coordinator may send it at Candidate: no recent dead end there and (fire fearers) not inside a fire zone. */
 	bool IsTargetUsableForTactics(const AActor* Candidate) const;
+	/** Dev diagnostics: path following, progress timer, fear / braving / fall-back, dead-end targets, status. */
+	FString GetDebugState() const;
 
 	/** EXP every squad member gets for this kill. */
 	int32 GetKillExpReward() const { return KillExpReward; }
