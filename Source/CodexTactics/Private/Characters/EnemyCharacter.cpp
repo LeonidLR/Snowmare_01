@@ -1022,7 +1022,7 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 			FireSight->NotifyFired(this); // the acid spit gives it away (Sprint 08-E)
 		}
 		const bool bIsCrit = FMath::FRand() < CritChance;
-		Target->TakeHit(AttackDamage * (bIsCrit ? CritMultiplier : 1.f) * Line.Cover, EnemyDisplayName, bIsCrit, false, this);
+		Target->TakeHit(AttackDamage * (bIsCrit ? CritMultiplier : 1.f) * Line.Cover, EnemyDisplayName, bIsCrit, false, this, bIsCrit ? CritMultiplier : 1.f);
 		if (UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
 		{
 			Feedback->SpawnTracer(Feet + FVector(0.f, 0.f, 90.f), End, FLinearColor(1.f, 0.2f, 0.2f));
@@ -1213,8 +1213,9 @@ AActor* AEnemyCharacter::FindVisibleOperative(const FEnemyPerceptionParams& Para
 			continue;
 		}
 		const float Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
-		// Range by stance and the field of view first (cheap), the trace only for candidates.
-		if (Distance >= BestDistance
+		// Range by stance and the field of view first (cheap), the trace only for candidates. Sprint 12: a man behind a
+		// full wall (head down) is unseen from the wall's side.
+		if (Distance >= BestDistance || Member->IsHiddenInCoverFrom(GetActorLocation())
 			|| !PerceptionRules::CanSee(Params, GetActorLocation(), Forward, Member->GetActorLocation(), Member->GetStance(), /*bLineClear*/ true))
 		{
 			continue;
@@ -1776,7 +1777,7 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	// Godot _attack_target -> player.gd take_damage (dodge, stance, fortitude) for operatives.
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Target))
 	{
-		Operative->TakeHit(FinalDamage, EnemyDisplayName, bIsCrit, false, this);
+		Operative->TakeHit(FinalDamage, EnemyDisplayName, bIsCrit, false, this, bIsCrit ? CritMultiplier : 1.f);
 		// Godot enemy_frostbitten.gd _attack_target: the blow shoves the operative 2.5 m/s away (velocity added).
 		FVector Push = Operative->GetActorLocation() - GetActorLocation();
 		Push.Z = 0.f;

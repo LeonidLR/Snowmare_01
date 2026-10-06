@@ -28,6 +28,9 @@
 #include "UI/ProfileDialogWidget.h"
 #include "UI/DialogueSubsystem.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Tactics/CoverGhostActor.h"
+#include "Tactics/CoverTraceRules.h"
+#include "Tactics/GorkyGridManager.h"
 #include "Interactables/LootCrateActor.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
@@ -223,6 +226,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACodexTacticsPlayerController::EnterPressed);
 	InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ACodexTacticsPlayerController::TabPressed);
 	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ACodexTacticsPlayerController::ProfilePressed);
+	// Sprint 12: N = cover fire mode (corner lean / blind fire) of the selected operative(s).
+	InputComponent->BindKey(EKeys::N, IE_Pressed, this, &ACodexTacticsPlayerController::ToggleCoverFireModeKey);
 	// Fire posture direct-select keys (user decision 2026-10-06): , Passive, . Defensive, / Aggressive.
 	InputComponent->BindKey(EKeys::Comma, IE_Pressed, this, &ACodexTacticsPlayerController::PosturePassiveKey);
 	InputComponent->BindKey(EKeys::Period, IE_Pressed, this, &ACodexTacticsPlayerController::PostureDefensiveKey);
@@ -316,6 +321,12 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 			HoldSphere->HideSphere();
 		}
 		HandleSpaceHold();
+	}
+
+	// Sprint 12: RMB / Esc drop the cover preview.
+	if (HasCoverPreview() && (WasInputKeyJustPressed(EKeys::RightMouseButton) || WasInputKeyJustPressed(EKeys::Escape)))
+	{
+		HideCoverPreview();
 	}
 
 	// Turn-based: the cursor frame on the hovered cell and, in attack mode, its hit chance (Godot set_hovered_cell).
@@ -1231,6 +1242,12 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 	// real time and in the tactical pause (user request 2026-10-06; Shift no longer attacks on the grid).
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 	{
+		// Sprint 12: a wall click on the grid previews / confirms a cover slot snapped to a cell.
+		if (!IsAttackModifierDown() && TryHandleCoverClick(Hit, TurnBased))
+		{
+			return;
+		}
+		HideCoverPreview();
 		TurnBased->HandleWorldClick(Hit.ImpactPoint, Hit.GetActor(), IsAttackModifierDown());
 		return;
 	}
@@ -1294,6 +1311,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 	// Ctrl + click: targeted fire only, never a move or a selection.
 	if (IsAttackModifierDown())
 	{
+		HideCoverPreview();
 		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 		if (!Flow || Flow->GetCombatMode() != ECodexCombatMode::TurnBased)
 		{
@@ -1301,6 +1319,14 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		}
 		return;
 	}
+
+	// Sprint 12: a click on a wall (Alt + click on a barricade / any object) = cover preview / confirm / shimmy; every
+	// other click drops a pending preview and goes on as before (a ground order also leaves the cover: OrderMoveTo).
+	if (TryHandleCoverClick(Hit, nullptr))
+	{
+		return;
+	}
+	HideCoverPreview();
 
 	// Godot main.gd plain-click rules during a fight (before the usual walk-up):
 	const UGameFlowSubsystem* ClickFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
@@ -1977,7 +2003,6 @@ void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
 	}
 }
 
-#undef LOCTEXT_NAMESPACE
 
 void ACodexTacticsPlayerController::SetSquadCeaseFire(bool bCease)
 {
@@ -1994,3 +2019,246 @@ void ACodexTacticsPlayerController::SetSquadCeaseFire(bool bCease)
 		}
 	}
 }
+
+// --- Tactical cover (Sprint 12) ---------------------------------------------------------------------------------
+
+bool ACodexTacticsPlayerController::HasCoverPreview() const
+{
+	return CoverGhost && CoverGhost->IsShown() && CoverPreviewOperative.IsValid();
+}
+
+bool ACodexTacticsPlayerController::FindCoverSlotForHit(const FHitResult& Hit, FCoverSlot& OutSlot) const
+{
+	OutSlot = FCoverSlot();
+	AActor* HitActor = Hit.GetActor();
+	if (!HitActor || HitActor->IsA<APawn>() || HitActor->IsA<AEnemyGhostActor>() || HitActor->IsA<ACoverGhostActor>()
+		|| HitActor->ActorHasTag(FName(TEXT("Enemy"))))
+	{
+		return false;
+	}
+	// Along the camera's view (planar), so the chest trace starts in front of the wall the player sees.
+	FVector Direction = PlayerCameraManager ? PlayerCameraManager->GetCameraRotation().Vector() : FVector::ForwardVector;
+	Direction.Z = 0.f;
+	if (!Direction.Normalize())
+	{
+		Direction = -FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f).GetSafeNormal();
+	}
+	// The clicked surface itself decides the side: trace into it from where the player looks.
+	if (FVector::DotProduct(Direction, FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f)) > 0.f && !FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f).IsNearlyZero())
+	{
+		Direction = -FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f).GetSafeNormal();
+	}
+	return CoverTraceRules::FindCoverSlotAt(GetWorld(), Hit.ImpactPoint, Direction, OutSlot);
+}
+
+bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, UTurnBasedCombatSubsystem* TurnBased)
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Operative = TurnBased ? TurnBased->GetActiveUnit() : (Squad ? Squad->GetLeader() : nullptr);
+	AActor* HitActor = Hit.GetActor();
+	if (!Operative || !HitActor || IsRealTimeOrderLocked() || bRelocateSelectMode)
+	{
+		return false;
+	}
+	const bool bAlt = IsSquadWideModifierDown();
+	// Objects (barricades, barrels, crates, quest objects) keep their click meaning; Alt + click takes cover at them.
+	if (HitActor->IsA<AInteractableActor>() && !bAlt)
+	{
+		return false;
+	}
+	if (FindClickedMember(Hit) || HitActor->IsA<APawn>() || HitActor->ActorHasTag(FName(TEXT("Enemy"))))
+	{
+		return false;
+	}
+	// A floor / ramp is a move target, not a wall (Alt + click probes anyway: a wall edge may have been clicked).
+	if (FMath::Abs(Hit.ImpactNormal.Z) > 0.3f && !bAlt)
+	{
+		return false;
+	}
+	FCoverSlot Slot;
+	if (!FindCoverSlotForHit(Hit, Slot))
+	{
+		if (bAlt)
+		{
+			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			{
+				Messages->PostMessage(LOCTEXT("HQ", "ШТАБ"), LOCTEXT("NoCoverHere", "⚠️ Здесь нет укрытия: нужна стена или препятствие не ниже 40 см."));
+			}
+			HideCoverPreview();
+			return true;
+		}
+		return false;
+	}
+	// Turn-based: the slot snaps to the nearest free cell of the grid.
+	if (TurnBased && TurnBased->GetGrid())
+	{
+		UGorkyGridManager* Grid = TurnBased->GetGrid();
+		const FIntPoint Cell = Grid->FindNearestFreeCell(Grid->WorldToGrid(Slot.WorldLocation));
+		if (!Grid->IsValidCell(Cell))
+		{
+			return false;
+		}
+		const FVector Centre = Grid->GridToWorld(Cell);
+		Slot.WorldLocation = FVector(Centre.X, Centre.Y, Slot.WorldLocation.Z);
+	}
+	// Second click on the previewed slot: confirm.
+	if (HasCoverPreview() && CoverPreviewOperative.Get() == Operative && FVector::Dist2D(Slot.WorldLocation, CoverPreviewSlot.WorldLocation) <= 100.f)
+	{
+		ConfirmCoverPreview();
+		return true;
+	}
+	// Along his own wall: shimmy at once (no preview).
+	if (!TurnBased && Operative->bInCover && CoverTraceRules::IsSameWall(Operative->GetCoverSlot(), Slot))
+	{
+		HideCoverPreview();
+		FCoverSlot Shimmy;
+		if (CoverTraceRules::FindShimmySlot(GetWorld(), Operative->GetCoverSlot(), Hit.ImpactPoint, Shimmy))
+		{
+			Operative->OrderShimmyTo(Shimmy);
+		}
+		else
+		{
+			Operative->OrderShimmyTo(Slot);
+		}
+		return true;
+	}
+	bCoverPreviewTurnBased = TurnBased != nullptr;
+	ShowCoverPreview(Operative, Slot);
+	return true;
+}
+
+void ACodexTacticsPlayerController::ShowCoverPreview(AOperativeCharacter* Operative, const FCoverSlot& Slot)
+{
+	if (!Operative || !Slot.IsValid())
+	{
+		return;
+	}
+	if (!CoverGhost)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		CoverGhost = GetWorld()->SpawnActor<ACoverGhostActor>(Slot.WorldLocation, FRotator::ZeroRotator, Params);
+	}
+	if (!CoverGhost)
+	{
+		return;
+	}
+	CoverPreviewSlot = Slot;
+	CoverPreviewOperative = Operative;
+	CoverGhost->ShowFor(*Operative, Slot);
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		const FText Kind = Slot.Height == ECoverHeight::HighCover ? LOCTEXT("CoverHigh", "стена") : LOCTEXT("CoverLow", "низкое укрытие");
+		const FText Corners = Slot.HasExposedEdge() ? LOCTEXT("CoverCorner", ", есть угол для выстрела") : FText::GetEmpty();
+		Messages->PostMessage(Operative->DisplayName, FText::Format(LOCTEXT("CoverPreview", "🧱 Укрытие: {0}{1}. Щёлкните ещё раз, чтобы занять."), Kind, Corners));
+	}
+}
+
+void ACodexTacticsPlayerController::HideCoverPreview()
+{
+	if (CoverGhost && CoverGhost->IsShown())
+	{
+		CoverGhost->Hide();
+	}
+	CoverPreviewOperative.Reset();
+}
+
+void ACodexTacticsPlayerController::ConfirmCoverPreview()
+{
+	AOperativeCharacter* Operative = CoverPreviewOperative.Get();
+	const FCoverSlot Slot = CoverPreviewSlot;
+	HideCoverPreview();
+	if (!Operative || !Slot.IsValid())
+	{
+		return;
+	}
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>();
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->GetGrid())
+	{
+		// The grid walk; the operative enters the slot when the walk stops on the cell (AOperativeCharacter::UpdateCover).
+		const FIntPoint Cell = TurnBased->GetGrid()->WorldToGrid(Slot.WorldLocation);
+		Operative->SetPendingCover(Slot);
+		if (!TurnBased->MoveActiveUnitTo(Cell))
+		{
+			Operative->ClearPendingCover();
+			if (Messages)
+			{
+				Messages->PostMessage(LOCTEXT("Tactics", "ТАКТИКА"), LOCTEXT("CoverCellUnreachable", "⚠️ До укрытия не дойти (нет AP или пути)."));
+			}
+		}
+		return;
+	}
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const ECombatOrderDispatch Dispatch = Flow ? FCombatTimeModeRules::GetOrderDispatch(Flow->GetPhase(), Flow->GetCombatMode(),
+		OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) : ECombatOrderDispatch::Execute;
+	if (Dispatch == ECombatOrderDispatch::Queue)
+	{
+		// Tactical pause: the walk is planned, the slot entered on arrival.
+		Operative->SetPendingCover(Slot);
+		const FVector Planned = GetSquad()->PlanMove(Operative, Slot.WorldLocation, true, Flow ? Flow->GetConfig().PauseOrderRadius : 1200.f);
+		if (Feedback)
+		{
+			Feedback->SpawnWaypointMarker(Planned);
+		}
+		if (Messages)
+		{
+			Messages->PostMessage(Operative->DisplayName, LOCTEXT("CoverPlanned", "📋 [ПЛАН] Занять укрытие у стены!"));
+		}
+		return;
+	}
+	const EOperativeOrderResult Result = Operative->OrderTakeCover(Slot, true);
+	if (Result == EOperativeOrderResult::Accepted)
+	{
+		if (Feedback)
+		{
+			Feedback->SpawnMovePing(Slot.WorldLocation, true);
+		}
+		if (Messages)
+		{
+			Messages->PostMessage(Operative->DisplayName, LOCTEXT("CoverOrdered", "🏃 В укрытие!"));
+		}
+	}
+	else if (Messages && Result == EOperativeOrderResult::Unreachable)
+	{
+		Messages->PostMessage(LOCTEXT("HQ", "ШТАБ"), LOCTEXT("CoverUnreachable", "⚠️ До этого укрытия нет пути."));
+	}
+}
+
+void ACodexTacticsPlayerController::ToggleCoverFireModeKey()
+{
+	if (IsDialogueOpen())
+	{
+		return;
+	}
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader)
+	{
+		return;
+	}
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
+	{
+		if (AOperativeCharacter* Active = TurnBased->GetActiveUnit())
+		{
+			Leader = Active;
+		}
+	}
+	TArray<AOperativeCharacter*> Targets = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
+	ECoverFireMode Mode = ECoverFireMode::CornerLean;
+	for (AOperativeCharacter* Operative : Targets)
+	{
+		if (Operative)
+		{
+			Mode = Operative->ToggleCoverFireMode();
+		}
+	}
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(Leader->DisplayName, Mode == ECoverFireMode::BlindFire
+			? LOCTEXT("CoverBlind", "🙈 Из укрытия — огонь вслепую (точность −40 %, голова не высовывается).")
+			: LOCTEXT("CoverLean", "👁️ Из укрытия — прицельный огонь из-за угла."));
+	}
+}
+
+#undef LOCTEXT_NAMESPACE

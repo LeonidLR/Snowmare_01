@@ -632,7 +632,8 @@ void AMarksmanEnemyCharacter::Fire(AOperativeCharacter* Target, const FMarksmanL
 	if (bHit)
 	{
 		const bool bCrit = FMath::FRand() < MarksmanConfig.CritChance;
-		Target->TakeHit(MarksmanConfig.ShotDamage * (bCrit ? MarksmanConfig.CritMultiplier : 1.f), EnemyDisplayName, bCrit, false, this);
+		Target->TakeHit(MarksmanConfig.ShotDamage * (bCrit ? MarksmanConfig.CritMultiplier : 1.f), EnemyDisplayName, bCrit, false, this,
+			bCrit ? MarksmanConfig.CritMultiplier : 1.f);
 	}
 	else
 	{

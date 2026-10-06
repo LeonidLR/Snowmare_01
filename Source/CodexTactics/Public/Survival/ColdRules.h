@@ -61,6 +61,13 @@ struct CODEXTACTICS_API FColdConfig
 	float ElevatedWindMultiplier = 2.f;
 
 	/**
+	 * Wind chill multiplier of an operative in tactical cover (Sprint 12-E, UE-only: a wall at the back shelters him
+	 * from the gale — the whole open-air accumulation, elevated wind included, is scaled; -50 % by default).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cold", meta = (ClampMin = "0", ClampMax = "1"))
+	float CoverWindChillMultiplier = 0.5f;
+
+	/**
 	 * Feet height (world Z) from which the ground counts as elevated, cm. Godot checks the body origin
 	 * y >= 2.4 m with the origin 1 m above the floor, i.e. feet 1.4 m above the base floor.
 	 */
@@ -127,6 +134,8 @@ struct CODEXTACTICS_API FColdEnvironment
 	bool bElevated = false;
 	/** Actually running in a sprint (not just the sprint order while standing). */
 	bool bSprinting = false;
+	/** Back to a wall (Sprint 12 cover): the wind is cut by FColdConfig::CoverWindChillMultiplier. */
+	bool bInCover = false;
 };
 
 /** Pure cold formulas. Godot reference: Scenes/movements/player.gd `_process_cold_system`, `_shoot_at_target`. */

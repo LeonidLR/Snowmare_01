@@ -103,6 +103,7 @@ FColdEnvironment UColdSurvivalComponent::GatherEnvironment() const
 	const float FeetZ = Location.Z - Operative->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	Environment.bElevated = FeetZ >= Config.ElevatedHeight;
 	Environment.bSprinting = Operative->IsSprinting() && Operative->GetVelocity().Size2D() > 150.f;
+	Environment.bInCover = Operative->bInCover; // Sprint 12: a wall at the back halves the wind chill
 	return Environment;
 }
 

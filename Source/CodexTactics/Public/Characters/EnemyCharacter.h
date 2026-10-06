@@ -168,6 +168,9 @@ public:
 	/** Current victim (operative, turret or generator). */
 	AActor* GetCurrentTarget() const { return CurrentTarget.Get(); }
 
+	/** Smokes: forces the victim (the behaviour tick may re-pick it; freeze the enemy with CustomTimeDilation 0 first). */
+	void SetCurrentTargetForTesting(AActor* Target) { CurrentTarget = Target; }
+
 	/** Shared enemy tuning (Godot enemy_* / spitter_preferred_range keys). */
 	FEnemyAIConfig AIConfig;
 

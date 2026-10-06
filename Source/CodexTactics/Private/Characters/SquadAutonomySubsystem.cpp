@@ -17,6 +17,8 @@
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/InteractableActor.h"
 #include "Quests/QuestChain.h"
+#include "Tactics/CoverDecisionRules.h"
+#include "Tactics/CoverTraceRules.h"
 #include "NavigationSystem.h"
 
 namespace SquadAutonomy
@@ -223,6 +225,16 @@ void USquadAutonomySubsystem::Decide(AOperativeCharacter& Operative, FOperativeS
 	UpdateWeapons(Operative, State, NearestCm);
 	const AOperativeCharacter* Leader = GetWorld()->GetSubsystem<USquadSubsystem>()->GetLeader();
 	ChooseTarget(Operative, Enemies, Leader);
+
+	// Sprint 12: at a wall he fights from the wall (stance / fire mode by CoverDecisionRules), no cover hunting.
+	if (Operative.bInCover || Operative.HasPendingCover())
+	{
+		if (Operative.bInCover)
+		{
+			DecideInCover(Operative, Enemies, Nearest, NearestCm, SniperOnMe);
+		}
+		return;
+	}
 
 	// «Ни шагу назад»: an enemy at point-blank range — the defender stays where he is and fires (no walk at all).
 	if (HoldsGround(ROE, Defense, NearestCm))
@@ -721,4 +733,79 @@ namespace SquadAutonomy
 	static FAutoConsoleCommandWithWorldAndArgs DefendObjective(TEXT("CodexTactics.DefendObjective"),
 		TEXT("Sprint 10: operative [index] holds the nearest objective (generator / terminal / gate, else a barricade) at all costs; «here»: his spot."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&DefendCommand));
+}
+
+void USquadAutonomySubsystem::DecideInCover(AOperativeCharacter& Operative, const TArray<FEnemyView>& Enemies, const FEnemyView* Nearest, float NearestCm,
+	const FEnemyView* SniperOnMe)
+{
+	const FCoverDecisionConfig Config;
+	const FCoverSlot& Slot = Operative.GetCoverSlot();
+	const FVector Position = Operative.GetActorLocation();
+	int32 Shooters = 0;
+	bool bElevatedEnemy = false;
+	for (const FEnemyView& View : Enemies)
+	{
+		if (View.Enemy && View.Enemy->GetCurrentTarget() == &Operative && FVector::Dist2D(View.Location, Position) <= 3000.f)
+		{
+			++Shooters;
+		}
+		if (FVector::Dist2D(View.Location, Position) <= 3000.f && View.Location.Z > Position.Z + 150.f)
+		{
+			bElevatedEnemy = true;
+		}
+	}
+	const float Health = Operative.HealthComponent ? Operative.HealthComponent->GetHealthFraction() : 1.f;
+	const float Suppression = CoverDecisionRules::SuppressionFromShooters(Config, Shooters);
+	const bool bLaser = SniperOnMe != nullptr;
+
+	// The corner towards the nearest threat.
+	if (Nearest)
+	{
+		Operative.SetCoverFacing(CoverTraceRules::ChooseFacing(Slot, &Nearest->Location));
+	}
+
+	FCoverFireSituation Fire;
+	Fire.Height = Operative.CurrentCoverHeight;
+	Fire.bEdgeExposed = Operative.CurrentCoverHeight == ECoverHeight::LowCover || Slot.HasExposedEdge();
+	Fire.bSniperLaserOnMe = bLaser;
+	Fire.HealthFraction = Health;
+	Fire.SuppressionPressure = Suppression;
+	Fire.RecentIncomingDamage = Operative.RecentIncomingDamage;
+	Fire.DistanceToEnemyCm = Nearest ? NearestCm : 100000.f;
+	const ECoverFireDecision Decision = Nearest ? CoverDecisionRules::DecideFire(Config, Fire) : ECoverFireDecision::Hold;
+	const bool bHold = Decision == ECoverFireDecision::Hold;
+	if (Operative.bCoverHoldFire != bHold || (!bHold && Operative.CoverFireMode != CoverDecisionRules::ToFireMode(Decision)))
+	{
+		Operative.bCoverHoldFire = bHold;
+		if (!bHold)
+		{
+			Operative.SetCoverFireMode(CoverDecisionRules::ToFireMode(Decision));
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s decides %s (hp %.0f %%, pressure %.2f, recent dmg %.0f, enemy %.0f m%s)"),
+			*Operative.DisplayName.ToString(), CoverDecisionRules::FireDecisionName(Decision), Health * 100.f, Suppression,
+			Operative.RecentIncomingDamage, Nearest ? NearestCm / 100.f : -1.f, bLaser ? TEXT(", laser on him") : TEXT(""));
+		switch (Decision)
+		{
+		case ECoverFireDecision::CornerPeek: ++Stats.CoverPeeks; break;
+		case ECoverFireDecision::BlindFire: ++Stats.CoverBlindFires; break;
+		default: ++Stats.CoverHolds; break;
+		}
+	}
+
+	FCoverStanceSituation StanceSituation;
+	StanceSituation.Height = Operative.CurrentCoverHeight;
+	StanceSituation.bSniperLaserOnMe = bLaser;
+	StanceSituation.HealthFraction = Health;
+	StanceSituation.SuppressionPressure = Suppression;
+	StanceSituation.bEnemyElevated = bElevatedEnemy;
+	StanceSituation.bWantsAimedFire = Decision == ECoverFireDecision::CornerPeek;
+	const EOperativeStance Wanted = CoverDecisionRules::ToStance(CoverDecisionRules::DecideStance(Config, StanceSituation));
+	if (Operative.GetStance() != EOperativeStance::Prone && Operative.GetStance() != Wanted)
+	{
+		Operative.SetStance(Wanted);
+		++Stats.CoverStanceChanges;
+		Stats.CoverCrouchForLaser += bLaser && Wanted == EOperativeStance::Crouching ? 1 : 0;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s %s at the wall%s"), *Operative.DisplayName.ToString(),
+			Wanted == EOperativeStance::Crouching ? TEXT("crouches") : TEXT("stands"), bLaser ? TEXT(" (sniper laser)") : TEXT(""));
+	}
 }

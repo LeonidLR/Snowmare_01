@@ -69,6 +69,9 @@ public:
 	/** Patrol -> Engage (another marksman's ambush alert, smokes). */
 	void Alert();
 
+	/** Smokes (Sprint 12 CoverSmoke): his laser rests on Target now (bIsAimingAtTarget); freeze him so the tick keeps it. */
+	void ForceAimForTesting(AActor* Target) { SetCurrentTargetForTesting(Target); StartAim(); }
+
 	/** A spline route puts him (back) on patrol: aim and hold dropped, AIState Patrol. */
 	virtual void StartPatrol(APatrolRouteActor* Route, AEnemyCharacter* Leader) override;
 	virtual bool IsOnPatrol() const override;

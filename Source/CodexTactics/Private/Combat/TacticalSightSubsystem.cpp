@@ -455,8 +455,10 @@ void UTacticalSightSubsystem::Update()
 		for (AOperativeCharacter* Operative : Operatives)
 		{
 			const float Distance = FVector::Dist2D(Operative->GetActorLocation(), Enemy->GetActorLocation());
+			// Sprint 12-E: high cover with the head down hides him from everything behind the wall (firing demasks).
+			const bool bCoverHidden = Operative->IsHiddenInCoverFrom(Enemy->GetActorLocation());
 			const bool bPerceives = IsDemasked(Operative) || Distance <= SightRules::EnemyHearingRadius(Operative->GetStance())
-				|| (Distance <= MaxSightCm && HasClearSight(Eye, ProfilePoint(*Operative)));
+				|| (!bCoverHidden && Distance <= MaxSightCm && HasClearSight(Eye, ProfilePoint(*Operative)));
 			if (bPerceives)
 			{
 				Known.Add(Operative, { Operative->GetActorLocation(), Now, -1.0, true });

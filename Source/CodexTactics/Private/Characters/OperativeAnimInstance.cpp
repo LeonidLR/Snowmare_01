@@ -315,6 +315,25 @@ void UOperativeAnimInstance::UpdateColdLayer(float DeltaSeconds)
 void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit)
 {
 	AimTimer = AimHoldAfterShot;
+	// Sprint 12: a shot from cover plays the corner fire (or blind fire) clip full body; the loop resumes after it.
+	if (bInCover && bUseNativeCoverClips && !bIsProne && !bIsReloading)
+	{
+		UAnimSequenceBase* Clip = Shooter && Shooter->bIsBlindFiring ? PickCoverClip(CoverBlindFire) : nullptr;
+		if (!Clip)
+		{
+			Clip = PickCoverClip(bIsCrouching ? CoverCrouchFire : CoverStandFire);
+		}
+		if (Clip)
+		{
+			if (UAnimMontage* Loop = CoverLoopMontage.Get(); Loop && Montage_IsPlaying(Loop))
+			{
+				Montage_Stop(0.1f, Loop);
+			}
+			CoverOneShotMontage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, 0.1f, 0.2f);
+			CoverClipsPlayed += CoverOneShotMontage.IsValid() ? 1 : 0;
+			return;
+		}
+	}
 	if (bIsProne)
 	{
 		// Godot ProneFire: the prone body shoots full body; the standing fire montage is not layered over it.
@@ -571,6 +590,15 @@ void UOperativeAnimInstance::UpdateState()
 		Direction = 0.f;
 	}
 	UpdateVaultClip(*Operative);
+	// Sprint 12 cover state (the shimmy moves sideways: the blend-space direction already strafes).
+	bInCover = Operative->bInCover;
+	CoverHeight = Operative->CurrentCoverHeight;
+	CoverFacing = Operative->CoverFacing;
+	bShimmying = Operative->bShimmying;
+	ShimmyDirection = Operative->ShimmyDirection;
+	bLeaning = Operative->bIsCornerLeaning;
+	bBlindFiring = Operative->bIsBlindFiring;
+	UpdateCoverLayer(*Operative);
 	bIsMoving = Speed > 5.f;
 	bIsSprinting = Operative->IsSprinting();
 	Stance = Operative->GetStance();
@@ -708,4 +736,93 @@ bool FOperativeAnimInstanceProxy::Evaluate(FPoseContext& Output)
 	FAnimationPoseData OutputData(Output);
 	FAnimationRuntime::BlendPosesTogether(Poses, Curves, Attributes, Weights, OutputData);
 	return true;
+}
+
+// --- Tactical cover baseline (Sprint 12) ------------------------------------------------------------------------
+
+UAnimSequenceBase* UOperativeAnimInstance::PickCoverClip(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) const
+{
+	const int32 Index = CoverFacing == ECoverFacing::Left ? 0 : 1;
+	if (Clips.IsValidIndex(Index) && Clips[Index])
+	{
+		return Clips[Index];
+	}
+	// The other side's clip stands in (mirrored by the user later).
+	return Clips.IsValidIndex(1 - Index) ? Clips[1 - Index].Get() : nullptr;
+}
+
+void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operative)
+{
+	const bool bEntered = bInCover && !bWasInCover;
+	const bool bLeft = !bInCover && bWasInCover;
+	bWasInCover = bInCover;
+	if (!bUseNativeCoverClips || bIsDead)
+	{
+		return;
+	}
+	if (bLeft)
+	{
+		if (UAnimMontage* Loop = CoverLoopMontage.Get(); Loop && Montage_IsPlaying(Loop))
+		{
+			Montage_Stop(0.25f, Loop);
+		}
+		CoverLoopMontage.Reset();
+		CoverLoopClip.Reset();
+		return;
+	}
+	if (!bInCover || bIsProne)
+	{
+		return;
+	}
+	// Cover_Enter once, then the loop.
+	if (bEntered)
+	{
+		if (UAnimSequenceBase* Enter = PickCoverClip(bIsCrouching ? CoverCrouchEnter : CoverStandEnter))
+		{
+			StopSlotAnimation(0.15f, FullBodySlot);
+			CoverOneShotMontage = PlaySlotAnimationAsDynamicMontage(Enter, FullBodySlot, 0.15f, 0.2f);
+			CoverClipsPlayed += CoverOneShotMontage.IsValid() ? 1 : 0;
+			CoverLoopMontage.Reset();
+			CoverLoopClip.Reset();
+		}
+	}
+	if (UAnimMontage* OneShot = CoverOneShotMontage.Get(); OneShot && Montage_IsPlaying(OneShot))
+	{
+		return; // enter / fire clip in progress
+	}
+	if (IsPlayingStanceTransition())
+	{
+		return; // stand <-> crouch at the wall: the stance clip plays, the loop follows
+	}
+	// The loop wanted now: shimmy towards / away from the corner, else the idle.
+	UAnimSequenceBase* Wanted = nullptr;
+	float PlayRate = 1.f;
+	if (bShimmying && Speed > 5.f)
+	{
+		// Forward = towards the corner he works: right facing moves right (+1), left facing moves left (-1).
+		const bool bTowardsCorner = (CoverFacing == ECoverFacing::Right) == (ShimmyDirection > 0.f);
+		Wanted = PickCoverClip(bIsCrouching ? (bTowardsCorner ? CoverCrouchMoveForward : CoverCrouchMoveBackward)
+			: (bTowardsCorner ? CoverStandMoveForward : CoverStandMoveBackward));
+		PlayRate = FMath::Clamp(Speed / FMath::Max(CoverShimmyClipSpeed, 1.f), 0.5f, 2.f);
+	}
+	if (!Wanted)
+	{
+		Wanted = PickCoverClip(bIsCrouching ? CoverCrouchIdle : CoverStandIdle);
+	}
+	if (!Wanted)
+	{
+		return; // no clips assigned: the graph's locomotion shows (back to the wall by the actor rotation)
+	}
+	UAnimMontage* Loop = CoverLoopMontage.Get();
+	if (CoverLoopClip.Get() == Wanted && Loop && Montage_IsPlaying(Loop))
+	{
+		return;
+	}
+	if (Loop && Montage_IsPlaying(Loop))
+	{
+		Montage_Stop(0.2f, Loop);
+	}
+	CoverLoopClip = Wanted;
+	CoverLoopMontage = PlaySlotAnimationAsDynamicMontage(Wanted, FullBodySlot, 0.2f, 0.2f, PlayRate, /*LoopCount*/ 1000);
+	CoverClipsPlayed += CoverLoopMontage.IsValid() ? 1 : 0;
 }

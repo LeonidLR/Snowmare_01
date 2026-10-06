@@ -41,6 +41,10 @@
 #include "GameFramework/PlayerController.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "Tactics/CoverRules.h"
+#include "Tactics/CoverTraceRules.h"
+#include "Tactics/CoverDecisionRules.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -298,6 +302,17 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ПАНИКЕ! НЕ ПОДЧИНЯЕТСЯ!"), FLinearColor(1.f, 0.3f, 0.3f));
 		return EOperativeOrderResult::Refused;
 	}
+	// Sprint 12: a move order away from the wall leaves the cover (a cover / shimmy order keeps it; so does the planned
+	// walk to the pending slot that the tactical pause releases).
+	const bool bToPendingSlot = bHasPendingCover && FVector::Dist2D(Destination, PendingCoverSlot.WorldLocation) <= 60.f;
+	if (!bCoverMoveOrder && !bPendingMoveReplay && !bToPendingSlot)
+	{
+		if (bInCover)
+		{
+			LeaveCover(TEXT("move order"));
+		}
+		bHasPendingCover = false;
+	}
 	// Commander Mode (Sprint 07-B): every player move order pins the anchor the autonomy fights around.
 	if (!bAutonomousOrder && !bPendingMoveReplay)
 	{
@@ -357,6 +372,10 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	if (IsPanicking())
 	{
 		return EOperativeOrderResult::Refused; // the panic moves him (Godot _process_panic_movement)
+	}
+	if (bInCover || bHasPendingCover)
+	{
+		return EOperativeOrderResult::Refused; // Sprint 12: he holds his wall like a guard; the formation does not pull him
 	}
 	ApplyMovementParams(Speed);
 	return RequestMove(Destination);
@@ -541,6 +560,11 @@ void AOperativeCharacter::UpdatePlaceholderPose(float Alpha)
 
 void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 {
+	if (bInCover)
+	{
+		LeaveCover(TEXT("died"));
+	}
+	bHasPendingCover = false;
 	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
 	{
 		Bus->OnSoldierDowned.Broadcast(this); // Godot EventBus.soldier_downed
@@ -632,6 +656,24 @@ void AOperativeCharacter::HandleMoveFinished()
 	bHasMoveOrder = false;
 	bSprinting = false;
 	ApplyMovementParams();
+
+	// Sprint 12: arrived at the cover slot ordered -> press against the wall.
+	if (bHasPendingCover)
+	{
+		if (FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation) <= 150.f)
+		{
+			bHasPendingCover = false;
+			EnterCover(PendingCoverSlot);
+			return;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("%s: cover slot not reached (%.0f cm off), stays in the open"), *DisplayName.ToString(),
+			FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation));
+		bHasPendingCover = false;
+		if (bInCover)
+		{
+			LeaveCover(TEXT("shimmy target not reached"));
+		}
+	}
 
 	// Godot _on_movement_destination_reached: behind a barricade in combat (not frostbitten) the operative takes cover.
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
@@ -827,6 +869,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	else
 	{
 		UpdateVaultTrigger(DeltaTime);
+		UpdateCover(DeltaTime);
 		UpdateCombatFacing(DeltaTime);
 		ProcessCombatShooting(DeltaTime);
 	}
@@ -962,6 +1005,11 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	GetCharacterMovement()->StopMovementImmediately();
 	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
 	SetActorEnableCollision(false);
+	if (bInCover)
+	{
+		LeaveCover(TEXT("vault"));
+	}
+	bHasPendingCover = false;
 	bVaulting = true;
 	VaultTimer = 0.f;
 	VaultDuration = VaultRules::Duration(bRunning);
@@ -992,6 +1040,11 @@ bool AOperativeCharacter::UpdateObstacleStepOff(float DeltaTime)
 	GetCharacterMovement()->StopMovementImmediately();
 	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
 	SetActorEnableCollision(false);
+	if (bInCover)
+	{
+		LeaveCover(TEXT("vault"));
+	}
+	bHasPendingCover = false;
 	bVaulting = true;
 	VaultTimer = 0.f;
 	VaultDuration = 0.5f;
@@ -1387,6 +1440,11 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	{
 		return false;
 	}
+	// Sprint 12: nothing to fire round / over from this cover (a full wall without a corner).
+	if (bInCover && !CanFireFromCover())
+	{
+		return false;
+	}
 	const FVector MyFeet = ShotFeet(this);
 	const FVector EnemyFeet = ShotFeet(Enemy);
 	if (!World || SquadFireRules::IsInDeadZone(MyFeet, EnemyFeet))
@@ -1414,7 +1472,7 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	EShotLineHit Kind = EShotLineHit::Clear;
 	AActor* HitEnemy = Enemy;
 	FHitResult Hit;
-	if (World->LineTraceSingleByChannel(Hit, GetMuzzleLocation(), EnemyFeet + FVector(0.f, 0.f, 80.f), ECC_Visibility, Params))
+	if (World->LineTraceSingleByChannel(Hit, bInCover ? GetCoverFireOrigin() : GetMuzzleLocation(), EnemyFeet + FVector(0.f, 0.f, 80.f), ECC_Visibility, Params))
 	{
 		AActor* Blocker = Hit.GetActor();
 		if (Blocker && Blocker != Enemy)
@@ -1459,6 +1517,10 @@ AEnemyGhostActor* AOperativeCharacter::GetBlindFireTarget() const
 bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShootCandidate& Out) const
 {
 	UWorld* World = GetWorld();
+	if (bInCover && !CanFireFromCover())
+	{
+		return false; // Sprint 12
+	}
 	const FVector MyFeet = ShotFeet(this);
 	const FVector GhostFeet = Ghost.GetLastKnownFeet();
 	if (!World || SquadFireRules::IsInDeadZone(MyFeet, GhostFeet))
@@ -1484,7 +1546,7 @@ bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShoo
 	}
 	EShotLineHit Kind = EShotLineHit::Clear;
 	FHitResult Hit;
-	if (World->LineTraceSingleByChannel(Hit, GetMuzzleLocation(), Ghost.GetAimPoint(), ECC_Visibility, Params) && Hit.GetActor())
+	if (World->LineTraceSingleByChannel(Hit, bInCover ? GetCoverFireOrigin() : GetMuzzleLocation(), Ghost.GetAimPoint(), ECC_Visibility, Params) && Hit.GetActor())
 	{
 		Kind = Hit.GetActor()->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
 	}
@@ -1815,7 +1877,8 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 	}
 
 	// Fire posture (user request 2026-10-06): Passive / unprovoked Defensive operatives open no fire of their own.
-	const bool bAutoFire = MayAutoFireNow();
+	// Sprint 12: Commander Mode may hold the fire behind the cover (direct orders still fire).
+	const bool bAutoFire = MayAutoFireNow() && !(bInCover && bCoverHoldFire);
 
 	// Godot: a clustered pack gets a grenade before the rifle (not while raging or reloading).
 	if (bAutoFire && !bRaging && !bIsReloading && GrenadesCount > 0 && AIGrenadeCooldown <= 0.f && TryAIGrenadeThrow())
@@ -1858,15 +1921,23 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		return;
 	}
 
-	// Turn towards target smoothly (the barrel onto it, see UpdateCombatFacing).
-	const FVector LookAt = Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation();
-	const FRotator LookRot(0.f, (LookAt - GetActorLocation()).Rotation().Yaw - BarrelYawOffset, 0.f);
-	SetActorRotation(FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 12.0f));
+	// Turn towards target smoothly (the barrel onto it, see UpdateCombatFacing); in cover the back stays to the wall.
+	if (!bInCover)
+	{
+		const FVector LookAt = Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation();
+		const FRotator LookRot(0.f, (LookAt - GetActorLocation()).Rotation().Yaw - BarrelYawOffset, 0.f);
+		SetActorRotation(FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 12.0f));
+	}
 
 	if (ShootTimer <= 0.0f && MisfireCooldownTimer <= 0.0f)
 	{
+		if (bInCover)
+		{
+			BeginCoverShot(); // Sprint 12: lean out, or keep the head down for a blind shot
+		}
 		TGuardValue<bool> Blind(bBlindShot, Shot.bBlind);
 		TGuardValue<FVector> Aim(BlindAimPoint, Shot.AimPoint);
+		TGuardValue<bool> CoverBlind(bCoverBlindShot, bInCover && CoverFireMode == ECoverFireMode::BlindFire);
 		ShootAtTarget(Target, Shot.Cover);
 	}
 }
@@ -1919,11 +1990,20 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	{
 		HitChance = FMath::Clamp(HitChance - ColdSurvival->GetAimPenalty(), 0.05f, 0.99f);
 	}
-	// Blind fire at a silhouette: -80 %, and nothing to hit once the enemy left that spot (Sprint 08-F).
-	if (bBlindShot)
+	// Blind fire at a silhouette: -80 %, and nothing to hit once the enemy left that spot (Sprint 08-F). Cover blind fire
+	// (Sprint 12, head down): -40 %. Both apply multiplied, floored at the tunable minimum (user decision 2026-10-06).
+	if (bBlindShot && FVector::Dist2D(ShotFeet(Target), BlindAimPoint) > SightRules::BlindFireHitRadiusCm)
 	{
-		HitChance = SightRules::BlindFireHitChance(HitChance,
-			FVector::Dist2D(ShotFeet(Target), BlindAimPoint));
+		HitChance = 0.f; // the enemy left the silhouette's spot
+	}
+	else if (bBlindShot || bCoverBlindShot)
+	{
+		HitChance = CoverRules::CombinedBlindFireHitChance(CoverRules::GetConfig(), HitChance, bCoverBlindShot, bBlindShot,
+			SightRules::BlindFireAccuracyMultiplier);
+	}
+	if (bInCover)
+	{
+		(bCoverBlindShot ? CoverBlindShots : CoverLeanShots) += 1;
 	}
 
 	const bool bHit = bForceHitForTesting || (FMath::FRand() <= HitChance);
@@ -2076,6 +2156,13 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	// (_face_movement_target) while not sprinting, so a single-click move walks sideways / backs off facing the enemy;
 	// a sprint turns to the movement and stops the fire.
 	bFacingCombatTarget = false;
+	if (bInCover)
+	{
+		// Sprint 12: the back stays to the wall (the lean / blind fire is the upper body's job); no turn to a target or a move.
+		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, CoverTraceRules::FacingYaw(CoverSlot), 0.f), DeltaTime, 10.f));
+		BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);
+		return;
+	}
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
 	const bool bRealTimeFight = !Flow || (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime);
 	AActor* Target = CurrentCombatTarget.Get();
@@ -2316,7 +2403,8 @@ void AOperativeCharacter::NotifyWeaponFrozen()
 	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🥶 ОРУЖИЕ ЗАМЁРЗЛО! Нужен источник тепла!"), FLinearColor(0.4f, 0.85f, 1.f));
 }
 
-float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool bCrit, bool bBypassAvoidance, AActor* AttackerActor)
+float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool bCrit, bool bBypassAvoidance, AActor* AttackerActor,
+	float CritMultiplierApplied)
 {
 	if (!HealthComponent || !HealthComponent->IsAlive())
 	{
@@ -2339,8 +2427,30 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	// 2. Stance defense and fortitude cut (Godot: 15 fortitude = 22.5 %, at most 50 %).
 	const float Fortitude = ColdSurvival ? ColdSurvival->Fortitude : 15.f;
 	const float FortitudeCut = FMath::Clamp(Fortitude * 0.015f, 0.f, 0.5f);
+	// Sprint 12 cover (user decision 2026-10-06): a hit from the wall's frontal arc is absorbed 90 % by high cover (35 %
+	// crouched / 90 % prone behind low cover), flanking hits pass fully; while the head stays down no hit is a headshot
+	// (crit). Blasts / traps (bBypassAvoidance) are not stopped by a wall at the back.
+	float CoverAbsorb = 0.f;
+	if (bInCover && !bBypassAvoidance && AttackerActor)
+	{
+		const FCoverCombatConfig& CoverConfig = CoverRules::GetConfig();
+		const bool bInArc = CoverRules::IsInFrontalArc(CoverSlot.WallNormal, CoverSlot.WorldLocation, AttackerActor->GetActorLocation(), CoverConfig.FrontalArcDeg);
+		CoverAbsorb = CoverRules::AbsorbFraction(CoverConfig, CurrentCoverHeight, Stance, bIsCornerLeaning, bInArc);
+		if (bCrit && CoverRules::IsHeadshotImmune(CurrentCoverHeight, bIsCornerLeaning))
+		{
+			bCrit = false; // the head never showed: the plain hit
+			Amount /= FMath::Max(CritMultiplierApplied, 1.f);
+			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🧱 ГОЛОВА В УКРЫТИИ"), FLinearColor(0.6f, 0.85f, 1.f));
+		}
+		if (CoverAbsorb > 0.f)
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(this, FString::Printf(TEXT("🧱 УКРЫТИЕ -%d%%"), FMath::RoundToInt(CoverAbsorb * 100.f)),
+				FLinearColor(0.5f, 0.8f, 1.f));
+		}
+	}
 	const float Final = bBypassAvoidance ? FMath::Max(1.f, Amount)
-		: FMath::Max(1.f, Amount * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut));
+		: FMath::Max(1.f, CoverRules::ApplyAbsorb(Amount, CoverAbsorb) * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut));
+	RecentIncomingDamage += Final;
 	HealthComponent->ApplyDirectHealthLoss(Final, Attacker);
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
 	{
@@ -2560,4 +2670,268 @@ void AOperativeCharacter::CaptureProgressionBases()
 	InitialBaseLuck = Luck;
 	InitialBaseAccuracy = Accuracy;
 	InitialBaseFortitude = GetStatValue(EProgressStat::Fortitude);
+}
+
+// --- Tactical cover (Sprint 12) ---------------------------------------------------------------------------------
+
+EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot, bool bSprint)
+{
+	if (!Slot.IsValid())
+	{
+		return EOperativeOrderResult::Unreachable;
+	}
+	if (bInCover && CoverTraceRules::IsSameWall(CoverSlot, Slot))
+	{
+		return OrderShimmyTo(Slot);
+	}
+	if (bInCover)
+	{
+		LeaveCover(TEXT("another cover"));
+	}
+	PendingCoverSlot = Slot;
+	bHasPendingCover = true;
+	TGuardValue<bool> CoverOrder(bCoverMoveOrder, true);
+	const EOperativeOrderResult Result = OrderMoveTo(Slot.WorldLocation, bSprint);
+	if (Result != EOperativeOrderResult::Accepted)
+	{
+		bHasPendingCover = false;
+	}
+	else
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: to the %s cover at (%.0f, %.0f)%s"), *DisplayName.ToString(),
+			Slot.Height == ECoverHeight::HighCover ? TEXT("high") : TEXT("low"), Slot.WorldLocation.X, Slot.WorldLocation.Y,
+			bSprint ? TEXT(" at a sprint") : TEXT(""));
+	}
+	return Result;
+}
+
+void AOperativeCharacter::SetPendingCover(const FCoverSlot& Slot)
+{
+	PendingCoverSlot = Slot;
+	bHasPendingCover = Slot.IsValid();
+}
+
+void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
+{
+	if (!Slot.IsValid() || !HealthComponent || !HealthComponent->IsAlive())
+	{
+		return;
+	}
+	const bool bWasInCover = bInCover;
+	const bool bSameWall = bWasInCover && CoverTraceRules::IsSameWall(CoverSlot, Slot);
+	StopOperative();
+	CoverSlot = Slot;
+	bInCover = true;
+	CurrentCoverHeight = Slot.Height;
+	bShimmying = false;
+	ShimmyDirection = 0.f;
+	bIsCornerLeaning = false;
+	bIsBlindFiring = false;
+	LeanTimer = 0.f;
+	BlindFireTimer = 0.f;
+	bHasPendingCover = false;
+	if (!bSameWall)
+	{
+		const FVector TargetLocation = CurrentCombatTarget.IsValid() ? CurrentCombatTarget->GetActorLocation() : FVector::ZeroVector;
+		CoverFacing = CoverTraceRules::ChooseFacing(Slot, CurrentCombatTarget.IsValid() ? &TargetLocation : nullptr);
+	}
+	// Back to the wall, on the slot (the feet keep their ground height).
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	SetActorLocation(FVector(Slot.WorldLocation.X, Slot.WorldLocation.Y, Feet.Z + GetSimpleCollisionHalfHeight()), true);
+	SetActorRotation(FRotator(0.f, CoverTraceRules::FacingYaw(Slot), 0.f));
+	ClearIdleFacing();
+	if (!bSameWall)
+	{
+		// High cover: standing (the wall covers him); low cover: crouched. Prone stays prone (hidden by the 60 cm rule).
+		const EOperativeStance Default = CoverRules::DefaultStanceFor(Slot.Height);
+		if (Stance != EOperativeStance::Prone && Stance != Default && !(ColdSurvival && ColdSurvival->IsFrostbitten()))
+		{
+			SetStance(Default);
+		}
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: %s %s cover at (%.0f, %.0f), facing %s, corners L %d R %d"), *DisplayName.ToString(),
+		bSameWall ? TEXT("shimmied along the") : TEXT("entered the"), Slot.Height == ECoverHeight::HighCover ? TEXT("high") : TEXT("low"),
+		Slot.WorldLocation.X, Slot.WorldLocation.Y, CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"),
+		Slot.bLeftEdgeExposed ? 1 : 0, Slot.bRightEdgeExposed ? 1 : 0);
+	if (!bWasInCover)
+	{
+		UFloatingTextSubsystem::SpawnAboveOperative(this, Slot.Height == ECoverHeight::HighCover ? TEXT("🧱 У СТЕНЫ") : TEXT("🧱 ЗА УКРЫТИЕМ"),
+			FLinearColor(0.5f, 0.8f, 1.f));
+		if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+		{
+			Messages->PostMessage(DisplayName, FText::FromString(Slot.Height == ECoverHeight::HighCover
+				? TEXT("🧱 Прижался к стене, держу угол!") : TEXT("🧱 Укрылся за препятствием!")));
+		}
+		ReceiveCoverChanged(true, CurrentCoverHeight);
+	}
+}
+
+void AOperativeCharacter::LeaveCover(const FString& Reason)
+{
+	if (!bInCover)
+	{
+		return;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: left the cover (%s)"), *DisplayName.ToString(), *Reason);
+	bInCover = false;
+	CurrentCoverHeight = ECoverHeight::None;
+	bShimmying = false;
+	ShimmyDirection = 0.f;
+	bIsCornerLeaning = false;
+	bIsBlindFiring = false;
+	bCoverHoldFire = false;
+	LeanTimer = 0.f;
+	BlindFireTimer = 0.f;
+	CoverSlot = FCoverSlot();
+	ReceiveCoverChanged(false, ECoverHeight::None);
+}
+
+EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Target)
+{
+	if (!bInCover || !Target.IsValid() || !CoverTraceRules::IsSameWall(CoverSlot, Target))
+	{
+		return EOperativeOrderResult::Unreachable;
+	}
+	if (IsRaging() || IsPanicking())
+	{
+		return EOperativeOrderResult::Refused;
+	}
+	const float Along = CoverTraceRules::AlongWallDistance(CoverSlot, Target.WorldLocation);
+	if (FMath::Abs(Along) < 30.f)
+	{
+		return EOperativeOrderResult::Accepted; // already there
+	}
+	PendingCoverSlot = Target;
+	PendingCoverSlot.WallNormal = CoverSlot.WallNormal; // one wall, one facing
+	bHasPendingCover = true;
+	ShimmyDirection = Along > 0.f ? 1.f : -1.f;
+	bShimmying = true;
+	bIsCornerLeaning = false;
+	bIsBlindFiring = false;
+	// Side-step at the crouch-walk pace, the back to the wall (UpdateCombatFacing holds the facing).
+	TGuardValue<bool> CoverOrder(bCoverMoveOrder, true);
+	bSprinting = false;
+	ApplyMovementParams(OperativeMovementRules::ComputeMaxSpeed(MovementConfig, EOperativeStance::Crouching, false, IsWounded(), bCarrying) * ColdSpeedMultiplier);
+	const EOperativeOrderResult Result = RequestMove(Target.WorldLocation);
+	if (Result != EOperativeOrderResult::Accepted)
+	{
+		bHasPendingCover = false;
+		bShimmying = false;
+		ShimmyDirection = 0.f;
+		ApplyMovementParams();
+	}
+	else
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: shimmies %.0f cm to the %s"), *DisplayName.ToString(), FMath::Abs(Along),
+			Along > 0.f ? TEXT("right") : TEXT("left"));
+	}
+	return Result;
+}
+
+void AOperativeCharacter::SetCoverFireMode(ECoverFireMode Mode)
+{
+	CoverFireMode = Mode == ECoverFireMode::Normal ? ECoverFireMode::CornerLean : Mode;
+}
+
+ECoverFireMode AOperativeCharacter::ToggleCoverFireMode()
+{
+	SetCoverFireMode(CoverFireMode == ECoverFireMode::BlindFire ? ECoverFireMode::CornerLean : ECoverFireMode::BlindFire);
+	UFloatingTextSubsystem::SpawnAboveOperative(this, CoverFireMode == ECoverFireMode::BlindFire ? TEXT("🙈 ОГОНЬ ВСЛЕПУЮ (-40%)") : TEXT("👁️ ОГОНЬ ИЗ-ЗА УГЛА"),
+		FLinearColor(0.9f, 0.85f, 0.4f));
+	return CoverFireMode;
+}
+
+bool AOperativeCharacter::CanFireFromCover() const
+{
+	if (!bInCover)
+	{
+		return true;
+	}
+	if (CurrentCoverHeight == ECoverHeight::LowCover)
+	{
+		return true; // over the top
+	}
+	return CoverSlot.HasExposedEdge();
+}
+
+FVector AOperativeCharacter::GetCoverFireOrigin() const
+{
+	const FVector Muzzle = GetMuzzleLocation();
+	if (!bInCover || CurrentCoverHeight != ECoverHeight::HighCover)
+	{
+		return Muzzle;
+	}
+	// Round the facing's corner (or the only exposed one).
+	const ECoverFacing Side = CoverSlot.IsEdgeExposed(CoverFacing) ? CoverFacing
+		: (CoverSlot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right);
+	const float EdgeDistance = Side == ECoverFacing::Left ? CoverSlot.LeftEdgeDistanceCm : CoverSlot.RightEdgeDistanceCm;
+	return CoverRules::CornerMuzzle(CoverSlot, Side, Muzzle, FMath::Max(CoverRules::GetConfig().CornerPeekOffsetCm, EdgeDistance + 20.f));
+}
+
+bool AOperativeCharacter::IsHiddenInCoverFrom(const FVector& ObserverLocation) const
+{
+	if (!bInCover)
+	{
+		return false;
+	}
+	const bool bInArc = CoverRules::IsInFrontalArc(CoverSlot.WallNormal, CoverSlot.WorldLocation, ObserverLocation, CoverRules::GetConfig().FrontalArcDeg);
+	return CoverRules::HiddenFromObserver(CurrentCoverHeight, bIsCornerLeaning, bInArc);
+}
+
+void AOperativeCharacter::BeginCoverShot()
+{
+	const FCoverCombatConfig& Config = CoverRules::GetConfig();
+	if (CoverFireMode == ECoverFireMode::BlindFire)
+	{
+		bIsBlindFiring = true;
+		bIsCornerLeaning = false;
+		BlindFireTimer = Config.BlindFireHoldSeconds;
+	}
+	else
+	{
+		bIsCornerLeaning = true;
+		bIsBlindFiring = false;
+		LeanTimer = Config.LeanHoldSeconds;
+	}
+}
+
+void AOperativeCharacter::UpdateCover(float DeltaTime)
+{
+	RecentIncomingDamage = CoverDecisionRules::DecayRecentDamage(FCoverDecisionConfig(), RecentIncomingDamage, DeltaTime);
+	// Grid walks (turn-based) and planned walks end without HandleMoveFinished: enter the pending slot on arrival.
+	if (bHasPendingCover && !bHasMoveOrder && GetVelocity().SizeSquared2D() < 4.f
+		&& FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation) <= 120.f)
+	{
+		const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+		if (!TurnBased || TurnBased->GetTacticalMoveSpeed(this) < 0.f)
+		{
+			bHasPendingCover = false;
+			EnterCover(PendingCoverSlot);
+		}
+	}
+	if (!bInCover)
+	{
+		return;
+	}
+	if (bIsCornerLeaning)
+	{
+		LeanTimer -= DeltaTime;
+		if (LeanTimer <= 0.f)
+		{
+			bIsCornerLeaning = false; // back behind the corner
+		}
+	}
+	if (bIsBlindFiring)
+	{
+		BlindFireTimer -= DeltaTime;
+		if (BlindFireTimer <= 0.f)
+		{
+			bIsBlindFiring = false;
+		}
+	}
+	if (bShimmying && !bHasMoveOrder && GetVelocity().SizeSquared2D() < 4.f)
+	{
+		bShimmying = false;
+		ShimmyDirection = 0.f;
+	}
 }

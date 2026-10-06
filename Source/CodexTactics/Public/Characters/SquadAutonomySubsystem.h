@@ -29,6 +29,12 @@ struct CODEXTACTICS_API FSquadAutonomyStats
 	int32 DefenseHolds = 0;
 	int32 AidRefusedDefense = 0;
 	int32 MeleeDraws = 0;
+	// Sprint 12: cover decisions (CoverDecisionRules).
+	int32 CoverPeeks = 0;
+	int32 CoverBlindFires = 0;
+	int32 CoverHolds = 0;
+	int32 CoverStanceChanges = 0;
+	int32 CoverCrouchForLaser = 0;
 };
 
 /**
@@ -107,6 +113,12 @@ private:
 
 	void Decide(AOperativeCharacter& Operative, FOperativeState& State, const TArray<FEnemyView>& Enemies, const TArray<AOperativeCharacter*>& Squad,
 		float Elapsed);
+	/**
+	 * Sprint 12: an operative at a wall — stance (instant crouch under a laser) and fire mode (corner peek / blind fire /
+	 * hold) by CoverDecisionRules; he never leaves the cover on his own.
+	 */
+	void DecideInCover(AOperativeCharacter& Operative, const TArray<FEnemyView>& Enemies, const FEnemyView* Nearest, float NearestCm,
+		const FEnemyView* SniperOnMe);
 	bool UpdateTask(AOperativeCharacter& Operative, FOperativeState& State, const TArray<FEnemyView>& Enemies, float Elapsed);
 	void UpdateWeapons(AOperativeCharacter& Operative, FOperativeState& State, float NearestEnemyCm);
 	bool TryAid(AOperativeCharacter& Operative, FOperativeState& State, const TArray<FEnemyView>& Enemies, const TArray<AOperativeCharacter*>& Squad,

@@ -30,7 +30,8 @@ namespace ColdRules
 			return FMath::Max(0.f, Cold - Config.SprintWarmupRate * Boost * DeltaSeconds);
 		}
 		const float FortitudeCut = FMath::Clamp(Fortitude * Config.FortitudeCutPerPoint, 0.f, Config.MaxFortitudeCut);
-		const float Wind = Environment.bElevated ? Config.ElevatedWindMultiplier : 1.f;
+		const float Wind = (Environment.bElevated ? Config.ElevatedWindMultiplier : 1.f)
+			* (Environment.bInCover ? FMath::Clamp(Config.CoverWindChillMultiplier, 0.f, 1.f) : 1.f); // Sprint 12 shelter
 		const float Rate = Environment.ZoneMultiplier * GetStanceMultiplier(Config, Stance) * Wind;
 		return FMath::Min(100.f, Cold + Config.AccumulationRate * (1.f - FortitudeCut) * Rate * DeltaSeconds);
 	}

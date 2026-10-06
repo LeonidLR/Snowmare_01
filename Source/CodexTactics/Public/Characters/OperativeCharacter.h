@@ -11,6 +11,7 @@
 #include "Characters/FirePostureRules.h"
 #include "Combat/TargetedShotRules.h"
 #include "Interactables/DeployableRules.h"
+#include "Tactics/CoverTypes.h"
 #include "OperativeCharacter.generated.h"
 
 class UMaterialInterface;
@@ -601,9 +602,11 @@ public:
 	 * An attack on this operative (Godot player.gd take_damage): dodge with luck * 0.4 %, then
 	 * max(1, Amount * stance defense * (1 - clamp(fortitude * 1.5 %, 0, 50 %))); bBypassAvoidance (grenades, traps
 	 * on the squad) skips both and takes max(1, Amount). Floating «💨 УКЛОНЕНИЕ!», «-N» or «💥 КРИТИЧЕСКИЙ УДАР! -N».
-	 * Returns the health taken.
+	 * Sprint 12: in cover a hit from the wall's frontal arc is absorbed (CoverRules) and a crit on a head kept down is
+	 * undone (Amount / CritMultiplierApplied — the attacker passes the multiplier it applied). Returns the health taken.
 	 */
-	float TakeHit(float Amount, const FString& Attacker, bool bCrit = false, bool bBypassAvoidance = false, AActor* AttackerActor = nullptr);
+	float TakeHit(float Amount, const FString& Attacker, bool bCrit = false, bool bBypassAvoidance = false, AActor* AttackerActor = nullptr,
+		float CritMultiplierApplied = 1.f);
 
 	/** Forces the next TakeHit dodge roll (smokes): 1 dodges, 0 never. Negative = random. */
 	UPROPERTY(Transient)
@@ -636,6 +639,109 @@ public:
 
 	/** Godot _set_squad_tactical_cease_fire: nobody shoots while Space is held for the turn-based switch. */
 	bool bTacticalCeaseFire = false;
+
+	// --- Tactical cover (Sprint 12, TANDEM «SPRINT 12 DIRECTIVE»; UE-only, no Godot reference — Gemini Sprint 12 spec).
+	// Back to a wall (CoverSlot): high cover = standing / crouched behind a full wall, fire round an exposed corner
+	// (lean) or blind; low cover = crouched behind a 60 cm barricade, stand to fire over it. CoverRules / CoverTraceRules
+	// / CoverDecisionRules hold the pure rules. ---
+
+	/** Pressed against a wall at CoverSlot (set by EnterCover, cleared by LeaveCover). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	bool bInCover = false;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	ECoverHeight CurrentCoverHeight = ECoverHeight::None;
+
+	/** The corner he works (lean / blind fire side). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	ECoverFacing CoverFacing = ECoverFacing::Right;
+
+	/** Leaning out of the corner for an aimed shot (head exposed, no cover absorption meanwhile). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	bool bIsCornerLeaning = false;
+
+	/** Firing blind round the corner / over the top (head down: -40 % accuracy, no headshots on him). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	bool bIsBlindFiring = false;
+
+	/** Side-stepping along the wall to another slot of it. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	bool bShimmying = false;
+
+	/** Shimmy direction along the wall: +1 to his right (facing away from the wall), -1 to his left, 0 none. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	float ShimmyDirection = 0.f;
+
+	/** How he fires from this cover (player: key N toggles lean / blind; Commander Mode: CoverDecisionRules). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	ECoverFireMode CoverFireMode = ECoverFireMode::CornerLean;
+
+	/** Commander Mode decided to hold fire behind the cover (no automatic shots; direct orders still fire). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	bool bCoverHoldFire = false;
+
+	/** Damage taken in the last seconds (decays; CoverDecisionRules input). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	float RecentIncomingDamage = 0.f;
+
+	/** The cover he stands at (valid while bInCover). */
+	const FCoverSlot& GetCoverSlot() const { return CoverSlot; }
+
+	/** Fired after EnterCover / LeaveCover (AnimBP, sounds, UI). */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Cover", meta = (DisplayName = "On Cover Changed"))
+	void ReceiveCoverChanged(bool bNowInCover, ECoverHeight Height);
+
+	/**
+	 * Order: sprint (or walk) to the slot and take cover there (EnterCover on arrival). Refused like a move order while
+	 * raging / panicking. In the tactical pause the controller plans the walk instead and calls SetPendingCover.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
+	EOperativeOrderResult OrderTakeCover(const FCoverSlot& Slot, bool bSprint);
+
+	/** Remembers a slot to enter once he arrives there (planned walks, grid walks). */
+	void SetPendingCover(const FCoverSlot& Slot);
+	void ClearPendingCover() { bHasPendingCover = false; }
+	bool HasPendingCover() const { return bHasPendingCover; }
+
+	/** Snaps him to the slot's wall: facing along the normal, the default stance of the height, Cover_Enter. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
+	void EnterCover(const FCoverSlot& Slot);
+
+	/** Leaves the wall (move order, death, vault, the player clicking away). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
+	void LeaveCover(const FString& Reason);
+
+	/** Side-step along the same wall to Target (CoverTraceRules::IsSameWall); refused when it is another wall. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
+	EOperativeOrderResult OrderShimmyTo(const FCoverSlot& Target);
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
+	void SetCoverFireMode(ECoverFireMode Mode);
+
+	/** Key N: CornerLean <-> BlindFire. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
+	ECoverFireMode ToggleCoverFireMode();
+
+	void SetCoverFacing(ECoverFacing Facing) { CoverFacing = Facing; }
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
+	bool IsInHighCover() const { return bInCover && CurrentCoverHeight == ECoverHeight::HighCover; }
+
+	/** A shot is possible from this cover: low cover (over the top) or an exposed corner on the facing side. */
+	bool CanFireFromCover() const;
+
+	/** Where shots leave in cover: the muzzle moved round the facing's corner (CoverRules::CornerMuzzle). */
+	FVector GetCoverFireOrigin() const;
+
+	/**
+	 * Sprint 12-E sight: an observer at ObserverLocation cannot see him — high cover, head down, observer behind the
+	 * wall (CoverRules::HiddenFromObserver). Firing demasks him (UTacticalSightSubsystem::IsDemasked, checked by the caller).
+	 */
+	bool IsHiddenInCoverFrom(const FVector& ObserverLocation) const;
+
+	/** Shots taken from cover by mode (smokes / stats). */
+	int32 GetCoverLeanShots() const { return CoverLeanShots; }
+	int32 GetCoverBlindShots() const { return CoverBlindShots; }
 
 	// --- Fire posture (rules of engagement of the automatic fire, user request 2026-10-06; FirePostureRules) ---
 
@@ -902,6 +1008,22 @@ private:
 	/** Set around ShootAtTarget for a blind shot. */
 	bool bBlindShot = false;
 	FVector BlindAimPoint = FVector::ZeroVector;
+	/** Set around ShootAtTarget for a cover blind shot (head down, -40 %). */
+	bool bCoverBlindShot = false;
+	/** Cover state (Sprint 12). */
+	FCoverSlot CoverSlot;
+	FCoverSlot PendingCoverSlot;
+	bool bHasPendingCover = false;
+	/** Set while OrderTakeCover / OrderShimmyTo issue their move: the move does not leave the cover. */
+	bool bCoverMoveOrder = false;
+	float LeanTimer = 0.f;
+	float BlindFireTimer = 0.f;
+	int32 CoverLeanShots = 0;
+	int32 CoverBlindShots = 0;
+	/** Facing lock at the wall, lean / blind timers, shimmy state, the pending slot on arrival. */
+	void UpdateCover(float DeltaTime);
+	/** Called before a shot from cover: lean out or keep the head down by CoverFireMode. */
+	void BeginCoverShot();
 	/** Range and line of fire to a silhouette's aim point (barricades by SquadFireRules::JudgeLine). */
 	bool EvaluateBlindLine(const class AEnemyGhostActor& Ghost, FShootCandidate& Out) const;
 	/** Set while AutonomousMoveTo runs: the move does not re-pin the anchor. */

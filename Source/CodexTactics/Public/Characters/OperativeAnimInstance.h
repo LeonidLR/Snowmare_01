@@ -6,6 +6,7 @@
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/RifleLocomotionRules.h"
 #include "Survival/ColdRules.h"
+#include "Tactics/CoverTypes.h"
 #include "OperativeAnimInstance.generated.h"
 
 class AActor;
@@ -403,6 +404,83 @@ public:
 	/** Current native blend weight of a clip (debug / tests). */
 	float GetClipWeight(EOperativeClip Clip) const { return ClipWeights[static_cast<int32>(Clip)]; }
 
+	// --- Tactical cover (Sprint 12, Gemini Sprint 12 spec; no Godot reference). State for the AnimBP and a C++
+	// baseline that plays the clips below on FullBodySlot while the graph has no cover states (the user polishes the
+	// ABP; Scripts/Editor/setup_operative_cover_animation.py assigns the M4 Cover Pack clips, index 0 = Left, 1 = Right
+	// = the corner the operative works, i.e. ECoverFacing). ---
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	bool bInCover = false;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	ECoverHeight CoverHeight = ECoverHeight::None;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	ECoverFacing CoverFacing = ECoverFacing::Right;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	bool bShimmying = false;
+
+	/** +1 towards his right (facing away from the wall), -1 left, 0 still. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	float ShimmyDirection = 0.f;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	bool bLeaning = false;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	bool bBlindFiring = false;
+
+	/** Play the cover clips natively on FullBodySlot (untick once the AnimBP has its own cover states). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation")
+	bool bUseNativeCoverClips = true;
+
+	/** Standing / crouched cover idle, back to the wall, by facing (M4: anim_M4_cvr_std_idle_L / _R, cvr_crch_idle_L / _R). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandIdle = { nullptr, nullptr };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchIdle = { nullptr, nullptr };
+
+	/** Shimmy loops towards the facing's corner (M4 cvr_*_walk_fwd_loop) and away from it (walk_bwd_loop). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandMoveForward = { nullptr, nullptr };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandMoveBackward = { nullptr, nullptr };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchMoveForward = { nullptr, nullptr };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchMoveBackward = { nullptr, nullptr };
+
+	/** Corner lean + shot (M4 cvr_std_fire_L / _R, cvr_crch_fire_L / _R), one shot each. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandFire = { nullptr, nullptr };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchFire = { nullptr, nullptr };
+
+	/** Blind fire round the corner (no M4 clip: the user supplies one; empty = the cover fire clip stands in). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverBlindFire = { nullptr, nullptr };
+
+	/** Cover_Enter from the open (M4 std_idle_fwd_to_cvr_std_idle_L / _R, crch_idle_fwd_to_cvr_crch_idle_L / _R). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandEnter = { nullptr, nullptr };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchEnter = { nullptr, nullptr };
+
+	/** Ground speed of the shimmy loops at rate 1, cm/s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", meta = (ClampMin = "1"))
+	float CoverShimmyClipSpeed = 90.f;
+
+	/** The cover loop playing now (nullptr = none; smokes). */
+	UAnimSequenceBase* GetCoverLoopClip() const { return CoverLoopClip.Get(); }
+	int32 GetCoverClipsPlayed() const { return CoverClipsPlayed; }
+
 	// --- Rifle_2 locomotion (ABP_Operative_Rifle2, Scripts/Editor/setup_operative_rifle2_animation.py; RifleLocomotionRules) ---
 
 	/** Runs the Idle / Turn / Start / Walk / Stop machine below (set on ABP_Operative_Rifle2's defaults). */
@@ -518,6 +596,14 @@ private:
 	/** Vault clip: started on the vault's first frame, foot alternating. */
 	void UpdateVaultClip(const AOperativeCharacter& Operative);
 	bool bWasVaulting = false;
+	/** Cover baseline: the loop (idle / shimmy) by stance, facing and direction; the enter clip on the first frame. */
+	void UpdateCoverLayer(const AOperativeCharacter& Operative);
+	UAnimSequenceBase* PickCoverClip(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) const;
+	bool bWasInCover = false;
+	TWeakObjectPtr<UAnimSequenceBase> CoverLoopClip;
+	TWeakObjectPtr<UAnimMontage> CoverLoopMontage;
+	TWeakObjectPtr<UAnimMontage> CoverOneShotMontage;
+	int32 CoverClipsPlayed = 0;
 	bool bVaultLeftNext = true;
 	int32 VaultClipsPlayed = 0;
 	TWeakObjectPtr<UAnimMontage> VaultMontage;

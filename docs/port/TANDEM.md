@@ -39,6 +39,7 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 |---|---|---|---|
 | Gemini | Architecture Leadership & Bot Telemetry Distillation (Jev System One) | Scripts/Tools/typesafe_triage.py | 2026-10-04 |
 | Claude | Jev AI coach (taken over from Gemini on the user's word, 2026-10-04): marksman kiting limit, bot marksman assault, `Codex.*` tunables, `AITuning` | Scripts/Tools/jev_ai_coach.py, Content/Data/AI/ai_tuning.json, Marksman*, PlaytestBotSubsystem | 2026-10-04 |
+| Claude | Sprint 12 cover: clips assigned by `Scripts/Editor/setup_operative_cover_animation.py` (uncommitted until the host commits) | `Content/Characters/Operatives/ABP_Operative.uasset`, `ABP_Operative_Rifle2.uasset` (cover clip defaults); `Content/Post_Apo_Survivor/.../UE4_Mannequin_Skeleton` (compatible skeleton += M4 pack SK_Mannequin; user pack, untracked); `Content/M4_Cover_Pack/**` read only | 2026-10-06 |
 
 ## Requests
 
@@ -679,6 +680,16 @@ Introduce a full tactical cover system for walls, building edges, and high obsta
 - Verification: `powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Smart`
 - Boundary audit: `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude`
 - Model Router: consult `python Scripts/Tools/model_router.py` for subtask tier assignment.
+
+---
+
+## ✅ Sprint 12 «Tactical cover» (Claude, 2026-10-06): DONE — see HANDOFF §10
+- 12-A/B: `CoverTypes.h` (+ `ECoverFireMode`, wall top, corner distances), `CoverTraceRules` (knee / chest / head traces, wall-top trace, 40 cm corner probes, navmesh projection, same-wall shimmy). 130-180 cm walls = low cover (decision).
+- 12-C: `ACoverGhostActor` (M_GhostHologram, the leader's mesh in the cover idle); first wall click = preview, second = confirm (real time sprint / tactical pause plan / turn-based cell snap), Alt + click for barricades and other objects (their plain click is unchanged), RMB / Esc / any other click drops it.
+- 12-D: operative cover state, shimmy (same wall, strafing walk), Z / C at the wall, corner lean (0.9 s exposure per shot) and blind fire (N; -40 %, no headshots); AnimInstance variables `bInCover, CoverHeight, CoverFacing, bShimmying, ShimmyDirection, bLeaning, bBlindFiring` + a C++ FullBody-slot baseline with the M4 Cover Pack clips (enter / idle / shimmy fwd-bwd / fire, L-R by facing). **For the user:** cover states in ABP_Operative's graph (then untick `bUseNativeCoverClips`), a blind-fire clip (none in the pack), check the pack's L / R vs the slot facing by eye, a HUD cover indicator.
+- 12-E: damage 90 % (user decision; `Codex.Cover.HighFrontalAbsorb`), 160° arc, low cover 35 % crouched / 90 % prone / 0 standing; sight: high cover + head down = unseen from the wall's side (firing demasks 2 s); cold: `CoverWindChillMultiplier` 0.5 on the whole open-air drain (the «75 % on ridges» variant not done).
+- 12-F + Jev: `CoverDecisionRules` (peek / blind / hold; stand / crouch, instant crouch under `bIsAimingAtTarget`), `jev_validate_cover.py` 21 / 24 (88 %; the 3 disagreements at Jev confidence <= 0.23), used by Commander Mode (`USquadAutonomySubsystem::DecideInCover`). Tests `Tactics.Cover.*` (7), `CodexTactics.CoverSmoke` in verify_all. Jev boundary audit PASS.
+- Cover blind fire (x0.6) and ghost blind fire (x0.2, Sprint 08) are separate tunables; both multiply with a 5 % floor (user decision).
 
 ---
 

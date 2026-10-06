@@ -7,11 +7,13 @@
 #include "Interactables/DeployableRules.h"
 #include "Combat/SpaceInput.h"
 #include "Characters/FirePostureRules.h"
+#include "Tactics/CoverTypes.h"
 #include "CodexTacticsPlayerController.generated.h"
 
 class UInputAction;
 class UInputMappingContext;
 class USquadSubsystem;
+class AOperativeCharacter;
 
 /**
  * Squad orders from mouse and keyboard. The controller possesses the camera pawn, never an operative.
@@ -30,6 +32,11 @@ class USquadSubsystem;
  * clicks, stances, attacks and abilities run at once, no Space needed; Space TAP = tactical pause on / off (orders are
  * planned with markers and run on resume); Space HOLD 1.5 s = turn-based fight (from real time or the pause), HOLD 1.5 s
  * there = back to full real time. During turn-based combat ground clicks do not issue real-time moves.
+ * Tactical cover (Sprint 12, Gemini spec): a click on a wall / high obstacle (plain click on world geometry, Alt + click
+ * on a barricade or any interactable) shows a holographic ghost of the leader pressed against it; a second click there
+ * confirms — the leader sprints to the slot and takes cover (planned in the tactical pause; snapped to a cell in the
+ * turn-based fight). A click along the same wall shimmies, a ground click leaves the cover, RMB / Esc hides the ghost.
+ * N toggles the cover fire mode (corner lean / blind fire) of the selected operative(s); Z / C switch the stance at the wall.
  * Fire posture keys (user decisions 2026-10-06): , = Passive, . = Defensive, / = Aggressive for the SELECTED operative(s)
  * only — the box-selected group, else the leader you control; Alt + , . / = the whole squad (like Alt + Z / C / V for
  * the stance). The action bar buttons follow the same rule (Alt + click = squad). USquadSubsystem::ApplyPostureOrder.
@@ -134,6 +141,29 @@ public:
 
 	/** Everything a left click on the world does once the modes above had their say (select, move, interact, ...). */
 	void HandleWorldHit(const FHitResult& Hit);
+
+	// --- Tactical cover (Sprint 12) ---
+
+	/**
+	 * A click on a wall: preview (ghost), confirm (second click on the same slot), or shimmy along the leader's wall.
+	 * True when the click was a cover click. bTurnBased: the slot snaps to the grid, the walk is the grid's.
+	 */
+	bool TryHandleCoverClick(const FHitResult& Hit, class UTurnBasedCombatSubsystem* TurnBased);
+
+	/** Shows the ghost of Operative at Slot (replaces a previous preview). */
+	void ShowCoverPreview(AOperativeCharacter* Operative, const FCoverSlot& Slot);
+	void HideCoverPreview();
+	bool HasCoverPreview() const;
+	const FCoverSlot& GetCoverPreviewSlot() const { return CoverPreviewSlot; }
+
+	/** Orders the previewed cover: the walk now, planned in the pause, the grid walk in turn-based combat. */
+	void ConfirmCoverPreview();
+
+	/** N: lean / blind fire toggle of the selected operative(s). */
+	void ToggleCoverFireModeKey();
+
+	/** The slot the leader would take for a wall under the cursor hit (smokes / HUD). */
+	bool FindCoverSlotForHit(const FHitResult& Hit, FCoverSlot& OutSlot) const;
 
 	/** Godot Alt + Z / C / V: the whole squad changes stance (prone refused while anyone moves). */
 	void SetEntireSquadStance(EOperativeStance Stance);
@@ -308,6 +338,13 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class AHoldSphereActor> HoldSphere;
+
+	/** Sprint 12 cover preview. */
+	UPROPERTY(Transient)
+	TObjectPtr<class ACoverGhostActor> CoverGhost;
+	FCoverSlot CoverPreviewSlot;
+	TWeakObjectPtr<AOperativeCharacter> CoverPreviewOperative;
+	bool bCoverPreviewTurnBased = false;
 
 	/** Godot _set_squad_tactical_cease_fire. */
 	void SetSquadCeaseFire(bool bCease);
