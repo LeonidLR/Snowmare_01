@@ -1,7 +1,10 @@
 // CodexTactics.Combat.Sight.* — Sprint 08 line of sight against 60 cm barricades (TANDEM «SPRINT 08 DIRECTIVE»).
 
 #include "Combat/SightRules.h"
+#include "Combat/TacticalSightSubsystem.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Misc/AutomationTest.h"
+#include "UObject/Package.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightHeightsTest, "CodexTactics.Combat.Sight.CoverOcclusion",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -47,5 +50,33 @@ bool FSightSensesTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("searches the spot a while"), ShouldForget(8.f, 3.f));
 	TestTrue(TEXT("gives up after searching 5 s"), ShouldForget(10.f, 5.f));
 	TestTrue(TEXT("forgets an old memory"), ShouldForget(25.f, 0.f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightHiddenPoseTest, "CodexTactics.Combat.Sight.HiddenEnemiesKeepAnimating",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSightHiddenPoseTest::RunTest(const FString& Parameters)
+{
+	// User report 2026-10-06: hidden enemies (and their silhouettes) slid in the T-pose — an unrendered mesh did not
+	// refresh its bones. While hidden the mesh must evaluate its pose; shown, its authored option comes back.
+	USkeletalMeshComponent* Mesh = NewObject<USkeletalMeshComponent>(GetTransientPackage());
+	Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+	UTacticalSightSubsystem::FSavedAnimTickOptions Saved;
+
+	UTacticalSightSubsystem::KeepPoseWhileHidden(*Mesh, true, Saved);
+	TestTrue(TEXT("hidden: pose ticked and bones refreshed although not rendered"),
+		Mesh->VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones);
+	TestEqual(TEXT("the authored option is saved"), Saved.Num(), 1);
+
+	UTacticalSightSubsystem::KeepPoseWhileHidden(*Mesh, true, Saved);
+	UTacticalSightSubsystem::KeepPoseWhileHidden(*Mesh, false, Saved);
+	TestTrue(TEXT("shown: the authored option is back (a second hide does not overwrite it)"),
+		Mesh->VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered);
+	TestEqual(TEXT("nothing left saved"), Saved.Num(), 0);
+
+	Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPose;
+	UTacticalSightSubsystem::KeepPoseWhileHidden(*Mesh, false, Saved);
+	TestTrue(TEXT("shown without a hide: untouched"), Mesh->VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::AlwaysTickPose);
 	return true;
 }

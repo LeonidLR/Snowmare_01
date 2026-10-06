@@ -8,6 +8,7 @@
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/SightRules.h"
+#include "Components/SkinnedMeshComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -239,14 +240,44 @@ UMaterialInterface* UTacticalSightSubsystem::GetGhostMaterial()
 	return GhostMaterial;
 }
 
+void UTacticalSightSubsystem::KeepPoseWhileHidden(USkinnedMeshComponent& Mesh, bool bHidden, FSavedAnimTickOptions& Saved)
+{
+	if (bHidden)
+	{
+		if (!Saved.Contains(&Mesh))
+		{
+			Saved.Add(&Mesh, Mesh.VisibilityBasedAnimTickOption);
+		}
+		Mesh.VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+	}
+	else if (const EVisibilityBasedAnimTickOption* Authored = Saved.Find(&Mesh))
+	{
+		Mesh.VisibilityBasedAnimTickOption = *Authored;
+		Saved.Remove(&Mesh);
+	}
+}
+
 void UTacticalSightSubsystem::SetEnemyHidden(AEnemyCharacter& Enemy, bool bHidden)
 {
-	Enemy.SetActorHiddenInGame(bHidden);
-	TArray<AActor*> Attached;
-	Enemy.GetAttachedActors(Attached, true, true);
-	for (AActor* Child : Attached)
+	TArray<AActor*> Hidden;
+	Hidden.Add(&Enemy);
+	Enemy.GetAttachedActors(Hidden, false, true);
+	for (AActor* Actor : Hidden)
 	{
-		Child->SetActorHiddenInGame(bHidden);
+		Actor->SetActorHiddenInGame(bHidden);
+		TArray<USkinnedMeshComponent*> Meshes;
+		Actor->GetComponents<USkinnedMeshComponent>(Meshes);
+		for (USkinnedMeshComponent* Mesh : Meshes)
+		{
+			KeepPoseWhileHidden(*Mesh, bHidden, SavedAnimTickOptions);
+		}
+	}
+	for (auto It = SavedAnimTickOptions.CreateIterator(); It; ++It)
+	{
+		if (!It->Key.IsValid())
+		{
+			It.RemoveCurrent(); // destroyed meshes
+		}
 	}
 }
 
@@ -290,6 +321,7 @@ void UTacticalSightSubsystem::RestoreAll()
 		DropGhost(Pair.Value);
 	}
 	EnemyStates.Reset();
+	SavedAnimTickOptions.Reset();
 	Intel.Reset();
 	DemaskUntil.Reset();
 }

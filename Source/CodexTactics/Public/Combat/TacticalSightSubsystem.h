@@ -9,6 +9,8 @@ class AEnemyCharacter;
 class AEnemyGhostActor;
 class AOperativeCharacter;
 class UMaterialInterface;
+class USkinnedMeshComponent;
+enum class EVisibilityBasedAnimTickOption : uint8;
 
 /** What the sight system did so far (smokes, the summary log). */
 struct CODEXTACTICS_API FTacticalSightStats
@@ -78,6 +80,20 @@ public:
 
 	const FTacticalSightStats& GetStats() const { return Stats; }
 
+	/** Authored tick options of the meshes kept animating while their enemy is hidden. */
+	using FSavedAnimTickOptions = TMap<TWeakObjectPtr<USkinnedMeshComponent>, EVisibilityBasedAnimTickOption>;
+
+	/**
+	 * Keeps a hidden enemy's mesh animating (user report 2026-10-06: enemies slid in the T-pose as silhouettes and
+	 * only animated once seen). A hidden actor is not rendered, and a skinned mesh refreshes its bones only while
+	 * rendered unless its option is AlwaysTickPoseAndRefreshBones (USkinnedMeshComponent::ShouldUpdateTransform), so a
+	 * hidden enemy kept its last pose — its reference (T) pose if it was never on screen — which its silhouette copied
+	 * and which it showed for a moment when it appeared. Hidden: the authored option is saved in Saved and the mesh
+	 * evaluates its pose every frame; shown: the authored option is restored (it is rendered again, the pose stays
+	 * current, and the cheaper option saves the bone work for enemies off screen).
+	 */
+	static void KeepPoseWhileHidden(USkinnedMeshComponent& Mesh, bool bHidden, FSavedAnimTickOptions& Saved);
+
 	static constexpr float UpdateInterval = 0.2f;
 	/** No sight beyond this, cm. */
 	static constexpr float MaxSightCm = 6000.f;
@@ -111,6 +127,7 @@ private:
 	TMap<TWeakObjectPtr<AActor>, double> DemaskUntil;
 	/** Pawns ignored by the sight traces (rebuilt every update). */
 	TArray<TWeakObjectPtr<AActor>> IgnoredPawns;
+	FSavedAnimTickOptions SavedAnimTickOptions;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> GhostMaterial;

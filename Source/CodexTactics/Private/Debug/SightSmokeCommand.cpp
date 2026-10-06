@@ -4,7 +4,9 @@
 // it. Checks: standing marksman seen; prone -> hidden + silhouette; the operative stands -> seen; crouches -> hidden;
 // the squad 14 m back (out of earshot) -> the silhouette stays where it was while the marksman crawls along the cover;
 // his shot demasks him for 2 s, then he hides again with the silhouette at the firing spot; symmetric: a standing
-// enemy 11 m off does not perceive a prone operative 1 m behind the barricade, does once he crouches.
+// enemy 11 m off does not perceive a prone operative 1 m behind the barricade, does once he crouches. Animation while
+// hidden (user report 2026-10-06, T-pose silhouettes): the hidden marksman's mesh refreshes its bones every frame and gets
+// its authored tick option back when seen; a heard silhouette ticks (follows + animates), an unheard one is frozen.
 
 #include "CoreMinimal.h"
 
@@ -19,6 +21,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Containers/Ticker.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -40,6 +43,7 @@ namespace SightSmoke
 		TWeakObjectPtr<AOperativeCharacter> Op;
 		TWeakObjectPtr<AMarksmanEnemyCharacter> Marksman;
 		FVector GhostFeet = FVector::ZeroVector;
+		EVisibilityBasedAnimTickOption AuthoredTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPose;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -94,6 +98,7 @@ namespace SightSmoke
 		AOperativeCharacter* Op = State.Op.Get();
 		const auto Hidden = [&]() { return Marksman && !Sight->IsVisibleToSquad(Marksman); };
 		const auto Ghost = [&]() { return Marksman ? Sight->GetGhost(Marksman) : nullptr; };
+	const auto TickOption = [&]() { return Marksman && Marksman->GetMesh() ? Marksman->GetMesh()->VisibilityBasedAnimTickOption : State.AuthoredTickOption; };
 		switch (State.Stage)
 		{
 		case 0:
@@ -148,6 +153,7 @@ namespace SightSmoke
 			}
 			Sight->Refresh();
 			Check(State, Sight->IsActive() && !Hidden(), TEXT("a standing marksman behind the 60 cm barricade is seen by the crouched squad"));
+			State.AuthoredTickOption = TickOption();
 			PlaceMarksman(State, State.P + State.F * 300.f, EOperativeStance::Prone);
 			State.Stage = 2;
 			State.Time = 0.f;
@@ -159,6 +165,9 @@ namespace SightSmoke
 			}
 			Sight->Refresh();
 			Check(State, Hidden() && Marksman->IsHidden() && Ghost(), TEXT("prone behind the barricade: hidden, silhouette at his spot"));
+			Check(State, TickOption() == EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones,
+				TEXT("hidden: his mesh keeps evaluating its pose (no T-pose while unseen)"));
+			Check(State, Ghost() && Ghost()->IsHeard() && Ghost()->IsActorTickEnabled(), TEXT("heard 3 m away: the silhouette follows and animates"));
 			Op->SetStance(EOperativeStance::Standing);
 			State.Stage = 3;
 			State.Time = 0.f;
@@ -170,6 +179,7 @@ namespace SightSmoke
 			}
 			Sight->Refresh();
 			Check(State, !Hidden() && !Ghost(), TEXT("the operative stands up 3 m away: the prone marksman is seen, no silhouette"));
+			Check(State, TickOption() == State.AuthoredTickOption, TEXT("seen: his authored anim tick option is back"));
 			Op->SetStance(EOperativeStance::Crouching);
 			State.Stage = 4;
 			State.Time = 0.f;
@@ -192,6 +202,7 @@ namespace SightSmoke
 			}
 			Sight->Refresh();
 			Check(State, Hidden() && Ghost() && !Ghost()->IsHeard(), TEXT("squad 14 m back: still hidden, out of earshot"));
+			Check(State, Ghost() && !Ghost()->IsActorTickEnabled(), TEXT("an unheard silhouette is frozen (no tick)"));
 			State.GhostFeet = Ghost() ? Ghost()->GetLastKnownFeet() : FVector::ZeroVector;
 			PlaceMarksman(State, State.P + State.F * 300.f + State.R * 120.f, EOperativeStance::Prone);
 			State.Stage = 6;
