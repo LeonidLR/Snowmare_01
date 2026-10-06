@@ -180,6 +180,17 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	/** "patrol_search_seconds": how long patrols hunt after a trap; <= 0 = enemy_perception.json (60 s). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	float PatrolSearchSeconds = -1.f;
+
+	/** "horde_enabled": false switches the horde after a long real-time fight off on this level (UHordeSubsystem). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	bool bHordeEnabled = true;
+
+	/**
+	 * "horde": this level's overrides of Content/Data/AI/horde.json (same keys, e.g. {"trigger_seconds": 180,
+	 * "count": 10}), kept as JSON text; empty = the file's values (HordeRules::ResolveForLevel).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level", meta = (MultiLine = true))
+	FString HordeOverrideJson;
 };
 
 UCLASS(BlueprintType)

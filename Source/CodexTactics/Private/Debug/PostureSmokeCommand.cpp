@@ -1,10 +1,11 @@
 // Dev-only headless check of the fire postures (user request 2026-10-06, FirePostureRules) on L_MovementTest (not saved):
 //   Scripts/smoke.ps1 -Command CodexTactics.PostureSmoke -Log Smoke-Posture.log
 // The level's enemies are removed and the level is made an ambush level; a frost hound (senses off) patrols ~9 m ahead.
-//   Exploration: Passive and Defensive squads keep quiet (no fight); the posture key path to Aggressive (no group
-//   selected = whole squad) makes them open fire on their own -> the ambush fight starts (trigger SquadAutoFire).
+//   Exploration: Passive and Defensive squads keep quiet (no fight); "/" with the leader selected turns only him
+//   Aggressive, Alt + "/" the whole squad -> they open fire on their own -> the ambush fight starts (SquadAutoFire).
 //   Fight (the hound frozen and tough): Passive -> no shot; Defensive -> no shot until the leader is attacked, then the
-//   leader fires back; a box-selected group gets its own posture (override) while the leader keeps the squad's;
+//   leader fires back; a box-selected group gets its own posture (override) while the leader keeps the squad's; the
+//   leader alone gets his own; Alt + key = squad-wide (overrides cleared);
 //   Passive again -> the leader still obeys a Ctrl + click attack order (IssueTargetedShot).
 
 #include "CoreMinimal.h"
@@ -184,9 +185,22 @@ namespace PostureSmoke
 			}
 			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration && TotalShots(State) == 0, TEXT("Defensive, not attacked: no fire, no fight"));
 			Squad->SetSelectedGroup({ Leader }, false);
-			PC->ApplyFirePosture(ESquadFirePosture::Aggressive); // the "/" key: no group selected = the whole squad
+			// User decision 2026-10-06: "/" alone changes only the selected operative (the leader) ...
+			PC->ApplyFirePosture(ESquadFirePosture::Aggressive);
+			{
+				bool bOthersKept = true;
+				for (const AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					bOthersKept &= Member == Leader || Squad->GetEffectivePosture(Member) == ESquadFirePosture::Defensive;
+				}
+				Check(State, Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Aggressive && bOthersKept
+					&& Squad->GetSquadPosture() == ESquadFirePosture::Defensive,
+					TEXT("posture key, one operative selected: only the leader turns Aggressive"));
+			}
+			// ... and Alt + "/" the whole squad.
+			PC->ApplyFirePosture(ESquadFirePosture::Aggressive, /*bSquadWide (Alt)*/ true);
 			Check(State, Squad->GetSquadPosture() == ESquadFirePosture::Aggressive && Squad->CountPostureOverrides() == 0,
-				TEXT("posture key without a group: squad-wide Aggressive"));
+				TEXT("Alt + posture key: squad-wide Aggressive, overrides cleared"));
 			Next(State, 3);
 			return true;
 		case 3:
@@ -251,8 +265,13 @@ namespace PostureSmoke
 				&& Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Defensive,
 				TEXT("posture key with a group: only the selected get their own posture"));
 			Squad->SetLeader(Leader); // drops the group
-			Squad->SetSquadPosture(ESquadFirePosture::Passive);
-			Check(State, Squad->CountPostureOverrides() == 0, TEXT("a squad-wide posture clears the overrides"));
+			PC->ApplyFirePosture(ESquadFirePosture::Aggressive); // "/" with only the leader selected
+			Check(State, Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Aggressive && bOthersPassive
+				&& Squad->GetEffectivePosture(Others.IsEmpty() ? Leader : Others[0]) == ESquadFirePosture::Passive,
+				TEXT("the leader alone gets his own posture, the group keeps theirs (per-operative)"));
+			PC->ApplyFirePosture(ESquadFirePosture::Passive, /*bSquadWide (Alt)*/ true);
+			Check(State, Squad->GetSquadPosture() == ESquadFirePosture::Passive && Squad->CountPostureOverrides() == 0,
+				TEXT("Alt + posture key clears the overrides (squad-wide)"));
 			Next(State, 7);
 			return true;
 		}

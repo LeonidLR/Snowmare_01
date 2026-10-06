@@ -86,6 +86,25 @@ public:
 	bool IsDying() const { return bIsDying; }
 
 	/**
+	 * Turn-based hold (bug fix 2026-10-06, MarksmanCloseShotSmoke): UTurnBasedCombatSubsystem sets it on every enemy it
+	 * freezes (grid units and the ones in stasis) and clears it when the fight ends. While held the AI controller refuses
+	 * navigation moves and the movement is stopped at once; event-driven reactions (a hit, a timer) must not move it —
+	 * the grid alone moves its units. The actor tick being off is not enough: the movement component and the path
+	 * following keep running.
+	 */
+	void SetTurnBasedHeld(bool bHeld);
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
+	bool IsTurnBasedHeld() const { return bTurnBasedHeld; }
+
+	/**
+	 * Horde member (UHordeSubsystem, user request 2026-10-06): it knows where every operative is (no sight / hearing
+	 * needed — UTacticalSightSubsystem::GetBelief answers «perceived»), goes straight for the squad and never falls back.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category = "CodexTactics|Enemy")
+	bool bKnowsSquadPosition = false;
+
+	/**
 	 * Godot enemy_base.gd _update_overhead_ui: armor tier marker, name, statuses, HP (hound / cutter 1.15 m, brute 2.4 m,
 	 * others 1.8 m up). The status emoji the HUD font lacks are written as words.
 	 */
@@ -326,6 +345,10 @@ protected:
 	bool bSearchMoving = false;
 	float PatrolSuspicion = 0.f;
 	bool bHeldByAIPause = false;
+	/** See SetTurnBasedHeld. */
+	bool bTurnBasedHeld = false;
+	/** Subclass hook of SetTurnBasedHeld (the marksman cancels his get-up / aim). */
+	virtual void OnTurnBasedHeldChanged(bool bHeld) {}
 	/** Breaks the patrol of its leader and of every enemy escorting it. */
 	void PropagatePatrolBreak(const FVector& AlertLocation);
 	/** Sets up the patrol from AssignedPatrolRoute / EscortLeader (BeginPlay). */

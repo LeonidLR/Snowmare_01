@@ -1,0 +1,21 @@
+{
+  "comment": "Horde after a long real-time fight (user request 2026-10-06, UE-only; Combat/HordeRules.h, UHordeSubsystem). The clock counts only fight time in full real time (not the tactical pause, not turn-based combat, not dialogues / cutscenes) and restarts with every fight (each wave, an ambush fight). Per level: the level JSON \"horde_enabled\": false switches it off, an optional \"horde\": { ...same keys... } overrides these values. Distances in meters, times in seconds. composition = weights per level-JSON enemy type (HOUND / FROST_HOUND, FROSTBITTEN, BRUTE, SPITTER, CUTTER, MARKSMAN, CRYO_DRONE). Console: Codex.Horde.TriggerSeconds / Codex.Horde.RepeatSeconds / Codex.Horde.Enabled (-1 = data), CodexTactics.Horde.Release.",
+  "enabled": true,
+  "trigger_seconds": 240,
+  "repeats": false,
+  "repeat_seconds": 120,
+  "count": 8,
+  "count_increase_per_repeat": 2,
+  "composition": {
+    "FROST_HOUND": 5,
+    "FROSTBITTEN": 3
+  },
+  "min_distance_m": 25,
+  "max_distance_m": 45,
+  "cluster_radius_m": 4,
+  "prefer_out_of_sight": true,
+  "spawn_samples": 32,
+  "apply_wave_modifiers": true,
+  "warning_seconds": 6,
+  "warning_sound": ""
+}

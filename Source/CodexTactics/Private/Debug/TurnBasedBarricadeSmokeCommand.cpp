@@ -1,7 +1,7 @@
 // Dev-only console command for a headless turn-based barricade relocation check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.TurnBasedBarricadeSmoke
 // A barricade stands 4 m in front of the commander, a hound far behind; turn-based combat starts, the barricade covers
-// the cells of Godot's five footprint samples, the commander walks up to it. A click (no Shift) picks it up, two
+// the cells of Godot's five footprint samples, the commander walks up to it. A click (no Ctrl) picks it up, two
 // 45° steps turn it by 90° (target cells recomputed), a click on a target cell moves and turns it for 2 AP
 // (Godot main.gd barricade relocation, turn_based_combat_manager.gd get_barricade_cells_at / can_place_barricade_at /
 // relocate_barricade / _register_barricade_cells).
@@ -138,7 +138,7 @@ namespace TurnBasedBarricadeSmoke
 				return true;
 			}
 			ABarricadeActor* Barricade = State.Barricade.Get();
-			TurnBased->HandleWorldClick(Barricade->GetActorLocation(), Barricade, /*bShift*/ false);
+			TurnBased->HandleWorldClick(Barricade->GetActorLocation(), Barricade, /*bAttackOrder (Ctrl)*/ false);
 			Check(State, TurnBased->IsRelocatingBarricade(), TEXT("click picks the barricade up"));
 			const int32 Before = TurnBased->GetRelocateCells().Num();
 			const float StartYaw = TurnBased->GetRelocateYaw();

@@ -610,6 +610,101 @@ Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
 
 ---
 
+## 🎯 SPRINT 12 DIRECTIVE: Full Tactical Cover System (High & Low Cover, Wall Hugging, Shimmy Locomotion, Corner Lean, Blind Fire, Cold/Sight/Damage Modifiers)
+**Author:** Gemini (Lead Architect) | **Reference:** `UE5 - M4 Cover Pack` (MandB Animation) | **Triage Gate:** Model Router (Enabled) | **Executor:** Claude (Opus 5.5)
+
+### Concept Overview:
+Introduce a full tactical cover system for walls, building edges, and high obstacles (1.8m–3.0m) alongside existing low barricades (60cm). Operatives snap to cover with back-to-wall or shoulder-to-wall stances, strafe along surfaces (shimmy), switch between High Stand and Low Crouch at the wall, peek around corners for precision fire, and execute blind fire without exposing head hitboxes. The system directly impacts combat: 100% frontal LoS occlusion, frontal projectile stopping, 50% wind chill reduction from arctic gales, and ambush stealth.
+
+### Sub-Task 12-A: Cover Data Structures & Classification (`CoverTypes.h`)
+- **Files:** `Source/CodexTactics/Public/Tactics/CoverTypes.h`
+- **Specification:**
+  1. `enum class ECoverHeight : uint8 { None, LowCover, HighCover };`
+  2. `enum class ECoverFacing : uint8 { Left, Right };`
+  3. `enum class ECoverFireMode : uint8 { Normal, CornerLean, BlindFire };`
+  4. `struct FCoverSlot`:
+     - `FVector WorldLocation;` (snapped to NavMesh, offset 40–45 cm from wall).
+     - `FVector WallNormal;` (normal of the wall surface facing outward).
+     - `ECoverHeight Height;` (LowCover < 130 cm, HighCover >= 180 cm).
+     - `bool bLeftEdgeExposed;` (free corner to peek left).
+     - `bool bRightEdgeExposed;` (free corner to peek right).
+     - `TWeakObjectPtr<AActor> WallActor;` (barricade, wall mesh, building).
+
+### Sub-Task 12-B: Wall Trace & Surface Snapping (`CoverTraceRules`)
+- **Files:** `Source/CodexTactics/Public/Tactics/CoverTraceRules.h` & `Private/.../CoverTraceRules.cpp`
+- **Specification:**
+  1. `bool FindCoverSlotAt(UWorld* World, const FVector& CursorHitPoint, const FVector& TraceDirection, FCoverSlot& OutSlot);`
+  2. Perform vertical multi-traces:
+     - Chest level (90 cm) and eye level (170 cm) to determine `LowCover` vs `HighCover`.
+     - Lateral traces (+40 cm, -40 cm along wall tangent) to detect corner edges (`bLeftEdgeExposed`, `bRightEdgeExposed`).
+  3. Project candidate point onto NavMesh (`UNavigationSystemV1::ProjectPointToNavigation`) with a safe clearance offset.
+
+### Sub-Task 12-C: Holographic Ghost Preview & Order Flow (`CoverGhostActor` & PlayerController)
+- **Files:** `Source/CodexTactics/Public/Core/CodexTacticsPlayerController.h`, `UCombatFeedbackSubsystem`, `ACoverGhostActor`
+- **Specification:**
+  1. Clicking a high wall or cover obstacle displays a translucent holographic ghost silhouette (`M_TacticalStasis` / `M_Silhouette`) snapped back-to-wall.
+  2. Second click / order execution orders the operative to sprint to the slot, play `Cover_Enter` transition, and set `bInCover = true`.
+  3. Right-click or moving away deselects and hides the ghost.
+
+### Sub-Task 12-D: Cover Locomotion & Animation Interface (`OperativeAnimInstance` & `OperativeCharacter`)
+- **Files:** `Source/CodexTactics/Public/Characters/OperativeAnimInstance.h`, `OperativeCharacter.h/.cpp`
+- **Specification:**
+  1. State flags in `AOperativeCharacter`:
+     - `bool bInCover = false;`
+     - `ECoverHeight CurrentCoverHeight = ECoverHeight::None;`
+     - `ECoverFacing CoverFacing = ECoverFacing::Right;`
+     - `bool bIsCornerLeaning = false;`
+     - `bool bIsBlindFiring = false;`
+  2. **Shimmy Locomotion:** When ordered to move to an adjacent point on the same wall, operative strafes laterally (`Cover_Move_Left` / `Cover_Move_Right`) without detaching back from wall.
+  3. **Stance Switching at Wall:** Pressing Z / C toggles between `HighCover` (stand against wall) and `LowCover` (crouch against wall).
+  4. **Corner Peeking & Shooting:**
+     - Targeting an enemy from a corner slot triggers a temporary lean-out (`Corner_Lean_Aim`), weapon fire, and return to safety.
+     - Blind Fire: fires over or around the corner with -40% accuracy penalty, but grants 0% headshot vulnerability.
+
+### Sub-Task 12-E: Gameplay Modifiers (Damage, Sight, Cold)
+- **Files:** `HealthComponent.cpp`, `TacticalSightSubsystem.cpp`, `ColdSurvivalComponent.cpp`
+- **Modifiers:**
+  1. **Damage Absorption:** Projectiles hitting within the wall's $160^\circ$ frontal cone are 100% blocked by high cover. Flanking angles ($>90^\circ$ relative to normal) bypass cover.
+  2. **Sight & Demasking:** Operatives in high cover have 100% LoS occlusion from enemies behind the wall. Firing temporarily demasks them for 2.0s per Sprint 08 rules.
+  3. **Arctic Wind Protection:** In `UColdSurvivalComponent::TickColdDrain`, having `bInCover == true` reduces environmental wind chill drain by 50% (and 75% on elevated ridges), simulating shelter behind solid walls.
+
+### Sub-Task 12-F: Tests & Verification
+- **Files:** `Source/CodexTacticsTests/Private/Tactics/CoverSystemTest.cpp`
+- **Tests:**
+  1. `Tactics.Cover.TraceDetectsHighWallVsLowBarricade`
+  2. `Tactics.Cover.CornerExposureCalculation`
+  3. `Tactics.Cover.DamageBlockedFromFrontalArc`
+  4. `Tactics.Cover.ColdDrainReducedBehindWall`
+  5. `Tactics.Cover.BlindFirePenaltyAndImmunity`
+- Verification: `powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Smart`
+- Boundary audit: `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude`
+- Model Router: consult `python Scripts/Tools/model_router.py` for subtask tier assignment.
+
+---
+
+## ⚡ MANDATORY TYPESAFE (JEV) & TOKEN ECONOMY RULES FOR CLAUDE (Sprint 12)
+
+Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
+1. **Always Inspect Existing Code First (Anti-Stale Rule):**
+   Read `OperativeCharacter.h/.cpp`, `OperativeAnimInstance.h`, `BarricadeActor.h`, and `HealthComponent.h` before modifying.
+2. **Mandatory TypeSafe JEV for Decision Algorithms:**
+   You MUST use TypeSafe Jev (`Scripts/Tools/jev_client.py` / `jev_validate_*.py`) to formulate and benchmark the tactical decision algorithms:
+   - Dynamic choice between Corner Peek vs Blind Fire (based on enemy suppression pressure, operative HP, and target distance).
+   - Dynamic stance choice at the wall (Stand vs Crouch under high-velocity sniper fire).
+   - Mirror these decisions in pure C++ rules (`CoverTraceRules` / `CoverDecisionRules`) and validate alignment with Jev ($\ge 75\%$ agreement via automated design-time script `jev_validate_cover.py`).
+3. **Model Router Usage:**
+   Run `python Scripts/Tools/model_router.py` for subtask triage and cost optimization.
+4. **Fast Smart Testing Only:**
+   Execute tests **strictly** via `powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Smart`.
+5. **Agent Lock:**
+   Always claim lock before builds/smokes: `powershell -ExecutionPolicy Bypass -File Scripts/agent_lock.ps1 -Take claude -Task "Sprint12_CoverSystem"` and release upon completion.
+6. **Never Commit User Assets:**
+   Never commit or reset `Content/Maps/L_MovementTest.umap` or `Config/DefaultEditor.ini`.
+
+---
+
+## Architect Decisions & Answers to Open Questions (Gemini)
+
 ## Architect Decisions & Answers to Open Questions (Gemini)
 
 ### 1. Wheel Zoom binding (Duplicate call)
@@ -764,6 +859,7 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-10-06 Claude: user requests — Ctrl + click attacks in every mode (turn-based `TurnClickRules`, Shift no longer attacks on the grid); fire postures per selected operative (Alt + , . / = squad; HUD marker П / О / А per operative); bug fix «shot prone marksman flew off the grid» (`AEnemyCharacter::SetTurnBasedHeld`, `AEnemyAIController::MoveTo` refusal, guard `UTurnBasedCombatSubsystem::EnforceHeldEnemies`); horde after 4 min of real-time fight (`HordeRules`, `UHordeSubsystem`, `Content/Data/AI/horde.json`, level JSON `horde_enabled` / `horde`). Smokes `MarksmanCloseShotSmoke`, `HordeSmoke` added to verify_all. Details: HANDOFF §10.
 - 2026-10-06 Claude: RTS combat time modes (user request; replaces the 2026-10-05 real-time order lock and TANDEM request 2's «no turn-based from the pause», both kept behind flags: `Codex.RealTimeOrders 0`, `FGameFlowConfig::bAllowTurnBasedFromTacticalPause`) — `FCombatTimeModeRules`, `ExitTurnBasedToRealTime`; fire postures Passive / Defensive / Aggressive (`FirePostureRules`, keys `,` `.` `/`, action bar). Gemini: the top-centre HUD badge (`ACodexTacticsHUD::DrawCombatModeBadge`) and the three posture buttons are baseline visuals, restyle freely. See HANDOFF §10.
 - 2026-10-04 Claude: marksman kiting limit (user decision), bot `AssaultMarksman`, `Codex.Marksman.*` / `Codex.Bot.*` tuning cvars, `Scripts/Tools/jev_ai_coach.py` (Jev-driven AI training loop; enemy knobs only with `--tune-enemies`). Gemini/Jev owners: `typesafe_triage.py --telemetry` ignores the runs file (hard-coded sample_summary) — worth fixing on your side.
 - 2026-10-04 Claude: took over Gemini's uncommitted AI-coach work (user decision): `MarksmanAIRules::ChooseMove(..., bCanKite)` + `RetreatCooldownSeconds` 10 / `RetreatMaxSeconds` 3.5, `UPlaytestBotSubsystem::AssaultMarksman`, `Codex.Marksman.*` / `Codex.Bot.*` console variables, `Scripts/Tools/jev_ai_coach.py` (Gemini's hill-climber + registry key lookup, worded summaries for Jev, noise margin 0.1, `-NoAITuning` batches, writes `Content/Data/AI/ai_tuning.json`), `AITuning` applies that file at StartPlay. Finding for Gemini: `typesafe_triage.py --telemetry` sends a hard-coded sample (not the runs) and the triage commands fall back to the offline heuristic when the key is only in the registry.

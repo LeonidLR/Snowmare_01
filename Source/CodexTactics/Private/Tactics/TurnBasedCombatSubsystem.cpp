@@ -5,8 +5,11 @@
 #include "GameFramework/PlayerController.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "AIController.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/MeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -36,6 +39,7 @@
 #include "Tactics/EnemyTurnRules.h"
 #include "Data/WeaponTuning.h"
 #include "Characters/EnemyTacticsRules.h"
+#include "Tactics/TurnClickRules.h"
 #include "Tactics/TurnGridOverlayActor.h"
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
@@ -366,6 +370,7 @@ void UTurnBasedCombatSubsystem::StartCombat()
 	ActiveIndex = 0;
 	Round = 1;
 	ContactHitsThisFight = 0;
+	GuardCorrections = 0;
 	UE_LOG(LogCodexTactics, Display, TEXT("Turn-based combat: %d operatives, %d enemies, %d barrels, %d mines, %d turrets"),
 		Squad.Num(), Enemies.Num(), GridBarrels.Num(), GridMines.Num(), GridTurrets.Num());
 	StartPlayerTurn();
@@ -435,6 +440,7 @@ void UTurnBasedCombatSubsystem::FreezeWorld(const TSet<AActor*>& OnGrid)
 		StasisMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/Materials/M_TacticalStasis.M_TacticalStasis"));
 	}
 	StasisMeshes.Reset();
+	HeldAnchors.Reset();
 	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 	{
 		if (AController* Controller = It->GetController())
@@ -442,6 +448,10 @@ void UTurnBasedCombatSubsystem::FreezeWorld(const TSet<AActor*>& OnGrid)
 			Controller->StopMovement();
 		}
 		Freeze(*It);
+		// Bug fix 2026-10-06: the actor tick alone left the movement / path following running — a hit could still send an
+		// enemy (the marksman's kiting sprint) off the grid. Held: no AI moves, velocity zeroed; the anchor guard keeps it.
+		It->SetTurnBasedHeld(true);
+		HeldAnchors.Add(*It, It->GetActorLocation());
 		// Godot: enemies outside the fight turn dark and translucent until it ends.
 		if (!OnGrid.Contains(*It) && StasisMaterial)
 		{
@@ -479,6 +489,14 @@ void UTurnBasedCombatSubsystem::RestoreWorld()
 		}
 	}
 	FrozenActors.Reset();
+	for (const TPair<TWeakObjectPtr<AEnemyCharacter>, FVector>& Entry : HeldAnchors)
+	{
+		if (AEnemyCharacter* Enemy = Entry.Key.Get())
+		{
+			Enemy->SetTurnBasedHeld(false);
+		}
+	}
+	HeldAnchors.Reset();
 	for (const FTurnStasisMesh& Entry : StasisMeshes)
 	{
 		if (UMeshComponent* Mesh = Entry.Mesh.Get())
@@ -1051,6 +1069,52 @@ void UTurnBasedCombatSubsystem::Tick(float DeltaTime)
 				Done();
 			}
 		}
+	}
+	EnforceHeldEnemies();
+}
+
+void UTurnBasedCombatSubsystem::EnforceHeldEnemies()
+{
+	if (!IsActive() || !Grid)
+	{
+		return;
+	}
+	// Guard (bug fix 2026-10-06): no frozen enemy may leave its place — a grid unit stays on its cell (outside its own
+	// scripted walk), an enemy in stasis where the fight found it. Whatever pushed it (an AI move from an event, a
+	// depenetration, a launch, root motion), it is put back and stopped.
+	const float Tolerance = TurnClickRules::GetHeldUnitTolerance(TurnCellSize);
+	for (TPair<TWeakObjectPtr<AEnemyCharacter>, FVector>& Entry : HeldAnchors)
+	{
+		AEnemyCharacter* Enemy = Entry.Key.Get();
+		if (!Enemy || Enemy->IsDying() || IsDead(Enemy))
+		{
+			continue;
+		}
+		if (Movers.ContainsByPredicate([Enemy](const FMover& Mover) { return Mover.Actor.Get() == Enemy; }))
+		{
+			continue; // its own walk / step back on the grid
+		}
+		FVector Anchor = Entry.Value;
+		if (const FTurnUnitState* State = States.Find(Enemy))
+		{
+			const FVector CellCentre = Grid->GridToWorld(State->GridPos);
+			Anchor = FVector(CellCentre.X, CellCentre.Y, Entry.Value.Z);
+		}
+		const FVector Location = Enemy->GetActorLocation();
+		const bool bOffGrid = States.Contains(Enemy) && !TurnClickRules::IsInsideGrid(Location, Grid->OriginWorld, TurnGridCells, TurnCellSize);
+		if (!bOffGrid && !TurnClickRules::IsHeldUnitDisplaced(Location, Anchor, Tolerance))
+		{
+			continue;
+		}
+		UE_LOG(LogCodexTactics, Warning, TEXT("[TurnBased] guard: %s pushed %.0f cm off its place%s - put back"), *Enemy->GetName(),
+			FVector::Dist2D(Location, Anchor), bOffGrid ? TEXT(" (outside the grid)") : TEXT(""));
+		if (AController* Controller = Enemy->GetController())
+		{
+			Controller->StopMovement();
+		}
+		Enemy->GetCharacterMovement()->StopMovementImmediately();
+		Enemy->SetActorLocation(FVector(Anchor.X, Anchor.Y, FMath::Max(Location.Z, Anchor.Z)), false, nullptr, ETeleportType::TeleportPhysics);
+		++GuardCorrections;
 	}
 }
 
@@ -1698,7 +1762,7 @@ void UTurnBasedCombatSubsystem::PassSquadTurn()
 	EndSquadPhase();
 }
 
-void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AActor* HitActor, bool bShift)
+void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AActor* HitActor, bool bAttackOrder)
 {
 	if (!IsActive() || Phase != ETurnPhase::Squad || IsBusy() || !Grid)
 	{
@@ -1781,7 +1845,10 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(HitActor); Operative && Squad.Contains(Operative))
 	{
-		SelectUnit(Operative);
+		if (!bAttackOrder)
+		{
+			SelectUnit(Operative); // Ctrl + click on a squad mate: no friendly fire, no selection
+		}
 		return;
 	}
 	if (const FTurnUnitState* State = GetUnitState(HitActor))
@@ -1797,80 +1864,51 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 		return;
 	}
 	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
-	switch (Grid->GetOccupantType(Cell))
+	const EGorkyOccupantType Occupant = Grid->GetOccupantType(Cell);
+	AActor* Occupier = Grid->GetOccupant(Cell);
+	// Relocation reach: a barrel is pushed from an orthogonal neighbour cell, a turret / barricade from any neighbour.
+	bool bAdjacent = false;
+	if (Occupant == EGorkyOccupantType::Barrel)
 	{
-	case EGorkyOccupantType::Barrel:
-	{
-		// Godot: an orthogonally adjacent barrel is pushed, Shift shoots it; a distant one needs Shift.
-		AActor* Barrel = Grid->GetOccupant(Cell);
 		const FIntPoint Diff = UnitState ? Cell - UnitState->GridPos : FIntPoint(99, 99);
-		if (!bShift)
-		{
-			Highlight(Barrel);
-			if (FMath::Abs(Diff.X) + FMath::Abs(Diff.Y) == 1)
-			{
-				StartRelocate(Barrel);
-			}
-			else
-			{
-				Post(TEXT("ТАКТИКА"), TEXT("⚠️ Боец должен подойти вплотную к бочке, чтобы переместить её (или зажмите Shift для выстрела)!"));
-			}
-			return;
-		}
-		AttackCellCinematic(Cell);
-		break;
+		bAdjacent = FMath::Abs(Diff.X) + FMath::Abs(Diff.Y) == 1;
 	}
-	case EGorkyOccupantType::Turret:
+	else if (Occupant == EGorkyOccupantType::Turret || Occupant == EGorkyOccupantType::Barricade)
 	{
-		AActor* Turret = Grid->GetOccupant(Cell);
-		if (!bShift)
-		{
-			Highlight(Turret);
-			if (IsUnitAdjacentToObject(GetActiveUnit(), Turret))
-			{
-				StartRelocate(Turret);
-			}
-			else
-			{
-				Post(TEXT("ТАКТИКА"), TEXT("⚠️ Боец должен подойти вплотную к турели, чтобы переместить её!"));
-			}
-		}
-		break;
+		bAdjacent = IsUnitAdjacentToObject(GetActiveUnit(), Occupier);
 	}
-	case EGorkyOccupantType::Barricade:
+	// User request 2026-10-06: Ctrl + click is the attack order here too (Godot used Shift on the grid).
+	switch (TurnClickRules::ResolveClick(Occupant, bAttackOrder, bAdjacent, bAttackMode))
 	{
-		// Godot: an adjacent barricade is relocated (with rotation), Shift attacks it.
-		AActor* Barricade = Grid->GetOccupant(Cell);
-		if (!bShift)
-		{
-			Highlight(Barricade);
-			if (IsUnitAdjacentToObject(GetActiveUnit(), Barricade))
-			{
-				StartRelocate(Barricade);
-			}
-			else
-			{
-				Post(TEXT("ТАКТИКА"), TEXT("⚠️ Боец должен подойти вплотную к баррикаде, чтобы переместить её (или зажмите Shift для атаки)!"));
-			}
-			return;
-		}
+	case ETurnClickAction::SelectUnit:
+		SelectUnit(Cast<AOperativeCharacter>(Occupier));
+		break;
+	case ETurnClickAction::Attack:
 		AttackCellCinematic(Cell);
 		break;
-	}
-	case EGorkyOccupantType::Enemy:
-		AttackCellCinematic(Cell);
+	case ETurnClickAction::Relocate:
+		Highlight(Occupier);
+		StartRelocate(Occupier);
 		break;
-	case EGorkyOccupantType::Squad:
-		SelectUnit(Cast<AOperativeCharacter>(Grid->GetOccupant(Cell)));
+	case ETurnClickAction::NeedApproach:
+		Highlight(Occupier);
+		Post(TEXT("ТАКТИКА"), Occupant == EGorkyOccupantType::Barrel
+			? TEXT("⚠️ Боец должен подойти вплотную к бочке, чтобы переместить её (или Ctrl + клик — выстрел)!")
+			: (Occupant == EGorkyOccupantType::Barricade
+				? TEXT("⚠️ Боец должен подойти вплотную к баррикаде, чтобы переместить её (или Ctrl + клик — атака)!")
+				: TEXT("⚠️ Боец должен подойти вплотную к турели, чтобы переместить её!")));
+		break;
+	case ETurnClickAction::NoTargetInAttackMode:
+		// Godot main.gd: in the attack mode an empty cell is no walk order.
+		Post(TEXT("ТАКТИКА"), TEXT("⚠️ В этой клетке нет цели для выстрела! (ПКМ / Esc для возврата к перемещению)"));
+		break;
+	case ETurnClickAction::NoTargetForAttackOrder:
+		Post(TEXT("ТАКТИКА"), TEXT("⚠️ Ctrl + клик — атака: укажите врага, бочку или баррикаду."));
+		break;
+	case ETurnClickAction::Walk:
+		MoveActiveUnitTo(Cell);
 		break;
 	default:
-		if (bAttackMode)
-		{
-			// Godot main.gd: in the attack mode an empty cell is no walk order.
-			Post(TEXT("ТАКТИКА"), TEXT("⚠️ В этой клетке нет цели для выстрела! (ПКМ / Esc для возврата к перемещению)"));
-			break;
-		}
-		MoveActiveUnitTo(Cell);
 		break;
 	}
 }
@@ -2804,6 +2842,11 @@ void UTurnBasedCombatSubsystem::RegisterReinforcement(AActor* Enemy, const FIntP
 	{
 		Enemy->SetActorTickEnabled(false);
 		FrozenActors.Add(Enemy);
+	}
+	if (AEnemyCharacter* HeldEnemy = Cast<AEnemyCharacter>(Enemy))
+	{
+		HeldEnemy->SetTurnBasedHeld(true);
+		HeldAnchors.Add(HeldEnemy, HeldEnemy->GetActorLocation());
 	}
 	FTurnUnitState& State = States.Add(Enemy);
 	State.Actor = Enemy;

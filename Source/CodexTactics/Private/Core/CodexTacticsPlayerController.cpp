@@ -435,7 +435,7 @@ bool ACodexTacticsPlayerController::IsRealTimeOrderLocked() const
 		OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) == ECombatOrderDispatch::Blocked;
 }
 
-void ACodexTacticsPlayerController::ApplyFirePosture(ESquadFirePosture Posture)
+void ACodexTacticsPlayerController::ApplyFirePosture(ESquadFirePosture Posture, bool bSquadWide)
 {
 	if (IsDialogueOpen())
 	{
@@ -443,8 +443,18 @@ void ACodexTacticsPlayerController::ApplyFirePosture(ESquadFirePosture Posture)
 	}
 	if (USquadSubsystem* Squad = GetSquad())
 	{
-		Squad->ApplyPostureOrder(Posture);
+		Squad->ApplyPostureOrder(Posture, bSquadWide);
 	}
+}
+
+bool ACodexTacticsPlayerController::IsAttackModifierDown() const
+{
+	return IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl);
+}
+
+bool ACodexTacticsPlayerController::IsSquadWideModifierDown() const
+{
+	return IsInputKeyDown(EKeys::LeftAlt) || IsInputKeyDown(EKeys::RightAlt);
 }
 
 bool ACodexTacticsPlayerController::BlockRealTimeOrder()
@@ -1217,10 +1227,11 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		return;
 	}
 
-	// Turn-based combat: the grid handles every click (select, attack, walk).
+	// Turn-based combat: the grid handles every click (select, attack, walk). Ctrl + click = the attack order, as in
+	// real time and in the tactical pause (user request 2026-10-06; Shift no longer attacks on the grid).
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 	{
-		TurnBased->HandleWorldClick(Hit.ImpactPoint, Hit.GetActor(), IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift));
+		TurnBased->HandleWorldClick(Hit.ImpactPoint, Hit.GetActor(), IsAttackModifierDown());
 		return;
 	}
 
@@ -1281,7 +1292,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 	}
 
 	// Ctrl + click: targeted fire only, never a move or a selection.
-	if (IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl))
+	if (IsAttackModifierDown())
 	{
 		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 		if (!Flow || Flow->GetCombatMode() != ECodexCombatMode::TurnBased)
@@ -1551,7 +1562,7 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 	{
 		return;
 	}
-	if (IsInputKeyDown(EKeys::LeftAlt) || IsInputKeyDown(EKeys::RightAlt))
+	if (IsSquadWideModifierDown())
 	{
 		SetEntireSquadStance(Stance); // Godot Alt + Z / C / V
 		return;

@@ -20,6 +20,7 @@ class AOperativeCharacter;
 class UPauseMenuWidget;
 class USaveLoadDialogWidget;
 enum class ESaveDialogMode : uint8;
+enum class ESquadFirePosture : uint8;
 class UPhaseBannersWidget;
 class UTurnBasedHudWidget;
 class ALootCrateActor;
@@ -249,8 +250,14 @@ private:
 	void DrawFloatingTexts();
 	/** Space-hold charge bar in the screen centre (Godot gorky17_combat_hud charge_bar_container). */
 	void DrawSpaceCharge();
-	/** Top centre: the combat time mode label with its Space hints, and the fire posture with the , . / hints. */
+	/** Top centre: the combat time mode label with its Space hints, and the selected operative's fire posture with the , . / hints. */
 	void DrawCombatModeBadge();
+	/** Per-operative fire posture marker over every living operative (letter П / О / А in the posture colour). */
+	void DrawPostureMarkers();
+	/** Horde warning (UHordeSubsystem): «ОРДА!» banner, distance, and an arrow at the screen edge towards it. */
+	void DrawHordeWarning();
+	/** Colour of a fire posture on the HUD (Passive grey, Defensive amber, Aggressive red). */
+	static FLinearColor PostureMarkerColor(ESquadFirePosture Posture);
 	/** Overhead labels of enemies and deployables / the generator (Godot overhead Label3D). */
 	void DrawWorldLabels();
 	/** Splits Text into lines no wider than MaxWidth pixels. */

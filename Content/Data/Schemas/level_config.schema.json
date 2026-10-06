@@ -10,6 +10,8 @@
     "description": { "type": "string", "description": "Краткое описание задачи на рубеже" },
     "prep_phase_duration": { "type": "number", "minimum": 0, "default": 60.0, "description": "Длительность начальной подготовки к обороне в секундах" },
     "wave_rest_duration": { "type": "number", "minimum": 0, "default": 20.0, "description": "Длительность передышки между волнами в секундах" },
+    "horde_enabled": { "type": "boolean", "default": true, "description": "UE: орда после 4 минут боя в реальном времени (Content/Data/AI/horde.json); false — выключить на этом уровне" },
+    "horde": { "type": "object", "description": "UE: переопределения horde.json для уровня (trigger_seconds, repeats, repeat_seconds, count, count_increase_per_repeat, composition, min_distance_m, max_distance_m, cluster_radius_m, prefer_out_of_sight, spawn_samples, apply_wave_modifiers, warning_seconds, warning_sound)" },
     "waves": {
       "type": "array",
       "description": "Список последовательных боевых волн",

@@ -174,7 +174,7 @@ void UActionBarWidget::BuildDefaultLayout()
 			*FirePostureRules::GetKeyHint(Posture))));
 		UButton* PostureButton = MakeSlotButton(NAME_None, BarWhite * 0.6f, 44.f, 56.f, PostureText, Row);
 		PostureButton->SetToolTipText(FText::Format(LOCTEXT("PostureTip",
-			"Режим огня: {0} [{1}] — выбранным бойцам (рамкой), иначе всему отряду"),
+			"Режим огня: {0} [{1}] — выбранному бойцу (или группе, выбранной рамкой). Alt + [{1}] / Alt + клик — всему отряду"),
 			FText::FromString(FirePostureRules::GetLabel(Posture)), FText::FromString(FirePostureRules::GetKeyHint(Posture))));
 		PostureButtons.Add(PostureButton);
 		PostureTexts.Add(PostureText);
@@ -312,12 +312,19 @@ void UActionBarWidget::Refresh()
 	}
 	if (PostureButtons.Num() == 3)
 	{
-		// The leader's posture in force is highlighted (his override, else the squad's).
-		const ESquadFirePosture Current = Squad->GetEffectivePosture(Leader);
+		// The posture of the selected operative(s) is highlighted (user decision 2026-10-06; the group's when it shares
+		// one — a mixed group lights nothing).
+		TArray<ESquadFirePosture> Selected;
+		for (const AOperativeCharacter* Member : Squad->GetPostureOrderTargets())
+		{
+			Selected.Add(Squad->GetEffectivePosture(Member));
+		}
+		ESquadFirePosture Current = Squad->GetEffectivePosture(Leader);
+		const bool bCommon = FirePostureRules::GetCommonPosture(Selected, Current) || Selected.IsEmpty();
 		const ESquadFirePosture Order[] = { ESquadFirePosture::Passive, ESquadFirePosture::Defensive, ESquadFirePosture::Aggressive };
 		for (int32 Index = 0; Index < 3; ++Index)
 		{
-			const bool bOn = Order[Index] == Current;
+			const bool bOn = bCommon && Order[Index] == Current;
 			const FLinearColor OnColor = Index == 0 ? FLinearColor(0.45f, 0.5f, 0.55f) : (Index == 1 ? FLinearColor(0.85f, 0.6f, 0.1f) : BarRed);
 			PostureButtons[Index]->SetBackgroundColor(bOn ? OnColor : BarWhite * 0.35f);
 		}
@@ -378,16 +385,16 @@ void UActionBarWidget::Refresh()
 		// Godot _update_tactical_command_bar: the shield tag, a green frame in barricade cover, blue while holding.
 		const bool bInCover = Member->IsInBarricadeCover();
 		const bool bHolding = Member->bGuarding || (Squad->IsSoloMode() && !bLeader);
-		if (bInCover || bHolding)
-		{
-			SquadSlot.Label->SetText(FText::FromString(GetSlotText(Index).ToString() + TEXT(" ●")));
-		}
+		// Per-operative fire posture letter П / О / А (user request 2026-10-06), then the cover / hold mark.
+		SquadSlot.Label->SetText(FText::FromString(FString::Printf(TEXT("%s %s%s"), *GetSlotText(Index).ToString(),
+			*FirePostureRules::GetLetter(Squad->GetEffectivePosture(Member)), bInCover || bHolding ? TEXT(" ●") : TEXT(""))));
 		SquadSlot.Button->SetToolTipText(Member->bGuarding
 			? LOCTEXT("SlotGuardTip", "ТОЧКА ОБОРОНЫ: Позиция зафиксирована [T]")
 			: bHolding ? LOCTEXT("SlotHoldTip", "ОБОРОНА: Боец закрепился в укрытии в режиме соло [B]")
 			: bInCover ? LOCTEXT("SlotCoverTip", "В укрытии за баррикадой (-35% входящего урона, +15% меткости)")
 			: bLeader && Squad->IsSoloMode() ? LOCTEXT("SlotSoloTip", "СОЛО-РАЗВЕДКА [B]")
-			: FText::Format(LOCTEXT("SlotSelectTip", "Выбрать бойца [{0}]"), Index + 1));
+			: FText::Format(LOCTEXT("SlotSelectTip", "Выбрать бойца [{0}] · режим огня: {1}"), Index + 1,
+				FText::FromString(FirePostureRules::GetLabel(Squad->GetEffectivePosture(Member)))));
 		SquadSlot.Button->SetBackgroundColor(bLeader ? BarLeaderOrange : bHolding ? FLinearColor::FromSRGBColor(FColor(46, 89, 166)) : BarOrange);
 		SquadSlot.Frame->SetBrushColor(bInCover ? FLinearColor::FromSRGBColor(FColor(77, 255, 128)) : bLeader ? BarLeaderBorder
 			: bHolding ? FLinearColor::FromSRGBColor(FColor(51, 230, 255)) : BarSlotBorder);
@@ -553,7 +560,7 @@ void UActionBarWidget::ApplyPosture(ESquadFirePosture Posture)
 {
 	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
 	{
-		PC->ApplyFirePosture(Posture);
+		PC->ApplyFirePosture(Posture, PC->IsSquadWideModifierDown()); // Alt + click = the whole squad
 	}
 	Refresh();
 }

@@ -21,6 +21,15 @@ enum class ESquadFirePosture : uint8
 	Aggressive
 };
 
+/** Who a posture order (keys , . / or the action bar buttons) changes (user decision 2026-10-06). */
+enum class EPostureOrderScope : uint8
+{
+	/** The selected operative(s): the box-selected group, else the leader the player controls (personal override). */
+	Selected,
+	/** The whole squad (Alt + , . /): the squad posture, every override cleared. */
+	Squad
+};
+
 /** Posture tuning (console: Codex.Posture.DefensiveSquadWide, Codex.Posture.AggressiveExplorationFire). */
 struct CODEXTACTICS_API FFirePostureConfig
 {
@@ -62,6 +71,15 @@ namespace FirePostureRules
 	/** Provocations end with the fight: a wave cleared, after the combat, back in exploration or game over. */
 	CODEXTACTICS_API bool ClearsProvocation(ECodexGamePhase NewPhase);
 
+	/**
+	 * Scope of a posture order: Alt held -> the whole squad; otherwise the selected operative(s) (NumSelected = the
+	 * box-selected group, or 1 for the controlled leader). Nobody selected (no leader) falls back to the squad.
+	 */
+	CODEXTACTICS_API EPostureOrderScope GetOrderScope(bool bSquadWideModifier, int32 NumSelected);
+
+	/** The posture all of Postures share (HUD of a selection); false when they differ or the list is empty. */
+	CODEXTACTICS_API bool GetCommonPosture(const TArray<ESquadFirePosture>& Postures, ESquadFirePosture& OutCommon);
+
 	/** Next posture of the cycle Passive -> Defensive -> Aggressive -> Passive. */
 	CODEXTACTICS_API ESquadFirePosture Next(ESquadFirePosture Posture);
 
@@ -69,6 +87,8 @@ namespace FirePostureRules
 	CODEXTACTICS_API FString GetLabel(ESquadFirePosture Posture);
 	/** Short action bar label «ПАСС» / «ОБОР» / «АГР». */
 	CODEXTACTICS_API FString GetShortLabel(ESquadFirePosture Posture);
+	/** One-letter indicator of the per-operative marker / squad slot: «П» / «О» / «А». */
+	CODEXTACTICS_API FString GetLetter(ESquadFirePosture Posture);
 	/** The direct-select hotkey shown on the HUD: «,» / «.» / «/». */
 	CODEXTACTICS_API FString GetKeyHint(ESquadFirePosture Posture);
 }

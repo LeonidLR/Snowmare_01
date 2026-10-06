@@ -78,6 +78,8 @@ protected:
 	virtual void TickBehavior(float DeltaTime) override;
 	/** Walks to a spline waypoint standing (his own move: stance, MoveGoal), at Speed. */
 	virtual void IssuePatrolMove(const FVector& Goal, float Speed) override;
+	/** Turn-based hold: cancels a pending get-up run and the aim (bug fix 2026-10-06). */
+	virtual void OnTurnBasedHeldChanged(bool bHeld) override;
 
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Marksman")
 	TObjectPtr<UStaticMeshComponent> AimBeam;

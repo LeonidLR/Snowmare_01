@@ -250,6 +250,15 @@ void AMarksmanEnemyCharacter::HandleMarksmanDamaged(const FDamageSpec& Spec, flo
 	{
 		return;
 	}
+	// Bug fix 2026-10-06 (user report: shot point-blank on the grid, the prone marksman stood up and flew off the grid):
+	// in the turn-based fight the grid owns his position — no kiting sprint, no get-up, no stance drill from a hit.
+	// Before, the hit ran StartRetreat (< 12 m) -> stand up -> 0.45 s later a 520 cm/s path move: the actor tick is off
+	// on the grid, but the movement component and the path following were not, so he ran backwards (still facing the
+	// shooter, the facing update lives in the tick) to a firing position 27 m away, off the 21 m grid.
+	if (IsTurnBasedHeld())
+	{
+		return;
+	}
 	// A trap / placed charge hurt him on patrol: the base handler sends him searching (user amendment 2026-10-06), no
 	// retaliation or ambush drill against a squad he has not found.
 	if (IsTrapBlastInProgress() && AIState == EMarksmanAIState::Patrol)
@@ -475,8 +484,22 @@ bool AMarksmanEnemyCharacter::HasLowCoverTowards(const AActor* Target) const
 	return bLow && !bHigh;
 }
 
+void AMarksmanEnemyCharacter::OnTurnBasedHeldChanged(bool bHeld)
+{
+	if (bHeld)
+	{
+		GetWorldTimerManager().ClearTimer(RiseTimerHandle); // no run starts after the get-up while frozen
+		CancelAim();
+		bHolding = false;
+	}
+}
+
 void AMarksmanEnemyCharacter::MoveTo(const FVector& Goal, bool bSprint)
 {
+	if (IsTurnBasedHeld())
+	{
+		return;
+	}
 	MoveGoal = Goal;
 	bPendingSprint = bSprint;
 	if (GetWorldTimerManager().IsTimerActive(RiseTimerHandle))
@@ -499,8 +522,8 @@ void AMarksmanEnemyCharacter::MoveTo(const FVector& Goal, bool bSprint)
 
 void AMarksmanEnemyCharacter::FinishRise()
 {
-	// Dropped again (hit and took cover) or dying meanwhile: no run.
-	if (bIsDying || Stance != EOperativeStance::Standing || bHolding)
+	// Dropped again (hit and took cover), dying or frozen by the turn-based fight meanwhile: no run.
+	if (bIsDying || Stance != EOperativeStance::Standing || bHolding || IsTurnBasedHeld())
 	{
 		return;
 	}
@@ -509,6 +532,10 @@ void AMarksmanEnemyCharacter::FinishRise()
 
 void AMarksmanEnemyCharacter::ExecuteMoveTo(const FVector& Goal, bool bSprint)
 {
+	if (IsTurnBasedHeld())
+	{
+		return;
+	}
 	SetMarksmanStance(EOperativeStance::Standing);
 	GetCharacterMovement()->MaxWalkSpeed = bSprint ? MarksmanConfig.SprintSpeed : MarksmanConfig.WalkSpeed;
 	MoveGoal = Goal;

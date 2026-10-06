@@ -467,7 +467,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	FEnemyTacticOrder Order;
 	UEnemyTacticsSubsystem* Tactics = GetWorld()->GetSubsystem<UEnemyTacticsSubsystem>();
 	const bool bHasOrder = Target && Target->IsA<AOperativeCharacter>() && Tactics && Tactics->GetOrder(this, Order);
-	if (bHasOrder && Order.Role == EEnemyTacticRole::FallBack)
+	if (bHasOrder && Order.Role == EEnemyTacticRole::FallBack && !bKnowsSquadPosition) // a horde never falls back
 	{
 		if (!bFallingBack)
 		{
@@ -720,7 +720,8 @@ AActor* AEnemyCharacter::FindTarget() const
 	for (int32 Index = 0; Index < Actors.Num(); ++Index)
 	{
 		const double* Until = UnreachableUntil.Find(Actors[Index]);
-		if ((Until && *Until > Now) || (bFearsFire && AIConfig.bFireFearEnabled && IsInFearZone(Candidates[Index].Location, Actors[Index])))
+		if ((Until && *Until > Now) || (bFearsFire && AIConfig.bFireFearEnabled && IsInFearZone(Candidates[Index].Location, Actors[Index]))
+			|| (bKnowsSquadPosition && !Known.IsEmpty() && Candidates[Index].Kind != EEnemyTargetKind::Operative)) // a horde goes for the squad
 		{
 			Candidates[Index].bUsable = false;
 		}
@@ -1134,6 +1135,27 @@ int32& AEnemyCharacter::TrapBlastDepth()
 {
 	static int32 Depth = 0;
 	return Depth;
+}
+
+void AEnemyCharacter::SetTurnBasedHeld(bool bHeld)
+{
+	if (bTurnBasedHeld == bHeld)
+	{
+		return;
+	}
+	bTurnBasedHeld = bHeld;
+	if (bHeld)
+	{
+		if (AAIController* AIC = Cast<AAIController>(GetController()))
+		{
+			AIC->StopMovement();
+		}
+		GetCharacterMovement()->StopMovementImmediately(); // no velocity carried into the frozen fight
+		bPatrolMoveIssued = false;
+		bEscortMoving = false;
+		bSearchMoving = false;
+	}
+	OnTurnBasedHeldChanged(bHeld);
 }
 
 bool AEnemyCharacter::HoldForWorldAIPause()

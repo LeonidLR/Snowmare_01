@@ -6,6 +6,7 @@
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 
 namespace
 {
@@ -68,6 +69,14 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 		return false;
 	}
 	Config.PatrolSearchSeconds = LevelJsonNumber(Root, TEXT("patrol_search_seconds"), -1.f);
+	// UE-only (user request 2026-10-06): the horde after a long real-time fight (defaults in Content/Data/AI/horde.json).
+	bool bHordeEnabled = true;
+	Config.bHordeEnabled = !Root->TryGetBoolField(TEXT("horde_enabled"), bHordeEnabled) || bHordeEnabled;
+	if (const TSharedPtr<FJsonObject> Horde = LevelJsonObject(Root, TEXT("horde")))
+	{
+		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Config.HordeOverrideJson);
+		FJsonSerializer::Serialize(Horde.ToSharedRef(), Writer);
+	}
 
 	const TArray<TSharedPtr<FJsonValue>>* Waves = nullptr;
 	if (Root->TryGetArrayField(TEXT("waves"), Waves))

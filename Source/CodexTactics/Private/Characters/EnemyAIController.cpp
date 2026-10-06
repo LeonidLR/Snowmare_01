@@ -1,4 +1,6 @@
 #include "Characters/EnemyAIController.h"
+#include "Characters/EnemyCharacter.h"
+#include "CodexTactics.h"
 #include "Interactables/VaultNavigation.h"
 #include "Navigation/CrowdFollowingComponent.h"
 
@@ -20,4 +22,16 @@ void AEnemyAIController::OnPossess(APawn* InPawn)
 		Crowd->SetCrowdSeparationWeight(2.0f);
 		Crowd->SetCrowdAvoidanceQuality(ECrowdAvoidanceQuality::Medium);
 	}
+}
+
+FPathFollowingRequestResult AEnemyAIController::MoveTo(const FAIMoveRequest& MoveRequest, FNavPathSharedPtr* OutPath)
+{
+	if (const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(GetPawn()); Enemy && Enemy->IsTurnBasedHeld())
+	{
+		UE_LOG(LogCodexTactics, Verbose, TEXT("[TurnBased] %s: AI move refused (held by the grid)"), *Enemy->GetName());
+		FPathFollowingRequestResult Refused;
+		Refused.Code = EPathFollowingRequestResult::Failed;
+		return Refused;
+	}
+	return Super::MoveTo(MoveRequest, OutPath);
 }

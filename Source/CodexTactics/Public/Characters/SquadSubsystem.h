@@ -121,10 +121,14 @@ public:
 	void SetSquadPosture(ESquadFirePosture Posture);
 
 	/**
-	 * The posture keys / action bar buttons (, . /): with several operatives box-selected only they get Posture as
-	 * their override; otherwise the whole squad (SetSquadPosture). Posts the radio line; returns how many changed.
+	 * The posture keys / action bar buttons (, . /), user decision 2026-10-06: the SELECTED operative(s) get Posture as
+	 * their own override — the box-selected group, else the controlled leader; bSquadWide (Alt + , . /) sets the whole
+	 * squad (SetSquadPosture). FirePostureRules::GetOrderScope. Posts the radio line; returns how many changed.
 	 */
-	int32 ApplyPostureOrder(ESquadFirePosture Posture);
+	int32 ApplyPostureOrder(ESquadFirePosture Posture, bool bSquadWide = false);
+
+	/** The operatives a posture order without Alt changes now: the box-selected group, else the leader. */
+	TArray<AOperativeCharacter*> GetPostureOrderTargets() const;
 
 	/** The posture in force for Operative (its override, else the squad's). */
 	ESquadFirePosture GetEffectivePosture(const AOperativeCharacter* Operative) const;

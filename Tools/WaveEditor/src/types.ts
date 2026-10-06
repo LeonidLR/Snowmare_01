@@ -125,6 +125,10 @@ export interface LevelConfig {
   standard_loot_found?: boolean;
   puzzle_secret_found?: boolean;
   squad_loadout?: SquadLoadoutConfig;
+  /** UE horde after 4 min of real-time fight (Content/Data/AI/horde.json); false switches it off for the level. */
+  horde_enabled?: boolean;
+  /** Per-level overrides of horde.json (same keys). */
+  horde?: Record<string, unknown>;
   waves: WaveConfig[];
 }
 

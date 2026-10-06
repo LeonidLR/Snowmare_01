@@ -11,6 +11,7 @@
 #include "TurnBasedCombatSubsystem.generated.h"
 
 class AOperativeCharacter;
+class AEnemyCharacter;
 class UMaterialInterface;
 class UMeshComponent;
 class ABarricadeActor;
@@ -102,7 +103,8 @@ public:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
-	virtual bool IsTickable() const override { return !Movers.IsEmpty(); }
+	/** Every frame of a fight (the held-enemy guard, relocation glides / hologram), and while anything still moves. */
+	virtual bool IsTickable() const override { return IsActive() || !Movers.IsEmpty(); }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
 	bool IsActive() const { return Phase != ETurnPhase::Inactive; }
@@ -180,6 +182,8 @@ public:
 	int32 GetSquadCount() const { return Squad.Num(); }
 	/** Meshes currently shown with the stasis material (enemies outside the fight). */
 	int32 GetStasisMeshCount() const { return StasisMeshes.Num(); }
+	/** How many times the held-enemy guard put an enemy back this fight (MarksmanCloseShotSmoke: 0 once the cause is fixed). */
+	int32 GetGuardCorrections() const { return GuardCorrections; }
 
 	/** Material of enemies outside the fight (Godot Shaders/tactical_stasis_enemy.gdshader). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|TurnBased")
@@ -219,10 +223,12 @@ public:
 
 	/**
 	 * Mouse click in turn-based mode (Godot main.gd _handle_gorky17_tactical_click): select an operative, attack an
-	 * enemy / barricade, walk; a barrel next to the operative (or an adjacent turret) is picked up for relocation unless
-	 * Shift is held (Shift + barrel = shot). While relocating, the click picks the target cell.
+	 * enemy, walk; a barrel / barricade / turret next to the operative is picked up for relocation. bAttackOrder = Ctrl
+	 * held (user request 2026-10-06: Ctrl + click attacks in every mode; it replaced Godot's Shift): an enemy / barrel /
+	 * barricade is attacked, never a walk or a selection (TurnClickRules::ResolveClick). While relocating, the click picks
+	 * the target cell.
 	 */
-	void HandleWorldClick(const FVector& WorldPoint, AActor* HitActor, bool bShift = false);
+	void HandleWorldClick(const FVector& WorldPoint, AActor* HitActor, bool bAttackOrder = false);
 
 	// --- Object relocation (barrels, turrets, barricades) ---
 
@@ -478,6 +484,10 @@ private:
 	TArray<TWeakObjectPtr<AActor>> TurretQueue;
 	TMap<TWeakObjectPtr<AActor>, int32> BurningBarrels;
 	TArray<TWeakObjectPtr<AActor>> FrozenActors;
+	/** Every enemy held by this fight (AEnemyCharacter::SetTurnBasedHeld) with its place when frozen (stasis anchor; grid units use their cell). */
+	TMap<TWeakObjectPtr<AEnemyCharacter>, FVector> HeldAnchors;
+	/** Puts back a held enemy pushed off its cell / place (or outside the grid) — the guard of the 2026-10-06 bug fix. */
+	void EnforceHeldEnemies();
 	TArray<FMover> Movers;
 	FExposedZones Zones;
 
@@ -495,6 +505,8 @@ private:
 	ETurnPhase Phase = ETurnPhase::Inactive;
 	int32 ActiveIndex = 0;
 	int32 Round = 0;
+	/** EnforceHeldEnemies corrections this fight. */
+	int32 GuardCorrections = 0;
 	/** Turn-based barricade contact hits this fight (Sprint 06-C). */
 	int32 ContactHitsThisFight = 0;
 	bool bSquadUnitMoving = false;

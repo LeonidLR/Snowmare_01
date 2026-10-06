@@ -184,7 +184,8 @@ bool UTacticalSightSubsystem::GetBelief(const AEnemyCharacter* Enemy, const AAct
 	{
 		return false;
 	}
-	if (!bWasActive || !IsActive())
+	// A horde (UHordeSubsystem) knows where the squad is: always «perceived».
+	if (!bWasActive || !IsActive() || (Enemy && Enemy->bKnowsSquadPosition))
 	{
 		OutLocation = Operative->GetActorLocation();
 		if (bOutPerceived)

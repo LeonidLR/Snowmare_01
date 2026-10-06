@@ -40,6 +40,38 @@ namespace FirePostureRules
 			|| NewPhase == ECodexGamePhase::Exploration || NewPhase == ECodexGamePhase::GameOver;
 	}
 
+	EPostureOrderScope GetOrderScope(bool bSquadWideModifier, int32 NumSelected)
+	{
+		return bSquadWideModifier || NumSelected <= 0 ? EPostureOrderScope::Squad : EPostureOrderScope::Selected;
+	}
+
+	bool GetCommonPosture(const TArray<ESquadFirePosture>& Postures, ESquadFirePosture& OutCommon)
+	{
+		if (Postures.IsEmpty())
+		{
+			return false;
+		}
+		for (const ESquadFirePosture Posture : Postures)
+		{
+			if (Posture != Postures[0])
+			{
+				return false;
+			}
+		}
+		OutCommon = Postures[0];
+		return true;
+	}
+
+	FString GetLetter(ESquadFirePosture Posture)
+	{
+		switch (Posture)
+		{
+		case ESquadFirePosture::Passive: return TEXT("П");
+		case ESquadFirePosture::Defensive: return TEXT("О");
+		default: return TEXT("А");
+		}
+	}
+
 	ESquadFirePosture Next(ESquadFirePosture Posture)
 	{
 		switch (Posture)

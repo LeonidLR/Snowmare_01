@@ -268,11 +268,26 @@ void USquadSubsystem::SetSquadPosture(ESquadFirePosture Posture)
 	UE_LOG(LogCodexTactics, Display, TEXT("Squad fire posture: %s"), *FirePostureRules::GetLabel(Posture));
 }
 
-int32 USquadSubsystem::ApplyPostureOrder(ESquadFirePosture Posture)
+TArray<AOperativeCharacter*> USquadSubsystem::GetPostureOrderTargets() const
+{
+	if (HasMultiSelection())
+	{
+		return GetSelectedGroup();
+	}
+	TArray<AOperativeCharacter*> Targets;
+	if (AOperativeCharacter* Controlled = GetLeader())
+	{
+		Targets.Add(Controlled);
+	}
+	return Targets;
+}
+
+int32 USquadSubsystem::ApplyPostureOrder(ESquadFirePosture Posture, bool bSquadWide)
 {
 	const FText Name = FText::FromString(FirePostureRules::GetLabel(Posture));
 	UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr;
-	if (!HasMultiSelection())
+	const TArray<AOperativeCharacter*> Targets = GetPostureOrderTargets();
+	if (FirePostureRules::GetOrderScope(bSquadWide, Targets.Num()) == EPostureOrderScope::Squad)
 	{
 		SetSquadPosture(Posture);
 		for (AOperativeCharacter* Member : GetMembers())
@@ -285,8 +300,7 @@ int32 USquadSubsystem::ApplyPostureOrder(ESquadFirePosture Posture)
 		}
 		return GetMembers().Num();
 	}
-	const TArray<AOperativeCharacter*> Group = GetSelectedGroup();
-	for (AOperativeCharacter* Member : Group)
+	for (AOperativeCharacter* Member : Targets)
 	{
 		Member->bHasPostureOverride = true;
 		Member->PostureOverride = Posture;
@@ -294,11 +308,12 @@ int32 USquadSubsystem::ApplyPostureOrder(ESquadFirePosture Posture)
 	}
 	if (Messages)
 	{
-		Messages->PostMessage(LOCTEXT("PostureSpeaker", "ОТРЯД"),
-			FText::Format(LOCTEXT("GroupPosture", "🎯 Режим огня выбранных бойцов ({0}): {1}"), Group.Num(), Name));
+		Messages->PostMessage(LOCTEXT("PostureSpeaker", "ОТРЯД"), Targets.Num() == 1
+			? FText::Format(LOCTEXT("UnitPosture", "🎯 Режим огня бойца {0}: {1} (Alt — весь отряд)"), Targets[0]->DisplayName, Name)
+			: FText::Format(LOCTEXT("GroupPosture", "🎯 Режим огня выбранных бойцов ({0}): {1}"), Targets.Num(), Name));
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("Fire posture %s for %d selected operatives"), *FirePostureRules::GetLabel(Posture), Group.Num());
-	return Group.Num();
+	UE_LOG(LogCodexTactics, Display, TEXT("Fire posture %s for %d selected operatives"), *FirePostureRules::GetLabel(Posture), Targets.Num());
+	return Targets.Num();
 }
 
 ESquadFirePosture USquadSubsystem::GetEffectivePosture(const AOperativeCharacter* Operative) const

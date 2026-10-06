@@ -124,7 +124,7 @@ namespace TurnBasedPushSmoke
 			const FIntPoint Diff = State.BarrelCell - LeaderState->GridPos;
 			Check(State, FMath::Abs(Diff.X) + FMath::Abs(Diff.Y) == 1, TEXT("barrel next to the commander"));
 
-			TurnBased->HandleWorldClick(State.Barrel->GetActorLocation(), State.Barrel.Get(), /*bShift*/ false);
+			TurnBased->HandleWorldClick(State.Barrel->GetActorLocation(), State.Barrel.Get(), /*bAttackOrder (Ctrl)*/ false);
 			Check(State, TurnBased->IsRelocating() && TurnBased->GetRelocatingObject() == State.Barrel.Get(), TEXT("click picks the barrel up"));
 			Check(State, !TurnBased->GetRelocateCells().Contains(LeaderState->GridPos) && TurnBased->GetRelocateCells().Num() > 0
 				&& TurnBased->GetRelocateCells().Num() <= 3, FString::Printf(TEXT("%d target cells, not the commander's"), TurnBased->GetRelocateCells().Num()));

@@ -108,6 +108,43 @@ bool FPostureAggressiveStartsAmbushTest::RunTest(const FString&)
 	return true;
 }
 
+POSTURE_TEST(FPostureOrderSelectedOnlyTest, "OrderSetsSelectedOperativeOnly")
+bool FPostureOrderSelectedOnlyTest::RunTest(const FString&)
+{
+	using namespace FirePostureRules;
+	// User decision 2026-10-06: , . / change the selected operative(s) — the controlled leader alone, or a group.
+	TestEqual(TEXT("One operative (the leader) selected"), GetOrderScope(false, 1), EPostureOrderScope::Selected);
+	TestEqual(TEXT("A box-selected group"), GetOrderScope(false, 3), EPostureOrderScope::Selected);
+	TestEqual(TEXT("Nobody selected: the squad"), GetOrderScope(false, 0), EPostureOrderScope::Squad);
+	// Personal overrides: the leader Passive, the others keep the squad's Aggressive.
+	TestEqual(TEXT("Leader's own"), Resolve(ESquadFirePosture::Aggressive, true, ESquadFirePosture::Passive), ESquadFirePosture::Passive);
+	TestEqual(TEXT("Mate keeps the squad's"), Resolve(ESquadFirePosture::Aggressive, false, ESquadFirePosture::Passive), ESquadFirePosture::Aggressive);
+	return true;
+}
+
+POSTURE_TEST(FPostureAltSquadWideTest, "AltSetsWholeSquad")
+bool FPostureAltSquadWideTest::RunTest(const FString&)
+{
+	using namespace FirePostureRules;
+	TestEqual(TEXT("Alt with one selected"), GetOrderScope(true, 1), EPostureOrderScope::Squad);
+	TestEqual(TEXT("Alt with a group"), GetOrderScope(true, 3), EPostureOrderScope::Squad);
+	return true;
+}
+
+POSTURE_TEST(FPostureIndicatorTest, "SelectionIndicator")
+bool FPostureIndicatorTest::RunTest(const FString&)
+{
+	using namespace FirePostureRules;
+	ESquadFirePosture Common = ESquadFirePosture::Aggressive;
+	TestTrue(TEXT("Same postures"), GetCommonPosture({ ESquadFirePosture::Defensive, ESquadFirePosture::Defensive }, Common));
+	TestEqual(TEXT("Shared one"), Common, ESquadFirePosture::Defensive);
+	TestFalse(TEXT("Mixed group: none lit"), GetCommonPosture({ ESquadFirePosture::Defensive, ESquadFirePosture::Passive }, Common));
+	TestFalse(TEXT("Nobody"), GetCommonPosture({}, Common));
+	TestEqual(TEXT("Letters"), GetLetter(ESquadFirePosture::Passive) + GetLetter(ESquadFirePosture::Defensive) + GetLetter(ESquadFirePosture::Aggressive),
+		FString(TEXT("ПОА")));
+	return true;
+}
+
 #undef POSTURE_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

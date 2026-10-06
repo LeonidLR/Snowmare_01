@@ -22,14 +22,17 @@ class USquadSubsystem;
  * supply crate / trapped object = remote detonation; during the tactical pause the shot is planned instead.
  * Ctrl + X: restart the mission (Godot _restart_current_test_mode).
  * While the bottom dialogue is open, orders are blocked: Space / Enter = next line, Esc = skip.
- * Turn-based combat (UTurnBasedCombatSubsystem): click = select / attack / walk, 1..3 select, Tab = next operative,
- * Enter = end the squad turn, Z / C / V = stance (1 AP), R = turn 90° (1 AP).
+ * Turn-based combat (UTurnBasedCombatSubsystem): click = select / attack an enemy / walk, Ctrl + click = attack (enemy,
+ * barrel, barricade — the same attack key as in real time and in the pause, user request 2026-10-06; Shift no longer
+ * attacks there), 1..3 select, Tab = next operative, Enter = end the squad turn, Z / C / V = stance (1 AP), R = turn
+ * 90° (1 AP).
  * Combat time modes (RTS control, user request 2026-10-06, FCombatTimeModeRules): a fight starts in full real time —
  * clicks, stances, attacks and abilities run at once, no Space needed; Space TAP = tactical pause on / off (orders are
  * planned with markers and run on resume); Space HOLD 1.5 s = turn-based fight (from real time or the pause), HOLD 1.5 s
  * there = back to full real time. During turn-based combat ground clicks do not issue real-time moves.
- * Fire posture keys (user decision 2026-10-06): , = Passive, . = Defensive, / = Aggressive — the box-selected operatives
- * when several are selected, else the whole squad (USquadSubsystem::ApplyPostureOrder).
+ * Fire posture keys (user decisions 2026-10-06): , = Passive, . = Defensive, / = Aggressive for the SELECTED operative(s)
+ * only — the box-selected group, else the leader you control; Alt + , . / = the whole squad (like Alt + Z / C / V for
+ * the stance). The action bar buttons follow the same rule (Alt + click = squad). USquadSubsystem::ApplyPostureOrder.
  * Input actions are created in code for now; they move to assets once the editor setup exists.
  * Godot reference: Scenes/movements/main.gd (_input, raycast_from_mouse, _select_squad_member_by_index).
  */
@@ -98,8 +101,17 @@ public:
 	/** FCombatTimeModeRules::GetOrderDispatch says Blocked now (no hint). */
 	bool IsRealTimeOrderLocked() const;
 
-	/** Posture keys / action bar posture buttons: see USquadSubsystem::ApplyPostureOrder (ignored during a dialogue). */
-	void ApplyFirePosture(ESquadFirePosture Posture);
+	/**
+	 * Posture keys / action bar posture buttons (ignored during a dialogue): the selected operative(s), or the whole squad
+	 * when bSquadWide (Alt held). See USquadSubsystem::ApplyPostureOrder.
+	 */
+	void ApplyFirePosture(ESquadFirePosture Posture, bool bSquadWide = false);
+
+	/** Ctrl (either side) is held: the attack-order modifier of a click in every combat mode. */
+	bool IsAttackModifierDown() const;
+
+	/** Alt (either side) is held: squad-wide stance / posture orders. */
+	bool IsSquadWideModifierDown() const;
 
 	/** Commander Mode on / off (Ctrl + T, the action bar «АВТО» button). */
 	void ToggleAutonomy();
@@ -146,9 +158,9 @@ private:
 	void RestartMission();
 	/** Ctrl + T: Commander Mode (autonomous squad combat) on / off. */
 	void ToggleAutonomyKey() { ToggleAutonomy(); }
-	void PosturePassiveKey() { ApplyFirePosture(ESquadFirePosture::Passive); }
-	void PostureDefensiveKey() { ApplyFirePosture(ESquadFirePosture::Defensive); }
-	void PostureAggressiveKey() { ApplyFirePosture(ESquadFirePosture::Aggressive); }
+	void PosturePassiveKey() { ApplyFirePosture(ESquadFirePosture::Passive, IsSquadWideModifierDown()); }
+	void PostureDefensiveKey() { ApplyFirePosture(ESquadFirePosture::Defensive, IsSquadWideModifierDown()); }
+	void PostureAggressiveKey() { ApplyFirePosture(ESquadFirePosture::Aggressive, IsSquadWideModifierDown()); }
 	/** The squad member a world click hit (body / owned actor, else the closest within SelectRadius); nullptr when none. */
 	class AOperativeCharacter* FindClickedMember(const FHitResult& Hit) const;
 	double LastOrderLockHintTime = -100.0;
