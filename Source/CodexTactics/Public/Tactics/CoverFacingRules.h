@@ -11,8 +11,11 @@
  * turns to the other side and forward / backward swap. Threat source: the priority target, else the nearest visible
  * enemy, else the nearest heard enemy / ghost silhouette; none known -> the nearest exposed edge. The threat is
  * projected onto the wall tangent; it must lie HysteresisCm past the slot on the other side to flip (no flicker).
- * At an exposed edge on the facing side he takes the corner pose (cvr_*_look_at_idle); an edge a little further
- * is walked to automatically. Pure rules, tested in CodexTactics.Tactics.Cover.ShimmyFacesThreat / ThreatSideFlipHysteresis
+ * At an exposed edge on the facing side he takes the corner pose: with a known / active threat (visible, heard, ordered
+ * target, shot taken within FireReadyHoldSeconds) the FIRE-READY pose (cvr_*_fire_idle_L/R, entered through
+ * cvr_*_idle_to_fire, left through cvr_*_fire_to_idle); with no threat the look-around pose (cvr_*_look_at_idle_L/R).
+ * Clip side: index 0 = _L = the operative's own left as he stands back to the wall (ECoverFacing::Left =
+ * -RightTangent), 1 = _R. An edge a little further is walked to automatically. Pure rules, tested in CodexTactics.Tactics.Cover.ShimmyFacesThreat / ThreatSideFlipHysteresis
  * / CornerPoseAndSnap / ThreatPriority.
  */
 struct CODEXTACTICS_API FCoverFacingConfig
@@ -31,6 +34,8 @@ struct CODEXTACTICS_API FCoverFacingConfig
 	float ThreatUpdateSeconds = 0.2f;
 	/** Visible enemies beyond this are ignored as a threat, cm. */
 	float MaxThreatDistanceCm = 5000.f;
+	/** The fire-ready corner pose is held this long after the last threat sighting / shot, then it relaxes to the look-around pose, s. */
+	float FireReadyHoldSeconds = 4.f;
 };
 
 /** How a threat is known (lower = stronger). */
@@ -81,8 +86,18 @@ namespace CoverFacingRules
 	/** The actor yaw is within ToleranceDeg of FacingYaw (the wall normal). */
 	CODEXTACTICS_API bool IsFacingAligned(float ActorYaw, const FCoverSlot& Slot, ECoverFacing Side, float ToleranceDeg);
 
-	/** A shimmy in ShimmyDirection (+1 right, -1 left) is forward (towards the facing side) — else backwards. */
-	CODEXTACTICS_API bool IsShimmyForward(ECoverFacing Facing, float ShimmyDirection);
+	/**
+	 * A shimmy in ShimmyDirection (+1 right, -1 left) is forward (towards the facing side) — else backwards (still facing
+	 * the threat). User rule 2026-10-06: with NO threat known (bThreatKnown false) he always moves face-forward in the
+	 * direction of the move (moving left = walk_fwd_loop_L, right = walk_fwd_loop_R).
+	 */
+	CODEXTACTICS_API bool IsShimmyForward(ECoverFacing Facing, float ShimmyDirection, bool bThreatKnown = true);
+
+	/**
+	 * Facing once a shimmy in ShimmyDirection is ordered: a known threat keeps the side facing it; with no threat known
+	 * the facing (idle clip side after the move) follows the movement direction.
+	 */
+	CODEXTACTICS_API ECoverFacing FacingForShimmy(ECoverFacing Current, float ShimmyDirection, bool bThreatKnown);
 
 	/** Distance to the exposed edge on Side, cm; negative when that side has no exposed edge in probe range. */
 	CODEXTACTICS_API float EdgeDistance(const FCoverSlot& Slot, ECoverFacing Side);
@@ -96,6 +111,20 @@ namespace CoverFacingRules
 	 */
 	CODEXTACTICS_API bool ShouldSnapToCorner(const FCoverSlot& Slot, ECoverFacing Facing, float& OutShiftCm,
 		const FCoverFacingConfig& Config = FCoverFacingConfig());
+
+	/**
+	 * The fire-ready corner pose (cvr_*_fire_idle) is wanted: at the exposed edge on the facing side, not shimmying, and a
+	 * threat was seen / ordered / shot at no longer than HoldSeconds ago. Else the corner pose is the look-around idle.
+	 */
+	CODEXTACTICS_API bool IsFireReady(bool bAtCorner, bool bShimmying, bool bHasThreat, float SecondsSinceThreat,
+		float HoldSeconds = FCoverFacingConfig().FireReadyHoldSeconds);
+
+	/**
+	 * Clip index of a shimmy loop. The walk clips' _L / _R is the MOVEMENT direction along the wall (M4 walk_fwd_loop_L =
+	 * face-forward to the left, walk_bwd_loop_L = backing away to the left): forward = towards the facing side = its
+	 * index, backward = away from it = the other index (threat right: right = fwd_loop_R, left = bwd_loop_L).
+	 */
+	CODEXTACTICS_API int32 ShimmyClipIndex(ECoverFacing Facing, bool bForward);
 
 	/** Clip array index of a facing side: 0 = Left (pack *_L), 1 = Right (pack *_R). */
 	CODEXTACTICS_API int32 ClipIndex(ECoverFacing Facing);

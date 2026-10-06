@@ -77,9 +77,18 @@ namespace CoverFacingRules
 		return FMath::Abs(FRotator::NormalizeAxis(ActorYaw - FacingYaw(Slot, Side))) <= ToleranceDeg;
 	}
 
-	bool IsShimmyForward(ECoverFacing Facing, float ShimmyDirection)
+	bool IsShimmyForward(ECoverFacing Facing, float ShimmyDirection, bool bThreatKnown)
 	{
-		return (Facing == ECoverFacing::Right) == (ShimmyDirection > 0.f);
+		return !bThreatKnown || (Facing == ECoverFacing::Right) == (ShimmyDirection > 0.f);
+	}
+
+	ECoverFacing FacingForShimmy(ECoverFacing Current, float ShimmyDirection, bool bThreatKnown)
+	{
+		if (bThreatKnown || FMath::IsNearlyZero(ShimmyDirection))
+		{
+			return Current;
+		}
+		return ShimmyDirection > 0.f ? ECoverFacing::Right : ECoverFacing::Left;
 	}
 
 	float EdgeDistance(const FCoverSlot& Slot, ECoverFacing Side)
@@ -107,6 +116,17 @@ namespace CoverFacingRules
 		}
 		OutShiftCm = FMath::Max(Distance - Config.CornerStandOffCm, 0.f);
 		return OutShiftCm > 1.f;
+	}
+
+	bool IsFireReady(bool bAtCorner, bool bShimmying, bool bHasThreat, float SecondsSinceThreat, float HoldSeconds)
+	{
+		return bAtCorner && !bShimmying && bHasThreat && SecondsSinceThreat <= HoldSeconds;
+	}
+
+	int32 ShimmyClipIndex(ECoverFacing Facing, bool bForward)
+	{
+		const int32 Side = ClipIndex(Facing);
+		return bForward ? Side : 1 - Side;
 	}
 
 	int32 ClipIndex(ECoverFacing Facing)

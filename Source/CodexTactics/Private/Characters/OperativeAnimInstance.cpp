@@ -71,6 +71,15 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 			TEXT("/Game/M4_Cover_Pack/Animations/stand/anim_M4_cvr_std_look_at_idle_R.anim_M4_cvr_std_look_at_idle_R"));
 		Fill(CoverCrouchCorner, TEXT("/Game/M4_Cover_Pack/Animations/crouch/anim_M4_cvr_crch_look_at_idle_L.anim_M4_cvr_crch_look_at_idle_L"),
 			TEXT("/Game/M4_Cover_Pack/Animations/crouch/anim_M4_cvr_crch_look_at_idle_R.anim_M4_cvr_crch_look_at_idle_R"));
+		// Fire-ready corner stance + its transitions (user rule 2026-10-06, see UpdateCoverLayer).
+		auto Stand = [](const TCHAR* Name) { return FString::Printf(TEXT("/Game/M4_Cover_Pack/Animations/stand/anim_M4_%s.anim_M4_%s"), Name, Name); };
+		auto Crouch = [](const TCHAR* Name) { return FString::Printf(TEXT("/Game/M4_Cover_Pack/Animations/crouch/anim_M4_%s.anim_M4_%s"), Name, Name); };
+		Fill(CoverStandFireIdle, *Stand(TEXT("cvr_std_fire_idle_L")), *Stand(TEXT("cvr_std_fire_idle_R")));
+		Fill(CoverCrouchFireIdle, *Crouch(TEXT("cvr_crch_fire_idle_L")), *Crouch(TEXT("cvr_crch_fire_idle_R")));
+		Fill(CoverStandFireEnter, *Stand(TEXT("cvr_std_idle_L_to_fire")), *Stand(TEXT("cvr_std_idle_R_to_fire")));
+		Fill(CoverCrouchFireEnter, *Crouch(TEXT("cvr_crch_idle_to_fire_L")), *Crouch(TEXT("cvr_crch_idle_to_fire_R")));
+		Fill(CoverStandFireExit, *Stand(TEXT("cvr_std_fire_to_std_idle_L")), *Stand(TEXT("cvr_std_fire_to_std_idle_R")));
+		Fill(CoverCrouchFireExit, *Crouch(TEXT("cvr_crch_fire_to_idle_L")), *Crouch(TEXT("cvr_crch_fire_to_idle_R")));
 	}
 }
 
@@ -349,12 +358,24 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 		}
 		if (Clip)
 		{
-			if (UAnimMontage* Loop = CoverLoopMontage.Get(); Loop && Montage_IsPlaying(Loop))
+			// Shot from the corner (user rule 2026-10-06): from the plain cover idle the idle -> fire transition plays first, then
+			// the shot, then the fire-ready idle again; already in the fire-ready pose the shot plays at once.
+			const bool bCornerShot = !(Shooter && Shooter->bIsBlindFiring) && bCoverAtCorner;
+			if (bCornerShot && PickCoverClip(bIsCrouching ? CoverCrouchFireIdle : CoverStandFireIdle))
 			{
-				Montage_Stop(0.1f, Loop);
+				if (CoverPendingFireClip.IsValid())
+				{
+					return; // the transition is playing and a shot is queued behind it
+				}
+				UAnimSequenceBase* Enter = bCoverInFirePose ? nullptr : PickCoverClip(bIsCrouching ? CoverCrouchFireEnter : CoverStandFireEnter);
+				bCoverInFirePose = true;
+				if (Enter && PlayCoverOneShot(Enter, 0.1f, 0.05f))
+				{
+					CoverPendingFireClip = Clip;
+					return;
+				}
 			}
-			CoverOneShotMontage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, 0.1f, 0.2f);
-			CoverClipsPlayed += CoverOneShotMontage.IsValid() ? 1 : 0;
+			PlayCoverOneShot(Clip, 0.1f, 0.2f);
 			return;
 		}
 	}
@@ -624,6 +645,7 @@ void UOperativeAnimInstance::UpdateState()
 	bBlindFiring = Operative->bIsBlindFiring;
 	bCoverShimmyForward = bShimmying && Operative->IsShimmyForward();
 	bCoverAtCorner = bInCover && Operative->bAtCoverCorner;
+	bCoverFireReady = bInCover && Operative->IsCoverFireReady();
 	UpdateCoverLayer(*Operative);
 	bIsMoving = Speed > 5.f;
 	bIsSprinting = Operative->IsSprinting();
@@ -778,6 +800,17 @@ UAnimSequenceBase* UOperativeAnimInstance::PickCoverClip(const TArray<TObjectPtr
 	return Clips.IsValidIndex(1 - Index) ? Clips[1 - Index].Get() : nullptr;
 }
 
+UAnimSequenceBase* UOperativeAnimInstance::PickShimmyClip(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips, bool bForward) const
+{
+	// The walk clips' suffix is the movement direction along the wall: the backing-away clip of the other side's suffix.
+	const int32 Index = CoverFacingRules::ShimmyClipIndex(CoverFacing, bForward);
+	if (Clips.IsValidIndex(Index) && Clips[Index])
+	{
+		return Clips[Index];
+	}
+	return Clips.IsValidIndex(1 - Index) ? Clips[1 - Index].Get() : nullptr;
+}
+
 void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operative)
 {
 	const bool bEntered = bInCover && !bWasInCover;
@@ -795,6 +828,16 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		}
 		CoverLoopMontage.Reset();
 		CoverLoopClip.Reset();
+		CoverPendingFireClip.Reset();
+		// Leaving the fire-ready pose: the exit transition plays when he stays put (walking on blends straight out).
+		if (bCoverInFirePose && Speed < 20.f)
+		{
+			if (UAnimSequenceBase* Exit = PickCoverClip(bIsCrouching ? CoverCrouchFireExit : CoverStandFireExit))
+			{
+				PlayCoverOneShot(Exit, 0.1f, 0.2f);
+			}
+		}
+		bCoverInFirePose = false;
 		return;
 	}
 	if (!bInCover || bIsProne)
@@ -809,17 +852,73 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 			StopSlotAnimation(0.15f, FullBodySlot);
 			CoverOneShotMontage = PlaySlotAnimationAsDynamicMontage(Enter, FullBodySlot, 0.15f, 0.2f);
 			CoverClipsPlayed += CoverOneShotMontage.IsValid() ? 1 : 0;
+			bCoverEnterPlaying = CoverOneShotMontage.IsValid();
+			if (bCoverEnterPlaying)
+			{
+				CoverClipLog.Add(Enter->GetName());
+			}
 			CoverLoopMontage.Reset();
 			CoverLoopClip.Reset();
 		}
 	}
-	if (UAnimMontage* OneShot = CoverOneShotMontage.Get(); OneShot && Montage_IsPlaying(OneShot))
 	{
-		return; // enter / fire clip in progress
+		UAnimMontage* OneShot = CoverOneShotMontage.Get();
+		bool bOneShotPlaying = OneShot && Montage_IsPlaying(OneShot);
+		if (bCoverEnterPlaying && (!bOneShotPlaying || bShimmying))
+		{
+			// The enter clip is done, or a shimmy ordered right after the entry cuts it short (never a walk blocked by it).
+			if (bOneShotPlaying)
+			{
+				Montage_Stop(0.15f, OneShot);
+				bOneShotPlaying = false;
+			}
+			bCoverEnterPlaying = false;
+		}
+		if (UAnimSequenceBase* Pending = CoverPendingFireClip.Get())
+		{
+			// The shot queued behind the idle -> fire transition starts as that ends.
+			if (!bOneShotPlaying || OneShot->GetPlayLength() - Montage_GetPosition(OneShot) <= 0.12f)
+			{
+				CoverPendingFireClip.Reset();
+				PlayCoverOneShot(Pending, 0.1f, 0.2f);
+				return;
+			}
+		}
+		if (bOneShotPlaying)
+		{
+			return; // enter / transition / fire clip in progress
+		}
 	}
 	if (IsPlayingStanceTransition())
 	{
 		return; // stand <-> crouch at the wall: the stance clip plays, the loop follows
+	}
+	// Fire-ready pose (user rule 2026-10-06): a threat is known and he stands at the exposed edge on its side -> the
+	// idle -> fire transition, then the fire-ready idle; the exit transition when the threat is gone for the hold time,
+	// he shimmies off the edge or leaves the cover. Without the clips the look-around corner pose stands in.
+	UAnimSequenceBase* FireIdle = PickCoverClip(bIsCrouching ? CoverCrouchFireIdle : CoverStandFireIdle);
+	const bool bWantFirePose = bCoverFireReady && FireIdle;
+	if (bWantFirePose && !bCoverInFirePose)
+	{
+		bCoverInFirePose = true;
+		if (UAnimSequenceBase* Enter = PickCoverClip(bIsCrouching ? CoverCrouchFireEnter : CoverStandFireEnter))
+		{
+			if (PlayCoverOneShot(Enter, 0.2f, 0.1f))
+			{
+				return;
+			}
+		}
+	}
+	else if (!bWantFirePose && bCoverInFirePose)
+	{
+		bCoverInFirePose = false;
+		if (UAnimSequenceBase* Exit = PickCoverClip(bIsCrouching ? CoverCrouchFireExit : CoverStandFireExit))
+		{
+			if (PlayCoverOneShot(Exit, 0.1f, 0.2f))
+			{
+				return;
+			}
+		}
 	}
 	// The loop wanted now: shimmy forward (towards the threat side he faces) / backwards (away from it, still facing it),
 	// the corner-ready pose at the exposed edge on that side, else the idle. Never the plain locomotion walk in cover.
@@ -827,13 +926,17 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	float PlayRate = 1.f;
 	if (bShimmying)
 	{
-		Wanted = PickCoverClip(bIsCrouching ? (bCoverShimmyForward ? CoverCrouchMoveForward : CoverCrouchMoveBackward)
-			: (bCoverShimmyForward ? CoverStandMoveForward : CoverStandMoveBackward));
+		Wanted = PickShimmyClip(bIsCrouching ? (bCoverShimmyForward ? CoverCrouchMoveForward : CoverCrouchMoveBackward)
+			: (bCoverShimmyForward ? CoverStandMoveForward : CoverStandMoveBackward), bCoverShimmyForward);
 		PlayRate = FMath::Clamp(Speed / FMath::Max(CoverShimmyClipSpeed, 1.f), 0.5f, 2.f);
+	}
+	if (!Wanted && bCoverInFirePose && FireIdle)
+	{
+		Wanted = FireIdle; // threat known at the edge: ready to fire
 	}
 	if (!Wanted && bCoverAtCorner)
 	{
-		Wanted = PickCoverClip(bIsCrouching ? CoverCrouchCorner : CoverStandCorner);
+		Wanted = PickCoverClip(bIsCrouching ? CoverCrouchCorner : CoverStandCorner); // no threat: looking round the corner
 	}
 	if (!Wanted)
 	{
@@ -856,4 +959,58 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	CoverLoopClip = Wanted;
 	CoverLoopMontage = PlaySlotAnimationAsDynamicMontage(Wanted, FullBodySlot, 0.2f, 0.2f, PlayRate, /*LoopCount*/ 1000);
 	CoverClipsPlayed += CoverLoopMontage.IsValid() ? 1 : 0;
+	if (CoverLoopMontage.IsValid())
+	{
+		CoverClipLog.Add(Wanted->GetName());
+		if (CoverClipLog.Num() > 40)
+		{
+			CoverClipLog.RemoveAt(0, CoverClipLog.Num() - 40);
+		}
+	}
+}
+
+void UOperativeAnimInstance::GetCoverPlayback(FString& OutClip, float& OutMontageWeight, float& OutSlotNodeWeight) const
+{
+	OutClip = TEXT("none");
+	OutMontageWeight = 0.f;
+	OutSlotNodeWeight = GetSlotNodeGlobalWeight(FullBodySlot);
+	if (const FAnimMontageInstance* Instance = GetActiveMontageInstance(); Instance && Instance->Montage)
+	{
+		OutMontageWeight = Instance->GetWeight();
+		for (const FSlotAnimationTrack& Track : Instance->Montage->SlotAnimTracks)
+		{
+			if (Track.AnimTrack.AnimSegments.Num() > 0 && Track.AnimTrack.AnimSegments[0].GetAnimReference())
+			{
+				OutClip = Track.AnimTrack.AnimSegments[0].GetAnimReference()->GetName();
+				break;
+			}
+		}
+	}
+}
+
+bool UOperativeAnimInstance::PlayCoverOneShot(UAnimSequenceBase* Clip, float BlendIn, float BlendOut)
+{
+	if (!Clip)
+	{
+		return false;
+	}
+	if (UAnimMontage* Loop = CoverLoopMontage.Get(); Loop && Montage_IsPlaying(Loop))
+	{
+		Montage_Stop(BlendIn, Loop);
+	}
+	CoverLoopMontage.Reset();
+	CoverLoopClip.Reset();
+	bCoverEnterPlaying = false;
+	CoverOneShotMontage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, BlendIn, BlendOut);
+	if (!CoverOneShotMontage.IsValid())
+	{
+		return false;
+	}
+	++CoverClipsPlayed;
+	CoverClipLog.Add(Clip->GetName());
+	if (CoverClipLog.Num() > 40)
+	{
+		CoverClipLog.RemoveAt(0, CoverClipLog.Num() - 40);
+	}
+	return true;
 }

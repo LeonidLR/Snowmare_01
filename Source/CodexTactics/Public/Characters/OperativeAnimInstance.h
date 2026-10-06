@@ -441,6 +441,13 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
 	bool bCoverAtCorner = false;
 
+	/**
+	 * Corner pose with an active threat (AOperativeCharacter::IsCoverFireReady): hold the fire-ready idle
+	 * (CoverStandFireIdle / CoverCrouchFireIdle); without it the corner pose is the look-around idle (CoverStandCorner).
+	 */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	bool bCoverFireReady = false;
+
 	/** Play the cover clips natively on FullBodySlot (untick once the AnimBP has its own cover states). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation")
 	bool bUseNativeCoverClips = true;
@@ -453,8 +460,9 @@ public:
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchIdle = { nullptr, nullptr };
 
 	/**
-	 * Corner-ready pose at the exposed edge on the facing side (M4 cvr_std_look_at_idle_L / _R, cvr_crch_look_at_idle_L
-	 * / _R). Empty = loaded from /Game/M4_Cover_Pack at start when the pack is present (idle otherwise).
+	 * Look-around corner pose at the exposed edge on the facing side while NO threat is known (M4 cvr_std_look_at_idle_L
+	 * / _R, cvr_crch_look_at_idle_L / _R). Empty = loaded from /Game/M4_Cover_Pack at start when the pack is present
+	 * (idle otherwise). With a known threat the fire-ready idle below is held instead.
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandCorner = { nullptr, nullptr };
@@ -462,7 +470,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchCorner = { nullptr, nullptr };
 
-	/** Shimmy loops towards the facing side (M4 cvr_*_walk_fwd_loop) and away from it, walking backwards (walk_bwd_loop). */
+	/**
+	 * Shimmy loops towards the facing side (M4 cvr_*_walk_fwd_loop) and away from it, walking backwards (walk_bwd_loop).
+	 * [0] = _L, [1] = _R is the MOVEMENT direction along the wall for both: threat right -> right = fwd_loop_R, left =
+	 * bwd_loop_L (the backing-away clip of the opposite suffix faces the threat).
+	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandMoveForward = { nullptr, nullptr };
 
@@ -482,6 +494,31 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchFire = { nullptr, nullptr };
 
+	/**
+	 * Fire-ready corner stance at the exposed edge on the threat side (M4 cvr_std_fire_idle_L / _R, cvr_crch_fire_idle_L / _R:
+	 * [0] = _L, [1] = _R). Held while a threat is known; empty = loaded from /Game/M4_Cover_Pack at start, then the
+	 * look-around corner pose stands in.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandFireIdle = { nullptr, nullptr };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchFireIdle = { nullptr, nullptr };
+
+	/** Cover idle -> fire-ready transition (M4 cvr_std_idle_L_to_fire / _R_to_fire, cvr_crch_idle_to_fire_L / _R). Empty = no transition. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandFireEnter = { nullptr, nullptr };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchFireEnter = { nullptr, nullptr };
+
+	/** Fire-ready -> cover idle transition (M4 cvr_std_fire_to_std_idle_L / _R, cvr_crch_fire_to_idle_L / _R). Empty = no transition. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandFireExit = { nullptr, nullptr };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchFireExit = { nullptr, nullptr };
+
 	/** Blind fire round the corner (no M4 clip: the user supplies one; empty = the cover fire clip stands in). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverBlindFire = { nullptr, nullptr };
@@ -500,6 +537,15 @@ public:
 	/** The cover loop playing now (nullptr = none; smokes). */
 	UAnimSequenceBase* GetCoverLoopClip() const { return CoverLoopClip.Get(); }
 	int32 GetCoverClipsPlayed() const { return CoverClipsPlayed; }
+	/** Names of the cover clips played (loops, one-shots) in order, newest last, capped (smokes). */
+	const TArray<FString>& GetCoverClipLog() const { return CoverClipLog; }
+	/**
+	 * What the mesh REALLY plays on FullBodySlot (smokes): the sequence of the highest-weight active montage, that
+	 * montage's blend weight, and the FullBody slot node's weight in the AnimGraph (a node missing / blended out = 0).
+	 */
+	void GetCoverPlayback(FString& OutClip, float& OutMontageWeight, float& OutSlotNodeWeight) const;
+	/** In the fire-ready pose (entered, not yet left through the exit transition). */
+	bool IsInCoverFirePose() const { return bCoverInFirePose; }
 
 	// --- Rifle_2 locomotion (ABP_Operative_Rifle2, Scripts/Editor/setup_operative_rifle2_animation.py; RifleLocomotionRules) ---
 
@@ -619,7 +665,18 @@ private:
 	/** Cover baseline: the loop (idle / shimmy) by stance, facing and direction; the enter clip on the first frame. */
 	void UpdateCoverLayer(const AOperativeCharacter& Operative);
 	UAnimSequenceBase* PickCoverClip(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) const;
+	/** Shimmy loop: _L / _R = the movement direction (CoverFacingRules::ShimmyClipIndex), not the facing side. */
+	UAnimSequenceBase* PickShimmyClip(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips, bool bForward) const;
+	/** Plays a cover one-shot on FullBodySlot (stops the loop), logs it; true when it started. */
+	bool PlayCoverOneShot(UAnimSequenceBase* Clip, float BlendIn, float BlendOut);
 	bool bWasInCover = false;
+	/** The fire-ready pose is entered (enter transition played / fire-ready idle looping) until the exit transition plays. */
+	bool bCoverInFirePose = false;
+	/** The cover enter clip (from the open) is the one-shot playing: a shimmy ordered meanwhile cuts it short. */
+	bool bCoverEnterPlaying = false;
+	/** A shot waiting for the enter transition / the previous one-shot to end. */
+	TWeakObjectPtr<UAnimSequenceBase> CoverPendingFireClip;
+	TArray<FString> CoverClipLog;
 	TWeakObjectPtr<UAnimSequenceBase> CoverLoopClip;
 	TWeakObjectPtr<UAnimMontage> CoverLoopMontage;
 	TWeakObjectPtr<UAnimMontage> CoverOneShotMontage;

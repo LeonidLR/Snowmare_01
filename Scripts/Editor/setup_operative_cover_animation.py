@@ -19,6 +19,12 @@ Mapping (pack name -> property):
   cvr_std_fire_L/R                      -> CoverStandFire            cvr_crch_fire_L/R                 -> CoverCrouchFire
   std_idle_fwd_to_cvr_std_idle_L/R      -> CoverStandEnter           crch_idle_fwd_to_cvr_crch_idle_L/R -> CoverCrouchEnter
   cvr_std_look_at_idle_L/R              -> CoverStandCorner          cvr_crch_look_at_idle_L/R         -> CoverCrouchCorner
+  cvr_std_fire_idle_L/R                 -> CoverStandFireIdle        cvr_crch_fire_idle_L/R            -> CoverCrouchFireIdle
+  cvr_std_idle_L/R_to_fire              -> CoverStandFireEnter       cvr_crch_idle_to_fire_L/R         -> CoverCrouchFireEnter
+  cvr_std_fire_to_std_idle_L/R          -> CoverStandFireExit        cvr_crch_fire_to_idle_L/R         -> CoverCrouchFireExit
+  Corner pose: threat known -> fire_idle (look_at_idle only with no threat). Idle / fire_idle / fire / look_at / transitions:
+  [0]/[1] = _L/_R by the facing (edge) side. WALK clips: _L/_R = the MOVEMENT direction (bwd_loop_L = backing away to the
+  left, facing right) - CoverFacingRules::ShimmyClipIndex; the arrays stay [L, R] by suffix.
   (no blind fire clip in the pack: CoverBlindFire stays empty, the fire clip stands in)
 
 Run with the editor closed:
@@ -43,6 +49,13 @@ CLIPS = {
     "cover_crouch_enter": ("crouch/anim_M4_crch_idle_fwd_to_cvr_crch_idle_L", "crouch/anim_M4_crch_idle_fwd_to_cvr_crch_idle_R"),
     # Corner-ready pose at the exposed edge on the threat side (user rule 2026-10-06). Until this script runs again the
     # AnimInstance loads these two pairs from the pack at start.
+    # Fire-ready corner stance (threat known at the edge) + its transitions: idle -> fire, fire -> idle. [0]=_L, [1]=_R.
+    "cover_stand_fire_idle": ("stand/anim_M4_cvr_std_fire_idle_L", "stand/anim_M4_cvr_std_fire_idle_R"),
+    "cover_crouch_fire_idle": ("crouch/anim_M4_cvr_crch_fire_idle_L", "crouch/anim_M4_cvr_crch_fire_idle_R"),
+    "cover_stand_fire_enter": ("stand/anim_M4_cvr_std_idle_L_to_fire", "stand/anim_M4_cvr_std_idle_R_to_fire"),
+    "cover_crouch_fire_enter": ("crouch/anim_M4_cvr_crch_idle_to_fire_L", "crouch/anim_M4_cvr_crch_idle_to_fire_R"),
+    "cover_stand_fire_exit": ("stand/anim_M4_cvr_std_fire_to_std_idle_L", "stand/anim_M4_cvr_std_fire_to_std_idle_R"),
+    "cover_crouch_fire_exit": ("crouch/anim_M4_cvr_crch_fire_to_idle_L", "crouch/anim_M4_cvr_crch_fire_to_idle_R"),
     "cover_stand_corner": ("stand/anim_M4_cvr_std_look_at_idle_L", "stand/anim_M4_cvr_std_look_at_idle_R"),
     "cover_crouch_corner": ("crouch/anim_M4_cvr_crch_look_at_idle_L", "crouch/anim_M4_cvr_crch_look_at_idle_R"),
 }

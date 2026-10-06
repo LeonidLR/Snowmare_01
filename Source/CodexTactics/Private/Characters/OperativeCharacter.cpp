@@ -2765,6 +2765,7 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	if (!bSameWall)
 	{
 		bHasCoverThreat = false;
+		CoverThreatSeenTime = -1.0e9;
 		CoverShotTarget.Reset();
 		CoverFacing = PredictCoverFacing(Slot);
 	}
@@ -2822,6 +2823,7 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	BlindFireTimer = 0.f;
 	bAtCoverCorner = false;
 	bHasCoverThreat = false;
+	CoverThreatSeenTime = -1.0e9;
 	bCoverAutoSnap = false;
 	bCoverSnapPending = false;
 	CoverShotTarget.Reset();
@@ -2848,6 +2850,8 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 	PendingCoverSlot.WallNormal = CoverSlot.WallNormal; // one wall, one facing
 	bHasPendingCover = true;
 	ShimmyDirection = Along > 0.f ? 1.f : -1.f;
+	// No threat known: face forward in the direction of the move (and idle facing that side afterwards).
+	CoverFacing = CoverFacingRules::FacingForShimmy(CoverFacing, ShimmyDirection, bHasCoverThreat);
 	bShimmying = true;
 	bIsCornerLeaning = false;
 	bIsBlindFiring = false;
@@ -3002,13 +3006,13 @@ float AOperativeCharacter::GetCoverFacingYaw() const
 
 bool AOperativeCharacter::IsShimmyForward() const
 {
-	return CoverFacingRules::IsShimmyForward(CoverFacing, ShimmyDirection);
+	return CoverFacingRules::IsShimmyForward(CoverFacing, ShimmyDirection, bHasCoverThreat);
 }
 
 bool AOperativeCharacter::GatherCoverThreat(FVector& OutLocation) const
 {
 	UWorld* World = GetWorld();
-	if (!World)
+	if (!World || bIgnoreCoverThreatForTesting)
 	{
 		return false;
 	}
@@ -3082,10 +3086,12 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 	{
 		bHasCoverThreat = true; // remembered: the facing keeps the last known direction when nobody is in sight
 		CoverThreatLocation = Threat;
+		CoverThreatSeenTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0; // ... the fire-ready pose only while it is fresh
 	}
 	const ECoverFacing Old = CoverFacing;
+	// No threat known: the facing stays (nearest edge from PredictCoverFacing on entry, then the last movement direction).
 	CoverFacing = bHasCoverThreat ? CoverFacingRules::ResolveThreatSide(CoverSlot, CoverThreatLocation, CoverFacing, Config.ThreatSideHysteresisCm)
-		: CoverFacingRules::DefaultSide(CoverSlot, CoverFacing);
+		: CoverFacing;
 	bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, Config);
 	if (CoverFacing != Old)
 	{
@@ -3093,6 +3099,19 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 			CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"), bHasCoverThreat ? TEXT("known") : TEXT("none, nearest edge"));
 		bCoverSnapPending |= bAllowSnap && !bShimmying;
 	}
+}
+
+bool AOperativeCharacter::IsCoverThreatActive() const
+{
+	const UWorld* World = GetWorld();
+	return bInCover && bHasCoverThreat && World && World->GetTimeSeconds() - CoverThreatSeenTime <= CoverFireReadyHoldSeconds;
+}
+
+bool AOperativeCharacter::IsCoverFireReady() const
+{
+	const UWorld* World = GetWorld();
+	return bInCover && World && CoverFacingRules::IsFireReady(bAtCoverCorner, bShimmying, bHasCoverThreat,
+		static_cast<float>(World->GetTimeSeconds() - CoverThreatSeenTime), CoverFireReadyHoldSeconds);
 }
 
 void AOperativeCharacter::TrySnapToCoverCorner()
@@ -3130,6 +3149,11 @@ void AOperativeCharacter::PlayCoverShot(AActor* Target, bool bHit)
 	}
 	CoverShotTarget = Target;
 	UpdateCoverFacing(/*bAllowSnap*/ false);
+	if (const UWorld* World = GetWorld())
+	{
+		bHasCoverThreat = true; // a shot is a threat contact (keeps / enters the fire-ready pose)
+		CoverThreatSeenTime = World->GetTimeSeconds();
+	}
 	SetActorRotation(FRotator(0.f, GetCoverFacingYaw(), 0.f)); // the grid shot resolves at once
 	BeginCoverShot();
 	(bIsBlindFiring ? CoverBlindShots : CoverLeanShots) += 1;

@@ -62,6 +62,52 @@ bool FCoverShimmyFacesThreatTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+COVER_FACING_TEST(FCoverUnknownThreatAlwaysForwardTest, "UnknownThreatAlwaysForward")
+bool FCoverUnknownThreatAlwaysForwardTest::RunTest(const FString& Parameters)
+{
+	using namespace CoverFacingRules;
+	// No threat known: every shimmy is face-forward in its direction, whatever the (default) facing.
+	for (const ECoverFacing Facing : { ECoverFacing::Left, ECoverFacing::Right })
+	{
+		TestTrue(TEXT("unknown threat, moving right: forward"), IsShimmyForward(Facing, 1.f, false));
+		TestTrue(TEXT("unknown threat, moving left: forward"), IsShimmyForward(Facing, -1.f, false));
+	}
+	// The facing after the move follows the movement; a known threat keeps its side.
+	TestEqual(TEXT("unknown, moved left: faces left"), static_cast<int32>(FacingForShimmy(ECoverFacing::Right, -1.f, false)), static_cast<int32>(ECoverFacing::Left));
+	TestEqual(TEXT("unknown, moved right: faces right"), static_cast<int32>(FacingForShimmy(ECoverFacing::Left, 1.f, false)), static_cast<int32>(ECoverFacing::Right));
+	TestEqual(TEXT("known: keeps the threat side"), static_cast<int32>(FacingForShimmy(ECoverFacing::Right, -1.f, true)), static_cast<int32>(ECoverFacing::Right));
+	// Clips: unknown threat, moving left = fwd_loop_L (index 0), moving right = fwd_loop_R (index 1).
+	TestEqual(TEXT("unknown, left: fwd_loop_L"), ShimmyClipIndex(FacingForShimmy(ECoverFacing::Right, -1.f, false), true), 0);
+	TestEqual(TEXT("unknown, right: fwd_loop_R"), ShimmyClipIndex(FacingForShimmy(ECoverFacing::Left, 1.f, false), true), 1);
+	return true;
+}
+
+COVER_FACING_TEST(FCoverShimmyClipByMovementTest, "ShimmyClipByMovementDirection")
+bool FCoverShimmyClipByMovementTest::RunTest(const FString& Parameters)
+{
+	using namespace CoverFacingRules;
+	// M4 walk clips: the suffix is the MOVEMENT direction (0 = _L, 1 = _R). Threat right: right = fwd_R, left = bwd_L.
+	TestEqual(TEXT("threat right, move right: fwd_loop_R"), ShimmyClipIndex(ECoverFacing::Right, true), 1);
+	TestEqual(TEXT("threat right, move left: bwd_loop_L"), ShimmyClipIndex(ECoverFacing::Right, false), 0);
+	// Threat left: left = fwd_L, right = bwd_R.
+	TestEqual(TEXT("threat left, move left: fwd_loop_L"), ShimmyClipIndex(ECoverFacing::Left, true), 0);
+	TestEqual(TEXT("threat left, move right: bwd_loop_R"), ShimmyClipIndex(ECoverFacing::Left, false), 1);
+	return true;
+}
+
+COVER_FACING_TEST(FCoverFireReadyRuleTest, "FireReadyCornerPose")
+bool FCoverFireReadyRuleTest::RunTest(const FString& Parameters)
+{
+	using namespace CoverFacingRules;
+	const float Hold = FCoverFacingConfig().FireReadyHoldSeconds;
+	TestTrue(TEXT("corner + fresh threat: fire-ready"), IsFireReady(true, false, true, 0.5f, Hold));
+	TestFalse(TEXT("no known threat: look-around idle"), IsFireReady(true, false, false, 0.f, Hold));
+	TestFalse(TEXT("threat older than the hold: relaxes"), IsFireReady(true, false, true, Hold + 0.1f, Hold));
+	TestFalse(TEXT("shimmying off the edge: not ready"), IsFireReady(true, true, true, 0.f, Hold));
+	TestFalse(TEXT("not at the corner: not ready"), IsFireReady(false, false, true, 0.f, Hold));
+	return true;
+}
+
 COVER_FACING_TEST(FCoverThreatSideFlipHysteresisTest, "ThreatSideFlipHysteresis")
 bool FCoverThreatSideFlipHysteresisTest::RunTest(const FString& Parameters)
 {

@@ -758,6 +758,21 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
 	FVector CoverThreatLocation = FVector::ZeroVector;
 
+	/** How long the fire-ready corner pose is held after the last threat sighting / ordered target / shot, s (FCoverFacingConfig). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverFireReadyHoldSeconds = 4.f;
+
+	/** Smokes only: no threat is ever gathered (the corner pose relaxes to the look-around idle). */
+	bool bIgnoreCoverThreatForTesting = false;
+
+	/** A threat (seen, heard, ordered, shot at) was known within CoverFireReadyHoldSeconds. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
+	bool IsCoverThreatActive() const;
+
+	/** Corner pose with an active threat: the AnimBP shows cvr_*_fire_idle (else the corner pose is cvr_*_look_at_idle). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
+	bool IsCoverFireReady() const;
+
 	/** Actor yaw wanted in cover: along the wall towards CoverFacing. */
 	float GetCoverFacingYaw() const;
 
@@ -1054,6 +1069,9 @@ private:
 	void UpdateCover(float DeltaTime);
 	/** Called before a shot from cover: lean out or keep the head down by CoverFireMode. */
 	void BeginCoverShot();
+	/** World time of the last threat sighting / shot in cover (IsCoverThreatActive). */
+	double CoverThreatSeenTime = -1.0e9;
+
 	/** Facing along the wall: threat re-evaluated every ThreatUpdateSeconds. */
 	float CoverThreatTimer = 0.f;
 	/** The enemy his last cover shot aimed at (the strongest threat for the facing while it lives). */
