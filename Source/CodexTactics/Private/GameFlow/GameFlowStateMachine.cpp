@@ -127,8 +127,10 @@ EGameFlowResult FGameFlowStateMachine::RequestEnterTurnBased(bool bEnemiesInRang
 	{
 		return EGameFlowResult::NotInWave;
 	}
-	// Only from the real-time fight: never from the tactical pause (TANDEM request 2; release the pause first).
-	if (CombatMode != ECodexCombatMode::RealTime)
+	// From the real-time fight; from the tactical pause only when allowed (user request 2026-10-06; TANDEM request 2
+	// forbade it — Config.bAllowTurnBasedFromTacticalPause = false restores that).
+	const bool bFromPause = CombatMode == ECodexCombatMode::TacticalPause && Config.bAllowTurnBasedFromTacticalPause;
+	if (CombatMode != ECodexCombatMode::RealTime && !bFromPause)
 	{
 		return EGameFlowResult::NotInRealTime;
 	}
@@ -139,6 +141,15 @@ EGameFlowResult FGameFlowStateMachine::RequestEnterTurnBased(bool bEnemiesInRang
 	if (!bEnemiesInRange)
 	{
 		return EGameFlowResult::NoEnemiesInRange;
+	}
+	if (bFromPause)
+	{
+		// The pause ends here (its charge stays spent) without running the planned orders: they make no sense on the grid.
+		PauseTimeRemaining = 0.f;
+		if (PauseCharges <= 0 && PauseCooldownRemaining <= 0.f)
+		{
+			PauseCooldownRemaining = Config.TacticalPauseCooldown;
+		}
 	}
 	++TurnBasedUsesThisWave;
 	SetState(ECodexGamePhase::WaveCombat, ECodexCombatMode::TurnBased);
@@ -153,6 +164,17 @@ EGameFlowResult FGameFlowStateMachine::ExitTurnBased()
 	}
 	PauseTimeRemaining = Config.PostTurnBasedPauseDuration;
 	SetState(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause);
+	return EGameFlowResult::Ok;
+}
+
+EGameFlowResult FGameFlowStateMachine::ExitTurnBasedToRealTime()
+{
+	if (CombatMode != ECodexCombatMode::TurnBased)
+	{
+		return EGameFlowResult::NotInTurnBased;
+	}
+	PauseTimeRemaining = 0.f;
+	SetState(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime);
 	return EGameFlowResult::Ok;
 }
 

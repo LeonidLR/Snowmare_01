@@ -10,6 +10,7 @@
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/RecruitSubsystem.h"
 #include "Combat/HoldSphereActor.h"
+#include "Combat/CombatTimeModeRules.h"
 #include "Interactables/DeployableActor.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -222,6 +223,10 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACodexTacticsPlayerController::EnterPressed);
 	InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ACodexTacticsPlayerController::TabPressed);
 	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ACodexTacticsPlayerController::ProfilePressed);
+	// Fire posture direct-select keys (user decision 2026-10-06): , Passive, . Defensive, / Aggressive.
+	InputComponent->BindKey(EKeys::Comma, IE_Pressed, this, &ACodexTacticsPlayerController::PosturePassiveKey);
+	InputComponent->BindKey(EKeys::Period, IE_Pressed, this, &ACodexTacticsPlayerController::PostureDefensiveKey);
+	InputComponent->BindKey(EKeys::Slash, IE_Pressed, this, &ACodexTacticsPlayerController::PostureAggressiveKey);
 	// Esc also closes the pause menu, so it runs while the world is paused.
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ACodexTacticsPlayerController::DialogueSkip).bExecuteWhenPaused = true;
 
@@ -275,7 +280,8 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	}
 
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	const float HoldDuration = Flow ? Flow->GetConfig().TurnBasedHoldDuration : 1.5f;
+	// Entry and exit thresholds may differ (FGameFlowConfig::TurnBasedHoldDuration / TurnBasedExitHoldDuration).
+	const float HoldDuration = Flow ? FCombatTimeModeRules::GetHoldSeconds(Flow->GetCombatMode(), Flow->GetConfig()) : 1.5f;
 	// Space hold is measured in real time: the tactical pause slows the world down.
 	const bool bTurnBasedNow = Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased;
 	if (SpaceInput.IsPressed())
@@ -416,15 +422,29 @@ bool ACodexTacticsPlayerController::CancelGrenadeAim()
 
 namespace OrderLock
 {
-	static TAutoConsoleVariable<int32> CVarRealTimeOrders(TEXT("Codex.RealTimeOrders"), 0,
-		TEXT("1: orders are allowed in a real-time wave fight (old control); 0: only in the tactical pause (user decision 2026-10-05)"));
+	// User request 2026-10-06 (RTS control): orders run at once in the real-time fight by default; 0 restores the
+	// 2026-10-05 lock (orders only in the tactical pause).
+	static TAutoConsoleVariable<int32> CVarRealTimeOrders(TEXT("Codex.RealTimeOrders"), 1,
+		TEXT("1: orders run at once in a real-time wave fight (RTS control, default, user request 2026-10-06); 0: only in the tactical pause (2026-10-05 lock)"));
 }
 
 bool ACodexTacticsPlayerController::IsRealTimeOrderLocked() const
 {
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	return Flow && OrderLock::CVarRealTimeOrders.GetValueOnGameThread() == 0 && Flow->GetPhase() == ECodexGamePhase::WaveCombat
-		&& Flow->GetCombatMode() == ECodexCombatMode::RealTime;
+	return Flow && FCombatTimeModeRules::GetOrderDispatch(Flow->GetPhase(), Flow->GetCombatMode(),
+		OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) == ECombatOrderDispatch::Blocked;
+}
+
+void ACodexTacticsPlayerController::ApplyFirePosture(ESquadFirePosture Posture)
+{
+	if (IsDialogueOpen())
+	{
+		return;
+	}
+	if (USquadSubsystem* Squad = GetSquad())
+	{
+		Squad->ApplyPostureOrder(Posture);
+	}
 }
 
 bool ACodexTacticsPlayerController::BlockRealTimeOrder()
@@ -799,9 +819,12 @@ void ACodexTacticsPlayerController::SpaceReleased()
 void ACodexTacticsPlayerController::HandleSpaceTap()
 {
 	UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	if (!Flow || Flow->GetCombatMode() == ECodexCombatMode::TurnBased)
+	// FCombatTimeModeRules: a tap toggles real time <-> tactical pause in a wave; in the turn-based fight it does nothing.
+	const ECombatTimeModeRequest Request = Flow
+		? FCombatTimeModeRules::ResolveSpace(Flow->GetPhase(), Flow->GetCombatMode(), ESpaceInputAction::Tap, Flow->GetConfig())
+		: ECombatTimeModeRequest::None;
+	if (Request != ECombatTimeModeRequest::EnterTacticalPause && Request != ECombatTimeModeRequest::ResumeRealTime)
 	{
-		// Turn-based: a tap toggles the squad command bar (UI step).
 		return;
 	}
 	const bool bWasPaused = Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
@@ -844,13 +867,29 @@ void ACodexTacticsPlayerController::HandleSpaceHold()
 	{
 		return;
 	}
-	if (Flow->GetCombatMode() == ECodexCombatMode::TurnBased)
+	const ECombatTimeModeRequest Request = FCombatTimeModeRules::ResolveSpace(Flow->GetPhase(), Flow->GetCombatMode(),
+		ESpaceInputAction::Hold, Flow->GetConfig());
+	if (Request == ECombatTimeModeRequest::ExitTurnBasedToRealTime)
+	{
+		// User request 2026-10-06: the hold leaves the grid straight into full real time.
+		if (Flow->ExitTurnBasedToRealTime() == EGameFlowResult::Ok)
+		{
+			PostHeadquarters(LOCTEXT("TurnBasedExitRealTime",
+				"▶️ Пошаговый бой завершен. Реальное время: приказы выполняются сразу. [ПРОБЕЛ] — пауза, удержание — пошаговый бой."));
+		}
+		return;
+	}
+	if (Request == ECombatTimeModeRequest::ExitTurnBasedToPause)
 	{
 		if (Flow->ExitTurnBased() == EGameFlowResult::Ok)
 		{
 			PostHeadquarters(LOCTEXT("TurnBasedExit",
 				"🛡️ Пошаговый бой завершен. Включена тактическая пауза (20с) для подготовки отряда [ПРОБЕЛ]."));
 		}
+		return;
+	}
+	if (Request != ECombatTimeModeRequest::EnterTurnBased)
+	{
 		return;
 	}
 
@@ -1382,8 +1421,11 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		}
 		return;
 	}
-	// Godot: during an active wave the squad moves only through the tactical pause.
-	if (Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Mode == ECodexCombatMode::RealTime)
+	// RTS control (user request 2026-10-06): a ground click moves the squad at once in the real-time fight and is planned
+	// in the tactical pause; only the old lock (Codex.RealTimeOrders 0) keeps the Godot «moves only in the pause» rule.
+	const ECombatOrderDispatch Dispatch = Flow ? FCombatTimeModeRules::GetOrderDispatch(Flow->GetPhase(), Mode,
+		OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) : ECombatOrderDispatch::Execute;
+	if (Dispatch == ECombatOrderDispatch::Blocked)
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
@@ -1412,7 +1454,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 			}
 		}
 	}
-	OrderGroupMove(Hit.ImpactPoint, bDoubleClick, Mode == ECodexCombatMode::TacticalPause);
+	OrderGroupMove(Hit.ImpactPoint, bDoubleClick, Dispatch == ECombatOrderDispatch::Queue);
 }
 
 void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance)

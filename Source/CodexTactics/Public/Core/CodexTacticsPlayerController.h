@@ -6,6 +6,7 @@
 #include "Characters/PersonalItemRules.h"
 #include "Interactables/DeployableRules.h"
 #include "Combat/SpaceInput.h"
+#include "Characters/FirePostureRules.h"
 #include "CodexTacticsPlayerController.generated.h"
 
 class UInputAction;
@@ -23,8 +24,12 @@ class USquadSubsystem;
  * While the bottom dialogue is open, orders are blocked: Space / Enter = next line, Esc = skip.
  * Turn-based combat (UTurnBasedCombatSubsystem): click = select / attack / walk, 1..3 select, Tab = next operative,
  * Enter = end the squad turn, Z / C / V = stance (1 AP), R = turn 90° (1 AP).
- * Space: tap = tactical pause (during a wave), hold = enter / leave turn-based combat. During the pause, clicks
- * plan moves (executed together on release); during turn-based combat ground clicks do not issue real-time moves.
+ * Combat time modes (RTS control, user request 2026-10-06, FCombatTimeModeRules): a fight starts in full real time —
+ * clicks, stances, attacks and abilities run at once, no Space needed; Space TAP = tactical pause on / off (orders are
+ * planned with markers and run on resume); Space HOLD 1.5 s = turn-based fight (from real time or the pause), HOLD 1.5 s
+ * there = back to full real time. During turn-based combat ground clicks do not issue real-time moves.
+ * Fire posture keys (user decision 2026-10-06): , = Passive, . = Defensive, / = Aggressive — the box-selected operatives
+ * when several are selected, else the whole squad (USquadSubsystem::ApplyPostureOrder).
  * Input actions are created in code for now; they move to assets once the editor setup exists.
  * Godot reference: Scenes/movements/main.gd (_input, raycast_from_mouse, _select_squad_member_by_index).
  */
@@ -84,14 +89,17 @@ public:
 	bool IsRelocateSelectMode() const { return bRelocateSelectMode; }
 
 	/**
-	 * User decision 2026-10-05: in a real-time wave fight the player gives no orders (moves, stances, weapons, grenades,
-	 * items, objects, targets) — only the tactical pause (Space), Commander Mode (Ctrl + T) and picking the operative /
-	 * the camera. True (with a throttled hint) when an order is refused now. Codex.RealTimeOrders 1 restores the old
-	 * real-time control (smokes, bot).
+	 * The optional real-time order lock of 2026-10-05 (only with Codex.RealTimeOrders 0; the default since the RTS
+	 * request of 2026-10-06 is 1 = orders run at once in real time): in a real-time wave fight the player gives no orders
+	 * then — only the tactical pause, Commander Mode and picking the operative. True (with a throttled hint) when an
+	 * order is refused now.
 	 */
 	bool BlockRealTimeOrder();
-	/** Real-time wave fight with Codex.RealTimeOrders 0 (no hint). */
+	/** FCombatTimeModeRules::GetOrderDispatch says Blocked now (no hint). */
 	bool IsRealTimeOrderLocked() const;
+
+	/** Posture keys / action bar posture buttons: see USquadSubsystem::ApplyPostureOrder (ignored during a dialogue). */
+	void ApplyFirePosture(ESquadFirePosture Posture);
 
 	/** Commander Mode on / off (Ctrl + T, the action bar «АВТО» button). */
 	void ToggleAutonomy();
@@ -138,6 +146,9 @@ private:
 	void RestartMission();
 	/** Ctrl + T: Commander Mode (autonomous squad combat) on / off. */
 	void ToggleAutonomyKey() { ToggleAutonomy(); }
+	void PosturePassiveKey() { ApplyFirePosture(ESquadFirePosture::Passive); }
+	void PostureDefensiveKey() { ApplyFirePosture(ESquadFirePosture::Defensive); }
+	void PostureAggressiveKey() { ApplyFirePosture(ESquadFirePosture::Aggressive); }
 	/** The squad member a world click hit (body / owned actor, else the closest within SelectRadius); nullptr when none. */
 	class AOperativeCharacter* FindClickedMember(const FHitResult& Hit) const;
 	double LastOrderLockHintTime = -100.0;
@@ -195,8 +206,8 @@ public:
 
 	/**
 	 * Sprint 10: Shift + RMB — the leader (or the selected group) holds the object under the cursor (generator, terminal,
-	 * gate, barricade) or that spot at all costs. Refused in the real-time fight (orders only in the pause, user decision
-	 * 2026-10-05) and in the turn-based fight.
+	 * gate, barricade) or that spot at all costs. Refused in the turn-based fight (and in the real-time fight only with
+	 * the optional order lock, Codex.RealTimeOrders 0).
 	 */
 	void AssignDefenseUnderCursor();
 

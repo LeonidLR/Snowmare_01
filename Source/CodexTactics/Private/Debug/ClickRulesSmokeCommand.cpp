@@ -1,8 +1,9 @@
 // Dev-only console command for a headless click-rule check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.ClickRulesSmoke
 // Godot main.gd plain-click rules in a fight: an enemy becomes the priority target; a barrel / set-up item can't be
-// moved outside the tactical pause (HQ line), a ground click can't move the squad either; in the pause a barrel is
-// picked up for relocation at once and a barricade opens its menu at once.
+// moved outside the tactical pause (HQ line); a ground click moves the leader at once (RTS control, user request
+// 2026-10-06 — Godot allowed moves only in the pause); in the pause a barrel is picked up for relocation at once and a
+// barricade opens its menu at once.
 
 #include "CoreMinimal.h"
 
@@ -118,8 +119,10 @@ namespace ClickRulesSmoke
 		Check(State, CountMessages(World, TEXT("менять расположение объектов нельзя")) == Refusals + 2 && !Relocation->IsPlacing(),
 			TEXT("barrel / barricade in the fight: HQ refusal"));
 		const int32 MoveRefusals = CountMessages(World, TEXT("Перемещение во время боя возможно только"));
-		PC->HandleWorldHit(HitOn(nullptr, Leader->GetActorLocation() + FVector(300.f, 0.f, -90.f)));
-		Check(State, CountMessages(World, TEXT("Перемещение во время боя возможно только")) == MoveRefusals + 1, TEXT("ground click in the fight: HQ refusal"));
+		PC->HandleWorldHit(HitOn(nullptr, Leader->GetActorLocation() + FVector(-300.f, 0.f, -90.f)));
+		Check(State, CountMessages(World, TEXT("Перемещение во время боя возможно только")) == MoveRefusals && Leader->IsMoving(),
+			TEXT("ground click in the real-time fight: the leader moves at once (RTS)"));
+		Leader->StopOperative();
 
 		// Tactical pause.
 		Flow->ToggleTacticalPause();
@@ -137,8 +140,8 @@ namespace ClickRulesSmoke
 		{
 			return;
 		}
-		// The click rules of the real-time fight (Godot main.gd): with the orders unlocked there (user decision 2026-10-05
-		// locked them by default; RealtimeSelectSmoke checks the lock).
+		// The click rules of the real-time fight with the RTS orders on (the default since 2026-10-06; set explicitly so a
+		// changed default shows up here).
 		if (IConsoleVariable* Orders = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.RealTimeOrders")))
 		{
 			Orders->Set(1, ECVF_SetByConsole);

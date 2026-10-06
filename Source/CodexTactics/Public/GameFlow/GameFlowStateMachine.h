@@ -68,10 +68,15 @@ public:
 	EGameFlowResult FinishPreparation();
 	/** RealTime -> TacticalPause (spends a charge), or TacticalPause -> RealTime (runs planned orders). */
 	EGameFlowResult ToggleTacticalPause();
-	/** RealTime -> TurnBased. bEnemiesInRange comes from the encounter selector. */
+	/**
+	 * RealTime -> TurnBased (also TacticalPause -> TurnBased with Config.bAllowTurnBasedFromTacticalPause: the pause ends
+	 * without OnTacticalPauseReleased, its plans are dropped). bEnemiesInRange comes from the encounter selector.
+	 */
 	EGameFlowResult RequestEnterTurnBased(bool bEnemiesInRange);
-	/** TurnBased -> TacticalPause for PostTurnBasedPauseDuration, without spending a charge. */
+	/** TurnBased -> TacticalPause for PostTurnBasedPauseDuration, without spending a charge (the grid's own end). */
 	EGameFlowResult ExitTurnBased();
+	/** TurnBased -> RealTime at once (the Space hold, user request 2026-10-06); no pause, no charge spent. */
+	EGameFlowResult ExitTurnBasedToRealTime();
 	/** WaveCombat (any sub-mode) -> WaveCleared. */
 	EGameFlowResult NotifyWaveCleared();
 	/** WaveCleared -> Preparation for the next wave, or PostCombat after the last wave. */

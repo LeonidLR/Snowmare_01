@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Characters/FirePostureRules.h"
 #include "ActionBarWidget.generated.h"
 
 class UBorder;
@@ -123,6 +124,24 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UButton> AutonomyButton;
+
+	/** Fire posture buttons «ПАСС [,]» / «ОБОР [.]» / «АГР [/]» (user request 2026-10-06). */
+	UFUNCTION()
+	void HandlePosturePassive() { ApplyPosture(ESquadFirePosture::Passive); }
+
+	UFUNCTION()
+	void HandlePostureDefensive() { ApplyPosture(ESquadFirePosture::Defensive); }
+
+	UFUNCTION()
+	void HandlePostureAggressive() { ApplyPosture(ESquadFirePosture::Aggressive); }
+
+	void ApplyPosture(ESquadFirePosture Posture);
+
+	UPROPERTY()
+	TArray<TObjectPtr<UButton>> PostureButtons;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UTextBlock>> PostureTexts;
 
 	UFUNCTION()
 	void HandleSelectM16();

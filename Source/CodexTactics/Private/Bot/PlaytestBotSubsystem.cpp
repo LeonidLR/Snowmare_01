@@ -84,6 +84,12 @@ void UPlaytestBotSubsystem::StartBot(EBotProfile InProfile, bool bQuitAtEnd, boo
 	bActive = true;
 	Stage = bCollect ? EBotStage::Explore : EBotStage::EnterCombat;
 	StartRealTime = FPlatformTime::Seconds();
+	// Fire posture (user request 2026-10-06): the bot fights with the squad's automatic fire as before postures existed.
+	// It drives the operatives directly (OrderMoveTo), so the RTS time modes need nothing else from it.
+	if (USquadSubsystem* BotSquad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	{
+		BotSquad->SetSquadPosture(ESquadFirePosture::Aggressive);
+	}
 	if (URunTelemetrySubsystem* Telemetry = GetWorld()->GetSubsystem<URunTelemetrySubsystem>())
 	{
 		Telemetry->SetTesterProfile(PlaytestBotRules::ProfileName(Profile));

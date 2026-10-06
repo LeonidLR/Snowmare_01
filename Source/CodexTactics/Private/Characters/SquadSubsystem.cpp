@@ -7,6 +7,7 @@
 #include "CollisionQueryParams.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "HAL/IConsoleManager.h"
 #include "UI/GameMessageSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "SquadSubsystem"
@@ -17,6 +18,11 @@ namespace
 	constexpr float SlotTraceHeight = 60.f;
 	/** A parked follower stays parked until its slot is this much farther than StopRadius, cm. */
 	constexpr float ParkedRestartMargin = 40.f;
+
+	TAutoConsoleVariable<int32> CVarPostureDefensiveSquadWide(TEXT("Codex.Posture.DefensiveSquadWide"), 0,
+		TEXT("1: an attack on any squad member provokes every Defensive operative; 0: only the one attacked (user request 2026-10-06)"));
+	TAutoConsoleVariable<int32> CVarPostureAggressiveExplorationFire(TEXT("Codex.Posture.AggressiveExplorationFire"), 1,
+		TEXT("1: Aggressive operatives open fire on enemies they see while exploring an ambush level (starting the fight); 0: never"));
 }
 
 bool USquadSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -244,6 +250,81 @@ void USquadSubsystem::SetAutonomousSquadCombat(bool bEnabled)
 	}
 }
 
+FFirePostureConfig USquadSubsystem::GetPostureConfig()
+{
+	FFirePostureConfig Config;
+	Config.bDefensiveSquadWideProvocation = CVarPostureDefensiveSquadWide.GetValueOnGameThread() != 0;
+	Config.bAggressiveOpensFireInExploration = CVarPostureAggressiveExplorationFire.GetValueOnGameThread() != 0;
+	return Config;
+}
+
+void USquadSubsystem::SetSquadPosture(ESquadFirePosture Posture)
+{
+	SquadPosture = Posture;
+	for (AOperativeCharacter* Member : GetMembers())
+	{
+		Member->bHasPostureOverride = false;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Squad fire posture: %s"), *FirePostureRules::GetLabel(Posture));
+}
+
+int32 USquadSubsystem::ApplyPostureOrder(ESquadFirePosture Posture)
+{
+	const FText Name = FText::FromString(FirePostureRules::GetLabel(Posture));
+	UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr;
+	if (!HasMultiSelection())
+	{
+		SetSquadPosture(Posture);
+		for (AOperativeCharacter* Member : GetMembers())
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(Member, FString::Printf(TEXT("🎯 %s"), *Name.ToString()), FLinearColor(1.f, 0.8f, 0.3f));
+		}
+		if (Messages)
+		{
+			Messages->PostMessage(LOCTEXT("PostureSpeaker", "ОТРЯД"), FText::Format(LOCTEXT("SquadPosture", "🎯 Режим огня отряда: {0}"), Name));
+		}
+		return GetMembers().Num();
+	}
+	const TArray<AOperativeCharacter*> Group = GetSelectedGroup();
+	for (AOperativeCharacter* Member : Group)
+	{
+		Member->bHasPostureOverride = true;
+		Member->PostureOverride = Posture;
+		UFloatingTextSubsystem::SpawnAboveOperative(Member, FString::Printf(TEXT("🎯 %s"), *Name.ToString()), FLinearColor(1.f, 0.8f, 0.3f));
+	}
+	if (Messages)
+	{
+		Messages->PostMessage(LOCTEXT("PostureSpeaker", "ОТРЯД"),
+			FText::Format(LOCTEXT("GroupPosture", "🎯 Режим огня выбранных бойцов ({0}): {1}"), Group.Num(), Name));
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Fire posture %s for %d selected operatives"), *FirePostureRules::GetLabel(Posture), Group.Num());
+	return Group.Num();
+}
+
+ESquadFirePosture USquadSubsystem::GetEffectivePosture(const AOperativeCharacter* Operative) const
+{
+	return Operative ? FirePostureRules::Resolve(SquadPosture, Operative->bHasPostureOverride, Operative->PostureOverride) : SquadPosture;
+}
+
+int32 USquadSubsystem::CountPostureOverrides() const
+{
+	int32 Count = 0;
+	for (const AOperativeCharacter* Member : GetMembers())
+	{
+		Count += Member->bHasPostureOverride && Member->PostureOverride != SquadPosture ? 1 : 0;
+	}
+	return Count;
+}
+
+void USquadSubsystem::NotifyMemberAttacked(AOperativeCharacter* Operative)
+{
+	if (!bSquadProvoked)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Squad provoked: %s was attacked"), Operative ? *Operative->DisplayName.ToString() : TEXT("?"));
+	}
+	bSquadProvoked = true;
+}
+
 bool USquadSubsystem::ToggleAutonomousSquadCombat()
 {
 	SetAutonomousSquadCombat(!bAutonomousSquadCombat);
@@ -341,6 +422,15 @@ bool USquadSubsystem::IsFormationActive() const
 
 void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)
 {
+	// Fire posture: a provocation lasts for one fight (user request 2026-10-06).
+	if (FirePostureRules::ClearsProvocation(Phase))
+	{
+		bSquadProvoked = false;
+		for (AOperativeCharacter* Member : GetMembers())
+		{
+			Member->bProvokedThisFight = false;
+		}
+	}
 	if (CombatMode == ECodexCombatMode::TacticalPause && LastCombatMode != ECodexCombatMode::TacticalPause)
 	{
 		BeginOrderPlanning();

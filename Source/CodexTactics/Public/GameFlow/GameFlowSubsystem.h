@@ -111,6 +111,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult ExitTurnBased() { return Machine.ExitTurnBased(); }
 
+	/** Turn-based fight -> full real time (the Space hold; see FGameFlowStateMachine::ExitTurnBasedToRealTime). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
+	EGameFlowResult ExitTurnBasedToRealTime() { return Machine.ExitTurnBasedToRealTime(); }
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult NotifyWaveCleared() { return Machine.NotifyWaveCleared(); }
 

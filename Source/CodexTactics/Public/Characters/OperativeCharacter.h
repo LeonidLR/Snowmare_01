@@ -8,6 +8,7 @@
 #include "Characters/PersonalItemRules.h"
 #include "Characters/ProgressionRules.h"
 #include "Characters/SquadAutonomyRules.h"
+#include "Characters/FirePostureRules.h"
 #include "Combat/TargetedShotRules.h"
 #include "Interactables/DeployableRules.h"
 #include "OperativeCharacter.generated.h"
@@ -618,9 +619,10 @@ public:
 	/**
 	 * Godot _find_shoot_target(delta): priority target, else the closest visible enemy; a current target is kept until a
 	 * much closer one (stance ratio, or within 3.5 m) stays closer for the stance's reaction delay. Barricade rules
-	 * decide cover (0.8 crouched) and block prone shooters («🚫 Баррикада блокирует огонь»).
+	 * decide cover (0.8 crouched) and block prone shooters («🚫 Баррикада блокирует огонь»). bAllowAutoTargets = false
+	 * (fire posture holds the automatic fire) keeps only the direct orders: priority target and blind fire.
 	 */
-	FShootCandidate FindShootTarget(float DeltaTime);
+	FShootCandidate FindShootTarget(float DeltaTime, bool bAllowAutoTargets = true);
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Combat")
 	void ProcessCombatShooting(float DeltaTime);
@@ -634,6 +636,27 @@ public:
 
 	/** Godot _set_squad_tactical_cease_fire: nobody shoots while Space is held for the turn-based switch. */
 	bool bTacticalCeaseFire = false;
+
+	// --- Fire posture (rules of engagement of the automatic fire, user request 2026-10-06; FirePostureRules) ---
+
+	/** This operative has its own posture (the posture keys with a box-selected group); false: it follows the squad's. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Combat|Posture")
+	bool bHasPostureOverride = false;
+
+	/** The own posture while bHasPostureOverride. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Combat|Posture")
+	ESquadFirePosture PostureOverride = FirePostureRules::DefaultPosture;
+
+	/** Attacked (hit or dodged) in the current fight: a Defensive operative fights back. Cleared when the fight ends. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Combat|Posture")
+	bool bProvokedThisFight = false;
+
+	/** The posture in force (override, else the squad's; Aggressive without a squad). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat|Posture")
+	ESquadFirePosture GetFirePosture() const;
+
+	/** The posture lets this operative open fire on its own now (provocation included). */
+	bool MayAutoFireNow() const;
 
 	/** Target switching per stance (Godot stance_target_switch_delay_* / stance_switch_distance_ratio_*; set from the balance). */
 	FSquadFireConfig FireConfig;

@@ -135,6 +135,9 @@ namespace AmbushSmoke
 			Hound->PerceptionOverride.SmellRadiusCm = 0.f;
 			Hound->StartPatrol(Route, nullptr);
 			Check(State, Hound->IsOnPatrol(), TEXT("hound patrols"));
+			// Passive fire posture: an Aggressive squad would open fire on the hound 9 m ahead by itself (PostureSmoke
+			// checks that); here only the player's attack order may start the fight — and a passive squad obeys it.
+			Squad->SetSquadPosture(ESquadFirePosture::Passive);
 			State.Stage = 1;
 			State.Time = 0.f;
 			return true;

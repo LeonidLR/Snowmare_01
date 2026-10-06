@@ -97,7 +97,9 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 
 | Where | Godot | UE | Decided |
 |---|---|---|---|
-| Turn-based entry | Allowed whenever enemies are within 15 m, incl. exploration, preparation and tactical pause | Only from WaveCombat/RealTime | User, 2026-09-28 |
+| Turn-based entry | Allowed whenever enemies are within 15 m, incl. exploration, preparation and tactical pause | Only in a wave: from RealTime, and (since 2026-10-06) from the tactical pause (`bAllowTurnBasedFromTacticalPause`) | User, 2026-09-28 / 2026-10-06 |
+| Real-time orders in a wave | Ground clicks move the squad only in the tactical pause | RTS: every order runs at once in real time (`Codex.RealTimeOrders 1`); the pause queues them; object relocation still pause-only | User, 2026-10-06 |
+| Turn-based exit by Space hold | Free 20 s tactical pause | Full real time (`bHoldExitsTurnBasedToRealTime`); the grid victory keeps the free pause | User, 2026-10-06 |
 | Wave rest | `is_wave_active` and `is_preparation_active` both true | `Preparation` phase with next wave index | User, 2026-09-28 — same behaviour |
 | Pathing | Straight line to target, wall sliding, whisker steering, leader breadcrumbs, collider phasing | NavMesh pathfinding + Detour Crowd avoidance | User, 2026-09-28 |
 | Stamina | Described in GDD / unused `movement_component.gd`; not active in `player.gd` | No stamina; sprint limited by cold and wounds only | User, 2026-09-28 |
@@ -115,4 +117,5 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 | Sprint | UE target | Status | Tests |
 |---|---|---|---|
 | 11 Outpost stealth patrols (Gemini, TANDEM) | `APatrolRouteActor`, `PatrolRouteRules`, `AEnemyCharacter` patrol / escort / alert break, marksman spline route (legacy points fallback), tripwire / mine 20 m alert | ✅ | `CodexTactics.AI.PatrolRoute.*`, PatrolSmoke |
+| RTS time modes + fire postures (user 2026-10-06) | `FCombatTimeModeRules` (real time default, tap = tactical pause, hold 1.5 s = turn-based and back), `ExitTurnBasedToRealTime`, HUD mode badge; `ESquadFirePosture` / `FirePostureRules` (Passive / Defensive / Aggressive, per-operative override, keys , . /, action bar), aggressive auto-fire starts an ambush | ✅ | `CodexTactics.Combat.TimeMode.*`, `CodexTactics.Squad.Posture.*`, RealTimeControlSmoke, PostureSmoke |
 | 11+ Patrol perception, trap search, dialogue-safe AI, ambush start (user 2026-10-06) | `PerceptionRules` + `enemy_perception.json` (sight / FOV / stance / suspicion, hearing by gait / gunshot / grenade, hound smell), trap -> SEARCH (60 s, back to route), `UWorldAIPauseSubsystem` (dialogue / cutscene hold), `ULevelEncounterSubsystem` + level JSON `combat_start` (ambush: attack / detection starts the fight, «Начать бой» hidden), Jev coach stealth knobs | ✅ | `CodexTactics.AI.Perception.*`, `AI.Patrol.*`, `Combat.AmbushStartsCombat`, `AI.Tuning.StealthKnobs`, PatrolSmoke, AmbushSmoke |

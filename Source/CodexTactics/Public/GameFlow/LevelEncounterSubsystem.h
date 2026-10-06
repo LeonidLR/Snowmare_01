@@ -16,7 +16,9 @@ enum class EAmbushTrigger : uint8
 	/** An enemy took damage from the squad. */
 	EnemyDamaged,
 	/** A patrol detected the squad (sight / hearing / smell) or was alerted by its partner. */
-	PatrolDetection
+	PatrolDetection,
+	/** An Aggressive operative opened fire on an enemy it saw (fire posture, user request 2026-10-06). */
+	SquadAutoFire
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAmbushCombatStarted, EAmbushTrigger, Trigger);

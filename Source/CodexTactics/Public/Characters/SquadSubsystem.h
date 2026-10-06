@@ -4,6 +4,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadFormation.h"
+#include "Characters/FirePostureRules.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "SquadSubsystem.generated.h"
 
@@ -109,6 +110,37 @@ public:
 	/** Flips Commander Mode (Ctrl + T, CodexTactics.ToggleAutonomousCombat); returns the new state. */
 	bool ToggleAutonomousSquadCombat();
 
+	// --- Fire posture (rules of engagement of the automatic fire, user request 2026-10-06; FirePostureRules) ---
+
+	/** The squad-wide posture (operatives without an override follow it). Default Aggressive (the old auto-fire). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad|Posture")
+	ESquadFirePosture GetSquadPosture() const { return SquadPosture; }
+
+	/** Sets the squad-wide posture and clears every per-operative override (the whole squad then fights this way). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad|Posture")
+	void SetSquadPosture(ESquadFirePosture Posture);
+
+	/**
+	 * The posture keys / action bar buttons (, . /): with several operatives box-selected only they get Posture as
+	 * their override; otherwise the whole squad (SetSquadPosture). Posts the radio line; returns how many changed.
+	 */
+	int32 ApplyPostureOrder(ESquadFirePosture Posture);
+
+	/** The posture in force for Operative (its override, else the squad's). */
+	ESquadFirePosture GetEffectivePosture(const AOperativeCharacter* Operative) const;
+
+	/** Number of living operatives whose override differs from the squad posture (HUD hint). */
+	int32 CountPostureOverrides() const;
+
+	/** An operative was attacked (hit or dodged an enemy attack): provokes the squad for Defensive (squad-wide option). */
+	void NotifyMemberAttacked(AOperativeCharacter* Operative);
+
+	/** Some squad member was attacked in the current fight. */
+	bool IsSquadProvoked() const { return bSquadProvoked; }
+
+	/** Posture tuning (CVars Codex.Posture.DefensiveSquadWide / Codex.Posture.AggressiveExplorationFire). */
+	static FFirePostureConfig GetPostureConfig();
+
 	/** Max scout distance from followers in solo mode before auto-exit (cm, 25m matching Godot). */
 	static constexpr float SoloModeMaxDistance = 2500.f;
 
@@ -191,4 +223,7 @@ private:
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> PauseOrigins;
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FPlannedOrder> PlannedOrders;
 	ECodexCombatMode LastCombatMode = ECodexCombatMode::None;
+
+	ESquadFirePosture SquadPosture = FirePostureRules::DefaultPosture;
+	bool bSquadProvoked = false;
 };

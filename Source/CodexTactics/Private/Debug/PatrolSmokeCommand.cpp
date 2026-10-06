@@ -161,6 +161,11 @@ namespace PatrolSmoke
 			}
 			ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>();
 			Encounter->SetCombatStartOverride(ECombatStartMode::Ambush);
+			// Stealth check: a Passive squad keeps quiet (an Aggressive one would open fire on the patrol it sees).
+			if (USquadSubsystem* PostureSquad = World->GetSubsystem<USquadSubsystem>())
+			{
+				PostureSquad->SetSquadPosture(ESquadFirePosture::Passive);
+			}
 			Encounter->SetPatrolSearchSecondsOverride(4.f);
 			Check(State, Encounter->IsAmbushCombatStart(), TEXT("ambush level (no «Начать бой»)"));
 			Marksman->StartPatrol(Route, nullptr);

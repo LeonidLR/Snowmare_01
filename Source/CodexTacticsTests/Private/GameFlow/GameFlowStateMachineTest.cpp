@@ -307,7 +307,11 @@ bool FGameFlowTurnBasedRejectedOutsideWaveTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowTurnBasedRejectedInPauseTest, "TurnBased.RejectedDuringTacticalPause")
 bool FGameFlowTurnBasedRejectedInPauseTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	// User request 2026-10-06 allows the pause -> turn-based hold by default (CodexTactics.Combat.TimeMode.HoldEntersTurnBased);
+	// the TANDEM request 2 rule stays behind bAllowTurnBasedFromTacticalPause = false.
+	FGameFlowConfig Config;
+	Config.bAllowTurnBasedFromTacticalPause = false;
+	FGameFlowStateMachine Machine(Config);
 	EnterFirstWave(Machine);
 	Machine.ToggleTacticalPause();
 	TestEqual(TEXT("From pause"), Machine.RequestEnterTurnBased(true), EGameFlowResult::NotInRealTime);
@@ -390,8 +394,11 @@ GAMEFLOW_TEST(FGameFlowTurnBasedKeepsPauseChargesTest, "TurnBased.KeepsPauseChar
 bool FGameFlowTurnBasedKeepsPauseChargesTest::RunTest(const FString&)
 {
 	// TANDEM request 2 (user + Gemini 2026-10-01): no turn-based fight from the tactical pause; the fight neither
-	// refills the pause charges nor runs their cooldown down.
-	FGameFlowStateMachine Machine;
+	// refills the pause charges nor runs their cooldown down. (The pause -> turn-based hold is allowed by default since the
+	// RTS request of 2026-10-06; this test keeps the old flag to check the frozen charges.)
+	FGameFlowConfig Config;
+	Config.bAllowTurnBasedFromTacticalPause = false;
+	FGameFlowStateMachine Machine(Config);
 	EnterFirstWave(Machine);
 	const int32 MaxCharges = Machine.GetPauseCharges();
 	TestEqual(TEXT("Pause"), Machine.ToggleTacticalPause(), EGameFlowResult::Ok);

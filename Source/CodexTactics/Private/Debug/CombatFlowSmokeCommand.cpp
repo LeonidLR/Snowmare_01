@@ -2,7 +2,8 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.CombatFlowSmoke
 // Drives the player controller's Space path (SpacePressed / SpaceReleased + real-time hold) through:
 // wave start -> no formation following -> tap pause -> planned move clamped to 12 m -> tap release executes it ->
-// hold without enemies refused -> hold near an enemy enters turn-based -> hold again returns to a free pause.
+// hold without enemies refused -> hold near an enemy enters turn-based -> hold again returns to full real time
+// (FGameFlowConfig::bHoldExitsTurnBasedToRealTime, user request 2026-10-06; with the flag off: the Godot free pause).
 
 #include "CoreMinimal.h"
 
@@ -192,13 +193,21 @@ namespace CombatFlowSmoke
 			if (State.StageTime >= 2.f)
 			{
 				PC->SpaceReleased();
-				Check(State, Flow->GetCombatMode() == ECodexCombatMode::TacticalPause, TEXT("hold again returned to tactical pause"));
-				Check(State, Flow->GetPauseCharges() == State.ChargesBeforeTurnBased, TEXT("free pause spent no charge"));
-				// The hold fires up to ~0.5 s before this step runs, so the free pause has already started counting down.
-				const float Remaining = Flow->GetPauseTimeRemaining();
-				UE_LOG(LogCodexTactics, Display, TEXT("Smoke free pause remaining %.2f s"), Remaining);
-				Check(State, Remaining > Flow->GetConfig().PostTurnBasedPauseDuration - 2.f
-					&& Remaining <= Flow->GetConfig().PostTurnBasedPauseDuration, TEXT("free pause lasts 20 s"));
+				Check(State, Flow->GetPauseCharges() == State.ChargesBeforeTurnBased, TEXT("leaving turn-based spent no charge"));
+				if (Flow->GetConfig().bHoldExitsTurnBasedToRealTime)
+				{
+					Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime, TEXT("hold again returned to full real time"));
+					Check(State, FMath::IsNearlyEqual(World->GetWorldSettings()->TimeDilation, 1.f, 0.001f), TEXT("world runs at full speed"));
+				}
+				else
+				{
+					Check(State, Flow->GetCombatMode() == ECodexCombatMode::TacticalPause, TEXT("hold again returned to tactical pause"));
+					// The hold fires up to ~0.5 s before this step runs, so the free pause has already started counting down.
+					const float Remaining = Flow->GetPauseTimeRemaining();
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke free pause remaining %.2f s"), Remaining);
+					Check(State, Remaining > Flow->GetConfig().PostTurnBasedPauseDuration - 2.f
+						&& Remaining <= Flow->GetConfig().PostTurnBasedPauseDuration, TEXT("free pause lasts 20 s"));
+				}
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures.Num() == 0 ? TEXT("PASS") : TEXT("FAIL"));
 				FPlatformMisc::RequestExit(false, TEXT("CombatFlowSmoke"));
 				return false;

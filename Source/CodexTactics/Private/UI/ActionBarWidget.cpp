@@ -25,6 +25,7 @@
 #include "UI/CodexTacticsHUD.h"
 #include "UI/InventoryDrawerWidget.h"
 #include "UI/TransferDialogWidget.h"
+#include "Characters/FirePostureRules.h"
 
 #define LOCTEXT_NAMESPACE "ActionBarWidget"
 
@@ -163,6 +164,25 @@ void UActionBarWidget::BuildDefaultLayout()
 	AutonomyButton = MakeSlotButton(TEXT("BarAutonomyButton"), BarWhite * 0.6f, 54.f, 56.f, BarAutonomyText, Row);
 	AutonomyButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleAutonomy);
 
+	// Fire posture (user request 2026-10-06): three direct-select buttons with their keys , . /
+	PostureButtons.Reset();
+	PostureTexts.Reset();
+	for (const ESquadFirePosture Posture : { ESquadFirePosture::Passive, ESquadFirePosture::Defensive, ESquadFirePosture::Aggressive })
+	{
+		UTextBlock* PostureText = MakeText(NAME_None, 10, BarTextColor);
+		PostureText->SetText(FText::FromString(FString::Printf(TEXT("%s\n[%s]"),*FirePostureRules::GetShortLabel(Posture),
+			*FirePostureRules::GetKeyHint(Posture))));
+		UButton* PostureButton = MakeSlotButton(NAME_None, BarWhite * 0.6f, 44.f, 56.f, PostureText, Row);
+		PostureButton->SetToolTipText(FText::Format(LOCTEXT("PostureTip",
+			"Режим огня: {0} [{1}] — выбранным бойцам (рамкой), иначе всему отряду"),
+			FText::FromString(FirePostureRules::GetLabel(Posture)), FText::FromString(FirePostureRules::GetKeyHint(Posture))));
+		PostureButtons.Add(PostureButton);
+		PostureTexts.Add(PostureText);
+	}
+	PostureButtons[0]->OnClicked.AddDynamic(this, &UActionBarWidget::HandlePosturePassive);
+	PostureButtons[1]->OnClicked.AddDynamic(this, &UActionBarWidget::HandlePostureDefensive);
+	PostureButtons[2]->OnClicked.AddDynamic(this, &UActionBarWidget::HandlePostureAggressive);
+
 	for (int32 Index = 0; Index < 4; ++Index)
 	{
 		FActionBarSquadSlot& SquadSlot = Slots.AddDefaulted_GetRef();
@@ -289,6 +309,18 @@ void UActionBarWidget::Refresh()
 		AutonomyButton->SetToolTipText(bAutonomy
 			? LOCTEXT("AutoOnTip", "Автономия ВКЛ: бойцы сами ведут бой в 7 м от точки приказа. Клик — ручное управление [Ctrl+T]")
 			: LOCTEXT("AutoOffTip", "Автономия ВЫКЛ: ручное управление. Клик — бойцы сами ведут бой у точки приказа [Ctrl+T]"));
+	}
+	if (PostureButtons.Num() == 3)
+	{
+		// The leader's posture in force is highlighted (his override, else the squad's).
+		const ESquadFirePosture Current = Squad->GetEffectivePosture(Leader);
+		const ESquadFirePosture Order[] = { ESquadFirePosture::Passive, ESquadFirePosture::Defensive, ESquadFirePosture::Aggressive };
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			const bool bOn = Order[Index] == Current;
+			const FLinearColor OnColor = Index == 0 ? FLinearColor(0.45f, 0.5f, 0.55f) : (Index == 1 ? FLinearColor(0.85f, 0.6f, 0.1f) : BarRed);
+			PostureButtons[Index]->SetBackgroundColor(bOn ? OnColor : BarWhite * 0.35f);
+		}
 	}
 	if (IsWeaponSelectorOpen())
 	{
@@ -515,6 +547,15 @@ void UActionBarWidget::HandleInventory()
 			Hud->ToggleInventoryDrawer();
 		}
 	}
+}
+
+void UActionBarWidget::ApplyPosture(ESquadFirePosture Posture)
+{
+	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
+	{
+		PC->ApplyFirePosture(Posture);
+	}
+	Refresh();
 }
 
 void UActionBarWidget::HandleAutonomy()

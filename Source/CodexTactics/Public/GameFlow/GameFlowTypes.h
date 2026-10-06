@@ -113,6 +113,27 @@ struct CODEXTACTICS_API FGameFlowConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based", meta = (ClampMin = "0.1"))
 	float TurnBasedHoldDuration = 1.5f;
 
+	/**
+	 * Holding Space this long in the turn-based fight leaves it, real s (user request 2026-10-06, RTS control; see
+	 * FCombatTimeModeRules). Separate from TurnBasedHoldDuration so the return path can be tuned on its own.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based", meta = (ClampMin = "0.1"))
+	float TurnBasedExitHoldDuration = 1.5f;
+
+	/**
+	 * The Space hold in the turn-based fight returns to full real time (user request 2026-10-06). False restores the
+	 * Godot path: a free tactical pause of PostTurnBasedPauseDuration. The grid's own end (victory) keeps the free pause.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based")
+	bool bHoldExitsTurnBasedToRealTime = true;
+
+	/**
+	 * The Space hold may enter the turn-based fight from the tactical pause too (user request 2026-10-06): the pause ends
+	 * without running its planned orders. False: only from real time (TANDEM request 2, 2026-10-01).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based")
+	bool bAllowTurnBasedFromTacticalPause = true;
+
 	/** Enemies within this radius of the leader are needed to start turn-based combat, cm (Godot: 15 m). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based", meta = (ClampMin = "0"))
 	float TurnBasedEncounterRadius = 1500.f;

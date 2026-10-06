@@ -49,6 +49,8 @@
 #include "HAL/IConsoleManager.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "UI/GameMessageSubsystem.h"
+#include "Combat/CombatTimeModeRules.h"
+#include "Characters/FirePostureRules.h"
 
 namespace
 {
@@ -86,7 +88,7 @@ namespace
 	{
 		switch (Mode)
 		{
-		case ECodexCombatMode::RealTime: return TEXT("реальное время");
+		case ECodexCombatMode::RealTime: return TEXT("РЕАЛЬНОЕ ВРЕМЯ");
 		case ECodexCombatMode::TacticalPause: return TEXT("ТАКТИЧЕСКАЯ ПАУЗА");
 		case ECodexCombatMode::TurnBased: return TEXT("ПОШАГОВЫЙ");
 		default: return TEXT("");
@@ -421,6 +423,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawWorldLabels();
 	DrawDefenseMarkers();
 	DrawSpaceCharge();
+	DrawCombatModeBadge();
 	DrawHitChanceLabel();
 	DrawSelectionBox();
 	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
@@ -605,12 +608,17 @@ void ACodexTacticsHUD::DrawSpaceCharge()
 	{
 		return;
 	}
-	// Godot: 300 x 80 in the centre, a 14 px label over a 280 x 22 bar.
+	// Godot: 300 x 80 in the centre, a 14 px label over a 280 x 22 bar. The caption says what the hold does now
+	// (FCombatTimeModeRules: enter the turn-based fight / back to real time); nothing to show when the hold does nothing.
 	const float Held = PC->GetSpaceHeldTime();
-	const float Limit = Flow->GetConfig().TurnBasedHoldDuration;
+	const float Limit = FCombatTimeModeRules::GetHoldSeconds(Flow->GetCombatMode(), Flow->GetConfig());
+	const FString Caption = FCombatTimeModeRules::GetHoldCaption(Flow->GetPhase(), Flow->GetCombatMode(), Flow->GetConfig());
+	if (Caption.IsEmpty())
+	{
+		return;
+	}
 	const bool bEntering = Flow->GetCombatMode() != ECodexCombatMode::TurnBased;
-	const FString Raw = bEntering ? FString::Printf(TEXT("⚔️ ВХОД В ПОШАГОВЫЙ БОЙ (GORKY 17): %.1fc / %.1fc"), Held, Limit)
-		: FString::Printf(TEXT("🛡️ ВОЗВРАТ В ТАКТИЧЕСКУЮ ПАУЗУ: %.1fc / %.1fc"), Held, Limit);
+	const FString Raw = FString::Printf(TEXT("%s: %.1fc / %.1fc"), *Caption, Held, Limit);
 	const FString Label = StripUnsupportedGlyphs(Raw).TrimStartAndEnd();
 	UFont* Font = GEngine->GetSmallFont();
 	float W = 0.f;
@@ -626,7 +634,60 @@ void ACodexTacticsHUD::DrawSpaceCharge()
 	Canvas->DrawItem(Item);
 	const float BarY = Y + H * 1.1f + 6.f;
 	DrawRect(FLinearColor(0.1f, 0.1f, 0.12f, 0.85f), X - 140.f, BarY, 280.f, 22.f);
-	DrawRect(FLinearColor(0.3f, 0.55f, 0.85f, 0.95f), X - 138.f, BarY + 2.f, 276.f * FMath::Clamp(Held / FMath::Max(0.01f, Limit), 0.f, 1.f), 18.f);
+	DrawRect(FLinearColor(0.3f, 0.55f, 0.85f, 0.95f), X - 138.f, BarY + 2.f, 276.f * FCombatTimeModeRules::GetHoldProgress(Held, Limit), 18.f);
+}
+
+void ACodexTacticsHUD::DrawCombatModeBadge()
+{
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	const UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
+	if (!Flow || !Squad || Squad->GetMembers().IsEmpty() || (Mission && Mission->IsMainMenuOpen()))
+	{
+		return;
+	}
+	UFont* Font = GEngine->GetSmallFont();
+	const float CenterX = Canvas->SizeX * 0.5f;
+	float Y = 20.f;
+	auto DrawCentered = [&](const FString& Text, const FLinearColor& Color, const FLinearColor& Back, float Scale)
+	{
+		float W = 0.f;
+		float H = 0.f;
+		Canvas->StrLen(Font, Text, W, H);
+		W *= Scale;
+		H *= Scale;
+		DrawRect(Back, CenterX - W * 0.5f - 10.f, Y - 3.f, W + 20.f, H + 6.f);
+		FCanvasTextItem Item(FVector2D(CenterX - W * 0.5f, Y), FText::FromString(Text), Font, Color);
+		Item.Scale = FVector2D(Scale, Scale);
+		Item.bOutlined = true;
+		Item.OutlineColor = FLinearColor::Black;
+		Canvas->DrawItem(Item);
+		Y += H + 10.f;
+	};
+	// Combat time mode (user request 2026-10-06): «РЕАЛЬНОЕ ВРЕМЯ» / «ТАКТИЧЕСКАЯ ПАУЗА» / «ПОШАГОВЫЙ БОЙ» with the keys.
+	const FString Mode = FCombatTimeModeRules::GetModeLabel(Flow->GetPhase(), Flow->GetCombatMode());
+	if (!Mode.IsEmpty())
+	{
+		const ECodexCombatMode CombatMode = Flow->GetCombatMode();
+		const FString Hint = CombatMode == ECodexCombatMode::TurnBased
+			? FString::Printf(TEXT("удерж. ПРОБЕЛ %.1fс — реальное время"), FCombatTimeModeRules::GetHoldSeconds(CombatMode, Flow->GetConfig()))
+			: FString::Printf(TEXT("ПРОБЕЛ — %s  ·  удерж. %.1fс — пошаговый бой"),
+				CombatMode == ECodexCombatMode::TacticalPause ? TEXT("продолжить") : TEXT("пауза"),
+				FCombatTimeModeRules::GetHoldSeconds(CombatMode, Flow->GetConfig()));
+		const FLinearColor Color = CombatMode == ECodexCombatMode::TacticalPause ? FLinearColor(1.f, 0.85f, 0.25f)
+			: (CombatMode == ECodexCombatMode::TurnBased ? FLinearColor(0.45f, 0.8f, 1.f) : FLinearColor(0.4f, 1.f, 0.5f));
+		DrawCentered(FString::Printf(TEXT("%s   [%s]"), *Mode, *Hint), Color, FLinearColor(0.f, 0.f, 0.f, 0.55f), 1.25f);
+	}
+	// Fire posture (user request 2026-10-06): the squad's, the key hints, and how many operatives have their own.
+	const ESquadFirePosture Posture = Squad->GetSquadPosture();
+	FString Line = FString::Printf(TEXT("ОГОНЬ: %s   [,] пасс  [.] обор  [/] агр"), *FirePostureRules::GetLabel(Posture));
+	if (const int32 Overrides = Squad->CountPostureOverrides(); Overrides > 0)
+	{
+		Line += FString::Printf(TEXT("   (свой режим: %d)"), Overrides);
+	}
+	const FLinearColor PostureColor = Posture == ESquadFirePosture::Passive ? FLinearColor(0.7f, 0.75f, 0.8f)
+		: (Posture == ESquadFirePosture::Defensive ? FLinearColor(1.f, 0.8f, 0.3f) : FLinearColor(1.f, 0.4f, 0.3f));
+	DrawCentered(Line, PostureColor, FLinearColor(0.f, 0.f, 0.f, 0.45f), 1.f);
 }
 
 void ACodexTacticsHUD::DrawWorldLabels()

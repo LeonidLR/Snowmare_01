@@ -2,8 +2,8 @@
 // (user report 2026-10-05: «1-4 do nothing in the real-time fight / the pause, the camera does not follow»):
 //   Scripts/smoke.ps1 -Command CodexTactics.RealtimeSelectSmoke -Log Smoke-RealtimeSelect.log
 // «Начать бой»; the keys 2, 3, 1 (real key events through Enhanced Input) in real time, then 2, 1 in the tactical pause:
-// each makes that operative the leader and the camera follows him. Orders (user decision 2026-10-05): a medkit is refused
-// in real time and works in the pause; the Commander Mode switch works in real time.
+// each makes that operative the leader and the camera follows him. Orders (RTS control, user request 2026-10-06 — the
+// 2026-10-05 lock is gone): a medkit works in real time and in the pause; the Commander Mode switch works in real time.
 
 #include "CoreMinimal.h"
 
@@ -85,12 +85,12 @@ namespace RealtimeSelectSmoke
 			Leader->HealthComponent->ApplyDirectHealthLoss(50000.f, TEXT("smoke"));
 			const float Before = Leader->HealthComponent->GetCurrentHealth();
 			CodexPC->UseSquadItem(EPersonalItem::Medkit);
-			const bool bRefused = Leader->MedkitsCount == 2 && Leader->HealthComponent->GetCurrentHealth() == Before;
+			const bool bRefused = Leader->MedkitsCount == 1 && Leader->HealthComponent->GetCurrentHealth() > Before; // used at once
 			const bool bWasAuto = Squad->IsAutonomousSquadCombat();
 			CodexPC->ToggleAutonomy();
 			const bool bToggled = Squad->IsAutonomousSquadCombat() != bWasAuto;
 			CodexPC->ToggleAutonomy();
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: real time: medkit refused %d, Commander Mode switch works %d"),
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: real time: medkit used at once %d, Commander Mode switch works %d"),
 				bRefused && bToggled ? TEXT("ok  ") : TEXT("FAIL"), bRefused ? 1 : 0, bToggled ? 1 : 0);
 			State.Failures += bRefused && bToggled ? 0 : 1;
 		}

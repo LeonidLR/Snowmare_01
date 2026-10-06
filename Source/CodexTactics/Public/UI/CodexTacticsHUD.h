@@ -249,6 +249,8 @@ private:
 	void DrawFloatingTexts();
 	/** Space-hold charge bar in the screen centre (Godot gorky17_combat_hud charge_bar_container). */
 	void DrawSpaceCharge();
+	/** Top centre: the combat time mode label with its Space hints, and the fire posture with the , . / hints. */
+	void DrawCombatModeBadge();
 	/** Overhead labels of enemies and deployables / the generator (Godot overhead Label3D). */
 	void DrawWorldLabels();
 	/** Splits Text into lines no wider than MaxWidth pixels. */

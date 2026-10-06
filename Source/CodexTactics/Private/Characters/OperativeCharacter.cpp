@@ -28,6 +28,7 @@
 #include "Characters/FacingRules.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/BarrelActor.h"
@@ -1570,7 +1571,7 @@ bool AOperativeCharacter::HealAlly(AOperativeCharacter& Patient)
 	return true;
 }
 
-FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime)
+FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllowAutoTargets)
 {
 	UWorld* World = GetWorld();
 	FShootCandidate Candidate;
@@ -1619,6 +1620,14 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime)
 			TargetSwitchTimer = 0.f;
 			return Candidate;
 		}
+	}
+	// The fire posture holds the automatic fire (user request 2026-10-06): only the direct orders above count.
+	if (!bAllowAutoTargets)
+	{
+		CurrentCombatTarget.Reset();
+		PendingFlankTarget.Reset();
+		TargetSwitchTimer = 0.f;
+		return FShootCandidate();
 	}
 	// 1b. Commander Mode: the target the ROE policy picked (Sprint 07-C).
 	if (AActor* Chosen = AutonomyTarget.Get())
@@ -1701,6 +1710,20 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime)
 	return *Current;
 }
 
+ESquadFirePosture AOperativeCharacter::GetFirePosture() const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	return Squad ? Squad->GetEffectivePosture(this)
+		: FirePostureRules::Resolve(FirePostureRules::DefaultPosture, bHasPostureOverride, PostureOverride);
+}
+
+bool AOperativeCharacter::MayAutoFireNow() const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	return FirePostureRules::MayAutoFire(GetFirePosture(), bProvokedThisFight, Squad && Squad->IsSquadProvoked(),
+		USquadSubsystem::GetPostureConfig());
+}
+
 void AOperativeCharacter::NotifyBarricadeBlocked()
 {
 	if (BarricadeBlockNotifyTimer > 0.f)
@@ -1761,20 +1784,41 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		return;
 	}
 
-	// Only auto-shoot when in WaveCombat real-time mode (or if no game flow subsystem exists, e.g. standalone test)
+	// Only auto-shoot when in WaveCombat real-time mode (or if no game flow subsystem exists, e.g. standalone test).
+	// Exception (user request 2026-10-06): an Aggressive operative on an ambush level still exploring opens fire on an
+	// enemy it sees — a squad attack that starts the ambush fight right here.
 	if (UWorld* World = GetWorld())
 	{
 		if (UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>())
 		{
 			if (Flow->GetPhase() != ECodexGamePhase::WaveCombat || Flow->GetCombatMode() != ECodexCombatMode::RealTime)
 			{
-				return;
+				const ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>();
+				if (!Encounter || bRaging || bIsReloading || ShootTimer > 0.f || (UsesAmmo() && CurrentClip <= 0)
+					|| !FirePostureRules::MayAutoFireInExploration(GetFirePosture(), Encounter->IsAmbushCombatStart(), Flow->GetPhase(),
+						Flow->IsCombatUnlocked(), USquadSubsystem::GetPostureConfig()))
+				{
+					return;
+				}
+				const FShootCandidate Opening = FindShootTarget(DeltaTime, true);
+				if (!Opening.Enemy || Opening.bBlind
+					|| !ULevelEncounterSubsystem::NotifyHostileContactIn(World, EAmbushTrigger::SquadAutoFire, Opening.Enemy))
+				{
+					CurrentCombatTarget.Reset();
+					return;
+				}
+				UE_LOG(LogCodexTactics, Display, TEXT("%s opens fire on %s (aggressive posture): the ambush fight starts"),
+					*DisplayName.ToString(), *Opening.Enemy->GetName());
+				// The fight is on now (WaveCombat / RealTime): the normal fire below shoots this frame.
 			}
 		}
 	}
 
+	// Fire posture (user request 2026-10-06): Passive / unprovoked Defensive operatives open no fire of their own.
+	const bool bAutoFire = MayAutoFireNow();
+
 	// Godot: a clustered pack gets a grenade before the rifle (not while raging or reloading).
-	if (!bRaging && !bIsReloading && GrenadesCount > 0 && AIGrenadeCooldown <= 0.f && TryAIGrenadeThrow())
+	if (bAutoFire && !bRaging && !bIsReloading && GrenadesCount > 0 && AIGrenadeCooldown <= 0.f && TryAIGrenadeThrow())
 	{
 		ShootTimer = 1.f;
 		return;
@@ -1806,7 +1850,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 	}
 	else
 	{
-		Shot = FindShootTarget(DeltaTime);
+		Shot = FindShootTarget(DeltaTime, bAutoFire);
 	}
 	AActor* Target = Shot.Enemy;
 	if (!Target)
@@ -2277,6 +2321,12 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	if (!HealthComponent || !HealthComponent->IsAlive())
 	{
 		return 0.f;
+	}
+	// Fire posture: an attack (dodged or not) provokes a Defensive operative to fight back (user request 2026-10-06).
+	bProvokedThisFight = true;
+	if (USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)
+	{
+		Squad->NotifyMemberAttacked(this);
 	}
 	// 1. Dodge on luck (Godot: luck 25 -> 10 %).
 	const float DodgeRoll = ForcedDodgeRollForTesting >= 0.f ? (ForcedDodgeRollForTesting >= 1.f ? -1.f : 101.f) : FMath::FRand() * 100.f;
