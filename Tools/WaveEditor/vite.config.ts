@@ -3,12 +3,22 @@ import react from '@vitejs/plugin-react'
 import fs from 'fs'
 import path from 'path'
 import { spawn } from 'child_process'
+import { parseJsonText, patchJsonText } from './src/utils/jsonTextPatch.ts'
+import {
+  applyLevelEncounterPatch, effectiveHorde, isJsonObject, mergeAiTuningCvars, pickLevelEncounter,
+  validateCVarEdits, validateHorde, validateLevelPatch, validatePerception,
+} from './src/utils/stealthCombat.ts'
 
 const PROJECT_PATH = path.resolve(__dirname, '../../')
 const LEVELS_DIR = path.resolve(__dirname, '../../Content/Data/LevelJson')
 // Weapon power (the «Оружие» tab); the game applies it at start (Source/.../Data/WeaponTuning.h).
 const WEAPONS_FILE = path.resolve(__dirname, '../../Content/Data/Weapons/weapons_tuning.json')
 const SQUAD_ROE_FILE = path.resolve(__dirname, '../../Content/Data/AI/squad_roe.json')
+// «Скрытность и бой» tab: the only files its endpoints read / write (plus the level JSONs in LEVELS_DIR).
+const PERCEPTION_FILE = path.resolve(__dirname, '../../Content/Data/AI/enemy_perception.json')
+const HORDE_FILE = path.resolve(__dirname, '../../Content/Data/AI/horde.json')
+const AI_TUNING_FILE = path.resolve(__dirname, '../../Content/Data/AI/ai_tuning.json')
+const ACTIVE_LEVEL_FILE = 'level_01_outpost.json'
 const TELEMETRY_DIR = path.resolve(__dirname, '../../Saved/Telemetry')
 const RAW_RUNS_FILE = path.join(TELEMETRY_DIR, 'raw_runs', 'runs.jsonl')
 const BOT_PRESETS_FILE = path.resolve(__dirname, '../../Content/Data/Bot/bot_presets.json')
@@ -174,6 +184,133 @@ const setupApiMiddlewares = (middlewares: any) => {
         res.end(JSON.stringify({ error: e.message }))
       }
     })
+  })
+
+  // ---- «Скрытность и бой» (Stealth & Combat) tab -------------------------------------------------------------------
+  // Every write goes through patchJsonText: only changed values are rewritten, unknown keys / layout / BOM / CRLF kept.
+  const sendJson = (res: any, code: number, payload: unknown) => {
+    res.statusCode = code
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.end(JSON.stringify(payload))
+  }
+  const readBody = (req: any): Promise<string> => new Promise((resolve, reject) => {
+    let body = ''
+    req.on('data', (chunk: any) => { body += chunk })
+    req.on('end', () => resolve(body))
+    req.on('error', reject)
+  })
+  const readText = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : null)
+  const writePatched = (file: string, data: unknown, fallbackText: string) => {
+    const original = readText(file) ?? fallbackText
+    const next = patchJsonText(original, data)
+    if (next !== original || !fs.existsSync(file)) fs.writeFileSync(file, next, 'utf-8')
+    return next !== original
+  }
+  const readHordeDefaults = (): any => {
+    const text = readText(HORDE_FILE)
+    const data = text ? parseJsonText(text) : {}
+    return isJsonObject(data) ? data : {}
+  }
+  // A level of Content/Data/LevelJson by id: letters, digits, _ and - only, the file must exist (no path escape).
+  const levelFile = (id: unknown): string | null => {
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(id)) return null
+    const file = path.join(LEVELS_DIR, `${id}.json`)
+    return fs.existsSync(file) ? file : null
+  }
+  const jsonFileEndpoint = (route: string, file: string, validate: (data: any) => string[]) => {
+    middlewares.use(route, async (req: any, res: any) => {
+      addCors(res)
+      try {
+        if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return }
+        if (req.method === 'GET') {
+          const text = readText(file)
+          if (text === null) return sendJson(res, 404, { error: `${path.basename(file)} not found (Content/Data/AI)` })
+          return sendJson(res, 200, parseJsonText(text))
+        }
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'GET / POST only' })
+        const data = JSON.parse(await readBody(req))
+        const errors = validate(data)
+        if (errors.length > 0) return sendJson(res, 400, { error: errors.join('; ') })
+        const changed = writePatched(file, data, '{}\n')
+        sendJson(res, 200, { success: true, changed })
+      } catch (e: any) {
+        sendJson(res, 500, { error: e.message })
+      }
+    })
+  }
+
+  // Enemy perception (Data/EnemyPerception.h): GET / POST Content/Data/AI/enemy_perception.json.
+  jsonFileEndpoint('/api/enemy-perception', PERCEPTION_FILE, (data) => {
+    if (!isJsonObject(data) || !isJsonObject(data.archetypes) || !isJsonObject(data.search)) return ['expected { search: {...}, archetypes: {...} }']
+    return validatePerception(data)
+  })
+
+  // Horde defaults (Combat/HordeRules.h): GET / POST Content/Data/AI/horde.json.
+  jsonFileEndpoint('/api/horde', HORDE_FILE, (data) => (isJsonObject(data) ? validateHorde(effectiveHorde(data)) : ['expected a JSON object']))
+
+  // Per-level combat_start / patrol_search_seconds / horde_enabled / horde of Content/Data/LevelJson/<id>.json.
+  // GET ?id=stage_01 -> { level_id, values }; POST { id, patch } (null removes a key) patches only those keys, and the
+  // editor's active-level copy level_01_outpost.json too when it holds the same level_id (save-stage mirrors there).
+  middlewares.use('/api/level-encounter', async (req: any, res: any) => {
+    addCors(res)
+    try {
+      if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return }
+      if (req.method === 'GET') {
+        const id = new URL(req.url || '', 'http://localhost').searchParams.get('id')
+        const file = levelFile(id)
+        if (!file) return sendJson(res, 404, { error: `level '${id}' not found in Content/Data/LevelJson` })
+        const level: any = parseJsonText(fs.readFileSync(file, 'utf-8'))
+        return sendJson(res, 200, { level_id: level.level_id ?? id, file: path.basename(file), values: pickLevelEncounter(level) })
+      }
+      if (req.method !== 'POST') return sendJson(res, 405, { error: 'GET / POST only' })
+      const { id, patch } = JSON.parse(await readBody(req))
+      const file = levelFile(id)
+      if (!file) return sendJson(res, 404, { error: `level '${id}' not found in Content/Data/LevelJson` })
+      const errors = validateLevelPatch(patch, readHordeDefaults())
+      if (errors.length > 0) return sendJson(res, 400, { error: errors.join('; ') })
+      const targets = [file]
+      const mirror = path.join(LEVELS_DIR, ACTIVE_LEVEL_FILE)
+      if (path.resolve(mirror) !== path.resolve(file) && fs.existsSync(mirror)) {
+        const mirrorLevel: any = parseJsonText(fs.readFileSync(mirror, 'utf-8'))
+        const level: any = parseJsonText(fs.readFileSync(file, 'utf-8'))
+        if (mirrorLevel.level_id && mirrorLevel.level_id === level.level_id) targets.push(mirror)
+      }
+      const written: string[] = []
+      for (const target of targets) {
+        const level = parseJsonText(fs.readFileSync(target, 'utf-8')) as object
+        if (writePatched(target, applyLevelEncounterPatch(level, patch), '{}')) written.push(path.basename(target))
+      }
+      const level: any = parseJsonText(fs.readFileSync(file, 'utf-8'))
+      sendJson(res, 200, { success: true, written, values: pickLevelEncounter(level) })
+    } catch (e: any) {
+      sendJson(res, 500, { error: e.message })
+    }
+  })
+
+  // Stealth console knobs in Content/Data/AI/ai_tuning.json "cvars" (Data/AITuning.h applies them at game start).
+  // POST { cvars: { "Codex.Perception.HearingScale": "1.2", "Codex.Patrol.SearchSeconds": "" } } — whitelisted names
+  // only, '' removes the key; the Jev coach's other keys are kept.
+  middlewares.use('/api/ai-tuning', async (req: any, res: any) => {
+    addCors(res)
+    try {
+      if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return }
+      const text = readText(AI_TUNING_FILE)
+      const doc: any = text ? parseJsonText(text) : {}
+      if (req.method === 'GET') return sendJson(res, 200, { exists: text !== null, cvars: isJsonObject(doc.cvars) ? doc.cvars : {} })
+      if (req.method !== 'POST') return sendJson(res, 405, { error: 'GET / POST only' })
+      const { cvars } = JSON.parse(await readBody(req))
+      if (!isJsonObject(cvars)) return sendJson(res, 400, { error: 'expected { cvars: { name: value } }' })
+      const edits: Record<string, string> = {}
+      for (const [k, v] of Object.entries(cvars)) edits[k] = v === null ? '' : String(v)
+      const errors = validateCVarEdits(edits)
+      if (errors.length > 0) return sendJson(res, 400, { error: errors.join('; ') })
+      const base = text ? doc : { comment: 'Codex.* console variables applied at game start (Data/AITuning.h); written by the Jev AI coach (Scripts/Tools/jev_ai_coach.py) and the Wave Editor tab «Скрытность и бой». A -dpcvars= value wins, -NoAITuning skips it.' }
+      const changed = writePatched(AI_TUNING_FILE, mergeAiTuningCvars(base, edits), '{}\n')
+      const after: any = parseJsonText(fs.readFileSync(AI_TUNING_FILE, 'utf-8'))
+      sendJson(res, 200, { success: true, changed, cvars: after.cvars ?? {} })
+    } catch (e: any) {
+      sendJson(res, 500, { error: e.message })
+    }
   })
 
   middlewares.use('/api/save-weapons', (req: any, res: any, next: any) => {

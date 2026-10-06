@@ -125,6 +125,10 @@ export interface LevelConfig {
   standard_loot_found?: boolean;
   puzzle_secret_found?: boolean;
   squad_loadout?: SquadLoadoutConfig;
+  /** UE: how the fight starts — auto (ambush when the map has patrols) | ambush | button (LevelEncounterRules). */
+  combat_start?: 'auto' | 'ambush' | 'button';
+  /** UE: patrol search time after a trap on this level, s (absent / -1: enemy_perception.json search.duration_seconds). */
+  patrol_search_seconds?: number;
   /** UE horde after 4 min of real-time fight (Content/Data/AI/horde.json); false switches it off for the level. */
   horde_enabled?: boolean;
   /** Per-level overrides of horde.json (same keys). */

@@ -12,8 +12,10 @@ import { LiveBalanceAdvisor } from './components/LiveBalanceAdvisor';
 import { WeaponTuningPanel } from './components/WeaponTuningPanel';
 import { EnemyWeaponsPanel } from './components/EnemyWeaponsPanel';
 import { CommanderROEPanel } from './components/CommanderROEPanel';
+import { StealthCombatPanel } from './components/StealthCombatPanel';
+import { applyLevelEncounterPatch } from './utils/stealthCombat';
 import { Activity, Terminal, Loader2, Swords, Plus, Snowflake, X, Wifi, WifiOff } from 'lucide-react';
-import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2 } from 'lucide-react';
+import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2, Eye } from 'lucide-react';
 
 const DEFAULT_LEVEL: LevelConfig = {
   $schema: "../../schemas/level_config.schema.json",
@@ -144,7 +146,7 @@ export const App: React.FC = () => {
   };
 
   const [selectedWaveIndex, setSelectedWaveIndex] = useState<number>(1);
-  const [activeTab, setActiveTab] = useState<'waves' | 'telemetry' | 'weapons' | 'enemyWeapons' | 'squadRoe'>('waves');
+  const [activeTab, setActiveTab] = useState<'waves' | 'telemetry' | 'weapons' | 'enemyWeapons' | 'squadRoe' | 'stealth'>('waves');
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [isServerConnected, setIsServerConnected] = useState<boolean | null>(null);
 
@@ -693,6 +695,17 @@ export const App: React.FC = () => {
               <Swords className="w-3.5 h-3.5" />
               Тактика отряда (ROE)
             </button>
+            <button
+              onClick={() => setActiveTab('stealth')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'stealth'
+                  ? 'bg-indigo-400 text-slate-950 shadow-md shadow-indigo-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Скрытность и бой
+            </button>
           </div>
 
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 font-mono">
@@ -711,6 +724,12 @@ export const App: React.FC = () => {
           <EnemyWeaponsPanel />
         ) : activeTab === 'squadRoe' ? (
           <CommanderROEPanel />
+        ) : activeTab === 'stealth' ? (
+          <StealthCombatPanel
+            levelId={config.level_id || activeStageId}
+            levelName={config.level_name}
+            onLevelPatched={(patch) => setConfig((prev) => applyLevelEncounterPatch(prev, patch))}
+          />
         ) : (
           <>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
