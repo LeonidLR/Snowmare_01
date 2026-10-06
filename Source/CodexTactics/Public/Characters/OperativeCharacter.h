@@ -200,6 +200,9 @@ public:
 	/** Ground speed of the current vault (the animation reads it). */
 	float GetVaultSpeed() const;
 
+	/** Length of the vault in progress, s (a step off an obstacle top is short: 0.5 s). */
+	float GetVaultDuration() const { return VaultDuration; }
+
 	/** Position in the squad roster (0 = commander); selection keys 1..N map to it. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
 	int32 SquadIndex = 0;

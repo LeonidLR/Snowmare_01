@@ -370,6 +370,51 @@ namespace HudShot
 				}), 0.05f);
 			}), 3.5f, false);
 		}
+		if (Args.Contains(TEXT("vault")))
+		{
+			// Vault clip check: a barricade 2.5 m ahead of the leader, he walks through it; HudShot_Vault_{1,2,3}.png mid-vault.
+			TWeakObjectPtr<UWorld> VaultWorld(World);
+			FTimerHandle VaultHandle;
+			World->GetTimerManager().SetTimer(VaultHandle, FTimerDelegate::CreateLambda([VaultWorld]()
+			{
+				USquadSubsystem* Squad = VaultWorld.IsValid() ? VaultWorld->GetSubsystem<USquadSubsystem>() : nullptr;
+				AOperativeCharacter* Lead = Squad ? Squad->GetLeader() : nullptr;
+				if (!Lead)
+				{
+					FPlatformMisc::RequestExit(false, TEXT("HudShot"));
+					return;
+				}
+				const FVector Ground = Lead->GetActorLocation() - FVector(0.f, 0.f, Lead->GetSimpleCollisionHalfHeight());
+				const FVector Forward = Lead->GetActorForwardVector().GetSafeNormal2D();
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				VaultWorld->SpawnActor<ABarricadeActor>(Ground + Forward * 250.f + FVector(0.f, 0.f, ABarricadeActor::HeightCm * 0.5f),
+					FRotator(0.f, Forward.Rotation().Yaw + 90.f, 0.f), Params);
+				Lead->OrderMoveTo(Ground + Forward * 700.f + FVector(0.f, 0.f, Lead->GetSimpleCollisionHalfHeight()), false);
+				TWeakObjectPtr<AOperativeCharacter> WeakLead(Lead);
+				TSharedRef<int32> Frames = MakeShared<int32>(0);
+				TSharedRef<int32> Shots = MakeShared<int32>(0);
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Frames, Shots, WeakLead](float)
+				{
+					AOperativeCharacter* L = WeakLead.Get();
+					const int32 F = ++(*Frames);
+					// Three shots 0.25 s apart once the vault has begun.
+					if (L && L->IsVaulting() && *Shots < 3 && (*Shots == 0 || F % 5 == 0))
+					{
+						++(*Shots);
+						FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / FString::Printf(TEXT("HudShot_Vault_%d.png"), *Shots), true, false);
+						UE_LOG(LogCodexTactics, Display, TEXT("HudShot vault shot %d at frame %d"), *Shots, F);
+					}
+					if (F >= 200 || (*Shots >= 3 && L && !L->IsVaulting() && F % 20 == 0))
+					{
+						FPlatformMisc::RequestExit(false, TEXT("HudShot"));
+						return false;
+					}
+					return true;
+				}), 0.05f);
+			}), 3.5f, false);
+			return; // its own timeline
+		}
 		if (Args.Contains(TEXT("rifle2")))
 		{
 			// Rifle_2 locomotion check: the leader gets ABP_Operative_Rifle2 for this run, walks off, stops, turns about;

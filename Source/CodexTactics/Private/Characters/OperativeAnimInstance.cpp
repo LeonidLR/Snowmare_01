@@ -249,6 +249,42 @@ void UOperativeAnimInstance::UpdateRifle2Locomotion(float DeltaSeconds, bool bMo
 	}
 }
 
+void UOperativeAnimInstance::UpdateVaultClip(const AOperativeCharacter& Operative)
+{
+	const bool bVaulting = Operative.IsVaulting();
+	if (bVaulting && !bWasVaulting && Operative.GetVaultDuration() >= VaultMinClipDuration)
+	{
+		// Left / right foot in turn (a missing one falls back to the other).
+		UAnimSequenceBase* Clip = bVaultLeftNext ? VaultLeftFootAnimation : VaultRightFootAnimation;
+		float Landing = bVaultLeftNext ? VaultLeftFootLandingTime : VaultRightFootLandingTime;
+		if (!Clip)
+		{
+			Clip = bVaultLeftNext ? VaultRightFootAnimation : VaultLeftFootAnimation;
+			Landing = bVaultLeftNext ? VaultRightFootLandingTime : VaultLeftFootLandingTime;
+		}
+		bVaultLeftNext = !bVaultLeftNext;
+		if (Clip && !bIsDead)
+		{
+			// The clip's landing frame on the arc's end: faster for a running vault, slower for a careful one.
+			const float PlayRate = FMath::Clamp(Landing / FMath::Max(Operative.GetVaultDuration(), 0.1f), 0.5f, 2.5f);
+			VaultMontage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, 0.1f, 0.25f, PlayRate);
+			VaultClipsPlayed += VaultMontage.IsValid() ? 1 : 0;
+			UE_LOG(LogCodexTactics, Display, TEXT("[Vault] %s plays %s at x%.2f (vault %.2f s)"), *Operative.DisplayName.ToString(), *Clip->GetName(),
+				PlayRate, Operative.GetVaultDuration());
+		}
+	}
+	else if (!bVaulting && bWasVaulting)
+	{
+		// Landed: walking on -> the recovery blends out into the locomotion; standing -> it plays to the end.
+		UAnimMontage* Montage = VaultMontage.Get();
+		if (Montage && Montage_IsPlaying(Montage) && Operative.IsMoving())
+		{
+			Montage_Stop(0.25f, Montage);
+		}
+	}
+	bWasVaulting = bVaulting;
+}
+
 void UOperativeAnimInstance::UpdateColdLayer(float DeltaSeconds)
 {
 	// Godot cold_animation_controller.gd: presentation only. Eligible = standing locomotion, not aiming / sprinting /
@@ -534,6 +570,7 @@ void UOperativeAnimInstance::UpdateState()
 		Speed = Operative->GetVaultSpeed();
 		Direction = 0.f;
 	}
+	UpdateVaultClip(*Operative);
 	bIsMoving = Speed > 5.f;
 	bIsSprinting = Operative->IsSprinting();
 	Stance = Operative->GetStance();

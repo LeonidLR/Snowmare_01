@@ -253,6 +253,32 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
 	TObjectPtr<UAnimSequenceBase> DeathCrouchAnimation;
 
+	/**
+	 * Vault over an obstacle (user request 2026-10-06: the Rifle_2 hurdle, M_Neutral_Traversal_Hurdle_1_0_stand_F_V2_*):
+	 * played on FullBodySlot when a vault starts, left / right foot first in turn, its play rate set so the clip lands
+	 * (VaultLeftFootLandingTime / VaultRightFootLandingTime) when the vault arc ends; the arc moves the body (the clips are
+	 * root-locked), the clip's recovery plays on when the operative stays put and blends out when he walks on.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> VaultLeftFootAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> VaultRightFootAnimation;
+
+	/** Clip time at which the body lands (the end of the vault arc is matched to it), s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0.1"))
+	float VaultLeftFootLandingTime = 0.96f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0.1"))
+	float VaultRightFootLandingTime = 0.95f;
+
+	/** Vaults shorter than this (a step down off an obstacle top) play no clip, s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float VaultMinClipDuration = 0.6f;
+
+	/** Vault clips started (smokes). */
+	int32 GetVaultClipsPlayed() const { return VaultClipsPlayed; }
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
 	TObjectPtr<UAnimSequenceBase> DeathProneAnimation;
 
@@ -489,6 +515,12 @@ private:
 	FDelegateHandle FiredHandle;
 	FDelegateHandle GrenadeHandle;
 	bool bDeathPlayed = false;
+	/** Vault clip: started on the vault's first frame, foot alternating. */
+	void UpdateVaultClip(const AOperativeCharacter& Operative);
+	bool bWasVaulting = false;
+	bool bVaultLeftNext = true;
+	int32 VaultClipsPlayed = 0;
+	TWeakObjectPtr<UAnimMontage> VaultMontage;
 	float AimTimer = 0.f;
 	bool bWasReloading = false;
 	/** Stance seen last update (transitions start on a change); unset until the first update. */
