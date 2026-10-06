@@ -130,20 +130,22 @@ bool FPatrolRouteAlertTest::RunTest(const FString& Parameters)
 	Partner.bPartnerAlerted = true;
 	TestTrue(TEXT("leader / escort alerted: engage"), ShouldBreakPatrol(Partner));
 
+	// User amendment 2026-10-06: a trap no longer breaks the patrol — it starts a search (see AI.Patrol.TrapStartsSearchNotCombat).
 	FPatrolAlertInput TrapNear;
 	TrapNear.TrapDistanceCm = 1500.f;
-	TestTrue(TEXT("tripwire at 15 m: engage"), ShouldBreakPatrol(TrapNear));
+	TestFalse(TEXT("tripwire at 15 m: no engage"), ShouldBreakPatrol(TrapNear));
+	TestTrue(TEXT("tripwire at 15 m: search"), ShouldStartSearch(TrapNear));
 	TrapNear.TrapDistanceCm = 2000.f;
-	TestTrue(TEXT("tripwire at exactly 20 m: engage"), ShouldBreakPatrol(TrapNear));
+	TestTrue(TEXT("tripwire at exactly 20 m: search"), ShouldStartSearch(TrapNear));
 
 	FPatrolAlertInput TrapFar;
 	TrapFar.TrapDistanceCm = 2500.f;
-	TestFalse(TEXT("tripwire at 25 m: stays on patrol"), ShouldBreakPatrol(TrapFar));
+	TestEqual(TEXT("tripwire at 25 m: stays on patrol"), static_cast<int32>(EvaluateAlert(TrapFar)), static_cast<int32>(EPatrolReaction::None));
 	TestEqual(TEXT("default trap alert radius 20 m"), TrapAlertRadiusCm, 2000.f);
 	TestFalse(TEXT("no trap (-1)"), IsTrapHeard(-1.f));
 
 	// A wider tuned radius hears the 25 m blast.
 	TrapFar.TrapAlertRadiusCm = 3000.f;
-	TestTrue(TEXT("tuned 30 m radius hears 25 m"), ShouldBreakPatrol(TrapFar));
+	TestTrue(TEXT("tuned 30 m radius hears 25 m"), ShouldStartSearch(TrapFar));
 	return true;
 }

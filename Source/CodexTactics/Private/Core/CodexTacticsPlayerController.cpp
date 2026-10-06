@@ -39,6 +39,7 @@
 #define LOCTEXT_NAMESPACE "CodexTacticsPlayerController"
 #include "InputActionValue.h"
 #include "Characters/EnemyCharacter.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "EnhancedInputComponent.h"
@@ -1798,6 +1799,12 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 	{
 	case ETargetedShotKind::Enemy:
 	{
+		// Ambush level (user request 2026-10-06): attacking an enemy opens the fight — no «Начать бой» needed. The
+		// priority target below then makes the squad fire at once (the real-time fight is on).
+		if (!bPaused)
+		{
+			ULevelEncounterSubsystem::NotifyHostileContactIn(GetWorld(), EAmbushTrigger::AttackOrder, HitActor);
+		}
 		const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(HitActor);
 		const FText EnemyName = Enemy ? FText::FromString(Enemy->GetEnemyDisplayName()) : LOCTEXT("Enemy", "Враг");
 		if (bPaused)

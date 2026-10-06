@@ -1,4 +1,5 @@
 #include "Combat/GrenadeActor.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/GrenadeRules.h"
@@ -148,6 +149,8 @@ void AGrenadeActor::ApplyAreaEffect()
 {
 	const FVector Center = GetActorLocation();
 	const FText Source = LOCTEXT("Source", "Граната");
+	// Patrols hear the squad's grenade (enemy_perception.json hear_explosion_m) and engage (user request 2026-10-06).
+	AEnemyCharacter::NotifySquadNoise(GetWorld(), Center, ESquadNoise::Explosion);
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	TArray<AActor*> InRadius;
 	for (TActorIterator<AActor> It(GetWorld()); It; ++It)

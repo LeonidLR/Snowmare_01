@@ -18,6 +18,7 @@ void FGameFlowStateMachine::Reset(const FGameFlowConfig& InConfig)
 	CutsceneTimeRemaining = 0.f;
 	TurnBasedUsesThisWave = 0;
 	bCombatUnlocked = false;
+	bAmbushFight = false;
 }
 
 float FGameFlowStateMachine::GetTimeDilation() const
@@ -47,6 +48,24 @@ EGameFlowResult FGameFlowStateMachine::TriggerCombatZone()
 	bCombatUnlocked = true;
 	CutsceneTimeRemaining = Config.CutsceneDuration;
 	SetState(ECodexGamePhase::Cutscene, ECodexCombatMode::None);
+	return EGameFlowResult::Ok;
+}
+
+EGameFlowResult FGameFlowStateMachine::StartAmbushCombat()
+{
+	if (Phase != ECodexGamePhase::Exploration)
+	{
+		return EGameFlowResult::WrongPhase;
+	}
+	if (bCombatUnlocked)
+	{
+		return EGameFlowResult::CombatAlreadyUnlocked;
+	}
+	bCombatUnlocked = true;
+	bAmbushFight = true;
+	WaveIndex = 1;
+	CutsceneTimeRemaining = 0.f;
+	StartWave();
 	return EGameFlowResult::Ok;
 }
 
@@ -154,7 +173,7 @@ EGameFlowResult FGameFlowStateMachine::AdvanceAfterWave()
 	{
 		return EGameFlowResult::WrongPhase;
 	}
-	if (WaveIndex >= Config.TotalWaves)
+	if (WaveIndex >= Config.TotalWaves || (bAmbushFight && Config.bAmbushSingleFight))
 	{
 		SetState(ECodexGamePhase::PostCombat, ECodexCombatMode::None);
 		return EGameFlowResult::Ok;
@@ -174,6 +193,7 @@ EGameFlowResult FGameFlowStateMachine::FinishPostCombat()
 		return EGameFlowResult::WrongPhase;
 	}
 	bCombatUnlocked = false;
+	bAmbushFight = false;
 	SetState(ECodexGamePhase::Exploration, ECodexCombatMode::None);
 	return EGameFlowResult::Ok;
 }

@@ -1,4 +1,5 @@
 #include "Data/LevelJsonRules.h"
+#include "GameFlow/LevelEncounterRules.h"
 
 #include "Dom/JsonObject.h"
 #include "Misc/FileHelper.h"
@@ -60,6 +61,13 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	Config.LevelName = FText::FromString(LevelJsonString(Root, TEXT("level_name"), FallbackId));
 	Config.PrepPhaseDuration = LevelJsonNumber(Root, TEXT("prep_phase_duration"), 60.f);
 	Config.WaveRestDuration = LevelJsonNumber(Root, TEXT("wave_rest_duration"), 20.f);
+	// UE-only (user request 2026-10-06): ambush combat start and the patrol search time.
+	if (!LevelEncounterRules::ParseCombatStart(LevelJsonString(Root, TEXT("combat_start"), TEXT("auto")), Config.CombatStart))
+	{
+		OutError = FString::Printf(TEXT("unknown combat_start '%s' (auto | ambush | button)"), *LevelJsonString(Root, TEXT("combat_start"), FString()));
+		return false;
+	}
+	Config.PatrolSearchSeconds = LevelJsonNumber(Root, TEXT("patrol_search_seconds"), -1.f);
 
 	const TArray<TSharedPtr<FJsonValue>>* Waves = nullptr;
 	if (Root->TryGetArrayField(TEXT("waves"), Waves))

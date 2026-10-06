@@ -1,6 +1,7 @@
 #include "Interactables/BarricadeActor.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "UI/OverheadLabel.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
 #include "Components/BoxComponent.h"
@@ -180,6 +181,8 @@ void ABarricadeActor::ApplyContactTo(AActor* Enemy, float Damage)
 	default:
 		return;
 	}
+	// A placed obstacle, not the squad's direct attack: on patrol it counts as a trap event (search, no ambush fight).
+	const AEnemyCharacter::FScopedTrapBlast PlacedObstacle;
 	EnemyHealth->TakeDamage(Spec);
 }
 

@@ -112,6 +112,12 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 	AliveEnemies.RemoveAll([](const TWeakObjectPtr<AEnemyCharacter>& E) { return !E.IsValid() || E->IsDying(); });
 	CheckDynamicFlankSpawners(WaveIndex); // Godot _start_next_wave
 
+	if (const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->IsAmbushFight() && WaveIndex == 1)
+	{
+		AdoptLevelEnemies();
+		OnWaveStarted.Broadcast(CurrentWaveIndex, TotalWaveEnemies);
+		return;
+	}
 	if (LevelConfig && LevelConfig->Config.Waves.IsValidIndex(WaveIndex - 1))
 	{
 		SpawnLevelWave(LevelConfig->Config.Waves[WaveIndex - 1]);
@@ -143,6 +149,26 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 	}
 
 	OnWaveStarted.Broadcast(CurrentWaveIndex, TotalWaveEnemies);
+}
+
+void UWaveSubsystem::AdoptLevelEnemies()
+{
+	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	{
+		AEnemyCharacter* Enemy = *It;
+		if (!Enemy->IsDying() && !AliveEnemies.Contains(Enemy))
+		{
+			Enemy->OnEnemyDiedNative.AddUObject(this, &UWaveSubsystem::HandleEnemyDied);
+			AliveEnemies.Add(Enemy);
+		}
+	}
+	TotalWaveEnemies = GetAliveEnemyCount();
+	UE_LOG(LogCodexTactics, Display, TEXT("[Wave] ambush fight: %d enemies of the level"), TotalWaveEnemies);
+	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Msg->PostMessage(FText::FromString(TEXT("Командир")),
+			FText::FromString(FString::Printf(TEXT("Засада! Противник на уровне (всего: %d) — уничтожить!"), TotalWaveEnemies)));
+	}
 }
 
 void UWaveSubsystem::SpawnLevelWave(const FWaveDefinition& Def)

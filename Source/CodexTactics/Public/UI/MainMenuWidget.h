@@ -19,6 +19,13 @@ class CODEXTACTICS_API UMainMenuWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
+public:
+	/**
+	 * Shows «Начать бой» only on levels whose fight starts by the button: on an ambush level (ULevelEncounterSubsystem —
+	 * patrols, level JSON "combat_start") the fight starts when the squad attacks or is detected (user request 2026-10-06).
+	 */
+	void RefreshModeButtons();
+
 protected:
 	virtual void NativeOnInitialized() override;
 

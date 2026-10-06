@@ -135,6 +135,21 @@ struct CODEXTACTICS_API FSquadLoadout
 	int32 GrenadesCount = -1;
 };
 
+/**
+ * How the fight of a level starts (user request 2026-10-06, level JSON "combat_start"). Auto: by ambush when the map
+ * holds patrols (an APatrolRouteActor or an enemy with a route / escort leader), else by the button / combat zone.
+ */
+UENUM(BlueprintType)
+enum class ECombatStartMode : uint8
+{
+	/** "auto": ambush on maps with patrols, the button elsewhere. */
+	Auto,
+	/** "ambush": the fight starts when the squad attacks an enemy or an enemy detects the squad; «Начать бой» is hidden. */
+	Ambush,
+	/** "button": the classic flow (main menu «Начать бой» / combat zone -> cutscene -> preparation -> wave). */
+	Button
+};
+
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FLevelCombatConfig
 {
@@ -157,6 +172,14 @@ struct CODEXTACTICS_API FLevelCombatConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FSquadLoadout SquadLoadout;
+
+	/** "combat_start": "auto" (default) | "ambush" | "button". */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	ECombatStartMode CombatStart = ECombatStartMode::Auto;
+
+	/** "patrol_search_seconds": how long patrols hunt after a trap; <= 0 = enemy_perception.json (60 s). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	float PatrolSearchSeconds = -1.f;
 };
 
 UCLASS(BlueprintType)

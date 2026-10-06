@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "AI/PatrolRouteRules.h"
+#include "AI/PerceptionRules.h"
 #include "Characters/EnemyAIRules.h"
 #include "GameFramework/Character.h"
 #include "Data/CombatTypes.h"
@@ -12,6 +13,15 @@ class UHealthComponent;
 struct FOverheadLabel;
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
+
+/** A loud squad action enemies can hear (PerceptionRules gunshot / grenade radius). */
+enum class ESquadNoise : uint8
+{
+	/** An operative fired (at an enemy or an object). */
+	Gunshot,
+	/** A grenade thrown by the squad went off. */
+	Explosion
+};
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedDynamic, AEnemyCharacter*, Enemy);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedNative, AEnemyCharacter*);
@@ -168,9 +178,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Patrol", meta = (ClampMin = "0"))
 	float PatrolWalkSpeed = 190.f;
 
-	/** A patroller notices an operative it sees (Sprint 08 sight rules: stance heights, 60 cm cover) this close, cm. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Patrol", meta = (ClampMin = "0"))
-	float PatrolSightRange = 3000.f;
+	/**
+	 * Use PerceptionOverride instead of its archetype's row in Content/Data/AI/enemy_perception.json (a special guard on
+	 * one map, smokes). Off: the data file decides (user request 2026-10-06; replaces the fixed 30 m PatrolSightRange).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Perception")
+	bool bOverridePerception = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Perception", meta = (EditCondition = "bOverridePerception"))
+	FEnemyPerceptionParams PerceptionOverride;
+
+	/** Sight / hearing / smell in force (override or the archetype's data; smell only for hounds). */
+	FEnemyPerceptionParams GetPerception() const;
 
 	/** A tripwire / mine detonation this close (planar) breaks its patrol, cm (user decision 2026-10-06: 20 m). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Patrol", meta = (ClampMin = "0"))
@@ -199,11 +218,49 @@ public:
 	 */
 	virtual void BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertLocation);
 
-	/** A tripwire / mine went off at Location: breaks the patrol within PatrolTrapAlertRadius. */
+	/**
+	 * A tripwire / mine / placed charge went off at Location: within PatrolTrapAlertRadius the patrol starts a search
+	 * (user amendment 2026-10-06: a trap no longer breaks it into Engage, so it does not start the fight).
+	 */
 	void NotifyTrapTriggered(const FVector& Location);
 
-	/** Every enemy in World hears a trap that went off at Location (ATripwireActor / AProximityMineActor). */
+	/** Every enemy in World hears a trap that went off at Location (ATripwireActor / AProximityMineActor / ApplyBlast). */
 	static void AlertPatrolsNearTrap(UWorld* World, const FVector& Location);
+
+	/**
+	 * A squad gunshot / thrown grenade at Location: every patrolling enemy within its hearing radius (x the search
+	 * multiplier while searching) breaks into Engage (and the fight starts on an ambush level).
+	 */
+	static void NotifySquadNoise(UWorld* World, const FVector& Location, ESquadNoise Noise);
+
+	/**
+	 * Patrol -> Search: walks to Location (faster than the patrol pace), then sweeps random reachable points around it
+	 * with heightened perception for the level's search time (60 s), then returns to the nearest waypoint of its route.
+	 * Its leader / escorts search too. A new blast moves the search there and restarts the clock. No-op off patrol.
+	 */
+	virtual void StartPatrolSearch(const FVector& Location);
+
+	/** Hunting for the squad after a trap (still on patrol duty, not engaged). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Patrol")
+	bool IsSearching() const { return bSearching; }
+
+	/** Suspicion meter 0..1 of the patrol sight (1 = detected). */
+	float GetSuspicion() const { return PatrolSuspicion; }
+
+	/** True while a trap / placed charge deals its blast damage (AInteractableActor::ApplyBlast): damage = trap event. */
+	static bool IsTrapBlastInProgress() { return TrapBlastDepth() > 0; }
+
+	/** Nesting depth of FScopedTrapBlast (game thread only). */
+	static int32& TrapBlastDepth();
+
+	/** Marks the damage dealt inside its lifetime as a trap blast (search, not the squad's direct attack). */
+	struct FScopedTrapBlast
+	{
+		FScopedTrapBlast() { ++TrapBlastDepth(); }
+		~FScopedTrapBlast() { --TrapBlastDepth(); }
+		FScopedTrapBlast(const FScopedTrapBlast&) = delete;
+		FScopedTrapBlast& operator=(const FScopedTrapBlast&) = delete;
+	};
 
 	/** Index of the waypoint it walks to / waits at (smokes, debugging). */
 	int32 GetPatrolWaypointIndex() const { return PatrolWaypointIndex; }
@@ -237,8 +294,38 @@ protected:
 	void TickEscort(float DeltaTime, const AEnemyCharacter& Leader);
 	/** Moves towards a patrol waypoint / tether point at PatrolWalkSpeed (the marksman walks his own way). */
 	virtual void IssuePatrolMove(const FVector& Goal, float Speed);
-	/** A living operative within Range it can see now (Sprint 08 eye / profile heights, cover traces). */
-	AActor* FindVisibleOperative(float Range) const;
+	/**
+	 * The closest living operative it sees now (PerceptionRules::CanSee with the Sprint 08 eye -> profile trace, so a
+	 * prone operative behind 60 cm cover stays hidden); OutDistance / OutRange: distance and the stance sight range.
+	 */
+	AActor* FindVisibleOperative(const FEnemyPerceptionParams& Params, float& OutDistance, float& OutRange) const;
+	/**
+	 * Sight (suspicion build-up), hearing (squad gait) and smell (hounds) every 0.2 s; a detection breaks the patrol
+	 * (BreakPatrol). True when it broke.
+	 */
+	bool TickPatrolPerception(float DeltaTime);
+	/** Perception in force on patrol (x the search multiplier while searching). */
+	FEnemyPerceptionParams GetPatrolPerception() const;
+	/** Search driver: blast point, then sweep points, until the search time is over. */
+	void TickPatrolSearch(float DeltaTime);
+	/** Search over: back to the nearest waypoint (route) / the tether (escort). */
+	void EndPatrolSearch();
+	/** «[Stealth] detection by <sense> at <t> s» log line for the Jev AI coach. */
+	void LogStealthDetection(EPatrolAlertCause Cause, bool bWasSearching) const;
+	/** World AI held (dialogue, cutscene): stops once and returns true — the behaviour tick does nothing else. */
+	bool HoldForWorldAIPause();
+
+	bool bSearching = false;
+	FVector SearchOrigin = FVector::ZeroVector;
+	FVector SearchGoal = FVector::ZeroVector;
+	float SearchElapsed = 0.f;
+	float SearchLegTime = 0.f;
+	float SearchLookLeft = 0.f;
+	float SearchStuckTime = 0.f;
+	bool bSearchReachedOrigin = false;
+	bool bSearchMoving = false;
+	float PatrolSuspicion = 0.f;
+	bool bHeldByAIPause = false;
 	/** Breaks the patrol of its leader and of every enemy escorting it. */
 	void PropagatePatrolBreak(const FVector& AlertLocation);
 	/** Sets up the patrol from AssignedPatrolRoute / EscortLeader (BeginPlay). */

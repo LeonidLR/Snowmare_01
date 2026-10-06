@@ -10,6 +10,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Core/MissionSubsystem.h"
 #include "Engine/World.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
 
 #define LOCTEXT_NAMESPACE "MainMenuWidget"
@@ -127,6 +128,16 @@ void UMainMenuWidget::NativeOnInitialized()
 			Text->SetText(StartClean(Text->GetText()));
 		}
 	}
+	RefreshModeButtons();
+}
+
+void UMainMenuWidget::RefreshModeButtons()
+{
+	const ULevelEncounterSubsystem* Encounter = GetWorld() ? GetWorld()->GetSubsystem<ULevelEncounterSubsystem>() : nullptr;
+	if (MenuCombatButton)
+	{
+		MenuCombatButton->SetVisibility(Encounter && Encounter->IsAmbushCombatStart() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	}
 }
 
 void UMainMenuWidget::HandleGame()
@@ -139,6 +150,10 @@ void UMainMenuWidget::HandleGame()
 
 void UMainMenuWidget::HandleCombat()
 {
+	if (const ULevelEncounterSubsystem* Encounter = GetWorld()->GetSubsystem<ULevelEncounterSubsystem>(); Encounter && Encounter->IsAmbushCombatStart())
+	{
+		return; // hidden on ambush levels (a restyled Blueprint button may still be bound)
+	}
 	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
 	{
 		Mission->StartMission(EMissionStartMode::Combat);

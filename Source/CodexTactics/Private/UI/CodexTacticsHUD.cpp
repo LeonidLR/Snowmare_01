@@ -379,6 +379,10 @@ void ACodexTacticsHUD::HandleMainMenuChanged(bool bOpen)
 	if (MainMenu)
 	{
 		MainMenu->SetVisibility(bOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		if (bOpen)
+		{
+			MainMenu->RefreshModeButtons(); // «Начать бой» hidden on ambush levels
+		}
 	}
 	// Godot: the tactical bar is hidden until the game starts.
 	if (ActionBar)

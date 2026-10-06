@@ -88,6 +88,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult FinishCutscene() { return Machine.FinishCutscene(); }
 
+	/** Ambush level: exploration straight into the real-time fight (see FGameFlowStateMachine::StartAmbushCombat). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
+	EGameFlowResult StartAmbushCombat() { return Machine.StartAmbushCombat(); }
+
+	/** The current fight was started by an ambush (the placed enemies are the wave). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
+	bool IsAmbushFight() const { return Machine.IsAmbushFight(); }
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult FinishPreparation() { return Machine.FinishPreparation(); }
 

@@ -2,6 +2,7 @@
 #include "Subsystems/CodexEventBus.h"
 #include "UI/OverheadLabel.h"
 #include "UI/FloatingTextSubsystem.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -241,6 +242,9 @@ void AInteractableActor::ApplyBlast(float EnemyDamageBase, float SquadDamageBase
 	const FText& Source, const FText& SquadLine, EStatusEffect Status, float StatusDuration, float StatusTickDamage)
 {
 	const FVector Center = GetActorLocation();
+	// A placed charge / trap (tripwire, mine, trapped object, barrel): its damage is a trap event — a patrol searches
+	// instead of engaging and no ambush fight starts (user amendment 2026-10-06).
+	const AEnemyCharacter::FScopedTrapBlast TrapBlast;
 	// Enemies (Godot group "enemies"; UE actors tagged Enemy with a health component).
 	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 	{
@@ -285,6 +289,8 @@ void AInteractableActor::ApplyBlast(float EnemyDamageBase, float SquadDamageBase
 			}
 		}
 	}
+	// Patrols within the trap alert radius (20 m) go searching around the blast.
+	AEnemyCharacter::AlertPatrolsNearTrap(GetWorld(), Center);
 	ReceiveExploded(Radius);
 }
 

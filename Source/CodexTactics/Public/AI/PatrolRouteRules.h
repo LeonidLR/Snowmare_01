@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 
 /**
- * Outpost stealth patrols (Sprint 11, no Godot reference — Sprint 11 spec by Gemini, docs/port/TANDEM.md
+ * Outpost stealth patrols (Sprint 11 + user requests 2026-10-06: trap -> Search, detection -> Engage; no Godot reference — Sprint 11 spec by Gemini, docs/port/TANDEM.md
  * «SPRINT 11 DIRECTIVE»). Pure rules of the spline patrol route, the escort tether and the patrol -> engage break,
  * tested in CodexTactics.AI.PatrolRoute.*; APatrolRouteActor / AEnemyCharacter apply them in the world.
  */
@@ -17,19 +17,46 @@ enum class EPatrolAlertCause : uint8
 	Damage,
 	/** Its leader / escort broke off (took damage, saw someone, was alerted). */
 	PartnerAlert,
-	/** A tripwire or mine went off within the trap alert radius. */
+	/** A tripwire / mine / placed charge went off within the trap alert radius (starts a search, not Engage). */
 	Trap,
 	/** Its leader died. */
-	LeaderLost
+	LeaderLost,
+	/** The enemy itself hears the squad (footsteps by gait, a gunshot, a thrown grenade). */
+	Hearing,
+	/** A frost hound smells an operative. */
+	Smell
+};
+
+/**
+ * How a patrolling enemy reacts to what happened (user amendment 2026-10-06): a detection or an attack by the squad
+ * breaks it into Engage (and starts the fight on ambush levels); a trap / placed charge only sends it searching.
+ */
+enum class EPatrolReaction : uint8
+{
+	None,
+	/** Hunts for the squad around the blast, then returns to its route. */
+	Search,
+	/** Patrol -> Engage. */
+	Engage
 };
 
 /** What happened to a patrolling enemy this tick (input of PatrolRouteRules::ShouldBreakPatrol). */
 struct CODEXTACTICS_API FPatrolAlertInput
 {
+	/** Sees an operative (suspicion meter full). */
 	bool bSeesOperative = false;
+	/** Hears squad footsteps, a squad gunshot or a thrown grenade. */
+	bool bHearsOperative = false;
+	/** A hound smells an operative. */
+	bool bSmellsOperative = false;
+	/** Took damage from the squad's direct action (shot, blow, thrown grenade). */
 	bool bTookDamage = false;
-	/** The leader / an escort took damage or broke off its patrol. */
+	/** Hurt by a trap / placed charge (tripwire, mine, trapped object, barrel): counts as a trap event. */
+	bool bTookTrapDamage = false;
+	/** The leader / an escort broke off its patrol into Engage. */
 	bool bPartnerAlerted = false;
+	/** The leader / an escort started a search. */
+	bool bPartnerSearching = false;
 	/** Planar distance to a tripwire / mine that went off, cm; < 0: none. */
 	float TrapDistanceCm = -1.f;
 	float TrapAlertRadiusCm = 2000.f;
@@ -73,6 +100,28 @@ namespace PatrolRouteRules
 	/** A trap that went off DistanceCm away is heard (0 <= distance <= radius). */
 	CODEXTACTICS_API bool IsTrapHeard(float DistanceCm, float RadiusCm = TrapAlertRadiusCm);
 
-	/** The patrol breaks into Engage: sees an operative, took damage, its partner was alerted, or a trap went off in earshot. */
+	/**
+	 * Engage when it detects the squad (sight / hearing / smell), took damage from the squad or its partner engaged;
+	 * Search when a trap went off within the trap radius, a trap hurt it or its partner searches; None otherwise.
+	 * Engage wins over Search.
+	 */
+	CODEXTACTICS_API EPatrolReaction EvaluateAlert(const FPatrolAlertInput& Input);
+
+	/** EvaluateAlert == Engage (the patrol breaks; a trap alone no longer does — user amendment 2026-10-06). */
 	CODEXTACTICS_API bool ShouldBreakPatrol(const FPatrolAlertInput& Input);
+
+	/** EvaluateAlert == Search. */
+	CODEXTACTICS_API bool ShouldStartSearch(const FPatrolAlertInput& Input);
+
+	/** The search is over after DurationSeconds (<= 0: ends at once) and the patrol returns to its route. */
+	CODEXTACTICS_API bool IsSearchOver(float ElapsedSeconds, float DurationSeconds);
+
+	/** Search pace: patrol speed x multiplier, never above its normal (combat) speed, never below the patrol pace. */
+	CODEXTACTICS_API float GetSearchSpeed(float PatrolWalkSpeed, float SpeedMultiplier, float NormalSpeed);
+
+	/** Sweep point at Angle01 (0..1 of a turn) and Distance01 (0..1, area-uniform) of Radius around Origin (keeps Origin.Z). */
+	CODEXTACTICS_API FVector PickSearchPoint(const FVector& Origin, float RadiusCm, float Angle01, float Distance01);
+
+	/** Index of the waypoint closest (planar) to Location; INDEX_NONE for an empty route. Back on the route after a search. */
+	CODEXTACTICS_API int32 FindNearestWaypoint(const TArray<FVector>& Waypoints, const FVector& Location);
 }

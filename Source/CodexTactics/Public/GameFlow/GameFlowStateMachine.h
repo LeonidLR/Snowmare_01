@@ -41,6 +41,8 @@ public:
 	float GetCutsceneTimeRemaining() const { return CutsceneTimeRemaining; }
 	int32 GetTurnBasedUsesThisWave() const { return TurnBasedUsesThisWave; }
 	bool IsCombatUnlocked() const { return bCombatUnlocked; }
+	/** The current fight was started by an ambush (StartAmbushCombat): the level's placed enemies are the wave. */
+	bool IsAmbushFight() const { return bAmbushFight; }
 	/**
 	 * Godot `is_wave_active`: true during a wave and during the rest before every following wave
 	 * (not during the first preparation, and not after a wave is cleared).
@@ -55,6 +57,11 @@ public:
 	// --- Requests ---
 	/** Exploration -> Cutscene when the squad enters the combat zone (once per mission). */
 	EGameFlowResult TriggerCombatZone();
+	/**
+	 * Exploration -> WaveCombat/RealTime of wave 1 at once (no cutscene, no preparation): the squad attacked an enemy or
+	 * an enemy detected the squad on an ambush level. Once per mission (CombatAlreadyUnlocked / WrongPhase after).
+	 */
+	EGameFlowResult StartAmbushCombat();
 	/** Cutscene -> Preparation for wave 1 (skip, or automatically after CutsceneDuration). */
 	EGameFlowResult FinishCutscene();
 	/** Preparation -> WaveCombat/RealTime (timer expired or player pressed "ready"). */
@@ -105,4 +112,5 @@ private:
 	float CutsceneTimeRemaining = 0.f;
 	int32 TurnBasedUsesThisWave = 0;
 	bool bCombatUnlocked = false;
+	bool bAmbushFight = false;
 };

@@ -1,5 +1,6 @@
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "AI/PatrolRouteActor.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
 #include "Data/WeaponTuning.h"
 
 #include "AIController.h"
@@ -198,6 +199,9 @@ void AMarksmanEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector
 		return;
 	}
 	bPatrolActive = false;
+	const bool bWasSearching = bSearching;
+	bSearching = false;
+	PatrolSuspicion = 0.f;
 	// A hit on the legacy route: HandleMarksmanDamaged plays the ambush right after this (drop prone, alert, relocate);
 	// his escort mirrors that on its next tick (propagating now would flip him to Engage first).
 	if (Cause == EPatrolAlertCause::Damage && !AssignedPatrolRoute)
@@ -214,11 +218,14 @@ void AMarksmanEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector
 	}
 	GetCharacterMovement()->MaxWalkSpeed = Stance == EOperativeStance::Standing ? MarksmanConfig.WalkSpeed : GetCharacterMovement()->MaxWalkSpeed;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s breaks his patrol (cause %d)"), *GetName(), static_cast<int32>(Cause));
+	LogStealthDetection(Cause, bWasSearching);
 	if (AssignedPatrolRoute && !bIsDying)
 	{
 		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❗ ТРЕВОГА!"), FLinearColor(1.f, 0.35f, 0.2f));
 	}
 	PropagatePatrolBreak(AlertLocation);
+	// User request 2026-10-06: an engaged patrol starts the fight on an ambush level.
+	ULevelEncounterSubsystem::NotifyHostileContactIn(GetWorld(), EAmbushTrigger::PatrolDetection, this);
 }
 
 void AMarksmanEnemyCharacter::IssuePatrolMove(const FVector& Goal, float Speed)
@@ -240,6 +247,12 @@ bool AMarksmanEnemyCharacter::IsFightOn() const
 void AMarksmanEnemyCharacter::HandleMarksmanDamaged(const FDamageSpec& Spec, float FinalDamage)
 {
 	if (bIsDying || AIState == EMarksmanAIState::Ambushed || AIState == EMarksmanAIState::Retreat)
+	{
+		return;
+	}
+	// A trap / placed charge hurt him on patrol: the base handler sends him searching (user amendment 2026-10-06), no
+	// retaliation or ambush drill against a squad he has not found.
+	if (IsTrapBlastInProgress() && AIState == EMarksmanAIState::Patrol)
 	{
 		return;
 	}
@@ -615,6 +628,12 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 		CancelAim();
 		return;
 	}
+	// A dialogue / cutscene is up: no perception, no aiming, no walking (user request 2026-10-06).
+	if (HoldForWorldAIPause())
+	{
+		CancelAim();
+		return;
+	}
 	AAIController* AIC = Cast<AAIController>(GetController());
 	if (HealthComponent->HasStatusEffect(EStatusEffect::Stagger))
 	{
@@ -705,21 +724,18 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 
 void AMarksmanEnemyCharacter::TickPatrol(float DeltaTime, AOperativeCharacter* Target, float Distance)
 {
-	// Sprint 11: the spline route — only sight (Sprint 08 rules, every 0.2 s), a hit, his escort or a trap end it.
+	// Sprint 11: the spline route — his perception (enemy_perception.json MARKSMAN: sight with suspicion, hearing; Sprint 08
+	// cover rule), a hit or his escort end it; a trap sends him searching (user request / amendment 2026-10-06).
 	if (AssignedPatrolRoute)
 	{
-		PatrolSightTimer -= DeltaTime;
-		if (PatrolSightTimer <= 0.f)
+		if (TickPatrolPerception(DeltaTime))
 		{
-			PatrolSightTimer = UTacticalSightSubsystem::UpdateInterval;
-			const AActor* Seen = FindVisibleOperative(MarksmanConfig.DetectionRange);
-			FPatrolAlertInput Input;
-			Input.bSeesOperative = Seen != nullptr;
-			if (PatrolRouteRules::ShouldBreakPatrol(Input))
-			{
-				BreakPatrol(EPatrolAlertCause::Sight, Seen->GetActorLocation());
-				return;
-			}
+			return;
+		}
+		if (bSearching)
+		{
+			TickPatrolSearch(DeltaTime);
+			return;
 		}
 		TickPatrolRoute(DeltaTime);
 		return;
@@ -729,6 +745,11 @@ void AMarksmanEnemyCharacter::TickPatrol(float DeltaTime, AOperativeCharacter* T
 	if (IsFightOn() || (Target && Distance <= MarksmanConfig.DetectionRange && TraceLine(Target).bHasLos))
 	{
 		BreakPatrol(EPatrolAlertCause::Sight, Target ? Target->GetActorLocation() : GetActorLocation());
+		return;
+	}
+	if (bSearching)
+	{
+		TickPatrolSearch(DeltaTime); // a trap on the legacy route: the same search, then back to his points
 		return;
 	}
 	if (PatrolRoute.IsEmpty())

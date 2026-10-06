@@ -124,4 +124,11 @@ struct CODEXTACTICS_API FGameFlowConfig
 	/** Turn-based entries allowed per wave; 0 or negative means unlimited. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turn-Based")
 	int32 TurnBasedUsesPerWave = -1;
+
+	/**
+	 * An ambush fight (StartAmbushCombat) is the whole battle: once its enemies are down the mission goes to PostCombat
+	 * instead of preparing the level's next waves (UE-only, user request 2026-10-06).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambush")
+	bool bAmbushSingleFight = true;
 };

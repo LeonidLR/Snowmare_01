@@ -1862,6 +1862,8 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	{
 		Sight->NotifyFired(this);
 	}
+	// Patrols hear the shot (enemy_perception.json hear_gunshot_m) and engage (user request 2026-10-06).
+	AEnemyCharacter::NotifySquadNoise(GetWorld(), GetActorLocation(), ESquadNoise::Gunshot);
 
 	const float Dist = FVector::Dist2D(GetActorLocation(), Target->GetActorLocation());
 	const float DistM = Dist / 100.0f;
@@ -2133,6 +2135,8 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 	}
 	OnWeaponFired.Broadcast(this, Target, bHit);
 	OnWeaponFiredNative.Broadcast(this, Target, bHit);
+	// A targeted shot at a barrel / mine / crate is heard by patrols too (user request 2026-10-06).
+	AEnemyCharacter::NotifySquadNoise(GetWorld(), GetActorLocation(), ESquadNoise::Gunshot);
 
 	// Godot tracers: barrel = default green, explosive targets = orange, mine miss = grey into the snow nearby.
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)

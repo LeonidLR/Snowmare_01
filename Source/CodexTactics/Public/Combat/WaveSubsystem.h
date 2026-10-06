@@ -152,6 +152,11 @@ private:
 
 	/** Godot _spawn_custom_json_wave: every enemy of the wave at once, modifiers applied, radio line with counts. */
 	void SpawnLevelWave(const FWaveDefinition& Def);
+	/**
+	 * Ambush fight (UGameFlowSubsystem::IsAmbushFight, user request 2026-10-06): the level's living enemies (patrols,
+	 * guards) are the wave — none are spawned; the fight is won when they are all down.
+	 */
+	void AdoptLevelEnemies();
 
 	UFUNCTION()
 	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);

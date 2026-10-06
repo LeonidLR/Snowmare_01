@@ -1,5 +1,9 @@
 #include "Characters/EnemyCharacter.h"
 #include "AI/PatrolRouteActor.h"
+#include "AI/WorldAIPauseSubsystem.h"
+#include "Data/EnemyPerception.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
+#include "NavigationSystem.h"
 #include "Interactables/VaultNavigation.h"
 #include "Characters/EnemyTacticsSubsystem.h"
 #include "Characters/FacingRules.h"
@@ -376,6 +380,11 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	if (IsJumpAttacking())
 	{
 		TickJumpAttack(DeltaTime);
+		return;
+	}
+	// A dialogue / cutscene is up: no perception, no attack, no walking (user request 2026-10-06).
+	if (HoldForWorldAIPause())
+	{
 		return;
 	}
 
@@ -1035,16 +1044,33 @@ void AEnemyCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDamage)
 	{
 		LastAttackerSource = Spec.AttackerSource;
 	}
+	// User request 2026-10-06: the squad's direct attack (shot, blow, thrown grenade) reveals it — on an ambush level the
+	// fight starts now. A trap / placed charge (ApplyBlast inside FScopedTrapBlast) only sends a patrol searching.
+	const bool bTrapDamage = IsTrapBlastInProgress();
+	if (!bTrapDamage)
+	{
+		ULevelEncounterSubsystem::NotifyHostileContactIn(GetWorld(), EAmbushTrigger::EnemyDamaged, this);
+	}
 	// Sprint 11: a hit breaks the patrol (its leader / escorts too). The shooter is unknown here: the alarm points at
 	// the closest operative (the shot was heard from there).
 	if (IsOnPatrol())
 	{
-		const AActor* Closest = FindClosestSquadMember();
 		FPatrolAlertInput Input;
-		Input.bTookDamage = true;
-		if (PatrolRouteRules::ShouldBreakPatrol(Input))
+		Input.bTookDamage = !bTrapDamage;
+		Input.bTookTrapDamage = bTrapDamage;
+		switch (PatrolRouteRules::EvaluateAlert(Input))
 		{
+		case EPatrolReaction::Engage:
+		{
+			const AActor* Closest = FindClosestSquadMember();
 			BreakPatrol(EPatrolAlertCause::Damage, Closest ? Closest->GetActorLocation() : GetActorLocation());
+			break;
+		}
+		case EPatrolReaction::Search:
+			StartPatrolSearch(GetActorLocation());
+			break;
+		default:
+			break;
 		}
 	}
 }
@@ -1093,8 +1119,50 @@ void AEnemyCharacter::InitPatrol()
 	}
 }
 
-AActor* AEnemyCharacter::FindVisibleOperative(float Range) const
+FEnemyPerceptionParams AEnemyCharacter::GetPerception() const
 {
+	return bOverridePerception ? PerceptionRules::Sanitize(Archetype, PerceptionOverride) : EnemyPerception::Get(Archetype);
+}
+
+FEnemyPerceptionParams AEnemyCharacter::GetPatrolPerception() const
+{
+	const FEnemyPerceptionParams Params = GetPerception();
+	return bSearching ? PerceptionRules::Scaled(Params, EnemyPerception::GetSearch().PerceptionMultiplier) : Params;
+}
+
+int32& AEnemyCharacter::TrapBlastDepth()
+{
+	static int32 Depth = 0;
+	return Depth;
+}
+
+bool AEnemyCharacter::HoldForWorldAIPause()
+{
+	if (!UWorldAIPauseSubsystem::IsPausedIn(GetWorld()))
+	{
+		bHeldByAIPause = false;
+		return false;
+	}
+	if (!bHeldByAIPause)
+	{
+		// Stands still in its idle pose; the walk is re-issued when the dialogue / cutscene is over.
+		bHeldByAIPause = true;
+		if (AAIController* AIC = Cast<AAIController>(GetController()))
+		{
+			AIC->StopMovement();
+		}
+		bPatrolMoveIssued = false;
+		bEscortMoving = false;
+		bSearchMoving = false;
+		UE_LOG(LogCodexTactics, Verbose, TEXT("[Patrol] %s held (world AI paused)"), *GetName());
+	}
+	return true;
+}
+
+AActor* AEnemyCharacter::FindVisibleOperative(const FEnemyPerceptionParams& Params, float& OutDistance, float& OutRange) const
+{
+	OutDistance = 0.f;
+	OutRange = 0.f;
 	UWorld* World = GetWorld();
 	const USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
 	if (!Squad)
@@ -1103,18 +1171,19 @@ AActor* AEnemyCharacter::FindVisibleOperative(float Range) const
 	}
 	// The Sprint 08 trace (UTacticalSightSubsystem::HasClearSight) with its own pawn list: the subsystem rebuilds its
 	// ignore list only during a wave fight, a patrol looks out before it. Pawns never block the view.
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(PatrolSight), false, this);
+	FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(PatrolSight), false, this);
 	for (TActorIterator<APawn> It(World); It; ++It)
 	{
-		Params.AddIgnoredActor(*It);
+		TraceParams.AddIgnoredActor(*It);
 	}
 	for (TActorIterator<AEnemyGhostActor> It(World); It; ++It)
 	{
-		Params.AddIgnoredActor(*It); // stasis silhouettes (wave fight) are no obstacles either
+		TraceParams.AddIgnoredActor(*It); // stasis silhouettes (wave fight) are no obstacles either
 	}
 	const FVector Eye = UTacticalSightSubsystem::EyePoint(*this);
+	const FVector Forward = GetActorForwardVector();
 	AActor* Best = nullptr;
-	float BestDistance = Range;
+	float BestDistance = TNumericLimits<float>::Max();
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
 		if (!Member || !Member->HealthComponent || !Member->HealthComponent->IsAlive())
@@ -1122,45 +1191,106 @@ AActor* AEnemyCharacter::FindVisibleOperative(float Range) const
 			continue;
 		}
 		const float Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
-		if (Distance > BestDistance)
+		// Range by stance and the field of view first (cheap), the trace only for candidates.
+		if (Distance >= BestDistance
+			|| !PerceptionRules::CanSee(Params, GetActorLocation(), Forward, Member->GetActorLocation(), Member->GetStance(), /*bLineClear*/ true))
 		{
 			continue;
 		}
 		// Sprint 08 heights: a prone operative behind a 60 cm barricade stays hidden.
 		FHitResult Hit;
-		const bool bBlocked = World->LineTraceSingleByChannel(Hit, Eye, UTacticalSightSubsystem::ProfilePoint(*Member), ECC_Visibility, Params)
+		const bool bBlocked = World->LineTraceSingleByChannel(Hit, Eye, UTacticalSightSubsystem::ProfilePoint(*Member), ECC_Visibility, TraceParams)
 			&& Cast<APawn>(Hit.GetActor()) == nullptr;
 		if (!bBlocked)
 		{
 			BestDistance = Distance;
 			Best = Member;
+			OutDistance = Distance;
+			OutRange = PerceptionRules::EffectiveSightRange(Params, Member->GetStance());
 		}
 	}
 	return Best;
 }
 
+bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
+{
+	// Checked every 0.2 s, like the sight system.
+	PatrolSightTimer -= DeltaTime;
+	if (PatrolSightTimer > 0.f)
+	{
+		return false;
+	}
+	const float Step = UTacticalSightSubsystem::UpdateInterval;
+	PatrolSightTimer = Step;
+	const FEnemyPerceptionParams Params = GetPatrolPerception();
+
+	// Sight: the suspicion meter fills while it sees someone (faster up close), detection at 1.
+	float SeenDistance = 0.f;
+	float SeenRange = 0.f;
+	const AActor* Seen = FindVisibleOperative(Params, SeenDistance, SeenRange);
+	const float Before = PatrolSuspicion;
+	PatrolSuspicion = PerceptionRules::StepSuspicion(Params, PatrolSuspicion, Step, Seen != nullptr, SeenDistance, SeenRange);
+	if (Seen && Before <= 0.f && PatrolSuspicion < 1.f && !bIsDying)
+	{
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("?"), FLinearColor(1.f, 0.85f, 0.3f));
+	}
+	FPatrolAlertInput Input;
+	Input.bSeesOperative = Seen != nullptr && PatrolSuspicion >= 1.f;
+
+	// Hearing (footsteps by gait) and smell (hounds): no line of sight needed.
+	const AActor* Heard = nullptr;
+	const AActor* Smelled = nullptr;
+	const bool bCanSmell = PerceptionRules::CanSmell(Archetype) && Params.SmellRadiusCm > 0.f;
+	if (!Input.bSeesOperative)
+	{
+		const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+		for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+		{
+			if (!Member || !Member->HealthComponent || !Member->HealthComponent->IsAlive())
+			{
+				continue;
+			}
+			const float Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
+			const ESquadMovementNoise Noise = PerceptionRules::ClassifyMovement(Member->GetStance(), Member->GetVelocity().Size2D(), Member->IsSprinting());
+			if (!Heard && PerceptionRules::HearsMovement(Params, Noise, Distance))
+			{
+				Heard = Member;
+			}
+			if (!Smelled && bCanSmell && PerceptionRules::Smells(Params, Distance))
+			{
+				Smelled = Member;
+			}
+		}
+	}
+	Input.bHearsOperative = Heard != nullptr;
+	Input.bSmellsOperative = Smelled != nullptr;
+	if (!PatrolRouteRules::ShouldBreakPatrol(Input))
+	{
+		return false;
+	}
+	const AActor* Found = Input.bSeesOperative ? Seen : (Heard ? Heard : Smelled);
+	BreakPatrol(Input.bSeesOperative ? EPatrolAlertCause::Sight : (Heard ? EPatrolAlertCause::Hearing : EPatrolAlertCause::Smell),
+		Found ? Found->GetActorLocation() : GetActorLocation());
+	return true;
+}
+
 void AEnemyCharacter::TickPatrolBehavior(float DeltaTime)
 {
-	// Sees an operative (checked every 0.2 s, like the sight system).
-	PatrolSightTimer -= DeltaTime;
-	if (PatrolSightTimer <= 0.f)
+	// Sight / hearing / smell (user request 2026-10-06): a detection breaks the patrol into Engage.
+	if (TickPatrolPerception(DeltaTime))
 	{
-		PatrolSightTimer = UTacticalSightSubsystem::UpdateInterval;
-		FPatrolAlertInput Input;
-		const AActor* Seen = FindVisibleOperative(PatrolSightRange);
-		Input.bSeesOperative = Seen != nullptr;
-		if (PatrolRouteRules::ShouldBreakPatrol(Input))
-		{
-			BreakPatrol(EPatrolAlertCause::Sight, Seen->GetActorLocation());
-			return;
-		}
+		return;
 	}
 	if (EscortLeader.IsValid() || EscortLeader.IsStale())
 	{
 		const AEnemyCharacter* Leader = EscortLeader.Get();
 		if (!Leader || Leader->IsDying() || !Leader->GetHealthComponent() || !Leader->GetHealthComponent()->IsAlive())
 		{
-			BreakPatrol(EPatrolAlertCause::LeaderLost, Leader ? Leader->GetActorLocation() : GetActorLocation());
+			// Lost its leader: hunts around his last spot (a trap may have killed him; a squad shot that did was heard,
+			// or its hit started the fight already — user amendment 2026-10-06).
+			const FVector Where = Leader ? Leader->GetActorLocation() : GetActorLocation();
+			EscortLeader = nullptr;
+			StartPatrolSearch(Where);
 			return;
 		}
 		// Mirrors the leader: he broke off (or never patrolled) -> so does the escort.
@@ -1171,10 +1301,197 @@ void AEnemyCharacter::TickPatrolBehavior(float DeltaTime)
 			BreakPatrol(EPatrolAlertCause::PartnerAlert, Leader->GetActorLocation());
 			return;
 		}
+		if (bSearching)
+		{
+			TickPatrolSearch(DeltaTime);
+			return;
+		}
 		TickEscort(DeltaTime, *Leader);
 		return;
 	}
+	if (bSearching)
+	{
+		TickPatrolSearch(DeltaTime);
+		return;
+	}
 	TickPatrolRoute(DeltaTime);
+}
+
+void AEnemyCharacter::StartPatrolSearch(const FVector& Location)
+{
+	if (!IsOnPatrol() || bIsDying)
+	{
+		return;
+	}
+	const bool bWasSearching = bSearching;
+	bSearching = true;
+	SearchOrigin = Location;
+	SearchGoal = Location;
+	SearchElapsed = 0.f;
+	SearchLegTime = 0.f;
+	SearchLookLeft = 0.f;
+	SearchStuckTime = 0.f;
+	bSearchReachedOrigin = false;
+	bSearchMoving = false;
+	bEscortMoving = false;
+	bPatrolMoveIssued = false;
+	if (bWasSearching)
+	{
+		return; // a new blast: the search moves there and its clock restarts
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s searches around %s"), *GetName(), *Location.ToCompactString());
+	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] search started by %s at %.1f s"), *GetName(), GetWorld()->GetTimeSeconds());
+	UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❓ ПОИСК"), FLinearColor(1.f, 0.8f, 0.25f));
+	// The whole patrol hunts: its leader and every escort.
+	if (AEnemyCharacter* Leader = EscortLeader.Get(); Leader && Leader->IsOnPatrol() && !Leader->IsSearching())
+	{
+		Leader->StartPatrolSearch(Location);
+	}
+	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	{
+		if (*It != this && It->EscortLeader.Get() == this && It->IsOnPatrol() && !It->IsSearching())
+		{
+			It->StartPatrolSearch(Location);
+		}
+	}
+}
+
+void AEnemyCharacter::TickPatrolSearch(float DeltaTime)
+{
+	const FPatrolSearchParams& Search = EnemyPerception::GetSearch();
+	SearchElapsed += DeltaTime;
+	if (PatrolRouteRules::IsSearchOver(SearchElapsed, ULevelEncounterSubsystem::GetPatrolSearchSecondsIn(GetWorld())))
+	{
+		EndPatrolSearch();
+		return;
+	}
+	AAIController* AIC = Cast<AAIController>(GetController());
+	if (SearchLookLeft > 0.f)
+	{
+		// Looks around on the spot, then picks the next sweep point (reachable, within the sweep radius of the blast).
+		SearchLookLeft -= DeltaTime;
+		FaceYaw(GetActorRotation().Yaw + 60.f, DeltaTime, 1.5f);
+		if (SearchLookLeft <= 0.f)
+		{
+			SearchGoal = PatrolRouteRules::PickSearchPoint(SearchOrigin, Search.SweepRadiusCm, FMath::FRand(), FMath::FRand());
+			if (const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+			{
+				FNavLocation Reachable;
+				if (Nav->GetRandomReachablePointInRadius(SearchOrigin, Search.SweepRadiusCm, Reachable))
+				{
+					SearchGoal = Reachable.Location;
+				}
+			}
+			SearchLegTime = 0.f;
+			bSearchMoving = false;
+		}
+		return;
+	}
+	const FVector Goal = bSearchReachedOrigin ? SearchGoal : SearchOrigin;
+	SearchLegTime += DeltaTime;
+	if (FVector::Dist2D(GetActorLocation(), Goal) <= Search.ArriveCm || SearchLegTime > Search.LegTimeoutSeconds)
+	{
+		if (AIC)
+		{
+			AIC->StopMovement();
+		}
+		bSearchReachedOrigin = true;
+		bSearchMoving = false;
+		SearchLookLeft = FMath::Max(Search.LookAroundSeconds, 0.1f);
+		return;
+	}
+	// (Re)issue the walk at the search pace: first time, or standing still for 1 s.
+	SearchStuckTime = GetVelocity().Size2D() < 10.f ? SearchStuckTime + DeltaTime : 0.f;
+	if (!bSearchMoving || SearchStuckTime > 1.f)
+	{
+		SearchStuckTime = 0.f;
+		bSearchMoving = true;
+		IssuePatrolMove(Goal, PatrolRouteRules::GetSearchSpeed(PatrolWalkSpeed, Search.SpeedMultiplier, BaseWalkSpeed));
+	}
+}
+
+void AEnemyCharacter::EndPatrolSearch()
+{
+	if (!bSearching)
+	{
+		return;
+	}
+	bSearching = false;
+	bSearchMoving = false;
+	PatrolSuspicion = 0.f;
+	if (AAIController* AIC = Cast<AAIController>(GetController()))
+	{
+		AIC->StopMovement();
+	}
+	// Back on the route at its nearest waypoint (an escort returns to its tether by itself).
+	if (const APatrolRouteActor* Route = AssignedPatrolRoute; Route && Route->GetNumberOfWaypoints() > 0)
+	{
+		TArray<FVector> Points;
+		for (int32 Index = 0; Index < Route->GetNumberOfWaypoints(); ++Index)
+		{
+			Points.Add(Route->GetWaypointWorldLocation(Index));
+		}
+		PatrolWaypointIndex = FMath::Max(PatrolRouteRules::FindNearestWaypoint(Points, GetActorLocation()), 0);
+		PatrolPhase = EPatrolPhase::Moving;
+	}
+	bPatrolMoveIssued = false;
+	PatrolStuckTime = 0.f;
+	bEscortMoving = false;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s gives up the search, back to waypoint %d"), *GetName(), PatrolWaypointIndex);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] search timed out for %s at %.1f s"), *GetName(), GetWorld()->GetTimeSeconds());
+	if (!bIsDying)
+	{
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("ОТБОЙ"), FLinearColor(0.7f, 0.8f, 0.9f));
+	}
+}
+
+void AEnemyCharacter::LogStealthDetection(EPatrolAlertCause Cause, bool bWasSearching) const
+{
+	// One line per patrol break for the Jev AI coach (Scripts/Tools/jev_ai_coach.py --stealth): sense, world time.
+	const TCHAR* Sense = TEXT("other");
+	switch (Cause)
+	{
+	case EPatrolAlertCause::Sight: Sense = TEXT("sight"); break;
+	case EPatrolAlertCause::Hearing: Sense = TEXT("hearing"); break;
+	case EPatrolAlertCause::Smell: Sense = TEXT("smell"); break;
+	case EPatrolAlertCause::Damage: Sense = TEXT("damage"); break;
+	case EPatrolAlertCause::PartnerAlert: Sense = TEXT("partner"); break;
+	default: break;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] detection by %s at %.1f s (%s%s)"), Sense, GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0,
+		*GetName(), bWasSearching ? TEXT(", search found the squad") : TEXT(""));
+}
+
+void AEnemyCharacter::NotifySquadNoise(UWorld* World, const FVector& Location, ESquadNoise Noise)
+{
+	if (!World || UWorldAIPauseSubsystem::IsPausedIn(World))
+	{
+		return;
+	}
+	TArray<AEnemyCharacter*> Listeners;
+	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	{
+		if (It->IsOnPatrol() && !It->IsDying())
+		{
+			Listeners.Add(*It);
+		}
+	}
+	for (AEnemyCharacter* Enemy : Listeners)
+	{
+		if (!IsValid(Enemy) || !Enemy->IsOnPatrol())
+		{
+			continue; // broke off with a partner already
+		}
+		const FEnemyPerceptionParams Params = Enemy->GetPatrolPerception();
+		const float Distance = FVector::Dist(Enemy->GetActorLocation(), Location);
+		FPatrolAlertInput Input;
+		Input.bHearsOperative = Noise == ESquadNoise::Gunshot ? PerceptionRules::HearsGunshot(Params, Distance)
+			: PerceptionRules::HearsExplosion(Params, Distance);
+		if (PatrolRouteRules::ShouldBreakPatrol(Input))
+		{
+			Enemy->BreakPatrol(EPatrolAlertCause::Hearing, Location);
+		}
+	}
 }
 
 void AEnemyCharacter::TickEscort(float DeltaTime, const AEnemyCharacter& Leader)
@@ -1285,8 +1602,11 @@ void AEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertL
 	{
 		return;
 	}
+	const bool bWasSearching = bSearching;
 	bPatrolActive = false;
 	bEscortMoving = false;
+	bSearching = false;
+	PatrolSuspicion = 0.f;
 	GetCharacterMovement()->MaxWalkSpeed = BaseWalkSpeed;
 	if (AAIController* AIC = Cast<AAIController>(GetController()))
 	{
@@ -1295,11 +1615,14 @@ void AEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertL
 	PatrolAlertLocation = AlertLocation;
 	bHasPatrolAlertLocation = true;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s breaks its patrol (cause %d)"), *GetName(), static_cast<int32>(Cause));
+	LogStealthDetection(Cause, bWasSearching);
 	if (!bIsDying)
 	{
 		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❗ ТРЕВОГА!"), FLinearColor(1.f, 0.35f, 0.2f));
 	}
 	PropagatePatrolBreak(AlertLocation);
+	// User request 2026-10-06: an enemy that engages the squad starts the fight on an ambush level.
+	ULevelEncounterSubsystem::NotifyHostileContactIn(GetWorld(), EAmbushTrigger::PatrolDetection, this);
 }
 
 void AEnemyCharacter::PropagatePatrolBreak(const FVector& AlertLocation)
@@ -1326,9 +1649,9 @@ void AEnemyCharacter::NotifyTrapTriggered(const FVector& Location)
 	FPatrolAlertInput Input;
 	Input.TrapDistanceCm = FVector::Dist2D(GetActorLocation(), Location);
 	Input.TrapAlertRadiusCm = PatrolTrapAlertRadius;
-	if (PatrolRouteRules::ShouldBreakPatrol(Input))
+	if (PatrolRouteRules::ShouldStartSearch(Input))
 	{
-		BreakPatrol(EPatrolAlertCause::Trap, Location);
+		StartPatrolSearch(Location);
 	}
 }
 

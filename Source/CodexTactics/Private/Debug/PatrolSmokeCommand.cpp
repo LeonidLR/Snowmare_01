@@ -1,10 +1,14 @@
 // Dev-only headless check of the Sprint 11 outpost patrols on L_MovementTest (the map is not saved):
 //   Scripts/smoke.ps1 -Command CodexTactics.PatrolSmoke -Log Smoke-Patrol.log
-// Exploration (no wave); the level's enemies are removed. A three-point spline route (APatrolRouteActor, loop, 1 s
-// pauses) is laid 12 m ahead of the squad; a marksman walks it, an escort frost hound follows him. Sight ranges are cut
-// to 1 m so nobody is spotted. Checks: the marksman reaches waypoints 1 and 2 at the patrol pace; the hound stays within
-// the tether band (<= 6 m once caught up) and keeps patrolling; a simulated tripwire blast 25 m away leaves both on
-// patrol, one 15 m away breaks both into Engage (the escort mirrors its leader).
+// Exploration (no wave); the level's enemies are removed and the level is made an ambush level (CodexTactics.CombatStart
+// ambush). A three-point spline route (APatrolRouteActor, loop, 1 s pauses) is laid 12 m ahead of the squad; a marksman
+// walks it, an escort frost hound follows him. Their perception is switched off (override) so nobody is spotted.
+// Checks: the marksman reaches waypoints 1 and 2 at the patrol pace; the hound stays within the tether band (<= 6 m once
+// caught up) and keeps patrolling; a simulated tripwire blast 25 m away leaves both on patrol, one 15 m away sends both
+// SEARCHING (user amendment 2026-10-06: no Engage, no fight); with the search time cut to 4 s they give up and walk the
+// route again; an open dialogue holds them (no detection though the hound's nose is set to 100 m, nobody moves); once it
+// closes the hound smells the squad, the patrol engages and the ambush fight starts (WaveCombat / RealTime, wave 1 =
+// the two of them) — no «Начать бой».
 
 #include "CoreMinimal.h"
 
@@ -12,6 +16,11 @@
 
 #include "AI/PatrolRouteActor.h"
 #include "AI/PatrolRouteRules.h"
+#include "AI/WorldAIPauseSubsystem.h"
+#include "Data/DialogueSequenceAsset.h"
+#include "GameFlow/GameFlowSubsystem.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
+#include "UI/DialogueSubsystem.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -44,7 +53,21 @@ namespace PatrolSmoke
 		bool bReached2 = false;
 		float MaxEscortDistance = 0.f;
 		float MaxMarksmanSpeed = 0.f;
+		float MaxHeldSpeed = 0.f;
+		bool bSearchEnded = false;
 	};
+
+	/** Perception that never detects anything (the walk / search part must not be cut short). */
+	FEnemyPerceptionParams Senseless()
+	{
+		FEnemyPerceptionParams Params;
+		Params.SightRangeCm = 0.f;
+		Params.ProximityCm = 0.f;
+		Params.HearWalkCm = Params.HearRunCm = Params.HearCrouchWalkCm = Params.HearCrawlCm = 0.f;
+		Params.HearGunshotCm = Params.HearExplosionCm = 0.f;
+		Params.SmellRadiusCm = 0.f;
+		return Params;
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -129,10 +152,17 @@ namespace PatrolSmoke
 				Check(State, false, TEXT("marksman and hound spawned"));
 				return Finish(State);
 			}
-			// Nobody is spotted in this check (sight is covered by CodexTactics.SightSmoke and the alert rule tests).
+			// Nobody is spotted until the dialogue part (perception rules: CodexTactics.AI.Perception.*).
 			Marksman->MarksmanConfig.DetectionRange = 100.f;
-			Marksman->PatrolSightRange = 100.f;
-			Hound->PatrolSightRange = 100.f;
+			for (AEnemyCharacter* Enemy : { static_cast<AEnemyCharacter*>(Marksman), Hound })
+			{
+				Enemy->bOverridePerception = true;
+				Enemy->PerceptionOverride = Senseless();
+			}
+			ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>();
+			Encounter->SetCombatStartOverride(ECombatStartMode::Ambush);
+			Encounter->SetPatrolSearchSecondsOverride(4.f);
+			Check(State, Encounter->IsAmbushCombatStart(), TEXT("ambush level (no «Начать бой»)"));
 			Marksman->StartPatrol(Route, nullptr);
 			Hound->StartPatrol(nullptr, Marksman);
 			Check(State, Marksman->IsOnPatrol() && Marksman->GetAIState() == EMarksmanAIState::Patrol, TEXT("marksman patrols the spline route"));
@@ -173,13 +203,13 @@ namespace PatrolSmoke
 					FString::Printf(TEXT("escort keeps the tether (max %.0f cm after catching up)"), State.MaxEscortDistance));
 				// A blast 25 m off: not heard.
 				AEnemyCharacter::AlertPatrolsNearTrap(World, Marksman->GetActorLocation() + State.R * 2500.f);
-				Check(State, Marksman->IsOnPatrol() && Hound->IsOnPatrol(), TEXT("tripwire at 25 m: both stay on patrol"));
+				Check(State, Marksman->IsOnPatrol() && Hound->IsOnPatrol() && !Marksman->IsSearching() && !Hound->IsSearching(), TEXT("tripwire at 25 m: both stay on patrol, no search"));
 				State.Stage = 2;
 				State.Time = 0.f;
 			}
 			return true;
 		}
-		default:
+		case 2:
 		{
 			if (!Marksman || !Hound)
 			{
@@ -190,16 +220,105 @@ namespace PatrolSmoke
 			{
 				return true;
 			}
-			if (State.Stage == 2)
+			// A blast 15 m off the marksman: he searches (no Engage), his escort hunts with him, the level stays in exploration.
+			AEnemyCharacter::AlertPatrolsNearTrap(World, Marksman->GetActorLocation() + State.R * 1500.f);
+			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			Check(State, Marksman->IsSearching() && Marksman->IsOnPatrol() && Marksman->GetAIState() == EMarksmanAIState::Patrol,
+				TEXT("tripwire at 15 m: marksman searches (no engage)"));
+			Check(State, Hound->IsSearching() && Hound->IsOnPatrol(), TEXT("escort hound searches with him"));
+			Check(State, Flow && Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("trap: no fight (still exploring)"));
+			State.Stage = 3;
+			State.Time = 0.f;
+			State.MaxMarksmanSpeed = 0.f;
+			return true;
+		}
+		case 3:
+		{
+			if (!Marksman || !Hound)
 			{
-				// A blast 15 m off the marksman (more than 20 m from the hound possibly): he breaks, the escort mirrors him.
-				AEnemyCharacter::AlertPatrolsNearTrap(World, Marksman->GetActorLocation() + State.R * 1500.f);
-				Check(State, !Marksman->IsOnPatrol() && Marksman->GetAIState() != EMarksmanAIState::Patrol, TEXT("tripwire at 15 m: marksman engages"));
-				State.Stage = 3;
+				Check(State, false, TEXT("patrol alive"));
+				return Finish(State);
+			}
+			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			if (!State.bSearchEnded)
+			{
+				if (Marksman->IsSearching() && State.Time < 10.f)
+				{
+					return true;
+				}
+				State.bSearchEnded = true;
+				Check(State, !Marksman->IsSearching() && State.Time >= 3.5f, FString::Printf(TEXT("search over after %.1f s (search time 4 s)"), State.Time));
+				Check(State, Marksman->IsOnPatrol() && Hound->IsOnPatrol() && !Hound->IsSearching(), TEXT("both back on patrol duty"));
+				Check(State, Flow && Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("still exploring after the search"));
 				State.Time = 0.f;
 				return true;
 			}
-			Check(State, !Hound->IsOnPatrol(), TEXT("escort hound broke off with him"));
+			State.MaxMarksmanSpeed = FMath::Max(State.MaxMarksmanSpeed, Marksman->GetVelocity().Size2D());
+			if (State.Time < 3.f)
+			{
+				return true;
+			}
+			Check(State, State.MaxMarksmanSpeed > 50.f, FString::Printf(TEXT("walks the route again (max %.0f cm/s)"), State.MaxMarksmanSpeed));
+			// A dialogue opens: the world AI is held. The hound's nose now reaches the squad — it must not use it yet.
+			UDialogueSubsystem* Dialogue = World->GetSubsystem<UDialogueSubsystem>();
+			const UDialogueSequenceAsset* Intro = LoadObject<UDialogueSequenceAsset>(nullptr, TEXT("/Game/Data/Dialogues/DA_DialogueIntro.DA_DialogueIntro"));
+			if (!Intro)
+			{
+				UDialogueSequenceAsset* Fallback = NewObject<UDialogueSequenceAsset>(GetTransientPackage());
+				Fallback->Lines.AddDefaulted(2);
+				Intro = Fallback;
+			}
+			Dialogue->StartDialogue(Intro);
+			Hound->PerceptionOverride.SmellRadiusCm = 10000.f;
+			Check(State, Dialogue->IsDialogueOpen() && UWorldAIPauseSubsystem::IsPausedIn(World), TEXT("dialogue open: world AI paused"));
+			State.Stage = 4;
+			State.Time = 0.f;
+			State.MaxHeldSpeed = 0.f;
+			return true;
+		}
+		case 4:
+		{
+			if (!Marksman || !Hound)
+			{
+				Check(State, false, TEXT("patrol alive"));
+				return Finish(State);
+			}
+			if (State.Time > 0.6f)
+			{
+				State.MaxHeldSpeed = FMath::Max(State.MaxHeldSpeed, FMath::Max(Marksman->GetVelocity().Size2D(), Hound->GetVelocity().Size2D()));
+			}
+			if (State.Time < 3.f)
+			{
+				return true;
+			}
+			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			Check(State, Hound->IsOnPatrol() && Marksman->IsOnPatrol(), TEXT("dialogue: nobody detects the squad (hound nose 100 m)"));
+			Check(State, State.MaxHeldSpeed < 15.f, FString::Printf(TEXT("dialogue: the patrol stands still (max %.0f cm/s)"), State.MaxHeldSpeed));
+			Check(State, Flow && Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("dialogue: no fight"));
+			World->GetSubsystem<UDialogueSubsystem>()->SkipDialogue();
+			Check(State, !UWorldAIPauseSubsystem::IsPausedIn(World), TEXT("dialogue closed: world AI live"));
+			State.Stage = 5;
+			State.Time = 0.f;
+			return true;
+		}
+		default:
+		{
+			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			const bool bFight = Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat;
+			if (!bFight && State.Time < 4.f)
+			{
+				return true;
+			}
+			const ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>();
+			const UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+			Check(State, Hound && !Hound->IsOnPatrol(), TEXT("after the dialogue the hound smells the squad and engages"));
+			Check(State, Marksman && !Marksman->IsOnPatrol(), TEXT("its leader engages with it"));
+			Check(State, bFight && Flow->GetCombatMode() == ECodexCombatMode::RealTime && Flow->IsAmbushFight(),
+				FString::Printf(TEXT("detection started the real-time fight by ambush (phase %d)"), Flow ? static_cast<int32>(Flow->GetPhase()) : -1));
+			Check(State, Encounter && Encounter->GetAmbushStarts() == 1 && Encounter->GetLastTrigger() == EAmbushTrigger::PatrolDetection,
+				TEXT("one ambush start, by the patrol's detection"));
+			Check(State, Waves && Waves->IsWaveActive() && Waves->GetAliveEnemyCount() == 2,
+				FString::Printf(TEXT("the patrol is the wave (alive %d, nothing spawned)"), Waves ? Waves->GetAliveEnemyCount() : -1));
 			return Finish(State);
 		}
 		}
@@ -217,7 +336,7 @@ namespace PatrolSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PatrolSmoke"),
-		TEXT("Dev check of the Sprint 11 spline patrols: route walk, escort tether, tripwire alert 25 m / 15 m; PASS / FAIL."),
+		TEXT("Dev check of the spline patrols: route walk, escort tether, trap search 25 m / 15 m + timeout, dialogue hold, detection starts the ambush fight; PASS / FAIL."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

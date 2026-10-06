@@ -15,12 +15,16 @@ Two objectives (user decisions 2026-10-04):
     VETERAN win rate inside WIN_BAND (40-75 %) and maximise Jev's engagement judgment there.
   * Enemy power knobs ("enemy": marksman damage, accuracy, ...) are balance - tuned only with --tune-enemies; otherwise
     the report lists Jev's top enemy issues as proposals for the user / Wave Editor.
+  * Stealth knobs ("stealth": patrol perception / trap search, user request 2026-10-06) - tuned only with --stealth, on a
+    patrol map (--map /Game/Maps/L_PatrolTest): keep the win rate inside WIN_BAND and aim for a detection that comes
+    neither at once nor never (STEALTH_DETECT_BAND, from the [Stealth] log lines) plus Jev's stealth tension judgment.
 
 Runs are deterministic (fixed step): equal knobs give equal results, so a kept step is a real effect on this level.
 
 Usage:
   python Scripts/Tools/jev_ai_coach.py [--iterations 6] [--runs 8] [--profile VETERAN] [--parallel 4]
                                         [--level-json <path>] [--tune-enemies] [--no-enemy-ai] [--dry-run]
+                                        [--stealth --map /Game/Maps/L_PatrolTest]
 Output: Saved/Telemetry/ai_coach/<timestamp>/report.json and report.md; the best bot + enemy-intelligence knobs (and
 enemy power knobs with --tune-enemies) go to Content/Data/AI/ai_tuning.json, applied at game start (Data/AITuning.h),
 only when they beat the defaults. The API key: TYPESAFE_API_KEY, the Windows user environment (registry) or
@@ -49,6 +53,9 @@ CONFIDENCE_GATE = 0.45
 NOISE_MARGIN = 0.1
 WIN_BAND = (0.40, 0.75)
 TUNING_FILE = os.path.join(ROOT, "Content", "Data", "AI", "ai_tuning.json")
+# Stealth objective: the first detection of a run should come after this many game seconds (a stealthy approach is
+# possible) but before the upper edge (the patrols are not deaf and blind).
+STEALTH_DETECT_BAND = (20.0, 120.0)
 
 # name -> (console variable, default, min, max, step, owner)
 KNOBS = {
@@ -64,6 +71,15 @@ KNOBS = {
     "marksman_aim": ("Codex.Marksman.AimDuration", 2.0, 2.0, 3.5, 0.25, "enemy"),
     "marksman_cooldown": ("Codex.Marksman.ShotCooldown", 2.5, 2.5, 5.0, 0.5, "enemy"),
     "marksman_kite_cooldown": ("Codex.Marksman.RetreatCooldown", 10.0, 4.0, 20.0, 2.0, "enemy"),
+    # Patrol perception / trap search (Data/EnemyPerception.h; multipliers of enemy_perception.json, -1 keeps the data).
+    "sight_range": ("Codex.Perception.SightRangeScale", 1.0, 0.5, 1.5, 0.1, "stealth"),
+    "fov": ("Codex.Perception.FovScale", 1.0, 0.6, 1.6, 0.2, "stealth"),
+    "prone_visibility": ("Codex.Perception.ProneVisibilityScale", 1.0, 0.5, 1.5, 0.25, "stealth"),
+    "hearing": ("Codex.Perception.HearingScale", 1.0, 0.5, 1.5, 0.1, "stealth"),
+    "smell": ("Codex.Perception.SmellScale", 1.0, 0.0, 2.0, 0.25, "stealth"),
+    "time_to_detect": ("Codex.Perception.TimeToDetectScale", 1.0, 0.5, 2.0, 0.25, "stealth"),
+    "search_seconds": ("Codex.Patrol.SearchSeconds", 60.0, 20.0, 120.0, 10.0, "stealth"),
+    "search_radius": ("Codex.Patrol.SearchRadius", 1200.0, 600.0, 2400.0, 300.0, "stealth"),
 }
 
 # Jev option -> (description, (knob, direction)); None: no step.
@@ -93,9 +109,23 @@ ENEMY_OPTIONS = {
     "marksman_too_evasive": ("Marksmen keep running away so the squad can never close in", ("marksman_kite_cooldown", +1)),
     "enemies_fair": ("The marksmen behave fairly; no change is needed", None),
 }
+STEALTH_OPTIONS = {
+    "spotted_instantly": ("The patrols spot the squad almost at once from far away; sneaking up is impossible", ("sight_range", -1)),
+    "patrols_oblivious": ("The squad walks right past the patrols; they barely notice anything", ("sight_range", +1)),
+    "tunnel_vision": ("The patrols only see straight ahead; flanking them is trivial", ("fov", +1)),
+    "hear_too_well": ("The patrols hear the squad's footsteps through everything; moving at all gives it away", ("hearing", -1)),
+    "deaf_patrols": ("Running and shooting next to a patrol goes unnoticed", ("hearing", +1)),
+    "prone_useless": ("Crawling prone does not help: prone operatives are found as easily as standing ones", ("prone_visibility", -1)),
+    "hounds_unfair": ("The hounds sniff the squad out wherever it hides", ("smell", -1)),
+    "detection_too_sudden": ("Detection comes with no warning; the player cannot react to a patrol's growing suspicion", ("time_to_detect", +1)),
+    "search_toothless": ("After a trap goes off the patrols give up the search too soon; traps have no consequence", ("search_seconds", +1)),
+    "search_endless": ("After a trap the patrols hunt for so long that the level stalls", ("search_seconds", -1)),
+    "stealth_good": ("Sneaking, traps and detections feel tense and fair; no change is needed", None),
+}
 FALLBACK_ORDER = [("bot_clear_radius", +1), ("enemy_flank_share", +1), ("bot_stop_distance", -1), ("enemy_morale_deaths", +1),
                   ("enemy_focus_cap", -1), ("enemy_preference", +1), ("marksman_aim", +1), ("marksman_damage", -1),
-                  ("marksman_accuracy", -1), ("marksman_cooldown", +1), ("bot_clear_radius", -1), ("enemy_flank_share", -1)]
+                  ("marksman_accuracy", -1), ("marksman_cooldown", +1), ("bot_clear_radius", -1), ("enemy_flank_share", -1),
+                  ("time_to_detect", +1), ("hearing", -1), ("sight_range", -1), ("search_seconds", +1), ("smell", -1)]
 
 
 # ------------------------------------------------------------------------------------------------- TypeSafe
@@ -144,7 +174,9 @@ def ask_jev(state, questions, attempts=4):
 
 # ------------------------------------------------------------------------------------------------- batches
 def dpcvars(values):
-    return ",".join("%s=%g" % (KNOBS[k][0], v) for k, v in sorted(values.items()))
+    # Stealth knobs at their defaults stay unset (the C++ defaults keep the data / per-level values: -1 / 1).
+    return ",".join("%s=%g" % (KNOBS[k][0], v) for k, v in sorted(values.items())
+                    if not (KNOBS[k][5] == "stealth" and v == KNOBS[k][1]))
 
 
 def log_path(args, n):
@@ -156,10 +188,11 @@ def run_batch(args, values):
     extra = "-NoAITuning -dpcvars=" + dpcvars(values)
     if args.level_json:
         extra += " -LevelJson=" + args.level_json
+    map_arg = (" -Map '%s'" % args.map.replace("'", "''")) if args.map else ""
     # -Command, not -File: -File passes "-EarlyStop:$false" as a string and the script refuses to start.
     script = os.path.join(ROOT, "Scripts", "bot_run.ps1").replace("'", "''")
-    command = "& '%s' -Runs %d -Profile %s -Parallel %d -EarlyStop:$false -Extra '%s'" % (
-        script, args.runs, args.profile, args.parallel, extra.replace("'", "''"))
+    command = "& '%s' -Runs %d -Profile %s -Parallel %d -EarlyStop:$false%s -Extra '%s'" % (
+        script, args.runs, args.profile, args.parallel, map_arg, extra.replace("'", "''"))
     print("[coach] batch: " + extra, flush=True)
     started = time.time()
     result = subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-Command", command], cwd=ROOT, check=False,
@@ -184,6 +217,9 @@ def collect_facts(args):
         failed = re.findall(r"Mission failed: (.*)", text)
         shots = re.findall(r"\[Marksman\] \S+ fires at .*?: (\d+) m, chance ([\d.]+), (hit|miss)", text)
         tactics = re.findall(r"\[EnemyTactics\] flank orders (\d+), fallbacks (\d+), backstabs (\d+)", text)
+        # Stealth telemetry (EnemyCharacter.cpp): one line per patrol break / search start / search time-out.
+        detections = re.findall(r"\[Stealth\] detection by (\w+) at ([\d.]+) s \(\S+?(, search found the squad)?\)", text)
+        senses = [d[0] for d in detections if d[0] in ("sight", "hearing", "smell")]
         runs.append({
             "result": result[-1][0] if result else "ERROR",
             "real_seconds": float(result[-1][1]) if result else 0.0,
@@ -199,6 +235,13 @@ def collect_facts(args):
             "flank_orders": sum(int(t[0]) for t in tactics),
             "fallbacks": sum(int(t[1]) for t in tactics),
             "backstabs": sum(int(t[2]) for t in tactics),
+            "first_detection_s": min((float(d[1]) for d in detections), default=None),
+            "detections_sight": senses.count("sight"),
+            "detections_hearing": senses.count("hearing"),
+            "detections_smell": senses.count("smell"),
+            "searches_started": len(re.findall(r"\[Stealth\] search started", text)),
+            "searches_timed_out": len(re.findall(r"\[Stealth\] search timed out", text)),
+            "searches_found_squad": sum(1 for d in detections if d[2]),
         })
     n = max(len(runs), 1)
     wins = sum(1 for r in runs if r["result"] == "VICTORY")
@@ -217,6 +260,17 @@ def collect_facts(args):
         "backstabs_per_run": round(sum(r["backstabs"] for r in runs) / n, 1),
         "avg_real_seconds": round(sum(r["real_seconds"] for r in runs) / n, 1),
     }
+    detected = [r["first_detection_s"] for r in runs if r["first_detection_s"] is not None]
+    summary.update({
+        "stealth_runs_detected": len(detected),
+        "avg_first_detection_s": round(sum(detected) / len(detected), 1) if detected else None,
+        "detections_by_sight_per_run": round(sum(r["detections_sight"] for r in runs) / n, 2),
+        "detections_by_hearing_per_run": round(sum(r["detections_hearing"] for r in runs) / n, 2),
+        "detections_by_smell_per_run": round(sum(r["detections_smell"] for r in runs) / n, 2),
+        "searches_started_per_run": round(sum(r["searches_started"] for r in runs) / n, 2),
+        "searches_timed_out_per_run": round(sum(r["searches_timed_out"] for r in runs) / n, 2),
+        "searches_found_squad_per_run": round(sum(r["searches_found_squad"] for r in runs) / n, 2),
+    })
     return {"summary": summary, "runs": runs, "words": describe(summary)}
 
 
@@ -248,7 +302,28 @@ def describe(s):
             bucket(s["fallbacks_per_run"], [1, 5, 15, 35], ["never", "rarely", "now and then", "often", "constantly"]),
             bucket(s["backstabs_per_run"], [0.5, 3, 10, 30], ["never", "rarely", "sometimes", "often", "constantly"])),
         "The fights lasted %s." % bucket(s["avg_real_seconds"], [40, 90, 200, 400], ["very short", "short", "a normal time", "long", "very long"]),
-    ]
+    ] + describe_stealth(s)
+
+
+def describe_stealth(s):
+    """Patrol / stealth facts (only when the map had patrols: [Stealth] lines)."""
+    if s.get("avg_first_detection_s") is None and not s.get("searches_started_per_run"):
+        return []
+    words = []
+    if s.get("avg_first_detection_s") is not None:
+        words.append("The patrols first detected the squad %s (in %d of %d runs); detections came by sight %s, by hearing %s, by smell %s." % (
+            bucket(s["avg_first_detection_s"], [10, 30, 90, 180], ["almost at once", "quickly", "after a while", "late", "very late"]),
+            s["stealth_runs_detected"], s["runs"],
+            bucket(s["detections_by_sight_per_run"], [0.2, 1, 3], ["never", "rarely", "sometimes", "often"]),
+            bucket(s["detections_by_hearing_per_run"], [0.2, 1, 3], ["never", "rarely", "sometimes", "often"]),
+            bucket(s["detections_by_smell_per_run"], [0.2, 1, 3], ["never", "rarely", "sometimes", "often"])))
+    else:
+        words.append("The patrols never detected the squad.")
+    words.append("Traps sent patrols searching %s; searches %s found the squad and %s gave up." % (
+        bucket(s.get("searches_started_per_run", 0), [0.2, 1, 3], ["never", "rarely", "sometimes", "often"]),
+        bucket(s.get("searches_found_squad_per_run", 0), [0.2, 1, 3], ["never", "rarely", "sometimes", "often"]),
+        bucket(s.get("searches_timed_out_per_run", 0), [0.2, 1, 3], ["never", "rarely", "sometimes", "often"])))
+    return words
 
 
 def build_questions():
@@ -274,6 +349,11 @@ def build_questions():
                                     "Interesting: flanks, focus and retreats force the player to adapt",
                                     "Gripping: the enemies feel coordinated and cunning yet beatable",
                                     "Exhausting: so erratic or relentless that it stops being fun"]},
+        "stealth_issue": {"type": "choice",
+                          "instructions": intro + " On maps with patrols the squad can sneak, lay traps and pick the moment "
+                                                  "of the fight. Judging only the patrols' sight / hearing / smell and their "
+                                                  "search after a trap: which change would make sneaking most tense and fair?",
+                          "criteria": {k: v[0] for k, v in STEALTH_OPTIONS.items()}},
         "avoidable": {"type": "noul",
                       "instructions": intro + " Could better squad tactics (cover, storming, focus fire) have avoided most of these defeats?"},
     }
@@ -300,6 +380,13 @@ def objective(facts, owner):
         return s["win_rate"] + 0.05 * s["avg_waves_cleared"]
     lo, hi = WIN_BAND
     distance = 0.0 if lo <= s["win_rate"] <= hi else min(abs(s["win_rate"] - lo), abs(s["win_rate"] - hi))
+    if owner == "stealth":
+        first = s.get("avg_first_detection_s")
+        dlo, dhi = STEALTH_DETECT_BAND
+        # Never detected counts as the far edge; too early / too late are penalised per minute outside the band.
+        late = 0.0 if first is None else max(0.0, dlo - first) / 60.0 + max(0.0, first - dhi) / 60.0
+        never = 0.5 if first is None else 0.0
+        return 1.0 - 2.0 * distance - late - never + 0.3 * engagement(facts.get("jev"))
     return 1.0 - 2.0 * distance + 0.3 * engagement(facts.get("jev"))
 
 
@@ -307,7 +394,8 @@ def choose_step(answers, facts, values, tried, args):
     """(knob, direction, new value, reason): Jev's confident picks first, else the fixed order."""
     candidates = []
     if answers:
-        for qid, options in (("bot_weakness", BOT_OPTIONS), ("enemy_ai_issue", ENEMY_AI_OPTIONS), ("enemy_issue", ENEMY_OPTIONS)):
+        for qid, options in (("bot_weakness", BOT_OPTIONS), ("enemy_ai_issue", ENEMY_AI_OPTIONS), ("enemy_issue", ENEMY_OPTIONS),
+                             ("stealth_issue", STEALTH_OPTIONS)):
             ans = answers.get(qid) or {}
             for option, p in sorted((ans.get("probabilities") or {}).items(), key=lambda kv: -kv[1]):
                 step = (options.get(option) or (None, None))[1]
@@ -317,7 +405,8 @@ def choose_step(answers, facts, values, tried, args):
     candidates += [(0, k, d, "fallback order") for k, d in FALLBACK_ORDER]
     for _, knob, direction, reason in candidates:
         owner = KNOBS[knob][5]
-        if (owner == "enemy" and not args.tune_enemies) or (owner == "enemy_ai" and args.no_enemy_ai):
+        if (owner == "enemy" and not args.tune_enemies) or (owner == "enemy_ai" and args.no_enemy_ai) \
+                or (owner == "stealth" and not args.stealth):
             continue
         if (knob, direction) in tried:
             continue
@@ -343,7 +432,7 @@ def enemy_proposals(answers):
 def write_tuning(best_values, summary, args):
     """Only knobs that differ from their defaults; enemy power knobs only when they were tuned on purpose."""
     cvars = {KNOBS[k][0]: "%g" % v for k, v in sorted(best_values.items())
-             if v != KNOBS[k][1] and (KNOBS[k][5] != "enemy" or args.tune_enemies)}
+             if v != KNOBS[k][1] and (KNOBS[k][5] != "enemy" or args.tune_enemies) and (KNOBS[k][5] != "stealth" or args.stealth)}
     if not cvars:
         return
     os.makedirs(os.path.dirname(TUNING_FILE), exist_ok=True)
@@ -366,6 +455,8 @@ def main():
     ap.add_argument("--tune-enemies", action="store_true", help="also tune enemy power (balance) knobs")
     ap.add_argument("--no-enemy-ai", action="store_true", help="leave the enemy intelligence knobs alone")
     ap.add_argument("--dry-run", action="store_true", help="analyse the last batch's logs once, no new runs")
+    ap.add_argument("--stealth", action="store_true", help="also tune the patrol perception / trap search knobs (Codex.Perception.*, Codex.Patrol.*)")
+    ap.add_argument("--map", default="", help="map for the bot batches (bot_run.ps1 -Map), e.g. /Game/Maps/L_PatrolTest for --stealth")
     args = ap.parse_args()
 
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -385,7 +476,7 @@ def main():
             it, 100 * s["win_rate"], s["avg_waves_cleared"], s["flank_orders_per_run"], s["fallbacks_per_run"],
             s["backstabs_per_run"], "" if answers else " (Jev unavailable: %s)" % facts.get("jev_error")), flush=True)
         if answers:
-            for qid in ("bot_weakness", "enemy_ai_issue", "enemy_issue"):
+            for qid in ("bot_weakness", "enemy_ai_issue", "enemy_issue") + (("stealth_issue",) if args.stealth else ()):
                 a = answers.get(qid, {})
                 print("        %s -> %s (conf %.2f)" % (qid, a.get("choice"), a.get("confidence", 0)), flush=True)
             print("        fairness %.2f / 4, engagement %.2f / 4, avoidable %.2f" % (
