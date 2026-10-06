@@ -523,6 +523,93 @@ Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
 - User decision: Shift + RMB assigns a defense line only in the tactical pause / outside the fight (the real-time order lock stays).
 - Jev validation 13/16 (81 %) after fixing the intruder ordering it exposed.
 
+---
+
+## 🎯 SPRINT 11 DIRECTIVE: Outpost Stealth Patrols & Spline Routes (Rifleman + Hound Escort)
+**Author:** Gemini (Lead Architect) | **Triage Gate:** Model Router (Enabled) | **Executor:** Claude (Opus 5.5)
+
+### Concept Overview:
+Transition from wave timer defense to real-time stealth infiltration and outpost ambush. Enemies patrol along designer-placed spline paths with waiting/scanning stops. Riflemen can be escorted by hounds that act as mobile alarms. Players can sneak up using stance stealth (Prone), lay tripwires/mines across patrol paths, or execute ambushes. Combat initiates immediately upon detection, tripwire detonation, or attack.
+
+### Sub-Task 11-A: Spline Patrol Route Actor (`APatrolRouteActor` / `BP_PatrolRoute`)
+- **Files:** `Source/CodexTactics/Public/AI/PatrolRouteActor.h` & `Private/.../PatrolRouteActor.cpp`
+- **Specification:**
+  1. Actor with `USceneComponent` root and editable `USplineComponent` (`RouteSpline`).
+  2. Properties:
+     - `bool bIsLoop = true;`
+     - `bool bPingPong = false;` (reverse direction on reaching end if not loop).
+     - `float DefaultWaitTimeSeconds = 3.0f;`
+     - `TArray<float> PerPointWaitTime;` (optional per-waypoint pauses).
+  3. Methods:
+     - `int32 GetNumberOfWaypoints() const;`
+     - `FVector GetWaypointWorldLocation(int32 Index) const;`
+     - `int32 GetNextWaypointIndex(int32 CurrentIndex, bool& inout_bForward) const;`
+     - Viewport visualizer / debug arrows in editor.
+
+### Sub-Task 11-B: Enemy Patrol & Escort Hound Binding
+- **Files:** `Source/CodexTactics/Public/Characters/EnemyCharacter.h` & `Private/.../EnemyCharacter.cpp`, `MarksmanEnemyCharacter.h`
+- **Specification:**
+  1. Add to `AEnemyCharacter`:
+     - `UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "CodexTactics|Patrol")`
+       `TObjectPtr<APatrolRouteActor> AssignedPatrolRoute;`
+     - `UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "CodexTactics|Patrol")`
+       `TWeakObjectPtr<AEnemyCharacter> EscortLeader;`
+     - `float PatrolWalkSpeed = 190.f;`
+  2. In `AEnemyCharacter::TickBehavior`:
+     - If in Exploration and `AssignedPatrolRoute` is set: move from waypoint to waypoint at `PatrolWalkSpeed`. Upon arrival, pause for `WaitTimeSeconds` facing the next route segment.
+     - If `EscortLeader` is valid (e.g. Frost Hound escorting a Marksman/Rifleman): maintain tethered distance of 200–350 cm near the leader during patrol.
+
+### Sub-Task 11-C: Ambush & Seamless Combat Transition
+- **Files:** `Source/CodexTactics/Private/Characters/EnemyCharacter.cpp`, `MarksmanEnemyCharacter.cpp`
+- **Triggers:**
+  1. Direct sight detection of operatives (respecting 60cm barricade occlusion and Prone crawl stealth from Sprint 08).
+  2. Taking damage from operative weapons.
+  3. Tripwire (`ATripwireActor`) or mine detonation within hearing radius (20m).
+- **Reaction:**
+  - Instantly abort patrol walk, sound alert to squad/escort, transition to `Engage`.
+  - Escort hound sprints at nearest operative; marksman/rifleman seeks cover, establishes line of fire, and opens fire.
+
+### Sub-Task 11-D: Task Model Router Integration
+- **Script:** `Scripts/Tools/model_router.py`
+- Claude must consult `python Scripts/Tools/model_router.py` to route subtasks according to complexity:
+  - **Tier 1:** Route actor component declarations, minor renaming, property exposures.
+  - **Tier 2:** Spline waypoint math, helper calculations, Python test scripts.
+  - **Tier 3:** Patrol navigation state machine, escort tethering, alert propagation.
+  - **Tier 4 / Host:** Overall system integration, combat mode transitions, test validation.
+
+### Sub-Task 11-E: Unit Tests & Verification
+- **Files:** `Source/CodexTacticsTests/Private/AI/PatrolRouteTest.cpp`
+- **Tests:**
+  1. `AI.PatrolRoute.LoopProgression`
+  2. `AI.PatrolRoute.PingPongProgression`
+  3. `AI.PatrolRoute.EscortFollowsLeader`
+  4. `AI.PatrolRoute.AlertBreaksPatrol`
+
+---
+
+## ✅ Sprint 11 «Outpost & stealth patrols» (Claude, 2026-10-06): DONE — see HANDOFF §10
+- User decisions: the marksman keeps his legacy `PatrolRoute` points as the fallback when `AssignedPatrolRoute` is null; a tripwire / mine **detonation** alerts patrols within 20 m (`PatrolTrapAlertRadius`), the marksman neighbour alert stays 15 m.
+- Spec deviation: `EscortLeader` is `EditInstanceOnly` without `BlueprintReadWrite` (UHT does not expose `TWeakObjectPtr` to Blueprints); BP access via `GetEscortLeader` / `SetEscortLeader`. Patrols run in any phase (the spec's «in Exploration» would have kept them idle during the preparation the user wanted skipped). A marksman does not escort (only base enemies, e.g. hounds, follow a leader).
+- `BP_PatrolRoute`: not made — place `APatrolRouteActor` directly (Blueprintable if a styled BP is wanted).
+
+---
+
+## ⚡ MANDATORY TYPESAFE (JEV) & TOKEN ECONOMY RULES FOR CLAUDE (Sprint 11)
+
+Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
+1. **Always Inspect Existing Code First (Anti-Stale Rule):**
+   Read `MarksmanEnemyCharacter.h/.cpp`, `EnemyCharacter.h/.cpp`, and `TripwireActor.h` before modifying.
+2. **Model Router Usage:**
+   Run `python Scripts/Tools/model_router.py` for subtask triage and cost optimization.
+3. **Fast Smart Testing Only:**
+   Execute tests **strictly** via `powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Smart`.
+4. **Agent Lock:**
+   Always claim lock before builds/smokes: `powershell -ExecutionPolicy Bypass -File Scripts/agent_lock.ps1 -Take claude -Task "Sprint11_PatrolRoutes"` and release upon completion.
+5. **Never Commit User Assets:**
+   Never commit or reset `Content/Maps/L_MovementTest.umap` or `Config/DefaultEditor.ini`.
+
+---
+
 ## Architect Decisions & Answers to Open Questions (Gemini)
 
 ### 1. Wheel Zoom binding (Duplicate call)

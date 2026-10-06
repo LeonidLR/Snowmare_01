@@ -1,11 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AI/PatrolRouteRules.h"
 #include "Characters/EnemyAIRules.h"
 #include "GameFramework/Character.h"
 #include "Data/CombatTypes.h"
 #include "EnemyCharacter.generated.h"
 
+class APatrolRouteActor;
 class UHealthComponent;
 struct FOverheadLabel;
 class UStaticMeshComponent;
@@ -144,6 +146,103 @@ public:
 	FOnEnemyDiedDynamic OnEnemyDied;
 
 	FOnEnemyDiedNative OnEnemyDiedNative;
+
+	// --- Sprint 11 outpost stealth patrols (no Godot reference — Sprint 11 spec by Gemini, docs/port/TANDEM.md) ---
+
+	/**
+	 * Spline route this enemy patrols from map start (no preparation delay) until it is alerted: it walks waypoint to
+	 * waypoint at PatrolWalkSpeed, pauses at each, then turns towards the next segment. Null: no route (wave enemies
+	 * behave as before; a marksman falls back to his legacy PatrolRoute points).
+	 */
+	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "CodexTactics|Patrol")
+	TObjectPtr<APatrolRouteActor> AssignedPatrolRoute;
+
+	/**
+	 * Leader this enemy escorts (e.g. a frost hound with a marksman): it stays 200-350 cm from him while he patrols and
+	 * breaks off with him. Not BlueprintReadWrite (UHT does not expose weak pointers to Blueprints): Get/SetEscortLeader.
+	 */
+	UPROPERTY(EditInstanceOnly, Category = "CodexTactics|Patrol")
+	TWeakObjectPtr<AEnemyCharacter> EscortLeader;
+
+	/** Walk speed on the patrol route / while escorting, cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Patrol", meta = (ClampMin = "0"))
+	float PatrolWalkSpeed = 190.f;
+
+	/** A patroller notices an operative it sees (Sprint 08 sight rules: stance heights, 60 cm cover) this close, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Patrol", meta = (ClampMin = "0"))
+	float PatrolSightRange = 3000.f;
+
+	/** A tripwire / mine detonation this close (planar) breaks its patrol, cm (user decision 2026-10-06: 20 m). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Patrol", meta = (ClampMin = "0"))
+	float PatrolTrapAlertRadius = PatrolRouteRules::TrapAlertRadiusCm;
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Patrol")
+	AEnemyCharacter* GetEscortLeader() const { return EscortLeader.Get(); }
+
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Patrol")
+	void SetEscortLeader(AEnemyCharacter* NewLeader);
+
+	/**
+	 * Puts a spawned enemy on patrol at runtime (level-placed ones start from their AssignedPatrolRoute / EscortLeader at
+	 * BeginPlay): walks Route, or escorts Leader when one is given. Both null: no patrol.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Patrol")
+	virtual void StartPatrol(APatrolRouteActor* Route, AEnemyCharacter* Leader);
+
+	/** Still on its patrol / escort duty (not alerted). Wave enemies without a route or leader: false. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Patrol")
+	virtual bool IsOnPatrol() const { return bPatrolActive; }
+
+	/**
+	 * Patrol -> Engage: stops the walk, alerts its leader / escorts, remembers AlertLocation (an engaged enemy that knows
+	 * of no operative goes there). No-op when not on patrol.
+	 */
+	virtual void BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertLocation);
+
+	/** A tripwire / mine went off at Location: breaks the patrol within PatrolTrapAlertRadius. */
+	void NotifyTrapTriggered(const FVector& Location);
+
+	/** Every enemy in World hears a trap that went off at Location (ATripwireActor / AProximityMineActor). */
+	static void AlertPatrolsNearTrap(UWorld* World, const FVector& Location);
+
+	/** Index of the waypoint it walks to / waits at (smokes, debugging). */
+	int32 GetPatrolWaypointIndex() const { return PatrolWaypointIndex; }
+
+protected:
+	/** Patrol state of the route driver (TickPatrolRoute). */
+	enum class EPatrolPhase : uint8 { Moving, Waiting, Turning, Finished };
+
+	/** Set at BeginPlay when it has a route or a leader; cleared by BreakPatrol. */
+	bool bPatrolActive = false;
+	EPatrolPhase PatrolPhase = EPatrolPhase::Moving;
+	int32 PatrolWaypointIndex = 0;
+	bool bPatrolForward = true;
+	float PatrolWaitLeft = 0.f;
+	float PatrolTurnTime = 0.f;
+	float PatrolStuckTime = 0.f;
+	bool bPatrolMoveIssued = false;
+	float PatrolSightTimer = 0.f;
+	bool bEscortMoving = false;
+	/** Last tether point it was sent to (a new move only when the leader walked on). */
+	FVector EscortGoal = FVector::ZeroVector;
+	/** Where the alarm came from: an engaged enemy with no known operative investigates it. */
+	FVector PatrolAlertLocation = FVector::ZeroVector;
+	bool bHasPatrolAlertLocation = false;
+
+	/** Walks AssignedPatrolRoute (move, wait, turn to the next segment). */
+	void TickPatrolRoute(float DeltaTime);
+	/** Patrol / escort tick of the base enemy: sight check, leader mirror, tether or route. */
+	void TickPatrolBehavior(float DeltaTime);
+	/** Keeps the 200-350 cm tether to Leader. */
+	void TickEscort(float DeltaTime, const AEnemyCharacter& Leader);
+	/** Moves towards a patrol waypoint / tether point at PatrolWalkSpeed (the marksman walks his own way). */
+	virtual void IssuePatrolMove(const FVector& Goal, float Speed);
+	/** A living operative within Range it can see now (Sprint 08 eye / profile heights, cover traces). */
+	AActor* FindVisibleOperative(float Range) const;
+	/** Breaks the patrol of its leader and of every enemy escorting it. */
+	void PropagatePatrolBreak(const FVector& AlertLocation);
+	/** Sets up the patrol from AssignedPatrolRoute / EscortLeader (BeginPlay). */
+	void InitPatrol();
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Enemy")

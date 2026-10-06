@@ -1,4 +1,5 @@
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "AI/PatrolRouteActor.h"
 #include "Data/WeaponTuning.h"
 
 #include "AIController.h"
@@ -103,8 +104,10 @@ void AMarksmanEnemyCharacter::BeginPlay()
 	{
 		Point = GetActorTransform().TransformPosition(Point);
 	}
-	// Sprint 06-G: spawned by a wave (or during its preparation) he fights at once.
-	AIState = PatrolRoute.IsEmpty() || IsFightOn() ? EMarksmanAIState::Engage : EMarksmanAIState::Patrol;
+	// Sprint 06-G: spawned by a wave (or during its preparation) he fights at once. Sprint 11: a spline route is walked
+	// from map start whatever the phase (no preparation delay for patrols).
+	AIState = AssignedPatrolRoute ? EMarksmanAIState::Patrol
+		: (PatrolRoute.IsEmpty() || IsFightOn() ? EMarksmanAIState::Engage : EMarksmanAIState::Patrol);
 	if (HealthComponent)
 	{
 		HealthComponent->OnDamaged.AddDynamic(this, &AMarksmanEnemyCharacter::HandleMarksmanDamaged);
@@ -167,10 +170,62 @@ void AMarksmanEnemyCharacter::SetMarksmanStance(EOperativeStance NewStance)
 
 void AMarksmanEnemyCharacter::Alert()
 {
-	if (AIState == EMarksmanAIState::Patrol)
+	BreakPatrol(EPatrolAlertCause::PartnerAlert, GetActorLocation());
+}
+
+void AMarksmanEnemyCharacter::StartPatrol(APatrolRouteActor* Route, AEnemyCharacter* Leader)
+{
+	Super::StartPatrol(Route, Leader);
+	if (Route && !bIsDying)
 	{
-		AIState = EMarksmanAIState::Engage;
+		CancelAim();
+		bHolding = false;
+		StateTimer = 0.f;
+		SetMarksmanStance(EOperativeStance::Standing);
+		AIState = EMarksmanAIState::Patrol;
 	}
+}
+
+bool AMarksmanEnemyCharacter::IsOnPatrol() const
+{
+	return AIState == EMarksmanAIState::Patrol && !bIsDying;
+}
+
+void AMarksmanEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertLocation)
+{
+	if (AIState != EMarksmanAIState::Patrol)
+	{
+		return;
+	}
+	bPatrolActive = false;
+	// A hit on the legacy route: HandleMarksmanDamaged plays the ambush right after this (drop prone, alert, relocate);
+	// his escort mirrors that on its next tick (propagating now would flip him to Engage first).
+	if (Cause == EPatrolAlertCause::Damage && !AssignedPatrolRoute)
+	{
+		return;
+	}
+	AIState = EMarksmanAIState::Engage;
+	StateTimer = 0.f;
+	bHolding = false;
+	FiringSearchCooldown = 0.f;
+	if (AAIController* AIC = Cast<AAIController>(GetController()))
+	{
+		AIC->StopMovement();
+	}
+	GetCharacterMovement()->MaxWalkSpeed = Stance == EOperativeStance::Standing ? MarksmanConfig.WalkSpeed : GetCharacterMovement()->MaxWalkSpeed;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s breaks his patrol (cause %d)"), *GetName(), static_cast<int32>(Cause));
+	if (AssignedPatrolRoute && !bIsDying)
+	{
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❗ ТРЕВОГА!"), FLinearColor(1.f, 0.35f, 0.2f));
+	}
+	PropagatePatrolBreak(AlertLocation);
+}
+
+void AMarksmanEnemyCharacter::IssuePatrolMove(const FVector& Goal, float Speed)
+{
+	bPatrolMoveIssued = true;
+	ExecuteMoveTo(Goal, false);
+	GetCharacterMovement()->MaxWalkSpeed = Speed;
 }
 
 bool AMarksmanEnemyCharacter::IsFightOn() const
@@ -650,11 +705,30 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 
 void AMarksmanEnemyCharacter::TickPatrol(float DeltaTime, AOperativeCharacter* Target, float Distance)
 {
+	// Sprint 11: the spline route — only sight (Sprint 08 rules, every 0.2 s), a hit, his escort or a trap end it.
+	if (AssignedPatrolRoute)
+	{
+		PatrolSightTimer -= DeltaTime;
+		if (PatrolSightTimer <= 0.f)
+		{
+			PatrolSightTimer = UTacticalSightSubsystem::UpdateInterval;
+			const AActor* Seen = FindVisibleOperative(MarksmanConfig.DetectionRange);
+			FPatrolAlertInput Input;
+			Input.bSeesOperative = Seen != nullptr;
+			if (PatrolRouteRules::ShouldBreakPatrol(Input))
+			{
+				BreakPatrol(EPatrolAlertCause::Sight, Seen->GetActorLocation());
+				return;
+			}
+		}
+		TickPatrolRoute(DeltaTime);
+		return;
+	}
 	// Sprint 06-D: a wave (or its preparation) is on — the fight is known, no more patrolling; otherwise an operative
 	// in sight within the detection range wakes him.
 	if (IsFightOn() || (Target && Distance <= MarksmanConfig.DetectionRange && TraceLine(Target).bHasLos))
 	{
-		AIState = EMarksmanAIState::Engage;
+		BreakPatrol(EPatrolAlertCause::Sight, Target ? Target->GetActorLocation() : GetActorLocation());
 		return;
 	}
 	if (PatrolRoute.IsEmpty())

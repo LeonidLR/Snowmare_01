@@ -1,4 +1,5 @@
 #include "Interactables/ProximityMineActor.h"
+#include "Characters/EnemyCharacter.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -215,6 +216,8 @@ void AProximityMineActor::Detonate()
 	UE_LOG(LogCodexTactics, Display, TEXT("%s detonated"), *GetName());
 	ApplyBlast(ExplosionDamage, ExplosionDamage * DeployableRules::SquadDamageScale, ExplosionRadius, 0.50f, EDamageType::Explosive,
 		LOCTEXT("Source", "Мина"), LOCTEXT("SquadHit", "💥 Ай! Задело взрывом мины (-{0} HP)!"));
+	// Sprint 11: the blast is heard — patrols within 20 m break off.
+	AEnemyCharacter::AlertPatrolsNearTrap(GetWorld(), GetActorLocation());
 	Destroy();
 }
 

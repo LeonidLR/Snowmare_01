@@ -224,6 +224,8 @@ void ATripwireActor::Detonate()
 	ApplyBlast(TripwireRules::BlastDamage, TripwireRules::BlastDamage * TripwireRules::SquadDamageShare, TripwireRules::BlastRadiusCm,
 		TripwireRules::ArmorPenetration, EDamageType::Explosive, LOCTEXT("Source", "Растяжка Ф-1"),
 		LOCTEXT("SquadLine", "💥 Подрыв на растяжке! -{0} HP"), EStatusEffect::Stagger, TripwireRules::StaggerSeconds);
+	// Sprint 11: the blast is heard — patrols within 20 m break off.
+	AEnemyCharacter::AlertPatrolsNearTrap(GetWorld(), (WireA + WireB) * 0.5f);
 	Destroy();
 }
 

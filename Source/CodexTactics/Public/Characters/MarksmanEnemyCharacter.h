@@ -15,7 +15,10 @@ class UStaticMeshComponent;
  * under 12 m, flanks (45-90 deg off the target's facing) a target camping in hard cover, goes prone on open / high
  * ground and crouches behind low cover. Every shot follows a 2 s telegraphed aim (beam) that breaks without a line of
  * fire. A hit from afar while unaware drops him prone (ambush), alerts nearby marksmen, then he relocates.
- * Rules: MarksmanAIRules (tests CodexTactics.Marksman.*).
+ * Sprint 11 (TANDEM «SPRINT 11 DIRECTIVE»): with AssignedPatrolRoute set he walks that spline route from map start instead
+ * of PatrolRoute (the legacy points stay the fallback) and breaks into Engage when he sees an operative (Sprint 08 sight),
+ * is hit (cover, laser, return fire), his escort is alerted or a trap goes off within 20 m.
+ * Rules: MarksmanAIRules (tests CodexTactics.Marksman.*), PatrolRouteRules (CodexTactics.AI.PatrolRoute.*).
  */
 UCLASS()
 class CODEXTACTICS_API AMarksmanEnemyCharacter : public AEnemyCharacter
@@ -27,7 +30,10 @@ public:
 
 	virtual void BeginPlay() override;
 
-	/** Patrol waypoints relative to the actor (edited in the level); empty = he hunts the squad from the start. */
+	/**
+	 * Legacy patrol waypoints relative to the actor (edited in the level); empty = he hunts the squad from the start.
+	 * Used only while AssignedPatrolRoute is null (user decision 2026-10-06: maps with these points keep working).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Marksman", meta = (MakeEditWidget = true))
 	TArray<FVector> PatrolRoute;
 
@@ -63,8 +69,15 @@ public:
 	/** Patrol -> Engage (another marksman's ambush alert, smokes). */
 	void Alert();
 
+	/** A spline route puts him (back) on patrol: aim and hold dropped, AIState Patrol. */
+	virtual void StartPatrol(APatrolRouteActor* Route, AEnemyCharacter* Leader) override;
+	virtual bool IsOnPatrol() const override;
+	virtual void BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertLocation) override;
+
 protected:
 	virtual void TickBehavior(float DeltaTime) override;
+	/** Walks to a spline waypoint standing (his own move: stance, MoveGoal), at Speed. */
+	virtual void IssuePatrolMove(const FVector& Goal, float Speed) override;
 
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Marksman")
 	TObjectPtr<UStaticMeshComponent> AimBeam;

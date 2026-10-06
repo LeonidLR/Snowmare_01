@@ -109,3 +109,9 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 - Open: prone clips (crouch stands in), spitter / cryo drone art, M16 offset on the new hand, cold animation layer (Phase 6).
 - Parity items: fallback waves (`FallbackWaveRules`), turn-based blasts (`ApplyBlast`), cold animation layer, box selection + group orders, grid pulses, barricade glide / grow-in, ghost hologram.
 - Weapon model switching: not in Godot either (only M16_Visual) — nothing to port.
+
+## UE-only sprints (Unreal is the reference since 2026-10-02)
+
+| Sprint | UE target | Status | Tests |
+|---|---|---|---|
+| 11 Outpost stealth patrols (Gemini, TANDEM) | `APatrolRouteActor`, `PatrolRouteRules`, `AEnemyCharacter` patrol / escort / alert break, marksman spline route (legacy points fallback), tripwire / mine 20 m alert | ✅ | `CodexTactics.AI.PatrolRoute.*`, PatrolSmoke |
