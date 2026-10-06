@@ -14,10 +14,14 @@ class UStaticMeshComponent;
 
 /**
  * Holographic preview of an operative at a cover slot (Sprint 12-C; UE-only, no Godot reference — Gemini Sprint 12
- * spec): a copy of the operative's skeletal mesh in the see-through hologram material (M_GhostHologram, the
- * relocation ghost's; cyan) pressed back-to-wall at the slot, playing the cover idle clip of the slot's height (or the
- * plain idle while no cover clips are set). Shown by the first click on a wall, confirmed by the second, hidden by any
- * other click, RMB or Esc. Without a skeletal mesh the placeholder cylinder stands in.
+ * spec): a copy of the operative's skeletal mesh pressed back-to-wall at the slot, facing along the wall towards the
+ * side he would face there (CoverFacingRules), playing the cover idle clip of the slot's height (or the plain idle while
+ * no cover clips are set). Look (user report 2026-10-06): exactly the operatives' see-through silhouette technique
+ * (AOperativeCharacter::SetSilhouetteVisible) — an OverlayMaterial MID of the operative's SilhouetteMaterial
+ * (/Game/VFX/Materials/M_Silhouette: translucent, unlit, depth test off; no custom depth / stencil) with his silhouette
+ * colour; the same MID replaces the base materials so no opaque body shows. Shown by the first click on a wall,
+ * confirmed by the second, hidden by any other click, RMB or Esc. Without a skeletal mesh the placeholder cylinder
+ * stands in.
  */
 UCLASS(NotBlueprintable)
 class CODEXTACTICS_API ACoverGhostActor : public AActor
@@ -36,15 +40,19 @@ public:
 	const FCoverSlot& GetSlot() const { return Slot; }
 	AOperativeCharacter* GetOperative() const { return Operative.Get(); }
 
-	/** Godot ghost colour family: cyan preview (0.2, 0.9, 1.0). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover")
-	FLinearColor GhostColor = FLinearColor::FromSRGBColor(FColor(51, 230, 255));
-
-	/** Hologram material with a "Color" vector parameter (M_GhostHologram). */
+	/** Fallback see-through material with a "Color" vector parameter when the operative sets none (M_Silhouette). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover")
 	TObjectPtr<UMaterialInterface> GhostMaterial;
 
+	/** The ghost's body (smokes: material / overlay checks). */
+	USkeletalMeshComponent* GetBody() const { return Body; }
+
+	/** The silhouette MID applied to the body (overlay and base slots). */
+	UMaterialInstanceDynamic* GetGhostMaterialInstance() const { return Material; }
+
 private:
+	UMaterialInterface* ResolveBaseMaterial(const AOperativeCharacter& InOperative) const;
+
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Cover")
 	TObjectPtr<USceneComponent> Root;
 

@@ -107,3 +107,8 @@ namespace ColdRules
 		return Cold >= Config.WeaponFreezeThreshold && !bNearHeat;
 	}
 }
+
+bool ColdRules::ShouldStepCold(bool bTurnBased, bool bWorldAIPaused)
+{
+	return !bTurnBased && !bWorldAIPaused;
+}

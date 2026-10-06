@@ -1,5 +1,5 @@
 {
-  "comment": "Enemy perception of the squad before a fight (patrols / search, user request 2026-10-06). Read at game start (Data/EnemyPerception.h); a missing key keeps the built-in default (AI/PerceptionRules.cpp). Distances in meters, angles in degrees (half-angle of the field of view), times in seconds. smell_radius_m only counts for FROST_HOUND. Placed charges / traps use the trap alert radius (20 m) and start a SEARCH; detection by sight / hearing / smell starts the fight.",
+  "comment": "Enemy perception of the squad before a fight (patrols / search, user request 2026-10-06). Read at game start (Data/EnemyPerception.h); a missing key keeps the built-in default (AI/PerceptionRules.cpp). Distances in meters, angles in degrees (half-angle of the field of view), times in seconds. smell_radius_m only counts for FROST_HOUND. Footstep radii lowered 2026-10-06 (user playtest); every wall between the enemy and the operative multiplies the footstep radius by hearing_occlusion_per_wall (optional per archetype, default 0.5). Placed charges / traps use the trap alert radius (20 m) and start a SEARCH; detection by sight / hearing / smell starts the fight.",
   "search": {
     "duration_seconds": 60,
     "sweep_radius_m": 12,
@@ -14,42 +14,42 @@
       "sight_range_m": 15, "sight_half_angle_deg": 70,
       "visibility_standing": 1, "visibility_crouching": 0.75, "visibility_prone": 0.4,
       "proximity_m": 3, "time_to_detect_seconds": 0.6, "suspicion_decay_per_second": 0.5,
-      "hear_walk_m": 15, "hear_run_m": 25, "hear_crouch_walk_m": 8, "hear_crawl_m": 4,
+      "hear_walk_m": 7, "hear_run_m": 14, "hear_crouch_walk_m": 3.5, "hear_crawl_m": 1.5,
       "hear_gunshot_m": 45, "hear_explosion_m": 60, "smell_radius_m": 12
     },
     "MARKSMAN": {
       "sight_range_m": 45, "sight_half_angle_deg": 30,
       "visibility_standing": 1, "visibility_crouching": 0.7, "visibility_prone": 0.35,
       "proximity_m": 3, "time_to_detect_seconds": 1.0, "suspicion_decay_per_second": 0.5,
-      "hear_walk_m": 10, "hear_run_m": 18, "hear_crouch_walk_m": 5, "hear_crawl_m": 2.5,
+      "hear_walk_m": 5, "hear_run_m": 10, "hear_crouch_walk_m": 2, "hear_crawl_m": 1,
       "hear_gunshot_m": 40, "hear_explosion_m": 60, "smell_radius_m": 0
     },
     "SPITTER": {
       "sight_range_m": 25, "sight_half_angle_deg": 50,
       "visibility_standing": 1, "visibility_crouching": 0.7, "visibility_prone": 0.4,
       "proximity_m": 3, "time_to_detect_seconds": 0.8, "suspicion_decay_per_second": 0.5,
-      "hear_walk_m": 12, "hear_run_m": 20, "hear_crouch_walk_m": 6, "hear_crawl_m": 3,
+      "hear_walk_m": 5.5, "hear_run_m": 11, "hear_crouch_walk_m": 2.5, "hear_crawl_m": 1,
       "hear_gunshot_m": 40, "hear_explosion_m": 60, "smell_radius_m": 0
     },
     "BRUTE": {
       "sight_range_m": 20, "sight_half_angle_deg": 45,
       "visibility_standing": 1, "visibility_crouching": 0.7, "visibility_prone": 0.4,
       "proximity_m": 3, "time_to_detect_seconds": 1.2, "suspicion_decay_per_second": 0.5,
-      "hear_walk_m": 10, "hear_run_m": 18, "hear_crouch_walk_m": 5, "hear_crawl_m": 2.5,
+      "hear_walk_m": 5, "hear_run_m": 10, "hear_crouch_walk_m": 2, "hear_crawl_m": 1,
       "hear_gunshot_m": 35, "hear_explosion_m": 50, "smell_radius_m": 0
     },
     "CUTTER": {
       "sight_range_m": 25, "sight_half_angle_deg": 55,
       "visibility_standing": 1, "visibility_crouching": 0.7, "visibility_prone": 0.4,
       "proximity_m": 3, "time_to_detect_seconds": 0.7, "suspicion_decay_per_second": 0.5,
-      "hear_walk_m": 13, "hear_run_m": 22, "hear_crouch_walk_m": 7, "hear_crawl_m": 3.5,
+      "hear_walk_m": 6, "hear_run_m": 12, "hear_crouch_walk_m": 3, "hear_crawl_m": 1.5,
       "hear_gunshot_m": 40, "hear_explosion_m": 60, "smell_radius_m": 0
     },
     "FROSTBITTEN": {
       "sight_range_m": 20, "sight_half_angle_deg": 50,
       "visibility_standing": 1, "visibility_crouching": 0.7, "visibility_prone": 0.4,
       "proximity_m": 3, "time_to_detect_seconds": 1.0, "suspicion_decay_per_second": 0.5,
-      "hear_walk_m": 11, "hear_run_m": 19, "hear_crouch_walk_m": 5.5, "hear_crawl_m": 2.5,
+      "hear_walk_m": 5.5, "hear_run_m": 11, "hear_crouch_walk_m": 2.5, "hear_crawl_m": 1,
       "hear_gunshot_m": 35, "hear_explosion_m": 50, "smell_radius_m": 0
     }
   }

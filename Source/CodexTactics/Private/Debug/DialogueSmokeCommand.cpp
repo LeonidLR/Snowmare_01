@@ -1,12 +1,15 @@
 // Dev-only console command for a headless dialogue check on L_MovementTest (needs -ForceMainMenu):
 //   Scripts/smoke.ps1 -Command CodexTactics.DialogueSmoke -Extra "-ForceMainMenu"
 // 1. «Начать игру» opens the intro briefing in the bottom window; 2. Space advances a line, world clicks are blocked,
-// Esc skips; 3. the preparation dialogue plays in the message feed line by line with the Godot delays.
+// Esc skips; 2b. no cold accumulates while the window is open, it resumes once closed (user request 2026-10-06);
+// 3. the preparation dialogue plays in the message feed line by line with the Godot delays.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -92,13 +95,42 @@ namespace DialogueSmoke
 			PC->SpaceReleased();
 			Check(State, Dialogue->GetLineIndex() == 1, TEXT("Space advances a line"));
 			Check(State, Flow->GetCombatMode() != ECodexCombatMode::TacticalPause, TEXT("Space did not toggle the pause"));
+			// User request 2026-10-06: no cold while the dialogue is open.
+			if (AOperativeCharacter* Leader = World->GetSubsystem<USquadSubsystem>()->GetLeader())
+			{
+				Leader->ColdLevel = 30.f;
+			}
+			Next(State);
+			return true;
+		case 1: // 2 s with the briefing open: the cold holds.
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			const AOperativeCharacter* Leader = World->GetSubsystem<USquadSubsystem>()->GetLeader();
+			Check(State, Dialogue->IsDialogueOpen() && Leader && FMath::IsNearlyEqual(Leader->ColdLevel, 30.f, 0.01f), *FString::Printf(
+				TEXT("no cold accumulates while the dialogue is open (cold %.2f after 2 s)"), Leader ? Leader->ColdLevel : -1.f));
 			Dialogue->SkipDialogue(); // Esc
 			Check(State, !Dialogue->IsDialogueOpen(), TEXT("skip closes the window"));
+			Next(State);
+			return true;
+		}
+		case 2: // The window closed: the cold runs again (chills or warms, but it moves).
+		{
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			const AOperativeCharacter* Leader = World->GetSubsystem<USquadSubsystem>()->GetLeader();
+			Check(State, Leader && !FMath::IsNearlyEqual(Leader->ColdLevel, 30.f, 0.01f), *FString::Printf(
+				TEXT("the cold resumes after the dialogue (cold %.2f)"), Leader ? Leader->ColdLevel : -1.f));
 			Flow->TriggerCombatZone();
 			Flow->FinishCutscene(); // -> Preparation: the prep dialogue plays in the feed
 			Next(State);
 			return true;
-		case 1: // First prep line at once, the second after its 4.5 s delay.
+		}
+		case 3: // First prep line at once, the second after its 4.5 s delay.
 			if (State.StageTime < 1.f)
 			{
 				return true;
@@ -106,7 +138,7 @@ namespace DialogueSmoke
 			Check(State, FeedHas(Messages, TEXT("Внимание отряду!")) && !FeedHas(Messages, TEXT("Разворачиваю")), TEXT("first prep line posted, second waits"));
 			Next(State);
 			return true;
-		case 2:
+		case 4:
 			if (State.StageTime < 4.f)
 			{
 				return true;

@@ -2,6 +2,8 @@
 #include "CodexTactics.h"
 #include "HAL/IConsoleManager.h"
 #include "Animation/AnimMontage.h"
+#include "Animation/AnimNodeBase.h"
+#include "Engine/World.h"
 #include "Animation/AnimSequence.h"
 #include "AnimationRuntime.h"
 #include "Characters/ColdAnimationRules.h"
@@ -9,6 +11,7 @@
 #include "Combat/HealthComponent.h"
 #include "Data/WeaponDataAsset.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "Tactics/CoverFacingRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
 namespace
@@ -47,6 +50,27 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 			Health->OnHealthChanged.AddUniqueDynamic(this, &UOperativeAnimInstance::HandleHealthChanged);
 			Health->OnDied.AddUniqueDynamic(this, &UOperativeAnimInstance::HandleDied);
 		}
+	}
+	// Corner-ready pose (user rule 2026-10-06): until setup_operative_cover_animation.py assigns it, take the M4 pack's
+	// look-at idles when the pack is in the project and the other cover clips come from it.
+	if (bUseNativeCoverClips && (CoverStandIdle.ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; })))
+	{
+		auto Fill = [](TArray<TObjectPtr<UAnimSequenceBase>>& Clips, const TCHAR* Left, const TCHAR* Right)
+		{
+			Clips.SetNum(2);
+			const TCHAR* Paths[2] = { Left, Right };
+			for (int32 Index = 0; Index < 2; ++Index)
+			{
+				if (!Clips[Index])
+				{
+					Clips[Index] = LoadObject<UAnimSequenceBase>(nullptr, Paths[Index], nullptr, LOAD_NoWarn | LOAD_Quiet);
+				}
+			}
+		};
+		Fill(CoverStandCorner, TEXT("/Game/M4_Cover_Pack/Animations/stand/anim_M4_cvr_std_look_at_idle_L.anim_M4_cvr_std_look_at_idle_L"),
+			TEXT("/Game/M4_Cover_Pack/Animations/stand/anim_M4_cvr_std_look_at_idle_R.anim_M4_cvr_std_look_at_idle_R"));
+		Fill(CoverCrouchCorner, TEXT("/Game/M4_Cover_Pack/Animations/crouch/anim_M4_cvr_crch_look_at_idle_L.anim_M4_cvr_crch_look_at_idle_L"),
+			TEXT("/Game/M4_Cover_Pack/Animations/crouch/anim_M4_cvr_crch_look_at_idle_R.anim_M4_cvr_crch_look_at_idle_R"));
 	}
 }
 
@@ -598,6 +622,8 @@ void UOperativeAnimInstance::UpdateState()
 	ShimmyDirection = Operative->ShimmyDirection;
 	bLeaning = Operative->bIsCornerLeaning;
 	bBlindFiring = Operative->bIsBlindFiring;
+	bCoverShimmyForward = bShimmying && Operative->IsShimmyForward();
+	bCoverAtCorner = bInCover && Operative->bAtCoverCorner;
 	UpdateCoverLayer(*Operative);
 	bIsMoving = Speed > 5.f;
 	bIsSprinting = Operative->IsSprinting();
@@ -742,12 +768,13 @@ bool FOperativeAnimInstanceProxy::Evaluate(FPoseContext& Output)
 
 UAnimSequenceBase* UOperativeAnimInstance::PickCoverClip(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) const
 {
-	const int32 Index = CoverFacing == ECoverFacing::Left ? 0 : 1;
+	// The pack's *_L clips face left along the wall, *_R right (CoverFacingRules::ClipIndex).
+	const int32 Index = CoverFacingRules::ClipIndex(CoverFacing);
 	if (Clips.IsValidIndex(Index) && Clips[Index])
 	{
 		return Clips[Index];
 	}
-	// The other side's clip stands in (mirrored by the user later).
+	// The other side's clip stands in (unmirrored: the user assigns / mirrors the missing side).
 	return Clips.IsValidIndex(1 - Index) ? Clips[1 - Index].Get() : nullptr;
 }
 
@@ -794,16 +821,19 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	{
 		return; // stand <-> crouch at the wall: the stance clip plays, the loop follows
 	}
-	// The loop wanted now: shimmy towards / away from the corner, else the idle.
+	// The loop wanted now: shimmy forward (towards the threat side he faces) / backwards (away from it, still facing it),
+	// the corner-ready pose at the exposed edge on that side, else the idle. Never the plain locomotion walk in cover.
 	UAnimSequenceBase* Wanted = nullptr;
 	float PlayRate = 1.f;
-	if (bShimmying && Speed > 5.f)
+	if (bShimmying)
 	{
-		// Forward = towards the corner he works: right facing moves right (+1), left facing moves left (-1).
-		const bool bTowardsCorner = (CoverFacing == ECoverFacing::Right) == (ShimmyDirection > 0.f);
-		Wanted = PickCoverClip(bIsCrouching ? (bTowardsCorner ? CoverCrouchMoveForward : CoverCrouchMoveBackward)
-			: (bTowardsCorner ? CoverStandMoveForward : CoverStandMoveBackward));
+		Wanted = PickCoverClip(bIsCrouching ? (bCoverShimmyForward ? CoverCrouchMoveForward : CoverCrouchMoveBackward)
+			: (bCoverShimmyForward ? CoverStandMoveForward : CoverStandMoveBackward));
 		PlayRate = FMath::Clamp(Speed / FMath::Max(CoverShimmyClipSpeed, 1.f), 0.5f, 2.f);
+	}
+	if (!Wanted && bCoverAtCorner)
+	{
+		Wanted = PickCoverClip(bIsCrouching ? CoverCrouchCorner : CoverStandCorner);
 	}
 	if (!Wanted)
 	{
@@ -816,6 +846,7 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	UAnimMontage* Loop = CoverLoopMontage.Get();
 	if (CoverLoopClip.Get() == Wanted && Loop && Montage_IsPlaying(Loop))
 	{
+		Montage_SetPlayRate(Loop, PlayRate); // the shimmy pace follows the ground speed
 		return;
 	}
 	if (Loop && Montage_IsPlaying(Loop))

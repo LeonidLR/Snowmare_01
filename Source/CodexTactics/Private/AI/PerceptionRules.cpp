@@ -28,22 +28,23 @@ namespace PerceptionRules
 FEnemyPerceptionParams PerceptionRules::GetArchetypeDefaults(EEnemyArchetype Archetype)
 {
 	// sight m, FOV half-angle, crouch / prone visibility, time to detect s, hearing walk / run / crouch / crawl m,
-	// gunshot m, grenade m, smell m. Mirrors Content/Data/AI/enemy_perception.json.
+	// gunshot m, grenade m, smell m. Mirrors Content/Data/AI/enemy_perception.json. Footstep radii lowered 2026-10-06
+	// (user playtest: heard from very far when running): run ~10-12 m, walk ~5-6 m, hounds a bit more, crouch / crawl small.
 	switch (Archetype)
 	{
 	case EEnemyArchetype::FrostHound: // short sight, wide view, good ears, big nose
-		return MakePerception(15.f, 70.f, 0.75f, 0.4f, 0.6f, 15.f, 25.f, 8.f, 4.f, 45.f, 60.f, 12.f);
+		return MakePerception(15.f, 70.f, 0.75f, 0.4f, 0.6f, 7.f, 14.f, 3.5f, 1.5f, 45.f, 60.f, 12.f);
 	case EEnemyArchetype::Marksman: // long sight through a narrow scope view, average ears
-		return MakePerception(45.f, 30.f, 0.7f, 0.35f, 1.0f, 10.f, 18.f, 5.f, 2.5f, 40.f, 60.f, 0.f);
+		return MakePerception(45.f, 30.f, 0.7f, 0.35f, 1.0f, 5.f, 10.f, 2.f, 1.f, 40.f, 60.f, 0.f);
 	case EEnemyArchetype::Spitter:
-		return MakePerception(25.f, 50.f, 0.7f, 0.4f, 0.8f, 12.f, 20.f, 6.f, 3.f, 40.f, 60.f, 0.f);
+		return MakePerception(25.f, 50.f, 0.7f, 0.4f, 0.8f, 5.5f, 11.f, 2.5f, 1.f, 40.f, 60.f, 0.f);
 	case EEnemyArchetype::Brute: // slow, dull senses
-		return MakePerception(20.f, 45.f, 0.7f, 0.4f, 1.2f, 10.f, 18.f, 5.f, 2.5f, 35.f, 50.f, 0.f);
+		return MakePerception(20.f, 45.f, 0.7f, 0.4f, 1.2f, 5.f, 10.f, 2.f, 1.f, 35.f, 50.f, 0.f);
 	case EEnemyArchetype::Cutter: // agile predator
-		return MakePerception(25.f, 55.f, 0.7f, 0.4f, 0.7f, 13.f, 22.f, 7.f, 3.5f, 40.f, 60.f, 0.f);
+		return MakePerception(25.f, 55.f, 0.7f, 0.4f, 0.7f, 6.f, 12.f, 3.f, 1.5f, 40.f, 60.f, 0.f);
 	case EEnemyArchetype::Frostbitten:
 	default:
-		return MakePerception(20.f, 50.f, 0.7f, 0.4f, 1.0f, 11.f, 19.f, 5.5f, 2.5f, 35.f, 50.f, 0.f);
+		return MakePerception(20.f, 50.f, 0.7f, 0.4f, 1.0f, 5.5f, 11.f, 2.5f, 1.f, 35.f, 50.f, 0.f);
 	}
 }
 
@@ -60,6 +61,7 @@ FEnemyPerceptionParams PerceptionRules::Sanitize(EEnemyArchetype Archetype, cons
 		Out.SmellRadiusCm = 0.f;
 	}
 	Out.SightHalfAngleDeg = FMath::Clamp(Out.SightHalfAngleDeg, 0.f, 180.f);
+	Out.HearingOcclusionPerWall = FMath::Clamp(Out.HearingOcclusionPerWall, 0.f, 1.f);
 	return Out;
 }
 
@@ -170,6 +172,18 @@ float PerceptionRules::HearingRadius(const FEnemyPerceptionParams& Params, ESqua
 bool PerceptionRules::HearsMovement(const FEnemyPerceptionParams& Params, ESquadMovementNoise Noise, float DistanceCm)
 {
 	const float Radius = HearingRadius(Params, Noise);
+	return Radius > 0.f && DistanceCm >= 0.f && DistanceCm <= Radius;
+}
+
+float PerceptionRules::OccludedRadius(float RadiusCm, int32 Walls, float PerWallFactor)
+{
+	const int32 Count = FMath::Clamp(Walls, 0, MaxHearingOccluders);
+	return FMath::Max(RadiusCm, 0.f) * FMath::Pow(FMath::Clamp(PerWallFactor, 0.f, 1.f), static_cast<float>(Count));
+}
+
+bool PerceptionRules::HearsMovementThroughWalls(const FEnemyPerceptionParams& Params, ESquadMovementNoise Noise, float DistanceCm, int32 Walls)
+{
+	const float Radius = OccludedRadius(HearingRadius(Params, Noise), Walls, Params.HearingOcclusionPerWall);
 	return Radius > 0.f && DistanceCm >= 0.f && DistanceCm <= Radius;
 }
 

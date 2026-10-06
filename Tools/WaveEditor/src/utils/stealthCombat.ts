@@ -327,6 +327,7 @@ export const CVARS: CVarInfo[] = [
   { name: 'Codex.Perception.FovScale', defaultValue: '1', unit: '×', description: 'множитель полуугла обзора (не больше 180°)', source: 'Data/EnemyPerception.cpp', editable: true, min: 0, max: 5 },
   { name: 'Codex.Perception.ProneVisibilityScale', defaultValue: '1', unit: '×', description: 'множитель заметности лежащего бойца', source: 'Data/EnemyPerception.cpp', editable: true, min: 0, max: 5 },
   { name: 'Codex.Perception.HearingScale', defaultValue: '1', unit: '×', description: 'множитель всех радиусов слуха (шаги, выстрелы, гранаты)', source: 'Data/EnemyPerception.cpp', editable: true, min: 0, max: 5 },
+  { name: 'Codex.Perception.HearingOcclusion', defaultValue: '-1', unit: '×', description: 'множитель радиуса шагов за каждую стену между врагом и бойцом (до 3 стен; -1 = данные, 0.5)', source: 'Data/EnemyPerception.cpp', editable: true, min: -1, max: 1 },
   { name: 'Codex.Perception.SmellScale', defaultValue: '1', unit: '×', description: 'множитель нюха гончих', source: 'Data/EnemyPerception.cpp', editable: true, min: 0, max: 5 },
   { name: 'Codex.Perception.TimeToDetectScale', defaultValue: '1', unit: '×', description: 'множитель времени обнаружения', source: 'Data/EnemyPerception.cpp', editable: true, min: 0, max: 10 },
   { name: 'Codex.Patrol.SearchSeconds', defaultValue: '-1', unit: 'с', description: 'время поиска патруля (-1 = JSON уровня / enemy_perception.json); главнее уровня', source: 'Data/EnemyPerception.cpp', editable: true, min: -1, max: 600 },

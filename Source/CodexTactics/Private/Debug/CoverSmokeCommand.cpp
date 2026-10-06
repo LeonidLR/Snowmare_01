@@ -2,11 +2,15 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.CoverSmoke -Log Smoke-Cover.log
 // A wave fight with the wave removed; a 3 m wall 4 m ahead of the leader and a 60 cm barricade beyond its end are
 // spawned at runtime. Checks: the wall is found as high cover (slot 45 cm off it, corners probed) and the barricade as
-// low cover; the leader sprints to the slot and enters cover (back to the wall, standing); a click along the wall
-// shimmies him (side-step, still in cover); a hit from behind the wall is absorbed 90 %, a crit from there is no
-// headshot, a flank hit passes fully; an enemy diagonally behind the wall (clear trace past the corner, out of earshot)
-// does not perceive him until he leans out; Commander Mode: a marksman's laser makes him crouch and hold fire, the
-// laser gone he stands and peeks again; the corner shot leaves round the corner; a ground order leaves the cover.
+// low cover; the leader sprints to the slot and enters cover (standing, the body along the wall). User design rule
+// 2026-10-06: a threat on his right -> he faces right along the wall; a shimmy right plays the forward clip, a shimmy
+// left walks backwards still facing right (+-10 deg); the threat moves to the left -> he turns left and walks to the
+// edge on that side (corner pose); a hit from behind the wall is absorbed 90 %, a crit from there is no headshot, a
+// flank hit passes fully; an enemy diagonally behind the wall (clear trace past the corner, out of earshot) does not
+// perceive him until he leans out; Commander Mode: a marksman's laser makes him crouch and hold fire, the laser gone he
+// stands and peeks again; the corner shot leaves round the corner; Ctrl + click on an enemy from cover = a corner
+// shot with bLeaning during it and back after; the cover ghost wears the operatives' see-through silhouette
+// material; a ground order leaves the cover.
 
 #include "CoreMinimal.h"
 
@@ -25,6 +29,11 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Containers/Ticker.h"
+#include "Core/CodexTacticsPlayerController.h"
+#include "Kismet/GameplayStatics.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInterface.h"
+#include "Tactics/CoverGhostActor.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
@@ -53,7 +62,33 @@ namespace CoverSmoke
 		FCoverSlot Slot;
 		FVector SlotEntered = FVector::ZeroVector;
 		float FortitudeCut = 0.f;
+		bool bSampled = false;
+		bool bAllowLeaderFire = false;
+		bool bSawLean = false;
+		bool bAnimSawLean = false;
+		float MaxShotYawOff = 0.f;
+		int32 LeanShotsBefore = 0;
+		int32 ClipsBefore = 0;
 	};
+
+	/** Planar angle between his yaw and Direction, degrees. */
+	float YawOff(const AOperativeCharacter& Op, const FVector& Direction)
+	{
+		return FMath::Abs(FRotator::NormalizeAxis(Op.GetActorRotation().Yaw - Direction.Rotation().Yaw));
+	}
+
+	/** Angle between his facing and the wall line (0 = along the wall), degrees; the wall runs along State.R. */
+	float AlongWall(const AOperativeCharacter& Op)
+	{
+		const FVector Wall = Op.GetCoverSlot().RightTangent();
+		const float Dot = FMath::Clamp(FMath::Abs(static_cast<float>(FVector::DotProduct(Op.GetActorForwardVector().GetSafeNormal2D(), Wall))), 0.f, 1.f);
+		return FMath::RadiansToDegrees(FMath::Acos(Dot));
+	}
+
+	FString LoopName(const UOperativeAnimInstance* Anim)
+	{
+		return Anim && Anim->GetCoverLoopClip() ? Anim->GetCoverLoopClip()->GetName() : FString(TEXT("none"));
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -104,6 +139,18 @@ namespace CoverSmoke
 		return Enemy;
 	}
 
+	/** Puts a frozen enemy on the ground at Where (feet height of the test floor). */
+	void PlaceEnemy(AEnemyCharacter& Enemy, const FState& State, const FVector& Where)
+	{
+		Enemy.SetActorLocation(FVector(Where.X, Where.Y, State.GroundZ + Enemy.GetSimpleCollisionHalfHeight() + 2.f));
+	}
+
+	void SampleAnimLean(const AOperativeCharacter& Op, FState& State)
+	{
+		const UOperativeAnimInstance* Anim = Op.GetMesh() ? Cast<UOperativeAnimInstance>(Op.GetMesh()->GetAnimInstance()) : nullptr;
+		State.bAnimSawLean |= Anim && Anim->bLeaning;
+	}
+
 	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
 	{
 		State.Time += 0.1f;
@@ -120,7 +167,7 @@ namespace CoverSmoke
 		for (AOperativeCharacter* Member : Squad->GetMembers())
 		{
 			Member->ColdLevel = 0.f;
-			Member->bTacticalCeaseFire = true; // nobody shoots the frozen enemies
+			Member->bTacticalCeaseFire = !(State.bAllowLeaderFire && Member == Op); // nobody shoots the frozen enemies (but the Ctrl + click check)
 		}
 		switch (State.Stage)
 		{
@@ -224,45 +271,127 @@ namespace CoverSmoke
 			}
 			Check(State, Op->bInCover && Op->CurrentCoverHeight == ECoverHeight::HighCover, FString::Printf(TEXT("entered the high cover after %.1f s"), State.Time));
 			Check(State, Op->GetStance() == EOperativeStance::Standing, TEXT("stands at the full wall"));
-			const float YawOff = FMath::Abs(FRotator::NormalizeAxis(Op->GetActorRotation().Yaw - (-State.F).Rotation().Yaw));
-			Check(State, YawOff < 10.f, FString::Printf(TEXT("back to the wall (facing %.0f deg off the normal)"), YawOff));
-			Check(State, FVector::Dist2D(Op->GetActorLocation(), State.Slot.WorldLocation) < 60.f, TEXT("standing on the slot"));
+			// User design rule 2026-10-06: the back against the wall, the body ALONG it (never out of the wall).
+			Check(State, AlongWall(*Op) < 10.f, FString::Printf(TEXT("faces along the wall (%.0f deg off the wall line)"), AlongWall(*Op)));
+			const float AlongSlot = FMath::Abs(FVector::DotProduct(Op->GetActorLocation() - State.Slot.WorldLocation, State.R));
+			Check(State, AlongSlot < 200.f && FMath::Abs(FVector::DotProduct(Op->GetActorLocation() - State.Slot.WorldLocation, State.F)) < 60.f,
+				FString::Printf(TEXT("on the slot or walked to its corner (%.0f cm along)"), AlongSlot));
 			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
 			Check(State, Anim && Anim->bInCover && Anim->CoverHeight == ECoverHeight::HighCover, TEXT("AnimInstance: bInCover / CoverHeight set"));
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: cover clips played so far %d (loop %s)"), Anim ? Anim->GetCoverClipsPlayed() : -1,
-				Anim && Anim->GetCoverLoopClip() ? *Anim->GetCoverLoopClip()->GetName() : TEXT("none"));
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: cover clips played so far %d (loop %s)"), Anim ? Anim->GetCoverClipsPlayed() : -1, *LoopName(Anim));
 			Check(State, Op->CanFireFromCover(), TEXT("a corner to fire round"));
 			Check(State, FVector::Dist2D(Op->GetCoverFireOrigin(), Op->GetMuzzleLocation()) >= 59.f, TEXT("the corner shot leaves round the corner"));
-			State.SlotEntered = Op->GetActorLocation();
-			// Shimmy 1.5 m along the wall, away from the corner (towards the wall's middle).
-			FCoverSlot Shimmy;
-			const FVector ClickAlong = State.P + State.F * 380.f + State.R * 100.f + FVector(0.f, 0.f, 90.f);
-			const bool bShimmy = CoverTraceRules::FindShimmySlot(World, Op->GetCoverSlot(), ClickAlong, Shimmy);
-			Check(State, bShimmy && CoverTraceRules::IsSameWall(Op->GetCoverSlot(), Shimmy), TEXT("a click 1.5 m along the wall is a shimmy target"));
-			const bool bShimmyOrdered = bShimmy && Op->OrderShimmyTo(Shimmy) == EOperativeOrderResult::Accepted;
-			Check(State, bShimmyOrdered && Op->bShimmying && Op->ShimmyDirection != 0.f,
-				FString::Printf(TEXT("shimmy ordered (direction %.0f)"), Op->ShimmyDirection));
-			State.Stage = 3;
-			State.Time = 0.f;
-			return true;
-		}
-		case 3:
-		{
-			if (Op->bShimmying && State.Time < 8.f)
-			{
-				return true;
-			}
-			const float Moved = FVector::Dist2D(Op->GetActorLocation(), State.SlotEntered);
-			Check(State, !Op->bShimmying && Op->bInCover && Moved >= 100.f, FString::Printf(TEXT("shimmied %.0f cm along the wall, still in cover (%.1f s)"), Moved, State.Time));
-			const float YawOff = FMath::Abs(FRotator::NormalizeAxis(Op->GetActorRotation().Yaw - (-State.F).Rotation().Yaw));
-			Check(State, YawOff < 10.f, TEXT("back still to the wall after the shimmy"));
-			// Damage through the wall: the frozen hound 3 m behind it.
+			// A threat out on the open side to his RIGHT (along the wall towards -R).
 			AEnemyCharacter* Hound = State.Hound.Get();
 			if (!Hound)
 			{
 				Check(State, false, TEXT("hound alive"));
 				return Finish(State);
 			}
+			PlaceEnemy(*Hound, State, Op->GetActorLocation() - State.F * 800.f - State.R * 500.f);
+			Sight->Refresh();
+			State.Stage = 3;
+			State.Time = 0.f;
+			return true;
+		}
+		case 3:
+		{
+			if (State.Time < 1.2f)
+			{
+				return true;
+			}
+			Sight->Refresh();
+			Check(State, Op->bHasCoverThreat && Op->CoverFacing == ECoverFacing::Right,
+				FString::Printf(TEXT("threat on the right: faces right (facing %s)"), Op->CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right")));
+			Check(State, YawOff(*Op, -State.R) < 10.f, FString::Printf(TEXT("body along the wall towards the threat (%.0f deg off)"), YawOff(*Op, -State.R)));
+			Check(State, !Op->bAtCoverCorner, TEXT("no corner pose: the right side has no exposed edge"));
+			State.SlotEntered = Op->GetActorLocation();
+			// Shimmy to the RIGHT (towards the threat): forward.
+			FCoverSlot Shimmy;
+			const FVector ClickAlong = State.P + State.F * 380.f + State.R * 60.f + FVector(0.f, 0.f, 90.f);
+			const bool bShimmy = CoverTraceRules::FindShimmySlot(World, Op->GetCoverSlot(), ClickAlong, Shimmy);
+			Check(State, bShimmy && CoverTraceRules::IsSameWall(Op->GetCoverSlot(), Shimmy), TEXT("a click along the wall is a shimmy target"));
+			const bool bShimmyOrdered = bShimmy && Op->OrderShimmyTo(Shimmy) == EOperativeOrderResult::Accepted;
+			Check(State, bShimmyOrdered && Op->bShimmying && Op->ShimmyDirection > 0.f && Op->IsShimmyForward(),
+				FString::Printf(TEXT("shimmy right ordered: forward (direction %.0f)"), Op->ShimmyDirection));
+			State.bSampled = false;
+			State.Stage = 4;
+			State.Time = 0.f;
+			return true;
+		}
+		case 4:
+		{
+			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
+			if (Op->bShimmying && State.Time < 8.f)
+			{
+				if (!State.bSampled && State.Time >= 0.5f)
+				{
+					State.bSampled = true;
+					Check(State, Anim && Anim->bShimmying && Anim->bCoverShimmyForward, FString::Printf(TEXT("shimmy towards the threat plays the forward clip (loop %s)"), *LoopName(Anim)));
+					Check(State, !Anim || !Anim->GetCoverLoopClip() || LoopName(Anim).Contains(TEXT("fwd")), TEXT("... the pack's walk_fwd loop when assigned"));
+					Check(State, YawOff(*Op, -State.R) < 10.f, FString::Printf(TEXT("... facing the threat while side-stepping (%.0f deg off)"), YawOff(*Op, -State.R)));
+				}
+				return true;
+			}
+			const float Moved = FVector::Dist2D(Op->GetActorLocation(), State.SlotEntered);
+			Check(State, !Op->bShimmying && Op->bInCover && Moved >= 100.f, FString::Printf(TEXT("shimmied %.0f cm right, still in cover (%.1f s)"), Moved, State.Time));
+			Check(State, YawOff(*Op, -State.R) < 10.f, TEXT("still facing the threat (right) after the shimmy"));
+			// Shimmy back LEFT (away from the threat): backwards, still facing right.
+			State.SlotEntered = Op->GetActorLocation();
+			FCoverSlot Shimmy;
+			const FVector ClickAlong = State.P + State.F * 380.f + State.R * 190.f + FVector(0.f, 0.f, 90.f);
+			const bool bShimmyOrdered = CoverTraceRules::FindShimmySlot(World, Op->GetCoverSlot(), ClickAlong, Shimmy)
+				&& Op->OrderShimmyTo(Shimmy) == EOperativeOrderResult::Accepted;
+			Check(State, bShimmyOrdered && Op->bShimmying && Op->ShimmyDirection < 0.f && !Op->IsShimmyForward(),
+				FString::Printf(TEXT("shimmy left ordered: backwards (direction %.0f)"), Op->ShimmyDirection));
+			State.bSampled = false;
+			State.Stage = 5;
+			State.Time = 0.f;
+			return true;
+		}
+		case 5:
+		{
+			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
+			if (Op->bShimmying && State.Time < 8.f)
+			{
+				if (!State.bSampled && State.Time >= 0.5f)
+				{
+					State.bSampled = true;
+					Check(State, Anim && Anim->bShimmying && !Anim->bCoverShimmyForward, FString::Printf(TEXT("shimmy away from the threat plays the backward clip (loop %s)"), *LoopName(Anim)));
+					Check(State, !Anim || !Anim->GetCoverLoopClip() || LoopName(Anim).Contains(TEXT("bwd")), TEXT("... the pack's walk_bwd loop when assigned"));
+					Check(State, YawOff(*Op, -State.R) < 10.f, FString::Printf(TEXT("... walking backwards, still facing the threat (%.0f deg off)"), YawOff(*Op, -State.R)));
+				}
+				return true;
+			}
+			const float Moved = FVector::Dist2D(Op->GetActorLocation(), State.SlotEntered);
+			Check(State, !Op->bShimmying && Op->bInCover && Moved >= 60.f, FString::Printf(TEXT("shimmied %.0f cm back left, still in cover"), Moved));
+			Check(State, YawOff(*Op, -State.R) < 10.f, TEXT("still facing right after walking backwards"));
+			// The enemy flanks to the LEFT side.
+			PlaceEnemy(*State.Hound.Get(), State, Op->GetActorLocation() - State.F * 800.f + State.R * 600.f);
+			Sight->Refresh();
+			State.Stage = 6;
+			State.Time = 0.f;
+			return true;
+		}
+		case 6:
+		{
+			if (State.Time < 1.5f || (Op->bShimmying && State.Time < 8.f))
+			{
+				Sight->Refresh();
+				return true; // turns round, then walks to the corner on that side
+			}
+			Check(State, Op->CoverFacing == ECoverFacing::Left && YawOff(*Op, State.R) < 10.f,
+				FString::Printf(TEXT("threat moved to the left: turns along the wall to the left (%.0f deg off)"), YawOff(*Op, State.R)));
+			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
+			const float EdgeLeft = 300.f - FVector::DotProduct(Op->GetActorLocation() - State.P, State.R);
+			Check(State, Op->bAtCoverCorner && Anim && Anim->bCoverAtCorner,
+				FString::Printf(TEXT("edge on the threat side: at the corner, corner pose (%.0f cm from the wall end, loop %s)"), EdgeLeft, *LoopName(Anim)));
+			Check(State, !Anim || !Anim->GetCoverLoopClip() || LoopName(Anim).Contains(TEXT("look_at")) || Anim->bShimmying,
+				TEXT("... the pack's look_at idle when present"));
+			Check(State, EdgeLeft <= 130.f, TEXT("... standing near the wall end"));
+
+			// Damage through the wall: the frozen hound 3 m behind it.
+			AEnemyCharacter* Hound = State.Hound.Get();
 			Hound->SetActorLocation(FVector(State.P.X, State.P.Y, State.GroundZ + Hound->GetSimpleCollisionHalfHeight() + 2.f) + State.F * 700.f + State.R * 100.f);
 			UHealthComponent* Health = Op->HealthComponent;
 			const float Base = 100.f * (1.f - State.FortitudeCut); // standing, no dodge
@@ -274,22 +403,22 @@ namespace CoverSmoke
 			Op->ForcedDodgeRollForTesting = 0.f;
 			Taken = Op->TakeHit(200.f, TEXT("smoke"), true, false, Hound, 2.f);
 			Check(State, FMath::IsNearlyEqual(Taken, Base * 0.1f, 0.5f), FString::Printf(TEXT("a crit (x2) from behind the wall is no headshot: %.1f"), Taken));
-			// Flank: the hound at the wall's end, along it (90 deg off the wall) -> full damage.
-			Hound->SetActorLocation(FVector(State.P.X, State.P.Y, State.GroundZ + Hound->GetSimpleCollisionHalfHeight() + 2.f) + State.F * 355.f + State.R * 600.f);
+			// Flank: the hound beyond the wall's end, along it (90 deg off the wall) -> full damage.
+			Hound->SetActorLocation(FVector(State.P.X, State.P.Y, State.GroundZ + Hound->GetSimpleCollisionHalfHeight() + 2.f) + State.F * 355.f + State.R * 800.f);
 			Op->ForcedDodgeRollForTesting = 0.f;
 			Before = Health->GetCurrentHealth();
 			Taken = Op->TakeHit(100.f, TEXT("smoke"), false, false, Hound);
 			Check(State, FMath::IsNearlyEqual(Taken, Base, 0.5f), FString::Printf(TEXT("a flank hit passes fully: %.1f"), Taken));
 			Check(State, Op->RecentIncomingDamage > 0.f, TEXT("recent incoming damage tracked for the cover decisions"));
 			// Sight: diagonally behind the wall (77 deg off its normal, 23 m: out of earshot), where the straight line to him passes
-			// the wall's end (he stands 2 m from it, the line clears the near face by ~0.7 m) — only the cover rule hides him.
+			// the wall's end (he stands at it) — only the cover rule hides him.
 			Hound->SetActorLocation(FVector(Op->GetActorLocation().X, Op->GetActorLocation().Y, State.GroundZ + Hound->GetSimpleCollisionHalfHeight() + 2.f)
 				+ State.F * 500.f + State.R * 2250.f);
-			State.Stage = 4;
+			State.Stage = 7;
 			State.Time = 0.f;
 			return true;
 		}
-		case 4:
+		case 7:
 		{
 			if (State.Time < 1.f)
 			{
@@ -323,11 +452,11 @@ namespace CoverSmoke
 			Op->bIsCornerLeaning = false;
 			// An enemy on his open side is perceived as usual.
 			Hound->SetActorLocation(FVector(Op->GetActorLocation().X, Op->GetActorLocation().Y, State.GroundZ + Hound->GetSimpleCollisionHalfHeight() + 2.f) - State.F * 600.f);
-			State.Stage = 5;
+			State.Stage = 8;
 			State.Time = 0.f;
 			return true;
 		}
-		case 5:
+		case 8:
 		{
 			if (State.Time < 1.f)
 			{
@@ -350,11 +479,11 @@ namespace CoverSmoke
 			}
 			Marksman->ForceAimForTesting(Op);
 			Check(State, Marksman->IsAimingAtTarget() && Marksman->GetCurrentTarget() == Op, TEXT("the marksman's laser rests on him"));
-			State.Stage = 6;
+			State.Stage = 9;
 			State.Time = 0.f;
 			return true;
 		}
-		case 6:
+		case 9:
 		{
 			if (State.Time < 0.5f)
 			{
@@ -366,11 +495,11 @@ namespace CoverSmoke
 			Check(State, Autonomy->GetStats().CoverCrouchForLaser >= 1 && Autonomy->GetStats().CoverHolds >= 1, TEXT("autonomy stats: crouch for laser, hold"));
 			// The marksman gone: the calm hound in front -> stand and peek.
 			State.Marksman->Destroy();
-			State.Stage = 7;
+			State.Stage = 10;
 			State.Time = 0.f;
 			return true;
 		}
-		case 7:
+		case 10:
 		{
 			if (State.Time < 0.5f)
 			{
@@ -384,13 +513,90 @@ namespace CoverSmoke
 			Check(State, Op->ToggleCoverFireMode() == ECoverFireMode::BlindFire, TEXT("N: blind fire mode"));
 			Op->SetCoverFireMode(ECoverFireMode::CornerLean);
 			Squad->SetAutonomousSquadCombat(false);
-			// A ground order leaves the cover.
-			Check(State, Op->OrderMoveTo(State.P, false) == EOperativeOrderResult::Accepted && !Op->bInCover, TEXT("a move order leaves the cover"));
-			State.Stage = 8;
+			// Ctrl + click on an enemy out on the open side (left, the corner side): the cover fire path, never a plain shot.
+			PlaceEnemy(*State.Hound.Get(), State, Op->GetActorLocation() - State.F * 700.f + State.R * 300.f);
+			Sight->Refresh();
+			State.bAllowLeaderFire = true;
+			State.LeanShotsBefore = Op->GetCoverLeanShots();
+			State.ClipsBefore = Op->GetMesh() && Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance())
+				? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance())->GetCoverClipsPlayed() : 0;
+			State.bSawLean = false;
+			State.MaxShotYawOff = 0.f;
+			if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(UGameplayStatics::GetPlayerController(World, 0)))
+			{
+				PC->IssueTargetedShot(State.Hound.Get());
+			}
+			else
+			{
+				Op->SetManualPriorityTarget(State.Hound.Get());
+			}
+			State.Stage = 11;
 			State.Time = 0.f;
 			return true;
 		}
-		case 8:
+		case 11:
+		{
+			Sight->Refresh();
+			SampleAnimLean(*Op, State);
+			if (Op->bIsCornerLeaning)
+			{
+				State.bSawLean = true;
+				State.MaxShotYawOff = FMath::Max(State.MaxShotYawOff, YawOff(*Op, State.R));
+			}
+			if (Op->GetCoverLeanShots() <= State.LeanShotsBefore && State.Time < 5.f)
+			{
+				return true;
+			}
+			Check(State, Op->GetCoverLeanShots() > State.LeanShotsBefore, FString::Printf(TEXT("Ctrl + click from cover: a corner shot (%.1f s)"), State.Time));
+			Check(State, Op->bIsCornerLeaning || State.bSawLean, TEXT("... leaning out round the corner during the shot (bLeaning)"));
+			Check(State, Op->bInCover && YawOff(*Op, State.R) < 20.f, FString::Printf(TEXT("... still in cover, body along the wall (%.0f deg off)"), YawOff(*Op, State.R)));
+			// One shot is enough: hold fire again.
+			State.bAllowLeaderFire = false;
+			Op->AssignPriorityTarget(nullptr);
+			State.Stage = 12;
+			State.Time = 0.f;
+			return true;
+		}
+		case 12:
+		{
+			SampleAnimLean(*Op, State);
+			if (State.Time < 1.6f)
+			{
+				return true;
+			}
+			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
+			Check(State, State.bAnimSawLean, TEXT("AnimInstance: bLeaning during the shot"));
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: cover fire clips played %d -> %d"), State.ClipsBefore, Anim ? Anim->GetCoverClipsPlayed() : -1);
+			Check(State, !Op->bIsCornerLeaning && Op->bInCover && Anim && !Anim->bLeaning, TEXT("... and back behind the corner after the shot"));
+			// The cover ghost wears the operatives' see-through silhouette (OverlayMaterial MID of M_Silhouette).
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			if (ACoverGhostActor* Ghost = World->SpawnActor<ACoverGhostActor>(State.Slot.WorldLocation, FRotator::ZeroRotator, Params))
+			{
+				Ghost->ShowFor(*Op, State.Slot);
+				const USkeletalMeshComponent* Body = Ghost->GetBody();
+				const UMaterialInterface* Expected = Op->SilhouetteMaterial ? Op->SilhouetteMaterial.Get()
+					: LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/Materials/M_Silhouette.M_Silhouette"));
+				const UMaterialInterface* Overlay = Body ? Body->GetOverlayMaterial() : nullptr;
+				const UMaterialInterface* Slot0 = Body && Body->GetNumMaterials() > 0 ? Body->GetMaterial(0) : nullptr;
+				Check(State, Expected && Overlay && Overlay->GetMaterial() == Expected->GetMaterial(),
+					FString::Printf(TEXT("cover ghost: overlay = the see-through silhouette material (%s)"), Overlay ? *Overlay->GetMaterial()->GetName() : TEXT("none")));
+				Check(State, Expected && Slot0 && Slot0->GetMaterial() == Expected->GetMaterial(), TEXT("cover ghost: no opaque body (base slots in the silhouette too)"));
+				const FVector GhostForward = Ghost->GetActorForwardVector();
+				Check(State, FMath::Abs(FVector::DotProduct(GhostForward, State.F)) < 0.18f, TEXT("cover ghost faces along the wall"));
+				Ghost->Destroy();
+			}
+			else
+			{
+				Check(State, false, TEXT("cover ghost spawned"));
+			}
+			// A ground order leaves the cover.
+			Check(State, Op->OrderMoveTo(State.P, false) == EOperativeOrderResult::Accepted && !Op->bInCover, TEXT("a move order leaves the cover"));
+			State.Stage = 13;
+			State.Time = 0.f;
+			return true;
+		}
+		case 13:
 		{
 			if (State.Time < 0.5f)
 			{
@@ -402,7 +608,7 @@ namespace CoverSmoke
 			Op->SetPendingCover(State.Slot);
 			Check(State, Op->OrderMoveTo(State.Slot.WorldLocation, true) == EOperativeOrderResult::Accepted && Op->HasPendingCover(),
 				TEXT("a planned walk to the remembered slot keeps the pending cover"));
-			State.Stage = 9;
+			State.Stage = 14;
 			State.Time = 0.f;
 			return true;
 		}

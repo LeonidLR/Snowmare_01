@@ -1,5 +1,6 @@
 #include "Misc/AutomationTest.h"
 #include "Survival/ColdRules.h"
+#include "GameFlow/LevelEncounterRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -97,6 +98,40 @@ bool FColdWeaponTest::RunTest(const FString&)
 	TestTrue(TEXT("Stays frozen at 86 (hysteresis)"), UpdateWeaponFrozen(Config, true, 86.f, false));
 	TestFalse(TEXT("Thaws below 85"), UpdateWeaponFrozen(Config, true, 84.f, false));
 	TestFalse(TEXT("Heat thaws"), UpdateWeaponFrozen(Config, true, 99.f, true));
+	return true;
+}
+
+// User request 2026-10-06: no cold while a dialogue (or the pre-combat cutscene / a blocker) holds the world — the same
+// gate as UWorldAIPauseSubsystem; cold, warming and freeze damage resume unchanged afterwards.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FColdPausedDuringDialogueTest, "CodexTactics.Survival.Cold.PausedDuringDialogue",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FColdPausedDuringDialogueTest::RunTest(const FString&)
+{
+	const FColdConfig Config;
+	const FColdEnvironment Open;
+	TestTrue(TEXT("exploring, no dialogue: cold runs"), ColdRules::ShouldStepCold(false,
+		LevelEncounterRules::IsWorldAIPaused(false, ECodexGamePhase::Exploration, 0)));
+	TestFalse(TEXT("dialogue open: paused"), ColdRules::ShouldStepCold(false,
+		LevelEncounterRules::IsWorldAIPaused(true, ECodexGamePhase::Exploration, 0)));
+	TestFalse(TEXT("dialogue open in a wave fight: paused"), ColdRules::ShouldStepCold(false,
+		LevelEncounterRules::IsWorldAIPaused(true, ECodexGamePhase::WaveCombat, 0)));
+	TestFalse(TEXT("pre-combat cutscene: paused"), ColdRules::ShouldStepCold(false,
+		LevelEncounterRules::IsWorldAIPaused(false, ECodexGamePhase::Cutscene, 0)));
+	TestFalse(TEXT("scripted blocker: paused"), ColdRules::ShouldStepCold(false,
+		LevelEncounterRules::IsWorldAIPaused(false, ECodexGamePhase::Exploration, 1)));
+	TestFalse(TEXT("turn-based: paused (Godot)"), ColdRules::ShouldStepCold(true, false));
+
+	// 10 s of open air, the middle 5 s with a dialogue open: only the 5 s outside it count.
+	float Cold = 20.f;
+	for (int32 Tick = 0; Tick < 100; ++Tick)
+	{
+		const bool bDialogue = Tick >= 25 && Tick < 75;
+		if (ColdRules::ShouldStepCold(false, LevelEncounterRules::IsWorldAIPaused(bDialogue, ECodexGamePhase::Exploration, 0)))
+		{
+			Cold = ColdRules::StepCold(Config, Cold, 0.1f, Open, EOperativeStance::Standing, 0.f);
+		}
+	}
+	TestEqual(TEXT("only the 5 s outside the dialogue chilled"), Cold, ColdRules::StepCold(Config, 20.f, 5.f, Open, EOperativeStance::Standing, 0.f), 0.01f);
 	return true;
 }
 

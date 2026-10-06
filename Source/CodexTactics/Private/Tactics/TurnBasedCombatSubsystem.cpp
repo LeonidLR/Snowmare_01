@@ -1542,6 +1542,15 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 		Result.Reason = TEXT("no_los");
 		return Result;
 	}
+	// Cover (user rule 2026-10-06): a grid shot from cover goes round the corner / over the top like a real-time one;
+	// a full wall without an exposed corner has no firing position.
+	const bool bCoverShot = Unit->bInCover;
+	if (bCoverShot && !Unit->CanFireFromCover())
+	{
+		Log(TEXT("⚠️ Из этого укрытия нет угла для стрельбы — сместитесь к краю стены!"));
+		Result.Reason = TEXT("no_cover_corner");
+		return Result;
+	}
 
 	State->AP -= Balance.AttackAPCost;
 	State->bHasAttacked = true;
@@ -1551,7 +1560,11 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 		ShakeCamera(Weapon && Weapon->WeaponId == TEXT("pistol") ? TEXT("pistol") : TEXT("rifle"));
 	}
 	State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Offset));
-	AlignFacing(Unit, State->Facing);
+	if (!bCoverShot)
+	{
+		AlignFacing(Unit, State->Facing); // in cover the body stays along the wall (PlayCoverShot turns it to the target's side)
+	}
+	const FVector Muzzle = bCoverShot ? Unit->GetCoverFireOrigin() : Unit->GetWeaponMuzzleLocation();
 	const int32 Distance = TurnBasedRules::CellDistance(State->GridPos, Cell);
 
 	if (Type == EGorkyOccupantType::Enemy)
@@ -1567,6 +1580,10 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 		Result.bSuccess = true;
 		Result.HitChance = Chance;
 		Result.bHit = bGuaranteeAllHits || bGuaranteeHit || Roll <= Chance;
+		if (bCoverShot)
+		{
+			Unit->PlayCoverShot(Target, Result.bHit);
+		}
 		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
 		{
 			FVector End = Target->GetActorLocation();
@@ -1574,7 +1591,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 			{
 				End += FVector(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(20.f, 120.f));
 			}
-			Feedback->SpawnTracer(Unit->GetWeaponMuzzleLocation(), End, Weapon ? Weapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
+			Feedback->SpawnTracer(Muzzle, End, Weapon ? Weapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
 				Weapon ? Weapon->DamageType : EDamageType::Kinetic);
 		}
 		if (!Result.bHit)
@@ -1599,9 +1616,13 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 	{
 		Result.bSuccess = true;
 		Result.bBarrelExploded = true;
+		if (bCoverShot)
+		{
+			Unit->PlayCoverShot(Target, true);
+		}
 		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
 		{
-			Feedback->SpawnTracer(Unit->GetWeaponMuzzleLocation(), Target->GetActorLocation(), UCombatFeedbackSubsystem::DefaultTracerColor());
+			Feedback->SpawnTracer(Muzzle, Target->GetActorLocation(), UCombatFeedbackSubsystem::DefaultTracerColor());
 		}
 		DetonateBarrel(Cell, Target);
 		if (!IsActive())
@@ -1613,6 +1634,10 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 	{
 		// Godot _damage_barricade (the trapped-barricade retaliation comes with the grid deployables).
 		Result.bSuccess = true;
+		if (bCoverShot)
+		{
+			Unit->PlayCoverShot(Target, true);
+		}
 		ApplyDamage(Target, State->BaseDamage, NameOf(Unit));
 	}
 	else

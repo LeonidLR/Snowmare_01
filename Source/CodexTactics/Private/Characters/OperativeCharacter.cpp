@@ -14,7 +14,9 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Core/MissionSubsystem.h"
+#include "TimerManager.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/SquadROE.h"
 #include "Characters/EnemyCharacter.h"
@@ -44,6 +46,7 @@
 #include "Tactics/CoverRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/CoverDecisionRules.h"
+#include "Tactics/CoverFacingRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
@@ -1929,6 +1932,17 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		SetActorRotation(FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 12.0f));
 	}
 
+	if (bInCover)
+	{
+		// User design rule 2026-10-06: the target sets the threat side; he turns along the wall to it before the corner
+		// shot (lean / pop up / blind) — never a plain shot turned away from the wall.
+		CoverShotTarget = Target;
+		UpdateCoverFacing(/*bAllowSnap*/ false);
+		if (!CoverFacingRules::IsFacingAligned(GetActorRotation().Yaw, CoverSlot, CoverFacing, FCoverFacingConfig().FacingToleranceDeg))
+		{
+			return;
+		}
+	}
 	if (ShootTimer <= 0.0f && MisfireCooldownTimer <= 0.0f)
 	{
 		if (bInCover)
@@ -2158,8 +2172,9 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	bFacingCombatTarget = false;
 	if (bInCover)
 	{
-		// Sprint 12: the back stays to the wall (the lean / blind fire is the upper body's job); no turn to a target or a move.
-		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, CoverTraceRules::FacingYaw(CoverSlot), 0.f), DeltaTime, 10.f));
+		// User design rule 2026-10-06: the back stays against the wall, the body faces ALONG it towards the threat side
+		// (CoverFacingRules); no turn to a target or to the movement (a shimmy away from the threat walks backwards).
+		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, GetCoverFacingYaw(), 0.f), DeltaTime, 10.f));
 		BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);
 		return;
 	}
@@ -2253,7 +2268,21 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 	{
 		return false;
 	}
-	StopAndFace(Target->GetActorLocation());
+	if (bInCover)
+	{
+		// From cover the targeted shot goes round the corner / over the top like any cover shot (user rule 2026-10-06).
+		if (!CanFireFromCover())
+		{
+			return false;
+		}
+		CoverShotTarget = Target;
+		UpdateCoverFacing(/*bAllowSnap*/ false);
+		BeginCoverShot();
+	}
+	else
+	{
+		StopAndFace(Target->GetActorLocation());
+	}
 
 	bool bHit = true;
 	FMineShotChance MineShot;
@@ -2730,15 +2759,24 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	LeanTimer = 0.f;
 	BlindFireTimer = 0.f;
 	bHasPendingCover = false;
+	// A fresh wall: walk to the threat-side edge on the next update if it is close (a player's shimmy is never undone).
+	bCoverSnapPending = !bSameWall;
+	bCoverAutoSnap = false;
 	if (!bSameWall)
 	{
-		const FVector TargetLocation = CurrentCombatTarget.IsValid() ? CurrentCombatTarget->GetActorLocation() : FVector::ZeroVector;
-		CoverFacing = CoverTraceRules::ChooseFacing(Slot, CurrentCombatTarget.IsValid() ? &TargetLocation : nullptr);
+		bHasCoverThreat = false;
+		CoverShotTarget.Reset();
+		CoverFacing = PredictCoverFacing(Slot);
 	}
-	// Back to the wall, on the slot (the feet keep their ground height).
+	// Back to the wall, on the slot (the feet keep their ground height), facing along the wall towards the threat side.
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 	SetActorLocation(FVector(Slot.WorldLocation.X, Slot.WorldLocation.Y, Feet.Z + GetSimpleCollisionHalfHeight()), true);
-	SetActorRotation(FRotator(0.f, CoverTraceRules::FacingYaw(Slot), 0.f));
+	CoverThreatTimer = 0.f;
+	UpdateCoverFacing(/*bAllowSnap*/ false);
+	if (!bSameWall)
+	{
+		SetActorRotation(FRotator(0.f, GetCoverFacingYaw(), 0.f));
+	}
 	ClearIdleFacing();
 	if (!bSameWall)
 	{
@@ -2782,6 +2820,11 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	bCoverHoldFire = false;
 	LeanTimer = 0.f;
 	BlindFireTimer = 0.f;
+	bAtCoverCorner = false;
+	bHasCoverThreat = false;
+	bCoverAutoSnap = false;
+	bCoverSnapPending = false;
+	CoverShotTarget.Reset();
 	CoverSlot = FCoverSlot();
 	ReceiveCoverChanged(false, ECoverHeight::None);
 }
@@ -2808,7 +2851,10 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 	bShimmying = true;
 	bIsCornerLeaning = false;
 	bIsBlindFiring = false;
-	// Side-step at the crouch-walk pace, the back to the wall (UpdateCombatFacing holds the facing).
+	bCoverSnapPending = false;
+	bCoverAutoSnap = false; // TrySnapToCoverCorner sets it after this call
+	// Side-step at the crouch-walk pace along the wall, facing the threat side (UpdateCombatFacing holds the facing):
+	// forward towards it, backwards away from it (CoverFacingRules::IsShimmyForward).
 	TGuardValue<bool> CoverOrder(bCoverMoveOrder, true);
 	bSprinting = false;
 	ApplyMovementParams(OperativeMovementRules::ComputeMaxSpeed(MovementConfig, EOperativeStance::Crouching, false, IsWounded(), bCarrying) * ColdSpeedMultiplier);
@@ -2822,8 +2868,9 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 	}
 	else
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: shimmies %.0f cm to the %s"), *DisplayName.ToString(), FMath::Abs(Along),
-			Along > 0.f ? TEXT("right") : TEXT("left"));
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: shimmies %.0f cm to the %s (%s, facing %s)"), *DisplayName.ToString(), FMath::Abs(Along),
+			Along > 0.f ? TEXT("right") : TEXT("left"), IsShimmyForward() ? TEXT("forward") : TEXT("backwards"),
+			CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"));
 	}
 	return Result;
 }
@@ -2933,5 +2980,158 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 	{
 		bShimmying = false;
 		ShimmyDirection = 0.f;
+		bCoverAutoSnap = false;
 	}
+	// Facing along the wall towards the last known threat (user design rule 2026-10-06).
+	CoverThreatTimer -= DeltaTime;
+	if (CoverThreatTimer <= 0.f)
+	{
+		CoverThreatTimer = FCoverFacingConfig().ThreatUpdateSeconds;
+		UpdateCoverFacing(/*bAllowSnap*/ true);
+	}
+	if (bCoverSnapPending && !bShimmying && !bHasMoveOrder)
+	{
+		TrySnapToCoverCorner();
+	}
+}
+
+float AOperativeCharacter::GetCoverFacingYaw() const
+{
+	return CoverFacingRules::FacingYaw(CoverSlot, CoverFacing);
+}
+
+bool AOperativeCharacter::IsShimmyForward() const
+{
+	return CoverFacingRules::IsShimmyForward(CoverFacing, ShimmyDirection);
+}
+
+bool AOperativeCharacter::GatherCoverThreat(FVector& OutLocation) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	const FCoverFacingConfig Config;
+	const FVector Here = GetActorLocation();
+	TArray<FCoverThreatCandidate> Candidates;
+	auto IsAlive = [](const AActor* Actor)
+	{
+		const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Actor);
+		return IsValid(Actor) && (!Enemy || (!Enemy->IsDying() && Enemy->GetHealthComponent() && Enemy->GetHealthComponent()->IsAlive()));
+	};
+	auto Add = [&Candidates, &Here](const FVector& Location, ECoverThreatSource Source)
+	{
+		FCoverThreatCandidate& Candidate = Candidates.AddDefaulted_GetRef();
+		Candidate.Location = Location;
+		Candidate.Source = Source;
+		Candidate.DistanceCm = static_cast<float>(FVector::Dist2D(Here, Location));
+	};
+	// The enemy he is ordered to / does shoot at (while it is in sight; out of sight its silhouette counts as heard).
+	for (const AActor* Priority : { CoverShotTarget.Get(), ManualPriorityTarget.Get(), CurrentCombatTarget.Get() })
+	{
+		if (Priority && IsAlive(Priority) && !Priority->IsHidden())
+		{
+			Add(Priority->GetActorLocation(), ECoverThreatSource::PriorityTarget);
+			break;
+		}
+	}
+	// Enemies seen now (the tactical sight hides the unseen ones in a fight) and heard / remembered silhouettes.
+	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	{
+		if (IsAlive(*It) && !It->IsHidden() && FVector::Dist2D(Here, It->GetActorLocation()) <= Config.MaxThreatDistanceCm)
+		{
+			Add(It->GetActorLocation(), ECoverThreatSource::Visible);
+		}
+	}
+	for (TActorIterator<AEnemyGhostActor> It(World); It; ++It)
+	{
+		if (!It->IsHidden() && FVector::Dist2D(Here, It->GetActorLocation()) <= Config.MaxThreatDistanceCm)
+		{
+			Add(It->GetActorLocation(), ECoverThreatSource::Heard);
+		}
+	}
+	const int32 Best = CoverFacingRules::PickThreat(Candidates);
+	if (Best == INDEX_NONE)
+	{
+		return false;
+	}
+	OutLocation = Candidates[Best].Location;
+	return true;
+}
+
+ECoverFacing AOperativeCharacter::PredictCoverFacing(const FCoverSlot& Slot) const
+{
+	FVector Threat;
+	if (GatherCoverThreat(Threat))
+	{
+		return CoverFacingRules::ThreatAlongWall(Slot, Threat) < 0.f ? ECoverFacing::Left : ECoverFacing::Right;
+	}
+	return CoverFacingRules::DefaultSide(Slot, CoverFacing);
+}
+
+void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
+{
+	if (!bInCover)
+	{
+		return;
+	}
+	const FCoverFacingConfig Config;
+	FVector Threat;
+	if (GatherCoverThreat(Threat))
+	{
+		bHasCoverThreat = true; // remembered: the facing keeps the last known direction when nobody is in sight
+		CoverThreatLocation = Threat;
+	}
+	const ECoverFacing Old = CoverFacing;
+	CoverFacing = bHasCoverThreat ? CoverFacingRules::ResolveThreatSide(CoverSlot, CoverThreatLocation, CoverFacing, Config.ThreatSideHysteresisCm)
+		: CoverFacingRules::DefaultSide(CoverSlot, CoverFacing);
+	bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, Config);
+	if (CoverFacing != Old)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: turns along the wall to the %s (threat %s)"), *DisplayName.ToString(),
+			CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"), bHasCoverThreat ? TEXT("known") : TEXT("none, nearest edge"));
+		bCoverSnapPending |= bAllowSnap && !bShimmying;
+	}
+}
+
+void AOperativeCharacter::TrySnapToCoverCorner()
+{
+	bCoverSnapPending = false;
+	if (!bInCover || bShimmying || IsRaging() || IsPanicking())
+	{
+		return;
+	}
+	const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	if (TurnBased && TurnBased->IsActive())
+	{
+		return; // grid positions stay on their cells
+	}
+	float Shift = 0.f;
+	if (!CoverFacingRules::ShouldSnapToCorner(CoverSlot, CoverFacing, Shift))
+	{
+		return;
+	}
+	const FVector Point = CoverSlot.WallPoint + CoverFacingRules::AlongWallDirection(CoverSlot, CoverFacing) * Shift;
+	FCoverSlot Corner;
+	if (CoverTraceRules::FindShimmySlot(GetWorld(), CoverSlot, Point, Corner) && OrderShimmyTo(Corner) == EOperativeOrderResult::Accepted && bShimmying)
+	{
+		bCoverAutoSnap = true;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: to the %s corner (%.0f cm)"), *DisplayName.ToString(),
+			CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"), Shift);
+	}
+}
+
+void AOperativeCharacter::PlayCoverShot(AActor* Target, bool bHit)
+{
+	if (!bInCover)
+	{
+		return;
+	}
+	CoverShotTarget = Target;
+	UpdateCoverFacing(/*bAllowSnap*/ false);
+	SetActorRotation(FRotator(0.f, GetCoverFacingYaw(), 0.f)); // the grid shot resolves at once
+	BeginCoverShot();
+	(bIsBlindFiring ? CoverBlindShots : CoverLeanShots) += 1;
+	OnWeaponFiredNative.Broadcast(this, Target, bHit); // the AnimInstance plays the cover fire clip
 }

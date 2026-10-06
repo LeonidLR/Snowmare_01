@@ -109,14 +109,15 @@ bool FPerceptionHearingTest::RunTest(const FString& Parameters)
 		static_cast<int32>(ESquadMovementNoise::CrouchWalk));
 	TestEqual(TEXT("crawl"), static_cast<int32>(ClassifyMovement(EOperativeStance::Prone, 60.f, false)), static_cast<int32>(ESquadMovementNoise::Crawl));
 
-	// Radii of the spitter defaults: walk 12 m, run 20 m, crouch 6 m, crawl 3 m, gunshot 40 m, grenade 60 m.
+	// Radii of the spitter defaults (lowered 2026-10-06): walk 5.5 m, run 11 m, crouch 2.5 m, crawl 1 m, gunshot 40 m, grenade 60 m.
 	const FEnemyPerceptionParams P = GetArchetypeDefaults(EEnemyArchetype::Spitter);
-	TestTrue(TEXT("walking at 11 m: heard"), HearsMovement(P, ESquadMovementNoise::Walk, 1100.f));
-	TestFalse(TEXT("walking at 13 m: not heard"), HearsMovement(P, ESquadMovementNoise::Walk, 1300.f));
-	TestTrue(TEXT("running at 19 m: heard"), HearsMovement(P, ESquadMovementNoise::Run, 1900.f));
-	TestFalse(TEXT("crouch-walking at 7 m: not heard"), HearsMovement(P, ESquadMovementNoise::CrouchWalk, 700.f));
-	TestTrue(TEXT("crawling at 2.5 m: heard"), HearsMovement(P, ESquadMovementNoise::Crawl, 250.f));
-	TestFalse(TEXT("crawling at 4 m: not heard"), HearsMovement(P, ESquadMovementNoise::Crawl, 400.f));
+	TestTrue(TEXT("walking at 5 m: heard"), HearsMovement(P, ESquadMovementNoise::Walk, 500.f));
+	TestFalse(TEXT("walking at 6 m: not heard"), HearsMovement(P, ESquadMovementNoise::Walk, 600.f));
+	TestTrue(TEXT("running at 10.5 m: heard"), HearsMovement(P, ESquadMovementNoise::Run, 1050.f));
+	TestFalse(TEXT("running at 12 m: not heard"), HearsMovement(P, ESquadMovementNoise::Run, 1200.f));
+	TestFalse(TEXT("crouch-walking at 3 m: not heard"), HearsMovement(P, ESquadMovementNoise::CrouchWalk, 300.f));
+	TestTrue(TEXT("crawling at 0.9 m: heard"), HearsMovement(P, ESquadMovementNoise::Crawl, 90.f));
+	TestFalse(TEXT("crawling at 1.5 m: not heard"), HearsMovement(P, ESquadMovementNoise::Crawl, 150.f));
 	TestFalse(TEXT("standing still next to it: no footsteps"), HearsMovement(P, ESquadMovementNoise::Still, 50.f));
 	TestTrue(TEXT("gunshot at 39 m: heard"), HearsGunshot(P, 3900.f));
 	TestFalse(TEXT("gunshot at 41 m: not heard"), HearsGunshot(P, 4100.f));
@@ -131,7 +132,7 @@ bool FPerceptionHearingTest::RunTest(const FString& Parameters)
 			D.HearCrawlCm < D.HearCrouchWalkCm && D.HearCrouchWalkCm < D.HearWalkCm && D.HearWalkCm < D.HearRunCm && D.HearRunCm < D.HearGunshotCm);
 	}
 	// The search boost scales the radii.
-	TestTrue(TEXT("searching (x1.25): walking at 14 m heard"), HearsMovement(Scaled(P, 1.25f), ESquadMovementNoise::Walk, 1400.f));
+	TestTrue(TEXT("searching (x1.25): walking at 6.5 m heard"), HearsMovement(Scaled(P, 1.25f), ESquadMovementNoise::Walk, 650.f));
 	return true;
 }
 
@@ -240,11 +241,11 @@ PERCEPTION_TEST(FPatrolSearchDetectionTest, "AI.Patrol.SearchDetectionStartsComb
 bool FPatrolSearchDetectionTest::RunTest(const FString& Parameters)
 {
 	using namespace PatrolRouteRules;
-	// While searching the perception is heightened: a hound hears a walk at 18 m (15 m x 1.25).
+	// While searching the perception is heightened: a hound hears a walk at 8 m (7 m x 1.25).
 	const FEnemyPerceptionParams Hound = PerceptionRules::GetArchetypeDefaults(EEnemyArchetype::FrostHound);
 	const FEnemyPerceptionParams Boosted = PerceptionRules::Scaled(Hound, 1.25f);
-	TestFalse(TEXT("patrolling hound: walk at 18 m unheard"), PerceptionRules::HearsMovement(Hound, ESquadMovementNoise::Walk, 1800.f));
-	TestTrue(TEXT("searching hound: walk at 18 m heard"), PerceptionRules::HearsMovement(Boosted, ESquadMovementNoise::Walk, 1800.f));
+	TestFalse(TEXT("patrolling hound: walk at 8 m unheard"), PerceptionRules::HearsMovement(Hound, ESquadMovementNoise::Walk, 800.f));
+	TestTrue(TEXT("searching hound: walk at 8 m heard"), PerceptionRules::HearsMovement(Boosted, ESquadMovementNoise::Walk, 800.f));
 
 	// Detection while searching: Engage (wins over the ongoing search) ...
 	FPatrolAlertInput Found;
@@ -331,6 +332,61 @@ bool FAmbushStartsCombatTest::RunTest(const FString& Parameters)
 	FGameFlowStateMachine Classic(Config);
 	Classic.TriggerCombatZone();
 	TestEqual(TEXT("no ambush during the cutscene"), Classic.StartAmbushCombat(), EGameFlowResult::WrongPhase);
+	return true;
+}
+
+PERCEPTION_TEST(FPerceptionHearingRadiiWallsTest, "AI.Perception.HearingRadiiAndWallOcclusion")
+bool FPerceptionHearingRadiiWallsTest::RunTest(const FString& Parameters)
+{
+	using namespace PerceptionRules;
+	// User report 2026-10-06 (heard running from very far): the shipped radii in force — run 10-12 m, walk 5-6 m for the
+	// typical enemy, the hound a bit more, crouch / crawl small; the knob Codex.Perception.HearingScale stays 1.
+	EnemyPerception::ResetToDefaults();
+	FString Text;
+	if (TestTrue(TEXT("enemy_perception.json readable"), FFileHelper::LoadFileToString(Text, *EnemyPerception::GetDefaultPath())))
+	{
+		TestTrue(TEXT("enemy_perception.json applies"), EnemyPerception::ApplyJson(Text));
+	}
+	TestEqual(TEXT("hearing knob neutral"), EnemyPerception::GetTuning().HearingScale, 1.f);
+	for (const EEnemyArchetype Type : { EEnemyArchetype::Marksman, EEnemyArchetype::Spitter, EEnemyArchetype::Brute, EEnemyArchetype::Cutter,
+		EEnemyArchetype::Frostbitten })
+	{
+		const FEnemyPerceptionParams D = EnemyPerception::Get(Type);
+		TestTrue(FString::Printf(TEXT("%d: run 10-12 m (%.1f)"), static_cast<int32>(Type), D.HearRunCm / 100.f), D.HearRunCm >= 1000.f && D.HearRunCm <= 1200.f);
+		TestTrue(FString::Printf(TEXT("%d: walk 5-6 m (%.1f)"), static_cast<int32>(Type), D.HearWalkCm / 100.f), D.HearWalkCm >= 500.f && D.HearWalkCm <= 600.f);
+		TestTrue(FString::Printf(TEXT("%d: crouch <= 3 m, crawl <= 1.5 m"), static_cast<int32>(Type)), D.HearCrouchWalkCm <= 300.f && D.HearCrawlCm <= 150.f);
+		TestEqual(FString::Printf(TEXT("%d: walls x0.5"), static_cast<int32>(Type)), D.HearingOcclusionPerWall, 0.5f);
+		// The file and the built-in defaults agree.
+		TestEqual(FString::Printf(TEXT("%d: file run = default"), static_cast<int32>(Type)), D.HearRunCm, GetArchetypeDefaults(Type).HearRunCm, 0.01f);
+	}
+	const FEnemyPerceptionParams Hound = EnemyPerception::Get(EEnemyArchetype::FrostHound);
+	TestTrue(TEXT("hound run a bit more (12-15 m)"), Hound.HearRunCm > 1200.f && Hound.HearRunCm <= 1500.f);
+	TestTrue(TEXT("hound walk 6-8 m"), Hound.HearWalkCm > 600.f && Hound.HearWalkCm <= 800.f);
+
+	// Walls: each one halves the footstep radius (at most 3 count).
+	const FEnemyPerceptionParams Spitter = EnemyPerception::Get(EEnemyArchetype::Spitter); // run 11 m
+	TestTrue(TEXT("running 8 m away, open air: heard"), HearsMovementThroughWalls(Spitter, ESquadMovementNoise::Run, 800.f, 0));
+	TestFalse(TEXT("running 8 m away behind a wall (5.5 m): unheard"), HearsMovementThroughWalls(Spitter, ESquadMovementNoise::Run, 800.f, 1));
+	TestTrue(TEXT("running 5 m away behind a wall: heard"), HearsMovementThroughWalls(Spitter, ESquadMovementNoise::Run, 500.f, 1));
+	TestFalse(TEXT("running 3 m away behind two walls (2.75 m): unheard"), HearsMovementThroughWalls(Spitter, ESquadMovementNoise::Run, 300.f, 2));
+	TestEqual(TEXT("occluders capped at 3"), OccludedRadius(800.f, 7, 0.5f), 100.f, 0.01f);
+	TestEqual(TEXT("factor clamped to 1"), OccludedRadius(800.f, 2, 3.f), 800.f, 0.01f);
+	TestEqual(TEXT("negative wall count = open air"), OccludedRadius(800.f, -1, 0.5f), 800.f, 0.01f);
+
+	// Data / knob: the per-archetype key and Codex.Perception.HearingOcclusion (>= 0 wins over the data).
+	FEnemyPerceptionParams Base = GetArchetypeDefaults(EEnemyArchetype::Brute);
+	TSharedPtr<FJsonObject> Json;
+	if (TestTrue(TEXT("json parses"), FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(TEXT("{\"hearing_occlusion_per_wall\":0.25}")), Json) && Json.IsValid()))
+	{
+		TestEqual(TEXT("per-archetype occlusion from the file"), EnemyPerception::ParamsFromJson(*Json, Base).HearingOcclusionPerWall, 0.25f);
+	}
+	FPerceptionTuning Tuning;
+	Tuning.HearingOcclusionPerWall = 0.8f;
+	TestEqual(TEXT("knob overrides the occlusion"), EnemyPerception::ApplyTuning(Base, Tuning).HearingOcclusionPerWall, 0.8f);
+	Tuning.HearingOcclusionPerWall = -1.f;
+	TestEqual(TEXT("knob -1 keeps the data"), EnemyPerception::ApplyTuning(Base, Tuning).HearingOcclusionPerWall, 0.5f);
+	TestEqual(TEXT("the search boost leaves the occlusion"), Scaled(Base, 1.25f).HearingOcclusionPerWall, 0.5f);
+	EnemyPerception::ResetToDefaults();
 	return true;
 }
 

@@ -7,7 +7,8 @@
     written). Bone names of the UE4 / UE5 mannequins match, so the clips play through the compatible skeleton without a
     retarget — proportions to check by eye.
   - ABP_Operative (and ABP_Operative_Rifle2 when it exists): the UOperativeAnimInstance cover clip arrays, index 0 =
-    Left, 1 = Right (ECoverFacing = the corner the operative works), set only while unset (hand-picked clips are kept;
+    Left (*_L), 1 = Right (*_R) (ECoverFacing = the side along the wall he faces, towards the threat — user rule
+    2026-10-06; forward = shimmy towards it, backward = away from it), set only while unset (hand-picked clips are kept;
     CODEX_RESET_COVER_CLIPS=1 overwrites). The AnimGraph is not touched: UOperativeAnimInstance::UpdateCoverLayer plays
     the clips on its FullBody slot (bUseNativeCoverClips) until the user builds cover states into the graph.
 
@@ -17,6 +18,7 @@ Mapping (pack name -> property):
   cvr_crch_walk_fwd_loop_L/R            -> CoverCrouchMoveForward    cvr_crch_walk_bwd_loop_L/R        -> CoverCrouchMoveBackward
   cvr_std_fire_L/R                      -> CoverStandFire            cvr_crch_fire_L/R                 -> CoverCrouchFire
   std_idle_fwd_to_cvr_std_idle_L/R      -> CoverStandEnter           crch_idle_fwd_to_cvr_crch_idle_L/R -> CoverCrouchEnter
+  cvr_std_look_at_idle_L/R              -> CoverStandCorner          cvr_crch_look_at_idle_L/R         -> CoverCrouchCorner
   (no blind fire clip in the pack: CoverBlindFire stays empty, the fire clip stands in)
 
 Run with the editor closed:
@@ -39,6 +41,10 @@ CLIPS = {
     "cover_crouch_fire": ("crouch/anim_M4_cvr_crch_fire_L", "crouch/anim_M4_cvr_crch_fire_R"),
     "cover_stand_enter": ("stand/anim_M4_std_idle_fwd_to_cvr_std_idle_L", "stand/anim_M4_std_idle_fwd_to_cvr_std_idle_R"),
     "cover_crouch_enter": ("crouch/anim_M4_crch_idle_fwd_to_cvr_crch_idle_L", "crouch/anim_M4_crch_idle_fwd_to_cvr_crch_idle_R"),
+    # Corner-ready pose at the exposed edge on the threat side (user rule 2026-10-06). Until this script runs again the
+    # AnimInstance loads these two pairs from the pack at start.
+    "cover_stand_corner": ("stand/anim_M4_cvr_std_look_at_idle_L", "stand/anim_M4_cvr_std_look_at_idle_R"),
+    "cover_crouch_corner": ("crouch/anim_M4_cvr_crch_look_at_idle_L", "crouch/anim_M4_cvr_crch_look_at_idle_R"),
 }
 log = []
 

@@ -758,11 +758,8 @@ void USquadAutonomySubsystem::DecideInCover(AOperativeCharacter& Operative, cons
 	const float Suppression = CoverDecisionRules::SuppressionFromShooters(Config, Shooters);
 	const bool bLaser = SniperOnMe != nullptr;
 
-	// The corner towards the nearest threat.
-	if (Nearest)
-	{
-		Operative.SetCoverFacing(CoverTraceRules::ChooseFacing(Slot, &Nearest->Location));
-	}
+	// The facing (the side along the wall towards the threat) is the operative's own (AOperativeCharacter::UpdateCoverFacing,
+	// user design rule 2026-10-06); Commander Mode only decides the fire mode and the stance.
 
 	FCoverFireSituation Fire;
 	Fire.Height = Operative.CurrentCoverHeight;

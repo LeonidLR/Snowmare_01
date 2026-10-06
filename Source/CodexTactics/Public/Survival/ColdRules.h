@@ -163,4 +163,12 @@ namespace ColdRules
 
 	/** New frozen-weapon state with hysteresis; heat always thaws. */
 	CODEXTACTICS_API bool UpdateWeaponFrozen(const FColdConfig& Config, bool bFrozen, float Cold, bool bNearHeat);
+
+	/**
+	 * The real-time cold step runs (accumulation, warming, freeze damage, warm regeneration): not during turn-based combat
+	 * (Godot stops the operatives' physics loop), and not while the world AI is held — any dialogue window, the
+	 * pre-combat cutscene or a registered blocker (UWorldAIPauseSubsystem; user request 2026-10-06: no cold during
+	 * dialogue). Everything resumes unchanged afterwards.
+	 */
+	CODEXTACTICS_API bool ShouldStepCold(bool bTurnBased, bool bWorldAIPaused);
 }

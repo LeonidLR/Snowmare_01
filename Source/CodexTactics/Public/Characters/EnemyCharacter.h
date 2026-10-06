@@ -321,6 +321,12 @@ protected:
 	 * prone operative behind 60 cm cover stays hidden); OutDistance / OutRange: distance and the stance sight range.
 	 */
 	AActor* FindVisibleOperative(const FEnemyPerceptionParams& Params, float& OutDistance, float& OutRange) const;
+
+	/**
+	 * World-blocking surfaces (walls, buildings; pawns and silhouettes ignored) between its ear and Target's body, up to
+	 * PerceptionRules::MaxHearingOccluders: each one cuts the footstep hearing radius (HearingOcclusionPerWall).
+	 */
+	int32 CountHearingWalls(const AActor& Target) const;
 	/**
 	 * Sight (suspicion build-up), hearing (squad gait) and smell (hounds) every 0.2 s; a detection breaks the patrol
 	 * (BreakPatrol). True when it broke.

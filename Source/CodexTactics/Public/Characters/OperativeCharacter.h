@@ -743,6 +743,36 @@ public:
 	int32 GetCoverLeanShots() const { return CoverLeanShots; }
 	int32 GetCoverBlindShots() const { return CoverBlindShots; }
 
+	// --- Facing along the wall (user design rule 2026-10-06, CoverFacingRules): the back stays against the wall, the
+	// body faces along it towards the last known threat; at the exposed edge on that side he takes the corner pose. ---
+
+	/** At the exposed edge on the facing side (corner-ready pose). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	bool bAtCoverCorner = false;
+
+	/** A threat direction is known (else the facing defaults to the nearest exposed edge). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	bool bHasCoverThreat = false;
+
+	/** The last known threat (priority target / nearest visible / heard enemy) the facing follows. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
+	FVector CoverThreatLocation = FVector::ZeroVector;
+
+	/** Actor yaw wanted in cover: along the wall towards CoverFacing. */
+	float GetCoverFacingYaw() const;
+
+	/** The current shimmy goes towards the facing side (forward clip), else backwards. */
+	bool IsShimmyForward() const;
+
+	/** Facing he would take at Slot with what he knows now (the cover ghost preview). */
+	ECoverFacing PredictCoverFacing(const FCoverSlot& Slot) const;
+
+	/**
+	 * A grid (turn-based) shot from cover: lean / blind pose by CoverFireMode and the cover fire clip (OnWeaponFiredNative),
+	 * the body kept along the wall. The caller resolves the hit.
+	 */
+	void PlayCoverShot(AActor* Target, bool bHit);
+
 	// --- Fire posture (rules of engagement of the automatic fire, user request 2026-10-06; FirePostureRules) ---
 
 	/** This operative has its own posture (the posture keys with a box-selected group); false: it follows the squad's. */
@@ -1024,6 +1054,20 @@ private:
 	void UpdateCover(float DeltaTime);
 	/** Called before a shot from cover: lean out or keep the head down by CoverFireMode. */
 	void BeginCoverShot();
+	/** Facing along the wall: threat re-evaluated every ThreatUpdateSeconds. */
+	float CoverThreatTimer = 0.f;
+	/** The enemy his last cover shot aimed at (the strongest threat for the facing while it lives). */
+	TWeakObjectPtr<AActor> CoverShotTarget;
+	/** The shimmy running was started by the corner snap (not the player). */
+	bool bCoverAutoSnap = false;
+	/** Check the corner snap on the next cover update (after entering a wall / turning to the other side). */
+	bool bCoverSnapPending = false;
+	/** Re-reads the threat, turns to its side (hysteresis), snaps to the corner after a turn; bAtCoverCorner. */
+	void UpdateCoverFacing(bool bAllowSnap);
+	/** Priority target, else nearest visible enemy, else nearest heard ghost (CoverFacingRules::PickThreat). */
+	bool GatherCoverThreat(FVector& OutLocation) const;
+	/** Walks to the exposed edge on the facing side when it lies just beyond the corner reach. */
+	void TrySnapToCoverCorner();
 	/** Range and line of fire to a silhouette's aim point (barricades by SquadFireRules::JudgeLine). */
 	bool EvaluateBlindLine(const class AEnemyGhostActor& Ghost, FShootCandidate& Out) const;
 	/** Set while AutonomousMoveTo runs: the move does not re-pin the anchor. */

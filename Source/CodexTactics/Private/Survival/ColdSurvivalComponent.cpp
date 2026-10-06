@@ -1,4 +1,5 @@
 #include "Survival/ColdSurvivalComponent.h"
+#include "AI/WorldAIPauseSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Camera/CameraZoneVolume.h"
@@ -41,9 +42,11 @@ void UColdSurvivalComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	// Godot stops the operatives' physics loop (and with it the real-time cold) during turn-based combat.
+	// Godot stops the operatives' physics loop (and with it the real-time cold) during turn-based combat; no cold either
+	// while a dialogue / the pre-combat cutscene / a blocker holds the world (user request 2026-10-06).
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	if (Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased)
+	const bool bTurnBased = Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased;
+	if (!ColdRules::ShouldStepCold(bTurnBased, UWorldAIPauseSubsystem::IsPausedIn(GetWorld())))
 	{
 		return;
 	}

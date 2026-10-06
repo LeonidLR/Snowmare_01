@@ -24,6 +24,8 @@ namespace EnemyPerception
 		TEXT("Patrol search time after a trap, s (-1: level JSON / enemy_perception.json)"));
 	static TAutoConsoleVariable<float> CVarSearchRadius(TEXT("Codex.Patrol.SearchRadius"), -1.f, TEXT("Patrol search sweep radius, cm (-1: data)"));
 	static TAutoConsoleVariable<float> CVarSearchSpeed(TEXT("Codex.Patrol.SearchSpeedScale"), 1.f, TEXT("Multiplier of the search pace multiplier"));
+	static TAutoConsoleVariable<float> CVarHearingOcclusion(TEXT("Codex.Perception.HearingOcclusion"), -1.f,
+		TEXT("Footstep hearing radius x this per wall between the enemy and the operative (0..1; -1: enemy_perception.json, default 0.5)"));
 
 	static TMap<EEnemyArchetype, FEnemyPerceptionParams> Overrides;
 	static FPatrolSearchParams CurrentSearch;
@@ -70,6 +72,7 @@ FPerceptionTuning EnemyPerception::GetTuning()
 	Tuning.SearchSeconds = CVarSearchSeconds.GetValueOnGameThread();
 	Tuning.SearchRadiusCm = CVarSearchRadius.GetValueOnGameThread();
 	Tuning.SearchSpeedScale = CVarSearchSpeed.GetValueOnGameThread();
+	Tuning.HearingOcclusionPerWall = CVarHearingOcclusion.GetValueOnGameThread();
 	return Tuning;
 }
 
@@ -88,6 +91,10 @@ FEnemyPerceptionParams EnemyPerception::ApplyTuning(const FEnemyPerceptionParams
 	Out.HearExplosionCm *= Hearing;
 	Out.SmellRadiusCm *= FMath::Max(Tuning.SmellScale, 0.f);
 	Out.TimeToDetectSeconds *= FMath::Max(Tuning.TimeToDetectScale, 0.f);
+	if (Tuning.HearingOcclusionPerWall >= 0.f)
+	{
+		Out.HearingOcclusionPerWall = FMath::Clamp(Tuning.HearingOcclusionPerWall, 0.f, 1.f);
+	}
 	return Out;
 }
 
@@ -145,6 +152,8 @@ FEnemyPerceptionParams EnemyPerception::ParamsFromJson(const FJsonObject& Json, 
 	ReadMeters(Json, TEXT("hear_gunshot_m"), Out.HearGunshotCm);
 	ReadMeters(Json, TEXT("hear_explosion_m"), Out.HearExplosionCm);
 	ReadMeters(Json, TEXT("smell_radius_m"), Out.SmellRadiusCm);
+	ReadNumber(Json, TEXT("hearing_occlusion_per_wall"), Out.HearingOcclusionPerWall);
+	Out.HearingOcclusionPerWall = FMath::Clamp(Out.HearingOcclusionPerWall, 0.f, 1.f);
 	Out.SightHalfAngleDeg = FMath::Clamp(Out.SightHalfAngleDeg, 0.f, 180.f);
 	return Out;
 }
@@ -211,10 +220,10 @@ namespace EnemyPerception
 		{
 			const FEnemyPerceptionParams P = Get(Archetype);
 			UE_LOG(LogCodexTactics, Display,
-				TEXT("Perception %s: sight %.0f m / %.0f deg (crouch x%.2f, prone x%.2f, detect %.1f s), hear walk %.0f run %.0f crouch %.0f crawl %.0f gunshot %.0f grenade %.0f m, smell %.0f m"),
+				TEXT("Perception %s: sight %.0f m / %.0f deg (crouch x%.2f, prone x%.2f, detect %.1f s), hear walk %.0f run %.0f crouch %.0f crawl %.0f gunshot %.0f grenade %.0f m, smell %.0f m, walls x%.2f each"),
 				*UEnum::GetValueAsString(Archetype), P.SightRangeCm / 100.f, P.SightHalfAngleDeg, P.CrouchingVisibility, P.ProneVisibility,
 				P.TimeToDetectSeconds, P.HearWalkCm / 100.f, P.HearRunCm / 100.f, P.HearCrouchWalkCm / 100.f, P.HearCrawlCm / 100.f,
-				P.HearGunshotCm / 100.f, P.HearExplosionCm / 100.f, P.SmellRadiusCm / 100.f);
+				P.HearGunshotCm / 100.f, P.HearExplosionCm / 100.f, P.SmellRadiusCm / 100.f, P.HearingOcclusionPerWall);
 		}
 		const FPatrolSearchParams& S = CurrentSearch;
 		UE_LOG(LogCodexTactics, Display, TEXT("Patrol search: %.0f s, sweep %.0f m, speed x%.2f, perception x%.2f"), S.DurationSeconds,

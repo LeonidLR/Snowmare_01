@@ -406,8 +406,10 @@ public:
 
 	// --- Tactical cover (Sprint 12, Gemini Sprint 12 spec; no Godot reference). State for the AnimBP and a C++
 	// baseline that plays the clips below on FullBodySlot while the graph has no cover states (the user polishes the
-	// ABP; Scripts/Editor/setup_operative_cover_animation.py assigns the M4 Cover Pack clips, index 0 = Left, 1 = Right
-	// = the corner the operative works, i.e. ECoverFacing). ---
+	// ABP; Scripts/Editor/setup_operative_cover_animation.py assigns the M4 Cover Pack clips, index 0 = Left (pack *_L),
+	// 1 = Right (*_R) = the side along the wall the operative FACES, i.e. ECoverFacing — user design rule 2026-10-06: the
+	// actor yaw runs along the wall towards the threat side, the back against the wall; forward = shimmy towards that
+	// side, backward = away from it, still facing it; CoverFacingRules). ---
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
 	bool bInCover = false;
@@ -431,6 +433,14 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
 	bool bBlindFiring = false;
 
+	/** The shimmy runs towards the facing side (forward clip); false = backwards, still facing the threat. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	bool bCoverShimmyForward = false;
+
+	/** At the exposed edge on the facing side: the corner-ready pose. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	bool bCoverAtCorner = false;
+
 	/** Play the cover clips natively on FullBodySlot (untick once the AnimBP has its own cover states). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation")
 	bool bUseNativeCoverClips = true;
@@ -442,7 +452,17 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchIdle = { nullptr, nullptr };
 
-	/** Shimmy loops towards the facing's corner (M4 cvr_*_walk_fwd_loop) and away from it (walk_bwd_loop). */
+	/**
+	 * Corner-ready pose at the exposed edge on the facing side (M4 cvr_std_look_at_idle_L / _R, cvr_crch_look_at_idle_L
+	 * / _R). Empty = loaded from /Game/M4_Cover_Pack at start when the pack is present (idle otherwise).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandCorner = { nullptr, nullptr };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchCorner = { nullptr, nullptr };
+
+	/** Shimmy loops towards the facing side (M4 cvr_*_walk_fwd_loop) and away from it, walking backwards (walk_bwd_loop). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandMoveForward = { nullptr, nullptr };
 

@@ -65,15 +65,23 @@ struct CODEXTACTICS_API FEnemyPerceptionParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Sight", meta = (ClampMin = "0"))
 	float SuspicionDecayPerSecond = 0.5f;
 
-	/** Hears squad footsteps this far, by gait, cm (no line of sight needed). */
+	/**
+	 * Hears squad footsteps this far, by gait, cm (no line of sight needed; walls in between cut it, see
+	 * HearingOcclusionPerWall). Lowered 2026-10-06 after the user's playtest (enemies heard running operatives from
+	 * 18-25 m through walls).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Hearing", meta = (ClampMin = "0"))
-	float HearWalkCm = 1200.f;
+	float HearWalkCm = 550.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Hearing", meta = (ClampMin = "0"))
-	float HearRunCm = 2000.f;
+	float HearRunCm = 1100.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Hearing", meta = (ClampMin = "0"))
-	float HearCrouchWalkCm = 600.f;
+	float HearCrouchWalkCm = 250.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Hearing", meta = (ClampMin = "0"))
-	float HearCrawlCm = 300.f;
+	float HearCrawlCm = 100.f;
+
+	/** Footstep hearing radius x this for every wall (world-blocking hit) between the ear and the feet (0..1). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Hearing", meta = (ClampMin = "0", ClampMax = "1"))
+	float HearingOcclusionPerWall = 0.5f;
 
 	/** Hears a squad gunshot this far, cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Hearing", meta = (ClampMin = "0"))
@@ -167,6 +175,15 @@ namespace PerceptionRules
 	CODEXTACTICS_API float HearingRadius(const FEnemyPerceptionParams& Params, ESquadMovementNoise Noise);
 
 	CODEXTACTICS_API bool HearsMovement(const FEnemyPerceptionParams& Params, ESquadMovementNoise Noise, float DistanceCm);
+
+	/** Most walls counted between the ear and the feet (more change nothing audible). */
+	constexpr int32 MaxHearingOccluders = 3;
+
+	/** Radius x PerWallFactor^Walls (Walls clamped to 0..MaxHearingOccluders, the factor to 0..1). */
+	CODEXTACTICS_API float OccludedRadius(float RadiusCm, int32 Walls, float PerWallFactor);
+
+	/** Footsteps heard DistanceCm away with Walls world-blocking hits between the ear and the feet. */
+	CODEXTACTICS_API bool HearsMovementThroughWalls(const FEnemyPerceptionParams& Params, ESquadMovementNoise Noise, float DistanceCm, int32 Walls);
 	CODEXTACTICS_API bool HearsGunshot(const FEnemyPerceptionParams& Params, float DistanceCm);
 	CODEXTACTICS_API bool HearsExplosion(const FEnemyPerceptionParams& Params, float DistanceCm);
 

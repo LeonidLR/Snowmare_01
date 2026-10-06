@@ -1,5 +1,6 @@
 #include "Tactics/CoverGhostActor.h"
 
+#include "Animation/AnimSequence.h"
 #include "Animation/AnimSequenceBase.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
@@ -9,8 +10,8 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverRules.h"
-#include "Tactics/CoverTraceRules.h"
 #include "UObject/ConstructorHelpers.h"
 
 ACoverGhostActor::ACoverGhostActor()
@@ -33,12 +34,21 @@ ACoverGhostActor::ACoverGhostActor()
 	{
 		Placeholder->SetStaticMesh(Cylinder.Object);
 	}
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Hologram(TEXT("/Game/VFX/Materials/M_GhostHologram.M_GhostHologram"));
-	if (Hologram.Succeeded())
+	// The see-through silhouette of the operatives (AOperativeCharacter::SetSilhouetteVisible): translucent, unlit, depth
+	// test off, skeletal-mesh usage. M_GhostHologram has no skeletal-mesh usage flag, so on a skeletal mesh it fell back to
+	// the default material — the ghost never looked holographic (user report 2026-10-06).
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Silhouette(TEXT("/Game/VFX/Materials/M_Silhouette.M_Silhouette"));
+	if (Silhouette.Succeeded())
 	{
-		GhostMaterial = Hologram.Object;
+		GhostMaterial = Silhouette.Object;
 	}
 	SetActorHiddenInGame(true);
+}
+
+UMaterialInterface* ACoverGhostActor::ResolveBaseMaterial(const AOperativeCharacter& InOperative) const
+{
+	// Exactly the operative's own see-through material when it has one set, else the shared M_Silhouette.
+	return InOperative.SilhouetteMaterial ? InOperative.SilhouetteMaterial.Get() : GhostMaterial.Get();
 }
 
 void ACoverGhostActor::ShowFor(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot)
@@ -46,13 +56,20 @@ void ACoverGhostActor::ShowFor(const AOperativeCharacter& InOperative, const FCo
 	Operative = const_cast<AOperativeCharacter*>(&InOperative);
 	Slot = InSlot;
 	bShown = true;
-	if (!Material && GhostMaterial)
+	UMaterialInterface* Base = ResolveBaseMaterial(InOperative);
+	if (Base && (!Material || Material->Parent != Base))
 	{
-		Material = UMaterialInstanceDynamic::Create(GhostMaterial, this);
-		Material->SetVectorParameterValue(TEXT("Color"), GhostColor);
+		Material = UMaterialInstanceDynamic::Create(Base, this);
 	}
+	if (Material)
+	{
+		// The operative's silhouette colour (leader cyan 0.55) — the same look as his see-through outline.
+		Material->SetVectorParameterValue(TEXT("Color"), InOperative.GetSilhouetteColor());
+	}
+	// Back to the wall, facing along it towards the side he would face there (CoverFacingRules, user rule 2026-10-06).
+	const ECoverFacing Facing = InOperative.PredictCoverFacing(InSlot);
 	const float HalfHeight = InOperative.GetSimpleCollisionHalfHeight();
-	SetActorLocationAndRotation(InSlot.WorldLocation + FVector(0.f, 0.f, HalfHeight), FRotator(0.f, CoverTraceRules::FacingYaw(InSlot), 0.f));
+	SetActorLocationAndRotation(InSlot.WorldLocation + FVector(0.f, 0.f, HalfHeight), FRotator(0.f, CoverFacingRules::FacingYaw(InSlot, Facing), 0.f));
 
 	const USkeletalMeshComponent* Source = InOperative.GetMesh();
 	USkeletalMesh* Asset = Source ? Cast<USkeletalMesh>(Source->GetSkinnedAsset()) : nullptr;
@@ -64,22 +81,21 @@ void ACoverGhostActor::ShowFor(const AOperativeCharacter& InOperative, const FCo
 		Placeholder->SetVisibility(false);
 		for (int32 Index = 0; Material && Index < Body->GetNumMaterials(); ++Index)
 		{
-			Body->SetMaterial(Index, Material);
+			Body->SetMaterial(Index, Material); // no opaque body: only the hologram
 		}
-		// The cover idle of the slot's height (the plain idle while no cover clips are assigned).
+		Body->SetOverlayMaterial(Material); // the same overlay technique as the operatives' see-through silhouette
+		// The cover idle of the slot's height and facing side (the plain idle while no cover clips are assigned).
 		const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Source->GetAnimInstance());
 		const bool bCrouched = CoverRules::DefaultStanceFor(InSlot.Height) == EOperativeStance::Crouching;
 		UAnimSequenceBase* Clip = nullptr;
 		if (Anim)
 		{
 			const TArray<TObjectPtr<UAnimSequenceBase>>& Idles = bCrouched ? Anim->CoverCrouchIdle : Anim->CoverStandIdle;
-			for (const TObjectPtr<UAnimSequenceBase>& Candidate : Idles)
+			const int32 Wanted = CoverFacingRules::ClipIndex(Facing);
+			Clip = Idles.IsValidIndex(Wanted) && Idles[Wanted] ? Idles[Wanted].Get() : nullptr;
+			for (int32 Index = 0; !Clip && Index < Idles.Num(); ++Index)
 			{
-				if (Candidate)
-				{
-					Clip = Candidate;
-					break;
-				}
+				Clip = Idles[Index].Get();
 			}
 			if (!Clip)
 			{
@@ -103,6 +119,7 @@ void ACoverGhostActor::ShowFor(const AOperativeCharacter& InOperative, const FCo
 		if (Material)
 		{
 			Placeholder->SetMaterial(0, Material);
+			Placeholder->SetOverlayMaterial(Material);
 		}
 	}
 	SetActorHiddenInGame(false);

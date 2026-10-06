@@ -1235,6 +1235,39 @@ AActor* AEnemyCharacter::FindVisibleOperative(const FEnemyPerceptionParams& Para
 	return Best;
 }
 
+int32 AEnemyCharacter::CountHearingWalls(const AActor& Target) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return 0;
+	}
+	FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(PatrolHearing), false, this);
+	for (TActorIterator<APawn> It(World); It; ++It)
+	{
+		TraceParams.AddIgnoredActor(*It); // bodies do not muffle
+	}
+	for (TActorIterator<AEnemyGhostActor> It(World); It; ++It)
+	{
+		TraceParams.AddIgnoredActor(*It);
+	}
+	// From the ear to the middle of his body; every blocking surface counts once (its component is skipped after).
+	const FVector Ear = GetActorLocation() + FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() * 0.5f);
+	const FVector Body = Target.GetActorLocation();
+	int32 Walls = 0;
+	FHitResult Hit;
+	while (Walls < PerceptionRules::MaxHearingOccluders && World->LineTraceSingleByChannel(Hit, Ear, Body, ECC_Visibility, TraceParams))
+	{
+		++Walls;
+		if (!Hit.GetComponent())
+		{
+			break;
+		}
+		TraceParams.AddIgnoredComponent(Hit.GetComponent());
+	}
+	return Walls;
+}
+
 bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
 {
 	// Checked every 0.2 s, like the sight system.
@@ -1275,7 +1308,10 @@ bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
 			}
 			const float Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
 			const ESquadMovementNoise Noise = PerceptionRules::ClassifyMovement(Member->GetStance(), Member->GetVelocity().Size2D(), Member->IsSprinting());
-			if (!Heard && PerceptionRules::HearsMovement(Params, Noise, Distance))
+			// Walls between muffle the footsteps (x HearingOcclusionPerWall each; user report 2026-10-06): traced only when
+			// the open-air radius reaches him.
+			if (!Heard && PerceptionRules::HearsMovement(Params, Noise, Distance)
+				&& PerceptionRules::HearsMovementThroughWalls(Params, Noise, Distance, CountHearingWalls(*Member)))
 			{
 				Heard = Member;
 			}

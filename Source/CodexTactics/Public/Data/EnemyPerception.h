@@ -22,6 +22,8 @@ struct CODEXTACTICS_API FPerceptionTuning
 	float SearchSeconds = -1.f;
 	float SearchRadiusCm = -1.f;
 	float SearchSpeedScale = 1.f;
+	/** Footstep hearing x this per wall in between (Codex.Perception.HearingOcclusion); < 0 keeps the data value. */
+	float HearingOcclusionPerWall = -1.f;
 };
 
 /**
@@ -31,8 +33,11 @@ struct CODEXTACTICS_API FPerceptionTuning
  *                 "look_around_seconds": 2, "arrive_m": 1.5, "leg_timeout_seconds": 10 },
  *     "archetypes": { "FROST_HOUND": { "sight_range_m": 15, "sight_half_angle_deg": 70, "visibility_standing": 1,
  *       "visibility_crouching": 0.75, "visibility_prone": 0.4, "proximity_m": 3, "time_to_detect_seconds": 0.6,
- *       "suspicion_decay_per_second": 0.5, "hear_walk_m": 15, "hear_run_m": 25, "hear_crouch_walk_m": 8, "hear_crawl_m": 4,
- *       "hear_gunshot_m": 45, "hear_explosion_m": 60, "smell_radius_m": 12 }, "MARKSMAN": {...}, ... } }
+ *       "suspicion_decay_per_second": 0.5, "hear_walk_m": 7, "hear_run_m": 14, "hear_crouch_walk_m": 3.5, "hear_crawl_m": 1.5,
+ *       "hear_gunshot_m": 45, "hear_explosion_m": 60, "smell_radius_m": 12, "hearing_occlusion_per_wall": 0.5 },
+ *       "MARKSMAN": {...}, ... } }
+ * (footstep radii lowered 2026-10-06 after the user's playtest: run ~10-12 m, walk ~5-6 m, hounds a bit more;
+ * hearing_occlusion_per_wall optional, default 0.5 — each wall between the ear and the feet halves the footstep radius).
  * Archetype keys as in the level JSON (LevelJsonRules::ParseEnemyType). A missing key keeps the built-in default
  * (PerceptionRules::GetArchetypeDefaults); smell is ignored for every archetype but the frost hound. Kept out of
  * GameBalanceConfig for the same reason as the ROE: that header is generated from Godot and these values are UE-only.
