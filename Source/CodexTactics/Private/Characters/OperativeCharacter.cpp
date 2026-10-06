@@ -2172,7 +2172,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	bFacingCombatTarget = false;
 	if (bInCover)
 	{
-		// User design rule 2026-10-06: the back stays against the wall, the body faces ALONG it towards the threat side
+		// User design rule 2026-10-06: the back stays against the wall (actor yaw = wall normal); the threat side only picks the _L/_R clip
 		// (CoverFacingRules); no turn to a target or to the movement (a shimmy away from the threat walks backwards).
 		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, GetCoverFacingYaw(), 0.f), DeltaTime, 10.f));
 		BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);

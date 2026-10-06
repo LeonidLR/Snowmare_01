@@ -75,10 +75,10 @@ namespace CoverFacingRules
 	/** Unit direction along the wall towards Side. */
 	CODEXTACTICS_API FVector AlongWallDirection(const FCoverSlot& Slot, ECoverFacing Side);
 
-	/** Actor yaw in cover: along the wall towards Side (the back stays against the wall). */
+	/** Actor yaw in cover: the wall normal (back to the wall) for either Side; Side only selects the _L/_R clip. */
 	CODEXTACTICS_API float FacingYaw(const FCoverSlot& Slot, ECoverFacing Side);
 
-	/** The body faces along the wall towards Side within ToleranceDeg. */
+	/** The actor yaw is within ToleranceDeg of FacingYaw (the wall normal). */
 	CODEXTACTICS_API bool IsFacingAligned(float ActorYaw, const FCoverSlot& Slot, ECoverFacing Side, float ToleranceDeg);
 
 	/** A shimmy in ShimmyDirection (+1 right, -1 left) is forward (towards the facing side) — else backwards. */

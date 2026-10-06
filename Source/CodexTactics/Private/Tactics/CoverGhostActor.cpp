@@ -66,7 +66,7 @@ void ACoverGhostActor::ShowFor(const AOperativeCharacter& InOperative, const FCo
 		// The operative's silhouette colour (leader cyan 0.55) — the same look as his see-through outline.
 		Material->SetVectorParameterValue(TEXT("Color"), InOperative.GetSilhouetteColor());
 	}
-	// Back to the wall, facing along it towards the side he would face there (CoverFacingRules, user rule 2026-10-06).
+	// Back to the wall (actor yaw = wall normal); the side he would face only picks the _L/_R idle clip (CoverFacingRules).
 	const ECoverFacing Facing = InOperative.PredictCoverFacing(InSlot);
 	const float HalfHeight = InOperative.GetSimpleCollisionHalfHeight();
 	SetActorLocationAndRotation(InSlot.WorldLocation + FVector(0.f, 0.f, HalfHeight), FRotator(0.f, CoverFacingRules::FacingYaw(InSlot, Facing), 0.f));

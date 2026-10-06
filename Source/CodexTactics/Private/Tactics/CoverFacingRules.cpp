@@ -65,9 +65,11 @@ namespace CoverFacingRules
 		return Side == ECoverFacing::Right ? Slot.RightTangent() : -Slot.RightTangent();
 	}
 
-	float FacingYaw(const FCoverSlot& Slot, ECoverFacing Side)
+	float FacingYaw(const FCoverSlot& Slot, ECoverFacing /*Side*/)
 	{
-		return AlongWallDirection(Slot, Side).Rotation().Yaw;
+		// The actor always faces away from the wall (back to it); the M4_Cover_Pack clips already carry the
+		// "looking left/right along the wall" pose, the side only picks the _L / _R clip (ClipIndex).
+		return Slot.WallNormal.Rotation().Yaw;
 	}
 
 	bool IsFacingAligned(float ActorYaw, const FCoverSlot& Slot, ECoverFacing Side, float ToleranceDeg)

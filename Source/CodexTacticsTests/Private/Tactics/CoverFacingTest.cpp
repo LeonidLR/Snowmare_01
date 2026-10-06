@@ -40,10 +40,13 @@ bool FCoverShimmyFacesThreatTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("threat 6 m along to the right"), ThreatAlongWall(Slot, ThreatRight), 600.f, 0.01f);
 	const ECoverFacing Facing = ResolveThreatSide(Slot, ThreatRight, ECoverFacing::Left);
 	TestEqual(TEXT("faces the threat side (right)"), static_cast<int32>(Facing), static_cast<int32>(ECoverFacing::Right));
-	TestEqual(TEXT("yaw along the wall, +Y"), static_cast<float>(FRotator::NormalizeAxis(FacingYaw(Slot, Facing))), 90.f, 0.01f);
-	TestTrue(TEXT("aligned within 10 deg at yaw 85"), IsFacingAligned(85.f, Slot, Facing, 10.f));
-	TestFalse(TEXT("not aligned facing out of the wall (yaw 0)"), IsFacingAligned(0.f, Slot, Facing, 10.f));
-	TestEqual(TEXT("left facing: yaw -90"), static_cast<float>(FRotator::NormalizeAxis(FacingYaw(Slot, ECoverFacing::Left))), -90.f, 0.01f);
+	const float NormalYaw = static_cast<float>(FRotator::NormalizeAxis(Slot.WallNormal.Rotation().Yaw));
+	TestEqual(TEXT("actor yaw = wall normal (back to the wall)"), static_cast<float>(FRotator::NormalizeAxis(FacingYaw(Slot, Facing))), NormalYaw, 0.01f);
+	TestEqual(TEXT("left side: same yaw, only the clip differs"), static_cast<float>(FRotator::NormalizeAxis(FacingYaw(Slot, ECoverFacing::Left))), NormalYaw, 0.01f);
+	TestTrue(TEXT("aligned within 10 deg of the normal"), IsFacingAligned(NormalYaw + 5.f, Slot, Facing, 10.f));
+	TestFalse(TEXT("not aligned turned along the wall (+90)"), IsFacingAligned(NormalYaw + 90.f, Slot, Facing, 10.f));
+	TestEqual(TEXT("right = clip 1"), ClipIndex(Facing), 1);
+	TestEqual(TEXT("left = clip 0"), ClipIndex(ECoverFacing::Left), 0);
 
 	// Shimmy towards the threat side = forward clip, away from it = backwards (still facing the threat).
 	TestTrue(TEXT("facing right, shimmy right: forward"), IsShimmyForward(ECoverFacing::Right, 1.f));
