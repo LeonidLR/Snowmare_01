@@ -1,0 +1,290 @@
+{
+  "_comment": [
+    "Deterministic impact map used by Scripts/test.ps1 -Changed, Scripts/smoke_parallel.ps1 and Scripts/verify_all.ps1.",
+    "rules: a changed repo-relative path (forward slashes) is matched against every rule's globs ('**' = any dirs, '*' = within one path part).",
+    "All matching rules are merged. Order inside 'smokes' is priority: -Quick runs only the first 'quickCount' smokes of the merged list per rule.",
+    "tests: automation filters (prefix match, joined with '+' into ONE UnrealEditor-Cmd run). A rule with no tests/smokes is an explicit 'nothing to verify'.",
+    "smokeRegistry lists every smoke that verify_all runs; test.ps1 -CheckMap fails when a Debug/*SmokeCommand.cpp is missing here or a registered smoke maps to no rule."
+  ],
+  "quickCount": 2,
+  "fallback": {
+    "tests": ["CodexTactics.Core"],
+    "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
+  },
+  "smokeRegistry": [
+    "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
+    "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke", "LevelWaveSmoke",
+    "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke", "WeaponSelectorSmoke",
+    "GrenadeSmoke", "GuardSmoke", "InventorySmoke", "TransferSmoke", "SaveLoadSmoke", "PauseMenuSmoke", "RadiusRingSmoke",
+    "FlankBreachSmoke", "SusaninSmoke", "FloatingTextSmoke", "SquadFireSmoke", "RageSmoke", "SquadControlSmoke",
+    "AIGrenadeSmoke", "EnemyAISmoke", "CutterSmoke", "ClickRulesSmoke", "NarrativeSmoke", "HoldSphereSmoke",
+    "ProgressionSmoke", "VictorySmoke", "TurnBasedCameraSmoke", "EventBusSmoke", "SilhouetteSmoke", "AttackModeSmoke",
+    "GroupSelectSmoke", "TurnWalkSmoke", "TurnBlastDeathSmoke", "EnemyHuntSmoke", "VaultSmoke", "BarricadeContactSmoke",
+    "CombatMoveSmoke", "EnemyDeathSmoke", "TurnSelectSmoke", "PanicSmoke", "FacingSmoke", "MarksmanSmoke",
+    "EnemyHitLayerSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke", "BotMarksmanSmoke", "BarricadeTurnContactSmoke",
+    "MarksmanAdvanceSmoke", "BotRepairSmoke", "PatrolSmoke", "AmbushSmoke", "RealTimeControlSmoke", "PostureSmoke",
+    "RealtimeSelectSmoke", "MarksmanCloseShotSmoke", "HordeSmoke", "CoverSmoke",
+    "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke", "CoverCrouchSmoke", "CoverMoveSmoke",
+    "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke", "PrepDeploySmoke", "SightSmoke",
+    "TripwireSmoke", "TurnRulesSmoke"
+  ],
+  "smokeOptions": {
+    "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; timeout in seconds; knownFail = reported but does not fail the run",
+    "SaveLoadSmoke": { "exclusive": true },
+    "PauseMenuSmoke": { "exclusive": true },
+    "EventBusSmoke": { "exclusive": true },
+    "MainMenuSmoke": { "extra": "-ForceMainMenu" },
+    "DialogueSmoke": { "extra": "-ForceMainMenu" },
+    "CombatMoveSmoke": { "knownFail": true }
+  },
+  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe"],
+  "rules": [
+    {
+      "name": "cover",
+      "globs": ["Source/**/Tactics/Cover*", "Source/**/Characters/Cover*"],
+      "tests": ["CodexTactics.Tactics.Cover"],
+      "smokes": ["CoverSmoke", "CoverMoveSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke"]
+    },
+    {
+      "name": "anim-operative",
+      "globs": ["Source/**/Characters/OperativeAnimInstance*", "Source/**/Characters/LeftHandIKRules*", "Source/**/Characters/AimOffsetRules*", "Source/**/Characters/RifleLocomotionRules*", "Source/**/Characters/ColdAnimationRules*", "Content/Characters/Operatives/**"],
+      "tests": ["CodexTactics.Anim", "CodexTactics.Characters.RifleLocomotion", "CodexTactics.Characters.ColdAnimation"],
+      "smokes": ["LeftHandIKSmoke", "AimOffsetSmoke", "GrenadeAnimSmoke", "CoverSmoke", "StanceSmoke"]
+    },
+    {
+      "name": "anim-enemy",
+      "globs": ["Source/**/Characters/EnemyAnimInstance*", "Source/**/Characters/MarksmanAnimInstance*", "Content/Characters/Enemies/**"],
+      "tests": ["CodexTactics.Characters.EnemyAI"],
+      "smokes": ["EnemyHitLayerSmoke", "MarksmanSmoke", "EnemyDeathSmoke"]
+    },
+    {
+      "name": "transfer-inventory",
+      "globs": ["Source/**/Characters/Transfer*", "Source/**/Characters/SquadTransferSubsystem*", "Source/**/Characters/PersonalItemRules*", "Source/**/UI/Inventory*", "Source/**/UI/QuantitySplit*", "Source/**/Interactables/ItemStash*", "Source/**/Interactables/DroppedItem*"],
+      "tests": ["CodexTactics.Transfer", "CodexTactics.Characters.Transfer", "CodexTactics.Characters.PersonalItems"],
+      "smokes": ["TransferSmoke", "InventorySmoke", "LootSmoke", "WeaponSelectorSmoke"]
+    },
+    {
+      "name": "loot",
+      "globs": ["Source/**/Interactables/Loot*", "Source/**/UI/LootDialog*"],
+      "tests": ["CodexTactics.Loot", "CodexTactics.Transfer"],
+      "smokes": ["LootSmoke", "TransferSmoke", "DeployableSmoke"]
+    },
+    {
+      "name": "weapons-arsenal",
+      "globs": ["Source/**/Characters/OperativeBalance*", "Source/**/Data/Weapon*", "Source/**/UI/ActionBar*"],
+      "tests": ["CodexTactics.Characters.Arsenal", "CodexTactics.Characters.BalanceApply", "CodexTactics.Data.Weapon"],
+      "smokes": ["WeaponSelectorSmoke", "ActionBarSmoke", "InventorySmoke"]
+    },
+    {
+      "name": "barrel-heat-relocation",
+      "globs": ["Source/**/Interactables/Barrel*", "Source/**/Interactables/HeatSource*", "Source/**/Interactables/Relocation*", "Source/**/Interactables/RadiusRing*"],
+      "tests": ["CodexTactics.Barrel", "CodexTactics.Relocation", "CodexTactics.Interactables.RelocationRules"],
+      "smokes": ["BarrelSmoke", "RelocationSmoke", "TurnBasedPushSmoke", "RadiusRingSmoke"]
+    },
+    {
+      "name": "deployables",
+      "globs": ["Source/**/Interactables/Deployable*", "Source/**/Interactables/Barricade*", "Source/**/Interactables/Turret*", "Source/**/Interactables/ProximityMine*"],
+      "tests": ["CodexTactics.Deployable"],
+      "smokes": ["DeployableSmoke", "TurretSmoke", "BarricadeContactSmoke", "TurnBasedDeploySmoke", "TurnBasedBarricadeSmoke", "PrepDeploySmoke", "BarricadeTurnContactSmoke"]
+    },
+    {
+      "name": "tripwire",
+      "globs": ["Source/**/Interactables/Tripwire*"],
+      "tests": ["CodexTactics.Interactables.Tripwire"],
+      "smokes": ["TripwireSmoke", "DeployableSmoke"]
+    },
+    {
+      "name": "interactables-core",
+      "globs": ["Source/**/Interactables/Interact*", "Source/**/Interactables/ActionMenu*", "Source/**/UI/ActionMenu*", "Source/**/Interactables/VaultNavigation*", "Source/**/Interactables/Gate*"],
+      "tests": ["CodexTactics.Quests", "CodexTactics.Characters.Vault"],
+      "smokes": ["QuestChainSmoke", "VaultSmoke", "DeployableSmoke"]
+    },
+    {
+      "name": "narrative-dialogue",
+      "globs": ["Source/**/Interactables/Narrative*", "Source/**/Quests/DialogueTrigger*", "Source/**/UI/Dialogue*", "Source/**/Data/DialogueSequence*"],
+      "tests": ["CodexTactics.Dialogue"],
+      "smokes": ["NarrativeSmoke", "DialogueSmoke"]
+    },
+    {
+      "name": "quests",
+      "globs": ["Source/**/Quests/Quest*"],
+      "tests": ["CodexTactics.Quests"],
+      "smokes": ["QuestChainSmoke", "MissionSmoke"]
+    },
+    {
+      "name": "grenades",
+      "globs": ["Source/**/Combat/Grenade*", "Source/**/Combat/AIGrenade*"],
+      "tests": ["CodexTactics.Combat.Grenade"],
+      "smokes": ["GrenadeSmoke", "AIGrenadeSmoke", "GrenadeAnimSmoke"]
+    },
+    {
+      "name": "horde",
+      "globs": ["Source/**/Combat/Horde*"],
+      "tests": ["CodexTactics.Combat.Horde"],
+      "smokes": ["HordeSmoke", "WaveCombatSmoke"]
+    },
+    {
+      "name": "sight",
+      "globs": ["Source/**/Combat/SightRules*", "Source/**/Combat/TacticalSight*", "Source/**/Tactics/GorkyLineOfSight*", "Source/**/Combat/EncounterQueries*"],
+      "tests": ["CodexTactics.Combat.Sight", "CodexTactics.Tactics.LineOfSight"],
+      "smokes": ["SightSmoke", "SquadFireSmoke", "EnemyHuntSmoke"]
+    },
+    {
+      "name": "real-time-fire",
+      "globs": ["Source/**/Combat/SquadFire*", "Source/**/Combat/TargetedShot*", "Source/**/Combat/SpaceInput*", "Source/**/Combat/CombatTimeMode*", "Source/**/Combat/HoldSphere*", "Source/**/Combat/CombatFeedback*"],
+      "tests": ["CodexTactics.Combat.SquadFire", "CodexTactics.Combat.TargetedShot", "CodexTactics.Combat.TimeMode", "CodexTactics.Combat.Squad"],
+      "smokes": ["SquadFireSmoke", "TargetedShotSmoke", "CombatFlowSmoke", "RealTimeControlSmoke", "RealtimeSelectSmoke", "HoldSphereSmoke", "ClickRulesSmoke", "CombatMoveSmoke"]
+    },
+    {
+      "name": "waves-victory",
+      "globs": ["Source/**/Combat/Wave*", "Source/**/Combat/EnemySpawn*", "Source/**/Combat/SpawnLane*", "Source/**/Combat/FallbackWave*", "Source/**/Combat/KillStats*", "Source/**/UI/VictoryPanel*", "Source/**/GameFlow/LevelEncounter*", "Source/**/Data/LevelJson*", "Source/**/Data/WaveConfig*", "Source/**/Data/EnemyArchetype*", "Content/Data/LevelJson/**"],
+      "tests": ["CodexTactics.Combat.Enemy", "CodexTactics.Combat.FallbackWave", "CodexTactics.Combat.SpawnLanes", "CodexTactics.Combat.KillStats", "CodexTactics.LevelJson", "CodexTactics.Core.LevelFlow"],
+      "smokes": ["WaveCombatSmoke", "LevelWaveSmoke", "FlankBreachSmoke", "VictorySmoke", "SusaninSmoke"]
+    },
+    {
+      "name": "health-damage",
+      "globs": ["Source/**/Combat/HealthComponent*", "Source/**/Combat/EnemyGhost*", "Source/**/UI/FloatingText*", "Source/**/UI/OverheadLabel*"],
+      "tests": ["CodexTactics.Combat.Health"],
+      "smokes": ["FloatingTextSmoke", "EnemyDeathSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke"]
+    },
+    {
+      "name": "enemy",
+      "globs": ["Source/**/Characters/EnemyCharacter*", "Source/**/Characters/EnemyAI*", "Source/**/Data/AITuning*", "Source/**/Data/EnemyPerception*"],
+      "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Combat.Enemy", "CodexTactics.AI"],
+      "smokes": ["EnemyAISmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke"]
+    },
+    {
+      "name": "enemy-tactics",
+      "globs": ["Source/**/Characters/EnemyTactics*"],
+      "tests": ["CodexTactics.Characters.EnemyTactics"],
+      "smokes": ["EnemyTacticsSmoke", "EnemyAISmoke", "HordeSmoke"]
+    },
+    {
+      "name": "marksman",
+      "globs": ["Source/**/Characters/Marksman*"],
+      "tests": ["CodexTactics.Marksman"],
+      "smokes": ["MarksmanSmoke", "MarksmanAdvanceSmoke", "MarksmanCloseShotSmoke", "BotMarksmanSmoke"]
+    },
+    {
+      "name": "operative-movement-squad",
+      "globs": ["Source/**/Characters/OperativeCharacter*", "Source/**/Characters/OperativeAIController*", "Source/**/Characters/OperativeMovement*", "Source/**/Characters/SquadFormation*", "Source/**/Characters/SquadSubsystem*", "Source/**/Characters/FacingRules*", "Source/**/Characters/Vault*", "Source/**/Characters/RecruitSubsystem*"],
+      "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault"],
+      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke"]
+    },
+    {
+      "name": "panic",
+      "globs": ["Source/**/Characters/Panic*"],
+      "tests": ["CodexTactics.Panic"],
+      "smokes": ["PanicSmoke"]
+    },
+    {
+      "name": "rage",
+      "globs": ["Source/**/Characters/Rage*"],
+      "tests": ["CodexTactics.Characters.Rage"],
+      "smokes": ["RageSmoke"]
+    },
+    {
+      "name": "progression",
+      "globs": ["Source/**/Characters/Progression*", "Source/**/UI/ProfileDialog*"],
+      "tests": ["CodexTactics.Characters.Progression"],
+      "smokes": ["ProgressionSmoke"]
+    },
+    {
+      "name": "autonomy-postures",
+      "globs": ["Source/**/Characters/SquadAutonomy*", "Source/**/Characters/FirePosture*", "Source/**/Data/SquadROE*"],
+      "tests": ["CodexTactics.Characters.SquadAutonomy", "CodexTactics.Squad.Posture", "CodexTactics.Data.SquadROE"],
+      "smokes": ["PostureSmoke", "AmbushSmoke", "SquadFireSmoke", "SquadControlSmoke"]
+    },
+    {
+      "name": "defense-marker",
+      "globs": ["Source/**/Characters/DefenseMarker*"],
+      "tests": ["CodexTactics.Characters.SquadAutonomy"],
+      "smokes": ["DefendSmoke"]
+    },
+    {
+      "name": "patrol-perception",
+      "globs": ["Source/**/AI/**"],
+      "tests": ["CodexTactics.AI"],
+      "smokes": ["PatrolSmoke", "AmbushSmoke", "EnemyHuntSmoke"]
+    },
+    {
+      "name": "cold-survival",
+      "globs": ["Source/**/Survival/**", "Source/**/UI/FrostVignette*"],
+      "tests": ["CodexTactics.Cold", "CodexTactics.Survival"],
+      "smokes": ["ColdSmoke", "BarrelSmoke"]
+    },
+    {
+      "name": "turn-based",
+      "globs": ["Source/**/Tactics/Gorky*", "Source/**/Tactics/Turn*", "Source/**/Tactics/EnemyTurn*", "Source/**/Tactics/TacticalEncounter*", "Source/**/Tactics/Gorky17Types*", "Source/**/UI/TurnBasedHud*"],
+      "tests": ["CodexTactics.Tactics", "CodexTactics.Combat.TurnBasedFlatGround"],
+      "smokes": ["TurnBasedSmoke", "TurnWalkSmoke", "TurnSelectSmoke", "AttackModeSmoke", "TurnBlastDeathSmoke", "TurnRulesSmoke", "BarricadeTurnContactSmoke"]
+    },
+    {
+      "name": "exposed-zones",
+      "globs": ["Source/**/Tactics/ExposedZones*"],
+      "tests": ["CodexTactics.Tactics.ExposedZones"],
+      "smokes": ["ExposedZonesSmoke", "TurnBasedSmoke"]
+    },
+    {
+      "name": "camera",
+      "globs": ["Source/**/Camera/**"],
+      "tests": ["CodexTactics.Camera", "CodexTactics.GameFlow.Phases"],
+      "smokes": ["CameraZoneSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke"]
+    },
+    {
+      "name": "save-load",
+      "globs": ["Source/**/Core/SaveGame*", "Source/**/UI/SaveLoadDialog*", "Source/**/UI/PauseMenu*"],
+      "tests": ["CodexTactics.Core.SaveGame"],
+      "smokes": ["SaveLoadSmoke", "PauseMenuSmoke", "EventBusSmoke"]
+    },
+    {
+      "name": "mission-flow",
+      "globs": ["Source/**/Core/Mission*", "Source/**/Core/LevelFlow*", "Source/**/Core/Loadout*", "Source/**/GameFlow/GameFlow*", "Source/**/UI/PhaseBanners*", "Source/**/UI/MissionFailed*", "Source/**/UI/MainMenu*", "Source/**/UI/GameMessage*"],
+      "tests": ["CodexTactics.Mission", "CodexTactics.GameFlow", "CodexTactics.Core.LevelFlow", "CodexTactics.Core.Loadout"],
+      "smokes": ["MissionSmoke", "BannersSmoke", "MainMenuSmoke", "DialogueSmoke", "VictorySmoke"]
+    },
+    {
+      "name": "game-framework",
+      "globs": ["Source/**/Core/CodexTacticsGameMode*", "Source/**/Core/CodexTacticsGameState*", "Source/**/Core/CodexTacticsPlayerController*", "Source/**/UI/CodexTacticsHUD*", "Source/**/UI/CodexButtonFocus*"],
+      "tests": ["CodexTactics.Core", "CodexTactics.Combat.TimeMode"],
+      "smokes": ["MovementSmoke", "CombatFlowSmoke", "ClickRulesSmoke", "MissionSmoke", "ActionBarSmoke", "SaveLoadSmoke"]
+    },
+    {
+      "name": "event-bus",
+      "globs": ["Source/**/Subsystems/**"],
+      "tests": ["CodexTactics.Core"],
+      "smokes": ["EventBusSmoke", "MissionSmoke"]
+    },
+    {
+      "name": "balance-data",
+      "globs": ["Source/**/Data/GameBalanceConfig*", "Source/**/Data/GodotBalance*", "Source/**/Data/CombatTypes*", "Content/Data/Balance/**"],
+      "tests": ["CodexTactics.Data", "CodexTactics.Characters.BalanceApply", "CodexTactics.Combat.Enemy"],
+      "smokes": ["ColdSmoke", "WaveCombatSmoke", "StanceSmoke"]
+    },
+    {
+      "name": "bot-telemetry",
+      "globs": ["Source/**/Bot/**", "Source/**/Telemetry/**"],
+      "tests": ["CodexTactics.Bot", "CodexTactics.Telemetry"],
+      "smokes": ["BotMarksmanSmoke", "BotRepairSmoke"]
+    },
+    {
+      "name": "build-config",
+      "globs": ["Source/**/*.Build.cs", "Source/*.Target.cs", "Config/DefaultEngine.ini", "Config/DefaultGame.ini", "Config/DefaultInput.ini", "Config/DefaultGameplayTags.ini", "CodexTactics.uproject"],
+      "tests": ["CodexTactics"],
+      "smokes": ["MovementSmoke", "CombatFlowSmoke", "MissionSmoke", "StanceSmoke", "SaveLoadSmoke"]
+    },
+    {
+      "name": "maps-and-content",
+      "globs": ["Content/Maps/**"],
+      "tests": [],
+      "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "CameraZoneSmoke", "QuestChainSmoke"]
+    },
+    {
+      "name": "no-verification",
+      "globs": ["Config/DefaultEditor.ini", "Config/DefaultScalability.ini", "Scripts/**", "docs/**", "design/**", "production/**", "Tools/**", ".claude/**", ".agents/**", "*.md", "Saved/**", "Content/**/*.png", "Content/**/*.jpg"],
+      "tests": [],
+      "smokes": []
+    }
+  ]
+}
