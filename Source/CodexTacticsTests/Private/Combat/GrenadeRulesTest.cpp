@@ -14,6 +14,12 @@ bool FGrenadeRulesTest::RunTest(const FString&)
 	TestEqual(TEXT("Crouching 9 m"), GrenadeRules::EffectiveRange(1200.f, EOperativeStance::Crouching), 900.f);
 	TestEqual(TEXT("Prone 6 m"), GrenadeRules::EffectiveRange(1200.f, EOperativeStance::Prone), 600.f);
 
+	TestEqual(TEXT("Release: no measured time = 70 % of the clip"), GrenadeRules::ReleaseDelay(2.f, -1.f), 1.4f, 0.001f);
+	TestEqual(TEXT("Release: measured time wins"), GrenadeRules::ReleaseDelay(2.042f, 1.28f), 1.28f, 0.001f);
+	TestEqual(TEXT("Release: clamped to the clip length"), GrenadeRules::ReleaseDelay(1.f, 3.f), 1.f, 0.001f);
+	TestEqual(TEXT("Release: no clip, measured time kept"), GrenadeRules::ReleaseDelay(0.f, 0.9f), 0.9f, 0.001f);
+	TestEqual(TEXT("Release: nothing at all = 0"), GrenadeRules::ReleaseDelay(0.f, -1.f), 0.f, 0.001f);
+
 	TestEqual(TEXT("Centre: full damage"), GrenadeRules::DamageFalloff(0.f, 400.f), 1.f);
 	TestEqual(TEXT("Half radius: 75 %"), GrenadeRules::DamageFalloff(200.f, 400.f), 0.75f);
 	TestEqual(TEXT("Edge: 50 %"), GrenadeRules::DamageFalloff(400.f, 400.f), 0.5f);

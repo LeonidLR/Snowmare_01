@@ -10,6 +10,12 @@ float GrenadeRules::EffectiveRange(float BaseRange, EOperativeStance Stance)
 	}
 }
 
+float GrenadeRules::ReleaseDelay(float ClipLength, float ReleaseSeconds)
+{
+	const float Length = FMath::Max(ClipLength, 0.f);
+	return ReleaseSeconds > 0.f ? FMath::Min(ReleaseSeconds, Length > 0.f ? Length : ReleaseSeconds) : Length * ReleaseAnimRatio;
+}
+
 float GrenadeRules::DamageFalloff(float Distance, float Radius)
 {
 	return FMath::Clamp(1.f - (Distance / FMath::Max(Radius, 0.01f)) * 0.5f, 0.5f, 1.f);

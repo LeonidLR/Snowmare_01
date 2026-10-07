@@ -296,9 +296,10 @@ AGrenadeActor* UGrenadeSubsystem::ThrowAt(AOperativeCharacter* InThrower, const 
 	{
 		return nullptr;
 	}
+	InThrower->GrenadeReleaseSeconds = -1.f; // the anim instance (or the Blueprint event) sets the clip's own release time
 	InThrower->OnGrenadeThrowNative.Broadcast();
 	InThrower->ReceiveGrenadeThrow();
-	Grenade->ConfigureFrom(InThrower, InThrower->GrenadeThrowDuration * GrenadeRules::ReleaseAnimRatio);
+	Grenade->ConfigureFrom(InThrower, GrenadeRules::ReleaseDelay(InThrower->GrenadeThrowDuration, InThrower->GrenadeReleaseSeconds));
 	Grenade->ThrowTo(Target + FVector(0.f, 0.f, 12.f));
 	--InThrower->GrenadesCount;
 	if (InThrower->GrenadesCount <= 0)

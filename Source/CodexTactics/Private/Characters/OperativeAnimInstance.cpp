@@ -546,22 +546,30 @@ void UOperativeAnimInstance::HandleHealthChanged(float NewHealth, float MaxHealt
 
 void UOperativeAnimInstance::HandleGrenadeThrow()
 {
-	// Godot play_grenade_throw: prone / crouch / run / walk by the stance and speed; the grenade leaves the hand at 70 %
-	// of the clip (Godot get_grenade_throw_duration), so the throw duration follows the clip.
+	// Godot play_grenade_throw: prone / crouch / run / walk by the stance and speed. Godot released the grenade at 70 % of
+	// the clip (get_grenade_throw_duration); the measured per-clip release time replaces that (GrenadeThrow*ReleaseSeconds).
 	AOperativeCharacter* Operative = BoundOperative.Get();
 	if (!Operative)
 	{
 		return;
 	}
-	UAnimSequenceBase* Clip = Operative->GetStance() == EOperativeStance::Prone ? GrenadeThrowProneAnimation
-		: Operative->GetStance() == EOperativeStance::Crouching ? GrenadeThrowCrouchAnimation
-		: (Operative->IsSprinting() || Operative->GetVelocity().Size2D() > 300.f) ? GrenadeThrowRunAnimation : GrenadeThrowWalkAnimation;
+	const EOperativeStance ThrowStance = Operative->GetStance();
+	const bool bRunning = ThrowStance == EOperativeStance::Standing && (Operative->IsSprinting() || Operative->GetVelocity().Size2D() > 300.f);
+	UAnimSequenceBase* Clip = ThrowStance == EOperativeStance::Prone ? GrenadeThrowProneAnimation
+		: ThrowStance == EOperativeStance::Crouching ? GrenadeThrowCrouchAnimation
+		: bRunning ? GrenadeThrowRunAnimation : GrenadeThrowWalkAnimation;
+	const float ReleaseSeconds = ThrowStance == EOperativeStance::Prone ? GrenadeThrowProneReleaseSeconds
+		: ThrowStance == EOperativeStance::Crouching ? GrenadeThrowCrouchReleaseSeconds
+		: bRunning ? GrenadeThrowRunReleaseSeconds : GrenadeThrowWalkReleaseSeconds;
 	if (!Clip)
 	{
 		return;
 	}
+	// The grenade leaves the hand at the clip's measured release frame (GrenadeSubsystem reads both fields right after
+	// this event); the montage plays on the upper-body slot only, so the legs keep the locomotion.
 	Operative->GrenadeThrowDuration = Clip->GetPlayLength();
-	PlaySlotAnimationAsDynamicMontage(Clip, UpperBodySlot, 0.1f, 0.2f);
+	Operative->GrenadeReleaseSeconds = ReleaseSeconds;
+	PlaySlotAnimationAsDynamicMontage(Clip, UpperBodySlot, GrenadeThrowBlendInSeconds, GrenadeThrowBlendOutSeconds);
 	LeftHandIKBlockSeconds = FMath::Max(LeftHandIKBlockSeconds, Clip->GetPlayLength()); // the left hand throws
 }
 

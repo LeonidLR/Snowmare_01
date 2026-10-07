@@ -234,7 +234,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
 	TObjectPtr<UAnimSequenceBase> PistolHitAnimation;
 
-	/** Upper-body grenade throw: walking, running, crouched, prone (Godot grenade_throw_*); its length sets the release time. */
+	/**
+	 * Upper-body grenade throw: walking, running, crouched, prone (Godot grenade_throw_*). Played on UpperBodySlot (the
+	 * graph's layered blend from spine_01) so the legs keep the locomotion. The grenade leaves the hand at the matching
+	 * GrenadeThrow*ReleaseSeconds (the measured release frame), not at the end of the clip.
+	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
 	TObjectPtr<UAnimSequenceBase> GrenadeThrowWalkAnimation;
 
@@ -246,6 +250,29 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
 	TObjectPtr<UAnimSequenceBase> GrenadeThrowProneAnimation;
+
+	/**
+	 * Release time of each throw clip, s from its start (hand at peak speed / just opening, measured 2026-10-07 on the
+	 * Grenade_01root_root_*_UE clips: walk 1.28, run 1.73, crouch 0.89, prone 1.14). <= 0 = 70 % of the clip length.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float GrenadeThrowWalkReleaseSeconds = 1.28f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float GrenadeThrowRunReleaseSeconds = 1.73f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float GrenadeThrowCrouchReleaseSeconds = 0.89f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float GrenadeThrowProneReleaseSeconds = 1.14f;
+
+	/** Blend in / out of the grenade throw on UpperBodySlot, s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float GrenadeThrowBlendInSeconds = 0.15f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float GrenadeThrowBlendOutSeconds = 0.2f;
 
 	/** Full-body death: one of the standing variations at random, or the crouched / prone one (held on its last frame). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")

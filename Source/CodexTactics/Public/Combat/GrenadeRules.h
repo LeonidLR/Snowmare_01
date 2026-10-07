@@ -23,6 +23,12 @@ namespace GrenadeRules
 	/** Operatives take 65 % of the blast (Godot take_damage(applied_damage * 0.65)). */
 	constexpr float SquadDamageScale = 0.65f;
 
+	/**
+	 * Seconds after the throw starts until the grenade leaves the hand: the measured release time of the clip
+	 * (ReleaseSeconds > 0, clamped to the clip length) or, without one, Godot's 70 % of the clip length.
+	 */
+	CODEXTACTICS_API float ReleaseDelay(float ClipLength, float ReleaseSeconds);
+
 	/** Godot calculate_effective_range: standing 100 %, crouching 75 %, prone 50 % of the base range. */
 	CODEXTACTICS_API float EffectiveRange(float BaseRange, EOperativeStance Stance);
 

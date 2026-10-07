@@ -587,6 +587,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "0"))
 	float GrenadeThrowDuration = 2.f;
 
+	/**
+	 * Seconds from the throw start to the release of the grenade (the measured release frame of the throw clip, set by
+	 * the anim instance with the clip); <= 0 = GrenadeThrowDuration * 70 % (GrenadeRules::ReleaseDelay). Reset by every throw.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category = "CodexTactics|Combat")
+	float GrenadeReleaseSeconds = -1.f;
+
 	/** The operative throws a grenade now (AnimBP / montage hook; Godot play_grenade_throw). */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Combat", meta = (DisplayName = "On Grenade Throw"))
 	void ReceiveGrenadeThrow();
