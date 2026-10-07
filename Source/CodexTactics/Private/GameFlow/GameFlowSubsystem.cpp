@@ -34,8 +34,10 @@ bool UGameFlowSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) 
 void UGameFlowSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	// DeltaTime is dilated by the world; flow timers must run on real time.
-	Machine.Tick(static_cast<float>(FApp::GetDeltaTime()));
+	// DeltaTime is dilated by the world; flow timers must run on real time - but a hitch (the first frame after a map load
+	// reports the whole load, 3.6 s by now) must not eat the timers: the 4 s pre-combat cutscene ended in the first frame
+	// after a quick restart (MainMenuSmoke "quick restart: cutscene again", 2026-10-07).
+	Machine.Tick(FMath::Min(static_cast<float>(FApp::GetDeltaTime()), MaxFlowStepSeconds));
 }
 
 TStatId UGameFlowSubsystem::GetStatId() const

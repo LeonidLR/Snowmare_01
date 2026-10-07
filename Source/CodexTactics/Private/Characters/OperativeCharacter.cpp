@@ -1769,8 +1769,11 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	const FShootCandidate& Closest = Visible[0];
 	const FShootCandidate* Current = IsLiveEnemy(CurrentCombatTarget.Get())
 		? Visible.FindByPredicate([this](const FShootCandidate& Entry) { return Entry.Enemy == CurrentCombatTarget.Get(); }) : nullptr;
-	// A melee enemy closing in (a flank rush, user PIE video CoverBug_02 2026-10-07) takes over at once: no reaction delay.
-	if (Current && Closest.Enemy != Current->Enemy && Closest.Distance <= FlankRushBreakCm && !IsRangedEnemyActor(Closest.Enemy))
+	// A melee enemy closing in on him at a cover (a flank rush while he holds the corner, user PIE video CoverBug_02
+	// 2026-10-07) takes over at once. Out in the open the Godot stance reaction delay below stays (parity: SquadFireSmoke
+	// "flank hound taken after 0.15 s, not at once").
+	if ((bInCover || bOpenShotReturnPending) && Current && Closest.Enemy != Current->Enemy && Closest.Distance <= FlankRushBreakCm
+		&& !IsRangedEnemyActor(Closest.Enemy))
 	{
 		CurrentCombatTarget = Closest.Enemy;
 		PendingFlankTarget.Reset();

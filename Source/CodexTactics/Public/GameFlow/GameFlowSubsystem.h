@@ -135,6 +135,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|GameFlow")
 	FOnTacticalPauseReleasedDynamic OnTacticalPauseReleased;
 
+	/** The flow timers (cutscene, preparation, tactical pause) advance at most this much per frame: a load hitch does not count, s. */
+	static constexpr float MaxFlowStepSeconds = 0.25f;
+
 private:
 	void HandleStateChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);
 	void HandlePauseReleased();

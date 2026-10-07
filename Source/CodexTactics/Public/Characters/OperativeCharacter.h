@@ -871,7 +871,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float OpenShotCommitSeconds = 3.f;
 
-	/** A melee enemy closing within this distance takes over as the target at once (no flank-switch delay), cm. */
+	/** At a cover (or stepped off it for open shots): a melee enemy closing within this distance takes over as the target at once (no flank-switch delay; in the open the stance delay stays), cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "0"))
 	float FlankRushBreakCm = 700.f;
 
