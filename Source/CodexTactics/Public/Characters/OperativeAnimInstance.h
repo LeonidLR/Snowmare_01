@@ -525,6 +525,50 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
 	bool bLeftHandIKGripValid = false;
 
+	// --- Aim offset (user request 2026-10-07, AimOffsetRules): the ABP's Aim Offset Player node with
+	// /Game/RifleAnims/Animations/AimOffsets/AO_Idle/AO1D_Rifle_Idle reads AimPitch (axis "Pitch", -90..90) and
+	// AimOffsetAlpha, see docs/port/HANDOFF.md section 6 "ABP: aim offset". ---
+
+	/** Aim offset on / off for this AnimBP. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	bool bAimOffset = true;
+
+	/** Keep the aim offset in the cover poses (leaned out / fire-ready); off = it fades out while in cover. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	bool bAimOffsetInCover = true;
+
+	/** AimPitch follows the target's pitch at this rate (FInterpTo speed, 1/s). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset", meta = (ClampMin = "0.1"))
+	float AimPitchInterpSpeed = 10.f;
+
+	/** The AO's range: AimPitch is clamped to +-this (AO1D_Rifle_Idle: -90..90), degrees. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset", meta = (ClampMin = "1", ClampMax = "90"))
+	float AimPitchClampDegrees = 90.f;
+
+	/** AimOffsetAlpha blend time in / out, s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset", meta = (ClampMin = "0"))
+	float AimOffsetBlendSeconds = 0.2f;
+
+	/** Pitch to the aim target in degrees (+ up, - down), eased; 0 with no target. The AO's "Pitch" axis. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	float AimPitch = 0.f;
+
+	/** The raw (not eased) pitch from the muzzle height to the aim point, degrees; 0 with no target. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	float AimPitchTarget = 0.f;
+
+	/** The operative has an aim target (a combat target or a shot within AimTargetHoldSeconds). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	bool bHasAimTarget = false;
+
+	/** The aim offset is blended in (AimOffsetAlpha > 0). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	bool bAimOffsetActive = false;
+
+	/** 0..1, eased; 0 while reloading, throwing, hit, vaulting, sprinting, prone, dead, melee, weapon hidden. The AO node's Alpha. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	float AimOffsetAlpha = 0.f;
+
 	/** Blend-in of the cover enter clip when he runs into the cover (eased; user-found bug 2026-10-07), s. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CoverEnterFromRunBlendSeconds = 0.25f;
@@ -778,6 +822,9 @@ private:
 	float LeftHandIKBlockSeconds = 0.f;
 	/** Reads the grip socket into LeftHandIKOffset / Rotation and steps the alpha (game thread, UpdateState). */
 	void UpdateLeftHandIK(const class AOperativeCharacter& Operative, float DeltaSeconds);
+	/** AimPitch / AimOffsetAlpha from the operative's aim target (game thread, UpdateState). */
+	void UpdateAimOffset(const class AOperativeCharacter& Operative, float DeltaSeconds);
+	float AimOffsetLinear = 0.f;
 	/** A shot waiting for the enter transition / the previous one-shot to end. */
 	TWeakObjectPtr<UAnimSequenceBase> CoverPendingFireClip;
 	TArray<FString> CoverClipLog;

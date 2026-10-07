@@ -33,17 +33,22 @@ EARLY_RELOAD_FRACTION = 0.34     # magazine at or below this share during a lull
 EARLY_RELOAD_LULL_S = 0.5        # "lull": no target in sight for at least this long
 AIM_WOUNDED_HEALTH = 0.5         # below this AND hit again in the last seconds -> duck (Jev 2026-10-07)
 
-STAY, RELOAD, SAFETY, RETURN = "stay", "duck_reload", "duck_safety", "return"
+STAY, RELOAD, SAFETY, RETURN, TURN = "stay", "duck_reload", "duck_safety", "return", "turn_shoot"
 
 
 def code_decision(s):
     low = s["reserve"] and s["clip"] <= EARLY_RELOAD_FRACTION
     if s["clip"] <= 0:
         return RELOAD if s["reserve"] else SAFETY  # nothing to fire: reload behind the corner (or switch weapons there)
-    if s["laser"] or s["grenade"] or s["flank"]:
-        return SAFETY
-    if (s["health"] < PEEK_MIN_HEALTH or s["recent_damage"] >= AIM_BIG_HIT_DAMAGE or s["suppression"] >= AIM_BREAK_SUPPRESSION
-            or (s["health"] < AIM_WOUNDED_HEALTH and s["recent_damage"] > 0)):
+    ranged = s.get("ranged", True)
+    if s["flank"] and not s.get("flank_ranged", True) and not s["laser"] and not s["grenade"]:
+        # A mutant on his side of the wall: not a corner-aim decision in the game — it is no corner-shot target, so the
+        # targeting turns him to it for an open shot off the wall (AOperativeCharacter::BeginOpenShotFromCover).
+        return TURN
+    if s["laser"] or s["grenade"] or (s["flank"] and s.get("flank_ranged", True)):
+        return SAFETY  # 2026-10-07 horde fix: only a RANGED enemy on his open side is a flank (melee rushers are targets)
+    if ranged and (s["health"] < PEEK_MIN_HEALTH or s["recent_damage"] >= AIM_BIG_HIT_DAMAGE or s["suppression"] >= AIM_BREAK_SUPPRESSION
+                   or (s["health"] < AIM_WOUNDED_HEALTH and s["recent_damage"] > 0)):
         return RELOAD if low else SAFETY  # forced back anyway: a low magazine is reloaded there (Jev 2026-10-07)
     if low and s["no_target_s"] >= EARLY_RELOAD_LULL_S:
         return RELOAD  # a lull (or the fight over) with a low magazine: reload behind the corner first
@@ -64,6 +69,15 @@ def clip_words(s):
     else:
         text = "his magazine is nearly full"
     return text + ("; he has spare magazines" if s["reserve"] else "; no spare magazines left")
+
+
+def melee_words(s):
+    n = s.get("melee", 0)
+    if n <= 0:
+        return "no mutant is rushing him"
+    if n == 1:
+        return "one clawed mutant (no gun, it only bites and claws) is a couple of steps away and closing in on him"
+    return "a pack of %d clawed mutants (no guns, they only bite and claw) is pouring round the corner and rushing at him, the nearest a few steps away" % n
 
 
 def target_words(t):
@@ -126,6 +140,14 @@ SCENARIOS = [
     {"id": "a_heavy_fire_no_target", "clip": 0.7, "reserve": True, "no_target_s": 3.0, "health": 0.9, "suppression": 0.8, "recent_damage": 0, "laser": False, "grenade": False, "flank": False},
     {"id": "a_full_lull_short", "clip": 0.9, "reserve": True, "no_target_s": 1.0, "health": 0.9, "suppression": 0.0, "recent_damage": 0, "laser": False, "grenade": False, "flank": False},
     {"id": "a_low_target_heavy", "clip": 0.2, "reserve": True, "no_target_s": 0.0, "health": 0.9, "suppression": 0.8, "recent_damage": 0, "laser": False, "grenade": False, "flank": False},
+    # 2026-10-07 horde regression: melee mutants rushing round the corner are targets, not suppression / flank.
+    {"id": "h_melee_horde", "clip": 0.7, "reserve": True, "no_target_s": 0.0, "health": 0.9, "suppression": 0.0, "recent_damage": 0, "laser": False, "grenade": False, "flank": False, "ranged": False, "melee": 6},
+    {"id": "h_melee_horde_on_his_side", "clip": 0.6, "reserve": True, "no_target_s": 0.0, "health": 0.8, "suppression": 0.0, "recent_damage": 0, "laser": False, "grenade": False, "flank": True, "flank_ranged": False, "ranged": False, "melee": 5},
+    {"id": "h_melee_biting_him", "clip": 0.6, "reserve": True, "no_target_s": 0.0, "health": 0.6, "suppression": 0.0, "recent_damage": 0, "laser": False, "grenade": False, "flank": True, "flank_ranged": False, "ranged": False, "melee": 1},
+    {"id": "h_melee_horde_wounded", "clip": 0.6, "reserve": True, "no_target_s": 0.0, "health": 0.3, "suppression": 0.0, "recent_damage": 0, "laser": False, "grenade": False, "flank": False, "ranged": False, "melee": 4},
+    {"id": "h_shooters_many", "clip": 0.7, "reserve": True, "no_target_s": 0.0, "health": 0.8, "suppression": 0.9, "recent_damage": 15, "laser": False, "grenade": False, "flank": False, "ranged": True, "melee": 0},
+    {"id": "h_horde_one_spitter", "clip": 0.7, "reserve": True, "no_target_s": 0.0, "health": 0.8, "suppression": 0.35, "recent_damage": 0, "laser": False, "grenade": False, "flank": False, "ranged": True, "melee": 5},
+    {"id": "h_gunman_flank", "clip": 0.7, "reserve": True, "no_target_s": 0.0, "health": 0.9, "suppression": 0.35, "recent_damage": 0, "laser": False, "grenade": False, "flank": True, "flank_ranged": True, "ranged": True, "melee": 0},
 ]
 
 OPTIONS = {
@@ -133,6 +155,7 @@ OPTIONS = {
     RELOAD: "Duck back behind the corner and reload there, then come back out",
     SAFETY: "Duck back behind the corner right now for safety, without reloading",
     RETURN: "Lower the rifle and relax back against the wall: the fight here is over for now",
+    TURN: "Turn away from the corner and shoot the mutant that has reached his side of the wall",
 }
 
 
@@ -144,8 +167,12 @@ def describe(s):
             "recent hit": damage_words(s["recent_damage"]),
             "sniper laser": "a sniper's laser dot has just settled on him" if s["laser"] else "no sniper laser on him",
             "grenade": "an enemy grenade just landed a few metres from him" if s["grenade"] else "no grenade near him",
-            "flank": ("an enemy has appeared on his open side, behind his back, a few metres away (the wall does not shield him from it)"
-                      if s["flank"] else "his open side behind him is clear")}
+            "flank": (("a gunman has appeared on his open side, behind his back, a few metres away (the wall does not shield him from it)"
+                       if s.get("flank_ranged", True) else "one of the rushing mutants has come round onto his side of the wall, a few metres away")
+                      if s["flank"] else "his open side behind him is clear"),
+            "mutants": melee_words(s),
+            "enemy guns": ("there are enemy gunmen in the fight" if s.get("ranged", True)
+                           else "none of the enemies has a gun: every one of them must come to arm's length to hurt him")}
 
 
 def build():

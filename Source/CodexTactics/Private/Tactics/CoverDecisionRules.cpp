@@ -100,34 +100,57 @@ namespace CoverDecisionRules
 		}
 	}
 
-	ECornerAimDecision DecideCornerAim(const FCoverDecisionConfig& Config, const FCornerAimSituation& Situation)
+	ECornerAimDecision DecideCornerAim(const FCoverDecisionConfig& Config, const FCornerAimSituation& Situation, const TCHAR** OutReason)
 	{
+		auto Decide = [OutReason](ECornerAimDecision Decision, const TCHAR* Reason)
+		{
+			if (OutReason)
+			{
+				*OutReason = Reason;
+			}
+			return Decision;
+		};
 		const bool bLowClip = Situation.bHasReserve && Situation.ClipFraction <= Config.AimEarlyReloadFraction;
 		if (Situation.ClipFraction <= 0.f)
 		{
-			return Situation.bHasReserve ? ECornerAimDecision::DuckToReload : ECornerAimDecision::DuckForSafety;
+			return Situation.bHasReserve ? Decide(ECornerAimDecision::DuckToReload, TEXT("magazine empty"))
+				: Decide(ECornerAimDecision::DuckForSafety, TEXT("magazine empty, no spare rounds"));
 		}
-		if (Situation.bSniperLaserOnMe || Situation.bGrenadeNearby || Situation.bFlankEnemyNear)
+		if (Situation.bSniperLaserOnMe)
 		{
-			return ECornerAimDecision::DuckForSafety;
+			return Decide(ECornerAimDecision::DuckForSafety, TEXT("sniper laser on him"));
 		}
-		const bool bHurt = Situation.HealthFraction < Config.PeekMinHealthFraction
-			|| Situation.RecentIncomingDamage >= Config.AimBigHitDamage
-			|| Situation.SuppressionPressure >= Config.AimBreakSuppression
-			|| (Situation.HealthFraction < Config.AimWoundedHealthFraction && Situation.RecentIncomingDamage > 0.f);
-		if (bHurt)
+		if (Situation.bGrenadeNearby)
 		{
-			return bLowClip ? ECornerAimDecision::DuckToReload : ECornerAimDecision::DuckForSafety; // the forced duck reloads a low magazine
+			return Decide(ECornerAimDecision::DuckForSafety, TEXT("grenade near"));
+		}
+		if (Situation.bFlankEnemyNear)
+		{
+			return Decide(ECornerAimDecision::DuckForSafety, TEXT("ranged enemy on his open side"));
+		}
+		// Wounds and incoming fire send him behind the corner only while a ranged enemy can keep shooting at him there.
+		if (Situation.bRangedThreatPresent)
+		{
+			const TCHAR* Hurt = Situation.HealthFraction < Config.PeekMinHealthFraction ? TEXT("badly wounded")
+				: Situation.RecentIncomingDamage >= Config.AimBigHitDamage ? TEXT("big ranged hit")
+				: Situation.SuppressionPressure >= Config.AimBreakSuppression ? TEXT("heavy ranged fire (2+ shooters)")
+				: (Situation.HealthFraction < Config.AimWoundedHealthFraction && Situation.RecentIncomingDamage > 0.f) ? TEXT("wounded and hit again")
+				: nullptr;
+			if (Hurt)
+			{
+				return bLowClip ? Decide(ECornerAimDecision::DuckToReload, Hurt) // the forced duck reloads a low magazine
+					: Decide(ECornerAimDecision::DuckForSafety, Hurt);
+			}
 		}
 		if (bLowClip && Situation.SecondsWithoutTarget >= Config.AimEarlyReloadLullSeconds)
 		{
-			return ECornerAimDecision::DuckToReload; // a lull (or the fight over) with a low magazine: reload behind the corner first
+			return Decide(ECornerAimDecision::DuckToReload, TEXT("low magazine in a lull")); // reload behind the corner first
 		}
 		if (!Situation.bHoldWithoutTargets && Situation.SecondsWithoutTarget >= Config.AimNoTargetGraceSeconds)
 		{
-			return ECornerAimDecision::ReturnNoTargets;
+			return Decide(ECornerAimDecision::ReturnNoTargets, TEXT("no target for the grace period"));
 		}
-		return ECornerAimDecision::StayAndFire;
+		return Decide(ECornerAimDecision::StayAndFire, TEXT("targets, no reason to break"));
 	}
 
 	const TCHAR* CornerAimDecisionName(ECornerAimDecision Decision)

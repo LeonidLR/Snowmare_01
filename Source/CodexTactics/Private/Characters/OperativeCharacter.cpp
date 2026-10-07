@@ -22,6 +22,25 @@
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Combat/GrenadeActor.h"
+#include "DrawDebugHelpers.h"
+
+namespace
+{
+	TAutoConsoleVariable<int32> CVarDebugCornerAim(TEXT("Codex.Debug.CornerAim"), 0,
+		TEXT("1: the sustained corner aim's decision, its reason and inputs over the operatives in cover."));
+
+	/** Spitters, cryo drones and marksmen shoot from a distance; hounds, cutters, frostbitten and brutes close in. */
+	bool IsRangedEnemyActor(const AActor* Actor)
+	{
+		const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Actor);
+		if (!Enemy)
+		{
+			return false;
+		}
+		const EEnemyArchetype Type = Enemy->GetArchetype();
+		return Type == EEnemyArchetype::Spitter || Type == EEnemyArchetype::CryoDrone || Type == EEnemyArchetype::Marksman;
+	}
+}
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/SightRules.h"
 #include "Combat/TacticalSightSubsystem.h"
@@ -2056,6 +2075,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	{
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("ПРОМАХ!"), FLinearColor(0.75f, 0.75f, 0.75f));
 	}
+	NoteShotAim(Target, bBlindShot ? BlindAimPoint : Target->GetActorLocation(), bBlindShot);
 	OnWeaponFired.Broadcast(this, Target, bHit);
 	OnWeaponFiredNative.Broadcast(this, Target, bHit);
 
@@ -2182,6 +2202,40 @@ FVector AOperativeCharacter::GetMuzzleLocation() const
 {
 	const float Height = Stance == EOperativeStance::Prone ? 25.f : (Stance == EOperativeStance::Crouching ? 85.f : 140.f);
 	return GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() - Height);
+}
+
+void AOperativeCharacter::NoteShotAim(AActor* Target, const FVector& Point, bool bBlind)
+{
+	LastShotTarget = Target;
+	LastShotPoint = Point;
+	bLastShotBlind = bBlind;
+	LastShotTime = GetWorld() ? GetWorld()->GetTimeSeconds() : -1.0e9;
+}
+
+bool AOperativeCharacter::GetAimTargetPoint(FVector& OutPoint) const
+{
+	const UWorld* World = GetWorld();
+	if (World && World->GetTimeSeconds() - LastShotTime <= AimTargetHoldSeconds)
+	{
+		const AActor* Shot = LastShotTarget.Get();
+		if (bLastShotBlind || !Shot)
+		{
+			OutPoint = LastShotPoint;
+			return true;
+		}
+		if (IsValid(Shot))
+		{
+			OutPoint = Shot->GetActorLocation(); // follows a running target (the tracer's end)
+			return true;
+		}
+	}
+	const AActor* Combat = CurrentCombatTarget.Get();
+	if (Combat && IsLiveEnemy(Combat))
+	{
+		OutPoint = Combat->GetActorLocation();
+		return true;
+	}
+	return false;
 }
 
 FVector AOperativeCharacter::GetWeaponMuzzleLocation() const
@@ -2328,6 +2382,7 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 		MineShot = TargetedShotRules::ComputeMineShotChance(Accuracy, ColdLevel, Stance, DistanceM);
 		bHit = bForceHitForTesting || FMath::FRand() * 100.f <= MineShot.Chance;
 	}
+	NoteShotAim(Target, Target->GetActorLocation(), false);
 	OnWeaponFired.Broadcast(this, Target, bHit);
 	OnWeaponFiredNative.Broadcast(this, Target, bHit);
 	// A targeted shot at a barrel / mine / crate is heard by patrols too (user request 2026-10-06).
@@ -2515,6 +2570,10 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	const float Final = bBypassAvoidance ? FMath::Max(1.f, Amount)
 		: FMath::Max(1.f, CoverRules::ApplyAbsorb(Amount, CoverAbsorb) * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut));
 	RecentIncomingDamage += Final;
+	if (IsRangedEnemyActor(AttackerActor))
+	{
+		RecentRangedDamage += Final; // the corner-aim duck counts only what the corner protects from (2026-10-07 horde fix)
+	}
 	HealthComponent->ApplyDirectHealthLoss(Final, Attacker);
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
 	{
@@ -2997,6 +3056,7 @@ void AOperativeCharacter::BeginCoverShot()
 void AOperativeCharacter::UpdateCover(float DeltaTime)
 {
 	RecentIncomingDamage = CoverDecisionRules::DecayRecentDamage(FCoverDecisionConfig(), RecentIncomingDamage, DeltaTime);
+	RecentRangedDamage = CoverDecisionRules::DecayRecentDamage(FCoverDecisionConfig(), RecentRangedDamage, DeltaTime);
 	// Grid walks (turn-based) and planned walks end without HandleMoveFinished: enter the pending slot on arrival.
 	if (bHasPendingCover && !bHasMoveOrder && GetVelocity().SizeSquared2D() < 4.f
 		&& FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation) <= 120.f)
@@ -3014,6 +3074,15 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 		return;
 	}
 	UpdateCornerAim(DeltaTime);
+	if (CVarDebugCornerAim.GetValueOnGameThread() > 0 && GetWorld())
+	{
+		const double Now = GetWorld()->GetTimeSeconds();
+		const FString Head = bCornerAimActive ? FString(TEXT("CORNER AIM")) : Now < CornerAimDuckUntil
+			? FString::Printf(TEXT("DUCKED (%s, %.1fs)"), CoverDecisionRules::CornerAimDecisionName(LastCornerAimBreak), CornerAimDuckUntil - Now)
+			: FString(TEXT("in cover"));
+		DrawDebugString(GetWorld(), GetActorLocation() + FVector(0.f, 0.f, 120.f), Head + TEXT("\n") + CornerAimLabel, nullptr,
+			bCornerAimActive ? FColor::Green : FColor::Orange, 0.f, true, 1.f);
+	}
 	if (bIsCornerLeaning && !bCornerAimActive)
 	{
 		LeanTimer -= DeltaTime;
@@ -3355,7 +3424,10 @@ FCornerAimSituation AOperativeCharacter::GatherCornerAimSituation() const
 	const UTurnBasedCombatSubsystem* TurnBased = World ? World->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
 	Situation.bHoldWithoutTargets = TurnBased && TurnBased->IsActive(); // in his turn the pose stays between his shots
 	Situation.HealthFraction = HealthComponent ? HealthComponent->GetHealthFraction() : 1.f;
-	Situation.RecentIncomingDamage = RecentIncomingDamage;
+	Situation.RecentIncomingDamage = RecentRangedDamage;
+	Situation.bRangedThreatPresent = false;
+	CornerAimTrace = FCornerAimTrace();
+	CornerAimTrace.AllDamage = RecentIncomingDamage;
 	if (!World)
 	{
 		return Situation;
@@ -3369,30 +3441,55 @@ FCornerAimSituation AOperativeCharacter::GatherCornerAimSituation() const
 		{
 			continue;
 		}
+		const bool bRanged = IsRangedEnemyActor(Enemy);
 		const float Distance = static_cast<float>(FVector::Dist2D(Here, Enemy->GetActorLocation()));
+		const bool bOpenSide = !IsCornerShotTarget(Enemy->GetActorLocation());
 		if (Enemy->GetCurrentTarget() == this && Distance <= 3000.f)
 		{
-			++Shooters;
+			++CornerAimTrace.AllAimers; // the old rule counted every enemy targeting him, melee rushers included
+			Shooters += bRanged ? 1 : 0;
+		}
+		if (bRanged && !Enemy->IsHidden() && Distance <= 3000.f)
+		{
+			Situation.bRangedThreatPresent = true;
+		}
+		if (!bRanged && Distance <= 500.f)
+		{
+			++Situation.MeleeRushers;
 		}
 		if (const AMarksmanEnemyCharacter* Marksman = Cast<AMarksmanEnemyCharacter>(Enemy);
 			Marksman && Marksman->IsAimingAtTarget() && Marksman->GetCurrentTarget() == this)
 		{
 			Situation.bSniperLaserOnMe = true;
 		}
-		// An enemy on his open side (in front of the wall) close by: the wall does not shield him from it.
-		if (!Enemy->IsHidden() && Distance <= Config.AimFlankDangerCm && !IsCornerShotTarget(Enemy->GetActorLocation()))
+		// An enemy on his open side (in front of the wall) close by: the wall does not shield him from it. Only a RANGED
+		// one is a reason to duck (2026-10-07 horde fix: melee rushers coming round the corner are the targets).
+		if (!Enemy->IsHidden() && Distance <= Config.AimFlankDangerCm && bOpenSide)
 		{
-			Situation.bFlankEnemyNear = true;
+			CornerAimTrace.bAnyOpenSideNear = true;
+			CornerAimTrace.NearestOpenSideCm = FMath::Min(CornerAimTrace.NearestOpenSideCm, Distance);
+			Situation.bFlankEnemyNear |= bRanged;
 		}
 	}
+	Situation.RangedAimers = Shooters;
 	Situation.SuppressionPressure = ForcedCornerAimSuppressionForTesting >= 0.f ? ForcedCornerAimSuppressionForTesting
 		: CoverDecisionRules::SuppressionFromShooters(Config, Shooters);
+	CornerAimTrace.AllPressure = CoverDecisionRules::SuppressionFromShooters(Config, CornerAimTrace.AllAimers);
 	for (TActorIterator<AGrenadeActor> It(World); It; ++It)
 	{
-		if (FVector::Dist2D(Here, It->GetActorLocation()) <= Config.AimGrenadeDangerCm)
+		// 2026-10-07: only an ENEMY grenade is a reason to duck. The squad's own grenades (all AGrenadeActor today: only
+		// operatives throw) sit in his hand before the release (distance 0) or fly at the horde — they made him duck at
+		// once. A friendly grenade that has LANDED next to him counts only with bCornerAimDuckForFriendlyGrenades.
+		const bool bFriendly = It->GetThrower() != nullptr;
+		if (bFriendly && !(bCornerAimDuckForFriendlyGrenades && It->HasLanded()))
+		{
+			continue;
+		}
+		const float GrenadeDistance = static_cast<float>(FVector::Dist2D(Here, It->GetActorLocation()));
+		CornerAimTrace.NearestGrenadeCm = FMath::Min(CornerAimTrace.NearestGrenadeCm, GrenadeDistance);
+		if (GrenadeDistance <= Config.AimGrenadeDangerCm)
 		{
 			Situation.bGrenadeNearby = true;
-			break;
 		}
 	}
 	return Situation;
@@ -3423,10 +3520,36 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 		return;
 	}
 	CornerAimEvalTimer = 0.1f;
-	const ECornerAimDecision Decision = CoverDecisionRules::DecideCornerAim(GetCoverDecisionConfig(), GatherCornerAimSituation());
+	const FCoverDecisionConfig Config = GetCoverDecisionConfig();
+	const FCornerAimSituation Situation = GatherCornerAimSituation();
+	const TCHAR* Reason = TEXT("");
+	const ECornerAimDecision Decision = CoverDecisionRules::DecideCornerAim(Config, Situation, &Reason);
+	// What the pre-fix rule (melee counted as suppression / flank, every hit counted) would have decided â€” the trace shows
+	// the horde regression's cause next to the fixed decision.
+	FCornerAimSituation Legacy = Situation;
+	Legacy.SuppressionPressure = CornerAimTrace.AllPressure;
+	Legacy.bFlankEnemyNear = CornerAimTrace.bAnyOpenSideNear;
+	Legacy.RecentIncomingDamage = CornerAimTrace.AllDamage;
+	Legacy.bRangedThreatPresent = true;
+	const TCHAR* LegacyReason = TEXT("");
+	const ECornerAimDecision LegacyDecision = CoverDecisionRules::DecideCornerAim(Config, Legacy, &LegacyReason);
+	CornerAimLabel = FString::Printf(TEXT("%s: %s | legacy %s: %s | hp %.0f%% rngDmg %.0f allDmg %.0f | press %.2f (rng aimers %d, all %d) | melee<5m %d | laser %d | grenade %.0f | openSide %.0f | noTarget %.1fs | clip %.0f%%"),
+		CoverDecisionRules::CornerAimDecisionName(Decision), Reason, CoverDecisionRules::CornerAimDecisionName(LegacyDecision), LegacyReason,
+		Situation.HealthFraction * 100.f, Situation.RecentIncomingDamage, CornerAimTrace.AllDamage, Situation.SuppressionPressure,
+		Situation.RangedAimers, CornerAimTrace.AllAimers, Situation.MeleeRushers, Situation.bSniperLaserOnMe ? 1 : 0,
+		CornerAimTrace.NearestGrenadeCm < 1.0e8f ? CornerAimTrace.NearestGrenadeCm : -1.f,
+		CornerAimTrace.NearestOpenSideCm < 1.0e8f ? CornerAimTrace.NearestOpenSideCm : -1.f, Situation.SecondsWithoutTarget,
+		Situation.ClipFraction * 100.f);
+	if (Decision != LastCornerAimTraceDecision || LegacyDecision != LastCornerAimLegacyDecision || FCString::Strcmp(Reason, *LastCornerAimTraceReason) != 0)
+	{
+		LastCornerAimTraceDecision = Decision;
+		LastCornerAimLegacyDecision = LegacyDecision;
+		LastCornerAimTraceReason = Reason;
+		UE_LOG(LogCodexTactics, Display, TEXT("[CornerAim] %s: %s"), *DisplayName.ToString(), *CornerAimLabel);
+	}
 	if (Decision != ECornerAimDecision::StayAndFire)
 	{
-		EndCornerAim(Decision, TEXT("decision"));
+		EndCornerAim(Decision, Reason);
 	}
 }
 
@@ -3473,7 +3596,18 @@ FCoverFacingConfig AOperativeCharacter::GetCoverFacingConfig() const
 
 bool AOperativeCharacter::IsCornerShotTarget(const FVector& TargetLocation) const
 {
-	return bInCover && CoverFacingRules::ShouldCornerShot(CoverSlot, TargetLocation, GetCoverFacingConfig());
+	if (!bInCover)
+	{
+		return false;
+	}
+	if (CoverFacingRules::ShouldCornerShot(CoverSlot, TargetLocation, GetCoverFacingConfig()))
+	{
+		return true;
+	}
+	// Holding the corner (2026-10-07 horde fix): leaned out past the exposed edge on the facing side he covers everything
+	// beyond that edge, also what rushes round it towards his side â€” no step off the wall and back for each of them.
+	return bCornerAimActive && CurrentCoverHeight == ECoverHeight::HighCover
+		&& CoverFacingRules::IsBeyondFacingEdge(CoverSlot, CoverFacing, TargetLocation);
 }
 
 bool AOperativeCharacter::BeginOpenShotFromCover(const AActor* Target)

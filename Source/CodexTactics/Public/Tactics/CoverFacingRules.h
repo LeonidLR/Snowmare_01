@@ -170,6 +170,9 @@ namespace CoverFacingRules
 	 */
 	CODEXTACTICS_API bool IsFiringSpot(ECoverHeight Height, bool bAtCorner);
 
+	/** Target lies beyond the exposed edge on the facing side (along the wall from the slot), at any depth. */
+	CODEXTACTICS_API bool IsBeyondFacingEdge(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Target);
+
 	/** Clip array index of a facing side: 0 = Right (pack *_L = his own right, back to the wall), 1 = Left (pack *_R). */
 	CODEXTACTICS_API int32 ClipIndex(ECoverFacing Facing);
 }

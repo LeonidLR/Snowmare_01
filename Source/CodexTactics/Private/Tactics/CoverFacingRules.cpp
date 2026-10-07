@@ -174,6 +174,17 @@ namespace CoverFacingRules
 		return Height == ECoverHeight::LowCover || (Height == ECoverHeight::HighCover && bAtCorner);
 	}
 
+	bool IsBeyondFacingEdge(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Target)
+	{
+		const float Edge = EdgeDistance(Slot, Facing);
+		if (Edge < 0.f)
+		{
+			return false;
+		}
+		const float Along = ThreatAlongWall(Slot, Target) * (Facing == ECoverFacing::Right ? 1.f : -1.f);
+		return Along >= Edge;
+	}
+
 	int32 ClipIndex(ECoverFacing Facing)
 	{
 		// Pack _L = his own right as he stands back to the wall (the pack names its sides facing the wall).

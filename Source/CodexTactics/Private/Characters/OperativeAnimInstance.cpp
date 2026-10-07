@@ -1,5 +1,6 @@
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/LeftHandIKRules.h"
+#include "Characters/AimOffsetRules.h"
 #include "DrawDebugHelpers.h"
 #include "HAL/IConsoleManager.h"
 
@@ -8,7 +9,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarDebugLeftHandIK(TEXT("Codex.Debug.LeftHandIK"), 0,
 		TEXT("1: draw the left-hand IK spheres (red socket, green target, yellow hand_l, blue shoulder) in PIE / game."));
 }
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshSocket.h"
 #include "CodexTactics.h"
@@ -721,6 +724,7 @@ void UOperativeAnimInstance::UpdateState()
 		bIsWeaponFrozen = Cold->IsWeaponFrozen();
 	}
 	UpdateLeftHandIK(*Operative, StateDeltaSeconds);
+	UpdateAimOffset(*Operative, StateDeltaSeconds);
 }
 
 void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operative, float DeltaSeconds)
@@ -822,6 +826,33 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 		DrawDebugString(World, TargetWorld + FVector(0.f, 0.f, 12.f), FString::Printf(TEXT("IK a=%.2f slide %.0f reach %.0f"),
 			LeftHandIKAlpha, LeftHandIKSlideCm, LeftHandArmReach), nullptr, FColor::Green, 0.f, true, 1.f);
 	}
+}
+
+void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operative, float DeltaSeconds)
+{
+	// The pitch from the stance's muzzle height (stable: it does not move with the pose the offset itself bends) to the
+	// point the tracer flies to (the target's capsule centre).
+	FVector AimPoint = FVector::ZeroVector;
+	bHasAimTarget = bAimOffset && Operative.GetAimTargetPoint(AimPoint);
+	AimPitchTarget = bHasAimTarget ? AimOffsetRules::PitchToTarget(Operative.GetMuzzleLocation(), AimPoint, AimPitchClampDegrees) : 0.f;
+	AimPitch = FMath::Clamp(FMath::FInterpTo(AimPitch, AimPitchTarget, DeltaSeconds, AimPitchInterpSpeed), -AimPitchClampDegrees, AimPitchClampDegrees);
+	if (!bHasAimTarget && FMath::Abs(AimPitch) < 0.05f)
+	{
+		AimPitch = 0.f;
+	}
+	FAimOffsetState State;
+	State.bEnabled = bAimOffset && (bAimOffsetInCover || !bInCover);
+	State.bRangedWeapon = Operative.UsesAmmo();
+	State.bWeaponVisible = Operative.WeaponMesh && Operative.WeaponMesh->IsVisible();
+	State.bReloading = bIsReloading;
+	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f; // grenade throw / hit reaction windows (shared with the left-hand IK)
+	State.bVaulting = bIsVaulting;
+	State.bSprinting = bIsSprinting;
+	State.bProne = bIsProne;
+	State.bDead = bIsDead;
+	AimOffsetLinear = AimOffsetRules::StepAlpha(AimOffsetLinear, AimOffsetRules::WantsAimOffset(State), DeltaSeconds, AimOffsetBlendSeconds);
+	AimOffsetAlpha = FMath::SmoothStep(0.f, 1.f, AimOffsetLinear);
+	bAimOffsetActive = AimOffsetAlpha > 0.01f;
 }
 
 UAnimSequence* UOperativeAnimInstance::GetClip(EOperativeClip Clip) const

@@ -893,6 +893,10 @@ public:
 	/** Visual mesh offset applied now by the run-in blend, actor-local (smokes), cm. */
 	FVector GetCoverEntryMeshOffset() const { return CoverEntryAppliedOffset; }
 
+	/** A friendly (squad) grenade that has landed within the danger radius also sends him behind the corner (default off). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	bool bCornerAimDuckForFriendlyGrenades = false;
+
 	/** The decision config with this operative's tunables (grace, re-entry delay). */
 	FCoverDecisionConfig GetCoverDecisionConfig() const;
 
@@ -1020,6 +1024,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
 	FVector GetWeaponMuzzleLocation() const;
 
+	/**
+	 * The point he aims at now (the one the tracer flies to: the target's capsule centre, or the blind-fire silhouette):
+	 * the target of a shot fired within AimTargetHoldSeconds, else the current combat target (manual priority, Commander
+	 * Mode or the closest visible enemy). False when he aims at nothing. Feeds UOperativeAnimInstance::AimPitch.
+	 */
+	bool GetAimTargetPoint(FVector& OutPoint) const;
+
+	/** A shot's target stays the aim target this long after the shot (turn-based shots, targeted shots at objects), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "0"))
+	float AimTargetHoldSeconds = 1.0f;
+
 	/** Muzzle in the weapon mesh's own space when it has no "Muzzle" socket (m16_01: the barrel runs along +Z, 98 cm). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Combat")
 	FVector MuzzleOffset = FVector(0.f, 0.f, 98.f);
@@ -1145,6 +1160,12 @@ private:
 	void NotifyBarricadeBlocked();
 	float BarricadeBlockNotifyTimer = 0.f;
 	TWeakObjectPtr<AActor> CurrentCombatTarget;
+	/** The last shot's target / point and time (GetAimTargetPoint). */
+	TWeakObjectPtr<AActor> LastShotTarget;
+	FVector LastShotPoint = FVector::ZeroVector;
+	bool bLastShotBlind = false;
+	double LastShotTime = -1.0e9;
+	void NoteShotAim(AActor* Target, const FVector& Point, bool bBlind);
 
 	/** Godot combat_facing_direction: real-time fight, not sprinting, a live target -> face it, no turn to the movement. */
 	void UpdateCombatFacing(float DeltaTime);
@@ -1220,6 +1241,23 @@ private:
 	void TryEnterCoverFromRun();
 	/** Moves the mesh so the body stays continuous while the enter clip blends in (V = (1 - w) C + glide). */
 	void UpdateCoverEntryBlend(float DeltaTime);
+	/** Damage from ranged attackers in the last seconds (decays like RecentIncomingDamage; the corner-aim duck input). */
+	float RecentRangedDamage = 0.f;
+	/** The corner-aim trace (Codex.Debug.CornerAim, the [CornerAim] log): the pre-fix inputs next to the fixed ones. */
+	struct FCornerAimTrace
+	{
+		int32 AllAimers = 0;
+		float AllPressure = 0.f;
+		float AllDamage = 0.f;
+		bool bAnyOpenSideNear = false;
+		float NearestOpenSideCm = 1.0e9f;
+		float NearestGrenadeCm = 1.0e9f;
+	};
+	mutable FCornerAimTrace CornerAimTrace;
+	FString CornerAimLabel;
+	ECornerAimDecision LastCornerAimTraceDecision = ECornerAimDecision::StayAndFire;
+	ECornerAimDecision LastCornerAimLegacyDecision = ECornerAimDecision::StayAndFire;
+	FString LastCornerAimTraceReason;
 	/** Sustained corner aim state (IsCornerAimActive). */
 	bool bCornerAimActive = false;
 	double CornerAimLastTargetTime = -1.0e9;

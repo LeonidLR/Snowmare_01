@@ -159,6 +159,45 @@ bool FCoverCornerAimJevRulesTest::RunTest(const FString&)
 	return true;
 }
 
+CORNER_AIM_TEST(FCoverCornerHoldVsHordeTest, "CornerHoldVsMeleeHorde")
+bool FCoverCornerHoldVsHordeTest::RunTest(const FString&)
+{
+	using namespace CoverDecisionRules;
+	const FCoverDecisionConfig Config;
+	// 2026-10-07 horde regression (Jev re-validated 25 / 31 = 81 %): melee mutants rushing round the corner are targets —
+	// they neither suppress nor flank, and wounds alone do not send him behind a corner that does not stop them.
+	FCornerAimSituation Horde;
+	Horde.ClipFraction = 0.7f;
+	Horde.bRangedThreatPresent = false;
+	Horde.MeleeRushers = 6;
+	const TCHAR* Reason = nullptr;
+	TestEqual(TEXT("h_melee_horde: holds and fires"), DecideCornerAim(Config, Horde, &Reason), ECornerAimDecision::StayAndFire);
+	Horde.HealthFraction = 0.3f;
+	TestEqual(TEXT("h_melee_horde_wounded: holds (the corner does not stop a horde)"), DecideCornerAim(Config, Horde), ECornerAimDecision::StayAndFire);
+	Horde.HealthFraction = 0.8f;
+	Horde.RecentIncomingDamage = 0.f; // the melee bites are not ranged damage
+	TestEqual(TEXT("bitten (melee damage only): holds"), DecideCornerAim(Config, Horde), ECornerAimDecision::StayAndFire);
+	Horde.ClipFraction = 0.f;
+	TestEqual(TEXT("horde, empty magazine: reloads behind the corner"), DecideCornerAim(Config, Horde, &Reason), ECornerAimDecision::DuckToReload);
+	TestTrue(TEXT("... reason"), FCString::Strcmp(Reason, TEXT("magazine empty")) == 0);
+	// Ranged fire still breaks it.
+	FCornerAimSituation Shooters;
+	Shooters.ClipFraction = 0.7f;
+	Shooters.SuppressionPressure = 0.9f;
+	Shooters.RecentIncomingDamage = 15.f;
+	TestEqual(TEXT("h_shooters_many: ducks"), DecideCornerAim(Config, Shooters, &Reason), ECornerAimDecision::DuckForSafety);
+	TestTrue(TEXT("... heavy ranged fire"), FCString::Strcmp(Reason, TEXT("heavy ranged fire (2+ shooters)")) == 0);
+	FCornerAimSituation OneSpitter;
+	OneSpitter.ClipFraction = 0.7f;
+	OneSpitter.SuppressionPressure = 0.35f;
+	OneSpitter.MeleeRushers = 5;
+	TestEqual(TEXT("h_horde_one_spitter: holds"), DecideCornerAim(Config, OneSpitter), ECornerAimDecision::StayAndFire);
+	FCornerAimSituation Flank = OneSpitter;
+	Flank.bFlankEnemyNear = true; // a gunman on his open side
+	TestEqual(TEXT("h_gunman_flank: ducks"), DecideCornerAim(Config, Flank, &Reason), ECornerAimDecision::DuckForSafety);
+	return true;
+}
+
 CORNER_AIM_TEST(FCoverEdgeProbePrecisionTest, "EdgeProbePrecision")
 bool FCoverEdgeProbePrecisionTest::RunTest(const FString&)
 {

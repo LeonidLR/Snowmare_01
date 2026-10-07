@@ -140,12 +140,26 @@ struct CODEXTACTICS_API FCornerAimSituation
 	/** Turn-based: the pose is kept between his shots within his turn (no "no targets" return). */
 	bool bHoldWithoutTargets = false;
 	float HealthFraction = 1.f;
+	/**
+	 * Damage from RANGED attackers in the last seconds (spitters, cryo drones, marksmen). 2026-10-07 horde fix: melee
+	 * hits do not count — ducking behind the corner does not stop a mutant already at him (he keeps firing at it).
+	 */
 	float RecentIncomingDamage = 0.f;
+	/** Pressure from RANGED enemies aiming at him (melee rushers targeting him are targets, not suppression). */
 	float SuppressionPressure = 0.f;
 	bool bSniperLaserOnMe = false;
 	bool bGrenadeNearby = false;
-	/** An enemy on his open side (in front of the wall) within AimFlankDangerCm. */
+	/** A RANGED enemy on his open side (in front of the wall) within AimFlankDangerCm (melee rushers coming round are targets). */
 	bool bFlankEnemyNear = false;
+	/**
+	 * Any ranged enemy in sight / in range: without one, wounds alone never send him behind the corner (the cover does
+	 * not protect from a melee horde; firing does).
+	 */
+	bool bRangedThreatPresent = true;
+	/** Trace only: melee enemies within a few metres (rushing him). */
+	int32 MeleeRushers = 0;
+	/** Trace only: ranged enemies aiming at him. */
+	int32 RangedAimers = 0;
 };
 
 namespace CoverDecisionRules
@@ -183,10 +197,13 @@ namespace CoverDecisionRules
 	 * and fires; he breaks the aim only for a reason. Empty magazine -> DuckToReload (no spare rounds: DuckForSafety, the
 	 * weapon is switched behind the corner); sniper laser / grenade near / an enemy flanking on his open side ->
 	 * DuckForSafety; badly wounded, a big hit, heavy incoming fire, or wounded and hit again -> DuckForSafety (DuckToReload
-	 * when the magazine is low: the forced duck is used to reload); a lull with a low magazine -> DuckToReload; no target
+	 * when the magazine is low: the forced duck is used to reload) — the wound / pressure ducks only while a RANGED threat
+	 * is present (2026-10-07 horde fix: melee rushers neither suppress nor flank, Jev-recalibrated); a lull with a low
+	 * magazine -> DuckToReload; no target
 	 * for AimNoTargetGraceSeconds -> ReturnNoTargets (never while bHoldWithoutTargets); else StayAndFire.
 	 */
-	CODEXTACTICS_API ECornerAimDecision DecideCornerAim(const FCoverDecisionConfig& Config, const FCornerAimSituation& Situation);
+	CODEXTACTICS_API ECornerAimDecision DecideCornerAim(const FCoverDecisionConfig& Config, const FCornerAimSituation& Situation,
+		const TCHAR** OutReason = nullptr);
 
 	CODEXTACTICS_API const TCHAR* CornerAimDecisionName(ECornerAimDecision Decision);
 }

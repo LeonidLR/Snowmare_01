@@ -41,6 +41,8 @@ public:
 	bool CancelAndRefund();
 
 	bool IsFlying() const { return bFlying; }
+	/** The operative who threw it (null once he is gone). */
+	AOperativeCharacter* GetThrower() const { return Thrower.Get(); }
 	bool HasLanded() const { return bLanded; }
 	FVector GetLandingPoint() const { return TargetLocation; }
 
