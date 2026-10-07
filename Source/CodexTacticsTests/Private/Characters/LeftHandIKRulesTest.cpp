@@ -48,7 +48,11 @@ bool FLeftHandIKAlphaRulesTest::RunTest(const FString&)
 	TestFalse(TEXT("dead"), Without([](FLeftHandIKState& S) { S.bDead = true; }));
 	TestFalse(TEXT("weapon hidden"), Without([](FLeftHandIKState& S) { S.bWeaponVisible = false; }));
 	TestFalse(TEXT("prone (crawl hand on the ground; prone aim already holds the grip)"), Without([](FLeftHandIKState& S) { S.bProne = true; }));
-	TestFalse(TEXT("cover idle / look-around / shimmy / enter / transitions (rifle low): off"), Without([](FLeftHandIKState& S) { S.bTwoHandedPose = false; }));
+	TestFalse(TEXT("a clip that deliberately frees the left hand (LeftHandIKFreeClips): off"), Without([](FLeftHandIKState& S) { S.bTwoHandedPose = false; }));
+	// Out of reach after the slide: fades by the excess instead of a straight arm.
+	TestEqual(TEXT("in reach: full"), ReachFade(0.f, 15.f), 1.f, 0.001f);
+	TestEqual(TEXT("7.5 cm too far over 15 cm: half"), ReachFade(7.5f, 15.f), 0.5f, 0.001f);
+	TestEqual(TEXT("15 cm too far: off"), ReachFade(20.f, 15.f), 0.f, 0.001f);
 	// 0.15 s blend: half way after 0.075 s, full after 0.15 s, and back.
 	float Alpha = StepAlpha(0.f, true, 0.075f, 0.15f);
 	TestEqual(TEXT("half way in"), Alpha, 0.5f, 0.001f);

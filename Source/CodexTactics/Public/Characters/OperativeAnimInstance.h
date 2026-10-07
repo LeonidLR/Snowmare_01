@@ -498,6 +498,18 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK", meta = (ClampMin = "0"))
 	float LeftHandIKMaxSlideCm = 40.f;
 
+	/** A target still beyond the reach after the slide fades the alpha out over this excess distance, cm. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK", meta = (ClampMin = "0"))
+	float LeftHandIKFadeCm = 15.f;
+
+	/** Clips (name parts) that deliberately free the left hand: the IK is off while they play on the FullBody slot. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
+	TArray<FString> LeftHandIKFreeClips;
+
+	/** How far the target still lies beyond the reach after the slide (fades the alpha), cm. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
+	float LeftHandIKExcessCm = 0.f;
+
 	/** How far the target slid back from the socket this update (0 = the socket is in reach), cm. */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
 	float LeftHandIKSlideCm = 0.f;

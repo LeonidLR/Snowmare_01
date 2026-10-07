@@ -32,6 +32,15 @@ namespace LeftHandIKRules
 		return Target - Dir * Slide;
 	}
 
+	float ReachFade(float ExcessCm, float FadeCm)
+	{
+		if (ExcessCm <= 0.f)
+		{
+			return 1.f;
+		}
+		return FadeCm <= KINDA_SMALL_NUMBER ? 0.f : FMath::Clamp(1.f - ExcessCm / FadeCm, 0.f, 1.f);
+	}
+
 	float StepAlpha(float Current, bool bWanted, float DeltaSeconds, float BlendSeconds)
 	{
 		const float Target = bWanted ? 1.f : 0.f;

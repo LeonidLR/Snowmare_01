@@ -24,9 +24,10 @@ struct CODEXTACTICS_API FLeftHandIKState
 	/** Prone: the crawl clips put the left hand on the ground (measured 49 cm off the grip); the prone aim already holds it (8-9 cm). */
 	bool bProne = false;
 	/**
-	 * In cover the clip holds the rifle two-handed only in the fire stance (fire_idle / fire, not its idle <-> fire
-	 * transitions); the cover idle / look-around / shimmy / enter clips carry it low or vertical and the left hand far
-	 * from it (user report 2026-10-07: the IK stretched the arm straight down the rifle). True out of cover.
+	 * The clip holds the rifle with both hands (default). False only for clips that deliberately free the left hand
+	 * (UOperativeAnimInstance::LeftHandIKFreeClips). 2026-10-07: the "arm stretched straight" in the cover idle came from
+	 * the IK node's unbound effector pin (target = hand_r), not from the idle pose: the cover idle / look-around / shimmy /
+	 * enter / stance switches keep the IK (the reach slide + ReachFade stop a straight arm).
 	 */
 	bool bTwoHandedPose = true;
 };
@@ -50,6 +51,12 @@ namespace LeftHandIKRules
 	 */
 	CODEXTACTICS_API FVector SlideIntoReach(const FVector& Target, const FVector& Axis, const FVector& Shoulder, float MaxDistance,
 		float MaxSlide);
+
+	/**
+	 * Alpha factor for a target still out of reach after the slide: 1 within reach, fading linearly to 0 over FadeCm of
+	 * excess distance (a lowered rifle whose handguard the hand cannot reach: the clip's own hand instead of a straight arm).
+	 */
+	CODEXTACTICS_API float ReachFade(float ExcessCm, float FadeCm);
 
 	/** Alpha eased towards the target over BlendSeconds (linear step, smoothstep shaped by the caller's read if needed). */
 	CODEXTACTICS_API float StepAlpha(float Current, bool bWanted, float DeltaSeconds, float BlendSeconds);

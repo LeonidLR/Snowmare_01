@@ -735,6 +735,7 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 	FTransform HandR = FTransform::Identity;
 	FVector Shoulder = FVector::ZeroVector;
 	LeftHandIKSlideCm = 0.f;
+	LeftHandIKExcessCm = 0.f;
 	if (bLeftHandIKGripValid)
 	{
 		const FTransform SocketInWeapon(Grip->RelativeRotation, Grip->RelativeLocation, Grip->RelativeScale);
@@ -774,6 +775,7 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 					LeftHandArmReach * LeftHandIKReachFraction, LeftHandIKMaxSlideCm);
 				LeftHandIKSlideCm = static_cast<float>(FVector::Dist(Reachable, LeftHandIKOffset));
 				LeftHandIKOffset = Reachable;
+				LeftHandIKExcessCm = FMath::Max(0.f, static_cast<float>(FVector::Dist(Reachable, Shoulder)) - LeftHandArmReach * LeftHandIKReachFraction);
 			}
 		}
 	}
@@ -787,15 +789,18 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 	State.bVaulting = bIsVaulting;
 	State.bDead = bIsDead;
 	State.bProne = bIsProne;
-	// In cover only the fire stance holds the rifle two-handed (not its idle <-> fire transitions, the cover idle,
-	// look-around, shimmy, enter or stance-switch clips: the rifle is low there, the hand far from it).
+	// Every pose where the right hand holds the rifle keeps the IK (cover idle / look-around / shimmy / enter / switches
+	// included, 2026-10-07); only clips listed in LeftHandIKFreeClips free the left hand (none measured so far).
 	{
-		const UAnimMontage* OneShot = CoverOneShotMontage.Get();
-		const bool bCoverTransition = OneShot && Montage_IsPlaying(OneShot) && CoverClipLog.Num() > 0 && CoverClipLog.Last().Contains(TEXT("_to_"));
-		State.bTwoHandedPose = !bInCover || ((bCoverInFirePose || bCoverCornerAim) && !bCoverTransition && !IsPlayingStanceTransition());
+		FString Playing;
+		float MontageWeight = 0.f;
+		float SlotWeight = 0.f;
+		GetCoverPlayback(Playing, MontageWeight, SlotWeight);
+		State.bTwoHandedPose = !(MontageWeight > 0.5f && LeftHandIKFreeClips.ContainsByPredicate([&Playing](const FString& Part) { return !Part.IsEmpty() && Playing.Contains(Part); }));
 	}
 	LeftHandIKLinear = LeftHandIKRules::StepAlpha(LeftHandIKLinear, LeftHandIKRules::WantsIK(State), DeltaSeconds, LeftHandIKBlendSeconds);
-	LeftHandIKAlpha = FMath::SmoothStep(0.f, 1.f, LeftHandIKLinear);
+	// Still out of reach after the slide (a rifle hanging low): fade by the excess instead of a straight arm.
+	LeftHandIKAlpha = FMath::SmoothStep(0.f, 1.f, LeftHandIKLinear) * LeftHandIKRules::ReachFade(LeftHandIKExcessCm, LeftHandIKFadeCm);
 	if (LeftHandIKAlphaOverrideForTesting >= 0.f)
 	{
 		LeftHandIKAlpha = FMath::Clamp(LeftHandIKAlphaOverrideForTesting, 0.f, 1.f);

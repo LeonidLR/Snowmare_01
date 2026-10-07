@@ -431,8 +431,9 @@ namespace CoverCrouchSmoke
 			Check(State, Op->bInCover && Op->GetStance() == EOperativeStance::Crouching, TEXT("... crouched at the high wall, still in cover"));
 			if (const UOperativeAnimInstance* IdleAnim = AnimOf(Op))
 			{
-				// User report 2026-10-07: in the cover idle the rifle is low, the IK would stretch the arm down it: off.
-				Check(State, IdleAnim->LeftHandIKAlpha <= 0.01f, FString::Printf(TEXT("... cover idle: left-hand IK off (alpha %.2f)"), IdleAnim->LeftHandIKAlpha));
+				// 2026-10-07 (the node's effector pin connected): the cover idle keeps the IK; only a target out of reach fades it.
+				Check(State, IdleAnim->LeftHandIKAlpha >= 0.99f || IdleAnim->LeftHandIKExcessCm > 0.f,
+					FString::Printf(TEXT("... cover idle: left-hand IK on (alpha %.2f, excess %.1f cm)"), IdleAnim->LeftHandIKAlpha, IdleAnim->LeftHandIKExcessCm));
 			}
 			CheckPlaying(State, Op, TEXT("cvr_crch_"), TEXT("... the crouched cover pose"));
 			// The threat round his right corner, behind the wall.
