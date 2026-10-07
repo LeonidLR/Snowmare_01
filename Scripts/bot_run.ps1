@@ -5,6 +5,9 @@
 # Usage: powershell -ExecutionPolicy Bypass -File Scripts\bot_run.ps1 [-Runs 1] [-Profile NORMAL] [-Loadout COLLECT]
 #        [-Parallel 4] [-TimeoutSeconds 600] [-Extra "<more game arguments>"]
 # -Profile CASUAL | NORMAL | VETERAN; -Loadout COLLECT (explore first) | UNIQUE | PRESET (straight to the fight).
+# Every run gets -BotSeed=<run number> (the stealth bot's seeded caution / patience / approach side vary per run, the
+# same run number repeats exactly). On an ambush / patrol map (e.g. -Map /Game/Maps/L_PatrolTest) the bot sneaks
+# instead of pressing «Начать бой» (PlaytestBotSubsystem, [Stealth] log lines). A batch holds the shared agent lock.
 # The Godot archive's speed is not needed: the runs are fixed-step (-benchmark -FPS=60), not time-scaled.
 param(
     [int]$Runs = 1,
@@ -67,6 +70,12 @@ function Complete-Run($Job) {
 $Pending = New-Object System.Collections.Queue
 1..$Runs | ForEach-Object { $Pending.Enqueue($_) }
 Write-Host ("{0}: {1} runs, {2} at a time" -f $Profile, $Runs, $Parallel)
+
+# The games load the module DLLs from Binaries\: a build while they run fails, so a batch holds the shared agent lock
+# (Scripts\agent_lock.ps1; a long coach run takes it per batch, so other agents can build between batches).
+. (Join-Path $PSScriptRoot "agent_lock.ps1")
+$LockOwned = Enter-AgentLock "bot_run $Profile x$Runs" 240
+try {
 Write-Status $true
 
 while ($Pending.Count -gt 0 -or $Active.Count -gt 0) {
@@ -75,7 +84,7 @@ while ($Pending.Count -gt 0 -or $Active.Count -gt 0) {
         $Log = Join-Path $ProjectDir "Saved\Logs\Bot-$Profile-$Run.log"
         $Part = Join-Path $PartsDir ("run_{0}_{1}_{2}.jsonl" -f $PID, $Profile, $Run)
         $GameArgs = "`"$Project`" $Map -game -nullrhi -nosound -nosplash -unattended -windowed -benchmark -FPS=60 -CodexBot " +
-            "-BotProfile=$Profile -BotLoadout=$Loadout -BotTimeout=$TimeoutSeconds `"-abslog=$Log`" `"-TelemetryRunsFile=$Part`" $Extra"
+            "-BotProfile=$Profile -BotLoadout=$Loadout -BotTimeout=$TimeoutSeconds -BotSeed=$Run `"-abslog=$Log`" `"-TelemetryRunsFile=$Part`" $Extra"
         $Process = Start-Process -FilePath $Editor -ArgumentList $GameArgs -PassThru -WindowStyle Hidden
         [void]$Active.Add([pscustomobject]@{ Run = $Run; Process = $Process; Log = $Log; Part = $Part; Watch = [Diagnostics.Stopwatch]::StartNew() })
         Write-Host ("[{0} {1}/{2}] started" -f $Profile, $Run, $Runs)
@@ -103,6 +112,9 @@ while ($Pending.Count -gt 0 -or $Active.Count -gt 0) {
             }
         }
     }
+}
+} finally {
+    if ($LockOwned) { Exit-AgentLock }
 }
 
 Write-Status $false

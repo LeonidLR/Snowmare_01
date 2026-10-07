@@ -1,6 +1,13 @@
 #include "Bot/PlaytestBotSubsystem.h"
 
+#include "AI/PatrolRouteActor.h"
 #include "Characters/EnemyCharacter.h"
+#include "Combat/TacticalSightSubsystem.h"
+#include "Components/SplineComponent.h"
+#include "Data/EnemyPerception.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
+#include "GameFramework/Pawn.h"
+#include "Tactics/CoverTraceRules.h"
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/PersonalItemRules.h"
@@ -53,6 +60,25 @@ namespace
 		const UHealthComponent* Health = Actor ? Actor->FindComponentByClass<UHealthComponent>() : nullptr;
 		return Health && Health->IsAlive();
 	}
+
+	/** Stealth decisions every this many world seconds (the patrol perception ticks at 0.2 s). */
+	constexpr float BotStealthInterval = 0.2f;
+	/** The sneaking leader re-plans his approach walk this often, s. */
+	constexpr float BotStealthMoveInterval = 2.5f;
+}
+
+namespace BotTuning
+{
+	// Set by Scripts/Tools/jev_ai_coach.py through -dpcvars= for its experiments.
+	static TAutoConsoleVariable<int32> CVarAssault(TEXT("Codex.Bot.MarksmanAssault"), 1, TEXT("Bot storms lone marksmen (0 / 1)"));
+	static TAutoConsoleVariable<float> CVarClearRadius(TEXT("Codex.Bot.AssaultClearRadius"), 1500.f,
+		TEXT("No other enemy this close to the leader (cm) before the bot storms a marksman"));
+	static TAutoConsoleVariable<float> CVarStopDistance(TEXT("Codex.Bot.AssaultStopDistance"), 900.f,
+		TEXT("The storming squad stops this far from the marksman (cm)"));
+	static TAutoConsoleVariable<int32> CVarWallCover(TEXT("Codex.Bot.WallCover"), 1,
+		TEXT("Bot leader takes a Sprint 12 wall-cover slot when no barricade is near (0 / 1)"));
+	static TAutoConsoleVariable<float> CVarWallCoverRadius(TEXT("Codex.Bot.WallCoverRadius"), 700.f,
+		TEXT("Bot looks for wall cover this far around the leader (cm)"));
 }
 
 void UPlaytestBotSubsystem::OnWorldBeginPlay(UWorld& InWorld)
@@ -67,7 +93,10 @@ void UPlaytestBotSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	FParse::Value(FCommandLine::Get(), TEXT("BotTimeout="), TimeoutSeconds);
 	FString Loadout = TEXT("COLLECT");
 	FParse::Value(FCommandLine::Get(), TEXT("BotLoadout="), Loadout);
-	StartBot(PlaytestBotRules::ParseProfile(ProfileName), true, Loadout.ToUpper().StartsWith(TEXT("COLLECT")) || Loadout.ToUpper().StartsWith(TEXT("EXPLORE")));
+	int32 RunSeed = 1;
+	FParse::Value(FCommandLine::Get(), TEXT("BotSeed="), RunSeed);
+	StartBot(PlaytestBotRules::ParseProfile(ProfileName), true, Loadout.ToUpper().StartsWith(TEXT("COLLECT")) || Loadout.ToUpper().StartsWith(TEXT("EXPLORE")),
+		RunSeed);
 }
 
 TStatId UPlaytestBotSubsystem::GetStatId() const
@@ -75,25 +104,78 @@ TStatId UPlaytestBotSubsystem::GetStatId() const
 	RETURN_QUICK_DECLARE_CYCLE_STAT(UPlaytestBotSubsystem, STATGROUP_Tickables);
 }
 
-void UPlaytestBotSubsystem::StartBot(EBotProfile InProfile, bool bQuitAtEnd, bool bCollectLoot)
+void UPlaytestBotSubsystem::StartBot(EBotProfile InProfile, bool bQuitAtEnd, bool bCollectLoot, int32 InSeed)
 {
 	Profile = InProfile;
 	Config = PlaytestBotRules::GetProfileConfig(Profile);
+	Seed = InSeed;
 	bQuit = bQuitAtEnd;
 	bCollect = bCollectLoot;
 	bActive = true;
-	Stage = bCollect ? EBotStage::Explore : EBotStage::EnterCombat;
 	StartRealTime = FPlatformTime::Seconds();
-	// Fire posture (user request 2026-10-06): the bot fights with the squad's automatic fire as before postures existed.
-	// It drives the operatives directly (OrderMoveTo), so the RTS time modes need nothing else from it.
-	if (USquadSubsystem* BotSquad = GetWorld()->GetSubsystem<USquadSubsystem>())
-	{
-		BotSquad->SetSquadPosture(ESquadFirePosture::Aggressive);
-	}
+	Stage = bCollect ? EBotStage::Explore : EBotStage::EnterCombat;
+	bRunSetUp = false; // SetupRun on the first tick with a squad (OnWorldBeginPlay runs before the actors' BeginPlay)
 	if (URunTelemetrySubsystem* Telemetry = GetWorld()->GetSubsystem<URunTelemetrySubsystem>())
 	{
 		Telemetry->SetTesterProfile(PlaytestBotRules::ProfileName(Profile));
 	}
+	if (UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>())
+	{
+		Waves->OnEnemySpawnedNative.AddUObject(this, &UPlaytestBotSubsystem::HandleEnemySpawned);
+	}
+}
+
+void UPlaytestBotSubsystem::SetupRun()
+{
+	bRunSetUp = true;
+	if (FParse::Param(FCommandLine::Get(), TEXT("BotSpawnPatrols")))
+	{
+		SpawnRuntimePatrols();
+	}
+	// Stealth (user plan 2026-10-07): an ambush level still in exploration is sneaked through, never started by the
+	// button. -BotStealth=0 keeps the old behaviour (the bot presses «Начать бой» after exploring).
+	int32 StealthSwitch = 1;
+	FParse::Value(FCommandLine::Get(), TEXT("BotStealth="), StealthSwitch);
+	const ULevelEncounterSubsystem* Encounter = GetWorld()->GetSubsystem<ULevelEncounterSubsystem>();
+	const UGameFlowSubsystem* StartFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	bStealthLevel = StealthSwitch != 0 && Encounter && Encounter->IsAmbushCombatStart() && StartFlow
+		&& StartFlow->GetPhase() == ECodexGamePhase::Exploration && !StartFlow->IsCombatUnlocked();
+	Stage = bCollect ? EBotStage::Explore : (bStealthLevel ? EBotStage::Stealth : EBotStage::EnterCombat);
+	// Fire posture (user request 2026-10-06): the bot fights with the squad's automatic fire (Aggressive) as before
+	// postures existed; while sneaking the squad holds its fire (Passive) so no auto-shot gives it away. Time mode: real
+	// time throughout — the bot drives the operatives directly (OrderMoveTo / OrderTakeCover), no tactical pause.
+	if (USquadSubsystem* BotSquad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	{
+		BotSquad->SetSquadPosture(BotStealthRules::PostureFor(!bStealthLevel));
+	}
+	if (bStealthLevel)
+	{
+		// The start menu keeps the world paused: «Начать игру» (exploration) — the patrols walk, the squad sneaks. (On a
+		// wave level the bot still explores behind the menu and then presses «Начать бой», as before.)
+		if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>(); Mission && Mission->IsMainMenuOpen())
+		{
+			Mission->StartMission(EMissionStartMode::Game);
+			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] «Начать игру»: the exploration runs in real time"));
+		}
+		AOperativeCharacter* Medic = Member(2);
+		StealthConfig = BotStealthRules::MakeSeededConfig(Seed, Config.Mines > 0 && Medic && Medic->GetDeployableCount(EDeployableType::Mine) > 0);
+		StealthStartTime = GetWorld()->GetTimeSeconds();
+		bStealthStarted = true;
+		TArray<AEnemyCharacter*> Patrols;
+		TArray<FBotPatrolView> Views;
+		GatherPatrols(Patrols, Views);
+		for (AEnemyCharacter* Each : Patrols)
+		{
+			KnownPatrols.Add(Each);
+		}
+		UE_LOG(LogCodexTactics, Display,
+			TEXT("[Stealth] bot sneaking: %d patrol enemies, posture passive, ambush range x%.2f, alarm %.2f, patience %.0f s, limit %.0f s, sight x%.2f, hearing x%.2f, approach %+.0f deg, trap %d (medic mines %d, seed %d)"),
+			Patrols.Num(), StealthConfig.AmbushRangeFraction, StealthConfig.AlarmSuspicion, StealthConfig.MinSneakSeconds, StealthConfig.MaxStealthSeconds,
+			StealthConfig.SightMargin, StealthConfig.HearingMargin, StealthConfig.ApproachAngleDeg, StealthConfig.bUseTrap ? 1 : 0,
+			Medic ? Medic->GetDeployableCount(EDeployableType::Mine) : -1, Seed);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Time mode: real time (no tactical pause / turn-based); fire posture %s"),
+		bStealthLevel ? TEXT("passive while sneaking, aggressive in the fight") : TEXT("aggressive"));
 	// Loot crates and loose deployables lying on the map (bot_driver _process_bot_exploration).
 	for (TActorIterator<ALootCrateActor> It(GetWorld()); It; ++It)
 	{
@@ -106,12 +188,8 @@ void UPlaytestBotSubsystem::StartBot(EBotProfile InProfile, bool bQuitAtEnd, boo
 	{
 		ExploreTargets.Add(*It);
 	}
-	if (UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>())
-	{
-		Waves->OnEnemySpawnedNative.AddUObject(this, &UPlaytestBotSubsystem::HandleEnemySpawned);
-	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Started: profile %s, collect %d (%d targets), timeout %.0f s"),
-		*PlaytestBotRules::ProfileName(Profile), bCollect ? 1 : 0, ExploreTargets.Num(), TimeoutSeconds);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Started: profile %s, collect %d (%d targets), timeout %.0f s, seed %d, stealth %d"),
+		*PlaytestBotRules::ProfileName(Profile), bCollect ? 1 : 0, ExploreTargets.Num(), TimeoutSeconds, Seed, bStealthLevel ? 1 : 0);
 }
 
 AOperativeCharacter* UPlaytestBotSubsystem::Member(int32 Index) const
@@ -172,6 +250,14 @@ void UPlaytestBotSubsystem::Tick(float DeltaTime)
 		Finish(TEXT("ABORTED"), 1);
 		return;
 	}
+	if (!bRunSetUp)
+	{
+		if (!Member(0) && FPlatformTime::Seconds() - StartRealTime < 10.0)
+		{
+			return; // the squad registers at its BeginPlay
+		}
+		SetupRun();
+	}
 	if (UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>())
 	{
 		if (Dialogue->IsDialogueOpen())
@@ -179,10 +265,23 @@ void UPlaytestBotSubsystem::Tick(float DeltaTime)
 			Dialogue->SkipDialogue();
 		}
 	}
+	// Ambush level: the fight starts by the bot's strike or by a detection — never by the button.
+	if (bStealthLevel && (Stage == EBotStage::Explore || Stage == EBotStage::Stealth))
+	{
+		const UGameFlowSubsystem* StealthFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		if (StealthFlow && (StealthFlow->IsCombatUnlocked() || StealthFlow->GetPhase() != ECodexGamePhase::Exploration))
+		{
+			OnStealthCombatStarted();
+			return;
+		}
+	}
 	switch (Stage)
 	{
 	case EBotStage::Explore:
 		TickExplore(DeltaTime);
+		return;
+	case EBotStage::Stealth:
+		TickStealth(DeltaTime, false);
 		return;
 	case EBotStage::EnterCombat:
 		// bot_driver: main._on_start_combat_pressed = «Начать бой»: the squad behind the gate, healed, warm, then the
@@ -190,6 +289,7 @@ void UPlaytestBotSubsystem::Tick(float DeltaTime)
 		if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
 		{
 			Mission->StartMission(EMissionStartMode::Combat);
+			bPressedCombatStart = true;
 			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Combat start (squad behind the gate)"));
 		}
 		Stage = EBotStage::Fight;
@@ -218,9 +318,10 @@ void UPlaytestBotSubsystem::TickExplore(float DeltaTime)
 	TargetTime += DeltaTime;
 	AOperativeCharacter* Leader = Member(0);
 	UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>();
+	const EBotStage AfterExplore = bStealthLevel ? EBotStage::Stealth : EBotStage::EnterCombat;
 	if (!Leader || !Interactions)
 	{
-		Stage = EBotStage::EnterCombat;
+		Stage = AfterExplore;
 		return;
 	}
 	// The menu / loot dialog of the reached target: take everything.
@@ -235,6 +336,24 @@ void UPlaytestBotSubsystem::TickExplore(float DeltaTime)
 		Interactions->CloseLootDialog();
 		ExploreTarget.Reset();
 		return;
+	}
+	// Ambush level: the stealth step decides first (stance, hiding, striking); the loot walk waits while it holds the squad.
+	if (bStealthLevel)
+	{
+		if (TickStealth(DeltaTime, true))
+		{
+			TargetTime = FMath::Max(0.f, TargetTime - DeltaTime); // hiding does not use up the walk's time limit
+			bExploreWalkPaused = true;
+			return;
+		}
+		if (bExploreWalkPaused)
+		{
+			bExploreWalkPaused = false;
+			if (AInteractableActor* Resume = Cast<AInteractableActor>(ExploreTarget.Get()))
+			{
+				Interactions->RequestInteraction(Resume); // back on the way to the loot
+			}
+		}
 	}
 	AActor* Target = ExploreTarget.Get();
 	const bool bTargetDone = !Target || (Cast<ALootCrateActor>(Target) && Cast<ALootCrateActor>(Target)->IsLooted());
@@ -266,7 +385,7 @@ void UPlaytestBotSubsystem::TickExplore(float DeltaTime)
 		if (!Best || ExploreTime > BotExploreLimit)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Exploration done (%.0f s)"), ExploreTime);
-			Stage = EBotStage::EnterCombat;
+			Stage = AfterExplore;
 			return;
 		}
 		ExploreTarget = Best;
@@ -293,7 +412,8 @@ void UPlaytestBotSubsystem::TickFight(float DeltaTime)
 		{
 			return; // the preparation waits for the repair
 		}
-		if (!bDeployed && Flow->GetWaveIndex() <= 1)
+		// The first preparation (wave 1 — or wave 2 after an ambush fight, whose wave 1 had none).
+		if (!bDeployed)
 		{
 			DeployDefences();
 			bDeployed = true;
@@ -476,7 +596,7 @@ void UPlaytestBotSubsystem::DeployDefences()
 	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] %s defences ordered: %d"), *PlaytestBotRules::ProfileName(Profile), DeploysOrdered);
 }
 
-void UPlaytestBotSubsystem::CombatAssist()
+void UPlaytestBotSubsystem::CombatAssist(bool bAllowWarmMoves)
 {
 	// _veteran_combat_assist / _normal_combat_assist with the real supplies (deviation: Godot healed with pause charges
 	// and lowered the cold by decree).
@@ -510,7 +630,7 @@ void UPlaytestBotSubsystem::CombatAssist()
 	}
 	// No food left: the squad steps into the nearest active heat zone (as a player would; Godot's bot had no need).
 	AOperativeCharacter* Leader = Member(0);
-	if (bNeedsWarmth && Leader && WarmMoveCooldown <= 0.f)
+	if (bNeedsWarmth && bAllowWarmMoves && Leader && WarmMoveCooldown <= 0.f)
 	{
 		const UHeatSourceComponent* Best = nullptr;
 		float BestDistance = 4000.f;
@@ -642,6 +762,22 @@ void UPlaytestBotSubsystem::SmartTactics(float DeltaTime)
 			Spatial.RecordEvent(TEXT("COVER_ENTER"), Leader->DisplayName.ToString(), BestId, BestStand, Details);
 			return;
 		}
+		// No barricade: a Sprint 12 wall-cover slot close by with the wall towards the enemies (Codex.Bot.WallCover).
+		FCoverSlot Slot;
+		if (BotTuning::CVarWallCover.GetValueOnGameThread() != 0 && !Leader->bInCover && !Leader->HasPendingCover()
+			&& FindWallCover(Leader, Threat, BotTuning::CVarWallCoverRadius.GetValueOnGameThread(), Slot)
+			&& Leader->OrderTakeCover(Slot, false) == EOperativeOrderResult::Accepted)
+		{
+			MoveCooldown = 4.f;
+			++WallCoverMoves;
+			TSharedRef<FJsonObject> Details = MakeShared<FJsonObject>();
+			Details->SetStringField(TEXT("reason"), TEXT("WALL_COVER"));
+			Details->SetBoolField(TEXT("high"), Slot.Height == ECoverHeight::HighCover);
+			Spatial.RecordEvent(TEXT("COVER_ENTER"), Leader->DisplayName.ToString(), GetNameSafe(Slot.WallActor.Get()), Slot.WorldLocation, Details);
+			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] %s takes wall cover (%s) %.0f m away"), *Leader->DisplayName.ToString(),
+				Slot.Height == ECoverHeight::HighCover ? TEXT("high") : TEXT("low"), FVector::Dist2D(Slot.WorldLocation, Leader->GetActorLocation()) / 100.f);
+			return;
+		}
 	}
 	// 4. Stances: crouch behind a barricade, stand up when out of it.
 	UpdateStances();
@@ -670,16 +806,6 @@ bool UPlaytestBotSubsystem::FindCover(const AOperativeCharacter* Leader, const F
 		}
 	}
 	return OutScore > -TNumericLimits<float>::Max();
-}
-
-namespace BotTuning
-{
-	// Set by Scripts/Tools/jev_ai_coach.py through -dpcvars= for its experiments.
-	static TAutoConsoleVariable<int32> CVarAssault(TEXT("Codex.Bot.MarksmanAssault"), 1, TEXT("Bot storms lone marksmen (0 / 1)"));
-	static TAutoConsoleVariable<float> CVarClearRadius(TEXT("Codex.Bot.AssaultClearRadius"), 1500.f,
-		TEXT("No other enemy this close to the leader (cm) before the bot storms a marksman"));
-	static TAutoConsoleVariable<float> CVarStopDistance(TEXT("Codex.Bot.AssaultStopDistance"), 900.f,
-		TEXT("The storming squad stops this far from the marksman (cm)"));
 }
 
 bool UPlaytestBotSubsystem::AssaultMarksman()
@@ -757,7 +883,7 @@ bool UPlaytestBotSubsystem::ReactToMarksman()
 		FVector Stand;
 		FString CoverId;
 		float Score = 0.f;
-		if (Leader && !Leader->IsBehindBarricade() && FindCover(Leader, It->GetActorLocation(), Stand, CoverId, Score))
+		if (Leader && MoveCooldown <= 0.f && !Leader->IsBehindBarricade() && FindCover(Leader, It->GetActorLocation(), Stand, CoverId, Score))
 		{
 			Leader->OrderMoveTo(Stand, false);
 			MoveCooldown = 3.f;
@@ -770,8 +896,15 @@ bool UPlaytestBotSubsystem::ReactToMarksman()
 		if (bReacted)
 		{
 			++MarksmanReactions;
-			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Marksman %s aims at %s (%.0f%%): crouch%s"), *It->GetName(),
-				*Target->DisplayName.ToString(), It->GetAimProgress() * 100.f, CoverId.IsEmpty() ? TEXT("") : TEXT(", leader to cover"));
+			// One line per aim (the reaction repeats every tick of it).
+			const double Now = GetWorld()->GetTimeSeconds();
+			if (LastReactedMarksman.Get() != *It || Now - LastReactLogTime > 3.0)
+			{
+				LastReactedMarksman = *It;
+				LastReactLogTime = Now;
+				UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Marksman %s aims at %s (%.0f%%): crouch%s"), *It->GetName(),
+					*Target->DisplayName.ToString(), It->GetAimProgress() * 100.f, CoverId.IsEmpty() ? TEXT("") : TEXT(", leader to cover"));
+			}
 		}
 		return bReacted;
 	}
@@ -888,7 +1021,8 @@ void UPlaytestBotSubsystem::UpdateStances()
 	for (int32 Index = 0; Index < 3; ++Index)
 	{
 		AOperativeCharacter* Each = Member(Index);
-		if (!Each || Each->IsMoving())
+		// A wall-cover slot runs its own stance (low cover crouched, high cover by the corner rules).
+		if (!Each || Each->IsMoving() || Each->bInCover || Each->HasPendingCover())
 		{
 			continue;
 		}
@@ -932,8 +1066,707 @@ void UPlaytestBotSubsystem::HandleEnemyDied(AActor* Victim, const FString& Sourc
 	Spatial.RecordEvent(TEXT("ENEMY_DEATH"), Source, Victim->GetName(), Victim->GetActorLocation(), Details);
 }
 
+void UPlaytestBotSubsystem::GatherPatrols(TArray<AEnemyCharacter*>& OutEnemies, TArray<FBotPatrolView>& OutViews) const
+{
+	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	{
+		if (It->IsDying() || !BotIsAlive(*It) || !It->IsOnPatrol())
+		{
+			continue;
+		}
+		FBotPatrolView View;
+		View.Location = It->GetActorLocation();
+		View.Forward = It->GetActorForwardVector().GetSafeNormal2D();
+		// The enemy's own perception in force (data file + Codex.Perception.* knobs), heightened while searching.
+		View.bSearching = It->IsSearching();
+		View.Params = View.bSearching ? PerceptionRules::Scaled(It->GetPerception(), EnemyPerception::GetSearch().PerceptionMultiplier) : It->GetPerception();
+		View.Suspicion = It->GetSuspicion();
+		OutEnemies.Add(*It);
+		OutViews.Add(View);
+	}
+}
+
+bool UPlaytestBotSubsystem::IsEyeLineClear(const AEnemyCharacter* Enemy, const AOperativeCharacter* Operative) const
+{
+	if (!Enemy || !Operative || Operative->IsHiddenInCoverFrom(Enemy->GetActorLocation()))
+	{
+		return false;
+	}
+	// The enemy's own sight trace (AEnemyCharacter::FindVisibleOperative): eyes -> profile, pawns never block.
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(BotStealthSight), false, Enemy);
+	for (TActorIterator<APawn> It(GetWorld()); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
+	FHitResult Hit;
+	return !GetWorld()->LineTraceSingleByChannel(Hit, UTacticalSightSubsystem::EyePoint(*Enemy), UTacticalSightSubsystem::ProfilePoint(*Operative),
+		ECC_Visibility, Params);
+}
+
+void UPlaytestBotSubsystem::ApplyStealthStance(EOperativeStance Stance, float DeltaTime)
+{
+	auto Loudness = [](EOperativeStance Each) { return Each == EOperativeStance::Standing ? 2 : (Each == EOperativeStance::Crouching ? 1 : 0); };
+	if (Stance == StealthStance)
+	{
+		StanceLouderTime = 0.f;
+		return;
+	}
+	// Quieter at once; louder only once it has been safe for a second (no stand-up / get-down churn).
+	if (Loudness(Stance) > Loudness(StealthStance))
+	{
+		StanceLouderTime += DeltaTime;
+		if (StanceLouderTime < 1.f)
+		{
+			return;
+		}
+	}
+	StanceLouderTime = 0.f;
+	StealthStance = Stance;
+	++StanceChanges;
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		AOperativeCharacter* Each = Member(Index);
+		if (Each && !Each->bInCover && Each->GetStance() != Stance)
+		{
+			Each->SetStance(Stance);
+		}
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] bot stance %s at %.1f s"), BotStealthRules::StanceName(Stance), GetWorld()->GetTimeSeconds());
+}
+
+bool UPlaytestBotSubsystem::TickStealth(float DeltaTime, bool bExploring)
+{
+	StealthMoveCooldown = FMath::Max(0.f, StealthMoveCooldown - DeltaTime);
+	StealthDecisionTimer += DeltaTime;
+	const bool bTrapWalk = TrapState == 1 || TrapState == 2;
+	if (StealthDecisionTimer < BotStealthInterval)
+	{
+		// Between decisions the last one stands: hiding / holding / the trap walk keep the squad.
+		return StealthAction != EBotStealthAction::Sneak || bTrapWalk;
+	}
+	const float Step = StealthDecisionTimer;
+	StealthDecisionTimer = 0.f;
+	UWorld* World = GetWorld();
+	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader || !BotIsAlive(Leader))
+	{
+		Leader = Member(0);
+	}
+	if (!Leader || !Squad)
+	{
+		return false;
+	}
+	CombatAssist(false); // medkits / warming food while sneaking (no walks to a heat source)
+	const double Now = World->GetTimeSeconds();
+	TArray<AEnemyCharacter*> Patrols;
+	TArray<FBotPatrolView> Views;
+	GatherPatrols(Patrols, Views);
+	for (AEnemyCharacter* Each : Patrols)
+	{
+		KnownPatrols.Add(Each);
+	}
+	// A known patrol enemy, alive, off its patrol and not by the bot's strike: it noticed something.
+	if (FirstDetectionTime < 0.0 && !bAmbushIssued)
+	{
+		for (const TWeakObjectPtr<AEnemyCharacter>& Known : KnownPatrols)
+		{
+			const AEnemyCharacter* Enemy = Known.Get();
+			if (Enemy && !Enemy->IsDying() && BotIsAlive(Enemy) && !Enemy->IsOnPatrol())
+			{
+				FirstDetectionTime = Now;
+				UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] bot detected at %.1f s by %s (sneaking %.1f s)"), Now, *Enemy->GetName(), Now - StealthStartTime);
+				break;
+			}
+		}
+	}
+
+	// Suspicion, searches and the target (the nearest patrol enemy; the nearest searcher for a search contact).
+	const FVector LeaderLocation = Leader->GetActorLocation();
+	FBotStealthInput Input;
+	AEnemyCharacter* Suspicious = nullptr;
+	AEnemyCharacter* Searcher = nullptr;
+	AEnemyCharacter* Nearest = nullptr;
+	float NearestDistance = TNumericLimits<float>::Max();
+	for (int32 Index = 0; Index < Patrols.Num(); ++Index)
+	{
+		const float Distance = FVector::Dist2D(LeaderLocation, Views[Index].Location);
+		if (Views[Index].Suspicion > Input.MaxSuspicion)
+		{
+			Input.MaxSuspicion = Views[Index].Suspicion;
+			Input.SuspiciousDistanceCm = Distance;
+			Suspicious = Patrols[Index];
+		}
+		if (Views[Index].bSearching && Distance < Input.SearcherDistanceCm)
+		{
+			Input.SearcherDistanceCm = Distance;
+			Searcher = Patrols[Index];
+		}
+		if (Distance < NearestDistance)
+		{
+			NearestDistance = Distance;
+			Nearest = Patrols[Index];
+		}
+	}
+	const bool bSearchOn = Searcher != nullptr;
+	if (bSearchOn && !bSearchWasOn)
+	{
+		++SearchesSeen;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] bot sees a search at %.1f s (%s %.0f m away)"), Now, *Searcher->GetName(),
+			Input.SearcherDistanceCm / 100.f);
+	}
+	bSearchWasOn = bSearchOn;
+	AEnemyCharacter* Target = StealthTarget.Get();
+	if (!Target || Target->IsDying() || !BotIsAlive(Target) || !Target->IsOnPatrol())
+	{
+		Target = Nearest;
+		StealthTarget = Target;
+	}
+	if (!Target && !bExploring)
+	{
+		// No patrol left to sneak up on: strike the nearest enemy, else the classic start.
+		AActor* Any = nullptr;
+		float AnyDistance = TNumericLimits<float>::Max();
+		for (AActor* Enemy : LiveEnemies())
+		{
+			const float Distance = FVector::Dist2D(Enemy->GetActorLocation(), LeaderLocation);
+			if (Distance < AnyDistance)
+			{
+				AnyDistance = Distance;
+				Any = Enemy;
+			}
+		}
+		if (AEnemyCharacter* AnyEnemy = Cast<AEnemyCharacter>(Any))
+		{
+			StrikeFirst(AnyEnemy, EBotAmbushReason::Forced, AnyDistance);
+		}
+		else
+		{
+			StealthOutcome = TEXT("no_patrols");
+			UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] outcome no_patrols at %.1f s: nothing to sneak up on, the bot starts the fight"), Now);
+			Stage = EBotStage::EnterCombat;
+		}
+		return true;
+	}
+
+	// Eye lines (only where the sight could reach) and the stance that keeps the leader under every patrol's senses.
+	TArray<bool> LeaderLines;
+	Input.bSquadUnseen = true;
+	for (int32 Index = 0; Index < Patrols.Num(); ++Index)
+	{
+		const float Reach = PerceptionRules::EffectiveSightRange(Views[Index].Params, EOperativeStance::Standing) * StealthConfig.SightMargin * 1.1f;
+		LeaderLines.Add(FVector::Dist2D(LeaderLocation, Views[Index].Location) > Reach || IsEyeLineClear(Patrols[Index], Leader));
+		for (int32 MemberIndex = 0; MemberIndex < 3 && Input.bSquadUnseen; ++MemberIndex)
+		{
+			const AOperativeCharacter* Each = Member(MemberIndex);
+			if (!Each || FVector::Dist2D(Each->GetActorLocation(), Views[Index].Location) > Reach)
+			{
+				continue;
+			}
+			const bool bClear = Each == Leader ? LeaderLines.Last() : IsEyeLineClear(Patrols[Index], Each);
+			Input.bSquadUnseen = BotStealthRules::SightRisk(Views[Index].Params, Views[Index].Location, Views[Index].Forward, Each->GetActorLocation(),
+				Each->GetStance(), bClear, StealthConfig) < 1.f;
+		}
+	}
+	const EOperativeStance Desired = BotStealthRules::ChooseSneakStance(Views, LeaderLines, LeaderLocation, StealthConfig);
+
+	Input.bHasTarget = Target != nullptr;
+	Input.TargetDistanceCm = Target ? FVector::Dist2D(LeaderLocation, Target->GetActorLocation()) : TNumericLimits<float>::Max();
+	Input.RifleRangeCm = Leader->CurrentWeapon ? Leader->CurrentWeapon->AttackRangeCm : 1400.f;
+	Input.bLeaderInCover = Leader->bInCover || Leader->IsBehindBarricade();
+	Input.ElapsedSeconds = static_cast<float>(Now - StealthStartTime);
+	Input.bTrapPending = TrapState == 3;
+	// Frost hounds smell whatever the stance: strike from beyond their nose, and strike now when it is about to work.
+	const float SmellReach = BotStealthRules::SmellReach(Views, StealthConfig);
+	Input.MinAmbushRangeCm = SmellReach;
+	FVector SmellerLocation = FVector::ZeroVector;
+	for (int32 Index = 0; Index < Views.Num() && !Input.bSmellImminent; ++Index)
+	{
+		for (int32 MemberIndex = 0; MemberIndex < 3; ++MemberIndex)
+		{
+			const AOperativeCharacter* Each = Member(MemberIndex);
+			if (Each && Views[Index].Params.SmellRadiusCm > 0.f
+				&& FVector::Dist(Each->GetActorLocation(), Views[Index].Location) <= Views[Index].Params.SmellRadiusCm * 1.25f)
+			{
+				Input.bSmellImminent = true;
+				SmellerLocation = Views[Index].Location;
+			}
+		}
+	}
+
+	// The trap opener first (not while a patrol grows suspicious): the medic lays a mine on the target's route.
+	if (!bExploring && StealthConfig.bUseTrap && TrapState < 4 && Target && Input.MaxSuspicion < StealthConfig.AlarmSuspicion
+		&& TickTrap(Target, Patrols))
+	{
+		ApplyStealthStance(Desired, Step);
+		return true;
+	}
+	Input.bTrapPending = TrapState == 3;
+
+	EBotAmbushReason Reason = EBotAmbushReason::None;
+	const EBotStealthAction Action = BotStealthRules::Decide(Input, StealthConfig, Reason);
+	++StealthDecisions;
+	if (Action != StealthAction && Action != EBotStealthAction::Ambush) // StrikeFirst logs the ambush itself
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] bot %s at %.1f s (stance %s, target %s %.0f m, suspicion %.2f, search %d, cover %d)"),
+			BotStealthRules::ActionName(Action), Now, BotStealthRules::StanceName(StealthStance), *GetNameSafe(Target), Input.TargetDistanceCm / 100.f,
+			Input.MaxSuspicion, bSearchOn ? 1 : 0, Input.bLeaderInCover ? 1 : 0);
+	}
+	const EBotStealthAction Previous = StealthAction;
+	StealthAction = Action;
+	switch (Action)
+	{
+	case EBotStealthAction::Ambush:
+	{
+		AEnemyCharacter* Victim = Reason == EBotAmbushReason::PreEmptive && Suspicious ? Suspicious
+			: (Reason == EBotAmbushReason::SearchContact && Searcher ? Searcher : Target);
+		StrikeFirst(Victim, Reason, Victim ? FVector::Dist2D(LeaderLocation, Victim->GetActorLocation()) : 0.f);
+		return true;
+	}
+	case EBotStealthAction::Hide:
+		if (Previous != EBotStealthAction::Hide)
+		{
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				if (AOperativeCharacter* Each = Member(Index); Each && !Each->bInCover && Each->IsMoving())
+				{
+					Each->StopOperative();
+				}
+			}
+			Squad->SetFollowersHolding(true);
+			bFollowersHeld = true;
+		}
+		// Still = silent; prone unless the wall already hides him.
+		ApplyStealthStance(Input.bLeaderInCover ? EOperativeStance::Crouching : EOperativeStance::Prone, 1.f);
+		return true;
+	case EBotStealthAction::Evade:
+	{
+		// Away from the nose, at the quietest gait that still moves (no sprint: running is heard far).
+		if (bFollowersHeld)
+		{
+			Squad->SetFollowersHolding(false);
+			bFollowersHeld = false;
+		}
+		ApplyStealthStance(Desired == EOperativeStance::Prone ? EOperativeStance::Crouching : Desired, 1.f);
+		if (Previous != EBotStealthAction::Evade || StealthMoveCooldown <= 0.f)
+		{
+			StealthMoveCooldown = 1.5f;
+			FVector Away = (LeaderLocation - SmellerLocation).GetSafeNormal2D();
+			Away = Away.IsNearlyZero() ? -Leader->GetActorForwardVector() : Away;
+			FVector OnNav;
+			for (const float Turn : { 0.f, 40.f, -40.f, 80.f, -80.f })
+			{
+				if (ProjectToNav(LeaderLocation + Away.RotateAngleAxis(Turn, FVector::UpVector) * 800.f, OnNav))
+				{
+					Leader->OrderMoveTo(OnNav, false);
+					break;
+				}
+			}
+		}
+		return true;
+	}
+	case EBotStealthAction::Hold:
+	{
+		if (bFollowersHeld)
+		{
+			Squad->SetFollowersHolding(false);
+			bFollowersHeld = false;
+		}
+		FCoverSlot Slot;
+		if (!Input.bLeaderInCover && !Leader->HasPendingCover() && StealthMoveCooldown <= 0.f && Target)
+		{
+			StealthMoveCooldown = 4.f;
+			if (FindWallCover(Leader, Target->GetActorLocation(), 800.f, Slot) && Leader->OrderTakeCover(Slot, false) == EOperativeOrderResult::Accepted)
+			{
+				++WallCoverMoves;
+				UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] bot takes cover (%s) %.0f m away at %.1f s"),
+					Slot.Height == ECoverHeight::HighCover ? TEXT("high") : TEXT("low"), FVector::Dist2D(Slot.WorldLocation, LeaderLocation) / 100.f, Now);
+			}
+			else
+			{
+				Leader->StopOperative();
+				ApplyStealthStance(EOperativeStance::Prone, 1.f);
+			}
+		}
+		return true;
+	}
+	default:
+		break;
+	}
+	// Sneak: the quietest needed gait; exploring walks on to the loot, else the leader closes in behind the target.
+	if (bFollowersHeld)
+	{
+		Squad->SetFollowersHolding(false);
+		bFollowersHeld = false;
+	}
+	ApplyStealthStance(Desired, Step);
+	if (bExploring || !Target)
+	{
+		return false;
+	}
+	if (StealthMoveCooldown <= 0.f)
+	{
+		StealthMoveCooldown = BotStealthMoveInterval;
+		const float Standoff = FMath::Min(Input.RifleRangeCm * 0.95f, FMath::Max(Input.RifleRangeCm * StealthConfig.AmbushRangeFraction * 0.85f, SmellReach));
+		const FVector TargetLocation = Target->GetActorLocation();
+		const FVector Goal = TargetLocation + (BotStealthRules::ApproachPoint(TargetLocation, Target->GetActorForwardVector(), LeaderLocation, Standoff)
+			- TargetLocation).RotateAngleAxis(StealthConfig.ApproachAngleDeg, FVector::UpVector);
+		FVector OnNav;
+		if (ProjectToNav(Goal, OnNav) || ProjectToNav((Goal + LeaderLocation) * 0.5f, OnNav))
+		{
+			Leader->OrderMoveTo(OnNav, false);
+		}
+	}
+	return true;
+}
+
+bool UPlaytestBotSubsystem::TickTrap(AEnemyCharacter* Target, const TArray<AEnemyCharacter*>& Patrols)
+{
+	UWorld* World = GetWorld();
+	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+	URelocationSubsystem* Relocation = World->GetSubsystem<URelocationSubsystem>();
+	AOperativeCharacter* Commander = Member(0);
+	AOperativeCharacter* Medic = Member(2);
+	const double Now = World->GetTimeSeconds();
+	auto GiveUp = [this, Squad, Commander](const TCHAR* Why)
+	{
+		TrapState = 4;
+		if (Squad && Commander && Squad->GetLeader() != Commander)
+		{
+			Squad->SetLeader(Commander);
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] bot trap skipped: %s"), Why);
+		return false;
+	};
+	switch (TrapState)
+	{
+	case 0:
+	{
+		const AEnemyCharacter* RouteOwner = Target->AssignedPatrolRoute ? Target : Target->GetEscortLeader();
+		const APatrolRouteActor* Route = RouteOwner ? RouteOwner->AssignedPatrolRoute.Get() : nullptr;
+		if (!Squad || !Relocation || !Commander || !Medic || Medic->GetDeployableCount(EDeployableType::Mine) <= 0 || !Route)
+		{
+			return GiveUp(TEXT("no medic with a mine or no route"));
+		}
+		// The waypoint nearest the squad that no patrol enemy stands near (it will walk into it later).
+		int32 BestIndex = INDEX_NONE;
+		float BestDistance = 4000.f;
+		FVector BestPoint = FVector::ZeroVector;
+		for (int32 Index = 0; Index < Route->GetNumberOfWaypoints(); ++Index)
+		{
+			const FVector Point = Route->GetWaypointWorldLocation(Index);
+			bool bQuiet = true;
+			for (const AEnemyCharacter* Enemy : Patrols)
+			{
+				bQuiet &= FVector::Dist2D(Enemy->GetActorLocation(), Point) > 1500.f;
+			}
+			const float Distance = FVector::Dist2D(Point, Commander->GetActorLocation());
+			FVector OnNav;
+			if (bQuiet && Distance < BestDistance && ProjectToNav(Point, OnNav))
+			{
+				BestDistance = Distance;
+				BestIndex = Index;
+				BestPoint = OnNav;
+			}
+		}
+		if (BestIndex == INDEX_NONE)
+		{
+			return GiveUp(TEXT("no quiet waypoint within 40 m"));
+		}
+		TrapRetreatPoint = Commander->GetActorLocation();
+		TrapMinesBefore = Medic->GetDeployableCount(EDeployableType::Mine);
+		Squad->SetLeader(Medic); // the squad sneaks with him (formation), the stealth stance follows his position
+		Relocation->ExecuteDeploy(Medic, EDeployableType::Mine, BestPoint, 0.f, false);
+		TrapState = 1;
+		TrapStateTime = Now;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] bot trap: %s lays a mine at waypoint %d of %s (%.0f m) at %.1f s"), *Medic->DisplayName.ToString(),
+			BestIndex, *Route->GetName(), BestDistance / 100.f, Now);
+		return true;
+	}
+	case 1:
+	{
+		const bool bLaid = Medic && Medic->GetDeployableCount(EDeployableType::Mine) < TrapMinesBefore;
+		const bool bIdle = Relocation && Relocation->GetActiveDeployCount() == 0 && Now - TrapStateTime > 2.0;
+		if (!bLaid && !bIdle && Now - TrapStateTime < 45.0 && Medic)
+		{
+			return true;
+		}
+		if (!bLaid)
+		{
+			return GiveUp(TEXT("the mine was not laid"));
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] bot trap laid at %.1f s, the squad backs off"), Now);
+		if (Squad && Commander)
+		{
+			Squad->SetLeader(Commander);
+			Commander->OrderMoveTo(TrapRetreatPoint, false);
+		}
+		TrapState = 2;
+		TrapStateTime = Now;
+		return true;
+	}
+	case 2:
+		if (Commander && FVector::Dist2D(Commander->GetActorLocation(), TrapRetreatPoint) > 250.f && Now - TrapStateTime < 30.0)
+		{
+			return true;
+		}
+		TrapState = 3;
+		TrapStateTime = Now;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] bot waits for the trap at %.1f s"), Now);
+		return false;
+	case 3:
+		if (SearchesSeen > 0 || Now - TrapStateTime > StealthConfig.TrapWaitSeconds)
+		{
+			TrapState = 4;
+			UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] bot trap wait over at %.1f s (%s)"), Now, SearchesSeen > 0 ? TEXT("search seen") : TEXT("timed out"));
+		}
+		return false;
+	default:
+		return false;
+	}
+}
+
+void UPlaytestBotSubsystem::StrikeFirst(AEnemyCharacter* Target, EBotAmbushReason Reason, float DistanceCm)
+{
+	UWorld* World = GetWorld();
+	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+	if (!Target || !Squad)
+	{
+		return;
+	}
+	bAmbushIssued = true;
+	AmbushReason = Reason;
+	const AOperativeCharacter* Leader = Squad->GetLeader();
+	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] bot ambush at %.1f s (%s, target %s %.0f m, leader cover %d, stance %s, sneaking %.1f s)"),
+		World->GetTimeSeconds(), BotStealthRules::ReasonName(Reason), *Target->GetName(), DistanceCm / 100.f,
+		Leader && (Leader->bInCover || Leader->IsBehindBarricade()) ? 1 : 0, BotStealthRules::StanceName(StealthStance),
+		World->GetTimeSeconds() - StealthStartTime);
+	Squad->SetSquadPosture(BotStealthRules::PostureFor(true));
+	if (bFollowersHeld)
+	{
+		Squad->SetFollowersHolding(false);
+		bFollowersHeld = false;
+	}
+	// The attack order of Ctrl + click (CodexTacticsPlayerController): the ambush fight starts, every operative fires at him.
+	const bool bStarted = ULevelEncounterSubsystem::NotifyHostileContactIn(World, EAmbushTrigger::AttackOrder, Target);
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		if (AOperativeCharacter* Each = Member(Index))
+		{
+			if (Each->GetStance() == EOperativeStance::Prone && !Each->bInCover)
+			{
+				Each->SetStance(EOperativeStance::Crouching);
+			}
+			Each->SetManualPriorityTarget(Target);
+		}
+	}
+	if (!bStarted)
+	{
+		const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+		if (!Flow || !Flow->IsCombatUnlocked())
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Stealth] the attack order did not start the fight: the bot presses the start button"));
+			Stage = EBotStage::EnterCombat;
+		}
+	}
+}
+
+void UPlaytestBotSubsystem::OnStealthCombatStarted()
+{
+	UWorld* World = GetWorld();
+	const ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>();
+	const EAmbushTrigger Trigger = Encounter ? Encounter->GetLastTrigger() : EAmbushTrigger::AttackOrder;
+	const double Now = World->GetTimeSeconds();
+	if (bAmbushIssued && Trigger == EAmbushTrigger::AttackOrder)
+	{
+		StealthOutcome = FString(TEXT("ambush_")) + BotStealthRules::ReasonName(AmbushReason);
+	}
+	else
+	{
+		switch (Trigger)
+		{
+		case EAmbushTrigger::PatrolDetection: StealthOutcome = TEXT("detected"); break;
+		case EAmbushTrigger::SquadAutoFire: StealthOutcome = TEXT("auto_fire"); break;
+		case EAmbushTrigger::EnemyDamaged: StealthOutcome = TEXT("damage"); break;
+		default: StealthOutcome = TEXT("attack_order"); break;
+		}
+		if (FirstDetectionTime < 0.0 && Trigger == EAmbushTrigger::PatrolDetection)
+		{
+			FirstDetectionTime = Now;
+		}
+	}
+	UE_LOG(LogCodexTactics, Display,
+		TEXT("[Stealth] outcome %s at %.1f s (sneaking %.1f s, first detection %s, searches seen %d, trap %d, stance changes %d, decisions %d, seed %d)"),
+		*StealthOutcome, Now, Now - StealthStartTime, FirstDetectionTime >= 0.0 ? *FString::Printf(TEXT("%.1f s"), FirstDetectionTime) : TEXT("none"),
+		SearchesSeen, TrapState >= 2 && TrapState <= 4 && TrapMinesBefore > 0 ? 1 : 0, StanceChanges, StealthDecisions, Seed);
+	if (USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
+	{
+		Squad->SetSquadPosture(BotStealthRules::PostureFor(true));
+		if (bFollowersHeld)
+		{
+			Squad->SetFollowersHolding(false);
+			bFollowersHeld = false;
+		}
+		if (Member(0) && Squad->GetLeader() != Member(0))
+		{
+			Squad->SetLeader(Member(0));
+		}
+	}
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		if (AOperativeCharacter* Each = Member(Index); Each && Each->GetStance() == EOperativeStance::Prone && !Each->bInCover)
+		{
+			Each->SetStance(EOperativeStance::Crouching);
+		}
+	}
+	Stage = EBotStage::Fight;
+}
+
+bool UPlaytestBotSubsystem::FindWallCover(const AOperativeCharacter* Operative, const FVector& Threat, float RadiusCm, FCoverSlot& OutSlot) const
+{
+	UWorld* World = GetWorld();
+	if (!Operative || !World)
+	{
+		return false;
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(BotWallCover), false, Operative);
+	for (TActorIterator<APawn> It(World); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
+	const FVector Feet = Operative->GetActorLocation() - FVector(0.f, 0.f, Operative->GetSimpleCollisionHalfHeight());
+	const FVector Origin = Feet + FVector(0.f, 0.f, 45.f); // knee height: finds 60 cm covers too
+	float BestScore = -TNumericLimits<float>::Max();
+	for (int32 Step = 0; Step < 16; ++Step)
+	{
+		const FVector Direction = FVector::ForwardVector.RotateAngleAxis(Step * 22.5f, FVector::UpVector);
+		FHitResult Hit;
+		if (!World->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * RadiusCm, ECC_Visibility, Params) || FMath::Abs(Hit.ImpactNormal.Z) > 0.3f)
+		{
+			continue;
+		}
+		const FVector Normal = FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f).GetSafeNormal();
+		// The face he would put his back to must look away from the threat (the wall between them).
+		if (Normal.IsNearlyZero() || FVector::DotProduct(Normal, (Threat - Hit.ImpactPoint).GetSafeNormal2D()) > -0.3f)
+		{
+			continue;
+		}
+		FCoverSlot Slot;
+		if (!CoverTraceRules::FindCoverSlotAt(World, Hit.ImpactPoint, -Normal, Slot) || !Slot.IsValid())
+		{
+			continue;
+		}
+		const float Score = (Slot.Height == ECoverHeight::HighCover ? 3.f : 0.f) - FVector::Dist2D(Slot.WorldLocation, Feet) / 100.f;
+		if (Score > BestScore)
+		{
+			BestScore = Score;
+			OutSlot = Slot;
+		}
+	}
+	return BestScore > -TNumericLimits<float>::Max();
+}
+
+int32 UPlaytestBotSubsystem::SpawnRuntimePatrols()
+{
+	UWorld* World = GetWorld();
+	UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+	ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>();
+	const AOperativeCharacter* Leader = Member(0);
+	if (!Waves || !Encounter || !Leader || Encounter->LevelHasPatrols())
+	{
+		return 0;
+	}
+	// Fixed offsets from the commander's start (forward F, right R): route A a 10 x 10 m loop 20-30 m ahead (marksman +
+	// hound escort), route B a ping-pong line 15-35 m ahead, 15 m to the right (hound + hound + frostbitten escorts).
+	const FVector F = Leader->GetActorForwardVector().GetSafeNormal2D();
+	const FVector R = FVector::CrossProduct(FVector::UpVector, F);
+	const FVector Feet = Leader->GetActorLocation() - FVector(0.f, 0.f, Leader->GetSimpleCollisionHalfHeight());
+	auto MakeRoute = [this, World](const TArray<FVector>& Points, bool bLoop) -> APatrolRouteActor*
+	{
+		TArray<FVector> OnNav;
+		for (const FVector& Point : Points)
+		{
+			FVector Projected;
+			if (ProjectToNav(Point, Projected))
+			{
+				OnNav.Add(Projected);
+			}
+		}
+		if (OnNav.Num() < 2)
+		{
+			return nullptr;
+		}
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		APatrolRouteActor* Route = World->SpawnActor<APatrolRouteActor>(OnNav[0], FRotator::ZeroRotator, Params);
+		USplineComponent* Spline = Route ? Route->GetRouteSpline() : nullptr;
+		if (!Spline)
+		{
+			return nullptr;
+		}
+		Spline->ClearSplinePoints(false);
+		for (const FVector& Point : OnNav)
+		{
+			Spline->AddSplinePoint(Point, ESplineCoordinateSpace::World, false);
+		}
+		Spline->UpdateSpline();
+		Route->bIsLoop = bLoop;
+		Route->bPingPong = !bLoop;
+		Route->DefaultWaitTimeSeconds = 3.f;
+		return Route;
+	};
+	int32 Spawned = 0;
+	auto Spawn = [&Spawned, Waves](EEnemyArchetype Type, const FVector& At, const FVector& Facing) -> AEnemyCharacter*
+	{
+		AEnemyCharacter* Enemy = Waves->SpawnEnemy(Type, At + FVector(0.f, 0.f, 100.f), Facing.Rotation());
+		Spawned += Enemy ? 1 : 0;
+		return Enemy;
+	};
+	const FVector A0 = Feet + F * 2000.f - R * 500.f;
+	if (APatrolRouteActor* RouteA = MakeRoute({ A0, Feet + F * 2000.f + R * 500.f, Feet + F * 3000.f + R * 500.f, Feet + F * 3000.f - R * 500.f }, true))
+	{
+		AEnemyCharacter* Marksman = Spawn(EEnemyArchetype::Marksman, RouteA->GetWaypointWorldLocation(0), R);
+		AEnemyCharacter* Hound = Spawn(EEnemyArchetype::FrostHound, RouteA->GetWaypointWorldLocation(0) - R * 300.f, R);
+		if (Marksman)
+		{
+			Marksman->StartPatrol(RouteA, nullptr);
+			if (Hound)
+			{
+				Hound->StartPatrol(nullptr, Marksman);
+			}
+		}
+	}
+	if (APatrolRouteActor* RouteB = MakeRoute({ Feet + F * 1500.f + R * 1500.f, Feet + F * 3500.f + R * 1500.f }, false))
+	{
+		AEnemyCharacter* Lead = Spawn(EEnemyArchetype::FrostHound, RouteB->GetWaypointWorldLocation(0), F);
+		AEnemyCharacter* Second = Spawn(EEnemyArchetype::FrostHound, RouteB->GetWaypointWorldLocation(0) - F * 250.f, F);
+		AEnemyCharacter* Walker = Spawn(EEnemyArchetype::Frostbitten, RouteB->GetWaypointWorldLocation(0) - F * 450.f, F);
+		if (Lead)
+		{
+			Lead->StartPatrol(RouteB, nullptr);
+			for (AEnemyCharacter* Escort : { Second, Walker })
+			{
+				if (Escort)
+				{
+					Escort->StartPatrol(nullptr, Lead);
+				}
+			}
+		}
+	}
+	Encounter->SetCombatStartOverride(ECombatStartMode::Ambush);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Runtime patrols: %d enemies on 2 routes ahead of the squad (the map is not saved)"), Spawned);
+	return Spawned;
+}
+
 void UPlaytestBotSubsystem::Finish(const TCHAR* Result, int32 ExitCode)
 {
+	if (bStealthLevel && StealthOutcome.IsEmpty())
+	{
+		StealthOutcome = TEXT("none");
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] outcome none at %.1f s (sneaking %.1f s, first detection %s, searches seen %d, decisions %d, seed %d)"),
+			GetWorld()->GetTimeSeconds(), GetWorld()->GetTimeSeconds() - StealthStartTime,
+			FirstDetectionTime >= 0.0 ? *FString::Printf(TEXT("%.1f s"), FirstDetectionTime) : TEXT("none"), SearchesSeen, StealthDecisions, Seed);
+	}
 	bActive = false;
 	{
 		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
@@ -960,12 +1793,20 @@ namespace PlaytestBotCommand
 	{
 		if (UPlaytestBotSubsystem* Bot = World ? World->GetSubsystem<UPlaytestBotSubsystem>() : nullptr)
 		{
+			int32 RunSeed = 1;
+			for (const FString& Arg : Args)
+			{
+				if (Arg.StartsWith(TEXT("seed=")))
+				{
+					RunSeed = FCString::Atoi(*Arg.Mid(5));
+				}
+			}
 			Bot->StartBot(PlaytestBotRules::ParseProfile(Args.IsEmpty() ? FString(TEXT("NORMAL")) : Args[0]), false,
-				!Args.Contains(TEXT("nocollect")));
+				!Args.Contains(TEXT("nocollect")), RunSeed);
 		}
 	}
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(TEXT("CodexTactics.Bot"),
-		TEXT("Starts the playtest bot in this game: CodexTactics.Bot [CASUAL|NORMAL|VETERAN] [nocollect]."),
+		TEXT("Starts the playtest bot in this game: CodexTactics.Bot [CASUAL|NORMAL|VETERAN] [nocollect] [seed=<n>]."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }

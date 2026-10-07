@@ -467,7 +467,7 @@ export const StealthCombatPanel: React.FC<{
           <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
           <span>
             Порядок силы: <code>-dpcvars=</code> в командной строке &gt; ai_tuning.json &gt; значение в коде. Запуск с <code>-NoAITuning</code> пропускает файл.
-            Внимание: Jev AI-коуч (<code>Scripts/Tools/jev_ai_coach.py</code>) перезаписывает ai_tuning.json целиком — после его прогона проверьте значения здесь.
+            Jev AI-коуч (<code>Scripts/Tools/jev_ai_coach.py</code>) не трогает заданные здесь ключи: он пишет предложение в <code>Saved/Coach/*_proposal.json</code>, а при применении (<code>--apply-proposal</code>) сливает только свои ключи (<code>coach_cvars</code>).
             Остальные переменные — только справка: задавайте их в консоли игры (~) или через <code>-dpcvars=</code>.
           </span>
         </div>

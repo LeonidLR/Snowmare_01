@@ -30,6 +30,14 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
    cannot regress performance unnoticed and optimizations cannot break behaviour (the logic smokes run too).
 6. **Handoff.** With every commit update `docs/port/HANDOFF.md` (§10 change log), this file's Log, and PORT_MATRIX.md where a row changes.
 7. Godot (`Documents/Codex/godot-test-01`) stays read-only for both. Balance values are tuned in Unreal (`DA_GameBalanceConfig`).
+8. **Agents' worktree (2026-10-07).** `../CodexTactics-agents` is a `git worktree` on branch `agents/work` with its own
+   Binaries / Intermediate / `Saved/agent.lock`, so agents can build, test and run smokes while the user's editor has the main
+   folder open. Untracked asset packs (M4_Cover_Pack, RifleAnims, Post_Apo_Survivor, monsters, Animations_Grenade, …) and
+   `DerivedDataCache` are directory junctions to the main folder (read-only use); `Config/DefaultScalability.ini` is a copy.
+   Tracked user-edited assets (maps, BP_Operative, ABP_Operative) are the COMMITTED versions there. Work there, commit on
+   `agents/work`, then fast-forward / merge into `main` from the main folder once the user's editor is closed (`git merge
+   agents/work`). Re-sync before a new task: `git -C ../CodexTactics-agents merge main`. A new untracked pack needs a new
+   junction (`mklink /J`). Gemini gets its own worktree the same way (`git worktree add ../CodexTactics-gemini -b gemini/<task> main`).
 
 ---
 

@@ -27,7 +27,7 @@
     "RealtimeSelectSmoke", "MarksmanCloseShotSmoke", "HordeSmoke", "CoverSmoke",
     "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke", "CoverCrouchSmoke", "CoverMoveSmoke",
     "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke", "PrepDeploySmoke", "SightSmoke",
-    "TripwireSmoke", "TurnRulesSmoke"
+    "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; timeout in seconds; knownFail = reported but does not fail the run",
@@ -266,7 +266,7 @@
       "name": "bot-telemetry",
       "globs": ["Source/**/Bot/**", "Source/**/Telemetry/**"],
       "tests": ["CodexTactics.Bot", "CodexTactics.Telemetry"],
-      "smokes": ["BotMarksmanSmoke", "BotRepairSmoke"]
+      "smokes": ["BotMarksmanSmoke", "BotRepairSmoke", "BotStealthSmoke"]
     },
     {
       "name": "build-config",
