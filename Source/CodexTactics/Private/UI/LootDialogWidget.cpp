@@ -16,6 +16,11 @@
 #include "Engine/World.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/LootCrateActor.h"
+#include "Interactables/ItemStashComponent.h"
+#include "Characters/SquadSubsystem.h"
+#include "Characters/SquadTransferSubsystem.h"
+#include "GameFramework/PlayerController.h"
+#include "UI/InventoryDragDropOperation.h"
 #include "UI/CodexTacticsHUD.h"
 
 #define LOCTEXT_NAMESPACE "LootDialogWidget"
@@ -159,7 +164,10 @@ void ULootDialogWidget::ShowCrate(ALootCrateActor* Crate)
 	{
 		TitleText->SetText(LootClean(FText::FromString(Crate->CrateName.ToString().ToUpper())));
 	}
+	ShownCrate = Crate;
+	ShownRevision = Crate->GetStash() ? Crate->GetStash()->GetRevision() : -1;
 	const TArray<FLootEntry> Items = Crate->GetItems();
+	EntryButtons.Reset();
 	if (ItemsGrid)
 	{
 		ItemsGrid->ClearChildren();
@@ -176,6 +184,8 @@ void ULootDialogWidget::ShowCrate(ALootCrateActor* Crate)
 			Label->SetText(LootClean(Items[Index].GetLabel()));
 			Button->AddChild(Label);
 			Button->Setup(this, Items[Index].Item);
+			CodexButtonFocus::Disable(Button);
+			EntryButtons.Add(Button);
 			ItemsGrid->AddChildToUniformGrid(Button, Index / 2, Index % 2); // Godot GridContainer columns = 2
 		}
 	}
@@ -188,7 +198,126 @@ void ULootDialogWidget::ShowCrate(ALootCrateActor* Crate)
 
 void ULootDialogWidget::HideDialog()
 {
+	ShownCrate.Reset();
 	SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void ULootDialogWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	// Sprint 13: items stored / taken by drag & drop (or a pending walk-over) refresh the open list.
+	ALootCrateActor* Crate = ShownCrate.Get();
+	if (Crate && GetVisibility() != ESlateVisibility::Collapsed && Crate->GetStash() && Crate->GetStash()->GetRevision() != ShownRevision
+		&& !PressedEntry.IsValid())
+	{
+		ShowCrate(Crate);
+	}
+}
+
+ULootEntryButton* ULootDialogWidget::FindEntryAt(const FVector2D& ScreenPosition) const
+{
+	for (ULootEntryButton* Button : EntryButtons)
+	{
+		if (Button && Button->GetCachedGeometry().IsUnderLocation(ScreenPosition))
+		{
+			return Button;
+		}
+	}
+	return nullptr;
+}
+
+UInventoryDragDropOperation* ULootDialogWidget::CreateDragOperation(ELootItem LootItem)
+{
+	ALootCrateActor* Crate = ShownCrate.Get();
+	ETransferItem Item = ETransferItem::Medkit;
+	const int32 Available = Crate && ItemStash::FromLootItem(LootItem, Item) ? Crate->GetStoredCount(Item) : 0;
+	if (Available <= 0)
+	{
+		return nullptr;
+	}
+	UInventoryDragDropOperation* Operation = NewObject<UInventoryDragDropOperation>(this);
+	Operation->Item = Item;
+	Operation->Container = Crate;
+	Operation->Available = Available;
+	Operation->Pivot = EDragPivot::CenterCenter;
+	UBorder* Visual = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+	Visual->SetBrushColor(LootFrameColor);
+	Visual->SetPadding(FMargin(6.f, 3.f));
+	UTextBlock* Label = MakeText(NAME_None, 11, LootButtonTextColor);
+	Label->SetText(LootClean(FText::FromString(FString::Printf(TEXT("%s x%d"), *TransferRules::GetItemName(Item), Available))));
+	Visual->SetContent(Label);
+	Operation->DefaultDragVisual = Visual;
+	return Operation;
+}
+
+FReply ULootDialogWidget::NativeOnPreviewMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	PressedEntry.Reset();
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		ETransferItem Item = ETransferItem::Medkit;
+		if (ULootEntryButton* Entry = FindEntryAt(InMouseEvent.GetScreenSpacePosition()); Entry && ItemStash::FromLootItem(Entry->GetItem(), Item))
+		{
+			// A drag takes the line out onto an operative; a release without a drag is the usual click (NativeOnMouseButtonUp).
+			PressedEntry = Entry;
+			return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
+		}
+	}
+	return Super::NativeOnPreviewMouseButtonDown(InGeometry, InMouseEvent);
+}
+
+FReply ULootDialogWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (PressedEntry.IsValid() && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		ULootEntryButton* Entry = PressedEntry.Get();
+		PressedEntry.Reset();
+		if (FindEntryAt(InMouseEvent.GetScreenSpacePosition()) == Entry)
+		{
+			HandleItem(Entry->GetItem());
+		}
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
+}
+
+void ULootDialogWidget::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
+{
+	if (ULootEntryButton* Entry = PressedEntry.Get())
+	{
+		OutOperation = CreateDragOperation(Entry->GetItem());
+		PressedEntry.Reset();
+		return;
+	}
+	Super::NativeOnDragDetected(InGeometry, InMouseEvent, OutOperation);
+}
+
+void ULootDialogWidget::NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	Super::NativeOnDragCancelled(InDragDropEvent, InOperation);
+	UInventoryDragDropOperation* Operation = Cast<UInventoryDragDropOperation>(InOperation);
+	const APlayerController* PC = GetOwningPlayer();
+	ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
+	if (Operation && Hud)
+	{
+		Hud->HandleDragReleasedOverWorld(Operation, InDragDropEvent.GetScreenSpacePosition()); // onto an operative's model
+	}
+}
+
+bool ULootDialogWidget::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	const UInventoryDragDropOperation* Operation = Cast<UInventoryDragDropOperation>(InOperation);
+	if (!Operation)
+	{
+		return Super::NativeOnDrop(InGeometry, InDragDropEvent, InOperation);
+	}
+	const APlayerController* PC = GetOwningPlayer();
+	ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
+	if (Hud && ShownCrate.IsValid() && !Operation->Container.IsValid() && Operation->Sender.IsValid())
+	{
+		Hud->HandleTransferRequest(FTransferRequest::MakeStore(Operation->Sender.Get(), ShownCrate.Get(), Operation->Item));
+	}
+	return true; // a crate line dropped back on its own window: nothing to do
 }
 
 void ULootDialogWidget::HandleItem(ELootItem Item)

@@ -3,8 +3,10 @@
 #include "CoreMinimal.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/LootRules.h"
+#include "Characters/TransferRules.h"
 #include "LootCrateActor.generated.h"
 
+class UItemStashComponent;
 class UMaterialInstanceDynamic;
 
 /** Crate look (Godot loot_tier). */
@@ -22,6 +24,11 @@ enum class ELootTier : uint8
  * OpenSeconds; single items or everything go into the leader's supply. A trapped crate opens the defusal menu first
  * (2 s crouched work); a detonation wrecks the crate and burns everything inside. Enemies within 1.8 m set the wire
  * off. Crates can be pushed like barrels.
+ * Sprint 13: two-way storage. Its items live in a UItemStashComponent (the same storage as a pile on the ground); the
+ * authored FLootContents counts move into it on first use (bonus weapon / clothing stay in Contents). Operatives store
+ * items by dropping a dragged inventory line on the crate or its open loot window, and take them out with a click
+ * (whole stack, Godot rule: no carry limit) or by dragging a loot line onto an operative / portrait / the drawer
+ * (capacity clamp). Stash capacity in units (Stash->Capacity, default 500).
  * Godot reference: Scenes/movements/loot_crate.gd, main.gd `_start_opening_crate`, `_on_action_confirmed` (branch 1),
  * `_on_loot_single_item_pressed`, `_on_loot_all_pressed`; Scenes/interactables/loot_crate.tscn (1.2 x 0.8 x 0.8 m).
  */
@@ -34,6 +41,7 @@ public:
 	ALootCrateActor();
 
 	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual bool HandleDirectInteraction(AOperativeCharacter* Leader) override;
 	virtual FActionMenuRequest BuildActionMenu(const AOperativeCharacter* Leader) const override;
@@ -54,11 +62,28 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
 	void TakeAll(AOperativeCharacter* Collector);
 
+	/** Everything inside: the stash merged with the authored contents not moved yet (Godot order). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Loot")
-	TArray<FLootEntry> GetItems() const { return Contents.GetItems(); }
+	TArray<FLootEntry> GetItems() const;
 
+	/** Nothing left inside (also after a blast). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Loot")
-	bool IsLooted() const { return bLooted; }
+	bool IsLooted() const;
+
+	/** Sprint 13: units of a storable item inside (stash + authored contents). */
+	int32 GetStoredCount(ETransferItem Item) const;
+
+	/** Sprint 13: the storage with the authored contents moved in (store / take go through it). */
+	UItemStashComponent* GetSyncedStash();
+
+	UItemStashComponent* GetStash() const { return Stash; }
+
+	/** Sprint 13: can items be put in now (not wrecked, not trapped). */
+	bool CanStore() const { return !bDestroyed && !bTrapped; }
+
+	/** Sprint 13 storage (shared item-container logic). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Loot")
+	TObjectPtr<UItemStashComponent> Stash;
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Loot")
 	bool IsDestroyed() const { return bDestroyed; }
@@ -94,11 +119,10 @@ public:
 
 private:
 	void UpdateVisuals();
+	/** Moves the authored storable counts of Contents into the stash (idempotent; smokes may refill Contents). */
+	void SyncContentsIntoStash();
 	void FinishOpening(TWeakObjectPtr<AOperativeCharacter> WeakLeader);
 	void FinishDefusal(TWeakObjectPtr<AOperativeCharacter> WeakUser);
-
-	UPROPERTY(VisibleInstanceOnly, Category = "CodexTactics|Loot")
-	bool bLooted = false;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "CodexTactics|Loot")
 	bool bDestroyed = false;

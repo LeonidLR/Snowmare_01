@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "EngineUtils.h"
 #include "Interactables/InteractionSubsystem.h"
+#include "Interactables/ItemStashComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
@@ -62,6 +63,8 @@ ALootCrateActor::ALootCrateActor()
 
 	// Godot box 1.2 x 0.8 x 0.8 m.
 	Box->SetBoxExtent(FVector(60.f, 40.f, 40.f));
+	Stash = CreateDefaultSubobject<UItemStashComponent>(TEXT("Stash"));
+	Stash->Capacity = 500; // Sprint 13: generous default, tunable per crate
 	Mesh->SetRelativeScale3D(FVector(1.2f, 0.8f, 0.8f));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> BaseMaterial(TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
 	if (BaseMaterial.Succeeded())
@@ -77,6 +80,12 @@ void ALootCrateActor::OnConstruction(const FTransform& Transform)
 	UpdateVisuals();
 }
 
+void ALootCrateActor::BeginPlay()
+{
+	Super::BeginPlay();
+	Stash->OnChanged.AddUObject(this, &ALootCrateActor::UpdateVisuals); // stored / taken items: empty colour on / off
+}
+
 void ALootCrateActor::UpdateVisuals()
 {
 	// Godot _update_visuals colours (sRGB): wrecked, empty, trapped, golden stash, blue army crate.
@@ -85,7 +94,7 @@ void ALootCrateActor::UpdateVisuals()
 	{
 		Color = FColor(31, 31, 31);
 	}
-	else if (bLooted)
+	else if (IsLooted())
 	{
 		Color = FColor(56, 56, 61);
 	}
@@ -128,7 +137,7 @@ void ALootCrateActor::Tick(float DeltaSeconds)
 bool ALootCrateActor::HandleDirectInteraction(AOperativeCharacter* Leader)
 {
 	// Godot: an intact, untrapped crate with loot opens right away (no action menu).
-	if (bDestroyed || bLooted || bTrapped || !Leader)
+	if (bDestroyed || IsLooted() || bTrapped || !Leader)
 	{
 		return false;
 	}
@@ -143,7 +152,7 @@ FActionMenuRequest ALootCrateActor::BuildActionMenu(const AOperativeCharacter* L
 	{
 		return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("Wrecked", "Этот ящик разорван взрывом ловушки. Всё содержимое уничтожено."));
 	}
-	if (bLooted)
+	if (IsLooted())
 	{
 		return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("Empty", "Этот ящик уже пуст. Всё полезное забрали."));
 	}
@@ -222,9 +231,11 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 	{
 		return FText::GetEmpty();
 	}
+	SyncContentsIntoStash();
 	const FString Id = Item == ELootItem::BonusWeapon ? Contents.BonusWeaponId
 		: (Item == ELootItem::BonusClothing ? Contents.BonusClothingId : FString());
-	const int32 Count = Contents.Take(Item);
+	ETransferItem Storable = ETransferItem::Medkit;
+	const int32 Count = ItemStash::FromLootItem(Item, Storable) ? Stash->Take(Storable, MAX_int32) : Contents.Take(Item);
 	if (Count <= 0)
 	{
 		return FText::GetEmpty();
@@ -245,25 +256,20 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 	case ELootItem::BonusClothing: Collector->BonusItems.Add(Id); break;
 	default: Collector->AddAmmo(AmmoKey(Item).ToString(), Count); break;
 	}
-	if (Contents.IsEmpty())
-	{
-		bLooted = true;
-		UpdateVisuals();
-	}
+	UpdateVisuals();
 	return TakeLine(Item, Count, Id);
 }
 
 void ALootCrateActor::TakeAll(AOperativeCharacter* Collector)
 {
-	if (bLooted || bDestroyed || !Collector)
+	if (IsLooted() || bDestroyed || !Collector)
 	{
 		return;
 	}
-	for (const FLootEntry& Entry : Contents.GetItems())
+	for (const FLootEntry& Entry : GetItems())
 	{
 		TakeItem(Entry.Item, Collector);
 	}
-	bLooted = true;
 	UpdateVisuals();
 }
 
@@ -275,8 +281,8 @@ void ALootCrateActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
 	}
 	bDestroyed = true;
 	bTrapped = false;
-	bLooted = true;
 	Contents.DestroyAll();
+	Stash->Clear();
 	UpdateVisuals();
 	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Снайпер") : InstigatorName) : LOCTEXT("TrapBlast", "ВЗРЫВ ЛОВУШКИ"),
 		bByShot ? LOCTEXT("ShotBoom", "💥 Взрыв ловушки ящика от выстрела! Ящик разорван в щепки, всё содержимое сгорело!")
@@ -287,16 +293,17 @@ void ALootCrateActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
 
 void ALootCrateActor::RestoreSaved(bool bInLooted, bool bInDefused, bool bInDestroyed)
 {
-	bLooted = bInLooted || bInDestroyed;
+	const bool bEmpty = bInLooted || bInDestroyed;
 	bDestroyed = bInDestroyed;
 	if (bInDefused || bInDestroyed)
 	{
 		bDefused = bInDefused;
 		bTrapped = false;
 	}
-	if (bLooted)
+	if (bEmpty)
 	{
 		Contents.DestroyAll();
+		Stash->Clear();
 	}
 	UpdateVisuals();
 	if (bDestroyed)
@@ -305,6 +312,45 @@ void ALootCrateActor::RestoreSaved(bool bInLooted, bool bInDefused, bool bInDest
 		SetActorHiddenInGame(true);
 		SetActorEnableCollision(false);
 	}
+}
+
+void ALootCrateActor::SyncContentsIntoStash()
+{
+	for (uint8 Index = 0; Index <= static_cast<uint8>(ETransferItem::PlasmaAmmo); ++Index)
+	{
+		const ETransferItem Item = static_cast<ETransferItem>(Index);
+		const int32 Count = Contents.Take(ItemStash::ToLootItem(Item));
+		if (Count > 0)
+		{
+			Stash->Add(Item, Count, true); // the authored loot never counts against the capacity
+		}
+	}
+}
+
+UItemStashComponent* ALootCrateActor::GetSyncedStash()
+{
+	SyncContentsIntoStash();
+	return Stash;
+}
+
+TArray<FLootEntry> ALootCrateActor::GetItems() const
+{
+	FLootContents Merged = Contents;
+	for (const TPair<ETransferItem, int32>& Pair : Stash->GetItems())
+	{
+		Merged.AddCount(ItemStash::ToLootItem(Pair.Key), Pair.Value);
+	}
+	return Merged.GetItems();
+}
+
+bool ALootCrateActor::IsLooted() const
+{
+	return bDestroyed || (Contents.IsEmpty() && Stash->IsEmpty());
+}
+
+int32 ALootCrateActor::GetStoredCount(ETransferItem Item) const
+{
+	return Stash->GetCount(Item) + Contents.GetCount(ItemStash::ToLootItem(Item));
 }
 
 #undef LOCTEXT_NAMESPACE

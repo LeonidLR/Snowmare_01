@@ -13,7 +13,11 @@ class UMainMenuWidget;
 class UDialogueWidget;
 class UActionBarWidget;
 class UInventoryDrawerWidget;
-class UTransferDialogWidget;
+class UQuantitySplitDialogWidget;
+enum class ETransferItem : uint8;
+enum class ETransferRequestOutcome : uint8;
+struct FTransferRequest;
+class UInventoryDragDropOperation;
 class UProfileDialogWidget;
 class UVictoryPanelWidget;
 class AOperativeCharacter;
@@ -73,9 +77,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UInventoryDrawerWidget> InventoryDrawerWidgetClass;
 
-	/** «ПЕРЕД» hand-over dialog class (a Widget Blueprint subclass can restyle it). */
+	/** Sprint 13 hand-over quantity dialog class (a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
-	TSubclassOf<UTransferDialogWidget> TransferDialogWidgetClass;
+	TSubclassOf<UQuantitySplitDialogWidget> QuantitySplitDialogWidgetClass;
 
 	/** Pause menu / save-load dialog classes (Widget Blueprint subclasses can restyle them). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
@@ -118,10 +122,29 @@ public:
 	/** Action bar «ИНВ» (Godot _toggle_inventory_drawer): opens / closes the drawer, the weapon selector closes. */
 	void ToggleInventoryDrawer();
 
-	UTransferDialogWidget* GetTransferDialog() const { return TransferDialog; }
+	UQuantitySplitDialogWidget* GetQuantityDialog() const { return QuantityDialog; }
 
-	/** Action bar «ПЕРЕД» (Godot _toggle_transfer_dialog): the drawer and the weapon selector close. */
-	void ToggleTransferDialog();
+	/**
+	 * Sprint 13 drop of an inventory item (drawer drag) on TargetActor / at Point: a supply crate -> store in it, a pile on
+	 * the ground -> add to it, a squad mate's model / portrait (or within 80 cm of him) -> hand over, anything else ->
+	 * drop on the ground at Point. Then HandleTransferRequest.
+	 */
+	ETransferRequestOutcome HandleTransferDropOnActor(AOperativeCharacter* Sender, ETransferItem Item, AActor* TargetActor, const FVector& Point);
+
+	/** Sprint 13 take-out drag (crate loot line) dropped on Taker (model / portrait / drawer). */
+	ETransferRequestOutcome HandleTakeDrop(AActor* Container, ETransferItem Item, AOperativeCharacter* Taker);
+
+	/**
+	 * Orders lock, stock / room checks with a feed line, then the quantity split dialog (more than one quantity possible)
+	 * or the single possible quantity at once through USquadTransferSubsystem::Request (range rules there).
+	 */
+	ETransferRequestOutcome HandleTransferRequest(const FTransferRequest& Request);
+
+	/**
+	 * A drag released where no widget took it (absolute desktop pixels): the world under the cursor is traced; an inventory
+	 * drag goes to HandleTransferDropOnActor, a take-out drag to the operative there (else nothing).
+	 */
+	void HandleDragReleasedOverWorld(UInventoryDragDropOperation* Operation, const FVector2D& ScreenPosition);
 
 	UPauseMenuWidget* GetPauseMenu() const { return PauseMenu; }
 	USaveLoadDialogWidget* GetSaveLoadDialog() const { return SaveLoadDialog; }
@@ -134,8 +157,8 @@ public:
 	void ClosePauseMenus();
 
 	/**
-	 * Esc (Godot main.gd KEY_ESCAPE): the overwrite confirmation, the save / load dialog, the pause menu, the inventory
-	 * drawer, the profile, the transfer dialog close in that order; with nothing open the pause menu opens (not over the start menu).
+	 * Esc (Godot main.gd KEY_ESCAPE): the hand-over quantity dialog (cancel), the overwrite confirmation, the save / load
+	 * dialog, the pause menu, the inventory drawer, the profile close in that order; with nothing open the pause menu opens (not over the start menu).
 	 * Returns false when Esc should go on (e.g. to the dialogue).
 	 */
 	bool HandleEscape();
@@ -209,7 +232,7 @@ private:
 	TObjectPtr<UInventoryDrawerWidget> InventoryDrawer;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UTransferDialogWidget> TransferDialog;
+	TObjectPtr<UQuantitySplitDialogWidget> QuantityDialog;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UProfileDialogWidget> ProfileDialog;

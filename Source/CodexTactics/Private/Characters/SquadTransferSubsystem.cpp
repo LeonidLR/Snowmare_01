@@ -1,6 +1,17 @@
 #include "Characters/SquadTransferSubsystem.h"
+#include "AIController.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Interactables/DroppedItemActor.h"
+#include "Interactables/ItemStashComponent.h"
+#include "Interactables/LootCrateActor.h"
 #include "Characters/SquadSubsystem.h"
+#include "Combat/HealthComponent.h"
+#include "EngineUtils.h"
+#include "GameFlow/GameFlowSubsystem.h"
+#include "Navigation/PathFollowingComponent.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
+#include "TimerManager.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -18,6 +29,19 @@ namespace
 	constexpr float TransferPickRadius = 220.f;
 	/** Godot torus 0.75..1.05 m: the ring at its mean radius. */
 	constexpr float TransferRingRadius = 90.f;
+
+	/** Sprint 13 approach: check period, give-up time, tolerances. */
+	constexpr float PendingTickSeconds = 0.2f;
+	constexpr double PendingTimeoutSeconds = 45.0;
+	constexpr double PendingOrderGraceSeconds = 1.0;
+	constexpr float PendingPathTolerance = 150.f;
+	constexpr float PendingOtherOrderTolerance = 60.f;
+	constexpr float PendingRecipientMoved = 100.f;
+
+	bool TransferIsAlive(const AOperativeCharacter* Operative)
+	{
+		return Operative && (!Operative->HealthComponent || Operative->HealthComponent->IsAlive());
+	}
 }
 
 ATransferCursorActor::ATransferCursorActor()
@@ -200,6 +224,500 @@ bool USquadTransferSubsystem::TransferItem(AOperativeCharacter* Sender, AOperati
 	}
 	Post(Sender->DisplayName, FString::Printf(TEXT("🟣 Передал(а) %s бойцу %s!"), *Result.Feedback, *Recipient->DisplayName.ToString()));
 	return true;
+}
+
+FTransferRequest FTransferRequest::MakeGive(AOperativeCharacter* Sender, AOperativeCharacter* InRecipient, ETransferItem InItem, int32 InQuantity)
+{
+	FTransferRequest Request;
+	Request.Action = ETransferAction::Give;
+	Request.Operative = Sender;
+	Request.Recipient = InRecipient;
+	Request.Item = InItem;
+	Request.Quantity = InQuantity;
+	return Request;
+}
+
+FTransferRequest FTransferRequest::MakeDrop(AOperativeCharacter* Sender, const FVector& InPoint, ETransferItem InItem, int32 InQuantity)
+{
+	FTransferRequest Request;
+	Request.Action = ETransferAction::DropToGround;
+	Request.Operative = Sender;
+	Request.Point = InPoint;
+	Request.Item = InItem;
+	Request.Quantity = InQuantity;
+	return Request;
+}
+
+FTransferRequest FTransferRequest::MakeStore(AOperativeCharacter* Sender, AActor* InContainer, ETransferItem InItem, int32 InQuantity)
+{
+	FTransferRequest Request;
+	Request.Action = ETransferAction::Store;
+	Request.Operative = Sender;
+	Request.Container = InContainer;
+	Request.Item = InItem;
+	Request.Quantity = InQuantity;
+	return Request;
+}
+
+FTransferRequest FTransferRequest::MakeTake(AOperativeCharacter* Taker, AActor* InContainer, ETransferItem InItem, int32 InQuantity)
+{
+	FTransferRequest Request;
+	Request.Action = ETransferAction::Take;
+	Request.Operative = Taker;
+	Request.Container = InContainer;
+	Request.Item = InItem;
+	Request.Quantity = InQuantity;
+	return Request;
+}
+
+AOperativeCharacter* USquadTransferSubsystem::ResolveDropRecipient(const AOperativeCharacter* Sender, AActor* HitActor, const FVector& Point,
+	float PickRadius) const
+{
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	if (!Squad)
+	{
+		return nullptr;
+	}
+	const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+	AOperativeCharacter* Hit = Cast<AOperativeCharacter>(HitActor);
+	if (!Hit && HitActor)
+	{
+		Hit = Cast<AOperativeCharacter>(HitActor->GetOwner());
+	}
+	if (Hit && Hit != Sender && Members.Contains(Hit) && TransferIsAlive(Hit))
+	{
+		return Hit;
+	}
+	AOperativeCharacter* Closest = nullptr;
+	float ClosestDistance = PickRadius;
+	for (AOperativeCharacter* Member : Members)
+	{
+		const float Distance = FVector::Dist2D(Member->GetActorLocation(), Point);
+		if (Member != Sender && TransferIsAlive(Member) && Distance <= ClosestDistance)
+		{
+			Closest = Member;
+			ClosestDistance = Distance;
+		}
+	}
+	return Closest;
+}
+
+FTransferRangeContext USquadTransferSubsystem::BuildRangeContext(const AOperativeCharacter& Sender, const AOperativeCharacter& Recipient) const
+{
+	return BuildRequestContext(FTransferRequest::MakeGive(const_cast<AOperativeCharacter*>(&Sender), const_cast<AOperativeCharacter*>(&Recipient),
+		ETransferItem::Medkit));
+}
+
+FTransferRangeContext USquadTransferSubsystem::BuildRequestContext(const FTransferRequest& InRequest) const
+{
+	FTransferRangeContext Context;
+	const AOperativeCharacter* Walker = InRequest.Operative.Get();
+	if (!Walker)
+	{
+		Context.bCanMove = false;
+		return Context;
+	}
+	Context.Distance = GetRequestDistance(InRequest);
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	Context.bInCombat = Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat;
+	const UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+	Context.bTurnBased = TurnBased && TurnBased->IsActive();
+	Context.bUnderFire = bForceUnderFireForTesting;
+	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It && !Context.bUnderFire; ++It)
+	{
+		const UHealthComponent* Health = It->GetHealthComponent();
+		Context.bUnderFire = It->GetCurrentTarget() == Walker && (!Health || Health->IsAlive());
+	}
+	Context.bCanMove = TransferIsAlive(Walker) && !Walker->IsRaging();
+	return Context;
+}
+
+UItemStashComponent* USquadTransferSubsystem::GetContainerStash(AActor* Container, bool bSync)
+{
+	if (ALootCrateActor* Crate = Cast<ALootCrateActor>(Container))
+	{
+		return bSync ? Crate->GetSyncedStash() : Crate->GetStash();
+	}
+	if (const ADroppedItemActor* Pile = Cast<ADroppedItemActor>(Container))
+	{
+		return Pile->GetStash();
+	}
+	return nullptr;
+}
+
+FVector USquadTransferSubsystem::GetTargetLocation(const FTransferRequest& InRequest)
+{
+	switch (InRequest.Action)
+	{
+	case ETransferAction::Give: return InRequest.Recipient.IsValid() ? InRequest.Recipient->GetActorLocation() : FVector::ZeroVector;
+	case ETransferAction::DropToGround: return InRequest.Point;
+	default: return InRequest.Container.IsValid() ? InRequest.Container->GetActorLocation() : FVector::ZeroVector;
+	}
+}
+
+float USquadTransferSubsystem::GetRequestDistance(const FTransferRequest& InRequest)
+{
+	const AOperativeCharacter* Walker = InRequest.Operative.Get();
+	if (!Walker)
+	{
+		return MAX_flt;
+	}
+	if (InRequest.Action == ETransferAction::Store || InRequest.Action == ETransferAction::Take)
+	{
+		if (const AInteractableActor* Object = Cast<AInteractableActor>(InRequest.Container.Get()))
+		{
+			return Object->GetDistanceTo(Walker->GetActorLocation()); // to the crate's box, not its centre
+		}
+		if (!InRequest.Container.IsValid())
+		{
+			return MAX_flt;
+		}
+	}
+	if (InRequest.Action == ETransferAction::Give && !InRequest.Recipient.IsValid())
+	{
+		return MAX_flt;
+	}
+	return FVector::Dist2D(Walker->GetActorLocation(), GetTargetLocation(InRequest));
+}
+
+int32 USquadTransferSubsystem::GetMaxQuantity(const FTransferRequest& InRequest) const
+{
+	const AOperativeCharacter* Operative = InRequest.Operative.Get();
+	if (!Operative)
+	{
+		return 0;
+	}
+	const int32 Stock = TransferRules::GetAvailable(*Operative, InRequest.Item);
+	switch (InRequest.Action)
+	{
+	case ETransferAction::Give:
+		return InRequest.Recipient.IsValid() ? TransferRules::GetMaxTransferQuantity(*Operative, *InRequest.Recipient, InRequest.Item) : 0;
+	case ETransferAction::DropToGround:
+		return Stock;
+	case ETransferAction::Store:
+	{
+		const UItemStashComponent* Stash = GetContainerStash(InRequest.Container.Get(), true);
+		return Stash ? FMath::Max(0, FMath::Min(Stock, Stash->GetFreeSpace())) : 0;
+	}
+	default:
+	{
+		const UItemStashComponent* Stash = GetContainerStash(InRequest.Container.Get(), true);
+		return Stash ? FMath::Max(0, FMath::Min(Stash->GetCount(InRequest.Item), TransferRules::GetRecipientCapacity(*Operative, InRequest.Item))) : 0;
+	}
+	}
+}
+
+ETransferRequestOutcome USquadTransferSubsystem::RequestTransfer(AOperativeCharacter* Sender, AOperativeCharacter* Recipient, ETransferItem InItem, int32 Quantity)
+{
+	if (!Sender || !Recipient || Sender == Recipient)
+	{
+		return ETransferRequestOutcome::Failed;
+	}
+	return Request(FTransferRequest::MakeGive(Sender, Recipient, InItem, Quantity));
+}
+
+ETransferRequestOutcome USquadTransferSubsystem::Request(const FTransferRequest& InRequest)
+{
+	AOperativeCharacter* Walker = InRequest.Operative.Get();
+	if (!Walker || InRequest.Quantity <= 0)
+	{
+		return ETransferRequestOutcome::Failed;
+	}
+	if (HasPendingTransfer())
+	{
+		CancelPendingTransfer(false);
+	}
+	switch (TransferRules::DecideRange(BuildRequestContext(InRequest)))
+	{
+	case ETransferRangeDecision::InRange:
+		return Execute(InRequest) > 0 ? ETransferRequestOutcome::Transferred : ETransferRequestOutcome::Failed;
+	case ETransferRangeDecision::Approach:
+		Pending.Request = InRequest;
+		Pending.StartTime = GetWorld()->GetTimeSeconds();
+		if (IssueApproach(*Walker, InRequest))
+		{
+			GetWorld()->GetTimerManager().SetTimer(PendingTimer, FTimerDelegate::CreateUObject(this, &USquadTransferSubsystem::TickPending),
+				PendingTickSeconds, true);
+			const FString What = TransferRules::GetItemName(InRequest.Item);
+			switch (InRequest.Action)
+			{
+			case ETransferAction::Give:
+				Post(Walker->DisplayName, FString::Printf(TEXT("🟣 Иду к бойцу %s, чтобы передать: %s."), *InRequest.Recipient->DisplayName.ToString(), *What));
+				break;
+			case ETransferAction::DropToGround:
+				Post(Walker->DisplayName, FString::Printf(TEXT("Иду выложить на землю: %s."), *What));
+				break;
+			case ETransferAction::Store:
+				Post(Walker->DisplayName, FString::Printf(TEXT("Иду к ящику, чтобы положить: %s."), *What));
+				break;
+			default:
+				Post(Walker->DisplayName, FString::Printf(TEXT("Иду забрать: %s."), *What));
+				break;
+			}
+			return ETransferRequestOutcome::Approaching;
+		}
+		Pending = FPendingTransfer();
+		break; // cannot walk over: blocked
+	default:
+		break;
+	}
+	if (InRequest.Action == ETransferAction::DropToGround)
+	{
+		// Decision: a drop out of reach while he cannot walk over goes down at his feet (getting rid of a load must
+		// always work, also under fire); stores / takes / hand-overs need the target within reach.
+		FTransferRequest AtFeet = InRequest;
+		AtFeet.Point = Walker->GetActorLocation();
+		return Execute(AtFeet) > 0 ? ETransferRequestOutcome::DroppedAtFeet : ETransferRequestOutcome::Failed;
+	}
+	Post(Walker->DisplayName, TEXT("Слишком далеко для передачи (макс. 2 метра)"));
+	return ETransferRequestOutcome::Blocked;
+}
+
+int32 USquadTransferSubsystem::ExecuteTransferQuantity(AOperativeCharacter* Sender, AOperativeCharacter* Recipient, ETransferItem InItem, int32 Quantity)
+{
+	if (!Sender || !Recipient || Sender == Recipient)
+	{
+		return 0;
+	}
+	return Execute(FTransferRequest::MakeGive(Sender, Recipient, InItem, Quantity));
+}
+
+int32 USquadTransferSubsystem::Execute(const FTransferRequest& InRequest)
+{
+	AOperativeCharacter* Operative = InRequest.Operative.Get();
+	if (!Operative || InRequest.Quantity <= 0)
+	{
+		return 0;
+	}
+	const FString Name = TransferRules::GetItemName(InRequest.Item);
+	switch (InRequest.Action)
+	{
+	case ETransferAction::Give:
+	{
+		AOperativeCharacter* Recipient = InRequest.Recipient.Get();
+		if (!Recipient || Recipient == Operative)
+		{
+			return 0;
+		}
+		const FTransferResult Result = TransferRules::TransferQuantity(*Operative, *Recipient, InRequest.Item, InRequest.Quantity);
+		if (Result.bRecipientFull)
+		{
+			Post(Operative->DisplayName, FString::Printf(TEXT("⚠️ У бойца %s нет места: %s."), *Recipient->DisplayName.ToString(), *Name));
+			return 0;
+		}
+		if (!Result.bDone)
+		{
+			Post(Operative->DisplayName, TEXT("В вашем инвентаре закончился этот предмет или патроны!"));
+			return 0;
+		}
+		Post(Operative->DisplayName, FString::Printf(TEXT("🟣 Передал(а) %s бойцу %s!%s"), *Result.Feedback, *Recipient->DisplayName.ToString(),
+			Result.bClampedByCapacity ? TEXT(" (больше не поместилось)") : TEXT("")));
+		return Result.Moved;
+	}
+	case ETransferAction::DropToGround:
+	{
+		const int32 Removed = TransferRules::RemoveFromOperative(*Operative, InRequest.Item, InRequest.Quantity);
+		if (Removed <= 0)
+		{
+			Post(Operative->DisplayName, TEXT("В вашем инвентаре закончился этот предмет или патроны!"));
+			return 0;
+		}
+		if (!ADroppedItemActor::SpawnOrMerge(GetWorld(), InRequest.Point, InRequest.Item, Removed))
+		{
+			TransferRules::AddToOperative(*Operative, InRequest.Item, Removed); // nothing could be spawned: keep it
+			return 0;
+		}
+		Post(Operative->DisplayName, FString::Printf(TEXT("Выбросил(а) на землю: %s x%d."), *Name, Removed));
+		return Removed;
+	}
+	case ETransferAction::Store:
+	{
+		ALootCrateActor* Crate = Cast<ALootCrateActor>(InRequest.Container.Get());
+		UItemStashComponent* Stash = GetContainerStash(InRequest.Container.Get(), true);
+		if (!Stash || (Crate && !Crate->CanStore()))
+		{
+			Post(Operative->DisplayName, TEXT("В этот ящик сейчас ничего не положить (заминирован или разрушен)."));
+			return 0;
+		}
+		const FTransferResult Result = TransferRules::StoreInStash(*Operative, *Stash, InRequest.Item, InRequest.Quantity);
+		if (Result.bRecipientFull)
+		{
+			Post(Operative->DisplayName, TEXT("⚠️ В ящике нет места!"));
+			return 0;
+		}
+		if (!Result.bDone)
+		{
+			Post(Operative->DisplayName, TEXT("В вашем инвентаре закончился этот предмет или патроны!"));
+			return 0;
+		}
+		Post(Operative->DisplayName, FString::Printf(TEXT("📦 Положил(а) в ящик: %s x%d.%s"), *Name, Result.Moved,
+			Result.bClampedByCapacity ? TEXT(" (ящик полон, остальное у меня)") : TEXT("")));
+		return Result.Moved;
+	}
+	default:
+	{
+		AActor* Container = InRequest.Container.Get();
+		UItemStashComponent* Stash = GetContainerStash(Container, true);
+		if (!Stash)
+		{
+			return 0;
+		}
+		const bool bPile = Cast<ADroppedItemActor>(Container) != nullptr;
+		const int32 Wanted = FMath::Min(InRequest.Quantity, Stash->GetCount(InRequest.Item));
+		const FTransferResult Result = TransferRules::TakeFromStash(*Stash, *Operative, InRequest.Item, InRequest.Quantity);
+		if (Result.bRecipientFull)
+		{
+			Post(Operative->DisplayName, FString::Printf(TEXT("⚠️ Больше не унести: %s."), *Name));
+			return 0;
+		}
+		if (!Result.bDone)
+		{
+			return 0;
+		}
+		const FString Left = Result.bClampedByCapacity ? FString::Printf(TEXT(" (не поместилось: %d, осталось %s)"), Wanted - Result.Moved,
+			bPile ? TEXT("на земле") : TEXT("в ящике")) : FString();
+		Post(Operative->DisplayName, bPile ? FString::Printf(TEXT("Подобрал(а): %s x%d.%s"), *Name, Result.Moved, *Left)
+			: FString::Printf(TEXT("📦 Взял(а) из ящика: %s x%d.%s"), *Name, Result.Moved, *Left));
+		return Result.Moved;
+	}
+	}
+}
+
+void USquadTransferSubsystem::PickUpAll(AOperativeCharacter* Leader, ADroppedItemActor* Pile)
+{
+	if (!Leader || !Pile)
+	{
+		return;
+	}
+	TWeakObjectPtr<ADroppedItemActor> WeakPile(Pile);
+	const UItemStashComponent* Stash = Pile->GetStash();
+	for (const ETransferItem Type : Stash->GetItemTypes())
+	{
+		if (!WeakPile.IsValid() || WeakPile->IsActorBeingDestroyed())
+		{
+			break; // emptied (and destroyed) by the previous take
+		}
+		Execute(FTransferRequest::MakeTake(Leader, Pile, Type, Stash->GetCount(Type)));
+	}
+}
+
+void USquadTransferSubsystem::CancelPendingTransfer(bool bNotify)
+{
+	AOperativeCharacter* Walker = Pending.Request.Operative.Get();
+	Pending = FPendingTransfer();
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(PendingTimer);
+	}
+	if (bNotify && Walker)
+	{
+		Post(Walker->DisplayName, TEXT("Передача отменена."));
+	}
+}
+
+bool USquadTransferSubsystem::IssueApproach(AOperativeCharacter& Walker, const FTransferRequest& InRequest)
+{
+	const FVector Anchor = GetTargetLocation(InRequest);
+	FVector Away = (Walker.GetActorLocation() - Anchor).GetSafeNormal2D();
+	if (Away.IsNearlyZero())
+	{
+		Away = FVector::ForwardVector;
+	}
+	FVector Destination = Anchor + Away * TransferRules::ApproachStopDistance;
+	if (InRequest.Action == ETransferAction::DropToGround)
+	{
+		Destination = Anchor + Away * TransferRules::GroundDropStopDistance;
+	}
+	else if (const AInteractableActor* Object = Cast<AInteractableActor>(InRequest.Container.Get()))
+	{
+		Destination = Object->GetApproachPoint(Walker.GetActorLocation());
+	}
+	if (Walker.OrderMoveTo(Destination, false) != EOperativeOrderResult::Accepted)
+	{
+		return false;
+	}
+	Pending.Destination = Destination;
+	Pending.RecipientAnchor = Anchor;
+	Pending.PathDestination.Reset();
+	Pending.OrderTime = GetWorld()->GetTimeSeconds();
+	// Baseline of our own path at once: an order given in the same frame (before the first check) must read as "another
+	// order", not as the start of ours. A deferred move (stand-up clip first) is captured by TickPending.
+	const AAIController* AI = Cast<AAIController>(Walker.GetController());
+	const UPathFollowingComponent* Path = AI ? AI->GetPathFollowingComponent() : nullptr;
+	if (Path && Path->GetStatus() == EPathFollowingStatus::Moving && FVector::Dist2D(Path->GetPathDestination(), Destination) <= PendingPathTolerance)
+	{
+		Pending.PathDestination = Path->GetPathDestination();
+	}
+	return true;
+}
+
+void USquadTransferSubsystem::TickPending()
+{
+	const FTransferRequest Request = Pending.Request;
+	AOperativeCharacter* Walker = Request.Operative.Get();
+	const bool bTargetGone = (Request.Action == ETransferAction::Give && !TransferIsAlive(Request.Recipient.Get()))
+		|| ((Request.Action == ETransferAction::Store || Request.Action == ETransferAction::Take)
+			&& (!Request.Container.IsValid() || Request.Container->IsActorBeingDestroyed()));
+	if (!TransferIsAlive(Walker) || bTargetGone)
+	{
+		CancelPendingTransfer(Walker != nullptr);
+		return;
+	}
+	if (GetRequestDistance(Request) <= TransferRules::MaxTransferDistance)
+	{
+		CancelPendingTransfer(false);
+		Walker->StopOperative();
+		Execute(Request);
+		return;
+	}
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - Pending.StartTime > PendingTimeoutSeconds)
+	{
+		CancelPendingTransfer(true);
+		return;
+	}
+	const bool bMovingTarget = Request.Action == ETransferAction::Give;
+	const AAIController* AI = Cast<AAIController>(Walker->GetController());
+	const UPathFollowingComponent* Path = AI ? AI->GetPathFollowingComponent() : nullptr;
+	const bool bFollowingPath = Path && Path->GetStatus() == EPathFollowingStatus::Moving;
+	const bool bGrace = Now - Pending.OrderTime < PendingOrderGraceSeconds;
+	if (bFollowingPath)
+	{
+		const FVector PathEnd = Path->GetPathDestination();
+		if (!Pending.PathDestination.IsSet())
+		{
+			if (FVector::Dist2D(PathEnd, Pending.Destination) <= PendingPathTolerance)
+			{
+				Pending.PathDestination = PathEnd;
+			}
+			else if (!bGrace)
+			{
+				CancelPendingTransfer(true); // walking somewhere else: another order replaced ours
+				return;
+			}
+		}
+		else if (FVector::Dist2D(PathEnd, Pending.PathDestination.GetValue()) > PendingOtherOrderTolerance)
+		{
+			CancelPendingTransfer(true); // another order
+			return;
+		}
+		// The recipient walked off: aim at him again (only while our own path is confirmed; never over a foreign order).
+		if (bMovingTarget && Pending.PathDestination.IsSet()
+			&& FVector::Dist2D(GetTargetLocation(Request), Pending.RecipientAnchor) > PendingRecipientMoved && !IssueApproach(*Walker, Request))
+		{
+			CancelPendingTransfer(true);
+		}
+		return;
+	}
+	if (!Walker->IsMoving() && !bGrace)
+	{
+		// Stopped short: follow a recipient who moved, otherwise the order was replaced / stopped.
+		if (!bMovingTarget || FVector::Dist2D(GetTargetLocation(Request), Pending.RecipientAnchor) <= PendingRecipientMoved
+			|| !IssueApproach(*Walker, Request))
+		{
+			CancelPendingTransfer(true);
+		}
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

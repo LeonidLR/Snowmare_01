@@ -694,6 +694,18 @@ Introduce a full tactical cover system for walls, building edges, and high obsta
 
 ---
 
+## ✅ Sprint 13 «Drag & drop hand-over» (Claude, 2026-10-07): DONE — see HANDOFF §10
+- 13-1: «ПЕРЕД» retired — `UTransferDialogWidget` deleted (no other user), action bar button and HUD toggle removed; the inventory drawer is the single access point (ammo lines added).
+- 13-2: drawer drag (`UInventoryDragDropOperation`: item, sender, available; purple label visual); drop on an operative's 3D model (drag cancelled over the viewport -> world trace) or on his action bar squad slot -> `ACodexTacticsHUD::HandleTransferDropOnActor`. A press released without a drag still clicks the line.
+- 13-3: range 2 m (`TransferRules::CanTransferTo`, horizontal). Far + free -> walk to 1.5 m and hand over on arrival (cancel on another order / death / 45 s). Far + blocked -> «Слишком далеко для передачи (макс. 2 метра)». **Blocked** = wave fight (real time or turn-based) or turn-based active, a living enemy targeting the sender, or the sender dead / raging / without a path.
+- 13-4: `UQuantitySplitDialogWidget` (C++-built): ammo step 5 (min 5, a smaller remainder whole), items step 1; slider + [-] [+], «ВСЁ», «ПОДТВЕРДИТЬ», «ОТМЕНА» / Esc; clamped to the recipient's capacity (shown as max); one possible quantity -> no dialog.
+- 13-5: `USquadTransferSubsystem::ExecuteTransferQuantity` (exact quantity, partial on capacity, feed line; the old transfer had no event-bus event, none added) and `RequestTransfer`.
+- 13-6: tests `CodexTactics.Transfer.*` (9) in `TransferRulesTest.cpp`; `CodexTactics.TransferSmoke` covers the whole flow. Verified: build, 268 / 268 tests, TransferSmoke / InventorySmoke / ActionBarSmoke / LootSmoke / SaveLoadSmoke / SquadControlSmoke / EventBusSmoke / RecruitDeathSmoke PASS.
+- 13-7 (user addition): drop to the ground — `ADroppedItemActor` pile (label, ground + navmesh snap, merge within 60 cm, click = walk up + pick up with capacity clamp, leftover stays); far + free -> walk there first, far + blocked -> at his feet. Engineering items lie as items.
+- 13-8 (user addition): two-way crates — shared `UItemStashComponent` (crate Capacity 500 units, tunable); store by dropping on the crate model or its open loot window, take out by click or by dragging a loot line onto an operative / portrait / the drawer; far + blocked store / take refused. Save / load: crate stashes + ground piles.
+
+---
+
 ## ⚡ MANDATORY TYPESAFE (JEV) & TOKEN ECONOMY RULES FOR CLAUDE (Sprint 12)
 
 Claude (Opus 5.5) **MUST** strictly adhere to the following rules:

@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the hand-over dialog open. "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar. "profile": the commander levelled up, profile open. "victory": the wave-cleared panel with kill statistics. "duel" (with "turnbased"): the dramatic shot framing. "frost": the frost vignette of a freezing squad (cold 90 %).
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the drawer with the Sprint 13 hand-over quantity dialog (M16 rounds to a squad mate, 15 chosen). "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar. "profile": the commander levelled up, profile open. "victory": the wave-cleared panel with kill statistics. "duel" (with "turnbased"): the dramatic shot framing. "frost": the frost vignette of a freezing squad (cold 90 %).
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -50,6 +50,10 @@
 #include "Core/SaveGameSubsystem.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
+#include "UI/QuantitySplitDialogWidget.h"
+#include "Animation/AnimSequence.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Characters/TransferRules.h"
 #include "UnrealClient.h"
 
 namespace HudShot
@@ -665,9 +669,19 @@ namespace HudShot
 			World->GetTimerManager().SetTimer(TrHandle, FTimerDelegate::CreateLambda([TrWorld]()
 			{
 				APlayerController* PC = TrWorld.IsValid() ? UGameplayStatics::GetPlayerController(TrWorld.Get(), 0) : nullptr;
-				if (ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr)
+				ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
+				const USquadSubsystem* Squad = TrWorld.IsValid() ? TrWorld->GetSubsystem<USquadSubsystem>() : nullptr;
+				AOperativeCharacter* Lead = Squad ? Squad->GetLeader() : nullptr;
+				AOperativeCharacter* Mate = nullptr;
+				for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
 				{
-					Hud->ToggleTransferDialog();
+					Mate = !Mate && Member != Lead ? Member : Mate;
+				}
+				if (Hud && Lead && Mate && Hud->GetQuantityDialog())
+				{
+					Hud->ToggleInventoryDrawer();
+					Hud->GetQuantityDialog()->OpenFor(Lead, Mate, ETransferItem::RifleAmmo, TransferRules::GetMaxTransferQuantity(*Lead, *Mate, ETransferItem::RifleAmmo));
+					Hud->GetQuantityDialog()->SetQuantity(15);
 				}
 			}), 3.5f, false);
 		}

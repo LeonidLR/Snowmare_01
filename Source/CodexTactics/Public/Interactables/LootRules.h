@@ -122,6 +122,9 @@ struct CODEXTACTICS_API FLootContents
 	/** Removes the whole stack of Item and returns how many were taken (0 if none). */
 	int32 Take(ELootItem Item);
 
+	/** Adds Count to a counted item (no-op for the bonus weapon / clothing). Sprint 13: the crate's merged view. */
+	void AddCount(ELootItem Item, int32 Count);
+
 	/** Everything burns (trap detonation). */
 	void DestroyAll();
 };

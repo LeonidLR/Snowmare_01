@@ -1,6 +1,7 @@
 #include "Characters/TransferRules.h"
 #include "Characters/OperativeCharacter.h"
 #include "Interactables/DeployableRules.h"
+#include "Interactables/ItemStashComponent.h"
 
 namespace
 {
@@ -112,6 +113,7 @@ FTransferResult TransferRules::Transfer(AOperativeCharacter& Sender, AOperativeC
 		Sender.AddDeployable(Type, -1);
 		Recipient.AddDeployable(Type, 1);
 		Result.bDone = true;
+		Result.Moved = 1;
 		Result.Feedback = FString::Printf(TEXT("+1 %s"), TransferFeedbackName(Item));
 		return Result;
 	}
@@ -123,6 +125,7 @@ FTransferResult TransferRules::Transfer(AOperativeCharacter& Sender, AOperativeC
 		{
 			Recipient.AddAmmo(WeaponId, Taken);
 			Result.bDone = true;
+			Result.Moved = Taken;
 			Result.Feedback = FString::Printf(TEXT("+%d %s"), Taken, TransferFeedbackName(Item));
 		}
 		return Result;
@@ -134,6 +137,7 @@ FTransferResult TransferRules::Transfer(AOperativeCharacter& Sender, AOperativeC
 		--*From;
 		++*To;
 		Result.bDone = true;
+		Result.Moved = 1;
 		Result.Feedback = FString::Printf(TEXT("+1 %s"), TransferFeedbackName(Item));
 	}
 	return Result;
@@ -152,4 +156,222 @@ FString TransferRules::GetPromptName(ETransferItem Item)
 	case ETransferItem::PlasmaAmmo: return TEXT("Батареи плазмы (10 ед.)");
 	default: return TransferFeedbackName(Item);
 	}
+}
+
+bool TransferRules::IsAmmoItem(ETransferItem Item)
+{
+	return !GetAmmoWeaponId(Item).IsEmpty();
+}
+
+int32 TransferRules::GetItemQuantityStep(ETransferItem Item)
+{
+	return IsAmmoItem(Item) ? 5 : 1;
+}
+
+int32 TransferRules::GetMinQuantity(ETransferItem Item, int32 MaxQuantity)
+{
+	return MaxQuantity <= 0 ? 0 : FMath::Min(GetItemQuantityStep(Item), MaxQuantity);
+}
+
+int32 TransferRules::QuantizeQuantity(ETransferItem Item, int32 Desired, int32 MaxQuantity)
+{
+	if (MaxQuantity <= 0)
+	{
+		return 0;
+	}
+	if (Desired >= MaxQuantity)
+	{
+		return MaxQuantity;
+	}
+	const int32 Step = GetItemQuantityStep(Item);
+	return FMath::Max(GetMinQuantity(Item, MaxQuantity), (FMath::Max(Desired, 0) / Step) * Step);
+}
+
+int32 TransferRules::StepQuantity(ETransferItem Item, int32 Current, int32 Direction, int32 MaxQuantity)
+{
+	const int32 Step = GetItemQuantityStep(Item);
+	if (Direction > 0)
+	{
+		return QuantizeQuantity(Item, (FMath::Max(Current, 0) / Step + 1) * Step, MaxQuantity);
+	}
+	if (Direction < 0)
+	{
+		// From an off-grid value (the whole stack) the first [-] lands on the grid below it.
+		const int32 Down = Current % Step != 0 ? (Current / Step) * Step : Current - Step;
+		return QuantizeQuantity(Item, Down, MaxQuantity);
+	}
+	return QuantizeQuantity(Item, Current, MaxQuantity);
+}
+
+bool TransferRules::NeedsQuantityDialog(ETransferItem Item, int32 MaxQuantity)
+{
+	return MaxQuantity > GetMinQuantity(Item, MaxQuantity);
+}
+
+int32 TransferRules::GetRecipientCapacity(const AOperativeCharacter& Recipient, ETransferItem Item)
+{
+	EDeployableType Type;
+	if (TransferDeployableType(Item, Type))
+	{
+		return FMath::Max(0, DeployableRules::GetMaxCarried(Type) - Recipient.GetDeployableCount(Type));
+	}
+	return MAX_int32;
+}
+
+int32 TransferRules::GetMaxTransferQuantity(const AOperativeCharacter& Sender, const AOperativeCharacter& Recipient, ETransferItem Item)
+{
+	return FMath::Max(0, FMath::Min(GetAvailable(Sender, Item), GetRecipientCapacity(Recipient, Item)));
+}
+
+bool TransferRules::IsWithinTransferRange(const FVector& SenderLocation, const FVector& RecipientLocation)
+{
+	return FVector::Dist2D(SenderLocation, RecipientLocation) <= MaxTransferDistance;
+}
+
+bool TransferRules::CanTransferTo(const AOperativeCharacter& Sender, const AOperativeCharacter& Recipient)
+{
+	return &Sender != &Recipient && IsWithinTransferRange(Sender.GetActorLocation(), Recipient.GetActorLocation());
+}
+
+ETransferRangeDecision TransferRules::DecideRange(const FTransferRangeContext& Context)
+{
+	if (Context.Distance <= MaxTransferDistance)
+	{
+		return ETransferRangeDecision::InRange;
+	}
+	const bool bBlocked = Context.bInCombat || Context.bTurnBased || Context.bUnderFire || !Context.bCanMove;
+	return bBlocked ? ETransferRangeDecision::Blocked : ETransferRangeDecision::Approach;
+}
+
+int32 TransferRules::RemoveFromOperative(AOperativeCharacter& Operative, ETransferItem Item, int32 Max)
+{
+	const int32 Count = FMath::Clamp(Max, 0, GetAvailable(Operative, Item));
+	if (Count <= 0)
+	{
+		return 0;
+	}
+	EDeployableType Type;
+	const FString WeaponId = GetAmmoWeaponId(Item);
+	if (TransferDeployableType(Item, Type))
+	{
+		Operative.AddDeployable(Type, -Count);
+		return Count;
+	}
+	if (!WeaponId.IsEmpty())
+	{
+		return Operative.TakeReserve(WeaponId, Count);
+	}
+	int32* Field = TransferCountField(Operative, Item);
+	if (!Field)
+	{
+		return 0;
+	}
+	*Field -= Count;
+	return Count;
+}
+
+void TransferRules::AddToOperative(AOperativeCharacter& Operative, ETransferItem Item, int32 Count)
+{
+	if (Count <= 0)
+	{
+		return;
+	}
+	EDeployableType Type;
+	const FString WeaponId = GetAmmoWeaponId(Item);
+	if (TransferDeployableType(Item, Type))
+	{
+		Operative.AddDeployable(Type, Count);
+	}
+	else if (!WeaponId.IsEmpty())
+	{
+		Operative.AddAmmo(WeaponId, Count);
+	}
+	else if (int32* Field = TransferCountField(Operative, Item))
+	{
+		*Field += Count;
+	}
+}
+
+FTransferResult TransferRules::TransferQuantity(AOperativeCharacter& Sender, AOperativeCharacter& Recipient, ETransferItem Item, int32 Quantity)
+{
+	FTransferResult Result;
+	const int32 Available = GetAvailable(Sender, Item);
+	if (Quantity <= 0 || Available <= 0)
+	{
+		return Result;
+	}
+	const int32 Capacity = GetRecipientCapacity(Recipient, Item);
+	if (Capacity <= 0)
+	{
+		Result.bRecipientFull = true;
+		return Result;
+	}
+	const int32 Wanted = FMath::Min(Quantity, Available);
+	const int32 Count = FMath::Min(Wanted, Capacity);
+	Result.bClampedByCapacity = Count < Wanted;
+	Result.Moved = RemoveFromOperative(Sender, Item, Count);
+	AddToOperative(Recipient, Item, Result.Moved);
+	Result.bDone = Result.Moved > 0;
+	if (Result.bDone)
+	{
+		Result.Feedback = FString::Printf(TEXT("+%d %s"), Result.Moved, TransferFeedbackName(Item));
+	}
+	return Result;
+}
+
+FTransferResult TransferRules::StoreInStash(AOperativeCharacter& Sender, UItemStashComponent& Stash, ETransferItem Item, int32 Quantity)
+{
+	FTransferResult Result;
+	const int32 Wanted = FMath::Min(Quantity, GetAvailable(Sender, Item));
+	if (Wanted <= 0)
+	{
+		return Result;
+	}
+	const int32 Free = Stash.GetFreeSpace();
+	if (Free <= 0)
+	{
+		Result.bRecipientFull = true;
+		return Result;
+	}
+	const int32 Count = FMath::Min(Wanted, Free);
+	Result.bClampedByCapacity = Count < Wanted;
+	const int32 Removed = RemoveFromOperative(Sender, Item, Count);
+	Result.Moved = Stash.Add(Item, Removed, true);
+	Result.bDone = Result.Moved > 0;
+	if (Result.bDone)
+	{
+		Result.Feedback = FString::Printf(TEXT("%d %s"), Result.Moved, TransferFeedbackName(Item));
+	}
+	return Result;
+}
+
+FTransferResult TransferRules::TakeFromStash(UItemStashComponent& Stash, AOperativeCharacter& Recipient, ETransferItem Item, int32 Quantity)
+{
+	FTransferResult Result;
+	const int32 Wanted = FMath::Min(Quantity, Stash.GetCount(Item));
+	if (Wanted <= 0)
+	{
+		return Result;
+	}
+	const int32 Capacity = GetRecipientCapacity(Recipient, Item);
+	if (Capacity <= 0)
+	{
+		Result.bRecipientFull = true;
+		return Result;
+	}
+	const int32 Count = FMath::Min(Wanted, Capacity);
+	Result.bClampedByCapacity = Count < Wanted;
+	Result.Moved = Stash.Take(Item, Count);
+	AddToOperative(Recipient, Item, Result.Moved);
+	Result.bDone = Result.Moved > 0;
+	if (Result.bDone)
+	{
+		Result.Feedback = FString::Printf(TEXT("%d %s"), Result.Moved, TransferFeedbackName(Item));
+	}
+	return Result;
+}
+
+FString TransferRules::GetItemName(ETransferItem Item)
+{
+	return TransferFeedbackName(Item);
 }

@@ -24,7 +24,8 @@
 #include "UI/GameMessageSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
 #include "UI/InventoryDrawerWidget.h"
-#include "UI/TransferDialogWidget.h"
+#include "UI/InventoryDragDropOperation.h"
+#include "Characters/SquadTransferSubsystem.h"
 #include "Characters/FirePostureRules.h"
 
 #define LOCTEXT_NAMESPACE "ActionBarWidget"
@@ -34,7 +35,6 @@ namespace
 	// Godot movements_demo.tscn StyleBoxFlat_tactical_bar / slot_* / *_bar_* colours.
 	const FLinearColor BarPanelColor = ACodexTacticsHUD::GodotColor(0.08f, 0.1f, 0.13f, 0.96f);
 	const FLinearColor BarFrameColor = ACodexTacticsHUD::GodotColor(0.35f, 0.38f, 0.45f);
-	const FLinearColor BarPurple = ACodexTacticsHUD::GodotColor(0.55f, 0.12f, 0.68f);
 	const FLinearColor BarGreen = ACodexTacticsHUD::GodotColor(0.12f, 0.65f, 0.28f);
 	const FLinearColor BarBlue = ACodexTacticsHUD::GodotColor(0.02f, 0.6f, 0.92f);
 	const FLinearColor BarRed = ACodexTacticsHUD::GodotColor(0.88f, 0.2f, 0.2f);
@@ -129,15 +129,10 @@ void UActionBarWidget::BuildDefaultLayout()
 		Button->SetIsEnabled(false);
 		Button->SetToolTipText(Tooltip);
 	};
-	UTextBlock* TransferText = MakeText(NAME_None, 10, BarTextColor);
-	TransferText->SetText(LOCTEXT("Transfer", "ПЕРЕД"));
-	UButton* TransferButton = MakeSlotButton(TEXT("BarTransferButton"), BarPurple, 54.f, 56.f, TransferText, Row);
-	TransferButton->SetToolTipText(LOCTEXT("TransferTip", "Передача предметов и патронов соратнику"));
-	TransferButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleTransfer);
 	UTextBlock* InventoryText = MakeText(NAME_None, 10, BarTextColor);
 	InventoryText->SetText(LOCTEXT("Inventory", "ИНВ"));
 	UButton* InventoryButton = MakeSlotButton(TEXT("BarInventoryButton"), BarGreen, 54.f, 56.f, InventoryText, Row);
-	InventoryButton->SetToolTipText(LOCTEXT("InventoryTip", "Личный инвентарь оперативника"));
+	InventoryButton->SetToolTipText(LOCTEXT("InventoryTip", "Личный инвентарь оперативника (передача: перетащите предмет на бойца или его портрет)"));
 	InventoryButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleInventory);
 
 	BarWeaponText = MakeText(TEXT("BarWeaponText"), 11, BarTextColor);
@@ -477,10 +472,6 @@ void UActionBarWidget::ToggleWeaponSelector()
 			{
 				Drawer->Close(); // Godot: the selector hides the inventory drawer and the transfer dialog
 			}
-			if (UTransferDialogWidget* Transfer = Hud ? Hud->GetTransferDialog() : nullptr)
-			{
-				Transfer->Close();
-			}
 		}
 		SelectorPanel->SetVisibility(IsWeaponSelectorOpen() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 		Refresh();
@@ -534,15 +525,58 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 	return true;
 }
 
-void UActionBarWidget::HandleTransfer()
+AOperativeCharacter* UActionBarWidget::GetSlotMember(int32 Index) const
 {
-	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()); PC && !PC->BlockRealTimeOrder())
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (!Squad)
 	{
-		if (ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(PC->GetHUD()))
+		return nullptr;
+	}
+	TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+	Members.Sort([](const AOperativeCharacter& A, const AOperativeCharacter& B) { return A.SquadIndex < B.SquadIndex; });
+	return Members.IsValidIndex(Index) ? Members[Index] : nullptr;
+}
+
+ETransferRequestOutcome UActionBarWidget::HandleTransferDropOnSlot(int32 Index, AOperativeCharacter* Sender, ETransferItem Item)
+{
+	AOperativeCharacter* Member = GetSlotMember(Index);
+	const APlayerController* PC = GetOwningPlayer();
+	ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
+	if (!Member || !Hud)
+	{
+		return ETransferRequestOutcome::Failed;
+	}
+	return Hud->HandleTransferDropOnActor(Sender, Item, Member, Member->GetActorLocation());
+}
+
+bool UActionBarWidget::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	const UInventoryDragDropOperation* Operation = Cast<UInventoryDragDropOperation>(InOperation);
+	if (!Operation)
+	{
+		return Super::NativeOnDrop(InGeometry, InDragDropEvent, InOperation);
+	}
+	for (int32 Index = 0; Index < Slots.Num(); ++Index)
+	{
+		if (Slots[Index].Frame && Slots[Index].Frame->GetCachedGeometry().IsUnderLocation(InDragDropEvent.GetScreenSpacePosition()))
 		{
-			Hud->ToggleTransferDialog();
+			if (Operation->Container.IsValid())
+			{
+				const APlayerController* PC = GetOwningPlayer();
+				ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
+				if (Hud && GetSlotMember(Index))
+				{
+					Hud->HandleTakeDrop(Operation->Container.Get(), Operation->Item, GetSlotMember(Index));
+				}
+			}
+			else
+			{
+				HandleTransferDropOnSlot(Index, Operation->Sender.Get(), Operation->Item);
+			}
+			break;
 		}
 	}
+	return true; // anywhere on the bar: taken (no world drop under the bar)
 }
 
 void UActionBarWidget::HandleInventory()

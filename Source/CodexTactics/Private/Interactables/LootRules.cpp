@@ -104,6 +104,28 @@ bool FLootContents::IsEmpty() const
 	return true;
 }
 
+void FLootContents::AddCount(ELootItem Item, int32 Count)
+{
+	switch (Item)
+	{
+	case ELootItem::Medkit: Medkits += Count; break;
+	case ELootItem::CannedFood: CannedFood += Count; break;
+	case ELootItem::Bread: Bread += Count; break;
+	case ELootItem::Chocolate: Chocolate += Count; break;
+	case ELootItem::Matches: Matches += Count; break;
+	case ELootItem::RifleAmmo: RifleAmmo += Count; break;
+	case ELootItem::PistolAmmo: PistolAmmo += Count; break;
+	case ELootItem::ShotgunAmmo: ShotgunAmmo += Count; break;
+	case ELootItem::FlameFuel: FlameFuel += Count; break;
+	case ELootItem::CryoAmmo: CryoAmmo += Count; break;
+	case ELootItem::PlasmaAmmo: PlasmaAmmo += Count; break;
+	case ELootItem::Turret: Turrets += Count; break;
+	case ELootItem::Barricade: Barricades += Count; break;
+	case ELootItem::Mine: Mines += Count; break;
+	default: break;
+	}
+}
+
 int32 FLootContents::Take(ELootItem Item)
 {
 	const int32 Count = GetCount(Item);

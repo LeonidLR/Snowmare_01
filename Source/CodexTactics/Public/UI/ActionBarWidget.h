@@ -5,6 +5,9 @@
 #include "Characters/FirePostureRules.h"
 #include "ActionBarWidget.generated.h"
 
+class AOperativeCharacter;
+enum class ETransferItem : uint8;
+enum class ETransferRequestOutcome : uint8;
 class UBorder;
 class UButton;
 class UProgressBar;
@@ -34,7 +37,8 @@ struct FActionBarSquadSlot
 };
 
 /**
- * Bottom tactical bar: transfer / inventory (not ported yet, disabled), weapon + ammo («[G] Граната»), relocation
+ * Bottom tactical bar: inventory «ИНВ» (Sprint 13: the «ПЕРЕД» transfer button is gone — hand-overs are dragged from the
+ * drawer; a squad slot is a drop target, NativeOnDrop), weapon + ammo («[G] Граната»), relocation
  * mode («ПЕР» / «АКТИВ»), stance letter (С / П / Л, click cycles), guard («ОБОР», not ported yet), squad slots
  * [1] КОМ, [2] ИНЖ, [3] МЕД with HP / cold bars, [4] РЕЗ (locked reserve). Refreshes every frame from the squad.
  * Built in C++ (restyle through a Widget Blueprint subclass).
@@ -76,9 +80,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|ActionBar")
 	bool SelectWeapon(const FString& WeaponId);
 
+	/** Squad member shown in slot Index (roster order), null for an empty slot. */
+	AOperativeCharacter* GetSlotMember(int32 Index) const;
+
+	/** Sprint 13: an inventory drag dropped on squad slot Index -> ACodexTacticsHUD::HandleTransferDropOnActor. */
+	ETransferRequestOutcome HandleTransferDropOnSlot(int32 Index, AOperativeCharacter* Sender, ETransferItem Item);
+
 protected:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|ActionBar", meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> BarWeaponText;
@@ -105,9 +116,6 @@ private:
 
 	UFUNCTION()
 	void HandleInventory();
-
-	UFUNCTION()
-	void HandleTransfer();
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> BarGuardText;

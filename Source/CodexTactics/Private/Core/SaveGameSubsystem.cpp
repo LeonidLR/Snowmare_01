@@ -12,6 +12,8 @@
 #include "HAL/FileManager.h"
 #include "Interactables/GateActor.h"
 #include "Interactables/LootCrateActor.h"
+#include "Interactables/DroppedItemActor.h"
+#include "Interactables/ItemStashComponent.h"
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -24,6 +26,39 @@
 
 namespace
 {
+	/** Sprint 13: a stash as {"RifleAmmo": 15, ...} (ETransferItem names). */
+	TSharedRef<FJsonObject> SaveStash(const UItemStashComponent* Stash)
+	{
+		TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
+		if (Stash)
+		{
+			for (const TPair<ETransferItem, int32>& Pair : Stash->GetItems())
+			{
+				Object->SetNumberField(StaticEnum<ETransferItem>()->GetNameStringByValue(static_cast<int64>(Pair.Key)), Pair.Value);
+			}
+		}
+		return Object;
+	}
+
+	TMap<ETransferItem, int32> LoadStash(const TSharedPtr<FJsonObject>& Object)
+	{
+		TMap<ETransferItem, int32> Items;
+		if (!Object.IsValid())
+		{
+			return Items;
+		}
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Field : Object->Values)
+		{
+			const int64 Value = StaticEnum<ETransferItem>()->GetValueByNameString(Field.Key);
+			double Count = 0.0;
+			if (Value != INDEX_NONE && Field.Value.IsValid() && Field.Value->TryGetNumber(Count) && Count > 0.0)
+			{
+				Items.Add(static_cast<ETransferItem>(Value), FMath::RoundToInt(Count));
+			}
+		}
+		return Items;
+	}
+
 	TArray<TSharedPtr<FJsonValue>> SaveVector(const FVector& V)
 	{
 		return { MakeShared<FJsonValueNumber>(V.X), MakeShared<FJsonValueNumber>(V.Y), MakeShared<FJsonValueNumber>(V.Z) };
@@ -204,9 +239,24 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 		Crate->SetBoolField(TEXT("is_looted"), It->IsLooted());
 		Crate->SetBoolField(TEXT("is_defused"), It->bDefused);
 		Crate->SetBoolField(TEXT("is_destroyed"), It->IsDestroyed());
+		Crate->SetObjectField(TEXT("stash"), SaveStash(It->GetSyncedStash())); // Sprint 13: exact contents (two-way crates)
 		Crates->SetObjectField(It->GetName(), Crate);
 	}
 	WorldState->SetObjectField(TEXT("crates"), Crates);
+	// Sprint 13: piles dropped on the ground.
+	TArray<TSharedPtr<FJsonValue>> Piles;
+	for (TActorIterator<ADroppedItemActor> It(World); It; ++It)
+	{
+		if (It->IsActorBeingDestroyed() || It->GetStash()->IsEmpty())
+		{
+			continue;
+		}
+		TSharedRef<FJsonObject> Pile = MakeShared<FJsonObject>();
+		Pile->SetArrayField(TEXT("location"), SaveVector(It->GetActorLocation()));
+		Pile->SetObjectField(TEXT("items"), SaveStash(It->GetStash()));
+		Piles.Add(MakeShared<FJsonValueObject>(Pile));
+	}
+	WorldState->SetArrayField(TEXT("dropped_items"), Piles);
 	WorldState->SetArrayField(TEXT("dismantled_objects"), {});
 
 	const FString Stage = GetCurrentStageName();
@@ -440,6 +490,39 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			{
 				It->RestoreSaved(SaveBool(*Crate, TEXT("is_looted"), false), SaveBool(*Crate, TEXT("is_defused"), false),
 					SaveBool(*Crate, TEXT("is_destroyed"), false));
+				const TSharedPtr<FJsonObject>* Stash = nullptr;
+				if (!It->IsDestroyed() && (*Crate)->TryGetObjectField(TEXT("stash"), Stash))
+				{
+					It->GetSyncedStash()->SetContents(LoadStash(*Stash)); // older saves: the authored loot stays
+				}
+			}
+		}
+	}
+	// Sprint 13: piles on the ground (older saves have none: the piles of the session are cleared either way).
+	if (WorldState)
+	{
+		for (TActorIterator<ADroppedItemActor> It(World); It; ++It)
+		{
+			It->Destroy();
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Piles = nullptr;
+		if ((*WorldState)->TryGetArrayField(TEXT("dropped_items"), Piles))
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *Piles)
+			{
+				const TSharedPtr<FJsonObject>* Pile = nullptr;
+				const TArray<TSharedPtr<FJsonValue>>* Location = nullptr;
+				const TSharedPtr<FJsonObject>* Items = nullptr;
+				if (!Value.IsValid() || !Value->TryGetObject(Pile) || !(*Pile)->TryGetArrayField(TEXT("location"), Location)
+					|| Location->Num() < 3 || !(*Pile)->TryGetObjectField(TEXT("items"), Items))
+				{
+					continue;
+				}
+				const FVector Point((*Location)[0]->AsNumber(), (*Location)[1]->AsNumber(), (*Location)[2]->AsNumber());
+				for (const TPair<ETransferItem, int32>& Pair : LoadStash(*Items))
+				{
+					ADroppedItemActor::SpawnOrMerge(World, Point, Pair.Key, Pair.Value);
+				}
 			}
 		}
 	}

@@ -29,7 +29,15 @@
 #include "UI/LootDialogWidget.h"
 #include "UI/ActionBarWidget.h"
 #include "UI/InventoryDrawerWidget.h"
-#include "UI/TransferDialogWidget.h"
+#include "UI/QuantitySplitDialogWidget.h"
+#include "UI/InventoryDragDropOperation.h"
+#include "Blueprint/SlateBlueprintLibrary.h"
+#include "Interactables/DroppedItemActor.h"
+#include "Interactables/ItemStashComponent.h"
+#include "Interactables/LootCrateActor.h"
+#include "Characters/SquadTransferSubsystem.h"
+#include "Characters/TransferRules.h"
+#include "UI/GameMessageSubsystem.h"
 #include "UI/ProfileDialogWidget.h"
 #include "UI/FrostVignetteWidget.h"
 #include "UI/VictoryPanelWidget.h"
@@ -148,7 +156,7 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	DialogueWidgetClass = UDialogueWidget::StaticClass();
 	ActionBarWidgetClass = UActionBarWidget::StaticClass();
 	InventoryDrawerWidgetClass = UInventoryDrawerWidget::StaticClass();
-	TransferDialogWidgetClass = UTransferDialogWidget::StaticClass();
+	QuantitySplitDialogWidgetClass = UQuantitySplitDialogWidget::StaticClass();
 	ProfileDialogWidgetClass = UProfileDialogWidget::StaticClass();
 	VictoryPanelWidgetClass = UVictoryPanelWidget::StaticClass();
 	PauseMenuWidgetClass = UPauseMenuWidget::StaticClass();
@@ -212,12 +220,12 @@ void ACodexTacticsHUD::BeginPlay()
 			InventoryDrawer->AddToViewport(6);
 		}
 	}
-	if (TransferDialogWidgetClass && GetOwningPlayerController())
+	if (QuantitySplitDialogWidgetClass && GetOwningPlayerController())
 	{
-		TransferDialog = CreateWidget<UTransferDialogWidget>(GetOwningPlayerController(), TransferDialogWidgetClass);
-		if (TransferDialog)
+		QuantityDialog = CreateWidget<UQuantitySplitDialogWidget>(GetOwningPlayerController(), QuantitySplitDialogWidgetClass);
+		if (QuantityDialog)
 		{
-			TransferDialog->AddToViewport(6);
+			QuantityDialog->AddToViewport(7); // over the drawer it was dragged from
 		}
 	}
 	if (GetOwningPlayerController())
@@ -1213,30 +1221,126 @@ void ACodexTacticsHUD::ToggleInventoryDrawer()
 	{
 		ActionBar->ToggleWeaponSelector();
 	}
-	if (InventoryDrawer->IsOpen() && TransferDialog)
-	{
-		TransferDialog->Close();
-	}
 }
 
-void ACodexTacticsHUD::ToggleTransferDialog()
+ETransferRequestOutcome ACodexTacticsHUD::HandleTransferDropOnActor(AOperativeCharacter* Sender, ETransferItem Item, AActor* TargetActor, const FVector& Point)
 {
-	if (!TransferDialog)
+	USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>();
+	if (!Sender || !Transfer)
+	{
+		return ETransferRequestOutcome::Failed;
+	}
+	if (ALootCrateActor* Crate = Cast<ALootCrateActor>(TargetActor))
+	{
+		return HandleTransferRequest(FTransferRequest::MakeStore(Sender, Crate, Item));
+	}
+	if (const ADroppedItemActor* Pile = Cast<ADroppedItemActor>(TargetActor))
+	{
+		return HandleTransferRequest(FTransferRequest::MakeDrop(Sender, Pile->GetActorLocation(), Item)); // merges into the pile
+	}
+	if (AOperativeCharacter* Recipient = Transfer->ResolveDropRecipient(Sender, TargetActor, Point))
+	{
+		return HandleTransferRequest(FTransferRequest::MakeGive(Sender, Recipient, Item));
+	}
+	if (Cast<AOperativeCharacter>(TargetActor) == Sender)
+	{
+		return ETransferRequestOutcome::Failed; // dropped on himself: nothing to do
+	}
+	return HandleTransferRequest(FTransferRequest::MakeDrop(Sender, Point, Item));
+}
+
+ETransferRequestOutcome ACodexTacticsHUD::HandleTakeDrop(AActor* Container, ETransferItem Item, AOperativeCharacter* Taker)
+{
+	if (!Container || !Taker)
+	{
+		return ETransferRequestOutcome::Failed;
+	}
+	return HandleTransferRequest(FTransferRequest::MakeTake(Taker, Container, Item));
+}
+
+ETransferRequestOutcome ACodexTacticsHUD::HandleTransferRequest(const FTransferRequest& Request)
+{
+	USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>();
+	AOperativeCharacter* Operative = Request.Operative.Get();
+	if (!Operative || !Transfer)
+	{
+		return ETransferRequestOutcome::Failed;
+	}
+	ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayerController());
+	if (PC && PC->BlockRealTimeOrder())
+	{
+		return ETransferRequestOutcome::Failed; // the optional real-time order lock (hint posted)
+	}
+	auto Post = [this, Operative](const TCHAR* Text)
+	{
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(Operative->DisplayName, FText::FromString(Text));
+		}
+	};
+	if (Request.Action != ETransferAction::Take && TransferRules::GetAvailable(*Operative, Request.Item) <= 0)
+	{
+		Post(TEXT("В вашем инвентаре закончился этот предмет или патроны!"));
+		return ETransferRequestOutcome::Failed;
+	}
+	if (Request.Action == ETransferAction::Store)
+	{
+		const ALootCrateActor* Crate = Cast<ALootCrateActor>(Request.Container.Get());
+		if (Crate && !Crate->CanStore())
+		{
+			Post(TEXT("В этот ящик сейчас ничего не положить (заминирован или разрушен)."));
+			return ETransferRequestOutcome::Failed;
+		}
+	}
+	const int32 MaxQuantity = Transfer->GetMaxQuantity(Request);
+	if (MaxQuantity <= 0)
+	{
+		switch (Request.Action)
+		{
+		case ETransferAction::Store: Post(TEXT("⚠️ В ящике нет места!")); break;
+		case ETransferAction::Take:
+			Post(USquadTransferSubsystem::GetContainerStash(Request.Container.Get(), false) ? TEXT("⚠️ Больше не унести (или там пусто).")
+				: TEXT("Здесь нечего взять."));
+			break;
+		default: Transfer->Execute(FTransferRequest::MakeGive(Operative, Request.Recipient.Get(), Request.Item, 1)); break; // «нет места»
+		}
+		return ETransferRequestOutcome::Failed;
+	}
+	if (TransferRules::NeedsQuantityDialog(Request.Item, MaxQuantity) && QuantityDialog)
+	{
+		QuantityDialog->OpenForRequest(Request, MaxQuantity);
+		return ETransferRequestOutcome::DialogOpened;
+	}
+	FTransferRequest Single = Request;
+	Single.Quantity = MaxQuantity;
+	return Transfer->Request(Single);
+}
+
+void ACodexTacticsHUD::HandleDragReleasedOverWorld(UInventoryDragDropOperation* Operation, const FVector2D& ScreenPosition)
+{
+	APlayerController* PC = GetOwningPlayerController();
+	USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>();
+	if (!Operation || !PC || !Transfer)
 	{
 		return;
 	}
-	TransferDialog->Toggle();
-	if (TransferDialog->IsOpen())
+	FVector2D PixelPosition;
+	FVector2D ViewportPosition;
+	USlateBlueprintLibrary::AbsoluteToViewport(this, ScreenPosition, PixelPosition, ViewportPosition);
+	FHitResult Hit;
+	if (!PC->GetHitResultAtScreenPosition(PixelPosition, ECC_Visibility, false, Hit))
 	{
-		if (InventoryDrawer)
-		{
-			InventoryDrawer->Close();
-		}
-		if (ActionBar && ActionBar->IsWeaponSelectorOpen())
-		{
-			ActionBar->ToggleWeaponSelector();
-		}
+		return;
 	}
+	if (Operation->Container.IsValid())
+	{
+		if (AOperativeCharacter* Taker = Transfer->ResolveDropRecipient(nullptr, Hit.GetActor(), Hit.ImpactPoint))
+		{
+			HandleTakeDrop(Operation->Container.Get(), Operation->Item, Taker);
+		}
+		return;
+	}
+	HandleTransferDropOnActor(Operation->Sender.Get(), Operation->Item, Hit.GetActor(), Hit.ImpactPoint);
 }
 
 void ACodexTacticsHUD::OpenSaveLoadDialog(ESaveDialogMode Mode)
@@ -1279,6 +1383,11 @@ void ACodexTacticsHUD::ClosePauseMenus()
 
 bool ACodexTacticsHUD::HandleEscape()
 {
+	if (QuantityDialog && QuantityDialog->IsOpen())
+	{
+		QuantityDialog->Cancel();
+		return true;
+	}
 	if (SaveLoadDialog && SaveLoadDialog->IsOpen())
 	{
 		if (SaveLoadDialog->IsConfirmOpen())
@@ -1304,11 +1413,6 @@ bool ACodexTacticsHUD::HandleEscape()
 	if (ProfileDialog && ProfileDialog->IsOpen())
 	{
 		ProfileDialog->Close();
-		return true;
-	}
-	if (TransferDialog && TransferDialog->IsOpen())
-	{
-		TransferDialog->Close();
 		return true;
 	}
 	const UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
