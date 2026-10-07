@@ -10,9 +10,12 @@ measured with the operative mesh and BP_Operative's WeaponMesh relative transfor
 location (-5.8, 4.4, 54.5) — 39 % of the way from the grip (z 27.9) to the muzzle (z 98) — rotation pitch 58.7,
 yaw -85.2, roll -170.8 (the hand bone's orientation there).
 
+2026-10-07: the user moved the socket onto the handguard in the static mesh editor (loc (2.45, 0.04, 73.3), no
+rotation) — that is the reference now. This script never overwrites an existing socket unless CODEX_FORCE_LEFT_HAND_SOCKET=1.
+
 Run with the CodexTactics editor closed:
   UnrealEditor-Cmd.exe CodexTactics.uproject -run=pythonscript -script="<abs path to this file>" -unattended -nullrhi
-Idempotent: an existing LeftHandGrip socket is updated to the transform. Result: Saved/Logs/add_weapon_left_hand_socket.txt
+An existing LeftHandGrip socket is kept (the user's placement). Result: Saved/Logs/add_weapon_left_hand_socket.txt
 """
 import os
 import unreal
@@ -29,6 +32,11 @@ if not mesh:
 else:
     socket = mesh.find_socket(SOCKET)
     created = socket is None
+    if not created and os.environ.get("CODEX_FORCE_LEFT_HAND_SOCKET") != "1":
+        log.append("%s already on %s at %s: kept (CODEX_FORCE_LEFT_HAND_SOCKET=1 overwrites)" % (SOCKET, MESH, socket.get_editor_property("relative_location")))
+        with open(os.path.join(unreal.Paths.project_saved_dir(), "Logs", "add_weapon_left_hand_socket.txt"), "w", encoding="utf-8") as f:
+            f.write("\n".join(log))
+        raise SystemExit(0)
     if created:
         socket = unreal.StaticMeshSocket(mesh)
         socket.set_editor_property("socket_name", SOCKET)

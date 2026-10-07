@@ -23,6 +23,12 @@ struct CODEXTACTICS_API FLeftHandIKState
 	bool bDead = false;
 	/** Prone: the crawl clips put the left hand on the ground (measured 49 cm off the grip); the prone aim already holds it (8-9 cm). */
 	bool bProne = false;
+	/**
+	 * In cover the clip holds the rifle two-handed only in the fire stance (fire_idle / fire, not its idle <-> fire
+	 * transitions); the cover idle / look-around / shimmy / enter clips carry it low or vertical and the left hand far
+	 * from it (user report 2026-10-07: the IK stretched the arm straight down the rifle). True out of cover.
+	 */
+	bool bTwoHandedPose = true;
 };
 
 namespace LeftHandIKRules
@@ -35,6 +41,15 @@ namespace LeftHandIKRules
 
 	/** The IK is wanted (alpha target 1) — else 0. */
 	CODEXTACTICS_API bool WantsIK(const FLeftHandIKState& State);
+
+	/**
+	 * Slides Target back along -Axis (towards the grip) until it lies within MaxDistance of Shoulder: the furthest reachable
+	 * point on the weapon's handguard line. User report 2026-10-07: on the pack's fire stances the m16 handguard socket is
+	 * 72-74 cm from the left shoulder and the arm reaches 57 cm, so the IK clamped the hand short along the shoulder line
+	 * (it landed on the magazine with the arm straight). Unreachable even at the grip end: the point nearest the shoulder.
+	 */
+	CODEXTACTICS_API FVector SlideIntoReach(const FVector& Target, const FVector& Axis, const FVector& Shoulder, float MaxDistance,
+		float MaxSlide);
 
 	/** Alpha eased towards the target over BlendSeconds (linear step, smoothstep shaped by the caller's read if needed). */
 	CODEXTACTICS_API float StepAlpha(float Current, bool bWanted, float DeltaSeconds, float BlendSeconds);

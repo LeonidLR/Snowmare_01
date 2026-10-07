@@ -60,6 +60,7 @@ namespace CoverCrouchSmoke
 		bool bSawLeftCover = false;
 		bool bSampled = false;
 		float MaxLateral = 0.f;
+		float IKGapOn = 0.f;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -428,6 +429,11 @@ namespace CoverCrouchSmoke
 			}
 			State.bSampled = false;
 			Check(State, Op->bInCover && Op->GetStance() == EOperativeStance::Crouching, TEXT("... crouched at the high wall, still in cover"));
+			if (const UOperativeAnimInstance* IdleAnim = AnimOf(Op))
+			{
+				// User report 2026-10-07: in the cover idle the rifle is low, the IK would stretch the arm down it: off.
+				Check(State, IdleAnim->LeftHandIKAlpha <= 0.01f, FString::Printf(TEXT("... cover idle: left-hand IK off (alpha %.2f)"), IdleAnim->LeftHandIKAlpha));
+			}
 			CheckPlaying(State, Op, TEXT("cvr_crch_"), TEXT("... the crouched cover pose"));
 			// The threat round his right corner, behind the wall.
 			Op->bIgnoreCoverThreatForTesting = false;
@@ -460,11 +466,46 @@ namespace CoverCrouchSmoke
 				const float AlongBarrel = static_cast<float>(FVector::DotProduct(FromGrip, Barrel));
 				Check(State, Anim->bLeftHandIKGripValid && Anim->LeftHandIKAlpha >= 0.99f,
 					FString::Printf(TEXT("left-hand IK on in the crouched fire stance (alpha %.2f, grip socket %d)"), Anim->LeftHandIKAlpha, Anim->bLeftHandIKGripValid ? 1 : 0));
-				Check(State, FVector::Dist(Target, Socket) <= 3.f,
-					FString::Printf(TEXT("... the IK target sits on the handguard socket (%.1f cm; %.0f cm along the barrel from the grip, %.1f cm off its axis)"),
-						FVector::Dist(Target, Socket), AlongBarrel, OffBarrel));
+				const FVector Root = Op->GetMesh()->GetBoneLocation(Anim->LeftHandIKChainRoot);
+				const float RootToTarget = static_cast<float>(FVector::Dist(Root, Target));
+				Check(State, FMath::Abs(static_cast<float>(FVector::Dist(Target, Socket)) - Anim->LeftHandIKSlideCm) <= 1.f
+					&& RootToTarget <= Anim->LeftHandArmReach * Anim->LeftHandIKReachFraction + 1.f,
+					FString::Printf(TEXT("... the IK target: the handguard socket slid %.1f cm back along the barrel into reach (%s -> target %.1f cm, reach %.1f x %.2f; %.0f cm along the barrel from the grip, %.1f cm off its axis)"),
+						Anim->LeftHandIKSlideCm, *Anim->LeftHandIKChainRoot.ToString(), RootToTarget, Anim->LeftHandArmReach, Anim->LeftHandIKReachFraction, AlongBarrel, OffBarrel));
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: left hand (clip) %.1f cm from the IK target: the gap the ABP's Two Bone IK closes"),
 					FVector::Dist(HandL, Target));
+				// What a clavicle-rooted chain (FABRIK clavicle_l -> hand_l) would reach: the socket itself?
+				const FReferenceSkeleton& Ref = Op->GetMesh()->GetSkeletalMeshAsset()->GetRefSkeleton();
+				const int32 UpperIndex = Ref.FindBoneIndex(TEXT("upperarm_l"));
+				const float ClavicleReach = Anim->LeftHandArmReach + (UpperIndex != INDEX_NONE ? static_cast<float>(Ref.GetRefBonePose()[UpperIndex].GetLocation().Size()) : 0.f);
+				const float ClavicleToSocket = static_cast<float>(FVector::Dist(Op->GetMesh()->GetBoneLocation(TEXT("clavicle_l")), Socket));
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: with a clavicle_l chain: socket %.1f cm from clavicle_l, reach %.1f (x %.2f = %.1f): %s"),
+					ClavicleToSocket, ClavicleReach, Anim->LeftHandIKReachFraction, ClavicleReach * Anim->LeftHandIKReachFraction,
+					ClavicleToSocket <= ClavicleReach * Anim->LeftHandIKReachFraction ? TEXT("the handguard itself is reachable") : TEXT("still short"));
+			}
+			// What the ABP's IK node does: the final left hand vs the target with alpha 1, then forced 0 (stage 30).
+			if (UOperativeAnimInstance* Anim = AnimOf(Op))
+			{
+				const FTransform HandR = Op->GetMesh()->GetSocketTransform(TEXT("hand_r"), RTS_World);
+				State.IKGapOn = static_cast<float>(FVector::Dist(Op->GetMesh()->GetBoneLocation(TEXT("hand_l")), HandR.TransformPosition(Anim->LeftHandIKOffset)));
+				Anim->LeftHandIKAlphaOverrideForTesting = 0.f;
+			}
+			return Next(30);
+		}
+		case 30:
+		{
+			if (StageTime < 0.3f)
+			{
+				return true;
+			}
+			if (UOperativeAnimInstance* Anim = AnimOf(Op))
+			{
+				const FTransform HandR = Op->GetMesh()->GetSocketTransform(TEXT("hand_r"), RTS_World);
+				const float GapOff = static_cast<float>(FVector::Dist(Op->GetMesh()->GetBoneLocation(TEXT("hand_l")), HandR.TransformPosition(Anim->LeftHandIKOffset)));
+				Anim->LeftHandIKAlphaOverrideForTesting = -1.f;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: ABP IK node effect: final hand_l -> IK target %.1f cm with alpha 1, %.1f cm with alpha 0 (%s)"),
+					State.IKGapOn, GapOff, FMath::Abs(GapOff - State.IKGapOn) < 1.f ? TEXT("NO EFFECT: node missing / after Output Pose / alpha or effector pin unconnected")
+					: State.IKGapOn < 2.f ? TEXT("the node reaches the target") : TEXT("the node moves the hand but not onto the target: check its effector space / target bone"));
 			}
 			State.LeanBefore = Op->GetCoverLeanShots();
 			State.bBurstBroken = false;
@@ -592,7 +633,8 @@ namespace CoverCrouchSmoke
 			}
 			if (!State.bSampled)
 			{
-				State.bSampled = true; // the reload is over: the blend back in from here
+				State.bSampled = true; // the reload is over: out of cover (the IK is on in the locomotion; the cover idle keeps it off)
+				Op->LeaveCover(TEXT("smoke: left-hand IK out of cover"));
 				StageTime = 0.f;
 				return true;
 			}
@@ -602,7 +644,7 @@ namespace CoverCrouchSmoke
 			}
 			const UOperativeAnimInstance* Anim = AnimOf(Op);
 			Check(State, !Op->bIsReloading && Anim && Anim->LeftHandIKAlpha >= 0.99f,
-				FString::Printf(TEXT("... and back on after the reload (alpha %.2f; grip %d, anim reloading %d, weapon visible %d, stance %d, %.1f s)"),
+				FString::Printf(TEXT("... and back on after the reload, out of cover (alpha %.2f; grip %d, anim reloading %d, weapon visible %d, stance %d, %.1f s)"),
 					Anim ? Anim->LeftHandIKAlpha : -1.f, Anim && Anim->bLeftHandIKGripValid ? 1 : 0, Anim && Anim->bIsReloading ? 1 : 0,
 					Op->WeaponMesh && Op->WeaponMesh->IsVisible() ? 1 : 0, static_cast<int32>(Op->GetStance()), StageTime));
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: reload diag: panicking %d, cease %d, alive %d"), Op->IsPanicking() ? 1 : 0,

@@ -1,5 +1,13 @@
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/LeftHandIKRules.h"
+#include "DrawDebugHelpers.h"
+#include "HAL/IConsoleManager.h"
+
+namespace
+{
+	TAutoConsoleVariable<int32> CVarDebugLeftHandIK(TEXT("Codex.Debug.LeftHandIK"), 0,
+		TEXT("1: draw the left-hand IK spheres (red socket, green target, yellow hand_l, blue shoulder) in PIE / game."));
+}
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshSocket.h"
@@ -723,12 +731,51 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 	const UStaticMesh* WeaponAsset = Weapon ? Weapon->GetStaticMesh() : nullptr;
 	const UStaticMeshSocket* Grip = WeaponAsset ? WeaponAsset->FindSocket(LeftHandGripSocket) : nullptr;
 	bLeftHandIKGripValid = Grip && Weapon->GetAttachSocketName() == Operative.WeaponSocket;
+	const USkeletalMeshComponent* Body = GetSkelMeshComponent();
+	FTransform HandR = FTransform::Identity;
+	FVector Shoulder = FVector::ZeroVector;
+	LeftHandIKSlideCm = 0.f;
 	if (bLeftHandIKGripValid)
 	{
 		const FTransform SocketInWeapon(Grip->RelativeRotation, Grip->RelativeLocation, Grip->RelativeScale);
 		const FTransform InHand = LeftHandIKRules::GripInHandSpace(Weapon->GetRelativeTransform(), SocketInWeapon);
 		LeftHandIKOffset = InHand.GetLocation();
 		LeftHandIKRotation = InHand.Rotator();
+		// The arm's reach (upper + lower arm of the reference skeleton) and the shoulder in hand_r space from the last
+		// pose: a grip beyond reach slides back along the barrel to the furthest reachable point (user report
+		// 2026-10-07: the m16 handguard is 72-74 cm from the shoulder on the pack's fire stances, the arm reaches 57).
+		if (Body && Body->GetSkeletalMeshAsset())
+		{
+			if (LeftHandArmReach <= 0.f || LeftHandIKChainRoot != LeftHandArmReachRoot)
+			{
+				// The chain's length from LeftHandIKChainRoot down to hand_l (Two Bone IK: upperarm_l; a FABRIK from
+				// clavicle_l reaches further).
+				LeftHandArmReachRoot = LeftHandIKChainRoot;
+				LeftHandArmReach = 0.f;
+				const FReferenceSkeleton& Ref = Body->GetSkeletalMeshAsset()->GetRefSkeleton();
+				const int32 Root = Ref.FindBoneIndex(LeftHandIKChainRoot);
+				for (int32 Bone = Ref.FindBoneIndex(TEXT("hand_l")); Bone != INDEX_NONE && Bone != Root && Root != INDEX_NONE; Bone = Ref.GetParentIndex(Bone))
+				{
+					LeftHandArmReach += static_cast<float>(Ref.GetRefBonePose()[Bone].GetLocation().Size());
+				}
+			}
+			HandR = Body->GetSocketTransform(TEXT("hand_r"), RTS_Component);
+			// Robust to how the weapon is attached (a skeletal socket with its own offset, a weapon bone...): the grip's
+			// world location taken into the hand_r BONE space the IK node uses (Effector Target = hand_r, Bone Space).
+			const FTransform GripWorld = Weapon->GetSocketTransform(LeftHandGripSocket, RTS_World);
+			const FTransform GripInHand = GripWorld.GetRelativeTransform(Body->GetComponentTransform()).GetRelativeTransform(HandR);
+			LeftHandIKOffset = GripInHand.GetLocation();
+			LeftHandIKRotation = GripInHand.Rotator();
+			Shoulder = HandR.InverseTransformPosition(Body->GetSocketTransform(LeftHandIKChainRoot, RTS_Component).GetLocation());
+			if (LeftHandArmReach > 0.f)
+			{
+				const FVector Axis = Weapon->GetRelativeTransform().TransformVectorNoScale(Operative.MuzzleOffset.GetSafeNormal());
+				const FVector Reachable = LeftHandIKRules::SlideIntoReach(LeftHandIKOffset, Axis, Shoulder,
+					LeftHandArmReach * LeftHandIKReachFraction, LeftHandIKMaxSlideCm);
+				LeftHandIKSlideCm = static_cast<float>(FVector::Dist(Reachable, LeftHandIKOffset));
+				LeftHandIKOffset = Reachable;
+			}
+		}
 	}
 	LeftHandIKBlockSeconds = FMath::Max(0.f, LeftHandIKBlockSeconds - DeltaSeconds);
 	FLeftHandIKState State;
@@ -740,8 +787,36 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 	State.bVaulting = bIsVaulting;
 	State.bDead = bIsDead;
 	State.bProne = bIsProne;
+	// In cover only the fire stance holds the rifle two-handed (not its idle <-> fire transitions, the cover idle,
+	// look-around, shimmy, enter or stance-switch clips: the rifle is low there, the hand far from it).
+	{
+		const UAnimMontage* OneShot = CoverOneShotMontage.Get();
+		const bool bCoverTransition = OneShot && Montage_IsPlaying(OneShot) && CoverClipLog.Num() > 0 && CoverClipLog.Last().Contains(TEXT("_to_"));
+		State.bTwoHandedPose = !bInCover || ((bCoverInFirePose || bCoverCornerAim) && !bCoverTransition && !IsPlayingStanceTransition());
+	}
 	LeftHandIKLinear = LeftHandIKRules::StepAlpha(LeftHandIKLinear, LeftHandIKRules::WantsIK(State), DeltaSeconds, LeftHandIKBlendSeconds);
 	LeftHandIKAlpha = FMath::SmoothStep(0.f, 1.f, LeftHandIKLinear);
+	if (LeftHandIKAlphaOverrideForTesting >= 0.f)
+	{
+		LeftHandIKAlpha = FMath::Clamp(LeftHandIKAlphaOverrideForTesting, 0.f, 1.f);
+	}
+	// Codex.Debug.LeftHandIK 1: red = the LeftHandGrip socket, green = the IK target (after the reach slide), yellow = the
+	// left hand now, blue = the shoulder (upperarm_l) with the reach as a circle radius in the log line.
+	if (CVarDebugLeftHandIK.GetValueOnGameThread() > 0 && Body && Weapon && Operative.GetWorld())
+	{
+		UWorld* World = Operative.GetWorld();
+		const FTransform BodyXf = Body->GetComponentTransform();
+		const FVector TargetWorld = BodyXf.TransformPosition(HandR.TransformPosition(LeftHandIKOffset));
+		if (bLeftHandIKGripValid)
+		{
+			DrawDebugSphere(World, Weapon->GetSocketLocation(LeftHandGripSocket), 3.f, 8, FColor::Red, false, -1.f, SDPG_Foreground);
+			DrawDebugSphere(World, TargetWorld, 3.5f, 8, FColor::Green, false, -1.f, SDPG_Foreground);
+		}
+		DrawDebugSphere(World, Body->GetBoneLocation(TEXT("hand_l")), 2.5f, 8, FColor::Yellow, false, -1.f, SDPG_Foreground);
+		DrawDebugSphere(World, Body->GetBoneLocation(LeftHandIKChainRoot), 2.5f, 8, FColor::Blue, false, -1.f, SDPG_Foreground);
+		DrawDebugString(World, TargetWorld + FVector(0.f, 0.f, 12.f), FString::Printf(TEXT("IK a=%.2f slide %.0f reach %.0f"),
+			LeftHandIKAlpha, LeftHandIKSlideCm, LeftHandArmReach), nullptr, FColor::Green, 0.f, true, 1.f);
+	}
 }
 
 UAnimSequence* UOperativeAnimInstance::GetClip(EOperativeClip Clip) const

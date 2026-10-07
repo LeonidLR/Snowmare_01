@@ -483,6 +483,32 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
 	float LeftHandIKAlpha = 0.f;
 
+	/** The IK target stays within this share of the arm's reach (upper + lower arm): a farther grip slides back along the barrel. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK", meta = (ClampMin = "0.5", ClampMax = "1"))
+	float LeftHandIKReachFraction = 0.95f;
+
+	/**
+	 * The IK chain's root bone (its reach is measured from there): upperarm_l for the Two Bone IK node; clavicle_l when the
+	 * graph uses a FABRIK from the clavicle (the shoulder swings forward: ~+15 cm of reach).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
+	FName LeftHandIKChainRoot = TEXT("upperarm_l");
+
+	/** At most this far back along the barrel, cm. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK", meta = (ClampMin = "0"))
+	float LeftHandIKMaxSlideCm = 40.f;
+
+	/** How far the target slid back from the socket this update (0 = the socket is in reach), cm. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
+	float LeftHandIKSlideCm = 0.f;
+
+	/** Upper + lower arm length of the reference skeleton, cm (read once). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
+	float LeftHandArmReach = 0.f;
+
+	/** Smokes: >= 0 forces LeftHandIKAlpha (to tell what the ABP's IK node changes). */
+	float LeftHandIKAlphaOverrideForTesting = -1.f;
+
 	/** The weapon has the grip socket (the offset is valid). */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
 	bool bLeftHandIKGripValid = false;
@@ -735,6 +761,8 @@ private:
 	bool bCoverEnteredThisFrame = false;
 	/** Left-hand IK: linear blend progress, the upper-body action windows (grenade throw / hit reaction) left, s. */
 	float LeftHandIKLinear = 0.f;
+	/** The chain root the cached LeftHandArmReach was measured from. */
+	FName LeftHandArmReachRoot;
 	float LeftHandIKBlockSeconds = 0.f;
 	/** Reads the grip socket into LeftHandIKOffset / Rotation and steps the alpha (game thread, UpdateState). */
 	void UpdateLeftHandIK(const class AOperativeCharacter& Operative, float DeltaSeconds);
