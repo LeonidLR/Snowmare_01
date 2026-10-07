@@ -448,6 +448,20 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
 	bool bCoverFireReady = false;
 
+	/**
+	 * Sustained corner aim (user request 2026-10-07): leaned out in the fire stance between shots — the shots play the
+	 * fire clip straight from fire_idle, no idle -> fire / fire -> idle transitions in between.
+	 */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	bool bCoverCornerAim = false;
+
+	/** Blend-in of the cover enter clip when he runs into the cover (eased; user-found bug 2026-10-07), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverEnterFromRunBlendSeconds = 0.25f;
+
+	/** Weight of the cover enter clip now (0..1 while it blends in / plays), -1 when none plays. */
+	float GetCoverEnterBlendWeight() const;
+
 	/** Play the cover clips natively on FullBodySlot (untick once the AnimBP has its own cover states). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation")
 	bool bUseNativeCoverClips = true;

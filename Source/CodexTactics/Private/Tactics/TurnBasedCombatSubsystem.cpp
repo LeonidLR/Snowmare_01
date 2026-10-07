@@ -735,6 +735,14 @@ float UTurnBasedCombatSubsystem::PrepareSquadWalk(AOperativeCharacter* Unit, flo
 	{
 		return 0.f;
 	}
+	// User-found bug 2026-10-07: a unit pressed against a wall when the grid fight started slid across the grid in its
+	// cover pose — the grid mover moves the actor directly and nothing left the cover, so the AnimInstance kept the
+	// cover loop on its FullBody slot. Every grid walk (move, push, deploy) leaves the cover first; a pending cover (a
+	// cover cell was clicked) is kept and entered on arrival (AOperativeCharacter::UpdateCover).
+	if (Unit->bInCover)
+	{
+		Unit->LeaveCoverToMove(TEXT("grid walk"));
+	}
 	float Delay = 0.f;
 	if (Unit->GetStance() == EOperativeStance::Prone)
 	{
@@ -1738,6 +1746,10 @@ void UTurnBasedCombatSubsystem::EndCurrentUnitTurn()
 	RelocateTarget.Reset();
 	RelocateCells.Reset();
 	bAttackMode = false; // Godot end_current_unit_turn
+	if (AOperativeCharacter* Ending = GetActiveUnit())
+	{
+		Ending->EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("turn over")); // the corner fire stance lasts his turn
+	}
 	++ActiveIndex;
 	if (Squad.IsValidIndex(ActiveIndex))
 	{
@@ -2733,6 +2745,13 @@ bool UTurnBasedCombatSubsystem::HandleDeployPlacement(EDeployableType Type, cons
 
 void UTurnBasedCombatSubsystem::EndSquadPhase()
 {
+	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Squad)
+	{
+		if (AOperativeCharacter* Unit = Member.Get())
+		{
+			Unit->EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("squad phase over"));
+		}
+	}
 	RelocateTarget.Reset();
 	RelocateCells.Reset();
 	if (Overlay)

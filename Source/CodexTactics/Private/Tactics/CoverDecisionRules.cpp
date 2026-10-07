@@ -99,4 +99,45 @@ namespace CoverDecisionRules
 		default: return TEXT("Hold");
 		}
 	}
+
+	ECornerAimDecision DecideCornerAim(const FCoverDecisionConfig& Config, const FCornerAimSituation& Situation)
+	{
+		const bool bLowClip = Situation.bHasReserve && Situation.ClipFraction <= Config.AimEarlyReloadFraction;
+		if (Situation.ClipFraction <= 0.f)
+		{
+			return Situation.bHasReserve ? ECornerAimDecision::DuckToReload : ECornerAimDecision::DuckForSafety;
+		}
+		if (Situation.bSniperLaserOnMe || Situation.bGrenadeNearby || Situation.bFlankEnemyNear)
+		{
+			return ECornerAimDecision::DuckForSafety;
+		}
+		const bool bHurt = Situation.HealthFraction < Config.PeekMinHealthFraction
+			|| Situation.RecentIncomingDamage >= Config.AimBigHitDamage
+			|| Situation.SuppressionPressure >= Config.AimBreakSuppression
+			|| (Situation.HealthFraction < Config.AimWoundedHealthFraction && Situation.RecentIncomingDamage > 0.f);
+		if (bHurt)
+		{
+			return bLowClip ? ECornerAimDecision::DuckToReload : ECornerAimDecision::DuckForSafety; // the forced duck reloads a low magazine
+		}
+		if (bLowClip && Situation.SecondsWithoutTarget >= Config.AimEarlyReloadLullSeconds)
+		{
+			return ECornerAimDecision::DuckToReload; // a lull (or the fight over) with a low magazine: reload behind the corner first
+		}
+		if (!Situation.bHoldWithoutTargets && Situation.SecondsWithoutTarget >= Config.AimNoTargetGraceSeconds)
+		{
+			return ECornerAimDecision::ReturnNoTargets;
+		}
+		return ECornerAimDecision::StayAndFire;
+	}
+
+	const TCHAR* CornerAimDecisionName(ECornerAimDecision Decision)
+	{
+		switch (Decision)
+		{
+		case ECornerAimDecision::DuckToReload: return TEXT("DuckToReload");
+		case ECornerAimDecision::DuckForSafety: return TEXT("DuckForSafety");
+		case ECornerAimDecision::ReturnNoTargets: return TEXT("ReturnNoTargets");
+		default: return TEXT("StayAndFire");
+		}
+	}
 }

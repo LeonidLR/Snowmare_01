@@ -1,7 +1,7 @@
 // Dev-only rendered screenshots of the cover clip sides (left / right edge, idle, fire-ready, shot, shimmies) for the
 // _L / _R mapping review (UE-only, no Godot reference). Needs rendering (not -nullrhi); nothing is saved to the map:
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900
-//     -ExecCmds="CodexTactics.CoverLRShot"
+//     -ExecCmds="CodexTactics.CoverLRShot"   ("CodexTactics.CoverLRShot <folder> runin": only the run-into-cover frame sequence)
 // A 3 m high, 6 m wide wall 4 m ahead of the leader is spawned at runtime (6 m so the middle has no corner within the
 // 2 m auto-snap). Labels in the world: the two wall ends ("END -R = HIS RIGHT", "END +R = HIS LEFT"), the enemy. Each
 // shot logs and labels the clip that is really playing (the FullBody slot montage), the edge, the facing and where the
@@ -64,6 +64,10 @@ namespace CoverLRShot
 		FString OutDir = TEXT("CoverLR");
 		int32 OpenShotsBefore = 0;
 		bool bOpenShotTaken = false;
+		int32 SequenceShots = 0;
+		float SequenceLastShot = -1.f;
+		FVector SequenceSlot = FVector::ZeroVector;
+		bool bRunInOnly = false;
 		int32 LeanShotsBefore = 0;
 	};
 
@@ -140,8 +144,8 @@ namespace CoverLRShot
 			CamRot = PC->PlayerCameraManager->GetCameraRotation();
 		}
 		const FString Line1 = FString::Printf(TEXT("%02d %s | PLAYING: %s"), Ctx.ShotIndex + 1, *Name, *Clip);
-		const FString Line2 = FString::Printf(TEXT("in cover=%d open shot=%d | code facing=%s (Right = his own right = -R) | at corner=%d | shimmy=%d dir=%+.0f fwd=%d | threat known=%d | along R=%+.0f cm"),
-			Op->bInCover ? 1 : 0, Op->IsCoverOpenShotActive() ? 1 : 0, Op->CoverFacing == ECoverFacing::Right ? TEXT("Right") : TEXT("Left"),
+		const FString Line2 = FString::Printf(TEXT("aim=%d in cover=%d open shot=%d | code facing=%s (Right = his own right = -R) | at corner=%d | shimmy=%d dir=%+.0f fwd=%d | threat known=%d | along R=%+.0f cm"),
+			Op->IsCornerAimActive() ? 1 : 0, Op->bInCover ? 1 : 0, Op->IsCoverOpenShotActive() ? 1 : 0, Op->CoverFacing == ECoverFacing::Right ? TEXT("Right") : TEXT("Left"),
 			Op->bAtCoverCorner ? 1 : 0, Op->bShimmying ? 1 : 0, Op->ShimmyDirection, Op->IsShimmyForward() ? 1 : 0, Op->bHasCoverThreat ? 1 : 0, Along);
 		const FString Line3 = FString::Printf(TEXT("edge: %s | enemy: %s | camera yaw %.0f (F yaw %.0f) pitch %.0f"), *Edge, *Ctx.EnemyWhere,
 			CamRot.Yaw, Ctx.F.Rotation().Yaw, CamRot.Pitch);
@@ -284,6 +288,44 @@ namespace CoverLRShot
 		};
 	}
 
+	/**
+	 * Sustained corner aim (user request 2026-10-07): Ctrl + click on the enemy round the corner, the screenshot after the
+	 * second shot of the burst (he holds the fire stance between shots), then fire held until the aim ends.
+	 */
+	FStep BurstShot(const FString& Name)
+	{
+		return [Name](FCtx& Ctx)
+		{
+			AOperativeCharacter* Op = Ctx.Op.Get();
+			UWorld* World = Ctx.World.Get();
+			if (Ctx.StepTime == 0.f)
+			{
+				Ctx.bAllowFire = true;
+				Ctx.bFireShotTaken = false;
+				Ctx.LeanShotsBefore = Op->GetCoverLeanShots();
+				if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(UGameplayStatics::GetPlayerController(World, 0)))
+				{
+					PC->IssueTargetedShot(Ctx.Hound.Get());
+				}
+				else
+				{
+					Op->SetManualPriorityTarget(Ctx.Hound.Get());
+				}
+				return false;
+			}
+			if (!Ctx.bFireShotTaken && ((Op->GetCoverLeanShots() >= Ctx.LeanShotsBefore + 2 && Ctx.StepTime > 0.3f) || Ctx.StepTime > 8.f))
+			{
+				Ctx.bFireShotTaken = true;
+				Shot(Ctx, Name);
+				UE_LOG(LogCodexTactics, Display, TEXT("CoverLR: mid-burst after %d shots, corner aim %d"), Op->GetCoverLeanShots() - Ctx.LeanShotsBefore,
+					Op->IsCornerAimActive() ? 1 : 0);
+				Ctx.bAllowFire = false;
+				Op->AssignPriorityTarget(nullptr);
+			}
+			return Ctx.bFireShotTaken && (!Op->IsCornerAimActive() || Ctx.StepTime > 12.f);
+		};
+	}
+
 	/** Ctrl + click on an enemy out in front of the wall: the screenshot once he is off the wall and has fired, then back. */
 	FStep OpenShotShot(const FString& Name)
 	{
@@ -318,6 +360,58 @@ namespace CoverLRShot
 		};
 	}
 
+	/**
+	 * Run into cover (user-found bug 2026-10-07): a sprint order to the wall's middle from 3 m out, a frame sequence from
+	 * 3.5 m before the slot until the cover loop (every ~0.07 s, 16 frames).
+	 */
+	FStep RunInSequence(const FString& Name)
+	{
+		return [Name](FCtx& Ctx)
+		{
+			AOperativeCharacter* Op = Ctx.Op.Get();
+			if (Ctx.StepTime == 0.f)
+			{
+				Ctx.SequenceShots = 0;
+				Ctx.SequenceLastShot = -1.f;
+				FCoverSlot Slot;
+				if (CoverTraceRules::FindCoverSlotAt(Ctx.World.Get(), Ctx.P + Ctx.F * 380.f + FVector(0.f, 0.f, 90.f), Ctx.F, Slot))
+				{
+					Ctx.SequenceSlot = Slot.WorldLocation;
+					Op->OrderTakeCover(Slot, true);
+				}
+				return false;
+			}
+			const bool bNear = Op->bInCover || FVector::Dist2D(Op->GetActorLocation(), Ctx.SequenceSlot) <= 350.f;
+			if (bNear && Ctx.SequenceShots == 0)
+			{
+				// Slow motion for the sequence (a screenshot costs ~0.3 s of real time): ~0.08 s of game time per frame.
+				UGameplayStatics::SetGlobalTimeDilation(Ctx.World.Get(), 0.25f);
+			}
+			if (bNear && Ctx.SequenceShots < 16 && Ctx.StepTime - Ctx.SequenceLastShot >= 0.07f)
+			{
+				Ctx.SequenceLastShot = Ctx.StepTime;
+				++Ctx.SequenceShots;
+				Shot(Ctx, FString::Printf(TEXT("%s_%02d"), *Name, Ctx.SequenceShots));
+			}
+			const bool bDone = Ctx.SequenceShots >= 16 || Ctx.StepTime > 20.f;
+			if (bDone)
+			{
+				UGameplayStatics::SetGlobalTimeDilation(Ctx.World.Get(), 1.f);
+			}
+			return bDone;
+		};
+	}
+
+	TArray<FStep> BuildRunInScript()
+	{
+		TArray<FStep> S;
+		S.Add(Do([](FCtx& C) { C.Op->bIgnoreCoverThreatForTesting = true; PlaceHound(C, C.P - C.F * 3000.f, TEXT("none (threat unknown)")); }));
+		S.Add(RunInSequence(TEXT("RunIntoCover")));
+		S.Add(Wait(1.5f));
+		S.Add(TakeShot(TEXT("RunIntoCover_Settled")));
+		return S;
+	}
+
 	TArray<FStep> BuildScript()
 	{
 		TArray<FStep> S;
@@ -334,7 +428,9 @@ namespace CoverLRShot
 		S.Add(Wait(4.f));
 		S.Add(TakeShot(TEXT("HisRightEdge_ThreatHisRight_FireIdle")));
 		S.Add(FireShot(TEXT("HisRightEdge_ThreatHisRight_Fire")));
-		S.Add(Wait(2.f));
+		S.Add(Wait(3.f));
+		S.Add(BurstShot(TEXT("HisRightEdge_ThreatHisRight_MidBurst")));
+		S.Add(Wait(1.f));
 		// Corner on HIS LEFT (+R end).
 		S.Add(Do([](FCtx& C) { C.Op->bIgnoreCoverThreatForTesting = true; PlaceHound(C, C.P - C.F * 3000.f, TEXT("none (threat unknown)")); }));
 		S.Add(TakeCover(250.f));
@@ -451,7 +547,8 @@ namespace CoverLRShot
 		{
 			Ctx->OutDir = Args[0];
 		}
-		TSharedRef<TArray<FStep>> Script = MakeShared<TArray<FStep>>(BuildScript());
+		Ctx->bRunInOnly = Args.Contains(TEXT("runin"));
+		TSharedRef<TArray<FStep>> Script = MakeShared<TArray<FStep>>(Ctx->bRunInOnly ? BuildRunInScript() : BuildScript());
 		TSharedRef<float> Boot = MakeShared<float>(0.f);
 		TSharedRef<bool> bReady = MakeShared<bool>(false);
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Ctx, Script, Boot, bReady](float DeltaTime)

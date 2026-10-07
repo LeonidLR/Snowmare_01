@@ -38,6 +38,18 @@ namespace CoverTraceRules
 		return FVector(Slot.X, Slot.Y, GroundZ);
 	}
 
+	float RefineEdgeDistance(float HitCm, float MissCm, TFunctionRef<bool(float)> WallAt, int32 Iterations)
+	{
+		float OnWall = HitCm;
+		float OffWall = MissCm;
+		for (int32 Step = 0; Step < Iterations; ++Step)
+		{
+			const float Mid = 0.5f * (OnWall + OffWall);
+			(WallAt(Mid) ? OnWall : OffWall) = Mid;
+		}
+		return 0.5f * (OnWall + OffWall);
+	}
+
 	bool EdgeExposedFromProbes(const TArray<bool>& ProbeHits, float StepCm, float& OutEdgeDistanceCm)
 	{
 		OutEdgeDistanceCm = 0.f;
@@ -215,18 +227,26 @@ namespace CoverTraceRules
 		for (int32 Side = 0; Side < 2; ++Side)
 		{
 			const FVector Along = Side == 0 ? -Right : Right;
+			auto WallAt = [&](float DistanceCm)
+			{
+				const FVector ProbeStart = FVector(Chest.ImpactPoint.X, Chest.ImpactPoint.Y, GroundZ + Config.ChestHeightCm) + Normal * 60.f
+					+ Along * DistanceCm;
+				FHitResult ProbeHit;
+				return CoverTrace(World, ProbeStart, ProbeStart - Normal * 140.f, IgnoredActors, ProbeHit)
+					&& FMath::Abs(ProbeHit.ImpactNormal.Z) <= Config.MaxWallNormalZ;
+			};
 			TArray<bool> Hits;
 			for (int32 Probe = 1; Probe <= Config.MaxEdgeProbes; ++Probe)
 			{
-				const FVector ProbeStart = FVector(Chest.ImpactPoint.X, Chest.ImpactPoint.Y, GroundZ + Config.ChestHeightCm) + Normal * 60.f
-					+ Along * (Probe * Config.EdgeProbeStepCm);
-				FHitResult ProbeHit;
-				const bool bHit = CoverTrace(World, ProbeStart, ProbeStart - Normal * 140.f, IgnoredActors, ProbeHit)
-					&& FMath::Abs(ProbeHit.ImpactNormal.Z) <= Config.MaxWallNormalZ;
-				Hits.Add(bHit);
+				Hits.Add(WallAt(Probe * Config.EdgeProbeStepCm));
 			}
 			float EdgeDistance = 0.f;
 			const bool bExposed = EdgeExposedFromProbes(Hits, Config.EdgeProbeStepCm, EdgeDistance);
+			if (bExposed)
+			{
+				// The coarse probes only bracket the edge within one 40 cm step: bisect it (user decision 2026-10-07).
+				EdgeDistance = RefineEdgeDistance(EdgeDistance - Config.EdgeProbeStepCm, EdgeDistance, WallAt, Config.EdgeRefineIterations);
+			}
 			if (Side == 0)
 			{
 				OutSlot.bLeftEdgeExposed = bExposed;

@@ -250,7 +250,7 @@ void UOperativeAnimInstance::UpdateRifle2Locomotion(float DeltaSeconds, bool bMo
 		if (ShouldStop(bMoveIntent))
 		{
 			const int32 Sector = DirectionSector(InDirection);
-			UAnimSequence* Clip = PickClip(Rifle2Stops, ClipIndex(Sector, StartFoot(Sector)));
+			UAnimSequence* Clip = bInCover ? nullptr : PickClip(Rifle2Stops, ClipIndex(Sector, StartFoot(Sector))); // into cover: the enter clip, no stop
 			EnterRifleLocoState(Clip ? ERifleLocoState::Stop : ERifleLocoState::Idle, Clip);
 		}
 		else if (LocoStateTime >= FMath::Max(0.f, LocoClipLength - StartBlendOut))
@@ -263,7 +263,7 @@ void UOperativeAnimInstance::UpdateRifle2Locomotion(float DeltaSeconds, bool bMo
 		if (ShouldStop(bMoveIntent))
 		{
 			const int32 Sector = DirectionSector(InDirection);
-			UAnimSequence* Clip = PickClip(Rifle2Stops, ClipIndex(Sector, StopFoot(LocoWalkSeconds, Rifle2WalkCycleSeconds)));
+			UAnimSequence* Clip = bInCover ? nullptr : PickClip(Rifle2Stops, ClipIndex(Sector, StopFoot(LocoWalkSeconds, Rifle2WalkCycleSeconds)));
 			EnterRifleLocoState(Clip ? ERifleLocoState::Stop : ERifleLocoState::Idle, Clip);
 		}
 		break;
@@ -360,7 +360,8 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 		{
 			// Shot from the corner (user rule 2026-10-06): from the plain cover idle the idle -> fire transition plays first, then
 			// the shot, then the fire-ready idle again; already in the fire-ready pose the shot plays at once.
-			const bool bCornerShot = !(Shooter && Shooter->bIsBlindFiring) && bCoverAtCorner;
+			const bool bCornerShot = !(Shooter && Shooter->bIsBlindFiring)
+				&& (bCoverAtCorner || (Shooter && Shooter->IsCornerAimActive())); // sustained aim: from fire_idle, no cycle per shot
 			if (bCornerShot && PickCoverClip(bIsCrouching ? CoverCrouchFireIdle : CoverStandFireIdle))
 			{
 				if (CoverPendingFireClip.IsValid())
@@ -646,6 +647,7 @@ void UOperativeAnimInstance::UpdateState()
 	bCoverShimmyForward = bShimmying && Operative->IsShimmyForward();
 	bCoverAtCorner = bInCover && Operative->bAtCoverCorner;
 	bCoverFireReady = bInCover && Operative->IsCoverFireReady();
+	bCoverCornerAim = bInCover && Operative->IsCornerAimActive();
 	UpdateCoverLayer(*Operative);
 	bIsMoving = Speed > 5.f;
 	bIsSprinting = Operative->IsSprinting();
@@ -831,9 +833,18 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		CoverLoopMontage.Reset();
 		CoverLoopClip.Reset();
 		CoverPendingFireClip.Reset();
+		bCoverEnterPlaying = false;
+		// A cover one-shot (enter / fire / transition) must not outlive the cover: it would hold the cover pose while the
+		// capsule walks off (user-found bug 2026-10-07: grid walks slid across the floor in the cover pose).
+		if (UAnimMontage* OneShot = CoverOneShotMontage.Get(); OneShot && Montage_IsPlaying(OneShot))
+		{
+			Montage_Stop(0.2f, OneShot);
+		}
+		CoverOneShotMontage.Reset();
 		// Leaving the fire-ready pose: the exit transition plays when he stays put (walking on blends straight out; an
-		// open shot at a target in front of the wall blends straight into the normal shooting pose).
-		if (bCoverInFirePose && Speed < 20.f && !Operative.IsCoverOpenShotActive())
+		// open shot at a target in front of the wall blends straight into the normal shooting pose; a move order / grid
+		// walk leaves walking).
+		if (bCoverInFirePose && Speed < 20.f && !Operative.IsCoverOpenShotActive() && !Operative.IsMovingOffCover())
 		{
 			if (UAnimSequenceBase* Exit = PickCoverClip(bIsCrouching ? CoverCrouchFireExit : CoverStandFireExit))
 			{
@@ -843,7 +854,19 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		bCoverInFirePose = false;
 		return;
 	}
-	if (!bInCover || bIsProne)
+	if (!bInCover)
+	{
+		if (Speed > 20.f)
+		{
+			if (UAnimMontage* OneShot = CoverOneShotMontage.Get(); OneShot && Montage_IsPlaying(OneShot))
+			{
+				Montage_Stop(0.2f, OneShot); // the fire -> idle exit never plays over a walk
+			}
+			CoverOneShotMontage.Reset();
+		}
+		return;
+	}
+	if (bIsProne)
 	{
 		return;
 	}
@@ -858,8 +881,20 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	{
 		if (UAnimSequenceBase* Enter = PickCoverClip(bIsCrouching ? CoverCrouchEnter : CoverStandEnter))
 		{
-			StopSlotAnimation(0.15f, FullBodySlot);
-			CoverOneShotMontage = PlaySlotAnimationAsDynamicMontage(Enter, FullBodySlot, 0.15f, 0.2f);
+			if (Operative.IsCoverEnteringFromRun())
+			{
+				// User-found bug 2026-10-07 (run -> hard stop -> enter clip): no stop between them, an eased blend over the
+				// last steps (the capsule is already at the slot; the mesh offset carries the body from where it ran).
+				FAlphaBlendArgs BlendIn(FMath::Max(CoverEnterFromRunBlendSeconds, 0.f));
+				BlendIn.BlendOption = EAlphaBlendOption::HermiteCubic;
+				FAlphaBlendArgs BlendOut(0.2f);
+				CoverOneShotMontage = PlaySlotAnimationAsDynamicMontage_WithBlendArgs(Enter, FullBodySlot, BlendIn, BlendOut);
+			}
+			else
+			{
+				StopSlotAnimation(0.15f, FullBodySlot);
+				CoverOneShotMontage = PlaySlotAnimationAsDynamicMontage(Enter, FullBodySlot, 0.15f, 0.2f);
+			}
 			CoverClipsPlayed += CoverOneShotMontage.IsValid() ? 1 : 0;
 			bCoverEnterPlaying = CoverOneShotMontage.IsValid();
 			if (bCoverEnterPlaying)
@@ -929,6 +964,18 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 			}
 		}
 	}
+	// Reload behind the corner (user request 2026-10-07; the pack has no cover reload clip): after the fire -> idle exit
+	// the cover loop steps aside so the normal reload (UpperBodySlot over the graph's idle) shows; the loop resumes after.
+	if (bIsReloading && !bShimmying)
+	{
+		if (UAnimMontage* Loop = CoverLoopMontage.Get(); Loop && Montage_IsPlaying(Loop))
+		{
+			Montage_Stop(0.25f, Loop);
+		}
+		CoverLoopMontage.Reset();
+		CoverLoopClip.Reset();
+		return;
+	}
 	// The loop wanted now: shimmy forward (towards the threat side he faces) / backwards (away from it, still facing it),
 	// the corner-ready pose at the exposed edge on that side, else the idle. Never the plain locomotion walk in cover.
 	UAnimSequenceBase* Wanted = nullptr;
@@ -995,6 +1042,17 @@ void UOperativeAnimInstance::GetCoverPlayback(FString& OutClip, float& OutMontag
 			}
 		}
 	}
+}
+
+float UOperativeAnimInstance::GetCoverEnterBlendWeight() const
+{
+	if (!bCoverEnterPlaying)
+	{
+		return -1.f; // no enter clip playing (none assigned, done, or cut short)
+	}
+	const UAnimMontage* OneShot = CoverOneShotMontage.Get();
+	const FAnimMontageInstance* Instance = OneShot ? GetActiveInstanceForMontage(OneShot) : nullptr;
+	return Instance ? Instance->GetWeight() : -1.f;
 }
 
 bool UOperativeAnimInstance::PlayCoverOneShot(UAnimSequenceBase* Clip, float BlendIn, float BlendOut)

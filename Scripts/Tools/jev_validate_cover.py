@@ -7,7 +7,8 @@ code and Jev disagree, so the thresholds in CoverDecisionRules can be tuned. Two
 
   1. Fire mode at the wall: Corner Peek (lean out, aimed fire) vs Blind Fire (no head exposure, -40 % accuracy) vs
      Hold — from the suppression pressure, the damage he just took, his health, the distance to the enemy, whether the
-     cover has a free corner and whether a sniper laser rests on him.
+     cover has a free corner and whether a sniper laser rests on him; plus Open Shot (2026-10-07 mirror of
+     ECoverFireDecision::OpenShot): the enemy stands on his side of the wall -> a normal shot off the wall.
   2. Stance at the wall: Stand vs Crouch — instant crouch under a sniper laser (bIsAimingAtTarget), otherwise by the
      cover height, the pressure, the health, an elevated enemy and the wish to fire aimed over a low wall.
 
@@ -34,7 +35,7 @@ STAND_MAX_SUPPRESSION_LOW = 0.3  # low cover: stand up to fire aimed only under 
 CROUCH_SUPPRESSION_HIGH = 0.5    # high cover: crouch from this pressure on
 
 HIGH, LOW = "high", "low"
-PEEK, BLIND, HOLD = "peek", "blind", "hold"
+PEEK, BLIND, HOLD, OPEN = "peek", "blind", "hold", "open"
 STAND, CROUCH = "stand", "crouch"
 
 
@@ -46,10 +47,12 @@ def danger_score(s):
 
 
 def code_fire(s):
-    if s["height"] == HIGH and not s["edge"]:
-        return HOLD  # nothing to shoot around or over: the wall blocks every line
     if s["laser"]:
         return HOLD  # a sniper's dot: nothing shows until the shot has passed (Jev-calibrated 2026-10-06)
+    if s.get("in_front"):
+        return OPEN  # user decision 2026-10-06: the enemy is on his side of the wall -> a normal shot off the wall
+    if s["height"] == HIGH and not s["edge"]:
+        return HOLD  # nothing to shoot around or over: the wall blocks every line
     if s["health"] < PEEK_MIN_HEALTH:
         # Badly wounded: never peeks; fires blind only at an enemy at point-blank range (self-defence), else holds.
         return BLIND if s["distance_m"] < CLOSE_RANGE_M else HOLD
@@ -128,6 +131,10 @@ FIRE = [
     {"id": "f_low_calm", "height": LOW, "edge": True, "laser": False, "health": 0.9, "suppression": 0.1, "recent_damage": 0, "distance_m": 12},
     {"id": "f_low_heavy", "height": LOW, "edge": True, "laser": False, "health": 0.6, "suppression": 0.8, "recent_damage": 25, "distance_m": 8},
     {"id": "f_light_fire_mid", "height": HIGH, "edge": True, "laser": False, "health": 0.6, "suppression": 0.4, "recent_damage": 0, "distance_m": 13},
+    # OpenShot (C++ ECoverFireDecision::OpenShot, 2026-10-06): the enemy stands on his side of the wall.
+    {"id": "f_front_calm", "height": HIGH, "edge": True, "laser": False, "health": 0.9, "suppression": 0.0, "recent_damage": 0, "distance_m": 8, "in_front": True},
+    {"id": "f_front_no_corner", "height": HIGH, "edge": False, "laser": False, "health": 0.9, "suppression": 0.35, "recent_damage": 0, "distance_m": 10, "in_front": True},
+    {"id": "f_front_heavy", "height": HIGH, "edge": True, "laser": False, "health": 0.8, "suppression": 0.8, "recent_damage": 25, "distance_m": 9, "in_front": True},
 ]
 
 STANCE = [
@@ -148,6 +155,7 @@ FIRE_OPTIONS = {
     PEEK: "Lean out of the cover and fire aimed shots at the enemy, exposing his head and shoulders for a moment",
     BLIND: "Fire blind around / over the cover without showing his head: far less accurate, but he stays protected",
     HOLD: "Hold fire and stay fully behind the cover for now",
+    OPEN: "Step away from the wall, turn and fire normal aimed shots at the enemy: the wall does not stand between them",
 }
 STANCE_OPTIONS = {
     STAND: "Stand upright against the cover",
@@ -157,7 +165,9 @@ STANCE_OPTIONS = {
 
 def describe_fire(s):
     return {"cover": cover_words(s),
-            "enemy": "a hostile shooter " + distance_words(s["distance_m"]),
+            "enemy": "a hostile shooter " + distance_words(s["distance_m"]) + (
+                ", standing on HIS side of the wall (in the open behind his back, the wall does not shield him from it)"
+                if s.get("in_front") else ", on the far side of the wall"),
             "fire on him": suppression_words(s["suppression"]),
             "recent damage": damage_words(s["recent_damage"]),
             "health": health_words(s["health"]),

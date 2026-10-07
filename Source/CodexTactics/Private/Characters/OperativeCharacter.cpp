@@ -20,6 +20,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Data/SquadROE.h"
 #include "Characters/EnemyCharacter.h"
+#include "Characters/MarksmanEnemyCharacter.h"
+#include "Combat/GrenadeActor.h"
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/SightRules.h"
 #include "Combat/TacticalSightSubsystem.h"
@@ -872,10 +874,12 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	else
 	{
 		UpdateVaultTrigger(DeltaTime);
+		TryEnterCoverFromRun();
 		UpdateCover(DeltaTime);
 		UpdateCombatFacing(DeltaTime);
 		ProcessCombatShooting(DeltaTime);
 	}
+	UpdateCoverEntryBlend(DeltaTime);
 	UpdateSilhouette(DeltaTime);
 	UpdateSelectionRing();
 }
@@ -1952,6 +1956,18 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		{
 			return;
 		}
+		// Sustained corner aim (user request 2026-10-07): a corner-shot target in sight keeps him leaned out; after a duck
+		// for safety he stays behind the corner for the re-entry delay.
+		const UWorld* AimWorld = GetWorld();
+		const double Now = AimWorld ? AimWorld->GetTimeSeconds() : 0.0;
+		if (bCornerAimActive)
+		{
+			CornerAimLastTargetTime = Now;
+		}
+		else if (Now < CornerAimDuckUntil)
+		{
+			return;
+		}
 	}
 	if (ShootTimer <= 0.0f && MisfireCooldownTimer <= 0.0f)
 	{
@@ -2779,7 +2795,10 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	BlindFireTimer = 0.f;
 	bHasPendingCover = false;
 	bOpenShotReturnPending = false; // a cover entry ends any open shot
+	bCornerAimActive = false;
 	bQuietCoverEntry = bQuietCoverEntryRequest; // the return after an open shot: no Cover_Enter clip
+	bCoverEntryFromRun = bCoverEntryFromRunRequest;
+	bCoverLeftToMove = false;
 	// A fresh wall: walk to the threat-side edge on the next update if it is close (a player's shimmy is never undone).
 	bCoverSnapPending = !bSameWall;
 	bCoverAutoSnap = false;
@@ -2847,6 +2866,8 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	CoverThreatSeenTime = -1.0e9;
 	bCoverAutoSnap = false;
 	bCoverSnapPending = false;
+	bCornerAimActive = false; // the sustained corner aim ends with the cover
+	bCoverEntryFromRun = false;
 	CoverShotTarget.Reset();
 	CoverSlot = FCoverSlot();
 	bQuietCoverEntry = false;
@@ -2864,9 +2885,13 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 		return EOperativeOrderResult::Refused;
 	}
 	const float Along = CoverTraceRules::AlongWallDistance(CoverSlot, Target.WorldLocation);
-	if (FMath::Abs(Along) < 30.f)
+	if (FMath::Abs(Along) < 10.f)
 	{
 		return EOperativeOrderResult::Accepted; // already there
+	}
+	if (bCornerAimActive)
+	{
+		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("shimmy ordered"));
 	}
 	PendingCoverSlot = Target;
 	PendingCoverSlot.WallNormal = CoverSlot.WallNormal; // one wall, one facing
@@ -2965,6 +2990,7 @@ void AOperativeCharacter::BeginCoverShot()
 		bIsCornerLeaning = true;
 		bIsBlindFiring = false;
 		LeanTimer = Config.LeanHoldSeconds;
+		BeginCornerAim();
 	}
 }
 
@@ -2987,7 +3013,8 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 	{
 		return;
 	}
-	if (bIsCornerLeaning)
+	UpdateCornerAim(DeltaTime);
+	if (bIsCornerLeaning && !bCornerAimActive)
 	{
 		LeanTimer -= DeltaTime;
 		if (LeanTimer <= 0.f)
@@ -3133,8 +3160,257 @@ bool AOperativeCharacter::IsCoverThreatActive() const
 bool AOperativeCharacter::IsCoverFireReady() const
 {
 	const UWorld* World = GetWorld();
-	return bInCover && World && CoverFacingRules::IsFireReady(bAtCoverCorner, bShimmying, bHasCoverThreat,
-		static_cast<float>(World->GetTimeSeconds() - CoverThreatSeenTime), CoverFireReadyHoldSeconds);
+	if (!bInCover || !World || bIsReloading)
+	{
+		return false;
+	}
+	if (bCornerAimActive)
+	{
+		return true; // sustained corner aim: the fire stance between the shots
+	}
+	const double Now = World->GetTimeSeconds();
+	if (Now < CornerAimDuckUntil || Now - CornerAimEndTime < CoverFireReadyHoldSeconds)
+	{
+		return false; // ducked back / just relaxed: the plain cover pose
+	}
+	// User decision 2026-10-07: the fire-ready corner pose only for a threat behind the wall / round the corner (the same
+	// rule as the corner shot); a threat out in front keeps the plain cover idle (it gets an open shot).
+	return CoverFacingRules::IsFireReady(bAtCoverCorner, bShimmying, bHasCoverThreat, static_cast<float>(Now - CoverThreatSeenTime),
+		CoverFireReadyHoldSeconds) && IsCornerShotTarget(CoverThreatLocation);
+}
+
+void AOperativeCharacter::LeaveCoverToMove(const FString& Reason)
+{
+	if (!bInCover)
+	{
+		return;
+	}
+	LeaveCover(Reason);
+	bCoverLeftToMove = true; // cleared by the next cover entry
+}
+
+void AOperativeCharacter::TryEnterCoverFromRun()
+{
+	// User-found bug 2026-10-07: running into cover the run stopped dead at the slot and the enter clip popped the body
+	// 76 cm back out (its start pose stands out from the wall facing it). Now the cover is entered where that start pose
+	// stands (plus a glide for the run's momentum): the capsule goes to the slot, the mesh is offset so the body stays
+	// where it ran and glides on, decelerating, while the clip blends in (UpdateCoverEntryBlend).
+	if (!bHasPendingCover || !bHasMoveOrder || bInCover || bShimmying || IsRaging() || IsPanicking())
+	{
+		return;
+	}
+	const UWorld* World = GetWorld();
+	const UTurnBasedCombatSubsystem* TurnBased = World ? World->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	if (!World || (TurnBased && TurnBased->IsActive()))
+	{
+		return; // grid walks end on their cell (UpdateCover enters there)
+	}
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	const EOperativeStance EntryStance = CoverRules::DefaultStanceFor(PendingCoverSlot.Height) == EOperativeStance::Crouching
+		|| Stance == EOperativeStance::Crouching ? EOperativeStance::Crouching : EOperativeStance::Standing;
+	const bool bCrouchEntry = EntryStance == EOperativeStance::Crouching;
+	const TArray<TObjectPtr<UAnimSequenceBase>>* EnterClips = Anim ? (bCrouchEntry ? &Anim->CoverCrouchEnter : &Anim->CoverStandEnter) : nullptr;
+	const bool bHasEnterClip = Anim && Anim->bUseNativeCoverClips && EnterClips && EnterClips->ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; });
+	const float ClipLead = bHasEnterClip ? (bCrouchEntry ? CoverEnterClipLeadCrouchCm : CoverEnterClipLeadStandCm) : 0.f;
+	const float Speed = static_cast<float>(GetVelocity().Size2D());
+	const float Glide = FMath::Min(Speed * CoverEnterDecelSeconds * 0.5f, CoverEnterMaxGlideCm);
+	const FVector Here = GetActorLocation();
+	const float Distance = static_cast<float>(FVector::Dist2D(Here, PendingCoverSlot.WorldLocation));
+	if (Distance > ClipLead + Glide || Distance < 1.f || Speed < 20.f)
+	{
+		return; // not there yet (or standing: HandleMoveFinished / UpdateCover enter at the slot)
+	}
+	const FCoverSlot Slot = PendingCoverSlot;
+	bHasPendingCover = false;
+	{
+		TGuardValue<bool> FromRun(bCoverEntryFromRunRequest, true);
+		EnterCover(Slot);
+	}
+	if (!bInCover)
+	{
+		return;
+	}
+	const FVector Delta = Here - GetActorLocation();
+	CoverEntryClipOffset = Slot.WallNormal.GetSafeNormal2D() * ClipLead; // where the clip's start pose stands from the slot
+	CoverEntryGlide = FVector(Delta.X, Delta.Y, 0.f) - CoverEntryClipOffset;
+	CoverEntryBlendTime = 0.f;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: runs into the cover (%.0f cm out, speed %.0f, clip lead %.0f, glide %.0f)"), *DisplayName.ToString(),
+		Distance, Speed, ClipLead, CoverEntryGlide.Size2D());
+}
+
+void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
+{
+	FVector Wanted = FVector::ZeroVector;
+	if (CoverEntryBlendTime >= 0.f)
+	{
+		if (!bInCover)
+		{
+			CoverEntryBlendTime = -1.f; // left again: no offset
+		}
+		else
+		{
+			CoverEntryBlendTime += DeltaTime;
+			const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+			const float Weight = Anim ? Anim->GetCoverEnterBlendWeight() : -1.f;
+			// The clip's start pose stands CoverEntryClipOffset out: while it blends in (weight w) the rest of the pose (the
+			// run) must be drawn there too; the glide (momentum + approach error) eases out over CoverEnterDecelSeconds.
+			const float W = Weight >= 0.f ? FMath::Clamp(Weight, 0.f, 1.f) : FMath::Clamp(CoverEntryBlendTime / 0.25f, 0.f, 1.f);
+			const float S = FMath::Clamp(CoverEntryBlendTime / FMath::Max(CoverEnterDecelSeconds, 0.05f), 0.f, 1.f);
+			const FVector ClipPart = Weight >= 0.f || CoverEntryBlendTime < 0.25f ? (1.f - W) * CoverEntryClipOffset : FVector::ZeroVector;
+			Wanted = ClipPart + CoverEntryGlide * FMath::Square(1.f - S);
+			if ((W >= 1.f || Weight < 0.f) && S >= 1.f && CoverEntryBlendTime >= 0.25f)
+			{
+				CoverEntryBlendTime = -1.f;
+				Wanted = FVector::ZeroVector;
+			}
+		}
+	}
+	// Additive on the mesh's relative location (crouch / other systems move it too), tracked in the actor's local frame
+	// so a turn during the blend never leaves a residue.
+	const FVector WantedLocal = Wanted.IsNearlyZero(0.01) ? FVector::ZeroVector : GetActorRotation().UnrotateVector(Wanted);
+	if (!WantedLocal.Equals(CoverEntryAppliedOffset, 0.01) && GetMesh())
+	{
+		GetMesh()->AddRelativeLocation(WantedLocal - CoverEntryAppliedOffset);
+		CoverEntryAppliedOffset = WantedLocal;
+	}
+}
+
+FCoverDecisionConfig AOperativeCharacter::GetCoverDecisionConfig() const
+{
+	FCoverDecisionConfig Config;
+	Config.AimNoTargetGraceSeconds = CornerAimNoTargetGraceSeconds;
+	Config.AimReentryDelaySeconds = CornerAimReentryDelaySeconds;
+	return Config;
+}
+
+void AOperativeCharacter::BeginCornerAim()
+{
+	if (!bInCover || CurrentCoverHeight != ECoverHeight::HighCover || bShimmying)
+	{
+		return; // a low cover is fired over (pop up per shot); the sustained stance is the high wall's corner
+	}
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	CornerAimLastTargetTime = Now;
+	if (!bCornerAimActive)
+	{
+		bCornerAimActive = true;
+		CornerAimEvalTimer = 0.f;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: leans out round the corner and holds the fire stance"), *DisplayName.ToString());
+	}
+}
+
+void AOperativeCharacter::EndCornerAim(ECornerAimDecision Reason, const TCHAR* Why)
+{
+	if (!bCornerAimActive)
+	{
+		return;
+	}
+	bCornerAimActive = false;
+	bIsCornerLeaning = false; // back behind the corner
+	LeanTimer = 0.f;
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	CornerAimEndTime = Now;
+	if (Reason == ECornerAimDecision::DuckForSafety)
+	{
+		CornerAimDuckUntil = Now + GetCoverDecisionConfig().AimReentryDelaySeconds;
+	}
+	LastCornerAimBreak = Reason;
+	++CornerAimBreakCounts[static_cast<int32>(Reason)];
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: breaks the corner aim: %s (%s)"), *DisplayName.ToString(),
+		CoverDecisionRules::CornerAimDecisionName(Reason), Why);
+	if (Reason == ECornerAimDecision::DuckToReload && !bIsReloading && UsesAmmo() && ReserveAmmo > 0
+		&& CurrentClip < (CurrentWeapon ? CurrentWeapon->MaxClipSize : 30))
+	{
+		StartReload(); // reload behind the corner (the AnimInstance plays the fire -> idle exit, then the reload)
+	}
+}
+
+FCornerAimSituation AOperativeCharacter::GatherCornerAimSituation() const
+{
+	const FCoverDecisionConfig Config = GetCoverDecisionConfig();
+	FCornerAimSituation Situation;
+	UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	const int32 MaxClip = FMath::Max(1, CurrentWeapon ? CurrentWeapon->MaxClipSize : 30);
+	Situation.ClipFraction = UsesAmmo() ? static_cast<float>(CurrentClip) / MaxClip : 1.f;
+	Situation.bHasReserve = !UsesAmmo() || ReserveAmmo > 0;
+	Situation.SecondsWithoutTarget = static_cast<float>(FMath::Max(0.0, Now - CornerAimLastTargetTime));
+	const UTurnBasedCombatSubsystem* TurnBased = World ? World->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	Situation.bHoldWithoutTargets = TurnBased && TurnBased->IsActive(); // in his turn the pose stays between his shots
+	Situation.HealthFraction = HealthComponent ? HealthComponent->GetHealthFraction() : 1.f;
+	Situation.RecentIncomingDamage = RecentIncomingDamage;
+	if (!World)
+	{
+		return Situation;
+	}
+	const FVector Here = GetActorLocation();
+	int32 Shooters = 0;
+	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	{
+		const AEnemyCharacter* Enemy = *It;
+		if (Enemy->IsDying() || !Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive())
+		{
+			continue;
+		}
+		const float Distance = static_cast<float>(FVector::Dist2D(Here, Enemy->GetActorLocation()));
+		if (Enemy->GetCurrentTarget() == this && Distance <= 3000.f)
+		{
+			++Shooters;
+		}
+		if (const AMarksmanEnemyCharacter* Marksman = Cast<AMarksmanEnemyCharacter>(Enemy);
+			Marksman && Marksman->IsAimingAtTarget() && Marksman->GetCurrentTarget() == this)
+		{
+			Situation.bSniperLaserOnMe = true;
+		}
+		// An enemy on his open side (in front of the wall) close by: the wall does not shield him from it.
+		if (!Enemy->IsHidden() && Distance <= Config.AimFlankDangerCm && !IsCornerShotTarget(Enemy->GetActorLocation()))
+		{
+			Situation.bFlankEnemyNear = true;
+		}
+	}
+	Situation.SuppressionPressure = ForcedCornerAimSuppressionForTesting >= 0.f ? ForcedCornerAimSuppressionForTesting
+		: CoverDecisionRules::SuppressionFromShooters(Config, Shooters);
+	for (TActorIterator<AGrenadeActor> It(World); It; ++It)
+	{
+		if (FVector::Dist2D(Here, It->GetActorLocation()) <= Config.AimGrenadeDangerCm)
+		{
+			Situation.bGrenadeNearby = true;
+			break;
+		}
+	}
+	return Situation;
+}
+
+void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
+{
+	if (!bCornerAimActive)
+	{
+		return;
+	}
+	if (!bInCover || bShimmying || CurrentCoverHeight != ECoverHeight::HighCover)
+	{
+		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no longer at the corner"));
+		return;
+	}
+	if (bIsReloading)
+	{
+		EndCornerAim(ECornerAimDecision::DuckToReload, TEXT("reloading"));
+		return;
+	}
+	// Leaned out (sight: exposed) for as long as the aim lasts.
+	bIsCornerLeaning = true;
+	LeanTimer = FMath::Max(LeanTimer, 0.2f);
+	CornerAimEvalTimer -= DeltaTime;
+	if (CornerAimEvalTimer > 0.f)
+	{
+		return;
+	}
+	CornerAimEvalTimer = 0.1f;
+	const ECornerAimDecision Decision = CoverDecisionRules::DecideCornerAim(GetCoverDecisionConfig(), GatherCornerAimSituation());
+	if (Decision != ECornerAimDecision::StayAndFire)
+	{
+		EndCornerAim(Decision, TEXT("decision"));
+	}
 }
 
 void AOperativeCharacter::TrySnapToCoverCorner()

@@ -91,6 +91,61 @@ struct CODEXTACTICS_API FCoverDecisionConfig
 	float PressurePerShooter = 0.35f;
 	/** Recent damage memory, s (the damage decays linearly over it). */
 	float RecentDamageSeconds = 5.f;
+
+	// --- Sustained corner aim (user request 2026-10-07; Jev-calibrated with Scripts/Tools/jev_validate_corner_aim.py:
+	// 19 / 24 scenarios, 79 %; the five disagreements are at Jev confidence <= 0.49). ---
+
+	/** Damage taken in the last seconds that counts as a big hit: duck back, HP. */
+	float AimBigHitDamage = 30.f;
+	/** Incoming fire pressure (SuppressionFromShooters) at or above which he ducks back: two shooters on him. */
+	float AimBreakSuppression = 0.7f;
+	/** Below this health share AND hit again in the last seconds: duck back (badly wounded = PeekMinHealthFraction always). */
+	float AimWoundedHealthFraction = 0.5f;
+	/** No target for this long: he lowers the rifle and relaxes back against the wall, s. */
+	float AimNoTargetGraceSeconds = 2.f;
+	/** Magazine share at or below which a lull (or a forced duck) is used to reload behind the corner. */
+	float AimEarlyReloadFraction = 0.34f;
+	/** A lull: no target in sight for at least this long, s. */
+	float AimEarlyReloadLullSeconds = 0.5f;
+	/** After a duck for safety he does not lean out again for this long, s. */
+	float AimReentryDelaySeconds = 1.5f;
+	/** An enemy on his open side (in front of the wall) closer than this flanks him: duck, cm. */
+	float AimFlankDangerCm = 800.f;
+	/** A grenade this close: duck, cm. */
+	float AimGrenadeDangerCm = 500.f;
+};
+
+/** What the operative leaned out in the corner fire stance does now (CoverDecisionRules::DecideCornerAim). */
+enum class ECornerAimDecision : uint8
+{
+	/** Keep aiming round the corner and keep firing from the fire stance (cvr_*_fire_idle / cvr_*_fire). */
+	StayAndFire,
+	/** Back behind the corner (cvr_*_fire_to_idle) and reload there; out again afterwards if targets remain. */
+	DuckToReload,
+	/** Back behind the corner for safety (no lean-out for AimReentryDelaySeconds). */
+	DuckForSafety,
+	/** No target left for the grace period: back to the plain cover pose. */
+	ReturnNoTargets
+};
+
+/** Inputs of the sustained corner aim decision. */
+struct CODEXTACTICS_API FCornerAimSituation
+{
+	/** Rounds in the magazine / magazine size (0 = empty). */
+	float ClipFraction = 1.f;
+	/** Spare rounds to reload from. */
+	bool bHasReserve = true;
+	/** Seconds since a corner-shot target (behind the wall / round the corner, in range) was last in sight; 0 = now. */
+	float SecondsWithoutTarget = 0.f;
+	/** Turn-based: the pose is kept between his shots within his turn (no "no targets" return). */
+	bool bHoldWithoutTargets = false;
+	float HealthFraction = 1.f;
+	float RecentIncomingDamage = 0.f;
+	float SuppressionPressure = 0.f;
+	bool bSniperLaserOnMe = false;
+	bool bGrenadeNearby = false;
+	/** An enemy on his open side (in front of the wall) within AimFlankDangerCm. */
+	bool bFlankEnemyNear = false;
 };
 
 namespace CoverDecisionRules
@@ -122,4 +177,16 @@ namespace CoverDecisionRules
 	CODEXTACTICS_API EOperativeStance ToStance(ECoverStanceDecision Decision);
 	CODEXTACTICS_API ECoverFireMode ToFireMode(ECoverFireDecision Decision);
 	CODEXTACTICS_API const TCHAR* FireDecisionName(ECoverFireDecision Decision);
+
+	/**
+	 * Sustained corner aim (user request 2026-10-07, Jev-calibrated): while leaned out in the corner fire stance he stays
+	 * and fires; he breaks the aim only for a reason. Empty magazine -> DuckToReload (no spare rounds: DuckForSafety, the
+	 * weapon is switched behind the corner); sniper laser / grenade near / an enemy flanking on his open side ->
+	 * DuckForSafety; badly wounded, a big hit, heavy incoming fire, or wounded and hit again -> DuckForSafety (DuckToReload
+	 * when the magazine is low: the forced duck is used to reload); a lull with a low magazine -> DuckToReload; no target
+	 * for AimNoTargetGraceSeconds -> ReturnNoTargets (never while bHoldWithoutTargets); else StayAndFire.
+	 */
+	CODEXTACTICS_API ECornerAimDecision DecideCornerAim(const FCoverDecisionConfig& Config, const FCornerAimSituation& Situation);
+
+	CODEXTACTICS_API const TCHAR* CornerAimDecisionName(ECornerAimDecision Decision);
 }

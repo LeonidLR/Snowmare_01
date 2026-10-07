@@ -28,6 +28,8 @@ struct CODEXTACTICS_API FCoverTraceConfig
 	/** Corner probes step along the wall this far, cm, up to MaxEdgeProbes steps. */
 	float EdgeProbeStepCm = 40.f;
 	int32 MaxEdgeProbes = 5;
+	/** Bisection steps refining the edge inside the bracketing 40 cm step (4: within 2.5 cm; user decision 2026-10-07). */
+	int32 EdgeRefineIterations = 4;
 	/** A click further than this from a wall surface finds no cover, cm. */
 	float MaxWallDistanceCm = 160.f;
 	/** Walls steeper than this (|normal.Z| below it) count; ramps / floors do not. */
@@ -55,6 +57,13 @@ namespace CoverTraceRules
 	 * still hit the wall). Exposed when a probe misses; OutEdgeDistanceCm = the distance of the first miss (0 when not).
 	 */
 	CODEXTACTICS_API bool EdgeExposedFromProbes(const TArray<bool>& ProbeHits, float StepCm, float& OutEdgeDistanceCm);
+
+	/**
+	 * Refines a coarse edge: the wall is there at HitCm (the last probe on it), not at MissCm (the first probe off it).
+	 * Bisects Iterations times with WallAt(cm) and returns the middle of the final bracket: the edge distance within
+	 * (MissCm - HitCm) / 2^(Iterations + 1). Tested in CodexTactics.Tactics.Cover.EdgeProbePrecision.
+	 */
+	CODEXTACTICS_API float RefineEdgeDistance(float HitCm, float MissCm, TFunctionRef<bool(float)> WallAt, int32 Iterations);
 
 	/** The two slots lie on one wall (parallel, same plane) — a click there is a shimmy, not a new cover. */
 	CODEXTACTICS_API bool IsSameWall(const FCoverSlot& A, const FCoverSlot& B, const FCoverTraceConfig& Config = FCoverTraceConfig());

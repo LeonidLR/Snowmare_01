@@ -11,6 +11,7 @@
 #include "Characters/FirePostureRules.h"
 #include "Combat/TargetedShotRules.h"
 #include "Interactables/DeployableRules.h"
+#include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverTypes.h"
 #include "OperativeCharacter.generated.h"
@@ -835,6 +836,69 @@ public:
 	/** The facing rules' config with this operative's tunables (stand-offs). */
 	FCoverFacingConfig GetCoverFacingConfig() const;
 
+	// --- Sustained corner aim (user request 2026-10-07, CoverDecisionRules::DecideCornerAim, Jev-calibrated): after the
+	// first corner shot at a target behind the wall he stays leaned out in the fire stance (cvr_*_fire_idle) and fires
+	// from it; he ducks back behind the corner only to reload, for safety (laser, grenade, flank, heavy fire, big hit,
+	// badly wounded) or when no target was in sight for the grace period, and on a shimmy / move order / leaving. ---
+
+	/** Leaned out in the corner fire stance (the AnimInstance holds cvr_*_fire_idle, shots play cvr_*_fire from it). */
+	bool IsCornerAimActive() const { return bCornerAimActive; }
+
+	/** Why the last sustained aim ended (StayAndFire = never ended yet). */
+	ECornerAimDecision GetLastCornerAimBreak() const { return LastCornerAimBreak; }
+
+	/** How many times the sustained aim ended for Reason (smokes / stats). */
+	int32 GetCornerAimBreakCount(ECornerAimDecision Reason) const { return CornerAimBreakCounts[static_cast<int32>(Reason)]; }
+
+	/** Ends the sustained aim (Reason is logged and counted); DuckForSafety also blocks a new lean-out for the re-entry delay. */
+	void EndCornerAim(ECornerAimDecision Reason, const TCHAR* Why);
+
+	/** No corner-shot target in sight this long: back to the plain cover pose, s (FCoverDecisionConfig::AimNoTargetGraceSeconds). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CornerAimNoTargetGraceSeconds = 2.f;
+
+	/** After ducking back for safety he does not lean out again for this long, s (FCoverDecisionConfig::AimReentryDelaySeconds). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CornerAimReentryDelaySeconds = 1.5f;
+
+	// --- Moving off / running into cover (user-found bugs 2026-10-07) ---
+
+	/** Leaves the cover because he walks off it (grid walk): the AnimInstance plays no fire -> idle exit, the walk shows at once. */
+	void LeaveCoverToMove(const FString& Reason);
+
+	/** He left the cover to walk off (a move order or a grid walk). */
+	bool IsMovingOffCover() const { return !bInCover && (bCoverLeftToMove || bHasMoveOrder); }
+
+	/** The current cover entry came from a run (the enter clip blends over the last steps). */
+	bool IsCoverEnteringFromRun() const { return bInCover && bCoverEntryFromRun; }
+
+	/**
+	 * Running into cover: the cover is entered this far before the slot — where the enter clip's start pose stands (the
+	 * pack's std_idle_fwd_to_cvr_std_idle begins 76 cm out from the wall facing it, crouched 98 cm) — plus speed x
+	 * CoverEnterDecelSeconds / 2 (capped) that the body glides on, decelerating, while the clip blends in. cm.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverEnterClipLeadStandCm = 76.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverEnterClipLeadCrouchCm = 98.f;
+
+	/** The run's momentum glides out over this long into the enter clip, s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.05"))
+	float CoverEnterDecelSeconds = 0.4f;
+
+	/** Cap of the extra glide distance, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverEnterMaxGlideCm = 120.f;
+
+	/** Visual mesh offset applied now by the run-in blend, actor-local (smokes), cm. */
+	FVector GetCoverEntryMeshOffset() const { return CoverEntryAppliedOffset; }
+
+	/** The decision config with this operative's tunables (grace, re-entry delay). */
+	FCoverDecisionConfig GetCoverDecisionConfig() const;
+
+	/** Smokes: the next corner-aim situation reports this suppression pressure (< 0: measured). */
+	float ForcedCornerAimSuppressionForTesting = -1.f;
+
 	// --- Fire posture (rules of engagement of the automatic fire, user request 2026-10-06; FirePostureRules) ---
 
 	/** This operative has its own posture (the posture keys with a box-selected group); false: it follows the squad's. */
@@ -1143,6 +1207,33 @@ private:
 	int32 CoverOpenShots = 0;
 	/** Back to the slot once the open shots are over (no move order, standing still, not far off). */
 	void UpdateOpenShotReturn();
+	/** Moving off / running into cover state. */
+	bool bCoverLeftToMove = false;
+	bool bCoverEntryFromRun = false;
+	bool bCoverEntryFromRunRequest = false;
+	/** Run-in blend: the clip's start-pose offset (world), the residual glide (world), time, the offset applied to the mesh. */
+	FVector CoverEntryClipOffset = FVector::ZeroVector;
+	FVector CoverEntryGlide = FVector::ZeroVector;
+	float CoverEntryBlendTime = -1.f;
+	FVector CoverEntryAppliedOffset = FVector::ZeroVector;
+	/** Enters the pending cover early when running in (the enter clip overlaps the last steps). */
+	void TryEnterCoverFromRun();
+	/** Moves the mesh so the body stays continuous while the enter clip blends in (V = (1 - w) C + glide). */
+	void UpdateCoverEntryBlend(float DeltaTime);
+	/** Sustained corner aim state (IsCornerAimActive). */
+	bool bCornerAimActive = false;
+	double CornerAimLastTargetTime = -1.0e9;
+	double CornerAimEndTime = -1.0e9;
+	double CornerAimDuckUntil = -1.0e9;
+	float CornerAimEvalTimer = 0.f;
+	ECornerAimDecision LastCornerAimBreak = ECornerAimDecision::StayAndFire;
+	int32 CornerAimBreakCounts[4] = { 0, 0, 0, 0 };
+	/** Starts / refreshes the sustained aim on a corner lean shot (high cover). */
+	void BeginCornerAim();
+	/** Re-evaluates DecideCornerAim while leaned out (every 0.1 s). */
+	void UpdateCornerAim(float DeltaTime);
+	/** The corner-aim inputs gathered from the world (targets, fire on him, laser, grenade, flank). */
+	FCornerAimSituation GatherCornerAimSituation() const;
 	/** Range and line of fire to a silhouette's aim point (barricades by SquadFireRules::JudgeLine). */
 	bool EvaluateBlindLine(const class AEnemyGhostActor& Ghost, FShootCandidate& Out) const;
 	/** Set while AutonomousMoveTo runs: the move does not re-pin the anchor. */
