@@ -2013,6 +2013,12 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		{
 			return;
 		}
+		// Arriving at an edge: no shot until the snap to the corner stand-off is decided / done (CornerEntrySmoke 2026-10-07:
+		// a shot fired from the wall while side-stepping to the corner, the rifle not on the target).
+		if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && (bCoverSnapPending || (bShimmying && bCoverAutoSnap)))
+		{
+			return;
+		}
 		// The corner hold stance fires only once the upper body twisted onto the target (user rule 2026-10-07).
 		if (IsCornerHoldSpot() && (!bCornerAimActive || GetShotAimResidualDeg(AimAt) > AimConeDeg))
 		{
@@ -3272,6 +3278,17 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 			|| (FacingWorld && FacingWorld->GetTimeSeconds() - CoverLastShotTime <= CoverEngageHoldSeconds);
 		CoverFacing = CoverFacingRules::KeepEngagedFacing(CoverSlot, Old, CoverFacing, bEngaged && !bShimmying);
 	}
+	// Corner hold (user decision 2026-10-07: no side flips at that corner): at the one exposed edge of a high wall he faces
+	// that edge whatever the threat side - the closed side has nothing to fire round (CornerHoldSmoke 2026-10-07: back at
+	// the wall after an open shot he turned to the closed side for a threat there and never leaned out again).
+	if (bCornerHoldAtEdge && !bShimmying && CoverSlot.Height == ECoverHeight::HighCover && CoverSlot.bLeftEdgeExposed != CoverSlot.bRightEdgeExposed)
+	{
+		const ECoverFacing Edge = CoverSlot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right;
+		if (CoverFacingRules::IsAtCorner(CoverSlot, Edge, Config))
+		{
+			CoverFacing = Edge;
+		}
+	}
 	bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, Config);
 	if (CoverFacing != Old)
 	{
@@ -3680,8 +3697,11 @@ bool AOperativeCharacter::IsCornerShotTarget(const FVector& TargetLocation) cons
 
 bool AOperativeCharacter::IsCornerHoldSpot() const
 {
-	return bCornerHoldAtEdge && bInCover && !bShimmying && CurrentCoverHeight == ECoverHeight::HighCover && bAtCoverCorner
-		&& CoverSlot.IsEdgeExposed(CoverFacing);
+	// Not while the walk to the corner stand-off is still due (bCoverSnapPending: set on entry, decided once the move order
+	// ended) - CornerEntrySmoke 2026-10-07: entering 90 cm from the edge he leaned out and broke the aim for the snap shimmy
+	// in the same instant; with a later snap that is step out -> tuck back -> step out.
+	return bCornerHoldAtEdge && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight == ECoverHeight::HighCover
+		&& bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
 }
 
 FVector AOperativeCharacter::GetStanceAimOrigin() const

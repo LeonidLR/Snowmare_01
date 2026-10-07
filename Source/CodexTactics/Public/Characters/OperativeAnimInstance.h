@@ -715,6 +715,17 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchToStand = { nullptr, nullptr };
 
+	/**
+	 * Stand <-> crouch while in the corner fire stance: the two fire_idle clips cross-blend over this long instead of the
+	 * idle -> idle switch clips above (they tuck the body back behind the corner; user PIE 2026-10-07), s.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover", meta = (ClampMin = "0.05"))
+	float CoverFireStanceSwitchBlendSeconds = 0.35f;
+
+	/** A cover one-shot hands over to the next clip this much before its own blend-out starts, s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverHandoffMarginSeconds = 0.05f;
+
 	/** Blind fire round the corner (no M4 clip: the user supplies one; empty = the cover fire clip stands in). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverBlindFire = { nullptr, nullptr };
@@ -735,6 +746,9 @@ public:
 	int32 GetCoverClipsPlayed() const { return CoverClipsPlayed; }
 	/** Names of the cover clips played (loops, one-shots) in order, newest last, capped (smokes). */
 	const TArray<FString>& GetCoverClipLog() const { return CoverClipLog; }
+
+	/** The cover layer is in the fire-ready pose (idle -> fire played / fire_idle looping) - smokes. */
+	bool IsCoverInFirePose() const { return bCoverInFirePose; }
 	/**
 	 * What the mesh REALLY plays on FullBodySlot (smokes): the sequence of the highest-weight active montage, that
 	 * montage's blend weight, and the FullBody slot node's weight in the AnimGraph (a node missing / blended out = 0).
@@ -871,6 +885,30 @@ private:
 	bool bWasInCover = false;
 	/** The fire-ready pose is entered (enter transition played / fire-ready idle looping) until the exit transition plays. */
 	bool bCoverInFirePose = false;
+	/** Blend-out time of the cover one-shot playing (the follow-up clip blends in over what is left of it). */
+	float CoverOneShotBlendOut = 0.2f;
+	/**
+	 * This frame's hand-off from an ending cover one-shot to the next clip (>= 0: the blend time, the old one-shot is faded
+	 * out over the same time so the FullBody slot stays fully covered; user PIE 2026-10-07: idle_to_fire blended out over
+	 * 0.1 s while fire_idle blended in over 0.2 s - the slot dropped to 45 % and the graph's plain rifle idle, 70 cm back
+	 * at the wall, flashed through: the "tuck back" blip after stepping out).
+	 */
+	float CoverHandoffBlend = -1.f;
+	TWeakObjectPtr<UAnimMontage> CoverHandoffMontage;
+	/** The blend-in for the next cover clip: the hand-off time when one is due this frame. */
+	float TakeCoverHandoffBlend(float Default);
+	/**
+	 * Before a cover clip starts on FullBodySlot with BlendIn: every FullBody montage still playing fades out over
+	 * BlendIn x 2 + 0.05 s - longer than the new one fades in, so the slot's total weight stays >= 1 (the slot normalises
+	 * above 1). Measured 2026-10-07 (CornerEntrySmoke): equal in/out times dipped the slot to 0.45 mid-way and the graph's
+	 * plain rifle idle - the body 70 cm back at the wall - flashed through every cover clip change.
+	 */
+	void FadeOutCoverMontages(float BlendIn);
+	/**
+	 * Plays a cover clip on FullBodySlot without the engine's "one montage per group" stop (that stop shortens every
+	 * fade-out to the new clip's blend-in, which is what dipped the slot): the old ones fade out over FadeOutCoverMontages.
+	 */
+	UAnimMontage* PlayCoverMontage(UAnimSequenceBase* Clip, const FAlphaBlendArgs& BlendIn, float BlendOut, float PlayRate = 1.f, int32 LoopCount = 1);
 	/** The cover enter clip (from the open) is the one-shot playing: a shimmy ordered meanwhile cuts it short. */
 	bool bCoverEnterPlaying = false;
 	/** The cover was entered in this update (the stance switch clip yields to the enter clip). */

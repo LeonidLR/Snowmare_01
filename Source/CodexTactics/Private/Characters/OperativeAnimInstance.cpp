@@ -1,4 +1,5 @@
 #include "Characters/OperativeAnimInstance.h"
+#include "Misc/ScopeExit.h"
 #include "Characters/LeftHandIKRules.h"
 #include "Characters/AimOffsetRules.h"
 #include "DrawDebugHelpers.h"
@@ -399,7 +400,7 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 					return;
 				}
 			}
-			PlayCoverOneShot(Clip, 0.1f, 0.2f);
+			PlayCoverOneShot(Clip, 0.1f, 0.05f);
 			return;
 		}
 	}
@@ -458,17 +459,40 @@ void UOperativeAnimInstance::UpdateStanceTransition()
 	// (cvr_crch_idle_L_to_cvr_stand_idle_L ... measured: they keep the side and end in the other stance's cover idle).
 	if (bInCover && bUseNativeCoverClips && !bShimmying && From != EOperativeStance::Prone && Stance != EOperativeStance::Prone)
 	{
+		// In the corner fire stance (user PIE 2026-10-07: the switch clips go idle -> idle, so the body tucked back behind the
+		// corner and stepped out again): straight from one stance's fire_idle to the other's, the rifle stays up.
+		UAnimSequenceBase* OtherFireIdle = PickCoverClip(Stance == EOperativeStance::Crouching ? CoverCrouchFireIdle : CoverStandFireIdle);
+		if (bCoverInFirePose && OtherFireIdle)
+		{
+			// The cover layer (it runs first in the frame, with the new stance) may already have started it: keep that one.
+			if (UAnimMontage* Loop = CoverLoopMontage.Get(); Loop && Montage_IsPlaying(Loop) && CoverLoopClip.Get() == OtherFireIdle)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[CoverAnim] stance switch in the corner fire stance: %s already blending in"), *OtherFireIdle->GetName());
+				return;
+			}
+			CoverOneShotMontage.Reset(); // the old stance's loop / shot / idle -> fire transition fade out in PlayCoverMontage
+			CoverPendingFireClip.Reset();
+			bCoverEnterPlaying = false;
+			CoverLoopClip = OtherFireIdle;
+			CoverLoopMontage = PlayCoverMontage(OtherFireIdle, FAlphaBlendArgs(CoverFireStanceSwitchBlendSeconds), 0.2f, 1.f, /*LoopCount*/ 1000);
+			// The loop is the stance clip here: the cover layer waits for it like for a switch clip, then keeps it.
+			StanceTransitionMontage.Reset();
+			if (CoverLoopMontage.IsValid())
+			{
+				++CoverClipsPlayed;
+				CoverClipLog.Add(OtherFireIdle->GetName());
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[CoverAnim] stance switch in the corner fire stance: blend to %s (%.2f s)"),
+				*OtherFireIdle->GetName(), CoverFireStanceSwitchBlendSeconds);
+			return;
+		}
 		if (UAnimSequenceBase* CoverSwitch = PickCoverClip(Stance == EOperativeStance::Crouching ? CoverStandToCrouch : CoverCrouchToStand))
 		{
-			if (UAnimMontage* Loop = CoverLoopMontage.Get(); Loop && Montage_IsPlaying(Loop))
-			{
-				Montage_Stop(0.15f, Loop);
-			}
 			CoverLoopMontage.Reset();
 			CoverLoopClip.Reset();
 			CoverPendingFireClip.Reset();
 			bCoverInFirePose = false; // the switch starts from the cover idle; the fire stance is re-entered after it
-			StanceTransitionMontage = PlaySlotAnimationAsDynamicMontage(CoverSwitch, FullBodySlot, 0.15f, 0.2f);
+			StanceTransitionMontage = PlayCoverMontage(CoverSwitch, FAlphaBlendArgs(0.15f), 0.2f);
 			if (StanceTransitionMontage.IsValid())
 			{
 				++CoverClipsPlayed;
@@ -1031,8 +1055,56 @@ UAnimSequenceBase* UOperativeAnimInstance::PickShimmyClip(const TArray<TObjectPt
 	return Clips.IsValidIndex(1 - Index) ? Clips[1 - Index].Get() : nullptr;
 }
 
+float UOperativeAnimInstance::TakeCoverHandoffBlend(float Default)
+{
+	if (CoverHandoffBlend < 0.f)
+	{
+		return Default;
+	}
+	const float Blend = CoverHandoffBlend;
+	CoverHandoffBlend = -1.f;
+	CoverHandoffMontage.Reset();
+	return Blend;
+}
+
+void UOperativeAnimInstance::FadeOutCoverMontages(float BlendIn)
+{
+	const FAlphaBlend FadeOut(FMath::Max(BlendIn, 0.f) * 2.f + 0.05f);
+	for (FAnimMontageInstance* Instance : MontageInstances)
+	{
+		if (Instance && Instance->Montage && !Instance->IsStopped() && Instance->Montage->IsValidSlot(FullBodySlot))
+		{
+			Instance->Stop(FadeOut);
+		}
+	}
+}
+
+UAnimMontage* UOperativeAnimInstance::PlayCoverMontage(UAnimSequenceBase* Clip, const FAlphaBlendArgs& BlendIn, float BlendOut, float PlayRate, int32 LoopCount)
+{
+	if (!Clip)
+	{
+		return nullptr;
+	}
+	FadeOutCoverMontages(BlendIn.BlendTime);
+	const FMontageBlendSettings In(BlendIn);
+	UAnimMontage* Montage = UAnimMontage::CreateSlotAnimationAsDynamicMontage_WithBlendSettings(Clip, FullBodySlot, In,
+		FMontageBlendSettings(BlendOut), PlayRate, LoopCount);
+	if (!Montage || Montage_PlayWithBlendSettings(Montage, In, PlayRate, EMontagePlayReturnType::MontageLength, 0.f, /*bStopAllMontages*/ false) <= 0.f)
+	{
+		return nullptr;
+	}
+	return Montage;
+}
+
 void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operative)
 {
+	CoverHandoffBlend = -1.f; // a hand-off is only valid in the frame (and the function) it was decided
+	CoverHandoffMontage.Reset();
+	ON_SCOPE_EXIT
+	{
+		CoverHandoffBlend = -1.f;
+		CoverHandoffMontage.Reset();
+	};
 	const bool bEntered = bInCover && !bWasInCover;
 	const bool bLeft = !bInCover && bWasInCover;
 	bWasInCover = bInCover;
@@ -1105,14 +1177,14 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 				FAlphaBlendArgs BlendIn(FMath::Max(CoverEnterFromRunBlendSeconds, 0.f));
 				BlendIn.BlendOption = EAlphaBlendOption::HermiteCubic;
 				FAlphaBlendArgs BlendOut(0.2f);
-				CoverOneShotMontage = PlaySlotAnimationAsDynamicMontage_WithBlendArgs(Enter, FullBodySlot, BlendIn, BlendOut);
+				CoverOneShotMontage = PlayCoverMontage(Enter, BlendIn, BlendOut.BlendTime);
 			}
 			else
 			{
-				StopSlotAnimation(0.15f, FullBodySlot);
-				CoverOneShotMontage = PlaySlotAnimationAsDynamicMontage(Enter, FullBodySlot, 0.15f, 0.2f);
+				CoverOneShotMontage = PlayCoverMontage(Enter, FAlphaBlendArgs(0.15f), 0.2f);
 			}
 			CoverClipsPlayed += CoverOneShotMontage.IsValid() ? 1 : 0;
+			CoverOneShotBlendOut = 0.2f;
 			bCoverEnterPlaying = CoverOneShotMontage.IsValid();
 			if (bCoverEnterPlaying)
 			{
@@ -1130,7 +1202,7 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 			// The enter clip is done, or a shimmy ordered right after the entry cuts it short (never a walk blocked by it).
 			if (bOneShotPlaying)
 			{
-				Montage_Stop(0.15f, OneShot);
+				FadeOutCoverMontages(0.2f); // the shimmy loop fades in over 0.2 s this frame
 				bOneShotPlaying = false;
 			}
 			bCoverEnterPlaying = false;
@@ -1139,7 +1211,7 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		{
 			// A shimmy cuts any cover one-shot (the fire -> idle exit, a transition): the side-step walk shows at once
 			// instead of the body sliding along the wall in the exit pose (user request 2026-10-07, seen crouched).
-			Montage_Stop(0.15f, OneShot);
+			FadeOutCoverMontages(0.2f);
 			bOneShotPlaying = false;
 			CoverPendingFireClip.Reset();
 		}
@@ -1155,7 +1227,23 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		}
 		if (bOneShotPlaying)
 		{
-			return; // enter / transition / fire clip in progress
+			// Hand-off (user PIE 2026-10-07, the "tuck back" blip): the next clip starts before this one-shot's own blend-out,
+			// and the two cross-fade over the same time - the FullBody slot never drops below full weight.
+			const float Rate = FMath::Max(FMath::Abs(Montage_GetPlayRate(OneShot)), 0.01f);
+			const float TimeLeft = (OneShot->GetPlayLength() - Montage_GetPosition(OneShot)) / Rate;
+			if (TimeLeft > CoverOneShotBlendOut + CoverHandoffMarginSeconds)
+			{
+				return; // enter / transition / fire clip in progress
+			}
+			CoverHandoffBlend = FMath::Max(TimeLeft, 0.05f);
+			CoverHandoffMontage = OneShot;
+			bCoverEnterPlaying = false;
+		}
+		else if (OneShot)
+		{
+			// Ended on its own (its blend-out runs): the next clip blends in over what is left of it.
+			CoverHandoffBlend = CoverOneShotBlendOut;
+			CoverOneShotMontage.Reset();
 		}
 	}
 	if (IsPlayingStanceTransition())
@@ -1172,7 +1260,8 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		bCoverInFirePose = true;
 		if (UAnimSequenceBase* Enter = PickCoverClip(bIsCrouching ? CoverCrouchFireEnter : CoverStandFireEnter))
 		{
-			if (PlayCoverOneShot(Enter, 0.2f, 0.1f))
+			// Blend out 0.2 like the loops blend in (the fire_idle that follows takes over without a dip).
+			if (PlayCoverOneShot(Enter, 0.2f, 0.2f))
 			{
 				return;
 			}
@@ -1233,12 +1322,13 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		Montage_SetPlayRate(Loop, PlayRate); // the shimmy pace follows the ground speed
 		return;
 	}
-	if (Loop && Montage_IsPlaying(Loop))
-	{
-		Montage_Stop(0.2f, Loop);
-	}
+	// Stand <-> crouch in the fire stance: one fire_idle into the other (UpdateStanceTransition keeps it).
+	const bool bFireStanceSwitch = Wanted == FireIdle && CoverLoopClip.IsValid()
+		&& (CoverLoopClip.Get() == PickCoverClip(CoverStandFireIdle) || CoverLoopClip.Get() == PickCoverClip(CoverCrouchFireIdle));
+	const float LoopBlend = TakeCoverHandoffBlend(bFireStanceSwitch ? CoverFireStanceSwitchBlendSeconds : 0.2f);
+
 	CoverLoopClip = Wanted;
-	CoverLoopMontage = PlaySlotAnimationAsDynamicMontage(Wanted, FullBodySlot, 0.2f, 0.2f, PlayRate, /*LoopCount*/ 1000);
+	CoverLoopMontage = PlayCoverMontage(Wanted, FAlphaBlendArgs(LoopBlend), 0.2f, PlayRate, /*LoopCount*/ 1000);
 	CoverClipsPlayed += CoverLoopMontage.IsValid() ? 1 : 0;
 	if (CoverLoopMontage.IsValid())
 	{
@@ -1286,14 +1376,12 @@ bool UOperativeAnimInstance::PlayCoverOneShot(UAnimSequenceBase* Clip, float Ble
 	{
 		return false;
 	}
-	if (UAnimMontage* Loop = CoverLoopMontage.Get(); Loop && Montage_IsPlaying(Loop))
-	{
-		Montage_Stop(BlendIn, Loop);
-	}
+	BlendIn = TakeCoverHandoffBlend(BlendIn);
 	CoverLoopMontage.Reset();
 	CoverLoopClip.Reset();
 	bCoverEnterPlaying = false;
-	CoverOneShotMontage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, BlendIn, BlendOut);
+	CoverOneShotBlendOut = BlendOut;
+	CoverOneShotMontage = PlayCoverMontage(Clip, FAlphaBlendArgs(BlendIn), BlendOut); // the loop and any one-shot fade out in it
 	if (!CoverOneShotMontage.IsValid())
 	{
 		return false;
