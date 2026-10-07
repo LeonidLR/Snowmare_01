@@ -106,16 +106,56 @@ namespace CoverFacingRules
 		return Distance >= 0.f && Distance <= Config.CornerReachCm;
 	}
 
-	bool ShouldSnapToCorner(const FCoverSlot& Slot, ECoverFacing Facing, float& OutShiftCm, const FCoverFacingConfig& Config)
+	float CornerStandOff(ECoverFacing Facing, bool bCrouched, const FCoverFacingConfig& Config)
+	{
+		const bool bPackL = ClipIndex(Facing) == 0;
+		if (bCrouched)
+		{
+			return bPackL ? Config.CrouchStandOffPackLCm : Config.CrouchStandOffPackRCm;
+		}
+		return bPackL ? Config.StandStandOffPackLCm : Config.StandStandOffPackRCm;
+	}
+
+	bool ShouldSnapToCorner(const FCoverSlot& Slot, ECoverFacing Facing, float& OutShiftCm, const FCoverFacingConfig& Config, bool bCrouched)
 	{
 		OutShiftCm = 0.f;
 		const float Distance = EdgeDistance(Slot, Facing);
-		if (Distance < 0.f || Distance <= Config.CornerReachCm || Distance > Config.AutoCornerSnapCm)
+		if (Distance < 0.f || Distance > Config.AutoCornerSnapCm)
 		{
 			return false;
 		}
-		OutShiftCm = FMath::Max(Distance - Config.CornerStandOffCm, 0.f);
-		return OutShiftCm > 1.f;
+		const float Shift = Distance - FMath::Max(CornerStandOff(Facing, bCrouched, Config), 0.f);
+		if (Shift <= FMath::Max(Config.CornerSnapToleranceCm, 1.f))
+		{
+			return false; // close enough (or already nearer than the stand-off: never walks away from the edge)
+		}
+		OutShiftCm = Shift;
+		return true;
+	}
+
+	float DepthInFrontOfWall(const FCoverSlot& Slot, const FVector& Target)
+	{
+		const FVector Normal = Slot.WallNormal.GetSafeNormal2D();
+		const FVector Delta = Target - Slot.WallPoint;
+		return static_cast<float>(FVector::DotProduct(FVector(Delta.X, Delta.Y, 0.f), Normal));
+	}
+
+	bool ShouldCornerShot(const FCoverSlot& Slot, const FVector& Target, const FCoverFacingConfig& Config)
+	{
+		const float Depth = DepthInFrontOfWall(Slot, Target);
+		if (Depth <= 0.f)
+		{
+			return true; // behind the wall face: only round the corner / over the top
+		}
+		if (Slot.Height != ECoverHeight::HighCover || Depth > Config.CornerShotFrontBandCm)
+		{
+			return false; // out on the open side
+		}
+		// Close to the wall's line: around the corner when it lies past the exposed edge on its side.
+		const float Along = ThreatAlongWall(Slot, Target);
+		const ECoverFacing Side = Along >= 0.f ? ECoverFacing::Right : ECoverFacing::Left;
+		const float Edge = EdgeDistance(Slot, Side);
+		return Edge >= 0.f && FMath::Abs(Along) >= Edge;
 	}
 
 	bool IsFireReady(bool bAtCorner, bool bShimmying, bool bHasThreat, float SecondsSinceThreat, float HoldSeconds)
@@ -131,6 +171,7 @@ namespace CoverFacingRules
 
 	int32 ClipIndex(ECoverFacing Facing)
 	{
-		return Facing == ECoverFacing::Left ? 0 : 1;
+		// Pack _L = his own right as he stands back to the wall (the pack names its sides facing the wall).
+		return Facing == ECoverFacing::Right ? 0 : 1;
 	}
 }

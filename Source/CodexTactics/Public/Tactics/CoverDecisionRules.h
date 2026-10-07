@@ -20,7 +20,12 @@ enum class ECoverFireDecision : uint8
 	/** Lean out of the corner (rise over a low cover) and fire aimed. */
 	CornerPeek,
 	/** Fire round the corner / over the top without showing the head (-40 %). */
-	BlindFire
+	BlindFire,
+	/**
+	 * The enemy stands out on the open side (in front of the wall, CoverFacingRules::ShouldCornerShot false): no corner
+	 * shot — he steps off the wall for a normal aimed shot and comes back (user decision 2026-10-06).
+	 */
+	OpenShot
 };
 
 enum class ECoverStanceDecision : uint8
@@ -43,6 +48,8 @@ struct CODEXTACTICS_API FCoverFireSituation
 	/** Damage he took in the last few seconds (HP). */
 	float RecentIncomingDamage = 0.f;
 	float DistanceToEnemyCm = 1000.f;
+	/** The enemy is out on the open side, in front of the wall (not behind it / around the corner). */
+	bool bEnemyInFrontOfCover = false;
 };
 
 /** Inputs of the stance decision. */

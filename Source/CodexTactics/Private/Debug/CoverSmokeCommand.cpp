@@ -10,10 +10,14 @@
 // perceive him until he leans out; Commander Mode: a marksman's laser makes him crouch and hold fire, the laser gone he
 // stands and peeks again; the corner shot leaves round the corner; Ctrl + click on an enemy from cover = a corner
 // shot with bLeaning during it and back after; the cover ghost wears the operatives' see-through silhouette
-// material; a ground order leaves the cover. Walk clips: _L / _R is the MOVEMENT direction (threat right: shimmy right =
-// walk_fwd_loop_R, left = walk_bwd_loop_L). Fire-ready corner pose (user rule 2026-10-06): a known threat at the
-// exposed edge -> cvr_*_fire_idle_L/R (the right-edge run: fire_idle_R), Ctrl + click = fire_R (no idle -> fire
-// transition: already ready) and back to fire_idle_R, the threat gone -> fire_to_idle exit and the look_at_idle_R.
+// material; a ground order leaves the cover. Clip sides (measured, user decision 2026-10-06): the pack names its sides
+// facing the wall, so pack _L = his own RIGHT as he stands back to the wall (CoverFacingRules::ClipIndex Right -> 0).
+// Walk clips: _L / _R is the MOVEMENT direction in that naming (threat on his right: shimmy right = walk_fwd_loop_L,
+// left = walk_bwd_loop_R). Fire-ready corner pose: a known threat at the exposed edge -> cvr_*_fire_idle_L/R (his
+// right corner: fire_idle_L), Ctrl + click on an enemy around the corner (behind the wall plane) = fire_L (no idle ->
+// fire transition: already ready) and back to fire_idle_L, the threat gone -> fire_to_idle exit and look_at_idle_L.
+// User decision 2026-10-06: the corner shot only at targets behind the wall / around the corner; Ctrl + click on an
+// enemy out in front of the wall = a normal open shot off the wall (he leaves the cover pose) and back to the slot.
 
 #include "CoreMinimal.h"
 
@@ -44,6 +48,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/BarricadeActor.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverRules.h"
 #include "Tactics/CoverTraceRules.h"
 
@@ -73,6 +78,9 @@ namespace CoverSmoke
 		int32 LeanShotsBefore = 0;
 		int32 ClipsBefore = 0;
 		int32 ClipLogMark = 0;
+		int32 OpenShotsBefore = 0;
+		bool bSawLeftCover = false;
+		int32 FrontSpot = 0;
 	};
 
 	/** Planar angle between his yaw and Direction, degrees. */
@@ -342,8 +350,8 @@ namespace CoverSmoke
 				{
 					State.bSampled = true;
 					Check(State, Anim && Anim->bShimmying && Anim->bCoverShimmyForward, FString::Printf(TEXT("shimmy towards the threat plays the forward clip (loop %s)"), *LoopName(Anim)));
-					CheckPlaying(State, Anim, TEXT("walk_fwd_loop_R"), TEXT("shimmy right, threat right"));
-					Check(State, !Anim || !Anim->GetCoverLoopClip() || LoopName(Anim).EndsWith(TEXT("walk_fwd_loop_R")), FString::Printf(TEXT("... the pack's walk_fwd_loop_R (moving right, loop %s)"), *LoopName(Anim)));
+					CheckPlaying(State, Anim, TEXT("walk_fwd_loop_L"), TEXT("shimmy right, threat right"));
+					Check(State, !Anim || !Anim->GetCoverLoopClip() || LoopName(Anim).EndsWith(TEXT("walk_fwd_loop_L")), FString::Printf(TEXT("... the pack's walk_fwd_loop_L (face-forward towards his right, loop %s)"), *LoopName(Anim)));
 					Check(State, YawOff(*Op, -State.F) < 10.f, FString::Printf(TEXT("... facing the threat while side-stepping (%.0f deg off)"), YawOff(*Op, -State.F)));
 				}
 				return true;
@@ -373,8 +381,8 @@ namespace CoverSmoke
 				{
 					State.bSampled = true;
 					Check(State, Anim && Anim->bShimmying && !Anim->bCoverShimmyForward, FString::Printf(TEXT("shimmy away from the threat plays the backward clip (loop %s)"), *LoopName(Anim)));
-					CheckPlaying(State, Anim, TEXT("walk_bwd_loop_L"), TEXT("shimmy left, threat right"));
-					Check(State, !Anim || !Anim->GetCoverLoopClip() || LoopName(Anim).EndsWith(TEXT("walk_bwd_loop_L")), FString::Printf(TEXT("... the pack's walk_bwd_loop_L (backing away to the left, facing right, loop %s)"), *LoopName(Anim)));
+					CheckPlaying(State, Anim, TEXT("walk_bwd_loop_R"), TEXT("shimmy left, threat right"));
+					Check(State, !Anim || !Anim->GetCoverLoopClip() || LoopName(Anim).EndsWith(TEXT("walk_bwd_loop_R")), FString::Printf(TEXT("... the pack's walk_bwd_loop_R (backing away to his left, facing right, loop %s)"), *LoopName(Anim)));
 					Check(State, YawOff(*Op, -State.F) < 10.f, FString::Printf(TEXT("... walking backwards, still facing the threat (%.0f deg off)"), YawOff(*Op, -State.F)));
 				}
 				return true;
@@ -485,6 +493,9 @@ namespace CoverSmoke
 			FVector Belief;
 			bool bPerceived = false;
 			Check(State, Sight->GetBelief(Hound, Op, Belief, &bPerceived) && bPerceived, TEXT("an enemy on his open side perceives him"));
+			// The cover fire decisions below need an enemy behind the wall plane, round the corner (user decision 2026-10-06:
+			// an enemy out in front gets an open shot, no peek): past the +R end, 3 m behind the wall face, 6.6 m off.
+			PlaceEnemy(*Hound, State, State.P + State.F * 700.f + State.R * 800.f);
 			// Commander Mode: the marksman's laser -> crouch at once and hold fire.
 			Squad->SetAutonomousSquadCombat(true);
 			State.Marksman = Cast<AMarksmanEnemyCharacter>(SpawnFrozen(World, EEnemyArchetype::Marksman,
@@ -531,9 +542,23 @@ namespace CoverSmoke
 			Check(State, Op->ToggleCoverFireMode() == ECoverFireMode::BlindFire, TEXT("N: blind fire mode"));
 			Op->SetCoverFireMode(ECoverFireMode::CornerLean);
 			Squad->SetAutonomousSquadCombat(false);
-			// Ctrl + click on an enemy out on the open side (left, the corner side): the cover fire path, never a plain shot.
-			PlaceEnemy(*State.Hound.Get(), State, Op->GetActorLocation() - State.F * 700.f + State.R * 300.f);
+			// Ctrl + click on an enemy round the left corner, behind the wall plane: the cover fire path, never a plain shot.
+			PlaceEnemy(*State.Hound.Get(), State, State.P + State.F * 700.f + State.R * 800.f);
 			Sight->Refresh();
+			State.Stage = 26;
+			State.Time = 0.f;
+			return true;
+		}
+		case 26:
+		{
+			Sight->Refresh();
+			if (State.Hound->IsHidden() && State.Time < 3.f)
+			{
+				return true; // the sight reveals it round the corner
+			}
+			Check(State, Op->IsCornerShotTarget(State.Hound->GetActorLocation()),
+				FString::Printf(TEXT("the enemy round the left corner is a corner-shot target (%.0f cm behind the wall face)"),
+					-CoverFacingRules::DepthInFrontOfWall(Op->GetCoverSlot(), State.Hound->GetActorLocation())));
 			State.bAllowLeaderFire = true;
 			State.LeanShotsBefore = Op->GetCoverLeanShots();
 			State.ClipsBefore = Op->GetMesh() && Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance())
@@ -694,21 +719,22 @@ namespace CoverSmoke
 			Check(State, Anim && Anim->bCoverFireReady, TEXT("AnimInstance: bCoverFireReady"));
 			const bool bCrouched = Op->GetStance() == EOperativeStance::Crouching;
 			const TArray<TObjectPtr<UAnimSequenceBase>>* FireIdle = Anim ? (bCrouched ? &Anim->CoverCrouchFireIdle : &Anim->CoverStandFireIdle) : nullptr;
-			const UAnimSequenceBase* IdleR = FireIdle && FireIdle->IsValidIndex(1) ? (*FireIdle)[1].Get() : nullptr;
-			if (IdleR)
+			const int32 RightIndex = CoverFacingRules::ClipIndex(ECoverFacing::Right); // pack _L = his own right
+			const UAnimSequenceBase* IdleRight = FireIdle && FireIdle->IsValidIndex(RightIndex) ? (*FireIdle)[RightIndex].Get() : nullptr;
+			if (IdleRight)
 			{
-				Check(State, Anim->GetCoverLoopClip() == IdleR && LoopName(Anim).EndsWith(TEXT("fire_idle_R")) && Anim->IsInCoverFirePose(),
-					FString::Printf(TEXT("fire-ready pose at the right edge = fire_idle_R (loop %s)"), *LoopName(Anim)));
-				CheckPlaying(State, Anim, TEXT("fire_idle_R"), TEXT("fire-ready pose"));
+				Check(State, Anim->GetCoverLoopClip() == IdleRight && LoopName(Anim).EndsWith(TEXT("fire_idle_L")) && Anim->IsInCoverFirePose(),
+					FString::Printf(TEXT("fire-ready pose at his right edge = fire_idle_L (loop %s)"), *LoopName(Anim)));
+				CheckPlaying(State, Anim, TEXT("fire_idle_L"), TEXT("fire-ready pose"));
 			}
 			else
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: fire_idle clips not assigned (M4 pack missing): clip checks skipped"));
 			}
-			// Ctrl + click on the enemy: fire_R at once (already ready), then back to fire_idle_R. First the enemy steps into
-			// plain sight (the sight needs a moment to reveal it): case 25 clicks.
+			// Ctrl + click on the enemy round his right corner (behind the wall plane): fire_L at once (already ready), then
+			// back to fire_idle_L. First the sight reveals it round the corner: case 25 clicks.
 			State.ClipLogMark = Anim ? Anim->GetCoverClipLog().Num() : 0;
-			PlaceEnemy(*State.Hound.Get(), State, Op->GetActorLocation() - State.F * 600.f - State.R * 250.f);
+			PlaceEnemy(*State.Hound.Get(), State, State.P + State.F * 700.f - State.R * 800.f);
 			Sight->Refresh();
 			State.Stage = 25;
 			State.Time = 0.f;
@@ -759,7 +785,8 @@ namespace CoverSmoke
 				return true;
 			}
 			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
-			if (Anim && Anim->CoverStandFireIdle.IsValidIndex(1) && Anim->CoverStandFireIdle[1])
+			if (Anim && Anim->CoverStandFireIdle.IsValidIndex(CoverFacingRules::ClipIndex(ECoverFacing::Right))
+				&& Anim->CoverStandFireIdle[CoverFacingRules::ClipIndex(ECoverFacing::Right)])
 			{
 				const TArray<FString>& Log = Anim->GetCoverClipLog();
 				int32 FireAt = INDEX_NONE;
@@ -768,18 +795,18 @@ namespace CoverSmoke
 				for (int32 Index = FMath::Min(State.ClipLogMark, Log.Num()); Index < Log.Num(); ++Index)
 				{
 					bTransition |= Log[Index].Contains(TEXT("_to_fire"));
-					if (FireAt == INDEX_NONE && Log[Index].EndsWith(TEXT("fire_R")))
+					if (FireAt == INDEX_NONE && Log[Index].EndsWith(TEXT("fire_L")))
 					{
 						FireAt = Index;
 					}
-					else if (FireAt != INDEX_NONE && IdleAt == INDEX_NONE && Log[Index].EndsWith(TEXT("fire_idle_R")))
+					else if (FireAt != INDEX_NONE && IdleAt == INDEX_NONE && Log[Index].EndsWith(TEXT("fire_idle_L")))
 					{
 						IdleAt = Index;
 					}
 				}
-				Check(State, FireAt != INDEX_NONE, TEXT("the shot plays fire_R"));
+				Check(State, FireAt != INDEX_NONE, TEXT("the shot plays fire_L (his right corner)"));
 				Check(State, !bTransition, TEXT("... directly (no idle -> fire transition: already fire-ready)"));
-				Check(State, IdleAt != INDEX_NONE && LoopName(Anim).EndsWith(TEXT("fire_idle_R")), FString::Printf(TEXT("... then back to fire_idle_R (loop %s)"), *LoopName(Anim)));
+				Check(State, IdleAt != INDEX_NONE && LoopName(Anim).EndsWith(TEXT("fire_idle_L")), FString::Printf(TEXT("... then back to fire_idle_L (loop %s)"), *LoopName(Anim)));
 			}
 			// No threat any more: after the hold time the exit transition plays and the corner pose is the look-around idle.
 			State.ClipLogMark = Anim ? Anim->GetCoverClipLog().Num() : 0;
@@ -799,7 +826,7 @@ namespace CoverSmoke
 			Check(State, Anim && !Anim->bCoverFireReady && !Anim->IsInCoverFirePose(), TEXT("AnimInstance: fire-ready cleared"));
 			const bool bCrouched = Op->GetStance() == EOperativeStance::Crouching;
 			const TArray<TObjectPtr<UAnimSequenceBase>>* Corner = Anim ? (bCrouched ? &Anim->CoverCrouchCorner : &Anim->CoverStandCorner) : nullptr;
-			if (Corner && Corner->IsValidIndex(1) && (*Corner)[1])
+			if (Corner && Corner->IsValidIndex(CoverFacingRules::ClipIndex(ECoverFacing::Right)) && (*Corner)[CoverFacingRules::ClipIndex(ECoverFacing::Right)])
 			{
 				bool bExit = false;
 				const TArray<FString>& Log = Anim->GetCoverClipLog();
@@ -808,9 +835,84 @@ namespace CoverSmoke
 					bExit |= Log[Index].Contains(TEXT("fire_to_"));
 				}
 				Check(State, bExit, TEXT("... the fire_to_idle exit transition played"));
-				Check(State, LoopName(Anim).EndsWith(TEXT("look_at_idle_R")), FString::Printf(TEXT("... the corner pose is look_at_idle_R (loop %s)"), *LoopName(Anim)));
+				Check(State, LoopName(Anim).EndsWith(TEXT("look_at_idle_L")), FString::Printf(TEXT("... the corner pose is look_at_idle_L (his right corner, loop %s)"), *LoopName(Anim)));
 			}
+			// User decision 2026-10-06: an enemy out IN FRONT of the wall (his open side) gets a normal shot off the wall.
+			Op->bIgnoreCoverThreatForTesting = false;
+			State.SlotEntered = Op->GetActorLocation();
+			PlaceEnemy(*State.Hound.Get(), State, Op->GetActorLocation() - State.F * 700.f + State.R * 100.f);
+			Sight->Refresh();
+			State.Stage = 30;
+			State.Time = 0.f;
+			return true;
+		}
+		case 30:
+		{
+			Sight->Refresh();
+			if (State.Hound->IsHidden() && State.Time < 6.f)
+			{
+				// Not revealed in 1.5 s (map props in the line): the next spot out in front.
+				const int32 Spot = FMath::FloorToInt(State.Time / 1.5f);
+				if (Spot != State.FrontSpot && Spot < 4)
+				{
+					State.FrontSpot = Spot;
+					static const FVector2D Spots[] = { { 700.f, 100.f }, { 600.f, -300.f }, { 500.f, 300.f }, { 800.f, -500.f } };
+					PlaceEnemy(*State.Hound.Get(), State, State.SlotEntered - State.F * Spots[Spot].X + State.R * Spots[Spot].Y);
+				}
+				return true;
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: open-shot enemy spot %d, hidden %d"), State.FrontSpot, State.Hound->IsHidden() ? 1 : 0);
+			Check(State, !Op->IsCornerShotTarget(State.Hound->GetActorLocation()),
+				FString::Printf(TEXT("an enemy 7 m in front of the wall is no corner-shot target (%.0f cm in front of the face)"),
+					CoverFacingRules::DepthInFrontOfWall(Op->GetCoverSlot(), State.Hound->GetActorLocation())));
+			State.LeanShotsBefore = Op->GetCoverLeanShots() + Op->GetCoverBlindShots();
+			State.OpenShotsBefore = Op->GetCoverOpenShots();
+			State.bSawLeftCover = false;
+			State.bAllowLeaderFire = true;
+			if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(UGameplayStatics::GetPlayerController(World, 0)))
+			{
+				PC->IssueTargetedShot(State.Hound.Get());
+			}
+			else
+			{
+				Op->SetManualPriorityTarget(State.Hound.Get());
+			}
+			State.Stage = 31;
+			State.Time = 0.f;
+			return true;
+		}
+		case 31:
+		{
+			Sight->Refresh();
+			State.bSawLeftCover |= !Op->bInCover && Op->IsCoverOpenShotActive();
+			if (Op->GetCoverOpenShots() <= State.OpenShotsBefore && State.Time < 5.f)
+			{
+				return true;
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: open-shot diag: hound hidden %d, reloading %d, clip %d, in cover %d, cease %d, hold %d, dist %.0f"),
+				State.Hound->IsHidden() ? 1 : 0, Op->bIsReloading ? 1 : 0, Op->CurrentClip, Op->bInCover ? 1 : 0, Op->bTacticalCeaseFire ? 1 : 0,
+				Op->bCoverHoldFire ? 1 : 0, FVector::Dist2D(Op->GetActorLocation(), State.Hound->GetActorLocation()));
+			Check(State, Op->GetCoverOpenShots() > State.OpenShotsBefore, FString::Printf(TEXT("Ctrl + click on an enemy in front of the wall: an open shot (%.1f s)"), State.Time));
+			Check(State, State.bSawLeftCover && !Op->bInCover, TEXT("... he stepped off the wall for it (left the cover pose)"));
+			Check(State, Op->GetCoverLeanShots() + Op->GetCoverBlindShots() == State.LeanShotsBefore, TEXT("... no corner lean / blind shot"));
+			State.bAllowLeaderFire = false;
+			Op->AssignPriorityTarget(nullptr);
+			State.Stage = 32;
+			State.Time = 0.f;
+			return true;
+		}
+		case 32:
+		{
+			if (!Op->bInCover && State.Time < 5.f)
+			{
+				return true;
+			}
+			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
+			Check(State, Op->bInCover && FVector::Dist2D(Op->GetActorLocation(), State.SlotEntered) < 60.f,
+				FString::Printf(TEXT("... and back to the same slot after the shot (%.1f s, %.0f cm off)"), State.Time, FVector::Dist2D(Op->GetActorLocation(), State.SlotEntered)));
+			Check(State, Op->IsQuietCoverEntry() && Anim && !LoopName(Anim).Contains(TEXT("idle_fwd_to_cvr")), TEXT("... without the Cover_Enter clip (he only stepped off the wall)"));
 			// Threat UNKNOWN (the flag keeps it so): a fresh wall entry in the middle, every shimmy face-forward in its direction.
+			Op->bIgnoreCoverThreatForTesting = true;
 			Op->LeaveCover(TEXT("smoke: unknown-threat run"));
 			State.Stage = 21;
 			State.Time = 0.f;
@@ -856,7 +958,7 @@ namespace CoverSmoke
 			if (!State.bSampled)
 			{
 				State.bSampled = true;
-				CheckPlaying(State, Anim, TEXT("walk_fwd_loop_R"), TEXT("unknown threat, moving right (right after the cover entry)"));
+				CheckPlaying(State, Anim, TEXT("walk_fwd_loop_L"), TEXT("unknown threat, moving to his right (right after the cover entry)"));
 			}
 			if (Op->bShimmying && State.Time < 8.f)
 			{
@@ -878,7 +980,7 @@ namespace CoverSmoke
 				return true;
 			}
 			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
-			CheckPlaying(State, Anim, TEXT("walk_fwd_loop_L"), TEXT("unknown threat, moving left"));
+			CheckPlaying(State, Anim, TEXT("walk_fwd_loop_R"), TEXT("unknown threat, moving to his left"));
 			Op->bIgnoreCoverThreatForTesting = false;
 			Op->LeaveCover(TEXT("smoke end"));
 			if (State.Wall.IsValid())

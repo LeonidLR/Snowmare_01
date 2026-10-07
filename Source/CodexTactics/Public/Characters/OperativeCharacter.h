@@ -11,6 +11,7 @@
 #include "Characters/FirePostureRules.h"
 #include "Combat/TargetedShotRules.h"
 #include "Interactables/DeployableRules.h"
+#include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverTypes.h"
 #include "OperativeCharacter.generated.h"
 
@@ -788,6 +789,52 @@ public:
 	 */
 	void PlayCoverShot(AActor* Target, bool bHit);
 
+	// --- Open shot from cover (user decision 2026-10-06, CoverFacingRules::ShouldCornerShot): the cover shot is only for
+	// targets behind the wall / around the corner; a target out on the open side gets a normal shot — he steps off the
+	// wall (leaves the cover), fires as usual and, unless ordered elsewhere, comes back to the same slot. ---
+
+	/** In cover and Target needs the cover shot (behind the wall / around the corner); false out of cover or for an open-side target. */
+	bool IsCornerShotTarget(const FVector& TargetLocation) const;
+
+	/**
+	 * Steps off the wall for a normal shot at an open-side target: leaves the cover and remembers the slot to come back to
+	 * (bReturnToCoverAfterOpenShot). False (nothing done) while shimmying or out of cover.
+	 */
+	bool BeginOpenShotFromCover(const AActor* Target);
+
+	/** Off the wall for an open shot, coming back to the slot once he stops firing (the AnimInstance skips the cover exit / enter clips). */
+	bool IsCoverOpenShotActive() const { return bOpenShotReturnPending; }
+
+	/** This cover entry is the return after an open shot (no Cover_Enter clip: he only stepped off the wall). */
+	bool IsQuietCoverEntry() const { return bQuietCoverEntry; }
+
+	/** After an open shot from cover (target in front of the wall) he returns to the slot unless ordered elsewhere. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	bool bReturnToCoverAfterOpenShot = true;
+
+	/** He returns to the slot this long after his last open shot, s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float OpenShotReturnDelaySeconds = 1.f;
+
+	/** Open shots taken off the wall (smokes / stats). */
+	int32 GetCoverOpenShots() const { return CoverOpenShots; }
+
+	/**
+	 * Corner stand-off per pack clip side and stance, cm (FCoverFacingConfig defaults, measured 2026-10-06: the peek
+	 * clip's body step-out minus 12 cm). _L plays at his own right corner, _R at his left.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverStandOffStandPackLCm = 57.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverStandOffStandPackRCm = 28.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverStandOffCrouchPackLCm = 65.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverStandOffCrouchPackRCm = 49.f;
+
+	/** The facing rules' config with this operative's tunables (stand-offs). */
+	FCoverFacingConfig GetCoverFacingConfig() const;
+
 	// --- Fire posture (rules of engagement of the automatic fire, user request 2026-10-06; FirePostureRules) ---
 
 	/** This operative has its own posture (the posture keys with a box-selected group); false: it follows the squad's. */
@@ -1086,6 +1133,16 @@ private:
 	bool GatherCoverThreat(FVector& OutLocation) const;
 	/** Walks to the exposed edge on the facing side when it lies just beyond the corner reach. */
 	void TrySnapToCoverCorner();
+	/** Open shot from cover: the slot to come back to, the last open shot's time, the return pending. */
+	FCoverSlot OpenShotReturnSlot;
+	double OpenShotLastTime = -1.0e9;
+	bool bOpenShotReturnPending = false;
+	/** The current cover entry is the return after an open shot (IsQuietCoverEntry); the request is set around that EnterCover. */
+	bool bQuietCoverEntry = false;
+	bool bQuietCoverEntryRequest = false;
+	int32 CoverOpenShots = 0;
+	/** Back to the slot once the open shots are over (no move order, standing still, not far off). */
+	void UpdateOpenShotReturn();
 	/** Range and line of fire to a silhouette's aim point (barricades by SquadFireRules::JudgeLine). */
 	bool EvaluateBlindLine(const class AEnemyGhostActor& Ghost, FShootCandidate& Out) const;
 	/** Set while AutonomousMoveTo runs: the move does not re-pin the anchor. */

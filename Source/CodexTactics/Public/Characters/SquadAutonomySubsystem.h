@@ -31,6 +31,8 @@ struct CODEXTACTICS_API FSquadAutonomyStats
 	int32 MeleeDraws = 0;
 	// Sprint 12: cover decisions (CoverDecisionRules).
 	int32 CoverPeeks = 0;
+	/** Cover decisions "open shot" (the enemy in front of the wall, user decision 2026-10-06). */
+	int32 CoverOpenShots = 0;
 	int32 CoverBlindFires = 0;
 	int32 CoverHolds = 0;
 	int32 CoverStanceChanges = 0;

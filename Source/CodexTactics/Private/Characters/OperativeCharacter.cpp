@@ -1443,13 +1443,15 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	{
 		return false;
 	}
-	// Sprint 12: nothing to fire round / over from this cover (a full wall without a corner).
-	if (bInCover && !CanFireFromCover())
+	const FVector MyFeet = ShotFeet(this);
+	const FVector EnemyFeet = ShotFeet(Enemy);
+	// Sprint 12: nothing to fire round / over from this cover (a full wall without a corner). User decision 2026-10-06:
+	// only a target behind the wall / around the corner needs that; one out on the open side gets a normal shot.
+	const bool bCornerShot = IsCornerShotTarget(EnemyFeet);
+	if (bCornerShot && !CanFireFromCover())
 	{
 		return false;
 	}
-	const FVector MyFeet = ShotFeet(this);
-	const FVector EnemyFeet = ShotFeet(Enemy);
 	if (!World || SquadFireRules::IsInDeadZone(MyFeet, EnemyFeet))
 	{
 		return false;
@@ -1475,7 +1477,7 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	EShotLineHit Kind = EShotLineHit::Clear;
 	AActor* HitEnemy = Enemy;
 	FHitResult Hit;
-	if (World->LineTraceSingleByChannel(Hit, bInCover ? GetCoverFireOrigin() : GetMuzzleLocation(), EnemyFeet + FVector(0.f, 0.f, 80.f), ECC_Visibility, Params))
+	if (World->LineTraceSingleByChannel(Hit, bCornerShot ? GetCoverFireOrigin() : GetMuzzleLocation(), EnemyFeet + FVector(0.f, 0.f, 80.f), ECC_Visibility, Params))
 	{
 		AActor* Blocker = Hit.GetActor();
 		if (Blocker && Blocker != Enemy)
@@ -1520,12 +1522,13 @@ AEnemyGhostActor* AOperativeCharacter::GetBlindFireTarget() const
 bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShootCandidate& Out) const
 {
 	UWorld* World = GetWorld();
-	if (bInCover && !CanFireFromCover())
-	{
-		return false; // Sprint 12
-	}
 	const FVector MyFeet = ShotFeet(this);
 	const FVector GhostFeet = Ghost.GetLastKnownFeet();
+	const bool bCornerShot = IsCornerShotTarget(GhostFeet);
+	if (bCornerShot && !CanFireFromCover())
+	{
+		return false; // Sprint 12 (a silhouette out on the open side: a normal shot, user decision 2026-10-06)
+	}
 	if (!World || SquadFireRules::IsInDeadZone(MyFeet, GhostFeet))
 	{
 		return false;
@@ -1549,7 +1552,7 @@ bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShoo
 	}
 	EShotLineHit Kind = EShotLineHit::Clear;
 	FHitResult Hit;
-	if (World->LineTraceSingleByChannel(Hit, bInCover ? GetCoverFireOrigin() : GetMuzzleLocation(), Ghost.GetAimPoint(), ECC_Visibility, Params) && Hit.GetActor())
+	if (World->LineTraceSingleByChannel(Hit, bCornerShot ? GetCoverFireOrigin() : GetMuzzleLocation(), Ghost.GetAimPoint(), ECC_Visibility, Params) && Hit.GetActor())
 	{
 		Kind = Hit.GetActor()->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
 	}
@@ -1924,6 +1927,13 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		return;
 	}
 
+	// User decision 2026-10-06: a target out on the open side (in front of the wall) is no corner shot: he steps off the
+	// wall and fires normally, then comes back to the slot (UpdateOpenShotReturn).
+	if (bInCover && !IsCornerShotTarget(Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation()) && !BeginOpenShotFromCover(Target))
+	{
+		return; // shimmying: the shot waits for the slot
+	}
+
 	// Turn towards target smoothly (the barrel onto it, see UpdateCombatFacing); in cover the back stays to the wall.
 	if (!bInCover)
 	{
@@ -2018,6 +2028,11 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	if (bInCover)
 	{
 		(bCoverBlindShot ? CoverBlindShots : CoverLeanShots) += 1;
+	}
+	else if (bOpenShotReturnPending)
+	{
+		++CoverOpenShots;
+		OpenShotLastTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	}
 
 	const bool bHit = bForceHitForTesting || (FMath::FRand() <= HitChance);
@@ -2267,6 +2282,10 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 	if (Kind == ETargetedShotKind::None || Kind == ETargetedShotKind::Enemy || !CanBeginWeaponShot())
 	{
 		return false;
+	}
+	if (bInCover && !IsCornerShotTarget(Target->GetActorLocation()))
+	{
+		BeginOpenShotFromCover(Target); // out on the open side: a normal shot off the wall (user decision 2026-10-06)
 	}
 	if (bInCover)
 	{
@@ -2759,6 +2778,8 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	LeanTimer = 0.f;
 	BlindFireTimer = 0.f;
 	bHasPendingCover = false;
+	bOpenShotReturnPending = false; // a cover entry ends any open shot
+	bQuietCoverEntry = bQuietCoverEntryRequest; // the return after an open shot: no Cover_Enter clip
 	// A fresh wall: walk to the threat-side edge on the next update if it is close (a player's shimmy is never undone).
 	bCoverSnapPending = !bSameWall;
 	bCoverAutoSnap = false;
@@ -2828,6 +2849,7 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	bCoverSnapPending = false;
 	CoverShotTarget.Reset();
 	CoverSlot = FCoverSlot();
+	bQuietCoverEntry = false;
 	ReceiveCoverChanged(false, ECoverHeight::None);
 }
 
@@ -2960,6 +2982,7 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 			EnterCover(PendingCoverSlot);
 		}
 	}
+	UpdateOpenShotReturn();
 	if (!bInCover)
 	{
 		return;
@@ -3127,7 +3150,7 @@ void AOperativeCharacter::TrySnapToCoverCorner()
 		return; // grid positions stay on their cells
 	}
 	float Shift = 0.f;
-	if (!CoverFacingRules::ShouldSnapToCorner(CoverSlot, CoverFacing, Shift))
+	if (!CoverFacingRules::ShouldSnapToCorner(CoverSlot, CoverFacing, Shift, GetCoverFacingConfig(), Stance == EOperativeStance::Crouching))
 	{
 		return;
 	}
@@ -3139,6 +3162,62 @@ void AOperativeCharacter::TrySnapToCoverCorner()
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: to the %s corner (%.0f cm)"), *DisplayName.ToString(),
 			CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"), Shift);
 	}
+}
+
+FCoverFacingConfig AOperativeCharacter::GetCoverFacingConfig() const
+{
+	FCoverFacingConfig Config;
+	Config.StandStandOffPackLCm = CoverStandOffStandPackLCm;
+	Config.StandStandOffPackRCm = CoverStandOffStandPackRCm;
+	Config.CrouchStandOffPackLCm = CoverStandOffCrouchPackLCm;
+	Config.CrouchStandOffPackRCm = CoverStandOffCrouchPackRCm;
+	return Config;
+}
+
+bool AOperativeCharacter::IsCornerShotTarget(const FVector& TargetLocation) const
+{
+	return bInCover && CoverFacingRules::ShouldCornerShot(CoverSlot, TargetLocation, GetCoverFacingConfig());
+}
+
+bool AOperativeCharacter::BeginOpenShotFromCover(const AActor* Target)
+{
+	if (!bInCover || bShimmying)
+	{
+		return false;
+	}
+	const FCoverSlot Slot = CoverSlot;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: steps off the wall for an open shot at %s (in front of the cover)"), *DisplayName.ToString(),
+		Target ? *Target->GetName() : TEXT("-"));
+	LeaveCover(TEXT("open shot: target in front of the cover"));
+	OpenShotReturnSlot = Slot;
+	bOpenShotReturnPending = bReturnToCoverAfterOpenShot;
+	OpenShotLastTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	return true;
+}
+
+void AOperativeCharacter::UpdateOpenShotReturn()
+{
+	if (!bOpenShotReturnPending)
+	{
+		return;
+	}
+	const UWorld* World = GetWorld();
+	const bool bAlive = HealthComponent && HealthComponent->IsAlive();
+	// Ordered elsewhere (a move / cover order), back in some cover, down, raging or panicking: no return.
+	if (bInCover || !bAlive || bHasMoveOrder || bHasPendingCover || IsRaging() || IsPanicking() || !World
+		|| FVector::Dist2D(GetActorLocation(), OpenShotReturnSlot.WorldLocation) > 150.f)
+	{
+		bOpenShotReturnPending = false;
+		return;
+	}
+	if (World->GetTimeSeconds() - OpenShotLastTime < OpenShotReturnDelaySeconds || GetVelocity().SizeSquared2D() > 4.f || bIsReloading)
+	{
+		return; // still firing / settling
+	}
+	bOpenShotReturnPending = false;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: back to the wall after the open shot"), *DisplayName.ToString());
+	TGuardValue<bool> Quiet(bQuietCoverEntryRequest, true);
+	EnterCover(OpenShotReturnSlot);
 }
 
 void AOperativeCharacter::PlayCoverShot(AActor* Target, bool bHit)

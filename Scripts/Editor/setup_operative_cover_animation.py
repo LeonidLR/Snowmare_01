@@ -6,9 +6,11 @@
     setup_operative_rifle2_animation.py made it compatible with the UE5 SK_Mannequin; the pack's own assets are not
     written). Bone names of the UE4 / UE5 mannequins match, so the clips play through the compatible skeleton without a
     retarget — proportions to check by eye.
-  - ABP_Operative (and ABP_Operative_Rifle2 when it exists): the UOperativeAnimInstance cover clip arrays, index 0 =
-    Left (*_L), 1 = Right (*_R) (ECoverFacing = the side along the wall he faces, towards the threat — user rule
-    2026-10-06; forward = shimmy towards it, backward = away from it), set only while unset (hand-picked clips are kept;
+  - ABP_Operative (and ABP_Operative_Rifle2 when it exists): the UOperativeAnimInstance cover clip arrays [*_L, *_R].
+    The pack names its sides as seen FACING the wall (measured 2026-10-06 from the clips' poses, user decision): *_L is
+    the side at the operative's OWN RIGHT hand as he stands back to the wall (screen-left when he faces the camera), so
+    CoverFacingRules::ClipIndex maps ECoverFacing::Right -> 0 (*_L), Left -> 1 (*_R) (ECoverFacing = the side along the
+    wall he faces, towards the threat; forward = shimmy towards it, backward = away from it), set only while unset (hand-picked clips are kept;
     CODEX_RESET_COVER_CLIPS=1 overwrites). The AnimGraph is not touched: UOperativeAnimInstance::UpdateCoverLayer plays
     the clips on its FullBody slot (bUseNativeCoverClips) until the user builds cover states into the graph.
 
@@ -23,8 +25,10 @@ Mapping (pack name -> property):
   cvr_std_idle_L/R_to_fire              -> CoverStandFireEnter       cvr_crch_idle_to_fire_L/R         -> CoverCrouchFireEnter
   cvr_std_fire_to_std_idle_L/R          -> CoverStandFireExit        cvr_crch_fire_to_idle_L/R         -> CoverCrouchFireExit
   Corner pose: threat known -> fire_idle (look_at_idle only with no threat). Idle / fire_idle / fire / look_at / transitions:
-  [0]/[1] = _L/_R by the facing (edge) side. WALK clips: _L/_R = the MOVEMENT direction (bwd_loop_L = backing away to the
-  left, facing right) - CoverFacingRules::ShimmyClipIndex; the arrays stay [L, R] by suffix.
+  [0]/[1] = _L/_R; _L plays at his own RIGHT corner (fire_idle_L steps ~69 cm out to his right), _R at his left (~40 cm).
+  WALK clips: _L/_R = the MOVEMENT direction in the pack's naming (fwd_loop_L = face-forward towards his own right,
+  bwd_loop_L = backing towards his own right while facing his left) - CoverFacingRules::ShimmyClipIndex; the arrays
+  stay [L, R] by suffix.
   (no blind fire clip in the pack: CoverBlindFire stays empty, the fire clip stands in)
 
 Run with the editor closed:

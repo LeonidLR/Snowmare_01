@@ -790,7 +790,8 @@ bool FOperativeAnimInstanceProxy::Evaluate(FPoseContext& Output)
 
 UAnimSequenceBase* UOperativeAnimInstance::PickCoverClip(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) const
 {
-	// The pack's *_L clips face left along the wall, *_R right (CoverFacingRules::ClipIndex).
+	// The pack names its sides facing the wall: *_L works at his own RIGHT (back to the wall), *_R at his left
+	// (CoverFacingRules::ClipIndex: Right -> 0 = _L, Left -> 1 = _R; measured 2026-10-06).
 	const int32 Index = CoverFacingRules::ClipIndex(CoverFacing);
 	if (Clips.IsValidIndex(Index) && Clips[Index])
 	{
@@ -802,7 +803,8 @@ UAnimSequenceBase* UOperativeAnimInstance::PickCoverClip(const TArray<TObjectPtr
 
 UAnimSequenceBase* UOperativeAnimInstance::PickShimmyClip(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips, bool bForward) const
 {
-	// The walk clips' suffix is the movement direction along the wall: the backing-away clip of the other side's suffix.
+	// The walk clips' suffix is the movement direction along the wall in the pack's naming (_L = towards his own right):
+	// forward = the facing side's clip, backing away = the other side's suffix (CoverFacingRules::ShimmyClipIndex).
 	const int32 Index = CoverFacingRules::ShimmyClipIndex(CoverFacing, bForward);
 	if (Clips.IsValidIndex(Index) && Clips[Index])
 	{
@@ -829,8 +831,9 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		CoverLoopMontage.Reset();
 		CoverLoopClip.Reset();
 		CoverPendingFireClip.Reset();
-		// Leaving the fire-ready pose: the exit transition plays when he stays put (walking on blends straight out).
-		if (bCoverInFirePose && Speed < 20.f)
+		// Leaving the fire-ready pose: the exit transition plays when he stays put (walking on blends straight out; an
+		// open shot at a target in front of the wall blends straight into the normal shooting pose).
+		if (bCoverInFirePose && Speed < 20.f && !Operative.IsCoverOpenShotActive())
 		{
 			if (UAnimSequenceBase* Exit = PickCoverClip(bIsCrouching ? CoverCrouchFireExit : CoverStandFireExit))
 			{
@@ -844,8 +847,14 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	{
 		return;
 	}
-	// Cover_Enter once, then the loop.
-	if (bEntered)
+	// Cover_Enter once, then the loop. Back at the wall after an open shot (he only stepped off it): straight to the loop.
+	if (bEntered && Operative.IsQuietCoverEntry())
+	{
+		bCoverEnterPlaying = false;
+		CoverLoopMontage.Reset();
+		CoverLoopClip.Reset();
+	}
+	else if (bEntered)
 	{
 		if (UAnimSequenceBase* Enter = PickCoverClip(bIsCrouching ? CoverCrouchEnter : CoverStandEnter))
 		{

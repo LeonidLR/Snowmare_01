@@ -18,6 +18,7 @@
 #include "Interactables/InteractableActor.h"
 #include "Quests/QuestChain.h"
 #include "Tactics/CoverDecisionRules.h"
+#include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "NavigationSystem.h"
 
@@ -769,6 +770,8 @@ void USquadAutonomySubsystem::DecideInCover(AOperativeCharacter& Operative, cons
 	Fire.SuppressionPressure = Suppression;
 	Fire.RecentIncomingDamage = Operative.RecentIncomingDamage;
 	Fire.DistanceToEnemyCm = Nearest ? NearestCm : 100000.f;
+	// User decision 2026-10-06: the corner peek / blind shot only at an enemy behind the wall or around the corner.
+	Fire.bEnemyInFrontOfCover = Nearest && !CoverFacingRules::ShouldCornerShot(Slot, Nearest->Location, Operative.GetCoverFacingConfig());
 	const ECoverFireDecision Decision = Nearest ? CoverDecisionRules::DecideFire(Config, Fire) : ECoverFireDecision::Hold;
 	const bool bHold = Decision == ECoverFireDecision::Hold;
 	if (Operative.bCoverHoldFire != bHold || (!bHold && Operative.CoverFireMode != CoverDecisionRules::ToFireMode(Decision)))
@@ -785,6 +788,7 @@ void USquadAutonomySubsystem::DecideInCover(AOperativeCharacter& Operative, cons
 		{
 		case ECoverFireDecision::CornerPeek: ++Stats.CoverPeeks; break;
 		case ECoverFireDecision::BlindFire: ++Stats.CoverBlindFires; break;
+		case ECoverFireDecision::OpenShot: ++Stats.CoverOpenShots; break;
 		default: ++Stats.CoverHolds; break;
 		}
 	}
@@ -795,7 +799,7 @@ void USquadAutonomySubsystem::DecideInCover(AOperativeCharacter& Operative, cons
 	StanceSituation.HealthFraction = Health;
 	StanceSituation.SuppressionPressure = Suppression;
 	StanceSituation.bEnemyElevated = bElevatedEnemy;
-	StanceSituation.bWantsAimedFire = Decision == ECoverFireDecision::CornerPeek;
+	StanceSituation.bWantsAimedFire = Decision == ECoverFireDecision::CornerPeek || Decision == ECoverFireDecision::OpenShot;
 	const EOperativeStance Wanted = CoverDecisionRules::ToStance(CoverDecisionRules::DecideStance(Config, StanceSituation));
 	if (Operative.GetStance() != EOperativeStance::Prone && Operative.GetStance() != Wanted)
 	{

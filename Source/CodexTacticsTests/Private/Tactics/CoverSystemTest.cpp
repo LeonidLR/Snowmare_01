@@ -225,6 +225,16 @@ bool FCoverDecisionFireTest::RunTest(const FString&)
 	TestTrue(TEXT("recent damage decays 40 HP over 5 s"), FMath::IsNearlyEqual(DecayRecentDamage(Config, 40.f, 2.5f), 20.f, 0.001f));
 	TestEqual(TEXT("peek -> corner lean mode"), ToFireMode(ECoverFireDecision::CornerPeek), ECoverFireMode::CornerLean);
 	TestEqual(TEXT("blind -> blind fire mode"), ToFireMode(ECoverFireDecision::BlindFire), ECoverFireMode::BlindFire);
+	// User decision 2026-10-06: an enemy out in front of the wall gets a normal shot off the wall (no peek / blind fire),
+	// also from a wall without a corner; the sniper laser still holds him down.
+	FCoverFireSituation Front = Situation(0.9f, 0.9f, 30.f, 9.f);
+	Front.bEnemyInFrontOfCover = true;
+	TestEqual(TEXT("enemy in front of the wall: open shot (not blind fire)"), DecideFire(Config, Front), ECoverFireDecision::OpenShot);
+	Front.bEdgeExposed = false;
+	TestEqual(TEXT("enemy in front of a wall without a corner: open shot"), DecideFire(Config, Front), ECoverFireDecision::OpenShot);
+	Front.bSniperLaserOnMe = true;
+	TestEqual(TEXT("enemy in front, laser on him: hold"), DecideFire(Config, Front), ECoverFireDecision::Hold);
+	TestTrue(TEXT("open shot name"), FCString::Strcmp(FireDecisionName(ECoverFireDecision::OpenShot), TEXT("OpenShot")) == 0);
 	return true;
 }
 

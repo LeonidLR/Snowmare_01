@@ -14,9 +14,13 @@
  * At an exposed edge on the facing side he takes the corner pose: with a known / active threat (visible, heard, ordered
  * target, shot taken within FireReadyHoldSeconds) the FIRE-READY pose (cvr_*_fire_idle_L/R, entered through
  * cvr_*_idle_to_fire, left through cvr_*_fire_to_idle); with no threat the look-around pose (cvr_*_look_at_idle_L/R).
- * Clip side: index 0 = _L = the operative's own left as he stands back to the wall (ECoverFacing::Left =
- * -RightTangent), 1 = _R. An edge a little further is walked to automatically. Pure rules, tested in CodexTactics.Tactics.Cover.ShimmyFacesThreat / ThreatSideFlipHysteresis
- * / CornerPoseAndSnap / ThreatPriority.
+ * Clip side (measured 2026-10-06 from the pack's poses, user decision): the M4 pack names its sides as seen FACING the
+ * wall (its enter clip starts facing it), so pack _L = the operative's own RIGHT hand as he stands back to the wall
+ * (+RightTangent, ECoverFacing::Right; screen-left when he faces the default camera) and _R = his own left. Clip arrays
+ * stay [_L, _R]: index 0 = ECoverFacing::Right, 1 = ECoverFacing::Left (ClipIndex). An edge a little further is walked
+ * to automatically; he stops short of it by the stand-off of the clip side that plays there (the _L peek steps ~69 cm
+ * out, the _R one ~40 cm, standing). Pure rules, tested in CodexTactics.Tactics.Cover.ShimmyFacesThreat /
+ * ThreatSideFlipHysteresis / CornerPoseAndSnap / ThreatPriority / CornerStandOffPerClipSide / CornerShotOnlyBehindWall.
  */
 struct CODEXTACTICS_API FCoverFacingConfig
 {
@@ -26,8 +30,23 @@ struct CODEXTACTICS_API FCoverFacingConfig
 	float CornerReachCm = 100.f;
 	/** An exposed edge on the facing side up to this far away is walked to automatically on entry / turn, cm. */
 	float AutoCornerSnapCm = 200.f;
-	/** He stops this far short of the measured edge (the probes step 40 cm, the real edge lies within the last step), cm. */
-	float CornerStandOffCm = 60.f;
+	/**
+	 * Corner stand-off: he stops this far short of the measured edge (the probes step 40 cm, the real edge lies within the
+	 * last step), per pack clip side and stance = the peek clip's body (pelvis) step-out minus a 12 cm margin, so head and
+	 * muzzle clear the edge even when the real edge lies right at the measured distance. Measured 2026-10-06: standing _L
+	 * +69 cm (his right corner), _R 40 cm (his left); crouched _L 77 cm, _R 61 cm. cm.
+	 */
+	float StandStandOffPackLCm = 57.f;
+	float StandStandOffPackRCm = 28.f;
+	float CrouchStandOffPackLCm = 65.f;
+	float CrouchStandOffPackRCm = 49.f;
+	/** At the corner but further from the edge than the stand-off by more than this: step closer (on entry / turn), cm. */
+	float CornerSnapToleranceCm = 15.f;
+	/**
+	 * Corner shot only at targets behind the wall: a target is "around the corner" when it lies beyond the exposed edge
+	 * on its side and no further than this in front of the wall face, cm. Anything else on the open side gets a normal shot.
+	 */
+	float CornerShotFrontBandCm = 120.f;
 	/** A shot from cover waits until the body faces along the wall within this, degrees. */
 	float FacingToleranceDeg = 20.f;
 	/** Threat re-evaluation interval, s. */
@@ -106,11 +125,29 @@ namespace CoverFacingRules
 	CODEXTACTICS_API bool IsAtCorner(const FCoverSlot& Slot, ECoverFacing Facing, const FCoverFacingConfig& Config = FCoverFacingConfig());
 
 	/**
-	 * The exposed edge on the facing side lies beyond the corner reach but within AutoCornerSnapCm: walk OutShiftCm
-	 * along the wall towards it (edge distance - CornerStandOffCm).
+	 * Stand-off from the exposed edge on the facing side, cm: the stand-off of the pack clip side that plays there
+	 * (ClipIndex: facing Right -> _L, Left -> _R) for the stance.
+	 */
+	CODEXTACTICS_API float CornerStandOff(ECoverFacing Facing, bool bCrouched, const FCoverFacingConfig& Config = FCoverFacingConfig());
+
+	/**
+	 * The exposed edge on the facing side lies within AutoCornerSnapCm and he stands further from it than the clip side's
+	 * stand-off (CornerStandOff) by more than CornerSnapToleranceCm: walk OutShiftCm along the wall towards it
+	 * (edge distance - stand-off). Never walks away from the edge.
 	 */
 	CODEXTACTICS_API bool ShouldSnapToCorner(const FCoverSlot& Slot, ECoverFacing Facing, float& OutShiftCm,
-		const FCoverFacingConfig& Config = FCoverFacingConfig());
+		const FCoverFacingConfig& Config = FCoverFacingConfig(), bool bCrouched = false);
+
+	/** Depth of Target in front of the wall face (along the wall normal from Slot.WallPoint), cm; negative = behind the wall. */
+	CODEXTACTICS_API float DepthInFrontOfWall(const FCoverSlot& Slot, const FVector& Target);
+
+	/**
+	 * User decision 2026-10-06: the cover shot (corner lean / blind / over the top) is only for a target BEHIND the cover
+	 * (past the wall face plane) or, at a high wall, around the corner: beyond the exposed edge on its side and no more than
+	 * CornerShotFrontBandCm in front of the wall face (the lean-out line reaches it). A target out on the open side (in
+	 * front of the wall, the operative's side) gets a normal shot: he steps off the wall, fires, and comes back.
+	 */
+	CODEXTACTICS_API bool ShouldCornerShot(const FCoverSlot& Slot, const FVector& Target, const FCoverFacingConfig& Config = FCoverFacingConfig());
 
 	/**
 	 * The fire-ready corner pose (cvr_*_fire_idle) is wanted: at the exposed edge on the facing side, not shimmying, and a
@@ -120,12 +157,13 @@ namespace CoverFacingRules
 		float HoldSeconds = FCoverFacingConfig().FireReadyHoldSeconds);
 
 	/**
-	 * Clip index of a shimmy loop. The walk clips' _L / _R is the MOVEMENT direction along the wall (M4 walk_fwd_loop_L =
-	 * face-forward to the left, walk_bwd_loop_L = backing away to the left): forward = towards the facing side = its
-	 * index, backward = away from it = the other index (threat right: right = fwd_loop_R, left = bwd_loop_L).
+	 * Clip index of a shimmy loop. The walk clips' _L / _R is the MOVEMENT direction along the wall in the pack's naming
+	 * (walk_fwd_loop_L = face-forward towards his own right, walk_bwd_loop_L = backing towards his own right while facing
+	 * his left): forward = towards the facing side = its index, backward = away from it = the other index (threat on his
+	 * right: shimmy right = fwd_loop_L, shimmy left = bwd_loop_R).
 	 */
 	CODEXTACTICS_API int32 ShimmyClipIndex(ECoverFacing Facing, bool bForward);
 
-	/** Clip array index of a facing side: 0 = Left (pack *_L), 1 = Right (pack *_R). */
+	/** Clip array index of a facing side: 0 = Right (pack *_L = his own right, back to the wall), 1 = Left (pack *_R). */
 	CODEXTACTICS_API int32 ClipIndex(ECoverFacing Facing);
 }

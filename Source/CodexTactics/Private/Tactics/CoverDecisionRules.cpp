@@ -15,13 +15,17 @@ namespace CoverDecisionRules
 
 	ECoverFireDecision DecideFire(const FCoverDecisionConfig& Config, const FCoverFireSituation& Situation)
 	{
-		if (Situation.Height == ECoverHeight::HighCover && !Situation.bEdgeExposed)
-		{
-			return ECoverFireDecision::Hold; // nothing to shoot around or over
-		}
 		if (Situation.bSniperLaserOnMe)
 		{
 			return ECoverFireDecision::Hold; // nothing shows until the sniper's shot has passed
+		}
+		if (Situation.bEnemyInFrontOfCover)
+		{
+			return ECoverFireDecision::OpenShot; // the wall does not stand between them: a normal shot off the wall
+		}
+		if (Situation.Height == ECoverHeight::HighCover && !Situation.bEdgeExposed)
+		{
+			return ECoverFireDecision::Hold; // nothing to shoot around or over
 		}
 		if (Situation.HealthFraction < Config.PeekMinHealthFraction)
 		{
@@ -91,6 +95,7 @@ namespace CoverDecisionRules
 		{
 		case ECoverFireDecision::CornerPeek: return TEXT("CornerPeek");
 		case ECoverFireDecision::BlindFire: return TEXT("BlindFire");
+		case ECoverFireDecision::OpenShot: return TEXT("OpenShot");
 		default: return TEXT("Hold");
 		}
 	}

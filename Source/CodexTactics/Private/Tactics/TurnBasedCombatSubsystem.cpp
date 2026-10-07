@@ -1543,13 +1543,20 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 		return Result;
 	}
 	// Cover (user rule 2026-10-06): a grid shot from cover goes round the corner / over the top like a real-time one;
-	// a full wall without an exposed corner has no firing position.
-	const bool bCoverShot = Unit->bInCover;
+	// a full wall without an exposed corner has no firing position. Only a target behind the wall / around the corner
+	// needs that (CoverFacingRules::ShouldCornerShot); one out on the open side gets a normal shot off the wall and he
+	// comes back to the slot afterwards (AOperativeCharacter::BeginOpenShotFromCover).
+	const bool bCoverShot = Unit->bInCover && Unit->IsCornerShotTarget(Target->GetActorLocation());
 	if (bCoverShot && !Unit->CanFireFromCover())
 	{
 		Log(TEXT("⚠️ Из этого укрытия нет угла для стрельбы — сместитесь к краю стены!"));
 		Result.Reason = TEXT("no_cover_corner");
 		return Result;
+	}
+
+	if (Unit->bInCover && !bCoverShot)
+	{
+		Unit->BeginOpenShotFromCover(Target);
 	}
 
 	State->AP -= Balance.AttackAPCost;
