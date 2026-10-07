@@ -8,6 +8,8 @@
 //  2. Turn-based with the leader pressed against the wall: a grid walk away from it leaves the cover and walks — no cover
 //     montage while moving (it slid across the grid in the cover pose), the anim speed follows the walk.
 //  3. A grid walk onto a cover cell: the walk animation while moving, then the cover is entered on the cell.
+// "CodexTactics.CoverMoveSmoke crouch" (user request 2026-10-07): the same with a 60 cm low cover and a crouch-walk into
+// it â€” the crouched enter clip (crch_idle_fwd_to_cvr_crch_idle, starting 98 cm out), the crouched cover loop (cvr_crch_*).
 
 #include "CoreMinimal.h"
 
@@ -50,6 +52,7 @@ namespace CoverMoveSmoke
 		TWeakObjectPtr<AOperativeCharacter> Op;
 		TWeakObjectPtr<AStaticMeshActor> Wall;
 		FCoverSlot Slot;
+		bool bCrouch = false;
 		// Run-in sampling.
 		bool bEntered = false;
 		float SinceEntry = 0.f;
@@ -213,8 +216,10 @@ namespace CoverMoveSmoke
 				}
 			}
 			const FVector WallCentre = State.P + State.F * 600.f;
-			State.Wall = SpawnBlock(World, FVector(WallCentre.X, WallCentre.Y, State.GroundZ + 150.f), State.F.Rotation(), FVector(0.4f, 6.f, 3.f));
-			Check(State, State.Wall.IsValid(), TEXT("3 m wall spawned 6 m ahead"));
+			const float WallHeight = State.bCrouch ? 60.f : 300.f; // crouch run: a 60 cm low cover
+			State.Wall = SpawnBlock(World, FVector(WallCentre.X, WallCentre.Y, State.GroundZ + WallHeight * 0.5f), State.F.Rotation(),
+				FVector(0.4f, 6.f, WallHeight / 100.f));
+			Check(State, State.Wall.IsValid(), FString::Printf(TEXT("a %.1f m high wall spawned 6 m ahead"), WallHeight / 100.f));
 			State.Stage = 1;
 			State.StageTime = 0.f;
 			return true;
@@ -225,13 +230,21 @@ namespace CoverMoveSmoke
 			{
 				return true; // the navmesh rebuilds round the wall
 			}
-			const bool bFound = CoverTraceRules::FindCoverSlotAt(World, State.P + State.F * 580.f + FVector(0.f, 0.f, 90.f), State.F, State.Slot);
-			Check(State, bFound && State.Slot.Height == ECoverHeight::HighCover, TEXT("high cover slot at the wall's middle"));
+			const FVector Click = State.bCrouch ? FVector(0.f, 0.f, 30.f) : FVector(0.f, 0.f, 90.f);
+			const bool bFound = CoverTraceRules::FindCoverSlotAt(World, State.P + State.F * 580.f + Click, State.F, State.Slot);
+			const ECoverHeight Wanted = State.bCrouch ? ECoverHeight::LowCover : ECoverHeight::HighCover;
+			Check(State, bFound && State.Slot.Height == Wanted, FString::Printf(TEXT("%s cover slot at the wall's middle"), State.bCrouch ? TEXT("low") : TEXT("high")));
 			if (!bFound)
 			{
 				return Finish(State, false);
 			}
-			Check(State, Op->OrderTakeCover(State.Slot, true) == EOperativeOrderResult::Accepted, TEXT("sprint into cover ordered (5 m run)"));
+			if (State.bCrouch)
+			{
+				Op->SetStance(EOperativeStance::Crouching); // crouch-walk into the low cover
+			}
+			Op->bIgnoreCoverThreatForTesting = true; // the run-in alone (no fire stance: a threat beyond the low cover would offset the mesh too)
+			Check(State, Op->OrderTakeCover(State.Slot, !State.bCrouch) == EOperativeOrderResult::Accepted,
+				State.bCrouch ? TEXT("crouch-walk into the low cover ordered (5 m)") : TEXT("sprint into cover ordered (5 m run)"));
 			State.Stage = 2;
 			State.StageTime = 0.f;
 			return true;
@@ -298,11 +311,12 @@ namespace CoverMoveSmoke
 			if (Anim)
 			{
 				bool bEnterClip = false;
+				const TCHAR* EnterName = State.bCrouch ? TEXT("crch_idle_fwd_to_cvr_crch_idle") : TEXT("std_idle_fwd_to_cvr_std_idle");
 				for (const FString& Clip : Anim->GetCoverClipLog())
 				{
-					bEnterClip |= Clip.Contains(TEXT("_to_cvr_"));
+					bEnterClip |= Clip.Contains(EnterName);
 				}
-				Check(State, bEnterClip, TEXT("... the pack's enter clip played"));
+				Check(State, bEnterClip, FString::Printf(TEXT("... the pack's %s enter clip played"), EnterName));
 			}
 			State.Stage = 3;
 			State.StageTime = 0.f;
@@ -317,6 +331,11 @@ namespace CoverMoveSmoke
 			FString Clip;
 			const bool bCoverPose = PlaysCoverPose(*Op, Clip);
 			Check(State, Op->bInCover && bCoverPose, FString::Printf(TEXT("in cover, the cover loop plays (%s)"), *Clip));
+			if (State.bCrouch)
+			{
+				Check(State, Clip.Contains(TEXT("cvr_crch_")) && Op->GetStance() == EOperativeStance::Crouching,
+					FString::Printf(TEXT("... crouched: the crouched cover loop (%s)"), *Clip));
+			}
 			Check(State, Flow->RequestEnterTurnBased(true) == EGameFlowResult::Ok && TurnBased->IsActive(), TEXT("turn-based combat started with the leader at the wall"));
 			State.Stage = 4;
 			State.StageTime = 0.f;
@@ -342,7 +361,9 @@ namespace CoverMoveSmoke
 			float BestScore = -1.e9f;
 			for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(UnitState->GridPos, UnitState->AP))
 			{
-				if (Entry.Value < 2 || Entry.Value > UnitState->AP / 2 || Grid->GetOccupantType(Entry.Key) != EGorkyOccupantType::None)
+				// Crouched every step costs double (TurnBasedRules::MoveCostMultiplier): keep AP for the walk back.
+				const int32 StepBudget = UnitState->AP / (Op->GetStance() == EOperativeStance::Crouching ? 2 : 1);
+				if (Entry.Value < 2 || Entry.Value > StepBudget / 2 || Grid->GetOccupantType(Entry.Key) != EGorkyOccupantType::None)
 				{
 					continue;
 				}
@@ -421,6 +442,10 @@ namespace CoverMoveSmoke
 			FString Clip;
 			const bool bCoverPose = PlaysCoverPose(*Op, Clip);
 			Check(State, Op->bInCover && bCoverPose, FString::Printf(TEXT("... the cover pose plays at the wall again (%s)"), *Clip));
+			if (State.bCrouch)
+			{
+				Check(State, Clip.Contains(TEXT("cvr_crch_")), FString::Printf(TEXT("... crouched again (%s)"), *Clip));
+			}
 			return Finish(State, true);
 		}
 		default:
@@ -444,6 +469,7 @@ namespace CoverMoveSmoke
 		}
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
+		State->bCrouch = Args.Contains(TEXT("crouch"));
 		// Every frame (the run-in blend is sampled per frame).
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float DeltaTime)
 		{

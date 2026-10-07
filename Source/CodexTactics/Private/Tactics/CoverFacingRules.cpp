@@ -169,6 +169,11 @@ namespace CoverFacingRules
 		return bForward ? Side : 1 - Side;
 	}
 
+	bool IsFiringSpot(ECoverHeight Height, bool bAtCorner)
+	{
+		return Height == ECoverHeight::LowCover || (Height == ECoverHeight::HighCover && bAtCorner);
+	}
+
 	int32 ClipIndex(ECoverFacing Facing)
 	{
 		// Pack _L = his own right as he stands back to the wall (the pack names its sides facing the wall).

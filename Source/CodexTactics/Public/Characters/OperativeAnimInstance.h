@@ -533,6 +533,17 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchFireExit = { nullptr, nullptr };
 
+	/**
+	 * Stand <-> crouch at the wall (user request 2026-10-07): the pack's cover stance switches [_L, _R]
+	 * (cvr_stand_idle_L_to_cvr_crch_idle_L / cvr_crch_idle_L_to_cvr_stand_idle_L, R alike; measured: they keep the side).
+	 * Empty = the pack's clips when present, else the generic stance transition.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandToCrouch = { nullptr, nullptr };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchToStand = { nullptr, nullptr };
+
 	/** Blind fire round the corner (no M4 clip: the user supplies one; empty = the cover fire clip stands in). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverBlindFire = { nullptr, nullptr };
@@ -688,6 +699,8 @@ private:
 	bool bCoverInFirePose = false;
 	/** The cover enter clip (from the open) is the one-shot playing: a shimmy ordered meanwhile cuts it short. */
 	bool bCoverEnterPlaying = false;
+	/** The cover was entered in this update (the stance switch clip yields to the enter clip). */
+	bool bCoverEnteredThisFrame = false;
 	/** A shot waiting for the enter transition / the previous one-shot to end. */
 	TWeakObjectPtr<UAnimSequenceBase> CoverPendingFireClip;
 	TArray<FString> CoverClipLog;

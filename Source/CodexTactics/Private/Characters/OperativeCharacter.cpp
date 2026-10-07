@@ -3175,7 +3175,9 @@ bool AOperativeCharacter::IsCoverFireReady() const
 	}
 	// User decision 2026-10-07: the fire-ready corner pose only for a threat behind the wall / round the corner (the same
 	// rule as the corner shot); a threat out in front keeps the plain cover idle (it gets an open shot).
-	return CoverFacingRules::IsFireReady(bAtCoverCorner, bShimmying, bHasCoverThreat, static_cast<float>(Now - CoverThreatSeenTime),
+	// A low cover is fired over anywhere along it (the crouched fire stance pops the rifle over the top): no corner needed.
+	const bool bFiringSpot = CoverFacingRules::IsFiringSpot(CurrentCoverHeight, bAtCoverCorner);
+	return CoverFacingRules::IsFireReady(bFiringSpot, bShimmying, bHasCoverThreat, static_cast<float>(Now - CoverThreatSeenTime),
 		CoverFireReadyHoldSeconds) && IsCornerShotTarget(CoverThreatLocation);
 }
 
@@ -3219,6 +3221,12 @@ void AOperativeCharacter::TryEnterCoverFromRun()
 	if (Distance > ClipLead + Glide || Distance < 1.f || Speed < 20.f)
 	{
 		return; // not there yet (or standing: HandleMoveFinished / UpdateCover enter at the slot)
+	}
+	// The enter clip starts facing the wall out in front of it: only an approach towards the wall matches it (walking in
+	// along the wall it would glide the body sideways; then he enters on arrival as before).
+	if (FVector::DotProduct(GetVelocity().GetSafeNormal2D(), -PendingCoverSlot.WallNormal.GetSafeNormal2D()) < 0.5f)
+	{
+		return;
 	}
 	const FCoverSlot Slot = PendingCoverSlot;
 	bHasPendingCover = false;
@@ -3265,6 +3273,15 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 			}
 		}
 	}
+	// Low cover (user request 2026-10-07): the pack's fire stance is a sideways lean round an edge (crouched _L +73 cm,
+	// _R -40 cm); over a low cover he fires over the top where he is, so the clips' sideways root step is cancelled.
+	if (bInCover && CurrentCoverHeight == ECoverHeight::LowCover && !bShimmying && GetMesh())
+	{
+		const FVector RootComponentSpace = GetMesh()->GetSocketTransform(TEXT("root"), RTS_Component).GetLocation();
+		const FVector RootWorldOffset = GetMesh()->GetComponentTransform().TransformVector(RootComponentSpace);
+		const FVector Tangent = CoverSlot.RightTangent();
+		Wanted -= Tangent * FVector::DotProduct(RootWorldOffset, Tangent);
+	}
 	// Additive on the mesh's relative location (crouch / other systems move it too), tracked in the actor's local frame
 	// so a turn during the blend never leaves a residue.
 	const FVector WantedLocal = Wanted.IsNearlyZero(0.01) ? FVector::ZeroVector : GetActorRotation().UnrotateVector(Wanted);
@@ -3285,9 +3302,9 @@ FCoverDecisionConfig AOperativeCharacter::GetCoverDecisionConfig() const
 
 void AOperativeCharacter::BeginCornerAim()
 {
-	if (!bInCover || CurrentCoverHeight != ECoverHeight::HighCover || bShimmying)
+	if (!bInCover || CurrentCoverHeight == ECoverHeight::None || bShimmying)
 	{
-		return; // a low cover is fired over (pop up per shot); the sustained stance is the high wall's corner
+		return; // the high wall's corner, or over the top of a low cover (user request 2026-10-07: crouched too)
 	}
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	CornerAimLastTargetTime = Now;
@@ -3387,7 +3404,7 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 	{
 		return;
 	}
-	if (!bInCover || bShimmying || CurrentCoverHeight != ECoverHeight::HighCover)
+	if (!bInCover || bShimmying || CurrentCoverHeight == ECoverHeight::None)
 	{
 		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no longer at the corner"));
 		return;
@@ -3424,6 +3441,10 @@ void AOperativeCharacter::TrySnapToCoverCorner()
 	if (TurnBased && TurnBased->IsActive())
 	{
 		return; // grid positions stay on their cells
+	}
+	if (CurrentCoverHeight == ECoverHeight::LowCover)
+	{
+		return; // a low cover is fired over the top anywhere: no walk to its end
 	}
 	float Shift = 0.f;
 	if (!CoverFacingRules::ShouldSnapToCorner(CoverSlot, CoverFacing, Shift, GetCoverFacingConfig(), Stance == EOperativeStance::Crouching))

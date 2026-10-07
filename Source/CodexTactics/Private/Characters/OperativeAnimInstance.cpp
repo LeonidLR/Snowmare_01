@@ -80,6 +80,14 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 		Fill(CoverCrouchFireEnter, *Crouch(TEXT("cvr_crch_idle_to_fire_L")), *Crouch(TEXT("cvr_crch_idle_to_fire_R")));
 		Fill(CoverStandFireExit, *Stand(TEXT("cvr_std_fire_to_std_idle_L")), *Stand(TEXT("cvr_std_fire_to_std_idle_R")));
 		Fill(CoverCrouchFireExit, *Crouch(TEXT("cvr_crch_fire_to_idle_L")), *Crouch(TEXT("cvr_crch_fire_to_idle_R")));
+		// Crouched set + stance switches at the wall (user request 2026-10-07; [_L, _R], pack _L = his own right).
+		Fill(CoverCrouchIdle, *Crouch(TEXT("cvr_crch_idle_L")), *Crouch(TEXT("cvr_crch_idle_R")));
+		Fill(CoverCrouchFire, *Crouch(TEXT("cvr_crch_fire_L")), *Crouch(TEXT("cvr_crch_fire_R")));
+		Fill(CoverCrouchMoveForward, *Crouch(TEXT("cvr_crch_walk_fwd_loop_L")), *Crouch(TEXT("cvr_crch_walk_fwd_loop_R")));
+		Fill(CoverCrouchMoveBackward, *Crouch(TEXT("cvr_crch_walk_bwd_loop_L")), *Crouch(TEXT("cvr_crch_walk_bwd_loop_R")));
+		Fill(CoverCrouchEnter, *Crouch(TEXT("crch_idle_fwd_to_cvr_crch_idle_L")), *Crouch(TEXT("crch_idle_fwd_to_cvr_crch_idle_R")));
+		Fill(CoverCrouchToStand, *Crouch(TEXT("cvr_crch_idle_L_to_cvr_stand_idle_L")), *Crouch(TEXT("cvr_crch_idle_R_to_cvr_stand_idle_R")));
+		Fill(CoverStandToCrouch, *Stand(TEXT("cvr_stand_idle_L_to_cvr_crch_idle_L")), *Stand(TEXT("cvr_stand_idle_R_to_cvr_crch_idle_R")));
 	}
 }
 
@@ -361,7 +369,7 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 			// Shot from the corner (user rule 2026-10-06): from the plain cover idle the idle -> fire transition plays first, then
 			// the shot, then the fire-ready idle again; already in the fire-ready pose the shot plays at once.
 			const bool bCornerShot = !(Shooter && Shooter->bIsBlindFiring)
-				&& (bCoverAtCorner || (Shooter && Shooter->IsCornerAimActive())); // sustained aim: from fire_idle, no cycle per shot
+				&& (bCoverAtCorner || CoverHeight == ECoverHeight::LowCover || (Shooter && Shooter->IsCornerAimActive())); // sustained aim: from fire_idle, no cycle per shot; a low cover is fired over anywhere
 			if (bCornerShot && PickCoverClip(bIsCrouching ? CoverCrouchFireIdle : CoverStandFireIdle))
 			{
 				if (CoverPendingFireClip.IsValid())
@@ -426,6 +434,40 @@ void UOperativeAnimInstance::UpdateStanceTransition()
 	if (From == Stance || bIsDead)
 	{
 		return;
+	}
+	if (bInCover && bUseNativeCoverClips && bCoverEnteredThisFrame)
+	{
+		return; // the cover enter clip carries the stance change (stand -> crouch at a low cover)
+	}
+	// Stand <-> crouch at the wall (user request 2026-10-07): the pack's cover transitions on the facing side
+	// (cvr_crch_idle_L_to_cvr_stand_idle_L ... measured: they keep the side and end in the other stance's cover idle).
+	if (bInCover && bUseNativeCoverClips && !bShimmying && From != EOperativeStance::Prone && Stance != EOperativeStance::Prone)
+	{
+		if (UAnimSequenceBase* CoverSwitch = PickCoverClip(Stance == EOperativeStance::Crouching ? CoverStandToCrouch : CoverCrouchToStand))
+		{
+			if (UAnimMontage* Loop = CoverLoopMontage.Get(); Loop && Montage_IsPlaying(Loop))
+			{
+				Montage_Stop(0.15f, Loop);
+			}
+			CoverLoopMontage.Reset();
+			CoverLoopClip.Reset();
+			CoverPendingFireClip.Reset();
+			bCoverInFirePose = false; // the switch starts from the cover idle; the fire stance is re-entered after it
+			StanceTransitionMontage = PlaySlotAnimationAsDynamicMontage(CoverSwitch, FullBodySlot, 0.15f, 0.2f);
+			if (StanceTransitionMontage.IsValid())
+			{
+				++CoverClipsPlayed;
+				CoverClipLog.Add(CoverSwitch->GetName());
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[CoverAnim] stance switch at the wall: %s (%s)"), *CoverSwitch->GetName(),
+				StanceTransitionMontage.IsValid() ? TEXT("playing") : TEXT("not played"));
+			return;
+		}
+	}
+	if (bInCover)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[CoverAnim] stance change in cover without a cover switch (native %d, shimmy %d)"),
+			bUseNativeCoverClips ? 1 : 0, bShimmying ? 1 : 0);
 	}
 	UAnimSequenceBase* Clip = nullptr;
 	switch (Stance)
@@ -648,13 +690,15 @@ void UOperativeAnimInstance::UpdateState()
 	bCoverAtCorner = bInCover && Operative->bAtCoverCorner;
 	bCoverFireReady = bInCover && Operative->IsCoverFireReady();
 	bCoverCornerAim = bInCover && Operative->IsCornerAimActive();
-	UpdateCoverLayer(*Operative);
-	bIsMoving = Speed > 5.f;
-	bIsSprinting = Operative->IsSprinting();
+	// The stance first (user request 2026-10-07): entering a crouched cover from a standing run picked the STANDING
+	// enter clip because the cover layer still saw last frame's stance.
 	Stance = Operative->GetStance();
 	bIsCrouching = Stance == EOperativeStance::Crouching;
 	bIsProne = Stance == EOperativeStance::Prone;
 	bIsReloading = Operative->bIsReloading;
+	UpdateCoverLayer(*Operative);
+	bIsMoving = Speed > 5.f;
+	bIsSprinting = Operative->IsSprinting();
 	bIsDead = Operative->HealthComponent && !Operative->HealthComponent->IsAlive();
 	if (const UColdSurvivalComponent* Cold = Operative->ColdSurvival)
 	{
@@ -820,6 +864,7 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	const bool bEntered = bInCover && !bWasInCover;
 	const bool bLeft = !bInCover && bWasInCover;
 	bWasInCover = bInCover;
+	bCoverEnteredThisFrame = bEntered;
 	if (!bUseNativeCoverClips || bIsDead)
 	{
 		return;
@@ -917,6 +962,14 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 				bOneShotPlaying = false;
 			}
 			bCoverEnterPlaying = false;
+		}
+		if (bShimmying && bOneShotPlaying)
+		{
+			// A shimmy cuts any cover one-shot (the fire -> idle exit, a transition): the side-step walk shows at once
+			// instead of the body sliding along the wall in the exit pose (user request 2026-10-07, seen crouched).
+			Montage_Stop(0.15f, OneShot);
+			bOneShotPlaying = false;
+			CoverPendingFireClip.Reset();
 		}
 		if (UAnimSequenceBase* Pending = CoverPendingFireClip.Get())
 		{

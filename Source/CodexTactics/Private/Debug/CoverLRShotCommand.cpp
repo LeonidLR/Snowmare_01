@@ -1,7 +1,8 @@
 // Dev-only rendered screenshots of the cover clip sides (left / right edge, idle, fire-ready, shot, shimmies) for the
 // _L / _R mapping review (UE-only, no Godot reference). Needs rendering (not -nullrhi); nothing is saved to the map:
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900
-//     -ExecCmds="CodexTactics.CoverLRShot"   ("CodexTactics.CoverLRShot <folder> runin": only the run-into-cover frame sequence)
+//     -ExecCmds="CodexTactics.CoverLRShot"   ("CodexTactics.CoverLRShot <folder> runin": only the run-into-cover frame sequence;
+//     "<folder> crouch": the crouched set)
 // A 3 m high, 6 m wide wall 4 m ahead of the leader is spawned at runtime (6 m so the middle has no corner within the
 // 2 m auto-snap). Labels in the world: the two wall ends ("END -R = HIS RIGHT", "END +R = HIS LEFT"), the enemy. Each
 // shot logs and labels the clip that is really playing (the FullBody slot montage), the edge, the facing and where the
@@ -34,6 +35,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/BarricadeActor.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/Paths.h"
 #include "Tactics/CoverTraceRules.h"
@@ -178,9 +180,9 @@ namespace CoverLRShot
 	}
 
 	/** Cover order at the wall point Along (cm along +R from the wall centre); waits until he is in cover. */
-	FStep TakeCover(float Along)
+	FStep TakeCover(float Along, float ClickZ = 90.f)
 	{
-		return [Along](FCtx& Ctx)
+		return [Along, ClickZ](FCtx& Ctx)
 		{
 			AOperativeCharacter* Op = Ctx.Op.Get();
 			if (Ctx.StepTime == 0.f)
@@ -190,7 +192,7 @@ namespace CoverLRShot
 					Op->LeaveCover(TEXT("CoverLRShot"));
 				}
 				FCoverSlot Slot;
-				if (CoverTraceRules::FindCoverSlotAt(Ctx.World.Get(), Ctx.P + Ctx.F * 380.f + Ctx.R * Along + FVector(0.f, 0.f, 90.f), Ctx.F, Slot))
+				if (CoverTraceRules::FindCoverSlotAt(Ctx.World.Get(), Ctx.P + Ctx.F * (ClickZ < 60.f ? 375.f : 380.f) + Ctx.R * Along + FVector(0.f, 0.f, ClickZ), Ctx.F, Slot))
 				{
 					Op->OrderTakeCover(Slot, false);
 				}
@@ -364,9 +366,9 @@ namespace CoverLRShot
 	 * Run into cover (user-found bug 2026-10-07): a sprint order to the wall's middle from 3 m out, a frame sequence from
 	 * 3.5 m before the slot until the cover loop (every ~0.07 s, 16 frames).
 	 */
-	FStep RunInSequence(const FString& Name)
+	FStep RunInSequence(const FString& Name, float Along = 0.f, float ClickZ = 90.f, bool bCrouchWalk = false)
 	{
-		return [Name](FCtx& Ctx)
+		return [Name, Along, ClickZ, bCrouchWalk](FCtx& Ctx)
 		{
 			AOperativeCharacter* Op = Ctx.Op.Get();
 			if (Ctx.StepTime == 0.f)
@@ -374,10 +376,14 @@ namespace CoverLRShot
 				Ctx.SequenceShots = 0;
 				Ctx.SequenceLastShot = -1.f;
 				FCoverSlot Slot;
-				if (CoverTraceRules::FindCoverSlotAt(Ctx.World.Get(), Ctx.P + Ctx.F * 380.f + FVector(0.f, 0.f, 90.f), Ctx.F, Slot))
+				if (CoverTraceRules::FindCoverSlotAt(Ctx.World.Get(), Ctx.P + Ctx.F * (ClickZ < 60.f ? 375.f : 380.f) + Ctx.R * Along + FVector(0.f, 0.f, ClickZ), Ctx.F, Slot))
 				{
 					Ctx.SequenceSlot = Slot.WorldLocation;
-					Op->OrderTakeCover(Slot, true);
+					if (bCrouchWalk)
+					{
+						Op->SetStance(EOperativeStance::Crouching);
+					}
+					Op->OrderTakeCover(Slot, !bCrouchWalk);
 				}
 				return false;
 			}
@@ -400,6 +406,98 @@ namespace CoverLRShot
 			}
 			return bDone;
 		};
+	}
+
+	FStep SetStanceStep(EOperativeStance Stance)
+	{
+		return [Stance](FCtx& Ctx) { Ctx.Op->SetStance(Stance); return true; };
+	}
+
+	/**
+	 * The crouched set (user request 2026-10-07): the high wall's corners crouched (stance switch, fire-ready, mid-burst),
+	 * crouch-shimmies, then a 60 cm barricade (fire-ready popped over the top, mid-burst), a crouch-walk run-in and the
+	 * crouch -> stand switch at it.
+	 */
+	TArray<FStep> BuildCrouchScript()
+	{
+		TArray<FStep> S;
+		// His right corner, crouched.
+		S.Add(Do([](FCtx& C) { C.Op->bIgnoreCoverThreatForTesting = true; PlaceHound(C, C.P - C.F * 3000.f, TEXT("none (threat unknown)")); }));
+		S.Add(TakeCover(-250.f));
+		S.Add(Wait(3.f));
+		S.Add(Do([](FCtx& C) { UGameplayStatics::SetGlobalTimeDilation(C.World.Get(), 0.25f); })); // slow motion: the switch is caught mid-way
+		S.Add(SetStanceStep(EOperativeStance::Crouching));
+		S.Add(Wait(1.2f));
+		S.Add(TakeShot(TEXT("HisRight_StanceSwitch_StandToCrouch")));
+		S.Add(Do([](FCtx& C) { UGameplayStatics::SetGlobalTimeDilation(C.World.Get(), 1.f); }));
+		S.Add(Wait(2.5f));
+		S.Add(TakeShot(TEXT("HisRight_Crouched_NoThreat")));
+		S.Add(Do([](FCtx& C)
+		{
+			C.Op->bIgnoreCoverThreatForTesting = false;
+			PlaceHound(C, C.P + C.F * 700.f - C.R * 800.f, TEXT("BEHIND the wall, round HIS RIGHT corner (-R)"));
+		}));
+		S.Add(Wait(3.5f));
+		S.Add(TakeShot(TEXT("HisRight_Crouched_FireIdle")));
+		S.Add(BurstShot(TEXT("HisRight_Crouched_MidBurst")));
+		S.Add(Wait(1.f));
+		// Crouch-shimmies, the threat in front to his right.
+		S.Add(Do([](FCtx& C) { PlaceHound(C, C.P - C.F * 400.f - C.R * 900.f, TEXT("in front, toward HIS RIGHT (-R)")); }));
+		S.Add(Wait(1.5f));
+		S.Add(ShimmyShot(-50.f, TEXT("Crouched_ShimmyHisLeft_ThreatHisRight")));
+		S.Add(Wait(1.f));
+		S.Add(ShimmyShot(-230.f, TEXT("Crouched_ShimmyHisRight_ThreatHisRight")));
+		S.Add(Wait(1.f));
+		// His left corner, crouched.
+		S.Add(Do([](FCtx& C) { C.Op->bIgnoreCoverThreatForTesting = true; PlaceHound(C, C.P - C.F * 3000.f, TEXT("none (threat unknown)")); }));
+		S.Add(TakeCover(250.f));
+		S.Add(Wait(2.5f));
+		S.Add(SetStanceStep(EOperativeStance::Crouching));
+		S.Add(Wait(2.5f));
+		S.Add(Do([](FCtx& C)
+		{
+			C.Op->bIgnoreCoverThreatForTesting = false;
+			PlaceHound(C, C.P + C.F * 700.f + C.R * 800.f, TEXT("BEHIND the wall, round HIS LEFT corner (+R)"));
+		}));
+		S.Add(Wait(3.5f));
+		S.Add(TakeShot(TEXT("HisLeft_Crouched_FireIdle")));
+		S.Add(BurstShot(TEXT("HisLeft_Crouched_MidBurst")));
+		S.Add(Wait(1.f));
+		// The 60 cm barricade beyond the wall's +R end (spawned now: it would stand in the left-corner shots).
+		S.Add(Do([](FCtx& C)
+		{
+			C.Op->bIgnoreCoverThreatForTesting = true;
+			PlaceHound(C, C.P - C.F * 3000.f, TEXT("none (threat unknown)"));
+			const FVector LowCentre = C.P + C.F * 400.f + C.R * 1150.f;
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			C.World->SpawnActor<ABarricadeActor>(FVector(LowCentre.X, LowCentre.Y, C.GroundZ + ABarricadeActor::HeightCm * 0.5f),
+				FRotator(0.f, C.F.Rotation().Yaw + 90.f, 0.f), Params);
+			C.Op->LeaveCover(TEXT("CoverLRShot: to the barricade"));
+			C.Op->TeleportTo(C.P + C.R * 1150.f, C.F.Rotation(), false, true);
+		}));
+		S.Add(Wait(2.5f));
+		S.Add(RunInSequence(TEXT("LowCover_CrouchWalkIn"), 1150.f, 30.f, true));
+		S.Add(Wait(1.5f));
+		S.Add(TakeShot(TEXT("LowCover_Crouched_Idle")));
+		S.Add(Do([](FCtx& C)
+		{
+			C.Op->bIgnoreCoverThreatForTesting = false;
+			PlaceHound(C, C.P + C.F * 1000.f + C.R * 1150.f, TEXT("BEYOND the barricade"));
+		}));
+		S.Add(Wait(3.5f));
+		S.Add(TakeShot(TEXT("LowCover_FireIdle_PopUp")));
+		S.Add(BurstShot(TEXT("LowCover_MidBurst")));
+		S.Add(Wait(1.f));
+		S.Add(Do([](FCtx& C) { C.Op->bIgnoreCoverThreatForTesting = true; }));
+		S.Add(Wait(4.f));
+		S.Add(Do([](FCtx& C) { UGameplayStatics::SetGlobalTimeDilation(C.World.Get(), 0.25f); }));
+		S.Add(SetStanceStep(EOperativeStance::Standing));
+		S.Add(Wait(1.2f));
+		S.Add(TakeShot(TEXT("LowCover_StanceSwitch_CrouchToStand")));
+		S.Add(Do([](FCtx& C) { UGameplayStatics::SetGlobalTimeDilation(C.World.Get(), 1.f); }));
+		S.Add(Wait(1.f));
+		return S;
 	}
 
 	TArray<FStep> BuildRunInScript()
@@ -548,7 +646,8 @@ namespace CoverLRShot
 			Ctx->OutDir = Args[0];
 		}
 		Ctx->bRunInOnly = Args.Contains(TEXT("runin"));
-		TSharedRef<TArray<FStep>> Script = MakeShared<TArray<FStep>>(Ctx->bRunInOnly ? BuildRunInScript() : BuildScript());
+		TSharedRef<TArray<FStep>> Script = MakeShared<TArray<FStep>>(Ctx->bRunInOnly ? BuildRunInScript()
+			: Args.Contains(TEXT("crouch")) ? BuildCrouchScript() : BuildScript());
 		TSharedRef<float> Boot = MakeShared<float>(0.f);
 		TSharedRef<bool> bReady = MakeShared<bool>(false);
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Ctx, Script, Boot, bReady](float DeltaTime)

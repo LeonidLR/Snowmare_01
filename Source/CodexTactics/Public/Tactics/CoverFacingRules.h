@@ -164,6 +164,12 @@ namespace CoverFacingRules
 	 */
 	CODEXTACTICS_API int32 ShimmyClipIndex(ECoverFacing Facing, bool bForward);
 
+	/**
+	 * Where the fire stance (fire-ready pose, sustained aim) can be taken: at a high wall only at the exposed edge on the
+	 * facing side (a lean round the corner); at a low cover anywhere along it (over the top; user request 2026-10-07).
+	 */
+	CODEXTACTICS_API bool IsFiringSpot(ECoverHeight Height, bool bAtCorner);
+
 	/** Clip array index of a facing side: 0 = Right (pack *_L = his own right, back to the wall), 1 = Left (pack *_R). */
 	CODEXTACTICS_API int32 ClipIndex(ECoverFacing Facing);
 }

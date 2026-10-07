@@ -229,8 +229,9 @@ namespace CoverTraceRules
 			const FVector Along = Side == 0 ? -Right : Right;
 			auto WallAt = [&](float DistanceCm)
 			{
-				const FVector ProbeStart = FVector(Chest.ImpactPoint.X, Chest.ImpactPoint.Y, GroundZ + Config.ChestHeightCm) + Normal * 60.f
-					+ Along * DistanceCm;
+				// A low cover is probed at knee height (at chest height its edges read as exposed right away).
+				const FVector ProbeStart = FVector(Chest.ImpactPoint.X, Chest.ImpactPoint.Y, GroundZ + (bChestHit ? Config.ChestHeightCm : Config.KneeHeightCm))
+					+ Normal * 60.f + Along * DistanceCm;
 				FHitResult ProbeHit;
 				return CoverTrace(World, ProbeStart, ProbeStart - Normal * 140.f, IgnoredActors, ProbeHit)
 					&& FMath::Abs(ProbeHit.ImpactNormal.Z) <= Config.MaxWallNormalZ;

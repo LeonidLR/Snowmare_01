@@ -30,6 +30,10 @@ Mapping (pack name -> property):
   bwd_loop_L = backing towards his own right while facing his left) - CoverFacingRules::ShimmyClipIndex; the arrays
   stay [L, R] by suffix.
   (no blind fire clip in the pack: CoverBlindFire stays empty, the fire clip stands in)
+  Crouched (measured 2026-10-07): the same side convention; the crouched fire stance (rifle at ~80-90 cm) doubles as the
+  pop-up over a low cover (no separate pop-up clip in the pack). Stance switches at the wall
+  (cvr_stand_idle_L/R_to_cvr_crch_idle_L/R -> CoverStandToCrouch, cvr_crch_idle_L/R_to_cvr_stand_idle_L/R ->
+  CoverCrouchToStand) are loaded by UOperativeAnimInstance from the pack when unset (not assigned by this script).
 
 Run with the editor closed:
   UnrealEditor-Cmd.exe CodexTactics.uproject -run=pythonscript -script="<abs path to this file>" -unattended -nullrhi
