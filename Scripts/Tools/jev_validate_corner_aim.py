@@ -175,6 +175,108 @@ def describe(s):
                            else "none of the enemies has a gun: every one of them must come to arm's length to hurt him")}
 
 
+# --- Posture between shots (2026-10-07 PIE video: stepping into cover after each shot / switching the lean side) -------
+HOLD_OUT, BACK_IN = "stay_out", "back_in"
+KEEP_SIDE, SWITCH_SIDE = "keep_side", "switch_side"
+OPEN_RETURN_CALM_S = 1.0      # OpenShotReturnDelaySeconds: calm = no enemy in sight this long
+POSTURE = [
+    # stepped off the wall for an open shot at targets in front: back into cover?
+    {"id": "p_stream_front", "kind": "open", "calm_s": 0.4, "more_coming": True},
+    {"id": "p_last_one_down_1s", "kind": "open", "calm_s": 1.0, "more_coming": False},
+    {"id": "p_calm_4s", "kind": "open", "calm_s": 4.0, "more_coming": False},
+    # leaned out round a corner; a pack swarms in front of him on both sides of his position
+    {"id": "s_pack_swarming_front", "kind": "side", "other_side_closed": True, "engaged": True},
+    {"id": "s_pack_both_edges_engaged", "kind": "side", "other_side_closed": False, "engaged": True},
+    {"id": "s_calm_threat_other_side", "kind": "side", "other_side_closed": False, "engaged": False},
+]
+
+
+def code_posture(s):
+    if s["kind"] == "open":
+        # stays out while enemies are in sight (a stream), back in after a calm with none in sight
+        return BACK_IN if (not s["more_coming"] and s["calm_s"] >= OPEN_RETURN_CALM_S) else HOLD_OUT
+    if not s["engaged"]:
+        return SWITCH_SIDE
+    return KEEP_SIDE  # engaged: never to a closed side; both edges exposed: the flip waits for the calm
+
+
+def describe_posture(s):
+    if s["kind"] == "open":
+        return {"situation": "the rifleman stepped away from his wall to shoot mutants that came at him from the open side",
+                "since the last shot": "%.1f seconds without a target in sight" % s["calm_s"] if s["calm_s"] > 0.5 else "he fired a moment ago",
+                "enemies": "more mutants keep pouring in from the same side" if s["more_coming"] else "no more mutants in sight",
+                "cover": "the wall does not shield him from mutants coming from this side; going back to it stops his fire"}
+    return {"situation": "the rifleman is leaned out round the corner of a wall, firing; a pack of mutants mills about in front of him, "
+                         "some slightly to his left of his position, some to his right",
+            "the other side of the wall": ("a solid wall with no corner there to lean round" if s["other_side_closed"]
+                                           else "another corner he could lean round, but it means a full stance change"),
+            "fight": "he is in the middle of firing" if s["engaged"] else "the fight has been quiet for several seconds; the only threat is now on the other side"}
+
+
+POSTURE_OPTIONS = {
+    "open": {HOLD_OUT: "Stay out where he is and keep firing", BACK_IN: "Step back into cover against the wall now"},
+    "side": {KEEP_SIDE: "Keep leaning round the same corner and keep firing", SWITCH_SIDE: "Switch to lean out on the other side"},
+}
+
+
+# --- Corner hold + aim cone (user decisions 2026-10-07, PIE video CoverBug_02): the DEFAULT rules since then -----------
+# At an exposed edge he holds the corner fire stance (no ducks except to reload); a shot only where the rifle points
+# (AimConeDeg 30, plus the upper-body twist AimYawClampDegrees 60 once the 2D aim offset is wired); a target beyond that
+# (a flank rush in front of the wall) -> step off the wall into the open stance facing it, committed >= 3 s.
+FIRE_CORNER, STEP_OUT, DUCK = "fire_corner", "step_out", "duck"
+AIM_CONE_DEG = 30.0
+TWIST_DEG = 60.0
+FLANK_RUSH_M = 7.0
+HOLD = [
+    {"id": "h_wave_in_line", "off_deg": 8, "twist": False, "where": "behind_wall", "dist_m": 14, "melee_close": False, "clip": "full"},
+    {"id": "h_wave_slightly_off", "off_deg": 25, "twist": False, "where": "behind_wall", "dist_m": 11, "melee_close": False, "clip": "full"},
+    {"id": "h_wave_off_twist", "off_deg": 50, "twist": True, "where": "behind_wall", "dist_m": 10, "melee_close": False, "clip": "full"},
+    {"id": "h_flank_rush_front_right", "off_deg": 110, "twist": False, "where": "front_side", "dist_m": 4, "melee_close": True, "clip": "full"},
+    {"id": "h_flank_rush_twist", "off_deg": 110, "twist": True, "where": "front_side", "dist_m": 5, "melee_close": True, "clip": "full"},
+    {"id": "h_hound_rounding_corner", "off_deg": 80, "twist": False, "where": "front_side", "dist_m": 3, "melee_close": True, "clip": "full"},
+    {"id": "h_far_front_open", "off_deg": 95, "twist": False, "where": "front_side", "dist_m": 18, "melee_close": False, "clip": "full"},
+    {"id": "h_magazine_empty", "off_deg": 8, "twist": False, "where": "behind_wall", "dist_m": 14, "melee_close": False, "clip": "empty"},
+]
+
+
+def code_hold(s):
+    if s["clip"] == "empty":
+        return DUCK  # the only duck: behind the corner to reload, then straight back out
+    reach = AIM_CONE_DEG + (TWIST_DEG if s["twist"] else 0.0) - 5.0
+    return FIRE_CORNER if s["where"] == "behind_wall" and s["off_deg"] <= reach else STEP_OUT
+
+
+def angle_words(deg):
+    if deg <= 12:
+        return "right where his rifle points"
+    if deg <= 30:
+        return "a little off to the side of where his rifle points (a small adjustment)"
+    if deg <= 60:
+        return "well off to the side of his rifle (about %d degrees)" % int(round(deg / 10.0) * 10)
+    return "far off to his side (about %d degrees from where his rifle points)" % int(round(deg / 10.0) * 10)
+
+
+def describe_hold(s):
+    d = {"position": "leaned out round the corner of a tall wall, rifle shouldered, aiming past the corner into the space behind the wall",
+         "target": "a mutant %s, %s, about %d metres away" % (
+             "behind the wall, beyond the corner" if s["where"] == "behind_wall" else "in front of the wall, on his own side of it, coming at his flank",
+             angle_words(s["off_deg"]), s["dist_m"]),
+         "upper body": ("he can twist his torso up to about 60 degrees to either side while staying in this stance" if s["twist"]
+                        else "the stance is locked: the rifle points where the stance points, only small corrections are possible"),
+         "magazine": "empty" if s["clip"] == "empty" else "plenty of rounds"}
+    if s["melee_close"]:
+        d["danger"] = "it is a fast melee beast closing in to bite him"
+    if s["where"] != "behind_wall":
+        d["cover"] = ("the wall only shields him from the space behind it: this mutant is on his own side of the wall, so "
+                      "ducking behind the corner gives no protection from it and stops his fire")
+    return d
+
+
+HOLD_OPTIONS = {FIRE_CORNER: "Fire at it from the corner stance (turning the upper body if needed)",
+                STEP_OUT: "Step off the wall and turn his whole body to face it, then fire",
+                DUCK: "Duck back behind the corner"}
+
+
 def build():
     state = {"setting": "Arctic tactical shooter. A rifleman fights from the corner of a wall taller than a man: he stands "
                         "leaned out round the corner in a firing stance, rifle shouldered, and shoots at mutants beyond the "
@@ -187,6 +289,16 @@ def build():
         state["situations"][s["id"]] = describe(s)
         questions[s["id"]] = {"type": "choice", "instructions": "Look at `situations.%s`. What should the rifleman at the corner do right now?" % s["id"],
                               "criteria": OPTIONS}
+    state["hold"] = {}
+    for s in HOLD:
+        state["hold"][s["id"]] = describe_hold(s)
+        questions[s["id"]] = {"type": "choice", "instructions": "Look at `hold.%s`. What should the rifleman do right now? He must never fire where his rifle is not pointing." % s["id"],
+                              "criteria": HOLD_OPTIONS}
+    state["posture"] = {}
+    for s in POSTURE:
+        state["posture"][s["id"]] = describe_posture(s)
+        questions[s["id"]] = {"type": "choice", "instructions": "Look at `posture.%s`. What should the rifleman do?" % s["id"],
+                              "criteria": POSTURE_OPTIONS[s["kind"]]}
     return state, questions
 
 
@@ -201,14 +313,30 @@ def main():
         print("Jev not asked: %s" % error)
         return 2
     agree = 0
+    legacy = 0
     for s in SCENARIOS:
         code = code_decision(s)
         jev, confidence = jev_client.choice(answers, s["id"])
         ok = jev == code
         agree += ok
         print("%-24s code %-11s Jev %-11s (%.2f) %s" % (s["id"], code, jev, confidence or 0.0, "" if ok else "<-- DISAGREE"))
-    rate = agree / float(len(SCENARIOS))
-    print("Agreement: %d/%d (%.0f%%)" % (agree, len(SCENARIOS), rate * 100))
+    legacy, agree = agree, 0
+    print("Legacy sustained-aim rule (bCornerAutoDuck, off by default): %d/%d" % (legacy, len(SCENARIOS)))
+    for s in HOLD:
+        code = code_hold(s)
+        jev, confidence = jev_client.choice(answers, s["id"])
+        ok = jev == code
+        agree += ok
+        print("%-24s code %-11s Jev %-11s (%.2f) %s" % (s["id"], code, jev, confidence or 0.0, "" if ok else "<-- DISAGREE"))
+    for s in POSTURE:
+        code = code_posture(s)
+        jev, confidence = jev_client.choice(answers, s["id"])
+        ok = jev == code
+        agree += ok
+        print("%-24s code %-11s Jev %-11s (%.2f) %s" % (s["id"], code, jev, confidence or 0.0, "" if ok else "<-- DISAGREE"))
+    total = len(HOLD) + len(POSTURE)
+    rate = agree / float(total)
+    print("Agreement on the default rules (corner hold + aim cone + posture): %d/%d (%.0f%%)" % (agree, total, rate * 100))
     return 0 if rate >= 0.75 else 1
 
 

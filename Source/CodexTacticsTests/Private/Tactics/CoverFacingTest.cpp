@@ -248,6 +248,58 @@ bool FCoverCornerShotOnlyBehindWallTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+COVER_FACING_TEST(FCoverFacingKeepEngagedTest, "Facing.KeepWhileEngaged")
+bool FCoverFacingKeepEngagedTest::RunTest(const FString& Parameters)
+{
+	// User PIE video 2026-10-07: hounds swarming in front of the corner flipped the threat side every shot or two,
+	// so the fire stance jumped between fire_idle_L and fire_idle_R. While engaged the stance keeps its side.
+	using namespace CoverFacingRules;
+	const FCoverSlot Corner = CoverFacingTest::MakeSlot(false, 0.f, true, 30.f); // exposed edge on his Right only
+	TestEqual(TEXT("engaged at the exposed corner: the threat side flip is ignored"),
+		KeepEngagedFacing(Corner, ECoverFacing::Right, ECoverFacing::Left, true), ECoverFacing::Right);
+	TestEqual(TEXT("not engaged: he follows the threat"),
+		KeepEngagedFacing(Corner, ECoverFacing::Right, ECoverFacing::Left, false), ECoverFacing::Left);
+	TestEqual(TEXT("engaged, facing the closed side: he turns to the exposed corner"),
+		KeepEngagedFacing(Corner, ECoverFacing::Left, ECoverFacing::Right, true), ECoverFacing::Right);
+	TestEqual(TEXT("engaged, no change wanted: unchanged"),
+		KeepEngagedFacing(Corner, ECoverFacing::Right, ECoverFacing::Right, true), ECoverFacing::Right);
+	const FCoverSlot Flat = CoverFacingTest::MakeSlot();
+	TestEqual(TEXT("engaged along a wall with no exposed edge: he keeps his side"),
+		KeepEngagedFacing(Flat, ECoverFacing::Left, ECoverFacing::Right, true), ECoverFacing::Left);
+	const FCoverSlot Both = CoverFacingTest::MakeSlot(true, 30.f, true, 30.f);
+	TestEqual(TEXT("engaged with both edges exposed: he keeps the edge he fights from"),
+		KeepEngagedFacing(Both, ECoverFacing::Left, ECoverFacing::Right, true), ECoverFacing::Left);
+	return true;
+}
+
+COVER_FACING_TEST(FCoverFacingCornerHoldTargetTest, "Facing.CornerHoldTarget")
+bool FCoverFacingCornerHoldTargetTest::RunTest(const FString& Parameters)
+{
+	// User decision 2026-10-07 (PIE video CoverBug_02, 58 s): at the edge he holds the corner stance and fires from it only
+	// at what the stance can aim at; a flank rush in front of the wall is no corner shot.
+	using namespace CoverFacingRules;
+	const FCoverSlot Corner = CoverFacingTest::MakeSlot(false, 0.f, true, 30.f); // exposed edge on his Right (+Y)
+	const FVector Straight = CornerAimDirection(Corner, ECoverFacing::Right, 0.f);
+	TestTrue(TEXT("0 deg outward: along the wall to his right"), Straight.Equals(FVector(0.f, 1.f, 0.f), 0.001f));
+	const FVector Round = CornerAimDirection(Corner, ECoverFacing::Right, 45.f);
+	TestTrue(TEXT("45 deg outward: half round the corner, behind the wall"), Round.Equals(FVector(-0.7071f, 0.7071f, 0.f), 0.001f));
+	TestTrue(TEXT("the left side mirrors"), CornerAimDirection(Corner, ECoverFacing::Left, 45.f).Equals(FVector(-0.7071f, -0.7071f, 0.f), 0.001f));
+	const FVector Origin(0.f, 100.f, 140.f); // stepped out past the edge
+	TestTrue(TEXT("behind the wall round the corner: corner shot"),
+		IsCornerHoldTarget(Corner, ECoverFacing::Right, Origin, FVector(-400.f, 400.f, 0.f), 45.f, 60.f));
+	TestTrue(TEXT("along the wall line past the edge, within reach: corner shot"),
+		IsCornerHoldTarget(Corner, ECoverFacing::Right, Origin, FVector(50.f, 900.f, 0.f), 45.f, 60.f));
+	TestFalse(TEXT("flank rush in front, past the edge but outside the reach: no corner shot"),
+		IsCornerHoldTarget(Corner, ECoverFacing::Right, Origin, FVector(400.f, 300.f, 0.f), 45.f, 60.f));
+	TestFalse(TEXT("in front within the wall's span: open side"),
+		IsCornerHoldTarget(Corner, ECoverFacing::Right, Origin, FVector(300.f, 0.f, 0.f), 45.f, 60.f));
+	TestFalse(TEXT("behind the wall on the other side: out of the stance's reach"),
+		IsCornerHoldTarget(Corner, ECoverFacing::Right, Origin, FVector(-400.f, -600.f, 0.f), 45.f, 60.f));
+	TestFalse(TEXT("the facing edge is closed: no corner hold"),
+		IsCornerHoldTarget(Corner, ECoverFacing::Left, FVector(0.f, -100.f, 140.f), FVector(-400.f, -400.f, 0.f), 45.f, 60.f));
+	return true;
+}
+
 #undef COVER_FACING_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

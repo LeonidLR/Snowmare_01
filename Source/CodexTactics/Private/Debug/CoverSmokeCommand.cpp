@@ -209,6 +209,10 @@ namespace CoverSmoke
 			Flow->FinishCutscene();
 			Flow->FinishPreparation();
 			State.Op = Squad->GetLeader();
+			// This smoke checks the per-shot lean / sustained-aim cover rules (the legacy mode behind the tunables); the
+			// default corner hold at the edge (user decision 2026-10-07) is CodexTactics.CornerHoldSmoke.
+			State.Op->bCornerHoldAtEdge = false;
+			State.Op->bCornerAutoDuck = true;
 			Op = State.Op.Get();
 			// The wave must stay alive (WaveCleared stops the world): our frozen hound joins it 60 m away first, then the
 			// spawned wave goes.

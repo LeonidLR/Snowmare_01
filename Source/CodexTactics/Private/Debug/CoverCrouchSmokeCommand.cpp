@@ -233,6 +233,9 @@ namespace CoverCrouchSmoke
 			Flow->FinishPreparation();
 			Op = Squad->GetLeader();
 			State.Op = Op;
+			// The legacy per-shot lean / sustained-aim mode (see CoverSmoke); the corner hold is CornerHoldSmoke.
+			Op->bCornerHoldAtEdge = false;
+			Op->bCornerAutoDuck = true;
 			State.F = Op->GetActorForwardVector().GetSafeNormal2D();
 			State.R = FVector::CrossProduct(FVector::UpVector, State.F);
 			State.P = Op->GetActorLocation();

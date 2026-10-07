@@ -571,6 +571,7 @@ void UOperativeAnimInstance::HandleGrenadeThrow()
 	Operative->GrenadeReleaseSeconds = ReleaseSeconds;
 	PlaySlotAnimationAsDynamicMontage(Clip, UpperBodySlot, GrenadeThrowBlendInSeconds, GrenadeThrowBlendOutSeconds);
 	LeftHandIKBlockSeconds = FMath::Max(LeftHandIKBlockSeconds, Clip->GetPlayLength()); // the left hand throws
+	GrenadeThrowSecondsLeft = Clip->GetPlayLength() - GrenadeThrowBlendOutSeconds;
 }
 
 void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerSource)
@@ -792,12 +793,16 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 		}
 	}
 	LeftHandIKBlockSeconds = FMath::Max(0.f, LeftHandIKBlockSeconds - DeltaSeconds);
+	GrenadeThrowSecondsLeft = FMath::Max(0.f, GrenadeThrowSecondsLeft - DeltaSeconds);
 	FLeftHandIKState State;
 	State.bEnabled = bLeftHandIK;
 	State.bHasGrip = bLeftHandIKGripValid && Operative.UsesAmmo(); // a melee weapon has no handguard
 	State.bWeaponVisible = Weapon && Weapon->IsVisible();
 	State.bReloading = bIsReloading;
-	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f;
+	// A grenade throw / hit reaction plays on the upper body: it frees the left hand only while it actually shows — under a
+	// full-body cover clip it is invisible (user PIE 2026-10-07: every hound bite blocked the IK for the hit clip's length
+	// while the cover fire stance kept the rifle up, so the left hand let go of it).
+	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f && GetSlotMontageGlobalWeight(FullBodySlot) < 0.5f;
 	State.bVaulting = bIsVaulting;
 	State.bDead = bIsDead;
 	State.bProne = bIsProne;
@@ -848,12 +853,24 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	{
 		AimPitch = 0.f;
 	}
+	// The yaw twist: only in an aiming pose (out of cover, or the corner fire stance) - the plain cover idle does not twist.
+	const bool bYawPose = !bInCover || Operative.IsCornerAimActive();
+	AimYawTarget = bHasAimTarget && bYawPose
+		? AimOffsetRules::YawToTarget(Operative.GetStanceAimOrigin(), Operative.GetStanceAimBaseDirection(), AimPoint, AimYawClampDegrees) : 0.f;
+	AimYaw = FMath::Clamp(FMath::FInterpTo(AimYaw, AimYawTarget, DeltaSeconds, AimYawInterpSpeed), -AimYawClampDegrees, AimYawClampDegrees);
+	if (AimYawTarget == 0.f && FMath::Abs(AimYaw) < 0.05f)
+	{
+		AimYaw = 0.f;
+	}
 	FAimOffsetState State;
 	State.bEnabled = bAimOffset && (bAimOffsetInCover || !bInCover);
 	State.bRangedWeapon = Operative.UsesAmmo();
 	State.bWeaponVisible = Operative.WeaponMesh && Operative.WeaponMesh->IsVisible();
 	State.bReloading = bIsReloading;
-	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f; // grenade throw / hit reaction windows (shared with the left-hand IK)
+	// A grenade throw / hit reaction plays on the upper body: it frees the left hand only while it actually shows — under a
+	// full-body cover clip it is invisible (user PIE 2026-10-07: every hound bite blocked the IK for the hit clip's length
+	// while the cover fire stance kept the rifle up, so the left hand let go of it).
+	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f && GetSlotMontageGlobalWeight(FullBodySlot) < 0.5f; // grenade throw / hit reaction windows (shared with the left-hand IK)
 	State.bVaulting = bIsVaulting;
 	State.bSprinting = bIsSprinting;
 	State.bProne = bIsProne;

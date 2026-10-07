@@ -39,4 +39,17 @@ namespace AimOffsetRules
 
 	/** Constant-rate alpha step (1 / BlendSeconds per second). */
 	CODEXTACTICS_API float StepAlpha(float Current, bool bWanted, float DeltaSeconds, float BlendSeconds);
+
+	/**
+	 * Signed horizontal angle in degrees from the pose's aim direction BaseDirection (at From) to the target To, + = to
+	 * his right (UE yaw, clockwise seen from above; the 2D aim offset AO_Rifle_Aim's "Yaw" axis has RightCenter at +90,
+	 * LeftCenter at -90, checked on its samples 2026-10-07), clamped to +-MaxAbsDegrees. 0 for a degenerate direction.
+	 */
+	CODEXTACTICS_API float YawToTarget(const FVector& From, const FVector& BaseDirection, const FVector& To, float MaxAbsDegrees);
+
+	/**
+	 * What is left of the aim error once the upper body twisted by AppliedYawDegrees (the AO's current yaw x alpha):
+	 * |ErrorDegrees - AppliedYawDegrees|, degrees. A shot is allowed while this is within the aim cone.
+	 */
+	CODEXTACTICS_API float ResidualAimError(float ErrorDegrees, float AppliedYawDegrees);
 }

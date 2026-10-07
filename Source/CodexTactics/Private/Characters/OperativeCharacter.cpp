@@ -50,6 +50,7 @@ namespace
 #include "EngineUtils.h"
 #include "Characters/FacingRules.h"
 #include "Characters/OperativeAnimInstance.h"
+#include "Characters/AimOffsetRules.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -1768,6 +1769,14 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	const FShootCandidate& Closest = Visible[0];
 	const FShootCandidate* Current = IsLiveEnemy(CurrentCombatTarget.Get())
 		? Visible.FindByPredicate([this](const FShootCandidate& Entry) { return Entry.Enemy == CurrentCombatTarget.Get(); }) : nullptr;
+	// A melee enemy closing in (a flank rush, user PIE video CoverBug_02 2026-10-07) takes over at once: no reaction delay.
+	if (Current && Closest.Enemy != Current->Enemy && Closest.Distance <= FlankRushBreakCm && !IsRangedEnemyActor(Closest.Enemy))
+	{
+		CurrentCombatTarget = Closest.Enemy;
+		PendingFlankTarget.Reset();
+		TargetSwitchTimer = 0.f;
+		return Closest;
+	}
 	if (!Current)
 	{
 		CurrentCombatTarget = Closest.Enemy;
@@ -1958,11 +1967,28 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 	}
 
 	// Turn towards target smoothly (the barrel onto it, see UpdateCombatFacing); in cover the back stays to the wall.
+	const FVector AimAt = Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation();
+	// The arms throw a grenade: no rifle shot until the throw clip is done (CornerHoldSmoke 2026-10-07 caught shots from
+	// the throw pose, the barrel 100+ deg off the target).
+	if (const UOperativeAnimInstance* ArmsAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+		ArmsAnim && ArmsAnim->IsThrowingGrenade())
+	{
+		return;
+	}
 	if (!bInCover)
 	{
-		const FVector LookAt = Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation();
-		const FRotator LookRot(0.f, (LookAt - GetActorLocation()).Rotation().Yaw - BarrelYawOffset, 0.f);
-		SetActorRotation(FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 12.0f));
+		const FRotator LookRot(0.f, (AimAt - GetActorLocation()).Rotation().Yaw - BarrelYawOffset, 0.f);
+		// Eased, but never slower than AimTurnRateDegPerSec (a quick, visible turn to a flank rush).
+		const FRotator Eased = FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 12.0f);
+		const FRotator Constant = FMath::RInterpConstantTo(GetActorRotation(), LookRot, DeltaTime, AimTurnRateDegPerSec);
+		const float EasedLeft = FMath::Abs(FRotator::NormalizeAxis(LookRot.Yaw - Eased.Yaw));
+		const float ConstantLeft = FMath::Abs(FRotator::NormalizeAxis(LookRot.Yaw - Constant.Yaw));
+		SetActorRotation(EasedLeft <= ConstantLeft ? Eased : Constant);
+		// User rule 2026-10-07: no shot where he does not aim - first the turn, then the shot.
+		if (GetShotAimResidualDeg(AimAt) > AimConeDeg)
+		{
+			return;
+		}
 	}
 
 	if (bInCover)
@@ -1984,6 +2010,11 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 			CornerAimLastTargetTime = Now;
 		}
 		else if (Now < CornerAimDuckUntil)
+		{
+			return;
+		}
+		// The corner hold stance fires only once the upper body twisted onto the target (user rule 2026-10-07).
+		if (IsCornerHoldSpot() && (!bCornerAimActive || GetShotAimResidualDeg(AimAt) > AimConeDeg))
 		{
 			return;
 		}
@@ -3018,11 +3049,15 @@ FVector AOperativeCharacter::GetCoverFireOrigin() const
 	{
 		return Muzzle;
 	}
+	return CornerFireOriginFor(CoverSlot, CoverFacing, Muzzle);
+}
+
+FVector AOperativeCharacter::CornerFireOriginFor(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Muzzle)
+{
 	// Round the facing's corner (or the only exposed one).
-	const ECoverFacing Side = CoverSlot.IsEdgeExposed(CoverFacing) ? CoverFacing
-		: (CoverSlot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right);
-	const float EdgeDistance = Side == ECoverFacing::Left ? CoverSlot.LeftEdgeDistanceCm : CoverSlot.RightEdgeDistanceCm;
-	return CoverRules::CornerMuzzle(CoverSlot, Side, Muzzle, FMath::Max(CoverRules::GetConfig().CornerPeekOffsetCm, EdgeDistance + 20.f));
+	const ECoverFacing Side = Slot.IsEdgeExposed(Facing) ? Facing : (Slot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right);
+	const float EdgeDistance = Side == ECoverFacing::Left ? Slot.LeftEdgeDistanceCm : Slot.RightEdgeDistanceCm;
+	return CoverRules::CornerMuzzle(Slot, Side, Muzzle, FMath::Max(CoverRules::GetConfig().CornerPeekOffsetCm, EdgeDistance + 20.f));
 }
 
 bool AOperativeCharacter::IsHiddenInCoverFrom(const FVector& ObserverLocation) const
@@ -3037,6 +3072,7 @@ bool AOperativeCharacter::IsHiddenInCoverFrom(const FVector& ObserverLocation) c
 
 void AOperativeCharacter::BeginCoverShot()
 {
+	CoverLastShotTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	const FCoverCombatConfig& Config = CoverRules::GetConfig();
 	if (CoverFireMode == ECoverFireMode::BlindFire)
 	{
@@ -3074,10 +3110,16 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 		return;
 	}
 	UpdateCornerAim(DeltaTime);
+	// Corner hold (user decision 2026-10-07): at the exposed edge he steps out into the fire stance at once - also right
+	// after a reload - and holds it.
+	if (!bCornerAimActive && !bIsReloading && IsCornerHoldSpot() && !(bCornerAutoDuck && GetWorld() && GetWorld()->GetTimeSeconds() < CornerAimDuckUntil))
+	{
+		BeginCornerAim();
+	}
 	if (CVarDebugCornerAim.GetValueOnGameThread() > 0 && GetWorld())
 	{
 		const double Now = GetWorld()->GetTimeSeconds();
-		const FString Head = bCornerAimActive ? FString(TEXT("CORNER AIM")) : Now < CornerAimDuckUntil
+		const FString Head = bCornerAimActive ? FString(IsCornerHoldSpot() ? TEXT("CORNER HOLD") : TEXT("CORNER AIM")) : Now < CornerAimDuckUntil
 			? FString::Printf(TEXT("DUCKED (%s, %.1fs)"), CoverDecisionRules::CornerAimDecisionName(LastCornerAimBreak), CornerAimDuckUntil - Now)
 			: FString(TEXT("in cover"));
 		DrawDebugString(GetWorld(), GetActorLocation() + FVector(0.f, 0.f, 120.f), Head + TEXT("\n") + CornerAimLabel, nullptr,
@@ -3185,6 +3227,16 @@ bool AOperativeCharacter::GatherCoverThreat(FVector& OutLocation) const
 
 ECoverFacing AOperativeCharacter::PredictCoverFacing(const FCoverSlot& Slot) const
 {
+	// Corner hold (user decision 2026-10-07): a slot at the one exposed edge of a high wall faces that edge - he steps out
+	// there at once (CornerHoldSmoke: re-entering after an open shot he faced the closed side for 5 s).
+	if (bCornerHoldAtEdge && Slot.Height == ECoverHeight::HighCover && Slot.bLeftEdgeExposed != Slot.bRightEdgeExposed)
+	{
+		const ECoverFacing Edge = Slot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right;
+		if (CoverFacingRules::IsAtCorner(Slot, Edge, FCoverFacingConfig()))
+		{
+			return Edge;
+		}
+	}
 	FVector Threat;
 	if (GatherCoverThreat(Threat))
 	{
@@ -3211,6 +3263,15 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 	// No threat known: the facing stays (nearest edge from PredictCoverFacing on entry, then the last movement direction).
 	CoverFacing = bHasCoverThreat ? CoverFacingRules::ResolveThreatSide(CoverSlot, CoverThreatLocation, CoverFacing, Config.ThreatSideHysteresisCm)
 		: CoverFacing;
+	// Engaged (leaned out, or a cover shot within CoverEngageHoldSeconds): no flip-flop of the fire stance between the sides.
+	{
+		const UWorld* FacingWorld = GetWorld();
+		// Firing (a shot within CoverEngageHoldSeconds) keeps the side - also at the corner hold, where the stance is held
+		// between the shots; a threat that stays on the other side without a shot for that long turns him (the hold ends).
+		const bool bEngaged = (bCornerAimActive && bCornerAutoDuck)
+			|| (FacingWorld && FacingWorld->GetTimeSeconds() - CoverLastShotTime <= CoverEngageHoldSeconds);
+		CoverFacing = CoverFacingRules::KeepEngagedFacing(CoverSlot, Old, CoverFacing, bEngaged && !bShimmying);
+	}
 	bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, Config);
 	if (CoverFacing != Old)
 	{
@@ -3511,6 +3572,11 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 		EndCornerAim(ECornerAimDecision::DuckToReload, TEXT("reloading"));
 		return;
 	}
+	if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !IsCornerHoldSpot())
+	{
+		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no longer at the exposed edge"));
+		return;
+	}
 	// Leaned out (sight: exposed) for as long as the aim lasts.
 	bIsCornerLeaning = true;
 	LeanTimer = FMath::Max(LeanTimer, 0.2f);
@@ -3547,7 +3613,7 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 		LastCornerAimTraceReason = Reason;
 		UE_LOG(LogCodexTactics, Display, TEXT("[CornerAim] %s: %s"), *DisplayName.ToString(), *CornerAimLabel);
 	}
-	if (Decision != ECornerAimDecision::StayAndFire)
+	if (Decision != ECornerAimDecision::StayAndFire && bCornerAutoDuck)
 	{
 		EndCornerAim(Decision, Reason);
 	}
@@ -3600,14 +3666,86 @@ bool AOperativeCharacter::IsCornerShotTarget(const FVector& TargetLocation) cons
 	{
 		return false;
 	}
-	if (CoverFacingRules::ShouldCornerShot(CoverSlot, TargetLocation, GetCoverFacingConfig()))
+	// Corner hold (user decision 2026-10-07): from the edge he fires at what the corner stance can aim at - behind the wall
+	// or past the edge, within the twist limit + the aim cone. The sticky "everything beyond the edge, at any depth" rule
+	// of the horde fix is gone: in CoverBug_02 (58 s) it kept a flank rush in front of the wall as corner targets, so he
+	// shot hounds at his side from the corner pose without turning to them.
+	if (IsCornerHoldSpot())
 	{
-		return true;
+		return CoverFacingRules::IsCornerHoldTarget(CoverSlot, CoverFacing, GetCoverFireOrigin(), TargetLocation, CornerAimOutwardDeg,
+			GetCornerHoldReachDeg());
 	}
-	// Holding the corner (2026-10-07 horde fix): leaned out past the exposed edge on the facing side he covers everything
-	// beyond that edge, also what rushes round it towards his side â€” no step off the wall and back for each of them.
-	return bCornerAimActive && CurrentCoverHeight == ECoverHeight::HighCover
-		&& CoverFacingRules::IsBeyondFacingEdge(CoverSlot, CoverFacing, TargetLocation);
+	return CoverFacingRules::ShouldCornerShot(CoverSlot, TargetLocation, GetCoverFacingConfig());
+}
+
+bool AOperativeCharacter::IsCornerHoldSpot() const
+{
+	return bCornerHoldAtEdge && bInCover && !bShimmying && CurrentCoverHeight == ECoverHeight::HighCover && bAtCoverCorner
+		&& CoverSlot.IsEdgeExposed(CoverFacing);
+}
+
+FVector AOperativeCharacter::GetStanceAimOrigin() const
+{
+	return bInCover && bCornerAimActive && CurrentCoverHeight == ECoverHeight::HighCover ? GetCoverFireOrigin() : GetMuzzleLocation();
+}
+
+FVector AOperativeCharacter::GetStanceAimBaseDirection() const
+{
+	if (bInCover && CurrentCoverHeight == ECoverHeight::HighCover && (bCornerAimActive || IsCornerHoldSpot()))
+	{
+		return CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg);
+	}
+	// Out of cover (and any other pose): the barrel's yaw (the rifle is held across the chest, BarrelYawOffset, measured on
+	// the weapon - so it already holds the twist the 2D aim offset applies: taken out to get the pose's own direction).
+	return FRotator(0.f, GetActorRotation().Yaw + BarrelYawOffset - GetAppliedAimYaw(), 0.f).Vector();
+}
+
+float AOperativeCharacter::GetAppliedAimYaw() const
+{
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	return Anim && Anim->bAimOffsetYaw ? Anim->AimYaw * Anim->AimOffsetAlpha : 0.f;
+}
+
+float AOperativeCharacter::GetCornerHoldReachDeg() const
+{
+	// 5 deg inside the shot cone: a target the corner stance claims is one its barrel can be brought onto (the clip's
+	// barrel varies a few degrees around CornerAimOutwardDeg) - no stand-off where he neither fires nor steps out.
+	return FMath::Max(5.f, GetAimTwistLimitDeg() + AimConeDeg - 5.f);
+}
+
+float AOperativeCharacter::GetAimTwistLimitDeg() const
+{
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	return Anim && Anim->bAimOffsetYaw && Anim->bAimOffset ? Anim->AimYawClampDegrees : 0.f;
+}
+
+float AOperativeCharacter::GetShotAimResidualDeg(const FVector& TargetLocation) const
+{
+	// The real barrel when the rifle is out and level (the pose as animated, the 2D aim offset's twist included): the shot
+	// goes where the rifle points (user rule 2026-10-07). Else the stance rule (the pose's aim direction + the twist).
+	const USkeletalMeshComponent* Body = GetMesh();
+	const bool bPoseLive = Body && (Body->VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones
+		|| Body->WasRecentlyRendered(0.25f)); // headless (not rendered) the bones keep a stale pose
+	if (bPoseLive && WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible() && UsesAmmo())
+	{
+		const FVector Barrel = WeaponMesh->GetComponentTransform().TransformVectorNoScale(MuzzleOffset.GetSafeNormal());
+		if (Barrel.Size2D() < 0.3f)
+		{
+			return 180.f; // the rifle points up / down (a clip in between): not aimed at anything
+		}
+		return FMath::Abs(AimOffsetRules::YawToTarget(GetWeaponMuzzleLocation(), Barrel, TargetLocation, 180.f));
+	}
+	const float Error = AimOffsetRules::YawToTarget(GetStanceAimOrigin(), GetStanceAimBaseDirection(), TargetLocation, 180.f);
+	return AimOffsetRules::ResidualAimError(Error, GetAppliedAimYaw());
+}
+
+void AOperativeCharacter::FaceAimAt(const FVector& TargetLocation)
+{
+	const FVector Delta = TargetLocation - GetActorLocation();
+	if (!Delta.IsNearlyZero())
+	{
+		SetActorRotation(FRotator(0.f, Delta.Rotation().Yaw - BarrelYawOffset, 0.f));
+	}
 }
 
 bool AOperativeCharacter::BeginOpenShotFromCover(const AActor* Target)
@@ -3617,12 +3755,15 @@ bool AOperativeCharacter::BeginOpenShotFromCover(const AActor* Target)
 		return false;
 	}
 	const FCoverSlot Slot = CoverSlot;
-	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: steps off the wall for an open shot at %s (in front of the cover)"), *DisplayName.ToString(),
-		Target ? *Target->GetName() : TEXT("-"));
+	bOpenShotReturnToCornerHold = IsCornerHoldSpot();
+	OpenShotReturnFacing = CoverFacing;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: steps off the wall for an open shot at %s (%s)"), *DisplayName.ToString(),
+		Target ? *Target->GetName() : TEXT("-"), bOpenShotReturnToCornerHold ? TEXT("outside the corner stance's reach") : TEXT("in front of the cover"));
 	LeaveCover(TEXT("open shot: target in front of the cover"));
 	OpenShotReturnSlot = Slot;
 	bOpenShotReturnPending = bReturnToCoverAfterOpenShot;
 	OpenShotLastTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	OpenShotStartTime = OpenShotLastTime;
 	return true;
 }
 
@@ -3634,16 +3775,47 @@ void AOperativeCharacter::UpdateOpenShotReturn()
 	}
 	const UWorld* World = GetWorld();
 	const bool bAlive = HealthComponent && HealthComponent->IsAlive();
-	// Ordered elsewhere (a move / cover order), back in some cover, down, raging or panicking: no return.
-	if (bInCover || !bAlive || bHasMoveOrder || bHasPendingCover || IsRaging() || IsPanicking() || !World
+	// Ordered elsewhere (a move / cover order), back in some cover, down, or moved away: no return.
+	if (bInCover || !bAlive || bHasMoveOrder || bHasPendingCover || !World
 		|| FVector::Dist2D(GetActorLocation(), OpenShotReturnSlot.WorldLocation) > 150.f)
 	{
 		bOpenShotReturnPending = false;
 		return;
 	}
-	if (World->GetTimeSeconds() - OpenShotLastTime < OpenShotReturnDelaySeconds || GetVelocity().SizeSquared2D() > 4.f || bIsReloading)
+	if (IsRaging() || IsPanicking())
 	{
-		return; // still firing / settling
+		OpenShotLastTime = World->GetTimeSeconds(); // raging / panicking: the return waits until it passes (it used to be dropped)
+		return;
+	}
+	// Enemies still in sight on the open side (a stream coming at him): he stays out, the calm only starts once none is
+	// in sight. Back at a corner hold the stance covers what is round the corner: those do not keep him out.
+	const float Reach = GetCornerHoldReachDeg();
+	const FVector CornerOrigin = CornerFireOriginFor(OpenShotReturnSlot, OpenShotReturnFacing,
+		FVector(OpenShotReturnSlot.WorldLocation.X, OpenShotReturnSlot.WorldLocation.Y, GetMuzzleLocation().Z));
+	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	{
+		if (It->IsDying() || !It->GetHealthComponent() || !It->GetHealthComponent()->IsAlive() || It->CustomTimeDilation <= 0.f)
+		{
+			continue;
+		}
+		const float Distance = static_cast<float>(FVector::Dist2D(It->GetActorLocation(), GetActorLocation()));
+		const bool bCoveredByCorner = bOpenShotReturnToCornerHold && CoverFacingRules::IsCornerHoldTarget(OpenShotReturnSlot,
+			OpenShotReturnFacing, CornerOrigin, It->GetActorLocation(), CornerAimOutwardDeg, Reach);
+		// A rusher close by keeps him facing it; one on the open side keeps him out while in sight within 30 m, or - out of
+		// sight for a moment (a pack falling back to flank) - within twice that rush distance (CornerHoldSmoke 2026-10-07:
+		// he stepped back to the wall while two flankers circled out of sight, then out again).
+		const bool bKeepsOut = Distance <= FlankRushBreakCm
+			|| (!bCoveredByCorner && (Distance <= 2.f * FlankRushBreakCm || (!It->IsHidden() && Distance <= 3000.f)));
+		if (bKeepsOut)
+		{
+			OpenShotLastTime = World->GetTimeSeconds();
+			break;
+		}
+	}
+	if (World->GetTimeSeconds() - OpenShotLastTime < OpenShotReturnDelaySeconds || World->GetTimeSeconds() - OpenShotStartTime < OpenShotCommitSeconds
+		|| GetVelocity().SizeSquared2D() > 4.f || bIsReloading)
+	{
+		return; // still firing / enemies in sight / settling
 	}
 	bOpenShotReturnPending = false;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: back to the wall after the open shot"), *DisplayName.ToString());

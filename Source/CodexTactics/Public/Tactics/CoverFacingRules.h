@@ -170,8 +170,31 @@ namespace CoverFacingRules
 	 */
 	CODEXTACTICS_API bool IsFiringSpot(ECoverHeight Height, bool bAtCorner);
 
+	/**
+	 * The facing while engaged (user PIE video 2026-10-07: a hound pack swarming in front of his corner flipped the threat
+	 * side shot by shot, so the fire stance jumped between fire_idle_L (+73 cm) and fire_idle_R (-40 cm) on every shot).
+	 * Engaged (leaned out / fired within the hold), he keeps a facing whose edge is exposed and never turns to a closed
+	 * side; with both edges exposed the flip waits until he is no longer engaged.
+	 */
+	CODEXTACTICS_API ECoverFacing KeepEngagedFacing(const FCoverSlot& Slot, ECoverFacing Current, ECoverFacing Wanted, bool bEngaged);
+
 	/** Target lies beyond the exposed edge on the facing side (along the wall from the slot), at any depth. */
 	CODEXTACTICS_API bool IsBeyondFacingEdge(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Target);
+
+	/**
+	 * The corner fire stance's aim direction (cvr_*_fire_idle, measured on the clips' barrel 2026-10-07): along the wall
+	 * towards the facing side, turned OutwardDeg past it towards the space behind the wall (round the corner). 2D, unit.
+	 */
+	CODEXTACTICS_API FVector CornerAimDirection(const FCoverSlot& Slot, ECoverFacing Facing, float OutwardDeg);
+
+	/**
+	 * Corner hold at an exposed edge (user decision 2026-10-07): the target is fired at from the corner stance when it is
+	 * behind the wall or beyond the facing edge AND within ReachDeg of the stance's aim direction seen from FireOrigin
+	 * (ReachDeg = the upper-body twist limit + the aim cone). Anything else - the open side in front of the wall, a flank
+	 * rush - is no corner shot: he steps off the wall and turns to it.
+	 */
+	CODEXTACTICS_API bool IsCornerHoldTarget(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& FireOrigin, const FVector& Target,
+		float OutwardDeg, float ReachDeg);
 
 	/** Clip array index of a facing side: 0 = Right (pack *_L = his own right, back to the wall), 1 = Left (pack *_R). */
 	CODEXTACTICS_API int32 ClipIndex(ECoverFacing Facing);

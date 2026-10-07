@@ -174,6 +174,19 @@ namespace CoverFacingRules
 		return Height == ECoverHeight::LowCover || (Height == ECoverHeight::HighCover && bAtCorner);
 	}
 
+	ECoverFacing KeepEngagedFacing(const FCoverSlot& Slot, ECoverFacing Current, ECoverFacing Wanted, bool bEngaged)
+	{
+		if (!bEngaged || Wanted == Current)
+		{
+			return Wanted;
+		}
+		if (Slot.IsEdgeExposed(Current))
+		{
+			return Current; // engaged at a usable side: hold it (both exposed: the flip waits for the calm)
+		}
+		return Slot.IsEdgeExposed(Wanted) ? Wanted : Current; // from a closed side to a usable one is fine
+	}
+
 	bool IsBeyondFacingEdge(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Target)
 	{
 		const float Edge = EdgeDistance(Slot, Facing);
@@ -183,6 +196,35 @@ namespace CoverFacingRules
 		}
 		const float Along = ThreatAlongWall(Slot, Target) * (Facing == ECoverFacing::Right ? 1.f : -1.f);
 		return Along >= Edge;
+	}
+
+	FVector CornerAimDirection(const FCoverSlot& Slot, ECoverFacing Facing, float OutwardDeg)
+	{
+		const FVector Along = AlongWallDirection(Slot, Facing).GetSafeNormal2D();
+		const FVector Behind = -Slot.WallNormal.GetSafeNormal2D();
+		const float Radians = FMath::DegreesToRadians(OutwardDeg);
+		return (Along * FMath::Cos(Radians) + Behind * FMath::Sin(Radians)).GetSafeNormal2D();
+	}
+
+	bool IsCornerHoldTarget(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& FireOrigin, const FVector& Target,
+		float OutwardDeg, float ReachDeg)
+	{
+		if (!Slot.IsEdgeExposed(Facing))
+		{
+			return false;
+		}
+		if (DepthInFrontOfWall(Slot, Target) > 0.f && !IsBeyondFacingEdge(Slot, Facing, Target))
+		{
+			return false; // in front of the wall, within its span: the open side
+		}
+		const FVector Aim = CornerAimDirection(Slot, Facing, OutwardDeg);
+		const FVector ToTarget = (Target - FireOrigin).GetSafeNormal2D();
+		if (ToTarget.IsNearlyZero())
+		{
+			return false;
+		}
+		const float Degrees = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(static_cast<float>(FVector::DotProduct(Aim, ToTarget)), -1.f, 1.f)));
+		return Degrees <= ReachDeg;
 	}
 
 	int32 ClipIndex(ECoverFacing Facing)

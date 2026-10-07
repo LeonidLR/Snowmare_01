@@ -584,6 +584,36 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
 	float AimPitchTarget = 0.f;
 
+	// --- 2D aim offset (user request 2026-10-07): /Game/RifleAnims/Animations/AimOffsets/AO_Aim/NotUsed_AimOffset2D/
+	// AO_Rifle_Aim (axes Yaw -180..180, Pitch -90..90; RightCenter at Yaw +90) reads AimYaw on X and AimPitch on Y. The
+	// yaw twists the upper body from the current pose's aim direction (the corner fire stance's lean-out direction, else
+	// the barrel) to the target, limited to AimYawClampDegrees; the operative's shot waits until the rest is within its
+	// aim cone (AOperativeCharacter::AimConeDeg). AimYaw is always computed; the gameplay counts on the twist only with
+	// bAimOffsetYaw (tick it in the ABP's Class Defaults once the 2D node is in; the 1D node keeps it off). ---
+
+	/**
+	 * The ABP applies AimYaw (2D AO_Rifle_Aim wired): the shot may count on the upper-body twist (up to AimYawClampDegrees).
+	 * Off (the 1D AO1D_Rifle_Idle, pitch only): the shot waits until the pose itself points at the target.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	bool bAimOffsetYaw = false;
+
+	/** The upper-body twist limit: AimYaw is clamped to +-this, degrees. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset", meta = (ClampMin = "0", ClampMax = "180"))
+	float AimYawClampDegrees = 60.f;
+
+	/** AimYaw follows the target at this rate (FInterpTo speed, 1/s). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset", meta = (ClampMin = "0.1"))
+	float AimYawInterpSpeed = 12.f;
+
+	/** Yaw from the pose's aim direction to the target in degrees (+ = to his right), eased; 0 with no target. The AO's "Yaw" axis. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	float AimYaw = 0.f;
+
+	/** The raw (not eased, clamped) yaw to the aim point, degrees; 0 with no target. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	float AimYawTarget = 0.f;
+
 	/** The operative has an aim target (a combat target or a shot within AimTargetHoldSeconds). */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
 	bool bHasAimTarget = false;
@@ -710,6 +740,9 @@ public:
 	 * montage's blend weight, and the FullBody slot node's weight in the AnimGraph (a node missing / blended out = 0).
 	 */
 	void GetCoverPlayback(FString& OutClip, float& OutMontageWeight, float& OutSlotNodeWeight) const;
+
+	/** The grenade throw clip is still playing (the arms throw: no rifle shot meanwhile, user rule 2026-10-07). */
+	bool IsThrowingGrenade() const { return GrenadeThrowSecondsLeft > 0.f; }
 	/** In the fire-ready pose (entered, not yet left through the exit transition). */
 	bool IsInCoverFirePose() const { return bCoverInFirePose; }
 
@@ -847,6 +880,9 @@ private:
 	/** The chain root the cached LeftHandArmReach was measured from. */
 	FName LeftHandArmReachRoot;
 	float LeftHandIKBlockSeconds = 0.f;
+
+	/** What is left of the grenade throw clip, s (IsThrowingGrenade). */
+	float GrenadeThrowSecondsLeft = 0.f;
 	/** Reads the grip socket into LeftHandIKOffset / Rotation and steps the alpha (game thread, UpdateState). */
 	void UpdateLeftHandIK(const class AOperativeCharacter& Operative, float DeltaSeconds);
 	/** AimPitch / AimOffsetAlpha from the operative's aim target (game thread, UpdateState). */

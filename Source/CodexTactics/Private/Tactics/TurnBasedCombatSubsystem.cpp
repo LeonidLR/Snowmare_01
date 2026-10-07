@@ -1578,6 +1578,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 	if (!bCoverShot)
 	{
 		AlignFacing(Unit, State->Facing); // in cover the body stays along the wall (PlayCoverShot turns it to the target's side)
+		Unit->FaceAimAt(Target->GetActorLocation()); // user rule 2026-10-07: the barrel on the target before the shot (not the 8-way grid facing)
 	}
 	const FVector Muzzle = bCoverShot ? Unit->GetCoverFireOrigin() : Unit->GetWeaponMuzzleLocation();
 	const int32 Distance = TurnBasedRules::CellDistance(State->GridPos, Cell);

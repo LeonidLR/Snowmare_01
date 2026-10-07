@@ -25,4 +25,21 @@ namespace AimOffsetRules
 		}
 		return FMath::FInterpConstantTo(Current, Target, DeltaSeconds, 1.f / BlendSeconds);
 	}
+
+	float YawToTarget(const FVector& From, const FVector& BaseDirection, const FVector& To, float MaxAbsDegrees)
+	{
+		const FVector Base = BaseDirection.GetSafeNormal2D();
+		const FVector Delta = (To - From).GetSafeNormal2D();
+		if (Base.IsNearlyZero() || Delta.IsNearlyZero())
+		{
+			return 0.f;
+		}
+		const float Degrees = FRotator::NormalizeAxis(static_cast<float>(Delta.Rotation().Yaw - Base.Rotation().Yaw));
+		return FMath::Clamp(Degrees, -MaxAbsDegrees, MaxAbsDegrees);
+	}
+
+	float ResidualAimError(float ErrorDegrees, float AppliedYawDegrees)
+	{
+		return FMath::Abs(FRotator::NormalizeAxis(ErrorDegrees - AppliedYawDegrees));
+	}
 }

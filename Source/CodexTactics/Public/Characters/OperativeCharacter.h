@@ -820,9 +820,87 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
 	bool bReturnToCoverAfterOpenShot = true;
 
-	/** He returns to the slot this long after his last open shot, s. */
+	/**
+	 * He returns to the slot after this calm: no open shot and no enemy in sight within 30 m for this long (user PIE
+	 * 2026-10-07: he stepped back into cover between the shots at a stream of targets; Jev: stay out while more keep
+	 * coming, back in once none is in sight), s.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float OpenShotReturnDelaySeconds = 1.f;
+
+	/** After a cover shot he counts as engaged this long: the fire stance keeps its side (CoverFacingRules::KeepEngagedFacing), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverEngageHoldSeconds = 3.f;
+
+	// --- Corner hold and the aim cone (user decisions 2026-10-07, PIE videos CoverBug_01 / CoverBug_02): at an exposed edge
+	// of a high wall he steps out into the corner fire stance and HOLDS it - no ducking between shots, no side flips; he
+	// goes behind the corner only to reload and steps right back out. A shot is fired only where the current pose aims:
+	// within AimConeDeg of the stance's aim direction after the upper-body twist (the 2D aim offset's AimYaw, limited by
+	// UOperativeAnimInstance::AimYawClampDegrees). A target beyond that - a flank rush in front of the wall - makes him
+	// step off the wall into the open stance and turn to it (AimTurnRateDegPerSec), then fire. ---
+
+	/** At an exposed edge of a high wall he holds the corner fire stance (steps out at once, fires from it). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	bool bCornerHoldAtEdge = true;
+
+	/**
+	 * The older automatic breaks of the corner aim (CoverDecisionRules::DecideCornerAim: duck for safety, return with no
+	 * target in sight). Off by user decision 2026-10-07: only the reload sends him behind the corner.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	bool bCornerAutoDuck = false;
+
+	/**
+	 * The corner fire stance (cvr_*_fire_idle) aims this far past the along-wall direction towards the space behind the
+	 * wall (round the corner), degrees. Measured 2026-10-07 on the real barrel in CornerHoldSmoke: anim_M4_cvr_std_fire_idle_L
+	 * steps 73 cm past the edge and aims 102-104 deg past the along-wall line, i.e. straight past the corner into the
+	 * space behind the wall (slightly back towards the wall).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "-90", ClampMax = "150"))
+	float CornerAimOutwardDeg = 100.f;
+
+	/** A shot leaves only while the barrel is within this angle of the target (after the upper-body twist), degrees. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "1", ClampMax = "90"))
+	float AimConeDeg = 30.f;
+
+	/** Out of cover he turns the body to the target at least this fast (a quick but visible turn), deg/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "30"))
+	float AimTurnRateDegPerSec = 360.f;
+
+	/** Once off the wall for an open shot he stays in the open stance at least this long, s (no cover <-> open flip-flop). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float OpenShotCommitSeconds = 3.f;
+
+	/** A melee enemy closing within this distance takes over as the target at once (no flank-switch delay), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat", meta = (ClampMin = "0"))
+	float FlankRushBreakCm = 700.f;
+
+	/** At an exposed edge of a high wall, facing it, not shimmying: the corner hold spot. */
+	bool IsCornerHoldSpot() const;
+
+	/** Where the current pose's aim starts (corner hold: the lean-out muzzle; else the muzzle height over the actor). */
+	FVector GetStanceAimOrigin() const;
+
+	/** The current pose's aim direction before the upper-body twist (2D unit): corner hold stance or the barrel's yaw. */
+	FVector GetStanceAimBaseDirection() const;
+
+	/** The upper-body twist the AnimInstance applies now (AimYaw x AimOffsetAlpha; 0 without the 2D aim offset), degrees. */
+	float GetAppliedAimYaw() const;
+
+	/** How far the upper body may twist to a target (UOperativeAnimInstance::AimYawClampDegrees; 0 without yaw), degrees. */
+	float GetAimTwistLimitDeg() const;
+
+	/** The corner hold claims targets within this angle of its aim direction (twist limit + cone - 5), degrees. */
+	float GetCornerHoldReachDeg() const;
+
+	/** The lean-out muzzle at Slot's Facing corner for a muzzle at Muzzle (CoverRules::CornerMuzzle). */
+	static FVector CornerFireOriginFor(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Muzzle);
+
+	/** Angle between where the pose aims now (after the twist) and the target, degrees. */
+	float GetShotAimResidualDeg(const FVector& TargetLocation) const;
+
+	/** Turns the body at once so the barrel points at TargetLocation (a grid shot resolves in the same frame). */
+	void FaceAimAt(const FVector& TargetLocation);
 
 	/** Open shots taken off the wall (smokes / stats). */
 	int32 GetCoverOpenShots() const { return CoverOpenShots; }
@@ -1228,6 +1306,11 @@ private:
 	/** Open shot from cover: the slot to come back to, the last open shot's time, the return pending. */
 	FCoverSlot OpenShotReturnSlot;
 	double OpenShotLastTime = -1.0e9;
+	/** When he stepped off the wall for the open shots (OpenShotCommitSeconds). */
+	double OpenShotStartTime = -1.0e9;
+	/** The slot he returns to was a corner hold spot facing this side (enemies its stance covers do not keep him out). */
+	bool bOpenShotReturnToCornerHold = false;
+	ECoverFacing OpenShotReturnFacing = ECoverFacing::Right;
 	bool bOpenShotReturnPending = false;
 	/** The current cover entry is the return after an open shot (IsQuietCoverEntry); the request is set around that EnterCover. */
 	bool bQuietCoverEntry = false;
@@ -1248,6 +1331,8 @@ private:
 	void TryEnterCoverFromRun();
 	/** Moves the mesh so the body stays continuous while the enter clip blends in (V = (1 - w) C + glide). */
 	void UpdateCoverEntryBlend(float DeltaTime);
+	/** World time of the last shot from cover (lean / blind; CoverEngageHoldSeconds). */
+	double CoverLastShotTime = -1.0e9;
 	/** Damage from ranged attackers in the last seconds (decays like RecentIncomingDamage; the corner-aim duck input). */
 	float RecentRangedDamage = 0.f;
 	/** The corner-aim trace (Codex.Debug.CornerAim, the [CornerAim] log): the pre-fix inputs next to the fixed ones. */
