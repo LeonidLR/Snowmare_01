@@ -1,4 +1,8 @@
 #include "Characters/OperativeAnimInstance.h"
+#include "Characters/LeftHandIKRules.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshSocket.h"
 #include "CodexTactics.h"
 #include "HAL/IConsoleManager.h"
 #include "Animation/AnimMontage.h"
@@ -525,6 +529,7 @@ void UOperativeAnimInstance::HandleHealthChanged(float NewHealth, float MaxHealt
 	if (Clip && !IsPlayingSlotAnimation(GrenadeThrowWalkAnimation, UpperBodySlot))
 	{
 		PlaySlotAnimationAsDynamicMontage(Clip, UpperBodySlot, 0.1f, 0.2f);
+		LeftHandIKBlockSeconds = FMath::Max(LeftHandIKBlockSeconds, Clip->GetPlayLength()); // the hit reaction has the arms
 	}
 }
 
@@ -546,6 +551,7 @@ void UOperativeAnimInstance::HandleGrenadeThrow()
 	}
 	Operative->GrenadeThrowDuration = Clip->GetPlayLength();
 	PlaySlotAnimationAsDynamicMontage(Clip, UpperBodySlot, 0.1f, 0.2f);
+	LeftHandIKBlockSeconds = FMath::Max(LeftHandIKBlockSeconds, Clip->GetPlayLength()); // the left hand throws
 }
 
 void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerSource)
@@ -706,6 +712,36 @@ void UOperativeAnimInstance::UpdateState()
 		bIsFrostbitten = Cold->IsFrostbitten();
 		bIsWeaponFrozen = Cold->IsWeaponFrozen();
 	}
+	UpdateLeftHandIK(*Operative, StateDeltaSeconds);
+}
+
+void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operative, float DeltaSeconds)
+{
+	// The grip in hand_r bone space: the socket on the weapon mesh, composed with the weapon's transform relative to its
+	// attach parent (hand_r). Recomputed every update: a weapon switch / a new mesh / offset shows at once.
+	const UStaticMeshComponent* Weapon = Operative.WeaponMesh;
+	const UStaticMesh* WeaponAsset = Weapon ? Weapon->GetStaticMesh() : nullptr;
+	const UStaticMeshSocket* Grip = WeaponAsset ? WeaponAsset->FindSocket(LeftHandGripSocket) : nullptr;
+	bLeftHandIKGripValid = Grip && Weapon->GetAttachSocketName() == Operative.WeaponSocket;
+	if (bLeftHandIKGripValid)
+	{
+		const FTransform SocketInWeapon(Grip->RelativeRotation, Grip->RelativeLocation, Grip->RelativeScale);
+		const FTransform InHand = LeftHandIKRules::GripInHandSpace(Weapon->GetRelativeTransform(), SocketInWeapon);
+		LeftHandIKOffset = InHand.GetLocation();
+		LeftHandIKRotation = InHand.Rotator();
+	}
+	LeftHandIKBlockSeconds = FMath::Max(0.f, LeftHandIKBlockSeconds - DeltaSeconds);
+	FLeftHandIKState State;
+	State.bEnabled = bLeftHandIK;
+	State.bHasGrip = bLeftHandIKGripValid && Operative.UsesAmmo(); // a melee weapon has no handguard
+	State.bWeaponVisible = Weapon && Weapon->IsVisible();
+	State.bReloading = bIsReloading;
+	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f;
+	State.bVaulting = bIsVaulting;
+	State.bDead = bIsDead;
+	State.bProne = bIsProne;
+	LeftHandIKLinear = LeftHandIKRules::StepAlpha(LeftHandIKLinear, LeftHandIKRules::WantsIK(State), DeltaSeconds, LeftHandIKBlendSeconds);
+	LeftHandIKAlpha = FMath::SmoothStep(0.f, 1.f, LeftHandIKLinear);
 }
 
 UAnimSequence* UOperativeAnimInstance::GetClip(EOperativeClip Clip) const

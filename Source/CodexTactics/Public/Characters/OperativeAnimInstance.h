@@ -455,6 +455,38 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
 	bool bCoverCornerAim = false;
 
+	// --- Left-hand IK onto the rifle's handguard (user-approved plan 2026-10-07, LeftHandIKRules). The ABP's Two Bone IK
+	// on hand_l (added by the user, see docs/port/HANDOFF.md «ABP: left-hand IK») reads these: effector = LeftHandIKOffset
+	// in hand_r bone space, alpha = LeftHandIKAlpha. ---
+
+	/** Left-hand IK on / off for this AnimBP. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
+	bool bLeftHandIK = true;
+
+	/** The weapon mesh's socket the left hand holds (Scripts/Editor/add_weapon_left_hand_socket.py). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
+	FName LeftHandGripSocket = TEXT("LeftHandGrip");
+
+	/** Alpha blend time in / out, s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK", meta = (ClampMin = "0"))
+	float LeftHandIKBlendSeconds = 0.15f;
+
+	/** The grip in hand_r bone space (Two Bone IK: Effector Location Space = Bone Space, Effector Target = hand_r). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
+	FVector LeftHandIKOffset = FVector::ZeroVector;
+
+	/** The grip's rotation in hand_r bone space (for a later Transform (Modify) Bone on hand_l). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
+	FRotator LeftHandIKRotation = FRotator::ZeroRotator;
+
+	/** 0..1, eased (smoothstep) over LeftHandIKBlendSeconds; 0 when reloading, throwing, hit, vaulting, dead, prone, no grip. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
+	float LeftHandIKAlpha = 0.f;
+
+	/** The weapon has the grip socket (the offset is valid). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Left Hand IK")
+	bool bLeftHandIKGripValid = false;
+
 	/** Blend-in of the cover enter clip when he runs into the cover (eased; user-found bug 2026-10-07), s. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CoverEnterFromRunBlendSeconds = 0.25f;
@@ -701,6 +733,11 @@ private:
 	bool bCoverEnterPlaying = false;
 	/** The cover was entered in this update (the stance switch clip yields to the enter clip). */
 	bool bCoverEnteredThisFrame = false;
+	/** Left-hand IK: linear blend progress, the upper-body action windows (grenade throw / hit reaction) left, s. */
+	float LeftHandIKLinear = 0.f;
+	float LeftHandIKBlockSeconds = 0.f;
+	/** Reads the grip socket into LeftHandIKOffset / Rotation and steps the alpha (game thread, UpdateState). */
+	void UpdateLeftHandIK(const class AOperativeCharacter& Operative, float DeltaSeconds);
 	/** A shot waiting for the enter transition / the previous one-shot to end. */
 	TWeakObjectPtr<UAnimSequenceBase> CoverPendingFireClip;
 	TArray<FString> CoverClipLog;

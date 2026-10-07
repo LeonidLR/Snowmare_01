@@ -39,6 +39,7 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 |---|---|---|---|
 | Gemini | Architecture Leadership & Bot Telemetry Distillation (Jev System One) | Scripts/Tools/typesafe_triage.py | 2026-10-04 |
 | Claude | Jev AI coach (taken over from Gemini on the user's word, 2026-10-04): marksman kiting limit, bot marksman assault, `Codex.*` tunables, `AITuning` | Scripts/Tools/jev_ai_coach.py, Content/Data/AI/ai_tuning.json, Marksman*, PlaytestBotSubsystem | 2026-10-04 |
+| Claude | Left-hand IK (user-approved 2026-10-07): socket `LeftHandGrip` added by `Scripts/Editor/add_weapon_left_hand_socket.py` (uncommitted until the host commits); the ABP_Operative Two Bone IK node is the user's | `Content/Weapons/M16/m16_01/StaticMeshes/m16_01.uasset` | 2026-10-07 |
 | Claude | Sprint 12 cover: clips assigned by `Scripts/Editor/setup_operative_cover_animation.py` (uncommitted until the host commits) | `Content/Characters/Operatives/ABP_Operative.uasset`, `ABP_Operative_Rifle2.uasset` (cover clip defaults); `Content/Post_Apo_Survivor/.../UE4_Mannequin_Skeleton` (compatible skeleton += M4 pack SK_Mannequin; user pack, untracked); `Content/M4_Cover_Pack/**` read only | 2026-10-06 |
 
 ## Requests

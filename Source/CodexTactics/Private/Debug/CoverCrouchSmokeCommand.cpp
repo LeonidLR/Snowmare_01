@@ -444,6 +444,28 @@ namespace CoverCrouchSmoke
 			Check(State, EdgeRight <= 77.f - 10.f, FString::Printf(TEXT("crouched: the crch _L peek (77 cm) clears the real edge (%.0f cm away, stand-off %.0f)"),
 				EdgeRight, CoverFacingRules::CornerStandOff(ECoverFacing::Right, true, Op->GetCoverFacingConfig())));
 			CheckPlaying(State, Op, TEXT("cvr_crch_fire_idle_L"), TEXT("crouched at his right corner, threat round it: crch fire_idle_L"));
+			// Left-hand IK (user-approved plan 2026-10-07): on in the crouched fire stance; the effector (hand_r space) lands
+			// on the rifle's LeftHandGrip socket; the gap to the clip's left hand is what the ABP's Two Bone IK closes.
+			if (const UOperativeAnimInstance* Anim = AnimOf(Op))
+			{
+				const FTransform HandR = Op->GetMesh()->GetSocketTransform(TEXT("hand_r"), RTS_World);
+				const FVector Target = HandR.TransformPosition(Anim->LeftHandIKOffset);
+				const FVector Socket = Op->WeaponMesh->GetSocketLocation(Anim->LeftHandGripSocket);
+				const FVector HandL = Op->GetMesh()->GetBoneLocation(TEXT("hand_l"));
+				const FTransform WeaponXf = Op->WeaponMesh->GetComponentTransform();
+				const FVector Grip = HandR.GetLocation();
+				const FVector Barrel = (WeaponXf.TransformPosition(Op->MuzzleOffset) - WeaponXf.TransformPosition(FVector(0.f, 0.f, 0.f))).GetSafeNormal();
+				const FVector FromGrip = Target - Grip;
+				const float OffBarrel = static_cast<float>((FromGrip - Barrel * FVector::DotProduct(FromGrip, Barrel)).Size());
+				const float AlongBarrel = static_cast<float>(FVector::DotProduct(FromGrip, Barrel));
+				Check(State, Anim->bLeftHandIKGripValid && Anim->LeftHandIKAlpha >= 0.99f,
+					FString::Printf(TEXT("left-hand IK on in the crouched fire stance (alpha %.2f, grip socket %d)"), Anim->LeftHandIKAlpha, Anim->bLeftHandIKGripValid ? 1 : 0));
+				Check(State, FVector::Dist(Target, Socket) <= 3.f,
+					FString::Printf(TEXT("... the IK target sits on the handguard socket (%.1f cm; %.0f cm along the barrel from the grip, %.1f cm off its axis)"),
+						FVector::Dist(Target, Socket), AlongBarrel, OffBarrel));
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: left hand (clip) %.1f cm from the IK target: the gap the ABP's Two Bone IK closes"),
+					FVector::Dist(HandL, Target));
+			}
 			State.LeanBefore = Op->GetCoverLeanShots();
 			State.bBurstBroken = false;
 			State.BurstBrokenBy.Reset();
@@ -541,6 +563,50 @@ namespace CoverCrouchSmoke
 			}
 			Check(State, Op->bInCover && Op->GetStance() == EOperativeStance::Standing, TEXT("... standing at the wall again"));
 			Op->bIgnoreCoverThreatForTesting = false;
+			// A reload: the left hand leaves the handguard for the magazine (IK alpha 0).
+			Op->CurrentClip = 0;
+			Op->ReserveAmmo = FMath::Max(Op->ReserveAmmo, 30);
+			// The reload timer runs in the combat tick, which a cease-fire skips: fire allowed, nobody in reach.
+			PlaceHound(State, State.P - State.F * 6000.f);
+			State.bAllowFire = true;
+			Op->StartReload();
+			return Next(16);
+		}
+		case 16:
+		{
+			if (StageTime < 0.4f)
+			{
+				return true;
+			}
+			const UOperativeAnimInstance* Anim = AnimOf(Op);
+			Check(State, Op->bIsReloading && Anim && Anim->LeftHandIKAlpha <= 0.01f,
+				FString::Printf(TEXT("reloading: left-hand IK off (alpha %.2f)"), Anim ? Anim->LeftHandIKAlpha : -1.f));
+			State.bSampled = false;
+			return Next(17);
+		}
+		case 17:
+		{
+			if (Op->bIsReloading && StageTime < 6.f)
+			{
+				return true;
+			}
+			if (!State.bSampled)
+			{
+				State.bSampled = true; // the reload is over: the blend back in from here
+				StageTime = 0.f;
+				return true;
+			}
+			if (StageTime < 0.5f)
+			{
+				return true;
+			}
+			const UOperativeAnimInstance* Anim = AnimOf(Op);
+			Check(State, !Op->bIsReloading && Anim && Anim->LeftHandIKAlpha >= 0.99f,
+				FString::Printf(TEXT("... and back on after the reload (alpha %.2f; grip %d, anim reloading %d, weapon visible %d, stance %d, %.1f s)"),
+					Anim ? Anim->LeftHandIKAlpha : -1.f, Anim && Anim->bLeftHandIKGripValid ? 1 : 0, Anim && Anim->bIsReloading ? 1 : 0,
+					Op->WeaponMesh && Op->WeaponMesh->IsVisible() ? 1 : 0, static_cast<int32>(Op->GetStance()), StageTime));
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: reload diag: panicking %d, cease %d, alive %d"), Op->IsPanicking() ? 1 : 0,
+				Op->bTacticalCeaseFire ? 1 : 0, Op->HealthComponent && Op->HealthComponent->IsAlive() ? 1 : 0);
 			return Finish(State);
 		}
 		default:
