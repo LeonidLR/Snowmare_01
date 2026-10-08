@@ -22,10 +22,10 @@ FText PersonalItemRules::GetName(EPersonalItem Item)
 {
 	switch (Item)
 	{
-	case EPersonalItem::Medkit: return LOCTEXT("Medkit", "Аптечка");
-	case EPersonalItem::CannedFood: return LOCTEXT("Can", "Консервы");
-	case EPersonalItem::Bread: return LOCTEXT("Bread", "Хлеб");
-	default: return LOCTEXT("Chocolate", "Шоколад");
+	case EPersonalItem::Medkit: return LOCTEXT("Medkit", "Medkit");
+	case EPersonalItem::CannedFood: return LOCTEXT("Can", "Canned food");
+	case EPersonalItem::Bread: return LOCTEXT("Bread", "Bread");
+	default: return LOCTEXT("Chocolate", "Chocolate");
 	}
 }
 
@@ -33,10 +33,10 @@ FText PersonalItemRules::GetMissingName(EPersonalItem Item)
 {
 	switch (Item)
 	{
-	case EPersonalItem::Medkit: return LOCTEXT("NoMedkit", "аптечек");
-	case EPersonalItem::CannedFood: return LOCTEXT("NoCan", "консервов");
-	case EPersonalItem::Bread: return LOCTEXT("NoBread", "хлеба");
-	default: return LOCTEXT("NoChocolate", "шоколада");
+	case EPersonalItem::Medkit: return LOCTEXT("NoMedkit", "medkits");
+	case EPersonalItem::CannedFood: return LOCTEXT("NoCan", "canned food");
+	case EPersonalItem::Bread: return LOCTEXT("NoBread", "bread");
+	default: return LOCTEXT("NoChocolate", "chocolate");
 	}
 }
 

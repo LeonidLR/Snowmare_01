@@ -83,7 +83,7 @@ public:
 	/** The object's own action (quest step, lighting a barrel...). */
 	virtual void PerformAction(AOperativeCharacter* User);
 
-	// --- Trap (Godot «⚠️ Взрывная ловушка») ---
+	// --- Trap (Godot "⚠️ explosive trap") ---
 
 	/** Trapped with a tripwire charge: needs defusal. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Trap")
@@ -118,7 +118,7 @@ public:
 	/** Arms a trap with one of Operative's grenades (Godot _execute_trap_object). */
 	bool TrapWithGrenade(AOperativeCharacter* Operative);
 
-	/** Can a grenade trap be set here now («Заминировать» button). */
+	/** Can a grenade trap be set here now ("Set trap" button). */
 	virtual bool CanReceiveTrap() const { return !bTrapped; }
 
 	/** World label above the object (Godot overhead Label3D); false = none. The generator shows its state and HP. */
@@ -130,7 +130,7 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Trap", meta = (DisplayName = "On Exploded"))
 	void ReceiveExploded(float Radius);
 
-	/** «Исполнитель: Имя (Поза: Присев) | Шанс успеха: ~70%» (Godot defusal status line). */
+	/** "Operator: Name (Stance: Crouched) | Success chance: ~70%" (Godot defusal status line). */
 	FText DescribeDefusal(const AOperativeCharacter* Operative) const;
 
 protected:

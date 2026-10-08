@@ -111,21 +111,21 @@ void UTurnBasedHudWidget::BuildDefaultLayout()
 	TbHpText = MakeText(TEXT("TbHpText"), 12, TbHpColor);
 	Stats->AddChildToHorizontalBox(TbHpText);
 
-	TbPassButton = MakeButton(TEXT("TbPassButton"), LOCTEXT("Pass", "🛑 КОНЕЦ ХОДА ОТРЯДА"), 32.f, Column);
-	TbPassButton->SetToolTipText(LOCTEXT("PassTip", "Завершить ход отряда и передать управление врагам [Enter]"));
-	TbNextButton = MakeButton(TEXT("TbNextButton"), LOCTEXT("Next", "⏭️ СЛЕДУЮЩИЙ БОЕЦ [Tab]"), 26.f, Column);
-	TbNextButton->SetToolTipText(LOCTEXT("NextTip", "Завершить ход текущего бойца и перейти к следующему [Tab]"));
+	TbPassButton = MakeButton(TEXT("TbPassButton"), LOCTEXT("Pass", "🛑 END SQUAD TURN"), 32.f, Column);
+	TbPassButton->SetToolTipText(LOCTEXT("PassTip", "End the squad's turn and hand over to the enemy [Enter]"));
+	TbNextButton = MakeButton(TEXT("TbNextButton"), LOCTEXT("Next", "⏭️ NEXT OPERATIVE [Tab]"), 26.f, Column);
+	TbNextButton->SetToolTipText(LOCTEXT("NextTip", "End the current operative's turn and go to the next one [Tab]"));
 	UTextBlock* StanceText = nullptr;
-	TbStanceButton = MakeButton(TEXT("TbStanceButton"), LOCTEXT("Stance", "🛡️ СТОЙКА: СТОЯ [C]"), 26.f, Column, &StanceText);
+	TbStanceButton = MakeButton(TEXT("TbStanceButton"), LOCTEXT("Stance", "🛡️ STANCE: STANDING [C]"), 26.f, Column, &StanceText);
 	TbStanceText = StanceText;
-	TbStanceButton->SetToolTipText(LOCTEXT("StanceTip", "Сменить стойку: Стоя / Присев / Лёжа [C] (1 AP)"));
+	TbStanceButton->SetToolTipText(LOCTEXT("StanceTip", "Change stance: standing / crouched / prone [C] (1 AP)"));
 
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("TbRow"));
 	Column->AddChildToVerticalBox(Row);
-	TbTurnButton = MakeButton(TEXT("TbTurnButton"), LOCTEXT("Turn", "🔄 Поворот [R]"), 26.f, Row);
-	TbTurnButton->SetToolTipText(LOCTEXT("TurnTip", "Повернуть бойца на 90 градусов (1 AP) [R]"));
-	TbBarrelButton = MakeButton(TEXT("TbBarrelButton"), LOCTEXT("Barrel", "📦 Бочка [F]"), 26.f, Row);
-	TbBarrelButton->SetToolTipText(LOCTEXT("BarrelTip", "Толкнуть соседнюю бочку (2 AP) [F]"));
+	TbTurnButton = MakeButton(TEXT("TbTurnButton"), LOCTEXT("Turn", "🔄 Turn [R]"), 26.f, Row);
+	TbTurnButton->SetToolTipText(LOCTEXT("TurnTip", "Turn the operative 90 degrees (1 AP) [R]"));
+	TbBarrelButton = MakeButton(TEXT("TbBarrelButton"), LOCTEXT("Barrel", "📦 Barrel [F]"), 26.f, Row);
+	TbBarrelButton->SetToolTipText(LOCTEXT("BarrelTip", "Push the adjacent barrel (2 AP) [F]"));
 }
 
 void UTurnBasedHudWidget::NativeOnInitialized()
@@ -174,7 +174,7 @@ FText UTurnBasedHudWidget::GetPhaseText() const
 	{
 		return FText::GetEmpty();
 	}
-	return TurnBased->GetPhase() == ETurnPhase::Squad ? LOCTEXT("SquadPhase", "⚔️ ХОД ОТРЯДА") : LOCTEXT("EnemyPhase", "🐺 ХОД ПРОТИВНИКА...");
+	return TurnBased->GetPhase() == ETurnPhase::Squad ? LOCTEXT("SquadPhase", "⚔️ SQUAD TURN") : LOCTEXT("EnemyPhase", "🐺 ENEMY TURN...");
 }
 
 FText UTurnBasedHudWidget::GetApText() const
@@ -203,7 +203,7 @@ void UTurnBasedHudWidget::Refresh()
 	}
 	if (TbUnitText)
 	{
-		TbUnitText->SetText(bSquadPhase && Unit ? FText::Format(LOCTEXT("Unit", "Боец: {0}"), Unit->DisplayName) : LOCTEXT("Enemies", "Враг: Противник"));
+		TbUnitText->SetText(bSquadPhase && Unit ? FText::Format(LOCTEXT("Unit", "Operative: {0}"), Unit->DisplayName) : LOCTEXT("Enemies", "Enemy: Hostiles"));
 	}
 	if (TbApText)
 	{
@@ -216,8 +216,8 @@ void UTurnBasedHudWidget::Refresh()
 	}
 	if (TbStanceText && State)
 	{
-		const TCHAR* Stance = State->Stance == EOperativeStance::Prone ? TEXT("ЛЁЖА") : (State->Stance == EOperativeStance::Crouching ? TEXT("ПРИСЕВ") : TEXT("СТОЯ"));
-		TbStanceText->SetText(FText::FromString(FString::Printf(TEXT("СТОЙКА: %s [C]"), Stance)));
+		const TCHAR* Stance = State->Stance == EOperativeStance::Prone ? TEXT("PRONE") : (State->Stance == EOperativeStance::Crouching ? TEXT("CROUCHED") : TEXT("STANDING"));
+		TbStanceText->SetText(FText::FromString(FString::Printf(TEXT("STANCE: %s [C]"), Stance)));
 	}
 	for (UButton* Button : { TbPassButton.Get(), TbNextButton.Get(), TbStanceButton.Get(), TbTurnButton.Get() })
 	{

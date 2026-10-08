@@ -39,9 +39,9 @@ namespace
 	/** The HUD font has no emoji: the enemy-type icons of the statistics become words. */
 	FString StatsForFont(FString Text)
 	{
-		Text.ReplaceInline(TEXT("🐺 "), TEXT("гончие "));
-		Text.ReplaceInline(TEXT("🏹 "), TEXT("плевуны "));
-		Text.ReplaceInline(TEXT("❄️ "), TEXT("громилы "));
+		Text.ReplaceInline(TEXT("🐺 "), TEXT("hounds "));
+		Text.ReplaceInline(TEXT("🏹 "), TEXT("spitters "));
+		Text.ReplaceInline(TEXT("❄️ "), TEXT("brutes "));
 		TArray<FString> Lines;
 		Text.Replace(TEXT("➔"), TEXT("->")).ParseIntoArrayLines(Lines, false);
 		for (FString& Line : Lines)
@@ -137,7 +137,7 @@ void UVictoryPanelWidget::BuildDefaultLayout()
 	NextText = Label;
 	Next->OnClicked.AddDynamic(this, &UVictoryPanelWidget::HandleNext);
 	UButton* Restart = MakeButton(TEXT("BtnRestart"), 34.f, Label);
-	Label->SetText(VictoryClean(TEXT("🔄 Перезапустить уровень (X)")));
+	Label->SetText(VictoryClean(TEXT("🔄 Restart level (X)")));
 	Restart->OnClicked.AddDynamic(this, &UVictoryPanelWidget::HandleRestart);
 }
 

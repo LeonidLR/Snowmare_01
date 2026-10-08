@@ -21,11 +21,11 @@ float CameraShakeRules::GetPower(const FCameraShakeConfig& Config, const FString
 {
 	// FText lowers Cyrillic too (FString::ToLower does not); Godot to_lower is Unicode-aware.
 	const FString Lower = FText::FromString(WeaponType).ToLower().ToString();
-	if (Lower.Contains(TEXT("pistol")) || Lower.Contains(TEXT("пистолет")))
+	if (Lower.Contains(TEXT("pistol")) || Lower.Contains(TEXT("пистолет")) /* legacy Russian data names */) // cyrillic-ok: legacy Russian data
 	{
 		return Config.PowerPistol;
 	}
-	if (Lower.Contains(TEXT("turret")) || Lower.Contains(TEXT("турел")))
+	if (Lower.Contains(TEXT("turret")) || Lower.Contains(TEXT("турел")) /* legacy Russian data names */) // cyrillic-ok: legacy Russian data
 	{
 		return Config.PowerTurret;
 	}

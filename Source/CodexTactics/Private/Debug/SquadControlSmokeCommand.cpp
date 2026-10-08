@@ -2,7 +2,7 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.SquadControlSmoke
 // Godot player.gd / main.gd: below 50 % health an operative is wounded (no sprint, slower); Alt + stance changes the
 // whole squad («👥 ОТРЯД», order line) but nobody lies down while someone moves; Shift + click turns the leader;
-// an operative arriving next to a barricade in combat crouches in cover («В УКРЫТИИ»).
+// an operative arriving next to a barricade in combat crouches in cover («IN COVER»).
 
 #include "CoreMinimal.h"
 
@@ -108,7 +108,7 @@ namespace SquadControlSmoke
 			{
 				bAllCrouched &= Member->GetStance() == EOperativeStance::Crouching;
 			}
-			Check(State, bAllCrouched && Floating->HasShown(TEXT("ОТРЯД: ПРИСЕВ")) && HasMessage(World, TEXT("[ПРИКАЗ ОТРЯДУ]")), TEXT("Alt + C: squad crouches"));
+			Check(State, bAllCrouched && Floating->HasShown(TEXT("SQUAD: CROUCHED")) && HasMessage(World, TEXT("[SQUAD ORDER]")), TEXT("Alt + C: squad crouches"));
 			PC->SetEntireSquadStance(EOperativeStance::Standing);
 
 			// Shift + click: face the point.
@@ -132,7 +132,7 @@ namespace SquadControlSmoke
 				return true;
 			}
 			PC->SetEntireSquadStance(EOperativeStance::Prone);
-			Check(State, Leader->GetStance() != EOperativeStance::Prone && HasMessage(World, TEXT("во время движения")), TEXT("Alt + V refused while moving"));
+			Check(State, Leader->GetStance() != EOperativeStance::Prone && HasMessage(World, TEXT("while moving")), TEXT("Alt + V refused while moving"));
 			Leader->StopOperative();
 
 			// Arrival next to a barricade in combat: cover.
@@ -155,7 +155,7 @@ namespace SquadControlSmoke
 			{
 				return true;
 			}
-			Check(State, Mover && Mover->IsInBarricadeCover() && Floating->HasShown(TEXT("В УКРЫТИИ")),
+			Check(State, Mover && Mover->IsInBarricadeCover() && Floating->HasShown(TEXT("IN COVER")),
 				TEXT("arrived next to the barricade in combat: crouched in cover"));
 			return Finish(State, true);
 		}

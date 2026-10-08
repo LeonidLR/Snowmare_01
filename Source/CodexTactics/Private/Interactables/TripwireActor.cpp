@@ -32,7 +32,7 @@ UNavArea_Tripwire::UNavArea_Tripwire()
 ATripwireActor::ATripwireActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	DisplayName = LOCTEXT("Name", "Растяжка МУВ-3");
+	DisplayName = LOCTEXT("Name", "MUV-3 Tripwire Mine");
 	bCanBeRelocated = false;
 	InteractionDistance = 150.f;
 
@@ -159,7 +159,7 @@ void ATripwireActor::Tick(float DeltaSeconds)
 		ArmingLeft -= DeltaSeconds;
 		if (ArmingLeft <= 0.f)
 		{
-			UFloatingTextSubsystem::SpawnAboveMine(this, TEXT("🪤 РАСТЯЖКА ВЗВЕДЕНА"), FLinearColor(1.f, 0.6f, 0.2f));
+			UFloatingTextSubsystem::SpawnAboveMine(this, TEXT("🪤 TRIPWIRE ARMED"), FLinearColor(1.f, 0.6f, 0.2f));
 		}
 		return;
 	}
@@ -212,7 +212,7 @@ void ATripwireActor::Trip(AActor* Tripper)
 		return;
 	}
 	bTripped = true;
-	UFloatingTextSubsystem::SpawnAboveMine(this, TEXT("❗ ЩЁЛК!"), FLinearColor(1.f, 0.85f, 0.2f));
+	UFloatingTextSubsystem::SpawnAboveMine(this, TEXT("❗ CLICK!"), FLinearColor(1.f, 0.85f, 0.2f));
 	UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s: pin pulled by %s"), *GetName(), Tripper ? *Tripper->GetName() : TEXT("-"));
 	ReceivePinPulled();
 	GetWorldTimerManager().SetTimer(FuseTimer, FTimerDelegate::CreateUObject(this, &ATripwireActor::Detonate), TripwireRules::FuseDelaySeconds, false);
@@ -220,10 +220,10 @@ void ATripwireActor::Trip(AActor* Tripper)
 
 void ATripwireActor::Detonate()
 {
-	UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s: paired Ф-1 blast"), *GetName());
+	UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s: paired F-1 blast"), *GetName());
 	ApplyBlast(TripwireRules::BlastDamage, TripwireRules::BlastDamage * TripwireRules::SquadDamageShare, TripwireRules::BlastRadiusCm,
-		TripwireRules::ArmorPenetration, EDamageType::Explosive, LOCTEXT("Source", "Растяжка Ф-1"),
-		LOCTEXT("SquadLine", "💥 Подрыв на растяжке! -{0} HP"), EStatusEffect::Stagger, TripwireRules::StaggerSeconds);
+		TripwireRules::ArmorPenetration, EDamageType::Explosive, LOCTEXT("Source", "F-1 Tripwire"),
+		LOCTEXT("SquadLine", "💥 Tripwire blast! -{0} HP"), EStatusEffect::Stagger, TripwireRules::StaggerSeconds);
 	// Sprint 11: the blast is heard — patrols within 20 m break off.
 	AEnemyCharacter::AlertPatrolsNearTrap(GetWorld(), (WireA + WireB) * 0.5f);
 	Destroy();
@@ -233,9 +233,9 @@ FActionMenuRequest ATripwireActor::BuildActionMenu(const AOperativeCharacter* Le
 {
 	const bool bSapper = Leader && Leader->SquadRole == EOperativeRole::MedicSapper;
 	return FActionMenuRequest::MakeMenu(DisplayName,
-		bSapper ? LOCTEXT("DescSapper", "Две Ф-1 на взрывателе МУВ-3. Медик-сапёр снимет её лёжа за 3 с и вернёт гранаты (при срыве — одну).")
-				: LOCTEXT("DescOther", "Две Ф-1 на взрывателе МУВ-3. Снять растяжку может только медик-сапёр."),
-		LOCTEXT("Disarm", "Обезвредить (3 с)"), LOCTEXT("Cancel", "Отмена"), !bSapper);
+		bSapper ? LOCTEXT("DescSapper", "Two F-1s on an MUV-3 fuze. The Medic-Sapper disarms it prone in 3 s and recovers the grenades (one on a fumble).")
+				: LOCTEXT("DescOther", "Two F-1s on an MUV-3 fuze. Only the Medic-Sapper can disarm the tripwire."),
+		LOCTEXT("Disarm", "Disarm (3 s)"), LOCTEXT("Cancel", "Cancel"), !bSapper);
 }
 
 void ATripwireActor::ExecuteAction(AOperativeCharacter* User)
@@ -248,7 +248,7 @@ void ATripwireActor::ExecuteAction(AOperativeCharacter* User)
 	User->StopOperative();
 	User->SetFacingPoint(GetActorLocation());
 	User->SetStance(EOperativeStance::Prone); // flat under the wire
-	PostLine(User->DisplayName, LOCTEXT("Disarming", "🪤 Снимаю растяжку, не подходить!"));
+	PostLine(User->DisplayName, LOCTEXT("Disarming", "🪤 Disarming the tripwire, stay back!"));
 	GetWorldTimerManager().SetTimer(DisarmTimer, FTimerDelegate::CreateUObject(this, &ATripwireActor::FinishDisarm), TripwireRules::DisarmSeconds, false);
 }
 
@@ -262,8 +262,8 @@ void ATripwireActor::FinishDisarm()
 	const bool bFumble = FMath::FRand() < TripwireRules::DisarmFumbleChance;
 	const int32 Returned = TripwireRules::GrenadesReturned(bFumble);
 	User->GrenadesCount += Returned;
-	PostLine(User->DisplayName, FText::Format(bFumble ? LOCTEXT("DisarmedFumble", "🪤 Растяжка снята, одна граната испорчена. +{0} граната")
-		: LOCTEXT("Disarmed", "🪤 Растяжка снята. +{0} гранаты"), Returned));
+	PostLine(User->DisplayName, FText::Format(bFumble ? LOCTEXT("DisarmedFumble", "🪤 Tripwire disarmed, one grenade ruined. +{0} grenade")
+		: LOCTEXT("Disarmed", "🪤 Tripwire disarmed. +{0} grenades"), Returned));
 	UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s disarmed by %s: +%d grenades"), *GetName(), *User->DisplayName.ToString(), Returned);
 	Destroy();
 }
@@ -274,7 +274,7 @@ bool ATripwireActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	{
 		return false;
 	}
-	OutLabel.Text = ArmingLeft > 0.f ? TEXT("🪤 Растяжка (взводится)") : TEXT("🪤 Растяжка");
+	OutLabel.Text = ArmingLeft > 0.f ? TEXT("🪤 Tripwire (arming)") : TEXT("🪤 Tripwire");
 	OutLabel.Color = FLinearColor(1.f, 0.6f, 0.2f);
 	OutLabel.HeightCm = 50.f;
 	return true;

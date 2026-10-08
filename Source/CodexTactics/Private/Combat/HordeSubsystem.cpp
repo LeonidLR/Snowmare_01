@@ -308,12 +308,12 @@ int32 UHordeSubsystem::SpawnHorde(int32 HordeIndex)
 		HordeIndex + 1, LastHorde.Num(), Distance, bHidden ? TEXT("out of sight") : TEXT("in sight"), Timer.CombatSeconds);
 	if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Messages->PostMessage(FText::FromString(TEXT("ШТАБ")), FText::FromString(FString::Printf(
-			TEXT("⚠️ ОРДА! %d тварей идут прямо на отряд — %.0f м! Занять оборону!"), LastHorde.Num(), Distance)));
+		Messages->PostMessage(FText::FromString(TEXT("HQ")), FText::FromString(FString::Printf(
+			TEXT("⚠️ HORDE! %d creatures heading straight for the squad - %.0f m! Take up defensive positions!"), LastHorde.Num(), Distance)));
 	}
 	if (AEnemyCharacter* First = LastHorde[0].Get())
 	{
-		UFloatingTextSubsystem::SpawnAboveEnemy(First, TEXT("⚠️ ОРДА!"), FLinearColor(1.f, 0.2f, 0.15f));
+		UFloatingTextSubsystem::SpawnAboveEnemy(First, TEXT("⚠️ HORDE!"), FLinearColor(1.f, 0.2f, 0.15f));
 	}
 	if (!Config.WarningSound.IsEmpty())
 	{

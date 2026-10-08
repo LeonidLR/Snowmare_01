@@ -157,12 +157,12 @@ void URecruitSubsystem::TriggerRescueEvent()
 	// Godot trigger_cold_distress.
 	bColdDistress = true;
 	Recruit->ColdLevel = 85.f;
-	UFloatingTextSubsystem::SpawnAboveOperative(Recruit, TEXT("🥶 ЗАМЕРЗАЕТ!"), FLinearColor(0.4f, 0.8f, 1.f));
+	UFloatingTextSubsystem::SpawnAboveOperative(Recruit, TEXT("🥶 FREEZING!"), FLinearColor(0.4f, 0.8f, 1.f));
 
 	if (UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>())
 	{
-		Dialogue->StartDialogue(MakeDialogue(TEXT("Сигнал бедствия: Иван Сусанин"), TEXT("Держись! Идём на помощь! ▶"),
-			TEXT("Эй, помогите мне, замерзаю, пожалуйста!")), FSimpleDelegate::CreateUObject(this, &URecruitSubsystem::HandleDistressDialogueFinished));
+		Dialogue->StartDialogue(MakeDialogue(TEXT("Distress signal: Ivan Susanin"), TEXT("Hold on! We're coming! ▶"),
+			TEXT("Hey, help me, please, I'm freezing!")), FSimpleDelegate::CreateUObject(this, &URecruitSubsystem::HandleDistressDialogueFinished));
 	}
 }
 
@@ -173,10 +173,10 @@ void URecruitSubsystem::HandleDistressDialogueFinished()
 	{
 		FocusCamera(const_cast<AOperativeCharacter*>(Leader));
 	}
-	RecruitPost(GetWorld(), TEXT("ШТАБ"), TEXT("⚠️ Сусанин замерзает на рубеже! Подойдите к нему любым бойцом, чтобы спасти и принять в отряд!"));
+	RecruitPost(GetWorld(), TEXT("HQ"), TEXT("⚠️ Susanin is freezing at the line! Reach him with any operative to rescue him and take him into the squad!"));
 	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
 	{
-		Mission->SetObjective(FText::FromString(TEXT("Спасти Сусанина: подойти к нему бойцом отряда!")));
+		Mission->SetObjective(FText::FromString(TEXT("Rescue Susanin: reach him with a squad operative!")));
 	}
 }
 
@@ -258,8 +258,8 @@ void URecruitSubsystem::StartRecruitmentDialogue(AOperativeCharacter* Rescuer)
 	bRecruitmentDialogueActive = true;
 	BeginNarrativePause();
 	TWeakObjectPtr<URecruitSubsystem> WeakThis(this);
-	UDialogueSequenceAsset* Sequence = MakeDialogue(TEXT("Присоединение к отряду"), TEXT("🤝 Принять в отряд ▶"),
-		TEXT("Спасибо, что пришли на выручку! Возьмите меня с собой, я знаю эти места и помогу отряду выстоять!"));
+	UDialogueSequenceAsset* Sequence = MakeDialogue(TEXT("Joining the squad"), TEXT("🤝 Take into the squad ▶"),
+		TEXT("Thank you for coming to my rescue! Take me with you, I know these parts and I'll help the squad hold out!"));
 	UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>();
 	FSimpleDelegate OnFinish = FSimpleDelegate::CreateLambda([WeakThis]()
 	{
@@ -295,9 +295,9 @@ void URecruitSubsystem::RecruitIntoSquad(bool bSilent)
 	{
 		return;
 	}
-	RecruitPost(GetWorld(), TEXT("Иван Сусанин"), TEXT("Спасибо, сынки! Я с вами. Держусь рядом!"));
-	UFloatingTextSubsystem::SpawnAboveOperative(Recruit, TEXT("🤝 ВСТУПИЛ В ОТРЯД"), FLinearColor(0.3f, 1.f, 0.5f));
-	RecruitPost(GetWorld(), TEXT("ШТАБ"), TEXT("✅ Иван Сусанин принят в боевой отряд! [Клавиша 4 — выбор]"));
+	RecruitPost(GetWorld(), TEXT("Ivan Susanin"), TEXT("Thank you, lads! I'm with you. I'll stay close!"));
+	UFloatingTextSubsystem::SpawnAboveOperative(Recruit, TEXT("🤝 JOINED THE SQUAD"), FLinearColor(0.3f, 1.f, 0.5f));
+	RecruitPost(GetWorld(), TEXT("HQ"), TEXT("✅ Ivan Susanin has joined the squad! [Key 4 - select]"));
 	const UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>();
 	UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
 	if (Mission && Waves && Waves->IsWaveActive())
@@ -353,7 +353,7 @@ UDialogueSequenceAsset* URecruitSubsystem::MakeDialogue(const FString& Title, co
 	Sequence->Title = Title;
 	Sequence->CustomFinishButtonText = FinishButton;
 	FDialogueLine Line;
-	Line.SpeakerName = TEXT("Иван Сусанин");
+	Line.SpeakerName = TEXT("Ivan Susanin");
 	Line.Text = Text;
 	Sequence->Lines.Add(Line);
 	Dialogues.Add(Sequence);

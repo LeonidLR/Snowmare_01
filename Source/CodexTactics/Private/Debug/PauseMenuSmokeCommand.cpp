@@ -1,8 +1,8 @@
 // Dev-only console command for a headless pause menu / save-load dialog check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.PauseMenuSmoke
-// Slots go to Saved/SmokeSaves. Esc opens the pause menu (world paused, «Загрузить» disabled without saves);
-// «Сохранить» opens the dialog with «Леонид_01» suggested; saving adds a card; the same name asks for the overwrite
-// confirmation (Esc closes it, «Да» overwrites); Esc goes back to the pause menu; «Загрузить» + a slot restores the
+// Slots go to Saved/SmokeSaves. Esc opens the pause menu (world paused, "Load" disabled without saves);
+// "Save" opens the dialog with «Leonid_01» suggested; saving adds a card; the same name asks for the overwrite
+// confirmation (Esc closes it, «Да» overwrites); Esc goes back to the pause menu; "Load" + a slot restores the
 // squad and closes everything (world runs); a slot is deleted; Esc toggles the menu off
 // (Godot pause_menu_dialog.gd, save_load_dialog.gd, main.gd KEY_ESCAPE / save / load handlers).
 
@@ -72,39 +72,39 @@ namespace PauseMenuSmoke
 		IFileManager::Get().DeleteDirectory(*Saves->SaveDirectoryOverride, false, true);
 
 		Check(State, Hud->HandleEscape() && Pause->IsOpen() && UGameplayStatics::IsGamePaused(World), TEXT("Esc: pause menu open, world paused"));
-		Check(State, !Pause->IsLoadEnabled() && Pause->GetStatusText().ToString() == TEXT("Нет сохраненных данных"), Pause->GetStatusText().ToString());
+		Check(State, !Pause->IsLoadEnabled() && Pause->GetStatusText().ToString() == TEXT("No saved data"), Pause->GetStatusText().ToString());
 
 		Pause->OpenSave();
-		Check(State, Dialog->IsOpen() && !Pause->IsOpen() && UGameplayStatics::IsGamePaused(World), TEXT("«Сохранить» opens the dialog, still paused"));
-		Check(State, Dialog->GetTitleText().ToString().Contains(TEXT("СОХРАНЕНИЕ И ПЕРЕЗАПИСЬ")) && Dialog->GetSlotNameText() == TEXT("Леонид_01")
-			&& Dialog->GetSaveButtonText().ToString().Contains(TEXT("Сохранить")), FString::Printf(TEXT("title / suggested %s / button"), *Dialog->GetSlotNameText()));
+		Check(State, Dialog->IsOpen() && !Pause->IsOpen() && UGameplayStatics::IsGamePaused(World), TEXT("\"Save\" opens the dialog, still paused"));
+		Check(State, Dialog->GetTitleText().ToString().Contains(TEXT("SAVE AND OVERWRITE")) && Dialog->GetSlotNameText() == TEXT("Leonid_01")
+			&& Dialog->GetSaveButtonText().ToString().Contains(TEXT("Save")), FString::Printf(TEXT("title / suggested %s / button"), *Dialog->GetSlotNameText()));
 		Commander->MedkitsCount = 2;
 		Dialog->PressSave();
-		Check(State, Dialog->GetCardCount() == 1 && Dialog->GetStatusText().ToString().Contains(TEXT("успешно сохранена")), Dialog->GetStatusText().ToString());
-		Dialog->SetSlotNameText(TEXT("Леонид_01"));
-		Check(State, Dialog->GetSaveButtonText().ToString().Contains(TEXT("Перезаписать")), TEXT("existing name: «Перезаписать»"));
+		Check(State, Dialog->GetCardCount() == 1 && Dialog->GetStatusText().ToString().Contains(TEXT("Game saved to slot")), Dialog->GetStatusText().ToString());
+		Dialog->SetSlotNameText(TEXT("Leonid_01"));
+		Check(State, Dialog->GetSaveButtonText().ToString().Contains(TEXT("Overwrite")), TEXT("existing name: \"Overwrite\""));
 		Dialog->PressSave();
 		Check(State, Dialog->IsConfirmOpen(), TEXT("overwrite asks for confirmation"));
 		Hud->HandleEscape();
 		Check(State, !Dialog->IsConfirmOpen() && Dialog->IsOpen(), TEXT("Esc closes the confirmation only"));
 		Dialog->PressSave();
 		Dialog->ConfirmOverwrite();
-		Check(State, Dialog->GetStatusText().ToString().Contains(TEXT("перезаписано")) && Dialog->GetCardCount() == 1, Dialog->GetStatusText().ToString());
+		Check(State, Dialog->GetStatusText().ToString().Contains(TEXT("overwritten")) && Dialog->GetCardCount() == 1, Dialog->GetStatusText().ToString());
 		Hud->HandleEscape();
-		Check(State, !Dialog->IsOpen() && Pause->IsOpen() && Pause->IsLoadEnabled(), TEXT("Esc: back to the pause menu, «Загрузить» enabled"));
-		Check(State, Pause->GetStatusText().ToString().StartsWith(TEXT("Слот: Леонид_01")), Pause->GetStatusText().ToString());
+		Check(State, !Dialog->IsOpen() && Pause->IsOpen() && Pause->IsLoadEnabled(), TEXT("Esc: back to the pause menu, \"Load\" enabled"));
+		Check(State, Pause->GetStatusText().ToString().StartsWith(TEXT("Slot: Leonid_01")), Pause->GetStatusText().ToString());
 
 		Commander->MedkitsCount = 7;
 		Pause->OpenLoad();
-		Check(State, Dialog->GetTitleText().ToString().Contains(TEXT("ЗАГРУЗКА ИГРЫ")), Dialog->GetTitleText().ToString());
-		Dialog->LoadSlot(TEXT("Леонид_01"));
+		Check(State, Dialog->GetTitleText().ToString().Contains(TEXT("LOAD GAME")), Dialog->GetTitleText().ToString());
+		Dialog->LoadSlot(TEXT("Leonid_01"));
 		Check(State, !Dialog->IsOpen() && !Pause->IsOpen() && !UGameplayStatics::IsGamePaused(World) && Commander->MedkitsCount == 2,
 			TEXT("load: windows closed, world runs, medkits back"));
 
 		Hud->HandleEscape();
 		Pause->OpenSave();
-		Dialog->DeleteSlot(TEXT("Леонид_01"));
-		Check(State, Dialog->GetCardCount() == 0 && !Saves->HasSave(TEXT("Леонид_01")), TEXT("slot deleted"));
+		Dialog->DeleteSlot(TEXT("Leonid_01"));
+		Check(State, Dialog->GetCardCount() == 0 && !Saves->HasSave(TEXT("Leonid_01")), TEXT("slot deleted"));
 		Hud->HandleEscape(); // dialog -> pause menu
 		Hud->HandleEscape(); // pause menu closes
 		Check(State, !Pause->IsOpen() && !UGameplayStatics::IsGamePaused(World), TEXT("Esc closes the pause menu, world runs"));

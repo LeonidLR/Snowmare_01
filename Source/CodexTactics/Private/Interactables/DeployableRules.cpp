@@ -81,9 +81,9 @@ FText DeployableRules::GetDefusalStanceName(EOperativeStance Stance)
 {
 	switch (Stance)
 	{
-	case EOperativeStance::Crouching: return LOCTEXT("Crouch", "Присев");
-	case EOperativeStance::Prone: return LOCTEXT("Prone", "Лёжа");
-	default: return LOCTEXT("Stand", "Стоя");
+	case EOperativeStance::Crouching: return LOCTEXT("Crouch", "Crouched");
+	case EOperativeStance::Prone: return LOCTEXT("Prone", "Prone");
+	default: return LOCTEXT("Stand", "Standing");
 	}
 }
 

@@ -20,7 +20,7 @@ bool FMineShotChanceByStanceTest::RunTest(const FString&)
 		ComputeMineShotChance(90.f, 60.f, EOperativeStance::Crouching, 10.f).Chance, 57.f, 0.001f);
 	TestEqual(TEXT("Engineer standing 12 m clamps to 0"), ComputeMineShotChance(75.f, 0.f, EOperativeStance::Standing, 12.f).Chance, 0.f);
 	TestEqual(TEXT("Effective accuracy floor 10: 10*1.25 - 2"), ComputeMineShotChance(20.f, 100.f, EOperativeStance::Prone, 2.f).Chance, 10.5f, 0.001f);
-	TestEqual(TEXT("Stance label"), ComputeMineShotChance(90.f, 0.f, EOperativeStance::Crouching, 1.f).StanceName.ToString(), FString(TEXT("Присев")));
+	TestEqual(TEXT("Stance label"), ComputeMineShotChance(90.f, 0.f, EOperativeStance::Crouching, 1.f).StanceName.ToString(), FString(TEXT("Crouched")));
 	return true;
 }
 
@@ -29,11 +29,11 @@ bool FMineMissReasonTest::RunTest(const FString&)
 {
 	using namespace TargetedShotRules;
 	TestEqual(TEXT("Standing far"), GetMineMissReason(EOperativeStance::Standing, 7.5f, 80.f).ToString(),
-		FString(TEXT("стоя на таком расстоянии не попасть")));
+		FString(TEXT("can't hit standing at this range")));
 	TestEqual(TEXT("Standing at 7 m falls through to cold"), GetMineMissReason(EOperativeStance::Standing, 7.f, 41.f).ToString(),
-		FString(TEXT("руки дрожат от холода")));
+		FString(TEXT("hands shaking from the cold")));
 	TestEqual(TEXT("Crouching far, cold 40 is not enough"), GetMineMissReason(EOperativeStance::Crouching, 12.f, 40.f).ToString(),
-		FString(TEXT("пуля ушла в мерзлый снег")));
+		FString(TEXT("the bullet went into the frozen snow")));
 	return true;
 }
 

@@ -230,15 +230,15 @@ void AOperativeCharacter::ApplyBodyColor()
 		{
 		case 0: // Commander - Military Blue
 			BodyColor = FLinearColor::FromSRGBColor(FColor(0x20, 0x80, 0xEC));
-			if (DisplayName.IsEmpty()) DisplayName = NSLOCTEXT("CodexTactics", "Commander", "Командир");
+			if (DisplayName.IsEmpty()) DisplayName = NSLOCTEXT("CodexTactics", "Commander", "Commander");
 			break;
 		case 1: // Engineer - Hazard Orange
 			BodyColor = FLinearColor::FromSRGBColor(FColor(0xFF, 0x61, 0x0F));
-			if (DisplayName.IsEmpty()) DisplayName = NSLOCTEXT("CodexTactics", "Engineer", "Инженер");
+			if (DisplayName.IsEmpty()) DisplayName = NSLOCTEXT("CodexTactics", "Engineer", "Engineer");
 			break;
 		case 2: // Medic-Sapper - Field Medic Green
 			BodyColor = FLinearColor::FromSRGBColor(FColor(0x1F, 0xB3, 0x33));
-			if (DisplayName.IsEmpty()) DisplayName = NSLOCTEXT("CodexTactics", "Medic", "Медик-сапёр");
+			if (DisplayName.IsEmpty()) DisplayName = NSLOCTEXT("CodexTactics", "Medic", "Medic-Sapper");
 			break;
 		default:
 			break;
@@ -319,12 +319,12 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 {
 	if (IsRaging())
 	{
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ЯРОСТИ! НЕ ПОДЧИНЯЕТСЯ!"), FLinearColor(1.f, 0.4f, 0.1f));
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ ENRAGED! IGNORING ORDERS!"), FLinearColor(1.f, 0.4f, 0.1f));
 		return EOperativeOrderResult::Refused;
 	}
 	if (IsPanicking())
 	{
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ПАНИКЕ! НЕ ПОДЧИНЯЕТСЯ!"), FLinearColor(1.f, 0.3f, 0.3f));
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ PANICKING! IGNORING ORDERS!"), FLinearColor(1.f, 0.3f, 0.3f));
 		return EOperativeOrderResult::Refused;
 	}
 	// Sprint 12: a move order away from the wall leaves the cover (a cover / shimmy order keeps it; so does the planned
@@ -518,9 +518,9 @@ FText AOperativeCharacter::GetStanceDisplayName(EOperativeStance InStance)
 {
 	switch (InStance)
 	{
-	case EOperativeStance::Crouching: return NSLOCTEXT("CodexTactics", "StanceCrouching", "СИДЯ");
-	case EOperativeStance::Prone: return NSLOCTEXT("CodexTactics", "StanceProne", "ЛЁЖА");
-	default: return NSLOCTEXT("CodexTactics", "StanceStanding", "СТОЯ");
+	case EOperativeStance::Crouching: return NSLOCTEXT("CodexTactics", "StanceCrouching", "CROUCHED");
+	case EOperativeStance::Prone: return NSLOCTEXT("CodexTactics", "StanceProne", "PRONE");
+	default: return NSLOCTEXT("CodexTactics", "StanceStanding", "STANDING");
 	}
 }
 
@@ -596,11 +596,11 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 	}
 	if (RageComponent)
 	{
-		RageComponent->ExitRage(TEXT("Погиб"));
+		RageComponent->ExitRage(TEXT("Killed"));
 	}
 	if (PanicComponent)
 	{
-		PanicComponent->RecoverFromPanic(TEXT("Погиб"), true);
+		PanicComponent->RecoverFromPanic(TEXT("Killed"), true);
 	}
 	// Godot _check_squad_vital_signs / _handle_expendable_member_death: an expendable member (the recruit) only leaves
 	// the squad (the leader passes on) and his body can be searched for his supplies (Godot corpse_loot,
@@ -609,15 +609,15 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(FText::FromString(TEXT("ШТАБ")), FText::FromString(FString::Printf(
-				TEXT("⚠️ %s погиб в бою! Обыщите останки, чтобы забрать припасы и снаряжение."), *DisplayName.ToString())));
+			Messages->PostMessage(FText::FromString(TEXT("HQ")), FText::FromString(FString::Printf(
+				TEXT("⚠️ %s was killed in action! Search the remains to recover supplies and gear."), *DisplayName.ToString())));
 		}
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 		if (ALootCrateActor* Remains = GetWorld()->SpawnActor<ALootCrateActor>(Feet + FVector(0.f, 0.f, 40.f), GetActorRotation(), Params))
 		{
-			Remains->CrateName = FText::FromString(FString::Printf(TEXT("Останки: %s"), *DisplayName.ToString()));
+			Remains->CrateName = FText::FromString(FString::Printf(TEXT("Remains: %s"), *DisplayName.ToString()));
 			FLootContents Contents;
 			auto Ammo = [this](const TCHAR* Id)
 			{
@@ -708,13 +708,13 @@ void AOperativeCharacter::HandleMoveFinished()
 		return;
 	}
 	SetStance(EOperativeStance::Crouching);
-	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🛡️ В УКРЫТИИ (-35% урона)"), FLinearColor(0.3f, 0.9f, 1.f));
+	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🛡️ IN COVER (-35% damage)"), FLinearColor(0.3f, 0.9f, 1.f));
 	const double Now = GetWorld()->GetTimeSeconds();
 	if (Now - LastCoverChatterTime >= 5.0)
 	{
 		LastCoverChatterTime = Now;
-		const TCHAR* Callouts[] = { TEXT("🛡️ Занял укрытие!"), TEXT("🛡️ В укрытии, сектор держу!"),
-			TEXT("🛡️ Укрылся за баррикадой, готов к бою!"), TEXT("🛡️ На позиции за щитом, веду наблюдение!") };
+		const TCHAR* Callouts[] = { TEXT("🛡️ In cover!"), TEXT("🛡️ In cover, holding the sector!"),
+			TEXT("🛡️ Behind the barricade, ready to fight!"), TEXT("🛡️ In position behind the shield, watching!") };
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
 			Messages->PostMessage(DisplayName, FText::FromString(Callouts[FMath::RandRange(0, 3)]));
@@ -1407,10 +1407,10 @@ void AOperativeCharacter::StartReload()
 
 	// Godot start_reload: radio callout asking for cover.
 	static const TCHAR* Callouts[] = {
-		TEXT("🔄 Перезаряжаюсь! Прикройте меня!"),
-		TEXT("🔄 Пустой магазин! Прикройте сектор!"),
-		TEXT("🔄 Меняю обойму, держите их!"),
-		TEXT("🔄 Перезарядка! Прикройте спину!") };
+		TEXT("🔄 Reloading! Cover me!"),
+		TEXT("🔄 Mag empty! Cover the sector!"),
+		TEXT("🔄 Changing mags, hold them off!"),
+		TEXT("🔄 Reloading! Watch my back!") };
 	if (UWorld* World = GetWorld())
 	{
 		if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
@@ -1834,7 +1834,7 @@ void AOperativeCharacter::NotifyBarricadeBlocked()
 		return;
 	}
 	BarricadeBlockNotifyTimer = 3.5f;
-	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🚫 Баррикада блокирует огонь (нужно сесть)!"), FLinearColor(1.f, 0.75f, 0.2f));
+	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🚫 Barricade blocks the shot (crouch)!"), FLinearColor(1.f, 0.75f, 0.2f));
 }
 
 void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
@@ -2064,7 +2064,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	if (bMisfire)
 	{
 		MisfireCooldownTimer = ColdSurvival ? ColdSurvival->Config.MisfireDelay : 0.45f;
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("❄️ ОСЕЧКА! (Затвор заклинил)"), FLinearColor(0.4f, 0.85f, 1.f));
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("❄️ MISFIRE! (Bolt jammed)"), FLinearColor(0.4f, 0.85f, 1.f));
 		OnWeaponMisfired.Broadcast(this);
 		OnWeaponMisfiredNative.Broadcast(this);
 		return false;
@@ -2113,7 +2113,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	const bool bHit = bForceHitForTesting || (FMath::FRand() <= HitChance);
 	if (!bHit)
 	{
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("ПРОМАХ!"), FLinearColor(0.75f, 0.75f, 0.75f));
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("MISS!"), FLinearColor(0.75f, 0.75f, 0.75f));
 	}
 	NoteShotAim(Target, bBlindShot ? BlindAimPoint : Target->GetActorLocation(), bBlindShot);
 	OnWeaponFired.Broadcast(this, Target, bHit);
@@ -2151,11 +2151,11 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		}
 		if (bCrit)
 		{
-			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🎯 КРИТ x2!"), FLinearColor(1.f, 0.85f, 0.1f));
+			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🎯 CRIT x2!"), FLinearColor(1.f, 0.85f, 0.1f));
 		}
 		else if (Elevation.bElevated)
 		{
-			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⛰️ +15% ВЫСОТА"), FLinearColor(0.35f, 0.9f, 1.f));
+			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⛰️ +15% HEIGHT"), FLinearColor(0.35f, 0.9f, 1.f));
 		}
 
 		FDamageSpec Spec;
@@ -2467,14 +2467,14 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 		if (bHit)
 		{
 			OperativeShotLine(*this, FText::Format(LOCTEXT("MineHit",
-				"💥 {0}: «Меткий выстрел (Шанс: {1}%, {2}, {3}м)! Мина ликвидирована дистанционно!»"),
+				"💥 {0}: \"Clean shot (Chance: {1}%, {2}, {3}m)! Mine neutralised remotely!\""),
 				DisplayName, Chance, MineShot.StanceName, Distance));
 			CastChecked<AProximityMineActor>(Target)->Detonate();
 		}
 		else
 		{
 			OperativeShotLine(*this, FText::Format(LOCTEXT("MineMiss",
-				"💨 {0}: «Промах! (Шанс был {1}%: дист. {2}м, {3}). {4} — присядьте или подойдите ближе!»"),
+				"💨 {0}: \"Missed! (Chance was {1}%: range {2}m, {3}). {4} - crouch or move closer!\""),
 				DisplayName, Chance, Distance, MineShot.StanceName, TargetedShotRules::GetMineMissReason(Stance, DistanceM, ColdLevel)));
 		}
 		break;
@@ -2484,18 +2484,18 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 		ALootCrateActor* Crate = CastChecked<ALootCrateActor>(Target);
 		if (Crate->bTrapped)
 		{
-			OperativeShotLine(*this, FText::Format(LOCTEXT("CrateTrapShot", "💥 {0}: «Выстрел по ловушке ящика! Дистанционный подрыв!»"), DisplayName));
+			OperativeShotLine(*this, FText::Format(LOCTEXT("CrateTrapShot", "💥 {0}: \"Shot the crate trap! Remote detonation!\""), DisplayName));
 			Crate->DetonateTrap(true, DisplayName);
 		}
 		else
 		{
 			// Only a trap blows up (user decision 2026-09-28: Godot also detonating an untrapped crate is a bug).
-			OperativeShotLine(*this, LOCTEXT("CratePierced", "💥 Пуля пробила ящик снабжения."));
+			OperativeShotLine(*this, LOCTEXT("CratePierced", "💥 The bullet pierced the supply crate."));
 		}
 		break;
 	}
 	case ETargetedShotKind::TrappedObject:
-		OperativeShotLine(*this, FText::Format(LOCTEXT("TrappedShot", "💥 {0}: «Выстрел по растяжке на объекте! Дистанционная детонация!»"), DisplayName));
+		OperativeShotLine(*this, FText::Format(LOCTEXT("TrappedShot", "💥 {0}: \"Shot the tripwire on the object! Remote detonation!\""), DisplayName));
 		CastChecked<AInteractableActor>(Target)->DetonateTrap(true, DisplayName);
 		break;
 	default:
@@ -2509,12 +2509,12 @@ void AOperativeCharacter::SetManualPriorityTarget(AActor* Enemy)
 {
 	if (IsRaging())
 	{
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ЯРОСТИ! НЕ ПОДЧИНЯЕТСЯ!"), FLinearColor(1.f, 0.4f, 0.1f));
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ ENRAGED! IGNORING ORDERS!"), FLinearColor(1.f, 0.4f, 0.1f));
 		return;
 	}
 	if (IsPanicking())
 	{
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ В ПАНИКЕ! НЕ СТРЕЛЯЕТ!"), FLinearColor(1.f, 0.3f, 0.3f));
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ PANICKING! NOT FIRING!"), FLinearColor(1.f, 0.3f, 0.3f));
 		return;
 	}
 	ManualPriorityTarget = Enemy;
@@ -2562,7 +2562,7 @@ bool AOperativeCharacter::ExecutePlannedTargetedShots()
 void AOperativeCharacter::NotifyWeaponFrozen()
 {
 	WeaponFreezeNotifyTimer = 2.5f;
-	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🥶 ОРУЖИЕ ЗАМЁРЗЛО! Нужен источник тепла!"), FLinearColor(0.4f, 0.85f, 1.f));
+	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🥶 WEAPON FROZEN! Need a heat source!"), FLinearColor(0.4f, 0.85f, 1.f));
 }
 
 float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool bCrit, bool bBypassAvoidance, AActor* AttackerActor,
@@ -2583,7 +2583,7 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	ForcedDodgeRollForTesting = -1.f;
 	if (!bBypassAvoidance && DodgeRoll < Luck * 0.4f)
 	{
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("💨 УКЛОНЕНИЕ!"), FLinearColor(0.3f, 0.9f, 1.f));
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("💨 DODGE!"), FLinearColor(0.3f, 0.9f, 1.f));
 		return 0.f;
 	}
 	// 2. Stance defense and fortitude cut (Godot: 15 fortitude = 22.5 %, at most 50 %).
@@ -2602,11 +2602,11 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 		{
 			bCrit = false; // the head never showed: the plain hit
 			Amount /= FMath::Max(CritMultiplierApplied, 1.f);
-			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🧱 ГОЛОВА В УКРЫТИИ"), FLinearColor(0.6f, 0.85f, 1.f));
+			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🧱 HEAD DOWN"), FLinearColor(0.6f, 0.85f, 1.f));
 		}
 		if (CoverAbsorb > 0.f)
 		{
-			UFloatingTextSubsystem::SpawnAboveOperative(this, FString::Printf(TEXT("🧱 УКРЫТИЕ -%d%%"), FMath::RoundToInt(CoverAbsorb * 100.f)),
+			UFloatingTextSubsystem::SpawnAboveOperative(this, FString::Printf(TEXT("🧱 COVER -%d%%"), FMath::RoundToInt(CoverAbsorb * 100.f)),
 				FLinearColor(0.5f, 0.8f, 1.f));
 		}
 	}
@@ -2631,7 +2631,7 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 		}
 		SetCarrying(false);
 	}
-	UFloatingTextSubsystem::SpawnAboveOperative(this, bCrit ? FString::Printf(TEXT("💥 КРИТИЧЕСКИЙ УДАР! -%d"), FMath::FloorToInt(Final))
+	UFloatingTextSubsystem::SpawnAboveOperative(this, bCrit ? FString::Printf(TEXT("💥 CRITICAL HIT! -%d"), FMath::FloorToInt(Final))
 		: FString::Printf(TEXT("-%d"), FMath::FloorToInt(Final)), bCrit ? FLinearColor(1.f, 0.25f, 0.1f) : FLinearColor(1.f, 0.3f, 0.3f));
 	// Godot rage_comp.on_incoming_hit(attacker_node, is_crit, final_incoming).
 	if (RageComponent && HealthComponent->IsAlive())
@@ -2691,8 +2691,8 @@ bool AOperativeCharacter::TryAIGrenadeThrow()
 	AGrenadeActor* Grenade = Grenades->ThrowAt(this, Opportunity.Target);
 	if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
 	{
-		const TCHAR* Callouts[] = { TEXT("💣 Бросаю гранату! Ложись!"), TEXT("🧨 Враги скучились! Ловите подарок!"),
-			TEXT("💣 Граната пошла! Пригнитесь!"), TEXT("🧨 Лови гранату, гады!") };
+		const TCHAR* Callouts[] = { TEXT("💣 Grenade out! Get down!"), TEXT("🧨 They're bunched up! Catch this!"),
+			TEXT("💣 Grenade away! Heads down!"), TEXT("🧨 Eat this, bastards!") };
 		Messages->PostMessage(DisplayName, FText::FromString(Callouts[FMath::RandRange(0, 3)]));
 	}
 	return Grenade != nullptr;
@@ -2734,17 +2734,17 @@ void AOperativeCharacter::AddExp(int32 Amount)
 	const int32 Gained = ProgressionRules::AddExp(Level, CurrentExp, Amount);
 	for (int32 NewLevel = FirstLevel + 1; NewLevel <= FirstLevel + Gained; ++NewLevel)
 	{
-		// Godot _on_level_up: +3 points, full heal, floating «⭐ УРОВЕНЬ N!», radio line.
+		// Godot _on_level_up: +3 points, full heal, floating "⭐ LEVEL N!", radio line.
 		UnspentStatPoints += ProgressionRules::PointsPerLevel;
 		if (HealthComponent)
 		{
 			HealthComponent->Heal(HealthComponent->GetMaxHealth() - HealthComponent->GetCurrentHealth());
 		}
-		UFloatingTextSubsystem::SpawnAboveOperative(this, FString::Printf(TEXT("⭐ УРОВЕНЬ %d!"), NewLevel), FLinearColor(1.f, 0.85f, 0.1f));
+		UFloatingTextSubsystem::SpawnAboveOperative(this, FString::Printf(TEXT("⭐ LEVEL %d!"), NewLevel), FLinearColor(1.f, 0.85f, 0.1f));
 		if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
 		{
 			Messages->PostMessage(DisplayName, FText::FromString(FString::Printf(
-				TEXT("⭐ НОВЫЙ УРОВЕНЬ %d! Доступно +3 очка характеристик для распределения!"), NewLevel)));
+				TEXT("⭐ NEW LEVEL %d! +3 attribute points to assign!"), NewLevel)));
 		}
 		UE_LOG(LogCodexTactics, Log, TEXT("%s reached level %d"), *DisplayName.ToString(), NewLevel);
 	}
@@ -2936,12 +2936,12 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		Slot.bLeftEdgeExposed ? 1 : 0, Slot.bRightEdgeExposed ? 1 : 0);
 	if (!bWasInCover)
 	{
-		UFloatingTextSubsystem::SpawnAboveOperative(this, Slot.Height == ECoverHeight::HighCover ? TEXT("🧱 У СТЕНЫ") : TEXT("🧱 ЗА УКРЫТИЕМ"),
+		UFloatingTextSubsystem::SpawnAboveOperative(this, Slot.Height == ECoverHeight::HighCover ? TEXT("🧱 AT THE WALL") : TEXT("🧱 BEHIND COVER"),
 			FLinearColor(0.5f, 0.8f, 1.f));
 		if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
 		{
 			Messages->PostMessage(DisplayName, FText::FromString(Slot.Height == ECoverHeight::HighCover
-				? TEXT("🧱 Прижался к стене, держу угол!") : TEXT("🧱 Укрылся за препятствием!")));
+				? TEXT("🧱 Hugging the wall, holding the corner!") : TEXT("🧱 Behind cover!")));
 		}
 		ReceiveCoverChanged(true, CurrentCoverHeight);
 	}
@@ -3036,7 +3036,7 @@ void AOperativeCharacter::SetCoverFireMode(ECoverFireMode Mode)
 ECoverFireMode AOperativeCharacter::ToggleCoverFireMode()
 {
 	SetCoverFireMode(CoverFireMode == ECoverFireMode::BlindFire ? ECoverFireMode::CornerLean : ECoverFireMode::BlindFire);
-	UFloatingTextSubsystem::SpawnAboveOperative(this, CoverFireMode == ECoverFireMode::BlindFire ? TEXT("🙈 ОГОНЬ ВСЛЕПУЮ (-40%)") : TEXT("👁️ ОГОНЬ ИЗ-ЗА УГЛА"),
+	UFloatingTextSubsystem::SpawnAboveOperative(this, CoverFireMode == ECoverFireMode::BlindFire ? TEXT("🙈 BLIND FIRE (-40%)") : TEXT("👁️ CORNER FIRE"),
 		FLinearColor(0.9f, 0.85f, 0.4f));
 	return CoverFireMode;
 }

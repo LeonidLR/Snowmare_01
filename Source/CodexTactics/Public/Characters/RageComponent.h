@@ -34,7 +34,7 @@ public:
 	void EnterRage(AActor* Offender = nullptr);
 
 	/** Godot exit_rage: radio line, target dropped. */
-	void ExitRage(const FString& Reason = TEXT("Ярость отпустила"));
+	void ExitRage(const FString& Reason = TEXT("Rage subsided"));
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Rage")
 	bool IsRaging() const { return bRaging; }

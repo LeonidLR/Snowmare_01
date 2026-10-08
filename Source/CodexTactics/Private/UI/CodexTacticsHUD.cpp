@@ -83,13 +83,13 @@ namespace
 	{
 		switch (Phase)
 		{
-		case ECodexGamePhase::Exploration: return TEXT("ИССЛЕДОВАНИЕ");
-		case ECodexGamePhase::Cutscene: return TEXT("КАТСЦЕНА");
-		case ECodexGamePhase::Preparation: return TEXT("ПОДГОТОВКА");
-		case ECodexGamePhase::WaveCombat: return TEXT("БОЙ");
-		case ECodexGamePhase::WaveCleared: return TEXT("ВОЛНА ОТБИТА");
-		case ECodexGamePhase::PostCombat: return TEXT("ПОСЛЕ БОЯ");
-		case ECodexGamePhase::GameOver: return TEXT("ПРОВАЛ");
+		case ECodexGamePhase::Exploration: return TEXT("EXPLORATION");
+		case ECodexGamePhase::Cutscene: return TEXT("CUTSCENE");
+		case ECodexGamePhase::Preparation: return TEXT("PREPARATION");
+		case ECodexGamePhase::WaveCombat: return TEXT("COMBAT");
+		case ECodexGamePhase::WaveCleared: return TEXT("WAVE CLEARED");
+		case ECodexGamePhase::PostCombat: return TEXT("AFTER COMBAT");
+		case ECodexGamePhase::GameOver: return TEXT("MISSION FAILED");
 		default: return TEXT("?");
 		}
 	}
@@ -98,9 +98,9 @@ namespace
 	{
 		switch (Mode)
 		{
-		case ECodexCombatMode::RealTime: return TEXT("РЕАЛЬНОЕ ВРЕМЯ");
-		case ECodexCombatMode::TacticalPause: return TEXT("ТАКТИЧЕСКАЯ ПАУЗА");
-		case ECodexCombatMode::TurnBased: return TEXT("ПОШАГОВЫЙ");
+		case ECodexCombatMode::RealTime: return TEXT("REAL TIME");
+		case ECodexCombatMode::TacticalPause: return TEXT("TACTICAL PAUSE");
+		case ECodexCombatMode::TurnBased: return TEXT("TURN-BASED");
 		default: return TEXT("");
 		}
 	}
@@ -109,11 +109,11 @@ namespace
 	{
 		switch (Tier)
 		{
-		case EColdTier::Chills: return TEXT("озноб");
-		case EColdTier::Freezing: return TEXT("замерзает");
-		case EColdTier::Hypothermia: return TEXT("гипотермия");
-		case EColdTier::Frostbite: return TEXT("ОБМОРОЖЕНИЕ");
-		default: return TEXT("норма");
+		case EColdTier::Chills: return TEXT("chills");
+		case EColdTier::Freezing: return TEXT("freezing");
+		case EColdTier::Hypothermia: return TEXT("hypothermia");
+		case EColdTier::Frostbite: return TEXT("FROSTBITE");
+		default: return TEXT("normal");
 		}
 	}
 }
@@ -133,7 +133,7 @@ FString ACodexTacticsHUD::StripUnsupportedGlyphs(const FString& Text)
 		}
 		if (Code == 0x25C0)
 		{
-			Result.AppendChar(TEXT('<')); // «◀ В РУКАХ»
+			Result.AppendChar(TEXT('<')); // «◀ EQUIPPED»
 			continue;
 		}
 		const bool bSurrogate = Code >= 0xD800 && Code <= 0xDFFF; // emoji outside the BMP
@@ -393,7 +393,7 @@ void ACodexTacticsHUD::HandleMainMenuChanged(bool bOpen)
 		MainMenu->SetVisibility(bOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 		if (bOpen)
 		{
-			MainMenu->RefreshModeButtons(); // «Начать бой» hidden on ambush levels
+			MainMenu->RefreshModeButtons(); // "Start combat" hidden on ambush levels
 		}
 	}
 	// Godot: the tactical bar is hidden until the game starts.
@@ -491,9 +491,9 @@ void ACodexTacticsHUD::DrawDefenseMarkers()
 		FCanvasTileItem Post(FVector2D(C.X - 1.5f * Scale, C.Y - Top * 0.8f), FVector2D(3.f * Scale, Top * 0.8f + Tip * 0.6f), Rim);
 		Post.BlendMode = SE_BLEND_Translucent;
 		Canvas->DrawItem(Post);
-		// «РУБЕЖ ×N» under it.
+		// «HOLD LINE ×N» under it.
 		UFont* Font = GEngine->GetSmallFont();
-		const FString Text = Marker.Defenders > 1 ? FString::Printf(TEXT("РУБЕЖ x%d"), Marker.Defenders) : FString(TEXT("РУБЕЖ"));
+		const FString Text = Marker.Defenders > 1 ? FString::Printf(TEXT("HOLD LINE x%d"), Marker.Defenders) : FString(TEXT("HOLD LINE"));
 		float TW = 0.f;
 		float TH = 0.f;
 		Canvas->StrLen(Font, Text, TW, TH);
@@ -676,15 +676,15 @@ void ACodexTacticsHUD::DrawCombatModeBadge()
 		Canvas->DrawItem(Item);
 		Y += H + 10.f;
 	};
-	// Combat time mode (user request 2026-10-06): «РЕАЛЬНОЕ ВРЕМЯ» / «ТАКТИЧЕСКАЯ ПАУЗА» / «ПОШАГОВЫЙ БОЙ» with the keys.
+	// Combat time mode (user request 2026-10-06): «REAL TIME» / «TACTICAL PAUSE» / «TURN-BASED» with the keys.
 	const FString Mode = FCombatTimeModeRules::GetModeLabel(Flow->GetPhase(), Flow->GetCombatMode());
 	if (!Mode.IsEmpty())
 	{
 		const ECodexCombatMode CombatMode = Flow->GetCombatMode();
 		const FString Hint = CombatMode == ECodexCombatMode::TurnBased
-			? FString::Printf(TEXT("удерж. ПРОБЕЛ %.1fс — реальное время"), FCombatTimeModeRules::GetHoldSeconds(CombatMode, Flow->GetConfig()))
-			: FString::Printf(TEXT("ПРОБЕЛ — %s  ·  удерж. %.1fс — пошаговый бой"),
-				CombatMode == ECodexCombatMode::TacticalPause ? TEXT("продолжить") : TEXT("пауза"),
+			? FString::Printf(TEXT("hold SPACE %.1fs — real time"), FCombatTimeModeRules::GetHoldSeconds(CombatMode, Flow->GetConfig()))
+			: FString::Printf(TEXT("SPACE — %s  ·  hold %.1fs — turn-based"),
+				CombatMode == ECodexCombatMode::TacticalPause ? TEXT("resume") : TEXT("pause"),
 				FCombatTimeModeRules::GetHoldSeconds(CombatMode, Flow->GetConfig()));
 		const FLinearColor Color = CombatMode == ECodexCombatMode::TacticalPause ? FLinearColor(1.f, 0.85f, 0.25f)
 			: (CombatMode == ECodexCombatMode::TurnBased ? FLinearColor(0.45f, 0.8f, 1.f) : FLinearColor(0.4f, 1.f, 0.5f));
@@ -705,12 +705,12 @@ void ACodexTacticsHUD::DrawCombatModeBadge()
 	}
 	else if (Targets.Num() > 1)
 	{
-		Who = FString::Printf(TEXT("группа %d"), Targets.Num());
+		Who = FString::Printf(TEXT("group %d"), Targets.Num());
 	}
 	ESquadFirePosture Posture = Squad->GetSquadPosture();
 	const bool bCommon = FirePostureRules::GetCommonPosture(Selected, Posture) || Selected.IsEmpty();
-	const FString Line = FString::Printf(TEXT("ОГОНЬ%s: %s   [,] пасс  [.] обор  [/] агр  ·  Alt — весь отряд"),
-		Who.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (%s)"), *Who), bCommon ? *FirePostureRules::GetLabel(Posture) : TEXT("РАЗНЫЕ"));
+	const FString Line = FString::Printf(TEXT("FIRE%s: %s  [,] pas [.] def [/] agg · Alt: squad"),
+		Who.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (%s)"), *Who), bCommon ? *FirePostureRules::GetLabel(Posture) : TEXT("MIXED"));
 	const FLinearColor PostureColor = !bCommon ? FLinearColor(0.85f, 0.85f, 0.85f) : PostureMarkerColor(Posture);
 	DrawCentered(Line, PostureColor, FLinearColor(0.f, 0.f, 0.f, 0.45f), 1.f);
 }
@@ -723,7 +723,7 @@ FLinearColor ACodexTacticsHUD::PostureMarkerColor(ESquadFirePosture Posture)
 
 void ACodexTacticsHUD::DrawPostureMarkers()
 {
-	// Per-operative fire posture marker (user request 2026-10-06): a small letter П / О / А in a dark box over the head,
+	// Per-operative fire posture marker (user request 2026-10-06): a small letter P / D / A in a dark box over the head,
 	// in the posture colour; the selected operative(s) get a brighter frame. Hidden under the start menu.
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	const UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
@@ -764,7 +764,7 @@ void ACodexTacticsHUD::DrawPostureMarkers()
 
 void ACodexTacticsHUD::DrawHordeWarning()
 {
-	// Horde (user request 2026-10-06): a pulsing «ОРДА!» banner under the mode badge and a marker towards the spot it
+	// Horde (user request 2026-10-06): a pulsing «HORDE!» banner under the mode badge and a marker towards the spot it
 	// appeared at — a frame round it while on screen, else an arrow at the screen edge (camera-relative direction).
 	const UHordeSubsystem* Horde = GetWorld()->GetSubsystem<UHordeSubsystem>();
 	FVector Location;
@@ -778,7 +778,7 @@ void ACodexTacticsHUD::DrawHordeWarning()
 	const FLinearColor Red(1.f, 0.18f, 0.12f, Pulse);
 	const float Distance = FVector::Dist2D(Location, Horde->GetLastSquadCentre()) / 100.f;
 	UFont* Font = GEngine->GetLargeFont();
-	const FString Banner = FString::Printf(TEXT("ОРДА!  %d врагов  -  %.0f м"), Count, Distance);
+	const FString Banner = FString::Printf(TEXT("HORDE!  %d enemies  -  %.0f m"), Count, Distance);
 	float W = 0.f;
 	float H = 0.f;
 	Canvas->StrLen(Font, Banner, W, H);
@@ -802,7 +802,7 @@ void ACodexTacticsHUD::DrawHordeWarning()
 		DrawLine(P.X + Half, P.Y - Half, P.X + Half, P.Y + Half, Red, 3.f);
 		DrawLine(P.X + Half, P.Y + Half, P.X - Half, P.Y + Half, Red, 3.f);
 		DrawLine(P.X - Half, P.Y + Half, P.X - Half, P.Y - Half, Red, 3.f);
-		DrawText(TEXT("ОРДА"), Red, P.X - Half, P.Y - Half - 18.f, GEngine->GetSmallFont(), 1.1f);
+		DrawText(TEXT("HORDE"), Red, P.X - Half, P.Y - Half - 18.f, GEngine->GetSmallFont(), 1.1f);
 		return;
 	}
 	// Off screen: the direction from the squad to the horde, turned into the camera's screen axes (top-down view).
@@ -828,7 +828,7 @@ void ACodexTacticsHUD::DrawHordeWarning()
 	DrawLine(Left.X, Left.Y, RightCorner.X, RightCorner.Y, Red, 4.f);
 	DrawLine(Base.X, Base.Y, (Base - Dir * 30.f).X, (Base - Dir * 30.f).Y, Red, 4.f);
 	const FVector2D LabelAt = Base - Dir * 52.f;
-	DrawText(TEXT("ОРДА"), Red, LabelAt.X - 18.f, LabelAt.Y - 8.f, GEngine->GetSmallFont(), 1.1f);
+	DrawText(TEXT("HORDE"), Red, LabelAt.X - 18.f, LabelAt.Y - 8.f, GEngine->GetSmallFont(), 1.1f);
 }
 
 void ACodexTacticsHUD::DrawWorldLabels()
@@ -1006,22 +1006,22 @@ FString ACodexTacticsHUD::DescribeOperative(const AOperativeCharacter& Operative
 	const USquadSubsystem* SquadSystem = GetWorld()->GetSubsystem<USquadSubsystem>();
 	const bool bSelected = !bLeader && SquadSystem && SquadSystem->HasMultiSelection() && SquadSystem->IsGroupSelected(&Operative);
 	FString Line = FString::Printf(TEXT("%s[%d] %s%s  %s"), bSelected ? TEXT("★ ") : TEXT(""), Operative.SquadIndex + 1, *Operative.DisplayName.ToString(),
-		bLeader ? TEXT(" <ЛИДЕР>") : TEXT(""), *AOperativeCharacter::GetStanceDisplayName(Operative.GetStance()).ToString());
+		bLeader ? TEXT(" <LEADER>") : TEXT(""), *AOperativeCharacter::GetStanceDisplayName(Operative.GetStance()).ToString());
 	if (SquadSystem)
 	{
-		Line += FString::Printf(TEXT("  огонь: %s"), *FirePostureRules::GetShortLabel(SquadSystem->GetEffectivePosture(&Operative)));
+		Line += FString::Printf(TEXT("  fire: %s"), *FirePostureRules::GetShortLabel(SquadSystem->GetEffectivePosture(&Operative)));
 	}
 	if (Operative.TacticalAnchor.Defense.IsActive())
 	{
-		Line += TEXT("  [РУБЕЖ: Защита]"); // Sprint 10
+		Line += TEXT("  [HOLD LINE: defending]"); // Sprint 10
 	}
 	if (Operative.IsSprinting())
 	{
-		Line += TEXT(" бег");
+		Line += TEXT(" sprinting");
 	}
 	else if (Operative.IsMoving())
 	{
-		Line += TEXT(" идёт");
+		Line += TEXT(" walking");
 	}
 	if (const UHealthComponent* Health = Operative.HealthComponent)
 	{
@@ -1029,21 +1029,21 @@ FString ACodexTacticsHUD::DescribeOperative(const AOperativeCharacter& Operative
 	}
 	if (const UColdSurvivalComponent* Cold = Operative.ColdSurvival)
 	{
-		Line += FString::Printf(TEXT("  холод %.0f%% (%s)"), Operative.ColdLevel, TierName(Cold->GetTier()));
+		Line += FString::Printf(TEXT("  cold %.0f%% (%s)"), Operative.ColdLevel, TierName(Cold->GetTier()));
 		if (Cold->IsNearHeatSource())
 		{
-			Line += TEXT(" греется");
+			Line += TEXT(" warming");
 		}
 		if (Cold->IsWeaponFrozen())
 		{
-			Line += TEXT("  ОРУЖИЕ ЗАМЁРЗЛО");
+			Line += TEXT("  WEAPON FROZEN");
 		}
 	}
-	Line += FString::Printf(TEXT("  патроны %d/%d%s  спички %d  гранаты %d"), Operative.CurrentClip, Operative.ReserveAmmo,
-		Operative.bIsReloading ? TEXT(" перезарядка") : TEXT(""), Operative.MatchesCount, Operative.GrenadesCount);
+	Line += FString::Printf(TEXT("  ammo %d/%d%s  matches %d  grenades %d"), Operative.CurrentClip, Operative.ReserveAmmo,
+		Operative.bIsReloading ? TEXT(" reloading") : TEXT(""), Operative.MatchesCount, Operative.GrenadesCount);
 	if (Operative.TurretsCount + Operative.BarricadesCount + Operative.MinesCount > 0)
 	{
-		Line += FString::Printf(TEXT("  [турели %d, баррикады %d, мины %d]"), Operative.TurretsCount, Operative.BarricadesCount,
+		Line += FString::Printf(TEXT("  [turrets %d, barricades %d, mines %d]"), Operative.TurretsCount, Operative.BarricadesCount,
 			Operative.MinesCount);
 	}
 	return Line;
@@ -1059,7 +1059,7 @@ float ACodexTacticsHUD::DrawObjectiveBanner()
 	// Godot ObjectivePanel: at (20, 20), gold 2 px frame, 12 x 8 padding, gold text.
 	UFont* Font = GEngine->GetMediumFont();
 	const float Scale = 1.f;
-	const FString Text = TEXT("ЦЕЛЬ: ") + StripUnsupportedGlyphs(Mission->GetObjective().ToString());
+	const FString Text = TEXT("OBJECTIVE: ") + StripUnsupportedGlyphs(Mission->GetObjective().ToString());
 	float W = 0.f;
 	float H = 0.f;
 	Canvas->StrLen(Font, Text, W, H);
@@ -1084,21 +1084,21 @@ void ACodexTacticsHUD::DrawSquadPanel(float Top)
 	TArray<TPair<FString, FLinearColor>> Lines;
 	if (Flow)
 	{
-		FString Header = FString::Printf(TEXT("ФАЗА: %s"), PhaseName(Flow->GetPhase()));
+		FString Header = FString::Printf(TEXT("PHASE: %s"), PhaseName(Flow->GetPhase()));
 		if (Flow->GetPhase() == ECodexGamePhase::WaveCombat)
 		{
-			Header += FString::Printf(TEXT("  |  %s  |  пауз %d/%d"), ModeName(Flow->GetCombatMode()),
+			Header += FString::Printf(TEXT("  |  %s  |  pauses %d/%d"), ModeName(Flow->GetCombatMode()),
 				Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges);
 		}
 		Lines.Emplace(Header, SpeakerColor);
 	}
 	if (Squad)
 	{
-		Lines.Emplace(Squad->IsSoloMode() ? TEXT("Режим: ОДИНОЧНЫЙ [B]") : TEXT("Режим: отряд [B]"), TextColor);
-		// Commander Mode (Sprint 07-A): «на паузе» while a tactical pause / turn-based fight freezes it.
+		Lines.Emplace(Squad->IsSoloMode() ? TEXT("Mode: SOLO [B]") : TEXT("Mode: squad [B]"), TextColor);
+		// Commander Mode (Sprint 07-A): «paused» while a tactical pause / turn-based fight freezes it.
 		const bool bAutonomy = Squad->IsAutonomousSquadCombat();
 		const bool bFrozenAutonomy = bAutonomy && Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat && !Flow->IsSquadAutonomyActive();
-		Lines.Emplace(FString::Printf(TEXT("АВТОНОМИЯ: %s [Ctrl+T]"), !bAutonomy ? TEXT("ВЫКЛ") : (bFrozenAutonomy ? TEXT("ВКЛ (пауза)") : TEXT("ВКЛ"))),
+		Lines.Emplace(FString::Printf(TEXT("AUTONOMY: %s [Ctrl+T]"), !bAutonomy ? TEXT("OFF") : (bFrozenAutonomy ? TEXT("ON (paused)") : TEXT("ON"))),
 			bAutonomy ? FLinearColor(0.35f, 1.f, 0.55f) : TextColor);
 		TArray<AOperativeCharacter*> Members = Squad->GetMembers();
 		Members.Sort([](const AOperativeCharacter& A, const AOperativeCharacter& B) { return A.SquadIndex < B.SquadIndex; });
@@ -1150,7 +1150,7 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 			*AOperativeCharacter::GetStanceDisplayName(Member->GetStance()).ToString());
 		if (Member->ColdSurvival && Member->ColdSurvival->IsFrostbitten())
 		{
-			Label += TEXT(" · ОБМОРОЖЕН");
+			Label += TEXT(" · FROSTBITTEN");
 		}
 		float W = 0.f;
 		float H = 0.f;
@@ -1158,16 +1158,16 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 		const bool bLeader = Member == Squad->GetLeader();
 		DrawRect(PanelColor, Screen.X - W * 0.5f - 4.f, Screen.Y - 2.f, W + 8.f, H + 4.f);
 		DrawText(Label, bLeader ? SpeakerColor : TextColor, Screen.X - W * 0.5f, Screen.Y, Font);
-		// Godot PanicIndicator: «ПАНИКА!» with the phase while panicking, «СТРЕСС: n%» from 50 % stress.
+		// Godot PanicIndicator: «PANIC!» with the phase while panicking, «STRESS: n%» from 50 % stress.
 		const UPanicComponent* Panic = Member->PanicComponent;
 		FString PanicBadge;
 		if (Panic && Panic->IsPanicking())
 		{
-			PanicBadge = Panic->GetPhase() == EPanicPhase::Cowering ? TEXT("ПАНИКА! [СЖАЛСЯ В СТРАХЕ]") : TEXT("ПАНИКА! [ОТБЕГАЕТ]");
+			PanicBadge = Panic->GetPhase() == EPanicPhase::Cowering ? TEXT("PANIC! [COWERING]") : TEXT("PANIC! [FLEEING]");
 		}
 		else if (Panic && Panic->IsCombatActive() && Panic->GetStress() >= 50.f)
 		{
-			PanicBadge = FString::Printf(TEXT("СТРЕСС: %d%%"), FMath::FloorToInt(Panic->GetStress()));
+			PanicBadge = FString::Printf(TEXT("STRESS: %d%%"), FMath::FloorToInt(Panic->GetStress()));
 		}
 		if (!PanicBadge.IsEmpty() && !Member->IsRaging())
 		{
@@ -1180,8 +1180,8 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 		}
 		if (Member->IsRaging())
 		{
-			// Godot RageBadge «🔥 ЯРОСТЬ!» above the head.
-			const FString Badge = StripUnsupportedGlyphs(TEXT("🔥 ЯРОСТЬ!"));
+			// Godot RageBadge «🔥 RAGE!» above the head.
+			const FString Badge = StripUnsupportedGlyphs(TEXT("🔥 RAGE!"));
 			float BW = 0.f;
 			float BH = 0.f;
 			Canvas->StrLen(Font, Badge, BW, BH);
@@ -1190,7 +1190,7 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 		}
 	}
 
-	// Godot recruit_susanin.gd OverheadPrompt: «[Клик] Поговорить», blue «[Клик] Подойти и спасти» while freezing.
+	// Godot recruit_susanin.gd OverheadPrompt: «[Click] Talk», blue «[Click] Go and rescue» while freezing.
 	const URecruitSubsystem* Recruits = GetWorld()->GetSubsystem<URecruitSubsystem>();
 	const AOperativeCharacter* Recruit = Recruits ? Recruits->GetSusanin() : nullptr;
 	if (Recruit && Recruits->IsRecruit(Recruit))
@@ -1199,8 +1199,8 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 		if (Screen.Z > 0.f)
 		{
 			const bool bDistress = Recruits->IsInColdDistress();
-			const FString Label = StripUnsupportedGlyphs(bDistress ? FString::Printf(TEXT("❄️ [Клик] Подойти и спасти: %s"), *Recruit->DisplayName.ToString())
-				: FString(TEXT("💬 [Клик] Поговорить")));
+			const FString Label = StripUnsupportedGlyphs(bDistress ? FString::Printf(TEXT("❄️ [Click] Go and rescue: %s"), *Recruit->DisplayName.ToString())
+				: FString(TEXT("💬 [Click] Talk")));
 			float W = 0.f;
 			float H = 0.f;
 			Canvas->StrLen(Font, Label, W, H);
@@ -1280,7 +1280,7 @@ ETransferRequestOutcome ACodexTacticsHUD::HandleTransferRequest(const FTransferR
 	};
 	if (Request.Action != ETransferAction::Take && TransferRules::GetAvailable(*Operative, Request.Item) <= 0)
 	{
-		Post(TEXT("В вашем инвентаре закончился этот предмет или патроны!"));
+		Post(TEXT("You have run out of this item or ammo!"));
 		return ETransferRequestOutcome::Failed;
 	}
 	if (Request.Action == ETransferAction::Store)
@@ -1288,7 +1288,7 @@ ETransferRequestOutcome ACodexTacticsHUD::HandleTransferRequest(const FTransferR
 		const ALootCrateActor* Crate = Cast<ALootCrateActor>(Request.Container.Get());
 		if (Crate && !Crate->CanStore())
 		{
-			Post(TEXT("В этот ящик сейчас ничего не положить (заминирован или разрушен)."));
+			Post(TEXT("Nothing can be stored in this crate right now (mined or destroyed)."));
 			return ETransferRequestOutcome::Failed;
 		}
 	}
@@ -1297,12 +1297,12 @@ ETransferRequestOutcome ACodexTacticsHUD::HandleTransferRequest(const FTransferR
 	{
 		switch (Request.Action)
 		{
-		case ETransferAction::Store: Post(TEXT("⚠️ В ящике нет места!")); break;
+		case ETransferAction::Store: Post(TEXT("⚠️ The crate is full!")); break;
 		case ETransferAction::Take:
-			Post(USquadTransferSubsystem::GetContainerStash(Request.Container.Get(), false) ? TEXT("⚠️ Больше не унести (или там пусто).")
-				: TEXT("Здесь нечего взять."));
+			Post(USquadTransferSubsystem::GetContainerStash(Request.Container.Get(), false) ? TEXT("⚠️ Can't carry any more (or it is empty).")
+				: TEXT("Nothing to take here."));
 			break;
-		default: Transfer->Execute(FTransferRequest::MakeGive(Operative, Request.Recipient.Get(), Request.Item, 1)); break; // «нет места»
+		default: Transfer->Execute(FTransferRequest::MakeGive(Operative, Request.Recipient.Get(), Request.Item, 1)); break; // «no room»
 		}
 		return ETransferRequestOutcome::Failed;
 	}

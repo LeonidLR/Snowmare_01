@@ -31,9 +31,9 @@ namespace PersonalItemRules
 	/** Godot heal_with_item: nothing to do at full health and zero cold. */
 	CODEXTACTICS_API bool CanUse(float Health, float MaxHealth, float Cold);
 
-	/** «Аптечка», «Консервы», «Хлеб», «Шоколад» (Godot item_names). */
+	/** "Medkit", "Canned food", "Bread", "Chocolate" (Godot item_names). */
 	CODEXTACTICS_API FText GetName(EPersonalItem Item);
 
-	/** «аптечек», «консервов», «хлеба», «шоколада» (Godot «У %s нет … в личном инвентаре!»). */
+	/** "medkits", "canned food", "bread", "chocolate" (Godot "%s has no ... in personal inventory!"). */
 	CODEXTACTICS_API FText GetMissingName(EPersonalItem Item);
 }

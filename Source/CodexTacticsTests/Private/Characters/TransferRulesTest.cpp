@@ -29,12 +29,12 @@ bool FTransferRulesTest::RunTest(const FString&)
 	Recipient->MedkitsCount = 0;
 	FTransferResult Result = TransferRules::Transfer(*Sender, *Recipient, ETransferItem::Medkit);
 	TestTrue(TEXT("medkit handed over"), Result.bDone && Sender->MedkitsCount == 0 && Recipient->MedkitsCount == 1);
-	TestEqual(TEXT("feedback"), Result.Feedback, FString(TEXT("+1 Аптечка")));
+	TestEqual(TEXT("feedback"), Result.Feedback, FString(TEXT("+1 Medkit")));
 	TestFalse(TEXT("nothing left"), TransferRules::Transfer(*Sender, *Recipient, ETransferItem::Medkit).bDone);
 
 	Result = TransferRules::Transfer(*Sender, *Recipient, ETransferItem::RifleAmmo);
 	TestTrue(TEXT("M16 pack of 30"), Result.bDone && Sender->ReserveAmmo == 30 && Recipient->ReserveAmmo == 90);
-	TestEqual(TEXT("M16 feedback"), Result.Feedback, FString(TEXT("+30 Патроны M16")));
+	TestEqual(TEXT("M16 feedback"), Result.Feedback, FString(TEXT("+30 M16 rounds")));
 	Sender->ReserveAmmo = 10;
 	Result = TransferRules::Transfer(*Sender, *Recipient, ETransferItem::RifleAmmo);
 	TestTrue(TEXT("last 10 rounds"), Result.bDone && Sender->ReserveAmmo == 0 && Result.Feedback.StartsWith(TEXT("+10")));
@@ -49,7 +49,7 @@ bool FTransferRulesTest::RunTest(const FString&)
 	TestTrue(TEXT("recipient full of turrets"), Result.bRecipientFull && !Result.bDone && Sender->TurretsCount == 1);
 	Recipient->AddDeployable(EDeployableType::Turret, -1);
 	Result = TransferRules::Transfer(*Sender, *Recipient, ETransferItem::Turret);
-	TestTrue(TEXT("turret handed over"), Result.bDone && Sender->TurretsCount == 0 && Result.Feedback == TEXT("+1 Турель"));
+	TestTrue(TEXT("turret handed over"), Result.bDone && Sender->TurretsCount == 0 && Result.Feedback == TEXT("+1 Turret"));
 	return true;
 }
 
@@ -177,7 +177,7 @@ bool FTransferPartialStackTest::RunTest(const FString&)
 	FTransferResult Result = TransferRules::TransferQuantity(*Sender, *Recipient, ETransferItem::RifleAmmo, 15);
 	TestTrue(TEXT("15 of 30 rounds"), Result.bDone && Result.Moved == 15 && Sender->GetReserve(TEXT("m16")) == 15
 		&& Recipient->GetReserve(TEXT("m16")) == 75);
-	TestEqual(TEXT("feedback"), Result.Feedback, FString(TEXT("+15 Патроны M16")));
+	TestEqual(TEXT("feedback"), Result.Feedback, FString(TEXT("+15 M16 rounds")));
 	Result = TransferRules::TransferQuantity(*Sender, *Recipient, ETransferItem::RifleAmmo, 40);
 	TestTrue(TEXT("asking for more than there is: the rest"), Result.Moved == 15 && Sender->GetReserve(TEXT("m16")) == 0 && !Result.bClampedByCapacity);
 	TestFalse(TEXT("empty: nothing"), TransferRules::TransferQuantity(*Sender, *Recipient, ETransferItem::RifleAmmo, 5).bDone);

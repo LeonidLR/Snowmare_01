@@ -79,9 +79,9 @@ FString FCombatTimeModeRules::GetModeLabel(ECodexGamePhase Phase, ECodexCombatMo
 	}
 	switch (Mode)
 	{
-	case ECodexCombatMode::RealTime: return TEXT("РЕАЛЬНОЕ ВРЕМЯ");
-	case ECodexCombatMode::TacticalPause: return TEXT("ТАКТИЧЕСКАЯ ПАУЗА");
-	case ECodexCombatMode::TurnBased: return TEXT("ПОШАГОВЫЙ БОЙ");
+	case ECodexCombatMode::RealTime: return TEXT("REAL TIME");
+	case ECodexCombatMode::TacticalPause: return TEXT("TACTICAL PAUSE");
+	case ECodexCombatMode::TurnBased: return TEXT("TURN-BASED");
 	default: return FString();
 	}
 }
@@ -90,9 +90,9 @@ FString FCombatTimeModeRules::GetHoldCaption(ECodexGamePhase Phase, ECodexCombat
 {
 	switch (ResolveSpace(Phase, Mode, ESpaceInputAction::Hold, Config))
 	{
-	case ECombatTimeModeRequest::EnterTurnBased: return TEXT("ВХОД В ПОШАГОВЫЙ БОЙ");
-	case ECombatTimeModeRequest::ExitTurnBasedToRealTime: return TEXT("ВОЗВРАТ В РЕАЛЬНОЕ ВРЕМЯ");
-	case ECombatTimeModeRequest::ExitTurnBasedToPause: return TEXT("ВОЗВРАТ В ТАКТИЧЕСКУЮ ПАУЗУ");
+	case ECombatTimeModeRequest::EnterTurnBased: return TEXT("ENTERING TURN-BASED");
+	case ECombatTimeModeRequest::ExitTurnBasedToRealTime: return TEXT("BACK TO REAL TIME");
+	case ECombatTimeModeRequest::ExitTurnBasedToPause: return TEXT("BACK TO TACTICAL PAUSE");
 	default: return FString();
 	}
 }

@@ -110,7 +110,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 	{
 	case EEnemyArchetype::Cutter:
 		// Godot enemy_cutter.gd _ready: 75 HP, 6.2 m/s, 18 damage, 2 m, 1.1 s, crit 0.25 x1.75.
-		EnemyDisplayName = TEXT("Механо-гончая Cutter");
+		EnemyDisplayName = TEXT("Cutter Mech-Hound");
 		HealthComponent->SetMaxHealth(75.0f);
 		HealthComponent->SetArmorTier(EArmorTier::Light);
 		GetCharacterMovement()->MaxWalkSpeed = 620.0f;
@@ -136,7 +136,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		break;
 
 	case EEnemyArchetype::FrostHound:
-		EnemyDisplayName = TEXT("Ледяная гончая");
+		EnemyDisplayName = TEXT("Frost Hound");
 		HealthComponent->SetMaxHealth(45.0f);
 		HealthComponent->SetArmorTier(EArmorTier::Light);
 		HealthComponent->SetBaseArmorReduction(0.10f);
@@ -152,7 +152,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 
 	case EEnemyArchetype::Spitter:
 	case EEnemyArchetype::CryoDrone:
-		EnemyDisplayName = TEXT("Ледяной стрелок");
+		EnemyDisplayName = TEXT("Frost Spitter");
 		HealthComponent->SetMaxHealth(70.0f);
 		HealthComponent->SetArmorTier(EArmorTier::Medium);
 		HealthComponent->SetBaseArmorReduction(0.40f);
@@ -167,7 +167,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		break;
 
 	case EEnemyArchetype::Brute:
-		EnemyDisplayName = TEXT("Ледяной громила");
+		EnemyDisplayName = TEXT("Frost Brute");
 		HealthComponent->SetMaxHealth(220.0f);
 		HealthComponent->SetArmorTier(EArmorTier::Heavy);
 		HealthComponent->SetBaseArmorReduction(0.75f);
@@ -183,7 +183,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 
 	case EEnemyArchetype::Marksman:
 		// UE-only archetype (TANDEM request 3): the shot itself is tuned in AMarksmanEnemyCharacter::MarksmanConfig.
-		EnemyDisplayName = TEXT("Снайпер");
+		EnemyDisplayName = TEXT("Marksman");
 		HealthComponent->SetMaxHealth(80.0f);
 		HealthComponent->SetArmorTier(EArmorTier::Medium);
 		GetCharacterMovement()->MaxWalkSpeed = 320.0f;
@@ -200,7 +200,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 
 	case EEnemyArchetype::Frostbitten:
 	default:
-		EnemyDisplayName = TEXT("Промёрзший");
+		EnemyDisplayName = TEXT("Frostbitten");
 		HealthComponent->SetMaxHealth(60.0f);
 		HealthComponent->SetArmorTier(EArmorTier::Light);
 		HealthComponent->SetBaseArmorReduction(0.10f);
@@ -449,7 +449,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		if (!bFleeingFire)
 		{
 			bFleeingFire = true;
-			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("🔥😱 СТРАХ ОГНЯ!"), FLinearColor(1.f, 0.45f, 0.1f));
+			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("🔥😱 FEAR OF FIRE!"), FLinearColor(1.f, 0.45f, 0.1f));
 		}
 		return;
 	}
@@ -472,7 +472,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		if (!bFallingBack)
 		{
 			bFallingBack = true;
-			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("↩ ОТХОД"), FLinearColor(0.7f, 0.85f, 1.f));
+			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("↩ FALLING BACK"), FLinearColor(0.7f, 0.85f, 1.f));
 		}
 		if (AIC)
 		{
@@ -750,7 +750,7 @@ AActor* AEnemyCharacter::FindTarget() const
 		}
 		Candidates = AllCandidates;
 	}
-	const bool bTurretHit = LastAttackerSource.Contains(TEXT("Турель")) || LastAttackerSource.Contains(TEXT("Turret"));
+	const bool bTurretHit = LastAttackerSource.Contains(TEXT("Турель")) || LastAttackerSource.Contains(TEXT("Turret")); // cyrillic-ok: legacy Russian data
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 	const int32 Index = EnemyAIRules::SelectTarget(AIConfig, EnemyAIRules::IsSmallEnemy(Archetype), Feet, Candidates, bTurretHit);
 	if (Actors.IsValidIndex(Index))
@@ -915,7 +915,7 @@ void AEnemyCharacter::AttackObject(AActor* Object)
 	ObjectHealth->ApplyDirectHealthLoss(AttackDamage * (bBarricade && Archetype == EEnemyArchetype::Brute ? 2.f : 1.f), EnemyDisplayName);
 	if (AInteractableActor* Trapped = Cast<AInteractableActor>(Object); Trapped && Trapped->bTrapped && IsValid(Trapped))
 	{
-		Trapped->DetonateTrap(false, NSLOCTEXT("EnemyCharacter", "EnemyBlow", "Удар противника"));
+		Trapped->DetonateTrap(false, NSLOCTEXT("EnemyCharacter", "EnemyBlow", "Enemy strike"));
 	}
 	else if (ABarricadeActor* Barricade = Cast<ABarricadeActor>(Object); Barricade && IsValid(Barricade))
 	{
@@ -1400,7 +1400,7 @@ void AEnemyCharacter::StartPatrolSearch(const FVector& Location)
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s searches around %s"), *GetName(), *Location.ToCompactString());
 	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] search started by %s at %.1f s"), *GetName(), GetWorld()->GetTimeSeconds());
-	UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❓ ПОИСК"), FLinearColor(1.f, 0.8f, 0.25f));
+	UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❓ SEARCHING"), FLinearColor(1.f, 0.8f, 0.25f));
 	// The whole patrol hunts: its leader and every escort.
 	if (AEnemyCharacter* Leader = EscortLeader.Get(); Leader && Leader->IsOnPatrol() && !Leader->IsSearching())
 	{
@@ -1500,7 +1500,7 @@ void AEnemyCharacter::EndPatrolSearch()
 	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] search timed out for %s at %.1f s"), *GetName(), GetWorld()->GetTimeSeconds());
 	if (!bIsDying)
 	{
-		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("ОТБОЙ"), FLinearColor(0.7f, 0.8f, 0.9f));
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("STAND DOWN"), FLinearColor(0.7f, 0.8f, 0.9f));
 	}
 }
 
@@ -1677,7 +1677,7 @@ void AEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertL
 	LogStealthDetection(Cause, bWasSearching);
 	if (!bIsDying)
 	{
-		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❗ ТРЕВОГА!"), FLinearColor(1.f, 0.35f, 0.2f));
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❗ ALARM!"), FLinearColor(1.f, 0.35f, 0.2f));
 	}
 	PropagatePatrolBreak(AlertLocation);
 	// User request 2026-10-06: an enemy that engages the squad starts the fight on an ambush level.
@@ -1849,7 +1849,7 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 		JumpPhase = ECutterJumpPhase::None;
 		GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Ignore);
 		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
-		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("💀 СБИТ В ВОЗДУХЕ"), FLinearColor(1.f, 0.25f, 0.25f));
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("💀 SHOT DOWN MID-AIR"), FLinearColor(1.f, 0.25f, 0.25f));
 	}
 	else
 	{
@@ -1897,19 +1897,19 @@ bool AEnemyCharacter::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	FString Status;
 	if (HealthComponent->HasStatusEffect(EStatusEffect::Burning))
 	{
-		Status += TEXT(" ГОРИТ");
+		Status += TEXT(" BURNING");
 	}
 	if (HealthComponent->HasStatusEffect(EStatusEffect::Frozen))
 	{
-		Status += TEXT(" ЛЁД");
+		Status += TEXT(" ICED");
 	}
 	if (HealthComponent->HasStatusEffect(EStatusEffect::Stagger))
 	{
-		Status += TEXT(" ОГЛУШЁН");
+		Status += TEXT(" STUNNED");
 	}
 	if (HealthComponent->HasStatusEffect(EStatusEffect::ArmorShred))
 	{
-		Status += TEXT(" БРОНЯ-");
+		Status += TEXT(" ARMOR-");
 	}
 	OutLabel.Text = FString::Printf(TEXT("%s%s\n%d/%d"), *EnemyDisplayName, *Status,
 		FMath::FloorToInt(FMath::Max(0.f, HealthComponent->GetCurrentHealth())), FMath::FloorToInt(HealthComponent->GetMaxHealth()));
@@ -2034,7 +2034,7 @@ void AEnemyCharacter::ApplyJumpImpactDamage()
 	}
 	if (bHitAny)
 	{
-		UFloatingTextSubsystem::SpawnAboveEnemy(this, FString::Printf(TEXT("💥 НАЛЁТ %d"), FMath::FloorToInt(Damage)), FLinearColor(1.f, 0.35f, 0.1f));
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, FString::Printf(TEXT("💥 POUNCE %d"), FMath::FloorToInt(Damage)), FLinearColor(1.f, 0.35f, 0.1f));
 	}
 }
 
@@ -2046,6 +2046,6 @@ void AEnemyCharacter::Landed(const FHitResult& Hit)
 		// Godot _process_airborne_death: crash landing.
 		bAirborneDeath = false;
 		GetCharacterMovement()->StopMovementImmediately();
-		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("💥 КРАХ"), FLinearColor(0.9f, 0.5f, 0.2f));
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("💥 CRASH"), FLinearColor(0.9f, 0.5f, 0.2f));
 	}
 }

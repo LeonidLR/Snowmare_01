@@ -148,7 +148,7 @@ void AGrenadeActor::Detonate()
 void AGrenadeActor::ApplyAreaEffect()
 {
 	const FVector Center = GetActorLocation();
-	const FText Source = LOCTEXT("Source", "Граната");
+	const FText Source = LOCTEXT("Source", "Grenade");
 	// Patrols hear the squad's grenade (enemy_perception.json hear_explosion_m) and engage (user request 2026-10-06).
 	AEnemyCharacter::NotifySquadNoise(GetWorld(), Center, ESquadNoise::Explosion);
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();

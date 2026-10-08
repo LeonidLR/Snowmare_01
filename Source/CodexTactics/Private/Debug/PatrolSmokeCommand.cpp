@@ -8,7 +8,7 @@
 // SEARCHING (user amendment 2026-10-06: no Engage, no fight); with the search time cut to 4 s they give up and walk the
 // route again; an open dialogue holds them (no detection though the hound's nose is set to 100 m, nobody moves); once it
 // closes the hound smells the squad, the patrol engages and the ambush fight starts (WaveCombat / RealTime, wave 1 =
-// the two of them) — no «Начать бой».
+// the two of them) — no "Start combat".
 
 #include "CoreMinimal.h"
 
@@ -167,7 +167,7 @@ namespace PatrolSmoke
 				PostureSquad->SetSquadPosture(ESquadFirePosture::Passive);
 			}
 			Encounter->SetPatrolSearchSecondsOverride(4.f);
-			Check(State, Encounter->IsAmbushCombatStart(), TEXT("ambush level (no «Начать бой»)"));
+			Check(State, Encounter->IsAmbushCombatStart(), TEXT("ambush level (no \"Start combat\")"));
 			Marksman->StartPatrol(Route, nullptr);
 			Hound->StartPatrol(nullptr, Marksman);
 			Check(State, Marksman->IsOnPatrol() && Marksman->GetAIState() == EMarksmanAIState::Patrol, TEXT("marksman patrols the spline route"));

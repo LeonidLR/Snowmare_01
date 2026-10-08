@@ -1,7 +1,7 @@
 // Dev-only console command for a headless save / load check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.SaveLoadSmoke
 // Slots go to Saved/SmokeSaves. The squad is put in a known state (hurt, cold, pistol with 5 rounds, no medkits,
-// engineer on guard, empty canister taken, a crate looted), saved to «Леонид_01», changed, loaded: everything comes
+// engineer on guard, empty canister taken, a crate looted), saved to "Leonid_01", changed, loaded: everything comes
 // back; F5 writes «quicksave»; the slot list, metadata and the next suggested name are checked
 // (Godot Scripts/managers/save_manager.gd, main.gd _perform_quick_save).
 
@@ -93,12 +93,12 @@ namespace SaveLoadSmoke
 		const FVector Spot = Commander->GetActorLocation();
 		const float Health = Commander->HealthComponent->GetCurrentHealth();
 
-		Check(State, Saves->SaveGame(TEXT("Леонид_01")) && Saves->HasSave(TEXT("Леонид_01")), TEXT("saved to «Леонид_01»"));
+		Check(State, Saves->SaveGame(TEXT("Leonid_01")) && Saves->HasSave(TEXT("Leonid_01")), TEXT("saved to \"Leonid_01\""));
 		FSaveSlotInfo Info;
-		const bool bInfo = Saves->GetSaveInfo(TEXT("Леонид_01"), Info);
-		Check(State, bInfo && Info.StageName == TEXT("Периметр КПП (Поиск дизеля)")
+		const bool bInfo = Saves->GetSaveInfo(TEXT("Leonid_01"), Info);
+		Check(State, bInfo && Info.StageName == TEXT("Checkpoint perimeter (Find diesel)")
 			&& Info.SaveType == TEXT("manual") && Info.SquadCount == 3, FString::Printf(TEXT("metadata: %s | %s | %s"), *Info.StageName, *Info.SquadSummary, *Info.DateTime));
-		Check(State, Saves->SuggestNextSlotName() == TEXT("Леонид_02"), Saves->SuggestNextSlotName());
+		Check(State, Saves->SuggestNextSlotName() == TEXT("Leonid_02"), Saves->SuggestNextSlotName());
 
 		// Change everything.
 		Commander->HealthComponent->Heal(1000.f);
@@ -109,7 +109,7 @@ namespace SaveLoadSmoke
 		Squad->ToggleGuard(Engineer);
 		Quests->RestoreState(FQuestChainState());
 
-		Check(State, Saves->LoadFromSlotWithMessage(TEXT("Леонид_01")), TEXT("loaded «Леонид_01»"));
+		Check(State, Saves->LoadFromSlotWithMessage(TEXT("Leonid_01")), TEXT("loaded \"Leonid_01\""));
 		Check(State, FMath::IsNearlyEqual(Commander->HealthComponent->GetCurrentHealth(), Health) && FMath::IsNearlyEqual(Commander->ColdLevel, 30.f),
 			FString::Printf(TEXT("health %.0f, cold %.0f back"), Commander->HealthComponent->GetCurrentHealth(), Commander->ColdLevel));
 		Check(State, FVector::Dist2D(Commander->GetActorLocation(), Spot) < 5.f, TEXT("position back"));

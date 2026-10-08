@@ -13,7 +13,7 @@ class UWidget;
 
 /**
  * Character profile (key P): portrait, name, role, level, free points, then EXP / HP / luck / accuracy / fortitude rows
- * with bars and - / + buttons for the stat points, «< Пред.» / «Закрыть [P]» / «След. >» to page through the squad.
+ * with bars and - / + buttons for the stat points, «< Prev» / «Close [P]» / «Next >» to page through the squad.
  * Refreshes every frame while open. Built in C++ (restyle through a Widget Blueprint subclass).
  * Godot reference: Scenes/ui/profile/profile_dialog.gd (430 x 530, gold frame), main.gd _toggle_profile_dialog /
  * _populate_profile_dialog.
@@ -47,7 +47,7 @@ public:
 
 	void Refresh();
 
-	/** Header lines: name, role, «Уровень: N», «Свободных очков: N». */
+	/** Header lines: name, role, «Level: N», «Free points: N». */
 	FString GetHeaderText() const;
 
 	/** Row texts: 0 EXP, 1 HP, 2 luck, 3 accuracy, 4 fortitude. */

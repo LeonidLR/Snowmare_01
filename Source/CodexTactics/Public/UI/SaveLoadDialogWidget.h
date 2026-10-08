@@ -41,9 +41,9 @@ enum class ESaveDialogMode : uint8
 };
 
 /**
- * Save slot manager: slot name field (suggested «Леонид_NN»), «Сохранить» / «Перезаписать» (with an overwrite
- * confirmation), the slot cards newest first (badge АВТО / БЫСТРОЕ / РУЧНОЕ, stage, author, time, squad; click selects,
- * a second click on the selected card acts, «Загрузить», delete), status line, «Назад в меню».
+ * Save slot manager: slot name field (suggested «Leonid_NN»), «Save» / «Overwrite» (with an overwrite
+ * confirmation), the slot cards newest first (badge AUTO / QUICK / MANUAL, stage, author, time, squad; click selects,
+ * a second click on the selected card acts, «Load», delete), status line, «Back to menu».
  * Godot reference: Scenes/ui/pause/save_load_dialog.gd, main.gd _on_save_slot_requested / _on_load_slot_requested.
  */
 UCLASS(Blueprintable)
@@ -68,9 +68,9 @@ public:
 	FText GetSaveButtonText() const;
 	int32 GetCardCount() const { return CardFrames.Num(); }
 
-	/** «Сохранить»: new slot saves at once, an existing one asks for the overwrite confirmation. */
+	/** «Save»: new slot saves at once, an existing one asks for the overwrite confirmation. */
 	void PressSave();
-	/** Confirmation «Да, перезаписать». */
+	/** Confirmation «Yes, overwrite». */
 	void ConfirmOverwrite();
 	void LoadSlot(const FString& SlotName);
 	void DeleteSlot(const FString& SlotName);

@@ -245,9 +245,9 @@ void USquadSubsystem::SetAutonomousSquadCombat(bool bEnabled)
 	UE_LOG(LogCodexTactics, Display, TEXT("Commander Mode (autonomous squad combat): %s"), bEnabled ? TEXT("ON") : TEXT("OFF"));
 	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
 	{
-		Messages->PostMessage(FText::FromString(TEXT("Командир")), FText::FromString(bEnabled
-			? TEXT("Автономия: ВКЛ. Бойцы сами держат позиции в 7 м от точки приказа (Ctrl + T — выключить).")
-			: TEXT("Автономия: ВЫКЛ. Полный ручной контроль.")));
+		Messages->PostMessage(FText::FromString(TEXT("Commander")), FText::FromString(bEnabled
+			? TEXT("Autonomy ON. Operatives hold positions within 7 m of the order point on their own (Ctrl + T - turn off).")
+			: TEXT("Autonomy OFF. Full manual control.")));
 	}
 }
 
@@ -297,7 +297,7 @@ int32 USquadSubsystem::ApplyPostureOrder(ESquadFirePosture Posture, bool bSquadW
 		}
 		if (Messages)
 		{
-			Messages->PostMessage(LOCTEXT("PostureSpeaker", "ОТРЯД"), FText::Format(LOCTEXT("SquadPosture", "🎯 Режим огня отряда: {0}"), Name));
+			Messages->PostMessage(LOCTEXT("PostureSpeaker", "SQUAD"), FText::Format(LOCTEXT("SquadPosture", "🎯 Squad fire posture: {0}"), Name));
 		}
 		return GetMembers().Num();
 	}
@@ -309,9 +309,9 @@ int32 USquadSubsystem::ApplyPostureOrder(ESquadFirePosture Posture, bool bSquadW
 	}
 	if (Messages)
 	{
-		Messages->PostMessage(LOCTEXT("PostureSpeaker", "ОТРЯД"), Targets.Num() == 1
-			? FText::Format(LOCTEXT("UnitPosture", "🎯 Режим огня бойца {0}: {1} (Alt — весь отряд)"), Targets[0]->DisplayName, Name)
-			: FText::Format(LOCTEXT("GroupPosture", "🎯 Режим огня выбранных бойцов ({0}): {1}"), Targets.Num(), Name));
+		Messages->PostMessage(LOCTEXT("PostureSpeaker", "SQUAD"), Targets.Num() == 1
+			? FText::Format(LOCTEXT("UnitPosture", "🎯 Fire posture of {0}: {1} (Alt - whole squad)"), Targets[0]->DisplayName, Name)
+			: FText::Format(LOCTEXT("GroupPosture", "🎯 Fire posture of selected operatives ({0}): {1}"), Targets.Num(), Name));
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Fire posture %s for %d selected operatives"), *FirePostureRules::GetLabel(Posture), Targets.Num());
 	return Targets.Num();
@@ -364,15 +364,15 @@ void USquadSubsystem::EnterSoloMode()
 		if (AOperativeCharacter* Operative = Follower.Operative.Get())
 		{
 			Operative->SetStance(EOperativeStance::Crouching);
-			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🛡️ ОБОРОНА: ПРИСЕВ"), FLinearColor(0.3f, 0.9f, 0.4f));
+			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🛡️ GUARD: CROUCHED"), FLinearColor(0.3f, 0.9f, 0.4f));
 		}
 	}
-	UFloatingTextSubsystem::SpawnAboveOperative(LeaderRef, TEXT("👤 РЕЖИМ СОЛО [B]"), FLinearColor(0.2f, 0.9f, 1.f));
+	UFloatingTextSubsystem::SpawnAboveOperative(LeaderRef, TEXT("👤 SOLO MODE [B]"), FLinearColor(0.2f, 0.9f, 1.f));
 
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Messages->PostMessage(LeaderRef->DisplayName,
-			FText::Format(LOCTEXT("SoloModeOn", "👤 [РЕЖИМ СОЛО: ВКЛ] {0} идёт на разведку один (макс. 25м). Напарники закрепились на позициях в присядке!"),
+			FText::Format(LOCTEXT("SoloModeOn", "👤 [SOLO MODE: ON] {0} scouts alone (max 25 m). Teammates hold their positions, crouched!"),
 				LeaderRef->DisplayName));
 	}
 }
@@ -388,7 +388,7 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 	SetFollowersHolding(false);
 
 	AOperativeCharacter* LeaderRef = Leader.Get();
-	const FText LeaderName = LeaderRef ? LeaderRef->DisplayName : LOCTEXT("SquadDefaultName", "Отряд");
+	const FText LeaderName = LeaderRef ? LeaderRef->DisplayName : LOCTEXT("SquadDefaultName", "Squad");
 
 	// Followers sync stance to leader and resume formation
 	if (LeaderRef)
@@ -398,7 +398,7 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 			if (AOperativeCharacter* Operative = Follower.Operative.Get())
 			{
 				Operative->SetStance(LeaderRef->GetStance());
-				UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🏃 ВОЗВРАТ В СТРОЙ"), FLinearColor(1.f, 0.85f, 0.2f));
+				UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🏃 REGROUPING"), FLinearColor(1.f, 0.85f, 0.2f));
 			}
 		}
 	}
@@ -408,13 +408,13 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 		if (bCausedByLeash)
 		{
 			Messages->PostMessage(LeaderName,
-				FText::Format(LOCTEXT("SoloModeLeash", "⚠️ Превышена дистанция соло ({0} м > 25.0 м)! Напарники поднимаются и возвращаются в строй!"),
+				FText::Format(LOCTEXT("SoloModeLeash", "⚠️ Solo range exceeded ({0} m > 25.0 m)! Teammates get up and regroup!"),
 					FText::AsNumber(FMath::RoundToFloat(Distance * 10.f) / 10.f)));
 		}
 		else
 		{
 			Messages->PostMessage(LeaderName,
-				LOCTEXT("SoloModeOff", "👥 [РЕЖИМ СОЛО: ВЫКЛ] Напарники выходят из укрытия и возвращаются в строй!"));
+				LOCTEXT("SoloModeOff", "👥 [SOLO MODE: OFF] Teammates leave cover and regroup!"));
 		}
 	}
 }
@@ -483,7 +483,7 @@ void USquadSubsystem::HandleTacticalPauseReleased()
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
 			Messages->PostMessage(Member->DisplayName, NSLOCTEXT("SquadSubsystem", "ShotDeferred",
-				"⏳ Оружие не готово — выстрелю по цели, как только смогу!"));
+				"⏳ Weapon not ready - I'll take the shot as soon as I can!"));
 		}
 	}
 	ExecutePlannedOrders();
@@ -529,7 +529,7 @@ void USquadSubsystem::RetryPlannedShots(float DeltaTime)
 				if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 				{
 					Messages->PostMessage(Operative->DisplayName, NSLOCTEXT("SquadSubsystem", "ShotGivenUp",
-						"❌ Не могу выстрелить по цели — приказ отменён."));
+						"❌ Can't take the shot - order cancelled."));
 				}
 			}
 			continue;
@@ -625,13 +625,13 @@ void USquadSubsystem::ToggleGuard(AOperativeCharacter* Operative)
 		Operative->StopOperative();
 	}
 	RebuildFollowers(); // Godot assign_formation_slots skips guards
-	UFloatingTextSubsystem::SpawnAboveOperative(Operative, Operative->bGuarding ? TEXT("🛡️ ОБОРОНА: ФИКСАЦИЯ") : TEXT("🏃 В СТРОЙ"),
+	UFloatingTextSubsystem::SpawnAboveOperative(Operative, Operative->bGuarding ? TEXT("🛡️ GUARD: HELD") : TEXT("🏃 REGROUP"),
 		Operative->bGuarding ? FLinearColor(0.3f, 0.9f, 0.5f) : FLinearColor(1.f, 0.85f, 0.2f));
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Messages->PostMessage(Name, FText::Format(Operative->bGuarding
-			? NSLOCTEXT("SquadSubsystem", "GuardOn", "🛡️ [{0}]: Точка обороны зафиксирована! Держу позицию сектора.")
-			: NSLOCTEXT("SquadSubsystem", "GuardOff", "👥 [{0}]: Снят(а) с позиции обороны, возвращается в строй!"), Name));
+			? NSLOCTEXT("SquadSubsystem", "GuardOn", "🛡️ [{0}]: Guard point set! Holding the sector.")
+			: NSLOCTEXT("SquadSubsystem", "GuardOff", "👥 [{0}]: Off guard, regrouping!"), Name));
 	}
 }
 

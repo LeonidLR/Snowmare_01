@@ -59,8 +59,8 @@ ACameraZoneVolume::ACameraZoneVolume()
 	Box->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Box->ShapeColor = FColor(80, 200, 255);
 
-	ZoneName = LOCTEXT("DefaultZoneName", "Сектор наблюдения 01");
-	ExitMessage = LOCTEXT("DefaultExit", "📡 Выход из сектора наблюдения. Отряд перегруппирован.");
+	ZoneName = LOCTEXT("DefaultZoneName", "Surveillance sector 01");
+	ExitMessage = LOCTEXT("DefaultExit", "📡 Leaving the surveillance sector. Squad regrouped.");
 }
 
 bool ACameraZoneVolume::ContainsLocation(const FVector& Location) const
@@ -126,7 +126,7 @@ void ACameraZoneVolume::Activate(AOperativeCharacter* Explorer)
 	}
 
 	const FText Text = EnterMessage.IsEmpty()
-		? FText::Format(LOCTEXT("EnterDefault", "📹 {0} [{1}]. Отряд занял периметр снаружи."), ZoneName, GetEnvironmentLabel())
+		? FText::Format(LOCTEXT("EnterDefault", "📹 {0} [{1}]. Squad holds the perimeter outside."), ZoneName, GetEnvironmentLabel())
 		: FText::Format(LOCTEXT("EnterCustom", "{0} [{1}]"), EnterMessage, GetEnvironmentLabel());
 	PostMessage(Text);
 }
@@ -159,13 +159,13 @@ FText ACameraZoneVolume::GetEnvironmentLabel() const
 	switch (Environment)
 	{
 	case ECameraZoneEnvironment::Closed:
-		return LOCTEXT("EnvClosed", "Закрытая (Бункер, 0.0x)");
+		return LOCTEXT("EnvClosed", "Closed (Bunker, 0.0x)");
 	case ECameraZoneEnvironment::Shelter:
-		return LOCTEXT("EnvShelter", "Укрытие (0.5x)");
+		return LOCTEXT("EnvShelter", "Shelter (0.5x)");
 	case ECameraZoneEnvironment::Blizzard:
-		return LOCTEXT("EnvBlizzard", "Буран (2.5x)");
+		return LOCTEXT("EnvBlizzard", "Blizzard (2.5x)");
 	default:
-		return LOCTEXT("EnvStandard", "Стандартная (1.0x)");
+		return LOCTEXT("EnvStandard", "Standard (1.0x)");
 	}
 }
 
@@ -173,7 +173,7 @@ void ACameraZoneVolume::PostMessage(const FText& Text) const
 {
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Messages->PostMessage(LOCTEXT("Speaker", "НАБЛЮДЕНИЕ"), Text);
+		Messages->PostMessage(LOCTEXT("Speaker", "SURVEILLANCE"), Text);
 	}
 }
 

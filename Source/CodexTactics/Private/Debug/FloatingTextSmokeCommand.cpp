@@ -1,9 +1,9 @@
 // Dev-only console command for a headless floating combat text / operative damage check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.FloatingTextSmoke
-// Operative hits follow Godot player.gd take_damage: a luck dodge floats «💨 УКЛОНЕНИЕ!» and costs nothing; a hit takes
-// max(1, amount * stance defense * (1 - fortitude cut)) with «-N»; a crit floats «💥 КРИТИЧЕСКИЙ УДАР! -N»; a bypass hit
+// Operative hits follow Godot player.gd take_damage: a luck dodge floats «💨 DODGE!» and costs nothing; a hit takes
+// max(1, amount * stance defense * (1 - fortitude cut)) with «-N»; a crit floats «💥 CRITICAL HIT! -N»; a bypass hit
 // (grenade / trap) ignores dodge and cuts. Enemy numbers carry the armor prefix (brute «🛡️ -N»); a medkit floats
-// «+N HP»; guard floats «🛡️ ОБОРОНА: ФИКСАЦИЯ». Texts expire after their duration.
+// «+N HP»; guard floats «🛡️ GUARD: HELD». Texts expire after their duration.
 
 #include "CoreMinimal.h"
 
@@ -73,25 +73,25 @@ namespace FloatingTextSmoke
 		{
 			const float Before = Health->GetCurrentHealth();
 			Leader->ForcedDodgeRollForTesting = 1.f;
-			Check(State, Leader->TakeHit(30.f, TEXT("Тест")) == 0.f && Health->GetCurrentHealth() == Before && Floating->HasShown(TEXT("УКЛОНЕНИЕ")),
-				TEXT("dodge: no damage, «УКЛОНЕНИЕ»"));
+			Check(State, Leader->TakeHit(30.f, TEXT("Test")) == 0.f && Health->GetCurrentHealth() == Before && Floating->HasShown(TEXT("DODGE")),
+				TEXT("dodge: no damage, \"DODGE\""));
 
 			Leader->SetStance(EOperativeStance::Crouching);
 			const float Fortitude = Leader->ColdSurvival ? Leader->ColdSurvival->Fortitude : 15.f;
 			const float Expected = FMath::Max(1.f, 40.f * 0.75f * (1.f - FMath::Clamp(Fortitude * 0.015f, 0.f, 0.5f)));
 			Leader->ForcedDodgeRollForTesting = 0.f;
-			const float Taken = Leader->TakeHit(40.f, TEXT("Тест"));
+			const float Taken = Leader->TakeHit(40.f, TEXT("Test"));
 			Check(State, FMath::IsNearlyEqual(Taken, Expected, 0.01f) && FMath::IsNearlyEqual(Health->GetCurrentHealth(), Before - Expected, 0.01f)
 				&& Floating->HasShown(FString::Printf(TEXT("-%d"), FMath::FloorToInt(Expected))),
 				FString::Printf(TEXT("crouched hit: %.2f (expected %.2f, fortitude %.0f)"), Taken, Expected, Fortitude));
 
 			Leader->ForcedDodgeRollForTesting = 0.f;
-			Leader->TakeHit(20.f, TEXT("Тест"), true);
-			Check(State, Floating->HasShown(TEXT("КРИТИЧЕСКИЙ УДАР! -")), TEXT("crit text"));
+			Leader->TakeHit(20.f, TEXT("Test"), true);
+			Check(State, Floating->HasShown(TEXT("CRITICAL HIT! -")), TEXT("crit text"));
 
 			const float BeforeBypass = Health->GetCurrentHealth();
 			Leader->ForcedDodgeRollForTesting = 1.f;
-			Check(State, FMath::IsNearlyEqual(Leader->TakeHit(10.f, TEXT("Граната"), false, true), 10.f)
+			Check(State, FMath::IsNearlyEqual(Leader->TakeHit(10.f, TEXT("Grenade"), false, true), 10.f)
 				&& FMath::IsNearlyEqual(Health->GetCurrentHealth(), BeforeBypass - 10.f), TEXT("bypass: no dodge, no cut"));
 			Leader->ForcedDodgeRollForTesting = -1.f;
 			Leader->SetStance(EOperativeStance::Standing);
@@ -101,9 +101,9 @@ namespace FloatingTextSmoke
 				TEXT("medkit: «+N HP»"));
 
 			Squad->ToggleGuard(Squad->GetMembers()[1]);
-			Check(State, Floating->HasShown(TEXT("ОБОРОНА: ФИКСАЦИЯ")), TEXT("guard text"));
+			Check(State, Floating->HasShown(TEXT("GUARD: HELD")), TEXT("guard text"));
 			Squad->ToggleGuard(Squad->GetMembers()[1]);
-			Check(State, Floating->HasShown(TEXT("В СТРОЙ")), TEXT("guard off text"));
+			Check(State, Floating->HasShown(TEXT("REGROUP")), TEXT("guard off text"));
 
 			AEnemyCharacter* Brute = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Brute,
 				Leader->GetActorLocation() + Leader->GetActorForwardVector() * 900.f);

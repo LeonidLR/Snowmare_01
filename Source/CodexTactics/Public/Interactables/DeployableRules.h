@@ -4,14 +4,14 @@
 #include "Characters/OperativeMovementRules.h"
 #include "DeployableRules.generated.h"
 
-/** Squad role (defusal skill, deployable routing). Godot: character_name «Командир» / «Инженер» / «Медик-сапёр». */
+/** Squad role (defusal skill, deployable routing). Godot: character_name "Commander" / "Engineer" / "Medic-Sapper". */
 UENUM(BlueprintType)
 enum class EOperativeRole : uint8
 {
 	Commander,
 	Engineer,
 	MedicSapper,
-	/** Civilian recruit (Godot recruit_susanin.gd «Иван Сусанин»; balance prefix susanin_, defusal base 35). */
+	/** Civilian recruit (Godot recruit_susanin.gd "Ivan Susanin"; balance prefix susanin_, defusal base 35). */
 	Recruit
 };
 
@@ -79,7 +79,7 @@ namespace DeployableRules
 	 */
 	CODEXTACTICS_API int32 PickRecoveryRecipient(const TArray<int32>& CarriedInOrder, int32 MaxCarried);
 
-	/** «Стоя» / «Присев» / «Лёжа» (Godot defusal stance names). */
+	/** "Standing" / "Crouched" / "Prone" (Godot defusal stance names). */
 	CODEXTACTICS_API FText GetDefusalStanceName(EOperativeStance Stance);
 
 	/** Enemy / squad falloff factors (Godot: 0.4 for enemies, 0.5 for the squad; the squad takes 75 %). */

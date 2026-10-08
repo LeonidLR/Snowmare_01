@@ -8,9 +8,9 @@ class UButton;
 class UTextBlock;
 
 /**
- * Turn-based action panel (bottom right, shown while the grid fight runs): «⚔️ ХОД ОТРЯДА» / «🐺 ХОД ПРОТИВНИКА...»,
- * unit name, AP and HP, «🛑 КОНЕЦ ХОДА ОТРЯДА» [Enter], «⏭️ СЛЕДУЮЩИЙ БОЕЦ [Tab]», «🛡️ СТОЙКА: … [C]»,
- * «🔄 Поворот [R]», «📦 Бочка [F]» (barrel push — disabled until ported).
+ * Turn-based action panel (bottom right, shown while the grid fight runs): «⚔️ SQUAD TURN» / «🐺 ENEMY TURN...»,
+ * unit name, AP and HP, «🛑 END SQUAD TURN» [Enter], «⏭️ NEXT OPERATIVE [Tab]», «🛡️ STANCE: … [C]»,
+ * «🔄 Turn [R]», «📦 Barrel [F]» (barrel push — disabled until ported).
  * Built in C++ (restyle through a Widget Blueprint subclass). Refreshes on UTurnBasedCombatSubsystem::OnStateChanged.
  * Godot reference: Scripts/tactics/gorky17_combat_hud.gd (_create_action_panel, update_unit_info).
  */
@@ -56,7 +56,7 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|TurnBased", meta = (BindWidgetOptional))
 	TObjectPtr<UButton> TbTurnButton;
 
-	/** «Бочка»: push the adjacent barrel (Godot push_barrel_pressed -> _try_push_adjacent_barrel). */
+	/** «Barrel»: push the adjacent barrel (Godot push_barrel_pressed -> _try_push_adjacent_barrel). */
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|TurnBased", meta = (BindWidgetOptional))
 	TObjectPtr<UButton> TbBarrelButton;
 

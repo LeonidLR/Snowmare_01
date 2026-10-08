@@ -106,8 +106,8 @@ void AInteractableActor::PerformAction(AOperativeCharacter* User)
 		User->StopOperative();
 		User->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 		User->SetStance(EOperativeStance::Crouching);
-		UFloatingTextSubsystem::SpawnAboveOperative(User, TEXT("⚡ РЕМОНТ ГЕНЕРАТОРА..."), FLinearColor(0.2f, 0.9f, 0.4f));
-		PostLine(User->DisplayName, FText::Format(LOCTEXT("GeneratorRepairing", "⚡ {0}: «Восстанавливаем топливную магистраль генератора ({1}с)...»"),
+		UFloatingTextSubsystem::SpawnAboveOperative(User, TEXT("⚡ REPAIRING GENERATOR..."), FLinearColor(0.2f, 0.9f, 0.4f));
+		PostLine(User->DisplayName, FText::Format(LOCTEXT("GeneratorRepairing", "⚡ {0}: \"Restoring the generator fuel line ({1}s)...\""),
 			User->DisplayName, FText::AsNumber(Seconds, &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))));
 		FTimerHandle Handle;
 		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateUObject(this, &AInteractableActor::FinishGeneratorRepair,
@@ -139,24 +139,24 @@ FText AInteractableActor::DescribeDefusal(const AOperativeCharacter* Operative) 
 {
 	const FDefusalChance Odds = GetDefusalChance(Operative);
 	const FText Status = Odds.bDangerous
-		? LOCTEXT("HighRisk", "⚠️ ВЫСОКИЙ РИСК ВЗРЫВА!")
-		: FText::Format(LOCTEXT("SuccessChance", "Шанс успеха: ~{0}%"), FMath::FloorToInt(Odds.Chance));
-	return FText::Format(LOCTEXT("Performer", "Исполнитель: {0} (Поза: {1}) | {2}"),
-		Operative ? Operative->DisplayName : LOCTEXT("Soldier", "Боец"),
+		? LOCTEXT("HighRisk", "⚠️ HIGH RISK OF DETONATION!")
+		: FText::Format(LOCTEXT("SuccessChance", "Success chance: ~{0}%"), FMath::FloorToInt(Odds.Chance));
+	return FText::Format(LOCTEXT("Performer", "Operator: {0} (Stance: {1}) | {2}"),
+		Operative ? Operative->DisplayName : LOCTEXT("Soldier", "Operative"),
 		DeployableRules::GetDefusalStanceName(Operative ? Operative->GetStance() : EOperativeStance::Standing), Status);
 }
 
 EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative)
 {
-	const FText Name = Operative ? Operative->DisplayName : LOCTEXT("Soldier", "Боец");
+	const FText Name = Operative ? Operative->DisplayName : LOCTEXT("Soldier", "Operative");
 	const ETrapFlavor Flavor = GetTrapFlavor();
 	if (!bTrapped)
 	{
-		PostLine(Name, Flavor == ETrapFlavor::Turret ? LOCTEXT("TurretSafe", "Турель безопасна — растяжек нет.")
-			: Flavor == ETrapFlavor::Crate ? LOCTEXT("CrateSafe", "Ящик безопасен — растяжек нет.")
-			: Flavor == ETrapFlavor::Mine ? LOCTEXT("MineSafe", "Мина уже обезврежена или безопасна.")
-			: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("BarricadeSafe", "Баррикада безопасна — мин-ловушек нет.")
-				: LOCTEXT("ObjectSafe", "Объект безопасен — мин-ловушек нет.")));
+		PostLine(Name, Flavor == ETrapFlavor::Turret ? LOCTEXT("TurretSafe", "The turret is safe - no tripwires.")
+			: Flavor == ETrapFlavor::Crate ? LOCTEXT("CrateSafe", "The crate is safe - no tripwires.")
+			: Flavor == ETrapFlavor::Mine ? LOCTEXT("MineSafe", "The mine is already disarmed or safe.")
+			: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("BarricadeSafe", "The barricade is safe - no booby traps.")
+				: LOCTEXT("ObjectSafe", "The object is safe - no booby traps.")));
 		return EDefusalResult::Success;
 	}
 
@@ -172,31 +172,31 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 		const bool bCold = Odds.ColdPenalty > 0.f;
 		if (Flavor == ETrapFlavor::Turret)
 		{
-			PostLine(Name, FText::Format(LOCTEXT("TurretWarn", "⚠️ {0}: «Турель заминирована растяжкой! {1}, {2} — подорвёмся! Нужно согреться или присесть!»"),
-				Name, bCold ? LOCTEXT("ColdFingers", "пальцы коченеют") : LOCTEXT("WireHinge", "проволока растяжки взведена на шарнире"),
-				bStanding ? LOCTEXT("TurretStanding", "стоя к заряду не подберусь") : LOCTEXT("PoseDanger", "в такой позе опасно")));
+			PostLine(Name, FText::Format(LOCTEXT("TurretWarn", "⚠️ {0}: \"The turret is rigged with a tripwire! {1}, {2} - we'll blow ourselves up! Need to warm up or crouch!\""),
+				Name, bCold ? LOCTEXT("ColdFingers", "my fingers are numb") : LOCTEXT("WireHinge", "the tripwire is armed on the hinge"),
+				bStanding ? LOCTEXT("TurretStanding", "I can't reach the charge standing") : LOCTEXT("PoseDanger", "this stance is too risky")));
 		}
 		else if (Flavor == ETrapFlavor::Crate)
 		{
-			PostLine(Name, FText::Format(LOCTEXT("CrateWarn", "⚠️ {0}: «Разминирование ящика крайне рискованно! {1}, {2} — подорвёмся и спалим весь лут! Нужно согреться или хотя бы присесть!»"),
-				Name, bCold ? LOCTEXT("ColdFingers", "пальцы коченеют") : LOCTEXT("MineUnstable", "механизм слишком нестабилен"),
-				bStanding ? LOCTEXT("CrateStanding", "стоя к детонатору не подберусь") : LOCTEXT("PoseDanger", "в такой позе опасно")));
+			PostLine(Name, FText::Format(LOCTEXT("CrateWarn", "⚠️ {0}: \"Defusing the crate is extremely risky! {1}, {2} - we'll blow up and burn all the loot! Need to warm up or at least crouch!\""),
+				Name, bCold ? LOCTEXT("ColdFingers", "my fingers are numb") : LOCTEXT("MineUnstable", "the mechanism is too unstable"),
+				bStanding ? LOCTEXT("CrateStanding", "I can't reach the detonator standing") : LOCTEXT("PoseDanger", "this stance is too risky")));
 		}
 		else if (Flavor == ETrapFlavor::Mine)
 		{
-			PostLine(Name, FText::Format(LOCTEXT("MineWarn", "⚠️ {0}: «Разминирование выглядит крайне опасным! {1}, {2} — подорвёмся! Нужно согреться или хотя бы лечь на землю!»"),
-				Name, bCold ? LOCTEXT("ColdFingers", "пальцы коченеют") : LOCTEXT("MineUnstable", "механизм слишком нестабилен"),
-				bStanding ? LOCTEXT("MineStanding", "стоя к ней не подберусь") : LOCTEXT("PoseDanger", "в такой позе опасно")));
+			PostLine(Name, FText::Format(LOCTEXT("MineWarn", "⚠️ {0}: \"Defusing this looks extremely dangerous! {1}, {2} - we'll blow up! Need to warm up or at least go prone!\""),
+				Name, bCold ? LOCTEXT("ColdFingers", "my fingers are numb") : LOCTEXT("MineUnstable", "the mechanism is too unstable"),
+				bStanding ? LOCTEXT("MineStanding", "I can't reach it standing") : LOCTEXT("PoseDanger", "this stance is too risky")));
 		}
 		else
 		{
-			const FText ColdHint = bCold ? LOCTEXT("ColdFingers", "пальцы коченеют")
-				: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("WireTight", "проволока растяжки сильно натянута")
-					: LOCTEXT("WireArmed", "проволока растяжки взведена на корпусе"));
-			const FText Pose = bStanding ? LOCTEXT("ChargeStanding", "стоя к заряду не подобраться") : LOCTEXT("PoseDanger", "в такой позе опасно");
+			const FText ColdHint = bCold ? LOCTEXT("ColdFingers", "my fingers are numb")
+				: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("WireTight", "the tripwire is pulled taut")
+					: LOCTEXT("WireArmed", "the tripwire is armed on the casing"));
+			const FText Pose = bStanding ? LOCTEXT("ChargeStanding", "the charge can't be reached standing") : LOCTEXT("PoseDanger", "this stance is too risky");
 			PostLine(Name, FText::Format(Flavor == ETrapFlavor::Barricade
-				? LOCTEXT("BarricadeWarn", "⚠️ {0}: «Баррикада заминирована растяжкой! {1}, {2} — подорвёмся! Нужно согреться или присесть!»")
-				: LOCTEXT("ObjectWarn", "⚠️ {0}: «Объект заминирован растяжкой! {1}, {2} — подорвёмся! Нужно согреться или присесть!»"),
+				? LOCTEXT("BarricadeWarn", "⚠️ {0}: \"The barricade is rigged with a tripwire! {1}, {2} - we'll blow ourselves up! Need to warm up or crouch!\"")
+				: LOCTEXT("ObjectWarn", "⚠️ {0}: \"The object is rigged with a tripwire! {1}, {2} - we'll blow ourselves up! Need to warm up or crouch!\""),
 				Name, ColdHint, Pose));
 		}
 		break;
@@ -205,33 +205,33 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 		bTrapped = false;
 		bDefused = true;
 		PostLine(Name, Flavor == ETrapFlavor::Turret
-			? FText::Format(LOCTEXT("TurretDefused", "✅ {0} успешно обезвредил(а) растяжку на боевой турели!"), Name)
+			? FText::Format(LOCTEXT("TurretDefused", "✅ {0} disarmed the tripwire on the combat turret!"), Name)
 			: Flavor == ETrapFlavor::Crate
-			? FText::Format(LOCTEXT("CrateDefused", "✅ {0} успешно обезвредил(а) растяжку на ящике снабжения!"), Name)
+			? FText::Format(LOCTEXT("CrateDefused", "✅ {0} disarmed the tripwire on the supply crate!"), Name)
 			: Flavor == ETrapFlavor::Mine
-			? FText::Format(LOCTEXT("MineDefused", "✅ {0} успешно обезвредил(а) мину!"), Name)
+			? FText::Format(LOCTEXT("MineDefused", "✅ {0} disarmed the mine!"), Name)
 			: (Flavor == ETrapFlavor::Barricade
-				? FText::Format(LOCTEXT("BarricadeDefused", "✅ {0} успешно обезвредил(а) растяжку на баррикаде!"), Name)
-				: FText::Format(LOCTEXT("ObjectDefused", "✅ {0} успешно обезвредил(а) растяжку на объекте ({1})!"), Name, DisplayName)));
+				? FText::Format(LOCTEXT("BarricadeDefused", "✅ {0} disarmed the tripwire on the barricade!"), Name)
+				: FText::Format(LOCTEXT("ObjectDefused", "✅ {0} disarmed the tripwire on the object ({1})!"), Name, DisplayName)));
 		break;
 	case EDefusalResult::Detonation:
-		PostLine(Name, Flavor == ETrapFlavor::Turret ? LOCTEXT("TurretBoom", "💥 Срыв чеки ловушки на турели! Прогремел взрыв!")
-			: Flavor == ETrapFlavor::Crate ? LOCTEXT("CrateBoom", "💥 Срыв чеки растяжки! Ловушка на ящике сдетонировала, всё содержимое уничтожено!")
-			: Flavor == ETrapFlavor::Mine ? LOCTEXT("MineBoom", "💥 Срыв взрывателя! Мина сдетонировала при попытке разминирования!")
-			: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("BarricadeBoom", "💥 Срыв чеки на баррикаде! Ловушка сдетонировала!")
-				: LOCTEXT("ObjectBoom", "💥 Срыв чеки ловушки на объекте! Взрыв!")));
+		PostLine(Name, Flavor == ETrapFlavor::Turret ? LOCTEXT("TurretBoom", "💥 The turret trap pin slipped! Detonation!")
+			: Flavor == ETrapFlavor::Crate ? LOCTEXT("CrateBoom", "💥 The tripwire pin slipped! The crate trap went off, all contents destroyed!")
+			: Flavor == ETrapFlavor::Mine ? LOCTEXT("MineBoom", "💥 The fuze slipped! The mine went off during the defusal!")
+			: (Flavor == ETrapFlavor::Barricade ? LOCTEXT("BarricadeBoom", "💥 The barricade pin slipped! The trap went off!")
+				: LOCTEXT("ObjectBoom", "💥 The object trap pin slipped! Detonation!")));
 		DetonateTrap(false, Name);
 		break;
 	default:
 		PostLine(Name, FText::Format(Flavor == ETrapFlavor::Turret
-			? LOCTEXT("TurretSlip", "⚠️ {0}: «Щёлк! Скоба сместилась, но детонатор не сработал! Следующая ошибка приведёт к взрыву!»")
+			? LOCTEXT("TurretSlip", "⚠️ {0}: \"Click! The clip shifted, but the detonator held! Next mistake and it blows!\"")
 			: Flavor == ETrapFlavor::Crate
-			? LOCTEXT("CrateSlip", "⚠️ {0}: «Щёлк! Растяжка натянулась, но взрыватель не сработал! Следующий срыв подорвёт ящик!»")
+			? LOCTEXT("CrateSlip", "⚠️ {0}: \"Click! The wire went taut, but the fuze held! Next slip blows the crate!\"")
 			: Flavor == ETrapFlavor::Mine
-			? LOCTEXT("MineSlip", "⚠️ {0}: «Щёлк! Детонатор заклинило, попытка сорвалась! Повторный срыв вызовет подрыв!»")
+			? LOCTEXT("MineSlip", "⚠️ {0}: \"Click! The detonator jammed, attempt failed! Another slip sets it off!\"")
 			: (Flavor == ETrapFlavor::Barricade
-				? LOCTEXT("BarricadeSlip", "⚠️ {0}: «Щёлк! Растяжка сместилась, взрыватель уцелел! Осторожнее!»")
-				: LOCTEXT("ObjectSlip", "⚠️ {0}: «Щёлк! Растяжка сместилась, детонатор не сработал! Следующая оплошность вызовет подрыв!»")),
+				? LOCTEXT("BarricadeSlip", "⚠️ {0}: \"Click! The wire shifted, the fuze held! Careful!\"")
+				: LOCTEXT("ObjectSlip", "⚠️ {0}: \"Click! The wire shifted, the detonator held! Next slip sets it off!\"")),
 			Name));
 		break;
 	}
@@ -301,18 +301,18 @@ void AInteractableActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
 		return;
 	}
 	bTrapped = false;
-	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Снайпер") : InstigatorName) : LOCTEXT("Blast", "ВЗРЫВ"),
-		bByShot ? LOCTEXT("ObjectShotBoom", "💥 Взрыв растяжки на объекте от выстрела!") : LOCTEXT("ObjectTrapBoom", "💥 Растяжка на объекте сдетонировала!"));
+	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Marksman") : InstigatorName) : LOCTEXT("Blast", "BLAST"),
+		bByShot ? LOCTEXT("ObjectShotBoom", "💥 A shot set off the tripwire on the object!") : LOCTEXT("ObjectTrapBoom", "💥 The tripwire on the object went off!"));
 	ApplyBlast(TrapDamage, TrapDamage * DeployableRules::SquadDamageScale, TrapRadius, 0.45f, EDamageType::Explosive,
-		LOCTEXT("ObjectTrapSource", "Ловушка объекта"),
-		LOCTEXT("ObjectTrapHit", "💥 Задело взрывом растяжки объекта (-{0} HP)!"));
+		LOCTEXT("ObjectTrapSource", "Object trap"),
+		LOCTEXT("ObjectTrapHit", "💥 Caught in the object tripwire blast (-{0} HP)!"));
 }
 
 bool AInteractableActor::TrapWithGrenade(AOperativeCharacter* Operative)
 {
 	if (!Operative || Operative->GrenadesCount <= 0)
 	{
-		PostLine(LOCTEXT("SquadSpeaker", "Отряд"), LOCTEXT("NeedGrenade", "Для минирования нужна граната в личном инвентаре выбранного бойца."));
+		PostLine(LOCTEXT("SquadSpeaker", "SQUAD"), LOCTEXT("NeedGrenade", "Setting a trap needs a grenade in the selected operative's personal inventory."));
 		return false;
 	}
 	if (!CanReceiveTrap())
@@ -326,7 +326,7 @@ bool AInteractableActor::TrapWithGrenade(AOperativeCharacter* Operative)
 	TrapDamage = 85.f;
 	TrapRadius = 400.f;
 	--Operative->GrenadesCount;
-	PostLine(Operative->DisplayName, FText::Format(LOCTEXT("Trapped", "🧨 Объект заминирован гранатой. Осталось гранат: {0}."),
+	PostLine(Operative->DisplayName, FText::Format(LOCTEXT("Trapped", "🧨 Object trapped with a grenade. Grenades left: {0}."),
 		Operative->GrenadesCount));
 	return true;
 }
@@ -338,82 +338,82 @@ FActionMenuRequest AInteractableActor::BuildActionMenu(const AOperativeCharacter
 	{
 		return FActionMenuRequest();
 	}
-	const FText Squad = LOCTEXT("SquadSpeaker", "Отряд");
-	const FText Cancel = LOCTEXT("Cancel", "Отмена");
-	const FText Close = LOCTEXT("Close", "Закрыть");
+	const FText Squad = LOCTEXT("SquadSpeaker", "SQUAD");
+	const FText Cancel = LOCTEXT("Cancel", "Cancel");
+	const FText Close = LOCTEXT("Close", "Close");
 
 	switch (ObjectType)
 	{
 	case EInteractableType::Canister:
 		if (Quests->HasEmptyCanister() || Quests->HasFuelCanister())
 		{
-			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("CanisterOwned", "Канистра уже у нас в инвентаре."));
+			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("CanisterOwned", "We already have the jerrycan."));
 		}
-		return FActionMenuRequest::MakeMenu(LOCTEXT("CanisterTitle", "🛢️ Пустая канистра"),
-			LOCTEXT("CanisterDesc", "Взять пустую канистру для топлива?"), LOCTEXT("CanisterTake", "Взять канистру"), Cancel, false);
+		return FActionMenuRequest::MakeMenu(LOCTEXT("CanisterTitle", "🛢️ Empty jerrycan"),
+			LOCTEXT("CanisterDesc", "Take the empty fuel jerrycan?"), LOCTEXT("CanisterTake", "Take jerrycan"), Cancel, false);
 
 	case EInteractableType::Vehicle:
 	{
-		const FText Title = LOCTEXT("VehicleTitle", "🚜 Брошенный БМП-2");
+		const FText Title = LOCTEXT("VehicleTitle", "🚜 Abandoned BMP-2");
 		if (Quests->HasFuelCanister() || Quests->IsGeneratorRunning())
 		{
-			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("VehicleDrained", "Топливо из бака БМП уже слито в канистру."));
+			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("VehicleDrained", "The BMP fuel tank is already drained into the jerrycan."));
 		}
 		if (Quests->HasEmptyCanister())
 		{
 			return FActionMenuRequest::MakeMenu(Title,
-				LOCTEXT("VehicleDrainDesc", "Слить дизельное топливо из бака БМП в канистру?\n(Топливо наполнит канистру для запуска генератора)"),
-				LOCTEXT("VehicleDrain", "Слить дизель в канистру"), Cancel, false);
+				LOCTEXT("VehicleDrainDesc", "Drain diesel from the BMP tank into the jerrycan?\n(The fuel will fill the jerrycan to start the generator)"),
+				LOCTEXT("VehicleDrain", "Drain diesel"), Cancel, false);
 		}
 		return FActionMenuRequest::MakeMenu(Title,
-			LOCTEXT("VehicleNoCanDesc", "Топливный бак БМП полон солярки, но у отряда нет подходящей емкости, чтобы её слить."),
-			LOCTEXT("VehicleNoCan", "Нужна емкость"), Close, true);
+			LOCTEXT("VehicleNoCanDesc", "The BMP fuel tank is full of diesel, but the squad has no container to drain it into."),
+			LOCTEXT("VehicleNoCan", "Need a container"), Close, true);
 	}
 
 	case EInteractableType::Generator:
 	{
-		const FText Title = LOCTEXT("GeneratorTitle", "⚡ Резервный дизель-генератор");
+		const FText Title = LOCTEXT("GeneratorTitle", "⚡ Backup Diesel Generator");
 		if (bGeneratorBroken || (GeneratorHealth < GeneratorMaxHealth && Quests->IsGeneratorRunning()))
 		{
 			const bool bEngineer = Leader && Leader->SquadRole == EOperativeRole::Engineer;
-			return FActionMenuRequest::MakeMenu(LOCTEXT("GeneratorBrokenTitle", "⚡ Резервный дизель-генератор [АВАРИЯ]"),
-				FText::Format(LOCTEXT("GeneratorBrokenDesc", "⚠️ Дизель-генератор повреждён врагами ({0}/{1} HP)!\nПитание турелей отключено.\nИсполнитель: {2} ({3}, ремонт: {4}с)."),
-					FMath::FloorToInt(GeneratorHealth), FMath::FloorToInt(GeneratorMaxHealth), Leader ? Leader->DisplayName : LOCTEXT("Soldier", "Боец"),
-					bEngineer ? LOCTEXT("EngineerFast", "🛠️ Инженер (в 2 раза быстрее)") : LOCTEXT("RegularSoldier", "Обычный боец"),
+			return FActionMenuRequest::MakeMenu(LOCTEXT("GeneratorBrokenTitle", "⚡ Backup Diesel Generator [FAULT]"),
+				FText::Format(LOCTEXT("GeneratorBrokenDesc", "⚠️ The diesel generator is damaged by the enemy ({0}/{1} HP)!\nTurret power is cut.\nOperator: {2} ({3}, repair: {4}s)."),
+					FMath::FloorToInt(GeneratorHealth), FMath::FloorToInt(GeneratorMaxHealth), Leader ? Leader->DisplayName : LOCTEXT("Soldier", "Operative"),
+					bEngineer ? LOCTEXT("EngineerFast", "🛠️ Engineer (2x faster)") : LOCTEXT("RegularSoldier", "Regular operative"),
 					FText::AsNumber(bEngineer ? 2.5f : 5.f, &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))),
-				LOCTEXT("GeneratorRepair", "🔧 Починить генератор"), Cancel, false);
+				LOCTEXT("GeneratorRepair", "🔧 Repair generator"), Cancel, false);
 		}
 		if (Quests->IsGeneratorRunning())
 		{
-			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("GeneratorRunning", "Генератор уже запущен на полную мощность и обогревает территорию."));
+			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("GeneratorRunning", "The generator is already running at full power and heating the area."));
 		}
 		if (Quests->HasFuelCanister())
 		{
 			return FActionMenuRequest::MakeMenu(Title,
-				LOCTEXT("GeneratorFuelDesc", "Залить дизельное топливо из канистры в генератор и запустить его?\n(Создаст обширную зону тепла и подаст ток на пульт гермоворот)"),
-				LOCTEXT("GeneratorFuel", "Залить бензин"), Cancel, false);
+				LOCTEXT("GeneratorFuelDesc", "Pour the diesel from the jerrycan into the generator and start it?\n(Creates a wide heat zone and powers the blast-door console)"),
+				LOCTEXT("GeneratorFuel", "Refuel"), Cancel, false);
 		}
 		return FActionMenuRequest::MakeMenu(Title,
-			LOCTEXT("GeneratorDryDesc", "Генератор сухой и обесточен. Сначала слейте дизель из БМП в канистру."),
-			LOCTEXT("GeneratorDry", "Требуется топливо"), Close, true);
+			LOCTEXT("GeneratorDryDesc", "The generator is dry and dead. Drain diesel from the BMP into the jerrycan first."),
+			LOCTEXT("GeneratorDry", "Needs fuel"), Close, true);
 	}
 
 	case EInteractableType::GateTerminal:
 	{
-		const FText Title = LOCTEXT("TerminalTitle", "🎛️ Пульт управления воротами");
+		const FText Title = LOCTEXT("TerminalTitle", "🎛️ Gate control console");
 		if (Quests->IsGatePowered())
 		{
-			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("TerminalPowered", "Питание на ворота уже подано. Створки разблокированы."));
+			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("TerminalPowered", "The gate is already powered. The doors are unlocked."));
 		}
 		if (Quests->IsGeneratorRunning())
 		{
 			return FActionMenuRequest::MakeMenu(Title,
-				LOCTEXT("TerminalOpenDesc", "Подать высокое напряжение на сервоприводы и открыть гермоворота?"),
-				LOCTEXT("TerminalOpen", "Открыть ворота"), Cancel, false);
+				LOCTEXT("TerminalOpenDesc", "Send high voltage to the servos and open the blast doors?"),
+				LOCTEXT("TerminalOpen", "Open gate"), Cancel, false);
 		}
 		return FActionMenuRequest::MakeMenu(Title,
-			LOCTEXT("TerminalNoPowerDesc", "Основная электросеть обесточена. Сначала заправьте и запустите резервный генератор."),
-			LOCTEXT("TerminalNoPower", "Нет питания"), Close, true);
+			LOCTEXT("TerminalNoPowerDesc", "The main grid is down. Refuel and start the backup generator first."),
+			LOCTEXT("TerminalNoPower", "No power"), Close, true);
 	}
 
 	default:
@@ -478,7 +478,7 @@ void AInteractableActor::BreakdownGenerator()
 	HeatSource->SetHeatActive(false);
 	ATurretActor::SetAllPowered(GetWorld(), false);
 	BroadcastGeneratorState(false); // Godot EventBus.generator_state_changed
-	PostLine(LOCTEXT("Attention", "ВНИМАНИЕ"), LOCTEXT("GeneratorDown", "⚠️ Дизель-генератор повреждён врагами и заглох! Турели обесточены!"));
+	PostLine(LOCTEXT("Attention", "WARNING"), LOCTEXT("GeneratorDown", "⚠️ The enemy damaged the diesel generator and it stalled! Turrets are without power!"));
 }
 
 void AInteractableActor::RepairGenerator()
@@ -488,14 +488,14 @@ void AInteractableActor::RepairGenerator()
 	HeatSource->SetHeatActive(true);
 	ATurretActor::SetAllPowered(GetWorld(), true);
 	BroadcastGeneratorState(true); // Godot EventBus.generator_state_changed
-	PostLine(LOCTEXT("EngineerSpeaker", "Инженер"), LOCTEXT("GeneratorBack", "⚡ Генератор восстановлен! Питание подано на все турели!"));
+	PostLine(LOCTEXT("EngineerSpeaker", "Engineer"), LOCTEXT("GeneratorBack", "⚡ Generator restored! All turrets are powered!"));
 }
 
 void AInteractableActor::FinishGeneratorRepair(TWeakObjectPtr<AOperativeCharacter> WeakUser)
 {
 	RepairGenerator();
-	PostLine(WeakUser.IsValid() ? WeakUser->DisplayName : LOCTEXT("Soldier", "Боец"),
-		LOCTEXT("GeneratorRepaired", "✅ Дизель-генератор снова запущен! Электросеть восстановлена!"));
+	PostLine(WeakUser.IsValid() ? WeakUser->DisplayName : LOCTEXT("Soldier", "Operative"),
+		LOCTEXT("GeneratorRepaired", "✅ The diesel generator is running again! Power grid restored!"));
 }
 
 #undef LOCTEXT_NAMESPACE
@@ -510,17 +510,17 @@ bool AInteractableActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	OutLabel.HeightCm = 240.f;
 	if (bGeneratorBroken)
 	{
-		OutLabel.Text = FString::Printf(TEXT("⚡ Генератор: ВЫВЕДЕН ИЗ СТРОЯ [0/%d HP]\n(Нужен ремонт)"), FMath::FloorToInt(GeneratorMaxHealth));
+		OutLabel.Text = FString::Printf(TEXT("⚡ Generator: DISABLED [0/%d HP]\n(Needs repair)"), FMath::FloorToInt(GeneratorMaxHealth));
 		OutLabel.Color = FLinearColor(1.f, 0.25f, 0.25f);
 	}
 	else if (IsGeneratorWorking())
 	{
-		OutLabel.Text = FString::Printf(TEXT("⚡ Генератор: РАБОТАЕТ [%d/%d HP]\n(Питание подано)"), FMath::FloorToInt(GeneratorHealth), FMath::FloorToInt(GeneratorMaxHealth));
+		OutLabel.Text = FString::Printf(TEXT("⚡ Generator: RUNNING [%d/%d HP]\n(Powered)"), FMath::FloorToInt(GeneratorHealth), FMath::FloorToInt(GeneratorMaxHealth));
 		OutLabel.Color = FLinearColor(0.2f, 0.9f, 0.4f);
 	}
 	else
 	{
-		OutLabel.Text = FString::Printf(TEXT("⚡ Резервный генератор [%d/%d HP]"), FMath::FloorToInt(GeneratorHealth), FMath::FloorToInt(GeneratorMaxHealth));
+		OutLabel.Text = FString::Printf(TEXT("⚡ Backup generator [%d/%d HP]"), FMath::FloorToInt(GeneratorHealth), FMath::FloorToInt(GeneratorMaxHealth));
 		OutLabel.Color = FLinearColor(0.9f, 0.8f, 0.3f);
 	}
 	return true;

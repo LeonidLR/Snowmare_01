@@ -143,8 +143,8 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 
 	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Msg->PostMessage(FText::FromString(TEXT("Командир")), FText::FromString(FString::Printf(
-			TEXT("Волна %d: Наступают враги (Всего: %d | 🐺 Гончие: %d, 🏹 Стрелки: %d, ❄️ Громилы: %d)!"),
+		Msg->PostMessage(FText::FromString(TEXT("Commander")), FText::FromString(FString::Printf(
+			TEXT("Wave %d: enemies advancing (Total: %d | 🐺 Hounds: %d, 🏹 Spitters: %d, ❄️ Brutes: %d)!"),
 			CurrentWaveIndex, Counts.Total(), Counts.Hounds, Counts.Spitters, Counts.Brutes)));
 	}
 
@@ -166,8 +166,8 @@ void UWaveSubsystem::AdoptLevelEnemies()
 	UE_LOG(LogCodexTactics, Display, TEXT("[Wave] ambush fight: %d enemies of the level"), TotalWaveEnemies);
 	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Msg->PostMessage(FText::FromString(TEXT("Командир")),
-			FText::FromString(FString::Printf(TEXT("Засада! Противник на уровне (всего: %d) — уничтожить!"), TotalWaveEnemies)));
+		Msg->PostMessage(FText::FromString(TEXT("Commander")),
+			FText::FromString(FString::Printf(TEXT("Ambush! Hostiles on the level (total: %d) - eliminate them!"), TotalWaveEnemies)));
 	}
 }
 
@@ -196,8 +196,8 @@ void UWaveSubsystem::SpawnLevelWave(const FWaveDefinition& Def)
 	{
 		const int32 Cutters = Counts.FindRef(EEnemyArchetype::Cutter);
 		const FString CutterPart = Cutters > 0 ? FString::Printf(TEXT("🐺 Cutter: %d, "), Cutters) : FString();
-		Msg->PostMessage(FText::FromString(TEXT("Командир")), FText::FromString(FString::Printf(
-			TEXT("Волна %d: Наступают враги (Всего: %d | %s🐺 Гончие: %d, 🏹 Стрелки: %d, ❄️ Громилы: %d)!"),
+		Msg->PostMessage(FText::FromString(TEXT("Commander")), FText::FromString(FString::Printf(
+			TEXT("Wave %d: enemies advancing (Total: %d | %s🐺 Hounds: %d, 🏹 Spitters: %d, ❄️ Brutes: %d)!"),
 			CurrentWaveIndex, Spawned, *CutterPart, Counts.FindRef(EEnemyArchetype::FrostHound),
 			Counts.FindRef(EEnemyArchetype::Spitter), Counts.FindRef(EEnemyArchetype::Brute))));
 	}
@@ -358,7 +358,7 @@ FVector UWaveSubsystem::GetSpawnLocationForLane(const FString& Lane, EEnemyArche
 			continue;
 		}
 		StaticLocations.Add(It->GetActorLocation());
-		const bool bLaneOk = bAnyLane || SpawnLaneRules::LanesMatch(It->SpawnLane, Lane); // + NORTH_GATE <-> «Северные ворота» aliases
+		const bool bLaneOk = bAnyLane || SpawnLaneRules::LanesMatch(It->SpawnLane, Lane); // + NORTH_GATE <-> Russian map lane name aliases
 		if (bLaneOk && It->Accepts(Type))
 		{
 			CandidateLocations.Add(It->GetActorLocation());
@@ -518,8 +518,8 @@ void UWaveSubsystem::SpawnBreachPack(const AEnemySpawnPoint& Point)
 {
 	if (UGameMessageSubsystem* Msg = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Msg->PostMessage(FText::FromString(TEXT("ШТАБ")), FText::FromString(FString::Printf(
-			TEXT("💥 ПРОРЫВ ВО ФЛАНГЕ! Враги пробили переборку на рубеже «%s»!"), *Point.SpawnLane)));
+		Msg->PostMessage(FText::FromString(TEXT("HQ")), FText::FromString(FString::Printf(
+			TEXT("💥 FLANK BREACH! Enemies broke through the bulkhead at \"%s\"!"), *SpawnLaneRules::GetLaneDisplayName(Point.SpawnLane))));
 	}
 	// Godot's match spawns hounds for any other type (FROSTBITTEN included).
 	const EEnemyArchetype Type = Point.BreachEnemyType == EEnemyArchetype::Spitter || Point.BreachEnemyType == EEnemyArchetype::Brute
@@ -556,11 +556,11 @@ void UWaveSubsystem::TriggerBreach(AEnemySpawnPoint* Point, float CameraDelay)
 		}
 		if (UGameMessageSubsystem* Msg = PointWorld->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Msg->PostMessage(FText::FromString(TEXT("ОТРЯД")), FText::FromString(TEXT("💥 Чёрт подери, откуда они взялись? Приготовиться к отражению атаки!")));
+			Msg->PostMessage(FText::FromString(TEXT("SQUAD")), FText::FromString(TEXT("💥 Damn it, where did they come from? Get ready to repel the attack!")));
 		}
 		if (const USquadSubsystem* Squad = PointWorld->GetSubsystem<USquadSubsystem>(); Squad && Squad->GetLeader())
 		{
-			UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(), TEXT("💥 ЧЁРТ ПОДЕРИ, ОТКУДА ОНИ?!"), FLinearColor(1.f, 0.3f, 0.3f));
+			UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(), TEXT("💥 DAMN IT, WHERE DID THEY COME FROM?!"), FLinearColor(1.f, 0.3f, 0.3f));
 		}
 		// Back to the squad 1.8 s after the breach was shown.
 		TWeakObjectPtr<ATacticalCameraPawn> WeakCamera(Camera);

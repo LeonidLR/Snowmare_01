@@ -134,12 +134,12 @@ void UInventoryDrawerWidget::BuildDefaultLayout()
 	HintText->SetFont(HintFont);
 	HintText->SetColorAndOpacity(FSlateColor(DrawerTitle * 0.85f));
 	HintText->SetJustification(ETextJustify::Center);
-	HintText->SetText(LOCTEXT("DragHint", "Передача: перетащите строку на бойца или его портрет (до 2 м, иначе боец подойдёт сам)"));
+	HintText->SetText(LOCTEXT("DragHint", "Drag a row onto an operative or portrait to hand it over (beyond 2 m he walks up)"));
 	Column->AddChildToVerticalBox(HintText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	UTextBlock* CloseText = nullptr;
 	UButton* CloseButton = MakeButton(TEXT("BtnClose"), CloseText);
-	CloseText->SetText(LOCTEXT("Close", "Закрыть"));
+	CloseText->SetText(LOCTEXT("Close", "Close"));
 	Column->AddChildToVerticalBox(CloseButton);
 	CloseButton->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleClose);
 
@@ -201,8 +201,8 @@ void UInventoryDrawerWidget::Toggle()
 FText UInventoryDrawerWidget::GetTitleText() const
 {
 	const AOperativeCharacter* Leader = DrawerLeader(GetWorld());
-	return Leader ? DrawerClean(FString::Printf(TEXT("🎒 ЛИЧНЫЙ ИНВЕНТАРЬ: %s"), *Leader->DisplayName.ToUpper().ToString()))
-		: DrawerClean(TEXT("🎒 ЛИЧНЫЙ ИНВЕНТАРЬ ОПЕРАТИВНИКА"));
+	return Leader ? DrawerClean(FString::Printf(TEXT("🎒 PERSONAL INVENTORY: %s"), *Leader->DisplayName.ToUpper().ToString()))
+		: DrawerClean(TEXT("🎒 OPERATIVE'S PERSONAL INVENTORY"));
 }
 
 FText UInventoryDrawerWidget::GetSlotText(EInventoryDrawerSlot Line) const
@@ -220,35 +220,35 @@ FText UInventoryDrawerWidget::GetSlotText(EInventoryDrawerSlot Line) const
 		const int32 InSquad = DrawerSquadCount(GetWorld(), Type);
 		if (Count > 0)
 		{
-			return DrawerClean(FString::Printf(TEXT("%s %s%s: %d/%d шт."), Icon, Name, Active, Count, Max));
+			return DrawerClean(FString::Printf(TEXT("%s %s%s: %d/%d"), Icon, Name, Active, Count, Max));
 		}
 		if (InSquad > 0)
 		{
-			return DrawerClean(FString::Printf(TEXT("%s %s%s: 0 (%d в отряде)"), Icon, Name, Active, InSquad));
+			return DrawerClean(FString::Printf(TEXT("%s %s%s: 0 (%d in squad)"), Icon, Name, Active, InSquad));
 		}
-		return DrawerClean(FString::Printf(TEXT("%s %s%s: 0/%d шт."), Icon, Name, Active, Max));
+		return DrawerClean(FString::Printf(TEXT("%s %s%s: 0/%d"), Icon, Name, Active, Max));
 	};
 	switch (Line)
 	{
-	case EInventoryDrawerSlot::Turret: return Deployable(EDeployableType::Turret, TEXT("🛠️"), TEXT("Турель"));
-	case EInventoryDrawerSlot::Barricade: return Deployable(EDeployableType::Barricade, TEXT("🧱"), TEXT("Баррикада"));
-	case EInventoryDrawerSlot::Mine: return Deployable(EDeployableType::Mine, TEXT("💣"), TEXT("Мина"));
-	case EInventoryDrawerSlot::Medkit: return DrawerClean(FString::Printf(TEXT("🩹 Аптечка [H]: %d шт."), Leader->MedkitsCount));
-	case EInventoryDrawerSlot::CannedFood: return DrawerClean(FString::Printf(TEXT("🥫 Консервы [J]: %d шт."), Leader->CannedFoodCount));
-	case EInventoryDrawerSlot::Bread: return DrawerClean(FString::Printf(TEXT("🍞 Хлеб [K]: %d шт."), Leader->BreadCount));
-	case EInventoryDrawerSlot::Chocolate: return DrawerClean(FString::Printf(TEXT("🍫 Шоколад [L]: %d шт."), Leader->ChocolateCount));
+	case EInventoryDrawerSlot::Turret: return Deployable(EDeployableType::Turret, TEXT("🛠️"), TEXT("Turret"));
+	case EInventoryDrawerSlot::Barricade: return Deployable(EDeployableType::Barricade, TEXT("🧱"), TEXT("Barricade"));
+	case EInventoryDrawerSlot::Mine: return Deployable(EDeployableType::Mine, TEXT("💣"), TEXT("Mine"));
+	case EInventoryDrawerSlot::Medkit: return DrawerClean(FString::Printf(TEXT("🩹 Medkit [H]: x%d"), Leader->MedkitsCount));
+	case EInventoryDrawerSlot::CannedFood: return DrawerClean(FString::Printf(TEXT("🥫 Canned food [J]: x%d"), Leader->CannedFoodCount));
+	case EInventoryDrawerSlot::Bread: return DrawerClean(FString::Printf(TEXT("🍞 Bread [K]: x%d"), Leader->BreadCount));
+	case EInventoryDrawerSlot::Chocolate: return DrawerClean(FString::Printf(TEXT("🍫 Chocolate [L]: x%d"), Leader->ChocolateCount));
 	case EInventoryDrawerSlot::Tripwire:
 	{
 		const URelocationSubsystem* Relocation = GetWorld() ? GetWorld()->GetSubsystem<URelocationSubsystem>() : nullptr;
-		return DrawerClean(FString::Printf(TEXT("🪤 Растяжка (2 гранаты): в отряде %d"), Relocation ? Relocation->GetSquadGrenades() : 0));
+		return DrawerClean(FString::Printf(TEXT("🪤 Tripwire (2 grenades): %d in squad"), Relocation ? Relocation->GetSquadGrenades() : 0));
 	}
-	case EInventoryDrawerSlot::RifleAmmo: return DrawerClean(FString::Printf(TEXT("🔫 Патроны M16: %d"), Leader->GetReserve(TEXT("m16"))));
-	case EInventoryDrawerSlot::PistolAmmo: return DrawerClean(FString::Printf(TEXT("🔫 Патроны 9мм: %d"), Leader->GetReserve(TEXT("pistol"))));
-	case EInventoryDrawerSlot::ShotgunAmmo: return DrawerClean(FString::Printf(TEXT("💥 Дробь 12k: %d"), Leader->GetReserve(TEXT("shotgun"))));
-	case EInventoryDrawerSlot::FlameFuel: return DrawerClean(FString::Printf(TEXT("🔥 Топливо: %d ед."), Leader->GetReserve(TEXT("flamethrower"))));
-	case EInventoryDrawerSlot::CryoAmmo: return DrawerClean(FString::Printf(TEXT("❄️ Хладагент: %d ед."), Leader->GetReserve(TEXT("cryo_emitter"))));
-	case EInventoryDrawerSlot::PlasmaAmmo: return DrawerClean(FString::Printf(TEXT("⚡ Плазма: %d ед."), Leader->GetReserve(TEXT("plasma_carbine"))));
-	default: return DrawerClean(FString::Printf(TEXT("🪵 Спички: %d шт."), Leader->MatchesCount));
+	case EInventoryDrawerSlot::RifleAmmo: return DrawerClean(FString::Printf(TEXT("🔫 M16 rounds: %d"), Leader->GetReserve(TEXT("m16"))));
+	case EInventoryDrawerSlot::PistolAmmo: return DrawerClean(FString::Printf(TEXT("🔫 9mm rounds: %d"), Leader->GetReserve(TEXT("pistol"))));
+	case EInventoryDrawerSlot::ShotgunAmmo: return DrawerClean(FString::Printf(TEXT("💥 12g shells: %d"), Leader->GetReserve(TEXT("shotgun"))));
+	case EInventoryDrawerSlot::FlameFuel: return DrawerClean(FString::Printf(TEXT("🔥 Fuel: %d"), Leader->GetReserve(TEXT("flamethrower"))));
+	case EInventoryDrawerSlot::CryoAmmo: return DrawerClean(FString::Printf(TEXT("❄️ Coolant: %d"), Leader->GetReserve(TEXT("cryo_emitter"))));
+	case EInventoryDrawerSlot::PlasmaAmmo: return DrawerClean(FString::Printf(TEXT("⚡ Plasma: %d"), Leader->GetReserve(TEXT("plasma_carbine"))));
+	default: return DrawerClean(FString::Printf(TEXT("🪵 Matches: x%d"), Leader->MatchesCount));
 	}
 }
 

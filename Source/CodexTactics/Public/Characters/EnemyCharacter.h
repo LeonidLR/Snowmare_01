@@ -377,7 +377,7 @@ protected:
 	EEnemyArchetype Archetype = EEnemyArchetype::FrostHound;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy")
-	FString EnemyDisplayName = TEXT("Ледяная гончая");
+	FString EnemyDisplayName = TEXT("Frost Hound");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy")
 	float AttackDamage = 12.0f;

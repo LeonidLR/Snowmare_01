@@ -20,9 +20,9 @@ struct CODEXTACTICS_API FDefenseMarkerView
 };
 
 /**
- * Sprint 10 «Рубеж обороны» visuals (user request 2026-10-05; UE-only): every object / point an operative holds at all
+ * Sprint 10 "Hold line" visuals (user request 2026-10-05; UE-only): every object / point an operative holds at all
  * costs gets a translucent green fresnel overlay (M_TargetFresnel, the material of the red target highlight), a shield
- * icon with «РУБЕЖ» drawn by the HUD, and a green ground ring at the intercept radius that grows and fades in softly,
+ * icon with "HOLD LINE" drawn by the HUD, and a green ground ring at the intercept radius that grows and fades in softly,
  * breathes gently and fades out when the line is lifted (a new move order, the object destroyed). Runs in the pause too
  * (real time, not the dilated world time). Reads the operatives' FTacticalAnchor::Defense; no gameplay effect.
  */

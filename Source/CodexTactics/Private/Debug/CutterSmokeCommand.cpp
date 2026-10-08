@@ -1,8 +1,8 @@
 // Dev-only console command for a headless cutter check on L_MovementTest (exploration, the squad holds fire):
 //   Scripts/smoke.ps1 -Command CodexTactics.CutterSmoke
 // Godot enemy_cutter.gd: 75 HP / 18 damage stats; 6 m from the commander it pounces (jump config from
-// DA_EnemyAnim_cutter), the landing hurts the squad in 2.2 m («НАЛЁТ»), then a 6 s cooldown; shot down mid-leap it
-// crashes («СБИТ В ВОЗДУХЕ», «КРАХ»).
+// DA_EnemyAnim_cutter), the landing hurts the squad in 2.2 m ("POUNCE"), then a 6 s cooldown; shot down mid-leap it
+// crashes («SHOT DOWN MID-AIR», «CRASH»).
 
 #include "CoreMinimal.h"
 
@@ -109,9 +109,9 @@ namespace CutterSmoke
 				return true;
 			}
 			Check(State, State.bSawJump, TEXT("cutter pounced from 6 m"));
-			Check(State, SquadHealth(Squad) < State.SquadHealth || Floating->HasShown(TEXT("УКЛОНЕНИЕ")), TEXT("landing hurt the squad"));
-			Check(State, Floating->HasShown(TEXT("НАЛЁТ")) && Cutter && Cutter->GetJumpCooldown() > 4.f,
-				FString::Printf(TEXT("«НАЛЁТ» and the 6 s cooldown (%.1f)"), Cutter ? Cutter->GetJumpCooldown() : -1.f));
+			Check(State, SquadHealth(Squad) < State.SquadHealth || Floating->HasShown(TEXT("DODGE")), TEXT("landing hurt the squad"));
+			Check(State, Floating->HasShown(TEXT("POUNCE")) && Cutter && Cutter->GetJumpCooldown() > 4.f,
+				FString::Printf(TEXT("\"POUNCE\" and the 6 s cooldown (%.1f)"), Cutter ? Cutter->GetJumpCooldown() : -1.f));
 			if (Cutter)
 			{
 				Cutter->Destroy();
@@ -140,11 +140,11 @@ namespace CutterSmoke
 			return true;
 		}
 		case 3:
-			if (!Floating->HasShown(TEXT("КРАХ")) && State.StageTime < 3.f)
+			if (!Floating->HasShown(TEXT("CRASH")) && State.StageTime < 3.f)
 			{
 				return true;
 			}
-			Check(State, Floating->HasShown(TEXT("СБИТ В ВОЗДУХЕ")) && Floating->HasShown(TEXT("КРАХ")), TEXT("shot down mid-leap: crash landing"));
+			Check(State, Floating->HasShown(TEXT("SHOT DOWN MID-AIR")) && Floating->HasShown(TEXT("CRASH")), TEXT("shot down mid-leap: crash landing"));
 			return Finish(State, true);
 		default:
 			return Finish(State, false);

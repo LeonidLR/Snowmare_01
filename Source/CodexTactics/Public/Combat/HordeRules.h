@@ -46,7 +46,7 @@ struct CODEXTACTICS_API FHordeConfig
 	int32 SpawnSamples = 32;
 	/** "apply_wave_modifiers": the current wave's hp / damage / speed multipliers (the level's difficulty) apply. */
 	bool bApplyWaveModifiers = true;
-	/** "warning_seconds": how long the HUD shows «ОРДА!» and the direction arrow. */
+	/** "warning_seconds": how long the HUD shows "HORDE!" and the direction arrow. */
 	float WarningSeconds = 6.f;
 	/** "warning_sound": optional sound asset path played once (empty: none — the project has no audio cue yet). */
 	FString WarningSound;

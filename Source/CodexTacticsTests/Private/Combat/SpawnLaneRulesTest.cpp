@@ -22,6 +22,12 @@ bool FSpawnLaneRulesTest::RunTest(const FString&)
 	TestTrue(TEXT("ANY request"), SpawnLaneRules::LanesMatch(TEXT("Правый фланг"), TEXT("ANY")));
 	TestTrue(TEXT("Empty request"), SpawnLaneRules::LanesMatch(TEXT("Правый фланг"), FString()));
 	TestTrue(TEXT("Godot containment kept"), SpawnLaneRules::LanesMatch(TEXT("Левый фланг (Прорыв)"), TEXT("Левый фланг")));
+
+	// English display names: accepted as aliases and used for player text.
+	TestTrue(TEXT("English point -> key"), SpawnLaneRules::LanesMatch(TEXT("North gate"), TEXT("NORTH_GATE")));
+	TestEqual(TEXT("Display name of the Russian point"), SpawnLaneRules::GetLaneDisplayName(TEXT("Левый фланг (Прорыв)")), FString(TEXT("West flank")));
+	TestEqual(TEXT("Display name of the key"), SpawnLaneRules::GetLaneDisplayName(TEXT("FAR_PERIMETER")), FString(TEXT("Far perimeter")));
+	TestEqual(TEXT("Unknown display name kept"), SpawnLaneRules::GetLaneDisplayName(TEXT("Roof")), FString(TEXT("Roof")));
 	return true;
 }
 

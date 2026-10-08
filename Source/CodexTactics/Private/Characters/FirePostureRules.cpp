@@ -66,9 +66,9 @@ namespace FirePostureRules
 	{
 		switch (Posture)
 		{
-		case ESquadFirePosture::Passive: return TEXT("П");
-		case ESquadFirePosture::Defensive: return TEXT("О");
-		default: return TEXT("А");
+		case ESquadFirePosture::Passive: return TEXT("P");
+		case ESquadFirePosture::Defensive: return TEXT("D");
+		default: return TEXT("A");
 		}
 	}
 
@@ -86,9 +86,9 @@ namespace FirePostureRules
 	{
 		switch (Posture)
 		{
-		case ESquadFirePosture::Passive: return TEXT("ПАССИВНЫЙ");
-		case ESquadFirePosture::Defensive: return TEXT("ОБОРОНИТЕЛЬНЫЙ");
-		default: return TEXT("АГРЕССИВНЫЙ");
+		case ESquadFirePosture::Passive: return TEXT("PASSIVE");
+		case ESquadFirePosture::Defensive: return TEXT("DEFENSIVE");
+		default: return TEXT("AGGRESSIVE");
 		}
 	}
 
@@ -96,9 +96,9 @@ namespace FirePostureRules
 	{
 		switch (Posture)
 		{
-		case ESquadFirePosture::Passive: return TEXT("ПАСС");
-		case ESquadFirePosture::Defensive: return TEXT("ОБОР");
-		default: return TEXT("АГР");
+		case ESquadFirePosture::Passive: return TEXT("PAS");
+		case ESquadFirePosture::Defensive: return TEXT("DEF");
+		default: return TEXT("AGG");
 		}
 	}
 

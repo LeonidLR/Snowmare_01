@@ -56,16 +56,17 @@ FMemberRunStats& URunTelemetrySubsystem::StatsFor(const AOperativeCharacter* Ope
 
 FDeployableRunStats* URunTelemetrySubsystem::DeployableFor(const FString& Source)
 {
-	// Godot register_deployable_damage / register_enemy_kill: by the attacker source string.
-	if (Source.Contains(TEXT("Турель")))
+	// Godot register_deployable_damage / register_enemy_kill: by the attacker source string (English names; the Russian
+	// alternatives stay until every attacker-source literal in the other systems is English).
+	if (Source.Contains(TEXT("Turret")) || Source.Contains(TEXT("Турель"))) // cyrillic-ok: legacy Russian data
 	{
 		return &Turrets;
 	}
-	if (Source.Contains(TEXT("Мина")))
+	if (Source.Contains(TEXT("Mine")) || Source.Contains(TEXT("Мина"))) // cyrillic-ok: legacy Russian data
 	{
 		return &Mines;
 	}
-	if (Source.Contains(TEXT("Баррикада")))
+	if (Source.Contains(TEXT("Barricade")) || Source.Contains(TEXT("Баррикада"))) // cyrillic-ok: legacy Russian data
 	{
 		return &Barricades;
 	}

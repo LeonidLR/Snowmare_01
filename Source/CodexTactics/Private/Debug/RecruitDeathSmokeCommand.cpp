@@ -1,7 +1,7 @@
 // Dev-only console command for a headless check of an expendable member's death on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.RecruitDeathSmoke
 // Godot is_expendable (recruit_susanin.gd) / main.gd _handle_expendable_member_death / player.gd corpse_loot: Susanin's
-// death does not fail the mission; his remains («Останки: Иван Сусанин») hold his supplies and the leader takes them.
+// death does not fail the mission; his remains («Remains: Иван Сусанин») hold his supplies and the leader takes them.
 
 #include "CoreMinimal.h"
 
@@ -64,7 +64,7 @@ namespace RecruitDeathSmoke
 				{
 					Remains = It->ActorHasTag(TEXT("CorpseLoot")) ? *It : Remains;
 				}
-				Check(bOk, Remains && Remains->CrateName.ToString().Contains(TEXT("Останки")),
+				Check(bOk, Remains && Remains->CrateName.ToString().Contains(TEXT("Remains")),
 					FString::Printf(TEXT("remains spawned: %s"), Remains ? *Remains->CrateName.ToString() : TEXT("none")));
 				if (Remains)
 				{

@@ -10,17 +10,17 @@ FMineShotChance TargetedShotRules::ComputeMineShotChance(float Accuracy, float C
 	case EOperativeStance::Crouching:
 		Result.StanceMultiplier = 1.f;
 		Result.PenaltyPerMeter = 1.8f;
-		Result.StanceName = LOCTEXT("Crouching", "Присев");
+		Result.StanceName = LOCTEXT("Crouching", "Crouched");
 		break;
 	case EOperativeStance::Prone:
 		Result.StanceMultiplier = 1.25f;
 		Result.PenaltyPerMeter = 1.f;
-		Result.StanceName = LOCTEXT("Prone", "Лёжа");
+		Result.StanceName = LOCTEXT("Prone", "Prone");
 		break;
 	default:
 		Result.StanceMultiplier = 0.6f;
 		Result.PenaltyPerMeter = 4.f;
-		Result.StanceName = LOCTEXT("Standing", "Стоя");
+		Result.StanceName = LOCTEXT("Standing", "Standing");
 		break;
 	}
 	const float Effective = FMath::Max(MinEffectiveAccuracy, Accuracy - ColdLevel * ColdAccuracyPenalty);
@@ -32,13 +32,13 @@ FText TargetedShotRules::GetMineMissReason(EOperativeStance Stance, float Distan
 {
 	if (Stance == EOperativeStance::Standing && DistanceM > StandingMissReasonDistance)
 	{
-		return LOCTEXT("MissStanding", "стоя на таком расстоянии не попасть");
+		return LOCTEXT("MissStanding", "can't hit standing at this range");
 	}
 	if (ColdLevel > ColdMissReasonLevel)
 	{
-		return LOCTEXT("MissCold", "руки дрожат от холода");
+		return LOCTEXT("MissCold", "hands shaking from the cold");
 	}
-	return LOCTEXT("MissSnow", "пуля ушла в мерзлый снег");
+	return LOCTEXT("MissSnow", "the bullet went into the frozen snow");
 }
 
 EPlannedShotRetry TargetedShotRules::GetPlannedShotRetry(ECodexGamePhase Phase, ECodexCombatMode Mode, float SecondsSinceRelease)

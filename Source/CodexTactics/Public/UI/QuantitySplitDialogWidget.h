@@ -13,8 +13,8 @@ class UTextBlock;
 
 /**
  * Sprint 13: compact «how many?» dialog after a dragged item was dropped (on a squad mate, the ground, a crate, or a
- * crate line onto an operative) and more than one quantity is possible. Quantity on a slider and [-] / [+] by TransferRules::GetItemQuantityStep (ammo 5, items 1), «ВСЁ» (the whole
- * stack), «ПОДТВЕРДИТЬ» (USquadTransferSubsystem::RequestTransfer), «ОТМЕНА» / Esc (ACodexTacticsHUD::HandleEscape).
+ * crate line onto an operative) and more than one quantity is possible. Quantity on a slider and [-] / [+] by TransferRules::GetItemQuantityStep (ammo 5, items 1), «ALL» (the whole
+ * stack), «CONFIRM» (USquadTransferSubsystem::RequestTransfer), «CANCEL» / Esc (ACodexTacticsHUD::HandleEscape).
  * The maximum is min(sender stock, recipient capacity) and is shown. Built in C++ (restyle through a Widget Blueprint
  * subclass). No Godot counterpart.
  */
@@ -46,15 +46,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Transfer")
 	int32 GetMaxQuantity() const { return MaxQuantity; }
 
-	/** [+] / [-] one step; «ВСЁ». */
+	/** [+] / [-] one step; «ALL». */
 	void Increment();
 	void Decrement();
 	void SelectAll();
 
-	/** «ПОДТВЕРДИТЬ»: closes and runs the request with the chosen quantity (Failed when the dialog was not open). */
+	/** «CONFIRM»: closes and runs the request with the chosen quantity (Failed when the dialog was not open). */
 	ETransferRequestOutcome Confirm();
 
-	/** «ОТМЕНА» / Esc: closes, nothing changes hands. */
+	/** «CANCEL» / Esc: closes, nothing changes hands. */
 	void Cancel();
 
 	ETransferItem GetItem() const { return Request.Item; }

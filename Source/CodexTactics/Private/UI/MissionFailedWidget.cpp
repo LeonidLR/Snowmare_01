@@ -75,14 +75,14 @@ void UMissionFailedWidget::BuildDefaultLayout()
 	Size->AddChild(Column);
 
 	FailedTitleText = MakeText(TEXT("FailedTitleText"), 20, FailedTitleColor);
-	FailedTitleText->SetText(LOCTEXT("Title", "❄️ МИССИЯ ПРОВАЛЕНА ❄️"));
+	FailedTitleText->SetText(LOCTEXT("Title", "❄️ MISSION FAILED ❄️"));
 	Column->AddChildToVerticalBox(FailedTitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
 
 	FailedReasonText = MakeText(TEXT("FailedReasonText"), 14, FailedReasonColor);
 	Column->AddChildToVerticalBox(FailedReasonText)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
 
 	FailedTipText = MakeText(TEXT("FailedTipText"), 12, FailedTipColor);
-	FailedTipText->SetText(LOCTEXT("Tip", "Совет: Разжигайте бочки спичками или грейтесь у работающего генератора, чтобы избежать обморожения."));
+	FailedTipText->SetText(LOCTEXT("Tip", "Tip: light barrels with matches or warm up at a running generator to avoid frostbite."));
 	Column->AddChildToVerticalBox(FailedTipText)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
 
 	UBorder* Separator = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("FailedSeparator"));
@@ -92,7 +92,7 @@ void UMissionFailedWidget::BuildDefaultLayout()
 
 	FailedRestartButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("FailedRestartButton"));
 	FailedRestartText = MakeText(TEXT("FailedRestartText"), 14, FailedButtonTextColor);
-	FailedRestartText->SetText(LOCTEXT("Restart", "🔄 Начать заново"));
+	FailedRestartText->SetText(LOCTEXT("Restart", "🔄 Restart"));
 	FailedRestartButton->AddChild(FailedRestartText);
 	USizeBox* ButtonSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("FailedButtonSize"));
 	ButtonSize->SetHeightOverride(42.f);

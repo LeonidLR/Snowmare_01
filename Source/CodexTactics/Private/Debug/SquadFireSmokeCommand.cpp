@@ -1,9 +1,9 @@
 // Dev-only console command for a headless real-time squad fire check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.SquadFireSmoke
 // Godot player.gd _find_shoot_target / _shoot_at_target: a barricade between the commander and a hound blocks a prone
-// shot («Баррикада блокирует огонь»); crouched and standing fire over the 60 cm barricade (Sprint 08); a current target is kept until a much
+// shot («Barricade blocks the shot»); crouched and standing fire over the 60 cm barricade (Sprint 08); a current target is kept until a much
 // closer hound has been closer for the stance delay (0.15 s standing); a crouched crit hits for 2.5x a standing plain
-// shot («КРИТ x2!»).
+// shot («CRIT x2!»).
 
 #include "CoreMinimal.h"
 
@@ -128,7 +128,7 @@ namespace SquadFireSmoke
 		case 1:
 		{
 			const FShootCandidate Prone = Commander->FindShootTarget(0.1f);
-			Check(State, !Prone.Enemy && Floating->HasShown(TEXT("Баррикада блокирует огонь")), TEXT("prone behind the barricade: blocked, text"));
+			Check(State, !Prone.Enemy && Floating->HasShown(TEXT("Barricade blocks the shot")), TEXT("prone behind the barricade: blocked, text"));
 			Commander->SetStance(EOperativeStance::Crouching);
 			return true;
 		}
@@ -190,7 +190,7 @@ namespace SquadFireSmoke
 			Commander->ShootAtTarget(Brute, 1.f);
 			const float Crit = Before - HealthOf(Brute);
 			Commander->bForceHitForTesting = false;
-			Check(State, State.Plain > 0.f && FMath::IsNearlyEqual(Crit, State.Plain * 2.5f, 0.6f) && Floating->HasShown(TEXT("КРИТ x2!")),
+			Check(State, State.Plain > 0.f && FMath::IsNearlyEqual(Crit, State.Plain * 2.5f, 0.6f) && Floating->HasShown(TEXT("CRIT x2!")),
 				FString::Printf(TEXT("plain %.1f, crouched crit %.1f (x2.5)"), State.Plain, Crit));
 			return Finish(State, true);
 		}

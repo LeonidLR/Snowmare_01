@@ -11,7 +11,7 @@ class AOperativeCharacter;
  * Sprint 13: an item line being dragged. From the inventory drawer (Sender set): onto a squad mate (model / portrait),
  * a crate (model / open loot window) or the ground. From a crate's loot window (Container set): onto an operative
  * (model / portrait) or the drawer (the leader). Available = the count at drag start (the drop re-reads the live one).
- * No Godot counterpart (Godot used the «ПЕРЕД» dialog + click mode).
+ * No Godot counterpart (Godot used a transfer dialog + click mode).
  */
 UCLASS()
 class CODEXTACTICS_API UInventoryDragDropOperation : public UDragDropOperation

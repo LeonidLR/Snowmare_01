@@ -19,22 +19,22 @@ namespace
 	{
 		switch (Item)
 		{
-		case ELootItem::Medkit: return FText::Format(LOCTEXT("TookMedkit", "+{0} 🩹 Аптечка"), Count);
-		case ELootItem::CannedFood: return FText::Format(LOCTEXT("TookFood", "+{0} 🥫 Консервы"), Count);
-		case ELootItem::Bread: return FText::Format(LOCTEXT("TookBread", "+{0} 🍞 Хлеб"), Count);
-		case ELootItem::Chocolate: return FText::Format(LOCTEXT("TookChocolate", "+{0} 🍫 Шоколад"), Count);
-		case ELootItem::Matches: return FText::Format(LOCTEXT("TookMatches", "+{0} 🪵 Спички"), Count);
-		case ELootItem::RifleAmmo: return FText::Format(LOCTEXT("TookRifle", "+{0} 🔫 Патроны M16"), Count);
-		case ELootItem::PistolAmmo: return FText::Format(LOCTEXT("TookPistol", "+{0} 🔫 Патроны к пистолету"), Count);
-		case ELootItem::ShotgunAmmo: return FText::Format(LOCTEXT("TookShotgun", "+{0} 💥 Дробь 12k"), Count);
-		case ELootItem::FlameFuel: return FText::Format(LOCTEXT("TookFuel", "+{0} 🔥 Топливо"), Count);
-		case ELootItem::CryoAmmo: return FText::Format(LOCTEXT("TookCryo", "+{0} ❄️ Хладагент"), Count);
-		case ELootItem::PlasmaAmmo: return FText::Format(LOCTEXT("TookPlasma", "+{0} ⚡ Плазма"), Count);
-		case ELootItem::Turret: return FText::Format(LOCTEXT("TookTurret", "+{0} 🎯 Турель"), Count);
-		case ELootItem::Barricade: return FText::Format(LOCTEXT("TookBarricade", "+{0} 🧱 Баррикада"), Count);
-		case ELootItem::Mine: return FText::Format(LOCTEXT("TookMine", "+{0} 💣 Мина"), Count);
-		case ELootItem::BonusWeapon: return FText::Format(LOCTEXT("TookWeapon", "⭐ Оружие: {0}"), FText::FromString(Id));
-		default: return FText::Format(LOCTEXT("TookClothing", "🧥 Снаряжение: {0}"), FText::FromString(Id));
+		case ELootItem::Medkit: return FText::Format(LOCTEXT("TookMedkit", "+{0} 🩹 Medkit"), Count);
+		case ELootItem::CannedFood: return FText::Format(LOCTEXT("TookFood", "+{0} 🥫 Canned food"), Count);
+		case ELootItem::Bread: return FText::Format(LOCTEXT("TookBread", "+{0} 🍞 Bread"), Count);
+		case ELootItem::Chocolate: return FText::Format(LOCTEXT("TookChocolate", "+{0} 🍫 Chocolate"), Count);
+		case ELootItem::Matches: return FText::Format(LOCTEXT("TookMatches", "+{0} 🪵 Matches"), Count);
+		case ELootItem::RifleAmmo: return FText::Format(LOCTEXT("TookRifle", "+{0} 🔫 M16 rounds"), Count);
+		case ELootItem::PistolAmmo: return FText::Format(LOCTEXT("TookPistol", "+{0} 🔫 9mm rounds"), Count);
+		case ELootItem::ShotgunAmmo: return FText::Format(LOCTEXT("TookShotgun", "+{0} 💥 12g shells"), Count);
+		case ELootItem::FlameFuel: return FText::Format(LOCTEXT("TookFuel", "+{0} 🔥 Fuel"), Count);
+		case ELootItem::CryoAmmo: return FText::Format(LOCTEXT("TookCryo", "+{0} ❄️ Coolant"), Count);
+		case ELootItem::PlasmaAmmo: return FText::Format(LOCTEXT("TookPlasma", "+{0} ⚡ Plasma"), Count);
+		case ELootItem::Turret: return FText::Format(LOCTEXT("TookTurret", "+{0} 🎯 Turret"), Count);
+		case ELootItem::Barricade: return FText::Format(LOCTEXT("TookBarricade", "+{0} 🧱 Barricade"), Count);
+		case ELootItem::Mine: return FText::Format(LOCTEXT("TookMine", "+{0} 💣 Mine"), Count);
+		case ELootItem::BonusWeapon: return FText::Format(LOCTEXT("TookWeapon", "⭐ Weapon: {0}"), FText::FromString(Id));
+		default: return FText::Format(LOCTEXT("TookClothing", "🧥 Gear: {0}"), FText::FromString(Id));
 		}
 	}
 
@@ -55,7 +55,7 @@ namespace
 ALootCrateActor::ALootCrateActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	CrateName = LOCTEXT("DefaultName", "📦 Армейский ящик снабжения");
+	CrateName = LOCTEXT("DefaultName", "📦 Army supply crate");
 	DisplayName = CrateName;
 	bCanBeRelocated = true;
 	TrapDamage = 95.f; // Godot loot_crate.gd trap_damage
@@ -128,7 +128,7 @@ void ALootCrateActor::Tick(float DeltaSeconds)
 		const UHealthComponent* EnemyHealth = It->FindComponentByClass<UHealthComponent>();
 		if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist(GetActorLocation(), It->GetActorLocation()) <= TrapContactDistance)
 		{
-			DetonateTrap(false, LOCTEXT("EnemyContact", "Контакт с противником"));
+			DetonateTrap(false, LOCTEXT("EnemyContact", "Enemy contact"));
 			return;
 		}
 	}
@@ -147,19 +147,19 @@ bool ALootCrateActor::HandleDirectInteraction(AOperativeCharacter* Leader)
 
 FActionMenuRequest ALootCrateActor::BuildActionMenu(const AOperativeCharacter* Leader) const
 {
-	const FText Squad = LOCTEXT("SquadSpeaker", "Отряд");
+	const FText Squad = LOCTEXT("SquadSpeaker", "SQUAD");
 	if (bDestroyed)
 	{
-		return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("Wrecked", "Этот ящик разорван взрывом ловушки. Всё содержимое уничтожено."));
+		return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("Wrecked", "This crate was torn apart by the trap blast. Everything inside is destroyed."));
 	}
 	if (IsLooted())
 	{
-		return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("Empty", "Этот ящик уже пуст. Всё полезное забрали."));
+		return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("Empty", "This crate is empty. Everything useful has been taken."));
 	}
-	return FActionMenuRequest::MakeMenu(LOCTEXT("TrappedTitle", "📦 Заминированный ящик"),
-		FText::Format(LOCTEXT("TrappedDesc", "⚠️ ВНИМАНИЕ: Ящик заминирован взрывной растяжкой!\nЛюбая ошибка или взрыв уничтожит все припасы внутри!\n{0}"),
+	return FActionMenuRequest::MakeMenu(LOCTEXT("TrappedTitle", "📦 Booby-trapped crate"),
+		FText::Format(LOCTEXT("TrappedDesc", "⚠️ WARNING: The crate is rigged with a tripwire charge!\nAny mistake or blast will destroy all supplies inside!\n{0}"),
 			DescribeDefusal(Leader)),
-		LOCTEXT("Defuse", "Разминировать"), LOCTEXT("Cancel", "Отмена"), false, bCanBeRelocated, LOCTEXT("Relocate", "Переместить"));
+		LOCTEXT("Defuse", "Defuse"), LOCTEXT("Cancel", "Cancel"), false, bCanBeRelocated, LOCTEXT("Relocate", "Relocate"));
 }
 
 void ALootCrateActor::ExecuteAction(AOperativeCharacter* User)
@@ -178,7 +178,7 @@ void ALootCrateActor::ExecuteAction(AOperativeCharacter* User)
 	User->StopOperative();
 	User->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 	User->SetStance(EOperativeStance::Crouching);
-	PostLine(User->DisplayName, FText::Format(LOCTEXT("Defusing", "🔧 {0}: «Осторожно обезвреживаю растяжку на ящике...»"), User->DisplayName));
+	PostLine(User->DisplayName, FText::Format(LOCTEXT("Defusing", "🔧 {0}: \"Carefully disarming the tripwire on the crate...\""), User->DisplayName));
 	FTimerHandle Handle;
 	GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateUObject(this, &ALootCrateActor::FinishDefusal,
 		TWeakObjectPtr<AOperativeCharacter>(User)), FMath::Max(DefuseSeconds, 0.01f), false);
@@ -284,11 +284,11 @@ void ALootCrateActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
 	Contents.DestroyAll();
 	Stash->Clear();
 	UpdateVisuals();
-	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Снайпер") : InstigatorName) : LOCTEXT("TrapBlast", "ВЗРЫВ ЛОВУШКИ"),
-		bByShot ? LOCTEXT("ShotBoom", "💥 Взрыв ловушки ящика от выстрела! Ящик разорван в щепки, всё содержимое сгорело!")
-			: LOCTEXT("TrapBoom", "💥 Растяжка на ящике сдетонировала! Содержимое ящика уничтожено взрывом!"));
+	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Marksman") : InstigatorName) : LOCTEXT("TrapBlast", "TRAP BLAST"),
+		bByShot ? LOCTEXT("ShotBoom", "💥 A shot set off the crate trap! The crate is blown to splinters, everything inside burned!")
+			: LOCTEXT("TrapBoom", "💥 The crate tripwire went off! The contents are destroyed by the blast!"));
 	ApplyBlast(TrapDamage, TrapDamage * DeployableRules::SquadDamageScale, TrapRadius, 0.45f, EDamageType::Explosive,
-		LOCTEXT("Source", "Ловушка ящика"), LOCTEXT("SquadHit", "💥 Задело взрывом растяжки ящика (-{0} HP)!"));
+		LOCTEXT("Source", "Crate trap"), LOCTEXT("SquadHit", "💥 Caught in the crate tripwire blast (-{0} HP)!"));
 }
 
 void ALootCrateActor::RestoreSaved(bool bInLooted, bool bInDefused, bool bInDestroyed)

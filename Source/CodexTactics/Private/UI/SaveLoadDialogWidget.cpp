@@ -119,18 +119,18 @@ void USaveLoadDialogWidget::BuildDefaultLayout()
 	UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 	Body->SetContent(Column);
 
-	TitleText = MakeText(18, SaveTitle, TEXT("💾 ВЫБОР И УПРАВЛЕНИЕ СОХРАНЕНИЯМИ"));
+	TitleText = MakeText(18, SaveTitle, TEXT("💾 SAVE MANAGER"));
 	Column->AddChildToVerticalBox(TitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
-	Column->AddChildToVerticalBox(MakeText(11, SaveSubtitle, TEXT("Кликните для выбора, двойной клик для быстрой перезаписи / загрузки")))
+	Column->AddChildToVerticalBox(MakeText(11, SaveSubtitle, TEXT("Click to select, double-click to quickly overwrite / load")))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
 	UHorizontalBox* NameRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	Column->AddChildToVerticalBox(NameRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	UHorizontalBoxSlot* LabelSlot = NameRow->AddChildToHorizontalBox(MakeText(13, SaveLabel, TEXT("Имя слота:"), ETextJustify::Left));
+	UHorizontalBoxSlot* LabelSlot = NameRow->AddChildToHorizontalBox(MakeText(13, SaveLabel, TEXT("Slot name:"), ETextJustify::Left));
 	LabelSlot->SetVerticalAlignment(VAlign_Center);
 	LabelSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 	SlotNameEdit = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("SlotNameEdit"));
-	SlotNameEdit->SetHintText(LOCTEXT("Hint", "Например: Леонид_01"));
+	SlotNameEdit->SetHintText(LOCTEXT("Hint", "e.g. Leonid_01"));
 	{
 		// Godot input style: dark field (0.1, 0.14, 0.2, 0.8), light text.
 		FEditableTextBoxStyle Style = SlotNameEdit->GetWidgetStyle();
@@ -148,13 +148,13 @@ void USaveLoadDialogWidget::BuildDefaultLayout()
 	EditSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	EditSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 	UTextBlock* SaveLabelText = nullptr;
-	const TPair<USizeBox*, UButton*> Save = MakeButton(TEXT("💾 Сохранить"), 150.f, 34.f, &SaveLabelText);
+	const TPair<USizeBox*, UButton*> Save = MakeButton(TEXT("💾 Save"), 150.f, 34.f, &SaveLabelText);
 	SaveButton = Save.Value;
 	SaveButtonText = SaveLabelText;
 	SaveButton->OnClicked.AddDynamic(this, &USaveLoadDialogWidget::HandleSave);
 	NameRow->AddChildToHorizontalBox(Save.Key);
 
-	Column->AddChildToVerticalBox(MakeText(12, SaveHeader, TEXT("Доступные сохранения (одиночный клик — выбор, двойной — действие):"), ETextJustify::Left))
+	Column->AddChildToVerticalBox(MakeText(12, SaveHeader, TEXT("Available saves (single click: select, double click: action):"), ETextJustify::Left))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("SavesScroll"));
 	USizeBox* ScrollSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
@@ -164,9 +164,9 @@ void USaveLoadDialogWidget::BuildDefaultLayout()
 	SavesList = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("SavesList"));
 	Scroll->AddChild(SavesList);
 
-	StatusText = MakeText(12, SaveStatusOk, TEXT("Выберите слот для загрузки или укажите имя для сохранения."));
+	StatusText = MakeText(12, SaveStatusOk, TEXT("Select a slot to load, or enter a name to save."));
 	Column->AddChildToVerticalBox(StatusText)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	const TPair<USizeBox*, UButton*> CloseButton = MakeButton(TEXT("✖ Назад в меню"), 160.f, 34.f);
+	const TPair<USizeBox*, UButton*> CloseButton = MakeButton(TEXT("✖ Back to menu"), 160.f, 34.f);
 	CloseButton.Value->OnClicked.AddDynamic(this, &USaveLoadDialogWidget::HandleClose);
 	Column->AddChildToVerticalBox(CloseButton.Key)->SetHorizontalAlignment(HAlign_Center);
 
@@ -194,15 +194,15 @@ void USaveLoadDialogWidget::BuildDefaultLayout()
 	ConfirmFrame->SetContent(ConfirmBody);
 	UVerticalBox* ConfirmColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 	ConfirmBody->SetContent(ConfirmColumn);
-	ConfirmColumn->AddChildToVerticalBox(MakeText(16, ConfirmTitle, TEXT("⚠️ ПЕРЕЗАПИСЬ СОХРАНЕНИЯ")))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-	ConfirmMessage = MakeText(12, FLinearColor(0.9f, 0.9f, 0.9f), TEXT("Перезаписать сохранение?\nПредыдущие данные будут заменены."));
+	ConfirmColumn->AddChildToVerticalBox(MakeText(16, ConfirmTitle, TEXT("⚠️ OVERWRITE SAVE")))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	ConfirmMessage = MakeText(12, FLinearColor(0.9f, 0.9f, 0.9f), TEXT("Overwrite the save?\nThe previous data will be replaced."));
 	ConfirmColumn->AddChildToVerticalBox(ConfirmMessage)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 	UHorizontalBox* ConfirmRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	ConfirmColumn->AddChildToVerticalBox(ConfirmRow)->SetHorizontalAlignment(HAlign_Center);
-	const TPair<USizeBox*, UButton*> Yes = MakeButton(TEXT("✅ Да, перезаписать"), 170.f, 32.f);
+	const TPair<USizeBox*, UButton*> Yes = MakeButton(TEXT("✅ Yes, overwrite"), 170.f, 32.f);
 	Yes.Value->OnClicked.AddDynamic(this, &USaveLoadDialogWidget::HandleConfirmYes);
 	ConfirmRow->AddChildToHorizontalBox(Yes.Key)->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
-	const TPair<USizeBox*, UButton*> No = MakeButton(TEXT("❌ Нет, отмена"), 140.f, 32.f);
+	const TPair<USizeBox*, UButton*> No = MakeButton(TEXT("❌ No, cancel"), 140.f, 32.f);
 	No.Value->OnClicked.AddDynamic(this, &USaveLoadDialogWidget::HandleConfirmNo);
 	ConfirmRow->AddChildToHorizontalBox(No.Key);
 }
@@ -249,8 +249,8 @@ void USaveLoadDialogWidget::Open(ESaveDialogMode Mode)
 	}
 	Panel->SetVisibility(ESlateVisibility::Visible);
 	CancelConfirmation();
-	TitleText->SetText(SaveClean(Mode == ESaveDialogMode::Save ? TEXT("💾 СОХРАНЕНИЕ И ПЕРЕЗАПИСЬ")
-		: (Mode == ESaveDialogMode::Load ? TEXT("📂 ЗАГРУЗКА ИГРЫ") : TEXT("💾 ВЫБОР И УПРАВЛЕНИЕ СОХРАНЕНИЯМИ"))));
+	TitleText->SetText(SaveClean(Mode == ESaveDialogMode::Save ? TEXT("💾 SAVE AND OVERWRITE")
+		: (Mode == ESaveDialogMode::Load ? TEXT("📂 LOAD GAME") : TEXT("💾 SAVE MANAGER"))));
 	SelectedSlot.Reset();
 	if (const USaveGameSubsystem* Saves = GetSaves())
 	{
@@ -299,7 +299,7 @@ void USaveLoadDialogWidget::UpdateSaveButton()
 	const bool bExists = Saves && !Raw.IsEmpty() && Saves->HasSave(SaveGameRules::SanitizeSlotName(Raw));
 	if (SaveButtonText)
 	{
-		SaveButtonText->SetText(SaveClean(bExists ? TEXT("💾 Перезаписать") : TEXT("💾 Сохранить")));
+		SaveButtonText->SetText(SaveClean(bExists ? TEXT("💾 Overwrite") : TEXT("💾 Save")));
 	}
 }
 
@@ -326,7 +326,7 @@ void USaveLoadDialogWidget::RefreshSavesList()
 	};
 	if (All.IsEmpty())
 	{
-		UTextBlock* Empty = MakeText(13, SaveEmpty, TEXT("Нет сохраненных игр.\nВведите имя сохранения выше и нажмите кнопку «Сохранить»."));
+		UTextBlock* Empty = MakeText(13, SaveEmpty, TEXT("No saved games.\nEnter a save name above and press \"Save\"."));
 		Empty->SetJustification(ETextJustify::Center);
 		SavesList->AddChildToVerticalBox(Empty)->SetPadding(FMargin(0.f, 40.f));
 		UpdateSaveButton();
@@ -362,10 +362,10 @@ void USaveLoadDialogWidget::RefreshSavesList()
 		const bool bAuto = Info.SaveType == TEXT("autosave");
 		const bool bQuick = Info.SaveType == TEXT("quicksave");
 		Top->AddChildToHorizontalBox(MakeText(11, bAuto ? BadgeAuto : (bQuick ? BadgeQuick : BadgeManual),
-			bAuto ? TEXT("[АВТО]") : (bQuick ? TEXT("[БЫСТРОЕ]") : TEXT("[РУЧНОЕ]"))))->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+			bAuto ? TEXT("[AUTO]") : (bQuick ? TEXT("[QUICK]") : TEXT("[MANUAL]"))))->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 		Top->AddChildToHorizontalBox(MakeText(13, CardName, Info.SlotName))->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
 		Top->AddChildToHorizontalBox(MakeText(11, CardStage, TEXT("📍 ") + Info.StageName));
-		FString Details = FString::Printf(TEXT("Автор: %s   %s"), *Info.Author, *Info.DateTime);
+		FString Details = FString::Printf(TEXT("Author: %s   %s"), *Info.Author, *Info.DateTime);
 		if (!Info.SquadSummary.IsEmpty())
 		{
 			Details += TEXT("   ") + Info.SquadSummary;
@@ -377,7 +377,7 @@ void USaveLoadDialogWidget::RefreshSavesList()
 
 		UButton* Load = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
 		Load->SetBackgroundColor(DialogButton);
-		Load->AddChild(MakeText(11, FLinearColor(0.95f, 0.95f, 0.95f), TEXT("📂 Загрузить")));
+		Load->AddChild(MakeText(11, FLinearColor(0.95f, 0.95f, 0.95f), TEXT("📂 Load")));
 		UHorizontalBoxSlot* LoadSlot = Row->AddChildToHorizontalBox(Load);
 		LoadSlot->SetVerticalAlignment(VAlign_Center);
 		LoadSlot->SetPadding(FMargin(6.f, 0.f));
@@ -385,7 +385,7 @@ void USaveLoadDialogWidget::RefreshSavesList()
 
 		UButton* Delete = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
 		Delete->SetBackgroundColor(DialogButton);
-		Delete->SetToolTipText(LOCTEXT("DeleteTip", "Удалить сохранение"));
+		Delete->SetToolTipText(LOCTEXT("DeleteTip", "Delete save"));
 		Delete->AddChild(MakeText(11, FLinearColor(0.95f, 0.95f, 0.95f), TEXT("X")));
 		Row->AddChildToHorizontalBox(Delete)->SetVerticalAlignment(VAlign_Center);
 		Bind(Delete, Info.SlotName, USaveCardProxy::EAction::Delete);
@@ -408,7 +408,7 @@ void USaveLoadDialogWidget::ClickCard(const FString& SlotName)
 		// Godot double click: load in the load mode, otherwise save (with the overwrite confirmation).
 		if (CurrentMode == ESaveDialogMode::Load)
 		{
-			SetStatus(FString::Printf(TEXT("📂 Загрузка слота '%s'..."), *SlotName));
+			SetStatus(FString::Printf(TEXT("📂 Loading slot \"%s\"..."), *SlotName));
 			LoadSlot(SlotName);
 		}
 		else
@@ -429,7 +429,7 @@ void USaveLoadDialogWidget::ClickCard(const FString& SlotName)
 		Cast<UBorder>((*Card)->GetContent())->SetBrushColor(CardSelectedBack);
 	}
 	SetSlotNameText(SlotName);
-	SetStatus(FString::Printf(TEXT("Выбран слот '%s'. Нажмите «Перезаписать» или дважды кликните по слоту."), *SlotName));
+	SetStatus(FString::Printf(TEXT("Slot \"%s\" selected. Press \"Overwrite\" or double-click the slot."), *SlotName));
 }
 
 void USaveLoadDialogWidget::PressSave()
@@ -461,7 +461,7 @@ void USaveLoadDialogWidget::RequestOverwrite(const FString& SlotName)
 		return;
 	}
 	PendingOverwrite = SlotName;
-	ConfirmMessage->SetText(FText::FromString(FString::Printf(TEXT("Перезаписать существующее сохранение «%s»?\nПредыдущие данные будут заменены."), *SlotName)));
+	ConfirmMessage->SetText(FText::FromString(FString::Printf(TEXT("Overwrite the existing save \"%s\"?\nThe previous data will be replaced."), *SlotName)));
 	ConfirmOverlay->SetVisibility(ESlateVisibility::Visible);
 }
 
@@ -485,14 +485,14 @@ void USaveLoadDialogWidget::SaveSlot(const FString& SlotName)
 	const bool bOverwrite = Saves->HasSave(SlotName);
 	if (Saves->SaveToSlotWithMessage(SlotName))
 	{
-		SetStatus(bOverwrite ? FString::Printf(TEXT("✅ Сохранение '%s' успешно перезаписано!"), *SlotName)
-			: FString::Printf(TEXT("✅ Игра успешно сохранена в слот '%s'!"), *SlotName));
+		SetStatus(bOverwrite ? FString::Printf(TEXT("✅ Save \"%s\" overwritten!"), *SlotName)
+			: FString::Printf(TEXT("✅ Game saved to slot \"%s\"!"), *SlotName));
 		SelectedSlot = SlotName;
 		RefreshSavesList();
 	}
 	else
 	{
-		SetStatus(FString::Printf(TEXT("❌ Ошибка при сохранении в '%s'!"), *SlotName), true);
+		SetStatus(FString::Printf(TEXT("❌ Failed to save to \"%s\"!"), *SlotName), true);
 	}
 }
 
@@ -509,7 +509,7 @@ void USaveLoadDialogWidget::LoadSlot(const FString& SlotName)
 		}
 		return;
 	}
-	SetStatus(FString::Printf(TEXT("❌ Ошибка загрузки из слота '%s'!"), *SlotName), true);
+	SetStatus(FString::Printf(TEXT("❌ Failed to load slot \"%s\"!"), *SlotName), true);
 }
 
 void USaveLoadDialogWidget::DeleteSlot(const FString& SlotName)
@@ -521,12 +521,12 @@ void USaveLoadDialogWidget::DeleteSlot(const FString& SlotName)
 		{
 			SelectedSlot.Reset();
 		}
-		SetStatus(FString::Printf(TEXT("Сохранение '%s' удалено."), *SlotName));
+		SetStatus(FString::Printf(TEXT("Save \"%s\" deleted."), *SlotName));
 		RefreshSavesList();
 	}
 	else
 	{
-		SetStatus(FString::Printf(TEXT("Не удалось удалить '%s'."), *SlotName), true);
+		SetStatus(FString::Printf(TEXT("Could not delete \"%s\"."), *SlotName), true);
 	}
 }
 
@@ -537,7 +537,7 @@ void USaveLoadDialogWidget::HandleSlotNameChanged(const FText& Text) { UpdateSav
 
 void USaveLoadDialogWidget::HandleClose()
 {
-	// «Назад в меню»: back to the pause menu.
+	// «Back to menu»: back to the pause menu.
 	const APlayerController* PC = GetOwningPlayer();
 	if (ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr)
 	{

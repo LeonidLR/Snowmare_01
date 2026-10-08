@@ -129,7 +129,7 @@ namespace AttackModeSmoke
 
 			// F: the attack mode with the weapon's dot matrix.
 			TurnBased->ToggleAttackMode(); // the F key's action
-			Check(State, TurnBased->IsAttackMode() && LastLineContains(World, TEXT("Режим прицеливания")), TEXT("F enters the attack mode"));
+			Check(State, TurnBased->IsAttackMode() && LastLineContains(World, TEXT("Aim mode")), TEXT("F enters the attack mode"));
 			Check(State, Overlay->GetCellCount(ETurnOverlayLayer::Reachable) == 0 && Overlay->GetCellCount(ETurnOverlayLayer::Attack) > 0,
 				FString::Printf(TEXT("attack mode: %d matrix cells, no walk cells"), Overlay->GetCellCount(ETurnOverlayLayer::Attack)));
 			const FTurnUnitState* Unit = TurnBased->GetUnitState(TurnBased->GetActiveUnit());
@@ -174,12 +174,12 @@ namespace AttackModeSmoke
 				}
 			}
 			Check(State, TurnBased->GetUnitState(TurnBased->GetActiveUnit())->GridPos == Before && !TurnBased->IsUnitMoving()
-				&& LastLineContains(World, TEXT("нет цели для выстрела")), TEXT("empty cell in the attack mode: no walk, a hint"));
+				&& LastLineContains(World, TEXT("No target on this cell")), TEXT("empty cell in the attack mode: no walk, a hint"));
 
 			// Esc / RMB leave it with the line; F toggles back.
-			TurnBased->ExitAttackMode(TEXT("🟢 Прицеливание отменено (возврат в режим перемещения)."));
+			TurnBased->ExitAttackMode(TEXT("🟢 Aiming cancelled (back to move mode)."));
 			Check(State, !TurnBased->IsAttackMode() && Overlay->GetCellCount(ETurnOverlayLayer::Attack) == 0
-				&& Overlay->GetCellCount(ETurnOverlayLayer::Reachable) > 0 && LastLineContains(World, TEXT("Прицеливание отменено")),
+				&& Overlay->GetCellCount(ETurnOverlayLayer::Reachable) > 0 && LastLineContains(World, TEXT("Aiming cancelled")),
 				TEXT("leaving the attack mode: walk cells back"));
 			TurnBased->ToggleAttackMode(); // the F key's action
 			Check(State, TurnBased->IsAttackMode(), TEXT("F again: attack mode"));

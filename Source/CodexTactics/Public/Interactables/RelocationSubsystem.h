@@ -12,13 +12,13 @@ class ARelocationGhostActor;
 class ADeployableActor;
 
 /**
- * Moving objects around the level («Переместить» / «Вытолкать»):
+ * Moving objects around the level ("Relocate" / "Push out"):
  *  1. placement: a ghost of the object follows the cursor (wheel / R rotate 45°, LMB confirm, RMB cancel),
  *     cyan inside the allowed radius, red outside;
  *  2. task: the worker walks to the object, braces against it and pushes it (carry speed) to the new spot,
  *     then sets it down and steps back.
  * In the tactical pause the move is planned and runs on release (and keeps running in the real-time fight); a task
- * started outside the pause is dropped when live combat begins («Боевая тревога!»). Frozen (>= 80 % cold) or badly wounded (< 50 % HP) operatives cannot lift.
+ * started outside the pause is dropped when live combat begins ("Combat alert!"). Frozen (>= 80 % cold) or badly wounded (< 50 % HP) operatives cannot lift.
  * Also sets up engineering items from an operative's supply (F): click a spot, turn it with the wheel / R,
  * click again; the operative walks there and builds it (a mine may go off in unsteady hands).
  * Godot: `_on_ability_button_pressed`, `_start_placement_mode`, `_handle_placement_click`, `_confirm_placement`,
@@ -43,7 +43,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Relocation")
 	bool IsPlacing() const { return PlacingObject.IsValid() || PlacingType.IsSet() || bPlacingTripwire; }
 
-	// --- Tripwire «Растяжка» (Sprint 09): two clicks, anchor A then B; ConfirmPlacement / UpdatePreview route here ---
+	// --- Tripwire (Sprint 09): two clicks, anchor A then B; ConfirmPlacement / UpdatePreview route here ---
 
 	/**
 	 * Starts the tripwire placement for Worker: refused (feed line) without 2 grenades in the squad or in the turn-based
@@ -110,7 +110,7 @@ public:
 	/** Spawn class for a deployable type (game mode settings). */
 	TSubclassOf<ADeployableActor> GetDeployableClass(EDeployableType Type) const;
 
-	/** «Турель» / «Баррикада» / «Мина». */
+	/** "Turret" / "Barricade" / "Mine". */
 	static FText GetDeployableName(EDeployableType Type);
 
 	/** Moves the ghost to the ground point under the cursor. */

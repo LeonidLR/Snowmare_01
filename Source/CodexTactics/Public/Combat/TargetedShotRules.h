@@ -37,7 +37,7 @@ struct CODEXTACTICS_API FMineShotChance
 	float StanceMultiplier = 0.6f;
 	/** Chance lost per metre of distance, %. */
 	float PenaltyPerMeter = 4.f;
-	/** Godot stance label («Стоя», «Присев», «Лёжа»). */
+	/** Godot stance label ("Standing", "Crouched", "Prone"). */
 	FText StanceName;
 };
 
@@ -52,9 +52,9 @@ namespace TargetedShotRules
 	/** Effective accuracy never drops below this, %. */
 	constexpr float MinEffectiveAccuracy = 10.f;
 	constexpr float MaxMineShotChance = 95.f;
-	/** Standing shots beyond this distance get the «стоя на таком расстоянии не попасть» miss reason, m. */
+	/** Standing shots beyond this distance get the "can't hit standing at this range" miss reason, m. */
 	constexpr float StandingMissReasonDistance = 7.f;
-	/** Cold above this gives the «руки дрожат от холода» miss reason, %. */
+	/** Cold above this gives the "hands shaking from the cold" miss reason, %. */
 	constexpr float ColdMissReasonLevel = 40.f;
 
 	/** clamp(max(10, Accuracy - Cold * 0.25) * StanceMult - DistanceM * PerMeter, 0, 95). */

@@ -1,6 +1,6 @@
 // Dev-only console command for a headless personal inventory check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.InventorySmoke
-// 1. «ИНВ» opens the drawer with the leader's title and lines; the weapon selector closes it; 2. H uses a medkit
+// 1. "INV" opens the drawer with the leader's title and lines; the weapon selector closes it; 2. H uses a medkit
 // (+HP, one spent, feed line), the drawer's canned food warms up; 3. the drawer's turret line with no turret on the
 // commander: a squad mate hands one over and the placement starts (Godot inventory_drawer.gd, main.gd use_squad_item,
 // _start_placement_for_type, player.gd heal_with_item).
@@ -71,10 +71,10 @@ namespace InventorySmoke
 		// 1. Drawer.
 		Check(State, !Drawer->IsOpen(), TEXT("drawer closed at start"));
 		Hud->ToggleInventoryDrawer();
-		Check(State, Drawer->IsOpen(), TEXT("«ИНВ» opens the drawer"));
-		Check(State, Drawer->GetTitleText().ToString().Contains(TEXT("ЛИЧНЫЙ ИНВЕНТАРЬ: КОМАНДИР")), Drawer->GetTitleText().ToString());
+		Check(State, Drawer->IsOpen(), TEXT("\"INV\" opens the drawer"));
+		Check(State, Drawer->GetTitleText().ToString().Contains(TEXT("PERSONAL INVENTORY: COMMANDER")), Drawer->GetTitleText().ToString());
 		const FString MedkitLine = Drawer->GetSlotText(EInventoryDrawerSlot::Medkit).ToString();
-		Check(State, MedkitLine.Contains(FString::Printf(TEXT("Аптечка [H]: %d шт."), Leader->MedkitsCount)), MedkitLine);
+		Check(State, MedkitLine.Contains(FString::Printf(TEXT("Medkit [H]: x%d"), Leader->MedkitsCount)), MedkitLine);
 		Bar->ToggleWeaponSelector();
 		Check(State, !Drawer->IsOpen() && Bar->IsWeaponSelectorOpen(), TEXT("the weapon selector closes the drawer"));
 		Bar->ToggleWeaponSelector();
@@ -98,7 +98,7 @@ namespace InventorySmoke
 		AOperativeCharacter* Mate = Squad->GetMembers().Last();
 		Mate->AddDeployable(EDeployableType::Turret, 1);
 		const int32 MateTurrets = Mate->GetDeployableCount(EDeployableType::Turret);
-		Check(State, Drawer->IsSlotEnabled(EInventoryDrawerSlot::Turret) && Drawer->GetSlotText(EInventoryDrawerSlot::Turret).ToString().Contains(TEXT("в отряде")),
+		Check(State, Drawer->IsSlotEnabled(EInventoryDrawerSlot::Turret) && Drawer->GetSlotText(EInventoryDrawerSlot::Turret).ToString().Contains(TEXT("in squad")),
 			Drawer->GetSlotText(EInventoryDrawerSlot::Turret).ToString());
 		Drawer->Activate(EInventoryDrawerSlot::Turret);
 		URelocationSubsystem* Relocation = World->GetSubsystem<URelocationSubsystem>();

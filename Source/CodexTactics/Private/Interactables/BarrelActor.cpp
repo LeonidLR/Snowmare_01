@@ -18,7 +18,7 @@ ABarrelActor::ABarrelActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	DisplayName = LOCTEXT("BarrelName", "Горючая бочка");
+	DisplayName = LOCTEXT("BarrelName", "Fuel Barrel");
 	bCanBeRelocated = true;
 
 	// Godot cylinder: radius 0.6 m, height 1.4 m.
@@ -58,7 +58,7 @@ void ABarrelActor::OnConstruction(const FTransform& Transform)
 
 bool ABarrelActor::CanPushNow() const
 {
-	// User decision 2026-10-08: the barrel menu also opens in the fight; «Вытолкать» only where objects may be moved
+	// User decision 2026-10-08: the barrel menu also opens in the fight; "Push" only where objects may be moved
 	// (not in the live real-time fight - the tactical pause plans it).
 	const URelocationSubsystem* Relocation = GetWorld() ? GetWorld()->GetSubsystem<URelocationSubsystem>() : nullptr;
 	return bCanBeRelocated && (!Relocation || Relocation->CanRelocateNow());
@@ -66,42 +66,42 @@ bool ABarrelActor::CanPushNow() const
 
 FActionMenuRequest ABarrelActor::BuildActionMenu(const AOperativeCharacter* Leader) const
 {
-	const FText Squad = LOCTEXT("SquadSpeaker", "Отряд");
-	const FText Cancel = LOCTEXT("Cancel", "Отмена");
-	const FText Push = LOCTEXT("Push", "Вытолкать");
+	const FText Squad = LOCTEXT("SquadSpeaker", "SQUAD");
+	const FText Cancel = LOCTEXT("Cancel", "Cancel");
+	const FText Push = LOCTEXT("Push", "Push");
 	const bool bCanPush = CanPushNow();
 
 	if (Burn.bBurning)
 	{
 		if (!bCanPush)
 		{
-			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("BurningMsg", "Бочка уже горит и согревает воздух вокруг."));
+			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("BurningMsg", "The barrel is already burning and warming the air around it."));
 		}
-		return FActionMenuRequest::MakeMenu(LOCTEXT("BurningTitle", "🔥 Горящая бочка"),
-			LOCTEXT("BurningDesc", "Бочка уже горит и согревает воздух вокруг.\nВы можете вытолкать её на новую позицию."),
-			LOCTEXT("BurningBtn", "Уже горит"), Cancel, true, true, Push);
+		return FActionMenuRequest::MakeMenu(LOCTEXT("BurningTitle", "🔥 Burning Barrel"),
+			LOCTEXT("BurningDesc", "The barrel is already burning and warming the air around it.\nYou can push it to a new position."),
+			LOCTEXT("BurningBtn", "Already burning"), Cancel, true, true, Push);
 	}
 	if (Burn.bBurnt)
 	{
 		if (!bCanPush)
 		{
-			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("BurntMsg", "Горючее в этой бочке уже полностью выгорело."));
+			return FActionMenuRequest::MakeMessage(Squad, LOCTEXT("BurntMsg", "The fuel in this barrel has burnt out."));
 		}
-		return FActionMenuRequest::MakeMenu(LOCTEXT("BurntTitle", "🪵 Сгоревшая бочка"),
-			LOCTEXT("BurntDesc", "Горючее в этой бочке уже полностью выгорело.\nВы можете вытолкать её в другое место."),
-			LOCTEXT("BurntBtn", "Пусто"), Cancel, true, true, Push);
+		return FActionMenuRequest::MakeMenu(LOCTEXT("BurntTitle", "🪵 Burnt-out Barrel"),
+			LOCTEXT("BurntDesc", "The fuel in this barrel has burnt out.\nYou can push it somewhere else."),
+			LOCTEXT("BurntBtn", "Empty"), Cancel, true, true, Push);
 	}
 
 	const int32 Matches = Leader ? Leader->MatchesCount : 0;
-	const FText LeaderName = Leader ? Leader->DisplayName : LOCTEXT("CommanderGenitive", "Командира");
-	FText Description = FText::Format(LOCTEXT("IgniteDesc", "Разжечь огонь для обогрева отряда.\nСтоимость: 🪵 1 спичка (У {0}: {1} шт.)"),
+	const FText LeaderName = Leader ? Leader->DisplayName : LOCTEXT("CommanderGenitive", "Commander");
+	FText Description = FText::Format(LOCTEXT("IgniteDesc", "Light a fire to warm the squad.\nCost: 🪵 1 match ({0}: x{1})"),
 		LeaderName, Matches);
 	if (bCanPush)
 	{
-		Description = FText::Format(LOCTEXT("IgniteDescPush", "{0}\nИли вытолкать бочку на новую позицию."), Description);
+		Description = FText::Format(LOCTEXT("IgniteDescPush", "{0}\nOr push the barrel to a new position."), Description);
 	}
-	return FActionMenuRequest::MakeMenu(LOCTEXT("FreshTitle", "🔥 Горючая бочка"), Description,
-		Matches > 0 ? LOCTEXT("IgniteBtn", "Разжечь (1 спичка)") : LOCTEXT("NoMatchesBtn", "Нет спичек"),
+	return FActionMenuRequest::MakeMenu(LOCTEXT("FreshTitle", "🔥 Fuel Barrel"), Description,
+		Matches > 0 ? LOCTEXT("IgniteBtn", "Ignite (1 match)") : LOCTEXT("NoMatchesBtn", "No matches"),
 		Cancel, Matches <= 0, bCanPush, Push);
 }
 
@@ -120,26 +120,26 @@ bool ABarrelActor::Ignite(AOperativeCharacter* User)
 {
 	int32 NoMatches = 0;
 	int32& Matches = User ? User->MatchesCount : NoMatches;
-	const FText UserName = User ? User->DisplayName : LOCTEXT("Soldier", "Боец");
+	const FText UserName = User ? User->DisplayName : LOCTEXT("Soldier", "Soldier");
 
 	switch (Burn.TryIgnite(Matches, BurnDuration))
 	{
 	case EBarrelIgniteResult::AlreadyBurning:
-		PostLine(LOCTEXT("SquadSpeaker", "Отряд"), LOCTEXT("AlreadyBurning", "Бочка уже ярко горит и согревает воздух."));
+		PostLine(LOCTEXT("SquadSpeaker", "SQUAD"), LOCTEXT("AlreadyBurning", "The barrel is already burning bright and warming the air."));
 		return false;
 	case EBarrelIgniteResult::BurntOut:
-		PostLine(LOCTEXT("SquadSpeaker", "Отряд"),
-			LOCTEXT("BurntOut", "Горючее в этой бочке уже полностью выгорело. Повторно разжечь её не выйдет."));
+		PostLine(LOCTEXT("SquadSpeaker", "SQUAD"),
+			LOCTEXT("BurntOut", "The fuel in this barrel has burnt out. It cannot be relit."));
 		return false;
 	case EBarrelIgniteResult::NoMatches:
-		PostLine(UserName, LOCTEXT("NoMatches", "У меня закончились спички! Переключитесь на другого бойца, у которого ещё есть спички."));
+		PostLine(UserName, LOCTEXT("NoMatches", "I'm out of matches! Switch to another operative who still has some."));
 		return false;
 	default:
 		break;
 	}
 
 	ApplyVisuals();
-	PostLine(UserName, FText::Format(LOCTEXT("Ignited", "Чиркаю спичкой... Пламя занялось! Вокруг становится теплее (осталось спичек: {0})."),
+	PostLine(UserName, FText::Format(LOCTEXT("Ignited", "Striking a match... It caught! Getting warmer around here (matches left: {0})."),
 		Matches));
 	OnBurningChanged.Broadcast(this, true);
 	ReceiveBurningChanged(true);
@@ -211,9 +211,9 @@ void ABarrelActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
 		return;
 	}
 	bTrapped = false;
-	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Снайпер") : InstigatorName) : LOCTEXT("Blast", "ВЗРЫВ"),
-		bByShot ? LOCTEXT("ShotBoom", "💥 Взрыв растяжки на объекте от выстрела!") : LOCTEXT("TrapBoom", "💥 Растяжка на объекте сдетонировала!"));
-	Explode(InstigatorName.IsEmpty() ? LOCTEXT("TrapSource", "Ловушка") : InstigatorName);
+	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Marksman") : InstigatorName) : LOCTEXT("Blast", "BLAST"),
+		bByShot ? LOCTEXT("ShotBoom", "💥 Object tripwire detonated by a shot!") : LOCTEXT("TrapBoom", "💥 Object tripwire detonated!"));
+	Explode(InstigatorName.IsEmpty() ? LOCTEXT("TrapSource", "Trap") : InstigatorName);
 }
 
 bool ABarrelActor::Explode(const FText& InstigatorName)
@@ -230,7 +230,7 @@ bool ABarrelActor::Explode(const FText& InstigatorName)
 	OnBurningChanged.Broadcast(this, true);
 	ReceiveBurningChanged(true);
 	ApplyBlast(120.f, 80.f, 550.f, 0.40f, EDamageType::Fire, InstigatorName,
-		LOCTEXT("BarrelHit", "💥 Обожгло взрывом бочки (-{0} HP)!"), EStatusEffect::Burning, 4.f, 10.f);
+		LOCTEXT("BarrelHit", "💥 Burned by the barrel blast (-{0} HP)!"), EStatusEffect::Burning, 4.f, 10.f);
 	return true;
 }
 

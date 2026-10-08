@@ -25,11 +25,11 @@ FString FExposedZones::GetQuadrantName(int32 Quadrant)
 {
 	switch (Quadrant)
 	{
-	case 0: return TEXT("Северо-Запад");
-	case 1: return TEXT("Северо-Восток");
-	case 2: return TEXT("Юго-Запад");
-	case 3: return TEXT("Юго-Восток");
-	default: return TEXT("Неизвестный сектор");
+	case 0: return TEXT("North-West");
+	case 1: return TEXT("North-East");
+	case 2: return TEXT("South-West");
+	case 3: return TEXT("South-East");
+	default: return TEXT("Unknown sector");
 	}
 }
 

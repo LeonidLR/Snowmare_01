@@ -10,8 +10,8 @@ class UTextBlock;
 class UWidget;
 
 /**
- * Wave-cleared panel over a dimmed screen: title, subtitle, the squad kill statistics card, «Запустить следующую волну
- * (N/M)» / «Завершить бой и продолжить исследование» and «Перезапустить уровень (X)». Shown while the flow is in
+ * Wave-cleared panel over a dimmed screen: title, subtitle, the squad kill statistics card, «Start next wave
+ * (N/M)» / «End combat and continue exploring» and «Restart level (X)». Shown while the flow is in
  * WaveCleared. Built in C++ (restyle through a Widget Blueprint subclass).
  * Godot reference: Scenes/movements/movements_demo.tscn UI/VictoryPanel, main.gd _on_wave_cleared / _on_next_wave_pressed.
  */

@@ -5,7 +5,7 @@ FString SaveGameRules::SanitizeSlotName(const FString& Raw)
 	FString Slot = Raw.TrimStartAndEnd();
 	if (Slot.IsEmpty())
 	{
-		return TEXT("Леонид_01");
+		return TEXT("Leonid_01");
 	}
 	for (const TCHAR* Invalid : { TEXT("\\"), TEXT("/"), TEXT(":"), TEXT("*"), TEXT("?"), TEXT("\""), TEXT("<"), TEXT(">"), TEXT("|") })
 	{
@@ -14,7 +14,7 @@ FString SaveGameRules::SanitizeSlotName(const FString& Raw)
 	Slot.TrimStartAndEndInline();
 	Slot.RemoveFromStart(TEXT("."));
 	Slot.RemoveFromEnd(TEXT("."));
-	return Slot.IsEmpty() ? FString(TEXT("Леонид_01")) : Slot;
+	return Slot.IsEmpty() ? FString(TEXT("Leonid_01")) : Slot;
 }
 
 FString SaveGameRules::GetSaveType(const FString& SlotName)
@@ -24,7 +24,7 @@ FString SaveGameRules::GetSaveType(const FString& SlotName)
 	{
 		return TEXT("autosave");
 	}
-	if (Lower.Contains(TEXT("quick")) || Lower.Contains(TEXT("быстр")))
+	if (Lower.Contains(TEXT("quick")) || Lower.Contains(TEXT("быстр")) /* legacy Russian slot names ("Быстрое") */) // cyrillic-ok: legacy Russian data
 	{
 		return TEXT("quicksave");
 	}
@@ -55,44 +55,44 @@ FString SaveGameRules::GetStageName(const FQuestChainState& Quests, bool bGateOp
 	FString Stage;
 	if (bWaveActive)
 	{
-		Stage = FString::Printf(TEXT("Оборона: Волна %d"), WaveIndex);
+		Stage = FString::Printf(TEXT("Defence: Wave %d"), WaveIndex);
 	}
 	else if (bPreparation)
 	{
-		Stage = FString::Printf(TEXT("Подготовка к обороне: Волна %d"), WaveIndex);
+		Stage = FString::Printf(TEXT("Defence preparation: Wave %d"), WaveIndex);
 	}
 	else if (bGateOpen)
 	{
-		Stage = TEXT("Внутренний двор (Ворота открыты)");
+		Stage = TEXT("Inner yard (Gate open)");
 	}
 	else if (Quests.bIsGatePowered)
 	{
-		Stage = TEXT("КПП (Питание гермоворот подано)");
+		Stage = TEXT("Checkpoint (Blast gate powered)");
 	}
 	else if (Quests.bIsGeneratorRunning)
 	{
-		Stage = TEXT("КПП (Генератор запущен)");
+		Stage = TEXT("Checkpoint (Generator running)");
 	}
 	else if (Quests.bHasFuelCanister)
 	{
-		Stage = TEXT("КПП (Топливо добыто)");
+		Stage = TEXT("Checkpoint (Fuel secured)");
 	}
 	else if (Quests.bHasEmptyCanister)
 	{
-		Stage = TEXT("Периметр КПП (Поиск дизеля)");
+		Stage = TEXT("Checkpoint perimeter (Find diesel)");
 	}
 	else
 	{
-		Stage = TEXT("Периметр КПП (Поиск канистры)");
+		Stage = TEXT("Checkpoint perimeter (Find canister)");
 	}
-	return bSoloMode ? Stage + TEXT(" [Соло]") : Stage;
+	return bSoloMode ? Stage + TEXT(" [Solo]") : Stage;
 }
 
 FString SaveGameRules::GetSquadSummary(const TArray<TPair<float, float>>& HealthAndMax)
 {
 	if (HealthAndMax.IsEmpty())
 	{
-		return TEXT("Отряд: 0 бойцов");
+		return TEXT("Squad: 0 operatives");
 	}
 	int32 Alive = 0;
 	float TotalPct = 0.f;
@@ -104,5 +104,5 @@ FString SaveGameRules::GetSquadSummary(const TArray<TPair<float, float>>& Health
 			TotalPct += Entry.Key / FMath::Max(Entry.Value, 1.f) * 100.f;
 		}
 	}
-	return FString::Printf(TEXT("Бойцов: %d/%d | HP: %d%%"), Alive, HealthAndMax.Num(), FMath::RoundToInt(TotalPct / HealthAndMax.Num()));
+	return FString::Printf(TEXT("Operatives: %d/%d | HP: %d%%"), Alive, HealthAndMax.Num(), FMath::RoundToInt(TotalPct / HealthAndMax.Num()));
 }

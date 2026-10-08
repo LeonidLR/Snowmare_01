@@ -15,6 +15,8 @@ bool FCameraShakeRulesTest::RunTest(const FString&)
 	const FCameraShakeConfig Defaults = CameraShakeRules::ConfigFromBalance(nullptr);
 	TestEqual(TEXT("Rifle"), CameraShakeRules::GetPower(Defaults, TEXT("rifle")), 0.35f);
 	TestEqual(TEXT("Pistol"), CameraShakeRules::GetPower(Defaults, TEXT("Pistol")), 0.2f);
+	TestEqual(TEXT("Turret"), CameraShakeRules::GetPower(Defaults, TEXT("Turret")), 0.28f);
+	TestEqual(TEXT("Beretta Pistol"), CameraShakeRules::GetPower(Defaults, TEXT("Beretta Pistol")), 0.2f);
 	TestEqual(TEXT("Turret (Russian)"), CameraShakeRules::GetPower(Defaults, TEXT("Турель")), 0.28f);
 	TestEqual(TEXT("Unknown -> rifle"), CameraShakeRules::GetPower(Defaults, TEXT("shotgun")), 0.35f);
 

@@ -36,10 +36,10 @@ struct CODEXTACTICS_API FSquadKillStats
 namespace KillStatsRules
 {
 	/**
-	 * Godot register_enemy_kill: «Турель» / «Командир» count for the commander (turret kills flagged), «Инженер» for the
-	 * engineer, «Мина» / «Медик-сапёр» / «Медик» for the medic-sapper (mine kills flagged); any other source counts for
-	 * the current leader — only when the leader is one of the three (the recruit has no entry). «Баррикада» also
-	 * counts a barricade kill.
+	 * Godot register_enemy_kill: "Turret" / "Commander" count for the commander (turret kills flagged), "Engineer" for
+	 * the engineer, "Mine" / "Medic-Sapper" / "Medic" for the medic-sapper (mine kills flagged); any other source counts
+	 * for the current leader — only when the leader is one of the three (the recruit has no entry). "Barricade" also
+	 * counts a barricade kill. Exact matches; the legacy Russian spellings of each source / name are accepted too.
 	 */
 	CODEXTACTICS_API void RegisterKill(FSquadKillStats& Stats, EEnemyArchetype Type, const FString& Source, const FString& LeaderName);
 

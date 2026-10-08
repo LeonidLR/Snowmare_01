@@ -23,8 +23,8 @@ class CODEXTACTICS_API USaveGameSubsystem : public UWorldSubsystem
 public:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
-	/** Godot save_game. CustomTitle empty: the slot name, or «Автосохранение / Быстрое сохранение: <этап>». */
-	bool SaveGame(const FString& SlotName, const FString& CustomTitle = FString(), const FString& Author = TEXT("Командир"));
+	/** Godot save_game. CustomTitle empty: the slot name, or "Autosave / Quicksave: <stage>". */
+	bool SaveGame(const FString& SlotName, const FString& CustomTitle = FString(), const FString& Author = TEXT("Commander"));
 
 	/** Godot load_game. */
 	bool LoadGame(const FString& SlotName);

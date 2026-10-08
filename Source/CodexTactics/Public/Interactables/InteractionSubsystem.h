@@ -18,7 +18,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnLootDialogChanged, bool, bOpen, 
  * Object interaction flow: the squad leader walks to the clicked object; once within its InteractionDistance the
  * object's action menu opens (or a feed line is posted), and the menu buttons run the action / cancel.
  * In the tactical pause the approach is planned like any pause order and runs on release.
- * Use orders in a fight (user decision 2026-10-08): «Разжечь» on a barrel in the real-time fight sends the operative to
+ * Use orders in a fight (user decision 2026-10-08): "Ignite" on a barrel in the real-time fight sends the operative to
  * light it (walk up, one match); in the tactical pause it is planned with a marker and runs on the release. Another move
  * order of that operative replaces it; turn-based combat drops it (UseOrderRules).
  * Godot reference: main.gd `pending_menu_target`, `_trigger_menu_for_object`, `_open_action_menu`,
@@ -49,11 +49,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void ConfirmActionMenu();
 
-	/** Relocate button («Переместить» / «Вытолкать»): placement mode for the menu object with the leader. */
+	/** Relocate button ("Relocate" / "Push out"): placement mode for the menu object with the leader. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void RelocateActionMenu();
 
-	/** «Заминировать» button: trap the menu object with one of the leader's grenades. */
+	/** "Set trap" button: trap the menu object with one of the leader's grenades. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Interactables")
 	void TrapActionMenu();
 
@@ -99,7 +99,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
 	void LootItem(ELootItem Item);
 
-	/** «Забрать ВСЁ» (Godot _on_loot_all_pressed). */
+	/** "Take ALL" (Godot _on_loot_all_pressed). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
 	void LootAll();
 

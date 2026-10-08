@@ -120,9 +120,9 @@ void UQuantitySplitDialogWidget::BuildDefaultLayout()
 
 	UHorizontalBox* ButtonRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	Column->AddChildToVerticalBox(ButtonRow)->SetHorizontalAlignment(HAlign_Center);
-	const TPair<UButton*, USizeBox*> All = MakeButton(TEXT("BtnSplitAll"), LOCTEXT("All", "ВСЁ"), SplitButton, 80.f);
-	const TPair<UButton*, USizeBox*> Confirm = MakeButton(TEXT("BtnSplitConfirm"), LOCTEXT("Confirm", "ПОДТВЕРДИТЬ"), SplitConfirm, 130.f);
-	const TPair<UButton*, USizeBox*> Cancel = MakeButton(TEXT("BtnSplitCancel"), LOCTEXT("Cancel", "ОТМЕНА"), SplitCancel, 100.f);
+	const TPair<UButton*, USizeBox*> All = MakeButton(TEXT("BtnSplitAll"), LOCTEXT("All", "ALL"), SplitButton, 80.f);
+	const TPair<UButton*, USizeBox*> Confirm = MakeButton(TEXT("BtnSplitConfirm"), LOCTEXT("Confirm", "CONFIRM"), SplitConfirm, 130.f);
+	const TPair<UButton*, USizeBox*> Cancel = MakeButton(TEXT("BtnSplitCancel"), LOCTEXT("Cancel", "CANCEL"), SplitCancel, 100.f);
 	for (USizeBox* Size : { All.Value, Confirm.Value, Cancel.Value })
 	{
 		ButtonRow->AddChildToHorizontalBox(Size)->SetPadding(FMargin(4.f, 0.f));
@@ -234,20 +234,20 @@ FText UQuantitySplitDialogWidget::GetTitleText() const
 	const FString Name = TransferRules::GetItemName(Request.Item);
 	switch (Request.Action)
 	{
-	case ETransferAction::DropToGround: return SplitClean(FString::Printf(TEXT("ВЫБРОСИТЬ НА ЗЕМЛЮ: %s"), *Name));
-	case ETransferAction::Store: return SplitClean(FString::Printf(TEXT("ПОЛОЖИТЬ В ЯЩИК: %s"), *Name));
+	case ETransferAction::DropToGround: return SplitClean(FString::Printf(TEXT("DROP ON GROUND: %s"), *Name));
+	case ETransferAction::Store: return SplitClean(FString::Printf(TEXT("STORE IN CRATE: %s"), *Name));
 	case ETransferAction::Take:
-		return SplitClean(FString::Printf(TEXT("ВЗЯТЬ: %s -> %s"), *Name,
+		return SplitClean(FString::Printf(TEXT("TAKE: %s -> %s"), *Name,
 			Request.Operative.IsValid() ? *Request.Operative->DisplayName.ToString() : TEXT("?")));
 	default:
-		return SplitClean(FString::Printf(TEXT("ПЕРЕДАТЬ: %s -> %s"), *Name,
+		return SplitClean(FString::Printf(TEXT("GIVE: %s -> %s"), *Name,
 			Request.Recipient.IsValid() ? *Request.Recipient->DisplayName.ToString() : TEXT("?")));
 	}
 }
 
 FText UQuantitySplitDialogWidget::GetQuantityText() const
 {
-	return SplitClean(FString::Printf(TEXT("%d шт.  (макс. %d, шаг %d)"), Quantity, MaxQuantity, TransferRules::GetItemQuantityStep(Request.Item)));
+	return SplitClean(FString::Printf(TEXT("x%d  (max %d, step %d)"), Quantity, MaxQuantity, TransferRules::GetItemQuantityStep(Request.Item)));
 }
 
 void UQuantitySplitDialogWidget::RefreshTexts()

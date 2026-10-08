@@ -17,7 +17,7 @@ ABarricadeActor::ABarricadeActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	DeployableType = EDeployableType::Barricade;
-	DisplayName = LOCTEXT("Name", "Тактическая баррикада");
+	DisplayName = LOCTEXT("Name", "Tactical Barricade");
 
 	// 3 m along the wall x 0.6 m deep x 0.6 m high (Godot: 1 m high; user decision 2026-10-05, Sprint 08: a 60 cm cover a
 	// crouched operative sees over and a prone one hides behind).
@@ -119,7 +119,7 @@ void ABarricadeActor::Tick(float DeltaSeconds)
 		const UHealthComponent* EnemyHealth = It->FindComponentByClass<UHealthComponent>();
 		if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist(GetActorLocation(), It->GetActorLocation()) <= TrapContactDistance)
 		{
-			DetonateTrap(false, LOCTEXT("EnemyContact", "Контакт с противником"));
+			DetonateTrap(false, LOCTEXT("EnemyContact", "Enemy contact"));
 			return;
 		}
 	}
@@ -152,11 +152,11 @@ void ABarricadeActor::ApplyContactTo(AActor* Enemy, float Damage)
 	{
 		return;
 	}
-	// Godot _apply_contact_effect_to_enemy: take_damage(dmg, type, 0.15 armor pen, «Баррикада», status...).
+	// Godot _apply_contact_effect_to_enemy: take_damage(dmg, type, 0.15 armor pen, "Barricade", status...).
 	FDamageSpec Spec;
 	Spec.Amount = Damage;
 	Spec.ArmorPenetration = 0.15f;
-	Spec.AttackerSource = TEXT("Баррикада");
+	Spec.AttackerSource = TEXT("Barricade");
 	switch (ContactType)
 	{
 	case EBarricadeContact::Physical:
@@ -193,12 +193,12 @@ void ABarricadeActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
 		return;
 	}
 	bTrapped = false;
-	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Снайпер") : InstigatorName) : LOCTEXT("Blast", "ВЗРЫВ"),
-		bByShot ? LOCTEXT("ShotBoom", "💥 Взрыв ловушки на баррикаде от меткого выстрела!") : LOCTEXT("TrapBoom", "💥 Растяжка на баррикаде сдетонировала!"));
+	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Marksman") : InstigatorName) : LOCTEXT("Blast", "BLAST"),
+		bByShot ? LOCTEXT("ShotBoom", "💥 Barricade booby trap detonated by a well-aimed shot!") : LOCTEXT("TrapBoom", "💥 Barricade tripwire detonated!"));
 	ApplyBlast(TrapDamage, TrapDamage * DeployableRules::SquadDamageScale, TrapRadius, 0.45f, EDamageType::Explosive,
-		LOCTEXT("Source", "Ловушка баррикады"), LOCTEXT("SquadHit", "💥 Задело взрывом растяжки баррикады (-{0} HP)!"));
+		LOCTEXT("Source", "Barricade trap"), LOCTEXT("SquadHit", "💥 Hit by the barricade tripwire blast (-{0} HP)!"));
 	// The charge sits on the barricade itself (Godot: max(trap_damage * 1.4, 130)).
-	Health->ApplyDirectHealthLoss(FMath::Max(TrapDamage * 1.4f, 130.f), LOCTEXT("Source", "Ловушка баррикады").ToString());
+	Health->ApplyDirectHealthLoss(FMath::Max(TrapDamage * 1.4f, 130.f), LOCTEXT("Source", "Barricade trap").ToString());
 }
 
 void ABarricadeActor::DescribeForMenu(const AOperativeCharacter* Leader, FText& OutTitle, FText& OutDescription, FText& OutConfirm,
@@ -208,29 +208,29 @@ void ABarricadeActor::DescribeForMenu(const AOperativeCharacter* Leader, FText& 
 	int32 Max = 0;
 	GetLeaderSupply(Leader, Count, Max);
 	const bool bFull = Count >= Max;
-	const FText LeaderName = Leader ? Leader->DisplayName : LOCTEXT("Soldier", "Боец");
+	const FText LeaderName = Leader ? Leader->DisplayName : LOCTEXT("Soldier", "Soldier");
 	const FText HealthInfo = FText::Format(LOCTEXT("HealthInfo", " (HP: {0}/{1})"), FMath::FloorToInt(Health->GetCurrentHealth()),
 		FMath::FloorToInt(Health->GetMaxHealth()));
 
-	OutTitle = bTrapped ? LOCTEXT("TitleTrapped", "🧱 Тактическая баррикада [ЗАМИНИРОВАНА]") : LOCTEXT("Title", "🧱 Тактическая баррикада");
-	OutConfirm = bTrapped ? LOCTEXT("Defuse", "Разминировать") : (bDeployable ? LOCTEXT("PickUp", "Подобрать") : LOCTEXT("CannotPickUp", "Нельзя подобрать"));
+	OutTitle = bTrapped ? LOCTEXT("TitleTrapped", "🧱 Tactical Barricade [BOOBY-TRAPPED]") : LOCTEXT("Title", "🧱 Tactical Barricade");
+	OutConfirm = bTrapped ? LOCTEXT("Defuse", "Defuse") : (bDeployable ? LOCTEXT("PickUp", "Pick up") : LOCTEXT("CannotPickUp", "Cannot pick up"));
 	if (bFull && bDeployable)
 	{
-		OutConfirm = FText::Format(LOCTEXT("Full", "Инвентарь полон ({0}/{1})"), Count, Max);
+		OutConfirm = FText::Format(LOCTEXT("Full", "Inventory full ({0}/{1})"), Count, Max);
 	}
 	if (bTrapped)
 	{
-		OutDescription = FText::Format(LOCTEXT("DescTrapped", "⚠️ ВНИМАНИЕ: Баррикада заминирована взрывной растяжкой!\n{0}\n(У {1} баррикад: {2}/{3})."),
+		OutDescription = FText::Format(LOCTEXT("DescTrapped", "⚠️ WARNING: Barricade is rigged with an explosive tripwire!\n{0}\n({1} barricades: {2}/{3})."),
 			DescribeDefusal(Leader), LeaderName, Count, Max);
 	}
 	else if (bDeployable)
 	{
-		OutDescription = FText::Format(LOCTEXT("DescPickUp", "Разобрать защитную бронебаррикаду{0}?\nОбъект будет добавлен в личный запас (У {1}: {2}/{3})."),
+		OutDescription = FText::Format(LOCTEXT("DescPickUp", "Dismantle the armored barricade{0}?\nIt will be added to personal supplies ({1}: {2}/{3})."),
 			HealthInfo, LeaderName, Count, Max);
 	}
 	else
 	{
-		OutDescription = FText::Format(LOCTEXT("DescFixed", "Стационарная баррикада{0}. Параметр deployable отключён: объект нельзя убрать в инвентарь."),
+		OutDescription = FText::Format(LOCTEXT("DescFixed", "Stationary barricade{0}. Deployable is off: it cannot be stowed in the inventory."),
 			HealthInfo);
 	}
 	bOutDisabled = (bFull && bDeployable) || (!bDeployable && !bTrapped);
@@ -247,11 +247,11 @@ bool ABarricadeActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	}
 	// Godot type icon 🗡️ / 🔥 / ❄️ / ⚡ (the HUD font has no emoji: a word).
 	const TCHAR* Contact = ContactDamage <= 0.f ? TEXT("")
-		: ContactType == EBarricadeContact::Physical ? TEXT(" [шипы]")
-		: ContactType == EBarricadeContact::Fire ? TEXT(" [огонь]")
-		: ContactType == EBarricadeContact::Cryo ? TEXT(" [холод]")
-		: ContactType == EBarricadeContact::Energy ? TEXT(" [ток]") : TEXT("");
-	OutLabel.Text = FString::Printf(TEXT("🧱 Баррикада%s%s: %d/%d"), Contact, bTrapped ? TEXT(" [⚠️ ЛОВУШКА]") : TEXT(""),
+		: ContactType == EBarricadeContact::Physical ? TEXT(" [spikes]")
+		: ContactType == EBarricadeContact::Fire ? TEXT(" [fire]")
+		: ContactType == EBarricadeContact::Cryo ? TEXT(" [cryo]")
+		: ContactType == EBarricadeContact::Energy ? TEXT(" [shock]") : TEXT("");
+	OutLabel.Text = FString::Printf(TEXT("🧱 Barricade%s%s: %d/%d"), Contact, bTrapped ? TEXT(" [⚠️ TRAP]") : TEXT(""),
 		FMath::FloorToInt(FMath::Max(0.f, BarricadeHealth->GetCurrentHealth())), FMath::FloorToInt(BarricadeHealth->GetMaxHealth()));
 	OutLabel.Color = FLinearColor(0.9f, 0.75f, 0.3f);
 	OutLabel.HeightCm = HeightCm + 35.f;

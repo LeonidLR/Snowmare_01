@@ -13,11 +13,11 @@
 UENUM(BlueprintType)
 enum class ESquadFirePosture : uint8
 {
-	/** «Пассивный»: never open fire on their own, not even when attacked. */
+	/** "Passive": never open fire on their own, not even when attacked. */
 	Passive,
-	/** «Оборонительный»: hold fire until attacked (self, or any squad member — tunable), then fight back for that fight. */
+	/** "Defensive": hold fire until attacked (self, or any squad member — tunable), then fight back for that fight. */
 	Defensive,
-	/** «Агрессивный»: open fire on any enemy in sight at once (the behaviour before postures existed). */
+	/** "Aggressive": open fire on any enemy in sight at once (the behaviour before postures existed). */
 	Aggressive
 };
 
@@ -83,11 +83,11 @@ namespace FirePostureRules
 	/** Next posture of the cycle Passive -> Defensive -> Aggressive -> Passive. */
 	CODEXTACTICS_API ESquadFirePosture Next(ESquadFirePosture Posture);
 
-	/** «ПАССИВНЫЙ» / «ОБОРОНИТЕЛЬНЫЙ» / «АГРЕССИВНЫЙ». */
+	/** "PASSIVE" / "DEFENSIVE" / "AGGRESSIVE". */
 	CODEXTACTICS_API FString GetLabel(ESquadFirePosture Posture);
-	/** Short action bar label «ПАСС» / «ОБОР» / «АГР». */
+	/** Short action bar label "PAS" / "DEF" / "AGG". */
 	CODEXTACTICS_API FString GetShortLabel(ESquadFirePosture Posture);
-	/** One-letter indicator of the per-operative marker / squad slot: «П» / «О» / «А». */
+	/** One-letter indicator of the per-operative marker / squad slot: "P" / "D" / "A". */
 	CODEXTACTICS_API FString GetLetter(ESquadFirePosture Posture);
 	/** The direct-select hotkey shown on the HUD: «,» / «.» / «/». */
 	CODEXTACTICS_API FString GetKeyHint(ESquadFirePosture Posture);

@@ -12,9 +12,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLoadoutRulesTest, "CodexTactics.Core.Loadout.R
 bool FLoadoutRulesTest::RunTest(const FString&)
 {
 	using namespace LoadoutRules;
-	TestTrue(TEXT("«Начать игру» collects"), ResolveMode(TEXT("STARTING_UNIQUE"), EMissionStartMode::Game) == ELoadoutMode::ExploreAndCollect);
-	TestTrue(TEXT("«Начать бой»: collecting becomes the starting set"), ResolveMode(TEXT("EXPLORE_AND_COLLECT"), EMissionStartMode::Combat) == ELoadoutMode::StartingUnique);
-	TestTrue(TEXT("«Начать бой» keeps a preset"), ResolveMode(TEXT("EDITOR_PRESET"), EMissionStartMode::Combat) == ELoadoutMode::EditorPreset);
+	TestTrue(TEXT("'Start game' collects"), ResolveMode(TEXT("STARTING_UNIQUE"), EMissionStartMode::Game) == ELoadoutMode::ExploreAndCollect);
+	TestTrue(TEXT("'Start combat': collecting becomes the starting set"), ResolveMode(TEXT("EXPLORE_AND_COLLECT"), EMissionStartMode::Combat) == ELoadoutMode::StartingUnique);
+	TestTrue(TEXT("'Start combat' keeps a preset"), ResolveMode(TEXT("EDITOR_PRESET"), EMissionStartMode::Combat) == ELoadoutMode::EditorPreset);
 	TestTrue(TEXT("No start mode: the level's"), ResolveMode(TEXT("STARTING_UNIQUE"), EMissionStartMode::None) == ELoadoutMode::StartingUnique);
 
 	const FSquadLoadout Loadout;

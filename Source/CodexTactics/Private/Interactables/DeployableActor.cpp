@@ -26,9 +26,9 @@ namespace
 	{
 		switch (Type)
 		{
-		case EDeployableType::Turret: return LOCTEXT("FoundTurret", "📦 Найдена боевая автотурель ➔ добавлена в инвентарь ({0})!");
-		case EDeployableType::Barricade: return LOCTEXT("FoundBarricade", "📦 Найдена тактическая баррикада ➔ добавлена в инвентарь ({0})!");
-		default: return LOCTEXT("FoundMine", "📦 Найдена тактическая мина ➔ добавлена в инвентарь ({0})!");
+		case EDeployableType::Turret: return LOCTEXT("FoundTurret", "📦 Found a combat auto-turret ➔ added to inventory ({0})!");
+		case EDeployableType::Barricade: return LOCTEXT("FoundBarricade", "📦 Found a tactical barricade ➔ added to inventory ({0})!");
+		default: return LOCTEXT("FoundMine", "📦 Found a tactical mine ➔ added to inventory ({0})!");
 		}
 	}
 
@@ -36,9 +36,9 @@ namespace
 	{
 		switch (Type)
 		{
-		case EDeployableType::Turret: return LOCTEXT("FullTurrets", "⚠️ Инвентарь полон! Достигнут максимум турелей в отряде.");
-		case EDeployableType::Barricade: return LOCTEXT("FullBarricades", "⚠️ Инвентарь полон! Достигнут максимум баррикад в отряде.");
-		default: return LOCTEXT("FullMines", "⚠️ Инвентарь полон! Достигнут максимум мин в отряде.");
+		case EDeployableType::Turret: return LOCTEXT("FullTurrets", "⚠️ Inventory full! Squad turret limit reached.");
+		case EDeployableType::Barricade: return LOCTEXT("FullBarricades", "⚠️ Inventory full! Squad barricade limit reached.");
+		default: return LOCTEXT("FullMines", "⚠️ Inventory full! Squad mine limit reached.");
 		}
 	}
 }
@@ -59,16 +59,16 @@ FActionMenuRequest ADeployableActor::BuildActionMenu(const AOperativeCharacter* 
 	const URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
 	if (Relocation && !Relocation->CanRelocateNow())
 	{
-		return FActionMenuRequest::MakeMessage(LOCTEXT("HQ", "ШТАБ"),
-			LOCTEXT("NotInCombat", "⚠️ Во время боя менять расположение объектов нельзя! Используйте тактическую паузу [ПРОБЕЛ]."));
+		return FActionMenuRequest::MakeMessage(LOCTEXT("HQ", "HQ"),
+			LOCTEXT("NotInCombat", "⚠️ Objects cannot be relocated during combat! Use tactical pause [SPACE]."));
 	}
 	FText Title;
 	FText Description;
 	FText Confirm;
 	bool bDisabled = false;
 	DescribeForMenu(Leader, Title, Description, Confirm, bDisabled);
-	return FActionMenuRequest::MakeMenu(Title, Description, Confirm, LOCTEXT("Cancel", "Отмена"), bDisabled, bCanBeRelocated,
-		LOCTEXT("Relocate", "Переместить"));
+	return FActionMenuRequest::MakeMenu(Title, Description, Confirm, LOCTEXT("Cancel", "Cancel"), bDisabled, bCanBeRelocated,
+		LOCTEXT("Relocate", "Relocate"));
 }
 
 AOperativeCharacter* ADeployableActor::FindRecipient(AOperativeCharacter* Leader) const
@@ -126,7 +126,7 @@ void ADeployableActor::ExecuteAction(AOperativeCharacter* User)
 	}
 	if (!bDeployable && !NeedsDefusal())
 	{
-		PostLine(User->DisplayName, LOCTEXT("Stationary", "Этот объект стационарный: параметр deployable отключён, поэтому его нельзя убрать в инвентарь."));
+		PostLine(User->DisplayName, LOCTEXT("Stationary", "This object is stationary: deployable is off, so it cannot be stowed in the inventory."));
 		return;
 	}
 	if (bDeployable && !NeedsDefusal() && !FindRecipient(User))

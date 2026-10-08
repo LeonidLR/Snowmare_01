@@ -70,7 +70,7 @@ namespace HudShot
 		}
 		if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(FText::FromString(TEXT("ШТАБ")), FText::FromString(TEXT("✅ Проверка HUD: лента сообщений и стойки отряда.")));
+			Messages->PostMessage(FText::FromString(TEXT("HQ")), FText::FromString(TEXT("✅ HUD check: message feed and squad stances.")));
 		}
 	}
 
@@ -281,7 +281,7 @@ namespace HudShot
 				Members[0]->TakeHit(24.f, TEXT("HudShot"), true);
 				Members[1]->ForcedDodgeRollForTesting = 1.f;
 				Members[1]->TakeHit(20.f, TEXT("HudShot"));
-				UFloatingTextSubsystem::SpawnAboveOperative(Members[2], TEXT("❄️ ОСЕЧКА! (Затвор заклинил)"), FLinearColor(0.4f, 0.85f, 1.f));
+				UFloatingTextSubsystem::SpawnAboveOperative(Members[2], TEXT("❄️ MISFIRE! (Bolt jammed)"), FLinearColor(0.4f, 0.85f, 1.f));
 				if (AEnemyCharacter* Brute = FloatWorld->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Brute,
 					Members[0]->GetActorLocation() + Members[0]->GetActorForwardVector() * 500.f))
 				{
@@ -619,10 +619,10 @@ namespace HudShot
 					Flow->FinishCutscene();
 					Flow->FinishPreparation();
 					VictoryWorld->GetSubsystem<UWaveSubsystem>()->ClearAllEnemies();
-					Victory->RegisterEnemyKill(EEnemyArchetype::FrostHound, TEXT("Командир"));
-					Victory->RegisterEnemyKill(EEnemyArchetype::Spitter, TEXT("Турель"));
-					Victory->RegisterEnemyKill(EEnemyArchetype::Brute, TEXT("Инженер"));
-					Victory->RegisterEnemyKill(EEnemyArchetype::FrostHound, TEXT("Мина"));
+					Victory->RegisterEnemyKill(EEnemyArchetype::FrostHound, TEXT("Commander"));
+					Victory->RegisterEnemyKill(EEnemyArchetype::Spitter, TEXT("Turret"));
+					Victory->RegisterEnemyKill(EEnemyArchetype::Brute, TEXT("Engineer"));
+					Victory->RegisterEnemyKill(EEnemyArchetype::FrostHound, TEXT("Mine"));
 					Flow->NotifyWaveCleared();
 					// Time stands still while the panel is up: shoot and exit on real time.
 					TSharedRef<int32> Frames = MakeShared<int32>(0);

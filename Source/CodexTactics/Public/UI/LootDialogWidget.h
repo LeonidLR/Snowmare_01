@@ -32,7 +32,7 @@ private:
 
 /**
  * Loot dialog of an opened supply crate: title (crate name), hint, one button per item (two columns),
- * «📦 Забрать ВСЁ» and «✖ Закрыть». Built in C++; a Widget Blueprint subclass can restyle it by naming its widgets
+ * «📦 Take ALL» and «✖ Close». Built in C++; a Widget Blueprint subclass can restyle it by naming its widgets
  * TitleText, SubtitleText, ItemsGrid, LootAllButton, LootAllText, CloseButton, CloseText.
  * Sprint 13 (two-way crates): a storable line can be dragged onto an operative (model / portrait) or the inventory
  * drawer (take-out with the split dialog and capacity clamp); an inventory line dropped on the window stores it in the

@@ -22,7 +22,7 @@ struct CODEXTACTICS_API FShotLineVerdict
 	bool bCanHit = false;
 	/** Damage factor: 0.8 crouched behind a barricade, else 1. */
 	float Cover = 1.f;
-	/** Prone behind a barricade: the shot is blocked («🚫 Баррикада блокирует огонь»). */
+	/** Prone behind a barricade: the shot is blocked ("🚫 Barricade blocks the shot"). */
 	bool bBarricadeBlocked = false;
 };
 

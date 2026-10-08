@@ -98,6 +98,7 @@ between 2026-10-06 and 2026-10-08 (details per commit in HANDOFF §10; `git log 
 
 | Agent | Task | Files / assets | Since |
 |---|---|---|---|
+| Claude (Opus) | English UI pass (user decision 2026-10-08: all in-game text English, RU later via localization): every player-facing C++ literal except the narrative files below; guard test `CodexTactics.Text.NoCyrillicInPlayerText` (skip list = narrative files until their English pass lands); UI terms for Gemini in `docs/port/glossary_ui_en.md` | `Source/CodexTactics/**` except `UI/Dialogue*`, `Data/DialogueSequenceAsset.*`, `Quests/**`, `Interactables/NarrativeElementActor.*`, `Core/Mission*`, `UI/PhaseBannersWidget.*` (Sonnet's narrative integration) | 2026-10-08 |
 | Gemini | Architecture Leadership & Bot Telemetry Distillation (Jev System One) | Scripts/Tools/typesafe_triage.py | 2026-10-04 |
 | Claude | Jev AI coach (taken over from Gemini on the user's word, 2026-10-04): marksman kiting limit, bot marksman assault, `Codex.*` tunables, `AITuning` | Scripts/Tools/jev_ai_coach.py, Content/Data/AI/ai_tuning.json, Marksman*, PlaytestBotSubsystem | 2026-10-04 |
 | Claude | Left-hand IK (user-approved 2026-10-07): socket `LeftHandGrip` added by `Scripts/Editor/add_weapon_left_hand_socket.py` (uncommitted until the host commits); the ABP_Operative Two Bone IK node is the user's | `Content/Weapons/M16/m16_01/StaticMeshes/m16_01.uasset` | 2026-10-07 |

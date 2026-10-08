@@ -133,7 +133,7 @@ void UPlaytestBotSubsystem::SetupRun()
 		SpawnRuntimePatrols();
 	}
 	// Stealth (user plan 2026-10-07): an ambush level still in exploration is sneaked through, never started by the
-	// button. -BotStealth=0 keeps the old behaviour (the bot presses «Начать бой» after exploring).
+	// button. -BotStealth=0 keeps the old behaviour (the bot presses "Start combat" after exploring).
 	int32 StealthSwitch = 1;
 	FParse::Value(FCommandLine::Get(), TEXT("BotStealth="), StealthSwitch);
 	const ULevelEncounterSubsystem* Encounter = GetWorld()->GetSubsystem<ULevelEncounterSubsystem>();
@@ -150,12 +150,12 @@ void UPlaytestBotSubsystem::SetupRun()
 	}
 	if (bStealthLevel)
 	{
-		// The start menu keeps the world paused: «Начать игру» (exploration) — the patrols walk, the squad sneaks. (On a
-		// wave level the bot still explores behind the menu and then presses «Начать бой», as before.)
+		// The start menu keeps the world paused: "Start game" (exploration) — the patrols walk, the squad sneaks. (On a
+		// wave level the bot still explores behind the menu and then presses "Start combat", as before.)
 		if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>(); Mission && Mission->IsMainMenuOpen())
 		{
 			Mission->StartMission(EMissionStartMode::Game);
-			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] «Начать игру»: the exploration runs in real time"));
+			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] 'Start game': the exploration runs in real time"));
 		}
 		AOperativeCharacter* Medic = Member(2);
 		StealthConfig = BotStealthRules::MakeSeededConfig(Seed, Config.Mines > 0 && Medic && Medic->GetDeployableCount(EDeployableType::Mine) > 0);
@@ -284,7 +284,7 @@ void UPlaytestBotSubsystem::Tick(float DeltaTime)
 		TickStealth(DeltaTime, false);
 		return;
 	case EBotStage::EnterCombat:
-		// bot_driver: main._on_start_combat_pressed = «Начать бой»: the squad behind the gate, healed, warm, then the
+		// bot_driver: main._on_start_combat_pressed = "Start combat": the squad behind the gate, healed, warm, then the
 		// combat cutscene / preparation.
 		if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
 		{

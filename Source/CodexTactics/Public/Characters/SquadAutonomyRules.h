@@ -69,7 +69,7 @@ struct CODEXTACTICS_API FSquadROE
 	bool bReservePersonalMedkit = true;
 	float AutoReloadThresholdPct = 25.f;
 	float EmergencySidearmDistMeters = 3.5f;
-	// --- Sprint 10: defense line («Ни шагу назад») ---
+	// --- Sprint 10: defense line ("Not one step back") ---
 	/** Enemies this close to the defended object / point are intruders, m. */
 	float DefenseInterceptRadiusMeters = 12.f;
 	/** Strict: the defender never leaves the 5 m defense leash; Flexible: up to 10 m for aid when no intruder is there. */
@@ -81,7 +81,7 @@ struct CODEXTACTICS_API FSquadROE
 };
 
 /**
- * Sprint 10 «Рубеж обороны» (Hold Objective at all costs): the operative holds a defended object (generator, terminal,
+ * Sprint 10 "Hold line" (Hold Objective at all costs): the operative holds a defended object (generator, terminal,
  * gate, barricade) or point. Intruders within the intercept radius of it come first, he never leaves the 5 m defense
  * leash, never retreats from a point-blank enemy (fires on the spot, draws the knife) and does not run off to aid
  * while intruders are there.
@@ -213,7 +213,7 @@ namespace SquadAutonomyRules
 	CODEXTACTICS_API bool CanGiveSafeAid(const FSquadROE& ROE, const FDefenseDirective& Defense, bool bSniperAimingOnRoute,
 		float NearestEnemyToPatientCm, bool bIntruderPresent, float PatientDistanceToDefendedCm);
 
-	/** «Ни шагу назад»: a defender never withdraws (no retreat / kiting step away from an enemy). */
+	/** "Not one step back": a defender never withdraws (no retreat / kiting step away from an enemy). */
 	CODEXTACTICS_API bool AllowsRetreat(const FDefenseDirective& Defense);
 
 	/** He holds the spot (no walking at all) while an enemy is inside the emergency (point-blank) distance. */

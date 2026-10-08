@@ -33,20 +33,20 @@ namespace
 	{
 		switch (Item)
 		{
-		case ETransferItem::Turret: return TEXT("Турель");
-		case ETransferItem::Barricade: return TEXT("Баррикада");
-		case ETransferItem::Mine: return TEXT("Мина");
-		case ETransferItem::Medkit: return TEXT("Аптечка");
-		case ETransferItem::CannedFood: return TEXT("Консервы");
-		case ETransferItem::Bread: return TEXT("Хлеб");
-		case ETransferItem::Chocolate: return TEXT("Шоколад");
-		case ETransferItem::Matches: return TEXT("Спички");
-		case ETransferItem::RifleAmmo: return TEXT("Патроны M16");
-		case ETransferItem::PistolAmmo: return TEXT("Патроны 9мм");
-		case ETransferItem::ShotgunAmmo: return TEXT("Дробь 12k");
-		case ETransferItem::FlameFuel: return TEXT("Топливо");
-		case ETransferItem::CryoAmmo: return TEXT("Хладагент");
-		default: return TEXT("Плазма");
+		case ETransferItem::Turret: return TEXT("Turret");
+		case ETransferItem::Barricade: return TEXT("Barricade");
+		case ETransferItem::Mine: return TEXT("Mine");
+		case ETransferItem::Medkit: return TEXT("Medkit");
+		case ETransferItem::CannedFood: return TEXT("Canned food");
+		case ETransferItem::Bread: return TEXT("Bread");
+		case ETransferItem::Chocolate: return TEXT("Chocolate");
+		case ETransferItem::Matches: return TEXT("Matches");
+		case ETransferItem::RifleAmmo: return TEXT("M16 rounds");
+		case ETransferItem::PistolAmmo: return TEXT("9mm rounds");
+		case ETransferItem::ShotgunAmmo: return TEXT("12g shells");
+		case ETransferItem::FlameFuel: return TEXT("Fuel");
+		case ETransferItem::CryoAmmo: return TEXT("Coolant");
+		default: return TEXT("Plasma");
 		}
 	}
 }
@@ -147,13 +147,13 @@ FString TransferRules::GetPromptName(ETransferItem Item)
 {
 	switch (Item)
 	{
-	case ETransferItem::Medkit: return TEXT("Аптечку");
-	case ETransferItem::RifleAmmo: return TEXT("Патроны M16 (30 шт.)");
-	case ETransferItem::PistolAmmo: return TEXT("Патроны 9мм (12 шт.)");
-	case ETransferItem::ShotgunAmmo: return TEXT("Дробь 12k (8 шт.)");
-	case ETransferItem::FlameFuel: return TEXT("Топливо огнемёта (25 ед.)");
-	case ETransferItem::CryoAmmo: return TEXT("Хладагент крио (15 ед.)");
-	case ETransferItem::PlasmaAmmo: return TEXT("Батареи плазмы (10 ед.)");
+	case ETransferItem::Medkit: return TEXT("Medkit");
+	case ETransferItem::RifleAmmo: return TEXT("M16 rounds (x30)");
+	case ETransferItem::PistolAmmo: return TEXT("9mm rounds (x12)");
+	case ETransferItem::ShotgunAmmo: return TEXT("12g shells (x8)");
+	case ETransferItem::FlameFuel: return TEXT("Flamethrower fuel (25 u)");
+	case ETransferItem::CryoAmmo: return TEXT("Cryo coolant (15 u)");
+	case ETransferItem::PlasmaAmmo: return TEXT("Plasma cells (10 u)");
 	default: return TransferFeedbackName(Item);
 	}
 }

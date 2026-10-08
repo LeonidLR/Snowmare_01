@@ -1,6 +1,6 @@
 // Dev-only console command for a headless object relocation check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.RelocationSmoke
-// Spawns a barrel ahead of the leader, opens its action menu, presses «Вытолкать», places it 6 m to the side:
+// Spawns a barrel ahead of the leader, opens its action menu, presses "Push", places it 6 m to the side:
 // the leader walks up, pushes it (carry speed) and sets it down there with collision restored. Then a frozen leader
 // (85 % cold) is refused, and placement can be cancelled. Last, a hit while pushing drops the barrel (Godot
 // take_damage -> _cancel_or_finalize_active_relocates_for_combat). Sprint 06-E/F: while pushing the barrel never comes
@@ -227,7 +227,7 @@ namespace RelocationSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.RelocationSmoke"),
-		TEXT("Dev check: push a barrel to a new spot via «Вытолкать», cold refusal, placement cancel; logs PASS/FAIL, then exits."),
+		TEXT("Dev check: push a barrel to a new spot via \"Push\", cold refusal, placement cancel; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

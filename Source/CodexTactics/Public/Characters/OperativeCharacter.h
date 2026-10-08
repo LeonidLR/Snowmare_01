@@ -91,7 +91,7 @@ enum class EOperativeOrderResult : uint8
 	NoController,
 	/** No navigable path to the destination. */
 	Unreachable,
-	/** Raging: player orders are ignored (Godot set_target «В ЯРОСТИ! НЕ ПОДЧИНЯЕТСЯ!»). */
+	/** Raging: player orders are ignored (Godot set_target "ENRAGED! IGNORING ORDERS!"). */
 	Refused
 };
 
@@ -253,7 +253,7 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Stance", meta = (DisplayName = "On Stance Changed"))
 	void ReceiveStanceChanged(EOperativeStance OldStance, EOperativeStance NewStance);
 
-	/** Localised stance name («СТОЯ», «СИДЯ», «ЛЁЖА»). */
+	/** Localised stance name ("STANDING", "CROUCHED", "PRONE"). */
 	static FText GetStanceDisplayName(EOperativeStance InStance);
 
 	/** Cold level in percent. Owned by the cold survival system once ported. */
@@ -325,7 +325,7 @@ public:
 
 	/**
 	 * Godot add_exp: EXP with overflow into the next levels; each level-up gives +3 points, heals fully, floats
-	 * «⭐ УРОВЕНЬ N!» and posts the radio line.
+	 * "⭐ LEVEL N!" and posts the radio line.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Progression")
 	void AddExp(int32 Amount);
@@ -370,7 +370,7 @@ public:
 
 	/**
 	 * Holds its position as a guard (Godot is_guarding): out of the formation, keeps facing, orders still move it.
-	 * Toggled by USquadSubsystem::ToggleGuard (T / action bar «ОБОР»).
+	 * Toggled by USquadSubsystem::ToggleGuard (T / action bar "GUARD").
 	 */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Squad")
 	bool bGuarding = false;
@@ -613,7 +613,7 @@ public:
 	/**
 	 * An attack on this operative (Godot player.gd take_damage): dodge with luck * 0.4 %, then
 	 * max(1, Amount * stance defense * (1 - clamp(fortitude * 1.5 %, 0, 50 %))); bBypassAvoidance (grenades, traps
-	 * on the squad) skips both and takes max(1, Amount). Floating «💨 УКЛОНЕНИЕ!», «-N» or «💥 КРИТИЧЕСКИЙ УДАР! -N».
+	 * on the squad) skips both and takes max(1, Amount). Floating "💨 DODGE!", "-N" or "💥 CRITICAL HIT! -N".
 	 * Sprint 12: in cover a hit from the wall's frontal arc is absorbed (CoverRules) and a crit on a head kept down is
 	 * undone (Amount / CritMultiplierApplied — the attacker passes the multiplier it applied). Returns the health taken.
 	 */
@@ -634,7 +634,7 @@ public:
 	/**
 	 * Godot _find_shoot_target(delta): priority target, else the closest visible enemy; a current target is kept until a
 	 * much closer one (stance ratio, or within 3.5 m) stays closer for the stance's reaction delay. Barricade rules
-	 * decide cover (0.8 crouched) and block prone shooters («🚫 Баррикада блокирует огонь»). bAllowAutoTargets = false
+	 * decide cover (0.8 crouched) and block prone shooters ("🚫 Barricade blocks the shot"). bAllowAutoTargets = false
 	 * (fire posture holds the automatic fire) keeps only the direct orders: priority target and blind fire.
 	 */
 	FShootCandidate FindShootTarget(float DeltaTime, bool bAllowAutoTargets = true);
@@ -1175,10 +1175,10 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Combat")
 	float MisfireCooldownTimer = 0.0f;
 
-	/** Godot cover_chatter_timer: the «Занял укрытие» radio line at most every 5 s. */
+	/** Godot cover_chatter_timer: the "In cover" radio line at most every 5 s. */
 	double LastCoverChatterTime = -100.0;
 
-	/** Godot weapon_freeze_notify_timer: «ОРУЖИЕ ЗАМЁРЗЛО» at most every 2.5 s. */
+	/** Godot weapon_freeze_notify_timer: "WEAPON FROZEN" at most every 2.5 s. */
 	float WeaponFreezeNotifyTimer = 0.f;
 	void NotifyWeaponFrozen();
 

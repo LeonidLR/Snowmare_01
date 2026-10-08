@@ -211,11 +211,11 @@ bool FTimeModeOrdersExecuteInRealTimeTest::RunTest(const FString&)
 		ECombatOrderDispatch::TurnBasedGrid);
 	TestEqual(TEXT("Old 2026-10-05 lock: blocked"), FCombatTimeModeRules::GetOrderDispatch(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, false),
 		ECombatOrderDispatch::Blocked);
-	TestEqual(TEXT("Label"), FCombatTimeModeRules::GetModeLabel(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime), FString(TEXT("РЕАЛЬНОЕ ВРЕМЯ")));
+	TestEqual(TEXT("Label"), FCombatTimeModeRules::GetModeLabel(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime), FString(TEXT("REAL TIME")));
 	TestEqual(TEXT("Label pause"), FCombatTimeModeRules::GetModeLabel(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause),
-		FString(TEXT("ТАКТИЧЕСКАЯ ПАУЗА")));
+		FString(TEXT("TACTICAL PAUSE")));
 	TestEqual(TEXT("Label turn-based"), FCombatTimeModeRules::GetModeLabel(ECodexGamePhase::WaveCombat, ECodexCombatMode::TurnBased),
-		FString(TEXT("ПОШАГОВЫЙ БОЙ")));
+		FString(TEXT("TURN-BASED")));
 	TestTrue(TEXT("No label in exploration"), FCombatTimeModeRules::GetModeLabel(ECodexGamePhase::Exploration, ECodexCombatMode::None).IsEmpty());
 	return true;
 }

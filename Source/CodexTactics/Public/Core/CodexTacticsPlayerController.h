@@ -93,7 +93,7 @@ public:
 	 * preparation unless in solo mode (Godot _cycle_leader_stance). */
 	void CycleLeaderStance();
 
-	/** Action bar «ПЕР»: toggles «click an object to move it» (cancels an active placement). Godot _on_relocate_slot_clicked. */
+	/** Action bar "MOVE": toggles «click an object to move it» (cancels an active placement). Godot _on_relocate_slot_clicked. */
 	void ToggleRelocateSelectMode();
 
 	bool IsRelocateSelectMode() const { return bRelocateSelectMode; }
@@ -120,7 +120,7 @@ public:
 	/** Alt (either side) is held: squad-wide stance / posture orders. */
 	bool IsSquadWideModifierDown() const;
 
-	/** Commander Mode on / off (Ctrl + T, the action bar «АВТО» button). */
+	/** Commander Mode on / off (Ctrl + T, the action bar "AUTO" button). */
 	void ToggleAutonomy();
 
 	/**
@@ -196,7 +196,7 @@ private:
 	double LastOrderLockHintTime = -100.0;
 	/** The Slate pre-processor for the keys 1-4 (registered while the controller plays). */
 	TSharedPtr<class IInputProcessor> SquadKeyProcessor;
-	/** Next object click starts its relocation (action bar «ПЕР»). */
+	/** Next object click starts its relocation (action bar "MOVE"). */
 	bool bRelocateSelectMode = false;
 	/** True while a story dialogue blocks world orders (Godot _unhandled_input). */
 	bool IsDialogueOpen() const;
@@ -234,7 +234,7 @@ private:
 	/** X (Godot switch_weapon): the leader's next arsenal weapon, outside the grid fight. */
 	void CycleWeaponKey();
 public:
-	/** T / action bar «ОБОР» (Godot _on_guard_slot_clicked): the leader holds its spot or rejoins the formation. */
+	/** T / action bar "GUARD" (Godot _on_guard_slot_clicked): the leader holds its spot or rejoins the formation. */
 	void GuardKey();
 
 	/** H / J / K / L and the inventory drawer (Godot use_squad_item): the leader uses a provision, feed line. */
@@ -253,7 +253,7 @@ public:
 	 */
 	void AssignDefenseUnderCursor();
 
-	/** Inventory «Растяжка» (Sprint 09): two-click tripwire placement for the leader (2 grenades of the squad). */
+	/** Inventory "Tripwire" (Sprint 09): two-click tripwire placement for the leader (2 grenades of the squad). */
 	void StartTripwirePlacement();
 
 	/** Key P: character profile (Godot main.gd KEY_P -> _toggle_profile_dialog). */
@@ -265,7 +265,7 @@ public:
 private:
 	/** Ground point under the cursor for the grenade aim (hit, else the thrower's floor plane). */
 	bool GetGrenadeAimPoint(FVector& OutPoint) const;
-	/** RMB / Esc while aiming a grenade (Godot «Бросок отменён.»). Returns true if an aim was cancelled. */
+	/** RMB / Esc while aiming a grenade (Godot "Throw cancelled."). Returns true if an aim was cancelled. */
 	bool CancelGrenadeAim();
 	/** Ground point under the cursor on the placement plane of the object being moved. */
 	bool GetPlacementPoint(FVector& OutPoint) const;

@@ -108,7 +108,7 @@ namespace EventBusSmoke
 		Check(State, Probe->Count(TEXT("item")) == 1 && Probe->LastItem == TEXT("MEDKIT"), TEXT("item_used «MEDKIT» from the drawer"));
 
 		const int32 Lines = Probe->Count(TEXT("line"));
-		World->GetSubsystem<UGameMessageSubsystem>()->PostMessage(FText::FromString(TEXT("ШТАБ")), FText::FromString(TEXT("Проверка шины событий")));
+		World->GetSubsystem<UGameMessageSubsystem>()->PostMessage(FText::FromString(TEXT("HQ")), FText::FromString(TEXT("Event bus check")));
 		Check(State, Probe->Count(TEXT("line")) == Lines + 1, TEXT("dialogue_line_displayed for a feed line"));
 
 		const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();

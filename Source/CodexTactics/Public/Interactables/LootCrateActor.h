@@ -54,7 +54,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
 	void StartOpening(AOperativeCharacter* Leader);
 
-	/** Moves one stack into Collector's supply; returns the Godot result line («+2 🩹 Аптечка»), empty if none. */
+	/** Moves one stack into Collector's supply; returns the Godot result line ("+2 🩹 Medkit"), empty if none. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
 	FText TakeItem(ELootItem Item, AOperativeCharacter* Collector);
 
@@ -91,7 +91,7 @@ public:
 	/** Save-game load (Godot _deserialize_world_state crates): looted -> empty, defused -> no trap, destroyed -> gone. */
 	void RestoreSaved(bool bInLooted, bool bInDefused, bool bInDestroyed);
 
-	/** «📦 Армейский ящик снабжения» (Godot crate_name). */
+	/** "📦 Army supply crate" (Godot crate_name). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Loot")
 	FText CrateName;
 

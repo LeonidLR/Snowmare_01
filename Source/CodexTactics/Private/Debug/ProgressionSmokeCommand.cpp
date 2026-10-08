@@ -86,7 +86,7 @@ namespace ProgressionSmoke
 			Check(State, FMath::IsNearlyEqual(Leader->HealthComponent->GetCurrentHealth(), Leader->HealthComponent->GetMaxHealth()),
 				TEXT("level-up heals fully"));
 			const UFloatingTextSubsystem* Floating = World->GetSubsystem<UFloatingTextSubsystem>();
-			Check(State, Floating && Floating->HasShown(TEXT("УРОВЕНЬ 2")), TEXT("floating «УРОВЕНЬ 2!»"));
+			Check(State, Floating && Floating->HasShown(TEXT("LEVEL 2")), TEXT("floating \"LEVEL 2!\""));
 
 			// Kill EXP: every squad member gets the hound reward.
 			for (const AOperativeCharacter* Member : Squad->GetMembers())
@@ -118,7 +118,7 @@ namespace ProgressionSmoke
 			// Profile: P opens the leader's card; + / - spend and refund points within the bounds.
 			PC->ProfilePressed();
 			Check(State, Profile->IsOpen() && Profile->GetMember() == Leader, TEXT("P opens the leader's profile"));
-			Check(State, Profile->GetHeaderText().Contains(TEXT("Уровень: 2")) && Profile->GetRowText(0) == FString::Printf(TEXT("📈 Опыт: %d / 500 XP"), Leader->CurrentExp),
+			Check(State, Profile->GetHeaderText().Contains(TEXT("Level: 2")) && Profile->GetRowText(0) == FString::Printf(TEXT("📈 Experience: %d / 500 XP"), Leader->CurrentExp),
 				FString::Printf(TEXT("header / EXP row: %s"), *Profile->GetRowText(0)));
 			const float Luck = Leader->Luck;
 			const float MaxHealth = Leader->HealthComponent->GetMaxHealth();
@@ -133,14 +133,14 @@ namespace ProgressionSmoke
 			Profile->ClickStat(EProgressStat::Fortitude, 1);
 			Profile->ClickStat(EProgressStat::Accuracy, 1);
 			Check(State, Leader->UnspentStatPoints == 0 && !Profile->IsStatButtonEnabled(EProgressStat::Luck, 1), TEXT("all points spent: + disabled"));
-			Check(State, Profile->GetRowText(4).Contains(TEXT("Срез: -")), Profile->GetRowText(4));
+			Check(State, Profile->GetRowText(4).Contains(TEXT("Damage cut: -")), Profile->GetRowText(4));
 
 			// Paging and the number keys (Godot _select_squad_member_by_index).
 			Profile->SwitchMember(1);
 			AOperativeCharacter* Second = Squad->GetMembers()[1];
-			Check(State, Profile->GetMember() == Second, TEXT("«След.» shows the next member"));
+			Check(State, Profile->GetMember() == Second, TEXT("\"Next\" shows the next member"));
 			Profile->SwitchMember(-1);
-			Check(State, Profile->GetMember() == Leader, TEXT("«Пред.» goes back"));
+			Check(State, Profile->GetMember() == Leader, TEXT("\"Prev\" goes back"));
 			PC->SelectMember(1);
 			Check(State, Squad->GetLeader() == Second && Profile->GetMember() == Second, TEXT("number key: new leader, the open profile follows"));
 			Hud->HandleEscape();

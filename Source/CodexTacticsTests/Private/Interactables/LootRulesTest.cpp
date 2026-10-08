@@ -18,8 +18,8 @@ bool FLootDefaultsTest::RunTest(const FString&)
 	TestEqual(TEXT("Eleven stacks"), Items.Num(), 11);
 	TestTrue(TEXT("Medkit first"), Items[0].Item == ELootItem::Medkit);
 	TestEqual(TEXT("Rifle ammo 60"), Crate.GetCount(ELootItem::RifleAmmo), 60);
-	TestEqual(TEXT("Label"), Items[0].GetLabel().ToString(), FString(TEXT("🩹 Аптечка: 1 шт.")));
-	TestEqual(TEXT("Fuel in units"), Items[8].GetLabel().ToString(), FString(TEXT("🔥 Топливо огнемёта: 50 ед.")));
+	TestEqual(TEXT("Label"), Items[0].GetLabel().ToString(), FString(TEXT("🩹 Medkit: x1")));
+	TestEqual(TEXT("Fuel in units"), Items[8].GetLabel().ToString(), FString(TEXT("🔥 Flamethrower fuel: 50 units")));
 	return true;
 }
 

@@ -2,7 +2,7 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.BotStealthSmoke -Map /Game/Maps/L_PatrolTest -Log Smoke-BotStealth.log
 // The bot starts without the loot walk (seed 3). On a map without patrols the bot's runtime patrols are spawned first.
 // Checks: the level is an ambush level and the bot sneaks (stealth stage, Passive posture — no auto-fire gives the squad
-// away); it makes stealth decisions (stance / hide / hold / ambush); it never presses «Начать бой»; within 150 s the
+// away); it makes stealth decisions (stance / hide / hold / ambush); it never presses "Start combat"; within 150 s the
 // fight starts by its own strike or by a detection (a [Stealth] outcome) — or it is still sneaking undetected — and once
 // the fight is on the posture is Aggressive.
 
@@ -63,7 +63,7 @@ namespace BotStealthSmoke
 				Check(State, Spawned > 0, FString::Printf(TEXT("no patrols on the map: %d runtime patrol enemies spawned"), Spawned));
 			}
 			Check(State, Encounter->IsAmbushCombatStart() && Flow->GetPhase() == ECodexGamePhase::Exploration,
-				TEXT("ambush level in exploration (no «Начать бой»)"));
+				TEXT("ambush level in exploration (no \"Start combat\")"));
 			Bot->StartBot(EBotProfile::Veteran, false, false, 3);
 			return true;
 		}
@@ -80,7 +80,7 @@ namespace BotStealthSmoke
 		{
 			if (Bot->HasPressedCombatStart())
 			{
-				Check(State, false, TEXT("the bot pressed «Начать бой» on an ambush level"));
+				Check(State, false, TEXT("the bot pressed \"Start combat\" on an ambush level"));
 				return Finish(State);
 			}
 			return true;
@@ -89,7 +89,7 @@ namespace BotStealthSmoke
 		Check(State, State.bPassiveSeen, TEXT("sneaking with the Passive fire posture"));
 		Check(State, Bot->GetStealthDecisions() > 0, FString::Printf(TEXT("stealth decisions made (%d, last %s, stance %s)"), Bot->GetStealthDecisions(),
 			BotStealthRules::ActionName(Bot->GetStealthAction()), BotStealthRules::StanceName(Bot->GetStealthStance())));
-		Check(State, !Bot->HasPressedCombatStart(), TEXT("never pressed «Начать бой»"));
+		Check(State, !Bot->HasPressedCombatStart(), TEXT("never pressed \"Start combat\""));
 		if (bFight)
 		{
 			Check(State, !Bot->GetStealthOutcome().IsEmpty() && Encounter->GetAmbushStarts() == 1,
