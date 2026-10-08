@@ -98,6 +98,7 @@ bool FAimOffsetWantsTest::RunTest(const FString&)
 	Off(TEXT("sprint"), [](FAimOffsetState& S) { S.bSprinting = true; });
 	Off(TEXT("prone"), [](FAimOffsetState& S) { S.bProne = true; });
 	Off(TEXT("dead"), [](FAimOffsetState& S) { S.bDead = true; });
+	Off(TEXT("turn-based (flag off)"), [](FAimOffsetState& S) { S.bTurnBasedSuppressed = true; });
 	// The step: 0.2 s blend, 0.1 s -> 0.5; reaches 1; instant at 0 blend time.
 	TestTrue(TEXT("half way"), FMath::IsNearlyEqual(StepAlpha(0.f, true, 0.1f, 0.2f), 0.5f, 0.001f));
 	TestTrue(TEXT("never above 1"), FMath::IsNearlyEqual(StepAlpha(0.9f, true, 1.f, 0.2f), 1.f, 0.001f));

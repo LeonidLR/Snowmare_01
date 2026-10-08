@@ -571,6 +571,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
 	bool bAimOffsetInCover = true;
 
+	/** Keep the aim offset in turn-based combat; off (default) = it fades out there (the shot still turns the body to the target) and returns in real time / tactical pause. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	bool bAimOffsetInTurnBased = false;
+
+	/** True while the offset is switched off by turn-based combat (see bAimOffsetInTurnBased). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
+	bool bAimOffsetTurnBasedOff = false;
+
 	/** AimPitch follows the target's pitch at this rate (FInterpTo speed, 1/s). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset", meta = (ClampMin = "0.1"))
 	float AimPitchInterpSpeed = 10.f;

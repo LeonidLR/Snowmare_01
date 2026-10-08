@@ -884,7 +884,9 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	// The pitch from the stance's muzzle height (stable: it does not move with the pose the offset itself bends) to the
 	// point the tracer flies to (the target's capsule centre).
 	FVector AimPoint = FVector::ZeroVector;
-	bHasAimTarget = bAimOffset && Operative.GetAimTargetPoint(AimPoint);
+	const UTurnBasedCombatSubsystem* TurnBasedMode = Operative.GetWorld() ? Operative.GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	bAimOffsetTurnBasedOff = !bAimOffsetInTurnBased && TurnBasedMode && TurnBasedMode->IsActive();
+	bHasAimTarget = bAimOffset && !bAimOffsetTurnBasedOff && Operative.GetAimTargetPoint(AimPoint);
 	AimPitchTarget = bHasAimTarget ? AimOffsetRules::PitchToTarget(Operative.GetMuzzleLocation(), AimPoint, AimPitchClampDegrees) : 0.f;
 	AimPitch = FMath::Clamp(FMath::FInterpTo(AimPitch, AimPitchTarget, DeltaSeconds, AimPitchInterpSpeed), -AimPitchClampDegrees, AimPitchClampDegrees);
 	if (!bHasAimTarget && FMath::Abs(AimPitch) < 0.05f)
@@ -896,8 +898,7 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	// No twist while walking a turn-based grid path (the body turns cell by cell along it; user PIE video
 	// AnimOffset_Bug_01 2026-10-08) - it fades back in when he stands. The reference is the pose's own aim direction, the
 	// AO excluded (AOperativeCharacter::GetStanceAimBaseDirection), so the twist never feeds back into its own input.
-	const UTurnBasedCombatSubsystem* TurnBased = Operative.GetWorld() ? Operative.GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
-	const bool bGridWalk = TurnBased && TurnBased->IsActive() && Operative.GetVelocity().SizeSquared2D() > 20.f * 20.f;
+	const bool bGridWalk = TurnBasedMode && TurnBasedMode->IsActive() && Operative.GetVelocity().SizeSquared2D() > 20.f * 20.f;
 	const float RawYaw = bHasAimTarget && bYawPose && !bGridWalk
 		? AimOffsetRules::YawToTarget(Operative.GetStanceAimOrigin(), Operative.GetStanceAimBaseDirection(), AimPoint, 180.f) : 0.f;
 	AimYawTarget = bHasAimTarget && bYawPose && !bGridWalk
@@ -919,6 +920,7 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	State.bVaulting = bIsVaulting;
 	State.bSprinting = bIsSprinting;
 	State.bProne = bIsProne;
+	State.bTurnBasedSuppressed = bAimOffsetTurnBasedOff;
 	State.bDead = bIsDead || bKnockedDown; // Sprint 14: no IK / aim offset while knocked down
 	AimOffsetLinear = AimOffsetRules::StepAlpha(AimOffsetLinear, AimOffsetRules::WantsAimOffset(State), DeltaSeconds, AimOffsetBlendSeconds);
 	AimOffsetAlpha = FMath::SmoothStep(0.f, 1.f, AimOffsetLinear);

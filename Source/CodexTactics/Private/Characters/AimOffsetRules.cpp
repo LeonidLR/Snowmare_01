@@ -13,7 +13,7 @@ namespace AimOffsetRules
 	bool WantsAimOffset(const FAimOffsetState& State)
 	{
 		return State.bEnabled && State.bRangedWeapon && State.bWeaponVisible && !State.bReloading && !State.bUpperBodyAction
-			&& !State.bVaulting && !State.bSprinting && !State.bProne && !State.bDead;
+			&& !State.bVaulting && !State.bSprinting && !State.bProne && !State.bDead && !State.bTurnBasedSuppressed;
 	}
 
 	float StepAlpha(float Current, bool bWanted, float DeltaSeconds, float BlendSeconds)

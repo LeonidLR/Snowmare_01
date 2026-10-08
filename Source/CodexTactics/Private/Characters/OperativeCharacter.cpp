@@ -3850,7 +3850,7 @@ float AOperativeCharacter::GetCornerHoldReachDeg() const
 float AOperativeCharacter::GetAimTwistLimitDeg() const
 {
 	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
-	return Anim && Anim->bAimOffsetYaw && Anim->bAimOffset ? Anim->AimYawClampDegrees : 0.f;
+	return Anim && Anim->bAimOffsetYaw && Anim->bAimOffset && !Anim->bAimOffsetTurnBasedOff ? Anim->AimYawClampDegrees : 0.f;
 }
 
 float AOperativeCharacter::GetShotAimResidualDeg(const FVector& TargetLocation) const
