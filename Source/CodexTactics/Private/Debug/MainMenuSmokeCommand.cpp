@@ -1,8 +1,8 @@
 // Dev-only console command for a headless start-menu check on L_MovementTest (needs -ForceMainMenu):
 //   Scripts/smoke.ps1 -Command CodexTactics.MainMenuSmoke -Extra "-ForceMainMenu"
-// 1. the menu is open and the world paused; 2. «Начать бой» closes it, completes the quest chain, heals / warms the
+// 1. the menu is open and the world paused; 2. "Start Battle" closes it, completes the quest chain, heals / warms the
 // squad and starts the pre-combat cutscene; 3. Ctrl + X (quick restart) reloads straight into combat mode;
-// 4. a normal restart («Начать заново») shows the menu again.
+// 4. a normal restart ("Restart") shows the menu again.
 
 #include "CoreMinimal.h"
 
@@ -117,7 +117,7 @@ namespace MainMenuSmoke
 			State.Stage = 2;
 			State.StageTime = 0.f;
 			return true;
-		case 2: // After «Начать заново»: menu again.
+		case 2: // After "Restart": menu again.
 			if (!bNewWorld)
 			{
 				return true;

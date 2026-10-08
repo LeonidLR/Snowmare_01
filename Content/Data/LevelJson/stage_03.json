@@ -1,17 +1,17 @@
 {
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "stage_03",
-  "level_name": "Бой 3: Вентшахта бункера",
+  "level_name": "Battle 3: Bunker Vent Shaft",
   "stage_number": 3,
   "act": 1,
   "biome_id": "bunker_industrial",
-  "description": "Оборона технического узла рециркуляции воздуха. Прорыв сквозь бреши в обшивке.",
+  "description": "Defending the air recirculation hub. The enemy breaks through gaps in the hull.",
   "prep_phase_duration": 45.0,
   "wave_rest_duration": 15.0,
   "waves": [
     {
       "wave_index": 1,
-      "name": "Волна 1",
+      "name": "Wave 1",
       "max_simultaneous_enemies": 8,
       "spawns": [
         {
@@ -38,7 +38,7 @@
     },
     {
       "wave_index": 2,
-      "name": "Волна 2",
+      "name": "Wave 2",
       "max_simultaneous_enemies": 10,
       "spawns": [
         {
@@ -65,7 +65,7 @@
     },
     {
       "wave_index": 3,
-      "name": "Волна 3",
+      "name": "Wave 3",
       "max_simultaneous_enemies": 12,
       "spawns": [
         {

@@ -1,6 +1,6 @@
 // Dev-only console command for a headless dialogue check on L_MovementTest (needs -ForceMainMenu):
 //   Scripts/smoke.ps1 -Command CodexTactics.DialogueSmoke -Extra "-ForceMainMenu"
-// 1. «Начать игру» opens the intro briefing in the bottom window; 2. Space advances a line, world clicks are blocked,
+// 1. "Start Game" opens the intro briefing in the bottom window; 2. Space advances a line, world clicks are blocked,
 // Esc skips; 2b. no cold accumulates while the window is open, it resumes once closed (user request 2026-10-06);
 // 3. the preparation dialogue plays in the message feed line by line with the Godot delays.
 
@@ -15,6 +15,7 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Core/MissionSubsystem.h"
 #include "Data/DialogueSequenceAsset.h"
+#include "Data/NarrativeManifest.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
@@ -89,8 +90,8 @@ namespace DialogueSmoke
 			}
 			Check(State, Mission->IsMainMenuOpen(), TEXT("menu open"));
 			Mission->StartMission(EMissionStartMode::Game);
-			Check(State, Dialogue->IsDialogueOpen() && Dialogue->GetCurrentSequence()->Lines.Num() == 15, TEXT("intro briefing opened (15 lines)"));
-			Check(State, Dialogue->GetCurrentSequence()->Lines[0].SpeakerName == TEXT("Медик-сапёр"), TEXT("first speaker is the medic-sapper"));
+			Check(State, Dialogue->IsDialogueOpen() && Dialogue->GetCurrentSequence()->Lines.Num() == FNarrativeManifest::Get().Sequences[TEXT("DA_DialogueIntro")].Num(), TEXT("intro briefing opened (line count from the narrative manifest)"));
+			Check(State, Dialogue->GetCurrentSequence()->Lines[0].SpeakerName == TEXT("Medic-Sapper"), TEXT("first speaker is the medic-sapper"));
 			PC->SpacePressed();
 			PC->SpaceReleased();
 			Check(State, Dialogue->GetLineIndex() == 1, TEXT("Space advances a line"));
@@ -130,12 +131,12 @@ namespace DialogueSmoke
 			Next(State);
 			return true;
 		}
-		case 3: // First prep line at once, the second after its 4.5 s delay.
+		case 3: // First prep line at once, the second after its 3.5 s delay.
 			if (State.StageTime < 1.f)
 			{
 				return true;
 			}
-			Check(State, FeedHas(Messages, TEXT("Внимание отряду!")) && !FeedHas(Messages, TEXT("Разворачиваю")), TEXT("first prep line posted, second waits"));
+			Check(State, FeedHas(Messages, TEXT("Alert! Perimeter under threat!")) && !FeedHas(Messages, TEXT("Generator is humming")), TEXT("first prep line posted, second waits"));
 			Next(State);
 			return true;
 		case 4:
@@ -143,7 +144,7 @@ namespace DialogueSmoke
 			{
 				return true;
 			}
-			Check(State, FeedHas(Messages, TEXT("Разворачиваю")), TEXT("second prep line after the delay"));
+			Check(State, FeedHas(Messages, TEXT("Generator is humming")), TEXT("second prep line after the delay"));
 			return Finish(State, true);
 		default:
 			return Finish(State, false);

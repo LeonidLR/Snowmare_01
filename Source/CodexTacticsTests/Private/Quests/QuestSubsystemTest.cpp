@@ -17,7 +17,7 @@ bool FQuestTerminalWithoutGeneratorTest::RunTest(const FString&)
 	const FQuestInteractionResult Result = State.Interact(EInteractableType::GateTerminal);
 	TestEqual(TEXT("No event"), Result.Event, EQuestEvent::None);
 	TestFalse(TEXT("Gate not powered"), State.bIsGatePowered);
-	TestTrue(TEXT("Terminal line"), Result.Text.ToString().Contains(TEXT("обесточена")));
+	TestTrue(TEXT("Terminal line"), Result.Text.ToString().Contains(TEXT("offline")));
 	return true;
 }
 
@@ -27,7 +27,7 @@ bool FQuestVehicleWithoutCanisterTest::RunTest(const FString&)
 	FQuestChainState State;
 	const FQuestInteractionResult Result = State.Interact(EInteractableType::Vehicle);
 	TestFalse(TEXT("No fuel"), State.bHasFuelCanister);
-	TestEqual(TEXT("Medic speaks"), Result.Speaker.ToString(), FString(TEXT("Медик")));
+	TestEqual(TEXT("Medic speaks"), Result.Speaker.ToString(), FString(TEXT("Medic")));
 	return true;
 }
 
@@ -85,15 +85,15 @@ QUEST_TEST(FQuestObjectiveProgressTest, "ObjectiveFollowsChain")
 bool FQuestObjectiveProgressTest::RunTest(const FString&)
 {
 	FQuestChainState State;
-	TestTrue(TEXT("Find canister"), State.GetObjective().ToString().Contains(TEXT("канистру")));
+	TestTrue(TEXT("Find canister"), State.GetObjective().ToString().Contains(TEXT("canister")));
 	State.Interact(EInteractableType::Canister);
-	TestTrue(TEXT("Drain"), State.GetObjective().ToString().Contains(TEXT("БМП")));
+	TestTrue(TEXT("Drain"), State.GetObjective().ToString().Contains(TEXT("APC")));
 	State.Interact(EInteractableType::Vehicle);
-	TestTrue(TEXT("Generator"), State.GetObjective().ToString().Contains(TEXT("генератор")));
+	TestTrue(TEXT("Generator"), State.GetObjective().ToString().Contains(TEXT("Generator")));
 	State.Interact(EInteractableType::Generator);
-	TestTrue(TEXT("Terminal"), State.GetObjective().ToString().Contains(TEXT("пульте")));
+	TestTrue(TEXT("Terminal"), State.GetObjective().ToString().Contains(TEXT("terminal")));
 	State.Interact(EInteractableType::GateTerminal);
-	TestTrue(TEXT("Opening"), State.GetObjective().ToString().Contains(TEXT("открываются")));
+	TestTrue(TEXT("Opening"), State.GetObjective().ToString().Contains(TEXT("opening")));
 	return true;
 }
 

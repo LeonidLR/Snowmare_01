@@ -10,9 +10,9 @@ struct CODEXTACTICS_API FDialogueLine
 {
 	GENERATED_BODY()
 
-	/** Speaker («Командир», «Инженер», «Медик-сапёр», «ШТАБ»…). */
+	/** Speaker ("Commander", "Engineer", "Medic-Sapper", "HQ"...). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Dialogue")
-	FString SpeakerName = TEXT("Командир");
+	FString SpeakerName = TEXT("Commander");
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Dialogue", meta = (MultiLine = "true"))
 	FString Text;
@@ -37,11 +37,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Dialogue")
 	FString Title;
 
-	/** Text of the button on the last line (empty: «Понял! ▶» / «В бой! ▶» by context). */
+	/** Text of the button on the last line (empty: "Understood!" / "To Battle!" by context). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Dialogue")
 	FString CustomFinishButtonText;
 
-	/** The last button reads «🤝 Вступить в отряд». */
+	/** The last button reads "Join the Squad". */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Dialogue")
 	bool bIsRecruitmentDialogue = false;
 

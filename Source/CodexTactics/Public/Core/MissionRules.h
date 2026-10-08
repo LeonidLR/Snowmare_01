@@ -16,7 +16,7 @@ namespace MissionRules
 	/** A fallen operative at or above this cold died of hypothermia (Godot cold_level >= 99). */
 	constexpr float FrozenDeathColdLevel = 99.f;
 
-	/** Objective when the mission starts in «Начать игру» (Godot _on_start_game_pressed). */
+	/** Objective when the mission starts in "Start Game" (Godot _on_start_game_pressed). */
 	CODEXTACTICS_API FText GetStartObjective();
 
 	/** Objective and commander radio line for a start mode (Game; Combat: empty, the flow sets the objective). */
@@ -25,7 +25,7 @@ namespace MissionRules
 
 	/**
 	 * Mode to start at once without the menu, or None to show the main menu.
-	 * Quick restart (Ctrl + X) repeats the last mode; bSkipMenu (headless checks, -NoMainMenu) starts «Начать игру».
+	 * Quick restart (Ctrl + X) repeats the last mode; bSkipMenu (headless checks, -NoMainMenu) starts "Start Game".
 	 */
 	CODEXTACTICS_API EMissionStartMode GetAutoStartMode(bool bQuickRestart, EMissionStartMode LastMode, bool bSkipMenu);
 
@@ -43,7 +43,7 @@ namespace MissionRules
 	/** Objective after the victory dialogue. */
 	CODEXTACTICS_API FText GetAfterVictoryObjective();
 
-	/** «ОБОРОНА: Отразить волну N! Врагов: M». */
+	/** "DEFENSE: Repel wave N! Enemies: M". */
 	CODEXTACTICS_API FText GetWaveObjective(int32 WaveIndex, int32 EnemyCount);
 
 	/** Mission failed reason for the fallen operative (hypothermia or wounds). */

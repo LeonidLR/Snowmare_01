@@ -2,12 +2,36 @@
 #include "Subsystems/CodexEventBus.h"
 #include "CodexTactics.h"
 #include "Data/DialogueSequenceAsset.h"
+#include "Data/NarrativeManifest.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
+#include "UObject/Package.h"
+
+const UDialogueSequenceAsset* UDialogueSubsystem::ResolveSequence(const UDialogueSequenceAsset* Sequence)
+{
+	// Runtime-built sequences (recruitment etc.) live in the transient package and carry their own English text.
+	if (!Sequence || Sequence->GetPackage() == GetTransientPackage())
+	{
+		return Sequence;
+	}
+	const FString SequenceId = Sequence->GetName();
+	TArray<FString> Warnings;
+	UDialogueSequenceAsset* Resolved = NewObject<UDialogueSequenceAsset>(this);
+	Resolved->Lines = FNarrativeManifest::Get().BuildLines(SequenceId, Sequence->Lines, Warnings);
+	Resolved->Title = FNarrativeManifest::EnglishOr(Sequence->Title, SequenceId);
+	Resolved->CustomFinishButtonText = FNarrativeManifest::EnglishOr(Sequence->CustomFinishButtonText, FString());
+	Resolved->bIsRecruitmentDialogue = Sequence->bIsRecruitmentDialogue;
+	for (const FString& Warning : Warnings)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("Narrative: %s"), *Warning);
+	}
+	return Resolved;
+}
 
 void UDialogueSubsystem::StartDialogue(const UDialogueSequenceAsset* Sequence, FSimpleDelegate OnFinished)
 {
+	Sequence = ResolveSequence(Sequence);
 	if (!Sequence || Sequence->Lines.IsEmpty())
 	{
 		OnFinished.ExecuteIfBound();
@@ -60,6 +84,7 @@ void UDialogueSubsystem::Close()
 void UDialogueSubsystem::PlayInFeed(const UDialogueSequenceAsset* Sequence, FSimpleDelegate OnFinished)
 {
 	++FeedPlayId;
+	Sequence = ResolveSequence(Sequence);
 	FeedSequence = Sequence;
 	OnFeedFinished = OnFinished;
 	if (!Sequence || Sequence->Lines.IsEmpty())
@@ -86,7 +111,7 @@ void UDialogueSubsystem::PostNextFeedLine(int32 PlayId, int32 Index)
 	const FDialogueLine& Line = FeedSequence->Lines[Index];
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Messages->PostMessage(FText::FromString(Line.SpeakerName.IsEmpty() ? TEXT("Командир") : Line.SpeakerName), FText::FromString(Line.Text));
+		Messages->PostMessage(FText::FromString(Line.SpeakerName.IsEmpty() ? TEXT("Commander") : Line.SpeakerName), FText::FromString(Line.Text));
 	}
 	FTimerHandle Handle;
 	GetWorld()->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateUObject(this, &UDialogueSubsystem::PostNextFeedLine, PlayId, Index + 1),

@@ -17,7 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMainMenuChanged, bool, bOpen);
 /**
  * Mission-level state: the main menu (start mode), the objective banner text, mission failure and restart.
  * The menu opens when a level starts unless Ctrl + X restarted it (same mode again) or the command line skips it
- * (-ExecCmds / -NoMainMenu: headless checks start «Начать игру»; -ForceMainMenu keeps it). The world is paused while
+ * (-ExecCmds / -NoMainMenu: headless checks start "Start Game"; -ForceMainMenu keeps it). The world is paused while
  * the menu is open.
  * The objective follows the quest chain in exploration and the game flow in combat (preparation, wave, victory).
  * Godot reference: Scenes/movements/main.gd update_objective, _update_objective_by_state, _check_squad_vital_signs,
@@ -42,11 +42,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Mission")
 	EMissionStartMode GetStartMode() const { return StartMode; }
 
-	/** Tag of the actor marking where «Начать бой» puts the squad (behind the gate; Godot hard-coded (0, -18)). */
+	/** Tag of the actor marking where "Start Battle" puts the squad (behind the gate; Godot hard-coded (0, -18)). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Mission")
 	FName CombatStartTag = TEXT("CombatStart");
 
-	/** Objective banner text without the «ЦЕЛЬ: » prefix. */
+	/** Objective banner text without the "OBJECTIVE: " prefix. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Mission")
 	FText GetObjective() const { return Objective; }
 
@@ -65,7 +65,7 @@ public:
 
 	/**
 	 * Reloads the current level (Godot reload_current_scene). bQuick (Ctrl + X) starts the same mode again without
-	 * the menu; «Начать заново» shows the menu.
+	 * the menu; "Restart" shows the menu.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Mission")
 	void RestartMission(bool bQuick = false);
@@ -94,7 +94,7 @@ private:
 	const class UDialogueSequenceAsset* LoadDialogue(TSoftObjectPtr<UDialogueSequenceAsset> ACodexTacticsGameMode::* Member) const;
 	void PostRadio(const FText& Speaker, const FText& Text) const;
 	void HandleVictoryDialogueFinished();
-	/** «Начать бой»: quest chain done, gate open, squad healed / warmed behind the gate, pre-combat cutscene. */
+	/** "Start Battle": quest chain done, gate open, squad healed / warmed behind the gate, pre-combat cutscene. */
 	void StartCombatMode();
 
 	FText Objective;

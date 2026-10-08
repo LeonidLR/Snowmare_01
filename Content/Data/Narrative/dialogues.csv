@@ -1,0 +1,59 @@
+SequenceID,LineIndex,Speaker_RU,Speaker_EN,Text_RU,Text_EN,DelayAfter,Mood,ContextNotes
+DA_DialogueIntro,1,Медик-сапёр,Medic-Sapper,"(поправляя тяжелый рюкзак с медикаментами и минами)
+
+Ну и глушь. Командир, объясни на милость, за каким чёртом нас сюда приволокли? Тут же даже вороны не летают.","(adjusting her heavy backpack with medical supplies and mines)
+
+What a wasteland. Commander, explain for pity's sake, why the hell did they drag us out here? Not even crows fly in this place.",4.0,Exhausted / Suspicious,Drop point at Checkpoint
+DA_DialogueIntro,2,Командир,Commander,"(останавливается, сверяется с планшетом)
+
+А ты сама напряги память, Соколова. Кто из вас вообще в курсе, что такое объект «Сектор-17»?","(stops, checking his tactical tablet)
+
+Rack your memory, Sokolova. Do any of you even know what Sector-17 is?",4.0,Calm / Commanding,Mission opening dialog
+DA_DialogueIntro,3,Инженер,Engineer,"(поправляет очки под баллистической маской, нервно)
+
+Я слышал, товарищ капитан. На полигоне ребята шептались… Говорили, в советские годы здесь был закрытый наукоград. Разрабатывали закрытые системы связи и тренировали специалистов глубокого внедрения. А в прошлом году объект якобы экстренно законсервировали.","(adjusts glasses under ballistic mask, nervously)
+
+I've heard, Captain. Back at the proving ground, the boys were whispering... They said during Soviet times this was a classified science enclave. Developing secure comms networks and training deep-cover operatives. And last year it was mothballed in an emergency.",4.5,Nervous / Academic,Historical lore
+DA_DialogueIntro,4,Командир,Commander,"(усмехается)
+
+Смотрю, институтские слухи до сих пор опережают официальные сводки. А ты что скажешь, Соколова?","(chuckles)
+
+I see institute rumors still outpace official dispatches. What about you, Sokolova?",3.5,Skeptical,Addressing Sokolova
+DA_DialogueIntro,5,Медик-сапёр,Medic-Sapper,"(сухо перебивает, проверяя полевую аптечку и детонаторы)
+
+В прошлом году этот сектор с воздуха утюжили так, что земля ходила ходуном. А по закрытой директиве округа город закрыли на глухой карантин: якобы вспышка боевого штамма. По периметру пулемётные кордоны, приказ стрелять без предупреждения. Нам тут только биооружия не хватало.","(bluntly cuts in, inspecting field medkit and detonators)
+
+Last year they hammered this sector from the air so hard the ground shook for miles. Then under a classified district directive, the town was locked in quarantine: supposed outbreak of a weaponized strain. Machine gun cordons on the perimeter, orders to shoot on sight. Biological warfare is the last thing we need.",4.5,Somber / Warning,Biohazard threat
+DA_DialogueIntro,6,Командир,Commander,"Именно. Для внешнего мира здесь эпидемиологический ад и запретная зона. Так что никаких иллюзий и мародерства — с баулами отсюда никто не выйдет. Генерал в штабе нам сувениров собирать не разрешал.","Precisely. To the outside world, this is an epidemiological nightmare and an exclusion zone. So drop any scavenging fantasies — nobody walks out of here with bags of loot. The General at HQ strictly forbade trophy hunting.",4.0,Stern,Mission briefing
+DA_DialogueIntro,7,Инженер,Engineer,"(срывается на фальцет, эмоционально)
+
+Товарищ капитан, постойте! В управлении перед отправкой нам чётко заявили: технический персонал привлекается только для тыловой экспертизы! Меня выдернули прямо из лаборатории, по закону о статусе специалистов меня не имели права бросать в зону поражения! Это грубейшее нарушение регламента и моих гражданских прав! Я требую зафиксировать рапорт…","(breaks into falsetto, agitated)
+
+Comrade Captain, wait! At Directorate before deployment, they explicitly stated: technical personnel are strictly rear-echelon consultants! They pulled me straight from the research lab! Under civil specialist protection laws, they had zero right to deploy me into a hot zone! This is an outrageous violation of protocol and my rights! I demand a formal protest report...",5.0,Hysterical / Protesting,Engineer panic
+DA_DialogueIntro,8,Командир,Commander,"(разворачивается к нему, голос тихий, жесткий)
+
+Ветров, дыши глубже. О своих нарушенных правах и злых военкомах напишешь заявление в профсоюз, когда вернемся. А сейчас твоя единственная обязанность — молчать, держать уши открытыми и шагать след в след за мной. Нытьё прекратить. Слушать боевую задачу.
+
+(Бойцы собираются полукругом вокруг командира).","(turns around slowly, tone hushed and ice-cold)
+
+Vetrov, take a deep breath. You can file a grievance with the union about your civil rights and cruel recruiters when we return. Right now, your sole duty is to shut your mouth, keep your ears open, and step in my exact footprints. Cease whining. Listen to the mission objective.
+
+(Operatives gather around the commander).",5.0,Cold / Firm,Suppressing panic
+DA_DialogueIntro,9,Командир,Commander,"Два дня назад в город зашла передовая группа зарубежных наблюдателей из сводного корпуса. Четыре человека: трое оперативников и женщина-аналитик. Спустя шесть часов после высадки они передали, что внутри творится необъяснимая чертовщина, после чего связь оборвалась.","Two days ago, an advance team of international observers from the joint corps entered the city. Four people: three operators and a female intelligence analyst. Six hours post-insertion, they transmitted that inexplicable madness was unfolding inside, and all comms went dead.",4.5,HQ Intel,Operation mission
+DA_DialogueIntro,10,Медик-сапёр,Medic-Sapper,"Мутанты? Радиация? Или та самая зараза из лабораторий?","Mutants? Radiation? Or that laboratory contagion?",3.0,Wary,Question
+DA_DialogueIntro,11,Командир,Commander,"Что угодно. Поэтому мы здесь:
+
+• Задача номер один: скрытно выдвинуться по маршруту, провести разведку и найти пропавшую группу. Или то, что от неё осталось.
+
+• Задача номер два: по разведданным, в центре города находится неразрушенный подземный лабораторный комплекс. Наша цель — найти вход, проникнуть внутрь и удерживать периметр до подхода основных сил с бронетехникой.","Could be anything. That's why we're here:
+
+• Priority One: Move covertly along the route, conduct reconnaissance, and locate the missing team. Or whatever is left of them.
+
+• Priority Two: Intel suggests an intact subterranean research complex lies in the city center. Our objective is to locate the entrance, breach the facility, and hold the perimeter until armored reinforcements arrive.",5.5,Combat Directive,Objectives 1 and 2
+DA_DialoguePrep,1,Командир,Commander,"Внимание, периметр под угрозой! Занять оборонительные рубежи, проверить оружие и расставить баррикады.","Alert! Perimeter under threat! Take defensive positions, check weapons, and deploy barricades.",3.5,Commanding,Wave prep phase
+DA_DialoguePrep,2,Инженер,Engineer,"Генератор запустил, но сеть перегружена! Нам нужно продержаться до стабилизации напряжения.","Generator is humming, but the power grid is overloaded! We need to hold out until voltage stabilizes.",3.5,Nervous,Power timer warning
+DA_DialogueWaveRest,1,Медик-сапёр,Medic-Sapper,"Первая волна отбита, но они перегруппировываются! Всем перевязать раны и распределить боезапас.","First wave repelled, but they are regrouping! Patch your wounds and redistribute ammunition.",4.0,Relieved / Cautious,Between waves rest
+DA_DialogueVictory,1,Командир,Commander,"Сектор зачищен. Отличная работа, отряд. Доложить в штаб: первая линия обороны удержана.","Sector clear. Outstanding work, squad. Report to HQ: first defensive line held.",4.0,Victorious,Wave victory
+DA_DialogueSusaninRecruitment,1,Сусанин,Susanin,"(хрипит из-за решетки) Не стреляйте, служивые! Я здешний, знаю все тропы в обход мутантов и минных полей. Вытащите меня — я выведу вас к бункеру!","(rasps from behind the barred gate) Don't shoot, soldiers! I'm local, I know all the secret trails around the mutants and minefields. Get me out of here — and I'll lead you right to the bunker!",4.5,Desperate plea,Encounter with guide Susanin
+DA_DialogueSusaninRecruitment,2,Командир,Commander,"Кто ты такой и откуда знаешь про подземный комплекс?","Who are you, and how do you know about the underground facility?",3.0,Interrogation,Checking trust
+DA_DialogueSusaninRecruitment,3,Сусанин,Susanin,"Я на этом объекте двадцать лет старшим механиком оттрубил. Каждый кабельный коллектор на ощупь знаю. Возьмите с собой, иначе все в мерзлоте ляжете!","I spent twenty years as chief mechanic on this installation! I know every cable conduit blindfolded. Take me with you, or you'll all freeze to death in this permafrost!",4.0,Persuasive,Recruitment deal

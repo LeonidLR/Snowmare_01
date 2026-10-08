@@ -1,8 +1,8 @@
 // Dev-only console command for a headless phase-banner check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.BannersSmoke
 // 1. the gate opens -> cutscene card with a countdown; Space skips it; 2. the squad starts the preparation warm and
-// healed; 3. preparation banner «ПОДГОТОВКА К БОЮ»; «Начать бой» -> wave banner «ВОЛНА 1 | ВРАГОВ ОСТАЛОСЬ»;
-// 4. tactical pause -> «РЕЖИМ ПРИКАЗОВ» banner.
+// healed; 3. preparation banner "BATTLE PREPARATION"; "Start Battle" -> wave banner "WAVE 1 | ENEMIES LEFT";
+// 4. tactical pause -> "ORDER MODE" banner.
 
 #include "CoreMinimal.h"
 
@@ -100,7 +100,7 @@ namespace BannersSmoke
 				}
 				Check(State, bFresh, TEXT("squad warm and healed for the preparation"));
 			}
-			Check(State, Banners->GetCombatText().ToString().StartsWith(TEXT("⏱ ПОДГОТОВКА К БОЮ: ")), Banners->GetCombatText().ToString());
+			Check(State, Banners->GetCombatText().ToString().StartsWith(TEXT("⏱ BATTLE PREPARATION: ")), Banners->GetCombatText().ToString());
 			Flow->FinishPreparation();
 			Next(State);
 			return true;
@@ -109,10 +109,10 @@ namespace BannersSmoke
 			{
 				return true;
 			}
-			Check(State, Banners->GetCombatText().ToString().StartsWith(TEXT("⚔️ ВОЛНА 1 | ВРАГОВ ОСТАЛОСЬ: ")), Banners->GetCombatText().ToString());
+			Check(State, Banners->GetCombatText().ToString().StartsWith(TEXT("⚔️ WAVE 1 | ENEMIES LEFT: ")), Banners->GetCombatText().ToString());
 			PC->SpacePressed();
 			PC->SpaceReleased();
-			Check(State, Banners->GetPauseText().ToString().StartsWith(TEXT("⏱️ РЕЖИМ ПРИКАЗОВ | Зарядов в волне: 2/3")), Banners->GetPauseText().ToString());
+			Check(State, Banners->GetPauseText().ToString().StartsWith(TEXT("⏱️ ORDER MODE | Charges per wave: 2/3")), Banners->GetPauseText().ToString());
 			return Finish(State, true);
 		default:
 			return Finish(State, false);

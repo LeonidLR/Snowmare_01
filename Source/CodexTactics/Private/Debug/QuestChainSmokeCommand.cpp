@@ -89,7 +89,7 @@ namespace QuestChainSmoke
 			}
 			else if (Interactions->IsActionMenuOpen())
 			{
-				// The player's menu buttons: a greyed-out action (e.g. «Нужна емкость») is closed, otherwise confirmed.
+				// The player's menu buttons: a greyed-out action (e.g. "Need a container") is closed, otherwise confirmed.
 				const FActionMenuSpec& Menu = Interactions->GetActionMenu();
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke menu \"%s\" button \"%s\"%s"), *Menu.Title.ToString(),
 					*Menu.ConfirmText.ToString(), Menu.bConfirmDisabled ? TEXT(" (disabled -> cancel)") : TEXT(""));

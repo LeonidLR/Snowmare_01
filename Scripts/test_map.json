@@ -102,7 +102,7 @@
     },
     {
       "name": "narrative-dialogue",
-      "globs": ["Source/**/Interactables/Narrative*", "Source/**/Quests/DialogueTrigger*", "Source/**/UI/Dialogue*", "Source/**/Data/DialogueSequence*"],
+      "globs": ["Source/**/Interactables/Narrative*", "Source/**/Quests/DialogueTrigger*", "Source/**/UI/Dialogue*", "Source/**/Data/DialogueSequence*", "Source/**/Data/NarrativeManifest*", "Content/Data/Narrative/**", "Scripts/Narrative/**"],
       "tests": ["CodexTactics.Dialogue"],
       "smokes": ["NarrativeSmoke", "DialogueSmoke"]
     },

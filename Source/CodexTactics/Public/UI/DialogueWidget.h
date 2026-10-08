@@ -9,8 +9,8 @@ class UButton;
 class UTextBlock;
 
 /**
- * Bottom dialogue window: speaker card (portrait tag, name, role, role colours), «РАЗГОВОР» badge, [N / M] progress,
- * the line, hint, «Пропустить» / «Далее» buttons. Mirrors UDialogueSubsystem; a click on the panel also advances.
+ * Bottom dialogue window: speaker card (portrait tag, name, role, role colours), "DIALOGUE" badge, [N / M] progress,
+ * the line, hint, "Skip" / "Next" buttons. Mirrors UDialogueSubsystem; a click on the panel also advances.
  * Built in C++; a Widget Blueprint subclass can restyle it by naming its widgets DialogCard, DialogPortraitText,
  * DialogNameText, DialogRoleText, DialogProgressText, DialogSpeechText, DialogSkipButton, DialogNextButton, DialogNextText.
  * Godot reference: Scenes/ui/dialogue/bottom_dialogue_dialog.gd (860 x 185, 20 px above the bottom edge).

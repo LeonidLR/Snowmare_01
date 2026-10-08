@@ -21,7 +21,7 @@ enum class ENarrativeType : uint8
 /**
  * A readable note / signpost / poster (Godot Scenes/movements/narrative_element.gd, main.gd _trigger_menu_for_object
  * narrative branch): a marker is visible from afar; within ReadableDistance of the leader the text shows in the world;
- * a click walks the leader up and opens «📜 Title» with the text, «Прочитать вслух» posts it to the feed.
+ * a click walks the leader up and opens «📜 Title» with the text, "Read Aloud" posts it to the feed.
  */
 UCLASS(Blueprintable)
 class CODEXTACTICS_API ANarrativeElementActor : public AInteractableActor
@@ -46,13 +46,13 @@ public:
 	bool bInWorldText = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Narrative")
-	FString Title = TEXT("Записка часового");
+	FString Title = TEXT("Sentry's Note");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Narrative", meta = (MultiLine = "true"))
-	FString ContentText = TEXT("Текст записки...");
+	FString ContentText = TEXT("Note text...");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Narrative")
-	FString AuthorOrSource = TEXT("КПП «Северный Рубеж»");
+	FString AuthorOrSource = TEXT("Northern Line Checkpoint");
 
 	/** In-world text height above the element, cm (Godot text_offset_y 1.2 m). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Narrative")
@@ -63,6 +63,12 @@ public:
 
 	/** Godot _get_type_icon. */
 	FString GetTypeIcon() const;
+	/**
+	 * Title / content / source as shown to the player: the authored text when it is English, otherwise the narrative
+	 * manifest sequence named like this actor (line 1 speaker_en = title, text_en = content, line 2 speaker_en = source),
+	 * otherwise "[EN missing: <ActorName>#1]".
+	 */
+	void GetEnglishTexts(FString& OutTitle, FString& OutContent, FString& OutSource) const;
 	/** The leader is within ReadableDistance now. */
 	bool IsReadableNow() const;
 };

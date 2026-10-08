@@ -1,17 +1,17 @@
 {
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "stage_11",
-  "level_name": "Бой 11: Криокамера реактора",
+  "level_name": "Battle 11: Reactor Cryochamber",
   "stage_number": 11,
   "act": 3,
   "biome_id": "core_citadel",
-  "description": "Сверхнизкие температуры аварийного охладителя. Элитные штурмовые волны.",
+  "description": "Ultra-low temperatures of the emergency coolant. Elite assault waves.",
   "prep_phase_duration": 45.0,
   "wave_rest_duration": 15.0,
   "waves": [
     {
       "wave_index": 1,
-      "name": "Волна 1",
+      "name": "Wave 1",
       "max_simultaneous_enemies": 8,
       "spawns": [
         {
@@ -45,7 +45,7 @@
     },
     {
       "wave_index": 2,
-      "name": "Волна 2",
+      "name": "Wave 2",
       "max_simultaneous_enemies": 10,
       "spawns": [
         {
@@ -79,7 +79,7 @@
     },
     {
       "wave_index": 3,
-      "name": "Волна 3",
+      "name": "Wave 3",
       "max_simultaneous_enemies": 12,
       "spawns": [
         {
@@ -113,7 +113,7 @@
     },
     {
       "wave_index": 4,
-      "name": "Волна 4",
+      "name": "Wave 4",
       "max_simultaneous_enemies": 14,
       "spawns": [
         {
