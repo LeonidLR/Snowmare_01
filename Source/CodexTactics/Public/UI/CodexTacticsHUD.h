@@ -277,6 +277,8 @@ private:
 	void DrawCombatModeBadge();
 	/** Per-operative fire posture marker over every living operative (letter P / D / A in the posture colour). */
 	void DrawPostureMarkers();
+	/** Sprint 14: «[KNOCKED DOWN]» badge + recovery bar over every knocked-down unit (squad and enemies). */
+	void DrawKnockdownBars();
 	/** Horde warning (UHordeSubsystem): «HORDE!» banner, distance, and an arrow at the screen edge towards it. */
 	void DrawHordeWarning();
 	/** Colour of a fire posture on the HUD (Passive grey, Defensive amber, Aggressive red). */

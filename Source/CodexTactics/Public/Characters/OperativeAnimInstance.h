@@ -419,6 +419,13 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
 	bool bIsDead = false;
 
+	/**
+	 * Sprint 14: in a knockdown (fall / downed / get-up; the clips play on FullBodySlot from UKnockdownComponent): no aim,
+	 * no left-hand IK / aim offset, no upper-body clips, no stance transitions.
+	 */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
+	bool bKnockedDown = false;
+
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
 	EColdTier ColdTier = EColdTier::Normal;
 

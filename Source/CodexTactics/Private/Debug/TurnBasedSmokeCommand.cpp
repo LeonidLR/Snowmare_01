@@ -167,7 +167,9 @@ namespace TurnBasedSmoke
 					State.bAttackClipSeen |= Anim->bIsAttacking && Anim->GetSlotMontageGlobalWeight(Anim->OneShotSlot) > 0.5f;
 				}
 			}
-			if (TurnBased->GetRound() < 2 || TurnBased->GetPhase() != ETurnPhase::Squad || TurnBased->IsUnitMoving())
+			// Sprint 14: the brute's blow knocks the bitten operative down; on his turn he gets up first (2 AP).
+			if (TurnBased->GetRound() < 2 || TurnBased->GetPhase() != ETurnPhase::Squad || TurnBased->IsUnitMoving()
+				|| TurnBased->IsActiveUnitKnockedDown())
 			{
 				return true;
 			}

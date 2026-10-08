@@ -1,4 +1,6 @@
 #include "Characters/EnemyCharacter.h"
+#include "Combat/KnockdownComponent.h"
+#include "Combat/KnockdownRules.h"
 #include "AI/PatrolRouteActor.h"
 #include "AI/WorldAIPauseSubsystem.h"
 #include "Data/EnemyPerception.h"
@@ -57,6 +59,8 @@ AEnemyCharacter::AEnemyCharacter()
 	Movement->MaxWalkSpeed = 300.f;
 
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+	KnockdownComponent = CreateDefaultSubobject<UKnockdownComponent>(TEXT("KnockdownComponent"));
+	KnockdownComponent->bCanBeKnockedDown = false; // ConfigureKnockdown by archetype
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
@@ -84,8 +88,13 @@ void AEnemyCharacter::BeginPlay()
 		HealthComponent->OnDiedNative.AddUObject(this, &AEnemyCharacter::HandleDied);
 		HealthComponent->OnDamaged.AddDynamic(this, &AEnemyCharacter::HandleDamaged);
 	}
+	if (KnockdownComponent)
+	{
+		KnockdownComponent->OnPhaseChanged.AddUObject(this, &AEnemyCharacter::HandleKnockdownPhase);
+	}
 
 	ApplyArchetypeDefaults();
+	ConfigureKnockdown();
 	InitPatrol();
 }
 
@@ -93,6 +102,80 @@ void AEnemyCharacter::InitializeArchetype(EEnemyArchetype InArchetype)
 {
 	Archetype = InArchetype;
 	ApplyArchetypeDefaults();
+	ConfigureKnockdown();
+}
+
+void AEnemyCharacter::ConfigureKnockdown()
+{
+	if (!KnockdownComponent)
+	{
+		return;
+	}
+	// Humanoid UE4-mannequin rigs with their own copies of the clips (Scripts/Editor/import_knockdown_animations.py). The
+	// hound (dog rig) and the cutter (it pounces itself) never fall; the marksman keeps its prone / kiting logic.
+	switch (Archetype)
+	{
+	case EEnemyArchetype::Frostbitten:
+		KnockdownComponent->bCanBeKnockedDown = true;
+		KnockdownComponent->bHeavyPoise = false;
+		KnockdownComponent->SetClipFolder(TEXT("Frostbitten"), false);
+		break;
+	case EEnemyArchetype::Brute:
+		KnockdownComponent->bCanBeKnockedDown = true;
+		KnockdownComponent->bHeavyPoise = true; // spec: only blasts and critical heavy hits floor a Frost Brute
+		KnockdownComponent->SetClipFolder(TEXT("Brute"), false);
+		break;
+	default:
+		KnockdownComponent->bCanBeKnockedDown = false;
+		break;
+	}
+}
+
+bool AEnemyCharacter::IsKnockedDown() const
+{
+	return KnockdownComponent && KnockdownComponent->IsDown();
+}
+
+void AEnemyCharacter::HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase)
+{
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (OldPhase == EKnockdownPhase::None && NewPhase != EKnockdownPhase::None)
+	{
+		if (AController* C = GetController())
+		{
+			C->StopMovement();
+		}
+		GetCharacterMovement()->StopMovementImmediately();
+		GetCharacterMovement()->DisableMovement();
+		KnockdownSavedPawnResponse = Capsule->GetCollisionResponseToChannel(ECC_Pawn);
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("KNOCKED DOWN"), FLinearColor(1.f, 0.7f, 0.2f));
+	}
+	else if (NewPhase == EKnockdownPhase::None && OldPhase != EKnockdownPhase::None && !bIsDying)
+	{
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, KnockdownSavedPawnResponse);
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	}
+}
+
+void AEnemyCharacter::TryKnockDownOperative(AOperativeCharacter* Operative, float DamageDealt)
+{
+	UKnockdownComponent* Knockdown = Operative ? Operative->KnockdownComponent.Get() : nullptr;
+	if (!Knockdown || DamageDealt <= 0.f)
+	{
+		return; // dodged
+	}
+	if (Archetype == EEnemyArchetype::Brute)
+	{
+		Knockdown->TryKnockDown(EKnockdownCause::HeavyMelee, GetActorLocation(), DamageDealt);
+	}
+	else if (Archetype == EEnemyArchetype::FrostHound
+		&& KnockdownRules::IsHoundPounce(KnockdownRules::GetConfig(), RunUpSeconds, SecondsSinceHoundPounce)
+		&& Knockdown->TryKnockDown(EKnockdownCause::Pounce, GetActorLocation(), DamageDealt))
+	{
+		SecondsSinceHoundPounce = 0.f;
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("POUNCE!"), FLinearColor(1.f, 0.35f, 0.1f));
+	}
 }
 
 void AEnemyCharacter::ApplyArchetypeDefaults()
@@ -337,6 +420,10 @@ void AEnemyCharacter::Tick(float DeltaTime)
 		SetActorLocation(StepOff, false, nullptr, ETeleportType::TeleportPhysics);
 		UE_LOG(LogCodexTactics, Display, TEXT("[Vault] %s jumped off an obstacle top"), *GetName());
 	}
+	// Sprint 14: hound pounce run-up (full speed for a while) and its cooldown.
+	const float MaxSpeed = GetCharacterMovement() ? GetCharacterMovement()->MaxWalkSpeed : 0.f;
+	RunUpSeconds = MaxSpeed > 0.f && GetVelocity().Size2D() >= MaxSpeed * 0.7f ? RunUpSeconds + DeltaTime : FMath::Max(0.f, RunUpSeconds - DeltaTime * 2.f);
+	SecondsSinceHoundPounce += DeltaTime;
 	TickBehavior(DeltaTime);
 	UpdateMovementFacing(DeltaTime);
 }
@@ -367,9 +454,9 @@ void AEnemyCharacter::UpdateMovementFacing(float DeltaTime)
 
 void AEnemyCharacter::TickBehavior(float DeltaTime)
 {
-	if (bIsDying || !HealthComponent || !HealthComponent->IsAlive())
+	if (bIsDying || !HealthComponent || !HealthComponent->IsAlive() || IsKnockedDown())
 	{
-		return;
+		return; // knocked down: lies until the knockdown component gets it up
 	}
 	AAIController* AIC = Cast<AAIController>(GetController());
 
@@ -755,6 +842,17 @@ AActor* AEnemyCharacter::FindTarget() const
 	const int32 Index = EnemyAIRules::SelectTarget(AIConfig, EnemyAIRules::IsSmallEnemy(Archetype), Feet, Candidates, bTurretHit);
 	if (Actors.IsValidIndex(Index))
 	{
+		// Sprint 14: a melee enemy goes for a knocked-down operative close by (melee bonus); spitters keep their pick.
+		const bool bMelee = Archetype != EEnemyArchetype::Spitter && Archetype != EEnemyArchetype::Marksman;
+		const float CurrentDistance = FVector::Dist2D(Feet, Actors[Index]->GetActorLocation());
+		for (AOperativeCharacter* Member : Known)
+		{
+			if (Member != Actors[Index] && Member->IsKnockedDown()
+				&& KnockdownRules::PreferDownedTarget(KnockdownRules::GetConfig(), bMelee, FVector::Dist2D(Feet, Member->GetActorLocation()), CurrentDistance))
+			{
+				return Member;
+			}
+		}
 		return Actors[Index];
 	}
 	// Everything skipped: never stand idle — hunt the nearest living operative it knows about.
@@ -1035,6 +1133,14 @@ void AEnemyCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDamage)
 	if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
 	{
 		Anim->NotifyHit();
+	}
+	// Sprint 14: a single hit of >= 40 HP knocks a Frostbitten down (a Brute only when it is critical); blasts go through
+	// UKnockdownComponent::NotifyExplosion. The shooter is unknown here: the closest operative gives the direction.
+	if (KnockdownComponent && HealthComponent && HealthComponent->IsAlive() && Spec.DamageType != EDamageType::Explosive)
+	{
+		const AActor* Closest = FindClosestSquadMember();
+		KnockdownComponent->TryKnockDown(EKnockdownCause::HeavyHit, Closest ? Closest->GetActorLocation() : GetActorLocation() + GetActorForwardVector() * 100.f,
+			FinalDamage, Spec.bIsCritical);
 	}
 	OnHitReaction(FinalDamage);
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
@@ -1813,7 +1919,8 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	// Godot _attack_target -> player.gd take_damage (dodge, stance, fortitude) for operatives.
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Target))
 	{
-		Operative->TakeHit(FinalDamage, EnemyDisplayName, bIsCrit, false, this, bIsCrit ? CritMultiplier : 1.f);
+		const float Dealt = Operative->TakeHit(FinalDamage, EnemyDisplayName, bIsCrit, false, this, bIsCrit ? CritMultiplier : 1.f);
+		TryKnockDownOperative(Operative, Dealt); // Sprint 14: Brute heavy melee / hound pounce
 		// Godot enemy_frostbitten.gd _attack_target: the blow shoves the operative 2.5 m/s away (velocity added).
 		FVector Push = Operative->GetActorLocation() - GetActorLocation();
 		Push.Z = 0.f;
@@ -2018,7 +2125,11 @@ void AEnemyCharacter::ApplyJumpImpactDamage()
 			const FVector Position = GodotPosition(Member);
 			if (FVector::Dist(Feet, Position) <= JumpDamageRadius && FMath::Abs(Feet.Z - Position.Z) <= 150.f)
 			{
-				Member->TakeHit(Damage, EnemyDisplayName, bIsCrit, false, this);
+				// Sprint 14: the pounce landing knocks him down (dodged: no hit, no fall).
+				if (Member->TakeHit(Damage, EnemyDisplayName, bIsCrit, false, this) > 0.f && Member->KnockdownComponent)
+				{
+					Member->KnockdownComponent->TryKnockDown(EKnockdownCause::Pounce, GetActorLocation());
+				}
 				bHitAny = true;
 			}
 		}

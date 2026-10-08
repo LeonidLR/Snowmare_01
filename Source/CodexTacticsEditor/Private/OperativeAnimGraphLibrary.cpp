@@ -20,6 +20,7 @@
 #include "AnimGraphNode_Slot.h"
 #include "AnimGraphNode_UseCachedPose.h"
 #include "Animation/AnimBlueprint.h"
+#include "Animation/AnimMontage.h"
 #include "Animation/BlendSpace.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraphSchema_K2.h"
@@ -680,5 +681,21 @@ bool UOperativeAnimGraphLibrary::FillDirectionalBlendSpace(UBlendSpace* BlendSpa
 	BlendSpace->PostEditChange();
 	BlendSpace->MarkPackageDirty();
 	OutReport = FString::Printf(TEXT("%s: %d samples, speed 0..%.0f"), *BlendSpace->GetName(), BlendSpace->GetNumberOfBlendSamples(), MaxSpeed);
+	return true;
+}
+
+bool UOperativeAnimGraphLibrary::SetMontageSlot(UAnimMontage* Montage, FName SlotName)
+{
+	if (!Montage || SlotName.IsNone() || Montage->SlotAnimTracks.IsEmpty())
+	{
+		return false;
+	}
+	Montage->Modify();
+	for (FSlotAnimationTrack& Track : Montage->SlotAnimTracks)
+	{
+		Track.SlotName = SlotName;
+	}
+	Montage->PostEditChange();
+	Montage->MarkPackageDirty();
 	return true;
 }

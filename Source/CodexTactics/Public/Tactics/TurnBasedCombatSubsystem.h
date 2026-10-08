@@ -136,6 +136,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
 	bool IsBusy() const { return bSquadUnitMoving || bDramaticShotActive; }
 
+	/** Sprint 14: the active operative is knocked down (falling / lying / getting up): no move, shot or stance order. */
+	bool IsActiveUnitKnockedDown() const;
+
 	/** A cinematic squad shot or turret volley is playing. */
 	bool IsDramaticShotActive() const { return bDramaticShotActive; }
 
@@ -502,6 +505,8 @@ private:
 	TMap<FIntPoint, int32> RelocateCells;
 	float RelocateYaw = 0.f;
 
+	/** Sprint 14: the active operative lies after a knockdown — 2 AP get him up, with fewer his turn is skipped. */
+	void UpdateKnockedDownTurn();
 	ETurnPhase Phase = ETurnPhase::Inactive;
 	int32 ActiveIndex = 0;
 	int32 Round = 0;
