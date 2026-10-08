@@ -130,6 +130,7 @@ between 2026-10-06 and 2026-10-08 (details per commit in HANDOFF §10; `git log 
 | User & Gemini → Claude | **9. Sprint 06-B: Ground Move Destination Waypoint Ping:** When issuing a ground move order in real-time or preparation (`ACodexTacticsPlayerController::IssueGroundMove`), spawn a ground destination visual marker/ping via `UCombatFeedbackSubsystem::SpawnWaypointMarker` (or a fading order disc) at `Destination`. The player must clearly see where the operatives were ordered to run. | Done (Claude 2026-10-04) |
 | User & Gemini → Claude | **10. Sprint 06-C: Turn-Based Barricade Infinite Damage Loop Fix:** `ABarricadeActor::Tick` currently continues running real-time contact damage (`ContactTimer -= DeltaSeconds`) during turn-based combat! An enemy adjacent to a spiked/contact barricade gets damaged every frame infinitely. Fix: Freeze barricade contact tick in `ABarricadeActor::Tick` during TurnBased mode (`Flow->GetCombatMode() == TurnBased`), and apply contact damage strictly ONCE per turn round in `UTurnBasedCombatSubsystem` when adjacent. | Done (Claude 2026-10-04) |
 | User & Gemini → Claude | **11. Sprint 06-D: Marksman Combat Wave Aggression & Tactical Advance:** Marksmen currently stay stuck in `Patrol` mode if spawned in a wave or when target is >45m away. Fix: 1) In wave combat / exploration with no route, default state must be `Engage`. 2) If target has no line of sight (`!Line.bHasLos`) or `Distance > PreferredMaxRange`, advance towards squad via NavMesh (`MoveToLocation`), then stop at 20-35m, take low cover/prone, telegraph laser aim, and fire. | Done (Claude 2026-10-04) |
+| User & Gemini → Claude (Opus) | **12. Sprint 14: Механика нокдауна и восстановления (Knockdown & Recovery System):** Реализовать механику сбивания с ног для бойцов и врагов при прыжке гончей (Cutter Pounce), силовом ударе Брута, взрывах (<2.5м) и критических ударах (>=40 урона). Включает: 1) Состояние `EStatusEffect::Knockdown`, 2) Направление падения (спереди -> `Knocked_Back` / `Revive_Back`, сзади -> `Knocked_Front` / `Revive_Front`), 3) Полосу восстановления оглушения в UI (1.5 сек оглушения + анимация подъема ~1.0 сек), 4) Расход 2 AP на подъем в пошаговом бою, 5) Анимационные монтажи из `/Game/Animations_KnockDown`. Полная спецификация ниже. | Open (Claude) |
 
 ## Open questions — Sprint 03 & 04 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 
@@ -1211,3 +1212,49 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
   The scripts only fill what is empty (graphs built while empty; CODEX_REBUILD_ANIM_GRAPHS=1 forces a rebuild): edit clips / look in the Blueprints — enemy BPs own capsule and mesh transform.
 - Turn-based movers set the actor location directly: anything reading movement must use
   `UTurnBasedCombatSubsystem::GetTacticalMoveSpeed`, not the velocity.
+
+---
+
+## 🎯 NEW SPRINT DIRECTIVE: Knockdown & Recovery System (Studio Spec for Claude / Opus)
+**Author:** Gemini (Lead Architect / Systems Design) upon user mandate 2026-10-08  
+**Executor:** Claude / Opus (Gameplay C++, AI, Animation Montages, UI & Unit Tests)  
+
+### 1. Game Design & Core Rules
+1. **Триггеры нокдауна (Knockdown Triggers):**
+   - **Cutter Mech-Hound / Frost Hound:** Атака в прыжке с наскока (Pounce Attack) — гарантированный нокдаун цели при попадании с разбега.
+   - **Frost Brute:** Силовой размашистый удар дубиной/кулаком или разбег (Heavy Melee / Charge Slam).
+   - **Взрывы окружения:** Близкий взрыв гранаты Ф-1 или бочки с топливом в радиусе < 2.5 м.
+   - **Тяжёлый критический урон:** Единичный урон $\ge 40$ HP за одно попадание (например, выстрел дробовика в упор < 4 м).
+   - **Порог стойкости (Poise Stability):** Тяжёлые враги (Frost Brute) имеют иммунитет к сбиванию от обычных выстрелов — нокдаун на них действует только от взрывов или критических пробитий.
+
+2. **Фазы состояния и тайминги:**
+   - **Фаза 1: Падение (`Fall`, ~0.8 сек):** Прерывание текущего действия (сброс прицеливания, перезарядки, движения). Персонаж падает на землю.
+   - **Фаза 2: Оглушение на земле (`Downed`, ~1.5 сек):** Персонаж лежит. В UI над персонажем отображается **полоса восстановления (Stun/Recovery Bar)** от 0% до 100% и бейдж `[KNOCKED DOWN]`.
+     - *Защита:* Входящий урон на дальней дистанции снижен (профиль лёжа / Prone defense).
+     - *Уязвимость:* Входящий урон в ближнем бою получает бонус.
+   - **Фаза 3: Подъём (`Get Up`, ~1.0 сек):** По завершении полосы восстановления проигрывается анимация подъёма (`Revive_*`), управление и коллизии восстанавливаются.
+
+3. **Синхронизация с боевыми режимами:**
+   - **Real-Time:** Таймер и полоса прогресса тикают в реальном времени (~3.3 сек суммарно). Приказы, отданные лежачему бойцу, буферизируются и исполняются после вставания.
+   - **Turn-Based (Пошаговый бой):** Сбитый с ног боец в свой ход обязан потратить **2 AP** на подъём. Если AP < 2, ход пропускается.
+   - **Tactical Pause / Safe Narrative:** Во время тактической паузы (Space) и сюжетных диалогов полоса восстановления и таймеры **замораживаются**.
+
+### 2. Математика направления и анимационные ассеты
+1. **Расчет угла импакта ($\theta$):**
+   - Угол между `ActorForwardVector` и вектором направления удара.
+   - Удар спереди ($|\theta| < 90^\circ$): `Knocked_Back` $\to$ `Revive_Back`.
+   - Удар сзади ($|\theta| \ge 90^\circ$): `Knocked_Front` $\to$ `Revive_Front`.
+   - Гибель в нокдауне (урон до 0 HP): `Death_Back` / `Death_Front`.
+2. **Ассеты:**
+   - Папка в проекте: `/Game/Animations_KnockDown` (исходники на Desktop: `C:\Users\Zephyrus15Duo\Desktop\KnockedDown\Game\KnockedDown\Animations\RTGT`).
+   - Настройка `AnimMontage` падения, удержания позы и подъема.
+
+### 3. Критерии приёмки и валидация (DoD)
+1. **Unit Tests:** Набор юнит-тестов в `Source/CodexTacticsTests/Private/Combat/KnockdownRulesTest.cpp`:
+   - Расчёт направления падения (Front/Back) по вектору атаки.
+   - Порог урона $\ge 40$ для нокдауна.
+   - Списание 2 AP на подъём в пошаговом бою.
+   - Заморозка таймера нокдауна при тактической паузе.
+2. **Smoke Test:** Команда `CodexTactics.KnockdownSmoke` в `Source/CodexTactics/Private/Debug/KnockdownSmokeCommand.cpp`:
+   - Спавнит бойца и гончую/громилу, наносит силовой удар, проверяет вход в состояние нокдауна, заполнение полосы восстановления, подъём и возвращение управления.
+3. Прогон `verify_all.ps1` — ALL GREEN без регрессий в существующих системах.
