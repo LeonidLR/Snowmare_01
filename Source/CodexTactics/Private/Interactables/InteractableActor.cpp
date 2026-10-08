@@ -451,6 +451,16 @@ void AInteractableActor::HandleGeneratorStarted()
 	BroadcastGeneratorState(true); // Godot EventBus.generator_state_changed
 }
 
+void AInteractableActor::RestoreGeneratorState(float Health, bool bBroken)
+{
+	GeneratorHealth = FMath::Clamp(Health, 0.f, GeneratorMaxHealth);
+	bGeneratorBroken = bBroken;
+	if (ObjectType == EInteractableType::Generator)
+	{
+		HeatSource->SetHeatActive(IsGeneratorWorking());
+	}
+}
+
 bool AInteractableActor::IsGeneratorWorking() const
 {
 	const UQuestSubsystem* Quests = GetWorld()->GetSubsystem<UQuestSubsystem>();

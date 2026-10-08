@@ -62,6 +62,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Barrel")
 	float GetBurnTimeLeft() const { return Burn.TimeLeft; }
 
+	/** Has ever been lit (burning now or burnt out; Godot has_been_burned). */
+	bool HasBeenLit() const { return Burn.bBurnt || Burn.bBurning; }
+
+	/** Raw burn state for the save game. */
+	const FBarrelBurnState& GetBurnState() const { return Burn; }
+
+	/** Save-game load: burning (with TimeLeft) / burnt / fresh, visuals and heat follow; no lines, no blast. */
+	void RestoreBurnState(bool bBurning, bool bBurnt, float TimeLeft);
+
 	/** Burn time, s (Godot burn_duration 35). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Barrel", meta = (ClampMin = "0.1"))
 	float BurnDuration = 35.f;

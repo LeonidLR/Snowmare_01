@@ -43,6 +43,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Mine")
 	bool IsArmedNow() const { return bTrapped && ArmingTimeLeft <= 0.f; }
 
+	/** Seconds until a freshly placed mine arms (0 = armed). */
+	float GetArmingTimeLeft() const { return ArmingTimeLeft; }
+
+	/** Save-game load: owner, live charge (bTrapped), revealed and the arming countdown; visuals follow. */
+	void RestoreSaved(bool bInPlacedBySquad, bool bInTrapped, bool bInRevealed, float InArmingTimeLeft);
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Mine", meta = (ClampMin = "0"))
 	float ExplosionDamage = 120.f;
 

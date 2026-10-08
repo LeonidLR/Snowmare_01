@@ -53,6 +53,9 @@ public:
 	/** Sets every turret of the world on / off (generator breakdown / repair / start). */
 	static void SetAllPowered(UWorld* World, bool bNewPowered);
 
+	/** Save-game load: power and broken state (health is restored separately); the look follows. */
+	void RestoreSaved(bool bInPowered, bool bInBroken);
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Turret")
 	TObjectPtr<UHealthComponent> Health;
 

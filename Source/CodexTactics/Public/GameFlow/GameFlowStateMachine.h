@@ -91,7 +91,7 @@ public:
 	 * is_wave_active / current_wave_index): Exploration before the combat, otherwise the preparation of the saved wave
 	 * (an active wave is resumed from its preparation — enemies are not saved, like in Godot).
 	 */
-	void RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex);
+	void RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex, float InPreparationSeconds = -1.f);
 
 	/** Advances real-time timers: pause cooldown, tactical pause, preparation. */
 	void Tick(float RealDeltaSeconds);

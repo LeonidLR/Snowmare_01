@@ -16,7 +16,7 @@
     "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke", "LevelWaveSmoke",
     "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke", "WeaponSelectorSmoke",
-    "GrenadeSmoke", "GuardSmoke", "InventorySmoke", "TransferSmoke", "SaveLoadSmoke", "PauseMenuSmoke", "RadiusRingSmoke",
+    "GrenadeSmoke", "GuardSmoke", "InventorySmoke", "TransferSmoke", "SaveLoadSmoke", "SaveRoundTripSmoke", "PauseMenuSmoke", "RadiusRingSmoke",
     "FlankBreachSmoke", "SusaninSmoke", "FloatingTextSmoke", "SquadFireSmoke", "RageSmoke", "SquadControlSmoke",
     "AIGrenadeSmoke", "EnemyAISmoke", "CutterSmoke", "ClickRulesSmoke", "NarrativeSmoke", "HoldSphereSmoke",
     "ProgressionSmoke", "VictorySmoke", "TurnBasedCameraSmoke", "EventBusSmoke", "SilhouetteSmoke", "AttackModeSmoke",
@@ -33,6 +33,7 @@
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; timeout in seconds; knownFail = reported but does not fail the run",
     "SaveLoadSmoke": { "exclusive": true },
+    "SaveRoundTripSmoke": { "exclusive": true },
     "PauseMenuSmoke": { "exclusive": true },
     "EventBusSmoke": { "exclusive": true },
     "MainMenuSmoke": { "extra": "-ForceMainMenu" },
@@ -241,9 +242,9 @@
     },
     {
       "name": "save-load",
-      "globs": ["Source/**/Core/SaveGame*", "Source/**/UI/SaveLoadDialog*", "Source/**/UI/PauseMenu*"],
-      "tests": ["CodexTactics.Core.SaveGame"],
-      "smokes": ["SaveLoadSmoke", "PauseMenuSmoke", "EventBusSmoke"]
+      "globs": ["Source/**/Core/SaveGame*", "Source/**/Core/SavePolicy*", "Source/**/UI/SaveLoadDialog*", "Source/**/UI/PauseMenu*"],
+      "tests": ["CodexTactics.Core.SaveGame", "CodexTactics.Save"],
+      "smokes": ["SaveRoundTripSmoke", "SaveLoadSmoke", "PauseMenuSmoke", "EventBusSmoke"]
     },
     {
       "name": "mission-flow",

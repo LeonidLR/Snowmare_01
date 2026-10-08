@@ -34,6 +34,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Gate")
 	bool IsOpen() const { return bOpen; }
 
+	/** Save-game load: snaps both leaves open (no blocking, no nav) or closed (blocking) at once. */
+	void RestoreOpen(bool bInOpen);
+
 	/** Slide distance of each door, cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate", meta = (ClampMin = "0"))
 	float OpenDistance = 350.f;

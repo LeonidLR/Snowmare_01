@@ -75,6 +75,28 @@ void AGateActor::OpenGate()
 	SetActorTickEnabled(true);
 }
 
+void AGateActor::RestoreOpen(bool bInOpen)
+{
+	const float HalfWidth = DoorSize.Y * 0.5f;
+	const float Offset = bInOpen ? OpenDistance : 0.f;
+	FVector Left = LeftDoor->GetRelativeLocation();
+	FVector Right = RightDoor->GetRelativeLocation();
+	Left.Y = -HalfWidth - Offset;
+	Right.Y = HalfWidth + Offset;
+	LeftDoor->SetRelativeLocation(Left);
+	RightDoor->SetRelativeLocation(Right);
+	LeftTargetY = Left.Y;
+	RightTargetY = Right.Y;
+	bOpening = false;
+	bOpen = bInOpen;
+	SetActorTickEnabled(false);
+	for (UBoxComponent* Door : { LeftDoor.Get(), RightDoor.Get() })
+	{
+		Door->SetCollisionEnabled(bInOpen ? ECollisionEnabled::NoCollision : ECollisionEnabled::QueryAndPhysics);
+		Door->SetCanEverAffectNavigation(!bInOpen);
+	}
+}
+
 void AGateActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
