@@ -23,6 +23,8 @@ struct CODEXTACTICS_API FAimOffsetState
 	/** Prone: the crawl / prone aim clips do not fit the standing-idle offset. */
 	bool bProne = false;
 	bool bDead = false;
+	/** Turn-based combat is on and bAimOffsetInTurnBased is off: the offset fades out (real time / tactical pause keep it). */
+	bool bTurnBasedSuppressed = false;
 };
 
 namespace AimOffsetRules

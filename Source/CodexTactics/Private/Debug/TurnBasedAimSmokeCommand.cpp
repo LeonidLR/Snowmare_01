@@ -358,7 +358,10 @@ namespace TurnBasedAimSmoke
 			// Next operative: select, stand 2 s (sampled).
 			if (State.UnitIndex >= State.Units.Num() || State.UnitIndex >= 2)
 			{
-				return Finish(State);
+				Flow->ExitTurnBasedToRealTime();
+				State.Stage = 6;
+				State.StageTime = 0.f;
+				return true;
 			}
 			AOperativeCharacter* Op = State.Units[State.UnitIndex].Get();
 			if (!Op || !TurnBased->SelectUnit(Op))
@@ -445,6 +448,12 @@ namespace TurnBasedAimSmoke
 				return true;
 			}
 			const FString Who = Op->DisplayName.ToString();
+			// bAimOffsetInTurnBased is off by default: the offset is faded out in turn-based combat.
+			if (const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr; Anim && !Anim->bAimOffsetInTurnBased)
+			{
+				Check(State, Anim->AimOffsetAlpha < 0.01f && FMath::IsNearlyZero(Anim->AimYaw, 0.05f) && FMath::IsNearlyZero(Anim->AimPitch, 0.05f),
+					FString::Printf(TEXT("%s: aim offset off in turn-based (alpha %.2f, AimYaw %.2f, AimPitch %.2f)"), *Who, Anim->AimOffsetAlpha, Anim->AimYaw, Anim->AimPitch));
+			}
 			Report(State, Who, TEXT("standing"), State.Stand);
 			Report(State, Who, TEXT("walking"), State.Walk);
 			Report(State, Who, TEXT("standing after the walk"), State.StandAfter);
@@ -452,6 +461,22 @@ namespace TurnBasedAimSmoke
 			State.Stage = 2;
 			State.StageTime = 0.f;
 			return true;
+		}
+		case 6:
+		{
+			// Back in real time the offset eases in again (alpha 1).
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			AOperativeCharacter* Op = State.Units.Num() > 0 ? State.Units[0].Get() : nullptr;
+			const UOperativeAnimInstance* Anim = Op && Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
+			if (Anim && !Anim->bAimOffsetInTurnBased)
+			{
+				Check(State, !TurnBased->IsActive() && Anim->AimOffsetAlpha > 0.99f,
+					FString::Printf(TEXT("back in real time the aim offset is on again (alpha %.2f)"), Anim->AimOffsetAlpha));
+			}
+			return Finish(State);
 		}
 		default:
 			return Finish(State);
