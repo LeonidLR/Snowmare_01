@@ -1,4 +1,5 @@
 #include "Combat/GrenadeActor.h"
+#include "Combat/KnockdownComponent.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -202,6 +203,8 @@ void AGrenadeActor::ApplyAreaEffect()
 			Health->TakeDamage(Spec);
 		}
 	}
+	// Sprint 14: everyone (squad and enemies) closer than 2.5 m is knocked down by the blast.
+	UKnockdownComponent::NotifyExplosion(GetWorld(), Center);
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -1,4 +1,6 @@
 #include "Characters/OperativeAnimInstance.h"
+
+#include "Combat/KnockdownComponent.h"
 #include "Misc/ScopeExit.h"
 #include "Characters/LeftHandIKRules.h"
 #include "Characters/AimOffsetRules.h"
@@ -371,6 +373,10 @@ void UOperativeAnimInstance::UpdateColdLayer(float DeltaSeconds)
 
 void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit)
 {
+	if (Shooter && Shooter->IsKnockedDown())
+	{
+		return; // Sprint 14: no fire clip over the knockdown
+	}
 	AimTimer = AimHoldAfterShot;
 	// Sprint 12: a shot from cover plays the corner fire (or blind fire) clip full body; the loop resumes after it.
 	if (bInCover && bUseNativeCoverClips && !bIsProne && !bIsReloading)
@@ -447,9 +453,9 @@ void UOperativeAnimInstance::UpdateStanceTransition()
 	}
 	const EOperativeStance From = PreviousStance.Get(Stance);
 	PreviousStance = Stance;
-	if (From == Stance || bIsDead)
+	if (From == Stance || bIsDead || bKnockedDown)
 	{
-		return;
+		return; // knocked down: the get-up clip ends standing, no stance clip on top
 	}
 	if (bInCover && bUseNativeCoverClips && bCoverEnteredThisFrame)
 	{
@@ -539,9 +545,9 @@ void UOperativeAnimInstance::HandleHealthChanged(float NewHealth, float MaxHealt
 {
 	// Godot play_hit_reaction: per stance, the pistol one with the pistol in hands; not over a throw or while dead.
 	const AOperativeCharacter* Operative = BoundOperative.Get();
-	if (Delta >= 0.f || NewHealth <= 0.f || !Operative || bIsDead)
+	if (Delta >= 0.f || NewHealth <= 0.f || !Operative || bIsDead || Operative->IsKnockedDown())
 	{
-		return;
+		return; // knocked down: the knockdown clip owns the body
 	}
 	UAnimSequenceBase* Clip = HitStandAnimation;
 	if (Operative->CurrentWeapon && Operative->CurrentWeapon->WeaponId == TEXT("pistol") && PistolHitAnimation)
@@ -573,7 +579,7 @@ void UOperativeAnimInstance::HandleGrenadeThrow()
 	// Godot play_grenade_throw: prone / crouch / run / walk by the stance and speed. Godot released the grenade at 70 % of
 	// the clip (get_grenade_throw_duration); the measured per-clip release time replaces that (GrenadeThrow*ReleaseSeconds).
 	AOperativeCharacter* Operative = BoundOperative.Get();
-	if (!Operative)
+	if (!Operative || Operative->IsKnockedDown())
 	{
 		return;
 	}
@@ -602,6 +608,13 @@ void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerS
 {
 	// Godot play_death: a random standing variation, or the crouched / prone death; full body, held at the end.
 	const AOperativeCharacter* Operative = BoundOperative.Get();
+	// Sprint 14: killed while knocked down -> Death_Back / Death_Front from the ground (UKnockdownComponent), held.
+	if (UKnockdownComponent* Knockdown = Operative ? Operative->KnockdownComponent.Get() : nullptr; !bDeathPlayed && Knockdown && Knockdown->HandleDeath())
+	{
+		bDeathPlayed = true;
+		StopSlotAnimation(0.1f, UpperBodySlot);
+		return;
+	}
 	if (bDeathPlayed || !Operative)
 	{
 		return;
@@ -650,7 +663,7 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 	{
 		AimTimer = 0.f;
 	}
-	bIsAiming = !bIsDead && !bIsSprinting && (bAttackMode || AimTimer > 0.f);
+	bIsAiming = !bIsDead && !bKnockedDown && !bIsSprinting && (bAttackMode || AimTimer > 0.f);
 
 	// Blend-space axes (user report 2026-10-01: legs and arms trembled while slowing down). The speed is smoothed and
 	// has a dead zone with hysteresis (formation followers stop / restart and creep at 10-25 cm/s, and the raw speed
@@ -684,7 +697,7 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 	// Prone: its own full-body clip (Godot ProneReload) or nothing.
 	UAnimSequenceBase* Reload = bIsProne ? ReloadProneAnimation.Get() : ReloadAnimation.Get();
 	const FName ReloadSlot = bIsProne ? FullBodySlot : UpperBodySlot;
-	if (bIsReloading && !bWasReloading && Reload && Operative && !IsPlayingStanceTransition())
+	if (bIsReloading && !bWasReloading && Reload && Operative && !IsPlayingStanceTransition() && !bKnockedDown)
 	{
 		const float Duration = FMath::Max(0.1f, Operative->ReloadTimer);
 		PlaySlotAnimationAsDynamicMontage(Reload, ReloadSlot, 0.2f, 0.2f, Reload->GetPlayLength() / Duration);
@@ -746,6 +759,7 @@ void UOperativeAnimInstance::UpdateState()
 	bIsCrouching = Stance == EOperativeStance::Crouching;
 	bIsProne = Stance == EOperativeStance::Prone;
 	bIsReloading = Operative->bIsReloading;
+	bKnockedDown = Operative->IsKnockedDown();
 	UpdateCoverLayer(*Operative);
 	bIsMoving = Speed > 5.f;
 	bIsSprinting = Operative->IsSprinting();
@@ -828,7 +842,7 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 	// while the cover fire stance kept the rifle up, so the left hand let go of it).
 	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f && GetSlotMontageGlobalWeight(FullBodySlot) < 0.5f;
 	State.bVaulting = bIsVaulting;
-	State.bDead = bIsDead;
+	State.bDead = bIsDead || bKnockedDown; // Sprint 14: no IK / aim offset while knocked down
 	State.bProne = bIsProne;
 	// Every pose where the right hand holds the rifle keeps the IK (cover idle / look-around / shimmy / enter / switches
 	// included, 2026-10-07); only clips listed in LeftHandIKFreeClips free the left hand (none measured so far).
@@ -905,7 +919,7 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	State.bVaulting = bIsVaulting;
 	State.bSprinting = bIsSprinting;
 	State.bProne = bIsProne;
-	State.bDead = bIsDead;
+	State.bDead = bIsDead || bKnockedDown; // Sprint 14: no IK / aim offset while knocked down
 	AimOffsetLinear = AimOffsetRules::StepAlpha(AimOffsetLinear, AimOffsetRules::WantsAimOffset(State), DeltaSeconds, AimOffsetBlendSeconds);
 	AimOffsetAlpha = FMath::SmoothStep(0.f, 1.f, AimOffsetLinear);
 	bAimOffsetActive = AimOffsetAlpha > 0.01f;
@@ -1140,7 +1154,7 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		// Leaving the fire-ready pose: the exit transition plays when he stays put (walking on blends straight out; an
 		// open shot at a target in front of the wall blends straight into the normal shooting pose; a move order / grid
 		// walk leaves walking).
-		if (bCoverInFirePose && Speed < 20.f && !Operative.IsCoverOpenShotActive() && !Operative.IsMovingOffCover())
+		if (bCoverInFirePose && !bKnockedDown && Speed < 20.f && !Operative.IsCoverOpenShotActive() && !Operative.IsMovingOffCover())
 		{
 			if (UAnimSequenceBase* Exit = PickCoverClip(bIsCrouching ? CoverCrouchFireExit : CoverStandFireExit))
 			{

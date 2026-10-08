@@ -6,6 +6,7 @@
 #include "Characters/EnemyAIRules.h"
 #include "GameFramework/Character.h"
 #include "Data/CombatTypes.h"
+#include "Combat/KnockdownTypes.h"
 #include "EnemyCharacter.generated.h"
 
 class APatrolRouteActor;
@@ -84,6 +85,14 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	bool IsDying() const { return bIsDying; }
+
+	/** Sprint 14 knockdown (Frostbitten / Brute only; the Brute has heavy poise; TANDEM request #12). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Knockdown")
+	TObjectPtr<class UKnockdownComponent> KnockdownComponent;
+
+	/** Knocked down (any phase): no AI, no attacks until it is up. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Knockdown")
+	bool IsKnockedDown() const;
 
 	/**
 	 * Turn-based hold (bug fix 2026-10-06, MarksmanCloseShotSmoke): UTurnBasedCombatSubsystem sets it on every enemy it
@@ -493,4 +502,16 @@ protected:
 	void HandleDied(AActor* Victim, const FString& AttackerSource);
 
 	void ApplyArchetypeDefaults();
+
+	/** Which archetypes can fall and with which clips (Frostbitten / Brute on their own skeletons). */
+	void ConfigureKnockdown();
+	/** Knockdown phase change: stops the AI / movement, frees the capsule; restores them when it is up. */
+	void HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase);
+	/** Knocks the operative down after a landed blow (Brute heavy melee, hound pounce after a run-up). */
+	void TryKnockDownOperative(class AOperativeCharacter* Operative, float DamageDealt);
+	/** Seconds it has been running at full speed (hound pounce run-up). */
+	float RunUpSeconds = 0.f;
+	/** Seconds since this hound last knocked somebody down. */
+	float SecondsSinceHoundPounce = 1000.f;
+	TEnumAsByte<ECollisionResponse> KnockdownSavedPawnResponse = ECR_Block;
 };

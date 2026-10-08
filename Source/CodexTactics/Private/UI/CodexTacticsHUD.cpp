@@ -8,6 +8,8 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "GameFramework/Character.h"
 #include "EngineUtils.h"
+#include "Combat/KnockdownComponent.h"
+#include "GameFramework/Character.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Characters/EnemyCharacter.h"
@@ -435,6 +437,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawSpaceCharge();
 	DrawCombatModeBadge();
 	DrawPostureMarkers();
+	DrawKnockdownBars();
 	DrawHordeWarning();
 	DrawHitChanceLabel();
 	DrawSelectionBox();
@@ -759,6 +762,49 @@ void ACodexTacticsHUD::DrawPostureMarkers()
 		DrawRect(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), X, Y, Box, Box);
 		FCanvasTextItem Item(FVector2D(Screen.X - W * 0.5f, Y + (Box - H) * 0.5f), FText::FromString(Letter), Font, Color);
 		Canvas->DrawItem(Item);
+	}
+}
+
+void ACodexTacticsHUD::DrawKnockdownBars()
+{
+	// Sprint 14 (TANDEM request #12): the overhead badge style of the panic / rage badges — a dark panel with the text —
+	// and a recovery bar under it that fills over the downed phase (frozen in the tactical pause / dialogue).
+	const UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
+	if (Mission && Mission->IsMainMenuOpen())
+	{
+		return;
+	}
+	UFont* Font = GEngine->GetSmallFont();
+	static const FString Badge = TEXT("[KNOCKED DOWN]");
+	for (TActorIterator<ACharacter> It(GetWorld()); It; ++It)
+	{
+		const UKnockdownComponent* Knockdown = It->FindComponentByClass<UKnockdownComponent>();
+		if (!Knockdown || !Knockdown->IsDown() || It->IsHidden())
+		{
+			continue;
+		}
+		// Above the name plate / posture marker (the panic / rage badges' place: the man lies, the plate stays up).
+		const float Top = It->GetSimpleCollisionHalfHeight() + 40.f;
+		FVector Screen = Project(It->GetActorLocation() + FVector(0.f, 0.f, Top), true);
+		if (Screen.Z <= 0.f)
+		{
+			continue;
+		}
+		float W = 0.f;
+		float H = 0.f;
+		Canvas->StrLen(Font, Badge, W, H);
+		Screen.Y -= H + 14.f;
+		const bool bEnemy = It->ActorHasTag(TEXT("Enemy"));
+		const FLinearColor BadgeColor = bEnemy ? FLinearColor(1.f, 0.45f, 0.35f) : FLinearColor(1.f, 0.7f, 0.2f);
+		const float BarWidth = FMath::Max(W, 70.f);
+		const float BarHeight = 5.f;
+		const float X = Screen.X - BarWidth * 0.5f;
+		DrawRect(PanelColor, X - 4.f, Screen.Y - H - 8.f, BarWidth + 8.f, H + BarHeight + 12.f);
+		DrawText(Badge, BadgeColor, Screen.X - W * 0.5f, Screen.Y - H - 6.f, Font);
+		const float Fill = FMath::Clamp(Knockdown->GetRecoveryFraction(), 0.f, 1.f);
+		DrawRect(FLinearColor(0.15f, 0.15f, 0.18f, 0.9f), X, Screen.Y, BarWidth, BarHeight);
+		DrawRect(Knockdown->GetPhase() == EKnockdownPhase::GettingUp ? FLinearColor(0.35f, 0.95f, 0.45f) : BadgeColor,
+			X, Screen.Y, BarWidth * Fill, BarHeight);
 	}
 }
 

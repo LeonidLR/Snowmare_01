@@ -2,6 +2,7 @@
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequenceBase.h"
 #include "Characters/EnemyCharacter.h"
+#include "Combat/KnockdownComponent.h"
 #include "Combat/HealthComponent.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
@@ -84,7 +85,8 @@ float UEnemyAnimInstance::NotifyAttack()
 	AttackTimer = AttackHoldTime;
 	bIsAttacking = true;
 	UAnimSequenceBase* Clip = PickClip(AttackAnimations, AttackVariant);
-	if (bIsDead || bIsJumping || !Clip)
+	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
+	if (bIsDead || bIsJumping || !Clip || (Owner && Owner->IsKnockedDown()))
 	{
 		return 0.f;
 	}
@@ -97,7 +99,8 @@ void UEnemyAnimInstance::NotifyHit()
 	HitVariant = HitAnimations.IsEmpty() ? FMath::RandRange(0, 2) : FMath::RandRange(0, HitAnimations.Num() - 1);
 	HitTimer = HitHoldTime;
 	bIsHit = true;
-	if (!bIsDead && !bIsJumping)
+	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
+	if (!bIsDead && !bIsJumping && !(Owner && Owner->IsKnockedDown())) // knocked down: the knockdown clip owns the body
 	{
 		// Moving: the upper body flinches, the legs keep running (no sliding full-body hit; TANDEM request 1).
 		UAnimSequenceBase* Clip = PickClip(HitAnimations, HitVariant);
@@ -128,6 +131,12 @@ void UEnemyAnimInstance::NotifyDeath()
 	}
 	bDeathPlayed = true;
 	bIsDead = true;
+	// Sprint 14: killed while knocked down -> Death_Back / Death_Front from the ground (UKnockdownComponent), held.
+	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
+	if (UKnockdownComponent* Knockdown = Owner ? Owner->KnockdownComponent.Get() : nullptr; Knockdown && Knockdown->HandleDeath())
+	{
+		return;
+	}
 	UAnimSequenceBase* Clip = DeathAnimations.IsEmpty() ? nullptr : DeathAnimations[FMath::RandRange(0, DeathAnimations.Num() - 1)].Get();
 	if (Clip)
 	{

@@ -44,7 +44,12 @@ enum class EStatusEffect : uint8
 	Bleeding UMETA(DisplayName = "Bleeding"),
 	ArmorShred UMETA(DisplayName = "Armor Shred"),
 	/** Godot SHOCKED (plasma: interrupts attacks + micro-stun); imported, effect not simulated yet. Appended to keep saved values. */
-	Shocked UMETA(DisplayName = "Shocked")
+	Shocked UMETA(DisplayName = "Shocked"),
+	/**
+	 * Sprint 14 knockdown (fall / downed / get-up). The state and timers live in UKnockdownComponent (phases, recovery
+	 * bar, turn-based AP); UHealthComponent::HasStatusEffect(Knockdown) reports it. Not applied through FDamageSpec.
+	 */
+	Knockdown UMETA(DisplayName = "Knocked Down")
 };
 
 /**
@@ -150,4 +155,8 @@ struct CODEXTACTICS_API FDamageSpec
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Damage")
 	bool bIsCritical = false;
+
+	/** A melee blow (knife / claws), not a shot: a knocked-down target takes the melee bonus instead of the prone cut. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Damage")
+	bool bMelee = false;
 };

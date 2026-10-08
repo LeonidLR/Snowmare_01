@@ -1,4 +1,5 @@
 #include "Interactables/InteractableActor.h"
+#include "Combat/KnockdownComponent.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/OverheadLabel.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -289,6 +290,8 @@ void AInteractableActor::ApplyBlast(float EnemyDamageBase, float SquadDamageBase
 			}
 		}
 	}
+	// Sprint 14: a fuel barrel / mine / trap blast closer than 2.5 m knocks everyone down.
+	UKnockdownComponent::NotifyExplosion(GetWorld(), Center);
 	// Patrols within the trap alert radius (20 m) go searching around the blast.
 	AEnemyCharacter::AlertPatrolsNearTrap(GetWorld(), Center);
 	ReceiveExploded(Radius);

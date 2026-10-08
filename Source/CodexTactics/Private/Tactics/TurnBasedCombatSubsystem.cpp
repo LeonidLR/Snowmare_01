@@ -1,4 +1,5 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Combat/KnockdownComponent.h"
 #include "Characters/EnemyAnimInstance.h"
 #include "Tactics/TacticalEncounterRules.h"
 #include "Camera/TacticalCameraPawn.h"
@@ -918,8 +919,43 @@ void UTurnBasedCombatSubsystem::SetRelocationHover(const FVector& WorldPoint)
 	RelocateGhost->SetValid(RelocateCells.Contains(Cell));
 }
 
+bool UTurnBasedCombatSubsystem::IsActiveUnitKnockedDown() const
+{
+	const AOperativeCharacter* Unit = GetActiveUnit();
+	return Unit && Unit->IsKnockedDown();
+}
+
+void UTurnBasedCombatSubsystem::UpdateKnockedDownTurn()
+{
+	if (Phase != ETurnPhase::Squad || IsBusy())
+	{
+		return;
+	}
+	AOperativeCharacter* Unit = GetActiveUnit();
+	FTurnUnitState* State = States.Find(Unit);
+	UKnockdownComponent* Knockdown = Unit ? Unit->KnockdownComponent.Get() : nullptr;
+	if (!State || !Knockdown || Knockdown->GetPhase() != EKnockdownPhase::Downed)
+	{
+		return; // up, or still falling (decided once he lies)
+	}
+	const int32 Before = State->AP;
+	const FKnockdownTurnDecision Decision = Knockdown->HandleTurn(State->AP);
+	if (Decision.bGetUp)
+	{
+		Log(FString::Printf(TEXT("%s gets back on his feet (-%d AP, %d left)."), *NameOf(Unit), Before - State->AP, State->AP));
+		RefreshOverlay();
+		Changed();
+	}
+	else if (Decision.bSkipTurn)
+	{
+		Log(FString::Printf(TEXT("%s is knocked down with %d AP - not enough to get up, turn skipped."), *NameOf(Unit), State->AP));
+		EndCurrentUnitTurn();
+	}
+}
+
 void UTurnBasedCombatSubsystem::Tick(float DeltaTime)
 {
+	UpdateKnockedDownTurn();
 	// The relocation hologram goes with the relocation (it ends in many places: confirm, cancel, turn end, combat end).
 	if (RelocateGhost && (!RelocateTarget.IsValid() || RelocateGhostSource.Get() != RelocateTarget.Get()))
 	{
@@ -1356,7 +1392,7 @@ bool UTurnBasedCombatSubsystem::MoveActiveUnitTo(const FIntPoint& Cell)
 {
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* State = States.Find(Unit);
-	if (IsBusy() || Phase != ETurnPhase::Squad || !State || State->GridPos == Cell)
+	if (IsBusy() || Phase != ETurnPhase::Squad || !State || State->GridPos == Cell || IsActiveUnitKnockedDown())
 	{
 		return false;
 	}
@@ -1438,7 +1474,7 @@ bool UTurnBasedCombatSubsystem::SetActiveUnitStance(EOperativeStance NewStance)
 {
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* State = States.Find(Unit);
-	if (IsBusy() || Phase != ETurnPhase::Squad || !State)
+	if (IsBusy() || Phase != ETurnPhase::Squad || !State || IsActiveUnitKnockedDown())
 	{
 		return false;
 	}
@@ -1511,7 +1547,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 	FTurnAttackResult Result;
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* State = States.Find(Unit);
-	if (IsBusy() || Phase != ETurnPhase::Squad || !State)
+	if (IsBusy() || Phase != ETurnPhase::Squad || !State || IsActiveUnitKnockedDown())
 	{
 		Result.Reason = TEXT("no_unit");
 		return Result;
@@ -1809,7 +1845,7 @@ void UTurnBasedCombatSubsystem::PassSquadTurn()
 
 void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AActor* HitActor, bool bAttackOrder)
 {
-	if (!IsActive() || Phase != ETurnPhase::Squad || IsBusy() || !Grid)
+	if (!IsActive() || Phase != ETurnPhase::Squad || IsBusy() || !Grid || IsActiveUnitKnockedDown())
 	{
 		return;
 	}
@@ -3141,6 +3177,14 @@ TSet<FIntPoint> UTurnBasedCombatSubsystem::GetFearCells() const
 void UTurnBasedCombatSubsystem::ExecuteEnemyTurn(AActor* Enemy)
 {
 	FTurnUnitState* State = States.Find(Enemy);
+	// Sprint 14: a knocked-down enemy spends its turn getting up.
+	if (AEnemyCharacter* Knocked = Cast<AEnemyCharacter>(Enemy); Knocked && Knocked->IsKnockedDown() && Knocked->KnockdownComponent)
+	{
+		const float GetUp = Knocked->KnockdownComponent->GetUpForTurn();
+		Log(FString::Printf(TEXT("%s spends its turn getting up."), *NameOf(Enemy)));
+		FinishEnemyTurn(FMath::Max(GetUp, 0.5f));
+		return;
+	}
 	// Godot _on_gorky17_turn_changed (enemy): the camera glides to it.
 	if (ATacticalCameraPawn* Camera = GetCamera())
 	{
@@ -3383,8 +3427,17 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 			AActor* Victim = WeakTarget.Get();
 			if (Biter && Victim && States.Contains(Victim))
 			{
-				ApplySquadHit(Victim, Damage, NameOf(Biter));
-				Log(FString::Printf(TEXT("🐺 Enemy %s attacks %s: %d damage!"), *NameOf(Biter), *NameOf(Victim), Damage));
+				// Sprint 14: a knocked-down operative takes the melee bonus; a Brute's blow knocks him down.
+				const AOperativeCharacter* VictimOperative = Cast<AOperativeCharacter>(Victim);
+				const int32 Dealt = VictimOperative && VictimOperative->KnockdownComponent
+					? FMath::Max(1, FMath::RoundToInt(Damage * VictimOperative->KnockdownComponent->GetDamageMultiplier(true))) : Damage;
+				ApplySquadHit(Victim, Dealt, NameOf(Biter));
+				Log(FString::Printf(TEXT("🐺 Enemy %s attacks %s: %d damage!"), *NameOf(Biter), *NameOf(Victim), Dealt));
+				const AEnemyCharacter* BiterEnemy = Cast<AEnemyCharacter>(Biter);
+				if (BiterEnemy && BiterEnemy->GetArchetype() == EEnemyArchetype::Brute && VictimOperative && VictimOperative->KnockdownComponent)
+				{
+					VictimOperative->KnockdownComponent->TryKnockDown(EKnockdownCause::HeavyMelee, Biter->GetActorLocation(), Dealt);
+				}
 				if (IsActive() && IsDead(Victim))
 				{
 					OnSquadMemberKilled(Victim, TargetPos);
@@ -3896,6 +3949,11 @@ void UTurnBasedCombatSubsystem::DetonateBarrel(const FIntPoint& Cell, AActor* Ba
 			}
 		}
 	}
+	// Sprint 14: units closer than 2.5 m are knocked down.
+	if (Barrel)
+	{
+		UKnockdownComponent::NotifyExplosion(GetWorld(), Barrel->GetActorLocation());
+	}
 	// The barrel stays on its cell as an obstacle and burns for 3 rounds.
 	if (ABarrelActor* BarrelActor = Cast<ABarrelActor>(Barrel))
 	{
@@ -3944,6 +4002,7 @@ void UTurnBasedCombatSubsystem::DetonateMine(const FIntPoint& Cell, AActor* Mine
 		return;
 	}
 	Grid->SetOccupant(Cell, Victim, State->bSquad ? EGorkyOccupantType::Squad : EGorkyOccupantType::Enemy);
+	UKnockdownComponent::NotifyExplosion(GetWorld(), Victim->GetActorLocation()); // Sprint 14: the mine floors him
 	if (State->bSquad)
 	{
 		// Godot: a surviving operative's turn ends 0.75 s after the blast.

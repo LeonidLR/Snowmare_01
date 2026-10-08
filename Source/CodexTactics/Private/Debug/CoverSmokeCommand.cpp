@@ -31,6 +31,7 @@
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
+#include "Combat/KnockdownComponent.h"
 #include "Characters/SquadAutonomySubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -443,6 +444,11 @@ namespace CoverSmoke
 			UHealthComponent* Health = Op->HealthComponent;
 			const float Base = 100.f * (1.f - State.FortitudeCut); // standing, no dodge
 			Op->ForcedDodgeRollForTesting = 0.f;
+			// Sprint 14: 100 HP test hits would knock him down (>= 40) and out of the cover the rest of the smoke checks.
+			if (Op->KnockdownComponent)
+			{
+				Op->KnockdownComponent->bCanBeKnockedDown = false;
+			}
 			float Before = Health->GetCurrentHealth();
 			float Taken = Op->TakeHit(100.f, TEXT("smoke"), false, false, Hound);
 			Check(State, FMath::IsNearlyEqual(Taken, Base * 0.1f, 0.5f) && FMath::IsNearlyEqual(Before - Health->GetCurrentHealth(), Taken, 0.01f),

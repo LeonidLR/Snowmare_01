@@ -1,4 +1,5 @@
 #include "Combat/HealthComponent.h"
+#include "Combat/KnockdownComponent.h"
 #include "GameFramework/Actor.h"
 #include "UI/FloatingTextSubsystem.h"
 
@@ -76,7 +77,10 @@ float UHealthComponent::TakeDamage(const FDamageSpec& Spec)
 	EffectiveArmor *= (1.0f - FMath::Clamp(Spec.ArmorPenetration, 0.0f, 1.0f));
 
 	const float DmgAfterArmor = Spec.Amount * (1.0f - EffectiveArmor);
-	const float FinalDamage = FMath::Max(1.0f, DmgAfterArmor * ElementMult * DefenseMultiplier);
+	// Sprint 14: a knocked-down unit takes shots x0.6 (prone profile) and melee x1.5; blasts are not modified.
+	const UKnockdownComponent* Knockdown = GetOwner() ? GetOwner()->FindComponentByClass<UKnockdownComponent>() : nullptr;
+	const float KnockdownScale = Knockdown && Spec.DamageType != EDamageType::Explosive ? Knockdown->GetDamageMultiplier(Spec.bMelee) : 1.f;
+	const float FinalDamage = FMath::Max(1.0f, DmgAfterArmor * ElementMult * DefenseMultiplier * KnockdownScale);
 
 	const float OldHealth = CurrentHealth;
 	CurrentHealth = FMath::Max(0.0f, CurrentHealth - FinalDamage);
@@ -190,6 +194,11 @@ bool UHealthComponent::HasStatusEffect(EStatusEffect Effect) const
 	case EStatusEffect::Stagger: return StaggerTimer > 0.0f;
 	case EStatusEffect::Bleeding: return BleedingTimer > 0.0f;
 	case EStatusEffect::ArmorShred: return ArmorShredTimer > 0.0f;
+	case EStatusEffect::Knockdown:
+	{
+		const UKnockdownComponent* Knockdown = GetOwner() ? GetOwner()->FindComponentByClass<UKnockdownComponent>() : nullptr;
+		return Knockdown && Knockdown->IsDown();
+	}
 	default: return false;
 	}
 }

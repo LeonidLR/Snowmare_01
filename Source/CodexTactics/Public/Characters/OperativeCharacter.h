@@ -14,6 +14,7 @@
 #include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverTypes.h"
+#include "Combat/KnockdownTypes.h"
 #include "OperativeCharacter.generated.h"
 
 class UMaterialInterface;
@@ -511,6 +512,14 @@ public:
 	/** Panicking: does not shoot, reload or obey orders (Godot panic_comp.is_panicking). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Panic")
 	bool IsPanicking() const;
+
+	/** Sprint 14 knockdown & recovery (fall / downed / get-up; UE-only, TANDEM request #12). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Knockdown")
+	TObjectPtr<class UKnockdownComponent> KnockdownComponent;
+
+	/** Knocked down (any phase): no orders (move orders are buffered), no fire, no aim, no reload. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Knockdown")
+	bool IsKnockedDown() const;
 
 	/** Max speed / turn rate from the stance, sprint, wounds and carrying (SpeedOverride >= 0 replaces the speed). */
 	void ApplyMovementParams(float SpeedOverride = -1.f);
@@ -1230,6 +1239,10 @@ private:
 
 	UFUNCTION()
 	void HandleDied(AActor* Victim, const FString& AttackerSource);
+	/** Knockdown phase change: interrupts (aim, reload, move, cover), frees / restores the capsule and the movement. */
+	void HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase);
+	/** The capsule's Pawn response before a knockdown (restored when he is up). */
+	TEnumAsByte<ECollisionResponse> KnockdownSavedPawnResponse = ECR_Block;
 	/** Pushes max speed and turn rate for the current state into CharacterMovement. */
 	EOperativeOrderResult RequestMove(const FVector& Destination);
 	/** Resizes the capsule for the stance, keeping the feet in place and the skeletal mesh on the ground. */

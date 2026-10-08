@@ -5,6 +5,7 @@
 #include "OperativeAnimGraphLibrary.generated.h"
 
 class UAnimBlueprint;
+class UAnimMontage;
 class UBlendSpace;
 
 /**
@@ -79,4 +80,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
 	static bool BuildMarksmanLocomotionGraph(UAnimBlueprint* AnimBlueprint, FName SlotName, float BlendTime, float StanceBlendTime,
 		FName UpperBodySlotName, FName UpperBodyBone, FString& OutReport);
+
+	/**
+	 * Renames every slot track of a montage to SlotName (UAnimMontage::SlotAnimTracks is read-only in Python). Used by
+	 * Scripts/Editor/import_knockdown_animations.py for the knockdown montages on the operative ABP's "FullBody" slot.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static bool SetMontageSlot(UAnimMontage* Montage, FName SlotName);
 };

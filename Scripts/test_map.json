@@ -27,7 +27,8 @@
     "RealtimeSelectSmoke", "MarksmanCloseShotSmoke", "HordeSmoke", "CoverSmoke",
     "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke", "CoverCrouchSmoke", "CoverMoveSmoke",
     "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke", "PrepDeploySmoke", "SightSmoke",
-    "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke", "TurnBasedAimSmoke"
+    "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke", "TurnBasedAimSmoke",
+    "KnockdownSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; timeout in seconds; knownFail = reported but does not fail the run",
@@ -146,7 +147,13 @@
       "name": "health-damage",
       "globs": ["Source/**/Combat/HealthComponent*", "Source/**/Combat/EnemyGhost*", "Source/**/UI/FloatingText*", "Source/**/UI/OverheadLabel*"],
       "tests": ["CodexTactics.Combat.Health"],
-      "smokes": ["FloatingTextSmoke", "EnemyDeathSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke"]
+      "smokes": ["FloatingTextSmoke", "EnemyDeathSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke", "KnockdownSmoke"]
+    },
+    {
+      "name": "knockdown",
+      "globs": ["Source/**/Combat/Knockdown*", "Content/Animations_KnockDown/**", "Scripts/Editor/import_knockdown_animations.py"],
+      "tests": ["CodexTactics.Combat.Knockdown"],
+      "smokes": ["KnockdownSmoke", "EnemyHitLayerSmoke", "TurnBasedSmoke", "GrenadeSmoke"]
     },
     {
       "name": "enemy",

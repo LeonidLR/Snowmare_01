@@ -1,4 +1,6 @@
 #include "Characters/OperativeCharacter.h"
+#include "Combat/KnockdownComponent.h"
+#include "Combat/KnockdownRules.h"
 #include "Telemetry/RunTelemetrySubsystem.h"
 #include "Interactables/RadiusRingSubsystem.h"
 #include "Subsystems/CodexEventBus.h"
@@ -154,6 +156,7 @@ AOperativeCharacter::AOperativeCharacter()
 	RageComponent = CreateDefaultSubobject<URageComponent>(TEXT("RageComponent"));
 	PanicComponent = CreateDefaultSubobject<UPanicComponent>(TEXT("PanicComponent"));
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+	KnockdownComponent = CreateDefaultSubobject<UKnockdownComponent>(TEXT("KnockdownComponent")); // AM_* montages on FullBody
 	HealthComponent->MaxHealth = 100.0f;
 	HealthComponent->BaseArmorReduction = 0.10f;
 }
@@ -194,6 +197,10 @@ void AOperativeCharacter::BeginPlay()
 	{
 		HealthComponent->OnDied.AddDynamic(this, &AOperativeCharacter::HandleDied);
 		HealthComponent->OnHealthChanged.AddDynamic(this, &AOperativeCharacter::HandleHealthChanged);
+	}
+	if (KnockdownComponent)
+	{
+		KnockdownComponent->OnPhaseChanged.AddUObject(this, &AOperativeCharacter::HandleKnockdownPhase);
 	}
 	CaptureProgressionBases();
 
@@ -327,6 +334,20 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ PANICKING! IGNORING ORDERS!"), FLinearColor(1.f, 0.3f, 0.3f));
 		return EOperativeOrderResult::Refused;
 	}
+	// Sprint 14: knocked down — the order waits and runs once he is up (the latest one wins).
+	if (IsKnockedDown())
+	{
+		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
+		KnockdownComponent->BufferOrder([WeakThis, Destination, bSprint]()
+		{
+			if (AOperativeCharacter* Self = WeakThis.Get())
+			{
+				Self->OrderMoveTo(Destination, bSprint);
+			}
+		});
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("KNOCKED DOWN - ORDER QUEUED"), FLinearColor(1.f, 0.7f, 0.2f));
+		return EOperativeOrderResult::Accepted;
+	}
 	// Sprint 12: a move order away from the wall leaves the cover (a cover / shimmy order keeps it; so does the planned
 	// walk to the pending slot that the tactical pause releases).
 	const bool bToPendingSlot = bHasPendingCover && FVector::Dist2D(Destination, PendingCoverSlot.WorldLocation) <= 60.f;
@@ -394,9 +415,9 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 
 EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, float Speed)
 {
-	if (IsPanicking())
+	if (IsPanicking() || IsKnockedDown())
 	{
-		return EOperativeOrderResult::Refused; // the panic moves him (Godot _process_panic_movement)
+		return EOperativeOrderResult::Refused; // the panic moves him (Godot _process_panic_movement); knocked down: he lies
 	}
 	if (bInCover || bHasPendingCover)
 	{
@@ -459,9 +480,9 @@ float AOperativeCharacter::GetStanceChangeDelay(EOperativeStance From, EOperativ
 
 void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 {
-	if (Stance == NewStance)
+	if (Stance == NewStance || IsKnockedDown())
 	{
-		return;
+		return; // knocked down: he gets up standing (the get-up clip)
 	}
 	// Godot: a frostbitten operative physically cannot get up from the snow.
 	if (ColdSurvival && ColdSurvival->IsFrostbitten() && NewStance != EOperativeStance::Prone)
@@ -891,7 +912,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	{
 		// jumping down off a barricade / barrel top this frame
 	}
-	else
+	else if (!IsKnockedDown()) // Sprint 14: lying on the ground — no cover, facing or shooting until he is up
 	{
 		UpdateVaultTrigger(DeltaTime);
 		TryEnterCoverFromRun();
@@ -1422,7 +1443,7 @@ void AOperativeCharacter::StartReload()
 
 bool AOperativeCharacter::CanShoot() const
 {
-	if (!HealthComponent || !HealthComponent->IsAlive() || (IsPanicking() && !IsRaging())) // Godot panic: can_shoot = false
+	if (!HealthComponent || !HealthComponent->IsAlive() || IsKnockedDown() || (IsPanicking() && !IsRaging())) // Godot panic: can_shoot = false
 	{
 		return false;
 	}
@@ -2162,6 +2183,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		Spec.Amount = SquadFireRules::ComputeShotDamage(CurrentWeapon ? CurrentWeapon->BaseDamage : 18.0f, Stance, Cover, bCrit, Elevation, DistanceMultiplier)
 			* (bRagingShot ? RageComponent->Config.DamageMultiplier : 1.f);
 		Spec.bIsCritical = bCrit;
+		Spec.bMelee = !UsesAmmo(); // the knife
 		Spec.DamageType = CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic;
 		Spec.ArmorPenetration = CurrentWeapon ? CurrentWeapon->ArmorPenetration : 0.20f;
 		Spec.AttackerSource = DisplayName.ToString();
@@ -2344,7 +2366,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 
 bool AOperativeCharacter::CanBeginWeaponShot()
 {
-	if (!HealthComponent || !HealthComponent->IsAlive() || bIsReloading || MisfireCooldownTimer > 0.f)
+	if (!HealthComponent || !HealthComponent->IsAlive() || bIsReloading || MisfireCooldownTimer > 0.f || IsKnockedDown())
 	{
 		return false;
 	}
@@ -2610,8 +2632,11 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 				FLinearColor(0.5f, 0.8f, 1.f));
 		}
 	}
+	// Sprint 14: lying after a knockdown — ranged hits find a prone profile (x0.6), melee blows a helpless man (x1.5).
+	const float KnockdownScale = !bBypassAvoidance && KnockdownComponent && KnockdownComponent->IsDown()
+		? KnockdownComponent->GetDamageMultiplier(AttackerActor && !IsRangedEnemyActor(AttackerActor)) : 1.f;
 	const float Final = bBypassAvoidance ? FMath::Max(1.f, Amount)
-		: FMath::Max(1.f, CoverRules::ApplyAbsorb(Amount, CoverAbsorb) * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut));
+		: FMath::Max(1.f, CoverRules::ApplyAbsorb(Amount, CoverAbsorb) * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut) * KnockdownScale);
 	RecentIncomingDamage += Final;
 	if (IsRangedEnemyActor(AttackerActor))
 	{
@@ -2643,7 +2668,76 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	{
 		PanicComponent->OnDamageTaken(Final);
 	}
+	// Sprint 14: a single hit of >= 40 HP knocks him down (blasts / traps go through UKnockdownComponent::NotifyExplosion).
+	if (KnockdownComponent && HealthComponent->IsAlive() && !bBypassAvoidance)
+	{
+		const FVector Source = AttackerActor ? AttackerActor->GetActorLocation() : GetActorLocation() + GetActorForwardVector() * 100.f;
+		KnockdownComponent->TryKnockDown(EKnockdownCause::HeavyHit, Source, Final, bCrit);
+	}
 	return Final;
+}
+
+bool AOperativeCharacter::IsKnockedDown() const
+{
+	return KnockdownComponent && KnockdownComponent->IsDown();
+}
+
+void AOperativeCharacter::HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase)
+{
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (OldPhase == EKnockdownPhase::None && NewPhase != EKnockdownPhase::None)
+	{
+		// Interrupts: the walk, sprint, reload, the corner aim / cover (left cleanly), a grenade being aimed.
+		StopOperative();
+		if (bCornerAimActive)
+		{
+			EndCornerAim(ECornerAimDecision::DuckForSafety, TEXT("knocked down"));
+		}
+		if (bInCover)
+		{
+			LeaveCover(TEXT("knocked down"));
+		}
+		bHasPendingCover = false;
+		bIsReloading = false;
+		ReloadTimer = 0.f;
+		if (Stance == EOperativeStance::Crouching)
+		{
+			Stance = EOperativeStance::Standing; // the get-up clip ends standing
+			ApplyStanceCapsule();
+		}
+		if (UGrenadeSubsystem* Grenades = GetWorld() ? GetWorld()->GetSubsystem<UGrenadeSubsystem>() : nullptr; Grenades && Grenades->GetThrower() == this)
+		{
+			Grenades->CancelAim();
+		}
+		if (UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+		{
+			Anim->StopSlotAnimation(0.1f, Anim->UpperBodySlot); // fire / reload / hit / throw clips over the fall
+		}
+		// Lying on the ground: no walking, the squad and the enemies step over him.
+		if (Movement)
+		{
+			Movement->StopMovementImmediately();
+			Movement->DisableMovement();
+		}
+		if (Capsule)
+		{
+			KnockdownSavedPawnResponse = Capsule->GetCollisionResponseToChannel(ECC_Pawn);
+			Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		}
+	}
+	else if (NewPhase == EKnockdownPhase::None && OldPhase != EKnockdownPhase::None)
+	{
+		if (Capsule)
+		{
+			Capsule->SetCollisionResponseToChannel(ECC_Pawn, KnockdownSavedPawnResponse);
+		}
+		if (Movement && HealthComponent && HealthComponent->IsAlive())
+		{
+			Movement->SetMovementMode(MOVE_Walking);
+			ApplyMovementParams();
+		}
+	}
 }
 
 bool AOperativeCharacter::TryAIGrenadeThrow()
@@ -2845,6 +2939,18 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot
 	if (!Slot.IsValid())
 	{
 		return EOperativeOrderResult::Unreachable;
+	}
+	if (IsKnockedDown())
+	{
+		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
+		KnockdownComponent->BufferOrder([WeakThis, Slot, bSprint]()
+		{
+			if (AOperativeCharacter* Self = WeakThis.Get())
+			{
+				Self->OrderTakeCover(Slot, bSprint);
+			}
+		});
+		return EOperativeOrderResult::Accepted;
 	}
 	if (bInCover && CoverTraceRules::IsSameWall(CoverSlot, Slot))
 	{
