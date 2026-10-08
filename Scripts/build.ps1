@@ -15,8 +15,11 @@ $Project = Join-Path $ProjectDir "CodexTactics.uproject"
 $LogFile = Join-Path $ProjectDir "Saved\Logs\Build.log"
 New-Item -ItemType Directory -Force (Split-Path $LogFile) | Out-Null
 
-# Only an editor of this project locks our DLLs (another project's editor may stay open).
-if (Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor.exe'" | Where-Object { $_.CommandLine -like "*CodexTactics.uproject*" }) {
+# Only an editor of THIS checkout locks our DLLs (another project's editor, or the user's editor on the main folder while we
+# build in the agents' worktree ../CodexTactics-agents, may stay open): match the full .uproject path.
+$ProjectFull = [IO.Path]::GetFullPath($Project)
+if (Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor.exe'" | Where-Object {
+        $_.CommandLine -and ($_.CommandLine.Replace('/', '') -like "*$ProjectFull*") }) {
     Write-Host "Unreal Editor (CodexTactics) is running: close it first (it locks the DLLs)." -ForegroundColor Yellow
     exit 2
 }

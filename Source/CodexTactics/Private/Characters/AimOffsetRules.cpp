@@ -38,6 +38,13 @@ namespace AimOffsetRules
 		return FMath::Clamp(Degrees, -MaxAbsDegrees, MaxAbsDegrees);
 	}
 
+	float YawTargetWithinReach(float RawDegrees, float ClampDeg, float ReachDeg, float HysteresisDeg, bool& bInOutOfReach)
+	{
+		const float Abs = FMath::Abs(FRotator::NormalizeAxis(RawDegrees));
+		bInOutOfReach = bInOutOfReach ? Abs > ReachDeg - FMath::Max(HysteresisDeg, 0.f) : Abs > ReachDeg;
+		return bInOutOfReach ? 0.f : FMath::Clamp(FRotator::NormalizeAxis(RawDegrees), -ClampDeg, ClampDeg);
+	}
+
 	float ResidualAimError(float ErrorDegrees, float AppliedYawDegrees)
 	{
 		return FMath::Abs(FRotator::NormalizeAxis(ErrorDegrees - AppliedYawDegrees));

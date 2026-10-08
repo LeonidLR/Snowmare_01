@@ -879,8 +879,15 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	}
 	// The yaw twist: only in an aiming pose (out of cover, or the corner fire stance) - the plain cover idle does not twist.
 	const bool bYawPose = !bInCover || Operative.IsCornerAimActive();
-	AimYawTarget = bHasAimTarget && bYawPose
-		? AimOffsetRules::YawToTarget(Operative.GetStanceAimOrigin(), Operative.GetStanceAimBaseDirection(), AimPoint, AimYawClampDegrees) : 0.f;
+	// No twist while walking a turn-based grid path (the body turns cell by cell along it; user PIE video
+	// AnimOffset_Bug_01 2026-10-08) - it fades back in when he stands. The reference is the pose's own aim direction, the
+	// AO excluded (AOperativeCharacter::GetStanceAimBaseDirection), so the twist never feeds back into its own input.
+	const UTurnBasedCombatSubsystem* TurnBased = Operative.GetWorld() ? Operative.GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	const bool bGridWalk = TurnBased && TurnBased->IsActive() && Operative.GetVelocity().SizeSquared2D() > 20.f * 20.f;
+	const float RawYaw = bHasAimTarget && bYawPose && !bGridWalk
+		? AimOffsetRules::YawToTarget(Operative.GetStanceAimOrigin(), Operative.GetStanceAimBaseDirection(), AimPoint, 180.f) : 0.f;
+	AimYawTarget = bHasAimTarget && bYawPose && !bGridWalk
+		? AimOffsetRules::YawTargetWithinReach(RawYaw, AimYawClampDegrees, AimYawClampDegrees + AimYawReachMarginDegrees, 15.f, bAimYawOutOfReach) : 0.f;
 	AimYaw = FMath::Clamp(FMath::FInterpTo(AimYaw, AimYawTarget, DeltaSeconds, AimYawInterpSpeed), -AimYawClampDegrees, AimYawClampDegrees);
 	if (AimYawTarget == 0.f && FMath::Abs(AimYaw) < 0.05f)
 	{

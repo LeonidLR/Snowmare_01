@@ -32,6 +32,27 @@ bool FAimOffsetYawToTargetTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAimOffsetYawReachTest, "CodexTactics.Anim.AimOffset.YawReachAndWrap",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAimOffsetYawReachTest::RunTest(const FString&)
+{
+	// AnimOffset_Bug_01 (2026-10-08): a target behind him flipped between +179 and -179 deg -> the yaw jumped +-60.
+	using namespace AimOffsetRules;
+	bool bOut = false;
+	TestEqual(TEXT("in reach: the angle"), YawTargetWithinReach(40.f, 60.f, 90.f, 15.f, bOut), 40.f);
+	TestEqual(TEXT("in reach beyond the clamp: clamped"), YawTargetWithinReach(-80.f, 60.f, 90.f, 15.f, bOut), -60.f);
+	TestFalse(TEXT("... still in reach"), bOut);
+	TestEqual(TEXT("behind him (+179): out of reach, no twist"), YawTargetWithinReach(179.f, 60.f, 90.f, 15.f, bOut), 0.f);
+	TestTrue(TEXT("... out of reach"), bOut);
+	TestEqual(TEXT("the sign flips across 180 (-179): still no twist"), YawTargetWithinReach(-179.f, 60.f, 90.f, 15.f, bOut), 0.f);
+	TestEqual(TEXT("hysteresis: 85 deg stays out of reach"), YawTargetWithinReach(85.f, 60.f, 90.f, 15.f, bOut), 0.f);
+	TestEqual(TEXT("below reach - hysteresis (70): back in reach, clamped"), YawTargetWithinReach(70.f, 60.f, 90.f, 15.f, bOut), 60.f);
+	TestFalse(TEXT("... in reach again"), bOut);
+	TestEqual(TEXT("in reach, 85 deg: clamped twist"), YawTargetWithinReach(85.f, 60.f, 90.f, 15.f, bOut), 60.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAimOffsetPitchToTargetTest, "CodexTactics.Anim.AimOffset.PitchToTarget",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

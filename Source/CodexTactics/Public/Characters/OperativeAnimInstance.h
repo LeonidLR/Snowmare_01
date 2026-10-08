@@ -602,6 +602,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset", meta = (ClampMin = "0", ClampMax = "180"))
 	float AimYawClampDegrees = 60.f;
 
+	/** A target farther than AimYawClampDegrees + this from the pose's aim is out of the twist's reach: AimYaw eases to 0 (deg). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset", meta = (ClampMin = "0", ClampMax = "120"))
+	float AimYawReachMarginDegrees = 30.f;
+
 	/** AimYaw follows the target at this rate (FInterpTo speed, 1/s). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset", meta = (ClampMin = "0.1"))
 	float AimYawInterpSpeed = 12.f;
@@ -613,6 +617,9 @@ public:
 	/** The raw (not eased, clamped) yaw to the aim point, degrees; 0 with no target. */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
 	float AimYawTarget = 0.f;
+
+	/** The target is out of the twist's reach (AimOffsetRules::YawTargetWithinReach hysteresis state). */
+	bool bAimYawOutOfReach = false;
 
 	/** The operative has an aim target (a combat target or a shot within AimTargetHoldSeconds). */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
