@@ -1,5 +1,5 @@
 {
-  "comment": "Written by Scripts/Tools/jev_ai_coach.py; applied at game start (Data/AITuning.h), a -dpcvars= value wins, -NoAITuning skips it. Review before committing.",
+  "comment": "Written by Scripts/Tools/jev_ai_coach.py (merged; the Wave Editor's keys kept) and the Wave Editor «Скрытность и бой» tab; applied at game start (Data/AITuning.h), a -dpcvars= value wins, -NoAITuning skips it. \"coach_cvars\" = the keys the coach set (any other key is the user's and never overwritten).",
   "updated": "2026-10-04T15:05:29",
   "profile": "VETERAN",
   "runs_per_batch": 8,
@@ -8,22 +8,47 @@
     0.75
   ],
   "result": {
-    "runs": 8,
-    "victories": 4,
-    "win_rate": 0.5,
-    "avg_waves_cleared": 2.38,
+    "runs": 24,
+    "victories": 24,
+    "win_rate": 1.0,
+    "avg_waves_cleared": 1.0,
     "deaths_by_freezing": 0,
-    "marksman_hit_rate": 0.667,
-    "marksman_shots_per_run": 16.5,
-    "marksman_retreats_per_run": 7.6,
-    "marksman_kill_share": 0.767,
-    "bot_assaults_per_run": 8.6,
-    "flank_orders_per_run": 183.5,
-    "fallbacks_per_run": 33.8,
-    "backstabs_per_run": 3.8,
-    "avg_real_seconds": 48.1
+    "marksman_hit_rate": 0.745,
+    "marksman_shots_per_run": 2.1,
+    "marksman_retreats_per_run": 0.5,
+    "marksman_kill_share": 1.0,
+    "bot_assaults_per_run": 2.0,
+    "flank_orders_per_run": 0.0,
+    "fallbacks_per_run": 0.3,
+    "backstabs_per_run": 0.0,
+    "avg_real_seconds": 15.7,
+    "stealth_runs": 24,
+    "stealth_outcomes": {
+      "ambush_pre_emptive": 8,
+      "detected": 16
+    },
+    "stealth_detected_share": 0.667,
+    "stealth_ambush_share": 0.333,
+    "stealth_forced_share": 0.0,
+    "avg_sneak_s": 43.6,
+    "stealth_runs_detected": 16,
+    "avg_first_detection_s": 42.5,
+    "detections_by_sight_per_run": 0.38,
+    "detections_by_hearing_per_run": 0.42,
+    "detections_by_smell_per_run": 0.29,
+    "searches_started_per_run": 0.0,
+    "searches_timed_out_per_run": 0.0,
+    "searches_found_squad_per_run": 0.0,
+    "traps_laid_per_run": 0.0
   },
   "cvars": {
-    "Codex.Bot.AssaultClearRadius": "1800"
-  }
+    "Codex.Bot.AssaultClearRadius": "1800",
+    "Codex.Perception.SightRangeScale": "0.9"
+  },
+  "coach_cvars": {
+    "Codex.Bot.AssaultClearRadius": "1800",
+    "Codex.Perception.SightRangeScale": "0.9"
+  },
+  "coach_updated": "2026-10-08T07:58:31",
+  "coach_source": "Saved\\Coach\\stealth_proposal.json"
 }
