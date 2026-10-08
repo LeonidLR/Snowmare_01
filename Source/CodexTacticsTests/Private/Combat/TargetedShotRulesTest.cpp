@@ -37,4 +37,26 @@ bool FMineMissReasonTest::RunTest(const FString&)
 	return true;
 }
 
+TARGETED_SHOT_TEST(FPlannedShotRetryTest, "PlannedShotRetry")
+bool FPlannedShotRetryTest::RunTest(const FString&)
+{
+	// Bug 2026-10-08: a barrel shot planned in the pause must not be lost when the shooter cannot fire at the release.
+	using namespace TargetedShotRules;
+	TestTrue(TEXT("Real time right after the release: retry"),
+		GetPlannedShotRetry(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, 0.f) == EPlannedShotRetry::Retry);
+	TestTrue(TEXT("Real time after a reload (3 s): retry"),
+		GetPlannedShotRetry(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, 3.f) == EPlannedShotRetry::Retry);
+	TestTrue(TEXT("Window edge: still retried"),
+		GetPlannedShotRetry(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, PlannedShotRetrySeconds) == EPlannedShotRetry::Retry);
+	TestTrue(TEXT("Window over: give up"),
+		GetPlannedShotRetry(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, PlannedShotRetrySeconds + 0.1f) == EPlannedShotRetry::GiveUp);
+	TestTrue(TEXT("Paused again: keep it for the next release"),
+		GetPlannedShotRetry(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause, 20.f) == EPlannedShotRetry::Wait);
+	TestTrue(TEXT("Turn-based: dropped"),
+		GetPlannedShotRetry(ECodexGamePhase::WaveCombat, ECodexCombatMode::TurnBased, 0.f) == EPlannedShotRetry::GiveUp);
+	TestTrue(TEXT("Wave over: dropped"),
+		GetPlannedShotRetry(ECodexGamePhase::Exploration, ECodexCombatMode::None, 0.f) == EPlannedShotRetry::GiveUp);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

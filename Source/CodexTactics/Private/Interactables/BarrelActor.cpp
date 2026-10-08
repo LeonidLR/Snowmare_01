@@ -7,6 +7,7 @@
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/HeatSourceComponent.h"
+#include "Interactables/RelocationSubsystem.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
@@ -57,7 +58,10 @@ void ABarrelActor::OnConstruction(const FTransform& Transform)
 
 bool ABarrelActor::CanPushNow() const
 {
-	return bCanBeRelocated;
+	// User decision 2026-10-08: the barrel menu also opens in the fight; «Вытолкать» only where objects may be moved
+	// (not in the live real-time fight - the tactical pause plans it).
+	const URelocationSubsystem* Relocation = GetWorld() ? GetWorld()->GetSubsystem<URelocationSubsystem>() : nullptr;
+	return bCanBeRelocated && (!Relocation || Relocation->CanRelocateNow());
 }
 
 FActionMenuRequest ABarrelActor::BuildActionMenu(const AOperativeCharacter* Leader) const

@@ -33,7 +33,13 @@ namespace VaultNavigation
 	/** Actor tag that makes a level object vaultable (Godot "vault" group / property). */
 	CODEXTACTICS_API extern const FName VaultTag;
 
-	/** Barricades with bVaultable and actors tagged "Vault". */
+	/**
+	 * Actor tag of an object an operative is walking up to / pushing (URelocationSubsystem): nobody vaults over it (bug
+	 * 2026-10-08: the worker vaulted over the barricade he came to push, the push then stalled behind it).
+	 */
+	CODEXTACTICS_API extern const FName RelocatingTag;
+
+	/** Barricades with bVaultable and actors tagged "Vault"; never an object being relocated. */
 	CODEXTACTICS_API bool IsVaultable(const AActor* Actor);
 
 	/**

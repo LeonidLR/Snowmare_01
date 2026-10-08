@@ -18,10 +18,13 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
+#include "Interactables/InteractionSubsystem.h"
 #include "Interactables/RelocationGhostActor.h"
 #include "Interactables/RelocationRules.h"
 #include "Interactables/TripwireActor.h"
 #include "Interactables/TripwireRules.h"
+#include "Interactables/VaultNavigation.h"
+#include "NavModifierComponent.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 
@@ -644,10 +647,14 @@ void URelocationSubsystem::ConfirmPlacement(const FVector& GroundPoint)
 		{
 			Feedback->SpawnWaypointMarker(Target);
 		}
-		// Godot clears the planned move of the worker: the relocation replaces it.
+		// Godot clears the planned move of the worker: the relocation replaces it (and a planned use order, 2026-10-08).
 		if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 		{
 			Squad->ClearPlannedOrder(Worker);
+		}
+		if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+		{
+			Interactions->CancelUseOrder(Worker);
 		}
 		Post(Worker->DisplayName, FText::Format(LOCTEXT("Planned", "📋 [ПЛАН] {0}: Запланирован перенос ({1}) на новую позицию! [ПРОБЕЛ — исполнить]"),
 			Worker->DisplayName, NameOf(Object)));
@@ -663,7 +670,8 @@ void URelocationSubsystem::ConfirmPlacement(const FVector& GroundPoint)
 	CancelPlacement();
 }
 
-void URelocationSubsystem::ExecuteRelocate(AOperativeCharacter* Worker, AInteractableActor* Object, const FVector& TargetLocation, float TargetYaw)
+void URelocationSubsystem::ExecuteRelocate(AOperativeCharacter* Worker, AInteractableActor* Object, const FVector& TargetLocation, float TargetYaw,
+	bool bPlannedInPause)
 {
 	if (!Worker || !Object)
 	{
@@ -677,13 +685,49 @@ void URelocationSubsystem::ExecuteRelocate(AOperativeCharacter* Worker, AInterac
 	Task.TargetYaw = TargetYaw;
 	Task.GroundZ = Object->GetActorLocation().Z;
 	Task.Stage = 1;
+	Task.bPlannedInPause = bPlannedInPause;
+	if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+	{
+		Interactions->CancelUseOrder(Worker); // the carry replaces a walk-up to light a barrel
+	}
+	SyncRelocatingTags();
 	Worker->OrderMoveTo(Object->GetApproachPoint(Worker->GetActorLocation()), false);
 	Post(Worker->DisplayName, FText::Format(LOCTEXT("MovingOut", "Выдвигаюсь, чтобы перенести {0} на новую позицию!"), NameOf(Object)));
+}
+
+void URelocationSubsystem::SyncRelocatingTags()
+{
+	for (int32 Index = TaggedObjects.Num() - 1; Index >= 0; --Index)
+	{
+		AInteractableActor* Object = TaggedObjects[Index].Get();
+		if (!Object || !Tasks.ContainsByPredicate([Object](const FRelocateTask& Task) { return Task.Object.Get() == Object; }))
+		{
+			if (Object)
+			{
+				Object->Tags.Remove(VaultNavigation::RelocatingTag);
+			}
+			TaggedObjects.RemoveAt(Index);
+		}
+	}
+	for (const FRelocateTask& Task : Tasks)
+	{
+		AInteractableActor* Object = Task.Object.Get();
+		if (Object && !Object->ActorHasTag(VaultNavigation::RelocatingTag))
+		{
+			Object->Tags.Add(VaultNavigation::RelocatingTag);
+			TaggedObjects.Add(Object);
+		}
+	}
 }
 
 bool URelocationSubsystem::HasPlannedTask(const AOperativeCharacter* Worker) const
 {
 	return PlannedTasks.ContainsByPredicate([Worker](const FRelocateTask& Task) { return Task.Worker.Get() == Worker; });
+}
+
+void URelocationSubsystem::ClearPlannedTask(const AOperativeCharacter* Worker)
+{
+	PlannedTasks.RemoveAll([Worker](const FRelocateTask& Task) { return Task.Worker.Get() == Worker; });
 }
 
 void URelocationSubsystem::HandlePauseReleased()
@@ -692,7 +736,7 @@ void URelocationSubsystem::HandlePauseReleased()
 	PlannedTasks.Reset();
 	for (const FRelocateTask& Plan : Plans)
 	{
-		ExecuteRelocate(Plan.Worker.Get(), Plan.Object.Get(), Plan.Target, Plan.TargetYaw);
+		ExecuteRelocate(Plan.Worker.Get(), Plan.Object.Get(), Plan.Target, Plan.TargetYaw, /*bPlannedInPause*/ true);
 	}
 	TArray<FDeployTask> Deploys = MoveTemp(PlannedDeploys);
 	PlannedDeploys.Reset();
@@ -727,6 +771,12 @@ void URelocationSubsystem::SetObjectCarried(AInteractableActor& Object, bool bCa
 	// A carried object must not block the worker or rebuild the NavMesh every frame.
 	Object.Box->SetCollisionEnabled(bCarried ? ECollisionEnabled::NoCollision : ECollisionEnabled::QueryAndPhysics);
 	Object.Box->SetCanEverAffectNavigation(!bCarried);
+	// A vaultable barricade marks its spot with a «vault» nav area the squad's filter avoids: carried along in front of the
+	// worker it blocked his own path, so the push crawled (bug 2026-10-08, PauseBarrelOrderSmoke: 28 s for 5 m).
+	if (UNavModifierComponent* Modifier = Object.FindComponentByClass<UNavModifierComponent>())
+	{
+		Modifier->SetCanEverAffectNavigation(!bCarried);
+	}
 }
 
 void URelocationSubsystem::StepBack(AOperativeCharacter& Worker, const AInteractableActor& Object, float Distance) const
@@ -920,27 +970,32 @@ float URelocationSubsystem::GetPushOffset(const AOperativeCharacter& Worker, con
 	return FMath::Max(RelocationRules::PushOffset, Radius + Along + 25.f);
 }
 
+void URelocationSubsystem::DropTask(FRelocateTask& Task, const FText& LineFormat)
+{
+	AOperativeCharacter* Worker = Task.Worker.Get();
+	AInteractableActor* Object = Task.Object.Get();
+	if (Object)
+	{
+		const FVector Location = Object->GetActorLocation();
+		Object->SetActorLocation(FVector(Location.X, Location.Y, Task.GroundZ));
+		SetObjectCarried(*Object, false);
+	}
+	if (Worker)
+	{
+		Worker->SetCarrying(false);
+		if (Object)
+		{
+			StepBack(*Worker, *Object, RelocationRules::StepBackDropped);
+		}
+		Post(Worker->DisplayName, FText::Format(LineFormat, NameOf(Object)));
+	}
+}
+
 void URelocationSubsystem::DropAllTasks(const FText& LineFormat)
 {
 	for (FRelocateTask& Task : Tasks)
 	{
-		AOperativeCharacter* Worker = Task.Worker.Get();
-		AInteractableActor* Object = Task.Object.Get();
-		if (Object)
-		{
-			const FVector Location = Object->GetActorLocation();
-			Object->SetActorLocation(FVector(Location.X, Location.Y, Task.GroundZ));
-			SetObjectCarried(*Object, false);
-		}
-		if (Worker)
-		{
-			Worker->SetCarrying(false);
-			if (Object)
-			{
-				StepBack(*Worker, *Object, RelocationRules::StepBackDropped);
-			}
-			Post(Worker->DisplayName, FText::Format(LineFormat, NameOf(Object)));
-		}
+		DropTask(Task, LineFormat);
 	}
 	Tasks.Reset();
 }
@@ -962,18 +1017,25 @@ void URelocationSubsystem::Tick(float DeltaTime)
 			TripwireTasks.RemoveAt(Index);
 		}
 	}
+	SyncRelocatingTags();
 	if (Tasks.IsEmpty())
 	{
 		return;
 	}
+	// Live combat drops the carries started outside the pause; a carry ordered in the pause runs on after the release
+	// (bug 2026-10-08: the resume dropped it the next frame, so the paused order never ran).
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	if (Flow && !CanRelocateNow())
-	{
-		DropAllTasks(LOCTEXT("Alarm", "⚠️ Боевая тревога! Бросаю {0} и занимаю оборону!"));
-		return;
-	}
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	const bool bZoneSolo = Leader && Leader->bInCameraZone;
 	for (int32 Index = Tasks.Num() - 1; Index >= 0; --Index)
 	{
+		if (Flow && RelocationRules::ShouldDropActiveTask(Flow->GetPhase(), Flow->GetCombatMode(), bZoneSolo, Tasks[Index].bPlannedInPause))
+		{
+			DropTask(Tasks[Index], LOCTEXT("Alarm", "⚠️ Боевая тревога! Бросаю {0} и занимаю оборону!"));
+			Tasks.RemoveAt(Index);
+			continue;
+		}
 		if (TickTask(Tasks[Index], DeltaTime))
 		{
 			Tasks.RemoveAt(Index);

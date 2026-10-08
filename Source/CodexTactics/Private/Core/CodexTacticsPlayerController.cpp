@@ -11,6 +11,7 @@
 #include "Characters/RecruitSubsystem.h"
 #include "Combat/HoldSphereActor.h"
 #include "Combat/CombatTimeModeRules.h"
+#include "Interactables/BarrelActor.h"
 #include "Interactables/DeployableActor.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -1199,8 +1200,13 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	UInteractionSubsystem* UseOrders = GetWorld()->GetSubsystem<UInteractionSubsystem>();
 	for (int32 Index = 0; Index < Group.Num(); ++Index)
 	{
+		if (UseOrders)
+		{
+			UseOrders->CancelUseOrder(Group[Index]); // a move order replaces a planned / running «Разжечь»
+		}
 		if (bPlan)
 		{
 			const FVector Planned = Squad->PlanMove(Group[Index], Targets[Index], bSprint, Flow ? Flow->GetConfig().PauseOrderRadius : 1200.f);
@@ -1357,6 +1363,16 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		const bool bDeployable = Object->IsA<ADeployableActor>();
 		// Godot is_zone_solo: the leader alone in a camera zone may move / take objects mid-wave.
 		const bool bZoneSolo = Leader && Leader->bInCameraZone;
+		// User decision 2026-10-08: a barrel in the fight (real time or pause) opens its menu at once - «Разжечь (1 спичка)»
+		// sends the operative to light it (planned in the pause), «Вытолкать» is offered in the pause only.
+		if (Object->IsA<ABarrelActor>() && bWave)
+		{
+			if (UInteractionSubsystem* ClickInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+			{
+				ClickInteractions->OpenMenuNow(Object);
+			}
+			return;
+		}
 		if ((bDeployable || Object->bCanBeRelocated) && bWave && !bClickPause && !bZoneSolo)
 		{
 			if (ClickMessages)

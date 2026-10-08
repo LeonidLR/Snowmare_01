@@ -5,6 +5,15 @@ bool RelocationRules::CanRelocateNow(ECodexGamePhase Phase, ECodexCombatMode Mod
 	return Phase != ECodexGamePhase::WaveCombat || Mode == ECodexCombatMode::TacticalPause || bLeaderZoneSolo;
 }
 
+bool RelocationRules::ShouldDropActiveTask(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo, bool bPlannedInPause)
+{
+	if (CanRelocateNow(Phase, Mode, bLeaderZoneSolo))
+	{
+		return false;
+	}
+	return !(bPlannedInPause && Phase == ECodexGamePhase::WaveCombat && Mode == ECodexCombatMode::RealTime);
+}
+
 float RelocationRules::GetPlacementRadius(ECodexGamePhase Phase, ECodexCombatMode Mode, float PauseRadius, float WorkerPlacementRadius)
 {
 	if (Mode == ECodexCombatMode::TacticalPause)

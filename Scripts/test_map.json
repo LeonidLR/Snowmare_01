@@ -27,7 +27,7 @@
     "RealtimeSelectSmoke", "MarksmanCloseShotSmoke", "HordeSmoke", "CoverSmoke",
     "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke", "CoverCrouchSmoke", "CoverMoveSmoke",
     "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke", "PrepDeploySmoke", "SightSmoke",
-    "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke"
+    "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; timeout in seconds; knownFail = reported but does not fail the run",
@@ -78,9 +78,9 @@
     },
     {
       "name": "barrel-heat-relocation",
-      "globs": ["Source/**/Interactables/Barrel*", "Source/**/Interactables/HeatSource*", "Source/**/Interactables/Relocation*", "Source/**/Interactables/RadiusRing*"],
-      "tests": ["CodexTactics.Barrel", "CodexTactics.Relocation", "CodexTactics.Interactables.RelocationRules"],
-      "smokes": ["BarrelSmoke", "RelocationSmoke", "TurnBasedPushSmoke", "RadiusRingSmoke"]
+      "globs": ["Source/**/Interactables/Barrel*", "Source/**/Interactables/HeatSource*", "Source/**/Interactables/Relocation*", "Source/**/Interactables/RadiusRing*", "Source/**/Interactables/UseOrder*", "Source/**/Interactables/InteractionSubsystem*"],
+      "tests": ["CodexTactics.Barrel", "CodexTactics.Relocation", "CodexTactics.Interactables.RelocationRules", "CodexTactics.Interactables.UseOrder"],
+      "smokes": ["BarrelSmoke", "PauseBarrelOrderSmoke", "RelocationSmoke", "TurnBasedPushSmoke", "RadiusRingSmoke", "ClickRulesSmoke", "TurnBasedBarricadeSmoke"]
     },
     {
       "name": "deployables",
@@ -134,7 +134,7 @@
       "name": "real-time-fire",
       "globs": ["Source/**/Combat/SquadFire*", "Source/**/Combat/TargetedShot*", "Source/**/Combat/SpaceInput*", "Source/**/Combat/CombatTimeMode*", "Source/**/Combat/HoldSphere*", "Source/**/Combat/CombatFeedback*"],
       "tests": ["CodexTactics.Combat.SquadFire", "CodexTactics.Combat.TargetedShot", "CodexTactics.Combat.TimeMode", "CodexTactics.Combat.Squad"],
-      "smokes": ["SquadFireSmoke", "TargetedShotSmoke", "CombatFlowSmoke", "RealTimeControlSmoke", "RealtimeSelectSmoke", "HoldSphereSmoke", "ClickRulesSmoke", "CombatMoveSmoke"]
+      "smokes": ["SquadFireSmoke", "TargetedShotSmoke", "PauseBarrelOrderSmoke", "CombatFlowSmoke", "RealTimeControlSmoke", "RealtimeSelectSmoke", "HoldSphereSmoke", "ClickRulesSmoke", "CombatMoveSmoke"]
     },
     {
       "name": "waves-victory",
@@ -248,7 +248,7 @@
       "name": "game-framework",
       "globs": ["Source/**/Core/CodexTacticsGameMode*", "Source/**/Core/CodexTacticsGameState*", "Source/**/Core/CodexTacticsPlayerController*", "Source/**/UI/CodexTacticsHUD*", "Source/**/UI/CodexButtonFocus*"],
       "tests": ["CodexTactics.Core", "CodexTactics.Combat.TimeMode"],
-      "smokes": ["MovementSmoke", "CombatFlowSmoke", "ClickRulesSmoke", "MissionSmoke", "ActionBarSmoke", "SaveLoadSmoke"]
+      "smokes": ["MovementSmoke", "CombatFlowSmoke", "ClickRulesSmoke", "PauseBarrelOrderSmoke", "MissionSmoke", "ActionBarSmoke", "SaveLoadSmoke"]
     },
     {
       "name": "event-bus",

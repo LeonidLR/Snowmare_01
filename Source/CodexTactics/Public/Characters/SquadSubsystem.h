@@ -169,6 +169,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	int32 GetPlannedOrderCount() const { return PlannedOrders.Num(); }
 
+	/** Operatives whose planned targeted shot could not fire on the pause release and is being retried (smokes). */
+	int32 GetDeferredShotCount() const { return DeferredShots.Num(); }
+
 	/** True while formation following is on (exploration only; from preparation on, operatives act individually). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool IsFormationActive() const;
@@ -199,6 +202,11 @@ private:
 	/** Remembers where every operative stands when a tactical pause begins and drops old plans. */
 	void BeginOrderPlanning();
 	void ExecutePlannedOrders();
+	/**
+	 * Bug 2026-10-08: re-fires the planned object shots that could not fire on the release (reload / misfire / frozen
+	 * weapon) in the real-time fight, within TargetedShotRules::PlannedShotRetrySeconds.
+	 */
+	void RetryPlannedShots(float DeltaTime);
 
 	struct FFollowerState
 	{
@@ -226,6 +234,8 @@ private:
 
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> PauseOrigins;
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FPlannedOrder> PlannedOrders;
+	/** Operatives with a deferred planned shot -> seconds of real-time fight since the release. */
+	TMap<TWeakObjectPtr<AOperativeCharacter>, float> DeferredShots;
 	ECodexCombatMode LastCombatMode = ECodexCombatMode::None;
 
 	ESquadFirePosture SquadPosture = FirePostureRules::DefaultPosture;

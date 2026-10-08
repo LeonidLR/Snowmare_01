@@ -33,10 +33,11 @@ UNavFilter_NoVault::UNavFilter_NoVault()
 namespace VaultNavigation
 {
 	const FName VaultTag(TEXT("Vault"));
+	const FName RelocatingTag(TEXT("CodexRelocating"));
 
 	bool IsVaultable(const AActor* Actor)
 	{
-		if (!Actor)
+		if (!Actor || Actor->ActorHasTag(RelocatingTag))
 		{
 			return false;
 		}

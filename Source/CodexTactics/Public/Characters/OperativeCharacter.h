@@ -131,6 +131,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
 	EOperativeOrderResult OrderMoveTo(const FVector& Destination, bool bSprint);
 
+	/** Goal of the last move request (a use order sees another order replace its walk-up). */
+	const FVector& GetLastMoveDestination() const { return LastMoveDestination; }
+
 	/** Formation move issued by the squad: path to Destination at a fixed speed, keeps stance and sprint state. */
 	EOperativeOrderResult FollowTo(const FVector& Destination, float Speed);
 
@@ -1094,8 +1097,12 @@ public:
 	/** Tactical pause: remembers a targeted shot (one per kind) executed when the pause is released. */
 	void PlanTargetedShot(AActor* Target);
 
-	/** Executes the planned shots in Godot order: barrel, mine, crate, trapped object, then the priority enemy. */
-	void ExecutePlannedTargetedShots();
+	/**
+	 * Executes the planned shots in Godot order: barrel, mine, crate, trapped object, then the priority enemy. An object
+	 * shot that cannot fire yet (reloading, misfire, frozen weapon, no line out of the cover) stays planned so the squad
+	 * retries it (bug 2026-10-08: it was silently dropped). Returns true when nothing is left planned.
+	 */
+	bool ExecutePlannedTargetedShots();
 
 	void ClearPlannedTargetedShots() { PlannedShots.Reset(); }
 

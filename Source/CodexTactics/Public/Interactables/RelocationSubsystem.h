@@ -17,8 +17,8 @@ class ADeployableActor;
  *     cyan inside the allowed radius, red outside;
  *  2. task: the worker walks to the object, braces against it and pushes it (carry speed) to the new spot,
  *     then sets it down and steps back.
- * In the tactical pause the move is planned and runs on release; in live combat tasks are dropped
- * («Боевая тревога!»). Frozen (>= 80 % cold) or badly wounded (< 50 % HP) operatives cannot lift.
+ * In the tactical pause the move is planned and runs on release (and keeps running in the real-time fight); a task
+ * started outside the pause is dropped when live combat begins («Боевая тревога!»). Frozen (>= 80 % cold) or badly wounded (< 50 % HP) operatives cannot lift.
  * Also sets up engineering items from an operative's supply (F): click a spot, turn it with the wheel / R,
  * click again; the operative walks there and builds it (a mine may go off in unsteady hands).
  * Godot: `_on_ability_button_pressed`, `_start_placement_mode`, `_handle_placement_click`, `_confirm_placement`,
@@ -128,9 +128,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Relocation")
 	void CancelPlacement();
 
-	/** Starts a move task right away (no placement UI). */
+	/**
+	 * Starts a move task right away (no placement UI). bPlannedInPause: ordered in the tactical pause (the release runs it),
+	 * so the real-time fight that follows does not drop it (RelocationRules::ShouldDropActiveTask).
+	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Relocation")
-	void ExecuteRelocate(AOperativeCharacter* Worker, AInteractableActor* Object, const FVector& TargetLocation, float TargetYaw);
+	void ExecuteRelocate(AOperativeCharacter* Worker, AInteractableActor* Object, const FVector& TargetLocation, float TargetYaw,
+		bool bPlannedInPause = false);
 
 	/** Height of the ground plane under the object being placed (for cursor ray intersection). */
 	float GetPlacementGroundZ() const;
@@ -151,6 +155,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Relocation")
 	bool HasPlannedTask(const AOperativeCharacter* Worker) const;
 
+	/** Drops Worker's planned (pause) relocation: another order for him replaces it. */
+	void ClearPlannedTask(const AOperativeCharacter* Worker);
+
 protected:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 
@@ -165,6 +172,8 @@ private:
 		float GroundZ = 0.f;
 		int32 Stage = 1;
 		float RetryTime = 0.f;
+		/** Ordered in the tactical pause: it survives the resume into the real-time fight. */
+		bool bPlannedInPause = false;
 	};
 
 	UFUNCTION()
@@ -179,6 +188,8 @@ private:
 	void StepBack(AOperativeCharacter& Worker, const AInteractableActor& Object, float Distance) const;
 	/** Drops every task where it is with LineFormat ({0} = object) posted by each worker. */
 	void DropAllTasks(const FText& LineFormat);
+	/** Drops one task where it is (object set down on its ground, worker steps back) and posts LineFormat. */
+	void DropTask(FRelocateTask& Task, const FText& LineFormat);
 
 	struct FDeployTask
 	{
@@ -249,6 +260,10 @@ private:
 	TObjectPtr<ARelocationGhostActor> Ghost;
 
 	TArray<FRelocateTask> Tasks;
+	/** Objects tagged VaultNavigation::RelocatingTag (no vaulting over them while a task moves them). */
+	TArray<TWeakObjectPtr<AInteractableActor>> TaggedObjects;
+	/** Tags the objects of the running tasks, untags the rest. */
+	void SyncRelocatingTags();
 	/** Pause plans per worker, executed on release. */
 	TArray<FRelocateTask> PlannedTasks;
 };

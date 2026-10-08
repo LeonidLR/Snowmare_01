@@ -5,10 +5,12 @@
 #include "CodexTactics.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/BarrelActor.h"
 #include "Interactables/DeployableActor.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/LootCrateActor.h"
 #include "Interactables/RelocationSubsystem.h"
+#include "Interactables/UseOrderRules.h"
 #include "UI/GameMessageSubsystem.h"
 
 bool UInteractionSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -90,6 +92,7 @@ void UInteractionSubsystem::TrapActionMenu()
 void UInteractionSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	TickUseOrders(DeltaTime);
 	if (Pending.IsValid())
 	{
 		TryOpenMenu();
@@ -156,7 +159,202 @@ void UInteractionSubsystem::ConfirmActionMenu()
 	if (Target && Leader && !bDisabled)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("Action confirmed on %s by %s"), *Target->GetName(), *Leader->DisplayName.ToString());
+		// User decision 2026-10-08: in the fight the barrel menu opens from afar, so «Разжечь» is an order - he walks up
+		// and lights it (real time), or it is planned and runs on the release (tactical pause).
+		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		if (Flow && Target->IsA<ABarrelActor>()
+			&& UseOrderRules::GetDispatch(Flow->GetPhase(), Flow->GetCombatMode()) != EUseOrderDispatch::Immediate)
+		{
+			OrderUse(Leader, Target);
+			return;
+		}
 		Target->ExecuteAction(Leader);
+	}
+}
+
+// --- Use orders in a fight (user decision 2026-10-08) ---
+
+void UInteractionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+	if (UGameFlowSubsystem* Flow = InWorld.GetSubsystem<UGameFlowSubsystem>())
+	{
+		Flow->OnGameFlowChanged.AddDynamic(this, &UInteractionSubsystem::HandleGameFlowChanged);
+		Flow->OnTacticalPauseReleased.AddDynamic(this, &UInteractionSubsystem::HandlePauseReleased);
+	}
+}
+
+void UInteractionSubsystem::PostLine(const FText& Speaker, const FText& Text) const
+{
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(Speaker, Text);
+	}
+}
+
+bool UInteractionSubsystem::HasUseOrder(const AOperativeCharacter* Worker) const
+{
+	auto Matches = [Worker](const FUseOrder& Order) { return Order.Worker.Get() == Worker; };
+	return UseOrders.ContainsByPredicate(Matches) || PlannedUseOrders.ContainsByPredicate(Matches);
+}
+
+void UInteractionSubsystem::CancelUseOrder(const AOperativeCharacter* Worker)
+{
+	if (!Worker)
+	{
+		return;
+	}
+	auto Matches = [Worker](const FUseOrder& Order) { return Order.Worker.Get() == Worker; };
+	if (UseOrders.RemoveAll(Matches) + PlannedUseOrders.RemoveAll(Matches) > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("%s: use order replaced by another order"), *Worker->DisplayName.ToString());
+	}
+}
+
+void UInteractionSubsystem::OrderUse(AOperativeCharacter* Worker, AInteractableActor* Target)
+{
+	if (!Worker || !Target)
+	{
+		return;
+	}
+	CancelUseOrder(Worker);
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const EUseOrderDispatch Dispatch = Flow ? UseOrderRules::GetDispatch(Flow->GetPhase(), Flow->GetCombatMode()) : EUseOrderDispatch::Immediate;
+	if (Dispatch == EUseOrderDispatch::Immediate)
+	{
+		UseNow(*Worker, *Target);
+		return;
+	}
+	if (Dispatch == EUseOrderDispatch::Execute)
+	{
+		StartUse(Worker, Target);
+		return;
+	}
+	// Tactical pause: the plan replaces his planned move / relocation; the release sends him (marker meanwhile).
+	FUseOrder& Plan = PlannedUseOrders.AddDefaulted_GetRef();
+	Plan.Worker = Worker;
+	Plan.Target = Target;
+	Plan.Approach = Target->GetApproachPoint(Worker->GetActorLocation());
+	if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	{
+		Squad->ClearPlannedOrder(Worker);
+	}
+	if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
+	{
+		Relocation->ClearPlannedTask(Worker);
+	}
+	if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+	{
+		Feedback->SpawnWaypointMarker(Plan.Approach);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("%s: use of %s planned (pause)"), *Worker->DisplayName.ToString(), *Target->GetName());
+	PostLine(Worker->DisplayName, FText::Format(NSLOCTEXT("InteractionSubsystem", "UsePlanned",
+		"📋 [ПЛАН] {0}: {1} — подойти и выполнить «{2}»! [ПРОБЕЛ — исполнить]"), Worker->DisplayName, Target->DisplayName,
+		Target->IsA<ABarrelActor>() ? NSLOCTEXT("InteractionSubsystem", "IgniteVerb", "Разжечь") : NSLOCTEXT("InteractionSubsystem", "UseVerb", "Использовать")));
+}
+
+void UInteractionSubsystem::StartUse(AOperativeCharacter* Worker, AInteractableActor* Target)
+{
+	if (!Worker || !Target)
+	{
+		return;
+	}
+	if (Target->GetDistanceTo(Worker->GetActorLocation()) <= Target->InteractionDistance)
+	{
+		UseNow(*Worker, *Target);
+		return;
+	}
+	FUseOrder& Order = UseOrders.AddDefaulted_GetRef();
+	Order.Worker = Worker;
+	Order.Target = Target;
+	Order.Approach = Target->GetApproachPoint(Worker->GetActorLocation());
+	Worker->OrderMoveTo(Order.Approach, false);
+	Order.IssuedGoal = Worker->GetLastMoveDestination();
+	UE_LOG(LogCodexTactics, Display, TEXT("%s: walking up to use %s"), *Worker->DisplayName.ToString(), *Target->GetName());
+	PostLine(Worker->DisplayName, Target->IsA<ABarrelActor>()
+		? NSLOCTEXT("InteractionSubsystem", "GoIgnite", "🔥 Иду разжигать бочку!")
+		: FText::Format(NSLOCTEXT("InteractionSubsystem", "GoUse", "Выдвигаюсь к объекту: {0}."), Target->DisplayName));
+}
+
+void UInteractionSubsystem::UseNow(AOperativeCharacter& Worker, AInteractableActor& Target) const
+{
+	Worker.StopOperative();
+	const FVector Facing = (Target.GetActorLocation() - Worker.GetActorLocation()).GetSafeNormal2D();
+	if (!Facing.IsNearlyZero())
+	{
+		Worker.SetActorRotation(FRotator(0.f, Facing.Rotation().Yaw, 0.f));
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("%s uses %s"), *Worker.DisplayName.ToString(), *Target.GetName());
+	Target.ExecuteAction(&Worker);
+}
+
+void UInteractionSubsystem::TickUseOrders(float DeltaTime)
+{
+	// Indexed walk from the back: using an object (a lit barrel, a trap) posts lines and may change the flow.
+	for (int32 Index = UseOrders.Num() - 1; Index >= 0; --Index)
+	{
+		if (!UseOrders.IsValidIndex(Index))
+		{
+			continue;
+		}
+		FUseOrder& Order = UseOrders[Index];
+		AOperativeCharacter* Worker = Order.Worker.Get();
+		AInteractableActor* Target = Order.Target.Get();
+		if (!Worker || !Target)
+		{
+			UseOrders.RemoveAt(Index);
+			continue;
+		}
+		Order.Elapsed += DeltaTime;
+		Order.RetryTime -= DeltaTime;
+		const FVector Goal = Worker->GetLastMoveDestination();
+		const float Drift = FMath::Min(FVector::Dist2D(Goal, Order.Approach), FVector::Dist2D(Goal, Order.IssuedGoal));
+		switch (UseOrderRules::GetStep(Target->GetDistanceTo(Worker->GetActorLocation()), Target->InteractionDistance, Drift, Order.Elapsed))
+		{
+		case EUseOrderStep::Use:
+			UseOrders.RemoveAt(Index);
+			UseNow(*Worker, *Target);
+			break;
+		case EUseOrderStep::Cancelled:
+			UE_LOG(LogCodexTactics, Display, TEXT("%s: use of %s cancelled (another move order)"), *Worker->DisplayName.ToString(), *Target->GetName());
+			UseOrders.RemoveAt(Index);
+			break;
+		case EUseOrderStep::TimedOut:
+			UseOrders.RemoveAt(Index);
+			PostLine(Worker->DisplayName, FText::Format(NSLOCTEXT("InteractionSubsystem", "UseTimedOut",
+				"❌ Не могу добраться до объекта ({0}) — приказ отменён."), Target->DisplayName));
+			break;
+		default:
+			if (!Worker->IsMoving() && Order.RetryTime <= 0.f)
+			{
+				// Stalled (a stance clip, a bump): send him again.
+				Order.RetryTime = 1.f;
+				Order.Approach = Target->GetApproachPoint(Worker->GetActorLocation());
+				Worker->OrderMoveTo(Order.Approach, false);
+				Order.IssuedGoal = Worker->GetLastMoveDestination();
+			}
+			break;
+		}
+	}
+}
+
+void UInteractionSubsystem::HandlePauseReleased()
+{
+	TArray<FUseOrder> Plans = MoveTemp(PlannedUseOrders);
+	PlannedUseOrders.Reset();
+	for (const FUseOrder& Plan : Plans)
+	{
+		StartUse(Plan.Worker.Get(), Plan.Target.Get());
+	}
+}
+
+void UInteractionSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)
+{
+	// Turn-based combat / the end of the wave drops the use orders of the fight (the grid has its own rules).
+	if (Phase != ECodexGamePhase::WaveCombat || CombatMode == ECodexCombatMode::TurnBased)
+	{
+		UseOrders.Reset();
+		PlannedUseOrders.Reset();
 	}
 }
 

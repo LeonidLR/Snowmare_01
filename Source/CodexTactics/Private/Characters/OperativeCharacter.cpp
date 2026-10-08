@@ -2535,16 +2535,16 @@ void AOperativeCharacter::PlanTargetedShot(AActor* Target)
 	}
 }
 
-void AOperativeCharacter::ExecutePlannedTargetedShots()
+bool AOperativeCharacter::ExecutePlannedTargetedShots()
 {
 	TMap<ETargetedShotKind, TWeakObjectPtr<AActor>> Plans = MoveTemp(PlannedShots);
 	PlannedShots.Reset();
 	for (const ETargetedShotKind Kind : { ETargetedShotKind::Barrel, ETargetedShotKind::Mine, ETargetedShotKind::Crate, ETargetedShotKind::TrappedObject })
 	{
 		const TWeakObjectPtr<AActor>* Target = Plans.Find(Kind);
-		if (Target && Target->IsValid())
+		if (Target && Target->IsValid() && !ShootAtObject(Target->Get()) && ClassifyShotTarget(Target->Get()) == Kind)
 		{
-			ShootAtObject(Target->Get());
+			PlannedShots.Add(Kind, *Target); // could not fire yet: the squad retries it (USquadSubsystem::RetryPlannedShots)
 		}
 	}
 	const TWeakObjectPtr<AActor>* Enemy = Plans.Find(ETargetedShotKind::Enemy);
@@ -2552,6 +2552,7 @@ void AOperativeCharacter::ExecutePlannedTargetedShots()
 	{
 		SetManualPriorityTarget(Enemy->Get());
 	}
+	return PlannedShots.IsEmpty();
 }
 
 #undef LOCTEXT_NAMESPACE

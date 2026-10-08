@@ -49,6 +49,22 @@ bool FRelocationLiftTest::RunTest(const FString&)
 	return true;
 }
 
+RELOCATION_TEST(FRelocationPausedCarryTest, "PausedCarrySurvivesResume")
+bool FRelocationPausedCarryTest::RunTest(const FString&)
+{
+	// Bug 2026-10-08: a carry ordered in the tactical pause was dropped the frame after the resume.
+	using namespace RelocationRules;
+	const ECodexGamePhase Wave = ECodexGamePhase::WaveCombat;
+	TestFalse(TEXT("Paused order keeps running in real time"), ShouldDropActiveTask(Wave, ECodexCombatMode::RealTime, false, true));
+	TestTrue(TEXT("Carry started outside the pause is dropped when live combat begins"),
+		ShouldDropActiveTask(Wave, ECodexCombatMode::RealTime, false, false));
+	TestFalse(TEXT("Zone solo keeps any carry"), ShouldDropActiveTask(Wave, ECodexCombatMode::RealTime, true, false));
+	TestFalse(TEXT("Paused again: nothing dropped"), ShouldDropActiveTask(Wave, ECodexCombatMode::TacticalPause, false, false));
+	TestTrue(TEXT("Turn-based drops even a paused order"), ShouldDropActiveTask(Wave, ECodexCombatMode::TurnBased, false, true));
+	TestFalse(TEXT("Exploration"), ShouldDropActiveTask(ECodexGamePhase::Exploration, ECodexCombatMode::None, false, false));
+	return true;
+}
+
 #undef RELOCATION_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

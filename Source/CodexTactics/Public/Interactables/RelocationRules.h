@@ -40,6 +40,14 @@ namespace RelocationRules
 	 */
 	CODEXTACTICS_API bool CanRelocateNow(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo = false);
 
+	/**
+	 * Whether an active carry / push task must be dropped now («Боевая тревога! Бросаю ...»). A carry ordered in the
+	 * tactical pause runs on in the real-time fight after the release (bug 2026-10-08: it was dropped the frame after the
+	 * resume, so the order never ran); one started outside the pause is dropped when live combat begins, and every carry
+	 * is dropped in turn-based combat (the grid has its own push).
+	 */
+	CODEXTACTICS_API bool ShouldDropActiveTask(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bLeaderZoneSolo, bool bPlannedInPause);
+
 	/** Placement radius for the current mode, cm. */
 	CODEXTACTICS_API float GetPlacementRadius(ECodexGamePhase Phase, ECodexCombatMode Mode, float PauseRadius, float WorkerPlacementRadius);
 

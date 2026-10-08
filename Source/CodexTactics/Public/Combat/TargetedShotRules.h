@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/OperativeMovementRules.h"
+#include "GameFlow/GameFlowTypes.h"
 #include "TargetedShotRules.generated.h"
 
 /** What a Ctrl + click aims at (Godot main.gd Ctrl branch order: enemy, barrel, mine, crate, trapped object). */
@@ -14,6 +15,17 @@ enum class ETargetedShotKind : uint8
 	Mine,
 	Crate,
 	TrappedObject
+};
+
+/** What happens to a planned targeted shot that could not fire on the pause release (reload, misfire, frozen weapon). */
+enum class EPlannedShotRetry : uint8
+{
+	/** Real-time fight inside the retry window: try again now. */
+	Retry,
+	/** Tactical pause again: keep it planned, the next release fires it. */
+	Wait,
+	/** Window over, turn-based combat or the wave ended: drop it. */
+	GiveUp
 };
 
 /** Hit chance of a remote shot at a mine. */
@@ -50,4 +62,13 @@ namespace TargetedShotRules
 
 	/** Why a mine shot missed (Godot fail_reason). */
 	CODEXTACTICS_API FText GetMineMissReason(EOperativeStance Stance, float DistanceM, float ColdLevel);
+
+	/** A deferred planned object shot is retried this long after the pause release, s (covers a reload + a misfire). */
+	constexpr float PlannedShotRetrySeconds = 8.f;
+
+	/**
+	 * Bug 2026-10-08: a barrel shot ordered in the tactical pause was lost when the operative could not fire at the release
+	 * (reloading after the auto-fire, misfire, frozen weapon). The squad keeps it and retries it in the real-time fight.
+	 */
+	CODEXTACTICS_API EPlannedShotRetry GetPlannedShotRetry(ECodexGamePhase Phase, ECodexCombatMode Mode, float SecondsSinceRelease);
 }

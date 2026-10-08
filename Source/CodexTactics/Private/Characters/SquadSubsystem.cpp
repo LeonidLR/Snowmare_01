@@ -3,6 +3,7 @@
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/TargetedShotRules.h"
 #include "CodexTactics.h"
 #include "CollisionQueryParams.h"
 #include "Engine/World.h"
@@ -460,6 +461,7 @@ void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatM
 		{
 			Member->ClearPlannedTargetedShots();
 		}
+		DeferredShots.Reset();
 	}
 	LastCombatMode = CombatMode;
 }
@@ -469,9 +471,76 @@ void USquadSubsystem::HandleTacticalPauseReleased()
 	// Godot execute_planned_tactical_orders: targeted shots first, then moves.
 	for (AOperativeCharacter* Member : GetMembers())
 	{
-		Member->ExecutePlannedTargetedShots();
+		if (Member->ExecutePlannedTargetedShots())
+		{
+			DeferredShots.Remove(Member);
+			continue;
+		}
+		// Bug 2026-10-08: the shooter cannot fire yet (reloading after the auto-fire, misfire, frozen weapon) - the shot
+		// used to be dropped silently; it is retried in the real-time fight instead.
+		DeferredShots.Add(Member, 0.f);
+		UE_LOG(LogCodexTactics, Display, TEXT("%s: planned targeted shot deferred (weapon not ready)"), *Member->DisplayName.ToString());
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(Member->DisplayName, NSLOCTEXT("SquadSubsystem", "ShotDeferred",
+				"⏳ Оружие не готово — выстрелю по цели, как только смогу!"));
+		}
 	}
 	ExecutePlannedOrders();
+}
+
+void USquadSubsystem::RetryPlannedShots(float DeltaTime)
+{
+	if (DeferredShots.IsEmpty())
+	{
+		return;
+	}
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	// Keys copied: a shot can end the wave (barrel blast), and the flow change resets DeferredShots.
+	TArray<TWeakObjectPtr<AOperativeCharacter>> Shooters;
+	DeferredShots.GetKeys(Shooters);
+	for (const TWeakObjectPtr<AOperativeCharacter>& Key : Shooters)
+	{
+		float* Elapsed = DeferredShots.Find(Key);
+		AOperativeCharacter* Operative = Key.Get();
+		if (!Elapsed)
+		{
+			continue;
+		}
+		if (!Operative || Operative->GetPlannedTargetedShotCount() == 0)
+		{
+			DeferredShots.Remove(Key);
+			continue;
+		}
+		const EPlannedShotRetry Retry = Flow
+			? TargetedShotRules::GetPlannedShotRetry(Flow->GetPhase(), Flow->GetCombatMode(), *Elapsed)
+			: EPlannedShotRetry::GiveUp;
+		if (Retry == EPlannedShotRetry::Wait)
+		{
+			continue; // paused again: the next release fires it
+		}
+		if (Retry == EPlannedShotRetry::GiveUp)
+		{
+			Operative->ClearPlannedTargetedShots();
+			DeferredShots.Remove(Key);
+			if (Flow && Flow->GetCombatMode() == ECodexCombatMode::RealTime)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("%s: deferred targeted shot given up"), *Operative->DisplayName.ToString());
+				if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+				{
+					Messages->PostMessage(Operative->DisplayName, NSLOCTEXT("SquadSubsystem", "ShotGivenUp",
+						"❌ Не могу выстрелить по цели — приказ отменён."));
+				}
+			}
+			continue;
+		}
+		*Elapsed += DeltaTime;
+		if (Operative->ExecutePlannedTargetedShots())
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("%s: deferred targeted shot fired"), *Operative->DisplayName.ToString());
+			DeferredShots.Remove(Key);
+		}
+	}
 }
 
 void USquadSubsystem::BeginOrderPlanning()
@@ -480,7 +549,11 @@ void USquadSubsystem::BeginOrderPlanning()
 	PauseOrigins.Reset();
 	for (AOperativeCharacter* Member : GetMembers())
 	{
-		Member->ClearPlannedTargetedShots();
+		// A shot deferred from the last release stays planned (the next release fires it); other plans start fresh.
+		if (!DeferredShots.Contains(Member))
+		{
+			Member->ClearPlannedTargetedShots();
+		}
 		PauseOrigins.Add(Member, Member->GetActorLocation());
 	}
 }
@@ -582,6 +655,7 @@ void USquadSubsystem::RebuildFollowers()
 void USquadSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	RetryPlannedShots(DeltaTime);
 
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	if (!LeaderRef)

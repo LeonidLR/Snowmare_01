@@ -41,4 +41,17 @@ FText TargetedShotRules::GetMineMissReason(EOperativeStance Stance, float Distan
 	return LOCTEXT("MissSnow", "пуля ушла в мерзлый снег");
 }
 
+EPlannedShotRetry TargetedShotRules::GetPlannedShotRetry(ECodexGamePhase Phase, ECodexCombatMode Mode, float SecondsSinceRelease)
+{
+	if (Phase != ECodexGamePhase::WaveCombat || Mode == ECodexCombatMode::TurnBased || Mode == ECodexCombatMode::None)
+	{
+		return EPlannedShotRetry::GiveUp;
+	}
+	if (Mode == ECodexCombatMode::TacticalPause)
+	{
+		return EPlannedShotRetry::Wait;
+	}
+	return SecondsSinceRelease <= PlannedShotRetrySeconds ? EPlannedShotRetry::Retry : EPlannedShotRetry::GiveUp;
+}
+
 #undef LOCTEXT_NAMESPACE
