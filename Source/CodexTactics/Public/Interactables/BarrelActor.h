@@ -11,7 +11,7 @@ class UMaterialInstanceDynamic;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBarrelBurningChanged, ABarrelActor*, Barrel, bool, bBurning);
 
 /**
- * Fuel barrel («Горючая бочка»): lit once with a match from the operative's supply, it burns for BurnDuration,
+ * Fuel barrel ("Fuel Barrel"): lit once with a match from the operative's supply, it burns for BurnDuration,
  * warms operatives within the heat radius and lights the area, fades during the last seconds, then stays charred.
  * The burn timer is frozen in turn-based combat (rounds drive it there).
  * Godot reference: Scenes/movements/interactable.gd (barrel part), main.gd `_trigger_menu_for_object` (barrel menu),

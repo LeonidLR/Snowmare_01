@@ -102,7 +102,7 @@ void UMissionSubsystem::StartMission(EMissionStartMode Mode)
 	}
 	else
 	{
-		PostRadio(LOCTEXT("Commander", "Командир"), MissionRules::GetModeRadio(Mode));
+		PostRadio(LOCTEXT("Commander", "Commander"), MissionRules::GetModeRadio(Mode));
 	}
 }
 
@@ -123,7 +123,7 @@ void UMissionSubsystem::PostRadio(const FText& Speaker, const FText& Text) const
 void UMissionSubsystem::HandleVictoryDialogueFinished()
 {
 	SetObjective(MissionRules::GetAfterVictoryObjective());
-	PostRadio(LOCTEXT("HQ", "ШТАБ"), MissionRules::GetVictoryRadio());
+	PostRadio(LOCTEXT("HQ", "HQ"), MissionRules::GetVictoryRadio());
 }
 
 void UMissionSubsystem::StartCombatMode()
@@ -225,11 +225,11 @@ void UMissionSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexComba
 		}
 		else if (bFirst)
 		{
-			PostRadio(LOCTEXT("Commander", "Командир"), MissionRules::GetPreparationRadio());
+			PostRadio(LOCTEXT("Commander", "Commander"), MissionRules::GetPreparationRadio());
 		}
 		else
 		{
-			PostRadio(LOCTEXT("HQ", "ШТАБ"), MissionRules::GetWaveRestRadio(Flow->GetPreparationTimeRemaining()));
+			PostRadio(LOCTEXT("HQ", "HQ"), MissionRules::GetWaveRestRadio(Flow->GetPreparationTimeRemaining()));
 		}
 	}
 	else if (Phase == ECodexGamePhase::PostCombat)
@@ -258,11 +258,11 @@ void UMissionSubsystem::TriggerMissionFailed(AOperativeCharacter* FallenOperativ
 		return;
 	}
 	bMissionFailed = true;
-	const FText Name = FallenOperative ? FallenOperative->DisplayName : LOCTEXT("Soldier", "Боец");
+	const FText Name = FallenOperative ? FallenOperative->DisplayName : LOCTEXT("Soldier", "Soldier");
 	FailureReason = MissionRules::GetFailureReason(Name, FallenOperative ? FallenOperative->ColdLevel : 0.f);
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Messages->PostMessage(LOCTEXT("HQ", "ШТАБ"), MissionRules::GetFailureRadio(Name));
+		Messages->PostMessage(LOCTEXT("HQ", "HQ"), MissionRules::GetFailureRadio(Name));
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Mission failed: %s"), *FailureReason.ToString());
 	if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>())

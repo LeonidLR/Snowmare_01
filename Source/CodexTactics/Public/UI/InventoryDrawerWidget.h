@@ -34,7 +34,7 @@ enum class EInventoryDrawerSlot : uint8
 };
 
 /**
- * Personal inventory of the leader above the action bar («ИНВ»): engineering items (click: set it up, a squad mate hands
+ * Personal inventory of the leader above the action bar («INV»): engineering items (click: set it up, a squad mate hands
  * one over when needed) and provisions (click / H J K L: use), matches and ammo reserves (info). Built in C++ (restyle
  * through a Widget Blueprint subclass).
  * Sprint 13: the single access point for hand-overs — LMB held on a line carrying stock and dragged starts an

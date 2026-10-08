@@ -291,8 +291,8 @@ bool USaveGameSubsystem::SaveGame(const FString& SlotName, const FString& Custom
 	FString Title = CustomTitle;
 	if (Title.IsEmpty())
 	{
-		Title = Type == TEXT("autosave") ? TEXT("Автосохранение: ") + GetCurrentStageName()
-			: (Type == TEXT("quicksave") ? TEXT("Быстрое сохранение: ") + GetCurrentStageName() : Slot);
+		Title = Type == TEXT("autosave") ? TEXT("Autosave: ") + GetCurrentStageName()
+			: (Type == TEXT("quicksave") ? TEXT("Quicksave: ") + GetCurrentStageName() : Slot);
 	}
 	FString Json;
 	const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Json);
@@ -545,8 +545,8 @@ bool USaveGameSubsystem::GetSaveInfo(const FString& SlotName, FSaveSlotInfo& Out
 	OutInfo.Timestamp = static_cast<int64>(Timestamp);
 	Data->TryGetStringField(TEXT("datetime_str"), OutInfo.DateTime);
 	OutInfo.SaveType = Data->HasField(TEXT("save_type")) ? Data->GetStringField(TEXT("save_type")) : SaveGameRules::GetSaveType(Slot);
-	OutInfo.Author = Data->HasField(TEXT("author")) ? Data->GetStringField(TEXT("author")) : TEXT("Командир");
-	OutInfo.StageName = Data->HasField(TEXT("stage_name")) ? Data->GetStringField(TEXT("stage_name")) : TEXT("Неизвестный этап");
+	OutInfo.Author = Data->HasField(TEXT("author")) ? Data->GetStringField(TEXT("author")) : TEXT("Commander");
+	OutInfo.StageName = Data->HasField(TEXT("stage_name")) ? Data->GetStringField(TEXT("stage_name")) : TEXT("Unknown stage");
 	Data->TryGetStringField(TEXT("squad_summary"), OutInfo.SquadSummary);
 	const TSharedPtr<FJsonObject>* GameState = nullptr;
 	OutInfo.Wave = Data->TryGetObjectField(TEXT("game_state"), GameState) ? SaveInt(*GameState, TEXT("current_wave_index"), 1) : 1;
@@ -589,8 +589,8 @@ bool USaveGameSubsystem::QuickSave()
 	{
 		return false;
 	}
-	const bool bSaved = SaveGame(TEXT("quicksave"), TEXT("Быстрое сохранение"));
-	Post(TEXT("СИСТЕМА"), bSaved ? TEXT("⚡ Игра быстро сохранена [F5]!") : TEXT("❌ Ошибка быстрого сохранения!"));
+	const bool bSaved = SaveGame(TEXT("quicksave"), TEXT("Quicksave"));
+	Post(TEXT("SYSTEM"), bSaved ? TEXT("⚡ Game quicksaved [F5]!") : TEXT("❌ Quicksave failed!"));
 	return bSaved;
 }
 
@@ -600,8 +600,8 @@ bool USaveGameSubsystem::SaveToSlotWithMessage(const FString& SlotName)
 	const bool bSaved = SaveGame(SlotName, SlotName);
 	if (bSaved)
 	{
-		Post(TEXT("СИСТЕМА"), bOverwrite ? FString::Printf(TEXT("💾 Сохранение '%s' перезаписано!"), *SlotName)
-			: FString::Printf(TEXT("💾 Сохранение '%s' успешно создано!"), *SlotName));
+		Post(TEXT("SYSTEM"), bOverwrite ? FString::Printf(TEXT("💾 Save \"%s\" overwritten!"), *SlotName)
+			: FString::Printf(TEXT("💾 Save \"%s\" created!"), *SlotName));
 	}
 	return bSaved;
 }
@@ -611,7 +611,7 @@ bool USaveGameSubsystem::LoadFromSlotWithMessage(const FString& SlotName)
 	const bool bLoaded = LoadGame(SlotName);
 	if (bLoaded)
 	{
-		Post(TEXT("СИСТЕМА"), FString::Printf(TEXT("📂 Сохранение '%s' успешно загружено!"), *SlotName));
+		Post(TEXT("SYSTEM"), FString::Printf(TEXT("📂 Save \"%s\" loaded!"), *SlotName));
 	}
 	return bLoaded;
 }

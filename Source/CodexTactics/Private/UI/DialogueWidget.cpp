@@ -117,7 +117,7 @@ void UDialogueWidget::BuildDefaultLayout()
 	UHorizontalBox* TopBar = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("DialogTopBar"));
 	Content->AddChildToVerticalBox(TopBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 	UTextBlock* Badge = MakeText(TEXT("DialogBadgeText"), 11, DialogBadgeColor, false);
-	Badge->SetText(DialogClean(LOCTEXT("Badge", "💬 РАЗГОВОР")));
+	Badge->SetText(DialogClean(LOCTEXT("Badge", "💬 DIALOGUE")));
 	TopBar->AddChildToHorizontalBox(Badge)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	DialogProgressText = MakeText(TEXT("DialogProgressText"), 11, DialogProgressColor, false);
 	TopBar->AddChildToHorizontalBox(DialogProgressText);
@@ -131,7 +131,7 @@ void UDialogueWidget::BuildDefaultLayout()
 	UHorizontalBox* BottomBar = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("DialogBottomBar"));
 	Content->AddChildToVerticalBox(BottomBar);
 	UTextBlock* Hint = MakeText(TEXT("DialogHintText"), 10, DialogHintColor, false);
-	Hint->SetText(LOCTEXT("Hint", "[Пробел] — далее, [Esc] — пропустить"));
+	Hint->SetText(LOCTEXT("Hint", "[Space] next, [Esc] skip"));
 	UHorizontalBoxSlot* HintSlot = BottomBar->AddChildToHorizontalBox(Hint);
 	HintSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	HintSlot->SetVerticalAlignment(VAlign_Center);
@@ -142,7 +142,7 @@ void UDialogueWidget::BuildDefaultLayout()
 		CodexButtonFocus::Disable(Button); // a focused HUD button would swallow the game keys (1-4, ...)
 		UTextBlock* Text = MakeText(TextName, 12, DialogButtonTextColor, true);
 		Text->SetText(DialogClean(Label));
-		Text->SetAutoWrapText(false); // long finish labels («Держись! Идём на помощь! ▶») widen the button
+		Text->SetAutoWrapText(false); // long finish labels ("Hang on! We're coming! ▶") widen the button
 		Button->AddChild(Text);
 		USizeBox* Size = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		Size->SetMinDesiredWidth(Width);
@@ -155,9 +155,9 @@ void UDialogueWidget::BuildDefaultLayout()
 		}
 		return Button;
 	};
-	DialogSkipButton = AddButton(TEXT("DialogSkipButton"), TEXT("DialogSkipText"), LOCTEXT("Skip", "Пропустить ⏭"), 130.f, nullptr);
+	DialogSkipButton = AddButton(TEXT("DialogSkipButton"), TEXT("DialogSkipText"), LOCTEXT("Skip", "Skip ⏭"), 130.f, nullptr);
 	UTextBlock* NextText = nullptr;
-	DialogNextButton = AddButton(TEXT("DialogNextButton"), TEXT("DialogNextText"), LOCTEXT("Next", "Далее ▶"), 140.f, &NextText);
+	DialogNextButton = AddButton(TEXT("DialogNextButton"), TEXT("DialogNextText"), LOCTEXT("Next", "Next ▶"), 140.f, &NextText);
 	DialogNextText = NextText;
 }
 
@@ -189,7 +189,7 @@ void UDialogueWidget::Refresh()
 	}
 	const int32 Index = Dialogue->GetLineIndex();
 	const FDialogueLine& Line = Sequence->Lines[Index];
-	const FString Speaker = Line.SpeakerName.IsEmpty() ? TEXT("Неизвестный") : Line.SpeakerName;
+	const FString Speaker = Line.SpeakerName.IsEmpty() ? TEXT("Unknown") : Line.SpeakerName;
 	const FDialogueSpeakerStyle Style = DialogueRules::GetSpeakerStyle(Speaker);
 	if (DialogPortraitText)
 	{

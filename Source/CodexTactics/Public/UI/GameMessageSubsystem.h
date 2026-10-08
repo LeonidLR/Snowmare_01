@@ -10,7 +10,7 @@ struct CODEXTACTICS_API FGameMessage
 {
 	GENERATED_BODY()
 
-	/** Speaker header, e.g. «Командир», «ШТАБ», «ОТРЯД», «НАБЛЮДЕНИЕ». */
+	/** Speaker header, e.g. «Commander», «HQ», «SQUAD», «SURVEILLANCE». */
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Messages")
 	FText Speaker;
 

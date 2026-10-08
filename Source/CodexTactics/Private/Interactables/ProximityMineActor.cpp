@@ -21,7 +21,7 @@ AProximityMineActor::AProximityMineActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	DeployableType = EDeployableType::Mine;
-	DisplayName = LOCTEXT("Name", "Противопехотная мина");
+	DisplayName = LOCTEXT("Name", "Anti-personnel Mine");
 	bTrapped = true; // Godot is_armed / is_trapped
 	InteractionDistance = 110.f; // Godot interaction_distance 1.1 m from the trigger sphere
 
@@ -102,7 +102,7 @@ void AProximityMineActor::Tick(float DeltaSeconds)
 		if (ArmingTimeLeft <= 0.f)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("%s armed"), *GetName());
-			UFloatingTextSubsystem::SpawnAboveMine(this, TEXT("⚠️ ВЗВЕДЕНА!"), FLinearColor(1.f, 0.3f, 0.2f)); // Godot _on_mine_armed_feedback
+			UFloatingTextSubsystem::SpawnAboveMine(this, TEXT("⚠️ ARMED!"), FLinearColor(1.f, 0.3f, 0.2f)); // Godot _on_mine_armed_feedback
 		}
 		return;
 	}
@@ -188,8 +188,8 @@ void AProximityMineActor::HandleSpotted(AOperativeCharacter* Spotter)
 	}
 	const FRotator Facing = (GetActorLocation() - Spotter->GetActorLocation()).Rotation();
 	Spotter->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
-	UFloatingTextSubsystem::SpawnAboveOperative(Spotter, TEXT("⚠️ МИНА ОБНАРУЖЕНА!"), FLinearColor(1.f, 0.85f, 0.1f));
-	PostLine(Spotter->DisplayName, LOCTEXT("Spotted", "⚠️ Внимание, мина! Всем остановиться!"));
+	UFloatingTextSubsystem::SpawnAboveOperative(Spotter, TEXT("⚠️ MINE SPOTTED!"), FLinearColor(1.f, 0.85f, 0.1f));
+	PostLine(Spotter->DisplayName, LOCTEXT("Spotted", "⚠️ Mine! Everyone hold position!"));
 	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
 	{
 		Bus->OnMineSpotted.Broadcast(this, Spotter);
@@ -215,7 +215,7 @@ void AProximityMineActor::Detonate()
 	bTrapped = false;
 	UE_LOG(LogCodexTactics, Display, TEXT("%s detonated"), *GetName());
 	ApplyBlast(ExplosionDamage, ExplosionDamage * DeployableRules::SquadDamageScale, ExplosionRadius, 0.50f, EDamageType::Explosive,
-		LOCTEXT("Source", "Мина"), LOCTEXT("SquadHit", "💥 Ай! Задело взрывом мины (-{0} HP)!"));
+		LOCTEXT("Source", "Mine"), LOCTEXT("SquadHit", "💥 Argh! Hit by the mine blast (-{0} HP)!"));
 	// Sprint 11: the blast is heard — patrols within 20 m break off.
 	AEnemyCharacter::AlertPatrolsNearTrap(GetWorld(), GetActorLocation());
 	Destroy();
@@ -228,28 +228,28 @@ void AProximityMineActor::DescribeForMenu(const AOperativeCharacter* Leader, FTe
 	int32 Max = 0;
 	GetLeaderSupply(Leader, Count, Max);
 	const bool bFull = Count >= Max;
-	const FText LeaderName = Leader ? Leader->DisplayName : LOCTEXT("Soldier", "Боец");
-	const FText DamageInfo = FText::Format(LOCTEXT("DamageInfo", " (Урон: {0})"), FMath::FloorToInt(ExplosionDamage));
+	const FText LeaderName = Leader ? Leader->DisplayName : LOCTEXT("Soldier", "Soldier");
+	const FText DamageInfo = FText::Format(LOCTEXT("DamageInfo", " (Damage: {0})"), FMath::FloorToInt(ExplosionDamage));
 
-	OutTitle = LOCTEXT("Title", "💣 Противопехотная мина");
-	OutConfirm = bTrapped ? LOCTEXT("Defuse", "Разминировать") : (bDeployable ? LOCTEXT("PickUp", "Подобрать") : LOCTEXT("CannotPickUp", "Нельзя подобрать"));
+	OutTitle = LOCTEXT("Title", "💣 Anti-personnel Mine");
+	OutConfirm = bTrapped ? LOCTEXT("Defuse", "Defuse") : (bDeployable ? LOCTEXT("PickUp", "Pick up") : LOCTEXT("CannotPickUp", "Cannot pick up"));
 	if (bFull && bDeployable)
 	{
-		OutConfirm = FText::Format(LOCTEXT("Full", "Инвентарь полон ({0}/{1})"), Count, Max);
+		OutConfirm = FText::Format(LOCTEXT("Full", "Inventory full ({0}/{1})"), Count, Max);
 	}
 	if (bTrapped)
 	{
-		OutDescription = FText::Format(LOCTEXT("DescArmed", "Взведённая противопехотная мина{0}.\n{1}\n(У {2} мин: {3}/{4})."),
+		OutDescription = FText::Format(LOCTEXT("DescArmed", "Armed anti-personnel mine{0}.\n{1}\n({2} mines: {3}/{4})."),
 			DamageInfo, DescribeDefusal(Leader), LeaderName, Count, Max);
 	}
 	else if (bDeployable)
 	{
-		OutDescription = FText::Format(LOCTEXT("DescPickUp", "Обезвредить и забрать мину{0}?\nБоеприпас будет добавлен в личный запас (У {1}: {2}/{3})."),
+		OutDescription = FText::Format(LOCTEXT("DescPickUp", "Disarm and take the mine{0}?\nIt will be added to personal supplies ({1}: {2}/{3})."),
 			DamageInfo, LeaderName, Count, Max);
 	}
 	else
 	{
-		OutDescription = FText::Format(LOCTEXT("DescFixed", "Стационарная мина{0}. Параметр deployable отключён: объект нельзя убрать в инвентарь."),
+		OutDescription = FText::Format(LOCTEXT("DescFixed", "Stationary mine{0}. Deployable is off: it cannot be stowed in the inventory."),
 			DamageInfo);
 	}
 	bOutDisabled = (bFull && bDeployable) || (!bDeployable && !bTrapped);

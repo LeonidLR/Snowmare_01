@@ -62,7 +62,7 @@ namespace LootSmoke
 		ALootCrateActor* Crate = World->SpawnActor<ALootCrateActor>(Ground + FVector(0.f, 0.f, 40.f), FRotator::ZeroRotator, Params);
 		if (Crate && bTrapped)
 		{
-			Crate->CrateName = FText::FromString(TEXT("📦 Заминированный ящик аванпоста"));
+			Crate->CrateName = FText::FromString(TEXT("📦 Booby-trapped outpost crate"));
 			Crate->bTrapped = true;
 			Crate->Contents.Turrets = 1;
 			Crate->Contents.Barricades = 2;

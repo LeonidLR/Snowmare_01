@@ -35,7 +35,7 @@ namespace
 
 ADroppedItemActor::ADroppedItemActor()
 {
-	DisplayName = LOCTEXT("Name", "Предметы на земле");
+	DisplayName = LOCTEXT("Name", "Items on the ground");
 	ObjectType = EInteractableType::GateTerminal; // unused: the pile never opens the quest flow (HandleDirectInteraction)
 	InteractionDistance = 120.f;
 	Box->SetBoxExtent(FVector(PileHalfSize));

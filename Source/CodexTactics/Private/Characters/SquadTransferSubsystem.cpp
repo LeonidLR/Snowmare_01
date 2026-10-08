@@ -124,7 +124,7 @@ void USquadTransferSubsystem::StartTransferMode(ETransferItem InItem)
 		const AOperativeCharacter* Leader = Squad->GetLeader();
 		Cursor->ShowAt(Leader->GetActorLocation() - FVector(0.f, 0.f, Leader->GetSimpleCollisionHalfHeight()), false);
 	}
-	Post(LOCTEXT("Transfer", "Передача"), FString::Printf(TEXT("🟣 Наведите фиолетовый круг на соратника и кликните ЛКМ, чтобы передать %s (ПКМ / Esc — отмена)."),
+	Post(LOCTEXT("Transfer", "Hand-over"), FString::Printf(TEXT("🟣 Put the purple circle on a teammate and LMB to hand over %s (RMB / Esc - cancel)."),
 		*TransferRules::GetPromptName(InItem)));
 }
 
@@ -188,12 +188,12 @@ bool USquadTransferSubsystem::HandleClick(const FVector& CursorPoint, AActor* Hi
 	AOperativeCharacter* Target = FindMate(CursorPoint, HitActor, true);
 	if (!Target)
 	{
-		Post(LOCTEXT("Transfer", "Передача"), TEXT("Кликните непосредственно по соратнику, которому хотите передать предмет!"));
+		Post(LOCTEXT("Transfer", "Hand-over"), TEXT("Click directly on the teammate you want to hand the item to!"));
 		return false;
 	}
 	if (Target == Leader)
 	{
-		Post(LOCTEXT("Transfer", "Передача"), TEXT("Нельзя передать предмет самому себе! Выберите напарника."));
+		Post(LOCTEXT("Transfer", "Hand-over"), TEXT("You can't hand an item to yourself! Pick a teammate."));
 		return false;
 	}
 	const bool bDone = TransferItem(Leader, Target, Item);
@@ -212,17 +212,17 @@ bool USquadTransferSubsystem::TransferItem(AOperativeCharacter* Sender, AOperati
 	{
 		const EDeployableType Type = InItem == ETransferItem::Turret ? EDeployableType::Turret
 			: (InItem == ETransferItem::Barricade ? EDeployableType::Barricade : EDeployableType::Mine);
-		const TCHAR* Plural = Type == EDeployableType::Turret ? TEXT("турелей") : (Type == EDeployableType::Barricade ? TEXT("баррикад") : TEXT("мин"));
-		Post(Sender->DisplayName, FString::Printf(TEXT("⚠️ Инвентарь %s полон %s (%d/%d)!"), *Recipient->DisplayName.ToString(), Plural,
+		const TCHAR* Plural = Type == EDeployableType::Turret ? TEXT("turrets") : (Type == EDeployableType::Barricade ? TEXT("barricades") : TEXT("mines"));
+		Post(Sender->DisplayName, FString::Printf(TEXT("⚠️ %s can't carry more %s (%d/%d)!"), *Recipient->DisplayName.ToString(), Plural,
 			Recipient->GetDeployableCount(Type), DeployableRules::GetMaxCarried(Type)));
 		return false;
 	}
 	if (!Result.bDone)
 	{
-		Post(Sender->DisplayName, TEXT("В вашем инвентаре закончился этот предмет или патроны!"));
+		Post(Sender->DisplayName, TEXT("You're out of this item or ammo!"));
 		return false;
 	}
-	Post(Sender->DisplayName, FString::Printf(TEXT("🟣 Передал(а) %s бойцу %s!"), *Result.Feedback, *Recipient->DisplayName.ToString()));
+	Post(Sender->DisplayName, FString::Printf(TEXT("🟣 Handed %s to %s!"), *Result.Feedback, *Recipient->DisplayName.ToString()));
 	return true;
 }
 
@@ -442,16 +442,16 @@ ETransferRequestOutcome USquadTransferSubsystem::Request(const FTransferRequest&
 			switch (InRequest.Action)
 			{
 			case ETransferAction::Give:
-				Post(Walker->DisplayName, FString::Printf(TEXT("🟣 Иду к бойцу %s, чтобы передать: %s."), *InRequest.Recipient->DisplayName.ToString(), *What));
+				Post(Walker->DisplayName, FString::Printf(TEXT("🟣 Moving to %s to hand over: %s."), *InRequest.Recipient->DisplayName.ToString(), *What));
 				break;
 			case ETransferAction::DropToGround:
-				Post(Walker->DisplayName, FString::Printf(TEXT("Иду выложить на землю: %s."), *What));
+				Post(Walker->DisplayName, FString::Printf(TEXT("Moving to drop on the ground: %s."), *What));
 				break;
 			case ETransferAction::Store:
-				Post(Walker->DisplayName, FString::Printf(TEXT("Иду к ящику, чтобы положить: %s."), *What));
+				Post(Walker->DisplayName, FString::Printf(TEXT("Moving to the crate to stow: %s."), *What));
 				break;
 			default:
-				Post(Walker->DisplayName, FString::Printf(TEXT("Иду забрать: %s."), *What));
+				Post(Walker->DisplayName, FString::Printf(TEXT("Moving to pick up: %s."), *What));
 				break;
 			}
 			return ETransferRequestOutcome::Approaching;
@@ -469,7 +469,7 @@ ETransferRequestOutcome USquadTransferSubsystem::Request(const FTransferRequest&
 		AtFeet.Point = Walker->GetActorLocation();
 		return Execute(AtFeet) > 0 ? ETransferRequestOutcome::DroppedAtFeet : ETransferRequestOutcome::Failed;
 	}
-	Post(Walker->DisplayName, TEXT("Слишком далеко для передачи (макс. 2 метра)"));
+	Post(Walker->DisplayName, TEXT("Too far to hand over (max 2 m)"));
 	return ETransferRequestOutcome::Blocked;
 }
 
@@ -502,16 +502,16 @@ int32 USquadTransferSubsystem::Execute(const FTransferRequest& InRequest)
 		const FTransferResult Result = TransferRules::TransferQuantity(*Operative, *Recipient, InRequest.Item, InRequest.Quantity);
 		if (Result.bRecipientFull)
 		{
-			Post(Operative->DisplayName, FString::Printf(TEXT("⚠️ У бойца %s нет места: %s."), *Recipient->DisplayName.ToString(), *Name));
+			Post(Operative->DisplayName, FString::Printf(TEXT("⚠️ %s has no room: %s."), *Recipient->DisplayName.ToString(), *Name));
 			return 0;
 		}
 		if (!Result.bDone)
 		{
-			Post(Operative->DisplayName, TEXT("В вашем инвентаре закончился этот предмет или патроны!"));
+			Post(Operative->DisplayName, TEXT("You're out of this item or ammo!"));
 			return 0;
 		}
-		Post(Operative->DisplayName, FString::Printf(TEXT("🟣 Передал(а) %s бойцу %s!%s"), *Result.Feedback, *Recipient->DisplayName.ToString(),
-			Result.bClampedByCapacity ? TEXT(" (больше не поместилось)") : TEXT("")));
+		Post(Operative->DisplayName, FString::Printf(TEXT("🟣 Handed %s to %s!%s"), *Result.Feedback, *Recipient->DisplayName.ToString(),
+			Result.bClampedByCapacity ? TEXT(" (no room for more)") : TEXT("")));
 		return Result.Moved;
 	}
 	case ETransferAction::DropToGround:
@@ -519,7 +519,7 @@ int32 USquadTransferSubsystem::Execute(const FTransferRequest& InRequest)
 		const int32 Removed = TransferRules::RemoveFromOperative(*Operative, InRequest.Item, InRequest.Quantity);
 		if (Removed <= 0)
 		{
-			Post(Operative->DisplayName, TEXT("В вашем инвентаре закончился этот предмет или патроны!"));
+			Post(Operative->DisplayName, TEXT("You're out of this item or ammo!"));
 			return 0;
 		}
 		if (!ADroppedItemActor::SpawnOrMerge(GetWorld(), InRequest.Point, InRequest.Item, Removed))
@@ -527,7 +527,7 @@ int32 USquadTransferSubsystem::Execute(const FTransferRequest& InRequest)
 			TransferRules::AddToOperative(*Operative, InRequest.Item, Removed); // nothing could be spawned: keep it
 			return 0;
 		}
-		Post(Operative->DisplayName, FString::Printf(TEXT("Выбросил(а) на землю: %s x%d."), *Name, Removed));
+		Post(Operative->DisplayName, FString::Printf(TEXT("Dropped on the ground: %s x%d."), *Name, Removed));
 		return Removed;
 	}
 	case ETransferAction::Store:
@@ -536,22 +536,22 @@ int32 USquadTransferSubsystem::Execute(const FTransferRequest& InRequest)
 		UItemStashComponent* Stash = GetContainerStash(InRequest.Container.Get(), true);
 		if (!Stash || (Crate && !Crate->CanStore()))
 		{
-			Post(Operative->DisplayName, TEXT("В этот ящик сейчас ничего не положить (заминирован или разрушен)."));
+			Post(Operative->DisplayName, TEXT("Can't stow anything in this crate now (trapped or destroyed)."));
 			return 0;
 		}
 		const FTransferResult Result = TransferRules::StoreInStash(*Operative, *Stash, InRequest.Item, InRequest.Quantity);
 		if (Result.bRecipientFull)
 		{
-			Post(Operative->DisplayName, TEXT("⚠️ В ящике нет места!"));
+			Post(Operative->DisplayName, TEXT("⚠️ The crate is full!"));
 			return 0;
 		}
 		if (!Result.bDone)
 		{
-			Post(Operative->DisplayName, TEXT("В вашем инвентаре закончился этот предмет или патроны!"));
+			Post(Operative->DisplayName, TEXT("You're out of this item or ammo!"));
 			return 0;
 		}
-		Post(Operative->DisplayName, FString::Printf(TEXT("📦 Положил(а) в ящик: %s x%d.%s"), *Name, Result.Moved,
-			Result.bClampedByCapacity ? TEXT(" (ящик полон, остальное у меня)") : TEXT("")));
+		Post(Operative->DisplayName, FString::Printf(TEXT("📦 Stowed in the crate: %s x%d.%s"), *Name, Result.Moved,
+			Result.bClampedByCapacity ? TEXT(" (crate full, I keep the rest)") : TEXT("")));
 		return Result.Moved;
 	}
 	default:
@@ -567,17 +567,17 @@ int32 USquadTransferSubsystem::Execute(const FTransferRequest& InRequest)
 		const FTransferResult Result = TransferRules::TakeFromStash(*Stash, *Operative, InRequest.Item, InRequest.Quantity);
 		if (Result.bRecipientFull)
 		{
-			Post(Operative->DisplayName, FString::Printf(TEXT("⚠️ Больше не унести: %s."), *Name));
+			Post(Operative->DisplayName, FString::Printf(TEXT("⚠️ Can't carry any more: %s."), *Name));
 			return 0;
 		}
 		if (!Result.bDone)
 		{
 			return 0;
 		}
-		const FString Left = Result.bClampedByCapacity ? FString::Printf(TEXT(" (не поместилось: %d, осталось %s)"), Wanted - Result.Moved,
-			bPile ? TEXT("на земле") : TEXT("в ящике")) : FString();
-		Post(Operative->DisplayName, bPile ? FString::Printf(TEXT("Подобрал(а): %s x%d.%s"), *Name, Result.Moved, *Left)
-			: FString::Printf(TEXT("📦 Взял(а) из ящика: %s x%d.%s"), *Name, Result.Moved, *Left));
+		const FString Left = Result.bClampedByCapacity ? FString::Printf(TEXT(" (no room for %d, left %s)"), Wanted - Result.Moved,
+			bPile ? TEXT("on the ground") : TEXT("in the crate")) : FString();
+		Post(Operative->DisplayName, bPile ? FString::Printf(TEXT("Picked up: %s x%d.%s"), *Name, Result.Moved, *Left)
+			: FString::Printf(TEXT("📦 Took from the crate: %s x%d.%s"), *Name, Result.Moved, *Left));
 		return Result.Moved;
 	}
 	}
@@ -611,7 +611,7 @@ void USquadTransferSubsystem::CancelPendingTransfer(bool bNotify)
 	}
 	if (bNotify && Walker)
 	{
-		Post(Walker->DisplayName, TEXT("Передача отменена."));
+		Post(Walker->DisplayName, TEXT("Hand-over cancelled."));
 	}
 }
 

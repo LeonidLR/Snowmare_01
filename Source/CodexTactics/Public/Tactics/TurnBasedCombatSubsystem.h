@@ -139,16 +139,16 @@ public:
 	/** A cinematic squad shot or turret volley is playing. */
 	bool IsDramaticShotActive() const { return bDramaticShotActive; }
 
-	// --- Attack mode (Godot is_attack_mode: F / the weapon selector; RMB, Esc, «ХОД» or a finished shot leave it) ---
+	// --- Attack mode (Godot is_attack_mode: F / the weapon selector; RMB, Esc, "MOVE" or a finished shot leave it) ---
 
 	/** Weapon aim: the dot matrix of the weapon's cells replaces the green walk cells; empty cells do not walk. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
 	bool IsAttackMode() const { return bAttackMode; }
 
-	/** Godot enter_attack_mode: «🎯 Режим прицеливания: <weapon>». */
+	/** Godot enter_attack_mode: "🎯 Aim mode: <weapon>". */
 	void EnterAttackMode();
 
-	/** Godot exit_attack_mode; Line (if any) goes to the feed as «ТАКТИКА». */
+	/** Godot exit_attack_mode; Line (if any) goes to the feed as "TACTICS". */
 	void ExitAttackMode(const FString& Line = FString());
 
 	/** Godot toggle_attack_mode (F); true when the mode is now on. */
@@ -260,7 +260,7 @@ public:
 	 * grid path to Target; the operative takes the object's previous cells. CustomAPCost < 0 = PushBarrelAPCost per step.
 	 */
 	bool RelocateObject(const FIntPoint& ObjectCell, const FIntPoint& Target, int32 CustomAPCost = -1);
-	/** Godot _try_push_adjacent_barrel (panel «Бочка»): relocation of an orthogonally adjacent barrel. */
+	/** Godot _try_push_adjacent_barrel (panel "Barrel"): relocation of an orthogonally adjacent barrel. */
 	bool TryPushAdjacentBarrel();
 	/** Godot is_unit_adjacent_to_object: Chebyshev distance 1 to any cell of the object. */
 	bool IsUnitAdjacentToObject(const AActor* Unit, const AActor* Object) const;
@@ -390,7 +390,7 @@ private:
 	void Log(const FString& Message) const;
 	/** Godot camera.trigger_weapon_shake from the turn-based shots (the camera ignores it outside turn-based combat). */
 	void ShakeCamera(const FString& WeaponType) const;
-	/** Feed line from another sender (Godot _on_quest_message("ТАКТИКА", ...)). */
+	/** Feed line from another sender (Godot _on_quest_message("TACTICS", ...)). */
 	void Post(const FString& Sender, const FString& Message) const;
 	void Highlight(AActor* Target) const;
 	class ATacticalCameraPawn* GetCamera() const;

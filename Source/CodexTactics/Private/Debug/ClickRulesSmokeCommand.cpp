@@ -2,7 +2,7 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.ClickRulesSmoke
 // Godot main.gd plain-click rules in a fight: an enemy becomes the priority target; a barrel / set-up item can't be
 // moved outside the tactical pause (HQ line); a ground click moves the leader at once (RTS control, user request
-// 2026-10-06 — Godot allowed moves only in the pause); a barrel opens its menu (2026-10-08: «Разжечь», «Вытолкать» in the pause) and a
+// 2026-10-06 — Godot allowed moves only in the pause); a barrel opens its menu (2026-10-08: "Ignite", "Push" in the pause) and a
 // barricade opens its menu at once.
 
 #include "CoreMinimal.h"
@@ -110,22 +110,22 @@ namespace ClickRulesSmoke
 
 		// Real-time fight.
 		PC->HandleWorldHit(HitOn(Hound, Hound->GetActorLocation()));
-		Check(State, Leader->GetManualPriorityTarget() == Hound && CountMessages(World, TEXT("Назначена приоритетная цель")) > 0,
+		Check(State, Leader->GetManualPriorityTarget() == Hound && CountMessages(World, TEXT("Priority target set")) > 0,
 			TEXT("plain click on an enemy: priority target"));
-		const int32 Refusals = CountMessages(World, TEXT("менять расположение объектов нельзя"));
+		const int32 Refusals = CountMessages(World, TEXT("Objects cannot be relocated during combat"));
 		UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
 		URelocationSubsystem* Relocation = World->GetSubsystem<URelocationSubsystem>();
-		// User decision 2026-10-08: a barrel in the fight opens its menu («Разжечь»; «Вытолкать» only in the pause).
+		// User decision 2026-10-08: a barrel in the fight opens its menu ("Ignite"; "Push" only in the pause).
 		PC->HandleWorldHit(HitOn(Barrel, Barrel->GetActorLocation()));
 		Check(State, Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Barrel && !Interactions->GetActionMenu().bAllowRelocate,
-			TEXT("barrel in the real-time fight: menu with «Разжечь», no «Вытолкать»"));
+			TEXT("barrel in the real-time fight: menu with \"Ignite\", no \"Push\""));
 		Interactions->CancelActionMenu();
 		PC->HandleWorldHit(HitOn(Barricade, Barricade->GetActorLocation()));
-		Check(State, CountMessages(World, TEXT("менять расположение объектов нельзя")) == Refusals + 1 && !Relocation->IsPlacing(),
+		Check(State, CountMessages(World, TEXT("Objects cannot be relocated during combat")) == Refusals + 1 && !Relocation->IsPlacing(),
 			TEXT("barricade in the fight: HQ refusal"));
-		const int32 MoveRefusals = CountMessages(World, TEXT("Перемещение во время боя возможно только"));
+		const int32 MoveRefusals = CountMessages(World, TEXT("During combat, moving is only possible"));
 		PC->HandleWorldHit(HitOn(nullptr, Leader->GetActorLocation() + FVector(-300.f, 0.f, -90.f)));
-		Check(State, CountMessages(World, TEXT("Перемещение во время боя возможно только")) == MoveRefusals && Leader->IsMoving(),
+		Check(State, CountMessages(World, TEXT("During combat, moving is only possible")) == MoveRefusals && Leader->IsMoving(),
 			TEXT("ground click in the real-time fight: the leader moves at once (RTS)"));
 		Leader->StopOperative();
 
@@ -133,9 +133,9 @@ namespace ClickRulesSmoke
 		Flow->ToggleTacticalPause();
 		PC->HandleWorldHit(HitOn(Barrel, Barrel->GetActorLocation()));
 		Check(State, Interactions->IsActionMenuOpen() && Interactions->GetActionMenu().bAllowRelocate,
-			TEXT("pause: barrel menu opens at once with «Вытолкать»"));
+			TEXT("pause: barrel menu opens at once with \"Push\""));
 		Interactions->RelocateActionMenu();
-		Check(State, Relocation->IsPlacing(), TEXT("pause: «Вытолкать» picks the barrel up for relocation"));
+		Check(State, Relocation->IsPlacing(), TEXT("pause: \"Push\" picks the barrel up for relocation"));
 		Relocation->CancelPlacement();
 		PC->HandleWorldHit(HitOn(Barricade, Barricade->GetActorLocation()));
 		Check(State, World->GetSubsystem<UInteractionSubsystem>()->IsActionMenuOpen(), TEXT("pause: barricade menu opens at once"));

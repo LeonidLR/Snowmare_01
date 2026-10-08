@@ -70,14 +70,14 @@ void UPanicComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		Stress = 0.f;
 		if (bPanicking)
 		{
-			RecoverFromPanic(TEXT("Механика паники отключена"), true);
+			RecoverFromPanic(TEXT("Panic mechanic disabled"), true);
 		}
 		return;
 	}
 	// Godot: the panic belongs to the real-time fight; the turn-based grid fight does not use it.
 	if (bPanicking && !IsCombatActive())
 	{
-		RecoverFromPanic(TEXT("Бой окончен"), true);
+		RecoverFromPanic(TEXT("Combat over"), true);
 	}
 	ProcessStress(DeltaTime);
 	if (bPanicking)
@@ -96,7 +96,7 @@ void UPanicComponent::ProcessStress(float DeltaSeconds)
 		Stress = FMath::Max(0.f, Stress - Config.HeatSourceCalmRate * DeltaSeconds);
 		if (bPanicking && WarmthTimer >= Config.HeatSourcePanicBreakTime)
 		{
-			RecoverFromPanic(TEXT("Согрелся у источника тепла"));
+			RecoverFromPanic(TEXT("Warmed up at a heat source"));
 			return;
 		}
 	}
@@ -175,19 +175,19 @@ void UPanicComponent::AttemptTriggerPanic()
 	default:
 		break;
 	}
-	FString Reason = TEXT("Критический стресс: ");
+	FString Reason = TEXT("Critical stress: ");
 	const UHealthComponent* Health = Operative->HealthComponent;
 	if (Health && Health->GetCurrentHealth() / FMath::Max(1.f, Health->GetMaxHealth()) < Config.HpThreshold)
 	{
-		Reason += TEXT("[Тяжелое ранение] ");
+		Reason += TEXT("[Badly wounded] ");
 	}
 	if (Operative->ColdLevel / 100.f > Config.ColdThreshold)
 	{
-		Reason += TEXT("[Обморожение] ");
+		Reason += TEXT("[Frostbite] ");
 	}
 	if (Operative->UsesAmmo() && Operative->ReserveAmmo <= Config.LowAmmoThreshold)
 	{
-		Reason += TEXT("[Нет патронов] ");
+		Reason += TEXT("[Out of ammo] ");
 	}
 	TriggerPanic(Reason);
 }
@@ -214,12 +214,12 @@ void UPanicComponent::TriggerPanic(const FString& Reason, bool bForce)
 	// Drops the player's orders and the reload; stands up to run (Godot set_stance(STANDING, true)).
 	Operative->StopOperative();
 	Operative->SetStance(EOperativeStance::Standing);
-	UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("😱 ПАНИКА!"), PanicRed);
+	UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("😱 PANIC!"), PanicRed);
 	static const TCHAR* Phrases[] = {
-		TEXT("😱 Я больше не могу! Они повсюду!"),
-		TEXT("😱 Отступаем, отходим! Нас сомнут!"),
-		TEXT("😱 Оружие заклинило! Я ухожу из сектора!"),
-		TEXT("😱 Назад, назад к теплу! Спасайтесь!") };
+		TEXT("😱 I can't take it! They're everywhere!"),
+		TEXT("😱 Fall back, fall back! They'll overrun us!"),
+		TEXT("😱 Weapon jammed! I'm leaving the sector!"),
+		TEXT("😱 Back to the warmth! Run!") };
 	PanicLinePost(Operative, Phrases[FMath::RandRange(0, UE_ARRAY_COUNT(Phrases) - 1)]);
 	UE_LOG(LogCodexTactics, Display, TEXT("%s panics (%s)"), *Operative->DisplayName.ToString(), *Reason);
 	UpdateAura(true);
@@ -240,7 +240,7 @@ void UPanicComponent::TransitionToCowering()
 	Phase = EPanicPhase::Cowering;
 	Operative->StopOperative();
 	Operative->SetStance(EOperativeStance::Crouching);
-	UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🧎 СЖАЛСЯ В СТРАХЕ"), FLinearColor(1.f, 0.4f, 0.4f));
+	UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🧎 COWERING"), FLinearColor(1.f, 0.4f, 0.4f));
 }
 
 void UPanicComponent::RecoverFromPanic(const FString& Reason, bool bSilent)
@@ -267,11 +267,11 @@ void UPanicComponent::RecoverFromPanic(const FString& Reason, bool bSilent)
 		if (!bSilent)
 		{
 			static const TCHAR* Phrases[] = {
-				TEXT("😮‍💨 Взял себя в руки! Возвращаюсь в строй!"),
-				TEXT("😮‍💨 Согрелся, дыхание ровное, готов к бою!"),
-				TEXT("😮‍💨 Паника отступила. Сектор чист, держу позицию!") };
+				TEXT("😮‍💨 Got a grip! Back in formation!"),
+				TEXT("😮‍💨 Warmed up, breathing steady, ready to fight!"),
+				TEXT("😮‍💨 Panic's gone. Sector clear, holding position!") };
 			PanicLinePost(Operative, Phrases[FMath::RandRange(0, UE_ARRAY_COUNT(Phrases) - 1)]);
-			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("😮‍💨 ПРИШЕЛ В СЕБЯ"), FLinearColor(0.3f, 1.f, 0.5f));
+			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("😮‍💨 COMPOSED"), FLinearColor(0.3f, 1.f, 0.5f));
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("%s recovers from panic (%s)"), *Operative->DisplayName.ToString(), *Reason);
 	}
@@ -318,11 +318,11 @@ void UPanicComponent::ProcessPanicState(float DeltaSeconds)
 	const float Nearest = GetNearestEnemyDistance();
 	if (PanicTimer <= 0.f && (Nearest > Config.RecoverDistanceFromEnemies || Nearest < 0.f))
 	{
-		RecoverFromPanic(TEXT("Оторвался от врагов"));
+		RecoverFromPanic(TEXT("Broke away from the enemy"));
 	}
 	else if (PanicTimer <= -2.f)
 	{
-		RecoverFromPanic(TEXT("Время паники истекло"));
+		RecoverFromPanic(TEXT("Panic timed out"));
 	}
 }
 

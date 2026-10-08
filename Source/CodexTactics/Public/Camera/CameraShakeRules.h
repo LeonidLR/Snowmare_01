@@ -25,7 +25,7 @@ namespace CameraShakeRules
 {
 	CODEXTACTICS_API FCameraShakeConfig ConfigFromBalance(const UGodotBalanceAsset* Balance);
 
-	/** Trauma a shot adds: «pistol» / «пистолет» -> pistol, «turret» / «турел» -> turret, anything else the rifle. */
+	/** Trauma a shot adds: "pistol" (or legacy Russian "пистолет") -> pistol, "turret" (or "турел") -> turret, anything else the rifle. */
 	CODEXTACTICS_API float GetPower(const FCameraShakeConfig& Config, const FString& WeaponType);
 
 	/** Trauma after a shot, clamped to [0, 1]. */

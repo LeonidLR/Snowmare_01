@@ -14,7 +14,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRunTelemetryWeaponTest, "CodexTactics.Telemetr
 bool FRunTelemetryWeaponTest::RunTest(const FString&)
 {
 	FMemberRunStats Stats;
-	Stats.Name = TEXT("Командир");
+	Stats.Name = TEXT("Commander");
 	RunTelemetryRules::RecordShot(Stats, 1, TEXT("m16"), 18.f);
 	RunTelemetryRules::RecordShot(Stats, 1, TEXT("m16"), 20.4f);
 	RunTelemetryRules::RecordShot(Stats, 2, TEXT("pistol"), 12.f);
@@ -51,12 +51,12 @@ bool FRunTelemetryRecordTest::RunTest(const FString&)
 	Record.FailedWave = 2;
 	Record.DeathCause = TEXT("FREEZING_FATIGUE");
 	FMemberRunStats A;
-	A.Name = TEXT("Командир");
+	A.Name = TEXT("Commander");
 	A.FinalColdPct = 60.f;
 	A.Medkits = 1;
 	A.AmmoM16 = 50;
 	FMemberRunStats B;
-	B.Name = TEXT("Инженер");
+	B.Name = TEXT("Engineer");
 	B.FinalColdPct = 71.f;
 	B.Medkits = 2;
 	B.ColdDamageTaken = 3.46f;

@@ -4,7 +4,7 @@
 
 FText MissionRules::GetStartObjective()
 {
-	return LOCTEXT("Start", "Исследовать КПП и найти способ открыть гермоворота");
+	return LOCTEXT("Start", "Explore the checkpoint and find a way to open the blast gates");
 }
 
 FText MissionRules::GetModeObjective(EMissionStartMode Mode)
@@ -23,7 +23,7 @@ FText MissionRules::GetModeRadio(EMissionStartMode Mode)
 	switch (Mode)
 	{
 	case EMissionStartMode::Game:
-		return LOCTEXT("GameRadio", "Мы у главных ворот карантинного КПП. Аномальный мороз посреди лета... Нужно запитать ворота и проникнуть внутрь.");
+		return LOCTEXT("GameRadio", "We're at the main gate of the quarantine checkpoint. Freak frost in the middle of summer... We need to power the gate and get inside.");
 	default:
 		return FText::GetEmpty();
 	}
@@ -44,12 +44,12 @@ bool MissionRules::GetPhaseObjective(ECodexGamePhase Phase, int32 WaveIndex, flo
 	{
 	case ECodexGamePhase::Preparation:
 		OutObjective = WaveIndex <= 1
-			? LOCTEXT("FirstPreparation", "ПОДГОТОВКА К ОБОРОНЕ: расставьте турели, баррикады и мины ([Space] — приказы)")
-			: FText::Format(LOCTEXT("RestPreparation", "ПОДГОТОВКА: {0} сек до волны {1}. Укрепите оборону!"),
+			? LOCTEXT("FirstPreparation", "DEFENSE PREPARATION: place turrets, barricades and mines ([Space] for orders)")
+			: FText::Format(LOCTEXT("RestPreparation", "PREPARATION: {0} sec until wave {1}. Fortify the defenses!"),
 				FMath::TruncToInt(PreparationSeconds), WaveIndex);
 		return true;
 	case ECodexGamePhase::PostCombat:
-		OutObjective = LOCTEXT("Victory", "РУБЕЖ ЗАЧИЩЕН: Отряд выжил! Перегруппировка...");
+		OutObjective = LOCTEXT("Victory", "LINE SECURED: The squad survived! Regrouping...");
 		return true;
 	case ECodexGamePhase::Exploration:
 		if (bAfterCombat)
@@ -65,40 +65,40 @@ bool MissionRules::GetPhaseObjective(ECodexGamePhase Phase, int32 WaveIndex, flo
 
 FText MissionRules::GetPreparationRadio()
 {
-	return LOCTEXT("PrepRadio", "Мы во внутреннем дворе КПП! Отряду держать позиции, приступаем к инженерной подготовке рубежа!");
+	return LOCTEXT("PrepRadio", "We're in the checkpoint courtyard! Squad, hold your positions and begin engineering the defensive line!");
 }
 
 FText MissionRules::GetWaveRestRadio(float PreparationSeconds)
 {
-	return FText::Format(LOCTEXT("RestRadio", "Необходимо подготовиться к следующей волне! У вас {0} секунд на перегруппировку."),
+	return FText::Format(LOCTEXT("RestRadio", "Prepare for the next wave! You have {0} seconds to regroup."),
 		FMath::TruncToInt(PreparationSeconds));
 }
 
 FText MissionRules::GetVictoryRadio()
 {
-	return LOCTEXT("VictoryRadio", "Отличная работа, бойцы! Рубеж полностью в безопасности. Можете продолжить исследование.");
+	return LOCTEXT("VictoryRadio", "Outstanding work, squad! The line is fully secure. You may continue exploring.");
 }
 
 FText MissionRules::GetAfterVictoryObjective()
 {
-	return LOCTEXT("Explore", "РУБЕЖ ЗАЧИЩЕН: Исследуйте территорию КПП");
+	return LOCTEXT("Explore", "LINE SECURED: Explore the checkpoint grounds");
 }
 
 FText MissionRules::GetWaveObjective(int32 WaveIndex, int32 EnemyCount)
 {
-	return FText::Format(LOCTEXT("Wave", "ОБОРОНА: Отразить волну {0}! Врагов: {1}"), WaveIndex, EnemyCount);
+	return FText::Format(LOCTEXT("Wave", "DEFENSE: Repel wave {0}! Enemies: {1}"), WaveIndex, EnemyCount);
 }
 
 FText MissionRules::GetFailureReason(const FText& OperativeName, float ColdLevel)
 {
 	return ColdLevel >= FrozenDeathColdLevel
-		? FText::Format(LOCTEXT("Frozen", "Оперативник {0} погиб от критического переохлаждения!"), OperativeName)
-		: FText::Format(LOCTEXT("Wounds", "Оперативник {0} погиб в бою от полученных ранений!"), OperativeName);
+		? FText::Format(LOCTEXT("Frozen", "Operative {0} died of critical hypothermia!"), OperativeName)
+		: FText::Format(LOCTEXT("Wounds", "Operative {0} died of battle wounds!"), OperativeName);
 }
 
 FText MissionRules::GetFailureRadio(const FText& OperativeName)
 {
-	return FText::Format(LOCTEXT("Radio", "Внимание! Связь с {0} потеряна. Миссия провалена."), OperativeName);
+	return FText::Format(LOCTEXT("Radio", "Warning! Contact with {0} lost. Mission failed."), OperativeName);
 }
 
 #undef LOCTEXT_NAMESPACE

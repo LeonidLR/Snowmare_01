@@ -51,6 +51,12 @@ public:
 	FOnDialogueChanged OnDialogueChanged;
 
 private:
+	/**
+	 * English version of a DA_Dialogue* asset: lines, speakers and delays come from narrative_manifest.json
+	 * (sequence id = asset name); missing lines become "[EN missing: <seq>#<n>]". Transient sequences pass through.
+	 */
+	const UDialogueSequenceAsset* ResolveSequence(const UDialogueSequenceAsset* Sequence);
+
 	void Close();
 	void PostNextFeedLine(int32 PlayId, int32 Index);
 

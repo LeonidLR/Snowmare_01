@@ -39,7 +39,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Quests")
 	bool IsGatePowered() const { return State.bIsGatePowered; }
 
-	/** Objective banner text (without the «ЦЕЛЬ: » prefix). */
+	/** Objective banner text (without the "OBJECTIVE: " prefix). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Quests")
 	FText GetObjective() const { return State.GetObjective(); }
 
@@ -53,7 +53,7 @@ public:
 	FOnObjectiveChanged OnObjectiveChanged;
 
 	/**
-	 * «Начать бой» from the main menu: every chain step done at once (generator running, gate powered and open).
+	 * "Start Battle" from the main menu: every chain step done at once (generator running, gate powered and open).
 	 * Godot _on_start_combat_pressed sets the quest_manager flags and calls _on_gate_opened.
 	 */
 	void CompleteChainForCombat();

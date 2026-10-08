@@ -187,7 +187,7 @@ bool FSquadROEJsonTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// --- Sprint 10: defense line («Рубеж обороны», Hold Objective at all costs) ---
+// --- Sprint 10: defense line ("Hold line", Hold Objective at all costs) ---
 
 namespace DefenseTest
 {

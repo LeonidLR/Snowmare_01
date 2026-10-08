@@ -8,7 +8,7 @@
   ],
   "quickCount": 2,
   "fallback": {
-    "tests": ["CodexTactics.Core"],
+    "tests": ["CodexTactics.Core", "CodexTactics.Text"],
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
@@ -102,7 +102,7 @@
     },
     {
       "name": "narrative-dialogue",
-      "globs": ["Source/**/Interactables/Narrative*", "Source/**/Quests/DialogueTrigger*", "Source/**/UI/Dialogue*", "Source/**/Data/DialogueSequence*"],
+      "globs": ["Source/**/Interactables/Narrative*", "Source/**/Quests/DialogueTrigger*", "Source/**/UI/Dialogue*", "Source/**/Data/DialogueSequence*", "Source/**/Data/NarrativeManifest*", "Content/Data/Narrative/**", "Scripts/Narrative/**"],
       "tests": ["CodexTactics.Dialogue"],
       "smokes": ["NarrativeSmoke", "DialogueSmoke"]
     },
@@ -267,6 +267,12 @@
       "globs": ["Source/**/Bot/**", "Source/**/Telemetry/**"],
       "tests": ["CodexTactics.Bot", "CodexTactics.Telemetry"],
       "smokes": ["BotMarksmanSmoke", "BotRepairSmoke", "BotStealthSmoke"]
+    },
+    {
+      "name": "player-text",
+      "globs": ["Source/**/UI/*", "Source/CodexTacticsTests/Private/Text/**"],
+      "tests": ["CodexTactics.Text"],
+      "smokes": []
     },
     {
       "name": "build-config",

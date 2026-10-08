@@ -1,7 +1,7 @@
 // Dev-only console command for a headless rage check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.RageSmoke
-// Godot rage_component.gd: two crits from the same hound (forced roll) put the commander into rage («В ЯРОСТИ!», radio
-// shout); orders are refused («НЕ ПОДЧИНЯЕТСЯ»); in the fight he sprays the enemies in reach without spending
+// Godot rage_component.gd: two crits from the same hound (forced roll) put the commander into rage («ENRAGED!», radio
+// shout); orders are refused («IGNORING ORDERS»); in the fight he sprays the enemies in reach without spending
 // rounds; when the rage runs out the calm-down line follows.
 
 #include "CoreMinimal.h"
@@ -115,15 +115,15 @@ namespace RageSmoke
 			Check(State, !Commander->IsRaging() && Rage->Config.RequiredCrits == 2 && FMath::IsNearlyEqual(Rage->Config.Duration, 9.f),
 				FString::Printf(TEXT("commander rage config: %d crits, %.1f s"), Rage->Config.RequiredCrits, Rage->Config.Duration));
 			Commander->ForcedDodgeRollForTesting = 0.f;
-			Commander->TakeHit(5.f, TEXT("Гончая"), true, false, State.Hound.Get());
+			Commander->TakeHit(5.f, TEXT("Hound"), true, false, State.Hound.Get());
 			Check(State, !Commander->IsRaging(), TEXT("one crit: no rage yet"));
 			Commander->ForcedDodgeRollForTesting = 0.f;
 			Rage->ForcedRollForTesting = 0.f;
-			Commander->TakeHit(5.f, TEXT("Гончая"), true, false, State.Hound.Get());
-			Check(State, Commander->IsRaging() && Floating->HasShown(TEXT("В ЯРОСТИ!")) && HasMessage(World, TEXT("на куски порву")),
+			Commander->TakeHit(5.f, TEXT("Hound"), true, false, State.Hound.Get());
+			Check(State, Commander->IsRaging() && Floating->HasShown(TEXT("ENRAGED!")) && HasMessage(World, TEXT("tear you all to pieces")),
 				TEXT("second crit from the same hound: rage, text, shout"));
 			Check(State, Commander->OrderMoveTo(Commander->GetActorLocation() + FVector(300.f, 0.f, 0.f), false) == EOperativeOrderResult::Refused
-				&& Floating->HasShown(TEXT("НЕ ПОДЧИНЯЕТСЯ")), TEXT("orders refused"));
+				&& Floating->HasShown(TEXT("IGNORING ORDERS")), TEXT("orders refused"));
 			Rage->Config.Duration = 3.f; // shorten the wait
 			State.Clip = Commander->CurrentClip;
 			State.HoundHealth = EnemyHealthSum(World); // the chaotic target may be any enemy in reach
@@ -151,7 +151,7 @@ namespace RageSmoke
 				return true;
 			}
 			Check(State, State.bAuraSeen && !Rage->IsAuraShown(), TEXT("fiery aura under the feet while raging, gone after"));
-			Check(State, !Commander->IsRaging() && HasMessage(World, TEXT("ярость отпустила")), TEXT("rage wears off with the calm line"));
+			Check(State, !Commander->IsRaging() && HasMessage(World, TEXT("the rage is gone")), TEXT("rage wears off with the calm line"));
 			return Finish(State, true);
 		default:
 			return Finish(State, false);

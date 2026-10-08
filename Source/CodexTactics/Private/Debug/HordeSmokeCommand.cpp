@@ -217,7 +217,7 @@ namespace HordeSmoke
 			FVector WarningAt;
 			int32 WarningCount = 0;
 			float WarningLeft = 0.f;
-			Check(State, Horde->GetActiveWarning(WarningAt, WarningCount, WarningLeft) && WarningCount == Members.Num(), TEXT("HUD warning «ОРДА!» up"));
+			Check(State, Horde->GetActiveWarning(WarningAt, WarningCount, WarningLeft) && WarningCount == Members.Num(), TEXT("HUD warning \"HORDE!\" up"));
 			State.MeanDistanceAtSpawn = MeanDistanceToSquad(*Horde, SquadCentre(*Squad));
 			Next(State);
 			return true;

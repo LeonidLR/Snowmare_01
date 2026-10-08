@@ -57,13 +57,13 @@ namespace
 
 	const TCHAR* TurnStanceName(EOperativeStance Stance)
 	{
-		return Stance == EOperativeStance::Prone ? TEXT("Лёжа") : (Stance == EOperativeStance::Crouching ? TEXT("Присев") : TEXT("Стоя"));
+		return Stance == EOperativeStance::Prone ? TEXT("Prone") : (Stance == EOperativeStance::Crouching ? TEXT("Crouched") : TEXT("Standing"));
 	}
 
 	const TCHAR* TurnArcName(EGorkyArcZone Arc)
 	{
 		// Godot prints str(ArcZone) (an int); the UE feed names the arc.
-		return Arc == EGorkyArcZone::Rear ? TEXT("тыл") : (Arc == EGorkyArcZone::Flank ? TEXT("фланг") : TEXT("фронт"));
+		return Arc == EGorkyArcZone::Rear ? TEXT("rear") : (Arc == EGorkyArcZone::Flank ? TEXT("flank") : TEXT("front"));
 	}
 
 	FIntPoint TurnStepDir(const FIntPoint& Delta)
@@ -76,7 +76,7 @@ namespace
 		const AEnemyCharacter* Character = Cast<AEnemyCharacter>(Enemy);
 		const EEnemyArchetype Archetype = Character ? Character->GetArchetype() : EEnemyArchetype::Base;
 		FEnemyTurnProfile Profile = EnemyTurnRules::ProfileFor(Archetype);
-		WeaponTuning::ApplyEnemyTurnWeapon(Archetype, Profile); // Wave Editor «Оружие врагов»
+		WeaponTuning::ApplyEnemyTurnWeapon(Archetype, Profile); // Wave Editor "Enemy weapons"
 		return Profile;
 	}
 
@@ -139,7 +139,7 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		if (const UGodotBalanceAsset* BalanceAsset = GameMode->TurnBasedBalance.LoadSynchronous())
 		{
 			Balance = TurnBasedRules::BalanceFromGodot(BalanceAsset);
-			WeaponTuning::ApplyTurnRules(Balance); // Wave Editor «Правила пошагового боя»
+			WeaponTuning::ApplyTurnRules(Balance); // Wave Editor "Turn-based rules"
 			SquadStepDuration = BalanceAsset->GetNumber(TEXT("tactical_step_duration"), SquadStepDuration);
 			EnemyStepDuration = BalanceAsset->GetNumber(TEXT("tactical_enemy_step_duration"), EnemyStepDuration);
 			EnemyHitDelay = BalanceAsset->GetNumber(TEXT("tactical_enemy_hit_delay"), EnemyHitDelay);
@@ -410,7 +410,7 @@ void UTurnBasedCombatSubsystem::EndCombat(bool bVictory, bool bLeaveFlow)
 	Grid = nullptr;
 	if (bVictory)
 	{
-		Log(TEXT("🏆 ПОБЕДА В ПОШАГОВОМ БОЮ! Враги повержены. Включена тактическая пауза (20с) для перегруппировки [ПРОБЕЛ]."));
+		Log(TEXT("🏆 TURN-BASED VICTORY! Enemies down. Tactical pause (20s) to regroup [SPACE]."));
 	}
 	if (bLeaveFlow)
 	{
@@ -753,7 +753,7 @@ float UTurnBasedCombatSubsystem::PrepareSquadWalk(AOperativeCharacter* Unit, flo
 			{
 				State->Stance = EOperativeStance::Crouching;
 			}
-			Log(FString::Printf(TEXT("🧍 %s поднимается в присед, чтобы перейти"), *NameOf(Unit)));
+			Log(FString::Printf(TEXT("🧍 %s rises to a crouch to move"), *NameOf(Unit)));
 			const UOperativeAnimInstance* Anim = Unit->GetMesh() ? Cast<UOperativeAnimInstance>(Unit->GetMesh()->GetAnimInstance()) : nullptr;
 			if (Anim && Anim->ProneToCrouchAnimation)
 			{
@@ -1149,7 +1149,7 @@ void UTurnBasedCombatSubsystem::StartPlayerTurn()
 		}
 		else
 		{
-			Log(FString::Printf(TEXT("🔥 Бочка продолжает пылать (осталось ходов: %d)"), Entry.Value));
+			Log(FString::Printf(TEXT("🔥 The barrel keeps burning (turns left: %d)"), Entry.Value));
 		}
 	}
 	for (const TWeakObjectPtr<AActor>& Barrel : BurntOut)
@@ -1158,7 +1158,7 @@ void UTurnBasedCombatSubsystem::StartPlayerTurn()
 		if (ABarrelActor* BarrelActor = Cast<ABarrelActor>(Barrel.Get()))
 		{
 			BarrelActor->ExtinguishNow();
-			Log(TEXT("💨 Горючая бочка полностью прогорела и погасла!"));
+			Log(TEXT("💨 The fuel barrel has burnt out!"));
 		}
 	}
 
@@ -1256,7 +1256,7 @@ void UTurnBasedCombatSubsystem::EnterAttackMode()
 	}
 	bAttackMode = true;
 	const UWeaponDataAsset* Weapon = WeaponOf(GetActiveUnit());
-	Log(FString::Printf(TEXT("🎯 Режим прицеливания: %s"), Weapon && !Weapon->WeaponName.IsEmpty() ? *Weapon->WeaponName.ToString() : TEXT("МТКМ-16")));
+	Log(FString::Printf(TEXT("🎯 Aim mode: %s"), Weapon && !Weapon->WeaponName.IsEmpty() ? *Weapon->WeaponName.ToString() : TEXT("M16")));
 	RefreshOverlay();
 	Changed();
 }
@@ -1270,7 +1270,7 @@ void UTurnBasedCombatSubsystem::ExitAttackMode(const FString& Line)
 	bAttackMode = false;
 	if (!Line.IsEmpty())
 	{
-		Post(TEXT("ТАКТИКА"), Line);
+		Post(TEXT("TACTICS"), Line);
 	}
 	RefreshOverlay();
 	Changed();
@@ -1337,7 +1337,7 @@ bool UTurnBasedCombatSubsystem::SelectUnit(AOperativeCharacter* Unit)
 		{
 			Camera->SmoothFocusOnTarget(Unit);
 		}
-		Post(TEXT("КАМЕРА"), FString::Printf(TEXT("🎥 Фокус камеры на бойце: %s"), *NameOf(Unit)));
+		Post(TEXT("CAMERA"), FString::Printf(TEXT("🎥 Camera on operative: %s"), *NameOf(Unit)));
 		return true;
 	}
 	ActiveIndex = Index;
@@ -1394,7 +1394,7 @@ bool UTurnBasedCombatSubsystem::MoveActiveUnitTo(const FIntPoint& Cell)
 	if (Mine)
 	{
 		State->AP = 0;
-		Log(FString::Printf(TEXT("🛑 Взрыв мины прервал ход бойца %s!"), *NameOf(Unit)));
+		Log(FString::Printf(TEXT("🛑 A mine blast cut short the move of %s!"), *NameOf(Unit)));
 	}
 	else
 	{
@@ -1448,13 +1448,13 @@ bool UTurnBasedCombatSubsystem::SetActiveUnitStance(EOperativeStance NewStance)
 	}
 	if (State->AP < Balance.StanceAPCost)
 	{
-		Log(FString::Printf(TEXT("⚠️ Недостаточно AP для смены стойки (%d/%d AP)!"), State->AP, Balance.StanceAPCost));
+		Log(FString::Printf(TEXT("⚠️ Not enough AP to change stance (%d/%d AP)!"), State->AP, Balance.StanceAPCost));
 		return false;
 	}
 	State->AP -= Balance.StanceAPCost;
 	State->Stance = NewStance;
 	Unit->SetStance(NewStance);
-	Log(FString::Printf(TEXT("🛡️ %s сменил стойку: %s (расход %d AP)"), *NameOf(Unit), TurnStanceName(NewStance), Balance.StanceAPCost));
+	Log(FString::Printf(TEXT("🛡️ %s changes stance: %s (%d AP)"), *NameOf(Unit), TurnStanceName(NewStance), Balance.StanceAPCost));
 	RefreshOverlay();
 	Changed();
 	return true;
@@ -1518,13 +1518,13 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 	}
 	if (State->bHasAttacked)
 	{
-		Log(FString::Printf(TEXT("⚠️ Боец %s уже атаковал в этом раунде! Доступна только 1 атака за ход."), *NameOf(Unit)));
+		Log(FString::Printf(TEXT("⚠️ %s has already attacked this round! Only 1 attack per turn."), *NameOf(Unit)));
 		Result.Reason = TEXT("already_attacked");
 		return Result;
 	}
 	if (State->AP < Balance.AttackAPCost)
 	{
-		Log(FString::Printf(TEXT("⚠️ Недостаточно AP для атаки (%d/%d AP)!"), State->AP, Balance.AttackAPCost));
+		Log(FString::Printf(TEXT("⚠️ Not enough AP to attack (%d/%d AP)!"), State->AP, Balance.AttackAPCost));
 		Result.Reason = TEXT("not_enough_ap");
 		return Result;
 	}
@@ -1539,14 +1539,14 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 	const FIntPoint Offset = Cell - State->GridPos;
 	if (!TurnBasedRules::IsTargetInPattern(Weapon, Offset))
 	{
-		Log(Weapon ? FString::Printf(TEXT("⚠️ Цель не на линии огня оружия (%s)!"), *Weapon->WeaponName.ToString()) : FString(TEXT("⚠️ Цель не на линии огня оружия!")));
+		Log(Weapon ? FString::Printf(TEXT("⚠️ Target is not in the weapon's line of fire (%s)!"), *Weapon->WeaponName.ToString()) : FString(TEXT("⚠️ Target is not in the weapon's line of fire!")));
 		Result.Reason = TEXT("not_in_fire_lane");
 		return Result;
 	}
 	bool bThroughCover = false;
 	if (!GorkyLineOfSight::HasLineOfFireThroughCover(State->GridPos, Cell, *Grid, bThroughCover))
 	{
-		Log(TEXT("⚠️ Нет прямой видимости (LoS) до цели!"));
+		Log(TEXT("⚠️ No line of sight (LoS) to the target!"));
 		Result.Reason = TEXT("no_los");
 		return Result;
 	}
@@ -1557,7 +1557,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 	const bool bCoverShot = Unit->bInCover && Unit->IsCornerShotTarget(Target->GetActorLocation());
 	if (bCoverShot && !Unit->CanFireFromCover())
 	{
-		Log(TEXT("⚠️ Из этого укрытия нет угла для стрельбы — сместитесь к краю стены!"));
+		Log(TEXT("⚠️ No firing angle from this cover - move to the edge of the wall!"));
 		Result.Reason = TEXT("no_cover_corner");
 		return Result;
 	}
@@ -1590,7 +1590,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 			* (bThroughCover ? Balance.CoverFireAccuracyMultiplier : 1.f);
 		if (bThroughCover)
 		{
-			Log(FString::Printf(TEXT("🧱 Огонь из-за баррикады: меткость x%.2f"), Balance.CoverFireAccuracyMultiplier));
+			Log(FString::Printf(TEXT("🧱 Firing over a barricade: accuracy x%.2f"), Balance.CoverFireAccuracyMultiplier));
 		}
 		const float Roll = FMath::FRand();
 		Result.bSuccess = true;
@@ -1612,7 +1612,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 		}
 		if (!Result.bHit)
 		{
-			Log(FString::Printf(TEXT("❌ ПРОМАХ! Шанс: %d%% (выпало: %d%%)"), FMath::RoundToInt(Chance * 100.f), FMath::RoundToInt(Roll * 100.f)));
+			Log(FString::Printf(TEXT("❌ MISS! Chance: %d%% (rolled: %d%%)"), FMath::RoundToInt(Chance * 100.f), FMath::RoundToInt(Roll * 100.f)));
 		}
 		else if (FTurnUnitState* EnemyState = States.Find(Target))
 		{
@@ -1620,7 +1620,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 			const float Base = TurnBasedRules::GetDamageForDistance(Weapon, Distance, State->BaseDamage);
 			Result.Damage = TurnBasedRules::SquadAttackDamage(Base, Arc.DamageMultiplier, EnemyState->Armor, Arc.EffectiveArmorMultiplier);
 			ApplyEnemyHit(Target, Result.Damage, NameOf(Unit));
-			Log(FString::Printf(TEXT("💥 Атака по %s: %d урона (%s, x%.2f) [Меткость: %d%%]"), *NameOf(Target), Result.Damage, TurnArcName(Arc.Arc),
+			Log(FString::Printf(TEXT("💥 Attack on %s: %d damage (%s, x%.2f) [Accuracy: %d%%]"), *NameOf(Target), Result.Damage, TurnArcName(Arc.Arc),
 				Arc.DamageMultiplier, FMath::RoundToInt(Chance * 100.f)));
 			if (IsDead(Target))
 			{
@@ -1778,7 +1778,7 @@ bool UTurnBasedCombatSubsystem::SwitchActiveUnitWeapon(const FString& WeaponId)
 		return false;
 	}
 	const FString Name = Unit->CurrentWeapon && !Unit->CurrentWeapon->WeaponName.IsEmpty() ? Unit->CurrentWeapon->WeaponName.ToString() : WeaponId;
-	Log(FString::Printf(TEXT("🔫 %s выбрал(а) оружие: %s"), *NameOf(Unit), *Name));
+	Log(FString::Printf(TEXT("🔫 %s selects weapon: %s"), *NameOf(Unit), *Name));
 	RefreshOverlay();
 	Changed();
 	return true;
@@ -1792,7 +1792,7 @@ bool UTurnBasedCombatSubsystem::EndTurnAfterMedkit(AOperativeCharacter* Unit)
 		return false;
 	}
 	State->AP = 0;
-	Log(FString::Printf(TEXT("💊 %s применил(а) аптечку — ход окончен."), *NameOf(Unit)));
+	Log(FString::Printf(TEXT("💊 %s uses a medkit - turn over."), *NameOf(Unit)));
 	EndCurrentUnitTurn();
 	return true;
 }
@@ -1803,7 +1803,7 @@ void UTurnBasedCombatSubsystem::PassSquadTurn()
 	{
 		return;
 	}
-	Log(TEXT("🛑 Ход отряда завершен. Ход переходит к врагам!"));
+	Log(TEXT("🛑 Squad turn over. Enemy turn!"));
 	EndSquadPhase();
 }
 
@@ -1841,11 +1841,11 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 				if (RelocateBarricade(Barricade, Cell, Yaw, APCost))
 				{
 					Highlight(Barricade);
-					Post(TEXT("ТАКТИКА"), FString::Printf(TEXT("✅ Баррикада успешно развернута (-%d AP)."), APCost));
+					Post(TEXT("TACTICS"), FString::Printf(TEXT("✅ Barricade placed (-%d AP)."), APCost));
 				}
 				else
 				{
-					Post(TEXT("ТАКТИКА"), TEXT("⚠️ Ошибка при установке баррикады!"));
+					Post(TEXT("TACTICS"), TEXT("⚠️ Failed to place the barricade!"));
 					RefreshOverlay();
 				}
 			}
@@ -1855,7 +1855,7 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 			}
 			else
 			{
-				Post(TEXT("ТАКТИКА"), TEXT("⚠️ Нельзя установить баррикаду в этой клетке с текущим углом поворота (или не хватает AP)!"));
+				Post(TEXT("TACTICS"), TEXT("⚠️ Cannot place the barricade on this cell at this rotation (or not enough AP)!"));
 			}
 			return;
 		}
@@ -1869,11 +1869,11 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 			if (RelocateObject(From, Cell, APCost))
 			{
 				Highlight(Moved);
-				Post(TEXT("ТАКТИКА"), FString::Printf(TEXT("✅ Объект успешно перемещен (-%d AP)."), APCost));
+				Post(TEXT("TACTICS"), FString::Printf(TEXT("✅ Object relocated (-%d AP)."), APCost));
 			}
 			else
 			{
-				Post(TEXT("ТАКТИКА"), TEXT("⚠️ Ошибка при перемещении объекта!"));
+				Post(TEXT("TACTICS"), TEXT("⚠️ Failed to relocate the object!"));
 				RefreshOverlay();
 			}
 		}
@@ -1883,7 +1883,7 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 		}
 		else
 		{
-			Post(TEXT("ТАКТИКА"), TEXT("⚠️ Выбранная клетка недоступна для перемещения (вне радиуса AP или занята)!"));
+			Post(TEXT("TACTICS"), TEXT("⚠️ That cell cannot be reached (out of AP range or occupied)!"));
 		}
 		return;
 	}
@@ -1937,18 +1937,18 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 		break;
 	case ETurnClickAction::NeedApproach:
 		Highlight(Occupier);
-		Post(TEXT("ТАКТИКА"), Occupant == EGorkyOccupantType::Barrel
-			? TEXT("⚠️ Боец должен подойти вплотную к бочке, чтобы переместить её (или Ctrl + клик — выстрел)!")
+		Post(TEXT("TACTICS"), Occupant == EGorkyOccupantType::Barrel
+			? TEXT("⚠️ Move right next to the barrel to relocate it (or Ctrl + click to shoot)!")
 			: (Occupant == EGorkyOccupantType::Barricade
-				? TEXT("⚠️ Боец должен подойти вплотную к баррикаде, чтобы переместить её (или Ctrl + клик — атака)!")
-				: TEXT("⚠️ Боец должен подойти вплотную к турели, чтобы переместить её!")));
+				? TEXT("⚠️ Move right next to the barricade to relocate it (or Ctrl + click to attack)!")
+				: TEXT("⚠️ Move right next to the turret to relocate it!")));
 		break;
 	case ETurnClickAction::NoTargetInAttackMode:
 		// Godot main.gd: in the attack mode an empty cell is no walk order.
-		Post(TEXT("ТАКТИКА"), TEXT("⚠️ В этой клетке нет цели для выстрела! (ПКМ / Esc для возврата к перемещению)"));
+		Post(TEXT("TACTICS"), TEXT("⚠️ No target on this cell! (RMB / Esc to return to movement)"));
 		break;
 	case ETurnClickAction::NoTargetForAttackOrder:
-		Post(TEXT("ТАКТИКА"), TEXT("⚠️ Ctrl + клик — атака: укажите врага, бочку или баррикаду."));
+		Post(TEXT("TACTICS"), TEXT("⚠️ Ctrl + click to attack: pick an enemy, a barrel or a barricade."));
 		break;
 	case ETurnClickAction::Walk:
 		MoveActiveUnitTo(Cell);
@@ -2005,7 +2005,7 @@ bool UTurnBasedCombatSubsystem::StartRelocate(AActor* Object)
 	const int32 CostPerStep = Balance.PushBarrelAPCost;
 	if (UnitState->AP < CostPerStep)
 	{
-		Post(TEXT("ТАКТИКА"), FString::Printf(TEXT("⚠️ Недостаточно очков действия для перемещения (нужно минимум %d AP)!"), CostPerStep));
+		Post(TEXT("TACTICS"), FString::Printf(TEXT("⚠️ Not enough action points to move (at least %d AP needed)!"), CostPerStep));
 		return false;
 	}
 	RelocateTarget = Object;
@@ -2016,7 +2016,7 @@ bool UTurnBasedCombatSubsystem::StartRelocate(AActor* Object)
 	{
 		RefreshBarricadeTargets();
 		RefreshOverlay();
-		Post(TEXT("ТАКТИКА"), TEXT("🧱 Размещение баррикады: [Колёсико мыши/Q/E — поворот на 45°, ЛКМ — подтвердить, ПКМ/[Esc] — отмена]"));
+		Post(TEXT("TACTICS"), TEXT("🧱 Barricade placement: [Mouse wheel/Q/E - rotate 45°, LMB - confirm, RMB/[Esc] - cancel]"));
 		Changed();
 		return true;
 	}
@@ -2029,8 +2029,8 @@ bool UTurnBasedCombatSubsystem::StartRelocate(AActor* Object)
 		}
 	}
 	RefreshOverlay();
-	Post(TEXT("ТАКТИКА"), FString::Printf(TEXT("📦 Выберите соседнюю свободную клетку для перемещения %s (1 деление = %d AP) [ЛКМ — подтвердить, ПКМ/[Esc] — отмена]"),
-		Object->IsA<ABarrelActor>() ? TEXT("бочки") : TEXT("объекта"), CostPerStep));
+	Post(TEXT("TACTICS"), FString::Printf(TEXT("📦 Pick a free adjacent cell to move the %s (1 step = %d AP) [LMB - confirm, RMB/[Esc] - cancel]"),
+		Object->IsA<ABarrelActor>() ? TEXT("barrel") : TEXT("object"), CostPerStep));
 	Changed();
 	return true;
 }
@@ -2168,13 +2168,13 @@ bool UTurnBasedCombatSubsystem::RelocateBarricade(AActor* Barricade, const FIntP
 	}
 	if (!CanPlaceBarricadeAt(Barricade, Cell, Yaw))
 	{
-		Log(TEXT("⚠️ Нельзя установить баррикаду в этой позиции!"));
+		Log(TEXT("⚠️ Cannot place the barricade here!"));
 		return false;
 	}
 	const int32 TotalAP = CustomAPCost >= 0 ? CustomAPCost : Balance.PushBarrelAPCost;
 	if (UnitState->AP < TotalAP)
 	{
-		Log(FString::Printf(TEXT("⚠️ Недостаточно AP для перемещения баррикады (требуется %d AP, доступно %d AP)!"), TotalAP, UnitState->AP));
+		Log(FString::Printf(TEXT("⚠️ Not enough AP to move the barricade (%d AP needed, %d AP left)!"), TotalAP, UnitState->AP));
 		return false;
 	}
 	UnitState->AP -= TotalAP;
@@ -2205,7 +2205,7 @@ bool UTurnBasedCombatSubsystem::RelocateBarricade(AActor* Barricade, const FIntP
 	// The operative turns to face the barricade.
 	UnitState->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Cell - UnitState->GridPos));
 	AlignFacing(Unit, UnitState->Facing);
-	Log(FString::Printf(TEXT("🧱 %s развернул(а) баррикаду (поворот %d°, потрачено %d AP)."), *NameOf(Unit),
+	Log(FString::Printf(TEXT("🧱 %s repositions the barricade (rotation %d°, %d AP spent)."), *NameOf(Unit),
 		FMath::RoundToInt(FRotator::ClampAxis(Yaw)), TotalAP));
 	RefreshOverlay();
 	Changed();
@@ -2222,7 +2222,7 @@ void UTurnBasedCombatSubsystem::CancelRelocate()
 	RelocateOrigin = FIntPoint(-1, -1);
 	RelocateCells.Reset();
 	RefreshOverlay();
-	Post(TEXT("ТАКТИКА"), TEXT("Перемещение объекта отменено."));
+	Post(TEXT("TACTICS"), TEXT("Object relocation cancelled."));
 	Changed();
 }
 
@@ -2243,7 +2243,7 @@ bool UTurnBasedCombatSubsystem::TryPushAdjacentBarrel()
 			return StartRelocate(Barrel);
 		}
 	}
-	Log(TEXT("⚠️ Рядом нет горючей бочки!"));
+	Log(TEXT("⚠️ No fuel barrel nearby!"));
 	return false;
 }
 
@@ -2264,7 +2264,7 @@ bool UTurnBasedCombatSubsystem::RelocateObject(const FIntPoint& ObjectCell, cons
 	}
 	if (!IsUnitAdjacentToObject(Unit, Object))
 	{
-		Log(TEXT("⚠️ Боец должен стоять вплотную к объекту, чтобы переместить его!"));
+		Log(TEXT("⚠️ Stand right next to the object to relocate it!"));
 		return false;
 	}
 	TArray<FIntPoint> Path = Grid->FindPath(ObjectCell, Target, 20);
@@ -2273,7 +2273,7 @@ bool UTurnBasedCombatSubsystem::RelocateObject(const FIntPoint& ObjectCell, cons
 		const FIntPoint Step = Target - ObjectCell;
 		if (Step.X * Step.X + Step.Y * Step.Y != 1)
 		{
-			Log(TEXT("⚠️ Нет проходимого пути к выбранной клетке!"));
+			Log(TEXT("⚠️ No walkable path to that cell!"));
 			return false;
 		}
 		Path = { Target };
@@ -2286,7 +2286,7 @@ bool UTurnBasedCombatSubsystem::RelocateObject(const FIntPoint& ObjectCell, cons
 	}
 	if (UnitState->AP < TotalAP)
 	{
-		Log(FString::Printf(TEXT("⚠️ Недостаточно AP для перемещения объекта (требуется %d AP, доступно %d AP)!"), TotalAP, UnitState->AP));
+		Log(FString::Printf(TEXT("⚠️ Not enough AP to relocate the object (%d AP needed, %d AP left)!"), TotalAP, UnitState->AP));
 		return false;
 	}
 	// The operative first steps onto the object's cell, then onto each cell the object leaves.
@@ -2343,8 +2343,8 @@ bool UTurnBasedCombatSubsystem::RelocateObject(const FIntPoint& ObjectCell, cons
 			Changed();
 		}
 	});
-	const TCHAR* ObjectName = Type == EGorkyOccupantType::Barrel ? TEXT("бочку") : TEXT("турель");
-	Log(FString::Printf(TEXT("📦 %s переместил(а) %s на новую позицию (потрачено %d AP)."), *NameOf(Unit), ObjectName, TotalAP));
+	const TCHAR* ObjectName = Type == EGorkyOccupantType::Barrel ? TEXT("the barrel") : TEXT("the turret");
+	Log(FString::Printf(TEXT("📦 %s moves %s to a new position (%d AP spent)."), *NameOf(Unit), ObjectName, TotalAP));
 	Changed();
 	return true;
 }
@@ -2356,20 +2356,20 @@ FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType T
 	FTurnDeployCheck Check;
 	if (!Grid || !Grid->IsValidCell(Cell))
 	{
-		Check.Reason = TEXT("Клетка вне тактической сетки");
+		Check.Reason = TEXT("Cell outside the tactical grid");
 		return Check;
 	}
 	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
 	if (!UnitState)
 	{
-		Check.Reason = TEXT("Нет активного бойца");
+		Check.Reason = TEXT("No active operative");
 		return Check;
 	}
 	const int32 DeployCost = Type == EDeployableType::Mine ? 2 : 3;
 	Check.APCost = DeployCost;
 	if (UnitState->AP < DeployCost)
 	{
-		Check.Reason = FString::Printf(TEXT("Недостаточно AP для сборки (требуется %d, есть %d)"), DeployCost, UnitState->AP);
+		Check.Reason = FString::Printf(TEXT("Not enough AP to deploy (%d needed, %d left)"), DeployCost, UnitState->AP);
 		return Check;
 	}
 	const FIntPoint UnitPos = UnitState->GridPos;
@@ -2381,29 +2381,29 @@ FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType T
 		Cells = GetBarricadeCellsAt(nullptr, Cell, Yaw);
 		if (Cells.IsEmpty())
 		{
-			Check.Reason = TEXT("Недопустимое положение баррикады");
+			Check.Reason = TEXT("Invalid barricade position");
 			return Check;
 		}
 		for (const FIntPoint& C : Cells)
 		{
 			if (!Grid->IsValidCell(C))
 			{
-				Check.Reason = TEXT("Баррикада выходит за границы сетки");
+				Check.Reason = TEXT("Barricade extends past the grid");
 				return Check;
 			}
 			if (C == UnitPos)
 			{
-				Check.Reason = TEXT("Баррикада задевает самого бойца");
+				Check.Reason = TEXT("Barricade overlaps the operative");
 				return Check;
 			}
 			if (Grid->GetOccupant(C))
 			{
-				Check.Reason = FString::Printf(TEXT("Клетка (%d, %d) занята"), C.X, C.Y);
+				Check.Reason = FString::Printf(TEXT("Cell (%d, %d) is occupied"), C.X, C.Y);
 				return Check;
 			}
 			if (!Grid->IsCellWalkable(C))
 			{
-				Check.Reason = FString::Printf(TEXT("Препятствие на клетке (%d, %d)"), C.X, C.Y);
+				Check.Reason = FString::Printf(TEXT("Obstacle on cell (%d, %d)"), C.X, C.Y);
 				return Check;
 			}
 		}
@@ -2413,12 +2413,12 @@ FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType T
 		Cells = { Cell };
 		if (!Grid->IsCellWalkable(Cell))
 		{
-			Check.Reason = TEXT("Клетка заблокирована препятствием");
+			Check.Reason = TEXT("Cell blocked by an obstacle");
 			return Check;
 		}
 		if (Grid->GetOccupant(Cell))
 		{
-			Check.Reason = TEXT("Клетка уже занята");
+			Check.Reason = TEXT("Cell already occupied");
 			return Check;
 		}
 	}
@@ -2460,7 +2460,7 @@ FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType T
 	}
 	if (Candidates.IsEmpty())
 	{
-		Check.Reason = TEXT("Нет свободных клеток рядом с объектом для сборки");
+		Check.Reason = TEXT("No free cell next to the object to deploy from");
 		return Check;
 	}
 	// Crouched / prone the walk to the stand cell costs double (user decision 2026-10-04): the budget in steps.
@@ -2487,7 +2487,7 @@ FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType T
 	}
 	if (!bFoundStand)
 	{
-		Check.Reason = TEXT("Слишком далеко для перехода и установки за текущий ход");
+		Check.Reason = TEXT("Too far to walk and deploy this turn");
 		return Check;
 	}
 	Check.bCanPlace = true;
@@ -2569,7 +2569,7 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 	{
 		return false;
 	}
-	const FString Name = Type == EDeployableType::Turret ? TEXT("Турель") : (Type == EDeployableType::Barricade ? TEXT("Баррикада") : TEXT("Мина"));
+	const FString Name = Type == EDeployableType::Turret ? TEXT("Turret") : (Type == EDeployableType::Barricade ? TEXT("Barricade") : TEXT("Mine"));
 	const int32 TotalAP = Check.APCost;
 	auto FaceTarget = [this, Unit, Cell](FTurnUnitState& State)
 	{
@@ -2589,7 +2589,7 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 		RegisterDeployable(Type, Spawned, Cell, Yaw);
 		StartGrowIn(Spawned);
 		PlayWorkingDevice(Unit);
-		Log(FString::Printf(TEXT("🛠️ %s собрал(а) и установил(а) %s (-%d AP)."), *NameOf(Unit), *Name, TotalAP));
+		Log(FString::Printf(TEXT("🛠️ %s assembles and deploys: %s (-%d AP)."), *NameOf(Unit), *Name, TotalAP));
 		RefreshOverlay();
 		Changed();
 		return true;
@@ -2653,7 +2653,7 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 		StartGrowIn(WeakSpawned.Get());
 		PlayWorkingDevice(Moved);
 		State->AP -= TotalAP;
-		Log(FString::Printf(TEXT("🛠️ %s подошел(а) и установил(а) %s (-%d AP)."), *NameOf(Moved), *Name, TotalAP));
+		Log(FString::Printf(TEXT("🛠️ %s walks up and deploys: %s (-%d AP)."), *NameOf(Moved), *Name, TotalAP));
 		Changed();
 		// Godot: 0.85 s of assembly before the next order.
 		After(0.85f, [this]()
@@ -2677,14 +2677,14 @@ bool UTurnBasedCombatSubsystem::HandleDeployPlacement(EDeployableType Type, cons
 	const bool bOnGrid = Local.X >= 0.f && Local.Y >= 0.f && Local.X < TurnGridCells * TurnCellSize && Local.Y < TurnGridCells * TurnCellSize;
 	if (!bOnGrid)
 	{
-		Post(TEXT("Инженерия"), TEXT("⚠️ Точка установки вне тактической зоны!"));
+		Post(TEXT("ENGINEERING"), TEXT("⚠️ Deploy point is outside the tactical zone!"));
 		return false;
 	}
 	const FIntPoint Cell = Grid->WorldToGrid(WorldPoint);
 	AOperativeCharacter* Unit = GetActiveUnit();
 	if (!Unit)
 	{
-		Post(TEXT("Инженерия"), TEXT("⚠️ Нет активного бойца для установки объекта!"));
+		Post(TEXT("ENGINEERING"), TEXT("⚠️ No active operative to deploy the object!"));
 		return false;
 	}
 	// Godot: a squad mate hands the item over when the active operative has none.
@@ -2703,13 +2703,13 @@ bool UTurnBasedCombatSubsystem::HandleDeployPlacement(EDeployableType Type, cons
 	}
 	if (Unit->GetDeployableCount(Type) <= 0)
 	{
-		Post(Unit->DisplayName.ToString(), FString::Printf(TEXT("⚠️ У отряда нет в наличии: %s!"), *URelocationSubsystem::GetDeployableName(Type).ToString()));
+		Post(Unit->DisplayName.ToString(), FString::Printf(TEXT("⚠️ The squad has none left: %s!"), *URelocationSubsystem::GetDeployableName(Type).ToString()));
 		return true; // placement ends (Godot _cancel_placement_mode)
 	}
 	const FTurnDeployCheck Check = CanPlaceDeployable(Type, Cell, Yaw);
 	if (!Check.bCanPlace)
 	{
-		Post(TEXT("Инженерия"), FString::Printf(TEXT("⚠️ %s!"), *Check.Reason));
+		Post(TEXT("ENGINEERING"), FString::Printf(TEXT("⚠️ %s!"), *Check.Reason));
 		return false;
 	}
 	const URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
@@ -2724,7 +2724,7 @@ bool UTurnBasedCombatSubsystem::HandleDeployPlacement(EDeployableType Type, cons
 	}
 	if (!Spawned)
 	{
-		Post(TEXT("Инженерия"), TEXT("⚠️ Не удалось создать объект на сцене!"));
+		Post(TEXT("ENGINEERING"), TEXT("⚠️ Failed to spawn the object!"));
 		return false;
 	}
 	if (AProximityMineActor* PlacedMine = Cast<AProximityMineActor>(Spawned))
@@ -2738,7 +2738,7 @@ bool UTurnBasedCombatSubsystem::HandleDeployPlacement(EDeployableType Type, cons
 		return true;
 	}
 	Spawned->Destroy();
-	Post(TEXT("Инженерия"), TEXT("⚠️ Ошибка при установке объекта на тактической сетке!"));
+	Post(TEXT("ENGINEERING"), TEXT("⚠️ Failed to place the object on the tactical grid!"));
 	return false;
 }
 
@@ -2828,11 +2828,11 @@ void UTurnBasedCombatSubsystem::UpdateExposedZones()
 		const FString Name = FExposedZones::GetQuadrantName(Quadrant);
 		if (Result.Turns[Quadrant] == 1)
 		{
-			Log(FString::Printf(TEXT("⚠️ Внимание: Сектор [%s] оголён (1 ход без прикрытия)!"), *Name));
+			Log(FString::Printf(TEXT("⚠️ Warning: sector [%s] is exposed (1 turn uncovered)!"), *Name));
 		}
 		else if (Result.Turns[Quadrant] == 2)
 		{
-			Log(FString::Printf(TEXT("🚨 ОПАСНОСТЬ: Сектор [%s] оголён 2 хода! На следующем ходу возможен прорыв врага!"), *Name));
+			Log(FString::Printf(TEXT("🚨 DANGER: sector [%s] exposed for 2 turns! Enemy breach possible next turn!"), *Name));
 		}
 	}
 	if (Overlay)
@@ -2909,7 +2909,7 @@ void UTurnBasedCombatSubsystem::RegisterReinforcement(AActor* Enemy, const FIntP
 	State.BaseDamage = EnemyTurnRules::BaseDamage(TurnProfile, Balance.EnemyBaseDamage);
 	State.Facing = EGorkyFacing::North;
 	AlignFacing(Enemy, State.Facing);
-	Log(FString::Printf(TEXT("🚨 ПРОРЫВ! Оголённая зона [%s] осталась без прикрытия! Прибыло подкрепление: %s!"), *QuadrantName, *NameOf(Enemy)));
+	Log(FString::Printf(TEXT("🚨 BREACH! Exposed sector [%s] was left uncovered! Reinforcement arrived: %s!"), *QuadrantName, *NameOf(Enemy)));
 }
 
 void UTurnBasedCombatSubsystem::ExecuteTurretPhase()
@@ -3040,8 +3040,8 @@ void UTurnBasedCombatSubsystem::ResolveTurretShot(AActor* Turret, AActor* Target
 	if (bHit)
 	{
 		const int32 Damage = FMath::RoundToInt(Balance.TurretDamage);
-		ApplyEnemyHit(Target, Damage, TEXT("Турель"));
-		Log(FString::Printf(TEXT("🔫 Турель произвела залп по %s (-%d HP)! [Меткость: %d%%]"), *NameOf(Target), Damage, FMath::RoundToInt(Chance * 100.f)));
+		ApplyEnemyHit(Target, Damage, TEXT("Turret"));
+		Log(FString::Printf(TEXT("🔫 Turret fires a burst at %s (-%d HP)! [Accuracy: %d%%]"), *NameOf(Target), Damage, FMath::RoundToInt(Chance * 100.f)));
 		if (IsDead(Target))
 		{
 			OnEnemyKilled(Target, States[Target].GridPos);
@@ -3049,8 +3049,8 @@ void UTurnBasedCombatSubsystem::ResolveTurretShot(AActor* Turret, AActor* Target
 	}
 	else
 	{
-		UFloatingTextSubsystem::SpawnAboveEnemy(Target, TEXT("ПРОМАХ!"), FLinearColor(0.85f, 0.85f, 0.85f));
-		Log(FString::Printf(TEXT("❌ Промах турели по %s! Шанс: %d%% (выпало: %d%%)"), *NameOf(Target), FMath::RoundToInt(Chance * 100.f),
+		UFloatingTextSubsystem::SpawnAboveEnemy(Target, TEXT("MISS!"), FLinearColor(0.85f, 0.85f, 0.85f));
+		Log(FString::Printf(TEXT("❌ Turret misses %s! Chance: %d%% (rolled: %d%%)"), *NameOf(Target), FMath::RoundToInt(Chance * 100.f),
 			FMath::RoundToInt(Roll * 100.f)));
 	}
 }
@@ -3293,7 +3293,7 @@ void UTurnBasedCombatSubsystem::ExecuteEnemyTurn(AActor* Enemy)
 				}
 				if (bStoppedByFear)
 				{
-					Log(FString::Printf(TEXT("🐺 %s подошел к границе пламени, но боится огня и рычит!"), *NameOf(Moved)));
+					Log(FString::Printf(TEXT("🐺 %s reaches the edge of the flames but fears the fire and snarls!"), *NameOf(Moved)));
 					FinishEnemyTurn(0.45f);
 					return;
 				}
@@ -3304,7 +3304,7 @@ void UTurnBasedCombatSubsystem::ExecuteEnemyTurn(AActor* Enemy)
 	}
 	if (bStoppedByFear)
 	{
-		Log(FString::Printf(TEXT("🐺 %s боится огня горящей бочки и не может подойти ближе!"), *NameOf(Enemy)));
+		Log(FString::Printf(TEXT("🐺 %s fears the burning barrel and cannot come closer!"), *NameOf(Enemy)));
 		FinishEnemyTurn(0.45f);
 		return;
 	}
@@ -3384,7 +3384,7 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 			if (Biter && Victim && States.Contains(Victim))
 			{
 				ApplySquadHit(Victim, Damage, NameOf(Biter));
-				Log(FString::Printf(TEXT("🐺 Враг %s атаковал %s: %d урона!"), *NameOf(Biter), *NameOf(Victim), Damage));
+				Log(FString::Printf(TEXT("🐺 Enemy %s attacks %s: %d damage!"), *NameOf(Biter), *NameOf(Victim), Damage));
 				if (IsActive() && IsDead(Victim))
 				{
 					OnSquadMemberKilled(Victim, TargetPos);
@@ -3712,7 +3712,7 @@ void UTurnBasedCombatSubsystem::EnemyRangedAttack(AActor* Enemy, AActor* Target,
 		if (bHit)
 		{
 			ApplySquadHit(Victim, Damage, NameOf(Shooter));
-			Log(FString::Printf(TEXT("🎯 %s стреляет в %s с %d клеток (шанс %d%%): %d урона!"), *NameOf(Shooter), *NameOf(Victim), Distance,
+			Log(FString::Printf(TEXT("🎯 %s shoots at %s from %d cells (chance %d%%): %d damage!"), *NameOf(Shooter), *NameOf(Victim), Distance,
 				FMath::RoundToInt(Chance * 100.f), Damage));
 			if (IsActive() && IsDead(Victim))
 			{
@@ -3721,7 +3721,7 @@ void UTurnBasedCombatSubsystem::EnemyRangedAttack(AActor* Enemy, AActor* Target,
 		}
 		else
 		{
-			Log(FString::Printf(TEXT("💨 %s стреляет в %s с %d клеток (шанс %d%%): промах."), *NameOf(Shooter), *NameOf(Victim), Distance,
+			Log(FString::Printf(TEXT("💨 %s shoots at %s from %d cells (chance %d%%): miss."), *NameOf(Shooter), *NameOf(Victim), Distance,
 				FMath::RoundToInt(Chance * 100.f)));
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[EnemyTurn] %s ranged at %s: %d cells, chance %.2f, %s"), *NameOf(Shooter), *NameOf(Victim),
@@ -3862,7 +3862,7 @@ void UTurnBasedCombatSubsystem::FocusMovingEnemy(AActor* Enemy) const
 
 void UTurnBasedCombatSubsystem::DetonateBarrel(const FIntPoint& Cell, AActor* Barrel)
 {
-	Log(TEXT("💥 БОЧКА ВЗОРВАЛАСЬ И ЗАГОРЕЛАСЬ! Зона поражения 3х3 клетки!"));
+	Log(TEXT("💥 THE BARREL EXPLODES AND IGNITES! Blast zone 3x3 cells!"));
 	for (int32 DX = -1; DX <= 1; ++DX)
 	{
 		for (int32 DY = -1; DY <= 1; ++DY)
@@ -3878,7 +3878,7 @@ void UTurnBasedCombatSubsystem::DetonateBarrel(const FIntPoint& Cell, AActor* Ba
 			const float Damage = bSquadMember
 				? FMath::Max(1, FMath::RoundToInt(Balance.BarrelDamage * TurnBasedRules::StanceDamageMultiplier(State->Stance, Balance)))
 				: Balance.BarrelDamage;
-			ApplyBlast(Occupant, bSquadMember, Damage, TEXT("Бочка"));
+			ApplyBlast(Occupant, bSquadMember, Damage, TEXT("Barrel"));
 			if (!IsActive())
 			{
 				return; // an operative's death failed the mission: the grid and the unit states are gone
@@ -3906,7 +3906,7 @@ void UTurnBasedCombatSubsystem::DetonateBarrel(const FIntPoint& Cell, AActor* Ba
 
 void UTurnBasedCombatSubsystem::DetonateMine(const FIntPoint& Cell, AActor* Mine, AActor* Victim)
 {
-	Log(FString::Printf(TEXT("💣 МИНА СДЕТОНИРОВАЛА под %s!"), *NameOf(Victim)));
+	Log(FString::Printf(TEXT("💣 MINE DETONATED under %s!"), *NameOf(Victim)));
 	Grid->ClearOccupant(Cell);
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>(); Feedback && Mine)
 	{
@@ -3926,7 +3926,7 @@ void UTurnBasedCombatSubsystem::DetonateMine(const FIntPoint& Cell, AActor* Mine
 	State->GridPos = Cell;
 	PlaceOnCell(Victim, Cell);
 	const bool bSquadMember = State->bSquad;
-	ApplyBlast(Victim, bSquadMember, Damage, TEXT("Мина"));
+	ApplyBlast(Victim, bSquadMember, Damage, TEXT("Mine"));
 	if (!IsActive())
 	{
 		return; // the blast ended the fight (mission failed / wave cleared): the states are gone
@@ -3953,7 +3953,7 @@ void UTurnBasedCombatSubsystem::DetonateMine(const FIntPoint& Cell, AActor* Mine
 
 void UTurnBasedCombatSubsystem::OnEnemyKilled(AActor* Enemy, const FIntPoint& Cell)
 {
-	Log(FString::Printf(TEXT("☠️ Враг %s уничтожен!"), *NameOf(Enemy)));
+	Log(FString::Printf(TEXT("☠️ Enemy %s destroyed!"), *NameOf(Enemy)));
 	if (!Grid)
 	{
 		return; // the fight already ended (e.g. the kill cleared the wave)
@@ -3970,7 +3970,7 @@ void UTurnBasedCombatSubsystem::OnEnemyKilled(AActor* Enemy, const FIntPoint& Ce
 
 void UTurnBasedCombatSubsystem::OnSquadMemberKilled(AActor* Member, const FIntPoint& Cell)
 {
-	Log(FString::Printf(TEXT("⚰️ Боец %s пал в бою!"), *NameOf(Member)));
+	Log(FString::Printf(TEXT("⚰️ %s has fallen in battle!"), *NameOf(Member)));
 	if (!Grid)
 	{
 		return; // the death already ended the mission and the fight with it

@@ -237,7 +237,7 @@ void USquadAutonomySubsystem::Decide(AOperativeCharacter& Operative, FOperativeS
 		return;
 	}
 
-	// «Ни шагу назад»: an enemy at point-blank range — the defender stays where he is and fires (no walk at all).
+	// "Not one step back": an enemy at point-blank range — the defender stays where he is and fires (no walk at all).
 	if (HoldsGround(ROE, Defense, NearestCm))
 	{
 		if (State.Task != ETask::None && Operative.TacticalAnchor.Location.Equals(State.TaskAnchor, 1.f))
@@ -713,7 +713,7 @@ namespace SquadAutonomy
 			return;
 		}
 		// The nearest objective (generator / terminal / gate) within 40 m, else the nearest barricade, else where he stands;
-		// «here» as the second argument: where he stands.
+		// "here" as the second argument: where he stands.
 		AActor* Target = nullptr;
 		float Best = 4000.f;
 		const bool bHere = Args.Num() > 1 && Args[1].Equals(TEXT("here"), ESearchCase::IgnoreCase);
@@ -732,7 +732,7 @@ namespace SquadAutonomy
 	}
 
 	static FAutoConsoleCommandWithWorldAndArgs DefendObjective(TEXT("CodexTactics.DefendObjective"),
-		TEXT("Sprint 10: operative [index] holds the nearest objective (generator / terminal / gate, else a barricade) at all costs; «here»: his spot."),
+		TEXT("Sprint 10: operative [index] holds the nearest objective (generator / terminal / gate, else a barricade) at all costs; \"here\": his spot."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&DefendCommand));
 }
 

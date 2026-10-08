@@ -35,8 +35,8 @@ FString UWaveVictorySubsystem::GetVictoryTitle() const
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const int32 Wave = Flow ? Flow->GetWaveIndex() : 1;
 	const int32 Total = Flow ? Flow->GetConfig().TotalWaves : 1;
-	return Wave >= Total ? FString::Printf(TEXT("🏆 ПОЛНАЯ ПОБЕДА! ВСЕ %d ВОЛН ОТРАЖЕНЫ! 🏆"), Total)
-		: FString::Printf(TEXT("🎉 ВОЛНА %d ОТРАЖЕНА! 🎉"), Wave);
+	return Wave >= Total ? FString::Printf(TEXT("🏆 TOTAL VICTORY! ALL %d WAVES REPELLED! 🏆"), Total)
+		: FString::Printf(TEXT("🎉 WAVE %d REPELLED! 🎉"), Wave);
 }
 
 FString UWaveVictorySubsystem::GetVictorySubtitle() const
@@ -44,8 +44,8 @@ FString UWaveVictorySubsystem::GetVictorySubtitle() const
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const int32 Wave = Flow ? Flow->GetWaveIndex() : 1;
 	const int32 Total = Flow ? Flow->GetConfig().TotalWaves : 1;
-	return Wave >= Total ? FString(TEXT("Карантинный рубеж КПП полностью зачищен от ледяных орд! Отряд выстоял!"))
-		: FString::Printf(TEXT("Все ледяные твари в волне %d уничтожены! Оборона КПП устояла."), Wave);
+	return Wave >= Total ? FString(TEXT("The checkpoint quarantine line is cleared of the frost hordes! The squad held!"))
+		: FString::Printf(TEXT("All frost creatures of wave %d destroyed! The checkpoint defence held."), Wave);
 }
 
 FString UWaveVictorySubsystem::GetNextButtonText() const
@@ -53,8 +53,8 @@ FString UWaveVictorySubsystem::GetNextButtonText() const
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const int32 Wave = Flow ? Flow->GetWaveIndex() : 1;
 	const int32 Total = Flow ? Flow->GetConfig().TotalWaves : 1;
-	return Wave >= Total ? FString(TEXT("🗺️ Завершить бой и продолжить исследование"))
-		: FString::Printf(TEXT("⚔️ Запустить следующую волну (%d/%d)"), Wave + 1, Total);
+	return Wave >= Total ? FString(TEXT("🗺️ End combat and continue exploring"))
+		: FString::Printf(TEXT("⚔️ Start the next wave (%d/%d)"), Wave + 1, Total);
 }
 
 void UWaveVictorySubsystem::ContinueAfterWave()
@@ -109,13 +109,13 @@ void UWaveVictorySubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexC
 		{
 			if (Wave >= Total)
 			{
-				Messages->PostMessage(LOCTEXT("HQ", "ШТАБ"),
-					FText::Format(LOCTEXT("AllWaves", "Поздравляем отряд! Все {0} волн отбиты, территория КПП освобождена!"), Total));
+				Messages->PostMessage(LOCTEXT("HQ", "HQ"),
+					FText::Format(LOCTEXT("AllWaves", "Well done, squad! All {0} waves repelled, the checkpoint is liberated!"), Total));
 			}
 			else
 			{
-				Messages->PostMessage(LOCTEXT("Commander", "Командир"),
-					FText::Format(LOCTEXT("WaveDone", "Отличная работа, отряд! Волна {0} зачищена. Перегруппироваться!"), Wave));
+				Messages->PostMessage(LOCTEXT("Commander", "Commander"),
+					FText::Format(LOCTEXT("WaveDone", "Excellent work, squad! Wave {0} cleared. Regroup!"), Wave));
 			}
 		}
 	}
@@ -235,22 +235,22 @@ void UWaveVictorySubsystem::RecoverDeployables()
 	TArray<FString> Parts;
 	if (Recovered[0] > 0)
 	{
-		Parts.Add(FString::Printf(TEXT("турелей: %d"), Recovered[0]));
+		Parts.Add(FString::Printf(TEXT("turrets: %d"), Recovered[0]));
 	}
 	if (Recovered[1] > 0)
 	{
-		Parts.Add(FString::Printf(TEXT("баррикад: %d"), Recovered[1]));
+		Parts.Add(FString::Printf(TEXT("barricades: %d"), Recovered[1]));
 	}
 	if (Recovered[2] > 0)
 	{
-		Parts.Add(FString::Printf(TEXT("мин: %d"), Recovered[2]));
+		Parts.Add(FString::Printf(TEXT("mines: %d"), Recovered[2]));
 	}
 	if (!Parts.IsEmpty())
 	{
 		if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(LOCTEXT("Engineer", "Инженер"), FText::FromString(FString::Printf(
-				TEXT("🛠️ Уцелевшие укрепления демонтированы и возвращены в снаряжение (%s)."), *FString::Join(Parts, TEXT(", ")))));
+			Messages->PostMessage(LOCTEXT("Engineer", "Engineer"), FText::FromString(FString::Printf(
+				TEXT("🛠️ Surviving fortifications dismantled and returned to the gear (%s)."), *FString::Join(Parts, TEXT(", ")))));
 		}
 	}
 }

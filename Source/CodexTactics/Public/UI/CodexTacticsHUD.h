@@ -31,7 +31,7 @@ class ALootCrateActor;
 class UFont;
 
 /**
- * Baseline canvas HUD until the UMG interface is ported: objective banner «ЦЕЛЬ: …» (top left, Godot ObjectivePanel),
+ * Baseline canvas HUD until the UMG interface is ported: objective banner «OBJECTIVE: …» (top left, Godot ObjectivePanel),
  * message feed (top right), squad status panel (below the objective: phase, mode, per-operative stance / health /
  * cold / ammo) and labels above the operatives. Shows the mission-failed screen (UMG) when UMissionSubsystem fails.
  * Godot reference: Scenes/movements/main.gd message panel (`_on_quest_message`) and squad status labels.
@@ -73,7 +73,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UActionBarWidget> ActionBarWidgetClass;
 
-	/** Personal inventory drawer class (action bar «ИНВ»; a Widget Blueprint subclass can restyle it). */
+	/** Personal inventory drawer class (action bar «INV»; a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UInventoryDrawerWidget> InventoryDrawerWidgetClass;
 
@@ -119,7 +119,7 @@ public:
 
 	UInventoryDrawerWidget* GetInventoryDrawer() const { return InventoryDrawer; }
 
-	/** Action bar «ИНВ» (Godot _toggle_inventory_drawer): opens / closes the drawer, the weapon selector closes. */
+	/** Action bar «INV» (Godot _toggle_inventory_drawer): opens / closes the drawer, the weapon selector closes. */
 	void ToggleInventoryDrawer();
 
 	UQuantitySplitDialogWidget* GetQuantityDialog() const { return QuantityDialog; }
@@ -151,7 +151,7 @@ public:
 
 	/** Pause menu -> save / load dialog (the world stays paused). */
 	void OpenSaveLoadDialog(ESaveDialogMode Mode);
-	/** «Назад в меню»: the dialog closes, the pause menu opens again. */
+	/** «Back to menu»: the dialog closes, the pause menu opens again. */
 	void CloseSaveLoadDialog();
 	/** Both closed, the world runs again (after a load). */
 	void ClosePauseMenus();
@@ -261,7 +261,7 @@ private:
 	void DrawHitChanceLabel();
 	/** The box being dragged to select squad members (Godot selection_box_canvas). */
 	void DrawSelectionBox();
-	/** Sprint 10: a green shield «РУБЕЖ» over every defended object / point (UDefenseMarkerSubsystem). */
+	/** Sprint 10: a green shield «HOLD LINE» over every defended object / point (UDefenseMarkerSubsystem). */
 	void DrawDefenseMarkers();
 	UPROPERTY(Transient)
 	TObjectPtr<class UFrostVignetteWidget> FrostVignette;
@@ -275,9 +275,9 @@ private:
 	void DrawSpaceCharge();
 	/** Top centre: the combat time mode label with its Space hints, and the selected operative's fire posture with the , . / hints. */
 	void DrawCombatModeBadge();
-	/** Per-operative fire posture marker over every living operative (letter П / О / А in the posture colour). */
+	/** Per-operative fire posture marker over every living operative (letter P / D / A in the posture colour). */
 	void DrawPostureMarkers();
-	/** Horde warning (UHordeSubsystem): «ОРДА!» banner, distance, and an arrow at the screen edge towards it. */
+	/** Horde warning (UHordeSubsystem): «HORDE!» banner, distance, and an arrow at the screen edge towards it. */
 	void DrawHordeWarning();
 	/** Colour of a fire posture on the HUD (Passive grey, Defensive amber, Aggressive red). */
 	static FLinearColor PostureMarkerColor(ESquadFirePosture Posture);

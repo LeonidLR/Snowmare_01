@@ -265,7 +265,7 @@ namespace WeaponTuning
 		const FTurnBasedBalance* TurnBalanceDefaults)
 	{
 		TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
-		Root->SetStringField(TEXT("comment"), TEXT("Weapon power (Wave Editor «Оружие»). Applied at game start onto DA_Weapon_* and the squad's grenades. Metres / seconds."));
+		Root->SetStringField(TEXT("comment"), TEXT("Weapon power (Wave Editor \"Weapons\"). Applied at game start onto DA_Weapon_* and the squad's grenades. Metres / seconds."));
 		TSharedRef<FJsonObject> Weapons = MakeShared<FJsonObject>();
 		TArray<UWeaponDataAsset*> All = LoadWeapons();
 		All.Sort([](const UWeaponDataAsset& A, const UWeaponDataAsset& B) { return A.WeaponId < B.WeaponId; });

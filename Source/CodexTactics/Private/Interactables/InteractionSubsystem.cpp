@@ -138,12 +138,12 @@ void UInteractionSubsystem::OpenMenuFor(AInteractableActor* Target, AOperativeCh
 	}
 	MenuTarget = Target;
 	Menu = Request.Menu;
-	// Godot _open_action_menu: any object that can carry a trap offers «Заминировать (N)» / «Нет гранат».
+	// Godot _open_action_menu: any object that can carry a trap offers "Set trap (N)" / "No grenades".
 	Menu.bAllowTrap = Target->CanReceiveTrap();
 	Menu.bTrapDisabled = Leader->GrenadesCount <= 0;
 	Menu.TrapText = Leader->GrenadesCount > 0
-		? FText::Format(NSLOCTEXT("InteractionSubsystem", "Trap", "Заминировать ({0})"), Leader->GrenadesCount)
-		: NSLOCTEXT("InteractionSubsystem", "NoGrenades", "Нет гранат");
+		? FText::Format(NSLOCTEXT("InteractionSubsystem", "Trap", "Set trap ({0})"), Leader->GrenadesCount)
+		: NSLOCTEXT("InteractionSubsystem", "NoGrenades", "No grenades");
 	UE_LOG(LogCodexTactics, Display, TEXT("Action menu: %s [%s%s]"), *Menu.Title.ToString(), *Menu.ConfirmText.ToString(),
 		Menu.bConfirmDisabled ? TEXT(", disabled") : TEXT(""));
 	OnActionMenuChanged.Broadcast(true, Menu);
@@ -159,7 +159,7 @@ void UInteractionSubsystem::ConfirmActionMenu()
 	if (Target && Leader && !bDisabled)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("Action confirmed on %s by %s"), *Target->GetName(), *Leader->DisplayName.ToString());
-		// User decision 2026-10-08: in the fight the barrel menu opens from afar, so «Разжечь» is an order - he walks up
+		// User decision 2026-10-08: in the fight the barrel menu opens from afar, so "Ignite" is an order - he walks up
 		// and lights it (real time), or it is planned and runs on the release (tactical pause).
 		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 		if (Flow && Target->IsA<ABarrelActor>()
@@ -249,8 +249,8 @@ void UInteractionSubsystem::OrderUse(AOperativeCharacter* Worker, AInteractableA
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("%s: use of %s planned (pause)"), *Worker->DisplayName.ToString(), *Target->GetName());
 	PostLine(Worker->DisplayName, FText::Format(NSLOCTEXT("InteractionSubsystem", "UsePlanned",
-		"📋 [ПЛАН] {0}: {1} — подойти и выполнить «{2}»! [ПРОБЕЛ — исполнить]"), Worker->DisplayName, Target->DisplayName,
-		Target->IsA<ABarrelActor>() ? NSLOCTEXT("InteractionSubsystem", "IgniteVerb", "Разжечь") : NSLOCTEXT("InteractionSubsystem", "UseVerb", "Использовать")));
+		"📋 [PLAN] {0}: {1} - move up and \"{2}\"! [SPACE - execute]"), Worker->DisplayName, Target->DisplayName,
+		Target->IsA<ABarrelActor>() ? NSLOCTEXT("InteractionSubsystem", "IgniteVerb", "Ignite") : NSLOCTEXT("InteractionSubsystem", "UseVerb", "Use")));
 }
 
 void UInteractionSubsystem::StartUse(AOperativeCharacter* Worker, AInteractableActor* Target)
@@ -272,8 +272,8 @@ void UInteractionSubsystem::StartUse(AOperativeCharacter* Worker, AInteractableA
 	Order.IssuedGoal = Worker->GetLastMoveDestination();
 	UE_LOG(LogCodexTactics, Display, TEXT("%s: walking up to use %s"), *Worker->DisplayName.ToString(), *Target->GetName());
 	PostLine(Worker->DisplayName, Target->IsA<ABarrelActor>()
-		? NSLOCTEXT("InteractionSubsystem", "GoIgnite", "🔥 Иду разжигать бочку!")
-		: FText::Format(NSLOCTEXT("InteractionSubsystem", "GoUse", "Выдвигаюсь к объекту: {0}."), Target->DisplayName));
+		? NSLOCTEXT("InteractionSubsystem", "GoIgnite", "🔥 Moving to light the barrel!")
+		: FText::Format(NSLOCTEXT("InteractionSubsystem", "GoUse", "Moving to the object: {0}."), Target->DisplayName));
 }
 
 void UInteractionSubsystem::UseNow(AOperativeCharacter& Worker, AInteractableActor& Target) const
@@ -322,7 +322,7 @@ void UInteractionSubsystem::TickUseOrders(float DeltaTime)
 		case EUseOrderStep::TimedOut:
 			UseOrders.RemoveAt(Index);
 			PostLine(Worker->DisplayName, FText::Format(NSLOCTEXT("InteractionSubsystem", "UseTimedOut",
-				"❌ Не могу добраться до объекта ({0}) — приказ отменён."), Target->DisplayName));
+				"❌ Can't reach the object ({0}) - order cancelled."), Target->DisplayName));
 			break;
 		default:
 			if (!Worker->IsMoving() && Order.RetryTime <= 0.f)
@@ -370,8 +370,8 @@ void UInteractionSubsystem::RelocateActionMenu()
 		// Godot _on_relocate_confirmed: moving a trapped object would set the wire off.
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(Leader ? Leader->DisplayName : NSLOCTEXT("InteractionSubsystem", "Soldier", "Боец"),
-				NSLOCTEXT("InteractionSubsystem", "TrappedMove", "⚠️ Объект заминирован растяжкой! Сначала обезвредьте ловушку, иначе перемещение вызовет взрыв!"));
+			Messages->PostMessage(Leader ? Leader->DisplayName : NSLOCTEXT("InteractionSubsystem", "Soldier", "Operative"),
+				NSLOCTEXT("InteractionSubsystem", "TrappedMove", "⚠️ The object is rigged with a tripwire! Defuse the trap first, or moving it will set it off!"));
 		}
 		return;
 	}
@@ -413,7 +413,7 @@ void UInteractionSubsystem::LootItem(ELootItem Item)
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(Leader->DisplayName, FText::Format(NSLOCTEXT("InteractionSubsystem", "LootedOne", "📦 Забрал(а) из ящика: {0}"), Taken));
+			Messages->PostMessage(Leader->DisplayName, FText::Format(NSLOCTEXT("InteractionSubsystem", "LootedOne", "📦 Took from the crate: {0}"), Taken));
 		}
 	}
 	OnLootDialogChanged.Broadcast(true, Crate); // refresh the list
@@ -429,7 +429,7 @@ void UInteractionSubsystem::LootAll()
 		Crate->TakeAll(Leader);
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(Leader->DisplayName, NSLOCTEXT("InteractionSubsystem", "LootedAll", "📦 Забрал(а) ВСЕ припасы из ящика снабжения!"));
+			Messages->PostMessage(Leader->DisplayName, NSLOCTEXT("InteractionSubsystem", "LootedAll", "📦 Took ALL supplies from the supply crate!"));
 		}
 	}
 	CloseLootDialog();

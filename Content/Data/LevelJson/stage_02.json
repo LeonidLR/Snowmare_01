@@ -1,17 +1,17 @@
 {
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "stage_02",
-  "level_name": "Бой 2: Складской терминал",
+  "level_name": "Battle 2: Warehouse Terminal",
   "stage_number": 2,
   "act": 1,
   "biome_id": "bunker_industrial",
-  "description": "Зачистка ангара снабжения внутри отапливаемого периметра.",
+  "description": "Clearing the supply hangar inside the heated perimeter.",
   "prep_phase_duration": 45.0,
   "wave_rest_duration": 15.0,
   "waves": [
     {
       "wave_index": 1,
-      "name": "Волна 1",
+      "name": "Wave 1",
       "max_simultaneous_enemies": 8,
       "spawns": [
         {
@@ -38,7 +38,7 @@
     },
     {
       "wave_index": 2,
-      "name": "Волна 2",
+      "name": "Wave 2",
       "max_simultaneous_enemies": 10,
       "spawns": [
         {

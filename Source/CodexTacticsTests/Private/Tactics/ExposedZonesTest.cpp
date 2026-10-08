@@ -32,7 +32,7 @@ bool FExposedZonesQuadrantsTest::RunTest(const FString&)
 	TestEqual(TEXT("(13,13) SE"), FExposedZones::GetQuadrant(FIntPoint(13, 13), GridSize), 3);
 	const FIntRect NorthWest = FExposedZones::GetQuadrantRect(0, GridSize);
 	TestTrue(TEXT("NW rect (0,0, 7x7)"), NorthWest.Min == FIntPoint(0, 0) && NorthWest.Size() == FIntPoint(7, 7));
-	TestEqual(TEXT("SE name"), FExposedZones::GetQuadrantName(3), FString(TEXT("Юго-Восток")));
+	TestEqual(TEXT("SE name"), FExposedZones::GetQuadrantName(3), FString(TEXT("South-East")));
 	return true;
 }
 

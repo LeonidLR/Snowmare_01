@@ -31,7 +31,7 @@ struct CODEXTACTICS_API FLoadoutSupply
  */
 namespace LoadoutRules
 {
-	/** Level mode, overridden by the start: «Начать игру» collects, «Начать бой» turns collecting into the starting set. */
+	/** Level mode, overridden by the start: "Start game" collects, "Start combat" turns collecting into the starting set. */
 	CODEXTACTICS_API ELoadoutMode ResolveMode(const FString& LevelMode, EMissionStartMode StartMode);
 
 	/**

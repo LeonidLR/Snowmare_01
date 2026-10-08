@@ -148,7 +148,7 @@ namespace TurnBasedSmoke
 			Check(State, Active && Active->AP == 8, TEXT("active operative has 8 AP"));
 			if (UTurnBasedHudWidget* Hud = CreateWidget<UTurnBasedHudWidget>(UGameplayStatics::GetPlayerController(World, 0), UTurnBasedHudWidget::StaticClass()))
 			{
-				Check(State, Hud->GetPhaseText().ToString() == TEXT("⚔️ ХОД ОТРЯДА") && Hud->GetApText().ToString() == TEXT("AP: 8/8"),
+				Check(State, Hud->GetPhaseText().ToString() == TEXT("⚔️ SQUAD TURN") && Hud->GetApText().ToString() == TEXT("AP: 8/8"),
 					TEXT("turn-based panel: squad phase, AP 8/8"));
 			}
 			Check(State, TurnBased->SetActiveUnitStance(EOperativeStance::Crouching) && Active->AP == 7, TEXT("stance change costs 1 AP"));

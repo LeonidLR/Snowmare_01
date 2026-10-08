@@ -18,7 +18,7 @@ bool FWeaponImportParityTest::RunTest(const FString&)
 		return false;
 	}
 	// rifle_m16.tres
-	TestEqual(TEXT("M16 name"), M16->WeaponName.ToString(), FString(TEXT("Автомат МТКМ-16")));
+	TestEqual(TEXT("M16 name"), M16->WeaponName.ToString(), FString(TEXT("M16A2 Assault Rifle")));
 	TestEqual(TEXT("M16 damage"), M16->BaseDamage, 18.f);
 	TestEqual(TEXT("M16 range 14 m"), M16->AttackRangeCm, 1400.f);
 	TestEqual(TEXT("M16 clip"), M16->MaxClipSize, 30);

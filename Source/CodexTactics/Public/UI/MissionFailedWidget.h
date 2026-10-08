@@ -8,7 +8,7 @@ class UButton;
 class UTextBlock;
 
 /**
- * «❄️ МИССИЯ ПРОВАЛЕНА ❄️» screen: dark red dim, centred panel with the reason, a tip and «🔄 Начать заново».
+ * «❄️ MISSION FAILED ❄️» screen: dark red dim, centred panel with the reason, a tip and «🔄 Restart».
  * Built in C++; a Widget Blueprint subclass can restyle it by naming its widgets FailedTitleText, FailedReasonText,
  * FailedTipText, FailedRestartButton, FailedRestartText.
  * Godot reference: Scenes/movements/movements_demo.tscn UI/GameOverPanel, main.gd _trigger_game_over / _on_restart_pressed.

@@ -18,7 +18,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHordeReleased, int32, HordeInd
  * 25-45 m from the squad's centre, out of the squad's sight when possible, clustered within 4 m; they know where the
  * squad is (AEnemyCharacter::bKnowsSquadPosition: no patrol, no perception, no fall-back) and rush it. They join the
  * wave (UWaveSubsystem::SpawnEnemy), so the fight ends only when they are dead. Once per fight unless "repeats".
- * HUD: «ОРДА!» banner + an arrow towards it (ACodexTacticsHUD::DrawHordeWarning), the radio line, OnHordeReleased (hook
+ * HUD: "HORDE!" banner + an arrow towards it (ACodexTacticsHUD::DrawHordeWarning), the radio line, OnHordeReleased (hook
  * for audio / VFX) and the optional "warning_sound". Data: Content/Data/AI/horde.json + the level JSON "horde_enabled" /
  * "horde" (HordeRules::ResolveForLevel); console Codex.Horde.TriggerSeconds / Codex.Horde.Enabled, command
  * CodexTactics.Horde.Release.

@@ -8,8 +8,8 @@ class UButton;
 class UTextBlock;
 
 /**
- * Start menu «❄️ COLD GRAD: ТАКТИЧЕСКИЙ РЕЖИМ ❄️» with two modes: «Начать игру» (exploration → combat) and
- * «Начать бой» (tactical preparation). Godot's third button «Начать исследование» is left out (user decision 2026-09-29).
+ * Start menu «❄️ COLD GRAD: TACTICAL MODE ❄️» with two modes: «Start game» (exploration → combat) and
+ * «Start combat» (tactical preparation). Godot's third button «Start exploration» is left out (user decision 2026-09-29).
  * Built in C++; a Widget Blueprint subclass can restyle it by naming its widgets MenuTitleText, MenuSubtitleText,
  * MenuGameButton, MenuCombatButton (+ …Text labels).
  * Godot reference: Scenes/movements/movements_demo.tscn UI/StartMenu, main.gd _on_start_*_pressed.
@@ -21,7 +21,7 @@ class CODEXTACTICS_API UMainMenuWidget : public UUserWidget
 
 public:
 	/**
-	 * Shows «Начать бой» only on levels whose fight starts by the button: on an ambush level (ULevelEncounterSubsystem —
+	 * Shows «Start combat» only on levels whose fight starts by the button: on an ambush level (ULevelEncounterSubsystem —
 	 * patrols, level JSON "combat_start") the fight starts when the squad attacks or is detected (user request 2026-10-06).
 	 */
 	void RefreshModeButtons();

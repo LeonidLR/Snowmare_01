@@ -32,7 +32,7 @@
 AMarksmanEnemyCharacter::AMarksmanEnemyCharacter()
 {
 	Archetype = EEnemyArchetype::Marksman;
-	EnemyDisplayName = TEXT("Снайпер");
+	EnemyDisplayName = TEXT("Marksman");
 	bFearsFire = false;
 
 	AimBeam = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("AimBeam"));
@@ -97,7 +97,7 @@ bool AMarksmanEnemyCharacter::CanKite() const
 void AMarksmanEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	WeaponTuning::ApplyMarksmanRifle(MarksmanConfig); // Wave Editor «Оружие врагов»; the Codex.Marksman.* overrides win
+	WeaponTuning::ApplyMarksmanRifle(MarksmanConfig); // Wave Editor "Enemy weapons"; the Codex.Marksman.* overrides win
 	ApplyTuningOverrides();
 	SpawnLocation = GetActorLocation();
 	// Waypoints are authored relative to the actor.
@@ -221,7 +221,7 @@ void AMarksmanEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector
 	LogStealthDetection(Cause, bWasSearching);
 	if (AssignedPatrolRoute && !bIsDying)
 	{
-		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❗ ТРЕВОГА!"), FLinearColor(1.f, 0.35f, 0.2f));
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❗ ALARM!"), FLinearColor(1.f, 0.35f, 0.2f));
 	}
 	PropagatePatrolBreak(AlertLocation);
 	// User request 2026-10-06: an engaged patrol starts the fight on an ambush level.
@@ -335,7 +335,7 @@ void AMarksmanEnemyCharacter::HandleMarksmanDamaged(const FDamageSpec& Spec, flo
 		SetMarksmanStance(EOperativeStance::Prone);
 		AIState = EMarksmanAIState::Ambushed;
 		StateTimer = 0.f;
-		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("ЗАСАДА!"), FLinearColor(1.f, 0.8f, 0.2f));
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("AMBUSH!"), FLinearColor(1.f, 0.8f, 0.2f));
 		for (TActorIterator<AMarksmanEnemyCharacter> It(GetWorld()); It; ++It)
 		{
 			if (*It != this && FVector::Dist(It->GetActorLocation(), GetActorLocation()) <= MarksmanConfig.AlertRadius)
@@ -638,7 +638,7 @@ void AMarksmanEnemyCharacter::Fire(AOperativeCharacter* Target, const FMarksmanL
 	else
 	{
 		End += FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(0.f, 1.f)).GetSafeNormal() * 120.f;
-		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("ПРОМАХ"), FLinearColor(0.8f, 0.8f, 0.8f));
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("MISS"), FLinearColor(0.8f, 0.8f, 0.8f));
 	}
 	// One line per shot for the AI coach (Scripts/Tools/jev_ai_coach.py).
 	UE_LOG(LogCodexTactics, Display, TEXT("[Marksman] %s fires at %s: %.0f m, chance %.2f, %s"), *GetName(), *Target->DisplayName.ToString(),

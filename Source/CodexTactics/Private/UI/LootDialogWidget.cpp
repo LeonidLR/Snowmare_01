@@ -100,7 +100,7 @@ void ULootDialogWidget::BuildDefaultLayout()
 	SubtitleText = MakeText(TEXT("SubtitleText"), 11, LootHintColor);
 	SubtitleText->SetJustification(ETextJustify::Center);
 	SubtitleText->SetAutoWrapText(true);
-	SubtitleText->SetText(LOCTEXT("Hint", "Кликните на конкретный ресурс, чтобы забрать его, или нажмите «Забрать всё»:"));
+	SubtitleText->SetText(LOCTEXT("Hint", "Click a resource to take it, or press 'Take ALL':"));
 	Column->AddChildToVerticalBox(SubtitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
 	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("Scroll"));
@@ -116,14 +116,14 @@ void ULootDialogWidget::BuildDefaultLayout()
 	LootAllButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("LootAllButton"));
 	CodexButtonFocus::Disable(LootAllButton); // a focused HUD button would swallow the game keys (1-4, ...)
 	LootAllText = MakeText(TEXT("LootAllText"), 12, LootButtonTextColor);
-	LootAllText->SetText(LOCTEXT("LootAll", "📦 Забрать ВСЁ"));
+	LootAllText->SetText(LOCTEXT("LootAll", "📦 Take ALL"));
 	LootAllButton->AddChild(LootAllText);
 	Buttons->AddChildToHorizontalBox(LootAllButton)->SetPadding(FMargin(6.f, 10.f, 6.f, 0.f));
 
 	CloseButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CloseButton"));
 	CodexButtonFocus::Disable(CloseButton); // a focused HUD button would swallow the game keys (1-4, ...)
 	CloseText = MakeText(TEXT("CloseText"), 12, LootButtonTextColor);
-	CloseText->SetText(LOCTEXT("Close", "✖ Закрыть"));
+	CloseText->SetText(LOCTEXT("Close", "✖ Close"));
 	CloseButton->AddChild(CloseText);
 	Buttons->AddChildToHorizontalBox(CloseButton)->SetPadding(FMargin(6.f, 10.f, 6.f, 0.f));
 }
@@ -174,7 +174,7 @@ void ULootDialogWidget::ShowCrate(ALootCrateActor* Crate)
 		if (Items.IsEmpty())
 		{
 			UTextBlock* Empty = MakeText(NAME_None, 12, LootEmptyColor);
-			Empty->SetText(LOCTEXT("Empty", "Ящик пуст. Все припасы забраны."));
+			Empty->SetText(LOCTEXT("Empty", "The crate is empty. All supplies taken."));
 			ItemsGrid->AddChildToUniformGrid(Empty, 0, 0);
 		}
 		for (int32 Index = 0; Index < Items.Num(); ++Index)

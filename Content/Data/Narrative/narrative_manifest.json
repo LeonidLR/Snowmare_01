@@ -1,0 +1,259 @@
+{
+  "sequences": {
+    "DA_DialogueIntro": {
+      "sequence_id": "DA_DialogueIntro",
+      "lines": [
+        {
+          "speaker_en": "Medic-Sapper",
+          "speaker_ru": "Медик-сапёр",
+          "text_en": "(adjusting her heavy backpack with medical supplies and mines)\n\nWhat a wasteland. Commander, explain for pity's sake, why the hell did they drag us out here? Not even crows fly in this place.",
+          "text_ru": "(поправляя тяжелый рюкзак с медикаментами и минами)\n\nНу и глушь. Командир, объясни на милость, за каким чёртом нас сюда приволокли? Тут же даже вороны не летают.",
+          "delay": 4.0,
+          "mood": "Exhausted / Suspicious",
+          "notes": "Drop point at Checkpoint"
+        },
+        {
+          "speaker_en": "Commander",
+          "speaker_ru": "Командир",
+          "text_en": "(stops, checking his tactical tablet)\n\nRack your memory, Sokolova. Do any of you even know what Sector-17 is?",
+          "text_ru": "(останавливается, сверяется с планшетом)\n\nА ты сама напряги память, Соколова. Кто из вас вообще в курсе, что такое объект «Сектор-17»?",
+          "delay": 4.0,
+          "mood": "Calm / Commanding",
+          "notes": "Mission opening dialog"
+        },
+        {
+          "speaker_en": "Engineer",
+          "speaker_ru": "Инженер",
+          "text_en": "(adjusts glasses under ballistic mask, nervously)\n\nI've heard, Captain. Back at the proving ground, the boys were whispering... They said during Soviet times this was a classified science enclave. Developing secure comms networks and training deep-cover operatives. And last year it was mothballed in an emergency.",
+          "text_ru": "(поправляет очки под баллистической маской, нервно)\n\nЯ слышал, товарищ капитан. На полигоне ребята шептались… Говорили, в советские годы здесь был закрытый наукоград. Разрабатывали закрытые системы связи и тренировали специалистов глубокого внедрения. А в прошлом году объект якобы экстренно законсервировали.",
+          "delay": 4.5,
+          "mood": "Nervous / Academic",
+          "notes": "Historical lore"
+        },
+        {
+          "speaker_en": "Commander",
+          "speaker_ru": "Командир",
+          "text_en": "(chuckles)\n\nI see institute rumors still outpace official dispatches. What about you, Sokolova?",
+          "text_ru": "(усмехается)\n\nСмотрю, институтские слухи до сих пор опережают официальные сводки. А ты что скажешь, Соколова?",
+          "delay": 3.5,
+          "mood": "Skeptical",
+          "notes": "Addressing Sokolova"
+        },
+        {
+          "speaker_en": "Medic-Sapper",
+          "speaker_ru": "Медик-сапёр",
+          "text_en": "(bluntly cuts in, inspecting field medkit and detonators)\n\nLast year they hammered this sector from the air so hard the ground shook for miles. Then under a classified district directive, the town was locked in quarantine: supposed outbreak of a weaponized strain. Machine gun cordons on the perimeter, orders to shoot on sight. Biological warfare is the last thing we need.",
+          "text_ru": "(сухо перебивает, проверяя полевую аптечку и детонаторы)\n\nВ прошлом году этот сектор с воздуха утюжили так, что земля ходила ходуном. А по закрытой директиве округа город закрыли на глухой карантин: якобы вспышка боевого штамма. По периметру пулемётные кордоны, приказ стрелять без предупреждения. Нам тут только биооружия не хватало.",
+          "delay": 4.5,
+          "mood": "Somber / Warning",
+          "notes": "Biohazard threat"
+        },
+        {
+          "speaker_en": "Commander",
+          "speaker_ru": "Командир",
+          "text_en": "Precisely. To the outside world, this is an epidemiological nightmare and an exclusion zone. So drop any scavenging fantasies — nobody walks out of here with bags of loot. The General at HQ strictly forbade trophy hunting.",
+          "text_ru": "Именно. Для внешнего мира здесь эпидемиологический ад и запретная зона. Так что никаких иллюзий и мародерства — с баулами отсюда никто не выйдет. Генерал в штабе нам сувениров собирать не разрешал.",
+          "delay": 4.0,
+          "mood": "Stern",
+          "notes": "Mission briefing"
+        },
+        {
+          "speaker_en": "Engineer",
+          "speaker_ru": "Инженер",
+          "text_en": "(breaks into falsetto, agitated)\n\nComrade Captain, wait! At Directorate before deployment, they explicitly stated: technical personnel are strictly rear-echelon consultants! They pulled me straight from the research lab! Under civil specialist protection laws, they had zero right to deploy me into a hot zone! This is an outrageous violation of protocol and my rights! I demand a formal protest report...",
+          "text_ru": "(срывается на фальцет, эмоционально)\n\nТоварищ капитан, постойте! В управлении перед отправкой нам чётко заявили: технический персонал привлекается только для тыловой экспертизы! Меня выдернули прямо из лаборатории, по закону о статусе специалистов меня не имели права бросать в зону поражения! Это грубейшее нарушение регламента и моих гражданских прав! Я требую зафиксировать рапорт…",
+          "delay": 5.0,
+          "mood": "Hysterical / Protesting",
+          "notes": "Engineer panic"
+        },
+        {
+          "speaker_en": "Commander",
+          "speaker_ru": "Командир",
+          "text_en": "(turns around slowly, tone hushed and ice-cold)\n\nVetrov, take a deep breath. You can file a grievance with the union about your civil rights and cruel recruiters when we return. Right now, your sole duty is to shut your mouth, keep your ears open, and step in my exact footprints. Cease whining. Listen to the mission objective.\n\n(Operatives gather around the commander).",
+          "text_ru": "(разворачивается к нему, голос тихий, жесткий)\n\nВетров, дыши глубже. О своих нарушенных правах и злых военкомах напишешь заявление в профсоюз, когда вернемся. А сейчас твоя единственная обязанность — молчать, держать уши открытыми и шагать след в след за мной. Нытьё прекратить. Слушать боевую задачу.\n\n(Бойцы собираются полукругом вокруг командира).",
+          "delay": 5.0,
+          "mood": "Cold / Firm",
+          "notes": "Suppressing panic"
+        },
+        {
+          "speaker_en": "Commander",
+          "speaker_ru": "Командир",
+          "text_en": "Two days ago, an advance team of international observers from the joint corps entered the city. Four people: three operators and a female intelligence analyst. Six hours post-insertion, they transmitted that inexplicable madness was unfolding inside, and all comms went dead.",
+          "text_ru": "Два дня назад в город зашла передовая группа зарубежных наблюдателей из сводного корпуса. Четыре человека: трое оперативников и женщина-аналитик. Спустя шесть часов после высадки они передали, что внутри творится необъяснимая чертовщина, после чего связь оборвалась.",
+          "delay": 4.5,
+          "mood": "HQ Intel",
+          "notes": "Operation mission"
+        },
+        {
+          "speaker_en": "Medic-Sapper",
+          "speaker_ru": "Медик-сапёр",
+          "text_en": "Mutants? Radiation? Or that laboratory contagion?",
+          "text_ru": "Мутанты? Радиация? Или та самая зараза из лабораторий?",
+          "delay": 3.0,
+          "mood": "Wary",
+          "notes": "Question"
+        },
+        {
+          "speaker_en": "Commander",
+          "speaker_ru": "Командир",
+          "text_en": "Could be anything. That's why we're here:\n\n• Priority One: Move covertly along the route, conduct reconnaissance, and locate the missing team. Or whatever is left of them.\n\n• Priority Two: Intel suggests an intact subterranean research complex lies in the city center. Our objective is to locate the entrance, breach the facility, and hold the perimeter until armored reinforcements arrive.",
+          "text_ru": "Что угодно. Поэтому мы здесь:\n\n• Задача номер один: скрытно выдвинуться по маршруту, провести разведку и найти пропавшую группу. Или то, что от неё осталось.\n\n• Задача номер два: по разведданным, в центре города находится неразрушенный подземный лабораторный комплекс. Наша цель — найти вход, проникнуть внутрь и удерживать периметр до подхода основных сил с бронетехникой.",
+          "delay": 5.5,
+          "mood": "Combat Directive",
+          "notes": "Objectives 1 and 2"
+        }
+      ]
+    },
+    "DA_DialoguePrep": {
+      "sequence_id": "DA_DialoguePrep",
+      "lines": [
+        {
+          "speaker_en": "Commander",
+          "speaker_ru": "Командир",
+          "text_en": "Alert! Perimeter under threat! Take defensive positions, check weapons, and deploy barricades.",
+          "text_ru": "Внимание, периметр под угрозой! Занять оборонительные рубежи, проверить оружие и расставить баррикады.",
+          "delay": 3.5,
+          "mood": "Commanding",
+          "notes": "Wave prep phase"
+        },
+        {
+          "speaker_en": "Engineer",
+          "speaker_ru": "Инженер",
+          "text_en": "Generator is humming, but the power grid is overloaded! We need to hold out until voltage stabilizes.",
+          "text_ru": "Генератор запустил, но сеть перегружена! Нам нужно продержаться до стабилизации напряжения.",
+          "delay": 3.5,
+          "mood": "Nervous",
+          "notes": "Power timer warning"
+        }
+      ]
+    },
+    "DA_DialogueWaveRest": {
+      "sequence_id": "DA_DialogueWaveRest",
+      "lines": [
+        {
+          "speaker_en": "Medic-Sapper",
+          "speaker_ru": "Медик-сапёр",
+          "text_en": "First wave repelled, but they are regrouping! Patch your wounds and redistribute ammunition.",
+          "text_ru": "Первая волна отбита, но они перегруппировываются! Всем перевязать раны и распределить боезапас.",
+          "delay": 4.0,
+          "mood": "Relieved / Cautious",
+          "notes": "Between waves rest"
+        }
+      ]
+    },
+    "DA_DialogueVictory": {
+      "sequence_id": "DA_DialogueVictory",
+      "lines": [
+        {
+          "speaker_en": "Commander",
+          "speaker_ru": "Командир",
+          "text_en": "Sector clear. Outstanding work, squad. Report to HQ: first defensive line held.",
+          "text_ru": "Сектор зачищен. Отличная работа, отряд. Доложить в штаб: первая линия обороны удержана.",
+          "delay": 4.0,
+          "mood": "Victorious",
+          "notes": "Wave victory"
+        }
+      ]
+    },
+    "DA_DialogueSusaninRecruitment": {
+      "sequence_id": "DA_DialogueSusaninRecruitment",
+      "lines": [
+        {
+          "speaker_en": "Susanin",
+          "speaker_ru": "Сусанин",
+          "text_en": "(rasps from behind the barred gate) Don't shoot, soldiers! I'm local, I know all the secret trails around the mutants and minefields. Get me out of here — and I'll lead you right to the bunker!",
+          "text_ru": "(хрипит из-за решетки) Не стреляйте, служивые! Я здешний, знаю все тропы в обход мутантов и минных полей. Вытащите меня — я выведу вас к бункеру!",
+          "delay": 4.5,
+          "mood": "Desperate plea",
+          "notes": "Encounter with guide Susanin"
+        },
+        {
+          "speaker_en": "Commander",
+          "speaker_ru": "Командир",
+          "text_en": "Who are you, and how do you know about the underground facility?",
+          "text_ru": "Кто ты такой и откуда знаешь про подземный комплекс?",
+          "delay": 3.0,
+          "mood": "Interrogation",
+          "notes": "Checking trust"
+        },
+        {
+          "speaker_en": "Susanin",
+          "speaker_ru": "Сусанин",
+          "text_en": "I spent twenty years as chief mechanic on this installation! I know every cable conduit blindfolded. Take me with you, or you'll all freeze to death in this permafrost!",
+          "text_ru": "Я на этом объекте двадцать лет старшим механиком оттрубил. Каждый кабельный коллектор на ощупь знаю. Возьмите с собой, иначе все в мерзлоте ляжете!",
+          "delay": 4.0,
+          "mood": "Persuasive",
+          "notes": "Recruitment deal"
+        }
+      ]
+    }
+  },
+  "glossary": {
+    "weapon_m16": {
+      "category": "Weapon",
+      "name_en": "M16A2 Assault Rifle",
+      "name_ru": "Штурмовая винтовка M16A2",
+      "description_en": "Reliable military rifle in 5.56mm. Effective at mid-range, standard issue for squad riflemen.",
+      "description_ru": "Надежный армейский автомат калибра 5.56 мм. Эффективен на средних дистанциях, штатное оружие стрелков."
+    },
+    "weapon_shotgun": {
+      "category": "Weapon",
+      "name_en": "Remington 870 Shotgun",
+      "name_ru": "Дробовик Remington 870",
+      "description_en": "Pump-action 12-gauge shotgun. Deadly at point-blank against armored mutants and frost hounds.",
+      "description_ru": "Помповый гладкоствольный дробовик 12-го калибра. Смертоносен в упор против бронированных мутантов и гончих."
+    },
+    "weapon_sniper": {
+      "category": "Weapon",
+      "name_en": "SVD Sniper Rifle",
+      "name_ru": "Снайперская винтовка СВД",
+      "description_en": "Designated marksman rifle with optical scope. Eliminates patrols and sentries from range before alarm is raised.",
+      "description_ru": "Винтовка с оптическим прицелом. Позволяет уничтожать патрули и часовых издалека до поднятия общей тревоги."
+    },
+    "item_medkit": {
+      "category": "Gear",
+      "name_en": "AI-2 Military Medkit",
+      "name_ru": "Армейская аптечка АИ-2",
+      "description_en": "Combat medical kit with coagulants and stimulants. Restores health and halts critical bleeding.",
+      "description_ru": "Набор противошоковых средств, бинтов и стимуляторов. Восстанавливает здоровье и останавливает кровотечение."
+    },
+    "item_tripwire": {
+      "category": "Gear",
+      "name_en": "MUV-3 Tripwire Mine",
+      "name_ru": "Растяжка МУВ-3 с гранатами Ф-1",
+      "description_en": "Engineering tripwire mine with dual F-1 grenades. Strung between trees or stakes. Deals massive shrapnel damage.",
+      "description_ru": "Инженерная мина-растяжка. Устанавливается между двумя деревьями или колышками в проходах. Колоссальный урон."
+    },
+    "item_canister": {
+      "category": "Quest",
+      "name_en": "20L Fuel Canister",
+      "name_ru": "Топливная канистра 20л",
+      "description_en": "Steel military canister. Used to siphon diesel fuel from abandoned APCs into the checkpoint generator.",
+      "description_ru": "Стальная армейская канистра. Необходима для перекачки дизельного топлива из брошенной техники в генератор."
+    },
+    "obj_generator": {
+      "category": "Interactable",
+      "name_en": "Backup Diesel Generator",
+      "name_ru": "Резервный дизель-генератор",
+      "description_en": "Powers the outpost grid and perimeter heat radiators. Without it, blast gates are locked and soldiers freeze.",
+      "description_ru": "Питает силовой контур КПП и систему обогрева. Без него гермоворота обесточены, а отряд быстро замерзает."
+    },
+    "enemy_hound": {
+      "category": "Enemy",
+      "name_en": "Frost Hound",
+      "name_ru": "Ледяная гончая",
+      "description_en": "Rapid quadruped predator mutated by the cryo-pathogen. Hunts in packs, aggressive flanker.",
+      "description_ru": "Быстрый четвероногий хищник, мутировавший под воздействием крио-штамма. Нападает стаями, обходя с флангов."
+    },
+    "enemy_marksman": {
+      "category": "Enemy",
+      "name_en": "Outpost Marksman",
+      "name_ru": "Стрелок-дозорный",
+      "description_en": "Carbine-equipped sentry in winter camouflage. Patrols the perimeter escorted by a combat hound.",
+      "description_ru": "Экипированный карабином стрелок в маскировочном тулупе. Патрулирует периметр в паре с гончей."
+    }
+  },
+  "total_sequences": 5,
+  "total_lines": 18,
+  "total_glossary_entries": 9
+}

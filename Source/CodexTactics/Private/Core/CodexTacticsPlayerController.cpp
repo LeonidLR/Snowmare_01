@@ -427,7 +427,7 @@ bool ACodexTacticsPlayerController::CancelGrenadeAim()
 	Grenades->CancelAim(true);
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Messages->PostMessage(LOCTEXT("GrenadeSpeaker", "Граната"), LOCTEXT("GrenadeCancelled", "Бросок отменён."));
+		Messages->PostMessage(LOCTEXT("GrenadeSpeaker", "Grenade"), LOCTEXT("GrenadeCancelled", "Throw cancelled."));
 	}
 	return true;
 }
@@ -480,7 +480,7 @@ bool ACodexTacticsPlayerController::BlockRealTimeOrder()
 	{
 		LastOrderLockHintTime = Now;
 		PostHeadquarters(LOCTEXT("OrdersLocked",
-			"⏸ В бою приказы отдаются только в тактической паузе [ПРОБЕЛ]. В реальном времени — автономия отряда [Ctrl+T]."));
+			"⏸ In combat, orders are given only in tactical pause [SPACE]. In real time the squad acts autonomously [Ctrl+T]."));
 	}
 	return true;
 }
@@ -570,7 +570,7 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 	}
 	if (Leader->UsePersonalItem(Item))
 	{
-		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("ItemUsed", "Использован(а) {0} (+HP / согрев)! (Осталось: {1} шт.)"),
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("ItemUsed", "Used {0} (+HP / warmth)! (Left: x{1})"),
 			PersonalItemRules::GetName(Item), Leader->GetItemCount(Item)));
 		// Turn-based: a medkit ends the operative's turn (user decision 2026-10-04).
 		if (Item == EPersonalItem::Medkit)
@@ -583,12 +583,12 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 	}
 	else if (Leader->GetItemCount(Item) <= 0)
 	{
-		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("ItemMissing", "У {0} нет {1} в личном инвентаре!"),
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("ItemMissing", "{0} has no {1} in personal inventory!"),
 			Leader->DisplayName, PersonalItemRules::GetMissingName(Item)));
 	}
 	else
 	{
-		Messages->PostMessage(Leader->DisplayName, LOCTEXT("ItemFull", "Здоровье и тепло бойца уже 100%!"));
+		Messages->PostMessage(Leader->DisplayName, LOCTEXT("ItemFull", "Operative's health and warmth are already 100%!"));
 	}
 }
 
@@ -617,12 +617,12 @@ void ACodexTacticsPlayerController::StartPlacementForType(EDeployableType Type)
 		}
 		if (!Carrier)
 		{
-			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("NoneInSquad", "⚠️ У отряда нет в наличии: {0}!"), Name));
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("NoneInSquad", "⚠️ The squad has no {0} left!"), Name));
 			return;
 		}
 		Carrier->AddDeployable(Type, -1);
 		Leader->AddDeployable(Type, 1);
-		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("HandsOver", "🛠️ {0} передает {1} бойцу {2} для установки!"),
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("HandsOver", "🛠️ {0} hands {1} to {2} for placement!"),
 			Carrier->DisplayName, Name, Leader->DisplayName));
 	}
 	Relocation->StartDeployPlacement(Type, Leader);
@@ -663,7 +663,7 @@ void ACodexTacticsPlayerController::GrenadeKey()
 		if (bSwitched)
 		{
 			const FString Ammo = Leader->UsesAmmo() ? FString::Printf(TEXT("%d / %d"), Leader->CurrentClip, Leader->ReserveAmmo) : TEXT("∞");
-			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("WeaponBack", "🔫 Оружие: {0} [{1}] (Урон: {2})"),
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("WeaponBack", "🔫 Weapon: {0} [{1}] (Damage: {2})"),
 				Leader->CurrentWeapon ? Leader->CurrentWeapon->WeaponName : FText::GetEmpty(), FText::FromString(Ammo),
 				Leader->CurrentWeapon ? FMath::FloorToInt(Leader->CurrentWeapon->BaseDamage) : 0));
 		}
@@ -671,7 +671,7 @@ void ACodexTacticsPlayerController::GrenadeKey()
 	}
 	if (Leader->GrenadesCount <= 0)
 	{
-		Messages->PostMessage(Leader->DisplayName, LOCTEXT("NoGrenade", "🧨 У бойца нет гранат!"));
+		Messages->PostMessage(Leader->DisplayName, LOCTEXT("NoGrenade", "🧨 The operative has no grenades!"));
 		return;
 	}
 	if (TurnBased)
@@ -683,7 +683,7 @@ void ACodexTacticsPlayerController::GrenadeKey()
 		Leader->SwitchToWeaponById(TEXT("grenade"));
 		Grenades->StartAim(Leader);
 	}
-	Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("GrenadeTaken", "🧨 Выбрана граната [{0} шт.] (Урон: {1}, Радиус: {2}m)"),
+	Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("GrenadeTaken", "🧨 Grenade selected [x{0}] (Damage: {1}, Radius: {2}m)"),
 		Leader->GrenadesCount, FMath::FloorToInt(Leader->GrenadeDamage),
 		FText::AsNumber(Leader->GrenadeEffectRadius / 100.f, &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))));
 }
@@ -762,7 +762,7 @@ void ACodexTacticsPlayerController::RotatePlacement()
 		{
 			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 			{
-				Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Reloading", "🔄 Перезаряжаю {0}..."),
+				Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Reloading", "🔄 Reloading {0}..."),
 					Leader->CurrentWeapon ? Leader->CurrentWeapon->WeaponName : FText::GetEmpty()));
 			}
 		}
@@ -789,7 +789,7 @@ void ACodexTacticsPlayerController::CycleWeaponKey()
 	if (Messages)
 	{
 		const FString Ammo = Leader->UsesAmmo() ? FString::Printf(TEXT("%d / %d"), Leader->CurrentClip, Leader->ReserveAmmo) : TEXT("∞");
-		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("WeaponCycle", "🔫 Оружие: {0} [{1}] (Урон: {2})"),
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("WeaponCycle", "🔫 Weapon: {0} [{1}] (Damage: {2})"),
 			Next->WeaponName, FText::FromString(Ammo), FMath::FloorToInt(Next->BaseDamage)));
 	}
 	if (Next->WeaponId == TEXT("grenade"))
@@ -800,7 +800,7 @@ void ACodexTacticsPlayerController::CycleWeaponKey()
 		}
 		else if (Messages)
 		{
-			Messages->PostMessage(Leader->DisplayName, LOCTEXT("GrenadesOut", "🧨 Гранаты закончились!"));
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("GrenadesOut", "🧨 Out of grenades!"));
 		}
 	}
 	else if (Grenades && Grenades->IsAiming())
@@ -858,22 +858,22 @@ void ACodexTacticsPlayerController::HandleSpaceTap()
 		{
 			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 			{
-				Messages->PostMessage(LOCTEXT("SquadSpeaker", "ОТРЯД"), LOCTEXT("OrdersAccepted", "▶️ Приказы приняты! Приступаем к выполнению задач!"));
+				Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), LOCTEXT("OrdersAccepted", "▶️ Orders received! Moving out!"));
 			}
 		}
 		else
 		{
 			PostHeadquarters(FText::Format(LOCTEXT("PausePlanning",
-				"⏱️ ПЛАНИРОВАНИЕ (Зарядов: {0}/{1}): Отдайте приказы бойцам. Они начнут выполнение после снятия паузы [ПРОБЕЛ]!"),
+				"⏱️ PLANNING (Charges: {0}/{1}): Give your orders. They are carried out once the pause ends [SPACE]!"),
 				Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges));
 		}
 		break;
 	case EGameFlowResult::PauseOnCooldown:
-		PostHeadquarters(FText::Format(LOCTEXT("PauseCooldown", "⏳ Тактическая пауза перезаряжается! Осталось: {0}с"),
+		PostHeadquarters(FText::Format(LOCTEXT("PauseCooldown", "⏳ Tactical pause is recharging! Remaining: {0}s"),
 			FText::AsNumber(Flow->GetPauseCooldownRemaining(), &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))));
 		break;
 	case EGameFlowResult::NoPauseCharges:
-		PostHeadquarters(LOCTEXT("PauseNoCharges", "⏳ Все 3 заряда тактической паузы исчерпаны в этой волне! Кулдаун: 20с."));
+		PostHeadquarters(LOCTEXT("PauseNoCharges", "⏳ All 3 tactical pause charges are used up this wave! Cooldown: 20s."));
 		break;
 	default:
 		// Outside a wave the tap opens the command bar (UI step).
@@ -897,7 +897,7 @@ void ACodexTacticsPlayerController::HandleSpaceHold()
 		if (Flow->ExitTurnBasedToRealTime() == EGameFlowResult::Ok)
 		{
 			PostHeadquarters(LOCTEXT("TurnBasedExitRealTime",
-				"▶️ Пошаговый бой завершен. Реальное время: приказы выполняются сразу. [ПРОБЕЛ] — пауза, удержание — пошаговый бой."));
+				"▶️ Turn-based combat over. Real time: orders execute at once. [SPACE] - pause, hold - turn-based."));
 		}
 		return;
 	}
@@ -906,7 +906,7 @@ void ACodexTacticsPlayerController::HandleSpaceHold()
 		if (Flow->ExitTurnBased() == EGameFlowResult::Ok)
 		{
 			PostHeadquarters(LOCTEXT("TurnBasedExit",
-				"🛡️ Пошаговый бой завершен. Включена тактическая пауза (20с) для подготовки отряда [ПРОБЕЛ]."));
+				"🛡️ Turn-based combat over. Tactical pause (20s) on to prepare the squad [SPACE]."));
 		}
 		return;
 	}
@@ -931,7 +931,7 @@ void ACodexTacticsPlayerController::HandleSpaceHold()
 		if (!CombatQueries::IsSquadOnFlatGround(Samples, Feet, 50.f, Ground))
 		{
 			PostHeadquarters(LOCTEXT("TurnBasedNotFlat",
-				"⚠️ Пошаговый бой можно начать только на ровной поверхности — не на возвышенности и не в низине!"));
+				"⚠️ Turn-based combat can only start on level ground - not on high ground or in a pit!"));
 			return;
 		}
 	}
@@ -940,11 +940,11 @@ void ACodexTacticsPlayerController::HandleSpaceHold()
 	const EGameFlowResult Result = Flow->RequestEnterTurnBased(bEnemiesNear);
 	if (Result == EGameFlowResult::NoEnemiesInRange)
 	{
-		PostHeadquarters(LOCTEXT("TurnBasedNoEnemies", "⚠️ В радиусе 15м нет живых врагов для пошагового боя!"));
+		PostHeadquarters(LOCTEXT("TurnBasedNoEnemies", "⚠️ No live enemies within 15m for turn-based combat!"));
 	}
 	else if (Result == EGameFlowResult::TurnBasedLimitReached)
 	{
-		PostHeadquarters(FText::Format(LOCTEXT("TurnBasedLimit", "⚠️ Лимит пошагового боя на эту волну исчерпан ({0}/{0})!"),
+		PostHeadquarters(FText::Format(LOCTEXT("TurnBasedLimit", "⚠️ Turn-based combat limit for this wave reached ({0}/{0})!"),
 			Flow->GetConfig().TurnBasedUsesPerWave));
 	}
 }
@@ -953,7 +953,7 @@ void ACodexTacticsPlayerController::PostHeadquarters(const FText& Text) const
 {
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Messages->PostMessage(LOCTEXT("HQSpeaker", "ШТАБ"), Text);
+		Messages->PostMessage(LOCTEXT("HQSpeaker", "HQ"), Text);
 	}
 }
 
@@ -1031,7 +1031,7 @@ void ACodexTacticsPlayerController::DialogueSkip()
 	}
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsAttackMode())
 	{
-		TurnBased->ExitAttackMode(TEXT("🟢 Прицеливание отменено (возврат в режим перемещения)."));
+		TurnBased->ExitAttackMode(TEXT("🟢 Aiming cancelled (back to move mode)."));
 		return;
 	}
 	if (UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>(); Dialogue && Dialogue->IsDialogueOpen())
@@ -1170,9 +1170,9 @@ int32 ACodexTacticsPlayerController::SelectInBox(const FVector2D& Min, const FVe
 	Squad->SetSelectedGroup(Selected);
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Messages->PostMessage(LOCTEXT("SquadSender", "ОТРЯД"), Selected.Num() == 1
-			? FText::Format(LOCTEXT("UnitSelected", "👤 Выбран боец: {0}"), Selected[0]->DisplayName)
-			: FText::Format(LOCTEXT("GroupSelected", "👥 Выбрана группа: {0} бойцов"), Selected.Num()));
+		Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), Selected.Num() == 1
+			? FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), Selected[0]->DisplayName)
+			: FText::Format(LOCTEXT("GroupSelected", "👥 Group selected: {0} operatives"), Selected.Num()));
 	}
 	return Selected.Num();
 }
@@ -1205,7 +1205,7 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 	{
 		if (UseOrders)
 		{
-			UseOrders->CancelUseOrder(Group[Index]); // a move order replaces a planned / running «Разжечь»
+			UseOrders->CancelUseOrder(Group[Index]); // a move order replaces a planned / running "Ignite"
 		}
 		if (bPlan)
 		{
@@ -1228,10 +1228,10 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 	if (Messages && Group.Num() > 1)
 	{
 		const FText Line = bPlan
-			? FText::Format(bSprint ? LOCTEXT("GroupPlanSprint", "🏃 [ПЛАН] Запланирован групповой рывок ({0} бойцов)!")
-				: LOCTEXT("GroupPlanMove", "📋 [ПЛАН] Запланировано групповое перемещение ({0} бойцов)!"), Group.Num())
-			: FText::Format(LOCTEXT("GroupMove", "🏃 Группа ({0} бойцов) выдвигается на позиции!"), Group.Num());
-		Messages->PostMessage(LOCTEXT("SquadSender", "ОТРЯД"), Line);
+			? FText::Format(bSprint ? LOCTEXT("GroupPlanSprint", "🏃 [PLAN] Group sprint planned ({0} operatives)!")
+				: LOCTEXT("GroupPlanMove", "📋 [PLAN] Group move planned ({0} operatives)!"), Group.Num())
+			: FText::Format(LOCTEXT("GroupMove", "🏃 Group ({0} operatives) moving into position!"), Group.Num());
+		Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), Line);
 	}
 }
 
@@ -1267,7 +1267,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 			Squad->SetLeader(Picked);
 			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 			{
-				Messages->PostMessage(LOCTEXT("SquadSpeaker", "ОТРЯД"), FText::Format(LOCTEXT("UnitSelected", "👤 Выбран боец: {0}"), Picked->DisplayName));
+				Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), Picked->DisplayName));
 			}
 		}
 		else
@@ -1277,7 +1277,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		return;
 	}
 
-	// Action bar «ПЕР»: the clicked object is picked up for relocation.
+	// Action bar "MOVE": the clicked object is picked up for relocation.
 	if (bRelocateSelectMode)
 	{
 		if (AInteractableActor* Object = Cast<AInteractableActor>(Hit.GetActor()))
@@ -1304,7 +1304,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 			}
 			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 			{
-				Messages->PostMessage(Leader->DisplayName, LOCTEXT("BlindFire", "🎯 Огонь вслепую по силуэту (точность −80%)!"));
+				Messages->PostMessage(Leader->DisplayName, LOCTEXT("BlindFire", "🎯 Blind fire at the silhouette (accuracy −80%)!"));
 			}
 			return;
 		}
@@ -1350,8 +1350,8 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 			if (ClickMessages)
 			{
 				const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(HitActor);
-				ClickMessages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🎯 Назначена приоритетная цель: %s!"),
-					Enemy ? *Enemy->GetEnemyDisplayName() : TEXT("Враг"))));
+				ClickMessages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🎯 Priority target set: %s!"),
+					Enemy ? *Enemy->GetEnemyDisplayName() : TEXT("Enemy"))));
 			}
 			return;
 		}
@@ -1363,8 +1363,8 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		const bool bDeployable = Object->IsA<ADeployableActor>();
 		// Godot is_zone_solo: the leader alone in a camera zone may move / take objects mid-wave.
 		const bool bZoneSolo = Leader && Leader->bInCameraZone;
-		// User decision 2026-10-08: a barrel in the fight (real time or pause) opens its menu at once - «Разжечь (1 спичка)»
-		// sends the operative to light it (planned in the pause), «Вытолкать» is offered in the pause only.
+		// User decision 2026-10-08: a barrel in the fight (real time or pause) opens its menu at once - "Ignite (1 match)"
+		// sends the operative to light it (planned in the pause), "Push out" is offered in the pause only.
 		if (Object->IsA<ABarrelActor>() && bWave)
 		{
 			if (UInteractionSubsystem* ClickInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
@@ -1377,7 +1377,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		{
 			if (ClickMessages)
 			{
-				ClickMessages->PostMessage(LOCTEXT("HQ", "ШТАБ"), LOCTEXT("NoMoveInFight", "⚠️ Во время боя менять расположение объектов нельзя! Используйте тактическую паузу [ПРОБЕЛ]."));
+				ClickMessages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("NoMoveInFight", "⚠️ Objects cannot be relocated during combat! Use tactical pause [SPACE]."));
 			}
 			if (UInteractionSubsystem* ClickInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
 			{
@@ -1426,8 +1426,8 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		Squad->SetLeader(SelectedMember);
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(LOCTEXT("SquadSpeaker", "ОТРЯД"),
-				FText::Format(LOCTEXT("UnitSelected", "👤 Выбран боец: {0}"), SelectedMember->DisplayName));
+			Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"),
+				FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), SelectedMember->DisplayName));
 		}
 		LastClickTime = -1.0;
 		return;
@@ -1467,10 +1467,10 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 	if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
 	{
 		Leader->SetFacingPoint(Hit.ImpactPoint);
-		UFloatingTextSubsystem::SpawnAboveOperative(Leader, TEXT("👁️ СЕКТОР ОБЗОРА"), FLinearColor(0.2f, 0.9f, 1.f));
+		UFloatingTextSubsystem::SpawnAboveOperative(Leader, TEXT("👁️ WATCH SECTOR"), FLinearColor(0.2f, 0.9f, 1.f));
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Сектор наблюдения зафиксирован!"), Leader->DisplayName));
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Watch sector locked!"), Leader->DisplayName));
 		}
 		return;
 	}
@@ -1482,7 +1482,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(LOCTEXT("HQ", "ШТАБ"), LOCTEXT("MoveOnlyInPause", "Перемещение во время боя возможно только в режиме тактической паузы [ПРОБЕЛ]!"));
+			Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("MoveOnlyInPause", "During combat, moving is only possible in tactical pause [SPACE]!"));
 		}
 		return;
 	}
@@ -1493,17 +1493,17 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		{
 			if (!Leader->CanSprint() && Leader->ColdLevel >= Leader->MovementConfig.MaxColdToSprint)
 			{
-				Messages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🥶 %s замерз(ла) (%d%% холода) и не может бежать! Иду шагом."),
+				Messages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🥶 %s is frozen (%d%% cold) and cannot run! Walking."),
 					*Leader->DisplayName.ToString(), FMath::FloorToInt(Leader->ColdLevel))));
 			}
 			else if (!Leader->CanSprint() && Leader->IsWounded() && Leader->HealthComponent)
 			{
-				Messages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🩹 %s тяжело ранен(а) (%d/%d HP) и не может бежать! Иду шагом."),
+				Messages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🩹 %s is badly wounded (%d/%d HP) and cannot run! Walking."),
 					*Leader->DisplayName.ToString(), FMath::FloorToInt(Leader->HealthComponent->GetCurrentHealth()), FMath::FloorToInt(Leader->HealthComponent->GetMaxHealth()))));
 			}
 			else if (Leader->CanSprint())
 			{
-				Messages->PostMessage(Leader->DisplayName, LOCTEXT("SprintOrder", "🏃 Бегом к позиции!"));
+				Messages->PostMessage(Leader->DisplayName, LOCTEXT("SprintOrder", "🏃 Run to position!"));
 			}
 		}
 	}
@@ -1527,21 +1527,21 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 			{
 				if (Messages)
 				{
-					Messages->PostMessage(LOCTEXT("HQ", "ШТАБ"), LOCTEXT("SquadProneMoving", "⚠️ Нельзя перевести отряд в положение лёжа во время движения! Сначала полностью остановитесь."));
+					Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("SquadProneMoving", "⚠️ The squad cannot go prone while moving! Come to a full stop first."));
 				}
 				return;
 			}
 		}
 	}
-	const TCHAR* Name = Stance == EOperativeStance::Prone ? TEXT("ЛЁЖА") : (Stance == EOperativeStance::Crouching ? TEXT("ПРИСЕВ") : TEXT("СТОЯ"));
+	const TCHAR* Name = Stance == EOperativeStance::Prone ? TEXT("PRONE") : (Stance == EOperativeStance::Crouching ? TEXT("CROUCHED") : TEXT("STANDING"));
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
 		Member->SetStance(Stance);
-		UFloatingTextSubsystem::SpawnAboveOperative(Member, FString::Printf(TEXT("👥 ОТРЯД: %s"), Name), FLinearColor(0.3f, 0.95f, 1.f));
+		UFloatingTextSubsystem::SpawnAboveOperative(Member, FString::Printf(TEXT("👥 SQUAD: %s"), Name), FLinearColor(0.3f, 0.95f, 1.f));
 	}
 	if (Messages)
 	{
-		Messages->PostMessage(LOCTEXT("SquadSpeaker", "ОТРЯД"), FText::FromString(FString::Printf(TEXT("📢 [ПРИКАЗ ОТРЯДУ]: Все бойцы переходят в положение %s!"), Name)));
+		Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), FText::FromString(FString::Printf(TEXT("📢 [SQUAD ORDER]: All operatives go %s!"), Name)));
 	}
 }
 
@@ -1584,8 +1584,8 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 			{
 				if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 				{
-					Messages->PostMessage(LOCTEXT("SquadSpeaker", "ОТРЯД"),
-						FText::Format(LOCTEXT("UnitSelected", "👤 Выбран боец: {0}"), NewLeader->DisplayName));
+					Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"),
+						FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), NewLeader->DisplayName));
 				}
 			}
 		}
@@ -1621,7 +1621,7 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
 			Messages->PostMessage(Leader->DisplayName,
-				LOCTEXT("CannotProneWhileMoving", "⚠️ Нельзя лечь во время движения! Сначала полностью остановитесь."));
+				LOCTEXT("CannotProneWhileMoving", "⚠️ Cannot go prone while moving! Come to a full stop first."));
 		}
 		return;
 	}
@@ -1635,14 +1635,14 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 		FText StanceName;
 		switch (Stance)
 		{
-		case EOperativeStance::Standing: StanceName = LOCTEXT("StanceStanding", "СТОЯ"); break;
-		case EOperativeStance::Crouching: StanceName = LOCTEXT("StanceCrouching", "ПРИСЕВ"); break;
-		case EOperativeStance::Prone: StanceName = LOCTEXT("StanceProne", "ЛЁЖА"); break;
+		case EOperativeStance::Standing: StanceName = LOCTEXT("StanceStanding", "STANDING"); break;
+		case EOperativeStance::Crouching: StanceName = LOCTEXT("StanceCrouching", "CROUCHED"); break;
+		case EOperativeStance::Prone: StanceName = LOCTEXT("StanceProne", "PRONE"); break;
 		default: break;
 		}
 
 		Messages->PostMessage(Leader->DisplayName,
-			FText::Format(LOCTEXT("SoloStanceFmt", "Стойка бойца {0}: {1}"), Leader->DisplayName, StanceName));
+			FText::Format(LOCTEXT("SoloStanceFmt", "{0} stance: {1}"), Leader->DisplayName, StanceName));
 	}
 }
 
@@ -1759,9 +1759,9 @@ void ACodexTacticsPlayerController::AssignDefenseUnderCursor()
 	}
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("DefenseLine", "🛡 [РУБЕЖ] {0}: держать любой ценой!{1}"),
-			Object ? Object->DisplayName : LOCTEXT("DefensePoint", "Точка"),
-			Squad->IsAutonomousSquadCombat() ? FText::GetEmpty() : LOCTEXT("DefenseNeedsAuto", " (включите автономию [Ctrl+T] — бойцы будут держать рубеж сами)")));
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("DefenseLine", "🛡 [HOLD LINE] {0}: hold at all costs!{1}"),
+			Object ? Object->DisplayName : LOCTEXT("DefensePoint", "Point"),
+			Squad->IsAutonomousSquadCombat() ? FText::GetEmpty() : LOCTEXT("DefenseNeedsAuto", " (turn on autonomy [Ctrl+T] - the operatives will hold the line themselves)")));
 	}
 }
 
@@ -1816,7 +1816,7 @@ void ACodexTacticsPlayerController::CameraDragRotateStart()
 	}
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsAttackMode())
 	{
-		TurnBased->ExitAttackMode(TEXT("🟢 Прицеливание отменено (возврат в режим перемещения)."));
+		TurnBased->ExitAttackMode(TEXT("🟢 Aiming cancelled (back to move mode)."));
 		return;
 	}
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
@@ -1894,39 +1894,39 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 	{
 	case ETargetedShotKind::Enemy:
 	{
-		// Ambush level (user request 2026-10-06): attacking an enemy opens the fight — no «Начать бой» needed. The
+		// Ambush level (user request 2026-10-06): attacking an enemy opens the fight — no "Start combat" needed. The
 		// priority target below then makes the squad fire at once (the real-time fight is on).
 		if (!bPaused)
 		{
 			ULevelEncounterSubsystem::NotifyHostileContactIn(GetWorld(), EAmbushTrigger::AttackOrder, HitActor);
 		}
 		const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(HitActor);
-		const FText EnemyName = Enemy ? FText::FromString(Enemy->GetEnemyDisplayName()) : LOCTEXT("Enemy", "Враг");
+		const FText EnemyName = Enemy ? FText::FromString(Enemy->GetEnemyDisplayName()) : LOCTEXT("Enemy", "Enemy");
 		if (bPaused)
 		{
-			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("PlanEnemy", "📋 [ПЛАН] Назначен прицельный огонь по: {0}!"), EnemyName));
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("PlanEnemy", "📋 [PLAN] Aimed fire assigned on: {0}!"), EnemyName));
 		}
 		else
 		{
 			Leader->SetManualPriorityTarget(HitActor);
-			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("PriorityEnemy", "🎯 Назначена приоритетная цель: {0}!"), EnemyName));
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("PriorityEnemy", "🎯 Priority target set: {0}!"), EnemyName));
 		}
 		break;
 	}
 	case ETargetedShotKind::Barrel:
 		if (bPaused)
 		{
-			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanBarrel", "📋 [ПЛАН] Запланирован выстрел по горючей бочке! [ПРОБЕЛ — огонь]"));
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanBarrel", "📋 [PLAN] Shot at the fuel barrel planned! [SPACE - fire]"));
 		}
 		else if (Leader->ShootAtObject(HitActor))
 		{
-			Messages->PostMessage(Leader->DisplayName, LOCTEXT("ShotBarrel", "💥 Прицельный выстрел по горючей бочке!"));
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("ShotBarrel", "💥 Aimed shot at the fuel barrel!"));
 		}
 		break;
 	case ETargetedShotKind::Mine:
 		if (bPaused)
 		{
-			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanMine", "📋 [ПЛАН] Запланирован прицельный выстрел по мине! [ПРОБЕЛ — огонь]"));
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanMine", "📋 [PLAN] Aimed shot at the mine planned! [SPACE - fire]"));
 		}
 		else
 		{
@@ -1936,7 +1936,7 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 	case ETargetedShotKind::Crate:
 		if (bPaused)
 		{
-			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanCrate", "📋 [ПЛАН] Запланирован выстрел по ящику снабжения! [ПРОБЕЛ — огонь]"));
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanCrate", "📋 [PLAN] Shot at the supply crate planned! [SPACE - fire]"));
 		}
 		else
 		{
@@ -1946,7 +1946,7 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 	case ETargetedShotKind::TrappedObject:
 		if (bPaused)
 		{
-			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanTrapped", "📋 [ПЛАН] Запланирован дистанционный подрыв растяжки! [ПРОБЕЛ — огонь]"));
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanTrapped", "📋 [PLAN] Remote detonation of the tripwire planned! [SPACE - fire]"));
 		}
 		else
 		{
@@ -1954,7 +1954,7 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 		}
 		break;
 	default:
-		Messages->PostMessage(Leader->DisplayName, LOCTEXT("TargetHint", "Укажите врага, бочку, мину или ящик для прицельной стрельбы [Ctrl+Клик]!"));
+		Messages->PostMessage(Leader->DisplayName, LOCTEXT("TargetHint", "Pick an enemy, barrel, mine or crate for aimed fire [Ctrl+Click]!"));
 		break;
 	}
 }
@@ -1995,7 +1995,7 @@ void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
 	}
 	if (Relocation && !Relocation->CanRelocateNow())
 	{
-		PostHeadquarters(LOCTEXT("RelocateCombat", "⚠️ Во время боя менять расположение объектов нельзя! Используйте тактическую паузу [ПРОБЕЛ]."));
+		PostHeadquarters(LOCTEXT("RelocateCombat", "⚠️ Objects cannot be relocated during combat! Use tactical pause [SPACE]."));
 		return;
 	}
 	if (bRelocateSelectMode || (Relocation && Relocation->IsPlacing()))
@@ -2007,15 +2007,15 @@ void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
 		}
 		if (Messages)
 		{
-			Messages->PostMessage(LOCTEXT("Engineering", "Инженерия"), LOCTEXT("RelocateCancelled", "Режим перемещения объектов отменен."));
+			Messages->PostMessage(LOCTEXT("Engineering", "ENGINEERING"), LOCTEXT("RelocateCancelled", "Relocate mode cancelled."));
 		}
 		return;
 	}
 	bRelocateSelectMode = true;
 	if (Messages)
 	{
-		Messages->PostMessage(LOCTEXT("Engineering", "Инженерия"),
-			LOCTEXT("RelocatePick", "📦 [ПЕРЕНОС] 1️⃣ Кликните на объект в сцене (бочка, баррикада, ящик, турель, мина), который хотите переместить."));
+		Messages->PostMessage(LOCTEXT("Engineering", "ENGINEERING"),
+			LOCTEXT("RelocatePick", "📦 [RELOCATE] 1️⃣ Click the object to move (barrel, barricade, crate, turret, mine)."));
 	}
 }
 
@@ -2098,7 +2098,7 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		{
 			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 			{
-				Messages->PostMessage(LOCTEXT("HQ", "ШТАБ"), LOCTEXT("NoCoverHere", "⚠️ Здесь нет укрытия: нужна стена или препятствие не ниже 40 см."));
+				Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("NoCoverHere", "⚠️ No cover here: needs a wall or obstacle at least 40 cm high."));
 			}
 			HideCoverPreview();
 			return true;
@@ -2164,9 +2164,9 @@ void ACodexTacticsPlayerController::ShowCoverPreview(AOperativeCharacter* Operat
 	CoverGhost->ShowFor(*Operative, Slot);
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		const FText Kind = Slot.Height == ECoverHeight::HighCover ? LOCTEXT("CoverHigh", "стена") : LOCTEXT("CoverLow", "низкое укрытие");
-		const FText Corners = Slot.HasExposedEdge() ? LOCTEXT("CoverCorner", ", есть угол для выстрела") : FText::GetEmpty();
-		Messages->PostMessage(Operative->DisplayName, FText::Format(LOCTEXT("CoverPreview", "🧱 Укрытие: {0}{1}. Щёлкните ещё раз, чтобы занять."), Kind, Corners));
+		const FText Kind = Slot.Height == ECoverHeight::HighCover ? LOCTEXT("CoverHigh", "wall") : LOCTEXT("CoverLow", "low cover");
+		const FText Corners = Slot.HasExposedEdge() ? LOCTEXT("CoverCorner", ", corner to fire from") : FText::GetEmpty();
+		Messages->PostMessage(Operative->DisplayName, FText::Format(LOCTEXT("CoverPreview", "🧱 Cover: {0}{1}. Click again to take it."), Kind, Corners));
 	}
 }
 
@@ -2200,7 +2200,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 			Operative->ClearPendingCover();
 			if (Messages)
 			{
-				Messages->PostMessage(LOCTEXT("Tactics", "ТАКТИКА"), LOCTEXT("CoverCellUnreachable", "⚠️ До укрытия не дойти (нет AP или пути)."));
+				Messages->PostMessage(LOCTEXT("Tactics", "TACTICS"), LOCTEXT("CoverCellUnreachable", "⚠️ Cover out of reach (no AP or path)."));
 			}
 		}
 		return;
@@ -2219,7 +2219,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 		}
 		if (Messages)
 		{
-			Messages->PostMessage(Operative->DisplayName, LOCTEXT("CoverPlanned", "📋 [ПЛАН] Занять укрытие у стены!"));
+			Messages->PostMessage(Operative->DisplayName, LOCTEXT("CoverPlanned", "📋 [PLAN] Take cover at the wall!"));
 		}
 		return;
 	}
@@ -2232,12 +2232,12 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 		}
 		if (Messages)
 		{
-			Messages->PostMessage(Operative->DisplayName, LOCTEXT("CoverOrdered", "🏃 В укрытие!"));
+			Messages->PostMessage(Operative->DisplayName, LOCTEXT("CoverOrdered", "🏃 Take cover!"));
 		}
 	}
 	else if (Messages && Result == EOperativeOrderResult::Unreachable)
 	{
-		Messages->PostMessage(LOCTEXT("HQ", "ШТАБ"), LOCTEXT("CoverUnreachable", "⚠️ До этого укрытия нет пути."));
+		Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("CoverUnreachable", "⚠️ No path to this cover."));
 	}
 }
 
@@ -2272,8 +2272,8 @@ void ACodexTacticsPlayerController::ToggleCoverFireModeKey()
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Messages->PostMessage(Leader->DisplayName, Mode == ECoverFireMode::BlindFire
-			? LOCTEXT("CoverBlind", "🙈 Из укрытия — огонь вслепую (точность −40 %, голова не высовывается).")
-			: LOCTEXT("CoverLean", "👁️ Из укрытия — прицельный огонь из-за угла."));
+			? LOCTEXT("CoverBlind", "🙈 From cover - blind fire (accuracy −40%, head stays down).")
+			: LOCTEXT("CoverLean", "👁️ From cover - aimed fire around the corner."));
 	}
 }
 

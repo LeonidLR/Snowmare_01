@@ -20,10 +20,10 @@ struct CODEXTACTICS_API FDialogueSpeakerStyle
  */
 namespace DialogueRules
 {
-	/** Card by speaker name (case-insensitive substrings: сусанин / командир / инженер / медик, сапёр …). */
+	/** Card by speaker name (case-insensitive substrings: susanin / commander / engineer / medic, sapper ...). */
 	CODEXTACTICS_API FDialogueSpeakerStyle GetSpeakerStyle(const FString& Speaker);
 
-	/** Next-button text: «Далее ▶» before the last line; on it the custom text, «🤝 Вступить в отряд», «В бой! ▶» or «Понял! ▶». */
+	/** Next-button text: "Next >" before the last line; on it the custom text, "Join the Squad", "To Battle!" or "Understood!". */
 	CODEXTACTICS_API FText GetNextButtonText(bool bLastLine, const FString& CustomFinishText, bool bRecruitment, bool bCombatPhase);
 
 	/** «[N / M]». */

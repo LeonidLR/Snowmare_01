@@ -60,7 +60,7 @@ void URageComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 	RageTimer -= DeltaTime;
 	if (RageTimer <= 0.f)
 	{
-		ExitRage(TEXT("Время ярости истекло"));
+		ExitRage(TEXT("Rage timed out"));
 		return;
 	}
 	ChaoticSwitchTimer -= DeltaTime;
@@ -120,8 +120,8 @@ void URageComponent::EnterRage(AActor* Offender)
 	ChaoticSwitchTimer = 0.f;
 	Operative->StopOperative(); // Godot: drops the player's move orders
 	ChaoticTarget = IsValid(Offender) ? Offender : FindAnyEnemyInReach();
-	UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🔥 В ЯРОСТИ!"), FLinearColor(1.f, 0.4f, 0.1f));
-	RagePost(Operative, FString::Printf(TEXT("🔥 %s: «Ах вы твари! Я вас всех на куски порву!»"), *Operative->DisplayName.ToString()));
+	UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🔥 ENRAGED!"), FLinearColor(1.f, 0.4f, 0.1f));
+	RagePost(Operative, FString::Printf(TEXT("🔥 %s: \"You bastards! I'll tear you all to pieces!\""), *Operative->DisplayName.ToString()));
 	UE_LOG(LogCodexTactics, Log, TEXT("%s enters rage for %.1f s"), *Operative->DisplayName.ToString(), Config.Duration);
 	OnRageChanged.Broadcast(true);
 	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
@@ -142,7 +142,7 @@ void URageComponent::ExitRage(const FString& Reason)
 	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(GetOwner());
 	if (Operative)
 	{
-		RagePost(Operative, FString::Printf(TEXT("😮‍💨 %s: «Фух... ярость отпустила. Держим строй!»"), *Operative->DisplayName.ToString()));
+		RagePost(Operative, FString::Printf(TEXT("😮‍💨 %s: \"Phew... the rage is gone. Hold the line!\""), *Operative->DisplayName.ToString()));
 		UE_LOG(LogCodexTactics, Log, TEXT("%s leaves rage (%s)"), *Operative->DisplayName.ToString(), *Reason);
 	}
 	UpdateAura(false);

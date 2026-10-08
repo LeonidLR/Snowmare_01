@@ -62,7 +62,7 @@ struct CODEXTACTICS_API FCombatTimeModeRules
 	/** The combat mode Request leads to from Current (Current when the request changes nothing). */
 	static ECodexCombatMode GetResultingMode(ECombatTimeModeRequest Request, ECodexCombatMode Current);
 
-	/** HUD mode label in a wave: «РЕАЛЬНОЕ ВРЕМЯ» / «ТАКТИЧЕСКАЯ ПАУЗА» / «ПОШАГОВЫЙ БОЙ»; empty outside a wave. */
+	/** HUD mode label in a wave: "REAL TIME" / "TACTICAL PAUSE" / "TURN-BASED"; empty outside a wave. */
 	static FString GetModeLabel(ECodexGamePhase Phase, ECodexCombatMode Mode);
 
 	/** HUD caption of the hold bar: what holding Space does now (empty when the hold does nothing). */

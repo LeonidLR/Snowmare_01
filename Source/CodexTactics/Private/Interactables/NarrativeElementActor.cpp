@@ -4,6 +4,7 @@
 #include "CodexTactics.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Data/NarrativeManifest.h"
 #include "Engine/World.h"
 #include "UI/OverheadLabel.h"
 
@@ -39,12 +40,32 @@ namespace
 
 ANarrativeElementActor::ANarrativeElementActor()
 {
-	DisplayName = LOCTEXT("Name", "Документ");
+	DisplayName = LOCTEXT("Name", "Document");
 	InteractionDistance = 150.f;
 	// Godot Area3D with a sphere: a small clickable volume, no mesh.
 	Box->SetBoxExtent(FVector(40.f, 40.f, 40.f));
 	Mesh->SetVisibility(false);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+}
+
+void ANarrativeElementActor::GetEnglishTexts(FString& OutTitle, FString& OutContent, FString& OutSource) const
+{
+	// Level-authored texts that are not English are looked up in the narrative manifest by actor name:
+	// sequence "<ActorName>", line 1 = speaker_en (title) + text_en (content), line 2 (optional) = speaker_en (author / source).
+	const FNarrativeManifest& Manifest = FNarrativeManifest::Get();
+	const TArray<FNarrativeLine>* Lines = Manifest.Sequences.Find(GetName());
+	const FNarrativeLine* First = Lines && Lines->Num() > 0 ? &(*Lines)[0] : nullptr;
+	const FNarrativeLine* Second = Lines && Lines->Num() > 1 ? &(*Lines)[1] : nullptr;
+	OutTitle = FNarrativeManifest::EnglishOr(Title, First ? FNarrativeManifest::EnglishOr(First->Speaker, TEXT("Document")) : FString(TEXT("Document")));
+	if (FNarrativeManifest::ContainsCyrillic(ContentText) || ContentText.IsEmpty())
+	{
+		OutContent = First && !First->Text.IsEmpty() ? First->Text : FNarrativeManifest::MakeMissingPlaceholder(GetName(), 1);
+	}
+	else
+	{
+		OutContent = ContentText;
+	}
+	OutSource = FNarrativeManifest::EnglishOr(AuthorOrSource, Second ? FNarrativeManifest::EnglishOr(Second->Speaker, FString()) : FString());
 }
 
 FString ANarrativeElementActor::GetTypeIcon() const
@@ -71,18 +92,22 @@ bool ANarrativeElementActor::IsReadableNow() const
 
 FActionMenuRequest ANarrativeElementActor::BuildActionMenu(const AOperativeCharacter* Leader) const
 {
-	const FString Source = AuthorOrSource.IsEmpty() ? FString(TEXT("КПП «Северный Рубеж»")) : AuthorOrSource;
-	return FActionMenuRequest::MakeMenu(FText::FromString(TEXT("📜 ") + Title),
-		FText::FromString(FString::Printf(TEXT("«%s»\n\n— %s"), *ContentText, *Source)),
-		LOCTEXT("Read", "Прочитать вслух"), LOCTEXT("Close", "Закрыть"), false);
+	FString EnTitle, EnContent, EnSource;
+	GetEnglishTexts(EnTitle, EnContent, EnSource);
+	const FString Source = EnSource.IsEmpty() ? FString(TEXT("Northern Line Checkpoint")) : EnSource;
+	return FActionMenuRequest::MakeMenu(FText::FromString(TEXT("📜 ") + EnTitle),
+		FText::FromString(FString::Printf(TEXT("\"%s\"\n\n- %s"), *EnContent, *Source)),
+		LOCTEXT("Read", "Read Aloud"), LOCTEXT("Close", "Close"), false);
 }
 
 void ANarrativeElementActor::PerformAction(AOperativeCharacter* User)
 {
-	// Godot narrative_element.gd interact: the text goes to the feed under «Title (icon)».
+	// Godot narrative_element.gd interact: the text goes to the feed under "Title (icon)".
 	bHasBeenRead = true;
-	PostLine(FText::FromString(FString::Printf(TEXT("%s (%s)"), *Title, *GetTypeIcon())), FText::FromString(ContentText));
-	UE_LOG(LogCodexTactics, Log, TEXT("%s read %s"), User ? *User->DisplayName.ToString() : TEXT("Squad"), *Title);
+	FString EnTitle, EnContent, EnSource;
+	GetEnglishTexts(EnTitle, EnContent, EnSource);
+	PostLine(FText::FromString(FString::Printf(TEXT("%s (%s)"), *EnTitle, *GetTypeIcon())), FText::FromString(EnContent));
+	UE_LOG(LogCodexTactics, Log, TEXT("%s read %s"), User ? *User->DisplayName.ToString() : TEXT("Squad"), *EnTitle);
 }
 
 bool ANarrativeElementActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
@@ -96,11 +121,12 @@ bool ANarrativeElementActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	OutLabel.HeightCm = TextOffset + 35.f;
 	if (bReadable && bInWorldText)
 	{
-		// FText::ToUpper handles Cyrillic (FString::ToUpper does not).
-		FString Text = FString::Printf(TEXT("%s\n%s"), *FText::FromString(Title).ToUpper().ToString(), *WrapWords(ContentText, 48));
-		if (!AuthorOrSource.IsEmpty())
+		FString EnTitle, EnContent, EnSource;
+		GetEnglishTexts(EnTitle, EnContent, EnSource);
+		FString Text = FString::Printf(TEXT("%s\n%s"), *EnTitle.ToUpper(), *WrapWords(EnContent, 48));
+		if (!EnSource.IsEmpty())
 		{
-			Text += TEXT("\n— ") + AuthorOrSource;
+			Text += TEXT("\n- ") + EnSource;
 		}
 		OutLabel.Text = Text;
 	}

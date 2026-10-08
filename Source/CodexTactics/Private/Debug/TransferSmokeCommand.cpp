@@ -1,6 +1,6 @@
 // Dev-only console command for a headless item hand-over check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.TransferSmoke
-// Sprint 13 drag & drop (the drop handlers are called directly — no real mouse in a headless run): the «ПЕРЕД» button is
+// Sprint 13 drag & drop (the drop handlers are called directly — no real mouse in a headless run): the "TRANSFER" button is
 // gone, the drawer shows the ammo and builds the drag payload; near the engineer 30 M16 rounds open the split dialog
 // ([-] / [+] by 5, 17 snaps to 15, confirm -> 15 / +15), Esc cancels it, a remainder below 5 and a single medkit go
 // without a dialog, a portrait (action bar slot) drop works, 3 medkits split by 1, the turret capacity clamps; far away
@@ -161,10 +161,10 @@ namespace TransferSmoke
 
 		if (State.Phase == EPhase::Instant)
 		{
-			Check(State, Bar->WidgetTree && !Bar->WidgetTree->FindWidget(TEXT("BarTransferButton")), TEXT("the «ПЕРЕД» button is gone from the action bar"));
+			Check(State, Bar->WidgetTree && !Bar->WidgetTree->FindWidget(TEXT("BarTransferButton")), TEXT("the \"TRANSFER\" button is gone from the action bar"));
 			SetReserve(Leader, TEXT("m16"), 30);
 			Drawer->Open();
-			Check(State, Drawer->IsSlotVisible(EInventoryDrawerSlot::RifleAmmo) && Drawer->GetSlotText(EInventoryDrawerSlot::RifleAmmo).ToString().Contains(TEXT("M16: 30")),
+			Check(State, Drawer->IsSlotVisible(EInventoryDrawerSlot::RifleAmmo) && Drawer->GetSlotText(EInventoryDrawerSlot::RifleAmmo).ToString().Contains(TEXT("M16 rounds: 30")),
 				Drawer->GetSlotText(EInventoryDrawerSlot::RifleAmmo).ToString());
 			Check(State, !Drawer->IsSlotVisible(EInventoryDrawerSlot::PlasmaAmmo), TEXT("plasma line hidden without plasma"));
 			const UInventoryDragDropOperation* Operation = Drawer->CreateDragOperation(EInventoryDrawerSlot::RifleAmmo);
@@ -185,7 +185,7 @@ namespace TransferSmoke
 			Dialog->SetQuantity(17);
 			Check(State, AfterMinus == 25 && AfterPlus == 30 && Dialog->GetQuantity() == 15,
 				FString::Printf(TEXT("[-] 25 / [+] 30 / 17 snaps to 15 (%d / %d / %d)"), AfterMinus, AfterPlus, Dialog->GetQuantity()));
-			Check(State, Dialog->GetQuantityText().ToString().Contains(TEXT("макс. 30")), Dialog->GetQuantityText().ToString());
+			Check(State, Dialog->GetQuantityText().ToString().Contains(TEXT("max 30")), Dialog->GetQuantityText().ToString());
 			Check(State, Dialog->Confirm() == ETransferRequestOutcome::Transferred && !Dialog->IsOpen() && Leader->GetReserve(TEXT("m16")) == 15
 				&& Engineer->GetReserve(TEXT("m16")) == EngineerRounds + 15, TEXT("confirm 15: commander -15, engineer +15"));
 
@@ -251,7 +251,7 @@ namespace TransferSmoke
 			const ETransferRequestOutcome BlockedOutcome = Drop(ETransferItem::Medkit);
 			const FString BlockedFeed = LastFeed(World);
 			Check(State, BlockedOutcome == ETransferRequestOutcome::Blocked && Leader->MedkitsCount == 1 && !Transfer->HasPendingTransfer()
-				&& BlockedFeed == TEXT("Слишком далеко для передачи (макс. 2 метра)"), TEXT("far under fire: blocked, feed line: ") + BlockedFeed);
+				&& BlockedFeed == TEXT("Too far to hand over (max 2 m)"), TEXT("far under fire: blocked, feed line: ") + BlockedFeed);
 			Transfer->bForceUnderFireForTesting = false;
 
 			// Far, out of combat: the commander walks over.
@@ -300,7 +300,7 @@ namespace TransferSmoke
 			}
 			const FString CancelFeed = LastFeed(World);
 			Check(State, !Transfer->HasPendingTransfer() && Leader->MedkitsCount == State.LeaderMedkits && Engineer->MedkitsCount == State.EngineerMedkits
-				&& CancelFeed == TEXT("Передача отменена."), TEXT("another order cancels the pending hand-over: ") + CancelFeed);
+				&& CancelFeed == TEXT("Hand-over cancelled."), TEXT("another order cancels the pending hand-over: ") + CancelFeed);
 			Leader->StopOperative();
 			State.Phase = EPhase::Ground;
 			State.PhaseTime = 0.f;
@@ -321,9 +321,9 @@ namespace TransferSmoke
 			const FString DropFeed = LastFeed(World);
 			ADroppedItemActor* Pile = PileNear(World, Point, 150.f);
 			Check(State, Dropped == ETransferRequestOutcome::Transferred && Leader->GetReserve(TEXT("m16")) == 15 && Pile
-				&& Pile->GetStash()->GetCount(ETransferItem::RifleAmmo) == 15 && DropFeed.StartsWith(TEXT("Выбросил(а)")),
+				&& Pile->GetStash()->GetCount(ETransferItem::RifleAmmo) == 15 && DropFeed.StartsWith(TEXT("Dropped on the ground")),
 				TEXT("15 rounds on the ground: commander -15, a pile with 15 (") + DropFeed + TEXT(")"));
-			Check(State, Pile && Pile->GetContentsText() == TEXT("Патроны M16 x15"), Pile ? Pile->GetContentsText() : FString(TEXT("no pile")));
+			Check(State, Pile && Pile->GetContentsText() == TEXT("M16 rounds x15"), Pile ? Pile->GetContentsText() : FString(TEXT("no pile")));
 
 			// Another operative picks it up (what arriving at a clicked pile does).
 			const int32 EngineerRounds = Engineer->GetReserve(TEXT("m16"));
@@ -332,7 +332,7 @@ namespace TransferSmoke
 			{
 				Pile->HandleDirectInteraction(Engineer);
 			}
-			Check(State, Engineer->GetReserve(TEXT("m16")) == EngineerRounds + 15 && PileGone(Pile) && LastFeed(World).StartsWith(TEXT("Подобрал(а)")),
+			Check(State, Engineer->GetReserve(TEXT("m16")) == EngineerRounds + 15 && PileGone(Pile) && LastFeed(World).StartsWith(TEXT("Picked up")),
 				TEXT("the engineer picks the 15 rounds up, the pile is gone: ") + LastFeed(World));
 
 			// Pick-up into a nearly full engineer: one mine stays on the ground (mines lie as items, never armed).
@@ -353,7 +353,7 @@ namespace TransferSmoke
 				TurretPile->HandleDirectInteraction(Engineer);
 			}
 			Check(State, TurretPile && !PileGone(TurretPile) && TurretPile->GetStash()->GetCount(ETransferItem::Mine) == 1
-				&& Engineer->GetDeployableCount(EDeployableType::Mine) == MaxMines && LastFeed(World).Contains(TEXT("не поместилось")),
+				&& Engineer->GetDeployableCount(EDeployableType::Mine) == MaxMines && LastFeed(World).Contains(TEXT("no room for")),
 				TEXT("full engineer: 1 taken, 1 stays (") + LastFeed(World) + TEXT(")"));
 			Teleport(Engineer, FarSpot(World, Leader, Engineer, FVector(0.f, 1.f, 0.f), 700.f));
 
@@ -446,7 +446,7 @@ namespace TransferSmoke
 		const ETransferRequestOutcome Stored = Dialog->Confirm();
 		const FString StoreFeed = LastFeed(World);
 		Check(State, Stored == ETransferRequestOutcome::Transferred && Leader->GetReserve(TEXT("m16")) == 0
-			&& Crate->GetStoredCount(ETransferItem::RifleAmmo) == CrateRounds + 10 && StoreFeed.StartsWith(TEXT("📦 Положил(а) в ящик")),
+			&& Crate->GetStoredCount(ETransferItem::RifleAmmo) == CrateRounds + 10 && StoreFeed.StartsWith(TEXT("📦 Stowed in the crate")),
 			TEXT("stored 10: commander -10, crate +10 (") + StoreFeed + TEXT(")"));
 		const int32 EngineerRounds = Engineer->GetReserve(TEXT("m16"));
 		Check(State, Hud->HandleTakeDrop(Crate, ETransferItem::RifleAmmo, Engineer) == ETransferRequestOutcome::DialogOpened
@@ -455,7 +455,7 @@ namespace TransferSmoke
 		const ETransferRequestOutcome Taken = Dialog->Confirm();
 		const FString TakeFeed = LastFeed(World);
 		Check(State, Taken == ETransferRequestOutcome::Transferred && Engineer->GetReserve(TEXT("m16")) == EngineerRounds + 5
-			&& Crate->GetStoredCount(ETransferItem::RifleAmmo) == CrateRounds + 5 && TakeFeed.StartsWith(TEXT("📦 Взял(а) из ящика")),
+			&& Crate->GetStoredCount(ETransferItem::RifleAmmo) == CrateRounds + 5 && TakeFeed.StartsWith(TEXT("📦 Took from the crate")),
 			TEXT("the engineer takes 5: +5, crate -5 (") + TakeFeed + TEXT(")"));
 		// Crate nearly full: 3 places left -> 3 go in, then refused.
 		UItemStashComponent* CrateStash = Crate->GetSyncedStash();
@@ -466,7 +466,7 @@ namespace TransferSmoke
 			&& Leader->GetReserve(TEXT("m16")) == 7, TEXT("crate with room for 3: 3 stored at once"));
 		const ETransferRequestOutcome Full = Hud->HandleTransferDropOnActor(Leader, ETransferItem::RifleAmmo, Crate, Crate->GetActorLocation());
 		const FString FullFeed = LastFeed(World);
-		Check(State, Full == ETransferRequestOutcome::Failed && Leader->GetReserve(TEXT("m16")) == 7 && FullFeed.Contains(TEXT("нет места")),
+		Check(State, Full == ETransferRequestOutcome::Failed && Leader->GetReserve(TEXT("m16")) == 7 && FullFeed.Contains(TEXT("crate is full")),
 			TEXT("full crate: refused (") + FullFeed + TEXT(")"));
 		CrateStash->Capacity = OldCapacity;
 		Check(State, !Crate->IsLooted(), TEXT("a crate with stored items is not empty"));

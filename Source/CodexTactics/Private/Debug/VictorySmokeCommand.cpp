@@ -58,7 +58,7 @@ namespace VictorySmoke
 	/** Kills every enemy; the first three by the commander, a turret and a mine. */
 	void KillAll(UWorld* World)
 	{
-		const TCHAR* Sources[] = { TEXT("Командир"), TEXT("Турель"), TEXT("Мина") };
+		const TCHAR* Sources[] = { TEXT("Commander"), TEXT("Turret"), TEXT("Mine") };
 		int32 Index = 0;
 		TArray<AEnemyCharacter*> Enemies;
 		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
@@ -72,7 +72,7 @@ namespace VictorySmoke
 		{
 			FDamageSpec Spec;
 			Spec.Amount = 100000.f;
-			Spec.AttackerSource = Index < 3 ? Sources[Index] : TEXT("Командир");
+			Spec.AttackerSource = Index < 3 ? Sources[Index] : TEXT("Commander");
 			Enemy->GetHealthComponent()->TakeDamage(Spec);
 			++Index;
 		}
@@ -171,16 +171,16 @@ namespace VictorySmoke
 				if (State.Wave == 1)
 				{
 					const FSquadKillStats& Stats = Victory->GetKillStats();
-					Check(State, Text.Contains(TEXT("ВОЛНА 1 ОТРАЖЕНА")) && Text.Contains(FString::Printf(TEXT("Запустить следующую волну (2/%d)"), Total)),
+					Check(State, Text.Contains(TEXT("WAVE 1 REPELLED")) && Text.Contains(FString::Printf(TEXT("Start the next wave (2/%d)"), Total)),
 						TEXT("title and «next wave (2/N)»"));
 					Check(State, Stats.Commander.TurretKills == 1 && Stats.Medic.MineKills == 1 && Stats.GetTotal() >= 3
 						&& Stats.Commander.Total == Stats.GetTotal() - 1,
 						FString::Printf(TEXT("kill stats: total %d, turret %d, mine %d"), Stats.GetTotal(), Stats.Commander.TurretKills, Stats.Medic.MineKills));
-					Check(State, Text.Contains(FString::Printf(TEXT("ВСЕГО УНИЧТОЖЕНО: %d"), Stats.GetTotal())), TEXT("stats card text"));
+					Check(State, Text.Contains(FString::Printf(TEXT("TOTAL KILLED: %d"), Stats.GetTotal())), TEXT("stats card text"));
 				}
 				if (State.Wave >= Total)
 				{
-					Check(State, Text.Contains(TEXT("ПОЛНАЯ ПОБЕДА")) && Text.Contains(TEXT("Завершить бой")), TEXT("last wave: full victory"));
+					Check(State, Text.Contains(TEXT("TOTAL VICTORY")) && Text.Contains(TEXT("End combat")), TEXT("last wave: full victory"));
 					// Scatter the squad and leave a turret: the post-combat sequence brings them back.
 					for (AOperativeCharacter* Member : Squad->GetMembers())
 					{

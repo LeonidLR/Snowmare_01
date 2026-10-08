@@ -4,33 +4,32 @@
 
 FDialogueSpeakerStyle DialogueRules::GetSpeakerStyle(const FString& Speaker)
 {
-	// FString::ToLower is ASCII-only; FText::ToLower lowers Cyrillic too (Godot String.to_lower).
-	const FString Low = FText::FromString(Speaker).ToLower().ToString();
+	// Speaker names are English (narrative_manifest.json speaker_en); matching is case-insensitive on substrings.
+	const FString Low = Speaker.ToLower();
 	FDialogueSpeakerStyle Style;
-	if (Low.Contains(TEXT("сусанин")) || Low.Contains(TEXT("иван")))
+	if (Low.Contains(TEXT("susanin")) || Low.Contains(TEXT("ivan")) || Low.Contains(TEXT("local")))
 	{
-		Style = { LOCTEXT("PortraitLocal", "ЖИТ"), LOCTEXT("RoleLocal", "Местный житель"), FLinearColor(0.4f, 0.95f, 0.6f),
+		Style = { LOCTEXT("PortraitLocal", "LOC"), LOCTEXT("RoleLocal", "Local Resident"), FLinearColor(0.4f, 0.95f, 0.6f),
 			FLinearColor(0.08f, 0.16f, 0.12f, 0.9f), FLinearColor(0.3f, 0.85f, 0.5f, 0.8f) };
 	}
-	else if (Low.Contains(TEXT("командир")) || Low.Contains(TEXT("северов")) || Low.Contains(TEXT("player")))
+	else if (Low.Contains(TEXT("commander")) || Low.Contains(TEXT("severov")) || Low.Contains(TEXT("player")))
 	{
-		Style = { LOCTEXT("PortraitCommander", "КОМ"), LOCTEXT("RoleCommander", "Командир отряда"), FLinearColor(0.3f, 0.85f, 1.f),
+		Style = { LOCTEXT("PortraitCommander", "CMD"), LOCTEXT("RoleCommander", "Squad Commander"), FLinearColor(0.3f, 0.85f, 1.f),
 			FLinearColor(0.08f, 0.13f, 0.22f, 0.9f), FLinearColor(0.2f, 0.7f, 1.f, 0.8f) };
 	}
-	else if (Low.Contains(TEXT("инженер")) || Low.Contains(TEXT("ветров")))
+	else if (Low.Contains(TEXT("engineer")) || Low.Contains(TEXT("vetrov")))
 	{
-		Style = { LOCTEXT("PortraitEngineer", "ИНЖ"), LOCTEXT("RoleEngineer", "Инженер-техник"), FLinearColor(1.f, 0.75f, 0.2f),
+		Style = { LOCTEXT("PortraitEngineer", "ENG"), LOCTEXT("RoleEngineer", "Field Engineer"), FLinearColor(1.f, 0.75f, 0.2f),
 			FLinearColor(0.18f, 0.14f, 0.08f, 0.9f), FLinearColor(1.f, 0.75f, 0.2f, 0.8f) };
 	}
-	else if (Low.Contains(TEXT("медик")) || Low.Contains(TEXT("сапёр")) || Low.Contains(TEXT("сапер")) || Low.Contains(TEXT("соколова"))
-		|| Low.Contains(TEXT("быков")))
+	else if (Low.Contains(TEXT("medic")) || Low.Contains(TEXT("sapper")) || Low.Contains(TEXT("sokolova")) || Low.Contains(TEXT("bykov")))
 	{
-		Style = { LOCTEXT("PortraitMedic", "МЕД"), LOCTEXT("RoleMedic", "Медик-сапёр"), FLinearColor(0.35f, 0.9f, 0.6f),
+		Style = { LOCTEXT("PortraitMedic", "MED"), LOCTEXT("RoleMedic", "Medic-Sapper"), FLinearColor(0.35f, 0.9f, 0.6f),
 			FLinearColor(0.08f, 0.16f, 0.14f, 0.9f), FLinearColor(0.3f, 0.85f, 0.65f, 0.8f) };
 	}
 	else
 	{
-		Style = { LOCTEXT("PortraitOther", "?"), LOCTEXT("RoleOther", "Собеседник"), FLinearColor(0.8f, 0.85f, 0.9f),
+		Style = { LOCTEXT("PortraitOther", "?"), LOCTEXT("RoleOther", "Speaker"), FLinearColor(0.8f, 0.85f, 0.9f),
 			FLinearColor(0.1f, 0.12f, 0.16f, 0.9f), FLinearColor(0.5f, 0.55f, 0.65f, 0.8f) };
 	}
 	return Style;
@@ -40,7 +39,7 @@ FText DialogueRules::GetNextButtonText(bool bLastLine, const FString& CustomFini
 {
 	if (!bLastLine)
 	{
-		return LOCTEXT("Next", "Далее ▶");
+		return LOCTEXT("Next", "Next ▶");
 	}
 	if (!CustomFinishText.IsEmpty())
 	{
@@ -48,9 +47,9 @@ FText DialogueRules::GetNextButtonText(bool bLastLine, const FString& CustomFini
 	}
 	if (bRecruitment)
 	{
-		return LOCTEXT("Recruit", "🤝 Вступить в отряд");
+		return LOCTEXT("Recruit", "🤝 Join the Squad");
 	}
-	return bCombatPhase ? LOCTEXT("ToBattle", "В бой! ▶") : LOCTEXT("Understood", "Понял! ▶");
+	return bCombatPhase ? LOCTEXT("ToBattle", "To Battle! ▶") : LOCTEXT("Understood", "Understood! ▶");
 }
 
 FText DialogueRules::GetProgressText(int32 LineIndex, int32 LineCount)

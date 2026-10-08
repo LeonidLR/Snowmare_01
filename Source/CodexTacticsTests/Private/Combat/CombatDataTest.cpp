@@ -16,7 +16,7 @@ bool FCombatDataWeaponDefaultsTest::RunTest(const FString&)
 {
 	UWeaponDataAsset* Weapon = NewObject<UWeaponDataAsset>();
 	Weapon->WeaponId = TEXT("m16");
-	Weapon->WeaponName = FText::FromString(TEXT("Автомат МТКМ-16"));
+	Weapon->WeaponName = FText::FromString(TEXT("M16 Rifle"));
 	Weapon->DamageType = EDamageType::Kinetic;
 	Weapon->BaseDamage = 18.0f;
 	Weapon->AttackRangeCm = 1400.0f;

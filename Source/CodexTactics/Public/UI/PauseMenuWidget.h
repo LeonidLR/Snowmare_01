@@ -8,7 +8,7 @@ class UButton;
 class UTextBlock;
 
 /**
- * «⏸️ МЕНЮ ПАУЗЫ» (Esc when no other window is open): continue, save, load (disabled without saves), main menu, quit;
+ * «⏸️ PAUSE MENU» (Esc when no other window is open): continue, save, load (disabled without saves), main menu, quit;
  * the status line names the newest save. The world is paused while it is open. Built in C++ (restyle through a Widget
  * Blueprint subclass).
  * Godot reference: Scenes/ui/pause/pause_menu_dialog.gd, main.gd _open_pause_menu / _close_pause_menu,

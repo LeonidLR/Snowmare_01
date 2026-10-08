@@ -8,29 +8,29 @@ namespace
 	{
 		const TCHAR* Icon;
 		FText Name;
-		bool bUnits; // «ед.» instead of «шт.»
+		bool bUnits; // "units" instead of a piece count
 	};
 
 	FLootItemInfo GetInfo(ELootItem Item)
 	{
 		switch (Item)
 		{
-		case ELootItem::Medkit: return { TEXT("🩹"), LOCTEXT("Medkit", "Аптечка"), false };
-		case ELootItem::CannedFood: return { TEXT("🥫"), LOCTEXT("CannedFood", "Консервы"), false };
-		case ELootItem::Bread: return { TEXT("🍞"), LOCTEXT("Bread", "Хлеб"), false };
-		case ELootItem::Chocolate: return { TEXT("🍫"), LOCTEXT("Chocolate", "Шоколад"), false };
-		case ELootItem::Matches: return { TEXT("🪵"), LOCTEXT("Matches", "Спички"), false };
-		case ELootItem::RifleAmmo: return { TEXT("🔫"), LOCTEXT("RifleAmmo", "Патроны 5.56 мм (M16)"), false };
-		case ELootItem::PistolAmmo: return { TEXT("🔫"), LOCTEXT("PistolAmmo", "Патроны к пистолету (9мм)"), false };
-		case ELootItem::ShotgunAmmo: return { TEXT("💥"), LOCTEXT("ShotgunAmmo", "Дробь 12k (Remington)"), false };
-		case ELootItem::FlameFuel: return { TEXT("🔥"), LOCTEXT("FlameFuel", "Топливо огнемёта"), true };
-		case ELootItem::CryoAmmo: return { TEXT("❄️"), LOCTEXT("CryoAmmo", "Хладагент крио"), true };
-		case ELootItem::PlasmaAmmo: return { TEXT("⚡"), LOCTEXT("PlasmaAmmo", "Батареи плазмы"), true };
-		case ELootItem::Turret: return { TEXT("🎯"), LOCTEXT("Turret", "Боевая автотурель"), false };
-		case ELootItem::Barricade: return { TEXT("🧱"), LOCTEXT("Barricade", "Тактическая бронебаррикада"), false };
-		case ELootItem::Mine: return { TEXT("💣"), LOCTEXT("Mine", "Противопехотная мина"), false };
-		case ELootItem::BonusWeapon: return { TEXT("⭐"), LOCTEXT("BonusWeapon", "Оружие ({0})"), false };
-		default: return { TEXT("🧥"), LOCTEXT("BonusClothing", "Экипировка ({0})"), false };
+		case ELootItem::Medkit: return { TEXT("🩹"), LOCTEXT("Medkit", "Medkit"), false };
+		case ELootItem::CannedFood: return { TEXT("🥫"), LOCTEXT("CannedFood", "Canned food"), false };
+		case ELootItem::Bread: return { TEXT("🍞"), LOCTEXT("Bread", "Bread"), false };
+		case ELootItem::Chocolate: return { TEXT("🍫"), LOCTEXT("Chocolate", "Chocolate"), false };
+		case ELootItem::Matches: return { TEXT("🪵"), LOCTEXT("Matches", "Matches"), false };
+		case ELootItem::RifleAmmo: return { TEXT("🔫"), LOCTEXT("RifleAmmo", "5.56mm rounds (M16)"), false };
+		case ELootItem::PistolAmmo: return { TEXT("🔫"), LOCTEXT("PistolAmmo", "9mm rounds (pistol)"), false };
+		case ELootItem::ShotgunAmmo: return { TEXT("💥"), LOCTEXT("ShotgunAmmo", "12g shells (Remington)"), false };
+		case ELootItem::FlameFuel: return { TEXT("🔥"), LOCTEXT("FlameFuel", "Flamethrower fuel"), true };
+		case ELootItem::CryoAmmo: return { TEXT("❄️"), LOCTEXT("CryoAmmo", "Cryo coolant"), true };
+		case ELootItem::PlasmaAmmo: return { TEXT("⚡"), LOCTEXT("PlasmaAmmo", "Plasma cells"), true };
+		case ELootItem::Turret: return { TEXT("🎯"), LOCTEXT("Turret", "Combat auto-turret"), false };
+		case ELootItem::Barricade: return { TEXT("🧱"), LOCTEXT("Barricade", "Tactical armored barricade"), false };
+		case ELootItem::Mine: return { TEXT("💣"), LOCTEXT("Mine", "Anti-personnel mine"), false };
+		case ELootItem::BonusWeapon: return { TEXT("⭐"), LOCTEXT("BonusWeapon", "Weapon ({0})"), false };
+		default: return { TEXT("🧥"), LOCTEXT("BonusClothing", "Gear ({0})"), false };
 		}
 	}
 
@@ -43,7 +43,10 @@ namespace
 
 FText FLootEntry::GetLabel() const
 {
-	return FText::Format(LOCTEXT("EntryLabel", "{0} {1}: {2} {3}"), FText::FromString(Icon), Name, Count, Unit);
+	// Piece counts read "x2"; measured stacks (fuel, coolant, cells) read "50 units".
+	return Unit.IsEmpty()
+		? FText::Format(LOCTEXT("EntryLabelPieces", "{0} {1}: x{2}"), FText::FromString(Icon), Name, Count)
+		: FText::Format(LOCTEXT("EntryLabel", "{0} {1}: {2} {3}"), FText::FromString(Icon), Name, Count, Unit);
 }
 
 int32 FLootContents::GetCount(ELootItem Item) const
@@ -84,7 +87,7 @@ TArray<FLootEntry> FLootContents::GetItems() const
 		Entry.Item = Item;
 		Entry.Icon = Info.Icon;
 		Entry.Count = Count;
-		Entry.Unit = Info.bUnits ? LOCTEXT("UnitUnits", "ед.") : LOCTEXT("UnitPieces", "шт.");
+		Entry.Unit = Info.bUnits ? LOCTEXT("UnitUnits", "units") : FText::GetEmpty();
 		Entry.Name = Item == ELootItem::BonusWeapon ? FText::Format(Info.Name, FText::FromString(BonusWeaponId))
 			: (Item == ELootItem::BonusClothing ? FText::Format(Info.Name, FText::FromString(BonusClothingId)) : Info.Name);
 	}

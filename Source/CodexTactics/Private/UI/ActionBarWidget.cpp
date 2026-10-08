@@ -56,8 +56,8 @@ namespace
 	const FLinearColor SelectorButtonColor = ACodexTacticsHUD::GodotColor(0.2f, 0.22f, 0.27f);
 	const TCHAR* const SelectorIds[] = { TEXT("m16"), TEXT("pistol"), TEXT("grenade"), TEXT("knife") };
 
-	/** Godot role tags (second line of «КУБ\nКОМ» etc.; the shape names were placeholder art; slot 4 «СУС\nИВАН»). */
-	const TCHAR* const BarRoleTags[] = { TEXT("КОМ"), TEXT("ИНЖ"), TEXT("МЕД"), TEXT("ИВАН") };
+	/** Godot role tags (second line of the slot label; the shape names were placeholder art; slot 4 is Ivan). */
+	const TCHAR* const BarRoleTags[] = { TEXT("CMD"), TEXT("ENG"), TEXT("MED"), TEXT("IVAN") };
 
 	UProgressBar* BarMakeProgress(UWidgetTree* Tree, const FLinearColor& Fill, const FLinearColor& Back)
 	{
@@ -130,14 +130,14 @@ void UActionBarWidget::BuildDefaultLayout()
 		Button->SetToolTipText(Tooltip);
 	};
 	UTextBlock* InventoryText = MakeText(NAME_None, 10, BarTextColor);
-	InventoryText->SetText(LOCTEXT("Inventory", "ИНВ"));
+	InventoryText->SetText(LOCTEXT("Inventory", "INV"));
 	UButton* InventoryButton = MakeSlotButton(TEXT("BarInventoryButton"), BarGreen, 54.f, 56.f, InventoryText, Row);
-	InventoryButton->SetToolTipText(LOCTEXT("InventoryTip", "Личный инвентарь оперативника (передача: перетащите предмет на бойца или его портрет)"));
+	InventoryButton->SetToolTipText(LOCTEXT("InventoryTip", "Operative's personal inventory (hand-over: drag an item onto an operative or their portrait)"));
 	InventoryButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleInventory);
 
 	BarWeaponText = MakeText(TEXT("BarWeaponText"), 11, BarTextColor);
 	UButton* WeaponButton = MakeSlotButton(TEXT("BarWeaponButton"), BarBlue, 160.f, 56.f, BarWeaponText, Row);
-	WeaponButton->SetToolTipText(LOCTEXT("WeaponTip", "Выбор оружия (Клик — меню арсенала / режим стрельбы, [F] — огонь, [G] — граната)"));
+	WeaponButton->SetToolTipText(LOCTEXT("WeaponTip", "Weapon select (click: arsenal menu / fire mode, [F]: fire, [G]: grenade)"));
 	WeaponButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleWeaponSlot);
 
 	BarRelocateText = MakeText(TEXT("BarRelocateText"), 11, BarTextColor);
@@ -149,9 +149,9 @@ void UActionBarWidget::BuildDefaultLayout()
 	StanceButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleStance);
 
 	BarGuardText = MakeText(TEXT("BarGuardText"), 10, BarTextColor);
-	BarGuardText->SetText(LOCTEXT("Guard", "ОБОР"));
+	BarGuardText->SetText(LOCTEXT("Guard", "GUARD"));
 	GuardButton = MakeSlotButton(TEXT("BarGuardButton"), BarWhite * 0.6f, 54.f, 56.f, BarGuardText, Row);
-	GuardButton->SetToolTipText(LOCTEXT("GuardTip", "Зафиксировать позицию (Охрана фланга/тыла) [T]"));
+	GuardButton->SetToolTipText(LOCTEXT("GuardTip", "Hold position (guard flank / rear) [T]"));
 	GuardButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleGuard);
 
 	// Commander Mode switch (user request 2026-10-05: an on-screen toggle next to Ctrl + T).
@@ -169,7 +169,7 @@ void UActionBarWidget::BuildDefaultLayout()
 			*FirePostureRules::GetKeyHint(Posture))));
 		UButton* PostureButton = MakeSlotButton(NAME_None, BarWhite * 0.6f, 44.f, 56.f, PostureText, Row);
 		PostureButton->SetToolTipText(FText::Format(LOCTEXT("PostureTip",
-			"Режим огня: {0} [{1}] — выбранному бойцу (или группе, выбранной рамкой). Alt + [{1}] / Alt + клик — всему отряду"),
+			"Fire mode: {0} [{1}] for the selected operative (or the box-selected group). Alt + [{1}] / Alt + click: whole squad"),
 			FText::FromString(FirePostureRules::GetLabel(Posture)), FText::FromString(FirePostureRules::GetKeyHint(Posture))));
 		PostureButtons.Add(PostureButton);
 		PostureTexts.Add(PostureText);
@@ -229,7 +229,7 @@ void UActionBarWidget::BuildDefaultLayout()
 	UVerticalBox* SelectorColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("WeaponSelectorColumn"));
 	SelectorBody->SetContent(SelectorColumn);
 	UTextBlock* SelectorTitleText = MakeText(TEXT("WeaponSelectorTitle"), 13, SelectorTitle);
-	SelectorTitleText->SetText(FText::FromString(ACodexTacticsHUD::StripUnsupportedGlyphs(TEXT("⚔️ ВЫБОР ВООРУЖЕНИЯ"))));
+	SelectorTitleText->SetText(FText::FromString(ACodexTacticsHUD::StripUnsupportedGlyphs(TEXT("⚔️ WEAPON SELECT"))));
 	SelectorColumn->AddChildToVerticalBox(SelectorTitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	for (const TCHAR* Id : SelectorIds)
 	{
@@ -290,20 +290,20 @@ void UActionBarWidget::Refresh()
 	}
 	if (BarGuardText && GuardButton)
 	{
-		// Godot: «ЗАФИК» (green) while the leader guards its spot.
-		BarGuardText->SetText(Leader->bGuarding ? LOCTEXT("GuardOn", "ЗАФИК") : LOCTEXT("Guard", "ОБОР"));
+		// Godot: «HELD» (green) while the leader guards its spot.
+		BarGuardText->SetText(Leader->bGuarding ? LOCTEXT("GuardOn", "HELD") : LOCTEXT("Guard", "GUARD"));
 		GuardButton->SetBackgroundColor(Leader->bGuarding ? BarGreen : BarWhite * 0.6f);
-		GuardButton->SetToolTipText(Leader->bGuarding ? LOCTEXT("GuardOnTip", "Боец на точке обороны! Нажмите [T] для возврата в строй")
-			: LOCTEXT("GuardTip", "Зафиксировать позицию (Охрана фланга/тыла) [T]"));
+		GuardButton->SetToolTipText(Leader->bGuarding ? LOCTEXT("GuardOnTip", "Operative is on a guard point! Press [T] to rejoin the squad")
+			: LOCTEXT("GuardTip", "Hold position (guard flank / rear) [T]"));
 	}
 	if (BarAutonomyText && AutonomyButton)
 	{
 		const bool bAutonomy = Squad->IsAutonomousSquadCombat();
-		BarAutonomyText->SetText(bAutonomy ? LOCTEXT("AutoOn", "АВТО\nВКЛ") : LOCTEXT("AutoOff", "АВТО\nВЫКЛ"));
+		BarAutonomyText->SetText(bAutonomy ? LOCTEXT("AutoOn", "AUTO\nON") : LOCTEXT("AutoOff", "AUTO\nOFF"));
 		AutonomyButton->SetBackgroundColor(bAutonomy ? BarGreen : BarWhite * 0.6f);
 		AutonomyButton->SetToolTipText(bAutonomy
-			? LOCTEXT("AutoOnTip", "Автономия ВКЛ: бойцы сами ведут бой в 7 м от точки приказа. Клик — ручное управление [Ctrl+T]")
-			: LOCTEXT("AutoOffTip", "Автономия ВЫКЛ: ручное управление. Клик — бойцы сами ведут бой у точки приказа [Ctrl+T]"));
+			? LOCTEXT("AutoOnTip", "Autonomy ON: operatives fight on their own within 7 m of the order point. Click: manual control [Ctrl+T]")
+			: LOCTEXT("AutoOffTip", "Autonomy OFF: manual control. Click: operatives fight on their own at the order point [Ctrl+T]"));
 	}
 	if (PostureButtons.Num() == 3)
 	{
@@ -345,20 +345,20 @@ void UActionBarWidget::Refresh()
 		const UTurnBasedCombatSubsystem* BarTurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
 		if (BarTurnBased && BarTurnBased->IsActive())
 		{
-			// Godot: «🟢 ХОД» (move mode, green) / «⚪ ХОД» (attack mode).
-			BarRelocateText->SetText(LOCTEXT("MoveMode", "ХОД"));
+			// Godot: «🟢 MOVE» (move mode, green) / «⚪ MOVE» (attack mode).
+			BarRelocateText->SetText(LOCTEXT("MoveMode", "MOVE"));
 			BarRelocateText->SetColorAndOpacity(FSlateColor(BarTurnBased->IsAttackMode() ? FLinearColor::White : FLinearColor(0.4f, 1.f, 0.4f)));
 		}
 		else
 		{
-			BarRelocateText->SetText(bActive ? LOCTEXT("RelocateActive", "АКТИВ") : LOCTEXT("Relocate", "ПЕР"));
+			BarRelocateText->SetText(bActive ? LOCTEXT("RelocateActive", "ACTIVE") : LOCTEXT("Relocate", "MOVE"));
 			BarRelocateText->SetColorAndOpacity(FSlateColor(BarTextColor));
 		}
 	}
 	if (BarStanceText)
 	{
 		const EOperativeStance Stance = Leader->GetStance();
-		BarStanceText->SetText(Stance == EOperativeStance::Prone ? LOCTEXT("P", "Л") : (Stance == EOperativeStance::Crouching ? LOCTEXT("C", "П") : LOCTEXT("S", "С")));
+		BarStanceText->SetText(Stance == EOperativeStance::Prone ? LOCTEXT("P", "P") : (Stance == EOperativeStance::Crouching ? LOCTEXT("C", "C") : LOCTEXT("S", "S")));
 	}
 
 	TArray<AOperativeCharacter*> Members = Squad->GetMembers();
@@ -380,15 +380,15 @@ void UActionBarWidget::Refresh()
 		// Godot _update_tactical_command_bar: the shield tag, a green frame in barricade cover, blue while holding.
 		const bool bInCover = Member->IsInBarricadeCover();
 		const bool bHolding = Member->bGuarding || (Squad->IsSoloMode() && !bLeader);
-		// Per-operative fire posture letter П / О / А (user request 2026-10-06), then the cover / hold mark.
+		// Per-operative fire posture letter P / D / A (user request 2026-10-06), then the cover / hold mark.
 		SquadSlot.Label->SetText(FText::FromString(FString::Printf(TEXT("%s %s%s"), *GetSlotText(Index).ToString(),
 			*FirePostureRules::GetLetter(Squad->GetEffectivePosture(Member)), bInCover || bHolding ? TEXT(" ●") : TEXT(""))));
 		SquadSlot.Button->SetToolTipText(Member->bGuarding
-			? LOCTEXT("SlotGuardTip", "ТОЧКА ОБОРОНЫ: Позиция зафиксирована [T]")
-			: bHolding ? LOCTEXT("SlotHoldTip", "ОБОРОНА: Боец закрепился в укрытии в режиме соло [B]")
-			: bInCover ? LOCTEXT("SlotCoverTip", "В укрытии за баррикадой (-35% входящего урона, +15% меткости)")
-			: bLeader && Squad->IsSoloMode() ? LOCTEXT("SlotSoloTip", "СОЛО-РАЗВЕДКА [B]")
-			: FText::Format(LOCTEXT("SlotSelectTip", "Выбрать бойца [{0}] · режим огня: {1}"), Index + 1,
+			? LOCTEXT("SlotGuardTip", "GUARD POINT: position held [T]")
+			: bHolding ? LOCTEXT("SlotHoldTip", "HOLDING: operative dug in at cover in solo mode [B]")
+			: bInCover ? LOCTEXT("SlotCoverTip", "In cover behind a barricade (-35% incoming damage, +15% accuracy)")
+			: bLeader && Squad->IsSoloMode() ? LOCTEXT("SlotSoloTip", "SOLO SCOUTING [B]")
+			: FText::Format(LOCTEXT("SlotSelectTip", "Select operative [{0}] · fire mode: {1}"), Index + 1,
 				FText::FromString(FirePostureRules::GetLabel(Squad->GetEffectivePosture(Member)))));
 		SquadSlot.Button->SetBackgroundColor(bLeader ? BarLeaderOrange : bHolding ? FLinearColor::FromSRGBColor(FColor(46, 89, 166)) : BarOrange);
 		SquadSlot.Frame->SetBrushColor(bInCover ? FLinearColor::FromSRGBColor(FColor(77, 255, 128)) : bLeader ? BarLeaderBorder
@@ -409,19 +409,19 @@ FText UActionBarWidget::GetWeaponText() const
 	}
 	if (Leader->bIsReloading)
 	{
-		return LOCTEXT("Reloading", "Перезарядка...\n[G] Граната");
+		return LOCTEXT("Reloading", "Reloading...\n[G] Grenade");
 	}
 	const FString Id = Leader->CurrentWeapon ? Leader->CurrentWeapon->WeaponId : FString();
 	if (Id == TEXT("grenade"))
 	{
-		return FText::Format(LOCTEXT("GrenadeSlot", "Граната [G]\n[{0} шт.] Урон: {1}"), Leader->GrenadesCount, FMath::FloorToInt(Leader->GrenadeDamage));
+		return FText::Format(LOCTEXT("GrenadeSlot", "Grenade [G]\n[x{0}] Dmg: {1}"), Leader->GrenadesCount, FMath::FloorToInt(Leader->GrenadeDamage));
 	}
 	if (Id == TEXT("knife"))
 	{
-		return LOCTEXT("KnifeSlot", "Нож\n[Ближний бой] | [G]");
+		return LOCTEXT("KnifeSlot", "Knife\n[Melee] | [G]");
 	}
 	const FText WeaponName = Leader->CurrentWeapon && !Leader->CurrentWeapon->WeaponName.IsEmpty() ? Leader->CurrentWeapon->WeaponName : LOCTEXT("M16", "M16");
-	return FText::Format(LOCTEXT("Weapon", "{0}\n[{1}/{2}] | [G] Граната"), WeaponName, Leader->CurrentClip, Leader->ReserveAmmo);
+	return FText::Format(LOCTEXT("Weapon", "{0}\n[{1}/{2}] | [G] Grenade"), WeaponName, Leader->CurrentClip, Leader->ReserveAmmo);
 }
 
 FText UActionBarWidget::GetSlotText(int32 Index) const
@@ -429,7 +429,7 @@ FText UActionBarWidget::GetSlotText(int32 Index) const
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	const int32 MemberCount = Squad ? Squad->GetMembers().Num() : 0;
 	const TCHAR* Tag = BarRoleTags[FMath::Clamp(Index, 0, 3)];
-	return FText::FromString(FString::Printf(TEXT("[%d] %s"), Index + 1, Index < MemberCount ? Tag : (Index == 3 ? TEXT("РЕЗ") : Tag)));
+	return FText::FromString(FString::Printf(TEXT("[%d] %s"), Index + 1, Index < MemberCount ? Tag : (Index == 3 ? TEXT("RES") : Tag)));
 }
 
 FText UActionBarWidget::GetSelectorText(int32 Index) const
@@ -441,16 +441,16 @@ FText UActionBarWidget::GetSelectorText(int32 Index) const
 		return FText::GetEmpty();
 	}
 	const FString Id = SelectorIds[Index];
-	const FString Active = Leader->CurrentWeapon && Leader->CurrentWeapon->WeaponId == Id ? TEXT(" ◀ В РУКАХ") : TEXT("");
+	const FString Active = Leader->CurrentWeapon && Leader->CurrentWeapon->WeaponId == Id ? TEXT(" ◀ EQUIPPED") : TEXT("");
 	const FWeaponAmmoState Ammo = Leader->GetAmmoState(Id);
 	FString Line;
 	switch (Index)
 	{
-	case 0: Line = FString::Printf(TEXT("🔫 [1] Автомат M16 [%d / %d]%s"), Ammo.Clip, Ammo.Reserve, *Active); break;
-	case 1: Line = FString::Printf(TEXT("🔫 [2] Пистолет Beretta [%d / %d]%s"), Ammo.Clip, Ammo.Reserve, *Active); break;
-	case 2: Line = FString::Printf(TEXT("🧨 [3] Граната [%d шт. | %d dmg | R:%.1fm]%s"), Leader->GrenadesCount,
+	case 0: Line = FString::Printf(TEXT("🔫 [1] M16 Rifle [%d / %d]%s"), Ammo.Clip, Ammo.Reserve, *Active); break;
+	case 1: Line = FString::Printf(TEXT("🔫 [2] Beretta Pistol [%d / %d]%s"), Ammo.Clip, Ammo.Reserve, *Active); break;
+	case 2: Line = FString::Printf(TEXT("🧨 [3] Grenade [x%d | %d dmg | R:%.1fm]%s"), Leader->GrenadesCount,
 		FMath::FloorToInt(Leader->GrenadeDamage), Leader->GrenadeEffectRadius / 100.f, *Active); break;
-	default: Line = FString::Printf(TEXT("🔪 [4] Тактический нож [Ближний бой]%s"), *Active); break;
+	default: Line = FString::Printf(TEXT("🔪 [4] Tactical Knife [Melee]%s"), *Active); break;
 	}
 	return FText::FromString(ACodexTacticsHUD::StripUnsupportedGlyphs(Line));
 }
@@ -509,7 +509,7 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 	{
 		const FText Name = Leader->CurrentWeapon ? Leader->CurrentWeapon->WeaponName : FText::FromString(WeaponId);
 		const int32 Damage = Leader->CurrentWeapon ? FMath::FloorToInt(Leader->CurrentWeapon->BaseDamage) : 0;
-		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Equipped", "🔫 Экипировано: {0} (Урон: {1})"), Name, Damage));
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Equipped", "🔫 Equipped: {0} (Damage: {1})"), Name, Damage));
 	}
 	// Godot: the grenade starts the throw aim (outside turn-based combat the grid does not take the click).
 	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
@@ -643,10 +643,10 @@ void UActionBarWidget::HandleSelectKnife()
 
 void UActionBarWidget::HandleRelocate()
 {
-	// Godot _on_relocate_slot_clicked in the turn-based fight: «ХОД» leaves the attack mode (nothing else there).
+	// Godot _on_relocate_slot_clicked in the turn-based fight: «MOVE» leaves the attack mode (nothing else there).
 	if (UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>(); TurnBased && TurnBased->IsActive())
 	{
-		TurnBased->ExitAttackMode(TEXT("🟢 Режим перемещения активен (отображается только зелёное поле)."));
+		TurnBased->ExitAttackMode(TEXT("🟢 Move mode active (only the green field is shown)."));
 		return;
 	}
 	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))

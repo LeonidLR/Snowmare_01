@@ -10,10 +10,10 @@ class UTextBlock;
 
 /**
  * Game-phase banners, refreshed every frame from the game flow:
- * - pause banner (top centre): «⏱️ РЕЖИМ ПРИКАЗОВ | Зарядов в волне: N/3 | Время планирования: T с [ПРОБЕЛ — исполнить]»;
- * - combat banner (below it): «⏱ ПОДГОТОВКА К БОЮ: NN сек | [ПРОБЕЛ] — НИЖНЕЕ МЕНЮ» + «⚔️ Начать бой» during the
- *   preparation, «⚔️ ВОЛНА N | ВРАГОВ ОСТАЛОСЬ: M» during a wave;
- * - pre-combat cutscene: letterbox bars, card «[КАТ-СЦЕНА: ПРОРЫВ В КАРАНТИННЫЙ ДВОР]», countdown; a click skips it.
+ * - pause banner (top centre): "ORDER MODE | Charges per wave: N/3 | Planning time: T s [SPACE to execute]";
+ * - combat banner (below it): "BATTLE PREPARATION: NN sec | [SPACE] for the bottom menu" + "Start Battle" during the
+ *   preparation, "WAVE N | ENEMIES LEFT: M" during a wave;
+ * - pre-combat cutscene: letterbox bars, card "[CUTSCENE: BREAKTHROUGH INTO THE QUARANTINE COURTYARD]", countdown; a click skips it.
  * Godot reference: movements_demo.tscn UI/PauseBanner, UI/CombatBanner, UI/CutscenePanel; main.gd _process banner
  * texts, _update_pause_banner_ui, _end_cutscene_and_start_pause.
  */

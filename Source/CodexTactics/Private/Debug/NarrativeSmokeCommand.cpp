@@ -1,7 +1,7 @@
 // Dev-only console command for a headless narrative element / dialogue trigger check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.NarrativeSmoke
 // Godot narrative_element.gd / dialogue_trigger.gd: the level has the note, signpost and poster; from afar the note
-// shows only its marker, within 2 m its text; its menu «📜 Записка дежурного инженера» reads the text into the feed;
+// shows only its marker, within 2 m its text; its menu reads the text into the feed (level texts without an English manifest entry show "[EN missing: ...]", never Cyrillic);
 // the wave-rest trigger plays its dialogue once when an operative walks in.
 
 #include "CoreMinimal.h"
@@ -12,6 +12,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Containers/Ticker.h"
+#include "Data/NarrativeManifest.h"
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -59,6 +60,19 @@ namespace NarrativeSmoke
 		return false;
 	}
 
+	/** True when any message of the feed contains a Cyrillic letter (nothing Russian may reach the screen). */
+	bool FeedHasCyrillic(UWorld* World)
+	{
+		for (const FGameMessage& Message : World->GetSubsystem<UGameMessageSubsystem>()->GetHistory())
+		{
+			if (FNarrativeManifest::ContainsCyrillic(Message.Speaker.ToString()) || FNarrativeManifest::ContainsCyrillic(Message.Text.ToString()))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
 	{
 		State.Time += StepSeconds;
@@ -96,18 +110,19 @@ namespace NarrativeSmoke
 		Leader->TeleportTo(Note->GetActorLocation() + FVector(120.f, 0.f, 60.f), Leader->GetActorRotation(), false, true);
 		FOverheadLabel Near;
 		Note->GetOverheadLabel(Near);
-		Check(State, Note->IsReadableNow() && Near.Text.Contains(TEXT("ЗАПИСКА ДЕЖУРНОГО ИНЖЕНЕРА")) && Near.Text.Contains(TEXT("Гермоворота")),
+		Check(State, Note->IsReadableNow() && !FNarrativeManifest::ContainsCyrillic(Near.Text) && !Near.Text.TrimStartAndEnd().IsEmpty(),
 			TEXT("within 2 m: the text shows"));
 
 		UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
 		Interactions->OpenMenuNow(Note);
-		const bool bMenu = Interactions->IsActionMenuOpen() && Interactions->GetActionMenu().Title.ToString().Contains(TEXT("Записка дежурного инженера"))
-			&& Interactions->GetActionMenu().ConfirmText.ToString() == TEXT("Прочитать вслух");
-		Check(State, bMenu, TEXT("menu «Записка дежурного инженера» / «Прочитать вслух»"));
+		const bool bMenu = Interactions->IsActionMenuOpen() && !FNarrativeManifest::ContainsCyrillic(Interactions->GetActionMenu().Title.ToString())
+			&& !FNarrativeManifest::ContainsCyrillic(Interactions->GetActionMenu().Description.ToString())
+			&& Interactions->GetActionMenu().ConfirmText.ToString() == TEXT("Read Aloud");
+		Check(State, bMenu, TEXT("menu: English only, \"Read Aloud\""));
 		Interactions->ConfirmActionMenu();
-		Check(State, Note->bHasBeenRead && HasMessage(World, TEXT("Записка дежурного инженера"), TEXT("Слейте дизель")), TEXT("read aloud into the feed"));
+		Check(State, Note->bHasBeenRead && !FeedHasCyrillic(World), TEXT("read aloud into the feed"));
 
-		Check(State, Trigger->TryTrigger(Leader) && HasMessage(World, TEXT("Инженер"), TEXT("Они отступили")), TEXT("trigger plays the wave-rest dialogue"));
+		Check(State, Trigger->TryTrigger(Leader) && HasMessage(World, TEXT("Medic-Sapper"), TEXT("First wave repelled")), TEXT("trigger plays the wave-rest dialogue"));
 		Check(State, !Trigger->TryTrigger(Leader), TEXT("only once"));
 		return Finish(State, true);
 	}

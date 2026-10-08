@@ -78,7 +78,7 @@ bool FPostureAggressiveFiresOnSightTest::RunTest(const FString&)
 	const FFirePostureConfig Config;
 	TestTrue(TEXT("Fires unprovoked"), MayAutoFire(ESquadFirePosture::Aggressive, false, false, Config));
 	TestEqual(TEXT("Cycle"), Next(Next(Next(ESquadFirePosture::Aggressive))), ESquadFirePosture::Aggressive);
-	TestEqual(TEXT("Label"), GetLabel(ESquadFirePosture::Aggressive), FString(TEXT("АГРЕССИВНЫЙ")));
+	TestEqual(TEXT("Label"), GetLabel(ESquadFirePosture::Aggressive), FString(TEXT("AGGRESSIVE")));
 	return true;
 }
 
@@ -141,7 +141,7 @@ bool FPostureIndicatorTest::RunTest(const FString&)
 	TestFalse(TEXT("Mixed group: none lit"), GetCommonPosture({ ESquadFirePosture::Defensive, ESquadFirePosture::Passive }, Common));
 	TestFalse(TEXT("Nobody"), GetCommonPosture({}, Common));
 	TestEqual(TEXT("Letters"), GetLetter(ESquadFirePosture::Passive) + GetLetter(ESquadFirePosture::Defensive) + GetLetter(ESquadFirePosture::Aggressive),
-		FString(TEXT("ПОА")));
+		FString(TEXT("PDA")));
 	return true;
 }
 

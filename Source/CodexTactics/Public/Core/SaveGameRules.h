@@ -25,19 +25,19 @@ struct CODEXTACTICS_API FSaveSlotInfo
  */
 namespace SaveGameRules
 {
-	/** Godot sanitize_slot_name: trims, replaces \ / : * ? " < > | with _, strips leading / trailing dots; empty -> «Леонид_01». */
+	/** Godot sanitize_slot_name: trims, replaces \ / : * ? " < > | with _, strips leading / trailing dots; empty -> "Leonid_01". */
 	CODEXTACTICS_API FString SanitizeSlotName(const FString& Raw);
 
-	/** "autosave" if the slot name contains "auto", "quicksave" for "quick" / «быстр», else "manual". */
+	/** "autosave" if the slot name contains "auto", "quicksave" for "quick" (or the legacy Russian "быстр"), else "manual". */
 	CODEXTACTICS_API FString GetSaveType(const FString& SlotName);
 
 	/** Godot suggest_next_slot_name: Prefix_NN with NN = highest existing Prefix_NN + 1 (two digits). */
-	CODEXTACTICS_API FString SuggestNextSlotName(const TArray<FString>& ExistingSlots, const FString& Prefix = TEXT("Леонид"));
+	CODEXTACTICS_API FString SuggestNextSlotName(const TArray<FString>& ExistingSlots, const FString& Prefix = TEXT("Leonid"));
 
-	/** Godot compute_current_stage_name (wave defence / preparation / quest chain step, «[Соло]»). */
+	/** Godot compute_current_stage_name (wave defence / preparation / quest chain step, "[Solo]"). */
 	CODEXTACTICS_API FString GetStageName(const FQuestChainState& Quests, bool bGateOpen, bool bWaveActive, bool bPreparation,
 		int32 WaveIndex, bool bSoloMode);
 
-	/** Godot compute_squad_summary: «Бойцов: alive/total | HP: avg%» (average over everyone, the dead count as 0). */
+	/** Godot compute_squad_summary: "Operatives: alive/total | HP: avg%" (average over everyone, the dead count as 0). */
 	CODEXTACTICS_API FString GetSquadSummary(const TArray<TPair<float, float>>& HealthAndMax);
 }

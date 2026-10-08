@@ -55,6 +55,6 @@ namespace ProgressionRules
 	/** EXP every squad member gets for a cleared wave: game_balance_config exp_reward_wave_complete (default 40). */
 	CODEXTACTICS_API int32 WaveClearReward(const UGodotBalanceAsset* Config);
 
-	/** Profile line «Срез: -N%»: fortitude x 1.5, clamped to [0, 50]. */
+	/** Profile line "Shred: -N%": fortitude x 1.5, clamped to [0, 50]. */
 	CODEXTACTICS_API int32 FortitudeCutPercent(float Fortitude);
 }

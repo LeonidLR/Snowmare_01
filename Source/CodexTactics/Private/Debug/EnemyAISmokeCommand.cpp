@@ -1,7 +1,7 @@
 // Dev-only console command for a headless enemy AI check on L_MovementTest (exploration, so the squad holds fire):
 //   Scripts/smoke.ps1 -Command CodexTactics.EnemyAISmoke
 // Godot enemy_base.gd / enemy_frost_*.gd: per-type affinities / armor (brute kinetic 0.25, armor 0.75); frost halves
-// the speed; a hound near a burning barrel flees («СТРАХ ОГНЯ»); a hound picks a close turret over the squad; a
+// the speed; a hound near a burning barrel flees («FEAR OF FIRE»); a hound picks a close turret over the squad; a
 // barricade in the way gets smashed; a spitter with a clear line shoots the commander.
 
 #include "CoreMinimal.h"
@@ -125,7 +125,7 @@ namespace EnemyAISmoke
 				return true;
 			}
 			const float Distance = FVector::Dist2D(State.Hound->GetActorLocation(), State.Barrel->GetActorLocation());
-			Check(State, Distance > State.StartDistance + 150.f && Floating->HasShown(TEXT("СТРАХ ОГНЯ")),
+			Check(State, Distance > State.StartDistance + 150.f && Floating->HasShown(TEXT("FEAR OF FIRE")),
 				FString::Printf(TEXT("hound flees the fire (%.0f -> %.0f cm)"), State.StartDistance, Distance));
 			State.Barrel->Extinguish();
 			State.Hound->Destroy();
@@ -205,7 +205,7 @@ namespace EnemyAISmoke
 			{
 				bAnyHit |= Member->HealthComponent->GetCurrentHealth() < Member->HealthComponent->GetMaxHealth();
 			}
-			Check(State, bAnyHit || Floating->HasShown(TEXT("УКЛОНЕНИЕ")), TEXT("spitter with a clear line shoots the squad"));
+			Check(State, bAnyHit || Floating->HasShown(TEXT("DODGE")), TEXT("spitter with a clear line shoots the squad"));
 
 			// Frostbitten blow: the leader is shoved away and flashes red; a hit on the enemy flashes it.
 			UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>();

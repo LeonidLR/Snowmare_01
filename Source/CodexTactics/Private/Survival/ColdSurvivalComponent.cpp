@@ -137,7 +137,7 @@ void UColdSurvivalComponent::StepCold(float DeltaSeconds)
 			const bool bCombat = Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat;
 			const float Multiplier = bCombat ? Config.CombatFreezeDamageMultiplier : 1.f;
 			const float FreezeDamage = Config.FreezeDamagePerSecond * Multiplier * DeltaSeconds;
-			Health->ApplyDirectHealthLoss(FreezeDamage, TEXT("Холод"));
+			Health->ApplyDirectHealthLoss(FreezeDamage, TEXT("Cold"));
 			ColdDamageTaken += FreezeDamage;
 			ExtremeColdTimeSec += DeltaSeconds;
 		}
@@ -151,7 +151,7 @@ void UColdSurvivalComponent::StepCold(float DeltaSeconds)
 		bFrostbitten = true;
 		Owner->SetStance(EOperativeStance::Prone);
 		// Godot floats these over the operative (no radio line).
-		UFloatingTextSubsystem::SpawnAboveOperative(Owner, TEXT("❄️ ОБМОРОЖЕНИЕ! ПАДАЕТ НА СНЕГ!"), FLinearColor(0.4f, 0.8f, 1.f));
+		UFloatingTextSubsystem::SpawnAboveOperative(Owner, TEXT("❄️ FROSTBITE! COLLAPSING IN THE SNOW!"), FLinearColor(0.4f, 0.8f, 1.f));
 	}
 	else if (bFrostbitten
 		&& (NewTier == EColdTier::Normal
@@ -165,7 +165,7 @@ void UColdSurvivalComponent::StepCold(float DeltaSeconds)
 	bWeaponFrozen = ColdRules::UpdateWeaponFrozen(Config, bWeaponFrozen, Cold, Environment.bWarm);
 	if (bWeaponFrozen != bWasFrozen)
 	{
-		UFloatingTextSubsystem::SpawnAboveOperative(Owner, bWeaponFrozen ? TEXT("🥶 ОРУЖИЕ ЗАМЁРЗЛО!") : TEXT("🔥 ОРУЖИЕ ОТОГРЕЛОСЬ!"),
+		UFloatingTextSubsystem::SpawnAboveOperative(Owner, bWeaponFrozen ? TEXT("🥶 WEAPON FROZEN!") : TEXT("🔥 WEAPON THAWED!"),
 			bWeaponFrozen ? FLinearColor(0.4f, 0.85f, 1.f) : FLinearColor(1.f, 0.6f, 0.2f));
 	}
 

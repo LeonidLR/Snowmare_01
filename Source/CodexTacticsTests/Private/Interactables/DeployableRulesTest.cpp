@@ -23,7 +23,7 @@ bool FDefusalChanceTest::RunTest(const FString&)
 	const FDefusalChance Retry = CalculateDefusal(EOperativeRole::Engineer, EOperativeStance::Crouching, 30.f, 0.f, 1, false);
 	TestEqual(TEXT("Engineer retry"), Retry.Chance, 45.f, 0.001f);
 	TestTrue(TEXT("Retry is dangerous"), Retry.bDangerous);
-	TestEqual(TEXT("Stance names"), GetDefusalStanceName(EOperativeStance::Crouching).ToString(), FString(TEXT("Присев")));
+	TestEqual(TEXT("Stance names"), GetDefusalStanceName(EOperativeStance::Crouching).ToString(), FString(TEXT("Crouched")));
 	return true;
 }
 

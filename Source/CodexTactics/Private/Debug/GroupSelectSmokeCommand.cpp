@@ -96,7 +96,7 @@ namespace GroupSelectSmoke
 			}
 			const UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>();
 			Check(State, Messages && !Messages->GetHistory().IsEmpty()
-				&& Messages->GetHistory().Last().Text.ToString().Contains(TEXT("Группа (3 бойцов)")), TEXT("group order line"));
+				&& Messages->GetHistory().Last().Text.ToString().Contains(TEXT("Group (3 operatives)")), TEXT("group order line"));
 			State.Targets.Reset();
 			FVector Average = FVector::ZeroVector;
 			for (int32 Index : { 1, 0, 2 })

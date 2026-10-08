@@ -47,6 +47,6 @@ struct CODEXTACTICS_API FQuestChainState
 	/** Applies an interaction with an object of the given type. */
 	FQuestInteractionResult Interact(EInteractableType Type);
 
-	/** Objective banner text for the current state (without the «ЦЕЛЬ: » prefix). */
+	/** Objective banner text for the current state (without the "OBJECTIVE: " prefix). */
 	FText GetObjective() const;
 };

@@ -1,7 +1,7 @@
 // Dev-only console command for a headless weapon selector check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.WeaponSelectorSmoke
 // 1. the squad carries the Godot arsenal (M16 in hands, pistol, grenade, knife); 2. the weapon slot opens
-// «ВЫБОР ВООРУЖЕНИЯ» with the M16 line marked «В РУКАХ»; 3. the pistol / knife are taken (slot text follows, the
+// «ВЫБОР ВООРУЖЕНИЯ» with the M16 line marked «EQUIPPED»; 3. the pistol / knife are taken (slot text follows, the
 // selector closes), the grenade starts the throw aim (cancel: the rifle comes back); 4. in turn-based combat the selector
 // switches the active operative's weapon (Godot main.gd _select_weapon_from_selector, switch_active_unit_weapon_to).
 
@@ -84,10 +84,10 @@ namespace WeaponSelectorSmoke
 		Bar->ToggleWeaponSelector();
 		Check(State, Bar->IsWeaponSelectorOpen(), TEXT("weapon slot opens the selector"));
 		const FString M16Line = Bar->GetSelectorText(0).ToString();
-		Check(State, M16Line.Contains(TEXT("[1] Автомат M16 [30 / 60]")) && M16Line.Contains(TEXT("В РУКАХ")), M16Line);
+		Check(State, M16Line.Contains(TEXT("[1] M16 Rifle [30 / 60]")) && M16Line.Contains(TEXT("EQUIPPED")), M16Line);
 		const FString PistolLine = Bar->GetSelectorText(1).ToString();
-		Check(State, PistolLine.Contains(TEXT("[2] Пистолет Beretta")) && !PistolLine.Contains(TEXT("В РУКАХ")), PistolLine);
-		Check(State, Bar->GetSelectorText(2).ToString().Contains(TEXT("[3] Граната [2 шт. | 85 dmg | R:4.0m]")), Bar->GetSelectorText(2).ToString());
+		Check(State, PistolLine.Contains(TEXT("[2] Beretta Pistol")) && !PistolLine.Contains(TEXT("EQUIPPED")), PistolLine);
+		Check(State, Bar->GetSelectorText(2).ToString().Contains(TEXT("[3] Grenade [x2 | 85 dmg | R:4.0m]")), Bar->GetSelectorText(2).ToString());
 
 		Check(State, Bar->SelectWeapon(TEXT("pistol")) && WeaponId(Leader) == TEXT("pistol"), TEXT("pistol taken"));
 		Check(State, !Bar->IsWeaponSelectorOpen(), TEXT("selector closes after the choice"));
@@ -98,7 +98,7 @@ namespace WeaponSelectorSmoke
 		Check(State, !Grenades->IsAiming() && WeaponId(Leader) == TEXT("m16"), TEXT("cancelled aim: the rifle is back"));
 		const bool bKnife = Bar->SelectWeapon(TEXT("knife"));
 		const FString KnifeSlot = Bar->GetWeaponText().ToString();
-		Check(State, bKnife && KnifeSlot.StartsWith(TEXT("Нож")), FString::Printf(TEXT("knife taken, slot: %s"), *KnifeSlot.Replace(TEXT("\n"), TEXT(" / "))));
+		Check(State, bKnife && KnifeSlot.StartsWith(TEXT("Knife")), FString::Printf(TEXT("knife taken, slot: %s"), *KnifeSlot.Replace(TEXT("\n"), TEXT(" / "))));
 		Check(State, !Leader->UsesAmmo(), TEXT("the knife uses no ammo"));
 
 		// Turn-based: the selector goes through the combat for the active operative.

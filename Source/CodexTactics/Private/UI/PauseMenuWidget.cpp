@@ -70,8 +70,8 @@ void UPauseMenuWidget::BuildDefaultLayout()
 		Block->SetText(PauseClean(Text));
 		return Block;
 	};
-	Column->AddChildToVerticalBox(MakeText(20, PauseTitle, TEXT("⏸️ МЕНЮ ПАУЗЫ")))->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
-	Column->AddChildToVerticalBox(MakeText(12, PauseSubtitle, TEXT("Управление сессией и прогрессом отряда")))->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+	Column->AddChildToVerticalBox(MakeText(20, PauseTitle, TEXT("⏸️ PAUSE MENU")))->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+	Column->AddChildToVerticalBox(MakeText(12, PauseSubtitle, TEXT("Session and squad progress")))->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
 
 	auto MakeButton = [this, Column, &MakeText](const FString& Label, const FName& Name)
 	{
@@ -86,13 +86,13 @@ void UPauseMenuWidget::BuildDefaultLayout()
 		Column->AddChildToVerticalBox(Size)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 		return Button;
 	};
-	MakeButton(TEXT("▶️ Продолжить игру"), TEXT("BtnResume"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::HandleResume);
-	MakeButton(TEXT("💾 Сохранить игру"), TEXT("BtnSave"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::HandleSave);
-	LoadButton = MakeButton(TEXT("📂 Загрузить игру"), TEXT("BtnLoad"));
+	MakeButton(TEXT("▶️ Resume game"), TEXT("BtnResume"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::HandleResume);
+	MakeButton(TEXT("💾 Save game"), TEXT("BtnSave"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::HandleSave);
+	LoadButton = MakeButton(TEXT("📂 Load game"), TEXT("BtnLoad"));
 	LoadButton->OnClicked.AddDynamic(this, &UPauseMenuWidget::HandleLoad);
-	MakeButton(TEXT("🏠 В главное меню"), TEXT("BtnMainMenu"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::HandleMainMenu);
-	MakeButton(TEXT("❌ Выход из игры"), TEXT("BtnQuit"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::HandleQuit);
-	StatusText = MakeText(11, PauseStatus, TEXT("Готово"));
+	MakeButton(TEXT("🏠 Main menu"), TEXT("BtnMainMenu"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::HandleMainMenu);
+	MakeButton(TEXT("❌ Quit game"), TEXT("BtnQuit"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::HandleQuit);
+	StatusText = MakeText(11, PauseStatus, TEXT("Ready"));
 	Column->AddChildToVerticalBox(StatusText)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
 }
 
@@ -116,9 +116,9 @@ FText UPauseMenuWidget::GetStatusText() const
 	const TArray<FSaveSlotInfo> All = Saves ? Saves->GetAllSaves() : TArray<FSaveSlotInfo>();
 	if (All.IsEmpty())
 	{
-		return LOCTEXT("NoSaves", "Нет сохраненных данных");
+		return LOCTEXT("NoSaves", "No saved data");
 	}
-	return FText::FromString(FString::Printf(TEXT("Слот: %s (%s, %s)"), *All[0].SlotName, *All[0].StageName,
+	return FText::FromString(FString::Printf(TEXT("Slot: %s (%s, %s)"), *All[0].SlotName, *All[0].StageName,
 		All[0].DateTime.IsEmpty() ? TEXT("—") : *All[0].DateTime));
 }
 

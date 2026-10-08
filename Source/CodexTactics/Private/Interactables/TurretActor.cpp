@@ -30,7 +30,7 @@ ATurretActor::ATurretActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	DeployableType = EDeployableType::Turret;
-	DisplayName = LOCTEXT("Name", "Автоматическая турель");
+	DisplayName = LOCTEXT("Name", "Automated Turret");
 	TrapDamage = 90.f; // Godot turret.gd trap_damage
 
 	// Godot ghost: cylinder r 0.4-0.5 m, 0.8 m high.
@@ -131,7 +131,7 @@ void ATurretActor::Tick(float DeltaSeconds)
 			const UHealthComponent* EnemyHealth = It->FindComponentByClass<UHealthComponent>();
 			if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist(GetActorLocation(), It->GetActorLocation()) <= TrapContactDistance)
 			{
-				DetonateTrap(false, LOCTEXT("EnemyContact", "Контакт с противником"));
+				DetonateTrap(false, LOCTEXT("EnemyContact", "Enemy contact"));
 				break;
 			}
 		}
@@ -205,7 +205,7 @@ void ATurretActor::Fire(AActor* Target, float Cover, const FVector& Aim)
 		Spec.Amount = Damage * Cover;
 		Spec.DamageType = EDamageType::Kinetic;
 		Spec.ArmorPenetration = 0.20f;
-		Spec.AttackerSource = TEXT("Турель");
+		Spec.AttackerSource = TEXT("Turret");
 		TargetHealth->TakeDamage(Spec);
 	}
 	// Godot turret.gd _spawn_muzzle_tracer: green tracer from 0.7 m above the turret, short flash.
@@ -231,8 +231,8 @@ void ATurretActor::ExecuteAction(AOperativeCharacter* User)
 		User->StopOperative();
 		User->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 		User->SetStance(EOperativeStance::Crouching);
-		UFloatingTextSubsystem::SpawnAboveOperative(User, TEXT("🔧 РЕМОНТ ТУРЕЛИ..."), FLinearColor(0.2f, 0.9f, 0.4f));
-		PostLine(User->DisplayName, FText::Format(LOCTEXT("Repairing", "🔧 {0}: «Чистим контакты и восстанавливаем сервоприводы турели ({1}с)...»"),
+		UFloatingTextSubsystem::SpawnAboveOperative(User, TEXT("🔧 REPAIRING TURRET..."), FLinearColor(0.2f, 0.9f, 0.4f));
+		PostLine(User->DisplayName, FText::Format(LOCTEXT("Repairing", "🔧 {0}: \"Cleaning the contacts and restoring the turret servos ({1}s)...\""),
 			User->DisplayName, FText::AsNumber(Seconds, &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))));
 		FTimerHandle Handle;
 		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateUObject(this, &ATurretActor::FinishRepair,
@@ -247,7 +247,7 @@ FActionMenuRequest ATurretActor::BuildActionMenu(const AOperativeCharacter* Lead
 	FActionMenuRequest Request = Super::BuildActionMenu(Leader);
 	if (Request.bOpenMenu && !bBroken && !bPowered && Health->GetCurrentHealth() >= Health->GetMaxHealth())
 	{
-		Request.Menu.CancelText = LOCTEXT("Close", "Закрыть");
+		Request.Menu.CancelText = LOCTEXT("Close", "Close");
 	}
 	return Request;
 }
@@ -255,8 +255,8 @@ FActionMenuRequest ATurretActor::BuildActionMenu(const AOperativeCharacter* Lead
 void ATurretActor::FinishRepair(TWeakObjectPtr<AOperativeCharacter> WeakUser)
 {
 	Repair();
-	PostLine(WeakUser.IsValid() ? WeakUser->DisplayName : LOCTEXT("Soldier", "Боец"),
-		LOCTEXT("Repaired", "✅ Турель полностью отремонтирована и готова к бою!"));
+	PostLine(WeakUser.IsValid() ? WeakUser->DisplayName : LOCTEXT("Soldier", "Soldier"),
+		LOCTEXT("Repaired", "✅ Turret fully repaired and combat-ready!"));
 }
 
 void ATurretActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
@@ -266,12 +266,12 @@ void ATurretActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
 		return;
 	}
 	bTrapped = false;
-	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Снайпер") : InstigatorName) : LOCTEXT("Blast", "ВЗРЫВ"),
-		bByShot ? LOCTEXT("ShotBoom", "💥 Взрыв ловушки на турели от точного выстрела!") : LOCTEXT("TrapBoom", "💥 Растяжка на турели сдетонировала!"));
+	PostLine(bByShot ? (InstigatorName.IsEmpty() ? LOCTEXT("Sniper", "Marksman") : InstigatorName) : LOCTEXT("Blast", "BLAST"),
+		bByShot ? LOCTEXT("ShotBoom", "💥 Turret booby trap detonated by a precise shot!") : LOCTEXT("TrapBoom", "💥 Turret tripwire detonated!"));
 	ApplyBlast(TrapDamage, TrapDamage * DeployableRules::SquadDamageScale, TrapRadius, 0.45f, EDamageType::Explosive,
-		LOCTEXT("Source", "Ловушка турели"), LOCTEXT("SquadHit", "💥 Задело взрывом растяжки турели (-{0} HP)!"));
+		LOCTEXT("Source", "Turret trap"), LOCTEXT("SquadHit", "💥 Hit by the turret tripwire blast (-{0} HP)!"));
 	// The charge sits on the turret (Godot: max(trap_damage * 1.3, 110)).
-	Health->ApplyDirectHealthLoss(FMath::Max(TrapDamage * 1.3f, 110.f), LOCTEXT("Source", "Ловушка турели").ToString());
+	Health->ApplyDirectHealthLoss(FMath::Max(TrapDamage * 1.3f, 110.f), LOCTEXT("Source", "Turret trap").ToString());
 }
 
 void ATurretActor::DescribeForMenu(const AOperativeCharacter* Leader, FText& OutTitle, FText& OutDescription, FText& OutConfirm,
@@ -281,7 +281,7 @@ void ATurretActor::DescribeForMenu(const AOperativeCharacter* Leader, FText& Out
 	int32 Max = 0;
 	GetLeaderSupply(Leader, Count, Max);
 	const bool bFull = Count >= Max;
-	const FText LeaderName = Leader ? Leader->DisplayName : LOCTEXT("Soldier", "Боец");
+	const FText LeaderName = Leader ? Leader->DisplayName : LOCTEXT("Soldier", "Soldier");
 	const int32 Current = FMath::FloorToInt(Health->GetCurrentHealth());
 	const int32 MaxHp = FMath::FloorToInt(Health->GetMaxHealth());
 	bOutDisabled = false;
@@ -289,53 +289,53 @@ void ATurretActor::DescribeForMenu(const AOperativeCharacter* Leader, FText& Out
 	if (bBroken || Current < MaxHp)
 	{
 		const bool bEngineer = Leader && Leader->SquadRole == EOperativeRole::Engineer;
-		OutTitle = bBroken ? LOCTEXT("TitleBroken", "🎯 Автоматическая турель [СЛОМАНА]") : LOCTEXT("TitleDamaged", "🎯 Автоматическая турель [ПОВРЕЖДЕНА]");
+		OutTitle = bBroken ? LOCTEXT("TitleBroken", "🎯 Automated Turret [BROKEN]") : LOCTEXT("TitleDamaged", "🎯 Automated Turret [DAMAGED]");
 		FText State = FText::GetEmpty();
 		if (bBroken)
 		{
-			State = LOCTEXT("StateBroken", "\nСИСТЕМА СЛОМАНА: Огонь не ведётся, требуется ремонт.");
+			State = LOCTEXT("StateBroken", "\nSYSTEM BROKEN: Not firing, repair required.");
 		}
 		else if (!bPowered)
 		{
-			State = LOCTEXT("StateUnpowered", "\nВНИМАНИЕ: Турель обесточена (генератор отключен).");
+			State = LOCTEXT("StateUnpowered", "\nWARNING: Turret unpowered (generator offline).");
 		}
-		OutDescription = FText::Format(LOCTEXT("DescRepair", "⚠️ Автоматическая турель повреждена ({0}/{1} HP)!{2}\nИсполнитель: {3} ({4}, ремонт: {5}с)."),
+		OutDescription = FText::Format(LOCTEXT("DescRepair", "⚠️ Automated Turret damaged ({0}/{1} HP)!{2}\nRepair by: {3} ({4}, repair: {5}s)."),
 			Current, MaxHp, State, LeaderName,
-			bEngineer ? LOCTEXT("Engineer", "🛠️ Инженер (в 2 раза быстрее)") : LOCTEXT("Regular", "Обычный боец"),
+			bEngineer ? LOCTEXT("Engineer", "🛠️ Engineer (2x faster)") : LOCTEXT("Regular", "Regular soldier"),
 			FText::AsNumber(GetRepairSeconds(Leader), &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1)));
-		OutConfirm = LOCTEXT("Repair", "🔧 Починить");
+		OutConfirm = LOCTEXT("Repair", "🔧 Repair");
 		return;
 	}
 	if (!bPowered)
 	{
-		OutTitle = LOCTEXT("TitleUnpowered", "🎯 Автоматическая турель [ОБЕСТОЧЕНА]");
-		OutDescription = FText::Format(LOCTEXT("DescUnpowered", "Автоматическая турель исправна ({0}/{1} HP), но обесточена!\nДля работы турели запустите или почините резервный генератор."),
+		OutTitle = LOCTEXT("TitleUnpowered", "🎯 Automated Turret [UNPOWERED]");
+		OutDescription = FText::Format(LOCTEXT("DescUnpowered", "Automated Turret is intact ({0}/{1} HP) but unpowered!\nStart or repair the backup generator to power the turret."),
 			Current, MaxHp);
-		OutConfirm = LOCTEXT("Unpowered", "⚡ Обесточена");
+		OutConfirm = LOCTEXT("Unpowered", "⚡ Unpowered");
 		bOutDisabled = true;
 		return;
 	}
 	if (bTrapped)
 	{
-		OutTitle = LOCTEXT("TitleTrapped", "🎯 Автоматическая турель [ЗАМИНИРОВАНА]");
-		OutDescription = FText::Format(LOCTEXT("DescTrapped", "⚠️ ВНИМАНИЕ: Турель заминирована взрывной растяжкой!\n{0}\n(У {1} турелей: {2}/{3})."),
+		OutTitle = LOCTEXT("TitleTrapped", "🎯 Automated Turret [BOOBY-TRAPPED]");
+		OutDescription = FText::Format(LOCTEXT("DescTrapped", "⚠️ WARNING: Turret is rigged with an explosive tripwire!\n{0}\n({1} turrets: {2}/{3})."),
 			DescribeDefusal(Leader), LeaderName, Count, Max);
-		OutConfirm = LOCTEXT("Defuse", "Разминировать");
+		OutConfirm = LOCTEXT("Defuse", "Defuse");
 		return;
 	}
-	OutTitle = LOCTEXT("Title", "🎯 Автоматическая турель");
-	const FText HealthInfo = FText::Format(LOCTEXT("HealthInfo", " (HP: {0}/{1}, Урон: {2})"), Current, MaxHp, FMath::FloorToInt(Damage));
+	OutTitle = LOCTEXT("Title", "🎯 Automated Turret");
+	const FText HealthInfo = FText::Format(LOCTEXT("HealthInfo", " (HP: {0}/{1}, Damage: {2})"), Current, MaxHp, FMath::FloorToInt(Damage));
 	if (bDeployable)
 	{
-		OutConfirm = bFull ? FText::Format(LOCTEXT("Full", "Инвентарь полон ({0}/{1})"), Count, Max) : LOCTEXT("PickUp", "Подобрать");
-		OutDescription = FText::Format(LOCTEXT("DescPickUp", "Подобрать стационарную турель{0}?\nОбъект будет добавлен в личный запас (У {1}: {2}/{3})."),
+		OutConfirm = bFull ? FText::Format(LOCTEXT("Full", "Inventory full ({0}/{1})"), Count, Max) : LOCTEXT("PickUp", "Pick up");
+		OutDescription = FText::Format(LOCTEXT("DescPickUp", "Pick up the stationary turret{0}?\nIt will be added to personal supplies ({1}: {2}/{3})."),
 			HealthInfo, LeaderName, Count, Max);
 		bOutDisabled = bFull;
 	}
 	else
 	{
-		OutConfirm = LOCTEXT("CannotPickUp", "Нельзя подобрать");
-		OutDescription = FText::Format(LOCTEXT("DescFixed", "Стационарная турель{0}. Параметр deployable отключён: объект нельзя убрать в инвентарь."), HealthInfo);
+		OutConfirm = LOCTEXT("CannotPickUp", "Cannot pick up");
+		OutDescription = FText::Format(LOCTEXT("DescFixed", "Stationary turret{0}. Deployable is off: it cannot be stowed in the inventory."), HealthInfo);
 		bOutDisabled = true;
 	}
 }
@@ -347,21 +347,21 @@ bool ATurretActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	const UHealthComponent* TurretHealth = FindComponentByClass<UHealthComponent>();
 	const float Max = TurretHealth ? TurretHealth->GetMaxHealth() : 0.f;
 	const float Current = TurretHealth ? TurretHealth->GetCurrentHealth() : 0.f;
-	const TCHAR* Trap = bTrapped ? TEXT(" [⚠️ ЛОВУШКА]") : TEXT("");
+	const TCHAR* Trap = bTrapped ? TEXT(" [⚠️ TRAP]") : TEXT("");
 	OutLabel.HeightCm = 160.f;
 	if (bBroken || Current <= 0.f)
 	{
-		OutLabel.Text = FString::Printf(TEXT("⚠️ Турель%s: СЛОМАНА [0/%d HP]\n(Нужен ремонт)"), Trap, FMath::FloorToInt(Max));
+		OutLabel.Text = FString::Printf(TEXT("⚠️ Turret%s: BROKEN [0/%d HP]\n(Repair needed)"), Trap, FMath::FloorToInt(Max));
 		OutLabel.Color = FLinearColor(1.f, 0.25f, 0.25f);
 	}
 	else if (!bPowered)
 	{
-		OutLabel.Text = FString::Printf(TEXT("⚡ Турель%s: ОБЕСТОЧЕНА [%d/%d HP]\n(Запустите генератор)"), Trap, FMath::FloorToInt(Current), FMath::FloorToInt(Max));
+		OutLabel.Text = FString::Printf(TEXT("⚡ Turret%s: UNPOWERED [%d/%d HP]\n(Start the generator)"), Trap, FMath::FloorToInt(Current), FMath::FloorToInt(Max));
 		OutLabel.Color = FLinearColor(1.f, 0.75f, 0.2f);
 	}
 	else
 	{
-		OutLabel.Text = FString::Printf(TEXT("🎯 Турель%s: %d/%d HP"), Trap, FMath::FloorToInt(Current), FMath::FloorToInt(Max));
+		OutLabel.Text = FString::Printf(TEXT("🎯 Turret%s: %d/%d HP"), Trap, FMath::FloorToInt(Current), FMath::FloorToInt(Max));
 		OutLabel.Color = FLinearColor(0.2f, 0.9f, 0.4f);
 	}
 	return true;

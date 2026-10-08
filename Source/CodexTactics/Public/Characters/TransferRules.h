@@ -32,7 +32,7 @@ struct CODEXTACTICS_API FTransferResult
 	bool bDone = false;
 	/** Recipient already carries the maximum (engineering items). */
 	bool bRecipientFull = false;
-	/** «+1 Турель», «+30 Патроны M16», … (Godot custom_feedback / item_names). */
+	/** "+1 Turret", "+30 M16 rounds", … (Godot custom_feedback / item_names). */
 	FString Feedback;
 	/** Units that changed hands (TransferQuantity; 1 / a pack for Transfer). */
 	int32 Moved = 0;
@@ -47,7 +47,7 @@ enum class ETransferRangeDecision : uint8
 	InRange,
 	/** Too far, the sender is free: he walks to the recipient and hands over on arrival. */
 	Approach,
-	/** Too far and the sender cannot walk over now: «Слишком далеко для передачи (макс. 2 метра)». */
+	/** Too far and the sender cannot walk over now: "Too far to hand over (max 2 m)". */
 	Blocked
 };
 
@@ -104,7 +104,7 @@ namespace TransferRules
 
 	/**
 	 * Snaps Desired to the dialog grid: [GetMinQuantity, MaxQuantity], multiples of the step below MaxQuantity, MaxQuantity
-	 * itself (the whole stack, «ВСЁ») allowed even off the grid.
+	 * itself (the whole stack, "ALL") allowed even off the grid.
 	 */
 	CODEXTACTICS_API int32 QuantizeQuantity(ETransferItem Item, int32 Desired, int32 MaxQuantity);
 
@@ -150,9 +150,9 @@ namespace TransferRules
 	/** Stash -> operative: up to Quantity, clamped by what lies there and the operative's capacity (leftover stays). */
 	CODEXTACTICS_API FTransferResult TakeFromStash(UItemStashComponent& Stash, AOperativeCharacter& Recipient, ETransferItem Item, int32 Quantity);
 
-	/** Nominative item name («Аптечка», «Патроны M16», …). */
+	/** Nominative item name ("Medkit", "M16 rounds", ...). */
 	CODEXTACTICS_API FString GetItemName(ETransferItem Item);
 
-	/** Accusative name for the prompt («Аптечку», «Патроны M16 (30 шт.)», …; Godot _start_transfer_mode item_names). */
+	/** Accusative name for the prompt ("Medkit", "M16 rounds (x30)", ...; Godot _start_transfer_mode item_names). */
 	CODEXTACTICS_API FString GetPromptName(ETransferItem Item);
 }

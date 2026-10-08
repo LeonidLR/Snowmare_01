@@ -41,7 +41,7 @@ enum class ETransferRequestOutcome : uint8
 	Transferred,
 	/** The sender walks to the recipient; the hand-over happens on arrival (see HasPendingTransfer). */
 	Approaching,
-	/** Too far and the sender cannot walk over now: «Слишком далеко для передачи (макс. 2 метра)». */
+	/** Too far and the sender cannot walk over now: "Too far to hand over (max 2 m)". */
 	Blocked,
 	/** More than one quantity possible: the split dialog is open (HUD). */
 	DialogOpened,
@@ -88,9 +88,9 @@ struct CODEXTACTICS_API FTransferRequest
  * Sprint 13 (current UI): a drag from the inventory drawer dropped on a squad mate's model or action bar portrait
  * (ACodexTacticsHUD::HandleTransferDropOnActor) -> optional quantity split dialog -> RequestTransfer: within 2 m the
  * items change hands at once (ExecuteTransferQuantity); farther away a free sender walks to 1.5 m of the recipient and
- * hands over on arrival, a blocked one (see FTransferRangeContext) gets «Слишком далеко…» in the feed.
+ * hands over on arrival, a blocked one (see FTransferRangeContext) gets "Too far..." in the feed.
  * Legacy click mode (Godot): the cursor ring follows the mouse, a click on a squad mate (or within 2.2 m of one) hands a
- * pack over; RMB / Esc cancels. No UI starts it since Sprint 13 (the «ПЕРЕД» dialog was retired).
+ * pack over; RMB / Esc cancels. No UI starts it since Sprint 13 (the hand-over dialog was retired).
  * Godot reference: main.gd _start_transfer_mode, _cancel_transfer_mode, _process_transfer_preview,
  * _handle_transfer_click, _transfer_item_to_target.
  */
@@ -145,7 +145,7 @@ public:
 
 	/**
 	 * Sprint 13 generic request. In range (2 m; container: to its box) it executes at once. Out of range a free operative
-	 * walks over and acts on arrival (Approaching); a blocked one gets «Слишком далеко…» — except a ground drop, which
+	 * walks over and acts on arrival (Approaching); a blocked one gets "Too far..." — except a ground drop, which
 	 * then lands at his feet (DroppedAtFeet). A new request replaces a pending one.
 	 */
 	ETransferRequestOutcome Request(const FTransferRequest& InRequest);
@@ -173,7 +173,7 @@ public:
 	AOperativeCharacter* GetPendingSender() const { return Pending.Request.Operative.Get(); }
 	ETransferAction GetPendingAction() const { return Pending.Request.Action; }
 
-	/** Drops the pending approach (bNotify: «Передача отменена» in the feed). The sender is not stopped. */
+	/** Drops the pending approach (bNotify: "Hand-over cancelled" in the feed). The sender is not stopped. */
 	void CancelPendingTransfer(bool bNotify);
 
 	/** Smokes: treat every sender as under fire (forces the Blocked branch out of range). */

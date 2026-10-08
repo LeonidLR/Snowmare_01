@@ -2,7 +2,7 @@
   "comment": "Weapon power (Wave Editor «Оружие»). Applied at game start onto DA_Weapon_* and the squad's grenades. Metres / seconds.",
   "weapons": {
     "cryo_emitter": {
-      "name": "Крио-излучатель «Абсолют»",
+      "name": "Absolute Cryo Emitter",
       "base_damage": 16,
       "attack_range_m": 10.5,
       "fire_rate": 0.5,
@@ -23,7 +23,7 @@
       "distance_damage_multipliers": []
     },
     "flamethrower": {
-      "name": "Огнемёт «Прометей»",
+      "name": "Prometheus Flamethrower",
       "base_damage": 32,
       "attack_range_m": 8.5,
       "fire_rate": 0.4,
@@ -44,7 +44,7 @@
       "distance_damage_multipliers": []
     },
     "grenade": {
-      "name": "Ручная граната",
+      "name": "Hand Grenade",
       "base_damage": 85,
       "attack_range_m": 12,
       "fire_rate": 1,
@@ -65,7 +65,7 @@
       "distance_damage_multipliers": []
     },
     "hammer": {
-      "name": "Тяжёлая кувалда",
+      "name": "Heavy Sledgehammer",
       "base_damage": 65,
       "attack_range_m": 2.2,
       "fire_rate": 1.25,
@@ -86,7 +86,7 @@
       "distance_damage_multipliers": []
     },
     "knife": {
-      "name": "Тактический нож",
+      "name": "Tactical Knife",
       "base_damage": 22,
       "attack_range_m": 2,
       "fire_rate": 0.35,
@@ -107,7 +107,7 @@
       "distance_damage_multipliers": []
     },
     "m16": {
-      "name": "Автомат МТКМ-16",
+      "name": "M16A2 Assault Rifle",
       "base_damage": 18,
       "attack_range_m": 14,
       "fire_rate": 0.65,
@@ -134,7 +134,7 @@
       ]
     },
     "pistol": {
-      "name": "Пистолет Beretta",
+      "name": "Beretta Pistol",
       "base_damage": 16,
       "attack_range_m": 10,
       "fire_rate": 0.45,
@@ -163,7 +163,7 @@
       ]
     },
     "plasma_carbine": {
-      "name": "Плазменный карабин «Спектр»",
+      "name": "Spectre Plasma Carbine",
       "base_damage": 28,
       "attack_range_m": 16,
       "fire_rate": 0.8,
@@ -184,7 +184,7 @@
       "distance_damage_multipliers": []
     },
     "shotgun": {
-      "name": "Дробовик Remington",
+      "name": "Remington 870 Shotgun",
       "base_damage": 45,
       "attack_range_m": 7,
       "fire_rate": 1.15,

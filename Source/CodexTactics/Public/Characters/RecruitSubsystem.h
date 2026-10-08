@@ -54,7 +54,7 @@ public:
 	 */
 	void HandleRecruitClicked(bool bSprint);
 
-	/** Godot start_recruitment_dialogue: narrative pause, one line, «🤝 Принять в отряд ▶» recruits him. */
+	/** Godot start_recruitment_dialogue: narrative pause, one line, "🤝 Take into the squad ▶" recruits him. */
 	void StartRecruitmentDialogue(AOperativeCharacter* Rescuer);
 
 	/** Godot recruit_into_squad: warm, armed, member 4 of the squad; radio lines unless bSilent (load). */

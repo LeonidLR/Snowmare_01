@@ -83,10 +83,10 @@ void UPhaseBannersWidget::BuildDefaultLayout()
 	CardSlot->SetHorizontalAlignment(HAlign_Center);
 	CardSlot->SetVerticalAlignment(VAlign_Center);
 	UTextBlock* Title = MakeText(TEXT("CutsceneTitle"), 18, BannerCutsceneTitle);
-	Title->SetText(BannerClean(LOCTEXT("CutsceneTitle", "🎬 [КАТ-СЦЕНА: ПРОРЫВ В КАРАНТИННЫЙ ДВОР]")));
+	Title->SetText(BannerClean(LOCTEXT("CutsceneTitle", "🎬 [CUTSCENE: BREAKTHROUGH INTO THE QUARANTINE COURTYARD]")));
 	Card->AddChildToVerticalBox(Title)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
 	UTextBlock* Body = MakeText(TEXT("CutsceneBody"), 14, BannerCutsceneBody);
-	Body->SetText(LOCTEXT("CutsceneBody", "Отряд осторожно пересекает линию гермоворот...\nСзади с грохотом блокируются пневмозамки.\nИз ледяного тумана двора доносятся глухие шорохи."));
+	Body->SetText(LOCTEXT("CutsceneBody", "The squad cautiously crosses the blast gate line...\nBehind them the pneumatic locks slam shut.\nDull rustling comes from the icy fog of the courtyard."));
 	Card->AddChildToVerticalBox(Body)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
 	CutsceneSkipText = MakeText(TEXT("CutsceneSkipText"), 12, BannerCutsceneSkip);
 	Card->AddChildToVerticalBox(CutsceneSkipText);
@@ -109,7 +109,7 @@ void UPhaseBannersWidget::BuildDefaultLayout()
 	FinishPrepButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("FinishPrepButton"));
 	CodexButtonFocus::Disable(FinishPrepButton); // a focused HUD button would swallow the game keys
 	UTextBlock* ButtonText = MakeText(TEXT("FinishPrepText"), 12, BannerButtonText);
-	ButtonText->SetText(BannerClean(LOCTEXT("FinishPrep", "⚔️ Начать бой")));
+	ButtonText->SetText(BannerClean(LOCTEXT("FinishPrep", "⚔️ Start Battle")));
 	FinishPrepButton->AddChild(ButtonText);
 	USizeBox* ButtonSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 	ButtonSize->SetWidthOverride(160.f);
@@ -154,7 +154,7 @@ FText UPhaseBannersWidget::GetPauseText() const
 	{
 		return FText::GetEmpty();
 	}
-	return FText::FromString(FString::Printf(TEXT("⏱️ РЕЖИМ ПРИКАЗОВ | Зарядов в волне: %d/%d | Время планирования: %04.1fс [ПРОБЕЛ — исполнить]"),
+	return FText::FromString(FString::Printf(TEXT("⏱️ ORDER MODE | Charges per wave: %d/%d | Planning time: %04.1fs [SPACE to execute]"),
 		Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges, FMath::Max(0.f, Flow->GetPauseTimeRemaining())));
 }
 
@@ -167,13 +167,13 @@ FText UPhaseBannersWidget::GetCombatText() const
 	}
 	if (Flow->GetPhase() == ECodexGamePhase::Preparation)
 	{
-		return FText::FromString(FString::Printf(TEXT("⏱ ПОДГОТОВКА К БОЮ: %02d сек | [ПРОБЕЛ] — НИЖНЕЕ МЕНЮ"),
+		return FText::FromString(FString::Printf(TEXT("⏱ BATTLE PREPARATION: %02d sec | [SPACE] for the bottom menu"),
 			FMath::CeilToInt(Flow->GetPreparationTimeRemaining())));
 	}
 	if (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() != ECodexCombatMode::TurnBased)
 	{
 		const UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>();
-		return FText::FromString(FString::Printf(TEXT("⚔️ ВОЛНА %d | ВРАГОВ ОСТАЛОСЬ: %d"), Flow->GetWaveIndex(),
+		return FText::FromString(FString::Printf(TEXT("⚔️ WAVE %d | ENEMIES LEFT: %d"), Flow->GetWaveIndex(),
 			Waves ? Waves->GetAliveEnemyCount() : 0));
 	}
 	return FText::GetEmpty();
@@ -217,7 +217,7 @@ void UPhaseBannersWidget::Refresh()
 	}
 	if (CutsceneSkipText && bCutscene)
 	{
-		CutsceneSkipText->SetText(FText::FromString(FString::Printf(TEXT("Продолжение через: %d сек... (или клик)"),
+		CutsceneSkipText->SetText(FText::FromString(FString::Printf(TEXT("Continues in: %d sec... (or click)"),
 			FMath::CeilToInt(Flow->GetCutsceneTimeRemaining()))));
 	}
 }

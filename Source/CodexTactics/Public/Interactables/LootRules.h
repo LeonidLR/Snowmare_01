@@ -34,7 +34,7 @@ struct CODEXTACTICS_API FLootEntry
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Loot")
 	ELootItem Item = ELootItem::Medkit;
 
-	/** «Аптечка», «Патроны 5.56 мм (M16)», «Оружие (id)»… */
+	/** "Medkit", "5.56mm rounds (M16)", "Weapon (id)"... */
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Loot")
 	FText Name;
 
@@ -44,11 +44,11 @@ struct CODEXTACTICS_API FLootEntry
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Loot")
 	int32 Count = 0;
 
-	/** «шт.» / «ед.» */
+	/** Empty for piece counts ("x2"), "units" for measured stacks. */
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Loot")
 	FText Unit;
 
-	/** «🩹 Аптечка: 2 шт.» (Godot button text). */
+	/** "🩹 Medkit: x2" / "🔥 Flamethrower fuel: 50 units" (Godot button text). */
 	FText GetLabel() const;
 };
 

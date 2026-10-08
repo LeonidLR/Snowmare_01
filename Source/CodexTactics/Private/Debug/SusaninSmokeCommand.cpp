@@ -117,9 +117,9 @@ namespace SusaninSmoke
 				TEXT("Susanin at the SusaninSpawn point"));
 			Check(State, !Susanin->bRecruited && !Squad->GetMembers().Contains(Susanin) && Squad->GetMembers().Num() == 3, TEXT("not in the squad"));
 			Check(State, Recruits->IsInColdDistress() && FMath::IsNearlyEqual(Susanin->ColdLevel, 85.f, 1.f), TEXT("cold distress 85"));
-			Check(State, Susanin->DisplayName.ToString() == TEXT("Иван Сусанин") && Susanin->SquadRole == EOperativeRole::Recruit
+			Check(State, Susanin->DisplayName.ToString() == TEXT("Ivan Susanin") && Susanin->SquadRole == EOperativeRole::Recruit
 				&& Susanin->MedkitsCount == 0 && Susanin->CannedFoodCount == 1, TEXT("identity and civilian kit"));
-			Check(State, Dialogue->IsDialogueOpen() && Dialogue->GetCurrentSequence() && Dialogue->GetCurrentSequence()->Title == TEXT("Сигнал бедствия: Иван Сусанин"),
+			Check(State, Dialogue->IsDialogueOpen() && Dialogue->GetCurrentSequence() && Dialogue->GetCurrentSequence()->Title == TEXT("Distress signal: Ivan Susanin"),
 				TEXT("distress dialogue open"));
 			Check(State, World->GetWorldSettings()->TimeDilation < 0.01f, TEXT("narrative pause"));
 			Check(State, Camera->GetFollowTarget() == Susanin, TEXT("camera on Susanin"));
@@ -130,8 +130,8 @@ namespace SusaninSmoke
 		case 2:
 			Check(State, !Dialogue->IsDialogueOpen() && FMath::IsNearlyEqual(World->GetWorldSettings()->TimeDilation, 1.f), TEXT("dialogue closed, time runs"));
 			Check(State, Camera->GetFollowTarget() == Leader, TEXT("camera back on the leader"));
-			Check(State, HasMessage(World, TEXT("ШТАБ"), TEXT("Сусанин замерзает на рубеже")), TEXT("HQ line"));
-			Check(State, World->GetSubsystem<UMissionSubsystem>()->GetObjective().ToString() == TEXT("Спасти Сусанина: подойти к нему бойцом отряда!"),
+			Check(State, HasMessage(World, TEXT("HQ"), TEXT("Susanin is freezing at the line")), TEXT("HQ line"));
+			Check(State, World->GetSubsystem<UMissionSubsystem>()->GetObjective().ToString() == TEXT("Rescue Susanin: reach him with a squad operative!"),
 				World->GetSubsystem<UMissionSubsystem>()->GetObjective().ToString());
 			Check(State, !Squad->SetLeaderByIndex(3), TEXT("key 4 does nothing yet"));
 			Leader->TeleportTo(Susanin->GetActorLocation() + FVector(200.f, 0.f, 0.f), Leader->GetActorRotation(), false, true);
@@ -142,8 +142,8 @@ namespace SusaninSmoke
 			{
 				return true;
 			}
-			Check(State, Recruits->IsRecruitmentDialogueActive() && Dialogue->GetCurrentSequence() && Dialogue->GetCurrentSequence()->Title == TEXT("Присоединение к отряду")
-				&& Dialogue->GetCurrentSequence()->CustomFinishButtonText.Contains(TEXT("Принять в отряд")), TEXT("operative within 2.8 m: recruitment dialogue"));
+			Check(State, Recruits->IsRecruitmentDialogueActive() && Dialogue->GetCurrentSequence() && Dialogue->GetCurrentSequence()->Title == TEXT("Joining the squad")
+				&& Dialogue->GetCurrentSequence()->CustomFinishButtonText.Contains(TEXT("Take into the squad")), TEXT("operative within 2.8 m: recruitment dialogue"));
 			Check(State, Susanin->GetActorForwardVector().Dot((Leader->GetActorLocation() - Susanin->GetActorLocation()).GetSafeNormal2D()) > 0.9f,
 				TEXT("Susanin faces the rescuer"));
 			Dialogue->AdvanceLine();
@@ -152,8 +152,8 @@ namespace SusaninSmoke
 		case 4:
 			Check(State, Susanin->bRecruited && Squad->GetMembers().Num() == 4 && Squad->GetMembers()[3] == Susanin && Susanin->ColdLevel < 5.f,
 				FString::Printf(TEXT("recruited: member 4, warm (cold %.1f)"), Susanin->ColdLevel));
-			Check(State, HasMessage(World, TEXT("Иван Сусанин"), TEXT("Я с вами")) && HasMessage(World, TEXT("ШТАБ"), TEXT("принят в боевой отряд")), TEXT("radio lines"));
-			Check(State, World->GetSubsystem<UMissionSubsystem>()->GetObjective().ToString().StartsWith(TEXT("ОБОРОНА: Отразить волну 1")),
+			Check(State, HasMessage(World, TEXT("Ivan Susanin"), TEXT("I'm with you")) && HasMessage(World, TEXT("HQ"), TEXT("has joined the squad")), TEXT("radio lines"));
+			Check(State, World->GetSubsystem<UMissionSubsystem>()->GetObjective().ToString().StartsWith(TEXT("DEFENSE: Repel wave 1")),
 				World->GetSubsystem<UMissionSubsystem>()->GetObjective().ToString());
 			Check(State, Squad->SetLeaderByIndex(3) && Squad->GetLeader() == Susanin, TEXT("key 4 selects Susanin"));
 			Squad->SetLeaderByIndex(0);

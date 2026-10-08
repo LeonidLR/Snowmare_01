@@ -24,9 +24,9 @@ public:
 };
 
 /**
- * Tripwire mine «Растяжка» МУВ-3 with two Ф-1 grenades (Sprint 09, TANDEM «SPRINT 09 DIRECTIVE»; UE-only). A wire
+ * Tripwire mine "Tripwire" MUV-3 with two F-1 grenades (Sprint 09, TANDEM «SPRINT 09 DIRECTIVE»; UE-only). A wire
  * 1-5 m long at 30 cm between two anchors (a ground peg, or a bracket on an object). Anyone — enemy or operative — who
- * crosses it with a body higher than the wire (not prone) pulls the pin: «ЩЁЛК!», 0.25 s, the paired Ф-1 blast
+ * crosses it with a body higher than the wire (not prone) pulls the pin: "CLICK!", 0.25 s, the paired F-1 blast
  * (140, 4.5 m, full armour penetration, stagger). A medic-sapper disarms it in 3 s and gets the grenades back (one is
  * lost on a fumble). Rules: TripwireRules; placed by URelocationSubsystem (two clicks). A preview copy (bPreview) is
  * the placement hologram: cyan valid, red invalid.

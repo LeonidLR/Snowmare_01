@@ -65,24 +65,24 @@ namespace
 		switch (Member.SquadRole)
 		{
 		case EOperativeRole::Engineer:
-			OutName = TEXT("Сержант Кузнецов");
-			OutRole = TEXT("Инженер / Саппорт");
-			OutIcon = TEXT("И");
+			OutName = TEXT("Sergeant Kuznetsov");
+			OutRole = TEXT("Engineer / Support");
+			OutIcon = TEXT("E");
 			break;
 		case EOperativeRole::MedicSapper:
-			OutName = TEXT("Лейтенант Морозова");
-			OutRole = TEXT("Медик-сапёр / Разведчик");
-			OutIcon = TEXT("М");
+			OutName = TEXT("Lieutenant Morozova");
+			OutRole = TEXT("Medic-Sapper / Scout");
+			OutIcon = TEXT("M");
 			break;
 		case EOperativeRole::Recruit:
 			OutName = Member.DisplayName.ToString();
-			OutRole = TEXT("Рекрут / Проводник");
-			OutIcon = TEXT("Р");
+			OutRole = TEXT("Recruit / Guide");
+			OutIcon = TEXT("R");
 			break;
 		default:
-			OutName = TEXT("Полковник Васин");
-			OutRole = TEXT("Командир / Снайпер");
-			OutIcon = TEXT("К");
+			OutName = TEXT("Colonel Vasin");
+			OutRole = TEXT("Commander / Sniper");
+			OutIcon = TEXT("C");
 			break;
 		}
 	}
@@ -209,9 +209,9 @@ void UProfileDialogWidget::BuildDefaultLayout()
 	UVerticalBoxSlot* NavSlot = Column->AddChildToVerticalBox(Nav);
 	NavSlot->SetHorizontalAlignment(HAlign_Center);
 	NavSlot->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
-	const TPair<UButton*, UWidget*> Prev = MakeButton(TEXT("BtnPrev"), TEXT("< Пред."), 80.f);
-	const TPair<UButton*, UWidget*> CloseButton = MakeButton(TEXT("BtnClose"), TEXT("Закрыть [P]"), 120.f);
-	const TPair<UButton*, UWidget*> Next = MakeButton(TEXT("BtnNext"), TEXT("След. >"), 80.f);
+	const TPair<UButton*, UWidget*> Prev = MakeButton(TEXT("BtnPrev"), TEXT("< Prev"), 80.f);
+	const TPair<UButton*, UWidget*> CloseButton = MakeButton(TEXT("BtnClose"), TEXT("Close [P]"), 120.f);
+	const TPair<UButton*, UWidget*> Next = MakeButton(TEXT("BtnNext"), TEXT("Next >"), 80.f);
 	Nav->AddChildToHorizontalBox(Prev.Value)->SetPadding(FMargin(4.f, 0.f));
 	Nav->AddChildToHorizontalBox(CloseButton.Value)->SetPadding(FMargin(4.f, 0.f));
 	Nav->AddChildToHorizontalBox(Next.Value)->SetPadding(FMargin(4.f, 0.f));
@@ -330,7 +330,7 @@ FString UProfileDialogWidget::GetHeaderText() const
 	FString Role;
 	FString Icon;
 	Identity(*Operative, Name, Role, Icon);
-	return FString::Printf(TEXT("%s\n%s\nУровень: %d\n⭐ Свободных очков: %d"), *Name, *Role, Operative->Level, Operative->UnspentStatPoints);
+	return FString::Printf(TEXT("%s\n%s\nLevel: %d\n⭐ Free points: %d"), *Name, *Role, Operative->Level, Operative->UnspentStatPoints);
 }
 
 FString UProfileDialogWidget::GetRowText(int32 Row) const
@@ -343,26 +343,26 @@ FString UProfileDialogWidget::GetRowText(int32 Row) const
 	switch (Row)
 	{
 	case 0:
-		return FString::Printf(TEXT("📈 Опыт: %d / %d XP"), Operative->CurrentExp, Operative->GetNextLevelExp());
+		return FString::Printf(TEXT("📈 Experience: %d / %d XP"), Operative->CurrentExp, Operative->GetNextLevelExp());
 	case 1:
 	{
 		const UHealthComponent* Health = Operative->HealthComponent;
-		return FString::Printf(TEXT("❤️ HP: %d / %d (Макс: 200)"), Health ? static_cast<int32>(Health->GetCurrentHealth()) : 100,
+		return FString::Printf(TEXT("❤️ HP: %d / %d (Max: 200)"), Health ? static_cast<int32>(Health->GetCurrentHealth()) : 100,
 			Health ? static_cast<int32>(Health->GetMaxHealth()) : 100);
 	}
 	case 2:
-		return FString::Printf(TEXT("🍀 Удача: %d%% (Крит x2.0, Уклон)"), static_cast<int32>(Operative->Luck));
+		return FString::Printf(TEXT("🍀 Luck: %d%% (Crit x2.0, Dodge)"), static_cast<int32>(Operative->Luck));
 	case 3:
 	{
 		const EOperativeStance Stance = Operative->GetStance();
-		const TCHAR* StanceText = Stance == EOperativeStance::Crouching ? TEXT("Сидя (x1.15)")
-			: (Stance == EOperativeStance::Prone ? TEXT("Лёжа (x1.35)") : TEXT("Стоя"));
-		return FString::Printf(TEXT("🎯 Меткость: %d%% | %s"), static_cast<int32>(Operative->Accuracy), StanceText);
+		const TCHAR* StanceText = Stance == EOperativeStance::Crouching ? TEXT("Crouched (x1.15)")
+			: (Stance == EOperativeStance::Prone ? TEXT("Prone (x1.35)") : TEXT("Standing"));
+		return FString::Printf(TEXT("🎯 Accuracy: %d%% | %s"), static_cast<int32>(Operative->Accuracy), StanceText);
 	}
 	default:
 	{
 		const float Fortitude = Operative->GetStatValue(EProgressStat::Fortitude);
-		return FString::Printf(TEXT("🛡️ Стойкость: %d (Срез: -%d%%)"), static_cast<int32>(Fortitude),
+		return FString::Printf(TEXT("🛡️ Fortitude: %d (Damage cut: -%d%%)"), static_cast<int32>(Fortitude),
 			ProgressionRules::FortitudeCutPercent(Fortitude));
 	}
 	}
@@ -397,11 +397,11 @@ void UProfileDialogWidget::Refresh()
 	}
 	if (LevelText)
 	{
-		LevelText->SetText(FText::FromString(FString::Printf(TEXT("Уровень: %d"), Operative->Level)));
+		LevelText->SetText(FText::FromString(FString::Printf(TEXT("Level: %d"), Operative->Level)));
 	}
 	if (UnspentText)
 	{
-		UnspentText->SetText(ProfileClean(FString::Printf(TEXT("⭐ Свободных очков: %d"), Operative->UnspentStatPoints)));
+		UnspentText->SetText(ProfileClean(FString::Printf(TEXT("⭐ Free points: %d"), Operative->UnspentStatPoints)));
 		UnspentText->SetColorAndOpacity(FSlateColor(Operative->UnspentStatPoints > 0 ? PointsColor : NoPointsColor));
 	}
 	// Bars: EXP of the next level, max HP of the 200 cap, the stat of its cap.

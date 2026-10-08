@@ -37,10 +37,10 @@ struct FActionBarSquadSlot
 };
 
 /**
- * Bottom tactical bar: inventory «ИНВ» (Sprint 13: the «ПЕРЕД» transfer button is gone — hand-overs are dragged from the
- * drawer; a squad slot is a drop target, NativeOnDrop), weapon + ammo («[G] Граната»), relocation
- * mode («ПЕР» / «АКТИВ»), stance letter (С / П / Л, click cycles), guard («ОБОР», not ported yet), squad slots
- * [1] КОМ, [2] ИНЖ, [3] МЕД with HP / cold bars, [4] РЕЗ (locked reserve). Refreshes every frame from the squad.
+ * Bottom tactical bar: inventory «INV» (Sprint 13: the old transfer button is gone — hand-overs are dragged from the
+ * drawer; a squad slot is a drop target, NativeOnDrop), weapon + ammo («[G] Grenade»), relocation
+ * mode («MOVE» / «ACTIVE»), stance letter (S / C / P, click cycles), guard («GUARD» / «HELD»), squad slots
+ * [1] CMD, [2] ENG, [3] MED with HP / cold bars, [4] RES (locked reserve). Refreshes every frame from the squad.
  * Built in C++ (restyle through a Widget Blueprint subclass).
  * Godot reference: movements_demo.tscn UI/TacticalBar, main.gd _create_tactical_command_bar,
  * _update_tactical_command_bar, _cycle_leader_stance, _on_relocate_slot_clicked.
@@ -63,7 +63,7 @@ public:
 
 	// --- Weapon selector (Godot main.gd _create_weapon_selector_panel / _select_weapon_from_selector) ---
 
-	/** Click on the weapon slot: opens / closes «ВЫБОР ВООРУЖЕНИЯ» above the bar. */
+	/** Click on the weapon slot: opens / closes «WEAPON SELECT» above the bar. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|ActionBar")
 	void ToggleWeaponSelector();
 
@@ -75,7 +75,7 @@ public:
 
 	/**
 	 * Takes weapon WeaponId: in turn-based combat through the combat (active operative), otherwise the leader; posts
-	 * «Экипировано» and closes the selector. Outside turn-based combat the grenade starts the throw aim.
+	 * «Equipped» and closes the selector. Outside turn-based combat the grenade starts the throw aim.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|ActionBar")
 	bool SelectWeapon(const FString& WeaponId);
@@ -123,7 +123,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UButton> GuardButton;
 
-	/** Commander Mode switch «АВТО ВКЛ / ВЫКЛ» (Ctrl + T on screen). */
+	/** Commander Mode switch «AUTO ON / OFF» (Ctrl + T on screen). */
 	UFUNCTION()
 	void HandleAutonomy();
 
@@ -133,7 +133,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UButton> AutonomyButton;
 
-	/** Fire posture buttons «ПАСС [,]» / «ОБОР [.]» / «АГР [/]» (user request 2026-10-06). */
+	/** Fire posture buttons «PAS [,]» / «DEF [.]» / «AGG [/]» (user request 2026-10-06). */
 	UFUNCTION()
 	void HandlePosturePassive() { ApplyPosture(ESquadFirePosture::Passive); }
 

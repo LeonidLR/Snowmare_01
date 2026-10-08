@@ -153,7 +153,7 @@ namespace FlankBreachSmoke
 			Point->ActivationChance = 1.f;
 			Point->EnemyCount = 3;
 			Point->BreachEnemyType = EEnemyArchetype::Spitter;
-			Point->SpawnLane = TEXT("Тестовый фланг");
+			Point->SpawnLane = TEXT("Test flank");
 			State.Breach = Point;
 			CheckFilters(World, State);
 
@@ -171,7 +171,7 @@ namespace FlankBreachSmoke
 			const FVector Center = State.Breach->GetActorLocation();
 			const int32 Pack = CountEnemiesNear(World, Center, EEnemyArchetype::Spitter);
 			Check(State, Waves->IsDynamicBreachTriggered() && Pack == 3, FString::Printf(TEXT("breach: %d spitters around the point"), Pack));
-			Check(State, HasMessage(World, TEXT("ШТАБ"), TEXT("ПРОРЫВ ВО ФЛАНГЕ! Враги пробили переборку на рубеже «Тестовый фланг»")), TEXT("HQ breach line"));
+			Check(State, HasMessage(World, TEXT("HQ"), TEXT("FLANK BREACH! Enemies broke through the bulkhead at \"Test flank\"")), TEXT("HQ breach line"));
 			Check(State, Camera->GetFollowTarget() == Leader, TEXT("camera still on the leader at once"));
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
@@ -186,7 +186,7 @@ namespace FlankBreachSmoke
 				return true;
 			}
 			Check(State, Camera->GetFollowTarget() == State.Breach.Get(), TEXT("1 s later the camera shows the breach"));
-			Check(State, HasMessage(World, TEXT("ОТРЯД"), TEXT("откуда они взялись")), TEXT("squad line"));
+			Check(State, HasMessage(World, TEXT("SQUAD"), TEXT("where did they come from")), TEXT("squad line"));
 			Next();
 			return true;
 		case 3:

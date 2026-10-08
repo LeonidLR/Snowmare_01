@@ -75,12 +75,12 @@ namespace MissionSmoke
 			Flow->TriggerCombatZone();
 			Flow->FinishCutscene();
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke objective: %s"), *Mission->GetObjective().ToString());
-			Check(State, Mission->GetObjective().ToString().StartsWith(TEXT("ПОДГОТОВКА К ОБОРОНЕ")), TEXT("preparation objective"));
+			Check(State, Mission->GetObjective().ToString().StartsWith(TEXT("DEFENSE PREPARATION")), TEXT("preparation objective"));
 			Flow->FinishPreparation();
 			return true;
 		case 1:
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke objective: %s"), *Mission->GetObjective().ToString());
-			Check(State, Mission->GetObjective().ToString().StartsWith(TEXT("ОБОРОНА: Отразить волну 1! Врагов: ")), TEXT("wave objective"));
+			Check(State, Mission->GetObjective().ToString().StartsWith(TEXT("DEFENSE: Repel wave 1! Enemies: ")), TEXT("wave objective"));
 			return true;
 		case 2:
 		{

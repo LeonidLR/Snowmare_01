@@ -44,7 +44,7 @@ public:
 	/** Cells of a quadrant: Min inclusive, Max exclusive. */
 	static FIntRect GetQuadrantRect(int32 Quadrant, const FIntPoint& GridSize);
 
-	/** «Северо-Запад», «Северо-Восток», «Юго-Запад», «Юго-Восток». */
+	/** "North-West", "North-East", "South-West", "South-East". */
 	static FString GetQuadrantName(int32 Quadrant);
 
 	/** New fight: counters and the breach limit reset. */

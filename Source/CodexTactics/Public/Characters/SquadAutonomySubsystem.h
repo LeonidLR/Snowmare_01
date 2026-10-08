@@ -65,7 +65,7 @@ public:
 	void Freeze();
 
 	/**
-	 * Sprint 10 «Рубеж обороны»: Operative holds TargetObject (generator, terminal, gate, barricade; nullptr: Point) at all
+	 * Sprint 10 "Hold line": Operative holds TargetObject (generator, terminal, gate, barricade; nullptr: Point) at all
 	 * costs — his anchor moves next to it with the 5 m defense leash and the directive (SquadAutonomyRules::MakeDefense),
 	 * and he walks there. A later player move order clears it. False without an operative.
 	 */

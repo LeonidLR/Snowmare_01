@@ -75,9 +75,9 @@ bool ULevelEncounterSubsystem::NotifyHostileContact(EAmbushTrigger Trigger, AAct
 	UE_LOG(LogCodexTactics, Display, TEXT("[Encounter] ambush fight started (%s by %s)"), *UEnum::GetValueAsString(Trigger), *GetNameSafe(Source));
 	if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Messages->PostMessage(LOCTEXT("Commander", "Командир"), Trigger == EAmbushTrigger::PatrolDetection
-			? LOCTEXT("Detected", "⚠️ Нас обнаружили! К бою!")
-			: LOCTEXT("Opened", "⚔️ Открываем огонь! Бой начался!"));
+		Messages->PostMessage(LOCTEXT("Commander", "Commander"), Trigger == EAmbushTrigger::PatrolDetection
+			? LOCTEXT("Detected", "⚠️ We've been spotted! Engage!")
+			: LOCTEXT("Opened", "⚔️ Open fire! Combat has begun!"));
 	}
 	OnAmbushCombatStarted.Broadcast(Trigger);
 	return true;

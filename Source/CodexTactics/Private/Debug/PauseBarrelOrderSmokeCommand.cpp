@@ -3,14 +3,14 @@
 // User report: in the real-time fight, tap Space (tactical pause), order an operative to ignite a barrel with matches or
 // to push a barrel, tap Space again: nothing happened. Causes: the carry started on the release was dropped the next frame
 // by the «no relocation in live combat» check, a planned Ctrl + click shot was lost when the shooter could not fire at the
-// release (reloading), and the barrel menu («Разжечь») could not be reached in a fight at all. Drives the controller like
+// release (reloading), and the barrel menu ("Ignite") could not be reached in a fight at all. Drives the controller like
 // the mouse / keyboard (HandleWorldHit, the action menu buttons, SpacePressed / SpaceReleased):
 //   real-time fight -> tap: pause -> A (empty clip) plans a Ctrl + click shot at barrel 1; B clicks barrel 2 (menu) ->
-//   «Вытолкать» -> spot; C clicks barrel 3 (menu) -> «Разжечь» (planned, marker) -> paused: nothing happens -> tap ->
+//   "Push" -> spot; C clicks barrel 3 (menu) -> "Ignite" (planned, marker) -> paused: nothing happens -> tap ->
 //   barrel 1 explodes once A reloaded, barrel 2 stands on the spot, C walks up and lights barrel 3 (one match) ->
-//   tap: pause -> B clicks the barricade (menu) -> «Переместить» -> spot -> tap -> the barricade stands there ->
-//   real time: C clicks barrel 4 -> «Разжечь» -> he walks up and lights it; A's Ctrl + click ignites barrel 5 at once; the
-//   real-time barrel menu offers no «Вытолкать».
+//   tap: pause -> B clicks the barricade (menu) -> "Relocate" -> spot -> tap -> the barricade stands there ->
+//   real time: C clicks barrel 4 -> "Ignite" -> he walks up and lights it; A's Ctrl + click ignites barrel 5 at once; the
+//   real-time barrel menu offers no "Push".
 
 #include "CoreMinimal.h"
 
@@ -193,13 +193,13 @@ namespace PauseBarrelOrderSmoke
 			Shooter->ReserveAmmo = FMath::Max(Shooter->ReserveAmmo, 60);
 			PC->IssueTargetedShot(State.ShotBarrel.Get()); // Ctrl + click on the barrel
 			Check(State, Shooter->GetPlannedTargetedShotCount() == 1, TEXT("A: Ctrl + click shot at barrel 1 planned"));
-			// B: click on barrel 2 -> its menu -> «Вытолкать» -> click on the spot.
+			// B: click on barrel 2 -> its menu -> "Push" -> click on the spot.
 			Squad->SetLeader(Carrier);
 			ClickActor(*PC, State.CarryBarrel.Get());
 			Check(State, Interactions->IsActionMenuOpen() && Interactions->GetActionMenu().bAllowRelocate,
-				TEXT("pause: barrel click opens its menu with «Вытолкать»"));
+				TEXT("pause: barrel click opens its menu with \"Push\""));
 			Interactions->RelocateActionMenu();
-			Check(State, Relocation->IsPlacing(), TEXT("B: «Вытолкать» starts the placement"));
+			Check(State, Relocation->IsPlacing(), TEXT("B: \"Push\" starts the placement"));
 			State.CarryStart = State.CarryBarrel->GetActorLocation();
 			State.CarryTarget = SpotBeside(World, *Carrier, *State.CarryBarrel, 60.f, 600.f);
 			Relocation->ConfirmPlacement(State.CarryTarget);
@@ -210,10 +210,10 @@ namespace PauseBarrelOrderSmoke
 			Squad->SetLeader(Lighter);
 			ClickActor(*PC, State.MatchBarrel.Get());
 			Check(State, Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == State.MatchBarrel.Get()
-				&& !Interactions->GetActionMenu().bConfirmDisabled, TEXT("pause: barrel 3 menu with «Разжечь» enabled"));
+				&& !Interactions->GetActionMenu().bConfirmDisabled, TEXT("pause: barrel 3 menu with \"Ignite\" enabled"));
 			Interactions->ConfirmActionMenu();
 			Check(State, Interactions->GetPlannedUseOrderCount() == 1 && !State.MatchBarrel->IsBurning()
-				&& Lighter->MatchesCount == State.MatchesBefore, TEXT("C: «Разжечь» planned (no match spent yet)"));
+				&& Lighter->MatchesCount == State.MatchesBefore, TEXT("C: \"Ignite\" planned (no match spent yet)"));
 			NextStage(State);
 			break;
 		}
@@ -258,7 +258,7 @@ namespace PauseBarrelOrderSmoke
 				Check(State, State.bShot && Squad->GetDeferredShotCount() == 0, TEXT("A's paused shot ran after the reload: barrel 1 burns"));
 				Check(State, State.bCarried && CarryError < PlaceTolerance, TEXT("B's paused push ran: barrel 2 stands on the marked spot"));
 				Check(State, !Carrier->bCarrying, TEXT("B let go of it"));
-				Check(State, State.bLit && Lighter->MatchesCount == State.MatchesBefore - 1, TEXT("C's paused «Разжечь» ran: barrel 3 burns, one match spent"));
+				Check(State, State.bLit && Lighter->MatchesCount == State.MatchesBefore - 1, TEXT("C's paused \"Ignite\" ran: barrel 3 burns, one match spent"));
 				Check(State, Interactions->GetActiveUseOrderCount() == 0, TEXT("no use order left"));
 				PC->SpacePressed();
 				NextStage(State);
@@ -270,9 +270,9 @@ namespace PauseBarrelOrderSmoke
 			Check(State, Flow->GetCombatMode() == ECodexCombatMode::TacticalPause, TEXT("tap: tactical pause again"));
 			Squad->SetLeader(Carrier);
 			ClickActor(*PC, State.Barricade.Get());
-			Check(State, Interactions->IsActionMenuOpen() && Interactions->GetActionMenu().bAllowRelocate, TEXT("pause: barricade menu with «Переместить»"));
+			Check(State, Interactions->IsActionMenuOpen() && Interactions->GetActionMenu().bAllowRelocate, TEXT("pause: barricade menu with \"Relocate\""));
 			Interactions->RelocateActionMenu();
-			Check(State, Relocation->IsPlacing(), TEXT("B: «Переместить» starts the barricade placement"));
+			Check(State, Relocation->IsPlacing(), TEXT("B: \"Relocate\" starts the barricade placement"));
 			State.BarricadeTarget = SpotBeside(World, *Carrier, *State.Barricade, -70.f, 500.f);
 			Relocation->ConfirmPlacement(State.BarricadeTarget);
 			Check(State, Relocation->HasPlannedTask(Carrier), TEXT("B: barricade move planned"));
@@ -296,7 +296,7 @@ namespace PauseBarrelOrderSmoke
 				Squad->SetLeader(Lighter);
 				ClickActor(*PC, State.LiveMatchBarrel.Get());
 				Check(State, Interactions->IsActionMenuOpen() && !Interactions->GetActionMenu().bAllowRelocate,
-					TEXT("real time: barrel menu with «Разжечь», no «Вытолкать»"));
+					TEXT("real time: barrel menu with \"Ignite\", no \"Push\""));
 				Interactions->ConfirmActionMenu();
 				Check(State, Interactions->GetActiveUseOrderCount() == 1 || State.LiveMatchBarrel->IsBurning(), TEXT("real time: C walks up at once"));
 				NextStage(State);
@@ -307,7 +307,7 @@ namespace PauseBarrelOrderSmoke
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: barrel 4 lit after %.2f s"), State.StageTime);
 				Check(State, State.LiveMatchBarrel->IsBurning() && Lighter->MatchesCount == State.MatchesBefore - 1,
-					TEXT("real time: «Разжечь» ran, barrel 4 burns, one match spent"));
+					TEXT("real time: \"Ignite\" ran, barrel 4 burns, one match spent"));
 				// Real time without a pause: the Ctrl + click shot ignites at once.
 				Squad->SetLeader(Shooter);
 				Shooter->CurrentClip = FMath::Max(Shooter->CurrentClip, 5);
@@ -352,7 +352,7 @@ namespace PauseBarrelOrderSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PauseBarrelOrderSmoke"),
-		TEXT("Dev check of barrel / barricade orders in the fight: paused shot (after a reload), push, barricade move and «Разжечь» run on resume; real-time «Разжечь»; PASS / FAIL."),
+		TEXT("Dev check of barrel / barricade orders in the fight: paused shot (after a reload), push, barricade move and \"Ignite\" run on resume; real-time \"Ignite\"; PASS / FAIL."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

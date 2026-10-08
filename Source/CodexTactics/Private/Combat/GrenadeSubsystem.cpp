@@ -185,7 +185,7 @@ bool UGrenadeSubsystem::StartAim(AOperativeCharacter* InThrower)
 {
 	if (!InThrower || InThrower->GrenadesCount <= 0)
 	{
-		Post(LOCTEXT("Squad", "Отряд"), LOCTEXT("NoGrenades", "В личном инвентаре выбранного бойца нет гранат."));
+		Post(LOCTEXT("Squad", "SQUAD"), LOCTEXT("NoGrenades", "The selected operative has no grenades."));
 		return false;
 	}
 	Thrower = InThrower;
@@ -200,9 +200,9 @@ bool UGrenadeSubsystem::StartAim(AOperativeCharacter* InThrower)
 		AimActor->SetActorHiddenInGame(false);
 	}
 	UpdateAim(InThrower->GetActorLocation() + InThrower->GetActorForwardVector() * 500.f);
-	const FText Stance = InThrower->GetStance() == EOperativeStance::Crouching ? LOCTEXT("Crouch", "сидя (макс. 9м)")
-		: (InThrower->GetStance() == EOperativeStance::Prone ? LOCTEXT("Prone", "лёжа (макс. 6м)") : LOCTEXT("Stand", "стоя (макс. 12м)"));
-	Post(InThrower->DisplayName, FText::Format(LOCTEXT("AimPrompt", "🧨 Выберите точку броска {0}. ПКМ или Esc — отмена."), Stance));
+	const FText Stance = InThrower->GetStance() == EOperativeStance::Crouching ? LOCTEXT("Crouch", "crouched (max 9 m)")
+		: (InThrower->GetStance() == EOperativeStance::Prone ? LOCTEXT("Prone", "prone (max 6 m)") : LOCTEXT("Stand", "standing (max 12 m)"));
+	Post(InThrower->DisplayName, FText::Format(LOCTEXT("AimPrompt", "🧨 Pick a throw point, {0}. RMB or Esc to cancel."), Stance));
 	return true;
 }
 
@@ -269,13 +269,13 @@ AGrenadeActor* UGrenadeSubsystem::ThrowAtCursor(const FVector& CursorPoint)
 	const FGrenadeAimInfo Info = GetAimInfo(CursorPoint);
 	if (!Info.bValid)
 	{
-		Post(LOCTEXT("Grenade", "Граната"), LOCTEXT("NoPoint", "Не удалось определить точку падения."));
+		Post(LOCTEXT("Grenade", "Grenade"), LOCTEXT("NoPoint", "Could not find a landing point."));
 		return nullptr;
 	}
 	AGrenadeActor* Grenade = ThrowAt(ThrowerActor, Info.Target);
 	if (Grenade)
 	{
-		Post(ThrowerActor->DisplayName, FText::Format(LOCTEXT("Thrown", "🧨 Граната брошена. Осталось: {0}."), ThrowerActor->GrenadesCount));
+		Post(ThrowerActor->DisplayName, FText::Format(LOCTEXT("Thrown", "🧨 Grenade thrown. Left: {0}."), ThrowerActor->GrenadesCount));
 		CancelAim(false);
 	}
 	return Grenade;
@@ -327,8 +327,8 @@ void UGrenadeSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexComba
 	}
 	if (Refunded > 0)
 	{
-		Post(LOCTEXT("HQ", "ШТАБ"), FText::Format(LOCTEXT("Refunded",
-			"🔄 Переход в пошаговый режим: бросок отменён, гранаты ({0} шт.) возвращены в инвентарь."), Refunded));
+		Post(LOCTEXT("HQ", "HQ"), FText::Format(LOCTEXT("Refunded",
+			"🔄 Switching to turn-based: throw cancelled, grenades (x{0}) returned to inventory."), Refunded));
 	}
 	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 	{

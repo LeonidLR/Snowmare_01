@@ -64,8 +64,8 @@ namespace AIGrenadeSmoke
 		for (const FGameMessage& Message : World->GetSubsystem<UGameMessageSubsystem>()->GetHistory())
 		{
 			const FString Text = Message.Text.ToString();
-			if (Text.Contains(TEXT("Бросаю гранату")) || Text.Contains(TEXT("Ловите подарок")) || Text.Contains(TEXT("Граната пошла"))
-				|| Text.Contains(TEXT("Лови гранату")))
+			if (Text.Contains(TEXT("Grenade out")) || Text.Contains(TEXT("Catch this")) || Text.Contains(TEXT("Grenade away"))
+				|| Text.Contains(TEXT("Eat this")))
 			{
 				return true;
 			}

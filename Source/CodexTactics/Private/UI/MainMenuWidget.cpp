@@ -88,11 +88,11 @@ void UMainMenuWidget::BuildDefaultLayout()
 	Size->AddChild(Column);
 
 	MenuTitleText = MakeText(TEXT("MenuTitleText"), 20, StartTitleColor);
-	MenuTitleText->SetText(LOCTEXT("Title", "❄️ COLD GRAD: ТАКТИЧЕСКИЙ РЕЖИМ ❄️"));
+	MenuTitleText->SetText(LOCTEXT("Title", "❄️ COLD GRAD: TACTICAL MODE ❄️"));
 	Column->AddChildToVerticalBox(MenuTitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
 
 	MenuSubtitleText = MakeText(TEXT("MenuSubtitleText"), 13, StartSubtitleColor);
-	MenuSubtitleText->SetText(LOCTEXT("Subtitle", "Выберите режим для прохождения или тестирования:"));
+	MenuSubtitleText->SetText(LOCTEXT("Subtitle", "Choose a mode to play or test:"));
 	Column->AddChildToVerticalBox(MenuSubtitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
 
 	UBorder* Separator = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("StartSeparator"));
@@ -101,9 +101,9 @@ void UMainMenuWidget::BuildDefaultLayout()
 	Column->AddChildToVerticalBox(Separator)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
 
 	MenuGameButton = MakeButton(TEXT("MenuGameButton"), TEXT("MenuGameText"),
-		LOCTEXT("Game", "🎮 1. Начать игру (Исследование ➔ Бой)"), MenuGameText, Column);
+		LOCTEXT("Game", "🎮 1. Start game (Exploration ➔ Combat)"), MenuGameText, Column);
 	MenuCombatButton = MakeButton(TEXT("MenuCombatButton"), TEXT("MenuCombatText"),
-		LOCTEXT("Combat", "⚔️ 2. Начать бой (Тактическая подготовка)"), MenuCombatText, Column);
+		LOCTEXT("Combat", "⚔️ 2. Start combat (Tactical preparation)"), MenuCombatText, Column);
 }
 
 void UMainMenuWidget::NativeOnInitialized()

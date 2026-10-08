@@ -10,7 +10,7 @@ class UItemStashComponent;
 /**
  * Sprint 13: a pile of inventory items lying on the ground (dropped from the inventory drawer onto the ground). A small
  * coloured placeholder box (ammo yellow, medicine red, food brown, engineering grey, matches orange) with an overhead
- * label («Аптечка x2»), snapped to the ground and the navmesh, no navigation / pawn blocking. Clicking it walks the
+ * label ("Medkit x2"), snapped to the ground and the navmesh, no navigation / pawn blocking. Clicking it walks the
  * leader up (the usual interaction flow, planned in the tactical pause); on arrival he picks up as much as he can carry
  * (capacity clamp, the rest stays); the pile is destroyed when empty. Engineering items lie as items, never armed.
  * Contents live in a UItemStashComponent (the same storage as a supply crate). No Godot counterpart.
@@ -44,7 +44,7 @@ public:
 	/** Piles within this distance of a new drop take it in, cm. */
 	static constexpr float MergeRadius = 60.f;
 
-	/** Label line («Аптечка x2», one line per item). */
+	/** Label line ("Medkit x2", one line per item). */
 	FString GetContentsText() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Stash")

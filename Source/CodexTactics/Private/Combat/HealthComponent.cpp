@@ -62,7 +62,7 @@ float UHealthComponent::TakeDamage(const FDamageSpec& Spec)
 	{
 		if (FloatsEnemyNumbers(GetOwner()))
 		{
-			UFloatingTextSubsystem::SpawnAboveEnemy(GetOwner(), TEXT("❄️ ИММУНИТЕТ"), FLinearColor(0.3f, 0.8f, 1.f));
+			UFloatingTextSubsystem::SpawnAboveEnemy(GetOwner(), TEXT("❄️ IMMUNE"), FLinearColor(0.3f, 0.8f, 1.f));
 		}
 		return 0.0f;
 	}

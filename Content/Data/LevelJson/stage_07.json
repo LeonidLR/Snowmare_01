@@ -1,17 +1,17 @@
 {
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "stage_07",
-  "level_name": "Бой 7: Руины архива",
+  "level_name": "Battle 7: Archive Ruins",
   "stage_number": 7,
   "act": 2,
   "biome_id": "abandoned_complex",
-  "description": "Позиционный бой в полуразрушенном книгохранилище НИИ.",
+  "description": "A positional fight in the half-ruined book vault of the research institute.",
   "prep_phase_duration": 45.0,
   "wave_rest_duration": 15.0,
   "waves": [
     {
       "wave_index": 1,
-      "name": "Волна 1",
+      "name": "Wave 1",
       "max_simultaneous_enemies": 8,
       "spawns": [
         {
@@ -45,7 +45,7 @@
     },
     {
       "wave_index": 2,
-      "name": "Волна 2",
+      "name": "Wave 2",
       "max_simultaneous_enemies": 10,
       "spawns": [
         {
@@ -79,7 +79,7 @@
     },
     {
       "wave_index": 3,
-      "name": "Волна 3",
+      "name": "Wave 3",
       "max_simultaneous_enemies": 12,
       "spawns": [
         {
@@ -113,7 +113,7 @@
     },
     {
       "wave_index": 4,
-      "name": "Волна 4",
+      "name": "Wave 4",
       "max_simultaneous_enemies": 14,
       "spawns": [
         {

@@ -4,7 +4,7 @@
 #include "Characters/OperativeMovementRules.h"
 #include "ColdRules.generated.h"
 
-/** Cold severity tiers. Godot player.gd `cold_status`: Норма / Озноб / Замерзание / Переохлаждение / Обморожение. */
+/** Cold severity tiers. Godot player.gd `cold_status`: normal / chills / freezing / hypothermia / FROSTBITE. */
 UENUM(BlueprintType)
 enum class EColdTier : uint8
 {

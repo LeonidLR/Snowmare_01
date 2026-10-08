@@ -10,11 +10,11 @@ enum class EMissionStartMode : uint8
 {
 	/** Not chosen yet: the main menu is shown. */
 	None,
-	/** «Начать игру»: exploration, then combat after the gate. */
+	/** "Start Game": exploration, then combat after the gate. */
 	Game,
-	/** «Начать бой»: quest chain completed, squad behind the gate, straight to the combat cutscene / preparation. */
+	/** "Start Battle": quest chain completed, squad behind the gate, straight to the combat cutscene / preparation. */
 	Combat
-	// Godot's third mode «Начать исследование» is not offered (user decision 2026-09-29).
+	// Godot's third mode "Start Exploration" is not offered (user decision 2026-09-29).
 };
 
 /**

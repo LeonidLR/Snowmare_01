@@ -1,6 +1,6 @@
 // Dev-only headless check of the ambush combat start on L_MovementTest (the map is not saved):
 //   Scripts/smoke.ps1 -Command CodexTactics.AmbushSmoke -Log Smoke-Ambush.log
-// User request 2026-10-06: on a level with patrols the fight starts when the squad attacks, not by «Начать бой».
+// User request 2026-10-06: on a level with patrols the fight starts when the squad attacks, not by "Start combat".
 // The level's enemies are removed; L_MovementTest itself has no patrols, so "auto" keeps the button there (wave map
 // unchanged). Then the level is made an ambush level (override), a frost hound patrols a two-point route ~10 m ahead of
 // the squad with its senses off, and the player Ctrl + clicks it (ACodexTacticsPlayerController::IssueTargetedShot).
@@ -94,9 +94,9 @@ namespace AmbushSmoke
 				It->Destroy();
 			}
 			// The wave map keeps the classic start ("auto" without patrols on the map).
-			Check(State, !Encounter->LevelHasPatrols() && !Encounter->IsAmbushCombatStart(), TEXT("L_MovementTest (no patrols): «Начать бой» kept"));
+			Check(State, !Encounter->LevelHasPatrols() && !Encounter->IsAmbushCombatStart(), TEXT("L_MovementTest (no patrols): \"Start combat\" kept"));
 			Encounter->SetCombatStartOverride(ECombatStartMode::Ambush);
-			Check(State, Encounter->IsAmbushCombatStart(), TEXT("ambush level: «Начать бой» hidden"));
+			Check(State, Encounter->IsAmbushCombatStart(), TEXT("ambush level: \"Start combat\" hidden"));
 			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("exploring"));
 
 			const FVector F = Leader->GetActorForwardVector().GetSafeNormal2D();
@@ -180,7 +180,7 @@ namespace AmbushSmoke
 			{
 				return true;
 			}
-			Check(State, !State.bSawCutsceneOrPreparation, TEXT("never through the cutscene / preparation («Начать бой» not needed)"));
+			Check(State, !State.bSawCutsceneOrPreparation, TEXT("never through the cutscene / preparation (\"Start combat\" not needed)"));
 			Check(State, Waves && Waves->GetTotalWaveEnemies() == 1, FString::Printf(TEXT("the hound is the wave (%d, nothing spawned)"),
 				Waves ? Waves->GetTotalWaveEnemies() : -1));
 			Check(State, bHurt, TEXT("the squad opens fire on the hound"));
@@ -202,7 +202,7 @@ namespace AmbushSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.AmbushSmoke"),
-		TEXT("Dev check of the ambush combat start: Ctrl + click on a patrol starts the real-time fight without «Начать бой»; PASS / FAIL."),
+		TEXT("Dev check of the ambush combat start: Ctrl + click on a patrol starts the real-time fight without \"Start combat\"; PASS / FAIL."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
