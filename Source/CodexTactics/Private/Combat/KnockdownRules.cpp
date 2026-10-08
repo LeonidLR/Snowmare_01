@@ -91,6 +91,19 @@ namespace KnockdownRules
 		return bMelee ? Config.DownedMeleeDamageMultiplier : Config.DownedRangedDamageMultiplier;
 	}
 
+	float DownedBlowMultiplier(const FKnockdownConfig& Config, EKnockdownBlow Blow)
+	{
+		switch (Blow)
+		{
+		case EKnockdownBlow::Melee:
+			return Config.DownedMeleeDamageMultiplier;
+		case EKnockdownBlow::Ranged:
+			return Config.DownedRangedDamageMultiplier;
+		default:
+			return 1.f;
+		}
+	}
+
 	float ClipPlayRate(float ClipSeconds, float TargetSeconds, float MaxRate)
 	{
 		if (ClipSeconds <= 0.f || TargetSeconds <= 0.f)

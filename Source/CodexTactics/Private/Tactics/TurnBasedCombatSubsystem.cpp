@@ -571,14 +571,19 @@ void UTurnBasedCombatSubsystem::ApplyEnemyHit(AActor* Enemy, float Amount, const
 	}
 }
 
-void UTurnBasedCombatSubsystem::ApplySquadHit(AActor* Victim, float Amount, const FString& Source)
+int32 UTurnBasedCombatSubsystem::ApplySquadHit(AActor* Victim, float Amount, const FString& Source, EKnockdownBlow Blow)
 {
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Victim))
 	{
-		Operative->TakeHit(Amount, Source, false, true);
-		return;
+		// Sprint 14: the grid path bypasses TakeHit's modifiers, so the downed multiplier is applied here, from the same
+		// KnockdownRules helper TakeHit uses (ranged x0.6, melee x1.5, explosion x1).
+		const float Scale = Operative->KnockdownComponent ? Operative->KnockdownComponent->GetBlowMultiplier(Blow) : 1.f;
+		const int32 Dealt = Scale == 1.f ? FMath::RoundToInt(Amount) : FMath::Max(1, FMath::RoundToInt(Amount * Scale));
+		Operative->TakeHit(Dealt, Source, false, true);
+		return Dealt;
 	}
 	ApplyDamage(Victim, Amount, Source);
+	return FMath::RoundToInt(Amount);
 }
 
 void UTurnBasedCombatSubsystem::ApplyBlast(AActor* Victim, bool bSquad, float Amount, const FString& Source)
@@ -3429,9 +3434,7 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 			{
 				// Sprint 14: a knocked-down operative takes the melee bonus; a Brute's blow knocks him down.
 				const AOperativeCharacter* VictimOperative = Cast<AOperativeCharacter>(Victim);
-				const int32 Dealt = VictimOperative && VictimOperative->KnockdownComponent
-					? FMath::Max(1, FMath::RoundToInt(Damage * VictimOperative->KnockdownComponent->GetDamageMultiplier(true))) : Damage;
-				ApplySquadHit(Victim, Dealt, NameOf(Biter));
+				const int32 Dealt = ApplySquadHit(Victim, Damage, NameOf(Biter), EKnockdownBlow::Melee);
 				Log(FString::Printf(TEXT("🐺 Enemy %s attacks %s: %d damage!"), *NameOf(Biter), *NameOf(Victim), Dealt));
 				const AEnemyCharacter* BiterEnemy = Cast<AEnemyCharacter>(Biter);
 				if (BiterEnemy && BiterEnemy->GetArchetype() == EEnemyArchetype::Brute && VictimOperative && VictimOperative->KnockdownComponent)
@@ -3764,9 +3767,9 @@ void UTurnBasedCombatSubsystem::EnemyRangedAttack(AActor* Enemy, AActor* Target,
 		}
 		if (bHit)
 		{
-			ApplySquadHit(Victim, Damage, NameOf(Shooter));
+			const int32 Dealt = ApplySquadHit(Victim, Damage, NameOf(Shooter), EKnockdownBlow::Ranged);
 			Log(FString::Printf(TEXT("🎯 %s shoots at %s from %d cells (chance %d%%): %d damage!"), *NameOf(Shooter), *NameOf(Victim), Distance,
-				FMath::RoundToInt(Chance * 100.f), Damage));
+				FMath::RoundToInt(Chance * 100.f), Dealt));
 			if (IsActive() && IsDead(Victim))
 			{
 				OnSquadMemberKilled(Victim, TargetPos);

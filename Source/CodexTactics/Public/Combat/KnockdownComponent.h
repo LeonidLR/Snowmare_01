@@ -96,6 +96,9 @@ public:
 	/** Incoming damage multiplier: 1 when up, else ranged / melee (KnockdownRules::DownedDamageMultiplier). */
 	float GetDamageMultiplier(bool bMelee) const;
 
+	/** Same by blow kind (KnockdownRules::DownedBlowMultiplier): 1 when up or for explosions. */
+	float GetBlowMultiplier(EKnockdownBlow Blow) const;
+
 	/** Turn-based, on his turn while lying: pay GetUpActionPoints and get up, or skip. ActionPoints is reduced. */
 	FKnockdownTurnDecision HandleTurn(int32& ActionPoints);
 
