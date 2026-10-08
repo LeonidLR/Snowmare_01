@@ -23,8 +23,6 @@
 #include "Combat/EncounterQueries.h"
 #include "Core/MissionSubsystem.h"
 #include "Core/SaveGameSubsystem.h"
-#include "UI/SaveLoadDialogWidget.h"
-#include "UI/PauseMenuWidget.h"
 #include "UI/CodexTacticsHUD.h"
 #include "UI/ProfileDialogWidget.h"
 #include "UI/DialogueSubsystem.h"
@@ -1008,8 +1006,8 @@ UTurnBasedCombatSubsystem* ACodexTacticsPlayerController::GetActiveTurnBased() c
 void ACodexTacticsPlayerController::DialogueSkip()
 {
 	ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(GetHUD());
-	// Pause menu windows first (they are open while the world is paused).
-	if (Hud && ((Hud->GetPauseMenu() && Hud->GetPauseMenu()->IsOpen()) || (Hud->GetSaveLoadDialog() && Hud->GetSaveLoadDialog()->IsOpen())))
+	// Pause menu screens first (they are open while the world is paused).
+	if (Hud && Hud->IsPauseMenuOpen())
 	{
 		Hud->HandleEscape();
 		return;

@@ -9,7 +9,6 @@ class AOperativeCharacter;
 class UActionMenuWidget;
 class ULootDialogWidget;
 class UMissionFailedWidget;
-class UMainMenuWidget;
 class UDialogueWidget;
 class UActionBarWidget;
 class UInventoryDrawerWidget;
@@ -21,9 +20,6 @@ class UInventoryDragDropOperation;
 class UProfileDialogWidget;
 class UVictoryPanelWidget;
 class AOperativeCharacter;
-class UPauseMenuWidget;
-class USaveLoadDialogWidget;
-enum class ESaveDialogMode : uint8;
 enum class ESquadFirePosture : uint8;
 class UPhaseBannersWidget;
 class UTurnBasedHudWidget;
@@ -61,10 +57,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UMissionFailedWidget> MissionFailedWidgetClass;
 
-	/** Start menu class (a Widget Blueprint subclass can restyle it). */
-	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
-	TSubclassOf<UMainMenuWidget> MainMenuWidgetClass;
-
 	/** Bottom dialogue window class (a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UDialogueWidget> DialogueWidgetClass;
@@ -80,13 +72,6 @@ public:
 	/** Sprint 13 hand-over quantity dialog class (a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
 	TSubclassOf<UQuantitySplitDialogWidget> QuantitySplitDialogWidgetClass;
-
-	/** Pause menu / save-load dialog classes (Widget Blueprint subclasses can restyle them). */
-	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
-	TSubclassOf<UPauseMenuWidget> PauseMenuWidgetClass;
-
-	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
-	TSubclassOf<USaveLoadDialogWidget> SaveLoadDialogWidgetClass;
 
 	/** Pause / preparation / wave banners and the cutscene card (a Widget Blueprint subclass can restyle it). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
@@ -146,20 +131,22 @@ public:
 	 */
 	void HandleDragReleasedOverWorld(UInventoryDragDropOperation* Operation, const FVector2D& ScreenPosition);
 
-	UPauseMenuWidget* GetPauseMenu() const { return PauseMenu; }
-	USaveLoadDialogWidget* GetSaveLoadDialog() const { return SaveLoadDialog; }
+	/**
+	 * The pause menu (UCodexPauseMenuScreen, frontend framework: GameMenu layer) or one of its sub-screens / a confirm
+	 * dialog is open.
+	 */
+	bool IsPauseMenuOpen() const;
 
-	/** Pause menu -> save / load dialog (the world stays paused). */
-	void OpenSaveLoadDialog(ESaveDialogMode Mode);
-	/** «Back to menu»: the dialog closes, the pause menu opens again. */
-	void CloseSaveLoadDialog();
-	/** Both closed, the world runs again (after a load). */
+	/** Esc with nothing else open: pushes the pause menu (not during a dialogue); false if it did not open. */
+	bool OpenPauseMenu();
+
+	/** Every pause menu screen / dialog closed, the world runs again. */
 	void ClosePauseMenus();
 
 	/**
-	 * Esc (Godot main.gd KEY_ESCAPE): the hand-over quantity dialog (cancel), the overwrite confirmation, the save / load
-	 * dialog, the pause menu, the inventory drawer, the profile close in that order; with nothing open the pause menu opens (not over the start menu).
-	 * Returns false when Esc should go on (e.g. to the dialogue).
+	 * Esc (Godot main.gd KEY_ESCAPE): the hand-over quantity dialog (cancel), the topmost pause-menu screen's back action
+	 * (dialog -> No, sub-screen -> back, pause menu -> resume), the inventory drawer, the profile close in that order; with
+	 * nothing open the pause menu opens. Returns false when Esc should go on (e.g. to the dialogue).
 	 */
 	bool HandleEscape();
 
@@ -214,12 +201,6 @@ private:
 	TObjectPtr<UMissionFailedWidget> MissionFailed;
 
 	UFUNCTION()
-	void HandleMainMenuChanged(bool bOpen);
-
-	UPROPERTY(Transient)
-	TObjectPtr<UMainMenuWidget> MainMenu;
-
-	UFUNCTION()
 	void HandleDialogueChanged(bool bOpen);
 
 	UPROPERTY(Transient)
@@ -243,12 +224,6 @@ private:
 	/** Godot wave-clear victory: the profile of the first member with free points opens. */
 	UFUNCTION()
 	void HandleWaveCleared(int32 WaveIndex);
-
-	UPROPERTY(Transient)
-	TObjectPtr<UPauseMenuWidget> PauseMenu;
-
-	UPROPERTY(Transient)
-	TObjectPtr<USaveLoadDialogWidget> SaveLoadDialog;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPhaseBannersWidget> PhaseBanners;

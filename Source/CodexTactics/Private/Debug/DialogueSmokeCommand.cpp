@@ -1,6 +1,7 @@
-// Dev-only console command for a headless dialogue check on L_MovementTest (needs -ForceMainMenu):
-//   Scripts/smoke.ps1 -Command CodexTactics.DialogueSmoke -Extra "-ForceMainMenu"
-// 1. "Start Game" opens the intro briefing in the bottom window; 2. Space advances a line, world clicks are blocked,
+// Dev-only console command for a headless dialogue check (frontend NEW GAME -> the campaign level, any start map):
+//   Scripts/smoke.ps1 -Command CodexTactics.DialogueSmoke
+// 1. the frontend's NEW GAME opens the level, whose start plays the intro briefing in the bottom window (a headless
+// check without the frontend gets the radio line instead); 2. Space advances a line, world clicks are blocked,
 // Esc skips; 2b. no cold accumulates while the window is open, it resumes once closed (user request 2026-10-06);
 // 3. the preparation dialogue plays in the message feed line by line with the Godot delays.
 
@@ -22,6 +23,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "UI/DialogueSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
+#include "Debug/FrontendSmokeUtils.h"
 
 namespace DialogueSmoke
 {
@@ -33,6 +35,7 @@ namespace DialogueSmoke
 		float Time = 0.f;
 		float StageTime = 0.f;
 		int32 Failures = 0;
+		TWeakObjectPtr<UWorld> StartWorld;
 	};
 
 	void Check(FState& State, bool bOk, const TCHAR* What)
@@ -66,15 +69,35 @@ namespace DialogueSmoke
 		State.StageTime = 0.f;
 	}
 
-	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
+	bool Step(FState& State)
 	{
 		State.Time += StepSeconds;
 		State.StageTime += StepSeconds;
-		UWorld* World = WeakWorld.Get();
-		if (!World || State.Time > 40.f)
+		UWorld* World = FrontendSmokeUtils::FindGameWorld();
+		if (State.Time > 70.f)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke stopped in stage %d"), State.Stage);
 			return Finish(State, false);
+		}
+		if (!World)
+		{
+			return true;
+		}
+		if (State.Stage == -1) // NEW GAME from the frontend (works from any map)
+		{
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			State.StartWorld = World;
+			UCodexFrontendSubsystem::Get(World)->StartNewGame();
+			Next(State);
+			State.Stage = 0;
+			return true;
+		}
+		if (World == State.StartWorld.Get())
+		{
+			return true; // the level is still opening
 		}
 		UMissionSubsystem* Mission = World->GetSubsystem<UMissionSubsystem>();
 		UDialogueSubsystem* Dialogue = World->GetSubsystem<UDialogueSubsystem>();
@@ -88,8 +111,8 @@ namespace DialogueSmoke
 			{
 				return true;
 			}
-			Check(State, Mission->IsMainMenuOpen(), TEXT("menu open"));
-			Mission->StartMission(EMissionStartMode::Game);
+			Check(State, Mission->IsMissionWorld() && Mission->GetStartMode() == EMissionStartMode::Game && !UGameplayStatics::IsGamePaused(World),
+				TEXT("NEW GAME: the level started in Game mode (no in-level menu)"));
 			Check(State, Dialogue->IsDialogueOpen() && Dialogue->GetCurrentSequence()->Lines.Num() == FNarrativeManifest::Get().Sequences[TEXT("DA_DialogueIntro")].Num(), TEXT("intro briefing opened (line count from the narrative manifest)"));
 			Check(State, Dialogue->GetCurrentSequence()->Lines[0].SpeakerName == TEXT("Medic-Sapper"), TEXT("first speaker is the medic-sapper"));
 			PC->SpacePressed();
@@ -153,17 +176,17 @@ namespace DialogueSmoke
 
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
-		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
-		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
+		State->Stage = -1;
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float)
 		{
-			return Step(WeakWorld, *State);
+			return Step(*State);
 		}), StepSeconds);
 	}
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.DialogueSmoke"),
-		TEXT("Dev check (run with -ForceMainMenu): intro briefing window, Space / skip, preparation lines in the feed; logs PASS/FAIL, then exits."),
+		TEXT("Dev check: frontend NEW GAME -> intro briefing window, Space / skip, preparation lines in the feed; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

@@ -17,7 +17,11 @@ public class CodexTacticsEditor : ModuleRules
 			"AssetRegistry",
 			"ToolsetRegistry",
 			"AnimGraph",
-			"AnimGraphRuntime"
+			"AnimGraphRuntime",
+			"UMG",
+			"UMGEditor",
+			"CommonUI",
+			"CodexTactics"
 		});
 	}
 }

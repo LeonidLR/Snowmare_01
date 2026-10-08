@@ -14,31 +14,31 @@
   "smokeRegistry": [
     "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
-    "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke", "LevelWaveSmoke",
-    "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke", "WeaponSelectorSmoke",
-    "GrenadeSmoke", "GuardSmoke", "InventorySmoke", "TransferSmoke", "SaveLoadSmoke", "SaveRoundTripSmoke", "PauseMenuSmoke", "RadiusRingSmoke",
-    "FlankBreachSmoke", "SusaninSmoke", "FloatingTextSmoke", "SquadFireSmoke", "RageSmoke", "SquadControlSmoke",
-    "AIGrenadeSmoke", "EnemyAISmoke", "CutterSmoke", "ClickRulesSmoke", "NarrativeSmoke", "HoldSphereSmoke",
-    "ProgressionSmoke", "VictorySmoke", "TurnBasedCameraSmoke", "EventBusSmoke", "SilhouetteSmoke", "AttackModeSmoke",
-    "GroupSelectSmoke", "TurnWalkSmoke", "TurnBlastDeathSmoke", "EnemyHuntSmoke", "VaultSmoke", "BarricadeContactSmoke",
-    "CombatMoveSmoke", "EnemyDeathSmoke", "TurnSelectSmoke", "PanicSmoke", "FacingSmoke", "MarksmanSmoke",
-    "EnemyHitLayerSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke", "BotMarksmanSmoke", "BarricadeTurnContactSmoke",
-    "MarksmanAdvanceSmoke", "BotRepairSmoke", "PatrolSmoke", "AmbushSmoke", "RealTimeControlSmoke", "PostureSmoke",
-    "RealtimeSelectSmoke", "MarksmanCloseShotSmoke", "HordeSmoke", "CoverSmoke",
-    "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke", "CoverCrouchSmoke", "CoverMoveSmoke",
-    "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke", "PrepDeploySmoke", "SightSmoke",
-    "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke", "TurnBasedAimSmoke",
-    "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke"
+    "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
+    "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
+    "WeaponSelectorSmoke", "GrenadeSmoke", "GuardSmoke", "InventorySmoke", "TransferSmoke", "SaveLoadSmoke",
+    "SaveRoundTripSmoke", "PauseMenuSmoke", "RadiusRingSmoke", "FlankBreachSmoke", "SusaninSmoke", "FloatingTextSmoke",
+    "SquadFireSmoke", "RageSmoke", "SquadControlSmoke", "AIGrenadeSmoke", "EnemyAISmoke", "CutterSmoke",
+    "ClickRulesSmoke", "NarrativeSmoke", "HoldSphereSmoke", "ProgressionSmoke", "VictorySmoke", "TurnBasedCameraSmoke",
+    "EventBusSmoke", "SilhouetteSmoke", "AttackModeSmoke", "GroupSelectSmoke", "TurnWalkSmoke", "TurnBlastDeathSmoke",
+    "EnemyHuntSmoke", "VaultSmoke", "BarricadeContactSmoke", "CombatMoveSmoke", "EnemyDeathSmoke", "TurnSelectSmoke",
+    "PanicSmoke", "FacingSmoke", "MarksmanSmoke", "EnemyHitLayerSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke",
+    "BotMarksmanSmoke", "BarricadeTurnContactSmoke", "MarksmanAdvanceSmoke", "BotRepairSmoke", "PatrolSmoke",
+    "AmbushSmoke", "RealTimeControlSmoke", "PostureSmoke", "RealtimeSelectSmoke", "MarksmanCloseShotSmoke",
+    "HordeSmoke", "CoverSmoke", "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke",
+    "CoverCrouchSmoke", "CoverMoveSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
+    "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
+    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke"
   ],
   "smokeOptions": {
-    "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; timeout in seconds; knownFail = reported but does not fail the run",
+    "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
     "SaveLoadSmoke": { "exclusive": true },
     "SaveRoundTripSmoke": { "exclusive": true },
     "PauseMenuSmoke": { "exclusive": true },
     "EventBusSmoke": { "exclusive": true },
-    "MainMenuSmoke": { "extra": "-ForceMainMenu" },
-    "DialogueSmoke": { "extra": "-ForceMainMenu" },
-    "CombatMoveSmoke": { "knownFail": true }
+    "CombatMoveSmoke": { "knownFail": true },
+    "MainMenuSmoke": { "map": "/Game/Maps/L_MainMenu" },
+    "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" }
   },
   "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe"],
   "rules": [
@@ -248,21 +248,21 @@
     },
     {
       "name": "save-load",
-      "globs": ["Source/**/Core/SaveGame*", "Source/**/Core/SavePolicy*", "Source/**/UI/SaveLoadDialog*", "Source/**/UI/PauseMenu*"],
+      "globs": ["Source/**/Core/SaveGame*", "Source/**/Core/SavePolicy*"],
       "tests": ["CodexTactics.Core.SaveGame", "CodexTactics.Save"],
-      "smokes": ["SaveRoundTripSmoke", "SaveLoadSmoke", "PauseMenuSmoke", "EventBusSmoke"]
+      "smokes": ["SaveRoundTripSmoke", "SaveLoadSmoke", "PauseMenuSmoke", "EventBusSmoke", "FrontendSmoke"]
     },
     {
       "name": "mission-flow",
-      "globs": ["Source/**/Core/Mission*", "Source/**/Core/LevelFlow*", "Source/**/Core/Loadout*", "Source/**/GameFlow/GameFlow*", "Source/**/UI/PhaseBanners*", "Source/**/UI/MissionFailed*", "Source/**/UI/MainMenu*", "Source/**/UI/GameMessage*"],
+      "globs": ["Source/**/Core/Mission*", "Source/**/Core/LevelFlow*", "Source/**/Core/Loadout*", "Source/**/GameFlow/GameFlow*", "Source/**/UI/PhaseBanners*", "Source/**/UI/MissionFailed*", "Source/**/UI/GameMessage*"],
       "tests": ["CodexTactics.Mission", "CodexTactics.GameFlow", "CodexTactics.Core.LevelFlow", "CodexTactics.Core.Loadout"],
-      "smokes": ["MissionSmoke", "BannersSmoke", "MainMenuSmoke", "DialogueSmoke", "VictorySmoke", "DeathCamSmoke"]
+      "smokes": ["MissionSmoke", "BannersSmoke", "MainMenuSmoke", "DialogueSmoke", "VictorySmoke", "DeathCamSmoke", "FrontendSmoke"]
     },
     {
       "name": "game-framework",
       "globs": ["Source/**/Core/CodexTacticsGameMode*", "Source/**/Core/CodexTacticsGameState*", "Source/**/Core/CodexTacticsPlayerController*", "Source/**/UI/CodexTacticsHUD*", "Source/**/UI/CodexButtonFocus*"],
       "tests": ["CodexTactics.Core", "CodexTactics.Combat.TimeMode"],
-      "smokes": ["MovementSmoke", "CombatFlowSmoke", "ClickRulesSmoke", "PauseBarrelOrderSmoke", "MissionSmoke", "ActionBarSmoke", "SaveLoadSmoke"]
+      "smokes": ["MovementSmoke", "CombatFlowSmoke", "ClickRulesSmoke", "PauseBarrelOrderSmoke", "MissionSmoke", "ActionBarSmoke", "SaveLoadSmoke", "PauseMenuSmoke"]
     },
     {
       "name": "event-bus",
@@ -292,7 +292,7 @@
       "name": "build-config",
       "globs": ["Source/**/*.Build.cs", "Source/*.Target.cs", "Config/DefaultEngine.ini", "Config/DefaultGame.ini", "Config/DefaultInput.ini", "Config/DefaultGameplayTags.ini", "CodexTactics.uproject"],
       "tests": ["CodexTactics"],
-      "smokes": ["MovementSmoke", "CombatFlowSmoke", "MissionSmoke", "StanceSmoke", "SaveLoadSmoke"]
+      "smokes": ["MovementSmoke", "CombatFlowSmoke", "MissionSmoke", "StanceSmoke", "SaveLoadSmoke", "FrontendSmoke", "PauseMenuSmoke"]
     },
     {
       "name": "maps-and-content",
@@ -305,6 +305,12 @@
       "globs": ["Config/DefaultEditor.ini", "Config/DefaultScalability.ini", "Scripts/**", "docs/**", "design/**", "production/**", "Tools/**", ".claude/**", ".agents/**", "*.md", "Saved/**", "Content/**/*.png", "Content/**/*.jpg"],
       "tests": [],
       "smokes": []
+    },
+    {
+      "name": "frontend",
+      "globs": ["Source/**/UI/Frontend/**", "Source/CodexTacticsTests/Private/UI/Frontend*", "Source/**/Debug/Frontend*", "Source/CodexTacticsEditor/Private/FrontendWidget*", "Content/UI/Frontend/**", "Content/Maps/L_MainMenu.umap", "Scripts/Editor/create_frontend_assets.py"],
+      "tests": ["CodexTactics.UI.Frontend", "CodexTactics.Mission"],
+      "smokes": ["FrontendSmoke", "MainMenuSmoke", "PauseMenuSmoke", "DialogueSmoke"]
     }
   ]
 }

@@ -12,6 +12,9 @@ public class CodexTacticsTests : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"Json",
+			"UMG",
+			"CommonUI",
+			"GameplayTags",
 			"CodexTactics"
 		});
 	}

@@ -1,6 +1,6 @@
 // Dev-only console command for a visual HUD / stance check (needs rendering, not -nullrhi):
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_MovementTest -game -windowed -ResX=1600 -ResY=900 -ExecCmds="CodexTactics.HudShot [close]"
-// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (with -ForceMainMenu): the start menu. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the drawer with the Sprint 13 hand-over quantity dialog (M16 rounds to a squad mate, 15 chosen). "pause" / "saves": the pause menu / the save dialog (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar. "profile": the commander levelled up, profile open. "victory": the wave-cleared panel with kill statistics. "duel" (with "turnbased"): the dramatic shot framing. "frost": the frost vignette of a freezing squad (cold 90 %).
+// "turnbased": Gorky 17 grid with one enemy. "cutscene": pre-combat cutscene card; "prep": preparation banner. "dialogue": the intro briefing in the bottom window. "failed": an operative dies -> mission-failed screen. "mainmenu" (run on /Game/Maps/L_MainMenu): the frontend title screen. "weapons": the weapon selector open. "grenade": the grenade aim. "inventory": the inventory drawer open. "transfer": the drawer with the Sprint 13 hand-over quantity dialog (M16 rounds to a squad mate, 15 chosen). "pause" / "saves": the pause menu / the SAVE GAME slot screen (a quicksave first). "ring": tactical pause + barricade placement radius ring. "susanin": the Susanin rescue event (distress dialogue). "floating": floating combat texts. "rage": the commander in rage. "labels": overhead labels of enemies and deployables. "hold": the Space-hold dome and charge bar. "profile": the commander levelled up, profile open. "victory": the wave-cleared panel with kill statistics. "duel" (with "turnbased"): the dramatic shot framing. "frost": the frost vignette of a freezing squad (cold 90 %).
 // "shoot": Ctrl + click shot at a barrel with the world slowed down, to see the tracer, target flash and a plan marker.
 // Otherwise puts the squad into all three stances, posts a feed message, saves Saved/Screenshots/.../HudShot.png and exits.
 
@@ -46,7 +46,9 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UI/ActionBarWidget.h"
-#include "UI/PauseMenuWidget.h"
+#include "UI/Frontend/CodexPauseMenuScreen.h"
+#include "UI/Frontend/CodexUISubsystem.h"
+#include "UI/Frontend/CodexUITags.h"
 #include "Core/SaveGameSubsystem.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
@@ -80,7 +82,7 @@ namespace HudShot
 		{
 			return;
 		}
-		// "mainmenu" (run with -ForceMainMenu): the world is paused behind the start menu, so use real time.
+		// "mainmenu" (run on /Game/Maps/L_MainMenu): the frontend title screen; real time.
 		if (Args.Contains(TEXT("mainmenu")))
 		{
 			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
@@ -569,9 +571,10 @@ namespace HudShot
 					}
 				}
 				Hud->HandleEscape();
-				if (bSaves && Hud->GetPauseMenu())
+				UCodexUISubsystem* UI = UCodexUISubsystem::Get(PauseWorld.Get());
+				if (UCodexActivatableScreen* Pause = bSaves && UI ? UI->FindScreen(CodexUITags::Screen_Pause) : nullptr)
 				{
-					Hud->GetPauseMenu()->OpenSave();
+					Pause->ActivateEntry(TEXT("Save"));
 				}
 				TSharedRef<int32> Frames = MakeShared<int32>(0);
 				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Frames](float)

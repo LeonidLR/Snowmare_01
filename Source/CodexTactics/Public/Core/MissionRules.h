@@ -24,10 +24,17 @@ namespace MissionRules
 	CODEXTACTICS_API FText GetModeRadio(EMissionStartMode Mode);
 
 	/**
-	 * Mode to start at once without the menu, or None to show the main menu.
-	 * Quick restart (Ctrl + X) repeats the last mode; bSkipMenu (headless checks, -NoMainMenu) starts "Start Game".
+	 * Mode a mission level starts in. The in-level start menu is retired (2026-10-08: the frontend map's NEW GAME opens
+	 * the level, which starts at once): quick restart (Ctrl + X) repeats the last mode, everything else starts "Game".
 	 */
-	CODEXTACTICS_API EMissionStartMode GetAutoStartMode(bool bQuickRestart, EMissionStartMode LastMode, bool bSkipMenu);
+	CODEXTACTICS_API EMissionStartMode GetAutoStartMode(bool bQuickRestart, EMissionStartMode LastMode);
+
+	/**
+	 * Skip the blocking intro briefing (the radio line is posted instead)? Always when a save is about to be loaded;
+	 * otherwise for headless runs (-ExecCmds / -NoMainMenu / -CodexBot) unless the frontend started the game or Ctrl + X
+	 * restarted it.
+	 */
+	CODEXTACTICS_API bool ShouldSkipIntro(bool bHeadlessCommandLine, bool bFrontendStart, bool bQuickRestart, bool bPendingLoad);
 
 	/**
 	 * Objective for a game phase change, false when the phase keeps the current objective.

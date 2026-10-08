@@ -29,13 +29,14 @@ FText MissionRules::GetModeRadio(EMissionStartMode Mode)
 	}
 }
 
-EMissionStartMode MissionRules::GetAutoStartMode(bool bQuickRestart, EMissionStartMode LastMode, bool bSkipMenu)
+EMissionStartMode MissionRules::GetAutoStartMode(bool bQuickRestart, EMissionStartMode LastMode)
 {
-	if (bQuickRestart && LastMode != EMissionStartMode::None)
-	{
-		return LastMode;
-	}
-	return bSkipMenu ? EMissionStartMode::Game : EMissionStartMode::None;
+	return bQuickRestart && LastMode != EMissionStartMode::None ? LastMode : EMissionStartMode::Game;
+}
+
+bool MissionRules::ShouldSkipIntro(bool bHeadlessCommandLine, bool bFrontendStart, bool bQuickRestart, bool bPendingLoad)
+{
+	return bPendingLoad || (bHeadlessCommandLine && !bFrontendStart && !bQuickRestart);
 }
 
 bool MissionRules::GetPhaseObjective(ECodexGamePhase Phase, int32 WaveIndex, float PreparationSeconds, bool bAfterCombat, FText& OutObjective)

@@ -12,13 +12,14 @@ class UDialogueSequenceAsset;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMissionObjectiveChanged, const FText&, Objective);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMissionFailed, const FText&, Reason);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMainMenuChanged, bool, bOpen);
 
 /**
- * Mission-level state: the main menu (start mode), the objective banner text, mission failure and restart.
- * The menu opens when a level starts unless Ctrl + X restarted it (same mode again) or the command line skips it
- * (-ExecCmds / -NoMainMenu: headless checks start "Start Game"; -ForceMainMenu keeps it). The world is paused while
- * the menu is open.
+ * Mission-level state: the start mode, the objective banner text, mission failure and restart.
+ * A mission level starts at once (the in-level start menu is retired, 2026-10-08: the frontend map L_MainMenu's NEW GAME
+ * opens the level): "Game" mode, or the last mode after Ctrl + X. The intro briefing plays unless a save is about to be
+ * loaded (UMissionSessionSubsystem::HasPendingLoad, applied by USaveGameSubsystem) or a headless check started the level
+ * (-ExecCmds / -NoMainMenu / -CodexBot without a frontend start: the radio line instead).
+ * Worlds without ACodexTacticsGameMode (the frontend map) have no mission.
  * The objective follows the quest chain in exploration and the game flow in combat (preparation, wave, victory).
  * Godot reference: Scenes/movements/main.gd update_objective, _update_objective_by_state, _check_squad_vital_signs,
  * _trigger_game_over, _on_restart_pressed, _restart_current_test_mode (Ctrl + X), _ready (quick restart),
@@ -32,12 +33,13 @@ class CODEXTACTICS_API UMissionSubsystem : public UWorldSubsystem
 public:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 
-	/** Starts the mission in a mode (main menu buttons): closes the menu, unpauses, applies the mode. */
+	/** Starts the mission in a mode (level start; Combat = dev / bot shortcut straight to the fight). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Mission")
 	void StartMission(EMissionStartMode Mode);
 
+	/** False on worlds without ACodexTacticsGameMode (the frontend map): nothing to start or save there. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Mission")
-	bool IsMainMenuOpen() const { return bMainMenuOpen; }
+	bool IsMissionWorld() const { return bMissionWorld; }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Mission")
 	EMissionStartMode GetStartMode() const { return StartMode; }
@@ -64,8 +66,8 @@ public:
 	FText GetFailureReason() const { return FailureReason; }
 
 	/**
-	 * Reloads the current level (Godot reload_current_scene). bQuick (Ctrl + X) starts the same mode again without
-	 * the menu; "Restart" shows the menu.
+	 * Reloads the current level (Godot reload_current_scene). bQuick (Ctrl + X) starts the same mode again; "Restart"
+	 * starts the level fresh in "Game" mode.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Mission")
 	void RestartMission(bool bQuick = false);
@@ -76,8 +78,6 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Mission")
 	FOnMissionFailed OnMissionFailed;
 
-	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Mission")
-	FOnMainMenuChanged OnMainMenuChanged;
 
 private:
 	UFUNCTION()
@@ -89,7 +89,6 @@ private:
 	UFUNCTION()
 	void HandleWaveStarted(int32 WaveIndex, int32 TotalEnemies);
 
-	void OpenMainMenu();
 	/** Story dialogue of the game mode (loads the soft reference), or null. */
 	const class UDialogueSequenceAsset* LoadDialogue(TSoftObjectPtr<UDialogueSequenceAsset> ACodexTacticsGameMode::* Member) const;
 	void PostRadio(const FText& Speaker, const FText& Text) const;
@@ -102,7 +101,7 @@ private:
 	void ApplyStageLoadout();
 
 	EMissionStartMode StartMode = EMissionStartMode::None;
-	bool bMainMenuOpen = false;
+	bool bMissionWorld = false;
 	/** Headless checks (menu skipped by the command line) get the radio line instead of the blocking intro dialogue. */
 	bool bHeadlessStart = false;
 	FText FailureReason;

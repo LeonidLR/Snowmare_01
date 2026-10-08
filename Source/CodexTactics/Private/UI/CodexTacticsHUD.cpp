@@ -46,16 +46,16 @@
 #include "Combat/WaveSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
-#include "UI/PauseMenuWidget.h"
 #include "Kismet/GameplayStatics.h"
-#include "UI/SaveLoadDialogWidget.h"
 #include "UI/DialogueSubsystem.h"
 #include "Core/MissionSubsystem.h"
 #include "UI/PhaseBannersWidget.h"
 #include "UI/TurnBasedHudWidget.h"
 #include "UI/DialogueSubsystem.h"
 #include "UI/DialogueWidget.h"
-#include "UI/MainMenuWidget.h"
+#include "Framework/Application/SlateApplication.h"
+#include "UI/Frontend/CodexUISubsystem.h"
+#include "UI/Frontend/CodexUITags.h"
 #include "UI/MissionFailedWidget.h"
 #include "HAL/IConsoleManager.h"
 #include "Survival/ColdSurvivalComponent.h"
@@ -154,15 +154,12 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	ActionMenuWidgetClass = UActionMenuWidget::StaticClass();
 	LootDialogWidgetClass = ULootDialogWidget::StaticClass();
 	MissionFailedWidgetClass = UMissionFailedWidget::StaticClass();
-	MainMenuWidgetClass = UMainMenuWidget::StaticClass();
 	DialogueWidgetClass = UDialogueWidget::StaticClass();
 	ActionBarWidgetClass = UActionBarWidget::StaticClass();
 	InventoryDrawerWidgetClass = UInventoryDrawerWidget::StaticClass();
 	QuantitySplitDialogWidgetClass = UQuantitySplitDialogWidget::StaticClass();
 	ProfileDialogWidgetClass = UProfileDialogWidget::StaticClass();
 	VictoryPanelWidgetClass = UVictoryPanelWidget::StaticClass();
-	PauseMenuWidgetClass = UPauseMenuWidget::StaticClass();
-	SaveLoadDialogWidgetClass = USaveLoadDialogWidget::StaticClass();
 	PhaseBannersWidgetClass = UPhaseBannersWidget::StaticClass();
 	TurnBasedHudWidgetClass = UTurnBasedHudWidget::StaticClass();
 }
@@ -195,15 +192,6 @@ void ACodexTacticsHUD::BeginPlay()
 		{
 			MissionFailed->AddToViewport(20);
 			MissionFailed->HideScreen();
-		}
-	}
-	if (MainMenuWidgetClass && GetOwningPlayerController())
-	{
-		MainMenu = CreateWidget<UMainMenuWidget>(GetOwningPlayerController(), MainMenuWidgetClass);
-		if (MainMenu)
-		{
-			MainMenu->AddToViewport(30);
-			MainMenu->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
 	if (ActionBarWidgetClass && GetOwningPlayerController())
@@ -256,21 +244,10 @@ void ACodexTacticsHUD::BeginPlay()
 			ProfileDialog->AddToViewport(12);
 		}
 	}
-	if (PauseMenuWidgetClass && GetOwningPlayerController())
+	// Frontend framework (CommonUI): the primary layout above the HUD widgets; the Esc pause menu goes onto its GameMenu layer.
+	if (UCodexUISubsystem* UI = UCodexUISubsystem::Get(this))
 	{
-		PauseMenu = CreateWidget<UPauseMenuWidget>(GetOwningPlayerController(), PauseMenuWidgetClass);
-		if (PauseMenu)
-		{
-			PauseMenu->AddToViewport(40);
-		}
-	}
-	if (SaveLoadDialogWidgetClass && GetOwningPlayerController())
-	{
-		SaveLoadDialog = CreateWidget<USaveLoadDialogWidget>(GetOwningPlayerController(), SaveLoadDialogWidgetClass);
-		if (SaveLoadDialog)
-		{
-			SaveLoadDialog->AddToViewport(41);
-		}
+		UI->GetOrCreateLayout(GetOwningPlayerController());
 	}
 	if (PhaseBannersWidgetClass && GetOwningPlayerController())
 	{
@@ -305,8 +282,6 @@ void ACodexTacticsHUD::BeginPlay()
 	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
 	{
 		Mission->OnMissionFailed.AddDynamic(this, &ACodexTacticsHUD::HandleMissionFailed);
-		Mission->OnMainMenuChanged.AddDynamic(this, &ACodexTacticsHUD::HandleMainMenuChanged);
-		HandleMainMenuChanged(Mission->IsMainMenuOpen()); // the mission decides before the HUD begins play
 	}
 	if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
 	{
@@ -385,23 +360,6 @@ void ACodexTacticsHUD::HandleDialogueChanged(bool bOpen)
 	if (Dialogue)
 	{
 		Dialogue->Refresh();
-	}
-}
-
-void ACodexTacticsHUD::HandleMainMenuChanged(bool bOpen)
-{
-	if (MainMenu)
-	{
-		MainMenu->SetVisibility(bOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-		if (bOpen)
-		{
-			MainMenu->RefreshModeButtons(); // "Start combat" hidden on ambush levels
-		}
-	}
-	// Godot: the tactical bar is hidden until the game starts.
-	if (ActionBar)
-	{
-		ActionBar->SetVisibility(bOpen ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible);
 	}
 }
 
@@ -656,8 +614,7 @@ void ACodexTacticsHUD::DrawCombatModeBadge()
 {
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-	const UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
-	if (!Flow || !Squad || Squad->GetMembers().IsEmpty() || (Mission && Mission->IsMainMenuOpen()))
+	if (!Flow || !Squad || Squad->GetMembers().IsEmpty())
 	{
 		return;
 	}
@@ -727,10 +684,9 @@ FLinearColor ACodexTacticsHUD::PostureMarkerColor(ESquadFirePosture Posture)
 void ACodexTacticsHUD::DrawPostureMarkers()
 {
 	// Per-operative fire posture marker (user request 2026-10-06): a small letter P / D / A in a dark box over the head,
-	// in the posture colour; the selected operative(s) get a brighter frame. Hidden under the start menu.
+	// in the posture colour; the selected operative(s) get a brighter frame.
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-	const UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
-	if (!Squad || (Mission && Mission->IsMainMenuOpen()))
+	if (!Squad)
 	{
 		return;
 	}
@@ -769,11 +725,6 @@ void ACodexTacticsHUD::DrawKnockdownBars()
 {
 	// Sprint 14 (TANDEM request #12): the overhead badge style of the panic / rage badges — a dark panel with the text —
 	// and a recovery bar under it that fills over the downed phase (frozen in the tactical pause / dialogue).
-	const UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
-	if (Mission && Mission->IsMainMenuOpen())
-	{
-		return;
-	}
 	UFont* Font = GEngine->GetSmallFont();
 	static const FString Badge = TEXT("[KNOCKED DOWN]");
 	for (TActorIterator<ACharacter> It(GetWorld()); It; ++It)
@@ -1389,42 +1340,37 @@ void ACodexTacticsHUD::HandleDragReleasedOverWorld(UInventoryDragDropOperation* 
 	HandleTransferDropOnActor(Operation->Sender.Get(), Operation->Item, Hit.GetActor(), Hit.ImpactPoint);
 }
 
-void ACodexTacticsHUD::OpenSaveLoadDialog(ESaveDialogMode Mode)
+bool ACodexTacticsHUD::IsPauseMenuOpen() const
 {
-	if (PauseMenu)
-	{
-		PauseMenu->Close(false);
-	}
-	UGameplayStatics::SetGamePaused(GetWorld(), true);
-	if (SaveLoadDialog)
-	{
-		SaveLoadDialog->Open(Mode);
-	}
+	const UCodexUISubsystem* UI = UCodexUISubsystem::Get(this);
+	return UI && (UI->GetScreenCount(CodexUITags::Layer_GameMenu) > 0 || UI->GetScreenCount(CodexUITags::Layer_Modal) > 0);
 }
 
-void ACodexTacticsHUD::CloseSaveLoadDialog()
+bool ACodexTacticsHUD::OpenPauseMenu()
 {
-	if (SaveLoadDialog)
+	UCodexUISubsystem* UI = UCodexUISubsystem::Get(this);
+	const UDialogueSubsystem* Dialogues = GetWorld()->GetSubsystem<UDialogueSubsystem>();
+	if (!UI || IsPauseMenuOpen() || (Dialogues && Dialogues->IsDialogueOpen()))
 	{
-		SaveLoadDialog->Close();
+		return false;
 	}
-	if (PauseMenu)
-	{
-		PauseMenu->Open();
-	}
+	UI->GetOrCreateLayout(GetOwningPlayerController());
+	UI->PushScreen(CodexUITags::Layer_GameMenu, CodexUITags::Screen_Pause);
+	return true;
 }
 
 void ACodexTacticsHUD::ClosePauseMenus()
 {
-	if (SaveLoadDialog)
+	if (UCodexUISubsystem* UI = UCodexUISubsystem::Get(this))
 	{
-		SaveLoadDialog->Close();
-	}
-	if (PauseMenu)
-	{
-		PauseMenu->Close(true);
+		UI->ClearLayer(CodexUITags::Layer_Modal);
+		UI->ClearLayer(CodexUITags::Layer_GameMenu);
 	}
 	UGameplayStatics::SetGamePaused(GetWorld(), false);
+	if (FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().SetAllUserFocusToGameViewport(); // a focused menu button would swallow the game keys
+	}
 }
 
 bool ACodexTacticsHUD::HandleEscape()
@@ -1434,21 +1380,14 @@ bool ACodexTacticsHUD::HandleEscape()
 		QuantityDialog->Cancel();
 		return true;
 	}
-	if (SaveLoadDialog && SaveLoadDialog->IsOpen())
+	// Pause menu / its sub-screens / a confirm dialog: the back action of the topmost screen (CommonUI usually consumes
+	// Esc itself; this path is for Esc reaching the game, e.g. right after a click on the world).
+	if (IsPauseMenuOpen())
 	{
-		if (SaveLoadDialog->IsConfirmOpen())
+		if (UCodexUISubsystem* UI = UCodexUISubsystem::Get(this))
 		{
-			SaveLoadDialog->CancelConfirmation();
+			UI->HandleBackOnTopScreen();
 		}
-		else
-		{
-			CloseSaveLoadDialog();
-		}
-		return true;
-	}
-	if (PauseMenu && PauseMenu->IsOpen())
-	{
-		PauseMenu->Close(true);
 		return true;
 	}
 	if (InventoryDrawer && InventoryDrawer->IsOpen())
@@ -1461,12 +1400,5 @@ bool ACodexTacticsHUD::HandleEscape()
 		ProfileDialog->Close();
 		return true;
 	}
-	const UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>();
-	const UDialogueSubsystem* Dialogues = GetWorld()->GetSubsystem<UDialogueSubsystem>();
-	if ((Mission && Mission->IsMainMenuOpen()) || (Dialogues && Dialogues->IsDialogueOpen()) || !PauseMenu)
-	{
-		return false;
-	}
-	PauseMenu->Open();
-	return true;
+	return OpenPauseMenu();
 }

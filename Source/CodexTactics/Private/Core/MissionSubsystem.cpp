@@ -25,6 +25,12 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Super::OnWorldBeginPlay(InWorld);
 	Objective = MissionRules::GetStartObjective();
 	StartMode = EMissionStartMode::None;
+	// The frontend map (any world without the mission game mode) has no mission to start.
+	bMissionWorld = InWorld.GetAuthGameMode<ACodexTacticsGameMode>() != nullptr;
+	if (!bMissionWorld)
+	{
+		return;
+	}
 	if (UQuestSubsystem* Quests = InWorld.GetSubsystem<UQuestSubsystem>())
 	{
 		Quests->OnObjectiveChanged.AddDynamic(this, &UMissionSubsystem::HandleQuestObjectiveChanged);
@@ -39,34 +45,24 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		Waves->OnWaveStarted.AddDynamic(this, &UMissionSubsystem::HandleWaveStarted);
 	}
 
-	// Godot _ready: Ctrl + X repeats the last mode, otherwise the start menu.
+	// Godot _ready: Ctrl + X repeats the last mode; otherwise the level starts in "Game" mode at once (the start menu is
+	// the frontend map now). A save loaded into this level (USaveGameSubsystem::LoadGameWithTravel, frontend CONTINUE /
+	// LOAD): Game mode without the intro; the save subsystem applies the slot.
 	UMissionSessionSubsystem* Session = InWorld.GetGameInstance() ? InWorld.GetGameInstance()->GetSubsystem<UMissionSessionSubsystem>() : nullptr;
 	const TCHAR* CommandLine = FCommandLine::Get();
-	const bool bSkipMenu = !FParse::Param(CommandLine, TEXT("ForceMainMenu"))
-		&& (FParse::Param(CommandLine, TEXT("NoMainMenu")) || FString(CommandLine).Contains(TEXT("-ExecCmds")));
-	const EMissionStartMode AutoMode = MissionRules::GetAutoStartMode(Session && Session->bQuickRestart,
-		Session ? Session->LastMode : EMissionStartMode::None, bSkipMenu);
-	bHeadlessStart = bSkipMenu && !(Session && Session->bQuickRestart);
+	const bool bHeadlessCommandLine = FParse::Param(CommandLine, TEXT("NoMainMenu")) || FParse::Param(CommandLine, TEXT("CodexBot"))
+		|| FString(CommandLine).Contains(TEXT("-ExecCmds"));
+	const bool bQuick = Session && Session->bQuickRestart;
+	const bool bPendingLoad = Session && Session->HasPendingLoad();
+	const EMissionStartMode AutoMode = bPendingLoad ? EMissionStartMode::Game
+		: MissionRules::GetAutoStartMode(bQuick, Session ? Session->LastMode : EMissionStartMode::None);
+	bHeadlessStart = MissionRules::ShouldSkipIntro(bHeadlessCommandLine, Session && Session->bFrontendStart, bQuick, bPendingLoad);
 	if (Session)
 	{
 		Session->bQuickRestart = false;
+		Session->bFrontendStart = false;
 	}
-	if (AutoMode == EMissionStartMode::None)
-	{
-		OpenMainMenu();
-	}
-	else
-	{
-		StartMission(AutoMode);
-	}
-}
-
-void UMissionSubsystem::OpenMainMenu()
-{
-	bMainMenuOpen = true;
-	StartMode = EMissionStartMode::None;
-	UGameplayStatics::SetGamePaused(GetWorld(), true);
-	OnMainMenuChanged.Broadcast(true);
+	StartMission(AutoMode);
 }
 
 void UMissionSubsystem::StartMission(EMissionStartMode Mode)
@@ -79,12 +75,6 @@ void UMissionSubsystem::StartMission(EMissionStartMode Mode)
 	if (UMissionSessionSubsystem* Session = GetWorld()->GetGameInstance() ? GetWorld()->GetGameInstance()->GetSubsystem<UMissionSessionSubsystem>() : nullptr)
 	{
 		Session->LastMode = Mode;
-	}
-	if (bMainMenuOpen)
-	{
-		bMainMenuOpen = false;
-		UGameplayStatics::SetGamePaused(GetWorld(), false);
-		OnMainMenuChanged.Broadcast(false);
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Mission start mode: %s"), *UEnum::GetValueAsString(Mode));
 	if (Mode == EMissionStartMode::Combat)
