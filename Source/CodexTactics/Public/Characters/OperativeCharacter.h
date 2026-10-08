@@ -634,6 +634,26 @@ public:
 	float ForcedDodgeRollForTesting = -1.f;
 
 	/**
+	 * Where the last hit came from (the attacker's location, else a point in front of him) — the hit reaction and the
+	 * death fall pick their direction from it. False before the first hit.
+	 */
+	bool GetLastHitSource(FVector& OutLocation) const;
+
+	/**
+	 * Killed in action (user decision 2026-10-08: only the commander's death fails the mission; the others stay down as
+	 * corpses for the rest of the mission, out of the squad, the HUD, the turn order and the enemies' targets). The save
+	 * system can read it from the health component too (dead = health 0).
+	 */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
+	bool IsKilledInAction() const { return bKilledInAction; }
+
+	/**
+	 * Save-game load of a fallen member: lies as a corpse at once (no death cinematic, no remains, no HQ line), out of the
+	 * squad and the turn order. The caller restores his health to 0 itself (UHealthComponent). For the save system.
+	 */
+	void RestoreKilledInAction();
+
+	/**
 	 * The enemy this operative would shoot now, without the target-switch memory (Godot _find_shoot_target: the manual
 	 * priority target while it can be hit, else the closest enemy in range with a line of fire).
 	 */
@@ -1239,6 +1259,13 @@ private:
 
 	UFUNCTION()
 	void HandleDied(AActor* Victim, const FString& AttackerSource);
+	/** A dead body: no movement, no pawn / click collision, no selection, no orders (stays where he fell). */
+	void BecomeCorpse();
+	/** Leaves supplies in searchable remains at his feet (Godot corpse_loot). */
+	void SpawnRemainsLoot();
+	bool bKilledInAction = false;
+	bool bHasLastHitSource = false;
+	FVector LastHitSource = FVector::ZeroVector;
 	/** Knockdown phase change: interrupts (aim, reload, move, cover), frees / restores the capsule and the movement. */
 	void HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase);
 	/** The capsule's Pawn response before a knockdown (restored when he is up). */

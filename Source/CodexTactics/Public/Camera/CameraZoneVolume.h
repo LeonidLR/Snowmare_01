@@ -29,11 +29,23 @@ namespace CameraZoneRules
 	/** Cold accumulation multiplier inside a zone of this environment. */
 	CODEXTACTICS_API float GetColdMultiplier(ECameraZoneEnvironment Environment);
 
+	/** Per-volume combat-mode switches (user request 2026-10-08). */
+	struct FCameraZoneModes
+	{
+		/** Real-time combat (exploration / preparation always show the zone camera). */
+		bool bRealTime = true;
+		bool bTurnBased = false;
+		bool bTacticalPause = false;
+	};
+
+	/** The zone is entered: the current leader is inside and the switch is on (messages, squad holding outside). */
+	CODEXTACTICS_API bool ShouldBeActive(bool bSwitchEnabled, bool bLeaderInside);
+
 	/**
-	 * A zone shows its camera while the current leader is inside, except during a tactical pause,
-	 * and during an active wave unless the zone allows combat.
+	 * The zone's fixed camera is shown in this combat mode (None = exploration / preparation / after the fight: always).
+	 * While it is not, the normal gameplay / turn-based camera takes over and the zone camera returns with the mode.
 	 */
-	CODEXTACTICS_API bool ShouldBeActive(bool bSwitchEnabled, bool bAllowInCombat, ECodexCombatMode CombatMode, bool bWaveActive, bool bLeaderInside);
+	CODEXTACTICS_API bool IsCameraAllowed(const FCameraZoneModes& Modes, ECodexCombatMode CombatMode);
 }
 
 /**
@@ -71,9 +83,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Camera")
 	bool bEnableCameraSwitch = true;
 
-	/** Keep switching the camera during an active wave. */
+	/**
+	 * Show the zone camera during real-time combat (user request 2026-10-08; replaces bAllowInCombat). Exploration and
+	 * preparation always show it.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Camera")
-	bool bAllowInCombat = false;
+	bool bActiveInRealTime = true;
+
+	/** Show it during turn-based combat (off: the turn-based camera; the zone camera returns in real time). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Camera")
+	bool bActiveInTurnBased = false;
+
+	/** Show it during the tactical pause (off: the gameplay camera for planning; back on release). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Camera")
+	bool bActiveInTacticalPause = false;
+
+	/** The fixed camera is the view right now (inside, mode allowed, no death cinematic). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Camera")
+	bool IsZoneCameraShown() const { return bCameraShown; }
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Camera")
 	FText ZoneName;
@@ -92,6 +119,9 @@ public:
 private:
 	void Activate(AOperativeCharacter* Explorer);
 	void Deactivate();
+	/** Blends to the zone camera / back to the player's pawn. */
+	void ShowZoneCamera(bool bShow);
+	bool bCameraShown = false;
 	FText GetEnvironmentLabel() const;
 	void PostMessage(const FText& Text) const;
 

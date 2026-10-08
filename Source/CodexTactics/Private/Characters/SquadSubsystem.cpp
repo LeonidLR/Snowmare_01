@@ -61,6 +61,7 @@ void USquadSubsystem::RegisterOperative(AOperativeCharacter* Operative)
 void USquadSubsystem::UnregisterOperative(AOperativeCharacter* Operative)
 {
 	Members.Remove(Operative);
+	SelectedGroup.Remove(Operative); // a fallen member drops out of the selection too
 	if (Leader.Get() == Operative)
 	{
 		Leader.Reset();

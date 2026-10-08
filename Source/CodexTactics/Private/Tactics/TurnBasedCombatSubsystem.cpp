@@ -1,5 +1,6 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Combat/KnockdownComponent.h"
+#include "Combat/DeathCinematicSubsystem.h"
 #include "Characters/EnemyAnimInstance.h"
 #include "Tactics/TacticalEncounterRules.h"
 #include "Camera/TacticalCameraPawn.h"
@@ -697,6 +698,10 @@ FVector UTurnBasedCombatSubsystem::GetSquadOverviewCenter() const
 
 void UTurnBasedCombatSubsystem::FocusSquadTurn(AActor* Unit) const
 {
+	if (const UDeathCinematicSubsystem* DeathCam = GetWorld()->GetSubsystem<UDeathCinematicSubsystem>(); DeathCam && DeathCam->IsFocusActive())
+	{
+		return; // the death cinematic owns the camera and returns it to the active operative itself
+	}
 	if (ATacticalCameraPawn* Camera = GetCamera())
 	{
 		Camera->SmoothFocusOnTarget(Unit, 0.75f, SquadTurnDistance);
@@ -4035,12 +4040,74 @@ void UTurnBasedCombatSubsystem::OnSquadMemberKilled(AActor* Member, const FIntPo
 	Log(FString::Printf(TEXT("⚰️ %s has fallen in battle!"), *NameOf(Member)));
 	if (!Grid)
 	{
-		return; // the death already ended the mission and the fight with it
+		return; // the fight is already over
 	}
 	Grid->ClearOccupant(Cell);
-	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Member);
-	Squad.RemoveAll([Operative](const TWeakObjectPtr<AOperativeCharacter>& Weak) { return Weak.Get() == Operative || !Weak.IsValid(); });
-	States.Remove(Member);
+	NotifyOperativeKilled(Cast<AOperativeCharacter>(Member)); // usually done already by his own death handler
+}
+
+void UTurnBasedCombatSubsystem::NotifyOperativeKilled(AOperativeCharacter* Operative)
+{
+	if (!IsActive() || !Operative)
+	{
+		return;
+	}
+	const int32 Index = Squad.IndexOfByPredicate([Operative](const TWeakObjectPtr<AOperativeCharacter>& Weak) { return Weak.Get() == Operative; });
+	if (const FTurnUnitState* State = States.Find(Operative); State && Grid)
+	{
+		Grid->ClearOccupant(State->GridPos);
+	}
+	States.Remove(Operative);
+	if (Index == INDEX_NONE)
+	{
+		return;
+	}
+	const bool bWasActive = Index == ActiveIndex;
+	Squad.RemoveAt(Index);
+	if (Index < ActiveIndex)
+	{
+		--ActiveIndex; // the same living operative stays active
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[TurnBased] %s removed from the turn order (%d left, active %d)"), *NameOf(Operative), Squad.Num(), ActiveIndex);
+	if (Squad.IsEmpty())
+	{
+		CheckBattleEnd();
+		return;
+	}
+	if (!bWasActive || Phase != ETurnPhase::Squad)
+	{
+		RefreshOverlay();
+		Changed();
+		return;
+	}
+	// The active operative died on his own turn (a blast, a trap): the next one takes over, or the squad phase ends.
+	bAttackMode = false;
+	if (Squad.IsValidIndex(ActiveIndex))
+	{
+		if (USquadSubsystem* SquadSystem = GetWorld()->GetSubsystem<USquadSubsystem>())
+		{
+			SquadSystem->SetLeader(GetActiveUnit());
+		}
+		RefreshOverlay();
+		Changed();
+		return;
+	}
+	ActiveIndex = Squad.Num() - 1;
+	After(0.3f, [this]() { EndSquadPhaseAfterDeath(); });
+}
+
+void UTurnBasedCombatSubsystem::EndSquadPhaseAfterDeath()
+{
+	if (Phase != ETurnPhase::Squad)
+	{
+		return;
+	}
+	if (IsBusy())
+	{
+		After(0.3f, [this]() { EndSquadPhaseAfterDeath(); }); // the action that killed him finishes first
+		return;
+	}
+	EndSquadPhase();
 }
 
 bool UTurnBasedCombatSubsystem::CheckBattleEnd()

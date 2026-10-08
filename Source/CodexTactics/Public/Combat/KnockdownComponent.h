@@ -116,6 +116,14 @@ public:
 	bool HandleDeath();
 	bool DiedWhileDown() const { return bDiedWhileDown; }
 
+	/**
+	 * Killed standing / crouched with no death clip of his own (user bug 2026-10-08: Susanin stayed standing): falls with
+	 * the Knocked_* clip of the side the killing blow came from (SourceLocation) and holds it as the corpse pose.
+	 * Returns false without a clip / anim instance. Idempotent.
+	 */
+	bool PlayDeathFall(const FVector& SourceLocation);
+	bool PlayedDeathFall() const { return bDeathFallPlayed; }
+
 	/** The clip asset of the current phase / the montage instance playing it (smokes). */
 	UAnimSequenceBase* GetPlayingClip() const { return PlayingClip.Get(); }
 	UAnimMontage* GetPlayingMontage() const { return PlayingMontage.Get(); }
@@ -158,6 +166,7 @@ private:
 	TWeakObjectPtr<UAnimMontage> PlayingMontage;
 	float GetUpPlayRate = 1.f;
 	bool bDiedWhileDown = false;
+	bool bDeathFallPlayed = false;
 	int32 KnockdownCount = 0;
 	int32 RecoveryCount = 0;
 };

@@ -234,6 +234,34 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
 	TObjectPtr<UAnimSequenceBase> PistolHitAnimation;
 
+	/** Standing / crouched hit from behind (empty = HitStand / HitCrouch). Upper body like the others. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	TObjectPtr<UAnimSequenceBase> HitBackAnimation;
+
+	/** At most one hit reaction per this many seconds (a burst plays one; HitReactionRules). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float HitReactionMinIntervalSeconds = 0.8f;
+
+	/** Hits below this damage (cold ticks, chip damage) play no reaction. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float HitReactionMinDamage = 1.f;
+
+	/** Play the reaction in cover too (default off: the M4 cover clips keep the body; the damage flash still shows). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots")
+	bool bHitReactionInCover = false;
+
+	/** Blend in / out of the upper-body hit reaction, s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float HitReactionBlendInSeconds = 0.08f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|One-shots", meta = (ClampMin = "0"))
+	float HitReactionBlendOutSeconds = 0.2f;
+
+	/** Hit reactions started / the last clip (smokes). */
+	int32 GetHitReactionsPlayed() const { return HitReactionsPlayed; }
+	UAnimSequenceBase* GetLastHitReactionClip() const { return LastHitReactionClip.Get(); }
+	FName GetLastHitReactionSlot() const { return LastHitReactionSlot; }
+
 	/**
 	 * Upper-body grenade throw: walking, running, crouched, prone (Godot grenade_throw_*). Played on UpperBodySlot (the
 	 * graph's layered blend from spine_01) so the legs keep the locomotion. The grenade leaves the hand at the matching
@@ -894,6 +922,11 @@ private:
 	FDelegateHandle FiredHandle;
 	FDelegateHandle GrenadeHandle;
 	bool bDeathPlayed = false;
+	/** Hit reactions (HitReactionRules): game time of the last one, count / clip / slot for the smokes. */
+	double LastHitReactionTime = -1000.0;
+	int32 HitReactionsPlayed = 0;
+	TWeakObjectPtr<UAnimSequenceBase> LastHitReactionClip;
+	FName LastHitReactionSlot;
 	/** Vault clip: started on the vault's first frame, foot alternating. */
 	void UpdateVaultClip(const AOperativeCharacter& Operative);
 	bool bWasVaulting = false;

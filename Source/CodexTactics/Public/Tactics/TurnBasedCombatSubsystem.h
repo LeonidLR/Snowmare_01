@@ -140,6 +140,13 @@ public:
 	/** Sprint 14: the active operative is knocked down (falling / lying / getting up): no move, shot or stance order. */
 	bool IsActiveUnitKnockedDown() const;
 
+	/**
+	 * An operative died (any cause; user decision 2026-10-08: only the commander's death ends the mission). Drops him
+	 * from the turn order, the grid and the unit states; keeps the active index on the same living unit, or passes the
+	 * turn on when the active operative himself died (the squad phase ends when he was the last). Idempotent.
+	 */
+	void NotifyOperativeKilled(AOperativeCharacter* Operative);
+
 	/** A cinematic squad shot or turret volley is playing. */
 	bool IsDramaticShotActive() const { return bDramaticShotActive; }
 
@@ -461,6 +468,8 @@ private:
 	void DetonateMine(const FIntPoint& Cell, AActor* Mine, AActor* Victim);
 	void OnEnemyKilled(AActor* Enemy, const FIntPoint& Cell);
 	void OnSquadMemberKilled(AActor* Member, const FIntPoint& Cell);
+	/** The last operative of the squad phase died on his own turn: end the phase once the running action is over. */
+	void EndSquadPhaseAfterDeath();
 	bool CheckBattleEnd();
 
 	void StartMover(AActor* Actor, const FIntPoint& From, const TArray<FIntPoint>& Path, float StepDuration, TFunction<bool(int32)> OnStep,

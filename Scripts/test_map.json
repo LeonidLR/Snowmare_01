@@ -28,7 +28,7 @@
     "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke", "CoverCrouchSmoke", "CoverMoveSmoke",
     "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke", "PrepDeploySmoke", "SightSmoke",
     "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke", "TurnBasedAimSmoke",
-    "KnockdownSmoke"
+    "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; timeout in seconds; knownFail = reported but does not fail the run",
@@ -52,7 +52,7 @@
       "name": "anim-operative",
       "globs": ["Source/**/Characters/OperativeAnimInstance*", "Source/**/Characters/LeftHandIKRules*", "Source/**/Characters/AimOffsetRules*", "Source/**/Characters/RifleLocomotionRules*", "Source/**/Characters/ColdAnimationRules*", "Content/Characters/Operatives/**"],
       "tests": ["CodexTactics.Anim", "CodexTactics.Characters.RifleLocomotion", "CodexTactics.Characters.ColdAnimation"],
-      "smokes": ["LeftHandIKSmoke", "AimOffsetSmoke", "TurnBasedAimSmoke", "GrenadeAnimSmoke", "CoverSmoke", "StanceSmoke"]
+      "smokes": ["LeftHandIKSmoke", "AimOffsetSmoke", "TurnBasedAimSmoke", "GrenadeAnimSmoke", "CoverSmoke", "StanceSmoke", "DeathCamSmoke"]
     },
     {
       "name": "anim-enemy",
@@ -238,7 +238,13 @@
       "name": "camera",
       "globs": ["Source/**/Camera/**"],
       "tests": ["CodexTactics.Camera", "CodexTactics.GameFlow.Phases"],
-      "smokes": ["CameraZoneSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke"]
+      "smokes": ["CameraZoneSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke"]
+    },
+    {
+      "name": "death-cinematic",
+      "globs": ["Source/**/Combat/DeathCinematic*", "Source/**/UI/DeathCinematicOverlay*", "Source/**/Characters/HitReactionRules*", "Scripts/Editor/setup_operative_hit_animation.py"],
+      "tests": ["CodexTactics.Combat.DeathCinematic", "CodexTactics.Anim.HitReaction", "CodexTactics.Mission.DefeatRule"],
+      "smokes": ["DeathCamSmoke", "CameraZoneModeSmoke", "RecruitDeathSmoke", "MissionSmoke", "TurnBlastDeathSmoke", "KnockdownSmoke"]
     },
     {
       "name": "save-load",
@@ -250,7 +256,7 @@
       "name": "mission-flow",
       "globs": ["Source/**/Core/Mission*", "Source/**/Core/LevelFlow*", "Source/**/Core/Loadout*", "Source/**/GameFlow/GameFlow*", "Source/**/UI/PhaseBanners*", "Source/**/UI/MissionFailed*", "Source/**/UI/MainMenu*", "Source/**/UI/GameMessage*"],
       "tests": ["CodexTactics.Mission", "CodexTactics.GameFlow", "CodexTactics.Core.LevelFlow", "CodexTactics.Core.Loadout"],
-      "smokes": ["MissionSmoke", "BannersSmoke", "MainMenuSmoke", "DialogueSmoke", "VictorySmoke"]
+      "smokes": ["MissionSmoke", "BannersSmoke", "MainMenuSmoke", "DialogueSmoke", "VictorySmoke", "DeathCamSmoke"]
     },
     {
       "name": "game-framework",

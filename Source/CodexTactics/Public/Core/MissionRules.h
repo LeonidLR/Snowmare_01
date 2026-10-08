@@ -51,4 +51,17 @@ namespace MissionRules
 
 	/** HQ radio line when an operative is lost. */
 	CODEXTACTICS_API FText GetFailureRadio(const FText& OperativeName);
+
+	/**
+	 * Defeat rule (user decision 2026-10-08): the mission is lost only when the COMMANDER dies (Engineer, Medic-Sapper and
+	 * recruits are permanent losses, the fight goes on) or when no squad member is left alive.
+	 * LivingSquadMembers = living members after this death.
+	 */
+	CODEXTACTICS_API bool ShouldFailMission(bool bFallenIsCommander, int32 LivingSquadMembers);
+
+	/** Full-screen line after the commander's death cinematic, before the mission-failed screen. */
+	CODEXTACTICS_API FText GetSquadFallenText();
+
+	/** HQ line when a non-commander member is killed (the fight goes on). */
+	CODEXTACTICS_API FText GetMemberLostRadio(const FText& OperativeName);
 }
