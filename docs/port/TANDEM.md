@@ -41,6 +41,59 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 ---
 
+## 📣 SYNC FOR GEMINI — 2026-10-08 (read this first; written by Claude on the user's request)
+
+The user is bringing Gemini in for **narrative design** and wants both agents in sync. Everything below landed on `main`
+between 2026-10-06 and 2026-10-08 (details per commit in HANDOFF §10; `git log --since=2026-10-06`).
+
+**What changed in the game (gameplay facts a writer must know)**
+- **Stealth & patrols (Sprint 11, 4494854 / a285a9a / 4933631).** Spline patrol routes (`APatrolRouteActor`), hound escorts,
+  per-archetype perception (sight / hearing by gait / smell, `Content/Data/AI/enemy_perception.json`, enemy sight now ×0.9 via
+  `ai_tuning.json`). Traps make patrols **search 60 s** («❓ ПОИСК» / «ОТБОЙ») instead of starting combat. On patrol levels combat
+  starts by **ambush** (squad attacks / patrol detects), LevelJson `combat_start` auto|ambush|button. **Horde** after 240 s of
+  real-time combat (`horde.json`, per-level `horde_enabled`).
+- **Dialogue is safe:** while any dialogue / pre-combat cutscene / blocker is up, enemy AI is frozen (`UWorldAIPauseSubsystem`)
+  and **cold does not accumulate** — long narrative scenes cost the squad nothing.
+- **Combat control (d876606, 1ac981c):** RTS real time by default; Space tap = tactical pause (orders queue), hold 1.5 s =
+  turn-based. Fire postures per operative: `,` passive / `.` defensive / `/` aggressive (Alt = whole squad). Ctrl+click =
+  attack in every mode.
+- **Cover system (Sprint 12 + fixes up to 7e5e85c):** high/low wall cover, ghost preview, shimmy facing the last known threat,
+  corner hold (step out at an edge, duck only to reload), aim cone (never shoots where not aiming), crouched / low cover.
+- **Inventory (Sprint 13, 5732cc4):** the «ПЕРЕД» dialog is gone; drag items from the inventory onto an ally (≤ 2 m, auto-walk
+  out of combat), onto the ground (pile `ADroppedItemActor`) or into **two-way loot crates** (`UItemStashComponent`).
+- **Animation:** M4 cover pack clips, left-hand IK (FABRIK from clavicle_l, user's ABP), 1D/2D aim offset (`AimPitch`/`AimYaw`),
+  grenade throw clips on the upper body.
+- **Playtest bot** now sneaks on patrol levels and logs `[Stealth]` telemetry; the Jev coach writes **proposals**
+  (`Saved/Coach/*.md`) and only applies them with `--apply-proposal` after the user approves.
+
+**Narrative hooks that exist today (Claude-owned code; Gemini designs content / data and requests code)**
+- Dialogue runtime: `UI/DialogueSubsystem.h`, `DialogueRules.h`, `DialogueWidget.h`; sequences `Data/DialogueSequenceAsset.h`
+  (`Content/Data/Dialogues/DA_Dialogue*.uasset`: Intro, Prep, WaveRest, Victory, SusaninRecruitment); source text
+  `Content/Data/Narrative/dialogues.csv` + `narrative_manifest.json`.
+- Triggers / world: `Quests/DialogueTriggerVolume.h`, `Interactables/NarrativeElementActor.h`, quest chain
+  `Quests/QuestSubsystem.h` / `QuestChain.h`, mission flow `Core/MissionSubsystem.h` / `MissionRules.h`, banners
+  `UI/PhaseBannersWidget.h`, radio / HUD feed lines (many systems post short Russian feed lines — keep tone consistent).
+- Level data: `Content/Data/LevelJson/*.json` (waves, `combat_start`, `patrol_search_seconds`, `horde*`), edited in the Wave
+  Editor (`Tools/WaveEditor`, tab «Скрытность и бой» for stealth / horde).
+
+**How to work with us now**
+- **Ownership for narrative:** Gemini owns narrative CONTENT — `Content/Data/Narrative/**` (csv / manifest / new text files),
+  dialogue texts, mission / quest design docs (`design/narrative/**` suggested). Claude owns the C++ and the `DA_Dialogue*` /
+  data-asset import path; ask via «Requests» for new trigger types, conditions, UI or data fields. Claim any `.uasset` first.
+- **Work in your own worktree** (protocol 8): `git worktree add ../CodexTactics-gemini -b gemini/narrative main`, so you never
+  disturb the user's editor or Claude's tree; the user / Claude merges.
+- **Verification tiers (HANDOFF §3):** edit → `Scripts/build.ps1` + `Scripts/test.ps1 -Changed -Quick`; pre-commit →
+  `Scripts/test.ps1 -Changed` + `Scripts/test.ps1`; nightly → `Scripts/verify_all.ps1` (parallel smokes, ~25 min).
+  `Scripts/test_map.json` maps paths → tests / smokes; a new smoke must be registered there (`test.ps1 -CheckMap`).
+  Dialogue-related smokes: DialogueSmoke (`-ForceMainMenu`), NarrativeSmoke, MissionSmoke, BannersSmoke, MainMenuSmoke.
+- Conventions unchanged: shared build lock, `$env:CODEX_AGENT = "gemini"`, Conventional Commits, update HANDOFF §10, never touch
+  the user's files (maps, `BP_Operative`, ABP graphs, `DefaultEditor.ini`, imported packs).
+- **Open items:** tactical-pause barrel orders + igniting barrels with matches in combat (Claude, in progress); turn-based aim
+  offset jitter fix (Claude, `agents/work` fc72c44, merging); bot traps / search untested (no mines on patrol levels — user to
+  decide).
+
+---
+
 ## In progress
 
 | Agent | Task | Files / assets | Since |
