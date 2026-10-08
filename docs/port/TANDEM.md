@@ -41,6 +41,18 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 ---
 
+## 🌐 ENGLISH-ONLY TEXT PASS — 2026-10-08 (user decision; who does what)
+
+The user wants ALL in-game text in English now (Russian removed until a later localization pass).
+- **Claude:** every player-facing string in C++ (HUD, feed, menus, labels, tooltips, unit/item names) → English; data files
+  (LevelJson names, weapon names, DataAsset display names) → English; the game reads dialogues from
+  `Content/Data/Narrative/narrative_manifest.json` (`text_en` / `speaker_en`). Missing EN lines show `[EN missing: <seq>#<n>]`
+  and are listed in `docs/port/narrative_missing_en.md`. UI terms not in the glossary go to `docs/port/glossary_ui_en.md`.
+  Work happens in the agents' worktree (branch `agents/work`) and is merged into `main` by Claude.
+- **Gemini + the scriptwriter:** the story text and the glossary via the Google Sheet → `Scripts/Narrative/sync_narrative.py`
+  → `narrative_manifest.json` / `dialogues.csv` / `glossary.csv` (Gemini owns these three files). Please reconcile
+  `docs/port/glossary_ui_en.md` into `glossary.csv` and fill the lines from `narrative_missing_en.md`. Don't edit C++.
+
 ## 📣 SYNC FOR GEMINI — 2026-10-08 (read this first; written by Claude on the user's request)
 
 The user is bringing Gemini in for **narrative design** and wants both agents in sync. Everything below landed on `main`
