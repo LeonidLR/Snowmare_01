@@ -27,7 +27,7 @@
     "RealtimeSelectSmoke", "MarksmanCloseShotSmoke", "HordeSmoke", "CoverSmoke",
     "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke", "CoverCrouchSmoke", "CoverMoveSmoke",
     "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke", "PrepDeploySmoke", "SightSmoke",
-    "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke"
+    "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke", "TurnBasedAimSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; timeout in seconds; knownFail = reported but does not fail the run",
@@ -50,7 +50,7 @@
       "name": "anim-operative",
       "globs": ["Source/**/Characters/OperativeAnimInstance*", "Source/**/Characters/LeftHandIKRules*", "Source/**/Characters/AimOffsetRules*", "Source/**/Characters/RifleLocomotionRules*", "Source/**/Characters/ColdAnimationRules*", "Content/Characters/Operatives/**"],
       "tests": ["CodexTactics.Anim", "CodexTactics.Characters.RifleLocomotion", "CodexTactics.Characters.ColdAnimation"],
-      "smokes": ["LeftHandIKSmoke", "AimOffsetSmoke", "GrenadeAnimSmoke", "CoverSmoke", "StanceSmoke"]
+      "smokes": ["LeftHandIKSmoke", "AimOffsetSmoke", "TurnBasedAimSmoke", "GrenadeAnimSmoke", "CoverSmoke", "StanceSmoke"]
     },
     {
       "name": "anim-enemy",

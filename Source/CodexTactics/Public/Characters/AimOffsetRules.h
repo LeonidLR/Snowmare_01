@@ -52,4 +52,13 @@ namespace AimOffsetRules
 	 * |ErrorDegrees - AppliedYawDegrees|, degrees. A shot is allowed while this is within the aim cone.
 	 */
 	CODEXTACTICS_API float ResidualAimError(float ErrorDegrees, float AppliedYawDegrees);
+
+	/**
+	 * The AimYaw target from the raw (unclamped, -180..180) angle to the target (user PIE video AnimOffset_Bug_01,
+	 * 2026-10-08: a target behind him sat at +-180 deg, its sign flipped frame to frame and the clamped yaw jumped between
+	 * +60 and -60 - the upper body jittered). A target beyond ReachDeg is out of the twist's reach: 0 (the body turns to it
+	 * for a shot, not the spine); it is reached again only below ReachDeg - HysteresisDeg (bInOutOfReach keeps the state).
+	 * Within reach: the raw angle clamped to +-ClampDeg.
+	 */
+	CODEXTACTICS_API float YawTargetWithinReach(float RawDegrees, float ClampDeg, float ReachDeg, float HysteresisDeg, bool& bInOutOfReach);
 }

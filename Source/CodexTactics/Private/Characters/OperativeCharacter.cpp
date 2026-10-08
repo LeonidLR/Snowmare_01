@@ -2334,7 +2334,9 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		const FVector Barrel = WeaponMesh->GetComponentTransform().TransformVectorNoScale(MuzzleOffset.GetSafeNormal());
 		if (FMath::Abs(Barrel.Z) < 0.7f) // roughly level, i.e. really aimed
 		{
-			Offset = FMath::Clamp(FRotator::NormalizeAxis(Barrel.Rotation().Yaw - GetActorRotation().Yaw), -45.f, 45.f);
+			// The pose's own barrel yaw: the 2D aim offset's twist (in these bones since the last evaluation, with the AimYaw
+			// still in the anim instance) is taken out - else the facing and AimYaw chase each other (AnimOffset_Bug_01).
+			Offset = FMath::Clamp(FRotator::NormalizeAxis(Barrel.Rotation().Yaw - GetActorRotation().Yaw - GetAppliedAimYaw()), -45.f, 45.f);
 		}
 	}
 	BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, Offset, DeltaTime, 6.f);
@@ -3719,9 +3721,10 @@ FVector AOperativeCharacter::GetStanceAimBaseDirection() const
 	{
 		return CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg);
 	}
-	// Out of cover (and any other pose): the barrel's yaw (the rifle is held across the chest, BarrelYawOffset, measured on
-	// the weapon - so it already holds the twist the 2D aim offset applies: taken out to get the pose's own direction).
-	return FRotator(0.f, GetActorRotation().Yaw + BarrelYawOffset - GetAppliedAimYaw(), 0.f).Vector();
+	// Out of cover (and any other pose): the pose's barrel yaw (the rifle is held across the chest). BarrelYawOffset is
+	// measured on the weapon with the 2D aim offset's twist taken out (UpdateCombatFacing): a stable reference, the AO never
+	// feeds back into its own input (AnimOffset_Bug_01, 2026-10-08).
+	return FRotator(0.f, GetActorRotation().Yaw + BarrelYawOffset, 0.f).Vector();
 }
 
 float AOperativeCharacter::GetAppliedAimYaw() const
