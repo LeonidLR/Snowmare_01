@@ -2634,7 +2634,8 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	}
 	// Sprint 14: lying after a knockdown — ranged hits find a prone profile (x0.6), melee blows a helpless man (x1.5).
 	const float KnockdownScale = !bBypassAvoidance && KnockdownComponent && KnockdownComponent->IsDown()
-		? KnockdownComponent->GetDamageMultiplier(AttackerActor && !IsRangedEnemyActor(AttackerActor)) : 1.f;
+		? KnockdownComponent->GetBlowMultiplier(!AttackerActor ? EKnockdownBlow::Explosion
+			: IsRangedEnemyActor(AttackerActor) ? EKnockdownBlow::Ranged : EKnockdownBlow::Melee) : 1.f;
 	const float Final = bBypassAvoidance ? FMath::Max(1.f, Amount)
 		: FMath::Max(1.f, CoverRules::ApplyAbsorb(Amount, CoverAbsorb) * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut) * KnockdownScale);
 	RecentIncomingDamage += Final;

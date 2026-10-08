@@ -92,6 +92,25 @@ bool FKnockdownTriggerTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKnockdownDownedModifiersTurnBasedTest, "CodexTactics.Combat.Knockdown.DownedDamageModifiersTurnBased",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FKnockdownDownedModifiersTurnBasedTest::RunTest(const FString& Parameters)
+{
+	// One helper feeds TakeHit and the turn-based grid hits (UTurnBasedCombatSubsystem::ApplySquadHit): enemy shot x0.6,
+	// bite x1.5, blast x1 on a lying operative. The turn-based ranged 30 dmg shot lands as 18, a bite of 20 as 30.
+	const FKnockdownConfig Config;
+	TestEqual(TEXT("Ranged blow x0.6"), KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Ranged), 0.6f);
+	TestEqual(TEXT("Melee blow x1.5"), KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Melee), 1.5f);
+	TestEqual(TEXT("Explosion x1"), KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Explosion), 1.f);
+	TestEqual(TEXT("Legacy bMelee=false matches Ranged"), KnockdownRules::DownedDamageMultiplier(Config, false),
+		KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Ranged));
+	TestEqual(TEXT("Legacy bMelee=true matches Melee"), KnockdownRules::DownedDamageMultiplier(Config, true),
+		KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Melee));
+	TestEqual(TEXT("Grid ranged 30 -> 18"), FMath::Max(1, FMath::RoundToInt(30.f * KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Ranged))), 18);
+	TestEqual(TEXT("Grid melee 20 -> 30"), FMath::Max(1, FMath::RoundToInt(20.f * KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Melee))), 30);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKnockdownPhaseTest, "CodexTactics.Combat.Knockdown.PhasesAndPause",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

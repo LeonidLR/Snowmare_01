@@ -300,7 +300,12 @@ bool UKnockdownComponent::IsTurnBasedNow() const
 
 float UKnockdownComponent::GetDamageMultiplier(bool bMelee) const
 {
-	return IsDown() ? KnockdownRules::DownedDamageMultiplier(KnockdownRules::GetConfig(), bMelee) : 1.f;
+	return GetBlowMultiplier(bMelee ? EKnockdownBlow::Melee : EKnockdownBlow::Ranged);
+}
+
+float UKnockdownComponent::GetBlowMultiplier(EKnockdownBlow Blow) const
+{
+	return IsDown() ? KnockdownRules::DownedBlowMultiplier(KnockdownRules::GetConfig(), Blow) : 1.f;
 }
 
 FKnockdownTurnDecision UKnockdownComponent::HandleTurn(int32& ActionPoints)

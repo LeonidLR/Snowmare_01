@@ -438,6 +438,21 @@ namespace KnockdownSmoke
 				return !Timeout(4.f, TEXT("1 AP: the turn was never skipped")) || Finish(State, false);
 			}
 			Check(State, Knock->GetPhase() == EKnockdownPhase::Downed, TEXT("1 AP: turn skipped, he stays down"));
+			// Grid hit path (ApplySquadHit) uses the same downed modifiers as TakeHit: ranged x0.6, melee x1.5, explosion x1.
+			if (AOperativeCharacter* Downed = Cast<AOperativeCharacter>(State.TurnUnit.Get()))
+			{
+				const UWorld* GridWorld = Downed->GetWorld();
+				UTurnBasedCombatSubsystem* Grid = GridWorld ? GridWorld->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+				if (Grid)
+				{
+					const float HpBefore = Downed->HealthComponent->GetCurrentHealth();
+					const int32 Ranged = Grid->ApplySquadHit(Downed, 30.f, TEXT("smoke"), EKnockdownBlow::Ranged);
+					const int32 Melee = Grid->ApplySquadHit(Downed, 20.f, TEXT("smoke"), EKnockdownBlow::Melee);
+					const int32 Blast = Grid->ApplySquadHit(Downed, 20.f, TEXT("smoke"), EKnockdownBlow::Explosion);
+					Check(State, Ranged == 18 && Melee == 30 && Blast == 20 && FMath::IsNearlyEqual(HpBefore - Downed->HealthComponent->GetCurrentHealth(), 68.f, 0.5f),
+						FString::Printf(TEXT("turn-based downed modifiers: ranged 30 -> %d (x0.6), melee 20 -> %d (x1.5), blast 20 -> %d (x1)"), Ranged, Melee, Blast));
+				}
+			}
 			Flow->ExitTurnBasedToRealTime();
 			Next();
 			return true;

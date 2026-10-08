@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Combat/KnockdownRules.h"
 #include "Interactables/DeployableRules.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "Subsystems/WorldSubsystem.h"
@@ -177,6 +178,13 @@ public:
 	int32 GetContactHitsThisFight() const { return ContactHitsThisFight; }
 
 	const FTurnUnitState* GetUnitState(const AActor* Actor) const;
+
+	/**
+	 * Godot target_squad.take_damage(dmg, name, false, en, true): bypasses dodge / fortitude, floats «-N». Sprint 14: a
+	 * knocked-down operative takes the downed modifier of the blow (KnockdownRules::DownedBlowMultiplier: ranged x0.6,
+	 * melee x1.5, explosion x1). Returns the damage actually dealt.
+	 */
+	int32 ApplySquadHit(AActor* Victim, float Amount, const FString& Source, EKnockdownBlow Blow = EKnockdownBlow::Ranged);
 	UGorkyGridManager* GetGrid() const { return Grid; }
 	int32 GetEnemyCount() const { return Enemies.Num(); }
 
@@ -385,8 +393,6 @@ private:
 	void ApplyEnemyHit(AActor* Enemy, float Amount, const FString& Source);
 	/** Barrel / mine blast on a grid unit (Godot detonation damage rules, see the .cpp). */
 	void ApplyBlast(AActor* Victim, bool bSquad, float Amount, const FString& Source);
-	/** Godot target_squad.take_damage(dmg, name, false, en, true): bypasses dodge / fortitude, floats «-N». */
-	void ApplySquadHit(AActor* Victim, float Amount, const FString& Source);
 	bool IsDead(const AActor* Actor) const;
 	FString NameOf(const AActor* Actor) const;
 	const UWeaponDataAsset* WeaponOf(const AActor* Actor) const;

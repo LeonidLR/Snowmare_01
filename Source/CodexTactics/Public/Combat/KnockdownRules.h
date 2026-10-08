@@ -44,6 +44,17 @@ struct CODEXTACTICS_API FKnockdownConfig
 	float HoundPounceCooldownSeconds = 12.f;
 };
 
+/** How a blow reaches a lying unit (selects the downed damage multiplier). */
+enum class EKnockdownBlow : uint8
+{
+	/** Shots (prone profile, x DownedRangedDamageMultiplier). */
+	Ranged,
+	/** Bites / strikes (x DownedMeleeDamageMultiplier). */
+	Melee,
+	/** Blasts / traps (unchanged, x1). */
+	Explosion
+};
+
 /** One incoming blow, as the knockdown rules see it. */
 struct FKnockdownHit
 {
@@ -137,6 +148,12 @@ namespace KnockdownRules
 
 	/** Incoming damage multiplier while he lies: ranged x DownedRangedDamageMultiplier, melee x DownedMeleeDamageMultiplier. */
 	CODEXTACTICS_API float DownedDamageMultiplier(const FKnockdownConfig& Config, bool bMelee);
+
+	/**
+	 * The one place for the downed damage modifier (real-time TakeHit and the turn-based grid hits share it):
+	 * Ranged x DownedRangedDamageMultiplier, Melee x DownedMeleeDamageMultiplier, Explosion x1.
+	 */
+	CODEXTACTICS_API float DownedBlowMultiplier(const FKnockdownConfig& Config, EKnockdownBlow Blow);
 
 	/** Play rate that brings a clip of ClipSeconds to TargetSeconds, never slower than 1, at most MaxRate. */
 	CODEXTACTICS_API float ClipPlayRate(float ClipSeconds, float TargetSeconds, float MaxRate);
