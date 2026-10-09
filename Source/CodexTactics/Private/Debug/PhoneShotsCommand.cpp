@@ -9,6 +9,7 @@
 //   NEW GAME -> pause menu with SAVE enabled, a wave fight -> pause menu with SAVE disabled.
 // "combat": bunker camera zone in real time, an operative hit reaction (clip), the engineer's death cinematic (clip),
 //   the commander's death -> «THE SQUAD HAS FALLEN» (clip + stills).
+// "sniperrt" / "snipertb" / "snipercover" (2026-10-09): sniper combat clips (real time, turn-based, cover), follow camera.
 // "sniper" (L_MovementTest, 2026-10-09): the Female Soldier Medic-Sapper with the sniper rifle — standing idle, the order while
 //   standing (kneel -> shot -> bolt, clip + still), kneeling fire (clip), prone fire (clip + stills); own camera framed on her.
 
@@ -19,6 +20,14 @@
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/CameraZoneVolume.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Tactics/CoverTraceRules.h"
+#include "Tactics/GorkyGridManager.h"
+#include "Tactics/GorkyLineOfSight.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Tactics/TurnBasedRules.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Camera/TacticalCameraPawn.h"
@@ -100,6 +109,9 @@ namespace PhoneShots
 		FPlatformMisc::RequestExit(false, TEXT("PhoneShots"));
 	}
 
+	/** The sniper combat clips' camera (defined with the sniper steps). */
+	void UpdateSniperFollowCam(UWorld* World);
+
 	void Tick()
 	{
 		FRunner& R = *Runner;
@@ -113,6 +125,10 @@ namespace PhoneShots
 			UE_LOG(LogCodexTactics, Display, TEXT("PhoneShots: timeout in step %d"), R.Index);
 			Finish();
 			return;
+		}
+		if (UWorld* CamWorld = FrontendSmokeUtils::FindGameWorld())
+		{
+			UpdateSniperFollowCam(CamWorld); // every frame, also while a step waits
 		}
 		if (R.Wait > 0)
 		{
@@ -411,6 +427,23 @@ namespace PhoneShots
 		TWeakObjectPtr<AEnemyCharacter> Target;
 		TWeakObjectPtr<ACameraActor> Camera;
 		int32 ShotsSeen = 0;
+		/** Combat clips: the camera follows her and her target every frame; a dead priority target is replaced by the nearest enemy. */
+		bool bFollow = false;
+		bool bAutoRetarget = false;
+		bool bCamPlaced = false;
+		/** Cover clip: the camera stays behind her wall (never through it), looking past her corner. */
+		bool bCoverCam = false;
+		FVector CamLocation = FVector::ZeroVector;
+		FVector CamLook = FVector::ZeroVector;
+		float CamBack = 260.f;
+		float CamSide = 520.f;
+		float CamUp = 220.f;
+		// Cover clip.
+		FVector P = FVector::ZeroVector;
+		FVector F = FVector::ForwardVector;
+		FVector R = FVector::RightVector;
+		float GroundZ = 0.f;
+		FCoverSlot Corner;
 	};
 	TSharedPtr<FSniperShots> Sniper;
 
@@ -561,6 +594,354 @@ namespace PhoneShots
 		S.Add([](UWorld* World) { FrameMedic(World, -60.f, 330.f, 90.f); return 5; }); // from the side
 		S.Add([](UWorld* World) { Shot(TEXT("13_sniper_prone_side"), false); return 5; });
 	}
+	// --- Sniper combat clips (user request 2026-10-09): real time, turn-based, cover. The camera follows her and her target
+	// every frame (behind / beside her on the line to the target), never fixed map coordinates. HUD stays on. ---
+
+	AEnemyCharacter* NearestLiveEnemy(UWorld* World, const FVector& From, float MaxCm)
+	{
+		AEnemyCharacter* Best = nullptr;
+		float BestDist = MaxCm;
+		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+		{
+			const UHealthComponent* Health = It->GetHealthComponent();
+			if (It->IsActorBeingDestroyed() || !Health || !Health->IsAlive() || It->ActorHasTag(TEXT("PhoneKeeper")))
+			{
+				continue;
+			}
+			const float Dist = FVector::Dist2D(From, It->GetActorLocation());
+			if (Dist < BestDist)
+			{
+				BestDist = Dist;
+				Best = *It;
+			}
+		}
+		return Best;
+	}
+
+	void UpdateSniperFollowCam(UWorld* World)
+	{
+		if (!Sniper.IsValid() || !Sniper->bFollow)
+		{
+			return;
+		}
+		AOperativeCharacter* Medic = Sniper->Medic.Get();
+		APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+		if (!Medic || !PC)
+		{
+			return;
+		}
+		AEnemyCharacter* Target = Sniper->Target.Get();
+		const bool bTargetDead = !Target || !Target->GetHealthComponent() || !Target->GetHealthComponent()->IsAlive();
+		if (bTargetDead && Sniper->bAutoRetarget)
+		{
+			Target = NearestLiveEnemy(World, Medic->GetActorLocation(), 4000.f);
+			Sniper->Target = Target;
+			if (Target)
+			{
+				Medic->SetManualPriorityTarget(Target);
+			}
+		}
+		const FVector Her = Medic->GetMesh()->Bounds.Origin;
+		const FVector There = Target ? Target->GetActorLocation() : Her + Medic->GetActorForwardVector() * 800.f;
+		FVector Dir = (There - Her).GetSafeNormal2D();
+		if (Dir.IsNearlyZero())
+		{
+			Dir = Medic->GetActorForwardVector();
+		}
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, Dir);
+		FVector WantEye = Her - Dir * Sniper->CamBack + Right * Sniper->CamSide + FVector(0.f, 0.f, Sniper->CamUp);
+		FVector WantLook = Her + (There - Her).GetClampedToMaxSize(1400.f) * 0.42f + FVector(0.f, 0.f, -20.f);
+		if (Sniper->bCoverCam)
+		{
+			WantEye = Her - Sniper->F * 480.f + Sniper->R * 330.f + FVector(0.f, 0.f, 230.f);
+			WantLook = Her + Sniper->F * 350.f - Sniper->R * 280.f + FVector(0.f, 0.f, -30.f);
+		}
+		if (!Sniper->bCamPlaced)
+		{
+			Sniper->CamLocation = WantEye;
+			Sniper->CamLook = WantLook;
+			Sniper->bCamPlaced = true;
+		}
+		Sniper->CamLocation = FMath::Lerp(Sniper->CamLocation, WantEye, 0.06f);
+		Sniper->CamLook = FMath::Lerp(Sniper->CamLook, WantLook, 0.08f);
+		if (!Sniper->Camera.IsValid())
+		{
+			Sniper->Camera = World->SpawnActor<ACameraActor>(Sniper->CamLocation, FRotator::ZeroRotator);
+		}
+		if (ACameraActor* Camera = Sniper->Camera.Get())
+		{
+			Camera->SetActorLocationAndRotation(Sniper->CamLocation, (Sniper->CamLook - Sniper->CamLocation).Rotation());
+			Camera->GetCameraComponent()->SetFieldOfView(72.f);
+			Camera->GetCameraComponent()->bConstrainAspectRatio = false;
+			if (PC->GetViewTarget() != Camera)
+			{
+				PC->SetViewTarget(Camera);
+			}
+		}
+	}
+
+	/** Shared set-up: the fight, the squad at the test start, the medic leads with the sniper rifle, the others 6 m back. */
+	AOperativeCharacter* SetUpSniperFight(UWorld* World)
+	{
+		StartFight(World);
+		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+		{
+			It->Tags.Add(TEXT("PhoneKeeper")); // the frozen far hound StartFight left: never a target
+		}
+		SmokeUtils::PlaceSquadAtTestStart(World);
+		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+		Squad->SetSquadPosture(ESquadFirePosture::Passive);
+		AOperativeCharacter* Medic = Member(World, EOperativeRole::MedicSapper);
+		Sniper->Medic = Medic;
+		if (!Medic)
+		{
+			return nullptr;
+		}
+		Squad->SetLeader(Medic);
+		Medic->SwitchToWeaponById(TEXT("sniper_rifle"));
+		Medic->ColdLevel = 0.f;
+		for (AOperativeCharacter* Each : Squad->GetMembers())
+		{
+			if (Each != Medic)
+			{
+				Each->TeleportTo(SmokeUtils::FreeSpot(World, Medic->GetActorLocation() - Medic->GetActorForwardVector() * 700.f
+					+ Medic->GetActorRightVector() * (Each->SquadRole == EOperativeRole::Commander ? -300.f : 300.f), Each),
+					Each->GetActorRotation(), false, true);
+			}
+		}
+		return Medic;
+	}
+
+	AEnemyCharacter* SpawnSniperTarget(UWorld* World, EEnemyArchetype Type, const FVector& Where, bool bFrozen, float Health = -1.f)
+	{
+		AEnemyCharacter* Enemy = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(Type, Where + FVector(0.f, 0.f, 30.f));
+		if (Enemy)
+		{
+			if (Health > 0.f)
+			{
+				Enemy->GetHealthComponent()->SetMaxHealth(Health, true);
+			}
+			if (bFrozen)
+			{
+				Enemy->CustomTimeDilation = 0.f;
+			}
+		}
+		return Enemy;
+	}
+
+	void AddSniperRealTimeSteps(TArray<FStep>& S)
+	{
+		Sniper = MakeShared<FSniperShots>();
+		S.Add([](UWorld* World) { return World->GetSubsystem<USquadSubsystem>() && World->GetSubsystem<USquadSubsystem>()->GetLeader() ? 60 : -1; });
+		S.Add([](UWorld* World)
+		{
+			AOperativeCharacter* Medic = SetUpSniperFight(World);
+			if (!Medic)
+			{
+				return 1;
+			}
+			Medic->CurrentClip = 2; // two shots, then the magazine reload is in the clip too
+			const FVector From = Medic->GetActorLocation();
+			const FVector Ahead = SmokeUtils::ClearPoint(World, From, From + Medic->GetActorForwardVector() * 1600.f);
+			const FVector Side = (Ahead - From).GetSafeNormal2D().RotateAngleAxis(90.f, FVector::UpVector);
+			Sniper->Target = SpawnSniperTarget(World, EEnemyArchetype::Frostbitten, Ahead + Side * 250.f, false, 130.f);
+			SpawnSniperTarget(World, EEnemyArchetype::Frostbitten, Ahead - Side * 300.f, false, 130.f);
+			SpawnSniperTarget(World, EEnemyArchetype::Frostbitten, Ahead + (Ahead - From).GetSafeNormal2D() * 300.f, false, 130.f);
+			Sniper->bFollow = true;
+			return 15;
+		});
+		// She walks across (standing, moving) when the order comes: she stops, kneels, fires, works the bolt, reloads.
+		S.Add([](UWorld* World)
+		{
+			StartClip(TEXT("sniper_combat_realtime"), 1);
+			if (AOperativeCharacter* Medic = Sniper->Medic.Get())
+			{
+				const FVector From = Medic->GetActorLocation();
+				Medic->OrderMoveTo(SmokeUtils::ClearPoint(World, From, From + Medic->GetActorRightVector() * 700.f), false);
+			}
+			return 40;
+		});
+		S.Add([](UWorld* World)
+		{
+			Sniper->bAutoRetarget = true;
+			SetSniperTarget(true); // the priority-target order while she walks
+			return 520;
+		});
+		S.Add([](UWorld* World) { StopClip(); return 2; });
+	}
+
+	void AddSniperTurnBasedSteps(TArray<FStep>& S)
+	{
+		Sniper = MakeShared<FSniperShots>();
+		S.Add([](UWorld* World) { return World->GetSubsystem<USquadSubsystem>() && World->GetSubsystem<USquadSubsystem>()->GetLeader() ? 60 : -1; });
+		S.Add([](UWorld* World)
+		{
+			AOperativeCharacter* Medic = SetUpSniperFight(World);
+			if (!Medic)
+			{
+				return 1;
+			}
+			const FVector From = Medic->GetActorLocation();
+			const FVector Spot = SmokeUtils::ClearPoint(World, From, From + Medic->GetActorForwardVector() * 900.f);
+			Sniper->Target = SpawnSniperTarget(World, EEnemyArchetype::Frostbitten, Spot, false, 100000.f);
+			Medic->FaceAimAt(Spot);
+			Sniper->bFollow = true;
+			Sniper->CamBack = 420.f;
+			Sniper->CamSide = 300.f;
+			Sniper->CamUp = 300.f;
+			return 20;
+		});
+		S.Add([](UWorld* World)
+		{
+			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
+			Flow->RequestEnterTurnBased(true);
+			if (AOperativeCharacter* Medic = Sniper->Medic.Get(); Medic && TurnBased->IsActive())
+			{
+				TurnBased->SelectUnit(Medic);
+			}
+			StartClip(TEXT("sniper_combat_turnbased"), 1);
+			return 45;
+		});
+		// Her turn, standing with only 3 AP: the sniper attack is not offered (feed line).
+		S.Add([](UWorld* World)
+		{
+			UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
+			if (FTurnUnitState* Unit = const_cast<FTurnUnitState*>(TurnBased->GetUnitState(Sniper->Medic.Get())))
+			{
+				Unit->AP = 3;
+				TurnBased->EnterAttackMode();
+			}
+			return 75;
+		});
+		// Full AP: into a fire lane if needed.
+		S.Add([](UWorld* World)
+		{
+			UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
+			AOperativeCharacter* Medic = Sniper->Medic.Get();
+			FTurnUnitState* Unit = const_cast<FTurnUnitState*>(TurnBased->GetUnitState(Medic));
+			const FTurnUnitState* EnemyState = TurnBased->GetUnitState(Sniper->Target.Get());
+			UGorkyGridManager* Grid = TurnBased->GetGrid();
+			if (!Unit || !EnemyState || !Grid)
+			{
+				return 1;
+			}
+			Unit->AP = 8;
+			if (!(TurnBasedRules::IsTargetInPattern(Medic->CurrentWeapon, EnemyState->GridPos - Unit->GridPos)
+				&& GorkyLineOfSight::HasLineOfSight(Unit->GridPos, EnemyState->GridPos, *Grid)))
+			{
+				for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(Unit->GridPos, Unit->AP - 4))
+				{
+					if (Entry.Key != Unit->GridPos && Grid->IsCellWalkable(Entry.Key)
+						&& TurnBasedRules::IsTargetInPattern(Medic->CurrentWeapon, EnemyState->GridPos - Entry.Key)
+						&& GorkyLineOfSight::HasLineOfSight(Entry.Key, EnemyState->GridPos, *Grid))
+					{
+						TurnBased->MoveActiveUnitTo(Entry.Key);
+						break;
+					}
+				}
+			}
+			return 10;
+		});
+		S.Add([](UWorld* World) { return World->GetSubsystem<UTurnBasedCombatSubsystem>()->IsUnitMoving() ? -1 : 20; });
+		S.Add([](UWorld* World) { World->GetSubsystem<UTurnBasedCombatSubsystem>()->EnterAttackMode(); return 40; });
+		// The shot from standing: kneel (stance AP) + shot (attack AP), the kneel clip, the shot, the bolt.
+		S.Add([](UWorld* World)
+		{
+			UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
+			if (const FTurnUnitState* EnemyState = TurnBased->GetUnitState(Sniper->Target.Get()))
+			{
+				TurnBased->bGuaranteeAllHits = true;
+				TurnBased->AttackCell(EnemyState->GridPos);
+			}
+			return 150;
+		});
+		S.Add([](UWorld* World) { StopClip(); return 2; });
+	}
+
+	void AddSniperCoverSteps(TArray<FStep>& S)
+	{
+		Sniper = MakeShared<FSniperShots>();
+		S.Add([](UWorld* World) { return World->GetSubsystem<USquadSubsystem>() && World->GetSubsystem<USquadSubsystem>()->GetLeader() ? 60 : -1; });
+		S.Add([](UWorld* World)
+		{
+			AOperativeCharacter* Medic = SetUpSniperFight(World);
+			if (!Medic)
+			{
+				return 1;
+			}
+			Sniper->F = Medic->GetActorForwardVector().GetSafeNormal2D();
+			Sniper->R = FVector::CrossProduct(FVector::UpVector, Sniper->F);
+			Sniper->P = Medic->GetActorLocation();
+			Sniper->GroundZ = Sniper->P.Z - Medic->GetSimpleCollisionHalfHeight();
+			// A 6 m x 3 m wall 4 m ahead (as CoverSmoke); the targets beyond it, round its right-hand corner (-R end).
+			if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+			{
+				const FVector Centre(Sniper->P.X + Sniper->F.X * 400.f, Sniper->P.Y + Sniper->F.Y * 400.f, Sniper->GroundZ + 150.f);
+				const FTransform Xf(Sniper->F.Rotation(), Centre, FVector(0.4f, 6.f, 3.f));
+				if (AStaticMeshActor* Block = World->SpawnActorDeferred<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Xf, nullptr, nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+				{
+					Block->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+					Block->GetStaticMeshComponent()->SetStaticMesh(Cube);
+					Block->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+					Block->GetStaticMeshComponent()->SetCanEverAffectNavigation(true);
+					Block->FinishSpawning(Xf);
+				}
+			}
+			const FVector Beyond = Sniper->P + Sniper->F * 1500.f - Sniper->R * 650.f;
+			Sniper->Target = SpawnSniperTarget(World, EEnemyArchetype::Frostbitten, FVector(Beyond.X, Beyond.Y, Sniper->GroundZ + 60.f), true, 130.f);
+			SpawnSniperTarget(World, EEnemyArchetype::Frostbitten, FVector(Beyond.X, Beyond.Y, Sniper->GroundZ + 60.f) + Sniper->F * 400.f - Sniper->R * 250.f, true, 130.f);
+			return 60; // the navmesh rebuilds round the wall
+		});
+		S.Add([](UWorld* World)
+		{
+			AOperativeCharacter* Medic = Sniper->Medic.Get();
+			const bool bCorner = Medic && CoverTraceRules::FindCoverSlotAt(World, Sniper->P + Sniper->F * 380.f - Sniper->R * 250.f + FVector(0.f, 0.f, 90.f),
+				Sniper->F, Sniper->Corner);
+			UE_LOG(LogCodexTactics, Display, TEXT("PhoneShots: cover corner %s (height %d, right edge exposed %d)"), bCorner ? TEXT("found") : TEXT("NOT found"),
+				static_cast<int32>(Sniper->Corner.Height), Sniper->Corner.bRightEdgeExposed ? 1 : 0);
+			Sniper->bFollow = true;
+			Sniper->bCoverCam = true;
+			Sniper->CamBack = 420.f;
+			Sniper->CamSide = 380.f;
+			Sniper->CamUp = 260.f;
+			StartClip(TEXT("sniper_combat_cover"), 1);
+			if (bCorner)
+			{
+				Medic->OrderTakeCover(Sniper->Corner, false);
+			}
+			return 30;
+		});
+		S.Add([](UWorld* World)
+		{
+			const AOperativeCharacter* Medic = Sniper->Medic.Get();
+			return Medic && Medic->bInCover ? 45 : (Runner->ClipCount > 200 ? 1 : -1);
+		});
+		S.Add([](UWorld* World)
+		{
+			if (const AOperativeCharacter* Medic = Sniper->Medic.Get())
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("PhoneShots: in cover %d, %s, corner %d"), Medic->bInCover ? 1 : 0,
+					*AOperativeCharacter::GetStanceDisplayName(Medic->GetStance()).ToString(), Medic->bAtCoverCorner ? 1 : 0);
+			}
+			Sniper->bAutoRetarget = true;
+			SetSniperTarget(true);
+			return 360;
+		});
+		S.Add([](UWorld* World)
+		{
+			if (const AOperativeCharacter* Medic = Sniper->Medic.Get())
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("PhoneShots: after the fire: in cover %d, %s, shots %d, kneels %d, refused %d"), Medic->bInCover ? 1 : 0,
+					*AOperativeCharacter::GetStanceDisplayName(Medic->GetStance()).ToString(), Medic->GetSniperShots(), Medic->GetSniperKneels(),
+					Medic->GetSniperRefusedShots());
+			}
+			StopClip();
+			return 2;
+		});
+	}
+
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
@@ -571,6 +952,18 @@ namespace PhoneShots
 		if (Mode == TEXT("combat"))
 		{
 			AddCombatSteps(Runner->Steps);
+		}
+		else if (Mode == TEXT("sniperrt"))
+		{
+			AddSniperRealTimeSteps(Runner->Steps);
+		}
+		else if (Mode == TEXT("snipertb"))
+		{
+			AddSniperTurnBasedSteps(Runner->Steps);
+		}
+		else if (Mode == TEXT("snipercover"))
+		{
+			AddSniperCoverSteps(Runner->Steps);
 		}
 		else if (Mode == TEXT("sniper"))
 		{
