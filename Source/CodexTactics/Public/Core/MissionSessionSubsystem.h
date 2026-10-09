@@ -8,7 +8,7 @@
 UENUM(BlueprintType)
 enum class EMissionStartMode : uint8
 {
-	/** Not chosen yet: the main menu is shown. */
+	/** Not started yet. */
 	None,
 	/** "Start Game": exploration, then combat after the gate. */
 	Game,
@@ -34,4 +34,25 @@ public:
 	/** Set by Ctrl + X before the reload; consumed by the next mission start. */
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Mission")
 	bool bQuickRestart = false;
+
+	/**
+	 * Set by the frontend (UCodexFrontendSubsystem NEW GAME / CONTINUE / LOAD) right before it opens the level; consumed
+	 * by the next mission start: the intro briefing plays even in a headless check (unless a save is loaded).
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Mission")
+	bool bFrontendStart = false;
+
+	/**
+	 * Save slot to load once the next level has begun play (USaveGameSubsystem::LoadGameWithTravel — "Continue" / "Load
+	 * Game" from a menu or a load that reopens the map): the mission starts in Game mode without the start menu and the
+	 * intro, then the slot is applied. Cleared when consumed.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Save")
+	FString PendingLoadSlot;
+
+	/** Save directory of PendingLoadSlot (empty: Saved/SaveGames). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Save")
+	FString PendingLoadDirectory;
+
+	bool HasPendingLoad() const { return !PendingLoadSlot.IsEmpty(); }
 };

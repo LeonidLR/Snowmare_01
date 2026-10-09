@@ -18,6 +18,8 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/MissionSubsystem.h"
+#include "Core/MissionRules.h"
+#include "Combat/DeathCinematicSubsystem.h"
 #include "TimerManager.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/SquadROE.h"
@@ -623,68 +625,142 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 	{
 		PanicComponent->RecoverFromPanic(TEXT("Killed"), true);
 	}
-	// Godot _check_squad_vital_signs / _handle_expendable_member_death: an expendable member (the recruit) only leaves
-	// the squad (the leader passes on) and his body can be searched for his supplies (Godot corpse_loot,
-	// player.gd get_items_list: ammo, medkits, food; grenades / the weapon have no loot stack here).
-	if (IsExpendable())
+	// User decision 2026-10-08 (replaces Godot _check_squad_vital_signs "any member down = mission failed"): only the
+	// COMMANDER's death loses the mission. Everybody else is a permanent loss (Godot _handle_expendable_member_death for
+	// the recruit, now for all): he leaves the squad (the leader passes on), stays down as a corpse and his body can be
+	// searched for his supplies (Godot corpse_loot). Either way the death cinematic shows him fall first.
+	bKilledInAction = true;
+	BecomeCorpse();
+	USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	const bool bSquadMember = Squad && Squad->GetMembers().Contains(this); // a recruit not yet rescued is not one
+	if (Squad)
+	{
+		Squad->UnregisterOperative(this);
+	}
+	if (UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>())
+	{
+		TurnBased->NotifyOperativeKilled(this);
+	}
+	int32 Living = 0;
+	for (const AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+	{
+		Living += Member && Member != this && Member->HealthComponent && Member->HealthComponent->IsAlive() ? 1 : 0;
+	}
+	const bool bDefeat = bSquadMember && MissionRules::ShouldFailMission(SquadRole == EOperativeRole::Commander, Living);
+	UE_LOG(LogCodexTactics, Display, TEXT("%s killed in action (%s, %d squad members alive)%s"), *DisplayName.ToString(),
+		*UEnum::GetValueAsString(SquadRole), Living, bDefeat ? TEXT(" -> mission failed after the death cinematic") : TEXT(""));
+	if (!bDefeat)
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(FText::FromString(TEXT("HQ")), FText::FromString(FString::Printf(
-				TEXT("⚠️ %s was killed in action! Search the remains to recover supplies and gear."), *DisplayName.ToString())));
+			Messages->PostMessage(FText::FromString(TEXT("HQ")), FText::FromString(TEXT("⚠️ ") + MissionRules::GetMemberLostRadio(DisplayName).ToString()));
 		}
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
-		if (ALootCrateActor* Remains = GetWorld()->SpawnActor<ALootCrateActor>(Feet + FVector(0.f, 0.f, 40.f), GetActorRotation(), Params))
-		{
-			Remains->CrateName = FText::FromString(FString::Printf(TEXT("Remains: %s"), *DisplayName.ToString()));
-			FLootContents Contents;
-			auto Ammo = [this](const TCHAR* Id)
-			{
-				const FWeaponAmmoState* State = AmmoInventory.Find(Id);
-				return State ? State->Clip + FMath::Max(0, State->Reserve) : 0;
-			};
-			Contents.Medkits = MedkitsCount;
-			Contents.CannedFood = CannedFoodCount;
-			Contents.Bread = BreadCount;
-			Contents.Chocolate = ChocolateCount;
-			Contents.Matches = 0;
-			Contents.RifleAmmo = Ammo(TEXT("m16"));
-			Contents.PistolAmmo = Ammo(TEXT("pistol"));
-			Contents.ShotgunAmmo = 0;
-			Contents.FlameFuel = 0;
-			Contents.CryoAmmo = 0;
-			Contents.PlasmaAmmo = 0;
-			Remains->Contents = Contents;
-			Remains->OpenSeconds = 0.6f; // searching a body, no lid
-			Remains->SetActorHiddenInGame(true); // the body is what the player sees and clicks; the crate is its hit box
-			Remains->Tags.Add(TEXT("CorpseLoot"));
-		}
-		USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-		if (Squad)
-		{
-			Squad->UnregisterOperative(this);
-		}
-		bool bAnyAlive = false;
-		for (const AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
-		{
-			bAnyAlive |= Member && Member != this && Member->HealthComponent && Member->HealthComponent->IsAlive();
-		}
-		if (bAnyAlive)
-		{
-			return;
-		}
+		SpawnRemainsLoot();
 	}
-	// Godot _check_squad_vital_signs: any squad member down = mission failed (HQ line, time stop, failed screen).
-	if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
+	if (UDeathCinematicSubsystem* DeathCam = GetWorld()->GetSubsystem<UDeathCinematicSubsystem>())
 	{
-		Mission->TriggerMissionFailed(this);
+		DeathCam->NotifyOperativeDied(this, bDefeat);
 	}
-	else if (UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>())
+	else if (bDefeat)
 	{
-		Flow->TriggerGameOver();
+		if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>())
+		{
+			Mission->TriggerMissionFailed(this);
+		}
 	}
+}
+
+void AOperativeCharacter::RestoreKilledInAction()
+{
+	bKilledInAction = true;
+	BecomeCorpse();
+	if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	{
+		Squad->UnregisterOperative(this);
+	}
+	if (UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>())
+	{
+		TurnBased->NotifyOperativeKilled(this);
+	}
+	if (KnockdownComponent)
+	{
+		KnockdownComponent->PlayDeathFall(GetActorLocation() + GetActorForwardVector() * 100.f); // on his back, held
+	}
+}
+
+bool AOperativeCharacter::GetLastHitSource(FVector& OutLocation) const
+{
+	OutLocation = LastHitSource;
+	return bHasLastHitSource;
+}
+
+void AOperativeCharacter::BecomeCorpse()
+{
+	// The body stays where he fell: no walking, the squad / enemies step over him, clicks go to his remains, never to him.
+	StopOperative();
+	if (bCornerAimActive)
+	{
+		EndCornerAim(ECornerAimDecision::DuckForSafety, TEXT("died"));
+	}
+	bIsReloading = false;
+	ReloadTimer = 0.f;
+	SetSprinting(false);
+	if (UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>(); Grenades && Grenades->GetThrower() == this)
+	{
+		Grenades->CancelAim();
+	}
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->StopMovementImmediately();
+		Movement->DisableMovement();
+	}
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		Capsule->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+		Capsule->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	}
+	if (BodyMesh)
+	{
+		BodyMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+	}
+	SetGroupSelected(false, false);
+	UpdateSelectionRing();
+}
+
+void AOperativeCharacter::SpawnRemainsLoot()
+{
+	// Godot corpse_loot / player.gd get_items_list: ammo, medkits, food (grenades / the weapon have no loot stack here).
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	ALootCrateActor* Remains = GetWorld()->SpawnActor<ALootCrateActor>(Feet + FVector(0.f, 0.f, 40.f), GetActorRotation(), Params);
+	if (!Remains)
+	{
+		return;
+	}
+	Remains->CrateName = FText::FromString(FString::Printf(TEXT("Remains: %s"), *DisplayName.ToString()));
+	FLootContents Contents;
+	auto Ammo = [this](const TCHAR* Id)
+	{
+		const FWeaponAmmoState* State = AmmoInventory.Find(Id);
+		return State ? State->Clip + FMath::Max(0, State->Reserve) : 0;
+	};
+	Contents.Medkits = MedkitsCount;
+	Contents.CannedFood = CannedFoodCount;
+	Contents.Bread = BreadCount;
+	Contents.Chocolate = ChocolateCount;
+	Contents.Matches = 0;
+	Contents.RifleAmmo = Ammo(TEXT("m16"));
+	Contents.PistolAmmo = Ammo(TEXT("pistol"));
+	Contents.ShotgunAmmo = 0;
+	Contents.FlameFuel = 0;
+	Contents.CryoAmmo = 0;
+	Contents.PlasmaAmmo = 0;
+	Remains->Contents = Contents;
+	Remains->OpenSeconds = 0.6f; // searching a body, no lid
+	Remains->SetActorHiddenInGame(true); // the body is what the player sees and clicks; the crate is its hit box
+	Remains->Tags.Add(TEXT("CorpseLoot"));
 }
 
 void AOperativeCharacter::SetSprinting(bool bNewSprinting)
@@ -2639,6 +2715,8 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	const float Final = bBypassAvoidance ? FMath::Max(1.f, Amount)
 		: FMath::Max(1.f, CoverRules::ApplyAbsorb(Amount, CoverAbsorb) * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut) * KnockdownScale);
 	RecentIncomingDamage += Final;
+	bHasLastHitSource = true; // before the health loss: the hit reaction / death fall read it
+	LastHitSource = AttackerActor ? AttackerActor->GetActorLocation() : GetActorLocation() + GetActorForwardVector() * 100.f;
 	if (IsRangedEnemyActor(AttackerActor))
 	{
 		RecentRangedDamage += Final; // the corner-aim duck counts only what the corner protects from (2026-10-07 horde fix)

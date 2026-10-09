@@ -2,6 +2,7 @@
 #include "Camera/CameraActor.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Combat/DeathCinematicSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -34,17 +35,24 @@ namespace CameraZoneRules
 		}
 	}
 
-	bool ShouldBeActive(bool bSwitchEnabled, bool bAllowInCombat, ECodexCombatMode CombatMode, bool bWaveActive, bool bLeaderInside)
+	bool ShouldBeActive(bool bSwitchEnabled, bool bLeaderInside)
 	{
-		if (!bSwitchEnabled || !bLeaderInside)
+		return bSwitchEnabled && bLeaderInside;
+	}
+
+	bool IsCameraAllowed(const FCameraZoneModes& Modes, ECodexCombatMode CombatMode)
+	{
+		switch (CombatMode)
 		{
-			return false;
+		case ECodexCombatMode::RealTime:
+			return Modes.bRealTime;
+		case ECodexCombatMode::TurnBased:
+			return Modes.bTurnBased;
+		case ECodexCombatMode::TacticalPause:
+			return Modes.bTacticalPause;
+		default:
+			return true;
 		}
-		if (CombatMode == ECodexCombatMode::TacticalPause)
-		{
-			return false;
-		}
-		return bAllowInCombat || !bWaveActive;
 	}
 }
 
@@ -85,8 +93,7 @@ void ACameraZoneVolume::Tick(float DeltaSeconds)
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 
 	const bool bLeaderInside = Leader && ContainsLocation(Leader->GetActorLocation());
-	const bool bShouldBeActive = CameraZoneRules::ShouldBeActive(bEnableCameraSwitch, bAllowInCombat,
-		Flow ? Flow->GetCombatMode() : ECodexCombatMode::None, Flow && Flow->IsWaveActive(), bLeaderInside);
+	const bool bShouldBeActive = CameraZoneRules::ShouldBeActive(bEnableCameraSwitch, bLeaderInside);
 
 	if (IsZoneActive() && (!bShouldBeActive || ActiveExplorer.Get() != Leader))
 	{
@@ -95,6 +102,39 @@ void ACameraZoneVolume::Tick(float DeltaSeconds)
 	if (!IsZoneActive() && bShouldBeActive)
 	{
 		Activate(Leader);
+	}
+	// User request 2026-10-08: the fixed camera per combat mode (real time yes; turn-based / tactical pause off by default:
+	// the normal camera takes over and the zone camera comes back with real time while the leader is still inside). The
+	// death cinematic owns the camera while it runs and hands it back here afterwards.
+	CameraZoneRules::FCameraZoneModes Modes;
+	Modes.bRealTime = bActiveInRealTime;
+	Modes.bTurnBased = bActiveInTurnBased;
+	Modes.bTacticalPause = bActiveInTacticalPause;
+	const UDeathCinematicSubsystem* DeathCam = World->GetSubsystem<UDeathCinematicSubsystem>();
+	const bool bWantCamera = IsZoneActive() && TargetCamera
+		&& CameraZoneRules::IsCameraAllowed(Modes, Flow ? Flow->GetCombatMode() : ECodexCombatMode::None)
+		&& !(DeathCam && DeathCam->IsFocusActive());
+	if (bWantCamera != bCameraShown)
+	{
+		ShowZoneCamera(bWantCamera);
+	}
+}
+
+void ACameraZoneVolume::ShowZoneCamera(bool bShow)
+{
+	bCameraShown = bShow;
+	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	if (!PC)
+	{
+		return;
+	}
+	if (bShow && TargetCamera)
+	{
+		PC->SetViewTargetWithBlend(TargetCamera, BlendTime);
+	}
+	else if (!bShow && PC->GetPawn() && PC->GetViewTarget() == TargetCamera)
+	{
+		PC->SetViewTargetWithBlend(PC->GetPawn(), BlendTime);
 	}
 }
 
@@ -115,11 +155,7 @@ void ACameraZoneVolume::Activate(AOperativeCharacter* Explorer)
 		Explorer->bInCameraZone = true;
 	}
 
-	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-	if (PC && TargetCamera)
-	{
-		PC->SetViewTargetWithBlend(TargetCamera, BlendTime);
-	}
+	// The camera itself follows in Tick (ShowZoneCamera) for the current combat mode.
 	if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 	{
 		Squad->SetFollowersHolding(true);
@@ -138,11 +174,9 @@ void ACameraZoneVolume::Deactivate()
 		Explorer->bInCameraZone = false;
 	}
 	ActiveExplorer.Reset();
-
-	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-	if (PC && PC->GetPawn() && PC->GetViewTarget() == TargetCamera)
+	if (bCameraShown)
 	{
-		PC->SetViewTargetWithBlend(PC->GetPawn(), BlendTime);
+		ShowZoneCamera(false);
 	}
 	if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 	{

@@ -72,6 +72,15 @@ void AProximityMineActor::SetPlacedBySquad()
 	UpdateVisuals();
 }
 
+void AProximityMineActor::RestoreSaved(bool bInPlacedBySquad, bool bInTrapped, bool bInRevealed, float InArmingTimeLeft)
+{
+	bPlacedBySquad = bInPlacedBySquad;
+	bTrapped = bInTrapped;
+	bRevealed = bInRevealed;
+	ArmingTimeLeft = FMath::Max(0.f, InArmingTimeLeft);
+	UpdateVisuals();
+}
+
 void AProximityMineActor::Reveal()
 {
 	bRevealed = true;

@@ -78,12 +78,23 @@ CAMERA_TEST(FCameraZoneRulesTest, "Camera.ZoneActivationRules")
 bool FCameraZoneRulesTest::RunTest(const FString&)
 {
 	using namespace CameraZoneRules;
-	TestTrue(TEXT("Leader inside in exploration"), ShouldBeActive(true, false, ECodexCombatMode::None, false, true));
-	TestFalse(TEXT("Leader outside"), ShouldBeActive(true, false, ECodexCombatMode::None, false, false));
-	TestFalse(TEXT("Switch disabled"), ShouldBeActive(false, false, ECodexCombatMode::None, false, true));
-	TestFalse(TEXT("Tactical pause"), ShouldBeActive(true, true, ECodexCombatMode::TacticalPause, true, true));
-	TestFalse(TEXT("Active wave"), ShouldBeActive(true, false, ECodexCombatMode::RealTime, true, true));
-	TestTrue(TEXT("Active wave, zone allows combat"), ShouldBeActive(true, true, ECodexCombatMode::RealTime, true, true));
+	TestTrue(TEXT("Leader inside"), ShouldBeActive(true, true));
+	TestFalse(TEXT("Leader outside"), ShouldBeActive(true, false));
+	TestFalse(TEXT("Switch disabled"), ShouldBeActive(false, true));
+	// User request 2026-10-08: per-volume modes, defaults = real time on, turn-based / tactical pause off.
+	const FCameraZoneModes Defaults;
+	TestTrue(TEXT("Exploration shows the zone camera"), IsCameraAllowed(Defaults, ECodexCombatMode::None));
+	TestTrue(TEXT("Real-time combat shows it"), IsCameraAllowed(Defaults, ECodexCombatMode::RealTime));
+	TestFalse(TEXT("Tactical pause hides it"), IsCameraAllowed(Defaults, ECodexCombatMode::TacticalPause));
+	TestFalse(TEXT("Turn-based hides it"), IsCameraAllowed(Defaults, ECodexCombatMode::TurnBased));
+	FCameraZoneModes Custom;
+	Custom.bRealTime = false;
+	Custom.bTurnBased = true;
+	Custom.bTacticalPause = true;
+	TestFalse(TEXT("Custom: real time off"), IsCameraAllowed(Custom, ECodexCombatMode::RealTime));
+	TestTrue(TEXT("Custom: turn-based on"), IsCameraAllowed(Custom, ECodexCombatMode::TurnBased));
+	TestTrue(TEXT("Custom: pause on"), IsCameraAllowed(Custom, ECodexCombatMode::TacticalPause));
+	TestTrue(TEXT("Custom: exploration always"), IsCameraAllowed(Custom, ECodexCombatMode::None));
 	TestEqual(TEXT("Bunker cold x0"), GetColdMultiplier(ECameraZoneEnvironment::Closed), 0.f);
 	TestEqual(TEXT("Shelter cold x0.5"), GetColdMultiplier(ECameraZoneEnvironment::Shelter), 0.5f);
 	TestEqual(TEXT("Open cold x1"), GetColdMultiplier(ECameraZoneEnvironment::Standard), 1.f);

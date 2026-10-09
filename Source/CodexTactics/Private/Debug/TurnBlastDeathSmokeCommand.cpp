@@ -1,7 +1,8 @@
 // Dev-only console command for a headless regression check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.TurnBlastDeathSmoke
-// A turn-based barrel shot whose blast kills an operative fails the mission, which ends the fight in the middle of the
-// blast (grid and unit states gone). The game must not crash (user report 2026-09-30: Shift + barrel shot crashed).
+// A turn-based barrel shot whose blast kills an operative (not the commander) drops him from the fight in the middle of
+// the blast; the fight goes on (user decision 2026-10-08). The game must not crash (user report 2026-09-30: Shift +
+// barrel shot crashed).
 
 #include "CoreMinimal.h"
 
@@ -127,19 +128,29 @@ namespace TurnBlastDeathSmoke
 			{
 				return Finish(State, false);
 			}
-			// One hit point left: the blast kills the mate and fails the mission during the detonation.
+			// One hit point left: the blast kills the mate during the detonation. User decision 2026-10-08: only the
+			// commander's death fails the mission, so the fight goes on without him (out of the turn order and the grid).
 			UHealthComponent* Health = State.Victim->HealthComponent;
 			Health->ApplyDirectHealthLoss(Health->GetCurrentHealth() - 1.f, TEXT("Smoke"));
 			TurnBased->AttackCell(BarrelState->GridPos, true, true);
-			Check(State, !TurnBased->IsActive() && Flow->GetPhase() == ECodexGamePhase::GameOver,
-				TEXT("the blast killed the mate: mission failed, fight over, no crash"));
+			// (The same blast may also clear the last enemy: then the fight ends in a victory, never in a defeat.)
+			Check(State, !State.Victim->HealthComponent->IsAlive() && Flow->GetPhase() != ECodexGamePhase::GameOver
+				&& TurnBased->GetUnitState(State.Victim.Get()) == nullptr,
+				FString::Printf(TEXT("the blast killed the mate: no crash, no defeat, he is out of the turn order (alive %d, turn-based %d, phase %s, unit state %d)"),
+					State.Victim->HealthComponent->IsAlive() ? 1 : 0, TurnBased->IsActive() ? 1 : 0, *UEnum::GetValueAsString(Flow->GetPhase()),
+					TurnBased->GetUnitState(State.Victim.Get()) ? 1 : 0));
 			State.Stage = 1;
 			State.StageTime = 0.f;
 			return true;
 		}
 		case 1:
-			// A few more frames: timers / movers must not touch the ended fight.
-			return State.StageTime < 1.f ? true : Finish(State, true);
+			// A few more frames (the blast's timers, the death cinematic) on the running fight: no crash.
+			if (State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, TurnBased->IsActive() || Flow->GetPhase() != ECodexGamePhase::GameOver, TEXT("still no game over after the blast"));
+			return Finish(State, true);
 		default:
 			return Finish(State, false);
 		}

@@ -7,6 +7,8 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnGameFlowChangedDynamic, ECodexGamePhase, Phase, ECodexCombatMode, CombatMode);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTacticalPauseReleasedDynamic);
+/** Old phase, new phase, new combat mode — fired before OnGameFlowChanged (the save system's autosave runs first). */
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnGameFlowTransitionNative, ECodexGamePhase, ECodexGamePhase, ECodexCombatMode);
 
 /**
  * Owns the mission game flow (FGameFlowStateMachine) for a game world and applies its side effects:
@@ -38,8 +40,8 @@ public:
 	/** Replaces tuning values without touching the current phase (the game mode applies the level config at start). */
 	void SetConfig(const FGameFlowConfig& Config) { Machine.SetConfig(Config); }
 
-	/** Save-game load: see FGameFlowStateMachine::RestoreForLoad. */
-	void RestoreForLoad(bool bCombatUnlocked, bool bCombatPhase, int32 WaveIndex);
+	/** Save-game load: see FGameFlowStateMachine::RestoreForLoad (PreparationSeconds < 0: the full preparation / rest). */
+	void RestoreForLoad(bool bCombatUnlocked, bool bCombatPhase, int32 WaveIndex, float PreparationSeconds = -1.f);
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	ECodexGamePhase GetPhase() const { return Machine.GetPhase(); }
@@ -131,6 +133,12 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|GameFlow")
 	FOnGameFlowChangedDynamic OnGameFlowChanged;
 
+	/**
+	 * Native, fires before OnGameFlowChanged with the previous phase (before any other system reacts to the change: the
+	 * pre-combat autosave still sees the world as it was when the fight began).
+	 */
+	FOnGameFlowTransitionNative OnBeforeGameFlowChanged;
+
 	/** Fires when a tactical pause ends: planned squad orders must run now. */
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|GameFlow")
 	FOnTacticalPauseReleasedDynamic OnTacticalPauseReleased;
@@ -143,6 +151,8 @@ private:
 	void HandlePauseReleased();
 
 	FGameFlowStateMachine Machine;
+	/** Phase of the last broadcast (the "old" phase of OnBeforeGameFlowChanged). */
+	ECodexGamePhase LastBroadcastPhase = ECodexGamePhase::Exploration;
 	FDelegateHandle StateChangedHandle;
 	FDelegateHandle PauseReleasedHandle;
 };

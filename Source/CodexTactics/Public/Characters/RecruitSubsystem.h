@@ -63,6 +63,12 @@ public:
 	/** Save / load (Godot save_manager.gd "susanin": is_recruited). */
 	void RestoreRecruited(bool bRecruited);
 
+	/**
+	 * Save-game load (version 2): the rescue already happened (Susanin present, in cold distress unless recruited — no
+	 * dialogue, no narrative pause) or not yet (a Susanin of the current session leaves and the rescue can happen again).
+	 */
+	void RestoreRescue(bool bTriggered, bool bRecruited);
+
 private:
 	UFUNCTION()
 	void HandleWaveStarted(int32 WaveIndex, int32 TotalEnemies);

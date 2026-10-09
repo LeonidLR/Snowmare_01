@@ -47,10 +47,15 @@ MISSION_TEST(FMissionStartModeTest, "StartModeAndMenu")
 bool FMissionStartModeTest::RunTest(const FString&)
 {
 	using namespace MissionRules;
-	TestTrue(TEXT("Fresh start opens the menu"), GetAutoStartMode(false, EMissionStartMode::Combat, false) == EMissionStartMode::None);
-	TestTrue(TEXT("Ctrl + X repeats the last mode"), GetAutoStartMode(true, EMissionStartMode::Combat, false) == EMissionStartMode::Combat);
-	TestTrue(TEXT("Quick restart without a mode shows the menu"), GetAutoStartMode(true, EMissionStartMode::None, false) == EMissionStartMode::None);
-	TestTrue(TEXT("Headless checks start the game"), GetAutoStartMode(false, EMissionStartMode::None, true) == EMissionStartMode::Game);
+	TestTrue(TEXT("Fresh start: Game at once (no in-level menu)"), GetAutoStartMode(false, EMissionStartMode::Combat) == EMissionStartMode::Game);
+	TestTrue(TEXT("Ctrl + X repeats the last mode"), GetAutoStartMode(true, EMissionStartMode::Combat) == EMissionStartMode::Combat);
+	TestTrue(TEXT("Quick restart without a mode starts Game"), GetAutoStartMode(true, EMissionStartMode::None) == EMissionStartMode::Game);
+	TestTrue(TEXT("Frontend NEW GAME plays the intro"), !ShouldSkipIntro(false, true, false, false));
+	TestTrue(TEXT("Frontend NEW GAME plays the intro even in a headless check"), !ShouldSkipIntro(true, true, false, false));
+	TestTrue(TEXT("Headless checks skip the intro"), ShouldSkipIntro(true, false, false, false));
+	TestTrue(TEXT("Ctrl + X plays the intro again"), !ShouldSkipIntro(true, false, true, false));
+	TestTrue(TEXT("A pending save load skips the intro"), ShouldSkipIntro(false, true, false, true));
+	TestTrue(TEXT("Editor play (not headless) plays the intro"), !ShouldSkipIntro(false, false, false, false));
 	TestEqual(TEXT("Game objective"), GetModeObjective(EMissionStartMode::Game).ToString(),
 		FString(TEXT("Explore the checkpoint and find a way to open the blast gates")));
 	TestTrue(TEXT("Combat sets no objective itself"), GetModeObjective(EMissionStartMode::Combat).IsEmpty());

@@ -24,10 +24,17 @@ namespace MissionRules
 	CODEXTACTICS_API FText GetModeRadio(EMissionStartMode Mode);
 
 	/**
-	 * Mode to start at once without the menu, or None to show the main menu.
-	 * Quick restart (Ctrl + X) repeats the last mode; bSkipMenu (headless checks, -NoMainMenu) starts "Start Game".
+	 * Mode a mission level starts in. The in-level start menu is retired (2026-10-08: the frontend map's NEW GAME opens
+	 * the level, which starts at once): quick restart (Ctrl + X) repeats the last mode, everything else starts "Game".
 	 */
-	CODEXTACTICS_API EMissionStartMode GetAutoStartMode(bool bQuickRestart, EMissionStartMode LastMode, bool bSkipMenu);
+	CODEXTACTICS_API EMissionStartMode GetAutoStartMode(bool bQuickRestart, EMissionStartMode LastMode);
+
+	/**
+	 * Skip the blocking intro briefing (the radio line is posted instead)? Always when a save is about to be loaded;
+	 * otherwise for headless runs (-ExecCmds / -NoMainMenu / -CodexBot) unless the frontend started the game or Ctrl + X
+	 * restarted it.
+	 */
+	CODEXTACTICS_API bool ShouldSkipIntro(bool bHeadlessCommandLine, bool bFrontendStart, bool bQuickRestart, bool bPendingLoad);
 
 	/**
 	 * Objective for a game phase change, false when the phase keeps the current objective.
@@ -51,4 +58,17 @@ namespace MissionRules
 
 	/** HQ radio line when an operative is lost. */
 	CODEXTACTICS_API FText GetFailureRadio(const FText& OperativeName);
+
+	/**
+	 * Defeat rule (user decision 2026-10-08): the mission is lost only when the COMMANDER dies (Engineer, Medic-Sapper and
+	 * recruits are permanent losses, the fight goes on) or when no squad member is left alive.
+	 * LivingSquadMembers = living members after this death.
+	 */
+	CODEXTACTICS_API bool ShouldFailMission(bool bFallenIsCommander, int32 LivingSquadMembers);
+
+	/** Full-screen line after the commander's death cinematic, before the mission-failed screen. */
+	CODEXTACTICS_API FText GetSquadFallenText();
+
+	/** HQ line when a non-commander member is killed (the fight goes on). */
+	CODEXTACTICS_API FText GetMemberLostRadio(const FText& OperativeName);
 }

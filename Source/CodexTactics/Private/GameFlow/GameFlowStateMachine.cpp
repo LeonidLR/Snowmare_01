@@ -220,7 +220,7 @@ EGameFlowResult FGameFlowStateMachine::FinishPostCombat()
 	return EGameFlowResult::Ok;
 }
 
-void FGameFlowStateMachine::RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex)
+void FGameFlowStateMachine::RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex, float InPreparationSeconds)
 {
 	const FGameFlowConfig Saved = Config;
 	Reset(Saved);
@@ -229,6 +229,10 @@ void FGameFlowStateMachine::RestoreForLoad(bool bInCombatUnlocked, bool bInComba
 	{
 		WaveIndex = FMath::Max(1, InWaveIndex);
 		PreparationTimeRemaining = WaveIndex > 1 ? Config.WaveRestDuration : Config.PreparationDuration;
+		if (InPreparationSeconds > 0.f)
+		{
+			PreparationTimeRemaining = FMath::Min(InPreparationSeconds, PreparationTimeRemaining);
+		}
 		SetState(ECodexGamePhase::Preparation, ECodexCombatMode::None);
 	}
 	else

@@ -56,8 +56,17 @@ public:
 
 	bool IsArmed() const { return !bPreview && ArmingLeft <= 0.f && !bTripped; }
 	bool IsTripped() const { return bTripped; }
+	/** The cyan placement preview (not a real wire). */
+	bool IsPreview() const { return bPreview; }
 	FVector GetAnchorA() const { return WireA; }
 	FVector GetAnchorB() const { return WireB; }
+	/** The anchor is a bracket on an object (not a peg in the snow). */
+	bool IsAnchorAOnObject() const { return bAnchorAOnObject; }
+	bool IsAnchorBOnObject() const { return bAnchorBOnObject; }
+	/** Seconds until it arms (0 = armed). */
+	float GetArmingLeft() const { return ArmingLeft; }
+	/** Save-game load (after Setup): the remaining arming time. */
+	void RestoreArmingLeft(float Seconds) { ArmingLeft = FMath::Max(0.f, Seconds); }
 
 	virtual FActionMenuRequest BuildActionMenu(const AOperativeCharacter* Leader) const override;
 	virtual void ExecuteAction(AOperativeCharacter* User) override;
@@ -94,6 +103,8 @@ private:
 	FVector WireB = FVector::ZeroVector;
 	bool bPreview = false;
 	bool bTripped = false;
+	bool bAnchorAOnObject = false;
+	bool bAnchorBOnObject = false;
 	float ArmingLeft = 0.f;
 	/** Ignored by the trigger until they leave the wire (the rigger). */
 	TArray<TWeakObjectPtr<AActor>> Ignored;

@@ -7,11 +7,16 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/RecruitSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/DeathCinematicSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/KnockdownComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Core/MissionSubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -47,6 +52,9 @@ namespace RecruitDeathSmoke
 			if (Leader && Susanin)
 			{
 				Check(bOk, Susanin->IsExpendable(), TEXT("the recruit is expendable"));
+				// The user's bug 2026-10-08 happened with Susanin in the squad: recruit him first.
+				Recruits->RestoreRecruited(true);
+				Check(bOk, Squad->GetMembers().Contains(Susanin), TEXT("Susanin recruited into the squad"));
 				Susanin->SetActorLocation(Leader->GetActorLocation() + Leader->GetActorForwardVector() * 300.f);
 				Susanin->MedkitsCount = 2;
 				Susanin->ChocolateCount = 3;
@@ -74,8 +82,35 @@ namespace RecruitDeathSmoke
 							Leader->MedkitsCount, ChocolateBefore, Leader->ChocolateCount));
 				}
 			}
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bOk ? TEXT("PASS") : TEXT("FAIL"));
-			FPlatformMisc::RequestExit(false, TEXT("RecruitDeathSmoke"));
+			if (!Susanin)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: FAIL"));
+				FPlatformMisc::RequestExit(false, TEXT("RecruitDeathSmoke"));
+				return;
+			}
+			// User bug 2026-10-08: he kept standing. A few seconds later (after the death cinematic) he must lie as a corpse.
+			TWeakObjectPtr<AOperativeCharacter> WeakSusanin(Susanin);
+			FTimerHandle CorpseHandle;
+			W->GetTimerManager().SetTimer(CorpseHandle, FTimerDelegate::CreateLambda([WeakWorld, WeakSusanin, bOk]() mutable
+			{
+				const AOperativeCharacter* Dead = WeakSusanin.Get();
+				UWorld* W2 = WeakWorld.Get();
+				const UDeathCinematicSubsystem* DeathCam = W2 ? W2->GetSubsystem<UDeathCinematicSubsystem>() : nullptr;
+				Check(bOk, DeathCam && !DeathCam->IsActive() && DeathCam->GetCompletedFocusCount() >= 1, TEXT("death cinematic played and ended"));
+				const UAnimInstance* Anim = Dead && Dead->GetMesh() ? Dead->GetMesh()->GetAnimInstance() : nullptr;
+				const UOperativeAnimInstance* OperativeAnim = Cast<UOperativeAnimInstance>(Anim);
+				const float FullBody = OperativeAnim ? OperativeAnim->GetSlotMontageGlobalWeight(OperativeAnim->FullBodySlot) : 0.f;
+				const UKnockdownComponent* Knockdown = Dead ? Dead->KnockdownComponent.Get() : nullptr;
+				Check(bOk, FullBody > 0.9f && Knockdown && (Knockdown->PlayedDeathFall() || Knockdown->DiedWhileDown()),
+					FString::Printf(TEXT("Susanin lies as a corpse: death fall held on FullBody (weight %.2f, clip %s)"), FullBody,
+						Knockdown && Knockdown->GetPlayingClip() ? *Knockdown->GetPlayingClip()->GetName() : TEXT("none")));
+				Check(bOk, Dead && Dead->GetCapsuleComponent()->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Ignore
+					&& Dead->GetCharacterMovement()->MovementMode == MOVE_None, TEXT("no pawn collision, no movement"));
+				const USquadSubsystem* Squad2 = W2 ? W2->GetSubsystem<USquadSubsystem>() : nullptr;
+				Check(bOk, Dead && Squad2 && !Squad2->GetMembers().Contains(Dead) && Dead->IsKilledInAction(), TEXT("out of the squad (HUD / key 4 / turn order)"));
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bOk ? TEXT("PASS") : TEXT("FAIL"));
+				FPlatformMisc::RequestExit(false, TEXT("RecruitDeathSmoke"));
+			}), 4.f, false);
 		}), 3.f, false);
 	}
 

@@ -324,6 +324,34 @@ void URecruitSubsystem::RestoreRecruited(bool bRecruited)
 	}
 }
 
+void URecruitSubsystem::RestoreRescue(bool bTriggered, bool bRecruited)
+{
+	if (bRecruited)
+	{
+		RestoreRecruited(true);
+		bColdDistress = false;
+		return;
+	}
+	RestoreRecruited(false);
+	bRecruitmentDialogueActive = false;
+	if (bTriggered)
+	{
+		if (GetOrSpawnSusanin())
+		{
+			bRescueTriggered = true;
+			bColdDistress = true;
+		}
+		return;
+	}
+	if (AOperativeCharacter* Recruit = Susanin.Get())
+	{
+		Recruit->Destroy();
+	}
+	Susanin = nullptr;
+	bRescueTriggered = false;
+	bColdDistress = false;
+}
+
 void URecruitSubsystem::BeginNarrativePause()
 {
 	// Godot is_narrative_pause + Engine.time_scale = 0 (the engine clamps 0 to a near-stop).

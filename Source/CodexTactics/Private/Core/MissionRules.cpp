@@ -29,13 +29,14 @@ FText MissionRules::GetModeRadio(EMissionStartMode Mode)
 	}
 }
 
-EMissionStartMode MissionRules::GetAutoStartMode(bool bQuickRestart, EMissionStartMode LastMode, bool bSkipMenu)
+EMissionStartMode MissionRules::GetAutoStartMode(bool bQuickRestart, EMissionStartMode LastMode)
 {
-	if (bQuickRestart && LastMode != EMissionStartMode::None)
-	{
-		return LastMode;
-	}
-	return bSkipMenu ? EMissionStartMode::Game : EMissionStartMode::None;
+	return bQuickRestart && LastMode != EMissionStartMode::None ? LastMode : EMissionStartMode::Game;
+}
+
+bool MissionRules::ShouldSkipIntro(bool bHeadlessCommandLine, bool bFrontendStart, bool bQuickRestart, bool bPendingLoad)
+{
+	return bPendingLoad || (bHeadlessCommandLine && !bFrontendStart && !bQuickRestart);
 }
 
 bool MissionRules::GetPhaseObjective(ECodexGamePhase Phase, int32 WaveIndex, float PreparationSeconds, bool bAfterCombat, FText& OutObjective)
@@ -99,6 +100,23 @@ FText MissionRules::GetFailureReason(const FText& OperativeName, float ColdLevel
 FText MissionRules::GetFailureRadio(const FText& OperativeName)
 {
 	return FText::Format(LOCTEXT("Radio", "Warning! Contact with {0} lost. Mission failed."), OperativeName);
+}
+
+bool MissionRules::ShouldFailMission(bool bFallenIsCommander, int32 LivingSquadMembers)
+{
+	// User decision 2026-10-08: only the commander's death loses the mission; the others are permanent losses.
+	// Nobody left standing (a roster without a commander) loses too.
+	return bFallenIsCommander || LivingSquadMembers <= 0;
+}
+
+FText MissionRules::GetSquadFallenText()
+{
+	return LOCTEXT("SquadFallen", "THE SQUAD HAS FALLEN");
+}
+
+FText MissionRules::GetMemberLostRadio(const FText& OperativeName)
+{
+	return FText::Format(LOCTEXT("MemberLost", "{0} is down - KIA. Search the remains to recover supplies and gear."), OperativeName);
 }
 
 #undef LOCTEXT_NAMESPACE

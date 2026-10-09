@@ -24,6 +24,22 @@ enum class ESquadNoise : uint8
 	Explosion
 };
 
+/** Patrol / search progress of one enemy for the save game (AEnemyCharacter::CapturePatrolSnapshot). */
+struct CODEXTACTICS_API FEnemyPatrolSnapshot
+{
+	/** On patrol / escort duty (not engaged). */
+	bool bOnPatrol = false;
+	int32 WaypointIndex = 0;
+	bool bForward = true;
+	/** EPatrolPhase as a number (Moving, Waiting, Turning, Finished). */
+	int32 Phase = 0;
+	float WaitLeft = 0.f;
+	bool bSearching = false;
+	FVector SearchOrigin = FVector::ZeroVector;
+	float SearchElapsed = 0.f;
+	float Suspicion = 0.f;
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedDynamic, AEnemyCharacter*, Enemy);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedNative, AEnemyCharacter*);
 
@@ -295,6 +311,15 @@ public:
 
 	/** Index of the waypoint it walks to / waits at (smokes, debugging). */
 	int32 GetPatrolWaypointIndex() const { return PatrolWaypointIndex; }
+
+	/** Save game: where it is on its patrol / search. */
+	FEnemyPatrolSnapshot CapturePatrolSnapshot() const;
+
+	/**
+	 * Save-game load: assigns Route / Leader and resumes the saved patrol (waypoint, phase, wait, search with its
+	 * elapsed time) without alert lines; Snapshot.bOnPatrol false keeps it off patrol (route / leader remembered).
+	 */
+	virtual void RestorePatrolSnapshot(APatrolRouteActor* Route, AEnemyCharacter* Leader, const FEnemyPatrolSnapshot& Snapshot);
 
 protected:
 	/** Patrol state of the route driver (TickPatrolRoute). */

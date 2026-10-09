@@ -99,6 +99,13 @@ void ATurretActor::SetAllPowered(UWorld* World, bool bNewPowered)
 	}
 }
 
+void ATurretActor::RestoreSaved(bool bInPowered, bool bInBroken)
+{
+	bPowered = bInPowered;
+	bBroken = bInBroken;
+	UpdateState();
+}
+
 void ATurretActor::HandleBroken(AActor* Victim, const FString& AttackerSource)
 {
 	bBroken = true;

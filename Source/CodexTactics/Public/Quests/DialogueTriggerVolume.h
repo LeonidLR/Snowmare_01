@@ -42,6 +42,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Dialogue")
 	void ResetTrigger() { bHasTriggered = false; }
 
+	/** Save-game load: the dialogue already played (a once-only trigger stays silent). */
+	void RestoreTriggered(bool bTriggered) { bHasTriggered = bTriggered; }
+
 	/** Plays the dialogue for Actor entering (squad filter, once); true when it played. */
 	bool TryTrigger(AActor* Actor);
 

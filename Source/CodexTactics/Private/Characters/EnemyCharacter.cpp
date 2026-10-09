@@ -1226,6 +1226,61 @@ void AEnemyCharacter::InitPatrol()
 	}
 }
 
+FEnemyPatrolSnapshot AEnemyCharacter::CapturePatrolSnapshot() const
+{
+	FEnemyPatrolSnapshot Snapshot;
+	Snapshot.bOnPatrol = IsOnPatrol();
+	Snapshot.WaypointIndex = PatrolWaypointIndex;
+	Snapshot.bForward = bPatrolForward;
+	Snapshot.Phase = static_cast<int32>(PatrolPhase);
+	Snapshot.WaitLeft = PatrolWaitLeft;
+	Snapshot.bSearching = bSearching;
+	Snapshot.SearchOrigin = SearchOrigin;
+	Snapshot.SearchElapsed = SearchElapsed;
+	Snapshot.Suspicion = PatrolSuspicion;
+	return Snapshot;
+}
+
+void AEnemyCharacter::RestorePatrolSnapshot(APatrolRouteActor* Route, AEnemyCharacter* Leader, const FEnemyPatrolSnapshot& Snapshot)
+{
+	if (bIsDying)
+	{
+		return;
+	}
+	if (AAIController* AIC = Cast<AAIController>(GetController()))
+	{
+		AIC->StopMovement();
+	}
+	if (!Snapshot.bOnPatrol)
+	{
+		AssignedPatrolRoute = Route;
+		EscortLeader = Leader != this ? Leader : nullptr;
+		bPatrolActive = false;
+		bSearching = false;
+		return;
+	}
+	StartPatrol(Route, Leader); // virtual: the marksman returns to his patrol state too
+	PatrolWaypointIndex = FMath::Max(0, Snapshot.WaypointIndex);
+	bPatrolForward = Snapshot.bForward;
+	PatrolPhase = static_cast<EPatrolPhase>(FMath::Clamp(Snapshot.Phase, 0, static_cast<int32>(EPatrolPhase::Finished)));
+	PatrolWaitLeft = Snapshot.WaitLeft;
+	PatrolTurnTime = 0.f;
+	PatrolStuckTime = 0.f;
+	bPatrolMoveIssued = false;
+	bEscortMoving = false;
+	PatrolSuspicion = Snapshot.Suspicion;
+	bSearching = Snapshot.bSearching;
+	SearchOrigin = Snapshot.SearchOrigin;
+	SearchGoal = Snapshot.SearchOrigin;
+	SearchElapsed = Snapshot.SearchElapsed;
+	SearchLegTime = 0.f;
+	SearchLookLeft = 0.f;
+	SearchStuckTime = 0.f;
+	bSearchReachedOrigin = false;
+	bSearchMoving = false;
+	GetCharacterMovement()->MaxWalkSpeed = PatrolWalkSpeed;
+}
+
 FEnemyPerceptionParams AEnemyCharacter::GetPerception() const
 {
 	return bOverridePerception ? PerceptionRules::Sanitize(Archetype, PerceptionOverride) : EnemyPerception::Get(Archetype);

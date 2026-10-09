@@ -51,9 +51,9 @@ void UGameFlowSubsystem::ResetFlow(const FGameFlowConfig& Config)
 	HandleStateChanged(Machine.GetPhase(), Machine.GetCombatMode());
 }
 
-void UGameFlowSubsystem::RestoreForLoad(bool bCombatUnlocked, bool bCombatPhase, int32 WaveIndex)
+void UGameFlowSubsystem::RestoreForLoad(bool bCombatUnlocked, bool bCombatPhase, int32 WaveIndex, float PreparationSeconds)
 {
-	Machine.RestoreForLoad(bCombatUnlocked, bCombatPhase, WaveIndex);
+	Machine.RestoreForLoad(bCombatUnlocked, bCombatPhase, WaveIndex, PreparationSeconds);
 	HandleStateChanged(Machine.GetPhase(), Machine.GetCombatMode());
 }
 
@@ -61,6 +61,9 @@ void UGameFlowSubsystem::HandleStateChanged(ECodexGamePhase Phase, ECodexCombatM
 {
 	UE_LOG(LogCodexTactics, Log, TEXT("GameFlow: %s / %s (wave %d)"),
 		*UEnum::GetValueAsString(Phase), *UEnum::GetValueAsString(CombatMode), Machine.GetWaveIndex());
+	const ECodexGamePhase OldPhase = LastBroadcastPhase;
+	LastBroadcastPhase = Phase;
+	OnBeforeGameFlowChanged.Broadcast(OldPhase, Phase, CombatMode);
 	ApplyTimeDilation();
 	OnGameFlowChanged.Broadcast(Phase, CombatMode);
 }

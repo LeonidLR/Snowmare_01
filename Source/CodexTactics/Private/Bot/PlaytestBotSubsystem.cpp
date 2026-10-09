@@ -150,13 +150,8 @@ void UPlaytestBotSubsystem::SetupRun()
 	}
 	if (bStealthLevel)
 	{
-		// The start menu keeps the world paused: "Start game" (exploration) — the patrols walk, the squad sneaks. (On a
-		// wave level the bot still explores behind the menu and then presses "Start combat", as before.)
-		if (UMissionSubsystem* Mission = GetWorld()->GetSubsystem<UMissionSubsystem>(); Mission && Mission->IsMainMenuOpen())
-		{
-			Mission->StartMission(EMissionStartMode::Game);
-			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] 'Start game': the exploration runs in real time"));
-		}
+		// The level starts in "Game" mode by itself (no in-level start menu since 2026-10-08): the patrols walk, the squad
+		// sneaks. (On a wave level the bot explores and then starts the fight with StartMission(Combat), as before.)
 		AOperativeCharacter* Medic = Member(2);
 		StealthConfig = BotStealthRules::MakeSeededConfig(Seed, Config.Mines > 0 && Medic && Medic->GetDeployableCount(EDeployableType::Mine) > 0);
 		StealthStartTime = GetWorld()->GetTimeSeconds();

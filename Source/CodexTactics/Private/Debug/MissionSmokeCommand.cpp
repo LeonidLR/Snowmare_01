@@ -1,7 +1,8 @@
 // Dev-only console command for a headless mission check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.MissionSmoke
-// 1. start objective; 2. preparation / wave objectives follow the game flow; 3. an operative killed by wounds fails
-// the mission (GameOver, reason, time stopped); 4. restart reloads the level into a fresh exploration.
+// 1. start objective; 2. preparation / wave objectives follow the game flow; 3. the engineer's death does NOT fail the
+// mission (user decision 2026-10-08), the commander's death does after the death cinematic (GameOver, reason, time
+// stopped); 4. restart reloads the level into a fresh exploration.
 
 #include "CoreMinimal.h"
 
@@ -10,6 +11,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/DeathCinematicSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Containers/Ticker.h"
 #include "Core/MissionRules.h"
@@ -33,6 +35,7 @@ namespace MissionSmoke
 
 	int32 GFailures = 0;
 	FDelegateHandle GReloadHandle;
+	FText GCommanderName;
 
 	void Check(FState& State, bool bOk, const TCHAR* What)
 	{
@@ -60,7 +63,7 @@ namespace MissionSmoke
 	{
 		UWorld* World = WeakWorld.Get();
 		State.Time += StepSeconds;
-		if (!World || State.Time > 30.f)
+		if (!World || State.Time > 60.f)
 		{
 			Finish(State.Failures + 1, false);
 			return false;
@@ -84,22 +87,56 @@ namespace MissionSmoke
 			return true;
 		case 2:
 		{
-			AOperativeCharacter* Engineer = Squad->GetMembers().Num() > 1 ? Squad->GetMembers()[1] : nullptr;
+			// User decision 2026-10-08: only the commander's death fails the mission.
+			AOperativeCharacter* Engineer = nullptr;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Engineer = Member->SquadRole == EOperativeRole::Engineer ? Member : Engineer;
+			}
 			if (Engineer)
 			{
-				Engineer->ColdLevel = 10.f;
 				Engineer->HealthComponent->ApplyDirectHealthLoss(10000.f, TEXT("Smoke"));
 			}
-			Check(State, Mission->IsMissionFailed(), TEXT("operative death fails the mission"));
-			Check(State, Flow->GetPhase() == ECodexGamePhase::GameOver, TEXT("game over phase"));
-			Check(State, Engineer && Mission->GetFailureReason().EqualTo(MissionRules::GetFailureReason(Engineer->DisplayName, 10.f)),
-				TEXT("wounds reason"));
+			Check(State, Engineer && !Mission->IsMissionFailed() && Flow->GetPhase() != ECodexGamePhase::GameOver,
+				TEXT("the engineer's death does not fail the mission"));
+			Check(State, Engineer && !Squad->GetMembers().Contains(Engineer), TEXT("he leaves the squad"));
+			return true;
+		}
+		case 3:
+		{
+			const UDeathCinematicSubsystem* DeathCam = World->GetSubsystem<UDeathCinematicSubsystem>();
+			if (DeathCam && DeathCam->IsActive())
+			{
+				State.Stage = 3; // the camera comes back first
+				return true;
+			}
+			AOperativeCharacter* Commander = nullptr;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Commander = Member->SquadRole == EOperativeRole::Commander ? Member : Commander;
+			}
+			GCommanderName = Commander ? Commander->DisplayName : FText::GetEmpty();
+			if (Commander)
+			{
+				Commander->ColdLevel = 10.f;
+				Commander->HealthComponent->ApplyDirectHealthLoss(10000.f, TEXT("Smoke"));
+			}
+			Check(State, Commander && !Mission->IsMissionFailed(), TEXT("commander killed: the death cinematic plays before the failed screen"));
+			return true;
+		}
+		case 4:
+			if (!Mission->IsMissionFailed())
+			{
+				State.Stage = 4; // death cinematic, fade, «THE SQUAD HAS FALLEN» first
+				return true;
+			}
+			Check(State, Flow->GetPhase() == ECodexGamePhase::GameOver, TEXT("the commander's death fails the mission (game over phase)"));
+			Check(State, Mission->GetFailureReason().EqualTo(MissionRules::GetFailureReason(GCommanderName, 10.f)), TEXT("wounds reason"));
 			Check(State, World->GetWorldSettings()->GetEffectiveTimeDilation() < 0.01f, TEXT("time stopped"));
 			GFailures = State.Failures;
 			GReloadHandle = FCoreUObjectDelegates::PostLoadMapWithWorld.AddStatic(&HandleReloaded);
 			Mission->RestartMission();
 			return false;
-		}
 		default:
 			return false;
 		}

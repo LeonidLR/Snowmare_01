@@ -74,6 +74,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Generator")
 	void RepairGenerator();
 
+	/** Save-game load (after the quest chain): generator durability and breakdown; its heat follows (running and intact). */
+	void RestoreGeneratorState(float Health, bool bBroken);
+
 	/** Menu (or feed line) for the leader standing at the object. */
 	virtual FActionMenuRequest BuildActionMenu(const AOperativeCharacter* Leader) const;
 

@@ -96,6 +96,8 @@ float ATripwireActor::BodyHeight(const AActor& Actor)
 void ATripwireActor::Setup(const FVector& GroundA, const FVector& GroundB, bool bAOnObject, bool bBOnObject, bool bInPreview, AActor* RiggedBy)
 {
 	bPreview = bInPreview;
+	bAnchorAOnObject = bAOnObject;
+	bAnchorBOnObject = bBOnObject;
 	WireA = GroundA;
 	WireB = GroundB;
 	const FVector Span = FVector(GroundB.X - GroundA.X, GroundB.Y - GroundA.Y, 0.f);

@@ -1,6 +1,7 @@
 #include "Characters/OperativeAnimInstance.h"
 
 #include "Combat/KnockdownComponent.h"
+#include "Characters/HitReactionRules.h"
 #include "Misc/ScopeExit.h"
 #include "Characters/LeftHandIKRules.h"
 #include "Characters/AimOffsetRules.h"
@@ -544,34 +545,63 @@ void UOperativeAnimInstance::UpdateStanceTransition()
 void UOperativeAnimInstance::HandleHealthChanged(float NewHealth, float MaxHealth, float Delta)
 {
 	// Godot play_hit_reaction: per stance, the pistol one with the pistol in hands; not over a throw or while dead.
+	// User request 2026-10-08: real time and turn-based (grid hits go through TakeHit too), throttled, not in cover.
 	const AOperativeCharacter* Operative = BoundOperative.Get();
-	if (Delta >= 0.f || NewHealth <= 0.f || !Operative || bIsDead || Operative->IsKnockedDown())
+	if (Delta >= 0.f || NewHealth <= 0.f || !Operative || bIsDead)
 	{
-		return; // knocked down: the knockdown clip owns the body
+		return;
 	}
+	const UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	HitReactionRules::FHitReactionSettings Settings;
+	Settings.MinIntervalSeconds = HitReactionMinIntervalSeconds;
+	Settings.MinDamage = HitReactionMinDamage;
+	Settings.bAllowInCover = bHitReactionInCover;
+	HitReactionRules::FHitReactionContext Context;
+	Context.Damage = -Delta;
+	Context.SecondsSinceLast = static_cast<float>(Now - LastHitReactionTime);
+	Context.bInCover = Operative->bInCover;
+	// Knocked down: the knockdown clip owns the body; a throw / reload / stance change keeps its clip.
+	Context.bBusy = Operative->IsKnockedDown() || IsThrowingGrenade() || Operative->bIsReloading || IsPlayingStanceTransition() || Operative->IsVaulting();
+	if (!HitReactionRules::ShouldReact(Settings, Context))
+	{
+		return;
+	}
+	FVector Source;
+	const bool bFromBehind = Operative->GetLastHitSource(Source)
+		&& HitReactionRules::IsFromBehind(Operative->GetActorForwardVector(), Operative->GetActorLocation(), Source);
 	UAnimSequenceBase* Clip = HitStandAnimation;
-	if (Operative->CurrentWeapon && Operative->CurrentWeapon->WeaponId == TEXT("pistol") && PistolHitAnimation)
+	FName Slot = UpperBodySlot;
+	if (Operative->GetStance() == EOperativeStance::Prone)
+	{
+		// The prone body reacts as a whole (Godot hit_prone).
+		Clip = HitProneAnimation;
+		Slot = FullBodySlot;
+	}
+	else if (bFromBehind && HitBackAnimation)
+	{
+		Clip = HitBackAnimation;
+	}
+	else if (Operative->CurrentWeapon && Operative->CurrentWeapon->WeaponId == TEXT("pistol") && PistolHitAnimation)
 	{
 		Clip = PistolHitAnimation;
 	}
-	else if (Operative->GetStance() == EOperativeStance::Crouching)
+	else if (Operative->GetStance() == EOperativeStance::Crouching && HitCrouchAnimation)
 	{
 		Clip = HitCrouchAnimation;
 	}
-	else if (Operative->GetStance() == EOperativeStance::Prone)
+	if (!Clip)
 	{
-		// The prone body reacts as a whole (Godot hit_prone), unless it is still lying down / getting up.
-		if (HitProneAnimation && !IsPlayingStanceTransition())
-		{
-			PlaySlotAnimationAsDynamicMontage(HitProneAnimation, FullBodySlot, 0.1f, 0.2f);
-		}
 		return;
 	}
-	if (Clip && !IsPlayingSlotAnimation(GrenadeThrowWalkAnimation, UpperBodySlot))
-	{
-		PlaySlotAnimationAsDynamicMontage(Clip, UpperBodySlot, 0.1f, 0.2f);
-		LeftHandIKBlockSeconds = FMath::Max(LeftHandIKBlockSeconds, Clip->GetPlayLength()); // the hit reaction has the arms
-	}
+	// Upper body ("Fire" slot, the graph's layered blend from spine_01): the legs keep the locomotion.
+	PlaySlotAnimationAsDynamicMontage(Clip, Slot, HitReactionBlendInSeconds, HitReactionBlendOutSeconds);
+	LeftHandIKBlockSeconds = FMath::Max(LeftHandIKBlockSeconds, Clip->GetPlayLength()); // the arms react: no IK / aim offset
+	LastHitReactionTime = Now;
+	++HitReactionsPlayed;
+	LastHitReactionClip = Clip;
+	LastHitReactionSlot = Slot;
+	UE_LOG(LogCodexTactics, Verbose, TEXT("[HitReaction] %s: %s on %s (-%.0f)"), *Operative->DisplayName.ToString(), *Clip->GetName(), *Slot.ToString(), -Delta);
 }
 
 void UOperativeAnimInstance::HandleGrenadeThrow()
@@ -620,14 +650,32 @@ void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerS
 		return;
 	}
 	bDeathPlayed = true;
+	TArray<UAnimSequenceBase*> StandClips;
+	for (const TObjectPtr<UAnimSequenceBase>& Stand : DeathStandAnimations)
+	{
+		if (Stand)
+		{
+			StandClips.Add(Stand.Get());
+		}
+	}
 	UAnimSequenceBase* Clip = Operative->GetStance() == EOperativeStance::Crouching ? DeathCrouchAnimation.Get()
 		: Operative->GetStance() == EOperativeStance::Prone ? DeathProneAnimation.Get()
-		: DeathStandAnimations.IsEmpty() ? nullptr : DeathStandAnimations[FMath::RandRange(0, DeathStandAnimations.Num() - 1)].Get();
+		: StandClips.IsEmpty() ? nullptr : StandClips[FMath::RandRange(0, StandClips.Num() - 1)];
+	StopSlotAnimation(0.1f, UpperBodySlot);
 	if (!Clip)
 	{
+		// User bug 2026-10-08 (Ivan Susanin kept standing after his death): ABP_Operative has no standing / crouched death
+		// clip (DeathStandAnimations empty, DeathCrouchAnimation unset — the pack's MM_Death_* clips stop half-way down,
+		// pelvis 83-88 cm, no corpse pose). He falls with the knockdown fall of the side the killing blow came from and
+		// lies there (held).
+		FVector Source = Operative->GetActorLocation() + Operative->GetActorForwardVector() * 100.f;
+		Operative->GetLastHitSource(Source);
+		if (UKnockdownComponent* Knockdown = Operative->KnockdownComponent.Get())
+		{
+			Knockdown->PlayDeathFall(Source);
+		}
 		return;
 	}
-	StopSlotAnimation(0.1f, UpperBodySlot);
 	if (UAnimMontage* Montage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, 0.15f, 0.f, 1.f, 1, -1.f,
 		Stance == EOperativeStance::Standing ? FMath::Min(DeathStartOffset, Clip->GetPlayLength() * 0.9f) : 0.f))
 	{

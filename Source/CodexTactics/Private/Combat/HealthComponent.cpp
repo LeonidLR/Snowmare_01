@@ -185,6 +185,14 @@ void UHealthComponent::SetMaxHealth(float NewMax, bool bResetCurrent)
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, 0.0f);
 }
 
+void UHealthComponent::RestoreHealth(float Current, float Max)
+{
+	MaxHealth = FMath::Max(1.0f, Max);
+	CurrentHealth = FMath::Clamp(Current, 0.0f, MaxHealth);
+	bIsDead = CurrentHealth <= 0.0f;
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, 0.0f);
+}
+
 bool UHealthComponent::HasStatusEffect(EStatusEffect Effect) const
 {
 	switch (Effect)

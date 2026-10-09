@@ -249,6 +249,20 @@ bool ABarrelActor::IgniteForTurnBased()
 	return true;
 }
 
+void ABarrelActor::RestoreBurnState(bool bBurning, bool bBurnt, float TimeLeft)
+{
+	const bool bWasBurning = Burn.bBurning;
+	Burn.bBurning = bBurning;
+	Burn.bBurnt = bBurnt || bBurning;
+	Burn.TimeLeft = bBurning ? FMath::Max(TimeLeft, 0.1f) : 0.f;
+	ApplyVisuals();
+	if (bWasBurning != bBurning)
+	{
+		OnBurningChanged.Broadcast(this, bBurning);
+		ReceiveBurningChanged(bBurning);
+	}
+}
+
 void ABarrelActor::ExtinguishNow()
 {
 	if (!Burn.bBurning)

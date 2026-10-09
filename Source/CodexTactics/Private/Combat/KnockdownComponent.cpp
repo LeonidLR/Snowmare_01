@@ -342,7 +342,7 @@ void UKnockdownComponent::BufferOrder(TFunction<void()> Order)
 
 bool UKnockdownComponent::HandleDeath()
 {
-	if (bDiedWhileDown)
+	if (bDiedWhileDown || bDeathFallPlayed)
 	{
 		return true;
 	}
@@ -368,6 +368,29 @@ bool UKnockdownComponent::HandleDeath()
 	State.Direction = Side;
 	SetPhase(EKnockdownPhase::None, Old);
 	UE_LOG(LogCodexTactics, Display, TEXT("[Knockdown] %s died while down (%s)"), *GetUnitName(), bFront ? TEXT("Death_Front") : TEXT("Death_Back"));
+	return true;
+}
+
+bool UKnockdownComponent::PlayDeathFall(const FVector& SourceLocation)
+{
+	if (bDiedWhileDown || bDeathFallPlayed)
+	{
+		return true;
+	}
+	const AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return false;
+	}
+	EKnockdownDirection Side = KnockdownRules::DirectionFromLocations(Owner->GetActorForwardVector(), Owner->GetActorLocation(), SourceLocation);
+	Side = Side == EKnockdownDirection::None ? EKnockdownDirection::Back : Side;
+	if (!PlayClip(LoadClip(Side == EKnockdownDirection::Front ? KnockedFrontClip : KnockedBackClip), FallBlendInSeconds, 0.f, 1.f, true))
+	{
+		return false;
+	}
+	bDeathFallPlayed = true; // the held fall is the corpse pose; no Death_* replay on top
+	UE_LOG(LogCodexTactics, Display, TEXT("[Knockdown] %s falls dead on the %s (%s, held)"), *GetUnitName(),
+		Side == EKnockdownDirection::Front ? TEXT("face") : TEXT("back"), KnockdownRules::FallClipName(Side));
 	return true;
 }
 

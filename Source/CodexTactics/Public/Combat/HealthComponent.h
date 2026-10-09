@@ -59,6 +59,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Health")
 	void SetMaxHealth(float NewMax, bool bResetCurrent = true);
 
+	/**
+	 * Save-game load: sets max and current health directly (no damage events, no death; Current <= 0 marks it dead, e.g.
+	 * a broken turret). Broadcasts OnHealthChanged with a zero delta.
+	 */
+	void RestoreHealth(float Current, float Max);
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Health")
 	EArmorTier GetArmorTier() const { return ArmorTier; }
 
