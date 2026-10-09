@@ -33,6 +33,21 @@ void UCodexActivatableScreen::SelectEntry(FName EntryId)
 	if (UCodexMenuButton* Button = FindEntryButton(EntryId))
 	{
 		SelectedEntryId = EntryId;
+		// The selected entry keeps the style's "selected" look (mouse moved away / keyboard / gamepad / scripted selection).
+		for (UCodexMenuButton* Each : EntryButtons)
+		{
+			if (Each)
+			{
+				if (Each == Button)
+				{
+					Each->SetIsSelected(true, /*bGiveClickFeedback*/ false);
+				}
+				else if (Each->GetSelected())
+				{
+					Each->ClearSelection(); // SetIsSelected(false) ignores non-toggleable buttons
+				}
+			}
+		}
 		OnEntrySelected(*Button);
 		BP_OnEntrySelected(EntryId);
 	}
@@ -149,6 +164,8 @@ void UCodexActivatableScreen::HookEntryButtons()
 			return;
 		}
 		EntryButtons.Add(Button);
+		Button->SetIsSelectable(true);
+		Button->SetIsInteractableWhenSelected(true); // a selected entry still activates on click / Enter
 		const FName Id = Button->GetEntryId();
 		Button->OnHovered().AddWeakLambda(this, [this, Id]() { SelectEntry(Id); });
 		Button->OnFocusReceived().AddWeakLambda(this, [this, Id]() { SelectEntry(Id); });

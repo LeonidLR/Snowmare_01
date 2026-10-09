@@ -40,7 +40,7 @@
     "MainMenuSmoke": { "map": "/Game/Maps/L_MainMenu" },
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" }
   },
-  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe"],
+  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "PhoneShots"],
   "rules": [
     {
       "name": "cover",
