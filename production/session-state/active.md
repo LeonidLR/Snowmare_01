@@ -14,6 +14,17 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Checkpoint 2026-10-09 (end of day, main 763ca9c pushed)
+- Done today: F9 quick load + black load cover (4b31144); Sniper-pack death clips for operatives / Marksman (4c75003);
+  Female Soldier = Medic-Sapper body + sniper rifle only for her, fires kneeling / prone only (c2478dd, ac61f69);
+  TB facing snap-back, cover-entry pops, kneel reload lift (5816996); TB shots resolve after turn / kneel (763ca9c).
+- User WIP NOT committed (do not touch / commit without asking): BP_Operative, BP_Enemy_Marksman, L_MovementTest,
+  DefaultEditor.ini, DefaultScalability.ini, ABP_Operative_Rifle2 deletion. Backups: Saved/Backups/user_wip_20261009_*.
+  L_PatrolTest is the committed (old) version; the user may restore Saved/Autosaves/.../L_PatrolTest_Auto1.umap themselves.
+- Open (ask the user): enemy TB shots with the same turn -> shot order; sniper pose in cover (now M4 cover clips);
+  real sniper rifle mesh (DA_Weapon_sniper_rifle.HandMesh); KIA in saves; save-slot playtime; Options screen.
+- Rule: back up the user's uncommitted files and compare hashes before every merge into main (memory backup-before-merge-main).
+
 ## Last verified
 2026-10-05: ABP_Operative_Rifle2 — build OK, `test.ps1 -Smart` 23/0, RifleLocomotion 2/0, setup script OK (6 states / 18 transitions, compile 0 errors, clips 8/16/16/8/6), rendered HudShot rifle2 OK, Jev 88 %.
 2026-10-05: Sprint 10 defense line — build OK, `test.ps1 -Smart` 43/0, SquadAutonomy + SquadROE 9/0, smokes Defend / CommanderMode / RealtimeSelect / ClickRules / CameraZone / Tripwire / Sight PASS, Jev ROE 81 %.
