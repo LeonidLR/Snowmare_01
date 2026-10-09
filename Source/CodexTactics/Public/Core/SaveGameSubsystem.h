@@ -71,6 +71,12 @@ public:
 	/** F5 (Godot _perform_quick_save): slot «quicksave», feed line; refused by the save policy (feed line with the reason). */
 	bool QuickSave();
 
+	/**
+	 * F9: reopens the newest save (GetContinueSlot, any type) with LoadGameWithTravel, so the level starts straight in the
+	 * saved state. Loading is always allowed (also in combat); feed line "No saves to load" without saves.
+	 */
+	bool QuickLoad();
+
 	/** Save from the save / load dialog with the feed line (Godot _on_save_slot_requested); refused by the save policy. */
 	bool SaveToSlotWithMessage(const FString& SlotName);
 
@@ -124,8 +130,20 @@ private:
 	void HandleFlowTransition(ECodexGamePhase OldPhase, ECodexGamePhase NewPhase, ECodexCombatMode NewMode);
 	void ApplyPendingLoad();
 
+	/**
+	 * Black full-screen cover (top of the viewport, above HUD and UMG) while a pending load is applied, so the level's own
+	 * start is never seen before the save; HideLoadCover fades it out once the saved state and the camera are in place.
+	 */
+	void ShowLoadCover(UWorld& InWorld);
+	void HideLoadCover();
+	void RemoveLoadCover();
+
 	FDelegateHandle FlowTransitionHandle;
 	FTimerHandle PendingLoadTimer;
+	FTimerHandle LoadCoverTimer;
+	TSharedPtr<class SWidget> LoadCoverWidget;
+	/** Platform time the cover fade-out started (< 0: fully opaque). */
+	double LoadCoverFadeStart = -1.0;
 	int32 AutosaveCount = 0;
 	EAutosaveMoment LastAutosaveMoment = EAutosaveMoment::None;
 };

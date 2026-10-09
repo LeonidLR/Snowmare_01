@@ -1,6 +1,7 @@
 #include "Core/SaveGameSubsystem.h"
 #include "AI/PatrolRouteActor.h"
 #include "AIController.h"
+#include "Camera/TacticalCameraPawn.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/RecruitSubsystem.h"
@@ -43,6 +44,19 @@
 #include "Survival/ColdSurvivalComponent.h"
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
+#include "Engine/GameViewportClient.h"
+#include "HAL/PlatformTime.h"
+#include "Styling/CoreStyle.h"
+#include "Widgets/Layout/SBorder.h"
+
+namespace
+{
+	/** Load cover (pending load): stays black this long after the save is applied, then fades out over LoadCoverFadeSeconds. */
+	constexpr float LoadCoverHoldSeconds = 0.2f;
+	constexpr float LoadCoverFadeSeconds = 0.35f;
+	/** Above the HUD, the CommonUI layout and the death-cinematic overlay. */
+	constexpr int32 LoadCoverZOrder = 10000;
+}
 
 namespace
 {
@@ -618,13 +632,77 @@ void USaveGameSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	const UMissionSessionSubsystem* Session = GameInstance ? GameInstance->GetSubsystem<UMissionSessionSubsystem>() : nullptr;
 	if (Session && Session->HasPendingLoad())
 	{
+		// Before the first rendered frame: the level's own start stays hidden until the save is in place.
+		ShowLoadCover(InWorld);
 		// After every actor began play and the mission start (squad, loadout) ran.
 		InWorld.GetTimerManager().SetTimer(PendingLoadTimer, FTimerDelegate::CreateUObject(this, &USaveGameSubsystem::ApplyPendingLoad), 0.5f, false);
 	}
 }
 
+void USaveGameSubsystem::ShowLoadCover(UWorld& InWorld)
+{
+	UGameViewportClient* Viewport = InWorld.GetGameViewport();
+	if (!Viewport || LoadCoverWidget.IsValid())
+	{
+		return; // headless (-nullrhi): nothing is drawn anyway
+	}
+	LoadCoverFadeStart = -1.0;
+	TWeakObjectPtr<USaveGameSubsystem> WeakThis(this);
+	LoadCoverWidget = SNew(SBorder)
+		.BorderImage(FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
+		.BorderBackgroundColor_Lambda([WeakThis]()
+		{
+			const USaveGameSubsystem* Self = WeakThis.Get();
+			if (!Self || Self->LoadCoverFadeStart < 0.0)
+			{
+				return FSlateColor(FLinearColor::Black);
+			}
+			const float Alpha = 1.f - FMath::Clamp(static_cast<float>((FPlatformTime::Seconds() - Self->LoadCoverFadeStart) / LoadCoverFadeSeconds), 0.f, 1.f);
+			return FSlateColor(FLinearColor(0.f, 0.f, 0.f, Alpha));
+		})
+		.Visibility(EVisibility::HitTestInvisible);
+	Viewport->AddViewportWidgetContent(LoadCoverWidget.ToSharedRef(), LoadCoverZOrder);
+}
+
+void USaveGameSubsystem::HideLoadCover()
+{
+	UWorld* World = GetWorld();
+	if (!LoadCoverWidget.IsValid() || !World)
+	{
+		return;
+	}
+	// The camera follows the restored squad on the next frames; fade once it has settled, then drop the widget.
+	World->GetTimerManager().SetTimer(LoadCoverTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		LoadCoverFadeStart = FPlatformTime::Seconds();
+		if (UWorld* Inner = GetWorld())
+		{
+			Inner->GetTimerManager().SetTimer(LoadCoverTimer, FTimerDelegate::CreateUObject(this, &USaveGameSubsystem::RemoveLoadCover),
+				LoadCoverFadeSeconds, false);
+		}
+	}), LoadCoverHoldSeconds, false);
+}
+
+void USaveGameSubsystem::RemoveLoadCover()
+{
+	if (!LoadCoverWidget.IsValid())
+	{
+		return;
+	}
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameViewportClient* Viewport = World->GetGameViewport())
+		{
+			Viewport->RemoveViewportWidgetContent(LoadCoverWidget.ToSharedRef());
+		}
+	}
+	LoadCoverWidget.Reset();
+	LoadCoverFadeStart = -1.0;
+}
+
 void USaveGameSubsystem::Deinitialize()
 {
+	RemoveLoadCover();
 	if (UWorld* World = GetWorld())
 	{
 		if (UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>())
@@ -946,7 +1024,13 @@ void USaveGameSubsystem::ApplyPendingLoad()
 	if (bLoaded)
 	{
 		Post(TEXT("SYSTEM"), FString::Printf(TEXT("📂 Save \"%s\" loaded!"), *Slot));
+		// The squad was teleported to its saved places: the camera jumps there instead of gliding over the level.
+		if (ATacticalCameraPawn* Camera = Cast<ATacticalCameraPawn>(UGameplayStatics::GetPlayerPawn(World, 0)))
+		{
+			Camera->SnapToFollowTarget();
+		}
 	}
+	HideLoadCover();
 }
 
 FString USaveGameSubsystem::GetContinueSlot() const
@@ -1411,6 +1495,22 @@ bool USaveGameSubsystem::QuickSave()
 	const bool bSaved = SaveGame(TEXT("quicksave"), TEXT("Quicksave"));
 	Post(TEXT("SYSTEM"), bSaved ? TEXT("⚡ Game quicksaved [F5]!") : TEXT("❌ Quicksave failed!"));
 	return bSaved;
+}
+
+bool USaveGameSubsystem::QuickLoad()
+{
+	const FString Slot = GetContinueSlot();
+	if (Slot.IsEmpty())
+	{
+		Post(TEXT("SYSTEM"), TEXT("⛔ No saves to load."));
+		return false;
+	}
+	const bool bLoading = LoadGameWithTravel(Slot);
+	if (!bLoading)
+	{
+		Post(TEXT("SYSTEM"), FString::Printf(TEXT("❌ Could not load \"%s\"!"), *Slot));
+	}
+	return bLoading;
 }
 
 bool USaveGameSubsystem::SaveToSlotWithMessage(const FString& SlotName)
