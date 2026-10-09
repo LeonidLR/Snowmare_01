@@ -680,6 +680,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CoverEnterFromRunBlendSeconds = 0.25f;
 
+	/** The enter clip's blend-in when the actor turned more than 90 deg on entry (its back to the wall): fast, so the run pose never shows turned round, s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverEnterTurnedBlendSeconds = 0.03f;
+
 	/** Weight of the cover enter clip now (0..1 while it blends in / plays), -1 when none plays. */
 	float GetCoverEnterBlendWeight() const;
 
@@ -880,6 +884,13 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", meta = (ClampMin = "0"))
 	float SniperShotBlendOutSeconds = 0.15f;
+
+	/**
+	 * A sniper one-shot / kneel clip hands over to the next clip this long before its own blend-out starts, s (the FullBody slot
+	 * never dips: the legs stay in the kneel / prone pose from shot to bolt to reload to the next shot; user report 2026-10-09).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", meta = (ClampMin = "0"))
+	float SniperHandoffMarginSeconds = 0.05f;
 
 	/** Below this ground speed she counts as standing still (sniper poses), cm/s. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", meta = (ClampMin = "0"))
@@ -1110,6 +1121,8 @@ private:
 	TWeakObjectPtr<UAnimMontage> SniperLoopMontage;
 	TWeakObjectPtr<UAnimSequenceBase> SniperLoopClip;
 	TWeakObjectPtr<UAnimMontage> SniperOneShotMontage;
+	/** Blend-out of the sniper one-shot playing (the next clip takes over before it starts). */
+	float SniperOneShotBlendOut = 0.2f;
 	bool bSniperFireQueued = false;
 	/** The queued shot (behind a kneel clip) works the bolt after it. */
 	bool bSniperQueuedFireBolt = false;

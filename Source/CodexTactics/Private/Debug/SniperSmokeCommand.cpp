@@ -37,6 +37,9 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/BarrelActor.h"
+#include "Tactics/CoverTraceRules.h"
+#include "Engine/StaticMeshActor.h"
+#include "Misc/CoreDelegates.h"
 #include "Tactics/GorkyGridManager.h"
 #include "Tactics/GorkyLineOfSight.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
@@ -67,6 +70,23 @@ namespace SniperSmoke
 		int32 KneelClipsBefore = 0;
 		int32 KneelFireClipsBefore = 0;
 		FDelegateHandle FiredHandle;
+		// Per-frame traces (OnEndFrame): the mesh's world yaw (pops), the FullBody slot weight in the sniper sequence (legs locked).
+		FDelegateHandle FrameHandle;
+		bool bTraceYaw = false;
+		float LastMeshYaw = 0.f;
+		bool bHasLastMeshYaw = false;
+		float MaxMeshYawJump = 0.f;
+		/** Cover entry: when she entered (world time) and the FullBody slot's lowest weight 0.1-0.4 s later. */
+		double CoverEnteredAt = -1.0;
+		float EntrySlotMin = 1.f;
+		bool bTraceSlot = false;
+		float MinSlotWeight = 1.f;
+		float ShotYaw = 0.f;
+		float MaxYawDrift = 0.f;
+		FVector P = FVector::ZeroVector;
+		FVector F = FVector::ForwardVector;
+		FVector R = FVector::RightVector;
+		FCoverSlot Corner;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -77,6 +97,7 @@ namespace SniperSmoke
 
 	bool Finish(FState& State, bool bComplete)
 	{
+		FCoreDelegates::OnEndFrame.Remove(State.FrameHandle);
 		if (AOperativeCharacter* Medic = State.Medic.Get())
 		{
 			Medic->OnWeaponFiredNative.Remove(State.FiredHandle);
@@ -498,6 +519,11 @@ namespace SniperSmoke
 			const EOperativeStance StanceBefore = Unit->Stance;
 			TurnBased->bGuaranteeAllHits = true;
 			const FTurnAttackResult Attack = TurnBased->AttackCell(EnemyState->GridPos);
+			// User report 2026-10-09: after a grid shot she snapped back to the old facing. A parked follower carries an idle
+			// facing from real time; the grid must win (UpdateCombatFacing clears it while turn-based is on).
+			State.ShotYaw = Medic->GetActorRotation().Yaw;
+			State.MaxYawDrift = 0.f;
+			Medic->SetIdleFacingYaw(State.ShotYaw - 90.f);
 			Check(State, StanceBefore == EOperativeStance::Standing && Attack.bSuccess && Attack.bHit,
 				FString::Printf(TEXT("turn-based sniper shot from standing (reason %s)"), *Attack.Reason));
 			Check(State, Unit->Stance == EOperativeStance::Crouching && Medic->GetStance() == EOperativeStance::Crouching && Unit->AP == ApBefore - 4,
@@ -506,13 +532,108 @@ namespace SniperSmoke
 			return true;
 		}
 		case 18:
+			State.MaxYawDrift = FMath::Max(State.MaxYawDrift, FMath::Abs(FRotator::NormalizeAxis(Medic->GetActorRotation().Yaw - State.ShotYaw)));
 			if (State.StageTime < 2.5f)
 			{
 				return true;
 			}
+			Check(State, State.MaxYawDrift < 5.f, FString::Printf(TEXT("turn-based: she keeps facing the target after the shot (max drift %.1f deg)"), State.MaxYawDrift));
 			Check(State, ClipCount(Medic, TEXT("AS_Knee_Aim_Start")) > State.KneelClipsBefore && ClipCount(Medic, TEXT("AS_Knee_Aim_Fire")) > State.KneelFireClipsBefore,
 				FString::Printf(TEXT("turn-based: kneel clip then the shot clip (clips: %s)"), *ClipLog(Medic)));
 			Flow->ExitTurnBasedToRealTime();
+			Next(State);
+			return true;
+		case 19: // Cover entry (user report 2026-10-09: two pops on the way in): a 6 x 3 m wall 4 m ahead, run to its corner.
+		{
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			Medic->SetManualPriorityTarget(nullptr);
+			Medic->SetStance(EOperativeStance::Standing);
+			State.F = Medic->GetActorForwardVector().GetSafeNormal2D();
+			State.R = FVector::CrossProduct(FVector::UpVector, State.F);
+			State.P = Medic->GetActorLocation();
+			const float GroundZ = State.P.Z - Medic->GetSimpleCollisionHalfHeight();
+			if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+			{
+				const FVector Centre = State.P + State.F * 400.f;
+				const FTransform Xf(State.F.Rotation(), FVector(Centre.X, Centre.Y, GroundZ + 150.f), FVector(0.4f, 6.f, 3.f));
+				if (AStaticMeshActor* Block = World->SpawnActorDeferred<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Xf, nullptr, nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+				{
+					Block->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+					Block->GetStaticMeshComponent()->SetStaticMesh(Cube);
+					Block->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+					Block->GetStaticMeshComponent()->SetCanEverAffectNavigation(true);
+					Block->FinishSpawning(Xf);
+				}
+			}
+			// The target beyond the wall, round its right-hand corner.
+			// (a fresh frozen Frostbitten as in PhoneShots snipercover; the turn-based brute goes)
+			if (AEnemyCharacter* Beyond = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Frostbitten,
+				State.P + State.F * 1500.f - State.R * 650.f + FVector(0.f, 0.f, 60.f)))
+			{
+				Beyond->GetHealthComponent()->SetMaxHealth(100000.f);
+				Beyond->CustomTimeDilation = 0.f;
+				State.Enemy->Destroy();
+				State.Enemy = Beyond;
+			}
+			Next(State);
+			return true;
+		}
+		case 20:
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true; // the navmesh rebuilds round the wall
+			}
+			const bool bCorner = CoverTraceRules::FindCoverSlotAt(World, State.P + State.F * 380.f - State.R * 250.f + FVector(0.f, 0.f, 90.f), State.F, State.Corner);
+			Check(State, bCorner && State.Corner.Height == ECoverHeight::HighCover, TEXT("the wall's corner is high cover"));
+			if (!bCorner)
+			{
+				return Finish(State, false);
+			}
+			State.bHasLastMeshYaw = false;
+			State.MaxMeshYawJump = 0.f;
+			State.bTraceYaw = true;
+			Check(State, Medic->OrderTakeCover(State.Corner, true) == EOperativeOrderResult::Accepted, TEXT("cover order (run)"));
+			Next(State);
+			return true;
+		}
+		case 21:
+			if (!Medic->bInCover && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Next(State);
+			return true;
+		case 22: // 1.5 s settled at the wall
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			State.bTraceYaw = false;
+			Check(State, Medic->bInCover, TEXT("she is in cover"));
+			// The approach turns her to the wall (no body yaw jump on the way in); entering, the actor turns its back to the wall
+			// at once, so the enter clip (first frame = the arrival pose) must cover the FullBody slot fast (no turned-round run pose).
+			Check(State, State.MaxMeshYawJump < 25.f, FString::Printf(TEXT("run to the wall: max body yaw step %.1f deg per frame"), State.MaxMeshYawJump));
+			Check(State, State.EntrySlotMin > 0.9f && Medic->GetCoverEntryTurnDeg() > 90.f, FString::Printf(TEXT("cover entry: turned %.0f deg, enter clip covers the body within 0.1 s (slot min %.2f in 0.1-0.4 s)"),
+				Medic->GetCoverEntryTurnDeg(), State.EntrySlotMin));
+			State.ShotsAtStageStart = State.Shots;
+			State.KneelsBefore = Medic->GetSniperKneels();
+			Medic->SetManualPriorityTarget(State.Enemy.Get());
+			Next(State);
+			return true;
+		case 23:
+			if (State.Shots == State.ShotsAtStageStart && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, Medic->GetSniperKneels() > State.KneelsBefore && Medic->GetStance() == EOperativeStance::Crouching && Medic->bInCover,
+				TEXT("ordered at the wall: she crouches in cover first"));
+			Check(State, State.Shots > State.ShotsAtStageStart && State.IllegalShots == 0, TEXT("then fires from the crouched corner, never standing"));
+			Check(State, State.MinSlotWeight > 0.97f, FString::Printf(TEXT("sniper sequence: FullBody slot never dipped (min %.2f) - the legs stay in the kneel / prone"), State.MinSlotWeight));
 			return Finish(State, true);
 		default:
 			return Finish(State, false);
@@ -533,6 +654,44 @@ namespace SniperSmoke
 		}), 0.5f, false);
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
+		State->FrameHandle = FCoreDelegates::OnEndFrame.AddLambda([State]()
+		{
+			const AOperativeCharacter* Medic = State->Medic.Get();
+			if (!Medic)
+			{
+				return;
+			}
+			if (State->bTraceYaw && Medic->bInCover)
+			{
+				const UOperativeAnimInstance* EntryAnim = AnimOf(Medic);
+				const double Now = Medic->GetWorld()->GetTimeSeconds();
+				if (State->CoverEnteredAt < 0.0)
+				{
+					State->CoverEnteredAt = Now;
+				}
+				if (EntryAnim && Now - State->CoverEnteredAt >= 0.1 && Now - State->CoverEnteredAt <= 0.4)
+				{
+					State->EntrySlotMin = FMath::Min(State->EntrySlotMin, EntryAnim->GetSlotMontageGlobalWeight(EntryAnim->FullBodySlot));
+				}
+			}
+			if (State->bTraceYaw && !Medic->bInCover)
+			{
+				const float Yaw = Medic->GetMesh()->GetComponentRotation().Yaw;
+				if (State->bHasLastMeshYaw)
+				{
+					State->MaxMeshYawJump = FMath::Max(State->MaxMeshYawJump, FMath::Abs(FRotator::NormalizeAxis(Yaw - State->LastMeshYaw)));
+				}
+				State->LastMeshYaw = Yaw;
+				State->bHasLastMeshYaw = true;
+			}
+			// From her first shot through bolt / reload / next shot (stages 3-4 kneeling, 12-13 prone): no slot dip.
+			const UOperativeAnimInstance* Anim = AnimOf(Medic);
+			const bool bSequence = (State->Stage == 4 || State->Stage == 13) && Anim && Anim->bSniperPose && !Anim->IsPlayingStanceTransition();
+			if (bSequence)
+			{
+				State->MinSlotWeight = FMath::Min(State->MinSlotWeight, Anim->GetSlotMontageGlobalWeight(Anim->FullBodySlot));
+			}
+		});
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
 			return Step(WeakWorld, State);

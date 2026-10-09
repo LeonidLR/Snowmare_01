@@ -38,11 +38,12 @@ ESniperFireStep AOperativeCharacter::PrepareSniperShot(bool bDirectOrder)
 	FSniperFireContext Context;
 	Context.Stance = Stance;
 	Context.bMoving = IsMoving();
-	Context.bStanceTransitionPlaying = Anim && Anim->IsPlayingStanceTransition();
-	Context.bDirectOrder = bDirectOrder;
-	const ESniperFireStep Step = SniperRules::NextStep(Context);
 	const UWorld* World = GetWorld();
 	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	// In cover the kneel is the cover layer's cross-blend into the crouched fire stance (no stance clip): it settles too.
+	Context.bStanceTransitionPlaying = (Anim && Anim->IsPlayingStanceTransition()) || Now - SniperKneelTime < SniperKneelSettleSeconds;
+	Context.bDirectOrder = bDirectOrder;
+	const ESniperFireStep Step = SniperRules::NextStep(Context);
 	const bool bLine = Now - SniperLastPrepLineTime > 2.0;
 	switch (Step)
 	{
@@ -63,6 +64,7 @@ ESniperFireStep AOperativeCharacter::PrepareSniperShot(bool bDirectOrder)
 		SetStance(SniperRules::FiringStance(Stance));
 		if (Stance != Old)
 		{
+			SniperKneelTime = Now;
 			++SniperKneels;
 			UE_LOG(LogCodexTactics, Display, TEXT("[Sniper] %s kneels for the shot (%s)"), *DisplayName.ToString(),
 				bDirectOrder ? TEXT("order") : TEXT("fire posture"));

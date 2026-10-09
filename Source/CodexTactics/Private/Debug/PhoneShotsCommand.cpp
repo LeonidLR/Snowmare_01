@@ -641,7 +641,24 @@ namespace PhoneShots
 				Medic->SetManualPriorityTarget(Target);
 			}
 		}
-		const FVector Her = Medic->GetMesh()->Bounds.Origin;
+		{
+			// Per-frame trace for the review (yaw / pose continuity): actor + mesh yaw, pelvis height above the feet, stance, FullBody clip.
+			const USkeletalMeshComponent* Body = Medic->GetMesh();
+			const UOperativeAnimInstance* TraceAnim = Cast<UOperativeAnimInstance>(Body->GetAnimInstance());
+			FString Clip;
+			float W = 0.f;
+			float SlotW = 0.f;
+			if (TraceAnim)
+			{
+				TraceAnim->GetCoverPlayback(Clip, W, SlotW);
+			}
+			const float Feet = Medic->GetActorLocation().Z - Medic->GetSimpleCollisionHalfHeight();
+			const AEnemyCharacter* TraceTarget = Sniper->Target.Get();
+			const float TargetYaw = TraceTarget ? (TraceTarget->GetActorLocation() - Medic->GetActorLocation()).Rotation().Yaw : 0.f;
+			UE_LOG(LogCodexTactics, Display, TEXT("[PoseTrace] f=%d yaw=%.1f mesh=%.1f pelvis=%.1f stance=%d cover=%d clip=%s w=%.2f target=%.1f"), Runner->ClipCount,
+				Medic->GetActorRotation().Yaw, Body->GetComponentRotation().Yaw, Body->GetBoneLocation(TEXT("pelvis")).Z - Feet,
+				static_cast<int32>(Medic->GetStance()), Medic->bInCover ? 1 : 0, *Clip, W, TargetYaw);
+		}		const FVector Her = Medic->GetMesh()->Bounds.Origin;
 		const FVector There = Target ? Target->GetActorLocation() : Her + Medic->GetActorForwardVector() * 800.f;
 		FVector Dir = (There - Her).GetSafeNormal2D();
 		if (Dir.IsNearlyZero())
