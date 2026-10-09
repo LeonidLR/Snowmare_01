@@ -240,7 +240,8 @@ namespace DeathCamSmoke
 			FString Clip;
 			const float Weight = DeathSlotWeight(Engineer, Clip);
 			const UKnockdownComponent* Knockdown = Engineer->KnockdownComponent;
-			Check(State, Weight > 0.9f && Knockdown && Knockdown->PlayedDeathFall(),
+			// A death clip of the ABP (DeathStandAnimations, the Sniper pack since 2026-10-09) or, without one, the knockdown fall.
+			Check(State, Weight > 0.9f && Knockdown && (Knockdown->PlayedDeathFall() || !Clip.IsEmpty()),
 				FString::Printf(TEXT("death clip plays on the FullBody slot (weight %.2f, %s)"), Weight, *Clip));
 			Next();
 			return true;

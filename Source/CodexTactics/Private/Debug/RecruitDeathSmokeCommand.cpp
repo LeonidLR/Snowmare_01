@@ -101,8 +101,13 @@ namespace RecruitDeathSmoke
 				const UOperativeAnimInstance* OperativeAnim = Cast<UOperativeAnimInstance>(Anim);
 				const float FullBody = OperativeAnim ? OperativeAnim->GetSlotMontageGlobalWeight(OperativeAnim->FullBodySlot) : 0.f;
 				const UKnockdownComponent* Knockdown = Dead ? Dead->KnockdownComponent.Get() : nullptr;
-				Check(bOk, FullBody > 0.9f && Knockdown && (Knockdown->PlayedDeathFall() || Knockdown->DiedWhileDown()),
-					FString::Printf(TEXT("Susanin lies as a corpse: death fall held on FullBody (weight %.2f, clip %s)"), FullBody,
+				// Since 2026-10-09 ABP_Operative has standing death clips (Sniper pack); the knockdown fall stays the fallback. Either
+				// way the held pose must be a body on the ground (pelvis near the feet).
+				// (Headless runs do not refresh bone poses, so the check reads the montage: played to its end and held.)
+				const UAnimMontage* Held = OperativeAnim ? OperativeAnim->GetCurrentActiveMontage() : nullptr;
+				const float HeldEnd = Held && OperativeAnim->Montage_GetPosition(Held) >= Held->GetPlayLength() - 0.05f ? 1.f : 0.f;
+				Check(bOk, FullBody > 0.9f && Knockdown && (HeldEnd > 0.f || Knockdown->PlayedDeathFall() || Knockdown->DiedWhileDown()),
+					FString::Printf(TEXT("Susanin lies as a corpse: death pose held on FullBody (weight %.2f, held at the end %.0f, fall clip %s)"), FullBody, HeldEnd,
 						Knockdown && Knockdown->GetPlayingClip() ? *Knockdown->GetPlayingClip()->GetName() : TEXT("none")));
 				Check(bOk, Dead && Dead->GetCapsuleComponent()->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Ignore
 					&& Dead->GetCharacterMovement()->MovementMode == MOVE_None, TEXT("no pawn collision, no movement"));
