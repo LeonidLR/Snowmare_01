@@ -195,6 +195,7 @@ void ACodexTacticsPlayerController::CreateInputActions()
 		MakeAction(TEXT("IA_UseBread"), EKeys::K),
 		MakeAction(TEXT("IA_UseChocolate"), EKeys::L) };
 	QuickSaveAction = MakeAction(TEXT("IA_QuickSave"), EKeys::F5);
+	QuickLoadAction = MakeAction(TEXT("IA_QuickLoad"), EKeys::F9);
 }
 
 void ACodexTacticsPlayerController::SetupInputComponent()
@@ -267,6 +268,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(ItemActions[2], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseBread);
 	Input->BindAction(ItemActions[3], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseChocolate);
 	Input->BindAction(QuickSaveAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::QuickSaveKey);
+	Input->BindAction(QuickLoadAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::QuickLoadKey);
 }
 
 void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
@@ -554,6 +556,14 @@ void ACodexTacticsPlayerController::QuickSaveKey()
 	if (USaveGameSubsystem* Saves = GetWorld()->GetSubsystem<USaveGameSubsystem>())
 	{
 		Saves->QuickSave();
+	}
+}
+
+void ACodexTacticsPlayerController::QuickLoadKey()
+{
+	if (USaveGameSubsystem* Saves = GetWorld()->GetSubsystem<USaveGameSubsystem>())
+	{
+		Saves->QuickLoad();
 	}
 }
 

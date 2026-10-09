@@ -329,6 +329,12 @@ private:
 	/** F5 (Godot _perform_quick_save). */
 	void QuickSaveKey();
 
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> QuickLoadAction;
+
+	/** F9 (user decision 2026-10-09): reopen the newest save (USaveGameSubsystem::QuickLoad). */
+	void QuickLoadKey();
+
 	void UseMedkit() { UseSquadItem(EPersonalItem::Medkit); }
 	void UseCannedFood() { UseSquadItem(EPersonalItem::CannedFood); }
 	void UseBread() { UseSquadItem(EPersonalItem::Bread); }

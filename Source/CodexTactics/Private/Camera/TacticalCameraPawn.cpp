@@ -138,6 +138,17 @@ void ATacticalCameraPawn::SetFollowTarget(AActor* NewTarget)
 	}
 }
 
+void ATacticalCameraPawn::SnapToFollowTarget()
+{
+	if (FollowTarget.IsValid())
+	{
+		Focus = FollowTarget->GetActorLocation();
+	}
+	PanOffset = FVector::ZeroVector;
+	TargetPanOffset = FVector::ZeroVector;
+	bInitialized = false;
+}
+
 void ATacticalCameraPawn::AddZoomNotches(float Notches)
 {
 	TargetDistance = TacticalCameraRules::StepZoom(Config, TargetDistance, Notches);

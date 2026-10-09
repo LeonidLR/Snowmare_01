@@ -32,6 +32,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Camera")
 	void SetFollowTarget(AActor* NewTarget);
 
+	/** Next tick places the camera on the follow target at once (no smoothing, pan cleared): after a save is loaded. */
+	void SnapToFollowTarget();
+
 	AActor* GetFollowTarget() const { return FollowTarget.Get(); }
 
 	/** Mouse wheel: positive notches zoom out, negative zoom in. */
