@@ -1,6 +1,7 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/SniperRules.h"
+#include "Tactics/TurnAttackTimeline.h"
 #include "Combat/DeathCinematicSubsystem.h"
 #include "Characters/EnemyAnimInstance.h"
 #include "Tactics/TacticalEncounterRules.h"
@@ -381,6 +382,7 @@ void UTurnBasedCombatSubsystem::StartCombat()
 
 void UTurnBasedCombatSubsystem::EndCombat(bool bVictory, bool bLeaveFlow)
 {
+	PendingShot.Reset(); // a shot still turning / kneeling is not shown after the fight
 	if (!IsActive())
 	{
 		return;
@@ -966,6 +968,7 @@ void UTurnBasedCombatSubsystem::UpdateKnockedDownTurn()
 
 void UTurnBasedCombatSubsystem::Tick(float DeltaTime)
 {
+	UpdatePendingShot(DeltaTime);
 	UpdateKnockedDownTurn();
 	// The relocation hologram goes with the relocation (it ends in many places: confirm, cancel, turn end, combat end).
 	if (RelocateGhost && (!RelocateTarget.IsValid() || RelocateGhostSource.Get() != RelocateTarget.Get()))
@@ -1638,107 +1641,214 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 	}
 	State->AP -= Balance.AttackAPCost;
 	State->bHasAttacked = true;
-	// Godot main.gd squad attack: the camera shakes by the weapon (pistol / rifle).
-	if (!bSkipShake)
-	{
-		ShakeCamera(Weapon && Weapon->WeaponId == TEXT("pistol") ? TEXT("pistol") : TEXT("rifle"));
-	}
 	State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Offset));
 	if (!bCoverShot)
 	{
 		const float YawBeforeShot = Unit->GetActorRotation().Yaw;
 		AlignFacing(Unit, State->Facing); // in cover the body stays along the wall (PlayCoverShot turns it to the target's side)
 		Unit->FaceAimAt(Target->GetActorLocation()); // user rule 2026-10-07: the barrel on the target before the shot (not the 8-way grid facing)
-		Unit->StartBodyYawBlend(YawBeforeShot); // the body turns to it smoothly (user report 2026-10-09); the shot resolves at once
+		Unit->StartBodyYawBlend(YawBeforeShot); // the body turns to it smoothly (user report 2026-10-09)
 	}
-	const FVector Muzzle = bCoverShot ? Unit->GetCoverFireOrigin() : Unit->GetWeaponMuzzleLocation();
 	const int32 Distance = TurnBasedRules::CellDistance(State->GridPos, Cell);
 
+	// The decision is made now (hit roll, damage); the shot is SHOWN once the body is on the target and a sniper's kneel
+	// has ended (user request 2026-10-09: the tracer / hit / damage came before the turn). TurnAttackTimeline, Tick.
+	TFunction<void()> Effects;
+	TWeakObjectPtr<AOperativeCharacter> WeakUnit(Unit);
+	TWeakObjectPtr<AActor> WeakTarget(Target);
+	const FString ShooterName = NameOf(Unit);
+	const FString WeaponKind = Weapon && Weapon->WeaponId == TEXT("pistol") ? TEXT("pistol") : TEXT("rifle");
 	if (Type == EGorkyOccupantType::Enemy)
 	{
 		// Past a barricade next to him or the target: less accurate (user decision 2026-10-04).
 		const float Chance = TurnBasedRules::CalculateHitChance(Weapon, Distance, State->Stance, Balance)
 			* (bThroughCover ? Balance.CoverFireAccuracyMultiplier : 1.f);
-		if (bThroughCover)
-		{
-			Log(FString::Printf(TEXT("🧱 Firing over a barricade: accuracy x%.2f"), Balance.CoverFireAccuracyMultiplier));
-		}
 		const float Roll = FMath::FRand();
 		Result.bSuccess = true;
 		Result.HitChance = Chance;
 		Result.bHit = bGuaranteeAllHits || bGuaranteeHit || Roll <= Chance;
-		if (bCoverShot)
-		{
-			Unit->PlayCoverShot(Target, Result.bHit);
-		}
-		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
-		{
-			FVector End = Target->GetActorLocation();
-			if (!Result.bHit)
-			{
-				End += FVector(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(20.f, 120.f));
-			}
-			Feedback->SpawnTracer(Muzzle, End, Weapon ? Weapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
-				Weapon ? Weapon->DamageType : EDamageType::Kinetic);
-		}
-		if (!Result.bHit)
-		{
-			Log(FString::Printf(TEXT("❌ MISS! Chance: %d%% (rolled: %d%%)"), FMath::RoundToInt(Chance * 100.f), FMath::RoundToInt(Roll * 100.f)));
-		}
-		else if (FTurnUnitState* EnemyState = States.Find(Target))
+		FString ArcName;
+		float ArcMultiplier = 1.f;
+		if (const FTurnUnitState* EnemyState = Result.bHit ? States.Find(Target) : nullptr)
 		{
 			const FGorkyArcResult Arc = FGorky17Utils::CalculateAttackArc(State->GridPos, Cell, EnemyState->Facing);
 			const float Base = TurnBasedRules::GetDamageForDistance(Weapon, Distance, State->BaseDamage);
 			Result.Damage = TurnBasedRules::SquadAttackDamage(Base, Arc.DamageMultiplier, EnemyState->Armor, Arc.EffectiveArmorMultiplier);
-			ApplyEnemyHit(Target, Result.Damage, NameOf(Unit));
-			Log(FString::Printf(TEXT("💥 Attack on %s: %d damage (%s, x%.2f) [Accuracy: %d%%]"), *NameOf(Target), Result.Damage, TurnArcName(Arc.Arc),
-				Arc.DamageMultiplier, FMath::RoundToInt(Chance * 100.f)));
-			if (IsDead(Target))
-			{
-				OnEnemyKilled(Target, Cell);
-			}
+			ArcName = TurnArcName(Arc.Arc);
+			ArcMultiplier = Arc.DamageMultiplier;
 		}
+		const bool bHit = Result.bHit;
+		const int32 Damage = Result.Damage;
+		const FLinearColor Tracer = Weapon ? Weapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor();
+		const EDamageType DamageKind = Weapon ? Weapon->DamageType : EDamageType::Kinetic;
+		Effects = [this, WeakUnit, WeakTarget, Cell, bHit, Damage, Chance, Roll, bThroughCover, bCoverShot, Tracer, DamageKind, ArcName, ArcMultiplier, ShooterName]()
+		{
+			AOperativeCharacter* Shooter = WeakUnit.Get();
+			AActor* Victim = WeakTarget.Get();
+			if (bThroughCover)
+			{
+				Log(FString::Printf(TEXT("🧱 Firing over a barricade: accuracy x%.2f"), Balance.CoverFireAccuracyMultiplier));
+			}
+			if (bCoverShot && Shooter && Victim)
+			{
+				Shooter->PlayCoverShot(Victim, bHit);
+			}
+			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>(); Feedback && Shooter && Victim)
+			{
+				FVector End = Victim->GetActorLocation();
+				if (!bHit)
+				{
+					End += FVector(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(20.f, 120.f));
+				}
+				Feedback->SpawnTracer(bCoverShot ? Shooter->GetCoverFireOrigin() : Shooter->GetWeaponMuzzleLocation(), End, Tracer, DamageKind);
+			}
+			if (!bHit)
+			{
+				Log(FString::Printf(TEXT("❌ MISS! Chance: %d%% (rolled: %d%%)"), FMath::RoundToInt(Chance * 100.f), FMath::RoundToInt(Roll * 100.f)));
+			}
+			else if (Victim && States.Contains(Victim))
+			{
+				ApplyEnemyHit(Victim, Damage, ShooterName);
+				Log(FString::Printf(TEXT("💥 Attack on %s: %d damage (%s, x%.2f) [Accuracy: %d%%]"), *NameOf(Victim), Damage, *ArcName,
+					ArcMultiplier, FMath::RoundToInt(Chance * 100.f)));
+				if (IsDead(Victim))
+				{
+					OnEnemyKilled(Victim, Cell);
+				}
+			}
+		};
 	}
 	else if (Type == EGorkyOccupantType::Barrel)
 	{
 		Result.bSuccess = true;
 		Result.bBarrelExploded = true;
-		if (bCoverShot)
+		Effects = [this, WeakUnit, WeakTarget, Cell, bCoverShot]()
 		{
-			Unit->PlayCoverShot(Target, true);
-		}
-		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
-		{
-			Feedback->SpawnTracer(Muzzle, Target->GetActorLocation(), UCombatFeedbackSubsystem::DefaultTracerColor());
-		}
-		DetonateBarrel(Cell, Target);
-		if (!IsActive())
-		{
-			return Result; // the blast ended the fight
-		}
+			AOperativeCharacter* Shooter = WeakUnit.Get();
+			AActor* Barrel = WeakTarget.Get();
+			if (bCoverShot && Shooter && Barrel)
+			{
+				Shooter->PlayCoverShot(Barrel, true);
+			}
+			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>(); Feedback && Shooter && Barrel)
+			{
+				Feedback->SpawnTracer(bCoverShot ? Shooter->GetCoverFireOrigin() : Shooter->GetWeaponMuzzleLocation(), Barrel->GetActorLocation(),
+					UCombatFeedbackSubsystem::DefaultTracerColor());
+			}
+			if (Barrel)
+			{
+				DetonateBarrel(Cell, Barrel);
+			}
+		};
 	}
 	else if (Type == EGorkyOccupantType::Barricade)
 	{
 		// Godot _damage_barricade (the trapped-barricade retaliation comes with the grid deployables).
 		Result.bSuccess = true;
-		if (bCoverShot)
+		const float BarricadeDamage = State->BaseDamage;
+		Effects = [this, WeakUnit, WeakTarget, bCoverShot, BarricadeDamage, ShooterName]()
 		{
-			Unit->PlayCoverShot(Target, true);
-		}
-		ApplyDamage(Target, State->BaseDamage, NameOf(Unit));
+			AOperativeCharacter* Shooter = WeakUnit.Get();
+			AActor* Barricade = WeakTarget.Get();
+			if (bCoverShot && Shooter && Barricade)
+			{
+				Shooter->PlayCoverShot(Barricade, true);
+			}
+			if (Barricade)
+			{
+				ApplyDamage(Barricade, BarricadeDamage, ShooterName);
+			}
+		};
 	}
 	else
 	{
 		Result.Reason = TEXT("no_target");
 	}
-	if (bSniper && Result.bSuccess && IsValid(Unit))
+	if (Result.bSuccess)
 	{
-		Unit->PlaySniperGridShot(); // the shot clip after the kneel clip, then the bolt
+		FPendingGridShot& Shot = PendingShot.Emplace();
+		Shot.Shooter = Unit;
+		Shot.Target = Target;
+		Shot.bCoverShot = bCoverShot;
+		Shot.bSkipShake = bSkipShake;
+		Shot.bHit = Result.bHit;
+		Shot.ShakeKind = WeaponKind;
+		Shot.Effects = MoveTemp(Effects);
+		Shot.CombatAtStart = CombatId;
+		Result.bPending = true;
+		UE_LOG(LogCodexTactics, Display, TEXT("[TurnShot] %s: attack ordered (body %.0f deg off the target)"), *ShooterName, Unit->GetBodyYawLagDeg());
+		UpdatePendingShot(0.f); // already on target and settled: fires in the same frame
+	}
+	RefreshOverlay();
+	Changed();
+	return Result;
+}
+
+void UTurnBasedCombatSubsystem::UpdatePendingShot(float DeltaTime)
+{
+	if (!PendingShot.IsSet())
+	{
+		return;
+	}
+	FPendingGridShot& Shot = PendingShot.GetValue();
+	if (Shot.CombatAtStart != CombatId || !IsActive())
+	{
+		PendingShot.Reset(); // the fight ended meanwhile: nothing to show
+		return;
+	}
+	Shot.Elapsed += DeltaTime;
+	AOperativeCharacter* Shooter = Shot.Shooter.Get();
+	const UOperativeAnimInstance* Anim = Shooter && Shooter->GetMesh() ? Cast<UOperativeAnimInstance>(Shooter->GetMesh()->GetAnimInstance()) : nullptr;
+	FTurnShotReadiness Readiness;
+	Readiness.Elapsed = Shot.Elapsed;
+	Readiness.bAttackerLost = !Shooter || !Shooter->HealthComponent || !Shooter->HealthComponent->IsAlive();
+	Readiness.BodyYawErrorDeg = Shooter && !Shot.bCoverShot ? Shooter->GetBodyYawLagDeg() : 0.f;
+	Readiness.bStanceSettling = Anim && (Anim->IsPlayingStanceTransition() || Anim->IsStanceChangePending());
+	switch (TurnAttackTimeline::NextStep(Readiness))
+	{
+	case ETurnShotStep::Wait:
+		return;
+	case ETurnShotStep::Drop:
+		UE_LOG(LogCodexTactics, Display, TEXT("[TurnShot] the attacker is gone: shot dropped"));
+		PendingShot.Reset();
+		RefreshOverlay();
+		Changed();
+		return;
+	default:
+		break;
+	}
+	// 3) the fire clip, 4) tracer / hit / damage / feed at once (the fire clips have no fire notify), 5) the bolt follows.
+	TFunction<void()> Effects = MoveTemp(Shot.Effects);
+	const bool bCoverShot = Shot.bCoverShot;
+	const bool bHit = Shot.bHit;
+	const bool bShake = !Shot.bSkipShake;
+	const FString ShakeKind = Shot.ShakeKind;
+	AActor* Target = Shot.Target.Get();
+	const float Waited = Shot.Elapsed;
+	PendingShot.Reset();
+	UE_LOG(LogCodexTactics, Display, TEXT("[TurnShot] %s fires after %.2f s (body %.1f deg off, settling %d)"), *NameOf(Shooter), Waited,
+		Readiness.BodyYawErrorDeg, Readiness.bStanceSettling ? 1 : 0);
+	++GridShotsFired;
+	if (!bCoverShot)
+	{
+		Shooter->PlayShotClip(Target, bHit); // cover shots play their corner clip in the effects (PlayCoverShot)
+	}
+	if (bShake)
+	{
+		ShakeCamera(ShakeKind); // Godot main.gd squad attack: the camera shakes by the weapon (pistol / rifle)
+	}
+	OnGridShotFired.Broadcast(Shooter, Target);
+	if (Effects)
+	{
+		Effects();
+	}
+	if (!IsActive())
+	{
+		return; // the shot ended the fight (last enemy, barrel blast)
 	}
 	RefreshOverlay();
 	Changed();
 	CheckBattleEnd();
-	return Result;
 }
 
 int32 UTurnBasedCombatSubsystem::GetActiveAttackCost() const
@@ -1781,7 +1891,13 @@ void UTurnBasedCombatSubsystem::AttackCellCinematic(const FIntPoint& Cell)
 	if (FTurnUnitState* State = States.Find(Unit))
 	{
 		State->Facing = FGorky17Utils::VectorToFacing(TurnStepDir(Cell - State->GridPos));
-		AlignFacing(Unit, State->Facing);
+		if (!(Unit->bInCover && Unit->IsCornerShotTarget(Target->GetActorLocation())))
+		{
+			const float YawBefore = Unit->GetActorRotation().Yaw;
+			AlignFacing(Unit, State->Facing);
+			Unit->FaceAimAt(Target->GetActorLocation());
+			Unit->StartBodyYawBlend(YawBefore); // the turn shows while the camera frames both (user request 2026-10-09)
+		}
 	}
 	Camera->DramaticActionFocus(Unit, Target, 0.4f);
 	RefreshOverlay();
@@ -1789,20 +1905,17 @@ void UTurnBasedCombatSubsystem::AttackCellCinematic(const FIntPoint& Cell)
 	TWeakObjectPtr<AOperativeCharacter> WeakUnit(Unit);
 	After(0.4f, [this, WeakUnit, Cell]()
 	{
-		// Phase 2: the shot fires (fire animation: the AnimBP) and shakes the camera.
-		const UWeaponDataAsset* Weapon = WeaponOf(WeakUnit.Get());
-		ShakeCamera(Weapon && Weapon->WeaponId == TEXT("pistol") ? TEXT("pistol") : TEXT("rifle"));
-		After(0.35f, [this, WeakUnit, Cell]()
+		// Phase 2: the attack is ordered; it is shown (fire clip, shake, tracer, hit) once the turn / kneel is done.
 		{
-			// Phase 3: the round lands.
 			bDramaticShotActive = false;
-			AttackCell(Cell, false, /*bSkipShake*/ true);
+			AttackCell(Cell);
 			if (!IsActive())
 			{
 				return; // the last enemy fell: EndCombat reset the camera
 			}
 			bDramaticShotActive = true;
-			After(0.65f, [this, WeakUnit]()
+			// Phase 3: the camera waits for the shot to be shown (TurnAttackTimeline), then holds on the hit a moment.
+			WhenShotResolved([this, WeakUnit]() { After(0.65f, [this, WeakUnit]()
 			{
 				// Phase 4: back to the tactical view on the shooter.
 				if (ATacticalCameraPawn* Cam = GetCamera())
@@ -1819,9 +1932,19 @@ void UTurnBasedCombatSubsystem::AttackCellCinematic(const FIntPoint& Cell)
 					RefreshOverlay();
 					Changed();
 				});
-			});
-		});
+			}); });
+		}
 	});
+}
+
+void UTurnBasedCombatSubsystem::WhenShotResolved(TFunction<void()> Then)
+{
+	if (!PendingShot.IsSet())
+	{
+		Then();
+		return;
+	}
+	After(0.05f, [this, Then]() { WhenShotResolved(Then); });
 }
 
 void UTurnBasedCombatSubsystem::EndCurrentUnitTurn()

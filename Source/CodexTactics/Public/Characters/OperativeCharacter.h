@@ -619,6 +619,12 @@ public:
 	 */
 	void StartBodyYawBlend(float OldYaw);
 
+	/** How far the body (mesh) still lags behind the actor's facing after an instant turn, deg (0 = on it). */
+	float GetBodyYawLagDeg() const;
+
+	/** Turn-based grid shot shown now: the fire clip of the pose (sniper shot + bolt, prone / standing rifle fire). */
+	void PlayShotClip(AActor* Target, bool bHit);
+
 	/** How far the actor turned when it entered the current cover (its back to the wall), deg (the anim blends a big turn in fast). */
 	float GetCoverEntryTurnDeg() const { return CoverEntryTurnDeg; }
 

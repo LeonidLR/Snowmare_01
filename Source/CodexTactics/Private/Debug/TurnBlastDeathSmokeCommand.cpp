@@ -133,6 +133,16 @@ namespace TurnBlastDeathSmoke
 			UHealthComponent* Health = State.Victim->HealthComponent;
 			Health->ApplyDirectHealthLoss(Health->GetCurrentHealth() - 1.f, TEXT("Smoke"));
 			TurnBased->AttackCell(BarrelState->GridPos, true, true);
+			State.Stage = 10; // the shot is shown once the shooter is on target (TurnAttackTimeline, user request 2026-10-09)
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 10:
+		{
+			if (TurnBased->IsActive() && TurnBased->IsShotPending() && State.StageTime < 4.f)
+			{
+				return true;
+			}
 			// (The same blast may also clear the last enemy: then the fight ends in a victory, never in a defeat.)
 			Check(State, !State.Victim->HealthComponent->IsAlive() && Flow->GetPhase() != ECodexGamePhase::GameOver
 				&& TurnBased->GetUnitState(State.Victim.Get()) == nullptr,
