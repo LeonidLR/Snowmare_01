@@ -185,19 +185,20 @@ namespace TurnBasedCameraSmoke
 		case 5:
 			if (State.StageTime < 0.6f)
 			{
-				State.bHitEarly |= State.Enemy->GetHealthComponent()->GetCurrentHealth() < State.EnemyHealth;
+				// The round lands once the shooter has turned to the target (TurnAttackTimeline): never at the click.
+				State.bHitEarly |= State.StageTime < 0.25f && State.Enemy->GetHealthComponent()->GetCurrentHealth() < State.EnemyHealth;
 				if (State.StageTime > 0.2f && !State.bMoveRefused)
 				{
 					State.bMoveRefused = !TurnBased->MoveActiveUnitTo(TurnBased->GetUnitState(TurnBased->GetActiveUnit())->GridPos + FIntPoint(1, 0));
 				}
 				return true;
 			}
-			if (State.StageTime < 1.2f)
+			if (State.StageTime < 1.2f || (TurnBased->IsShotPending() && State.StageTime < 4.f))
 			{
 				return true;
 			}
 			Check(State, !State.bHitEarly && State.Enemy->GetHealthComponent()->GetCurrentHealth() < State.EnemyHealth,
-				TEXT("the round lands after the shot (0.75 s), not at the click"));
+				TEXT("the round lands after the turn to the target, not at the click"));
 			Check(State, State.bMoveRefused, TEXT("orders wait while the shot plays"));
 			Next();
 			return true;

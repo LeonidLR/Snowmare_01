@@ -50,6 +50,15 @@ namespace TurnBasedSmoke
 		float SquadHealthBefore = 0.f;
 		/** The biting enemy played its attack clip (Godot play_tactical_attack). */
 		bool bAttackClipSeen = false;
+		/** User request 2026-10-09: the grid shot is shown after the turn (TurnAttackTimeline). */
+		bool bShotShown = false;
+		float ShotBodyLagDeg = 999.f;
+		float ShotWaitSeconds = 0.f;
+		float TurnAwayDeg = 0.f;
+		bool bDamageBeforeShot = false;
+		float ShotTrauma = 0.f;
+		float EnemyHealthAtOrder = 0.f;
+		FDelegateHandle ShotHandle;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -220,11 +229,48 @@ namespace TurnBasedSmoke
 				const FTurnUnitState* EnemyState = TurnBased->GetUnitState(State.Enemy.Get());
 				State.Enemy->GetHealthComponent()->ApplyDirectHealthLoss(State.Enemy->GetHealthComponent()->GetCurrentHealth() - 1.f, TEXT("Smoke")); // 1 HP: the brute's own armor cuts grid damage (Godot take_damage)
 				TurnBased->bGuaranteeAllHits = true;
+				// A rifleman turned ~100 deg away from the target: the shot must wait for the body's turn.
+				AOperativeCharacter* Shooter = TurnBased->GetActiveUnit();
+				const float ToTarget = (State.Enemy->GetActorLocation() - Shooter->GetActorLocation()).Rotation().Yaw;
+				Shooter->SetActorRotation(FRotator(0.f, ToTarget + 100.f, 0.f));
+				State.TurnAwayDeg = 100.f;
+				State.EnemyHealthAtOrder = State.Enemy->GetHealthComponent()->GetCurrentHealth();
+				FState* StatePtr = &State;
+				State.ShotHandle = TurnBased->OnGridShotFired.AddLambda([StatePtr, World](AOperativeCharacter* By, AActor* At)
+				{
+					StatePtr->bShotShown = true;
+					const APlayerController* LambdaPC = UGameplayStatics::GetPlayerController(World, 0);
+					const ATacticalCameraPawn* LambdaCamera = LambdaPC ? Cast<ATacticalCameraPawn>(LambdaPC->GetPawn()) : nullptr;
+					StatePtr->ShotTrauma = LambdaCamera ? LambdaCamera->GetShakeTrauma() : 0.f;
+					StatePtr->ShotBodyLagDeg = By ? FMath::Abs(By->GetBodyYawLagDeg()) : 999.f;
+					StatePtr->ShotWaitSeconds = static_cast<float>(World->GetTimeSeconds()) - StatePtr->ShotWaitSeconds;
+					if (const AEnemyCharacter* Enemy = StatePtr->Enemy.Get())
+					{
+						StatePtr->bDamageBeforeShot = Enemy->GetHealthComponent()->GetCurrentHealth() < StatePtr->EnemyHealthAtOrder;
+					}
+				});
+				State.ShotWaitSeconds = static_cast<float>(World->GetTimeSeconds());
 				const FTurnAttackResult Attack = TurnBased->AttackCell(EnemyState->GridPos);
 				Check(State, Attack.bSuccess && Attack.bHit && Attack.Damage > 0, FString::Printf(TEXT("shot hits for %d (reason %s)"), Attack.Damage, *Attack.Reason));
+				Check(State, Attack.bPending && TurnBased->IsShotPending() && TurnBased->IsActive() && State.Enemy->GetHealthComponent()->GetCurrentHealth() >= State.EnemyHealthAtOrder,
+					TEXT("ordered while turned away: the shot waits for the turn (no damage at the click)"));
+			}
+			State.Stage = 4;
+			State.StageTime = 0.f;
+			return true;
+		case 4:
+			if (!State.bShotShown && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			TurnBased->OnGridShotFired.Remove(State.ShotHandle);
+			Check(State, State.bShotShown && State.ShotBodyLagDeg <= 5.f && !State.bDamageBeforeShot && State.ShotWaitSeconds >= 0.15f,
+				FString::Printf(TEXT("the shot is shown after the %.0f deg turn: body %.1f deg off at the shot, %.2f s after the order, damage only after it"),
+					State.TurnAwayDeg, State.ShotBodyLagDeg, State.ShotWaitSeconds));
+			{
 				const APlayerController* ShotPC = UGameplayStatics::GetPlayerController(World, 0);
 				const ATacticalCameraPawn* ShotCamera = ShotPC ? Cast<ATacticalCameraPawn>(ShotPC->GetPawn()) : nullptr;
-				Check(State, ShotCamera && ShotCamera->GetShakeTrauma() > 0.3f, TEXT("the shot shakes the camera (Godot trigger_weapon_shake)"));
+				Check(State, ShotCamera && State.ShotTrauma > 0.3f, TEXT("the shot shakes the camera at the shot (Godot trigger_weapon_shake)"));
 				Check(State, !TurnBased->IsActive(), TEXT("last enemy down -> combat over"));
 				Check(State, Flow->GetCombatMode() == ECodexCombatMode::TacticalPause, TEXT("victory returns to the tactical pause"));
 				const UMeshComponent* FarMesh = VisibleMesh(State.FarEnemy.Get());

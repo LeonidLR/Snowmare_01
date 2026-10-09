@@ -243,3 +243,9 @@ void UOperativeAnimInstance::UpdateSniperLayer(const AOperativeCharacter& Operat
 		UE_LOG(LogCodexTactics, Display, TEXT("[SniperAnim] loop %s"), *Idle->GetName());
 	}
 }
+
+bool UOperativeAnimInstance::IsStanceChangePending() const
+{
+	const AOperativeCharacter* Operative = BoundOperative.Get();
+	return Operative && PreviousStance.IsSet() && PreviousStance.GetValue() != Operative->GetStance();
+}

@@ -959,6 +959,111 @@ namespace PhoneShots
 		});
 	}
 
+	/** Turn-based shot order with a rifleman (user request 2026-10-09): the Commander turns ~90 deg, then fires. */
+	void AddRifleTurnBasedSteps(TArray<FStep>& S)
+	{
+		Sniper = MakeShared<FSniperShots>();
+		S.Add([](UWorld* World) { return World->GetSubsystem<USquadSubsystem>() && World->GetSubsystem<USquadSubsystem>()->GetLeader() ? 60 : -1; });
+		S.Add([](UWorld* World)
+		{
+			StartFight(World);
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				It->Tags.Add(TEXT("PhoneKeeper"));
+			}
+			SmokeUtils::PlaceSquadAtTestStart(World);
+			USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+			Squad->SetSquadPosture(ESquadFirePosture::Passive);
+			AOperativeCharacter* Rifleman = Member(World, EOperativeRole::Commander);
+			Sniper->Medic = Rifleman;
+			if (!Rifleman)
+			{
+				return 1;
+			}
+			Squad->SetLeader(Rifleman);
+			for (AOperativeCharacter* Each : Squad->GetMembers())
+			{
+				if (Each != Rifleman)
+				{
+					Each->TeleportTo(SmokeUtils::FreeSpot(World, Rifleman->GetActorLocation() - Rifleman->GetActorForwardVector() * 700.f
+						+ Rifleman->GetActorRightVector() * (Each->SquadRole == EOperativeRole::Engineer ? -300.f : 300.f), Each),
+						Each->GetActorRotation(), false, true);
+				}
+			}
+			// The target to his right (one grid row, 4.5 m): he faces ahead, so the shot needs a ~90 deg turn first.
+			const FVector From = Rifleman->GetActorLocation();
+			Sniper->Target = SpawnSniperTarget(World, EEnemyArchetype::Frostbitten, From + Rifleman->GetActorRightVector() * 450.f, false, 100000.f);
+			Sniper->bFollow = true;
+			Sniper->CamBack = 380.f;
+			Sniper->CamSide = -420.f;
+			Sniper->CamUp = 260.f;
+			return 20;
+		});
+		S.Add([](UWorld* World)
+		{
+			World->GetSubsystem<UGameFlowSubsystem>()->RequestEnterTurnBased(true);
+			UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
+			AOperativeCharacter* Rifleman = Sniper->Medic.Get();
+			if (Rifleman && TurnBased->IsActive())
+			{
+				TurnBased->SelectUnit(Rifleman);
+				// Face straight ahead again (the grid start may have turned him): the target is ~90 deg to his right.
+				if (const AEnemyCharacter* Target = Sniper->Target.Get())
+				{
+					Rifleman->SetActorRotation(FRotator(0.f, (Target->GetActorLocation() - Rifleman->GetActorLocation()).Rotation().Yaw - 95.f, 0.f));
+				}
+			}
+			return 30;
+		});
+		// Into a fire lane if needed (before the clip's turn), then face ~95 deg away from the target again.
+		S.Add([](UWorld* World)
+		{
+			UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
+			AOperativeCharacter* Rifleman = Sniper->Medic.Get();
+			const FTurnUnitState* Unit = TurnBased->GetUnitState(Rifleman);
+			const FTurnUnitState* EnemyState = TurnBased->GetUnitState(Sniper->Target.Get());
+			UGorkyGridManager* Grid = TurnBased->GetGrid();
+			if (Unit && EnemyState && Grid && !(TurnBasedRules::IsTargetInPattern(Rifleman->CurrentWeapon, EnemyState->GridPos - Unit->GridPos)
+				&& GorkyLineOfSight::HasLineOfSight(Unit->GridPos, EnemyState->GridPos, *Grid)))
+			{
+				for (const TPair<FIntPoint, int32>& Entry : Grid->GetReachableCells(Unit->GridPos, Unit->AP - 3))
+				{
+					if (Entry.Key != Unit->GridPos && Grid->IsCellWalkable(Entry.Key)
+						&& TurnBasedRules::IsTargetInPattern(Rifleman->CurrentWeapon, EnemyState->GridPos - Entry.Key)
+						&& GorkyLineOfSight::HasLineOfSight(Entry.Key, EnemyState->GridPos, *Grid))
+					{
+						TurnBased->MoveActiveUnitTo(Entry.Key);
+						break;
+					}
+				}
+			}
+			return 5;
+		});
+		S.Add([](UWorld* World) { return World->GetSubsystem<UTurnBasedCombatSubsystem>()->IsUnitMoving() ? -1 : 10; });
+		S.Add([](UWorld* World)
+		{
+			AOperativeCharacter* Rifleman = Sniper->Medic.Get();
+			if (const AEnemyCharacter* Target = Sniper->Target.Get(); Rifleman && Target)
+			{
+				Rifleman->SetActorRotation(FRotator(0.f, (Target->GetActorLocation() - Rifleman->GetActorLocation()).Rotation().Yaw - 95.f, 0.f));
+			}
+			StartClip(TEXT("tb_shot_order_rifle"), 1);
+			return 20;
+		});
+		S.Add([](UWorld* World) { World->GetSubsystem<UTurnBasedCombatSubsystem>()->EnterAttackMode(); return 25; });
+		S.Add([](UWorld* World)
+		{
+			UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
+			if (const FTurnUnitState* EnemyState = TurnBased->GetUnitState(Sniper->Target.Get()))
+			{
+				TurnBased->bGuaranteeAllHits = true;
+				const FTurnAttackResult Attack = TurnBased->AttackCell(EnemyState->GridPos);
+				UE_LOG(LogCodexTactics, Display, TEXT("PhoneShots: rifle grid attack %s (%s)"), Attack.bSuccess ? TEXT("ordered") : TEXT("REFUSED"), *Attack.Reason);
+			}
+			return 60;
+		});
+		S.Add([](UWorld* World) { StopClip(); return 2; });
+	}
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
@@ -973,6 +1078,10 @@ namespace PhoneShots
 		else if (Mode == TEXT("sniperrt"))
 		{
 			AddSniperRealTimeSteps(Runner->Steps);
+		}
+		else if (Mode == TEXT("rifletb"))
+		{
+			AddRifleTurnBasedSteps(Runner->Steps);
 		}
 		else if (Mode == TEXT("snipertb"))
 		{

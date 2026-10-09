@@ -907,6 +907,12 @@ public:
 	/** Plays the sniper shot of the current stance (queued behind a kneel / prone clip), then the bolt when bCycleBolt. */
 	void PlaySniperShot(bool bCycleBolt);
 
+	/** A turn-based grid shot shown now: the same clip a real-time shot plays (sniper / prone / rifle fire montage). */
+	void PlayShotClip(AOperativeCharacter* Shooter, AActor* Target, bool bHit) { HandleWeaponFired(Shooter, Target, bHit); }
+
+	/** The pawn's stance changed and the stance clip is not decided yet (it starts in the next anim update). */
+	bool IsStanceChangePending() const;
+
 	/** Smokes: the sniper loop / the last sniper clip started, the clips started in order (capped). */
 	UAnimSequenceBase* GetSniperLoopClip() const { return SniperLoopClip.Get(); }
 	const TArray<FString>& GetSniperClipLog() const { return SniperClipLog; }

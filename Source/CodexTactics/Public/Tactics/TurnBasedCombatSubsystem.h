@@ -53,6 +53,8 @@ struct CODEXTACTICS_API FTurnAttackResult
 	int32 Damage = 0;
 	float HitChance = 0.f;
 	bool bBarrelExploded = false;
+	/** The shot is decided but shown later (the shooter turns / kneels first): wait for !IsShotPending() for its effects. */
+	bool bPending = false;
 	FString Reason;
 };
 
@@ -135,7 +137,17 @@ public:
 
 	/** An operative walks or a cinematic shot plays: player orders wait (Godot is_squad_unit_moving / is_dramatic_shot_active). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
-	bool IsBusy() const { return bSquadUnitMoving || bDramaticShotActive; }
+	bool IsBusy() const { return bSquadUnitMoving || bDramaticShotActive || PendingShot.IsSet(); }
+
+	/** A grid shot was ordered and waits for the shooter's turn / kneel before it is shown (TurnAttackTimeline). */
+	bool IsShotPending() const { return PendingShot.IsSet(); }
+
+	/** Grid shots shown so far (smokes). */
+	int32 GetGridShotsFired() const { return GridShotsFired; }
+
+	/** A grid shot is shown now: fire clip started, tracer / hit / damage follow in the same frame (shooter, target). */
+	DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGridShotFired, AOperativeCharacter*, AActor*);
+	FOnGridShotFired OnGridShotFired;
 
 	/** Sprint 14: the active operative is knocked down (falling / lying / getting up): no move, shot or stance order. */
 	bool IsActiveUnitKnockedDown() const;
@@ -536,6 +548,25 @@ private:
 	/** Turn-based barricade contact hits this fight (Sprint 06-C). */
 	int32 ContactHitsThisFight = 0;
 	bool bSquadUnitMoving = false;
+	/** The ordered grid shot waiting for its presentation (user request 2026-10-09). */
+	struct FPendingGridShot
+	{
+		TWeakObjectPtr<AOperativeCharacter> Shooter;
+		TWeakObjectPtr<AActor> Target;
+		bool bCoverShot = false;
+		bool bSkipShake = false;
+		bool bHit = false;
+		FString ShakeKind;
+		TFunction<void()> Effects;
+		int32 CombatAtStart = 0;
+		float Elapsed = 0.f;
+	};
+	TOptional<FPendingGridShot> PendingShot;
+	int32 GridShotsFired = 0;
+	/** Shows the pending shot once the shooter is on target and settled (TurnAttackTimeline). */
+	void UpdatePendingShot(float DeltaTime);
+	/** Runs Then once no grid shot is pending (polled; dropped when the fight ends). */
+	void WhenShotResolved(TFunction<void()> Then);
 	bool bDramaticShotActive = false;
 	bool bAttackMode = false;
 	FIntPoint HoveredCell = FIntPoint(-999, -999);

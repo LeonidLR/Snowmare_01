@@ -87,6 +87,13 @@ namespace SniperSmoke
 		FVector F = FVector::ForwardVector;
 		FVector R = FVector::RightVector;
 		FCoverSlot Corner;
+		/** Turn-based shot presentation (user request 2026-10-09): at the shown shot the body is on target and the kneel done. */
+		bool bGridShotShown = false;
+		float GridShotBodyLag = 999.f;
+		bool bGridShotWhileKneeling = true;
+		float GridShotTargetHealthAtShow = 0.f;
+		float GridShotTargetHealthAtOrder = 0.f;
+		FDelegateHandle GridShotHandle;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -518,7 +525,18 @@ namespace SniperSmoke
 			State.KneelFireClipsBefore = ClipCount(Medic, TEXT("AS_Knee_Aim_Fire"));
 			const EOperativeStance StanceBefore = Unit->Stance;
 			TurnBased->bGuaranteeAllHits = true;
+			FState* StatePtr = &State;
+			State.GridShotTargetHealthAtOrder = State.Enemy->GetHealthComponent()->GetCurrentHealth();
+			State.GridShotHandle = TurnBased->OnGridShotFired.AddLambda([StatePtr](AOperativeCharacter* By, AActor* At)
+			{
+				const UOperativeAnimInstance* ShotAnim = AnimOf(By);
+				StatePtr->bGridShotShown = true;
+				StatePtr->GridShotBodyLag = By ? FMath::Abs(By->GetBodyYawLagDeg()) : 999.f;
+				StatePtr->bGridShotWhileKneeling = ShotAnim && (ShotAnim->IsPlayingStanceTransition() || ShotAnim->IsStanceChangePending());
+				StatePtr->GridShotTargetHealthAtShow = StatePtr->Enemy.IsValid() ? StatePtr->Enemy->GetHealthComponent()->GetCurrentHealth() : 0.f;
+			});
 			const FTurnAttackResult Attack = TurnBased->AttackCell(EnemyState->GridPos);
+			Check(State, Attack.bPending && !State.bGridShotShown, TEXT("turn-based: the shot is not shown at the click (she kneels first)"));
 			// User report 2026-10-09: after a grid shot she snapped back to the old facing. A parked follower carries an idle
 			// facing from real time; the grid must win (UpdateCombatFacing clears it while turn-based is on).
 			State.ShotYaw = Medic->GetActorRotation().Yaw;
@@ -537,6 +555,10 @@ namespace SniperSmoke
 			{
 				return true;
 			}
+			TurnBased->OnGridShotFired.Remove(State.GridShotHandle);
+			Check(State, State.bGridShotShown && !State.bGridShotWhileKneeling && State.GridShotBodyLag <= 5.f
+				&& State.GridShotTargetHealthAtShow >= State.GridShotTargetHealthAtOrder,
+				FString::Printf(TEXT("turn-based: shown after the kneel, body %.1f deg off the target, no damage before it"), State.GridShotBodyLag));
 			Check(State, State.MaxYawDrift < 5.f, FString::Printf(TEXT("turn-based: she keeps facing the target after the shot (max drift %.1f deg)"), State.MaxYawDrift));
 			Check(State, ClipCount(Medic, TEXT("AS_Knee_Aim_Start")) > State.KneelClipsBefore && ClipCount(Medic, TEXT("AS_Knee_Aim_Fire")) > State.KneelFireClipsBefore,
 				FString::Printf(TEXT("turn-based: kneel clip then the shot clip (clips: %s)"), *ClipLog(Medic)));
