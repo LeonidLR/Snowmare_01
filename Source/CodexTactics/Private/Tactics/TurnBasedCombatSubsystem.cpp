@@ -1,5 +1,6 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Combat/KnockdownComponent.h"
+#include "Combat/SniperRules.h"
 #include "Combat/DeathCinematicSubsystem.h"
 #include "Characters/EnemyAnimInstance.h"
 #include "Tactics/TacticalEncounterRules.h"
@@ -1300,6 +1301,15 @@ void UTurnBasedCombatSubsystem::EnterAttackMode()
 	{
 		return;
 	}
+	// Sniper rifle (user request 2026-10-09): not offered without the AP for the kneel (when standing) and the shot.
+	if (const FTurnUnitState* ActiveState = GetUnitState(GetActiveUnit());
+		ActiveState && GetActiveUnit()->IsSniperWeaponEquipped() && ActiveState->AP < GetActiveAttackCost())
+	{
+		Log(FString::Printf(TEXT("⚠️ %s: the sniper rifle needs %d AP (%s), only %d AP left - no shot this turn."),
+			*NameOf(GetActiveUnit()), GetActiveAttackCost(),
+			SniperRules::CanFireInStance(ActiveState->Stance) ? TEXT("shot") : TEXT("kneel + shot"), ActiveState->AP));
+		return;
+	}
 	bAttackMode = true;
 	const UWeaponDataAsset* Weapon = WeaponOf(GetActiveUnit());
 	Log(FString::Printf(TEXT("🎯 Aim mode: %s"), Weapon && !Weapon->WeaponName.IsEmpty() ? *Weapon->WeaponName.ToString() : TEXT("M16")));
@@ -1568,9 +1578,15 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 		Result.Reason = TEXT("already_attacked");
 		return Result;
 	}
-	if (State->AP < Balance.AttackAPCost)
+	// Sniper rifle (user request 2026-10-09, SniperRules): standing she kneels first, which costs the stance AP on top.
+	const bool bSniper = Unit->IsSniperWeaponEquipped();
+	const int32 AttackCost = GetActiveAttackCost();
+	if (State->AP < AttackCost)
 	{
-		Log(FString::Printf(TEXT("⚠️ Not enough AP to attack (%d/%d AP)!"), State->AP, Balance.AttackAPCost));
+		Log(bSniper && AttackCost > Balance.AttackAPCost
+			? FString::Printf(TEXT("⚠️ %s fires the sniper rifle only kneeling or prone: kneel %d AP + shot %d AP = %d AP, only %d AP left!"),
+				*NameOf(Unit), Balance.StanceAPCost, Balance.AttackAPCost, AttackCost, State->AP)
+			: FString::Printf(TEXT("⚠️ Not enough AP to attack (%d/%d AP)!"), State->AP, AttackCost));
 		Result.Reason = TEXT("not_enough_ap");
 		return Result;
 	}
@@ -1613,6 +1629,13 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 		Unit->BeginOpenShotFromCover(Target);
 	}
 
+	if (bSniper && !SniperRules::CanFireInStance(State->Stance))
+	{
+		State->AP -= Balance.StanceAPCost;
+		State->Stance = SniperRules::FiringStance(State->Stance);
+		Unit->SetStance(State->Stance);
+		Log(FString::Printf(TEXT("🎯 %s kneels for the sniper shot (%d AP)"), *NameOf(Unit), Balance.StanceAPCost));
+	}
 	State->AP -= Balance.AttackAPCost;
 	State->bHasAttacked = true;
 	// Godot main.gd squad attack: the camera shakes by the weapon (pistol / rifle).
@@ -1706,17 +1729,32 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 	{
 		Result.Reason = TEXT("no_target");
 	}
+	if (bSniper && Result.bSuccess && IsValid(Unit))
+	{
+		Unit->PlaySniperGridShot(); // the shot clip after the kneel clip, then the bolt
+	}
 	RefreshOverlay();
 	Changed();
 	CheckBattleEnd();
 	return Result;
 }
 
+int32 UTurnBasedCombatSubsystem::GetActiveAttackCost() const
+{
+	const AOperativeCharacter* Unit = GetActiveUnit();
+	const FTurnUnitState* State = GetUnitState(Unit);
+	if (!Unit || !State || !Unit->IsSniperWeaponEquipped())
+	{
+		return Balance.AttackAPCost;
+	}
+	return SniperRules::TurnBasedAttackCost(State->Stance, Balance.StanceAPCost, Balance.AttackAPCost);
+}
+
 bool UTurnBasedCombatSubsystem::CanAttackQuietly(const FIntPoint& Cell) const
 {
 	const AOperativeCharacter* Unit = GetActiveUnit();
 	const FTurnUnitState* State = GetUnitState(Unit);
-	if (IsBusy() || Phase != ETurnPhase::Squad || !State || State->bHasAttacked || State->AP < Balance.AttackAPCost || !Grid
+	if (IsBusy() || Phase != ETurnPhase::Squad || !State || State->bHasAttacked || State->AP < GetActiveAttackCost() || !Grid
 		|| !Grid->GetOccupant(Cell))
 	{
 		return false;

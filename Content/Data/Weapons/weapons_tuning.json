@@ -203,6 +203,43 @@
         0.15
       ],
       "distance_damage_multipliers": []
+    },
+    "sniper_rifle": {
+      "name": "Sniper Rifle",
+      "base_damage": 70,
+      "attack_range_m": 30,
+      "fire_rate": 2.4,
+      "armor_penetration": 0.6,
+      "max_clip_size": 5,
+      "default_reserve_ammo": 15,
+      "reload_time": 3.5,
+      "status_duration": 0,
+      "status_tick_damage": 0,
+      "max_range_cells": 10,
+      "base_hit_chances": [
+        0.6,
+        0.8,
+        0.9,
+        0.95,
+        0.95,
+        0.92,
+        0.9,
+        0.87,
+        0.83,
+        0.78
+      ],
+      "distance_damage_multipliers": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
     }
   },
   "grenade": {

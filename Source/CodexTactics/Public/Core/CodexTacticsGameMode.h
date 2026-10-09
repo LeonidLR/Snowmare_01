@@ -47,6 +47,17 @@ struct CODEXTACTICS_API FSquadMemberSpawn
 	/** Marksmanship, % (Godot player.gd accuracy: commander 90, engineer 75, medic-sapper 85). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
 	float Accuracy = 90.f;
+
+	/**
+	 * Body of this member instead of the operative Blueprint's mesh (same AnimBP; empty = the Blueprint's). User request
+	 * 2026-10-09: the Medic-Sapper is /Game/Female_Soldier/Mesh/SK_Female_soldier.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	TSoftObjectPtr<class USkeletalMesh> BodyMesh;
+
+	/** Weapons this member carries on top of the starting arsenal (user request 2026-10-09: the Medic-Sapper's sniper rifle). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	TArray<TSoftObjectPtr<UWeaponDataAsset>> ExtraWeapons;
 };
 
 /**

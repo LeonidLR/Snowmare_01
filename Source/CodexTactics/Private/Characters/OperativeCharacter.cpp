@@ -185,6 +185,13 @@ void AOperativeCharacter::BeginPlay()
 			WeaponMesh->AttachToComponent(SkeletalMesh, FAttachmentTransformRules::KeepRelativeTransform, WeaponSocket);
 		}
 	}
+	if (WeaponMesh && !bDefaultWeaponMeshCaptured)
+	{
+		// The Blueprint's model + offset: a weapon without its own HandMesh shows it (ApplyWeaponVisual).
+		DefaultWeaponMeshAsset = WeaponMesh->GetStaticMesh();
+		DefaultWeaponMeshTransform = WeaponMesh->GetRelativeTransform();
+		bDefaultWeaponMeshCaptured = true;
+	}
 	UpdatePlaceholderVisibility();
 	ApplyStanceCapsule();
 	UpdatePlaceholderPose(1.f);
@@ -424,6 +431,10 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	if (bInCover || bHasPendingCover)
 	{
 		return EOperativeOrderResult::Refused; // Sprint 12: he holds his wall like a guard; the formation does not pull him
+	}
+	if (IsHoldingForSniperShot())
+	{
+		return EOperativeOrderResult::Refused; // kneeling for an ordered sniper shot: the formation waits for her
 	}
 	ApplyMovementParams(Speed);
 	return RequestMove(Destination);
@@ -995,6 +1006,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 		UpdateCover(DeltaTime);
 		UpdateCombatFacing(DeltaTime);
 		ProcessCombatShooting(DeltaTime);
+		UpdateSniperPendingShot(DeltaTime);
 	}
 	UpdateCoverEntryBlend(DeltaTime);
 	UpdateSilhouette(DeltaTime);
@@ -1349,6 +1361,7 @@ void AOperativeCharacter::EquipWeapon(UWeaponDataAsset* NewWeapon)
 	bIsReloading = false;
 	ReloadTimer = 0.0f;
 	ShootTimer = 0.0f;
+	ApplyWeaponVisual();
 }
 
 void AOperativeCharacter::InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, int32 RifleReserve)
@@ -1416,6 +1429,8 @@ bool AOperativeCharacter::SwitchToWeaponById(const FString& WeaponId)
 	bIsReloading = false;
 	ReloadTimer = 0.0f;
 	ShootTimer = 0.0f;
+	SniperPendingObject.Reset();
+	ApplyWeaponVisual();
 	return true;
 }
 
@@ -2059,6 +2074,18 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		return;
 	}
 
+	// Sniper rifle (user request 2026-10-09, SniperRules): only kneeling / prone and still. A direct order (priority target,
+	// blind fire at a silhouette) stops her and she kneels by herself; automatic fire waits while she walks under a move order.
+	ESniperFireStep SniperStep = ESniperFireStep::Ready;
+	if (IsSniperWeaponEquipped())
+	{
+		SniperStep = PrepareSniperShot(Target == ManualPriorityTarget.Get() || Shot.bBlind);
+		if (SniperStep == ESniperFireStep::WaitForMove)
+		{
+			return;
+		}
+	}
+
 	// User decision 2026-10-06: a target out on the open side (in front of the wall) is no corner shot: he steps off the
 	// wall and fires normally, then comes back to the slot (UpdateOpenShotReturn).
 	if (bInCover && !IsCornerShotTarget(Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation()) && !BeginOpenShotFromCover(Target))
@@ -2125,7 +2152,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 			return;
 		}
 	}
-	if (ShootTimer <= 0.0f && MisfireCooldownTimer <= 0.0f)
+	if (ShootTimer <= 0.0f && MisfireCooldownTimer <= 0.0f && SniperStep == ESniperFireStep::Ready)
 	{
 		if (bInCover)
 		{
@@ -2140,7 +2167,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 
 bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 {
-	if (!Target || (UsesAmmo() && CurrentClip <= 0))
+	if (!Target || (UsesAmmo() && CurrentClip <= 0) || !SniperShotAllowed())
 	{
 		return false;
 	}
@@ -2381,8 +2408,10 @@ FVector AOperativeCharacter::GetWeaponMuzzleLocation() const
 	if (WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible())
 	{
 		static const FName MuzzleSocket(TEXT("Muzzle"));
+		const FVector Offset = CurrentWeapon && !CurrentWeapon->HandMesh.IsNull() && !CurrentWeapon->HandMeshMuzzleOffset.IsNearlyZero()
+			? CurrentWeapon->HandMeshMuzzleOffset : MuzzleOffset;
 		return WeaponMesh->DoesSocketExist(MuzzleSocket) ? WeaponMesh->GetSocketLocation(MuzzleSocket)
-			: WeaponMesh->GetComponentTransform().TransformPosition(MuzzleOffset);
+			: WeaponMesh->GetComponentTransform().TransformPosition(Offset);
 	}
 	return GetMuzzleLocation();
 }
@@ -2427,7 +2456,8 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	// Barrel vs body yaw in the current aim pose (the rifle is held across the chest); 0 when not aiming.
 	float Offset = 0.f;
 	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
-	if (bAlignBarrelWithTarget && Anim && Anim->bIsAiming && WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible())
+	// The sniper clips aim straight along the body (measured: the pack's Offset_F holds the rifle on the mesh forward axis).
+	if (bAlignBarrelWithTarget && !IsSniperWeaponEquipped() && Anim && Anim->bIsAiming && WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible())
 	{
 		const FVector Barrel = WeaponMesh->GetComponentTransform().TransformVectorNoScale(MuzzleOffset.GetSafeNormal());
 		if (FMath::Abs(Barrel.Z) < 0.7f) // roughly level, i.e. really aimed
@@ -2492,6 +2522,25 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 	if (Kind == ETargetedShotKind::None || Kind == ETargetedShotKind::Enemy || !CanBeginWeaponShot())
 	{
 		return false;
+	}
+	if (IsSniperWeaponEquipped())
+	{
+		// Sniper rifle (user request 2026-10-09): she stops / kneels first; the shot waits for her (UpdateSniperPendingShot).
+		if (PrepareSniperShot(/*bDirectOrder*/ true) != ESniperFireStep::Ready)
+		{
+			SniperPendingObject = Target;
+			SniperPendingTimer = SniperPendingShotSeconds;
+			FaceAimAt(Target->GetActorLocation());
+			return false;
+		}
+		if (!SniperShotAllowed())
+		{
+			return false;
+		}
+		if (SniperPendingObject.Get() == Target)
+		{
+			SniperPendingObject.Reset();
+		}
 	}
 	if (bInCover && !IsCornerShotTarget(Target->GetActorLocation()))
 	{
@@ -3935,6 +3984,12 @@ float AOperativeCharacter::GetShotAimResidualDeg(const FVector& TargetLocation) 
 {
 	// The real barrel when the rifle is out and level (the pose as animated, the 2D aim offset's twist included): the shot
 	// goes where the rifle points (user rule 2026-10-07). Else the stance rule (the pose's aim direction + the twist).
+	if (IsSniperWeaponEquipped() && !bInCover)
+	{
+		// The sniper clips aim along the body's forward (the M16 stand-in model is held at the pack rifle's angle only
+		// roughly): the body's facing decides, not the stand-in's barrel.
+		return FMath::Abs(AimOffsetRules::YawToTarget(GetMuzzleLocation(), GetActorForwardVector(), TargetLocation, 180.f));
+	}
 	const USkeletalMeshComponent* Body = GetMesh();
 	const bool bPoseLive = Body && (Body->VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones
 		|| Body->WasRecentlyRendered(0.25f)); // headless (not rendered) the bones keep a stale pose

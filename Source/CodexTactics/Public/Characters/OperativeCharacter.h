@@ -15,6 +15,7 @@
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverTypes.h"
 #include "Combat/KnockdownTypes.h"
+#include "Combat/SniperRules.h"
 #include "OperativeCharacter.generated.h"
 
 class UMaterialInterface;
@@ -30,6 +31,7 @@ struct CODEXTACTICS_API FOperativeOutfit
 };
 
 class UStaticMeshComponent;
+class UStaticMesh;
 class UWeaponDataAsset;
 
 /** Clip / reserve of one weapon of the arsenal (Godot ammo_inventory entry). */
@@ -573,6 +575,53 @@ public:
 
 	/** False for melee weapons (Godot uses_ammo). */
 	bool UsesAmmo() const;
+
+	/**
+	 * Adds one more weapon to the arsenal after InitArsenal (user request 2026-10-09: the Medic-Sapper's sniper rifle):
+	 * full magazine, Reserve rounds (< 0 = the weapon's DefaultReserveAmmo); the weapon in hands stays.
+	 */
+	void AddArsenalWeapon(UWeaponDataAsset* Weapon, int32 Reserve = -1);
+
+	/**
+	 * Replaces the Blueprint's skeletal mesh before BeginPlay (per-role body, FSquadMemberSpawn::BodyMesh: the Female Soldier
+	 * for the Medic-Sapper). The AnimBP stays; the Blueprint's index-based material overrides are dropped (they belong to the
+	 * old mesh's slots).
+	 */
+	void ApplyBodyMeshOverride(class USkeletalMesh* Mesh);
+
+	// --- Sniper rifle (user request 2026-10-09, SniperRules): only kneeling / prone and standing still. ---
+
+	/** The weapon in hands is a sniper rifle (EWeaponHandling::SniperRifle). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Sniper")
+	bool IsSniperWeaponEquipped() const;
+
+	/**
+	 * Gets her ready for a sniper shot: a direct order while moving stops her, standing she kneels by herself, the shot
+	 * waits for the kneel clip. Returns the step (Ready = fire now). Not a sniper: always Ready.
+	 */
+	ESniperFireStep PrepareSniperShot(bool bDirectOrder);
+
+	/** After a direct sniper order she holds her spot this long (the formation does not pull her away), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Sniper", meta = (ClampMin = "0"))
+	float SniperOrderHoldSeconds = 3.f;
+
+	/** A Ctrl + click object shot waiting for her to kneel is given up after this long, s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Sniper", meta = (ClampMin = "0"))
+	float SniperPendingShotSeconds = 6.f;
+
+	/** Holding her spot for a direct sniper order (FollowTo refused). */
+	bool IsHoldingForSniperShot() const;
+
+	/** Turn-based grid shot of a sniper: the anim instance plays the shot (after the kneel clip) and the bolt. */
+	void PlaySniperGridShot();
+
+	/** Smokes / stats: kneels for a shot, stops for a shot, sniper shots fired, shots refused (wrong stance / moving). */
+	int32 GetSniperKneels() const { return SniperKneels; }
+	int32 GetSniperStops() const { return SniperStops; }
+	int32 GetSniperShots() const { return SniperShots; }
+	int32 GetSniperRefusedShots() const { return SniperRefusedShots; }
+	/** An object shot waiting for the kneel (Ctrl + click). */
+	AActor* GetSniperPendingObject() const { return SniperPendingObject.Get(); }
 
 	/** Weapons this operative can switch to (Godot available_weapons). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Combat")
@@ -1444,4 +1493,24 @@ private:
 
 	/** Seconds until a stance clip that starts now / is playing lets the operative walk (0 without a clip). */
 	float GetStanceChangeDelay(EOperativeStance From, EOperativeStance To) const;
+
+	/** Sets WeaponMesh to the equipped weapon's HandMesh (or back to the Blueprint's model). */
+	void ApplyWeaponVisual();
+	UPROPERTY(Transient)
+	TObjectPtr<UStaticMesh> DefaultWeaponMeshAsset;
+	FTransform DefaultWeaponMeshTransform = FTransform::Identity;
+	bool bDefaultWeaponMeshCaptured = false;
+	/** Sniper: an object shot (Ctrl + click) waiting for the kneel, retried every frame until it fires or times out. */
+	void UpdateSniperPendingShot(float DeltaTime);
+	TWeakObjectPtr<AActor> SniperPendingObject;
+	float SniperPendingTimer = 0.f;
+	double SniperHoldUntil = -1.0;
+	/** The last kneel / stop feed line (one per order, not per frame). */
+	double SniperLastPrepLineTime = -100.0;
+	int32 SniperKneels = 0;
+	int32 SniperStops = 0;
+	int32 SniperShots = 0;
+	int32 SniperRefusedShots = 0;
+	/** The sniper rule allows a shot that leaves the barrel now (refuses + counts otherwise). */
+	bool SniperShotAllowed();
 };

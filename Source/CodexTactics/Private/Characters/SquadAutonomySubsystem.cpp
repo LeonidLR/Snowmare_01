@@ -328,7 +328,9 @@ void USquadAutonomySubsystem::Decide(AOperativeCharacter& Operative, FOperativeS
 	// Stance (7-C) while standing still with enemies around.
 	if (Nearest)
 	{
-		const EOperativeStance Desired = DesiredStance(ROE, bBehindBarricade, SniperOnMe != nullptr, bCoverReachable);
+		// A sniper rifle never fires standing (SniperRules, user request 2026-10-09): the autonomy keeps her down.
+		const EOperativeStance Desired = SniperRules::AutonomyStance(DesiredStance(ROE, bBehindBarricade, SniperOnMe != nullptr, bCoverReachable),
+			Operative.IsSniperWeaponEquipped());
 		if (Desired != Operative.GetStance())
 		{
 			Operative.SetStance(Desired);
@@ -800,7 +802,8 @@ void USquadAutonomySubsystem::DecideInCover(AOperativeCharacter& Operative, cons
 	StanceSituation.SuppressionPressure = Suppression;
 	StanceSituation.bEnemyElevated = bElevatedEnemy;
 	StanceSituation.bWantsAimedFire = Decision == ECoverFireDecision::CornerPeek || Decision == ECoverFireDecision::OpenShot;
-	const EOperativeStance Wanted = CoverDecisionRules::ToStance(CoverDecisionRules::DecideStance(Config, StanceSituation));
+	const EOperativeStance Wanted = SniperRules::AutonomyStance(CoverDecisionRules::ToStance(CoverDecisionRules::DecideStance(Config, StanceSituation)),
+		Operative.IsSniperWeaponEquipped());
 	if (Operative.GetStance() != EOperativeStance::Prone && Operative.GetStance() != Wanted)
 	{
 		Operative.SetStance(Wanted);

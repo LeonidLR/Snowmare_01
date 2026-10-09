@@ -28,7 +28,7 @@
     "HordeSmoke", "CoverSmoke", "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke",
     "CoverCrouchSmoke", "CoverMoveSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
-    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke"
+    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
@@ -42,6 +42,14 @@
   },
   "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "PhoneShots"],
   "rules": [
+    {
+      "name": "sniper",
+      "globs": ["Source/**/Combat/SniperRules*", "Source/**/Characters/OperativeCharacterSniper*", "Source/**/Characters/OperativeAnimInstanceSniper*",
+        "Source/**/Data/WeaponDataAsset*", "Source/**/Core/CodexTacticsGameMode*", "Source/**/Debug/SniperSmoke*", "Content/Data/Weapons/**",
+        "Content/Characters/Operatives/**", "Scripts/Editor/setup_operative_sniper_animation.py"],
+      "tests": ["CodexTactics.Combat.Sniper"],
+      "smokes": ["SniperSmoke", "WeaponSelectorSmoke", "SaveRoundTripSmoke", "TurnBasedSmoke"]
+    },
     {
       "name": "cover",
       "globs": ["Source/**/Tactics/Cover*", "Source/**/Characters/Cover*"],

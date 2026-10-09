@@ -805,6 +805,101 @@ public:
 	 */
 	void GetCoverPlayback(FString& OutClip, float& OutMontageWeight, float& OutSlotNodeWeight) const;
 
+	// --- Sniper rifle set (user request 2026-10-09; Scripts/Editor/setup_operative_sniper_animation.py fills them from
+	// /Game/Sniper_Animation). Index [0] stand, [1] knee (crouched), [2] prone (SniperRules::ClipIndex). While the weapon in
+	// hands is a sniper rifle (EWeaponHandling::SniperRifle) and she stands still out of cover, the clips play natively on
+	// FullBodySlot (no graph change): idle loop per stance, kneel / prone / rise transitions, shot + bolt, magazine reload,
+	// hit reaction. Moving keeps the normal locomotion (no sniper walk clips). ---
+
+	/** Play the sniper set (untick to leave the graph / rifle clips on). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation")
+	bool bUseSniperClips = true;
+
+	/** Aimed idle loop per stance (AS_Stand_Aim_Idle, AS_Knee_Aim_Idle, AS_Prone_Aim_Idle). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> SniperIdle = { nullptr, nullptr, nullptr };
+
+	/**
+	 * Into the stance's aim from standing: [0] relaxed stand -> stand aim (AS_Stand_Aim_Start, played when she comes to rest
+	 * standing), [1] stand -> kneel aim (AS_Knee_Aim_Start, the stand -> crouch transition), [2] stand -> prone aim
+	 * (AS_Prone_Aim_Idle_Start, the stand -> prone transition). Measured: pelvis 95 -> 41 cm / 95 -> 12 cm.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> SniperAimStart = { nullptr, nullptr, nullptr };
+
+	/** Out of the stance's aim back to standing: [0] AS_Stand_Aim_End, [1] knee -> stand (AS_Knee_Aim_End), [2] prone -> stand (AS_Prone_Aim_Idle_End). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> SniperAimEnd = { nullptr, nullptr, nullptr };
+
+	/** The shot (AS_Knee_Aim_Fire / AS_Prone_Aim_Fire; [0] AS_Stand_Aim_Fire is never used: no standing shot). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> SniperFire = { nullptr, nullptr, nullptr };
+
+	/** The bolt worked after a shot while rounds remain (AS_*_Aim_Bullet_Reload). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> SniperBoltCycle = { nullptr, nullptr, nullptr };
+
+	/** Magazine reload, stretched to the weapon's reload time (AS_*_Aim_Magazine_Reload). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> SniperReload = { nullptr, nullptr, nullptr };
+
+	/** Hit reaction in the aim pose (AS_*_Aim_HitReact). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> SniperHitReact = { nullptr, nullptr, nullptr };
+
+	/**
+	 * 2D aim offsets built from the pack's Offset_F / L / R / U / D poses (AO_Sniper_Stand / _Knee / _Prone, axes Yaw / Pitch
+	 * like AO_Rifle_Aim). The graph's Aim Offset Player uses them only once its Blend Space pin is bound to ActiveAimOffset
+	 * (docs/port/HANDOFF.md section 6 «ABP: sniper set»); until then bSniperAimOffsetWired stays off.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", EditFixedSize)
+	TArray<TObjectPtr<class UBlendSpace>> SniperAimOffsets = { nullptr, nullptr, nullptr };
+
+	/** The rifle aim offset the graph uses outside the sniper poses (AO_Rifle_Aim; ActiveAimOffset falls back to it). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation")
+	TObjectPtr<class UBlendSpace> RifleAimOffset;
+
+	/**
+	 * Tick once the graph's Aim Offset Player reads ActiveAimOffset: the sniper poses then keep AimOffsetAlpha. Off (default):
+	 * AimOffsetAlpha fades to 0 in the sniper poses (the rifle AO was made on AS_Rifle_Aim and would bend the kneeling /
+	 * prone pose wrongly); the body itself turns to the target.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation")
+	bool bSniperAimOffsetWired = false;
+
+	/** The aim offset for the pose now: the stance's sniper AO in a sniper pose, else RifleAimOffset (bind the AO node's pin). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation")
+	TObjectPtr<class UBlendSpace> ActiveAimOffset;
+
+	/** Blend of the idle loop and of a stance change between the loops, s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", meta = (ClampMin = "0"))
+	float SniperLoopBlendSeconds = 0.25f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", meta = (ClampMin = "0"))
+	float SniperShotBlendInSeconds = 0.05f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", meta = (ClampMin = "0"))
+	float SniperShotBlendOutSeconds = 0.15f;
+
+	/** Below this ground speed she counts as standing still (sniper poses), cm/s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation", meta = (ClampMin = "0"))
+	float SniperStillSpeed = 20.f;
+
+	/** A sniper rifle is in hands. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation")
+	bool bSniperWeapon = false;
+
+	/** The sniper set owns the body now (still, out of cover, alive): graph hook for the user's own states. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Sniper Animation")
+	bool bSniperPose = false;
+
+	/** Plays the sniper shot of the current stance (queued behind a kneel / prone clip), then the bolt when bCycleBolt. */
+	void PlaySniperShot(bool bCycleBolt);
+
+	/** Smokes: the sniper loop / the last sniper clip started, the clips started in order (capped). */
+	UAnimSequenceBase* GetSniperLoopClip() const { return SniperLoopClip.Get(); }
+	const TArray<FString>& GetSniperClipLog() const { return SniperClipLog; }
+
 	/** The grenade throw clip is still playing (the arms throw: no rifle shot meanwhile, user rule 2026-10-07). */
 	bool IsThrowingGrenade() const { return GrenadeThrowSecondsLeft > 0.f; }
 	/** In the fire-ready pose (entered, not yet left through the exit transition). */
@@ -1000,6 +1095,31 @@ private:
 	/** Smoothed speed and moving state driving the blend-space axes. */
 	float LocomotionSpeed = 0.f;
 	bool bLocomotionMoving = false;
+
+	// Sniper layer (OperativeAnimInstanceSniper.cpp).
+	void UpdateSniperLayer(const AOperativeCharacter& Operative);
+	UAnimSequenceBase* SniperClipFor(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips, EOperativeStance InStance) const;
+	/** Plays a sniper one-shot on FullBodySlot (the loop fades out), logs it. */
+	UAnimMontage* PlaySniperOneShot(UAnimSequenceBase* Clip, float BlendIn, float BlendOut, float PlayRate = 1.f);
+	/** The kneel / prone / rise clip of a stance change with the sniper rifle (nullptr = the generic transition). */
+	UAnimSequenceBase* PickSniperTransition(EOperativeStance From, EOperativeStance To) const;
+	/** Magazine reload start in a sniper pose (true = handled, the upper-body reload is skipped). */
+	bool StartSniperReload(const AOperativeCharacter& Operative);
+	/** Hit reaction in a sniper pose (true = handled). */
+	bool PlaySniperHitReaction(EOperativeStance InStance);
+	TWeakObjectPtr<UAnimMontage> SniperLoopMontage;
+	TWeakObjectPtr<UAnimSequenceBase> SniperLoopClip;
+	TWeakObjectPtr<UAnimMontage> SniperOneShotMontage;
+	bool bSniperFireQueued = false;
+	/** The queued shot (behind a kneel clip) works the bolt after it. */
+	bool bSniperQueuedFireBolt = false;
+	bool bSniperBoltQueued = false;
+	/** The stance of the shot the queued bolt follows (a stance change drops it). */
+	EOperativeStance SniperBoltStance = EOperativeStance::Standing;
+	bool bSniperBoltPlaying = false;
+	bool bSniperWasPosed = false;
+	bool bSniperTransitionPlaying = false;
+	TArray<FString> SniperClipLog;
 
 	// Rifle_2 machine.
 	void EnterRifleLocoState(ERifleLocoState NewState, UAnimSequence* Clip);
