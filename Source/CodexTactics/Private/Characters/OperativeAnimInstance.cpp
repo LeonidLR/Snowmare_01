@@ -5,6 +5,7 @@
 #include "Misc/ScopeExit.h"
 #include "Characters/LeftHandIKRules.h"
 #include "Characters/AimOffsetRules.h"
+#include "Combat/SniperRules.h"
 #include "DrawDebugHelpers.h"
 #include "HAL/IConsoleManager.h"
 
@@ -379,6 +380,12 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 		return; // Sprint 14: no fire clip over the knockdown
 	}
 	AimTimer = AimHoldAfterShot;
+	// Sniper rifle (user request 2026-10-09): the stance's shot + the bolt while rounds remain, full body.
+	if (bSniperWeapon && bSniperPose && Shooter)
+	{
+		PlaySniperShot(SniperRules::ShouldCycleBolt(Shooter->CurrentClip));
+		return;
+	}
 	// Sprint 12: a shot from cover plays the corner fire (or blind fire) clip full body; the loop resumes after it.
 	if (bInCover && bUseNativeCoverClips && !bIsProne && !bIsReloading)
 	{
@@ -515,6 +522,20 @@ void UOperativeAnimInstance::UpdateStanceTransition()
 		UE_LOG(LogCodexTactics, Display, TEXT("[CoverAnim] stance change in cover without a cover switch (native %d, shimmy %d)"),
 			bUseNativeCoverClips ? 1 : 0, bShimmying ? 1 : 0);
 	}
+	// Sniper rifle in hands, standing still (user request 2026-10-09): the pack's kneel / prone / rise clips.
+	if (UAnimSequenceBase* SniperClip = PickSniperTransition(From, Stance))
+	{
+		StopSlotAnimation(StanceTransitionBlendTime, UpperBodySlot);
+		SniperLoopMontage.Reset();
+		SniperLoopClip.Reset();
+		SniperOneShotMontage.Reset();
+		bSniperBoltPlaying = false;
+		StanceTransitionMontage = PlayCoverMontage(SniperClip, FAlphaBlendArgs(StanceTransitionBlendTime), StanceTransitionBlendTime);
+		bSniperTransitionPlaying = StanceTransitionMontage.IsValid();
+		SniperClipLog.Add(SniperClip->GetName());
+		UE_LOG(LogCodexTactics, Display, TEXT("[SniperAnim] stance %d -> %d: %s"), static_cast<int32>(From), static_cast<int32>(Stance), *SniperClip->GetName());
+		return;
+	}
 	UAnimSequenceBase* Clip = nullptr;
 	switch (Stance)
 	{
@@ -565,6 +586,13 @@ void UOperativeAnimInstance::HandleHealthChanged(float NewHealth, float MaxHealt
 	Context.bBusy = Operative->IsKnockedDown() || IsThrowingGrenade() || Operative->bIsReloading || IsPlayingStanceTransition() || Operative->IsVaulting();
 	if (!HitReactionRules::ShouldReact(Settings, Context))
 	{
+		return;
+	}
+	if (bSniperPose && PlaySniperHitReaction(Operative->GetStance()))
+	{
+		LastHitReactionTime = Now;
+		++HitReactionsPlayed;
+		LastHitReactionSlot = FullBodySlot;
 		return;
 	}
 	FVector Source;
@@ -745,6 +773,16 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 	// Prone: its own full-body clip (Godot ProneReload) or nothing.
 	UAnimSequenceBase* Reload = bIsProne ? ReloadProneAnimation.Get() : ReloadAnimation.Get();
 	const FName ReloadSlot = bIsProne ? FullBodySlot : UpperBodySlot;
+	// Sniper pose: the stance's magazine reload on the full body (it runs out with the reload time on its own).
+	if (bIsReloading && !bWasReloading && Operative && bSniperPose && StartSniperReload(*Operative))
+	{
+		bWasReloading = true;
+		Reload = nullptr;
+	}
+	else if (bSniperPose)
+	{
+		Reload = nullptr; // never stop the sniper clips at the reload's end
+	}
 	if (bIsReloading && !bWasReloading && Reload && Operative && !IsPlayingStanceTransition() && !bKnockedDown)
 	{
 		const float Duration = FMath::Max(0.1f, Operative->ReloadTimer);
@@ -818,6 +856,7 @@ void UOperativeAnimInstance::UpdateState()
 		bIsFrostbitten = Cold->IsFrostbitten();
 		bIsWeaponFrozen = Cold->IsWeaponFrozen();
 	}
+	UpdateSniperLayer(*Operative);
 	UpdateLeftHandIK(*Operative, StateDeltaSeconds);
 	UpdateAimOffset(*Operative, StateDeltaSeconds);
 }
@@ -884,14 +923,14 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 	State.bEnabled = bLeftHandIK;
 	State.bHasGrip = bLeftHandIKGripValid && Operative.UsesAmmo(); // a melee weapon has no handguard
 	State.bWeaponVisible = Weapon && Weapon->IsVisible();
-	State.bReloading = bIsReloading;
+	State.bReloading = bIsReloading || bSniperBoltPlaying; // the bolt hand leaves the rifle
 	// A grenade throw / hit reaction plays on the upper body: it frees the left hand only while it actually shows — under a
 	// full-body cover clip it is invisible (user PIE 2026-10-07: every hound bite blocked the IK for the hit clip's length
 	// while the cover fire stance kept the rifle up, so the left hand let go of it).
 	State.bUpperBodyAction = LeftHandIKBlockSeconds > 0.f && GetSlotMontageGlobalWeight(FullBodySlot) < 0.5f;
 	State.bVaulting = bIsVaulting;
 	State.bDead = bIsDead || bKnockedDown; // Sprint 14: no IK / aim offset while knocked down
-	State.bProne = bIsProne;
+	State.bProne = bIsProne && !bSniperPose; // the prone sniper aim holds the rifle with both hands (crawl clips do not)
 	// Every pose where the right hand holds the rifle keeps the IK (cover idle / look-around / shimmy / enter / switches
 	// included, 2026-10-07); only clips listed in LeftHandIKFreeClips free the left hand (none measured so far).
 	{
@@ -957,7 +996,8 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 		AimYaw = 0.f;
 	}
 	FAimOffsetState State;
-	State.bEnabled = bAimOffset && (bAimOffsetInCover || !bInCover);
+	// Sniper poses: only with the sniper AO wired into the graph (ActiveAimOffset); the rifle AO would bend them wrongly.
+	State.bEnabled = bAimOffset && (bAimOffsetInCover || !bInCover) && (!bSniperPose || bSniperAimOffsetWired);
 	State.bRangedWeapon = Operative.UsesAmmo();
 	State.bWeaponVisible = Operative.WeaponMesh && Operative.WeaponMesh->IsVisible();
 	State.bReloading = bIsReloading;

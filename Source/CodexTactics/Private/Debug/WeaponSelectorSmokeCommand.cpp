@@ -76,9 +76,11 @@ namespace WeaponSelectorSmoke
 		bool bArsenal = true;
 		for (const AOperativeCharacter* Member : Squad->GetMembers())
 		{
-			bArsenal &= Member->AvailableWeapons.Num() == 4 && WeaponId(Member) == TEXT("m16") && Member->ReserveAmmo == 60;
+			// User request 2026-10-09: the Medic-Sapper also carries the sniper rifle (5 weapons).
+			const int32 Expected = Member->SquadRole == EOperativeRole::MedicSapper ? 5 : 4;
+			bArsenal &= Member->AvailableWeapons.Num() == Expected && WeaponId(Member) == TEXT("m16") && Member->ReserveAmmo == 60;
 		}
-		Check(State, bArsenal, TEXT("every operative: 4 weapons, M16 in hands, reserve 60"));
+		Check(State, bArsenal, TEXT("every operative: 4 weapons (the Medic-Sapper 5: + sniper rifle), M16 in hands, reserve 60"));
 
 		Check(State, !Bar->IsWeaponSelectorOpen(), TEXT("selector closed at start"));
 		Bar->ToggleWeaponSelector();

@@ -36,6 +36,8 @@
 #include "Debug/SmokeUtils.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Engine.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -353,6 +355,9 @@ namespace SaveRoundTripSmoke
 		Engineer->CannedFoodCount = 0;
 		Medic->SetStance(EOperativeStance::Prone);
 		Medic->HealthComponent->ApplyDirectHealthLoss(12.f, TEXT("Smoke"));
+		// User request 2026-10-09: her sniper rifle (in hands, 3 rounds left) must survive the round trip.
+		Medic->SwitchToWeaponById(TEXT("sniper_rifle"));
+		Medic->CurrentClip = 3;
 		Squad->SetSquadPosture(ESquadFirePosture::Passive);
 		Engineer->bHasPostureOverride = true;
 		Engineer->PostureOverride = ESquadFirePosture::Defensive;
@@ -544,6 +549,7 @@ namespace SaveRoundTripSmoke
 		Engineer->SetStance(EOperativeStance::Standing);
 		Engineer->bHasPostureOverride = false;
 		Medic->SetStance(EOperativeStance::Standing);
+		Medic->SwitchToWeaponById(TEXT("m16"));
 		Squad->ToggleGuard(Medic);
 		Squad->SetSquadPosture(ESquadFirePosture::Aggressive);
 		if (ALootCrateActor* Crate = FindNamed<ALootCrateActor>(World, State.CrateName))
@@ -613,6 +619,9 @@ namespace SaveRoundTripSmoke
 		ReportDiff(State, State.SnapshotA, SnapshotB, TEXT("in-place load"));
 
 		// Direct checks of the world.
+		Check(State, Medic->IsSniperWeaponEquipped() && Medic->CurrentClip == 3 && Medic->GetMesh()->GetSkeletalMeshAsset()
+			&& Medic->GetMesh()->GetSkeletalMeshAsset()->GetName() == TEXT("SK_Female_soldier"),
+			FString::Printf(TEXT("Medic-Sapper: Female Soldier body, sniper rifle back in hands [%d/%d]"), Medic->CurrentClip, Medic->ReserveAmmo));
 		const ABarrelActor* Barrel = FindNamed<ABarrelActor>(World, State.BarrelName);
 		Check(State, Barrel && Barrel->IsBurning(), TEXT("barrel burns again at its pushed spot"));
 		int32 SquadMines = 0;

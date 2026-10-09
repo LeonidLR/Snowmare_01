@@ -9,14 +9,21 @@
 //   NEW GAME -> pause menu with SAVE enabled, a wave fight -> pause menu with SAVE disabled.
 // "combat": bunker camera zone in real time, an operative hit reaction (clip), the engineer's death cinematic (clip),
 //   the commander's death -> «THE SQUAD HAS FALLEN» (clip + stills).
+// "sniper" (L_MovementTest, 2026-10-09): the Female Soldier Medic-Sapper with the sniper rifle — standing idle, the order while
+//   standing (kneel -> shot -> bolt, clip + still), kneeling fire (clip), prone fire (clip + stills); own camera framed on her.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
 #include "Camera/CameraZoneVolume.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -57,20 +64,22 @@ namespace PhoneShots
 		int32 ClipEvery = 1;
 		int32 ClipFrame = 0;
 		int32 ClipCount = 0;
+		bool bClipShowUI = true;
 		FDelegateHandle Handle;
 	};
 
 	TSharedPtr<FRunner> Runner;
 
-	void Shot(const FString& Name)
+	void Shot(const FString& Name, bool bShowUI = true)
 	{
 		const FString Path = Runner->Dir / (Name + TEXT(".png"));
-		FScreenshotRequest::RequestScreenshot(Path, /*bShowUI*/ true, /*bAddFilenameSuffix*/ false);
+		FScreenshotRequest::RequestScreenshot(Path, bShowUI, /*bAddFilenameSuffix*/ false);
 		UE_LOG(LogCodexTactics, Display, TEXT("PhoneShots: still %s"), *Path);
 	}
 
-	void StartClip(const FString& Name, int32 Every)
+	void StartClip(const FString& Name, int32 Every, bool bShowUI = true)
 	{
+		Runner->bClipShowUI = bShowUI;
 		Runner->ClipName = Name;
 		Runner->ClipEvery = FMath::Max(1, Every);
 		Runner->ClipFrame = 0;
@@ -97,7 +106,7 @@ namespace PhoneShots
 		++R.Frame;
 		if (!R.ClipName.IsEmpty() && (R.ClipFrame++ % R.ClipEvery) == 0)
 		{
-			FScreenshotRequest::RequestScreenshot(R.Dir / TEXT("frames") / R.ClipName / FString::Printf(TEXT("f_%04d.png"), R.ClipCount++), true, false);
+			FScreenshotRequest::RequestScreenshot(R.Dir / TEXT("frames") / R.ClipName / FString::Printf(TEXT("f_%04d.png"), R.ClipCount++), R.bClipShowUI, false);
 		}
 		if (R.Frame > 30 * 240)
 		{
@@ -393,6 +402,165 @@ namespace PhoneShots
 		S.Add([](UWorld* World) { StopClip(); return 5; });
 	}
 
+	// --- "sniper" (user request 2026-10-09): the Female Soldier Medic-Sapper with the sniper rifle. A dedicated camera is placed
+	// relative to HER (not at map coordinates: L_MovementTest's layout changes), looking at her mesh bounds. ---
+
+	struct FSniperShots
+	{
+		TWeakObjectPtr<AOperativeCharacter> Medic;
+		TWeakObjectPtr<AEnemyCharacter> Target;
+		TWeakObjectPtr<ACameraActor> Camera;
+		int32 ShotsSeen = 0;
+	};
+	TSharedPtr<FSniperShots> Sniper;
+
+	/** The review camera: Side cm to her right, Front cm ahead, Height above her mesh centre, looking at the mesh centre. */
+	void FrameMedic(UWorld* World, float Front, float Side, float Height)
+	{
+		AOperativeCharacter* Medic = Sniper->Medic.Get();
+		APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+		if (!Medic || !PC)
+		{
+			return;
+		}
+		if (!Sniper->Camera.IsValid())
+		{
+			Sniper->Camera = World->SpawnActor<ACameraActor>(Medic->GetActorLocation(), FRotator::ZeroRotator);
+		}
+		ACameraActor* Camera = Sniper->Camera.Get();
+		if (!Camera)
+		{
+			return;
+		}
+		const FVector Centre = Medic->GetMesh()->Bounds.Origin;
+		const FVector Eye = Centre + Medic->GetActorForwardVector() * Front + Medic->GetActorRightVector() * Side + FVector(0.f, 0.f, Height);
+		Camera->SetActorLocationAndRotation(Eye, (Centre - Eye).Rotation());
+		Camera->GetCameraComponent()->SetFieldOfView(50.f);
+		Camera->GetCameraComponent()->bConstrainAspectRatio = false;
+		PC->SetViewTarget(Camera);
+	}
+
+	/** Sniper fire clips the medic's anim started so far (a shot that misfired in the cold plays none). */
+	int32 CountFireClips()
+	{
+		const AOperativeCharacter* Medic = Sniper->Medic.Get();
+		const UOperativeAnimInstance* Anim = Medic ? Cast<UOperativeAnimInstance>(Medic->GetMesh()->GetAnimInstance()) : nullptr;
+		int32 Count = 0;
+		for (const FString& Clip : Anim ? Anim->GetSniperClipLog() : TArray<FString>())
+		{
+			Count += Clip.EndsWith(TEXT("_Fire")) ? 1 : 0;
+		}
+		return Count;
+	}
+
+	/** Runs again every frame until the medic's anim played another sniper fire clip. */
+	int32 WaitForSniperShot(int32 ThenWait)
+	{
+		const int32 Fired = CountFireClips();
+		if (Fired <= Sniper->ShotsSeen)
+		{
+			return -1;
+		}
+		Sniper->ShotsSeen = Fired;
+		return ThenWait;
+	}
+
+	void SetSniperTarget(bool bFire)
+	{
+		AOperativeCharacter* Medic = Sniper->Medic.Get();
+		if (!Medic)
+		{
+			return;
+		}
+		Medic->bTacticalCeaseFire = !bFire;
+		Medic->SetManualPriorityTarget(bFire ? Sniper->Target.Get() : nullptr);
+	}
+
+	void AddSniperSteps(TArray<FStep>& S)
+	{
+		Sniper = MakeShared<FSniperShots>();
+		S.Add([](UWorld* World) { return World->GetSubsystem<USquadSubsystem>() && World->GetSubsystem<USquadSubsystem>()->GetLeader() ? 60 : -1; });
+		S.Add([](UWorld* World)
+		{
+			StartFight(World);
+			SmokeUtils::PlaceSquadAtTestStart(World);
+			USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+			Squad->SetSquadPosture(ESquadFirePosture::Passive);
+			AOperativeCharacter* Medic = Member(World, EOperativeRole::MedicSapper);
+			Sniper->Medic = Medic;
+			if (!Medic)
+			{
+				return 1;
+			}
+			Squad->SetLeader(Medic);
+			Medic->SwitchToWeaponById(TEXT("sniper_rifle"));
+			Medic->ColdLevel = 0.f;
+			// The others step 6 m back (out of the frame); the target 12 m ahead, frozen and unkillable.
+			for (AOperativeCharacter* Each : Squad->GetMembers())
+			{
+				if (Each != Medic)
+				{
+					Each->TeleportTo(SmokeUtils::FreeSpot(World, Medic->GetActorLocation() - Medic->GetActorForwardVector() * 600.f
+						+ Medic->GetActorRightVector() * (Each->SquadRole == EOperativeRole::Commander ? -250.f : 250.f), Each),
+						Each->GetActorRotation(), false, true);
+				}
+			}
+			const FVector From = Medic->GetActorLocation();
+			const FVector Spot = SmokeUtils::ClearPoint(World, From, From + Medic->GetActorForwardVector() * 1200.f);
+			if (AEnemyCharacter* Target = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Brute, Spot + FVector(0.f, 0.f, 20.f)))
+			{
+				Target->GetHealthComponent()->SetMaxHealth(100000.f, true);
+				Target->CustomTimeDilation = 0.f;
+				Sniper->Target = Target;
+				Medic->FaceAimAt(Target->GetActorLocation());
+			}
+			return 20;
+		});
+		// Standing idle with the rifle (HUD on: the weapon line shows the sniper rifle), then a clean frame.
+		S.Add([](UWorld* World) { FrameMedic(World, 330.f, 300.f, -5.f); return 70; });
+		S.Add([](UWorld* World) { Shot(TEXT("10_sniper_stand_idle_hud")); return 3; });
+		S.Add([](UWorld* World)
+		{
+			if (ACodexTacticsHUD* Hud = HudOf(World))
+			{
+				Hud->bShowHUD = false; // clean frames of her from here on (the canvas HUD; bShowUI = false drops the UMG bar)
+			}
+			return 2;
+		});
+		S.Add([](UWorld* World) { Shot(TEXT("10_sniper_stand_idle"), false); return 5; });
+		// Stand -> kneel -> fire (the order while standing): clip + a still at the shot.
+		S.Add([](UWorld* World)
+		{
+			StartClip(TEXT("sniper_stand_kneel_fire"), 1, false);
+			Sniper->ShotsSeen = CountFireClips();
+			SetSniperTarget(true);
+			return 1;
+		});
+		S.Add([](UWorld* World) { return WaitForSniperShot(3); });
+		S.Add([](UWorld* World) { Shot(TEXT("11_sniper_kneel_fire"), false); return 75; }); // the bolt after the shot
+		S.Add([](UWorld* World) { StopClip(); return 2; });
+		// Kneeling fire again (shot + bolt), closer frame.
+		S.Add([](UWorld* World) { FrameMedic(World, 260.f, 230.f, 5.f); StartClip(TEXT("sniper_kneel_fire"), 1, false); return 1; });
+		S.Add([](UWorld* World) { return WaitForSniperShot(70); });
+		S.Add([](UWorld* World) { StopClip(); return 2; });
+		// Prone: down, then prone fire.
+		S.Add([](UWorld* World)
+		{
+			SetSniperTarget(false);
+			if (AOperativeCharacter* Medic = Sniper->Medic.Get())
+			{
+				Medic->SetStance(EOperativeStance::Prone);
+			}
+			StartClip(TEXT("sniper_prone_fire"), 1, false);
+			return 60;
+		});
+		S.Add([](UWorld* World) { FrameMedic(World, 260.f, 200.f, 110.f); Sniper->ShotsSeen = CountFireClips(); SetSniperTarget(true); return 1; });
+		S.Add([](UWorld* World) { return WaitForSniperShot(3); });
+		S.Add([](UWorld* World) { Shot(TEXT("12_sniper_prone_fire"), false); return 90; });
+		S.Add([](UWorld* World) { StopClip(); SetSniperTarget(false); return 20; });
+		S.Add([](UWorld* World) { FrameMedic(World, -60.f, 330.f, 90.f); return 5; }); // from the side
+		S.Add([](UWorld* World) { Shot(TEXT("13_sniper_prone_side"), false); return 5; });
+	}
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
@@ -403,6 +571,10 @@ namespace PhoneShots
 		if (Mode == TEXT("combat"))
 		{
 			AddCombatSteps(Runner->Steps);
+		}
+		else if (Mode == TEXT("sniper"))
+		{
+			AddSniperSteps(Runner->Steps);
 		}
 		else
 		{

@@ -47,6 +47,15 @@ public:
 		float MaxSpeed, FString& OutReport);
 
 	/**
+	 * Fills a 2D aim offset like AO_Rifle_Aim (axis 0 "Yaw" -YawRange..YawRange, axis 1 "Pitch" -PitchRange..PitchRange): Center
+	 * at (0, 0), Left at (-SampleYaw, 0), Right at (+SampleYaw, 0), Up at (0, +SamplePitch), Down at (0, -SamplePitch). The
+	 * samples must already be additive (mesh-space rotation offsets). Existing samples are replaced. Sniper set, 2026-10-09.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static bool FillAimOffset2D(UBlendSpace* AimOffset, UAnimSequence* Center, UAnimSequence* Left, UAnimSequence* Right,
+		UAnimSequence* Up, UAnimSequence* Down, float YawRange, float PitchRange, float SampleYaw, float SamplePitch, FString& OutReport);
+
+	/**
 	 * Replaces the AnimGraph of an enemy AnimBlueprint (parent UEnemyAnimInstance) and compiles it:
 	 * idle / walk / run sequence players reading IdleAnimation / WalkAnimation / RunAnimation (set per enemy on the
 	 * class defaults) with WalkPlayRate / RunPlayRate, switched by bIsRunning and bIsMoving, then a full-body Slot

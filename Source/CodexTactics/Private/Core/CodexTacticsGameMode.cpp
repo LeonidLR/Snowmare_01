@@ -20,6 +20,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Core/CodexTacticsGameState.h"
 #include "Core/CodexTacticsPlayerController.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
@@ -73,6 +74,9 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 		{ LOCTEXT("Commander", "Commander"), FLinearColor::FromSRGBColor(FColor(0x20, 0x80, 0xEC)), FVector(0.f, 0.f, 0.f), 15.f, EOperativeRole::Commander, 25.f, 90.f },
 		{ LOCTEXT("Engineer", "Engineer"), FLinearColor::FromSRGBColor(FColor(0xFF, 0x61, 0x0F)), FVector(-280.f, -260.f, 0.f), 25.f, EOperativeRole::Engineer, 30.f, 75.f },
 		{ LOCTEXT("Medic", "Medic-Sapper"), FLinearColor::FromSRGBColor(FColor(0x1F, 0xB3, 0x33)), FVector(-280.f, 260.f, 0.f), 20.f, EOperativeRole::MedicSapper, 35.f, 85.f } };
+	// User request 2026-10-09: the Medic-Sapper is the Female Soldier (same ABP_Operative) and also carries the sniper rifle.
+	SquadRoster[2].BodyMesh = TSoftObjectPtr<USkeletalMesh>(FSoftObjectPath(TEXT("/Game/Female_Soldier/Mesh/SK_Female_soldier.SK_Female_soldier")));
+	SquadRoster[2].ExtraWeapons.Add(TSoftObjectPtr<UWeaponDataAsset>(FSoftObjectPath(TEXT("/Game/Data/Weapons/DA_Weapon_sniper_rifle.DA_Weapon_sniper_rifle"))));
 	RecruitSusanin = { LOCTEXT("Susanin", "Ivan Susanin"), FLinearColor(0.95f, 0.28f, 0.72f), FVector::ZeroVector, 20.f, EOperativeRole::Recruit, 45.f, 70.f };
 }
 
@@ -201,6 +205,10 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 			OperativeBalance::Apply(*Config, *Operative);
 		}
 		WeaponTuning::ApplyGrenades(*Operative);
+		if (!Entry.BodyMesh.IsNull())
+		{
+			Operative->ApplyBodyMeshOverride(Entry.BodyMesh.LoadSynchronous());
+		}
 		UGameplayStatics::FinishSpawningActor(Operative, FTransform(Facing, Location));
 		TArray<UWeaponDataAsset*> Arsenal;
 		for (const TSoftObjectPtr<UWeaponDataAsset>& Weapon : StartingArsenal)
@@ -211,6 +219,10 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 			}
 		}
 		Operative->InitArsenal(Arsenal, StartingReserveAmmo); // full clips, M16 in hands
+		for (const TSoftObjectPtr<UWeaponDataAsset>& Extra : Entry.ExtraWeapons)
+		{
+			Operative->AddArsenalWeapon(Extra.LoadSynchronous()); // reserve = the weapon's DefaultReserveAmmo (weapons_tuning.json)
+		}
 		Operative->ApplyBodyColor();
 		return Operative;
 	}

@@ -684,6 +684,65 @@ bool UOperativeAnimGraphLibrary::FillDirectionalBlendSpace(UBlendSpace* BlendSpa
 	return true;
 }
 
+bool UOperativeAnimGraphLibrary::FillAimOffset2D(UBlendSpace* AimOffset, UAnimSequence* Center, UAnimSequence* Left, UAnimSequence* Right,
+	UAnimSequence* Up, UAnimSequence* Down, float YawRange, float PitchRange, float SampleYaw, float SamplePitch, FString& OutReport)
+{
+	OutReport.Reset();
+	if (!AimOffset || !Center || YawRange <= 0.f || PitchRange <= 0.f)
+	{
+		OutReport = TEXT("missing aim offset / centre pose or empty range");
+		return false;
+	}
+	AimOffset->Modify();
+	if (const FStructProperty* Property = CastField<FStructProperty>(UBlendSpace::StaticClass()->FindPropertyByName(TEXT("BlendParameters"))))
+	{
+		FBlendParameter* Parameters = Property->ContainerPtrToValuePtr<FBlendParameter>(AimOffset);
+		Parameters[0].DisplayName = TEXT("Yaw");
+		Parameters[0].Min = -YawRange;
+		Parameters[0].Max = YawRange;
+		Parameters[0].GridNum = 4;
+		Parameters[1].DisplayName = TEXT("Pitch");
+		Parameters[1].Min = -PitchRange;
+		Parameters[1].Max = PitchRange;
+		Parameters[1].GridNum = 4;
+	}
+	else
+	{
+		OutReport = TEXT("BlendParameters not found");
+		return false;
+	}
+	while (AimOffset->GetNumberOfBlendSamples() > 0)
+	{
+		AimOffset->DeleteSample(AimOffset->GetNumberOfBlendSamples() - 1);
+	}
+	const float Yaw = FMath::Clamp(SampleYaw, 1.f, YawRange);
+	const float Pitch = FMath::Clamp(SamplePitch, 1.f, PitchRange);
+	AimOffset->AddSample(Center, FVector(0.f, 0.f, 0.f));
+	if (Left)
+	{
+		AimOffset->AddSample(Left, FVector(-Yaw, 0.f, 0.f));
+	}
+	if (Right)
+	{
+		AimOffset->AddSample(Right, FVector(Yaw, 0.f, 0.f));
+	}
+	if (Up)
+	{
+		AimOffset->AddSample(Up, FVector(0.f, Pitch, 0.f));
+	}
+	if (Down)
+	{
+		AimOffset->AddSample(Down, FVector(0.f, -Pitch, 0.f));
+	}
+	AimOffset->ValidateSampleData();
+	AimOffset->ResampleData();
+	AimOffset->PostEditChange();
+	AimOffset->MarkPackageDirty();
+	OutReport = FString::Printf(TEXT("%s: %d samples, yaw +-%.0f (range %.0f), pitch +-%.0f (range %.0f)"), *AimOffset->GetName(),
+		AimOffset->GetNumberOfBlendSamples(), Yaw, YawRange, Pitch, PitchRange);
+	return true;
+}
+
 bool UOperativeAnimGraphLibrary::SetMontageSlot(UAnimMontage* Montage, FName SlotName)
 {
 	if (!Montage || SlotName.IsNone() || Montage->SlotAnimTracks.IsEmpty())

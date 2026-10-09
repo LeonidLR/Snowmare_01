@@ -156,6 +156,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|TurnBased")
 	bool IsAttackMode() const { return bAttackMode; }
 
+	/**
+	 * AP an attack of the active operative costs now: AttackAPCost, plus StanceAPCost for a sniper rifle while standing (she
+	 * kneels first; SniperRules, user request 2026-10-09).
+	 */
+	int32 GetActiveAttackCost() const;
+
 	/** Godot enter_attack_mode: "🎯 Aim mode: <weapon>". */
 	void EnterAttackMode();
 
