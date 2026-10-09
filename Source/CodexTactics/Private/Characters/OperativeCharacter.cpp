@@ -2442,12 +2442,31 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	// Godot _face_movement_target / _safe_look_at: otherwise the body turns to the (smoothed) movement above 0.35 m/s
 	// with lerp_angle(turn_speed of the stance) and holds still below it — no trembling while braking at the goal.
 	SmoothedVelocity = FacingRules::SmoothVelocity(SmoothedVelocity, GetVelocity(), DeltaTime);
+	// Turn-based: the grid owns the facing (a shot's FaceAimAt, a step's direction). The parked-follower idle facing from real
+	// time used to pull the body back to the leader's old yaw right after every grid shot (user report 2026-10-09).
+	const UTurnBasedCombatSubsystem* FacingTurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	const bool bGridOwnsFacing = FacingTurnBased && FacingTurnBased->IsActive();
+	if (bGridOwnsFacing)
+	{
+		ClearIdleFacing();
+	}
+	bool bFacingWall = false;
+	// Running into cover (user report 2026-10-09: two pops on entry): the last metres turn the body to face the wall, the
+	// pose the enter clip starts in (UpdateCoverEntryBlend takes out what is left of the turn).
+	if (!bFacingCombatTarget && bHasPendingCover && !bInCover && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f
+		&& FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation) < CoverApproachFaceWallCm
+		&& FVector::DotProduct(SmoothedVelocity.GetSafeNormal2D(), -PendingCoverSlot.WallNormal.GetSafeNormal2D()) >= 0.5f)
+	{
+		const float WallYaw = (-PendingCoverSlot.WallNormal).Rotation().Yaw;
+		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, WallYaw, 2.f * OperativeMovementRules::GetTurnRate(MovementConfig, Stance) / 57.2958f, DeltaTime), 0.f));
+		bFacingWall = true; // the movement facing below stays out of it this frame
+	}
 	const float TurnSpeed = OperativeMovementRules::GetTurnRate(MovementConfig, Stance) / 57.2958f; // stored as deg/s, Godot rad/s
-	if (!bFacingCombatTarget && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f)
+	if (!bFacingCombatTarget && !bFacingWall && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f)
 	{
 		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, SmoothedVelocity.Rotation().Yaw, TurnSpeed, DeltaTime), 0.f));
 	}
-	else if (!bFacingCombatTarget && bHasIdleFacing && GetVelocity().SizeSquared2D() < 10.f * 10.f)
+	else if (!bFacingCombatTarget && bHasIdleFacing && GetVelocity().SizeSquared2D() < 10.f * 10.f && !bGridOwnsFacing)
 	{
 		// Every frame (it used to step only with the formation repath, every 0.2 s, and looked jerky).
 		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, IdleFacingYaw, TurnSpeed, DeltaTime), 0.f));
@@ -2665,7 +2684,7 @@ void AOperativeCharacter::SetManualPriorityTarget(AActor* Enemy)
 		return;
 	}
 	ManualPriorityTarget = Enemy;
-	if (Enemy)
+	if (Enemy && !bInCover) // in cover the body stays along the wall (user report 2026-10-09: the order snapped her round, then back)
 	{
 		const FVector Direction = (Enemy->GetActorLocation() - GetActorLocation()).GetSafeNormal2D();
 		if (!Direction.IsNearlyZero())
@@ -3152,7 +3171,22 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	UpdateCoverFacing(/*bAllowSnap*/ false);
 	if (!bSameWall)
 	{
+		// The actor turns its back to the wall at once (user report 2026-10-09: pops on entry). With an enter clip the clip's
+		// first frame faces the wall - the pose he arrives in (the approach turns him to the wall, UpdateCombatFacing) - and the
+		// anim blends it in fast when the turn is large (GetCoverEntryTurnDeg). Without one the body's old yaw is drawn back on
+		// the mesh and eased out (UpdateCoverEntryBlend).
+		const float OldYaw = GetActorRotation().Yaw;
 		SetActorRotation(FRotator(0.f, GetCoverFacingYaw(), 0.f));
+		CoverEntryTurnDeg = FMath::Abs(FRotator::NormalizeAxis(OldYaw - GetActorRotation().Yaw));
+		const UOperativeAnimInstance* EntryAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+		const auto HasClip = [](const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) { return Clips.ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; }); };
+		const bool bEnterClip = EntryAnim && EntryAnim->bUseNativeCoverClips && (HasClip(EntryAnim->CoverStandEnter) || HasClip(EntryAnim->CoverCrouchEnter));
+		CoverEntryYawOffset = FRotator::NormalizeAxis(OldYaw - GetActorRotation().Yaw);
+		CoverEntryYawTime = bQuietCoverEntry || bEnterClip ? -1.f : 0.f;
+		bBodyYawFree = false;
+		// With an enter clip and a big turn the clip comes in at once (CoverEnterTurnedBlendSeconds), one anim update later:
+		// until it plays, the old pose keeps its old yaw on the mesh (no frame of the run pose turned round).
+		bCoverEntryAwaitClip = bEnterClip && !bQuietCoverEntry && CoverEntryTurnDeg > 90.f;
 	}
 	ClearIdleFacing();
 	if (!bSameWall)
@@ -3669,6 +3703,38 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 		const FVector Tangent = CoverSlot.RightTangent();
 		Wanted -= Tangent * FVector::DotProduct(RootWorldOffset, Tangent);
 	}
+	// The body's yaw on entry: (1 - enter clip weight) of the turn the actor made at once is drawn back on the mesh.
+	float WantedYaw = 0.f;
+	if (bCoverEntryAwaitClip)
+	{
+		const UOperativeAnimInstance* AwaitAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+		if (bInCover && AwaitAnim && AwaitAnim->GetCoverEnterBlendWeight() < 0.5f)
+		{
+			WantedYaw = CoverEntryYawOffset;
+		}
+		else
+		{
+			bCoverEntryAwaitClip = false;
+		}
+	}
+	if (CoverEntryYawTime >= 0.f)
+	{
+		CoverEntryYawTime += DeltaTime;
+		const float W = FMath::Clamp(CoverEntryYawTime / FMath::Max(CoverEntryYawBlendSeconds, 0.05f), 0.f, 1.f);
+		const bool bKeep = bInCover || bBodyYawFree;
+		WantedYaw = bKeep ? CoverEntryYawOffset * (1.f - FMath::SmoothStep(0.f, 1.f, W)) : 0.f;
+		if (!bKeep || W >= 1.f || CoverEntryYawTime > 2.f)
+		{
+			CoverEntryYawTime = -1.f;
+			bBodyYawFree = false;
+			WantedYaw = 0.f;
+		}
+	}
+	if (!FMath::IsNearlyEqual(WantedYaw, CoverEntryAppliedYaw, 0.01f) && GetMesh())
+	{
+		GetMesh()->AddRelativeRotation(FRotator(0.f, WantedYaw - CoverEntryAppliedYaw, 0.f));
+		CoverEntryAppliedYaw = WantedYaw;
+	}
 	// Additive on the mesh's relative location (crouch / other systems move it too), tracked in the actor's local frame
 	// so a turn during the blend never leaves a residue.
 	const FVector WantedLocal = Wanted.IsNearlyZero(0.01) ? FVector::ZeroVector : GetActorRotation().UnrotateVector(Wanted);
@@ -3984,6 +4050,10 @@ float AOperativeCharacter::GetShotAimResidualDeg(const FVector& TargetLocation) 
 {
 	// The real barrel when the rifle is out and level (the pose as animated, the 2D aim offset's twist included): the shot
 	// goes where the rifle points (user rule 2026-10-07). Else the stance rule (the pose's aim direction + the twist).
+	if (bCoverEntryAwaitClip || CoverEntryYawTime >= 0.f)
+	{
+		return 180.f; // the body is still turning after an instant actor turn (the mesh holds the old yaw): not aimed yet
+	}
 	if (IsSniperWeaponEquipped() && !bInCover)
 	{
 		// The sniper clips aim along the body's forward (the M16 stand-in model is held at the pack rifle's angle only
@@ -4009,6 +4079,7 @@ float AOperativeCharacter::GetShotAimResidualDeg(const FVector& TargetLocation) 
 void AOperativeCharacter::FaceAimAt(const FVector& TargetLocation)
 {
 	const FVector Delta = TargetLocation - GetActorLocation();
+	ClearIdleFacing(); // an aimed facing is not undone by the parked-follower facing
 	if (!Delta.IsNearlyZero())
 	{
 		SetActorRotation(FRotator(0.f, Delta.Rotation().Yaw - BarrelYawOffset, 0.f));
@@ -4107,4 +4178,16 @@ void AOperativeCharacter::PlayCoverShot(AActor* Target, bool bHit)
 	BeginCoverShot();
 	(bIsBlindFiring ? CoverBlindShots : CoverLeanShots) += 1;
 	OnWeaponFiredNative.Broadcast(this, Target, bHit); // the AnimInstance plays the cover fire clip
+}
+
+void AOperativeCharacter::StartBodyYawBlend(float OldYaw)
+{
+	// The actor turned at once (a turn-based shot's FaceAimAt): the body keeps OldYaw and turns over CoverEntryYawBlendSeconds.
+	if (bInCover || !GetMesh())
+	{
+		return;
+	}
+	CoverEntryYawOffset = FRotator::NormalizeAxis(OldYaw - GetActorRotation().Yaw + CoverEntryAppliedYaw);
+	CoverEntryYawTime = FMath::Abs(CoverEntryYawOffset) > 1.f ? 0.f : -1.f;
+	bBodyYawFree = CoverEntryYawTime >= 0.f;
 }

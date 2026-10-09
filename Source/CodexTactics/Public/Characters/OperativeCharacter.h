@@ -609,6 +609,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Sniper", meta = (ClampMin = "0"))
 	float SniperPendingShotSeconds = 6.f;
 
+	/** After kneeling for a shot the shot waits at least this long (in cover the kneel is a cross-blend, not a stance clip), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Sniper", meta = (ClampMin = "0"))
+	float SniperKneelSettleSeconds = 0.45f;
+
+	/**
+	 * The actor just turned at once from OldYaw (a turn-based shot turns him to the target): the body follows smoothly over
+	 * CoverEntryYawBlendSeconds instead of snapping (user report 2026-10-09). Not in cover.
+	 */
+	void StartBodyYawBlend(float OldYaw);
+
+	/** How far the actor turned when it entered the current cover (its back to the wall), deg (the anim blends a big turn in fast). */
+	float GetCoverEntryTurnDeg() const { return CoverEntryTurnDeg; }
+
 	/** Holding her spot for a direct sniper order (FollowTo refused). */
 	bool IsHoldingForSniperShot() const;
 
@@ -847,6 +860,14 @@ public:
 	/** The last known threat (priority target / nearest visible / heard enemy) the facing follows. */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover")
 	FVector CoverThreatLocation = FVector::ZeroVector;
+
+	/** Running into cover: within this distance of the slot the body turns to face the wall (the enter clip's start pose), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverApproachFaceWallCm = 300.f;
+
+	/** Cover entry without an enter clip weight to follow: the body's turn along the wall blends over this long, s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.05"))
+	float CoverEntryYawBlendSeconds = 0.3f;
 
 	/** How long the fire-ready corner pose is held after the last threat sighting / ordered target / shot, s (FCoverFacingConfig). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
@@ -1423,6 +1444,15 @@ private:
 	FVector CoverEntryGlide = FVector::ZeroVector;
 	float CoverEntryBlendTime = -1.f;
 	FVector CoverEntryAppliedOffset = FVector::ZeroVector;
+	/** Cover entry: the actor's instant turn along the wall, drawn back on the mesh while the enter clip blends in (deg). */
+	float CoverEntryYawOffset = 0.f;
+	float CoverEntryYawTime = -1.f;
+	float CoverEntryAppliedYaw = 0.f;
+	float CoverEntryTurnDeg = 0.f;
+	/** The body-yaw blend runs outside cover (StartBodyYawBlend). */
+	bool bBodyYawFree = false;
+	/** Entered with a big turn: the old yaw is held on the mesh until the enter clip plays (one anim update). */
+	bool bCoverEntryAwaitClip = false;
 	/** Enters the pending cover early when running in (the enter clip overlaps the last steps). */
 	void TryEnterCoverFromRun();
 	/** Moves the mesh so the body stays continuous while the enter clip blends in (V = (1 - w) C + glide). */
@@ -1505,6 +1535,8 @@ private:
 	TWeakObjectPtr<AActor> SniperPendingObject;
 	float SniperPendingTimer = 0.f;
 	double SniperHoldUntil = -1.0;
+	/** When she last knelt for a shot (the shot waits SniperKneelSettleSeconds after it). */
+	double SniperKneelTime = -100.0;
 	/** The last kneel / stop feed line (one per order, not per frame). */
 	double SniperLastPrepLineTime = -100.0;
 	int32 SniperKneels = 0;

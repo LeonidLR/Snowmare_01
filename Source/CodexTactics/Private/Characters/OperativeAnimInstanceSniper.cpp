@@ -29,6 +29,7 @@ UAnimMontage* UOperativeAnimInstance::PlaySniperOneShot(UAnimSequenceBase* Clip,
 	}
 	UAnimMontage* Montage = PlayCoverMontage(Clip, FAlphaBlendArgs(BlendIn), BlendOut, PlayRate);
 	SniperOneShotMontage = Montage;
+	SniperOneShotBlendOut = BlendOut;
 	SniperLoopMontage.Reset(); // faded out by PlayCoverMontage; the loop restarts after the one-shot
 	SniperLoopClip.Reset();
 	bSniperBoltPlaying = false;
@@ -72,7 +73,7 @@ void UOperativeAnimInstance::PlaySniperShot(bool bCycleBolt)
 	}
 	const EOperativeStance Now = Operative ? Operative->GetStance() : Stance;
 	// Kneeling down / a stance change not seen by the anim yet (turn-based: kneel + shot in one click): the shot follows it.
-	if (IsPlayingStanceTransition() || Now != PreviousStance.Get(Now))
+	if ((IsPlayingStanceTransition() && GetStanceTransitionTimeLeft() > SniperHandoffMarginSeconds) || Now != PreviousStance.Get(Now))
 	{
 		bSniperFireQueued = true;
 		bSniperQueuedFireBolt = bCycleBolt;
@@ -123,6 +124,17 @@ void UOperativeAnimInstance::UpdateSniperLayer(const AOperativeCharacter& Operat
 		&& !Operative.bCarrying && bStill && !IsThrowingGrenade();
 	const UAnimMontage* OneShot = SniperOneShotMontage.Get();
 	const bool bOneShotPlaying = OneShot && Montage_IsPlaying(OneShot);
+	// User report 2026-10-09 (she rose between the shots): the next clip takes over BEFORE the one-shot starts its own
+	// blend-out (PlayCoverMontage fades the old one over 2 x blend-in + 0.05 s, so the FullBody slot stays fully covered);
+	// waiting for the end let the slot dip and the graph's crouch locomotion (pelvis ~57 cm vs the kneel's 41-44) show through.
+	bool bOneShotHolding = bOneShotPlaying;
+	if (bOneShotPlaying)
+	{
+		const float Rate = FMath::Max(FMath::Abs(Montage_GetPlayRate(OneShot)), 0.01f);
+		const float Left = (OneShot->GetPlayLength() - Montage_GetPosition(OneShot)) / Rate;
+		bOneShotHolding = Left > SniperOneShotBlendOut + SniperHandoffMarginSeconds;
+	}
+	const bool bTransitionHolding = IsPlayingStanceTransition() && GetStanceTransitionTimeLeft() > SniperHandoffMarginSeconds;
 	if (bSniperTransitionPlaying && !IsPlayingStanceTransition())
 	{
 		bSniperTransitionPlaying = false;
@@ -168,7 +180,7 @@ void UOperativeAnimInstance::UpdateSniperLayer(const AOperativeCharacter& Operat
 	}
 
 	// A stance change this frame: UpdateStanceTransition (after this layer) decides the kneel / rise clip first.
-	if (IsPlayingStanceTransition() || bOneShotPlaying || (PreviousStance.IsSet() && PreviousStance.GetValue() != Stance))
+	if (bTransitionHolding || bOneShotHolding || (PreviousStance.IsSet() && PreviousStance.GetValue() != Stance))
 	{
 		bSniperWasPosed = true;
 		return; // the kneel / rise clip or a shot / bolt / reload / hit plays; the loop comes after it

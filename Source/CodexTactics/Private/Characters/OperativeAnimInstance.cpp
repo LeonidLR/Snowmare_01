@@ -1285,14 +1285,17 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 			{
 				// User-found bug 2026-10-07 (run -> hard stop -> enter clip): no stop between them, an eased blend over the
 				// last steps (the capsule is already at the slot; the mesh offset carries the body from where it ran).
-				FAlphaBlendArgs BlendIn(FMath::Max(CoverEnterFromRunBlendSeconds, 0.f));
-				BlendIn.BlendOption = EAlphaBlendOption::HermiteCubic;
+				// The actor turned its back to the wall on entry (~180 deg): the run pose would show turned round under a slow
+				// blend (user report 2026-10-09) - the clip's first frame is the arrival pose, so it comes in fast then.
+				const bool bBigTurn = Operative.GetCoverEntryTurnDeg() > 90.f;
+				FAlphaBlendArgs BlendIn(bBigTurn ? FMath::Min(CoverEnterFromRunBlendSeconds, CoverEnterTurnedBlendSeconds) : FMath::Max(CoverEnterFromRunBlendSeconds, 0.f));
+				BlendIn.BlendOption = bBigTurn ? EAlphaBlendOption::Linear : EAlphaBlendOption::HermiteCubic;
 				FAlphaBlendArgs BlendOut(0.2f);
 				CoverOneShotMontage = PlayCoverMontage(Enter, BlendIn, BlendOut.BlendTime);
 			}
 			else
 			{
-				CoverOneShotMontage = PlayCoverMontage(Enter, FAlphaBlendArgs(0.15f), 0.2f);
+				CoverOneShotMontage = PlayCoverMontage(Enter, FAlphaBlendArgs(Operative.GetCoverEntryTurnDeg() > 90.f ? FMath::Min(0.15f, CoverEnterTurnedBlendSeconds) : 0.15f), 0.2f);
 			}
 			CoverClipsPlayed += CoverOneShotMontage.IsValid() ? 1 : 0;
 			CoverOneShotBlendOut = 0.2f;
