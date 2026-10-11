@@ -39,6 +39,11 @@ bool MissionRules::ShouldSkipIntro(bool bHeadlessCommandLine, bool bFrontendStar
 	return bPendingLoad || (bHeadlessCommandLine && !bFrontendStart && !bQuickRestart);
 }
 
+bool MissionRules::ShouldOpenIntroDialogue(bool bHeadlessStart, bool bDemoLevel, bool bDemoIntroDialogue)
+{
+	return !bHeadlessStart && (!bDemoLevel || bDemoIntroDialogue);
+}
+
 bool MissionRules::GetPhaseObjective(ECodexGamePhase Phase, int32 WaveIndex, float PreparationSeconds, bool bAfterCombat, FText& OutObjective)
 {
 	switch (Phase)

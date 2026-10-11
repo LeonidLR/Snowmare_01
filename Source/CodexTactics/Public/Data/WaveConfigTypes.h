@@ -194,6 +194,14 @@ struct CODEXTACTICS_API FDemoModeSettings
 	/** "hud": "demo" hides the debug squad panel and the labels above operatives (ACodexTacticsHUD::bDemoHudPreset). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
 	bool bDemoHud = false;
+
+	/**
+	 * "intro_dialogue": false skips the blocking mission-start briefing window (no window, no pause; the tutorial's A0
+	 * walk-and-talk carries its content). Default true = classic behaviour; with a "demo" object and no key the parser
+	 * sets false (user decision 2026-10-11).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bIntroDialogue = true;
 };
 
 USTRUCT(BlueprintType)

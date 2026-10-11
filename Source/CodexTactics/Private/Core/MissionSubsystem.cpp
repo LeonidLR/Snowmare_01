@@ -7,6 +7,7 @@
 #include "Misc/CommandLine.h"
 #include "CodexTactics.h"
 #include "Combat/WaveSubsystem.h"
+#include "Data/WaveConfigTypes.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Core/MissionRules.h"
 #include "Core/LoadoutRules.h"
@@ -85,10 +86,19 @@ void UMissionSubsystem::StartMission(EMissionStartMode Mode)
 	SetObjective(MissionRules::GetModeObjective(Mode));
 	// Godot: the intro briefing in the bottom dialogue window, the radio line only without it.
 	UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>();
-	const UDialogueSequenceAsset* Intro = bHeadlessStart ? nullptr : LoadDialogue(&ACodexTacticsGameMode::DialogueMissionStart);
+	// Demo level with "intro_dialogue": false: no window and no radio line (the tutorial's A0 walk-and-talk carries the briefing).
+	ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
+	const ULevelConfigAsset* Level = GameMode ? GameMode->PeekLevelConfig() : nullptr;
+	const bool bDemoLevel = Level && Level->Config.Demo.bDemo;
+	const bool bDemoIntroOff = !MissionRules::ShouldOpenIntroDialogue(false, bDemoLevel, bDemoLevel && Level->Config.Demo.bIntroDialogue);
+	const UDialogueSequenceAsset* Intro = bHeadlessStart || bDemoIntroOff ? nullptr : LoadDialogue(&ACodexTacticsGameMode::DialogueMissionStart);
 	if (Intro && Dialogue)
 	{
 		Dialogue->StartDialogue(Intro);
+	}
+	else if (bDemoIntroOff)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Mission start: the intro briefing is off on this demo level"));
 	}
 	else
 	{

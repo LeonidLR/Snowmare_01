@@ -1,5 +1,6 @@
 #include "Misc/AutomationTest.h"
 #include "Core/PlayerCommands.h"
+#include "Core/MissionRules.h"
 #include "Data/LevelJsonRules.h"
 #include "Data/NarrativeManifest.h"
 #include "Dom/JsonObject.h"
@@ -350,7 +351,17 @@ bool FTutorialTextAndDemoFlagsTest::RunTest(const FString&)
 	TestTrue(TEXT("tutorial"), Level.Demo.bTutorial);
 	TestEqual(TEXT("default steps file"), Level.Demo.TutorialSteps, FString(TEXT("demo_01_steps.json")));
 	TestTrue(TEXT("demo HUD"), Level.Demo.bDemoHud);
+	TestFalse(TEXT("demo object without the key: no intro briefing"), Level.Demo.bIntroDialogue);
+	TestTrue(TEXT("intro_dialogue true"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"d","demo":{"intro_dialogue":true}})"), TEXT("d"), Level, Error));
+	TestTrue(TEXT("intro kept"), Level.Demo.bIntroDialogue);
+	TestTrue(TEXT("intro_dialogue false"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"d","demo":{"intro_dialogue":false}})"), TEXT("d"), Level, Error));
+	TestFalse(TEXT("intro off"), Level.Demo.bIntroDialogue);
 	TestTrue(TEXT("level without demo"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"n"})"), TEXT("n"), Level, Error));
+	TestTrue(TEXT("normal level keeps the intro"), Level.Demo.bIntroDialogue);
+	TestTrue(TEXT("intro opens: normal level"), MissionRules::ShouldOpenIntroDialogue(false, false, true));
+	TestTrue(TEXT("intro opens: demo with intro_dialogue true"), MissionRules::ShouldOpenIntroDialogue(false, true, true));
+	TestFalse(TEXT("no intro: demo with intro_dialogue false"), MissionRules::ShouldOpenIntroDialogue(false, true, false));
+	TestFalse(TEXT("no intro: headless start"), MissionRules::ShouldOpenIntroDialogue(true, false, true));
 	TestFalse(TEXT("normal game"), Level.Demo.bDemo || Level.Demo.bTutorial || Level.Demo.bOverrideVisionCones || !Level.Demo.bPanicEnabled);
 	return true;
 }

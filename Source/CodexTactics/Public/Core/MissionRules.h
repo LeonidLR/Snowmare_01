@@ -37,6 +37,12 @@ namespace MissionRules
 	CODEXTACTICS_API bool ShouldSkipIntro(bool bHeadlessCommandLine, bool bFrontendStart, bool bQuickRestart, bool bPendingLoad);
 
 	/**
+	 * Whether the mission-start briefing window opens: not on a headless start, and not on a demo level whose "demo"
+	 * object sets "intro_dialogue": false (bDemoLevel = the level JSON has a "demo" object).
+	 */
+	CODEXTACTICS_API bool ShouldOpenIntroDialogue(bool bHeadlessStart, bool bDemoLevel, bool bDemoIntroDialogue);
+
+	/**
 	 * Objective for a game phase change, false when the phase keeps the current objective.
 	 * WaveIndex = the flow's wave number (1 = first wave); PreparationSeconds = time left in the preparation.
 	 * bAfterCombat: exploration entered after the defence (victory).

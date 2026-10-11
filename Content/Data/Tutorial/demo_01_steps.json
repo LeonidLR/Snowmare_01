@@ -20,6 +20,9 @@
       "id": "A0_walk_talk", "beat": "A0", "kind": "walk_talk",
       "trigger": { "type": "beat_start", "delay_s": 1.5 },
       "lines": [
+        { "speaker": "HQ", "text_id": "WT_A0_BRIEFING_1" },
+        { "speaker": "Commander", "text_id": "WT_A0_BRIEFING_2" },
+        { "speaker": "HQ", "text_id": "WT_A0_BRIEFING_3" },
         { "speaker": "HQ", "text_id": "WT_A0_01" },
         { "speaker": "Commander", "text_id": "WT_A0_02" },
         { "speaker": "Medic-Sapper", "text_id": "WT_A0_03" },

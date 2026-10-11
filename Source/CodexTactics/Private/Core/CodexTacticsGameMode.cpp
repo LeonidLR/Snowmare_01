@@ -114,6 +114,15 @@ void ACodexTacticsGameMode::StartPlay()
 	}
 }
 
+const ULevelConfigAsset* ACodexTacticsGameMode::PeekLevelConfig()
+{
+	if (!ActiveLevelConfig)
+	{
+		ActiveLevelConfig = LoadLevelConfig();
+	}
+	return ActiveLevelConfig;
+}
+
 void ACodexTacticsGameMode::ApplyLevelConfig()
 {
 	UWorld* World = GetWorld();
@@ -121,6 +130,23 @@ void ACodexTacticsGameMode::ApplyLevelConfig()
 	{
 		return;
 	}
+	ULevelConfigAsset* Level = LoadLevelConfig();
+	ActiveLevelConfig = Level;
+	if (UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>())
+	{
+		Waves->SetLevelConfig(Level);
+	}
+	if (UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>())
+	{
+		Flow->SetConfig(LevelFlowRules::ApplyLevel(Flow->GetConfig(), Level ? &Level->Config : nullptr,
+			GameBalanceConfig.IsNull() ? nullptr : GameBalanceConfig.LoadSynchronous()));
+		UE_LOG(LogCodexTactics, Log, TEXT("Level config %s: %d waves, preparation %.0f s, rest %.0f s"), *GetNameSafe(Level),
+			Flow->GetConfig().TotalWaves, Flow->GetConfig().PreparationDuration, Flow->GetConfig().WaveRestDuration);
+	}
+}
+
+ULevelConfigAsset* ACodexTacticsGameMode::LoadLevelConfig()
+{
 	// The level JSON (Wave Editor) first, the imported asset as the fallback.
 	ULevelConfigAsset* Level = nullptr;
 	// -LevelJson=<file name or absolute path> replaces the map's level for a run (bot A / B batches on other waves).
@@ -144,18 +170,7 @@ void ACodexTacticsGameMode::ApplyLevelConfig()
 	{
 		Level = LevelConfig.LoadSynchronous();
 	}
-	ActiveLevelConfig = Level;
-	if (UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>())
-	{
-		Waves->SetLevelConfig(Level);
-	}
-	if (UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>())
-	{
-		Flow->SetConfig(LevelFlowRules::ApplyLevel(Flow->GetConfig(), Level ? &Level->Config : nullptr,
-			GameBalanceConfig.IsNull() ? nullptr : GameBalanceConfig.LoadSynchronous()));
-		UE_LOG(LogCodexTactics, Log, TEXT("Level config %s: %d waves, preparation %.0f s, rest %.0f s"), *GetNameSafe(Level),
-			Flow->GetConfig().TotalWaves, Flow->GetConfig().PreparationDuration, Flow->GetConfig().WaveRestDuration);
-	}
+	return Level;
 }
 
 void ACodexTacticsGameMode::SpawnSquad()

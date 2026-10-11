@@ -146,6 +146,12 @@ public:
 	const ULevelConfigAsset* GetActiveLevelConfig() const { return ActiveLevelConfig; }
 
 	/**
+	 * Same as GetActiveLevelConfig, but loads the level data when StartPlay has not applied it yet (world subsystems
+	 * start before the game mode's StartPlay, e.g. the mission start reading the "demo" flags).
+	 */
+	const ULevelConfigAsset* PeekLevelConfig();
+
+	/**
 	 * Enemy Blueprint per type (the art: skeletal mesh + AnimBP). A type without an entry, or whose Blueprint is missing,
 	 * spawns the C++ AEnemyCharacter with the placeholder body. Default: the hound = /Game/Characters/Enemies/Hound/BP_Enemy_Hound.
 	 */
@@ -206,6 +212,9 @@ private:
 
 	/** Hands LevelConfig to the wave subsystem and its durations / wave count to the game flow (before BeginPlay). */
 	void ApplyLevelConfig();
+
+	/** Loads the level data (the level JSON first, the LevelConfig asset as the fallback); nullptr = built-in waves. */
+	ULevelConfigAsset* LoadLevelConfig();
 
 	UPROPERTY(Transient)
 	TObjectPtr<ULevelConfigAsset> ActiveLevelConfig;

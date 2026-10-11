@@ -71,6 +71,8 @@ FDemoModeSettings LevelJsonRules::ParseDemoSettings(const FJsonObject& Demo)
 	FString Text;
 	Settings.TutorialSteps = Demo.TryGetStringField(TEXT("tutorial_steps"), Text) && !Text.IsEmpty() ? Text : FString(TEXT("demo_01_steps.json"));
 	Settings.bDemoHud = Demo.TryGetStringField(TEXT("hud"), Text) && Text.Equals(TEXT("demo"), ESearchCase::IgnoreCase);
+	// A demo level has no blocking briefing window unless it asks for one (the A0 walk-and-talk replaces it).
+	Settings.bIntroDialogue = Demo.TryGetBoolField(TEXT("intro_dialogue"), bValue) && bValue;
 	return Settings;
 }
 
