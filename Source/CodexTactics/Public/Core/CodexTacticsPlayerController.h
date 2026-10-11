@@ -237,8 +237,14 @@ public:
 	/** T / action bar "GUARD" (Godot _on_guard_slot_clicked): the leader holds its spot or rejoins the formation. */
 	void GuardKey();
 
-	/** H / J / K / L and the inventory drawer (Godot use_squad_item): the leader uses a provision, feed line. */
+	/**
+	 * H / J / K / L and the inventory drawer (Godot use_squad_item): the leader uses a provision, feed line. Sprint 15: U / the
+	 * drawer = a heat pack on the leader (UTacticalHeatSubsystem::UseHeatPack; 1 AP in turn-based combat).
+	 */
 	void UseSquadItem(EPersonalItem Item);
+
+	/** Sprint 15: Shift + G / the selector / drawer flare line — the leader's signal flare aim (again: cancel). */
+	void StartFlareAim();
 
 	/**
 	 * Inventory drawer turret / barricade / mine (Godot _start_placement_for_type): selects the type, a squad mate hands
@@ -339,6 +345,7 @@ private:
 	void UseCannedFood() { UseSquadItem(EPersonalItem::CannedFood); }
 	void UseBread() { UseSquadItem(EPersonalItem::Bread); }
 	void UseChocolate() { UseSquadItem(EPersonalItem::Chocolate); }
+	void UseHeatPackKey() { UseSquadItem(EPersonalItem::HeatPack); }
 
 	FSpaceInputTracker SpaceInput;
 

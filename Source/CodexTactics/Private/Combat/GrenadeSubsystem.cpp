@@ -1,4 +1,8 @@
 #include "Combat/GrenadeSubsystem.h"
+#include "Combat/SignalFlareActor.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/TacticalHeatTuning.h"
+#include "CodexTactics.h"
 #include "Components/StaticMeshComponent.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -189,6 +193,7 @@ bool UGrenadeSubsystem::StartAim(AOperativeCharacter* InThrower)
 		return false;
 	}
 	Thrower = InThrower;
+	bFlareAim = false;
 	if (!AimActor)
 	{
 		FActorSpawnParameters Params;
@@ -208,11 +213,12 @@ bool UGrenadeSubsystem::StartAim(AOperativeCharacter* InThrower)
 
 void UGrenadeSubsystem::CancelAim(bool bRevertWeapon)
 {
-	if (bRevertWeapon)
+	if (bRevertWeapon && !bFlareAim)
 	{
 		TakeFirearm(Thrower.Get());
 	}
 	Thrower.Reset();
+	bFlareAim = false;
 	if (AimActor)
 	{
 		AimActor->SetActorHiddenInGame(true);
@@ -228,7 +234,8 @@ FGrenadeAimInfo UGrenadeSubsystem::GetAimInfo(const FVector& CursorPoint) const
 		return Info;
 	}
 	const FVector From = ThrowerActor->GetActorLocation();
-	Info.MaxRange = GrenadeRules::EffectiveRange(ThrowerActor->GrenadeThrowRange > 0.f ? ThrowerActor->GrenadeThrowRange : 1200.f, ThrowerActor->GetStance());
+	Info.MaxRange = bFlareAim ? TacticalHeatRules::GetFlareThrowRange(TacticalHeatTuning::Get(), ThrowerActor->GetStance())
+		: GrenadeRules::EffectiveRange(ThrowerActor->GrenadeThrowRange > 0.f ? ThrowerActor->GrenadeThrowRange : 1200.f, ThrowerActor->GetStance());
 	const float Flat = FVector::Dist2D(From, CursorPoint);
 	Info.bValid = true;
 	Info.Target = GrenadeRules::ClampTarget(From, CursorPoint, Info.MaxRange);
@@ -244,7 +251,7 @@ void UGrenadeSubsystem::UpdateAim(const FVector& CursorPoint)
 	{
 		return;
 	}
-	if (ThrowerActor->GrenadesCount <= 0)
+	if ((bFlareAim ? ThrowerActor->FlaresCount : ThrowerActor->GrenadesCount) <= 0)
 	{
 		CancelAim();
 		return;
@@ -253,7 +260,9 @@ void UGrenadeSubsystem::UpdateAim(const FVector& CursorPoint)
 	if (AimActor && Info.bValid)
 	{
 		const FVector Ground = ThrowerActor->GetActorLocation() - FVector(0.f, 0.f, ThrowerActor->GetSimpleCollisionHalfHeight());
-		AimActor->Show(Ground, Info.MaxRange, Info.Target, ThrowerActor->GrenadeEffectRadius > 0.f ? ThrowerActor->GrenadeEffectRadius : 400.f,
+		const float EffectRadius = bFlareAim ? TacticalHeatTuning::Get().FlareRevealRadius
+			: (ThrowerActor->GrenadeEffectRadius > 0.f ? ThrowerActor->GrenadeEffectRadius : 400.f);
+		AimActor->Show(Ground, Info.MaxRange, Info.Target, EffectRadius,
 			ThrowerActor->GetActorLocation() + FVector(0.f, 0.f, GrenadeRules::HandHeight));
 	}
 }
@@ -270,6 +279,19 @@ AGrenadeActor* UGrenadeSubsystem::ThrowAtCursor(const FVector& CursorPoint)
 	if (!Info.bValid)
 	{
 		Post(LOCTEXT("Grenade", "Grenade"), LOCTEXT("NoPoint", "Could not find a landing point."));
+		return nullptr;
+	}
+	if (bFlareAim)
+	{
+		// Sprint 15: a click next to the thrower lights the flare at his feet, otherwise it flies along the arc.
+		const bool bAtFeet = FVector::Dist2D(ThrowerActor->GetActorLocation(), CursorPoint) <= TacticalHeatTuning::Get().FlareAtFeetDistance;
+		const ASignalFlareActor* Flare = bAtFeet ? LightFlareAtFeet(ThrowerActor) : ThrowFlareAt(ThrowerActor, Info.Target);
+		if (Flare)
+		{
+			Post(ThrowerActor->DisplayName, FText::Format(bAtFeet ? LOCTEXT("FlareLit", "🎆 Flare lit at my feet! Left: {0}.")
+				: LOCTEXT("FlareThrown", "🎆 Flare out! Left: {0}."), ThrowerActor->FlaresCount));
+			CancelAim(false);
+		}
 		return nullptr;
 	}
 	AGrenadeActor* Grenade = ThrowAt(ThrowerActor, Info.Target);
@@ -307,6 +329,90 @@ AGrenadeActor* UGrenadeSubsystem::ThrowAt(AOperativeCharacter* InThrower, const 
 		TakeFirearm(InThrower);
 	}
 	return Grenade;
+}
+
+bool UGrenadeSubsystem::StartFlareAim(AOperativeCharacter* InThrower)
+{
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	if (!InThrower || InThrower->FlaresCount <= 0)
+	{
+		Post(LOCTEXT("Squad", "SQUAD"), LOCTEXT("NoFlares", "The selected operative has no signal flares."));
+		return false;
+	}
+	if (Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased)
+	{
+		Post(LOCTEXT("Squad", "SQUAD"), LOCTEXT("NoFlareTurnBased", "Flares are thrown in real time or the tactical pause, not in turn-based combat."));
+		return false;
+	}
+	if (IsAiming())
+	{
+		CancelAim(true);
+	}
+	Thrower = InThrower;
+	bFlareAim = true;
+	if (!AimActor)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AimActor = GetWorld()->SpawnActor<AGrenadeAimActor>(FVector::ZeroVector, FRotator::ZeroRotator, Params);
+	}
+	if (AimActor)
+	{
+		AimActor->SetActorHiddenInGame(false);
+	}
+	UpdateAim(InThrower->GetActorLocation() + InThrower->GetActorForwardVector() * 500.f);
+	const float Range = TacticalHeatRules::GetFlareThrowRange(TacticalHeatTuning::Get(), InThrower->GetStance());
+	Post(InThrower->DisplayName, FText::Format(LOCTEXT("FlareAim",
+		"🎆 Signal flare [x{0}]: pick a point (max {1} m) or click at my feet to light it here. RMB or Esc to cancel."),
+		InThrower->FlaresCount, FMath::RoundToInt(Range / 100.f)));
+	return true;
+}
+
+ASignalFlareActor* UGrenadeSubsystem::ThrowFlareAt(AOperativeCharacter* InThrower, const FVector& Target)
+{
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	if (!InThrower || InThrower->FlaresCount <= 0 || (Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased))
+	{
+		return nullptr;
+	}
+	const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
+	UClass* Class = GameMode && GameMode->SignalFlareClass ? GameMode->SignalFlareClass.Get() : ASignalFlareActor::StaticClass();
+	const float Range = TacticalHeatRules::GetFlareThrowRange(TacticalHeatTuning::Get(), InThrower->GetStance());
+	const FVector Landing = GrenadeRules::ClampTarget(InThrower->GetActorLocation(), Target, Range);
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ASignalFlareActor* Flare = GetWorld()->SpawnActor<ASignalFlareActor>(Class, InThrower->GetActorLocation() + FVector(0.f, 0.f, GrenadeRules::HandHeight),
+		FRotator::ZeroRotator, Params);
+	if (!Flare)
+	{
+		return nullptr;
+	}
+	// The grenade throw clip (the same hand movement); the flare leaves the hand at its release point.
+	InThrower->GrenadeReleaseSeconds = -1.f;
+	InThrower->OnGrenadeThrowNative.Broadcast();
+	InThrower->ReceiveGrenadeThrow();
+	Flare->Throw(InThrower, Landing, GrenadeRules::ReleaseDelay(InThrower->GrenadeThrowDuration, InThrower->GrenadeReleaseSeconds));
+	--InThrower->FlaresCount;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Heat] %s throws a flare %.1f m (left %d)"), *InThrower->DisplayName.ToString(),
+		FVector::Dist2D(InThrower->GetActorLocation(), Landing) / 100.f, InThrower->FlaresCount);
+	return Flare;
+}
+
+ASignalFlareActor* UGrenadeSubsystem::LightFlareAtFeet(AOperativeCharacter* Operative)
+{
+	if (!Operative || Operative->FlaresCount <= 0)
+	{
+		return nullptr;
+	}
+	const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
+	const FVector Feet = Operative->GetActorLocation() - FVector(0.f, 0.f, Operative->GetSimpleCollisionHalfHeight())
+		+ Operative->GetActorForwardVector() * 60.f;
+	ASignalFlareActor* Flare = ASignalFlareActor::SpawnLit(GetWorld(), Feet, GameMode ? GameMode->SignalFlareClass : nullptr);
+	if (Flare)
+	{
+		--Operative->FlaresCount;
+	}
+	return Flare;
 }
 
 void UGrenadeSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)

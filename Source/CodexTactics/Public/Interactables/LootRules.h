@@ -22,7 +22,13 @@ enum class ELootItem : uint8
 	Barricade,
 	Mine,
 	BonusWeapon,
-	BonusClothing
+	BonusClothing,
+	/** Sprint 15 (UE-only): chemical heat pack. */
+	HeatPack,
+	/** Sprint 15: firewood for a campfire. */
+	Firewood,
+	/** Sprint 15: signal flare. */
+	Flare
 };
 
 /** One line of the loot dialog. */
@@ -102,6 +108,16 @@ struct CODEXTACTICS_API FLootContents
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Engineering")
 	int32 Mines = 0;
+
+	/** Sprint 15 loot table (UE-only): every crate holds one heat pack and one firewood by default; flares are placed per crate. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Heat")
+	int32 HeatPacks = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Heat")
+	int32 Firewood = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Heat")
+	int32 Flares = 0;
 
 	/** Extra weapon id (e.g. "plasma_carbine"), empty for none. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Special")

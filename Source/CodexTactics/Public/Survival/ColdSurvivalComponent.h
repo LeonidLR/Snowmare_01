@@ -6,6 +6,7 @@
 #include "ColdSurvivalComponent.generated.h"
 
 class AOperativeCharacter;
+struct FTacticalHeatConfig;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnColdTierChanged, AOperativeCharacter*, Operative, EColdTier, Tier);
 
@@ -50,6 +51,22 @@ public:
 	/** Advances cold by DeltaSeconds (also used by headless checks). */
 	void StepCold(float DeltaSeconds);
 
+	/**
+	 * Sprint 15 chemical heat pack on this operative: cold - HeatPackColdReduction, frostbite cleared (the collapsed operative
+	 * gets up to a crouch and can move again), the heat buffer (x0.5 accumulation) restarts. False when it would do nothing.
+	 */
+	bool ApplyHeatPack(const FTacticalHeatConfig& HeatConfig);
+
+	/** Seconds left of the heat-pack buffer (0 = none); frozen with the cold (turn-based, dialogues), runs on world time. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cold")
+	float GetHeatBufferSecondsLeft() const { return HeatBufferSecondsLeft; }
+
+	/** Save-game load. */
+	void RestoreHeatBuffer(float SecondsLeft) { HeatBufferSecondsLeft = FMath::Max(0.f, SecondsLeft); }
+
+	/** Strongest WarmthRate of the active heat sources covering the owner (0 = none sets one). */
+	float GetHeatSourceWarmthRate() const;
+
 	/** Run telemetry (Godot cold_damage_taken / extreme_cold_time_sec): HP lost to freezing, seconds spent at 100 %. */
 	float GetColdDamageTaken() const { return ColdDamageTaken; }
 	float GetExtremeColdTime() const { return ExtremeColdTimeSec; }
@@ -70,6 +87,7 @@ private:
 
 	TWeakObjectPtr<AOperativeCharacter> Operative;
 	EColdTier Tier = EColdTier::Normal;
+	float HeatBufferSecondsLeft = 0.f;
 	bool bWeaponFrozen = false;
 	bool bFrostbitten = false;
 	float ColdDamageTaken = 0.f;

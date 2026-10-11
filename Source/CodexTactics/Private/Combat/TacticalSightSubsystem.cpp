@@ -1,4 +1,5 @@
 #include "Combat/TacticalSightSubsystem.h"
+#include "Survival/TacticalHeatSubsystem.h"
 
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
@@ -408,7 +409,8 @@ void UTacticalSightSubsystem::Update()
 
 		// Squad -> enemy.
 		const FVector Profile = ProfilePoint(*Enemy);
-		bool bSeen = bCinematicReveal || IsDemasked(Enemy);
+		// Sprint 15: a burning signal flare's magnesium light shows every enemy within its reveal radius.
+		bool bSeen = bCinematicReveal || IsDemasked(Enemy) || UTacticalHeatSubsystem::IsRevealedByFlare(GetWorld(), Enemy->GetActorLocation());
 		bool bHeard = false;
 		for (AOperativeCharacter* Operative : Operatives)
 		{

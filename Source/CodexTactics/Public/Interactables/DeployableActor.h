@@ -41,6 +41,12 @@ public:
 	/** Trapped (or armed, for mines): must be defused before pick-up. */
 	virtual bool NeedsDefusal() const { return bTrapped; }
 
+	/**
+	 * Sprint 15: the item was just set up by Worker (real-time task or turn-based grid), called right after the spawn and before
+	 * the item leaves his supply. A stove takes the gas of his canister, a campfire is kindled.
+	 */
+	virtual void OnDeployedBy(AOperativeCharacter* Worker) {}
+
 protected:
 	/** Title, description and confirm label of the menu (subclass texts). */
 	virtual void DescribeForMenu(const AOperativeCharacter* Leader, FText& OutTitle, FText& OutDescription, FText& OutConfirm,
@@ -53,6 +59,9 @@ protected:
 	void GetLeaderSupply(const AOperativeCharacter* Leader, int32& OutCount, int32& OutMax) const;
 
 	EDeployableType DeployableType = EDeployableType::Barricade;
+
+	/** Sprint 15: the item just went into Recipient's supply (a stove hands its gas over). */
+	virtual void OnPickedUpBy(AOperativeCharacter& Recipient) {}
 
 private:
 	void FinishDismantle(TWeakObjectPtr<AOperativeCharacter> WeakUser, bool bWasStanding);

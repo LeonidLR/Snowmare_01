@@ -18,6 +18,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Engine/World.h"
+#include "Data/TacticalHeatTuning.h"
 #include "UI/CodexTacticsHUD.h"
 
 #define LOCTEXT_NAMESPACE "InventoryDrawerWidget"
@@ -114,7 +115,7 @@ void UInventoryDrawerWidget::BuildDefaultLayout()
 	const TCHAR* Names[] = { TEXT("BtnInvTurret"), TEXT("BtnInvBarricade"), TEXT("BtnInvMine"), TEXT("BtnInvMedkit"),
 		TEXT("BtnInvCan"), TEXT("BtnInvBread"), TEXT("BtnInvChoco"), TEXT("BtnInvMatch"), TEXT("BtnInvTripwire"),
 		TEXT("BtnInvAmmoM16"), TEXT("BtnInvAmmoPistol"), TEXT("BtnInvAmmoShotgun"), TEXT("BtnInvAmmoFuel"), TEXT("BtnInvAmmoCryo"),
-		TEXT("BtnInvAmmoPlasma") };
+		TEXT("BtnInvAmmoPlasma"), TEXT("BtnInvHeatPack"), TEXT("BtnInvFirewood"), TEXT("BtnInvFlare"), TEXT("BtnInvStove"), TEXT("BtnInvCampfire") };
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Names); ++Index)
 	{
 		UTextBlock* Text = nullptr;
@@ -151,6 +152,10 @@ void UInventoryDrawerWidget::BuildDefaultLayout()
 	SlotButtons[5]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleBread);
 	SlotButtons[6]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleChocolate);
 	SlotButtons[8]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleTripwire);
+	SlotButtons[static_cast<int32>(EInventoryDrawerSlot::HeatPack)]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleHeatPack);
+	SlotButtons[static_cast<int32>(EInventoryDrawerSlot::Flare)]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleFlare);
+	SlotButtons[static_cast<int32>(EInventoryDrawerSlot::PortableStove)]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleStove);
+	SlotButtons[static_cast<int32>(EInventoryDrawerSlot::Campfire)]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleCampfire);
 }
 
 void UInventoryDrawerWidget::NativeOnInitialized()
@@ -248,6 +253,24 @@ FText UInventoryDrawerWidget::GetSlotText(EInventoryDrawerSlot Line) const
 	case EInventoryDrawerSlot::FlameFuel: return DrawerClean(FString::Printf(TEXT("🔥 Fuel: %d"), Leader->GetReserve(TEXT("flamethrower"))));
 	case EInventoryDrawerSlot::CryoAmmo: return DrawerClean(FString::Printf(TEXT("❄️ Coolant: %d"), Leader->GetReserve(TEXT("cryo_emitter"))));
 	case EInventoryDrawerSlot::PlasmaAmmo: return DrawerClean(FString::Printf(TEXT("⚡ Plasma: %d"), Leader->GetReserve(TEXT("plasma_carbine"))));
+	case EInventoryDrawerSlot::HeatPack:
+		return DrawerClean(FString::Printf(TEXT("🔥 Heat pack [U]: x%d/%d"), Leader->HeatPacksCount, TacticalHeatTuning::Get().HeatPackMaxStack));
+	case EInventoryDrawerSlot::Firewood: return DrawerClean(FString::Printf(TEXT("🪵 Firewood: x%d"), Leader->FirewoodCount));
+	case EInventoryDrawerSlot::Flare: return DrawerClean(FString::Printf(TEXT("🎆 Signal flare [Shift+G]: x%d"), Leader->FlaresCount));
+	case EInventoryDrawerSlot::PortableStove:
+	{
+		const TCHAR* Active = Leader->SelectedDeployType == EDeployableType::PortableStove ? TEXT(" [F]") : TEXT("");
+		if (Leader->PortableStovesCount > 0)
+		{
+			return DrawerClean(FString::Printf(TEXT("🔵 Gas stove%s: gas %d s"), Active, FMath::RoundToInt(Leader->StoveGasSeconds)));
+		}
+		return DrawerClean(FString::Printf(TEXT("🔵 Gas stove%s: 0 (%d in squad)"), Active, DrawerSquadCount(GetWorld(), EDeployableType::PortableStove)));
+	}
+	case EInventoryDrawerSlot::Campfire:
+	{
+		const TCHAR* Active = Leader->SelectedDeployType == EDeployableType::Campfire ? TEXT(" [F]") : TEXT("");
+		return DrawerClean(FString::Printf(TEXT("🔥 Campfire%s: x%d (match + firewood)"), Active, Leader->GetDeployableCount(EDeployableType::Campfire)));
+	}
 	default: return DrawerClean(FString::Printf(TEXT("🪵 Matches: x%d"), Leader->MatchesCount));
 	}
 }
@@ -273,6 +296,10 @@ bool UInventoryDrawerWidget::IsSlotEnabled(EInventoryDrawerSlot Line) const
 		const URelocationSubsystem* Relocation = GetWorld() ? GetWorld()->GetSubsystem<URelocationSubsystem>() : nullptr;
 		return Relocation && Relocation->GetSquadGrenades() >= 2;
 	}
+	case EInventoryDrawerSlot::HeatPack: return Leader->HeatPacksCount > 0;
+	case EInventoryDrawerSlot::Flare: return Leader->FlaresCount > 0;
+	case EInventoryDrawerSlot::PortableStove: return DrawerSquadCount(GetWorld(), EDeployableType::PortableStove) > 0;
+	case EInventoryDrawerSlot::Campfire: return DrawerSquadCount(GetWorld(), EDeployableType::Campfire) > 0;
 	default:
 	{
 		// Matches and ammo: information lines, enabled while there is something to drag over.
@@ -314,6 +341,9 @@ bool UInventoryDrawerWidget::GetTransferItem(EInventoryDrawerSlot Line, ETransfe
 	case EInventoryDrawerSlot::FlameFuel: OutItem = ETransferItem::FlameFuel; return true;
 	case EInventoryDrawerSlot::CryoAmmo: OutItem = ETransferItem::CryoAmmo; return true;
 	case EInventoryDrawerSlot::PlasmaAmmo: OutItem = ETransferItem::PlasmaAmmo; return true;
+	case EInventoryDrawerSlot::HeatPack: OutItem = ETransferItem::HeatPack; return true;
+	case EInventoryDrawerSlot::Firewood: OutItem = ETransferItem::Firewood; return true;
+	case EInventoryDrawerSlot::Flare: OutItem = ETransferItem::Flare; return true;
 	default: return false;
 	}
 }
@@ -497,6 +527,16 @@ void UInventoryDrawerWidget::Activate(EInventoryDrawerSlot Line)
 		Close();
 		PC->StartTripwirePlacement();
 		break;
+	case EInventoryDrawerSlot::HeatPack: PC->UseSquadItem(EPersonalItem::HeatPack); break;
+	case EInventoryDrawerSlot::Flare:
+		Close();
+		PC->StartFlareAim();
+		break;
+	case EInventoryDrawerSlot::PortableStove:
+	case EInventoryDrawerSlot::Campfire:
+		Close();
+		PC->StartPlacementForType(Line == EInventoryDrawerSlot::PortableStove ? EDeployableType::PortableStove : EDeployableType::Campfire);
+		break;
 	default: break;
 	}
 	// Godot inventory_drawer.gd: EventBus.item_used(target_soldier, "MEDKIT" / ...).
@@ -519,6 +559,10 @@ void UInventoryDrawerWidget::HandleCannedFood() { Activate(EInventoryDrawerSlot:
 void UInventoryDrawerWidget::HandleBread() { Activate(EInventoryDrawerSlot::Bread); }
 void UInventoryDrawerWidget::HandleChocolate() { Activate(EInventoryDrawerSlot::Chocolate); }
 void UInventoryDrawerWidget::HandleTripwire() { Activate(EInventoryDrawerSlot::Tripwire); }
+void UInventoryDrawerWidget::HandleHeatPack() { Activate(EInventoryDrawerSlot::HeatPack); }
+void UInventoryDrawerWidget::HandleFlare() { Activate(EInventoryDrawerSlot::Flare); }
+void UInventoryDrawerWidget::HandleStove() { Activate(EInventoryDrawerSlot::PortableStove); }
+void UInventoryDrawerWidget::HandleCampfire() { Activate(EInventoryDrawerSlot::Campfire); }
 void UInventoryDrawerWidget::HandleClose() { Close(); }
 
 #undef LOCTEXT_NAMESPACE

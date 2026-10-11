@@ -37,6 +37,7 @@
 #include "Interactables/BarrelActor.h"
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TurretActor.h"
+#include "Data/TacticalHeatTuning.h"
 #include "Misc/App.h"
 #include "Tactics/GorkyGridManager.h"
 #include "Tactics/GorkyLineOfSight.h"
@@ -2050,6 +2051,33 @@ bool UTurnBasedCombatSubsystem::EndTurnAfterMedkit(AOperativeCharacter* Unit)
 	return true;
 }
 
+bool UTurnBasedCombatSubsystem::SpendActiveUnitAP(AOperativeCharacter* Unit, int32 Cost, const FString& LogLine)
+{
+	FTurnUnitState* State = States.Find(Unit);
+	if (!State || Phase != ETurnPhase::Squad || IsBusy() || GetActiveUnit() != Unit || State->AP < Cost)
+	{
+		return false;
+	}
+	State->AP -= FMath::Max(0, Cost);
+	if (!LogLine.IsEmpty())
+	{
+		Log(LogLine);
+	}
+	Changed();
+	return true;
+}
+
+int32 UTurnBasedCombatSubsystem::GetDeployActionPoints(EDeployableType Type)
+{
+	switch (Type)
+	{
+	case EDeployableType::Mine: return 2;
+	case EDeployableType::PortableStove: return TacticalHeatTuning::Get().StoveDeployActionPoints;
+	case EDeployableType::Campfire: return TacticalHeatTuning::Get().CampfireBuildActionPoints;
+	default: return 3;
+	}
+}
+
 void UTurnBasedCombatSubsystem::PassSquadTurn()
 {
 	if (IsBusy() || Phase != ETurnPhase::Squad)
@@ -2618,7 +2646,7 @@ FTurnDeployCheck UTurnBasedCombatSubsystem::CanPlaceDeployable(EDeployableType T
 		Check.Reason = TEXT("No active operative");
 		return Check;
 	}
-	const int32 DeployCost = Type == EDeployableType::Mine ? 2 : 3;
+	const int32 DeployCost = GetDeployActionPoints(Type);
 	Check.APCost = DeployCost;
 	if (UnitState->AP < DeployCost)
 	{
@@ -2803,6 +2831,10 @@ void UTurnBasedCombatSubsystem::RegisterDeployable(EDeployableType Type, AActor*
 	case EDeployableType::Mine:
 		Grid->SetOccupant(Cell, Object, EGorkyOccupantType::Mine);
 		break;
+	default:
+		// Sprint 15 stove / campfire: nobody walks through the flame.
+		Grid->SetOccupant(Cell, Object, EGorkyOccupantType::Obstacle);
+		break;
 	}
 	// Frozen like everything else off the grid's turns (Godot set_physics_process(false)).
 	if (Object->IsActorTickEnabled())
@@ -2822,7 +2854,7 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 	{
 		return false;
 	}
-	const FString Name = Type == EDeployableType::Turret ? TEXT("Turret") : (Type == EDeployableType::Barricade ? TEXT("Barricade") : TEXT("Mine"));
+	const FString Name = URelocationSubsystem::GetDeployableName(Type).ToString();
 	const int32 TotalAP = Check.APCost;
 	auto FaceTarget = [this, Unit, Cell](FTurnUnitState& State)
 	{
@@ -2946,10 +2978,8 @@ bool UTurnBasedCombatSubsystem::HandleDeployPlacement(EDeployableType Type, cons
 		for (const TWeakObjectPtr<AOperativeCharacter>& Weak : Squad)
 		{
 			AOperativeCharacter* Carrier = Weak.Get();
-			if (Carrier && Carrier != Unit && Carrier->GetDeployableCount(Type) > 0)
+			if (Carrier && Carrier != Unit && Carrier->GetDeployableCount(Type) > 0 && Carrier->MoveDeployableTo(*Unit, Type))
 			{
-				Carrier->AddDeployable(Type, -1);
-				Unit->AddDeployable(Type, 1);
 				break;
 			}
 		}
@@ -2986,6 +3016,10 @@ bool UTurnBasedCombatSubsystem::HandleDeployPlacement(EDeployableType Type, cons
 	}
 	if (DeployObject(Type, Cell, Yaw, Spawned))
 	{
+		if (ADeployableActor* Placed = Cast<ADeployableActor>(Spawned))
+		{
+			Placed->OnDeployedBy(Unit); // Sprint 15: the stove takes its gas, the campfire is kindled (its timer counts rounds)
+		}
 		Unit->AddDeployable(Type, -1);
 		Highlight(Spawned);
 		return true;
@@ -3340,6 +3374,7 @@ void UTurnBasedCombatSubsystem::ProcessNextEnemy()
 		// New round: the squad moves again from the first operative.
 		++Round;
 		ActiveIndex = 0;
+		OnRoundAdvanced.Broadcast(Round); // Sprint 15: heat sources burn one round
 		StartPlayerTurn();
 		return;
 	}

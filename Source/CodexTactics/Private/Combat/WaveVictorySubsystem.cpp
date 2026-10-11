@@ -202,7 +202,8 @@ void UWaveVictorySubsystem::RecoverDeployables()
 	TArray<ADeployableActor*> Found;
 	for (TActorIterator<ADeployableActor> It(World); It; ++It)
 	{
-		if (It->bDeployable && !It->IsActorBeingDestroyed())
+		// Sprint 15: only the engineering items come back by themselves (a stove is packed up by hand, a campfire stays).
+		if (It->bDeployable && !It->IsActorBeingDestroyed() && DeployableRules::IsEngineeringType(It->GetDeployableType()))
 		{
 			Found.Add(*It);
 		}

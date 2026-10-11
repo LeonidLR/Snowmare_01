@@ -1,4 +1,7 @@
 #include "Interactables/BarrelActor.h"
+#include "Combat/FirePuddleActor.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/TacticalHeatTuning.h"
 #include "Characters/OperativeCharacter.h"
 #include "Components/BoxComponent.h"
 #include "Components/PointLightComponent.h"
@@ -231,7 +234,20 @@ bool ABarrelActor::Explode(const FText& InstigatorName)
 	ReceiveBurningChanged(true);
 	ApplyBlast(120.f, 80.f, 550.f, 0.40f, EDamageType::Fire, InstigatorName,
 		LOCTEXT("BarrelHit", "💥 Burned by the barrel blast (-{0} HP)!"), EStatusEffect::Burning, 4.f, 10.f);
+	SpawnFuelPuddle();
 	return true;
+}
+
+void ABarrelActor::SpawnFuelPuddle()
+{
+	// Sprint 15 (TANDEM #14 §2.5): the burning fuel trail at the barrel's foot - fire core + radiant ring for 12-15 s.
+	if (!TacticalHeatTuning::Get().bBarrelLeavesPuddle || !GetWorld())
+	{
+		return;
+	}
+	const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
+	const FVector Foot = GetActorLocation() - FVector(0.f, 0.f, Box->GetScaledBoxExtent().Z);
+	AFirePuddleActor::SpawnAt(GetWorld(), Foot, TEXT("Barrel fire"), GameMode ? GameMode->FirePuddleClass : nullptr);
 }
 
 bool ABarrelActor::IgniteForTurnBased()
@@ -246,6 +262,7 @@ bool ABarrelActor::IgniteForTurnBased()
 	ApplyVisuals();
 	OnBurningChanged.Broadcast(this, true);
 	ReceiveBurningChanged(true);
+	SpawnFuelPuddle(); // its timer burns one round on the grid
 	return true;
 }
 

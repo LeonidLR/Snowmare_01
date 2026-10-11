@@ -1,4 +1,7 @@
 #include "Characters/SquadTransferSubsystem.h"
+#include "Survival/ColdSurvivalComponent.h"
+#include "Survival/TacticalHeatRules.h"
+#include "Survival/TacticalHeatSubsystem.h"
 #include "AIController.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -497,6 +500,22 @@ int32 USquadTransferSubsystem::Execute(const FTransferRequest& InRequest)
 		AOperativeCharacter* Recipient = InRequest.Recipient.Get();
 		if (!Recipient || Recipient == Operative)
 		{
+			return 0;
+		}
+		// Sprint 15: a heat pack dropped on a cold / frostbitten mate is cracked on him at once (one pack, 1 AP in turn-based);
+		// on a warm mate it is handed over like any item.
+		if (InRequest.Item == ETransferItem::HeatPack && Recipient->ColdSurvival
+			&& TacticalHeatRules::CanUseHeatPack(Recipient->ColdLevel, Recipient->ColdSurvival->IsFrostbitten()))
+		{
+			UTacticalHeatSubsystem* Heat = GetWorld()->GetSubsystem<UTacticalHeatSubsystem>();
+			EHeatPackRefusal Refusal = EHeatPackRefusal::None;
+			if (Heat && Heat->UseHeatPack(Operative, Recipient, &Refusal))
+			{
+				return 1;
+			}
+			Post(Operative->DisplayName, Refusal == EHeatPackRefusal::NotEnoughAP ? TEXT("Not enough AP for a heat pack.")
+				: (Refusal == EHeatPackRefusal::NotYourTurn ? TEXT("Only the operative whose turn it is can use a heat pack.")
+					: TEXT("You're out of this item or ammo!")));
 			return 0;
 		}
 		const FTransferResult Result = TransferRules::TransferQuantity(*Operative, *Recipient, InRequest.Item, InRequest.Quantity);

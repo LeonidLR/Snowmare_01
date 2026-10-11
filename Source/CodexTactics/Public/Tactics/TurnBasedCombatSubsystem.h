@@ -149,6 +149,10 @@ public:
 	DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGridShotFired, AOperativeCharacter*, AActor*);
 	FOnGridShotFired OnGridShotFired;
 
+	/** Sprint 15: a new squad round starts after the enemy phase (round number); heat sources burn one round (UTacticalHeatSubsystem). */
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnRoundAdvanced, int32);
+	FOnRoundAdvanced OnRoundAdvanced;
+
 	/**
 	 * Sprint 14: the active operative is knocked down (falling / lying / getting up): no move, shot, stance, facing,
 	 * barrel push, relocation or deploy order. Allowed while he lies: «GET UP» (GetUpActiveUnit, 2 AP), a personal item,
@@ -271,6 +275,15 @@ public:
 	 * next operative takes over). Call after the item was used; false when it does not apply.
 	 */
 	bool EndTurnAfterMedkit(AOperativeCharacter* Unit);
+
+	/**
+	 * Sprint 15: the active operative pays Cost AP for a side action on his squad turn (a heat pack); LogLine goes to the feed.
+	 * False (nothing paid) when it is not his turn, the grid is busy or he lacks the AP.
+	 */
+	bool SpendActiveUnitAP(AOperativeCharacter* Unit, int32 Cost, const FString& LogLine);
+
+	/** Sprint 15: AP to set up a deployable on the grid (turret / barricade 3, mine 2, stove / campfire from tactical_heat.json). */
+	static int32 GetDeployActionPoints(EDeployableType Type);
 	/** Godot switch_active_unit_weapon_to: the active operative takes another arsenal weapon (free); attack cells follow. */
 	bool SwitchActiveUnitWeapon(const FString& WeaponId);
 

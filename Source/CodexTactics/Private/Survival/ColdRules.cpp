@@ -21,7 +21,8 @@ namespace ColdRules
 		if (Environment.bWarm || Environment.bPreparation || Environment.ZoneMultiplier <= 0.001f)
 		{
 			const float Boost = 1.f + Fortitude * Config.FortitudeWarmupPerPoint;
-			return FMath::Max(0.f, Cold - Config.WarmthRecoveryRate * Boost * DeltaSeconds);
+			const float WarmRate = FMath::Max(Config.WarmthRecoveryRate * Boost, Environment.WarmthRateOverride); // Sprint 15 sources
+			return FMath::Max(0.f, Cold - WarmRate * DeltaSeconds);
 		}
 		if (Environment.bSprinting)
 		{
@@ -32,7 +33,8 @@ namespace ColdRules
 		const float FortitudeCut = FMath::Clamp(Fortitude * Config.FortitudeCutPerPoint, 0.f, Config.MaxFortitudeCut);
 		const float Wind = (Environment.bElevated ? Config.ElevatedWindMultiplier : 1.f)
 			* (Environment.bInCover ? FMath::Clamp(Config.CoverWindChillMultiplier, 0.f, 1.f) : 1.f); // Sprint 12 shelter
-		const float Rate = Environment.ZoneMultiplier * GetStanceMultiplier(Config, Stance) * Wind;
+		const float Rate = Environment.ZoneMultiplier * GetStanceMultiplier(Config, Stance) * Wind
+			* FMath::Clamp(Environment.AccumulationMultiplier, 0.f, 1.f); // Sprint 15 heat-pack buffer
 		return FMath::Min(100.f, Cold + Config.AccumulationRate * (1.f - FortitudeCut) * Rate * DeltaSeconds);
 	}
 

@@ -70,6 +70,8 @@ namespace
 #include "GameFramework/PlayerController.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "Data/TacticalHeatTuning.h"
+#include "Survival/TacticalHeatSubsystem.h"
 #include "Tactics/CoverRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/CoverDecisionRules.h"
@@ -886,12 +888,19 @@ int32 AOperativeCharacter::GetItemCount(EPersonalItem Item) const
 	case EPersonalItem::Medkit: return MedkitsCount;
 	case EPersonalItem::CannedFood: return CannedFoodCount;
 	case EPersonalItem::Bread: return BreadCount;
+	case EPersonalItem::HeatPack: return HeatPacksCount;
 	default: return ChocolateCount;
 	}
 }
 
 bool AOperativeCharacter::UsePersonalItem(EPersonalItem Item)
 {
+	if (Item == EPersonalItem::HeatPack)
+	{
+		// Sprint 15: on himself through the heat subsystem (turn-based AP, feed line, buffer).
+		UTacticalHeatSubsystem* Heat = GetWorld() ? GetWorld()->GetSubsystem<UTacticalHeatSubsystem>() : nullptr;
+		return Heat && Heat->UseHeatPack(this, this);
+	}
 	if (GetItemCount(Item) <= 0 || !HealthComponent
 		|| !PersonalItemRules::CanUse(HealthComponent->GetCurrentHealth(), HealthComponent->GetMaxHealth(), ColdLevel))
 	{
@@ -919,22 +928,67 @@ int32 AOperativeCharacter::GetDeployableCount(EDeployableType Type) const
 	{
 	case EDeployableType::Turret: return TurretsCount;
 	case EDeployableType::Barricade: return BarricadesCount;
-	default: return MinesCount;
+	case EDeployableType::Mine: return MinesCount;
+	case EDeployableType::PortableStove: return PortableStovesCount;
+	default: return TacticalHeatRules::GetCraftableCampfires(TacticalHeatTuning::Get(), MatchesCount, FirewoodCount, GetReserve(TEXT("flamethrower")));
 	}
 }
 
 void AOperativeCharacter::AddDeployable(EDeployableType Type, int32 Delta)
 {
-	int32& Count = Type == EDeployableType::Turret ? TurretsCount : (Type == EDeployableType::Barricade ? BarricadesCount : MinesCount);
+	if (Type == EDeployableType::Campfire)
+	{
+		// Sprint 15: a campfire is its materials.
+		const FTacticalHeatConfig& Heat = TacticalHeatTuning::Get();
+		if (Delta > 0)
+		{
+			MatchesCount += Delta * Heat.CampfireMatchesCost;
+			FirewoodCount += Delta * FMath::Max(1, Heat.CampfireFirewoodCost);
+		}
+		for (int32 Index = 0; Index < -Delta; ++Index)
+		{
+			int32 Fuel = GetReserve(TEXT("flamethrower"));
+			const int32 FuelBefore = Fuel;
+			if (!TacticalHeatRules::ConsumeCampfireMaterials(Heat, MatchesCount, FirewoodCount, Fuel))
+			{
+				break;
+			}
+			if (Fuel < FuelBefore)
+			{
+				TakeReserve(TEXT("flamethrower"), FuelBefore - Fuel);
+			}
+		}
+		return;
+	}
+	int32& Count = Type == EDeployableType::Turret ? TurretsCount : (Type == EDeployableType::Barricade ? BarricadesCount
+		: (Type == EDeployableType::PortableStove ? PortableStovesCount : MinesCount));
 	Count = FMath::Clamp(Count + Delta, 0, DeployableRules::GetMaxCarried(Type));
+	// A stove's gas (StoveGasSeconds) moves with it: APortableStoveActor::OnDeployedBy takes it, MoveDeployableTo hands it over.
+}
+
+bool AOperativeCharacter::MoveDeployableTo(AOperativeCharacter& To, EDeployableType Type)
+{
+	if (&To == this || GetDeployableCount(Type) <= 0 || To.GetDeployableCount(Type) >= DeployableRules::GetMaxCarried(Type))
+	{
+		return false;
+	}
+	const float Gas = StoveGasSeconds;
+	AddDeployable(Type, -1);
+	To.AddDeployable(Type, 1);
+	if (Type == EDeployableType::PortableStove)
+	{
+		To.StoveGasSeconds = Gas; // max one stove each: the recipient had none
+		StoveGasSeconds = GetDeployableCount(Type) > 0 ? StoveGasSeconds : 0.f;
+	}
+	return true;
 }
 
 EDeployableType AOperativeCharacter::CycleDeployableType()
 {
-	for (int32 Step = 1; Step <= 3; ++Step)
+	for (int32 Step = 1; Step <= DeployableTypeCount; ++Step)
 	{
-		const EDeployableType Next = static_cast<EDeployableType>((static_cast<int32>(SelectedDeployType) + Step) % 3);
-		if (GetDeployableCount(Next) > 0 || Step == 3)
+		const EDeployableType Next = static_cast<EDeployableType>((static_cast<int32>(SelectedDeployType) + Step) % DeployableTypeCount);
+		if (GetDeployableCount(Next) > 0 || Step == DeployableTypeCount)
 		{
 			SelectedDeployType = Next;
 			break;

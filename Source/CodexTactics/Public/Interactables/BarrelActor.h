@@ -105,6 +105,8 @@ public:
 
 private:
 	void ApplyVisuals();
+	/** Sprint 15: an exploded barrel leaves a residual fire puddle (FTacticalHeatConfig::bBarrelLeavesPuddle). */
+	void SpawnFuelPuddle();
 	/** Shared switch-off: charred look, heat and light off, events. */
 	void HandleFireOut();
 	/** Godot can_push: the barrel may be pushed to a new spot. */

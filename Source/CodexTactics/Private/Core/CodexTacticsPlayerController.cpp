@@ -19,6 +19,8 @@
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/GrenadeSubsystem.h"
+#include "Data/TacticalHeatTuning.h"
+#include "Survival/TacticalHeatSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Combat/EncounterQueries.h"
@@ -194,7 +196,8 @@ void ACodexTacticsPlayerController::CreateInputActions()
 		MakeAction(TEXT("IA_UseMedkit"), EKeys::H),
 		MakeAction(TEXT("IA_UseCannedFood"), EKeys::J),
 		MakeAction(TEXT("IA_UseBread"), EKeys::K),
-		MakeAction(TEXT("IA_UseChocolate"), EKeys::L) };
+		MakeAction(TEXT("IA_UseChocolate"), EKeys::L),
+		MakeAction(TEXT("IA_UseHeatPack"), EKeys::U) }; // Sprint 15
 	QuickSaveAction = MakeAction(TEXT("IA_QuickSave"), EKeys::F5);
 	QuickLoadAction = MakeAction(TEXT("IA_QuickLoad"), EKeys::F9);
 }
@@ -268,6 +271,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(ItemActions[1], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseCannedFood);
 	Input->BindAction(ItemActions[2], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseBread);
 	Input->BindAction(ItemActions[3], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseChocolate);
+	Input->BindAction(ItemActions[4], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseHeatPackKey);
 	Input->BindAction(QuickSaveAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::QuickSaveKey);
 	Input->BindAction(QuickLoadAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::QuickLoadKey);
 }
@@ -577,6 +581,34 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 	{
 		return;
 	}
+	if (Item == EPersonalItem::HeatPack)
+	{
+		// Sprint 15: the heat pack has its own lines (cold off, buffer, turn-based AP).
+		UTacticalHeatSubsystem* Heat = GetWorld()->GetSubsystem<UTacticalHeatSubsystem>();
+		EHeatPackRefusal Refusal = EHeatPackRefusal::None;
+		if (!Heat || Heat->UseHeatPack(Leader, Leader, &Refusal))
+		{
+			return;
+		}
+		switch (Refusal)
+		{
+		case EHeatPackRefusal::NoPack:
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("ItemMissingPack", "{0} has no {1} in personal inventory!"),
+				Leader->DisplayName, PersonalItemRules::GetMissingName(Item)));
+			break;
+		case EHeatPackRefusal::NotYourTurn:
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PackNotTurn", "Only the operative whose turn it is can use a heat pack."));
+			break;
+		case EHeatPackRefusal::NotEnoughAP:
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("PackNoAP", "Not enough AP for a heat pack ({0} needed)."),
+				TacticalHeatTuning::Get().HeatPackActionPoints));
+			break;
+		default:
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PackWarm", "No need for a heat pack - not cold at all."));
+			break;
+		}
+		return;
+	}
 	if (Leader->UsePersonalItem(Item))
 	{
 		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("ItemUsed", "Used {0} (+HP / warmth)! (Left: x{1})"),
@@ -629,8 +661,7 @@ void ACodexTacticsPlayerController::StartPlacementForType(EDeployableType Type)
 			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("NoneInSquad", "⚠️ The squad has no {0} left!"), Name));
 			return;
 		}
-		Carrier->AddDeployable(Type, -1);
-		Leader->AddDeployable(Type, 1);
+		Carrier->MoveDeployableTo(*Leader, Type);
 		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("HandsOver", "🛠️ {0} hands {1} to {2} for placement!"),
 			Carrier->DisplayName, Name, Leader->DisplayName));
 	}
@@ -648,8 +679,31 @@ void ACodexTacticsPlayerController::StartTripwirePlacement()
 	Relocation->StartTripwirePlacement(Squad->GetLeader());
 }
 
+void ACodexTacticsPlayerController::StartFlareAim()
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
+	if (!Leader || !Grenades || BlockRealTimeOrder())
+	{
+		return;
+	}
+	if (Grenades->IsAimingFlare())
+	{
+		Grenades->CancelAim(false);
+		return;
+	}
+	Grenades->StartFlareAim(Leader);
+}
+
 void ACodexTacticsPlayerController::GrenadeKey()
 {
+	// Sprint 15: Shift + G = the signal flare (same slot).
+	if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
+	{
+		StartFlareAim();
+		return;
+	}
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();

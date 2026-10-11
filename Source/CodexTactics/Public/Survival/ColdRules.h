@@ -136,6 +136,13 @@ struct CODEXTACTICS_API FColdEnvironment
 	bool bSprinting = false;
 	/** Back to a wall (Sprint 12 cover): the wind is cut by FColdConfig::CoverWindChillMultiplier. */
 	bool bInCover = false;
+	/**
+	 * Sprint 15: the strongest warming rate of the heat sources covering the operative, %/s (0 = none of them sets one; a
+	 * residual fire puddle's radiant ring warms at 12). Warming runs at max(WarmthRecoveryRate x fortitude boost, this).
+	 */
+	float WarmthRateOverride = 0.f;
+	/** Sprint 15 heat-pack buffer: the open-air accumulation is multiplied by this (0.5 for 45 s after a pack, else 1). */
+	float AccumulationMultiplier = 1.f;
 };
 
 /** Pure cold formulas. Godot reference: Scenes/movements/player.gd `_process_cold_system`, `_shoot_at_target`. */

@@ -1,4 +1,5 @@
 #include "Interactables/DeployableRules.h"
+#include "Data/TacticalHeatTuning.h"
 
 #define LOCTEXT_NAMESPACE "DeployableRules"
 
@@ -61,8 +62,15 @@ int32 DeployableRules::GetMaxCarried(EDeployableType Type)
 	{
 	case EDeployableType::Turret: return 2;
 	case EDeployableType::Barricade: return 4;
-	default: return 5;
+	case EDeployableType::Mine: return 5;
+	case EDeployableType::PortableStove: return FMath::Max(1, TacticalHeatTuning::Get().StoveMaxCarried);
+	default: return MAX_int32;
 	}
+}
+
+bool DeployableRules::IsEngineeringType(EDeployableType Type)
+{
+	return Type == EDeployableType::Turret || Type == EDeployableType::Barricade || Type == EDeployableType::Mine;
 }
 
 int32 DeployableRules::PickRecoveryRecipient(const TArray<int32>& CarriedInOrder, int32 MaxCarried)

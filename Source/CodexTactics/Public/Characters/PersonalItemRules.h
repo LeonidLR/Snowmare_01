@@ -3,17 +3,21 @@
 #include "CoreMinimal.h"
 #include "PersonalItemRules.generated.h"
 
-/** Provisions an operative can use (Godot use_squad_item "MEDKIT" / "CANNED_FOOD" / "BREAD" / "CHOCOLATE"). */
+/**
+ * Provisions an operative can use (Godot use_squad_item "MEDKIT" / "CANNED_FOOD" / "BREAD" / "CHOCOLATE"). Sprint 15 (UE-only):
+ * the chemical heat pack (U), applied through UTacticalHeatSubsystem::UseHeatPack (values in tactical_heat.json).
+ */
 UENUM(BlueprintType)
 enum class EPersonalItem : uint8
 {
 	Medkit,
 	CannedFood,
 	Bread,
-	Chocolate
+	Chocolate,
+	HeatPack
 };
 
-/** Health / warmth one item gives. */
+/** Health / warmth one item gives (the heat pack: none here, see FTacticalHeatConfig). */
 struct FPersonalItemEffect
 {
 	float Heal = 0.f;

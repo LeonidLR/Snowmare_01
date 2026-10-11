@@ -409,12 +409,43 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Inventory")
 	int32 GetDeployableCount(EDeployableType Type) const;
 
-	/** Adds (or removes, negative Delta) carried items, clamped to 0..max. */
+	/**
+	 * Adds (or removes, negative Delta) carried items, clamped to 0..max. Sprint 15 campfire: -1 spends the materials of one
+	 * fire (matches + firewood, else flamethrower fuel), +1 gives back one match + one firewood.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Inventory")
 	void AddDeployable(EDeployableType Type, int32 Delta);
 
-	/** Next type in the Godot cycle order turret -> barricade -> mine (skips empty types when possible). */
+	/**
+	 * Hands one item of Type to To (a portable stove takes its gas along; a campfire moves one match + one firewood). False when
+	 * this operative has none or To has no room.
+	 */
+	bool MoveDeployableTo(AOperativeCharacter& To, EDeployableType Type);
+
+	/** Next type in the cycle order turret -> barricade -> mine -> stove -> campfire (skips empty types when possible). */
 	EDeployableType CycleDeployableType();
+
+	// --- Sprint 15 «Mobile & Tactical Heat» (TANDEM #14; starting amounts: tactical_heat.json "starting_loadout") ---
+
+	/** Chemical heat packs (one slot, stack FTacticalHeatConfig::HeatPackMaxStack 3): U / the drawer, or dragged onto a mate. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 HeatPacksCount = 0;
+
+	/** Firewood: one per campfire (with a match). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 FirewoodCount = 0;
+
+	/** Signal flares (grenade slot: Shift + G / the weapon selector). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 FlaresCount = 0;
+
+	/** Packed portable gas stoves (max FTacticalHeatConfig::StoveMaxCarried). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 PortableStovesCount = 0;
+
+	/** Gas left in the packed stove's canister, s (kept with the item; goes into the stove when it is set up). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	float StoveGasSeconds = 0.f;
 
 	/** Placement / relocation radius outside the pause and preparation, cm (Godot placement_radius 15 m). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
