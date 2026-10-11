@@ -215,9 +215,8 @@ namespace CoverReverseSmoke
 			{
 				return true;
 			}
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			// The sudden horde start opens in a free tactical pause; the shared helper releases it (2026-10-11).
+			SmokeUtils::StartWaveFight(Flow);
 			AEnemyCharacter* Kept = nullptr;
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
