@@ -1604,6 +1604,11 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 {
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 	{
+		if (Stance == EOperativeStance::Standing && TurnBased->IsActiveUnitKnockedDown())
+		{
+			TurnBased->GetUpActiveUnit(); // knocked down: [Z] = «GET UP» (2 AP; not enough AP -> a feed line, he stays down)
+			return;
+		}
 		TurnBased->SetActiveUnitStance(Stance); // 1 AP, active operative only
 		return;
 	}

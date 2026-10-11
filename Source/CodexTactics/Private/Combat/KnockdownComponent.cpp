@@ -126,6 +126,7 @@ bool UKnockdownComponent::TryKnockDown(EKnockdownCause Cause, const FVector& Sou
 	Hit.Damage = Damage;
 	Hit.bCritical = bCritical;
 	Hit.ExplosionDistance = FVector::Dist(Owner->GetActorLocation(), SourceLocation);
+	Hit.ChanceRoll = FMath::FRand(); // KnockdownChance (Codex.Knockdown.Chance; smokes force 1) for heavy hits / blows
 	FKnockdownTarget Target;
 	Target.bCanBeKnockedDown = bCanBeKnockedDown;
 	Target.bHeavyPoise = bHeavyPoise;
@@ -298,17 +299,12 @@ bool UKnockdownComponent::IsTurnBasedNow() const
 	return Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased;
 }
 
-float UKnockdownComponent::GetDamageMultiplier(bool bMelee) const
+float UKnockdownComponent::GetDamageMultiplier() const
 {
-	return GetBlowMultiplier(bMelee ? EKnockdownBlow::Melee : EKnockdownBlow::Ranged);
+	return KnockdownRules::DownedDamageMultiplier(KnockdownRules::GetConfig(), IsDown());
 }
 
-float UKnockdownComponent::GetBlowMultiplier(EKnockdownBlow Blow) const
-{
-	return IsDown() ? KnockdownRules::DownedBlowMultiplier(KnockdownRules::GetConfig(), Blow) : 1.f;
-}
-
-FKnockdownTurnDecision UKnockdownComponent::HandleTurn(int32& ActionPoints)
+FKnockdownTurnDecision UKnockdownComponent::TryTurnGetUp(int32& ActionPoints)
 {
 	const FKnockdownTurnDecision Decision = KnockdownRules::DecideTurnGetUp(KnockdownRules::GetConfig(), State, ActionPoints);
 	if (Decision.bGetUp)

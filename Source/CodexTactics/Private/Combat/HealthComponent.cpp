@@ -77,9 +77,9 @@ float UHealthComponent::TakeDamage(const FDamageSpec& Spec)
 	EffectiveArmor *= (1.0f - FMath::Clamp(Spec.ArmorPenetration, 0.0f, 1.0f));
 
 	const float DmgAfterArmor = Spec.Amount * (1.0f - EffectiveArmor);
-	// Sprint 14: a knocked-down unit takes shots x0.6 (prone profile) and melee x1.5; blasts are not modified.
+	// A unit lying after a knockdown takes any damage (shots, melee, blasts) x1.33 (user decision 2026-10-11).
 	const UKnockdownComponent* Knockdown = GetOwner() ? GetOwner()->FindComponentByClass<UKnockdownComponent>() : nullptr;
-	const float KnockdownScale = Knockdown && Spec.DamageType != EDamageType::Explosive ? Knockdown->GetDamageMultiplier(Spec.bMelee) : 1.f;
+	const float KnockdownScale = Knockdown ? Knockdown->GetDamageMultiplier() : 1.f;
 	const float FinalDamage = FMath::Max(1.0f, DmgAfterArmor * ElementMult * DefenseMultiplier * KnockdownScale);
 
 	const float OldHealth = CurrentHealth;

@@ -119,6 +119,12 @@ void UTurnBasedHudWidget::BuildDefaultLayout()
 	TbStanceButton = MakeButton(TEXT("TbStanceButton"), LOCTEXT("Stance", "🛡️ STANCE: STANDING [C]"), 26.f, Column, &StanceText);
 	TbStanceText = StanceText;
 	TbStanceButton->SetToolTipText(LOCTEXT("StanceTip", "Change stance: standing / crouched / prone [C] (1 AP)"));
+	// Knockdown (user decision 2026-10-11): takes the stance button's place while the active operative lies.
+	UTextBlock* GetUpText = nullptr;
+	TbGetUpButton = MakeButton(TEXT("TbGetUpButton"), LOCTEXT("GetUp", "GET UP (2 AP) [Z]"), 26.f, Column, &GetUpText);
+	TbGetUpText = GetUpText;
+	TbGetUpButton->SetToolTipText(LOCTEXT("GetUpTip",
+		"The operative is knocked down: get up for 2 AP [Z], or stay down (he cannot move or shoot; every hit lands x1.33)"));
 
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("TbRow"));
 	Column->AddChildToVerticalBox(Row);
@@ -154,6 +160,10 @@ void UTurnBasedHudWidget::NativeOnInitialized()
 	if (TbBarrelButton)
 	{
 		TbBarrelButton->OnClicked.AddDynamic(this, &UTurnBasedHudWidget::HandleBarrel);
+	}
+	if (TbGetUpButton)
+	{
+		TbGetUpButton->OnClicked.AddDynamic(this, &UTurnBasedHudWidget::HandleGetUp);
 	}
 	if (UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr)
 	{
@@ -226,6 +236,29 @@ void UTurnBasedHudWidget::Refresh()
 			Button->SetIsEnabled(bSquadPhase && !TurnBased->IsUnitMoving());
 		}
 	}
+	// Knockdown: «GET UP (2 AP)» replaces the stance entry while the active operative is down (enabled once he lies).
+	const bool bDown = bSquadPhase && TurnBased->IsActiveUnitKnockedDown();
+	if (TbGetUpButton)
+	{
+		const ESlateVisibility Shown = bDown ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+		(TbGetUpButton->GetParent() ? static_cast<UWidget*>(TbGetUpButton->GetParent()) : TbGetUpButton.Get())->SetVisibility(Shown);
+		TbGetUpButton->SetIsEnabled(TurnBased->IsGetUpAvailable());
+	}
+	if (TbGetUpText)
+	{
+		TbGetUpText->SetText(FText::FromString(FString::Printf(TEXT("GET UP (%d AP) [Z]"), TurnBased->GetGetUpCost())));
+	}
+	if (TbStanceButton)
+	{
+		const ESlateVisibility Shown = bDown ? ESlateVisibility::Collapsed : ESlateVisibility::Visible;
+		(TbStanceButton->GetParent() ? static_cast<UWidget*>(TbStanceButton->GetParent()) : TbStanceButton.Get())->SetVisibility(Shown);
+	}
+}
+
+bool UTurnBasedHudWidget::IsGetUpShown() const
+{
+	const UWidget* Shown = TbGetUpButton && TbGetUpButton->GetParent() ? static_cast<const UWidget*>(TbGetUpButton->GetParent()) : TbGetUpButton.Get();
+	return Shown && Shown->GetVisibility() != ESlateVisibility::Collapsed;
 }
 
 void UTurnBasedHudWidget::HandlePass()
@@ -257,6 +290,14 @@ void UTurnBasedHudWidget::HandleTurn()
 	if (UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>())
 	{
 		TurnBased->RotateActiveUnitClockwise();
+	}
+}
+
+void UTurnBasedHudWidget::HandleGetUp()
+{
+	if (UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>())
+	{
+		TurnBased->GetUpActiveUnit();
 	}
 }
 

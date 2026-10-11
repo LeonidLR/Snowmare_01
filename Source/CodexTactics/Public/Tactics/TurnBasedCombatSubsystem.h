@@ -149,8 +149,25 @@ public:
 	DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGridShotFired, AOperativeCharacter*, AActor*);
 	FOnGridShotFired OnGridShotFired;
 
-	/** Sprint 14: the active operative is knocked down (falling / lying / getting up): no move, shot or stance order. */
+	/**
+	 * Sprint 14: the active operative is knocked down (falling / lying / getting up): no move, shot, stance, facing,
+	 * barrel push, relocation or deploy order. Allowed while he lies: «GET UP» (GetUpActiveUnit, 2 AP), a personal item,
+	 * selecting another operative, ending his / the squad's turn (staying down: every blow lands x1.33).
+	 */
 	bool IsActiveUnitKnockedDown() const;
+
+	/**
+	 * Knockdown (user decision 2026-10-11): the explicit «GET UP» action of the lying active operative on his turn — pays
+	 * GetUpActionPoints (2) and plays the get-up; he is never stood up for free. With fewer AP he stays down (feed line,
+	 * the turn goes on). False when not lying / still falling / not the squad phase / busy / not enough AP.
+	 */
+	bool GetUpActiveUnit();
+
+	/** The active operative lies after a knockdown (the downed phase) and «GET UP» can be ordered now (the HUD button). */
+	bool IsGetUpAvailable() const;
+
+	/** AP cost of «GET UP» (FKnockdownConfig::GetUpActionPoints). */
+	int32 GetGetUpCost() const;
 
 	/**
 	 * An operative died (any cause; user decision 2026-10-08: only the commander's death ends the mission). Drops him
@@ -205,11 +222,11 @@ public:
 	const FTurnUnitState* GetUnitState(const AActor* Actor) const;
 
 	/**
-	 * Godot target_squad.take_damage(dmg, name, false, en, true): bypasses dodge / fortitude, floats «-N». Sprint 14: a
-	 * knocked-down operative takes the downed modifier of the blow (KnockdownRules::DownedBlowMultiplier: ranged x0.6,
-	 * melee x1.5, explosion x1). Returns the damage actually dealt.
+	 * Godot target_squad.take_damage(dmg, name, false, en, true): bypasses dodge / fortitude, floats «-N». A knocked-down
+	 * operative takes any grid blow (shot, bite) x1.33, rounded (AOperativeCharacter::TakeHit applies
+	 * KnockdownRules::DownedDamageMultiplier on this path too). Returns the damage actually dealt.
 	 */
-	int32 ApplySquadHit(AActor* Victim, float Amount, const FString& Source, EKnockdownBlow Blow = EKnockdownBlow::Ranged);
+	int32 ApplySquadHit(AActor* Victim, float Amount, const FString& Source);
 	UGorkyGridManager* GetGrid() const { return Grid; }
 	int32 GetEnemyCount() const { return Enemies.Num(); }
 
@@ -538,8 +555,14 @@ private:
 	TMap<FIntPoint, int32> RelocateCells;
 	float RelocateYaw = 0.f;
 
-	/** Sprint 14: the active operative lies after a knockdown — 2 AP get him up, with fewer his turn is skipped. */
+	/**
+	 * Knockdown (user decision 2026-10-11): never gets the lying active operative up by itself. Posts the «GET UP (2 AP)
+	 * or stay down» hint once per turn when he lies and refreshes the HUD when his knockdown phase changes.
+	 */
 	void UpdateKnockedDownTurn();
+	TWeakObjectPtr<AOperativeCharacter> KnockdownHintUnit;
+	int32 KnockdownHintRound = -1;
+	EKnockdownPhase LastActiveKnockdownPhase = EKnockdownPhase::None;
 	ETurnPhase Phase = ETurnPhase::Inactive;
 	int32 ActiveIndex = 0;
 	int32 Round = 0;

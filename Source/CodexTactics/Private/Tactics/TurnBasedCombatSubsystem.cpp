@@ -575,16 +575,13 @@ void UTurnBasedCombatSubsystem::ApplyEnemyHit(AActor* Enemy, float Amount, const
 	}
 }
 
-int32 UTurnBasedCombatSubsystem::ApplySquadHit(AActor* Victim, float Amount, const FString& Source, EKnockdownBlow Blow)
+int32 UTurnBasedCombatSubsystem::ApplySquadHit(AActor* Victim, float Amount, const FString& Source)
 {
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Victim))
 	{
-		// Sprint 14: the grid path bypasses TakeHit's modifiers, so the downed multiplier is applied here, from the same
-		// KnockdownRules helper TakeHit uses (ranged x0.6, melee x1.5, explosion x1).
-		const float Scale = Operative->KnockdownComponent ? Operative->KnockdownComponent->GetBlowMultiplier(Blow) : 1.f;
-		const int32 Dealt = Scale == 1.f ? FMath::RoundToInt(Amount) : FMath::Max(1, FMath::RoundToInt(Amount * Scale));
-		Operative->TakeHit(Dealt, Source, false, true);
-		return Dealt;
+		// The grid path bypasses dodge / cover / fortitude; TakeHit still applies the downed x1.33 (rounded) here, the same
+		// KnockdownRules::DownedDamageMultiplier as every real-time blow (user decision 2026-10-11).
+		return FMath::RoundToInt(Operative->TakeHit(FMath::RoundToFloat(Amount), Source, false, true));
 	}
 	ApplyDamage(Victim, Amount, Source);
 	return FMath::RoundToInt(Amount);
@@ -940,30 +937,75 @@ bool UTurnBasedCombatSubsystem::IsActiveUnitKnockedDown() const
 
 void UTurnBasedCombatSubsystem::UpdateKnockedDownTurn()
 {
-	if (Phase != ETurnPhase::Squad || IsBusy())
+	if (Phase != ETurnPhase::Squad)
 	{
+		LastActiveKnockdownPhase = EKnockdownPhase::None;
 		return;
 	}
 	AOperativeCharacter* Unit = GetActiveUnit();
+	const UKnockdownComponent* Knockdown = Unit ? Unit->KnockdownComponent.Get() : nullptr;
+	const EKnockdownPhase KnockPhase = Knockdown ? Knockdown->GetPhase() : EKnockdownPhase::None;
+	if (KnockPhase != LastActiveKnockdownPhase)
+	{
+		LastActiveKnockdownPhase = KnockPhase;
+		Changed(); // the HUD's «GET UP» entry follows his phase (landed / getting up / up)
+	}
+	// User decision 2026-10-11: he is never stood up for free; the player orders «GET UP» (2 AP) or leaves him lying.
+	if (KnockPhase != EKnockdownPhase::Downed || (KnockdownHintUnit.Get() == Unit && KnockdownHintRound == Round))
+	{
+		return;
+	}
+	KnockdownHintUnit = Unit;
+	KnockdownHintRound = Round;
+	const FTurnUnitState* State = States.Find(Unit);
+	const int32 Cost = GetGetUpCost();
+	if (State && State->AP >= Cost)
+	{
+		Log(FString::Printf(TEXT("%s is knocked down: GET UP (%d AP) [Z] or stay down (every hit lands x%.2f)."), *NameOf(Unit), Cost,
+			KnockdownRules::GetConfig().DownedDamageMultiplier));
+	}
+	else
+	{
+		Log(FString::Printf(TEXT("%s is knocked down with %d AP - not enough to get up (%d AP), he stays down."), *NameOf(Unit),
+			State ? State->AP : 0, Cost));
+	}
+}
+
+int32 UTurnBasedCombatSubsystem::GetGetUpCost() const
+{
+	return KnockdownRules::GetConfig().GetUpActionPoints;
+}
+
+bool UTurnBasedCombatSubsystem::IsGetUpAvailable() const
+{
+	const AOperativeCharacter* Unit = GetActiveUnit();
+	const UKnockdownComponent* Knockdown = Unit ? Unit->KnockdownComponent.Get() : nullptr;
+	return Phase == ETurnPhase::Squad && !IsBusy() && States.Contains(Unit) && Knockdown && Knockdown->GetPhase() == EKnockdownPhase::Downed;
+}
+
+bool UTurnBasedCombatSubsystem::GetUpActiveUnit()
+{
+	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* State = States.Find(Unit);
 	UKnockdownComponent* Knockdown = Unit ? Unit->KnockdownComponent.Get() : nullptr;
-	if (!State || !Knockdown || Knockdown->GetPhase() != EKnockdownPhase::Downed)
+	if (!IsGetUpAvailable() || !State || !Knockdown)
 	{
-		return; // up, or still falling (decided once he lies)
+		return false;
 	}
 	const int32 Before = State->AP;
-	const FKnockdownTurnDecision Decision = Knockdown->HandleTurn(State->AP);
+	const FKnockdownTurnDecision Decision = Knockdown->TryTurnGetUp(State->AP);
 	if (Decision.bGetUp)
 	{
 		Log(FString::Printf(TEXT("%s gets back on his feet (-%d AP, %d left)."), *NameOf(Unit), Before - State->AP, State->AP));
 		RefreshOverlay();
 		Changed();
+		return true;
 	}
-	else if (Decision.bSkipTurn)
+	if (Decision.bNotEnoughAP)
 	{
-		Log(FString::Printf(TEXT("%s is knocked down with %d AP - not enough to get up, turn skipped."), *NameOf(Unit), State->AP));
-		EndCurrentUnitTurn();
+		Log(FString::Printf(TEXT("%s has %d AP - not enough to get up (%d AP), he stays down."), *NameOf(Unit), State->AP, GetGetUpCost()));
 	}
+	return false;
 }
 
 void UTurnBasedCombatSubsystem::Tick(float DeltaTime)
@@ -1534,7 +1576,7 @@ bool UTurnBasedCombatSubsystem::TurnActiveUnitFacing(EGorkyFacing NewFacing)
 {
 	AOperativeCharacter* Unit = GetActiveUnit();
 	FTurnUnitState* State = States.Find(Unit);
-	if (IsBusy() || Phase != ETurnPhase::Squad || !State || State->AP < 1 || State->Facing == NewFacing)
+	if (IsBusy() || Phase != ETurnPhase::Squad || !State || State->AP < 1 || State->Facing == NewFacing || IsActiveUnitKnockedDown())
 	{
 		return false;
 	}
@@ -2207,7 +2249,7 @@ bool UTurnBasedCombatSubsystem::StartRelocate(AActor* Object)
 	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
 	const FTurnUnitState* ObjectState = GetUnitState(Object);
 	const bool bBarricade = IsValid(Object) && Object->IsA<ABarricadeActor>();
-	if (Phase != ETurnPhase::Squad || IsBusy() || !UnitState || (!ObjectState && !bBarricade) || !Grid)
+	if (Phase != ETurnPhase::Squad || IsBusy() || !UnitState || (!ObjectState && !bBarricade) || !Grid || IsActiveUnitKnockedDown())
 	{
 		return false;
 	}
@@ -2438,7 +2480,7 @@ void UTurnBasedCombatSubsystem::CancelRelocate()
 bool UTurnBasedCombatSubsystem::TryPushAdjacentBarrel()
 {
 	const FTurnUnitState* UnitState = GetUnitState(GetActiveUnit());
-	if (!IsActive() || Phase != ETurnPhase::Squad || !UnitState)
+	if (!IsActive() || Phase != ETurnPhase::Squad || !UnitState || IsActiveUnitKnockedDown())
 	{
 		return false;
 	}
@@ -2878,7 +2920,7 @@ bool UTurnBasedCombatSubsystem::DeployObject(EDeployableType Type, const FIntPoi
 
 bool UTurnBasedCombatSubsystem::HandleDeployPlacement(EDeployableType Type, const FVector& WorldPoint, float Yaw)
 {
-	if (!IsActive() || Phase != ETurnPhase::Squad || IsBusy() || !Grid)
+	if (!IsActive() || Phase != ETurnPhase::Squad || IsBusy() || !Grid || IsActiveUnitKnockedDown())
 	{
 		return false;
 	}
@@ -3600,9 +3642,9 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 			AActor* Victim = WeakTarget.Get();
 			if (Biter && Victim && States.Contains(Victim))
 			{
-				// Sprint 14: a knocked-down operative takes the melee bonus; a Brute's blow knocks him down.
+				// Sprint 14: a knocked-down operative takes the bite x1.33; a Brute's blow can knock him down (50 %).
 				const AOperativeCharacter* VictimOperative = Cast<AOperativeCharacter>(Victim);
-				const int32 Dealt = ApplySquadHit(Victim, Damage, NameOf(Biter), EKnockdownBlow::Melee);
+				const int32 Dealt = ApplySquadHit(Victim, Damage, NameOf(Biter));
 				Log(FString::Printf(TEXT("🐺 Enemy %s attacks %s: %d damage!"), *NameOf(Biter), *NameOf(Victim), Dealt));
 				const AEnemyCharacter* BiterEnemy = Cast<AEnemyCharacter>(Biter);
 				if (BiterEnemy && BiterEnemy->GetArchetype() == EEnemyArchetype::Brute && VictimOperative && VictimOperative->KnockdownComponent)
@@ -3935,7 +3977,7 @@ void UTurnBasedCombatSubsystem::EnemyRangedAttack(AActor* Enemy, AActor* Target,
 		}
 		if (bHit)
 		{
-			const int32 Dealt = ApplySquadHit(Victim, Damage, NameOf(Shooter), EKnockdownBlow::Ranged);
+			const int32 Dealt = ApplySquadHit(Victim, Damage, NameOf(Shooter));
 			Log(FString::Printf(TEXT("🎯 %s shoots at %s from %d cells (chance %d%%): %d damage!"), *NameOf(Shooter), *NameOf(Victim), Distance,
 				FMath::RoundToInt(Chance * 100.f), Dealt));
 			if (IsActive() && IsDead(Victim))

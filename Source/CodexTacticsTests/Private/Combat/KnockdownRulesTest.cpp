@@ -87,27 +87,92 @@ bool FKnockdownTriggerTest::RunTest(const FString&)
 	TestFalse(TEXT("Hound: standing bite"), KnockdownRules::IsHoundPounce(Config, 0.3f, 30.f));
 	TestFalse(TEXT("Hound: pounce on cooldown"), KnockdownRules::IsHoundPounce(Config, 2.f, 5.f));
 
-	TestEqual(TEXT("Downed: ranged damage reduced"), KnockdownRules::DownedDamageMultiplier(Config, false), 0.6f);
-	TestEqual(TEXT("Downed: melee damage bonus"), KnockdownRules::DownedDamageMultiplier(Config, true), 1.5f);
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKnockdownDownedModifiersTurnBasedTest, "CodexTactics.Combat.Knockdown.DownedDamageModifiersTurnBased",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKnockdownChanceTest, "CodexTactics.Combat.Knockdown.Chance",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-bool FKnockdownDownedModifiersTurnBasedTest::RunTest(const FString& Parameters)
+
+bool FKnockdownChanceTest::RunTest(const FString&)
 {
-	// One helper feeds TakeHit and the turn-based grid hits (UTurnBasedCombatSubsystem::ApplySquadHit): enemy shot x0.6,
-	// bite x1.5, blast x1 on a lying operative. The turn-based ranged 30 dmg shot lands as 18, a bite of 20 as 30.
+	// User decision 2026-10-11: a qualifying heavy hit / heavy blow knocks down with 50 % (the roll is passed in);
+	// a blast within 2.5 m and a pounce always do.
 	const FKnockdownConfig Config;
-	TestEqual(TEXT("Ranged blow x0.6"), KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Ranged), 0.6f);
-	TestEqual(TEXT("Melee blow x1.5"), KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Melee), 1.5f);
-	TestEqual(TEXT("Explosion x1"), KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Explosion), 1.f);
-	TestEqual(TEXT("Legacy bMelee=false matches Ranged"), KnockdownRules::DownedDamageMultiplier(Config, false),
-		KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Ranged));
-	TestEqual(TEXT("Legacy bMelee=true matches Melee"), KnockdownRules::DownedDamageMultiplier(Config, true),
-		KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Melee));
-	TestEqual(TEXT("Grid ranged 30 -> 18"), FMath::Max(1, FMath::RoundToInt(30.f * KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Ranged))), 18);
-	TestEqual(TEXT("Grid melee 20 -> 30"), FMath::Max(1, FMath::RoundToInt(20.f * KnockdownRules::DownedBlowMultiplier(Config, EKnockdownBlow::Melee))), 30);
+	TestEqual(TEXT("Default chance 0.5"), Config.KnockdownChance, 0.5f);
+	const FKnockdownTarget Operative;
+	FKnockdownHit Hit;
+	Hit.Cause = EKnockdownCause::HeavyHit;
+	Hit.Damage = 45.f;
+	Hit.ChanceRoll = 0.49f;
+	TestTrue(TEXT("Heavy hit, roll 0.49 < 0.5: down"), KnockdownRules::ShouldKnockDown(Config, Hit, Operative));
+	Hit.ChanceRoll = 0.51f;
+	TestFalse(TEXT("Heavy hit, roll 0.51: stays up"), KnockdownRules::ShouldKnockDown(Config, Hit, Operative));
+	Hit.ChanceRoll = 0.5f;
+	TestFalse(TEXT("Heavy hit, roll exactly 0.5: stays up (roll < chance)"), KnockdownRules::ShouldKnockDown(Config, Hit, Operative));
+	Hit.Damage = 39.f;
+	Hit.ChanceRoll = 0.f;
+	TestFalse(TEXT("Below the threshold the roll does not matter"), KnockdownRules::ShouldKnockDown(Config, Hit, Operative));
+
+	FKnockdownHit Blow;
+	Blow.Cause = EKnockdownCause::HeavyMelee;
+	Blow.ChanceRoll = 0.49f;
+	TestTrue(TEXT("Brute heavy blow, roll 0.49: down"), KnockdownRules::ShouldKnockDown(Config, Blow, Operative));
+	Blow.ChanceRoll = 0.51f;
+	TestFalse(TEXT("Brute heavy blow, roll 0.51: stays up"), KnockdownRules::ShouldKnockDown(Config, Blow, Operative));
+
+	FKnockdownHit Blast;
+	Blast.Cause = EKnockdownCause::Explosion;
+	Blast.ExplosionDistance = 200.f;
+	Blast.ChanceRoll = 0.99f;
+	TestTrue(TEXT("Explosion within 2.5 m: always down (roll ignored)"), KnockdownRules::ShouldKnockDown(Config, Blast, Operative));
+	FKnockdownHit Pounce;
+	Pounce.Cause = EKnockdownCause::Pounce;
+	Pounce.ChanceRoll = 0.99f;
+	TestTrue(TEXT("Hound / cutter pounce: always down (dedicated knockdown attack)"), KnockdownRules::ShouldKnockDown(Config, Pounce, Operative));
+	TestTrue(TEXT("Heavy hit rolls"), KnockdownRules::UsesKnockdownChance(EKnockdownCause::HeavyHit));
+	TestTrue(TEXT("Heavy melee rolls"), KnockdownRules::UsesKnockdownChance(EKnockdownCause::HeavyMelee));
+	TestFalse(TEXT("Explosion never rolls"), KnockdownRules::UsesKnockdownChance(EKnockdownCause::Explosion));
+	TestFalse(TEXT("Pounce never rolls"), KnockdownRules::UsesKnockdownChance(EKnockdownCause::Pounce));
+
+	FKnockdownConfig Always = Config;
+	Always.KnockdownChance = 1.f; // what the smokes force (Codex.Knockdown.Chance 1)
+	Hit.Damage = 45.f;
+	Hit.ChanceRoll = 0.999f;
+	TestTrue(TEXT("Chance 1: every qualifying hit"), KnockdownRules::ShouldKnockDown(Always, Hit, Operative));
+	FKnockdownConfig Never = Config;
+	Never.KnockdownChance = 0.f;
+	Hit.ChanceRoll = 0.f;
+	TestFalse(TEXT("Chance 0: none"), KnockdownRules::ShouldKnockDown(Never, Hit, Operative));
+	TestTrue(TEXT("Chance 0: blasts still floor him"), KnockdownRules::ShouldKnockDown(Never, Blast, Operative));
+
+	// The brute's poise still decides before the roll.
+	FKnockdownTarget Brute;
+	Brute.bHeavyPoise = true;
+	Hit.ChanceRoll = 0.1f;
+	Hit.bCritical = false;
+	TestFalse(TEXT("Brute: plain heavy hit with a good roll: poise holds"), KnockdownRules::ShouldKnockDown(Config, Hit, Brute));
+	Hit.bCritical = true;
+	TestTrue(TEXT("Brute: critical heavy hit with a good roll: down"), KnockdownRules::ShouldKnockDown(Config, Hit, Brute));
+	Hit.ChanceRoll = 0.9f;
+	TestFalse(TEXT("Brute: critical heavy hit with a bad roll: up"), KnockdownRules::ShouldKnockDown(Config, Hit, Brute));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKnockdownDownedDamageTest, "CodexTactics.Combat.Knockdown.DownedDamage",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FKnockdownDownedDamageTest::RunTest(const FString& Parameters)
+{
+	// User decision 2026-10-11: any blow (ranged, melee, explosion) on a unit lying after a knockdown lands x1.33, real
+	// time and turn-based (one helper: AOperativeCharacter::TakeHit incl. the grid path, UHealthComponent::TakeDamage).
+	const FKnockdownConfig Config;
+	TestEqual(TEXT("Default x1.33"), Config.DownedDamageMultiplier, 1.33f);
+	TestEqual(TEXT("Down: x1.33"), KnockdownRules::DownedDamageMultiplier(Config, true), 1.33f);
+	TestEqual(TEXT("Up: x1"), KnockdownRules::DownedDamageMultiplier(Config, false), 1.f);
+	// The turn-based grid hits are whole numbers (TakeHit's bypass path rounds): 30 -> 40, 20 -> 27, 1 -> 1.
+	TestEqual(TEXT("Shot / bite / blast 30 -> 39.9"), 30.f * KnockdownRules::DownedDamageMultiplier(Config, true), 39.9f, 0.001f);
+	TestEqual(TEXT("Grid 30 -> 40"), FMath::RoundToInt(30.f * KnockdownRules::DownedDamageMultiplier(Config, true)), 40);
+	TestEqual(TEXT("Grid 20 -> 27"), FMath::RoundToInt(20.f * KnockdownRules::DownedDamageMultiplier(Config, true)), 27);
+	TestEqual(TEXT("Grid 1 -> 1"), FMath::Max(1, FMath::RoundToInt(1.f * KnockdownRules::DownedDamageMultiplier(Config, true))), 1);
 	return true;
 }
 
@@ -117,14 +182,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKnockdownPhaseTest, "CodexTactics.Combat.Knock
 bool FKnockdownPhaseTest::RunTest(const FString&)
 {
 	const FKnockdownConfig Config;
-	TestEqual(TEXT("Revive_Back 1.667 s -> 1.0 s at 1.667x"), KnockdownRules::ClipPlayRate(1.667f, 1.f, 1.7f), 1.667f, 0.001f);
-	TestEqual(TEXT("Revive_Front 2.5 s capped at 1.7x"), KnockdownRules::ClipPlayRate(2.5f, 1.f, 1.7f), 1.7f, 0.001f);
+	// User decision 2026-10-11: faster get-up — downed 0.6 s (was 1.5), get-up 0.8 s (was 1.0), max play rate 2.1x.
+	TestEqual(TEXT("Downed 0.6 s"), Config.DownedSeconds, 0.6f);
+	TestEqual(TEXT("Get-up 0.8 s"), Config.GetUpSeconds, 0.8f);
+	TestEqual(TEXT("Fall fallback unchanged 0.8 s"), Config.FallSeconds, 0.8f);
+	TestEqual(TEXT("Revive_Back 1.667 s -> 0.8 s at 2.08x"), KnockdownRules::ClipPlayRate(1.667f, Config.GetUpSeconds, Config.GetUpMaxPlayRate), 1.667f / 0.8f, 0.001f);
+	TestEqual(TEXT("Revive_Front 2.5 s capped at 2.1x"), KnockdownRules::ClipPlayRate(2.5f, Config.GetUpSeconds, Config.GetUpMaxPlayRate), 2.1f, 0.001f);
 	TestEqual(TEXT("A short clip is never slowed down"), KnockdownRules::ClipPlayRate(0.5f, 1.f, 1.7f), 1.f, 0.001f);
 
 	FKnockdownState State = KnockdownRules::Start(Config, EKnockdownDirection::Back, EKnockdownCause::Pounce, 0.867f, 1.667f, false);
 	TestEqual(TEXT("Starts falling"), State.Phase, EKnockdownPhase::Falling);
 	TestEqual(TEXT("Fall = clip length"), State.FallDuration, 0.867f, 0.001f);
-	TestEqual(TEXT("Get-up = 1.0 s"), State.GetUpDuration, 1.f, 0.001f);
+	TestEqual(TEXT("Get-up = 0.8 s"), State.GetUpDuration, 0.8f, 0.001f);
+	TestEqual(TEXT("Downed = 0.6 s"), State.DownedDuration, 0.6f, 0.001f);
+	TestTrue(TEXT("On the ground ~2.2 s in all (fall 0.87 + 0.6 + 0.8), was ~3.3 s"),
+		FMath::IsNearlyEqual(State.FallDuration + State.DownedDuration + State.GetUpDuration, 2.267f, 0.01f));
 	TestTrue(TEXT("Down"), KnockdownRules::IsDown(State));
 	TestEqual(TEXT("Bar empty while falling"), KnockdownRules::RecoveryFraction(State), 0.f);
 
@@ -141,17 +213,19 @@ bool FKnockdownPhaseTest::RunTest(const FString&)
 	TestEqual(TEXT("Frozen: no step"), KnockdownRules::Advance(State, 10.f, true), EKnockdownStep::None);
 	TestEqual(TEXT("Frozen: bar unchanged"), KnockdownRules::RecoveryFraction(State), Before);
 
-	KnockdownRules::Advance(State, 0.717f, false);
-	TestEqual(TEXT("Bar half full at 0.75 s of 1.5"), KnockdownRules::RecoveryFraction(State), 0.5f, 0.01f);
-	TestEqual(TEXT("Gets up after 1.5 s"), KnockdownRules::Advance(State, 0.76f, false), EKnockdownStep::StartGetUp);
+	KnockdownRules::Advance(State, 0.267f, false);
+	TestEqual(TEXT("Bar half full at 0.3 s of 0.6"), KnockdownRules::RecoveryFraction(State), 0.5f, 0.01f);
+	TestEqual(TEXT("Still lying at 0.58 s"), KnockdownRules::Advance(State, 0.28f, false), EKnockdownStep::None);
+	TestEqual(TEXT("Gets up after 0.6 s"), KnockdownRules::Advance(State, 0.03f, false), EKnockdownStep::StartGetUp);
 	TestEqual(TEXT("Bar full while getting up"), KnockdownRules::RecoveryFraction(State), 1.f);
-	TestEqual(TEXT("Recovers after the get-up"), KnockdownRules::Advance(State, 1.f, false), EKnockdownStep::Recovered);
+	TestEqual(TEXT("Still getting up at 0.75 s"), KnockdownRules::Advance(State, 0.75f, false), EKnockdownStep::None);
+	TestEqual(TEXT("Recovers after the 0.8 s get-up"), KnockdownRules::Advance(State, 0.06f, false), EKnockdownStep::Recovered);
 	TestFalse(TEXT("Up again"), KnockdownRules::IsDown(State));
 
 	// No clip known: spec fallback durations.
 	const FKnockdownState NoClip = KnockdownRules::Start(Config, EKnockdownDirection::None, EKnockdownCause::Explosion, 0.f, 0.f, false);
 	TestEqual(TEXT("Fallback fall 0.8 s"), NoClip.FallDuration, 0.8f);
-	TestEqual(TEXT("Fallback get-up 1.0 s"), NoClip.GetUpDuration, 1.f);
+	TestEqual(TEXT("Fallback get-up 0.8 s"), NoClip.GetUpDuration, 0.8f);
 	TestEqual(TEXT("No direction = back"), NoClip.Direction, EKnockdownDirection::Back);
 	return true;
 }
@@ -163,28 +237,34 @@ bool FKnockdownTurnBasedTest::RunTest(const FString&)
 {
 	const FKnockdownConfig Config;
 	FKnockdownState State = KnockdownRules::Start(Config, EKnockdownDirection::Front, EKnockdownCause::HeavyMelee, 0.933f, 2.5f, true);
-	TestFalse(TEXT("Still falling: no get-up decision yet"), KnockdownRules::DecideTurnGetUp(Config, State, 8).bGetUp || KnockdownRules::DecideTurnGetUp(Config, State, 8).bSkipTurn);
+	TestEqual(TEXT("Get-up costs 2 AP"), Config.GetUpActionPoints, 2);
+	TestFalse(TEXT("Still falling: no get-up yet"), KnockdownRules::DecideTurnGetUp(Config, State, 8).bGetUp || KnockdownRules::DecideTurnGetUp(Config, State, 8).bNotEnoughAP);
 	KnockdownRules::Advance(State, 1.f, false);
 	TestEqual(TEXT("Downed"), State.Phase, EKnockdownPhase::Downed);
+	// No free auto-stand: however long the turn-based wait (his turn starting included), only the paid order gets him up.
 	TestEqual(TEXT("Turn-based: the timer does not get him up"), KnockdownRules::Advance(State, 5.f, false), EKnockdownStep::None);
-	TestEqual(TEXT("Still downed"), State.Phase, EKnockdownPhase::Downed);
+	TestEqual(TEXT("... nor a whole round later"), KnockdownRules::Advance(State, 60.f, false), EKnockdownStep::None);
+	TestEqual(TEXT("Still downed (he may stay down)"), State.Phase, EKnockdownPhase::Downed);
 	TestTrue(TEXT("Get-up due"), State.bGetUpReady);
 	TestEqual(TEXT("Bar full when due"), KnockdownRules::RecoveryFraction(State), 1.f);
 
 	const FKnockdownTurnDecision Full = KnockdownRules::DecideTurnGetUp(Config, State, 8);
 	TestTrue(TEXT("8 AP: gets up"), Full.bGetUp);
 	TestEqual(TEXT("Costs 2 AP"), Full.ActionPointsSpent, 2);
-	TestFalse(TEXT("Turn not skipped"), Full.bSkipTurn);
+	TestFalse(TEXT("Enough AP"), Full.bNotEnoughAP);
 	const FKnockdownTurnDecision Two = KnockdownRules::DecideTurnGetUp(Config, State, 2);
 	TestTrue(TEXT("Exactly 2 AP: gets up"), Two.bGetUp);
 	const FKnockdownTurnDecision One = KnockdownRules::DecideTurnGetUp(Config, State, 1);
 	TestFalse(TEXT("1 AP: stays down"), One.bGetUp);
-	TestTrue(TEXT("1 AP: turn skipped"), One.bSkipTurn);
+	TestTrue(TEXT("1 AP: not enough AP (feed line, the turn goes on)"), One.bNotEnoughAP);
 	TestEqual(TEXT("1 AP: nothing spent"), One.ActionPointsSpent, 0);
+	TestEqual(TEXT("A refused get-up leaves him lying"), State.Phase, EKnockdownPhase::Downed);
 
 	TestTrue(TEXT("Paid: get-up starts"), KnockdownRules::BeginTurnGetUp(State));
 	TestEqual(TEXT("Getting up"), State.Phase, EKnockdownPhase::GettingUp);
-	TestEqual(TEXT("Revive_Front at 1.7x"), State.GetUpDuration, 2.5f / 1.7f, 0.01f);
+	TestEqual(TEXT("Revive_Front at 2.1x"), State.GetUpDuration, 2.5f / 2.1f, 0.01f);
+	const FKnockdownTurnDecision Again = KnockdownRules::DecideTurnGetUp(Config, State, 8);
+	TestFalse(TEXT("Already getting up: no second payment"), Again.bGetUp || Again.ActionPointsSpent > 0);
 	TestEqual(TEXT("Recovers"), KnockdownRules::Advance(State, 2.f, false), EKnockdownStep::Recovered);
 
 	FKnockdownState Up;

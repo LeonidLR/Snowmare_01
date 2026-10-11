@@ -842,7 +842,7 @@ AActor* AEnemyCharacter::FindTarget() const
 	const int32 Index = EnemyAIRules::SelectTarget(AIConfig, EnemyAIRules::IsSmallEnemy(Archetype), Feet, Candidates, bTurretHit);
 	if (Actors.IsValidIndex(Index))
 	{
-		// Sprint 14: a melee enemy goes for a knocked-down operative close by (melee bonus); spitters keep their pick.
+		// Sprint 14: a melee enemy goes for a knocked-down operative close by (he takes x1.33, cannot hit back); spitters keep their pick.
 		const bool bMelee = Archetype != EEnemyArchetype::Spitter && Archetype != EEnemyArchetype::Marksman;
 		const float CurrentDistance = FVector::Dist2D(Feet, Actors[Index]->GetActorLocation());
 		for (AOperativeCharacter* Member : Known)

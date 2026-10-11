@@ -2776,11 +2776,11 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 				FLinearColor(0.5f, 0.8f, 1.f));
 		}
 	}
-	// Sprint 14: lying after a knockdown — ranged hits find a prone profile (x0.6), melee blows a helpless man (x1.5).
-	const float KnockdownScale = !bBypassAvoidance && KnockdownComponent && KnockdownComponent->IsDown()
-		? KnockdownComponent->GetBlowMultiplier(!AttackerActor ? EKnockdownBlow::Explosion
-			: IsRangedEnemyActor(AttackerActor) ? EKnockdownBlow::Ranged : EKnockdownBlow::Melee) : 1.f;
-	const float Final = bBypassAvoidance ? FMath::Max(1.f, Amount)
+	// Lying after a knockdown: any blow (shot, bite, blast, trap; real time and the turn-based grid hits, which come in
+	// with bBypassAvoidance) lands x1.33 (user decision 2026-10-11, KnockdownRules::DownedDamageMultiplier). The
+	// bypass path keeps whole numbers (grid damage is integer).
+	const float KnockdownScale = KnockdownComponent ? KnockdownComponent->GetDamageMultiplier() : 1.f;
+	const float Final = bBypassAvoidance ? FMath::Max(1.f, KnockdownScale != 1.f ? FMath::RoundToFloat(Amount * KnockdownScale) : Amount)
 		: FMath::Max(1.f, CoverRules::ApplyAbsorb(Amount, CoverAbsorb) * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut) * KnockdownScale);
 	RecentIncomingDamage += Final;
 	bHasLastHitSource = true; // before the health loss: the hit reaction / death fall read it

@@ -10,7 +10,8 @@ class UTextBlock;
 /**
  * Turn-based action panel (bottom right, shown while the grid fight runs): «⚔️ SQUAD TURN» / «🐺 ENEMY TURN...»,
  * unit name, AP and HP, «🛑 END SQUAD TURN» [Enter], «⏭️ NEXT OPERATIVE [Tab]», «🛡️ STANCE: … [C]»,
- * «🔄 Turn [R]», «📦 Barrel [F]» (barrel push — disabled until ported).
+ * «🔄 Turn [R]», «📦 Barrel [F]» (barrel push — disabled until ported); «GET UP (2 AP) [Z]» in the stance entry's place
+ * while the active operative lies after a knockdown (user decision 2026-10-11).
  * Built in C++ (restyle through a Widget Blueprint subclass). Refreshes on UTurnBasedCombatSubsystem::OnStateChanged.
  * Godot reference: Scripts/tactics/gorky17_combat_hud.gd (_create_action_panel, update_unit_info).
  */
@@ -25,6 +26,9 @@ public:
 
 	FText GetPhaseText() const;
 	FText GetApText() const;
+
+	/** The «GET UP (2 AP)» entry is on the panel (the active operative is knocked down; smokes). */
+	bool IsGetUpShown() const;
 
 protected:
 	virtual void NativeOnInitialized() override;
@@ -56,6 +60,13 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|TurnBased", meta = (BindWidgetOptional))
 	TObjectPtr<UButton> TbTurnButton;
 
+	/** «GET UP (2 AP) [Z]»: the knocked-down active operative gets up (UTurnBasedCombatSubsystem::GetUpActiveUnit). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|TurnBased", meta = (BindWidgetOptional))
+	TObjectPtr<UButton> TbGetUpButton;
+
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|TurnBased", meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> TbGetUpText;
+
 	/** «Barrel»: push the adjacent barrel (Godot push_barrel_pressed -> _try_push_adjacent_barrel). */
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|TurnBased", meta = (BindWidgetOptional))
 	TObjectPtr<UButton> TbBarrelButton;
@@ -82,4 +93,7 @@ private:
 
 	UFUNCTION()
 	void HandleBarrel();
+
+	UFUNCTION()
+	void HandleGetUp();
 };
