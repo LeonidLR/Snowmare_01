@@ -9,6 +9,7 @@
 #include "Combat/KnockdownTypes.h"
 #include "EnemyCharacter.generated.h"
 
+class AAIController;
 class APatrolRouteActor;
 class UHealthComponent;
 struct FOverheadLabel;
@@ -506,6 +507,17 @@ protected:
 	 * Archetypes with their own brain (AMarksmanEnemyCharacter) override it.
 	 */
 	virtual void TickBehavior(float DeltaTime);
+
+	/**
+	 * The per-tick AI's move ask: MoveToLocation(Goal, AcceptanceRadius, no stop on overlap, pathfinding), re-issued only
+	 * when the goal changed / the move stopped / the re-path interval passed (AEnemyAIController::RequestMoveToLocation,
+	 * audit 2026-10-11 #1). Another controller class moves at once.
+	 */
+	void RequestAIMoveToLocation(AAIController* AIC, const FVector& Goal, float AcceptanceRadius);
+	/** The per-tick AI's chase ask: MoveToActor(Goal, AcceptanceRadius), throttled like RequestAIMoveToLocation. */
+	void RequestAIMoveToActor(AAIController* AIC, AActor* Goal, float AcceptanceRadius);
+	/** Forgets the last throttled move, so the next ask is issued at once (turn-based hold, world AI pause). */
+	void ResetAIMoveThrottle();
 
 	/** Turn towards Yaw this frame (attack lock, aiming, pounce windup): the movement facing then stays out of it. */
 	void FaceYaw(float Yaw, float DeltaTime, float InterpSpeed);

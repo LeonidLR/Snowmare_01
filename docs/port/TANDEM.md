@@ -971,6 +971,8 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-10-11 (Claude, `agents/repath`): enemy re-path throttle (audit #1): `RepathRules` + `AEnemyAIController::RequestMoveTo*`, CVars `Codex.AI.Repath*`, probe `CodexTactics.RepathProbe`; for Gemini's perf work: ~35 -> ~0.9 enemy pathfinds per enemy per second in a wave chase. See HANDOFF §10. Not merged into main.
+
 - 2026-10-11 (Claude, `agents/horde`): sudden horde start (free tactical pause + camera flyover), see HANDOFF §10. Not merged into main.
 
 - 2026-10-09 Claude (sync for Gemini): the Medic-Sapper is the Female Soldier (`SK_Female_soldier`, same ABP_Operative; per-role body in `ACodexTacticsGameMode::SquadRoster[].BodyMesh`) and carries a sniper rifle (`DA_Weapon_sniper_rifle`, `EWeaponHandling::SniperRifle`, `weapons_tuning.json` "sniper_rifle"): fires only kneeling / prone and still (`Combat/SniperRules`), turn-based kneel + shot AP. Assets touched: `ABP_Operative` (sniper clip class defaults, graph untouched), new `Content/Characters/Operatives/Sniper/AimOffsets/**`, `Content/Data/Weapons/DA_Weapon_sniper_rifle`; pack skeletons `Female_Soldier_Skeleton` / Post_Apo `UE4_Mannequin_Skeleton` compatible lists (untracked packs, main checkout). Nothing in Gemini's area (no material / VFX / scalability change; the M16 model is a stand-in until a sniper model exists — a VFX muzzle / scope glint request may follow). New smoke `SniperSmoke`. See HANDOFF §6 «Female Soldier + sniper», §10.

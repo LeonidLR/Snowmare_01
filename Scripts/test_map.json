@@ -41,7 +41,7 @@
     "MainMenuSmoke": { "map": "/Game/Maps/L_MainMenu" },
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" }
   },
-  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "PhoneShots", "KnockdownShots"],
+  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots"],
   "rules": [
     {
       "name": "sniper",
@@ -173,7 +173,7 @@
     },
     {
       "name": "enemy",
-      "globs": ["Source/**/Characters/EnemyCharacter*", "Source/**/Characters/EnemyAI*", "Source/**/Data/AITuning*", "Source/**/Data/EnemyPerception*"],
+      "globs": ["Source/**/Characters/EnemyCharacter*", "Source/**/Characters/EnemyAI*", "Source/**/AI/RepathRules*", "Source/**/Debug/RepathProbe*", "Source/**/Data/AITuning*", "Source/**/Data/EnemyPerception*"],
       "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Combat.Enemy", "CodexTactics.AI"],
       "smokes": ["EnemyAISmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke"]
     },
