@@ -29,7 +29,7 @@
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
-    "HordeIntroSmoke", "SoloRejoinSmoke"
+    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
@@ -39,9 +39,10 @@
     "EventBusSmoke": { "exclusive": true },
     "CombatMoveSmoke": { "knownFail": true },
     "MainMenuSmoke": { "map": "/Game/Maps/L_MainMenu" },
-    "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" }
+    "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" },
+    "PatrolAmbushSmoke": { "map": "/Game/Maps/L_PatrolTest" }
   },
-  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots"],
+  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "EncounterProbe"],
   "rules": [
     {
       "name": "sniper",
@@ -156,8 +157,8 @@
     {
       "name": "waves-victory",
       "globs": ["Source/**/Combat/Wave*", "Source/**/Combat/EnemySpawn*", "Source/**/Combat/SpawnLane*", "Source/**/Combat/FallbackWave*", "Source/**/Combat/KillStats*", "Source/**/UI/VictoryPanel*", "Source/**/GameFlow/LevelEncounter*", "Source/**/Data/LevelJson*", "Source/**/Data/WaveConfig*", "Source/**/Data/EnemyArchetype*", "Content/Data/LevelJson/**"],
-      "tests": ["CodexTactics.Combat.Enemy", "CodexTactics.Combat.FallbackWave", "CodexTactics.Combat.SpawnLanes", "CodexTactics.Combat.KillStats", "CodexTactics.LevelJson", "CodexTactics.Core.LevelFlow"],
-      "smokes": ["WaveCombatSmoke", "LevelWaveSmoke", "FlankBreachSmoke", "VictorySmoke", "SusaninSmoke"]
+      "tests": ["CodexTactics.Combat.Enemy", "CodexTactics.Combat.FallbackWave", "CodexTactics.Combat.SpawnLanes", "CodexTactics.Combat.KillStats", "CodexTactics.LevelJson", "CodexTactics.Core.LevelFlow", "CodexTactics.Combat.AmbushStartsCombat", "CodexTactics.Combat.LevelEnemyContactStartsCombat"],
+      "smokes": ["WaveCombatSmoke", "LevelWaveSmoke", "FlankBreachSmoke", "VictorySmoke", "SusaninSmoke", "PatrolAmbushSmoke", "AmbushSmoke"]
     },
     {
       "name": "health-damage",
@@ -175,7 +176,7 @@
       "name": "enemy",
       "globs": ["Source/**/Characters/EnemyCharacter*", "Source/**/Characters/EnemyAI*", "Source/**/AI/RepathRules*", "Source/**/Debug/RepathProbe*", "Source/**/Data/AITuning*", "Source/**/Data/EnemyPerception*"],
       "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Combat.Enemy", "CodexTactics.AI"],
-      "smokes": ["EnemyAISmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke"]
+      "smokes": ["EnemyAISmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke", "PatrolAmbushSmoke"]
     },
     {
       "name": "enemy-tactics",
@@ -187,7 +188,7 @@
       "name": "marksman",
       "globs": ["Source/**/Characters/Marksman*"],
       "tests": ["CodexTactics.Marksman"],
-      "smokes": ["MarksmanSmoke", "MarksmanAdvanceSmoke", "MarksmanCloseShotSmoke", "BotMarksmanSmoke"]
+      "smokes": ["MarksmanSmoke", "MarksmanAdvanceSmoke", "MarksmanCloseShotSmoke", "BotMarksmanSmoke", "PatrolAmbushSmoke"]
     },
     {
       "name": "operative-movement-squad",

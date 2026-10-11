@@ -34,14 +34,19 @@ FString LevelEncounterRules::CombatStartName(ECombatStartMode Mode)
 	}
 }
 
-bool LevelEncounterRules::IsAmbushStart(ECombatStartMode Mode, bool bLevelHasPatrols)
+bool LevelEncounterRules::IsAmbushStart(ECombatStartMode Mode, bool bLevelHasPatrols, bool bLevelHasPlacedEnemies)
 {
-	return Mode == ECombatStartMode::Ambush || (Mode == ECombatStartMode::Auto && bLevelHasPatrols);
+	return Mode == ECombatStartMode::Ambush || (Mode == ECombatStartMode::Auto && (bLevelHasPatrols || bLevelHasPlacedEnemies));
 }
 
 bool LevelEncounterRules::ShouldStartAmbush(bool bAmbushLevel, ECodexGamePhase Phase, bool bCombatUnlocked)
 {
 	return bAmbushLevel && Phase == ECodexGamePhase::Exploration && !bCombatUnlocked;
+}
+
+bool LevelEncounterRules::ShouldStartFightOnContact(bool bAmbushLevel, bool bContactWithLevelEnemy, ECodexGamePhase Phase, bool bCombatUnlocked)
+{
+	return ShouldStartAmbush(bAmbushLevel || bContactWithLevelEnemy, Phase, bCombatUnlocked);
 }
 
 bool LevelEncounterRules::IsWorldAIPaused(bool bDialogueOpen, ECodexGamePhase Phase, int32 NumBlockers)

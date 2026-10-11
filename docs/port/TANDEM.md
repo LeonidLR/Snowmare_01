@@ -972,6 +972,7 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-10-11 (Claude, `agents/patrolfix`, temp worktree `../CodexTactics-agents2`): enemies placed in a map now always start the (ambush) fight when they attack / spot the squad or are hit, and "auto" maps with placed enemies are ambush levels (user bug: L_PatrolTest enemies without routes attacked a squad that stayed in exploration). Gameplay code only (`LevelEncounter*`, `EnemyCharacter`, `MarksmanEnemyCharacter`), see HANDOFF §5 / §10. Not merged into main.
 - 2026-10-11 (Claude, `agents/work`): sudden horde start reworked after the user's review — the horde runs first, the free pause + «HORDE INCOMING» alert + slow-motion flyover (0.2) open once it is a running mass; see HANDOFF §5 / §10. `ATacticalCameraPawn` got `SetCinematicYaw` / `RestorePlayerYaw` (camera only, no rendering change).
 - 2026-10-11 (Claude, `agents/repath`): enemy re-path throttle (audit #1): `RepathRules` + `AEnemyAIController::RequestMoveTo*`, CVars `Codex.AI.Repath*`, probe `CodexTactics.RepathProbe`; for Gemini's perf work: ~35 -> ~0.9 enemy pathfinds per enemy per second in a wave chase. See HANDOFF §10. Not merged into main.
 

@@ -395,6 +395,43 @@ bool FPerceptionHearingRadiiWallsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// User bug 2026-10-11 (L_PatrolTest): a marksman and a hound placed in the map without routes attacked the squad, the
+// flow stayed in exploration and the operatives never fired back. Enemies placed in a map now make "auto" an ambush
+// level, and any contact with such an enemy (it attacks / spots the squad, or is hit) starts the fight on every level.
+PERCEPTION_TEST(FLevelEnemyContactStartsCombatTest, "Combat.LevelEnemyContactStartsCombat")
+bool FLevelEnemyContactStartsCombatTest::RunTest(const FString& Parameters)
+{
+	using namespace LevelEncounterRules;
+	// Auto: patrols or placed enemies -> ambush («Start combat» hidden); a wave map with neither keeps the button.
+	TestTrue(TEXT("auto + placed enemies (no routes): ambush"), IsAmbushStart(ECombatStartMode::Auto, false, true));
+	TestTrue(TEXT("auto + patrols: ambush"), IsAmbushStart(ECombatStartMode::Auto, true, false));
+	TestFalse(TEXT("auto, empty wave map: button"), IsAmbushStart(ECombatStartMode::Auto, false, false));
+	TestFalse(TEXT("button forced on a map with placed enemies"), IsAmbushStart(ECombatStartMode::Button, false, true));
+	TestTrue(TEXT("ambush forced"), IsAmbushStart(ECombatStartMode::Ambush, false, false));
+
+	// Contact with a level enemy starts the fight on any level, while exploring, once.
+	TestTrue(TEXT("placed enemy attacks on a button level"), ShouldStartFightOnContact(false, true, ECodexGamePhase::Exploration, false));
+	TestTrue(TEXT("ambush level, any contact"), ShouldStartFightOnContact(true, false, ECodexGamePhase::Exploration, false));
+	TestFalse(TEXT("button level, runtime-spawned enemy (smokes, dev spawns): no fight"),
+		ShouldStartFightOnContact(false, false, ECodexGamePhase::Exploration, false));
+	TestFalse(TEXT("already fighting"), ShouldStartFightOnContact(false, true, ECodexGamePhase::WaveCombat, true));
+	TestFalse(TEXT("not during a cutscene"), ShouldStartFightOnContact(true, true, ECodexGamePhase::Cutscene, true));
+	TestFalse(TEXT("not during the preparation"), ShouldStartFightOnContact(false, true, ECodexGamePhase::Preparation, true));
+	TestFalse(TEXT("not after the battle"), ShouldStartFightOnContact(false, true, ECodexGamePhase::PostCombat, true));
+	TestFalse(TEXT("not once unlocked"), ShouldStartFightOnContact(true, true, ECodexGamePhase::Exploration, true));
+
+	// The started fight is the real-time ambush fight (operatives auto-fire in WaveCombat / RealTime).
+	FGameFlowConfig Config;
+	Config.TotalWaves = 3;
+	FGameFlowStateMachine Machine(Config);
+	TestEqual(TEXT("ambush start ok"), Machine.StartAmbushCombat(), EGameFlowResult::Ok);
+	TestEqual(TEXT("wave combat"), Machine.GetPhase(), ECodexGamePhase::WaveCombat);
+	TestEqual(TEXT("real time"), Machine.GetCombatMode(), ECodexCombatMode::RealTime);
+	TestFalse(TEXT("no horde intro / free pause for an ambush"), Machine.IsAwaitingHordeIntro());
+	TestFalse(TEXT("then no further contact start"), ShouldStartFightOnContact(true, true, Machine.GetPhase(), Machine.IsCombatUnlocked()));
+	return true;
+}
+
 #undef PERCEPTION_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS
