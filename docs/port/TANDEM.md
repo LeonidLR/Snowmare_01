@@ -145,6 +145,7 @@ between 2026-10-06 and 2026-10-08 (details per commit in HANDOFF §10; `git log 
 | User & Gemini → Claude | **11. Sprint 06-D: Marksman Combat Wave Aggression & Tactical Advance:** Marksmen currently stay stuck in `Patrol` mode if spawned in a wave or when target is >45m away. Fix: 1) In wave combat / exploration with no route, default state must be `Engage`. 2) If target has no line of sight (`!Line.bHasLos`) or `Distance > PreferredMaxRange`, advance towards squad via NavMesh (`MoveToLocation`), then stop at 20-35m, take low cover/prone, telegraph laser aim, and fire. | Done (Claude 2026-10-04) |
 | User & Gemini → Claude (Opus) | **12. Sprint 14: Механика нокдауна и восстановления (Knockdown & Recovery System):** Реализовать механику сбивания с ног для бойцов и врагов при прыжке гончей (Cutter Pounce), силовом ударе Брута, взрывах (<2.5м) и критических ударах (>=40 урона). Включает: 1) Состояние `EStatusEffect::Knockdown`, 2) Направление падения (спереди -> `Knocked_Back` / `Revive_Back`, сзади -> `Knocked_Front` / `Revive_Front`), 3) Полосу восстановления оглушения в UI (1.5 сек оглушения + анимация подъема ~1.0 сек), 4) Расход 2 AP на подъем в пошаговом бою, 5) Анимационные монтажи из `/Game/Animations_KnockDown`. Полная спецификация ниже. | Done (Claude 2026-10-08, see «Sprint 14» below / HANDOFF §10) |
 | Claude (frontend) → Claude (save system) | **13. Play time in the save metadata:** the frontend slot list shows "--:--" for the play time; please record the mission play time (seconds) in the save and expose it in `FSaveSlotInfo` (e.g. `PlayTimeSeconds`). The frontend reads it in one place: `UI/Frontend/CodexSaveBridge.cpp ListSlots` (`CodexFrontendRules::FormatPlayTime`). | Open |
+| User & Gemini → Claude (Opus) | **14. Sprint 15: Комплексная система мобильного и тактического тепла (Mobile & Tactical Heat System):** Реализовать систему из 5 источников тепла на базе `UHeatSourceComponent`: 1) Термопакет `EPersonalItem::HeatPack` (-35% холода, снятие `Frostbite`, бафф теплового буфера на 45 с), 2) Костёр `ACampfireActor` (крафт из спички и топлива, радиус 3.5 м, 75 с горения, шум/дым привлекает патрули), 3) Портативная газовая печка `APortableStoveActor` (многоразовый деплойбл `Deploy`/`Pack Up`, баллон на 180 с, радиус 2.2 м, бесшумное пламя без дыма), 4) Сигнальный фальшфейер `ASignalFlareActor` (метаемый, свет + тепло 1.8 м на 40 с + отпугивание зверей/гончих), 5) Термальный след огнемёта/бочек `AFirePuddleActor` (двойная зона: центр $R \le 1.2$ м огонь/урон, периметр $1.2 < R \le 3.5$ м лучистое тепло +12%/с и разморозка оружия). Спецификация ниже. | Open (Claude) |
 
 ## Open questions — Sprint 03 & 04 (Claude → Gemini) — [ALL ANSWERED BY GEMINI BELOW]
 
@@ -1290,3 +1291,74 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 - 14-5 tests `CodexTactics.Combat.Knockdown.*` (4) + `CodexTactics.KnockdownSmoke` (registered in `Scripts/test_map.json`, rule `knockdown`).
 - Not done / notes: no knockdown for hounds, cutters, marksmen; turn-based ranged enemy shots ignore the prone x0.6 (grid hits bypass TakeHit's modifiers, the melee x1.5 is applied); the hound pounce rule (run-up 1 s, 12 s cooldown) is a design reading of «pounce from a run-up» - tune or disable with `Codex.Knockdown.*` / `FKnockdownConfig`.
 - **Sync 2026-10-11 (Claude, branch `agents/knockdown`, user decisions):** knockdown chance 50 % for everyone (`KnockdownChance` / `Codex.Knockdown.Chance`; heavy hits and Brute heavy blows roll, blasts < 2.5 m and pounces always floor), faster get-up (Downed 0.6 s, GetUp 0.8 s at up to 2.1x: ~2.27 s on the ground), one downed damage multiplier x1.33 for any blow in real time and turn-based (`DownedDamageMultiplier` / `Codex.Knockdown.DownedDamage`; `EKnockdownBlow` and `Codex.Knockdown.DownedRanged/MeleeDamage` removed), turn-based: no free stand-up, the lying operative stays down or orders «GET UP (2 AP) [Z]» (panel entry, `UTurnBasedCombatSubsystem::GetUpActiveUnit`). Details HANDOFF §6 «Knockdown values» / §10. No asset or shader changes.
+
+---
+
+## 🎯 NEW SPRINT DIRECTIVE: Mobile & Tactical Heat System (Studio Spec for Claude / Opus)
+**Author:** Gemini (Lead Architect / Systems Design) upon user mandate 2026-10-11  
+**Executor:** Claude / Opus (Gameplay C++, Survival Rules, Deployables, Throwables, UI & Unit Tests)  
+
+### 1. Архитектурный фундамент (Unified Heat Integration)
+Все источники тепла обязаны интегрироваться с существующим компонентом `UHeatSourceComponent`.
+Метод `UColdSurvivalComponent::IsNearHeatSource()` опрашивает `UHeatSourceComponent::GetAllSources()`, благодаря чему согревание, регенерация здоровья в тепле (`WarmHealthRegenPerSecond`) и разморозка оружия (`bWeaponFrozen = false`) работают бесшовно без создания дублирующих триггеров.
+
+### 2. Спецификация 5 источников тепла
+
+#### 2.1. Термопакет («Chemical Heat Pack») — Персональная скорая помощь
+- **Тип:** Расширение `EPersonalItem::HeatPack` в `PersonalItemRules.h`.
+- **Инвентарь:** 1 слот, стак до 3 шт. Активация на себя или Drag & Drop на напарника.
+- **Эффекты:**
+  - Мгновенно: `-35%` текущего уровня холода.
+  - Реанимация от обморожения: Снимает статус `Frostbite` (100% холод), возвращая упавшему бойцу возможность двигаться.
+  - Бафф «Тепловой буфер»: На 45 секунд скорость накопления холода `AccumulationRate` снижается на 50%.
+- **Пошаговый бой:** Использование стоит 1 AP.
+
+#### 2.2. Полевой костёр («Campfire») — Групповой привал с риском
+- **Класс:** `ACampfireActor` (размещаемый объект / деплойбл на местности).
+- **Крафт / Ресурсы:** 1 спичка (`Matches`) + 1 единица топлива (`Wood` или `Fuel`).
+- **Тепловые параметры:**
+  - `HeatRadius = 350.f` (3.5 м — укрытие для отряда из 4 человек).
+  - Время горения: 75.0 секунд (в пошаговом бою — 4 раунда). После прогорания переходит в статус `BurntOut`.
+- **Стелс & ИИ патрулей:**
+  - Шум треска и визуальный столб дыма регистрируют событие для ИИ (`MakeNoise` / видимость ~15 м). Патрули и гончие реагируют и переходят в режим `Search` (❓ ПОИСК).
+- **Погода:** При арктическом ветре на возвышенностях время горения сокращается на 20%.
+
+#### 2.3. Переносная газовая печка («Portable Gas Stove») — Мобильный чистый обогрев
+- **Класс:** `APortableStoveActor` (`EDeployableType::PortableStove`).
+- **Многоразовость (Deploy / Pack Up):**
+  - «Установить» (`Deploy`): размещение на земле (2 AP в пошаговом бою).
+  - «Собрать» (`Pack Up`): удержание взаимодействия выключает печку и возвращает её в инвентарь бойца.
+- **Ресурс:**
+  - Сменный газовый картридж (`Gas Canister`): общий ресурс 180.0 секунд (3 минуты суммарно). Оставшийся запас сохраняется в данных предмета.
+- **Тепловые параметры:**
+  - `HeatRadius = 220.f` (2.2 м — компактный тепловой купол). Полностью защищена от ветра.
+- **Стелс:**
+  - Голубое пламя, бесшумно, без дыма. Шум = 0, демаскировка = 0. Безопасна для скрытного прохождения.
+
+#### 2.4. Сигнальный фальшфейер («Signal Flare») — Тактическое боевое тепло
+- **Класс:** `ASignalFlareActor` (метаемый предмет / гранатный слот).
+- **Применение:** Бросок по дуге на 15–20 м или зажигание под ноги.
+- **Тройной эффект:**
+  1. Тепло: `HeatRadius = 180.f` (1.8 м) на 40.0 секунд (2 раунда в пошаговом бою).
+  2. Освещение: Яркий магниевый свет раскрывает цели в радиусе 10 м и снимает ночные штрафы меткости.
+  3. Отпугивание мутантов: Архетипы `FrostHound` и звероподобные мутанты пугаются открытого пламени (Hesitate/Flee на 2 секунды при попытке пересечь границу).
+
+#### 2.5. Термальный след огнемёта и бочек («Residual Fire Puddle»)
+- **Класс:** `AFirePuddleActor` (остаточный след напалма / взрыва бочки).
+- **Архитектура двух зон:**
+  - Ядро пламени ($R \le 1.2$ м): Наносит урон огнём `EDamageType::Fire` и статус `Burning`.
+  - Лучистое тепло ($1.2 < R \le 3.5$ м): `UHeatSourceComponent`. Не наносит урона, согревает с максимальной скоростью (+12% тепла/сек) и оттаивает замерзшее оружие (`bWeaponFrozen = false`).
+- **Время жизни:** 12–15 секунд (1 раунд в пошаговом бою).
+
+### 3. Правила синхронизации и паузы
+- **Safe Narrative & Tactical Pause:** Во время тактической паузы (`Space`) и сюжетных диалогов все таймеры горения костров, фаеров, печек и расход газа **строго замораживаются**.
+
+### 4. Критерии приёмки и валидация (DoD)
+1. **Unit Tests:** `Source/CodexTacticsTests/Private/Survival/TacticalHeatRulesTest.cpp`:
+   - Расчёт сброса холода от `HeatPack` и снятие `Frostbite`.
+   - Проверка радиусов и времени горения `Campfire`, `PortableStove`, `SignalFlare`.
+   - Проверка двухзонной геометрии `FirePuddle` (урон в центре, тепло по периметру).
+   - Заморозка таймеров при тактической паузе.
+2. **Smoke Test:** Команда `CodexTactics.TacticalHeatSmoke`:
+   - Спавнит бойца на холоде, активирует термопакет, разжигает костёр, устанавливает и собирает печку, бросает фаер — проверяет вход в тепловые зоны и снижение холода.
+3. Прогон `verify_all.ps1` — ALL GREEN без регрессий.
