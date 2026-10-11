@@ -27,8 +27,11 @@ public:
 	FText GetPhaseText() const;
 	FText GetApText() const;
 
-	/** The «GET UP (2 AP)» entry is on the panel (the active operative is knocked down; smokes). */
+	/** The «GET UP (2 AP)» entry is on the panel (the active operative lies after a knockdown; smokes). */
 	bool IsGetUpShown() const;
+
+	/** The stance entry is on the panel (hidden only while «GET UP» takes its place; smokes). */
+	bool IsStanceShown() const;
 
 protected:
 	virtual void NativeOnInitialized() override;

@@ -3642,7 +3642,7 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 			AActor* Victim = WeakTarget.Get();
 			if (Biter && Victim && States.Contains(Victim))
 			{
-				// Sprint 14: a knocked-down operative takes the bite x1.33; a Brute's blow can knock him down (50 %).
+				// Sprint 14: a knocked-down operative takes the bite x1.33; a Brute's blow always knocks him down.
 				const AOperativeCharacter* VictimOperative = Cast<AOperativeCharacter>(Victim);
 				const int32 Dealt = ApplySquadHit(Victim, Damage, NameOf(Biter));
 				Log(FString::Printf(TEXT("🐺 Enemy %s attacks %s: %d damage!"), *NameOf(Biter), *NameOf(Victim), Dealt));
