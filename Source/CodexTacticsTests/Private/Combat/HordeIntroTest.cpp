@@ -4,6 +4,8 @@
 #include "Data/LevelJsonRules.h"
 #include "Data/WaveConfigTypes.h"
 #include "GameFlow/GameFlowStateMachine.h"
+#include "GameFlow/PauseOrderRules.h"
+#include "Interactables/RelocationRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -341,6 +343,25 @@ bool FHordeIntroLevelDataTest::RunTest(const FString&)
 	TestTrue(TEXT("it is wave 2"), Flow.PreparedWaveIndices.Contains(2));
 	TestTrue(TEXT("sudden by default"), Flow.bSuddenWaveStart);
 	TestEqual(TEXT("its rest countdown from the data"), Flow.WaveRestDuration, 15.f);
+	return true;
+}
+
+HORDEINTRO_TEST(FHordeIntroFreePauseRadiusTest, "FreePauseHasNoRadius")
+bool FHordeIntroFreePauseRadiusTest::RunTest(const FString&)
+{
+	// User decision 2026-10-11: the free pause of the horde start is an unrestricted preparation (no radius ring, no distance
+	// limit on move orders / placements); a paid pause (Space during a fight) keeps the 12 m order radius.
+	const FGameFlowConfig Config;
+	TestTrue(TEXT("a paid pause limits"), PauseOrderRules::IsRadiusLimited(false));
+	TestFalse(TEXT("the free pause does not"), PauseOrderRules::IsRadiusLimited(true));
+	TestEqual(TEXT("paid pause: the configured radius"), PauseOrderRules::GetOrderRadius(false, Config.PauseOrderRadius), Config.PauseOrderRadius);
+	TestTrue(TEXT("free pause: far beyond any map"), PauseOrderRules::GetOrderRadius(true, Config.PauseOrderRadius) > Config.PauseOrderRadius * 100.f);
+	const float FreeRadius = PauseOrderRules::GetOrderRadius(true, Config.PauseOrderRadius);
+	TestEqual(TEXT("placement in the free pause is unlimited"),
+		RelocationRules::GetPlacementRadius(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause, FreeRadius, 1500.f), FreeRadius);
+	TestTrue(TEXT("a barricade 60 m away is within the free pause"), RelocationRules::IsWithinRadius(FVector::ZeroVector, FVector(6000.f, 0.f, 0.f), FreeRadius));
+	TestFalse(TEXT("... and outside a paid pause"), RelocationRules::IsWithinRadius(FVector::ZeroVector, FVector(6000.f, 0.f, 0.f),
+		PauseOrderRules::GetOrderRadius(false, Config.PauseOrderRadius)));
 	return true;
 }
 

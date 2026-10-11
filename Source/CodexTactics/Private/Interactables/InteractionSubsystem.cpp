@@ -49,7 +49,7 @@ bool UInteractionSubsystem::RequestInteraction(AInteractableActor* Target, bool 
 	if (Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause)
 	{
 		// Godot: in the pause the approach is a planned move (clamped to the pause radius), run on release.
-		const FVector Planned = Squad->PlanMove(Leader, Approach, bSprint, Flow->GetConfig().PauseOrderRadius);
+		const FVector Planned = Squad->PlanMove(Leader, Approach, bSprint, Flow->GetPauseOrderRadius());
 		if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
 		{
 			Feedback->SpawnWaypointMarker(Planned);

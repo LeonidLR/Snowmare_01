@@ -38,6 +38,7 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/WorldSettings.h"
+#include "Interactables/RadiusRingSubsystem.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
@@ -354,15 +355,46 @@ namespace HordeIntroSmoke
 				Mover = Member != Leader && Member != Engineer && !Mover ? Member : Mover;
 			}
 			State.Mover = Mover;
+			// User decision 2026-10-11: the free pause is an unrestricted preparation - no radius ring, no distance limit on orders
+			// and placements (the paid pause keeps its 12 m ring and limit: RadiusRingSmoke).
+			{
+				const URadiusRingSubsystem* Rings = World->GetSubsystem<URadiusRingSubsystem>();
+				// (The selection rings / defence markers are radius ring actors too: only the pause's own ring counts.)
+				const ARadiusRingActor* PauseRing = Rings ? Rings->GetRing() : nullptr;
+				Check(State, Rings && Rings->GetMode() == ERadiusRingMode::Hidden && (!PauseRing || PauseRing->IsHidden()),
+					FString::Printf(TEXT("free pause: no radius ring (mode %d, ring %s)"), Rings ? static_cast<int32>(Rings->GetMode()) : -1,
+						!PauseRing ? TEXT("not spawned") : (PauseRing->IsHidden() ? TEXT("hidden") : TEXT("VISIBLE"))));
+				Check(State, !Flow->IsPauseRadiusLimited() && Flow->GetPauseOrderRadius() > FlowConfig.PauseOrderRadius * 100.f,
+					FString::Printf(TEXT("free pause: order radius %.0f cm (a paid pause: %.0f)"), Flow->GetPauseOrderRadius(), FlowConfig.PauseOrderRadius));
+				if (Mover)
+				{
+					const FVector Far = Mover->GetActorLocation() - Mover->GetActorForwardVector() * (FlowConfig.PauseOrderRadius * 3.f);
+					const FVector FarPlanned = Squad->PlanMove(Mover, Far, false, Flow->GetPauseOrderRadius());
+					Check(State, FVector::Dist2D(FarPlanned, Far) < 1.f,
+						FString::Printf(TEXT("free pause: a move order %.0f m away is planned as given (planned %.0f m)"),
+							FlowConfig.PauseOrderRadius * 3.f / 100.f, FVector::Dist2D(FarPlanned, Mover->GetActorLocation()) / 100.f));
+					Squad->ClearPlannedOrder(Mover);
+				}
+			}
 			if (Mover)
 			{
 				State.PlannedMove = Squad->PlanMove(Mover, Mover->GetActorLocation() - Mover->GetActorForwardVector() * 500.f, false,
-					FlowConfig.PauseOrderRadius);
+					Flow->GetPauseOrderRadius());
 				State.MoveStartDistance = FVector::Dist2D(Mover->GetActorLocation(), State.PlannedMove);
 			}
 			Check(State, Squad->GetPlannedOrderCount() >= 1, TEXT("a move order planned in the free pause"));
 			URelocationSubsystem* Relocation = World->GetSubsystem<URelocationSubsystem>();
 			Engineer->BarricadesCount = FMath::Max(Engineer->BarricadesCount, 1);
+			if (Relocation && Relocation->StartDeployPlacement(EDeployableType::Barricade, Engineer))
+			{
+				// A spot beyond the old pause radius is a valid barricade spot in the free pause.
+				const FVector FarSpot = Engineer->GetActorLocation() + Engineer->GetActorForwardVector() * (FlowConfig.PauseOrderRadius * 2.5f);
+				Relocation->UpdatePreview(FarSpot);
+				Check(State, Relocation->IsGhostValid() && Relocation->GetRadius(*Engineer) > FlowConfig.PauseOrderRadius * 100.f,
+					FString::Printf(TEXT("free pause: a barricade %.0f m away is valid (radius %.0f cm)"), FlowConfig.PauseOrderRadius * 2.5f / 100.f,
+						Relocation->GetRadius(*Engineer)));
+				Relocation->CancelPlacement();
+			}
 			const FVector Spot = Engineer->GetActorLocation() - Engineer->GetActorForwardVector() * 300.f;
 			const bool bStarted = Relocation && Relocation->StartDeployPlacement(EDeployableType::Barricade, Engineer);
 			if (bStarted)

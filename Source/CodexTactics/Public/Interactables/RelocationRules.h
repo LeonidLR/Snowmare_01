@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFlow/GameFlowTypes.h"
+#include "GameFlow/PauseOrderRules.h"
 
 /** Why an operative cannot lift an object. */
 enum class ELiftBlocker : uint8
@@ -32,7 +33,7 @@ namespace RelocationRules
 	/** Rotation step of the placement preview, degrees. */
 	constexpr float RotationStep = 45.f;
 	/** Radius used where Godot has no limit (preparation: 9999 m). */
-	constexpr float UnlimitedRadius = 999900.f;
+	constexpr float UnlimitedRadius = PauseOrderRules::UnlimitedRadius;
 
 	/**
 	 * Objects can be moved outside a wave, in preparation and in the tactical pause (not in live combat) — and by a

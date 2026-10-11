@@ -3,9 +3,20 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HordeIntroRules.h"
+#include "GameFlow/PauseOrderRules.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/App.h"
+
+float UGameFlowSubsystem::GetPauseOrderRadius() const
+{
+	return PauseOrderRules::GetOrderRadius(IsFreePause(), GetConfig().PauseOrderRadius);
+}
+
+bool UGameFlowSubsystem::IsPauseRadiusLimited() const
+{
+	return PauseOrderRules::IsRadiusLimited(IsFreePause());
+}
 
 void UGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {

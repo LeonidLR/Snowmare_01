@@ -137,9 +137,9 @@
     },
     {
       "name": "horde-intro",
-      "globs": ["Source/**/Combat/HordeIntro*", "Source/**/Debug/HordeIntroSmoke*", "Source/**/Debug/SmokeUtils.h"],
+      "globs": ["Source/**/Combat/HordeIntro*", "Source/**/Debug/HordeIntroSmoke*", "Source/**/Debug/SmokeUtils.h", "Source/**/GameFlow/PauseOrderRules*"],
       "tests": ["CodexTactics.Combat.HordeIntro", "CodexTactics.GameFlow", "CodexTactics.Combat.TimeMode"],
-      "smokes": ["HordeIntroSmoke", "LevelWaveSmoke", "MissionSmoke", "VictorySmoke", "QuestChainSmoke", "MainMenuSmoke", "SaveRoundTripSmoke", "CombatFlowSmoke"]
+      "smokes": ["HordeIntroSmoke", "RadiusRingSmoke", "LevelWaveSmoke", "MissionSmoke", "VictorySmoke", "QuestChainSmoke", "MainMenuSmoke", "SaveRoundTripSmoke", "CombatFlowSmoke"]
     },
     {
       "name": "sight",
