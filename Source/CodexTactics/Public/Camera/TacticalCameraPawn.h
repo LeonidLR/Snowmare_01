@@ -89,6 +89,14 @@ public:
 	void SetCinematicLock(bool bLocked);
 	bool IsCinematicLocked() const { return bCinematicLock; }
 
+	/**
+	 * While locked: the cinematic turns the view to Yaw (deg, smoothed like Q / E). Unlocking returns to the player's yaw
+	 * of the moment the lock began (bSnapYaw: at once).
+	 */
+	void SetCinematicYaw(float Yaw);
+	void RestorePlayerYaw(bool bSnapYaw);
+	float GetCurrentYaw() const { return CurrentYaw; }
+
 	/** While a dramatic shot runs the camera holds its framing (Godot main.gd is_dramatic_shot_active). */
 	void SetDramaticShotActive(bool bActive) { bDramaticShot = bActive; }
 
@@ -137,6 +145,7 @@ private:
 	FVector SmoothPosition = FVector::ZeroVector;
 	bool bDramaticShot = false;
 	bool bCinematicLock = false;
+	float PreCinematicYaw = 0.f;
 	bool bTurnBasedZoom = false;
 	float PreTurnBasedDistance = 0.f;
 

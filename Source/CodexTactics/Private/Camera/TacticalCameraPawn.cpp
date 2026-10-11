@@ -168,12 +168,33 @@ void ATacticalCameraPawn::SnapFocusOnTarget(AActor* Target, float Distance)
 
 void ATacticalCameraPawn::SetCinematicLock(bool bLocked)
 {
+	if (bLocked && !bCinematicLock)
+	{
+		PreCinematicYaw = TargetYaw;
+	}
 	bCinematicLock = bLocked;
 	if (bLocked)
 	{
 		bDragPanning = false;
 		bDragRotating = false;
 		bPanReturning = false;
+	}
+}
+
+void ATacticalCameraPawn::SetCinematicYaw(float Yaw)
+{
+	if (bCinematicLock)
+	{
+		TargetYaw = CurrentYaw + FMath::FindDeltaAngleDegrees(CurrentYaw, Yaw);
+	}
+}
+
+void ATacticalCameraPawn::RestorePlayerYaw(bool bSnapYaw)
+{
+	TargetYaw = PreCinematicYaw;
+	if (bSnapYaw)
+	{
+		CurrentYaw = TargetYaw;
 	}
 }
 

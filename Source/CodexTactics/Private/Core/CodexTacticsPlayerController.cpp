@@ -1023,8 +1023,9 @@ void ACodexTacticsPlayerController::DialogueSkip()
 		Hud->HandleEscape();
 		return;
 	}
-	// Sudden horde start (user decision 2026-10-11): Esc skips the camera flyover, the free tactical pause stays.
-	if (UHordeIntroSubsystem* HordeIntro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>(); HordeIntro && HordeIntro->HandleSkipInput())
+	// Sudden horde start (user decision 2026-10-11): Esc skips the camera flyover (the free tactical pause stays); before
+	// the horde's trigger it opens the free pause at once.
+	if (UHordeIntroSubsystem* HordeIntro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>(); HordeIntro && HordeIntro->HandleSkipInput(true))
 	{
 		return;
 	}
@@ -1066,8 +1067,8 @@ void ACodexTacticsPlayerController::OnClick()
 	{
 		return; // the dialogue panel handles its own clicks
 	}
-	// A click skips the horde flyover (user decision 2026-10-11) and is not an order.
-	if (UHordeIntroSubsystem* HordeIntro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>(); HordeIntro && HordeIntro->HandleSkipInput())
+	// A click skips the horde flyover (user decision 2026-10-11) and is not an order; before the trigger it is a normal click.
+	if (UHordeIntroSubsystem* HordeIntro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>(); HordeIntro && HordeIntro->HandleSkipInput(false))
 	{
 		return;
 	}

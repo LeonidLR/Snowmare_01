@@ -10,6 +10,8 @@
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Combat/EnemySpawnPoint.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/GateActor.h"
@@ -151,12 +153,22 @@ namespace SmokeUtils
 	}
 
 	/**
-	 * Releases the free tactical pause a sudden horde wave opens with (user decision 2026-10-11; it also ends the camera
-	 * flyover): the fight runs in real time, the pause charges untouched. No-op outside that pause.
+	 * Ends the horde intro of a sudden wave deterministically (user decisions 2026-10-11): no trigger, no flyover, no
+	 * free pause later — the fight runs in real time, the pause charges untouched (a free pause already open is
+	 * released). No-op outside a sudden wave.
 	 */
 	inline void ReleaseHordeIntroPause(UGameFlowSubsystem* Flow)
 	{
-		if (Flow && Flow->IsFreePause())
+		if (!Flow)
+		{
+			return;
+		}
+		if (UHordeIntroSubsystem* Intro = Flow->GetWorld() ? Flow->GetWorld()->GetSubsystem<UHordeIntroSubsystem>() : nullptr)
+		{
+			Intro->DismissIntro();
+		}
+		Flow->CancelHordeIntro();
+		if (Flow->IsFreePause())
 		{
 			Flow->ToggleTacticalPause();
 		}
@@ -164,7 +176,8 @@ namespace SmokeUtils
 
 	/**
 	 * Starts the wave fight the way the game does and lands in WaveCombat / RealTime: the sudden horde start (the wave
-	 * spawns at once into the free tactical pause, which is released here), or with the old prepared start
+	 * spawns at once; its horde intro is dismissed here, so no free pause / flyover interrupts the smoke later), or with
+	 * the old prepared start
 	 * (Codex.HordeIntro.SuddenStart 0, a "sudden_start": false wave) cutscene -> preparation -> wave.
 	 */
 	inline void StartWaveFight(UGameFlowSubsystem* Flow)
@@ -177,6 +190,44 @@ namespace SmokeUtils
 		Flow->FinishCutscene();
 		Flow->FinishPreparation();
 		ReleaseHordeIntroPause(Flow);
+	}
+
+	/**
+	 * L_MovementTest's wave spawn points sit around the test start (a horde would appear on the squad): puts the squad
+	 * DistanceCm from their centre (on the side of the test start), facing them, so the horde has a run-up.
+	 */
+	inline void PlaceSquadAwayFromWaveSpawns(UWorld* World, float DistanceCm)
+	{
+		USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+		if (!Squad || !Squad->GetLeader())
+		{
+			return;
+		}
+		FVector Centre = FVector::ZeroVector;
+		int32 Points = 0;
+		for (TActorIterator<AEnemySpawnPoint> It(World); It; ++It)
+		{
+			if (!It->bIsDynamic)
+			{
+				Centre += It->GetActorLocation();
+				++Points;
+			}
+		}
+		if (Points == 0)
+		{
+			return;
+		}
+		Centre /= Points;
+		FVector Away = (Squad->GetLeader()->GetActorLocation() - Centre).GetSafeNormal2D();
+		Away = Away.IsNearlyZero() ? FVector(1.f, 0.f, 0.f) : Away;
+		const FVector Delta = Centre + Away * DistanceCm - Squad->GetLeader()->GetActorLocation();
+		for (AOperativeCharacter* Each : Squad->GetMembers())
+		{
+			Each->StopOperative();
+			const FVector Spot = FreeSpot(World, FVector(Each->GetActorLocation().X + Delta.X, Each->GetActorLocation().Y + Delta.Y,
+				Each->GetActorLocation().Z), Each);
+			Each->TeleportTo(Spot, (-Away).Rotation(), false, true);
+		}
 	}
 
 	inline void PlaceSquadAtTestStart(UWorld* World)

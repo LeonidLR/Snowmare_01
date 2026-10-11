@@ -15,16 +15,13 @@
 namespace TimeModeTest
 {
 	/**
-	 * A fresh machine in WaveCombat / RealTime of wave 1: the horde comes suddenly in the free tactical pause (user
-	 * decision 2026-10-11), the player's first tap releases it into full real time.
+	 * A fresh machine in WaveCombat / RealTime of wave 1: the horde comes suddenly (user decisions 2026-10-11); its horde
+	 * intro (the free pause later on) is dismissed, so the tests see the plain RTS time modes.
 	 */
 	void StartFight(FGameFlowStateMachine& Machine)
 	{
 		Machine.TriggerCombatZone();
-		if (Machine.IsFreePause())
-		{
-			Machine.ToggleTacticalPause();
-		}
+		Machine.CancelHordeIntro();
 	}
 
 	/** Presses Space, advances HeldSeconds of real time in 0.1 s steps, releases; returns the resolved action. */

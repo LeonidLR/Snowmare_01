@@ -59,6 +59,11 @@ public:
 	 */
 	bool IsFreePause() const { return bFreePause && CombatMode == ECodexCombatMode::TacticalPause; }
 	/**
+	 * A sudden wave runs in real time and waits for its horde intro (UHordeIntroSubsystem): the free pause opens when the
+	 * horde has become a running mass (EnterFreeTacticalPause), or at once on Space.
+	 */
+	bool IsAwaitingHordeIntro() const { return bAwaitingHordeIntro && Phase == ECodexGamePhase::WaveCombat && CombatMode == ECodexCombatMode::RealTime; }
+	/**
 	 * Wave InWaveIndex (1-based) starts suddenly: Config.bSuddenWaveStart unless the wave is listed in
 	 * Config.PreparedWaveIndices; the console override (SetSuddenStartOverride) wins over both.
 	 */
@@ -69,7 +74,7 @@ public:
 	// --- Requests ---
 	/**
 	 * The squad enters the combat zone (once per mission): Exploration -> Cutscene (old prepared start), or with a sudden
-	 * wave 1 (UsesSuddenStart) straight to WaveCombat / TacticalPause — the wave spawns now, in the free pause.
+	 * wave 1 (UsesSuddenStart) straight to WaveCombat / RealTime awaiting the horde intro — the wave spawns now.
 	 */
 	EGameFlowResult TriggerCombatZone();
 	/**
@@ -81,12 +86,12 @@ public:
 	EGameFlowResult FinishCutscene();
 	/**
 	 * Preparation -> WaveCombat/RealTime (timer expired or player pressed "ready"); a sudden wave (a loaded save resumes
-	 * in its preparation) opens in the free tactical pause instead.
+	 * in its preparation) awaits its horde intro instead.
 	 */
 	EGameFlowResult FinishPreparation();
 	/**
-	 * RealTime -> TacticalPause (spends a charge), or TacticalPause -> RealTime (runs planned orders). Releasing the free
-	 * pause of a sudden wave works the same and costs nothing.
+	 * RealTime -> TacticalPause (spends a charge), or TacticalPause -> RealTime (runs planned orders). While a sudden wave
+	 * awaits its horde intro the tap opens the free pause instead (no charge); releasing the free pause costs nothing.
 	 */
 	EGameFlowResult ToggleTacticalPause();
 	/**
@@ -98,10 +103,17 @@ public:
 	EGameFlowResult ExitTurnBased();
 	/** TurnBased -> RealTime at once (the Space hold, user request 2026-10-06); no pause, no charge spent. */
 	EGameFlowResult ExitTurnBasedToRealTime();
+	/**
+	 * The horde intro of a sudden wave opens its free tactical pause: RealTime -> TacticalPause without a charge or a
+	 * timer (only while IsAwaitingHordeIntro).
+	 */
+	EGameFlowResult EnterFreeTacticalPause();
+	/** The sudden wave stays in real time without a horde intro (smokes, the bot). */
+	void CancelHordeIntro();
 	/** WaveCombat (any sub-mode) -> WaveCleared. */
 	EGameFlowResult NotifyWaveCleared();
 	/**
-	 * WaveCleared -> Preparation for the next wave (a sudden next wave: WaveCombat in the free pause at once), or
+	 * WaveCleared -> Preparation for the next wave (a sudden next wave: WaveCombat at once, awaiting its horde intro), or
 	 * PostCombat after the last wave.
 	 */
 	EGameFlowResult AdvanceAfterWave();
@@ -119,7 +131,7 @@ public:
 
 	/**
 	 * Advances real-time timers: pause cooldown, tactical pause (not the free one), preparation. A preparation of a
-	 * sudden wave (restored by a save load) ends on the first tick: the wave starts suddenly.
+	 * sudden wave (restored by a save load) ends on the first tick: the wave starts suddenly (awaiting its intro).
 	 */
 	void Tick(float RealDeltaSeconds);
 
@@ -130,7 +142,7 @@ public:
 
 private:
 	void SetState(ECodexGamePhase NewPhase, ECodexCombatMode NewMode);
-	/** Starts wave WaveIndex: real time, or the free tactical pause when bSudden. */
+	/** Starts wave WaveIndex in real time; bSudden arms the horde intro (IsAwaitingHordeIntro). */
 	void StartWave(bool bSudden = false);
 	void ReleaseTacticalPause();
 
@@ -148,5 +160,7 @@ private:
 	bool bAmbushFight = false;
 	/** The running tactical pause is the free, untimed one of a sudden wave start. */
 	bool bFreePause = false;
+	/** A sudden wave started and its free pause has not opened yet. */
+	bool bAwaitingHordeIntro = false;
 	int32 SuddenStartOverride = -1;
 };

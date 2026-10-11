@@ -1,18 +1,19 @@
-// Dev-only headless check of the sudden horde start (user decision 2026-10-11, UHordeIntroSubsystem) on L_MovementTest
-// with its level waves (wave 1: hounds + frostbitten; wave 2 adds cutters + marksmen; wave 3: hounds, cutters, marksmen):
+// Dev-only headless check of the sudden horde start (user decisions / feedback 2026-10-11, UHordeIntroSubsystem) on
+// L_MovementTest with its level waves (wave 1: hounds + frostbitten; wave 2 adds cutters + marksmen; wave 3: hounds,
+// cutters, marksmen); the squad waits 30 m from the spawn points so the horde has a run-up:
 //   Scripts/smoke.ps1 -Command CodexTactics.HordeIntroSmoke
-// 1. the combat zone -> wave 1 spawns AT ONCE (no cutscene / preparation phase, nothing queued), the fight opens in the
-//    FREE tactical pause (pause dilation, charges 3/3 kept, no timer), saving refused, the banner says "free pause"
-//    (the autosave at the spawn moment: SaveRoundTripSmoke);
-// 2. 1.5-2 s later the flyover runs on real time while the world stays slowed: wide shot on the moving anchor between
-//    the squad and the horde, then one medium shot per type in spawn order (hound, frostbitten; a live representative of
-//    that type followed), then back to the leader (camera input locked meanwhile, unlocked after); the world stays at the
-//    pause dilation the whole time; still the free pause with 3/3 charges;
-// 3. orders in the free pause: a planned move and a barricade set-up are planned; a Space tap releases the pause: real
-//    time, charges still 3/3, the plans run;
-// 4. wave 2 comes at once in a new free pause: the flyover shows only the new types (cutter, marksman); Esc (simulated
-//    key) skips it during a type shot: camera at once on the leader, unlocked, still the free pause, no pause menu;
-// 5. wave 3 (only known types): a short wide shot only; a left click (simulated) skips it without giving an order.
+// 1. the combat zone -> wave 1 spawns AT ONCE (no cutscene / preparation phase, nothing queued) into the RUNNING fight:
+//    real time, no pause, the camera stays on the squad, saving refused, the horde intro waits;
+// 2. the horde becomes a running mass -> trigger (not before MinDelaySeconds, at MaxWaitSeconds at the latest): the free
+//    tactical pause opens (charges 3/3 kept), the «HORDE INCOMING» alert shows, the flyover runs in slow motion
+//    (FlyoverTimeDilation, faster than the 0.02 pause): wide shot on the running mass, a close tracking shot (7 m) of a
+//    running front-runner per type in spawn order (hound, frostbitten), back to the leader (camera locked meanwhile,
+//    the whole horde revealed); then the free pause at 0.02, camera unlocked;
+// 3. orders in the free pause: a planned move and a barricade set-up; a Space tap releases it: real time, charges 3/3;
+// 4. wave 2 comes at once (real time, intro armed); its flyover shows only the new types (cutter, marksman); Esc
+//    (simulated key) skips it during a type shot: camera at once on the leader, unlocked, the free pause at 0.02, no menu;
+// 5. wave 3 before its trigger: a click is a normal click (no pause), Esc opens the free pause at once (no flyover);
+// 6. a load resumes wave 3 (RestoreForLoad): it comes suddenly again; known types only: wide shot + return; a click skips.
 
 #include "CoreMinimal.h"
 
@@ -27,7 +28,6 @@
 #include "Combat/HordeIntroSubsystem.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
-#include "Combat/WaveVictorySubsystem.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -42,6 +42,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "UI/CodexTacticsHUD.h"
+#include "UI/HordeAlertWidget.h"
 #include "UI/PhaseBannersWidget.h"
 
 namespace HordeIntroSmoke
@@ -56,16 +57,17 @@ namespace HordeIntroSmoke
 		int32 Failures = 0;
 		TArray<ECodexGamePhase> PhasesSeen;
 		FDelegateHandle PhaseHandle;
-		int32 AutosavesBefore = 0;
 		int32 LastShot = INDEX_NONE;
 		float ShotStartTime = 0.f;
 		int32 VerifiedShot = INDEX_NONE;
-		TMap<TWeakObjectPtr<AEnemyCharacter>, FVector> SpawnSpots;
-		float FlyoverStartReal = -1.f;
+		bool bFlyoverSeen = false;
+		bool bWaitChecked = false;
 		FVector PlannedMove = FVector::ZeroVector;
 		float MoveStartDistance = 0.f;
 		TWeakObjectPtr<AOperativeCharacter> Mover;
 		bool bKeyDown = false;
+		int32 SubStep = 0;
+		int32 StartedBefore = 0;
 		TWeakObjectPtr<UPhaseBannersWidget> Banners;
 	};
 
@@ -86,6 +88,8 @@ namespace HordeIntroSmoke
 	{
 		++State.Stage;
 		State.StageTime = 0.f;
+		State.SubStep = 0;
+		State.bKeyDown = false;
 	}
 
 	void PressKey(APlayerController* PC, const FKey& Key, EInputEvent Event)
@@ -146,16 +150,19 @@ namespace HordeIntroSmoke
 		case EHordeIntroShotKind::Wide:
 			Check(State, Target && Camera.GetFollowTarget() == Target && Camera.GetCurrentDistance() >= Config.WideMinDistance - 50.f
 				&& Camera.GetCurrentDistance() <= Config.WideMaxDistance + 50.f,
-				FString::Printf(TEXT("%s: camera on the moving anchor at %.0f m"), *Label, Camera.GetCurrentDistance() / 100.f));
+				FString::Printf(TEXT("%s: camera on the running mass at %.0f m (yaw %.0f)"), *Label, Camera.GetCurrentDistance() / 100.f,
+					Camera.GetCurrentYaw()));
 			break;
 		case EHordeIntroShotKind::Type:
 		{
 			const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Target);
+			const float Speed = Enemy ? Enemy->GetVelocity().Size2D() : 0.f;
 			Check(State, Enemy && Enemy->GetArchetype() == Shot.Archetype && Camera.GetFollowTarget() == Enemy && !Enemy->IsHidden()
 				&& FMath::IsNearlyEqual(Camera.GetCurrentDistance(), Config.TypeShotDistance, 60.f)
 				&& FVector::Dist2D(Camera.GetFocus(), Enemy->GetActorLocation()) < 150.f,
-				FString::Printf(TEXT("%s: camera follows %s at %.1f m (medium framing)"), *Label, Enemy ? *Enemy->GetName() : TEXT("-"),
+				FString::Printf(TEXT("%s: camera tracks %s close at %.1f m"), *Label, Enemy ? *Enemy->GetName() : TEXT("-"),
 					Camera.GetCurrentDistance() / 100.f));
+			Check(State, Speed > 50.f, FString::Printf(TEXT("%s: the tracked one moves (%.0f cm/s)"), *Label, Speed));
 			break;
 		}
 		default:
@@ -177,12 +184,40 @@ namespace HordeIntroSmoke
 		return !Intro.IsFlyoverActive();
 	}
 
+	/** The intro's trigger has fired: the free pause, slow motion, alert, locked camera. */
+	void CheckTrigger(FState& State, UWorld* World, const UGameFlowSubsystem& Flow, const UHordeIntroSubsystem& Intro,
+		const ATacticalCameraPawn& Camera)
+	{
+		const FHordeIntroConfig Config = HordeIntroRules::GetConfig();
+		const FGameFlowConfig& FlowConfig = Flow.GetConfig();
+		Check(State, Intro.GetTriggerGameSeconds() >= Config.MinDelaySeconds - 0.05f && Intro.GetTriggerGameSeconds() <= Config.MaxWaitSeconds + 0.3f,
+			FString::Printf(TEXT("trigger %.2f game s after the spawn (%s, %.0f %% running)"), Intro.GetTriggerGameSeconds(),
+				Intro.WasTriggerByMass() ? TEXT("running mass") : TEXT("timeout"), Intro.GetTriggerRunningFraction() * 100.f));
+		Check(State, Flow.IsFreePause() && Flow.GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges,
+			TEXT("the free tactical pause opened (charges 3/3)"));
+		Check(State, FMath::IsNearlyEqual(WorldDilation(World), Config.FlyoverTimeDilation, 0.001f)
+			&& WorldDilation(World) > FlowConfig.TacticalPauseTimeDilation * 2.f,
+			FString::Printf(TEXT("flyover slow motion %.2f (the pause would be %.2f)"), WorldDilation(World), FlowConfig.TacticalPauseTimeDilation));
+		const UHordeAlertWidget* Alert = Intro.GetAlertWidget();
+		Check(State, Alert && Alert->IsInViewport() && Intro.GetAlertTitle().ToString() == TEXT("HORDE INCOMING")
+			&& Intro.GetAlertSubtitle().ToString().Contains(TEXT("TACTICAL PAUSE")),
+			FString::Printf(TEXT("alert \"%s\" / \"%s\""), *Intro.GetAlertTitle().ToString(), *Intro.GetAlertSubtitle().ToString()));
+		Check(State, Camera.IsCinematicLocked(), TEXT("camera input locked during the flyover"));
+		const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+		bool bAllShown = true;
+		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+		{
+			bAllShown &= It->IsDying() || !It->IsHidden();
+		}
+		Check(State, (!Sight || Sight->IsCinematicReveal()) && bAllShown, TEXT("the flyover reveals the whole horde"));
+	}
+
 	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
 	{
 		State.StageTime += StepSeconds;
 		State.Total += StepSeconds;
 		UWorld* World = WeakWorld.Get();
-		if (!World || State.Total > 150.f)
+		if (!World || State.Total > 180.f)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke stopped in stage %d"), State.Stage);
 			return Finish(State, false);
@@ -211,6 +246,7 @@ namespace HordeIntroSmoke
 		AOperativeCharacter* Leader = Squad->GetLeader();
 		const FGameFlowConfig& FlowConfig = Flow->GetConfig();
 		const FHordeIntroConfig Config = HordeIntroRules::GetConfig();
+		const bool bPauseDilation = FMath::IsNearlyEqual(WorldDilation(World), FlowConfig.TacticalPauseTimeDilation, 0.001f);
 		switch (State.Stage)
 		{
 		case 0:
@@ -218,10 +254,6 @@ namespace HordeIntroSmoke
 			if (State.StageTime < 3.f)
 			{
 				return true;
-			}
-			if (USaveGameSubsystem* Saves = World->GetSubsystem<USaveGameSubsystem>())
-			{
-				State.AutosavesBefore = Saves->GetAutosaveCount();
 			}
 			State.PhaseHandle = Flow->OnBeforeGameFlowChanged.AddLambda([&State](ECodexGamePhase, ECodexGamePhase NewPhase, ECodexCombatMode)
 			{
@@ -231,74 +263,59 @@ namespace HordeIntroSmoke
 			Check(State, Flow->TriggerCombatZone() == EGameFlowResult::Ok, TEXT("combat zone triggered"));
 			Check(State, State.PhasesSeen.Num() == 1 && State.PhasesSeen[0] == ECodexGamePhase::WaveCombat,
 				FString::Printf(TEXT("straight into the wave: %d phase change(s), no cutscene / preparation"), State.PhasesSeen.Num()));
-			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause
-				&& Flow->IsFreePause() && Flow->GetWaveIndex() == 1, TEXT("wave 1 opens in the free tactical pause"));
+			Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && Flow->IsAwaitingHordeIntro() && !Flow->IsFreePause()
+				&& FMath::IsNearlyEqual(WorldDilation(World), Config.PreTriggerTimeDilation, 0.001f),
+				TEXT("no pause at the spawn: the fight runs, horde intro armed"));
+			Check(State, Intro->GetStage() == EHordeIntroStage::Waiting && !Camera->IsCinematicLocked(), TEXT("intro waits, camera free"));
 			const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
 			const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
 			const int32 Expected = Level && Level->Config.Waves.Num() > 0 ? Level->Config.Waves[0].GetTotalEnemyCount() : -1;
 			Check(State, Waves->GetAliveEnemyCount() > 0 && Waves->GetAliveEnemyCount() == Expected && Waves->GetRemainingSpawnCount() == 0,
-				FString::Printf(TEXT("the whole wave spawned at once: %d alive (level wave 1: %d), %d queued"), Waves->GetAliveEnemyCount(),
-					Expected, Waves->GetRemainingSpawnCount()));
-			Check(State, FMath::IsNearlyEqual(WorldDilation(World), FlowConfig.TacticalPauseTimeDilation, 0.001f),
-				FString::Printf(TEXT("pause dilation %.3f"), WorldDilation(World)));
-			Check(State, Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges && Flow->GetPauseCooldownRemaining() <= 0.f,
-				FString::Printf(TEXT("free: charges %d/%d"), Flow->GetPauseCharges(), FlowConfig.TacticalPauseMaxCharges));
+				FString::Printf(TEXT("the whole wave spawned at once: %d alive (level wave 1: %d)"), Waves->GetAliveEnemyCount(), Expected));
+			Check(State, Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges, TEXT("charges 3/3"));
 			if (const USaveGameSubsystem* Saves = World->GetSubsystem<USaveGameSubsystem>())
 			{
 				// The autosave itself (off in smokes: shared Saved/ files) is checked by SaveRoundTripSmoke.
-				Check(State, !Saves->CanSaveNow(), TEXT("no saving in the fight (free pause)"));
-			}
-			Check(State, Intro->IsIntroPending() && !Intro->IsFlyoverActive(), TEXT("flyover pending"));
-			const FString Banner = State.Banners.IsValid() ? State.Banners->GetPauseText().ToString() : FString();
-			Check(State, Banner.Contains(TEXT("free pause")), FString::Printf(TEXT("banner: %s"), *Banner));
-			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
-			{
-				State.SpawnSpots.Add(*It, It->GetActorLocation());
+				Check(State, !Saves->CanSaveNow(), TEXT("no saving in the fight"));
 			}
 			Next(State);
 			return true;
 		}
 		case 1:
-			// Wait for the flyover, then follow it shot by shot.
-			if (!Intro->IsFlyoverActive() && State.FlyoverStartReal < 0.f)
+			if (!Intro->IsFlyoverActive() && !State.bFlyoverSeen)
 			{
-				if (State.StageTime > 4.f)
+				if (!State.bWaitChecked && State.StageTime > 1.f && Intro->GetStage() == EHordeIntroStage::Waiting)
+				{
+					State.bWaitChecked = true;
+					Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && Camera->GetFollowTarget() == Leader
+						&& !Camera->IsCinematicLocked(), TEXT("1 s after the spawn: real time, the camera stays on the squad"));
+				}
+				if (State.StageTime > Config.MaxWaitSeconds / FMath::Max(0.05f, Config.PreTriggerTimeDilation) + 3.f)
 				{
 					Check(State, false, TEXT("the flyover never started"));
 					return Finish(State, false);
 				}
 				return true;
 			}
-			if (State.FlyoverStartReal < 0.f)
+			if (!State.bFlyoverSeen)
 			{
-				State.FlyoverStartReal = Intro->GetSecondsSinceSpawn();
-				Check(State, State.FlyoverStartReal >= 1.4f && State.FlyoverStartReal <= 2.3f,
-					FString::Printf(TEXT("flyover starts %.2f s (real) after the spawn"), State.FlyoverStartReal));
-				Check(State, Camera->IsCinematicLocked(), TEXT("camera input locked during the flyover"));
-				const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
-				bool bAllShown = true;
-				for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
-				{
-					bAllShown &= It->IsDying() || !It->IsHidden();
-				}
-				Check(State, (!Sight || Sight->IsCinematicReveal()) && bAllShown, TEXT("the flyover reveals the whole horde (line of sight overridden)"));
-				const TArray<EEnemyArchetype> Types = LiveTypes(World);
-				TArray<FHordeIntroShot> Expected = HordeIntroRules::BuildShotList(Types, TSet<EEnemyArchetype>(), Config);
+				State.bFlyoverSeen = true;
+				CheckTrigger(State, World, *Flow, *Intro, *Camera);
 				FString ExpectedLabels;
-				for (const FHordeIntroShot& Shot : Expected)
+				for (const FHordeIntroShot& Shot : HordeIntroRules::BuildShotList(LiveTypes(World), TSet<EEnemyArchetype>(), Config))
 				{
 					ExpectedLabels += (ExpectedLabels.IsEmpty() ? TEXT("") : TEXT(" ")) + HordeIntroRules::ShotLabel(Shot);
 				}
-				Check(State, ShotLabels(*Intro) == ExpectedLabels && Types.Num() >= 2,
+				Check(State, ShotLabels(*Intro) == ExpectedLabels && LiveTypes(World).Num() >= 2,
 					FString::Printf(TEXT("shots \"%s\" (wide + one per type in spawn order + return)"), *ShotLabels(*Intro)));
+			}
+			if (Intro->IsFlyoverActive() && !FMath::IsNearlyEqual(WorldDilation(World), Config.FlyoverTimeDilation, 0.001f))
+			{
+				Check(State, false, FString::Printf(TEXT("the world left the flyover slow motion (%.3f)"), WorldDilation(World)));
 			}
 			if (Intro->IsFlyoverActive() && !Flow->IsFreePause())
 			{
 				Check(State, false, TEXT("the free pause ended during the flyover"));
-			}
-			if (Intro->IsFlyoverActive() && !FMath::IsNearlyEqual(WorldDilation(World), FlowConfig.TacticalPauseTimeDilation, 0.001f))
-			{
-				Check(State, false, FString::Printf(TEXT("world left the pause dilation during the flyover (%.3f)"), WorldDilation(World)));
 			}
 			if (!TrackFlyover(State, *Intro, *Camera, Leader))
 			{
@@ -307,31 +324,17 @@ namespace HordeIntroSmoke
 			{
 				Check(State, Intro->GetCompletedCount() == 1 && Intro->GetSkippedCount() == 0, TEXT("flyover played to the end"));
 				Check(State, !Camera->IsCinematicLocked() && Camera->GetFollowTarget() == Leader, TEXT("camera back on the leader, input unlocked"));
+				Check(State, Flow->IsFreePause() && Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges && bPauseDilation,
+					FString::Printf(TEXT("settled into the free pause (dilation %.3f, charges 3/3, no timer)"), WorldDilation(World)));
 				const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
 				Check(State, !Sight || !Sight->IsCinematicReveal(), TEXT("the squad's own line of sight is back"));
-				Check(State, Flow->IsFreePause() && Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges
-					&& FMath::IsNearlyEqual(WorldDilation(World), FlowConfig.TacticalPauseTimeDilation, 0.001f),
-					TEXT("still the free pause after the flyover (no timer, charges 3/3, pause dilation)"));
+				const FString Banner = State.Banners.IsValid() ? State.Banners->GetPauseText().ToString() : FString();
+				Check(State, Banner.Contains(TEXT("free pause")), FString::Printf(TEXT("banner: %s"), *Banner));
 				for (const EEnemyArchetype Type : LiveTypes(World))
 				{
 					Check(State, Intro->GetShownTypes().Contains(Type), FString::Printf(TEXT("type %s marked shown"),
 						*StaticEnum<EEnemyArchetype>()->GetNameStringByValue(static_cast<int64>(Type))));
 				}
-				float Sum = 0.f;
-				int32 Count = 0;
-				for (const TPair<TWeakObjectPtr<AEnemyCharacter>, FVector>& Spot : State.SpawnSpots)
-				{
-					if (const AEnemyCharacter* Enemy = Spot.Key.Get())
-					{
-						Sum += FVector::Dist2D(Enemy->GetActorLocation(), Spot.Value);
-						++Count;
-					}
-				}
-				// Informational: at the pause dilation (0.02) the ~11 real s of the flyover are ~0.2 s of game time, so the
-				// horde barely moves while it is filmed (and needs its first perception update to pick the squad).
-				const float Mean = Count > 0 ? Sum / Count : 0.f;
-				Check(State, Mean < 600.f, FString::Printf(TEXT("the horde stays slowed during %.1f real s (mean move %.1f cm)"),
-					Intro->GetSecondsSinceSpawn(), Mean));
 			}
 			Next(State);
 			return true;
@@ -370,7 +373,6 @@ namespace HordeIntroSmoke
 			}
 			Check(State, bStarted && !Relocation->IsPlacingDeployable() && Relocation->GetActiveDeployCount() == 0,
 				TEXT("barricade placement works in the free pause (planned, not started yet)"));
-			// Space tap: the pause ends like any tactical pause.
 			PC->SpacePressed();
 			PC->SpaceReleased();
 			Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && !Flow->IsFreePause(), TEXT("Space: real time"));
@@ -384,7 +386,6 @@ namespace HordeIntroSmoke
 		}
 		case 3:
 		{
-			// The plan runs once the pause ends: he walks towards the point (the rushing horde may crowd him later on).
 			const AOperativeCharacter* Mover = State.Mover.Get();
 			const float Left = Mover ? FVector::Dist2D(Mover->GetActorLocation(), State.PlannedMove) : -1.f;
 			const bool bOnTheWay = Mover && (Mover->IsMoving() || Left < 150.f || State.MoveStartDistance - Left > 60.f);
@@ -394,7 +395,6 @@ namespace HordeIntroSmoke
 			}
 			Check(State, bOnTheWay, FString::Printf(TEXT("the planned move runs (moving %d, %.0f of %.0f cm left)"),
 				Mover && Mover->IsMoving() ? 1 : 0, Left, State.MoveStartDistance));
-			// Wave 1 down -> wave 2 at once.
 			Waves->ClearAllEnemies();
 			Next(State);
 			return true;
@@ -402,9 +402,10 @@ namespace HordeIntroSmoke
 		case 4:
 			if (Flow->GetPhase() == ECodexGamePhase::WaveCleared)
 			{
+				SmokeUtils::PlaceSquadAwayFromWaveSpawns(World, 3000.f);
 				Check(State, Flow->AdvanceAfterWave() == EGameFlowResult::Ok, TEXT("next wave"));
-				Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause() && Flow->GetWaveIndex() == 2,
-					TEXT("wave 2 comes at once (no rest countdown), free pause again"));
+				Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsAwaitingHordeIntro() && Flow->GetWaveIndex() == 2,
+					TEXT("wave 2 comes at once (no rest countdown), real time, intro armed"));
 				State.LastShot = INDEX_NONE;
 				State.VerifiedShot = INDEX_NONE;
 				Next(State);
@@ -415,7 +416,7 @@ namespace HordeIntroSmoke
 		{
 			if (!Intro->IsFlyoverActive())
 			{
-				return State.StageTime < 4.f || Finish(State, false);
+				return State.StageTime < Config.MaxWaitSeconds + 4.f || Finish(State, false);
 			}
 			const TSet<EEnemyArchetype> Shown1 = { EEnemyArchetype::FrostHound, EEnemyArchetype::Frostbitten };
 			bool bNoOld = true;
@@ -425,13 +426,14 @@ namespace HordeIntroSmoke
 				bNoOld &= !(Shot.Kind == EHordeIntroShotKind::Type && Shown1.Contains(Shot.Archetype));
 				TypeShots += Shot.Kind == EHordeIntroShotKind::Type ? 1 : 0;
 			}
-			Check(State, bNoOld && TypeShots >= 1, FString::Printf(TEXT("wave 2 shots \"%s\": only the new types"), *ShotLabels(*Intro)));
+			Check(State, bNoOld && TypeShots >= 1 && Intro->GetShots()[0].Kind == EHordeIntroShotKind::Wide,
+				FString::Printf(TEXT("wave 2 shots \"%s\": the running mass + only the new types"), *ShotLabels(*Intro)));
 			Next(State);
 			return true;
 		}
 		case 6:
 		{
-			// Esc during the second type shot (or the last one) skips the rest.
+			// Esc during the last type shot skips the rest.
 			TrackFlyover(State, *Intro, *Camera, Leader);
 			const int32 Index = Intro->GetCurrentShotIndex();
 			const TArray<FHordeIntroShot>& Shots = Intro->GetShots();
@@ -456,8 +458,7 @@ namespace HordeIntroSmoke
 			Check(State, !Intro->IsIntroPending() && Intro->GetSkippedCount() == 1, TEXT("Esc skipped the flyover"));
 			Check(State, Camera->GetFollowTarget() == Leader && FVector::Dist2D(Camera->GetFocus(), Leader->GetActorLocation()) < 120.f
 				&& !Camera->IsCinematicLocked(), TEXT("camera at once on the leader, unlocked"));
-			Check(State, Flow->IsFreePause() && FMath::IsNearlyEqual(WorldDilation(World), FlowConfig.TacticalPauseTimeDilation, 0.001f),
-				TEXT("the slowed free pause stays"));
+			Check(State, Flow->IsFreePause() && bPauseDilation, TEXT("the free pause stays, at the pause dilation"));
 			Check(State, (!Hud || !Hud->IsPauseMenuOpen()) && !UGameplayStatics::IsGamePaused(World), TEXT("Esc opened no pause menu"));
 			for (const FHordeIntroShot& Shot : Shots)
 			{
@@ -475,28 +476,84 @@ namespace HordeIntroSmoke
 			if (Flow->GetPhase() == ECodexGamePhase::WaveCleared)
 			{
 				Flow->AdvanceAfterWave();
-				Check(State, Flow->IsFreePause() && Flow->GetWaveIndex() == 3, TEXT("wave 3 at once, free pause"));
+				Check(State, Flow->IsAwaitingHordeIntro() && Flow->GetWaveIndex() == 3 && Intro->GetStage() == EHordeIntroStage::Waiting,
+					TEXT("wave 3 at once, intro waiting"));
+				State.StartedBefore = Intro->GetStartedCount();
 				Next(State);
 				return true;
 			}
 			return State.StageTime < 5.f || Finish(State, false);
 		case 8:
+			// Before the trigger: a click is a normal click, Esc opens the free pause at once.
+			switch (State.SubStep++)
+			{
+			case 0:
+				PressKey(PC, EKeys::LeftMouseButton, IE_Pressed);
+				return true;
+			case 1:
+				PressKey(PC, EKeys::LeftMouseButton, IE_Released);
+				return true;
+			case 2:
+				Check(State, Intro->GetStage() == EHordeIntroStage::Waiting && Flow->GetCombatMode() == ECodexCombatMode::RealTime,
+					TEXT("a click before the trigger skips nothing (normal click, real time)"));
+				PressKey(PC, EKeys::Escape, IE_Pressed);
+				return true;
+			case 3:
+			{
+				PressKey(PC, EKeys::Escape, IE_Released);
+				const ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(PC->GetHUD());
+				Check(State, Flow->IsFreePause() && bPauseDilation && Flow->GetPauseCharges() == FlowConfig.TacticalPauseMaxCharges,
+					TEXT("Esc before the trigger: the free pause at once (0.02, charges 3/3)"));
+				Check(State, Intro->GetStage() == EHordeIntroStage::Idle && Intro->GetStartedCount() == State.StartedBefore
+					&& Intro->GetAlertAlpha() > 0.f && (!Hud || !Hud->IsPauseMenuOpen()),
+					TEXT("no flyover, the alert explains the pause, no pause menu"));
+				SmokeUtils::ReleaseHordeIntroPause(Flow);
+				Waves->ClearAllEnemies();
+				Next(State);
+				return true;
+			}
+			default:
+				return true;
+			}
+		case 9:
+			// A load resumes wave 3 in its preparation: it comes suddenly again on the next flow tick.
+			if (State.SubStep == 0)
+			{
+				if (Flow->GetPhase() != ECodexGamePhase::WaveCleared)
+				{
+					return State.StageTime < 5.f || Finish(State, false);
+				}
+				SmokeUtils::PlaceSquadAwayFromWaveSpawns(World, 3000.f);
+				Flow->RestoreForLoad(true, true, 3);
+				State.SubStep = 1;
+				return true;
+			}
+			if (!Flow->IsAwaitingHordeIntro())
+			{
+				return State.StageTime < 3.f || Finish(State, false);
+			}
+			Check(State, Flow->GetWaveIndex() == 3 && Waves->GetAliveEnemyCount() > 0, TEXT("loaded wave 3 came suddenly again"));
+			State.LastShot = INDEX_NONE;
+			State.VerifiedShot = INDEX_NONE;
+			Next(State);
+			return true;
+		case 10:
 		{
 			if (!State.bKeyDown)
 			{
 				if (!Intro->IsFlyoverActive())
 				{
-					return State.StageTime < 4.f || Finish(State, false);
+					return State.StageTime < Config.MaxWaitSeconds + 4.f || Finish(State, false);
+				}
+				TrackFlyover(State, *Intro, *Camera, Leader);
+				if (State.Total - State.ShotStartTime < 0.8f)
+				{
+					return true;
 				}
 				const TArray<FHordeIntroShot>& Shots = Intro->GetShots();
-				const bool bKnownOnly = LiveTypes(World).Num() > 0 && Shots.Num() == 2 && Shots[0].Kind == EHordeIntroShotKind::Wide
+				const bool bKnownOnly = Shots.Num() == 2 && Shots[0].Kind == EHordeIntroShotKind::Wide
 					&& FMath::IsNearlyEqual(Shots[0].Seconds, Config.RepeatWideShotSeconds) && Shots[1].Kind == EHordeIntroShotKind::Return;
-				bool bAllKnown = true;
-				for (const EEnemyArchetype Type : LiveTypes(World))
-				{
-					bAllKnown &= Intro->GetShownTypes().Contains(Type);
-				}
-				Check(State, !bAllKnown || bKnownOnly, FString::Printf(TEXT("wave 3 (known types: %d): \"%s\""), bAllKnown ? 1 : 0, *ShotLabels(*Intro)));
+				Check(State, bKnownOnly, FString::Printf(TEXT("wave 3 again (known types): \"%s\""), *ShotLabels(*Intro)));
 				Squad->ClearPlannedOrder(Leader);
 				PressKey(PC, EKeys::LeftMouseButton, IE_Pressed);
 				State.bKeyDown = true;
@@ -504,9 +561,10 @@ namespace HordeIntroSmoke
 			}
 			PressKey(PC, EKeys::LeftMouseButton, IE_Released);
 			State.bKeyDown = false;
-			Check(State, !Intro->IsIntroPending() && Intro->GetSkippedCount() == 2, TEXT("a click skipped the flyover"));
+			Check(State, !Intro->IsIntroPending() && Intro->GetSkippedCount() == 3, TEXT("a click skipped the flyover"));
 			Check(State, Camera->GetFollowTarget() == Leader && !Camera->IsCinematicLocked(), TEXT("camera on the leader"));
-			Check(State, Squad->GetPlannedOrderCount() == 0 && Flow->IsFreePause(), TEXT("the click gave no order, the free pause stays"));
+			Check(State, Squad->GetPlannedOrderCount() == 0 && Flow->IsFreePause() && bPauseDilation,
+				TEXT("the click gave no order, the free pause stays"));
 			PC->SpacePressed();
 			PC->SpaceReleased();
 			Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && FMath::IsNearlyEqual(WorldDilation(World), 1.f, 0.001f),
@@ -530,6 +588,7 @@ namespace HordeIntroSmoke
 		World->GetTimerManager().SetTimer(PlaceHandle, FTimerDelegate::CreateLambda([PlaceWorld]()
 		{
 			SmokeUtils::PlaceSquadAtTestStart(PlaceWorld.Get());
+			SmokeUtils::PlaceSquadAwayFromWaveSpawns(PlaceWorld.Get(), 3000.f);
 		}), 0.5f, false);
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
@@ -541,7 +600,7 @@ namespace HordeIntroSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.HordeIntroSmoke"),
-		TEXT("Dev check of the sudden horde start (free tactical pause + camera flyover, skips, next waves); PASS / FAIL, then exits."),
+		TEXT("Dev check of the sudden horde start (running mass trigger, slow-motion flyover, free pause, skips, next waves); PASS / FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
