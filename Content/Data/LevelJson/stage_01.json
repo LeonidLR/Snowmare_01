@@ -8,6 +8,10 @@
   "description": "First line of defense before the generator complex. 3 waves of frost creatures storm the blast gates.",
   "prep_phase_duration": 60,
   "wave_rest_duration": 20,
+  "gate_open_mode": "generator_waves",
+  "gate_progress_per_second": 0.004,
+  "gate_max_progress_before_final": 0.9,
+  "gate_full_open_after_wave": 0,
   "waves": [
     {
       "wave_index": 1,

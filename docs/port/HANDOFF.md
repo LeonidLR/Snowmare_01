@@ -84,7 +84,8 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 |---|---|
 | `MovementSmoke` | sprint through the corridor, column formation |
 | `CameraZoneSmoke` | leader-only camera zone, followers hold (per-volume `bActiveInRealTime` / `bActiveInTurnBased` / `bActiveInTacticalPause`, see `CameraZoneModeSmoke`) |
-| `QuestChainSmoke` | canister → APC → generator → terminal → gate via the action menu, walk through the gate |
+| `QuestChainSmoke` | canister → APC → generator → terminal via the action menu; wave 1 comes suddenly; the paced blast gate only unlocked (objective «Hold the line until the blast door opens»), it stays shut and the leader ordered beyond it stays on the near side (2026-10-11) |
+| `GateGeneratorSmoke` | 2026-10-11: blast gate tied to the generator — terminal unlocks the paced servos («barely move», HQ «grid is overloaded»); creep sped up (`Codex.Gate.ProgressPerSecond` 0.05); wave 1 creeps (collision closed, no nav path beyond); generator broken -> paused (not reversed), «GENERATOR OFFLINE», HQ line; engineer repair (`ExecuteAction`) -> HQ «Power is back», resumes; each wave holds at its cap 30 / 60 / 90 %, door impassable; wave 3 cleared with the generator down -> the door waits (HQ «last wave»); repaired -> opens, collision off, nav path beyond, the leader walks through |
 | `CombatFlowSmoke` | Space tap / hold, tactical pause planning, turn-based enter / exit (the hold exit lands in full real time since 2026-10-06) |
 | `RealTimeControlSmoke` | RTS time modes (2026-10-06): fight starts in real time, a ground click moves the leader without any Space; tap = pause, a click is only planned and the leader stays; tap = the plan runs; hold 1.5 s = turn-based (release is no tap); hold 1.5 s = full real time |
 | `PostureSmoke` | Fire postures (2026-10-06): ambush level + patrolling hound 9 m ahead — Passive / Defensive keep stealth, «/» with only the leader selected turns only him Aggressive, Alt + «/» = squad Aggressive (overrides cleared) opens fire and starts the ambush (`SquadAutoFire`); in the fight Passive never fires, Defensive holds until the leader is attacked then fires back, «,» with a group selected = their override, «/» with the leader alone = his own, Alt + «,» clears the overrides, Passive still obeys Ctrl + click |
@@ -320,6 +321,21 @@ mate, 1 AP in turn-based), the flare reveal (`IsRevealedByFlare`, used by `UTact
   turrets unpowered, «[АВАРИЯ]» menu), repair on confirm (engineer 2.5 s / others 5 s) → `RepairGenerator`.
   Starting the generator also powers all turrets. Godot `interactable.gd breakdown_generator / repair_generator`.
 - `Quests/QuestChain`, `QuestSubsystem`, `Interactables/GateActor`. Godot `quest_manager.gd`, `gate.gd`.
+  **Blast gate tied to the generator (user request 2026-10-11, default):** `Quests/GateProgressRules` (pure) + `AGateActor`. Level JSON
+  `gate_open_mode` = `generator_waves` (default) | `instant` (the old Godot gate: the terminal opens it). Paced: the terminal only
+  unlocks the servos (`UnlockProgress`; quest line «the leaves barely move», objective «Hold the line until the blast door opens»);
+  during the wave fight (WaveCombat, real time / tactical pause in game time; not the turn-based grid) the door creeps by
+  `gate_progress_per_second` (0.004 = 0.4 %/s) ONLY while the generator works (quest running and no generator broken); a breakdown
+  pauses it (never reverses); each wave may push it to `gate_max_progress_before_final` (0.9) x wave / final wave (3 waves: 30 / 60
+  / 90 %); it opens fully only when `gate_full_open_after_wave` (0 = the level's last wave) is cleared (latched `IsFinalWaveCleared`)
+  AND the generator works (down at that moment -> it waits for the repair). Before that the leaf meshes only creep
+  (`MaxCrackDistance` 25 cm per leaf at 100 %: ~7.5 / 15 / 22.5 cm) — the collision boxes and the navmesh block stay closed.
+  HUD: a line under the fire-posture badge + a world label above the gate («BLAST DOOR 37% — GENERATOR OFFLINE», «… — OPENING
+  SLOWLY», «… — GRID OVERLOADED, HOLD THE WAVE», «BLAST DOOR OPENING — GET INSIDE»). HQ feed lines on: unlock («power grid is
+  overloaded…»), wave cap reached, generator down, power back, last wave cleared without power, opening. Console:
+  `Codex.Gate.OpenMode -1|0|1`, `Codex.Gate.ProgressPerSecond`. «Start Battle» (`CompleteChainForCombat`) still opens the gate at
+  once (the squad is placed behind it at `CombatStart`, the waves spawn on the near side). Saved: `world_state.gate_progress`
+  {progress, final_wave_cleared} per gate (generator health / broken were already saved with the interactables).
 
 **Turn-based combat** — `Tactics/TurnBasedCombatSubsystem` (starts when the flow enters TurnBased, ends on victory /
 defeat / leaving): 14 x 14 grid (1.5 m) around the leader, floor traced under it, static colliders baked as obstacles,
@@ -691,7 +707,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
   (`SaveGameRules::CurrentSaveVersion`; version 1 / Godot saves still load — missing sections leave the world alone).
   Saved: squad (+ bonus items, per-operative fire posture), flow phase / wave / preparation time / ambush, squad posture,
   Commander Mode, quest chain, crates, piles, every interactable by actor name (position, hidden, trap, generator,
-  barrel fire, mine, tripwire, barricade / turret health, turret power / broken, note read), gates, dialogue triggers,
+  barrel fire, mine, tripwire, barricade / turret health, turret power / broken, note read), gates (+ the paced creep), dialogue triggers,
   patrol routes, living enemies (patrol waypoint / phase / wait / search / escort leader; anyone missing = dead stays
   dead), Susanin (rescue + recruited). Deployables / tripwires / enemies / routes missing from the world are recreated
   from their class path; ones not in the save are removed.
@@ -709,6 +725,11 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 
 ## 7. Open user decisions / questions
 
+- **Blast gate tied to the generator (2026-10-11), to confirm with the user:** (1) speed: 0.4 %/s of wave fight with the generator
+  up, capped per wave at 30 / 60 / 90 % (a wave's share fills in ~75 s), full only after wave 3; (2) «Start Battle» keeps opening
+  the gate at once because it places the squad behind the gate (`CombatStart`) while the waves spawn near the test start — say if
+  «Start Battle» should place the squad in front of the shut gate instead; (3) the Wave Editor has no UI for the `gate_*` keys yet
+  (only the TS types / schema).
 - **Sprint 15 heat - design gaps decided by Claude (2026-10-11), waiting for the user's confirmation** (values in tactical_heat.json):
   (1) heat pack "-35 %" = 35 points of the 0..100 cold scale (like the food's "25 % cold off"), frostbite cleared -> the operative gets
   up to a crouch; a pack dragged onto a COLD mate is used on him, onto a warm one it is handed over; (2) items: starting loadout (above) +
@@ -1091,6 +1112,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 ## 10. Change log (newest first)
 
 | Commit | What |
+| (this, agents/work) | **Blast gate tied to the generator during the wave fight (user request 2026-10-11).** The terminal no longer opens the checkpoint gate: new pure `Quests/GateProgressRules` (+ `FGateProgressConfig` in `FLevelCombatConfig::Gate`, level JSON `gate_open_mode` generator_waves | instant, `gate_progress_per_second` 0.004, `gate_max_progress_before_final` 0.9, `gate_full_open_after_wave` 0 = last wave; schema + Wave Editor TS types); `AGateActor` paced mode: creeps only in the wave fight with the generator up, pauses on a breakdown (never reverses), per-wave cap 30 / 60 / 90 %, only the leaf meshes creep (25 cm per leaf at 100 %), collision / navmesh stay closed, full open only after the final wave is cleared AND the generator works; HQ feed lines, HUD line + world label «BLAST DOOR 37% — GENERATOR OFFLINE»; quest terminal / gate lines and objective «Hold the line until the blast door opens»; «Start Battle» still opens it at once; CVars `Codex.Gate.OpenMode`, `Codex.Gate.ProgressPerSecond`; save `world_state.gate_progress`. Tests `CodexTactics.Quests.GateProgress.*` (6); new `GateGeneratorSmoke` (rule `blast-gate`), `QuestChainSmoke` now checks the door stays shut in wave 1, `SaveRoundTripSmoke` round-trips the creep (37 %) and a damaged generator. `test.ps1 -Changed`: 46 mapped unit tests PASS, 23 smokes PASS (11 only on the alone re-run: parallel instances hung at the UBT ValidatePlatforms start-up; LevelWave once failed a wave-2 spawn-overlap check in parallel), + HordeIntro / BotRepair / GateGenerator PASS. |
 | (this, agents/vision) | **Vision cones for operatives and enemies, switchable from the editor (user request 2026-10-11; Godot player.gd cones).** New `Combat/VisionConeRules` + `Combat/VisionConeComponent` (procedural mesh: Godot fan of 32 segments + outline band, 8 cm above the feet, colour lerp x14; module dependency `ProceduralMeshComponent`); `AOperativeCharacter` / `AEnemyCharacter`: `VisionCone` component, `bShowVisionCone` (EditAnywhere, off), operative range from the weapon x stance / half angle 35 (Godot 70 full), enemy range / angle from its perception with idle / suspicious / alert colours, `bShowVisionConeWhenEngaged`; console `Codex.Debug.VisionCones`. Material: engine `M_SimpleUnlitTranslucent` until Gemini's `ConeMaterial` (TANDEM request 16). Tests `CodexTactics.Combat.VisionCone.*` (3: Godot geometry, cone = perception, toggle / colours); `VisionConeSmoke` (+ `Shot` still) registered in `test_map.json` (rule `vision-cone`). How to switch them on: §6. |
 | (this, agents/vision) | **Placed enemies without a route guard their post until they perceive the squad (user request 2026-10-11).** Since abc1b0f the map-placed hound / marksman of L_PatrolTest hunted at once (the marksman shot from 35 m at 4 s). Now `AEnemyCharacter::TryStartGuardPost` (BeginPlay; `ULevelEncounterSubsystem::MarkLevelEnemy` for smokes) turns a placed enemy with no route and no escort leader into a route-less patrol (`bGuardingPost`): `TickGuardPost` (hold the placement, face its yaw, look around, walk back after a search), the patrol perception / search / break unchanged; `AMarksmanEnemyCharacter` patrols as a guard (`HasLegacyPatrolRoute`, BeginPlay state, `TickPatrol`, `StartPatrol`); `BreakPatrol` / snapshot restore clear the post. New rules `PatrolRouteRules::ShouldGuardPost` / `GetGuardLookOffset` / `ShouldWalkBackToPost` (test `CodexTactics.AI.PatrolRoute.GuardPostUntilPerceived`); `PatrolAmbushSmoke` extended (guard 6 s, trap search and return, gunshot -> fight); `test_map.json` maps `Source/**/AI/**` to it too. Details §5 «Game flow». |
 | (this, agents/vision) | **M16 range 14 -> 25 m (user decision 2026-10-11).** `weapons_tuning.json` m16: `attack_range_m` 25, `max_range_cells` 8, 17-entry hit table (old values up to 14 m, then 0.47 -> 0.26 at 25 m), 17 damage multipliers; `DA_Weapon_m16` updated by the new generic `Scripts/Editor/apply_weapon_tuning.py` (JSON -> assets, only changed assets saved, `CODEX_WEAPONS` filter). Tests: new `CodexTactics.Data.WeaponTuning.M16Range25m` (file values, sniper still outranges it, chances inside 14 m unchanged, falling table, 25 m = 0.26), `CodexTactics.Data.WeaponImportParity` now expects 25 m / 8 cells / 17 entries. Details §6. |

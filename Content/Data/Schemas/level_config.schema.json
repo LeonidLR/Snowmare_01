@@ -11,6 +11,10 @@
     "prep_phase_duration": { "type": "number", "minimum": 0, "default": 60.0, "description": "Длительность начальной подготовки к обороне в секундах" },
     "wave_rest_duration": { "type": "number", "minimum": 0, "default": 20.0, "description": "Длительность передышки между волнами в секундах" },
     "horde_enabled": { "type": "boolean", "default": true, "description": "UE: орда после 4 минут боя в реальном времени (Content/Data/AI/horde.json); false — выключить на этом уровне" },
+    "gate_open_mode": { "type": "string", "enum": ["generator_waves", "instant"], "default": "generator_waves", "description": "UE: blast gate — generator_waves: the terminal only unlocks the servos, the door creeps open during the wave fight only while the generator works and opens fully after the final wave is cleared; instant: the terminal opens it at once" },
+    "gate_progress_per_second": { "type": "number", "minimum": 0, "default": 0.004, "description": "UE: door progress (0..1) per second of wave fight with the generator up (0.004 = 0.4 %/s)" },
+    "gate_max_progress_before_final": { "type": "number", "minimum": 0, "maximum": 0.99, "default": 0.9, "description": "UE: most the door reaches before the final wave is cleared; wave N of F may push it to this * N / F (3 waves: 30/60/90 %)" },
+    "gate_full_open_after_wave": { "type": "integer", "minimum": 0, "default": 0, "description": "UE: the wave whose clearing opens the door fully; 0 = the level's last wave" },
     "horde": { "type": "object", "description": "UE: переопределения horde.json для уровня (trigger_seconds, repeats, repeat_seconds, count, count_increase_per_repeat, composition, min_distance_m, max_distance_m, cluster_radius_m, prefer_out_of_sight, spawn_samples, apply_wave_modifiers, warning_seconds, warning_sound)" },
     "waves": {
       "type": "array",

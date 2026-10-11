@@ -974,6 +974,7 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-10-11 (Claude, `agents/work`): blast gate tied to the generator during the wave fight (`Quests/GateProgressRules`, `AGateActor` paced mode, HUD line + world label, HQ feed lines, save `gate_progress`, level JSON `gate_*` keys); HANDOFF §5 / §7 / §10. Gameplay only, nothing for Gemini (the door leaves are still engine cubes).
 - 2026-10-11 (Claude, `agents/vision`): vision cones for operatives and enemies (`UVisionConeComponent`, `bShowVisionCone`, `Codex.Debug.VisionCones`; HANDOFF §5 / §6 / §10). Request 16 to Gemini: the cone material.
 - 2026-10-11 (Claude, `agents/vision`, temp worktree `../CodexTactics-agents2`): enemies placed in a map without a route guard their post until they perceive the squad (`AEnemyCharacter::TryStartGuardPost`, HANDOFF §5 «Game flow» / §10); wave spawns unchanged. M16 range 14 -> 25 m (`weapons_tuning.json`, `DA_Weapon_m16`, HANDOFF §6).
 - 2026-10-11 (Claude, `agents/patrolfix`, temp worktree `../CodexTactics-agents2`): enemies placed in a map now always start the (ambush) fight when they attack / spot the squad or are hit, and "auto" maps with placed enemies are ambush levels (user bug: L_PatrolTest enemies without routes attacked a squad that stayed in exploration). Gameplay code only (`LevelEncounter*`, `EnemyCharacter`, `MarksmanEnemyCharacter`), see HANDOFF §5 / §10. Not merged into main.

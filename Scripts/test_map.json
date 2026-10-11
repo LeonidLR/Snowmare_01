@@ -29,7 +29,7 @@
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
-    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke"
+    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
@@ -111,7 +111,7 @@
       "name": "interactables-core",
       "globs": ["Source/**/Interactables/Interact*", "Source/**/Interactables/ActionMenu*", "Source/**/UI/ActionMenu*", "Source/**/Interactables/VaultNavigation*", "Source/**/Interactables/Gate*"],
       "tests": ["CodexTactics.Quests", "CodexTactics.Characters.Vault"],
-      "smokes": ["QuestChainSmoke", "VaultSmoke", "DeployableSmoke"]
+      "smokes": ["QuestChainSmoke", "GateGeneratorSmoke", "VaultSmoke", "DeployableSmoke"]
     },
     {
       "name": "narrative-dialogue",
@@ -123,7 +123,13 @@
       "name": "quests",
       "globs": ["Source/**/Quests/Quest*"],
       "tests": ["CodexTactics.Quests"],
-      "smokes": ["QuestChainSmoke", "MissionSmoke"]
+      "smokes": ["QuestChainSmoke", "MissionSmoke", "GateGeneratorSmoke"]
+    },
+    {
+      "name": "blast-gate",
+      "globs": ["Source/**/Quests/GateProgress*", "Source/**/Interactables/Gate*", "Source/**/Debug/GateGeneratorSmoke*", "Source/**/Debug/QuestChainSmoke*"],
+      "tests": ["CodexTactics.Quests", "CodexTactics.LevelJson"],
+      "smokes": ["GateGeneratorSmoke", "QuestChainSmoke", "SaveRoundTripSmoke", "VictorySmoke", "MissionSmoke", "MainMenuSmoke"]
     },
     {
       "name": "grenades",
@@ -159,7 +165,7 @@
       "name": "waves-victory",
       "globs": ["Source/**/Combat/Wave*", "Source/**/Combat/EnemySpawn*", "Source/**/Combat/SpawnLane*", "Source/**/Combat/FallbackWave*", "Source/**/Combat/KillStats*", "Source/**/UI/VictoryPanel*", "Source/**/GameFlow/LevelEncounter*", "Source/**/Data/LevelJson*", "Source/**/Data/WaveConfig*", "Source/**/Data/EnemyArchetype*", "Content/Data/LevelJson/**"],
       "tests": ["CodexTactics.Combat.Enemy", "CodexTactics.Combat.FallbackWave", "CodexTactics.Combat.SpawnLanes", "CodexTactics.Combat.KillStats", "CodexTactics.LevelJson", "CodexTactics.Core.LevelFlow", "CodexTactics.Combat.AmbushStartsCombat", "CodexTactics.Combat.LevelEnemyContactStartsCombat"],
-      "smokes": ["WaveCombatSmoke", "LevelWaveSmoke", "FlankBreachSmoke", "VictorySmoke", "SusaninSmoke", "PatrolAmbushSmoke", "AmbushSmoke"]
+      "smokes": ["WaveCombatSmoke", "LevelWaveSmoke", "FlankBreachSmoke", "VictorySmoke", "SusaninSmoke", "PatrolAmbushSmoke", "AmbushSmoke", "GateGeneratorSmoke"]
     },
     {
       "name": "health-damage",
@@ -279,7 +285,7 @@
       "name": "save-load",
       "globs": ["Source/**/Core/SaveGame*", "Source/**/Core/SavePolicy*"],
       "tests": ["CodexTactics.Core.SaveGame", "CodexTactics.Save"],
-      "smokes": ["SaveRoundTripSmoke", "SaveLoadSmoke", "PauseMenuSmoke", "EventBusSmoke", "FrontendSmoke"]
+      "smokes": ["SaveRoundTripSmoke", "SaveLoadSmoke", "PauseMenuSmoke", "EventBusSmoke", "FrontendSmoke", "GateGeneratorSmoke"]
     },
     {
       "name": "mission-flow",

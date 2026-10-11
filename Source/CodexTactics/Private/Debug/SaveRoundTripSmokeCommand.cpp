@@ -4,7 +4,8 @@
 // Slots go to Saved/SmokeSaves (exclusive in Scripts/test_map.json). A non-trivial out-of-combat world is built: squad
 // hurt / cold / moved / crouched / prone, ammo per weapon, items, bonus item, extra ammo, postures (squad + own), guard;
 // 10 rounds stored in a crate, a pile dropped, a barrel pushed 3 m and lit, a squad mine and a tripwire placed, a
-// turret and a barricade damaged (turret unpowered), canister + diesel quest steps (the canister hides), the level's
+// turret and a barricade damaged (turret unpowered), the generator damaged and the blast gate's creep at 37 % (2026-10-11),
+// canister + diesel quest steps (the canister hides), the level's
 // dialogue trigger played and a note read; one level enemy killed, one hurt; a marksman + escort hound walking a runtime
 // route mid-way, a frostbitten searching on a second route. Then:
 //  1. SNAPSHOT (the save data of the live world, flattened), save, mutate everything (heal, move, items, posture, crate,
@@ -52,6 +53,8 @@
 #include "Survival/ColdSurvivalComponent.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/DroppedItemActor.h"
+#include "Interactables/GateActor.h"
+#include "Interactables/InteractableActor.h"
 #include "Interactables/ItemStashComponent.h"
 #include "Interactables/LootCrateActor.h"
 #include "Interactables/NarrativeElementActor.h"
@@ -472,6 +475,21 @@ namespace SaveRoundTripSmoke
 		Quests->InteractWith(EInteractableType::Vehicle, nullptr);
 		Check(State, Quests->HasFuelCanister() && !State.CanisterName.IsEmpty(), TEXT("canister found and filled"));
 
+		// The blast gate paced by the generator and the waves (2026-10-11): its creep and the generator's damage.
+		AGateActor* Gate = AGateActor::FindLevelGate(World);
+		AInteractableActor* Generator = nullptr;
+		for (TActorIterator<AInteractableActor> It(World); It && !Generator; ++It)
+		{
+			Generator = It->ObjectType == EInteractableType::Generator ? *It : nullptr;
+		}
+		if (Gate && Generator)
+		{
+			Gate->RestoreProgress(false, 0.37f, false);
+			Generator->TakeGeneratorDamage(60.f);
+		}
+		Check(State, Gate && Generator && FMath::IsNearlyEqual(Gate->GetOpenProgress(), 0.37f) && Generator->GeneratorHealth == 140.f,
+			TEXT("blast gate creep 37 %, generator at 140 HP"));
+
 		// Narrative: the dialogue trigger played, a note read.
 		for (TActorIterator<ADialogueTriggerVolume> It(World); It && State.TriggerName.IsEmpty(); ++It)
 		{
@@ -636,6 +654,17 @@ namespace SaveRoundTripSmoke
 			It->SetPowered(true);
 		}
 		Quests->RestoreState(FQuestChainState());
+		if (AGateActor* Gate = AGateActor::FindLevelGate(World))
+		{
+			Gate->RestoreProgress(false, 0.f, false);
+		}
+		for (TActorIterator<AInteractableActor> It(World); It; ++It)
+		{
+			if (It->ObjectType == EInteractableType::Generator)
+			{
+				It->RestoreGeneratorState(It->GeneratorMaxHealth, false);
+			}
+		}
 		if (AInteractableActor* Canister = FindNamed<AInteractableActor>(World, State.CanisterName))
 		{
 			Canister->SetActorHiddenInGame(false);
@@ -713,6 +742,14 @@ namespace SaveRoundTripSmoke
 				Commander->ColdSurvival->GetHeatBufferSecondsLeft()));
 		const AInteractableActor* Canister = FindNamed<AInteractableActor>(World, State.CanisterName);
 		Check(State, Canister && Canister->IsHidden() && Quests->HasFuelCanister(), TEXT("canister hidden, fuel canister in the quest"));
+		const AGateActor* Gate = AGateActor::FindLevelGate(World);
+		float GeneratorHealth = -1.f;
+		for (TActorIterator<AInteractableActor> It(World); It; ++It)
+		{
+			GeneratorHealth = It->ObjectType == EInteractableType::Generator ? It->GeneratorHealth : GeneratorHealth;
+		}
+		Check(State, Gate && FMath::IsNearlyEqual(Gate->GetOpenProgress(), 0.37f) && !Gate->IsOpen() && GeneratorHealth == 140.f,
+			FString::Printf(TEXT("blast gate creep back at %.2f, generator %.0f HP"), Gate ? Gate->GetOpenProgress() : -1.f, GeneratorHealth));
 		const ADialogueTriggerVolume* Trigger = FindNamed<ADialogueTriggerVolume>(World, State.TriggerName);
 		Check(State, Trigger && Trigger->HasTriggered(), TEXT("dialogue already played"));
 		Marksman = State.Marksman.Get();

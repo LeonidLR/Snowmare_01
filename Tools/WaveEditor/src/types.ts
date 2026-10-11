@@ -139,6 +139,14 @@ export interface LevelConfig {
   horde_enabled?: boolean;
   /** Per-level overrides of horde.json (same keys). */
   horde?: Record<string, unknown>;
+  /** UE blast gate (GateProgressRules): generator_waves (default) creeps open only while the generator runs during the waves, full open after the final wave; instant = terminal opens it. */
+  gate_open_mode?: 'generator_waves' | 'instant';
+  /** UE: door progress (0..1) per second of wave fight with the generator up (default 0.004). */
+  gate_progress_per_second?: number;
+  /** UE: most the door reaches before the final wave is cleared (default 0.9; wave N of F caps at this * N / F). */
+  gate_max_progress_before_final?: number;
+  /** UE: the wave whose clearing opens the door fully; 0 = the last wave. */
+  gate_full_open_after_wave?: number;
   waves: WaveConfig[];
 }
 
