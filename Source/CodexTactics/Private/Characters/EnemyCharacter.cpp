@@ -38,6 +38,8 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/EnemyGhostActor.h"
+#include "Combat/VisionConeComponent.h"
+#include "Combat/VisionConeRules.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -72,6 +74,9 @@ AEnemyCharacter::AEnemyCharacter()
 		BodyMesh->SetStaticMesh(CylinderMesh.Object);
 	}
 
+	VisionCone = CreateDefaultSubobject<UVisionConeComponent>(TEXT("VisionCone"));
+	VisionCone->SetupAttachment(GetCapsuleComponent());
+
 	Tags.Add(FName(TEXT("Enemy")));
 }
 
@@ -96,6 +101,8 @@ void AEnemyCharacter::BeginPlay()
 	ApplyArchetypeDefaults();
 	ConfigureKnockdown();
 	InitPatrol();
+	// User request 2026-10-11: placed in the map without a route -> guards its post until it perceives the squad.
+	TryStartGuardPost();
 }
 
 void AEnemyCharacter::InitializeArchetype(EEnemyArchetype InArchetype)
@@ -426,6 +433,7 @@ void AEnemyCharacter::Tick(float DeltaTime)
 	SecondsSinceHoundPounce += DeltaTime;
 	TickBehavior(DeltaTime);
 	UpdateMovementFacing(DeltaTime);
+	UpdateVisionCone(DeltaTime);
 }
 
 void AEnemyCharacter::FaceYaw(float Yaw, float DeltaTime, float InterpSpeed)
@@ -1244,7 +1252,12 @@ void AEnemyCharacter::InitPatrol()
 	{
 		EscortLeader = nullptr;
 	}
-	bPatrolActive = AssignedPatrolRoute != nullptr || EscortLeader.IsValid();
+	if (AssignedPatrolRoute || EscortLeader.IsValid())
+	{
+		bGuardingPost = false; // a route / a leader of its own replaces the guard post
+	}
+	bGuardReturning = false;
+	bPatrolActive = AssignedPatrolRoute != nullptr || EscortLeader.IsValid() || bGuardingPost;
 	bEscortMoving = false;
 	PatrolPhase = EPatrolPhase::Moving;
 	PatrolWaypointIndex = 0;
@@ -1254,7 +1267,7 @@ void AEnemyCharacter::InitPatrol()
 	PatrolSightTimer = FMath::FRandRange(0.f, 0.2f);
 	if (bPatrolActive)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s patrols (route %s, leader %s)"), *GetName(),
+		UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s %s (route %s, leader %s)"), *GetName(), bGuardingPost ? TEXT("guards its post") : TEXT("patrols"),
 			AssignedPatrolRoute ? *AssignedPatrolRoute->GetName() : TEXT("-"), EscortLeader.IsValid() ? *EscortLeader->GetName() : TEXT("-"));
 	}
 }
@@ -1289,6 +1302,7 @@ void AEnemyCharacter::RestorePatrolSnapshot(APatrolRouteActor* Route, AEnemyChar
 		AssignedPatrolRoute = Route;
 		EscortLeader = Leader != this ? Leader : nullptr;
 		bPatrolActive = false;
+		bGuardingPost = false;
 		bSearching = false;
 		return;
 	}
@@ -1569,7 +1583,96 @@ void AEnemyCharacter::TickPatrolBehavior(float DeltaTime)
 		TickPatrolSearch(DeltaTime);
 		return;
 	}
+	if (bGuardingPost && !AssignedPatrolRoute)
+	{
+		TickGuardPost(DeltaTime);
+		return;
+	}
 	TickPatrolRoute(DeltaTime);
+}
+
+bool AEnemyCharacter::TryStartGuardPost()
+{
+	if (bIsDying)
+	{
+		return false;
+	}
+	if (bGuardingPost)
+	{
+		return IsOnPatrol();
+	}
+	const UWorld* World = GetWorld();
+	const ULevelEncounterSubsystem* Encounter = World ? World->GetSubsystem<ULevelEncounterSubsystem>() : nullptr;
+	if (!PatrolRouteRules::ShouldGuardPost(Encounter && Encounter->IsLevelEnemy(this), AssignedPatrolRoute != nullptr || HasLegacyPatrolRoute(),
+		EscortLeader.IsValid(), bGuardPostWhenUnrouted))
+	{
+		return false;
+	}
+	GuardPostLocation = GetActorLocation();
+	GuardPostYaw = GetActorRotation().Yaw;
+	// Spread the look-around of a group (the first look comes after a while, not all heads at once).
+	GuardClock = FMath::FRandRange(0.f, 0.3f) * GuardLookPeriodSeconds;
+	bGuardingPost = true;
+	StartPatrol(nullptr, nullptr); // virtual: the marksman enters his patrol state too
+	return IsOnPatrol();
+}
+
+void AEnemyCharacter::TickGuardPost(float DeltaTime)
+{
+	// Back to the post after a search / a shove; a guard does not wander.
+	const float Away = FVector::Dist2D(GetActorLocation(), GuardPostLocation);
+	if (PatrolRouteRules::ShouldWalkBackToPost(Away, bGuardReturning))
+	{
+		PatrolStuckTime = GetVelocity().Size2D() < 10.f ? PatrolStuckTime + DeltaTime : 0.f;
+		if (!bGuardReturning || !bPatrolMoveIssued || PatrolStuckTime > 1.f)
+		{
+			PatrolStuckTime = 0.f;
+			IssuePatrolMove(GuardPostLocation, PatrolWalkSpeed);
+		}
+		bGuardReturning = true;
+		return;
+	}
+	if (bGuardReturning)
+	{
+		bGuardReturning = false;
+		bPatrolMoveIssued = false;
+		if (AAIController* AIC = Cast<AAIController>(GetController()))
+		{
+			AIC->StopMovement();
+		}
+	}
+	// Faces its placement rotation and looks around now and then (its sight cone sweeps with it).
+	GuardClock += DeltaTime;
+	FaceYaw(GuardPostYaw + PatrolRouteRules::GetGuardLookOffset(GuardClock, GuardLookAroundDeg, GuardLookPeriodSeconds), DeltaTime, 2.f);
+}
+
+float AEnemyCharacter::GetVisionConeRange() const
+{
+	return PerceptionRules::EffectiveSightRange(GetPatrolPerception(), EOperativeStance::Standing);
+}
+
+float AEnemyCharacter::GetVisionConeHalfAngle() const
+{
+	return GetPatrolPerception().SightHalfAngleDeg;
+}
+
+void AEnemyCharacter::UpdateVisionCone(float DeltaTime)
+{
+	if (!VisionCone)
+	{
+		return;
+	}
+	const bool bAlive = !bIsDying && HealthComponent && HealthComponent->IsAlive();
+	const bool bOnPatrol = IsOnPatrol();
+	const bool bVisible = VisionConeRules::ResolveVisible(UVisionConeComponent::GetGlobalMode(), bShowVisionCone, bAlive)
+		&& (bOnPatrol || bShowVisionConeWhenEngaged);
+	if (!bVisible && !VisionCone->IsConeShown())
+	{
+		return;
+	}
+	const EVisionConeState State = VisionConeRules::GetEnemyState(bOnPatrol, bSearching, PatrolSuspicion);
+	VisionCone->UpdateCone(bVisible, GetVisionConeRange(), GetVisionConeHalfAngle(),
+		VisionConeRules::GetStateColor(State, bSearching ? 1.f : PatrolSuspicion), DeltaTime);
 }
 
 void AEnemyCharacter::StartPatrolSearch(const FVector& Location)
@@ -1692,7 +1795,14 @@ void AEnemyCharacter::EndPatrolSearch()
 	bPatrolMoveIssued = false;
 	PatrolStuckTime = 0.f;
 	bEscortMoving = false;
-	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s gives up the search, back to waypoint %d"), *GetName(), PatrolWaypointIndex);
+	if (bGuardingPost && !AssignedPatrolRoute)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s gives up the search, back to its post"), *GetName());
+	}
+	else
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s gives up the search, back to waypoint %d"), *GetName(), PatrolWaypointIndex);
+	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] search timed out for %s at %.1f s"), *GetName(), GetWorld()->GetTimeSeconds());
 	if (!bIsDying)
 	{
@@ -1859,6 +1969,8 @@ void AEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertL
 	}
 	const bool bWasSearching = bSearching;
 	bPatrolActive = false;
+	bGuardingPost = false;
+	bGuardReturning = false;
 	bEscortMoving = false;
 	bSearching = false;
 	PatrolSuspicion = 0.f;

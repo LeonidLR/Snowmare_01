@@ -61,7 +61,7 @@ public:
 	int32 GetNumLevelEnemies() const { return LevelEnemies.Num(); }
 	/** The map held enemies when it loaded (Auto resolves to ambush). */
 	bool LevelHasPlacedEnemies() const { return bLevelHasPlacedEnemies; }
-	/** Smokes: treats a runtime-spawned enemy as placed in the map. */
+	/** Smokes: treats a runtime-spawned enemy as placed in the map (without a route it starts guarding its post). */
 	void MarkLevelEnemy(AActor* Enemy);
 
 	/**

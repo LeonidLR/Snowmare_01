@@ -107,7 +107,9 @@ void AMarksmanEnemyCharacter::BeginPlay()
 	}
 	// Sprint 06-G: spawned by a wave (or during its preparation) he fights at once. Sprint 11: a spline route is walked
 	// from map start whatever the phase (no preparation delay for patrols).
-	AIState = AssignedPatrolRoute ? EMarksmanAIState::Patrol
+	// User request 2026-10-11: placed in the map without any route he guards his post (TryStartGuardPost in the base
+	// BeginPlay) until his perception detects the squad.
+	AIState = AssignedPatrolRoute || bGuardingPost ? EMarksmanAIState::Patrol
 		: (PatrolRoute.IsEmpty() || IsFightOn() ? EMarksmanAIState::Engage : EMarksmanAIState::Patrol);
 	if (HealthComponent)
 	{
@@ -177,7 +179,7 @@ void AMarksmanEnemyCharacter::Alert()
 void AMarksmanEnemyCharacter::StartPatrol(APatrolRouteActor* Route, AEnemyCharacter* Leader)
 {
 	Super::StartPatrol(Route, Leader);
-	if (Route && !bIsDying)
+	if ((Route || bGuardingPost) && !bIsDying)
 	{
 		CancelAim();
 		bHolding = false;
@@ -199,6 +201,8 @@ void AMarksmanEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector
 		return;
 	}
 	bPatrolActive = false;
+	bGuardingPost = false;
+	bGuardReturning = false;
 	const bool bWasSearching = bSearching;
 	bSearching = false;
 	PatrolSuspicion = 0.f;
@@ -756,7 +760,8 @@ void AMarksmanEnemyCharacter::TickPatrol(float DeltaTime, AOperativeCharacter* T
 {
 	// Sprint 11: the spline route — his perception (enemy_perception.json MARKSMAN: sight with suspicion, hearing; Sprint 08
 	// cover rule), a hit or his escort end it; a trap sends him searching (user request / amendment 2026-10-06).
-	if (AssignedPatrolRoute)
+	// User request 2026-10-11: a guard post (placed without a route) uses the same perception, then holds his spot.
+	if (AssignedPatrolRoute || bGuardingPost)
 	{
 		if (TickPatrolPerception(DeltaTime))
 		{
@@ -767,7 +772,14 @@ void AMarksmanEnemyCharacter::TickPatrol(float DeltaTime, AOperativeCharacter* T
 			TickPatrolSearch(DeltaTime);
 			return;
 		}
-		TickPatrolRoute(DeltaTime);
+		if (AssignedPatrolRoute)
+		{
+			TickPatrolRoute(DeltaTime);
+		}
+		else
+		{
+			TickGuardPost(DeltaTime);
+		}
 		return;
 	}
 	// Sprint 06-D: a wave (or its preparation) is on — the fight is known, no more patrolling; otherwise an operative

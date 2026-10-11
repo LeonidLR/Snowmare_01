@@ -81,6 +81,8 @@ protected:
 	virtual void TickBehavior(float DeltaTime) override;
 	/** Walks to a spline waypoint standing (his own move: stance, MoveGoal), at Speed. */
 	virtual void IssuePatrolMove(const FVector& Goal, float Speed) override;
+	/** His legacy PatrolRoute points are a route of their own (no guard post). */
+	virtual bool HasLegacyPatrolRoute() const override { return !PatrolRoute.IsEmpty(); }
 	/** Turn-based hold: cancels a pending get-up run and the aim (bug fix 2026-10-06). */
 	virtual void OnTurnBasedHeldChanged(bool bHeld) override;
 

@@ -569,6 +569,38 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
 	float GetColdSpeedMultiplier() const { return ColdSpeedMultiplier; }
 
+	// --- Vision cone (user request 2026-10-11; Godot player.gd _setup_vision_cone / _update_vision_cone) ---
+
+	/** Ground cone of the operative's fire sector (look: its ConeMaterial / colours / segments). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Vision Cone")
+	TObjectPtr<class UVisionConeComponent> VisionCone;
+
+	/**
+	 * Draw this operative's vision cone (Godot show_vision_cones, off in Godot's shipped config). Set it on BP_Operative's
+	 * Class Defaults or on one placed / spawned operative; console Codex.Debug.VisionCones 0 / 1 overrides every actor.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone")
+	bool bShowVisionCone = false;
+
+	/** Cone range = the current weapon's real-time range x the stance multiplier (what it can hit); off: VisionConeRangeCm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone")
+	bool bVisionConeRangeFromWeapon = true;
+
+	/** Cone range without a weapon (or bVisionConeRangeFromWeapon off), cm (Godot vision_cone_range 14 m). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone", meta = (ClampMin = "0"))
+	float VisionConeRangeCm = 1400.f;
+
+	/** Half angle of the cone, degrees (Godot vision_cone_angle 70 = +-35). Operatives fire all round; this is their watch sector. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone", meta = (ClampMin = "1", ClampMax = "180"))
+	float VisionConeHalfAngleDeg = 35.f;
+
+	/** Range the cone shows now, cm. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Vision Cone")
+	float GetVisionConeRange() const;
+
+	/** Godot _is_any_enemy_spotted: a combat / priority target, or a living enemy inside the cone with a clear line. */
+	bool IsEnemySpottedInCone() const;
+
 	// --- Combat & Weapon System (Godot player.gd parity) ---
 
 	virtual void Tick(float DeltaTime) override;
@@ -1387,6 +1419,11 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class ARadiusRingActor> SelectionRing;
+
+	/** Vision cone: visibility / shape / colour every tick, the spotted check every 0.2 s. */
+	void UpdateVisionCone(float DeltaTime);
+	float VisionConeCheckTimer = 0.f;
+	bool bVisionConeSpotted = false;
 
 	UFUNCTION()
 	void HandleHealthChanged(float NewHealth, float MaxHealth, float Delta);
