@@ -14,6 +14,8 @@ import { EnemyWeaponsPanel } from './components/EnemyWeaponsPanel';
 import { CommanderROEPanel } from './components/CommanderROEPanel';
 import { StealthCombatPanel } from './components/StealthCombatPanel';
 import { applyLevelEncounterPatch } from './utils/stealthCombat';
+import { BlastDoorPanel, DemoPanel } from './components/LevelSettingsPanels';
+import { validateLevelSettings } from './utils/levelSettings';
 import { Activity, Terminal, Loader2, Swords, Plus, Snowflake, X, Wifi, WifiOff } from 'lucide-react';
 import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2, Eye } from 'lucide-react';
 
@@ -377,6 +379,12 @@ export const App: React.FC = () => {
   };
 
   const handleSaveConfig = async () => {
+    const settingsErrors = validateLevelSettings(config);
+    if (settingsErrors.length > 0) {
+      setSaveStatus(`⚠️ Не сохранено: ${settingsErrors.join('; ')}`);
+      setTimeout(() => setSaveStatus(null), 6000);
+      return;
+    }
     try {
       const res = await fetch('/api/save-stage', {
         method: 'POST',
@@ -768,6 +776,12 @@ export const App: React.FC = () => {
               <span className="font-bold text-emerald-400">{config.waves.length}</span>
             </div>
           </div>
+        </div>
+
+        {/* Настройки уровня (не волны): бластовая дверь и демо / туториал */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <BlastDoorPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
+          <DemoPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
         </div>
 
         {/* ❄️ Карточка мониторинга холода последнего боя прямо в конфигураторе волн */}
