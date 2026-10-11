@@ -141,6 +141,15 @@ int32 TurnBasedRules::MoveCostMultiplier(EOperativeStance Stance, const FTurnBas
 	return Stance == EOperativeStance::Standing ? 1 : FMath::Max(1, Balance.CrouchMoveCostMultiplier);
 }
 
+float TurnBasedRules::BlastBaseDamage(bool bBarrel, bool bOnSquad, const FTurnBasedBalance& Balance)
+{
+	if (bBarrel)
+	{
+		return bOnSquad ? Balance.BarrelDamage : Balance.BarrelDamageEnemies;
+	}
+	return bOnSquad ? Balance.MineDamageOperatives : Balance.MineDamageEnemies;
+}
+
 float TurnBasedRules::StanceDamageMultiplier(EOperativeStance Stance, const FTurnBasedBalance& Balance)
 {
 	return Stance == EOperativeStance::Crouching ? Balance.CrouchDamageMultiplier

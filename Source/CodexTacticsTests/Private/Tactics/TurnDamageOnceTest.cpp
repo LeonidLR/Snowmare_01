@@ -63,6 +63,22 @@ bool FTurnBlastStanceOnceTest::RunTest(const FString&)
 	return true;
 }
 
+TURN_ONCE_TEST(FTurnBlastDamageValuesTest, "BlastDamageValues")
+bool FTurnBlastDamageValuesTest::RunTest(const FString&)
+{
+	// User decision 2026-10-11 (tb_parity_2026-10-11.md): TB barrel on enemies 80 -> 95, mines 50 -> 65 (both victims);
+	// barrel on operatives stays 80, crouch defence stays 0.70; real time is untouched.
+	const FTurnBasedBalance Balance;
+	TestEqual(TEXT("barrel on enemies 95"), TurnBasedRules::BlastBaseDamage(true, false, Balance), 95.f);
+	TestEqual(TEXT("barrel on operatives 80"), TurnBasedRules::BlastBaseDamage(true, true, Balance), 80.f);
+	TestEqual(TEXT("mine on enemies 65"), TurnBasedRules::BlastBaseDamage(false, false, Balance), 65.f);
+	TestEqual(TEXT("mine on operatives 65"), TurnBasedRules::BlastBaseDamage(false, true, Balance), 65.f);
+	TestEqual(TEXT("crouch defence stays 0.70"), Balance.CrouchDamageMultiplier, 0.70f);
+	TestEqual(TEXT("crouched mine: round(65 x 0.70) = 46"), FMath::RoundToInt(TurnBasedRules::BlastBaseDamage(false, true, Balance)
+		* TurnBasedRules::StanceDamageMultiplier(EOperativeStance::Crouching, Balance)), 46);
+	return true;
+}
+
 TURN_ONCE_TEST(FTurnBlastDodgeTest, "BlastDodgeKeptFromGodot")
 bool FTurnBlastDodgeTest::RunTest(const FString&)
 {

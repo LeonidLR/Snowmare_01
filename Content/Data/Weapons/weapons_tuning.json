@@ -297,6 +297,9 @@
     "cover_fire_accuracy_multiplier": 0.75,
     "enemy_fire_at_cover_multiplier": 0.6,
     "crouch_damage_multiplier": 0.7,
-    "prone_damage_multiplier": 0.5
+    "prone_damage_multiplier": 0.5,
+    "barrel_damage_enemies": 95,
+    "mine_damage_enemies": 65,
+    "mine_damage_operatives": 65
   }
 }

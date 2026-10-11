@@ -241,6 +241,10 @@ namespace WeaponTuning
 		// Damage an operative takes crouched / prone (user decision 2026-10-04: tuned in the Wave Editor, over DA_Balance).
 		Number(*TurnRulesBlock, TEXT("crouch_damage_multiplier"), Balance.CrouchDamageMultiplier);
 		Number(*TurnRulesBlock, TEXT("prone_damage_multiplier"), Balance.ProneDamageMultiplier);
+		// Grid blasts on enemies / mines (user decision 2026-10-11, docs/port/tb_parity_2026-10-11.md): over the code defaults.
+		Number(*TurnRulesBlock, TEXT("barrel_damage_enemies"), Balance.BarrelDamageEnemies);
+		Number(*TurnRulesBlock, TEXT("mine_damage_enemies"), Balance.MineDamageEnemies);
+		Number(*TurnRulesBlock, TEXT("mine_damage_operatives"), Balance.MineDamageOperatives);
 		Balance.CrouchMoveCostMultiplier = FMath::Max(1, Balance.CrouchMoveCostMultiplier);
 	}
 

@@ -30,7 +30,16 @@ struct CODEXTACTICS_API FTurnBasedBalance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float EnemyBaseDamage = 18.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float TurretDamage = 25.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") int32 TurretRange = 5;
+	/** Barrel blast on an OPERATIVE (before the grid stance factor): DA_Balance tactical_barrel_damage. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float BarrelDamage = 80.f;
+	/**
+	 * Barrel blast on an ENEMY (user decision 2026-10-11: 80 -> 95, still below the real-time 120); weapons_tuning.json
+	 * turn_based_rules.barrel_damage_enemies.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float BarrelDamageEnemies = 95.f;
+	/** Mine blast on an enemy / an operative (user decision 2026-10-11: 50 -> 65 both, real time is 120); turn_based_rules.mine_damage_enemies / mine_damage_operatives. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float MineDamageEnemies = 65.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float MineDamageOperatives = 65.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float CrouchDamageMultiplier = 0.70f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TurnBased") float ProneDamageMultiplier = 0.50f;
 	/** UE-only (user decision 2026-10-04): a step on the grid costs this many times more crouched (prone walks crouched). */
@@ -80,6 +89,9 @@ namespace TurnBasedRules
 
 	/** Is the offset on the weapon's fire lanes (Godot weapon_data.gd is_target_in_pattern; no weapon = 8 rays of 5). */
 	CODEXTACTICS_API bool IsTargetInPattern(const UWeaponDataAsset* Weapon, const FIntPoint& Offset);
+
+	/** Base damage of a grid blast before the victim's stance factor / armour: barrel or mine, on an operative or an enemy. */
+	CODEXTACTICS_API float BlastBaseDamage(bool bBarrel, bool bOnSquad, const FTurnBasedBalance& Balance);
 
 	/** Incoming damage multiplier of the defender's stance (crouch 0.70, prone 0.50). */
 	CODEXTACTICS_API float StanceDamageMultiplier(EOperativeStance Stance, const FTurnBasedBalance& Balance);

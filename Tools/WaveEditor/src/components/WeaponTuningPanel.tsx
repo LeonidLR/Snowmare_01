@@ -45,6 +45,9 @@ const DEFAULT_RULES: TurnBasedRulesTuning = {
   enemy_fire_at_cover_multiplier: 0.6,
   crouch_damage_multiplier: 0.7,
   prone_damage_multiplier: 0.5,
+  barrel_damage_enemies: 95,
+  mine_damage_enemies: 65,
+  mine_damage_operatives: 65,
 };
 const RULE_FIELDS: { key: keyof TurnBasedRulesTuning; label: string; hint: string; step: number; min: number; max: number }[] = [
   { key: 'crouch_move_cost_multiplier', label: 'Цена шага в присядку / лёжа, ×', hint: 'во сколько раз дороже AP за клетку, чем стоя (целое)', step: 1, min: 1, max: 4 },
@@ -52,6 +55,9 @@ const RULE_FIELDS: { key: keyof TurnBasedRulesTuning; label: string; hint: strin
   { key: 'enemy_fire_at_cover_multiplier', label: 'Попадание врагов по бойцу за баррикадой, ×', hint: 'шанс дальнобойных врагов (1 — баррикада не мешает)', step: 0.05, min: 0, max: 1 },
   { key: 'crouch_damage_multiplier', label: 'Урон по бойцу в присядку, ×', hint: 'доля урона, которую получает сидящий (1 — как стоя)', step: 0.05, min: 0, max: 1.5 },
   { key: 'prone_damage_multiplier', label: 'Урон по бойцу лёжа, ×', hint: 'доля урона, которую получает лежащий (1 — как стоя)', step: 0.05, min: 0, max: 1.5 },
+  { key: 'barrel_damage_enemies', label: 'Бочка по врагам (пошаговый бой), урон', hint: 'взрыв бочки на сетке по врагам; в реальном времени 120; по бойцам берётся DA_Balance (80)', step: 5, min: 0, max: 300 },
+  { key: 'mine_damage_enemies', label: 'Мина по врагам (пошаговый бой), урон', hint: 'взрыв мины на сетке по врагам; в реальном времени 120', step: 5, min: 0, max: 300 },
+  { key: 'mine_damage_operatives', label: 'Мина по бойцам (пошаговый бой), урон', hint: 'до множителя стойки; в реальном времени 90', step: 5, min: 0, max: 300 },
 ];
 
 const listToText = (values: number[]) => values.join(', ');

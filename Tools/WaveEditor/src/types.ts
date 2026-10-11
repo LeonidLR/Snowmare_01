@@ -111,6 +111,10 @@ export interface TurnBasedRulesTuning {
   enemy_fire_at_cover_multiplier: number;
   crouch_damage_multiplier: number;
   prone_damage_multiplier: number;
+  /** UE grid blasts (user decision 2026-10-11): barrel on enemies 95, mine on enemies / operatives 65 (real time: 120). */
+  barrel_damage_enemies: number;
+  mine_damage_enemies: number;
+  mine_damage_operatives: number;
 }
 
 export interface WeaponTuningFile {

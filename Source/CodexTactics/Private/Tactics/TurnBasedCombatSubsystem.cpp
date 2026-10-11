@@ -56,7 +56,6 @@ namespace
 	/** Godot main.gd _enter_turn_based_combat: select_participants(centre, 15.0, tree, 6). */
 	constexpr float TurnEncounterRadius = 1500.f;
 	constexpr int32 TurnEncounterMaxEnemies = 6;
-	constexpr float TurnMineDamage = 50.f; // Godot _detonate_mine base_mine_dmg
 	constexpr float TurnTurretSupportDistance = 4500.f; // Godot max_support_dist 45 m
 	constexpr int32 TurnBarrelBurnRounds = 3;
 
@@ -4181,9 +4180,10 @@ void UTurnBasedCombatSubsystem::DetonateBarrel(const FIntPoint& Cell, AActor* Ba
 				continue;
 			}
 			const bool bSquadMember = State->bSquad;
+			const float BaseDamage = TurnBasedRules::BlastBaseDamage(true, bSquadMember, Balance);
 			const float Damage = bSquadMember
-				? FMath::Max(1, FMath::RoundToInt(Balance.BarrelDamage * TurnBasedRules::StanceDamageMultiplier(State->Stance, Balance)))
-				: Balance.BarrelDamage;
+				? FMath::Max(1, FMath::RoundToInt(BaseDamage * TurnBasedRules::StanceDamageMultiplier(State->Stance, Balance)))
+				: BaseDamage;
 			ApplyBlast(Occupant, bSquadMember, Damage, TEXT("Barrel"));
 			if (!IsActive())
 			{
@@ -4232,7 +4232,8 @@ void UTurnBasedCombatSubsystem::DetonateMine(const FIntPoint& Cell, AActor* Mine
 	{
 		return;
 	}
-	const int32 Damage = FMath::Max(1, FMath::RoundToInt(TurnMineDamage * TurnBasedRules::StanceDamageMultiplier(State->Stance, Balance)));
+	const float MineBase = TurnBasedRules::BlastBaseDamage(false, State->bSquad, Balance);
+	const int32 Damage = FMath::Max(1, FMath::RoundToInt(MineBase * TurnBasedRules::StanceDamageMultiplier(State->Stance, Balance)));
 	State->AP = 0;
 	State->GridPos = Cell;
 	PlaceOnCell(Victim, Cell);

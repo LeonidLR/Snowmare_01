@@ -49,7 +49,7 @@ bool FWeaponTuningTurnRulesTest::RunTest(const FString& Parameters)
 {
 	// A file with only the rules block (no weapons: no asset is touched).
 	const FString Path = FPaths::ProjectSavedDir() / TEXT("Automation/turn_rules_test.json");
-	FFileHelper::SaveStringToFile(TEXT("{\"turn_based_rules\": {\"crouch_move_cost_multiplier\": 3, \"cover_fire_accuracy_multiplier\": 0.5, \"enemy_fire_at_cover_multiplier\": 0.4, \"crouch_damage_multiplier\": 0.8, \"prone_damage_multiplier\": 0.3}}"), *Path);
+	FFileHelper::SaveStringToFile(TEXT("{\"turn_based_rules\": {\"crouch_move_cost_multiplier\": 3, \"cover_fire_accuracy_multiplier\": 0.5, \"enemy_fire_at_cover_multiplier\": 0.4, \"crouch_damage_multiplier\": 0.8, \"prone_damage_multiplier\": 0.3, \"barrel_damage_enemies\": 100, \"mine_damage_enemies\": 70, \"mine_damage_operatives\": 55}}"), *Path);
 	WeaponTuning::ApplyFile(Path);
 	FTurnBasedBalance Balance;
 	WeaponTuning::ApplyTurnRules(Balance);
@@ -58,8 +58,29 @@ bool FWeaponTuningTurnRulesTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("enemy fire at cover x0.4"), Balance.EnemyFireAtCoverMultiplier, 0.4f);
 	TestEqual(TEXT("crouched damage x0.8"), Balance.CrouchDamageMultiplier, 0.8f);
 	TestEqual(TEXT("prone damage x0.3"), Balance.ProneDamageMultiplier, 0.3f);
+	TestEqual(TEXT("barrel on enemies from the file"), Balance.BarrelDamageEnemies, 100.f);
+	TestEqual(TEXT("mine on enemies from the file"), Balance.MineDamageEnemies, 70.f);
+	TestEqual(TEXT("mine on operatives from the file"), Balance.MineDamageOperatives, 55.f);
 	// Back to the project's file for the rest of the session.
 	WeaponTuning::ApplyFile(WeaponTuning::GetDefaultPath());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeaponTuningTurnBlastFileTest, "CodexTactics.Data.WeaponTuning.TurnBlastDamage",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWeaponTuningTurnBlastFileTest::RunTest(const FString& Parameters)
+{
+	// User decision 2026-10-11: the project's weapons_tuning.json carries TB barrel-on-enemies 95, mines 65 / 65;
+	// the crouch defence stays 0.70.
+	WeaponTuning::ApplyFile(WeaponTuning::GetDefaultPath());
+	FTurnBasedBalance Balance;
+	WeaponTuning::ApplyTurnRules(Balance);
+	TestEqual(TEXT("barrel on enemies 95"), Balance.BarrelDamageEnemies, 95.f);
+	TestEqual(TEXT("barrel on operatives stays 80 (DA_Balance)"), Balance.BarrelDamage, 80.f);
+	TestEqual(TEXT("mine on enemies 65"), Balance.MineDamageEnemies, 65.f);
+	TestEqual(TEXT("mine on operatives 65"), Balance.MineDamageOperatives, 65.f);
+	TestEqual(TEXT("crouch defence 0.70"), Balance.CrouchDamageMultiplier, 0.7f);
 	return true;
 }
 
