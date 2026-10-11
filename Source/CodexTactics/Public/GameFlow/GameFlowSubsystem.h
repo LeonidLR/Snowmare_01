@@ -81,6 +81,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	bool IsFreePause() const { return Machine.IsFreePause(); }
 
+	/**
+	 * Radius of the pause's move orders and placements, cm: GetConfig().PauseOrderRadius in a paid pause, unlimited in the free
+	 * horde-start pause (PauseOrderRules).
+	 */
+	float GetPauseOrderRadius() const;
+
+	/** The radius ring and the distance limit apply now (a paid tactical pause; not the free horde pause). */
+	bool IsPauseRadiusLimited() const;
+
 	/** A sudden wave runs and waits for its horde intro (see FGameFlowStateMachine::IsAwaitingHordeIntro). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	bool IsAwaitingHordeIntro() const { return Machine.IsAwaitingHordeIntro(); }

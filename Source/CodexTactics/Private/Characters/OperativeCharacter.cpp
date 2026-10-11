@@ -375,20 +375,15 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		TacticalAnchor = SquadAutonomyRules::MakeAnchor(SquadROE::Get(), GetActorLocation(), Destination, GetActorRotation());
 	}
 	// User decision 2026-10-01: a sprint order (double click) stands a prone operative up — he rises in place, then runs;
-	// any move ordered while he is getting up starts once he is up.
-	UOperativeAnimInstance* StanceAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
-	float RiseDelay = 0.f;
+	// any move ordered while he is getting up starts once he is up. SetStance arms the settle time, so the hold below covers
+	// both this stand-up and a stance clip that is already playing (bug 2026-10-11: a move must never slide a rooted body).
 	if (bSprint && Stance == EOperativeStance::Prone && !bCarrying
 		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded()))
 	{
-		RiseDelay = GetStanceChangeDelay(EOperativeStance::Prone, EOperativeStance::Standing);
 		SetStance(EOperativeStance::Standing);
 	}
-	else if (StanceAnim && StanceAnim->IsPlayingStanceTransition() && !bPendingMoveReplay)
-	{
-		RiseDelay = StanceAnim->GetStanceTransitionTimeLeft();
-	}
-	if (RiseDelay > 0.05f && GetWorld())
+	const float RiseDelay = GetMoveHoldSeconds();
+	if (OperativeMovementRules::ShouldDeferMove(RiseDelay) && GetWorld())
 	{
 		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
 		GetWorld()->GetTimerManager().SetTimer(PendingMoveTimer, FTimerDelegate::CreateLambda([WeakThis, Destination, bSprint]()
@@ -437,8 +432,22 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	{
 		return EOperativeOrderResult::Refused; // kneeling for an ordered sniper shot: the formation waits for her
 	}
+	// A stance change is playing (the follower rises from prone / crouch, or lies down): the clip roots him, so no formation move
+	// until it ends. The squad retries after GetMoveHoldSeconds (it keeps the slot, the order is not dropped).
+	if (OperativeMovementRules::ShouldDeferMove(GetMoveHoldSeconds()))
+	{
+		return EOperativeOrderResult::Refused;
+	}
 	ApplyMovementParams(Speed);
 	return RequestMove(Destination);
+}
+
+float AOperativeCharacter::GetMoveHoldSeconds() const
+{
+	const UWorld* World = GetWorld();
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	return OperativeMovementRules::ComputeMoveHold(World ? StanceSettleUntil - World->GetTimeSeconds() : 0.f,
+		Anim ? Anim->GetStanceTransitionTimeLeft() : 0.f);
 }
 
 EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& Destination)
@@ -511,6 +520,9 @@ void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 		StopOperative();
 	}
 	const EOperativeStance OldStance = Stance;
+	// The stance clip starts on the next anim update: hold moves for its length from now (not at the wall — the cover clips
+	// carry their own timing through the anim instance).
+	StanceSettleUntil = GetWorld() && !bInCover ? GetWorld()->GetTimeSeconds() + GetStanceChangeDelay(OldStance, NewStance) : 0.f;
 	Stance = NewStance;
 	if (Stance != EOperativeStance::Standing)
 	{

@@ -211,6 +211,24 @@ bool FOperativeRoleColorsTest::RunTest(const FString&)
 	return true;
 }
 
+MOVEMENT_TEST(FStanceMoveHoldRuleTest, "Squad.StanceMoveHold")
+bool FStanceMoveHoldRuleTest::RunTest(const FString&)
+{
+	using namespace OperativeMovementRules;
+	// Bug 2026-10-11: a follower rising from prone slid to the leader. The hold is the longer of the armed settle time and the
+	// stance clip already playing; a move waits while it is above the threshold, and runs once the clip tail is reached.
+	TestEqual(TEXT("no stance change: no hold"), ComputeMoveHold(0.f, 0.f), 0.f);
+	TestEqual(TEXT("negative settle time is no hold"), ComputeMoveHold(-0.4f, 0.f), 0.f);
+	TestEqual(TEXT("settle time before the clip starts"), ComputeMoveHold(1.6f, 0.f), 1.6f);
+	TestEqual(TEXT("clip already playing"), ComputeMoveHold(0.f, 0.9f), 0.9f);
+	TestEqual(TEXT("the longer of the two"), ComputeMoveHold(0.7f, 0.9f), 0.9f);
+	TestTrue(TEXT("prone -> stand clip defers a follow move"), ShouldDeferMove(ComputeMoveHold(1.6f, 0.f)));
+	TestTrue(TEXT("a clip with 0.2 s left still defers"), ShouldDeferMove(0.2f));
+	TestFalse(TEXT("no hold: the move runs"), ShouldDeferMove(0.f));
+	TestFalse(TEXT("the clip tail does not hold"), ShouldDeferMove(MoveHoldThreshold));
+	return true;
+}
+
 #undef MOVEMENT_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -91,7 +91,7 @@ float URelocationSubsystem::GetRadius(const AOperativeCharacter& Worker) const
 	{
 		return Worker.PlacementRadius;
 	}
-	return RelocationRules::GetPlacementRadius(Flow->GetPhase(), Flow->GetCombatMode(), Flow->GetConfig().PauseOrderRadius,
+	return RelocationRules::GetPlacementRadius(Flow->GetPhase(), Flow->GetCombatMode(), Flow->GetPauseOrderRadius(),
 		Worker.PlacementRadius);
 }
 

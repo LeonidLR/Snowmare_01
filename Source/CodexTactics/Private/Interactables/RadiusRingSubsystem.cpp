@@ -99,7 +99,9 @@ void URadiusRingSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
-	const bool bPause = Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+	// User decision 2026-10-11: the free pause of a sudden horde start is an unrestricted preparation - no radius ring there
+	// (the 12 m ring and limit stay in the paid pause).
+	const bool bPause = Flow->GetCombatMode() == ECodexCombatMode::TacticalPause && Flow->IsPauseRadiusLimited();
 	FVector Center = FVector::ZeroVector;
 	float Radius = 0.f;
 	FLinearColor Color = Green;
@@ -120,7 +122,7 @@ void URadiusRingSubsystem::Tick(float DeltaTime)
 		Center = Leader->GetActorLocation();
 		Squad->GetPauseOrigin(Leader, Center);
 		Center.Z = Leader->GetActorLocation().Z - Leader->GetSimpleCollisionHalfHeight();
-		Radius = Flow->GetConfig().PauseOrderRadius;
+		Radius = Flow->GetPauseOrderRadius();
 	}
 	if (Mode == ERadiusRingMode::Hidden)
 	{

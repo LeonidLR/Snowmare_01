@@ -773,6 +773,8 @@ float UTurnBasedCombatSubsystem::PrepareSquadWalk(AOperativeCharacter* Unit, flo
 			}
 		}
 	}
+	// Any other stance clip still playing (or just ordered) roots him too: the grid walk starts once it ends (bug 2026-10-11).
+	Delay = FMath::Max(Delay, Unit->GetMoveHoldSeconds());
 	if (Unit->GetStance() != EOperativeStance::Standing)
 	{
 		const float Ratio = OperativeMovementRules::GetStanceSpeedMultiplier(Unit->MovementConfig, Unit->GetStance());

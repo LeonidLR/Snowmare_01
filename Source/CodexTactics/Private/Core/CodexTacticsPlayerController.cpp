@@ -1229,7 +1229,7 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 		}
 		if (bPlan)
 		{
-			const FVector Planned = Squad->PlanMove(Group[Index], Targets[Index], bSprint, Flow ? Flow->GetConfig().PauseOrderRadius : 1200.f);
+			const FVector Planned = Squad->PlanMove(Group[Index], Targets[Index], bSprint, Flow ? Flow->GetPauseOrderRadius() : 1200.f);
 			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
 			{
 				Feedback->SpawnWaypointMarker(Planned);
@@ -2237,7 +2237,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 	{
 		// Tactical pause: the walk is planned, the slot entered on arrival.
 		Operative->SetPendingCover(Slot);
-		const FVector Planned = GetSquad()->PlanMove(Operative, Slot.WorldLocation, true, Flow ? Flow->GetConfig().PauseOrderRadius : 1200.f);
+		const FVector Planned = GetSquad()->PlanMove(Operative, Slot.WorldLocation, true, Flow ? Flow->GetPauseOrderRadius() : 1200.f);
 		if (Feedback)
 		{
 			Feedback->SpawnWaypointMarker(Planned);

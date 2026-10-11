@@ -50,4 +50,14 @@ namespace OperativeMovementRules
 			return Config.TurnRateStanding;
 		}
 	}
+
+	float ComputeMoveHold(float SettleSecondsLeft, float PlayingClipSecondsLeft)
+	{
+		return FMath::Max3(0.f, SettleSecondsLeft, PlayingClipSecondsLeft);
+	}
+
+	bool ShouldDeferMove(float MoveHoldSeconds)
+	{
+		return MoveHoldSeconds > MoveHoldThreshold;
+	}
 }
