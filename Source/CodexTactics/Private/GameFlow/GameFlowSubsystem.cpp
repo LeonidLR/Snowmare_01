@@ -2,6 +2,7 @@
 
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/HordeIntroRules.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/App.h"
@@ -37,7 +38,13 @@ void UGameFlowSubsystem::Tick(float DeltaTime)
 	// DeltaTime is dilated by the world; flow timers must run on real time - but a hitch (the first frame after a map load
 	// reports the whole load, 3.6 s by now) must not eat the timers: the 4 s pre-combat cutscene ended in the first frame
 	// after a quick restart (MainMenuSmoke "quick restart: cutscene again", 2026-10-07).
+	SyncSuddenStartOverride();
 	Machine.Tick(FMath::Min(static_cast<float>(FApp::GetDeltaTime()), MaxFlowStepSeconds));
+}
+
+void UGameFlowSubsystem::SyncSuddenStartOverride()
+{
+	Machine.SetSuddenStartOverride(HordeIntroRules::GetSuddenStartOverride());
 }
 
 TStatId UGameFlowSubsystem::GetStatId() const
@@ -53,14 +60,16 @@ void UGameFlowSubsystem::ResetFlow(const FGameFlowConfig& Config)
 
 void UGameFlowSubsystem::RestoreForLoad(bool bCombatUnlocked, bool bCombatPhase, int32 WaveIndex, float PreparationSeconds)
 {
+	SyncSuddenStartOverride();
 	Machine.RestoreForLoad(bCombatUnlocked, bCombatPhase, WaveIndex, PreparationSeconds);
 	HandleStateChanged(Machine.GetPhase(), Machine.GetCombatMode());
 }
 
 void UGameFlowSubsystem::HandleStateChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)
 {
-	UE_LOG(LogCodexTactics, Log, TEXT("GameFlow: %s / %s (wave %d)"),
-		*UEnum::GetValueAsString(Phase), *UEnum::GetValueAsString(CombatMode), Machine.GetWaveIndex());
+	UE_LOG(LogCodexTactics, Log, TEXT("GameFlow: %s / %s (wave %d)%s"),
+		*UEnum::GetValueAsString(Phase), *UEnum::GetValueAsString(CombatMode), Machine.GetWaveIndex(),
+		Machine.IsFreePause() ? TEXT(" [free pause: sudden horde]") : TEXT(""));
 	const ECodexGamePhase OldPhase = LastBroadcastPhase;
 	LastBroadcastPhase = Phase;
 	OnBeforeGameFlowChanged.Broadcast(OldPhase, Phase, CombatMode);

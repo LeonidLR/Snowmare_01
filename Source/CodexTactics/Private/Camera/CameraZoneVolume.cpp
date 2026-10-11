@@ -3,6 +3,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/DeathCinematicSubsystem.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -111,9 +112,11 @@ void ACameraZoneVolume::Tick(float DeltaSeconds)
 	Modes.bTurnBased = bActiveInTurnBased;
 	Modes.bTacticalPause = bActiveInTacticalPause;
 	const UDeathCinematicSubsystem* DeathCam = World->GetSubsystem<UDeathCinematicSubsystem>();
+	// The horde flyover (2026-10-11) owns the camera the same way.
+	const UHordeIntroSubsystem* HordeIntro = World->GetSubsystem<UHordeIntroSubsystem>();
 	const bool bWantCamera = IsZoneActive() && TargetCamera
 		&& CameraZoneRules::IsCameraAllowed(Modes, Flow ? Flow->GetCombatMode() : ECodexCombatMode::None)
-		&& !(DeathCam && DeathCam->IsFocusActive());
+		&& !(DeathCam && DeathCam->IsFocusActive()) && !(HordeIntro && HordeIntro->IsFlyoverActive());
 	if (bWantCamera != bCameraShown)
 	{
 		ShowZoneCamera(bWantCamera);

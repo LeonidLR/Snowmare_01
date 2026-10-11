@@ -9,6 +9,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -149,6 +150,8 @@ namespace DialogueSmoke
 			const AOperativeCharacter* Leader = World->GetSubsystem<USquadSubsystem>()->GetLeader();
 			Check(State, Leader && !FMath::IsNearlyEqual(Leader->ColdLevel, 30.f, 0.01f), *FString::Printf(
 				TEXT("the cold resumes after the dialogue (cold %.2f)"), Leader ? Leader->ColdLevel : -1.f));
+			// The preparation dialogue belongs to the old prepared start (a "sudden_start": false wave, user decision 2026-10-11).
+			SmokeUtils::UsePreparedWaveStart();
 			Flow->TriggerCombatZone();
 			Flow->FinishCutscene(); // -> Preparation: the prep dialogue plays in the feed
 			Next(State);

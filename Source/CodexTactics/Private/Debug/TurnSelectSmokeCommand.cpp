@@ -8,6 +8,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/RecruitSubsystem.h"
@@ -94,9 +95,7 @@ namespace TurnSelectSmoke
 			Recruits->RecruitIntoSquad(true);
 			State.Susanin = Susanin;
 			Check(State, Squad->GetMembers().Contains(Susanin) && Susanin->SquadIndex == 3, TEXT("Susanin recruited as member 4"));
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			AEnemyCharacter* Kept = nullptr;
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{

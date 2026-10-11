@@ -2,13 +2,15 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.QuestChainSmoke
 // Uses the player's click path (UInteractionSubsystem::RequestInteraction + action menu buttons) for: APC without
 // canister (greyed-out menu, closed),
-// canister, APC, generator, gate terminal. Then checks the generator heat, the opened gate, the cutscene ->
-// preparation transition and that the leader can walk through the gate.
+// canister, APC, generator, gate terminal. Then checks the generator heat, the opened gate, the sudden horde start
+// (user decision 2026-10-11: wave 1 at once in the free tactical pause, no cutscene / preparation; the wave is parked
+// out of the way and the pause released) and that the leader can walk through the gate.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -127,11 +129,26 @@ namespace QuestChainSmoke
 		AInteractableActor* Generator = FindInteractable(World, EInteractableType::Generator);
 		const bool bHeat = Generator && Generator->HeatSource->IsHeatActive();
 		const bool bGateOpen = Gate && Gate->IsOpen();
-		const bool bPreparation = Flow->GetPhase() == ECodexGamePhase::Preparation;
+		const bool bSuddenWave = Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause();
 
-		if (bGateOpen && bPreparation && !State.bWalkOrdered)
+		if (bGateOpen && bSuddenWave && !State.bWalkOrdered)
 		{
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke gate open, phase Preparation at %.1fs, heat=%d"), State.TotalTime, bHeat ? 1 : 0);
+			int32 Spawned = 0;
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				++Spawned;
+				// The walk check needs a quiet courtyard; parked (not killed: the wave must not end and stop the time).
+				It->CustomTimeDilation = 0.f;
+				It->SetActorLocation(It->GetActorLocation() + FVector(0.f, 0.f, -5000.f), false, nullptr, ETeleportType::TeleportPhysics);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke gate open, wave 1 came suddenly (free pause, %d enemies) at %.1fs, heat=%d"),
+				Spawned, State.TotalTime, bHeat ? 1 : 0);
+			if (Spawned == 0)
+			{
+				Finish(World, false, TEXT("the gate started no wave"));
+				return false;
+			}
+			SmokeUtils::ReleaseHordeIntroPause(Flow);
 			Leader->OrderMoveTo(SmokeUtils::LevelPoint(World, DesignBeyondGate), true);
 			State.bWalkOrdered = true;
 			State.StepTime = 0.f;

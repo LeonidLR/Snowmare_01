@@ -17,7 +17,8 @@ namespace LevelFlowRules
 	/**
 	 * Returns Base with the level's preparation / rest durations and wave count applied. Without a level (nullptr),
 	 * Godot falls back to the balance: preparation_phase_duration and max_campaign_waves (default 10); the rest keeps
-	 * main.gd's default 20 s. Either source may be missing; missing values keep Base.
+	 * main.gd's default 20 s. Either source may be missing; missing values keep Base. The level's waves with
+	 * "sudden_start": false (1-based, in order) go to PreparedWaveIndices (the rest start suddenly, 2026-10-11).
 	 */
 	CODEXTACTICS_API FGameFlowConfig ApplyLevel(const FGameFlowConfig& Base, const FLevelCombatConfig* Level, const UGodotBalanceAsset* Balance);
 }

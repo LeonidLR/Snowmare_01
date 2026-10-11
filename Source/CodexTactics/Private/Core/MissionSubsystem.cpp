@@ -181,7 +181,12 @@ void UMissionSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexComba
 		return;
 	}
 	bCombatFinished |= LastPhase == ECodexGamePhase::PostCombat;
-	const bool bCutsceneEnded = LastPhase == ECodexGamePhase::Cutscene && Phase == ECodexGamePhase::Preparation;
+	const UGameFlowSubsystem* StartFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	// Sudden horde start (user decision 2026-10-11): no cutscene / preparation — the squad gets the same warm, healed
+	// start at the moment the first wave spawns (an ambush fight never had it).
+	const bool bSuddenFirstWave = Phase == ECodexGamePhase::WaveCombat && LastPhase == ECodexGamePhase::Exploration
+		&& StartFlow && !StartFlow->IsAmbushFight() && StartFlow->GetWaveIndex() <= 1;
+	const bool bCutsceneEnded = (LastPhase == ECodexGamePhase::Cutscene && Phase == ECodexGamePhase::Preparation) || bSuddenFirstWave;
 	LastPhase = Phase;
 	if (bCutsceneEnded)
 	{

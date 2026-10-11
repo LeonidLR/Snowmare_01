@@ -133,9 +133,7 @@ namespace HordeSmoke
 			// Before the fight starts: the subsystem reads the config when the wave fight begins.
 			SetCVar(TEXT("Codex.Horde.TriggerSeconds"), State.TriggerSeconds);
 			SetCVar(TEXT("Codex.Horde.Enabled"), 1.f);
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
 				It->Destroy();

@@ -160,9 +160,7 @@ namespace FlankBreachSmoke
 			Waves->SetRandomEventWaves(1, 2);
 			Waves->bInstantRandomEvents = true;
 			State.EnemiesBefore = Waves->GetAliveEnemyCount();
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			Next();
 			return true;
 		}

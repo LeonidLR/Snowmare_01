@@ -167,9 +167,7 @@ namespace CoverMoveSmoke
 			{
 				return true;
 			}
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			// Keep one wave enemy, parked far behind and frozen (an empty wave would be cleared at once).
 			AEnemyCharacter* Kept = nullptr;
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)

@@ -75,6 +75,8 @@ namespace GroupSelectSmoke
 				return true;
 			}
 			// Preparation: operatives act on their own (no formation following).
+			// Preparation-phase behaviour: the old prepared start (a "sudden_start": false wave; default since 2026-10-11 is the sudden horde).
+			SmokeUtils::UsePreparedWaveStart();
 			Flow->TriggerCombatZone();
 			Flow->FinishCutscene();
 			Squad->SetLeader(Members[0]);

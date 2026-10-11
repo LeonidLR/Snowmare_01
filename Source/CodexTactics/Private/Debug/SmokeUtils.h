@@ -10,6 +10,8 @@
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFlow/GameFlowSubsystem.h"
+#include "HAL/IConsoleManager.h"
 #include "Interactables/GateActor.h"
 #include "Engine/StaticMeshActor.h"
 #include "NavigationSystem.h"
@@ -135,6 +137,48 @@ namespace SmokeUtils
 	 * layout the checks were written for (Scripts/Editor/create_movement_test_map.py). The level's PlayerStart may be
 	 * moved for play-testing; smokes that rely on distances to map features call this first.
 	 */
+	/**
+	 * Smokes that check preparation-phase behaviour (preparation set-up, banners, prep dialogue, ...) use the old
+	 * prepared start (cutscene -> preparation countdown -> wave): still the start of a level wave with "sudden_start":
+	 * false. Sets Codex.HordeIntro.SuddenStart 0 for this process (each smoke runs in its own); false restores -1.
+	 */
+	inline void UsePreparedWaveStart(bool bPrepared = true)
+	{
+		if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.HordeIntro.SuddenStart")))
+		{
+			Variable->Set(bPrepared ? 0 : -1, ECVF_SetByConsole);
+		}
+	}
+
+	/**
+	 * Releases the free tactical pause a sudden horde wave opens with (user decision 2026-10-11; it also ends the camera
+	 * flyover): the fight runs in real time, the pause charges untouched. No-op outside that pause.
+	 */
+	inline void ReleaseHordeIntroPause(UGameFlowSubsystem* Flow)
+	{
+		if (Flow && Flow->IsFreePause())
+		{
+			Flow->ToggleTacticalPause();
+		}
+	}
+
+	/**
+	 * Starts the wave fight the way the game does and lands in WaveCombat / RealTime: the sudden horde start (the wave
+	 * spawns at once into the free tactical pause, which is released here), or with the old prepared start
+	 * (Codex.HordeIntro.SuddenStart 0, a "sudden_start": false wave) cutscene -> preparation -> wave.
+	 */
+	inline void StartWaveFight(UGameFlowSubsystem* Flow)
+	{
+		if (!Flow)
+		{
+			return;
+		}
+		Flow->TriggerCombatZone();
+		Flow->FinishCutscene();
+		Flow->FinishPreparation();
+		ReleaseHordeIntroPause(Flow);
+	}
+
 	inline void PlaceSquadAtTestStart(UWorld* World)
 	{
 		USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;

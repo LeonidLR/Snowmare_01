@@ -136,9 +136,7 @@ namespace GrenadeSmoke
 		{
 			// Combat: throw again and switch to turn-based combat while the grenade is still in the hand.
 			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
 				if (*It != State.Brute.Get())

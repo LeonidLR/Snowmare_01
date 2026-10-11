@@ -21,7 +21,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 |---|---|---|---|---|
 | `Scenes/movements/main.gd` | `ACodexTacticsGameMode` | 0 | ✅ skeleton | `CodexTactics.Core.Smoke` |
 | `Scenes/movements/game_state.gd` | `ACodexTacticsGameState` (exposes flow to UI) | 0 | ✅ | `CodexTactics.Core.Smoke` |
-| `Scenes/movements/main.gd` mode flags: preparation, waves, tactical pause, turn-based enter/exit | `FGameFlowStateMachine` + `UGameFlowSubsystem` | 1 | ✅ logic (Space tap/hold input → Phase 3, encounter selection → Phase 4, config from balance → Phase 2) | `CodexTactics.GameFlow.*` (25) |
+| `Scenes/movements/main.gd` mode flags: preparation, waves, tactical pause, turn-based enter/exit | `FGameFlowStateMachine` + `UGameFlowSubsystem` | 1 | ✅ logic (Space tap/hold input → Phase 3, encounter selection → Phase 4, config from balance → Phase 2) | `CodexTactics.GameFlow.*` (25), `CodexTactics.Combat.HordeIntro.*` (9), HordeIntroSmoke — **deviation 2026-10-11:** sudden horde start (no cutscene / preparation, free tactical pause + camera flyover; per-wave `sudden_start: false` keeps the Godot start) |
 | `Scripts/tactics/gorky17_enums.gd` | `Tactics/Gorky17Types.h` (UENUMs, arc zones) | 1 | ✅ (Gemini) | `CodexTactics.Tactics.*` |
 | `Scripts/tactics/gorky17_grid_manager.gd` | `Tactics/UGorkyGridManager` (cells, occupancy, AP BFS, A*) | 1 | ✅ (Gemini) | `CodexTactics.Tactics.*` |
 | `Scripts/tactics/gorky17_los.gd` | `GorkyLineOfSight::HasLineOfSight` | 1 | ✅ | `CodexTactics.Tactics.LineOfSight` |
@@ -97,6 +97,7 @@ Status: ⬜ not started · 🟨 in progress · ✅ done (build + tests pass) · 
 
 | Where | Godot | UE | Decided |
 |---|---|---|---|
+| Horde wave start | Cutscene (4 s) -> preparation 60 s / rest 20 s -> wave in real time | The wave spawns at once into a free, untimed tactical pause (no charge) + camera flyover over the new enemy types (`UHordeIntroSubsystem`); per-wave `sudden_start: false` keeps the Godot start | User, 2026-10-11 |
 | Turn-based entry | Allowed whenever enemies are within 15 m, incl. exploration, preparation and tactical pause | Only in a wave: from RealTime, and (since 2026-10-06) from the tactical pause (`bAllowTurnBasedFromTacticalPause`) | User, 2026-09-28 / 2026-10-06 |
 | Real-time orders in a wave | Ground clicks move the squad only in the tactical pause | RTS: every order runs at once in real time (`Codex.RealTimeOrders 1`); the pause queues them; object relocation still pause-only | User, 2026-10-06 |
 | Turn-based attack modifier | Shift + click shoots a barrel / attacks a barricade on the grid | Ctrl + click = attack in every mode (real time, tactical pause, turn-based); Shift no longer attacks on the grid (Shift + click = facing sector, Shift + RMB = defense line elsewhere) | User, 2026-10-06 |

@@ -96,7 +96,10 @@ void UWaveVictorySubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexC
 	const ECodexGamePhase Previous = LastPhase;
 	LastPhase = Phase;
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	if (Previous == ECodexGamePhase::Cutscene && Phase == ECodexGamePhase::Preparation)
+	// Sudden horde start (user decision 2026-10-11): the stations are where the squad stood when wave 1 spawned.
+	const bool bSuddenFirstWave = Previous == ECodexGamePhase::Exploration && Phase == ECodexGamePhase::WaveCombat && Flow
+		&& !Flow->IsAmbushFight();
+	if ((Previous == ECodexGamePhase::Cutscene && Phase == ECodexGamePhase::Preparation) || bSuddenFirstWave)
 	{
 		// Godot _end_cutscene_and_start_pause: initial_prep_station = where each operative stands now.
 		RecordPrepStations(true);

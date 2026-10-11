@@ -1084,8 +1084,8 @@ void ACodexTacticsHUD::DrawSquadPanel(float Top)
 		FString Header = FString::Printf(TEXT("PHASE: %s"), PhaseName(Flow->GetPhase()));
 		if (Flow->GetPhase() == ECodexGamePhase::WaveCombat)
 		{
-			Header += FString::Printf(TEXT("  |  %s  |  pauses %d/%d"), ModeName(Flow->GetCombatMode()),
-				Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges);
+			Header += FString::Printf(TEXT("  |  %s%s  |  pauses %d/%d"), ModeName(Flow->GetCombatMode()),
+				Flow->IsFreePause() ? TEXT(" (free)") : TEXT(""), Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges);
 		}
 		Lines.Emplace(Header, SpeakerColor);
 	}

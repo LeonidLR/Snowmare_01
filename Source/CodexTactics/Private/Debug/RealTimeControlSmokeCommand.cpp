@@ -105,9 +105,7 @@ namespace RealTimeControlSmoke
 		switch (State.Stage)
 		{
 		case 0: // The fight starts — in full real time, Space never touched.
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			State.SquadStart = Leader->GetActorLocation();
 			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime,
 				TEXT("the fight starts in full real time"));

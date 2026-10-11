@@ -12,6 +12,8 @@
 // "sniperrt" / "snipertb" / "snipercover" (2026-10-09): sniper combat clips (real time, turn-based, cover), follow camera.
 // "sniper" (L_MovementTest, 2026-10-09): the Female Soldier Medic-Sapper with the sniper rifle — standing idle, the order while
 //   standing (kneel -> shot -> bolt, clip + still), kneeling fire (clip), prone fire (clip + stills); own camera framed on her.
+// "horde" (L_MovementTest, 2026-10-11): the sudden horde start — spawn -> free tactical pause -> wide shot -> per-type shots ->
+//   back to the squad (clip horde_intro_flyover + stills horde_intro_wide, horde_intro_type_closeup).
 
 #include "CoreMinimal.h"
 
@@ -37,6 +39,8 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/EnemySpawnPoint.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Core/MissionSubsystem.h"
 #include "Debug/FrontendSmokeUtils.h"
@@ -169,9 +173,7 @@ namespace PhoneShots
 	void StartFight(UWorld* World)
 	{
 		UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-		Flow->TriggerCombatZone();
-		Flow->FinishCutscene();
-		Flow->FinishPreparation();
+		SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 		{
 			It->Destroy();
@@ -1064,6 +1066,116 @@ namespace PhoneShots
 		});
 		S.Add([](UWorld* World) { StopClip(); return 2; });
 	}
+	// --- "horde" (user decision 2026-10-11): the sudden horde start — wave 1 spawns at once into the free tactical pause, the
+	// camera flies over the horde (wide shot, one shot per type) and returns to the squad; the HUD shows the pause. ---
+
+	struct FHordeShots
+	{
+		bool bWide = false;
+		bool bType = false;
+		int32 AfterFrames = 0;
+	};
+	FHordeShots HordeShots;
+
+	void KeepSquadAlive(UWorld* World)
+	{
+		for (AOperativeCharacter* Each : World->GetSubsystem<USquadSubsystem>()->GetMembers())
+		{
+			Each->HealthComponent->SetMaxHealth(100000.f, false);
+			Each->HealthComponent->Heal(100000.f);
+			Each->bTacticalCeaseFire = true;
+			Each->ColdLevel = 0.f;
+		}
+	}
+
+	void AddHordeSteps(TArray<FStep>& S)
+	{
+		S.Add([](UWorld* World) { return World->GetSubsystem<USquadSubsystem>() && World->GetSubsystem<USquadSubsystem>()->GetLeader() ? 60 : -1; });
+		S.Add([](UWorld* World)
+		{
+			SmokeUtils::PlaceSquadAtTestStart(World);
+			// L_MovementTest's wave spawn points sit around the test start (the horde would appear on the squad): the squad
+			// waits ~30 m away from their centre, so the wide shot shows the horde coming at it.
+			FVector Centre = FVector::ZeroVector;
+			int32 Points = 0;
+			for (TActorIterator<AEnemySpawnPoint> It(World); It; ++It)
+			{
+				if (!It->bIsDynamic)
+				{
+					Centre += It->GetActorLocation();
+					++Points;
+				}
+			}
+			USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+			if (Points > 0 && Squad->GetLeader())
+			{
+				Centre /= Points;
+				FVector Away = (Squad->GetLeader()->GetActorLocation() - Centre).GetSafeNormal2D();
+				Away = Away.IsNearlyZero() ? FVector(1.f, 0.f, 0.f) : Away;
+				const FVector Delta = Centre + Away * 3000.f - Squad->GetLeader()->GetActorLocation();
+				for (AOperativeCharacter* Each : Squad->GetMembers())
+				{
+					const FVector Spot = SmokeUtils::FreeSpot(World, FVector(Each->GetActorLocation().X + Delta.X, Each->GetActorLocation().Y + Delta.Y,
+						Each->GetActorLocation().Z), Each);
+					Each->TeleportTo(Spot, (-Away).Rotation(), false, true);
+				}
+			}
+			KeepSquadAlive(World);
+			HordeShots = FHordeShots();
+			return 45;
+		});
+		S.Add([](UWorld* World)
+		{
+			StartClip(TEXT("horde_intro_flyover"), 1);
+			return 15; // half a second of quiet exploration before the horde
+		});
+		S.Add([](UWorld* World)
+		{
+			World->GetSubsystem<UGameFlowSubsystem>()->TriggerCombatZone();
+			return 1;
+		});
+		S.Add([](UWorld* World)
+		{
+			KeepSquadAlive(World);
+			const UHordeIntroSubsystem* Intro = World->GetSubsystem<UHordeIntroSubsystem>();
+			if (!Intro)
+			{
+				return 0;
+			}
+			const int32 Index = Intro->GetCurrentShotIndex();
+			const FHordeIntroConfig Config = HordeIntroRules::GetConfig();
+			// Stills once the camera has arrived on the shot (its glide is part of the shot time).
+			static float ShotStart = 0.f;
+			static int32 LastIndex = INDEX_NONE;
+			if (Index != LastIndex)
+			{
+				LastIndex = Index;
+				ShotStart = Intro->GetSecondsSinceSpawn();
+			}
+			const float InShot = Intro->GetSecondsSinceSpawn() - ShotStart;
+			if (Intro->GetShots().IsValidIndex(Index) && InShot > Config.ShotBlendSeconds + 0.6f)
+			{
+				const EHordeIntroShotKind Kind = Intro->GetShots()[Index].Kind;
+				if (Kind == EHordeIntroShotKind::Wide && !HordeShots.bWide)
+				{
+					HordeShots.bWide = true;
+					Shot(TEXT("horde_intro_wide"));
+				}
+				else if (Kind == EHordeIntroShotKind::Type && !HordeShots.bType)
+				{
+					HordeShots.bType = true;
+					Shot(TEXT("horde_intro_type_closeup"));
+				}
+			}
+			if (Intro->IsIntroPending())
+			{
+				return -1;
+			}
+			return 75; // back on the squad: the tactical pause HUD for 2.5 s
+		});
+		S.Add([](UWorld* World) { StopClip(); return 5; });
+	}
+
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
@@ -1074,6 +1186,10 @@ namespace PhoneShots
 		if (Mode == TEXT("combat"))
 		{
 			AddCombatSteps(Runner->Steps);
+		}
+		else if (Mode == TEXT("horde"))
+		{
+			AddHordeSteps(Runner->Steps);
 		}
 		else if (Mode == TEXT("sniperrt"))
 		{

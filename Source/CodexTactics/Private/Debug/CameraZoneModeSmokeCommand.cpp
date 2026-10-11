@@ -105,9 +105,7 @@ namespace CameraZoneModeSmoke
 			}
 			Check(State, Zone->bActiveInRealTime && !Zone->bActiveInTurnBased && !Zone->bActiveInTacticalPause,
 				TEXT("defaults: real time on, turn-based / tactical pause off"));
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			for (TActorIterator<AEnemyCharacter> Enemy(World); Enemy; ++Enemy)
 			{
 				Enemy->Destroy();

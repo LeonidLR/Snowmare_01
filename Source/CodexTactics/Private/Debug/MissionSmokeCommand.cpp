@@ -1,6 +1,7 @@
 // Dev-only console command for a headless mission check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.MissionSmoke
-// 1. start objective; 2. preparation / wave objectives follow the game flow; 3. the engineer's death does NOT fail the
+// 1. start objective; 2. the wave objective follows the game flow (sudden horde start 2026-10-11: no preparation —
+// the wave objective at once, in the free tactical pause); 3. the engineer's death does NOT fail the
 // mission (user decision 2026-10-08), the commander's death does after the death cinematic (GameOver, reason, time
 // stopped); 4. restart reloads the level into a fresh exploration.
 
@@ -8,6 +9,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -76,10 +78,11 @@ namespace MissionSmoke
 		case 0:
 			Check(State, Mission->GetObjective().EqualTo(MissionRules::GetStartObjective()), TEXT("start objective"));
 			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke objective: %s"), *Mission->GetObjective().ToString());
-			Check(State, Mission->GetObjective().ToString().StartsWith(TEXT("DEFENSE PREPARATION")), TEXT("preparation objective"));
-			Flow->FinishPreparation();
+			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause(),
+				TEXT("sudden horde start: wave 1 at once, free tactical pause (no cutscene / preparation)"));
+			Check(State, Mission->GetObjective().ToString().StartsWith(TEXT("DEFENSE: Repel wave 1! Enemies: ")), TEXT("wave objective at once"));
+			SmokeUtils::ReleaseHordeIntroPause(Flow);
 			return true;
 		case 1:
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke objective: %s"), *Mission->GetObjective().ToString());

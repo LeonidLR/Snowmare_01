@@ -10,6 +10,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -76,6 +77,8 @@ namespace ActionBarSmoke
 				Check(Squad->GetLeader() && Squad->GetLeader()->SquadRole == EOperativeRole::Engineer, TEXT("slot 2 selects the engineer"));
 
 				UGameFlowSubsystem* Flow = W->GetSubsystem<UGameFlowSubsystem>();
+				// Preparation-phase behaviour: the old prepared start (a "sudden_start": false wave; default since 2026-10-11 is the sudden horde).
+				SmokeUtils::UsePreparedWaveStart();
 				Flow->TriggerCombatZone();
 				Flow->FinishCutscene();
 				Check(Flow->GetPhase() == ECodexGamePhase::Preparation, TEXT("preparation"));

@@ -102,9 +102,7 @@ namespace RageSmoke
 		{
 		case 0:
 		{
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			State.Hound = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::FrostHound,
 				Commander->GetActorLocation() + Commander->GetActorForwardVector() * 700.f);
 			if (!State.Hound.IsValid())

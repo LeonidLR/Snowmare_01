@@ -7,6 +7,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -71,6 +72,7 @@ namespace MarksmanAdvanceSmoke
 			}
 			Flow->FinishCutscene();
 			Flow->FinishPreparation();
+			SmokeUtils::ReleaseHordeIntroPause(Flow); // the sudden horde start opens in the free pause
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
 				It->Destroy();

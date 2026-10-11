@@ -28,7 +28,8 @@
     "HordeSmoke", "CoverSmoke", "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke",
     "CoverCrouchSmoke", "CoverMoveSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
-    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke"
+    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
+    "HordeIntroSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
@@ -133,6 +134,12 @@
       "globs": ["Source/**/Combat/Horde*"],
       "tests": ["CodexTactics.Combat.Horde"],
       "smokes": ["HordeSmoke", "WaveCombatSmoke"]
+    },
+    {
+      "name": "horde-intro",
+      "globs": ["Source/**/Combat/HordeIntro*", "Source/**/Debug/HordeIntroSmoke*", "Source/**/Debug/SmokeUtils.h"],
+      "tests": ["CodexTactics.Combat.HordeIntro", "CodexTactics.GameFlow", "CodexTactics.Combat.TimeMode"],
+      "smokes": ["HordeIntroSmoke", "LevelWaveSmoke", "MissionSmoke", "VictorySmoke", "QuestChainSmoke", "MainMenuSmoke", "SaveRoundTripSmoke", "CombatFlowSmoke"]
     },
     {
       "name": "sight",
@@ -246,7 +253,7 @@
       "name": "camera",
       "globs": ["Source/**/Camera/**"],
       "tests": ["CodexTactics.Camera", "CodexTactics.GameFlow.Phases"],
-      "smokes": ["CameraZoneSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke"]
+      "smokes": ["CameraZoneSmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke"]
     },
     {
       "name": "death-cinematic",
@@ -264,7 +271,7 @@
       "name": "mission-flow",
       "globs": ["Source/**/Core/Mission*", "Source/**/Core/LevelFlow*", "Source/**/Core/Loadout*", "Source/**/GameFlow/GameFlow*", "Source/**/UI/PhaseBanners*", "Source/**/UI/MissionFailed*", "Source/**/UI/GameMessage*"],
       "tests": ["CodexTactics.Mission", "CodexTactics.GameFlow", "CodexTactics.Core.LevelFlow", "CodexTactics.Core.Loadout"],
-      "smokes": ["MissionSmoke", "BannersSmoke", "MainMenuSmoke", "DialogueSmoke", "VictorySmoke", "DeathCamSmoke", "FrontendSmoke"]
+      "smokes": ["MissionSmoke", "HordeIntroSmoke", "BannersSmoke", "MainMenuSmoke", "DialogueSmoke", "VictorySmoke", "DeathCamSmoke", "FrontendSmoke"]
     },
     {
       "name": "game-framework",

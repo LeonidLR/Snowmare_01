@@ -18,6 +18,15 @@ FGameFlowConfig LevelFlowRules::ApplyLevel(const FGameFlowConfig& Base, const FL
 	if (bLevelWaves)
 	{
 		Result.TotalWaves = Level->Waves.Num();
+		// Per-wave "sudden_start": false keeps that wave's old prepared start (user decision 2026-10-11).
+		Result.PreparedWaveIndices.Reset();
+		for (int32 Index = 0; Index < Level->Waves.Num(); ++Index)
+		{
+			if (!Level->Waves[Index].bSuddenStart)
+			{
+				Result.PreparedWaveIndices.Add(Index + 1);
+			}
+		}
 	}
 	else if (Balance)
 	{

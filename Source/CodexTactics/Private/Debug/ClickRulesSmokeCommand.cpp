@@ -92,9 +92,7 @@ namespace ClickRulesSmoke
 		{
 			return Finish(State, false);
 		}
-		Flow->TriggerCombatZone();
-		Flow->FinishCutscene();
-		Flow->FinishPreparation();
+		SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		const FVector Front = Leader->GetActorLocation() + Leader->GetActorForwardVector() * 400.f;

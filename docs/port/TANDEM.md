@@ -41,6 +41,15 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 ---
 
+## 📣 SYNC — 2026-10-11 (Claude): sudden horde start on branch `agents/horde` (worktree `../CodexTactics-agents2`)
+
+User decision 2026-10-11: horde waves have no intro cutscene and no 60 s preparation / rest countdown any more — the wave
+spawns at once into a FREE tactical pause (no charge, no timer) and `UHordeIntroSubsystem` flies the camera over the horde
+(wide shot + one shot per new enemy type, real time, world at the pause dilation; Esc / click skip). Details: HANDOFF §5
+«Game flow», §6, §10. For Gemini: the flyover only drives `ATacticalCameraPawn` (new `SetCinematicLock` / `SnapFocusOnTarget`);
+no rendering / material change. A second agents' worktree `../CodexTactics-agents2` (protocol 8 junctions) was created for
+this task so it does not collide with `../CodexTactics-agents` (cover bugs); it has its own `Saved/agent.lock`.
+
 ## 🌐 ENGLISH-ONLY TEXT PASS — 2026-10-08 (user decision; who does what)
 
 The user wants ALL in-game text in English now (Russian removed until a later localization pass).
@@ -961,6 +970,8 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 ---
 
 ## Log
+
+- 2026-10-11 (Claude, `agents/horde`): sudden horde start (free tactical pause + camera flyover), see HANDOFF §10. Not merged into main.
 
 - 2026-10-09 Claude (sync for Gemini): the Medic-Sapper is the Female Soldier (`SK_Female_soldier`, same ABP_Operative; per-role body in `ACodexTacticsGameMode::SquadRoster[].BodyMesh`) and carries a sniper rifle (`DA_Weapon_sniper_rifle`, `EWeaponHandling::SniperRifle`, `weapons_tuning.json` "sniper_rifle"): fires only kneeling / prone and still (`Combat/SniperRules`), turn-based kneel + shot AP. Assets touched: `ABP_Operative` (sniper clip class defaults, graph untouched), new `Content/Characters/Operatives/Sniper/AimOffsets/**`, `Content/Data/Weapons/DA_Weapon_sniper_rifle`; pack skeletons `Female_Soldier_Skeleton` / Post_Apo `UE4_Mannequin_Skeleton` compatible lists (untracked packs, main checkout). Nothing in Gemini's area (no material / VFX / scalability change; the M16 model is a stand-in until a sniper model exists — a VFX muzzle / scope glint request may follow). New smoke `SniperSmoke`. See HANDOFF §6 «Female Soldier + sniper», §10.
 - 2026-10-08 Claude: commander-only defeat, death cinematic (`UDeathCinematicSubsystem`, `Codex.DeathCam.*`), Susanin corpse fix, operative hit reactions (ABP_Operative / Rifle2 Class Defaults set by `setup_operative_hit_animation.py`), camera-zone mode switches, `DeathCamSmoke` / `CameraZoneModeSmoke`. Save system: a fallen member is `IsKilledInAction()` with health 0; restore him with `AOperativeCharacter::RestoreKilledInAction()` after `UHealthComponent::RestoreHealth(0, Max)` (not wired into SaveGame* yet). See HANDOFF §10.

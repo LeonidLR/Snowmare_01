@@ -128,9 +128,7 @@ namespace HudShot
 					return;
 				}
 				UGameFlowSubsystem* Flow = W->GetSubsystem<UGameFlowSubsystem>();
-				Flow->TriggerCombatZone();
-				Flow->FinishCutscene();
-				Flow->FinishPreparation();
+				SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 				for (TActorIterator<AEnemyCharacter> It(W); It; ++It)
 				{
 					It->Destroy();
@@ -171,6 +169,7 @@ namespace HudShot
 			{
 				if (UGameFlowSubsystem* Flow = FlowWorld.IsValid() ? FlowWorld->GetSubsystem<UGameFlowSubsystem>() : nullptr)
 				{
+					SmokeUtils::UsePreparedWaveStart(); // the cutscene card / preparation banner: the old prepared start
 					Flow->TriggerCombatZone();
 					if (bPrep)
 					{
@@ -307,9 +306,7 @@ namespace HudShot
 					return;
 				}
 				UGameFlowSubsystem* Flow = SusWorld->GetSubsystem<UGameFlowSubsystem>();
-				Flow->TriggerCombatZone();
-				Flow->FinishCutscene();
-				Flow->FinishPreparation();
+				SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 				for (TActorIterator<AEnemyCharacter> It(SusWorld.Get()); It; ++It)
 				{
 					It->CustomTimeDilation = 0.f;
@@ -346,9 +343,7 @@ namespace HudShot
 					return;
 				}
 				UGameFlowSubsystem* Flow = RingWorld->GetSubsystem<UGameFlowSubsystem>();
-				Flow->TriggerCombatZone();
-				Flow->FinishCutscene();
-				Flow->FinishPreparation();
+				SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 				for (TActorIterator<AEnemyCharacter> It(RingWorld.Get()); It; ++It)
 				{
 					It->CustomTimeDilation = 0.f; // killing the wave would end the fight (and the pause)
@@ -513,9 +508,7 @@ namespace HudShot
 					return;
 				}
 				UGameFlowSubsystem* Flow = DefendWorld->GetSubsystem<UGameFlowSubsystem>();
-				Flow->TriggerCombatZone();
-				Flow->FinishCutscene();
-				Flow->FinishPreparation();
+				SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 				for (TActorIterator<AEnemyCharacter> It(DefendWorld.Get()); It; ++It)
 				{
 					It->CustomTimeDilation = 0.f;
@@ -618,9 +611,7 @@ namespace HudShot
 				UWaveVictorySubsystem* Victory = VictoryWorld.IsValid() ? VictoryWorld->GetSubsystem<UWaveVictorySubsystem>() : nullptr;
 				if (Flow && Victory)
 				{
-					Flow->TriggerCombatZone();
-					Flow->FinishCutscene();
-					Flow->FinishPreparation();
+					SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 					VictoryWorld->GetSubsystem<UWaveSubsystem>()->ClearAllEnemies();
 					Victory->RegisterEnemyKill(EEnemyArchetype::FrostHound, TEXT("Commander"));
 					Victory->RegisterEnemyKill(EEnemyArchetype::Spitter, TEXT("Turret"));

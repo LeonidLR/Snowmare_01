@@ -134,6 +134,21 @@ export const WaveEditorCard: React.FC<Props> = ({
                   {wave.is_active !== false ? 'ВКЛЮЧЕНА В БОЙ' : 'ОТКЛЮЧЕНА (ВЫКЛ)'}
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={() => onUpdateWave({ ...wave, sudden_start: wave.sudden_start === false })}
+                className={`px-2.5 py-0.5 rounded-full text-xs font-black tracking-wider transition-all cursor-pointer ${
+                  wave.sudden_start !== false
+                    ? 'bg-rose-500/90 text-slate-950 hover:bg-rose-400'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                }`}
+                title={wave.sudden_start !== false
+                  ? 'Внезапная атака: враги появляются сразу, бой начинается с бесплатной тактической паузы и облёта камеры. Нажмите, чтобы вернуть подготовку.'
+                  : 'Старый старт: заставка + отсчёт подготовки (prep_phase_duration / wave_rest_duration). Нажмите для внезапной атаки.'}
+              >
+                {wave.sudden_start !== false ? 'ВНЕЗАПНАЯ АТАКА' : 'С ПОДГОТОВКОЙ'}
+              </button>
             </div>
           </div>
         </div>

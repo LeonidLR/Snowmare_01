@@ -105,9 +105,7 @@ namespace WeaponSelectorSmoke
 
 		// Turn-based: the selector goes through the combat for the active operative.
 		UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-		Flow->TriggerCombatZone();
-		Flow->FinishCutscene();
-		Flow->FinishPreparation();
+		SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 		{
 			It->Destroy();

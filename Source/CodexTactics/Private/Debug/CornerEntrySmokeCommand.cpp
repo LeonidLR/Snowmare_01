@@ -7,6 +7,7 @@
 // stand <-> crouch switch at the edge. Every frame the playing FullBody montages (clip + weight) and the cover flags are
 // sampled; every change is logged ("trace"), and a tuck-back clip after the first fire-stance clip fails the path.
 
+#include "Debug/SmokeUtils.h"
 #include "CoreMinimal.h"
 #include "Animation/AnimMontage.h"
 #include "Characters/EnemyCharacter.h"
@@ -342,9 +343,7 @@ namespace CornerEntrySmoke
 				return true;
 			}
 			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			Op = Squad->GetLeader();
 			State.Op = Op;
 			{

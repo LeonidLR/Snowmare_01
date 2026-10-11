@@ -327,6 +327,15 @@ void UTacticalSightSubsystem::RestoreAll()
 	DemaskUntil.Reset();
 }
 
+void UTacticalSightSubsystem::SetCinematicReveal(bool bReveal)
+{
+	if (bCinematicReveal != bReveal)
+	{
+		bCinematicReveal = bReveal;
+		Refresh();
+	}
+}
+
 void UTacticalSightSubsystem::Update()
 {
 	UWorld* World = GetWorld();
@@ -399,7 +408,7 @@ void UTacticalSightSubsystem::Update()
 
 		// Squad -> enemy.
 		const FVector Profile = ProfilePoint(*Enemy);
-		bool bSeen = IsDemasked(Enemy);
+		bool bSeen = bCinematicReveal || IsDemasked(Enemy);
 		bool bHeard = false;
 		for (AOperativeCharacter* Operative : Operatives)
 		{

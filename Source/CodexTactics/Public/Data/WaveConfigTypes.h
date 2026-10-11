@@ -84,6 +84,14 @@ struct CODEXTACTICS_API FWaveDefinition
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave")
 	FWaveModifiers Modifiers;
 
+	/**
+	 * Level JSON "sudden_start" (UE-only, user decision 2026-10-11; default true): the horde spawns at once and the fight
+	 * opens in the free tactical pause with the camera flyover. False keeps the old start of this wave (wave 1: cutscene
+	 * + prep_phase_duration countdown; later waves: wave_rest_duration countdown).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave")
+	bool bSuddenStart = true;
+
 	int32 GetTotalEnemyCount() const
 	{
 		int32 Total = 0;
@@ -161,9 +169,11 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FText LevelName;
 
+	/** "prep_phase_duration": countdown before wave 1, s — only for a wave with "sudden_start": false (2026-10-11). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	float PrepPhaseDuration = 60.0f;
 
+	/** "wave_rest_duration": countdown before a later wave, s — only for a wave with "sudden_start": false (2026-10-11). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	float WaveRestDuration = 20.0f;
 

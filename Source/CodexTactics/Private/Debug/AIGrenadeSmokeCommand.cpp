@@ -94,9 +94,7 @@ namespace AIGrenadeSmoke
 		{
 		case 0:
 		{
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
 				It->Destroy(); // only the test pack

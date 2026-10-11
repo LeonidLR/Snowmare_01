@@ -12,6 +12,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -324,9 +325,7 @@ namespace CornerHoldSmoke
 				return true;
 			}
 			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			Op = Squad->GetLeader();
 			State.Op = Op;
 			// Headless: the pose (and with it the rifle) is only evaluated when forced - the barrel checks need the real pose.

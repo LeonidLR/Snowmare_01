@@ -9,6 +9,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadAutonomySubsystem.h"
 #include "Characters/SquadSubsystem.h"
@@ -59,9 +60,7 @@ namespace CommanderModeSmoke
 				return true;
 			}
 			State.bDefaultOff = !Squad->IsAutonomousSquadCombat() && !Flow->IsAutonomousSquadCombat();
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			for (AOperativeCharacter* Member : Members)
 			{
 				Member->HealthComponent->SetMaxHealth(100000.f);

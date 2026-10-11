@@ -111,6 +111,8 @@ namespace TripwireSmoke
 			{
 				return true;
 			}
+			// Preparation-phase behaviour: the old prepared start (a "sudden_start": false wave; default since 2026-10-11 is the sudden horde).
+			SmokeUtils::UsePreparedWaveStart();
 			Flow->TriggerCombatZone();
 			Flow->FinishCutscene();
 			State.Commander = Squad->GetLeader();

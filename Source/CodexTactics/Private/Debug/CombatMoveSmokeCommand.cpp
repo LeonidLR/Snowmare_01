@@ -121,9 +121,7 @@ namespace CombatMoveSmoke
 		case 0:
 		{
 			// A real-time wave; its enemies frozen far away, one frozen brute (220 hp, kinetic armour) 8 m ahead.
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
 				It->CustomTimeDilation = 0.f;

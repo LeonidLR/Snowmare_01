@@ -29,6 +29,12 @@ export interface WaveConfig {
   wave_index: number;
   name?: string;
   is_active?: boolean;
+  /**
+   * UE-only (2026-10-11): the horde spawns at once and the fight opens in a free tactical pause with a camera flyover
+   * (default, also when missing). false: the old start of this wave (cutscene + prep_phase_duration for wave 1,
+   * wave_rest_duration for later waves).
+   */
+  sudden_start?: boolean;
   max_simultaneous_enemies: number;
   spawns: EnemySpawn[];
   wave_modifiers: WaveModifiers;

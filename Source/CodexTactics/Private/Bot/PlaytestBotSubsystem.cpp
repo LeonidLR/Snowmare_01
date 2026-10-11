@@ -2,6 +2,7 @@
 
 #include "AI/PatrolRouteActor.h"
 #include "Characters/EnemyCharacter.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Components/SplineComponent.h"
 #include "Data/EnemyPerception.h"
@@ -451,6 +452,23 @@ void UPlaytestBotSubsystem::TickFight(float DeltaTime)
 		Finish(TEXT("DEFEAT"), 0);
 		return;
 	case ECodexGamePhase::WaveCombat:
+		if (Flow->IsFreePause())
+		{
+			// Sudden horde start (user decision 2026-10-11): no preparation — the bot orders its defences in the free
+			// pause (they are set up while the fight runs), skips the camera flyover and resumes at once.
+			if (!bDeployed)
+			{
+				DeployDefences();
+				bDeployed = true;
+			}
+			if (UHordeIntroSubsystem* Intro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>())
+			{
+				Intro->HandleSkipInput();
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Wave %d came suddenly: defences ordered, free pause released"), Flow->GetWaveIndex());
+			Flow->ToggleTacticalPause();
+			return;
+		}
 		break;
 	default:
 		return;
