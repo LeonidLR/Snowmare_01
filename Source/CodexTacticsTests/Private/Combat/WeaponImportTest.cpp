@@ -20,10 +20,13 @@ bool FWeaponImportParityTest::RunTest(const FString&)
 	// rifle_m16.tres
 	TestEqual(TEXT("M16 name"), M16->WeaponName.ToString(), FString(TEXT("M16A2 Assault Rifle")));
 	TestEqual(TEXT("M16 damage"), M16->BaseDamage, 18.f);
-	TestEqual(TEXT("M16 range 14 m"), M16->AttackRangeCm, 1400.f);
+	// Range 14 -> 25 m, grid 5 -> 8 cells, hit table over 25 m (user decision 2026-10-11, weapons_tuning.json written onto
+	// the asset by Scripts/Editor/apply_weapon_tuning.py).
+	TestEqual(TEXT("M16 range 25 m"), M16->AttackRangeCm, 2500.f);
+	TestEqual(TEXT("M16 grid range 8 cells"), M16->MaxRangeCells, 8);
 	TestEqual(TEXT("M16 clip"), M16->MaxClipSize, 30);
 	TestEqual(TEXT("M16 reload"), M16->ReloadTime, 2.68f);
-	TestEqual(TEXT("M16 hit curve"), M16->BaseHitChances.Num(), 5);
+	TestEqual(TEXT("M16 hit curve"), M16->BaseHitChances.Num(), 17);
 	TestEqual(TEXT("M16 3 cells"), M16->GetHitChanceForDistance(3), 0.75f);
 	TestTrue(TEXT("M16 8 rays"), M16->AttackShape == EAttackShape::Rays8);
 	// pistol_beretta.tres: 4 rays, infinite reserve (-1)
