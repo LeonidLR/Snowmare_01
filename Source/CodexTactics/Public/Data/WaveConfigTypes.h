@@ -158,6 +158,43 @@ enum class ECombatStartMode : uint8
 	Button
 };
 
+/**
+ * Demo game-mode flags of a level (level JSON "demo" object, Demo 01 producer plan C10): set by the demo level's data,
+ * not by the global BP defaults. Applied by UDemoModeSubsystem; no "demo" object = every flag off (normal game).
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FDemoModeSettings
+{
+	GENERATED_BODY()
+
+	/** True when the level JSON has a "demo" object. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bDemo = false;
+
+	/** "panic": false switches Panic / stress off on every operative (UPanicComponent::bEnabled). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bPanicEnabled = true;
+
+	/** "vision_cones": true shows every operative / enemy vision cone (bShowVisionCone), false hides them; absent = the BP defaults. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bOverrideVisionCones = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bVisionCones = true;
+
+	/** "tutorial": true runs the tutorial steps file below (the player's tutorial ON/OFF setting still applies). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bTutorial = false;
+
+	/** "tutorial_steps": Content/Data/Tutorial/<file> (default demo_01_steps.json). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	FString TutorialSteps;
+
+	/** "hud": "demo" hides the debug squad panel and the labels above operatives (ACodexTacticsHUD::bDemoHudPreset). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bDemoHud = false;
+};
+
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FLevelCombatConfig
 {
@@ -201,6 +238,10 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level", meta = (MultiLine = true))
 	FString HordeOverrideJson;
+
+	/** "demo": demo game-mode flags (Panic off, vision cones, tutorial, demo HUD preset). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	FDemoModeSettings Demo;
 };
 
 UCLASS(BlueprintType)

@@ -14,6 +14,7 @@
 //  2. Save policy: cutscene and fight refuse F5 / dialog saves (CanSaveNow hint "Saving is disabled during combat",
 //     which the frontend pause screen shows), also in the tactical pause; autosave right before the wave (written as its preparation) and right
 //     after it is cleared; loading the after-combat autosave resumes the next wave's preparation.
+//     Tutorial progress (Demo 01): completed / skipped / shown steps and the beat survive the round trip.
 //  3. Load with travel ("Continue"): the map is reopened, the save applied to the fresh world and its SNAPSHOT diffed
 //     against the first one (runtime routes / enemies / mine / tripwire / turret recreated, killed level enemies stay dead).
 
@@ -67,6 +68,9 @@
 #include "Serialization/JsonSerializer.h"
 #include "TimerManager.h"
 #include "UI/DialogueSubsystem.h"
+#include "Core/PlayerCommands.h"
+#include "Tutorial/TutorialRules.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "UObject/UObjectGlobals.h"
 
 namespace SaveRoundTripSmoke
@@ -545,6 +549,21 @@ namespace SaveRoundTripSmoke
 		State.Searcher = Searcher;
 		State.RouteA = RouteA;
 		State.RouteB = RouteB;
+
+		// Demo 01 tutorial progress: one step completed, one skipped, one shown, the beat (saved in "tutorial").
+		if (UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>())
+		{
+			FTutorialStepsData Data;
+			TArray<FString> Warnings;
+			FString Error;
+			TutorialRules::ParseSteps(TEXT(R"({"start_beat":"T0","beats":[{"id":"T0","checkpoint":false}],"steps":[
+				{"id":"rt_done","beat":"T0","complete":{"commands":["Squad.Guard"]}},
+				{"id":"rt_skip","beat":"T0","trigger":{"type":"after_step","step":"rt_done"},"complete":{"commands":["Squad.Solo"]}},
+				{"id":"rt_obj","beat":"T0","kind":"objective","complete":{"event":"Never"}}]})"), Data, Warnings, Error);
+			Tutorial->LoadSteps(Data);
+			Tutorial->HandlePlayerCommand(PlayerCommands::Guard, FPlayerCommandContext());
+			Tutorial->SkipStep(TEXT("rt_skip"));
+		}
 		return true;
 	}
 
@@ -572,6 +591,11 @@ namespace SaveRoundTripSmoke
 			FString::Printf(TEXT("save info: version %d, map %s"), Info.Version, *Info.MapName));
 
 		// Mutate everything.
+		UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>();
+		if (Tutorial)
+		{
+			Tutorial->ResetTutorial();
+		}
 		Commander->HealthComponent->Heal(1000.f);
 		Commander->ColdLevel = 0.f;
 		Commander->MedkitsCount = 5;
@@ -673,6 +697,9 @@ namespace SaveRoundTripSmoke
 		ReportDiff(State, State.SnapshotA, SnapshotB, TEXT("in-place load"));
 
 		// Direct checks of the world.
+		Check(State, Tutorial && Tutorial->GetStepState(TEXT("rt_done")) == ETutorialStepState::Completed
+			&& Tutorial->GetStepState(TEXT("rt_skip")) == ETutorialStepState::Skipped && Tutorial->GetStepState(TEXT("rt_obj")) == ETutorialStepState::Active
+			&& Tutorial->GetCurrentBeat() == FName(TEXT("T0")), TEXT("tutorial: completed / skipped steps, the shown objective and the beat restored"));
 		Check(State, Medic->IsSniperWeaponEquipped() && Medic->CurrentClip == 3 && Medic->GetMesh()->GetSkeletalMeshAsset()
 			&& Medic->GetMesh()->GetSkeletalMeshAsset()->GetName() == TEXT("SK_Female_soldier"),
 			FString::Printf(TEXT("Medic-Sapper: Female Soldier body, sniper rifle back in hands [%d/%d]"), Medic->CurrentClip, Medic->ReserveAmmo));

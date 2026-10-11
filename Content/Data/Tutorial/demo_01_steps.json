@@ -1,0 +1,184 @@
+{
+  "_comment": [
+    "Demo 01 'Frozen Lake' tutorial steps, beats A0-A2 (docs/demo/DEMO01_BEAT_SHEET.md section 4). Read at runtime by UTutorialSubsystem",
+    "(the level JSON 'demo': {'tutorial': true, 'tutorial_steps': 'demo_01_steps.json'} selects this file). Schema: HANDOFF section 6 'Tutorial'.",
+    "Texts are ids only (TUT_*, WT_*, OBJ_*): English text comes from the narrative manifest 'tutorial' section (TANDEM request #17);",
+    "until it exists the overlay shows '[EN missing: <id>]'. Command ids: Source/CodexTactics/Public/Core/PlayerCommands.h.",
+    "Volume ids (VOL_*) are the VolumeId / StepId of ATutorialTriggerVolume actors placed in L_Demo01_A_FrozenLake:",
+    "VOL_A0_BEACON1 (BeatId A1), VOL_A1_BEACON2, VOL_A1_BEACON3, VOL_A1_BEACON4, VOL_A1_RIDGE, VOL_A1_RIDGE_FAR, VOL_A2_CAMP (BeatId A2)."
+  ],
+  "version": 1,
+  "id": "demo_01_frozen_lake",
+  "start_beat": "A0",
+  "beats": [
+    { "id": "A0", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A0" },
+    { "id": "A1", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A1" },
+    { "id": "A2", "lesson": true, "checkpoint": false, "title_id": "TUT_BEAT_A2" }
+  ],
+  "steps": [
+    {
+      "id": "A0_walk_talk", "beat": "A0", "kind": "walk_talk",
+      "trigger": { "type": "beat_start", "delay_s": 1.5 },
+      "lines": [
+        { "speaker": "HQ", "text_id": "WT_A0_01" },
+        { "speaker": "Commander", "text_id": "WT_A0_02" },
+        { "speaker": "Medic-Sapper", "text_id": "WT_A0_03" },
+        { "speaker": "Engineer", "text_id": "WT_A0_04" },
+        { "speaker": "Medic-Sapper", "text_id": "WT_A0_05" },
+        { "speaker": "Commander", "text_id": "WT_A0_06" }
+      ]
+    },
+    {
+      "id": "A0_obj_beacon", "beat": "A0", "kind": "objective", "text_id": "OBJ_A0_BEACON1",
+      "trigger": { "type": "beat_start" },
+      "complete": { "volume": "VOL_A0_BEACON1" }
+    },
+    {
+      "id": "A0_camera", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_CAMERA",
+      "keys": ["Camera.Pan", "Camera.Rotate", "Camera.Zoom"],
+      "trigger": { "type": "beat_start", "delay_s": 2 },
+      "complete": { "commands": ["Camera.*"], "count": 2, "timeout_s": 20 }
+    },
+    {
+      "id": "A0_move", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_MOVE",
+      "keys": ["Order.Move"],
+      "trigger": { "type": "after_step", "step": "A0_camera" },
+      "complete": { "volume": "VOL_A0_BEACON1", "timeout_s": 60 }
+    },
+
+    {
+      "id": "A1_obj_camp", "beat": "A1", "kind": "objective", "text_id": "OBJ_A1_CAMP",
+      "trigger": { "type": "beat_start" },
+      "complete": { "volume": "VOL_A2_CAMP" }
+    },
+    {
+      "id": "A1_wt_sprint", "beat": "A1", "kind": "walk_talk",
+      "trigger": { "type": "beat_start" },
+      "lines": [
+        { "speaker": "Commander", "text_id": "WT_A1_01" },
+        { "speaker": "Engineer", "text_id": "WT_A1_02" },
+        { "speaker": "Medic-Sapper", "text_id": "WT_A1_03" }
+      ]
+    },
+    {
+      "id": "A1_sprint", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SPRINT",
+      "keys": ["Order.Sprint"],
+      "trigger": { "type": "beat_start", "delay_s": 3 },
+      "complete": { "commands": ["Order.Sprint"], "timeout_s": 25 }
+    },
+    {
+      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
+      "keys": ["Select.Member", "Select.Box"],
+      "trigger": { "type": "after_step", "step": "A1_sprint" },
+      "complete": { "commands": ["Select.*"], "timeout_s": 30 }
+    },
+    {
+      "id": "A1_wt_scout", "beat": "A1", "kind": "walk_talk",
+      "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
+      "lines": [
+        { "speaker": "Engineer", "text_id": "WT_A1_04" },
+        { "speaker": "Commander", "text_id": "WT_A1_05" },
+        { "speaker": "Engineer", "text_id": "WT_A1_06" }
+      ]
+    },
+    {
+      "id": "A1_solo", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SOLO",
+      "keys": ["Squad.Solo"],
+      "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
+      "complete": { "commands": ["Squad.Solo"], "timeout_s": 45 }
+    },
+    {
+      "id": "A1_regroup", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_REGROUP",
+      "keys": ["Squad.Regroup"],
+      "trigger": { "type": "after_step", "step": "A1_solo", "delay_s": 6 },
+      "complete": { "commands": ["Squad.Regroup"], "timeout_s": 60 }
+    },
+    {
+      "id": "A1_wt_regroup", "beat": "A1", "kind": "walk_talk",
+      "trigger": { "type": "volume", "volume": "VOL_A1_BEACON3" },
+      "lines": [
+        { "speaker": "Commander", "text_id": "WT_A1_07" },
+        { "speaker": "Medic-Sapper", "text_id": "WT_A1_08" },
+        { "speaker": "Engineer", "text_id": "WT_A1_09" }
+      ]
+    },
+    {
+      "id": "A1_guard", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_GUARD",
+      "keys": ["Squad.Guard"],
+      "trigger": { "type": "after_step", "step": "A1_regroup", "delay_s": 2 },
+      "complete": { "commands": ["Squad.Guard"], "timeout_s": 15 }
+    },
+    {
+      "id": "A1_wt_wind", "beat": "A1", "kind": "walk_talk",
+      "trigger": { "type": "volume", "volume": "VOL_A1_BEACON4" },
+      "lines": [
+        { "speaker": "Medic-Sapper", "text_id": "WT_A1_10" },
+        { "speaker": "Commander", "text_id": "WT_A1_11" },
+        { "speaker": "Medic-Sapper", "text_id": "WT_A1_12" }
+      ]
+    },
+    {
+      "id": "A1_stance", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_STANCE",
+      "keys": ["Stance.Crouch", "Stance.Prone", "Stance.Stand", "Stance.Squad.Prone"],
+      "trigger": { "type": "volume", "volume": "VOL_A1_BEACON4" },
+      "complete": { "commands": ["Stance.*"], "count": 2, "timeout_s": 45 }
+    },
+    {
+      "id": "A1_vault", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_VAULT",
+      "keys": ["Order.Move"],
+      "trigger": { "type": "volume", "volume": "VOL_A1_RIDGE" },
+      "complete": { "volume": "VOL_A1_RIDGE_FAR", "timeout_s": 30 }
+    },
+
+    {
+      "id": "A2_obj_warm", "beat": "A2", "kind": "objective", "text_id": "OBJ_A2_WARM",
+      "trigger": { "type": "beat_start" },
+      "complete": { "event": "BarrelLit" }
+    },
+    {
+      "id": "A2_wt_cold", "beat": "A2", "kind": "walk_talk",
+      "trigger": { "type": "event", "event": "ColdTier" },
+      "lines": [
+        { "speaker": "Medic-Sapper", "text_id": "WT_A2_01" },
+        { "speaker": "Commander", "text_id": "WT_A2_02" },
+        { "speaker": "Medic-Sapper", "text_id": "WT_A2_03" },
+        { "speaker": "Commander", "text_id": "WT_A2_04" }
+      ]
+    },
+    {
+      "id": "A2_coldbar", "beat": "A2", "kind": "hint_card", "text_id": "TUT_A2_COLDBAR",
+      "trigger": { "type": "event", "event": "ColdTier" },
+      "complete": { "timeout_s": 12 }
+    },
+    {
+      "id": "A2_push", "beat": "A2", "kind": "hint_card", "text_id": "TUT_A2_PUSH",
+      "keys": ["Object.Relocate"],
+      "trigger": { "type": "beat_start", "delay_s": 2 },
+      "complete": { "event": "RelocationDone", "timeout_s": 90 }
+    },
+    {
+      "id": "A2_wt_roll", "beat": "A2", "kind": "radio",
+      "trigger": { "type": "beat_start", "delay_s": 6 },
+      "lines": [ { "speaker": "Engineer", "text_id": "WT_A2_05" } ]
+    },
+    {
+      "id": "A2_light", "beat": "A2", "kind": "hint_card", "text_id": "TUT_A2_LIGHT",
+      "keys": ["Object.LightBarrel"],
+      "trigger": { "type": "after_step", "step": "A2_push" },
+      "complete": { "event": "BarrelLit", "timeout_s": 60 }
+    },
+    {
+      "id": "A2_heatpack", "beat": "A2", "kind": "hint_card", "text_id": "TUT_A2_HEATPACK",
+      "keys": ["Item.HeatPack"],
+      "trigger": { "type": "after_step", "step": "A2_light", "delay_s": 3 },
+      "complete": { "commands": ["Item.HeatPack"], "timeout_s": 40 }
+    },
+    {
+      "id": "A2_toocold", "beat": "A2", "kind": "hint_card", "text_id": "TUT_A2_TOOCOLD",
+      "keys": ["Select.Member"],
+      "once": false,
+      "trigger": { "type": "failure_retry", "event": "RelocationRefused" },
+      "complete": { "commands": ["Select.Member"], "timeout_s": 20 }
+    }
+  ]
+}

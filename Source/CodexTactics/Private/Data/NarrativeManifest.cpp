@@ -66,7 +66,48 @@ bool FNarrativeManifest::Parse(const FString& Json, FNarrativeManifest& Out, FSt
 			}
 		}
 	}
+	const TSharedPtr<FJsonObject>* TutorialObj = nullptr;
+	if (Root->TryGetObjectField(TEXT("tutorial"), TutorialObj))
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*TutorialObj)->Values)
+		{
+			const TSharedPtr<FJsonObject>* EntryObj = nullptr;
+			if (!Entry.Value.IsValid() || !Entry.Value->TryGetObject(EntryObj))
+			{
+				continue;
+			}
+			FNarrativeTutorialEntry Text;
+			(*EntryObj)->TryGetStringField(TEXT("title_en"), Text.Title);
+			(*EntryObj)->TryGetStringField(TEXT("text_en"), Text.Text);
+			(*EntryObj)->TryGetStringField(TEXT("radio_en"), Text.Radio);
+			(*EntryObj)->TryGetStringField(TEXT("speaker_en"), Text.Speaker);
+			Out.TutorialTexts.Add(Entry.Key, MoveTemp(Text));
+		}
+	}
 	return true;
+}
+
+FTutorialTextView FNarrativeManifest::GetTutorialText(const FString& TextId) const
+{
+	FTutorialTextView View;
+	if (const FNarrativeTutorialEntry* Entry = TutorialTexts.Find(TextId))
+	{
+		View.Title = EnglishOr(Entry->Title, FString());
+		View.Text = EnglishOr(Entry->Text, FString());
+		View.Radio = EnglishOr(Entry->Radio, FString());
+		View.Speaker = EnglishOr(Entry->Speaker, FString());
+	}
+	else if (const TArray<FNarrativeLine>* Lines = Sequences.Find(TextId); Lines && Lines->Num() > 0)
+	{
+		View.Text = EnglishOr((*Lines)[0].Text, FString());
+		View.Speaker = EnglishOr((*Lines)[0].Speaker, FString());
+	}
+	if (View.Text.IsEmpty() && View.Radio.IsEmpty())
+	{
+		View.Text = FString::Printf(TEXT("[EN missing: %s]"), *TextId);
+		View.bMissing = true;
+	}
+	return View;
 }
 
 const FNarrativeManifest& FNarrativeManifest::Get()
@@ -87,7 +128,8 @@ const FNarrativeManifest& FNarrativeManifest::Get()
 		}
 		else
 		{
-			UE_LOG(LogCodexTactics, Log, TEXT("Narrative manifest loaded: %d sequences, %d glossary names"), GCachedManifest.Sequences.Num(), GCachedManifest.GlossaryNames.Num());
+			UE_LOG(LogCodexTactics, Log, TEXT("Narrative manifest loaded: %d sequences, %d glossary names, %d tutorial texts"), GCachedManifest.Sequences.Num(),
+				GCachedManifest.GlossaryNames.Num(), GCachedManifest.TutorialTexts.Num());
 		}
 	}
 	return GCachedManifest;

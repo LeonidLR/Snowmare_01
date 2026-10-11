@@ -49,6 +49,30 @@ bool LevelJsonRules::ParseEnemyType(const FString& Name, EEnemyArchetype& OutTyp
 	return false;
 }
 
+FDemoModeSettings LevelJsonRules::ParseDemoSettings(const FJsonObject& Demo)
+{
+	FDemoModeSettings Settings;
+	Settings.bDemo = true;
+	bool bValue = true;
+	if (Demo.TryGetBoolField(TEXT("panic"), bValue))
+	{
+		Settings.bPanicEnabled = bValue;
+	}
+	if (Demo.TryGetBoolField(TEXT("vision_cones"), bValue))
+	{
+		Settings.bOverrideVisionCones = true;
+		Settings.bVisionCones = bValue;
+	}
+	if (Demo.TryGetBoolField(TEXT("tutorial"), bValue))
+	{
+		Settings.bTutorial = bValue;
+	}
+	FString Text;
+	Settings.TutorialSteps = Demo.TryGetStringField(TEXT("tutorial_steps"), Text) && !Text.IsEmpty() ? Text : FString(TEXT("demo_01_steps.json"));
+	Settings.bDemoHud = Demo.TryGetStringField(TEXT("hud"), Text) && Text.Equals(TEXT("demo"), ESearchCase::IgnoreCase);
+	return Settings;
+}
+
 bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, FLevelCombatConfig& OutConfig, FString& OutError)
 {
 	TSharedPtr<FJsonObject> Root;
@@ -76,6 +100,12 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	{
 		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Config.HordeOverrideJson);
 		FJsonSerializer::Serialize(Horde.ToSharedRef(), Writer);
+	}
+
+	// UE-only (Demo 01 C10): demo game-mode flags.
+	if (const TSharedPtr<FJsonObject> Demo = LevelJsonObject(Root, TEXT("demo")))
+	{
+		Config.Demo = ParseDemoSettings(*Demo);
 	}
 
 	const TArray<TSharedPtr<FJsonValue>>* Waves = nullptr;

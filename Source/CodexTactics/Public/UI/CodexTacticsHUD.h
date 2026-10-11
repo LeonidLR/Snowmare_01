@@ -23,6 +23,7 @@ class AOperativeCharacter;
 enum class ESquadFirePosture : uint8;
 class UPhaseBannersWidget;
 class UTurnBasedHudWidget;
+class UTutorialOverlayWidget;
 class ALootCrateActor;
 class UFont;
 
@@ -92,6 +93,22 @@ public:
 	TSubclassOf<UVictoryPanelWidget> VictoryPanelWidgetClass;
 
 	UVictoryPanelWidget* GetVictoryPanel() const { return VictoryPanel; }
+
+	/** Tutorial overlay class (hint card, objective tracker, radio strip; a Widget Blueprint subclass can restyle it). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|HUD")
+	TSubclassOf<UTutorialOverlayWidget> TutorialOverlayWidgetClass;
+
+	UTutorialOverlayWidget* GetTutorialOverlay() const { return TutorialOverlay; }
+
+	/**
+	 * Demo HUD preset (Demo 01 C10, level JSON "demo": {"hud": "demo"}, set by UDemoModeSubsystem): the debug squad panel
+	 * and the labels above the operatives are hidden, like CodexTactics.HUD.ShowStatus 0.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|HUD")
+	bool bDemoHudPreset = false;
+
+	/** Squad panel / operative labels drawn now (ShowStatus and not the demo preset). */
+	bool ShouldDrawStatus() const;
 
 	/** Key P (Godot _toggle_profile_dialog): the leader's profile opens, or the open one closes. */
 	void ToggleProfileDialog();
@@ -230,6 +247,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTurnBasedHudWidget> TurnBasedHud;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTutorialOverlayWidget> TutorialOverlay;
 
 	void DrawMessageFeed();
 	/** Turn-based attack mode: the hovered cell's hit chance (Godot hit_chance_label). */
