@@ -125,3 +125,31 @@ int32 PatrolRouteRules::FindNearestWaypoint(const TArray<FVector>& Waypoints, co
 	}
 	return Best;
 }
+
+bool PatrolRouteRules::ShouldGuardPost(bool bPlacedInMap, bool bHasRoute, bool bHasEscortLeader, bool bGuardEnabled)
+{
+	return bGuardEnabled && bPlacedInMap && !bHasRoute && !bHasEscortLeader;
+}
+
+float PatrolRouteRules::GetGuardLookOffset(float ClockSeconds, float AmplitudeDeg, float PeriodSeconds)
+{
+	if (AmplitudeDeg <= 0.f || PeriodSeconds <= 0.f)
+	{
+		return 0.f;
+	}
+	const float Phase = FMath::Fmod(FMath::Max(ClockSeconds, 0.f), PeriodSeconds) / PeriodSeconds;
+	if (Phase >= 0.35f && Phase < 0.5f)
+	{
+		return AmplitudeDeg;
+	}
+	if (Phase >= 0.7f && Phase < 0.85f)
+	{
+		return -AmplitudeDeg;
+	}
+	return 0.f;
+}
+
+bool PatrolRouteRules::ShouldWalkBackToPost(float DistanceFromPostCm, bool bReturning)
+{
+	return DistanceFromPostCm > (bReturning ? WaypointAcceptCm : GuardLeaveCm);
+}

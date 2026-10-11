@@ -217,7 +217,8 @@ public:
 	/**
 	 * Spline route this enemy patrols from map start (no preparation delay) until it is alerted: it walks waypoint to
 	 * waypoint at PatrolWalkSpeed, pauses at each, then turns towards the next segment. Null: no route (wave enemies
-	 * behave as before; a marksman falls back to his legacy PatrolRoute points).
+	 * behave as before; a marksman falls back to his legacy PatrolRoute points; an enemy placed in the map without any
+	 * route guards its post - bGuardPostWhenUnrouted, user request 2026-10-11).
 	 */
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "CodexTactics|Patrol")
 	TObjectPtr<APatrolRouteActor> AssignedPatrolRoute;
@@ -329,7 +330,52 @@ public:
 	 */
 	virtual void RestorePatrolSnapshot(APatrolRouteActor* Route, AEnemyCharacter* Leader, const FEnemyPatrolSnapshot& Snapshot);
 
+	// --- Guard post (user request 2026-10-11) ---
+
+	/**
+	 * Placed in the map without a route or an escort leader: it guards its placement (stands, faces its placement
+	 * rotation, looks around) until its perception detects the squad (sight / hearing / smell; a trap sends it searching,
+	 * then it walks back), then the normal ambush flow. Off: it hunts the squad from level start (the behaviour before
+	 * 2026-10-11). Wave / runtime spawns always hunt.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Patrol")
+	bool bGuardPostWhenUnrouted = true;
+
+	/** Look-around sweep of a guard to each side of its placement facing, degrees (0 = stares ahead). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Patrol", meta = (ClampMin = "0", ClampMax = "180"))
+	float GuardLookAroundDeg = PatrolRouteRules::GuardLookAroundDeg;
+
+	/** One look-around cycle (ahead, left, ahead, right, ahead), seconds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Patrol", meta = (ClampMin = "1"))
+	float GuardLookPeriodSeconds = PatrolRouteRules::GuardLookPeriodSeconds;
+
+	/** Guarding its placement (on patrol duty without a route; see bGuardPostWhenUnrouted). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Patrol")
+	bool IsGuardingPost() const { return bGuardingPost && IsOnPatrol(); }
+
+	/** Where it guards (its placement). */
+	FVector GetGuardPostLocation() const { return GuardPostLocation; }
+
+	/**
+	 * Starts guarding the current spot when PatrolRouteRules::ShouldGuardPost allows it (placed in the map, no route, no
+	 * escort leader, bGuardPostWhenUnrouted). Called at BeginPlay and by ULevelEncounterSubsystem::MarkLevelEnemy.
+	 * True when it guards.
+	 */
+	bool TryStartGuardPost();
+
 protected:
+	/** Legacy marksman PatrolRoute points (a route of their own: no guard post). */
+	virtual bool HasLegacyPatrolRoute() const { return false; }
+
+	/** Guard driver: back to the post when away, else face the placement yaw with the look-around sweep. */
+	void TickGuardPost(float DeltaTime);
+
+	bool bGuardingPost = false;
+	bool bGuardReturning = false;
+	FVector GuardPostLocation = FVector::ZeroVector;
+	float GuardPostYaw = 0.f;
+	float GuardClock = 0.f;
+
 	/** Patrol state of the route driver (TickPatrolRoute). */
 	enum class EPatrolPhase : uint8 { Moving, Waiting, Turning, Finished };
 

@@ -230,7 +230,7 @@
       "name": "patrol-perception",
       "globs": ["Source/**/AI/**"],
       "tests": ["CodexTactics.AI"],
-      "smokes": ["PatrolSmoke", "AmbushSmoke", "EnemyHuntSmoke"]
+      "smokes": ["PatrolSmoke", "AmbushSmoke", "EnemyHuntSmoke", "PatrolAmbushSmoke"]
     },
     {
       "name": "cold-survival",

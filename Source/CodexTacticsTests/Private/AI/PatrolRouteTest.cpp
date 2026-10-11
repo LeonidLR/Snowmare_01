@@ -149,3 +149,47 @@ bool FPatrolRouteAlertTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("tuned 30 m radius hears 25 m"), ShouldStartSearch(TrapFar));
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPatrolGuardPostTest, "CodexTactics.AI.PatrolRoute.GuardPostUntilPerceived",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPatrolGuardPostTest::RunTest(const FString& Parameters)
+{
+	using namespace PatrolRouteRules;
+	// User request 2026-10-11: an enemy placed in the map without a route guards its post until it perceives the squad.
+	TestTrue(TEXT("placed, no route, no leader: guards"), ShouldGuardPost(true, false, false, true));
+	TestFalse(TEXT("wave / runtime spawn: hunts"), ShouldGuardPost(false, false, false, true));
+	TestFalse(TEXT("own route: patrols it"), ShouldGuardPost(true, true, false, true));
+	TestFalse(TEXT("escort: mirrors its leader"), ShouldGuardPost(true, false, true, true));
+	TestFalse(TEXT("guard option off: hunts"), ShouldGuardPost(true, false, false, false));
+
+	// The guard is a patrol without a route: perception breaks it like any patrol (detection -> Engage, the fight
+	// starts), a trap only sends it searching (and it comes back afterwards).
+	FPatrolAlertInput Seen;
+	Seen.bSeesOperative = true;
+	TestTrue(TEXT("sight breaks the guard"), ShouldBreakPatrol(Seen));
+	FPatrolAlertInput Heard;
+	Heard.bHearsOperative = true;
+	TestTrue(TEXT("hearing breaks the guard"), ShouldBreakPatrol(Heard));
+	FPatrolAlertInput Trap;
+	Trap.TrapDistanceCm = 900.f;
+	TestTrue(TEXT("a trap 9 m away: search"), ShouldStartSearch(Trap) && !ShouldBreakPatrol(Trap));
+	TestFalse(TEXT("nothing: stays on guard"), ShouldBreakPatrol(FPatrolAlertInput()) || ShouldStartSearch(FPatrolAlertInput()));
+
+	// Look-around cycle (12 s, 45 deg): ahead 0..4.2 s, left 4.2..6 s, ahead, right 8.4..10.2 s, ahead.
+	TestEqual(TEXT("ahead at 1 s"), GetGuardLookOffset(1.f, 45.f, 12.f), 0.f);
+	TestEqual(TEXT("one side at 5 s"), GetGuardLookOffset(5.f, 45.f, 12.f), 45.f);
+	TestEqual(TEXT("ahead at 7 s"), GetGuardLookOffset(7.f, 45.f, 12.f), 0.f);
+	TestEqual(TEXT("other side at 9 s"), GetGuardLookOffset(9.f, 45.f, 12.f), -45.f);
+	TestEqual(TEXT("ahead at 11 s"), GetGuardLookOffset(11.f, 45.f, 12.f), 0.f);
+	TestEqual(TEXT("cycle repeats (17 s = 5 s)"), GetGuardLookOffset(17.f, 45.f, 12.f), 45.f);
+	TestEqual(TEXT("no sweep without amplitude"), GetGuardLookOffset(5.f, 0.f, 12.f), 0.f);
+	TestEqual(TEXT("no sweep without a period"), GetGuardLookOffset(5.f, 45.f, 0.f), 0.f);
+
+	// Back to the post: leaves it beyond 2 m, walks until within the waypoint radius (hysteresis).
+	TestFalse(TEXT("1.5 m off: stays"), ShouldWalkBackToPost(150.f, false));
+	TestTrue(TEXT("3 m off: walks back"), ShouldWalkBackToPost(300.f, false));
+	TestTrue(TEXT("returning, 1.5 m off: keeps walking"), ShouldWalkBackToPost(150.f, true));
+	TestFalse(TEXT("returning, 0.5 m off: arrived"), ShouldWalkBackToPost(50.f, true));
+	return true;
+}

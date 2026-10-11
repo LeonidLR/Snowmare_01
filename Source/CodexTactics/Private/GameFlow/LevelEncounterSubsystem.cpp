@@ -49,6 +49,11 @@ void ULevelEncounterSubsystem::MarkLevelEnemy(AActor* Enemy)
 	{
 		LevelEnemies.Add(Enemy);
 		bLevelHasPlacedEnemies = true;
+		// As placed in the map: without a route it guards its post (user request 2026-10-11).
+		if (AEnemyCharacter* Placed = Cast<AEnemyCharacter>(Enemy); Placed && Placed->HasActorBegunPlay())
+		{
+			Placed->TryStartGuardPost();
+		}
 	}
 }
 

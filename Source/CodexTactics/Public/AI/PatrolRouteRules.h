@@ -124,4 +124,27 @@ namespace PatrolRouteRules
 
 	/** Index of the waypoint closest (planar) to Location; INDEX_NONE for an empty route. Back on the route after a search. */
 	CODEXTACTICS_API int32 FindNearestWaypoint(const TArray<FVector>& Waypoints, const FVector& Location);
+
+	// --- Guard post (user request 2026-10-11): placed enemies without a route guard their placement ---
+
+	/** Default look-around sweep to each side, degrees, and one full cycle, seconds. */
+	inline constexpr float GuardLookAroundDeg = 45.f;
+	inline constexpr float GuardLookPeriodSeconds = 12.f;
+	/** A guard further than this from its post (planar) walks back, cm; it is back within WaypointAcceptCm. */
+	inline constexpr float GuardLeaveCm = 200.f;
+
+	/**
+	 * Guards its post until it perceives the squad: placed in the map (not a wave / runtime spawn), no route of its own
+	 * (spline route or legacy marksman points), no escort leader (an escort mirrors its leader), and the guard option on.
+	 */
+	CODEXTACTICS_API bool ShouldGuardPost(bool bPlacedInMap, bool bHasRoute, bool bHasEscortLeader, bool bGuardEnabled);
+
+	/**
+	 * Look-around offset from the post facing at ClockSeconds: one Period = ahead (35 %), +Amplitude (15 %), ahead (20 %),
+	 * -Amplitude (15 %), ahead (15 %). 0 for a non-positive amplitude / period.
+	 */
+	CODEXTACTICS_API float GetGuardLookOffset(float ClockSeconds, float AmplitudeDeg, float PeriodSeconds);
+
+	/** Walks back to the post: beyond GuardLeaveCm, or while returning until within WaypointAcceptCm (hysteresis). */
+	CODEXTACTICS_API bool ShouldWalkBackToPost(float DistanceFromPostCm, bool bReturning);
 }
