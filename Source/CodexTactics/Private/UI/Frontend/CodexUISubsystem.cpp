@@ -7,6 +7,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "UI/Frontend/CodexConfirmDialog.h"
+#include "UI/Frontend/CodexControlsScreen.h"
 #include "UI/Frontend/CodexFrontendSettings.h"
 #include "UI/Frontend/CodexInfoScreens.h"
 #include "UI/Frontend/CodexMainMenuScreen.h"
@@ -103,6 +104,7 @@ TSubclassOf<UCodexActivatableScreen> UCodexUISubsystem::GetNativeScreenClass(FGa
 	if (ScreenTag == CodexUITags::Screen_Credits) return UCodexCreditsScreen::StaticClass();
 	if (ScreenTag == CodexUITags::Screen_Pause) return UCodexPauseMenuScreen::StaticClass();
 	if (ScreenTag == CodexUITags::Screen_Confirm) return UCodexConfirmDialog::StaticClass();
+	if (ScreenTag == CodexUITags::Screen_Controls) return UCodexControlsScreen::StaticClass();
 	return nullptr;
 }
 
@@ -241,6 +243,29 @@ bool UCodexUISubsystem::HandleBackOnTopScreen()
 		}
 	}
 	return false;
+}
+
+bool UCodexUISubsystem::ToggleControlsScreen()
+{
+	if (UCodexActivatableScreen* Open = FindScreen(CodexUITags::Screen_Controls))
+	{
+		Open->RequestBack();
+		return false;
+	}
+	if (GetScreenCount(CodexUITags::Layer_Modal) > 0 || bControlsPushPending)
+	{
+		return false; // a confirm dialog needs its answer first / the screen is still loading
+	}
+	bControlsPushPending = true;
+	TWeakObjectPtr<UCodexUISubsystem> WeakThis(this);
+	PushScreen(CodexUITags::Layer_GameMenu, CodexUITags::Screen_Controls, {}, [WeakThis](UCodexActivatableScreen*)
+	{
+		if (UCodexUISubsystem* Self = WeakThis.Get())
+		{
+			Self->bControlsPushPending = false;
+		}
+	});
+	return true;
 }
 
 bool UCodexUISubsystem::IsAnyMenuOpen() const

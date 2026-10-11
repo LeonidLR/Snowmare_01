@@ -74,30 +74,72 @@ namespace PlayerCommands
 
 	const FName QuickSave(TEXT("System.QuickSave"));
 	const FName QuickLoad(TEXT("System.QuickLoad"));
+	const FName ControlsScreen(TEXT("System.Controls"));
+	const FName PauseMenu(TEXT("System.PauseMenu"));
+
+	const TArray<const TCHAR*>& GetSections()
+	{
+		static const TArray<const TCHAR*> Sections = {
+			TEXT("Movement & camera"), TEXT("Squad"), TEXT("Stances"), TEXT("Combat"), TEXT("Tactical pause & turn-based"),
+			TEXT("Items & traps"), TEXT("Saving & menus"),
+		};
+		return Sections;
+	}
+
+	namespace
+	{
+		TMap<FName, FString>& KeyLabelOverrides()
+		{
+			static TMap<FName, FString> Overrides;
+			return Overrides;
+		}
+	}
+
+	void SetKeyLabelOverride(FName Id, const FString& KeyLabel)
+	{
+		if (KeyLabel.IsEmpty())
+		{
+			KeyLabelOverrides().Remove(Id);
+		}
+		else
+		{
+			KeyLabelOverrides().Add(Id, KeyLabel);
+		}
+	}
+
+	FString GetKeyLabel(FName Id)
+	{
+		if (const FString* Override = KeyLabelOverrides().Find(Id))
+		{
+			return *Override;
+		}
+		const FPlayerCommandInfo* Info = Find(Id);
+		return Info ? FString(Info->KeyLabel) : FString();
+	}
 
 	const TArray<FPlayerCommandInfo>& GetRegistry()
 	{
 		static const TArray<FPlayerCommandInfo> Registry = {
-			{ CameraPan, TEXT("W/A/S/D"), TEXT("Camera"), TEXT("Pan the camera (also the screen edge or MMB drag)") },
-			{ CameraRotate, TEXT("Q/E"), TEXT("Camera"), TEXT("Rotate the camera (also RMB drag)") },
-			{ CameraZoom, TEXT("Wheel"), TEXT("Camera"), TEXT("Zoom in / out") },
-			{ Move, TEXT("LMB"), TEXT("Orders"), TEXT("Move to the clicked spot") },
-			{ Sprint, TEXT("Double-click"), TEXT("Orders"), TEXT("Sprint to the clicked spot") },
-			{ WatchSector, TEXT("Shift+Click"), TEXT("Orders"), TEXT("Watch a sector") },
-			{ SelectMember, TEXT("1-4"), TEXT("Orders"), TEXT("Select an operative") },
-			{ SelectBox, TEXT("Drag"), TEXT("Orders"), TEXT("Box-select a group") },
-			{ Interact, TEXT("LMB"), TEXT("Orders"), TEXT("Walk up to an object") },
-			{ StanceStand, TEXT("Z"), TEXT("Orders"), TEXT("Stand up") },
-			{ StanceCrouch, TEXT("C"), TEXT("Orders"), TEXT("Crouch") },
-			{ StanceProne, TEXT("V"), TEXT("Orders"), TEXT("Go prone") },
-			{ SquadStanceStand, TEXT("Alt+Z"), TEXT("Orders"), TEXT("Whole squad: stand up") },
-			{ SquadStanceCrouch, TEXT("Alt+C"), TEXT("Orders"), TEXT("Whole squad: crouch") },
-			{ SquadStanceProne, TEXT("Alt+V"), TEXT("Orders"), TEXT("Whole squad: go prone") },
-			{ SoloOn, TEXT("B"), TEXT("Orders"), TEXT("Solo: the others hold their spots") },
-			{ Regroup, TEXT("B"), TEXT("Orders"), TEXT("Regroup into the formation") },
-			{ Guard, TEXT("T"), TEXT("Orders"), TEXT("Guard this spot / rejoin") },
-			{ Autonomy, TEXT("Ctrl+T"), TEXT("Orders"), TEXT("Commander Mode (autonomous squad)") },
-			{ HoldLine, TEXT("Shift+RMB"), TEXT("Orders"), TEXT("Hold this line at all costs") },
+			{ CameraPan, TEXT("W/A/S/D"), TEXT("Movement & camera"), TEXT("Pan the camera (also the screen edge or MMB drag)") },
+			{ CameraRotate, TEXT("Q/E"), TEXT("Movement & camera"), TEXT("Rotate the camera (also RMB drag)") },
+			{ CameraZoom, TEXT("Wheel"), TEXT("Movement & camera"), TEXT("Zoom in / out") },
+			{ Move, TEXT("LMB"), TEXT("Movement & camera"), TEXT("Move to the clicked spot") },
+			{ Sprint, TEXT("Double-click"), TEXT("Movement & camera"), TEXT("Sprint to the clicked spot") },
+			{ WatchSector, TEXT("Shift+Click"), TEXT("Movement & camera"), TEXT("Watch a sector") },
+			{ SelectMember, TEXT("1-4"), TEXT("Squad"), TEXT("Select an operative") },
+			{ SelectBox, TEXT("Drag"), TEXT("Squad"), TEXT("Box-select a group") },
+			{ Interact, TEXT("LMB"), TEXT("Movement & camera"), TEXT("Walk up to an object") },
+			{ StanceStand, TEXT("Z"), TEXT("Stances"), TEXT("Stand up") },
+			{ StanceCrouch, TEXT("C"), TEXT("Stances"), TEXT("Crouch") },
+			{ StanceProne, TEXT("V"), TEXT("Stances"), TEXT("Go prone") },
+			{ SquadStanceStand, TEXT("Alt+Z"), TEXT("Stances"), TEXT("Whole squad: stand up") },
+			{ SquadStanceCrouch, TEXT("Alt+C"), TEXT("Stances"), TEXT("Whole squad: crouch") },
+			{ SquadStanceProne, TEXT("Alt+V"), TEXT("Stances"), TEXT("Whole squad: go prone") },
+			{ SoloOn, TEXT("B"), TEXT("Squad"), TEXT("Solo: the others hold their spots") },
+			{ Regroup, TEXT("B"), TEXT("Squad"), TEXT("Regroup into the formation") },
+			{ Guard, TEXT("T"), TEXT("Squad"), TEXT("Guard this spot / rejoin") },
+			{ Autonomy, TEXT("Ctrl+T"), TEXT("Squad"), TEXT("Commander Mode (autonomous squad)") },
+			{ HoldLine, TEXT("Shift+RMB"), TEXT("Squad"), TEXT("Hold this line at all costs") },
 			{ PosturePassive, TEXT(","), TEXT("Combat"), TEXT("Fire posture: passive (Alt = squad)") },
 			{ PostureDefensive, TEXT("."), TEXT("Combat"), TEXT("Fire posture: defensive (Alt = squad)") },
 			{ PostureAggressive, TEXT("/"), TEXT("Combat"), TEXT("Fire posture: aggressive (Alt = squad)") },
@@ -106,23 +148,23 @@ namespace PlayerCommands
 			{ CoverCorner, TEXT("Click corner"), TEXT("Combat"), TEXT("Take a corner slot") },
 			{ CoverShimmy, TEXT("Click along wall"), TEXT("Combat"), TEXT("Shimmy along the wall") },
 			{ CoverFireMode, TEXT("N"), TEXT("Combat"), TEXT("Corner lean / blind fire") },
-			{ Relocate, TEXT("Click > Push"), TEXT("Survival"), TEXT("Push / relocate an object") },
-			{ LightBarrel, TEXT("Click > Light"), TEXT("Survival"), TEXT("Light a barrel with a match") },
-			{ UseObject, TEXT("Click > Use"), TEXT("Survival"), TEXT("Use an object") },
-			{ UseHeatPack, TEXT("U"), TEXT("Survival"), TEXT("Use a heat pack") },
-			{ UseItem, TEXT("H/J/K/L"), TEXT("Survival"), TEXT("Medkit / food") },
-			{ LootCrate, TEXT("Click crate"), TEXT("Survival"), TEXT("Open a supply crate") },
-			{ LootTake, TEXT("Take"), TEXT("Survival"), TEXT("Take supplies") },
-			{ DisarmMine, TEXT("Click > Defuse"), TEXT("Survival"), TEXT("Defuse a mine") },
-			{ DisarmTrap, TEXT("Click > Defuse"), TEXT("Survival"), TEXT("Defuse a trapped object") },
-			{ DisarmTripwire, TEXT("Click > Disarm"), TEXT("Survival"), TEXT("Disarm a tripwire") },
-			{ SetTrap, TEXT("Click > Set trap"), TEXT("Combat"), TEXT("Booby-trap an object with a grenade") },
-			{ DeployStart, TEXT("F"), TEXT("Combat"), TEXT("Set up from the supply") },
-			{ DeployMine, TEXT("F"), TEXT("Combat"), TEXT("Place a mine") },
-			{ DeployBarricade, TEXT("F"), TEXT("Combat"), TEXT("Place a barricade") },
-			{ DeployTurret, TEXT("F"), TEXT("Combat"), TEXT("Place a turret") },
-			{ DeployTripwire, TEXT("Inventory"), TEXT("Combat"), TEXT("Rig a tripwire") },
-			{ DeployOther, TEXT("Inventory"), TEXT("Survival"), TEXT("Set up a campfire / stove") },
+			{ Relocate, TEXT("Click > Push"), TEXT("Items & traps"), TEXT("Push / relocate an object") },
+			{ LightBarrel, TEXT("Click > Light"), TEXT("Items & traps"), TEXT("Light a barrel with a match") },
+			{ UseObject, TEXT("Click > Use"), TEXT("Items & traps"), TEXT("Use an object") },
+			{ UseHeatPack, TEXT("U"), TEXT("Items & traps"), TEXT("Use a heat pack") },
+			{ UseItem, TEXT("H/J/K/L"), TEXT("Items & traps"), TEXT("Medkit / food") },
+			{ LootCrate, TEXT("Click crate"), TEXT("Items & traps"), TEXT("Open a supply crate") },
+			{ LootTake, TEXT("Take"), TEXT("Items & traps"), TEXT("Take supplies") },
+			{ DisarmMine, TEXT("Click > Defuse"), TEXT("Items & traps"), TEXT("Defuse a mine") },
+			{ DisarmTrap, TEXT("Click > Defuse"), TEXT("Items & traps"), TEXT("Defuse a trapped object") },
+			{ DisarmTripwire, TEXT("Click > Disarm"), TEXT("Items & traps"), TEXT("Disarm a tripwire") },
+			{ SetTrap, TEXT("Click > Set trap"), TEXT("Items & traps"), TEXT("Booby-trap an object with a grenade") },
+			{ DeployStart, TEXT("F"), TEXT("Items & traps"), TEXT("Set up from the supply") },
+			{ DeployMine, TEXT("F"), TEXT("Items & traps"), TEXT("Place a mine") },
+			{ DeployBarricade, TEXT("F"), TEXT("Items & traps"), TEXT("Place a barricade") },
+			{ DeployTurret, TEXT("F"), TEXT("Items & traps"), TEXT("Place a turret") },
+			{ DeployTripwire, TEXT("Inventory"), TEXT("Items & traps"), TEXT("Rig a tripwire") },
+			{ DeployOther, TEXT("Inventory"), TEXT("Items & traps"), TEXT("Set up a campfire / stove") },
 			{ TargetedShot, TEXT("Ctrl+Click"), TEXT("Combat"), TEXT("Targeted shot") },
 			{ PriorityTarget, TEXT("Click enemy"), TEXT("Combat"), TEXT("Priority target") },
 			{ GrenadeAim, TEXT("G"), TEXT("Combat"), TEXT("Grenade") },
@@ -130,16 +172,18 @@ namespace PlayerCommands
 			{ FlareAim, TEXT("Shift+G"), TEXT("Combat"), TEXT("Signal flare") },
 			{ CycleWeapon, TEXT("X"), TEXT("Combat"), TEXT("Next weapon") },
 			{ Reload, TEXT("R"), TEXT("Combat"), TEXT("Reload") },
-			{ TacticalPause, TEXT("Space"), TEXT("Time"), TEXT("Tactical pause") },
-			{ PauseRelease, TEXT("Space"), TEXT("Time"), TEXT("Release the pause: orders run") },
-			{ TurnBasedEnter, TEXT("Hold Space"), TEXT("Time"), TEXT("Turn-based combat") },
-			{ TurnBasedExit, TEXT("Hold Space"), TEXT("Time"), TEXT("Back to real time") },
-			{ EndTurn, TEXT("Enter"), TEXT("Time"), TEXT("End the squad turn") },
-			{ NextUnit, TEXT("Tab"), TEXT("Time"), TEXT("Next operative") },
-			{ TurnBasedAttack, TEXT("Ctrl+Click"), TEXT("Time"), TEXT("Turn-based attack") },
-			{ TurnBasedOrder, TEXT("LMB"), TEXT("Time"), TEXT("Turn-based select / walk") },
-			{ QuickSave, TEXT("F5"), TEXT("System"), TEXT("Quick save") },
-			{ QuickLoad, TEXT("F9"), TEXT("System"), TEXT("Quick load") },
+			{ TacticalPause, TEXT("Space"), TEXT("Tactical pause & turn-based"), TEXT("Tactical pause") },
+			{ PauseRelease, TEXT("Space"), TEXT("Tactical pause & turn-based"), TEXT("Release the pause: orders run") },
+			{ TurnBasedEnter, TEXT("Hold Space"), TEXT("Tactical pause & turn-based"), TEXT("Turn-based combat") },
+			{ TurnBasedExit, TEXT("Hold Space"), TEXT("Tactical pause & turn-based"), TEXT("Back to real time") },
+			{ EndTurn, TEXT("Enter"), TEXT("Tactical pause & turn-based"), TEXT("End the squad turn") },
+			{ NextUnit, TEXT("Tab"), TEXT("Tactical pause & turn-based"), TEXT("Next operative") },
+			{ TurnBasedAttack, TEXT("Ctrl+Click"), TEXT("Tactical pause & turn-based"), TEXT("Turn-based attack") },
+			{ TurnBasedOrder, TEXT("LMB"), TEXT("Tactical pause & turn-based"), TEXT("Turn-based select / walk") },
+			{ QuickSave, TEXT("F5"), TEXT("Saving & menus"), TEXT("Quick save") },
+			{ QuickLoad, TEXT("F9"), TEXT("Saving & menus"), TEXT("Quick load") },
+			{ ControlsScreen, TEXT("F1"), TEXT("Saving & menus"), TEXT("This controls reference (F1 or Esc closes it)") },
+			{ PauseMenu, TEXT("Esc"), TEXT("Saving & menus"), TEXT("Pause menu: save, load, options, tutorial") },
 		};
 		return Registry;
 	}
@@ -175,9 +219,9 @@ namespace PlayerCommands
 		{
 			return FString();
 		}
-		if (const FPlayerCommandInfo* Info = Find(FName(*Trimmed)))
+		if (Find(FName(*Trimmed)))
 		{
-			return FString::Printf(TEXT("[%s]"), Info->KeyLabel);
+			return FString::Printf(TEXT("[%s]"), *GetKeyLabel(FName(*Trimmed)));
 		}
 		return FString::Printf(TEXT("[%s]"), *Trimmed);
 	}

@@ -10,8 +10,12 @@ class UTextBlock;
  * In-game PAUSE menu (Esc; GameMenu layer; the world is paused while it is open): RESUME / SAVE GAME (disabled with the
  * reason, e.g. "Saving is disabled during combat") / LOAD GAME / OPTIONS / QUIT TO MAIN MENU (confirm) / QUIT GAME
  * (confirm). Back = RESUME. The tactical pause (Space) is a separate game mechanic and is not touched.
+ * Also CONTROLS (opens the F1 Controls reference), TUTORIAL: ON / OFF (UTutorialSubsystem::SetTutorialEnabled, the player's
+ * setting) and RESET TUTORIAL (confirm; disabled when the level has no tutorial) after OPTIONS. A Widget Blueprint made
+ * before these entries existed gets them added at run time next to OptionsButton (EnsureExtraEntries).
  * Widget names (WBP_PauseMenu): ResumeButton, SaveButton, LoadButton, OptionsButton, QuitToMenuButton, QuitGameButton
- * (EntryId Resume / Save / Load / Options / QuitToMenu / QuitGame), DescriptionText, StatusText (latest save line), TitleText.
+ * (EntryId Resume / Save / Load / Options / QuitToMenu / QuitGame; optional ControlsButton, TutorialButton, ResetTutorialButton:
+ * EntryId Controls / Tutorial / ResetTutorial), DescriptionText, StatusText (latest save line), TitleText.
  * Godot reference (behaviour of the old menu it replaces): Scenes/ui/pause/pause_menu_dialog.gd, main.gd _open_pause_menu.
  */
 UCLASS(Blueprintable)
@@ -43,6 +47,7 @@ public:
 	virtual void BuildDefaultTree(UWidgetTree& Tree) const override;
 
 protected:
+	virtual void NativeOnInitialized() override;
 	virtual void BindScreenWidgets() override;
 	virtual void NativeOnActivated() override;
 	virtual void RefreshScreen() override;
@@ -51,4 +56,11 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|UI", meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> StatusText;
+
+private:
+	/** Adds the CONTROLS / TUTORIAL / RESET TUTORIAL entries after OPTIONS when the (older) tree lacks them. */
+	void EnsureExtraEntries();
+
+	/** TUTORIAL: ON / OFF label and the RESET TUTORIAL enabled state. */
+	void RefreshTutorialEntries();
 };

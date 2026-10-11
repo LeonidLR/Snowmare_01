@@ -56,6 +56,7 @@
 #include "HAL/PlatformTime.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+#include "UI/Frontend/CodexUISubsystem.h"
 
 namespace ControllerCommands
 {
@@ -285,6 +286,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Slash, IE_Pressed, this, &ACodexTacticsPlayerController::PostureAggressiveKey);
 	// Esc also closes the pause menu, so it runs while the world is paused.
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ACodexTacticsPlayerController::DialogueSkip).bExecuteWhenPaused = true;
+	// F1: the Controls reference opens / closes at any time (it pauses the world itself, so it runs while paused).
+	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &ACodexTacticsPlayerController::ControlsKey).bExecuteWhenPaused = true;
 
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!Input)
@@ -1144,6 +1147,14 @@ UTurnBasedCombatSubsystem* ACodexTacticsPlayerController::GetActiveTurnBased() c
 {
 	UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
 	return TurnBased && TurnBased->IsActive() ? TurnBased : nullptr;
+}
+
+void ACodexTacticsPlayerController::ControlsKey()
+{
+	if (UCodexUISubsystem* UI = UCodexUISubsystem::Get(this))
+	{
+		UI->ToggleControlsScreen();
+	}
 }
 
 void ACodexTacticsPlayerController::DialogueSkip()

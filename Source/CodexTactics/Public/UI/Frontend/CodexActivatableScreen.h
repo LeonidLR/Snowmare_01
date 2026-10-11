@@ -58,18 +58,32 @@ public:
 
 	virtual void BuildDefaultTree(UWidgetTree& Tree) const override {}
 
+	/**
+	 * A hotkey reached the screen while a menu widget owns the keyboard focus (the game's input component does not see
+	 * keys then). F1 toggles the Controls reference when bHandlesControlsHotkey is set. True = consumed.
+	 */
+	bool HandleHotkey(const FKey& Key);
+
 	/** Button class the placeholder tree uses for its entries (WBP_MenuButton in the WBP_* assets). */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|UI")
 	TSubclassOf<UCodexMenuButton> EntryButtonClass;
+
+	/** F1 opens / closes the Controls reference from this screen (in-game screens only: the pause menu, the Controls screen). */
+	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|UI")
+	bool bHandlesControlsHotkey = false;
 
 	/** Widget focused on activation (by name); empty = the first enabled menu button. */
 	UPROPERTY(EditDefaultsOnly, Category = "CodexTactics|UI")
 	FName DesiredFocusName;
 
 protected:
+	/** Hooks one entry button (hover / focus select it, click activates it); for buttons added after initialization. */
+	void HookEntryButton(UCodexMenuButton* Button);
+
 	virtual void NativeOnInitialized() override;
 	virtual void NativeOnActivated() override;
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
+	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	/** After the tree exists: find the named widgets (BindWidgetOptional does it for WBPs, this for the bare class). */
 	virtual void BindScreenWidgets() {}

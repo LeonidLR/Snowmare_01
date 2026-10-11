@@ -29,7 +29,7 @@
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugSmoke", "CoverHugMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
-    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke"
+    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "ControlsScreenSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
@@ -37,6 +37,7 @@
     "SaveRoundTripSmoke": { "exclusive": true },
     "TutorialSmoke": { "exclusive": true },
     "PauseMenuSmoke": { "exclusive": true },
+    "ControlsScreenSmoke": { "exclusive": true },
     "EventBusSmoke": { "exclusive": true },
     "CombatMoveSmoke": { "knownFail": true },
     "MainMenuSmoke": { "map": "/Game/Maps/L_MainMenu" },
@@ -50,8 +51,8 @@
       "name": "tutorial",
       "globs": ["Source/**/Tutorial/**", "Source/**/Core/PlayerCommands*", "Source/**/Core/DemoModeSubsystem*", "Source/**/UI/TutorialOverlay*",
         "Source/**/Debug/TutorialSmoke*", "Content/Data/Tutorial/**"],
-      "tests": ["CodexTactics.Tutorial"],
-      "smokes": ["TutorialSmoke", "SaveRoundTripSmoke"]
+      "tests": ["CodexTactics.Tutorial", "CodexTactics.UI.Frontend.Controls"],
+      "smokes": ["TutorialSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke"]
     },
     {
       "name": "sniper",
@@ -354,7 +355,7 @@
       "name": "frontend",
       "globs": ["Source/**/UI/Frontend/**", "Source/CodexTacticsTests/Private/UI/Frontend*", "Source/**/Debug/Frontend*", "Source/CodexTacticsEditor/Private/FrontendWidget*", "Content/UI/Frontend/**", "Content/Maps/L_MainMenu.umap", "Scripts/Editor/create_frontend_assets.py"],
       "tests": ["CodexTactics.UI.Frontend", "CodexTactics.Mission"],
-      "smokes": ["FrontendSmoke", "MainMenuSmoke", "PauseMenuSmoke", "DialogueSmoke"]
+      "smokes": ["FrontendSmoke", "MainMenuSmoke", "PauseMenuSmoke", "DialogueSmoke", "ControlsScreenSmoke"]
     }
   ]
 }

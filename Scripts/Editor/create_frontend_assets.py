@@ -9,7 +9,7 @@
       BP_FrontendButtonStyle            CommonButtonStyle (plain colour brushes) + text styles BP_FrontendText_*
   /Game/UI/Frontend/
       WBP_MenuButton, WBP_SaveSlotEntry, WBP_PrimaryLayout, WBP_TitleScreen, WBP_MainMenu, WBP_SaveSlots, WBP_Options,
-      WBP_Credits, WBP_PauseMenu, WBP_ConfirmDialog   (Widget Blueprints of the C++ classes, placeholder trees written by
+      WBP_Credits, WBP_PauseMenu, WBP_ConfirmDialog, WBP_Controls   (Widget Blueprints of the C++ classes, placeholder trees written by
       UFrontendWidgetGenerator; existing trees are kept, CODEX_FRONTEND_REBUILD=1 rewrites them)
   /Game/Maps/L_MainMenu                 menu map: floor, sun / sky, the operative idling (ACodexMenuCharacterActor) and
                                         one ACodexMenuCameraAnchor per menu entry; World Settings game mode =
@@ -189,7 +189,7 @@ widget("WBP_PrimaryLayout", unreal.CodexPrimaryLayout)
 for name, parent in (("WBP_TitleScreen", unreal.CodexTitleScreen), ("WBP_MainMenu", unreal.CodexMainMenuScreen),
                      ("WBP_SaveSlots", unreal.CodexSaveSlotsScreen), ("WBP_Options", unreal.CodexOptionsScreen),
                      ("WBP_Credits", unreal.CodexCreditsScreen), ("WBP_PauseMenu", unreal.CodexPauseMenuScreen),
-                     ("WBP_ConfirmDialog", unreal.CodexConfirmDialog)):
+                     ("WBP_ConfirmDialog", unreal.CodexConfirmDialog), ("WBP_Controls", unreal.CodexControlsScreen)):
     widget(name, parent, button_class, slot_class)
 
 # ------------------------------------------------------------------------------------------------------------ menu map
