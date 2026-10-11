@@ -442,10 +442,11 @@ private:
 	float GetHealth(const AActor* Actor) const;
 	void ApplyDamage(AActor* Victim, float Amount, const FString& Source);
 	/**
-	 * Godot occ.take_damage(final_dmg, KINETIC, 0.0, source) on an enemy: the enemy's own armor / affinity cut applies on
-	 * top of the grid damage, with the floating number (squad shots, the turret).
+	 * Godot occ.take_damage(amount, KINETIC, pen, source) on an enemy, with the floating number. ArmorPenetration 0 = the
+	 * enemy's own % armour applies (the turret, blasts); a squad shot passes TurnBasedRules::SquadShotArmorPenetration
+	 * because its grid damage already subtracted the grid armour (each armour once, audit 2026-10-11). Affinity applies.
 	 */
-	void ApplyEnemyHit(AActor* Enemy, float Amount, const FString& Source);
+	void ApplyEnemyHit(AActor* Enemy, float Amount, const FString& Source, float ArmorPenetration = 0.f);
 	/** Barrel / mine blast on a grid unit (Godot detonation damage rules, see the .cpp). */
 	void ApplyBlast(AActor* Victim, bool bSquad, float Amount, const FString& Source);
 	bool IsDead(const AActor* Actor) const;

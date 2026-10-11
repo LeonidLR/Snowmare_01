@@ -169,9 +169,10 @@
     },
     {
       "name": "health-damage",
-      "globs": ["Source/**/Combat/HealthComponent*", "Source/**/Combat/EnemyGhost*", "Source/**/UI/FloatingText*", "Source/**/UI/OverheadLabel*"],
-      "tests": ["CodexTactics.Combat.Health"],
-      "smokes": ["FloatingTextSmoke", "EnemyDeathSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke", "KnockdownSmoke"]
+      "globs": ["Source/**/Combat/HealthComponent*", "Source/**/Combat/EnemyGhost*", "Source/**/UI/FloatingText*", "Source/**/UI/OverheadLabel*",
+        "Source/**/Characters/OperativeHitRules*"],
+      "tests": ["CodexTactics.Combat.Health", "CodexTactics.Tactics.TurnBased.DamageOnce"],
+      "smokes": ["FloatingTextSmoke", "EnemyDeathSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke", "KnockdownSmoke", "TurnBlastDeathSmoke", "CoverSmoke"]
     },
     {
       "name": "knockdown",
