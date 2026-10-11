@@ -1147,6 +1147,7 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 	if (Line.bHasLos && Distance <= AttackRange && AttackTimer <= 0.f)
 	{
 		AttackTimer = AttackCooldown;
+		NotifySquadAttacked(Target);
 		if (UTacticalSightSubsystem* FireSight = World->GetSubsystem<UTacticalSightSubsystem>())
 		{
 			FireSight->NotifyFired(this); // the acid spit gives it away (Sprint 08-E)
@@ -1985,6 +1986,7 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 		Sight->NotifyFired(this); // a blow gives it away (Sprint 08-E)
 	}
 
+	NotifySquadAttacked(Target); // before the blow: a Defensive operative hit by it is already in the fight
 	AttackTimer = AttackCooldown;
 	StartAttackAnimation(Target);
 	OnAttackStarted(Target);
@@ -2021,6 +2023,14 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	else if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 	{
 		TargetHealth->ApplyDamage(Spec, this);
+	}
+}
+
+void AEnemyCharacter::NotifySquadAttacked(AActor* Target)
+{
+	if (Target && Target->IsA<AOperativeCharacter>() && !bIsDying)
+	{
+		ULevelEncounterSubsystem::NotifyHostileContactIn(GetWorld(), EAmbushTrigger::EnemyAttack, this);
 	}
 }
 
@@ -2125,6 +2135,7 @@ bool AEnemyCharacter::StartJumpAttack(AActor* Target)
 	{
 		return false;
 	}
+	NotifySquadAttacked(Target);
 	JumpTarget = Target;
 	JumpPhase = ECutterJumpPhase::Windup;
 	JumpPhaseTimer = 0.f;

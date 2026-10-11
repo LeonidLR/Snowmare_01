@@ -168,6 +168,13 @@ public:
 	/** Seconds until the next pounce. */
 	float GetJumpCooldown() const { return JumpCooldownTimer; }
 
+	/**
+	 * It attacks Target (blow, pounce, spit, marksman shot). An operative attacked by an enemy placed in the map while
+	 * the squad still explores starts the fight right away (ULevelEncounterSubsystem, EAmbushTrigger::EnemyAttack; user
+	 * bug 2026-10-11), so the squad fights back per its fire posture. Call before the hit lands.
+	 */
+	void NotifySquadAttacked(AActor* Target);
+
 	/** Blueprint hooks for animations / effects (the enemy's AnimBP can also read UEnemyAnimInstance). */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Enemy")
 	void OnAttackStarted(AActor* Target);

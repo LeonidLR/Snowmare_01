@@ -618,6 +618,7 @@ void AMarksmanEnemyCharacter::UpdateBeam(const FMarksmanLine& Line)
 void AMarksmanEnemyCharacter::Fire(AOperativeCharacter* Target, const FMarksmanLine& Line, float Distance)
 {
 	++ShotsFired;
+	NotifySquadAttacked(Target); // a shot from a placed marksman starts the fight (user bug 2026-10-11)
 	if (UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
 	{
 		Sight->NotifyFired(this); // the muzzle flash gives him away for 2 s (Sprint 08-E)

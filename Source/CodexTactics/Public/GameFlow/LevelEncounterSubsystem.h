@@ -18,7 +18,9 @@ enum class EAmbushTrigger : uint8
 	/** A patrol detected the squad (sight / hearing / smell) or was alerted by its partner. */
 	PatrolDetection,
 	/** An Aggressive operative opened fire on an enemy it saw (fire posture, user request 2026-10-06). */
-	SquadAutoFire
+	SquadAutoFire,
+	/** An enemy attacked the squad: blow, pounce, spit or marksman shot (user bug 2026-10-11). */
+	EnemyAttack
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAmbushCombatStarted, EAmbushTrigger, Trigger);
@@ -26,7 +28,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAmbushCombatStarted, EAmbushTrigg
 /**
  * Per-level encounter settings (user request 2026-10-06, UE-only).
  * Combat start: on an ambush level (level JSON "combat_start": "ambush", or "auto" — the default — on a map that holds
- * patrols: an APatrolRouteActor or an enemy with a route / escort leader at load) the player never presses «Начать бой»
+ * patrols: an APatrolRouteActor or an enemy with a route / escort leader at load, or any enemy placed in the map - user
+ * bug 2026-10-11) the player never presses «Начать бой»
  * (the main menu hides it): the real-time fight (WaveCombat / RealTime of wave 1, no cutscene, no preparation; the
  * level's placed enemies are the wave) starts once — when the squad attacks / hurts an enemy or an enemy on patrol
  * detects the squad. Wave maps without patrols keep the classic flow. Overrides: -CombatStart=auto|ambush|button on the
@@ -49,12 +52,23 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Encounter")
 	bool IsAmbushCombatStart() const;
 
-	/** The map held patrols when it loaded (Auto resolves to ambush). */
+	/** The map held patrols when it loaded (Auto resolves to ambush; so does any placed enemy, LevelHasPlacedEnemies). */
 	bool LevelHasPatrols() const { return bLevelHasPatrols; }
 
+	/** Enemy was placed in the map (present when the world began play), not spawned by a wave / at runtime. */
+	bool IsLevelEnemy(const AActor* Enemy) const;
+	/** How many enemies were placed in the map (alive or not). */
+	int32 GetNumLevelEnemies() const { return LevelEnemies.Num(); }
+	/** The map held enemies when it loaded (Auto resolves to ambush). */
+	bool LevelHasPlacedEnemies() const { return bLevelHasPlacedEnemies; }
+	/** Smokes: treats a runtime-spawned enemy as placed in the map. */
+	void MarkLevelEnemy(AActor* Enemy);
+
 	/**
-	 * A hostile contact happened (see EAmbushTrigger): on an ambush level still in exploration the fight starts now
-	 * (once). True when this call started it.
+	 * A hostile contact happened (see EAmbushTrigger; Source = the enemy involved): on an ambush level still in
+	 * exploration the fight starts now (once). On any other level too when Source is an enemy placed in the map (it
+	 * attacked / spotted the squad or was hit): the level's own enemies never fight a squad left in exploration
+	 * (LevelEncounterRules::ShouldStartFightOnContact). True when this call started it.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Encounter")
 	bool NotifyHostileContact(EAmbushTrigger Trigger, AActor* Source);
@@ -84,6 +98,9 @@ private:
 	const FLevelCombatConfig* GetLevelConfig() const;
 
 	bool bLevelHasPatrols = false;
+	bool bLevelHasPlacedEnemies = false;
+	/** Enemies placed in the map (recorded at OnWorldBeginPlay; MarkLevelEnemy for smokes). */
+	TArray<TWeakObjectPtr<AActor>> LevelEnemies;
 	bool bHasOverride = false;
 	ECombatStartMode ModeOverride = ECombatStartMode::Auto;
 	float SearchSecondsOverride = -1.f;

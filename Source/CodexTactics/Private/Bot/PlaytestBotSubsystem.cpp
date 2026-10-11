@@ -1604,6 +1604,7 @@ void UPlaytestBotSubsystem::OnStealthCombatStarted()
 		case EAmbushTrigger::PatrolDetection: StealthOutcome = TEXT("detected"); break;
 		case EAmbushTrigger::SquadAutoFire: StealthOutcome = TEXT("auto_fire"); break;
 		case EAmbushTrigger::EnemyDamaged: StealthOutcome = TEXT("damage"); break;
+		case EAmbushTrigger::EnemyAttack: StealthOutcome = TEXT("attacked"); break;
 		default: StealthOutcome = TEXT("attack_order"); break;
 		}
 		if (FirstDetectionTime < 0.0 && Trigger == EAmbushTrigger::PatrolDetection)

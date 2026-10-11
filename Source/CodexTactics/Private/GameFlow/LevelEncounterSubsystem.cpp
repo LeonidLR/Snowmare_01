@@ -21,18 +21,35 @@ void ULevelEncounterSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Super::OnWorldBeginPlay(InWorld);
 	// Level-placed patrols (their properties are loaded before BeginPlay; runtime spawns do not count).
 	bLevelHasPatrols = TActorIterator<APatrolRouteActor>(&InWorld) ? true : false;
-	for (TActorIterator<AEnemyCharacter> It(&InWorld); It && !bLevelHasPatrols; ++It)
+	LevelEnemies.Reset();
+	for (TActorIterator<AEnemyCharacter> It(&InWorld); It; ++It)
 	{
-		bLevelHasPatrols = It->AssignedPatrolRoute != nullptr || It->GetEscortLeader() != nullptr;
+		LevelEnemies.Add(*It);
+		bLevelHasPatrols |= It->AssignedPatrolRoute != nullptr || It->GetEscortLeader() != nullptr;
 	}
+	bLevelHasPlacedEnemies = !LevelEnemies.IsEmpty();
 	FString CommandLineMode;
 	ECombatStartMode Parsed = ECombatStartMode::Auto;
 	if (FParse::Value(FCommandLine::Get(), TEXT("CombatStart="), CommandLineMode) && LevelEncounterRules::ParseCombatStart(CommandLineMode, Parsed))
 	{
 		SetCombatStartOverride(Parsed);
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[Encounter] patrols on the map: %s, combat start %s"), bLevelHasPatrols ? TEXT("yes") : TEXT("no"),
-		*LevelEncounterRules::CombatStartName(GetCombatStartMode()));
+	UE_LOG(LogCodexTactics, Display, TEXT("[Encounter] patrols on the map: %s, placed enemies %d, combat start %s"), bLevelHasPatrols ? TEXT("yes") : TEXT("no"),
+		LevelEnemies.Num(), *LevelEncounterRules::CombatStartName(GetCombatStartMode()));
+}
+
+bool ULevelEncounterSubsystem::IsLevelEnemy(const AActor* Enemy) const
+{
+	return Enemy && LevelEnemies.ContainsByPredicate([Enemy](const TWeakObjectPtr<AActor>& Entry) { return Entry.Get() == Enemy; });
+}
+
+void ULevelEncounterSubsystem::MarkLevelEnemy(AActor* Enemy)
+{
+	if (Enemy && !IsLevelEnemy(Enemy))
+	{
+		LevelEnemies.Add(Enemy);
+		bLevelHasPlacedEnemies = true;
+	}
 }
 
 const FLevelCombatConfig* ULevelEncounterSubsystem::GetLevelConfig() const
@@ -55,14 +72,15 @@ ECombatStartMode ULevelEncounterSubsystem::GetCombatStartMode() const
 
 bool ULevelEncounterSubsystem::IsAmbushCombatStart() const
 {
-	return LevelEncounterRules::IsAmbushStart(GetCombatStartMode(), bLevelHasPatrols);
+	return LevelEncounterRules::IsAmbushStart(GetCombatStartMode(), bLevelHasPatrols, bLevelHasPlacedEnemies);
 }
 
 bool ULevelEncounterSubsystem::NotifyHostileContact(EAmbushTrigger Trigger, AActor* Source)
 {
 	UWorld* World = GetWorld();
 	UGameFlowSubsystem* Flow = World ? World->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	if (!Flow || !LevelEncounterRules::ShouldStartAmbush(IsAmbushCombatStart(), Flow->GetPhase(), Flow->IsCombatUnlocked()))
+	if (!Flow || !LevelEncounterRules::ShouldStartFightOnContact(IsAmbushCombatStart(), IsLevelEnemy(Source), Flow->GetPhase(),
+		Flow->IsCombatUnlocked()))
 	{
 		return false;
 	}
@@ -77,6 +95,8 @@ bool ULevelEncounterSubsystem::NotifyHostileContact(EAmbushTrigger Trigger, AAct
 	{
 		Messages->PostMessage(LOCTEXT("Commander", "Commander"), Trigger == EAmbushTrigger::PatrolDetection
 			? LOCTEXT("Detected", "⚠️ We've been spotted! Engage!")
+			: Trigger == EAmbushTrigger::EnemyAttack
+			? LOCTEXT("Attacked", "⚠️ We're under attack! Return fire!")
 			: LOCTEXT("Opened", "⚔️ Open fire! Combat has begun!"));
 	}
 	OnAmbushCombatStarted.Broadcast(Trigger);
@@ -136,8 +156,9 @@ namespace LevelEncounterConsole
 				Encounter->SetCombatStartOverride(Mode);
 			}
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("[Encounter] combat start %s (patrols on the map: %s) -> %s"),
+		UE_LOG(LogCodexTactics, Display, TEXT("[Encounter] combat start %s (patrols on the map: %s, placed enemies %d) -> %s"),
 			*LevelEncounterRules::CombatStartName(Encounter->GetCombatStartMode()), Encounter->LevelHasPatrols() ? TEXT("yes") : TEXT("no"),
+			Encounter->GetNumLevelEnemies(),
 			Encounter->IsAmbushCombatStart() ? TEXT("ambush") : TEXT("button"));
 	}
 
