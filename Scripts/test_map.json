@@ -29,7 +29,7 @@
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
-    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke"
+    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
@@ -40,7 +40,8 @@
     "CombatMoveSmoke": { "knownFail": true },
     "MainMenuSmoke": { "map": "/Game/Maps/L_MainMenu" },
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" },
-    "PatrolAmbushSmoke": { "map": "/Game/Maps/L_PatrolTest" }
+    "PatrolAmbushSmoke": { "map": "/Game/Maps/L_PatrolTest" },
+    "VisionConeSmoke": { "map": "/Game/Maps/L_PatrolTest" }
   },
   "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "EncounterProbe"],
   "rules": [
@@ -231,6 +232,12 @@
       "globs": ["Source/**/AI/**"],
       "tests": ["CodexTactics.AI"],
       "smokes": ["PatrolSmoke", "AmbushSmoke", "EnemyHuntSmoke", "PatrolAmbushSmoke"]
+    },
+    {
+      "name": "vision-cone",
+      "globs": ["Source/**/Combat/VisionCone*", "Source/**/Debug/VisionConeSmoke*"],
+      "tests": ["CodexTactics.Combat.VisionCone", "CodexTactics.AI.Perception"],
+      "smokes": ["VisionConeSmoke"]
     },
     {
       "name": "cold-survival",

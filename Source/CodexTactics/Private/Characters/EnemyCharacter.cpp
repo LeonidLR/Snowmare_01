@@ -38,6 +38,8 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/EnemyGhostActor.h"
+#include "Combat/VisionConeComponent.h"
+#include "Combat/VisionConeRules.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -71,6 +73,9 @@ AEnemyCharacter::AEnemyCharacter()
 	{
 		BodyMesh->SetStaticMesh(CylinderMesh.Object);
 	}
+
+	VisionCone = CreateDefaultSubobject<UVisionConeComponent>(TEXT("VisionCone"));
+	VisionCone->SetupAttachment(GetCapsuleComponent());
 
 	Tags.Add(FName(TEXT("Enemy")));
 }
@@ -428,6 +433,7 @@ void AEnemyCharacter::Tick(float DeltaTime)
 	SecondsSinceHoundPounce += DeltaTime;
 	TickBehavior(DeltaTime);
 	UpdateMovementFacing(DeltaTime);
+	UpdateVisionCone(DeltaTime);
 }
 
 void AEnemyCharacter::FaceYaw(float Yaw, float DeltaTime, float InterpSpeed)
@@ -1638,6 +1644,35 @@ void AEnemyCharacter::TickGuardPost(float DeltaTime)
 	// Faces its placement rotation and looks around now and then (its sight cone sweeps with it).
 	GuardClock += DeltaTime;
 	FaceYaw(GuardPostYaw + PatrolRouteRules::GetGuardLookOffset(GuardClock, GuardLookAroundDeg, GuardLookPeriodSeconds), DeltaTime, 2.f);
+}
+
+float AEnemyCharacter::GetVisionConeRange() const
+{
+	return PerceptionRules::EffectiveSightRange(GetPatrolPerception(), EOperativeStance::Standing);
+}
+
+float AEnemyCharacter::GetVisionConeHalfAngle() const
+{
+	return GetPatrolPerception().SightHalfAngleDeg;
+}
+
+void AEnemyCharacter::UpdateVisionCone(float DeltaTime)
+{
+	if (!VisionCone)
+	{
+		return;
+	}
+	const bool bAlive = !bIsDying && HealthComponent && HealthComponent->IsAlive();
+	const bool bOnPatrol = IsOnPatrol();
+	const bool bVisible = VisionConeRules::ResolveVisible(UVisionConeComponent::GetGlobalMode(), bShowVisionCone, bAlive)
+		&& (bOnPatrol || bShowVisionConeWhenEngaged);
+	if (!bVisible && !VisionCone->IsConeShown())
+	{
+		return;
+	}
+	const EVisionConeState State = VisionConeRules::GetEnemyState(bOnPatrol, bSearching, PatrolSuspicion);
+	VisionCone->UpdateCone(bVisible, GetVisionConeRange(), GetVisionConeHalfAngle(),
+		VisionConeRules::GetStateColor(State, bSearching ? 1.f : PatrolSuspicion), DeltaTime);
 }
 
 void AEnemyCharacter::StartPatrolSearch(const FVector& Location)

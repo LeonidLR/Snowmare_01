@@ -13,7 +13,7 @@
 
 | Module | Host type | Public deps | Private deps | Notes |
 |---|---|---|---|---|
-| CodexTactics | Runtime | Core, CoreUObject, Engine, InputCore, EnhancedInput, GameplayTags, AIModule, GameplayTasks, NavigationSystem, Niagara, UMG, Slate, SlateCore, CommonUI, CommonInput, DeveloperSettings | Json | All gameplay code; `Public/` + `Private/` grouped by system (Core, Combat, Survival, Characters, Data, Subsystems, Camera, Tactics, Interactables, Quests, UI (+ UI/Frontend: CommonUI frontend), Debug) |
+| CodexTactics | Runtime | Core, CoreUObject, Engine, InputCore, EnhancedInput, GameplayTags, AIModule, GameplayTasks, NavigationSystem, Niagara, UMG, Slate, SlateCore, CommonUI, CommonInput, DeveloperSettings, ProceduralMeshComponent | Json | All gameplay code; `Public/` + `Private/` grouped by system (Core, Combat, Survival, Characters, Data, Subsystems, Camera, Tactics, Interactables, Quests, UI (+ UI/Frontend: CommonUI frontend), Debug) |
 | CodexTacticsTests | DeveloperTool | — | Core, CoreUObject, Engine, Json, UMG, CommonUI, GameplayTags, CodexTactics | Automation tests `CodexTactics.<System>.<Feature>.<Case>` |
 | CodexTacticsEditor | Editor (PostEngineInit) | — | Core, CoreUObject, Engine, UnrealEd, BlueprintGraph, Kismet, AssetRegistry, ToolsetRegistry, AnimGraph, AnimGraphRuntime, UMG, UMGEditor, CommonUI, CodexTactics | `UBlueprintGraphToolset` — Blueprint / AnimBP graph tools served over the Unreal MCP plugin; `UOperativeAnimGraphLibrary`; `UFrontendWidgetGenerator` (placeholder frontend WBP trees) |
 
@@ -24,7 +24,7 @@
 | Niagara | stable | VFX (baseline; user polishes) |
 | ModularGameplay | stable | enabled for later use |
 | StateTree, GameplayStateTree | stable | enabled; enemy AI is plain C++ (Godot parity) |
-| ProceduralMeshComponent | stable | enabled |
+| ProceduralMeshComponent | stable | ground vision cones (`Combat/VisionConeComponent`, module dependency since 2026-10-11) |
 | CommonUI (+ CommonInput) | stable | frontend / pause menu framework (2026-10-08): activatable screens on layer stacks, `CommonGameViewportClient`, input data `/Game/UI/Frontend/Input`; `bEnableDefaultInputConfig=False` |
 | PythonScriptPlugin, EditorScriptingUtilities | stable (editor) | asset / import scripts in `Scripts/Editor/*.py` |
 | ModelingToolsEditorMode | stable (editor) | editor tooling |

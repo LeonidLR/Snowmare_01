@@ -15,6 +15,7 @@ class UHealthComponent;
 struct FOverheadLabel;
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
+class UVisionConeComponent;
 
 /** A loud squad action enemies can hear (PerceptionRules gunshot / grenade radius). */
 enum class ESquadNoise : uint8
@@ -363,12 +364,36 @@ public:
 	 */
 	bool TryStartGuardPost();
 
+	// --- Vision cone (user request 2026-10-11; Godot had cones on the operatives only) ---
+
+	/** Ground cone of its sight (range / field of view from GetPerception; colour idle / suspicious / alert). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Vision Cone")
+	TObjectPtr<UVisionConeComponent> VisionCone;
+
+	/**
+	 * Draw this enemy's vision cone. Set it on a BP_Enemy_*'s Class Defaults or on one enemy placed in a level; console
+	 * Codex.Debug.VisionCones 0 / 1 overrides every actor.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone")
+	bool bShowVisionCone = false;
+
+	/** Keep the (red) cone once it hunts / fights the squad; off: only while on patrol / guard / search. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone")
+	bool bShowVisionConeWhenEngaged = true;
+
+	/** Sight range the cone shows: a standing operative's detection range (x the search multiplier while searching), cm. */
+	float GetVisionConeRange() const;
+	float GetVisionConeHalfAngle() const;
+
 protected:
 	/** Legacy marksman PatrolRoute points (a route of their own: no guard post). */
 	virtual bool HasLegacyPatrolRoute() const { return false; }
 
 	/** Guard driver: back to the post when away, else face the placement yaw with the look-around sweep. */
 	void TickGuardPost(float DeltaTime);
+
+	/** Shape / colour / visibility of the vision cone (every tick). */
+	void UpdateVisionCone(float DeltaTime);
 
 	bool bGuardingPost = false;
 	bool bGuardReturning = false;

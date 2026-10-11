@@ -49,6 +49,8 @@ namespace
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/SightRules.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "Combat/VisionConeComponent.h"
+#include "Combat/VisionConeRules.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -162,6 +164,9 @@ AOperativeCharacter::AOperativeCharacter()
 	KnockdownComponent = CreateDefaultSubobject<UKnockdownComponent>(TEXT("KnockdownComponent")); // AM_* montages on FullBody
 	HealthComponent->MaxHealth = 100.0f;
 	HealthComponent->BaseArmorReduction = 0.10f;
+
+	VisionCone = CreateDefaultSubobject<UVisionConeComponent>(TEXT("VisionCone"));
+	VisionCone->SetupAttachment(GetCapsuleComponent());
 }
 
 void AOperativeCharacter::OnConstruction(const FTransform& Transform)
@@ -1024,6 +1029,81 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	UpdateCoverEntryBlend(DeltaTime);
 	UpdateSilhouette(DeltaTime);
 	UpdateSelectionRing();
+	UpdateVisionCone(DeltaTime);
+}
+
+float AOperativeCharacter::GetVisionConeRange() const
+{
+	if (!bVisionConeRangeFromWeapon || !CurrentWeapon)
+	{
+		return VisionConeRangeCm;
+	}
+	// What FindBestCombatTarget can reach on flat ground (Godot: the cone range was the M16 range, 14 m).
+	return CurrentWeapon->AttackRangeCm * SquadFireRules::GetPostureRangeMultiplier(Stance);
+}
+
+bool AOperativeCharacter::IsEnemySpottedInCone() const
+{
+	if (GetCurrentCombatTarget() || GetManualPriorityTarget())
+	{
+		return true;
+	}
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	const float Range = GetVisionConeRange();
+	const FVector Origin = GetActorLocation();
+	const FVector Forward = GetActorForwardVector();
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(VisionConeSpot), false, this);
+	if (const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Params.AddIgnoredActor(Member);
+		}
+	}
+	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	{
+		const AEnemyCharacter* Enemy = *It;
+		if (Enemy->IsDying() || !Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive()
+			|| !VisionConeRules::IsInsideCone(Origin, Forward, Enemy->GetActorLocation(), Range, VisionConeHalfAngleDeg))
+		{
+			continue;
+		}
+		// Godot: a ray from the eyes to the enemy's body; a barricade still counts as seen unless prone.
+		FHitResult Hit;
+		const FVector Eye = UTacticalSightSubsystem::EyePoint(*this);
+		const FVector Body = Enemy->GetActorLocation() + FVector(0.f, 0.f, 60.f);
+		if (!World->LineTraceSingleByChannel(Hit, Eye, Body, ECC_Visibility, Params) || Hit.GetActor() == Enemy
+			|| Cast<APawn>(Hit.GetActor()) || (Hit.GetActor() && Hit.GetActor()->IsA<ABarricadeActor>() && Stance != EOperativeStance::Prone))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
+{
+	if (!VisionCone)
+	{
+		return;
+	}
+	const bool bAlive = HealthComponent && HealthComponent->IsAlive();
+	const bool bVisible = VisionConeRules::ResolveVisible(UVisionConeComponent::GetGlobalMode(), bShowVisionCone, bAlive);
+	if (bVisible)
+	{
+		VisionConeCheckTimer -= DeltaTime;
+		if (VisionConeCheckTimer <= 0.f)
+		{
+			VisionConeCheckTimer = 0.2f;
+			bVisionConeSpotted = IsEnemySpottedInCone();
+		}
+	}
+	const FLinearColor Color = VisionConeRules::GetStateColor(bVisionConeSpotted ? EVisionConeState::Spotted : EVisionConeState::Clear);
+	VisionCone->UpdateCone(bVisible, GetVisionConeRange(), VisionConeHalfAngleDeg, Color, DeltaTime);
 }
 
 float AOperativeCharacter::GetVaultSpeed() const

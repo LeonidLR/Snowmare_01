@@ -23,7 +23,8 @@ public class CodexTactics : ModuleRules
 			"SlateCore",
 			"CommonUI",
 			"CommonInput",
-			"DeveloperSettings"
+			"DeveloperSettings",
+			"ProceduralMeshComponent"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "Json" });
