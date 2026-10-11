@@ -1021,6 +1021,14 @@ public:
 	bool bCornerHoldAtEdge = true;
 
 	/**
+	 * The corner hold only in a fight or with a fresh known threat (user bug 2026-10-11): exploring with no enemy known he
+	 * hugs the wall at its edge (look-around corner pose) instead of stepping out past it and aiming round it. Off = the
+	 * 2026-10-07 behaviour (the hold at every exposed edge, also with nobody around).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	bool bCornerHoldOnlyWhenEngaged = true;
+
+	/**
 	 * The older automatic breaks of the corner aim (CoverDecisionRules::DecideCornerAim: duck for safety, return with no
 	 * target in sight). Off by user decision 2026-10-07: only the reload sends him behind the corner.
 	 */
@@ -1054,6 +1062,12 @@ public:
 
 	/** At an exposed edge of a high wall, facing it, not shimmying: the corner hold spot. */
 	bool IsCornerHoldSpot() const;
+
+	/**
+	 * He steps out into the corner hold now: at the hold spot and (bCornerHoldOnlyWhenEngaged) in a fight - wave combat or
+	 * a turn-based fight - or with a fresh known threat (CoverFacingRules::WantsCornerHold). Else he hugs the wall.
+	 */
+	bool WantsCornerHold() const;
 
 	/** Where the current pose's aim starts (corner hold: the lean-out muzzle; else the muzzle height over the actor). */
 	FVector GetStanceAimOrigin() const;
@@ -1554,6 +1568,9 @@ private:
 	bool bBodyYawFree = false;
 	/** Entered with a big turn: the old yaw is held on the mesh until the enter clip plays (one anim update). */
 	bool bCoverEntryAwaitClip = false;
+	/** The awaited enter clip has been seen playing (CoverFacingRules::EntryHeldYawFraction); seconds since the entry. */
+	bool bCoverEntryClipSeen = false;
+	float CoverEntryAwaitSeconds = 0.f;
 	/** Enters the pending cover early when running in (the enter clip overlaps the last steps). */
 	void TryEnterCoverFromRun();
 	/** Moves the mesh so the body stays continuous while the enter clip blends in (V = (1 - w) C + glide). */

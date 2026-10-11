@@ -35,6 +35,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "TimerManager.h"
 
@@ -149,7 +150,12 @@ namespace CoverReverseSmoke
 			{
 				continue; // IK targets / virtual bones are not skin
 			}
-			const float Depth = static_cast<float>(FVector::DotProduct(Mesh->GetBoneLocation(Bone) - State.Slot.WallPoint, Normal));
+			const FVector BoneLocation = Mesh->GetBoneLocation(Bone);
+			if (!CoverFacingRules::IsWithinWallSpan(Op.GetCoverSlot(), BoneLocation))
+			{
+				continue; // past an exposed edge (the corner fire stance): no wall behind the face plane there
+			}
+			const float Depth = static_cast<float>(FVector::DotProduct(BoneLocation - State.Slot.WallPoint, Normal));
 			bInside |= Depth < 0.f;
 			if (Depth < State.MinClearance)
 			{

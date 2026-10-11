@@ -196,6 +196,33 @@ namespace CoverFacingRules
 	CODEXTACTICS_API bool IsCornerHoldTarget(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& FireOrigin, const FVector& Target,
 		float OutwardDeg, float ReachDeg);
 
+	/**
+	 * The corner hold is wanted (he steps out into the corner fire stance on his own and holds it): at the exposed edge of
+	 * a high wall (bAtHoldSpot) AND in a fight or with a fresh known threat. Exploring with nothing known he hugs the wall
+	 * with the look-around corner pose instead (user bug 2026-10-11: at the first wall of the level, no enemy anywhere, he
+	 * stood stepped out past the edge aiming round it - "not hugging the wall, looking somewhere else"; the 2026-10-06
+	 * clip rule: fire-ready pose only with a known threat, look-around without one).
+	 */
+	CODEXTACTICS_API bool WantsCornerHold(bool bAtHoldSpot, bool bInFight, bool bThreatFresh);
+
+	/**
+	 * Cover entry with a big turn: the actor turns its back to the wall at once and the mesh holds the old yaw while the
+	 * enter clip (whose first frame faces the wall) blends in. Fraction of that turn still held on the mesh: 1 - the clip's
+	 * weight while it plays (EnterWeight >= 0; 0 once it is fully in); 1 while the clip has not started yet (not seen,
+	 * within AwaitSeconds of the entry); -1 when it is gone without having brought the body round (cut short by a shimmy,
+	 * ended, never came): the caller eases out what is left over a fixed time. Never holds for good (user bug 2026-10-11:
+	 * a cut clip left the mesh turned ~180 deg).
+	 */
+	CODEXTACTICS_API float EntryHeldYawFraction(float EnterWeight, bool bClipSeen, float SecondsSinceEntry, float AwaitSeconds = 0.25f);
+
+	/**
+	 * The point lies within the wall's span along it (between its exposed edges, MarginCm past an edge still counts; a
+	 * closed side is unbounded). Past an exposed edge there is no wall behind the face plane: a bone there - the corner
+	 * fire stance steps 40-73 cm past the edge and aims round it - is not "in the wall" (user bug 2026-10-11: the clearance
+	 * push shoved the whole body ~30 cm off the wall at a corner).
+	 */
+	CODEXTACTICS_API bool IsWithinWallSpan(const FCoverSlot& Slot, const FVector& Point, float MarginCm = 0.f);
+
 	/** Clip array index of a facing side: 0 = Right (pack *_L = his own right, back to the wall), 1 = Left (pack *_R). */
 	CODEXTACTICS_API int32 ClipIndex(ECoverFacing Facing);
 }

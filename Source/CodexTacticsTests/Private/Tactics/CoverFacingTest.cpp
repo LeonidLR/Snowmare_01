@@ -300,6 +300,59 @@ bool FCoverFacingCornerHoldTargetTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+COVER_FACING_TEST(FCoverCornerHoldOnlyWhenEngagedTest, "Facing.CornerHoldOnlyWhenEngaged")
+bool FCoverCornerHoldOnlyWhenEngagedTest::RunTest(const FString&)
+{
+	using namespace CoverFacingRules;
+	// User bug 2026-10-11: at the first wall of the level (exploration, no enemy known) he stepped out past the edge into
+	// the corner fire stance instead of hugging the wall. The hold needs the edge AND a fight or a fresh known threat.
+	TestFalse(TEXT("exploring, nothing known: he hugs the wall at the edge"), WantsCornerHold(true, false, false));
+	TestTrue(TEXT("a fight: he holds the corner (user decision 2026-10-07)"), WantsCornerHold(true, true, false));
+	TestTrue(TEXT("exploring with a fresh known threat: he holds the corner"), WantsCornerHold(true, false, true));
+	TestFalse(TEXT("away from the exposed edge: never"), WantsCornerHold(false, true, true));
+	// With no threat the corner pose is the look-around idle (2026-10-06 clip rule), never the fire-ready one.
+	const FCoverSlot Edge = CoverFacingTest::MakeSlot(true, 60.f, false, 0.f);
+	TestTrue(TEXT("the edge 60 cm away is the corner"), IsAtCorner(Edge, ECoverFacing::Left));
+	TestFalse(TEXT("no threat: no fire-ready pose at the corner"), IsFireReady(true, false, false, 0.f));
+	// No threat known: a shimmy either way along the wall is a forward walk (never the backward clip).
+	for (const float Direction : { -1.f, 1.f })
+	{
+		const ECoverFacing Facing = FacingForShimmy(ECoverFacing::Left, Direction, false);
+		TestTrue(FString::Printf(TEXT("no threat, shimmy %+.0f: forward"), Direction), IsShimmyForward(Facing, Direction, false));
+		TestEqual(FString::Printf(TEXT("no threat, shimmy %+.0f: the forward clip index of the move side"), Direction),
+			ShimmyClipIndex(Facing, true), Direction > 0.f ? 0 : 1);
+	}
+	return true;
+}
+
+COVER_FACING_TEST(FCoverEntryHeldYawTest, "Facing.EntryHeldYawNeverSticks")
+bool FCoverEntryHeldYawTest::RunTest(const FString&)
+{
+	using namespace CoverFacingRules;
+	// User bug 2026-10-11: running into a wall near its edge, the auto-snap shimmy cut the enter clip and the ~180 deg entry
+	// turn stayed on the mesh for good (weight -1 read as 0): turned round, "walking backwards" along the wall.
+	TestEqual(TEXT("first frames, the clip not started yet: the old yaw is held"), EntryHeldYawFraction(-1.f, false, 0.f), 1.f);
+	TestEqual(TEXT("blending in at 0.4: 60 % held"), EntryHeldYawFraction(0.4f, true, 0.1f), 0.6f, 1.e-4f);
+	TestEqual(TEXT("fully in: nothing held"), EntryHeldYawFraction(1.f, true, 0.3f), 0.f);
+	TestTrue(TEXT("cut short by a shimmy after it played: hand over to the timed ease-out"), EntryHeldYawFraction(-1.f, true, 0.2f) < 0.f);
+	TestTrue(TEXT("never came: hand over after the wait"), EntryHeldYawFraction(-1.f, false, 0.3f) < 0.f);
+	return true;
+}
+
+COVER_FACING_TEST(FCoverWallSpanTest, "Facing.ClearanceOnlyWithinWallSpan")
+bool FCoverWallSpanTest::RunTest(const FString&)
+{
+	using namespace CoverFacingRules;
+	// The wall along Y at X = -45; his Right = +Y. Left edge exposed 26 cm away, the right side closed.
+	const FCoverSlot Slot = CoverFacingTest::MakeSlot(true, 26.f, false, 0.f);
+	TestTrue(TEXT("behind the slot: within the wall"), IsWithinWallSpan(Slot, FVector(-60.f, 0.f, 90.f)));
+	TestTrue(TEXT("20 cm to the left, before the edge: within"), IsWithinWallSpan(Slot, FVector(-60.f, -20.f, 90.f)));
+	TestFalse(TEXT("the corner fire stance's hand 60 cm past the left edge: no wall there (no push)"), IsWithinWallSpan(Slot, FVector(-60.f, -86.f, 90.f)));
+	TestTrue(TEXT("3 cm past the edge with a 6 cm margin: still counted"), IsWithinWallSpan(Slot, FVector(-60.f, -29.f, 90.f), 6.f));
+	TestTrue(TEXT("the closed right side is unbounded"), IsWithinWallSpan(Slot, FVector(-60.f, 900.f, 90.f)));
+	return true;
+}
+
 #undef COVER_FACING_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS
