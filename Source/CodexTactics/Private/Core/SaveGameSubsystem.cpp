@@ -914,6 +914,16 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 		Gates->SetBoolField(It->GetName(), It->IsOpen() || It->IsOpening());
 	}
 	WorldState->SetObjectField(TEXT("gates"), Gates);
+	// 2026-10-11: the blast gate paced by the generator and the waves (AGateActor / GateProgressRules).
+	TSharedRef<FJsonObject> GateProgress = MakeShared<FJsonObject>();
+	for (TActorIterator<AGateActor> It(World); It; ++It)
+	{
+		TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+		Entry->SetNumberField(TEXT("progress"), It->GetOpenProgress());
+		Entry->SetBoolField(TEXT("final_wave_cleared"), It->IsFinalWaveCleared());
+		GateProgress->SetObjectField(It->GetName(), Entry);
+	}
+	WorldState->SetObjectField(TEXT("gate_progress"), GateProgress);
 	TSharedRef<FJsonObject> Triggers = MakeShared<FJsonObject>();
 	for (TActorIterator<ADialogueTriggerVolume> It(World); It; ++It)
 	{
@@ -1306,6 +1316,17 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 				It->RestoreOpen(bOpen);
 			}
 		}
+	}
+	// The paced gate's progress (older saves: none, the door starts its creep from 0 again).
+	const TSharedPtr<FJsonObject>* GateProgress = nullptr;
+	(*WorldState)->TryGetObjectField(TEXT("gate_progress"), GateProgress);
+	const UQuestSubsystem* GateQuests = World->GetSubsystem<UQuestSubsystem>();
+	for (TActorIterator<AGateActor> It(World); It; ++It)
+	{
+		const TSharedPtr<FJsonObject>* Entry = nullptr;
+		const bool bEntry = GateProgress && (*GateProgress)->TryGetObjectField(It->GetName(), Entry);
+		It->RestoreProgress(GateQuests && GateQuests->IsGatePowered(), bEntry ? SaveFloat(*Entry, TEXT("progress"), 0.f) : 0.f,
+			bEntry && SaveBool(*Entry, TEXT("final_wave_cleared"), false));
 	}
 	const TSharedPtr<FJsonObject>* Triggers = nullptr;
 	if ((*WorldState)->TryGetObjectField(TEXT("dialogue_triggers"), Triggers))

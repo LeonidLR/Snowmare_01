@@ -13,6 +13,7 @@
 #include "Combat/KnockdownComponent.h"
 #include "GameFramework/Character.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Interactables/GateActor.h"
 #include "Interactables/InteractableActor.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/PanicComponent.h"
@@ -675,6 +676,14 @@ void ACodexTacticsHUD::DrawCombatModeBadge()
 		Who.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (%s)"), *Who), bCommon ? *FirePostureRules::GetLabel(Posture) : TEXT("MIXED"));
 	const FLinearColor PostureColor = !bCommon ? FLinearColor(0.85f, 0.85f, 0.85f) : PostureMarkerColor(Posture);
 	DrawCentered(Line, PostureColor, FLinearColor(0.f, 0.f, 0.f, 0.45f), 1.f);
+	// Blast gate paced by the generator and the waves (user request 2026-10-11): «BLAST DOOR 37% — GENERATOR OFFLINE».
+	if (const AGateActor* Gate = AGateActor::FindLevelGate(GetWorld()); Gate && Gate->ShouldShowStatus())
+	{
+		const EGateProgressStatus GateStatus = Gate->GetProgressStatus();
+		const FLinearColor GateColor = GateStatus == EGateProgressStatus::NoPower ? FLinearColor(1.f, 0.35f, 0.3f)
+			: (GateStatus == EGateProgressStatus::Opening ? FLinearColor(0.35f, 1.f, 0.5f) : FLinearColor(1.f, 0.8f, 0.35f));
+		DrawCentered(Gate->GetStatusText(), GateColor, FLinearColor(0.f, 0.f, 0.f, 0.5f), 1.f);
+	}
 }
 
 FLinearColor ACodexTacticsHUD::PostureMarkerColor(ESquadFirePosture Posture)
@@ -899,6 +908,14 @@ void ACodexTacticsHUD::DrawWorldLabels()
 		}
 	}
 	for (TActorIterator<AInteractableActor> It(World); It; ++It)
+	{
+		FOverheadLabel Label;
+		if (!It->IsHidden() && It->GetOverheadLabel(Label))
+		{
+			Draw(*It, Label);
+		}
+	}
+	for (TActorIterator<AGateActor> It(World); It; ++It)
 	{
 		FOverheadLabel Label;
 		if (!It->IsHidden() && It->GetOverheadLabel(Label))

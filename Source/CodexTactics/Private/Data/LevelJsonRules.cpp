@@ -1,5 +1,6 @@
 #include "Data/LevelJsonRules.h"
 #include "GameFlow/LevelEncounterRules.h"
+#include "Quests/GateProgressRules.h"
 
 #include "Dom/JsonObject.h"
 #include "Misc/FileHelper.h"
@@ -77,6 +78,16 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Config.HordeOverrideJson);
 		FJsonSerializer::Serialize(Horde.ToSharedRef(), Writer);
 	}
+	// UE-only (user request 2026-10-11): the blast gate tied to the generator during the wave fight (GateProgressRules).
+	const FString GateMode = LevelJsonString(Root, TEXT("gate_open_mode"), GateProgressRules::OpenModeToString(Config.Gate.Mode));
+	if (!GateProgressRules::ParseOpenMode(GateMode, Config.Gate.Mode))
+	{
+		OutError = FString::Printf(TEXT("unknown gate_open_mode '%s' (generator_waves | instant)"), *GateMode);
+		return false;
+	}
+	Config.Gate.ProgressPerSecond = FMath::Max(0.f, LevelJsonNumber(Root, TEXT("gate_progress_per_second"), Config.Gate.ProgressPerSecond));
+	Config.Gate.MaxProgressBeforeFinal = FMath::Clamp(LevelJsonNumber(Root, TEXT("gate_max_progress_before_final"), Config.Gate.MaxProgressBeforeFinal), 0.f, 0.99f);
+	Config.Gate.FullOpenAfterWave = FMath::Max(0, FMath::RoundToInt(LevelJsonNumber(Root, TEXT("gate_full_open_after_wave"), static_cast<float>(Config.Gate.FullOpenAfterWave))));
 
 	const TArray<TSharedPtr<FJsonValue>>* Waves = nullptr;
 	if (Root->TryGetArrayField(TEXT("waves"), Waves))

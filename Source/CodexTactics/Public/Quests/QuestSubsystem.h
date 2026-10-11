@@ -39,9 +39,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Quests")
 	bool IsGatePowered() const { return State.bIsGatePowered; }
 
-	/** Objective banner text (without the "OBJECTIVE: " prefix). */
+	/**
+	 * Objective banner text (without the "OBJECTIVE: " prefix). A powered gate paced by the generator and the waves
+	 * (AGateActor, user request 2026-10-11) reads «Hold the line until the blast door opens» until it opens.
+	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Quests")
-	FText GetObjective() const { return State.GetObjective(); }
+	FText GetObjective() const;
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Quests")
 	FOnGeneratorStarted OnGeneratorStarted;
@@ -54,7 +57,8 @@ public:
 
 	/**
 	 * "Start Battle" from the main menu: every chain step done at once (generator running, gate powered and open).
-	 * Godot _on_start_combat_pressed sets the quest_manager flags and calls _on_gate_opened.
+	 * Godot _on_start_combat_pressed sets the quest_manager flags and calls _on_gate_opened. The gate opens outright even
+	 * when paced by the generator: the squad starts behind it.
 	 */
 	void CompleteChainForCombat();
 

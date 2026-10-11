@@ -2,9 +2,11 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.QuestChainSmoke
 // Uses the player's click path (UInteractionSubsystem::RequestInteraction + action menu buttons) for: APC without
 // canister (greyed-out menu, closed),
-// canister, APC, generator, gate terminal. Then checks the generator heat, the opened gate, the sudden horde start
+// canister, APC, generator, gate terminal. Then checks the generator heat, the sudden horde start
 // (user decision 2026-10-11: wave 1 at once, no cutscene / preparation; the wave is parked
-// out of the way and the pause released) and that the leader can walk through the gate.
+// out of the way and the pause released) and that the blast gate, paced by the generator and the waves (user request
+// 2026-10-11), only unlocked: it stays shut and the leader ordered beyond it stays on the near side. The full door cycle
+// (creep, breakdown pause, repair, open after the last wave) is GateGeneratorSmoke.
 
 #include "CoreMinimal.h"
 
@@ -33,6 +35,9 @@ namespace QuestChainSmoke
 	constexpr float StepTimeout = 25.f;
 	/** Past the gate, in L_MovementTest design coordinates (SmokeUtils::LevelPoint maps it onto the current layout). */
 	const FVector DesignBeyondGate(0.f, -2600.f, 100.f);
+	/** The gate line (design Y of the checkpoint gate) and how long the leader tries to get past the shut door, s. */
+	constexpr float DesignGateY = -2000.f;
+	constexpr float BlockedWalkSeconds = 6.f;
 
 	struct FState
 	{
@@ -128,10 +133,10 @@ namespace QuestChainSmoke
 		}
 		AInteractableActor* Generator = FindInteractable(World, EInteractableType::Generator);
 		const bool bHeat = Generator && Generator->HeatSource->IsHeatActive();
-		const bool bGateOpen = Gate && Gate->IsOpen();
+		const bool bGateOpen = Gate && (Gate->IsOpen() || Gate->IsOpening());
 		const bool bSuddenWave = Flow->GetPhase() == ECodexGamePhase::WaveCombat && (Flow->IsAwaitingHordeIntro() || Flow->IsFreePause());
 
-		if (bGateOpen && bSuddenWave && !State.bWalkOrdered)
+		if (bSuddenWave && !State.bWalkOrdered)
 		{
 			int32 Spawned = 0;
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
@@ -141,8 +146,9 @@ namespace QuestChainSmoke
 				It->CustomTimeDilation = 0.f;
 				It->SetActorLocation(It->GetActorLocation() + FVector(0.f, 0.f, -5000.f), false, nullptr, ETeleportType::TeleportPhysics);
 			}
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke gate open, wave 1 came suddenly (%d enemies) at %.1fs, heat=%d"),
-				Spawned, State.TotalTime, bHeat ? 1 : 0);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke wave 1 came suddenly (%d enemies) at %.1fs, heat=%d, gate open=%d unlocked=%d \"%s\""),
+				Spawned, State.TotalTime, bHeat ? 1 : 0, bGateOpen ? 1 : 0, Gate && Gate->IsProgressUnlocked() ? 1 : 0,
+				Gate ? *Gate->GetStatusText() : TEXT("no gate"));
 			if (Spawned == 0)
 			{
 				Finish(World, false, TEXT("the gate started no wave"));
@@ -156,15 +162,20 @@ namespace QuestChainSmoke
 		}
 		if (State.bWalkOrdered)
 		{
-			if (FVector::Dist2D(Leader->GetActorLocation(), SmokeUtils::LevelPoint(World, DesignBeyondGate)) < 60.f)
+			const FVector Design = SmokeUtils::LayoutTransform(World).InverseTransformPosition(Leader->GetActorLocation());
+			if (Design.Y < DesignGateY)
 			{
-				Finish(World, bHeat && bGateOpen && Quests->IsGatePowered(), TEXT("leader walked through the gate"));
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke leader got past the shut gate at design (%.0f, %.0f)"), Design.X, Design.Y);
+				Finish(World, false, TEXT("the blast door let the squad in during wave 1"));
 				return false;
 			}
-			if (State.StepTime > StepTimeout)
+			if (State.StepTime >= BlockedWalkSeconds)
 			{
-				UE_LOG(LogCodexTactics, Display, TEXT("Smoke leader stuck at (%.0f, %.0f)"), Leader->GetActorLocation().X, Leader->GetActorLocation().Y);
-				Finish(World, false, TEXT("leader could not pass the gate"));
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke leader held at design (%.0f, %.0f); gate \"%s\""), Design.X, Design.Y,
+					Gate ? *Gate->GetStatusText() : TEXT("no gate"));
+				Finish(World, bHeat && Quests->IsGatePowered() && Gate && Gate->IsProgressUnlocked() && !bGateOpen
+					&& Quests->GetObjective().ToString().Contains(TEXT("blast door")),
+					TEXT("terminal unlocked the paced blast door; it stayed shut for wave 1"));
 				return false;
 			}
 			return true;

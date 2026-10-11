@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Data/CombatTypes.h"
+#include "Quests/GateProgressRules.h"
 #include "WaveConfigTypes.generated.h"
 
 USTRUCT(BlueprintType)
@@ -201,6 +202,13 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level", meta = (MultiLine = true))
 	FString HordeOverrideJson;
+
+	/**
+	 * Blast gate tied to the generator during the wave fight (user request 2026-10-11): "gate_open_mode",
+	 * "gate_progress_per_second", "gate_max_progress_before_final", "gate_full_open_after_wave" (GateProgressRules).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	FGateProgressConfig Gate;
 };
 
 UCLASS(BlueprintType)
