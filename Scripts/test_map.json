@@ -48,9 +48,9 @@
     {
       "name": "sniper",
       "globs": ["Source/**/Combat/SniperRules*", "Source/**/Characters/OperativeCharacterSniper*", "Source/**/Characters/OperativeAnimInstanceSniper*",
-        "Source/**/Data/WeaponDataAsset*", "Source/**/Core/CodexTacticsGameMode*", "Source/**/Debug/SniperSmoke*", "Content/Data/Weapons/**",
+        "Source/**/Data/WeaponDataAsset*", "Source/**/Core/CodexTacticsGameMode*", "Source/**/Core/SquadSpawnRules*", "Source/**/Debug/SniperSmoke*", "Content/Data/Weapons/**",
         "Content/Characters/Operatives/**", "Scripts/Editor/setup_operative_sniper_animation.py"],
-      "tests": ["CodexTactics.Combat.Sniper"],
+      "tests": ["CodexTactics.Combat.Sniper", "CodexTactics.Core.SquadSpawn"],
       "smokes": ["SniperSmoke", "WeaponSelectorSmoke", "SaveRoundTripSmoke", "TurnBasedSmoke"]
     },
     {

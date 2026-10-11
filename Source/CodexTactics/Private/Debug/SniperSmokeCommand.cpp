@@ -1,6 +1,8 @@
 // Dev-only console command (user request 2026-10-09): the Medic-Sapper is the Female Soldier and carries the sniper rifle.
 //   Scripts/smoke.ps1 -Command CodexTactics.SniperSmoke
 // 1. body: SK_Female_soldier with ABP_Operative (others keep their mesh), feet on the capsule bottom, hand_r weapon socket;
+//    2026-10-11: she spawns from her member Blueprint (BP_Operative_FemaleSoldier, its own mesh) when it exists, else from
+//    BP_Operative with the roster's BodyMesh (the fallback);
 //    arsenal: only she has the sniper rifle, right after the M16 in the X cycle; switch: M16 model, clip 5 / reserve 15.
 // 2. standing idle with the rifle (Passive posture, enemy in sight): no shot, the stand aim idle loop.
 // 3. order (priority target) while standing: she kneels by herself (AS_Knee_Aim_Start), then fires (AS_Knee_Aim_Fire),
@@ -21,6 +23,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Core/CodexTacticsGameMode.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/CapsuleComponent.h"
@@ -215,7 +218,26 @@ namespace SniperSmoke
 				if (Member->SquadRole == EOperativeRole::MedicSapper)
 				{
 					State.Medic = Member;
-					Check(State, bFemale, FString::Printf(TEXT("Medic-Sapper body = SK_Female_soldier (%s)"), Body ? *Body->GetName() : TEXT("none")));
+					// Per-member Blueprint (2026-10-11): her own Blueprint owns the look; missing -> BP_Operative + BodyMesh.
+					const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
+					const FSquadMemberSpawn* Entry = GameMode ? GameMode->SquadRoster.FindByPredicate(
+						[](const FSquadMemberSpawn& E) { return E.Role == EOperativeRole::MedicSapper; }) : nullptr;
+					bool bApplyBodyMesh = true;
+					const UClass* Expected = GameMode && Entry ? GameMode->ResolveMemberClass(*Entry, bApplyBodyMesh).Get() : nullptr;
+					Check(State, Expected && Member->GetClass() == Expected, FString::Printf(TEXT("Medic-Sapper class %s = %s (%s)"),
+						*GetNameSafe(Member->GetClass()), *GetNameSafe(Expected),
+						bApplyBodyMesh ? TEXT("member Blueprint missing: BP_Operative + BodyMesh") : TEXT("her member Blueprint")));
+					if (bApplyBodyMesh)
+					{
+						Check(State, bFemale, FString::Printf(TEXT("Medic-Sapper body = SK_Female_soldier (%s)"), Body ? *Body->GetName() : TEXT("none")));
+					}
+					else
+					{
+						const AOperativeCharacter* Defaults = Expected->GetDefaultObject<AOperativeCharacter>();
+						const USkeletalMesh* Own = Defaults && Defaults->GetMesh() ? Defaults->GetMesh()->GetSkeletalMeshAsset() : nullptr;
+						Check(State, Body && Body == Own, FString::Printf(TEXT("Medic-Sapper body = her Blueprint's own mesh, no BodyMesh override (%s / %s)"),
+							*GetNameSafe(Body), *GetNameSafe(Own)));
+					}
 					Check(State, bHasSniper, TEXT("Medic-Sapper carries the sniper rifle"));
 				}
 				else

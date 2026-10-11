@@ -59,6 +59,15 @@ struct CODEXTACTICS_API FSquadMemberSpawn
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
 	TSoftObjectPtr<class USkeletalMesh> BodyMesh;
 
+	/**
+	 * This member's own operative Blueprint (user request 2026-10-11: dress a member in a Blueprint, e.g. the Female
+	 * Soldier's backpack; make it a child of BP_Operative so collision / AnimBP / tunables stay). Set and loadable -> the
+	 * member spawns from it and BodyMesh is NOT applied (the Blueprint owns the look); empty or missing -> the game mode's
+	 * OperativeBlueprint + BodyMesh (a missing asset only logs a line). Role, stats and weapons still come from this entry.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	TSoftClassPtr<AOperativeCharacter> MemberBlueprint;
+
 	/** Weapons this member carries on top of the starting arsenal (user request 2026-10-09: the Medic-Sapper's sniper rifle). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
 	TArray<TSoftObjectPtr<UWeaponDataAsset>> ExtraWeapons;
@@ -184,6 +193,13 @@ public:
 	 */
 	AOperativeCharacter* SpawnOperative(const FSquadMemberSpawn& Entry, int32 SquadIndex, const FVector& Location,
 		const FRotator& Facing, bool bRecruited = true);
+
+	/**
+	 * The class Entry spawns from and whether its BodyMesh applies (SquadSpawnRules::ChooseMemberClass): its
+	 * MemberBlueprint when that asset exists, else OperativeBlueprint (else OperativeClass). A missing member Blueprint is
+	 * checked on disk first (no load warning) and logged.
+	 */
+	TSubclassOf<AOperativeCharacter> ResolveMemberClass(const FSquadMemberSpawn& Entry, bool& bOutApplyBodyMesh) const;
 
 private:
 	void SpawnSquad();
