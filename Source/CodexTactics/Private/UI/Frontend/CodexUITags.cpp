@@ -14,4 +14,5 @@ namespace CodexUITags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Screen_Credits, "Codex.UI.Screen.Credits", "Credits");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Screen_Pause, "Codex.UI.Screen.Pause", "In-game pause menu (Esc)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Screen_Confirm, "Codex.UI.Screen.Confirm", "Yes / No or OK dialog");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Screen_Controls, "Codex.UI.Screen.Controls", "Controls reference (F1 / pause menu)");
 }

@@ -1,11 +1,14 @@
 #include "UI/Frontend/CodexPauseMenuScreen.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
+#include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Kismet/GameplayStatics.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "UI/Frontend/CodexFrontendSubsystem.h"
 #include "UI/Frontend/CodexMenuButton.h"
 #include "UI/Frontend/CodexSaveBridge.h"
@@ -18,6 +21,7 @@
 UCodexPauseMenuScreen::UCodexPauseMenuScreen()
 {
 	bIsBackHandler = true;
+	bHandlesControlsHotkey = true;
 }
 
 void UCodexPauseMenuScreen::Resume()
@@ -66,6 +70,70 @@ FText UCodexPauseMenuScreen::GetStatusLine() const
 	return FText::Format(LOCTEXT("Latest", "Latest save: {0} ({1})"), FText::FromString(Slots[0].Title), FText::FromString(Slots[0].DateTime));
 }
 
+namespace
+{
+	struct FPauseExtraEntry
+	{
+		const TCHAR* WidgetName;
+		const TCHAR* EntryId;
+	};
+	const FPauseExtraEntry ExtraEntries[] = {
+		{ TEXT("ControlsButton"), TEXT("Controls") },
+		{ TEXT("TutorialButton"), TEXT("Tutorial") },
+		{ TEXT("ResetTutorialButton"), TEXT("ResetTutorial") },
+	};
+}
+
+void UCodexPauseMenuScreen::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+	EnsureExtraEntries();
+}
+
+void UCodexPauseMenuScreen::EnsureExtraEntries()
+{
+	UCodexMenuButton* Options = FindEntryButton(TEXT("Options"));
+	UPanelWidget* Parent = Options ? Options->GetParent() : nullptr;
+	if (!Parent || !WidgetTree)
+	{
+		return;
+	}
+	int32 Index = Parent->GetChildIndex(Options);
+	for (const FPauseExtraEntry& Extra : ExtraEntries)
+	{
+		if (FindEntryButton(Extra.EntryId))
+		{
+			Index = Parent->GetChildIndex(FindEntryButton(Extra.EntryId));
+			continue;
+		}
+		const FText Label = FName(Extra.EntryId) == TEXT("Controls") ? LOCTEXT("Controls", "CONTROLS")
+			: FName(Extra.EntryId) == TEXT("Tutorial") ? LOCTEXT("TutorialOn", "TUTORIAL: ON") : LOCTEXT("ResetTutorial", "RESET TUTORIAL");
+		UCodexMenuButton* Button = MakeEntryButton(*WidgetTree, Extra.WidgetName, Extra.EntryId, Label, FText::GetEmpty());
+		Button->SetDescriptionText(FName(Extra.EntryId) == TEXT("Controls") ? LOCTEXT("ControlsDesc", "Every key and command (F1 anywhere).")
+			: FName(Extra.EntryId) == TEXT("Tutorial") ? LOCTEXT("TutorialDesc", "Show or hide the tutorial hints (saved in your profile).")
+			: LOCTEXT("ResetTutorialDesc", "Forget the tutorial progress and start it again."));
+		UPanelSlot* PanelSlot = Parent->InsertChildAt(++Index, Button);
+		if (UVerticalBoxSlot* BoxSlot = Cast<UVerticalBoxSlot>(PanelSlot))
+		{
+			BoxSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+		}
+		HookEntryButton(Button);
+	}
+}
+
+void UCodexPauseMenuScreen::RefreshTutorialEntries()
+{
+	if (UCodexMenuButton* Toggle = FindEntryButton(TEXT("Tutorial")))
+	{
+		Toggle->SetButtonText(UTutorialSubsystem::IsTutorialEnabled() ? LOCTEXT("TutorialOn", "TUTORIAL: ON") : LOCTEXT("TutorialOff", "TUTORIAL: OFF"));
+	}
+	if (UCodexMenuButton* Reset = FindEntryButton(TEXT("ResetTutorial")))
+	{
+		const UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr;
+		Reset->SetEntryEnabled(Tutorial && Tutorial->HasSteps(), LOCTEXT("NoTutorial", "This level has no tutorial."));
+	}
+}
+
 void UCodexPauseMenuScreen::BindScreenWidgets()
 {
 	BindNamed(StatusText, TEXT("StatusText"));
@@ -95,6 +163,7 @@ void UCodexPauseMenuScreen::RefreshScreen()
 	{
 		StatusText->SetText(GetStatusLine());
 	}
+	RefreshTutorialEntries();
 }
 
 void UCodexPauseMenuScreen::OnEntryActivated(FName EntryId)
@@ -118,6 +187,30 @@ void UCodexPauseMenuScreen::OnEntryActivated(FName EntryId)
 	else if (EntryId == TEXT("Options") && UI)
 	{
 		UI->PushScreen(CodexUITags::Layer_GameMenu, CodexUITags::Screen_Options);
+	}
+	else if (EntryId == TEXT("Controls") && UI)
+	{
+		UI->ToggleControlsScreen();
+	}
+	else if (EntryId == TEXT("Tutorial"))
+	{
+		if (UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr)
+		{
+			Tutorial->SetTutorialEnabled(!UTutorialSubsystem::IsTutorialEnabled());
+			RefreshTutorialEntries();
+		}
+	}
+	else if (EntryId == TEXT("ResetTutorial") && UI)
+	{
+		TWeakObjectPtr<UTutorialSubsystem> Tutorial(GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr);
+		UI->ShowConfirm(ECodexConfirmType::YesNo, LOCTEXT("ResetTutorialTitle", "RESET TUTORIAL"),
+			LOCTEXT("ResetTutorialMessage", "Forget the tutorial progress and start the tutorial again?"), [Tutorial](ECodexConfirmResult Result)
+			{
+				if (Result == ECodexConfirmResult::Confirmed && Tutorial.IsValid())
+				{
+					Tutorial->ResetTutorial();
+				}
+			});
 	}
 	else if (EntryId == TEXT("QuitToMenu") && UI)
 	{
@@ -168,6 +261,9 @@ void UCodexPauseMenuScreen::BuildDefaultTree(UWidgetTree& Tree) const
 		{ TEXT("SaveButton"), TEXT("Save"), LOCTEXT("Save", "SAVE GAME"), LOCTEXT("SaveDesc", "Save your progress to a slot.") },
 		{ TEXT("LoadButton"), TEXT("Load"), LOCTEXT("Load", "LOAD GAME"), LOCTEXT("LoadDesc", "Load a saved game.") },
 		{ TEXT("OptionsButton"), TEXT("Options"), LOCTEXT("Options", "OPTIONS"), LOCTEXT("OptionsDesc", "Graphics, audio and controls.") },
+		{ TEXT("ControlsButton"), TEXT("Controls"), LOCTEXT("Controls", "CONTROLS"), LOCTEXT("ControlsDesc", "Every key and command (F1 anywhere).") },
+		{ TEXT("TutorialButton"), TEXT("Tutorial"), LOCTEXT("TutorialOn", "TUTORIAL: ON"), LOCTEXT("TutorialDesc", "Show or hide the tutorial hints (saved in your profile).") },
+		{ TEXT("ResetTutorialButton"), TEXT("ResetTutorial"), LOCTEXT("ResetTutorial", "RESET TUTORIAL"), LOCTEXT("ResetTutorialDesc", "Forget the tutorial progress and start it again.") },
 		{ TEXT("QuitToMenuButton"), TEXT("QuitToMenu"), LOCTEXT("QuitToMenu", "QUIT TO MAIN MENU"), LOCTEXT("QuitToMenuDesc", "Leave the mission for the main menu.") },
 		{ TEXT("QuitGameButton"), TEXT("QuitGame"), LOCTEXT("QuitGame", "QUIT GAME"), LOCTEXT("QuitGameDesc", "Quit to the desktop.") },
 	};

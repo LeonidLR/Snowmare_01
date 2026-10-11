@@ -63,6 +63,13 @@ public:
 	/** Esc reached the game (CommonUI did not consume it): back on the topmost screen of any layer; false if none. */
 	bool HandleBackOnTopScreen();
 
+	/**
+	 * F1: opens the Controls reference on the GameMenu layer (over the pause menu when that is open) or closes it when it is
+	 * open. Does nothing under a confirm dialog. True when it opened.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|UI")
+	bool ToggleControlsScreen();
+
 	/** Any screen on the GameMenu / Menu / Modal layers (the game must not take clicks / keys). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|UI")
 	bool IsAnyMenuOpen() const;
@@ -85,5 +92,6 @@ private:
 	void PreloadScreenClasses();
 
 	TWeakObjectPtr<UCodexPrimaryLayout> Layout;
+	bool bControlsPushPending = false;
 	TSharedPtr<FStreamableHandle> PreloadHandle;
 };

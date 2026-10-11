@@ -1,6 +1,7 @@
 #include "Misc/AutomationTest.h"
 #include "Blueprint/WidgetTree.h"
 #include "UI/Frontend/CodexConfirmDialog.h"
+#include "UI/Frontend/CodexControlsScreen.h"
 #include "UI/Frontend/CodexFrontendRules.h"
 #include "UI/Frontend/CodexFrontendSettings.h"
 #include "UI/Frontend/CodexInfoScreens.h"
@@ -64,7 +65,7 @@ bool FFrontendSettingsTest::RunTest(const FString&)
 {
 	const UCodexFrontendSettings& Settings = UCodexFrontendSettings::Get();
 	for (const FGameplayTag& Tag : { CodexUITags::Screen_Title.GetTag(), CodexUITags::Screen_MainMenu.GetTag(), CodexUITags::Screen_SaveSlots.GetTag(),
-		CodexUITags::Screen_Options.GetTag(), CodexUITags::Screen_Credits.GetTag(), CodexUITags::Screen_Pause.GetTag(), CodexUITags::Screen_Confirm.GetTag() })
+		CodexUITags::Screen_Options.GetTag(), CodexUITags::Screen_Credits.GetTag(), CodexUITags::Screen_Pause.GetTag(), CodexUITags::Screen_Confirm.GetTag(), CodexUITags::Screen_Controls.GetTag() })
 	{
 		const TSoftClassPtr<UCodexActivatableScreen>* Configured = Settings.ScreenClasses.Find(Tag);
 		TestTrue(*FString::Printf(TEXT("%s has a Widget Blueprint"), *Tag.ToString()), Configured && !Configured->IsNull());
@@ -107,12 +108,13 @@ bool FFrontendTreeContractTest::RunTest(const FString&)
 		{ UCodexMainMenuScreen::StaticClass(), { TEXT("ContinueButton"), TEXT("NewGameButton"), TEXT("LoadGameButton"), TEXT("OptionsButton"),
 			TEXT("CreditsButton"), TEXT("QuitButton"), TEXT("DescriptionText"), TEXT("BackHintText") } },
 		{ UCodexPauseMenuScreen::StaticClass(), { TEXT("ResumeButton"), TEXT("SaveButton"), TEXT("LoadButton"), TEXT("OptionsButton"),
-			TEXT("QuitToMenuButton"), TEXT("QuitGameButton"), TEXT("DescriptionText"), TEXT("StatusText") } },
+			TEXT("ControlsButton"), TEXT("TutorialButton"), TEXT("ResetTutorialButton"), TEXT("QuitToMenuButton"), TEXT("QuitGameButton"), TEXT("DescriptionText"), TEXT("StatusText") } },
 		{ UCodexSaveSlotsScreen::StaticClass(), { TEXT("TitleText"), TEXT("SlotList"), TEXT("EmptyText"), TEXT("SlotNameBox"), TEXT("SaveButton"),
 			TEXT("DeleteButton"), TEXT("BackButton"), TEXT("StatusText") } },
 		{ UCodexConfirmDialog::StaticClass(), { TEXT("BackgroundBlur"), TEXT("TitleText"), TEXT("MessageText"), TEXT("YesButton"), TEXT("NoButton"), TEXT("OkButton") } },
 		{ UCodexOptionsScreen::StaticClass(), { TEXT("TitleText"), TEXT("BackButton") } },
 		{ UCodexCreditsScreen::StaticClass(), { TEXT("TitleText"), TEXT("CreditsText"), TEXT("BackButton") } },
+		{ UCodexControlsScreen::StaticClass(), { TEXT("TitleText"), TEXT("ControlsList"), TEXT("BackButton") } },
 		{ UCodexMenuButton::StaticClass(), { TEXT("ButtonLabel") } },
 		{ UCodexSaveSlotEntry::StaticClass(), { TEXT("SlotTitleText"), TEXT("SlotDateText"), TEXT("SlotLevelText"), TEXT("SlotPlayTimeText") } },
 	};

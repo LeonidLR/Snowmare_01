@@ -33,13 +33,16 @@ struct CODEXTACTICS_API FPlayerCommandContext
 	bool bPlanned = false;
 };
 
-/** One row of the command registry: id -> default key label, section and description (the future Controls screen). */
+/**
+ * One row of the command registry: id -> default key label, section and description. THE table the F1 Controls screen
+ * (UCodexControlsScreen) is generated from, so the registry and the screen never diverge.
+ */
 struct CODEXTACTICS_API FPlayerCommandInfo
 {
 	FName Id;
 	/** Default binding as shown on hint cards, e.g. "B", "Alt+V", "Ctrl+Click". */
 	const TCHAR* KeyLabel = TEXT("");
-	/** Camera / Orders / Combat / Survival / Time / System. */
+	/** One of PlayerCommands::GetSections() (the Controls screen section it is listed under). */
 	const TCHAR* Section = TEXT("");
 	const TCHAR* Description = TEXT("");
 };
@@ -183,9 +186,22 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName QuickSave;
 	/** F9: quick load. */
 	extern CODEXTACTICS_API const FName QuickLoad;
+	/** F1: the Controls reference screen (a UI hotkey: listed here for the screen, never reported). */
+	extern CODEXTACTICS_API const FName ControlsScreen;
+	/** Esc: the pause menu (listed here for the screen, never reported). */
+	extern CODEXTACTICS_API const FName PauseMenu;
 
 	/** Every command with its default key label (registry order = Controls screen order). */
 	CODEXTACTICS_API const TArray<FPlayerCommandInfo>& GetRegistry();
+
+	/** The Controls screen sections in display order: "Movement & camera", "Squad", "Stances", "Combat", ... */
+	CODEXTACTICS_API const TArray<const TCHAR*>& GetSections();
+
+	/** Overrides the key label of a command (a rebound key); an empty label restores the default. */
+	CODEXTACTICS_API void SetKeyLabelOverride(FName Id, const FString& KeyLabel);
+
+	/** The key label to show for Id now: the rebound one, else the registry default; empty for an unknown id. */
+	CODEXTACTICS_API FString GetKeyLabel(FName Id);
 
 	/** The registry row of Id, nullptr when unknown. */
 	CODEXTACTICS_API const FPlayerCommandInfo* Find(FName Id);

@@ -1,6 +1,7 @@
 #include "UI/Frontend/CodexActivatableScreen.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/TextBlock.h"
+#include "InputCoreTypes.h"
 #include "UI/Frontend/CodexMenuButton.h"
 #include "UI/Frontend/CodexUISubsystem.h"
 
@@ -158,17 +159,43 @@ void UCodexActivatableScreen::HookEntryButtons()
 	}
 	WidgetTree->ForEachWidget([this](UWidget* Widget)
 	{
-		UCodexMenuButton* Button = Cast<UCodexMenuButton>(Widget);
-		if (!Button || Button->GetEntryId().IsNone())
-		{
-			return;
-		}
-		EntryButtons.Add(Button);
-		Button->SetIsSelectable(true);
-		Button->SetIsInteractableWhenSelected(true); // a selected entry still activates on click / Enter
-		const FName Id = Button->GetEntryId();
-		Button->OnHovered().AddWeakLambda(this, [this, Id]() { SelectEntry(Id); });
-		Button->OnFocusReceived().AddWeakLambda(this, [this, Id]() { SelectEntry(Id); });
-		Button->OnClicked().AddWeakLambda(this, [this, Id]() { ActivateEntry(Id); });
+		HookEntryButton(Cast<UCodexMenuButton>(Widget));
 	});
+}
+
+void UCodexActivatableScreen::HookEntryButton(UCodexMenuButton* Button)
+{
+	if (!Button || Button->GetEntryId().IsNone() || EntryButtons.Contains(Button))
+	{
+		return;
+	}
+	EntryButtons.Add(Button);
+	Button->SetIsSelectable(true);
+	Button->SetIsInteractableWhenSelected(true); // a selected entry still activates on click / Enter
+	const FName Id = Button->GetEntryId();
+	Button->OnHovered().AddWeakLambda(this, [this, Id]() { SelectEntry(Id); });
+	Button->OnFocusReceived().AddWeakLambda(this, [this, Id]() { SelectEntry(Id); });
+	Button->OnClicked().AddWeakLambda(this, [this, Id]() { ActivateEntry(Id); });
+}
+
+bool UCodexActivatableScreen::HandleHotkey(const FKey& Key)
+{
+	if (bHandlesControlsHotkey && Key == EKeys::F1)
+	{
+		if (UCodexUISubsystem* UI = UCodexUISubsystem::Get(this))
+		{
+			UI->ToggleControlsScreen();
+		}
+		return true;
+	}
+	return false;
+}
+
+FReply UCodexActivatableScreen::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	if (!InKeyEvent.IsRepeat() && HandleHotkey(InKeyEvent.GetKey()))
+	{
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }

@@ -208,6 +208,8 @@ private:
 	/** Turn-based combat subsystem while a grid fight is running, else null. */
 	class UTurnBasedCombatSubsystem* GetActiveTurnBased() const;
 	void DialogueSkip();
+	/** F1: opens / closes the Controls reference (UCodexUISubsystem::ToggleControlsScreen); also while the world is paused. */
+	void ControlsKey();
 	void SelectMember1() { SelectMember(0); }
 	void SelectMember2() { SelectMember(1); }
 	void SelectMember3() { SelectMember(2); }
