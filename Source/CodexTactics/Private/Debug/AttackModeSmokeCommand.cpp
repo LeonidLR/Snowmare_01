@@ -133,22 +133,24 @@ namespace AttackModeSmoke
 			const FTurnUnitState* Unit = TurnBased->GetUnitState(TurnBased->GetActiveUnit());
 			const TMap<FIntPoint, FTurnBasedAttackCell> Cells = TurnBasedRules::GetWeaponAttackCells(*TurnBased->GetGrid(), Unit->GridPos,
 				TurnBased->GetActiveUnit()->CurrentWeapon, Unit->Stance, FTurnBasedBalance());
+			// Rays can end before the weapon's max range (grid edge, obstacles), so the far end is the farthest reached cell
+			// and every cell must match Godot's lerp(1.0, 0.25, (distance - 1) / max(1, max_range - 1)).
 			float Near = -1.f;
-			float Far = 2.f;
+			int32 FarthestDistance = 1;
+			bool bAllMatch = true;
 			for (const TPair<FIntPoint, FTurnBasedAttackCell>& Entry : Cells)
 			{
 				const float Value = Overlay->GetAttackCellFalloff(Entry.Key);
+				const float Span = FMath::Max(1.f, static_cast<float>(Entry.Value.MaxRange - 1));
+				bAllMatch &= FMath::IsNearlyEqual(Value, FMath::Lerp(1.f, 0.25f, static_cast<float>(Entry.Value.Distance - 1) / Span), 0.01f);
 				if (Entry.Value.Distance == 1)
 				{
 					Near = Value;
 				}
-				if (Entry.Value.Distance == Entry.Value.MaxRange && Entry.Value.MaxRange > 1)
-				{
-					Far = FMath::Min(Far, Value);
-				}
+				FarthestDistance = FMath::Max(FarthestDistance, Entry.Value.Distance);
 			}
-			Check(State, FMath::IsNearlyEqual(Near, 1.f) && FMath::IsNearlyEqual(Far, 0.25f, 0.01f),
-				FString::Printf(TEXT("falloff: 1st cell %.2f, farthest %.2f"), Near, Far));
+			Check(State, FMath::IsNearlyEqual(Near, 1.f) && bAllMatch && FarthestDistance > 1,
+				FString::Printf(TEXT("falloff: 1st cell %.2f, farthest reached %d cells, all match %d"), Near, FarthestDistance, bAllMatch ? 1 : 0));
 
 			// Hit chance over a matrix cell.
 			if (Cells.Num() > 0)
