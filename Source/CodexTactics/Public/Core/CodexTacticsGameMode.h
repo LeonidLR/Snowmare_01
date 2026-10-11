@@ -14,6 +14,10 @@ class AOperativeCharacter;
 class ABarricadeActor;
 class AProximityMineActor;
 class ATurretActor;
+class APortableStoveActor;
+class ACampfireActor;
+class ASignalFlareActor;
+class AFirePuddleActor;
 
 /** One squad member spawned at mission start. */
 USTRUCT(BlueprintType)
@@ -92,6 +96,19 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
 	TSubclassOf<ATurretActor> TurretClass;
+
+	/** Sprint 15 heat sources (a Blueprint subclass with real meshes / VFX may replace each). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
+	TSubclassOf<APortableStoveActor> PortableStoveClass;
+
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
+	TSubclassOf<ACampfireActor> CampfireClass;
+
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
+	TSubclassOf<ASignalFlareActor> SignalFlareClass;
+
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Deployables")
+	TSubclassOf<AFirePuddleActor> FirePuddleClass;
 
 	/** Balance the turn-based combat reads (Godot turn_based_combat_manager loads resources/balance.tres first). */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Balance")

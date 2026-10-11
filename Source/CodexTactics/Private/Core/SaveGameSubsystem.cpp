@@ -19,6 +19,10 @@
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/BarrelActor.h"
+#include "Interactables/CampfireActor.h"
+#include "Interactables/PortableStoveActor.h"
+#include "Survival/TacticalHeatSubsystem.h"
+#include "Survival/TacticalHeatTimerComponent.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/DeployableActor.h"
 #include "Interactables/DroppedItemActor.h"
@@ -250,6 +254,13 @@ namespace
 		Soldier->SetNumberField(TEXT("bread_count"), Member->BreadCount);
 		Soldier->SetNumberField(TEXT("chocolate_count"), Member->ChocolateCount);
 		Soldier->SetNumberField(TEXT("grenades_count"), Member->GrenadesCount);
+		// Sprint 15 heat items (UE-only keys; older saves keep the spawned loadout).
+		Soldier->SetNumberField(TEXT("heat_packs_count"), Member->HeatPacksCount);
+		Soldier->SetNumberField(TEXT("firewood_count"), Member->FirewoodCount);
+		Soldier->SetNumberField(TEXT("flares_count"), Member->FlaresCount);
+		Soldier->SetNumberField(TEXT("stoves_count"), Member->PortableStovesCount);
+		Soldier->SetNumberField(TEXT("stove_gas_seconds"), Member->StoveGasSeconds);
+		Soldier->SetNumberField(TEXT("heat_buffer_left"), Member->ColdSurvival ? Member->ColdSurvival->GetHeatBufferSecondsLeft() : 0.f);
 		Soldier->SetBoolField(TEXT("is_guarding"), Member->bGuarding);
 		// Version 2: the own fire posture ("" = follows the squad) and the bonus items found in crates.
 		Soldier->SetStringField(TEXT("posture_override"), Member->bHasPostureOverride ? SaveEnumName(Member->PostureOverride) : FString());
@@ -312,6 +323,15 @@ namespace
 		Member->BreadCount = SaveInt(Info, TEXT("bread_count"), Member->BreadCount);
 		Member->ChocolateCount = SaveInt(Info, TEXT("chocolate_count"), Member->ChocolateCount);
 		Member->GrenadesCount = SaveInt(Info, TEXT("grenades_count"), Member->GrenadesCount);
+		Member->HeatPacksCount = SaveInt(Info, TEXT("heat_packs_count"), Member->HeatPacksCount);
+		Member->FirewoodCount = SaveInt(Info, TEXT("firewood_count"), Member->FirewoodCount);
+		Member->FlaresCount = SaveInt(Info, TEXT("flares_count"), Member->FlaresCount);
+		Member->PortableStovesCount = SaveInt(Info, TEXT("stoves_count"), Member->PortableStovesCount);
+		Member->StoveGasSeconds = SaveFloat(Info, TEXT("stove_gas_seconds"), Member->StoveGasSeconds);
+		if (Member->ColdSurvival)
+		{
+			Member->ColdSurvival->RestoreHeatBuffer(SaveFloat(Info, TEXT("heat_buffer_left"), Member->ColdSurvival->GetHeatBufferSecondsLeft()));
+		}
 		Member->bGuarding = SaveBool(Info, TEXT("is_guarding"), false);
 		FString Posture;
 		if (Info->TryGetStringField(TEXT("posture_override"), Posture))
@@ -415,6 +435,14 @@ namespace
 		{
 			Entry->SetBoolField(TEXT("read"), Narrative->bHasBeenRead);
 		}
+		// Sprint 15: a campfire's burn timer / a stove's gas.
+		if (const UTacticalHeatTimerComponent* Timer = Object->FindComponentByClass<UTacticalHeatTimerComponent>())
+		{
+			Entry->SetBoolField(TEXT("heat_burning"), Timer->IsBurning());
+			Entry->SetBoolField(TEXT("heat_burnt_out"), Timer->IsBurntOut());
+			Entry->SetNumberField(TEXT("heat_time_left"), Timer->GetTimeLeft());
+			Entry->SetNumberField(TEXT("heat_round_seconds"), Timer->GetSecondsPerRound());
+		}
 		return Entry;
 	}
 
@@ -473,6 +501,21 @@ namespace
 		if (ANarrativeElementActor* Narrative = Cast<ANarrativeElementActor>(Object))
 		{
 			Narrative->bHasBeenRead = SaveBool(Entry, TEXT("read"), Narrative->bHasBeenRead);
+		}
+		if (Entry->HasField(TEXT("heat_time_left")))
+		{
+			const bool bBurning = SaveBool(Entry, TEXT("heat_burning"), false);
+			const bool bBurntOut = SaveBool(Entry, TEXT("heat_burnt_out"), false);
+			const float TimeLeft = SaveFloat(Entry, TEXT("heat_time_left"), 0.f);
+			const float RoundSeconds = SaveFloat(Entry, TEXT("heat_round_seconds"), 0.f);
+			if (ACampfireActor* Campfire = Cast<ACampfireActor>(Object))
+			{
+				Campfire->RestoreHeatState(bBurning, bBurntOut, TimeLeft, RoundSeconds);
+			}
+			else if (APortableStoveActor* Stove = Cast<APortableStoveActor>(Object))
+			{
+				Stove->RestoreHeatState(bBurning, bBurntOut, TimeLeft, RoundSeconds);
+			}
 		}
 	}
 
@@ -848,6 +891,11 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 		Piles.Add(MakeShared<FJsonValueObject>(Pile));
 	}
 	WorldState->SetArrayField(TEXT("dropped_items"), Piles);
+	// Sprint 15: loose heat sources (signal flares, fire puddles).
+	if (const UTacticalHeatSubsystem* Heat = World->GetSubsystem<UTacticalHeatSubsystem>())
+	{
+		WorldState->SetArrayField(TEXT("heat_sources"), Heat->SaveLooseSources());
+	}
 	WorldState->SetArrayField(TEXT("dismantled_objects"), {});
 
 	// Version 2: every other interactable by its actor name.
@@ -1233,6 +1281,16 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			{
 				ADroppedItemActor::SpawnOrMerge(World, Point, Pair.Key, Pair.Value);
 			}
+		}
+	}
+
+	// Sprint 15: signal flares / fire puddles (older saves have none: the session's stay).
+	const TArray<TSharedPtr<FJsonValue>>* HeatSources = nullptr;
+	if ((*WorldState)->TryGetArrayField(TEXT("heat_sources"), HeatSources))
+	{
+		if (UTacticalHeatSubsystem* Heat = World->GetSubsystem<UTacticalHeatSubsystem>())
+		{
+			Heat->LoadLooseSources(*HeatSources);
 		}
 	}
 

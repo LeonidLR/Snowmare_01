@@ -10,6 +10,8 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/HeatSourceComponent.h"
+#include "Data/TacticalHeatTuning.h"
+#include "Survival/TacticalHeatRules.h"
 #include "UI/GameMessageSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "ColdSurvival"
@@ -70,6 +72,56 @@ bool UColdSurvivalComponent::IsNearHeatSource() const
 	return false;
 }
 
+float UColdSurvivalComponent::GetHeatSourceWarmthRate() const
+{
+	const AActor* Owner = GetOwner();
+	float Best = 0.f;
+	if (!Owner)
+	{
+		return Best;
+	}
+	for (const TWeakObjectPtr<UHeatSourceComponent>& Source : UHeatSourceComponent::GetAllSources())
+	{
+		if (Source.IsValid() && Source->GetWorld() == GetWorld() && Source->WarmthRate > Best && Source->IsLocationWarm(Owner->GetActorLocation()))
+		{
+			Best = Source->WarmthRate;
+		}
+	}
+	return Best;
+}
+
+bool UColdSurvivalComponent::ApplyHeatPack(const FTacticalHeatConfig& HeatConfig)
+{
+	AOperativeCharacter* Owner = Operative.Get();
+	const UHealthComponent* Health = Owner ? Owner->HealthComponent.Get() : nullptr;
+	if (!Owner || (Health && !Health->IsAlive()) || !TacticalHeatRules::CanUseHeatPack(Owner->ColdLevel, bFrostbitten))
+	{
+		return false;
+	}
+	const FHeatPackResult Result = TacticalHeatRules::ApplyHeatPack(HeatConfig, Owner->ColdLevel, bFrostbitten);
+	Owner->ColdLevel = Result.NewCold;
+	HeatBufferSecondsLeft = Result.BufferSeconds;
+	if (Result.bClearsFrostbite)
+	{
+		// The collapsed operative can move again: he gets up to a crouch (safe in a fight; Z stands him up).
+		bFrostbitten = false;
+		Owner->SetStance(EOperativeStance::Crouching);
+	}
+	const bool bWasFrozen = bWeaponFrozen;
+	bWeaponFrozen = ColdRules::UpdateWeaponFrozen(Config, bWeaponFrozen, Owner->ColdLevel, IsNearHeatSource());
+	if (bWasFrozen && !bWeaponFrozen)
+	{
+		UFloatingTextSubsystem::SpawnAboveOperative(Owner, TEXT("🔥 WEAPON THAWED!"), FLinearColor(1.f, 0.6f, 0.2f));
+	}
+	const EColdTier NewTier = ColdRules::GetTier(Owner->ColdLevel);
+	if (NewTier != Tier)
+	{
+		Tier = NewTier;
+		ApplyTierEffects(Tier);
+	}
+	return true;
+}
+
 float UColdSurvivalComponent::GetMisfireChance() const
 {
 	return Operative.IsValid() ? ColdRules::GetMisfireChance(Config, Operative->ColdLevel, IsNearHeatSource()) : 0.f;
@@ -107,6 +159,9 @@ FColdEnvironment UColdSurvivalComponent::GatherEnvironment() const
 	Environment.bElevated = FeetZ >= Config.ElevatedHeight;
 	Environment.bSprinting = Operative->IsSprinting() && Operative->GetVelocity().Size2D() > 150.f;
 	Environment.bInCover = Operative->bInCover; // Sprint 12: a wall at the back halves the wind chill
+	// Sprint 15: a fire puddle's ring warms faster; a heat pack's buffer halves the accumulation.
+	Environment.WarmthRateOverride = Environment.bWarm ? GetHeatSourceWarmthRate() : 0.f;
+	Environment.AccumulationMultiplier = TacticalHeatRules::GetBufferAccumulationMultiplier(TacticalHeatTuning::Get(), HeatBufferSecondsLeft);
 	return Environment;
 }
 
@@ -121,6 +176,7 @@ void UColdSurvivalComponent::StepCold(float DeltaSeconds)
 
 	const FColdEnvironment Environment = GatherEnvironment();
 	Owner->ColdLevel = ColdRules::StepCold(Config, Owner->ColdLevel, DeltaSeconds, Environment, Owner->GetStance(), Fortitude);
+	HeatBufferSecondsLeft = FMath::Max(0.f, HeatBufferSecondsLeft - DeltaSeconds);
 	const float Cold = Owner->ColdLevel;
 
 	if (Health)

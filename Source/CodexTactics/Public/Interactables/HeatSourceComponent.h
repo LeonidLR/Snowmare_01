@@ -43,4 +43,14 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Heat")
 	bool bHeatActive = false;
+
+	/**
+	 * Sprint 15: own warming rate inside the zone, %/s (0 = the operative's FColdConfig::WarmthRecoveryRate with his fortitude
+	 * boost; a residual fire puddle's radiant ring sets 12). The strongest covering source wins.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Heat", meta = (ClampMin = "0"))
+	float WarmthRate = 0.f;
+
+	/** Sprint 15: distance at which Location stops counting (Radius + Tolerance). */
+	float GetWarmReach() const { return Radius + Tolerance; }
 };

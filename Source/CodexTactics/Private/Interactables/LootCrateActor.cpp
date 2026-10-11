@@ -6,6 +6,7 @@
 #include "EngineUtils.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/ItemStashComponent.h"
+#include "Characters/TransferRules.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
@@ -34,6 +35,9 @@ namespace
 		case ELootItem::Barricade: return FText::Format(LOCTEXT("TookBarricade", "+{0} 🧱 Barricade"), Count);
 		case ELootItem::Mine: return FText::Format(LOCTEXT("TookMine", "+{0} 💣 Mine"), Count);
 		case ELootItem::BonusWeapon: return FText::Format(LOCTEXT("TookWeapon", "⭐ Weapon: {0}"), FText::FromString(Id));
+		case ELootItem::HeatPack: return FText::Format(LOCTEXT("TookHeatPack", "+{0} 🔥 Heat pack"), Count);
+		case ELootItem::Firewood: return FText::Format(LOCTEXT("TookFirewood", "+{0} 🪵 Firewood"), Count);
+		case ELootItem::Flare: return FText::Format(LOCTEXT("TookFlare", "+{0} 🎆 Signal flare"), Count);
 		default: return FText::Format(LOCTEXT("TookClothing", "🧥 Gear: {0}"), FText::FromString(Id));
 		}
 	}
@@ -235,7 +239,10 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 	const FString Id = Item == ELootItem::BonusWeapon ? Contents.BonusWeaponId
 		: (Item == ELootItem::BonusClothing ? Contents.BonusClothingId : FString());
 	ETransferItem Storable = ETransferItem::Medkit;
-	const int32 Count = ItemStash::FromLootItem(Item, Storable) ? Stash->Take(Storable, MAX_int32) : Contents.Take(Item);
+	// Sprint 15: a heat-pack stack / flare pouch takes only what fits (the rest stays in the crate).
+	const bool bLimited = Item == ELootItem::HeatPack || Item == ELootItem::Flare;
+	const int32 Room = bLimited && ItemStash::FromLootItem(Item, Storable) ? TransferRules::GetRecipientCapacity(*Collector, Storable) : MAX_int32;
+	const int32 Count = ItemStash::FromLootItem(Item, Storable) ? Stash->Take(Storable, Room) : Contents.Take(Item);
 	if (Count <= 0)
 	{
 		return FText::GetEmpty();
@@ -254,6 +261,9 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 	case ELootItem::Mine: Collector->MinesCount += Count; break;
 	case ELootItem::BonusWeapon:
 	case ELootItem::BonusClothing: Collector->BonusItems.Add(Id); break;
+	case ELootItem::HeatPack:
+	case ELootItem::Firewood:
+	case ELootItem::Flare: TransferRules::AddToOperative(*Collector, Storable, Count); break;
 	default: Collector->AddAmmo(AmmoKey(Item).ToString(), Count); break;
 	}
 	UpdateVisuals();
@@ -316,7 +326,7 @@ void ALootCrateActor::RestoreSaved(bool bInLooted, bool bInDefused, bool bInDest
 
 void ALootCrateActor::SyncContentsIntoStash()
 {
-	for (uint8 Index = 0; Index <= static_cast<uint8>(ETransferItem::PlasmaAmmo); ++Index)
+	for (uint8 Index = 0; Index <= static_cast<uint8>(LastTransferItem); ++Index)
 	{
 		const ETransferItem Item = static_cast<ETransferItem>(Index);
 		const int32 Count = Contents.Take(ItemStash::ToLootItem(Item));

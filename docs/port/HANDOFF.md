@@ -93,6 +93,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `CoverSmoke` | Sprint 12 tactical cover (2026-10-06): a 3 m wall + 60 cm barricade spawned at runtime; the wall found as high cover (slot 45-60 cm off it, corners probed), the barricade as low cover; sprint + `EnterCover` (back to the wall, standing, body ALONG the wall — user rule 2026-10-06), threat right -> faces right, shimmy right = forward clip (walk_fwd_loop), shimmy left = backward clip still facing right (±10°), threat moves left -> turns left + walks to that corner (look_at idle), Ctrl + click = corner shot with bLeaning then back, the cover ghost wears M_Silhouette (overlay + base slots), a hit from behind the wall absorbed 90 % and a crit undone, a flank hit full, a diagonal enemy out of earshot does not perceive him until he leans out, Commander Mode: laser -> crouch + hold, laser gone -> stand + peek, N blind fire, a move order leaves, a planned walk to the remembered slot enters |
 | `WaveCombatSmoke` | enemy archetypes, wave subsystem (Gemini) |
 | `ColdSmoke` | cold accumulation, Freezing tier speed, frostbite, frozen weapon |
+| `TacticalHeatSmoke [shot]` | Sprint 15 (2026-10-11): starting loadout; 100 % cold -> frostbite -> U heat pack: cold 65, frostbite gone, up to a crouch, 45 s buffer halves the accumulation; a pack dropped on a cold mate is used on him; drawer «Campfire» line -> placement -> walk -> kindled from 1 match + 1 firewood (3.5 m, 75 s), a patrol 9 m away searches, warming next to it, one turn-based round = 18.75 s, a dialogue blocker freezes it; «Gas stove»: the engineer hands it over with its 180 s of gas, set up (2.2 m, gas burns), «Pack up» returns it with the rest; Shift + G flare thrown 12 m (1.8 m, 40 s, reveals 10 m), a click at the feet lights the second; an exploded barrel leaves a fire puddle (core burns the engineer, the ring warms the medic at 12 %/s, no damage, weapon thaws); wave fight -> tactical pause: campfire / flare timers frozen, released: they run. `shot` (rendered `UnrealEditor.exe -game`) saves `Saved/Screenshots/Phone/heat_sources.png` |
 | `StanceSmoke` | BP_Operative + Explorer mesh + ABP, capsule per stance |
 | `BarrelSmoke` | light a barrel (match), warmth, burn-out, burnt menu, no matches |
 | `RelocationSmoke` | «Вытолкать» a barrel 6 m, cold refusal, cancel |
@@ -234,6 +235,31 @@ Module `CodexTactics` (runtime). Folder → class → Godot reference.
 
 **Survival** — `Survival/ColdRules`, `ColdSurvivalComponent`; `Interactables/HeatSourceComponent`. Godot
 `player.gd _process_cold_system`, `warm_zone.gd`.
+**Mobile & tactical heat (Sprint 15, TANDEM #14, 2026-10-11, UE-only)** — every source warms through `UHeatSourceComponent`
+(`UColdSurvivalComponent::IsNearHeatSource`: warming, warm regeneration, weapon thaw; the beasts' existing fire fear of any active
+heat source applies too). Pure `Survival/TacticalHeatRules` (`FTacticalHeatConfig` = Gemini's spec values, `FHeatBurnState`, heat
+pack / buffer, campfire wind + craft, puddle zones, `ShouldAdvanceRealTime`) read from `Content/Data/Survival/tactical_heat.json`
+(`Data/TacticalHeatTuning`, loaded at StartPlay; `CodexTactics.DumpTacticalHeat`). `UTacticalHeatTimerComponent` (burn time / gas) is
+advanced only by `Survival/UTacticalHeatSubsystem`: real time when not in the tactical pause (incl. the free horde pause and its
+flyover), not turn-based and not under a dialogue / cutscene (`UWorldAIPauseSubsystem`); one turn-based squad round
+(`UTurnBasedCombatSubsystem::OnRoundAdvanced`) burns total / rounds. The subsystem also runs the heat pack (`UseHeatPack`: self or a
+mate, 1 AP in turn-based), the flare reveal (`IsRevealedByFlare`, used by `UTacticalSightSubsystem`) and the save of loose sources.
+- Heat pack: `EPersonalItem::HeatPack`, `AOperativeCharacter::HeatPacksCount` (stack 3), U / drawer line; dragged onto a cold mate
+  (`USquadTransferSubsystem::Execute`, `ACodexTacticsHUD::HandleTransferRequest`) it is used on him; `UColdSurvivalComponent::ApplyHeatPack`
+  (-35 points, frostbite cleared -> crouch, 45 s buffer: `FColdEnvironment::AccumulationMultiplier` 0.5).
+- Campfire: `Interactables/ACampfireActor` (`EDeployableType::Campfire`; count = what matches + `FirewoodCount` (or 10 flamethrower
+  fuel) make), F cycle / drawer, kindled by `OnDeployedBy`; ashes can be rekindled from the menu; patrols within 15 m search
+  (`AlertPatrols`, every 10 s); wind on high ground (base Z >= 140) -20 % burn time.
+- Portable gas stove: `Interactables/APortableStoveActor` (`EDeployableType::PortableStove`, max 1 each, `StoveGasSeconds` travels
+  with the item: `AOperativeCharacter::MoveDeployableTo`, `OnDeployedBy` / `OnPickedUpBy`); «Pack up» = the deployable pick-up
+  (1.5 s, into the packer's inventory). Silent, no smoke, windproof; not auto-recovered after a wave.
+- Signal flare: `Combat/ASignalFlareActor` (base `Survival/ATacticalHeatActor`), `FlaresCount`; Shift + G / the weapon selector's 5th
+  line / drawer: `UGrenadeSubsystem::StartFlareAim` (grenade rings and arc, 20 m standing / 15 m crouched), `ThrowFlareAt` (throw clip),
+  a click within 2 m = `LightFlareAtFeet`. Refused in turn-based combat.
+- Fire puddle: `Combat/AFirePuddleActor` (core 1.2 m: Fire + Burning pulses every 0.5 s; ring 3.5 m: `UHeatSourceComponent::WarmthRate`
+  12 %/s, `FColdEnvironment::WarmthRateOverride`), 12-15 s / 1 round; `ABarrelActor::Explode` / `IgniteForTurnBased` leave one.
+- Visual slots: placeholder engine shapes + point lights; Niagara slots load `/Game/VFX/Heat/NS_Campfire|NS_PortableStove|NS_SignalFlare|NS_FirePuddle`
+  when Gemini creates them (TANDEM request #15); game-mode classes `CampfireClass` / `PortableStoveClass` / `SignalFlareClass` / `FirePuddleClass`.
 
 **Interaction / world objects**
 - `Interactables/InteractionSubsystem` — click → approach → `BuildActionMenu` → menu or feed line; confirm /
@@ -352,6 +378,17 @@ Python names drop the `b` prefix of bools: `bTrapped` → `trapped`),
 clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot). All are idempotent.
 
 ## 6. Data / content status
+
+- **Tactical heat data (Sprint 15, 2026-10-11).** `Content/Data/Survival/tactical_heat.json` (staged as UFS) holds every value of
+  `FTacticalHeatConfig` (snake_case keys, cm / s / cold points / AP): heat pack 35 / 45 s / x0.5 / 1 AP / stack 3; campfire 350 cm /
+  75 s / 4 rounds / wind x0.8 from Z 140 / 1 match + 1 firewood or 10 fuel / noise 15 m every 10 s / 3 AP; stove 220 cm / 180 s gas /
+  15 s per round / 2 AP / pack-up 1.5 s / 1 each; flare 180 cm / 40 s / 2 rounds / throw 20 m / at feet within 2 m / reveal 10 m /
+  3 carried; puddle core 120 / ring 350 cm / 12 %/s / 12-15 s / 1 round / 10 dps (pulse 0.5 s) + Burning 3 s x 5 / barrel puddle on;
+  new sources' heat tolerance 0 (old sources keep Godot's 50 cm). `starting_loadout` per role (commander 1 pack + 1 firewood + 1 flare,
+  engineer 1 pack + 1 firewood + the stove (full canister), medic-sapper 2 packs + 1 flare). Loot: `FLootContents` HeatPacks 1 / Firewood 1 /
+  Flares 0 per crate by default (editable per crate). Save keys (squad): `heat_packs_count`, `firewood_count`, `flares_count`,
+  `stoves_count`, `stove_gas_seconds`, `heat_buffer_left`; objects: `heat_burning` / `heat_burnt_out` / `heat_time_left` /
+  `heat_round_seconds`; world: `heat_sources` (flares, puddles).
 
 - **Sudden horde start data (2026-10-11).** Level JSON per wave `"sudden_start"` (bool, default true when missing; Wave Editor
   card button «ВНЕЗАПНАЯ АТАКА» / «С ПОДГОТОВКОЙ»): false keeps the old start of that wave. `prep_phase_duration` /
@@ -619,6 +656,19 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 
 ## 7. Open user decisions / questions
 
+- **Sprint 15 heat - design gaps decided by Claude (2026-10-11), waiting for the user's confirmation** (values in tactical_heat.json):
+  (1) heat pack "-35 %" = 35 points of the 0..100 cold scale (like the food's "25 % cold off"), frostbite cleared -> the operative gets
+  up to a crouch; a pack dragged onto a COLD mate is used on him, onto a warm one it is handed over; (2) items: starting loadout (above) +
+  every crate 1 heat pack + 1 firewood; flares only per crate / loadout; the stove only in the loadout (no gas canister item yet);
+  (3) keys: U = heat pack, Shift + G = flare (and the selector's 5th line), F / drawer = stove and campfire (F keeps the Godot priority of
+  turrets / barricades / mines; heat gear when the squad has none, or by cycling F while placing); (4) crafting = the campfire's set-up
+  spends 1 match + 1 firewood (else 10 flamethrower fuel; no crafting UI); new item `Firewood`; the "Fuel" of the spec = flamethrower
+  fuel; (5) campfire noise = patrols within 15 m start a search (no ambush / fight start); (6) wind = the cold system's elevation rule
+  (fire base Z >= 140); (7) the beasts' fear of the flare = the existing fire fear of every active heat source (hounds / cutters /
+  frostbitten flee while inside 6 m) instead of a 2 s hesitation — it also applies to the campfire, stove and puddle; (8) not in
+  turn-based: throwing / lighting a flare; deploying the stove / campfire costs 2 / 3 AP there; (9) an exploded barrel leaves a puddle
+  (its core damages operatives too); (10) no night / darkness system exists: the flare's "night accuracy" part has no hook.
+
 - **Sniper rifle vs move orders (user decision 2026-10-09, confirmed):** the fire posture's automatic fire never interrupts a
   player's move order — the Medic-Sapper does not shoot while walking and fires only once she has stopped (kneeling first);
   direct fire orders (priority target, Ctrl + click, planned / turn-based shot) do stop her (`SniperRules::NextStep`).
@@ -670,6 +720,9 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 
 ## 8. Next steps (in order)
 
+- **Sprint 15 heat (2026-10-11), waiting for the user:** confirm the design decisions (§7 «Sprint 15 heat»), look at
+  `Saved/Screenshots/Phone/heat_sources.png` (main folder; placeholder shapes); Gemini: VFX / materials (TANDEM request #15). Open:
+  gas canister refill item, flamethrower hook (`AFirePuddleActor::SpawnAt`), night accuracy (no night system), flares in turn-based combat.
 - **Knockdown tuning (2026-10-11), waiting for the user:** branch `agents/knockdown` (worktree `../CodexTactics-agents3`) merged to main (9da272b); clips `Saved/Screenshots/Phone/knockdown_faster_getup.mp4` / `knockdown_tb_getup.png`. Answered 2026-10-11: the Brute blow is guaranteed again (done), no shooting while lying in turn-based for now.
 - **Sudden horde start (2026-10-11, reworked), waiting for the user:** watch `Saved/Screenshots/Phone/horde_intro_flyover.mp4`
   (main folder); tune with `Codex.HordeIntro.*`, then move the numbers into DA_GameBalanceConfig. Open: a bottom-HUD effect on
@@ -753,6 +806,10 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 
 ## 9. Known gaps / tech debt
 
+- **Sprint 15 heat gaps (2026-10-11):** no flamethrower in the arsenal (puddle hook `AFirePuddleActor::SpawnAt` unused but by the
+  barrel); no night / darkness system (the flare's "removes night accuracy penalties" has no hook); no gas canister refill item; the stove
+  is not a drag & drop item (it moves through F hand-overs only); flares cannot be thrown in turn-based combat; the bot does not use the
+  new items; heat items are not shown on the HUD squad panel (drawer only).
 - **Melee chasers stop just outside their bite (found 2026-10-11, pre-existing, NOT changed - gameplay decision):** the chase is
   `MoveToActor(Target, AttackRange * 0.5)` with `bStopOnOverlap` (the reach test adds both capsule radii), so a hound (1.8 m
   range) is "at the goal" at about 1.65-2 m centre to centre, while `EnemyAIRules::CanMelee` measures feet to the target's
@@ -981,6 +1038,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 ## 10. Change log (newest first)
 
 | Commit | What |
+| (this, agents/work) | **Sprint 15 «Mobile & Tactical Heat» (TANDEM #14, user order 2026-10-11 "together with Gemini").** Five heat sources on `UHeatSourceComponent`: heat pack (`EPersonalItem::HeatPack`, U / drawer / drag onto a cold mate; -35 cold, frostbite cleared, 45 s x0.5 buffer, 1 AP), campfire (`ACampfireActor`, crafted at set-up from 1 match + 1 firewood, 3.5 m / 75 s / 4 rounds, -20 % in the wind, patrols within 15 m search), portable gas stove (`APortableStoveActor`, `EDeployableType::PortableStove`, 2.2 m, 180 s gas kept with the item, pack up), signal flare (`ASignalFlareActor`, Shift + G / selector, 20 m arc or at the feet, 1.8 m / 40 s / 2 rounds, reveals 10 m), fire puddle (`AFirePuddleActor`, exploded barrels: core fire + Burning, ring 12 %/s + thaw, 12-15 s / 1 round). Timers: `UTacticalHeatTimerComponent` + `UTacticalHeatSubsystem` (frozen in the tactical pause incl. the free horde pause / flyover, dialogues, cutscenes; turn-based rounds via the new `UTurnBasedCombatSubsystem::OnRoundAdvanced`). Data `Content/Data/Survival/tactical_heat.json` (`TacticalHeatTuning`), loadout per role, loot (+1 pack, +1 firewood per crate), transfer / stash items (`HeatPack`, `Firewood`, `Flare`), drawer lines, F cycle of 5 types (Godot priority kept), turn-based deploy costs (`GetDeployActionPoints`), save (squad items, buffer, gas, campfire / stove timers, loose flares / puddles). Cold: `FColdEnvironment::WarmthRateOverride` / `AccumulationMultiplier`, `UColdSurvivalComponent::ApplyHeatPack`. Tests `CodexTactics.Survival.TacticalHeat.*` (7), `CodexTactics.Loot` defaults now 13 stacks; smoke `TacticalHeatSmoke` (+ `shot`), `SaveRoundTripSmoke` extended. Design decisions waiting for the user: §7. Gemini VFX request #15. |
 | (this, agents/work) | **Free horde pause = unrestricted preparation (user request 2026-10-11): no radius ring, no distance limit.** The free tactical pause that opens a sudden horde wave (`UGameFlowSubsystem::IsFreePause`) used to show the 12 m order ring and clamp orders / placements to it like a paid pause. New pure `GameFlow/PauseOrderRules` (`IsRadiusLimited(bFree)`, `GetOrderRadius(bFree, PauseRadius)`, `UnlimitedRadius` 999900 cm = `RelocationRules::UnlimitedRadius`); `UGameFlowSubsystem::GetPauseOrderRadius()` / `IsPauseRadiusLimited()` now feed every consumer: `USquadSubsystem::PlanMove` callers (`OrderGroupMove`, the cover-slot plan in `CodexTacticsPlayerController`, `UInteractionSubsystem` approach), `URelocationSubsystem::GetRadius` (barricade / deployable / object placement validity + the "too far" refusals) and `URadiusRingSubsystem` (hidden in the free pause for every mode: order ring and the placement rings). **Unchanged (user asked only for the horde start):** the PAID tactical pause (Space during a fight) keeps the 12 m `PauseOrderRadius` clamp, the green ring and the placement rings (`RadiusRingSmoke` PASS). Planned orders still run on release (`ExecutePlannedOrders`; HordeIntroSmoke: planned move + barricade set-up run after Space), the turn-based switch from the free pause and the bot's free-pause flow (defences ordered, pause dismissed) are untouched (no code there; BotRepairSmoke / TurnBasedDeploySmoke PASS). Test `CodexTactics.Combat.HordeIntro.FreePauseHasNoRadius` (rule: the limit applies only in a paid pause; free-pause placement radius unlimited); `HordeIntroSmoke` stage 2 extended (no pause ring, radius 999900, a move order 36 m away is planned as given, a barricade 30 m away is a valid ghost); `test_map.json` rule `horde-intro` also covers `GameFlow/PauseOrderRules*` and `RadiusRingSmoke`. Known flake: HordeIntroSmoke "type:Cutter: the tracked one moves" (0 cm/s) failed once in a parallel batch, PASS on re-run. No asset changes. |
 | (this, agents/work) | **Stance clips root the body: solo-off followers no longer slide while rising (user bug 2026-10-11).** Repro: formation -> Alt+V (squad prone) -> B (solo: followers crouch, the player may lay them down again) -> the leader scouts -> B: the followers were sent to their slots at once (`UpdateFollower` -> `FollowTo` -> `RequestMove`) while the stand-up clip played, so they slid towards the leader rising. Only `OrderMoveTo` knew about stance clips (and only `IsPlayingStanceTransition` + the sprint-from-prone case: the clip starts on the next anim update, so the first frame after `SetStance` was unguarded). **Rule (pure, `OperativeMovementRules::ComputeMoveHold / ShouldDeferMove`, `MoveHoldThreshold` 0.05 s):** a character never translates while a stance change plays: hold = max(settle time armed by `SetStance` = the ABP clip length from `GetStanceChangeDelay`, not in cover; time left of the playing stance clip). `AOperativeCharacter::GetMoveHoldSeconds()`. **Users of the hold:** `OrderMoveTo` (queues the move on `PendingMoveTimer`, replays after the hold - all player/Ctrl+click/regroup/autonomy (`AutonomousMoveTo`)/tactical-pause plan (`ExecutePlannedOrders`)/interaction/relocation orders go through it; the replay re-arms if the hold is still on), `FollowTo` (refuses while held), `USquadSubsystem::UpdateFollower` (a held follower stops if walking and repaths exactly when the hold ends - no 0.2 s lag), turn-based `UTurnBasedCombatSubsystem` grid walk (`Delay = max(prone rise delay, hold)`). Leader movement unchanged (the leader is moved by the player's `OrderMoveTo`, which already waited). **Stance after solo (unchanged by design):** `ExitSoloMode` sets every follower to the LEADER's current stance (as Godot `can_sync_stance` on solo exit), then the formation lets each keep it (user decision 2026-10-01). So prone followers + standing leader: stand up in place (prone->stand clip ~1.85 s), then walk; crouched followers + standing leader: no crouch->stand clip in the ABP (hold 0), they straighten while walking; crawling (prone) leader: followers stay prone and crawl. New `CodexTactics.SoloRejoinSmoke` (`Debug/SoloRejoinSmokeCommand.cpp`, registered + rule operative-movement-squad): 3 variants (prone/standing, crouched/standing, prone/crawling leader) - solo held positions, then after B the stance, the hold (1.85 s), no slide (< 5 cm) while held, the walk starts after the clip and the followers close >= 150 cm to the leader; verified it FAILS with the gate off. Test `CodexTactics.Squad.StanceMoveHold`. Verified: build, 11 Squad tests, SoloRejoin / Movement / Stance / SquadControl / GroupSelect / RealtimeSelect / CommanderMode / TurnWalk / Cover* / Sniper / Guard / TurnBased / Facing smokes PASS (CoverSmoke failed once under parallel load, PASS alone - known timing flake). No asset changes. |
 | (this, agents/work) | **Sudden horde start reworked after the user's review (2026-10-11): the onslaught, not the spawn.** The wave spawns into the running fight (no pause, camera on the squad, normal control); once the horde is a running mass (`HordeIntroRules::RunningFraction` / `IsMassFormed` / `ShouldTrigger`: 60 % at >= 250 cm/s towards the squad for 0.4 s, not before 2.5 s, 6 s at the latest) `UHordeIntroSubsystem` opens the free pause (`FGameFlowStateMachine::EnterFreeTacticalPause`; `IsAwaitingHordeIntro`, `CancelHordeIntro`; Space before the trigger = the free pause), shows the new `UHordeAlertWidget` «HORDE INCOMING / TACTICAL PAUSE - GIVE YOUR ORDERS» and flies over the horde in slow motion (0.2): wide shot of the running mass from the squad's side (`ATacticalCameraPawn::SetCinematicYaw` / `RestorePlayerYaw`), close 7 m tracking shots of a moving front-runner per new type (`PickRunningRepresentative`), back to the leader, then the free pause at 0.02. Delegates `OnHordeIntroStarted` / `OnHordeIntroFinished` for a later HUD effect. `SmokeUtils::StartWaveFight` / `ReleaseHordeIntroPause` dismiss the intro (real time, deterministic); Mission / Victory / LevelWave / QuestChain / MainMenu / SaveRoundTrip check «intro armed»; `HordeIntroSmoke` rewritten; tests `CodexTactics.Combat.HordeIntro.*` (11); `PhoneShots horde` clip. |

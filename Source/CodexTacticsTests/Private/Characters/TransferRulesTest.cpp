@@ -238,7 +238,7 @@ bool FTransferStashCapacityTest::RunTest(const FString&)
 	const int32 Revision = Stash->GetRevision();
 	Stash->Clear();
 	TestTrue(TEXT("cleared, revision bumped"), Stash->IsEmpty() && Stash->GetRevision() > Revision);
-	for (uint8 Index = 0; Index <= static_cast<uint8>(ETransferItem::PlasmaAmmo); ++Index)
+	for (uint8 Index = 0; Index <= static_cast<uint8>(LastTransferItem); ++Index)
 	{
 		const ETransferItem Item = static_cast<ETransferItem>(Index);
 		ETransferItem Back = ETransferItem::Medkit;

@@ -1,4 +1,6 @@
 #include "Interactables/RelocationSubsystem.h"
+#include "Interactables/CampfireActor.h"
+#include "Interactables/PortableStoveActor.h"
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -47,7 +49,7 @@ namespace
 	/** Worker step-back after setting up, cm (Godot: mine 2.2 m, barricade 1.6 m, turret 1.1 m). */
 	float DeployStepBack(EDeployableType Type)
 	{
-		return Type == EDeployableType::Mine ? 220.f : (Type == EDeployableType::Barricade ? 160.f : 110.f);
+		return Type == EDeployableType::Mine ? 220.f : (Type == EDeployableType::Barricade || Type == EDeployableType::Campfire ? 160.f : 110.f);
 	}
 
 	FText NameOf(const AInteractableActor* Object)
@@ -206,6 +208,8 @@ FText URelocationSubsystem::GetDeployableName(EDeployableType Type)
 	{
 	case EDeployableType::Turret: return LOCTEXT("TurretName", "Turret");
 	case EDeployableType::Barricade: return LOCTEXT("BarricadeName", "Barricade");
+	case EDeployableType::PortableStove: return LOCTEXT("StoveName", "Portable stove");
+	case EDeployableType::Campfire: return LOCTEXT("CampfireName", "Campfire");
 	default: return LOCTEXT("MineName", "Mine");
 	}
 }
@@ -221,6 +225,8 @@ TSubclassOf<ADeployableActor> URelocationSubsystem::GetDeployableClass(EDeployab
 	{
 	case EDeployableType::Barricade: return GameMode->BarricadeClass;
 	case EDeployableType::Mine: return GameMode->MineClass;
+	case EDeployableType::PortableStove: return GameMode->PortableStoveClass;
+	case EDeployableType::Campfire: return GameMode->CampfireClass;
 	default: return GameMode->TurretClass;
 	}
 }
@@ -266,14 +272,32 @@ void URelocationSubsystem::HandleDeployKey(AOperativeCharacter* Leader)
 	}
 
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	// The engineering items keep the Godot priority: the leader's own, then a mate's hand-over; Sprint 15 heat gear (stove,
+	// campfire materials) only when the squad has no engineering item at all (F while placing / the drawer reach it anyway).
+	const EDeployableType EngineeringTypes[] = { EDeployableType::Turret, EDeployableType::Barricade, EDeployableType::Mine };
+	const EDeployableType HeatTypes[] = { EDeployableType::PortableStove, EDeployableType::Campfire };
 	const int32 Total = Leader->TurretsCount + Leader->BarricadesCount + Leader->MinesCount;
+	TOptional<EDeployableType> OwnHeatType;
+	for (EDeployableType Type : HeatTypes)
+	{
+		if (!OwnHeatType.IsSet() && Leader->GetDeployableCount(Type) > 0)
+		{
+			OwnHeatType = Type;
+		}
+	}
 	if (Total <= 0)
 	{
 		// Godot _on_ability_button_pressed: a squad mate hands one item over.
 		AOperativeCharacter* Carrier = nullptr;
 		EDeployableType CarrierType = EDeployableType::Turret;
-		for (EDeployableType Type : { EDeployableType::Turret, EDeployableType::Barricade, EDeployableType::Mine })
+		TArray<EDeployableType> Candidates(EngineeringTypes, UE_ARRAY_COUNT(EngineeringTypes));
+		Candidates.Append(HeatTypes, UE_ARRAY_COUNT(HeatTypes));
+		for (EDeployableType Type : Candidates)
 		{
+			if (OwnHeatType.IsSet() && !DeployableRules::IsEngineeringType(Type))
+			{
+				break; // no engineering item in the squad: the leader's own heat gear
+			}
 			for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
 			{
 				if (Member != Leader && Member->GetDeployableCount(Type) > 0)
@@ -288,21 +312,41 @@ void URelocationSubsystem::HandleDeployKey(AOperativeCharacter* Leader)
 				break;
 			}
 		}
-		if (!Carrier)
+		if (Carrier)
+		{
+			Carrier->MoveDeployableTo(*Leader, CarrierType);
+			Leader->SelectedDeployType = CarrierType;
+			Post(Leader->DisplayName, FText::Format(LOCTEXT("HandOver", "🛠️ {0} hands the gear to {1} to deploy!"),
+				Carrier->DisplayName, Leader->DisplayName));
+		}
+		else if (OwnHeatType.IsSet())
+		{
+			Leader->SelectedDeployType = *OwnHeatType;
+		}
+		else
 		{
 			Post(Leader->DisplayName, LOCTEXT("NoItems", "⚠️ The squad has nothing to deploy (Turrets: 0, Barricades: 0, Mines: 0)!"));
 			return;
 		}
-		Carrier->AddDeployable(CarrierType, -1);
-		Leader->AddDeployable(CarrierType, 1);
-		Leader->SelectedDeployType = CarrierType;
-		Post(Leader->DisplayName, FText::Format(LOCTEXT("HandOver", "🛠️ {0} hands the gear to {1} to deploy!"),
-			Carrier->DisplayName, Leader->DisplayName));
 	}
 	EDeployableType Type = Leader->SelectedDeployType;
 	if (Leader->GetDeployableCount(Type) <= 0)
 	{
-		Type = Leader->CycleDeployableType();
+		// The first engineering item he carries, else the next type of the cycle.
+		bool bEngineering = false;
+		for (EDeployableType Each : EngineeringTypes)
+		{
+			if (!bEngineering && Leader->GetDeployableCount(Each) > 0)
+			{
+				Leader->SelectedDeployType = Each;
+				Type = Each;
+				bEngineering = true;
+			}
+		}
+		if (!bEngineering)
+		{
+			Type = Leader->CycleDeployableType();
+		}
 	}
 	StartDeployPlacement(Type, Leader);
 }
@@ -396,8 +440,7 @@ AOperativeCharacter* URelocationSubsystem::PickPreparationWorker(AOperativeChara
 		{
 			return Fallback;
 		}
-		Carrier->AddDeployable(Type, -1);
-		Chosen->AddDeployable(Type, 1);
+		Carrier->MoveDeployableTo(*Chosen, Type);
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Preparation: %s (closest, %.1f m) sets up the %s"), *Chosen->DisplayName.ToString(),
 		FVector::Dist2D(Chosen->GetActorLocation(), GroundPoint) / 100.f, *GetDeployableName(Type).ToString());
@@ -437,6 +480,10 @@ bool URelocationSubsystem::TickDeploy(FDeployTask& Task, float DeltaTime)
 	ADeployableActor* Placed = GetWorld()->SpawnActor<ADeployableActor>(Class, Task.Target + FVector(0.f, 0.f, HalfHeight),
 		FRotator(0.f, Task.Yaw, 0.f), Params);
 	const FText Name = Worker->DisplayName;
+	if (Placed)
+	{
+		Placed->OnDeployedBy(Worker); // Sprint 15: the stove takes its gas, the campfire is kindled (with their own lines)
+	}
 
 	if (AProximityMineActor* Mine = Cast<AProximityMineActor>(Placed))
 	{
@@ -462,6 +509,10 @@ bool URelocationSubsystem::TickDeploy(FDeployTask& Task, float DeltaTime)
 	else if (Task.Type == EDeployableType::Barricade)
 	{
 		Post(Name, LOCTEXT("BarricadePlaced", "Barricade assembled and placed!"));
+	}
+	else if (Task.Type == EDeployableType::PortableStove || Task.Type == EDeployableType::Campfire)
+	{
+		// OnDeployedBy posted the line.
 	}
 	else
 	{

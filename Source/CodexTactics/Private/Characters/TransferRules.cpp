@@ -2,6 +2,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Interactables/DeployableRules.h"
 #include "Interactables/ItemStashComponent.h"
+#include "Data/TacticalHeatTuning.h"
 
 namespace
 {
@@ -14,6 +15,9 @@ namespace
 		case ETransferItem::Bread: return &Operative.BreadCount;
 		case ETransferItem::Chocolate: return &Operative.ChocolateCount;
 		case ETransferItem::Matches: return &Operative.MatchesCount;
+		case ETransferItem::HeatPack: return &Operative.HeatPacksCount;
+		case ETransferItem::Firewood: return &Operative.FirewoodCount;
+		case ETransferItem::Flare: return &Operative.FlaresCount;
 		default: return nullptr;
 		}
 	}
@@ -46,6 +50,9 @@ namespace
 		case ETransferItem::ShotgunAmmo: return TEXT("12g shells");
 		case ETransferItem::FlameFuel: return TEXT("Fuel");
 		case ETransferItem::CryoAmmo: return TEXT("Coolant");
+		case ETransferItem::HeatPack: return TEXT("Heat pack");
+		case ETransferItem::Firewood: return TEXT("Firewood");
+		case ETransferItem::Flare: return TEXT("Signal flare");
 		default: return TEXT("Plasma");
 		}
 	}
@@ -132,6 +139,11 @@ FTransferResult TransferRules::Transfer(AOperativeCharacter& Sender, AOperativeC
 	}
 	int32* From = TransferCountField(Sender, Item);
 	int32* To = TransferCountField(Recipient, Item);
+	if (From && To && *From > 0 && GetRecipientCapacity(Recipient, Item) <= 0)
+	{
+		Result.bRecipientFull = true; // Sprint 15: a full heat-pack stack / flare pouch
+		return Result;
+	}
 	if (From && To && *From > 0)
 	{
 		--*From;
@@ -214,6 +226,14 @@ int32 TransferRules::GetRecipientCapacity(const AOperativeCharacter& Recipient, 
 	if (TransferDeployableType(Item, Type))
 	{
 		return FMath::Max(0, DeployableRules::GetMaxCarried(Type) - Recipient.GetDeployableCount(Type));
+	}
+	if (Item == ETransferItem::HeatPack)
+	{
+		return FMath::Max(0, TacticalHeatTuning::Get().HeatPackMaxStack - Recipient.HeatPacksCount);
+	}
+	if (Item == ETransferItem::Flare)
+	{
+		return FMath::Max(0, TacticalHeatTuning::Get().FlareMaxCarried - Recipient.FlaresCount);
 	}
 	return MAX_int32;
 }

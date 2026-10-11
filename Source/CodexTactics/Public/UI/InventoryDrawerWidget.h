@@ -30,7 +30,16 @@ enum class EInventoryDrawerSlot : uint8
 	ShotgunAmmo,
 	FlameFuel,
 	CryoAmmo,
-	PlasmaAmmo
+	PlasmaAmmo,
+	/** Sprint 15 heat: heat pack (click / U: on the leader; drag onto a cold mate: used on him). */
+	HeatPack,
+	Firewood,
+	/** Click: flare throw aim (like Shift + G). */
+	Flare,
+	/** Click: set up the squad's stove (F placement). */
+	PortableStove,
+	/** Click: build a campfire from matches + firewood (F placement). */
+	Campfire
 };
 
 /**
@@ -114,6 +123,10 @@ private:
 	UFUNCTION() void HandleBread();
 	UFUNCTION() void HandleChocolate();
 	UFUNCTION() void HandleTripwire();
+	UFUNCTION() void HandleHeatPack();
+	UFUNCTION() void HandleFlare();
+	UFUNCTION() void HandleStove();
+	UFUNCTION() void HandleCampfire();
 	UFUNCTION() void HandleClose();
 
 	UPROPERTY()

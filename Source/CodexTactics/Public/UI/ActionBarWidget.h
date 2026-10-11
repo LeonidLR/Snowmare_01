@@ -163,6 +163,10 @@ private:
 	UFUNCTION()
 	void HandleSelectKnife();
 
+	/** Sprint 15: the selector's fifth line, the signal flare (aim mode; the weapon in hands stays). */
+	UFUNCTION()
+	void HandleSelectFlare();
+
 	UPROPERTY()
 	TObjectPtr<UWidget> SelectorPanel;
 

@@ -21,6 +21,7 @@
 #include "Interactables/RelocationSubsystem.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Combat/GrenadeSubsystem.h"
+#include "Data/TacticalHeatTuning.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
 #include "UI/InventoryDrawerWidget.h"
@@ -54,7 +55,8 @@ namespace
 	const FLinearColor SelectorBorder = ACodexTacticsHUD::GodotColor(0.2f, 0.75f, 0.95f);
 	const FLinearColor SelectorTitle = ACodexTacticsHUD::GodotColor(0.4f, 0.9f, 1.f);
 	const FLinearColor SelectorButtonColor = ACodexTacticsHUD::GodotColor(0.2f, 0.22f, 0.27f);
-	const TCHAR* const SelectorIds[] = { TEXT("m16"), TEXT("pistol"), TEXT("grenade"), TEXT("knife") };
+	/** Sprint 15: "flare" is not an arsenal weapon - its line starts the flare aim (UGrenadeSubsystem::StartFlareAim). */
+	const TCHAR* const SelectorIds[] = { TEXT("m16"), TEXT("pistol"), TEXT("grenade"), TEXT("knife"), TEXT("flare") };
 
 	/** Godot role tags (second line of the slot label; the shape names were placeholder art; slot 4 is Ivan). */
 	const TCHAR* const BarRoleTags[] = { TEXT("CMD"), TEXT("ENG"), TEXT("MED"), TEXT("IVAN") };
@@ -250,6 +252,7 @@ void UActionBarWidget::BuildDefaultLayout()
 	SelectorButtons[1]->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSelectPistol);
 	SelectorButtons[2]->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSelectGrenade);
 	SelectorButtons[3]->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSelectKnife);
+	SelectorButtons[4]->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSelectFlare);
 
 	Slots[0].Button->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSlot0);
 	Slots[1].Button->OnClicked.AddDynamic(this, &UActionBarWidget::HandleSlot1);
@@ -335,6 +338,10 @@ void UActionBarWidget::Refresh()
 		if (SelectorButtons.IsValidIndex(2) && BarLeader)
 		{
 			SelectorButtons[2]->SetIsEnabled(BarLeader->GrenadesCount > 0); // Godot b_grenade.disabled = count <= 0
+			if (SelectorButtons.IsValidIndex(4))
+			{
+				SelectorButtons[4]->SetIsEnabled(BarLeader->FlaresCount > 0);
+			}
 		}
 	}
 	if (BarRelocateText)
@@ -436,9 +443,15 @@ FText UActionBarWidget::GetSelectorText(int32 Index) const
 {
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	if (!Leader || Index < 0 || Index > 3)
+	if (!Leader || Index < 0 || Index > 4)
 	{
 		return FText::GetEmpty();
+	}
+	if (Index == 4)
+	{
+		const FTacticalHeatConfig& Heat = TacticalHeatTuning::Get();
+		return FText::FromString(ACodexTacticsHUD::StripUnsupportedGlyphs(FString::Printf(
+			TEXT("🎆 [Shift+G] Signal flare [x%d | light %.0fm | %.0fs]"), Leader->FlaresCount, Heat.FlareRevealRadius / 100.f, Heat.FlareBurnSeconds)));
 	}
 	const FString Id = SelectorIds[Index];
 	const FString Active = Leader->CurrentWeapon && Leader->CurrentWeapon->WeaponId == Id ? TEXT(" ◀ EQUIPPED") : TEXT("");
@@ -639,6 +652,19 @@ void UActionBarWidget::HandleSelectGrenade()
 void UActionBarWidget::HandleSelectKnife()
 {
 	SelectWeapon(TEXT("knife"));
+}
+
+void UActionBarWidget::HandleSelectFlare()
+{
+	if (SelectorPanel)
+	{
+		SelectorPanel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
+	{
+		PC->StartFlareAim();
+	}
+	Refresh();
 }
 
 void UActionBarWidget::HandleRelocate()

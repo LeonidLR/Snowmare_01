@@ -112,6 +112,9 @@ ELootItem ItemStash::ToLootItem(ETransferItem Item)
 	case ETransferItem::Chocolate: return ELootItem::Chocolate;
 	case ETransferItem::CryoAmmo: return ELootItem::CryoAmmo;
 	case ETransferItem::Matches: return ELootItem::Matches;
+	case ETransferItem::HeatPack: return ELootItem::HeatPack;
+	case ETransferItem::Firewood: return ELootItem::Firewood;
+	case ETransferItem::Flare: return ELootItem::Flare;
 	default: return ELootItem::PlasmaAmmo;
 	}
 }
@@ -134,6 +137,9 @@ bool ItemStash::FromLootItem(ELootItem Loot, ETransferItem& OutItem)
 	case ELootItem::Turret: OutItem = ETransferItem::Turret; return true;
 	case ELootItem::Barricade: OutItem = ETransferItem::Barricade; return true;
 	case ELootItem::Mine: OutItem = ETransferItem::Mine; return true;
+	case ELootItem::HeatPack: OutItem = ETransferItem::HeatPack; return true;
+	case ELootItem::Firewood: OutItem = ETransferItem::Firewood; return true;
+	case ELootItem::Flare: OutItem = ETransferItem::Flare; return true;
 	default: return false;
 	}
 }

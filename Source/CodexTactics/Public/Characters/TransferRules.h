@@ -23,8 +23,17 @@ enum class ETransferItem : uint8
 	Chocolate,
 	CryoAmmo,
 	Matches,
-	PlasmaAmmo
+	PlasmaAmmo,
+	/** Sprint 15 (UE-only): chemical heat pack (dropped on a cold mate it is used on him, see USquadTransferSubsystem). */
+	HeatPack,
+	/** Sprint 15: firewood for a campfire. */
+	Firewood,
+	/** Sprint 15: signal flare. */
+	Flare
 };
+
+/** Last ETransferItem value (loops over every item). */
+inline constexpr ETransferItem LastTransferItem = ETransferItem::Flare;
 
 /** Outcome of a hand-over. */
 struct CODEXTACTICS_API FTransferResult
@@ -114,7 +123,10 @@ namespace TransferRules
 	/** The split dialog only opens when there is a choice (MaxQuantity above the minimum); otherwise the transfer is instant. */
 	CODEXTACTICS_API bool NeedsQuantityDialog(ETransferItem Item, int32 MaxQuantity);
 
-	/** How many more the recipient can take: up to the carry maximum for deployables, unlimited (MAX_int32) otherwise. */
+	/**
+	 * How many more the recipient can take: up to the carry maximum for deployables, the heat-pack stack (3) and the flare
+	 * maximum (Sprint 15, tactical_heat.json), unlimited (MAX_int32) otherwise.
+	 */
 	CODEXTACTICS_API int32 GetRecipientCapacity(const AOperativeCharacter& Recipient, ETransferItem Item);
 
 	/** min(available at the sender, recipient capacity). */

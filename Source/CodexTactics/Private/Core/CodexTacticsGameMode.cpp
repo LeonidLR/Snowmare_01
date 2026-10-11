@@ -29,6 +29,11 @@
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TurretActor.h"
+#include "Interactables/CampfireActor.h"
+#include "Interactables/PortableStoveActor.h"
+#include "Combat/FirePuddleActor.h"
+#include "Combat/SignalFlareActor.h"
+#include "Data/TacticalHeatTuning.h"
 #include "Interactables/VaultNavigation.h"
 #include "UI/CodexTacticsHUD.h"
 
@@ -43,6 +48,10 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 	BarricadeClass = ABarricadeActor::StaticClass();
 	MineClass = AProximityMineActor::StaticClass();
 	TurretClass = ATurretActor::StaticClass();
+	PortableStoveClass = APortableStoveActor::StaticClass();
+	CampfireClass = ACampfireActor::StaticClass();
+	SignalFlareClass = ASignalFlareActor::StaticClass();
+	FirePuddleClass = AFirePuddleActor::StaticClass();
 	OperativeClass = AOperativeCharacter::StaticClass();
 	OperativeBlueprint = TSoftClassPtr<AOperativeCharacter>(FSoftObjectPath(TEXT("/Game/Characters/Operatives/BP_Operative.BP_Operative_C")));
 	TurnBasedBalance = TSoftObjectPtr<UGodotBalanceAsset>(FSoftObjectPath(TEXT("/Game/Data/Balance/DA_Balance.DA_Balance")));
@@ -86,6 +95,7 @@ void ACodexTacticsGameMode::StartPlay()
 	WeaponTuning::ApplyFile(WeaponTuning::GetDefaultPath()); // Wave Editor weapon power onto DA_Weapon_* (in memory)
 	SquadROE::ApplyFile(SquadROE::GetDefaultPath()); // Commander Mode tactical ROE (Wave Editor "Squad tactics")
 	EnemyPerception::ApplyFile(EnemyPerception::GetDefaultPath()); // patrol sight / hearing / smell, trap search
+	TacticalHeatTuning::ApplyFile(TacticalHeatTuning::GetDefaultPath()); // Sprint 15 heat sources + their starting loadout
 	ApplyLevelConfig();
 	Super::StartPlay();
 	SpawnSquad();
@@ -205,6 +215,16 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 			OperativeBalance::Apply(*Config, *Operative);
 		}
 		WeaponTuning::ApplyGrenades(*Operative);
+		{
+			// Sprint 15: heat packs, firewood, flares, the stove with a full canister (tactical_heat.json "starting_loadout").
+			const FTacticalHeatConfig& Heat = TacticalHeatTuning::Get();
+			const FTacticalHeatLoadout Loadout = TacticalHeatRules::GetLoadout(Heat, static_cast<int32>(Entry.Role));
+			Operative->HeatPacksCount = FMath::Min(Loadout.HeatPacks, Heat.HeatPackMaxStack);
+			Operative->FirewoodCount = Loadout.Firewood;
+			Operative->FlaresCount = FMath::Min(Loadout.Flares, Heat.FlareMaxCarried);
+			Operative->PortableStovesCount = FMath::Min(Loadout.Stoves, Heat.StoveMaxCarried);
+			Operative->StoveGasSeconds = Operative->PortableStovesCount > 0 ? Heat.StoveGasCapacitySeconds : 0.f;
+		}
 		if (!Entry.BodyMesh.IsNull())
 		{
 			Operative->ApplyBodyMeshOverride(Entry.BodyMesh.LoadSynchronous());

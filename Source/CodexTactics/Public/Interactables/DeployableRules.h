@@ -15,14 +15,23 @@ enum class EOperativeRole : uint8
 	Recruit
 };
 
-/** Engineering items an operative carries and sets up. Godot: "TURRET" / "BARRICADE" / "MINE". */
+/**
+ * Items an operative carries and sets up with F / the drawer (placement ghost, walk, build). Godot: "TURRET" / "BARRICADE" /
+ * "MINE"; Sprint 15 (UE-only): the reusable portable gas stove and the campfire, crafted on the spot from matches + firewood
+ * (its "count" is how many the carried materials make, see AOperativeCharacter::GetDeployableCount).
+ */
 UENUM(BlueprintType)
 enum class EDeployableType : uint8
 {
 	Turret,
 	Barricade,
-	Mine
+	Mine,
+	PortableStove,
+	Campfire
 };
+
+/** Number of EDeployableType values (the F cycle). */
+inline constexpr int32 DeployableTypeCount = 5;
 
 /** Outcome of one defusal attempt. Godot attempt_defusal result: SUCCESS / WARNING / FAILURE / DETONATION. */
 enum class EDefusalResult : uint8
@@ -70,8 +79,14 @@ namespace DeployableRules
 	/** Blast damage at Distance: Damage * (1 - Distance / Radius * Falloff); 0 outside the radius. */
 	CODEXTACTICS_API float GetBlastDamage(float Damage, float Distance, float Radius, float Falloff);
 
-	/** Godot player.gd max_turrets 2, max_barricades 4, max_mines 5. */
+	/**
+	 * Godot player.gd max_turrets 2, max_barricades 4, max_mines 5; Sprint 15: stove FTacticalHeatConfig::StoveMaxCarried (1),
+	 * campfire unlimited (materials, MAX_int32).
+	 */
 	CODEXTACTICS_API int32 GetMaxCarried(EDeployableType Type);
+
+	/** The three Godot engineering items (turret / barricade / mine): auto-recovered after a wave, trapped / defused. */
+	CODEXTACTICS_API bool IsEngineeringType(EDeployableType Type);
 
 	/**
 	 * Godot _auto_recover_all_deployables: the first member (in the given order) carrying fewer than the maximum gets

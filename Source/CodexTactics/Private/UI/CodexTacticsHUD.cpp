@@ -1,4 +1,6 @@
 #include "UI/CodexTacticsHUD.h"
+#include "Survival/ColdSurvivalComponent.h"
+#include "Survival/TacticalHeatRules.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Characters/RecruitSubsystem.h"
 #include "CanvasItem.h"
@@ -1288,6 +1290,14 @@ ETransferRequestOutcome ACodexTacticsHUD::HandleTransferRequest(const FTransferR
 			Post(TEXT("Nothing can be stored in this crate right now (mined or destroyed)."));
 			return ETransferRequestOutcome::Failed;
 		}
+	}
+	// Sprint 15: a heat pack dropped on a cold / frostbitten mate is used on him (one pack, no split dialog).
+	if (const AOperativeCharacter* Mate = Request.Action == ETransferAction::Give && Request.Item == ETransferItem::HeatPack ? Request.Recipient.Get() : nullptr;
+		Mate && Mate->ColdSurvival && TacticalHeatRules::CanUseHeatPack(Mate->ColdLevel, Mate->ColdSurvival->IsFrostbitten()))
+	{
+		FTransferRequest Use = Request;
+		Use.Quantity = 1;
+		return Transfer->Request(Use);
 	}
 	const int32 MaxQuantity = Transfer->GetMaxQuantity(Request);
 	if (MaxQuantity <= 0)

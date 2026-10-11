@@ -44,6 +44,12 @@
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/BarrelActor.h"
+#include "Combat/FirePuddleActor.h"
+#include "Combat/SignalFlareActor.h"
+#include "Interactables/CampfireActor.h"
+#include "Interactables/HeatSourceComponent.h"
+#include "Interactables/PortableStoveActor.h"
+#include "Survival/ColdSurvivalComponent.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/DroppedItemActor.h"
 #include "Interactables/ItemStashComponent.h"
@@ -424,6 +430,36 @@ namespace SaveRoundTripSmoke
 		}
 		Check(State, Mine && Turret && Barricade && Wire && Barrel && Crate, TEXT("mine, turret, barricade, tripwire placed; barrel lit; crate filled"));
 
+		// Sprint 15 heat: items, the heat buffer, the stove's gas; a campfire burning, a stove running, a flare, a fire puddle
+		// (behind the squad, away from the patrol routes; timers long enough for the whole check, no noise).
+		Commander->HeatPacksCount = 2;
+		Commander->FirewoodCount = 3;
+		Commander->FlaresCount = 1;
+		Commander->ColdSurvival->RestoreHeatBuffer(20.f);
+		Engineer->StoveGasSeconds = 123.f;
+		ACampfireActor* Campfire = Cast<ACampfireActor>(SpawnDeployable(EDeployableType::Campfire, SmokeUtils::ClearPoint(World, Feet, Feet - F * 1000.f)));
+		if (Campfire)
+		{
+			Campfire->RestoreHeatState(true, false, 300.f, 18.75f);
+		}
+		APortableStoveActor* Stove = Cast<APortableStoveActor>(SpawnDeployable(EDeployableType::PortableStove,
+			SmokeUtils::ClearPoint(World, Feet, Feet - F * 1000.f + R * 500.f)));
+		if (Stove)
+		{
+			Stove->StartWithGas(250.f);
+		}
+		ASignalFlareActor* Flare = ASignalFlareActor::SpawnLit(World, SmokeUtils::ClearPoint(World, Feet, Feet - F * 1300.f - R * 400.f));
+		if (Flare)
+		{
+			Flare->RestoreHeatState(true, false, 300.f, 20.f);
+		}
+		AFirePuddleActor* Puddle = AFirePuddleActor::SpawnAt(World, SmokeUtils::ClearPoint(World, Feet, Feet - F * 1600.f + R * 300.f), TEXT("Smoke"));
+		if (Puddle)
+		{
+			Puddle->LightPuddle(300.f);
+		}
+		Check(State, Campfire && Stove && Flare && Puddle, TEXT("campfire, stove, flare and fire puddle burning"));
+
 		// Quest: the canister picked up (it hides) and filled at the APC.
 		for (TActorIterator<AInteractableActor> It(World); It; ++It)
 		{
@@ -576,6 +612,24 @@ namespace SaveRoundTripSmoke
 		{
 			It->Destroy();
 		}
+		// Sprint 15: heat items used up, the campfire out, the stove nearly empty, the flare / puddle gone.
+		Commander->HeatPacksCount = 0;
+		Commander->FirewoodCount = 0;
+		Commander->FlaresCount = 3;
+		Commander->ColdSurvival->RestoreHeatBuffer(0.f);
+		Engineer->StoveGasSeconds = 0.f;
+		for (TActorIterator<ACampfireActor> It(World); It; ++It)
+		{
+			It->RestoreHeatState(false, true, 0.f, 0.f);
+		}
+		for (TActorIterator<APortableStoveActor> It(World); It; ++It)
+		{
+			It->StartWithGas(5.f);
+		}
+		for (TActorIterator<ATacticalHeatActor> It(World); It; ++It)
+		{
+			It->Destroy();
+		}
 		for (TActorIterator<ATurretActor> It(World); It; ++It)
 		{
 			It->Repair();
@@ -635,6 +689,28 @@ namespace SaveRoundTripSmoke
 			Wires += It->IsPreview() ? 0 : 1;
 		}
 		Check(State, SquadMines == 1 && Wires == 1, FString::Printf(TEXT("mine (%d) and tripwire (%d) back"), SquadMines, Wires));
+		int32 Flares = 0;
+		int32 Puddles = 0;
+		for (TActorIterator<ATacticalHeatActor> It(World); It; ++It)
+		{
+			Flares += It->IsA<ASignalFlareActor>() && It->IsBurning() ? 1 : 0;
+			Puddles += It->IsA<AFirePuddleActor>() && It->IsBurning() ? 1 : 0;
+		}
+		const ACampfireActor* Fire = nullptr;
+		for (TActorIterator<ACampfireActor> It(World); It && !Fire; ++It)
+		{
+			Fire = *It;
+		}
+		const APortableStoveActor* Stove = nullptr;
+		for (TActorIterator<APortableStoveActor> It(World); It && !Stove; ++It)
+		{
+			Stove = *It;
+		}
+		Check(State, Flares == 1 && Puddles == 1 && Fire && Fire->IsBurning() && Fire->HeatSource->IsHeatActive() && Stove && Stove->GetGasLeft() > 200.f
+			&& Commander->HeatPacksCount == 2 && Engineer->StoveGasSeconds == 123.f && Commander->ColdSurvival->GetHeatBufferSecondsLeft() > 1.f,
+			FString::Printf(TEXT("heat back: flares %d, puddles %d, campfire %d, stove gas %.0f, packs %d, engineer gas %.0f, buffer %.1f"), Flares, Puddles,
+				Fire && Fire->IsBurning() ? 1 : 0, Stove ? Stove->GetGasLeft() : 0.f, Commander->HeatPacksCount, Engineer->StoveGasSeconds,
+				Commander->ColdSurvival->GetHeatBufferSecondsLeft()));
 		const AInteractableActor* Canister = FindNamed<AInteractableActor>(World, State.CanisterName);
 		Check(State, Canister && Canister->IsHidden() && Quests->HasFuelCanister(), TEXT("canister hidden, fuel canister in the quest"));
 		const ADialogueTriggerVolume* Trigger = FindNamed<ADialogueTriggerVolume>(World, State.TriggerName);

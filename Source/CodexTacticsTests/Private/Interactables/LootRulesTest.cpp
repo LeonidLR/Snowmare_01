@@ -14,8 +14,10 @@ bool FLootDefaultsTest::RunTest(const FString&)
 {
 	const FLootContents Crate;
 	const TArray<FLootEntry> Items = Crate.GetItems();
-	// Defaults: medkit 1, food 1, bread 1, chocolate 2, matches 2, rifle 60, pistol 24, shotgun 16, fuel 50, cryo 30, plasma 20.
-	TestEqual(TEXT("Eleven stacks"), Items.Num(), 11);
+	// Defaults: medkit 1, food 1, bread 1, chocolate 2, matches 2, rifle 60, pistol 24, shotgun 16, fuel 50, cryo 30, plasma 20;
+	// Sprint 15 (UE-only loot table): + heat pack 1, firewood 1 at the end of the list.
+	TestEqual(TEXT("Thirteen stacks"), Items.Num(), 13);
+	TestTrue(TEXT("Heat pack and firewood last"), Items[11].Item == ELootItem::HeatPack && Items[12].Item == ELootItem::Firewood);
 	TestTrue(TEXT("Medkit first"), Items[0].Item == ELootItem::Medkit);
 	TestEqual(TEXT("Rifle ammo 60"), Crate.GetCount(ELootItem::RifleAmmo), 60);
 	TestEqual(TEXT("Label"), Items[0].GetLabel().ToString(), FString(TEXT("🩹 Medkit: x1")));

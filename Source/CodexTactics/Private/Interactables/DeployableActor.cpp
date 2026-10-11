@@ -18,6 +18,8 @@ namespace
 		{
 		case EDeployableType::Turret: return { EOperativeRole::Commander, EOperativeRole::Engineer, EOperativeRole::MedicSapper };
 		case EDeployableType::Barricade: return { EOperativeRole::Engineer, EOperativeRole::Commander, EOperativeRole::MedicSapper };
+		case EDeployableType::PortableStove:
+		case EDeployableType::Campfire: return { EOperativeRole::Engineer, EOperativeRole::Commander, EOperativeRole::MedicSapper };
 		default: return { EOperativeRole::MedicSapper, EOperativeRole::Engineer, EOperativeRole::Commander };
 		}
 	}
@@ -28,6 +30,8 @@ namespace
 		{
 		case EDeployableType::Turret: return LOCTEXT("FoundTurret", "📦 Found a combat auto-turret ➔ added to inventory ({0})!");
 		case EDeployableType::Barricade: return LOCTEXT("FoundBarricade", "📦 Found a tactical barricade ➔ added to inventory ({0})!");
+		case EDeployableType::PortableStove: return LOCTEXT("PackedStove", "🔥 Portable stove packed up ➔ back in the inventory ({0}), the canister goes with it.");
+		case EDeployableType::Campfire: return LOCTEXT("FoundCampfire", "🔥 Campfire materials ➔ inventory ({0})!");
 		default: return LOCTEXT("FoundMine", "📦 Found a tactical mine ➔ added to inventory ({0})!");
 		}
 	}
@@ -38,6 +42,8 @@ namespace
 		{
 		case EDeployableType::Turret: return LOCTEXT("FullTurrets", "⚠️ Inventory full! Squad turret limit reached.");
 		case EDeployableType::Barricade: return LOCTEXT("FullBarricades", "⚠️ Inventory full! Squad barricade limit reached.");
+		case EDeployableType::PortableStove: return LOCTEXT("FullStoves", "⚠️ Everybody already carries a stove!");
+		case EDeployableType::Campfire: return LOCTEXT("FullCampfire", "⚠️ A campfire cannot be packed up.");
 		default: return LOCTEXT("FullMines", "⚠️ Inventory full! Squad mine limit reached.");
 		}
 	}
@@ -94,6 +100,10 @@ AOperativeCharacter* ADeployableActor::FindRecipient(AOperativeCharacter* Leader
 		}
 		return nullptr;
 	};
+	if (DeployableType == EDeployableType::PortableStove && HasRoom(Leader))
+	{
+		return Leader; // Sprint 15: «Pack up» puts the stove into the packer's own inventory
+	}
 	const TArray<EOperativeRole> Order = RoutingOrder(DeployableType);
 	if (AOperativeCharacter* Specialist = FindRole(Order[0]); HasRoom(Specialist))
 	{
@@ -178,6 +188,7 @@ void ADeployableActor::FinishDismantle(TWeakObjectPtr<AOperativeCharacter> WeakU
 		return;
 	}
 	Recipient->AddDeployable(DeployableType, 1);
+	OnPickedUpBy(*Recipient);
 	PostLine(User->DisplayName, FText::Format(FoundLine(DeployableType), Recipient->DisplayName));
 	StandUp();
 	Destroy();

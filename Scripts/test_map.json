@@ -12,7 +12,7 @@
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
-    "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
@@ -235,7 +235,13 @@
       "name": "cold-survival",
       "globs": ["Source/**/Survival/**", "Source/**/UI/FrostVignette*"],
       "tests": ["CodexTactics.Cold", "CodexTactics.Survival"],
-      "smokes": ["ColdSmoke", "BarrelSmoke"]
+      "smokes": ["ColdSmoke", "TacticalHeatSmoke", "BarrelSmoke"]
+    },
+    {
+      "name": "tactical-heat",
+      "globs": ["Source/**/Survival/TacticalHeat*", "Source/**/Interactables/Campfire*", "Source/**/Interactables/PortableStove*", "Source/**/Combat/SignalFlare*", "Source/**/Combat/FirePuddle*", "Source/**/Data/TacticalHeatTuning*", "Source/**/Debug/TacticalHeatSmoke*", "Content/Data/Survival/**"],
+      "tests": ["CodexTactics.Survival.TacticalHeat", "CodexTactics.Cold", "CodexTactics.Loot", "CodexTactics.Transfer"],
+      "smokes": ["TacticalHeatSmoke", "ColdSmoke", "DeployableSmoke", "GrenadeSmoke", "InventorySmoke", "TransferSmoke", "SaveRoundTripSmoke", "BarrelSmoke"]
     },
     {
       "name": "turn-based",

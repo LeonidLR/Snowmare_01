@@ -7,6 +7,7 @@
 
 class AGrenadeActor;
 class AOperativeCharacter;
+class ASignalFlareActor;
 class UInstancedStaticMeshComponent;
 
 /**
@@ -105,6 +106,24 @@ public:
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Grenade")
 	TSubclassOf<AGrenadeActor> GrenadeClass;
 
+	// --- Sprint 15 signal flare (grenade slot; TANDEM request #14 §2.4) ---
+
+	/**
+	 * Flare aim mode for Thrower (Shift + G, the selector / drawer flare line): the same rings and arc as a grenade with the flare's
+	 * range (FlareThrowRange by stance) and its light radius; a click throws it, a click within FlareAtFeetDistance of the thrower
+	 * lights it at his feet. Refused without flares or in turn-based combat (feed line). The weapon in hands stays.
+	 */
+	bool StartFlareAim(AOperativeCharacter* InThrower);
+
+	/** The running aim throws a flare (not a grenade). */
+	bool IsAimingFlare() const { return IsAiming() && bFlareAim; }
+
+	/** Throws one of Thrower's flares at Target (clamped to his range); the throw clip plays like a grenade's. Null in turn-based combat. */
+	ASignalFlareActor* ThrowFlareAt(AOperativeCharacter* InThrower, const FVector& Target);
+
+	/** Lights one of Operative's flares at his feet. */
+	ASignalFlareActor* LightFlareAtFeet(AOperativeCharacter* Operative);
+
 	AGrenadeAimActor* GetAimActor() const { return AimActor; }
 
 private:
@@ -115,6 +134,7 @@ private:
 	static void TakeFirearm(AOperativeCharacter* Operative);
 
 	TWeakObjectPtr<AOperativeCharacter> Thrower;
+	bool bFlareAim = false;
 
 	UPROPERTY(Transient)
 	TObjectPtr<AGrenadeAimActor> AimActor;
