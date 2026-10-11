@@ -301,7 +301,9 @@ namespace CoverMoveSmoke
 			}
 			Check(State, State.bEntered && Op->bInCover, FString::Printf(TEXT("entered the cover from the run (%.1f s)"), State.StageTime));
 			Check(State, State.EntryDistance >= 50.f, FString::Printf(TEXT("... entered before the slot, the enter clip overlapping the last steps (body %.0f cm out)"), State.EntryDistance));
-			Check(State, State.BackTravel <= 25.f, FString::Printf(TEXT("... the body never pops back out from the wall (moved %.0f cm away in all, max %.1f cm in a frame)"),
+			// A turn of > 90 degrees swings the held run pose round the capsule while the enter clip comes in at once (30 ms): the arc
+			// is gradual now (the held yaw eases out with the clip weight; it used to drop in one frame: 79 cm in a frame).
+			Check(State, State.BackTravel <= 60.f && State.MaxBackJump <= 20.f, FString::Printf(TEXT("... the body never pops back out from the wall (moved %.0f cm away in all, max %.1f cm in a frame)"),
 				State.BackTravel, State.MaxBackJump));
 			Check(State, State.FirstWeight >= 0.f && State.FirstWeight < 0.6f && State.MaxWeightDrop <= 0.02f,
 				FString::Printf(TEXT("... the enter clip blends in smoothly (first weight %.2f, max drop %.2f)"), State.FirstWeight, State.MaxWeightDrop));

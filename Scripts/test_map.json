@@ -26,7 +26,7 @@
     "BotMarksmanSmoke", "BarricadeTurnContactSmoke", "MarksmanAdvanceSmoke", "BotRepairSmoke", "PatrolSmoke",
     "AmbushSmoke", "RealTimeControlSmoke", "PostureSmoke", "RealtimeSelectSmoke", "MarksmanCloseShotSmoke",
     "HordeSmoke", "CoverSmoke", "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke",
-    "CoverCrouchSmoke", "CoverMoveSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
+    "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke"
   ],
@@ -54,7 +54,7 @@
       "name": "cover",
       "globs": ["Source/**/Tactics/Cover*", "Source/**/Characters/Cover*"],
       "tests": ["CodexTactics.Tactics.Cover"],
-      "smokes": ["CoverSmoke", "CoverMoveSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke"]
+      "smokes": ["CoverSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke"]
     },
     {
       "name": "anim-operative",

@@ -83,6 +83,11 @@ namespace CoverTraceRules
 		return static_cast<float>(FVector::DotProduct(Point - A.WorldLocation, A.RightTangent()));
 	}
 
+	float AlongWallDistanceFrom(const FCoverSlot& Wall, const FVector& From, const FVector& To)
+	{
+		return static_cast<float>(FVector::DotProduct(To - From, Wall.RightTangent()));
+	}
+
 	ECoverFacing ChooseFacing(const FCoverSlot& Slot, const FVector* ThreatLocation)
 	{
 		if (Slot.bLeftEdgeExposed != Slot.bRightEdgeExposed)
