@@ -173,6 +173,8 @@ private:
 	FVector TargetPanOffset = FVector::ZeroVector;
 	bool bDragRotating = false;
 	bool bDragPanning = false;
+	/** Keyboard / edge pan input was active last frame (the Camera.Pan command is reported once per pan). */
+	bool bKeyboardPanning = false;
 	/** Cursor position of the previous drag frame, viewport pixels (Godot event.relative is in pixels). */
 	FVector2D LastDragCursor = FVector2D::ZeroVector;
 	bool bHasLastDragCursor = false;

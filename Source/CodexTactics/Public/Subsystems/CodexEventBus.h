@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "Core/PlayerCommands.h"
 #include "CodexEventBus.generated.h"
 
 class AOperativeCharacter;
@@ -15,6 +16,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCodexPowerEvent, bool, bPowered);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexGameSavedEvent, const FString&, SlotName, bool, bAutosave);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCodexGameLoadedEvent, const FString&, SlotName);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexSoldierReasonEvent, AOperativeCharacter*, Soldier, const FString&, Reason);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexPlayerCommandEvent, FName, CommandId, const FPlayerCommandContext&, Context);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexGameplayEvent, FName, EventName, AActor*, Subject);
 
 /**
  * Global game events for Blueprints, audio, VFX and UI hooks: the Godot EventBus signals the game actually emits.
@@ -85,4 +88,15 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
 	FCodexGameLoadedEvent OnGameLoaded;
+
+	/**
+	 * Every logical player command (UE-only, Demo 01 tutorial): the one choke point PlayerCommands::Report broadcasts here.
+	 * Ids: Core/PlayerCommands.h.
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
+	FCodexPlayerCommandEvent OnPlayerCommand;
+
+	/** Named gameplay events for the tutorial / content (GameplayEvents::Raise; names in Core/PlayerCommands.h). */
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
+	FCodexGameplayEvent OnGameplayEvent;
 };
