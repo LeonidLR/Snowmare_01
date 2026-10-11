@@ -415,6 +415,36 @@ labels; owns the action menu, loot dialog and `UI/MissionFailedWidget` «МИС�
 through `ACodexTacticsHUD::GodotColor` (sRGB → linear) in UMG and canvas.
 `UI/GameMessageSubsystem` (feed, logs every line to `LogCodexTactics`).
 
+**Tutorial framework (Demo 01 Sprint 1, C2 / C7 / C8 / C9 / C10, 2026-10-11)** — UE-only (Godot had no tutorial).
+- **Command choke point** `Core/PlayerCommands.h`: ~60 logical command ids (`Order.Move`, `Squad.Solo`, `Squad.Regroup`,
+  `Stance.Crouch`, `Stance.Squad.Prone`, `Cover.Enter`, `Cover.Shimmy`, `Cover.Corner`, `Object.Relocate`, `Object.LightBarrel`,
+  `Item.HeatPack`, `Loot.Open`, `Trap.DisarmMine` / `DisarmObject` / `DisarmTripwire`, `Trap.SetOnObject`, `Deploy.Mine` /
+  `Barricade` / `Turret` / `Tripwire`, `Attack.TargetedShot`, `Grenade.Aim`, `Time.Pause` / `Resume` / `TurnBased` / `RealTime`,
+  `TB.EndTurn` / `TB.Attack`, `Posture.*`, `System.QuickSave`, camera ...) + a registry (default key label, section, description:
+  the future Controls screen). `PlayerCommands::Report(Context, Id, FPlayerCommandContext)` -> `UCodexEventBus::OnPlayerCommand`.
+  Reported (one line each, behaviour unchanged) from `ACodexTacticsPlayerController` handlers (`ControllerCommands::Report`),
+  `UInteractionSubsystem` (menu confirm -> light / defuse / use, loot, set trap), `URelocationSubsystem` (relocate / deploy /
+  tripwire orders), `ATacticalCameraPawn` (WASD / edge pan start). Gameplay events `GameplayEvents::Raise` ->
+  `UCodexEventBus::OnGameplayEvent`: `RelocationDone`, `RelocationRefused`, `BarrelLit`, `LessonDowned`; the tutorial also maps
+  `OnMineSpotted` -> `MineSpotted`, `OnItemUsed` -> `ItemUsed` (+ `.ItemId`), `OnSoldierDowned`, `OnDialogueFinished`, cold tier ->
+  `ColdTier` (+ `.Chills` / `.Freezing` / ...), flow -> `CombatStarted` / `CombatEnded`.
+- `Tutorial/TutorialRules` (pure: steps JSON parse + validation, matching, line timing, lesson rule, save / telemetry formats),
+  `Tutorial/TutorialStateMachine` (pure per-step machine: Idle -> Waiting (delay) -> Queued -> Active -> Completed / Skipped /
+  TimedOut; one hint card at a time + 1.5 s breather, <= 3 objectives, one radio / walk-and-talk step; queued steps complete
+  silently; once / replay; failure_retry rate-limited 60 s; export / import progress), `Tutorial/TutorialSubsystem`
+  (UTickableWorldSubsystem glue: loads the steps file named by the level's demo flags on the first tick, real-time ticking,
+  overlay views, markers, speech playback, checkpoint autosave per beat (slot `checkpoint`, only when `CanSaveNow`), lesson rule via
+  `UHealthComponent::LethalDamageGuard` (HP floor 1 + `ForceKnockDown` + retry prompt), "Retry from checkpoint" = in-place
+  `LoadGame("checkpoint")`, save section `"tutorial"` (progress applied later if the steps load after the save), telemetry
+  `Saved/Tutorial/tutorial.jsonl`, ON / OFF `Codex.Tutorial.Enabled` + `Saved/Tutorial/profile.json`; dev console
+  `Codex.Tutorial.Skip / Reset / Retry / Step <id>`), `Tutorial/TutorialTriggerVolume`, `Tutorial/TutorialMarkerActor`,
+  `UI/TutorialOverlayWidget` (HUD z 14). Texts: `FNarrativeManifest::GetTutorialText` (manifest `"tutorial"` section, else a
+  `sequences` entry, else `[EN missing: <id>]`), `UTutorialSubsystem::GetTutorialText` for Blueprints.
+- **Demo game-mode flags** `Core/DemoModeSubsystem` + `FDemoModeSettings` (level JSON `"demo"` object, `LevelJsonRules::ParseDemoSettings`):
+  Panic off on every operative, vision cones forced on / off on operatives and enemies (also later spawns), tutorial on + steps file,
+  demo HUD preset (`ACodexTacticsHUD::bDemoHudPreset`: debug squad panel and operative labels hidden). No `"demo"` object = no change.
+- Tests `CodexTactics.Tutorial.*` (9), smoke `TutorialSmoke` (exclusive), `SaveRoundTripSmoke` covers the "tutorial" save section.
+
 **Editor scripts** (`Scripts/Editor/`, run with `UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script=<abs path>`):
 `create_movement_test_map.py` (regenerates the test map — **overwrites manual edits, avoid**),
 `add_level_objects_to_movement_test.py` (adds barrel / barricades / mines / supply crates by label, keeps edits;
@@ -423,6 +453,40 @@ Python names drop the `b` prefix of bools: `bTrapped` → `trapped`),
 clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot). All are idempotent.
 
 ## 6. Data / content status
+
+### Tutorial: how the user places volumes / markers and edits steps (Demo 01, 2026-10-11)
+
+1. **Turn it on for a level**: in its level JSON (`Content/Data/LevelJson/<level>.json`) add
+   `"demo": { "panic": false, "vision_cones": true, "tutorial": true, "tutorial_steps": "demo_01_steps.json", "hud": "demo" }`
+   (every key optional; no `"demo"` object = normal game). The game mode BP's `LevelJsonFile` names the level JSON.
+2. **Volumes**: Place Actors -> `TutorialTriggerVolume` (class `ATutorialTriggerVolume`, amber box; resize the `Box` component).
+   Details -> **CodexTactics|Tutorial**: `Step Id` (step to start), `Beat Id` (beat to start: checkpoint + lesson rule),
+   `Volume Id` (the name steps use in `"trigger": {"type": "volume", "volume": ...}` / `"complete": {"volume": ...}`; empty =
+   Step Id), `Required Beat` (fires only from that beat on), `Activated By` (Only The Leader / Any Operative), `Fire Once`.
+   Without steps / with the tutorial off it does nothing and is not used up.
+3. **Markers**: Place Actors -> `TutorialMarkerActor` (`ATutorialMarkerActor`: ground ring + bobbing beacon, visible in the editor,
+   in game only while active). `Step Id` (shown while that step is on screen) or `Beat Id` (shown during that beat); `Ring Radius Cm`,
+   `Show Beacon`, `Beacon Height Cm`, `Screen Edge Pointer` (overlay arrow when off-screen), `Color` (amber), `Marker Material`
+   (Gemini's material slot, needs a vector parameter `Color`; request #18).
+4. **Steps**: `Content/Data/Tutorial/<file>.json` (staged as UFS). Root `{ "id", "version", "start_beat", "beats": [...], "steps": [...] }`.
+   Beat: `{ "id", "lesson": bool (lethal hits only down), "checkpoint": bool (autosave slot "checkpoint" at its start), "title_id" }`.
+   Step: `{ "id", "beat", "kind": hint_card | objective | radio | walk_talk, "text_id", "keys": [command ids or literal keys],
+   "trigger": { "type": manual | beat_start | volume | event | after_step | first_use | failure_retry, "volume", "event", "step",
+   "command", "count", "delay_s" }, "complete": { "commands": [...], "count", "event", "volume", "timeout_s" }, "once", "skippable",
+   "blocking" (always false), "lines": [ { "speaker", "text_id", "duration_s" } ] }`. No trigger = `beat_start`. Patterns:
+   exact, `"Prefix.*"`, `"*"`. A hint card without completion gets `timeout_s` 12; radio / walk-and-talk steps without completion
+   end when their lines have played. Body text may contain `{key:Squad.Solo}` (-> `[B]`). Unknown keys / commands are warned in the
+   log; the unit test `CodexTactics.Tutorial.Schema.DemoFile` fails on any warning of `demo_01_steps.json`.
+5. **Texts** live in the narrative sheet (Tutorial tab, request #17) -> `narrative_manifest.json` `"tutorial": { "<id>":
+   { "title_en", "text_en", "radio_en", "speaker_en" } }`; a walk-and-talk `text_id` may also name a `sequences` entry. Until then
+   the overlay shows `[EN missing: <id>]`.
+6. **Overlay look**: a WBP child of `UTutorialOverlayWidget` set as the HUD's `TutorialOverlayWidgetClass`, with widgets named
+   `TutorialHintCard` (Border), `TutorialCardTitle`, `TutorialCardBody`, `TutorialCardKeys`, `TutorialCardProgress`,
+   `TutorialCardDone` (TextBlocks), `TutorialSkipButton`, `TutorialTracker` (VerticalBox) + `TutorialObjective1..3`,
+   `TutorialRadioStrip` (Border), `TutorialRadioSpeaker`, `TutorialRadioLine`, `TutorialRetryPanel`, `TutorialRetryText`,
+   `TutorialRetryButton`, `TutorialContinueButton`. Keep panels Self-Hit-Test-Invisible (only the buttons take clicks).
+7. **Testers' log**: `Saved/Tutorial/tutorial.jsonl` (one JSON per line: session, map, event shown / completed /
+   completed_silently / skipped / timed_out / beat_started / lesson_downed / retry / enabled / disabled, step, beat, active_s, game_s).
 
 - **Tactical heat data (Sprint 15, 2026-10-11).** `Content/Data/Survival/tactical_heat.json` (staged as UFS) holds every value of
   `FTacticalHeatConfig` (snake_case keys, cm / s / cold points / AP): heat pack 35 / 45 s / x0.5 / 1 AP / stack 3; campfire 350 cm /
@@ -1113,6 +1177,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 
 | Commit | What |
 | (this, agents/work) | **Blast gate tied to the generator during the wave fight (user request 2026-10-11).** The terminal no longer opens the checkpoint gate: new pure `Quests/GateProgressRules` (+ `FGateProgressConfig` in `FLevelCombatConfig::Gate`, level JSON `gate_open_mode` generator_waves | instant, `gate_progress_per_second` 0.004, `gate_max_progress_before_final` 0.9, `gate_full_open_after_wave` 0 = last wave; schema + Wave Editor TS types); `AGateActor` paced mode: creeps only in the wave fight with the generator up, pauses on a breakdown (never reverses), per-wave cap 30 / 60 / 90 %, only the leaf meshes creep (25 cm per leaf at 100 %), collision / navmesh stay closed, full open only after the final wave is cleared AND the generator works; HQ feed lines, HUD line + world label «BLAST DOOR 37% — GENERATOR OFFLINE»; quest terminal / gate lines and objective «Hold the line until the blast door opens»; «Start Battle» still opens it at once; CVars `Codex.Gate.OpenMode`, `Codex.Gate.ProgressPerSecond`; save `world_state.gate_progress`. Tests `CodexTactics.Quests.GateProgress.*` (6); new `GateGeneratorSmoke` (rule `blast-gate`), `QuestChainSmoke` now checks the door stays shut in wave 1, `SaveRoundTripSmoke` round-trips the creep (37 %) and a damaged generator. `test.ps1 -Changed`: 46 mapped unit tests PASS, 23 smokes PASS (11 only on the alone re-run: parallel instances hung at the UBT ValidatePlatforms start-up; LevelWave once failed a wave-2 spawn-overlap check in parallel), + HordeIntro / BotRepair / GateGenerator PASS. |
+| (this, agents/tutorial) | **Demo 01 Sprint 1 tutorial framework core (C2 / C7 / C8 / C9 / C10, user go 2026-10-11).** Command registry + choke point `PlayerCommands::Report` -> `UCodexEventBus::OnPlayerCommand` reported from the controller / interaction / relocation / camera handlers without behaviour change; gameplay events (`RelocationDone`, `BarrelLit`, `RelocationRefused`, `LessonDowned`, ...) -> `OnGameplayEvent`. `UTutorialSubsystem` + pure `TutorialRules` / `FTutorialStateMachine` (steps JSON `Content/Data/Tutorial/*.json`, triggers volume / event / after_step / first_use / failure_retry / beat_start, completion by commands / event / volume / timeout, once / skip / replay, ON / OFF `Codex.Tutorial.Enabled` + profile, save section "tutorial", `tutorial.jsonl`), `ATutorialTriggerVolume`, `ATutorialMarkerActor`, `UTutorialOverlayWidget` (hint card, objective tracker, walk-and-talk strip that never pauses, retry prompt, edge arrows), lesson beats: lethal hit -> 1 HP + knockdown + "Retry from checkpoint" (slot `checkpoint`, autosaved per beat) via the new `UHealthComponent::LethalDamageGuard`; demo flags (`"demo"` in the level JSON, `UDemoModeSubsystem`: Panic off, vision cones, tutorial, demo HUD preset). Sample `demo_01_steps.json` (beats A0-A2). `FNarrativeManifest::GetTutorialText` + `[EN missing: <id>]`. Tests `CodexTactics.Tutorial.*` (9), `TutorialSmoke`, `SaveRoundTripSmoke` extended. TANDEM #17 / #18 filed. |
 | (this, agents/vision) | **Vision cones for operatives and enemies, switchable from the editor (user request 2026-10-11; Godot player.gd cones).** New `Combat/VisionConeRules` + `Combat/VisionConeComponent` (procedural mesh: Godot fan of 32 segments + outline band, 8 cm above the feet, colour lerp x14; module dependency `ProceduralMeshComponent`); `AOperativeCharacter` / `AEnemyCharacter`: `VisionCone` component, `bShowVisionCone` (EditAnywhere, off), operative range from the weapon x stance / half angle 35 (Godot 70 full), enemy range / angle from its perception with idle / suspicious / alert colours, `bShowVisionConeWhenEngaged`; console `Codex.Debug.VisionCones`. Material: engine `M_SimpleUnlitTranslucent` until Gemini's `ConeMaterial` (TANDEM request 16). Tests `CodexTactics.Combat.VisionCone.*` (3: Godot geometry, cone = perception, toggle / colours); `VisionConeSmoke` (+ `Shot` still) registered in `test_map.json` (rule `vision-cone`). How to switch them on: §6. |
 | (this, agents/vision) | **Placed enemies without a route guard their post until they perceive the squad (user request 2026-10-11).** Since abc1b0f the map-placed hound / marksman of L_PatrolTest hunted at once (the marksman shot from 35 m at 4 s). Now `AEnemyCharacter::TryStartGuardPost` (BeginPlay; `ULevelEncounterSubsystem::MarkLevelEnemy` for smokes) turns a placed enemy with no route and no escort leader into a route-less patrol (`bGuardingPost`): `TickGuardPost` (hold the placement, face its yaw, look around, walk back after a search), the patrol perception / search / break unchanged; `AMarksmanEnemyCharacter` patrols as a guard (`HasLegacyPatrolRoute`, BeginPlay state, `TickPatrol`, `StartPatrol`); `BreakPatrol` / snapshot restore clear the post. New rules `PatrolRouteRules::ShouldGuardPost` / `GetGuardLookOffset` / `ShouldWalkBackToPost` (test `CodexTactics.AI.PatrolRoute.GuardPostUntilPerceived`); `PatrolAmbushSmoke` extended (guard 6 s, trap search and return, gunshot -> fight); `test_map.json` maps `Source/**/AI/**` to it too. Details §5 «Game flow». |
 | (this, agents/vision) | **M16 range 14 -> 25 m (user decision 2026-10-11).** `weapons_tuning.json` m16: `attack_range_m` 25, `max_range_cells` 8, 17-entry hit table (old values up to 14 m, then 0.47 -> 0.26 at 25 m), 17 damage multipliers; `DA_Weapon_m16` updated by the new generic `Scripts/Editor/apply_weapon_tuning.py` (JSON -> assets, only changed assets saved, `CODEX_WEAPONS` filter). Tests: new `CodexTactics.Data.WeaponTuning.M16Range25m` (file values, sniper still outranges it, chances inside 14 m unchanged, falling table, 25 m = 0.26), `CodexTactics.Data.WeaponImportParity` now expects 25 m / 8 cells / 17 entries. Details §6. |

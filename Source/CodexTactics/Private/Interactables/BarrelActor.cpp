@@ -1,4 +1,5 @@
 #include "Interactables/BarrelActor.h"
+#include "Core/PlayerCommands.h"
 #include "Combat/FirePuddleActor.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/TacticalHeatTuning.h"
@@ -146,6 +147,7 @@ bool ABarrelActor::Ignite(AOperativeCharacter* User)
 		Matches));
 	OnBurningChanged.Broadcast(this, true);
 	ReceiveBurningChanged(true);
+	GameplayEvents::Raise(this, GameplayEvents::BarrelLit, this); // Demo 01 tutorial
 	return true;
 }
 

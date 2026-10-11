@@ -50,6 +50,30 @@ bool LevelJsonRules::ParseEnemyType(const FString& Name, EEnemyArchetype& OutTyp
 	return false;
 }
 
+FDemoModeSettings LevelJsonRules::ParseDemoSettings(const FJsonObject& Demo)
+{
+	FDemoModeSettings Settings;
+	Settings.bDemo = true;
+	bool bValue = true;
+	if (Demo.TryGetBoolField(TEXT("panic"), bValue))
+	{
+		Settings.bPanicEnabled = bValue;
+	}
+	if (Demo.TryGetBoolField(TEXT("vision_cones"), bValue))
+	{
+		Settings.bOverrideVisionCones = true;
+		Settings.bVisionCones = bValue;
+	}
+	if (Demo.TryGetBoolField(TEXT("tutorial"), bValue))
+	{
+		Settings.bTutorial = bValue;
+	}
+	FString Text;
+	Settings.TutorialSteps = Demo.TryGetStringField(TEXT("tutorial_steps"), Text) && !Text.IsEmpty() ? Text : FString(TEXT("demo_01_steps.json"));
+	Settings.bDemoHud = Demo.TryGetStringField(TEXT("hud"), Text) && Text.Equals(TEXT("demo"), ESearchCase::IgnoreCase);
+	return Settings;
+}
+
 bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, FLevelCombatConfig& OutConfig, FString& OutError)
 {
 	TSharedPtr<FJsonObject> Root;
@@ -88,6 +112,12 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	Config.Gate.ProgressPerSecond = FMath::Max(0.f, LevelJsonNumber(Root, TEXT("gate_progress_per_second"), Config.Gate.ProgressPerSecond));
 	Config.Gate.MaxProgressBeforeFinal = FMath::Clamp(LevelJsonNumber(Root, TEXT("gate_max_progress_before_final"), Config.Gate.MaxProgressBeforeFinal), 0.f, 0.99f);
 	Config.Gate.FullOpenAfterWave = FMath::Max(0, FMath::RoundToInt(LevelJsonNumber(Root, TEXT("gate_full_open_after_wave"), static_cast<float>(Config.Gate.FullOpenAfterWave))));
+
+	// UE-only (Demo 01 C10): demo game-mode flags.
+	if (const TSharedPtr<FJsonObject> Demo = LevelJsonObject(Root, TEXT("demo")))
+	{
+		Config.Demo = ParseDemoSettings(*Demo);
+	}
 
 	const TArray<TSharedPtr<FJsonValue>>* Waves = nullptr;
 	if (Root->TryGetArrayField(TEXT("waves"), Waves))

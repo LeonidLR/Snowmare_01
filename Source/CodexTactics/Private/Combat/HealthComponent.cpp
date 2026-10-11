@@ -275,6 +275,13 @@ void UHealthComponent::Die(const FString& AttackerSource)
 	{
 		return;
 	}
+	if (LethalDamageGuard.IsBound() && LethalDamageGuard.Execute(this, AttackerSource))
+	{
+		// Vetoed (tutorial lesson beat): he stays on the floor health instead of dying.
+		CurrentHealth = FMath::Clamp(CurrentHealth, 1.0f, FMath::Max(1.0f, MaxHealth));
+		OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, 0.0f);
+		return;
+	}
 	bIsDead = true;
 	CurrentHealth = 0.0f;
 	OnDied.Broadcast(GetOwner(), AttackerSource);

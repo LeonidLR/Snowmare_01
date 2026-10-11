@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "Data/WaveConfigTypes.h"
 
+class FJsonObject;
+
 /**
  * Level / wave data read at runtime from Content/Data/LevelJson/<file>.json (user decision 2026-10-02: Unreal is the
  * reference; the JSON is edited with the Wave Editor in Tools/WaveEditor and migrated from the Godot archive
@@ -17,6 +19,12 @@ namespace LevelJsonRules
 
 	/** "HOUND" / "FROST_HOUND", "SPITTER", "BRUTE", "FROSTBITTEN", "CUTTER", "CRYO_DRONE", "MARKSMAN" (any case). */
 	CODEXTACTICS_API bool ParseEnemyType(const FString& Name, EEnemyArchetype& OutType);
+
+	/**
+	 * The level JSON "demo" object (UE-only, Demo 01 C10): {"panic": false, "vision_cones": true, "tutorial": true,
+	 * "tutorial_steps": "demo_01_steps.json", "hud": "demo"}; absent keys keep the normal game's behaviour.
+	 */
+	CODEXTACTICS_API FDemoModeSettings ParseDemoSettings(const FJsonObject& Demo);
 
 	/** Parses a level JSON text; false + OutError on invalid JSON or an unknown enemy type. */
 	CODEXTACTICS_API bool ParseLevel(const FString& Json, const FString& FallbackId, FLevelCombatConfig& OutConfig, FString& OutError);

@@ -9,6 +9,9 @@
 #include "Interactables/DeployableActor.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/LootCrateActor.h"
+#include "Core/PlayerCommands.h"
+#include "Interactables/ProximityMineActor.h"
+#include "Interactables/TripwireActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/UseOrderRules.h"
 #include "UI/GameMessageSubsystem.h"
@@ -77,15 +80,40 @@ void UInteractionSubsystem::ClearDefuser(AInteractableActor* Target) const
 	}
 }
 
+namespace InteractionCommands
+{
+	/** Demo 01 command id of a confirmed action menu (defuse / light / use), decided before the action changes the object. */
+	FName ForConfirm(const AInteractableActor& Target)
+	{
+		if (Target.IsA<ATripwireActor>())
+		{
+			return PlayerCommands::DisarmTripwire;
+		}
+		if (const AProximityMineActor* Mine = Cast<AProximityMineActor>(&Target))
+		{
+			return Mine->bPlacedBySquad ? PlayerCommands::UseObject : PlayerCommands::DisarmMine;
+		}
+		if (Target.bTrapped)
+		{
+			return PlayerCommands::DisarmTrap;
+		}
+		if (const ABarrelActor* Barrel = Cast<ABarrelActor>(&Target); Barrel && !Barrel->IsBurning() && !Barrel->IsBurnt())
+		{
+			return PlayerCommands::LightBarrel;
+		}
+		return PlayerCommands::UseObject;
+	}
+}
+
 void UInteractionSubsystem::TrapActionMenu()
 {
 	AInteractableActor* Target = MenuTarget.Get();
 	CloseMenu();
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	if (Target && Leader)
+	if (Target && Leader && Target->TrapWithGrenade(Leader))
 	{
-		Target->TrapWithGrenade(Leader);
+		PlayerCommands::ReportBy(this, PlayerCommands::SetTrap, Leader, Target);
 	}
 }
 
@@ -159,6 +187,9 @@ void UInteractionSubsystem::ConfirmActionMenu()
 	if (Target && Leader && !bDisabled)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("Action confirmed on %s by %s"), *Target->GetName(), *Leader->DisplayName.ToString());
+		const UGameFlowSubsystem* CommandFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		PlayerCommands::ReportBy(this, InteractionCommands::ForConfirm(*Target), Leader, Target,
+			CommandFlow && CommandFlow->GetCombatMode() == ECodexCombatMode::TacticalPause);
 		// User decision 2026-10-08: in the fight the barrel menu opens from afar, so "Ignite" is an order - he walks up
 		// and lights it (real time), or it is planned and runs on the release (tactical pause).
 		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
@@ -390,6 +421,8 @@ void UInteractionSubsystem::OpenLootDialog(ALootCrateActor* Crate)
 	CloseMenu();
 	LootCrate = Crate;
 	OnLootDialogChanged.Broadcast(true, Crate);
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	PlayerCommands::ReportBy(this, PlayerCommands::LootCrate, Squad ? Squad->GetLeader() : nullptr, Crate);
 }
 
 void UInteractionSubsystem::CloseLootDialog()
@@ -411,6 +444,7 @@ void UInteractionSubsystem::LootItem(ELootItem Item)
 	const FText Taken = Crate->TakeItem(Item, Leader);
 	if (!Taken.IsEmpty())
 	{
+		PlayerCommands::ReportBy(this, PlayerCommands::LootTake, Leader, Crate);
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
 			Messages->PostMessage(Leader->DisplayName, FText::Format(NSLOCTEXT("InteractionSubsystem", "LootedOne", "📦 Took from the crate: {0}"), Taken));
@@ -427,6 +461,7 @@ void UInteractionSubsystem::LootAll()
 	if (Crate && Leader)
 	{
 		Crate->TakeAll(Leader);
+		PlayerCommands::ReportBy(this, PlayerCommands::LootTake, Leader, Crate);
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
 			Messages->PostMessage(Leader->DisplayName, NSLOCTEXT("InteractionSubsystem", "LootedAll", "📦 Took ALL supplies from the supply crate!"));

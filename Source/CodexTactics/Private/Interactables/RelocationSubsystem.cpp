@@ -1,4 +1,5 @@
 #include "Interactables/RelocationSubsystem.h"
+#include "Core/PlayerCommands.h"
 #include "Interactables/CampfireActor.h"
 #include "Interactables/PortableStoveActor.h"
 #include "Components/BoxComponent.h"
@@ -118,6 +119,7 @@ bool URelocationSubsystem::CheckLift(const AOperativeCharacter& Worker, const AI
 	{
 		return true;
 	}
+	GameplayEvents::Raise(this, GameplayEvents::RelocationRefused, const_cast<AOperativeCharacter*>(&Worker));
 	const FText Name = Worker.DisplayName;
 	if (Blocker == ELiftBlocker::TooCold)
 	{
@@ -634,6 +636,16 @@ void URelocationSubsystem::ConfirmPlacement(const FVector& GroundPoint)
 			return;
 		}
 		const EDeployableType Type = *PlacingType;
+		{
+			const FName DeployCommand = Type == EDeployableType::Mine ? PlayerCommands::DeployMine
+				: (Type == EDeployableType::Barricade ? PlayerCommands::DeployBarricade
+					: (Type == EDeployableType::Turret ? PlayerCommands::DeployTurret : PlayerCommands::DeployOther));
+			FPlayerCommandContext DeployContext;
+			DeployContext.Operative = DeployWorker;
+			DeployContext.Location = DeployAnchor;
+			DeployContext.bPlanned = bDeployPause;
+			PlayerCommands::Report(this, DeployCommand, DeployContext);
+		}
 		if (bDeployPause)
 		{
 			PlannedDeploys.RemoveAll([DeployWorker](const FDeployTask& Plan) { return Plan.Worker.Get() == DeployWorker; });
@@ -709,10 +721,12 @@ void URelocationSubsystem::ConfirmPlacement(const FVector& GroundPoint)
 		}
 		Post(Worker->DisplayName, FText::Format(LOCTEXT("Planned", "📋 [PLAN] {0}: Relocation of {1} to a new position planned! [SPACE - execute]"),
 			Worker->DisplayName, NameOf(Object)));
+		PlayerCommands::ReportBy(this, PlayerCommands::Relocate, Worker, Object, true);
 	}
 	else if (CanRelocateNow())
 	{
 		ExecuteRelocate(Worker, Object, Target, PlacingYaw);
+		PlayerCommands::ReportBy(this, PlayerCommands::Relocate, Worker, Object, false);
 	}
 	else
 	{
@@ -919,6 +933,7 @@ bool URelocationSubsystem::TickTask(FRelocateTask& Task, float DeltaTime)
 		Worker->SetCarrying(false);
 		StepBack(*Worker, *Object, RelocationRules::StepBackPlaced);
 		Post(Worker->DisplayName, FText::Format(LOCTEXT("Placed", "{0} is set at the new position!"), NameOf(Object)));
+		GameplayEvents::Raise(this, GameplayEvents::RelocationDone, Object);
 		UE_LOG(LogCodexTactics, Display, TEXT("Relocated %s to (%.0f, %.0f)"), *Object->GetName(), Task.Target.X, Task.Target.Y);
 		return true;
 	}
@@ -1266,6 +1281,13 @@ void URelocationSubsystem::ConfirmTripwirePoint(const FVector& GroundPoint)
 	const FVector A = TripwireA;
 	const bool bAOnObject = bTripwireAOnObject;
 	CancelPlacement();
+	{
+		FPlayerCommandContext TripwireContext;
+		TripwireContext.Operative = Rigger;
+		TripwireContext.Location = (A + Point) * 0.5f;
+		TripwireContext.bPlanned = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+		PlayerCommands::Report(this, PlayerCommands::DeployTripwire, TripwireContext);
+	}
 	if (Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause)
 	{
 		FTripwireTask& Plan = PlannedTripwires.AddDefaulted_GetRef();

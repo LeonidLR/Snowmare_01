@@ -5,6 +5,7 @@
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/RecruitSubsystem.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
@@ -984,6 +985,14 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 		}
 		Data->SetObjectField(TEXT("susanin"), SusaninState);
 	}
+	// Demo 01 tutorial progress (only on levels running a tutorial).
+	if (const UTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>())
+	{
+		if (const TSharedPtr<FJsonObject> TutorialState = Tutorial->CaptureSaveState())
+		{
+			Data->SetObjectField(TEXT("tutorial"), TutorialState);
+		}
+	}
 	return Data;
 }
 
@@ -1111,6 +1120,13 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 		{
 			Relocation->CancelActiveTask(Member);
 		}
+	}
+
+	// Demo 01 tutorial progress (completed / skipped steps, the current beat); older saves have none: progress stays.
+	const TSharedPtr<FJsonObject>* TutorialState = nullptr;
+	if (UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>(); Tutorial && Data->TryGetObjectField(TEXT("tutorial"), TutorialState))
+	{
+		Tutorial->RestoreSaveState(**TutorialState);
 	}
 
 	// 0. Susanin first, so a recruited Susanin takes his squad entry below.

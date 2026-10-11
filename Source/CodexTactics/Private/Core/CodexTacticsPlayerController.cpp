@@ -25,6 +25,7 @@
 #include "Data/WeaponDataAsset.h"
 #include "Combat/EncounterQueries.h"
 #include "Core/MissionSubsystem.h"
+#include "Core/PlayerCommands.h"
 #include "Core/SaveGameSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
 #include "UI/ProfileDialogWidget.h"
@@ -55,6 +56,52 @@
 #include "HAL/PlatformTime.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+
+namespace ControllerCommands
+{
+	/**
+	 * Demo 01 command choke point: reports a logical player command (PlayerCommands::Report) with the leader (or the
+	 * given operative) as the actor. Pure notification - the handler's behaviour is unchanged.
+	 */
+	void Report(const ACodexTacticsPlayerController* Controller, FName CommandId, AActor* Target = nullptr, bool bPlanned = false,
+		bool bSquadWide = false, AActor* Operative = nullptr, const FVector& Location = FVector::ZeroVector)
+	{
+		if (!Controller)
+		{
+			return;
+		}
+		const UWorld* World = Controller->GetWorld();
+		const USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+		FPlayerCommandContext Context;
+		Context.Operative = Operative ? Operative : (Squad ? Squad->GetLeader() : nullptr);
+		Context.Target = Target;
+		Context.bPlanned = bPlanned;
+		Context.bSquadWide = bSquadWide;
+		Context.Location = !Location.IsZero() ? Location : (Target ? Target->GetActorLocation() : FVector::ZeroVector);
+		PlayerCommands::Report(Controller, CommandId, Context);
+	}
+
+	FName ForStance(EOperativeStance Stance, bool bSquadWide)
+	{
+		switch (Stance)
+		{
+		case EOperativeStance::Crouching: return bSquadWide ? PlayerCommands::SquadStanceCrouch : PlayerCommands::StanceCrouch;
+		case EOperativeStance::Prone: return bSquadWide ? PlayerCommands::SquadStanceProne : PlayerCommands::StanceProne;
+		default: return bSquadWide ? PlayerCommands::SquadStanceStand : PlayerCommands::StanceStand;
+		}
+	}
+
+	FName ForDeployable(EDeployableType Type)
+	{
+		switch (Type)
+		{
+		case EDeployableType::Mine: return PlayerCommands::DeployMine;
+		case EDeployableType::Barricade: return PlayerCommands::DeployBarricade;
+		case EDeployableType::Turret: return PlayerCommands::DeployTurret;
+		default: return PlayerCommands::DeployOther;
+		}
+	}
+}
 
 ACodexTacticsPlayerController::ACodexTacticsPlayerController()
 {
@@ -461,6 +508,8 @@ void ACodexTacticsPlayerController::ApplyFirePosture(ESquadFirePosture Posture, 
 	if (USquadSubsystem* Squad = GetSquad())
 	{
 		Squad->ApplyPostureOrder(Posture, bSquadWide);
+		ControllerCommands::Report(this, Posture == ESquadFirePosture::Passive ? PlayerCommands::PosturePassive
+			: (Posture == ESquadFirePosture::Defensive ? PlayerCommands::PostureDefensive : PlayerCommands::PostureAggressive), nullptr, false, bSquadWide);
 	}
 }
 
@@ -495,6 +544,7 @@ void ACodexTacticsPlayerController::ToggleAutonomy()
 	if (USquadSubsystem* Squad = GetSquad())
 	{
 		Squad->ToggleAutonomousSquadCombat();
+		ControllerCommands::Report(this, PlayerCommands::Autonomy);
 	}
 }
 
@@ -553,6 +603,7 @@ void ACodexTacticsPlayerController::GuardKey()
 	if (USquadSubsystem* Squad = GetSquad(); Squad && Squad->GetLeader())
 	{
 		Squad->ToggleGuard(Squad->GetLeader());
+		ControllerCommands::Report(this, PlayerCommands::Guard);
 	}
 }
 
@@ -560,7 +611,10 @@ void ACodexTacticsPlayerController::QuickSaveKey()
 {
 	if (USaveGameSubsystem* Saves = GetWorld()->GetSubsystem<USaveGameSubsystem>())
 	{
-		Saves->QuickSave();
+		if (Saves->QuickSave())
+		{
+			ControllerCommands::Report(this, PlayerCommands::QuickSave);
+		}
 	}
 }
 
@@ -568,6 +622,7 @@ void ACodexTacticsPlayerController::QuickLoadKey()
 {
 	if (USaveGameSubsystem* Saves = GetWorld()->GetSubsystem<USaveGameSubsystem>())
 	{
+		ControllerCommands::Report(this, PlayerCommands::QuickLoad);
 		Saves->QuickLoad();
 	}
 }
@@ -586,8 +641,13 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 		// Sprint 15: the heat pack has its own lines (cold off, buffer, turn-based AP).
 		UTacticalHeatSubsystem* Heat = GetWorld()->GetSubsystem<UTacticalHeatSubsystem>();
 		EHeatPackRefusal Refusal = EHeatPackRefusal::None;
-		if (!Heat || Heat->UseHeatPack(Leader, Leader, &Refusal))
+		if (!Heat)
 		{
+			return;
+		}
+		if (Heat->UseHeatPack(Leader, Leader, &Refusal))
+		{
+			ControllerCommands::Report(this, PlayerCommands::UseHeatPack);
 			return;
 		}
 		switch (Refusal)
@@ -611,6 +671,7 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 	}
 	if (Leader->UsePersonalItem(Item))
 	{
+		ControllerCommands::Report(this, PlayerCommands::UseItem);
 		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("ItemUsed", "Used {0} (+HP / warmth)! (Left: x{1})"),
 			PersonalItemRules::GetName(Item), Leader->GetItemCount(Item)));
 		// Turn-based: a medkit ends the operative's turn (user decision 2026-10-04).
@@ -694,6 +755,7 @@ void ACodexTacticsPlayerController::StartFlareAim()
 		return;
 	}
 	Grenades->StartFlareAim(Leader);
+	ControllerCommands::Report(this, PlayerCommands::FlareAim);
 }
 
 void ACodexTacticsPlayerController::GrenadeKey()
@@ -746,6 +808,7 @@ void ACodexTacticsPlayerController::GrenadeKey()
 		Leader->SwitchToWeaponById(TEXT("grenade"));
 		Grenades->StartAim(Leader);
 	}
+	ControllerCommands::Report(this, PlayerCommands::GrenadeAim);
 	Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("GrenadeTaken", "🧨 Grenade selected [x{0}] (Damage: {1}, Radius: {2}m)"),
 		Leader->GrenadesCount, FMath::FloorToInt(Leader->GrenadeDamage),
 		FText::AsNumber(Leader->GrenadeEffectRadius / 100.f, &FNumberFormattingOptions().SetMinimumFractionalDigits(1).SetMaximumFractionalDigits(1))));
@@ -793,6 +856,7 @@ void ACodexTacticsPlayerController::DeployAbility()
 	if (Relocation && Worker)
 	{
 		Relocation->HandleDeployKey(Worker);
+		ControllerCommands::Report(this, PlayerCommands::DeployStart, nullptr, false, false, Worker);
 	}
 }
 
@@ -823,6 +887,7 @@ void ACodexTacticsPlayerController::RotatePlacement()
 		Leader->StartReload();
 		if (Leader->bIsReloading)
 		{
+			ControllerCommands::Report(this, PlayerCommands::Reload);
 			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 			{
 				Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Reloading", "🔄 Reloading {0}..."),
@@ -847,6 +912,7 @@ void ACodexTacticsPlayerController::CycleWeaponKey()
 	{
 		return;
 	}
+	ControllerCommands::Report(this, PlayerCommands::CycleWeapon);
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
 	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
 	if (Messages)
@@ -914,6 +980,10 @@ void ACodexTacticsPlayerController::HandleSpaceTap()
 	}
 	const bool bWasPaused = Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
 	const EGameFlowResult Result = Flow->ToggleTacticalPause();
+	if (Result == EGameFlowResult::Ok)
+	{
+		ControllerCommands::Report(this, bWasPaused ? PlayerCommands::PauseRelease : PlayerCommands::TacticalPause);
+	}
 	switch (Result)
 	{
 	case EGameFlowResult::Ok:
@@ -959,6 +1029,7 @@ void ACodexTacticsPlayerController::HandleSpaceHold()
 		// User request 2026-10-06: the hold leaves the grid straight into full real time.
 		if (Flow->ExitTurnBasedToRealTime() == EGameFlowResult::Ok)
 		{
+			ControllerCommands::Report(this, PlayerCommands::TurnBasedExit);
 			PostHeadquarters(LOCTEXT("TurnBasedExitRealTime",
 				"▶️ Turn-based combat over. Real time: orders execute at once. [SPACE] - pause, hold - turn-based."));
 		}
@@ -968,6 +1039,7 @@ void ACodexTacticsPlayerController::HandleSpaceHold()
 	{
 		if (Flow->ExitTurnBased() == EGameFlowResult::Ok)
 		{
+			ControllerCommands::Report(this, PlayerCommands::TurnBasedExit);
 			PostHeadquarters(LOCTEXT("TurnBasedExit",
 				"🛡️ Turn-based combat over. Tactical pause (20s) on to prepare the squad [SPACE]."));
 		}
@@ -1001,6 +1073,10 @@ void ACodexTacticsPlayerController::HandleSpaceHold()
 	const bool bEnemiesNear = CombatQueries::HasEnemiesWithin(GetWorld(), Squad->GetLeader()->GetActorLocation(),
 		Flow->GetConfig().TurnBasedEncounterRadius);
 	const EGameFlowResult Result = Flow->RequestEnterTurnBased(bEnemiesNear);
+	if (Result == EGameFlowResult::Ok)
+	{
+		ControllerCommands::Report(this, PlayerCommands::TurnBasedEnter);
+	}
 	if (Result == EGameFlowResult::NoEnemiesInRange)
 	{
 		PostHeadquarters(LOCTEXT("TurnBasedNoEnemies", "⚠️ No live enemies within 15m for turn-based combat!"));
@@ -1043,6 +1119,7 @@ void ACodexTacticsPlayerController::EnterPressed()
 	else if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 	{
 		TurnBased->PassSquadTurn();
+		ControllerCommands::Report(this, PlayerCommands::EndTurn);
 	}
 }
 
@@ -1059,6 +1136,7 @@ void ACodexTacticsPlayerController::TabPressed()
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 	{
 		TurnBased->EndCurrentUnitTurn();
+		ControllerCommands::Report(this, PlayerCommands::NextUnit);
 	}
 }
 
@@ -1145,6 +1223,7 @@ void ACodexTacticsPlayerController::OnClick()
 		if (GetGrenadeAimPoint(Point))
 		{
 			Grenades->ThrowAtCursor(Point);
+			ControllerCommands::Report(this, PlayerCommands::GrenadeThrow, nullptr, false, false, nullptr, Point);
 		}
 		return;
 	}
@@ -1155,9 +1234,11 @@ void ACodexTacticsPlayerController::OnClick()
 		if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 		{
 			FVector Point;
-			if (GetPlacementPoint(Point) && TurnBased->HandleDeployPlacement(Relocation->GetPlacingType(), Point, Relocation->GetPlacingYaw()))
+			const EDeployableType PlacedType = Relocation->GetPlacingType();
+			if (GetPlacementPoint(Point) && TurnBased->HandleDeployPlacement(PlacedType, Point, Relocation->GetPlacingYaw()))
 			{
 				Relocation->CancelPlacement();
+				ControllerCommands::Report(this, ControllerCommands::ForDeployable(PlacedType), nullptr, false, false, TurnBased->GetActiveUnit(), Point);
 			}
 			return;
 		}
@@ -1242,6 +1323,7 @@ int32 ACodexTacticsPlayerController::SelectInBox(const FVector2D& Min, const FVe
 		return 0;
 	}
 	Squad->SetSelectedGroup(Selected);
+	ControllerCommands::Report(this, PlayerCommands::SelectBox);
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), Selected.Num() == 1
@@ -1329,6 +1411,8 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		}
 		HideCoverPreview();
 		TurnBased->HandleWorldClick(Hit.ImpactPoint, Hit.GetActor(), IsAttackModifierDown());
+		ControllerCommands::Report(this, IsAttackModifierDown() ? PlayerCommands::TurnBasedAttack : PlayerCommands::TurnBasedOrder, Hit.GetActor(),
+			false, false, TurnBased->GetActiveUnit(), Hit.ImpactPoint);
 		return;
 	}
 
@@ -1339,6 +1423,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		if (AOperativeCharacter* Picked = FindClickedMember(Hit))
 		{
 			Squad->SetLeader(Picked);
+			ControllerCommands::Report(this, PlayerCommands::SelectMember, nullptr, false, false, Picked);
 			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 			{
 				Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), Picked->DisplayName));
@@ -1421,6 +1506,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		if (!EnemyHealth || EnemyHealth->IsAlive())
 		{
 			Leader->AssignPriorityTarget(HitActor);
+			ControllerCommands::Report(this, PlayerCommands::PriorityTarget, HitActor);
 			if (ClickMessages)
 			{
 				const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(HitActor);
@@ -1498,6 +1584,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 			Interactions->CancelInteraction();
 		}
 		Squad->SetLeader(SelectedMember);
+		ControllerCommands::Report(this, PlayerCommands::SelectMember, nullptr, false, false, SelectedMember);
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
 			Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"),
@@ -1522,6 +1609,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		if (Interactions)
 		{
 			Interactions->RequestInteraction(Interactable, bDoubleClick);
+			ControllerCommands::Report(this, PlayerCommands::Interact, Interactable);
 		}
 		return;
 	}
@@ -1541,6 +1629,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 	if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
 	{
 		Leader->SetFacingPoint(Hit.ImpactPoint);
+		ControllerCommands::Report(this, PlayerCommands::WatchSector, nullptr, false, false, Leader, Hit.ImpactPoint);
 		UFloatingTextSubsystem::SpawnAboveOperative(Leader, TEXT("👁️ WATCH SECTOR"), FLinearColor(0.2f, 0.9f, 1.f));
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
@@ -1582,6 +1671,8 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		}
 	}
 	OrderGroupMove(Hit.ImpactPoint, bDoubleClick, Dispatch == ECombatOrderDispatch::Queue);
+	ControllerCommands::Report(this, bDoubleClick ? PlayerCommands::Sprint : PlayerCommands::Move, nullptr, Dispatch == ECombatOrderDispatch::Queue,
+		Squad->HasMultiSelection(), Leader, Hit.ImpactPoint);
 }
 
 void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance)
@@ -1617,6 +1708,7 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 	{
 		Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), FText::FromString(FString::Printf(TEXT("📢 [SQUAD ORDER]: All operatives go %s!"), Name)));
 	}
+	ControllerCommands::Report(this, ControllerCommands::ForStance(Stance, true), nullptr, false, true);
 }
 
 void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
@@ -1629,6 +1721,7 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 			if (Member->SquadIndex == RosterIndex)
 			{
 				TurnBased->SelectUnit(Member);
+				ControllerCommands::Report(this, PlayerCommands::SelectMember, nullptr, false, false, Member);
 			}
 		}
 		return;
@@ -1650,6 +1743,7 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 		}
 		if (Squad->SetLeaderByIndex(RosterIndex))
 		{
+			ControllerCommands::Report(this, PlayerCommands::SelectMember);
 			if (Hud && Hud->GetProfileDialog() && Hud->GetProfileDialog()->IsOpen())
 			{
 				Hud->OpenProfileDialog(Squad->GetLeader());
@@ -1676,6 +1770,7 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 			return;
 		}
 		TurnBased->SetActiveUnitStance(Stance); // 1 AP, active operative only
+		ControllerCommands::Report(this, ControllerCommands::ForStance(Stance, false), nullptr, false, false, TurnBased->GetActiveUnit());
 		return;
 	}
 	USquadSubsystem* Squad = GetSquad();
@@ -1708,6 +1803,7 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 	// Deviation (user decision 2026-10-01; Godot _sync_squad_stances made the others follow): only the selected
 	// operative changes his stance — the whole squad only with Alt + Z / C / V (SetEntireSquadStance).
 	Leader->SetStance(Stance);
+	ControllerCommands::Report(this, ControllerCommands::ForStance(Stance, false));
 
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
@@ -1734,6 +1830,7 @@ void ACodexTacticsPlayerController::ToggleSoloMode()
 	if (USquadSubsystem* Squad = GetSquad())
 	{
 		Squad->ToggleSoloMode();
+		ControllerCommands::Report(this, Squad->IsSoloMode() ? PlayerCommands::SoloOn : PlayerCommands::Regroup);
 	}
 }
 
@@ -1757,6 +1854,7 @@ void ACodexTacticsPlayerController::OnMouseWheelUp()
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->AddZoomNotches(-1.f);
+		ControllerCommands::Report(this, PlayerCommands::CameraZoom);
 	}
 }
 
@@ -1775,6 +1873,7 @@ void ACodexTacticsPlayerController::OnMouseWheelDown()
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->AddZoomNotches(+1.f);
+		ControllerCommands::Report(this, PlayerCommands::CameraZoom);
 	}
 }
 
@@ -1794,6 +1893,7 @@ void ACodexTacticsPlayerController::CameraRotateLeft()
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->RotateStep(+1);
+		ControllerCommands::Report(this, PlayerCommands::CameraRotate);
 	}
 }
 
@@ -1813,6 +1913,7 @@ void ACodexTacticsPlayerController::CameraRotateRight()
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->RotateStep(-1);
+		ControllerCommands::Report(this, PlayerCommands::CameraRotate);
 	}
 }
 
@@ -1836,6 +1937,7 @@ void ACodexTacticsPlayerController::AssignDefenseUnderCursor()
 	{
 		Autonomy->SetDefenseObjective(Defender, Object, Hit.ImpactPoint);
 	}
+	ControllerCommands::Report(this, PlayerCommands::HoldLine, Object, false, Defenders.Num() > 1, Leader, Hit.ImpactPoint);
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("DefenseLine", "🛡 [HOLD LINE] {0}: hold at all costs!{1}"),
@@ -1901,6 +2003,7 @@ void ACodexTacticsPlayerController::CameraDragRotateStart()
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->SetDragRotating(true);
+		ControllerCommands::Report(this, PlayerCommands::CameraRotate);
 	}
 }
 
@@ -1917,6 +2020,7 @@ void ACodexTacticsPlayerController::CameraDragPanStart()
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->SetDragPanning(true);
+		ControllerCommands::Report(this, PlayerCommands::CameraPan);
 	}
 }
 
@@ -1967,6 +2071,10 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 	if (bPaused && Kind != ETargetedShotKind::None)
 	{
 		Leader->PlanTargetedShot(HitActor);
+	}
+	if (Kind != ETargetedShotKind::None)
+	{
+		ControllerCommands::Report(this, PlayerCommands::TargetedShot, HitActor, bPaused);
 	}
 
 	switch (Kind)
@@ -2061,6 +2169,7 @@ void ACodexTacticsPlayerController::CycleLeaderStance()
 	}
 	// Godot _cycle_leader_stance, without the squad sync (user decision 2026-10-01): the selected operative only.
 	Leader->SetStance(Next);
+	ControllerCommands::Report(this, ControllerCommands::ForStance(Next, false));
 }
 
 void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
@@ -2215,10 +2324,12 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		{
 			Operative->OrderShimmyTo(Slot);
 		}
+		ControllerCommands::Report(this, PlayerCommands::CoverShimmy, nullptr, false, false, Operative, Hit.ImpactPoint);
 		return true;
 	}
 	bCoverPreviewTurnBased = TurnBased != nullptr;
 	ShowCoverPreview(Operative, Slot);
+	ControllerCommands::Report(this, PlayerCommands::CoverPreview, nullptr, false, false, Operative, Slot.WorldLocation);
 	return true;
 }
 
@@ -2282,6 +2393,14 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 				Messages->PostMessage(LOCTEXT("Tactics", "TACTICS"), LOCTEXT("CoverCellUnreachable", "⚠️ Cover out of reach (no AP or path)."));
 			}
 		}
+		else
+		{
+			ControllerCommands::Report(this, PlayerCommands::CoverEnter, nullptr, false, false, Operative, Slot.WorldLocation);
+			if (Slot.HasExposedEdge())
+			{
+				ControllerCommands::Report(this, PlayerCommands::CoverCorner, nullptr, false, false, Operative, Slot.WorldLocation);
+			}
+		}
 		return;
 	}
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
@@ -2300,11 +2419,21 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 		{
 			Messages->PostMessage(Operative->DisplayName, LOCTEXT("CoverPlanned", "📋 [PLAN] Take cover at the wall!"));
 		}
+		ControllerCommands::Report(this, PlayerCommands::CoverEnter, nullptr, true, false, Operative, Slot.WorldLocation);
+		if (Slot.HasExposedEdge())
+		{
+			ControllerCommands::Report(this, PlayerCommands::CoverCorner, nullptr, true, false, Operative, Slot.WorldLocation);
+		}
 		return;
 	}
 	const EOperativeOrderResult Result = Operative->OrderTakeCover(Slot, true);
 	if (Result == EOperativeOrderResult::Accepted)
 	{
+		ControllerCommands::Report(this, PlayerCommands::CoverEnter, nullptr, false, false, Operative, Slot.WorldLocation);
+		if (Slot.HasExposedEdge())
+		{
+			ControllerCommands::Report(this, PlayerCommands::CoverCorner, nullptr, false, false, Operative, Slot.WorldLocation);
+		}
 		if (Feedback)
 		{
 			Feedback->SpawnMovePing(Slot.WorldLocation, true);
@@ -2348,6 +2477,7 @@ void ACodexTacticsPlayerController::ToggleCoverFireModeKey()
 			Mode = Operative->ToggleCoverFireMode();
 		}
 	}
+	ControllerCommands::Report(this, PlayerCommands::CoverFireMode, nullptr, false, Targets.Num() > 1);
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Messages->PostMessage(Leader->DisplayName, Mode == ECoverFireMode::BlindFire

@@ -60,6 +60,7 @@
 #include "UI/Frontend/CodexUISubsystem.h"
 #include "UI/Frontend/CodexUITags.h"
 #include "UI/MissionFailedWidget.h"
+#include "UI/TutorialOverlayWidget.h"
 #include "HAL/IConsoleManager.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "UI/GameMessageSubsystem.h"
@@ -165,6 +166,12 @@ ACodexTacticsHUD::ACodexTacticsHUD()
 	VictoryPanelWidgetClass = UVictoryPanelWidget::StaticClass();
 	PhaseBannersWidgetClass = UPhaseBannersWidget::StaticClass();
 	TurnBasedHudWidgetClass = UTurnBasedHudWidget::StaticClass();
+	TutorialOverlayWidgetClass = UTutorialOverlayWidget::StaticClass();
+}
+
+bool ACodexTacticsHUD::ShouldDrawStatus() const
+{
+	return CVarShowStatus.GetValueOnGameThread() && !bDemoHudPreset;
 }
 
 void ACodexTacticsHUD::BeginPlay()
@@ -267,6 +274,16 @@ void ACodexTacticsHUD::BeginPlay()
 		if (TurnBasedHud)
 		{
 			TurnBasedHud->AddToViewport(9); // shows itself while the grid fight runs
+		}
+	}
+	if (TutorialOverlayWidgetClass && GetOwningPlayerController())
+	{
+		// Demo 01 tutorial (UX brief 03 §2.5): above the banners (8-9), below the dialogue window (15); never takes clicks
+		// except on its own buttons.
+		TutorialOverlay = CreateWidget<UTutorialOverlayWidget>(GetOwningPlayerController(), TutorialOverlayWidgetClass);
+		if (TutorialOverlay)
+		{
+			TutorialOverlay->AddToViewport(14);
 		}
 	}
 	if (DialogueWidgetClass && GetOwningPlayerController())
@@ -389,7 +406,7 @@ void ACodexTacticsHUD::DrawHUD()
 	{
 		return;
 	}
-	if (CVarShowStatus.GetValueOnGameThread())
+	if (ShouldDrawStatus())
 	{
 		DrawOperativeLabels();
 	}
@@ -405,7 +422,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
 	DrawMessageFeed();
 	const float ObjectiveBottom = DrawObjectiveBanner();
-	if (CVarShowStatus.GetValueOnGameThread())
+	if (ShouldDrawStatus())
 	{
 		DrawSquadPanel(ObjectiveBottom + Margin * 0.5f);
 	}

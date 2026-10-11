@@ -29,12 +29,13 @@
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
-    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke"
+    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
     "SaveLoadSmoke": { "exclusive": true },
     "SaveRoundTripSmoke": { "exclusive": true },
+    "TutorialSmoke": { "exclusive": true },
     "PauseMenuSmoke": { "exclusive": true },
     "EventBusSmoke": { "exclusive": true },
     "CombatMoveSmoke": { "knownFail": true },
@@ -45,6 +46,13 @@
   },
   "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "EncounterProbe"],
   "rules": [
+    {
+      "name": "tutorial",
+      "globs": ["Source/**/Tutorial/**", "Source/**/Core/PlayerCommands*", "Source/**/Core/DemoModeSubsystem*", "Source/**/UI/TutorialOverlay*",
+        "Source/**/Debug/TutorialSmoke*", "Content/Data/Tutorial/**"],
+      "tests": ["CodexTactics.Tutorial"],
+      "smokes": ["TutorialSmoke", "SaveRoundTripSmoke"]
+    },
     {
       "name": "sniper",
       "globs": ["Source/**/Combat/SniperRules*", "Source/**/Characters/OperativeCharacterSniper*", "Source/**/Characters/OperativeAnimInstanceSniper*",

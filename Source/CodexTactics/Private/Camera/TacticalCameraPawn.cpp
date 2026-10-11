@@ -1,4 +1,5 @@
 #include "Camera/TacticalCameraPawn.h"
+#include "Core/PlayerCommands.h"
 #include "Camera/CameraComponent.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -348,6 +349,13 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 	}
 
 	const bool bCombat = IsCombatView();
+	// Demo 01 command choke point: the start of a keyboard / edge pan (once per pan, not every frame).
+	const bool bPanningNow = !Input.IsNearlyZero();
+	if (bPanningNow && !bKeyboardPanning)
+	{
+		PlayerCommands::ReportBy(this, PlayerCommands::CameraPan, nullptr);
+	}
+	bKeyboardPanning = bPanningNow;
 	if (!Input.IsNearlyZero())
 	{
 		TargetPanOffset += TacticalCameraRules::ComputePanDirection(Input, CurrentYaw) * Config.PanSpeed * RealDelta;

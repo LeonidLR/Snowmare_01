@@ -12,6 +12,29 @@ struct CODEXTACTICS_API FNarrativeLine
 };
 
 /**
+ * One entry of the manifest's "tutorial" section (TANDEM request #17: the Tutorial tab of the narrative sheet,
+ * columns StepID, Kind, Title_EN, Text_EN, Radio_EN; optional speaker_en for radio / walk-and-talk lines).
+ */
+struct CODEXTACTICS_API FNarrativeTutorialEntry
+{
+	FString Title;
+	FString Text;
+	FString Radio;
+	FString Speaker;
+};
+
+/** What the tutorial shows for a text id (GetTutorialText). */
+struct CODEXTACTICS_API FTutorialTextView
+{
+	FString Title;
+	/** Card / objective body or the line itself; "[EN missing: <id>]" when the id is unknown. */
+	FString Text;
+	FString Radio;
+	FString Speaker;
+	bool bMissing = false;
+};
+
+/**
  * Runtime view of Content/Data/Narrative/narrative_manifest.json, the output of Scripts/Narrative/sync_narrative.py
  * (Google Sheet -> manifest). Dialogues show the English columns (speaker_en / text_en); a missing line shows the
  * placeholder "[EN missing: <sequence>#<n>]" and logs a warning, so no Russian ever reaches the screen.
@@ -23,6 +46,8 @@ struct CODEXTACTICS_API FNarrativeManifest
 	TMap<FString, TArray<FNarrativeLine>> Sequences;
 	/** Glossary key -> name_en (weapons, items, enemies, objects). */
 	TMap<FString, FString> GlossaryNames;
+	/** Tutorial text id -> English texts (manifest "tutorial" section, request #17; empty until Gemini adds the tab). */
+	TMap<FString, FNarrativeTutorialEntry> TutorialTexts;
 
 	/** Parses the manifest JSON; false (and OutError) when it is not a valid manifest. */
 	static bool Parse(const FString& Json, FNarrativeManifest& Out, FString& OutError);
@@ -41,6 +66,13 @@ struct CODEXTACTICS_API FNarrativeManifest
 
 	/** "[EN missing: <SequenceId>#<LineNumber>]", LineNumber is 1-based. */
 	static FString MakeMissingPlaceholder(const FString& SequenceId, int32 LineNumber);
+
+	/**
+	 * The tutorial text of TextId: the "tutorial" section first (title_en / text_en / radio_en / speaker_en), else a
+	 * one-line "sequences" entry with that id (its first line's speaker / text), else the placeholder
+	 * "[EN missing: <TextId>]" (bMissing). Cyrillic never passes (treated as missing).
+	 */
+	FTutorialTextView GetTutorialText(const FString& TextId) const;
 
 	/** Glossary name_en for Key, or Fallback when the key is unknown. */
 	FString GetGlossaryName(const FString& Key, const FString& Fallback = FString()) const;

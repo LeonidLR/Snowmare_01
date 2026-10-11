@@ -139,7 +139,7 @@ struct CODEXTACTICS_API FSquadLoadout
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	int32 PistolAmmo = 48;
 
-	/** Grenades per operative (UE-only, Wave Editor «Гранаты», user request 2026-10-04); -1: the operatives keep their own. */
+	/** Grenades per operative (UE-only, Wave Editor Â«Ð“Ñ€Ð°Ð½Ð°Ñ‚Ñ‹Â», user request 2026-10-04); -1: the operatives keep their own. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	int32 GrenadesCount = -1;
 };
@@ -153,10 +153,47 @@ enum class ECombatStartMode : uint8
 {
 	/** "auto": ambush on maps with patrols, the button elsewhere. */
 	Auto,
-	/** "ambush": the fight starts when the squad attacks an enemy or an enemy detects the squad; «Начать бой» is hidden. */
+	/** "ambush": the fight starts when the squad attacks an enemy or an enemy detects the squad; Â«ÐÐ°Ñ‡Ð°Ñ‚ÑŒ Ð±Ð¾Ð¹Â» is hidden. */
 	Ambush,
-	/** "button": the classic flow (main menu «Начать бой» / combat zone -> cutscene -> preparation -> wave). */
+	/** "button": the classic flow (main menu Â«ÐÐ°Ñ‡Ð°Ñ‚ÑŒ Ð±Ð¾Ð¹Â» / combat zone -> cutscene -> preparation -> wave). */
 	Button
+};
+
+/**
+ * Demo game-mode flags of a level (level JSON "demo" object, Demo 01 producer plan C10): set by the demo level's data,
+ * not by the global BP defaults. Applied by UDemoModeSubsystem; no "demo" object = every flag off (normal game).
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FDemoModeSettings
+{
+	GENERATED_BODY()
+
+	/** True when the level JSON has a "demo" object. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bDemo = false;
+
+	/** "panic": false switches Panic / stress off on every operative (UPanicComponent::bEnabled). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bPanicEnabled = true;
+
+	/** "vision_cones": true shows every operative / enemy vision cone (bShowVisionCone), false hides them; absent = the BP defaults. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bOverrideVisionCones = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bVisionCones = true;
+
+	/** "tutorial": true runs the tutorial steps file below (the player's tutorial ON/OFF setting still applies). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bTutorial = false;
+
+	/** "tutorial_steps": Content/Data/Tutorial/<file> (default demo_01_steps.json). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	FString TutorialSteps;
+
+	/** "hud": "demo" hides the debug squad panel and the labels above operatives (ACodexTacticsHUD::bDemoHudPreset). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Demo")
+	bool bDemoHud = false;
 };
 
 USTRUCT(BlueprintType)
@@ -170,11 +207,11 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FText LevelName;
 
-	/** "prep_phase_duration": countdown before wave 1, s — only for a wave with "sudden_start": false (2026-10-11). */
+	/** "prep_phase_duration": countdown before wave 1, s â€” only for a wave with "sudden_start": false (2026-10-11). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	float PrepPhaseDuration = 60.0f;
 
-	/** "wave_rest_duration": countdown before a later wave, s — only for a wave with "sudden_start": false (2026-10-11). */
+	/** "wave_rest_duration": countdown before a later wave, s â€” only for a wave with "sudden_start": false (2026-10-11). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	float WaveRestDuration = 20.0f;
 
@@ -209,6 +246,9 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FGateProgressConfig Gate;
+	/** "demo": demo game-mode flags (Panic off, vision cones, tutorial, demo HUD preset). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	FDemoModeSettings Demo;
 };
 
 UCLASS(BlueprintType)

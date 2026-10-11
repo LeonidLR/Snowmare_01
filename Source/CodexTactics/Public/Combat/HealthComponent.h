@@ -9,6 +9,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHealthChangedSignature, float,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnDamagedSignature, const FDamageSpec&, DamageSpec, float, FinalDamage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnDiedSignature, AActor*, Victim, const FString&, AttackerSource);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnDiedNativeSignature, AActor*, const FString&);
+/** Asked when a blow would kill the owner; returning true keeps him alive (the guard sets his floor health / state). */
+DECLARE_DELEGATE_RetVal_TwoParams(bool, FLethalDamageGuard, class UHealthComponent* /*Health*/, const FString& /*AttackerSource*/);
 
 /**
  * Health, armor, elemental defense and status effect management component.
@@ -114,6 +116,13 @@ public:
 
 	/** Native C++ multicast delegate supporting lambdas. */
 	FOnDiedNativeSignature OnDiedNative;
+
+	/**
+	 * Optional veto of a lethal blow (Demo 01 tutorial lesson beats: UTutorialSubsystem downs the operative instead).
+	 * Runs once per would-be death, before OnDied; when it returns true the owner keeps at least
+	 * TutorialRules::LessonHealthFloor (1 HP) and nothing dies.
+	 */
+	FLethalDamageGuard LethalDamageGuard;
 
 protected:
 	void ProcessStatusEffects(float DeltaSeconds);
