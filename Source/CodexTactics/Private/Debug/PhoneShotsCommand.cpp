@@ -12,8 +12,9 @@
 // "sniperrt" / "snipertb" / "snipercover" (2026-10-09): sniper combat clips (real time, turn-based, cover), follow camera.
 // "sniper" (L_MovementTest, 2026-10-09): the Female Soldier Medic-Sapper with the sniper rifle — standing idle, the order while
 //   standing (kneel -> shot -> bolt, clip + still), kneeling fire (clip), prone fire (clip + stills); own camera framed on her.
-// "horde" (L_MovementTest, 2026-10-11): the sudden horde start — spawn -> free tactical pause -> wide shot -> per-type shots ->
-//   back to the squad (clip horde_intro_flyover + stills horde_intro_wide, horde_intro_type_closeup).
+// "horde" (L_MovementTest, 2026-10-11): the sudden horde start — spawn, the horde runs in real time, «HORDE INCOMING» + free
+//   pause, slow-motion flyover (wide shot of the running mass, a close shot per type), back to the squad (clip
+//   horde_intro_flyover + stills horde_intro_wide, horde_intro_type_closeup).
 
 #include "CoreMinimal.h"
 
@@ -1282,32 +1283,7 @@ namespace PhoneShots
 		S.Add([](UWorld* World)
 		{
 			SmokeUtils::PlaceSquadAtTestStart(World);
-			// L_MovementTest's wave spawn points sit around the test start (the horde would appear on the squad): the squad
-			// waits ~30 m away from their centre, so the wide shot shows the horde coming at it.
-			FVector Centre = FVector::ZeroVector;
-			int32 Points = 0;
-			for (TActorIterator<AEnemySpawnPoint> It(World); It; ++It)
-			{
-				if (!It->bIsDynamic)
-				{
-					Centre += It->GetActorLocation();
-					++Points;
-				}
-			}
-			USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
-			if (Points > 0 && Squad->GetLeader())
-			{
-				Centre /= Points;
-				FVector Away = (Squad->GetLeader()->GetActorLocation() - Centre).GetSafeNormal2D();
-				Away = Away.IsNearlyZero() ? FVector(1.f, 0.f, 0.f) : Away;
-				const FVector Delta = Centre + Away * 3000.f - Squad->GetLeader()->GetActorLocation();
-				for (AOperativeCharacter* Each : Squad->GetMembers())
-				{
-					const FVector Spot = SmokeUtils::FreeSpot(World, FVector(Each->GetActorLocation().X + Delta.X, Each->GetActorLocation().Y + Delta.Y,
-						Each->GetActorLocation().Z), Each);
-					Each->TeleportTo(Spot, (-Away).Rotation(), false, true);
-				}
-			}
+			SmokeUtils::PlaceSquadAwayFromWaveSpawns(World, 3000.f); // the horde has a run-up to film
 			KeepSquadAlive(World);
 			HordeShots = FHordeShots();
 			return 45;
@@ -1338,9 +1314,9 @@ namespace PhoneShots
 			if (Index != LastIndex)
 			{
 				LastIndex = Index;
-				ShotStart = Intro->GetSecondsSinceSpawn();
+				ShotStart = Intro->GetFlyoverSeconds();
 			}
-			const float InShot = Intro->GetSecondsSinceSpawn() - ShotStart;
+			const float InShot = Intro->GetFlyoverSeconds() - ShotStart;
 			if (Intro->GetShots().IsValidIndex(Index) && InShot > Config.ShotBlendSeconds + 0.6f)
 			{
 				const EHordeIntroShotKind Kind = Intro->GetShots()[Index].Kind;

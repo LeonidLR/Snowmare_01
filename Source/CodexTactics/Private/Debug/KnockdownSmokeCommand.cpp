@@ -195,6 +195,11 @@ namespace KnockdownSmoke
 			State.Brute = Waves->SpawnEnemy(EEnemyArchetype::Brute, Leader->GetActorLocation() + Leader->GetActorForwardVector() * 160.f + FVector(0.f, 0.f, 30.f),
 				(-Leader->GetActorForwardVector()).Rotation());
 			Check(State, State.Brute.IsValid() && KnockdownOf(State.Brute.Get()) && KnockdownOf(State.Brute.Get())->bHeavyPoise, TEXT("brute spawned in front of the leader (heavy poise)"));
+			if (AEnemyCharacter* Brute = State.Brute.Get())
+			{
+				// Frozen until the scripted blow: its own AI must not strike first (a 40+ HP hit = a chance-based heavy hit).
+				Brute->CustomTimeDilation = 0.f;
+			}
 			Next();
 			return true;
 		}

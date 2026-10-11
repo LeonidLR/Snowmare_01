@@ -4,7 +4,7 @@
 // 2. OPTIONS / CREDITS / LOAD GAME (empty slot list) open on the Menu layer and BACK returns; back on the main menu
 //    returns to the title; QUIT asks first (NO keeps the menu, YES quits — quitting is disabled for the check);
 // 3. NEW GAME: the level starts in Game mode; StartMission(Combat) (dev / bot) completes the quest chain, heals / warms
-//    the squad and starts wave 1 suddenly in the free tactical pause (user decision 2026-10-11: no cutscene / preparation);
+//    the squad and starts wave 1 suddenly (user decision 2026-10-11: no cutscene / preparation);
 //    Ctrl + X (quick restart) repeats combat mode; a normal restart starts Game mode.
 
 #include "CoreMinimal.h"
@@ -238,8 +238,8 @@ namespace MainMenuSmoke
 			Mission->StartMission(EMissionStartMode::Combat);
 			Check(State, World->GetSubsystem<UQuestSubsystem>()->IsGatePowered() && World->GetSubsystem<UQuestSubsystem>()->IsGeneratorRunning(),
 				TEXT("combat mode: quest chain completed"));
-			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause(),
-				TEXT("combat mode: wave 1 at once in the free tactical pause (no cutscene)"));
+			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsAwaitingHordeIntro(),
+				TEXT("combat mode: wave 1 at once, horde intro armed (no cutscene)"));
 			bool bFresh = true;
 			for (const AOperativeCharacter* Member : World->GetSubsystem<USquadSubsystem>()->GetMembers())
 			{
@@ -260,7 +260,7 @@ namespace MainMenuSmoke
 			State.LastWorld = World;
 			Check(State, Mission->GetStartMode() == EMissionStartMode::Combat, TEXT("quick restart repeats combat mode"));
 			Check(State, World->GetSubsystem<UGameFlowSubsystem>()->GetPhase() == ECodexGamePhase::WaveCombat
-				&& World->GetSubsystem<UGameFlowSubsystem>()->IsFreePause(), TEXT("quick restart: the sudden wave again"));
+				&& World->GetSubsystem<UGameFlowSubsystem>()->IsAwaitingHordeIntro(), TEXT("quick restart: the sudden wave again"));
 			Mission->RestartMission(/*bQuick*/ false);
 			Next(State, 6);
 			return true;

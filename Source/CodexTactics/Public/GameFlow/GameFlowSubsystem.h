@@ -81,6 +81,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	bool IsFreePause() const { return Machine.IsFreePause(); }
 
+	/** A sudden wave runs and waits for its horde intro (see FGameFlowStateMachine::IsAwaitingHordeIntro). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
+	bool IsAwaitingHordeIntro() const { return Machine.IsAwaitingHordeIntro(); }
+
+	/** The horde intro opens the free tactical pause (FGameFlowStateMachine::EnterFreeTacticalPause). */
+	EGameFlowResult EnterFreeTacticalPause() { return Machine.EnterFreeTacticalPause(); }
+
+	/** The sudden wave stays in real time without a horde intro (smokes, the bot). */
+	void CancelHordeIntro() { Machine.CancelHordeIntro(); }
+
 	/** Wave WaveIndex starts suddenly (no cutscene / countdown, free pause); see FGameFlowStateMachine::UsesSuddenStart. */
 	bool UsesSuddenStart(int32 InWaveIndex) const { return Machine.UsesSuddenStart(InWaveIndex); }
 

@@ -452,10 +452,10 @@ void UPlaytestBotSubsystem::TickFight(float DeltaTime)
 		Finish(TEXT("DEFEAT"), 0);
 		return;
 	case ECodexGamePhase::WaveCombat:
-		if (Flow->IsFreePause())
+		if (Flow->IsAwaitingHordeIntro() || Flow->IsFreePause())
 		{
-			// Sudden horde start (user decision 2026-10-11): no preparation — the bot orders its defences in the free
-			// pause (they are set up while the fight runs), skips the camera flyover and resumes at once.
+			// Sudden horde start (user decision 2026-10-11): no preparation — the bot orders its defences at once (they
+			// are set up while the fight runs), dismisses the horde intro (no flyover) and fights in real time.
 			if (!bDeployed)
 			{
 				DeployDefences();
@@ -463,10 +463,13 @@ void UPlaytestBotSubsystem::TickFight(float DeltaTime)
 			}
 			if (UHordeIntroSubsystem* Intro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>())
 			{
-				Intro->HandleSkipInput();
+				Intro->DismissIntro();
 			}
-			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Wave %d came suddenly: defences ordered, free pause released"), Flow->GetWaveIndex());
-			Flow->ToggleTacticalPause();
+			if (Flow->IsFreePause())
+			{
+				Flow->ToggleTacticalPause();
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Wave %d came suddenly: defences ordered, horde intro dismissed"), Flow->GetWaveIndex());
 			return;
 		}
 		break;

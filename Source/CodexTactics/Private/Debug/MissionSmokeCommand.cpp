@@ -1,7 +1,7 @@
 // Dev-only console command for a headless mission check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.MissionSmoke
 // 1. start objective; 2. the wave objective follows the game flow (sudden horde start 2026-10-11: no preparation —
-// the wave objective at once, in the free tactical pause); 3. the engineer's death does NOT fail the
+// the wave objective at once, the fight runs until the horde intro); 3. the engineer's death does NOT fail the
 // mission (user decision 2026-10-08), the commander's death does after the death cinematic (GameOver, reason, time
 // stopped); 4. restart reloads the level into a fresh exploration.
 
@@ -79,8 +79,8 @@ namespace MissionSmoke
 			Check(State, Mission->GetObjective().EqualTo(MissionRules::GetStartObjective()), TEXT("start objective"));
 			Flow->TriggerCombatZone();
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke objective: %s"), *Mission->GetObjective().ToString());
-			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause(),
-				TEXT("sudden horde start: wave 1 at once, free tactical pause (no cutscene / preparation)"));
+			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsAwaitingHordeIntro(),
+				TEXT("sudden horde start: wave 1 at once, horde intro armed (no cutscene / preparation)"));
 			Check(State, Mission->GetObjective().ToString().StartsWith(TEXT("DEFENSE: Repel wave 1! Enemies: ")), TEXT("wave objective at once"));
 			SmokeUtils::ReleaseHordeIntroPause(Flow);
 			return true;

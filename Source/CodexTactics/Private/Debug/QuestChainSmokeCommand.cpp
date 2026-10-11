@@ -3,7 +3,7 @@
 // Uses the player's click path (UInteractionSubsystem::RequestInteraction + action menu buttons) for: APC without
 // canister (greyed-out menu, closed),
 // canister, APC, generator, gate terminal. Then checks the generator heat, the opened gate, the sudden horde start
-// (user decision 2026-10-11: wave 1 at once in the free tactical pause, no cutscene / preparation; the wave is parked
+// (user decision 2026-10-11: wave 1 at once, no cutscene / preparation; the wave is parked
 // out of the way and the pause released) and that the leader can walk through the gate.
 
 #include "CoreMinimal.h"
@@ -129,7 +129,7 @@ namespace QuestChainSmoke
 		AInteractableActor* Generator = FindInteractable(World, EInteractableType::Generator);
 		const bool bHeat = Generator && Generator->HeatSource->IsHeatActive();
 		const bool bGateOpen = Gate && Gate->IsOpen();
-		const bool bSuddenWave = Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause();
+		const bool bSuddenWave = Flow->GetPhase() == ECodexGamePhase::WaveCombat && (Flow->IsAwaitingHordeIntro() || Flow->IsFreePause());
 
 		if (bGateOpen && bSuddenWave && !State.bWalkOrdered)
 		{
@@ -141,7 +141,7 @@ namespace QuestChainSmoke
 				It->CustomTimeDilation = 0.f;
 				It->SetActorLocation(It->GetActorLocation() + FVector(0.f, 0.f, -5000.f), false, nullptr, ETeleportType::TeleportPhysics);
 			}
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke gate open, wave 1 came suddenly (free pause, %d enemies) at %.1fs, heat=%d"),
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke gate open, wave 1 came suddenly (%d enemies) at %.1fs, heat=%d"),
 				Spawned, State.TotalTime, bHeat ? 1 : 0);
 			if (Spawned == 0)
 			{

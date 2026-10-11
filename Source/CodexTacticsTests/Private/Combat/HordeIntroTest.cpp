@@ -7,8 +7,9 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// Sudden horde start (user decision 2026-10-11; UE-only): the wave spawns at once into a FREE, untimed tactical pause
-// (no charge spent), a camera flyover shows the horde wide and then every enemy type not yet shown in this fight.
+// Sudden horde start (user decisions / feedback 2026-10-11; UE-only): the wave spawns at once into the running fight;
+// once the horde has become a running mass the FREE, untimed tactical pause opens (no charge spent) and a slow-motion
+// camera flyover shows the charging mass, then a running front-runner of every type not yet shown in this fight.
 
 #define HORDEINTRO_TEST(TestClass, TestPath) \
 	IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, "CodexTactics.Combat.HordeIntro." TestPath, \
@@ -53,7 +54,10 @@ bool FHordeIntroFirstWaveShotsTest::RunTest(const FString&)
 	TestEqual(TEXT("type shot length"), Shots[1].Seconds, Config.TypeShotSeconds);
 	TestEqual(TEXT("return glide"), Shots.Last().Seconds, Config.ReturnBlendSeconds);
 	TestEqual(TEXT("total 3 + 3 x 2.5 + 1 s"), HordeIntroRules::GetShotsSeconds(Shots), 11.5f, 0.001f);
-	TestTrue(TEXT("default delay within 1.5 - 2 s"), Config.FlyoverDelaySeconds >= 1.5f && Config.FlyoverDelaySeconds <= 2.f);
+	// User feedback 2026-10-11: dramatic slow motion (not the 0.02 pause), close tracking shots, a wait for the mass.
+	TestTrue(TEXT("flyover slow motion between the pause and real time"), Config.FlyoverTimeDilation > 0.1f && Config.FlyoverTimeDilation < 0.5f);
+	TestTrue(TEXT("type shots close (6-8 m)"), Config.TypeShotDistance >= 600.f && Config.TypeShotDistance <= 800.f);
+	TestTrue(TEXT("the mass gets 2.5..6 s"), FMath::IsNearlyEqual(Config.MinDelaySeconds, 2.5f) && FMath::IsNearlyEqual(Config.MaxWaitSeconds, 6.f));
 	return true;
 }
 
@@ -66,7 +70,7 @@ bool FHordeIntroShownTypesTest::RunTest(const FString&)
 	TestEqual(TEXT("the hound was shown in wave 1: only the frostbitten"), Labels(Shots), FString(TEXT("wide type:Frostbitten return")));
 	TestEqual(TEXT("new types keep the full wide shot"), Shots[0].Seconds, Config.WideShotSeconds);
 
-	// Wave 2 with the same types: a short wide shot only (where the new wave comes from), then back.
+	// Wave 2 with the same types: the wide shot of the running mass only, then back.
 	const TSet<EEnemyArchetype> All = { EEnemyArchetype::FrostHound, EEnemyArchetype::Frostbitten };
 	const TArray<FHordeIntroShot> Repeat = HordeIntroRules::BuildShotList({ EEnemyArchetype::Frostbitten, EEnemyArchetype::FrostHound }, All, Config);
 	TestEqual(TEXT("known types: short wide + return"), Labels(Repeat), FString(TEXT("wide return")));
@@ -90,45 +94,89 @@ bool FHordeIntroShownTypesTest::RunTest(const FString&)
 	return true;
 }
 
-HORDEINTRO_TEST(FHordeIntroTimelineTest, "Timeline.DelayThenShotsOnRealTime")
+HORDEINTRO_TEST(FHordeIntroTimelineTest, "Timeline.ShotsOnRealTimeFromTheTrigger")
 bool FHordeIntroTimelineTest::RunTest(const FString&)
 {
-	FHordeIntroConfig Config;
-	Config.FlyoverDelaySeconds = 1.75f;
 	const TArray<FHordeIntroShot> Shots = { Shot(EHordeIntroShotKind::Wide, EEnemyArchetype::Base, 3.f),
 		Shot(EHordeIntroShotKind::Type, EEnemyArchetype::FrostHound, 2.5f), Shot(EHordeIntroShotKind::Return, EEnemyArchetype::Base, 1.f) };
-	FHordeIntroCursor Cursor = HordeIntroRules::Evaluate(Shots, Config, 1.f);
-	TestTrue(TEXT("1 s after the spawn: still waiting"), Cursor.bWaiting && !Cursor.bFinished && Cursor.ShotIndex == INDEX_NONE);
-	Cursor = HordeIntroRules::Evaluate(Shots, Config, 1.8f);
-	TestTrue(TEXT("1.8 s: the wide shot"), !Cursor.bWaiting && Cursor.ShotIndex == 0);
+	FHordeIntroCursor Cursor = HordeIntroRules::Evaluate(Shots, 0.f);
+	TestTrue(TEXT("at the trigger: the wide shot"), !Cursor.bFinished && Cursor.ShotIndex == 0);
+	Cursor = HordeIntroRules::Evaluate(Shots, 0.05f);
 	TestEqual(TEXT("0.05 s into it"), Cursor.ShotSeconds, 0.05f, 0.001f);
-	TestEqual(TEXT("4.75 s: the hound"), HordeIntroRules::Evaluate(Shots, Config, 4.75f).ShotIndex, 1);
-	TestEqual(TEXT("7.3 s: the return"), HordeIntroRules::Evaluate(Shots, Config, 7.3f).ShotIndex, 2);
-	TestTrue(TEXT("8.25 s: over"), HordeIntroRules::Evaluate(Shots, Config, 8.25f).bFinished);
-	TestTrue(TEXT("no shots: over at once"), HordeIntroRules::Evaluate({}, Config, 0.f).bFinished);
+	TestEqual(TEXT("3 s: the hound"), HordeIntroRules::Evaluate(Shots, 3.f).ShotIndex, 1);
+	TestEqual(TEXT("5.6 s: the return"), HordeIntroRules::Evaluate(Shots, 5.6f).ShotIndex, 2);
+	TestTrue(TEXT("6.5 s: over"), HordeIntroRules::Evaluate(Shots, 6.5f).bFinished);
+	TestTrue(TEXT("no shots: over at once"), HordeIntroRules::Evaluate({}, 0.f).bFinished);
 	return true;
 }
 
-HORDEINTRO_TEST(FHordeIntroFramingTest, "Framing.WideShotAndRepresentative")
+HORDEINTRO_TEST(FHordeIntroTriggerTest, "Trigger.RunningMassAfterMinDelayElseTimeout")
+bool FHordeIntroTriggerTest::RunTest(const FString&)
+{
+	const FHordeIntroConfig Config;
+	const FVector Squad(0.f, 0.f, 0.f);
+	FHordeMover Runner;
+	Runner.Location = FVector(3000.f, 0.f, 0.f);
+	Runner.Velocity = FVector(-600.f, 100.f, 0.f);
+	FHordeMover Idle;
+	Idle.Location = FVector(3000.f, 500.f, 0.f);
+	FHordeMover Away;
+	Away.Location = FVector(3000.f, -500.f, 0.f);
+	Away.Velocity = FVector(600.f, 0.f, 0.f);
+	FHordeMover Slow = Runner;
+	Slow.Velocity = FVector(-150.f, 0.f, 0.f);
+	TestTrue(TEXT("6 m/s at the squad runs"), HordeIntroRules::IsRunningAtSquad(Runner, Squad, Config.MassMinSpeed));
+	TestFalse(TEXT("standing does not"), HordeIntroRules::IsRunningAtSquad(Idle, Squad, Config.MassMinSpeed));
+	TestFalse(TEXT("running away does not"), HordeIntroRules::IsRunningAtSquad(Away, Squad, Config.MassMinSpeed));
+	TestFalse(TEXT("1.5 m/s is too slow"), HordeIntroRules::IsRunningAtSquad(Slow, Squad, Config.MassMinSpeed));
+	TestEqual(TEXT("3 of 5 run: 60 %"), HordeIntroRules::RunningFraction({ Runner, Runner, Runner, Idle, Away }, Squad, Config.MassMinSpeed), 0.6f, 0.001f);
+	TestEqual(TEXT("no movers: 0"), HordeIntroRules::RunningFraction({}, Squad, Config.MassMinSpeed), 0.f);
+	TestFalse(TEXT("0.2 s of running is no mass yet"), HordeIntroRules::IsMassFormed(0.2f, Config));
+	TestTrue(TEXT("0.4 s of running forms the mass"), HordeIntroRules::IsMassFormed(Config.MassHoldSeconds, Config));
+	TestFalse(TEXT("the mass formed, but too early (1 s)"), HordeIntroRules::ShouldTrigger(1.f, true, Config));
+	TestTrue(TEXT("2.5 s with the mass formed (latched)"), HordeIntroRules::ShouldTrigger(2.5f, true, Config));
+	TestFalse(TEXT("5.9 s, no mass"), HordeIntroRules::ShouldTrigger(5.9f, false, Config));
+	TestTrue(TEXT("6 s: timeout"), HordeIntroRules::ShouldTrigger(6.f, false, Config));
+	return true;
+}
+
+HORDEINTRO_TEST(FHordeIntroFramingTest, "Framing.FromTheSquadSideOnTheFrontRunner")
 bool FHordeIntroFramingTest::RunTest(const FString&)
 {
 	const FHordeIntroConfig Config;
 	const FVector Squad(0.f, 0.f, 0.f);
 	const FVector Horde(4000.f, 0.f, 0.f);
-	TestEqual(TEXT("focus 60 % towards the horde"), HordeIntroRules::WideFocus(Squad, Horde, Config), FVector(2400.f, 0.f, 0.f));
-	const FVector Focus(2400.f, 0.f, 0.f);
-	TestEqual(TEXT("close horde: the minimum distance"), HordeIntroRules::WideDistance(Focus, { FVector(2600.f, 0.f, 0.f) }, Config),
+	TestEqual(TEXT("focus 80 % towards the mass"), HordeIntroRules::WideFocus(Squad, Horde, Config), FVector(3200.f, 0.f, 0.f));
+	const FVector Focus(3200.f, 0.f, 0.f);
+	TestEqual(TEXT("tight mass: the minimum distance"), HordeIntroRules::WideDistance(Focus, { FVector(3400.f, 0.f, 0.f) }, Config),
 		Config.WideMinDistance);
-	TestEqual(TEXT("spread horde: span x 0.9 + 10 m"), HordeIntroRules::WideDistance(Focus, { Squad, FVector(5400.f, 0.f, 0.f) }, Config),
-		3000.f * 0.9f + 1000.f, 0.1f);
+	TestEqual(TEXT("spread mass: span x 0.9 + 8 m"), HordeIntroRules::WideDistance(Focus, { FVector(5200.f, 0.f, 0.f) }, Config),
+		2000.f * 0.9f + 800.f, 0.1f);
 	TestEqual(TEXT("huge span: clamped"), HordeIntroRules::WideDistance(Focus, { FVector(20000.f, 0.f, 0.f) }, Config), Config.WideMaxDistance);
-	TestEqual(TEXT("the representative is the one nearest the squad"),
-		HordeIntroRules::PickRepresentative({ FVector(3000.f, 0.f, 0.f), FVector(1500.f, 500.f, 0.f), FVector(2000.f, 0.f, 0.f) }, Squad), 1);
-	TestEqual(TEXT("none without candidates"), HordeIntroRules::PickRepresentative({}, Squad), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("view from the squad towards a horde in +X, 25 deg aside"), HordeIntroRules::ViewYawAt(Squad, Horde, 25.f), 25.f, 0.01f);
+	TestEqual(TEXT("horde in +Y"), HordeIntroRules::ViewYawAt(Squad, FVector(0.f, 3000.f, 0.f), 0.f), 90.f, 0.01f);
+	FHordeMover Near;
+	Near.Location = FVector(1500.f, 0.f, 0.f); // nearest, but standing
+	FHordeMover Front;
+	Front.Location = FVector(2000.f, 0.f, 0.f);
+	Front.Velocity = FVector(-500.f, 0.f, 0.f);
+	FHordeMover Back = Front;
+	Back.Location = FVector(3500.f, 0.f, 0.f);
+	TestEqual(TEXT("the representative is the running front-runner"),
+		HordeIntroRules::PickRunningRepresentative({ Back, Near, Front }, Squad, Config.MassMinSpeed), 2);
+	FHordeMover Flanker = Back;
+	Flanker.Velocity = FVector(0.f, 300.f, 0.f); // moves, but not at the squad
+	TestEqual(TEXT("nobody runs at the squad: the nearest that moves"), HordeIntroRules::PickRunningRepresentative({ Near, Flanker }, Squad, Config.MassMinSpeed), 1);
+	TestEqual(TEXT("nobody moves: the nearest"), HordeIntroRules::PickRunningRepresentative({ Back, Near }, Squad, 100000.f), 1);
+	TestEqual(TEXT("none without candidates"), HordeIntroRules::PickRunningRepresentative({}, Squad, Config.MassMinSpeed),
+		static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("alert fades in"), HordeIntroRules::AlertAlpha(0.25f, 3.f, Config), 0.5f, 0.01f);
+	TestEqual(TEXT("alert full"), HordeIntroRules::AlertAlpha(2.f, 3.f, Config), 1.f);
+	TestEqual(TEXT("alert gone"), HordeIntroRules::AlertAlpha(3.6f, 3.f, Config), 0.f);
 	return true;
 }
 
-HORDEINTRO_TEST(FHordeIntroFreePauseTest, "FreePause.SuddenStartOpensFreeUntimedPause")
+HORDEINTRO_TEST(FHordeIntroFreePauseTest, "FreePause.SuddenWaveRunsThenIntroOpensFreeUntimedPause")
 bool FHordeIntroFreePauseTest::RunTest(const FString&)
 {
 	FGameFlowConfig Config;
@@ -140,18 +188,21 @@ bool FHordeIntroFreePauseTest::RunTest(const FString&)
 	TestEqual(TEXT("combat zone"), Machine.TriggerCombatZone(), EGameFlowResult::Ok);
 	TestEqual(TEXT("straight into the wave (no cutscene / preparation)"), Machine.GetPhase(), ECodexGamePhase::WaveCombat);
 	TestEqual(TEXT("one state change"), Modes.Num(), 1);
-	TestEqual(TEXT("tactical pause"), Machine.GetCombatMode(), ECodexCombatMode::TacticalPause);
-	TestTrue(TEXT("the free pause"), Machine.IsFreePause());
+	TestEqual(TEXT("the fight runs: real time"), Machine.GetCombatMode(), ECodexCombatMode::RealTime);
+	TestEqual(TEXT("real time dilation"), Machine.GetTimeDilation(), 1.f);
+	TestTrue(TEXT("the horde intro is armed"), Machine.IsAwaitingHordeIntro());
 	TestEqual(TEXT("wave 1"), Machine.GetWaveIndex(), 1);
+	TestEqual(TEXT("free pause opens"), Machine.EnterFreeTacticalPause(), EGameFlowResult::Ok);
+	TestTrue(TEXT("the free pause"), Machine.IsFreePause() && Machine.GetCombatMode() == ECodexCombatMode::TacticalPause);
+	TestFalse(TEXT("intro no longer armed"), Machine.IsAwaitingHordeIntro());
 	TestEqual(TEXT("pause dilation"), Machine.GetTimeDilation(), Config.TacticalPauseTimeDilation);
 	TestEqual(TEXT("no charge spent (3/3)"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges);
-	TestTrue(TEXT("a wave is active"), Machine.IsWaveActive());
-	// No timer: the normal pause would have ended after 30 s.
+	TestEqual(TEXT("only once"), Machine.EnterFreeTacticalPause(), EGameFlowResult::NotInRealTime);
 	for (int32 Step = 0; Step < 1200; ++Step)
 	{
 		Machine.Tick(0.1f);
 	}
-	TestTrue(TEXT("still in the free pause after 120 s"), Machine.IsFreePause() && Machine.GetCombatMode() == ECodexCombatMode::TacticalPause);
+	TestTrue(TEXT("still in the free pause after 120 s (no timer)"), Machine.IsFreePause());
 	int32 Releases = 0;
 	Machine.OnTacticalPauseReleased.AddLambda([&Releases]() { ++Releases; });
 	TestEqual(TEXT("Space releases it"), Machine.ToggleTacticalPause(), EGameFlowResult::Ok);
@@ -159,12 +210,34 @@ bool FHordeIntroFreePauseTest::RunTest(const FString&)
 	TestEqual(TEXT("the planned orders run"), Releases, 1);
 	TestEqual(TEXT("charges still 3/3"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges);
 	TestEqual(TEXT("no cooldown"), Machine.GetPauseCooldownRemaining(), 0.f);
-	TestFalse(TEXT("no longer free"), Machine.IsFreePause());
-	// The next pause is a normal one: a charge and the timer.
+	TestEqual(TEXT("no free pause outside the intro"), Machine.EnterFreeTacticalPause(), EGameFlowResult::WrongPhase);
 	Machine.ToggleTacticalPause();
-	TestEqual(TEXT("normal pause spends a charge"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges - 1);
-	TestFalse(TEXT("normal pause is not free"), Machine.IsFreePause());
-	TestEqual(TEXT("normal pause has its timer"), Machine.GetPauseTimeRemaining(), Config.TacticalPauseDuration);
+	TestEqual(TEXT("the next pause spends a charge"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges - 1);
+	TestEqual(TEXT("and has its timer"), Machine.GetPauseTimeRemaining(), Config.TacticalPauseDuration);
+	return true;
+}
+
+HORDEINTRO_TEST(FHordeIntroSpaceBeforeTriggerTest, "FreePause.SpaceBeforeTheTriggerOpensItFree")
+bool FHordeIntroSpaceBeforeTriggerTest::RunTest(const FString&)
+{
+	FGameFlowConfig Config;
+	FGameFlowStateMachine Machine(Config);
+	Machine.TriggerCombatZone();
+	TestEqual(TEXT("Space tap while the horde forms"), Machine.ToggleTacticalPause(), EGameFlowResult::Ok);
+	TestTrue(TEXT("the free pause, not a charged one"), Machine.IsFreePause());
+	TestEqual(TEXT("charges 3/3"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges);
+	FGameFlowStateMachine Hold(Config);
+	Hold.TriggerCombatZone();
+	TestEqual(TEXT("hold -> turn-based"), Hold.RequestEnterTurnBased(true), EGameFlowResult::Ok);
+	TestFalse(TEXT("intro dropped"), Hold.IsAwaitingHordeIntro());
+	Hold.ExitTurnBasedToRealTime();
+	TestFalse(TEXT("still dropped back in real time"), Hold.IsAwaitingHordeIntro());
+	FGameFlowStateMachine Dismissed(Config);
+	Dismissed.TriggerCombatZone();
+	Dismissed.CancelHordeIntro();
+	TestFalse(TEXT("dismissed"), Dismissed.IsAwaitingHordeIntro());
+	Dismissed.ToggleTacticalPause();
+	TestTrue(TEXT("a normal pause"), !Dismissed.IsFreePause() && Dismissed.GetPauseCharges() == Config.TacticalPauseMaxCharges - 1);
 	return true;
 }
 
@@ -175,29 +248,27 @@ bool FHordeIntroNextWaveTest::RunTest(const FString&)
 	Config.TotalWaves = 3;
 	FGameFlowStateMachine Machine(Config);
 	Machine.TriggerCombatZone();
+	Machine.EnterFreeTacticalPause();
 	Machine.ToggleTacticalPause();
 	Machine.ToggleTacticalPause(); // a normal pause: 2/3
 	TestEqual(TEXT("wave cleared from a pause"), Machine.NotifyWaveCleared(), EGameFlowResult::Ok);
 	TestEqual(TEXT("next wave"), Machine.AdvanceAfterWave(), EGameFlowResult::Ok);
 	TestEqual(TEXT("wave 2 at once"), Machine.GetPhase(), ECodexGamePhase::WaveCombat);
 	TestEqual(TEXT("wave index 2"), Machine.GetWaveIndex(), 2);
-	TestTrue(TEXT("free pause again"), Machine.IsFreePause());
+	TestTrue(TEXT("its horde intro armed, real time"), Machine.IsAwaitingHordeIntro());
 	TestEqual(TEXT("charges back to 3/3"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges);
 	TestEqual(TEXT("no rest countdown"), Machine.GetPreparationTimeRemaining(), 0.f);
-	// Turn-based is reachable from the free pause (hold), the charges stay.
-	TestEqual(TEXT("hold -> turn-based"), Machine.RequestEnterTurnBased(true), EGameFlowResult::Ok);
-	TestEqual(TEXT("turn-based"), Machine.GetCombatMode(), ECodexCombatMode::TurnBased);
+	Machine.EnterFreeTacticalPause();
+	TestEqual(TEXT("hold -> turn-based from the free pause"), Machine.RequestEnterTurnBased(true), EGameFlowResult::Ok);
 	TestEqual(TEXT("charges untouched"), Machine.GetPauseCharges(), Config.TacticalPauseMaxCharges);
 	TestEqual(TEXT("no cooldown either"), Machine.GetPauseCooldownRemaining(), 0.f);
 	TestFalse(TEXT("not free in the grid"), Machine.IsFreePause());
 	Machine.ExitTurnBasedToRealTime();
-	TestEqual(TEXT("back in real time"), Machine.GetCombatMode(), ECodexCombatMode::RealTime);
-	// The game over / wave end clear the free flag.
 	Machine.NotifyWaveCleared();
 	Machine.AdvanceAfterWave();
-	TestTrue(TEXT("wave 3 free"), Machine.IsFreePause() && Machine.GetWaveIndex() == 3);
+	TestTrue(TEXT("wave 3 armed"), Machine.IsAwaitingHordeIntro() && Machine.GetWaveIndex() == 3);
 	Machine.TriggerGameOver();
-	TestFalse(TEXT("game over: no free pause"), Machine.IsFreePause());
+	TestFalse(TEXT("game over: nothing armed"), Machine.IsAwaitingHordeIntro() || Machine.IsFreePause());
 	return true;
 }
 
@@ -211,16 +282,14 @@ bool FHordeIntroPreparedWaveTest::RunTest(const FString&)
 	TestTrue(TEXT("wave 1 sudden"), Machine.UsesSuddenStart(1));
 	TestFalse(TEXT("wave 2 prepared"), Machine.UsesSuddenStart(2));
 	Machine.TriggerCombatZone();
-	TestTrue(TEXT("wave 1 in the free pause"), Machine.IsFreePause());
+	TestTrue(TEXT("wave 1 armed"), Machine.IsAwaitingHordeIntro());
 	Machine.NotifyWaveCleared();
 	Machine.AdvanceAfterWave();
 	TestEqual(TEXT("wave 2: the rest countdown"), Machine.GetPhase(), ECodexGamePhase::Preparation);
 	TestEqual(TEXT("rest seconds"), Machine.GetPreparationTimeRemaining(), Config.WaveRestDuration);
 	TestEqual(TEXT("rest ends"), Machine.FinishPreparation(), EGameFlowResult::Ok);
 	TestEqual(TEXT("wave 2 in real time"), Machine.GetCombatMode(), ECodexCombatMode::RealTime);
-	TestFalse(TEXT("not free"), Machine.IsFreePause());
-
-	// Console override 0: the old start everywhere (cutscene + preparation).
+	TestFalse(TEXT("no horde intro"), Machine.IsAwaitingHordeIntro());
 	FGameFlowStateMachine Old(Config);
 	Old.SetSuddenStartOverride(0);
 	Old.TriggerCombatZone();
@@ -239,13 +308,11 @@ bool FHordeIntroLoadTest::RunTest(const FString&)
 	FGameFlowConfig Config;
 	Config.TotalWaves = 3;
 	FGameFlowStateMachine Machine(Config);
-	// The pre-combat autosave stores the wave's preparation (SaveGameSubsystem); the load restores it ...
 	Machine.RestoreForLoad(true, true, 2, 15.f);
 	TestEqual(TEXT("restored in the preparation"), Machine.GetPhase(), ECodexGamePhase::Preparation);
-	// ... and the next flow tick brings the horde, in the free pause.
 	Machine.Tick(0.016f);
 	TestEqual(TEXT("wave 2 comes at once"), Machine.GetPhase(), ECodexGamePhase::WaveCombat);
-	TestTrue(TEXT("free pause"), Machine.IsFreePause());
+	TestTrue(TEXT("its horde intro armed"), Machine.IsAwaitingHordeIntro());
 	TestEqual(TEXT("wave index kept"), Machine.GetWaveIndex(), 2);
 	return true;
 }

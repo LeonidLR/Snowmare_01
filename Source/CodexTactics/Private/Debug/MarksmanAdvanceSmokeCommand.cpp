@@ -72,7 +72,7 @@ namespace MarksmanAdvanceSmoke
 			}
 			Flow->FinishCutscene();
 			Flow->FinishPreparation();
-			SmokeUtils::ReleaseHordeIntroPause(Flow); // the sudden horde start opens in the free pause
+			SmokeUtils::ReleaseHordeIntroPause(Flow); // no horde intro: real time
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
 				It->Destroy();

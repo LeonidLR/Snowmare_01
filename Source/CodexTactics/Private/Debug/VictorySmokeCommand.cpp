@@ -148,11 +148,11 @@ namespace VictorySmoke
 			return true;
 		case 1:
 			// Each wave: start, kill everything, the panel appears; the button goes on. A horde wave comes suddenly in the
-			// free tactical pause (user decision 2026-10-11): released here like a player's Space tap.
-			if (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause())
+			// horde intro (user decisions 2026-10-11): dismissed here, the fight stays in real time.
+			if (Flow->GetPhase() == ECodexGamePhase::WaveCombat && (Flow->IsAwaitingHordeIntro() || Flow->IsFreePause()))
 			{
 				Check(State, Flow->GetPauseCharges() == Flow->GetConfig().TacticalPauseMaxCharges,
-					FString::Printf(TEXT("wave %d: sudden start in the free pause, charges %d/%d"), Flow->GetWaveIndex(),
+					FString::Printf(TEXT("wave %d: sudden start, charges %d/%d"), Flow->GetWaveIndex(),
 						Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges));
 				SmokeUtils::ReleaseHordeIntroPause(Flow);
 				State.Wave = Flow->GetWaveIndex();
@@ -210,8 +210,8 @@ namespace VictorySmoke
 					return true;
 				}
 				Panel->PressNext();
-				Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause() && Flow->GetWaveIndex() == State.Wave + 1
-					&& !Panel->IsShown(), FString::Printf(TEXT("next wave: wave %d comes at once in the free pause (no rest), panel hidden"),
+				Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsAwaitingHordeIntro() && Flow->GetWaveIndex() == State.Wave + 1
+					&& !Panel->IsShown(), FString::Printf(TEXT("next wave: wave %d comes at once (no rest), panel hidden"),
 						Flow->GetWaveIndex()));
 				return true;
 			}

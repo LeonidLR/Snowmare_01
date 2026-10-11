@@ -2,7 +2,7 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.LevelWaveSmoke
 // 1. the game flow took the level (3 waves; preparation 60 s / rest 20 s still parsed, used only by a wave with
 //    "sudden_start": false — every wave of this level starts suddenly, user decision 2026-10-11);
-// 2. the combat zone -> wave 1 appears at once in the free tactical pause (no cutscene / countdown) like Godot
+// 2. the combat zone -> wave 1 appears at once (no cutscene / countdown) like Godot
 //    _spawn_custom_json_wave (the level's wave 1 count, nothing queued)
 //    around the level's enemy spawn points, and the wave's cold_drain_mult reaches the squad's cold;
 // 3. (user report 2026-10-04: wave 2 spawned into one point, the enemies inside each other, standing still) for waves 1
@@ -150,7 +150,7 @@ namespace LevelWaveSmoke
 			Check(State, Flow->UsesSuddenStart(1) && Flow->UsesSuddenStart(2) && Flow->UsesSuddenStart(3) && Config.PreparedWaveIndices.IsEmpty(),
 				TEXT("every level wave starts suddenly"));
 			Flow->TriggerCombatZone();
-			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause(), TEXT("wave 1 started at once, free tactical pause"));
+			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsAwaitingHordeIntro(), TEXT("wave 1 started at once, real time, horde intro armed"));
 			// The wave 1 size comes from the level data (edited in the Wave Editor).
 			const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
 			const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
@@ -161,7 +161,7 @@ namespace LevelWaveSmoke
 			Check(State, FMath::IsNearlyEqual(Waves->GetColdDrainMultiplier(), ColdMult),
 				FString::Printf(TEXT("cold drain multiplier %.2f"), Waves->GetColdDrainMultiplier()));
 			CheckSpawned(World, State);
-			SmokeUtils::ReleaseHordeIntroPause(Flow); // the player's Space tap: real time
+			SmokeUtils::ReleaseHordeIntroPause(Flow); // no intro: real time
 			State.Stage = 1;
 			State.StageTime = 0.f;
 			return true;
