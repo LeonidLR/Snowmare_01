@@ -176,7 +176,7 @@ namespace TurnBasedSmoke
 					State.bAttackClipSeen |= Anim->bIsAttacking && Anim->GetSlotMontageGlobalWeight(Anim->OneShotSlot) > 0.5f;
 				}
 			}
-			// Sprint 14: the brute's blow may knock the bitten operative down (50 %); on his turn the player orders «GET UP»
+			// Sprint 14: the brute's blow knocks the bitten operative down (guaranteed); on his turn the player orders «GET UP»
 			// (2 AP; 2026-10-11: never automatic).
 			if (TurnBased->GetRound() >= 2 && TurnBased->GetPhase() == ETurnPhase::Squad && TurnBased->IsGetUpAvailable())
 			{

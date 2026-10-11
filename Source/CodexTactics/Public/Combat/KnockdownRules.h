@@ -17,8 +17,9 @@ struct CODEXTACTICS_API FKnockdownConfig
 	/** A single hit doing at least this much damage can knock the target down (spec: >= 40 HP; then KnockdownChance). */
 	float DamageThreshold = 40.f;
 	/**
-	 * A qualifying heavy hit / heavy melee blow knocks down only with this probability (user decision 2026-10-11: 50 %
-	 * for everyone). Explosions within ExplosionRadius and pounces (hound run-up pounce, cutter leap) always knock down.
+	 * A qualifying heavy hit (>= DamageThreshold) knocks down only with this probability (user decision 2026-10-11: 50 %
+	 * for everyone). Explosions within ExplosionRadius, pounces (hound run-up pounce, cutter leap) and the Frost Brute's
+	 * heavy blow (dedicated knockdown attacks) always knock down.
 	 */
 	float KnockdownChance = 0.5f;
 	/** An explosion closer than this knocks down (spec: < 2.5 m), cm. */
@@ -61,7 +62,7 @@ struct FKnockdownHit
 	/** Explosion only: distance from the blast centre, cm. */
 	float ExplosionDistance = 0.f;
 	/**
-	 * The knockdown chance roll in [0, 1) for HeavyHit / HeavyMelee (passed in so the rules stay pure; the component rolls
+	 * The knockdown chance roll in [0, 1) for HeavyHit (passed in so the rules stay pure; the component rolls
 	 * FMath::FRand). Knocked down when ChanceRoll < KnockdownChance. Default 0 = the roll always succeeds.
 	 */
 	float ChanceRoll = 0.f;
@@ -141,13 +142,13 @@ namespace KnockdownRules
 
 	/**
 	 * Does this blow knock the target down? Never when he cannot fall, is already down, or is within the re-knock
-	 * immunity. Pounce always (not on heavy poise); Explosion when closer than ExplosionRadius (also breaks poise);
-	 * HeavyMelee (not on heavy poise) and HeavyHit when Damage >= DamageThreshold (on heavy poise only when also
-	 * critical) qualify and then knock down only when Hit.ChanceRoll < KnockdownChance (UsesKnockdownChance).
+	 * immunity. Pounce / HeavyMelee (Brute blow) always (not on heavy poise); Explosion when closer than
+	 * ExplosionRadius (also breaks poise); HeavyHit when Damage >= DamageThreshold (on heavy poise only when also
+	 * critical) and then only when Hit.ChanceRoll < KnockdownChance (UsesKnockdownChance).
 	 */
 	CODEXTACTICS_API bool ShouldKnockDown(const FKnockdownConfig& Config, const FKnockdownHit& Hit, const FKnockdownTarget& Target);
 
-	/** The cause rolls KnockdownChance (HeavyHit, HeavyMelee); explosions and pounces always knock down. */
+	/** The cause rolls KnockdownChance (HeavyHit only); explosions, pounces and the Brute's heavy blow always knock down. */
 	CODEXTACTICS_API bool UsesKnockdownChance(EKnockdownCause Cause);
 
 	/**

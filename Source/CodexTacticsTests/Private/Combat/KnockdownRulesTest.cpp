@@ -95,8 +95,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKnockdownChanceTest, "CodexTactics.Combat.Knoc
 
 bool FKnockdownChanceTest::RunTest(const FString&)
 {
-	// User decision 2026-10-11: a qualifying heavy hit / heavy blow knocks down with 50 % (the roll is passed in);
-	// a blast within 2.5 m and a pounce always do.
+	// User decision 2026-10-11: a qualifying heavy hit knocks down with 50 % (the roll is passed in); a blast within
+	// 2.5 m, a pounce and the Brute's heavy blow (dedicated knockdown attacks) always do.
 	const FKnockdownConfig Config;
 	TestEqual(TEXT("Default chance 0.5"), Config.KnockdownChance, 0.5f);
 	const FKnockdownTarget Operative;
@@ -117,8 +117,14 @@ bool FKnockdownChanceTest::RunTest(const FString&)
 	Blow.Cause = EKnockdownCause::HeavyMelee;
 	Blow.ChanceRoll = 0.49f;
 	TestTrue(TEXT("Brute heavy blow, roll 0.49: down"), KnockdownRules::ShouldKnockDown(Config, Blow, Operative));
-	Blow.ChanceRoll = 0.51f;
-	TestFalse(TEXT("Brute heavy blow, roll 0.51: stays up"), KnockdownRules::ShouldKnockDown(Config, Blow, Operative));
+	Blow.ChanceRoll = 0.99f;
+	TestTrue(TEXT("Brute heavy blow, roll 0.99: still down (guaranteed, user 2026-10-11)"), KnockdownRules::ShouldKnockDown(Config, Blow, Operative));
+	FKnockdownConfig NoChance = Config;
+	NoChance.KnockdownChance = 0.f;
+	TestTrue(TEXT("Brute heavy blow ignores the chance even at 0"), KnockdownRules::ShouldKnockDown(NoChance, Blow, Operative));
+	FKnockdownTarget PoiseTarget;
+	PoiseTarget.bHeavyPoise = true;
+	TestFalse(TEXT("Brute heavy blow on heavy poise: still never (qualify rules kept)"), KnockdownRules::ShouldKnockDown(Config, Blow, PoiseTarget));
 
 	FKnockdownHit Blast;
 	Blast.Cause = EKnockdownCause::Explosion;
@@ -130,7 +136,7 @@ bool FKnockdownChanceTest::RunTest(const FString&)
 	Pounce.ChanceRoll = 0.99f;
 	TestTrue(TEXT("Hound / cutter pounce: always down (dedicated knockdown attack)"), KnockdownRules::ShouldKnockDown(Config, Pounce, Operative));
 	TestTrue(TEXT("Heavy hit rolls"), KnockdownRules::UsesKnockdownChance(EKnockdownCause::HeavyHit));
-	TestTrue(TEXT("Heavy melee rolls"), KnockdownRules::UsesKnockdownChance(EKnockdownCause::HeavyMelee));
+	TestFalse(TEXT("Brute heavy melee never rolls"), KnockdownRules::UsesKnockdownChance(EKnockdownCause::HeavyMelee));
 	TestFalse(TEXT("Explosion never rolls"), KnockdownRules::UsesKnockdownChance(EKnockdownCause::Explosion));
 	TestFalse(TEXT("Pounce never rolls"), KnockdownRules::UsesKnockdownChance(EKnockdownCause::Pounce));
 

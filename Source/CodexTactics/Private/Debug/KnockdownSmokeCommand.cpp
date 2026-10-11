@@ -208,10 +208,20 @@ namespace KnockdownSmoke
 			}
 			AEnemyCharacter* Brute = State.Brute.Get();
 			Leader->ForcedDodgeRollForTesting = 0.f; // no dodge
+			// The Brute's heavy blow is a guaranteed knockdown (user 2026-10-11): it floors him even with the chance at 0.
+			if (IConsoleVariable* Chance = ChanceVar())
+			{
+				Chance->Set(0.f, ECVF_SetByConsole);
+			}
 			Brute->AttackTarget(Leader);
 			Brute->Destroy();
-			Check(State, LeaderKnock->IsDown() && LeaderKnock->GetPhase() == EKnockdownPhase::Falling,
-				FString::Printf(TEXT("brute blow knocks the leader down (cause %d)"), static_cast<int32>(LeaderKnock->GetState().Cause)));
+			if (IConsoleVariable* Chance = ChanceVar())
+			{
+				Chance->Set(1.f, ECVF_SetByConsole);
+			}
+			Check(State, LeaderKnock->IsDown() && LeaderKnock->GetPhase() == EKnockdownPhase::Falling
+				&& LeaderKnock->GetState().Cause == EKnockdownCause::HeavyMelee,
+				FString::Printf(TEXT("brute blow knocks the leader down even with Codex.Knockdown.Chance 0 (cause %d)"), static_cast<int32>(LeaderKnock->GetState().Cause)));
 			Check(State, LeaderKnock->GetDirection() == EKnockdownDirection::Back, TEXT("blow from the front: falls on his back"));
 			Check(State, FMath::IsNearlyEqual(LeaderKnock->GetState().DownedDuration, 0.6f, 0.01f) && FMath::IsNearlyEqual(LeaderKnock->GetState().GetUpDuration, 0.8f, 0.05f),
 				FString::Printf(TEXT("faster get-up: fall %.2f s + downed %.2f s + get-up %.2f s = %.2f s on the ground"), LeaderKnock->GetState().FallDuration,
@@ -455,6 +465,12 @@ namespace KnockdownSmoke
 			Unit = TurnBased->GetUnitState(State.TurnUnit.Get());
 			Check(State, Unit && Unit->AP == State.APBefore - 2 && Knock->GetPhase() == EKnockdownPhase::GettingUp,
 				FString::Printf(TEXT("getting up cost exactly 2 AP (%d -> %d)"), State.APBefore, Unit ? Unit->AP : -1));
+			if (UTurnBasedHudWidget* Hud = CreateWidget<UTurnBasedHudWidget>(UGameplayStatics::GetPlayerController(World, 0), UTurnBasedHudWidget::StaticClass()))
+			{
+				Hud->Refresh();
+				Check(State, !Hud->IsGetUpShown() && Hud->IsStanceShown(),
+					TEXT("getting up: the GET UP entry is hidden, the stance entry is back in its place (no empty button)"));
+			}
 			Next();
 			return true;
 		}

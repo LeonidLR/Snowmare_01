@@ -2,6 +2,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/KnockdownComponent.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
 #include "UI/CodexButtonFocus.h"
@@ -236,11 +237,14 @@ void UTurnBasedHudWidget::Refresh()
 			Button->SetIsEnabled(bSquadPhase && !TurnBased->IsUnitMoving());
 		}
 	}
-	// Knockdown: «GET UP (2 AP)» replaces the stance entry while the active operative is down (enabled once he lies).
-	const bool bDown = bSquadPhase && TurnBased->IsActiveUnitKnockedDown();
+	// Knockdown: «GET UP (2 AP)» replaces the stance entry only while the active operative LIES (the downed phase). While
+	// he falls / gets up the stance entry stays in its place, disabled (user 2026-10-11: no empty / disabled GET UP flash).
+	const UKnockdownComponent* Knockdown = Unit ? Unit->KnockdownComponent.Get() : nullptr;
+	const bool bKnockedDown = bSquadPhase && TurnBased->IsActiveUnitKnockedDown();
+	const bool bLying = bKnockedDown && Knockdown && Knockdown->GetPhase() == EKnockdownPhase::Downed;
 	if (TbGetUpButton)
 	{
-		const ESlateVisibility Shown = bDown ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+		const ESlateVisibility Shown = bLying ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
 		(TbGetUpButton->GetParent() ? static_cast<UWidget*>(TbGetUpButton->GetParent()) : TbGetUpButton.Get())->SetVisibility(Shown);
 		TbGetUpButton->SetIsEnabled(TurnBased->IsGetUpAvailable());
 	}
@@ -250,9 +254,19 @@ void UTurnBasedHudWidget::Refresh()
 	}
 	if (TbStanceButton)
 	{
-		const ESlateVisibility Shown = bDown ? ESlateVisibility::Collapsed : ESlateVisibility::Visible;
+		const ESlateVisibility Shown = bLying ? ESlateVisibility::Collapsed : ESlateVisibility::Visible;
 		(TbStanceButton->GetParent() ? static_cast<UWidget*>(TbStanceButton->GetParent()) : TbStanceButton.Get())->SetVisibility(Shown);
+		if (bKnockedDown)
+		{
+			TbStanceButton->SetIsEnabled(false); // falling / getting up: no stance order
+		}
 	}
+}
+
+bool UTurnBasedHudWidget::IsStanceShown() const
+{
+	const UWidget* Shown = TbStanceButton && TbStanceButton->GetParent() ? static_cast<const UWidget*>(TbStanceButton->GetParent()) : TbStanceButton.Get();
+	return Shown && Shown->GetVisibility() != ESlateVisibility::Collapsed;
 }
 
 bool UTurnBasedHudWidget::IsGetUpShown() const

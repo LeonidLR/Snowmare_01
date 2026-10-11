@@ -88,13 +88,13 @@ namespace KnockdownRules
 		default:
 			break;
 		}
-		// User decision 2026-10-11: a qualifying heavy hit / blow floors him only with KnockdownChance (50 %).
+		// User decision 2026-10-11: a qualifying heavy hit floors him only with KnockdownChance (50 %).
 		return bQualifies && (!UsesKnockdownChance(Hit.Cause) || Hit.ChanceRoll < Config.KnockdownChance);
 	}
 
 	bool UsesKnockdownChance(EKnockdownCause Cause)
 	{
-		return Cause == EKnockdownCause::HeavyHit || Cause == EKnockdownCause::HeavyMelee;
+		return Cause == EKnockdownCause::HeavyHit; // the Brute's heavy blow is a dedicated knockdown attack (user 2026-10-11)
 	}
 
 	float DownedDamageMultiplier(const FKnockdownConfig& Config, bool bIsDown)
