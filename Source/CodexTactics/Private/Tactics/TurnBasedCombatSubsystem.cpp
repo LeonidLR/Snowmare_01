@@ -563,14 +563,14 @@ void UTurnBasedCombatSubsystem::ApplyDamage(AActor* Victim, float Amount, const 
 	}
 }
 
-void UTurnBasedCombatSubsystem::ApplyEnemyHit(AActor* Enemy, float Amount, const FString& Source)
+void UTurnBasedCombatSubsystem::ApplyEnemyHit(AActor* Enemy, float Amount, const FString& Source, float ArmorPenetration)
 {
 	if (UHealthComponent* Health = Enemy ? Enemy->FindComponentByClass<UHealthComponent>() : nullptr)
 	{
 		FDamageSpec Spec;
 		Spec.Amount = Amount;
 		Spec.DamageType = EDamageType::Kinetic;
-		Spec.ArmorPenetration = 0.f;
+		Spec.ArmorPenetration = ArmorPenetration;
 		Spec.AttackerSource = Source;
 		Health->TakeDamage(Spec);
 	}
@@ -591,14 +591,17 @@ int32 UTurnBasedCombatSubsystem::ApplySquadHit(AActor* Victim, float Amount, con
 void UTurnBasedCombatSubsystem::ApplyBlast(AActor* Victim, bool bSquad, float Amount, const FString& Source)
 {
 	// Godot _detonate_barrel / _detonate_mine: the unit's own take_damage(amount) (enemy armor; operative dodge,
-	// stance, fortitude), while the grid hp loses the raw amount and decides the kill. An enemy whose health could not
+	// fortitude), while the grid hp loses the raw amount and decides the kill. An enemy whose health could not
 	// take the raw blast dies (Godot _on_enemy_killed -> die()). Operatives die by their real health only: Godot would
 	// drop a still-living operative from the fight (grid hp) — treated as a bug.
+	// Audit 2026-10-11: the squad Amount already carries the grid stance factor (DetonateBarrel / DetonateMine), so the
+	// operative takes it as a GridBlast: the luck dodge stays (Godot take_damage had it), the stance defence is not
+	// applied a second time (Godot did — a bug), no cover, no heavy-hit knockdown (NotifyExplosion floors him).
 	if (bSquad)
 	{
 		if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Victim))
 		{
-			Operative->TakeHit(Amount, Source);
+			Operative->TakeGridBlast(Amount, Source);
 			return;
 		}
 		ApplyDamage(Victim, Amount, Source);
@@ -1753,7 +1756,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 			}
 			else if (Victim && States.Contains(Victim))
 			{
-				ApplyEnemyHit(Victim, Damage, ShooterName);
+				ApplyEnemyHit(Victim, Damage, ShooterName, TurnBasedRules::SquadShotArmorPenetration); // grid armour already in Damage
 				Log(FString::Printf(TEXT("💥 Attack on %s: %d damage (%s, x%.2f) [Accuracy: %d%%]"), *NameOf(Victim), Damage, *ArcName,
 					ArcMultiplier, FMath::RoundToInt(Chance * 100.f)));
 				if (IsDead(Victim))

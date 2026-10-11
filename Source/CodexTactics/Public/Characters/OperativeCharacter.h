@@ -19,6 +19,7 @@
 #include "OperativeCharacter.generated.h"
 
 class UMaterialInterface;
+enum class EOperativeHitKind : uint8; // Characters/OperativeHitRules.h
 
 /** Materials of one squad member's outfit, by skeletal mesh material slot name. */
 USTRUCT(BlueprintType)
@@ -766,6 +767,13 @@ public:
 	float TakeHit(float Amount, const FString& Attacker, bool bCrit = false, bool bBypassAvoidance = false, AActor* AttackerActor = nullptr,
 		float CritMultiplierApplied = 1.f);
 
+	/**
+	 * A turn-based barrel / mine blast (Godot _detonate_* -> take_damage): Amount already carries the grid stance factor,
+	 * so only the luck dodge (as Godot), the fortitude cut and the downed x1.33 apply (OperativeHitRules GridBlast; no
+	 * cover, no stance again, no heavy-hit knockdown). Returns the health taken (0 = dodged).
+	 */
+	float TakeGridBlast(float Amount, const FString& Source);
+
 	/** Forces the next TakeHit dodge roll (smokes): 1 dodges, 0 never. Negative = random. */
 	UPROPERTY(Transient)
 	float ForcedDodgeRollForTesting = -1.f;
@@ -1407,6 +1415,10 @@ public:
 	FOnWeaponMisfiredNative OnWeaponMisfiredNative;
 
 private:
+	/** TakeHit / TakeGridBlast: one incoming blow resolved by OperativeHitRules for its kind. */
+	float ResolveIncomingHit(EOperativeHitKind Kind, float Amount, const FString& Attacker, bool bCrit, AActor* AttackerActor,
+		float CritMultiplierApplied);
+
 	/** Shows the selection ring when selected and not the leader, or the leader of a multi-selection. */
 
 	/** Vault in progress (Godot is_vaulting): kinematic arc, collision off, the walk resumes after it. */

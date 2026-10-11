@@ -90,6 +90,13 @@ namespace TurnBasedRules
 	/** Squad attack damage: max(1, round(base x arc multiplier - armour x arc armour multiplier)). */
 	CODEXTACTICS_API int32 SquadAttackDamage(float BaseDamage, float ArcMultiplier, float Armor, float ArcArmorMultiplier);
 
+	/**
+	 * Armour penetration of the FDamageSpec that hands a squad shot's SquadAttackDamage to the enemy's UHealthComponent:
+	 * the grid armour is already subtracted, so the health component's % armour must not cut it again (audit 2026-10-11
+	 * area 2 #3; Godot subtracted both). Affinity and the downed x1.33 still apply there, once.
+	 */
+	constexpr float SquadShotArmorPenetration = 1.f;
+
 	/** Enemy melee damage: max(1, round(base x arc multiplier x stance multiplier)). */
 	CODEXTACTICS_API int32 EnemyAttackDamage(float BaseDamage, float ArcMultiplier, float StanceMultiplier);
 

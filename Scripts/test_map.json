@@ -56,9 +56,9 @@
     {
       "name": "sniper",
       "globs": ["Source/**/Combat/SniperRules*", "Source/**/Characters/OperativeCharacterSniper*", "Source/**/Characters/OperativeAnimInstanceSniper*",
-        "Source/**/Data/WeaponDataAsset*", "Source/**/Core/CodexTacticsGameMode*", "Source/**/Debug/SniperSmoke*", "Content/Data/Weapons/**",
+        "Source/**/Data/WeaponDataAsset*", "Source/**/Core/CodexTacticsGameMode*", "Source/**/Core/SquadSpawnRules*", "Source/**/Debug/SniperSmoke*", "Content/Data/Weapons/**",
         "Content/Characters/Operatives/**", "Scripts/Editor/setup_operative_sniper_animation.py"],
-      "tests": ["CodexTactics.Combat.Sniper"],
+      "tests": ["CodexTactics.Combat.Sniper", "CodexTactics.Core.SquadSpawn"],
       "smokes": ["SniperSmoke", "WeaponSelectorSmoke", "SaveRoundTripSmoke", "TurnBasedSmoke"]
     },
     {
@@ -177,9 +177,10 @@
     },
     {
       "name": "health-damage",
-      "globs": ["Source/**/Combat/HealthComponent*", "Source/**/Combat/EnemyGhost*", "Source/**/UI/FloatingText*", "Source/**/UI/OverheadLabel*"],
-      "tests": ["CodexTactics.Combat.Health"],
-      "smokes": ["FloatingTextSmoke", "EnemyDeathSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke", "KnockdownSmoke"]
+      "globs": ["Source/**/Combat/HealthComponent*", "Source/**/Combat/EnemyGhost*", "Source/**/UI/FloatingText*", "Source/**/UI/OverheadLabel*",
+        "Source/**/Characters/OperativeHitRules*"],
+      "tests": ["CodexTactics.Combat.Health", "CodexTactics.Tactics.TurnBased.DamageOnce"],
+      "smokes": ["FloatingTextSmoke", "EnemyDeathSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke", "KnockdownSmoke", "TurnBlastDeathSmoke", "CoverSmoke"]
     },
     {
       "name": "knockdown",

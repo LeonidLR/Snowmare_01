@@ -6,6 +6,7 @@
 #include "CodexTactics.h"
 #include "Combat/WaveSubsystem.h"
 #include "Core/LevelFlowRules.h"
+#include "Core/SquadSpawnRules.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Data/WaveConfigTypes.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -16,6 +17,7 @@
 #include "Data/WeaponTuning.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
+#include "Misc/PackageName.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/OperativeCharacter.h"
 #include "Core/CodexTacticsGameState.h"
@@ -85,6 +87,9 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 		{ LOCTEXT("Medic", "Medic-Sapper"), FLinearColor::FromSRGBColor(FColor(0x1F, 0xB3, 0x33)), FVector(-280.f, 260.f, 0.f), 20.f, EOperativeRole::MedicSapper, 35.f, 85.f } };
 	// User request 2026-10-09: the Medic-Sapper is the Female Soldier (same ABP_Operative) and also carries the sniper rifle.
 	SquadRoster[2].BodyMesh = TSoftObjectPtr<USkeletalMesh>(FSoftObjectPath(TEXT("/Game/Female_Soldier/Mesh/SK_Female_soldier.SK_Female_soldier")));
+	// User request 2026-10-11: her own Blueprint (a BP_Operative child the user dresses, e.g. a backpack). Missing -> BP_Operative + BodyMesh.
+	SquadRoster[2].MemberBlueprint = TSoftClassPtr<AOperativeCharacter>(
+		FSoftObjectPath(TEXT("/Game/Characters/Operatives/BP_Operative_FemaleSoldier.BP_Operative_FemaleSoldier_C")));
 	SquadRoster[2].ExtraWeapons.Add(TSoftObjectPtr<UWeaponDataAsset>(FSoftObjectPath(TEXT("/Game/Data/Weapons/DA_Weapon_sniper_rifle.DA_Weapon_sniper_rifle"))));
 	RecruitSusanin = { LOCTEXT("Susanin", "Ivan Susanin"), FLinearColor(0.95f, 0.28f, 0.72f), FVector::ZeroVector, 20.f, EOperativeRole::Recruit, 45.f, 70.f };
 }
@@ -185,11 +190,8 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 	const FRotator& Facing, bool bRecruited)
 {
 	UWorld* World = GetWorld();
-	TSubclassOf<AOperativeCharacter> SpawnClass = OperativeBlueprint.IsNull() ? nullptr : OperativeBlueprint.LoadSynchronous();
-	if (!SpawnClass)
-	{
-		SpawnClass = OperativeClass;
-	}
+	bool bApplyBodyMesh = true;
+	const TSubclassOf<AOperativeCharacter> SpawnClass = ResolveMemberClass(Entry, bApplyBodyMesh);
 	if (!World || !SpawnClass)
 	{
 		return nullptr;
@@ -225,7 +227,7 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 			Operative->PortableStovesCount = FMath::Min(Loadout.Stoves, Heat.StoveMaxCarried);
 			Operative->StoveGasSeconds = Operative->PortableStovesCount > 0 ? Heat.StoveGasCapacitySeconds : 0.f;
 		}
-		if (!Entry.BodyMesh.IsNull())
+		if (bApplyBodyMesh && !Entry.BodyMesh.IsNull())
 		{
 			Operative->ApplyBodyMeshOverride(Entry.BodyMesh.LoadSynchronous());
 		}
@@ -246,6 +248,34 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 		Operative->ApplyBodyColor();
 		return Operative;
 	}
+}
+
+TSubclassOf<AOperativeCharacter> ACodexTacticsGameMode::ResolveMemberClass(const FSquadMemberSpawn& Entry, bool& bOutApplyBodyMesh) const
+{
+	TSubclassOf<AOperativeCharacter> DefaultClass = OperativeBlueprint.IsNull() ? nullptr : OperativeBlueprint.LoadSynchronous();
+	if (!DefaultClass)
+	{
+		DefaultClass = OperativeClass;
+	}
+	const bool bMemberSet = !Entry.MemberBlueprint.IsNull();
+	UClass* MemberClass = nullptr;
+	// Checked on disk first: a member Blueprint the user has not created yet falls back without a load warning.
+	if (bMemberSet && FPackageName::DoesPackageExist(Entry.MemberBlueprint.ToSoftObjectPath().GetLongPackageName()))
+	{
+		MemberClass = Entry.MemberBlueprint.LoadSynchronous();
+	}
+	const SquadSpawnRules::FMemberClassChoice Choice = SquadSpawnRules::ChooseMemberClass(bMemberSet, MemberClass, DefaultClass);
+	if (Choice.bMemberBlueprintMissing)
+	{
+		UE_LOG(LogCodexTactics, Log, TEXT("%s: member Blueprint %s not found - %s with its body mesh"), *Entry.DisplayName.ToString(),
+			*Entry.MemberBlueprint.ToString(), *GetNameSafe(Choice.Class));
+	}
+	else if (bMemberSet)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("%s: member Blueprint %s"), *Entry.DisplayName.ToString(), *GetNameSafe(Choice.Class));
+	}
+	bOutApplyBodyMesh = Choice.bApplyBodyMesh;
+	return Choice.Class;
 }
 
 #undef LOCTEXT_NAMESPACE

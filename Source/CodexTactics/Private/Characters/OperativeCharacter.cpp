@@ -1,4 +1,5 @@
 #include "Characters/OperativeCharacter.h"
+#include "Characters/OperativeHitRules.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/KnockdownRules.h"
 #include "Telemetry/RunTelemetrySubsystem.h"
@@ -2881,6 +2882,18 @@ void AOperativeCharacter::NotifyWeaponFrozen()
 float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool bCrit, bool bBypassAvoidance, AActor* AttackerActor,
 	float CritMultiplierApplied)
 {
+	return ResolveIncomingHit(bBypassAvoidance ? EOperativeHitKind::Unavoidable : EOperativeHitKind::Attack, Amount, Attacker, bCrit,
+		AttackerActor, CritMultiplierApplied);
+}
+
+float AOperativeCharacter::TakeGridBlast(float Amount, const FString& Source)
+{
+	return ResolveIncomingHit(EOperativeHitKind::GridBlast, Amount, Source, false, nullptr, 1.f);
+}
+
+float AOperativeCharacter::ResolveIncomingHit(EOperativeHitKind Kind, float Amount, const FString& Attacker, bool bCrit, AActor* AttackerActor,
+	float CritMultiplierApplied)
+{
 	if (!HealthComponent || !HealthComponent->IsAlive())
 	{
 		return 0.f;
@@ -2894,19 +2907,18 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	// 1. Dodge on luck (Godot: luck 25 -> 10 %).
 	const float DodgeRoll = ForcedDodgeRollForTesting >= 0.f ? (ForcedDodgeRollForTesting >= 1.f ? -1.f : 101.f) : FMath::FRand() * 100.f;
 	ForcedDodgeRollForTesting = -1.f;
-	if (!bBypassAvoidance && DodgeRoll < Luck * 0.4f)
+	if (OperativeHitRules::IsDodged(Kind, DodgeRoll, Luck))
 	{
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("💨 DODGE!"), FLinearColor(0.3f, 0.9f, 1.f));
 		return 0.f;
 	}
-	// 2. Stance defense and fortitude cut (Godot: 15 fortitude = 22.5 %, at most 50 %).
+	// 2. Stance defense and fortitude cut (Godot: 15 fortitude = 22.5 %, at most 50 %), each once per kind (OperativeHitRules).
 	const float Fortitude = ColdSurvival ? ColdSurvival->Fortitude : 15.f;
-	const float FortitudeCut = FMath::Clamp(Fortitude * 0.015f, 0.f, 0.5f);
 	// Sprint 12 cover (user decision 2026-10-06): a hit from the wall's frontal arc is absorbed 90 % by high cover (35 %
 	// crouched / 90 % prone behind low cover), flanking hits pass fully; while the head stays down no hit is a headshot
 	// (crit). Blasts / traps (bBypassAvoidance) are not stopped by a wall at the back.
 	float CoverAbsorb = 0.f;
-	if (bInCover && !bBypassAvoidance && AttackerActor)
+	if (bInCover && OperativeHitRules::UsesCover(Kind) && AttackerActor)
 	{
 		const FCoverCombatConfig& CoverConfig = CoverRules::GetConfig();
 		const bool bInArc = CoverRules::IsInFrontalArc(CoverSlot.WallNormal, CoverSlot.WorldLocation, AttackerActor->GetActorLocation(), CoverConfig.FrontalArcDeg);
@@ -2927,8 +2939,8 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 	// with bBypassAvoidance) lands x1.33 (user decision 2026-10-11, KnockdownRules::DownedDamageMultiplier). The
 	// bypass path keeps whole numbers (grid damage is integer).
 	const float KnockdownScale = KnockdownComponent ? KnockdownComponent->GetDamageMultiplier() : 1.f;
-	const float Final = bBypassAvoidance ? FMath::Max(1.f, KnockdownScale != 1.f ? FMath::RoundToFloat(Amount * KnockdownScale) : Amount)
-		: FMath::Max(1.f, CoverRules::ApplyAbsorb(Amount, CoverAbsorb) * HealthComponent->GetDefenseMultiplier() * (1.f - FortitudeCut) * KnockdownScale);
+	const float Final = OperativeHitRules::FinalDamage(Kind, CoverRules::ApplyAbsorb(Amount, CoverAbsorb), HealthComponent->GetDefenseMultiplier(),
+		Fortitude, KnockdownScale);
 	RecentIncomingDamage += Final;
 	bHasLastHitSource = true; // before the health loss: the hit reaction / death fall read it
 	LastHitSource = AttackerActor ? AttackerActor->GetActorLocation() : GetActorLocation() + GetActorForwardVector() * 100.f;
@@ -2963,7 +2975,7 @@ float AOperativeCharacter::TakeHit(float Amount, const FString& Attacker, bool b
 		PanicComponent->OnDamageTaken(Final);
 	}
 	// Sprint 14: a single hit of >= 40 HP knocks him down (blasts / traps go through UKnockdownComponent::NotifyExplosion).
-	if (KnockdownComponent && HealthComponent->IsAlive() && !bBypassAvoidance)
+	if (KnockdownComponent && HealthComponent->IsAlive() && OperativeHitRules::AllowsHeavyHitKnockdown(Kind))
 	{
 		const FVector Source = AttackerActor ? AttackerActor->GetActorLocation() : GetActorLocation() + GetActorForwardVector() * 100.f;
 		KnockdownComponent->TryKnockDown(EKnockdownCause::HeavyHit, Source, Final, bCrit);

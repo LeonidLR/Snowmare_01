@@ -2,7 +2,7 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.TurnBlastDeathSmoke
 // A turn-based barrel shot whose blast kills an operative (not the commander) drops him from the fight in the middle of
 // the blast; the fight goes on (user decision 2026-10-08). The game must not crash (user report 2026-09-30: Shift +
-// barrel shot crashed).
+// barrel shot crashed). The victim's dodge roll is pinned (no dodge): the blast must land every run.
 
 #include "CoreMinimal.h"
 
@@ -130,6 +130,9 @@ namespace TurnBlastDeathSmoke
 			// commander's death fails the mission, so the fight goes on without him (out of the turn order and the grid).
 			UHealthComponent* Health = State.Victim->HealthComponent;
 			Health->ApplyDirectHealthLoss(Health->GetCurrentHealth() - 1.f, TEXT("Smoke"));
+			// A turn-based blast keeps Godot's luck dodge (OperativeHitRules GridBlast): pin the roll so the blast always
+			// lands (the old flake «the blast killed the mate ... alive 1», audit 2026-10-11).
+			State.Victim->ForcedDodgeRollForTesting = 0.f;
 			TurnBased->AttackCell(BarrelState->GridPos, true, true);
 			State.Stage = 10; // the shot is shown once the shooter is on target (TurnAttackTimeline, user request 2026-10-09)
 			State.StageTime = 0.f;
