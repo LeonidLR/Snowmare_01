@@ -152,4 +152,20 @@ struct CODEXTACTICS_API FGameFlowConfig
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambush")
 	bool bAmbushSingleFight = true;
+
+	/**
+	 * Horde waves start suddenly (user decision 2026-10-11, UE-only): no pre-combat cutscene, no preparation / rest
+	 * countdown — the wave spawns at once and the fight opens in a FREE, untimed tactical pause (no charge spent) while
+	 * UHordeIntroSubsystem flies the camera over the new enemy types. False restores the old start (cutscene ->
+	 * PreparationDuration -> wave, WaveRestDuration between waves). Ambush fights are never horde waves.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horde Start")
+	bool bSuddenWaveStart = true;
+
+	/**
+	 * 1-based waves that keep the old prepared start although bSuddenWaveStart is on (level JSON per wave
+	 * "sudden_start": false; LevelFlowRules::ApplyLevel fills it).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horde Start")
+	TArray<int32> PreparedWaveIndices;
 };

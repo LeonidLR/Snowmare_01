@@ -93,6 +93,9 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 			Definition.WaveIndex = FMath::RoundToInt(LevelJsonNumber(Wave, TEXT("wave_index"), Config.Waves.Num() + 1));
 			Definition.Name = FText::FromString(LevelJsonString(Wave, TEXT("name"), FString()));
 			Definition.MaxSimultaneousEnemies = FMath::RoundToInt(LevelJsonNumber(Wave, TEXT("max_simultaneous_enemies"), 8.f));
+			// UE-only (user decision 2026-10-11): horde waves start suddenly unless the wave says otherwise.
+			bool bSudden = true;
+			Definition.bSuddenStart = !Wave->TryGetBoolField(TEXT("sudden_start"), bSudden) || bSudden;
 			const TArray<TSharedPtr<FJsonValue>>* Spawns = nullptr;
 			if (Wave->TryGetArrayField(TEXT("spawns"), Spawns))
 			{

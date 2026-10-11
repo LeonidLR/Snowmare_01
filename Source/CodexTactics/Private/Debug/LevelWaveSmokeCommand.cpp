@@ -1,7 +1,9 @@
 // Dev-only console command for a headless level-wave check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.LevelWaveSmoke
-// 1. the game flow took the level (3 waves, preparation 60 s, rest 20 s);
-// 2. «Начать бой» -> wave 1 appears at once like Godot _spawn_custom_json_wave (the level's wave 1 count, nothing queued)
+// 1. the game flow took the level (3 waves; preparation 60 s / rest 20 s still parsed, used only by a wave with
+//    "sudden_start": false — every wave of this level starts suddenly, user decision 2026-10-11);
+// 2. the combat zone -> wave 1 appears at once in the free tactical pause (no cutscene / countdown) like Godot
+//    _spawn_custom_json_wave (the level's wave 1 count, nothing queued)
 //    around the level's enemy spawn points, and the wave's cold_drain_mult reaches the squad's cold;
 // 3. (user report 2026-10-04: wave 2 spawned into one point, the enemies inside each other, standing still) for waves 1
 //    and 2: nobody spawns inside another enemy, everyone stands on the navmesh, and 6 s later they are on the move.
@@ -10,6 +12,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/EnemyCharacter.h"
 #include "CodexTactics.h"
 #include "Data/WaveConfigTypes.h"
@@ -143,11 +146,11 @@ namespace LevelWaveSmoke
 			const FGameFlowConfig& Config = Flow->GetConfig();
 			Check(State, Config.TotalWaves == 3, FString::Printf(TEXT("level waves: %d"), Config.TotalWaves));
 			Check(State, FMath::IsNearlyEqual(Config.PreparationDuration, 60.f) && FMath::IsNearlyEqual(Config.WaveRestDuration, 20.f),
-				FString::Printf(TEXT("preparation %.0f s, rest %.0f s"), Config.PreparationDuration, Config.WaveRestDuration));
+				FString::Printf(TEXT("preparation %.0f s, rest %.0f s (parsed, unused by sudden waves)"), Config.PreparationDuration, Config.WaveRestDuration));
+			Check(State, Flow->UsesSuddenStart(1) && Flow->UsesSuddenStart(2) && Flow->UsesSuddenStart(3) && Config.PreparedWaveIndices.IsEmpty(),
+				TEXT("every level wave starts suddenly"));
 			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
-			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat, TEXT("wave 1 started"));
+			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause(), TEXT("wave 1 started at once, free tactical pause"));
 			// The wave 1 size comes from the level data (edited in the Wave Editor).
 			const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
 			const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
@@ -158,6 +161,7 @@ namespace LevelWaveSmoke
 			Check(State, FMath::IsNearlyEqual(Waves->GetColdDrainMultiplier(), ColdMult),
 				FString::Printf(TEXT("cold drain multiplier %.2f"), Waves->GetColdDrainMultiplier()));
 			CheckSpawned(World, State);
+			SmokeUtils::ReleaseHordeIntroPause(Flow); // the player's Space tap: real time
 			State.Stage = 1;
 			State.StageTime = 0.f;
 			return true;

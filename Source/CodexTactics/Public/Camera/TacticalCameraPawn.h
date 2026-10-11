@@ -76,6 +76,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Camera")
 	void DramaticActionFocus(const AActor* From, const AActor* To, float Duration = 0.4f);
 
+	/**
+	 * Places the camera on Target at once (no glide, pan cleared) at Distance (cm; <= 0 keeps the zoom) and follows it:
+	 * a skipped cinematic hands the view straight back (UHordeIntroSubsystem).
+	 */
+	void SnapFocusOnTarget(AActor* Target, float Distance = -1.f);
+
+	/**
+	 * A cinematic owns the camera (UHordeIntroSubsystem flyover): WASD / edge / drag pan, wheel zoom and Q / E rotation
+	 * are ignored while locked.
+	 */
+	void SetCinematicLock(bool bLocked);
+	bool IsCinematicLocked() const { return bCinematicLock; }
+
 	/** While a dramatic shot runs the camera holds its framing (Godot main.gd is_dramatic_shot_active). */
 	void SetDramaticShotActive(bool bActive) { bDramaticShot = bActive; }
 
@@ -123,6 +136,7 @@ private:
 	bool bSmoothToPosition = false;
 	FVector SmoothPosition = FVector::ZeroVector;
 	bool bDramaticShot = false;
+	bool bCinematicLock = false;
 	bool bTurnBasedZoom = false;
 	float PreTurnBasedDistance = 0.f;
 

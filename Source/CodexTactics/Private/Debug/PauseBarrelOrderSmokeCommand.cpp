@@ -159,9 +159,7 @@ namespace PauseBarrelOrderSmoke
 		{
 		case 0: // Real-time fight; the objects around the squad.
 		{
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			State.Shooter = Squad->GetMembers()[0];
 			State.Carrier = Squad->GetMembers()[1];
 			State.Lighter = Squad->GetMembers()[2];

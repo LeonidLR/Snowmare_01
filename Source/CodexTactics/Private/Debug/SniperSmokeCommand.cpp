@@ -259,9 +259,7 @@ namespace SniperSmoke
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke shot %d: %s, speed %.0f"), S.Shots, *S.LastShotStance, Shooter->GetVelocity().Size2D());
 			});
 			// The fight: one target 11 m ahead, frozen and unkillable; nobody else fires.
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			Squad->SetSquadPosture(ESquadFirePosture::Passive);
 			Squad->SetLeader(Medic);
 			const FVector From = Medic->GetActorLocation();

@@ -7,6 +7,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Bot/PlaytestBotSubsystem.h"
 #include "CodexTactics.h"
 #include "Core/MissionSessionSubsystem.h"
@@ -46,6 +47,8 @@ namespace BotRepairSmoke
 		}
 		if (State.Stage == 0)
 		{
+			// The bot's repair during the preparation: the old prepared start (a "sudden_start": false wave).
+			SmokeUtils::UsePreparedWaveStart();
 			if (UMissionSubsystem* Mission = World->GetSubsystem<UMissionSubsystem>())
 			{
 				Mission->StartMission(EMissionStartMode::Combat);

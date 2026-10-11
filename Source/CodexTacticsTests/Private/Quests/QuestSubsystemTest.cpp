@@ -100,7 +100,9 @@ bool FQuestObjectiveProgressTest::RunTest(const FString&)
 QUEST_TEST(FQuestCutsceneTimerTest, "CutsceneEndsAfterFourSeconds")
 bool FQuestCutsceneTimerTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowConfig Prepared;
+	Prepared.bSuddenWaveStart = false; // the classic prepared start ("sudden_start": false)
+	FGameFlowStateMachine Machine(Prepared);
 	Machine.TriggerCombatZone();
 	Machine.Tick(Machine.GetConfig().CutsceneDuration - 0.5f);
 	TestEqual(TEXT("Still cutscene"), Machine.GetPhase(), ECodexGamePhase::Cutscene);

@@ -14,6 +14,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
@@ -584,9 +585,7 @@ namespace CoverLRShot
 		UWorld* World = Ctx.World.Get();
 		UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
-		Flow->TriggerCombatZone();
-		Flow->FinishCutscene();
-		Flow->FinishPreparation();
+		SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 		AOperativeCharacter* Op = Squad->GetLeader();
 		if (!Op)
 		{

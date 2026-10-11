@@ -18,6 +18,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "Containers/Ticker.h"
 #include "Core/MissionSubsystem.h"
+#include "Debug/SmokeUtils.h"
 #include "Debug/FrontendSmokeUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/FileManager.h"
@@ -255,9 +256,7 @@ namespace FrontendSmoke
 			Commander->MedkitsCount = 0;
 			// Into a wave fight.
 			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat, TEXT("wave fight started"));
 			Next(State);
 			return true;

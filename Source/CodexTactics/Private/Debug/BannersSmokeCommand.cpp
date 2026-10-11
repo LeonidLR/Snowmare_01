@@ -8,6 +8,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Blueprint/UserWidget.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -87,6 +88,9 @@ namespace BannersSmoke
 				Member->ColdLevel = 60.f;
 				Member->HealthComponent->ApplyDirectHealthLoss(40.f, TEXT("Smoke"));
 			}
+			// The cutscene card and the preparation banner belong to the old prepared start (a "sudden_start": false wave);
+			// the sudden horde start's free-pause banner is checked by CodexTactics.HordeIntroSmoke.
+			SmokeUtils::UsePreparedWaveStart();
 			Flow->TriggerCombatZone();
 			Check(State, Banners->IsCutsceneShown(), TEXT("cutscene card shown"));
 			PC->SpacePressed();

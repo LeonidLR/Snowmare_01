@@ -91,9 +91,7 @@ namespace TurnBasedCameraSmoke
 			if (!State.bPrepared)
 			{
 				// The wave first (the camera switches to its combat zoom on its next tick), the fight a moment later.
-				Flow->TriggerCombatZone();
-				Flow->FinishCutscene();
-				Flow->FinishPreparation();
+				SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 				State.bPrepared = true;
 				State.StageTime = 2.5f;
 				return true;

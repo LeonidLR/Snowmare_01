@@ -27,6 +27,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
@@ -206,9 +207,7 @@ namespace CoverSmoke
 			{
 				return true;
 			}
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			State.Op = Squad->GetLeader();
 			// This smoke checks the per-shot lean / sustained-aim cover rules (the legacy mode behind the tunables); the
 			// default corner hold at the edge (user decision 2026-10-07) is CodexTactics.CornerHoldSmoke.

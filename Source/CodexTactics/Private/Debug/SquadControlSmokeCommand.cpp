@@ -117,9 +117,7 @@ namespace SquadControlSmoke
 			Check(State, Leader->GetActorForwardVector().Dot((Right - Leader->GetActorLocation()).GetSafeNormal2D()) > 0.99f, TEXT("Shift + click: leader faces the point"));
 
 			// Combat: nobody lies down while someone moves.
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			Leader->OrderMoveTo(Leader->GetActorLocation() + Leader->GetActorForwardVector() * 600.f, false);
 			++State.Stage;
 			State.StageTime = 0.f;

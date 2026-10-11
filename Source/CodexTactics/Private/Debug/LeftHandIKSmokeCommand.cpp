@@ -12,6 +12,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
@@ -206,9 +207,7 @@ namespace LeftHandIKSmoke
 				return true;
 			}
 			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			Op = Squad->GetLeader();
 			State.Op = Op;
 			State.F = Op->GetActorForwardVector().GetSafeNormal2D();

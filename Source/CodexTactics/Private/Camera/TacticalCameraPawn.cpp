@@ -149,14 +149,50 @@ void ATacticalCameraPawn::SnapToFollowTarget()
 	bInitialized = false;
 }
 
+void ATacticalCameraPawn::SnapFocusOnTarget(AActor* Target, float Distance)
+{
+	if (!IsValid(Target))
+	{
+		return;
+	}
+	FollowTarget = Target;
+	bSmoothFocusing = false;
+	bSmoothToPosition = false;
+	SmoothTargetDistance = -1.f;
+	if (Distance > 0.f)
+	{
+		CurrentDistance = TargetDistance = Distance;
+	}
+	SnapToFollowTarget();
+}
+
+void ATacticalCameraPawn::SetCinematicLock(bool bLocked)
+{
+	bCinematicLock = bLocked;
+	if (bLocked)
+	{
+		bDragPanning = false;
+		bDragRotating = false;
+		bPanReturning = false;
+	}
+}
+
 void ATacticalCameraPawn::AddZoomNotches(float Notches)
 {
+	if (bCinematicLock)
+	{
+		return;
+	}
 	TargetDistance = TacticalCameraRules::StepZoom(Config, TargetDistance, Notches);
 	(bCombatView ? UserDistanceCombat : UserDistanceExploration) = TargetDistance;
 }
 
 void ATacticalCameraPawn::RotateStep(int32 Direction)
 {
+	if (bCinematicLock)
+	{
+		return;
+	}
 	TargetYaw += Config.RotationStep * static_cast<float>(FMath::Sign(Direction));
 }
 
@@ -236,6 +272,10 @@ void ATacticalCameraPawn::UpdateZoomMode()
 
 void ATacticalCameraPawn::UpdatePan(float RealDelta)
 {
+	if (bCinematicLock)
+	{
+		return; // the cinematic glides clear the pan themselves
+	}
 	APlayerController* PC = GetController<APlayerController>();
 	const float PanAlpha = FMath::Clamp(Config.PanSmoothSpeed * RealDelta, 0.f, 1.f);
 
@@ -302,7 +342,7 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 
 void ATacticalCameraPawn::UpdateRotation(float RealDelta)
 {
-	if (bDragRotating)
+	if (bDragRotating && !bCinematicLock)
 	{
 		TargetYaw += ConsumeCursorDelta().X * Config.DragRotationSensitivity;
 	}

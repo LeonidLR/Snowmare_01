@@ -1,4 +1,5 @@
 #include "UI/PhaseBannersWidget.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "Blueprint/WidgetTree.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/Border.h"
@@ -153,6 +154,17 @@ FText UPhaseBannersWidget::GetPauseText() const
 	if (!Flow || Flow->GetCombatMode() != ECodexCombatMode::TacticalPause)
 	{
 		return FText::GetEmpty();
+	}
+	if (Flow->IsFreePause())
+	{
+		// Sudden horde start (user decision 2026-10-11): free, untimed, the charges stay as they are.
+		FString Line = FString::Printf(TEXT("⏱️ ORDER MODE | CONTACT - free pause, charges %d/%d kept | [SPACE to execute]"),
+			Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges);
+		if (const UHordeIntroSubsystem* Intro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>(); Intro && Intro->IsFlyoverActive())
+		{
+			Line += TEXT("  |  ") + Intro->GetCaption().ToString();
+		}
+		return FText::FromString(Line);
 	}
 	return FText::FromString(FString::Printf(TEXT("⏱️ ORDER MODE | Charges per wave: %d/%d | Planning time: %04.1fs [SPACE to execute]"),
 		Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges, FMath::Max(0.f, Flow->GetPauseTimeRemaining())));

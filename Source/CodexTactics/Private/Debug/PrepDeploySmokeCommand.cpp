@@ -56,6 +56,8 @@ namespace PrepDeploySmoke
 			{
 				return true;
 			}
+			// Preparation-phase behaviour: the old prepared start (a "sudden_start": false wave; default since 2026-10-11 is the sudden horde).
+			SmokeUtils::UsePreparedWaveStart();
 			Flow->TriggerCombatZone();
 			Flow->FinishCutscene();
 			const TArray<AOperativeCharacter*> Members = Squad->GetMembers();

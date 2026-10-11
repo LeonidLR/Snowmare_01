@@ -329,9 +329,14 @@ bool FAmbushStartsCombatTest::RunTest(const FString& Parameters)
 	Machine.AdvanceAfterWave();
 	TestEqual(TEXT("ambush fight is the whole battle"), Machine.GetPhase(), ECodexGamePhase::PostCombat);
 	// The combat zone path is unchanged and still refuses an ambush once the cutscene runs.
-	FGameFlowStateMachine Classic(Config);
+	FGameFlowConfig ClassicConfig = Config;
+	ClassicConfig.bSuddenWaveStart = false; // a wave with the old prepared start ("sudden_start": false)
+	FGameFlowStateMachine Classic(ClassicConfig);
 	Classic.TriggerCombatZone();
 	TestEqual(TEXT("no ambush during the cutscene"), Classic.StartAmbushCombat(), EGameFlowResult::WrongPhase);
+	FGameFlowStateMachine Sudden(Config);
+	Sudden.TriggerCombatZone();
+	TestEqual(TEXT("no ambush during a sudden horde wave"), Sudden.StartAmbushCombat(), EGameFlowResult::WrongPhase);
 	return true;
 }
 

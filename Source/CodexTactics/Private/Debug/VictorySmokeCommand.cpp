@@ -143,11 +143,22 @@ namespace VictorySmoke
 				State.Stations.Add(Member, Member->GetActorLocation());
 			}
 			Check(State, Victory->GetPrepStation(Squad->GetMembers()[1]).Equals(Squad->GetMembers()[1]->GetActorLocation(), 1.f),
-				TEXT("preparation spot recorded when the cutscene ends"));
+				TEXT("preparation spot recorded when wave 1 spawns (sudden horde start)"));
 			Next();
 			return true;
 		case 1:
-			// Each wave: start, kill everything, the panel appears; the button goes on.
+			// Each wave: start, kill everything, the panel appears; the button goes on. A horde wave comes suddenly in the
+			// free tactical pause (user decision 2026-10-11): released here like a player's Space tap.
+			if (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause())
+			{
+				Check(State, Flow->GetPauseCharges() == Flow->GetConfig().TacticalPauseMaxCharges,
+					FString::Printf(TEXT("wave %d: sudden start in the free pause, charges %d/%d"), Flow->GetWaveIndex(),
+						Flow->GetPauseCharges(), Flow->GetConfig().TacticalPauseMaxCharges));
+				SmokeUtils::ReleaseHordeIntroPause(Flow);
+				State.Wave = Flow->GetWaveIndex();
+				KillAll(World);
+				return true;
+			}
 			if (Flow->GetPhase() == ECodexGamePhase::Preparation)
 			{
 				Flow->FinishPreparation();
@@ -199,8 +210,9 @@ namespace VictorySmoke
 					return true;
 				}
 				Panel->PressNext();
-				Check(State, Flow->GetPhase() == ECodexGamePhase::Preparation && Flow->GetWaveIndex() == State.Wave + 1 && !Panel->IsShown(),
-					FString::Printf(TEXT("next wave: rest before wave %d, panel hidden"), Flow->GetWaveIndex()));
+				Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause() && Flow->GetWaveIndex() == State.Wave + 1
+					&& !Panel->IsShown(), FString::Printf(TEXT("next wave: wave %d comes at once in the free pause (no rest), panel hidden"),
+						Flow->GetWaveIndex()));
 				return true;
 			}
 			return true;

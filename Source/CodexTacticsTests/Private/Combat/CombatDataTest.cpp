@@ -107,7 +107,9 @@ bool FCombatDataWaveTotalEnemyCountTest::RunTest(const FString&)
 COMBAT_DATA_TEST(FCombatDataFinishPreparationAdvancesToWaveTest, "FinishPreparationAdvancesToWave")
 bool FCombatDataFinishPreparationAdvancesToWaveTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowConfig Prepared;
+	Prepared.bSuddenWaveStart = false; // the classic prepared start ("sudden_start": false)
+	FGameFlowStateMachine Machine(Prepared);
 	Machine.TriggerCombatZone();
 	Machine.FinishCutscene(); // Advances to Preparation
 

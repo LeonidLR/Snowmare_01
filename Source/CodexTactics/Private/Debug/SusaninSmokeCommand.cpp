@@ -100,9 +100,7 @@ namespace SusaninSmoke
 		case 0:
 			Waves->SetRandomEventWaves(3, 1);
 			Waves->bInstantRandomEvents = true;
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			Next();
 			return true;
 		case 1: // Godot headless delay: 3 s into the wave.

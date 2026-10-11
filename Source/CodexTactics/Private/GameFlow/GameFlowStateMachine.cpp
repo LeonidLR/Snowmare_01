@@ -19,6 +19,16 @@ void FGameFlowStateMachine::Reset(const FGameFlowConfig& InConfig)
 	TurnBasedUsesThisWave = 0;
 	bCombatUnlocked = false;
 	bAmbushFight = false;
+	bFreePause = false;
+}
+
+bool FGameFlowStateMachine::UsesSuddenStart(int32 InWaveIndex) const
+{
+	if (SuddenStartOverride >= 0)
+	{
+		return SuddenStartOverride > 0;
+	}
+	return Config.bSuddenWaveStart && !Config.PreparedWaveIndices.Contains(InWaveIndex);
 }
 
 float FGameFlowStateMachine::GetTimeDilation() const
@@ -46,6 +56,14 @@ EGameFlowResult FGameFlowStateMachine::TriggerCombatZone()
 		return EGameFlowResult::CombatAlreadyUnlocked;
 	}
 	bCombatUnlocked = true;
+	if (UsesSuddenStart(1))
+	{
+		// User decision 2026-10-11: the horde comes without intro or countdown; the fight opens in the free pause.
+		WaveIndex = 1;
+		CutsceneTimeRemaining = 0.f;
+		StartWave(true);
+		return EGameFlowResult::Ok;
+	}
 	CutsceneTimeRemaining = Config.CutsceneDuration;
 	SetState(ECodexGamePhase::Cutscene, ECodexCombatMode::None);
 	return EGameFlowResult::Ok;
@@ -88,7 +106,7 @@ EGameFlowResult FGameFlowStateMachine::FinishPreparation()
 	{
 		return EGameFlowResult::WrongPhase;
 	}
-	StartWave();
+	StartWave(UsesSuddenStart(WaveIndex));
 	return EGameFlowResult::Ok;
 }
 
@@ -145,6 +163,8 @@ EGameFlowResult FGameFlowStateMachine::RequestEnterTurnBased(bool bEnemiesInRang
 	if (bFromPause)
 	{
 		// The pause ends here (its charge stays spent) without running the planned orders: they make no sense on the grid.
+		// The free pause of a sudden wave spent nothing and stays free.
+		bFreePause = false;
 		PauseTimeRemaining = 0.f;
 		if (PauseCharges <= 0 && PauseCooldownRemaining <= 0.f)
 		{
@@ -185,6 +205,7 @@ EGameFlowResult FGameFlowStateMachine::NotifyWaveCleared()
 		return EGameFlowResult::WrongPhase;
 	}
 	PauseTimeRemaining = 0.f;
+	bFreePause = false;
 	SetState(ECodexGamePhase::WaveCleared, ECodexCombatMode::None);
 	return EGameFlowResult::Ok;
 }
@@ -201,6 +222,11 @@ EGameFlowResult FGameFlowStateMachine::AdvanceAfterWave()
 		return EGameFlowResult::Ok;
 	}
 	++WaveIndex;
+	if (UsesSuddenStart(WaveIndex))
+	{
+		StartWave(true); // no rest countdown: the next horde comes at once, in the free pause
+		return EGameFlowResult::Ok;
+	}
 	PauseCharges = Config.TacticalPauseMaxCharges;
 	PauseCooldownRemaining = 0.f;
 	PreparationTimeRemaining = Config.WaveRestDuration;
@@ -246,6 +272,7 @@ void FGameFlowStateMachine::TriggerGameOver()
 {
 	PauseTimeRemaining = 0.f;
 	PreparationTimeRemaining = 0.f;
+	bFreePause = false;
 	SetState(ECodexGamePhase::GameOver, ECodexCombatMode::None);
 }
 
@@ -265,6 +292,10 @@ void FGameFlowStateMachine::Tick(float RealDeltaSeconds)
 
 	if (Phase == ECodexGamePhase::WaveCombat && CombatMode == ECodexCombatMode::TacticalPause)
 	{
+		if (bFreePause)
+		{
+			return; // no timer: only the player ends the free pause of a sudden wave
+		}
 		PauseTimeRemaining -= RealDeltaSeconds;
 		if (PauseTimeRemaining <= 0.f)
 		{
@@ -281,6 +312,11 @@ void FGameFlowStateMachine::Tick(float RealDeltaSeconds)
 	}
 	else if (Phase == ECodexGamePhase::Preparation)
 	{
+		if (UsesSuddenStart(WaveIndex))
+		{
+			StartWave(true); // a save load resumed this wave in its preparation: the horde comes now
+			return;
+		}
 		PreparationTimeRemaining -= RealDeltaSeconds;
 		if (PreparationTimeRemaining <= 0.f)
 		{
@@ -300,17 +336,21 @@ void FGameFlowStateMachine::SetState(ECodexGamePhase NewPhase, ECodexCombatMode 
 	OnStateChanged.Broadcast(Phase, CombatMode);
 }
 
-void FGameFlowStateMachine::StartWave()
+void FGameFlowStateMachine::StartWave(bool bSudden)
 {
 	PreparationTimeRemaining = 0.f;
 	PauseCharges = Config.TacticalPauseMaxCharges;
 	PauseCooldownRemaining = 0.f;
 	TurnBasedUsesThisWave = 0;
-	SetState(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime);
+	PauseTimeRemaining = 0.f;
+	// The free pause costs no charge and has no timer (user decision 2026-10-11).
+	bFreePause = bSudden;
+	SetState(ECodexGamePhase::WaveCombat, bSudden ? ECodexCombatMode::TacticalPause : ECodexCombatMode::RealTime);
 }
 
 void FGameFlowStateMachine::ReleaseTacticalPause()
 {
+	bFreePause = false;
 	PauseTimeRemaining = 0.f;
 	if (PauseCharges <= 0 && PauseCooldownRemaining <= 0.f)
 	{

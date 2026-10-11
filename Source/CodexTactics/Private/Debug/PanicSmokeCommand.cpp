@@ -10,6 +10,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/PanicComponent.h"
@@ -95,9 +96,7 @@ namespace PanicSmoke
 				}
 			}
 			// A real-time wave: its enemies frozen far away, one frozen, unkillable hound 6 m from Susanin.
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
 				It->CustomTimeDilation = 0.f;

@@ -674,15 +674,17 @@ namespace SaveRoundTripSmoke
 		}
 		Saves->DeleteSave(TEXT("quicksave"));
 		FText Hint;
-		const bool bCutscene = Flow->TriggerCombatZone() == EGameFlowResult::Ok;
-		const bool bCutsceneRefused = !Saves->CanSaveNow(&Hint);
-		Check(State, bCutscene && bCutsceneRefused && !Hint.IsEmpty(),
-			FString::Printf(TEXT("cutscene: saving refused (%s)"), *Hint.ToString()));
-		Check(State, Flow->FinishCutscene() == EGameFlowResult::Ok && Saves->CanSaveNow(), TEXT("preparation: saving allowed"));
+		// Sudden horde start (user decision 2026-10-11): no cutscene / preparation; the autosave runs at the spawn moment,
+		// before the free tactical pause, and nothing can be saved from then on.
+		Check(State, Saves->CanSaveNow(), TEXT("exploration: saving allowed"));
 		const int32 Before = Saves->GetAutosaveCount();
-		Check(State, Flow->FinishPreparation() == EGameFlowResult::Ok && Flow->GetPhase() == ECodexGamePhase::WaveCombat, TEXT("wave 1 started"));
+		Check(State, Flow->TriggerCombatZone() == EGameFlowResult::Ok && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsFreePause(),
+			TEXT("wave 1 started suddenly (free tactical pause)"));
 		Check(State, Saves->GetAutosaveCount() == Before + 1 && Saves->GetLastAutosaveMoment() == EAutosaveMoment::BeforeCombat
 			&& Saves->HasSave(SaveGameRules::GetAutosaveSlotName()), TEXT("autosave right before the wave"));
+		Check(State, !Saves->CanSaveNow(&Hint) && Hint.ToString() == TEXT("Saving is disabled during combat"),
+			FString::Printf(TEXT("free pause: saving refused (\"%s\")"), *Hint.ToString()));
+		SmokeUtils::ReleaseHordeIntroPause(Flow);
 		const TSharedPtr<FJsonObject> PreCombat = ReadSaveFile(*Saves, SaveGameRules::GetAutosaveSlotName());
 		Check(State, SavedPhase(PreCombat) == TEXT("Preparation"), FString::Printf(TEXT("pre-combat autosave holds the preparation (%s)"), *SavedPhase(PreCombat)));
 

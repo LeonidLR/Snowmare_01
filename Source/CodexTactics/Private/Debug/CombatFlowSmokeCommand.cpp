@@ -96,9 +96,7 @@ namespace CombatFlowSmoke
 		switch (State.Stage)
 		{
 		case 0: // Start a wave the same way the flow does after the gate.
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime, TEXT("wave started in real time"));
 			// The level wave spawns at the spawn points beyond the gate; freeze it there so the checks below control
 			// which enemies are near the squad.

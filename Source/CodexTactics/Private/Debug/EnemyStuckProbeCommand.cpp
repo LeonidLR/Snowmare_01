@@ -9,6 +9,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -48,9 +49,7 @@ namespace EnemyStuckProbe
 				return true;
 			}
 			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			for (AOperativeCharacter* Member : World->GetSubsystem<USquadSubsystem>()->GetMembers())
 			{
 				Member->bTacticalCeaseFire = true; // nobody dies: we watch them walk

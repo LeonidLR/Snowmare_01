@@ -53,6 +53,13 @@ public:
 	/** Runs an update now (smokes; the tick runs one every UpdateInterval). */
 	void Refresh();
 
+	/**
+	 * A cinematic shows the enemies (the sudden horde flyover, 2026-10-11): while on, every live enemy counts as seen by
+	 * the squad (shown, then remembered with a silhouette like any seen enemy). Applies at once (Refresh).
+	 */
+	void SetCinematicReveal(bool bReveal);
+	bool IsCinematicReveal() const { return bCinematicReveal; }
+
 	/** The squad sees this enemy (always true while inactive). */
 	bool IsVisibleToSquad(const AActor* Enemy) const;
 
@@ -134,6 +141,7 @@ private:
 
 	FTacticalSightStats Stats;
 	float Timer = 0.f;
+	bool bCinematicReveal = false;
 	float SummaryTimer = 0.f;
 	bool bWasActive = false;
 };

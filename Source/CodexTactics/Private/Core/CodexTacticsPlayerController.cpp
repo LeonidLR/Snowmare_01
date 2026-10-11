@@ -1,5 +1,6 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Characters/SquadAutonomySubsystem.h"
+#include "Combat/HordeIntroSubsystem.h"
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Widgets/SWindow.h"
@@ -1022,6 +1023,11 @@ void ACodexTacticsPlayerController::DialogueSkip()
 		Hud->HandleEscape();
 		return;
 	}
+	// Sudden horde start (user decision 2026-10-11): Esc skips the camera flyover, the free tactical pause stays.
+	if (UHordeIntroSubsystem* HordeIntro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>(); HordeIntro && HordeIntro->HandleSkipInput())
+	{
+		return;
+	}
 	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring())
 	{
 		Transfer->CancelTransferMode();
@@ -1059,6 +1065,11 @@ void ACodexTacticsPlayerController::OnClick()
 	if (IsDialogueOpen())
 	{
 		return; // the dialogue panel handles its own clicks
+	}
+	// A click skips the horde flyover (user decision 2026-10-11) and is not an order.
+	if (UHordeIntroSubsystem* HordeIntro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>(); HordeIntro && HordeIntro->HandleSkipInput())
+	{
+		return;
 	}
 	// Real-time fight without orders (user decision 2026-10-05): a click only picks an operative.
 	const bool bOrdersLocked = IsRealTimeOrderLocked();

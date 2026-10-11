@@ -159,9 +159,7 @@ namespace TargetedShotSmoke
 				State.NearEnemy->Destroy();
 				State.FarEnemy->Destroy();
 				// Start a wave so the tactical pause is available.
-				Flow->TriggerCombatZone();
-				Flow->FinishCutscene();
-				Flow->FinishPreparation();
+				SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 				PC->SpacePressed();
 				Next(State);
 			}

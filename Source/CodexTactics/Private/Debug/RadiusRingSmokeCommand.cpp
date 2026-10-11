@@ -76,9 +76,7 @@ namespace RadiusRingSmoke
 		{
 		case 0:
 			Check(State, Rings->GetMode() == ERadiusRingMode::Hidden, TEXT("no ring outside the pause"));
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			Flow->ToggleTacticalPause();
 			return true;
 		case 1:

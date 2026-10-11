@@ -77,6 +77,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	float GetPauseTimeRemaining() const { return Machine.GetPauseTimeRemaining(); }
 
+	/** The running tactical pause is the free, untimed one of a sudden horde wave (no charge spent; user decision 2026-10-11). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
+	bool IsFreePause() const { return Machine.IsFreePause(); }
+
+	/** Wave WaveIndex starts suddenly (no cutscene / countdown, free pause); see FGameFlowStateMachine::UsesSuddenStart. */
+	bool UsesSuddenStart(int32 InWaveIndex) const { return Machine.UsesSuddenStart(InWaveIndex); }
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	float GetPreparationTimeRemaining() const { return Machine.GetPreparationTimeRemaining(); }
 
@@ -84,8 +91,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	float GetCutsceneTimeRemaining() const { return Machine.GetCutsceneTimeRemaining(); }
 
+	/** Exploration -> cutscene, or with a sudden horde wave 1 straight into the wave's free tactical pause. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
-	EGameFlowResult TriggerCombatZone() { return Machine.TriggerCombatZone(); }
+	EGameFlowResult TriggerCombatZone() { SyncSuddenStartOverride(); return Machine.TriggerCombatZone(); }
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult FinishCutscene() { return Machine.FinishCutscene(); }
@@ -99,7 +107,7 @@ public:
 	bool IsAmbushFight() const { return Machine.IsAmbushFight(); }
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
-	EGameFlowResult FinishPreparation() { return Machine.FinishPreparation(); }
+	EGameFlowResult FinishPreparation() { SyncSuddenStartOverride(); return Machine.FinishPreparation(); }
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult ToggleTacticalPause() { return Machine.ToggleTacticalPause(); }
@@ -121,7 +129,7 @@ public:
 	EGameFlowResult NotifyWaveCleared() { return Machine.NotifyWaveCleared(); }
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
-	EGameFlowResult AdvanceAfterWave() { return Machine.AdvanceAfterWave(); }
+	EGameFlowResult AdvanceAfterWave() { SyncSuddenStartOverride(); return Machine.AdvanceAfterWave(); }
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|GameFlow")
 	EGameFlowResult FinishPostCombat() { return Machine.FinishPostCombat(); }
@@ -147,6 +155,8 @@ public:
 	static constexpr float MaxFlowStepSeconds = 0.25f;
 
 private:
+	/** Applies the Codex.HordeIntro.SuddenStart console override to the machine (before every start request). */
+	void SyncSuddenStartOverride();
 	void HandleStateChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);
 	void HandlePauseReleased();
 

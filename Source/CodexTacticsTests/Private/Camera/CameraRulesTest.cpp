@@ -105,7 +105,9 @@ bool FCameraZoneRulesTest::RunTest(const FString&)
 CAMERA_TEST(FGameFlowWaveActiveTest, "GameFlow.Phases.WaveActiveMatchesGodot")
 bool FGameFlowWaveActiveTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowConfig Prepared;
+	Prepared.bSuddenWaveStart = false; // Godot's is_wave_active through the classic prepared start
+	FGameFlowStateMachine Machine(Prepared);
 	TestFalse(TEXT("Exploration"), Machine.IsWaveActive());
 	Machine.TriggerCombatZone();
 	Machine.FinishCutscene();

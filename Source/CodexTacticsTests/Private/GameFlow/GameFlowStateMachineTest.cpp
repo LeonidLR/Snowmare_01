@@ -12,6 +12,18 @@
 
 namespace GameFlowTest
 {
+	/**
+	 * These tests cover the classic prepared start (cutscene -> preparation countdown -> wave), still used by a level
+	 * wave with "sudden_start": false. The sudden horde start (the default since 2026-10-11) is tested in
+	 * CodexTactics.Combat.HordeIntro.*.
+	 */
+	FGameFlowConfig PreparedConfig()
+	{
+		FGameFlowConfig Config;
+		Config.bSuddenWaveStart = false;
+		return Config;
+	}
+
 	/** Drives a fresh machine into WaveCombat/RealTime of wave 1. */
 	void EnterFirstWave(FGameFlowStateMachine& Machine)
 	{
@@ -35,7 +47,7 @@ using namespace GameFlowTest;
 GAMEFLOW_TEST(FGameFlowStartsInExplorationTest, "Phases.StartsInExploration")
 bool FGameFlowStartsInExplorationTest::RunTest(const FString&)
 {
-	const FGameFlowStateMachine Machine;
+	const FGameFlowStateMachine Machine(PreparedConfig());
 	TestEqual(TEXT("Phase"), Machine.GetPhase(), ECodexGamePhase::Exploration);
 	TestEqual(TEXT("Mode"), Machine.GetCombatMode(), ECodexCombatMode::None);
 	TestEqual(TEXT("Wave index"), Machine.GetWaveIndex(), 0);
@@ -46,7 +58,7 @@ bool FGameFlowStartsInExplorationTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowCombatZoneOnceTest, "Phases.CombatZoneTriggersCutsceneOnce")
 bool FGameFlowCombatZoneOnceTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	TestEqual(TEXT("First trigger"), Machine.TriggerCombatZone(), EGameFlowResult::Ok);
 	TestEqual(TEXT("Phase"), Machine.GetPhase(), ECodexGamePhase::Cutscene);
 	TestEqual(TEXT("Second trigger during cutscene"), Machine.TriggerCombatZone(), EGameFlowResult::WrongPhase);
@@ -56,7 +68,7 @@ bool FGameFlowCombatZoneOnceTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowCutsceneToPreparationTest, "Phases.CutsceneStartsFirstPreparation")
 bool FGameFlowCutsceneToPreparationTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstPreparation(Machine);
 	TestEqual(TEXT("Phase"), Machine.GetPhase(), ECodexGamePhase::Preparation);
 	TestEqual(TEXT("Wave index"), Machine.GetWaveIndex(), 1);
@@ -67,7 +79,7 @@ bool FGameFlowCutsceneToPreparationTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowPreparationTimerStartsWaveTest, "Phases.PreparationTimerStartsWave")
 bool FGameFlowPreparationTimerStartsWaveTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstPreparation(Machine);
 	const float Duration = Machine.GetConfig().PreparationDuration;
 	Machine.Tick(Duration - 0.5f);
@@ -81,7 +93,7 @@ bool FGameFlowPreparationTimerStartsWaveTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowReadyButtonStartsWaveTest, "Phases.ReadyButtonStartsWave")
 bool FGameFlowReadyButtonStartsWaveTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstPreparation(Machine);
 	TestEqual(TEXT("Finish preparation"), Machine.FinishPreparation(), EGameFlowResult::Ok);
 	TestEqual(TEXT("Phase"), Machine.GetPhase(), ECodexGamePhase::WaveCombat);
@@ -92,7 +104,7 @@ bool FGameFlowReadyButtonStartsWaveTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowWaveClearedStopsTimeTest, "Phases.WaveClearedStopsTime")
 bool FGameFlowWaveClearedStopsTimeTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstWave(Machine);
 	TestEqual(TEXT("Clear"), Machine.NotifyWaveCleared(), EGameFlowResult::Ok);
 	TestEqual(TEXT("Phase"), Machine.GetPhase(), ECodexGamePhase::WaveCleared);
@@ -104,7 +116,7 @@ bool FGameFlowWaveClearedStopsTimeTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowWaveClearedFromTurnBasedTest, "Phases.WaveClearedFromTurnBased")
 bool FGameFlowWaveClearedFromTurnBasedTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstWave(Machine);
 	Machine.RequestEnterTurnBased(true);
 	TestEqual(TEXT("Clear during turn-based"), Machine.NotifyWaveCleared(), EGameFlowResult::Ok);
@@ -115,7 +127,7 @@ bool FGameFlowWaveClearedFromTurnBasedTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowNextWaveRestTest, "Phases.NextWaveIsRestPreparation")
 bool FGameFlowNextWaveRestTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstWave(Machine);
 	Machine.NotifyWaveCleared();
 	TestEqual(TEXT("Advance"), Machine.AdvanceAfterWave(), EGameFlowResult::Ok);
@@ -129,7 +141,7 @@ bool FGameFlowNextWaveRestTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowLastWaveToPostCombatTest, "Phases.LastWaveLeadsToPostCombatAndExploration")
 bool FGameFlowLastWaveToPostCombatTest::RunTest(const FString&)
 {
-	FGameFlowConfig Config;
+	FGameFlowConfig Config = PreparedConfig();
 	Config.TotalWaves = 2;
 	FGameFlowStateMachine Machine(Config);
 	EnterFirstWave(Machine);
@@ -148,7 +160,7 @@ bool FGameFlowLastWaveToPostCombatTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowGameOverTest, "Phases.GameOverStopsTime")
 bool FGameFlowGameOverTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstWave(Machine);
 	Machine.ToggleTacticalPause();
 	Machine.TriggerGameOver();
@@ -163,7 +175,7 @@ bool FGameFlowGameOverTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowPauseSpendsChargeTest, "TacticalPause.SpendsChargeAndSlowsTime")
 bool FGameFlowPauseSpendsChargeTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstWave(Machine);
 	const FGameFlowConfig& Config = Machine.GetConfig();
 	TestEqual(TEXT("Pause"), Machine.ToggleTacticalPause(), EGameFlowResult::Ok);
@@ -177,7 +189,7 @@ bool FGameFlowPauseSpendsChargeTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowPauseRejectedOutsideWaveTest, "TacticalPause.RejectedOutsideWave")
 bool FGameFlowPauseRejectedOutsideWaveTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	TestEqual(TEXT("Exploration"), Machine.ToggleTacticalPause(), EGameFlowResult::NotInWave);
 	EnterFirstPreparation(Machine);
 	TestEqual(TEXT("Preparation"), Machine.ToggleTacticalPause(), EGameFlowResult::NotInWave);
@@ -187,7 +199,7 @@ bool FGameFlowPauseRejectedOutsideWaveTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowPauseReleaseEventTest, "TacticalPause.ReleaseRunsOrdersByToggleAndTimeout")
 bool FGameFlowPauseReleaseEventTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	int32 Releases = 0;
 	Machine.OnTacticalPauseReleased.AddLambda([&Releases]() { ++Releases; });
 	EnterFirstWave(Machine);
@@ -209,7 +221,7 @@ bool FGameFlowPauseReleaseEventTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowPauseChargesAndCooldownTest, "TacticalPause.ChargesExhaustedStartCooldown")
 bool FGameFlowPauseChargesAndCooldownTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstWave(Machine);
 	const FGameFlowConfig& Config = Machine.GetConfig();
 	for (int32 Index = 0; Index < Config.TacticalPauseMaxCharges; ++Index)
@@ -230,7 +242,7 @@ bool FGameFlowPauseChargesAndCooldownTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowNoChargesWithoutCooldownTest, "TacticalPause.NoChargesReportedWhenCooldownZero")
 bool FGameFlowNoChargesWithoutCooldownTest::RunTest(const FString&)
 {
-	FGameFlowConfig Config;
+	FGameFlowConfig Config = PreparedConfig();
 	Config.TacticalPauseMaxCharges = 0;
 	FGameFlowStateMachine Machine(Config);
 	EnterFirstWave(Machine);
@@ -241,7 +253,7 @@ bool FGameFlowNoChargesWithoutCooldownTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowNewWaveResetsCountersTest, "TacticalPause.NewWaveResetsCounters")
 bool FGameFlowNewWaveResetsCountersTest::RunTest(const FString&)
 {
-	FGameFlowConfig Config;
+	FGameFlowConfig Config = PreparedConfig();
 	Config.TurnBasedUsesPerWave = 1;
 	FGameFlowStateMachine Machine(Config);
 	EnterFirstWave(Machine);
@@ -268,7 +280,7 @@ GAMEFLOW_TEST(FGameFlowRealTimeTimersTest, "TacticalPause.TimersIgnoreTimeDilati
 bool FGameFlowRealTimeTimersTest::RunTest(const FString&)
 {
 	// The machine only sees real seconds: 30 real seconds end the pause even at dilation 0.02.
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstWave(Machine);
 	Machine.ToggleTacticalPause();
 	for (int32 Frame = 0; Frame < 31 * 60; ++Frame)
@@ -284,7 +296,7 @@ bool FGameFlowRealTimeTimersTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowTurnBasedFromRealTimeTest, "TurnBased.EntersFromRealTime")
 bool FGameFlowTurnBasedFromRealTimeTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstWave(Machine);
 	TestEqual(TEXT("Enter"), Machine.RequestEnterTurnBased(true), EGameFlowResult::Ok);
 	TestEqual(TEXT("Mode"), Machine.GetCombatMode(), ECodexCombatMode::TurnBased);
@@ -297,7 +309,7 @@ bool FGameFlowTurnBasedFromRealTimeTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowTurnBasedRejectedOutsideWaveTest, "TurnBased.RejectedInExplorationAndPreparation")
 bool FGameFlowTurnBasedRejectedOutsideWaveTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	TestEqual(TEXT("Exploration"), Machine.RequestEnterTurnBased(true), EGameFlowResult::NotInWave);
 	EnterFirstPreparation(Machine);
 	TestEqual(TEXT("Preparation"), Machine.RequestEnterTurnBased(true), EGameFlowResult::NotInWave);
@@ -309,7 +321,7 @@ bool FGameFlowTurnBasedRejectedInPauseTest::RunTest(const FString&)
 {
 	// User request 2026-10-06 allows the pause -> turn-based hold by default (CodexTactics.Combat.TimeMode.HoldEntersTurnBased);
 	// the TANDEM request 2 rule stays behind bAllowTurnBasedFromTacticalPause = false.
-	FGameFlowConfig Config;
+	FGameFlowConfig Config = PreparedConfig();
 	Config.bAllowTurnBasedFromTacticalPause = false;
 	FGameFlowStateMachine Machine(Config);
 	EnterFirstWave(Machine);
@@ -323,7 +335,7 @@ bool FGameFlowTurnBasedRejectedInPauseTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowTurnBasedNeedsEnemiesTest, "TurnBased.RejectedWithoutEnemiesInRange")
 bool FGameFlowTurnBasedNeedsEnemiesTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstWave(Machine);
 	TestEqual(TEXT("No enemies"), Machine.RequestEnterTurnBased(false), EGameFlowResult::NoEnemiesInRange);
 	TestEqual(TEXT("Still real-time"), Machine.GetCombatMode(), ECodexCombatMode::RealTime);
@@ -334,7 +346,7 @@ bool FGameFlowTurnBasedNeedsEnemiesTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowTurnBasedLimitTest, "TurnBased.LimitPerWave")
 bool FGameFlowTurnBasedLimitTest::RunTest(const FString&)
 {
-	FGameFlowConfig Config;
+	FGameFlowConfig Config = PreparedConfig();
 	Config.TurnBasedUsesPerWave = 1;
 	FGameFlowStateMachine Machine(Config);
 	EnterFirstWave(Machine);
@@ -348,7 +360,7 @@ bool FGameFlowTurnBasedLimitTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowTurnBasedUnlimitedTest, "TurnBased.UnlimitedByDefault")
 bool FGameFlowTurnBasedUnlimitedTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstWave(Machine);
 	for (int32 Index = 0; Index < 5; ++Index)
 	{
@@ -363,7 +375,7 @@ bool FGameFlowTurnBasedUnlimitedTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowTurnBasedExitToFreePauseTest, "TurnBased.ExitGivesFreeTacticalPause")
 bool FGameFlowTurnBasedExitToFreePauseTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	EnterFirstWave(Machine);
 	const FGameFlowConfig& Config = Machine.GetConfig();
 	Machine.RequestEnterTurnBased(true);
@@ -380,7 +392,7 @@ bool FGameFlowTurnBasedExitToFreePauseTest::RunTest(const FString&)
 GAMEFLOW_TEST(FGameFlowStateChangedEventTest, "Events.StateChangedFiresOncePerChange")
 bool FGameFlowStateChangedEventTest::RunTest(const FString&)
 {
-	FGameFlowStateMachine Machine;
+	FGameFlowStateMachine Machine(PreparedConfig());
 	TArray<ECodexGamePhase> Phases;
 	Machine.OnStateChanged.AddLambda([&Phases](ECodexGamePhase Phase, ECodexCombatMode) { Phases.Add(Phase); });
 	EnterFirstWave(Machine);
@@ -396,7 +408,7 @@ bool FGameFlowTurnBasedKeepsPauseChargesTest::RunTest(const FString&)
 	// TANDEM request 2 (user + Gemini 2026-10-01): no turn-based fight from the tactical pause; the fight neither
 	// refills the pause charges nor runs their cooldown down. (The pause -> turn-based hold is allowed by default since the
 	// RTS request of 2026-10-06; this test keeps the old flag to check the frozen charges.)
-	FGameFlowConfig Config;
+	FGameFlowConfig Config = PreparedConfig();
 	Config.bAllowTurnBasedFromTacticalPause = false;
 	FGameFlowStateMachine Machine(Config);
 	EnterFirstWave(Machine);

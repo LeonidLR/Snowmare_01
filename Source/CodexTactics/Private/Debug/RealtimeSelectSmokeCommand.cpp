@@ -9,6 +9,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -65,9 +66,7 @@ namespace RealtimeSelectSmoke
 		{
 			if (Step == 11)
 			{
-				Flow->TriggerCombatZone();
-				Flow->FinishCutscene();
-				Flow->FinishPreparation();
+				SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 				for (AOperativeCharacter* Member : Squad->GetMembers())
 				{
 					Member->HealthComponent->SetMaxHealth(100000.f);

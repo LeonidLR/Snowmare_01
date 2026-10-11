@@ -53,9 +53,24 @@ public:
 	}
 	/** World time dilation the current state requires (0 = stopped). */
 	float GetTimeDilation() const;
+	/**
+	 * The current tactical pause is the free one a sudden horde wave opens with (user decision 2026-10-11): it spent no
+	 * charge, it has no timer (only the player ends it, like any pause: Space tap / hold).
+	 */
+	bool IsFreePause() const { return bFreePause && CombatMode == ECodexCombatMode::TacticalPause; }
+	/**
+	 * Wave InWaveIndex (1-based) starts suddenly: Config.bSuddenWaveStart unless the wave is listed in
+	 * Config.PreparedWaveIndices; the console override (SetSuddenStartOverride) wins over both.
+	 */
+	bool UsesSuddenStart(int32 InWaveIndex) const;
+	/** -1: the config decides; 0: every wave has the old prepared start; 1: every wave starts suddenly (Codex.HordeIntro.SuddenStart). */
+	void SetSuddenStartOverride(int32 Override) { SuddenStartOverride = Override; }
 
 	// --- Requests ---
-	/** Exploration -> Cutscene when the squad enters the combat zone (once per mission). */
+	/**
+	 * The squad enters the combat zone (once per mission): Exploration -> Cutscene (old prepared start), or with a sudden
+	 * wave 1 (UsesSuddenStart) straight to WaveCombat / TacticalPause — the wave spawns now, in the free pause.
+	 */
 	EGameFlowResult TriggerCombatZone();
 	/**
 	 * Exploration -> WaveCombat/RealTime of wave 1 at once (no cutscene, no preparation): the squad attacked an enemy or
@@ -64,9 +79,15 @@ public:
 	EGameFlowResult StartAmbushCombat();
 	/** Cutscene -> Preparation for wave 1 (skip, or automatically after CutsceneDuration). */
 	EGameFlowResult FinishCutscene();
-	/** Preparation -> WaveCombat/RealTime (timer expired or player pressed "ready"). */
+	/**
+	 * Preparation -> WaveCombat/RealTime (timer expired or player pressed "ready"); a sudden wave (a loaded save resumes
+	 * in its preparation) opens in the free tactical pause instead.
+	 */
 	EGameFlowResult FinishPreparation();
-	/** RealTime -> TacticalPause (spends a charge), or TacticalPause -> RealTime (runs planned orders). */
+	/**
+	 * RealTime -> TacticalPause (spends a charge), or TacticalPause -> RealTime (runs planned orders). Releasing the free
+	 * pause of a sudden wave works the same and costs nothing.
+	 */
 	EGameFlowResult ToggleTacticalPause();
 	/**
 	 * RealTime -> TurnBased (also TacticalPause -> TurnBased with Config.bAllowTurnBasedFromTacticalPause: the pause ends
@@ -79,7 +100,10 @@ public:
 	EGameFlowResult ExitTurnBasedToRealTime();
 	/** WaveCombat (any sub-mode) -> WaveCleared. */
 	EGameFlowResult NotifyWaveCleared();
-	/** WaveCleared -> Preparation for the next wave, or PostCombat after the last wave. */
+	/**
+	 * WaveCleared -> Preparation for the next wave (a sudden next wave: WaveCombat in the free pause at once), or
+	 * PostCombat after the last wave.
+	 */
 	EGameFlowResult AdvanceAfterWave();
 	/** PostCombat -> Exploration; the combat zone can be triggered again. */
 	EGameFlowResult FinishPostCombat();
@@ -93,7 +117,10 @@ public:
 	 */
 	void RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex, float InPreparationSeconds = -1.f);
 
-	/** Advances real-time timers: pause cooldown, tactical pause, preparation. */
+	/**
+	 * Advances real-time timers: pause cooldown, tactical pause (not the free one), preparation. A preparation of a
+	 * sudden wave (restored by a save load) ends on the first tick: the wave starts suddenly.
+	 */
 	void Tick(float RealDeltaSeconds);
 
 	/** Fires after every phase or combat mode change. */
@@ -103,7 +130,8 @@ public:
 
 private:
 	void SetState(ECodexGamePhase NewPhase, ECodexCombatMode NewMode);
-	void StartWave();
+	/** Starts wave WaveIndex: real time, or the free tactical pause when bSudden. */
+	void StartWave(bool bSudden = false);
 	void ReleaseTacticalPause();
 
 	FGameFlowConfig Config;
@@ -118,4 +146,7 @@ private:
 	int32 TurnBasedUsesThisWave = 0;
 	bool bCombatUnlocked = false;
 	bool bAmbushFight = false;
+	/** The running tactical pause is the free, untimed one of a sudden wave start. */
+	bool bFreePause = false;
+	int32 SuddenStartOverride = -1;
 };

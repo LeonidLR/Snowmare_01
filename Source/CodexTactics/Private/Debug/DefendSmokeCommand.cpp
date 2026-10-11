@@ -118,9 +118,7 @@ namespace DefendSmoke
 			{
 				return true;
 			}
-			Flow->TriggerCombatZone();
-			Flow->FinishCutscene();
-			Flow->FinishPreparation();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			State.Defender = Squad->GetLeader();
 			Defender = State.Defender.Get();
 			for (AOperativeCharacter* Member : Squad->GetMembers())

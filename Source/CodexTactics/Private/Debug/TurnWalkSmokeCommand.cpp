@@ -89,9 +89,7 @@ namespace TurnWalkSmoke
 			}
 			if (!State.bPrepared)
 			{
-				Flow->TriggerCombatZone();
-				Flow->FinishCutscene();
-				Flow->FinishPreparation();
+				SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 				// Keep one wave enemy (moved in front) and drop the rest: an empty wave would be cleared at once.
 				AEnemyCharacter* Kept = nullptr;
 				for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
