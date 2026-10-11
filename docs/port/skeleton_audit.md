@@ -101,3 +101,27 @@ Manny clips on stocky monsters need translation-retarget settings (root/pelvis/I
 every change must be re-verified with `verify_all.ps1` (IK, cover, vault, knockdown, marksman smokes).
 
 Re-run the audit: `UnrealEditor-Cmd.exe CodexTactics.uproject -run=pythonscript -script=Scripts/Editor/skeleton_audit.py -unattended -nullrhi` (the editor may stay open; the "GetBoneParent: Bone ... not found" log errors are expected noise, it probes which skeleton bones a mesh really has).
+
+## 6. Translation retargeting modes - why the Marksman looked stretched (2026-10-11)
+
+`USkeleton` keeps a translation retargeting mode per bone (`BoneTree[i].TranslationRetargetingMode`); `FAnimationRuntime::RetargetBoneTransform`
+reads it from the skeleton of the mesh being animated: Animation = the clip's translation (its bone LENGTHS) is used as is, Skeleton = the
+skeleton's reference translation, AnimationScaled = the clip's translation scaled by (target ref length / source skeleton ref length).
+
+| Skeleton | Bones | Modes |
+|---|---|---|
+| UE4 mannequins (Post_Apo, BM1/BM2 ue4, MM1, MM2, M4 UE4) | 68-74 | pelvis + ik_* (+ extras) Animation, the other 49-59 Skeleton |
+| Epic UE5 Manny (`Characters/Mannequins`, M4 196, Sniper) | 161 / 196 | root, ik_*, interaction, center_of_mass Animation; ball_*, ankle_* Skeleton; the other 145 AnimationScaled |
+| **BM1 ue5 `SK_base_mesh_ue5_1_Skeleton` (Marksman)** | 161 | **all 161 Animation** (FBX import default, never set) |
+| BM2 ue5, Explorer, UEFN, Crawl A / Rifle / Pistol, dog | 68-161 | all Animation (BM2 ue5 / Explorer would need the same fix as BM1 ue5 before a character uses them; Crawl skeletons are clip sources only; the dog plays only its own clips) |
+
+BM1 ue5's reference pose is not the UE4 mannequin's: `spine_02` / `spine_03` are 0 cm (spine_01 11.3 + spine_04 10.9 + spine_05 11.2 cm), thigh bone
+38.9 vs 42.6, calf 39.0 vs 40.2, upper arm 13.4 vs 15.8, lower arm 36.5 vs 30.3. With every bone on Animation the UE4 clips (monster pack walk / run / idles /
+attacks, RifleAnims crouch, Crawl prone) stretch the torso x1.32-1.56, legs x1.06-1.18, arms x0.96-1.18; the Sniper (Manny) death clips x1.12 / x1.10 / x0.92.
+Measured with `AnimPoseExtensions.get_anim_pose_at_time` on the mesh over the 25 `AnimSequence`s on the `ABP_Enemy_Marksman` class defaults.
+
+Fix: `Scripts/Editor/fix_marksman_retargeting.py` sets BM1 ue5 to the UE4-skeleton convention (root / ik_* / interaction / center_of_mass Animation, pelvis
+AnimationScaled, the other 150 Skeleton): all 25 clips x1.00 (in-memory dry run). Epic's own Manny convention (AnimationScaled on almost every bone) was tried too
+and leaves the monster pack's UE4 clips at x1.12 / x1.11 / x1.27, so it is not used. Operatives (80 clips), Brute, Frostbitten, Cutter: x1.000 measured, not affected.
+If the Marksman is ever moved to the 196 Manny skeleton (section 4, Phase B), that skeleton's AnimationScaled modes will stretch the UE4 clips the same way: set the
+bones Skeleton there first. Python: `Skeleton.bone_tree` is read-only as a whole, assign by index (`tree[i] = node`); no `unreal.Skeleton` setter exists.
