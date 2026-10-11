@@ -103,4 +103,17 @@ namespace OperativeMovementRules
 
 	/** Yaw turn rate for a stance, deg/s. */
 	CODEXTACTICS_API float GetTurnRate(const FOperativeMovementConfig& Config, EOperativeStance Stance);
+
+	/** A stance clip with less than this left (s) no longer holds a move back (the clip's tail blends into the walk). */
+	constexpr float MoveHoldThreshold = 0.05f;
+
+	/**
+	 * Seconds an operative must stand still while a stance change plays (user bug 2026-10-11: followers slid while rising from
+	 * prone): the longer of the settle time armed by SetStance (the clip that starts on the next anim update) and the time
+	 * left of the stance clip already playing. A character never translates while a stance clip roots him.
+	 */
+	CODEXTACTICS_API float ComputeMoveHold(float SettleSecondsLeft, float PlayingClipSecondsLeft);
+
+	/** True when a move issued now waits for the stance change (it is queued / retried after ComputeMoveHold seconds). */
+	CODEXTACTICS_API bool ShouldDeferMove(float MoveHoldSeconds);
 }

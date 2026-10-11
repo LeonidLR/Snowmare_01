@@ -1,4 +1,5 @@
 #include "Characters/SquadSubsystem.h"
+#include "Characters/OperativeMovementRules.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -738,6 +739,18 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	// Followers copy the moving leader's sprint. Deviation (user decision 2026-10-01): every operative keeps the stance
 	// he was given — no copy of the leader's stance (Godot can_sync_stance); only Alt + Z / C / V sets the whole squad.
 	Operative->SetSprinting(LeaderRef.IsSprinting());
+
+	// Bug 2026-10-11 (solo off: prone followers slid towards the leader while still rising): a stance change in progress roots
+	// the follower - he stays put until the clip ends, then the next repath sends him to his slot.
+	if (const float MoveHold = Operative->GetMoveHoldSeconds(); OperativeMovementRules::ShouldDeferMove(MoveHold))
+	{
+		if (Operative->GetVelocity().SizeSquared2D() > 25.f)
+		{
+			Operative->StopOperative(); // walking when the stance change started
+		}
+		Follower.RepathTimeRemaining = MoveHold;
+		return;
+	}
 
 	Follower.RepathTimeRemaining -= DeltaTime;
 	Follower.ColumnTimeRemaining = FMath::Max(0.f, Follower.ColumnTimeRemaining - DeltaTime);

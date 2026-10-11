@@ -140,6 +140,12 @@ public:
 	/** Formation move issued by the squad: path to Destination at a fixed speed, keeps stance and sprint state. */
 	EOperativeOrderResult FollowTo(const FVector& Destination, float Speed);
 
+	/**
+	 * Seconds he must stand still while a stance change plays (OperativeMovementRules::ComputeMoveHold): the settle time armed by
+	 * SetStance plus the stance clip already playing. Moves issued meanwhile wait (OrderMoveTo queues, FollowTo refuses).
+	 */
+	float GetMoveHoldSeconds() const;
+
 	/** Stops any movement immediately. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
 	void StopOperative();
@@ -1555,6 +1561,9 @@ private:
 	/** A move waiting for the stand-up clip (OrderMoveTo from prone / during a stance clip). */
 	FTimerHandle PendingMoveTimer;
 	bool bPendingMoveReplay = false;
+
+	/** World time (s) until which the stance change armed by SetStance holds him still (before the anim instance starts the clip). */
+	float StanceSettleUntil = 0.f;
 
 	/** Seconds until a stance clip that starts now / is playing lets the operative walk (0 without a clip). */
 	float GetStanceChangeDelay(EOperativeStance From, EOperativeStance To) const;
