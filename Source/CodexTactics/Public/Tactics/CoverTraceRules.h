@@ -71,6 +71,13 @@ namespace CoverTraceRules
 	/** Signed distance of Point along A's wall tangent (positive = to the operative's right), cm. */
 	CODEXTACTICS_API float AlongWallDistance(const FCoverSlot& A, const FVector& Point);
 
+	/**
+	 * Signed distance along the wall (positive = along RightTangent) from the point From (where the body really is) to To.
+	 * The slot of a running shimmy is still the one it started from: a reversing order must measure from the body, not
+	 * from the slot (user report 2026-10-11: moved right while the left clip kept playing).
+	 */
+	CODEXTACTICS_API float AlongWallDistanceFrom(const FCoverSlot& Wall, const FVector& From, const FVector& To);
+
 	/** The corner the operative should work: the exposed edge towards the threat; the only exposed one; else Right. */
 	CODEXTACTICS_API ECoverFacing ChooseFacing(const FCoverSlot& Slot, const FVector* ThreatLocation);
 

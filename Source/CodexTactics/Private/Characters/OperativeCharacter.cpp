@@ -17,6 +17,7 @@
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Core/MissionSubsystem.h"
 #include "Core/MissionRules.h"
 #include "Combat/DeathCinematicSubsystem.h"
@@ -3254,7 +3255,9 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 	{
 		return EOperativeOrderResult::Refused;
 	}
-	const float Along = CoverTraceRules::AlongWallDistance(CoverSlot, Target.WorldLocation);
+	// From where the body IS: while a shimmy runs CoverSlot is still the slot it started from (a reversing order whose
+	// target is on the old side of that slot used to get the old direction: right-moving body, left clip, no turn).
+	const float Along = CoverTraceRules::AlongWallDistanceFrom(CoverSlot, GetActorLocation(), Target.WorldLocation);
 	if (FMath::Abs(Along) < 10.f)
 	{
 		return EOperativeOrderResult::Accepted; // already there
@@ -3667,6 +3670,54 @@ void AOperativeCharacter::TryEnterCoverFromRun()
 		Distance, Speed, ClipLead, CoverEntryGlide.Size2D());
 }
 
+float AOperativeCharacter::UpdateCoverWallClearance(float DeltaTime)
+{
+	USkeletalMeshComponent* SkinMesh = GetMesh();
+	float Target = 0.f;
+	if (bInCover && SkinMesh && SkinMesh->GetSkeletalMeshAsset() && CoverWallClearanceCm > 0.f)
+	{
+		if (CoverClearanceBonesMesh.Get() != SkinMesh->GetSkeletalMeshAsset())
+		{
+			CoverClearanceBonesMesh = SkinMesh->GetSkeletalMeshAsset();
+			CoverClearanceBones.Reset();
+			const FReferenceSkeleton& RefSkeleton = SkinMesh->GetSkeletalMeshAsset()->GetRefSkeleton();
+			for (int32 Index = 0; Index < RefSkeleton.GetNum(); ++Index)
+			{
+				const FString Name = RefSkeleton.GetBoneName(Index).ToString();
+				if (!Name.StartsWith(TEXT("ik_")) && !Name.StartsWith(TEXT("VB ")) && !Name.Equals(TEXT("root")))
+				{
+					CoverClearanceBones.Add(Index);
+				}
+			}
+		}
+		const TArray<FTransform>& Pose = SkinMesh->GetComponentSpaceTransforms();
+		const FTransform& ToWorld = SkinMesh->GetComponentTransform();
+		const FVector Normal = CoverSlot.WallNormal.GetSafeNormal2D();
+		CoverWallPushDir = Normal; // the slot is cleared on leaving: the push eases out along the last wall
+		float MinDepth = TNumericLimits<float>::Max();
+		for (const int32 Bone : CoverClearanceBones)
+		{
+			if (Pose.IsValidIndex(Bone))
+			{
+				MinDepth = FMath::Min(MinDepth, static_cast<float>(FVector::DotProduct(ToWorld.TransformPosition(Pose[Bone].GetLocation()) - CoverSlot.WallPoint, Normal)));
+			}
+		}
+		// The measured depth already contains the push applied so far: the push that is still missing (or in excess).
+		if (MinDepth < TNumericLimits<float>::Max())
+		{
+			Target = FMath::Clamp(CoverWallPush + (CoverWallClearanceCm - MinDepth), 0.f, CoverWallClearanceMaxPushCm);
+		}
+	}
+	// Rises fast (a limb in the wall is worse than a short shove), eases out when the need is gone.
+	CoverWallPush = Target >= CoverWallPush ? FMath::Min(Target, CoverWallPush + CoverWallClearanceRiseCmPerSec * DeltaTime)
+		: FMath::Lerp(CoverWallPush, Target, 1.f - FMath::Exp(-CoverWallClearanceInterp * DeltaTime));
+	if (CoverWallPush < 0.05f && Target <= 0.f)
+	{
+		CoverWallPush = 0.f;
+	}
+	return CoverWallPush;
+}
+
 void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 {
 	FVector Wanted = FVector::ZeroVector;
@@ -3708,9 +3759,12 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 	if (bCoverEntryAwaitClip)
 	{
 		const UOperativeAnimInstance* AwaitAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
-		if (bInCover && AwaitAnim && AwaitAnim->GetCoverEnterBlendWeight() < 0.5f)
+		// The held yaw eases out WITH the clip's weight: it used to hold fully until 0.5 and drop to 0 in one frame, which
+		// swung the pose (pelvis ~1 m off the pivot) round the capsule - a 79 cm pop and arms through the wall.
+		const float EnterWeight = AwaitAnim ? AwaitAnim->GetCoverEnterBlendWeight() : -1.f;
+		if (bInCover && AwaitAnim && EnterWeight < 1.f)
 		{
-			WantedYaw = CoverEntryYawOffset;
+			WantedYaw = CoverEntryYawOffset * (1.f - FMath::Clamp(EnterWeight, 0.f, 1.f));
 		}
 		else
 		{
@@ -3742,6 +3796,17 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 	{
 		GetMesh()->AddRelativeLocation(WantedLocal - CoverEntryAppliedOffset);
 		CoverEntryAppliedOffset = WantedLocal;
+	}
+	// Keep every bone out of the wall (the entry blend of an old run pose swings the arms through it): measured after the
+	// entry offset / yaw above, so the capsule's jump to the slot is not mistaken for a body in the wall.
+	if (GetMesh())
+	{
+		const float Push = UpdateCoverWallClearance(DeltaTime);
+		if (!FMath::IsNearlyEqual(Push, CoverWallPushApplied, 0.01f))
+		{
+			GetMesh()->AddRelativeLocation(GetActorRotation().UnrotateVector(CoverWallPushDir * (Push - CoverWallPushApplied)));
+			CoverWallPushApplied = Push;
+		}
 	}
 }
 

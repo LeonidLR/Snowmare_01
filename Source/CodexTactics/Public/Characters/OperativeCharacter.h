@@ -1079,6 +1079,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.05"))
 	float CoverEnterDecelSeconds = 0.4f;
 
+	/**
+	 * Wall clearance (user report 2026-10-11: the body / rifle sank into the wall - during a cover entry the old run pose,
+	 * held on the turned mesh, blends with the enter clip and swings a hand through the wall): while in cover the closest
+	 * skin bone to the wall plane is kept this far out; the mesh is pushed out along the wall normal by what is missing,
+	 * eased in / out (UpdateCoverWallClearance). 0 = off. cm.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cover|Clearance", meta = (ClampMin = "0"))
+	float CoverWallClearanceCm = 6.f;
+
+	/** Most the mesh is pushed away from the wall, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cover|Clearance", meta = (ClampMin = "0"))
+	float CoverWallClearanceMaxPushCm = 60.f;
+
+	/** How fast the push rises, cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cover|Clearance", meta = (ClampMin = "1"))
+	float CoverWallClearanceRiseCmPerSec = 300.f;
+
+	/** How fast the push eases out when the need is gone, 1/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cover|Clearance", meta = (ClampMin = "1"))
+	float CoverWallClearanceInterp = 8.f;
+
 	/** Cap of the extra glide distance, cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CoverEnterMaxGlideCm = 120.f;
@@ -1463,6 +1484,14 @@ private:
 	void TryEnterCoverFromRun();
 	/** Moves the mesh so the body stays continuous while the enter clip blends in (V = (1 - w) C + glide). */
 	void UpdateCoverEntryBlend(float DeltaTime);
+	/** The mesh push away from the wall that keeps every skin bone outside it (CoverWallClearanceCm), world cm along the normal. */
+	float UpdateCoverWallClearance(float DeltaTime);
+	float CoverWallPush = 0.f;
+	float CoverWallPushApplied = 0.f;
+	FVector CoverWallPushDir = FVector::ForwardVector;
+	/** Skin bones (no IK targets / virtual bones) of the mesh asset the list was built for. */
+	TArray<int32> CoverClearanceBones;
+	TWeakObjectPtr<const USkeletalMesh> CoverClearanceBonesMesh;
 	/** World time of the last shot from cover (lean / blind; CoverEngageHoldSeconds). */
 	double CoverLastShotTime = -1.0e9;
 	/** Damage from ranged attackers in the last seconds (decays like RecentIncomingDamage; the corner-aim duck input). */

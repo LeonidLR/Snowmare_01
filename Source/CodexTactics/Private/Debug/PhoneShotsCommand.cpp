@@ -111,6 +111,7 @@ namespace PhoneShots
 
 	/** The sniper combat clips' camera (defined with the sniper steps). */
 	void UpdateSniperFollowCam(UWorld* World);
+	void UpdateCoverReverseCam(UWorld* World);
 
 	void Tick()
 	{
@@ -129,6 +130,7 @@ namespace PhoneShots
 		if (UWorld* CamWorld = FrontendSmokeUtils::FindGameWorld())
 		{
 			UpdateSniperFollowCam(CamWorld); // every frame, also while a step waits
+			UpdateCoverReverseCam(CamWorld);
 		}
 		if (R.Wait > 0)
 		{
@@ -1064,6 +1066,192 @@ namespace PhoneShots
 		});
 		S.Add([](UWorld* World) { StopClip(); return 2; });
 	}
+
+	// --- "coverreverse" (user report 2026-10-11): an operative hugs a wall, shimmies one way and is ordered back the other
+	// way, mid-run: the clip flips with the direction and no limb is in the wall. The male Commander, then the Female Soldier.
+	// The camera is relative to the operative and the wall normal (never map coordinates). ---
+
+	struct FCoverReverseShots
+	{
+		TWeakObjectPtr<AOperativeCharacter> Op;
+		TWeakObjectPtr<AStaticMeshActor> Wall;
+		TWeakObjectPtr<ACameraActor> Camera;
+		FCoverSlot Slot;
+		bool bFollow = false;
+		FVector CamLocation = FVector::ZeroVector;
+		FVector CamLook = FVector::ZeroVector;
+		bool bCamPlaced = false;
+		FVector P = FVector::ZeroVector;
+		FVector F = FVector::ForwardVector;
+		float GroundZ = 0.f;
+	};
+	TSharedPtr<FCoverReverseShots> CoverRev;
+
+	void UpdateCoverReverseCam(UWorld* World)
+	{
+		AOperativeCharacter* Op = CoverRev.IsValid() ? CoverRev->Op.Get() : nullptr;
+		APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+		if (!Op || !PC || !CoverRev->bFollow)
+		{
+			return;
+		}
+		const FVector Her = Op->GetMesh()->Bounds.Origin;
+		const FVector N = CoverRev->Slot.WallNormal.GetSafeNormal2D();
+		const FVector T = CoverRev->Slot.RightTangent();
+		const FVector WantEye = Her + N * 330.f + T * 140.f + FVector(0.f, 0.f, 90.f);
+		const FVector WantLook = Her + FVector(0.f, 0.f, -5.f);
+		if (!CoverRev->bCamPlaced)
+		{
+			CoverRev->CamLocation = WantEye;
+			CoverRev->CamLook = WantLook;
+			CoverRev->bCamPlaced = true;
+		}
+		CoverRev->CamLocation = FMath::Lerp(CoverRev->CamLocation, WantEye, 0.12f);
+		CoverRev->CamLook = FMath::Lerp(CoverRev->CamLook, WantLook, 0.2f);
+		if (!CoverRev->Camera.IsValid())
+		{
+			CoverRev->Camera = World->SpawnActor<ACameraActor>(CoverRev->CamLocation, FRotator::ZeroRotator);
+		}
+		if (ACameraActor* Camera = CoverRev->Camera.Get())
+		{
+			Camera->SetActorLocationAndRotation(CoverRev->CamLocation, (CoverRev->CamLook - CoverRev->CamLocation).Rotation());
+			Camera->GetCameraComponent()->SetFieldOfView(55.f);
+			Camera->GetCameraComponent()->bConstrainAspectRatio = false;
+			if (PC->GetViewTarget() != Camera)
+			{
+				PC->SetViewTarget(Camera);
+			}
+		}
+	}
+
+	/** Orders a shimmy Along cm from where the operative is (the way a click on the wall does). */
+	FStep CoverReverseShimmy(float Along)
+	{
+		return [Along](UWorld* World)
+		{
+			AOperativeCharacter* Op = CoverRev->Op.Get();
+			if (!Op)
+			{
+				return 1;
+			}
+			const FVector Click = Op->GetActorLocation() + CoverRev->Slot.RightTangent() * Along - CoverRev->Slot.WallNormal * 40.f + FVector(0.f, 0.f, 90.f);
+			FCoverSlot Target;
+			if (CoverTraceRules::FindShimmySlot(World, Op->GetCoverSlot(), Click, Target))
+			{
+				Op->OrderShimmyTo(Target);
+			}
+			return 1;
+		};
+	}
+
+	/** One operative's pass: run into the cover, shimmy A, reverse to B mid-run, clip + stills. */
+	void AddCoverReversePass(TArray<FStep>& S, EOperativeRole Role, const FString& Label)
+	{
+		S.Add([Role](UWorld* World)
+		{
+			AOperativeCharacter* Op = Member(World, Role);
+			if (!Op || !CoverRev->Wall.IsValid())
+			{
+				return 1;
+			}
+			CoverRev->bFollow = false;
+			CoverRev->bCamPlaced = false;
+			if (Op->bInCover)
+			{
+				Op->LeaveCover(TEXT("phone shots"));
+			}
+			Op->StopOperative();
+			Op->bIgnoreCoverThreatForTesting = true;
+			Op->bTacticalCeaseFire = true;
+			CoverRev->Op = Op;
+			const FVector N = CoverRev->Slot.WallNormal.GetSafeNormal2D();
+			const FVector At = CoverRev->Slot.WorldLocation + N * 450.f;
+			Op->TeleportTo(FVector(At.X, At.Y, CoverRev->GroundZ + Op->GetSimpleCollisionHalfHeight() + 2.f), (-N).Rotation(), false, true);
+			Op->OrderTakeCover(CoverRev->Slot, true);
+			return 1;
+		});
+		S.Add([](UWorld* World) { return CoverRev->Op.IsValid() && CoverRev->Op->bInCover ? 70 : -1; });
+		S.Add([Label](UWorld* World)
+		{
+			CoverRev->bFollow = true;
+			StartClip(TEXT("cover_reverse_") + Label, 1, false);
+			return 40;
+		});
+		S.Add(CoverReverseShimmy(-320.f));
+		S.Add([](UWorld* World) { return 52; }); // ~1.7 s at 30 fps: well into the run
+		S.Add([Label](UWorld* World) { Shot(TEXT("cover_reverse_") + Label + TEXT("_A"), false); return 1; });
+		S.Add(CoverReverseShimmy(260.f)); // the reverse, ordered while the first shimmy is still running
+		S.Add([](UWorld* World) { return 40; });
+		S.Add([Label](UWorld* World) { Shot(TEXT("cover_reverse_") + Label + TEXT("_B"), false); return 1; });
+		S.Add([](UWorld* World) { return CoverRev->Op.IsValid() && CoverRev->Op->bShimmying ? -1 : 45; });
+		S.Add([](UWorld* World) { StopClip(); CoverRev->bFollow = false; return 3; });
+	}
+
+	void AddCoverReverseSteps(TArray<FStep>& S)
+	{
+		CoverRev = MakeShared<FCoverReverseShots>();
+		S.Add([](UWorld* World) { return World->GetSubsystem<USquadSubsystem>() && World->GetSubsystem<USquadSubsystem>()->GetLeader() ? 60 : -1; });
+		S.Add([](UWorld* World)
+		{
+			StartFight(World);
+			SmokeUtils::PlaceSquadAtTestStart(World);
+			USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+			AOperativeCharacter* Leader = Squad->GetLeader();
+			if (!Leader)
+			{
+				return 1;
+			}
+			CoverRev->F = Leader->GetActorForwardVector().GetSafeNormal2D();
+			CoverRev->P = Leader->GetActorLocation();
+			CoverRev->GroundZ = CoverRev->P.Z - Leader->GetSimpleCollisionHalfHeight();
+			for (AOperativeCharacter* Each : Squad->GetMembers())
+			{
+				Each->ColdLevel = 0.f;
+				Each->bTacticalCeaseFire = true;
+			}
+			// The others stand back and to the side, out of the frame.
+			int32 Index = 0;
+			for (AOperativeCharacter* Each : Squad->GetMembers())
+			{
+				if (Each != Leader)
+				{
+					Each->StopOperative();
+					Each->TeleportTo(SmokeUtils::FreeSpot(World, CoverRev->P - CoverRev->F * 700.f + FVector::CrossProduct(FVector::UpVector, CoverRev->F) * (Index++ % 2 == 0 ? 900.f : -900.f), Each),
+						Each->GetActorRotation(), false, true);
+				}
+			}
+			UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+			const FVector Centre = CoverRev->P + CoverRev->F * 600.f;
+			const FTransform Place(CoverRev->F.Rotation(), FVector(Centre.X, Centre.Y, CoverRev->GroundZ + 150.f), FVector(0.4f, 12.f, 3.f));
+			AStaticMeshActor* Wall = Cube ? World->SpawnActorDeferred<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Place, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn) : nullptr;
+			if (Wall)
+			{
+				Wall->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+				Wall->GetStaticMeshComponent()->SetStaticMesh(Cube);
+				Wall->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+				Wall->GetStaticMeshComponent()->SetCanEverAffectNavigation(true);
+				Wall->FinishSpawning(Place);
+				CoverRev->Wall = Wall;
+			}
+			return 90; // the navmesh rebuilds round the wall
+		});
+		S.Add([](UWorld* World)
+		{
+			if (!CoverTraceRules::FindCoverSlotAt(World, CoverRev->P + CoverRev->F * 580.f + FVector(0.f, 0.f, 90.f), CoverRev->F, CoverRev->Slot))
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("PhoneShots: no cover slot at the wall"));
+				CoverRev->Wall.Reset();
+			}
+			if (ACodexTacticsHUD* Hud = HudOf(World))
+			{
+				Hud->bShowHUD = false;
+			}
+			return 2;
+		});
+		AddCoverReversePass(S, EOperativeRole::Commander, TEXT("male"));
+		AddCoverReversePass(S, EOperativeRole::MedicSapper, TEXT("female"));
+	}
+
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
@@ -1090,6 +1278,10 @@ namespace PhoneShots
 		else if (Mode == TEXT("snipercover"))
 		{
 			AddSniperCoverSteps(Runner->Steps);
+		}
+		else if (Mode == TEXT("coverreverse"))
+		{
+			AddCoverReverseSteps(Runner->Steps);
 		}
 		else if (Mode == TEXT("sniper"))
 		{
