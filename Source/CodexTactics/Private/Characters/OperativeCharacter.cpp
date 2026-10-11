@@ -3334,6 +3334,8 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		// With an enter clip and a big turn the clip comes in at once (CoverEnterTurnedBlendSeconds), one anim update later:
 		// until it plays, the old pose keeps its old yaw on the mesh (no frame of the run pose turned round).
 		bCoverEntryAwaitClip = bEnterClip && !bQuietCoverEntry && CoverEntryTurnDeg > 90.f;
+		bCoverEntryClipSeen = false;
+		CoverEntryAwaitSeconds = 0.f;
 	}
 	ClearIdleFacing();
 	if (!bSameWall)
@@ -3540,8 +3542,8 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 	}
 	UpdateCornerAim(DeltaTime);
 	// Corner hold (user decision 2026-10-07): at the exposed edge he steps out into the fire stance at once - also right
-	// after a reload - and holds it.
-	if (!bCornerAimActive && !bIsReloading && IsCornerHoldSpot() && !(bCornerAutoDuck && GetWorld() && GetWorld()->GetTimeSeconds() < CornerAimDuckUntil))
+	// after a reload - and holds it; only in a fight / with a known threat (2026-10-11: exploring he hugs the wall).
+	if (!bCornerAimActive && !bIsReloading && WantsCornerHold() && !(bCornerAutoDuck && GetWorld() && GetWorld()->GetTimeSeconds() < CornerAimDuckUntil))
 	{
 		BeginCornerAim();
 	}
@@ -3845,7 +3847,12 @@ float AOperativeCharacter::UpdateCoverWallClearance(float DeltaTime)
 		{
 			if (Pose.IsValidIndex(Bone))
 			{
-				MinDepth = FMath::Min(MinDepth, static_cast<float>(FVector::DotProduct(ToWorld.TransformPosition(Pose[Bone].GetLocation()) - CoverSlot.WallPoint, Normal)));
+				// Only where the wall is: past an exposed edge (the corner fire stance) nothing lies behind the face plane.
+				const FVector BoneWorld = ToWorld.TransformPosition(Pose[Bone].GetLocation());
+				if (CoverFacingRules::IsWithinWallSpan(CoverSlot, BoneWorld, CoverWallClearanceCm))
+				{
+					MinDepth = FMath::Min(MinDepth, static_cast<float>(FVector::DotProduct(BoneWorld - CoverSlot.WallPoint, Normal)));
+				}
 			}
 		}
 		// The measured depth already contains the push applied so far: the push that is still missing (or in excess).
@@ -3907,14 +3914,26 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 		const UOperativeAnimInstance* AwaitAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
 		// The held yaw eases out WITH the clip's weight: it used to hold fully until 0.5 and drop to 0 in one frame, which
 		// swung the pose (pelvis ~1 m off the pivot) round the capsule - a 79 cm pop and arms through the wall.
+		// User bug 2026-10-11 (bb3345c): the weight is -1 once the clip is no longer playing - cut short by the auto-snap shimmy
+		// to a near corner, or done - and -1 counted as 0, so the full ~180 deg turn stayed on the mesh for good: he stood
+		// turned to the wall / round, shimmied "backwards" (the forward clip on a reversed body) and never fired from there.
 		const float EnterWeight = AwaitAnim ? AwaitAnim->GetCoverEnterBlendWeight() : -1.f;
-		if (bInCover && AwaitAnim && EnterWeight < 1.f)
+		CoverEntryAwaitSeconds += DeltaTime;
+		bCoverEntryClipSeen |= EnterWeight >= 0.f;
+		const float Held = bInCover && AwaitAnim ? CoverFacingRules::EntryHeldYawFraction(EnterWeight, bCoverEntryClipSeen, CoverEntryAwaitSeconds) : 0.f;
+		if (Held > 0.f)
 		{
-			WantedYaw = CoverEntryYawOffset * (1.f - FMath::Clamp(EnterWeight, 0.f, 1.f));
+			WantedYaw = CoverEntryYawOffset * Held;
 		}
 		else
 		{
 			bCoverEntryAwaitClip = false;
+			if (Held < 0.f && !FMath::IsNearlyZero(CoverEntryAppliedYaw, 0.5f))
+			{
+				// Clip gone before it brought the body round: the rest of the turn eases out over CoverEntryYawBlendSeconds.
+				CoverEntryYawOffset = CoverEntryAppliedYaw;
+				CoverEntryYawTime = 0.f;
+			}
 		}
 	}
 	if (CoverEntryYawTime >= 0.f)
@@ -4111,6 +4130,13 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no longer at the exposed edge"));
 		return;
 	}
+	// The hold outside a fight lasts while a threat is known (or he fired lately): then back to hugging the wall.
+	if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !WantsCornerHold() && GetWorld()
+		&& GetWorld()->GetTimeSeconds() - CoverLastShotTime > CoverEngageHoldSeconds)
+	{
+		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no fight, no threat known"));
+		return;
+	}
 	// Leaned out (sight: exposed) for as long as the aim lasts.
 	bIsCornerLeaning = true;
 	LeanTimer = FMath::Max(LeanTimer, 0.2f);
@@ -4219,6 +4245,23 @@ bool AOperativeCharacter::IsCornerHoldSpot() const
 	// in the same instant; with a later snap that is step out -> tuck back -> step out.
 	return bCornerHoldAtEdge && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight == ECoverHeight::HighCover
 		&& bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
+}
+
+bool AOperativeCharacter::WantsCornerHold() const
+{
+	if (!IsCornerHoldSpot())
+	{
+		return false;
+	}
+	if (!bCornerHoldOnlyWhenEngaged)
+	{
+		return true;
+	}
+	const UWorld* World = GetWorld();
+	const UGameFlowSubsystem* Flow = World ? World->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	const UTurnBasedCombatSubsystem* TurnBased = World ? World->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	const bool bInFight = !Flow || Flow->GetPhase() == ECodexGamePhase::WaveCombat || (TurnBased && TurnBased->IsActive());
+	return CoverFacingRules::WantsCornerHold(true, bInFight, IsCoverThreatActive());
 }
 
 FVector AOperativeCharacter::GetStanceAimOrigin() const

@@ -227,6 +227,30 @@ namespace CoverFacingRules
 		return Degrees <= ReachDeg;
 	}
 
+	bool WantsCornerHold(bool bAtHoldSpot, bool bInFight, bool bThreatFresh)
+	{
+		return bAtHoldSpot && (bInFight || bThreatFresh);
+	}
+
+	float EntryHeldYawFraction(float EnterWeight, bool bClipSeen, float SecondsSinceEntry, float AwaitSeconds)
+	{
+		if (EnterWeight >= 0.f)
+		{
+			return 1.f - FMath::Clamp(EnterWeight, 0.f, 1.f);
+		}
+		return !bClipSeen && SecondsSinceEntry < AwaitSeconds ? 1.f : -1.f;
+	}
+
+	bool IsWithinWallSpan(const FCoverSlot& Slot, const FVector& Point, float MarginCm)
+	{
+		const float Along = static_cast<float>(FVector::DotProduct(Point - Slot.WallPoint, Slot.RightTangent()));
+		if (Slot.bLeftEdgeExposed && -Along > Slot.LeftEdgeDistanceCm + MarginCm)
+		{
+			return false;
+		}
+		return !(Slot.bRightEdgeExposed && Along > Slot.RightEdgeDistanceCm + MarginCm);
+	}
+
 	int32 ClipIndex(ECoverFacing Facing)
 	{
 		// Pack _L = his own right as he stands back to the wall (the pack names its sides facing the wall).
