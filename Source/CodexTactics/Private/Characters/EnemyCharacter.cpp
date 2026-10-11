@@ -531,7 +531,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		const FVector Direction = EnemyAIRules::FleeDirection(GetActorLocation(), Fire, Victim ? &VictimLocation : nullptr);
 		if (AIC)
 		{
-			AIC->MoveToLocation(GetActorLocation() + Direction * 300.f, 50.f, false, true);
+			RequestAIMoveToLocation(AIC, GetActorLocation() + Direction * 300.f, 50.f);
 		}
 		if (!bFleeingFire)
 		{
@@ -563,7 +563,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		}
 		if (AIC)
 		{
-			AIC->MoveToLocation(Order.MovePoint, 80.f, false, true);
+			RequestAIMoveToLocation(AIC, Order.MovePoint, 80.f);
 		}
 		CurrentTarget = nullptr;
 		return;
@@ -589,7 +589,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		// Sprint 11: an alerted patroller that knows of no operative investigates where the alarm came from.
 		if (bHasPatrolAlertLocation && AIC && FVector::Dist2D(GetActorLocation(), PatrolAlertLocation) > 150.f)
 		{
-			AIC->MoveToLocation(PatrolAlertLocation, 100.f, false, true);
+			RequestAIMoveToLocation(AIC, PatrolAlertLocation, 100.f);
 			return;
 		}
 		bHasPatrolAlertLocation = false;
@@ -680,7 +680,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		{
 			if (FVector::Dist2D(Feet, Waypoint) > 60.f)
 			{
-				AIC->MoveToLocation(Waypoint, 30.f, false, true);
+				RequestAIMoveToLocation(AIC, Waypoint, 30.f);
 			}
 			else
 			{
@@ -691,7 +691,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		else if (bHasOrder && Order.Role == EEnemyTacticRole::Flank && FlankDoneTarget.Get() != Target
 			&& FVector::Dist2D(Feet, TargetPosition) > 500.f && FVector::Dist2D(Feet, Order.MovePoint) > 150.f)
 		{
-			AIC->MoveToLocation(Order.MovePoint, 60.f, false, true); // round his side, then in
+			RequestAIMoveToLocation(AIC, Order.MovePoint, 60.f); // round his side, then in
 		}
 		else
 		{
@@ -701,13 +701,45 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 			const UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>();
 			if (Sight && Target->IsA<AOperativeCharacter>() && Sight->GetBelief(this, Target, Belief, &bPerceived) && !bPerceived)
 			{
-				AIC->MoveToLocation(Belief, 50.f, false, true);
+				RequestAIMoveToLocation(AIC, Belief, 50.f);
 			}
 			else
 			{
-				AIC->MoveToActor(Target, AttackRange * 0.5f);
+				RequestAIMoveToActor(AIC, Target, AttackRange * 0.5f);
 			}
 		}
+	}
+}
+
+void AEnemyCharacter::RequestAIMoveToLocation(AAIController* AIC, const FVector& Goal, float AcceptanceRadius)
+{
+	if (AEnemyAIController* EnemyAIC = Cast<AEnemyAIController>(AIC))
+	{
+		EnemyAIC->RequestMoveToLocation(Goal, AcceptanceRadius);
+	}
+	else if (AIC)
+	{
+		AIC->MoveToLocation(Goal, AcceptanceRadius, false, true);
+	}
+}
+
+void AEnemyCharacter::RequestAIMoveToActor(AAIController* AIC, AActor* Goal, float AcceptanceRadius)
+{
+	if (AEnemyAIController* EnemyAIC = Cast<AEnemyAIController>(AIC))
+	{
+		EnemyAIC->RequestMoveToActor(Goal, AcceptanceRadius);
+	}
+	else if (AIC)
+	{
+		AIC->MoveToActor(Goal, AcceptanceRadius);
+	}
+}
+
+void AEnemyCharacter::ResetAIMoveThrottle()
+{
+	if (AEnemyAIController* EnemyAIC = Cast<AEnemyAIController>(GetController()))
+	{
+		EnemyAIC->ResetRepathState();
 	}
 }
 
@@ -1089,11 +1121,11 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 			bool bPerceived = true;
 			if (Sight && Sight->GetBelief(this, Target, Belief, &bPerceived) && !bPerceived)
 			{
-				AIC->MoveToLocation(Belief, 50.f, false, true); // to where it last knew him
+				RequestAIMoveToLocation(AIC, Belief, 50.f); // to where it last knew him
 			}
 			else
 			{
-				AIC->MoveToActor(Target, AIConfig.SpitterPreferredRange * 0.5f);
+				RequestAIMoveToActor(AIC, Target, AIConfig.SpitterPreferredRange * 0.5f);
 			}
 		}
 		break;
@@ -1101,7 +1133,7 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 		if (AIC)
 		{
 			const FVector Back = (GetActorLocation() - Target->GetActorLocation()).GetSafeNormal2D();
-			AIC->MoveToLocation(GetActorLocation() + Back * 300.f, 50.f, false, true);
+			RequestAIMoveToLocation(AIC, GetActorLocation() + Back * 300.f, 50.f);
 		}
 		break;
 	default:
@@ -1305,6 +1337,7 @@ void AEnemyCharacter::SetTurnBasedHeld(bool bHeld)
 		return;
 	}
 	bTurnBasedHeld = bHeld;
+	ResetAIMoveThrottle(); // a frozen / released enemy asks for its move afresh
 	if (bHeld)
 	{
 		if (AAIController* AIC = Cast<AAIController>(GetController()))
@@ -1330,6 +1363,7 @@ bool AEnemyCharacter::HoldForWorldAIPause()
 	{
 		// Stands still in its idle pose; the walk is re-issued when the dialogue / cutscene is over.
 		bHeldByAIPause = true;
+		ResetAIMoveThrottle();
 		if (AAIController* AIC = Cast<AAIController>(GetController()))
 		{
 			AIC->StopMovement();
@@ -1812,7 +1846,7 @@ void AEnemyCharacter::IssuePatrolMove(const FVector& Goal, float Speed)
 	bPatrolMoveIssued = true;
 	if (AAIController* AIC = Cast<AAIController>(GetController()))
 	{
-		AIC->MoveToLocation(Goal, 50.f, false, true);
+		AIC->MoveToLocation(Goal, 50.f, false, true); // own gating (first issue, 1 s stuck, escort goal moved): never throttled
 	}
 }
 

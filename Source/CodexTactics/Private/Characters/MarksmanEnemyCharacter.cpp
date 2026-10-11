@@ -231,6 +231,7 @@ void AMarksmanEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector
 void AMarksmanEnemyCharacter::IssuePatrolMove(const FVector& Goal, float Speed)
 {
 	bPatrolMoveIssued = true;
+	ResetAIMoveThrottle(); // the patrol / escort gates its own re-issues (first walk, 1 s stuck): never throttled
 	ExecuteMoveTo(Goal, false);
 	GetCharacterMovement()->MaxWalkSpeed = Speed;
 }
@@ -541,7 +542,7 @@ void AMarksmanEnemyCharacter::ExecuteMoveTo(const FVector& Goal, bool bSprint)
 	MoveGoal = Goal;
 	if (AAIController* AIC = Cast<AAIController>(GetController()))
 	{
-		AIC->MoveToLocation(Goal, 60.f, false, true);
+		RequestAIMoveToLocation(AIC, Goal, 60.f); // throttled: the approach / back-off asks again while standing still
 	}
 }
 
