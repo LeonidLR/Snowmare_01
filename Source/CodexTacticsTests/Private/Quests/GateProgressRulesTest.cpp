@@ -162,7 +162,11 @@ bool FGateProgressTextsTest::RunTest(const FString&)
 	TestFalse(TEXT("hidden while locked"), GateProgressRules::ShouldShowStatus(EGateProgressStatus::Locked));
 	TestFalse(TEXT("hidden once open"), GateProgressRules::ShouldShowStatus(EGateProgressStatus::Open));
 	TestTrue(TEXT("shown without power"), GateProgressRules::ShouldShowStatus(EGateProgressStatus::NoPower));
-	TestEqual(TEXT("crack 30 % of 25 cm"), GateProgressRules::GetCrackOffset(0.3f, 25.f), 7.5f, 1e-4f);
+	TestTrue(TEXT("beacon spins while unlocked and powered"), GateProgressRules::ShouldBeaconSpin(true, false, false, true));
+	TestFalse(TEXT("beacon stops without power"), GateProgressRules::ShouldBeaconSpin(true, false, false, false));
+	TestFalse(TEXT("beacon off while the servos are locked"), GateProgressRules::ShouldBeaconSpin(false, false, false, true));
+	TestTrue(TEXT("beacon spins while the leaves slide open"), GateProgressRules::ShouldBeaconSpin(true, false, true, false));
+	TestFalse(TEXT("beacon off once open"), GateProgressRules::ShouldBeaconSpin(true, true, false, true));
 
 	FText Speaker;
 	FText Text;

@@ -6,6 +6,8 @@
 #include "GateActor.generated.h"
 
 class UBoxComponent;
+class UMaterialInterface;
+class USpotLightComponent;
 class UStaticMeshComponent;
 struct FOverheadLabel;
 
@@ -14,9 +16,11 @@ struct FOverheadLabel;
  * +OpenDistance) at OpenSpeed; once open, their collision stops blocking the passage.
  * Opening (level JSON "gate_open_mode", GateProgressRules):
  *  - "generator_waves" (default, user request 2026-10-11): powering the terminal only unlocks the servos. During the wave
- *    fight the door creeps open (Progress, a visible crack of up to MaxCrackDistance per leaf; the collision and the
- *    navmesh block stay) only while the generator works; a generator breakdown pauses it; it opens fully only once the
- *    final wave is cleared with the generator up. HQ radio lines and a HUD / world line report it.
+ *    fight the internal Progress advances only while the generator works (the door stays VISUALLY CLOSED, leaves at rest,
+ *    collision and navmesh block stay); a generator breakdown pauses it; the leaves move only when it opens fully, once
+ *    the final wave is cleared with the generator up. A rotating amber warning beacon on the door spins (light on) while
+ *    the process runs and the generator works, and stops when the generator is down. HQ radio lines and a HUD / world
+ *    line report the progress.
  *  - "instant": the terminal opens it at once (Godot).
  * Console: Codex.Gate.OpenMode, Codex.Gate.ProgressPerSecond.
  * Godot reference: Scenes/movements/gate.gd (open_distance 3.5 m, open_speed 2 m/s); design/levels/stage-01-bunker-gate.md.
@@ -87,6 +91,20 @@ public:
 	 */
 	void RestoreProgress(bool bUnlocked, float InProgress, bool bInFinalWaveCleared);
 
+	/** The warning beacon spins (light on) now. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Gate")
+	bool IsBeaconSpinning() const { return bBeaconSpinning; }
+
+	/** Accumulated beacon yaw, degrees (grows only while it spins). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Gate")
+	float GetBeaconYaw() const { return BeaconYaw; }
+
+	/** The beacon light is on. */
+	bool IsBeaconLightOn() const;
+
+	/** Both leaves sit in their closed place (boxes and meshes at rest). */
+	bool AreLeavesClosed() const;
+
 	/** Slide distance of each door, cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate", meta = (ClampMin = "0"))
 	float OpenDistance = 350.f;
@@ -95,12 +113,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate", meta = (ClampMin = "0"))
 	float OpenSpeed = 200.f;
 
-	/**
-	 * Visible creep of each leaf at 100 % progress before the final opening, cm (only the leaf meshes move: the collision
-	 * stays closed, so the door is impassable for the whole fight). 3 waves: ~7.5 / 15 / 22.5 cm per leaf.
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate", meta = (ClampMin = "0"))
-	float MaxCrackDistance = 25.f;
+	/** Beacon position relative to the gate actor (above the door by default); applied on construction. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate|Beacon")
+	FVector BeaconOffset = FVector(0.f, 0.f, 430.f);
+
+	/** Beacon spin speed, degrees per second. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate|Beacon", meta = (ClampMin = "0"))
+	float BeaconSpinSpeed = 240.f;
+
+	/** Beacon lens material (Gemini slot, TANDEM request 19); null = the engine default material. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate|Beacon")
+	TObjectPtr<UMaterialInterface> BeaconMaterial;
+
+	/** Beacon light colour, intensity (cd) and reach (cm). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate|Beacon")
+	FLinearColor BeaconColor = FLinearColor(1.f, 0.55f, 0.08f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate|Beacon", meta = (ClampMin = "0"))
+	float BeaconIntensity = 20000.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate|Beacon", meta = (ClampMin = "0"))
+	float BeaconRadius = 1800.f;
 
 	/** Size of one door leaf (X thickness, Y width, Z height), cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Gate")
@@ -121,14 +154,28 @@ private:
 	void TickProgress(float DeltaSeconds);
 	/** Records the status; posts the HQ line for the change unless the change is silent (load). */
 	void SetStatus(EGateProgressStatus NewStatus);
-	/** Moves the leaf meshes by the creep of the current progress (the collision boxes stay closed). */
-	void ApplyCrack();
+	/** Spins the beacon / switches its light for this frame. */
+	void UpdateBeacon(float DeltaSeconds, bool bGeneratorWorking);
+	void SetBeaconOn(bool bOn);
 
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Gate")
 	TObjectPtr<UStaticMeshComponent> LeftDoorMesh;
 
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Gate")
 	TObjectPtr<UStaticMeshComponent> RightDoorMesh;
+
+	/** Rotates around Z; carries the lens mesh and the spot light. */
+	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Gate|Beacon")
+	TObjectPtr<USceneComponent> BeaconPivot;
+
+	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Gate|Beacon")
+	TObjectPtr<UStaticMeshComponent> BeaconMesh;
+
+	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Gate|Beacon")
+	TObjectPtr<USpotLightComponent> BeaconLight;
+
+	bool bBeaconSpinning = false;
+	float BeaconYaw = 0.f;
 
 	float LeftTargetY = 0.f;
 	float RightTargetY = 0.f;
@@ -143,7 +190,7 @@ private:
 	/** The next status change is recorded without a radio line (save-game load). */
 	bool bSilentStatus = false;
 
-	/** Leaf mesh rest positions relative to their boxes (the creep is added to them). */
+	/** Leaf mesh rest positions relative to their boxes. */
 	FVector LeftMeshRest = FVector::ZeroVector;
 	FVector RightMeshRest = FVector::ZeroVector;
 };

@@ -125,8 +125,11 @@ namespace GateProgressRules
 	/** Advances the door by DeltaSeconds of game time. */
 	CODEXTACTICS_API FGateProgressStep Step(const FGateProgressConfig& Config, float Progress, const FGateProgressInputs& Inputs, float DeltaSeconds);
 
-	/** Visible creep of each leaf before the final opening, cm (Progress * MaxCrackCm; the collision stays closed). */
-	CODEXTACTICS_API float GetCrackOffset(float Progress, float MaxCrackCm);
+	/**
+	 * The warning beacon on the door spins (light on) while the opening process runs and the generator works: servos
+	 * unlocked and the door not fully open yet (or sliding open), generator up. Generator down = off (user decision 2026-10-11).
+	 */
+	CODEXTACTICS_API bool ShouldBeaconSpin(bool bProgressUnlocked, bool bOpen, bool bSlidingOpen, bool bGeneratorWorking);
 
 	/** The HUD / world label shows the gate line in this status. */
 	CODEXTACTICS_API bool ShouldShowStatus(EGateProgressStatus Status);

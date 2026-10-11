@@ -2,9 +2,11 @@
 #include "CodexTactics.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Components/BoxComponent.h"
+#include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/WaveConfigTypes.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -56,6 +58,29 @@ AGateActor::AGateActor()
 	};
 	LeftDoor = MakeDoor(TEXT("LeftDoor"), TEXT("LeftDoorMesh"), LeftDoorMesh);
 	RightDoor = MakeDoor(TEXT("RightDoor"), TEXT("RightDoorMesh"), RightDoorMesh);
+
+	// Warning beacon: placeholder engine shapes; BeaconMaterial / the mesh are the slots for the final look (TANDEM request 19).
+	BeaconPivot = CreateDefaultSubobject<USceneComponent>(TEXT("BeaconPivot"));
+	BeaconPivot->SetupAttachment(RootComponent);
+	BeaconPivot->SetMobility(EComponentMobility::Movable);
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> LensMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	BeaconMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BeaconMesh"));
+	BeaconMesh->SetupAttachment(BeaconPivot);
+	BeaconMesh->SetMobility(EComponentMobility::Movable);
+	BeaconMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BeaconMesh->SetCanEverAffectNavigation(false);
+	BeaconMesh->SetRelativeScale3D(FVector(0.3f));
+	if (LensMesh.Succeeded())
+	{
+		BeaconMesh->SetStaticMesh(LensMesh.Object);
+	}
+	BeaconLight = CreateDefaultSubobject<USpotLightComponent>(TEXT("BeaconLight"));
+	BeaconLight->SetupAttachment(BeaconPivot);
+	BeaconLight->SetMobility(EComponentMobility::Movable);
+	BeaconLight->SetOuterConeAngle(22.f);
+	BeaconLight->SetInnerConeAngle(8.f);
+	BeaconLight->SetCastShadows(false);
+	BeaconLight->SetVisibility(false);
 }
 
 void AGateActor::OnConstruction(const FTransform& Transform)
@@ -71,6 +96,15 @@ void AGateActor::OnConstruction(const FTransform& Transform)
 	RightDoor->SetRelativeLocation(FVector(0.f, Extent.Y, Extent.Z));
 	LeftDoorMesh->SetRelativeScale3D(DoorSize / 100.f);
 	RightDoorMesh->SetRelativeScale3D(DoorSize / 100.f);
+
+	BeaconPivot->SetRelativeLocation(BeaconOffset);
+	if (BeaconMaterial)
+	{
+		BeaconMesh->SetMaterial(0, BeaconMaterial);
+	}
+	BeaconLight->SetLightColor(BeaconColor);
+	BeaconLight->SetIntensity(BeaconIntensity);
+	BeaconLight->SetAttenuationRadius(BeaconRadius);
 }
 
 void AGateActor::BeginPlay()
@@ -142,17 +176,6 @@ void AGateActor::OpenGate()
 	{
 		return;
 	}
-	// The creep was only visual: the leaves take over the meshes' current place and slide on from there.
-	const float Crack = GateProgressRules::GetCrackOffset(Progress, MaxCrackDistance);
-	FVector Left = LeftDoor->GetRelativeLocation();
-	FVector Right = RightDoor->GetRelativeLocation();
-	Left.Y -= Crack;
-	Right.Y += Crack;
-	LeftDoor->SetRelativeLocation(Left);
-	RightDoor->SetRelativeLocation(Right);
-	LeftDoorMesh->SetRelativeLocation(LeftMeshRest);
-	RightDoorMesh->SetRelativeLocation(RightMeshRest);
-
 	const float HalfWidth = DoorSize.Y * 0.5f;
 	LeftTargetY = -HalfWidth - OpenDistance;
 	RightTargetY = HalfWidth + OpenDistance;
@@ -183,8 +206,6 @@ void AGateActor::RestoreOpen(bool bInOpen)
 	Right.Y = HalfWidth + Offset;
 	LeftDoor->SetRelativeLocation(Left);
 	RightDoor->SetRelativeLocation(Right);
-	LeftDoorMesh->SetRelativeLocation(LeftMeshRest);
-	RightDoorMesh->SetRelativeLocation(RightMeshRest);
 	LeftTargetY = Left.Y;
 	RightTargetY = Right.Y;
 	bOpening = false;
@@ -199,10 +220,7 @@ void AGateActor::RestoreOpen(bool bInOpen)
 		Progress = 1.f;
 		Status = bProgressUnlocked ? EGateProgressStatus::Open : Status;
 	}
-	else
-	{
-		ApplyCrack();
-	}
+	SetBeaconOn(false);
 	SetActorTickEnabled(!bInOpen && bProgressUnlocked);
 }
 
@@ -220,19 +238,40 @@ void AGateActor::RestoreProgress(bool bUnlocked, float InProgress, bool bInFinal
 	Progress = FMath::Clamp(InProgress, 0.f, 1.f);
 	Status = bProgressUnlocked ? EGateProgressStatus::Idle : EGateProgressStatus::Locked;
 	bSilentStatus = true; // the first evaluation after the load posts no HQ line
-	ApplyCrack();
 	SetActorTickEnabled(bProgressUnlocked || bOpening);
 }
 
-void AGateActor::ApplyCrack()
+void AGateActor::SetBeaconOn(bool bOn)
 {
-	if (bOpen || bOpening)
+	bBeaconSpinning = bOn;
+	BeaconLight->SetVisibility(bOn);
+}
+
+void AGateActor::UpdateBeacon(float DeltaSeconds, bool bGeneratorWorking)
+{
+	const bool bSpin = GateProgressRules::ShouldBeaconSpin(bProgressUnlocked, bOpen, bOpening, bGeneratorWorking);
+	if (bSpin != bBeaconSpinning)
 	{
-		return;
+		SetBeaconOn(bSpin);
 	}
-	const float Crack = GateProgressRules::GetCrackOffset(Progress, MaxCrackDistance);
-	LeftDoorMesh->SetRelativeLocation(LeftMeshRest - FVector(0.f, Crack, 0.f));
-	RightDoorMesh->SetRelativeLocation(RightMeshRest + FVector(0.f, Crack, 0.f));
+	if (bSpin)
+	{
+		BeaconYaw += BeaconSpinSpeed * DeltaSeconds;
+		BeaconPivot->SetRelativeRotation(FRotator(0.f, FMath::Fmod(BeaconYaw, 360.f), 0.f));
+	}
+}
+
+bool AGateActor::IsBeaconLightOn() const
+{
+	return BeaconLight->IsVisible();
+}
+
+bool AGateActor::AreLeavesClosed() const
+{
+	const float HalfWidth = DoorSize.Y * 0.5f;
+	return FMath::IsNearlyEqual(LeftDoor->GetRelativeLocation().Y, -HalfWidth, 0.1f)
+		&& FMath::IsNearlyEqual(RightDoor->GetRelativeLocation().Y, HalfWidth, 0.1f)
+		&& LeftDoorMesh->GetRelativeLocation().Equals(LeftMeshRest, 0.1f) && RightDoorMesh->GetRelativeLocation().Equals(RightMeshRest, 0.1f);
 }
 
 void AGateActor::SetStatus(EGateProgressStatus NewStatus)
@@ -296,17 +335,18 @@ void AGateActor::TickProgress(float DeltaSeconds)
 		OpenGate();
 		return;
 	}
-	if (Step.Progress != Progress)
-	{
-		Progress = Step.Progress;
-		ApplyCrack();
-	}
+	Progress = Step.Progress;
+	UpdateBeacon(DeltaSeconds, Inputs.bGeneratorWorking);
 	SetStatus(Step.Status);
 }
 
 void AGateActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (bOpening)
+	{
+		UpdateBeacon(DeltaSeconds, true);
+	}
 	if (!bOpening)
 	{
 		if (bProgressUnlocked && !bOpen)
@@ -330,6 +370,7 @@ void AGateActor::Tick(float DeltaSeconds)
 	{
 		bOpening = false;
 		bOpen = true;
+		SetBeaconOn(false);
 		SetActorTickEnabled(false);
 		// Architect spec: once open, the leaves stop blocking the passage (also refreshes the NavMesh).
 		for (UBoxComponent* Door : { LeftDoor.Get(), RightDoor.Get() })

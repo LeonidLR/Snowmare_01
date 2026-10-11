@@ -4,11 +4,13 @@
 // The quest chain is completed directly (canister, APC, generator, terminal): the terminal only unlocks the paced servos
 // (HQ «grid is overloaded» line, no «swing open»). The wave fight starts suddenly (SmokeUtils::StartWaveFight); each wave
 // is parked out of the way so nothing ends it early. The creep is sped up (Codex.Gate.ProgressPerSecond 0.05):
-//  1. wave 1: the door creeps (progress > 0, below the wave's 30 % cap, collision closed, «OPENING SLOWLY»);
-//  2. the generator breaks down: progress pauses (not reversed), «GENERATOR OFFLINE», HQ «generator is down»;
-//  3. the engineer repairs it (ExecuteAction, 2.5 s): HQ «Power is back», the creep resumes;
+//  1. wave 1: the internal progress advances (> 0, below the wave's 30 % cap, collision closed, «OPENING SLOWLY») while
+//     the leaves stay visually closed (no creep) and the warning beacon spins with its light on;
+//  2. the generator breaks down: progress pauses (not reversed), «GENERATOR OFFLINE», HQ «generator is down»; the beacon
+//     stops (light off);
+//  3. the engineer repairs it (ExecuteAction, 2.5 s): HQ «Power is back», the progress and the beacon resume;
 //  4. each wave holds at its cap (30 / 60 / 90 %), never full, the leaves' collision and the navmesh block stay
-//     (no complete path beyond the gate); the wave is killed, the victory panel's button starts the next one;
+//     (no complete path beyond the gate), the leaves never move before the final wave; the wave is killed, the victory panel's button starts the next one;
 //  5. wave 3: the generator breaks again before the kill — the final wave cleared without power does NOT open the door
 //     (HQ «last wave»); repaired: «the blast door is opening», the leaves slide open, collision off, a complete nav path
 //     beyond the gate and the leader walks through.
@@ -72,6 +74,8 @@ namespace GateGeneratorSmoke
 		bool bHoldChecked = false;
 		bool bWalkOrdered = false;
 		bool bMovedDuringRepair = false;
+		float BeaconYawMark = 0.f;
+		bool bBeaconResumeChecked = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -243,8 +247,12 @@ namespace GateGeneratorSmoke
 			Check(State, Progress > 0.02f && Progress < 0.3f && Gate->GetProgressStatus() == EGateProgressStatus::Advancing,
 				FString::Printf(TEXT("wave 1: the door creeps (%.3f, \"%s\")"), Progress, *Gate->GetStatusText()));
 			Check(State, LeavesBlock(Gate) && !PathBeyondGate(World, Leader), TEXT("creeping: collision closed, no nav path beyond the gate"));
+			Check(State, Gate->AreLeavesClosed(), TEXT("the leaves stay visually closed while the progress advances (no creep)"));
+			Check(State, Gate->IsBeaconSpinning() && Gate->IsBeaconLightOn() && Gate->GetBeaconYaw() > 90.f,
+				FString::Printf(TEXT("powered: the beacon spins, light on (yaw %.0f)"), Gate->GetBeaconYaw()));
 			State.FeedMark = FeedCount(World);
 			Generator->TakeGeneratorDamage(100000.f);
+			State.BeaconYawMark = Gate->GetBeaconYaw();
 			State.ProgressAtBreakdown = Gate->GetOpenProgress();
 			Check(State, Generator->bGeneratorBroken, TEXT("the generator broke down"));
 			Next(EStage::Broken);
@@ -256,6 +264,9 @@ namespace GateGeneratorSmoke
 			}
 			Check(State, FMath::IsNearlyEqual(Progress, State.ProgressAtBreakdown, 1e-4f),
 				FString::Printf(TEXT("generator down 2 s: progress paused (%.4f -> %.4f), not reversed"), State.ProgressAtBreakdown, Progress));
+			Check(State, !Gate->IsBeaconSpinning() && !Gate->IsBeaconLightOn() && FMath::IsNearlyEqual(Gate->GetBeaconYaw(), State.BeaconYawMark, 1.f),
+				FString::Printf(TEXT("generator down: the beacon stopped, light off (yaw %.0f -> %.0f)"), State.BeaconYawMark, Gate->GetBeaconYaw()));
+			Check(State, Gate->AreLeavesClosed(), TEXT("generator down: the leaves are closed"));
 			Check(State, Gate->GetProgressStatus() == EGateProgressStatus::NoPower && Gate->GetStatusText().Contains(TEXT("GENERATOR OFFLINE")),
 				FString::Printf(TEXT("HUD line \"%s\""), *Gate->GetStatusText()));
 			Check(State, FeedHas(World, State.FeedMark, TEXT("generator is down")), TEXT("HQ: «the generator is down and the blast door has stopped»"));
@@ -281,6 +292,7 @@ namespace GateGeneratorSmoke
 				return true; // one step for the gate to notice
 			}
 			Check(State, !State.bMovedDuringRepair, FString::Printf(TEXT("still paused during the repair (%.1fs)"), State.StageTime));
+			Check(State, Gate->IsBeaconSpinning() && Gate->IsBeaconLightOn(), TEXT("repaired: the beacon spins again"));
 			Check(State, FeedHas(World, State.FeedMark, TEXT("Power is back")), TEXT("engineer repaired it: HQ «Power is back»"));
 			Next(EStage::WaveHold);
 			return true;
@@ -310,8 +322,8 @@ namespace GateGeneratorSmoke
 			}
 			Check(State, FMath::IsNearlyEqual(Progress, Cap, 1e-3f) && Gate->GetProgressStatus() == EGateProgressStatus::HoldingForWave,
 				FString::Printf(TEXT("wave %d: held at its cap %.2f (%.4f, \"%s\")"), Wave, Cap, Progress, *Gate->GetStatusText()));
-			Check(State, !Gate->IsOpen() && !Gate->IsOpening() && LeavesBlock(Gate) && !PathBeyondGate(World, Leader),
-				FString::Printf(TEXT("wave %d: door impassable (collision closed, no nav path beyond)"), Wave));
+			Check(State, !Gate->IsOpen() && !Gate->IsOpening() && LeavesBlock(Gate) && Gate->AreLeavesClosed() && !PathBeyondGate(World, Leader),
+				FString::Printf(TEXT("wave %d: door impassable and visually closed (collision closed, leaves at rest, no nav path beyond)"), Wave));
 			if (Wave >= Total)
 			{
 				// The final wave cleared without power must not open it.
@@ -353,6 +365,7 @@ namespace GateGeneratorSmoke
 			{
 				return true;
 			}
+			Check(State, Gate->AreLeavesClosed() && !Gate->IsBeaconSpinning(), TEXT("last wave cleared without power: leaves closed, beacon stopped"));
 			Check(State, Gate->IsFinalWaveCleared() && !Gate->IsOpening() && !Gate->IsOpen() && LeavesBlock(Gate)
 				&& Gate->GetProgressStatus() == EGateProgressStatus::NoPower,
 				FString::Printf(TEXT("last wave cleared, generator down: the door waits (%.3f, \"%s\")"), Gate->GetOpenProgress(), *Gate->GetStatusText()));
@@ -372,6 +385,7 @@ namespace GateGeneratorSmoke
 				Check(State, (Gate->IsOpening() || Gate->IsOpen()) && Gate->GetOpenProgress() >= 1.f,
 					FString::Printf(TEXT("generator back after the last wave: the door opens (\"%s\")"), *Gate->GetStatusText()));
 				Check(State, FeedHas(World, State.FeedMark, TEXT("blast door is opening")), TEXT("HQ: «the blast door is opening! Get the squad inside»"));
+				Check(State, Gate->IsOpening() ? Gate->IsBeaconSpinning() : !Gate->IsBeaconSpinning(), TEXT("final opening: the beacon spins while the leaves slide"));
 				Victory->ContinueAfterWave(); // the victory panel's button: post-combat (the world runs again)
 				return true;
 			}
@@ -383,6 +397,7 @@ namespace GateGeneratorSmoke
 			{
 				return true; // the navmesh rebuilds around the opened leaves
 			}
+			Check(State, !Gate->AreLeavesClosed() && !Gate->IsBeaconSpinning(), TEXT("full open: the leaves moved, the beacon stopped"));
 			Check(State, !LeavesBlock(Gate) && Gate->GetProgressStatus() == EGateProgressStatus::Open,
 				FString::Printf(TEXT("door fully open after the last wave: collision off, nav path beyond (%.1fs)"), State.StageTime));
 			Next(EStage::Walk);

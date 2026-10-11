@@ -111,9 +111,13 @@ FGateProgressStep GateProgressRules::Step(const FGateProgressConfig& Config, flo
 	return Result;
 }
 
-float GateProgressRules::GetCrackOffset(float Progress, float MaxCrackCm)
+bool GateProgressRules::ShouldBeaconSpin(bool bProgressUnlocked, bool bOpen, bool bSlidingOpen, bool bGeneratorWorking)
 {
-	return FMath::Clamp(Progress, 0.f, 1.f) * FMath::Max(0.f, MaxCrackCm);
+	if (bOpen)
+	{
+		return false;
+	}
+	return bSlidingOpen || (bProgressUnlocked && bGeneratorWorking);
 }
 
 bool GateProgressRules::ShouldShowStatus(EGateProgressStatus Status)
