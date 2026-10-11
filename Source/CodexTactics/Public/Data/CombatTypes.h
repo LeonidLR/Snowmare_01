@@ -156,7 +156,7 @@ struct CODEXTACTICS_API FDamageSpec
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Damage")
 	bool bIsCritical = false;
 
-	/** A melee blow (knife / claws), not a shot: a knocked-down target takes the melee bonus instead of the prone cut. */
+	/** A melee blow (knife / claws), not a shot (info; since 2026-10-11 a knocked-down target takes any blow x1.33). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Damage")
 	bool bMelee = false;
 };

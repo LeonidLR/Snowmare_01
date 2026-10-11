@@ -9,17 +9,17 @@ namespace KnockdownTunables
 	static TAutoConsoleVariable<float> CVarExplosionRadius(TEXT("Codex.Knockdown.ExplosionRadius"), -1.f,
 		TEXT("Blast distance that knocks down, cm (-1 = default 250)."));
 	static TAutoConsoleVariable<float> CVarDownedSeconds(TEXT("Codex.Knockdown.DownedSeconds"), -1.f,
-		TEXT("Seconds on the ground while the recovery bar fills (-1 = default 1.5)."));
+		TEXT("Seconds on the ground while the recovery bar fills (-1 = default 0.6)."));
 	static TAutoConsoleVariable<float> CVarGetUpSeconds(TEXT("Codex.Knockdown.GetUpSeconds"), -1.f,
-		TEXT("Wanted get-up time, s (-1 = default 1.0)."));
+		TEXT("Wanted get-up time, s (-1 = default 0.8)."));
 	static TAutoConsoleVariable<float> CVarGetUpMaxRate(TEXT("Codex.Knockdown.GetUpMaxPlayRate"), -1.f,
-		TEXT("Fastest play rate of the get-up clip (-1 = default 1.7)."));
+		TEXT("Fastest play rate of the get-up clip (-1 = default 2.1)."));
 	static TAutoConsoleVariable<int32> CVarGetUpAP(TEXT("Codex.Knockdown.GetUpActionPoints"), -1,
 		TEXT("Turn-based AP cost of getting up (-1 = default 2)."));
-	static TAutoConsoleVariable<float> CVarRangedMult(TEXT("Codex.Knockdown.DownedRangedDamage"), -1.f,
-		TEXT("Ranged damage multiplier while downed (-1 = default 0.6)."));
-	static TAutoConsoleVariable<float> CVarMeleeMult(TEXT("Codex.Knockdown.DownedMeleeDamage"), -1.f,
-		TEXT("Melee damage multiplier while downed (-1 = default 1.5)."));
+	static TAutoConsoleVariable<float> CVarChance(TEXT("Codex.Knockdown.Chance"), -1.f,
+		TEXT("Probability 0..1 that a qualifying heavy hit / heavy melee blow knocks down; blasts and pounces always do (-1 = default 0.5)."));
+	static TAutoConsoleVariable<float> CVarDownedDamage(TEXT("Codex.Knockdown.DownedDamage"), -1.f,
+		TEXT("Damage multiplier for any blow on a unit lying after a knockdown (-1 = default 1.33)."));
 	static TAutoConsoleVariable<float> CVarReknock(TEXT("Codex.Knockdown.ReknockImmunitySeconds"), -1.f,
 		TEXT("No new knockdown this long after getting up, s (-1 = default 1.5)."));
 }
@@ -39,8 +39,8 @@ namespace KnockdownRules
 		Config.GetUpMaxPlayRate = Pick(KnockdownTunables::CVarGetUpMaxRate.GetValueOnGameThread(), Defaults.GetUpMaxPlayRate);
 		const int32 AP = KnockdownTunables::CVarGetUpAP.GetValueOnGameThread();
 		Config.GetUpActionPoints = AP >= 0 ? AP : Defaults.GetUpActionPoints;
-		Config.DownedRangedDamageMultiplier = Pick(KnockdownTunables::CVarRangedMult.GetValueOnGameThread(), Defaults.DownedRangedDamageMultiplier);
-		Config.DownedMeleeDamageMultiplier = Pick(KnockdownTunables::CVarMeleeMult.GetValueOnGameThread(), Defaults.DownedMeleeDamageMultiplier);
+		Config.KnockdownChance = FMath::Clamp(Pick(KnockdownTunables::CVarChance.GetValueOnGameThread(), Defaults.KnockdownChance), 0.f, 1.f);
+		Config.DownedDamageMultiplier = Pick(KnockdownTunables::CVarDownedDamage.GetValueOnGameThread(), Defaults.DownedDamageMultiplier);
 		Config.ReknockImmunitySeconds = Pick(KnockdownTunables::CVarReknock.GetValueOnGameThread(), Defaults.ReknockImmunitySeconds);
 		return Config;
 	}
@@ -72,36 +72,34 @@ namespace KnockdownRules
 		{
 			return false;
 		}
+		bool bQualifies = false;
 		switch (Hit.Cause)
 		{
 		case EKnockdownCause::Pounce:
 		case EKnockdownCause::HeavyMelee:
-			return !Target.bHeavyPoise;
+			bQualifies = !Target.bHeavyPoise;
+			break;
 		case EKnockdownCause::Explosion:
-			return Hit.ExplosionDistance < Config.ExplosionRadius;
+			bQualifies = Hit.ExplosionDistance < Config.ExplosionRadius;
+			break;
 		case EKnockdownCause::HeavyHit:
-			return Hit.Damage >= Config.DamageThreshold && (!Target.bHeavyPoise || Hit.bCritical);
+			bQualifies = Hit.Damage >= Config.DamageThreshold && (!Target.bHeavyPoise || Hit.bCritical);
+			break;
 		default:
-			return false;
+			break;
 		}
+		// User decision 2026-10-11: a qualifying heavy hit / blow floors him only with KnockdownChance (50 %).
+		return bQualifies && (!UsesKnockdownChance(Hit.Cause) || Hit.ChanceRoll < Config.KnockdownChance);
 	}
 
-	float DownedDamageMultiplier(const FKnockdownConfig& Config, bool bMelee)
+	bool UsesKnockdownChance(EKnockdownCause Cause)
 	{
-		return bMelee ? Config.DownedMeleeDamageMultiplier : Config.DownedRangedDamageMultiplier;
+		return Cause == EKnockdownCause::HeavyHit || Cause == EKnockdownCause::HeavyMelee;
 	}
 
-	float DownedBlowMultiplier(const FKnockdownConfig& Config, EKnockdownBlow Blow)
+	float DownedDamageMultiplier(const FKnockdownConfig& Config, bool bIsDown)
 	{
-		switch (Blow)
-		{
-		case EKnockdownBlow::Melee:
-			return Config.DownedMeleeDamageMultiplier;
-		case EKnockdownBlow::Ranged:
-			return Config.DownedRangedDamageMultiplier;
-		default:
-			return 1.f;
-		}
+		return bIsDown ? FMath::Max(0.f, Config.DownedDamageMultiplier) : 1.f;
 	}
 
 	float ClipPlayRate(float ClipSeconds, float TargetSeconds, float MaxRate)
@@ -201,7 +199,7 @@ namespace KnockdownRules
 		}
 		else
 		{
-			Decision.bSkipTurn = true;
+			Decision.bNotEnoughAP = true; // he stays down; the turn goes on (the player ends it)
 		}
 		return Decision;
 	}

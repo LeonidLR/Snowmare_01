@@ -17,7 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnKnockdownChangedSignature, EKnoc
  * Knockdown & Recovery state of one unit (Sprint 14, TANDEM request #12; UE-only, no Godot reference — Gemini spec
  * "Knockdown & Recovery System", user-approved 2026-10-08). Pure decisions in KnockdownRules.
  *
- * Falling (Knocked_* clip) -> Downed (last frame held, recovery bar 0..100 %, 1.5 s; turn-based: until his turn and
+ * Falling (Knocked_* clip) -> Downed (last frame held, recovery bar 0..100 %, 0.6 s; turn-based: until he orders "get up" on his turn for
  * 2 AP) -> GettingUp (Revive_* clip) -> up. Timers stop in the tactical pause and while the dialogue AI pause holds the
  * world. A death while down plays Death_*. The owner (operative / enemy) listens to OnPhaseChanged to interrupt its
  * actions, release its capsule and resume; move orders given meanwhile are buffered here and replayed when he is up.
@@ -93,14 +93,17 @@ public:
 
 	const FKnockdownState& GetState() const { return State; }
 
-	/** Incoming damage multiplier: 1 when up, else ranged / melee (KnockdownRules::DownedDamageMultiplier). */
-	float GetDamageMultiplier(bool bMelee) const;
+	/**
+	 * Incoming damage multiplier for any blow (ranged, melee, explosion): 1 when up, x DownedDamageMultiplier (1.33) while
+	 * he is down (KnockdownRules::DownedDamageMultiplier).
+	 */
+	float GetDamageMultiplier() const;
 
-	/** Same by blow kind (KnockdownRules::DownedBlowMultiplier): 1 when up or for explosions. */
-	float GetBlowMultiplier(EKnockdownBlow Blow) const;
-
-	/** Turn-based, on his turn while lying: pay GetUpActionPoints and get up, or skip. ActionPoints is reduced. */
-	FKnockdownTurnDecision HandleTurn(int32& ActionPoints);
+	/**
+	 * Turn-based "get up" order on his own turn (never automatic): lying with enough AP -> pays GetUpActionPoints from
+	 * ActionPoints and plays the get-up; fewer AP -> bNotEnoughAP, he stays down. Not lying: nothing.
+	 */
+	FKnockdownTurnDecision TryTurnGetUp(int32& ActionPoints);
 
 	/** Turn-based enemy turn: gets up without AP (its turn is spent on it). Returns the get-up duration, 0 when not lying. */
 	float GetUpForTurn();

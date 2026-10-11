@@ -14,27 +14,33 @@
  */
 struct CODEXTACTICS_API FKnockdownConfig
 {
-	/** A single hit doing at least this much damage knocks the target down (spec: >= 40 HP). */
+	/** A single hit doing at least this much damage can knock the target down (spec: >= 40 HP; then KnockdownChance). */
 	float DamageThreshold = 40.f;
+	/**
+	 * A qualifying heavy hit / heavy melee blow knocks down only with this probability (user decision 2026-10-11: 50 %
+	 * for everyone). Explosions within ExplosionRadius and pounces (hound run-up pounce, cutter leap) always knock down.
+	 */
+	float KnockdownChance = 0.5f;
 	/** An explosion closer than this knocks down (spec: < 2.5 m), cm. */
 	float ExplosionRadius = 250.f;
 	/** Fall phase when no clip is known, s (spec ~0.8; the clips are 0.87 / 0.93 s and play at their own length). */
 	float FallSeconds = 0.8f;
-	/** Lying on the ground while the recovery bar fills, s (spec 1.5). */
-	float DownedSeconds = 1.5f;
-	/** Wanted get-up time, s (spec ~1.0): the Revive clip is sped up towards it, limited by GetUpMaxPlayRate. */
-	float GetUpSeconds = 1.0f;
-	/** Fastest the get-up clip may play (1.667 s Revive_Back -> 1.0 s needs 1.67x; Revive_Front 2.5 s is capped). */
-	float GetUpMaxPlayRate = 1.7f;
-	/** Turn-based: getting up costs this many AP on his turn; with fewer the turn is skipped (spec 2). */
+	/** Lying on the ground while the recovery bar fills, s (user decision 2026-10-11: 0.6, was 1.5). */
+	float DownedSeconds = 0.6f;
+	/** Wanted get-up time, s (user decision 2026-10-11: 0.8, was 1.0): the Revive clip is sped up towards it, limited by GetUpMaxPlayRate. */
+	float GetUpSeconds = 0.8f;
+	/** Fastest the get-up clip may play (1.667 s Revive_Back -> 0.8 s needs 2.08x; Revive_Front 2.5 s is capped at 1.19 s). */
+	float GetUpMaxPlayRate = 2.1f;
+	/** Turn-based: getting up is an explicit action on his turn and costs this many AP; he may also stay down (spec 2). */
 	int32 GetUpActionPoints = 2;
-	/** Incoming ranged damage while he lies (prone profile, spec "reduced"). */
-	float DownedRangedDamageMultiplier = 0.6f;
-	/** Incoming melee damage while he lies (spec "bonus"). */
-	float DownedMeleeDamageMultiplier = 1.5f;
+	/**
+	 * Any incoming damage (ranged, melee, explosion) while he lies after a knockdown, real time and turn-based (user
+	 * decision 2026-10-11: x1.33; replaces the old ranged x0.6 / melee x1.5 split).
+	 */
+	float DownedDamageMultiplier = 1.33f;
 	/** After getting up he cannot be knocked down again for this long (no stun-lock by a pack), s. */
 	float ReknockImmunitySeconds = 1.5f;
-	/** Melee enemies go for a downed operative (melee bonus) within this distance, cm. */
+	/** Melee enemies go for a downed operative within this distance, cm. */
 	float DownedTargetPreferenceCm = 600.f;
 	/** ... when he is at most this much farther than the target they picked, cm. */
 	float DownedTargetExtraCm = 300.f;
@@ -42,17 +48,6 @@ struct CODEXTACTICS_API FKnockdownConfig
 	float HoundPounceRunUpSeconds = 1.f;
 	/** A hound knocks somebody down at most this often, s. */
 	float HoundPounceCooldownSeconds = 12.f;
-};
-
-/** How a blow reaches a lying unit (selects the downed damage multiplier). */
-enum class EKnockdownBlow : uint8
-{
-	/** Shots (prone profile, x DownedRangedDamageMultiplier). */
-	Ranged,
-	/** Bites / strikes (x DownedMeleeDamageMultiplier). */
-	Melee,
-	/** Blasts / traps (unchanged, x1). */
-	Explosion
 };
 
 /** One incoming blow, as the knockdown rules see it. */
@@ -65,6 +60,11 @@ struct FKnockdownHit
 	bool bCritical = false;
 	/** Explosion only: distance from the blast centre, cm. */
 	float ExplosionDistance = 0.f;
+	/**
+	 * The knockdown chance roll in [0, 1) for HeavyHit / HeavyMelee (passed in so the rules stay pure; the component rolls
+	 * FMath::FRand). Knocked down when ChanceRoll < KnockdownChance. Default 0 = the roll always succeeds.
+	 */
+	float ChanceRoll = 0.f;
 };
 
 /** The unit receiving the blow. */
@@ -93,7 +93,7 @@ struct FKnockdownState
 	float GetUpDuration = 1.0f;
 	/** Turn-based: the downed timer does not run out; he waits for his own turn and 2 AP. */
 	bool bWaitForTurn = false;
-	/** Turn-based: the downed phase is over, the get-up is due (paid with AP on his turn). */
+	/** Turn-based: the downed phase is over, he may get up (an explicit action paid with AP on his turn). */
 	bool bGetUpReady = false;
 };
 
@@ -109,15 +109,15 @@ enum class EKnockdownStep : uint8
 	Recovered
 };
 
-/** Turn-based decision on the downed unit's turn. */
+/** Turn-based: the player ordered "get up" for the lying unit on his turn. */
 struct FKnockdownTurnDecision
 {
-	/** He gets up this turn. */
+	/** He gets up now. */
 	bool bGetUp = false;
 	/** AP spent on it. */
 	int32 ActionPointsSpent = 0;
-	/** Not enough AP: the turn is skipped, he stays down. */
-	bool bSkipTurn = false;
+	/** Lying, but fewer AP than GetUpActionPoints: he stays down (the turn goes on; nothing is spent). */
+	bool bNotEnoughAP = false;
 };
 
 namespace KnockdownRules
@@ -141,19 +141,21 @@ namespace KnockdownRules
 
 	/**
 	 * Does this blow knock the target down? Never when he cannot fall, is already down, or is within the re-knock
-	 * immunity. Pounce / HeavyMelee always (not on heavy poise); Explosion when closer than ExplosionRadius (also
-	 * breaks poise); HeavyHit when Damage >= DamageThreshold — on heavy poise only when also critical.
+	 * immunity. Pounce always (not on heavy poise); Explosion when closer than ExplosionRadius (also breaks poise);
+	 * HeavyMelee (not on heavy poise) and HeavyHit when Damage >= DamageThreshold (on heavy poise only when also
+	 * critical) qualify and then knock down only when Hit.ChanceRoll < KnockdownChance (UsesKnockdownChance).
 	 */
 	CODEXTACTICS_API bool ShouldKnockDown(const FKnockdownConfig& Config, const FKnockdownHit& Hit, const FKnockdownTarget& Target);
 
-	/** Incoming damage multiplier while he lies: ranged x DownedRangedDamageMultiplier, melee x DownedMeleeDamageMultiplier. */
-	CODEXTACTICS_API float DownedDamageMultiplier(const FKnockdownConfig& Config, bool bMelee);
+	/** The cause rolls KnockdownChance (HeavyHit, HeavyMelee); explosions and pounces always knock down. */
+	CODEXTACTICS_API bool UsesKnockdownChance(EKnockdownCause Cause);
 
 	/**
-	 * The one place for the downed damage modifier (real-time TakeHit and the turn-based grid hits share it):
-	 * Ranged x DownedRangedDamageMultiplier, Melee x DownedMeleeDamageMultiplier, Explosion x1.
+	 * The one place for the downed damage modifier: any blow (ranged, melee, explosion) on a unit lying after a
+	 * knockdown, x DownedDamageMultiplier; 1 when he is up. Real-time TakeHit / UHealthComponent::TakeDamage and the
+	 * turn-based grid hits share it.
 	 */
-	CODEXTACTICS_API float DownedBlowMultiplier(const FKnockdownConfig& Config, EKnockdownBlow Blow);
+	CODEXTACTICS_API float DownedDamageMultiplier(const FKnockdownConfig& Config, bool bIsDown);
 
 	/** Play rate that brings a clip of ClipSeconds to TargetSeconds, never slower than 1, at most MaxRate. */
 	CODEXTACTICS_API float ClipPlayRate(float ClipSeconds, float TargetSeconds, float MaxRate);
@@ -179,7 +181,11 @@ namespace KnockdownRules
 	/** Switches the downed wait mode when the combat mode changes (turn-based enter / exit). */
 	CODEXTACTICS_API void SetTurnBased(FKnockdownState& State, bool bTurnBased);
 
-	/** Turn-based: on his turn — AP >= GetUpActionPoints: get up, pay; else skip the turn. Not lying (up / still falling): nothing. */
+	/**
+	 * Turn-based "get up" order on his turn (never automatic: he may stay down and act / end the turn instead):
+	 * lying with AP >= GetUpActionPoints -> get up and pay; fewer AP -> bNotEnoughAP, he stays down. Not lying (up /
+	 * still falling / already getting up): nothing.
+	 */
 	CODEXTACTICS_API FKnockdownTurnDecision DecideTurnGetUp(const FKnockdownConfig& Config, const FKnockdownState& State, int32 ActionPoints);
 
 	/** Turn-based get-up paid: Downed -> GettingUp. Returns false when not downed. */
@@ -193,7 +199,8 @@ namespace KnockdownRules
 
 	/**
 	 * Enemy targeting: a melee attacker switches to a downed operative within DownedTargetPreferenceCm that is at most
-	 * DownedTargetExtraCm farther than its current pick (melee bonus); ranged attackers keep their pick (prone profile).
+	 * DownedTargetExtraCm farther than its current pick (he takes x DownedDamageMultiplier and cannot strike back);
+	 * ranged attackers keep their pick.
 	 */
 	CODEXTACTICS_API bool PreferDownedTarget(const FKnockdownConfig& Config, bool bMeleeAttacker, float DistanceToDowned, float DistanceToCurrent);
 

@@ -5,9 +5,11 @@
 // IK / aim offset, capsule free, no walking), a move order is buffered, the recovery bar fills, stops in the tactical pause
 // and under the dialogue AI pause, AM_Revive_Back plays, control returns and the buffered order runs; no re-knock right
 // away. Enemies: a >= 40 HP hit floors a Frostbitten, a Brute shrugs off a plain heavy hit (poise) but not a crit, the
-// Frostbitten killed while down plays Death_*. Turn-based: getting up costs 2 AP; with 1 AP the turn is skipped and he
-// stays down; back in real time the timer gets him up. Last, a blast behind a squad mate throws him on his face and his
-// death while down plays AM_Death_Front.
+// Frostbitten killed while down plays Death_*. Turn-based (user decision 2026-10-11): he is never stood up for free — he
+// lies through his turn (the «GET UP (2 AP)» entry replaces the stance one), every blow lands x1.33, «GET UP» costs
+// exactly 2 AP; with 1 AP the order is refused (feed line), he stays down and the turn goes on; back in real time the timer
+// gets him up. Last, a blast behind a squad mate throws him on his face and his death while down plays AM_Death_Front.
+// The 50 % knockdown chance (Codex.Knockdown.Chance) is forced to 1 for the run and restored at the end.
 
 #include "CoreMinimal.h"
 
@@ -35,8 +37,10 @@
 #include "HAL/IConsoleManager.h"
 #include "Interactables/InteractableActor.h"
 #include "Misc/Paths.h"
+#include "Kismet/GameplayStatics.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "TimerManager.h"
+#include "UI/TurnBasedHudWidget.h"
 #include "UnrealClient.h"
 
 namespace KnockdownSmoke
@@ -61,7 +65,14 @@ namespace KnockdownSmoke
 		TWeakObjectPtr<AOperativeCharacter> Mate;
 		TWeakObjectPtr<AEnemyCharacter> Brute;
 		TWeakObjectPtr<AEnemyCharacter> Frostbitten;
+		/** Codex.Knockdown.Chance before the run (restored by Finish). */
+		float SavedChance = -1.f;
 	};
+
+	IConsoleVariable* ChanceVar()
+	{
+		return IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Knockdown.Chance"));
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -71,6 +82,10 @@ namespace KnockdownSmoke
 
 	bool Finish(const FState& State, bool bComplete)
 	{
+		if (IConsoleVariable* Chance = ChanceVar())
+		{
+			Chance->Set(State.SavedChance, ECVF_SetByConsole); // the 50 % roll back as it was
+		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("KnockdownSmoke"));
 		return false;
@@ -198,6 +213,10 @@ namespace KnockdownSmoke
 			Check(State, LeaderKnock->IsDown() && LeaderKnock->GetPhase() == EKnockdownPhase::Falling,
 				FString::Printf(TEXT("brute blow knocks the leader down (cause %d)"), static_cast<int32>(LeaderKnock->GetState().Cause)));
 			Check(State, LeaderKnock->GetDirection() == EKnockdownDirection::Back, TEXT("blow from the front: falls on his back"));
+			Check(State, FMath::IsNearlyEqual(LeaderKnock->GetState().DownedDuration, 0.6f, 0.01f) && FMath::IsNearlyEqual(LeaderKnock->GetState().GetUpDuration, 0.8f, 0.05f),
+				FString::Printf(TEXT("faster get-up: fall %.2f s + downed %.2f s + get-up %.2f s = %.2f s on the ground"), LeaderKnock->GetState().FallDuration,
+					LeaderKnock->GetState().DownedDuration, LeaderKnock->GetState().GetUpDuration,
+					LeaderKnock->GetState().FallDuration + LeaderKnock->GetState().DownedDuration + LeaderKnock->GetState().GetUpDuration));
 			Check(State, Leader->HealthComponent->HasStatusEffect(EStatusEffect::Knockdown), TEXT("status effect Knockdown reported by the health component"));
 			Check(State, Leader->GetCapsuleComponent()->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Ignore
 				&& Leader->GetCharacterMovement()->MovementMode == MOVE_None, TEXT("capsule frees pawns, no walking"));
@@ -233,7 +252,7 @@ namespace KnockdownSmoke
 			Next();
 			return true;
 		case 4:
-			if (State.StageTime < 0.6f)
+			if (State.StageTime < 0.2f) // the downed phase is 0.6 s now
 			{
 				return true;
 			}
@@ -403,13 +422,39 @@ namespace KnockdownSmoke
 		}
 		case 13:
 		{
+			// He lies through his turn: no free stand-up, the HUD offers «GET UP (2 AP)», blows land x1.33.
 			const UKnockdownComponent* Knock = KnockdownOf(State.TurnUnit.Get());
-			if (Knock->GetPhase() != EKnockdownPhase::GettingUp)
+			if (Knock->GetPhase() != EKnockdownPhase::Downed || State.StageTime < 1.5f)
 			{
-				return !Timeout(4.f, TEXT("turn-based get-up never started")) || Finish(State, false);
+				return Knock->GetPhase() == EKnockdownPhase::Falling || Knock->GetPhase() == EKnockdownPhase::Downed
+					? (!Timeout(4.f, TEXT("turn-based: never lay down")) || Finish(State, false))
+					: (Check(State, false, TEXT("turn-based: he got up by himself")), Finish(State, false));
 			}
 			const FTurnUnitState* Unit = TurnBased->GetUnitState(State.TurnUnit.Get());
-			Check(State, Unit && Unit->AP == State.APBefore - 2, FString::Printf(TEXT("getting up cost 2 AP (%d -> %d)"), State.APBefore, Unit ? Unit->AP : -1));
+			Check(State, Unit && Unit->AP == State.APBefore && TurnBased->GetActiveUnit() == State.TurnUnit.Get(),
+				FString::Printf(TEXT("turn-based: lying 1.5 s on his turn, no free get-up, AP untouched (%d)"), Unit ? Unit->AP : -1));
+			Check(State, TurnBased->IsGetUpAvailable() && TurnBased->GetGetUpCost() == 2, TEXT("«GET UP (2 AP)» is offered"));
+			if (UTurnBasedHudWidget* Hud = CreateWidget<UTurnBasedHudWidget>(UGameplayStatics::GetPlayerController(World, 0), UTurnBasedHudWidget::StaticClass()))
+			{
+				Hud->Refresh();
+				Check(State, Hud->IsGetUpShown(), TEXT("turn-based panel shows the GET UP (2 AP) [Z] entry"));
+			}
+			Check(State, !TurnBased->SetActiveUnitStance(EOperativeStance::Crouching), TEXT("no stance change while down"));
+			// Staying down: every grid blow (shot, bite) and a blast land x1.33 (rounded on the grid path).
+			if (AOperativeCharacter* Downed = State.TurnUnit.Get())
+			{
+				const float HpBefore = Downed->HealthComponent->GetCurrentHealth();
+				const int32 Shot30 = TurnBased->ApplySquadHit(Downed, 30.f, TEXT("smoke shot"));
+				const int32 Bite20 = TurnBased->ApplySquadHit(Downed, 20.f, TEXT("smoke bite"));
+				const int32 Blast20 = FMath::RoundToInt(Downed->TakeHit(20.f, TEXT("smoke blast"), false, true));
+				Check(State, Shot30 == 40 && Bite20 == 27 && Blast20 == 27 && FMath::IsNearlyEqual(HpBefore - Downed->HealthComponent->GetCurrentHealth(), 94.f, 0.5f),
+					FString::Printf(TEXT("staying down: shot 30 -> %d, bite 20 -> %d, blast 20 -> %d (x1.33)"), Shot30, Bite20, Blast20));
+			}
+			Shot(State, TEXT("6_TurnBasedGetUpOption"));
+			Check(State, TurnBased->GetUpActiveUnit(), TEXT("«GET UP» ordered"));
+			Unit = TurnBased->GetUnitState(State.TurnUnit.Get());
+			Check(State, Unit && Unit->AP == State.APBefore - 2 && Knock->GetPhase() == EKnockdownPhase::GettingUp,
+				FString::Printf(TEXT("getting up cost exactly 2 AP (%d -> %d)"), State.APBefore, Unit ? Unit->AP : -1));
 			Next();
 			return true;
 		}
@@ -433,26 +478,16 @@ namespace KnockdownSmoke
 		case 15:
 		{
 			const UKnockdownComponent* Knock = KnockdownOf(State.TurnUnit.Get());
-			if (TurnBased->GetActiveUnit() == State.TurnUnit.Get() && TurnBased->GetPhase() == ETurnPhase::Squad)
+			if (Knock->GetPhase() != EKnockdownPhase::Downed)
 			{
-				return !Timeout(4.f, TEXT("1 AP: the turn was never skipped")) || Finish(State, false);
+				return !Timeout(4.f, TEXT("1 AP: never lay down")) || Finish(State, false);
 			}
-			Check(State, Knock->GetPhase() == EKnockdownPhase::Downed, TEXT("1 AP: turn skipped, he stays down"));
-			// Grid hit path (ApplySquadHit) uses the same downed modifiers as TakeHit: ranged x0.6, melee x1.5, explosion x1.
-			if (AOperativeCharacter* Downed = Cast<AOperativeCharacter>(State.TurnUnit.Get()))
-			{
-				const UWorld* GridWorld = Downed->GetWorld();
-				UTurnBasedCombatSubsystem* Grid = GridWorld ? GridWorld->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
-				if (Grid)
-				{
-					const float HpBefore = Downed->HealthComponent->GetCurrentHealth();
-					const int32 Ranged = Grid->ApplySquadHit(Downed, 30.f, TEXT("smoke"), EKnockdownBlow::Ranged);
-					const int32 Melee = Grid->ApplySquadHit(Downed, 20.f, TEXT("smoke"), EKnockdownBlow::Melee);
-					const int32 Blast = Grid->ApplySquadHit(Downed, 20.f, TEXT("smoke"), EKnockdownBlow::Explosion);
-					Check(State, Ranged == 18 && Melee == 30 && Blast == 20 && FMath::IsNearlyEqual(HpBefore - Downed->HealthComponent->GetCurrentHealth(), 68.f, 0.5f),
-						FString::Printf(TEXT("turn-based downed modifiers: ranged 30 -> %d (x0.6), melee 20 -> %d (x1.5), blast 20 -> %d (x1)"), Ranged, Melee, Blast));
-				}
-			}
+			Check(State, !TurnBased->GetUpActiveUnit(), TEXT("1 AP: «GET UP» refused"));
+			const FTurnUnitState* Unit = TurnBased->GetUnitState(State.TurnUnit.Get());
+			Check(State, Knock->GetPhase() == EKnockdownPhase::Downed && Unit && Unit->AP == 1 && TurnBased->GetActiveUnit() == State.TurnUnit.Get()
+				&& TurnBased->GetPhase() == ETurnPhase::Squad, TEXT("1 AP: he stays down, nothing spent, still his turn"));
+			TurnBased->EndCurrentUnitTurn(); // the player ends his turn; he keeps lying
+			Check(State, Knock->GetPhase() == EKnockdownPhase::Downed, TEXT("turn ended: he is still down"));
 			Flow->ExitTurnBasedToRealTime();
 			Next();
 			return true;
@@ -545,6 +580,11 @@ namespace KnockdownSmoke
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->bShots = Args.Contains(TEXT("shot"));
+		if (IConsoleVariable* Chance = ChanceVar())
+		{
+			State->SavedChance = Chance->GetFloat();
+			Chance->Set(1.f, ECVF_SetByConsole); // every qualifying blow knocks down for the checks (default 50 %)
+		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
 			return Step(WeakWorld, *State);
@@ -553,8 +593,9 @@ namespace KnockdownSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.KnockdownSmoke"),
-		TEXT("Dev check (Sprint 14): knockdown fall / downed bar / pause freeze / get-up / buffered order, enemy poise and death "
-			"while down, turn-based 2 AP get-up and skipped turn; 'shot' saves Knockdown_*.png. Logs PASS/FAIL, then exits."),
+		TEXT("Dev check (Sprint 14, 2026-10-11): knockdown fall / downed bar / pause freeze / faster get-up / buffered order, enemy "
+			"poise and death while down, turn-based: lying through the turn, x1.33 damage, GET UP for 2 AP, refused with 1 AP; "
+			"'shot' saves Knockdown_*.png. Logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
