@@ -10,7 +10,6 @@
   "gate_open_mode": "generator_waves",
   "demo": {
     "panic": false,
-    "vision_cones": true,
     "tutorial": true,
     "tutorial_steps": "demo_01_steps.json",
     "hud": "demo",
