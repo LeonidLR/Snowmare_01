@@ -25,7 +25,9 @@
 #include "Tutorial/TutorialMarkerActor.h"
 #include "Tutorial/TutorialTriggerVolume.h"
 #include "UI/DialogueRules.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
+#include "Engine/Engine.h"
 
 #define LOCTEXT_NAMESPACE "TutorialSubsystem"
 
@@ -200,7 +202,10 @@ bool UTutorialSubsystem::LoadStepsFile(const FString& FileName)
 
 void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 {
+	Machine.StatProvider = [this](FName Stat) { return GetConditionStat(Stat); };
 	Machine.Load(Data);
+	LockedRefusals = 0;
+	FocusOperatives.Reset();
 	SpeechStep = NAME_None;
 	SpeechLines.Reset();
 	FlashCard = NAME_None;
@@ -491,6 +496,7 @@ bool UTutorialSubsystem::ReplayStep(FName StepId)
 void UTutorialSubsystem::ResetTutorial()
 {
 	Machine.ResetProgress();
+	FocusOperatives.Reset();
 	SpeechStep = NAME_None;
 	SpeechLines.Reset();
 	FlashCard = NAME_None;
@@ -504,65 +510,228 @@ void UTutorialSubsystem::ResetTutorial()
 
 void UTutorialSubsystem::ProcessTransitions()
 {
-	const TArray<FTutorialTransition> Transitions = Machine.ConsumeTransitions();
-	if (Transitions.IsEmpty())
+	// A shown step may finish at once (feed lines) and start followers: drain until quiet (bounded).
+	for (int32 Round = 0; Round < 16; ++Round)
 	{
-		return;
-	}
-	const FTutorialStepsData& Data = Machine.GetData();
-	for (const FTutorialTransition& Transition : Transitions)
-	{
-		if (Transition.Type == FTutorialTransition::EType::BeatStarted)
+		const TArray<FTutorialTransition> Transitions = Machine.ConsumeTransitions();
+		if (Transitions.IsEmpty())
 		{
-			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: beat %s started"), *Transition.BeatId.ToString());
-			WriteTelemetry(TEXT("beat_started"), NAME_None, Transition.BeatId, 0.f);
-			const int32 BeatIndex = Data.FindBeatIndex(Transition.BeatId);
-			if (Data.Beats.IsValidIndex(BeatIndex) && Data.Beats[BeatIndex].bCheckpoint)
-			{
-				SaveCheckpoint();
-			}
-			continue;
+			break;
 		}
-		const FTutorialStep* Step = Data.FindStep(Transition.StepId);
-		if (!Step)
+		const FTutorialStepsData& Data = Machine.GetData();
+		for (const FTutorialTransition& Transition : Transitions)
 		{
-			continue;
-		}
-		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s %s -> %s%s"), *Transition.StepId.ToString(), TutorialRules::StateName(Transition.From),
-			TutorialRules::StateName(Transition.To), Transition.bSilent ? TEXT(" (silent)") : TEXT(""));
-		if (Transition.To == ETutorialStepState::Active)
-		{
-			WriteTelemetry(TEXT("shown"), Step->Id, Step->Beat, 0.f);
-			if (Step->Kind == ETutorialStepKind::Radio || Step->Kind == ETutorialStepKind::WalkTalk)
+			if (Transition.Type == FTutorialTransition::EType::BeatStarted)
 			{
-				StartSpeech(Step->Id);
-			}
-		}
-		else if (TutorialRules::IsFinished(Transition.To))
-		{
-			const TCHAR* Event = Transition.To == ETutorialStepState::Skipped ? TEXT("skipped")
-				: (Transition.To == ETutorialStepState::TimedOut ? TEXT("timed_out") : (Transition.bSilent ? TEXT("completed_silently") : TEXT("completed")));
-			WriteTelemetry(Event, Step->Id, Step->Beat, Transition.ActiveSeconds);
-			if (Transition.From == ETutorialStepState::Active && Transition.To == ETutorialStepState::Completed)
-			{
-				if (Step->Kind == ETutorialStepKind::HintCard)
+				UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: beat %s started"), *Transition.BeatId.ToString());
+				WriteTelemetry(TEXT("beat_started"), NAME_None, Transition.BeatId, 0.f);
+				const int32 BeatIndex = Data.FindBeatIndex(Transition.BeatId);
+				if (Data.Beats.IsValidIndex(BeatIndex) && Data.Beats[BeatIndex].bCheckpoint)
 				{
-					FlashCard = Step->Id;
-					FlashCardLeft = FMath::Min(0.8f, Machine.CardBreatherSeconds);
+					SaveCheckpoint();
 				}
-				else if (Step->Kind == ETutorialStepKind::Objective)
+				continue;
+			}
+			const FTutorialStep* Step = Data.FindStep(Transition.StepId);
+			if (!Step)
+			{
+				continue;
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s %s -> %s%s"), *Transition.StepId.ToString(), TutorialRules::StateName(Transition.From),
+				TutorialRules::StateName(Transition.To), Transition.bSilent ? TEXT(" (silent)") : TEXT(""));
+			if (Transition.To == ETutorialStepState::Active)
+			{
+				WriteTelemetry(TEXT("shown"), Step->Id, Step->Beat, 0.f);
+				HandleStepShown(*Step);
+				if (Step->Kind == ETutorialStepKind::Radio || Step->Kind == ETutorialStepKind::WalkTalk)
 				{
-					FlashObjectives.Add(Step->Id, 1.2f);
+					StartSpeech(Step->Id);
 				}
 			}
-			if (SpeechStep == Step->Id)
+			else if (TutorialRules::IsFinished(Transition.To))
 			{
-				SpeechStep = NAME_None;
-				SpeechLines.Reset();
+				const TCHAR* Event = Transition.To == ETutorialStepState::Skipped ? TEXT("skipped")
+					: (Transition.To == ETutorialStepState::TimedOut ? TEXT("timed_out") : (Transition.bSilent ? TEXT("completed_silently") : TEXT("completed")));
+				WriteTelemetry(Event, Step->Id, Step->Beat, Transition.ActiveSeconds);
+				if (Transition.From == ETutorialStepState::Active && Transition.To == ETutorialStepState::Completed)
+				{
+					if (Step->Kind == ETutorialStepKind::HintCard)
+					{
+						FlashCard = Step->Id;
+						FlashCardLeft = FMath::Min(0.8f, Machine.CardBreatherSeconds);
+					}
+					else if (Step->Kind == ETutorialStepKind::Objective)
+					{
+						FlashObjectives.Add(Step->Id, 1.2f);
+					}
+				}
+				if (SpeechStep == Step->Id)
+				{
+					SpeechStep = NAME_None;
+					SpeechLines.Reset();
+				}
 			}
 		}
 	}
 	RefreshMarkers();
+}
+
+void UTutorialSubsystem::HandleStepShown(const FTutorialStep& Step)
+{
+	if (!Step.Focus.IsNone())
+	{
+		AOperativeCharacter* Focus = FindColdestMember();
+		FocusOperatives.Add(Step.Id, Focus);
+		if (Focus)
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(Focus, FString::Printf(TEXT("🥶 COLDEST: %d%%"), FMath::RoundToInt(Focus->ColdLevel)),
+				FLinearColor(0.45f, 0.85f, 1.f));
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s focuses %s (cold %.0f%%)"), *Step.Id.ToString(), *Focus->DisplayName.ToString(), Focus->ColdLevel);
+		}
+	}
+	RunActions(Step);
+	if (Step.Kind == ETutorialStepKind::Feed)
+	{
+		UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr;
+		for (const FSpokenLine& Line : ResolveLines(Step))
+		{
+			const FString Text = ResolveFocusToken(Line.Text, Step.Id);
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial feed [%s] %s: %s"), *Step.Id.ToString(), *Line.Speaker, *Text);
+			if (Messages)
+			{
+				Messages->PostMessage(FText::FromString(Line.Speaker), FText::FromString(Text));
+			}
+		}
+		Machine.CompleteStep(Step.Id);
+	}
+}
+
+void UTutorialSubsystem::RunActions(const FTutorialStep& Step)
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	for (const FTutorialAction& Action : Step.Actions)
+	{
+		if (Action.Type == FName(TEXT("cold_bump")) && Squad)
+		{
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Member && Member->ColdSurvival)
+				{
+					const float Before = Member->ColdLevel;
+					Member->ColdSurvival->AddColdShock(Action.Amount, Action.MinLevel);
+					UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s cold_bump %s %.0f%% -> %.0f%%"), *Step.Id.ToString(), *Member->DisplayName.ToString(),
+						Before, Member->ColdLevel);
+				}
+			}
+			WriteTelemetry(TEXT("action_cold_bump"), Step.Id, Step.Beat, 0.f);
+		}
+	}
+}
+
+AOperativeCharacter* UTutorialSubsystem::FindColdestMember() const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	AOperativeCharacter* Coldest = nullptr;
+	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+	{
+		const bool bAlive = Member && (!Member->HealthComponent || Member->HealthComponent->IsAlive());
+		if (bAlive && (!Coldest || Member->ColdLevel > Coldest->ColdLevel))
+		{
+			Coldest = Member;
+		}
+	}
+	return Coldest;
+}
+
+AOperativeCharacter* UTutorialSubsystem::GetFocusOperative(FName StepId) const
+{
+	const TWeakObjectPtr<AOperativeCharacter>* Found = FocusOperatives.Find(StepId);
+	return Found ? Found->Get() : nullptr;
+}
+
+FString UTutorialSubsystem::ResolveFocusToken(const FString& Text, FName StepId) const
+{
+	if (!Text.Contains(TEXT("{focus}")))
+	{
+		return Text;
+	}
+	const AOperativeCharacter* Focus = GetFocusOperative(StepId);
+	return Text.Replace(TEXT("{focus}"), Focus ? *Focus->DisplayName.ToString() : TEXT("the coldest operative"));
+}
+
+float UTutorialSubsystem::GetConditionStat(FName Stat) const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (!Squad)
+	{
+		return 0.f;
+	}
+	if (Stat == FName(TEXT("leader_cold")))
+	{
+		const AOperativeCharacter* Leader = Squad->GetLeader();
+		return Leader ? Leader->ColdLevel : 0.f;
+	}
+	float ColdMax = 0.f;
+	float ColdMin = 0.f;
+	int32 HeatPacks = 0;
+	int32 Alive = 0;
+	for (const AOperativeCharacter* Member : Squad->GetMembers())
+	{
+		if (!Member || (Member->HealthComponent && !Member->HealthComponent->IsAlive()))
+		{
+			continue;
+		}
+		ColdMax = Alive == 0 ? Member->ColdLevel : FMath::Max(ColdMax, Member->ColdLevel);
+		ColdMin = Alive == 0 ? Member->ColdLevel : FMath::Min(ColdMin, Member->ColdLevel);
+		HeatPacks += Member->HeatPacksCount;
+		++Alive;
+	}
+	if (Stat == FName(TEXT("squad_cold_max")))
+	{
+		return ColdMax;
+	}
+	if (Stat == FName(TEXT("squad_cold_min")))
+	{
+		return ColdMin;
+	}
+	if (Stat == FName(TEXT("squad_heat_packs")))
+	{
+		return static_cast<float>(HeatPacks);
+	}
+	return 0.f;
+}
+
+bool UTutorialSubsystem::IsCommandLocked(FName CommandId) const
+{
+	return IsTutorialActive() && Machine.IsCommandLocked(CommandId);
+}
+
+bool UTutorialSubsystem::CheckCommandLocked(const UObject* WorldContext, FName CommandId)
+{
+	UWorld* World = GEngine && WorldContext ? GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::ReturnNull) : nullptr;
+	UTutorialSubsystem* Tutorial = World ? World->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	if (!Tutorial || !Tutorial->IsCommandLocked(CommandId))
+	{
+		return false;
+	}
+	++Tutorial->LockedRefusals;
+	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: command %s is locked (beat %s) - degraded"), *CommandId.ToString(),
+		*Tutorial->GetCurrentBeat().ToString());
+	Tutorial->WriteTelemetry(TEXT("command_locked"), NAME_None, Tutorial->GetCurrentBeat(), 0.f);
+	GameplayEvents::Raise(World, GameplayEvents::TutorialLocked);
+	GameplayEvents::Raise(World, TutorialRules::MakeLockedEventName(CommandId));
+	return true;
+}
+
+FName UTutorialSubsystem::FilterCommand(const UObject* WorldContext, FName CommandId)
+{
+	if (!CheckCommandLocked(WorldContext, CommandId))
+	{
+		return CommandId;
+	}
+	UWorld* World = GEngine && WorldContext ? GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::ReturnNull) : nullptr;
+	const UTutorialSubsystem* Tutorial = World ? World->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	return Tutorial ? TutorialRules::ResolveLockedCommand(Tutorial->GetMachine().GetLocks(), CommandId) : CommandId;
 }
 
 void UTutorialSubsystem::RefreshMarkers()
@@ -634,8 +803,13 @@ FTutorialCardView UTutorialSubsystem::BuildCardView(FName StepId, bool bDone) co
 	if (!Step->TextId.IsNone())
 	{
 		const FTutorialTextView Text = FNarrativeManifest::Get().GetTutorialText(Step->TextId.ToString());
-		View.Title = FText::FromString(Text.Title);
-		View.Body = FText::FromString(PlayerCommands::ResolveKeyTokens(Text.Text));
+		View.Title = FText::FromString(ResolveFocusToken(Text.Title, StepId));
+		View.Body = FText::FromString(PlayerCommands::ResolveKeyTokens(ResolveFocusToken(Text.Text, StepId)));
+	}
+	if (AOperativeCharacter* Focus = GetFocusOperative(StepId))
+	{
+		View.FocusOperative = Focus;
+		View.FocusName = Focus->DisplayName;
 	}
 	View.Keys = FText::FromString(TutorialRules::FormatKeys(Step->Keys));
 	int32 Index = 0;

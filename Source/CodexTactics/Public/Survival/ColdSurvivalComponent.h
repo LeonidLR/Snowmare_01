@@ -57,6 +57,13 @@ public:
 	 */
 	bool ApplyHeatPack(const FTacticalHeatConfig& HeatConfig);
 
+	/**
+	 * A sudden cold shock (tutorial "cold_bump" = a scripted wind gust): cold + Amount, at least MinLevel (ColdRules::ApplyColdShock);
+	 * the tier / speed / frozen-weapon state follow at once (OnTierChanged fires). Frostbite at 100 % comes with the next cold step.
+	 * Returns the new cold; no-op for a dead operative.
+	 */
+	float AddColdShock(float Amount, float MinLevel = 0.f);
+
 	/** Seconds left of the heat-pack buffer (0 = none); frozen with the cold (turn-based, dialogues), runs on world time. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cold")
 	float GetHeatBufferSecondsLeft() const { return HeatBufferSecondsLeft; }

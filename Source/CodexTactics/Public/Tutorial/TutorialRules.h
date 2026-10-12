@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/Function.h"
 #include "Tutorial/TutorialTypes.h"
 
 class FJsonObject;
@@ -28,9 +29,9 @@ struct CODEXTACTICS_API FTutorialTelemetryEntry
  */
 namespace TutorialRules
 {
-	/** "hint_card" | "objective" | "radio" | "walk_talk". */
+	/** "hint_card" | "objective" | "radio" | "walk_talk" | "feed". */
 	CODEXTACTICS_API bool ParseKind(const FString& Text, ETutorialStepKind& OutKind);
-	/** "manual" | "beat_start" | "volume" | "event" | "after_step" | "first_use" | "failure_retry". */
+	/** "manual" | "beat_start" | "volume" | "event" | "after_step" | "first_use" | "failure_retry" | "condition". */
 	CODEXTACTICS_API bool ParseTriggerType(const FString& Text, ETutorialTriggerType& OutType);
 	CODEXTACTICS_API const TCHAR* KindName(ETutorialStepKind Kind);
 	CODEXTACTICS_API const TCHAR* StateName(ETutorialStepState State);
@@ -89,4 +90,36 @@ namespace TutorialRules
 
 	/** Key caps of a step joined for the card: "[B]  [Alt+V]". */
 	CODEXTACTICS_API FString FormatKeys(const TArray<FString>& Keys);
+
+	// --- Conditions, command locks, actions (2026-10-12, Demo 01 A0-A1 redesign) ---------------------------------------
+
+	/** Condition stats the runtime provides: "squad_cold_max", "squad_cold_min", "leader_cold", "squad_heat_packs". */
+	CODEXTACTICS_API bool IsKnownStat(FName Stat);
+
+	/** Action types: "cold_bump". */
+	CODEXTACTICS_API bool IsKnownAction(FName Type);
+
+	/** Focus kinds: "coldest_operative". */
+	CODEXTACTICS_API bool IsKnownFocus(FName Focus);
+
+	/** All clauses hold (AND; an empty list holds). Stat returns the current value of a stat. */
+	CODEXTACTICS_API bool IsConditionMet(const TArray<FTutorialCondition>& Conditions, TFunctionRef<float(FName)> Stat);
+
+	/**
+	 * Applies a step's / beat's lock changes to the patterns in force: Unlock first (removes equal patterns, case-insensitive;
+	 * "*" removes all), then Lock (adds new patterns). Returns true when the set changed.
+	 */
+	CODEXTACTICS_API bool ApplyLockChanges(TArray<FString>& InOutLocks, const TArray<FString>& Lock, const TArray<FString>& Unlock);
+
+	/** True when any lock pattern matches the command (PlayerCommands::Matches). */
+	CODEXTACTICS_API bool IsCommandLocked(const TArray<FString>& Locks, FName CommandId);
+
+	/**
+	 * The command a handler carries out under the locks: CommandId itself when it is not locked; a locked command with a
+	 * milder fallback degrades to it (a locked "Order.Sprint" walks: "Order.Move"); NAME_None = refused (no fallback).
+	 */
+	CODEXTACTICS_API FName ResolveLockedCommand(const TArray<FString>& Locks, FName CommandId);
+
+	/** "Tutorial.Locked.<CommandId>": the specific event a locked command raises next to "Tutorial.Locked". */
+	CODEXTACTICS_API FName MakeLockedEventName(FName CommandId);
 }

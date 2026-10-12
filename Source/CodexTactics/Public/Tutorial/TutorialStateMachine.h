@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/Function.h"
 #include "Tutorial/TutorialTypes.h"
 
 /** A change the tutorial runtime reports to its owner (UI, log, checkpoint). */
@@ -35,6 +36,12 @@ public:
 	int32 MaxObjectives = 3;
 	/** At most one failure_retry (remedial) step per this many seconds. */
 	float RemedialCooldownSeconds = 60.f;
+
+	/**
+	 * Current value of a condition stat ("squad_cold_max", ...; TutorialRules::IsKnownStat). Set by the runtime
+	 * (UTutorialSubsystem: the squad's cold / heat packs) or by tests; unset = every stat reads 0.
+	 */
+	TFunction<float(FName)> StatProvider;
 
 	/** Replaces the steps and resets all progress. */
 	void Load(const FTutorialStepsData& InData);
@@ -83,6 +90,11 @@ public:
 	/** "2 / 5": the card's place among the hint cards of its beat (1-based) and their count. */
 	void GetCardProgress(FName StepId, int32& OutIndex, int32& OutCount) const;
 
+	/** True when a lock pattern in force matches CommandId (beat / step "lock"; see FTutorialStep::Lock). */
+	bool IsCommandLocked(FName CommandId) const;
+	/** The lock patterns in force, in the order they were added. */
+	const TArray<FString>& GetLocks() const { return Locks; }
+
 	// --- Save -------------------------------------------------------------------------------------------------------
 	FTutorialProgress ExportProgress() const;
 	/** Restores finished steps and the beat; pending steps are queued again (no transitions for the finished ones). */
@@ -103,11 +115,22 @@ private:
 		bool bEverFinished = false;
 		/** Subjects already counted by a distinct_operatives completion. */
 		TSet<FName> CountedSubjects;
+		/** The step's lock / unlock were applied (once per trigger). */
+		bool bLocksApplied = false;
 	};
 
 	int32 IndexOf(FName StepId) const;
 	bool CanTrigger(int32 Index) const;
-	void Fire(int32 Index);
+	/** Every "trigger.requires" step has been triggered at least once. */
+	bool IsArmed(int32 Index) const;
+	float ReadStat(FName Stat) const;
+	bool AreConditionsMet(int32 Index) const;
+	void ApplyStepLocks(int32 Index);
+	void PollConditionTriggers();
+	/** Which steps are running now (inputs only count for steps that were running when they came). */
+	TArray<bool> RunningSnapshot() const;
+	/** bForce: manual TriggerStep / ReplayStep (ignores "requires"). */
+	void Fire(int32 Index, bool bForce = false);
 	void Enqueue(int32 Index);
 	void Activate(int32 Index);
 	void Finish(int32 Index, ETutorialStepState FinalState);
@@ -124,4 +147,5 @@ private:
 	float RemedialCooldownLeft = 0.f;
 	TSet<FName> UsedCommands;
 	TArray<FTutorialTransition> Transitions;
+	TArray<FString> Locks;
 };

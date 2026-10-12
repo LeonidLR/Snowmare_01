@@ -123,6 +123,25 @@ bool UColdSurvivalComponent::ApplyHeatPack(const FTacticalHeatConfig& HeatConfig
 	return true;
 }
 
+float UColdSurvivalComponent::AddColdShock(float Amount, float MinLevel)
+{
+	AOperativeCharacter* Owner = Operative.Get();
+	const UHealthComponent* Health = Owner ? Owner->HealthComponent.Get() : nullptr;
+	if (!Owner || (Health && !Health->IsAlive()))
+	{
+		return Owner ? Owner->ColdLevel : 0.f;
+	}
+	Owner->ColdLevel = ColdRules::ApplyColdShock(Owner->ColdLevel, Amount, MinLevel);
+	bWeaponFrozen = ColdRules::UpdateWeaponFrozen(Config, bWeaponFrozen, Owner->ColdLevel, IsNearHeatSource());
+	const EColdTier NewTier = ColdRules::GetTier(Owner->ColdLevel);
+	if (NewTier != Tier)
+	{
+		Tier = NewTier;
+		ApplyTierEffects(Tier);
+	}
+	return Owner->ColdLevel;
+}
+
 float UColdSurvivalComponent::GetMisfireChance() const
 {
 	return Operative.IsValid() ? ColdRules::GetMisfireChance(Config, Operative->ColdLevel, IsNearHeatSource()) : 0.f;

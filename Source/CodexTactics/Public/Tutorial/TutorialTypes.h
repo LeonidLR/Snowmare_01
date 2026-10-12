@@ -14,7 +14,12 @@ enum class ETutorialStepKind : uint8
 	/** "radio": HQ / squad radio lines in the subtitle strip. */
 	Radio,
 	/** "walk_talk": squad banter in the subtitle strip while the squad keeps moving (never pauses). */
-	WalkTalk
+	WalkTalk,
+	/**
+	 * "feed": its line(s) go to the message feed at once (no display slot, never queued behind a card or a speech) and the
+	 * step completes immediately. For short reactions ("No running yet") while a card / speech is up.
+	 */
+	Feed
 };
 
 /** What starts a step (steps JSON "trigger.type"). */
@@ -33,7 +38,9 @@ enum class ETutorialTriggerType : uint8
 	/** "first_use": the first time the player issues a command matching "trigger.command". */
 	FirstUse,
 	/** "failure_retry": a failure event ("trigger.event") happened "trigger.count" times; remedial, rate-limited. */
-	FailureRetry
+	FailureRetry,
+	/** "condition": polled every tick; fires as soon as the step's "condition" clauses hold (world state, e.g. squad cold). */
+	Condition
 };
 
 /** Runtime state of one step. */
@@ -62,6 +69,29 @@ struct CODEXTACTICS_API FTutorialLine
 	float DurationSeconds = 0.f;
 };
 
+/**
+ * One clause of a step "condition" (JSON {"stat": "squad_cold_max", "at_least": 40} or {"stat": ..., "below": 40}). Stats
+ * come from the runtime (UTutorialSubsystem::GetConditionStat): "squad_cold_max", "squad_cold_min", "leader_cold",
+ * "squad_heat_packs". All clauses of a step must hold (AND).
+ */
+struct CODEXTACTICS_API FTutorialCondition
+{
+	FName Stat;
+	/** True: Stat >= Value ("at_least"); false: Stat < Value ("below"). */
+	bool bAtLeast = true;
+	float Value = 0.f;
+};
+
+/** A world action a step runs when it is shown (JSON "actions": [{ "type": ... }] or a single "action": {...}). */
+struct CODEXTACTICS_API FTutorialAction
+{
+	/** "cold_bump": every squad member's cold + Amount, raised to at least MinLevel (UColdSurvivalComponent::AddColdShock). */
+	FName Type;
+	float Amount = 0.f;
+	/** "min_level": cold_bump never leaves anyone below this (0 = no floor). */
+	float MinLevel = 0.f;
+};
+
 struct CODEXTACTICS_API FTutorialTrigger
 {
 	ETutorialTriggerType Type = ETutorialTriggerType::Manual;
@@ -73,6 +103,11 @@ struct CODEXTACTICS_API FTutorialTrigger
 	FString Command;
 	int32 Count = 1;
 	float DelaySeconds = 0.f;
+	/**
+	 * "requires": step ids that must have been triggered (left Idle) before this trigger counts at all (events / volumes /
+	 * conditions before that are ignored, not stored). Manual TriggerStep / ReplayStep ignore it.
+	 */
+	TArray<FName> Requires;
 };
 
 struct CODEXTACTICS_API FTutorialCompletion
@@ -118,6 +153,22 @@ struct CODEXTACTICS_API FTutorialStep
 	bool bBlocking = false;
 	/** Radio / walk-and-talk lines; empty = one line from TextId. */
 	TArray<FTutorialLine> Lines;
+	/**
+	 * "condition": clauses that must hold when the step becomes due (after its delay, before it queues); otherwise it is
+	 * skipped silently (its after_step followers still fire). For a "condition" trigger they are also the trigger.
+	 */
+	TArray<FTutorialCondition> Conditions;
+	/**
+	 * Command locks (JSON "lock" / "unlock": command id patterns, "*" = all): applied once, when the step is shown (or, if it
+	 * never shows, when it finishes). Unlock first, then lock. A locked command is degraded by its handler (a locked sprint
+	 * becomes a walk) and raises "Tutorial.Locked" + "Tutorial.Locked.<CommandId>".
+	 */
+	TArray<FString> Lock;
+	TArray<FString> Unlock;
+	/** World actions run by the runtime when the step is shown. */
+	TArray<FTutorialAction> Actions;
+	/** "focus": "coldest_operative" -> the card names / marks the coldest squad member ({focus} token in the text). */
+	FName Focus;
 };
 
 struct CODEXTACTICS_API FTutorialBeat
@@ -128,6 +179,9 @@ struct CODEXTACTICS_API FTutorialBeat
 	/** Autosave to the "checkpoint" slot when the beat starts. */
 	bool bCheckpoint = true;
 	FName TitleId;
+	/** Command locks applied when the beat starts ("lock" / "unlock", as on steps). */
+	TArray<FString> Lock;
+	TArray<FString> Unlock;
 };
 
 /** A parsed Content/Data/Tutorial/<file>.json. */
@@ -153,6 +207,10 @@ struct CODEXTACTICS_API FTutorialProgress
 	/** Steps that were triggered but not finished (re-queued on load). */
 	TArray<FName> Pending;
 	FName CurrentBeat;
+	/** Command lock patterns in force ("locks"). */
+	TArray<FString> Locks;
+	/** The save had a "locks" array (older saves: the locks are rebuilt from the beat and the finished steps). */
+	bool bHasLocks = false;
 
-	bool IsEmpty() const { return Finished.IsEmpty() && Pending.IsEmpty() && CurrentBeat.IsNone(); }
+	bool IsEmpty() const { return Finished.IsEmpty() && Pending.IsEmpty() && CurrentBeat.IsNone() && Locks.IsEmpty(); }
 };

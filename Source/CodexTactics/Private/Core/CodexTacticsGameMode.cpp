@@ -1,4 +1,5 @@
 #include "Core/CodexTacticsGameMode.h"
+#include "Core/LoadoutRules.h"
 #include "Data/LevelJsonRules.h"
 #include "Characters/EnemyCharacter.h"
 #include "Data/DialogueSequenceAsset.h"
@@ -239,7 +240,9 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 			// Sprint 15: heat packs, firewood, flares, the stove with a full canister (tactical_heat.json "starting_loadout").
 			const FTacticalHeatConfig& Heat = TacticalHeatTuning::Get();
 			const FTacticalHeatLoadout Loadout = TacticalHeatRules::GetLoadout(Heat, static_cast<int32>(Entry.Role));
-			Operative->HeatPacksCount = FMath::Min(Loadout.HeatPacks, Heat.HeatPackMaxStack);
+			// The level's "heat_packs_count" replaces the role kit for the starting squad (Demo 01: 0, packs come from the A1 crate).
+			const int32 LevelHeatPacks = !bRecruited && ActiveLevelConfig ? ActiveLevelConfig->Config.SquadLoadout.HeatPacksCount : -1;
+			Operative->HeatPacksCount = LoadoutRules::StartingHeatPacks(Loadout.HeatPacks, LevelHeatPacks, Heat.HeatPackMaxStack);
 			Operative->FirewoodCount = Loadout.Firewood;
 			Operative->FlaresCount = FMath::Min(Loadout.Flares, Heat.FlareMaxCarried);
 			Operative->PortableStovesCount = FMath::Min(Loadout.Stoves, Heat.StoveMaxCarried);

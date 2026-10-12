@@ -31,6 +31,7 @@
 #include "UI/ProfileDialogWidget.h"
 #include "UI/DialogueSubsystem.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "Tactics/CoverGhostActor.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/GorkyGridManager.h"
@@ -1656,7 +1657,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		return;
 	}
 
-	FVector2D MousePosition;
+	FVector2D MousePosition = FVector2D::ZeroVector; // stays zero without a viewport (headless smokes)
 	GetMousePosition(MousePosition.X, MousePosition.Y);
 	const double Now = FApp::GetCurrentTime(); // real time, but follows a fixed-step (bot) run
 	const bool bDoubleClick = LastClickTime >= 0.0
@@ -1670,7 +1671,8 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 	{
 		if (Interactions)
 		{
-			Interactions->RequestInteraction(Interactable, bDoubleClick);
+			// Tutorial command lock (Demo 01: no running until warmed up in A1): a locked sprint walks there instead.
+			Interactions->RequestInteraction(Interactable, bDoubleClick && UTutorialSubsystem::FilterCommand(this, PlayerCommands::Sprint) == PlayerCommands::Sprint);
 			ControllerCommands::Report(this, PlayerCommands::Interact, Interactable);
 		}
 		return;
@@ -1711,8 +1713,11 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 		}
 		return;
 	}
+	// Tutorial command lock (Demo 01 user decision 2026-10-12: no running until warmed up in A1): a locked sprint is
+	// degraded to a walk without any error line; the lock raises "Tutorial.Locked" for the one-time hint.
+	const bool bSprint = bDoubleClick && UTutorialSubsystem::FilterCommand(this, PlayerCommands::Sprint) == PlayerCommands::Sprint;
 	// Godot double click: sprint, or why not.
-	if (bDoubleClick)
+	if (bSprint)
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
@@ -1732,8 +1737,8 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 			}
 		}
 	}
-	OrderGroupMove(Hit.ImpactPoint, bDoubleClick, Dispatch == ECombatOrderDispatch::Queue);
-	ControllerCommands::Report(this, bDoubleClick ? PlayerCommands::Sprint : PlayerCommands::Move, nullptr, Dispatch == ECombatOrderDispatch::Queue,
+	OrderGroupMove(Hit.ImpactPoint, bSprint, Dispatch == ECombatOrderDispatch::Queue);
+	ControllerCommands::Report(this, bSprint ? PlayerCommands::Sprint : PlayerCommands::Move, nullptr, Dispatch == ECombatOrderDispatch::Queue,
 		Squad->HasMultiSelection(), Leader, Hit.ImpactPoint);
 }
 

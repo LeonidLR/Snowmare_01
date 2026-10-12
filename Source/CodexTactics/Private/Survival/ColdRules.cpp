@@ -115,3 +115,13 @@ bool ColdRules::ShouldStepCold(bool bTurnBased, bool bWorldAIPaused)
 {
 	return !bTurnBased && !bWorldAIPaused;
 }
+
+float ColdRules::ApplyColdShock(float Cold, float Amount, float MinLevel)
+{
+	float Result = Cold + Amount;
+	if (MinLevel > 0.f)
+	{
+		Result = FMath::Max(Result, MinLevel);
+	}
+	return FMath::Clamp(Result, 0.f, 100.f);
+}
