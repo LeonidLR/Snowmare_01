@@ -1,4 +1,5 @@
 #include "Misc/AutomationTest.h"
+#include "Core/MissionRules.h"
 #include "Data/LevelJsonRules.h"
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
@@ -83,6 +84,48 @@ bool FLevelJsonFilesParseTest::RunTest(const FString&)
 		for (const FWaveDefinition& Wave : Config.Waves)
 		{
 			TestTrue(FString::Printf(TEXT("%s wave %d has enemies"), *File, Wave.WaveIndex), Wave.GetTotalEnemyCount() > 0);
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelJsonPerMapTest, "CodexTactics.LevelJson.PerMapResolution",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FLevelJsonPerMapTest::RunTest(const FString&)
+{
+	const FString Default = TEXT("level_01_outpost.json");
+	TestEqual(TEXT("PIE prefix stripped"), LevelJsonRules::NormalizeMapName(TEXT("UEDPIE_0_L_Demo01_A_FrozenLake")), FString(TEXT("L_Demo01_A_FrozenLake")));
+	TestEqual(TEXT("Package path stripped"), LevelJsonRules::NormalizeMapName(TEXT("/Game/Maps/L_Demo01_A_FrozenLake")), FString(TEXT("L_Demo01_A_FrozenLake")));
+	TestEqual(TEXT("Plain name kept"), LevelJsonRules::NormalizeMapName(TEXT("L_MovementTest")), FString(TEXT("L_MovementTest")));
+	TestEqual(TEXT("Map file wins over the default"), LevelJsonRules::ChooseLevelJsonFile(TEXT("UEDPIE_1_L_X"), true, Default, FString()), FString(TEXT("L_X.json")));
+	TestEqual(TEXT("No map file -> default"), LevelJsonRules::ChooseLevelJsonFile(TEXT("L_X"), false, Default, FString()), Default);
+	TestEqual(TEXT("Command line wins over the map file"), LevelJsonRules::ChooseLevelJsonFile(TEXT("L_X"), true, Default, TEXT("C:/a.json")), FString(TEXT("C:/a.json")));
+	TestEqual(TEXT("Empty default stays empty"), LevelJsonRules::ChooseLevelJsonFile(TEXT("L_X"), false, FString(), FString()), FString());
+
+	// Real files: the demo map resolves to its own JSON (demo flags, no intro window); maps without a file keep the default.
+	const FString Demo = LevelJsonRules::ResolveLevelJsonFile(TEXT("UEDPIE_0_L_Demo01_A_FrozenLake"), Default, FString());
+	TestEqual(TEXT("Demo map file"), Demo, FString(TEXT("L_Demo01_A_FrozenLake.json")));
+	TestEqual(TEXT("Movement test keeps the default"), LevelJsonRules::ResolveLevelJsonFile(TEXT("L_MovementTest"), Default, FString()), Default);
+	TestEqual(TEXT("Patrol test keeps the default"), LevelJsonRules::ResolveLevelJsonFile(TEXT("L_PatrolTest"), Default, FString()), Default);
+	TestEqual(TEXT("-LevelJson= still wins"), LevelJsonRules::ResolveLevelJsonFile(TEXT("L_Demo01_A_FrozenLake"), Default, Default), Default);
+
+	FLevelCombatConfig Config;
+	FString Error;
+	if (TestTrue(FString::Printf(TEXT("Demo level loads (%s)"), *Error), LevelJsonRules::LoadLevel(Demo, Config, Error)))
+	{
+		TestTrue(TEXT("Demo flag"), Config.Demo.bDemo);
+		TestFalse(TEXT("Panic off"), Config.Demo.bPanicEnabled);
+		TestTrue(TEXT("Tutorial on"), Config.Demo.bTutorial);
+		TestTrue(TEXT("Demo HUD"), Config.Demo.bDemoHud);
+		TestFalse(TEXT("Intro dialogue off"), Config.Demo.bIntroDialogue);
+		TestFalse(TEXT("The intro briefing does not open"), MissionRules::ShouldOpenIntroDialogue(false, Config.Demo.bDemo, Config.Demo.bIntroDialogue));
+		TestFalse(TEXT("Mid-fight horde off"), Config.bHordeEnabled);
+		TestEqual(TEXT("Three waves"), Config.Waves.Num(), 3);
+		for (const FWaveDefinition& Wave : Config.Waves)
+		{
+			TestTrue(TEXT("Sudden start"), Wave.bSuddenStart);
+			TestTrue(TEXT("Cold drain not above 1"), Wave.Modifiers.ColdDrainMult <= 1.f);
 		}
 	}
 	return true;

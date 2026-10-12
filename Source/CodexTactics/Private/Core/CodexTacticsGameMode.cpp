@@ -150,8 +150,11 @@ ULevelConfigAsset* ACodexTacticsGameMode::LoadLevelConfig()
 	// The level JSON (Wave Editor) first, the imported asset as the fallback.
 	ULevelConfigAsset* Level = nullptr;
 	// -LevelJson=<file name or absolute path> replaces the map's level for a run (bot A / B batches on other waves).
-	FString JsonFile = LevelJsonFile;
-	FParse::Value(FCommandLine::Get(), TEXT("LevelJson="), JsonFile);
+	// Without it, Content/Data/LevelJson/<MapName>.json when the map has its own file, else LevelJsonFile.
+	FString CommandLineJson;
+	FParse::Value(FCommandLine::Get(), TEXT("LevelJson="), CommandLineJson);
+	const FString MapName = GetWorld() ? GetWorld()->GetMapName() : FString();
+	const FString JsonFile = LevelJsonRules::ResolveLevelJsonFile(MapName, LevelJsonFile, CommandLineJson);
 	if (!JsonFile.IsEmpty())
 	{
 		FLevelCombatConfig Parsed;

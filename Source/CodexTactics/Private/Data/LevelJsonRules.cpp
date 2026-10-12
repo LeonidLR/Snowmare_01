@@ -3,6 +3,7 @@
 #include "Quests/GateProgressRules.h"
 
 #include "Dom/JsonObject.h"
+#include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
@@ -33,6 +34,43 @@ namespace
 FString LevelJsonRules::GetLevelsDirectory()
 {
 	return FPaths::ProjectContentDir() / TEXT("Data/LevelJson");
+}
+
+FString LevelJsonRules::NormalizeMapName(const FString& MapName)
+{
+	FString Name = FPaths::GetBaseFilename(MapName);
+	// PIE worlds are prefixed "UEDPIE_<n>_".
+	if (Name.StartsWith(TEXT("UEDPIE_")))
+	{
+		FString Rest;
+		FString Tail;
+		if (Name.Split(TEXT("_"), nullptr, &Rest) && Rest.Split(TEXT("_"), nullptr, &Tail)) // drop "UEDPIE", then "<n>"
+		{
+			Name = Tail;
+		}
+	}
+	return Name;
+}
+
+FString LevelJsonRules::ChooseLevelJsonFile(const FString& MapName, bool bMapFileExists, const FString& DefaultFile, const FString& CommandLineOverride)
+{
+	if (!CommandLineOverride.IsEmpty())
+	{
+		return CommandLineOverride;
+	}
+	const FString Name = NormalizeMapName(MapName);
+	if (bMapFileExists && !Name.IsEmpty())
+	{
+		return Name + TEXT(".json");
+	}
+	return DefaultFile;
+}
+
+FString LevelJsonRules::ResolveLevelJsonFile(const FString& MapName, const FString& DefaultFile, const FString& CommandLineOverride)
+{
+	const FString Name = NormalizeMapName(MapName);
+	const bool bExists = !Name.IsEmpty() && IFileManager::Get().FileExists(*(GetLevelsDirectory() / (Name + TEXT(".json"))));
+	return ChooseLevelJsonFile(MapName, bExists, DefaultFile, CommandLineOverride);
 }
 
 bool LevelJsonRules::ParseEnemyType(const FString& Name, EEnemyArchetype& OutType)

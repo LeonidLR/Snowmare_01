@@ -130,7 +130,9 @@ public:
 	/**
 	 * Level combat data file in Content/Data/LevelJson (edited with the Wave Editor, Tools/WaveEditor; read at the start
 	 * by LevelJsonRules — Unreal is the reference since 2026-10-02): waves for the wave subsystem, preparation / rest
-	 * durations and the wave count for the game flow. Unreadable / empty -> LevelConfig.
+	 * durations and the wave count for the game flow. The default for maps without their own file: a map
+	 * with Content/Data/LevelJson/<MapName>.json uses that instead (LevelJsonRules::ResolveLevelJsonFile); -LevelJson= wins
+	 * over both. Unreadable / empty -> LevelConfig.
 	 */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Balance")
 	FString LevelJsonFile = TEXT("level_01_outpost.json");

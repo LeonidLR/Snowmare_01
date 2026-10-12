@@ -17,6 +17,19 @@ namespace LevelJsonRules
 	/** Folder of the level JSON files (Content/Data/LevelJson, staged with the game). */
 	CODEXTACTICS_API FString GetLevelsDirectory();
 
+	/** Map package/short name without the PIE prefix ("UEDPIE_0_L_Demo_A" / "/Game/Maps/L_Demo_A" -> "L_Demo_A"). */
+	CODEXTACTICS_API FString NormalizeMapName(const FString& MapName);
+
+	/**
+	 * Which level JSON a map uses (pure rule, UE-only, 2026-10-12): the command-line override (-LevelJson=) wins; else
+	 * "<MapName>.json" when that file exists (bMapFileExists); else the game mode's DefaultFile. Empty result = no JSON
+	 * (the LevelConfig asset fallback).
+	 */
+	CODEXTACTICS_API FString ChooseLevelJsonFile(const FString& MapName, bool bMapFileExists, const FString& DefaultFile, const FString& CommandLineOverride);
+
+	/** Same as ChooseLevelJsonFile, checking the level folder for "<MapName>.json" itself. */
+	CODEXTACTICS_API FString ResolveLevelJsonFile(const FString& MapName, const FString& DefaultFile, const FString& CommandLineOverride);
+
 	/** "HOUND" / "FROST_HOUND", "SPITTER", "BRUTE", "FROSTBITTEN", "CUTTER", "CRYO_DRONE", "MARKSMAN" (any case). */
 	CODEXTACTICS_API bool ParseEnemyType(const FString& Name, EEnemyArchetype& OutType);
 
