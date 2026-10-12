@@ -87,6 +87,34 @@ bool FNarrativeManifest::Parse(const FString& Json, FNarrativeManifest& Out, FSt
 	return true;
 }
 
+bool FNarrativeManifest::ParseDraftTexts(const FString& Json, TMap<FString, FNarrativeTutorialEntry>& OutTexts, FString& OutError)
+{
+	OutTexts.Reset();
+	TSharedPtr<FJsonObject> Root;
+	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Json), Root) || !Root.IsValid())
+	{
+		OutError = TEXT("draft tutorial texts: not valid JSON");
+		return false;
+	}
+	const TSharedPtr<FJsonObject>* Texts = nullptr;
+	if (Root->TryGetObjectField(TEXT("texts"), Texts))
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Texts)->Values)
+		{
+			const TSharedPtr<FJsonObject> Object = Pair.Value.IsValid() ? Pair.Value->AsObject() : nullptr;
+			if (!Object.IsValid())
+			{
+				continue;
+			}
+			FNarrativeTutorialEntry Entry;
+			Object->TryGetStringField(TEXT("title"), Entry.Title);
+			Object->TryGetStringField(TEXT("text"), Entry.Text);
+			OutTexts.Add(Pair.Key, MoveTemp(Entry));
+		}
+	}
+	return true;
+}
+
 FTutorialTextView FNarrativeManifest::GetTutorialText(const FString& TextId) const
 {
 	FTutorialTextView View;
@@ -104,6 +132,23 @@ FTutorialTextView FNarrativeManifest::GetTutorialText(const FString& TextId) con
 	}
 	if (View.Text.IsEmpty() && View.Radio.IsEmpty())
 	{
+		if (const FNarrativeTutorialEntry* Draft = DraftTutorialTexts.Find(TextId))
+		{
+			View.Title = EnglishOr(Draft->Title, FString());
+			View.Text = EnglishOr(Draft->Text, View.Title); // a title-only entry (a beat title) shows its title
+#if !UE_BUILD_SHIPPING
+			static TSet<FString> LoggedIds;
+			if (!View.Text.IsEmpty() && !LoggedIds.Contains(TextId))
+			{
+				LoggedIds.Add(TextId);
+				UE_LOG(LogCodexTactics, Log, TEXT("Tutorial text %s is missing in the narrative manifest: using the DRAFT text (demo_01_texts_draft.json)"), *TextId);
+			}
+#endif
+			if (!View.Text.IsEmpty())
+			{
+				return View;
+			}
+		}
 		View.Text = FString::Printf(TEXT("[EN missing: %s]"), *TextId);
 		View.bMissing = true;
 	}
@@ -130,6 +175,13 @@ const FNarrativeManifest& FNarrativeManifest::Get()
 		{
 			UE_LOG(LogCodexTactics, Log, TEXT("Narrative manifest loaded: %d sequences, %d glossary names, %d tutorial texts"), GCachedManifest.Sequences.Num(),
 				GCachedManifest.GlossaryNames.Num(), GCachedManifest.TutorialTexts.Num());
+		}
+		// The DRAFT tutorial texts (placeholders until the manifest has a "tutorial" section), loaded after Parse reset the struct.
+		const FString DraftPath = FPaths::ProjectContentDir() / TEXT("Data/Tutorial/demo_01_texts_draft.json");
+		FString DraftJson;
+		if (FFileHelper::LoadFileToString(DraftJson, *DraftPath) && !ParseDraftTexts(DraftJson, GCachedManifest.DraftTutorialTexts, Error))
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("%s (%s)"), *Error, *DraftPath);
 		}
 	}
 	return GCachedManifest;

@@ -1,0 +1,46 @@
+{
+  "_comment": "DRAFT placeholder tutorial texts (Demo 01 A0), used only when narrative_manifest.json has no entry for the id (FNarrativeManifest::DraftTutorialTexts). To be replaced by the sheet Tutorial tab (TANDEM request 17).",
+  "texts": {
+    "WT_A0_BRIEFING_1": {
+      "text": "Cold Silence, this is HQ. Drop confirmed. You're on the ice, three klicks south of the Sector-17 weather station."
+    },
+    "WT_A0_BRIEFING_2": {
+      "text": "Copy, HQ. Frost in the middle of summer... Somebody really doesn't want us here."
+    },
+    "WT_A0_BRIEFING_3": {
+      "text": "The station went dark forty hours ago. Find out why. And keep moving — standing still on that ice will kill you."
+    },
+    "WT_A0_01": {
+      "text": "Follow the beacons north. The fishermen marked the safe ice."
+    },
+    "WT_A0_02": {
+      "text": "You heard him. Eyes open, one step at a time."
+    },
+    "WT_A0_03": {
+      "text": "Minus thirty and dropping. Watch your hands — fingers go first."
+    },
+    "WT_A0_04": {
+      "text": "Radio's dead. Not static — dead. Like something is eating the signal."
+    },
+    "WT_A0_05": {
+      "text": "Then we do it the old way. Beacon one, twenty-five metres."
+    },
+    "WT_A0_06": {
+      "text": "Move out."
+    },
+    "TUT_BEAT_A0": {
+      "title": "THE DROP"
+    },
+    "TUT_A0_CAMERA": {
+      "title": "CAMERA",
+      "text": "Look around. {key:Camera.Pan} or the screen edge moves the camera, {key:Camera.Zoom} zooms, {key:Camera.Rotate} rotates."
+    },
+    "TUT_A0_MOVE": {
+      "title": "MOVE",
+      "text": "Click the ground to move the squad. Head for the amber ring at beacon one."
+    },
+    "OBJ_A0_BEACON1": {
+      "text": "Reach beacon one"
+    }
+  }
+}

@@ -348,6 +348,20 @@ bool FTutorialTextAndDemoFlagsTest::RunTest(const FString&)
 	TestEqual(TEXT("placeholder"), Missing.Text, FString(TEXT("[EN missing: TUT_NONE]")));
 	TestTrue(TEXT("cyrillic counts as missing"), Manifest.GetTutorialText(TEXT("TUT_RU")).bMissing);
 
+	// Lookup order: manifest, then the DRAFT texts, then the placeholder.
+	TestTrue(TEXT("draft parses"), FNarrativeManifest::ParseDraftTexts(TEXT(R"({"texts":{"TUT_A":{"title":"Draft A","text":"draft a"},"TUT_D":{"title":"Draft","text":"Press {key:Camera.Pan}."},"WT_D":{"text":"Radio draft."},"BEAT_D":{"title":"THE DROP"}}})"),
+		Manifest.DraftTutorialTexts, Error));
+	TestEqual(TEXT("manifest wins over the draft"), Manifest.GetTutorialText(TEXT("TUT_A")).Title, FString(TEXT("Split up")));
+	const FTutorialTextView Draft = Manifest.GetTutorialText(TEXT("TUT_D"));
+	TestFalse(TEXT("draft found"), Draft.bMissing);
+	TestEqual(TEXT("draft title"), Draft.Title, FString(TEXT("Draft")));
+	TestFalse(TEXT("draft key token resolves"), PlayerCommands::ResolveKeyTokens(Draft.Text).Contains(TEXT("{key:")));
+	TestEqual(TEXT("draft line"), Manifest.GetTutorialText(TEXT("WT_D")).Text, FString(TEXT("Radio draft.")));
+	TestEqual(TEXT("title-only draft"), Manifest.GetTutorialText(TEXT("BEAT_D")).Text, FString(TEXT("THE DROP")));
+	TestEqual(TEXT("still missing -> placeholder"), Manifest.GetTutorialText(TEXT("TUT_NONE")).Text, FString(TEXT("[EN missing: TUT_NONE]")));
+	TestFalse(TEXT("bad draft json rejected"), FNarrativeManifest::ParseDraftTexts(TEXT("{ nope"), Manifest.DraftTutorialTexts, Error));
+	Manifest.DraftTutorialTexts.Reset();
+
 	FLevelCombatConfig Level;
 	TestTrue(TEXT("level with demo"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"d","demo":{"panic":false,"vision_cones":true,"tutorial":true,"hud":"demo"}})"),
 		TEXT("d"), Level, Error));

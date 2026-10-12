@@ -48,9 +48,17 @@ struct CODEXTACTICS_API FNarrativeManifest
 	TMap<FString, FString> GlossaryNames;
 	/** Tutorial text id -> English texts (manifest "tutorial" section, request #17; empty until Gemini adds the tab). */
 	TMap<FString, FNarrativeTutorialEntry> TutorialTexts;
+	/**
+	 * DRAFT tutorial texts (Content/Data/Tutorial/demo_01_texts_draft.json), the fallback of GetTutorialText until the
+	 * manifest "tutorial" section exists (request #17); the manifest always wins.
+	 */
+	TMap<FString, FNarrativeTutorialEntry> DraftTutorialTexts;
 
 	/** Parses the manifest JSON; false (and OutError) when it is not a valid manifest. */
 	static bool Parse(const FString& Json, FNarrativeManifest& Out, FString& OutError);
+
+	/** Parses {"texts": {"<ID>": {"title": ..., "text": ...}}} into OutTexts (replacing it); false when it is not valid JSON. */
+	static bool ParseDraftTexts(const FString& Json, TMap<FString, FNarrativeTutorialEntry>& OutTexts, FString& OutError);
 
 	/** Loads Content/Data/Narrative/narrative_manifest.json once (empty and a warning in the log when it is missing). */
 	static const FNarrativeManifest& Get();
@@ -69,7 +77,8 @@ struct CODEXTACTICS_API FNarrativeManifest
 
 	/**
 	 * The tutorial text of TextId: the "tutorial" section first (title_en / text_en / radio_en / speaker_en), else a
-	 * one-line "sequences" entry with that id (its first line's speaker / text), else the placeholder
+	 * one-line "sequences" entry with that id (its first line's speaker / text), else DraftTutorialTexts (logged once per
+	 * id in non-shipping builds), else the placeholder
 	 * "[EN missing: <TextId>]" (bMissing). Cyrillic never passes (treated as missing).
 	 */
 	FTutorialTextView GetTutorialText(const FString& TextId) const;
