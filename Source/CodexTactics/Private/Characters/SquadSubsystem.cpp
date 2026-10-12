@@ -1,4 +1,5 @@
 #include "Characters/SquadSubsystem.h"
+#include "Vehicles/VehicleSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -732,6 +733,11 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 {
 	AOperativeCharacter* Operative = Follower.Operative.Get();
 	if (!Operative || bFollowersHolding)
+	{
+		return;
+	}
+	// APC P1: aboard a vehicle he rides; with the leader aboard the ones outside hold their spots.
+	if (VehicleQueries::IsMounted(Operative) || VehicleQueries::IsMounted(&LeaderRef))
 	{
 		return;
 	}

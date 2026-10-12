@@ -162,6 +162,12 @@ public:
 	/** N: lean / blind fire toggle of the selected operative(s). */
 	void ToggleCoverFireModeKey();
 
+	/**
+	 * APC P1: Y (bSquadWide = Alt + Y) - the selected operatives (the whole squad) board the hovered / nearest vehicle, or
+	 * get out when they are all aboard (UVehicleSubsystem::HandleBoardKey). Public for the action bar and the smokes.
+	 */
+	void VehicleKey(bool bSquadWide);
+
 	/** The slot the leader would take for a wall under the cursor hit (smokes / HUD). */
 	bool FindCoverSlotForHit(const FHitResult& Hit, FCoverSlot& OutSlot) const;
 
@@ -188,6 +194,7 @@ private:
 	void RestartMission();
 	/** Ctrl + T: Commander Mode (autonomous squad combat) on / off. */
 	void ToggleAutonomyKey() { ToggleAutonomy(); }
+	void VehicleKeyPressed();
 	void PosturePassiveKey() { ApplyFirePosture(ESquadFirePosture::Passive, IsSquadWideModifierDown()); }
 	void PostureDefensiveKey() { ApplyFirePosture(ESquadFirePosture::Defensive, IsSquadWideModifierDown()); }
 	void PostureAggressiveKey() { ApplyFirePosture(ESquadFirePosture::Aggressive, IsSquadWideModifierDown()); }

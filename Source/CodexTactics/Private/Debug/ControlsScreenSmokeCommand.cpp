@@ -119,7 +119,7 @@ namespace ControlsScreenSmoke
 			if (UCodexControlsScreen* Screen = Controls(UI))
 			{
 				const TArray<FString> Expected = { TEXT("Movement & camera"), TEXT("Squad"), TEXT("Stances"), TEXT("Combat"),
-					TEXT("Tactical pause & turn-based"), TEXT("Items & traps"), TEXT("Saving & menus") };
+					TEXT("Tactical pause & turn-based"), TEXT("Items & traps"), TEXT("Vehicles"), TEXT("Saving & menus") };
 				Check(State, bPaused && Screen->PausedTheWorld(), TEXT("F1 opened the screen and paused the world"));
 				Check(State, UI->GetTopScreen(CodexUITags::Layer_GameMenu) == Screen, TEXT("on the GameMenu layer"));
 				Check(State, Screen->GetSectionTitles() == Expected, FString::Printf(TEXT("sections: %s"), *FString::Join(Screen->GetSectionTitles(), TEXT(" | "))));

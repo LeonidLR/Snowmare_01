@@ -1,4 +1,5 @@
 #include "Interactables/TripwireActor.h"
+#include "Vehicles/VehicleSubsystem.h"
 
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
@@ -324,7 +325,7 @@ void ATripwireActor::ScanForSpotters()
 	const FVector2D B(WireB.X, WireB.Y);
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
-		if (!Member->HealthComponent || !Member->HealthComponent->IsAlive()
+		if (!Member->HealthComponent || !Member->HealthComponent->IsAlive() || VehicleQueries::IsMounted(Member)
 			|| FMath::Abs(Member->GetActorLocation().Z - GetActorLocation().Z) > 300.f)
 		{
 			continue;

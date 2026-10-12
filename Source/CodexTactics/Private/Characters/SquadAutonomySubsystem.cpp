@@ -1,4 +1,5 @@
 #include "Characters/SquadAutonomySubsystem.h"
+#include "Vehicles/VehicleSubsystem.h"
 
 #include "Algo/AnyOf.h"
 #include "Bot/PlaytestBotRules.h"
@@ -161,7 +162,7 @@ void USquadAutonomySubsystem::RunDecisions()
 	TArray<AOperativeCharacter*> Members;
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
-		if (SquadAutonomy::IsAliveOperative(Member))
+		if (SquadAutonomy::IsAliveOperative(Member) && !VehicleQueries::IsMounted(Member)) // APC P1: autonomy never drives / acts from inside
 		{
 			Members.Add(Member);
 		}

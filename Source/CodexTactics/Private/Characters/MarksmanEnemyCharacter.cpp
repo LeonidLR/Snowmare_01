@@ -1,4 +1,5 @@
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Vehicles/VehicleSubsystem.h"
 #include "AI/PatrolRouteActor.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "Data/WeaponTuning.h"
@@ -434,7 +435,7 @@ AOperativeCharacter* AMarksmanEnemyCharacter::FindClosestOperative(float& OutDis
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
 	{
-		if (Member && Member->HealthComponent && Member->HealthComponent->IsAlive())
+		if (Member && Member->HealthComponent && Member->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Member))
 		{
 			const float Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
 			if (Distance < OutDistance)
@@ -696,7 +697,7 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				const float MemberDistance = Member ? FVector::Dist(GetActorLocation(), Member->GetActorLocation()) : 0.f;
-				if (Member && Member != Target && Member->HealthComponent && Member->HealthComponent->IsAlive()
+				if (Member && Member != Target && Member->HealthComponent && Member->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Member)
 					&& MemberDistance < BestDistance && TraceLine(Member).bHasLos)
 				{
 					BestDistance = MemberDistance;
