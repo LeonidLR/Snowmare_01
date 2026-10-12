@@ -41,6 +41,17 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
 
 ---
 
+## 📣 SYNC — 2026-10-12 (Claude): APC P0 + P1 on branch `agents/apc` (temporary worktree `../CodexTactics-agents3`)
+
+**For Gemini — `Config/DefaultEngine.ini` `[/Script/NavigationSystem.NavigationSystemV1]` now declares two nav agents**
+(`+SupportedAgents=`): index 0 `Default` = exactly the engine's former implicit agent (radius 35, height 144, no step override:
+infantry pathing unchanged, verified by the movement / cover / patrol / wave smokes) and index 1 `Vehicle` (radius 200, height 300,
+step 40, `bCanFly=True` so no ground pawn's NavAgentProps ever resolve to it). **Perf:** a second RecastNavMesh actor exists in
+every map, but its navmesh is opt-in — `UVehicleSubsystem` strips the Vehicle agent at BeginPlay from every NavMeshBoundsVolume
+without the actor tag `VehicleNav` (vehicle-only volumes are kept), so maps without vehicles pay nothing but an empty navmesh
+(log: a "ConstructTiledNavMesh: Failed to create navmesh of size 0" warning at load for that empty one). Rendering untouched; the APC uses
+the vendor's Cascade emitters only if the BP adds them (P1 adds none). Keep the agent order (the nav areas address them by index).
+
 ## 📣 SYNC — 2026-10-11 (Claude): sudden horde start on branch `agents/horde` (worktree `../CodexTactics-agents2`)
 
 User decision 2026-10-11: horde waves have no intro cutscene and no 60 s preparation / rest countdown any more — the wave
@@ -119,6 +130,7 @@ between 2026-10-06 and 2026-10-08 (details per commit in HANDOFF §10; `git log 
 
 | Agent | Task | Files / assets | Since |
 |---|---|---|---|
+| Claude (Opus) | **APC P0 + P1** (user decisions 2026-10-12; branch `agents/apc`, worktree `../CodexTactics-agents3`, removed by the lead) | `Source/CodexTactics/*/Vehicles/**` (new), `Source/CodexTacticsTests/Private/Vehicles/**`, `Debug/VehicleSmokeCommand.cpp`, `Scripts/Editor/setup_apc_vehicle.py`, **`Config/DefaultEngine.ini` `[NavigationSystemV1]` SupportedAgents** (see SYNC above), `Content/Vehicles/BP_APC_BTR82.uasset` (to be created by the script once the editor is closed; vendor `VigilanteContent/Vehicles` read only) | 2026-10-12 |
 | Claude (Opus) | Female Soldier Medic-Sapper + sniper rifle (user request 2026-10-09; `setup_operative_sniper_animation.py`, committed on agents/work) | `Content/Characters/Operatives/ABP_Operative.uasset` (sniper class defaults), `Content/Characters/Operatives/Sniper/**`, `Content/Data/Weapons/DA_Weapon_sniper_rifle.uasset`; pack skeletons `Female_Soldier_Skeleton`, Post_Apo `UE4_Mannequin_Skeleton` (compatible lists; untracked) | 2026-10-09 |
 | Claude (Opus) | Sprint 14 knockdown clips / montages (our assets, made by `Scripts/Editor/import_knockdown_animations.py`, committed on agents/work) | `Content/Animations_KnockDown/**` | 2026-10-08 |
 | Claude (Opus) | English UI pass (user decision 2026-10-08: all in-game text English, RU later via localization): every player-facing C++ literal except the narrative files below; guard test `CodexTactics.Text.NoCyrillicInPlayerText` (skip list = narrative files until their English pass lands); UI terms for Gemini in `docs/port/glossary_ui_en.md` | `Source/CodexTactics/**` except `UI/Dialogue*`, `Data/DialogueSequenceAsset.*`, `Quests/**`, `Interactables/NarrativeElementActor.*`, `Core/Mission*`, `UI/PhaseBannersWidget.*` (Sonnet's narrative integration) | 2026-10-08 |
@@ -977,6 +989,7 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-10-12 (Claude, `agents/apc`, temp worktree `../CodexTactics-agents3`): APC P0 + P1 — nav agents Default + Vehicle (DefaultEngine.ini, SYNC above), `AVehiclePawn` (kinematic, Vehicle navmesh, hull cover / blocking, infantry nav carve when parked, cabin heat, engine noise), `UVehicleSubsystem` (Y / Alt + Y board / get out, seats, drive clicks, save / load), `NavArea_NoVehicle`, commands `Vehicle.*` + F1 section «Vehicles», events `Vehicle*`, tutorial volume «Activated By: Vehicle», `VehicleSmoke` (HANDOFF §5 «Vehicles» / §6 «APC» / §10). `BP_APC_BTR82` not created yet (the user's editor had the main project open): `Scripts/Editor/setup_apc_vehicle.py` with the editor closed. Nothing for Gemini now; later (P2+): turret muzzle / tracer, wheel dust, a path-preview ribbon material.
 - 2026-10-12 (Claude, `agents/work`): Demo 01 beat A6 cover events (`CoverEntered` on settling, `CoverLeft`, `CoverShimmy`, `CornerReached`; `OnGameplayEventDetailed`) + tutorial `distinct_operatives`; sample A6 steps. Request #17 (tutorial texts) gains the ids `TUT_BEAT_A6`, `TUT_A6_COVER`, `TUT_A6_SQUAD`, `TUT_A6_SHIMMY`, `TUT_A6_CORNER`, `OBJ_A6_SQUAD_COVER`, `OBJ_A6_BOUND`.
 - 2026-10-12 (Claude, `agents/work`): Demo 01 G3 PMC tripwires placed in the level (`APMCTripwireActor`, hidden until spotted, anyone disarms with the mine formula + cold, operatives-only trigger, TB 2 AP disarm, saved; HANDOFF §6 «How to place a PMC tripwire» / §10). No asset changes. For Gemini (optional, no request): the wire / pegs use `BasicShapeMaterial` with the `Color` parameter (PMC red, squad grey); a proper wire material can be set on the BP child.
 - 2026-10-11 (Claude, `agents/work`): blast gate tied to the generator during the wave fight (`Quests/GateProgressRules`, `AGateActor` paced mode, HUD line + world label, HQ feed lines, save `gate_progress`, level JSON `gate_*` keys); HANDOFF §5 / §7 / §10. Gameplay only, nothing for Gemini (the door leaves are still engine cubes).
