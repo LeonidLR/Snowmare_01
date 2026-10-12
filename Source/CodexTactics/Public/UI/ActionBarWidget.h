@@ -127,6 +127,16 @@ private:
 	UFUNCTION()
 	void HandleAutonomy();
 
+	/** APC P1: «BOARD [Y]» near a vehicle / «EXIT [Y]» aboard (hidden otherwise). */
+	UFUNCTION()
+	void HandleVehicle();
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> BarVehicleText;
+
+	UPROPERTY()
+	TObjectPtr<UButton> VehicleButton;
+
 	UPROPERTY()
 	TObjectPtr<UTextBlock> BarAutonomyText;
 

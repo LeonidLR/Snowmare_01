@@ -5,6 +5,7 @@
 #include "Components/BoxComponent.h"
 #include "Engine/World.h"
 #include "Tutorial/TutorialSubsystem.h"
+#include "Vehicles/VehiclePawn.h"
 
 ATutorialTriggerVolume::ATutorialTriggerVolume()
 {
@@ -40,6 +41,20 @@ bool ATutorialTriggerVolume::TryActivate(AActor* Actor)
 	UWorld* World = GetWorld();
 	const USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
 	AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Actor);
+	// APC P1: "Activated By: Vehicle" - a vehicle with the squad aboard drove in; its driver (else any crew member) counts.
+	if (ActivatedBy == ETutorialVolumeFilter::Vehicle)
+	{
+		const AVehiclePawn* Vehicle = Cast<AVehiclePawn>(Actor);
+		Operative = Vehicle ? Vehicle->GetOccupant(EVehicleSeat::Driver) : nullptr;
+		for (const FVehicleCrewMember& Member : Vehicle ? Vehicle->GetCrew() : TArray<FVehicleCrewMember>())
+		{
+			Operative = Operative ? Operative : Member.Operative.Get();
+		}
+	}
+	else if (Cast<AVehiclePawn>(Actor))
+	{
+		return false;
+	}
 	if (!Operative || !Squad || !Squad->GetMembers().Contains(Operative))
 	{
 		return false;
@@ -60,7 +75,7 @@ bool ATutorialTriggerVolume::TryActivate(AActor* Actor)
 void ATutorialTriggerVolume::CheckOverlapping()
 {
 	TArray<AActor*> Inside;
-	Box->GetOverlappingActors(Inside, AOperativeCharacter::StaticClass());
+	Box->GetOverlappingActors(Inside, ActivatedBy == ETutorialVolumeFilter::Vehicle ? AVehiclePawn::StaticClass() : AOperativeCharacter::StaticClass());
 	for (AActor* Actor : Inside)
 	{
 		if (TryActivate(Actor) && bFireOnce)

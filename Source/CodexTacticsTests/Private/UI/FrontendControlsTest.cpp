@@ -39,6 +39,7 @@ namespace ControlsTest
 		PlayerCommands::TacticalPause, PlayerCommands::PauseRelease, PlayerCommands::TurnBasedEnter, PlayerCommands::TurnBasedExit,
 		PlayerCommands::EndTurn, PlayerCommands::NextUnit, PlayerCommands::TurnBasedAttack, PlayerCommands::TurnBasedOrder,
 		PlayerCommands::QuickSave, PlayerCommands::QuickLoad, PlayerCommands::ControlsScreen, PlayerCommands::PauseMenu,
+		PlayerCommands::VehicleBoard, PlayerCommands::VehicleDisembark, PlayerCommands::VehicleDrive,
 		};
 	}
 }
@@ -68,8 +69,8 @@ bool FControlsSectionsTest::RunTest(const FString&)
 {
 	const TArray<FCodexControlsSection> Sections = CodexControlsRules::BuildSections();
 	const TArray<const TCHAR*>& Titles = PlayerCommands::GetSections();
-	TestEqual(TEXT("Seven sections, none empty"), Sections.Num(), Titles.Num());
-	TestEqual(TEXT("Section count"), Sections.Num(), 7);
+	TestEqual(TEXT("Eight sections, none empty"), Sections.Num(), Titles.Num());
+	TestEqual(TEXT("Section count"), Sections.Num(), 8);
 	for (int32 Index = 0; Index < Sections.Num() && Index < Titles.Num(); ++Index)
 	{
 		TestEqual(TEXT("Section order"), Sections[Index].Title, FString(Titles[Index]));

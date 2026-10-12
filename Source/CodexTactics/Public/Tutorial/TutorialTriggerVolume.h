@@ -13,7 +13,9 @@ enum class ETutorialVolumeFilter : uint8
 	/** Only the operative the player leads (default: the lesson is about what the player does). */
 	Leader UMETA(DisplayName = "Only The Leader"),
 	/** Any squad member. */
-	AnyOperative UMETA(DisplayName = "Any Operative")
+	AnyOperative UMETA(DisplayName = "Any Operative"),
+	/** A vehicle with squad members aboard (APC P1; the step counts its driver, else any crew member). */
+	Vehicle UMETA(DisplayName = "Vehicle")
 };
 
 /**

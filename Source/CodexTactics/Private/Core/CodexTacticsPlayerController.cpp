@@ -57,6 +57,8 @@
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "UI/Frontend/CodexUISubsystem.h"
+#include "Vehicles/VehiclePawn.h"
+#include "Vehicles/VehicleSubsystem.h"
 
 namespace ControllerCommands
 {
@@ -280,6 +282,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ACodexTacticsPlayerController::ProfilePressed);
 	// Sprint 12: N = cover fire mode (corner lean / blind fire) of the selected operative(s).
 	InputComponent->BindKey(EKeys::N, IE_Pressed, this, &ACodexTacticsPlayerController::ToggleCoverFireModeKey);
+	// APC P1 (user decision 2026-10-12): Y = board / get out (the selection), Alt + Y = the whole squad.
+	InputComponent->BindKey(EKeys::Y, IE_Pressed, this, &ACodexTacticsPlayerController::VehicleKeyPressed);
 	// Fire posture direct-select keys (user decision 2026-10-06): , Passive, . Defensive, / Aggressive.
 	InputComponent->BindKey(EKeys::Comma, IE_Pressed, this, &ACodexTacticsPlayerController::PosturePassiveKey);
 	InputComponent->BindKey(EKeys::Period, IE_Pressed, this, &ACodexTacticsPlayerController::PostureDefensiveKey);
@@ -578,6 +582,10 @@ AOperativeCharacter* ACodexTacticsPlayerController::FindClickedMember(const FHit
 		float ClosestDist = SelectRadius;
 		for (AOperativeCharacter* Member : Members)
 		{
+			if (VehicleQueries::IsMounted(Member))
+			{
+				continue; // inside a vehicle: picked with 1-4, never by a click near the hull
+			}
 			const float Dist = FVector::Dist2D(Member->GetActorLocation(), Hit.ImpactPoint);
 			if (Dist <= ClosestDist)
 			{
@@ -1052,6 +1060,12 @@ void ACodexTacticsPlayerController::HandleSpaceHold()
 	{
 		return;
 	}
+	// APC P1: the grid fight has no vehicle seats yet (P3) - everyone out first.
+	if (const UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>(); Vehicles && Vehicles->HasMountedOperatives())
+	{
+		PostHeadquarters(LOCTEXT("TurnBasedMounted", "⚠️ Get out of the APC first [Y]: it can't fight turn-based yet."));
+		return;
+	}
 
 	// User decision 2026-09-30: only on flat ground — no fight started up on a platform or down in a pit.
 	if (Flow->GetCombatMode() != ECodexCombatMode::TurnBased)
@@ -1356,6 +1370,12 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 	TArray<AOperativeCharacter*> Group = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
 	Group.Remove(Leader);
 	Group.Insert(Leader, 0);
+	// APC P1: the ones aboard ride with the vehicle (Y gets them out first).
+	Group.RemoveAll([](const AOperativeCharacter* Member) { return VehicleQueries::IsMounted(Member); });
+	if (Group.IsEmpty())
+	{
+		return;
+	}
 	FVector Average = FVector::ZeroVector;
 	for (const AOperativeCharacter* Member : Group)
 	{
@@ -1373,6 +1393,10 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 		if (UseOrders)
 		{
 			UseOrders->CancelUseOrder(Group[Index]); // a move order replaces a planned / running "Ignite"
+		}
+		if (UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>())
+		{
+			Vehicles->CancelBoarding(Group[Index]); // ... and a walk to the APC's door
 		}
 		if (bPlan)
 		{
@@ -1458,6 +1482,33 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 				Relocation->StartRelocate(Object, Leader);
 			}
 		}
+		return;
+	}
+
+	// APC P1: with the leader aboard a click on the ground drives his vehicle (double click: full speed); a click on an
+	// operative still selects him; Ctrl / Shift + click wait for the turret (P2).
+	if (UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>(); Vehicles && Vehicles->IsMounted(Leader))
+	{
+		HideCoverPreview();
+		if (AOperativeCharacter* Picked = FindClickedMember(Hit))
+		{
+			Squad->SetLeader(Picked);
+			ControllerCommands::Report(this, PlayerCommands::SelectMember, nullptr, false, false, Picked);
+			return;
+		}
+		if (IsAttackModifierDown() || IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift)
+			|| Hit.GetActor() == Vehicles->GetVehicleOf(Leader))
+		{
+			return;
+		}
+		FVector2D DriveMouse;
+		GetMousePosition(DriveMouse.X, DriveMouse.Y);
+		const double DriveNow = FApp::GetCurrentTime();
+		const bool bDriveDoubleClick = LastClickTime >= 0.0 && DriveNow - LastClickTime <= DoubleClickSeconds
+			&& FVector2D::Distance(DriveMouse, LastClickPosition) <= DoubleClickPixels;
+		LastClickTime = bDriveDoubleClick ? -1.0 : DriveNow;
+		LastClickPosition = DriveMouse;
+		Vehicles->HandleDriveClick(Leader, Hit.ImpactPoint, bDriveDoubleClick);
 		return;
 	}
 
@@ -2246,6 +2297,14 @@ bool ACodexTacticsPlayerController::FindCoverSlotForHit(const FHitResult& Hit, F
 {
 	OutSlot = FCoverSlot();
 	AActor* HitActor = Hit.GetActor();
+	// APC P1: a click anywhere on the vehicle (roof included) probes the hull side the player looks at.
+	if (const AVehiclePawn* Vehicle = Cast<AVehiclePawn>(HitActor))
+	{
+		const FVector View = PlayerCameraManager ? PlayerCameraManager->GetCameraRotation().Vector() : FVector::ForwardVector;
+		FVector Probe;
+		FVector Normal;
+		return Vehicle->GetCoverProbe(Hit.ImpactPoint, View, Probe, Normal) && CoverTraceRules::FindCoverSlotAt(GetWorld(), Probe, -Normal, OutSlot);
+	}
 	if (!HitActor || HitActor->IsA<APawn>() || HitActor->IsA<AEnemyGhostActor>() || HitActor->IsA<ACoverGhostActor>()
 		|| HitActor->ActorHasTag(FName(TEXT("Enemy"))))
 	{
@@ -2281,12 +2340,15 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	{
 		return false;
 	}
-	if (FindClickedMember(Hit) || HitActor->IsA<APawn>() || HitActor->ActorHasTag(FName(TEXT("Enemy"))))
+	// APC P1: the vehicle is a Pawn but its hull is cover (the click on the APC stays "take cover", user decision 2026-10-12).
+	const bool bVehicle = HitActor->IsA<AVehiclePawn>();
+	if (FindClickedMember(Hit) || (HitActor->IsA<APawn>() && !bVehicle) || HitActor->ActorHasTag(FName(TEXT("Enemy"))))
 	{
 		return false;
 	}
-	// A floor / ramp is a move target, not a wall (Alt + click probes anyway: a wall edge may have been clicked).
-	if (FMath::Abs(Hit.ImpactNormal.Z) > 0.3f && !bAlt)
+	// A floor / ramp is a move target, not a wall (Alt + click probes anyway: a wall edge may have been clicked); the
+	// vehicle's roof is always its hull.
+	if (FMath::Abs(Hit.ImpactNormal.Z) > 0.3f && !bAlt && !bVehicle)
 	{
 		return false;
 	}
@@ -2368,6 +2430,11 @@ void ACodexTacticsPlayerController::ShowCoverPreview(AOperativeCharacter* Operat
 		const FText Kind = Slot.Height == ECoverHeight::HighCover ? LOCTEXT("CoverHigh", "wall") : LOCTEXT("CoverLow", "low cover");
 		const FText Corners = Slot.HasExposedEdge() ? LOCTEXT("CoverCorner", ", corner to fire from") : FText::GetEmpty();
 		Messages->PostMessage(Operative->DisplayName, FText::Format(LOCTEXT("CoverPreview", "🧱 Cover: {0}{1}. Click again to take it."), Kind, Corners));
+		if (Slot.WallActor.IsValid() && Slot.WallActor->IsA<AVehiclePawn>())
+		{
+			Messages->PostMessage(LOCTEXT("HQ", "HQ"), FText::FromString(PlayerCommands::ResolveKeyTokens(
+				TEXT("{key:Vehicle.Board} Board the APC, [Alt+Y] all aboard."))));
+		}
 	}
 }
 
@@ -2437,6 +2504,10 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 		}
 		return;
 	}
+	if (UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>())
+	{
+		Vehicles->CancelBoarding(Operative);
+	}
 	const EOperativeOrderResult Result = Operative->OrderTakeCover(Slot, true);
 	if (Result == EOperativeOrderResult::Accepted)
 	{
@@ -2458,6 +2529,27 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 	{
 		Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("CoverUnreachable", "⚠️ No path to this cover."));
 	}
+}
+
+void ACodexTacticsPlayerController::VehicleKey(bool bSquadWide)
+{
+	if (UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>())
+	{
+		// The hovered vehicle wins when several are near (design 1.1).
+		FHitResult Hover;
+		AVehiclePawn* Hovered = GetHitResultUnderCursor(ECC_Visibility, false, Hover) ? Cast<AVehiclePawn>(Hover.GetActor()) : nullptr;
+		HideCoverPreview();
+		Vehicles->HandleBoardKey(bSquadWide, Hovered);
+	}
+}
+
+void ACodexTacticsPlayerController::VehicleKeyPressed()
+{
+	if (IsDialogueOpen())
+	{
+		return;
+	}
+	VehicleKey(IsSquadWideModifierDown());
 }
 
 void ACodexTacticsPlayerController::ToggleCoverFireModeKey()

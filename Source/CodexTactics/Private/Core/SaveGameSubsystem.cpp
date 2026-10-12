@@ -1,4 +1,5 @@
 #include "Core/SaveGameSubsystem.h"
+#include "Vehicles/VehicleSubsystem.h"
 #include "AI/PatrolRouteActor.h"
 #include "AIController.h"
 #include "Camera/TacticalCameraPawn.h"
@@ -960,6 +961,11 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 		Enemies.Add(MakeShared<FJsonValueObject>(SaveEnemy(Enemy, PreCombat.bActive && PreCombat.bAmbush)));
 	}
 	WorldState->SetArrayField(TEXT("enemies"), Enemies);
+	// APC P1: vehicles (transform, crew + seats); the crew's operatives are saved in "squad" as usual.
+	if (const UVehicleSubsystem* Vehicles = World->GetSubsystem<UVehicleSubsystem>())
+	{
+		WorldState->SetArrayField(TEXT("vehicles"), Vehicles->CaptureSave());
+	}
 
 	const FString Stage = GetCurrentStageName();
 	TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -1115,6 +1121,12 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 	UWorld* World = GetWorld();
 	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 	const int32 Version = SaveInt(Data, TEXT("version"), 1);
+
+	// APC P1: everyone out of the vehicles first (the save puts them back aboard below, or where they stood).
+	if (UVehicleSubsystem* Vehicles = World->GetSubsystem<UVehicleSubsystem>())
+	{
+		Vehicles->PrepareForLoad();
+	}
 
 	// Whatever was being carried / placed in this session is dropped first (the objects get their saved places below).
 	if (URelocationSubsystem* Relocation = World->GetSubsystem<URelocationSubsystem>())
@@ -1289,6 +1301,12 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 	if (!WorldState)
 	{
 		return;
+	}
+	// APC P1: vehicles back at their places, their crews aboard in their seats (older saves: everyone on foot).
+	const TArray<TSharedPtr<FJsonValue>>* VehicleList = nullptr;
+	if (UVehicleSubsystem* Vehicles = World->GetSubsystem<UVehicleSubsystem>(); Vehicles && (*WorldState)->TryGetArrayField(TEXT("vehicles"), VehicleList))
+	{
+		Vehicles->RestoreSave(*VehicleList);
 	}
 	// Sprint 13: piles on the ground (older saves have none: the piles of the session are cleared either way).
 	for (TActorIterator<ADroppedItemActor> It(World); It; ++It)

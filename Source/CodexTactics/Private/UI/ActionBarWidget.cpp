@@ -16,6 +16,8 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Core/CodexTacticsPlayerController.h"
+#include "Vehicles/VehiclePawn.h"
+#include "Vehicles/VehicleSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/World.h"
 #include "Interactables/RelocationSubsystem.h"
@@ -160,6 +162,12 @@ void UActionBarWidget::BuildDefaultLayout()
 	BarAutonomyText = MakeText(TEXT("BarAutonomyText"), 10, BarTextColor);
 	AutonomyButton = MakeSlotButton(TEXT("BarAutonomyButton"), BarWhite * 0.6f, 54.f, 56.f, BarAutonomyText, Row);
 	AutonomyButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleAutonomy);
+
+	// APC P1 (user decision 2026-10-12): board / get out next to the guard and autonomy switches.
+	BarVehicleText = MakeText(TEXT("BarVehicleText"), 10, BarTextColor);
+	VehicleButton = MakeSlotButton(TEXT("BarVehicleButton"), BarBlue, 54.f, 56.f, BarVehicleText, Row);
+	VehicleButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleVehicle);
+	VehicleButton->SetVisibility(ESlateVisibility::Collapsed);
 
 	// Fire posture (user request 2026-10-06): three direct-select buttons with their keys , . /
 	PostureButtons.Reset();
@@ -307,6 +315,17 @@ void UActionBarWidget::Refresh()
 		AutonomyButton->SetToolTipText(bAutonomy
 			? LOCTEXT("AutoOnTip", "Autonomy ON: operatives fight on their own within 7 m of the order point. Click: manual control [Ctrl+T]")
 			: LOCTEXT("AutoOffTip", "Autonomy OFF: manual control. Click: operatives fight on their own at the order point [Ctrl+T]"));
+	}
+	if (BarVehicleText && VehicleButton)
+	{
+		// Aboard: EXIT; a vehicle within the board range: BOARD; else hidden.
+		const UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>();
+		const bool bAboard = Vehicles && Vehicles->IsMounted(Leader);
+		const AVehiclePawn* Near = Vehicles && !bAboard ? Vehicles->FindNearestVehicle(Leader->GetActorLocation(), 3000.f) : nullptr;
+		VehicleButton->SetVisibility(bAboard || Near ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		BarVehicleText->SetText(bAboard ? LOCTEXT("VehicleExit", "EXIT\n[Y]") : LOCTEXT("VehicleBoard", "BOARD\n[Y]"));
+		VehicleButton->SetToolTipText(bAboard ? LOCTEXT("VehicleExitTip", "Get out of the vehicle [Y] (Alt+Y: whole squad)")
+			: LOCTEXT("VehicleBoardTip", "Board the vehicle [Y] (Alt+Y: whole squad)"));
 	}
 	if (PostureButtons.Num() == 3)
 	{
@@ -617,6 +636,15 @@ void UActionBarWidget::HandleAutonomy()
 	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
 	{
 		PC->ToggleAutonomy();
+	}
+	Refresh();
+}
+
+void UActionBarWidget::HandleVehicle()
+{
+	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
+	{
+		PC->VehicleKey(false);
 	}
 	Refresh();
 }

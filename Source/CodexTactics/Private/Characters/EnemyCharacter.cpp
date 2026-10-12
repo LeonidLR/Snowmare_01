@@ -1,4 +1,5 @@
 #include "Characters/EnemyCharacter.h"
+#include "Vehicles/VehicleSubsystem.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/KnockdownRules.h"
 #include "AI/PatrolRouteActor.h"
@@ -818,7 +819,7 @@ AActor* AEnemyCharacter::FindTarget() const
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
 		FVector Belief = Member->GetActorLocation();
-		if (Member->HealthComponent && Member->HealthComponent->IsAlive() && (!Sight || Sight->GetBelief(this, Member, Belief)))
+		if (Member->HealthComponent && Member->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Member) && (!Sight || Sight->GetBelief(this, Member, Belief)))
 		{
 			Known.Add(Member);
 			Actors.Add(Member);
@@ -1073,7 +1074,7 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
 	{
 		FVector Belief;
-		if (Member->HealthComponent && Member->HealthComponent->IsAlive() && (!Sight || Sight->GetBelief(this, Member, Belief)))
+		if (Member->HealthComponent && Member->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Member) && (!Sight || Sight->GetBelief(this, Member, Belief)))
 		{
 			Members.Add(Member);
 			Positions.Add(GodotPosition(Member));
@@ -1418,7 +1419,7 @@ AActor* AEnemyCharacter::FindVisibleOperative(const FEnemyPerceptionParams& Para
 	float BestDistance = TNumericLimits<float>::Max();
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
-		if (!Member || !Member->HealthComponent || !Member->HealthComponent->IsAlive())
+		if (!Member || !Member->HealthComponent || !Member->HealthComponent->IsAlive() || VehicleQueries::IsMounted(Member))
 		{
 			continue;
 		}
@@ -1512,7 +1513,7 @@ bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
 		const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 		for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
 		{
-			if (!Member || !Member->HealthComponent || !Member->HealthComponent->IsAlive())
+			if (!Member || !Member->HealthComponent || !Member->HealthComponent->IsAlive() || VehicleQueries::IsMounted(Member))
 			{
 				continue;
 			}
@@ -2062,7 +2063,7 @@ AActor* AEnemyCharacter::FindClosestSquadMember() const
 
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
-		if (!Member || !Member->HealthComponent || !Member->HealthComponent->IsAlive())
+		if (!Member || !Member->HealthComponent || !Member->HealthComponent->IsAlive() || VehicleQueries::IsMounted(Member))
 		{
 			continue;
 		}
@@ -2335,7 +2336,7 @@ void AEnemyCharacter::ApplyJumpImpactDamage()
 		for (AOperativeCharacter* Member : Squad->GetMembers())
 		{
 			const FVector Position = GodotPosition(Member);
-			if (FVector::Dist(Feet, Position) <= JumpDamageRadius && FMath::Abs(Feet.Z - Position.Z) <= 150.f)
+			if (!VehicleQueries::IsMounted(Member) && FVector::Dist(Feet, Position) <= JumpDamageRadius && FMath::Abs(Feet.Z - Position.Z) <= 150.f)
 			{
 				// Sprint 14: the pounce landing knocks him down (dodged: no hit, no fall).
 				if (Member->TakeHit(Damage, EnemyDisplayName, bIsCrit, false, this) > 0.f && Member->KnockdownComponent)

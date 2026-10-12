@@ -1,0 +1,153 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Dom/JsonValue.h"
+#include "Subsystems/WorldSubsystem.h"
+#include "Vehicles/VehicleRules.h"
+#include "VehicleSubsystem.generated.h"
+
+class AOperativeCharacter;
+class AVehiclePawn;
+class ANavMeshBoundsVolume;
+
+/**
+ * The squad's vehicles (APC P1, docs/vehicles/APC_02_DESIGN.md §1): boarding (Y / Alt + Y: walk to the nearest free door,
+ * ~2 s, then mounted), getting out (exit on the side away from known threats, valid navmesh, straight into cover at the
+ * hull), driving orders from the controller, the mounted registry every system asks (VehicleQueries::IsMounted), the
+ * opt-in vehicle navmesh bounds and the save / load of vehicles and crews.
+ *
+ * Mounted operatives stay squad members, co-located with the vehicle (attached, hidden, no collision, movement off); a
+ * short list of systems checks IsMounted (enemy targeting / perception, damage, auto fire, formation, autonomy, move
+ * orders, mines / tripwires, turn-based entry). UE-only.
+ */
+UCLASS()
+class CODEXTACTICS_API UVehicleSubsystem : public UTickableWorldSubsystem
+{
+	GENERATED_BODY()
+
+public:
+	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
+	virtual void Tick(float DeltaTime) override;
+	virtual TStatId GetStatId() const override;
+
+	void RegisterVehicle(AVehiclePawn* Vehicle);
+	void UnregisterVehicle(AVehiclePawn* Vehicle);
+	TArray<AVehiclePawn*> GetVehicles() const;
+
+	// --- Mounted registry ------------------------------------------------------------------------------------------
+
+	bool IsMounted(const AActor* Operative) const;
+	AVehiclePawn* GetVehicleOf(const AActor* Operative) const;
+	bool HasMountedOperatives() const { return !Mounted.IsEmpty(); }
+	/** Walking to a door / climbing in (smokes). */
+	bool IsBoarding(const AOperativeCharacter* Operative) const;
+	/** Climbing out (smokes). */
+	bool IsDisembarking(const AOperativeCharacter* Operative) const;
+
+	// --- Orders --------------------------------------------------------------------------------------------------
+
+	/**
+	 * The Y key (bSquadWide: Alt + Y): the selected operatives (or the whole squad) board the nearest vehicle within range
+	 * (Preferred when it is in range), or all get out when they are all aboard. Posts the feed lines, reports
+	 * Vehicle.Board / Vehicle.Disembark. Returns what it did.
+	 */
+	EVehicleKeyAction HandleBoardKey(bool bSquadWide, AVehiclePawn* Preferred = nullptr);
+
+	/** Orders Operatives into Vehicle (nullptr: the nearest in range); returns how many were sent. */
+	int32 OrderBoard(const TArray<AOperativeCharacter*>& Operatives, AVehiclePawn* Vehicle = nullptr);
+
+	/** A new order for Operative (a move / cover click): his walk to the door is dropped. */
+	void CancelBoarding(const AOperativeCharacter* Operative);
+
+	/** Orders the mounted ones among Operatives out; returns how many will get out. */
+	int32 OrderDisembark(const TArray<AOperativeCharacter*>& Operatives);
+
+	/**
+	 * A ground click while the leader is aboard (the controller): drive his vehicle there (bRush: double click). Refused in
+	 * the tactical pause / turn-based (P1) with a feed line. True when the click was a vehicle order (handled).
+	 */
+	bool HandleDriveClick(AOperativeCharacter* Leader, const FVector& Goal, bool bRush);
+
+	/** The nearest vehicle to Location within MaxDistanceCm (any when < 0). */
+	AVehiclePawn* FindNearestVehicle(const FVector& Location, float MaxDistanceCm = -1.f) const;
+
+	/** Mounts at once (load / smokes): no walk, no door time. */
+	bool MountImmediately(AOperativeCharacter* Operative, AVehiclePawn* Vehicle);
+
+	/** Dismounts at once at Location (load / smokes); no cover order. */
+	void DismountImmediately(AOperativeCharacter* Operative, const FVector& Location);
+
+	// --- Navigation ----------------------------------------------------------------------------------------------
+
+	/**
+	 * Lets Volume build the vehicle navmesh too (the vehicle agent bit) and re-registers its bounds. Vehicle navmesh is
+	 * opt-in: at BeginPlay every NavMeshBoundsVolume without the "VehicleNav" tag that also serves the infantry loses the
+	 * Vehicle agent (no second navmesh cost on maps without vehicles); a vehicle-only volume (Default unticked) keeps it.
+	 */
+	void EnableVehicleNavigation(ANavMeshBoundsVolume* Volume);
+
+	/** SupportedAgents index of the vehicle agent, INDEX_NONE without one. */
+	int32 GetVehicleAgentIndex() const;
+
+	// --- Save / load -----------------------------------------------------------------------------------------------
+
+	/** world_state.vehicles: transform, crew + seats per vehicle. */
+	TArray<TSharedPtr<FJsonValue>> CaptureSave() const;
+
+	/** Before a load is applied: everyone out at once (they get their saved places), drives / boarding orders dropped. */
+	void PrepareForLoad();
+
+	/** Applies world_state.vehicles (vehicles by name, else spawned from their class). */
+	void RestoreSave(const TArray<TSharedPtr<FJsonValue>>& Entries);
+
+private:
+	struct FPendingBoard
+	{
+		TWeakObjectPtr<AOperativeCharacter> Operative;
+		TWeakObjectPtr<AVehiclePawn> Vehicle;
+		int32 Entry = 0;
+		/** < 0: walking to the door; >= 0: climbing in. */
+		float ClimbLeft = -1.f;
+		float Age = 0.f;
+		/** Seconds standing still short of the door (a crowded door, a path dropped by a tile rebuild). */
+		float IdleSeconds = 0.f;
+		int32 Retries = 0;
+	};
+
+	struct FPendingExit
+	{
+		TWeakObjectPtr<AOperativeCharacter> Operative;
+		TWeakObjectPtr<AVehiclePawn> Vehicle;
+		FVector Point = FVector::ZeroVector;
+		float ClimbLeft = 0.f;
+	};
+
+	void Mount(AOperativeCharacter* Operative, AVehiclePawn* Vehicle, bool bRaiseEvent);
+	void Unmount(AOperativeCharacter* Operative, const FVector& Location, bool bTakeCover);
+	void UpdateBoarding(float DeltaTime);
+	void UpdateExits(float DeltaTime);
+	void UpdateDoors();
+	void StripVehicleAgentFromBounds();
+	TArray<FVector> GatherKnownThreats(const FVector& Around) const;
+	bool IsExitFree(const AVehiclePawn& Vehicle, const FVector& Point) const;
+	void PostLine(const FText& Speaker, const FText& Text) const;
+	FText RefusalText(EVehicleRefusal Refusal, const AOperativeCharacter* Operative) const;
+	void HandleArrived(AVehiclePawn* Vehicle);
+	void HandleBlocked(AVehiclePawn* Vehicle);
+
+	TArray<TWeakObjectPtr<AVehiclePawn>> Vehicles;
+	TMap<TWeakObjectPtr<const AActor>, TWeakObjectPtr<AVehiclePawn>> Mounted;
+	TArray<FPendingBoard> Boarding;
+	TArray<FPendingExit> Exits;
+};
+
+/** Fast queries for the systems that treat a mounted operative differently (no include of the subsystem's users). */
+namespace VehicleQueries
+{
+	/** Operative sits in a vehicle. */
+	CODEXTACTICS_API bool IsMounted(const AActor* Operative);
+
+	/** Its vehicle, nullptr when on foot. */
+	CODEXTACTICS_API AVehiclePawn* GetVehicle(const AActor* Operative);
+}

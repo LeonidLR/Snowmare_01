@@ -12,7 +12,7 @@
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
-    "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "VehicleSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
@@ -352,7 +352,13 @@
       "name": "build-config",
       "globs": ["Source/**/*.Build.cs", "Source/*.Target.cs", "Config/DefaultEngine.ini", "Config/DefaultGame.ini", "Config/DefaultInput.ini", "Config/DefaultGameplayTags.ini", "CodexTactics.uproject"],
       "tests": ["CodexTactics"],
-      "smokes": ["MovementSmoke", "CombatFlowSmoke", "MissionSmoke", "StanceSmoke", "SaveLoadSmoke", "FrontendSmoke", "PauseMenuSmoke"]
+      "smokes": ["MovementSmoke", "CombatFlowSmoke", "MissionSmoke", "StanceSmoke", "SaveLoadSmoke", "FrontendSmoke", "PauseMenuSmoke", "VehicleSmoke", "CoverHugSmoke", "PatrolAmbushSmoke", "LevelWaveSmoke"]
+    },
+    {
+      "name": "vehicles",
+      "globs": ["Source/**/Vehicles/**", "Source/**/Debug/VehicleSmoke*", "Source/CodexTacticsTests/Private/Vehicles/**", "Content/Vehicles/**", "Scripts/Editor/setup_apc_vehicle.py"],
+      "tests": ["CodexTactics.Vehicle", "CodexTactics.UI.Frontend.Controls", "CodexTactics.Tutorial"],
+      "smokes": ["VehicleSmoke", "CoverHugSmoke", "MovementSmoke", "SaveRoundTripSmoke", "ActionBarSmoke", "ControlsScreenSmoke"]
     },
     {
       "name": "maps-and-content",

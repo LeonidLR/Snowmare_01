@@ -1,4 +1,5 @@
 #include "Tactics/CoverTraceRules.h"
+#include "Vehicles/VehiclePawn.h"
 
 #include "Combat/EnemyGhostActor.h"
 #include "Engine/World.h"
@@ -117,7 +118,10 @@ namespace CoverTraceRules
 			}
 			for (TActorIterator<APawn> It(World); It; ++It)
 			{
-				Params.AddIgnoredActor(*It); // bodies are no walls
+				if (!It->IsA<AVehiclePawn>()) // a vehicle's hull is a wall (APC P1: clicking the APC = cover at its hull)
+				{
+					Params.AddIgnoredActor(*It); // bodies are no walls
+				}
 			}
 			for (TActorIterator<AEnemyGhostActor> It(World); It; ++It)
 			{

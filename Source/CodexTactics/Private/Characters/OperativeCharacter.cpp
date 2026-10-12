@@ -1,4 +1,5 @@
 #include "Characters/OperativeCharacter.h"
+#include "Vehicles/VehicleSubsystem.h"
 #include "Characters/OperativeHitRules.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/KnockdownRules.h"
@@ -465,6 +466,10 @@ float AOperativeCharacter::GetMoveHoldSeconds() const
 
 EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& Destination)
 {
+	if (VehicleQueries::IsMounted(this))
+	{
+		return EOperativeOrderResult::Refused; // APC P1: aboard he rides (Y gets him out)
+	}
 	LastMoveDestination = Destination;
 	ClearIdleFacing();
 	AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
@@ -1077,7 +1082,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	{
 		// jumping down off a barricade / barrel top this frame
 	}
-	else if (!IsKnockedDown()) // Sprint 14: lying on the ground — no cover, facing or shooting until he is up
+	else if (!IsKnockedDown() && !VehicleQueries::IsMounted(this)) // Sprint 14: lying on the ground — no cover, facing or shooting until he is up (APC P1: nor aboard)
 	{
 		UpdateVaultTrigger(DeltaTime);
 		TryEnterCoverFromRun();
@@ -2899,7 +2904,7 @@ float AOperativeCharacter::TakeGridBlast(float Amount, const FString& Source)
 float AOperativeCharacter::ResolveIncomingHit(EOperativeHitKind Kind, float Amount, const FString& Attacker, bool bCrit, AActor* AttackerActor,
 	float CritMultiplierApplied)
 {
-	if (!HealthComponent || !HealthComponent->IsAlive())
+	if (!HealthComponent || !HealthComponent->IsAlive() || VehicleQueries::IsMounted(this)) // APC P1: the crew inside takes no hits
 	{
 		return 0.f;
 	}

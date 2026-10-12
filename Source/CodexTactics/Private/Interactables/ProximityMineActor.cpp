@@ -1,4 +1,5 @@
 #include "Interactables/ProximityMineActor.h"
+#include "Vehicles/VehicleSubsystem.h"
 #include "Characters/EnemyCharacter.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -146,7 +147,7 @@ void AProximityMineActor::Tick(float DeltaSeconds)
 		{
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
-				if (Member == ApproachingDefuser.Get() || !Member->HealthComponent || !Member->HealthComponent->IsAlive())
+				if (Member == ApproachingDefuser.Get() || !Member->HealthComponent || !Member->HealthComponent->IsAlive() || VehicleQueries::IsMounted(Member))
 				{
 					continue;
 				}

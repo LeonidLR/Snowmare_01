@@ -1,4 +1,5 @@
 #include "Combat/TacticalSightSubsystem.h"
+#include "Vehicles/VehicleSubsystem.h"
 #include "Survival/TacticalHeatSubsystem.h"
 
 #include "Characters/EnemyCharacter.h"
@@ -181,7 +182,8 @@ bool UTacticalSightSubsystem::IsVisibleToSquad(const AActor* Enemy) const
 
 bool UTacticalSightSubsystem::GetBelief(const AEnemyCharacter* Enemy, const AActor* Operative, FVector& OutLocation, bool* bOutPerceived) const
 {
-	if (!Operative)
+	// APC P1: an operative inside a vehicle is nobody's target (the hull takes the attention in P4).
+	if (!Operative || VehicleQueries::IsMounted(Operative))
 	{
 		return false;
 	}

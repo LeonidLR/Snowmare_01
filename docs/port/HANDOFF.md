@@ -151,6 +151,7 @@ Smokes (dev console commands in `Source/CodexTactics/Private/Debug/`, run headle
 | `HudShot [close] [walk] [menu] [place] [shoot] [failed] [mainmenu] [dialogue] [cutscene] [prep] [turnbased] [weapons] [grenade] [inventory] [transfer] [pause] [saves]` (`dialogue`: intro briefing window; `shoot`: slowed-down barrel shot = tracer, target flash, plan marker; `failed`: mission-failed screen; `mainmenu`: run on `/Game/Maps/L_MainMenu`, the frontend title; `saves`: the SAVE GAME slot screen) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
 | `SniperSmoke` | 2026-10-09: Medic-Sapper = SK_Female_soldier with ABP_Operative (others unchanged), feet on the capsule bottom, rifle on her hand_r; only she has the sniper rifle (right after the M16 in the X cycle, M16 stand-in model, [5/15]); standing idle with it: no shot (stand aim idle loop); priority target while standing -> she kneels by herself (AS_Knee_Aim_Start) -> AS_Knee_Aim_Fire -> bolt; order while walking -> stops, kneels, fires; Aggressive auto fire while walking under a move order: no shot, no stop; arrived -> kneels by herself, fires; prone shot stays prone, last round -> AS_Prone_Aim_Magazine_Reload, clip refilled; Ctrl + click a barrel while standing waits for the kneel, then explodes it; no real-time shot ever standing / moving; turn-based: standing attack = kneel 1 + shot 3 AP, with 3 AP not offered / refused (no AP spent), with the AP she kneels on the grid and fires |
 | `PhoneShots frontend\|combat\|horde\|sniper\|sniperrt\|snipertb\|snipercover` (rendered, offscreen; `sniperrt` / `snipertb` / `snipercover` = the sniper test fights (real time, turn-based, cover) with a follow camera on her and her target, HUD on; `sniper` = the Female Soldier with the sniper rifle: stand idle, stand -> kneel -> fire, kneeling fire, prone fire, own camera framed on her; frames that collide with a still are skipped, renumber before ffmpeg) (rendered, offscreen: `UnrealEditor.exe <uproject> <map> -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound -benchmark -fps=30 -ExecCmds="CodexTactics.PhoneShots frontend"`; map L_MainMenu for `frontend`, L_MovementTest for `combat`) | stills + frame sequences in `Saved/Screenshots/Phone/` for a remote review (title, main menu entries / anchors, quit confirm, pause SAVE on / off, bunker zone, hit reaction, death cinematic, «THE SQUAD HAS FALLEN»); encode the `frames/<clip>` folders with ffmpeg. In-engine capture only |
+| `VehicleSmoke` | APC P0 + P1 (2026-10-12), on a flat test area it builds 100 m under the L_MovementTest layout (floor, a copy of the map's NavMeshBoundsVolume tagged `VehicleNav`, a wall, a `NavArea_NoVehicle` zone): two nav agents, Default = the former implicit agent (35 / 144), every operative's NavAgentProps resolve to the infantry navmesh, the map's own bounds volume lost the Vehicle agent (opt-in); the parked APC carves the infantry navmesh (a path across goes round the hull); a click on the APC's roof = cover ghost, second click = the commander hugs the hull; Alt + Y = all three walk to the doors and board (Engineer driver, Commander gunner, Medic passenger, 3 `VehicleBoarded`); mounted = hidden, no collision, unknown to enemies (`GetBelief`), no damage, move orders refused, no cold drain (engine heater); a ground click (leader aboard) drives round the wall (detour, the hull never touches it, `VehicleArrived`, camera follows), a double click past the NoVehicle zone (never enters it), a goal 8 m behind in reverse; save / change / load: the APC back, all three in their seats; Y: the commander out into cover at the hull; Alt + Y: all out into cover (4 `VehicleDisembarked`), engine + heater off; all exits blocked: nobody gets out. every operative / enemy archetype resolves to the infantry navmesh. Uses `BP_APC_BTR82` when it exists, else the C++ class (vendor mesh by soft path) |
 | `HordeIntroSmoke` | 2026-10-11 (reworked): squad 30 m from the spawn points; combat zone -> wave 1 (55) at once, one phase change, real time + intro armed, camera on the squad; the running mass triggers at 2.5 s (latched, else 6 s): free pause (charges 3/3), slow motion 0.2 (> pause 0.02), «HORDE INCOMING» alert, camera locked, horde revealed; wide (running mass) + hound + frostbitten (7 m, a moving front-runner) + return; then the free pause at 0.02; planned move + barricade, Space -> real time; wave 2 at once: only cutter + marksman, Esc skips mid-flyover; wave 3 before its trigger: a click is a normal click, Esc opens the free pause (no flyover, alert); a load resumes wave 3 suddenly: wide + return, a click skips; Space -> real time |
 | `PatrolAmbushSmoke` | 2026-10-11 (user bug + guard request), map **L_PatrolTest**: a hound (24 m to the side) and a marksman (28 m ahead) without routes, facing away, treated as placed in the map (`MarkLevelEnemy`): both GUARD their post (`IsGuardingPost`); auto = ambush level; forced «button»; 6 s: no drift (< 60 cm), no fight, no damage to the squad; a trap next to the hound -> it searches (marksman out of radius keeps guarding), no fight, then it walks back to its post; a squad gunshot -> both hear it, leave their posts and start the real-time ambush fight once (`PatrolDetection`; no cutscene / preparation / horde intro), both are the wave, the Aggressive squad returns fire, no game over |
 | `VisionConeSmoke [Shot]` | 2026-10-11, map **L_PatrolTest**: every operative / enemy has a `VisionCone` on its capsule, hidden by default; `bShowVisionCone` on the leader / a guarding brute shows only theirs; operative cone = weapon range x stance (M16 2500 cm), +-35 deg, 34 fill vertices, at the feet +8 cm, red with the brute in it (Passive squad); brute cone = its perception (1800 cm / +-45 deg), idle colour; `Codex.Debug.VisionCones` 0 hides all, 1 shows all, -1 back; trap -> searching brute: amber, range x1.25; no fight. `Shot` (rendered, `-RenderOffscreen`): all cones on, camera over the squad, `Saved/Screenshots/<platform>/vision_cones.png` |
@@ -458,6 +459,39 @@ through `ACodexTacticsHUD::GodotColor` (sRGB → linear) in UMG and canvas.
   demo HUD preset (`ACodexTacticsHUD::bDemoHudPreset`: debug squad panel and operative labels hidden). No `"demo"` object = no change.
 - Tests `CodexTactics.Tutorial.*` (9), smoke `TutorialSmoke` (exclusive), `SaveRoundTripSmoke` covers the "tutorial" save section.
 
+**Vehicles (APC BTR-82, phases P0 + P1, 2026-10-12, UE-only; design `docs/vehicles/APC_00..02`)** — kinematic, nav-driven
+(approach B, no Chaos). `Vehicles/VehicleRules` (pure: seats `AssignSeats` Engineer driver / Commander gunner / anyone if absent, 7
+seats; `CanBoard` / `CanDisembark` / `CanDrive` (P1: refused in the tactical pause and turn-based); the Y key `ResolveKeyAction`
+(all addressed aboard = get out, else board); `RankExitPoints` (away from the nearest known threat, else the camera side, blocked
+skipped); drive model `StepYaw` (yaw rate <= v / R, no pivot), `ShouldReverse` (goal behind >= 120 deg within 15 m),
+`StepSpeed` / `GetDesiredSpeed` (cruise 6 / rush 10 / reverse 2.5 m/s, 3 / 6 m/s2, braking distance, slow to turn),
+`GetLookaheadPoint` (pure pursuit, 1 m carry past a corner > 25 deg: no cutting round wall ends), `GetHullSideFacing` (cover probe),
+noise radii idle / cruise / rush 20 / 40 / 55 m, wheel spin, Ackermann steer, `GetMountedEffects`). `Vehicles/VehiclePawn`
+(`AVehiclePawn`, Blueprintable APawn: Root (ground pivot), `Hull` box (WorldDynamic, blocks everything but Camera, overlaps,
+no nav), `Mesh` (vendor SK + ABP, no collision; a C++-only spawn loads `DefaultMesh` / `DefaultAnimClass` by soft path),
+`CabinHeat` (`UHeatSourceComponent`, on while the engine runs = a crew member aboard), `NavObstacle`; tunables `DriveConfig` /
+`CrewConfig` / `EngineConfig`, hull centre / extent, entry points (side doors, rear hatch), ground probes; `DriveTo` (path on the
+"Vehicle" navmesh by agent name, partial paths drive to the nearest reachable point; K-turn first when facing > 70 deg away),
+pawn sweep ahead (brakes for operatives / enemies, gives up after 6 s), ground conform (4 traces: Z, pitch, roll), vendor ABP
+variables by name (`WheelSpeed`, `WheelsAngle`, `DoorAngle`) + BlueprintImplementableEvents On Visual Drive / On Doors Changed / On
+Engine Changed, engine noise breaks patrols (`AEnemyCharacter::BreakPatrol(Hearing)`) once a second). `Vehicles/VehicleNavigation`
+(`UNavArea_NoVehicle` = unwalkable for agent 1 only; `UNavArea_VehicleHull` = unwalkable for agent 0 only;
+`UVehicleNavObstacleComponent` = one rotated box modifier over the hull + 40 cm on the infantry navmesh, off while driving, on when
+parked). `Vehicles/VehicleSubsystem` (`UVehicleSubsystem`: registry; mounted map + `VehicleQueries::IsMounted / GetVehicle`;
+`HandleBoardKey` (Y / Alt + Y, action bar BOARD / EXIT), `OrderBoard` (walk to the nearest door, retries / another door when one is
+crowded, 2 s climb, `CancelBoarding` on a new move / cover order), `OrderDisembark` (exit candidates on the infantry navmesh, free of
+bodies, ranked, 1 s, then `OrderTakeCover` at the hull side), `HandleDriveClick`, mount = stop, leave cover, hidden, no collision,
+movement off, attached at `CrewAttachOffset`; opt-in vehicle navmesh (strips the Vehicle agent from untagged bounds at BeginPlay,
+`EnableVehicleNavigation`); save `world_state.vehicles` (name, class, transform, crew + seats), `PrepareForLoad` / `RestoreSave`).
+**The IsMounted list** (keep it short): enemy targeting / perception / hearing / nearest / pounce (`EnemyCharacter`, `GetBelief`),
+marksman targets, operative cover / facing / shooting tick, `ResolveIncomingHit` (no damage), `RequestMove` (refused), formation
+followers (a mounted leader: the ones outside hold), Commander Mode, mines / tripwires, the controller's group moves and the click
+pick, turn-based entry (refused while anyone is aboard). Controller: a ground click with the leader aboard drives; a click on the
+vehicle = cover at its hull (`FindCoverSlotForHit` / `TryHandleCoverClick` vehicle exception, `CoverTraceRules` no longer ignores
+vehicle pawns). Commands `Vehicle.Board` / `Vehicle.Disembark` / `Vehicle.Drive` (F1 section «Vehicles»), events `VehicleBoarded` (Kind
+= seat), `VehicleDisembarked`, `VehicleDriveStarted`, `VehicleArrived`, `VehiclePathBlocked`; `ATutorialTriggerVolume` «Activated By:
+Vehicle». Tests `CodexTactics.Vehicle.*` (10), smoke `VehicleSmoke`; editor script `Scripts/Editor/setup_apc_vehicle.py`.
+
 **Editor scripts** (`Scripts/Editor/`, run with `UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script=<abs path>`):
 `create_movement_test_map.py` (regenerates the test map — **overwrites manual edits, avoid**),
 `add_level_objects_to_movement_test.py` (adds barrel / barricades / mines / supply crates by label, keeps edits;
@@ -611,6 +645,39 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 - Placeholder meshes (engine shapes) for barrels, barricades, mines, quest objects; the user will replace them.
 - The user reported the character looks "перекручено" (twisted) — not investigated yet (ask what exactly: spine /
   hands / pose), see §8.
+
+### APC: how the user places it / makes L_VehicleTest / nav for vehicles (P0 + P1, 2026-10-12)
+
+1. **The Blueprint (once, editor CLOSED):** `UnrealEditor-Cmd.exe "<repo>/CodexTactics.uproject" -run=pythonscript
+   -script="<repo>/Scripts/Editor/setup_apc_vehicle.py" -unattended -nullrhi` creates `/Game/Vehicles/BP_APC_BTR82` (child of
+   `AVehiclePawn`, Mesh = `SK_East_APC_BTR82`, Anim Class = `ABP_East_APC_BTR82`; the vendor folder is untouched; re-running keeps
+   your edits). Or by hand: Content Browser -> Blueprint Class -> parent **VehiclePawn**, name it `BP_APC_BTR82` in `Content/Vehicles`,
+   select **Mesh** -> Skeletal Mesh Asset `SK_East_APC_BTR82`, Anim Class `ABP_East_APC_BTR82`. Without the BP a dropped
+   `VehiclePawn` (C++) shows the same vendor model by soft path. Polish in the BP: the events **On Visual Drive** (speed, steer),
+   **On Doors Changed**, **On Engine Changed** (sound, dust FX); the ABP variables C++ writes are `WheelSpeed` (deg/s), `WheelsAngle`
+   (deg), `DoorAngle` (0 / `Door Open Angle` 80) - rename them in **Visual** if the ABP changes.
+2. **Tunables (Details, CodexTactics | Vehicle):** Drive Config (cruise / rush / reverse speed, acceleration, braking, **Min Turn Radius
+   Cm** 700, look-ahead, reverse distance 15 m), Crew Config (passenger seats 5, board range 30 m, board 2 s / get out 1 s, exit
+   offset), Engine Config (noise radii 20 / 40 / 55 m, cabin heat radius 3.5 m), **Hull Centre / Hull Half Extent** (the collision box,
+   shown light blue), **Entry Points** (doors, pivot space), Crew Attach Offset, Ground Probes.
+3. **Make `L_VehicleTest`:** a new level (File -> New Level -> Basic, or duplicate L_PatrolTest), a big flat floor (60 x 60 m or a
+   landscape), **a NavMeshBoundsVolume** over the drivable area with the actor **Tag `VehicleNav`** (Details -> Actor -> Tags) - only
+   tagged volumes (or a volume with only **Vehicle** ticked under Navigation -> Supported Agents) build the vehicle navmesh, every
+   other volume keeps only the infantry one (no cost on maps without vehicles). A PlayerStart; drop **BP_APC_BTR82** 10-20 m from it,
+   wheels on the ground (it snaps to the floor at BeginPlay). Walls / wrecks / gates as obstacles (>= 5 m wide passages: the vehicle
+   agent's radius is 2 m). **Blocked spots** (thin ice, narrow alleys, steps): a **NavModifierVolume** with Area Class
+   **NavArea_NoVehicle** - only the vehicle avoids it; make it ~2 m bigger than the spot (areas are not eroded: the hull centre stays
+   out, half the hull may overhang). Press **P** in the editor to see the navmeshes (the vehicle one is drawn in orange).
+4. **Play:** select an operative, **Y** = he boards (walks to the nearest door, ~2 s), **Alt+Y** = the whole squad; seats fill
+   automatically (Engineer drives, Commander guns, the rest ride; anyone if absent). With the leader aboard **LMB on the ground** =
+   drive there (double click = full speed; a short goal behind = reverse; the camera follows). **Y** again = the selected get out,
+   **Alt+Y** = everyone (they exit on the side away from known enemies and take cover at the hull). Clicking the APC itself is still
+   "take cover at its hull". The action bar shows **BOARD [Y]** near a vehicle and **EXIT [Y]** aboard. P1 limits: no driving /
+   boarding in the tactical pause or turn-based (feed line), turn-based entry refused while anyone is aboard, no turret (P2), no
+   damage (P4), engine noise only breaks patrols.
+5. **Nav agents (DefaultEngine.ini, for any map):** `SupportedAgents` = `Default` (35 / 144: the engine's former implicit agent,
+   infantry unchanged) + `Vehicle` (200 / 300, step 40, `bCanFly=True` so no ground pawn ever picks it). Keep the order (the nav areas
+   address the agents by index 0 / 1). Opening an old map shows no change except the tag rule above.
 
 ### How to place a PMC tripwire (Demo 01 G3, 2026-10-12)
 
@@ -909,6 +976,15 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 
 ## 7. Open user decisions / questions
 
+- **APC P1 (2026-10-12) - choices made by Claude inside the approved design, to confirm:** (1) the tactical pause refuses vehicle
+  orders (board / get out / drive) with a feed line instead of planning them (the task allowed "planned if simple"); (2) turn-based
+  entry is refused while anyone is aboard (the grid has no vehicle seats until P3); (3) Alt + Y with the squad partly aboard boards
+  the rest ("all aboard"); only with everyone aboard does it empty the vehicle; (4) the vehicle navmesh is opt-in per bounds volume
+  (tag `VehicleNav`); (5) the engine runs while anyone is aboard (no 10 s auto-off yet) and then heats a 3.5 m zone round the hull
+  centre, which also warms operatives hugging the hull; (6) the path preview ribbon (red where it won't fit) is not built: a drive
+  that can't reach the click goes as close as it can, the driver says so and `VehiclePathBlocked` is raised; (7) the vehicle agent's
+  slope limit is the infantry's 44 deg (a per-agent 25 deg needs a RecastNavMesh subclass - say if wanted).
+
 - **Real time vs turn-based damage numbers (2026-10-11, table `docs/port/tb_parity_2026-10-11.md`).** The double cuts are fixed;
   still different per mode (all inherited from Godot): crouch defence RT 0.75 vs TB 0.70; barrel on enemies RT 120 x falloff vs
   TB 80; mine RT 120 (squad 90) x falloff vs TB 50; TB blasts keep Godot's luck dodge, RT blasts never dodge. Choose per row:
@@ -982,6 +1058,12 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 - The world is paused while the start menu is open (Godot keeps processing behind its menu) — cosmetic difference.
 
 ## 8. Next steps (in order)
+
+- **APC (2026-10-12, branch `agents/apc`):** user: run `Scripts/Editor/setup_apc_vehicle.py` with the editor closed (or make
+  `BP_APC_BTR82` by hand, §6 «APC»), build `L_VehicleTest` (§6), answer §7 «APC P1». Next phases: P2 turret (gunner seat, posture
+  auto-fire, Ctrl+click target, ammo, ABP aim), P3 turn-based (vehicle as a multi-cell occupant, parked turret 3 AP, get out 2 AP),
+  P4 damage (armour, damage proxy for the crew, enemies target the hull, disabled / repairable, crew ejected), P5 tutorial beat V
+  (steps JSON + texts) and the remaining design items (engine auto-off, fuel option, path ribbon).
 
 - **Sprint 15 heat (2026-10-11), waiting for the user:** confirm the design decisions (§7 «Sprint 15 heat»), look at
   `Saved/Screenshots/Phone/heat_sources.png` (main folder; placeholder shapes); Gemini: VFX / materials (TANDEM request #15). Open:
@@ -1307,6 +1389,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 | Commit | What |
 | (this, agents/camlesson) | **Staged camera lesson (user feedback 2026-10-12: WASD alone finished the camera card).** `Camera.Pan` / `Camera.Rotate` split into `Camera.Pan.Keys / .Edge / .Drag`, `Camera.Rotate.Keys / .Mouse` (+ `Camera.Zoom`), reported from the real handlers (`ATacticalCameraPawn::UpdatePan / UpdateRotation`, `ACodexTacticsPlayerController` Q/E, RMB / MMB drag start, wheel); continuous ones report once per action + `PlayerCommands::ReportHold` ticks. New completion `hold_s` (see §6 Tutorial). Beat A0 = four sequential cards (pan -> Q/E -> mouse look -> zoom) then `A0_move`, no timeout; draft texts `TUT_A0_CAM_*` replace `TUT_A0_CAMERA` (TANDEM #17 ids updated). Tests `CodexTactics.Tutorial.Commands.MultiSegmentWildcard`, `.StateMachine.HoldSeconds`, `.HoldOnlyWhileShown`, `.Schema.DemoFile` (four-stage order); `FrontendControlsTest` ids; `TutorialSmoke` drives the four stages with real `InputKey`. |
 | (this, agents/work) | **Weather idle poses (user request + fire-role design 2026-10-12).** Pack `/Game/90+_Weather_Animations` (junction in agents) Cold sets IK-retargeted (M4 `RTG_UE5Manny_UE4Manny`, Blend to Source off in memory) to `Content/Characters/Operatives/Anims/Weather/Male|Female` by `Scripts/Editor/setup_operative_weather_animation.py`, which also fills the new `UOperativeAnimInstance` class defaults (ColdIdle / HandWarm / SitWarm x Male / Female; ABP_Operative backed up to `Saved/Backups/weather_anim_*`; graph untouched). New `Survival/WarmIdleRules` (exploration-only gate, interrupts, solo pose, fire roles by cold, rings / slot pick / facing, gender, clip sequence, exit style), `UWarmIdleSubsystem` (decisions at 10 Hz, spots on the NavMesh, walks, facing, per-operative order serial), anim layer `OperativeAnimInstanceWarmIdle.cpp` (FullBodySlot, End / blend-out, weapon hidden; the sniper idle yields), `AOperativeCharacter::GetMoveOrderSerial / GetLastAttackedTime / WarmSpotSource`, `URelocationSubsystem::HasActiveTask`, follower hold in `USquadSubsystem::UpdateFollower`, `FColdEnvironment::HeatWarmthMultiplier` (combat x0.5). Tuning keys in `tactical_heat.json`. Tests `CodexTactics.Survival.WarmIdle.*` (8), smoke `WarmIdleSmoke [shot]` (test_map rule `warm-idle`); TacticalHeat / Barrel / Knockdown / Movement / SoloRejoin / Tutorial / Sniper / Cold smokes pass. Section 6 «Weather idle poses». |
+| (this, agents/apc) | **APC BTR-82 phases P0 + P1 (user decisions 2026-10-12, `docs/vehicles/APC_00..02`).** P0: `Config/DefaultEngine.ini` two nav agents (Default = the former implicit 35 / 144, infantry unchanged; Vehicle 200 / 300, step 40, `bCanFly=True`), opt-in vehicle navmesh per bounds volume (tag `VehicleNav`), `NavArea_NoVehicle`, `AVehiclePawn` (kinematic on the Vehicle navmesh: pure pursuit without corner cutting, 7 m turning radius, K-turn, auto reverse, pawn sweep, ground conform; hull box = blocking + cover; parked footprint carves the infantry navmesh; vendor ABP variables by name; cabin heat; engine noise for patrols), `Scripts/Editor/setup_apc_vehicle.py` (BP_APC_BTR82 NOT created: the user's editor had the main project open). P1: `UVehicleSubsystem` (Y / Alt + Y board / get out, seats Engineer driver / Commander gunner, exits away from threats into cover at the hull, blocked exits refused, drive clicks, save `world_state.vehicles`), controller (drive clicks, the APC click stays cover, TB entry refused while aboard), the IsMounted list (§5 «Vehicles»), commands / events / F1 «Vehicles», action bar BOARD / EXIT, tutorial volume «Activated By: Vehicle». Tests `CodexTactics.Vehicle.*` (10), `VehicleSmoke` (+ every operative / enemy archetype resolves to the infantry navmesh); `ControlsScreenSmoke` / `FrontendControlsTest` expect the 8th section. Verified: build, 384 / 384 unit tests, `test.ps1 -Changed` 65 smokes (LevelWaveSmoke 87 % vs 90 % "on the move" under parallel load, PASS alone; ControlsScreenSmoke fixed for the new section) + RealtimeSelect / HordeIntro / CommanderMode / LevelWave / ControlsScreen / VehicleSmoke PASS, `-CheckMap` OK, Jev audit PASS. How to place it / L_VehicleTest: §6 «APC». |
 | (this, agents/work) | **Draft tutorial texts fallback (2026-10-12).** `Content/Data/Tutorial/demo_01_texts_draft.json` (`{"texts": {id: {title, text}}}`, staged with Data/Tutorial) = placeholders for the A0 beat (WT_A0_*, TUT_A0_*, OBJ_A0_BEACON1, TUT_BEAT_A0) until the sheet Tutorial tab exists (TANDEM #17). `FNarrativeManifest::GetTutorialText` order: manifest, then `DraftTutorialTexts` (logged once per id, non-shipping), then `[EN missing: id]`; `{key:...}` tokens are resolved by the callers as before. Test `CodexTactics.Tutorial.Text.ManifestAndDemoFlags` extended. |
 | (this, agents/work) | **Per-map level JSON (2026-10-12).** `LevelJsonRules::NormalizeMapName / ChooseLevelJsonFile / ResolveLevelJsonFile`: `-LevelJson=` > `<MapName>.json` in `Content/Data/LevelJson` > `LevelJsonFile`; `LoadLevelConfig` uses it (so `PeekLevelConfig` too). New draft `L_Demo01_A_FrozenLake.json` (demo flags, intro window off, 3 waves, button start, horde off). Test `CodexTactics.LevelJson.PerMapResolution` (rule + the demo JSON -> `ShouldOpenIntroDialogue` false). |
 | (this, agents/work) | **Fix: CommanderModeSmoke "aid 0" was the smoke, not the game (2026-10-12).** Cause: the sudden horde start (a02c4fe) spawns the whole wave at once around the L_MovementTest start, so the squad stood among 45 hounds and the Safe Aid Check (nobody within 6 m of the patient) refused first aid correctly (`AidRefusedUnsafe` 42); a wound dealt out of combat also heals by itself. `CommanderModeSmoke`: squad placed 3000 cm from the spawns (`PlaceSquadAwayFromWaveSpawns`), wound + autonomy while the horde still runs, 15 s window. `DefendSmoke`: only the defender keeps medkits (AidMoves is squad-wide; a free mate patching the wounded one is right). Game code unchanged. |
