@@ -282,7 +282,7 @@ Completion events marked (E) need the tutorial command choke point (UX W2). Mark
 - **Hint cards:** `TUT_A4_MINE` (spotted (X `OnMineSpotted`) -> "select 3 (Medic-Sapper), click the mine -> Defuse; or Ctrl+click to shoot it from > 4 m"), `TUT_A4_WIRE` (prone under it **or** disarm), `TUT_A4_CHANCE` (when the defusal menu opens with chance < 60 %: "Cold costs up to 50 % chance. Warm up at the barrel, then crouch or go prone"), `TUT_A4_TRAP_CRATE` (done on defused).
 - **Setup:**
   - 2 hidden `AProximityMineActor` (level mines, not `bPlacedBySquad`) on the **shortcut** between the sandbag ring and the shed (straight line 25 m). The long path round the fence (40 m) is clean. Mines 5 m apart.
-  - 1 **PMC tripwire** across the shed door (1.6 m span, 30 cm), **needs gap G3** (level-placed armed tripwire). Until G3 lands: a trapped `AInteractableActor` placeholder "Door charge" next to the door (bTrapped, existing defusal and cold formula).
+  - 1 **PMC tripwire** across the shed door (1.6 m span, 30 cm): **G3 DONE 2026-10-12** - place an `APMCTripwireActor` («PMC Tripwire») and drag its AnchorA / AnchorB handles to the door jambs (HANDOFF §6 «How to place a PMC tripwire»).
   - 1 trapped `ALootCrateActor` inside the shed (`bTrapped`; contents: 2 grenades, 1 tripwire kit (2 grenades), 1 heat pack, 1 medkit).
   - 1 clean crate in the guard hut (ammo).
   - **1 unlit barrel 12 m from the shed door** by the guard hut (warm-up spot for the defusal lesson). Push reprise without a card unless the player stalls: "Bring the fire to the door". Pushed to within 4 m of the door, its 5.5 m disc covers the Medic-Sapper while she works. The bonus card `TUT_A4_FIREDOOR` appears if her chance reads < 60 % for 20 s.
@@ -614,8 +614,8 @@ See §8. ~5 min.
 | Buildings / interiors | **PARTIAL** | Camera zones: fixed camera, the leader alone inside, the squad holds outside, environment cold | G9: no roof cutaway / occlusion fade for a whole-interior map (B). Roofs hidden in game as a workaround |
 | Crates trapped / untrapped | **EXISTS** | `ALootCrateActor` (`bTrapped`, `Contents`, defuse 2 s) | per-actor demo damage values |
 | Mines (PMC) | **EXISTS** | `AProximityMineActor` (hidden, spotted 4.5 / 6 m, defuse menu, Ctrl+click) | - |
-| Tripwire disarm | **PARTIAL** | `ATripwireActor` / `TripwireRules`: squad deployable only; Medic-Sapper disarm 3 s, 10 % fumble | G3 (M): **level-placed PMC tripwire** (editable anchors, armed at begin play, hidden until spotted like mines, saved), disarm by the cold-aware formula |
-| Too cold -> cannot disarm | **EXISTS** for mines / crates / trapped objects; **MISSING** for tripwires | `DeployableRules::CalculateDefusal` (-15 / -30 / -50 at > 25 / 50 / 75 cold), warning "my fingers are numb" | G3 extends it to wires |
+| Tripwire disarm | **EXISTS (G3 done 2026-10-12)**: placed PMC wires hidden until spotted, anyone disarms with the mine formula; squad wire unchanged. Was: **PARTIAL** | `ATripwireActor` / `TripwireRules`: squad deployable only; Medic-Sapper disarm 3 s, 10 % fumble | G3 (M): **level-placed PMC tripwire** (editable anchors, armed at begin play, hidden until spotted like mines, saved), disarm by the cold-aware formula |
+| Too cold -> cannot disarm | **EXISTS** for mines / crates / trapped objects and (2026-10-12) PMC tripwires | `DeployableRules::CalculateDefusal` (-15 / -30 / -50 at > 25 / 50 / 75 cold), warning "my fingers are numb" | G3 extends it to wires |
 | Quest: navigate to important objects | **PARTIAL** | `FQuestChainState` hard-coded canister -> vehicle -> generator -> terminal -> gate (reused in A); objective banner | G4 (M): objective marker (world beacon + screen-edge arrow + distance). Generic quests are not needed for demo 1 |
 | Cover-to-cover movement (exploration) | **EXISTS for one operative** | `TryHandleCoverClick` (leader / TB active unit): ghost preview + confirm, shimmy, corners within 2 m, N lean / blind, Ctrl+click corner shot, Alt+click on objects; cover halves wind chill; hides from observers | G7 (M): **followers do not take cover**. In formation they stand in the open behind a covered leader. Commander Mode autonomy seeks only **barricade actors** and only with a threat <= 25 m; the "within 2.2 m of a barricade, crouch" rule is combat-only. Proposal below |
 | Enemy attack (wave) | **EXISTS** | Quest console -> `TriggerCombatZone` -> sudden wave + flyover | demo JSON |
@@ -678,7 +678,7 @@ See §8. ~5 min.
 |---|---|---|
 | G1 | Tutorial layer (UX W1-W13: command registry, `UTutorialSubsystem`, hint card, tracker, trigger volume, events incl. cold tier changed / solo toggled / cover entered / shimmy / deployable placed / looted / drawer opened / pause used / TB entered) | L (already in producer M1) |
 | G2 | Intro as walk-and-talk: mission start plays a feed sequence instead of the blocking intro (per GameMode flag); subtitle / radio strip | S + (W5 M) |
-| G3 | Level-placed PMC tripwire: editable anchors, armed at begin play, hidden until spotted (mine rules 4.5 / 6 m), cold-aware disarm via `DeployableRules::CalculateDefusal` (role / stance / cold), save / load, smoke | M |
+| G3 | Level-placed PMC tripwire: editable anchors, armed at begin play, hidden until spotted (mine rules 4.5 / 6 m), cold-aware disarm via `DeployableRules::CalculateDefusal` (role / stance / cold), save / load, smoke | M - **DONE 2026-10-12** (`APMCTripwireActor`, `PMCTripwireSmoke`; HANDOFF §6) |
 | G4 | Objective / tutorial marker actor (world beacon + edge arrow + distance), driven by quest state and tutorial steps | M |
 | G5 | Float cold multiplier zone (`AColdZoneVolume` or a float override on the camera zone) | S |
 | G6 | `ACheckpointVolume` (exploration autosave, once) + "Retry from checkpoint" on Mission Failed | S |

@@ -42,6 +42,11 @@ EDefusalResult DeployableRules::ResolveDefusal(const FDefusalChance& Chance, boo
 	return ExplosionRoll <= Risk ? EDefusalResult::Detonation : EDefusalResult::Failure;
 }
 
+float DeployableRules::GetSpotRangeCm(float BaseCm, float SapperBonusCm, EOperativeRole Role)
+{
+	return BaseCm + (Role == EOperativeRole::MedicSapper ? SapperBonusCm : 0.f);
+}
+
 float DeployableRules::GetMineMishapChance(bool bSapper, float ColdLevel)
 {
 	return FMath::Clamp((bSapper ? 2.f : 10.f) + ColdLevel / 100.f * 20.f, 0.f, 95.f);

@@ -175,7 +175,7 @@ void AProximityMineActor::ScanForSpotters()
 	}
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
-		const float Range = DetectionRange + (Member->SquadRole == EOperativeRole::MedicSapper ? SapperDetectionBonus : 0.f);
+		const float Range = DeployableRules::GetSpotRangeCm(DetectionRange, SapperDetectionBonus, Member->SquadRole);
 		if (FVector::Dist(GetActorLocation(), Member->GetActorLocation()) <= Range)
 		{
 			HandleSpotted(Member);

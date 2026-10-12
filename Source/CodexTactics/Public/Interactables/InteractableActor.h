@@ -23,7 +23,9 @@ enum class ETrapFlavor : uint8
 	/** loot_crate.gd */
 	Crate,
 	/** deployables/turret.gd */
-	Turret
+	Turret,
+	/** A PMC tripwire placed in the level (ATripwireActor, Demo 01 G3; UE-only texts). */
+	Tripwire
 };
 
 /**
@@ -109,8 +111,12 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Trap")
 	bool bDefused = false;
 
-	/** Defusal odds for Operative on this trap. */
-	FDefusalChance GetDefusalChance(const AOperativeCharacter* Operative) const;
+	/** Defusal odds for Operative on this trap (a PMC tripwire: always in its crouched work stance). */
+	virtual FDefusalChance GetDefusalChance(const AOperativeCharacter* Operative) const;
+
+	/** Smokes only: forced rolls (0..100) of the next defusal attempts instead of random ones (< 0 = random). */
+	float DefusalRollForTesting = -1.f;
+	float DefusalExplosionRollForTesting = -1.f;
 
 	/** One defusal attempt: resolves it, posts the Godot line and may detonate. */
 	EDefusalResult AttemptDefusal(AOperativeCharacter* Operative);

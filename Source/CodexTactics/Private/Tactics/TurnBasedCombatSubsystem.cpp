@@ -37,6 +37,9 @@
 #include "Interactables/BarrelActor.h"
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TurretActor.h"
+#include "Interactables/TripwireActor.h"
+#include "Interactables/TripwireRules.h"
+#include "Core/PlayerCommands.h"
 #include "Data/TacticalHeatTuning.h"
 #include "Misc/App.h"
 #include "Tactics/GorkyGridManager.h"
@@ -2171,6 +2174,13 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 		return;
 	}
 
+	// Demo 01 G3: a click on a spotted PMC tripwire next to the active operative = one disarm attempt for its AP (mine rule).
+	if (ATripwireActor* Wire = Cast<ATripwireActor>(HitActor); Wire && Wire->IsHostile() && !Wire->IsConcealed() && !bAttackOrder)
+	{
+		HandleTripwireClick(Wire);
+		return;
+	}
+
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(HitActor); Operative && Squad.Contains(Operative))
 	{
 		if (!bAttackOrder)
@@ -2239,6 +2249,30 @@ void UTurnBasedCombatSubsystem::HandleWorldClick(const FVector& WorldPoint, AAct
 	default:
 		break;
 	}
+}
+
+bool UTurnBasedCombatSubsystem::HandleTripwireClick(ATripwireActor* Wire)
+{
+	AOperativeCharacter* Unit = GetActiveUnit();
+	if (!Wire || !Unit)
+	{
+		return false;
+	}
+	const float Distance = TripwireRules::DistanceToWire(FVector2D(Unit->GetActorLocation()), FVector2D(Wire->GetAnchorA()), FVector2D(Wire->GetAnchorB()));
+	if (Distance > TripwireRules::TurnBasedDisarmReachCm)
+	{
+		Highlight(Wire);
+		Post(TEXT("TACTICS"), TEXT("⚠️ Move right next to the tripwire to disarm it!"));
+		return false;
+	}
+	const int32 Cost = FMath::Max(0, Wire->TurnBasedDisarmAP);
+	if (!SpendActiveUnitAP(Unit, Cost, FString::Printf(TEXT("🪤 %s works on the PMC tripwire (-%d AP)."), *NameOf(Unit), Cost)))
+	{
+		Post(TEXT("TACTICS"), FString::Printf(TEXT("⚠️ Disarming the tripwire needs %d AP!"), Cost));
+		return false;
+	}
+	PlayerCommands::ReportBy(this, PlayerCommands::DisarmTripwire, Unit, Wire);
+	return Wire->TryTurnBasedDisarm(Unit);
 }
 
 // --- Object relocation ----------------------------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Interactables/DeployableRules.h"
 
 /**
  * Tripwire mine «Растяжка» МУВ-3 + 2 Ф-1 (Sprint 09, TANDEM «SPRINT 09 DIRECTIVE: Military Tripwire Mine»; UE-only, no
@@ -47,4 +48,40 @@ namespace TripwireRules
 
 	/** Grenades a disarm returns: 2, or 1 on a fumble. */
 	CODEXTACTICS_API int32 GrenadesReturned(bool bFumble);
+
+	// --- PMC (hostile, level-placed) tripwires (Demo 01 G3, user decisions 2026-10-11): hidden until spotted with the
+	// mine spotting rule, disarmed by ANY operative with the mine defusal formula (role / cold / failures; crouched, as a mine),
+	// failure = the mine failure rule (warning, slip, detonation risk), triggered only by operatives. These are the
+	// defaults of the editable APMCTripwireActor / ATripwireActor properties (per instance / Blueprint in Unreal). ---
+
+	/** Spotting range of an operative (the mine rule: 4.5 m, Medic-Sapper +1.5 m), cm. */
+	inline constexpr float SpotRangeCm = 450.f;
+	inline constexpr float SapperSpotBonusCm = 150.f;
+	/** Disarm duration of a PMC wire by role, s (the squad's own wire: DisarmSeconds, Medic-Sapper only). */
+	inline constexpr float HostileDisarmSecondsSapper = 3.f;
+	inline constexpr float HostileDisarmSecondsEngineer = 4.f;
+	inline constexpr float HostileDisarmSecondsOther = 5.f;
+	/** Turn-based: one disarm attempt costs this many AP (as setting a mine, TurnBasedCombatSubsystem::GetDeployActionPoints). */
+	inline constexpr int32 TurnBasedDisarmAP = 2;
+	/** Reach of a turn-based disarm: the active operative stands within this of the wire, cm (about one diagonal cell). */
+	inline constexpr float TurnBasedDisarmReachCm = 220.f;
+
+	/** A wire reacts to this body: the squad's own wire to everyone (friendly fire), a PMC wire only to operatives. */
+	CODEXTACTICS_API bool TriggersOn(bool bHostileWire, bool bIsOperative);
+
+	/** Who may disarm: the squad's wire only the Medic-Sapper, a PMC wire anyone (role chance). */
+	CODEXTACTICS_API bool CanDisarm(bool bHostileWire, EOperativeRole Role);
+
+	/** Disarm duration, s: squad wire DisarmSeconds; PMC wire Medic-Sapper 3 / Engineer 4 / others 5. */
+	CODEXTACTICS_API float GetDisarmSeconds(bool bHostileWire, EOperativeRole Role);
+
+	/** An operative at DistanceCm from the wire spots a hidden PMC wire (DeployableRules::GetSpotRangeCm, the mine rule). */
+	CODEXTACTICS_API bool CanSpot(float DistanceCm, EOperativeRole Role, float BaseRangeCm = SpotRangeCm, float SapperBonusCm = SapperSpotBonusCm);
+
+	/**
+	 * Odds of a PMC wire disarm: the mine formula (DeployableRules::CalculateDefusal) in the mine's work stance - crouched
+	 * (+10) - with the role base, luck, cold penalty (-15 / -30 / -50 above 25 / 50 / 75 %) and the failed attempts.
+	 * Default luck: Medic-Sapper 60 + 10 + 35 / 2 = 87.5 %, Engineer 70 %, Commander 57.5 % (warm hands).
+	 */
+	CODEXTACTICS_API FDefusalChance GetHostileDisarmChance(EOperativeRole Role, float Luck, float ColdLevel, int32 FailedAttempts, bool bWarned);
 }

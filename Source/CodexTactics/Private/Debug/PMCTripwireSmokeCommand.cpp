@@ -1,0 +1,510 @@
+// Dev-only headless check of the Demo 01 G3 PMC tripwire (a hostile wire placed in the level) on L_MovementTest:
+//   Scripts/smoke.ps1 -Command CodexTactics.PMCTripwireSmoke
+// Exploration, nothing saved into the map. An APMCTripwireActor is spawned 6 m ahead of the squad with its two anchors
+// (actor space, as the viewport handles) 3 m apart:
+//  0. laid between the anchors at BeginPlay, armed at once, hidden (not clickable, no label);
+//  1. a frozen hound standing on it: no trip (PMC wires react only to operatives);
+//  2. the crouched engineer at 5.5 m does not spot it, the crouched Medic-Sapper at 5.5 m does (4.5 m + 1.5 m): the wire
+//     shows (clickable), TripwireSpotted with her as the subject;
+//  3. the Commander at 80 % cold: chance = warm chance - 50, disarm takes 5 s; the first attempt only warns (dangerous),
+//     the second (forced miss + detonation roll) pulls the pin: blast, the wire is gone, TripwireTriggered;
+//  4. a second wire: the Medic-Sapper disarms it in 3 s (forced success): gone, +2 grenades, TripwireDisarmed;
+//  5. a third wire: the engineer lying prone on it - no trip; standing up on it - trip;
+//  6. save / load: a hidden wire and a spotted wire saved; after revealing the first and removing the second the load
+//     restores both (hidden / spotted, armed, PMC).
+// Saves go to Saved/SmokeSaves/PMCTripwire (exclusive in Scripts/test_map.json).
+
+#include "CoreMinimal.h"
+
+#if !UE_BUILD_SHIPPING
+
+#include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
+#include "CodexTactics.h"
+#include "Combat/HealthComponent.h"
+#include "Combat/WaveSubsystem.h"
+#include "Components/BoxComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Containers/Ticker.h"
+#include "Core/PlayerCommands.h"
+#include "Core/SaveGameSubsystem.h"
+#include "Debug/EventBusProbe.h"
+#include "Debug/SmokeUtils.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFlow/GameFlowSubsystem.h"
+#include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
+#include "Interactables/TripwireActor.h"
+#include "Interactables/TripwireRules.h"
+#include "Misc/Paths.h"
+#include "Subsystems/CodexEventBus.h"
+#include "UI/OverheadLabel.h"
+#include "UObject/StrongObjectPtr.h"
+
+namespace PMCTripwireSmoke
+{
+	struct FState
+	{
+		float Time = 0.f;
+		int32 Stage = 0;
+		int32 Failures = 0;
+		FVector Ground = FVector::ZeroVector;
+		FVector F = FVector::ForwardVector;
+		FVector R = FVector::RightVector;
+		FVector Centre = FVector::ZeroVector;
+		FVector Second = FVector::ZeroVector;
+		TWeakObjectPtr<AOperativeCharacter> Commander;
+		TWeakObjectPtr<AOperativeCharacter> Engineer;
+		TWeakObjectPtr<AOperativeCharacter> Medic;
+		TWeakObjectPtr<ATripwireActor> Wire;
+		TWeakObjectPtr<ATripwireActor> Hidden;
+		TWeakObjectPtr<ATripwireActor> Spotted;
+		FString HiddenName;
+		FString SpottedName;
+		TWeakObjectPtr<AEnemyCharacter> Hound;
+		TMap<TWeakObjectPtr<AOperativeCharacter>, float> Cold;
+		float HoundHealth = 0.f;
+		float CommanderHealth = 0.f;
+		int32 MedicGrenades = 0;
+		bool bCheckedWorking = false;
+		TStrongObjectPtr<UEventBusProbe> Probe;
+	};
+
+	void Check(FState& State, bool bOk, const FString& What)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %s"), bOk ? TEXT("ok  ") : TEXT("FAIL"), *What);
+		State.Failures += bOk ? 0 : 1;
+	}
+
+	bool Finish(FState& State)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 ? TEXT("PASS") : TEXT("FAIL"));
+		State.Probe.Reset();
+		FPlatformMisc::RequestExit(false, TEXT("PMCTripwireSmoke"));
+		return false;
+	}
+
+	void Place(AActor* Actor, const FVector& Ground)
+	{
+		if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Actor))
+		{
+			Operative->StopOperative();
+		}
+		const ACharacter* Character = Cast<ACharacter>(Actor);
+		Actor->SetActorLocation(Ground + FVector(0.f, 0.f, (Character ? Character->GetSimpleCollisionHalfHeight() : 50.f) + 2.f), false, nullptr,
+			ETeleportType::TeleportPhysics);
+	}
+
+	/** A PMC wire as a level designer places it: actor at Centre, anchors 1.5 m either side along R (the viewport handles). */
+	ATripwireActor* SpawnWire(UWorld* World, const FState& State, const FVector& Centre)
+	{
+		const FTransform Transform(State.R.Rotation(), Centre + FVector(0.f, 0.f, 5.f));
+		APMCTripwireActor* Wire = World->SpawnActorDeferred<APMCTripwireActor>(APMCTripwireActor::StaticClass(), Transform, nullptr, nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Wire)
+		{
+			Wire->AnchorA = FVector(-150.f, 0.f, 0.f);
+			Wire->AnchorB = FVector(150.f, 0.f, 0.f);
+			Wire->FinishSpawning(Transform);
+		}
+		return Wire;
+	}
+
+	/** Everybody 10-12 m behind the wire, standing. */
+	void ParkSquad(USquadSubsystem* Squad, const FState& State)
+	{
+		int32 Index = 0;
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Member->SetStance(EOperativeStance::Standing);
+			Place(Member, State.Centre - State.F * 1000.f + State.R * (Index++ * 200.f - 200.f));
+		}
+	}
+
+	bool IsClickable(const ATripwireActor* Wire)
+	{
+		return Wire && Wire->Box->GetCollisionResponseToChannel(ECC_Visibility) == ECR_Block && Wire->Mesh->IsVisible();
+	}
+
+	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
+	{
+		State.Time += 0.1f;
+		UWorld* World = WeakWorld.Get();
+		if (!World)
+		{
+			return false;
+		}
+		UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			const float* Cold = State.Cold.Find(Member);
+			Member->ColdLevel = Cold ? *Cold : 0.f;
+		}
+		switch (State.Stage)
+		{
+		case 0:
+		{
+			if (State.Time < 3.f)
+			{
+				return true;
+			}
+			State.Probe.Reset(NewObject<UEventBusProbe>());
+			State.Probe->ListenGameplayEvents(UCodexEventBus::Get(World));
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->HealthComponent->SetMaxHealth(100000.f);
+				if (Member->SquadRole == EOperativeRole::Commander)
+				{
+					State.Commander = Member;
+				}
+				else if (Member->SquadRole == EOperativeRole::Engineer)
+				{
+					State.Engineer = Member;
+				}
+				else if (Member->SquadRole == EOperativeRole::MedicSapper)
+				{
+					State.Medic = Member;
+				}
+			}
+			AOperativeCharacter* Commander = State.Commander.Get();
+			if (!Commander || !State.Engineer.IsValid() || !State.Medic.IsValid() || (Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat))
+			{
+				Check(State, false, TEXT("exploration with commander, engineer and medic-sapper"));
+				return Finish(State);
+			}
+			State.Ground = Commander->GetActorLocation() - FVector(0.f, 0.f, Commander->GetSimpleCollisionHalfHeight());
+			State.F = Commander->GetActorForwardVector().GetSafeNormal2D();
+			State.R = FVector::CrossProduct(FVector::UpVector, State.F);
+			State.Centre = SmokeUtils::ClearPoint(World, State.Ground, State.Ground + State.F * 600.f);
+			State.Centre.Z = State.Ground.Z;
+			State.F = (State.Centre - State.Ground).GetSafeNormal2D();
+			State.R = FVector::CrossProduct(FVector::UpVector, State.F);
+			State.Second = SmokeUtils::ClearPoint(World, State.Centre, State.Centre + State.F * 400.f);
+			State.Second.Z = State.Ground.Z;
+			ParkSquad(Squad, State);
+			ATripwireActor* Wire = SpawnWire(World, State, State.Centre);
+			State.Wire = Wire;
+			const float Span = Wire ? FVector::Dist2D(Wire->GetAnchorA(), Wire->GetAnchorB()) : 0.f;
+			FOverheadLabel Label;
+			Check(State, Wire && Wire->IsHostile() && Wire->IsArmed() && Wire->GetArmingLeft() <= 0.f && FMath::IsNearlyEqual(Span, 300.f, 5.f),
+				FString::Printf(TEXT("placed PMC wire laid between its anchors at BeginPlay (%.0f cm), armed at once"), Span));
+			Check(State, Wire && Wire->IsConcealed() && !IsClickable(Wire) && !Wire->GetOverheadLabel(Label),
+				TEXT("hidden: not drawn, not clickable, no label"));
+			State.Stage = 1;
+			State.Time = 0.f;
+			return true;
+		}
+		case 1:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			State.Hound = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::FrostHound, State.Centre + FVector(0.f, 0.f, 100.f));
+			AEnemyCharacter* Hound = State.Hound.Get();
+			if (!Hound)
+			{
+				Check(State, false, TEXT("hound spawned"));
+				return Finish(State);
+			}
+			Hound->CustomTimeDilation = 0.f;
+			Hound->GetHealthComponent()->SetMaxHealth(1000.f);
+			State.HoundHealth = Hound->GetHealthComponent()->GetCurrentHealth();
+			Place(Hound, State.Centre);
+			State.Stage = 2;
+			State.Time = 0.f;
+			return true;
+		}
+		case 2:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			ATripwireActor* Wire = State.Wire.Get();
+			AEnemyCharacter* Hound = State.Hound.Get();
+			Check(State, Wire && Wire->IsArmed() && Wire->IsConcealed() && Hound && Hound->GetHealthComponent()->GetCurrentHealth() >= State.HoundHealth,
+				TEXT("an enemy on the PMC wire does not set it off"));
+			if (Hound)
+			{
+				Hound->Destroy();
+			}
+			State.Engineer->SetStance(EOperativeStance::Crouching);
+			Place(State.Engineer.Get(), State.Centre - State.F * 550.f);
+			State.Stage = 3;
+			State.Time = 0.f;
+			return true;
+		}
+		case 3:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			ATripwireActor* Wire = State.Wire.Get();
+			Check(State, Wire && Wire->IsConcealed(), TEXT("the crouched engineer at 5.5 m does not spot it (4.5 m)"));
+			ParkSquad(Squad, State);
+			State.Medic->SetStance(EOperativeStance::Crouching);
+			Place(State.Medic.Get(), State.Centre - State.F * 550.f);
+			State.Stage = 4;
+			State.Time = 0.f;
+			return true;
+		}
+		case 4:
+		{
+			ATripwireActor* Wire = State.Wire.Get();
+			if (Wire && Wire->IsConcealed() && State.Time < 2.f)
+			{
+				return true;
+			}
+			Check(State, Wire && Wire->IsSpotted() && IsClickable(Wire) && Wire->IsArmed(),
+				FString::Printf(TEXT("the crouched Medic-Sapper at 5.5 m spots it (6 m) in %.1f s: drawn and clickable"), State.Time));
+			Check(State, State.Probe->CountEvent(GameplayEvents::TripwireSpotted, State.Medic->GetFName()) == 1,
+				TEXT("TripwireSpotted raised once with the medic-sapper as the subject"));
+			// The Commander, frozen hands, crouched next to the wire.
+			ParkSquad(Squad, State);
+			AOperativeCharacter* Commander = State.Commander.Get();
+			State.Cold.Add(Commander, 80.f);
+			Commander->ColdLevel = 80.f;
+			Place(Commander, State.Centre - State.F * 120.f);
+			const FDefusalChance Warm = TripwireRules::GetHostileDisarmChance(EOperativeRole::Commander, Commander->Luck, 0.f, 0, false);
+			const FDefusalChance Odds = Wire ? Wire->GetDefusalChance(Commander) : FDefusalChance();
+			Check(State, FMath::IsNearlyEqual(Odds.ColdPenalty, 50.f) && FMath::IsNearlyEqual(Odds.Chance, FMath::Max(1.f, Warm.Chance - 50.f), 0.01f) && Odds.bDangerous,
+				FString::Printf(TEXT("commander at 80 %% cold: %.1f %% (warm %.1f %%, -%.0f), dangerous"), Odds.Chance, Warm.Chance, Odds.ColdPenalty));
+			Check(State, Wire && FMath::IsNearlyEqual(Wire->GetDisarmSecondsFor(Commander), 5.f) && FMath::IsNearlyEqual(Wire->GetDisarmSecondsFor(State.Medic.Get()), 3.f)
+				&& Wire->CanBeDisarmedBy(Commander), TEXT("anyone may disarm: commander 5 s, medic-sapper 3 s"));
+			if (Wire)
+			{
+				Wire->DefusalRollForTesting = 99.f; // a miss ...
+				Wire->DefusalExplosionRollForTesting = 0.f; // ... that sets it off
+				Wire->ExecuteAction(Commander);
+			}
+			State.CommanderHealth = Commander->HealthComponent->GetCurrentHealth();
+			State.Stage = 5;
+			State.Time = 0.f;
+			return true;
+		}
+		case 5:
+		{
+			if (State.Time < 4.5f)
+			{
+				ATripwireActor* Wire = State.Wire.Get();
+				if (State.Time > 1.f && !State.bCheckedWorking)
+				{
+					State.bCheckedWorking = true;
+					Check(State, Wire && Wire->IsDisarming(), TEXT("the commander is still working at 1 s"));
+				}
+				return true;
+			}
+			if (State.Time < 5.4f)
+			{
+				return true;
+			}
+			ATripwireActor* Wire = State.Wire.Get();
+			Check(State, Wire && Wire->IsArmed() && !Wire->IsTripped() && Wire->bDefusalWarned && Wire->FailedDefusalAttempts == 0,
+				TEXT("first frozen attempt (5 s): only the warning (mine rule), the wire stays armed"));
+			if (Wire)
+			{
+				Wire->ExecuteAction(State.Commander.Get());
+			}
+			State.Stage = 6;
+			State.Time = 0.f;
+			return true;
+		}
+		case 6:
+		{
+			if (State.Time < 6.f)
+			{
+				return true;
+			}
+			AOperativeCharacter* Commander = State.Commander.Get();
+			const float Lost = State.CommanderHealth - Commander->HealthComponent->GetCurrentHealth();
+			Check(State, !State.Wire.IsValid() && Lost > 0.f && State.Probe->CountEvent(GameplayEvents::TripwireTriggered) == 1,
+				FString::Printf(TEXT("second attempt fails: the pin is pulled, blast (commander -%.0f HP), wire gone, TripwireTriggered"), Lost));
+			State.Cold.Remove(Commander);
+			ParkSquad(Squad, State);
+			ATripwireActor* Wire = SpawnWire(World, State, State.Centre);
+			State.Wire = Wire;
+			if (Wire)
+			{
+				Wire->Reveal();
+				Wire->DefusalRollForTesting = 0.f;
+				Wire->DefusalExplosionRollForTesting = 99.f;
+			}
+			Place(State.Medic.Get(), State.Centre - State.F * 120.f);
+			State.MedicGrenades = State.Medic->GrenadesCount;
+			State.Stage = 7;
+			State.Time = 0.f;
+			return true;
+		}
+		case 7:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			if (ATripwireActor* Wire = State.Wire.Get())
+			{
+				Wire->ExecuteAction(State.Medic.Get());
+			}
+			State.Stage = 8;
+			State.Time = 0.f;
+			return true;
+		}
+		case 8:
+		{
+			if (State.Time < 3.5f)
+			{
+				return true;
+			}
+			Check(State, !State.Wire.IsValid() && State.Medic->GrenadesCount == State.MedicGrenades + 2
+				&& State.Probe->CountEvent(GameplayEvents::TripwireDisarmed, State.Medic->GetFName()) == 1,
+				FString::Printf(TEXT("the medic-sapper disarms a PMC wire in 3 s: removed, +%d grenades, TripwireDisarmed"), State.Medic->GrenadesCount - State.MedicGrenades));
+			ParkSquad(Squad, State);
+			ATripwireActor* Wire = SpawnWire(World, State, State.Centre);
+			State.Wire = Wire;
+			if (Wire)
+			{
+				Wire->Reveal();
+			}
+			State.Engineer->SetStance(EOperativeStance::Prone);
+			State.Stage = 9;
+			State.Time = 0.f;
+			return true;
+		}
+		case 9:
+			if (State.Time < 2.f)
+			{
+				return true;
+			}
+			Place(State.Engineer.Get(), State.Centre);
+			State.Stage = 10;
+			State.Time = 0.f;
+			return true;
+		case 10:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			ATripwireActor* Wire = State.Wire.Get();
+			Check(State, Wire && Wire->IsArmed(), TEXT("the engineer lying prone on the PMC wire crawls under it"));
+			State.Engineer->SetStance(EOperativeStance::Standing);
+			Place(State.Engineer.Get(), State.Centre);
+			State.Stage = 11;
+			State.Time = 0.f;
+			return true;
+		}
+		case 11:
+		{
+			if (State.Time < 1.5f)
+			{
+				return true;
+			}
+			Check(State, !State.Wire.IsValid() && State.Probe->CountEvent(GameplayEvents::TripwireTriggered, State.Engineer->GetFName()) == 1,
+				TEXT("standing up on the wire trips it (TripwireTriggered by the engineer)"));
+			// Save / load: one hidden, one spotted wire.
+			ParkSquad(Squad, State);
+			ATripwireActor* HiddenWire = SpawnWire(World, State, State.Centre);
+			ATripwireActor* SpottedWire = SpawnWire(World, State, State.Second);
+			if (!HiddenWire || !SpottedWire)
+			{
+				Check(State, false, TEXT("two wires for the save"));
+				return Finish(State);
+			}
+			SpottedWire->Reveal();
+			State.Hidden = HiddenWire;
+			State.Spotted = SpottedWire;
+			State.HiddenName = HiddenWire->GetName();
+			State.SpottedName = SpottedWire->GetName();
+			State.Stage = 12;
+			State.Time = 0.f;
+			return true;
+		}
+		case 12:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			USaveGameSubsystem* Saves = World->GetSubsystem<USaveGameSubsystem>();
+			Saves->SaveDirectoryOverride = FPaths::ProjectSavedDir() / TEXT("SmokeSaves") / TEXT("PMCTripwire");
+			IFileManager::Get().DeleteDirectory(*Saves->SaveDirectoryOverride, false, true);
+			const bool bSaved = Saves->SaveGame(TEXT("pmc_wires"));
+			Check(State, bSaved, TEXT("saved with a hidden and a spotted PMC wire"));
+			if (ATripwireActor* HiddenWire = State.Hidden.Get())
+			{
+				HiddenWire->Reveal();
+			}
+			if (ATripwireActor* SpottedWire = State.Spotted.Get())
+			{
+				SpottedWire->Destroy();
+			}
+			State.Stage = 13;
+			State.Time = 0.f;
+			return true;
+		}
+		case 13:
+		{
+			if (State.Time < 0.5f)
+			{
+				return true;
+			}
+			USaveGameSubsystem* Saves = World->GetSubsystem<USaveGameSubsystem>();
+			Check(State, Saves->LoadGame(TEXT("pmc_wires")), TEXT("loaded"));
+			State.Stage = 14;
+			State.Time = 0.f;
+			return true;
+		}
+		default:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			ATripwireActor* HiddenWire = nullptr;
+			ATripwireActor* SpottedWire = nullptr;
+			int32 Count = 0;
+			for (TActorIterator<APMCTripwireActor> It(World); It; ++It)
+			{
+				if (It->IsActorBeingDestroyed())
+				{
+					continue;
+				}
+				++Count;
+				HiddenWire = It->GetName() == State.HiddenName ? *It : HiddenWire;
+				// A wire recreated by the load gets a new name when the old one is still held by the destroyed actor: match by place.
+				SpottedWire = It->GetName() != State.HiddenName && FVector::Dist2D(It->GetActorLocation(), State.Second) < 30.f ? *It : SpottedWire;
+			}
+			Check(State, Count == 2 && HiddenWire && SpottedWire, FString::Printf(TEXT("load: both saved PMC wires present (%d)"), Count));
+			Check(State, HiddenWire && HiddenWire->IsHostile() && HiddenWire->IsConcealed() && HiddenWire->IsArmed() && !IsClickable(HiddenWire),
+				TEXT("load: the hidden wire is hidden again (revealed after the save)"));
+			Check(State, SpottedWire && SpottedWire->IsHostile() && SpottedWire->IsSpotted() && SpottedWire->IsArmed() && IsClickable(SpottedWire)
+				&& FVector::Dist2D(SpottedWire->GetActorLocation(), State.Second) < 30.f
+				&& FMath::IsNearlyEqual(FVector::Dist2D(SpottedWire->GetAnchorA(), SpottedWire->GetAnchorB()), 300.f, 5.f),
+				TEXT("load: the removed spotted wire is back, spotted and armed between its anchors"));
+			return Finish(State);
+		}
+		}
+	}
+
+	void Run(const TArray<FString>& Args, UWorld* World)
+	{
+		TWeakObjectPtr<UWorld> WeakWorld(World);
+		TSharedRef<FState> State = MakeShared<FState>();
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
+		{
+			return Step(WeakWorld, *State);
+		}), 0.1f);
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs Command(
+		TEXT("CodexTactics.PMCTripwireSmoke"),
+		TEXT("Dev check of the Demo 01 PMC tripwire: placed hidden + armed, enemies pass, spotting (sapper bonus), cold commander disarm fails, sapper disarms, prone passes, save / load."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
+}
+
+#endif // !UE_BUILD_SHIPPING

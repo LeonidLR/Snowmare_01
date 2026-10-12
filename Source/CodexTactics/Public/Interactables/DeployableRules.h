@@ -73,6 +73,9 @@ namespace DeployableRules
 	CODEXTACTICS_API EDefusalResult ResolveDefusal(const FDefusalChance& Chance, bool& bInOutWarned, int32& InOutFailedAttempts,
 		float Roll, float ExplosionRoll);
 
+	/** Spotting range of a hidden level trap (mine, PMC tripwire): Base, + SapperBonus for the Medic-Sapper (Godot 4.5 / +1.5 m), cm. */
+	CODEXTACTICS_API float GetSpotRangeCm(float BaseCm, float SapperBonusCm, EOperativeRole Role);
+
 	/** Mine set-up mishap: 2 % for the sapper, 10 % otherwise, + cold / 100 * 20, clamped 0..95. */
 	CODEXTACTICS_API float GetMineMishapChance(bool bSapper, float ColdLevel);
 

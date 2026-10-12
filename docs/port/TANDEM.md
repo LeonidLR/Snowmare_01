@@ -977,6 +977,7 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-10-12 (Claude, `agents/work`): Demo 01 G3 PMC tripwires placed in the level (`APMCTripwireActor`, hidden until spotted, anyone disarms with the mine formula + cold, operatives-only trigger, TB 2 AP disarm, saved; HANDOFF §6 «How to place a PMC tripwire» / §10). No asset changes. For Gemini (optional, no request): the wire / pegs use `BasicShapeMaterial` with the `Color` parameter (PMC red, squad grey); a proper wire material can be set on the BP child.
 - 2026-10-11 (Claude, `agents/work`): blast gate tied to the generator during the wave fight (`Quests/GateProgressRules`, `AGateActor` paced mode, HUD line + world label, HQ feed lines, save `gate_progress`, level JSON `gate_*` keys); HANDOFF §5 / §7 / §10. Gameplay only, nothing for Gemini (the door leaves are still engine cubes).
 - 2026-10-11 (Claude, `agents/vision`): vision cones for operatives and enemies (`UVisionConeComponent`, `bShowVisionCone`, `Codex.Debug.VisionCones`; HANDOFF §5 / §6 / §10). Request 16 to Gemini: the cone material.
 - 2026-10-11 (Claude, `agents/vision`, temp worktree `../CodexTactics-agents2`): enemies placed in a map without a route guard their post until they perceive the squad (`AEnemyCharacter::TryStartGuardPost`, HANDOFF §5 «Game flow» / §10); wave spawns unchanged. M16 range 14 -> 25 m (`weapons_tuning.json`, `DA_Weapon_m16`, HANDOFF §6).

@@ -292,6 +292,13 @@ namespace GameplayEvents
 	const FName DialogueFinished(TEXT("DialogueFinished"));
 	const FName CombatStarted(TEXT("CombatStarted"));
 	const FName CombatEnded(TEXT("CombatEnded"));
+	const FName TripwireSpotted(TEXT("TripwireSpotted"));
+	const FName TripwireDisarmed(TEXT("TripwireDisarmed"));
+	const FName TripwireTriggered(TEXT("TripwireTriggered"));
+	const FName CoverEntered(TEXT("CoverEntered"));
+	const FName CoverLeft(TEXT("CoverLeft"));
+	const FName CoverShimmy(TEXT("CoverShimmy"));
+	const FName CornerReached(TEXT("CornerReached"));
 
 	void Raise(const UObject* WorldContext, FName EventName, AActor* Subject)
 	{
@@ -305,4 +312,29 @@ namespace GameplayEvents
 			Bus->OnGameplayEvent.Broadcast(EventName, Subject);
 		}
 	}
+
+	void RaiseWithContext(const UObject* WorldContext, FName EventName, const FGameplayEventContext& Context)
+	{
+		if (EventName.IsNone())
+		{
+			return;
+		}
+		FGameplayEventContext Filled = Context;
+		if (Filled.SubjectId.IsNone() && Filled.Subject)
+		{
+			Filled.SubjectId = Filled.Subject->GetFName();
+		}
+		if (Filled.TargetId.IsNone() && Filled.Target)
+		{
+			Filled.TargetId = Filled.Target->GetFName();
+		}
+		UE_LOG(LogCodexTactics, Verbose, TEXT("[Event] %s subject %s target %s kind %s"), *EventName.ToString(), *Filled.SubjectId.ToString(),
+			*Filled.TargetId.ToString(), *Filled.Kind.ToString());
+		if (UCodexEventBus* Bus = WorldContext ? UCodexEventBus::Get(WorldContext) : nullptr)
+		{
+			Bus->OnGameplayEvent.Broadcast(EventName, Filled.Subject);
+			Bus->OnGameplayEventDetailed.Broadcast(EventName, Filled);
+		}
+	}
 }
+

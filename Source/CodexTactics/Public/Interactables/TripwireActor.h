@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Interactables/InteractableActor.h"
+#include "Interactables/TripwireRules.h"
 #include "NavAreas/NavArea.h"
 #include "TripwireActor.generated.h"
 
@@ -23,6 +24,16 @@ public:
 	UNavArea_Tripwire();
 };
 
+/** Who rigged a wire: the squad (friendly fire on everyone) or the PMC (a level trap that only operatives set off). */
+UENUM(BlueprintType)
+enum class ETripwireFaction : uint8
+{
+	/** The squad's own wire (drawer, two anchor clicks): trips on enemies and operatives, only the Medic-Sapper disarms it. */
+	Squad,
+	/** Hostile PMC wire placed in the level: hidden until spotted, trips only on operatives, anyone may disarm it (role chance). */
+	PMC
+};
+
 /**
  * Tripwire mine "Tripwire" MUV-3 with two F-1 grenades (Sprint 09, TANDEM «SPRINT 09 DIRECTIVE»; UE-only). A wire
  * 1-5 m long at 30 cm between two anchors (a ground peg, or a bracket on an object). Anyone — enemy or operative — who
@@ -30,6 +41,13 @@ public:
  * (140, 4.5 m, full armour penetration, stagger). A medic-sapper disarms it in 3 s and gets the grenades back (one is
  * lost on a fumble). Rules: TripwireRules; placed by URelocationSubsystem (two clicks). A preview copy (bPreview) is
  * the placement hologram: cyan valid, red invalid.
+ * Demo 01 G3 (user decisions 2026-10-11): a wire placed in the level with Faction PMC + Armed At Level Start (the
+ * APMCTripwireActor defaults) lays itself between its two viewport anchors (AnchorA / AnchorB, actor space, projected on the
+ * ground) at BeginPlay, armed. It stays hidden until an operative comes within the mine spotting range (4.5 m, Medic-Sapper
+ * +1.5 m), trips only on operatives (prone crawls under), and ANY operative may disarm it crouched with the mine formula
+ * (role base + luck, cold -15 / -30 / -50, failed attempts; the mine failure rule: warning / slip / detonation) in 3 / 4 / 5 s
+ * (sapper / engineer / others); turn-based: a click on the wire next to it costs 2 AP for one attempt. Success gives the
+ * grenades to the disarmer. Saved (faction, spotted, anchors, arming).
  */
 UCLASS(Blueprintable)
 class CODEXTACTICS_API ATripwireActor : public AInteractableActor
@@ -39,7 +57,109 @@ class CODEXTACTICS_API ATripwireActor : public AInteractableActor
 public:
 	ATripwireActor();
 
+	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
+
+	// --- Level placement (PMC wires; Demo 01 G3) ---
+
+	/** Squad = the drawer wire; PMC = hostile level trap (hidden until spotted, operatives only, anyone disarms). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire")
+	ETripwireFaction Faction = ETripwireFaction::Squad;
+
+	/** Placed in the level: lays the wire between AnchorA and AnchorB at BeginPlay, armed at once (no arming delay). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire")
+	bool bArmedAtLevelStart = false;
+
+	/** First anchor in actor space (drag the diamond handle in the viewport); projected on the ground at BeginPlay, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire", meta = (MakeEditWidget = true))
+	FVector AnchorA = FVector(-100.f, 0.f, 0.f);
+
+	/** Second anchor in actor space (viewport handle). The span should be 1-5 m (outside it a warning is logged). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire", meta = (MakeEditWidget = true))
+	FVector AnchorB = FVector(100.f, 0.f, 0.f);
+
+	/** The anchor is a bracket on an object (door frame, post) instead of a peg in the snow (look only). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire")
+	bool bAnchorABracket = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire")
+	bool bAnchorBBracket = false;
+
+	/** A PMC wire is invisible (and not clickable) until an operative spots it. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire")
+	bool bHiddenUntilSpotted = true;
+
+	/** Charge: blast damage at the centre (enemies; the squad takes SquadDamageShare of it), radius cm (TripwireRules defaults). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire|Charge", meta = (ClampMin = "0"))
+	float BlastDamage = TripwireRules::BlastDamage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire|Charge", meta = (ClampMin = "0"))
+	float BlastRadiusCm = TripwireRules::BlastRadiusCm;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire|Charge", meta = (ClampMin = "0", ClampMax = "1"))
+	float SquadDamageShare = TripwireRules::SquadDamageShare;
+
+	/** Grenades a successful PMC wire disarm gives the disarmer. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire|Charge", meta = (ClampMin = "0"))
+	int32 GrenadesRecovered = TripwireRules::GrenadeCost;
+
+	/** Spotting range (mine rule 4.5 m) and the Medic-Sapper's bonus (+1.5 m), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire|PMC", meta = (ClampMin = "0"))
+	float SpotRangeCm = TripwireRules::SpotRangeCm;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire|PMC", meta = (ClampMin = "0"))
+	float SapperSpotBonusCm = TripwireRules::SapperSpotBonusCm;
+
+	/** PMC wire disarm time by role, s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire|PMC", meta = (ClampMin = "0.1"))
+	float DisarmSecondsSapper = TripwireRules::HostileDisarmSecondsSapper;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire|PMC", meta = (ClampMin = "0.1"))
+	float DisarmSecondsEngineer = TripwireRules::HostileDisarmSecondsEngineer;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire|PMC", meta = (ClampMin = "0.1"))
+	float DisarmSecondsOther = TripwireRules::HostileDisarmSecondsOther;
+
+	/** Turn-based: AP of one disarm attempt. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tripwire|PMC", meta = (ClampMin = "0"))
+	int32 TurnBasedDisarmAP = TripwireRules::TurnBasedDisarmAP;
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tripwire")
+	bool IsHostile() const { return Faction == ETripwireFaction::PMC; }
+
+	/** A PMC wire already seen by the squad (always true for a squad wire). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tripwire")
+	bool IsSpotted() const { return !IsHostile() || !bHiddenUntilSpotted || bSpotted; }
+
+	/** Hidden from the squad now (not drawn, not clickable, no path cost). */
+	bool IsConcealed() const { return !IsSpotted(); }
+
+	/** Shows a hidden PMC wire; with a Spotter the squad stops and he warns (the mine rule). */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tripwire")
+	void Reveal(AOperativeCharacter* Spotter = nullptr);
+
+	/** Who may disarm it (squad wire: the Medic-Sapper; PMC wire: anyone). */
+	bool CanBeDisarmedBy(const AOperativeCharacter* Operative) const;
+
+	/** Disarm time for Operative, s. */
+	float GetDisarmSecondsFor(const AOperativeCharacter* Operative) const;
+
+	/** A timed disarm is running. */
+	bool IsDisarming() const { return bDisarming; }
+
+	/**
+	 * Turn-based disarm of a PMC wire (the caller paid TurnBasedDisarmAP): one attempt resolved at once. False when it cannot
+	 * be tried (not hostile, hidden, tripped, busy).
+	 */
+	bool TryTurnBasedDisarm(AOperativeCharacter* User);
+
+	/** Save-game load, before Setup: faction and spotted state. */
+	void RestoreSavedState(bool bInHostile, bool bInSpotted);
+
+	virtual FDefusalChance GetDefusalChance(const AOperativeCharacter* Operative) const override;
+	virtual void DetonateTrap(bool bByShot = false, const FText& InstigatorName = FText::GetEmpty()) override;
+	virtual ETrapFlavor GetTrapFlavor() const override { return IsHostile() ? ETrapFlavor::Tripwire : ETrapFlavor::Object; }
 
 	/**
 	 * Lays the wire between the ground points A and B (anchors on objects get a bracket, on the ground a peg). An armed
@@ -80,6 +200,16 @@ public:
 private:
 	void Detonate();
 	void FinishDisarm();
+	/** One PMC wire disarm attempt by User (mine formula); success removes the wire and hands over the grenades. */
+	EDefusalResult ResolveHostileDisarm(AOperativeCharacter* User);
+	/** Lays the placed wire from AnchorA / AnchorB (ground-projected) and arms it. */
+	void ArmFromPlacement();
+	/** Editor / pre-Setup look: wire and pegs between the local anchors. */
+	void LayoutLocal(const FVector& LocalA, const FVector& LocalB);
+	/** Concealment: wire / pegs drawn, cursor-clickable and the squad's path cost only while spotted. */
+	void ApplyConcealment();
+	void EnsureNavModifier();
+	void ScanForSpotters();
 	/** Body height above the feet that meets the wire (operatives / marksman by stance, others by size). */
 	static float BodyHeight(const AActor& Actor);
 
@@ -105,10 +235,28 @@ private:
 	bool bTripped = false;
 	bool bAnchorAOnObject = false;
 	bool bAnchorBOnObject = false;
+	/** Setup ran (the wire is laid in the world). */
+	bool bSetUp = false;
+	bool bSpotted = false;
+	bool bDisarming = false;
 	float ArmingLeft = 0.f;
 	/** Ignored by the trigger until they leave the wire (the rigger). */
 	TArray<TWeakObjectPtr<AActor>> Ignored;
 	TWeakObjectPtr<AOperativeCharacter> Disarmer;
 	FTimerHandle FuseTimer;
 	FTimerHandle DisarmTimer;
+};
+
+/**
+ * Hostile PMC tripwire for level designers (Demo 01 G3): an ATripwireActor with Faction PMC, armed at level start and hidden
+ * until spotted. Place it from Place Actors ("PMC Tripwire"), drag the AnchorA / AnchorB diamonds in the viewport (1-5 m);
+ * charge / spotting / disarm values are in Details -> CodexTactics | Tripwire.
+ */
+UCLASS(Blueprintable, meta = (DisplayName = "PMC Tripwire"))
+class CODEXTACTICS_API APMCTripwireActor : public ATripwireActor
+{
+	GENERATED_BODY()
+
+public:
+	APMCTripwireActor();
 };

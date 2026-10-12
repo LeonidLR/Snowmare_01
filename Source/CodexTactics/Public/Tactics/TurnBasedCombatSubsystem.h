@@ -304,6 +304,12 @@ public:
 	 * operative where the barricade fits at the current rotation (RotateRelocation, 45° steps).
 	 */
 	bool StartRelocate(AActor* Object);
+
+	/**
+	 * Demo 01 G3: a click on a spotted PMC tripwire. Within TripwireRules::TurnBasedDisarmReachCm of the active operative it
+	 * costs the wire's TurnBasedDisarmAP (2) for one disarm attempt (mine formula, resolved at once); else a feed hint.
+	 */
+	bool HandleTripwireClick(class ATripwireActor* Wire);
 	/** Godot R / E (+45°) and Q (-45°) while relocating; barricades refresh their target cells. */
 	void RotateRelocation(int32 Steps);
 	float GetRelocateYaw() const { return RelocateYaw; }

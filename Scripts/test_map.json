@@ -29,13 +29,15 @@
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugSmoke", "CoverHugMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
-    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "ControlsScreenSmoke"
+    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "ControlsScreenSmoke",
+    "PMCTripwireSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
     "SaveLoadSmoke": { "exclusive": true },
     "SaveRoundTripSmoke": { "exclusive": true },
     "TutorialSmoke": { "exclusive": true },
+    "PMCTripwireSmoke": { "exclusive": true },
     "PauseMenuSmoke": { "exclusive": true },
     "ControlsScreenSmoke": { "exclusive": true },
     "EventBusSmoke": { "exclusive": true },
@@ -48,11 +50,17 @@
   "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "EncounterProbe"],
   "rules": [
     {
+      "name": "gameplay-events-probe",
+      "globs": ["Source/**/Debug/EventBusProbe*", "Source/**/Subsystems/CodexEventBus*"],
+      "tests": ["CodexTactics.Tutorial"],
+      "smokes": ["PMCTripwireSmoke", "EventBusSmoke"]
+    },
+    {
       "name": "tutorial",
       "globs": ["Source/**/Tutorial/**", "Source/**/Core/PlayerCommands*", "Source/**/Core/DemoModeSubsystem*", "Source/**/UI/TutorialOverlay*",
         "Source/**/Debug/TutorialSmoke*", "Content/Data/Tutorial/**"],
       "tests": ["CodexTactics.Tutorial", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": ["TutorialSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke"]
+      "smokes": ["TutorialSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke"]
     },
     {
       "name": "sniper",
@@ -112,9 +120,9 @@
     },
     {
       "name": "tripwire",
-      "globs": ["Source/**/Interactables/Tripwire*"],
+      "globs": ["Source/**/Interactables/Tripwire*", "Source/**/Debug/PMCTripwireSmoke*", "Source/**/Debug/TripwireSmoke*"],
       "tests": ["CodexTactics.Interactables.Tripwire"],
-      "smokes": ["TripwireSmoke", "DeployableSmoke"]
+      "smokes": ["PMCTripwireSmoke", "TripwireSmoke", "DeployableSmoke", "SaveRoundTripSmoke"]
     },
     {
       "name": "interactables-core",

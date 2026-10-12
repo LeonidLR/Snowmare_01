@@ -18,6 +18,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCodexGameLoadedEvent, const FString
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexSoldierReasonEvent, AOperativeCharacter*, Soldier, const FString&, Reason);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexPlayerCommandEvent, FName, CommandId, const FPlayerCommandContext&, Context);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexGameplayEvent, FName, EventName, AActor*, Subject);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCodexGameplayEventDetailed, FName, EventName, const FGameplayEventContext&, Context);
 
 /**
  * Global game events for Blueprints, audio, VFX and UI hooks: the Godot EventBus signals the game actually emits.
@@ -99,4 +100,8 @@ public:
 	/** Named gameplay events for the tutorial / content (GameplayEvents::Raise; names in Core/PlayerCommands.h). */
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
 	FCodexGameplayEvent OnGameplayEvent;
+
+	/** The same events with their details when the emitter has them (GameplayEvents::RaiseWithContext: cover kind, wall, ids). */
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Events")
+	FCodexGameplayEventDetailed OnGameplayEventDetailed;
 };

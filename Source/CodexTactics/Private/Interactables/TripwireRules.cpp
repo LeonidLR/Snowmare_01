@@ -34,3 +34,37 @@ int32 TripwireRules::GrenadesReturned(bool bFumble)
 {
 	return bFumble ? GrenadeCost - 1 : GrenadeCost;
 }
+
+bool TripwireRules::TriggersOn(bool bHostileWire, bool bIsOperative)
+{
+	return bIsOperative || !bHostileWire;
+}
+
+bool TripwireRules::CanDisarm(bool bHostileWire, EOperativeRole Role)
+{
+	return bHostileWire || Role == EOperativeRole::MedicSapper;
+}
+
+float TripwireRules::GetDisarmSeconds(bool bHostileWire, EOperativeRole Role)
+{
+	if (!bHostileWire)
+	{
+		return DisarmSeconds;
+	}
+	switch (Role)
+	{
+	case EOperativeRole::MedicSapper: return HostileDisarmSecondsSapper;
+	case EOperativeRole::Engineer: return HostileDisarmSecondsEngineer;
+	default: return HostileDisarmSecondsOther;
+	}
+}
+
+bool TripwireRules::CanSpot(float DistanceCm, EOperativeRole Role, float BaseRangeCm, float SapperBonusCm)
+{
+	return DistanceCm <= DeployableRules::GetSpotRangeCm(BaseRangeCm, SapperBonusCm, Role);
+}
+
+FDefusalChance TripwireRules::GetHostileDisarmChance(EOperativeRole Role, float Luck, float ColdLevel, int32 FailedAttempts, bool bWarned)
+{
+	return DeployableRules::CalculateDefusal(Role, EOperativeStance::Crouching, Luck, ColdLevel, FailedAttempts, bWarned);
+}

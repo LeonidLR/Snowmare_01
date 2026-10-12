@@ -415,6 +415,8 @@ namespace
 			Entry->SetBoolField(TEXT("anchor_a_on_object"), Wire->IsAnchorAOnObject());
 			Entry->SetBoolField(TEXT("anchor_b_on_object"), Wire->IsAnchorBOnObject());
 			Entry->SetNumberField(TEXT("arming_left"), Wire->GetArmingLeft());
+			Entry->SetBoolField(TEXT("wire_pmc"), Wire->IsHostile());
+			Entry->SetBoolField(TEXT("wire_spotted"), Wire->IsSpotted());
 		}
 		const UHealthComponent* Health = nullptr;
 		if (const ABarricadeActor* Barricade = Cast<ABarricadeActor>(Object))
@@ -451,6 +453,8 @@ namespace
 	{
 		if (ATripwireActor* Wire = Cast<ATripwireActor>(Object))
 		{
+			// Demo 01 G3: a PMC wire's faction and spotted state first (Setup applies the concealment).
+			Wire->RestoreSavedState(SaveBool(Entry, TEXT("wire_pmc"), Wire->IsHostile()), SaveBool(Entry, TEXT("wire_spotted"), false));
 			// Setup places the wire between its anchors (location / rotation follow from them).
 			Wire->Setup(LoadVector(Entry, TEXT("anchor_a"), Wire->GetAnchorA()), LoadVector(Entry, TEXT("anchor_b"), Wire->GetAnchorB()),
 				SaveBool(Entry, TEXT("anchor_a_on_object"), false), SaveBool(Entry, TEXT("anchor_b_on_object"), false), false);

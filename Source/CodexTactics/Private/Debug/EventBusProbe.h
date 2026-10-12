@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
+#include "Core/PlayerCommands.h"
+#include "GameFramework/Actor.h"
 #include "EventBusProbe.generated.h"
 
 class AOperativeCharacter;
@@ -34,4 +36,37 @@ public:
 	UFUNCTION() void OnLoaded(const FString& SlotName) { ++Counts.FindOrAdd(TEXT("loaded")); }
 
 	int32 Count(const TCHAR* Key) const { const int32* Value = Counts.Find(Key); return Value ? *Value : 0; }
+
+	// --- Named gameplay events (PMCTripwireSmoke, CoverEventSmoke): ListenGameplayEvents binds only these. ---
+
+	/** Every OnGameplayEvent in order with its subject's name. */
+	TArray<FName> EventNames;
+	TArray<FName> EventSubjects;
+	/** Every OnGameplayEventDetailed in order. */
+	TArray<FName> DetailedNames;
+	TArray<FGameplayEventContext> DetailedContexts;
+
+	void ListenGameplayEvents(UCodexEventBus* Bus);
+
+	UFUNCTION() void OnGameplayEvent(FName EventName, AActor* Subject)
+	{
+		EventNames.Add(EventName);
+		EventSubjects.Add(Subject ? Subject->GetFName() : NAME_None);
+	}
+	UFUNCTION() void OnGameplayEventDetailed(FName EventName, const FGameplayEventContext& Context)
+	{
+		DetailedNames.Add(EventName);
+		DetailedContexts.Add(Context);
+	}
+
+	/** How many times EventName was heard (optionally only with this subject). */
+	int32 CountEvent(FName EventName, FName SubjectId = NAME_None) const
+	{
+		int32 Total = 0;
+		for (int32 Index = 0; Index < EventNames.Num(); ++Index)
+		{
+			Total += EventNames[Index] == EventName && (SubjectId.IsNone() || EventSubjects[Index] == SubjectId) ? 1 : 0;
+		}
+		return Total;
+	}
 };

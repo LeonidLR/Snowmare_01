@@ -163,8 +163,34 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 
 	const FDefusalChance Odds = GetDefusalChance(Operative);
 	const EDefusalResult Result = DeployableRules::ResolveDefusal(Odds, bDefusalWarned, FailedDefusalAttempts,
-		FMath::FRand() * 100.f, FMath::FRand() * 100.f);
+		DefusalRollForTesting >= 0.f ? DefusalRollForTesting : FMath::FRand() * 100.f,
+		DefusalExplosionRollForTesting >= 0.f ? DefusalExplosionRollForTesting : FMath::FRand() * 100.f);
 	const bool bStanding = !Operative || Operative->GetStance() == EOperativeStance::Standing;
+
+	if (Flavor == ETrapFlavor::Tripwire)
+	{
+		// Demo 01 G3: a PMC tripwire (the mine failure rule; the wire itself handles success / detonation).
+		switch (Result)
+		{
+		case EDefusalResult::Warning:
+			PostLine(Name, FText::Format(LOCTEXT("TripwireWarn", "⚠️ {0}: \"This wire is tight as a string! {1} - one twitch and both grenades go. Need to warm up first, or let the sapper do it!\""),
+				Name, Odds.ColdPenalty > 0.f ? LOCTEXT("ColdFingers", "my fingers are numb") : LOCTEXT("WireTaut", "the pin is half out already")));
+			break;
+		case EDefusalResult::Success:
+			bTrapped = false;
+			bDefused = true;
+			PostLine(Name, FText::Format(LOCTEXT("TripwireDefused", "✅ {0} disarmed the PMC tripwire!"), Name));
+			break;
+		case EDefusalResult::Detonation:
+			PostLine(Name, LOCTEXT("TripwireBoom", "💥 The pin slipped out of numb fingers! The tripwire went off!"));
+			DetonateTrap(false, Name);
+			break;
+		default:
+			PostLine(Name, FText::Format(LOCTEXT("TripwireSlip", "⚠️ {0}: \"Click! The wire jerked, but the pin held! Another slip sets it off!\""), Name));
+			break;
+		}
+		return Result;
+	}
 
 	switch (Result)
 	{

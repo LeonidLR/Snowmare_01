@@ -6,6 +6,12 @@
 #include "Debug/EventBusProbe.h"
 #include "Subsystems/CodexEventBus.h"
 
+void UEventBusProbe::ListenGameplayEvents(UCodexEventBus* Bus)
+{
+	Bus->OnGameplayEvent.AddDynamic(this, &UEventBusProbe::OnGameplayEvent);
+	Bus->OnGameplayEventDetailed.AddDynamic(this, &UEventBusProbe::OnGameplayEventDetailed);
+}
+
 void UEventBusProbe::Listen(UCodexEventBus* Bus)
 {
 	Bus->OnSquadMemberSelected.AddDynamic(this, &UEventBusProbe::OnSelected);

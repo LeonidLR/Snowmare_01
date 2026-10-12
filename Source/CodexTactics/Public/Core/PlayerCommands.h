@@ -34,6 +34,40 @@ struct CODEXTACTICS_API FPlayerCommandContext
 };
 
 /**
+ * Details of a gameplay event (GameplayEvents::RaiseWithContext -> UCodexEventBus::OnGameplayEventDetailed): who, what,
+ * where, and a short kind ("High" / "Low" cover). Every field is optional.
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FGameplayEventContext
+{
+	GENERATED_BODY()
+
+	/** The operative / object the event is about (also the Subject of OnGameplayEvent). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Events")
+	TObjectPtr<AActor> Subject = nullptr;
+
+	/** Stable id of the subject (actor name) - the tutorial counts distinct operatives by it. */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Events")
+	FName SubjectId;
+
+	/** The other actor involved (the cover's wall / barricade, the trap, ...). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Events")
+	TObjectPtr<AActor> Target = nullptr;
+
+	/** Id of Target or of the place (wall actor name, empty when none). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Events")
+	FName TargetId;
+
+	/** Short kind of the event: cover "High" / "Low", corner side "Left" / "Right". */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Events")
+	FName Kind;
+
+	/** World point (the cover slot), zero when none. */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Events")
+	FVector Location = FVector::ZeroVector;
+};
+
+/**
  * One row of the command registry: id -> default key label, section and description. THE table the F1 Controls screen
  * (UCodexControlsScreen) is generated from, so the registry and the screen never diverge.
  */
@@ -259,7 +293,27 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName CombatStarted;
 	/** The fight ended (wave cleared / post combat). */
 	extern CODEXTACTICS_API const FName CombatEnded;
+	/** A hidden PMC tripwire was spotted (Subject = the spotter). */
+	extern CODEXTACTICS_API const FName TripwireSpotted;
+	/** A tripwire was disarmed (Subject = the disarmer). */
+	extern CODEXTACTICS_API const FName TripwireDisarmed;
+	/** A tripwire's pin was pulled (Subject = whoever crossed it, none for a failed disarm). */
+	extern CODEXTACTICS_API const FName TripwireTriggered;
+	/** An operative settled in a cover slot (arrived and pressed to the wall; not on the order). Also "CoverEntered.High" / ".Low". */
+	extern CODEXTACTICS_API const FName CoverEntered;
+	/** An operative left his cover (moved off, ordered elsewhere, knocked out of it). */
+	extern CODEXTACTICS_API const FName CoverLeft;
+	/** An operative finished a side-step along the same wall. */
+	extern CODEXTACTICS_API const FName CoverShimmy;
+	/** An operative in high cover reached the exposed corner on his facing side. */
+	extern CODEXTACTICS_API const FName CornerReached;
 
 	/** Broadcasts UCodexEventBus::OnGameplayEvent (no-op without a game instance) and logs it. */
 	CODEXTACTICS_API void Raise(const UObject* WorldContext, FName EventName, AActor* Subject = nullptr);
+
+	/**
+	 * Broadcasts OnGameplayEvent (EventName, Context.Subject) and OnGameplayEventDetailed (EventName, Context); fills
+	 * SubjectId / TargetId from the actors when empty.
+	 */
+	CODEXTACTICS_API void RaiseWithContext(const UObject* WorldContext, FName EventName, const FGameplayEventContext& Context);
 }
