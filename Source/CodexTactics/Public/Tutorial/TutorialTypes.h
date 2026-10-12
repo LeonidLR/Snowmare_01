@@ -91,6 +91,11 @@ struct CODEXTACTICS_API FTutorialCompletion
 	FName Volume;
 	/** > 0: an active step that is not done after this many seconds times out (hides; counts as finished). */
 	float TimeoutSeconds = 0.f;
+	/**
+	 * "hold_s" > 0: besides Count uses, the matching continuous command (key pan, edge pan, drags) must have been active this
+	 * many seconds in total while the step is shown (hold ticks, PlayerCommands::ReportHold). 0 = count only.
+	 */
+	float HoldSeconds = 0.f;
 
 	bool HasCondition() const { return Commands.Num() > 0 || !Event.IsEmpty() || !Volume.IsNone(); }
 };

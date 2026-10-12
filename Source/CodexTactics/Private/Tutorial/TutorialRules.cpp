@@ -291,7 +291,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		{
 			const TSharedPtr<FJsonObject> Complete = *CompleteObject;
 			WarnUnknownKeys(Complete, { TEXT("command"), TEXT("commands"), TEXT("event"), TEXT("count"), TEXT("volume"), TEXT("timeout_s"),
-				TEXT("distinct_operatives") },
+				TEXT("distinct_operatives"), TEXT("hold_s") },
 				Where + TEXT(" complete"), OutWarnings);
 			Step.Complete.Commands = JsonStrings(Complete, TEXT("commands"));
 			Step.Complete.Commands.Append(JsonStrings(Complete, TEXT("command")));
@@ -300,9 +300,14 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			Step.Complete.Volume = FName(*JsonString(Complete, TEXT("volume")));
 			Step.Complete.TimeoutSeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Complete, TEXT("timeout_s"), 0.0)));
 			Step.Complete.bDistinctSubjects = JsonBool(Complete, TEXT("distinct_operatives"), false);
+			Step.Complete.HoldSeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Complete, TEXT("hold_s"), 0.0)));
 			if (Step.Complete.bDistinctSubjects && Step.Complete.Event.IsEmpty())
 			{
 				OutWarnings.Add(Where + TEXT(": \"distinct_operatives\" only counts events - no \"event\" given"));
+			}
+			if (Step.Complete.HoldSeconds > 0.f && Step.Complete.Commands.IsEmpty())
+			{
+				OutWarnings.Add(Where + TEXT(": \"hold_s\" only counts command hold time - no \"commands\" given (it would never complete)"));
 			}
 		}
 
@@ -431,6 +436,11 @@ bool TutorialRules::CountsCommand(const FTutorialStep& Step, FName CommandId)
 		}
 	}
 	return false;
+}
+
+bool TutorialRules::IsProgressMet(int32 Progress, int32 Needed, float HeldSeconds, float HoldSeconds)
+{
+	return Progress >= FMath::Max(1, Needed) && HeldSeconds + KINDA_SMALL_NUMBER >= FMath::Max(0.f, HoldSeconds);
 }
 
 float TutorialRules::LineDurationSeconds(const FString& Text, float Override)

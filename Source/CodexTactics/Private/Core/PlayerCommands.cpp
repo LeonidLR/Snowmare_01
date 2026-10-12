@@ -5,8 +5,11 @@
 
 namespace PlayerCommands
 {
-	const FName CameraPan(TEXT("Camera.Pan"));
-	const FName CameraRotate(TEXT("Camera.Rotate"));
+	const FName CameraPanKeys(TEXT("Camera.Pan.Keys"));
+	const FName CameraPanEdge(TEXT("Camera.Pan.Edge"));
+	const FName CameraPanDrag(TEXT("Camera.Pan.Drag"));
+	const FName CameraRotateKeys(TEXT("Camera.Rotate.Keys"));
+	const FName CameraRotateMouse(TEXT("Camera.Rotate.Mouse"));
 	const FName CameraZoom(TEXT("Camera.Zoom"));
 
 	const FName Move(TEXT("Order.Move"));
@@ -120,8 +123,11 @@ namespace PlayerCommands
 	const TArray<FPlayerCommandInfo>& GetRegistry()
 	{
 		static const TArray<FPlayerCommandInfo> Registry = {
-			{ CameraPan, TEXT("W/A/S/D"), TEXT("Movement & camera"), TEXT("Pan the camera (also the screen edge or MMB drag)") },
-			{ CameraRotate, TEXT("Q/E"), TEXT("Movement & camera"), TEXT("Rotate the camera (also RMB drag)") },
+			{ CameraPanKeys, TEXT("W/A/S/D"), TEXT("Movement & camera"), TEXT("Pan the camera") },
+			{ CameraPanEdge, TEXT("Screen edge"), TEXT("Movement & camera"), TEXT("Pan the camera by pushing the cursor to the screen edge") },
+			{ CameraPanDrag, TEXT("MMB drag"), TEXT("Movement & camera"), TEXT("Pan the camera by dragging the ground") },
+			{ CameraRotateKeys, TEXT("Q/E"), TEXT("Movement & camera"), TEXT("Turn the camera in 45 degree steps") },
+			{ CameraRotateMouse, TEXT("RMB drag"), TEXT("Movement & camera"), TEXT("Turn the camera freely with the mouse") },
 			{ CameraZoom, TEXT("Wheel"), TEXT("Movement & camera"), TEXT("Zoom in / out") },
 			{ Move, TEXT("LMB"), TEXT("Movement & camera"), TEXT("Move to the clicked spot") },
 			{ Sprint, TEXT("Double-click"), TEXT("Movement & camera"), TEXT("Sprint to the clicked spot") },
@@ -261,6 +267,20 @@ namespace PlayerCommands
 			Context.bPlanned ? TEXT(" (planned)") : TEXT(""));
 		if (UCodexEventBus* Bus = WorldContext ? UCodexEventBus::Get(WorldContext) : nullptr)
 		{
+			Bus->OnPlayerCommand.Broadcast(CommandId, Context);
+		}
+	}
+
+	void ReportHold(const UObject* WorldContext, FName CommandId, float DeltaSeconds)
+	{
+		if (CommandId.IsNone() || DeltaSeconds <= 0.f)
+		{
+			return;
+		}
+		if (UCodexEventBus* Bus = WorldContext ? UCodexEventBus::Get(WorldContext) : nullptr)
+		{
+			FPlayerCommandContext Context;
+			Context.HeldSeconds = DeltaSeconds;
 			Bus->OnPlayerCommand.Broadcast(CommandId, Context);
 		}
 	}

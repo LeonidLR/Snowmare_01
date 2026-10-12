@@ -22,7 +22,8 @@ namespace ControlsTest
 	TArray<FName> AllDeclaredIds()
 	{
 		return {
-		PlayerCommands::CameraPan, PlayerCommands::CameraRotate, PlayerCommands::CameraZoom, PlayerCommands::Move,
+		PlayerCommands::CameraPanKeys, PlayerCommands::CameraPanEdge, PlayerCommands::CameraPanDrag, PlayerCommands::CameraRotateKeys,
+		PlayerCommands::CameraRotateMouse, PlayerCommands::CameraZoom, PlayerCommands::Move,
 		PlayerCommands::Sprint, PlayerCommands::WatchSector, PlayerCommands::SelectMember, PlayerCommands::SelectBox,
 		PlayerCommands::Interact, PlayerCommands::StanceStand, PlayerCommands::StanceCrouch, PlayerCommands::StanceProne,
 		PlayerCommands::SquadStanceStand, PlayerCommands::SquadStanceCrouch, PlayerCommands::SquadStanceProne, PlayerCommands::SoloOn,

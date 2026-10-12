@@ -40,15 +40,34 @@
       "complete": { "volume": "VOL_A0_BEACON1" }
     },
     {
-      "id": "A0_camera", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_CAMERA",
-      "keys": ["Camera.Pan", "Camera.Rotate", "Camera.Zoom"],
+      "_comment": "Camera lesson, STAGED (user feedback 2026-10-12): pan -> turn with Q/E -> free look with the mouse -> zoom -> move. No timeout: each card waits for the real input (skippable). hold_s = accumulated time the continuous input was active while the card was shown.",
+      "id": "A0_cam_pan", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_CAM_PAN",
+      "keys": ["Camera.Pan.Keys"],
       "trigger": { "type": "beat_start", "delay_s": 2 },
-      "complete": { "commands": ["Camera.*"], "count": 2, "timeout_s": 20 }
+      "complete": { "commands": ["Camera.Pan.Keys", "Camera.Pan.Edge"], "hold_s": 1.0 }
+    },
+    {
+      "id": "A0_cam_rotate_keys", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_CAM_ROTATE_KEYS",
+      "keys": ["Camera.Rotate.Keys"],
+      "trigger": { "type": "after_step", "step": "A0_cam_pan" },
+      "complete": { "commands": ["Camera.Rotate.Keys"], "count": 2 }
+    },
+    {
+      "id": "A0_cam_rotate_mouse", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_CAM_ROTATE_MOUSE",
+      "keys": ["Camera.Rotate.Mouse"],
+      "trigger": { "type": "after_step", "step": "A0_cam_rotate_keys" },
+      "complete": { "commands": ["Camera.Rotate.Mouse"], "hold_s": 0.5 }
+    },
+    {
+      "id": "A0_cam_zoom", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_CAM_ZOOM",
+      "keys": ["Camera.Zoom"],
+      "trigger": { "type": "after_step", "step": "A0_cam_rotate_mouse" },
+      "complete": { "commands": ["Camera.Zoom"], "count": 2 }
     },
     {
       "id": "A0_move", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_MOVE",
       "keys": ["Order.Move"],
-      "trigger": { "type": "after_step", "step": "A0_camera" },
+      "trigger": { "type": "after_step", "step": "A0_cam_zoom" },
       "complete": { "volume": "VOL_A0_BEACON1", "timeout_s": 60 }
     },
 

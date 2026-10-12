@@ -341,7 +341,14 @@ void UTutorialSubsystem::HandlePlayerCommand(FName CommandId, const FPlayerComma
 	{
 		return;
 	}
-	Machine.HandleCommand(CommandId);
+	if (Context.HeldSeconds > 0.f)
+	{
+		Machine.HandleCommandHold(CommandId, Context.HeldSeconds);
+	}
+	else
+	{
+		Machine.HandleCommand(CommandId);
+	}
 	ProcessTransitions();
 }
 

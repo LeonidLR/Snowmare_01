@@ -487,11 +487,21 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    Beat: `{ "id", "lesson": bool (lethal hits only down), "checkpoint": bool (autosave slot "checkpoint" at its start), "title_id" }`.
    Step: `{ "id", "beat", "kind": hint_card | objective | radio | walk_talk, "text_id", "keys": [command ids or literal keys],
    "trigger": { "type": manual | beat_start | volume | event | after_step | first_use | failure_retry, "volume", "event", "step",
-   "command", "count", "delay_s" }, "complete": { "commands": [...], "count", "event", "distinct_operatives", "volume", "timeout_s" }, "once", "skippable",
+   "command", "count", "delay_s" }, "complete": { "commands": [...], "count", "hold_s", "event", "distinct_operatives", "volume", "timeout_s" }, "once", "skippable",
    "blocking" (always false), "lines": [ { "speaker", "text_id", "duration_s" } ] }`. No trigger = `beat_start`. Patterns:
    exact, `"Prefix.*"`, `"*"`. `"distinct_operatives": true` (2026-10-12): each operative's event counts once, so `count` = how many
    different operatives must do it ("put each operative into cover": `{"event": "CoverEntered", "count": 3, "distinct_operatives": true}`;
-   "enter cover 4 times": `{"event": "CoverEntered", "count": 4}`). Sample: `demo_01_steps.json` beat A6 (`A6_*`, volume `VOL_A6_FIELD`). A hint card without completion gets `timeout_s` 12; radio / walk-and-talk steps without completion
+   "enter cover 4 times": `{"event": "CoverEntered", "count": 4}`). **`hold_s` (2026-10-12):** accumulated seconds a CONTINUOUS command was
+   active while the card is SHOWN (never during the card breather, never while merely queued), in addition to `count` uses:
+   `{"commands": ["Camera.Pan.Keys", "Camera.Pan.Edge"], "hold_s": 1.0}`. Continuous inputs report ONE use when the action starts and
+   then `PlayerCommands::ReportHold(id, dt)` ticks (`FPlayerCommandContext::HeldSeconds` > 0, same bus; ticks are never uses and never
+   fire `first_use`); `FTutorialStateMachine::HandleCommandHold`, rule `TutorialRules::IsProgressMet`. A wildcard is a plain prefix match
+   so it spans segments (`Camera.*`, `Camera.Pan.*`). **Camera ids (2026-10-12, were Camera.Pan / .Rotate):** `Camera.Pan.Keys` (WASD, hold ticks),
+   `Camera.Pan.Edge` (cursor at the screen edge, hold ticks), `Camera.Pan.Drag` (MMB drag, hold ticks), `Camera.Rotate.Keys` (Q / E, one per
+   press), `Camera.Rotate.Mouse` (RMB drag, hold ticks), `Camera.Zoom` (one per wheel notch); key hints in the registry = the F1 Controls
+   screen rows (6 camera rows now). **Beat A0 is STAGED:** `A0_cam_pan` (WASD / edge, hold 1 s) -> `A0_cam_rotate_keys` (Q/E x2) ->
+   `A0_cam_rotate_mouse` (RMB drag, hold 0.5 s) -> `A0_cam_zoom` (wheel x2) -> `A0_move`; no timeout (skippable); texts
+   `TUT_A0_CAM_PAN / _ROTATE_KEYS / _ROTATE_MOUSE / _ZOOM` (draft file). The card counter is per beat ("n / 5" in A0, move included). Sample: `demo_01_steps.json` beat A6 (`A6_*`, volume `VOL_A6_FIELD`). A hint card without completion gets `timeout_s` 12; radio / walk-and-talk steps without completion
    end when their lines have played. Body text may contain `{key:Squad.Solo}` (-> `[B]`). Unknown keys / commands are warned in the
    log; the unit test `CodexTactics.Tutorial.Schema.DemoFile` fails on any warning of `demo_01_steps.json`.
 5. **Texts** live in the narrative sheet (Tutorial tab, request #17) -> `narrative_manifest.json` `"tutorial": { "<id>":
@@ -1247,6 +1257,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 ## 10. Change log (newest first)
 
 | Commit | What |
+| (this, agents/camlesson) | **Staged camera lesson (user feedback 2026-10-12: WASD alone finished the camera card).** `Camera.Pan` / `Camera.Rotate` split into `Camera.Pan.Keys / .Edge / .Drag`, `Camera.Rotate.Keys / .Mouse` (+ `Camera.Zoom`), reported from the real handlers (`ATacticalCameraPawn::UpdatePan / UpdateRotation`, `ACodexTacticsPlayerController` Q/E, RMB / MMB drag start, wheel); continuous ones report once per action + `PlayerCommands::ReportHold` ticks. New completion `hold_s` (see §6 Tutorial). Beat A0 = four sequential cards (pan -> Q/E -> mouse look -> zoom) then `A0_move`, no timeout; draft texts `TUT_A0_CAM_*` replace `TUT_A0_CAMERA` (TANDEM #17 ids updated). Tests `CodexTactics.Tutorial.Commands.MultiSegmentWildcard`, `.StateMachine.HoldSeconds`, `.HoldOnlyWhileShown`, `.Schema.DemoFile` (four-stage order); `FrontendControlsTest` ids; `TutorialSmoke` drives the four stages with real `InputKey`. |
 | (this, agents/work) | **Draft tutorial texts fallback (2026-10-12).** `Content/Data/Tutorial/demo_01_texts_draft.json` (`{"texts": {id: {title, text}}}`, staged with Data/Tutorial) = placeholders for the A0 beat (WT_A0_*, TUT_A0_*, OBJ_A0_BEACON1, TUT_BEAT_A0) until the sheet Tutorial tab exists (TANDEM #17). `FNarrativeManifest::GetTutorialText` order: manifest, then `DraftTutorialTexts` (logged once per id, non-shipping), then `[EN missing: id]`; `{key:...}` tokens are resolved by the callers as before. Test `CodexTactics.Tutorial.Text.ManifestAndDemoFlags` extended. |
 | (this, agents/work) | **Per-map level JSON (2026-10-12).** `LevelJsonRules::NormalizeMapName / ChooseLevelJsonFile / ResolveLevelJsonFile`: `-LevelJson=` > `<MapName>.json` in `Content/Data/LevelJson` > `LevelJsonFile`; `LoadLevelConfig` uses it (so `PeekLevelConfig` too). New draft `L_Demo01_A_FrozenLake.json` (demo flags, intro window off, 3 waves, button start, horde off). Test `CodexTactics.LevelJson.PerMapResolution` (rule + the demo JSON -> `ShouldOpenIntroDialogue` false). |
 | (this, agents/work) | **Fix: CommanderModeSmoke "aid 0" was the smoke, not the game (2026-10-12).** Cause: the sudden horde start (a02c4fe) spawns the whole wave at once around the L_MovementTest start, so the squad stood among 45 hounds and the Safe Aid Check (nobody within 6 m of the patient) refused first aid correctly (`AidRefusedUnsafe` 42); a wound dealt out of combat also heals by itself. `CommanderModeSmoke`: squad placed 3000 cm from the spawns (`PlaceSquadAwayFromWaveSpawns`), wound + autonomy while the horde still runs, 15 s window. `DefendSmoke`: only the defender keeps medkits (AidMoves is squad-wide; a free mate patching the wounded one is right). Game code unchanged. |

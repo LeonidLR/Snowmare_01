@@ -303,6 +303,7 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 
 	if (bDragPanning && PC)
 	{
+		PlayerCommands::ReportHold(this, PlayerCommands::CameraPanDrag, RealDelta);
 		const FVector2D Delta = ConsumeCursorDelta();
 		const FRotator Yaw(0.f, CurrentYaw, 0.f);
 		const FVector Forward = Yaw.Vector();
@@ -330,12 +331,14 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 	}
 
 	FVector2D Input = FVector2D::ZeroVector;
+	FVector2D KeyInput = FVector2D::ZeroVector;
+	FVector2D EdgeInput = FVector2D::ZeroVector;
 	if (PC)
 	{
-		Input.Y += PC->IsInputKeyDown(EKeys::W) ? 1.f : 0.f;
-		Input.Y -= PC->IsInputKeyDown(EKeys::S) ? 1.f : 0.f;
-		Input.X += PC->IsInputKeyDown(EKeys::D) ? 1.f : 0.f;
-		Input.X -= PC->IsInputKeyDown(EKeys::A) ? 1.f : 0.f;
+		KeyInput.Y += PC->IsInputKeyDown(EKeys::W) ? 1.f : 0.f;
+		KeyInput.Y -= PC->IsInputKeyDown(EKeys::S) ? 1.f : 0.f;
+		KeyInput.X += PC->IsInputKeyDown(EKeys::D) ? 1.f : 0.f;
+		KeyInput.X -= PC->IsInputKeyDown(EKeys::A) ? 1.f : 0.f;
 
 		float MouseX = 0.f;
 		float MouseY = 0.f;
@@ -344,18 +347,34 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 		if (PC->GetMousePosition(MouseX, MouseY))
 		{
 			PC->GetViewportSize(SizeX, SizeY);
-			Input += TacticalCameraRules::ComputeEdgeScroll(FVector2D(MouseX, MouseY), FVector2D(SizeX, SizeY), Config.EdgeScrollMargin);
+			EdgeInput = TacticalCameraRules::ComputeEdgeScroll(FVector2D(MouseX, MouseY), FVector2D(SizeX, SizeY), Config.EdgeScrollMargin);
 		}
 	}
+	Input = KeyInput + EdgeInput;
 
 	const bool bCombat = IsCombatView();
-	// Demo 01 command choke point: the start of a keyboard / edge pan (once per pan, not every frame).
-	const bool bPanningNow = !Input.IsNearlyZero();
-	if (bPanningNow && !bKeyboardPanning)
+	// Demo 01 command choke point: the start of a keyboard / edge pan is reported once per pan (not every frame), then
+	// hold ticks while it lasts (the tutorial's "hold_s").
+	const bool bKeysNow = !KeyInput.IsNearlyZero();
+	const bool bEdgeNow = !EdgeInput.IsNearlyZero();
+	if (bKeysNow)
 	{
-		PlayerCommands::ReportBy(this, PlayerCommands::CameraPan, nullptr);
+		if (!bKeyPanning)
+		{
+			PlayerCommands::ReportBy(this, PlayerCommands::CameraPanKeys, nullptr);
+		}
+		PlayerCommands::ReportHold(this, PlayerCommands::CameraPanKeys, RealDelta);
 	}
-	bKeyboardPanning = bPanningNow;
+	if (bEdgeNow)
+	{
+		if (!bEdgePanning)
+		{
+			PlayerCommands::ReportBy(this, PlayerCommands::CameraPanEdge, nullptr);
+		}
+		PlayerCommands::ReportHold(this, PlayerCommands::CameraPanEdge, RealDelta);
+	}
+	bKeyPanning = bKeysNow;
+	bEdgePanning = bEdgeNow;
 	if (!Input.IsNearlyZero())
 	{
 		TargetPanOffset += TacticalCameraRules::ComputePanDirection(Input, CurrentYaw) * Config.PanSpeed * RealDelta;
@@ -373,6 +392,7 @@ void ATacticalCameraPawn::UpdateRotation(float RealDelta)
 {
 	if (bDragRotating && !bCinematicLock)
 	{
+		PlayerCommands::ReportHold(this, PlayerCommands::CameraRotateMouse, RealDelta);
 		TargetYaw += ConsumeCursorDelta().X * Config.DragRotationSensitivity;
 	}
 	const float Alpha = FMath::Clamp(Config.RotationSmoothSpeed * RealDelta, 0.f, 1.f);

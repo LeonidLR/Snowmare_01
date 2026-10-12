@@ -12,7 +12,10 @@
 //  5. lesson beat: a lethal blow leaves the engineer alive at 1 HP (down), the retry prompt shows;
 //     "Retry from checkpoint" loads the checkpoint: health restored, progress back to the beat start, prompt gone;
 //  6. the fight beat: the lethal-hit guard no longer saves anyone; tutorial off hides everything;
-//  7. tutorial.jsonl got "shown" / "completed" lines.
+//  7. tutorial.jsonl got "shown" / "completed" lines;
+//  8. the STAGED camera lesson (beat CAM, user feedback 2026-10-12) through real InputKey: W held ~1.7 s completes the pan
+//     stage (hold_s 1.0) and nothing else; Q + E (count 2), a ~1 s RMB drag (hold_s 0.5) and two wheel notches complete
+//     the next stages in order, and WASD / Q / the wheel never complete a stage that is not theirs.
 // Saves go to Saved/SmokeSaves/Tutorial (exclusive in Scripts/test_map.json).
 
 #include "CoreMinimal.h"
@@ -47,14 +50,25 @@ namespace TutorialSmoke
 {
 	const TCHAR* Steps = TEXT(R"JSON({
 		"id": "tutorial_smoke", "start_beat": "L0",
-		"beats": [ { "id": "L0", "lesson": true, "checkpoint": true }, { "id": "FIGHT", "lesson": false, "checkpoint": false } ],
+		"beats": [ { "id": "L0", "lesson": true, "checkpoint": true }, { "id": "FIGHT", "lesson": false, "checkpoint": false },
+			{ "id": "CAM", "lesson": false, "checkpoint": false } ],
 		"steps": [
 			{ "id": "walk", "beat": "L0", "kind": "walk_talk", "trigger": { "type": "beat_start" },
 			  "lines": [ { "speaker": "Engineer", "text_id": "WT_SMOKE_1", "duration_s": 4 }, { "speaker": "Commander", "text_id": "WT_SMOKE_2", "duration_s": 4 } ] },
 			{ "id": "solo_card", "beat": "L0", "kind": "hint_card", "text_id": "TUT_SMOKE_SOLO", "keys": ["Squad.Solo"],
 			  "trigger": { "type": "volume", "volume": "VOL_SMOKE_IN" }, "complete": { "commands": ["Squad.Solo"] } },
 			{ "id": "regroup_card", "beat": "L0", "kind": "hint_card", "text_id": "TUT_SMOKE_REGROUP", "keys": ["Squad.Regroup"],
-			  "trigger": { "type": "after_step", "step": "solo_card" }, "complete": { "commands": ["Squad.Regroup"] } }
+			  "trigger": { "type": "after_step", "step": "solo_card" }, "complete": { "commands": ["Squad.Regroup"] } },
+			{ "id": "cam_pan", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_PAN", "keys": ["Camera.Pan.Keys"],
+			  "trigger": { "type": "manual" }, "complete": { "commands": ["Camera.Pan.Keys", "Camera.Pan.Edge"], "hold_s": 1.0 } },
+			{ "id": "cam_yaw", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_YAW", "keys": ["Camera.Rotate.Keys"],
+			  "trigger": { "type": "after_step", "step": "cam_pan" }, "complete": { "commands": ["Camera.Rotate.Keys"], "count": 2 } },
+			{ "id": "cam_look", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_LOOK", "keys": ["Camera.Rotate.Mouse"],
+			  "trigger": { "type": "after_step", "step": "cam_yaw" }, "complete": { "commands": ["Camera.Rotate.Mouse"], "hold_s": 0.5 } },
+			{ "id": "cam_zoom", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_ZOOM", "keys": ["Camera.Zoom"],
+			  "trigger": { "type": "after_step", "step": "cam_look" }, "complete": { "commands": ["Camera.Zoom"], "count": 2 } },
+			{ "id": "cam_move", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_MOVE", "keys": ["Order.Move"],
+			  "trigger": { "type": "after_step", "step": "cam_zoom" }, "complete": { "commands": ["Order.Move"] } }
 		] })JSON");
 
 	struct FState
@@ -70,6 +84,8 @@ namespace TutorialSmoke
 		bool bNeverPaused = true;
 		float CheckpointHealth = 0.f;
 		int64 TelemetrySizeAtStart = 0;
+		/** A key tapped in the previous stage: released at the start of the next tick. */
+		FKey PendingRelease;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -100,6 +116,13 @@ namespace TutorialSmoke
 	void PressKey(APlayerController* PC, const FKey& Key, EInputEvent Event)
 	{
 		PC->InputKey(FInputKeyEventArgs::CreateSimulated(Key, Event, Event == IE_Pressed ? 1.f : 0.f));
+	}
+
+	/** Presses Key now; it is released on the next tick (a tap through the real input path). */
+	void Tap(APlayerController* PC, FState& State, const FKey& Key)
+	{
+		PressKey(PC, Key, IE_Pressed);
+		State.PendingRelease = Key;
 	}
 
 	AOperativeCharacter* FindRole(USquadSubsystem* Squad, EOperativeRole Role)
@@ -134,12 +157,17 @@ namespace TutorialSmoke
 		ACodexTacticsHUD* Hud = PC ? PC->GetHUD<ACodexTacticsHUD>() : nullptr;
 		UTutorialOverlayWidget* Overlay = Hud ? Hud->GetTutorialOverlay() : nullptr;
 		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-		if (!Leader || !Tutorial || !Saves || !PC || !Overlay || State.Time > 120.f)
+		if (!Leader || !Tutorial || !Saves || !PC || !Overlay || State.Time > 200.f)
 		{
 			Check(State, false, FString::Printf(TEXT("world ready / timeout (stage %d, overlay %d)"), State.Stage, Overlay ? 1 : 0));
 			return Finish(State, false);
 		}
 		Overlay->Refresh();
+		if (State.PendingRelease.IsValid())
+		{
+			PressKey(PC, State.PendingRelease, IE_Released);
+			State.PendingRelease = FKey();
+		}
 		switch (State.Stage)
 		{
 		case 0:
@@ -308,6 +336,164 @@ namespace TutorialSmoke
 			const FString Tail = Log.Mid(static_cast<int32>(FMath::Min<int64>(State.TelemetrySizeAtStart, Log.Len())));
 			Check(State, Tail.Contains(TEXT("\"event\":\"shown\",\"step\":\"solo_card\"")) && Tail.Contains(TEXT("\"event\":\"completed\",\"step\":\"solo_card\""))
 				&& Tail.Contains(TEXT("\"event\":\"lesson_downed\"")) && Tail.Contains(TEXT("\"event\":\"retry\"")), TEXT("tutorial.jsonl has shown / completed / lesson_downed / retry"));
+			Next(State);
+			return true;
+		}
+		// --- The staged camera lesson (user feedback 2026-10-12), driven through the real input path --------------------
+		case 9:
+		{
+			Tutorial->SkipStep(TEXT("solo_card")); // free the card slot (its follow-up regroup card is skipped too)
+			Tutorial->SkipStep(TEXT("regroup_card"));
+			Check(State, Tutorial->TriggerStep(TEXT("cam_pan")), TEXT("camera lesson started"));
+			Next(State);
+			return true;
+		}
+		case 10:
+		{
+			if (Tutorial->GetStepState(TEXT("cam_pan")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("cam_pan")) == ETutorialStepState::Active && Overlay->IsCardShown()
+				&& Overlay->GetShownCardKeys().ToString() == TEXT("[W/A/S/D]"),
+				FString::Printf(TEXT("stage 1: pan card shown with keys '%s' (pan %s, solo %s, active card '%s', paused %d, dilation %.2f)"),
+					*Overlay->GetShownCardKeys().ToString(), TutorialRules::StateName(Tutorial->GetStepState(TEXT("cam_pan"))),
+					TutorialRules::StateName(Tutorial->GetStepState(TEXT("solo_card"))), *Tutorial->GetMachine().GetActiveCard().ToString(),
+					World->IsPaused() ? 1 : 0, World->GetWorldSettings()->GetEffectiveTimeDilation()));
+			Check(State, Tutorial->GetStepState(TEXT("cam_yaw")) == ETutorialStepState::Idle && Tutorial->GetStepState(TEXT("cam_zoom")) == ETutorialStepState::Idle,
+				TEXT("the later stages have not started"));
+			PressKey(PC, EKeys::W, IE_Pressed); // held: the camera pans, hold ticks accumulate
+			Next(State);
+			return true;
+		}
+		case 11:
+		{
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("cam_pan")) == ETutorialStepState::Active && Tutorial->GetMachine().GetHeldSeconds(TEXT("cam_pan")) < 1.f
+				&& Tutorial->GetStepProgress(TEXT("cam_pan")) == 1, FString::Printf(TEXT("0.5 s of W: one use, %.2f s held, card still up"),
+				Tutorial->GetMachine().GetHeldSeconds(TEXT("cam_pan"))));
+			Next(State);
+			return true;
+		}
+		case 12:
+		{
+			if (State.StageTime < 1.2f)
+			{
+				return true;
+			}
+			PressKey(PC, EKeys::W, IE_Released);
+			Check(State, Tutorial->GetStepState(TEXT("cam_pan")) == ETutorialStepState::Completed,
+				FString::Printf(TEXT("W held ~1.7 s completes the pan stage (%.2f s held)"), Tutorial->GetMachine().GetHeldSeconds(TEXT("cam_pan"))));
+			Next(State);
+			return true;
+		}
+		case 13:
+		{
+			if (Tutorial->GetStepState(TEXT("cam_yaw")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("cam_yaw")) == ETutorialStepState::Active, TEXT("stage 2: Q/E card shown after the breather"));
+			Tap(PC, State, EKeys::W); // WASD alone must not finish the rotate stage
+			Next(State);
+			return true;
+		}
+		case 14:
+			Check(State, Tutorial->GetStepState(TEXT("cam_yaw")) == ETutorialStepState::Active && Tutorial->GetStepProgress(TEXT("cam_yaw")) == 0,
+				TEXT("WASD does not count for the Q/E stage"));
+			Tap(PC, State, EKeys::Q);
+			Next(State);
+			return true;
+		case 15:
+			Check(State, Tutorial->GetStepState(TEXT("cam_yaw")) == ETutorialStepState::Active && Tutorial->GetStepProgress(TEXT("cam_yaw")) == 1,
+				TEXT("one Q press: 1 of 2"));
+			Tap(PC, State, EKeys::E);
+			Next(State);
+			return true;
+		case 16:
+			Check(State, Tutorial->GetStepState(TEXT("cam_yaw")) == ETutorialStepState::Completed, TEXT("Q then E completes the Q/E stage"));
+			Next(State);
+			return true;
+		case 17:
+		{
+			if (Tutorial->GetStepState(TEXT("cam_look")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("cam_look")) == ETutorialStepState::Active, TEXT("stage 3: mouse free-look card shown"));
+			Tap(PC, State, EKeys::Q); // keys / wheel must not finish the mouse stage
+			Next(State);
+			return true;
+		}
+		case 18:
+			Tap(PC, State, EKeys::MouseScrollUp);
+			Next(State);
+			return true;
+		case 19:
+			Check(State, Tutorial->GetStepState(TEXT("cam_look")) == ETutorialStepState::Active && Tutorial->GetStepProgress(TEXT("cam_look")) == 0,
+				TEXT("Q and the wheel do not count for the mouse stage"));
+			PressKey(PC, EKeys::RightMouseButton, IE_Pressed);
+			Next(State);
+			return true;
+		case 20:
+		{
+			if (State.StageTime < 0.25f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("cam_look")) == ETutorialStepState::Active && Tutorial->GetStepProgress(TEXT("cam_look")) == 1,
+				FString::Printf(TEXT("RMB drag started (%.2f s held): not enough yet"), Tutorial->GetMachine().GetHeldSeconds(TEXT("cam_look"))));
+			Next(State);
+			return true;
+		}
+		case 21:
+		{
+			if (State.StageTime < 0.7f)
+			{
+				return true;
+			}
+			PressKey(PC, EKeys::RightMouseButton, IE_Released);
+			Check(State, Tutorial->GetStepState(TEXT("cam_look")) == ETutorialStepState::Completed,
+				FString::Printf(TEXT("a ~1 s RMB drag completes the mouse stage (%.2f s held)"), Tutorial->GetMachine().GetHeldSeconds(TEXT("cam_look"))));
+			Next(State);
+			return true;
+		}
+		case 22:
+		{
+			if (Tutorial->GetStepState(TEXT("cam_zoom")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("cam_zoom")) == ETutorialStepState::Active, TEXT("stage 4: zoom card shown"));
+			Tap(PC, State, EKeys::E); // rotating does not zoom
+			Next(State);
+			return true;
+		}
+		case 23:
+			Check(State, Tutorial->GetStepProgress(TEXT("cam_zoom")) == 0, TEXT("Q/E do not count for the zoom stage"));
+			Tap(PC, State, EKeys::MouseScrollUp);
+			Next(State);
+			return true;
+		case 24:
+			Check(State, Tutorial->GetStepState(TEXT("cam_zoom")) == ETutorialStepState::Active && Tutorial->GetStepProgress(TEXT("cam_zoom")) == 1,
+				TEXT("one wheel notch: 1 of 2"));
+			Tap(PC, State, EKeys::MouseScrollDown);
+			Next(State);
+			return true;
+		case 25:
+			Check(State, Tutorial->GetStepState(TEXT("cam_zoom")) == ETutorialStepState::Completed, TEXT("two wheel notches complete the zoom stage"));
+			Next(State);
+			return true;
+		case 26:
+		{
+			if (Tutorial->GetStepState(TEXT("cam_move")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("cam_move")) == ETutorialStepState::Active, TEXT("then the move card follows"));
 			return Finish(State, true);
 		}
 		default:
