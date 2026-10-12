@@ -23,6 +23,8 @@
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Combat/FirePuddleActor.h"
+#include "Combat/HealthComponent.h"
 #include "CodexTactics.h"
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -195,6 +197,31 @@ namespace WarmIdleSmoke
 		return Centre;
 	}
 
+	/**
+	 * A clean slate between the stages (the test intent is poses, not damage): the barrel stage leaves a fire puddle (core 120 cm, 12-15 s)
+	 * exactly where the later stages put the squad - a Medic-Sapper with a low max HP (BP_Operative_FemaleSoldier: 120) burned to death in
+	 * it 1 s after sitting at the stove (2026-10-12). Puddles go, everybody is healed; the HP is logged.
+	 */
+	void ResetBodies(UWorld* World, const TCHAR* Label)
+	{
+		int32 Puddles = 0;
+		for (TActorIterator<AFirePuddleActor> It(World); It; ++It)
+		{
+			It->Destroy();
+			++Puddles;
+		}
+		FString Hp;
+		for (AOperativeCharacter* Each : World->GetSubsystem<USquadSubsystem>()->GetMembers())
+		{
+			if (UHealthComponent* Health = Each->HealthComponent)
+			{
+				Hp += FString::Printf(TEXT(" %s %.0f/%.0f"), *Each->DisplayName.ToString(), Health->GetCurrentHealth(), Health->GetMaxHealth());
+				Health->Heal(Health->GetMaxHealth() - Health->GetCurrentHealth());
+			}
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s - %d fire puddle(s) removed, HP before the heal:%s"), Label, Puddles, *Hp);
+	}
+
 	/** Checks the fire roles: Sitters sit on distinct inner seats facing the fire, Standers stand on the outer ring. */
 	void CheckFireRoles(FState& State, UWorld* World, const AActor* Fire, const TArray<AOperativeCharacter*>& Sitters,
 		const TArray<AOperativeCharacter*>& Standers, float SeatDistance, float StandDistance, const TCHAR* Label)
@@ -342,7 +369,13 @@ namespace WarmIdleSmoke
 				State.StageTime = 0.f;
 				return true; // the squad spawns late on a slow start
 			}
-			Check(State, false, TEXT("squad of three"));
+			FString Who;
+			for (const AOperativeCharacter* Member : World->GetSubsystem<USquadSubsystem>()->GetMembers())
+			{
+				Who += Member->DisplayName.ToString() + TEXT(" ");
+			}
+			Check(State, false, FString::Printf(TEXT("squad of three (stage %d; alive in the squad: %s) - see the [Health] line above for who died of what"),
+				static_cast<int32>(State.Stage), *Who));
 			return Finish(State, false);
 		}
 		const TArray<AOperativeCharacter*> Squad = { Commander, Engineer, Medic };
@@ -460,6 +493,7 @@ namespace WarmIdleSmoke
 				{
 					Barrel->Destroy();
 				}
+				ResetBodies(World, TEXT("barrel stage over"));
 				Enter(State, EStage::CampfireLight);
 			}
 			return true;
@@ -468,6 +502,7 @@ namespace WarmIdleSmoke
 			if (State.StageTime >= 0.5f)
 			{
 				// Followers held in a triangle 2.2 m round the fire (inside its 3.5 m zone; the formation would pull them about).
+				ResetBodies(World, TEXT("campfire stage"));
 				SmokeUtils::PlaceSquadAtTestStart(World);
 				const FVector FireAt = PlaceAround(World, Squad, SmokeUtils::ClearPoint(World, Feet(Commander), Feet(Commander) + Commander->GetActorForwardVector() * 250.f), 220.f);
 				Commander->ColdLevel = 55.f;
@@ -544,6 +579,7 @@ namespace WarmIdleSmoke
 			if (State.StageTime >= 3.5f)
 			{
 				// The stove warms only 2.2 m: the followers' formation slots lie outside it, so they hold a tight triangle round it.
+				ResetBodies(World, TEXT("stove stage"));
 				SmokeUtils::PlaceSquadAtTestStart(World);
 				const FVector Centre = PlaceAround(World, Squad, SmokeUtils::ClearPoint(World, Feet(Commander), Feet(Commander) + Commander->GetActorForwardVector() * 250.f), 150.f);
 				Commander->ColdLevel = 60.f;
