@@ -78,4 +78,33 @@ bool FEnemyAIRulesTest::RunTest(const FString&)
 	return true;
 }
 
+// Placed enemies (not from a spawner): the archetype from the instance, the game mode's class mapping, else the class
+// default (user bug 2026-10-12: a placed BP_Enemy_Brute played a 45 HP hound).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyPlacedArchetypeTest, "CodexTactics.Characters.EnemyAI.PlacedArchetype",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FEnemyPlacedArchetypeTest::RunTest(const FString&)
+{
+	const FString Brute = TEXT("/Game/Characters/Enemies/Brute/BP_Enemy_Brute.BP_Enemy_Brute_C");
+	const FString Hound = TEXT("/Game/Characters/Enemies/Hound/BP_Enemy_Hound.BP_Enemy_Hound_C");
+	const FString Base = TEXT("/Script/CodexTactics.EnemyCharacter");
+	const TArray<TPair<EEnemyArchetype, FString>> Mapping = { { EEnemyArchetype::FrostHound, Hound }, { EEnemyArchetype::Brute, Brute } };
+	FString Source;
+	// A placed BP_Enemy_Brute, the field left at the property default (FrostHound): the class mapping makes it a Brute.
+	TestTrue(TEXT("BP_Enemy_Brute untouched -> Brute"), EnemyAIRules::ResolvePlacedArchetype(EEnemyArchetype::FrostHound, EEnemyArchetype::FrostHound,
+		{ Brute, Base }, Mapping, Source) == EEnemyArchetype::Brute && Source == TEXT("class mapping"));
+	// A child Blueprint of BP_Enemy_Brute (IsChildOf): its parent is mapped.
+	TestTrue(TEXT("a child of BP_Enemy_Brute -> Brute"), EnemyAIRules::ResolvePlacedArchetype(EEnemyArchetype::FrostHound, EEnemyArchetype::FrostHound,
+		{ TEXT("/Game/Test/BP_Enemy_BruteElite.BP_Enemy_BruteElite_C"), Brute, Base }, Mapping, Source) == EEnemyArchetype::Brute);
+	// The designer set the instance to Cutter: it wins.
+	TestTrue(TEXT("instance override wins"), EnemyAIRules::ResolvePlacedArchetype(EEnemyArchetype::Cutter, EEnemyArchetype::FrostHound,
+		{ Brute, Base }, Mapping, Source) == EEnemyArchetype::Cutter && Source == TEXT("instance"));
+	// An unmapped class (the C++ marksman sets its own default): the class default.
+	TestTrue(TEXT("unmapped C++ marksman -> its class default"), EnemyAIRules::ResolvePlacedArchetype(EEnemyArchetype::Marksman, EEnemyArchetype::Marksman,
+		{ TEXT("/Script/CodexTactics.MarksmanEnemyCharacter"), Base }, Mapping, Source) == EEnemyArchetype::Marksman && Source == TEXT("class default"));
+	TestTrue(TEXT("plain C++ enemy -> the property default"), EnemyAIRules::ResolvePlacedArchetype(EEnemyArchetype::FrostHound, EEnemyArchetype::FrostHound,
+		{ Base }, Mapping, Source) == EEnemyArchetype::FrostHound);
+	return true;
+}
+
 #endif

@@ -12,7 +12,7 @@
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
-    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyArchetypeSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
@@ -206,9 +206,9 @@
     },
     {
       "name": "enemy",
-      "globs": ["Source/**/Characters/EnemyCharacter*", "Source/**/Characters/EnemyAI*", "Source/**/AI/RepathRules*", "Source/**/Debug/RepathProbe*", "Source/**/Data/AITuning*", "Source/**/Data/EnemyPerception*"],
+      "globs": ["Source/**/Characters/EnemyCharacter*", "Source/**/Characters/EnemyAI*", "Source/**/Debug/EnemyArchetypeSmoke*", "Source/**/AI/RepathRules*", "Source/**/Debug/RepathProbe*", "Source/**/Data/AITuning*", "Source/**/Data/EnemyPerception*"],
       "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Combat.Enemy", "CodexTactics.AI"],
-      "smokes": ["EnemyAISmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke", "PatrolAmbushSmoke"]
+      "smokes": ["EnemyAISmoke", "EnemyArchetypeSmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke", "PatrolAmbushSmoke"]
     },
     {
       "name": "enemy-tactics",

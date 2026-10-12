@@ -64,6 +64,16 @@ namespace EnemyAIRules
 {
 	CODEXTACTICS_API FEnemyAIConfig ConfigFromBalance(const UGodotBalanceAsset* Balance);
 
+	/**
+	 * The archetype of an enemy placed in a level (not made by a spawner, which sets it itself; user bug 2026-10-12: a placed
+	 * BP_Enemy_Brute kept the property default FrostHound and played a 45 HP hound): the designer's instance value when it
+	 * differs from the class default; else the game mode's archetype -> class mapping, reverse-looked-up over ClassChain (the
+	 * actor's class first, then its parents: a child of a mapped Blueprint counts); else the class default (a C++ subclass such
+	 * as AMarksmanEnemyCharacter sets its own). OutSource: "instance" / "class mapping" / "class default".
+	 */
+	CODEXTACTICS_API EEnemyArchetype ResolvePlacedArchetype(EEnemyArchetype InstanceValue, EEnemyArchetype ClassDefaultValue, const TArray<FString>& ClassChain,
+		const TArray<TPair<EEnemyArchetype, FString>>& Mapping, FString& OutSource);
+
 	/** Hounds, cutters and frostbitten go for the generator / turrets first (Godot is_small_enemy). */
 	CODEXTACTICS_API bool IsSmallEnemy(EEnemyArchetype Archetype);
 

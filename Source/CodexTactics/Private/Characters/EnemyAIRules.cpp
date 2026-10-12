@@ -55,6 +55,29 @@ float EnemyAIRules::GetBaseArmor(EEnemyArchetype Archetype)
 	}
 }
 
+EEnemyArchetype EnemyAIRules::ResolvePlacedArchetype(EEnemyArchetype InstanceValue, EEnemyArchetype ClassDefaultValue, const TArray<FString>& ClassChain,
+	const TArray<TPair<EEnemyArchetype, FString>>& Mapping, FString& OutSource)
+{
+	if (InstanceValue != ClassDefaultValue)
+	{
+		OutSource = TEXT("instance");
+		return InstanceValue;
+	}
+	for (const FString& ClassPath : ClassChain)
+	{
+		for (const TPair<EEnemyArchetype, FString>& Entry : Mapping)
+		{
+			if (!Entry.Value.IsEmpty() && Entry.Value.Equals(ClassPath, ESearchCase::IgnoreCase))
+			{
+				OutSource = TEXT("class mapping");
+				return Entry.Key;
+			}
+		}
+	}
+	OutSource = TEXT("class default");
+	return ClassDefaultValue;
+}
+
 int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy, const FVector& Enemy,
 	const TArray<FEnemyTargetCandidate>& Candidates, bool bLastAttackerTurret)
 {

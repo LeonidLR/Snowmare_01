@@ -66,6 +66,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Enemy")
 	void InitializeArchetype(EEnemyArchetype InArchetype);
 
+	/**
+	 * A spawner (waves, save load) spawns an enemy of Archetype within this scope: its BeginPlay takes it as is. Without
+	 * one the enemy was placed in the level and BeginPlay resolves its archetype from its class
+	 * (EnemyAIRules::ResolvePlacedArchetype).
+	 */
+	struct CODEXTACTICS_API FScopedSpawnArchetype
+	{
+		explicit FScopedSpawnArchetype(EEnemyArchetype InArchetype);
+		~FScopedSpawnArchetype();
+		FScopedSpawnArchetype(const FScopedSpawnArchetype&) = delete;
+		FScopedSpawnArchetype& operator=(const FScopedSpawnArchetype&) = delete;
+
+	private:
+		TOptional<EEnemyArchetype> Previous;
+	};
+
+	/** Placed in the level (not made by a spawner): the archetype came from ResolvePlacedArchetype (smokes). */
+	bool WasPlacedInLevel() const { return bPlacedInLevel; }
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	EEnemyArchetype GetArchetype() const { return Archetype; }
 
@@ -486,8 +505,15 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> BodyMaterial;
 
+	/**
+	 * The enemy type (stats, name, AI). A placed enemy left at its class default takes the game mode's EnemyClasses mapping
+	 * for its Blueprint (BP_Enemy_Brute -> Brute); set it on the instance to override.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy")
 	EEnemyArchetype Archetype = EEnemyArchetype::FrostHound;
+
+	/** Set by BeginPlay when no spawner scope was active. */
+	bool bPlacedInLevel = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy")
 	FString EnemyDisplayName = TEXT("Frost Hound");
@@ -628,6 +654,8 @@ protected:
 	void HandleDied(AActor* Victim, const FString& AttackerSource);
 
 	void ApplyArchetypeDefaults();
+	/** A placed enemy: Archetype from the instance / the game mode's class mapping / the class default (logged once). */
+	void ResolvePlacedArchetype();
 
 	/** Which archetypes can fall and with which clips (Frostbitten / Brute on their own skeletons). */
 	void ConfigureKnockdown();

@@ -100,11 +100,59 @@ void AEnemyCharacter::BeginPlay()
 		KnockdownComponent->OnPhaseChanged.AddUObject(this, &AEnemyCharacter::HandleKnockdownPhase);
 	}
 
+	ResolvePlacedArchetype();
 	ApplyArchetypeDefaults();
 	ConfigureKnockdown();
 	InitPatrol();
 	// User request 2026-10-11: placed in the map without a route -> guards its post until it perceives the squad.
 	TryStartGuardPost();
+}
+
+namespace EnemyCharacterLocal
+{
+	/** The archetype a spawner is spawning now (FScopedSpawnArchetype); unset = a placed enemy. Game thread only. */
+	TOptional<EEnemyArchetype> SpawnArchetype;
+}
+
+AEnemyCharacter::FScopedSpawnArchetype::FScopedSpawnArchetype(EEnemyArchetype InArchetype)
+	: Previous(EnemyCharacterLocal::SpawnArchetype)
+{
+	EnemyCharacterLocal::SpawnArchetype = InArchetype;
+}
+
+AEnemyCharacter::FScopedSpawnArchetype::~FScopedSpawnArchetype()
+{
+	EnemyCharacterLocal::SpawnArchetype = Previous;
+}
+
+void AEnemyCharacter::ResolvePlacedArchetype()
+{
+	if (EnemyCharacterLocal::SpawnArchetype.IsSet())
+	{
+		Archetype = EnemyCharacterLocal::SpawnArchetype.GetValue();
+		bPlacedInLevel = false;
+		return;
+	}
+	bPlacedInLevel = true;
+	const AEnemyCharacter* Defaults = GetClass()->GetDefaultObject<AEnemyCharacter>();
+	TArray<FString> Chain;
+	for (const UClass* Class = GetClass(); Class && Class != AEnemyCharacter::StaticClass()->GetSuperClass(); Class = Class->GetSuperClass())
+	{
+		Chain.Add(Class->GetPathName());
+	}
+	TArray<TPair<EEnemyArchetype, FString>> Mapping;
+	if (const ACodexTacticsGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>() : nullptr)
+	{
+		for (const TPair<EEnemyArchetype, TSoftClassPtr<AEnemyCharacter>>& Entry : GameMode->EnemyClasses)
+		{
+			Mapping.Emplace(Entry.Key, Entry.Value.ToSoftObjectPath().ToString());
+		}
+	}
+	FString Source;
+	const EEnemyArchetype Resolved = EnemyAIRules::ResolvePlacedArchetype(Archetype, Defaults ? Defaults->Archetype : Archetype, Chain, Mapping, Source);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Enemy] placed %s (%s): archetype %s from the %s"), *GetName(), *GetClass()->GetName(),
+		*StaticEnum<EEnemyArchetype>()->GetNameStringByValue(static_cast<int64>(Resolved)), *Source);
+	Archetype = Resolved;
 }
 
 void AEnemyCharacter::InitializeArchetype(EEnemyArchetype InArchetype)
