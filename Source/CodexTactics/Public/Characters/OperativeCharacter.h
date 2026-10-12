@@ -1559,6 +1559,21 @@ private:
 	/** The current cover entry is the return after an open shot (IsQuietCoverEntry); the request is set around that EnterCover. */
 	bool bQuietCoverEntry = false;
 	bool bQuietCoverEntryRequest = false;
+	/** LeaveCover raises no CoverLeft event (the open-shot step off the wall comes back on its own). */
+	bool bQuietCoverLeaveRequest = false;
+	/** EnterCover ran (new wall, not a quiet return): CoverEntered waits until the body has stopped at the slot. */
+	bool bCoverEnteredEventPending = false;
+	float CoverEnteredPendingSeconds = 0.f;
+	/**
+	 * Raises the pending CoverEntered once he has settled: the run-in glide / enter clip blend over, on the slot (within 25 cm),
+	 * no corner walk pending or running, not moving; at the latest 3 s after the entry. Called from UpdateCover.
+	 */
+	void UpdateCoverEnteredEvent(float DeltaTime);
+	/**
+	 * Demo 01 tutorial (beat A6): CoverEntered / CoverLeft / CoverShimmy / CornerReached through GameplayEvents::RaiseWithContext
+	 * (subject = this operative, target = the wall actor, kind = High / Low or the corner side, location = the slot).
+	 */
+	void RaiseCoverEvent(FName EventName, const FCoverSlot& Slot, FName Kind = NAME_None);
 	int32 CoverOpenShots = 0;
 	/** Back to the slot once the open shots are over (no move order, standing still, not far off). */
 	void UpdateOpenShotReturn();

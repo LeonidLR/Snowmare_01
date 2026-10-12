@@ -1,11 +1,13 @@
 {
   "_comment": [
-    "Demo 01 'Frozen Lake' tutorial steps, beats A0-A2 (docs/demo/DEMO01_BEAT_SHEET.md section 4). Read at runtime by UTutorialSubsystem",
+    "Demo 01 'Frozen Lake' tutorial steps, beats A0-A2 + the A6 cover sample (docs/demo/DEMO01_BEAT_SHEET.md section 4). Read at runtime by UTutorialSubsystem",
     "(the level JSON 'demo': {'tutorial': true, 'tutorial_steps': 'demo_01_steps.json'} selects this file). Schema: HANDOFF section 6 'Tutorial'.",
     "Texts are ids only (TUT_*, WT_*, OBJ_*): English text comes from the narrative manifest 'tutorial' section (TANDEM request #17);",
     "until it exists the overlay shows '[EN missing: <id>]'. Command ids: Source/CodexTactics/Public/Core/PlayerCommands.h.",
     "Volume ids (VOL_*) are the VolumeId / StepId of ATutorialTriggerVolume actors placed in L_Demo01_A_FrozenLake:",
-    "VOL_A0_BEACON1 (BeatId A1), VOL_A1_BEACON2, VOL_A1_BEACON3, VOL_A1_BEACON4, VOL_A1_RIDGE, VOL_A1_RIDGE_FAR, VOL_A2_CAMP (BeatId A2)."
+    "VOL_A0_BEACON1 (BeatId A1), VOL_A1_BEACON2, VOL_A1_BEACON3, VOL_A1_BEACON4, VOL_A1_RIDGE, VOL_A1_RIDGE_FAR, VOL_A2_CAMP (BeatId A2),",
+    "VOL_A6_FIELD (the A6 ridge field entrance). Cover events (raised when an operative SETTLES in a slot, not on the order):",
+    "CoverEntered (+ CoverEntered.High / .Low), CoverShimmy, CornerReached, CoverLeft; 'distinct_operatives': true counts each operative once."
   ],
   "version": 1,
   "id": "demo_01_frozen_lake",
@@ -13,7 +15,8 @@
   "beats": [
     { "id": "A0", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A0" },
     { "id": "A1", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A1" },
-    { "id": "A2", "lesson": true, "checkpoint": false, "title_id": "TUT_BEAT_A2" }
+    { "id": "A2", "lesson": true, "checkpoint": false, "title_id": "TUT_BEAT_A2" },
+    { "id": "A6", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A6" }
   ],
   "steps": [
     {
@@ -182,6 +185,39 @@
       "once": false,
       "trigger": { "type": "failure_retry", "event": "RelocationRefused" },
       "complete": { "commands": ["Select.Member"], "timeout_s": 20 }
+    },
+    {
+      "id": "A6_cover", "beat": "A6", "kind": "hint_card", "text_id": "TUT_A6_COVER",
+      "keys": ["Cover.Enter"],
+      "trigger": { "type": "volume", "volume": "VOL_A6_FIELD" },
+      "complete": { "event": "CoverEntered", "timeout_s": 60 }
+    },
+    {
+      "id": "A6_squad_cover", "beat": "A6", "kind": "objective", "text_id": "OBJ_A6_SQUAD_COVER",
+      "trigger": { "type": "after_step", "step": "A6_cover" },
+      "complete": { "event": "CoverEntered", "count": 3, "distinct_operatives": true }
+    },
+    {
+      "id": "A6_squad_card", "beat": "A6", "kind": "hint_card", "text_id": "TUT_A6_SQUAD",
+      "keys": ["Select.Member", "Cover.Enter"],
+      "trigger": { "type": "after_step", "step": "A6_cover", "delay_s": 2 },
+      "complete": { "event": "CoverEntered", "count": 2, "distinct_operatives": true, "timeout_s": 45 }
+    },
+    {
+      "id": "A6_bound", "beat": "A6", "kind": "objective", "text_id": "OBJ_A6_BOUND",
+      "trigger": { "type": "after_step", "step": "A6_cover" },
+      "complete": { "event": "CoverEntered", "count": 4 }
+    },
+    {
+      "id": "A6_shimmy", "beat": "A6", "kind": "hint_card", "text_id": "TUT_A6_SHIMMY",
+      "keys": ["Cover.Shimmy"],
+      "trigger": { "type": "after_step", "step": "A6_squad_card" },
+      "complete": { "event": "CoverShimmy", "timeout_s": 40 }
+    },
+    {
+      "id": "A6_corner", "beat": "A6", "kind": "hint_card", "text_id": "TUT_A6_CORNER",
+      "trigger": { "type": "after_step", "step": "A6_shimmy" },
+      "complete": { "event": "CornerReached", "timeout_s": 40 }
     }
   ]
 }

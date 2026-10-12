@@ -43,7 +43,8 @@ public:
 
 	// --- Inputs -----------------------------------------------------------------------------------------------------
 	void HandleCommand(FName CommandId);
-	void HandleEvent(FName EventName);
+	/** A gameplay event; SubjectId (the operative's id) feeds "distinct_operatives" completions. */
+	void HandleEvent(FName EventName, FName SubjectId = NAME_None);
 	/** A squad member entered a tutorial volume: VolumeId for "volume" triggers / completions, StepId / BeatId start them directly. */
 	void HandleVolume(FName VolumeId, FName StepId, FName BeatId);
 	/** Starts a beat (only forward unless bAllowBackwards). Returns true when the current beat changed. */
@@ -90,6 +91,8 @@ private:
 		float DelayLeft = 0.f;
 		int32 TriggerHits = 0;
 		bool bEverFinished = false;
+		/** Subjects already counted by a distinct_operatives completion. */
+		TSet<FName> CountedSubjects;
 	};
 
 	int32 IndexOf(FName StepId) const;

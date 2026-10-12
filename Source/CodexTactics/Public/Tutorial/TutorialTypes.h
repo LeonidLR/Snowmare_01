@@ -82,6 +82,11 @@ struct CODEXTACTICS_API FTutorialCompletion
 	/** Event name pattern; each occurrence counts towards Count. */
 	FString Event;
 	int32 Count = 1;
+	/**
+	 * "distinct_operatives": only the first matching event of each subject (operative) counts, so Count = how many different
+	 * operatives must do it ("put each operative into cover"). Events without a subject never count then.
+	 */
+	bool bDistinctSubjects = false;
 	/** Entering this volume completes the step. */
 	FName Volume;
 	/** > 0: an active step that is not done after this many seconds times out (hides; counts as finished). */

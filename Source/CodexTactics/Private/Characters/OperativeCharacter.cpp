@@ -5,6 +5,7 @@
 #include "Telemetry/RunTelemetrySubsystem.h"
 #include "Interactables/RadiusRingSubsystem.h"
 #include "Subsystems/CodexEventBus.h"
+#include "Core/PlayerCommands.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/PanicComponent.h"
@@ -3297,6 +3298,7 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	}
 	const bool bWasInCover = bInCover;
 	const bool bSameWall = bWasInCover && CoverTraceRules::IsSameWall(CoverSlot, Slot);
+	const bool bWasAutoSnap = bCoverAutoSnap; // the automatic walk to the threat-side corner is no player shimmy
 	StopOperative();
 	CoverSlot = Slot;
 	bInCover = true;
@@ -3374,6 +3376,61 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		}
 		ReceiveCoverChanged(true, CurrentCoverHeight);
 	}
+	// Demo 01 tutorial: the entry counts once he has settled at the slot (UpdateCoverEnteredEvent: a run-in enters ~1 m out
+	// while the enter clip glides him in). The return after an open shot is no new entry; a player's side-step is a shimmy.
+	if (!bQuietCoverEntry)
+	{
+		if (bSameWall)
+		{
+			if (!bWasAutoSnap)
+			{
+				RaiseCoverEvent(GameplayEvents::CoverShimmy, Slot);
+			}
+		}
+		else
+		{
+			bCoverEnteredEventPending = true;
+			CoverEnteredPendingSeconds = 0.f;
+		}
+	}
+}
+
+void AOperativeCharacter::UpdateCoverEnteredEvent(float DeltaTime)
+{
+	if (!bCoverEnteredEventPending || !bInCover)
+	{
+		return;
+	}
+	CoverEnteredPendingSeconds += DeltaTime;
+	const bool bOnSlot = FVector::DistSquared2D(GetActorLocation(), CoverSlot.WorldLocation) <= FMath::Square(25.f);
+	// Settled = the run-in glide / enter clip blend is over (CoverEntryBlendTime), no walk to the corner pending or running.
+	const bool bBusy = bShimmying || bCoverSnapPending || CoverEntryBlendTime >= 0.f || !bOnSlot || GetVelocity().SizeSquared2D() > FMath::Square(20.f);
+	if (bBusy && CoverEnteredPendingSeconds < 3.f)
+	{
+		return;
+	}
+	bCoverEnteredEventPending = false;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: settled in the cover after %.2f s (%.0f cm off the slot, shimmying %d, speed %.0f) -> CoverEntered"),
+		*DisplayName.ToString(), CoverEnteredPendingSeconds, FVector::Dist2D(GetActorLocation(), CoverSlot.WorldLocation), bShimmying ? 1 : 0,
+		GetVelocity().Size2D());
+	const FName Kind = CoverSlot.Height == ECoverHeight::HighCover ? FName(TEXT("High")) : FName(TEXT("Low"));
+	RaiseCoverEvent(GameplayEvents::CoverEntered, CoverSlot, Kind);
+	RaiseCoverEvent(FName(*(GameplayEvents::CoverEntered.ToString() + TEXT(".") + Kind.ToString())), CoverSlot, Kind);
+}
+
+void AOperativeCharacter::RaiseCoverEvent(FName EventName, const FCoverSlot& Slot, FName Kind)
+{
+	FGameplayEventContext Context;
+	Context.Subject = this;
+	Context.Target = Slot.WallActor.Get();
+	Context.Kind = Kind;
+	Context.Location = Slot.WorldLocation;
+	if (!Context.Target)
+	{
+		// A wall without an actor (landscape / BSP): the slot's wall point names the place.
+		Context.TargetId = FName(*FString::Printf(TEXT("Wall_%d_%d"), FMath::RoundToInt(Slot.WallPoint.X / 50.f), FMath::RoundToInt(Slot.WallPoint.Y / 50.f)));
+	}
+	GameplayEvents::RaiseWithContext(this, EventName, Context);
 }
 
 void AOperativeCharacter::LeaveCover(const FString& Reason)
@@ -3381,6 +3438,14 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	if (!bInCover)
 	{
 		return;
+	}
+	if (bCoverEnteredEventPending)
+	{
+		bCoverEnteredEventPending = false; // left before he settled: no entry, no leave
+	}
+	else if (!bQuietCoverLeaveRequest)
+	{
+		RaiseCoverEvent(GameplayEvents::CoverLeft, CoverSlot, CurrentCoverHeight == ECoverHeight::HighCover ? FName(TEXT("High")) : FName(TEXT("Low")));
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: left the cover (%s)"), *DisplayName.ToString(), *Reason);
 	bInCover = false;
@@ -3552,6 +3617,7 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 	{
 		return;
 	}
+	UpdateCoverEnteredEvent(DeltaTime);
 	UpdateCornerAim(DeltaTime);
 	// Corner hold (user decision 2026-10-07): at the exposed edge he steps out into the fire stance at once - also right
 	// after a reload - and holds it; only in a fight / with a known threat (2026-10-11: exploring he hugs the wall).
@@ -3726,7 +3792,12 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 			CoverFacing = Edge;
 		}
 	}
+	const bool bWasAtCorner = bAtCoverCorner;
 	bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, Config);
+	if (bAtCoverCorner && !bWasAtCorner && bInCover && !bShimmying)
+	{
+		RaiseCoverEvent(GameplayEvents::CornerReached, CoverSlot, CoverFacing == ECoverFacing::Left ? FName(TEXT("Left")) : FName(TEXT("Right")));
+	}
 	if (CoverFacing != Old)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: turns along the wall to the %s (threat %s)"), *DisplayName.ToString(),
@@ -4363,7 +4434,10 @@ bool AOperativeCharacter::BeginOpenShotFromCover(const AActor* Target)
 	OpenShotReturnFacing = CoverFacing;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: steps off the wall for an open shot at %s (%s)"), *DisplayName.ToString(),
 		Target ? *Target->GetName() : TEXT("-"), bOpenShotReturnToCornerHold ? TEXT("outside the corner stance's reach") : TEXT("in front of the cover"));
-	LeaveCover(TEXT("open shot: target in front of the cover"));
+	{
+		TGuardValue<bool> QuietLeave(bQuietCoverLeaveRequest, bReturnToCoverAfterOpenShot);
+		LeaveCover(TEXT("open shot: target in front of the cover"));
+	}
 	OpenShotReturnSlot = Slot;
 	bOpenShotReturnPending = bReturnToCoverAfterOpenShot;
 	OpenShotLastTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;

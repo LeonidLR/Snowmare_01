@@ -351,16 +351,16 @@ void UTutorialSubsystem::HandleBusEvent(FName EventName, AActor* Subject)
 	{
 		return;
 	}
-	NotifyEvent(EventName);
+	NotifyEvent(EventName, Subject ? Subject->GetFName() : NAME_None);
 }
 
-void UTutorialSubsystem::NotifyEvent(FName EventName)
+void UTutorialSubsystem::NotifyEvent(FName EventName, FName SubjectId)
 {
 	if (!IsTutorialActive() || EventName.IsNone())
 	{
 		return;
 	}
-	Machine.HandleEvent(EventName);
+	Machine.HandleEvent(EventName, SubjectId);
 	ProcessTransitions();
 }
 
@@ -409,11 +409,12 @@ void UTutorialSubsystem::HandleColdTierChanged(AOperativeCharacter* Operative, E
 	{
 		return;
 	}
-	NotifyEvent(GameplayEvents::ColdTierChanged);
+	const FName OperativeId = Operative ? Operative->GetFName() : NAME_None;
+	NotifyEvent(GameplayEvents::ColdTierChanged, OperativeId);
 	const UEnum* TierEnum = StaticEnum<EColdTier>();
 	if (TierEnum)
 	{
-		NotifyEvent(FName(*(GameplayEvents::ColdTierChanged.ToString() + TEXT(".") + TierEnum->GetNameStringByValue(static_cast<int64>(Tier)))));
+		NotifyEvent(FName(*(GameplayEvents::ColdTierChanged.ToString() + TEXT(".") + TierEnum->GetNameStringByValue(static_cast<int64>(Tier)))), OperativeId);
 	}
 }
 

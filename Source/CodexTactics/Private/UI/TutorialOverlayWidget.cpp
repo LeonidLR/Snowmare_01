@@ -307,7 +307,7 @@ void UTutorialOverlayWidget::UpdateEdgePointers()
 	}
 	const FVector2D Size(SizeX / Scale, SizeY / Scale);
 	const FVector2D Centre = Size * 0.5f;
-	constexpr float Margin = 48.f;
+	constexpr float EdgeMargin = 48.f;
 	for (const ATutorialMarkerActor* Marker : Tutorial->GetVisibleMarkers())
 	{
 		if (!Marker->bScreenEdgePointer)
@@ -317,7 +317,7 @@ void UTutorialOverlayWidget::UpdateEdgePointers()
 		FVector2D Screen;
 		const bool bProjected = PC->ProjectWorldLocationToScreen(Marker->GetActorLocation(), Screen, true);
 		FVector2D Local = Screen / Scale;
-		const bool bOnScreen = bProjected && Local.X >= Margin && Local.Y >= Margin && Local.X <= Size.X - Margin && Local.Y <= Size.Y - Margin;
+		const bool bOnScreen = bProjected && Local.X >= EdgeMargin && Local.Y >= EdgeMargin && Local.X <= Size.X - EdgeMargin && Local.Y <= Size.Y - EdgeMargin;
 		if (bOnScreen)
 		{
 			continue;
@@ -332,7 +332,7 @@ void UTutorialOverlayWidget::UpdateEdgePointers()
 			Direction = FVector2D(0.f, 1.f);
 		}
 		// Clamp the ray from the centre to the inset screen rectangle.
-		const FVector2D Half = Centre - FVector2D(Margin, Margin);
+		const FVector2D Half = Centre - FVector2D(EdgeMargin, EdgeMargin);
 		const float TX = FMath::Abs(Direction.X) > KINDA_SMALL_NUMBER ? Half.X / FMath::Abs(Direction.X) : BIG_NUMBER;
 		const float TY = FMath::Abs(Direction.Y) > KINDA_SMALL_NUMBER ? Half.Y / FMath::Abs(Direction.Y) : BIG_NUMBER;
 		FEdgePointer& Pointer = EdgePointers.AddDefaulted_GetRef();

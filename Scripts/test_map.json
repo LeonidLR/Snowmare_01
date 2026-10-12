@@ -30,7 +30,7 @@
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "ControlsScreenSmoke",
-    "PMCTripwireSmoke"
+    "PMCTripwireSmoke", "CoverEventSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
@@ -51,16 +51,16 @@
   "rules": [
     {
       "name": "gameplay-events-probe",
-      "globs": ["Source/**/Debug/EventBusProbe*", "Source/**/Subsystems/CodexEventBus*"],
+      "globs": ["Source/**/Debug/CoverEventSmoke*", "Source/**/Debug/EventBusProbe*", "Source/**/Subsystems/CodexEventBus*"],
       "tests": ["CodexTactics.Tutorial"],
-      "smokes": ["PMCTripwireSmoke", "EventBusSmoke"]
+      "smokes": ["CoverEventSmoke", "PMCTripwireSmoke", "EventBusSmoke"]
     },
     {
       "name": "tutorial",
       "globs": ["Source/**/Tutorial/**", "Source/**/Core/PlayerCommands*", "Source/**/Core/DemoModeSubsystem*", "Source/**/UI/TutorialOverlay*",
         "Source/**/Debug/TutorialSmoke*", "Content/Data/Tutorial/**"],
       "tests": ["CodexTactics.Tutorial", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": ["TutorialSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke"]
+      "smokes": ["TutorialSmoke", "CoverEventSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke"]
     },
     {
       "name": "sniper",
@@ -74,7 +74,7 @@
       "name": "cover",
       "globs": ["Source/**/Tactics/Cover*", "Source/**/Characters/Cover*"],
       "tests": ["CodexTactics.Tactics.Cover"],
-      "smokes": ["CoverSmoke", "CoverHugSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugMedicSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke"]
+      "smokes": ["CoverSmoke", "CoverEventSmoke", "CoverHugSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugMedicSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke"]
     },
     {
       "name": "anim-operative",

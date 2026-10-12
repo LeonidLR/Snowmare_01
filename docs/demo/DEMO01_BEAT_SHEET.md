@@ -335,7 +335,7 @@ The existing hard-coded chain (`FQuestChainState`) is reused with lake fiction, 
   - `TUT_A6_SHIMMY`: "Click along the same wall to slide." Done on shimmy (E).
   - `TUT_A6_CORNER`: "Corners are where you look and fire from. Stop near an edge." Done on a slot with an exposed edge (E).
   - `TUT_A6_BOUND`: "Crouch (C) and move to the next cover. Don't stop in the open." Done on 3 cover entries in the zone within 90 s each.
-  - `TUT_A6_SQUAD`: (with G7) "Your squad stacks on your cover." Otherwise: "Press 2 / 3 and give each their own cover."
+  - `TUT_A6_SQUAD`: "Press 2 / 3 and give each their own cover." (G7 dropped by the user.) Done on `CoverEntered` by 2 / 3 different operatives (`distinct_operatives`, sample steps `A6_squad_card` / `A6_squad_cover` in `demo_01_steps.json`, 2026-10-12).
   - **Completion of A6:** leader reaches the APC slot volume AND >= 4 cover entries in the field (any mix, including 1 high, 1 low, 1 shimmy). Not hard-gated: walking straight in also works, but the cards stay and the debrief (UX W11) notes "cover lesson skipped".
 - **Setup:**
   - **Ridge-field lane** 60 m long, 20 m wide, leading to the APC from the south-west.
@@ -645,7 +645,7 @@ See §8. ~5 min.
 - **What:** each follower gets the nearest free slot within **6 m** of the leader's slot. First on the same wall (slots 1.2 m apart along the wall via `CoverTraceRules::FindShimmySlot`). Then on another cover surface within 6 m, probed from the formation positions. Same cover class: low -> crouch; high -> stand with the back to the wall. If no slot is found, the follower crouches at his formation point.
 - **Leave:** when the leader moves away more than 3 m, followers leave cover and resume formation (the existing `LeaveCoverToMove`).
 - **Not in TB** (TB units are ordered one by one). Not for the leader's corner slot (followers never take the exposed edge).
-- **Completion event:** `OnCoverEntered(Operative, Height, bExposedEdge)` on the event bus (also needed by the tutorial).
+- **Completion event:** DONE 2026-10-12 as gameplay events (no G7): `CoverEntered` (+ `.High` / `.Low`, raised when the operative has settled in the slot, all modes), `CoverLeft`, `CoverShimmy`, `CornerReached` on `UCodexEventBus::OnGameplayEvent` / `OnGameplayEventDetailed` (operative, wall, kind); tutorial `complete.distinct_operatives` counts each operative once.
 - **Size:** M (rules + test `CodexTactics.Tactics.Cover.SquadStack.*` + `CoverSquadSmoke`). It also helps stealth: today a hidden leader with visible followers gives the squad away.
 
 ---
@@ -682,7 +682,7 @@ See §8. ~5 min.
 | G4 | Objective / tutorial marker actor (world beacon + edge arrow + distance), driven by quest state and tutorial steps | M |
 | G5 | Float cold multiplier zone (`AColdZoneVolume` or a float override on the camera zone) | S |
 | G6 | `ACheckpointVolume` (exploration autosave, once) + "Retry from checkpoint" on Mission Failed | S |
-| G7 | Squad stacks on the leader's cover (§9.1) + `OnCoverEntered` event | M |
+| G7 | ~~Squad stacks on the leader's cover (§9.1)~~ dropped by the user (cover = manual orders per operative); the `OnCoverEntered` part DONE 2026-10-12 as `CoverEntered` / `CoverLeft` / `CoverShimmy` / `CornerReached` gameplay events + `distinct_operatives` (`CoverEventSmoke`) | - |
 | G8 | `ALocationExitVolume` + squad-only transfer save/apply across maps (incl. Susanin) + `DemoTravelSmoke` | M |
 | G9 | Interior roof hiding / occlusion fade for B (or confirm "roof hidden in game") | S (hide) / M (fade; material side goes to Gemini via TANDEM) |
 | G10 | Elevated wind relative to the local floor / off indoors | S |

@@ -290,7 +290,8 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		if (Object->TryGetObjectField(TEXT("complete"), CompleteObject))
 		{
 			const TSharedPtr<FJsonObject> Complete = *CompleteObject;
-			WarnUnknownKeys(Complete, { TEXT("command"), TEXT("commands"), TEXT("event"), TEXT("count"), TEXT("volume"), TEXT("timeout_s") },
+			WarnUnknownKeys(Complete, { TEXT("command"), TEXT("commands"), TEXT("event"), TEXT("count"), TEXT("volume"), TEXT("timeout_s"),
+				TEXT("distinct_operatives") },
 				Where + TEXT(" complete"), OutWarnings);
 			Step.Complete.Commands = JsonStrings(Complete, TEXT("commands"));
 			Step.Complete.Commands.Append(JsonStrings(Complete, TEXT("command")));
@@ -298,6 +299,11 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			Step.Complete.Count = FMath::Max(1, static_cast<int32>(JsonNumber(Complete, TEXT("count"), 1.0)));
 			Step.Complete.Volume = FName(*JsonString(Complete, TEXT("volume")));
 			Step.Complete.TimeoutSeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Complete, TEXT("timeout_s"), 0.0)));
+			Step.Complete.bDistinctSubjects = JsonBool(Complete, TEXT("distinct_operatives"), false);
+			if (Step.Complete.bDistinctSubjects && Step.Complete.Event.IsEmpty())
+			{
+				OutWarnings.Add(Where + TEXT(": \"distinct_operatives\" only counts events - no \"event\" given"));
+			}
 		}
 
 		const TArray<TSharedPtr<FJsonValue>>* Lines = nullptr;

@@ -104,11 +104,17 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	{
 		AddError(TEXT("demo file warning: ") + Warning);
 	}
-	TestEqual(TEXT("A0..A2"), Data.Beats.Num(), 3);
+	TestEqual(TEXT("A0..A2 + A6"), Data.Beats.Num(), 4);
 	TestEqual(TEXT("start beat"), Data.StartBeat, FName(TEXT("A0")));
 	TestNotNull(TEXT("solo card"), Data.FindStep(TEXT("A1_solo")));
 	TestNotNull(TEXT("barrel push card"), Data.FindStep(TEXT("A2_push")));
 	TestNotNull(TEXT("heat pack card"), Data.FindStep(TEXT("A2_heatpack")));
+	// A6 sample: each operative into cover (distinct operatives) and "enter cover 4 times".
+	const FTutorialStep* SquadCover = Data.FindStep(TEXT("A6_squad_cover"));
+	TestTrue(TEXT("A6 each operative into cover"), SquadCover && SquadCover->Complete.bDistinctSubjects
+		&& SquadCover->Complete.Event == TEXT("CoverEntered") && SquadCover->Complete.Count == 3);
+	const FTutorialStep* Bound = Data.FindStep(TEXT("A6_bound"));
+	TestTrue(TEXT("A6 enter cover 4 times"), Bound && !Bound->Complete.bDistinctSubjects && Bound->Complete.Count == 4);
 	for (const FTutorialStep& Step : Data.Steps)
 	{
 		TestFalse(TEXT("never blocking"), Step.bBlocking);
@@ -363,6 +369,40 @@ bool FTutorialTextAndDemoFlagsTest::RunTest(const FString&)
 	TestFalse(TEXT("no intro: demo with intro_dialogue false"), MissionRules::ShouldOpenIntroDialogue(false, true, false));
 	TestFalse(TEXT("no intro: headless start"), MissionRules::ShouldOpenIntroDialogue(true, false, true));
 	TestFalse(TEXT("normal game"), Level.Demo.bDemo || Level.Demo.bTutorial || Level.Demo.bOverrideVisionCones || !Level.Demo.bPanicEnabled);
+	return true;
+}
+
+TUTORIAL_TEST(FTutorialDistinctOperativesTest, "StateMachine.DistinctOperatives")
+bool FTutorialDistinctOperativesTest::RunTest(const FString&)
+{
+	FTutorialStepsData Data;
+	TArray<FString> Warnings;
+	FString Error;
+	TestTrue(TEXT("parse"), TutorialRules::ParseSteps(TEXT(R"({"start_beat":"B","beats":[{"id":"B"}],"steps":[
+		{"id":"each","beat":"B","kind":"objective","text_id":"OBJ_EACH","complete":{"event":"CoverEntered","count":2,"distinct_operatives":true}},
+		{"id":"four","beat":"B","kind":"objective","text_id":"OBJ_FOUR","complete":{"event":"CoverEntered","count":4}}]})"), Data, Warnings, Error));
+	TestEqual(TEXT("no warnings"), Warnings.Num(), 0);
+	TestTrue(TEXT("distinct flag parsed"), Data.Steps.Num() == 2 && Data.Steps[0].Complete.bDistinctSubjects && !Data.Steps[1].Complete.bDistinctSubjects);
+	FTutorialStateMachine Machine;
+	Machine.Load(Data);
+	Machine.StartBeat(TEXT("B"));
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Commander"));
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Commander"));
+	Machine.HandleEvent(TEXT("CoverEntered")); // no subject: never counts for a distinct step
+	TestEqual(TEXT("the same operative twice counts once"), Machine.GetProgress(TEXT("each")), 1);
+	TestEqual(TEXT("the plain count counts all three"), Machine.GetProgress(TEXT("four")), 3);
+	TestEqual(TEXT("not done yet"), Machine.GetState(TEXT("each")), ETutorialStepState::Active);
+	Machine.HandleEvent(TEXT("CoverEntered.High"), TEXT("Engineer")); // a sub-event does not match the exact pattern
+	TestEqual(TEXT("sub-event ignored"), Machine.GetProgress(TEXT("each")), 1);
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Engineer"));
+	TestEqual(TEXT("two different operatives complete it"), Machine.GetState(TEXT("each")), ETutorialStepState::Completed);
+	TestEqual(TEXT("the fourth entry completes the plain count"), Machine.GetState(TEXT("four")), ETutorialStepState::Completed);
+
+	// Without "event" the flag is warned about (it only counts events).
+	TArray<FString> FlagWarnings;
+	FTutorialStepsData FlagOnly;
+	TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"x","beat":"B","complete":{"commands":["Cover.Enter"],"distinct_operatives":true}}]})"), FlagOnly, FlagWarnings, Error);
+	TestTrue(TEXT("warned"), FlagWarnings.ContainsByPredicate([](const FString& Line) { return Line.Contains(TEXT("distinct_operatives")); }));
 	return true;
 }
 

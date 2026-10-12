@@ -171,9 +171,9 @@ public:
 	/** A player command (normally through UCodexEventBus::OnPlayerCommand). */
 	void HandlePlayerCommand(FName CommandId, const FPlayerCommandContext& Context);
 
-	/** A gameplay event (normally through UCodexEventBus::OnGameplayEvent). */
+	/** A gameplay event (normally through UCodexEventBus::OnGameplayEvent); SubjectId = the operative's id (distinct counts). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tutorial")
-	void NotifyEvent(FName EventName);
+	void NotifyEvent(FName EventName, FName SubjectId = NAME_None);
 
 	/** A squad member entered a tutorial volume; false when it did not count (tutorial off, required beat not reached). */
 	bool NotifyVolumeEntered(ATutorialTriggerVolume* Volume, AOperativeCharacter* Operative);
@@ -215,6 +215,8 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tutorial")
 	ETutorialStepState GetStepState(FName StepId) const { return Machine.GetState(StepId); }
+	/** How far a running step got (commands / events counted towards its completion count). */
+	int32 GetStepProgress(FName StepId) const { return Machine.GetProgress(StepId); }
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tutorial")
 	FName GetCurrentBeat() const { return Machine.GetCurrentBeat(); }

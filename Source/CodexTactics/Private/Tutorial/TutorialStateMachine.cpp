@@ -78,6 +78,7 @@ void FTutorialStateMachine::Fire(int32 Index)
 	FRuntime& State = Runtime[Index];
 	State.Progress = 0;
 	State.TriggerHits = 0;
+	State.CountedSubjects.Reset();
 	if (Step.Trigger.DelaySeconds > 0.f)
 	{
 		State.DelayLeft = Step.Trigger.DelaySeconds;
@@ -226,7 +227,7 @@ void FTutorialStateMachine::HandleCommand(FName CommandId)
 	}
 }
 
-void FTutorialStateMachine::HandleEvent(FName EventName)
+void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId)
 {
 	if (EventName.IsNone() || !IsLoaded())
 	{
@@ -237,6 +238,18 @@ void FTutorialStateMachine::HandleEvent(FName EventName)
 		const FTutorialCompletion& Complete = Data.Steps[Index].Complete;
 		if (TutorialRules::IsRunning(Runtime[Index].State) && !Complete.Event.IsEmpty() && TutorialRules::MatchesName(Complete.Event, EventName))
 		{
+			if (Complete.bDistinctSubjects)
+			{
+				bool bAlreadyCounted = true;
+				if (!SubjectId.IsNone())
+				{
+					Runtime[Index].CountedSubjects.Add(SubjectId, &bAlreadyCounted);
+				}
+				if (bAlreadyCounted)
+				{
+					continue; // no subject, or this operative already counted
+				}
+			}
 			AddProgress(Index, 1, Complete.Count);
 		}
 	}
