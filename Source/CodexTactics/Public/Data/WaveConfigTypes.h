@@ -146,7 +146,7 @@ struct CODEXTACTICS_API FSquadLoadout
 	/**
 	 * "heat_packs_count" (UE-only, Demo 01 2026-10-12): heat packs EACH operative of the starting squad spawns with,
 	 * replacing the tactical_heat.json role kit (C1 / E1 / M2); clamped to heat_pack_max_stack. -1 (default): the role kit.
-	 * The demo sets 0 so the first heat pack comes from the A1 hut crate.
+	 * The demo sets 1 (one starter pack each for the A1 heat pack lesson); more come from the A1 hut crate.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	int32 HeatPacksCount = -1;

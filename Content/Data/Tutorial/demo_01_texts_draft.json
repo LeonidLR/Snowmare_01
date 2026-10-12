@@ -64,16 +64,16 @@
       "text": "Follow the beacons to the fishing camp"
     },
     "OBJ_A1_HUT": {
-      "text": "Search the fisherman's hut"
+      "text": "Resupply heat packs at the fishermen's hut"
     },
     "WT_A1_01": {
-      "text": "There's a fisherman's hut by the shore. Worth a look."
+      "text": "Beacon one. The ice holds out here, we can pick up the pace."
     },
     "WT_A1_02": {
-      "text": "Quick look, then on to the crack. Walking pace."
+      "text": "Run where it's open, but nobody gets ahead of the squad."
     },
     "WT_A1_03": {
-      "text": "Good. Sweat freezes faster than you think."
+      "text": "Running keeps the blood moving. Stand still out here and the cold gets in fast."
     },
     "TUT_A1_SELECT": {
       "title": "SELECT",
@@ -116,17 +116,17 @@
     },
     "TUT_A1_HEATPACK": {
       "title": "HEAT PACK",
-      "text": "{focus} is the coldest — past 40 % the shivering starts. Open the inventory and drag a heat pack onto him, or, if he carries one, select him and press {key:Item.HeatPack}."
+      "text": "{focus} is the coldest — past 40 % the shivering starts. Select him and press {key:Item.HeatPack} to crack his heat pack (or drag a mate's pack onto him in the inventory)."
     },
-    "WT_A1_NOPACK": {
-      "text": "We've got no heat packs on us. The crate in the hut had some — go back for them."
+    "WT_A1_RESUPPLY": {
+      "text": "We're nearly out of heat packs. The fishermen's hut is close — let's check it."
     },
     "TUT_A1_HEATPACK_MATE": {
       "title": "HEAT PACK",
-      "text": "{focus} is still freezing. Drag another heat pack onto him in the inventory (or select him and press {key:Item.HeatPack} if he carries one)."
+      "text": "{focus} is still freezing. Same again: select him and press {key:Item.HeatPack}, or drag a mate's heat pack onto him in the inventory."
     },
-    "WT_A1_WARMED": {
-      "text": "Warmed up. Now we move fast — on the run the cold can't catch us."
+    "WT_A1_STOCKED": {
+      "text": "Packs in the kit. That should hold us to the camp. Back to the beacons."
     },
     "TUT_A1_SPRINT": {
       "title": "RUN",

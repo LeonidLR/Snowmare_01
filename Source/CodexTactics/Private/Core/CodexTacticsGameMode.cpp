@@ -240,7 +240,7 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 			// Sprint 15: heat packs, firewood, flares, the stove with a full canister (tactical_heat.json "starting_loadout").
 			const FTacticalHeatConfig& Heat = TacticalHeatTuning::Get();
 			const FTacticalHeatLoadout Loadout = TacticalHeatRules::GetLoadout(Heat, static_cast<int32>(Entry.Role));
-			// The level's "heat_packs_count" replaces the role kit for the starting squad (Demo 01: 0, packs come from the A1 crate).
+			// The level's "heat_packs_count" replaces the role kit for the starting squad (Demo 01: 1 per operative; more come from the A1 hut crate).
 			const int32 LevelHeatPacks = !bRecruited && ActiveLevelConfig ? ActiveLevelConfig->Config.SquadLoadout.HeatPacksCount : -1;
 			Operative->HeatPacksCount = LoadoutRules::StartingHeatPacks(Loadout.HeatPacks, LevelHeatPacks, Heat.HeatPackMaxStack);
 			Operative->FirewoodCount = Loadout.Firewood;

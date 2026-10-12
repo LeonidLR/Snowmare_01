@@ -58,7 +58,7 @@ export interface SquadLoadoutConfig {
   matches: number;
   /** Grenades per operative (the game reads it; -1 / absent: the operatives keep their own). */
   grenades_count?: number;
-  /** Heat packs each starting operative spawns with (the game reads it; -1 / absent: the tactical_heat.json role kit C1 / E1 / M2). Demo 01: 0. */
+  /** Heat packs each starting operative spawns with (the game reads it; -1 / absent: the tactical_heat.json role kit C1 / E1 / M2). Demo 01: 1. */
   heat_packs_count?: number;
 }
 
