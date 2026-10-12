@@ -39,7 +39,7 @@ namespace ControlsTest
 		PlayerCommands::TacticalPause, PlayerCommands::PauseRelease, PlayerCommands::TurnBasedEnter, PlayerCommands::TurnBasedExit,
 		PlayerCommands::EndTurn, PlayerCommands::NextUnit, PlayerCommands::TurnBasedAttack, PlayerCommands::TurnBasedOrder,
 		PlayerCommands::QuickSave, PlayerCommands::QuickLoad, PlayerCommands::ControlsScreen, PlayerCommands::PauseMenu,
-		PlayerCommands::VehicleBoard, PlayerCommands::VehicleDisembark, PlayerCommands::VehicleDrive,
+		PlayerCommands::VehicleBoard, PlayerCommands::VehicleDisembark, PlayerCommands::VehicleDrive, PlayerCommands::VehicleTurretFire,
 		};
 	}
 }

@@ -153,6 +153,12 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	Config.Gate.MaxProgressBeforeFinal = FMath::Clamp(LevelJsonNumber(Root, TEXT("gate_max_progress_before_final"), Config.Gate.MaxProgressBeforeFinal), 0.f, 0.99f);
 	Config.Gate.FullOpenAfterWave = FMath::Max(0, FMath::RoundToInt(LevelJsonNumber(Root, TEXT("gate_full_open_after_wave"), static_cast<float>(Config.Gate.FullOpenAfterWave))));
 
+	// UE-only (APC P2): the turret's shells for this map.
+	if (const TSharedPtr<FJsonObject> Vehicle = LevelJsonObject(Root, TEXT("vehicle")))
+	{
+		Config.VehicleShells = FMath::Max(-1, FMath::RoundToInt(LevelJsonNumber(Vehicle, TEXT("shells"), -1.f)));
+	}
+
 	// UE-only (Demo 01 C10): demo game-mode flags.
 	if (const TSharedPtr<FJsonObject> Demo = LevelJsonObject(Root, TEXT("demo")))
 	{

@@ -75,6 +75,18 @@ public:
 	/** Starts a knockdown regardless of the trigger rules (smokes / scripted events). */
 	bool ForceKnockDown(EKnockdownDirection Direction, EKnockdownCause Cause);
 
+	/**
+	 * ForceKnockDown with a heavier, slower fall (the APC ramming a Brute, 2026-10-12): the fall and get-up clips play at
+	 * the absolute rate PlayRateScale (< 1 = slower) and the downed time lasts DownedTimeScale times longer
+	 * (KnockdownRules::ScaleTimeline).
+	 * The caller checks the re-knock immunity (GetSecondsSinceGetUp) itself.
+	 */
+	bool ForceKnockDownScaled(EKnockdownDirection Direction, EKnockdownCause Cause, float PlayRateScale, float DownedTimeScale);
+
+	/** Play rates of the current knockdown's clips (smokes). */
+	float GetFallPlayRate() const { return FallPlayRate; }
+	float GetGetUpPlayRate() const { return GetUpPlayRate; }
+
 	/** Every knockdown unit within ExplosionRadius of Center falls (grenade, barrel, mine). Returns how many fell. */
 	static int32 NotifyExplosion(UWorld* World, const FVector& Center);
 
@@ -147,7 +159,7 @@ public:
 	int32 GetRecoveryCount() const { return RecoveryCount; }
 
 private:
-	bool StartKnockdown(EKnockdownDirection Direction, EKnockdownCause Cause);
+	bool StartKnockdown(EKnockdownDirection Direction, EKnockdownCause Cause, float PlayRateScale = 1.f, float DownedTimeScale = 1.f);
 	void SetPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase);
 	void PlayPhaseClip();
 	UAnimMontage* PlayClip(UAnimSequenceBase* Clip, float BlendIn, float BlendOut, float PlayRate, bool bHold);
@@ -168,6 +180,7 @@ private:
 	TWeakObjectPtr<UAnimSequenceBase> PlayingClip;
 	TWeakObjectPtr<UAnimMontage> PlayingMontage;
 	float GetUpPlayRate = 1.f;
+	float FallPlayRate = 1.f;
 	bool bDiedWhileDown = false;
 	bool bDeathFallPlayed = false;
 	int32 KnockdownCount = 0;

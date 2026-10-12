@@ -15,13 +15,22 @@
 #include "GameFramework/PlayerController.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Interactables/InteractionSubsystem.h"
+#include "Kismet/GameplayStatics.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "NavigationSystem.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
 #include "Tactics/CoverTraceRules.h"
 #include "UI/GameMessageSubsystem.h"
+#include "Camera/TacticalCameraPawn.h"
+#include "AIController.h"
+#include "Components/CapsuleComponent.h"
+#include "Navigation/CrowdFollowingComponent.h"
+#include "Engine/GameViewportClient.h"
+#include "Styling/CoreStyle.h"
 #include "Vehicles/VehicleNavigation.h"
 #include "Vehicles/VehiclePawn.h"
+#include "Vehicles/VehicleTurretComponent.h"
+#include "Widgets/Layout/SBorder.h"
 
 #define LOCTEXT_NAMESPACE "CodexVehicles"
 
@@ -30,6 +39,21 @@ namespace VehicleSubsystemLocal
 	bool IsAliveOperative(const AOperativeCharacter* Operative)
 	{
 		return Operative && Operative->HealthComponent && Operative->HealthComponent->IsAlive();
+	}
+
+	/** A boarder waiting at the door for the group fade lets his mates walk through him (bBlock false), restored after. */
+	void SetBlocksPawns(AOperativeCharacter* Operative, bool bBlock)
+	{
+		if (UCapsuleComponent* Capsule = Operative ? Operative->GetCapsuleComponent() : nullptr)
+		{
+			Capsule->SetCollisionResponseToChannel(ECC_Pawn, bBlock ? ECR_Block : ECR_Ignore);
+		}
+		// The mates' crowd avoidance must not steer round him either (separation kept them metres short of the door).
+		const AAIController* Controller = Operative ? Cast<AAIController>(Operative->GetController()) : nullptr;
+		if (UCrowdFollowingComponent* Crowd = Controller ? Cast<UCrowdFollowingComponent>(Controller->GetPathFollowingComponent()) : nullptr)
+		{
+			Crowd->SetCrowdSimulationState(bBlock ? ECrowdSimulationState::Enabled : ECrowdSimulationState::Disabled);
+		}
 	}
 
 	void ModeFlags(const UWorld* World, bool& bOutTurnBased, bool& bOutPause)
@@ -55,6 +79,12 @@ void UVehicleSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
 	StripVehicleAgentFromBounds();
+}
+
+void UVehicleSubsystem::Deinitialize()
+{
+	RemoveFadeOverlay();
+	Super::Deinitialize();
 }
 
 // --- Registry ----------------------------------------------------------------------------------------------------
@@ -108,7 +138,15 @@ AVehiclePawn* UVehicleSubsystem::GetVehicleOf(const AActor* Operative) const
 
 void UVehicleSubsystem::CancelBoarding(const AOperativeCharacter* Operative)
 {
-	Boarding.RemoveAll([Operative](const FPendingBoard& Each) { return Each.Operative.Get() == Operative && Each.ClimbLeft < 0.f; });
+	Boarding.RemoveAll([Operative](const FPendingBoard& Each)
+	{
+		const bool bDrop = Each.Operative.Get() == Operative && Each.ClimbLeft < 0.f && !Each.bFadeQueued;
+		if (bDrop && Each.bReady)
+		{
+			VehicleSubsystemLocal::SetBlocksPawns(Each.Operative.Get(), true);
+		}
+		return bDrop;
+	});
 }
 
 bool UVehicleSubsystem::IsBoarding(const AOperativeCharacter* Operative) const
@@ -265,11 +303,16 @@ int32 UVehicleSubsystem::OrderBoard(const TArray<AOperativeCharacter*>& Operativ
 		// The nearest door (side doors, then the rear hatch).
 		int32 Entry = 0;
 		float EntryDistance = TNumericLimits<float>::Max();
+		float BestScore = TNumericLimits<float>::Max();
 		for (int32 Index = 0; Index < Target->EntryPoints.Num(); ++Index)
 		{
 			const float Distance = FVector::Dist2D(Operative->GetActorLocation(), Target->GetEntryPointWorld(Index));
-			if (Distance < EntryDistance)
+			// Spread a group over the doors (a mate waiting at a door for the fade stands in it).
+			const int32 Users = Boarding.FilterByPredicate([Target, Index](const FPendingBoard& Each) { return Each.Vehicle.Get() == Target && Each.Entry == Index; }).Num();
+			const float Score = Distance + Users * 400.f;
+			if (Score < BestScore)
 			{
+				BestScore = Score;
 				EntryDistance = Distance;
 				Entry = Index;
 			}
@@ -308,7 +351,15 @@ int32 UVehicleSubsystem::OrderBoard(const TArray<AOperativeCharacter*>& Operativ
 		if (EntryDistance <= Target->CrewConfig.EntryReachCm)
 		{
 			Operative->StopOperative();
-			Pending.ClimbLeft = Target->CrewConfig.BoardSeconds;
+			if (ShouldFade(Target))
+			{
+				Pending.bReady = true; // in through the fade (no climbing animation)
+				VehicleSubsystemLocal::SetBlocksPawns(Operative, false);
+			}
+			else
+			{
+				Pending.ClimbLeft = Target->CrewConfig.BoardSeconds;
+			}
 			Target->SetDoorsOpen(true);
 		}
 		else if (Operative->OrderMoveTo(Target->GetEntryPointWorld(Entry), true) != EOperativeOrderResult::Accepted)
@@ -523,6 +574,7 @@ void UVehicleSubsystem::Mount(AOperativeCharacter* Operative, AVehiclePawn* Vehi
 		Squad->ClearPlannedOrder(Operative);
 	}
 	const FMountedOperativeEffects Effects = VehicleRules::GetMountedEffects(true);
+	VehicleSubsystemLocal::SetBlocksPawns(Operative, true); // back to normal for when he gets out (collision is off aboard)
 	Operative->SetActorHiddenInGame(Effects.bHidden);
 	Operative->SetActorEnableCollision(Effects.bCollision);
 	if (UCharacterMovementComponent* Movement = Operative->GetCharacterMovement())
@@ -626,13 +678,206 @@ void UVehicleSubsystem::DismountImmediately(AOperativeCharacter* Operative, cons
 void UVehicleSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	if (Boarding.IsEmpty() && Exits.IsEmpty())
+	if (Boarding.IsEmpty() && Exits.IsEmpty() && !Fade.IsActive())
 	{
 		return;
 	}
 	UpdateBoarding(DeltaTime);
 	UpdateExits(DeltaTime);
+	UpdateFade();
 	UpdateDoors();
+}
+
+// --- Boarding fade -------------------------------------------------------------------------------------------------
+
+bool UVehicleSubsystem::ShouldFade(const AVehiclePawn* Vehicle) const
+{
+	bool bTurnBased = false;
+	bool bPause = false;
+	VehicleSubsystemLocal::ModeFlags(GetWorld(), bTurnBased, bPause);
+	return Vehicle && Vehicle->FadeConfig.bEnabled && !bTurnBased && !bPause && !UGameplayStatics::IsGamePaused(GetWorld());
+}
+
+void UVehicleSubsystem::RequestFade(const AVehiclePawn* Vehicle)
+{
+	if (!Fade.IsActive())
+	{
+		FadeConfig = Vehicle ? Vehicle->FadeConfig : FVehicleFadeConfig();
+		FadeAge = 0.f;
+		++FadeCount;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] fade to black #%d (%.2f s out, %.2f s hold, %.2f s in)"), FadeCount,
+			FadeConfig.FadeOutSeconds, FadeConfig.HoldSeconds, FadeConfig.FadeInSeconds);
+		ShowFadeOverlay();
+	}
+	else if (Fade.Phase == EVehicleFadePhase::FadeIn && !Fade.bQueued)
+	{
+		++FadeCount; // a second cycle right after this one
+	}
+	Fade.Request(FadeConfig);
+}
+
+float UVehicleSubsystem::GetFadeAlpha() const
+{
+	return Fade.GetAlpha(FadeConfig);
+}
+
+void UVehicleSubsystem::UpdateFade()
+{
+	if (!Fade.IsActive())
+	{
+		return;
+	}
+	// Real time: the fade runs the same in the tactical pause's slow motion and never waits on world time.
+	const UWorld* World = GetWorld();
+	const float RealDelta = FMath::Clamp(World ? static_cast<float>(World->DeltaRealTimeSeconds) : 0.f, 0.f, 0.1f);
+	FadeAge += RealDelta;
+	Fade.Advance(RealDelta, FadeConfig);
+	if (Fade.IsBlack())
+	{
+		ExecuteFadeQueue();
+	}
+	// Watchdog: never stuck black (a hitch, a world without real time, a queue that keeps refilling).
+	const float Limit = FadeConfig.FadeOutSeconds + FadeConfig.MaxHoldSeconds + FadeConfig.FadeInSeconds + 1.5f;
+	if (FadeAge > Limit * (Fade.bQueued ? 2.f : 1.f))
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[Vehicle] fade watchdog: forced back to clear after %.1f s"), FadeAge);
+		ExecuteFadeQueue();
+		Fade = FVehicleFadeTimeline();
+	}
+	if (!Fade.IsActive())
+	{
+		ExecuteFadeQueue(); // anything that slipped in at the very end is not left waiting
+		RemoveFadeOverlay();
+	}
+}
+
+void UVehicleSubsystem::ExecuteFadeQueue()
+{
+	bool bMoved = false;
+	for (int32 Index = Boarding.Num() - 1; Index >= 0; --Index)
+	{
+		if (!Boarding[Index].bFadeQueued)
+		{
+			continue;
+		}
+		AOperativeCharacter* Operative = Boarding[Index].Operative.Get();
+		AVehiclePawn* Vehicle = Boarding[Index].Vehicle.Get();
+		Boarding.RemoveAt(Index);
+		if (Operative && Vehicle && VehicleSubsystemLocal::IsAliveOperative(Operative) && !IsMounted(Operative) && Vehicle->GetFreeSeats() > 0)
+		{
+			Mount(Operative, Vehicle, true);
+			bMoved = true;
+		}
+		else
+		{
+			VehicleSubsystemLocal::SetBlocksPawns(Operative, true);
+		}
+	}
+	for (int32 Index = Exits.Num() - 1; Index >= 0; --Index)
+	{
+		if (!Exits[Index].bFadeQueued)
+		{
+			continue;
+		}
+		AOperativeCharacter* Operative = Exits[Index].Operative.Get();
+		const FVector Point = Exits[Index].Point;
+		Exits.RemoveAt(Index);
+		if (Operative && IsMounted(Operative))
+		{
+			Unmount(Operative, Point, true);
+			bMoved = true;
+		}
+	}
+	if (!bMoved)
+	{
+		return;
+	}
+	// The camera jumps with the leader while the screen is black (no visible swoop to the hull / the exit).
+	if (const APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		if (ATacticalCameraPawn* Camera = Cast<ATacticalCameraPawn>(PC->GetPawn()); Camera && Camera->GetFollowTarget() && !Camera->IsCinematicLocked())
+		{
+			Camera->SnapFocusOnTarget(Camera->GetFollowTarget());
+		}
+	}
+}
+
+void UVehicleSubsystem::ShowFadeOverlay()
+{
+	UWorld* World = GetWorld();
+	UGameViewportClient* Viewport = World ? World->GetGameViewport() : nullptr;
+	if (!Viewport || FadeOverlay.IsValid())
+	{
+		return; // headless (-nullrhi): the timeline still runs (smokes read GetFadeAlpha)
+	}
+	TWeakObjectPtr<UVehicleSubsystem> WeakThis(this);
+	FadeOverlay = SNew(SBorder)
+		.BorderImage(FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
+		.BorderBackgroundColor_Lambda([WeakThis]()
+		{
+			const UVehicleSubsystem* Self = WeakThis.Get();
+			return FSlateColor(FLinearColor(0.f, 0.f, 0.f, Self ? Self->GetFadeAlpha() : 0.f));
+		})
+		.Visibility(EVisibility::HitTestInvisible); // never blocks the mouse
+	Viewport->AddViewportWidgetContent(FadeOverlay.ToSharedRef(), 9000);
+}
+
+void UVehicleSubsystem::RemoveFadeOverlay()
+{
+	if (!FadeOverlay.IsValid())
+	{
+		return;
+	}
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameViewportClient* Viewport = World->GetGameViewport())
+		{
+			Viewport->RemoveViewportWidgetContent(FadeOverlay.ToSharedRef());
+		}
+	}
+	FadeOverlay.Reset();
+}
+
+// --- Turret orders -------------------------------------------------------------------------------------------------
+
+bool UVehicleSubsystem::HandleTurretTargetClick(AOperativeCharacter* Leader, AActor* Target)
+{
+	AVehiclePawn* Vehicle = GetVehicleOf(Leader);
+	if (!Vehicle)
+	{
+		return false;
+	}
+	const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Target);
+	const UHealthComponent* Health = Enemy ? Enemy->GetHealthComponent() : nullptr;
+	if (!Enemy || Enemy->IsDying() || !Health || !Health->IsAlive())
+	{
+		return true; // not a target: ignored (no drive on a Ctrl + click)
+	}
+	AOperativeCharacter* Gunner = Vehicle->Turret ? Vehicle->Turret->GetGunner() : nullptr;
+	if (!Gunner)
+	{
+		PostLine(Vehicle->DisplayName, LOCTEXT("NoGunner", "Nobody on the gun: board a second operative."));
+		return true;
+	}
+	Vehicle->Turret->SetPriorityTarget(Target);
+	if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+	{
+		Feedback->HighlightTarget(Target);
+	}
+	if (Vehicle->GetHullDistance2D(Target->GetActorLocation()) < Vehicle->Turret->Config.DeadZoneCm)
+	{
+		PostLine(Gunner->DisplayName, LOCTEXT("DeadZone", "Too close - can't depress the gun that far!"));
+	}
+	else
+	{
+		PostLine(Gunner->DisplayName, LOCTEXT("TurretTarget", "On it - target marked."));
+	}
+	FPlayerCommandContext Context;
+	Context.Operative = Leader;
+	Context.Target = Target;
+	Context.Location = Target->GetActorLocation();
+	PlayerCommands::Report(this, PlayerCommands::VehicleTurretFire, Context);
+	return true;
 }
 
 void UVehicleSubsystem::UpdateBoarding(float DeltaTime)
@@ -644,15 +889,26 @@ void UVehicleSubsystem::UpdateBoarding(float DeltaTime)
 		AVehiclePawn* Vehicle = Pending.Vehicle.Get();
 		if (!Operative || !Vehicle || !VehicleSubsystemLocal::IsAliveOperative(Operative) || IsMounted(Operative))
 		{
+			VehicleSubsystemLocal::SetBlocksPawns(Operative, true);
 			Boarding.RemoveAt(Index);
 			continue;
 		}
 		Pending.Age += DeltaTime;
 		if (!Vehicle->IsStopped() || Operative->IsKnockedDown() || Vehicle->GetFreeSeats() <= 0)
 		{
+			VehicleSubsystemLocal::SetBlocksPawns(Operative, true);
 			PostLine(Operative->DisplayName, LOCTEXT("BoardCancelled", "Boarding cancelled."));
 			Boarding.RemoveAt(Index);
 			continue;
+		}
+		if (Pending.bFadeQueued)
+		{
+			continue; // mounted on black (ExecuteFadeQueue)
+		}
+		if (Pending.bReady)
+		{
+			Pending.ReadySeconds += DeltaTime;
+			continue; // waits at the door for the group fade (below)
 		}
 		if (Pending.ClimbLeft < 0.f)
 		{
@@ -664,7 +920,15 @@ void UVehicleSubsystem::UpdateBoarding(float DeltaTime)
 			{
 				Operative->StopOperative();
 				Operative->SetFacingPoint(Vehicle->GetHullCentreWorld());
-				Pending.ClimbLeft = Vehicle->CrewConfig.BoardSeconds;
+				if (ShouldFade(Vehicle))
+				{
+					Pending.bReady = true;
+					VehicleSubsystemLocal::SetBlocksPawns(Operative, false);
+				}
+				else
+				{
+					Pending.ClimbLeft = Vehicle->CrewConfig.BoardSeconds;
+				}
 			}
 			else if (Pending.IdleSeconds > 1.f && Pending.Retries < 4 && Pending.Age < 40.f)
 			{
@@ -673,17 +937,20 @@ void UVehicleSubsystem::UpdateBoarding(float DeltaTime)
 				++Pending.Retries;
 				Pending.IdleSeconds = 0.f;
 				float Best = TNumericLimits<float>::Max();
+				const int32 StalledEntry = Pending.Entry; // (P1 compared against the entry being updated in the loop)
 				for (int32 Entry = 0; Entry < Vehicle->EntryPoints.Num(); ++Entry)
 				{
 					const float EntryDistance = FVector::Dist2D(Operative->GetActorLocation(), Vehicle->GetEntryPointWorld(Entry))
-						+ (Entry == Pending.Entry && Pending.Retries > 1 ? 300.f : 0.f); // a blocked door: try another
+						+ (Entry == StalledEntry && Pending.Retries > 1 ? 600.f : 0.f); // a blocked door: try another
 					if (EntryDistance < Best)
 					{
 						Best = EntryDistance;
 						Pending.Entry = Entry;
 					}
 				}
-				Operative->OrderMoveTo(Vehicle->GetEntryPointWorld(Pending.Entry), true);
+				const EOperativeOrderResult Retry = Operative->OrderMoveTo(Vehicle->GetEntryPointWorld(Pending.Entry), true);
+				UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] %s stalled %.0f cm from the door: retry %d to entry %d (order %d, at %s)"), *Operative->GetName(),
+					Distance, Pending.Retries, Pending.Entry, static_cast<int32>(Retry), *Vehicle->GetActorTransform().InverseTransformPosition(Operative->GetActorLocation()).ToCompactString());
 			}
 			else if ((Pending.IdleSeconds > 1.f && Pending.Retries >= 4) || Pending.Age > 40.f)
 			{
@@ -700,6 +967,58 @@ void UVehicleSubsystem::UpdateBoarding(float DeltaTime)
 			Mount(Operative, Vehicle, true);
 		}
 	}
+	// Group fade: the ones at a door go in together once nobody else walking to the same vehicle is about to arrive (or
+	// the first has waited GroupWaitSeconds) - one fade for the whole squad.
+	for (AVehiclePawn* Vehicle : GetVehicles())
+	{
+		float ReadyWait = -1.f;
+		TArray<float> Walkers;
+		for (const FPendingBoard& Pending : Boarding)
+		{
+			if (Pending.Vehicle.Get() != Vehicle || Pending.bFadeQueued || !Pending.Operative.IsValid())
+			{
+				continue;
+			}
+			if (Pending.bReady)
+			{
+				ReadyWait = FMath::Max(ReadyWait, Pending.ReadySeconds);
+			}
+			else if (Pending.ClimbLeft < 0.f)
+			{
+				const float Distance = FVector::Dist2D(Pending.Operative->GetActorLocation(), Vehicle->GetEntryPointWorld(Pending.Entry));
+				Walkers.Add(VehicleCombatRules::EstimateArrivalSeconds(FMath::Max(0.f, Distance - Vehicle->CrewConfig.EntryReachCm),
+					Pending.Operative->GetVelocity().Size2D()));
+			}
+		}
+		if (ReadyWait < 0.f)
+		{
+			continue;
+		}
+		if (!ShouldFade(Vehicle))
+		{
+			// The pause / turn-based came in while they waited: straight in, no fade.
+			for (FPendingBoard& Pending : Boarding)
+			{
+				if (Pending.Vehicle.Get() == Vehicle && Pending.bReady && !Pending.bFadeQueued)
+				{
+					Pending.bFadeQueued = true;
+				}
+			}
+			ExecuteFadeQueue();
+			continue;
+		}
+		if (VehicleCombatRules::ShouldStartGroupFade(ReadyWait, Walkers, Vehicle->FadeConfig))
+		{
+			for (FPendingBoard& Pending : Boarding)
+			{
+				if (Pending.Vehicle.Get() == Vehicle && Pending.bReady && !Pending.bFadeQueued)
+				{
+					Pending.bFadeQueued = true;
+				}
+			}
+			RequestFade(Vehicle);
+		}
+	}
 }
 
 void UVehicleSubsystem::UpdateExits(float DeltaTime)
@@ -714,9 +1033,20 @@ void UVehicleSubsystem::UpdateExits(float DeltaTime)
 			Exits.RemoveAt(Index);
 			continue;
 		}
+		if (Exit.bFadeQueued)
+		{
+			continue; // moved out on black (ExecuteFadeQueue)
+		}
 		if (!Vehicle->IsStopped())
 		{
 			continue; // braking first
+		}
+		if (ShouldFade(Vehicle))
+		{
+			// Everyone of this order is handed over on the same tick (the vehicle stopped for all): one fade.
+			Exit.bFadeQueued = true;
+			RequestFade(Vehicle);
+			continue;
 		}
 		Exit.ClimbLeft -= DeltaTime;
 		if (Exit.ClimbLeft <= 0.f)
@@ -732,7 +1062,10 @@ void UVehicleSubsystem::UpdateDoors()
 {
 	for (AVehiclePawn* Vehicle : GetVehicles())
 	{
-		const bool bOpen = Boarding.ContainsByPredicate([Vehicle](const FPendingBoard& Each) { return Each.Vehicle.Get() == Vehicle && Each.ClimbLeft >= 0.f; })
+		const bool bOpen = Boarding.ContainsByPredicate([Vehicle](const FPendingBoard& Each)
+			{
+				return Each.Vehicle.Get() == Vehicle && (Each.ClimbLeft >= 0.f || Each.bReady || Each.bFadeQueued);
+			})
 			|| Exits.ContainsByPredicate([Vehicle](const FPendingExit& Each) { return Each.Vehicle.Get() == Vehicle; });
 		Vehicle->SetDoorsOpen(bOpen);
 	}
@@ -809,6 +1142,10 @@ TArray<TSharedPtr<FJsonValue>> UVehicleSubsystem::CaptureSave() const
 		Entry->SetNumberField(TEXT("y"), Location.Y);
 		Entry->SetNumberField(TEXT("z"), Location.Z);
 		Entry->SetNumberField(TEXT("yaw"), Vehicle->GetHeadingYaw());
+		if (Vehicle->Turret)
+		{
+			Entry->SetNumberField(TEXT("shells"), Vehicle->Turret->GetShellsLeft());
+		}
 		TArray<TSharedPtr<FJsonValue>> CrewList;
 		for (const FVehicleCrewMember& Member : Vehicle->GetCrew())
 		{
@@ -829,8 +1166,14 @@ TArray<TSharedPtr<FJsonValue>> UVehicleSubsystem::CaptureSave() const
 
 void UVehicleSubsystem::PrepareForLoad()
 {
+	for (const FPendingBoard& Pending : Boarding)
+	{
+		VehicleSubsystemLocal::SetBlocksPawns(Pending.Operative.Get(), true);
+	}
 	Boarding.Reset();
 	Exits.Reset();
+	Fade = FVehicleFadeTimeline();
+	RemoveFadeOverlay();
 	for (AVehiclePawn* Vehicle : GetVehicles())
 	{
 		Vehicle->StopDriving();
@@ -881,6 +1224,11 @@ void UVehicleSubsystem::RestoreSave(const TArray<TSharedPtr<FJsonValue>>& Entrie
 			continue;
 		}
 		Vehicle->RestoreTransform(Location, Yaw);
+		double Shells = -1.0;
+		if (Vehicle->Turret && Entry->TryGetNumberField(TEXT("shells"), Shells) && Shells >= 0.0)
+		{
+			Vehicle->Turret->SetShellsLeft(FMath::RoundToInt(Shells));
+		}
 		const TArray<TSharedPtr<FJsonValue>>* CrewList = nullptr;
 		if (!Squad || !Entry->TryGetArrayField(TEXT("crew"), CrewList))
 		{
@@ -925,6 +1273,13 @@ namespace VehicleQueries
 		const UWorld* World = Operative ? Operative->GetWorld() : nullptr;
 		const UVehicleSubsystem* Vehicles = World ? World->GetSubsystem<UVehicleSubsystem>() : nullptr;
 		return Vehicles && Vehicles->IsMounted(Operative);
+	}
+
+	bool IsBoarding(const AActor* Operative)
+	{
+		const UWorld* World = Operative ? Operative->GetWorld() : nullptr;
+		const UVehicleSubsystem* Vehicles = World ? World->GetSubsystem<UVehicleSubsystem>() : nullptr;
+		return Vehicles && Vehicles->IsBoarding(Cast<AOperativeCharacter>(Operative));
 	}
 
 	AVehiclePawn* GetVehicle(const AActor* Operative)

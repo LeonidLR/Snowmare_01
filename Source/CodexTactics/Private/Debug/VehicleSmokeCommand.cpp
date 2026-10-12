@@ -15,6 +15,8 @@
 //  5. save, change (one out, the APC moved), load: the APC is back, all three aboard in their seats;
 //  6. Y: the commander gets out and takes cover at the hull; Alt + Y: the others too; the engine stops;
 //  7. all exits blocked: nobody gets out ("All exits are blocked").
+// P2 (user 2026-10-12, no boarding animations): the squad boarding = ONE fade to black, the commander out = one, back in on
+// his own (Y) = one, everyone out = one; the screen is clear after each. Combat: VehicleCombatSmoke.
 
 #include "CoreMinimal.h"
 
@@ -413,11 +415,14 @@ namespace VehicleSmoke
 			{
 				Aboard += Vehicles->IsMounted(Member) ? 1 : 0;
 			}
-			if (Aboard < 3 && State.StageTime < 25.f)
+			if ((Aboard < 3 || Vehicles->IsFadeActive()) && State.StageTime < 25.f)
 			{
 				return true;
 			}
 			Check(State, Aboard == 3, FString::Printf(TEXT("all aboard (%d / 3, %.1f s)"), Aboard, State.StageTime));
+			// User 2026-10-12: no boarding animation, one quick fade to black covers the whole squad.
+			Check(State, Vehicles->GetFadeCount() == 1 && FMath::IsNearlyZero(Vehicles->GetFadeAlpha()),
+				FString::Printf(TEXT("squad boarding = ONE fade (%d), the screen is clear after (alpha %.2f)"), Vehicles->GetFadeCount(), Vehicles->GetFadeAlpha()));
 			Check(State, Apc->GetSeatOf(State.Engineer.Get()) == EVehicleSeat::Driver && Apc->GetSeatOf(State.Commander.Get()) == EVehicleSeat::Gunner
 				&& Apc->GetSeatOf(State.Medic.Get()) == EVehicleSeat::Passenger, TEXT("seats: Engineer driver, Commander gunner, Medic passenger"));
 			Check(State, State.Probe->CountEvent(GameplayEvents::VehicleBoarded) == 3, FString::Printf(TEXT("3 VehicleBoarded events (%d)"),
@@ -546,7 +551,7 @@ namespace VehicleSmoke
 		case 8:
 		{
 			AOperativeCharacter* Commander = State.Commander.Get();
-			if (!InCoverAtHull(Commander, Apc) && State.StageTime < 12.f)
+			if ((!InCoverAtHull(Commander, Apc) || Vehicles->IsFadeActive()) && State.StageTime < 12.f)
 			{
 				return true;
 			}
@@ -556,8 +561,25 @@ namespace VehicleSmoke
 				TEXT("the commander is out: visible, colliding, on the navmesh"));
 			Check(State, InCoverAtHull(Commander, Apc), TEXT("Y: he took cover at the hull"));
 			Check(State, State.Probe->CountEvent(GameplayEvents::VehicleDisembarked, Commander->GetFName()) == 1, TEXT("VehicleDisembarked with his id"));
-			// Back in at once; Alt + Y with the whole squad aboard: everyone out.
-			Vehicles->MountImmediately(Commander, Apc);
+			Check(State, Vehicles->GetFadeCount() == 2 && !Vehicles->IsFadeActive() && FMath::IsNearlyZero(Vehicles->GetFadeAlpha()),
+				FString::Printf(TEXT("getting out solo: one fade (%d in all), the screen is clear after"), Vehicles->GetFadeCount()));
+			// Back in on his own (Y): a solo boarding, one fade.
+			Squad->SetLeader(Commander);
+			PC->VehicleKey(false);
+			Check(State, Vehicles->IsBoarding(Commander), TEXT("Y: the commander boards again"));
+			NextStage(State, 20);
+			return true;
+		}
+		case 20:
+		{
+			AOperativeCharacter* Commander = State.Commander.Get();
+			if ((!Vehicles->IsMounted(Commander) || Vehicles->IsFadeActive()) && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, Vehicles->IsMounted(Commander) && Vehicles->GetFadeCount() == 3 && FMath::IsNearlyZero(Vehicles->GetFadeAlpha()),
+				FString::Printf(TEXT("solo boarding: one fade (%d in all, %.1f s), the screen is clear after"), Vehicles->GetFadeCount(), State.StageTime));
+			// Alt + Y with the whole squad aboard: everyone out.
 			PC->VehicleKey(true);
 			int32 Leaving = 0;
 			for (const AOperativeCharacter* Member : Crew(State))
@@ -577,11 +599,13 @@ namespace VehicleSmoke
 				bAllCover &= InCoverAtHull(Member, Apc);
 				bAnyAboard |= Vehicles->IsMounted(Member);
 			}
-			if ((!bAllCover || bAnyAboard) && State.StageTime < 15.f)
+			if ((!bAllCover || bAnyAboard || Vehicles->IsFadeActive()) && State.StageTime < 15.f)
 			{
 				return true;
 			}
 			Check(State, !bAnyAboard, TEXT("everyone is out"));
+			Check(State, Vehicles->GetFadeCount() == 4 && FMath::IsNearlyZero(Vehicles->GetFadeAlpha()),
+				FString::Printf(TEXT("the whole squad out = ONE fade (%d in all), the screen is clear after"), Vehicles->GetFadeCount()));
 			Check(State, bAllCover, TEXT("all three took cover at the hull"));
 			Check(State, State.Probe->CountEvent(GameplayEvents::VehicleDisembarked) == 4, FString::Printf(TEXT("4 VehicleDisembarked events (%d)"),
 				State.Probe->CountEvent(GameplayEvents::VehicleDisembarked)));

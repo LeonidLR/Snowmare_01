@@ -238,6 +238,8 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName VehicleDisembark;
 	/** LMB on the ground with the leader aboard: the vehicle drives there (double click: full speed). */
 	extern CODEXTACTICS_API const FName VehicleDrive;
+	/** Ctrl + click on an enemy with the leader aboard: the turret's priority target (P2). */
+	extern CODEXTACTICS_API const FName VehicleTurretFire;
 
 	// --- System ---------------------------------------------------------------------------------------------------
 	/** F5: quick save. */
@@ -348,6 +350,12 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName VehicleArrived;
 	/** A drive could not reach the clicked spot (no road / too narrow / blocked). */
 	extern CODEXTACTICS_API const FName VehiclePathBlocked;
+	/** The turret fired (Subject = the gunner, Target = the enemy, Kind = "Cannon" per shell / "MachineGun" per second of fire). */
+	extern CODEXTACTICS_API const FName VehicleTurretFired;
+	/** The turret killed an enemy (Subject = the gunner, Target = the enemy, Kind = "Cannon" / "MachineGun"). */
+	extern CODEXTACTICS_API const FName VehicleTurretKill;
+	/** A small enemy died under the wheels (Subject = the driver, Target = the enemy, Kind = its archetype). */
+	extern CODEXTACTICS_API const FName VehicleRunOver;
 
 	/** Broadcasts UCodexEventBus::OnGameplayEvent (no-op without a game instance) and logs it. */
 	CODEXTACTICS_API void Raise(const UObject* WorldContext, FName EventName, AActor* Subject = nullptr);

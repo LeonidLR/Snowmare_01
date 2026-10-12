@@ -6,7 +6,14 @@
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
+#include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/KnockdownComponent.h"
+#include "Combat/KnockdownRules.h"
+#include "Core/PlayerCommands.h"
+#include "Data/WeaponTuning.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/OverlapResult.h"
@@ -19,6 +26,7 @@
 #include "NavFilters/NavigationQueryFilter.h"
 #include "Vehicles/VehicleNavigation.h"
 #include "Vehicles/VehicleSubsystem.h"
+#include "Vehicles/VehicleTurretComponent.h"
 
 AVehiclePawn::AVehiclePawn()
 {
@@ -48,6 +56,8 @@ AVehiclePawn::AVehiclePawn()
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Mesh->SetCanEverAffectNavigation(false);
 	Mesh->SetGenerateOverlapEvents(false);
+	// The turret aims from the muzzle socket (gun_jntSocket) also while the vehicle is off screen: keep the bones posed.
+	Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 
 	CabinHeat = CreateDefaultSubobject<UHeatSourceComponent>(TEXT("CabinHeat"));
 	CabinHeat->SetupAttachment(Root);
@@ -56,12 +66,14 @@ AVehiclePawn::AVehiclePawn()
 	CabinHeat->bHeatActive = false;
 
 	NavObstacle = CreateDefaultSubobject<UVehicleNavObstacleComponent>(TEXT("NavObstacle"));
+	Turret = CreateDefaultSubobject<UVehicleTurretComponent>(TEXT("Turret"));
 
 	DisplayName = NSLOCTEXT("CodexVehicle", "ApcName", "APC");
 	DefaultMesh = TSoftObjectPtr<USkeletalMesh>(FSoftObjectPath(TEXT("/Game/VigilanteContent/Vehicles/East_APC_BTR82/SK_East_APC_BTR82.SK_East_APC_BTR82")));
 	DefaultAnimClass = TSoftClassPtr<UAnimInstance>(FSoftObjectPath(TEXT("/Game/VigilanteContent/Vehicles/East_APC_BTR82/ABP_East_APC_BTR82.ABP_East_APC_BTR82_C")));
-	// Side doors between axles 2 and 3 (x -20 cm), the rear hatch; on the ground, 70 cm off the hull.
-	EntryPoints = { FVector(-20.f, -(153.f + 70.f), 0.f), FVector(-20.f, 153.f + 70.f, 0.f), FVector(58.f - 389.f - 70.f, 0.f, 0.f) };
+	// Side doors between axles 2 and 3 (x -20 cm), the rear hatch; on the ground, 1 m off the hull (outside the parked
+	// footprint carve + 40 cm and the infantry agent radius 35 cm: a point inside it was unreachable, 2026-10-12).
+	EntryPoints = { FVector(-20.f, -(153.f + 100.f), 0.f), FVector(-20.f, 153.f + 100.f, 0.f), FVector(58.f - 389.f - 100.f, 0.f, 0.f) };
 	// Wheels: x +270 / -190 (front / back axle), y +-130 (track).
 	GroundProbes = { FVector2D(270.f, 0.f), FVector2D(-190.f, 0.f), FVector2D(40.f, -130.f), FVector2D(40.f, 130.f) };
 }
@@ -98,6 +110,7 @@ void AVehiclePawn::ApplyNavObstacleBox()
 void AVehiclePawn::BeginPlay()
 {
 	Super::BeginPlay();
+	WeaponTuning::ApplyVehicleWeapons(nullptr, &CrushConfig);
 	CurrentYaw = GetActorRotation().Yaw;
 	ApplyNavObstacleBox();
 	ConformToGround(0.f, true);
@@ -225,6 +238,8 @@ void AVehiclePawn::RestoreTransform(const FVector& Location, float Yaw)
 {
 	bHasGoal = false;
 	Speed = 0.f;
+	GroundSpeed = 0.f;
+	bHasLastTickLocation = false;
 	PathPoints.Reset();
 	CurrentYaw = FRotator::NormalizeAxis(Yaw);
 	SetActorLocationAndRotation(Location, FRotator(0.f, CurrentYaw, 0.f), false, nullptr, ETeleportType::TeleportPhysics);
@@ -260,6 +275,8 @@ void AVehiclePawn::Tick(float DeltaSeconds)
 	// A dialogue / cutscene blocker holds the world AI: the vehicle waits too.
 	if (UWorldAIPauseSubsystem::IsPausedIn(GetWorld()) || DeltaSeconds <= 0.f)
 	{
+		LastWheelSpin = 0.f;
+		PushWheelPose(DeltaSeconds); // the ABP clock still runs: keep the wheels where they are
 		return;
 	}
 	const float YawBefore = CurrentYaw;
@@ -282,6 +299,16 @@ void AVehiclePawn::Tick(float DeltaSeconds)
 	{
 		ConformToGround(DeltaSeconds, false);
 	}
+	// The wheels follow the ground speed the hull really travelled this tick (no spin while it stands; user report
+	// 2026-10-12: the wheels spun in place before it moved off).
+	const FVector Now = GetActorLocation();
+	if (bHasLastTickLocation)
+	{
+		const FVector Heading(FMath::Cos(FMath::DegreesToRadians(CurrentYaw)), FMath::Sin(FMath::DegreesToRadians(CurrentYaw)), 0.f);
+		GroundSpeed = FVector::DotProduct(FVector(Now.X - LastTickLocation.X, Now.Y - LastTickLocation.Y, 0.f), Heading) / DeltaSeconds;
+	}
+	LastTickLocation = Now;
+	bHasLastTickLocation = true;
 	const float YawRate = FMath::FindDeltaAngleDegrees(YawBefore, CurrentYaw) / DeltaSeconds;
 	ApplyVisuals(YawRate, DeltaSeconds);
 	UpdateEngineNoise(DeltaSeconds);
@@ -307,8 +334,10 @@ void AVehiclePawn::UpdateDrive(float DeltaSeconds)
 		return;
 	}
 	float Target = 0.f;
-	if (IsPawnAhead())
+	AActor* Blocker = nullptr;
+	if (HandleContactsAhead(DeltaSeconds, Blocker))
 	{
+		LastBlocker = Blocker;
 		BlockedSeconds += DeltaSeconds;
 		if (BlockedSeconds > 6.f)
 		{
@@ -334,7 +363,11 @@ void AVehiclePawn::UpdateDrive(float DeltaSeconds)
 			Target = -DriveConfig.ReverseSpeedCmS;
 		}
 	}
-	Speed = VehicleRules::StepSpeed(Speed, Target, DriveConfig, DeltaSeconds);
+	// Pulling away from a standstill: the acceleration ramps up (no instant shove to speed).
+	LaunchSeconds = FMath::Abs(Speed) < 5.f ? 0.f : LaunchSeconds + DeltaSeconds;
+	FVehicleDriveConfig Drive = DriveConfig;
+	Drive.AccelerationCmS2 *= VehicleRules::GetLaunchAccelerationFactor(LaunchSeconds, DriveConfig);
+	Speed = VehicleRules::StepSpeed(Speed, Target, Drive, DeltaSeconds);
 	CurrentYaw = VehicleRules::StepYaw(CurrentYaw, DesiredYaw, Speed, DriveConfig.MinTurnRadiusCm, DeltaSeconds);
 	const FVector Heading(FMath::Cos(FMath::DegreesToRadians(CurrentYaw)), FMath::Sin(FMath::DegreesToRadians(CurrentYaw)), 0.f);
 	SetActorLocation(Location + Heading * Speed * DeltaSeconds);
@@ -354,33 +387,199 @@ void AVehiclePawn::UpdateDrive(float DeltaSeconds)
 	}
 }
 
-bool AVehiclePawn::IsPawnAhead() const
+bool AVehiclePawn::HandleContactsAhead(float DeltaSeconds, AActor*& OutBlocker)
 {
+	OutBlocker = nullptr;
 	const float Direction = Speed < -1.f || (bHasGoal && (bReverse || bManeuverReverse)) ? -1.f : 1.f;
 	const FTransform Frame(FRotator(0.f, CurrentYaw, 0.f), GetActorLocation());
-	const FVector Centre = Frame.TransformPosition(FVector(HullCentre.X + Direction * (HullHalfExtent.X + 110.f), HullCentre.Y, HullCentre.Z));
+	const float Edge = HullCentre.X + Direction * HullHalfExtent.X;
+	// Brake zone: the braking distance at this speed + 1 m, at least 2.2 m (the P1 value).
+	const float AbsSpeed = FMath::Abs(Speed);
+	const float BrakeReach = FMath::Max(220.f, AbsSpeed * AbsSpeed / (2.f * FMath::Max(1.f, DriveConfig.BrakingCmS2)) + 100.f);
+	// Contact zone: the last metre of the hull and what the bumper reaches this tick (+60 cm).
+	const float ContactIn = 100.f;
+	const float ContactOut = 60.f + AbsSpeed * DeltaSeconds;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(VehicleAhead), false, this);
 	for (const FVehicleCrewMember& Member : Crew)
 	{
 		Params.AddIgnoredActor(Member.Operative.Get());
 	}
 	TArray<FOverlapResult> Overlaps;
+	const FVector Centre = Frame.TransformPosition(FVector(Edge + Direction * (BrakeReach - ContactIn) * 0.5f, HullCentre.Y, 100.f));
 	GetWorld()->OverlapMultiByObjectType(Overlaps, Centre, Frame.GetRotation(), FCollisionObjectQueryParams(ECC_Pawn),
-		FCollisionShape::MakeBox(FVector(110.f, HullHalfExtent.Y, 90.f)), Params);
+		FCollisionShape::MakeBox(FVector((BrakeReach + ContactIn) * 0.5f, HullHalfExtent.Y, 100.f)), Params);
+	TSet<AActor*> Seen;
+	TArray<AEnemyCharacter*> ToCrush;
+	AEnemyCharacter* ToRam = nullptr;
+	bool bBrake = false;
 	for (const FOverlapResult& Overlap : Overlaps)
 	{
-		const AActor* Other = Overlap.GetActor();
-		if (!Other || Other == this || Other->IsHidden())
+		AActor* Other = Overlap.GetActor();
+		if (!Other || Other == this || Other->IsHidden() || Seen.Contains(Other) || !Other->IsA<APawn>() || Other->IsA<AVehiclePawn>())
 		{
 			continue;
 		}
+		Seen.Add(Other);
 		const UHealthComponent* Health = Other->FindComponentByClass<UHealthComponent>();
-		if ((Other->IsA<AOperativeCharacter>() || Other->IsA<AEnemyCharacter>()) && (!Health || Health->IsAlive()))
+		AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Other);
+		VehicleCombatRules::FContactInput Contact;
+		Contact.Kind = Enemy ? VehicleCombatRules::EContactKind::Enemy
+			: (Other->IsA<AOperativeCharacter>() ? VehicleCombatRules::EContactKind::Operative : VehicleCombatRules::EContactKind::Friendly);
+		Contact.bAlive = (!Health || Health->IsAlive()) && !(Enemy && Enemy->IsDying());
+		if (Enemy)
 		{
-			return true; // never runs anyone over: brakes and waits (user decision 2026-10-12)
+			Contact.Archetype = Enemy->GetArchetype();
+			Contact.bDowned = Enemy->IsKnockedDown();
+			const UKnockdownComponent* Knockdown = Enemy->FindComponentByClass<UKnockdownComponent>();
+			Contact.bKnockdownImmune = !Knockdown || Knockdown->GetSecondsSinceGetUp() < KnockdownRules::GetConfig().ReknockImmunitySeconds;
+			Contact.bFlying = Enemy->GetArchetype() == EEnemyArchetype::CryoDrone;
+		}
+		const EVehicleContact Result = VehicleCombatRules::EvaluateContact(Contact, AbsSpeed, CrushConfig);
+		// Where the body is along the travel, from the hull edge (negative = already under the hull's end).
+		const float Along = (Frame.InverseTransformPosition(Other->GetActorLocation()).X - Edge) * Direction;
+		const bool bTouching = Along <= ContactOut;
+		switch (Result)
+		{
+		case EVehicleContact::Brake:
+		case EVehicleContact::Block:
+			bBrake = true;
+			OutBlocker = OutBlocker ? OutBlocker : Other;
+			break;
+		case EVehicleContact::Crush:
+			if (bTouching)
+			{
+				ToCrush.Add(Enemy);
+			}
+			break;
+		case EVehicleContact::Push:
+			if (bTouching && Enemy)
+			{
+				// Too slow to crush: shoved off the bumper, sideways (no braking for small enemies).
+				const FVector Local = Frame.InverseTransformPosition(Enemy->GetActorLocation());
+				const float Side = Local.Y >= HullCentre.Y ? 1.f : -1.f;
+				const FVector Shove = Frame.TransformVectorNoScale(FVector(Direction * 0.4f, Side, 0.f)).GetSafeNormal2D() * CrushConfig.PushLaunchCmS;
+				Enemy->LaunchCharacter(Shove + FVector(0.f, 0.f, 120.f), true, false);
+			}
+			break;
+		case EVehicleContact::KnockDown:
+			if (bTouching)
+			{
+				ToRam = Enemy;
+			}
+			break;
+		default:
+			break;
 		}
 	}
-	return false;
+	for (AEnemyCharacter* Enemy : ToCrush)
+	{
+		CrushEnemy(Enemy);
+	}
+	if (ToRam)
+	{
+		RamEnemy(ToRam);
+		bBrake = true; // the hull loses its speed on him and stops against the fallen body
+		OutBlocker = ToRam;
+	}
+	if (ToCrush.Num() > 0 || ToRam)
+	{
+		Speed = VehicleCombatRules::GetSpeedAfterImpacts(Speed, ToCrush.Num(), ToRam != nullptr, CrushConfig);
+	}
+	return bBrake;
+}
+
+void AVehiclePawn::CrushEnemy(AEnemyCharacter* Enemy)
+{
+	UHealthComponent* Health = Enemy ? Enemy->GetHealthComponent() : nullptr;
+	if (!Health || !Health->IsAlive() || Enemy->IsDying())
+	{
+		return;
+	}
+	AOperativeCharacter* Driver = GetOccupant(EVehicleSeat::Driver);
+	const FString Source = Driver ? Driver->DisplayName.ToString() : DisplayName.ToString();
+	// Thrown off the wheels: the body lands beside the hull on the nearer side, a little ahead (the crush impulse; no ragdoll).
+	const FTransform Frame(FRotator(0.f, CurrentYaw, 0.f), GetActorLocation());
+	const FVector Local = Frame.InverseTransformPosition(Enemy->GetActorLocation());
+	const float Side = Local.Y >= HullCentre.Y ? 1.f : -1.f;
+	const float Direction = Speed < 0.f ? -1.f : 1.f;
+	const float Throw = FMath::Clamp(CrushConfig.CrushImpulseCmS * 0.15f, 30.f, 150.f);
+	const FVector Landing = Frame.TransformPosition(FVector(Local.X + Direction * Throw, HullCentre.Y + Side * (HullHalfExtent.Y + 70.f), Local.Z));
+	if (UCharacterMovementComponent* Movement = Enemy->GetCharacterMovement())
+	{
+		Movement->StopMovementImmediately();
+	}
+	Enemy->SetActorLocation(Landing, false, nullptr, ETeleportType::TeleportPhysics);
+	if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+	{
+		Feedback->FlashEnemyHit(Enemy);
+	}
+	UFloatingTextSubsystem::SpawnAboveEnemy(Enemy, TEXT("CRUSHED"), FLinearColor(1.f, 0.35f, 0.25f));
+	// A proper kill: the normal death chain (death clip, corpse, kill credit to the driver, XP, wave bookkeeping).
+	Health->ApplyDirectHealthLoss(Health->GetCurrentHealth() + 1.f, Source);
+	++CrushCount;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] %s ran over %s at %.0f cm/s (credit %s)"), *GetName(), *Enemy->GetName(), FMath::Abs(Speed), *Source);
+	ReceiveRanOver(Enemy, Landing);
+	FGameplayEventContext Event;
+	Event.Subject = Driver;
+	Event.Target = Enemy;
+	Event.Kind = FName(*StaticEnum<EEnemyArchetype>()->GetNameStringByValue(static_cast<int64>(Enemy->GetArchetype())));
+	Event.Location = Landing;
+	GameplayEvents::RaiseWithContext(this, GameplayEvents::VehicleRunOver, Event);
+}
+
+void AVehiclePawn::RamEnemy(AEnemyCharacter* Enemy)
+{
+	UHealthComponent* Health = Enemy ? Enemy->GetHealthComponent() : nullptr;
+	UKnockdownComponent* Knockdown = Enemy ? Enemy->FindComponentByClass<UKnockdownComponent>() : nullptr;
+	if (!Health || !Health->IsAlive() || Enemy->IsDying())
+	{
+		return;
+	}
+	const AOperativeCharacter* Driver = GetOccupant(EVehicleSeat::Driver);
+	const float RamSpeed = FMath::Abs(Speed);
+	if (CrushConfig.RamDamage > 0.f)
+	{
+		FDamageSpec Spec;
+		Spec.Amount = CrushConfig.RamDamage;
+		Spec.DamageType = EDamageType::Kinetic;
+		Spec.bMelee = true;
+		Spec.AttackerSource = Driver ? Driver->DisplayName.ToString() : DisplayName.ToString();
+		Health->TakeDamage(Spec);
+	}
+	if (Knockdown && Health->IsAlive() && !Enemy->IsDying())
+	{
+		const EKnockdownDirection Side = KnockdownRules::DirectionFromLocations(Enemy->GetActorForwardVector(), Enemy->GetActorLocation(), GetHullCentreWorld());
+		if (Knockdown->ForceKnockDownScaled(Side, EKnockdownCause::HeavyHit, CrushConfig.RamKnockdownPlayRate, CrushConfig.RamDownedTimeScale))
+		{
+			++RamKnockdownCount;
+			// Thrown back off the bumper so the hull does not stand in the fallen body.
+			const FVector Away = (Enemy->GetActorLocation() - GetHullCentreWorld()).GetSafeNormal2D();
+			Enemy->SetActorLocation(Enemy->GetActorLocation() + Away * 80.f, true, nullptr, ETeleportType::TeleportPhysics);
+		}
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] %s rammed %s at %.0f cm/s (knocked down %d)"), *GetName(), *Enemy->GetName(), RamSpeed,
+		Enemy->IsKnockedDown() ? 1 : 0);
+}
+
+float AVehiclePawn::GetHullDistance2D(const FVector& World) const
+{
+	const FTransform Frame(FRotator(0.f, CurrentYaw, 0.f), GetActorLocation());
+	const FVector Local = Frame.InverseTransformPosition(World);
+	const float DX = FMath::Max(0.f, FMath::Abs(Local.X - HullCentre.X) - HullHalfExtent.X);
+	const float DY = FMath::Max(0.f, FMath::Abs(Local.Y - HullCentre.Y) - HullHalfExtent.Y);
+	return FMath::Sqrt(DX * DX + DY * DY);
+}
+
+bool AVehiclePawn::GetAnimFloat(FName Variable, float& OutValue) const
+{
+	const UAnimInstance* Anim = Mesh ? Mesh->GetAnimInstance() : nullptr;
+	const FNumericProperty* Property = Anim && !Variable.IsNone() ? CastField<FNumericProperty>(Anim->GetClass()->FindPropertyByName(Variable)) : nullptr;
+	if (!Property || !Property->IsFloatingPoint())
+	{
+		return false;
+	}
+	OutValue = static_cast<float>(Property->GetFloatingPointPropertyValue(Property->ContainerPtrToValuePtr<void>(Anim)));
+	return true;
 }
 
 void AVehiclePawn::ConformToGround(float DeltaSeconds, bool bSnap)
@@ -448,18 +647,32 @@ void AVehiclePawn::SetAnimFloat(FName Variable, float Value) const
 
 void AVehiclePawn::ApplyVisuals(float YawRateDeg, float DeltaSeconds)
 {
-	const float Steer = VehicleRules::GetSteerAngleDeg(YawRateDeg, Speed, DriveConfig);
+	// Wheel spin and steering follow what the hull really did (the measured ground speed and turn rate), never the
+	// commanded speed: no spin while it stands, the tread speed matches the travel, reverse spins backwards.
+	const float Steer = VehicleRules::GetSteerAngleDeg(YawRateDeg, GroundSpeed, DriveConfig);
 	LastSteer = FMath::FInterpTo(LastSteer, Steer, DeltaSeconds, 8.f);
-	const bool bMoving = !FMath::IsNearlyZero(Speed);
-	if (bMoving || !FMath::IsNearlyZero(LastSteer, 0.05f))
+	LastWheelSpin = VehicleRules::GetAnimWheelSpeed(GroundSpeed, DriveConfig.WheelRadiusCm, AnimWheelSpinSign);
+	WheelAngleDeg = VehicleRules::StepWheelAngle(WheelAngleDeg, LastWheelSpin, DeltaSeconds);
+	PushWheelPose(DeltaSeconds);
+	if (!FMath::IsNearlyZero(GroundSpeed) || !FMath::IsNearlyZero(LastSteer, 0.05f))
 	{
-		SetAnimFloat(AnimWheelSpeedVariable, VehicleRules::GetWheelSpinDegPerSec(Speed, DriveConfig.WheelRadiusCm));
 		SetAnimFloat(AnimSteerVariable, LastSteer);
-		ReceiveVisualDrive(Speed, LastSteer);
+		ReceiveVisualDrive(GroundSpeed, LastSteer);
+	}
+}
+
+void AVehiclePawn::PushWheelPose(float DeltaSeconds)
+{
+	float Clock = 0.f;
+	if (!AnimWheelOffsetVariable.IsNone() && GetAnimFloat(AnimWheelOffsetVariable, Clock))
+	{
+		// The vendor ABP multiplies WheelSpeed by its own clock: pin the clock, write angle / clock (no whirl on speed changes).
+		SetAnimFloat(AnimWheelOffsetVariable, AnimWheelClockHold);
+		SetAnimFloat(AnimWheelSpeedVariable, VehicleRules::GetAnimWheelSpeedForAngle(WheelAngleDeg, AnimWheelClockHold, DeltaSeconds));
 	}
 	else
 	{
-		SetAnimFloat(AnimWheelSpeedVariable, 0.f);
+		SetAnimFloat(AnimWheelSpeedVariable, LastWheelSpin);
 	}
 }
 
@@ -510,7 +723,7 @@ void AVehiclePawn::SetParked(bool bParked)
 	if (bParked)
 	{
 		Speed = 0.f;
-		ApplyVisuals(0.f, 1.f);
+		GroundSpeed = 0.f;
 	}
 	if (NavObstacle)
 	{

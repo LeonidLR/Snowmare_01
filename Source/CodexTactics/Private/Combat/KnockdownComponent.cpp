@@ -148,6 +148,15 @@ bool UKnockdownComponent::ForceKnockDown(EKnockdownDirection Direction, EKnockdo
 	return StartKnockdown(Direction, Cause);
 }
 
+bool UKnockdownComponent::ForceKnockDownScaled(EKnockdownDirection Direction, EKnockdownCause Cause, float PlayRateScale, float DownedTimeScale)
+{
+	if (IsDown() || !CanFallNow())
+	{
+		return false;
+	}
+	return StartKnockdown(Direction, Cause, PlayRateScale, DownedTimeScale);
+}
+
 int32 UKnockdownComponent::NotifyExplosion(UWorld* World, const FVector& Center)
 {
 	if (!World)
@@ -170,7 +179,7 @@ int32 UKnockdownComponent::NotifyExplosion(UWorld* World, const FVector& Center)
 	return Count;
 }
 
-bool UKnockdownComponent::StartKnockdown(EKnockdownDirection Direction, EKnockdownCause Cause)
+bool UKnockdownComponent::StartKnockdown(EKnockdownDirection Direction, EKnockdownCause Cause, float PlayRateScale, float DownedTimeScale)
 {
 	const FKnockdownConfig& Config = KnockdownRules::GetConfig();
 	const EKnockdownDirection Side = Direction == EKnockdownDirection::None ? EKnockdownDirection::Back : Direction;
@@ -179,6 +188,12 @@ bool UKnockdownComponent::StartKnockdown(EKnockdownDirection Direction, EKnockdo
 	const EKnockdownPhase Old = State.Phase;
 	State = KnockdownRules::Start(Config, Side, Cause, ClipLength(Fall), ClipLength(GetUp), IsTurnBasedNow());
 	GetUpPlayRate = KnockdownRules::ClipPlayRate(ClipLength(GetUp), Config.GetUpSeconds, Config.GetUpMaxPlayRate);
+	FallPlayRate = 1.f;
+	if (!FMath::IsNearlyEqual(PlayRateScale, 1.f) || !FMath::IsNearlyEqual(DownedTimeScale, 1.f))
+	{
+		KnockdownRules::ScaleTimeline(State, GetUpPlayRate, PlayRateScale, DownedTimeScale);
+		FallPlayRate = PlayRateScale > 0.f ? PlayRateScale : 1.f;
+	}
 	++KnockdownCount;
 	BufferedOrder = nullptr;
 	SetPhase(EKnockdownPhase::Falling, Old); // the owner interrupts its actions first (stops the upper-body montages)
@@ -205,7 +220,7 @@ void UKnockdownComponent::PlayPhaseClip()
 	{
 	case EKnockdownPhase::Falling:
 		// The fall holds its last frame through the downed phase (the montage's auto blend-out is off on the instance).
-		PlayClip(LoadClip(bFront ? KnockedFrontClip : KnockedBackClip), FallBlendInSeconds, 0.f, 1.f, true);
+		PlayClip(LoadClip(bFront ? KnockedFrontClip : KnockedBackClip), FallBlendInSeconds, 0.f, FallPlayRate, true);
 		break;
 	case EKnockdownPhase::GettingUp:
 		PlayClip(LoadClip(bFront ? ReviveFrontClip : ReviveBackClip), GetUpBlendInSeconds, GetUpBlendOutSeconds, GetUpPlayRate, false);

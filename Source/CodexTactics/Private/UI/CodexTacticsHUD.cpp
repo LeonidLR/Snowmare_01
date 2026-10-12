@@ -67,6 +67,9 @@
 #include "Combat/CombatTimeModeRules.h"
 #include "Characters/FirePostureRules.h"
 #include "Combat/HordeSubsystem.h"
+#include "Vehicles/VehiclePawn.h"
+#include "Vehicles/VehicleSubsystem.h"
+#include "Vehicles/VehicleTurretComponent.h"
 
 namespace
 {
@@ -693,6 +696,14 @@ void ACodexTacticsHUD::DrawCombatModeBadge()
 		Who.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (%s)"), *Who), bCommon ? *FirePostureRules::GetLabel(Posture) : TEXT("MIXED"));
 	const FLinearColor PostureColor = !bCommon ? FLinearColor(0.85f, 0.85f, 0.85f) : PostureMarkerColor(Posture);
 	DrawCentered(Line, PostureColor, FLinearColor(0.f, 0.f, 0.f, 0.45f), 1.f);
+	// APC P2: with the selected leader aboard, the turret's ammo / heat line («TURRET AGG   30mm 57/60   MG heat 40%»).
+	if (const AVehiclePawn* Vehicle = VehicleQueries::GetVehicle(Squad->GetLeader()); Vehicle && Vehicle->Turret)
+	{
+		const UVehicleTurretComponent* Turret = Vehicle->Turret;
+		const FLinearColor TurretColor = !Turret->GetGunner() || Turret->IsMgOverheated() || Turret->GetShellsLeft() <= 0
+			? FLinearColor(1.f, 0.45f, 0.3f) : FLinearColor(0.85f, 0.95f, 1.f);
+		DrawCentered(StripUnsupportedGlyphs(Turret->GetHudLine()), TurretColor, FLinearColor(0.f, 0.f, 0.f, 0.5f), 1.f);
+	}
 	// Blast gate paced by the generator and the waves (user request 2026-10-11): «BLAST DOOR 37% — GENERATOR OFFLINE».
 	if (const AGateActor* Gate = AGateActor::FindLevelGate(GetWorld()); Gate && Gate->ShouldShowStatus())
 	{

@@ -737,8 +737,9 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	{
 		return;
 	}
-	// APC P1: aboard a vehicle he rides; with the leader aboard the ones outside hold their spots.
-	if (VehicleQueries::IsMounted(Operative) || VehicleQueries::IsMounted(&LeaderRef))
+	// APC P1: aboard a vehicle he rides; with the leader aboard the ones outside hold their spots. P2: walking to a door
+	// he is not pulled back to his formation slot (the leader waiting at the door for the group fade stood still).
+	if (VehicleQueries::IsMounted(Operative) || VehicleQueries::IsMounted(&LeaderRef) || VehicleQueries::IsBoarding(Operative))
 	{
 		return;
 	}
