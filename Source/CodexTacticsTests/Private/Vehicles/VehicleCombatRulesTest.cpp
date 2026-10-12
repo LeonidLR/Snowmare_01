@@ -115,16 +115,6 @@ bool FVehicleTurretWeaponTest::RunTest(const FString&)
 	TestEqual(TEXT("direct hit 70"), VehicleCombatRules::GetCannonDamage(0.f, true, Config), 70.f);
 	TestEqual(TEXT("splash 35 within 1.5 m"), VehicleCombatRules::GetCannonDamage(120.f, false, Config), 35.f);
 	TestEqual(TEXT("nothing beyond"), VehicleCombatRules::GetCannonDamage(200.f, false, Config), 0.f);
-	// MG suppression pins after 5 rounds (8 x 5 = 40), then starts again.
-	bool bPinned = false;
-	float Meter = 0.f;
-	for (int32 Round = 0; Round < 4; ++Round)
-	{
-		Meter = VehicleCombatRules::AddSuppression(Meter, Config.MgSuppressionPerRound, bPinned, Config);
-	}
-	TestFalse(TEXT("4 rounds: not pinned"), bPinned);
-	Meter = VehicleCombatRules::AddSuppression(Meter, Config.MgSuppressionPerRound, bPinned, Config);
-	TestTrue(TEXT("5th round: pinned, meter reset"), bPinned && Meter == 0.f);
 	TestTrue(TEXT("HUD line"), VehicleCombatRules::GetHudLine(true, 57, 60, 0.4f, false, ESquadFirePosture::Aggressive).Contains(TEXT("57/60")));
 	TestTrue(TEXT("HUD overheat"), VehicleCombatRules::GetHudLine(true, 57, 60, 1.f, true, ESquadFirePosture::Aggressive).Contains(TEXT("OVERHEAT")));
 	TestTrue(TEXT("HUD no gunner"), VehicleCombatRules::GetHudLine(false, 57, 60, 0.f, false, ESquadFirePosture::Aggressive).Contains(TEXT("NO GUNNER")));

@@ -320,9 +320,6 @@
       "mg_hit_chance": 0.8,
       "mg_overheat_seconds": 4,
       "mg_cooldown_seconds": 3,
-      "mg_suppression_per_round": 8,
-      "mg_suppression_threshold": 40,
-      "mg_suppression_stagger": 0.5,
       "traverse_deg_per_sec": 60,
       "dead_zone_m": 4,
       "defensive_radius_m": 20

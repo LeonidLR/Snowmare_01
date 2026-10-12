@@ -15,3 +15,4 @@ Approach: **kinematic vehicle pawn on a separate Vehicle nav agent** (no Chaos p
 - **No boarding animations:** every board / get-out is covered by a quick fade to black and back (0.25 s out, hold while they are moved, 0.25 s in; one fade per group; never in the pause / turn-based; watchdog against a stuck black).
 - **Turret (P2, real time):** gunner seat (Commander, else anyone aboard); 30 mm cannon (shells per map) + coaxial MG (overheats); fires by the gunner's fire posture and on Ctrl+click; dead zone 4 m round the hull.
 - **Wheels:** the wheel spin follows the hull's real ground speed (no whirl / slip at the start); the acceleration ramps up when pulling away.
+- **Turret MG (2026-10-12, user):** the coaxial MG just deals damage - **no "suppression stagger"** (the P2 0.5 s stagger after 5 hits in a row is removed); damage, rate and heat are unchanged.

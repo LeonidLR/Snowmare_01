@@ -105,22 +105,6 @@ struct CODEXTACTICS_API FVehicleTurretConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "0.1"))
 	float MgCooldownSeconds = 3.f;
 
-	/** Suppression put on the target per round (the enemy suppression meter). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "0"))
-	float MgSuppressionPerRound = 8.f;
-
-	/** A suppression meter this full pins the target: a short stagger (it stops moving / attacking), then the meter resets. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "1"))
-	float MgSuppressionThreshold = 40.f;
-
-	/** How long a suppressed enemy is pinned (stagger seconds). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "0"))
-	float MgSuppressionStaggerSeconds = 0.5f;
-
-	/** Suppression decays by this much per second when the MG stops hitting him. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "0"))
-	float MgSuppressionDecayPerSecond = 20.f;
-
 	/** Enemies hear the MG (design 45 m, gunshot class). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "0"))
 	float MgNoiseRadiusCm = 4500.f;
@@ -388,12 +372,6 @@ namespace VehicleCombatRules
 	 * Reaching 1 latches bInOutOverheated until the heat is back at 0.
 	 */
 	CODEXTACTICS_API float StepHeat(float Heat, bool bFiring, float DeltaSeconds, bool& bInOutOverheated, const FVehicleTurretConfig& Config);
-
-	/**
-	 * MG suppression on one target: Meter + Added; reaching MgSuppressionThreshold sets bOutPinned (a short stagger) and the
-	 * meter starts again from 0.
-	 */
-	CODEXTACTICS_API float AddSuppression(float Meter, float Added, bool& bOutPinned, const FVehicleTurretConfig& Config);
 
 	/** Damage of a shell to an enemy DistanceFromImpactCm from the impact (direct hit at <= 1 cm; splash inside the radius). */
 	CODEXTACTICS_API float GetCannonDamage(float DistanceFromImpactCm, bool bDirectHit, const FVehicleTurretConfig& Config);

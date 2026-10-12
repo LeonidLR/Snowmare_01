@@ -18,7 +18,7 @@ class UParticleSystemComponent;
  * (VehicleCombatRules::ChooseTarget: Passive holds, Defensive answers within 20 m once provoked, Aggressive engages
  * anything visible) or the Ctrl+click priority target, slews the turret / gun (vendor ABP TurretHorizontalAngle /
  * GunElevation) and fires the 30 mm autocannon (HE, splash, limited shells per map) or the coaxial MG (unlimited,
- * overheats, suppresses = short stagger). Line of sight from the muzzle socket gun_jntSocket; nothing within the dead zone
+ * overheats; it only deals damage: user decision 2026-10-12, no suppression stagger). Line of sight from the muzzle socket gun_jntSocket; nothing within the dead zone
  * round the hull. Shots: tracers + muzzle flash (vendor Cascade PS_MuzzleFire_01), damage numbers through
  * UHealthComponent, kill credit = the gunner (AttackerSource = his name), noise for enemies.
  * Events VehicleTurretFired (Kind = "Cannon" / "MachineGun") and VehicleTurretKill.
@@ -105,7 +105,7 @@ private:
 	void FireCannon(AEnemyCharacter* Target, AOperativeCharacter* Gunner);
 	void FireMgRound(AEnemyCharacter* Target, AOperativeCharacter* Gunner);
 	void ApplyHit(AEnemyCharacter* Enemy, float Amount, EDamageType Type, float ArmourPenetration, AOperativeCharacter* Gunner,
-		EVehicleTurretWeapon Weapon, bool bStagger);
+		EVehicleTurretWeapon Weapon);
 	void PlayMuzzleFlash(bool bCannon);
 	void RaiseFired(AActor* Target, EVehicleTurretWeapon Weapon);
 	void PushAnim() const;
@@ -113,7 +113,6 @@ private:
 	TWeakObjectPtr<AActor> PriorityTarget;
 	TWeakObjectPtr<AEnemyCharacter> CurrentTarget;
 	EVehicleTurretWeapon CurrentWeapon = EVehicleTurretWeapon::None;
-	TMap<TWeakObjectPtr<AActor>, float> Suppression;
 	UPROPERTY(Transient)
 	TObjectPtr<UParticleSystemComponent> FlashComponent;
 	float FlashLeft = 0.f;

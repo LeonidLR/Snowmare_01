@@ -201,13 +201,6 @@ namespace VehicleCombatRules
 		return Next;
 	}
 
-	float AddSuppression(float Meter, float Added, bool& bOutPinned, const FVehicleTurretConfig& Config)
-	{
-		const float Next = FMath::Max(0.f, Meter) + FMath::Max(0.f, Added);
-		bOutPinned = Next >= Config.MgSuppressionThreshold;
-		return bOutPinned ? 0.f : Next;
-	}
-
 	float GetCannonDamage(float DistanceFromImpactCm, bool bDirectHit, const FVehicleTurretConfig& Config)
 	{
 		if (bDirectHit)

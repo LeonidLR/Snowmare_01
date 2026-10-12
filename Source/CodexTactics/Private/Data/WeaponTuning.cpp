@@ -266,9 +266,6 @@ namespace WeaponTuning
 			Number(Json, TEXT("mg_hit_chance"), Turret->MgHitChance);
 			Number(Json, TEXT("mg_overheat_seconds"), Turret->MgOverheatSeconds);
 			Number(Json, TEXT("mg_cooldown_seconds"), Turret->MgCooldownSeconds);
-			Number(Json, TEXT("mg_suppression_per_round"), Turret->MgSuppressionPerRound);
-			Number(Json, TEXT("mg_suppression_threshold"), Turret->MgSuppressionThreshold);
-			Number(Json, TEXT("mg_suppression_stagger"), Turret->MgSuppressionStaggerSeconds);
 			Number(Json, TEXT("traverse_deg_per_sec"), Turret->TraverseDegPerSec);
 			Number(Json, TEXT("dead_zone_m"), Turret->DeadZoneCm, 100.f);
 			Number(Json, TEXT("defensive_radius_m"), Turret->DefensiveRadiusCm, 100.f);
@@ -405,9 +402,6 @@ namespace WeaponTuning
 		ApcTurret->SetNumberField(TEXT("mg_hit_chance"), Round4(Turret.MgHitChance));
 		ApcTurret->SetNumberField(TEXT("mg_overheat_seconds"), Round4(Turret.MgOverheatSeconds));
 		ApcTurret->SetNumberField(TEXT("mg_cooldown_seconds"), Round4(Turret.MgCooldownSeconds));
-		ApcTurret->SetNumberField(TEXT("mg_suppression_per_round"), Round4(Turret.MgSuppressionPerRound));
-		ApcTurret->SetNumberField(TEXT("mg_suppression_threshold"), Round4(Turret.MgSuppressionThreshold));
-		ApcTurret->SetNumberField(TEXT("mg_suppression_stagger"), Round4(Turret.MgSuppressionStaggerSeconds));
 		ApcTurret->SetNumberField(TEXT("traverse_deg_per_sec"), Round4(Turret.TraverseDegPerSec));
 		ApcTurret->SetNumberField(TEXT("dead_zone_m"), Round4(Turret.DeadZoneCm / 100.f));
 		ApcTurret->SetNumberField(TEXT("defensive_radius_m"), Round4(Turret.DefensiveRadiusCm / 100.f));

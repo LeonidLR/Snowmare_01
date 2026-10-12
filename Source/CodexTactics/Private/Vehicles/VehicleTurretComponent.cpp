@@ -274,14 +274,6 @@ void UVehicleTurretComponent::TickComponent(float DeltaTime, ELevelTick TickType
 			FlashComponent->DeactivateSystem();
 		}
 	}
-	for (auto It = Suppression.CreateIterator(); It; ++It)
-	{
-		It.Value() -= Config.MgSuppressionDecayPerSecond * DeltaTime;
-		if (!It.Key().IsValid() || It.Value() <= 0.f)
-		{
-			It.RemoveCurrent();
-		}
-	}
 	AOperativeCharacter* Gunner = GetGunner();
 	const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 	const bool bTurnBased = Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased;
@@ -335,7 +327,7 @@ void UVehicleTurretComponent::TickComponent(float DeltaTime, ELevelTick TickType
 }
 
 void UVehicleTurretComponent::ApplyHit(AEnemyCharacter* Enemy, float Amount, EDamageType Type, float ArmourPenetration, AOperativeCharacter* Gunner,
-	EVehicleTurretWeapon Weapon, bool bStagger)
+	EVehicleTurretWeapon Weapon)
 {
 	UHealthComponent* Health = Enemy ? Enemy->GetHealthComponent() : nullptr;
 	if (!Health || !Health->IsAlive() || Enemy->IsDying() || Amount <= 0.f)
@@ -347,11 +339,6 @@ void UVehicleTurretComponent::ApplyHit(AEnemyCharacter* Enemy, float Amount, EDa
 	Spec.DamageType = Type;
 	Spec.ArmorPenetration = FMath::Clamp(ArmourPenetration, 0.f, 1.f);
 	Spec.AttackerSource = Gunner ? Gunner->DisplayName.ToString() : TEXT("APC");
-	if (bStagger)
-	{
-		Spec.StatusEffect = EStatusEffect::Stagger;
-		Spec.StatusDuration = Config.MgSuppressionStaggerSeconds;
-	}
 	Health->TakeDamage(Spec);
 	if (!Health->IsAlive() || Enemy->IsDying())
 	{
@@ -408,7 +395,7 @@ void UVehicleTurretComponent::FireCannon(AEnemyCharacter* Target, AOperativeChar
 	{
 		const bool bDirect = bHit && Victim == Target;
 		const float Damage = VehicleCombatRules::GetCannonDamage(FVector::Dist(Victim->GetActorLocation(), Impact), bDirect, Config);
-		ApplyHit(Victim, Damage, EDamageType::Explosive, Penetration, Gunner, EVehicleTurretWeapon::Cannon, false);
+		ApplyHit(Victim, Damage, EDamageType::Explosive, Penetration, Gunner, EVehicleTurretWeapon::Cannon);
 	}
 	if (NoiseTimer <= 0.f)
 	{
@@ -440,10 +427,8 @@ void UVehicleTurretComponent::FireMgRound(AEnemyCharacter* Target, AOperativeCha
 	PlayMuzzleFlash(false);
 	if (bHit)
 	{
-		bool bPinned = false;
-		float& Meter = Suppression.FindOrAdd(Target);
-		Meter = VehicleCombatRules::AddSuppression(Meter, Config.MgSuppressionPerRound, bPinned, Config);
-		ApplyHit(Target, Config.MgDamage, EDamageType::Kinetic, 0.2f, Gunner, EVehicleTurretWeapon::MachineGun, bPinned);
+		// User decision 2026-10-12: the MG just deals damage (no suppression stagger).
+		ApplyHit(Target, Config.MgDamage, EDamageType::Kinetic, 0.2f, Gunner, EVehicleTurretWeapon::MachineGun);
 	}
 	if (NoiseTimer <= 0.f)
 	{
