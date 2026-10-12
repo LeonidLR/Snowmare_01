@@ -30,7 +30,7 @@
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "ControlsScreenSmoke",
-    "PMCTripwireSmoke", "CoverEventSmoke"
+    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
@@ -49,6 +49,13 @@
   },
   "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "EncounterProbe"],
   "rules": [
+    {
+      "name": "warm-idle",
+      "globs": ["Source/**/Survival/WarmIdle*", "Source/**/Characters/OperativeAnimInstanceWarmIdle*", "Source/**/Debug/WarmIdleSmoke*",
+        "Scripts/Editor/setup_operative_weather_animation.py", "Content/Characters/Operatives/Anims/Weather/**"],
+      "tests": ["CodexTactics.Survival.WarmIdle", "CodexTactics.Survival.TacticalHeat", "CodexTactics.Survival.Cold"],
+      "smokes": ["WarmIdleSmoke", "TacticalHeatSmoke", "BarrelSmoke", "SniperSmoke", "KnockdownSmoke"]
+    },
     {
       "name": "gameplay-events-probe",
       "globs": ["Source/**/Debug/CoverEventSmoke*", "Source/**/Debug/EventBusProbe*", "Source/**/Subsystems/CodexEventBus*"],

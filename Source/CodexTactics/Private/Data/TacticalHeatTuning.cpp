@@ -53,7 +53,21 @@ namespace TacticalHeatTuning
 		{ TEXT("puddle_damage_interval_seconds"), &FTacticalHeatConfig::PuddleDamageIntervalSeconds },
 		{ TEXT("puddle_burning_seconds"), &FTacticalHeatConfig::PuddleBurningSeconds },
 		{ TEXT("puddle_burning_tick_damage"), &FTacticalHeatConfig::PuddleBurningTickDamage },
-		{ TEXT("heat_tolerance"), &FTacticalHeatConfig::HeatTolerance } };
+		{ TEXT("heat_tolerance"), &FTacticalHeatConfig::HeatTolerance },
+		{ TEXT("exploration_warmth_multiplier"), &FTacticalHeatConfig::ExplorationWarmthMultiplier },
+		{ TEXT("combat_warmth_multiplier"), &FTacticalHeatConfig::CombatWarmthMultiplier },
+		{ TEXT("warm_idle_cold_threshold"), &FTacticalHeatConfig::WarmIdleColdThreshold },
+		{ TEXT("warm_idle_cold_hysteresis"), &FTacticalHeatConfig::WarmIdleColdHysteresis },
+		{ TEXT("warm_idle_delay_seconds"), &FTacticalHeatConfig::WarmIdleDelaySeconds },
+		{ TEXT("warm_extra_sitter_cold"), &FTacticalHeatConfig::WarmExtraSitterCold },
+		{ TEXT("campfire_seat_distance"), &FTacticalHeatConfig::CampfireSeatDistance },
+		{ TEXT("campfire_stand_distance"), &FTacticalHeatConfig::CampfireStandDistance },
+		{ TEXT("stove_seat_distance"), &FTacticalHeatConfig::StoveSeatDistance },
+		{ TEXT("stove_stand_distance"), &FTacticalHeatConfig::StoveStandDistance },
+		{ TEXT("barrel_stand_distance"), &FTacticalHeatConfig::BarrelStandDistance },
+		{ TEXT("warm_spot_spacing"), &FTacticalHeatConfig::WarmSpotSpacing },
+		{ TEXT("warm_spot_arrive_tolerance"), &FTacticalHeatConfig::WarmSpotArriveTolerance },
+		{ TEXT("warm_spot_walk_speed"), &FTacticalHeatConfig::WarmSpotWalkSpeed } };
 
 	static const FIntKey IntKeys[] = {
 		{ TEXT("heat_pack_action_points"), &FTacticalHeatConfig::HeatPackActionPoints },
@@ -67,7 +81,8 @@ namespace TacticalHeatTuning
 		{ TEXT("stove_max_carried"), &FTacticalHeatConfig::StoveMaxCarried },
 		{ TEXT("flare_turn_rounds"), &FTacticalHeatConfig::FlareTurnRounds },
 		{ TEXT("flare_max_carried"), &FTacticalHeatConfig::FlareMaxCarried },
-		{ TEXT("puddle_turn_rounds"), &FTacticalHeatConfig::PuddleTurnRounds } };
+		{ TEXT("puddle_turn_rounds"), &FTacticalHeatConfig::PuddleTurnRounds },
+		{ TEXT("warm_min_sitters"), &FTacticalHeatConfig::WarmMinSitters } };
 
 	/** Loadout rows by role (EOperativeRole order). */
 	static const TCHAR* const RoleKeys[] = { TEXT("commander"), TEXT("engineer"), TEXT("medic_sapper"), TEXT("recruit") };

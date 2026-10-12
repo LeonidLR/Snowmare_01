@@ -138,6 +138,22 @@ public:
 	/** Goal of the last move request (a use order sees another order replace its walk-up). */
 	const FVector& GetLastMoveDestination() const { return LastMoveDestination; }
 
+	/** Counts OrderMoveTo calls (not the replay of a deferred one): a change = this operative was given an order (weather idle). */
+	uint32 GetMoveOrderSerial() const { return MoveOrderSerial; }
+
+	/** World time of the last attack on him (hit or dodged; -1e9 = never). */
+	double GetLastAttackedTime() const { return LastAttackedTime; }
+
+	/**
+	 * Weather idle (UWarmIdleSubsystem, user request 2026-10-12): he walks to / holds a spot at this heat source's ring (a seat at a
+	 * campfire / stove, a hand-warming place at a barrel). A parked follower keeps it while the leader stays in that warm zone.
+	 */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Weather")
+	TWeakObjectPtr<AActor> WarmSpotSource;
+
+	/** The heat source's warm reach of WarmSpotSource (Radius + Tolerance), cm. */
+	float WarmSpotReach = 0.f;
+
 	/** Formation move issued by the squad: path to Destination at a fixed speed, keeps stance and sprint state. */
 	EOperativeOrderResult FollowTo(const FVector& Destination, float Speed);
 
@@ -1669,6 +1685,8 @@ private:
 	bool bHasMoveOrder = false;
 	/** The last RequestMove destination (the walk resumes there after jumping off an obstacle top). */
 	FVector LastMoveDestination = FVector::ZeroVector;
+	uint32 MoveOrderSerial = 0;
+	double LastAttackedTime = -1.0e9;
 
 	/** A move waiting for the stand-up clip (OrderMoveTo from prone / during a stance clip). */
 	FTimerHandle PendingMoveTimer;

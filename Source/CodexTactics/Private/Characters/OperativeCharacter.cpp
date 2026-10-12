@@ -343,6 +343,10 @@ bool AOperativeCharacter::IsPanicking() const
 
 EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destination, bool bSprint)
 {
+	if (!bPendingMoveReplay)
+	{
+		++MoveOrderSerial; // every real order (player, interaction, relocation, bot) - the weather idle pose of THIS operative ends
+	}
 	if (IsRaging())
 	{
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ ENRAGED! IGNORING ORDERS!"), FLinearColor(1.f, 0.4f, 0.1f));
@@ -2899,6 +2903,7 @@ float AOperativeCharacter::ResolveIncomingHit(EOperativeHitKind Kind, float Amou
 	{
 		return 0.f;
 	}
+	LastAttackedTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0; // a threat: the weather idle poses end (UWarmIdleSubsystem)
 	// Fire posture: an attack (dodged or not) provokes a Defensive operative to fight back (user request 2026-10-06).
 	bProvokedThisFight = true;
 	if (USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)

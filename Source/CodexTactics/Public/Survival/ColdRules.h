@@ -143,6 +143,12 @@ struct CODEXTACTICS_API FColdEnvironment
 	float WarmthRateOverride = 0.f;
 	/** Sprint 15 heat-pack buffer: the open-air accumulation is multiplied by this (0.5 for 45 s after a pack, else 1). */
 	float AccumulationMultiplier = 1.f;
+	/**
+	 * Warming at a heat source (bWarm) is multiplied by this (user request 2026-10-12: slower in a wave fight, where the squad has to
+	 * manoeuvre; WarmIdleRules::GetHeatSourceWarmthMultiplier, tactical_heat.json exploration / combat_warmth_multiplier).
+	 * Preparation / closed-zone warming without a heat source is not scaled.
+	 */
+	float HeatWarmthMultiplier = 1.f;
 };
 
 /** Pure cold formulas. Godot reference: Scenes/movements/player.gd `_process_cold_system`, `_shoot_at_target`. */

@@ -123,6 +123,7 @@ void UOperativeAnimInstance::NativeUninitializeAnimation()
 			Health->OnDied.RemoveDynamic(this, &UOperativeAnimInstance::HandleDied);
 		}
 	}
+	SetWarmWeaponHidden(false);
 	BoundOperative.Reset();
 	Super::NativeUninitializeAnimation();
 }
@@ -856,6 +857,7 @@ void UOperativeAnimInstance::UpdateState()
 		bIsFrostbitten = Cold->IsFrostbitten();
 		bIsWeaponFrozen = Cold->IsWeaponFrozen();
 	}
+	UpdateWarmIdleLayer(*Operative); // before the sniper layer: a weather pose keeps the sniper idle off
 	UpdateSniperLayer(*Operative);
 	UpdateLeftHandIK(*Operative, StateDeltaSeconds);
 	UpdateAimOffset(*Operative, StateDeltaSeconds);
@@ -938,7 +940,7 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 		float MontageWeight = 0.f;
 		float SlotWeight = 0.f;
 		GetCoverPlayback(Playing, MontageWeight, SlotWeight);
-		State.bTwoHandedPose = !(MontageWeight > 0.5f && LeftHandIKFreeClips.ContainsByPredicate([&Playing](const FString& Part) { return !Part.IsEmpty() && Playing.Contains(Part); }));
+		State.bTwoHandedPose = !bWarmIdleActive && !(MontageWeight > 0.5f && LeftHandIKFreeClips.ContainsByPredicate([&Playing](const FString& Part) { return !Part.IsEmpty() && Playing.Contains(Part); }));
 	}
 	LeftHandIKLinear = LeftHandIKRules::StepAlpha(LeftHandIKLinear, LeftHandIKRules::WantsIK(State), DeltaSeconds, LeftHandIKBlendSeconds);
 	// Still out of reach after the slide (a rifle hanging low): fade by the excess instead of a straight arm.

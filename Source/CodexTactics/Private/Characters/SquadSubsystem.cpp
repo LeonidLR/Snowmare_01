@@ -1,4 +1,5 @@
 #include "Characters/SquadSubsystem.h"
+#include "Survival/WarmIdleSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -732,6 +733,12 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 {
 	AOperativeCharacter* Operative = Follower.Operative.Get();
 	if (!Operative || bFollowersHolding)
+	{
+		return;
+	}
+	// Weather idle (user request 2026-10-12): a follower at his seat / hand-warming place by a fire stays there while the leader is
+	// within that fire's warm zone (only the operatives actually ordered get up); the leader leaving it takes the squad along.
+	if (UWarmIdleSubsystem::ShouldFollowerHoldWarmSpot(*Operative, LeaderRef))
 	{
 		return;
 	}

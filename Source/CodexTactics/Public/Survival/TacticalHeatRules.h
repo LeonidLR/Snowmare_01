@@ -191,6 +191,66 @@ struct CODEXTACTICS_API FTacticalHeatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FirePuddle")
 	bool bBarrelLeavesPuddle = true;
 
+	// --- Warming at a heat source and the weather idle poses (user request 2026-10-12, Survival/WarmIdleRules) ---
+
+	/** Warming at a heat source (barrel, campfire, stove, generator, flare, puddle ring) outside a wave fight: x this. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "0"))
+	float ExplorationWarmthMultiplier = 1.f;
+
+	/** Warming at a heat source during a wave fight / ambush (any combat mode): x this - the squad has to manoeuvre. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "0"))
+	float CombatWarmthMultiplier = 0.5f;
+
+	/** Exploration, standing still out of any warm zone: the cold idle (shivering) starts from this cold (the Chills tier, 40). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "0", ClampMax = "100"))
+	float WarmIdleColdThreshold = 40.f;
+
+	/** The cold idle ends this far below the threshold (no flicker at the edge). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "0"))
+	float WarmIdleColdHysteresis = 5.f;
+
+	/** Seconds an operative must stand idle (no order, no move, no task) before a weather pose starts. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "0"))
+	float WarmIdleDelaySeconds = 2.f;
+
+	/** At a campfire / stove at least this many of the operatives present sit (the coldest), the rest stand and warm their hands. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "0"))
+	int32 WarmMinSitters = 2;
+
+	/** ... and every further operative at least this cold sits too (inner seats permitting). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "0", ClampMax = "100"))
+	float WarmExtraSitterCold = 50.f;
+
+	/** Distance of the inner (sitting) ring / outer (standing) ring from a campfire's centre, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "30"))
+	float CampfireSeatDistance = 115.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "30"))
+	float CampfireStandDistance = 175.f;
+
+	/** The same rings around a gas stove (a smaller flame). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "30"))
+	float StoveSeatDistance = 95.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "30"))
+	float StoveStandDistance = 150.f;
+
+	/** Hand-warming spots around a burning barrel (hands over the rim of the 1.2 m drum), cm from its centre. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "30"))
+	float BarrelStandDistance = 125.f;
+
+	/** Least distance between two spots on a ring (seats / standing places), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "30"))
+	float WarmSpotSpacing = 85.f;
+
+	/** The operative counts as at his spot within this distance, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "5"))
+	float WarmSpotArriveTolerance = 35.f;
+
+	/** Walk speed to a spot, cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "10"))
+	float WarmSpotWalkSpeed = 160.f;
+
 	// --- Common ---
 
 	/** Extra distance counted as inside a new source's warm zone (the old sources keep Godot's 50 cm). */
