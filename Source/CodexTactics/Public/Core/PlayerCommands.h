@@ -215,6 +215,14 @@ namespace PlayerCommands
 	/** Plain click on the grid: select / walk. */
 	extern CODEXTACTICS_API const FName TurnBasedOrder;
 
+	// --- Vehicles (APC P1, 2026-10-12) -----------------------------------------------------------------------------
+	/** Y: the selected operative(s) board the nearest vehicle (Alt + Y: the whole squad; FPlayerCommandContext::bSquadWide). */
+	extern CODEXTACTICS_API const FName VehicleBoard;
+	/** Y with everyone addressed aboard: they get out (Alt + Y: the whole squad). */
+	extern CODEXTACTICS_API const FName VehicleDisembark;
+	/** LMB on the ground with the leader aboard: the vehicle drives there (double click: full speed). */
+	extern CODEXTACTICS_API const FName VehicleDrive;
+
 	// --- System ---------------------------------------------------------------------------------------------------
 	/** F5: quick save. */
 	extern CODEXTACTICS_API const FName QuickSave;
@@ -307,6 +315,16 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName CoverShimmy;
 	/** An operative in high cover reached the exposed corner on his facing side. */
 	extern CODEXTACTICS_API const FName CornerReached;
+	/** An operative climbed into a vehicle (Subject = him, Target = the vehicle, Kind = his seat "Driver" / "Gunner" / "Passenger"). */
+	extern CODEXTACTICS_API const FName VehicleBoarded;
+	/** An operative climbed out (Subject = him, Target = the vehicle). */
+	extern CODEXTACTICS_API const FName VehicleDisembarked;
+	/** A drive order started (Subject = the driver, Target = the vehicle, Location = the goal). */
+	extern CODEXTACTICS_API const FName VehicleDriveStarted;
+	/** The vehicle reached its goal (Subject = the driver, Target = the vehicle). */
+	extern CODEXTACTICS_API const FName VehicleArrived;
+	/** A drive could not reach the clicked spot (no road / too narrow / blocked). */
+	extern CODEXTACTICS_API const FName VehiclePathBlocked;
 
 	/** Broadcasts UCodexEventBus::OnGameplayEvent (no-op without a game instance) and logs it. */
 	CODEXTACTICS_API void Raise(const UObject* WorldContext, FName EventName, AActor* Subject = nullptr);

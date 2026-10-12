@@ -72,6 +72,10 @@ namespace PlayerCommands
 	const FName TurnBasedAttack(TEXT("TB.Attack"));
 	const FName TurnBasedOrder(TEXT("TB.Order"));
 
+	const FName VehicleBoard(TEXT("Vehicle.Board"));
+	const FName VehicleDisembark(TEXT("Vehicle.Disembark"));
+	const FName VehicleDrive(TEXT("Vehicle.Drive"));
+
 	const FName QuickSave(TEXT("System.QuickSave"));
 	const FName QuickLoad(TEXT("System.QuickLoad"));
 	const FName ControlsScreen(TEXT("System.Controls"));
@@ -81,7 +85,7 @@ namespace PlayerCommands
 	{
 		static const TArray<const TCHAR*> Sections = {
 			TEXT("Movement & camera"), TEXT("Squad"), TEXT("Stances"), TEXT("Combat"), TEXT("Tactical pause & turn-based"),
-			TEXT("Items & traps"), TEXT("Saving & menus"),
+			TEXT("Items & traps"), TEXT("Vehicles"), TEXT("Saving & menus"),
 		};
 		return Sections;
 	}
@@ -180,6 +184,9 @@ namespace PlayerCommands
 			{ NextUnit, TEXT("Tab"), TEXT("Tactical pause & turn-based"), TEXT("Next operative") },
 			{ TurnBasedAttack, TEXT("Ctrl+Click"), TEXT("Tactical pause & turn-based"), TEXT("Turn-based attack") },
 			{ TurnBasedOrder, TEXT("LMB"), TEXT("Tactical pause & turn-based"), TEXT("Turn-based select / walk") },
+			{ VehicleBoard, TEXT("Y"), TEXT("Vehicles"), TEXT("Board the nearest vehicle (Alt+Y: whole squad)") },
+			{ VehicleDisembark, TEXT("Y"), TEXT("Vehicles"), TEXT("Get out of the vehicle (Alt+Y: whole squad)") },
+			{ VehicleDrive, TEXT("LMB"), TEXT("Vehicles"), TEXT("Drive there while aboard (double-click: full speed)") },
 			{ QuickSave, TEXT("F5"), TEXT("Saving & menus"), TEXT("Quick save") },
 			{ QuickLoad, TEXT("F9"), TEXT("Saving & menus"), TEXT("Quick load") },
 			{ ControlsScreen, TEXT("F1"), TEXT("Saving & menus"), TEXT("This controls reference (F1 or Esc closes it)") },
@@ -299,6 +306,11 @@ namespace GameplayEvents
 	const FName CoverLeft(TEXT("CoverLeft"));
 	const FName CoverShimmy(TEXT("CoverShimmy"));
 	const FName CornerReached(TEXT("CornerReached"));
+	const FName VehicleBoarded(TEXT("VehicleBoarded"));
+	const FName VehicleDisembarked(TEXT("VehicleDisembarked"));
+	const FName VehicleDriveStarted(TEXT("VehicleDriveStarted"));
+	const FName VehicleArrived(TEXT("VehicleArrived"));
+	const FName VehiclePathBlocked(TEXT("VehiclePathBlocked"));
 
 	void Raise(const UObject* WorldContext, FName EventName, AActor* Subject)
 	{
