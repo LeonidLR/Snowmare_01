@@ -98,6 +98,69 @@ namespace TutorialRulesLocal
 			}
 		}
 	}
+
+	/** An object or an array of objects ("condition" / "actions"). */
+	TArray<TSharedPtr<FJsonObject>> JsonObjects(const TSharedPtr<FJsonObject>& Object, const TCHAR* Field)
+	{
+		TArray<TSharedPtr<FJsonObject>> Out;
+		if (!Object.IsValid())
+		{
+			return Out;
+		}
+		const TSharedPtr<FJsonObject>* Single = nullptr;
+		if (Object->TryGetObjectField(Field, Single))
+		{
+			Out.Add(*Single);
+			return Out;
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
+		if (Object->TryGetArrayField(Field, Values))
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *Values)
+			{
+				if (const TSharedPtr<FJsonObject> Item = Value.IsValid() ? Value->AsObject() : nullptr)
+				{
+					Out.Add(Item);
+				}
+			}
+		}
+		return Out;
+	}
+
+	/** Parses "condition" clauses; false + OutError on a bad clause. */
+	bool ParseConditions(const TSharedPtr<FJsonObject>& Object, const FString& Where, TArray<FTutorialCondition>& OutConditions,
+		TArray<FString>& OutWarnings, FString& OutError)
+	{
+		for (const TSharedPtr<FJsonObject>& Clause : JsonObjects(Object, TEXT("condition")))
+		{
+			WarnUnknownKeys(Clause, { TEXT("stat"), TEXT("at_least"), TEXT("below") }, Where + TEXT(" condition"), OutWarnings);
+			FTutorialCondition Condition;
+			Condition.Stat = FName(*JsonString(Clause, TEXT("stat")));
+			if (!TutorialRules::IsKnownStat(Condition.Stat))
+			{
+				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs)"),
+					*Where, *Condition.Stat.ToString());
+				return false;
+			}
+			double Value = 0.0;
+			if (Clause->TryGetNumberField(TEXT("at_least"), Value))
+			{
+				Condition.bAtLeast = true;
+			}
+			else if (Clause->TryGetNumberField(TEXT("below"), Value))
+			{
+				Condition.bAtLeast = false;
+			}
+			else
+			{
+				OutError = Where + TEXT(": a condition needs \"at_least\" or \"below\"");
+				return false;
+			}
+			Condition.Value = static_cast<float>(Value);
+			OutConditions.Add(Condition);
+		}
+		return true;
+	}
 }
 
 bool TutorialRules::ParseKind(const FString& Text, ETutorialStepKind& OutKind)
@@ -119,6 +182,10 @@ bool TutorialRules::ParseKind(const FString& Text, ETutorialStepKind& OutKind)
 	{
 		OutKind = ETutorialStepKind::WalkTalk;
 	}
+	else if (Lower == TEXT("feed"))
+	{
+		OutKind = ETutorialStepKind::Feed;
+	}
 	else
 	{
 		return false;
@@ -132,7 +199,7 @@ bool TutorialRules::ParseTriggerType(const FString& Text, ETutorialTriggerType& 
 		{ TEXT("manual"), ETutorialTriggerType::Manual }, { TEXT("beat_start"), ETutorialTriggerType::BeatStart },
 		{ TEXT("volume"), ETutorialTriggerType::Volume }, { TEXT("event"), ETutorialTriggerType::Event },
 		{ TEXT("after_step"), ETutorialTriggerType::AfterStep }, { TEXT("first_use"), ETutorialTriggerType::FirstUse },
-		{ TEXT("failure_retry"), ETutorialTriggerType::FailureRetry } };
+		{ TEXT("failure_retry"), ETutorialTriggerType::FailureRetry }, { TEXT("condition"), ETutorialTriggerType::Condition } };
 	if (const ETutorialTriggerType* Found = Types.Find(Text.TrimStartAndEnd().ToLower()))
 	{
 		OutType = *Found;
@@ -149,6 +216,7 @@ const TCHAR* TutorialRules::KindName(ETutorialStepKind Kind)
 	case ETutorialStepKind::Objective: return TEXT("objective");
 	case ETutorialStepKind::Radio: return TEXT("radio");
 	case ETutorialStepKind::WalkTalk: return TEXT("walk_talk");
+	case ETutorialStepKind::Feed: return TEXT("feed");
 	default: return TEXT("?");
 	}
 }
@@ -213,12 +281,15 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 				OutError = FString::Printf(TEXT("tutorial steps: duplicate beat id \"%s\""), *Id);
 				return false;
 			}
-			WarnUnknownKeys(Object, { TEXT("id"), TEXT("lesson"), TEXT("checkpoint"), TEXT("title_id") }, TEXT("beat ") + Id, OutWarnings);
+			WarnUnknownKeys(Object, { TEXT("id"), TEXT("lesson"), TEXT("checkpoint"), TEXT("title_id"), TEXT("lock"), TEXT("unlock") },
+				TEXT("beat ") + Id, OutWarnings);
 			FTutorialBeat& Beat = OutData.Beats.AddDefaulted_GetRef();
 			Beat.Id = FName(*Id);
 			Beat.bLesson = JsonBool(Object, TEXT("lesson"), false);
 			Beat.bCheckpoint = JsonBool(Object, TEXT("checkpoint"), true);
 			Beat.TitleId = FName(*JsonString(Object, TEXT("title_id")));
+			Beat.Lock = JsonStrings(Object, TEXT("lock"));
+			Beat.Unlock = JsonStrings(Object, TEXT("unlock"));
 		}
 	}
 
@@ -244,7 +315,8 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		}
 		const FString Where = TEXT("step ") + Id;
 		WarnUnknownKeys(Object, { TEXT("id"), TEXT("beat"), TEXT("kind"), TEXT("text_id"), TEXT("keys"), TEXT("trigger"), TEXT("complete"),
-			TEXT("once"), TEXT("skippable"), TEXT("blocking"), TEXT("lines") }, Where, OutWarnings);
+			TEXT("once"), TEXT("skippable"), TEXT("blocking"), TEXT("lines"), TEXT("condition"), TEXT("lock"), TEXT("unlock"), TEXT("action"),
+			TEXT("actions"), TEXT("focus") }, Where, OutWarnings);
 		FTutorialStep Step;
 		Step.Id = FName(*Id);
 		Step.Beat = FName(*JsonString(Object, TEXT("beat")));
@@ -267,8 +339,8 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		if (Object->TryGetObjectField(TEXT("trigger"), TriggerObject))
 		{
 			const TSharedPtr<FJsonObject> Trigger = *TriggerObject;
-			WarnUnknownKeys(Trigger, { TEXT("type"), TEXT("volume"), TEXT("event"), TEXT("step"), TEXT("command"), TEXT("count"), TEXT("delay_s") },
-				Where + TEXT(" trigger"), OutWarnings);
+			WarnUnknownKeys(Trigger, { TEXT("type"), TEXT("volume"), TEXT("event"), TEXT("step"), TEXT("command"), TEXT("count"), TEXT("delay_s"),
+				TEXT("requires") }, Where + TEXT(" trigger"), OutWarnings);
 			if (!ParseTriggerType(JsonString(Trigger, TEXT("type"), TEXT("manual")), Step.Trigger.Type))
 			{
 				OutError = FString::Printf(TEXT("%s: unknown trigger type \"%s\""), *Where, *JsonString(Trigger, TEXT("type")));
@@ -280,6 +352,10 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			Step.Trigger.Command = JsonString(Trigger, TEXT("command"));
 			Step.Trigger.Count = FMath::Max(1, static_cast<int32>(JsonNumber(Trigger, TEXT("count"), 1.0)));
 			Step.Trigger.DelaySeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Trigger, TEXT("delay_s"), 0.0)));
+			for (const FString& Required : JsonStrings(Trigger, TEXT("requires")))
+			{
+				Step.Trigger.Requires.Add(FName(*Required));
+			}
 		}
 		else if (!Step.Beat.IsNone())
 		{
@@ -309,6 +385,35 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			{
 				OutWarnings.Add(Where + TEXT(": \"hold_s\" only counts command hold time - no \"commands\" given (it would never complete)"));
 			}
+		}
+
+		if (!ParseConditions(Object, Where, Step.Conditions, OutWarnings, OutError))
+		{
+			return false;
+		}
+		Step.Lock = JsonStrings(Object, TEXT("lock"));
+		Step.Unlock = JsonStrings(Object, TEXT("unlock"));
+		TArray<TSharedPtr<FJsonObject>> ActionObjects = JsonObjects(Object, TEXT("actions"));
+		ActionObjects.Append(JsonObjects(Object, TEXT("action")));
+		for (const TSharedPtr<FJsonObject>& ActionObject : ActionObjects)
+		{
+			WarnUnknownKeys(ActionObject, { TEXT("type"), TEXT("amount"), TEXT("min_level") }, Where + TEXT(" action"), OutWarnings);
+			FTutorialAction Action;
+			Action.Type = FName(*JsonString(ActionObject, TEXT("type")));
+			if (!IsKnownAction(Action.Type))
+			{
+				OutError = FString::Printf(TEXT("%s: unknown action type \"%s\" (cold_bump)"), *Where, *Action.Type.ToString());
+				return false;
+			}
+			Action.Amount = static_cast<float>(JsonNumber(ActionObject, TEXT("amount"), 0.0));
+			Action.MinLevel = FMath::Clamp(static_cast<float>(JsonNumber(ActionObject, TEXT("min_level"), 0.0)), 0.f, 100.f);
+			Step.Actions.Add(Action);
+		}
+		Step.Focus = FName(*JsonString(Object, TEXT("focus")));
+		if (!Step.Focus.IsNone() && !IsKnownFocus(Step.Focus))
+		{
+			OutError = FString::Printf(TEXT("%s: unknown focus \"%s\" (coldest_operative)"), *Where, *Step.Focus.ToString());
+			return false;
 		}
 
 		const TArray<TSharedPtr<FJsonValue>>* Lines = nullptr;
@@ -359,6 +464,19 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			OutError = FString::Printf(TEXT("step %s: trigger \"%s\" needs \"event\""), *Step.Id.ToString(),
 				Step.Trigger.Type == ETutorialTriggerType::Event ? TEXT("event") : TEXT("failure_retry"));
 			return false;
+		}
+		if (Step.Trigger.Type == ETutorialTriggerType::Condition && Step.Conditions.IsEmpty())
+		{
+			OutError = FString::Printf(TEXT("step %s: trigger \"condition\" needs a \"condition\""), *Step.Id.ToString());
+			return false;
+		}
+		for (const FName Required : Step.Trigger.Requires)
+		{
+			if (OutData.FindStepIndex(Required) == INDEX_NONE)
+			{
+				OutError = FString::Printf(TEXT("step %s: trigger \"requires\" names an unknown step \"%s\""), *Step.Id.ToString(), *Required.ToString());
+				return false;
+			}
 		}
 		if (Step.Trigger.Type == ETutorialTriggerType::FirstUse && Step.Trigger.Command.IsEmpty())
 		{
@@ -482,6 +600,12 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 		Pending.Add(MakeShared<FJsonValueString>(Id.ToString()));
 	}
 	Object->SetArrayField(TEXT("pending"), Pending);
+	TArray<TSharedPtr<FJsonValue>> Locks;
+	for (const FString& Lock : Progress.Locks)
+	{
+		Locks.Add(MakeShared<FJsonValueString>(Lock));
+	}
+	Object->SetArrayField(TEXT("locks"), Locks);
 	return Object;
 }
 
@@ -519,6 +643,19 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 			}
 		}
 	}
+	const TArray<TSharedPtr<FJsonValue>>* Locks = nullptr;
+	if (Object.TryGetArrayField(TEXT("locks"), Locks))
+	{
+		OutProgress.bHasLocks = true;
+		for (const TSharedPtr<FJsonValue>& Value : *Locks)
+		{
+			FString Pattern;
+			if (Value.IsValid() && Value->TryGetString(Pattern) && !Pattern.IsEmpty())
+			{
+				OutProgress.Locks.Add(Pattern);
+			}
+		}
+	}
 	return true;
 }
 
@@ -551,4 +688,98 @@ FString TutorialRules::FormatKeys(const TArray<FString>& Keys)
 		}
 	}
 	return FString::Join(Caps, TEXT("  "));
+}
+
+bool TutorialRules::IsKnownStat(FName Stat)
+{
+	static const FName Stats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs") };
+	for (const FName Known : Stats)
+	{
+		if (Stat == Known)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool TutorialRules::IsKnownAction(FName Type)
+{
+	return Type == FName(TEXT("cold_bump"));
+}
+
+bool TutorialRules::IsKnownFocus(FName Focus)
+{
+	return Focus == FName(TEXT("coldest_operative"));
+}
+
+bool TutorialRules::IsConditionMet(const TArray<FTutorialCondition>& Conditions, TFunctionRef<float(FName)> Stat)
+{
+	for (const FTutorialCondition& Condition : Conditions)
+	{
+		const float Value = Stat(Condition.Stat);
+		if (Condition.bAtLeast ? !(Value >= Condition.Value) : !(Value < Condition.Value))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool TutorialRules::ApplyLockChanges(TArray<FString>& InOutLocks, const TArray<FString>& Lock, const TArray<FString>& Unlock)
+{
+	bool bChanged = false;
+	for (const FString& Pattern : Unlock)
+	{
+		if (Pattern == TEXT("*"))
+		{
+			bChanged |= InOutLocks.Num() > 0;
+			InOutLocks.Reset();
+			continue;
+		}
+		bChanged |= InOutLocks.RemoveAll([&Pattern](const FString& Existing) { return Existing.Equals(Pattern, ESearchCase::IgnoreCase); }) > 0;
+	}
+	for (const FString& Pattern : Lock)
+	{
+		if (!Pattern.IsEmpty() && !InOutLocks.ContainsByPredicate([&Pattern](const FString& Existing) { return Existing.Equals(Pattern, ESearchCase::IgnoreCase); }))
+		{
+			InOutLocks.Add(Pattern);
+			bChanged = true;
+		}
+	}
+	return bChanged;
+}
+
+bool TutorialRules::IsCommandLocked(const TArray<FString>& Locks, FName CommandId)
+{
+	if (CommandId.IsNone())
+	{
+		return false;
+	}
+	for (const FString& Pattern : Locks)
+	{
+		if (PlayerCommands::Matches(Pattern, CommandId))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+FName TutorialRules::MakeLockedEventName(FName CommandId)
+{
+	return FName(*(GameplayEvents::TutorialLocked.ToString() + TEXT(".") + CommandId.ToString()));
+}
+
+FName TutorialRules::ResolveLockedCommand(const TArray<FString>& Locks, FName CommandId)
+{
+	if (!IsCommandLocked(Locks, CommandId))
+	{
+		return CommandId;
+	}
+	if (CommandId == PlayerCommands::Sprint && !IsCommandLocked(Locks, PlayerCommands::Move))
+	{
+		return PlayerCommands::Move;
+	}
+	return NAME_None;
 }

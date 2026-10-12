@@ -2,7 +2,10 @@
 
 > **User decisions 2026-10-11 (rev 2 review):** scope = **Location A «Frozen Lake» only** for now (one map `L_Demo01_A_FrozenLake`); the garage, the map transfer and the 4-minute horde are postponed. Generator: **knocked out only, repairable** (never a mission loss). PMC tripwires: **hidden until spotted, cold lowers the disarm chance, anyone may try (role chance)**. Followers in cover: **NO automatic stacking — cover is taught as manual orders per operative** (G7 dropped; the cover beat asks the player to put each operative into cover). Lesson failures before the lake fight: **a lethal hit only downs the operative at 1 HP and he GETS UP by himself (current behaviour of the tutorial lesson guard; "Retry from checkpoint" stays available; nobody lies until Retry)**; normal rules in the fight. Barrel push in live real time stays **pause-only** (2026-10-08 rule). **The Frozen Lake has NO enemies before the attack** (2026-10-11): it is a normal level that teaches the basic mechanics; the only dangers before the fight are cold and PMC traps (mines, tripwires, trapped crates). No stealth / patrol / vision-cone / guard-post lesson beats on the lake (none were in beats A0-A7; A6 already states "no enemies"; `demo_01_steps.json` has none); enemies appear only in the A8-A10 attack. Patrols, guard posts and stealth belong to the postponed garage (B). Cautious cover-to-cover approach (A6) stays. Beat numbering A0-A12 and the ~45 min estimate are unchanged. **Intro briefing window OFF on the demo level; its content becomes A0 walk-and-talk** (level JSON `demo.intro_dialogue: false`, the default when a `demo` object exists; ids `WT_A0_BRIEFING_1..3`, texts via the narrative sheet). Open: Susanin rescue + enemy counts (recommendation stands), TB rule fixes, housekeeping commit.
 
+> **User decisions 2026-10-12 (rev 3, A0-A2 redesign):** **sprint is LOCKED until warmed up** — sprinting warms the body (2026-10-01 rule), so a player who runs never meets the cold lesson; a double click walks from A0 on (one feed line `TUT_A0_NOSPRINT` on the first try) and `WT_A1_WARMED` unlocks it after the heat-pack lesson (beat A2 unlocks it as a safety). **Heat pack moved from A2 to A1**, after a new **loot lesson in a fisherman's hut** (crate with 3 heat packs; the squad starts WITHOUT heat packs: level JSON `squad_loadout.heat_packs_count: 0`). **Wind zone at the solo point** (`ACameraZoneVolume` x2.5, the user places it) **+ a gust safety**: 20 s after solo, if nobody is at Chills (40 %), a scripted gust (`WT_A1_GUST`) gives every operative +20 cold (at least 42 %), data-driven in the step (`cold_bump`). The heat-pack card names / marks the coldest operative. A2 keeps the barrel push / light; its heat-pack card is remedial only; the A2 cold-bar card is gone. Engine side: generic tutorial command locks (`lock` / `unlock` on beats and steps, saved), condition triggers + `requires`, step actions, `feed` kind (HANDOFF §6 «Tutorial»).
+
 > **Change log**
+> - **2026-10-12 rev 3:** A0-A2 reordered (sprint locked until warmed; hut loot lesson; heat pack in A1 with the wind zone + gust safety; A2 barrel only + remedial heat pack). §4 A0 / A1 / A2.
 > - **2026-10-11 rev 2:** barrel relocation in exploration / RT / pause / TB (new §2.5; beats A2, A4, A7, §5 W1–W3, B2–B3).
 >   Squad-placed traps: mines, tripwires, and booby-trapping objects ("mining a barricade") (new §2.6; beats A7, §5 W2, B1–B3).
 >   **No feeling of safety (sudden horde, no 60 s prep):** A7 becomes "read the ground": approach signs, a hidden east lane, choke points.
@@ -214,53 +217,58 @@ Completion events marked (E) need the tutorial command choke point (UX W2). Mark
 
 #### A0. Menu -> drop (cold open)
 - **Goal:** start moving within 20 s of NEW GAME. No standing dialogue.
-- **Teaches:** camera (WASD / edge, wheel, Q/E), click-move.
-- **Walk-and-talk:** `WT_A0_01..06` start on spawn as feed lines while the camera eases onto the squad. Content: HQ drop confirmation, Sokolova on the cold, Engineer on the dead radio. **Replace the 15-line blocking intro** (gap G2).
+- **Teaches:** camera (WASD / edge, wheel, Q/E), click-move. **Sprint is LOCKED** from the start (rev 3, see the decision block): sprinting warms the body (2026-10-01 rule), so a player who runs would never meet the cold lesson in A1.
+- **Walk-and-talk:** `WT_A0_BRIEFING_1..3` + `WT_A0_01..06` start on spawn as subtitle lines while the camera eases onto the squad. Content: HQ drop confirmation, Sokolova on the cold, Engineer on the dead radio. **Replace the 15-line blocking intro** (gap G2).
 - **Hint cards:** four STAGED camera cards, each done by real use, no timeout: `TUT_A0_CAM_PAN` (WASD / screen edge for 1 s), `TUT_A0_CAM_ROTATE_KEYS` (Q / E, twice), `TUT_A0_CAM_ROTATE_MOUSE` (hold RMB and drag, 0.5 s), `TUT_A0_CAM_ZOOM` (wheel, twice), `TUT_A0_MOVE` (click the ground at the amber ring 12 m ahead; done when the leader enters the ring).
-- **Setup:** PlayerStart; snowcat wreck (art); `ATutorialMarkerActor` ring at beacon 1 (gap G4); `ADialogueTriggerVolume` (box 10 x 10 m on the start).
+- **Sprint lock:** a double click walks (no error line). The first try puts ONE line in the message feed: Commander `TUT_A0_NOSPRINT` "No running yet — save your strength." (step `A0_nosprint`, kind `feed`, event `Tutorial.Locked.Order.Sprint`).
+- **Setup:** PlayerStart; snowcat wreck (art); `ATutorialMarkerActor` ring at beacon 1 (gap G4); `ATutorialTriggerVolume` `VOL_A0_BEACON1` (Beat Id `A1`) at beacon 1.
 - **Metrics:** start -> beacon 1 = 25 m (11 s walk).
 - **Cold:** Shelter x0.5 (G5: x0.2).
 - **Success:** leader at beacon 1. **Fail:** none.
 - **Checkpoint:** `CP_A0` = mission start.
 - **~1.5 min**
 
-#### A1. The crossing: squad body language (walk and talk)
-- **Goal:** cross 130 m of ice to the fishing camp while the squad banters.
-- **Teaches:** double-click sprint; select 1/2/3 and drag box-select; **B solo (split up) and B again (regroup into formation)**; **T guard**; **C crouch, V prone, Z stand, Alt + C/V for the whole squad**; vault a low ridge.
-- **Walk-and-talk (triggered by volumes along the beacons):**
-  `WT_A1_01-03` (beacon 1, sprint: "Pick up the pace, Captain, standing still kills here"),
-  `WT_A1_04-06` (beacon 2, crack ahead: Engineer volunteers to scout, which sets up SOLO),
-  `WT_A1_07-09` (beacon 3, regroup: "Formation, close it up"),
-  `WT_A1_10-12` (beacon 4, wind gust: Sokolova "Get low, the wind cuts less", which sets up crouch / prone; prone is also "how you crawl under a wire").
-- **Hint cards in order:** `TUT_A1_SPRINT` (double-click), `TUT_A1_SELECT` (press 2: the Engineer leads), `TUT_A1_SOLO` (B: the others hold; scout the crack edge 20 m away), `TUT_A1_REGROUP` (B again), `TUT_A1_GUARD` (optional: T keeps one in place), `TUT_A1_STANCE` (C / V / Z; Alt = whole squad), `TUT_A1_VAULT` (click past the ridge).
-  Done by: stance changed (X `OnStanceChanged`), solo toggled (E), leader changed (X), vault (E).
-- **Setup:** beacons 1-5 (art + amber light); 3 pressure ridges (one `Vault` tag, 0.8 m high, 8 m long); a 2 m crack 40 m long across the direct line (nav blocker), whose detour around the end is 20 m; 4 `ADialogueTriggerVolume` (8 x 30 m strips across the corridor at beacons 1-4); 2 tutorial trigger volumes for SOLO / STANCE.
-- **Metrics:** corridor 130 x 30 m, beacons 25 m apart; solo scout point 20 m off the line (the "split up" distance must be visible on screen: <= 26 m camera distance).
-- **Cold:** Standard x1. At walk pace plus lessons (~3 min) the squad reaches **25-40 %** at the camp. That is intended: they "start to freeze" exactly at A2. With x1 a slow player can reach 60 %, so the A2 barrel must be on the arrival path.
-- **Success:** leader inside the camp volume. **Fail:** none (cold cannot kill before A2 at these rates: 100 % needs > 100 s standing still in x1 after fortitude).
-- **Checkpoint:** `CP_A1` at beacon 3 (exploration autosave, gap G6).
-- **~4 min**
+#### A1. The crossing: select, loot, split up, cold, heat pack, run (rev 3, 2026-10-12)
+- **Goal:** cross 130 m of ice to the fishing camp; on the way learn selection, looting, solo / regroup, the cold and the heat pack; earn the right to run.
+- **Teaches, in this order:** select 1/2/3 -> drag box-select -> **loot a crate** (hut) -> **B solo** (the Engineer scouts the crack, the others hold crouched) -> **B regroup** -> **the cold bites** (wind zone at the solo point; gust safety) -> **heat pack on the coldest operative** -> "Warmed up" -> **double-click sprint (unlocked)** -> T guard -> C / V / Z stances, Alt = squad -> vault a low ridge.
+- **Walk-and-talk:** `WT_A1_01-03` (beacon 1: "a fisherman's hut by the shore, worth a look ... walking pace"), `WT_A1_HUT` (in the hut: "a crate, fishermen always keep something warm in there"), `WT_A1_04-06` (beacon 2, the crack: the Engineer volunteers to scout = SOLO), `WT_A1_GUST` (the gust, Medic-Sapper), `WT_A1_NOPACK` (remedial radio, Engineer: no packs on us, back to the hut crate), `WT_A1_WARMED` (Commander: "Warmed up. Now we move fast — on the run the cold can't catch us." = sprint unlocked), `WT_A1_07-09` (beacon 3, formation), `WT_A1_10-12` (beacon 4, wind: get low).
+- **Hint cards in order (step ids in `demo_01_steps.json`):**
+  1. `A1_select` `TUT_A1_SELECT` (1/2/3 or click; `Select.Member`) -> `A1_box` `TUT_A1_BOX` (drag a box; `Select.Box`).
+  2. **Hut loot lesson** (volume `VOL_A1_HUT`): `A1_loot_open` `TUT_A1_LOOT_OPEN` ("click the crate"; done on `Loot.Open`) -> `A1_loot_take` `TUT_A1_LOOT_TAKE` ("take the heat packs"; done on event `ItemLooted.HeatPack`). Objective `OBJ_A1_HUT` "Search the fisherman's hut" from the A1 start, done on the same event.
+  3. `A1_solo` `TUT_A1_SOLO` at beacon 2 (`VOL_A1_BEACON2`; `Squad.Solo`) -> `A1_regroup` `TUT_A1_REGROUP` 6 s later (`Squad.Regroup`).
+  4. **Gust safety** `A1_gust` (walk-and-talk `WT_A1_GUST`): 20 s after solo started, ONLY if nobody has reached Chills (40 %), every operative gets +20 cold, at least 42 % (action `cold_bump`, data in the step: `amount` 20, `min_level` 42).
+  5. `A1_heatpack` `TUT_A1_HEATPACK` as soon as anyone is >= 40 % (condition trigger, armed by the solo card): names and marks the COLDEST operative ("{focus} is the coldest ... select him and press U, or drag a heat pack onto him in the inventory"); done on `ItemUsed.HEAT_PACK`, 90 s timeout. `A1_wt_nopack` plays if the squad carries no pack (skipped crate). `A1_heatpack_mate` `TUT_A1_HEATPACK_MATE` only if another operative is still >= 40 %.
+  6. `A1_wt_warmed` -> **sprint unlocked** -> `A1_sprint` `TUT_A1_SPRINT` ("Double-click to run. Running keeps you warm."; done on `Order.Sprint`).
+  7. Then as before: `A1_guard` `TUT_A1_GUARD` (after the run card), `A1_stance` `TUT_A1_STANCE` (beacon 4), `A1_vault` `TUT_A1_VAULT` (ridge).
+- **Setup:** beacons 1-5 (art + amber light); **the fisherman's hut** between beacon 1 and beacon 2 (shore side, ~10-15 m off the beacon line): interior with its own fixed-camera `ACameraZoneVolume` (Shelter x0.5), an `ALootCrateActor` inside (Contents: see below), a `TutorialTriggerVolume` `VOL_A1_HUT` filling the hut floor (Activated By: Any Operative); optional `TutorialMarkerActor` on the crate with Step Id `A1_loot_open`. **The crack** at beacon 2 with `VOL_A1_BEACON2` and, at the solo scout point 20 m off the line on the crack edge, a **wind `ACameraZoneVolume` x2.5** (camera switch off), ~12 x 12 m; optional marker with Step Id `A1_solo` on that spot. 3 pressure ridges (one `Vault` tag, 0.8 m high, 8 m long; `VOL_A1_RIDGE` / `VOL_A1_RIDGE_FAR`); `VOL_A1_BEACON3`, `VOL_A1_BEACON4`.
+- **Crate Contents (`LootCrateActor` -> Details -> CodexTactics|Loot -> Contents):** **Heat Packs = 3** (one per operative; the leader can carry 3 = `heat_pack_max_stack`), every other field 0 (Medkits, Canned Food, Bread, Chocolate, Matches, all Ammo, Firewood, Flares, Turrets, Barricades, Mines; Bonus ids empty), Trapped off. Why 3: the card targets the coldest operative, usually not the leader who looted, and a mate card can follow; with 1 pack the second card has nothing to use.
+- **Loadout:** level JSON `squad_loadout.heat_packs_count: 0` (new key, -1 = the role kit C1 / E1 / M2): the squad starts WITHOUT heat packs; the first come from the hut crate.
+- **Metrics:** corridor 130 x 30 m, beacons 25 m apart; solo scout point 20 m off the line (<= 26 m camera distance). Wind zone x2.5 at the scout point: the Engineer gains ~2 %/s there, the others ~0.8 %/s holding crouched -> Chills within ~20-25 s; the gust covers a player who avoids the zone.
+- **Cold:** Standard x1, the solo point x2.5 (wind). Sprint stays locked until `WT_A1_WARMED` (and the A2 beat start unlocks it as a safety).
+- **Success:** leader inside the camp volume. **Fail:** none (cold cannot kill before A2 at these rates; the heat pack lesson brings everyone back under 40 %).
+- **Checkpoint:** `CP_A1` at beacon 1 (beat start).
+- **~5 min**
 
-#### A2. The cold bites: barrel and heat pack
+#### A2. The cold bites: barrel
 - **Goal:** get everyone <= 30 % cold.
-- **Teaches:** read the cold bars / vignette; **move a barrel in exploration** (click barrel -> menu -> **Push** -> ghost -> click the spot, see §2.5) **into the wind shadow of hut 1** where the squad shelters; **light it with a match** (menu -> Light); warm zone 5.5 m; **U heat pack** (drag onto a mate in the drawer); crouch / prone slow the cold; **"too cold to lift" at 80 %** (send the warmest member).
-- **Walk-and-talk:** `WT_A2_01-04` fire on the first cold tier (event, gap G1 "cold tier changed"). Sokolova: "Fingers first, then the trigger finger." Commander: "Barrels by the huts. Fishermen kept fires." `WT_A2_05` Engineer: "Not out here in the wind. Roll it to the hut."
+- **Teaches:** read the cold bars / vignette; **move a barrel in exploration** (click barrel -> menu -> **Push** -> ghost -> click the spot, see §2.5) **into the wind shadow of hut 1** where the squad shelters; **light it with a match** (menu -> Light); warm zone 5.5 m; crouch / prone slow the cold; **"too cold to lift" at 80 %** (send the warmest member). The heat pack is taught in A1 now (rev 3); here only as a remedial card.
+- **Walk-and-talk:** `WT_A2_01-04` at the A2 beat start (no longer on the first cold tier: the cold tier is reached in A1 now). Sokolova: "Fingers first, then the trigger finger." Commander: "Barrels by the huts. Fishermen kept fires." `WT_A2_05` Engineer: "Not out here in the wind. Roll it to the hut."
 - **Hint cards:**
-  - `TUT_A2_COLDBAR` (first tier).
   - `TUT_A2_PUSH` (marker on barrel 1: "Click the barrel -> Push, then click where it should stand. Put it by the hut wall." Done on `RelocationDone` (E) with the barrel within 3 m of the hut-1 wall marker).
   - `TUT_A2_LIGHT` (done on barrel lit (E)).
-  - `TUT_A2_HEATPACK` (when one member is > 40 % and outside the 5.5 m disc; done on item used (X `OnItemUsed`)).
+  - `TUT_A2_HEATPACK` **remedial only**: after the light card, if someone is >= 60 % and the squad still carries a pack (focus on the coldest; done on item used).
   - `TUT_A2_TOOCOLD` (remedial, on the "too cold to lift" refusal: "Above 80 % cold nobody can lift. Send the warmest operative (1/2/3).").
+  - (`TUT_A2_COLDBAR` dropped: the cold bars are explained by the A1 heat-pack card.)
 - **Setup:**
   - Barrel 1 (unlit) at the **open ice edge, 10 m from hut 1**, in the wind (x1), and an amber floor decal "wind shadow" spot against hut 1's lee wall.
   - Barrel 2 (unlit) 6 m from barrel 1 (spare, second match).
-  - Matches 3 in the loadout (JSON `squad_loadout`); heat packs from the start kit (C1 / E1 / M2).
+  - Matches 3 in the loadout (JSON `squad_loadout`); heat packs: whatever is left from the A1 crate.
   - Hut 1: door **2.0 m** (the only hut a barrel may be pushed into: the barrel is 1.2 m wide); interior Shelter x0.5 + fixed camera (first building entry, see A3).
   - Optional: a `ACameraZoneVolume` **Shelter x0.5** (camera switch off) 4 x 6 m along the lee wall, so "by the wall" really is warmer.
 - **Metrics:** push distance 10 m (inside the 15 m radius; ~6 s of pushing). The lit barrel's 5.5 m disc must cover the lee-wall zone and the hut door; in the hut, 6 x 4 m, it covers the whole floor. It burns 35 s, enough to go from 50 % to 0 % at 8 %/s.
 - **Cold:** outside x1, lee wall x0.5, hut Shelter x0.5.
 - **Success:** barrel pushed and lit, all <= 30 %. **Fail:** none (spare barrel; heat packs; if the player lights it in place, the push card stays and the debrief notes "barrel push skipped").
-- **Checkpoint:** none (A1 is close).
+- **Checkpoint:** none (A1 is close). Beat start unlocks sprint (safety if A1 was cut short).
 - **~3 min**
 
 #### A3. Buildings: the leader scouts inside

@@ -227,6 +227,7 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	Config.SquadLoadout.M16Ammo = FMath::RoundToInt(LevelJsonNumber(Loadout, TEXT("m16_ammo"), 120.f));
 	Config.SquadLoadout.PistolAmmo = FMath::RoundToInt(LevelJsonNumber(Loadout, TEXT("pistol_ammo"), 48.f));
 	Config.SquadLoadout.GrenadesCount = FMath::RoundToInt(LevelJsonNumber(Loadout, TEXT("grenades_count"), -1.f));
+	Config.SquadLoadout.HeatPacksCount = FMath::RoundToInt(LevelJsonNumber(Loadout, TEXT("heat_packs_count"), -1.f));
 	OutConfig = MoveTemp(Config);
 	return true;
 }

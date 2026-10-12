@@ -48,4 +48,10 @@ namespace LoadoutRules
 	 * Clamped to MaxCarried.
 	 */
 	CODEXTACTICS_API int32 GrenadesFor(ELoadoutMode Mode, const FSquadLoadout& Loadout, int32 MaxCarried);
+
+	/**
+	 * Heat packs a starting operative spawns with (UE-only): the level's "heat_packs_count" when >= 0, else the role kit of
+	 * tactical_heat.json; both clamped to [0, MaxStack].
+	 */
+	CODEXTACTICS_API int32 StartingHeatPacks(int32 RoleKit, int32 LevelOverride, int32 MaxStack);
 }

@@ -2,20 +2,25 @@
   "_comment": [
     "Demo 01 'Frozen Lake' tutorial steps, beats A0-A2 + the A6 cover sample (docs/demo/DEMO01_BEAT_SHEET.md section 4). Read at runtime by UTutorialSubsystem",
     "(the level JSON 'demo': {'tutorial': true, 'tutorial_steps': 'demo_01_steps.json'} selects this file). Schema: HANDOFF section 6 'Tutorial'.",
-    "Texts are ids only (TUT_*, WT_*, OBJ_*): English text comes from the narrative manifest 'tutorial' section (TANDEM request #17);",
-    "until it exists the overlay shows '[EN missing: <id>]'. Command ids: Source/CodexTactics/Public/Core/PlayerCommands.h.",
+    "Texts are ids only (TUT_*, WT_*, OBJ_*): English text comes from the narrative manifest 'tutorial' section (TANDEM request #17), else",
+    "Content/Data/Tutorial/demo_01_texts_draft.json, else '[EN missing: <id>]'. Command ids: Source/CodexTactics/Public/Core/PlayerCommands.h.",
     "Volume ids (VOL_*) are the VolumeId / StepId of ATutorialTriggerVolume actors placed in L_Demo01_A_FrozenLake:",
-    "VOL_A0_BEACON1 (BeatId A1), VOL_A1_BEACON2, VOL_A1_BEACON3, VOL_A1_BEACON4, VOL_A1_RIDGE, VOL_A1_RIDGE_FAR, VOL_A2_CAMP (BeatId A2),",
-    "VOL_A6_FIELD (the A6 ridge field entrance). Cover events (raised when an operative SETTLES in a slot, not on the order):",
-    "CoverEntered (+ CoverEntered.High / .Low), CoverShimmy, CornerReached, CoverLeft; 'distinct_operatives': true counts each operative once."
+    "VOL_A0_BEACON1 (BeatId A1), VOL_A1_HUT (inside the fishing hut with the heat-pack crate), VOL_A1_BEACON2 (the crack: solo point), VOL_A1_BEACON3,",
+    "VOL_A1_BEACON4, VOL_A1_RIDGE, VOL_A1_RIDGE_FAR, VOL_A2_CAMP (BeatId A2), VOL_A6_FIELD (the A6 ridge field entrance).",
+    "A0-A1 order (user decision 2026-10-12): sprint is LOCKED from A0 (sprinting warms, so a sprinter would never meet the cold lesson) ->",
+    "camera -> beacon 1 -> select / box select -> hut: open the crate, take the heat packs (the squad starts with none: level JSON",
+    "squad_loadout.heat_packs_count 0) -> solo at the crack (wind zone + the gust safety) -> heat pack on the coldest -> 'Warmed up' -> sprint unlocked.",
+    "Cover events (raised when an operative SETTLES in a slot, not on the order): CoverEntered (+ .High / .Low), CoverShimmy, CornerReached, CoverLeft;",
+    "'distinct_operatives': true counts each operative once. Loot: command Loot.Open (crate opened), event ItemLooted.<Item> (ItemLooted.HeatPack).",
+    "Heat pack used: event ItemUsed.HEAT_PACK (U key and a pack dragged onto a cold mate). Locked command tried: event Tutorial.Locked.<CommandId>."
   ],
   "version": 1,
   "id": "demo_01_frozen_lake",
   "start_beat": "A0",
   "beats": [
-    { "id": "A0", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A0" },
+    { "id": "A0", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A0", "lock": ["Order.Sprint"] },
     { "id": "A1", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A1" },
-    { "id": "A2", "lesson": true, "checkpoint": false, "title_id": "TUT_BEAT_A2" },
+    { "id": "A2", "lesson": true, "checkpoint": false, "title_id": "TUT_BEAT_A2", "unlock": ["Order.Sprint"] },
     { "id": "A6", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A6" }
   ],
   "steps": [
@@ -38,6 +43,12 @@
       "id": "A0_obj_beacon", "beat": "A0", "kind": "objective", "text_id": "OBJ_A0_BEACON1",
       "trigger": { "type": "beat_start" },
       "complete": { "volume": "VOL_A0_BEACON1" }
+    },
+    {
+      "_comment": "Sprint is locked from the start (beat A0 'lock'): a double click walks. The first try puts one line in the message feed (no card slot needed).",
+      "id": "A0_nosprint", "beat": "A0", "kind": "feed", "text_id": "TUT_A0_NOSPRINT",
+      "trigger": { "type": "event", "event": "Tutorial.Locked.Order.Sprint" },
+      "lines": [ { "speaker": "Commander", "text_id": "TUT_A0_NOSPRINT" } ]
     },
     {
       "_comment": "Camera lesson, STAGED (user feedback 2026-10-12): pan -> turn with Q/E -> free look with the mouse -> zoom -> move. No timeout: each card waits for the real input (skippable). hold_s = accumulated time the continuous input was active while the card was shown.",
@@ -77,25 +88,48 @@
       "complete": { "volume": "VOL_A2_CAMP" }
     },
     {
-      "id": "A1_wt_sprint", "beat": "A1", "kind": "walk_talk",
+      "id": "A1_obj_hut", "beat": "A1", "kind": "objective", "text_id": "OBJ_A1_HUT",
+      "trigger": { "type": "beat_start" },
+      "complete": { "event": "ItemLooted.HeatPack" }
+    },
+    {
+      "id": "A1_wt_start", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "beat_start" },
       "lines": [
-        { "speaker": "Commander", "text_id": "WT_A1_01" },
-        { "speaker": "Engineer", "text_id": "WT_A1_02" },
+        { "speaker": "Engineer", "text_id": "WT_A1_01" },
+        { "speaker": "Commander", "text_id": "WT_A1_02" },
         { "speaker": "Medic-Sapper", "text_id": "WT_A1_03" }
       ]
     },
     {
-      "id": "A1_sprint", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SPRINT",
-      "keys": ["Order.Sprint"],
+      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
+      "keys": ["Select.Member"],
       "trigger": { "type": "beat_start", "delay_s": 3 },
-      "complete": { "commands": ["Order.Sprint"], "timeout_s": 25 }
+      "complete": { "commands": ["Select.Member"], "timeout_s": 30 }
     },
     {
-      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
-      "keys": ["Select.Member", "Select.Box"],
-      "trigger": { "type": "after_step", "step": "A1_sprint" },
-      "complete": { "commands": ["Select.*"], "timeout_s": 30 }
+      "id": "A1_box", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_BOX",
+      "keys": ["Select.Box"],
+      "trigger": { "type": "after_step", "step": "A1_select" },
+      "complete": { "commands": ["Select.Box"], "timeout_s": 30 }
+    },
+    {
+      "_comment": "Loot lesson in the fishing hut (user decision 2026-10-12): the squad starts without heat packs; the hut crate holds them.",
+      "id": "A1_wt_hut", "beat": "A1", "kind": "walk_talk",
+      "trigger": { "type": "volume", "volume": "VOL_A1_HUT" },
+      "lines": [ { "speaker": "Engineer", "text_id": "WT_A1_HUT" } ]
+    },
+    {
+      "id": "A1_loot_open", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_LOOT_OPEN",
+      "keys": ["Loot.Open"],
+      "trigger": { "type": "volume", "volume": "VOL_A1_HUT" },
+      "complete": { "commands": ["Loot.Open"], "timeout_s": 60 }
+    },
+    {
+      "id": "A1_loot_take", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_LOOT_TAKE",
+      "keys": ["Loot.Take"],
+      "trigger": { "type": "after_step", "step": "A1_loot_open" },
+      "complete": { "event": "ItemLooted.HeatPack", "timeout_s": 60 }
     },
     {
       "id": "A1_wt_scout", "beat": "A1", "kind": "walk_talk",
@@ -108,7 +142,7 @@
     },
     {
       "id": "A1_solo", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SOLO",
-      "keys": ["Squad.Solo"],
+      "keys": ["Select.Member", "Squad.Solo"],
       "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
       "complete": { "commands": ["Squad.Solo"], "timeout_s": 45 }
     },
@@ -117,6 +151,47 @@
       "keys": ["Squad.Regroup"],
       "trigger": { "type": "after_step", "step": "A1_solo", "delay_s": 6 },
       "complete": { "commands": ["Squad.Regroup"], "timeout_s": 60 }
+    },
+    {
+      "_comment": "Tutorial safety: 20 s after solo started, if nobody is at Chills (40 %) yet - e.g. the player kept out of the wind zone - a scripted gust: the line + every operative +20 cold, at least 42 % so the heat-pack lesson always starts.",
+      "id": "A1_gust", "beat": "A1", "kind": "walk_talk",
+      "trigger": { "type": "after_step", "step": "A1_solo", "delay_s": 20 },
+      "condition": { "stat": "squad_cold_max", "below": 40 },
+      "action": { "type": "cold_bump", "amount": 20, "min_level": 42 },
+      "lines": [ { "speaker": "Medic-Sapper", "text_id": "WT_A1_GUST" } ]
+    },
+    {
+      "id": "A1_heatpack", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HEATPACK",
+      "keys": ["Item.HeatPack"], "focus": "coldest_operative",
+      "trigger": { "type": "condition", "requires": ["A1_solo"] },
+      "condition": { "stat": "squad_cold_max", "at_least": 40 },
+      "complete": { "event": "ItemUsed.HEAT_PACK", "timeout_s": 90 }
+    },
+    {
+      "_comment": "Remedial: the heat-pack card is up but nobody carries a pack (the crate was skipped) -> a radio line sends them back to the hut.",
+      "id": "A1_wt_nopack", "beat": "A1", "kind": "radio",
+      "trigger": { "type": "condition", "requires": ["A1_heatpack"] },
+      "condition": { "stat": "squad_heat_packs", "below": 1 },
+      "lines": [ { "speaker": "Engineer", "text_id": "WT_A1_NOPACK" } ]
+    },
+    {
+      "id": "A1_heatpack_mate", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HEATPACK_MATE",
+      "keys": ["Item.HeatPack"], "focus": "coldest_operative",
+      "trigger": { "type": "after_step", "step": "A1_heatpack", "delay_s": 1 },
+      "condition": { "stat": "squad_cold_max", "at_least": 40 },
+      "complete": { "event": "ItemUsed.HEAT_PACK", "timeout_s": 40 }
+    },
+    {
+      "id": "A1_wt_warmed", "beat": "A1", "kind": "walk_talk",
+      "trigger": { "type": "after_step", "step": "A1_heatpack_mate", "delay_s": 1 },
+      "unlock": ["Order.Sprint"],
+      "lines": [ { "speaker": "Commander", "text_id": "WT_A1_WARMED" } ]
+    },
+    {
+      "id": "A1_sprint", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SPRINT",
+      "keys": ["Order.Sprint"],
+      "trigger": { "type": "after_step", "step": "A1_wt_warmed" },
+      "complete": { "commands": ["Order.Sprint"], "timeout_s": 30 }
     },
     {
       "id": "A1_wt_regroup", "beat": "A1", "kind": "walk_talk",
@@ -130,7 +205,7 @@
     {
       "id": "A1_guard", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_GUARD",
       "keys": ["Squad.Guard"],
-      "trigger": { "type": "after_step", "step": "A1_regroup", "delay_s": 2 },
+      "trigger": { "type": "after_step", "step": "A1_sprint", "delay_s": 2 },
       "complete": { "commands": ["Squad.Guard"], "timeout_s": 15 }
     },
     {
@@ -162,18 +237,13 @@
     },
     {
       "id": "A2_wt_cold", "beat": "A2", "kind": "walk_talk",
-      "trigger": { "type": "event", "event": "ColdTier" },
+      "trigger": { "type": "beat_start", "delay_s": 1 },
       "lines": [
         { "speaker": "Medic-Sapper", "text_id": "WT_A2_01" },
         { "speaker": "Commander", "text_id": "WT_A2_02" },
         { "speaker": "Medic-Sapper", "text_id": "WT_A2_03" },
         { "speaker": "Commander", "text_id": "WT_A2_04" }
       ]
-    },
-    {
-      "id": "A2_coldbar", "beat": "A2", "kind": "hint_card", "text_id": "TUT_A2_COLDBAR",
-      "trigger": { "type": "event", "event": "ColdTier" },
-      "complete": { "timeout_s": 12 }
     },
     {
       "id": "A2_push", "beat": "A2", "kind": "hint_card", "text_id": "TUT_A2_PUSH",
@@ -193,10 +263,12 @@
       "complete": { "event": "BarrelLit", "timeout_s": 60 }
     },
     {
+      "_comment": "Remedial only (the heat pack is taught in A1): someone is very cold again after the barrel lesson and the squad still has a pack.",
       "id": "A2_heatpack", "beat": "A2", "kind": "hint_card", "text_id": "TUT_A2_HEATPACK",
-      "keys": ["Item.HeatPack"],
-      "trigger": { "type": "after_step", "step": "A2_light", "delay_s": 3 },
-      "complete": { "commands": ["Item.HeatPack"], "timeout_s": 40 }
+      "keys": ["Item.HeatPack"], "focus": "coldest_operative",
+      "trigger": { "type": "condition", "requires": ["A2_light"] },
+      "condition": [ { "stat": "squad_cold_max", "at_least": 60 }, { "stat": "squad_heat_packs", "at_least": 1 } ],
+      "complete": { "event": "ItemUsed.HEAT_PACK", "timeout_s": 30 }
     },
     {
       "id": "A2_toocold", "beat": "A2", "kind": "hint_card", "text_id": "TUT_A2_TOOCOLD",

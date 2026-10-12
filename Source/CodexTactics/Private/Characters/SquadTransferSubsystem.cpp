@@ -8,6 +8,7 @@
 #include "Interactables/DroppedItemActor.h"
 #include "Interactables/ItemStashComponent.h"
 #include "Interactables/LootCrateActor.h"
+#include "Core/PlayerCommands.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "EngineUtils.h"
@@ -597,6 +598,11 @@ int32 USquadTransferSubsystem::Execute(const FTransferRequest& InRequest)
 			bPile ? TEXT("on the ground") : TEXT("in the crate")) : FString();
 		Post(Operative->DisplayName, bPile ? FString::Printf(TEXT("Picked up: %s x%d.%s"), *Name, Result.Moved, *Left)
 			: FString::Printf(TEXT("📦 Took from the crate: %s x%d.%s"), *Name, Result.Moved, *Left));
+		if (const UEnum* ItemEnum = StaticEnum<ETransferItem>())
+		{
+			GameplayEvents::RaiseItemLooted(this, Operative, Container, FName(*ItemEnum->GetNameStringByValue(static_cast<int64>(InRequest.Item))),
+				Result.Moved);
+		}
 		return Result.Moved;
 	}
 	}

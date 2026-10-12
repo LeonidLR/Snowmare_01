@@ -331,6 +331,8 @@ namespace GameplayEvents
 	const FName VehicleDriveStarted(TEXT("VehicleDriveStarted"));
 	const FName VehicleArrived(TEXT("VehicleArrived"));
 	const FName VehiclePathBlocked(TEXT("VehiclePathBlocked"));
+	const FName TutorialLocked(TEXT("Tutorial.Locked"));
+	const FName ItemLooted(TEXT("ItemLooted"));
 
 	void Raise(const UObject* WorldContext, FName EventName, AActor* Subject)
 	{
@@ -367,6 +369,24 @@ namespace GameplayEvents
 			Bus->OnGameplayEvent.Broadcast(EventName, Filled.Subject);
 			Bus->OnGameplayEventDetailed.Broadcast(EventName, Filled);
 		}
+	}
+
+	void RaiseItemLooted(const UObject* WorldContext, AActor* Collector, AActor* Container, FName ItemKind, int32 Count)
+	{
+		if (Count <= 0 || ItemKind.IsNone())
+		{
+			return;
+		}
+		FGameplayEventContext Context;
+		Context.Subject = Collector;
+		Context.Target = Container;
+		Context.Kind = ItemKind;
+		if (Container)
+		{
+			Context.Location = Container->GetActorLocation();
+		}
+		RaiseWithContext(WorldContext, ItemLooted, Context);
+		RaiseWithContext(WorldContext, FName(*(ItemLooted.ToString() + TEXT(".") + ItemKind.ToString())), Context);
 	}
 }
 

@@ -457,7 +457,23 @@ through `ACodexTacticsHUD::GodotColor` (sRGB → linear) in UMG and canvas.
 - **Demo game-mode flags** `Core/DemoModeSubsystem` + `FDemoModeSettings` (level JSON `"demo"` object, `LevelJsonRules::ParseDemoSettings`):
   Panic off on every operative, vision cones forced on / off on operatives and enemies (also later spawns), tutorial on + steps file,
   demo HUD preset (`ACodexTacticsHUD::bDemoHudPreset`: debug squad panel and operative labels hidden). No `"demo"` object = no change.
-- Tests `CodexTactics.Tutorial.*` (9), smoke `TutorialSmoke` (exclusive), `SaveRoundTripSmoke` covers the "tutorial" save section.
+- **Command locks / conditions / actions (2026-10-12, Demo 01 A0-A1 redesign):** beats and steps carry `lock` / `unlock`
+  (command id patterns; beat: on start, step: when shown or, never shown, when finished) -> `FTutorialStateMachine::IsCommandLocked`
+  / `GetLocks` (saved as `"locks"` in the save's tutorial section; older saves rebuild them). The lock choke point for order handlers is
+  `UTutorialSubsystem::CheckCommandLocked` / `FilterCommand` (`TutorialRules::ResolveLockedCommand`: a locked `Order.Sprint` degrades
+  to `Order.Move`, other locked ids are refused) - used by `ACodexTacticsPlayerController::HandleWorldHit` (double click on the ground /
+  on an object); a refusal raises `Tutorial.Locked` + `Tutorial.Locked.<CommandId>` (no error line). Tutorial OFF / no steps = no locks.
+  Trigger `condition` (polled each tick) + step `condition` clauses (`squad_cold_max` / `squad_cold_min` / `leader_cold` /
+  `squad_heat_packs`, `UTutorialSubsystem::GetConditionStat` via `FTutorialStateMachine::StatProvider`; a due step whose condition
+  fails is skipped silently, followers go on), `trigger.requires` (arming steps), step `actions` (`cold_bump`:
+  `UColdSurvivalComponent::AddColdShock` = `ColdRules::ApplyColdShock`, run when shown), `focus: coldest_operative` (card names / marks
+  him, `{focus}` token, `FTutorialCardView::FocusOperative`), kind `feed` (message-feed line, no slot, completes at once). New event
+  `ItemLooted` + `ItemLooted.<Item>` (`GameplayEvents::RaiseItemLooted`; `ALootCrateActor::TakeItem` = click / Take all, and the
+  crate / pile drag in `USquadTransferSubsystem`). Level JSON `squad_loadout.heat_packs_count` (`FSquadLoadout::HeatPacksCount`,
+  `LoadoutRules::StartingHeatPacks`, applied at spawn by the game mode; -1 = the tactical_heat.json role kit).
+- Tests `CodexTactics.Tutorial.*` (9 + 8: `Lock.Rules`, `Lock.Schema`, `Lock.LockUnlock`, `Lock.Saved`, `Action.GustTimeout`,
+  `Condition.Trigger`, `Schema.DemoFileA0A1Flow`, `Demo.HeatPackLoadout`), smoke `TutorialSmoke` (exclusive; now also runs the real
+  demo file A0 -> A1), `SaveRoundTripSmoke` covers the "tutorial" save section.
 
 **Vehicles (APC BTR-82, phases P0 + P1, 2026-10-12, UE-only; design `docs/vehicles/APC_00..02`)** — kinematic, nav-driven
 (approach B, no Chaos). `Vehicles/VehicleRules` (pure: seats `AssignSeats` Engineer driver / Commander gunner / anyone if absent, 7
@@ -503,7 +519,18 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 ### Tutorial: how the user places volumes / markers and edits steps (Demo 01, 2026-10-11)
 
-**Draft texts:** `Content/Data/Tutorial/demo_01_texts_draft.json` supplies placeholder texts for ids missing from the narrative manifest (A0 now); replace by the sheet (request #17) and delete entries as the manifest gains them.
+**Draft texts:** `Content/Data/Tutorial/demo_01_texts_draft.json` supplies placeholder texts for ids missing from the narrative manifest (A0, A1 and the A2 heat-pack card since 2026-10-12); replace by the sheet (request #17) and delete entries as the manifest gains them.
+
+**Demo 01 A0-A1 (2026-10-12) - what the user places in `L_Demo01_A_FrozenLake`:** (1) `VOL_A0_BEACON1` (Beat Id `A1`) at beacon 1
+(as before). (2) The **fisherman's hut** between beacon 1 and beacon 2, shore side ~10-15 m off the beacon line: its interior
+`ACameraZoneVolume` (fixed camera, Environment Shelter x0.5), an **`ALootCrateActor`** inside with Contents **Heat Packs 3** and every
+other count 0 (Medkits, Canned Food, Bread, Chocolate, Matches, all Ammo, Firewood, Flares, Turrets, Barricades, Mines; bonus ids empty;
+not trapped), a **`TutorialTriggerVolume` Volume Id `VOL_A1_HUT`** covering the hut floor (Activated By: Any Operative), optional
+`TutorialMarkerActor` on the crate with Step Id `A1_loot_open`. (3) `VOL_A1_BEACON2` at the crack (as before) and, at the solo scout
+point ~20 m off the line on the crack edge, a **wind `ACameraZoneVolume`** Cold Multiplier **2.5** (camera switch off), ~12 x 12 m;
+optional marker with Step Id `A1_solo` there. No extra solo volume is needed (the gust timer starts when solo is pressed). (4) The
+rest as before (`VOL_A1_BEACON3/4`, `VOL_A1_RIDGE` / `_FAR`, `VOL_A2_CAMP` Beat Id `A2`). The level JSON already has
+`squad_loadout.heat_packs_count: 0` (the squad starts without heat packs).
 
 1. **Turn it on for a level**: in its level JSON (`Content/Data/LevelJson/<level>.json`) add
    `"demo": { "panic": false, "vision_cones": true, "tutorial": true, "tutorial_steps": "demo_01_steps.json", "hud": "demo" }`
@@ -522,7 +549,22 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
    Step: `{ "id", "beat", "kind": hint_card | objective | radio | walk_talk, "text_id", "keys": [command ids or literal keys],
    "trigger": { "type": manual | beat_start | volume | event | after_step | first_use | failure_retry, "volume", "event", "step",
    "command", "count", "delay_s" }, "complete": { "commands": [...], "count", "hold_s", "event", "distinct_operatives", "volume", "timeout_s" }, "once", "skippable",
-   "blocking" (always false), "lines": [ { "speaker", "text_id", "duration_s" } ] }`. No trigger = `beat_start`. Patterns:
+   "blocking" (always false), "lines": [ { "speaker", "text_id", "duration_s" } ] }`. No trigger = `beat_start`.
+   **2026-10-12 additions (Demo 01 A0-A1 redesign):** kind `feed` (its line(s) go to the message feed at once, no display slot,
+   completes immediately: short reactions while a card / speech is up). Beat and step `"lock": [...]` / `"unlock": [...]` (command id
+   patterns, `"*"` = all; beat: at its start; step: when shown, or when it finishes without showing; unlock first, then lock): a
+   locked `Order.Sprint` walks, the try raises `Tutorial.Locked` / `Tutorial.Locked.Order.Sprint` (trigger a hint with
+   `{"type": "event", "event": "Tutorial.Locked.Order.Sprint"}`); saved with the progress; tutorial OFF = no locks. Trigger type
+   `condition` + `"trigger.requires": [step ids]` (the trigger counts only after those steps were triggered; works for every trigger
+   type) + step `"condition": {"stat": ..., "at_least" | "below": N}` (or an array = AND; stats `squad_cold_max`, `squad_cold_min`,
+   `leader_cold`, `squad_heat_packs`): for a `condition` trigger it fires the step; on any step it is re-checked when the step is due
+   (after `delay_s`) and a failed check skips it silently (its `after_step` followers still fire). Step `"action": {"type":
+   "cold_bump", "amount": 20, "min_level": 42}` (or `"actions": [...]`): run when the step is SHOWN (a walk-and-talk waits for the
+   speech slot). Step `"focus": "coldest_operative"`: the card / feed text may use `{focus}` (his name), he gets a floating
+   "COLDEST" line, `FTutorialCardView::FocusOperative / FocusName` for the WBP. Unknown stat / action / focus, a `condition`
+   trigger without a condition and `requires` naming an unknown step are parse ERRORS. Events for loot: `Loot.Open` (command, crate
+   window opened), `ItemLooted` / `ItemLooted.<Item>` (`HeatPack`, `Medkit`, ... - taken into an operative's kit); heat pack used:
+   `ItemUsed.HEAT_PACK`. Patterns:
    exact, `"Prefix.*"`, `"*"`. `"distinct_operatives": true` (2026-10-12): each operative's event counts once, so `count` = how many
    different operatives must do it ("put each operative into cover": `{"event": "CoverEntered", "count": 3, "distinct_operatives": true}`;
    "enter cover 4 times": `{"event": "CoverEntered", "count": 4}`). **`hold_s` (2026-10-12):** accumulated seconds a CONTINUOUS command was
@@ -1387,6 +1429,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 ## 10. Change log (newest first)
 
 | Commit | What |
+| (this, agents/tutA1) | **Demo 01 A0-A1 redesign (user decision 2026-10-12): sprint locked until warmed up, hut loot lesson, heat pack in A1, gust safety.** Generic tutorial command locks (beat / step `lock` / `unlock`, saved as `"locks"`, rebuilt for old saves; `UTutorialSubsystem::CheckCommandLocked` / `FilterCommand`, `TutorialRules::ResolveLockedCommand`: locked sprint -> walk in `HandleWorldHit` (ground + object double click), event `Tutorial.Locked(.<Id>)`), trigger `condition` + `requires`, step `condition` (skip when due and false), step `actions` (`cold_bump` -> new `UColdSurvivalComponent::AddColdShock` / `ColdRules::ApplyColdShock`), `focus: coldest_operative` (`{focus}`, card view `FocusOperative`), kind `feed`; `ProcessTransitions` drains follow-ups; inputs (commands / events / volumes) now only count for steps already running when they arrive (a follower started by a completion no longer takes the same heat pack). New event `ItemLooted(.<Item>)` (crate take / Take all / crate-pile drag). Level JSON `squad_loadout.heat_packs_count` (`LoadoutRules::StartingHeatPacks`, game-mode spawn; demo = 0; Wave Editor type). `demo_01_steps.json` A0-A2 rewritten (A0 lock + `A0_nosprint` feed; A1 select -> box -> hut loot `VOL_A1_HUT` -> solo -> regroup -> `A1_gust` -> `A1_heatpack` (coldest) / `A1_wt_nopack` / `A1_heatpack_mate` -> `A1_wt_warmed` unlock -> `A1_sprint` -> guard / stance / vault; A2 unlock safety, `A2_wt_cold` on beat start, `A2_coldbar` dropped, `A2_heatpack` remedial); drafts for all A1 ids; beat sheet rev 3; controller mouse position zero-initialised (deterministic headless double click). Tests `CodexTactics.Tutorial.Lock.* / Action.GustTimeout / Condition.Trigger / Schema.DemoFileA0A1Flow / Demo.HeatPackLoadout`; `TutorialSmoke` extended (real demo file A0 -> A1). Verified: build, `test.ps1 -Changed` (123 unit tests, 37 smokes PASS; LevelWaveSmoke = the known flaky wave-2 spawn spacing, passed alone on the third run; SniperSmoke passed on its re-run), SoloRejoin / WarmIdle smokes PASS, Jev audit PASS. |
 | (this, agents/camlesson) | **Staged camera lesson (user feedback 2026-10-12: WASD alone finished the camera card).** `Camera.Pan` / `Camera.Rotate` split into `Camera.Pan.Keys / .Edge / .Drag`, `Camera.Rotate.Keys / .Mouse` (+ `Camera.Zoom`), reported from the real handlers (`ATacticalCameraPawn::UpdatePan / UpdateRotation`, `ACodexTacticsPlayerController` Q/E, RMB / MMB drag start, wheel); continuous ones report once per action + `PlayerCommands::ReportHold` ticks. New completion `hold_s` (see §6 Tutorial). Beat A0 = four sequential cards (pan -> Q/E -> mouse look -> zoom) then `A0_move`, no timeout; draft texts `TUT_A0_CAM_*` replace `TUT_A0_CAMERA` (TANDEM #17 ids updated). Tests `CodexTactics.Tutorial.Commands.MultiSegmentWildcard`, `.StateMachine.HoldSeconds`, `.HoldOnlyWhileShown`, `.Schema.DemoFile` (four-stage order); `FrontendControlsTest` ids; `TutorialSmoke` drives the four stages with real `InputKey`. |
 | (this, agents/work) | **Weather idle poses (user request + fire-role design 2026-10-12).** Pack `/Game/90+_Weather_Animations` (junction in agents) Cold sets IK-retargeted (M4 `RTG_UE5Manny_UE4Manny`, Blend to Source off in memory) to `Content/Characters/Operatives/Anims/Weather/Male|Female` by `Scripts/Editor/setup_operative_weather_animation.py`, which also fills the new `UOperativeAnimInstance` class defaults (ColdIdle / HandWarm / SitWarm x Male / Female; ABP_Operative backed up to `Saved/Backups/weather_anim_*`; graph untouched). New `Survival/WarmIdleRules` (exploration-only gate, interrupts, solo pose, fire roles by cold, rings / slot pick / facing, gender, clip sequence, exit style), `UWarmIdleSubsystem` (decisions at 10 Hz, spots on the NavMesh, walks, facing, per-operative order serial), anim layer `OperativeAnimInstanceWarmIdle.cpp` (FullBodySlot, End / blend-out, weapon hidden; the sniper idle yields), `AOperativeCharacter::GetMoveOrderSerial / GetLastAttackedTime / WarmSpotSource`, `URelocationSubsystem::HasActiveTask`, follower hold in `USquadSubsystem::UpdateFollower`, `FColdEnvironment::HeatWarmthMultiplier` (combat x0.5). Tuning keys in `tactical_heat.json`. Tests `CodexTactics.Survival.WarmIdle.*` (8), smoke `WarmIdleSmoke [shot]` (test_map rule `warm-idle`); TacticalHeat / Barrel / Knockdown / Movement / SoloRejoin / Tutorial / Sniper / Cold smokes pass. Section 6 «Weather idle poses». |
 | (this, agents/apc) | **APC BTR-82 phases P0 + P1 (user decisions 2026-10-12, `docs/vehicles/APC_00..02`).** P0: `Config/DefaultEngine.ini` two nav agents (Default = the former implicit 35 / 144, infantry unchanged; Vehicle 200 / 300, step 40, `bCanFly=True`), opt-in vehicle navmesh per bounds volume (tag `VehicleNav`), `NavArea_NoVehicle`, `AVehiclePawn` (kinematic on the Vehicle navmesh: pure pursuit without corner cutting, 7 m turning radius, K-turn, auto reverse, pawn sweep, ground conform; hull box = blocking + cover; parked footprint carves the infantry navmesh; vendor ABP variables by name; cabin heat; engine noise for patrols), `Scripts/Editor/setup_apc_vehicle.py` (BP_APC_BTR82 NOT created: the user's editor had the main project open). P1: `UVehicleSubsystem` (Y / Alt + Y board / get out, seats Engineer driver / Commander gunner, exits away from threats into cover at the hull, blocked exits refused, drive clicks, save `world_state.vehicles`), controller (drive clicks, the APC click stays cover, TB entry refused while aboard), the IsMounted list (§5 «Vehicles»), commands / events / F1 «Vehicles», action bar BOARD / EXIT, tutorial volume «Activated By: Vehicle». Tests `CodexTactics.Vehicle.*` (10), `VehicleSmoke` (+ every operative / enemy archetype resolves to the infantry navmesh); `ControlsScreenSmoke` / `FrontendControlsTest` expect the 8th section. Verified: build, 384 / 384 unit tests, `test.ps1 -Changed` 65 smokes (LevelWaveSmoke 87 % vs 90 % "on the move" under parallel load, PASS alone; ControlsScreenSmoke fixed for the new section) + RealtimeSelect / HordeIntro / CommanderMode / LevelWave / ControlsScreen / VehicleSmoke PASS, `-CheckMap` OK, Jev audit PASS. How to place it / L_VehicleTest: §6 «APC». |

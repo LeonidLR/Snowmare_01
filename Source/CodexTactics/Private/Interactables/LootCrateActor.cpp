@@ -1,4 +1,5 @@
 #include "Interactables/LootCrateActor.h"
+#include "Core/PlayerCommands.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
 #include "Components/BoxComponent.h"
@@ -267,6 +268,11 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 	default: Collector->AddAmmo(AmmoKey(Item).ToString(), Count); break;
 	}
 	UpdateVisuals();
+	// Tutorial / tools: "ItemLooted" + "ItemLooted.<Item>" (the A1 heat-pack loot lesson completes on ItemLooted.HeatPack).
+	if (const UEnum* ItemEnum = StaticEnum<ELootItem>())
+	{
+		GameplayEvents::RaiseItemLooted(this, Collector, this, FName(*ItemEnum->GetNameStringByValue(static_cast<int64>(Item))), Count);
+	}
 	return TakeLine(Item, Count, Id);
 }
 

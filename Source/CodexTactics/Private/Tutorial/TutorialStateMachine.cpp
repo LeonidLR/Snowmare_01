@@ -18,6 +18,7 @@ void FTutorialStateMachine::ResetProgress()
 	RemedialCooldownLeft = 0.f;
 	UsedCommands.Reset();
 	Transitions.Reset();
+	Locks.Reset();
 }
 
 int32 FTutorialStateMachine::IndexOf(FName StepId) const
@@ -39,6 +40,73 @@ bool FTutorialStateMachine::CanTrigger(int32 Index) const
 	return TutorialRules::IsFinished(State.State) && !Data.Steps[Index].bOnce;
 }
 
+bool FTutorialStateMachine::IsArmed(int32 Index) const
+{
+	if (!Data.Steps.IsValidIndex(Index))
+	{
+		return false;
+	}
+	for (const FName Required : Data.Steps[Index].Trigger.Requires)
+	{
+		const int32 RequiredIndex = IndexOf(Required);
+		if (!Runtime.IsValidIndex(RequiredIndex)
+			|| (Runtime[RequiredIndex].State == ETutorialStepState::Idle && !Runtime[RequiredIndex].bEverFinished))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+float FTutorialStateMachine::ReadStat(FName Stat) const
+{
+	return StatProvider ? StatProvider(Stat) : 0.f;
+}
+
+bool FTutorialStateMachine::AreConditionsMet(int32 Index) const
+{
+	return TutorialRules::IsConditionMet(Data.Steps[Index].Conditions, [this](FName Stat) { return ReadStat(Stat); });
+}
+
+void FTutorialStateMachine::ApplyStepLocks(int32 Index)
+{
+	FRuntime& State = Runtime[Index];
+	if (State.bLocksApplied)
+	{
+		return;
+	}
+	State.bLocksApplied = true;
+	const FTutorialStep& Step = Data.Steps[Index];
+	TutorialRules::ApplyLockChanges(Locks, Step.Lock, Step.Unlock);
+}
+
+TArray<bool> FTutorialStateMachine::RunningSnapshot() const
+{
+	TArray<bool> Out;
+	Out.Reserve(Runtime.Num());
+	for (const FRuntime& State : Runtime)
+	{
+		Out.Add(TutorialRules::IsRunning(State.State));
+	}
+	return Out;
+}
+
+bool FTutorialStateMachine::IsCommandLocked(FName CommandId) const
+{
+	return TutorialRules::IsCommandLocked(Locks, CommandId);
+}
+
+void FTutorialStateMachine::PollConditionTriggers()
+{
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		if (Data.Steps[Index].Trigger.Type == ETutorialTriggerType::Condition && CanTrigger(Index) && IsArmed(Index) && AreConditionsMet(Index))
+		{
+			Fire(Index);
+		}
+	}
+}
+
 void FTutorialStateMachine::SetState(int32 Index, ETutorialStepState NewState, bool bSilent)
 {
 	FRuntime& State = Runtime[Index];
@@ -58,9 +126,9 @@ void FTutorialStateMachine::SetState(int32 Index, ETutorialStepState NewState, b
 	State.StateSeconds = 0.f;
 }
 
-void FTutorialStateMachine::Fire(int32 Index)
+void FTutorialStateMachine::Fire(int32 Index, bool bForce)
 {
-	if (!CanTrigger(Index))
+	if (!CanTrigger(Index) || (!bForce && !IsArmed(Index)))
 	{
 		return;
 	}
@@ -80,6 +148,7 @@ void FTutorialStateMachine::Fire(int32 Index)
 	State.HeldSeconds = 0.f;
 	State.TriggerHits = 0;
 	State.CountedSubjects.Reset();
+	State.bLocksApplied = false;
 	if (Step.Trigger.DelaySeconds > 0.f)
 	{
 		State.DelayLeft = Step.Trigger.DelaySeconds;
@@ -92,6 +161,12 @@ void FTutorialStateMachine::Fire(int32 Index)
 void FTutorialStateMachine::Enqueue(int32 Index)
 {
 	SetState(Index, ETutorialStepState::Queued);
+	if (!AreConditionsMet(Index))
+	{
+		// Due but its condition does not hold (e.g. the gust when someone is already cold): skipped silently, followers go on.
+		Finish(Index, ETutorialStepState::Skipped);
+		return;
+	}
 	Queue.AddUnique(Index);
 	PumpQueues();
 }
@@ -99,6 +174,7 @@ void FTutorialStateMachine::Enqueue(int32 Index)
 void FTutorialStateMachine::Activate(int32 Index)
 {
 	Queue.Remove(Index);
+	ApplyStepLocks(Index);
 	SetState(Index, ETutorialStepState::Active);
 }
 
@@ -116,6 +192,7 @@ void FTutorialStateMachine::Finish(int32 Index, ETutorialStepState FinalState)
 		CardBreatherLeft = CardBreatherSeconds;
 	}
 	Runtime[Index].bEverFinished = true;
+	ApplyStepLocks(Index); // a step that never showed still applies its locks (never lost)
 	SetState(Index, FinalState, /*bSilent*/ !bWasActive);
 	const FName FinishedId = Step.Id;
 	for (int32 Other = 0; Other < Data.Steps.Num(); ++Other)
@@ -172,6 +249,7 @@ void FTutorialStateMachine::PumpQueues()
 		{
 		case ETutorialStepKind::HintCard: bCardActive = true; break;
 		case ETutorialStepKind::Objective: ++ActiveObjectives; break;
+		case ETutorialStepKind::Feed: break;
 		default: bSpeechActive = true; break;
 		}
 	}
@@ -193,6 +271,9 @@ void FTutorialStateMachine::PumpQueues()
 				Activate(Index);
 				++ActiveObjectives;
 			}
+			break;
+		case ETutorialStepKind::Feed:
+			Activate(Index); // no slot: the runtime posts the line and completes it at once
 			break;
 		default:
 			if (!bSpeechActive)
@@ -223,9 +304,11 @@ void FTutorialStateMachine::HandleCommand(FName CommandId)
 	{
 		return;
 	}
+	// Only steps already running when this input came count it (a follower started by a completion must not take the same input).
+	const TArray<bool> WasRunning = RunningSnapshot();
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 	{
-		if (TutorialRules::IsRunning(Runtime[Index].State) && TutorialRules::CountsCommand(Data.Steps[Index], CommandId))
+		if (WasRunning[Index] && TutorialRules::IsRunning(Runtime[Index].State) && TutorialRules::CountsCommand(Data.Steps[Index], CommandId))
 		{
 			AddProgress(Index, 1, Data.Steps[Index].Complete.Count);
 		}
@@ -252,10 +335,12 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId)
 	{
 		return;
 	}
+	// Only steps already running when this input came count it (a follower started by a completion must not take the same input).
+	const TArray<bool> WasRunning = RunningSnapshot();
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 	{
 		const FTutorialCompletion& Complete = Data.Steps[Index].Complete;
-		if (TutorialRules::IsRunning(Runtime[Index].State) && !Complete.Event.IsEmpty() && TutorialRules::MatchesName(Complete.Event, EventName))
+		if (WasRunning[Index] && TutorialRules::IsRunning(Runtime[Index].State) && !Complete.Event.IsEmpty() && TutorialRules::MatchesName(Complete.Event, EventName))
 		{
 			if (Complete.bDistinctSubjects)
 			{
@@ -276,9 +361,10 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId)
 	{
 		const FTutorialTrigger& Trigger = Data.Steps[Index].Trigger;
 		const bool bFailure = Trigger.Type == ETutorialTriggerType::FailureRetry;
-		if ((Trigger.Type != ETutorialTriggerType::Event && !bFailure) || !TutorialRules::MatchesName(Trigger.Event, EventName) || !CanTrigger(Index))
+		if ((Trigger.Type != ETutorialTriggerType::Event && !bFailure) || !TutorialRules::MatchesName(Trigger.Event, EventName) || !CanTrigger(Index)
+			|| !IsArmed(Index))
 		{
-			continue;
+			continue; // not armed yet ("requires"): the event is not stored
 		}
 		FRuntime& State = Runtime[Index];
 		if (++State.TriggerHits < Trigger.Count)
@@ -309,9 +395,11 @@ void FTutorialStateMachine::HandleVolume(FName VolumeId, FName StepId, FName Bea
 	}
 	if (!VolumeId.IsNone())
 	{
+		// Only steps already running when this input came count it (a follower started by a completion must not take the same input).
+		const TArray<bool> WasRunning = RunningSnapshot();
 		for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 		{
-			if (TutorialRules::IsRunning(Runtime[Index].State) && Data.Steps[Index].Complete.Volume == VolumeId)
+			if (WasRunning[Index] && TutorialRules::IsRunning(Runtime[Index].State) && Data.Steps[Index].Complete.Volume == VolumeId)
 			{
 				AddProgress(Index, 1, 1);
 			}
@@ -349,6 +437,7 @@ bool FTutorialStateMachine::StartBeat(FName BeatId, bool bAllowBackwards)
 		}
 	}
 	CurrentBeatIndex = BeatIndex;
+	TutorialRules::ApplyLockChanges(Locks, Data.Beats[BeatIndex].Lock, Data.Beats[BeatIndex].Unlock);
 	FTutorialTransition& Transition = Transitions.AddDefaulted_GetRef();
 	Transition.Type = FTutorialTransition::EType::BeatStarted;
 	Transition.BeatId = BeatId;
@@ -363,7 +452,7 @@ bool FTutorialStateMachine::TriggerStep(FName StepId)
 	{
 		return false;
 	}
-	Fire(Index);
+	Fire(Index, /*bForce*/ true);
 	return true;
 }
 
@@ -401,7 +490,7 @@ bool FTutorialStateMachine::ReplayStep(FName StepId)
 		return false;
 	}
 	Runtime[Index] = FRuntime();
-	Fire(Index);
+	Fire(Index, /*bForce*/ true);
 	return true;
 }
 
@@ -434,6 +523,7 @@ void FTutorialStateMachine::Tick(float DeltaSeconds)
 			}
 		}
 	}
+	PollConditionTriggers();
 	PumpQueues();
 }
 
@@ -541,6 +631,8 @@ FTutorialProgress FTutorialStateMachine::ExportProgress() const
 {
 	FTutorialProgress Progress;
 	Progress.CurrentBeat = GetCurrentBeat();
+	Progress.Locks = Locks;
+	Progress.bHasLocks = true;
 	for (int32 Index = 0; Index < Runtime.Num(); ++Index)
 	{
 		const FRuntime& State = Runtime[Index];
@@ -567,6 +659,26 @@ void FTutorialStateMachine::ImportProgress(const FTutorialProgress& Progress)
 		{
 			Runtime[Index].State = Entry.Value;
 			Runtime[Index].bEverFinished = true;
+			Runtime[Index].bLocksApplied = true;
+		}
+	}
+	if (Progress.bHasLocks)
+	{
+		Locks = Progress.Locks;
+	}
+	else
+	{
+		// An older save without "locks": rebuild them from the beats up to the current one, then the finished steps.
+		for (int32 BeatIndex = 0; BeatIndex <= CurrentBeatIndex && Data.Beats.IsValidIndex(BeatIndex); ++BeatIndex)
+		{
+			TutorialRules::ApplyLockChanges(Locks, Data.Beats[BeatIndex].Lock, Data.Beats[BeatIndex].Unlock);
+		}
+		for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+		{
+			if (Runtime[Index].bEverFinished)
+			{
+				TutorialRules::ApplyLockChanges(Locks, Data.Steps[Index].Lock, Data.Steps[Index].Unlock);
+			}
 		}
 	}
 	for (const FName StepId : Progress.Pending)

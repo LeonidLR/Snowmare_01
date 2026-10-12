@@ -48,6 +48,14 @@ struct CODEXTACTICS_API FTutorialCardView
 	/** The confirm moment (the step was just completed; the card hides after a short flash). */
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial")
 	bool bDone = false;
+
+	/** The operative the card is about (step "focus": "coldest_operative"), null when none. */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial")
+	TObjectPtr<AOperativeCharacter> FocusOperative = nullptr;
+
+	/** His display name (also substituted for the {focus} token of the text). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial")
+	FText FocusName;
 };
 
 /** One objective tracker line. */
@@ -251,6 +259,38 @@ public:
 	/** Log file of this run (smokes). */
 	FString GetTelemetryPath() const;
 
+	// --- Command locks, conditions, focus (2026-10-12, Demo 01 A0-A1 redesign) ------------------------------------------
+
+	/** True when the tutorial is active and a beat / step lock covers CommandId (e.g. "Order.Sprint" until warmed up in A1). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tutorial")
+	bool IsCommandLocked(FName CommandId) const;
+
+	/**
+	 * THE lock choke point for order handlers: true when CommandId is locked now; the caller then degrades the order (a locked
+	 * sprint walks, no error line) and this raises "Tutorial.Locked" + "Tutorial.Locked.<CommandId>" (a "feed" / card step can
+	 * react once). False without a tutorial (tutorial OFF = no locks).
+	 */
+	static bool CheckCommandLocked(const UObject* WorldContext, FName CommandId);
+
+	/**
+	 * The command an order handler should carry out (TutorialRules::ResolveLockedCommand): CommandId when free, its fallback
+	 * when locked ("Order.Sprint" -> "Order.Move"), NAME_None when locked without one. A locked command raises the
+	 * "Tutorial.Locked" events (CheckCommandLocked).
+	 */
+	static FName FilterCommand(const UObject* WorldContext, FName CommandId);
+
+	/** Locked commands refused since the steps were loaded (smokes). */
+	int32 GetLockedRefusalCount() const { return LockedRefusals; }
+
+	/**
+	 * A step condition stat now: "squad_cold_max" / "squad_cold_min" (cold % of the living squad members), "leader_cold",
+	 * "squad_heat_packs" (heat packs carried by the whole squad).
+	 */
+	float GetConditionStat(FName Stat) const;
+
+	/** The operative a shown step focuses on ("focus"), null when none. */
+	AOperativeCharacter* GetFocusOperative(FName StepId) const;
+
 	// --- Markers / save ---------------------------------------------------------------------------------------------
 
 	void RegisterMarker(ATutorialMarkerActor* Marker);
@@ -279,6 +319,12 @@ private:
 	bool HandleLethalHit(UHealthComponent* Health, const FString& Source);
 	void WriteTelemetry(const FString& Event, FName StepId, FName BeatId, float ActiveSeconds) const;
 	TArray<FSpokenLine> ResolveLines(const FTutorialStep& Step) const;
+	/** A step was shown: focus, world actions, feed lines. */
+	void HandleStepShown(const FTutorialStep& Step);
+	void RunActions(const FTutorialStep& Step);
+	/** {focus} -> the focused operative's name. */
+	FString ResolveFocusToken(const FString& Text, FName StepId) const;
+	AOperativeCharacter* FindColdestMember() const;
 	FTutorialCardView BuildCardView(FName StepId, bool bDone) const;
 	FText ObjectiveText(FName StepId) const;
 
@@ -318,6 +364,9 @@ private:
 
 	bool bRetryPrompt = false;
 	int32 LessonDownCount = 0;
+	int32 LockedRefusals = 0;
+	/** Operative each shown "focus" step is about (resolved when it shows). */
+	TMap<FName, TWeakObjectPtr<AOperativeCharacter>> FocusOperatives;
 	float SquadBindTimer = 0.f;
 	TArray<TWeakObjectPtr<AOperativeCharacter>> BoundMembers;
 	TArray<TWeakObjectPtr<ATutorialMarkerActor>> Markers;

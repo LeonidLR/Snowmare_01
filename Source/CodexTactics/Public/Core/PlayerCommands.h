@@ -348,6 +348,17 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName VehicleArrived;
 	/** A drive could not reach the clicked spot (no road / too narrow / blocked). */
 	extern CODEXTACTICS_API const FName VehiclePathBlocked;
+	/**
+	 * A player command was refused because the tutorial locks it (UTutorialSubsystem::CheckCommandLocked; the handler degrades
+	 * it, e.g. a locked sprint walks). Also raised as "Tutorial.Locked.<CommandId>" ("Tutorial.Locked.Order.Sprint").
+	 */
+	extern CODEXTACTICS_API const FName TutorialLocked;
+	/**
+	 * An item went from a crate / ground pile into an operative's kit (loot click, Take all, a loot line dragged onto him).
+	 * Subject = the collector, Target = the container, Kind = the item ("HeatPack", "Medkit", ...); also raised as
+	 * "ItemLooted.<Kind>" ("ItemLooted.HeatPack").
+	 */
+	extern CODEXTACTICS_API const FName ItemLooted;
 
 	/** Broadcasts UCodexEventBus::OnGameplayEvent (no-op without a game instance) and logs it. */
 	CODEXTACTICS_API void Raise(const UObject* WorldContext, FName EventName, AActor* Subject = nullptr);
@@ -357,4 +368,7 @@ namespace GameplayEvents
 	 * SubjectId / TargetId from the actors when empty.
 	 */
 	CODEXTACTICS_API void RaiseWithContext(const UObject* WorldContext, FName EventName, const FGameplayEventContext& Context);
+
+	/** "ItemLooted" and "ItemLooted.<ItemKind>" for Count > 0 units of ItemKind taken by Collector from Container. */
+	CODEXTACTICS_API void RaiseItemLooted(const UObject* WorldContext, AActor* Collector, AActor* Container, FName ItemKind, int32 Count);
 }

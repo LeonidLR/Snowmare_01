@@ -184,4 +184,10 @@ namespace ColdRules
 	 * dialogue). Everything resumes unchanged afterwards.
 	 */
 	CODEXTACTICS_API bool ShouldStepCold(bool bTurnBased, bool bWorldAIPaused);
+
+	/**
+	 * A sudden cold shock (tutorial "cold_bump", a scripted wind gust; UE-only): Cold + Amount, raised to at least MinLevel,
+	 * clamped to [0, 100]. MinLevel <= 0 = no floor.
+	 */
+	CODEXTACTICS_API float ApplyColdShock(float Cold, float Amount, float MinLevel = 0.f);
 }
