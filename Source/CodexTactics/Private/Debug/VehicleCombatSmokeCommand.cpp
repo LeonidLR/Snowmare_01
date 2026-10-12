@@ -8,7 +8,8 @@
 //     a frostbitten off to the side too; the MG heats;
 //  2. dead zone: a hound 1.5 m off the hull side is never fired at (even as the Ctrl+click priority target);
 //  3. a Brute at 30 m gets the 30 mm cannon (shells decrease);
-//  4. a hound that will not die: the MG overheats, falls silent, cools down;
+//  4. a hound that will not die: the MG overheats, falls silent, cools down; it is never staggered (user decision 2026-10-12:
+//     the MG only deals damage, no suppression stagger);
 //  5. Passive gunner, rush through a pack of 3 hounds: all 3 crushed (dead, corpses, kill credit = the driver, 3
 //     VehicleRunOver), the drive goes on; wheels: 0 while parked, the ABP's wheel spin matches the ground speed (no slip),
 //     rolls forward;
@@ -90,6 +91,7 @@ namespace VehicleCombatSmoke
 		bool bSpinWhileStopped = false;
 		bool bProportional = true;
 		bool bPassedBrute = false;
+		bool bStaggerSeen = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -505,11 +507,17 @@ namespace VehicleCombatSmoke
 		}
 		case 8:
 		{
+			if (const AEnemyCharacter* Tough = State.Targets.Num() > 0 ? State.Targets[0].Get() : nullptr; Tough && Tough->GetHealthComponent())
+			{
+				State.bStaggerSeen |= Tough->GetHealthComponent()->HasStatusEffect(EStatusEffect::Stagger);
+			}
 			if (!Turret->IsMgOverheated() && State.StageTime < 12.f)
 			{
 				return true;
 			}
 			Check(State, Turret->IsMgOverheated(), FString::Printf(TEXT("continuous fire overheats the MG (%.1f s)"), State.StageTime));
+			Check(State, !State.bStaggerSeen, FString::Printf(TEXT("the MG only deals damage: the hound was never staggered (%d rounds)"),
+				Turret->GetShotsFired(EVehicleTurretWeapon::MachineGun)));
 			State.RoundsBefore = Turret->GetShotsFired(EVehicleTurretWeapon::MachineGun);
 			State.HeatAtOverheat = Turret->GetMgHeat();
 			NextStage(State, 9);

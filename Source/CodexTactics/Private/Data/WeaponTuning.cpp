@@ -8,6 +8,7 @@
 #include "Tactics/EnemyTurnRules.h"
 #include "Tactics/TurnBasedRules.h"
 #include "Vehicles/VehicleCombatRules.h"
+#include "Vehicles/VehicleHullRules.h"
 #include "CodexTactics.h"
 #include "Data/WeaponDataAsset.h"
 #include "Data/GodotBalanceAsset.h"
@@ -30,6 +31,7 @@ namespace WeaponTuning
 		TSharedPtr<FJsonObject> TurnRulesBlock;
 		TSharedPtr<FJsonObject> VehicleTurretBlock;
 		TSharedPtr<FJsonObject> VehicleRamBlock;
+		TSharedPtr<FJsonObject> VehicleHullBlock;
 
 		void Number(const FJsonObject& Json, const TCHAR* Key, float& Value, float Scale = 1.f)
 		{
@@ -175,6 +177,10 @@ namespace WeaponTuning
 			{
 				VehicleRamBlock = *Block;
 			}
+			if ((*VehicleWeapons)->TryGetObjectField(TEXT("apc_hull"), Block) && Block)
+			{
+				VehicleHullBlock = *Block;
+			}
 		}
 		const TSharedPtr<FJsonObject>* Weapons = nullptr;
 		if (!Root->TryGetObjectField(TEXT("weapons"), Weapons) || !Weapons)
@@ -245,7 +251,7 @@ namespace WeaponTuning
 		Number(Json, TEXT("preferred_max_range_m"), Config.PreferredMaxRange, 100.f);
 	}
 
-	void ApplyVehicleWeapons(FVehicleTurretConfig* Turret, FVehicleCrushConfig* Crush)
+	void ApplyVehicleWeapons(FVehicleTurretConfig* Turret, FVehicleCrushConfig* Crush, FVehicleHullConfig* Hull)
 	{
 		if (Turret && VehicleTurretBlock.IsValid())
 		{
@@ -266,9 +272,6 @@ namespace WeaponTuning
 			Number(Json, TEXT("mg_hit_chance"), Turret->MgHitChance);
 			Number(Json, TEXT("mg_overheat_seconds"), Turret->MgOverheatSeconds);
 			Number(Json, TEXT("mg_cooldown_seconds"), Turret->MgCooldownSeconds);
-			Number(Json, TEXT("mg_suppression_per_round"), Turret->MgSuppressionPerRound);
-			Number(Json, TEXT("mg_suppression_threshold"), Turret->MgSuppressionThreshold);
-			Number(Json, TEXT("mg_suppression_stagger"), Turret->MgSuppressionStaggerSeconds);
 			Number(Json, TEXT("traverse_deg_per_sec"), Turret->TraverseDegPerSec);
 			Number(Json, TEXT("dead_zone_m"), Turret->DeadZoneCm, 100.f);
 			Number(Json, TEXT("defensive_radius_m"), Turret->DefensiveRadiusCm, 100.f);
@@ -283,11 +286,31 @@ namespace WeaponTuning
 			Number(Json, TEXT("ram_speed_factor"), Crush->RamSpeedFactor);
 			Number(Json, TEXT("ram_knockdown_play_rate"), Crush->RamKnockdownPlayRate);
 			Number(Json, TEXT("ram_downed_time_scale"), Crush->RamDownedTimeScale);
+			Number(Json, TEXT("hull_ram_damage"), Crush->HullRamDamage);
 			bool bCrushDowned = Crush->bCrushDownedRammed;
 			if (Json.TryGetBoolField(TEXT("crush_downed_brute"), bCrushDowned))
 			{
 				Crush->bCrushDownedRammed = bCrushDowned;
 			}
+		}
+		if (Hull && VehicleHullBlock.IsValid())
+		{
+			const FJsonObject& Json = *VehicleHullBlock;
+			Number(Json, TEXT("max_hp"), Hull->MaxHealth);
+			Number(Json, TEXT("small_melee_factor"), Hull->SmallMeleeFactor);
+			Number(Json, TEXT("heavy_melee_factor"), Hull->HeavyMeleeFactor);
+			Number(Json, TEXT("acid_factor"), Hull->AcidFactor);
+			Number(Json, TEXT("rifle_factor"), Hull->RifleFactor);
+			Number(Json, TEXT("explosion_factor"), Hull->ExplosionFactor);
+			Number(Json, TEXT("mine_damage"), Hull->MineDamage);
+			Number(Json, TEXT("other_factor"), Hull->OtherFactor);
+			Number(Json, TEXT("low_health_fraction"), Hull->LowHealthFraction);
+			Number(Json, TEXT("repair_seconds"), Hull->RepairSeconds);
+			Number(Json, TEXT("other_repair_seconds"), Hull->OtherRepairSeconds);
+			Number(Json, TEXT("repair_fraction"), Hull->RepairFraction);
+			Number(Json, TEXT("enemy_weight_small"), Hull->EnemyTargetWeightSmall);
+			Number(Json, TEXT("enemy_weight_large"), Hull->EnemyTargetWeightLarge);
+			Number(Json, TEXT("enemy_awareness_m"), Hull->EnemyAwarenessCm, 100.f);
 		}
 	}
 
@@ -386,7 +409,8 @@ namespace WeaponTuning
 		// The APC turret and ram (P2): the C++ defaults with the file values applied (the vehicle Blueprint may differ).
 		FVehicleTurretConfig Turret;
 		FVehicleCrushConfig Crush;
-		ApplyVehicleWeapons(&Turret, &Crush);
+		FVehicleHullConfig Hull;
+		ApplyVehicleWeapons(&Turret, &Crush, &Hull);
 		TSharedRef<FJsonObject> ApcTurret = MakeShared<FJsonObject>();
 		TSharedRef<FJsonObject> ApcRam = MakeShared<FJsonObject>();
 		ApcTurret->SetNumberField(TEXT("cannon_damage"), Round4(Turret.CannonDamage));
@@ -405,9 +429,6 @@ namespace WeaponTuning
 		ApcTurret->SetNumberField(TEXT("mg_hit_chance"), Round4(Turret.MgHitChance));
 		ApcTurret->SetNumberField(TEXT("mg_overheat_seconds"), Round4(Turret.MgOverheatSeconds));
 		ApcTurret->SetNumberField(TEXT("mg_cooldown_seconds"), Round4(Turret.MgCooldownSeconds));
-		ApcTurret->SetNumberField(TEXT("mg_suppression_per_round"), Round4(Turret.MgSuppressionPerRound));
-		ApcTurret->SetNumberField(TEXT("mg_suppression_threshold"), Round4(Turret.MgSuppressionThreshold));
-		ApcTurret->SetNumberField(TEXT("mg_suppression_stagger"), Round4(Turret.MgSuppressionStaggerSeconds));
 		ApcTurret->SetNumberField(TEXT("traverse_deg_per_sec"), Round4(Turret.TraverseDegPerSec));
 		ApcTurret->SetNumberField(TEXT("dead_zone_m"), Round4(Turret.DeadZoneCm / 100.f));
 		ApcTurret->SetNumberField(TEXT("defensive_radius_m"), Round4(Turret.DefensiveRadiusCm / 100.f));
@@ -419,9 +440,27 @@ namespace WeaponTuning
 		ApcRam->SetNumberField(TEXT("ram_knockdown_play_rate"), Round4(Crush.RamKnockdownPlayRate));
 		ApcRam->SetNumberField(TEXT("ram_downed_time_scale"), Round4(Crush.RamDownedTimeScale));
 		ApcRam->SetBoolField(TEXT("crush_downed_brute"), Crush.bCrushDownedRammed);
+		ApcRam->SetNumberField(TEXT("hull_ram_damage"), Round4(Crush.HullRamDamage));
+		TSharedRef<FJsonObject> ApcHull = MakeShared<FJsonObject>();
+		ApcHull->SetNumberField(TEXT("max_hp"), Round4(Hull.MaxHealth));
+		ApcHull->SetNumberField(TEXT("small_melee_factor"), Round4(Hull.SmallMeleeFactor));
+		ApcHull->SetNumberField(TEXT("heavy_melee_factor"), Round4(Hull.HeavyMeleeFactor));
+		ApcHull->SetNumberField(TEXT("acid_factor"), Round4(Hull.AcidFactor));
+		ApcHull->SetNumberField(TEXT("rifle_factor"), Round4(Hull.RifleFactor));
+		ApcHull->SetNumberField(TEXT("explosion_factor"), Round4(Hull.ExplosionFactor));
+		ApcHull->SetNumberField(TEXT("mine_damage"), Round4(Hull.MineDamage));
+		ApcHull->SetNumberField(TEXT("other_factor"), Round4(Hull.OtherFactor));
+		ApcHull->SetNumberField(TEXT("low_health_fraction"), Round4(Hull.LowHealthFraction));
+		ApcHull->SetNumberField(TEXT("repair_seconds"), Round4(Hull.RepairSeconds));
+		ApcHull->SetNumberField(TEXT("other_repair_seconds"), Round4(Hull.OtherRepairSeconds));
+		ApcHull->SetNumberField(TEXT("repair_fraction"), Round4(Hull.RepairFraction));
+		ApcHull->SetNumberField(TEXT("enemy_weight_small"), Round4(Hull.EnemyTargetWeightSmall));
+		ApcHull->SetNumberField(TEXT("enemy_weight_large"), Round4(Hull.EnemyTargetWeightLarge));
+		ApcHull->SetNumberField(TEXT("enemy_awareness_m"), Round4(Hull.EnemyAwarenessCm / 100.f));
 		TSharedRef<FJsonObject> VehicleWeapons = MakeShared<FJsonObject>();
 		VehicleWeapons->SetObjectField(TEXT("apc_turret"), ApcTurret);
 		VehicleWeapons->SetObjectField(TEXT("apc_ram"), ApcRam);
+		VehicleWeapons->SetObjectField(TEXT("apc_hull"), ApcHull);
 		Root->SetObjectField(TEXT("vehicle_weapons"), VehicleWeapons);
 		FString Text;
 		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Text);

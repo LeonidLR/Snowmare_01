@@ -35,7 +35,9 @@ enum class EVehicleRefusal : uint8
 	TurnBased,
 	TacticalPause,
 	NoDriver,
-	NoExit
+	NoExit,
+	/** The hull is at 0 HP (P4): no boarding / driving until the Engineer repairs it. */
+	Disabled
 };
 
 /** What the board key (Y / Alt + Y) does for the operatives it addresses. */
@@ -44,7 +46,9 @@ enum class EVehicleKeyAction : uint8
 {
 	None,
 	Board,
-	Disembark
+	Disembark,
+	/** The nearest vehicle is disabled (P4): the Engineer goes to repair it. */
+	Repair
 };
 
 /** Engine state for the noise radius. */
@@ -229,6 +233,8 @@ namespace VehicleRules
 		int32 FreeSeats = 1;
 		bool bTurnBased = false;
 		bool bTacticalPause = false;
+		/** The hull is disabled (P4). */
+		bool bVehicleDisabled = false;
 	};
 
 	CODEXTACTICS_API EVehicleRefusal CanBoard(const FBoardCheck& Check, const FVehicleCrewConfig& Config);
@@ -236,8 +242,8 @@ namespace VehicleRules
 	/** Getting out: mounted, not in the grid fight / the pause (P1), a free exit. A moving vehicle stops first. */
 	CODEXTACTICS_API EVehicleRefusal CanDisembark(bool bMounted, bool bTurnBased, bool bTacticalPause, bool bHasFreeExit);
 
-	/** Driving: a driver aboard, real time only (P1: refused in the tactical pause and turn-based with a feed line). */
-	CODEXTACTICS_API EVehicleRefusal CanDrive(bool bHasDriver, bool bTurnBased, bool bTacticalPause);
+	/** Driving: a driver aboard, real time only (P1: refused in the tactical pause and turn-based with a feed line), not disabled (P4). */
+	CODEXTACTICS_API EVehicleRefusal CanDrive(bool bHasDriver, bool bTurnBased, bool bTacticalPause, bool bDisabled = false);
 
 	/**
 	 * The Y key: the addressed operatives (Y: the selection, Alt + Y: the whole squad) all aboard = get out; otherwise
@@ -251,6 +257,13 @@ namespace VehicleRules
 	 * nearest ViewPoint (the camera side). Ties keep the candidate order.
 	 */
 	CODEXTACTICS_API TArray<int32> RankExitPoints(const TArray<FVector>& Candidates, const TArray<bool>& bFree, const FVector& VehicleCentre,
+		const TArray<FVector>& Threats, const FVector& ViewPoint);
+
+	/**
+	 * Forced exits when the hull is disabled (P4): RankExitPoints' free exits first (the safe side), then the blocked ones in
+	 * candidate order - nobody stays inside a dead hull. Every candidate index appears once.
+	 */
+	CODEXTACTICS_API TArray<int32> GetEjectionOrder(const TArray<FVector>& Candidates, const TArray<bool>& bFree, const FVector& VehicleCentre,
 		const TArray<FVector>& Threats, const FVector& ViewPoint);
 
 	/** Max yaw rate (deg/s) of a vehicle at Speed with the minimum turning radius: |v| / R. */

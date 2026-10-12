@@ -1,4 +1,5 @@
 #include "Interactables/TripwireActor.h"
+#include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 
 #include "Characters/EnemyCharacter.h"
@@ -363,6 +364,31 @@ void ATripwireActor::Tick(float DeltaSeconds)
 	const FVector2D B(WireB.X, WireB.Y);
 	const FVector Mid = GetActorLocation();
 	const float Reach = FVector::Dist2D(WireA, WireB) * 0.5f + 150.f;
+	// APC P4: a vehicle whose hull crosses the wire pulls the pin (friendly side: like an operative) - mines are its threat.
+	if (TripwireRules::TriggersOn(IsHostile(), true))
+	{
+		if (const UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>())
+		{
+			for (AVehiclePawn* Vehicle : Vehicles->GetVehicles())
+			{
+				if (FMath::Abs(Vehicle->GetActorLocation().Z - (Mid.Z - TripwireRules::WireHeightCm)) > 200.f)
+				{
+					continue;
+				}
+				bool bCrosses = false;
+				for (int32 Step = 0; Step <= 8 && !bCrosses; ++Step)
+				{
+					bCrosses = Vehicle->IsInsideFootprint(FMath::Lerp(WireA, WireB, Step / 8.f), 20.f);
+				}
+				if (bCrosses)
+				{
+					BlastTriggeredByVehicle = Vehicle;
+					Trip(Vehicle);
+					return;
+				}
+			}
+		}
+	}
 	for (TActorIterator<ACharacter> It(GetWorld()); It; ++It)
 	{
 		ACharacter* Body = *It;

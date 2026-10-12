@@ -1277,6 +1277,13 @@ public:
 	static ETargetedShotKind ClassifyShotTarget(const AActor* Target);
 
 	/**
+	 * The detonation of a targeted shot that hit an object (shared by ShootAtObject and the APC cannon, P4): a barrel
+	 * explodes, a mine goes off, a trapped crate / trapped object detonates remotely. False when nothing went off (an
+	 * untrapped crate, a burning barrel, not an object kind).
+	 */
+	static bool DetonateShotTarget(AActor* Target, ETargetedShotKind Kind, const FText& ShooterName);
+
+	/**
 	 * Fires one aimed round at a barrel (explodes), a mine (hit chance by stance / distance / cold), a supply crate or
 	 * a trapped object (remote detonation). Stops the operative and consumes ammo. False when the weapon cannot fire.
 	 */

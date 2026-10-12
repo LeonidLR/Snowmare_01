@@ -31,25 +31,25 @@ struct CODEXTACTICS_API FVehicleTurretConfig
 
 	// --- Autocannon ----------------------------------------------------------------------------------------------
 
-	/** Direct hit damage of one HE shell (design 70). */
+	/** Direct hit damage of one HE shell (design 70; user 2026-10-12 "too powerful": 45). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon", meta = (ClampMin = "0"))
-	float CannonDamage = 70.f;
+	float CannonDamage = 45.f;
 
 	/** Splash radius round the impact (design 1.5 m). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon", meta = (ClampMin = "0"))
 	float CannonSplashRadiusCm = 150.f;
 
-	/** Splash damage to the others inside the radius (design 35). */
+	/** Splash damage to the others inside the radius (design 35; user 2026-10-12: 20). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon", meta = (ClampMin = "0"))
-	float CannonSplashDamage = 35.f;
+	float CannonSplashDamage = 20.f;
 
 	/** Seconds between the shells of a burst (design 1 shot / 0.5 s). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon", meta = (ClampMin = "0.05"))
 	float CannonShotIntervalSeconds = 0.5f;
 
-	/** Shells per burst (design 3). */
+	/** Shells per burst (design 3; user 2026-10-12: 2). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon", meta = (ClampMin = "1"))
-	int32 CannonBurstShots = 3;
+	int32 CannonBurstShots = 2;
 
 	/** Pause after a burst. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon", meta = (ClampMin = "0"))
@@ -104,22 +104,6 @@ struct CODEXTACTICS_API FVehicleTurretConfig
 	/** Seconds to cool down from full heat to 0 (design 3 s); an overheated MG stays silent until it is cold. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "0.1"))
 	float MgCooldownSeconds = 3.f;
-
-	/** Suppression put on the target per round (the enemy suppression meter). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "0"))
-	float MgSuppressionPerRound = 8.f;
-
-	/** A suppression meter this full pins the target: a short stagger (it stops moving / attacking), then the meter resets. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "1"))
-	float MgSuppressionThreshold = 40.f;
-
-	/** How long a suppressed enemy is pinned (stagger seconds). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "0"))
-	float MgSuppressionStaggerSeconds = 0.5f;
-
-	/** Suppression decays by this much per second when the MG stops hitting him. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "0"))
-	float MgSuppressionDecayPerSecond = 20.f;
 
 	/** Enemies hear the MG (design 45 m, gunshot class). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Machine Gun", meta = (ClampMin = "0"))
@@ -236,9 +220,9 @@ struct CODEXTACTICS_API FVehicleCrushConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ram")
 	bool bCrushDownedRammed = false;
 
-	/** Damage the hull takes from a ram (P4 damage: no hull health yet, kept for the damage phase). */
+	/** Damage the hull takes from a fast ram of a Brute (P4: "costs the hull a little"; Ram source, no armour factor). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ram", meta = (ClampMin = "0"))
-	float HullRamDamage = 0.f;
+	float HullRamDamage = 30.f;
 };
 
 /** Boarding / disembarking fade (user 2026-10-12: no boarding animations, a quick fade to black and back). */
@@ -388,12 +372,6 @@ namespace VehicleCombatRules
 	 * Reaching 1 latches bInOutOverheated until the heat is back at 0.
 	 */
 	CODEXTACTICS_API float StepHeat(float Heat, bool bFiring, float DeltaSeconds, bool& bInOutOverheated, const FVehicleTurretConfig& Config);
-
-	/**
-	 * MG suppression on one target: Meter + Added; reaching MgSuppressionThreshold sets bOutPinned (a short stagger) and the
-	 * meter starts again from 0.
-	 */
-	CODEXTACTICS_API float AddSuppression(float Meter, float Added, bool& bOutPinned, const FVehicleTurretConfig& Config);
 
 	/** Damage of a shell to an enemy DistanceFromImpactCm from the impact (direct hit at <= 1 cm; splash inside the radius). */
 	CODEXTACTICS_API float GetCannonDamage(float DistanceFromImpactCm, bool bDirectHit, const FVehicleTurretConfig& Config);

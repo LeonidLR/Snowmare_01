@@ -26,7 +26,9 @@ enum class EEnemyTargetKind : uint8
 {
 	Operative,
 	Turret,
-	Generator
+	Generator,
+	/** A manned squad vehicle (APC P4, UE-only): weighed by the candidate's own Weight. */
+	Vehicle
 };
 
 /** A possible victim (Godot groups "squad", "turrets", "generators"). */
@@ -37,6 +39,8 @@ struct CODEXTACTICS_API FEnemyTargetCandidate
 	FVector Location = FVector::ZeroVector;
 	/** Alive, not broken and (turrets) attackable. */
 	bool bUsable = true;
+	/** Vehicle candidates only: distance weight (VehicleHullRules::GetEnemyTargetWeight; Location = the nearest hull point). */
+	float Weight = 1.f;
 };
 
 /** What a spitter does this frame (Godot enemy_frost_spitter.gd _process_enemy_behavior). */
@@ -60,6 +64,16 @@ namespace EnemyAIRules
 {
 	CODEXTACTICS_API FEnemyAIConfig ConfigFromBalance(const UGodotBalanceAsset* Balance);
 
+	/**
+	 * The archetype of an enemy placed in a level (not made by a spawner, which sets it itself; user bug 2026-10-12: a placed
+	 * BP_Enemy_Brute kept the property default FrostHound and played a 45 HP hound): the designer's instance value when it
+	 * differs from the class default; else the game mode's archetype -> class mapping, reverse-looked-up over ClassChain (the
+	 * actor's class first, then its parents: a child of a mapped Blueprint counts); else the class default (a C++ subclass such
+	 * as AMarksmanEnemyCharacter sets its own). OutSource: "instance" / "class mapping" / "class default".
+	 */
+	CODEXTACTICS_API EEnemyArchetype ResolvePlacedArchetype(EEnemyArchetype InstanceValue, EEnemyArchetype ClassDefaultValue, const TArray<FString>& ClassChain,
+		const TArray<TPair<EEnemyArchetype, FString>>& Mapping, FString& OutSource);
+
 	/** Hounds, cutters and frostbitten go for the generator / turrets first (Godot is_small_enemy). */
 	CODEXTACTICS_API bool IsSmallEnemy(EEnemyArchetype Archetype);
 
@@ -72,7 +86,8 @@ namespace EnemyAIRules
 	/**
 	 * Godot _find_closest_squad_member: small enemies weigh generators at 0.4 x distance and turrets at 0.5 x, then
 	 * operatives at 1 x; large ones weigh operatives at 0.7 x and then turrets at 0.85 x (0.6 x when a turret hit
-	 * them last), also taking a turret within the threat distance unless something is clearly closer.
+	 * them last), also taking a turret within the threat distance unless something is clearly closer. APC P4: a Vehicle
+	 * candidate (a manned APC) competes at distance x its own Weight, right after the operatives.
 	 * Returns the candidate index or INDEX_NONE.
 	 */
 	CODEXTACTICS_API int32 SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy, const FVector& Enemy,

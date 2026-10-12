@@ -151,6 +151,12 @@ protected:
 		const FText& Source, const FText& SquadLine, EStatusEffect Status = EStatusEffect::None, float StatusDuration = 0.f,
 		float StatusTickDamage = 0.f);
 
+	/**
+	 * APC P4: the vehicle that set this charge off itself (a mine / tripwire under its wheels): ApplyBlast gives it the
+	 * flat mine damage instead of the blast falloff (UVehicleSubsystem::ApplyBlastToVehicles).
+	 */
+	TWeakObjectPtr<AActor> BlastTriggeredByVehicle;
+
 	/** Posts a feed line. */
 	void PostLine(const FText& Speaker, const FText& Text) const;
 

@@ -2521,6 +2521,36 @@ ETargetedShotKind AOperativeCharacter::ClassifyShotTarget(const AActor* Target)
 	return Interactable && Interactable->bTrapped ? ETargetedShotKind::TrappedObject : ETargetedShotKind::None;
 }
 
+bool AOperativeCharacter::DetonateShotTarget(AActor* Target, ETargetedShotKind Kind, const FText& ShooterName)
+{
+	if (!IsValid(Target))
+	{
+		return false;
+	}
+	switch (Kind)
+	{
+	case ETargetedShotKind::Barrel:
+		return Cast<ABarrelActor>(Target) && Cast<ABarrelActor>(Target)->Explode(ShooterName);
+	case ETargetedShotKind::Mine:
+		if (AProximityMineActor* Mine = Cast<AProximityMineActor>(Target))
+		{
+			Mine->Detonate();
+			return true;
+		}
+		return false;
+	case ETargetedShotKind::Crate:
+	case ETargetedShotKind::TrappedObject:
+		if (AInteractableActor* Object = Cast<AInteractableActor>(Target); Object && Object->bTrapped)
+		{
+			Object->DetonateTrap(true, ShooterName);
+			return true;
+		}
+		return false;
+	default:
+		return false;
+	}
+}
+
 FVector AOperativeCharacter::GetMuzzleLocation() const
 {
 	const float Height = Stance == EOperativeStance::Prone ? 25.f : (Stance == EOperativeStance::Crouching ? 85.f : 140.f);
@@ -2782,7 +2812,7 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 	switch (Kind)
 	{
 	case ETargetedShotKind::Barrel:
-		CastChecked<ABarrelActor>(Target)->Explode(DisplayName);
+		DetonateShotTarget(Target, Kind, DisplayName);
 		break;
 	case ETargetedShotKind::Mine:
 	{
@@ -2793,7 +2823,7 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 			OperativeShotLine(*this, FText::Format(LOCTEXT("MineHit",
 				"💥 {0}: \"Clean shot (Chance: {1}%, {2}, {3}m)! Mine neutralised remotely!\""),
 				DisplayName, Chance, MineShot.StanceName, Distance));
-			CastChecked<AProximityMineActor>(Target)->Detonate();
+			DetonateShotTarget(Target, Kind, DisplayName);
 		}
 		else
 		{
@@ -2809,7 +2839,7 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 		if (Crate->bTrapped)
 		{
 			OperativeShotLine(*this, FText::Format(LOCTEXT("CrateTrapShot", "💥 {0}: \"Shot the crate trap! Remote detonation!\""), DisplayName));
-			Crate->DetonateTrap(true, DisplayName);
+			DetonateShotTarget(Crate, Kind, DisplayName);
 		}
 		else
 		{
@@ -2820,7 +2850,7 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 	}
 	case ETargetedShotKind::TrappedObject:
 		OperativeShotLine(*this, FText::Format(LOCTEXT("TrappedShot", "💥 {0}: \"Shot the tripwire on the object! Remote detonation!\""), DisplayName));
-		CastChecked<AInteractableActor>(Target)->DetonateTrap(true, DisplayName);
+		DetonateShotTarget(Target, Kind, DisplayName);
 		break;
 	default:
 		break;

@@ -1492,9 +1492,18 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			if (!Enemy)
 			{
 				UClass* Class = LoadClass<AEnemyCharacter>(nullptr, *SaveString(Entry, TEXT("class")));
-				Enemy = Class ? World->SpawnActor<AEnemyCharacter>(Class, Location, Rotation, SaveSpawnParams(Pair.Key)) : nullptr;
 				EEnemyArchetype Archetype = EEnemyArchetype::FrostHound;
-				if (Enemy && LoadEnumName(SaveString(Entry, TEXT("archetype")), Archetype))
+				const bool bSavedArchetype = LoadEnumName(SaveString(Entry, TEXT("archetype")), Archetype);
+				{
+					// A saved enemy is no placed one: its saved archetype, not a class lookup (the archetype-safety net).
+					TOptional<AEnemyCharacter::FScopedSpawnArchetype> SpawnScope;
+					if (bSavedArchetype)
+					{
+						SpawnScope.Emplace(Archetype);
+					}
+					Enemy = Class ? World->SpawnActor<AEnemyCharacter>(Class, Location, Rotation, SaveSpawnParams(Pair.Key)) : nullptr;
+				}
+				if (Enemy && bSavedArchetype)
 				{
 					Enemy->InitializeArchetype(Archetype);
 				}

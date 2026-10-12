@@ -1,4 +1,5 @@
 #include "Combat/KnockdownComponent.h"
+#include "Vehicles/VehicleSubsystem.h"
 
 #include "AI/WorldAIPauseSubsystem.h"
 #include "Animation/AnimInstance.h"
@@ -170,6 +171,10 @@ int32 UKnockdownComponent::NotifyExplosion(UWorld* World, const FVector& Center)
 		if (FVector::DistSquared(It->GetActorLocation(), Center) >= FMath::Square(Radius + 100.f))
 		{
 			continue; // the rules decide on the exact distance; this only skips the far ones
+		}
+		if (VehicleQueries::IsMounted(*It))
+		{
+			continue; // APC P4: the crew inside is not thrown about (the hull takes the blast)
 		}
 		if (UKnockdownComponent* Knockdown = It->FindComponentByClass<UKnockdownComponent>())
 		{

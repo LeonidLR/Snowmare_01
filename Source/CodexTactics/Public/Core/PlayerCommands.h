@@ -238,8 +238,10 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName VehicleDisembark;
 	/** LMB on the ground with the leader aboard: the vehicle drives there (double click: full speed). */
 	extern CODEXTACTICS_API const FName VehicleDrive;
-	/** Ctrl + click on an enemy with the leader aboard: the turret's priority target (P2). */
+	/** Ctrl + click on an enemy with the leader aboard: the turret's priority target (P2); on a barrel / mine / trapped object: one cannon shell at it (P4). */
 	extern CODEXTACTICS_API const FName VehicleTurretFire;
+	/** Y near a disabled vehicle: the Engineer goes to repair it (P4). */
+	extern CODEXTACTICS_API const FName VehicleRepair;
 
 	// --- System ---------------------------------------------------------------------------------------------------
 	/** F5: quick save. */
@@ -367,6 +369,12 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName VehicleTurretKill;
 	/** A small enemy died under the wheels (Subject = the driver, Target = the enemy, Kind = its archetype). */
 	extern CODEXTACTICS_API const FName VehicleRunOver;
+	/** The hull took damage (P4; Subject = the attacker or nullptr, Target = the vehicle, Kind = the source "SmallMelee" / "HeavyMelee" / "Mine" / ...). */
+	extern CODEXTACTICS_API const FName VehicleDamaged;
+	/** The hull reached 0 HP: disabled, the crew ejected (Subject = the last attacker or nullptr, Target = the vehicle). */
+	extern CODEXTACTICS_API const FName VehicleDisabled;
+	/** A disabled hull was repaired (Subject = the repairer, Target = the vehicle). */
+	extern CODEXTACTICS_API const FName VehicleRepaired;
 
 	/** Broadcasts UCodexEventBus::OnGameplayEvent (no-op without a game instance) and logs it. */
 	CODEXTACTICS_API void Raise(const UObject* WorldContext, FName EventName, AActor* Subject = nullptr);

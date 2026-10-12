@@ -1,4 +1,7 @@
 #include "Interactables/InteractableActor.h"
+#include "Interactables/DeployableRules.h"
+#include "Vehicles/VehiclePawn.h"
+#include "Vehicles/VehicleSubsystem.h"
 #include "Combat/KnockdownComponent.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/OverheadLabel.h"
@@ -316,6 +319,11 @@ void AInteractableActor::ApplyBlast(float EnemyDamageBase, float SquadDamageBase
 			}
 		}
 	}
+	// APC P4: the hull of any vehicle in reach (the mine / tripwire it set off itself: the flat mine damage).
+	UVehicleSubsystem::ApplyBlastToVehicles(GetWorld(), Center, Radius, [EnemyDamageBase, Radius](float HullDistance)
+	{
+		return DeployableRules::GetBlastDamage(EnemyDamageBase, HullDistance, Radius, DeployableRules::EnemyFalloff);
+	}, Cast<AVehiclePawn>(BlastTriggeredByVehicle.Get()), Source.ToString());
 	// Sprint 14: a fuel barrel / mine / trap blast closer than 2.5 m knocks everyone down.
 	UKnockdownComponent::NotifyExplosion(GetWorld(), Center);
 	// Patrols within the trap alert radius (20 m) go searching around the blast.

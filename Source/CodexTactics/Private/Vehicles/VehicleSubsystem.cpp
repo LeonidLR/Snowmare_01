@@ -7,6 +7,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Core/PlayerCommands.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -98,6 +99,7 @@ void UVehicleSubsystem::RegisterVehicle(AVehiclePawn* Vehicle)
 	Vehicles.Add(Vehicle);
 	Vehicle->OnArrived.AddUObject(this, &UVehicleSubsystem::HandleArrived);
 	Vehicle->OnDriveBlocked.AddUObject(this, &UVehicleSubsystem::HandleBlocked);
+	Vehicle->OnDisabled.AddUObject(this, &UVehicleSubsystem::HandleDisabled);
 }
 
 void UVehicleSubsystem::UnregisterVehicle(AVehiclePawn* Vehicle)
@@ -147,6 +149,8 @@ void UVehicleSubsystem::CancelBoarding(const AOperativeCharacter* Operative)
 		}
 		return bDrop;
 	});
+	// ... and a repair walk / work (P4).
+	Repairs.RemoveAll([Operative](const FPendingRepair& Each) { return Each.Operative.Get() == Operative; });
 }
 
 bool UVehicleSubsystem::IsBoarding(const AOperativeCharacter* Operative) const
@@ -206,6 +210,8 @@ FText UVehicleSubsystem::RefusalText(EVehicleRefusal Refusal, const AOperativeCh
 		return LOCTEXT("RefuseDriver", "Nobody at the wheel.");
 	case EVehicleRefusal::NoExit:
 		return LOCTEXT("RefuseExit", "All exits are blocked!");
+	case EVehicleRefusal::Disabled:
+		return LOCTEXT("RefuseDisabled", "She's disabled - the Engineer has to get her running first [Y].");
 	default:
 		return FText::GetEmpty();
 	}
@@ -242,6 +248,18 @@ EVehicleKeyAction UVehicleSubsystem::HandleBoardKey(bool bSquadWide, AVehiclePaw
 	else if (Action == EVehicleKeyAction::Board)
 	{
 		TArray<AOperativeCharacter*> Outside = Addressed.FilterByPredicate([this](const AOperativeCharacter* Each) { return !IsMounted(Each); });
+		// P4: the nearest vehicle is disabled - Y sends the Engineer to repair it instead.
+		AVehiclePawn* Wreck = Preferred ? Preferred : FindNearestVehicle(Leader->GetActorLocation(), -1.f);
+		if (Wreck && Wreck->IsDisabled() && FVector::Dist2D(Leader->GetActorLocation(), Wreck->GetHullCentreWorld()) <= Wreck->CrewConfig.BoardRangeCm)
+		{
+			if (OrderRepair(Outside, Wreck))
+			{
+				Context.Target = Wreck;
+				Context.Location = Wreck->GetActorLocation();
+				PlayerCommands::Report(this, PlayerCommands::VehicleRepair, Context);
+			}
+			return EVehicleKeyAction::Repair;
+		}
 		// The squad boards the vehicle part of it is already in; else the hovered / nearest one.
 		AVehiclePawn* Target = Preferred;
 		for (const AOperativeCharacter* Each : Addressed)
@@ -326,6 +344,7 @@ int32 UVehicleSubsystem::OrderBoard(const TArray<AOperativeCharacter*>& Operativ
 		Check.FreeSeats = FreeSeats;
 		Check.bTurnBased = bTurnBased;
 		Check.bTacticalPause = bPause;
+		Check.bVehicleDisabled = Target->IsDisabled();
 		const EVehicleRefusal Refusal = VehicleRules::CanBoard(Check, Target->CrewConfig);
 		if (Refusal != EVehicleRefusal::None)
 		{
@@ -424,30 +443,15 @@ int32 UVehicleSubsystem::OrderDisembark(const TArray<AOperativeCharacter*>& Oper
 			ByVehicle.FindOrAdd(Vehicle).Add(Operative);
 		}
 	}
-	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 	const APlayerController* PC = GetWorld()->GetFirstPlayerController();
 	int32 Count = 0;
 	for (TPair<AVehiclePawn*, TArray<AOperativeCharacter*>>& Pair : ByVehicle)
 	{
 		AVehiclePawn* Vehicle = Pair.Key;
 		// Exit candidates: on the infantry navmesh, free of bodies, not taken by someone already climbing out.
-		TArray<FVector> Candidates = Vehicle->GetExitCandidatesWorld();
+		TArray<FVector> Candidates;
 		TArray<bool> Free;
-		for (FVector& Candidate : Candidates)
-		{
-			FNavLocation OnNav;
-			bool bOk = Nav && Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(60.f, 60.f, 300.f))
-				&& FVector::Dist2D(OnNav.Location, Candidate) <= 70.f && !Vehicle->IsInsideFootprint(OnNav.Location, 30.f);
-			if (bOk)
-			{
-				Candidate = OnNav.Location;
-				bOk = IsExitFree(*Vehicle, Candidate) && !Exits.ContainsByPredicate([&Candidate](const FPendingExit& Each)
-				{
-					return FVector::Dist2D(Each.Point, Candidate) < 90.f;
-				});
-			}
-			Free.Add(bOk);
-		}
+		GatherExitPoints(*Vehicle, Candidates, Free);
 		const EVehicleRefusal Refusal = VehicleRules::CanDisembark(true, bTurnBased, bPause, Free.Contains(true));
 		if (Refusal != EVehicleRefusal::None)
 		{
@@ -493,7 +497,7 @@ bool UVehicleSubsystem::HandleDriveClick(AOperativeCharacter* Leader, const FVec
 	bool bTurnBased = false;
 	bool bPause = false;
 	VehicleSubsystemLocal::ModeFlags(GetWorld(), bTurnBased, bPause);
-	const EVehicleRefusal Refusal = VehicleRules::CanDrive(Vehicle->HasDriver(), bTurnBased, bPause);
+	const EVehicleRefusal Refusal = VehicleRules::CanDrive(Vehicle->HasDriver(), bTurnBased, bPause, Vehicle->IsDisabled());
 	AOperativeCharacter* Driver = Vehicle->GetOccupant(EVehicleSeat::Driver);
 	const FText Speaker = Driver ? Driver->DisplayName : Vehicle->DisplayName;
 	if (Refusal != EVehicleRefusal::None)
@@ -506,6 +510,11 @@ bool UVehicleSubsystem::HandleDriveClick(AOperativeCharacter* Leader, const FVec
 	Event.Subject = Driver;
 	Event.Target = Vehicle;
 	Event.Location = Goal;
+	if (Result == EVehicleDriveResult::Disabled)
+	{
+		PostLine(Speaker, RefusalText(EVehicleRefusal::Disabled, Driver));
+		return true;
+	}
 	if (Result == EVehicleDriveResult::NoPath || Result == EVehicleDriveResult::NoDriver)
 	{
 		PostLine(Speaker, LOCTEXT("NoRoad", "Can't get her through there. Dismount? [Y]"));
@@ -678,12 +687,13 @@ void UVehicleSubsystem::DismountImmediately(AOperativeCharacter* Operative, cons
 void UVehicleSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	if (Boarding.IsEmpty() && Exits.IsEmpty() && !Fade.IsActive())
+	if (Boarding.IsEmpty() && Exits.IsEmpty() && Repairs.IsEmpty() && !Fade.IsActive())
 	{
 		return;
 	}
 	UpdateBoarding(DeltaTime);
 	UpdateExits(DeltaTime);
+	UpdateRepairs(DeltaTime);
 	UpdateFade();
 	UpdateDoors();
 }
@@ -849,11 +859,58 @@ bool UVehicleSubsystem::HandleTurretTargetClick(AOperativeCharacter* Leader, AAc
 	}
 	const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Target);
 	const UHealthComponent* Health = Enemy ? Enemy->GetHealthComponent() : nullptr;
+	AOperativeCharacter* Gunner = Vehicle->Turret ? Vehicle->Turret->GetGunner() : nullptr;
+	if (!Enemy && Target && Vehicle->Turret)
+	{
+		// P4: a barrel / mine / trapped object gets one cannon shell (detonated like an operative's targeted shot).
+		const EVehicleObjectShot Shot = Vehicle->Turret->SetObjectTarget(Target);
+		if (Shot == EVehicleObjectShot::NotATarget)
+		{
+			return true; // not a target: ignored (no drive on a Ctrl + click)
+		}
+		const FText Speaker = Gunner ? Gunner->DisplayName : Vehicle->DisplayName;
+		switch (Shot)
+		{
+		case EVehicleObjectShot::None:
+			PostLine(Speaker, LOCTEXT("ShellObject", "One shell on it - stand clear!"));
+			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+			{
+				Feedback->HighlightTarget(Target);
+			}
+			break;
+		case EVehicleObjectShot::NoGunner:
+			PostLine(Speaker, LOCTEXT("NoGunnerObject", "Nobody on the gun: board a second operative."));
+			break;
+		case EVehicleObjectShot::Disabled:
+			PostLine(Speaker, LOCTEXT("DisabledGun", "The turret is dead - no power."));
+			break;
+		case EVehicleObjectShot::NoShells:
+			PostLine(Speaker, LOCTEXT("NoShells", "Out of 30 mm shells."));
+			break;
+		case EVehicleObjectShot::OutOfRange:
+			PostLine(Speaker, LOCTEXT("ObjectFar", "Too far for the cannon."));
+			break;
+		case EVehicleObjectShot::DeadZone:
+			PostLine(Speaker, LOCTEXT("ObjectDeadZone", "Too close - can't depress the gun that far!"));
+			break;
+		case EVehicleObjectShot::NoLineOfFire:
+			PostLine(Speaker, LOCTEXT("ObjectNoLine", "No line of fire from the turret."));
+			break;
+		default:
+			PostLine(Speaker, LOCTEXT("ObjectHeld", "The gun can't fire right now."));
+			break;
+		}
+		FPlayerCommandContext Context;
+		Context.Operative = Leader;
+		Context.Target = Target;
+		Context.Location = Target->GetActorLocation();
+		PlayerCommands::Report(this, PlayerCommands::VehicleTurretFire, Context);
+		return true;
+	}
 	if (!Enemy || Enemy->IsDying() || !Health || !Health->IsAlive())
 	{
 		return true; // not a target: ignored (no drive on a Ctrl + click)
 	}
-	AOperativeCharacter* Gunner = Vehicle->Turret ? Vehicle->Turret->GetGunner() : nullptr;
 	if (!Gunner)
 	{
 		PostLine(Vehicle->DisplayName, LOCTEXT("NoGunner", "Nobody on the gun: board a second operative."));
@@ -1146,6 +1203,8 @@ TArray<TSharedPtr<FJsonValue>> UVehicleSubsystem::CaptureSave() const
 		{
 			Entry->SetNumberField(TEXT("shells"), Vehicle->Turret->GetShellsLeft());
 		}
+		Entry->SetNumberField(TEXT("hull_hp"), Vehicle->GetHullHealth());
+		Entry->SetBoolField(TEXT("disabled"), Vehicle->IsDisabled());
 		TArray<TSharedPtr<FJsonValue>> CrewList;
 		for (const FVehicleCrewMember& Member : Vehicle->GetCrew())
 		{
@@ -1172,6 +1231,7 @@ void UVehicleSubsystem::PrepareForLoad()
 	}
 	Boarding.Reset();
 	Exits.Reset();
+	Repairs.Reset();
 	Fade = FVehicleFadeTimeline();
 	RemoveFadeOverlay();
 	for (AVehiclePawn* Vehicle : GetVehicles())
@@ -1224,6 +1284,12 @@ void UVehicleSubsystem::RestoreSave(const TArray<TSharedPtr<FJsonValue>>& Entrie
 			continue;
 		}
 		Vehicle->RestoreTransform(Location, Yaw);
+		// P4: hull health / disabled (older saves: a whole hull).
+		double HullHealth = Vehicle->GetHullMaxHealth();
+		bool bDisabled = false;
+		Entry->TryGetNumberField(TEXT("hull_hp"), HullHealth);
+		Entry->TryGetBoolField(TEXT("disabled"), bDisabled);
+		Vehicle->RestoreHull(static_cast<float>(HullHealth), bDisabled);
 		double Shells = -1.0;
 		if (Vehicle->Turret && Entry->TryGetNumberField(TEXT("shells"), Shells) && Shells >= 0.0)
 		{
@@ -1262,6 +1328,292 @@ void UVehicleSubsystem::RestoreSave(const TArray<TSharedPtr<FJsonValue>>& Entrie
 			Vehicle->SetCrewSeat(Seat.Key, Seat.Value);
 		}
 	}
+}
+
+// --- Hull (P4) ---------------------------------------------------------------------------------------------------
+
+void UVehicleSubsystem::GatherExitPoints(const AVehiclePawn& Vehicle, TArray<FVector>& OutCandidates, TArray<bool>& OutFree) const
+{
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	OutCandidates = Vehicle.GetExitCandidatesWorld();
+	OutFree.Reset();
+	for (FVector& Candidate : OutCandidates)
+	{
+		FNavLocation OnNav;
+		bool bOk = Nav && Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(60.f, 60.f, 300.f))
+			&& FVector::Dist2D(OnNav.Location, Candidate) <= 70.f && !Vehicle.IsInsideFootprint(OnNav.Location, 30.f);
+		if (bOk)
+		{
+			Candidate = OnNav.Location;
+			bOk = IsExitFree(Vehicle, Candidate) && !Exits.ContainsByPredicate([&Candidate](const FPendingExit& Each)
+			{
+				return FVector::Dist2D(Each.Point, Candidate) < 90.f;
+			});
+		}
+		OutFree.Add(bOk);
+	}
+}
+
+void UVehicleSubsystem::HandleDisabled(AVehiclePawn* Vehicle)
+{
+	if (!Vehicle)
+	{
+		return;
+	}
+	Repairs.RemoveAll([Vehicle](const FPendingRepair& Each) { return Each.Vehicle.Get() == Vehicle; });
+	const int32 Ejected = EjectCrew(Vehicle);
+	FGameplayEventContext Event;
+	Event.Target = Vehicle;
+	Event.Location = Vehicle->GetActorLocation();
+	Event.Kind = FName(*FString::FromInt(Ejected));
+	GameplayEvents::RaiseWithContext(this, GameplayEvents::VehicleDisabled, Event);
+}
+
+int32 UVehicleSubsystem::EjectCrew(AVehiclePawn* Vehicle)
+{
+	if (!Vehicle)
+	{
+		return 0;
+	}
+	// Boarders still walking up are turned away.
+	for (int32 Index = Boarding.Num() - 1; Index >= 0; --Index)
+	{
+		if (Boarding[Index].Vehicle.Get() == Vehicle)
+		{
+			VehicleSubsystemLocal::SetBlocksPawns(Boarding[Index].Operative.Get(), true);
+			Boarding.RemoveAt(Index);
+		}
+	}
+	TArray<AOperativeCharacter*> Crew;
+	for (const FVehicleCrewMember& Member : Vehicle->GetCrew())
+	{
+		if (AOperativeCharacter* Operative = Member.Operative.Get(); Operative && !IsDisembarking(Operative))
+		{
+			Crew.Add(Operative);
+		}
+	}
+	if (Crew.IsEmpty())
+	{
+		return 0;
+	}
+	Vehicle->StopDriving();
+	TArray<FVector> Candidates;
+	TArray<bool> Free;
+	GatherExitPoints(*Vehicle, Candidates, Free);
+	const APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	const FVector View = PC && PC->PlayerCameraManager ? PC->PlayerCameraManager->GetCameraLocation() : Vehicle->GetActorLocation();
+	// The safe side first (away from known threats); nobody stays inside a dead hull: the blocked exits after the free ones.
+	const TArray<int32> Order = VehicleRules::GetEjectionOrder(Candidates, Free, Vehicle->GetHullCentreWorld(), GatherKnownThreats(Vehicle->GetActorLocation()), View);
+	int32 Next = 0;
+	for (AOperativeCharacter* Operative : Crew)
+	{
+		FPendingExit& Exit = Exits.AddDefaulted_GetRef();
+		Exit.Operative = Operative;
+		Exit.Vehicle = Vehicle;
+		Exit.Point = Order.IsValidIndex(Next) ? Candidates[Order[Next]] : Vehicle->GetHullAttackPoint(Operative->GetActorLocation(), 120.f);
+		Exit.ClimbLeft = 0.f; // out at once (the fade covers it in real time)
+		++Next;
+	}
+	Vehicle->SetDoorsOpen(true);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] %s: crew of %d ejected"), *Vehicle->GetName(), Crew.Num());
+	return Crew.Num();
+}
+
+bool UVehicleSubsystem::WalkToHull(AOperativeCharacter* Worker, const AVehiclePawn& Vehicle) const
+{
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	FVector Spot = Vehicle.GetHullAttackPoint(Worker->GetActorLocation(), 90.f);
+	FNavLocation OnNav;
+	if (Nav && Nav->ProjectPointToNavigation(Spot, OnNav, FVector(150.f, 150.f, 300.f)))
+	{
+		Spot = OnNav.Location;
+	}
+	return Worker->OrderMoveTo(Spot, false) == EOperativeOrderResult::Accepted;
+}
+
+bool UVehicleSubsystem::OrderRepair(const TArray<AOperativeCharacter*>& Operatives, AVehiclePawn* Vehicle)
+{
+	if (!Vehicle || !Vehicle->IsDisabled())
+	{
+		return false;
+	}
+	bool bTurnBased = false;
+	bool bPause = false;
+	VehicleSubsystemLocal::ModeFlags(GetWorld(), bTurnBased, bPause);
+	const FText Speaker = Operatives.Num() > 0 && Operatives[0] ? Operatives[0]->DisplayName : Vehicle->DisplayName;
+	if (bTurnBased || bPause)
+	{
+		PostLine(Speaker, RefusalText(bTurnBased ? EVehicleRefusal::TurnBased : EVehicleRefusal::TacticalPause, nullptr));
+		return false;
+	}
+	if (const FPendingRepair* Busy = Repairs.FindByPredicate([Vehicle](const FPendingRepair& Each) { return Each.Vehicle.Get() == Vehicle; }))
+	{
+		PostLine(Busy->Operative.IsValid() ? Busy->Operative->DisplayName : Speaker, LOCTEXT("RepairBusy", "Already on it."));
+		return false;
+	}
+	// The Engineer first (the fastest repairer); anyone else only when the hull allows it.
+	AOperativeCharacter* Worker = nullptr;
+	float Seconds = 0.f;
+	for (AOperativeCharacter* Operative : Operatives)
+	{
+		const float Time = Operative ? VehicleHullRules::GetRepairSeconds(Operative->SquadRole, Vehicle->HullConfig) : 0.f;
+		if (Time > 0.f && VehicleSubsystemLocal::IsAliveOperative(Operative) && !Operative->IsKnockedDown() && !IsMounted(Operative)
+			&& (!Worker || Time < Seconds))
+		{
+			Worker = Operative;
+			Seconds = Time;
+		}
+	}
+	if (!Worker)
+	{
+		PostLine(Speaker, LOCTEXT("RepairNeedsEngineer", "Only the Engineer can get her running - select him and press [Y]."));
+		return false;
+	}
+	if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+	{
+		Interactions->CancelUseOrder(Worker);
+	}
+	if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
+	{
+		Relocation->CancelActiveTask(Worker);
+	}
+	FPendingRepair& Repair = Repairs.AddDefaulted_GetRef();
+	Repair.Operative = Worker;
+	Repair.Vehicle = Vehicle;
+	Repair.WorkTotal = Seconds;
+	if (Vehicle->GetHullDistance2D(Worker->GetActorLocation()) > Vehicle->HullConfig.RepairReachCm && !WalkToHull(Worker, *Vehicle))
+	{
+		Repairs.Pop();
+		PostLine(Worker->DisplayName, LOCTEXT("RepairNoWay", "Can't get to her."));
+		return false;
+	}
+	PostLine(Worker->DisplayName, FText::Format(LOCTEXT("RepairOrder", "On it - I'll get the {0} running ({1} s)."), Vehicle->DisplayName,
+		FMath::RoundToInt(Seconds)));
+	UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] %s goes to repair %s (%.1f s)"), *Worker->GetName(), *Vehicle->GetName(), Seconds);
+	return true;
+}
+
+bool UVehicleSubsystem::IsRepairing(const AOperativeCharacter* Operative) const
+{
+	return Repairs.ContainsByPredicate([Operative](const FPendingRepair& Each) { return Each.Operative.Get() == Operative; });
+}
+
+float UVehicleSubsystem::GetRepairProgress(const AVehiclePawn* Vehicle) const
+{
+	const FPendingRepair* Repair = Repairs.FindByPredicate([Vehicle](const FPendingRepair& Each) { return Each.Vehicle.Get() == Vehicle && Each.WorkLeft >= 0.f; });
+	return Repair ? FMath::Clamp(1.f - Repair->WorkLeft / FMath::Max(0.01f, Repair->WorkTotal), 0.f, 1.f) : 0.f;
+}
+
+void UVehicleSubsystem::UpdateRepairs(float DeltaTime)
+{
+	for (int32 Index = Repairs.Num() - 1; Index >= 0; --Index)
+	{
+		FPendingRepair& Repair = Repairs[Index];
+		AOperativeCharacter* Worker = Repair.Operative.Get();
+		AVehiclePawn* Vehicle = Repair.Vehicle.Get();
+		if (!Worker || !Vehicle || !Vehicle->IsDisabled() || !VehicleSubsystemLocal::IsAliveOperative(Worker) || IsMounted(Worker))
+		{
+			Repairs.RemoveAt(Index);
+			continue;
+		}
+		const float Reach = Vehicle->HullConfig.RepairReachCm;
+		const float Distance = Vehicle->GetHullDistance2D(Worker->GetActorLocation());
+		if (Worker->IsKnockedDown() || (Repair.WorkLeft >= 0.f && Distance > Reach * 2.f))
+		{
+			PostLine(Worker->DisplayName, LOCTEXT("RepairInterrupted", "Repair interrupted!"));
+			Repairs.RemoveAt(Index);
+			continue;
+		}
+		Repair.Age += DeltaTime;
+		if (Repair.WorkLeft < 0.f)
+		{
+			Repair.IdleSeconds = Worker->IsMoving() ? 0.f : Repair.IdleSeconds + DeltaTime;
+			if (Distance <= Reach || (Repair.IdleSeconds > 0.5f && Distance <= Reach * 1.6f))
+			{
+				Worker->StopOperative();
+				Worker->SetFacingPoint(Vehicle->GetClosestHullPoint(Worker->GetActorLocation()));
+				Worker->SetStance(EOperativeStance::Crouching);
+				Repair.WorkLeft = Repair.WorkTotal;
+				UFloatingTextSubsystem::SpawnAboveOperative(Worker, TEXT("🔧 REPAIRING..."), FLinearColor(0.2f, 0.9f, 0.4f));
+				UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] %s repairs %s (%.1f s)"), *Worker->GetName(), *Vehicle->GetName(), Repair.WorkTotal);
+			}
+			else if (Repair.IdleSeconds > 1.f && Repair.Retries < 4 && Repair.Age < 40.f)
+			{
+				++Repair.Retries;
+				Repair.IdleSeconds = 0.f;
+				WalkToHull(Worker, *Vehicle);
+			}
+			else if ((Repair.IdleSeconds > 1.f && Repair.Retries >= 4) || Repair.Age > 40.f)
+			{
+				PostLine(Worker->DisplayName, LOCTEXT("RepairNoReach", "Can't get to her."));
+				Repairs.RemoveAt(Index);
+			}
+			continue;
+		}
+		Repair.WorkLeft -= DeltaTime;
+		if (Repair.WorkLeft > 0.f)
+		{
+			continue;
+		}
+		Repairs.RemoveAt(Index);
+		Vehicle->RepairHull();
+		PostLine(Worker->DisplayName, FText::Format(LOCTEXT("Repaired", "The {0} is running again ({1}%)."), Vehicle->DisplayName,
+			FMath::RoundToInt(Vehicle->GetHullHealth() / Vehicle->GetHullMaxHealth() * 100.f)));
+		FGameplayEventContext Event;
+		Event.Subject = Worker;
+		Event.Target = Vehicle;
+		Event.Location = Vehicle->GetActorLocation();
+		GameplayEvents::RaiseWithContext(this, GameplayEvents::VehicleRepaired, Event);
+	}
+}
+
+void UVehicleSubsystem::ApplyBlastToVehicles(UWorld* World, const FVector& Centre, float Radius, TFunctionRef<float(float)> DamageAtHullDistance,
+	const AVehiclePawn* TriggeredBy, const FString& Source)
+{
+	const UVehicleSubsystem* Self = World ? World->GetSubsystem<UVehicleSubsystem>() : nullptr;
+	if (!Self)
+	{
+		return;
+	}
+	for (AVehiclePawn* Vehicle : Self->GetVehicles())
+	{
+		const bool bTriggered = Vehicle == TriggeredBy;
+		const float HullDistance = Vehicle->GetHullDistance2D(Centre);
+		if (!bTriggered && (HullDistance > Radius || FMath::Abs(Centre.Z - Vehicle->GetActorLocation().Z) > 500.f))
+		{
+			continue;
+		}
+		const float Raw = bTriggered ? 0.f : DamageAtHullDistance(HullDistance);
+		EVehicleDamageSource DamageSource = EVehicleDamageSource::Explosion;
+		VehicleHullRules::GetBlastHullDamage(Raw, bTriggered, Vehicle->HullConfig, DamageSource);
+		Vehicle->ApplyHullDamage(Raw, DamageSource, Source);
+	}
+}
+
+AVehiclePawn* UVehicleSubsystem::FindEnemyTargetVehicle(const FVector& From, bool bHordeKnowsSquad, float* OutHullDistanceCm) const
+{
+	AVehiclePawn* Best = nullptr;
+	float BestDistance = TNumericLimits<float>::Max();
+	for (const TWeakObjectPtr<AVehiclePawn>& Weak : Vehicles) // every enemy asks every tick: no array copy
+	{
+		AVehiclePawn* Vehicle = Weak.Get();
+		if (!Vehicle)
+		{
+			continue;
+		}
+		const float Distance = Vehicle->GetHullDistance2D(From);
+		if (VehicleHullRules::IsEnemyTarget(Vehicle->GetCrewCount(), Vehicle->IsDisabled(), bHordeKnowsSquad, Distance, Vehicle->HullConfig)
+			&& Distance < BestDistance)
+		{
+			Best = Vehicle;
+			BestDistance = Distance;
+		}
+	}
+	if (OutHullDistanceCm)
+	{
+		*OutHullDistanceCm = Best ? BestDistance : -1.f;
+	}
+	return Best;
 }
 
 // --- Queries -----------------------------------------------------------------------------------------------------

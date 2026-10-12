@@ -66,6 +66,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Enemy")
 	void InitializeArchetype(EEnemyArchetype InArchetype);
 
+	/**
+	 * A spawner (waves, save load) spawns an enemy of Archetype within this scope: its BeginPlay takes it as is. Without
+	 * one the enemy was placed in the level and BeginPlay resolves its archetype from its class
+	 * (EnemyAIRules::ResolvePlacedArchetype).
+	 */
+	struct CODEXTACTICS_API FScopedSpawnArchetype
+	{
+		explicit FScopedSpawnArchetype(EEnemyArchetype InArchetype);
+		~FScopedSpawnArchetype();
+		FScopedSpawnArchetype(const FScopedSpawnArchetype&) = delete;
+		FScopedSpawnArchetype& operator=(const FScopedSpawnArchetype&) = delete;
+
+	private:
+		TOptional<EEnemyArchetype> Previous;
+	};
+
+	/** Placed in the level (not made by a spawner): the archetype came from ResolvePlacedArchetype (smokes). */
+	bool WasPlacedInLevel() const { return bPlacedInLevel; }
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	EEnemyArchetype GetArchetype() const { return Archetype; }
 
@@ -486,8 +505,15 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> BodyMaterial;
 
+	/**
+	 * The enemy type (stats, name, AI). A placed enemy left at its class default takes the game mode's EnemyClasses mapping
+	 * for its Blueprint (BP_Enemy_Brute -> Brute); set it on the instance to override.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy")
 	EEnemyArchetype Archetype = EEnemyArchetype::FrostHound;
+
+	/** Set by BeginPlay when no spawner scope was active. */
+	bool bPlacedInLevel = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy")
 	FString EnemyDisplayName = TEXT("Frost Hound");
@@ -580,6 +606,17 @@ protected:
 	/** Godot enemy_frost_spitter.gd _process_enemy_behavior. */
 	void TickSpitter(float DeltaTime);
 
+	/** APC P4: the manned vehicle this enemy would go for (UVehicleSubsystem::FindEnemyTargetVehicle), nullptr when none. */
+	class AVehiclePawn* FindVehicleTarget() const;
+
+	/**
+	 * APC P4: a ranged enemy against a manned vehicle (spitter / cryo drone acid, the marksman's rifle): closes to within
+	 * RangeCm of the hull with a line from MuzzleHeightCm over the feet to the hull, then hits it every CooldownSeconds
+	 * (HitChance) with Damage through the hull's armour for its archetype.
+	 */
+	void TickRangedVsVehicle(class AVehiclePawn& Vehicle, float DeltaTime, float RangeCm, float Damage, float CooldownSeconds, float MuzzleHeightCm,
+		float HitChance);
+
 	/**
 	 * The behaviour part of Tick (targets, attacks, movement); Tick then turns the body (UpdateMovementFacing).
 	 * Archetypes with their own brain (AMarksmanEnemyCharacter) override it.
@@ -617,6 +654,8 @@ protected:
 	void HandleDied(AActor* Victim, const FString& AttackerSource);
 
 	void ApplyArchetypeDefaults();
+	/** A placed enemy: Archetype from the instance / the game mode's class mapping / the class default (logged once). */
+	void ResolvePlacedArchetype();
 
 	/** Which archetypes can fall and with which clips (Frostbitten / Brute on their own skeletons). */
 	void ConfigureKnockdown();

@@ -1,4 +1,5 @@
 #include "Combat/GrenadeActor.h"
+#include "Vehicles/VehicleSubsystem.h"
 #include "Combat/KnockdownComponent.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -150,6 +151,11 @@ void AGrenadeActor::ApplyAreaEffect()
 {
 	const FVector Center = GetActorLocation();
 	const FText Source = LOCTEXT("Source", "Grenade");
+	// APC P4: the hull of a vehicle in reach (grenade falloff at the hull side's distance).
+	UVehicleSubsystem::ApplyBlastToVehicles(GetWorld(), Center, EffectRadius, [this](float HullDistance)
+	{
+		return Damage * GrenadeRules::DamageFalloff(HullDistance, EffectRadius);
+	}, nullptr, Source.ToString());
 	// Patrols hear the squad's grenade (enemy_perception.json hear_explosion_m) and engage (user request 2026-10-06).
 	AEnemyCharacter::NotifySquadNoise(GetWorld(), Center, ESquadNoise::Explosion);
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();

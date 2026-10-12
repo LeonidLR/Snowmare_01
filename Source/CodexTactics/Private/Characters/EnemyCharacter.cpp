@@ -1,4 +1,5 @@
 #include "Characters/EnemyCharacter.h"
+#include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/KnockdownRules.h"
@@ -99,11 +100,59 @@ void AEnemyCharacter::BeginPlay()
 		KnockdownComponent->OnPhaseChanged.AddUObject(this, &AEnemyCharacter::HandleKnockdownPhase);
 	}
 
+	ResolvePlacedArchetype();
 	ApplyArchetypeDefaults();
 	ConfigureKnockdown();
 	InitPatrol();
 	// User request 2026-10-11: placed in the map without a route -> guards its post until it perceives the squad.
 	TryStartGuardPost();
+}
+
+namespace EnemyCharacterLocal
+{
+	/** The archetype a spawner is spawning now (FScopedSpawnArchetype); unset = a placed enemy. Game thread only. */
+	TOptional<EEnemyArchetype> SpawnArchetype;
+}
+
+AEnemyCharacter::FScopedSpawnArchetype::FScopedSpawnArchetype(EEnemyArchetype InArchetype)
+	: Previous(EnemyCharacterLocal::SpawnArchetype)
+{
+	EnemyCharacterLocal::SpawnArchetype = InArchetype;
+}
+
+AEnemyCharacter::FScopedSpawnArchetype::~FScopedSpawnArchetype()
+{
+	EnemyCharacterLocal::SpawnArchetype = Previous;
+}
+
+void AEnemyCharacter::ResolvePlacedArchetype()
+{
+	if (EnemyCharacterLocal::SpawnArchetype.IsSet())
+	{
+		Archetype = EnemyCharacterLocal::SpawnArchetype.GetValue();
+		bPlacedInLevel = false;
+		return;
+	}
+	bPlacedInLevel = true;
+	const AEnemyCharacter* Defaults = GetClass()->GetDefaultObject<AEnemyCharacter>();
+	TArray<FString> Chain;
+	for (const UClass* Class = GetClass(); Class && Class != AEnemyCharacter::StaticClass()->GetSuperClass(); Class = Class->GetSuperClass())
+	{
+		Chain.Add(Class->GetPathName());
+	}
+	TArray<TPair<EEnemyArchetype, FString>> Mapping;
+	if (const ACodexTacticsGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>() : nullptr)
+	{
+		for (const TPair<EEnemyArchetype, TSoftClassPtr<AEnemyCharacter>>& Entry : GameMode->EnemyClasses)
+		{
+			Mapping.Emplace(Entry.Key, Entry.Value.ToSoftObjectPath().ToString());
+		}
+	}
+	FString Source;
+	const EEnemyArchetype Resolved = EnemyAIRules::ResolvePlacedArchetype(Archetype, Defaults ? Defaults->Archetype : Archetype, Chain, Mapping, Source);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Enemy] placed %s (%s): archetype %s from the %s"), *GetName(), *GetClass()->GetName(),
+		*StaticEnum<EEnemyArchetype>()->GetNameStringByValue(static_cast<int64>(Resolved)), *Source);
+	Archetype = Resolved;
 }
 
 void AEnemyCharacter::InitializeArchetype(EEnemyArchetype InArchetype)
@@ -616,7 +665,8 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	};
 
 	// Godot enemy_cutter.gd _process_enemy_behavior: a pounce at 3.5-9 m (at most 2.5 m of height difference).
-	if (Archetype == EEnemyArchetype::Cutter && bJumpAttackEnabled && JumpCooldownTimer <= 0.f)
+	AVehiclePawn* TargetVehicle = Cast<AVehiclePawn>(Target);
+	if (Archetype == EEnemyArchetype::Cutter && bJumpAttackEnabled && JumpCooldownTimer <= 0.f && !TargetVehicle)
 	{
 		const FVector JumpFeet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 		const FVector JumpTargetPosition = GodotPosition(Target);
@@ -645,7 +695,8 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 
 	// 2. Melee reach (Godot: attack range and at most 1.2 m of height difference), else close in.
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
-	const FVector TargetPosition = GodotPosition(Target);
+	// APC P4: a vehicle is reached at its nearest hull side (a 7.8 m hull: its pivot is metres away), at the feet's height.
+	const FVector TargetPosition = TargetVehicle ? FVector(FVector2D(TargetVehicle->GetClosestHullPoint(Feet)), Feet.Z) : GodotPosition(Target);
 	if (EnemyAIRules::CanMelee(FVector::Dist(Feet, TargetPosition), FMath::Abs(TargetPosition.Z - Feet.Z), AttackRange))
 	{
 		if (AIC)
@@ -684,7 +735,12 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		FVector Zone;
 		float ZoneRadius = 0.f;
 		FVector Waypoint;
-		if (bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire && FindNearestFireZone(800.f, Zone, ZoneRadius)
+		if (TargetVehicle)
+		{
+			// APC P4: up to the hull side nearest it (the parked hull is carved out of the navmesh).
+			RequestAIMoveToLocation(AIC, TargetVehicle->GetHullAttackPoint(Feet, GetSimpleCollisionRadius() + 30.f), 40.f);
+		}
+		else if (bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire && FindNearestFireZone(800.f, Zone, ZoneRadius)
 			&& EnemyAIRules::FireDetourWaypoint(Feet, Zone, ZoneRadius + 50.f, TargetPosition, Waypoint))
 		{
 			if (FVector::Dist2D(Feet, Waypoint) > 60.f)
@@ -840,6 +896,16 @@ AActor* AEnemyCharacter::FindTarget() const
 			Candidates.Add({ EEnemyTargetKind::Generator, GodotPosition(*It), !It->bGeneratorBroken && It->GeneratorHealth > 0.f });
 		}
 	}
+	// APC P4: a manned vehicle (the crew inside is the damage proxy's: the hull takes the blows), at its nearest hull point.
+	if (AVehiclePawn* Vehicle = FindVehicleTarget())
+	{
+		const FVector EnemyFeet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		FEnemyTargetCandidate Candidate{ EEnemyTargetKind::Vehicle, Vehicle->GetClosestHullPoint(EnemyFeet), true };
+		Candidate.Weight = VehicleHullRules::GetEnemyTargetWeight(Archetype != EEnemyArchetype::Brute,
+			Vehicle->HullConfig);
+		Actors.Add(Vehicle);
+		Candidates.Add(Candidate);
+	}
 	// Targets it could not get closer to recently (no path on the navmesh) are skipped for a while, and an enemy that
 	// fears fire prefers targets outside fire / heat zones (it would only wait at their edge).
 	const double Now = World->GetTimeSeconds();
@@ -849,7 +915,8 @@ AActor* AEnemyCharacter::FindTarget() const
 	{
 		const double* Until = UnreachableUntil.Find(Actors[Index]);
 		if ((Until && *Until > Now) || (bFearsFire && AIConfig.bFireFearEnabled && IsInFearZone(Candidates[Index].Location, Actors[Index]))
-			|| (bKnowsSquadPosition && !Known.IsEmpty() && Candidates[Index].Kind != EEnemyTargetKind::Operative)) // a horde goes for the squad
+			|| (bKnowsSquadPosition && !Known.IsEmpty() && Candidates[Index].Kind != EEnemyTargetKind::Operative
+				&& Candidates[Index].Kind != EEnemyTargetKind::Vehicle)) // a horde goes for the squad (and its manned APC)
 		{
 			Candidates[Index].bUsable = false;
 		}
@@ -1038,6 +1105,17 @@ void AEnemyCharacter::AttackObject(AActor* Object)
 	AttackTimer = AttackCooldown;
 	StartAttackAnimation(Object);
 	OnAttackStarted(Object);
+	if (AVehiclePawn* Vehicle = Cast<AVehiclePawn>(Object))
+	{
+		// APC P4: claws scratch the armour, a Brute's blow dents it (VehicleHullRules armour per source).
+		NotifySquadAttacked(Vehicle);
+		if (UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>())
+		{
+			Sight->NotifyFired(this);
+		}
+		Vehicle->ApplyHullDamage(AttackDamage, VehicleHullRules::ClassifyEnemyAttack(Archetype), EnemyDisplayName, this);
+		return;
+	}
 	if (AInteractableActor* Interactable = Cast<AInteractableActor>(Object);
 		Interactable && Interactable->ObjectType == EInteractableType::Generator && !Object->IsA<ADeployableActor>())
 	{
@@ -1088,6 +1166,13 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 	CurrentTarget = Target;
 	if (!Target)
 	{
+		// APC P4: the squad is aboard - spit at the hull (acid x the hull's acid factor).
+		if (AVehiclePawn* Vehicle = FindVehicleTarget())
+		{
+			CurrentTarget = Vehicle;
+			TickRangedVsVehicle(*Vehicle, DeltaTime, AttackRange, AttackDamage, AttackCooldown, 40.f, 1.f);
+			return;
+		}
 		if (AIC)
 		{
 			AIC->StopMovement();
@@ -1167,6 +1252,69 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 		{
 			Feedback->SpawnTracer(Feet + FVector(0.f, 0.f, 90.f), End, FLinearColor(1.f, 0.2f, 0.2f));
 		}
+	}
+}
+
+AVehiclePawn* AEnemyCharacter::FindVehicleTarget() const
+{
+	const UVehicleSubsystem* Vehicles = GetWorld() ? GetWorld()->GetSubsystem<UVehicleSubsystem>() : nullptr;
+	return Vehicles && Vehicles->HasMountedOperatives() ? Vehicles->FindEnemyTargetVehicle(GetActorLocation(), bKnowsSquadPosition) : nullptr;
+}
+
+void AEnemyCharacter::TickRangedVsVehicle(AVehiclePawn& Vehicle, float DeltaTime, float RangeCm, float Damage, float CooldownSeconds,
+	float MuzzleHeightCm, float HitChance)
+{
+	UWorld* World = GetWorld();
+	AAIController* AIC = Cast<AAIController>(GetController());
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const FVector HullPoint = Vehicle.GetClosestHullPoint(Feet);
+	const float Distance = Vehicle.GetHullDistance2D(Feet);
+	const FVector Aim = FVector(FVector2D(HullPoint), Vehicle.GetHullCentreWorld().Z);
+	FaceYaw((Aim - GetActorLocation()).Rotation().Yaw, DeltaTime, 8.f);
+	// The line: the hull must be the first thing the shot meets (walls / rocks in between block it; other enemies do not).
+	const FVector Start = Feet + FVector(0.f, 0.f, MuzzleHeightCm);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(EnemyVehicleLine), false, this);
+	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
+	FHitResult Hit;
+	const bool bLine = !World->LineTraceSingleByChannel(Hit, Start, Vehicle.GetHullCentreWorld(), ECC_Visibility, Params) || Hit.GetActor() == &Vehicle;
+	if (AIC)
+	{
+		if (!bLine || Distance > RangeCm * 0.9f)
+		{
+			RequestAIMoveToLocation(AIC, Vehicle.GetHullAttackPoint(Feet, FMath::Min(RangeCm * 0.5f, 600.f)), 100.f);
+		}
+		else
+		{
+			AIC->StopMovement();
+		}
+	}
+	if (!bLine || Distance > RangeCm || AttackTimer > 0.f)
+	{
+		return;
+	}
+	AttackTimer = CooldownSeconds;
+	NotifySquadAttacked(&Vehicle);
+	OnAttackStarted(&Vehicle);
+	if (UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>())
+	{
+		Sight->NotifyFired(this);
+	}
+	if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+	{
+		Anim->NotifyAttack();
+	}
+	const bool bHit = FMath::FRand() < HitChance;
+	if (bHit)
+	{
+		Vehicle.ApplyHullDamage(Damage, VehicleHullRules::ClassifyEnemyAttack(Archetype), EnemyDisplayName, this);
+	}
+	if (UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
+	{
+		const FVector End = bHit ? (Hit.bBlockingHit ? Hit.ImpactPoint : Aim) : Aim + FVector(FMath::FRandRange(-150.f, 150.f), FMath::FRandRange(-150.f, 150.f), 120.f);
+		Feedback->SpawnTracer(Start, End, Archetype == EEnemyArchetype::Marksman ? FLinearColor(1.f, 0.85f, 0.3f) : FLinearColor(1.f, 0.2f, 0.2f));
 	}
 }
 
@@ -2141,7 +2289,7 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 
 void AEnemyCharacter::NotifySquadAttacked(AActor* Target)
 {
-	if (Target && Target->IsA<AOperativeCharacter>() && !bIsDying)
+	if (Target && (Target->IsA<AOperativeCharacter>() || Target->IsA<AVehiclePawn>()) && !bIsDying) // APC P4: an attack on the manned hull too
 	{
 		ULevelEncounterSubsystem::NotifyHostileContactIn(GetWorld(), EAmbushTrigger::EnemyAttack, this);
 	}

@@ -304,11 +304,11 @@
   },
   "vehicle_weapons": {
     "apc_turret": {
-      "cannon_damage": 70,
+      "cannon_damage": 45,
       "cannon_splash_radius_m": 1.5,
-      "cannon_splash_damage": 35,
+      "cannon_splash_damage": 20,
       "cannon_shot_interval": 0.5,
-      "cannon_burst_shots": 3,
+      "cannon_burst_shots": 2,
       "cannon_burst_pause": 1.2,
       "cannon_range_m": 40,
       "shells_per_map": 60,
@@ -320,9 +320,6 @@
       "mg_hit_chance": 0.8,
       "mg_overheat_seconds": 4,
       "mg_cooldown_seconds": 3,
-      "mg_suppression_per_round": 8,
-      "mg_suppression_threshold": 40,
-      "mg_suppression_stagger": 0.5,
       "traverse_deg_per_sec": 60,
       "dead_zone_m": 4,
       "defensive_radius_m": 20
@@ -335,7 +332,25 @@
       "ram_speed_factor": 0.25,
       "ram_knockdown_play_rate": 0.65,
       "ram_downed_time_scale": 1.5,
-      "crush_downed_brute": false
+      "crush_downed_brute": false,
+      "hull_ram_damage": 30
+    },
+    "apc_hull": {
+      "max_hp": 1200,
+      "small_melee_factor": 0.1,
+      "heavy_melee_factor": 1,
+      "acid_factor": 0.5,
+      "rifle_factor": 0.25,
+      "explosion_factor": 1,
+      "mine_damage": 250,
+      "other_factor": 1,
+      "low_health_fraction": 0.25,
+      "repair_seconds": 5,
+      "other_repair_seconds": 0,
+      "repair_fraction": 0.5,
+      "enemy_weight_small": 1,
+      "enemy_weight_large": 0.85,
+      "enemy_awareness_m": 40
     }
   }
 }

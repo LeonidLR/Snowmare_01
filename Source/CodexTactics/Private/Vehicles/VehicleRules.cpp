@@ -74,6 +74,10 @@ namespace VehicleRules
 		{
 			return EVehicleRefusal::AlreadyMounted;
 		}
+		if (Check.bVehicleDisabled)
+		{
+			return EVehicleRefusal::Disabled;
+		}
 		if (Check.bTurnBased)
 		{
 			return EVehicleRefusal::TurnBased;
@@ -118,8 +122,12 @@ namespace VehicleRules
 		return bHasFreeExit ? EVehicleRefusal::None : EVehicleRefusal::NoExit;
 	}
 
-	EVehicleRefusal CanDrive(bool bHasDriver, bool bTurnBased, bool bTacticalPause)
+	EVehicleRefusal CanDrive(bool bHasDriver, bool bTurnBased, bool bTacticalPause, bool bDisabled)
 	{
+		if (bDisabled)
+		{
+			return EVehicleRefusal::Disabled;
+		}
 		if (bTurnBased)
 		{
 			return EVehicleRefusal::TurnBased;
@@ -138,6 +146,17 @@ namespace VehicleRules
 			return EVehicleKeyAction::None;
 		}
 		return MountedCount >= AddressedCount ? EVehicleKeyAction::Disembark : EVehicleKeyAction::Board;
+	}
+
+	TArray<int32> GetEjectionOrder(const TArray<FVector>& Candidates, const TArray<bool>& bFree, const FVector& VehicleCentre,
+		const TArray<FVector>& Threats, const FVector& ViewPoint)
+	{
+		TArray<int32> Order = RankExitPoints(Candidates, bFree, VehicleCentre, Threats, ViewPoint);
+		for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+		{
+			Order.AddUnique(Index);
+		}
+		return Order;
 	}
 
 	TArray<int32> RankExitPoints(const TArray<FVector>& Candidates, const TArray<bool>& bFree, const FVector& VehicleCentre,

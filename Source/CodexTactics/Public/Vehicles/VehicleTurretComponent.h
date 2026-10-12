@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Vehicles/VehicleCombatRules.h"
+#include "Vehicles/VehicleHullRules.h"
 #include "VehicleTurretComponent.generated.h"
 
 class AActor;
@@ -18,10 +19,13 @@ class UParticleSystemComponent;
  * (VehicleCombatRules::ChooseTarget: Passive holds, Defensive answers within 20 m once provoked, Aggressive engages
  * anything visible) or the Ctrl+click priority target, slews the turret / gun (vendor ABP TurretHorizontalAngle /
  * GunElevation) and fires the 30 mm autocannon (HE, splash, limited shells per map) or the coaxial MG (unlimited,
- * overheats, suppresses = short stagger). Line of sight from the muzzle socket gun_jntSocket; nothing within the dead zone
+ * overheats; it only deals damage: user decision 2026-10-12, no suppression stagger). Line of sight from the muzzle socket gun_jntSocket; nothing within the dead zone
  * round the hull. Shots: tracers + muzzle flash (vendor Cascade PS_MuzzleFire_01), damage numbers through
  * UHealthComponent, kill credit = the gunner (AttackerSource = his name), noise for enemies.
  * Events VehicleTurretFired (Kind = "Cannon" / "MachineGun") and VehicleTurretKill.
+ * P4: silent while the hull is disabled; a Ctrl+click on a barrel / mine / trapped object = one cannon shell at it once
+ * aimed (range, dead zone, line of fire), detonating it like an operative's targeted shot (shared
+ * AOperativeCharacter::DetonateShotTarget); costs a shell. Auto-fire stays enemy-only.
  */
 UCLASS(ClassGroup = (CodexTactics), meta = (BlueprintSpawnableComponent))
 class CODEXTACTICS_API UVehicleTurretComponent : public UActorComponent
@@ -67,6 +71,21 @@ public:
 	void SetPriorityTarget(AActor* Target);
 	AActor* GetPriorityTarget() const { return PriorityTarget.Get(); }
 
+	/**
+	 * Ctrl+click on an object (P4): checks it now (VehicleHullRules::CheckObjectShot) and, when it may be shelled, makes it
+	 * the gun's next shot (the enemy targets wait; dropped after ObjectTargetTimeoutSeconds or once it cannot be shelled).
+	 */
+	EVehicleObjectShot SetObjectTarget(AActor* Object);
+	AActor* GetObjectTarget() const { return ObjectTarget.Get(); }
+	/** The check of a cannon shot at Object from where the turret is now. */
+	EVehicleObjectShot CheckObjectShot(const AActor* Object) const;
+	/** Shells fired at objects so far (smokes). */
+	int32 GetObjectShots() const { return ObjectShots; }
+
+	/** An object order gives up after this long without a shot (turret slewing, line lost). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vehicle|Turret", meta = (ClampMin = "0.5"))
+	float ObjectTargetTimeoutSeconds = 6.f;
+
 	/** The gunner (nullptr = the turret is unmanned). */
 	AOperativeCharacter* GetGunner() const;
 
@@ -104,16 +123,22 @@ private:
 	void UpdateAim(float DeltaTime);
 	void FireCannon(AEnemyCharacter* Target, AOperativeCharacter* Gunner);
 	void FireMgRound(AEnemyCharacter* Target, AOperativeCharacter* Gunner);
+	void FireCannonAtObject(AActor* Object, AOperativeCharacter* Gunner);
+	bool HasLineOfFireToObject(const FVector& From, const AActor* Object) const;
+	/** Turret held: no gunner, turn-based, the world AI pause or a disabled hull. */
+	bool IsHeld() const;
 	void ApplyHit(AEnemyCharacter* Enemy, float Amount, EDamageType Type, float ArmourPenetration, AOperativeCharacter* Gunner,
-		EVehicleTurretWeapon Weapon, bool bStagger);
+		EVehicleTurretWeapon Weapon);
 	void PlayMuzzleFlash(bool bCannon);
 	void RaiseFired(AActor* Target, EVehicleTurretWeapon Weapon);
 	void PushAnim() const;
 
 	TWeakObjectPtr<AActor> PriorityTarget;
 	TWeakObjectPtr<AEnemyCharacter> CurrentTarget;
+	TWeakObjectPtr<AActor> ObjectTarget;
+	float ObjectTargetAge = 0.f;
+	int32 ObjectShots = 0;
 	EVehicleTurretWeapon CurrentWeapon = EVehicleTurretWeapon::None;
-	TMap<TWeakObjectPtr<AActor>, float> Suppression;
 	UPROPERTY(Transient)
 	TObjectPtr<UParticleSystemComponent> FlashComponent;
 	float FlashLeft = 0.f;

@@ -248,7 +248,11 @@ AEnemyCharacter* UWaveSubsystem::SpawnEnemy(EEnemyArchetype Archetype, const FVe
 			}
 		}
 	}
-	AEnemyCharacter* Enemy = World->SpawnActor<AEnemyCharacter>(EnemyClass, Location, Rotation, Params);
+	AEnemyCharacter* Enemy = nullptr;
+	{
+		const AEnemyCharacter::FScopedSpawnArchetype SpawnScope(Archetype); // not a placed enemy: no class lookup at BeginPlay
+		Enemy = World->SpawnActor<AEnemyCharacter>(EnemyClass, Location, Rotation, Params);
+	}
 	if (Enemy)
 	{
 		Enemy->InitializeArchetype(Archetype);

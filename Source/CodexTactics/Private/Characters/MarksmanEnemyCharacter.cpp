@@ -1,4 +1,5 @@
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "AI/PatrolRouteActor.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
@@ -716,6 +717,19 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 		Distance = FVector::Dist(GetActorLocation(), Shooter->GetActorLocation());
 	}
 	CurrentTarget = Target;
+	// APC P4: the squad is aboard - he puts rifle rounds into the hull (x the hull's rifle factor) instead.
+	if (!Target && AIState != EMarksmanAIState::Patrol && AIState != EMarksmanAIState::Ambushed)
+	{
+		if (AVehiclePawn* Vehicle = FindVehicleTarget())
+		{
+			CancelAim();
+			AIState = EMarksmanAIState::Engage;
+			CurrentTarget = Vehicle;
+			TickRangedVsVehicle(*Vehicle, DeltaTime, MarksmanConfig.PreferredMaxRange, MarksmanConfig.ShotDamage,
+				MarksmanConfig.AimDuration + MarksmanConfig.ShotCooldown, Stance == EOperativeStance::Prone ? 35.f : 150.f, MarksmanConfig.BaseAccuracy);
+			return;
+		}
+	}
 
 	switch (AIState)
 	{

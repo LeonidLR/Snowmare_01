@@ -55,6 +55,29 @@ float EnemyAIRules::GetBaseArmor(EEnemyArchetype Archetype)
 	}
 }
 
+EEnemyArchetype EnemyAIRules::ResolvePlacedArchetype(EEnemyArchetype InstanceValue, EEnemyArchetype ClassDefaultValue, const TArray<FString>& ClassChain,
+	const TArray<TPair<EEnemyArchetype, FString>>& Mapping, FString& OutSource)
+{
+	if (InstanceValue != ClassDefaultValue)
+	{
+		OutSource = TEXT("instance");
+		return InstanceValue;
+	}
+	for (const FString& ClassPath : ClassChain)
+	{
+		for (const TPair<EEnemyArchetype, FString>& Entry : Mapping)
+		{
+			if (!Entry.Value.IsEmpty() && Entry.Value.Equals(ClassPath, ESearchCase::IgnoreCase))
+			{
+				OutSource = TEXT("class mapping");
+				return Entry.Key;
+			}
+		}
+	}
+	OutSource = TEXT("class default");
+	return ClassDefaultValue;
+}
+
 int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy, const FVector& Enemy,
 	const TArray<FEnemyTargetCandidate>& Candidates, bool bLastAttackerTurret)
 {
@@ -85,6 +108,20 @@ int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy,
 		}
 	}
 	Consider(EEnemyTargetKind::Operative, bSmallEnemy ? 1.f : 0.7f);
+	// APC P4: a manned vehicle (the crew inside cannot be hit: the hull is the target), at its own weight.
+	for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+	{
+		const FEnemyTargetCandidate& Candidate = Candidates[Index];
+		if (Candidate.Kind == EEnemyTargetKind::Vehicle && Candidate.bUsable)
+		{
+			const float Effective = FVector::Dist(Enemy, Candidate.Location) * Candidate.Weight;
+			if (Effective < MinDistance)
+			{
+				MinDistance = Effective;
+				Best = Index;
+			}
+		}
+	}
 	if (!bSmallEnemy && Config.bCanTargetTurrets)
 	{
 		for (int32 Index = 0; Index < Candidates.Num(); ++Index)

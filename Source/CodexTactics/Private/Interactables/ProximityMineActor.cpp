@@ -1,4 +1,5 @@
 #include "Interactables/ProximityMineActor.h"
+#include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Characters/EnemyCharacter.h"
 #include "Subsystems/CodexEventBus.h"
@@ -143,6 +144,20 @@ void AProximityMineActor::Tick(float DeltaSeconds)
 	// 2. Operatives, unless it is a friendly-safe squad mine; the defuser walking up is ignored.
 	if (!bPlacedBySquad || bFriendlyFire)
 	{
+		// APC P4: a vehicle driving over it (its hull over the mine) sets it off and takes the flat mine damage.
+		if (const UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>())
+		{
+			for (AVehiclePawn* Vehicle : Vehicles->GetVehicles())
+			{
+				if (Vehicle->IsInsideFootprint(Location, TriggerRadius * 0.5f) && FMath::Abs(Location.Z - Vehicle->GetActorLocation().Z) < 200.f)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("%s: %s drove over it"), *GetName(), *Vehicle->GetName());
+					BlastTriggeredByVehicle = Vehicle;
+					Detonate();
+					return;
+				}
+			}
+		}
 		if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 		{
 			for (AOperativeCharacter* Member : Squad->GetMembers())
