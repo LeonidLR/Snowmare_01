@@ -7,6 +7,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TargetedShotRules.h"
+#include "Data/TacticalHeatTuning.h"
 #include "CodexTactics.h"
 #include "CollisionQueryParams.h"
 #include "Engine/World.h"
@@ -772,6 +773,35 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		return;
 	}
 	Follower.RepathTimeRemaining = FormationConfig.RepathInterval;
+
+	// Squad gathers at the fire (user decision 2026-10-12): while the leader warms at a barrel / campfire / stove the follower's follow
+	// target is that source's ring instead of his formation slot; once he stands in the zone the weather idle gives him a seat / place.
+	// Exploration formation only (solo and held followers returned above, guards are not followers); an explicit order to him leaves
+	// the pull, the leader leaving the zone ends it.
+	if (UWarmIdleSubsystem* WarmIdle = GetWorld()->GetSubsystem<UWarmIdleSubsystem>())
+	{
+		UWarmIdleSubsystem::FFollowerPull Pull;
+		if (WarmIdle->GetFollowerPullTarget(*Operative, LeaderRef, Pull))
+		{
+			if (Pull.bArrived)
+			{
+				if (!Follower.bParked)
+				{
+					Operative->StopOperative();
+					Follower.bParked = true;
+				}
+				Operative->SetIdleFacingYaw(WarmIdleRules::FaceYaw(Operative->GetActorLocation(), Pull.Fire));
+			}
+			else
+			{
+				Follower.bParked = false;
+				// The path follower stops AcceptanceRadius short of its goal: aim that far past the spot (as UWarmIdleSubsystem::DriveMember).
+				const FVector Past = Pull.Target + (Pull.Target - Operative->GetActorLocation()).GetSafeNormal2D() * Operative->MovementConfig.AcceptanceRadius;
+				Operative->FollowTo(Past, TacticalHeatTuning::Get().WarmSpotWalkSpeed);
+			}
+			return;
+		}
+	}
 
 	const FVector LeaderLocation = LeaderRef.GetActorLocation();
 	FVector SlotLocation = SquadFormation::ComputeSlotPosition(FormationConfig, LeaderLocation, FormationHeading, Follower.Slot, false);

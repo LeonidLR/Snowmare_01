@@ -109,6 +109,25 @@ struct CODEXTACTICS_API FWarmIdleInput
 	bool bInColdIdle = false;
 };
 
+/** What the squad's "gather at the fire" pull reads about one follower (USquadSubsystem / UWarmIdleSubsystem::GetFollowerPullTarget). */
+struct CODEXTACTICS_API FWarmPullInput
+{
+	/** Exploration (WarmIdleRules::IsExplorationPhase): never in a fight / ambush / pause / turn-based / cutscene. */
+	bool bExploration = true;
+	/** In the formation: not solo mode, not a guard (T), the followers are not held. */
+	bool bInFormation = true;
+	/** He was given an explicit order since the pull began (or while this fire burned): he leaves the pull until the leader leaves the fire. */
+	bool bOrdered = false;
+	/** The leader is at the fire: holds a warm spot there (a new pull) or still stands in its warm zone (a pull in progress). */
+	bool bLeaderAtFire = false;
+	/** The pull is already running (the distance limit applies only to its start, so a detour does not drop it). */
+	bool bPulling = false;
+	/** The follower can walk and pose: alive, up, not frostbitten / in cover / carrying / vaulting / busy / threatened / prone. */
+	bool bFollowerFree = true;
+	/** Follower to the heat source, 2D, cm. */
+	float FollowerToSource = 0.f;
+};
+
 /** Pure rules of the weather idle poses (tests: CodexTactics.Survival.WarmIdle.*). */
 namespace WarmIdleRules
 {
@@ -144,6 +163,12 @@ namespace WarmIdleRules
 	 */
 	CODEXTACTICS_API TArray<EWarmFireRole> AssignFireRoles(const TArray<EWarmFireRole>& Current, const TArray<float>& Colds,
 		int32 MinSitters, float ExtraSitterCold, int32 MaxSitters);
+
+	/**
+	 * Squad gathers at the fire (user decision 2026-10-12): the follower's formation follow target switches to the source's ring while
+	 * the leader is at the fire, in exploration formation only; an explicit order, solo / guard, a threat or a body state ends it.
+	 */
+	CODEXTACTICS_API bool ShouldPullFollower(const FWarmPullInput& Input, const FTacticalHeatConfig& Config);
 
 	/** How many spots fit on a ring of Radius with Spacing between them (>= 1). */
 	CODEXTACTICS_API int32 RingCapacity(float Radius, float Spacing);

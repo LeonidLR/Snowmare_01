@@ -10,7 +10,10 @@
 //     change does not swap the roles; the cold drops faster at the fire exploring (x1);
 //  4. an order to the engineer ends only HIS pose; the sitters keep sitting;
 //  5. gas stove (commander 60, medic 40, engineer 10): two sit, one stands;
-//  6. the wave fight starts: nobody sits / warms hands any more (End clips, then nothing) and the warming at the fire is x0.5.
+//  6. the wave fight starts: nobody sits / warms hands any more (End clips, then nothing) and the warming at the fire is x0.5;
+//  7. squad gathers at the fire (user decision 2026-10-12): the followers are NOT held, 9 m / 11 m from a campfire the leader walks
+//     up to (then from a burning stove he sits at) -> both walk to its ring, the two coldest sit, the third stands right beside them; the leader leaves -> they follow him again; an order to
+//     one follower, a guard (T) and solo mode keep that one out of the pull; in the wave fight nobody is pulled.
 // Headless runs do not render: the checks read the anim instance's montage / clip state, not bones.
 // "shot" (rendered, offscreen: UnrealEditor.exe <uproject> /Game/Maps/L_MovementTest -game -RenderOffscreen -ResX=1280 -ResY=720
 // -ExecCmds="CodexTactics.WarmIdleSmoke shot") saves stills to Saved/Screenshots/WeatherAnim/ (cold idle male / female, barrel,
@@ -23,6 +26,8 @@
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Combat/FirePuddleActor.h"
+#include "Combat/HealthComponent.h"
 #include "CodexTactics.h"
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -53,7 +58,7 @@ namespace WarmIdleSmoke
 {
 	constexpr float NavWarmupSeconds = 3.f;
 	constexpr float StepSeconds = 0.25f;
-	constexpr float Timeout = 150.f;
+	constexpr float Timeout = 420.f;
 
 	enum class EStage : uint8
 	{
@@ -67,8 +72,20 @@ namespace WarmIdleSmoke
 		CampfireOrder,
 		StoveLight,
 		StoveSeated,
+		PullSetup,
+		PullWalk,
+		PullLeave,
+		OrderSetup,
+		OrderCheck,
+		GuardSetup,
+		GuardCheck,
+		SoloSetup,
+		SoloCheck,
+		FinalSetup,
+		FinalSeated,
 		Combat,
 		CombatSettle,
+		CombatPull,
 		Done
 	};
 
@@ -81,6 +98,14 @@ namespace WarmIdleSmoke
 		TWeakObjectPtr<ABarrelActor> Barrel;
 		TWeakObjectPtr<ADeployableActor> Fire;
 		TWeakObjectPtr<ADeployableActor> Stove;
+		/** Squad-gathers scenes: where the followers started (Medic, Engineer), cm from the stove, and checks done once per stage. */
+		float StartDistMedic = 0.f;
+		float StartDistEngineer = 0.f;
+		FVector HeldMedicAt = FVector::ZeroVector;
+		FVector HeldEngineerAt = FVector::ZeroVector;
+		bool bStageChecked = false;
+		/** The squad-gathers scenes run twice: first at a campfire (the leader walks up to it), then at the gas stove (the leader stands at it). */
+		bool bCampfire = true;
 		/** Rendered stills ("shot"): queued photos, the stage machine waits while they are taken. */
 		bool bShot = false;
 		struct FPhoto
@@ -193,6 +218,110 @@ namespace WarmIdleSmoke
 			Squad[Index]->TeleportTo(SmokeUtils::FreeSpot(World, Around + FVector(0.f, 0.f, 92.f), Squad[Index]), Squad[Index]->GetActorRotation(), false, true);
 		}
 		return Centre;
+	}
+
+	/**
+	 * A clean slate between the stages (the test intent is poses, not damage): the barrel stage leaves a fire puddle (core 120 cm, 12-15 s)
+	 * exactly where the later stages put the squad - a Medic-Sapper with a low max HP (BP_Operative_FemaleSoldier: 120) burned to death in
+	 * it 1 s after sitting at the stove (2026-10-12). Puddles go, everybody is healed; the HP is logged.
+	 */
+	void ResetBodies(UWorld* World, const TCHAR* Label)
+	{
+		int32 Puddles = 0;
+		for (TActorIterator<AFirePuddleActor> It(World); It; ++It)
+		{
+			It->Destroy();
+			++Puddles;
+		}
+		FString Hp;
+		for (AOperativeCharacter* Each : World->GetSubsystem<USquadSubsystem>()->GetMembers())
+		{
+			if (UHealthComponent* Health = Each->HealthComponent)
+			{
+				Hp += FString::Printf(TEXT(" %s %.0f/%.0f"), *Each->DisplayName.ToString(), Health->GetCurrentHealth(), Health->GetMaxHealth());
+				Health->Heal(Health->GetMaxHealth() - Health->GetCurrentHealth());
+			}
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s - %d fire puddle(s) removed, HP before the heal:%s"), Label, Puddles, *Hp);
+	}
+
+	/** Puts the followers Medic / Engineer DistMedic / DistEngineer (cm) from Centre on open ground (a walkable, free spot). */
+	void PlaceFollowersAway(UWorld* World, FState& State, AOperativeCharacter* Leader, AOperativeCharacter* Medic, AOperativeCharacter* Engineer,
+		const FVector& Centre, float DistMedic, float DistEngineer)
+	{
+		const FVector Forward = Leader->GetActorForwardVector();
+		AOperativeCharacter* Followers[2] = { Medic, Engineer };
+		const float Distances[2] = { DistMedic, DistEngineer };
+		const float Angles[2] = { 60.f, -60.f };
+		for (int32 Index = 0; Index < 2; ++Index)
+		{
+			const FVector Dir = Forward.RotateAngleAxis(Angles[Index], FVector::UpVector);
+			const FVector Spot = SmokeUtils::ClearPoint(World, Centre, Centre + Dir * Distances[Index]);
+			Followers[Index]->StopOperative();
+			Followers[Index]->TeleportTo(SmokeUtils::FreeSpot(World, Spot + FVector(0.f, 0.f, 92.f), Followers[Index]), Followers[Index]->GetActorRotation(), false, true);
+		}
+		State.StartDistMedic = FVector::Dist2D(Medic->GetActorLocation(), Centre);
+		State.StartDistEngineer = FVector::Dist2D(Engineer->GetActorLocation(), Centre);
+	}
+
+	/**
+	 * The squad-gathers scene: followers free (not held), a gas stove burning with the leader (Commander, cold 60) 120 cm from it, the
+	 * Medic (cold 40) 9 m and the Engineer (cold 10) 11 m away. The old stove goes.
+	 */
+	void SetupPullScene(UWorld* World, FState& State, AOperativeCharacter* Commander, AOperativeCharacter* Medic, AOperativeCharacter* Engineer,
+		bool bCampfire = false)
+	{
+		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+		if (AActor* Old = State.Stove.Get())
+		{
+			Old->Destroy();
+		}
+		ResetBodies(World, TEXT("pull scene"));
+		if (Squad->IsSoloMode())
+		{
+			Squad->ExitSoloMode();
+		}
+		Squad->SetFollowersHolding(false);
+		SmokeUtils::PlaceSquadAtTestStart(World);
+		if (Squad->GetLeader() != Commander)
+		{
+			Squad->SetLeader(Commander, true);
+		}
+		for (AOperativeCharacter* Each : { Commander, Medic, Engineer })
+		{
+			Each->StopOperative();
+		}
+		const FVector Centre = SmokeUtils::ClearPoint(World, Feet(Commander), Feet(Commander) + Commander->GetActorForwardVector() * 250.f);
+		ADeployableActor* Stove = SpawnDeployable(World, bCampfire ? EDeployableType::Campfire : EDeployableType::PortableStove, Centre);
+		if (APortableStoveActor* Gas = Cast<APortableStoveActor>(Stove))
+		{
+			Gas->StartWithGas(180.f);
+		}
+		if (ACampfireActor* Campfire = Cast<ACampfireActor>(Stove))
+		{
+			Campfire->Kindle(Commander);
+		}
+		State.Stove = Stove;
+		// The stove scene: the leader already sits next to it. The campfire scene: he starts 6 m away and WALKS up to it.
+		const float LeaderDistance = bCampfire ? 600.f : 120.f;
+		Commander->TeleportTo(SmokeUtils::FreeSpot(World, Centre + FVector(0.f, 0.f, 92.f) - Commander->GetActorForwardVector() * LeaderDistance, Commander),
+			Commander->GetActorRotation(), false, true);
+		if (bCampfire)
+		{
+			const FVector Dir = (Commander->GetActorLocation() - Centre).GetSafeNormal2D();
+			Commander->OrderMoveTo(SmokeUtils::ClearPoint(World, Feet(Commander), Centre + Dir * 160.f), false);
+		}
+		Commander->ColdLevel = 60.f;
+		Medic->ColdLevel = 40.f;
+		Engineer->ColdLevel = 10.f;
+		PlaceFollowersAway(World, State, Commander, Medic, Engineer, Centre, 900.f, 1100.f);
+		State.bStageChecked = false;
+	}
+
+	/** True while Follower is being pulled to the stove, by the subsystem's own account. */
+	bool IsPulledTo(UWorld* World, const AOperativeCharacter* Follower, const AActor* Stove)
+	{
+		return Stove && World->GetSubsystem<UWarmIdleSubsystem>()->GetFollowerPullSource(Follower) == Stove;
 	}
 
 	/** Checks the fire roles: Sitters sit on distinct inner seats facing the fire, Standers stand on the outer ring. */
@@ -342,7 +471,13 @@ namespace WarmIdleSmoke
 				State.StageTime = 0.f;
 				return true; // the squad spawns late on a slow start
 			}
-			Check(State, false, TEXT("squad of three"));
+			FString Who;
+			for (const AOperativeCharacter* Member : World->GetSubsystem<USquadSubsystem>()->GetMembers())
+			{
+				Who += Member->DisplayName.ToString() + TEXT(" ");
+			}
+			Check(State, false, FString::Printf(TEXT("squad of three (stage %d; alive in the squad: %s) - see the [Health] line above for who died of what"),
+				static_cast<int32>(State.Stage), *Who));
 			return Finish(State, false);
 		}
 		const TArray<AOperativeCharacter*> Squad = { Commander, Engineer, Medic };
@@ -460,6 +595,7 @@ namespace WarmIdleSmoke
 				{
 					Barrel->Destroy();
 				}
+				ResetBodies(World, TEXT("barrel stage over"));
 				Enter(State, EStage::CampfireLight);
 			}
 			return true;
@@ -468,6 +604,7 @@ namespace WarmIdleSmoke
 			if (State.StageTime >= 0.5f)
 			{
 				// Followers held in a triangle 2.2 m round the fire (inside its 3.5 m zone; the formation would pull them about).
+				ResetBodies(World, TEXT("campfire stage"));
 				SmokeUtils::PlaceSquadAtTestStart(World);
 				const FVector FireAt = PlaceAround(World, Squad, SmokeUtils::ClearPoint(World, Feet(Commander), Feet(Commander) + Commander->GetActorForwardVector() * 250.f), 220.f);
 				Commander->ColdLevel = 55.f;
@@ -544,6 +681,7 @@ namespace WarmIdleSmoke
 			if (State.StageTime >= 3.5f)
 			{
 				// The stove warms only 2.2 m: the followers' formation slots lie outside it, so they hold a tight triangle round it.
+				ResetBodies(World, TEXT("stove stage"));
 				SmokeUtils::PlaceSquadAtTestStart(World);
 				const FVector Centre = PlaceAround(World, Squad, SmokeUtils::ClearPoint(World, Feet(Commander), Feet(Commander) + Commander->GetActorForwardVector() * 250.f), 150.f);
 				Commander->ColdLevel = 60.f;
@@ -566,17 +704,170 @@ namespace WarmIdleSmoke
 			if (Stove && AllPosed({ Commander, Medic }, { Engineer }) && State.StageTime >= 1.f)
 			{
 				CheckFireRoles(State, World, Stove, { Commander, Medic }, { Engineer }, Heat.StoveSeatDistance, Heat.StoveStandDistance, TEXT("stove"));
-				SmokeUtils::StartWaveFight(Flow);
-				Enter(State, EStage::Combat);
+				Enter(State, EStage::PullSetup);
 			}
 			else if (State.StageTime > 20.f)
 			{
 				Check(State, false, FString::Printf(TEXT("stove roles within 20 s [%s] [%s] [%s]"), *PoseText(Commander), *PoseText(Medic), *PoseText(Engineer)));
+				Enter(State, EStage::PullSetup);
+			}
+			return true;
+		}
+
+		case EStage::PullSetup:
+			Check(State, Heat.bWarmPullFollowers, TEXT("squad gathers: warm_pull_followers is on"));
+			SetupPullScene(World, State, Commander, Medic, Engineer, State.bCampfire);
+			Check(State, State.StartDistMedic >= 600.f && State.StartDistMedic <= 1500.f && State.StartDistEngineer >= 600.f && State.StartDistEngineer <= 1500.f,
+				FString::Printf(TEXT("pull scene (%s): followers start %.0f / %.0f cm from the fire (formation, not held), the leader %s"),
+					State.bCampfire ? TEXT("campfire") : TEXT("stove"), State.StartDistMedic, State.StartDistEngineer,
+					State.bCampfire ? TEXT("walks up to it") : TEXT("sits at it")));
+			Enter(State, EStage::PullWalk);
+			return true;
+
+		case EStage::PullWalk:
+		{
+			const AActor* Stove = State.Stove.Get();
+			if (!State.bStageChecked && State.StageTime >= (State.bCampfire ? 8.f : 5.5f))
+			{
+				State.bStageChecked = true;
+				const float Medic2D = Stove ? FVector::Dist2D(Medic->GetActorLocation(), Stove->GetActorLocation()) : -1.f;
+				const float Engineer2D = Stove ? FVector::Dist2D(Engineer->GetActorLocation(), Stove->GetActorLocation()) : -1.f;
+				Check(State, IsPulledTo(World, Medic, Stove) && IsPulledTo(World, Engineer, Stove) && Medic2D <= State.StartDistMedic - 150.f
+					&& Engineer2D <= State.StartDistEngineer - 150.f,
+					FString::Printf(TEXT("the leader is at the %s: both followers are pulled in and walk to it (Medic %.0f -> %.0f cm, Engineer %.0f -> %.0f cm)"),
+						State.bCampfire ? TEXT("campfire") : TEXT("stove"), State.StartDistMedic, Medic2D, State.StartDistEngineer, Engineer2D));
+			}
+			if (Stove && AllPosed({ Medic, Commander }, { Engineer }) && State.StageTime >= 6.f)
+			{
+				CheckFireRoles(State, World, Stove, { Commander, Medic }, { Engineer }, State.bCampfire ? Heat.CampfireSeatDistance : Heat.StoveSeatDistance,
+					State.bCampfire ? Heat.CampfireStandDistance : Heat.StoveStandDistance, State.bCampfire ? TEXT("squad at the campfire") : TEXT("squad at the stove"));
+				// The standing one is right beside the sitters (outer ring), not off at formation distance.
+				Check(State, FVector::Dist2D(Engineer->GetActorLocation(), Medic->GetActorLocation()) <= 330.f && FVector::Dist2D(Engineer->GetActorLocation(), Commander->GetActorLocation()) <= 330.f,
+					FString::Printf(TEXT("the standing Engineer is right beside the sitters (%.0f / %.0f cm)"), FVector::Dist2D(Engineer->GetActorLocation(), Medic->GetActorLocation()),
+						FVector::Dist2D(Engineer->GetActorLocation(), Commander->GetActorLocation())));
+				const FVector Away = SmokeUtils::ClearPoint(World, Feet(Commander), Feet(Commander) - Commander->GetActorForwardVector() * 1300.f);
+				Commander->OrderMoveTo(Away, false);
+				Enter(State, EStage::PullLeave);
+			}
+			else if (State.StageTime > 45.f)
+			{
+				Check(State, false, FString::Printf(TEXT("pulled followers seated within 45 s [%s] [%s] [%s]"), *PoseText(Commander), *PoseText(Medic), *PoseText(Engineer)));
+				Enter(State, State.bCampfire ? EStage::PullSetup : EStage::OrderSetup);
+				State.bCampfire = false;
+			}
+			return true;
+		}
+
+		case EStage::PullLeave:
+		{
+			const AActor* Stove = State.Stove.Get();
+			const float LeaderFromStove = Stove ? FVector::Dist2D(Commander->GetActorLocation(), Stove->GetActorLocation()) : 0.f;
+			const bool bNear = FVector::Dist2D(Medic->GetActorLocation(), Commander->GetActorLocation()) < 700.f
+				&& FVector::Dist2D(Engineer->GetActorLocation(), Commander->GetActorLocation()) < 700.f;
+			if (LeaderFromStove > 600.f && bNear && !Anim(Medic)->bWarmIdleActive && !Anim(Engineer)->bWarmIdleActive)
+			{
+				Check(State, !IsPulledTo(World, Medic, Stove) && !IsPulledTo(World, Engineer, Stove),
+					FString::Printf(TEXT("the leader left the %s (%.0f cm): the squad un-contracts, the followers are back in the formation within 7 m of him, no pull"),
+						State.bCampfire ? TEXT("campfire") : TEXT("stove"), LeaderFromStove));
+				Enter(State, State.bCampfire ? EStage::PullSetup : EStage::OrderSetup);
+				State.bCampfire = false;
+			}
+			else if (State.StageTime > 40.f)
+			{
+				Check(State, false, FString::Printf(TEXT("followers follow the leader again within 40 s (leader %.0f cm from the stove, medic %.0f cm, engineer %.0f cm from him) [%s] [%s]"),
+					LeaderFromStove, FVector::Dist2D(Medic->GetActorLocation(), Commander->GetActorLocation()), FVector::Dist2D(Engineer->GetActorLocation(), Commander->GetActorLocation()),
+					*PoseText(Medic), *PoseText(Engineer)));
+				Enter(State, State.bCampfire ? EStage::PullSetup : EStage::OrderSetup);
+				State.bCampfire = false;
+			}
+			return true;
+		}
+
+		case EStage::OrderSetup:
+			SetupPullScene(World, State, Commander, Medic, Engineer);
+			Enter(State, EStage::OrderCheck);
+			return true;
+
+		case EStage::OrderCheck:
+		{
+			const AActor* Stove = State.Stove.Get();
+			if (!State.bStageChecked && State.StageTime >= 5.f)
+			{
+				State.bStageChecked = true;
+				Check(State, IsPulledTo(World, Medic, Stove) && IsPulledTo(World, Engineer, Stove), TEXT("order scene: both followers are being pulled"));
+				const FVector Away = SmokeUtils::ClearPoint(World, Feet(Medic), Feet(Medic) + (Medic->GetActorLocation() - Stove->GetActorLocation()).GetSafeNormal2D() * 500.f);
+				Medic->OrderMoveTo(Away, false);
+			}
+			else if (State.bStageChecked && State.StageTime >= 11.f)
+			{
+				Check(State, !IsPulledTo(World, Medic, Stove) && !InPose(Medic, EWarmIdlePose::SitWarm) && !InPose(Medic, EWarmIdlePose::HandWarm),
+					FString::Printf(TEXT("an explicit order to the Medic: she leaves the pull and stays out while the leader sits (%s)"), *PoseText(Medic)));
+				Check(State, FVector::Dist2D(Engineer->GetActorLocation(), Stove->GetActorLocation()) <= 260.f,
+					FString::Printf(TEXT("... the Engineer still gathers at the fire (%.0f cm)"), FVector::Dist2D(Engineer->GetActorLocation(), Stove->GetActorLocation())));
+				Enter(State, EStage::GuardSetup);
+			}
+			return true;
+		}
+
+		case EStage::GuardSetup:
+			SetupPullScene(World, State, Commander, Medic, Engineer);
+			World->GetSubsystem<USquadSubsystem>()->ToggleGuard(Medic);
+			State.HeldMedicAt = Medic->GetActorLocation();
+			Enter(State, EStage::GuardCheck);
+			return true;
+
+		case EStage::GuardCheck:
+			if (State.StageTime >= 13.f)
+			{
+				const AActor* Stove = State.Stove.Get();
+				Check(State, Medic->bGuarding && !IsPulledTo(World, Medic, Stove) && FVector::Dist2D(Medic->GetActorLocation(), State.HeldMedicAt) < 100.f,
+					FString::Printf(TEXT("a guard (T) holds her post: not pulled, moved %.0f cm"), FVector::Dist2D(Medic->GetActorLocation(), State.HeldMedicAt)));
+				Check(State, FVector::Dist2D(Engineer->GetActorLocation(), Stove->GetActorLocation()) <= 260.f,
+					FString::Printf(TEXT("... the Engineer (formation) is gathered at the fire (%.0f cm)"), FVector::Dist2D(Engineer->GetActorLocation(), Stove->GetActorLocation())));
+				World->GetSubsystem<USquadSubsystem>()->ToggleGuard(Medic);
+				Enter(State, EStage::SoloSetup);
+			}
+			return true;
+
+		case EStage::SoloSetup:
+			SetupPullScene(World, State, Commander, Medic, Engineer);
+			World->GetSubsystem<USquadSubsystem>()->EnterSoloMode();
+			State.HeldMedicAt = Medic->GetActorLocation();
+			State.HeldEngineerAt = Engineer->GetActorLocation();
+			Enter(State, EStage::SoloCheck);
+			return true;
+
+		case EStage::SoloCheck:
+			if (State.StageTime >= 9.f)
+			{
+				const AActor* Stove = State.Stove.Get();
+				Check(State, World->GetSubsystem<USquadSubsystem>()->IsSoloMode() && !IsPulledTo(World, Medic, Stove) && !IsPulledTo(World, Engineer, Stove)
+					&& FVector::Dist2D(Medic->GetActorLocation(), State.HeldMedicAt) < 100.f && FVector::Dist2D(Engineer->GetActorLocation(), State.HeldEngineerAt) < 100.f,
+					FString::Printf(TEXT("solo mode: the held followers are not pulled (moved %.0f / %.0f cm)"), FVector::Dist2D(Medic->GetActorLocation(), State.HeldMedicAt),
+						FVector::Dist2D(Engineer->GetActorLocation(), State.HeldEngineerAt)));
+				World->GetSubsystem<USquadSubsystem>()->ExitSoloMode();
+				Enter(State, EStage::FinalSetup);
+			}
+			return true;
+
+		case EStage::FinalSetup:
+			SetupPullScene(World, State, Commander, Medic, Engineer);
+			Enter(State, EStage::FinalSeated);
+			return true;
+
+		case EStage::FinalSeated:
+			if (State.Stove.IsValid() && AllPosed({ Medic, Commander }, { Engineer }) && State.StageTime >= 6.f)
+			{
+				SmokeUtils::StartWaveFight(Flow);
+				Enter(State, EStage::Combat);
+			}
+			else if (State.StageTime > 45.f)
+			{
+				Check(State, false, FString::Printf(TEXT("pulled followers seated within 45 s [%s] [%s] [%s]"), *PoseText(Commander), *PoseText(Medic), *PoseText(Engineer)));
 				SmokeUtils::StartWaveFight(Flow);
 				Enter(State, EStage::Combat);
 			}
 			return true;
-		}
 
 		case EStage::Combat:
 			if (State.StageTime >= 0.5f)
@@ -612,6 +903,25 @@ namespace WarmIdleSmoke
 				}
 				Check(State, bNone, FString::Printf(TEXT("in combat nobody sits or warms hands [%s] [%s] [%s]"), *PoseText(Commander), *PoseText(Medic),
 					*PoseText(Engineer)));
+				if (const AActor* Stove = State.Stove.Get())
+				{
+					PlaceFollowersAway(World, State, Commander, Medic, Engineer, Stove->GetActorLocation() - FVector(0.f, 0.f, Stove->GetSimpleCollisionHalfHeight()), 900.f, 1100.f);
+				}
+				Enter(State, EStage::CombatPull);
+			}
+			return true;
+
+		case EStage::CombatPull:
+			if (State.StageTime >= 5.f)
+			{
+				const AActor* Stove = State.Stove.Get();
+				Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && !IsPulledTo(World, Medic, Stove) && !IsPulledTo(World, Engineer, Stove)
+					&& Stove && FVector::Dist2D(Medic->GetActorLocation(), Stove->GetActorLocation()) >= State.StartDistMedic - 100.f
+					&& FVector::Dist2D(Engineer->GetActorLocation(), Stove->GetActorLocation()) >= State.StartDistEngineer - 100.f,
+					FString::Printf(TEXT("wave fight (phase %d): nobody is pulled to the stove (Medic %.0f cm, Engineer %.0f cm away, started %.0f / %.0f)"),
+						static_cast<int32>(Flow->GetPhase()),
+						Stove ? FVector::Dist2D(Medic->GetActorLocation(), Stove->GetActorLocation()) : -1.f,
+						Stove ? FVector::Dist2D(Engineer->GetActorLocation(), Stove->GetActorLocation()) : -1.f, State.StartDistMedic, State.StartDistEngineer));
 				return Finish(State, true);
 			}
 			return true;

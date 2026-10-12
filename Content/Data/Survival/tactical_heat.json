@@ -1,5 +1,5 @@
 {
-  "comment": "Sprint 15 Mobile & Tactical Heat (TANDEM request #14, UE-only; Survival/TacticalHeatRules.h FTacticalHeatConfig, Data/TacticalHeatTuning). Read at StartPlay; a missing key keeps the code default (Gemini's spec value). Distances in cm, times in seconds, cold in points of the 0..100 scale, turn-based costs in AP. Burn timers / gas freeze in the tactical pause (incl. the free horde pause and its flyover), in dialogues / cutscenes; in turn-based combat one squad round burns total / rounds. Console: CodexTactics.DumpTacticalHeat. Weather idle (2026-10-12, Survival/WarmIdleRules): heat-source warming x exploration / combat_warmth_multiplier (wave fight / ambush = combat); cold idle from warm_idle_cold_threshold after warm_idle_delay_seconds idle; at a campfire / stove the coldest warm_min_sitters (+ everyone >= warm_extra_sitter_cold) sit on the inner ring (*_seat_distance), the rest stand on the outer ring (*_stand_distance); barrel = standing hand warming at barrel_stand_distance.",
+  "comment": "Sprint 15 Mobile & Tactical Heat (TANDEM request #14, UE-only; Survival/TacticalHeatRules.h FTacticalHeatConfig, Data/TacticalHeatTuning). Read at StartPlay; a missing key keeps the code default (Gemini's spec value). Distances in cm, times in seconds, cold in points of the 0..100 scale, turn-based costs in AP. Burn timers / gas freeze in the tactical pause (incl. the free horde pause and its flyover), in dialogues / cutscenes; in turn-based combat one squad round burns total / rounds. Console: CodexTactics.DumpTacticalHeat. Weather idle (2026-10-12, Survival/WarmIdleRules): heat-source warming x exploration / combat_warmth_multiplier (wave fight / ambush = combat); cold idle from warm_idle_cold_threshold after warm_idle_delay_seconds idle; at a campfire / stove the coldest warm_min_sitters (+ everyone >= warm_extra_sitter_cold) sit on the inner ring (*_seat_distance), the rest stand on the outer ring (*_stand_distance); barrel = standing hand warming at barrel_stand_distance. Squad gathers at the fire (2026-10-12): warm_pull_followers + warm_pull_max_distance (cm) - in exploration formation the followers walk to the ring of a barrel / campfire / stove the leader warms at.",
   "heat_pack_cold_reduction": 35,
   "heat_pack_buffer_seconds": 45,
   "heat_pack_accumulation_multiplier": 0.5,
@@ -55,7 +55,10 @@
   "barrel_stand_distance": 125,
   "warm_spot_spacing": 85,
   "warm_spot_arrive_tolerance": 35,
-  "warm_spot_walk_speed": 160,  "starting_loadout": {
+  "warm_spot_walk_speed": 160,
+  "warm_pull_followers": true,
+  "warm_pull_max_distance": 1500,
+  "starting_loadout": {
     "commander": { "heat_packs": 1, "firewood": 1, "flares": 1, "stoves": 0 },
     "engineer": { "heat_packs": 1, "firewood": 1, "flares": 0, "stoves": 1 },
     "medic_sapper": { "heat_packs": 2, "firewood": 0, "flares": 1, "stoves": 0 },

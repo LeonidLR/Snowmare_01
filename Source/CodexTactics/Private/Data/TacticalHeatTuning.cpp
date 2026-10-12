@@ -67,7 +67,8 @@ namespace TacticalHeatTuning
 		{ TEXT("barrel_stand_distance"), &FTacticalHeatConfig::BarrelStandDistance },
 		{ TEXT("warm_spot_spacing"), &FTacticalHeatConfig::WarmSpotSpacing },
 		{ TEXT("warm_spot_arrive_tolerance"), &FTacticalHeatConfig::WarmSpotArriveTolerance },
-		{ TEXT("warm_spot_walk_speed"), &FTacticalHeatConfig::WarmSpotWalkSpeed } };
+		{ TEXT("warm_spot_walk_speed"), &FTacticalHeatConfig::WarmSpotWalkSpeed },
+		{ TEXT("warm_pull_max_distance"), &FTacticalHeatConfig::WarmPullMaxDistance } };
 
 	static const FIntKey IntKeys[] = {
 		{ TEXT("heat_pack_action_points"), &FTacticalHeatConfig::HeatPackActionPoints },
@@ -148,6 +149,11 @@ FTacticalHeatConfig TacticalHeatTuning::FromJson(const FJsonObject& Json, const 
 	{
 		Config.bBarrelLeavesPuddle = bPuddle;
 	}
+	bool bPull = Config.bWarmPullFollowers;
+	if (Json.TryGetBoolField(TEXT("warm_pull_followers"), bPull))
+	{
+		Config.bWarmPullFollowers = bPull;
+	}
 	const TSharedPtr<FJsonObject>* Loadout = nullptr;
 	if (Json.TryGetObjectField(TEXT("starting_loadout"), Loadout))
 	{
@@ -176,6 +182,7 @@ TSharedRef<FJsonObject> TacticalHeatTuning::ToJson(const FTacticalHeatConfig& Co
 		Json->SetNumberField(Entry.Key, Config.*Entry.Member);
 	}
 	Json->SetBoolField(TEXT("barrel_leaves_puddle"), Config.bBarrelLeavesPuddle);
+	Json->SetBoolField(TEXT("warm_pull_followers"), Config.bWarmPullFollowers);
 	TSharedRef<FJsonObject> Loadout = MakeShared<FJsonObject>();
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(RoleKeys); ++Index)
 	{

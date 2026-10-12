@@ -1,5 +1,6 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
+#include "CodexTactics.h"
 #include "GameFramework/Actor.h"
 #include "UI/FloatingTextSubsystem.h"
 
@@ -284,6 +285,9 @@ void UHealthComponent::Die(const FString& AttackerSource)
 	}
 	bIsDead = true;
 	CurrentHealth = 0.0f;
+	// Who killed whom and where (smoke / playtest diagnosis: a death with no attacker in the log is hard to explain).
+	UE_LOG(LogCodexTactics, Display, TEXT("[Health] %s died (source '%s', max HP %.0f) at %s"), GetOwner() ? *GetOwner()->GetName() : TEXT("-"),
+		*AttackerSource, MaxHealth, GetOwner() ? *GetOwner()->GetActorLocation().ToCompactString() : TEXT("-"));
 	OnDied.Broadcast(GetOwner(), AttackerSource);
 	OnDiedNative.Broadcast(GetOwner(), AttackerSource);
 }
