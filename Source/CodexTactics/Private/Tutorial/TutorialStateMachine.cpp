@@ -77,6 +77,7 @@ void FTutorialStateMachine::Fire(int32 Index)
 	}
 	FRuntime& State = Runtime[Index];
 	State.Progress = 0;
+	State.HeldSeconds = 0.f;
 	State.TriggerHits = 0;
 	State.CountedSubjects.Reset();
 	if (Step.Trigger.DelaySeconds > 0.f)
@@ -132,9 +133,27 @@ void FTutorialStateMachine::AddProgress(int32 Index, int32 Amount, int32 Needed)
 {
 	FRuntime& State = Runtime[Index];
 	State.Progress += Amount;
-	if (State.Progress >= FMath::Max(1, Needed))
+	if (TutorialRules::IsProgressMet(State.Progress, Needed, State.HeldSeconds, Data.Steps[Index].Complete.HoldSeconds))
 	{
 		Finish(Index, ETutorialStepState::Completed);
+	}
+}
+
+void FTutorialStateMachine::HandleCommandHold(FName CommandId, float DeltaSeconds)
+{
+	if (CommandId.IsNone() || DeltaSeconds <= 0.f || !IsLoaded())
+	{
+		return;
+	}
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		const FTutorialCompletion& Complete = Data.Steps[Index].Complete;
+		// Only a SHOWN step collects hold time: the player must do it while the card is up (not during the breather).
+		if (Complete.HoldSeconds > 0.f && Runtime[Index].State == ETutorialStepState::Active && TutorialRules::CountsCommand(Data.Steps[Index], CommandId))
+		{
+			Runtime[Index].HeldSeconds += DeltaSeconds;
+			AddProgress(Index, 0, Complete.Count);
+		}
 	}
 }
 
@@ -428,6 +447,12 @@ int32 FTutorialStateMachine::GetProgress(FName StepId) const
 {
 	const int32 Index = IndexOf(StepId);
 	return Runtime.IsValidIndex(Index) ? Runtime[Index].Progress : 0;
+}
+
+float FTutorialStateMachine::GetHeldSeconds(FName StepId) const
+{
+	const int32 Index = IndexOf(StepId);
+	return Runtime.IsValidIndex(Index) ? Runtime[Index].HeldSeconds : 0.f;
 }
 
 float FTutorialStateMachine::GetStateSeconds(FName StepId) const

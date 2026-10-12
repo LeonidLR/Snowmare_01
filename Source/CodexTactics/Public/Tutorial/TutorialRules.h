@@ -57,6 +57,12 @@ namespace TutorialRules
 	/** True when the step's completion counts this command (any pattern of "complete.commands"). */
 	CODEXTACTICS_API bool CountsCommand(const FTutorialStep& Step, FName CommandId);
 
+	/**
+	 * True when a step's completion is satisfied: Progress reached Needed (at least 1) AND the accumulated hold time reached
+	 * HoldSeconds ("complete.hold_s"; 0 = no hold needed).
+	 */
+	CODEXTACTICS_API bool IsProgressMet(int32 Progress, int32 Needed, float HeldSeconds, float HoldSeconds);
+
 	/** Seconds a subtitle line stays: Override when > 0, else clamp(1.2 + 0.055 s per character, 2.5, 9). */
 	CODEXTACTICS_API float LineDurationSeconds(const FString& Text, float Override = 0.f);
 

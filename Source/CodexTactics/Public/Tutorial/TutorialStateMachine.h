@@ -43,6 +43,12 @@ public:
 
 	// --- Inputs -----------------------------------------------------------------------------------------------------
 	void HandleCommand(FName CommandId);
+	/**
+	 * A hold tick of a continuous command (the action is still going on): adds DeltaSeconds to every ACTIVE step whose
+	 * completion counts the command and has "hold_s"; it completes once uses (Count) and hold time are both reached. Never
+	 * counts as a use and never fires first_use.
+	 */
+	void HandleCommandHold(FName CommandId, float DeltaSeconds);
 	/** A gameplay event; SubjectId (the operative's id) feeds "distinct_operatives" completions. */
 	void HandleEvent(FName EventName, FName SubjectId = NAME_None);
 	/** A squad member entered a tutorial volume: VolumeId for "volume" triggers / completions, StepId / BeatId start them directly. */
@@ -64,6 +70,8 @@ public:
 	// --- Queries ----------------------------------------------------------------------------------------------------
 	ETutorialStepState GetState(FName StepId) const;
 	int32 GetProgress(FName StepId) const;
+	/** Hold seconds collected so far ("complete.hold_s" steps). */
+	float GetHeldSeconds(FName StepId) const;
 	/** Seconds the step has been in its current state. */
 	float GetStateSeconds(FName StepId) const;
 	FName GetActiveCard() const;
@@ -87,6 +95,8 @@ private:
 	{
 		ETutorialStepState State = ETutorialStepState::Idle;
 		int32 Progress = 0;
+		/** Accumulated hold time of the counted commands while Active ("complete.hold_s"). */
+		float HeldSeconds = 0.f;
 		float StateSeconds = 0.f;
 		float DelayLeft = 0.f;
 		int32 TriggerHits = 0;

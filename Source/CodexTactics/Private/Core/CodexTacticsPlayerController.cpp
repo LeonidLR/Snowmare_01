@@ -1904,7 +1904,7 @@ void ACodexTacticsPlayerController::CameraRotateLeft()
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->RotateStep(+1);
-		ControllerCommands::Report(this, PlayerCommands::CameraRotate);
+		ControllerCommands::Report(this, PlayerCommands::CameraRotateKeys);
 	}
 }
 
@@ -1924,7 +1924,7 @@ void ACodexTacticsPlayerController::CameraRotateRight()
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->RotateStep(-1);
-		ControllerCommands::Report(this, PlayerCommands::CameraRotate);
+		ControllerCommands::Report(this, PlayerCommands::CameraRotateKeys);
 	}
 }
 
@@ -2014,7 +2014,7 @@ void ACodexTacticsPlayerController::CameraDragRotateStart()
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->SetDragRotating(true);
-		ControllerCommands::Report(this, PlayerCommands::CameraRotate);
+		ControllerCommands::Report(this, PlayerCommands::CameraRotateMouse);
 	}
 }
 
@@ -2031,7 +2031,7 @@ void ACodexTacticsPlayerController::CameraDragPanStart()
 	if (ATacticalCameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->SetDragPanning(true);
-		ControllerCommands::Report(this, PlayerCommands::CameraPan);
+		ControllerCommands::Report(this, PlayerCommands::CameraPanDrag);
 	}
 }
 

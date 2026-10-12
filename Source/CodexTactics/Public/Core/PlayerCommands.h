@@ -31,6 +31,14 @@ struct CODEXTACTICS_API FPlayerCommandContext
 	/** Planned in the tactical pause (runs on the release). */
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Commands")
 	bool bPlanned = false;
+
+	/**
+	 * > 0: this is not a new command but a HOLD tick of a continuous one (a pan / drag that is still going on): the seconds
+	 * since the previous tick (PlayerCommands::ReportHold). The tutorial adds them up for "complete.hold_s"; it never counts
+	 * a tick as a new use.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Commands")
+	float HeldSeconds = 0.f;
 };
 
 /**
@@ -91,11 +99,19 @@ struct CODEXTACTICS_API FPlayerCommandInfo
 namespace PlayerCommands
 {
 	// --- Camera ---------------------------------------------------------------------------------------------------
-	/** W / A / S / D, screen edge or MMB drag: the camera starts panning. */
-	extern CODEXTACTICS_API const FName CameraPan;
-	/** Q / E, arrows or RMB drag: the camera turns. */
-	extern CODEXTACTICS_API const FName CameraRotate;
-	/** Mouse wheel: zoom in / out. */
+	// Continuous inputs (pans, drags) report ONCE per action when it starts, then ReportHold ticks while it lasts, so the
+	// tutorial can ask for "complete.hold_s" of real use. Discrete inputs (Q / E, wheel) report once per press / notch.
+	/** W / A / S / D: a keyboard pan starts ("Camera.Pan.Keys"). */
+	extern CODEXTACTICS_API const FName CameraPanKeys;
+	/** The cursor pushed to the screen edge: an edge pan starts ("Camera.Pan.Edge"). */
+	extern CODEXTACTICS_API const FName CameraPanEdge;
+	/** MMB drag: a drag pan starts ("Camera.Pan.Drag"). */
+	extern CODEXTACTICS_API const FName CameraPanDrag;
+	/** Q / E: one 45 degree camera step per press ("Camera.Rotate.Keys"). */
+	extern CODEXTACTICS_API const FName CameraRotateKeys;
+	/** RMB drag: a free-look drag starts ("Camera.Rotate.Mouse"). */
+	extern CODEXTACTICS_API const FName CameraRotateMouse;
+	/** Mouse wheel: one notch of zoom in / out ("Camera.Zoom"). */
 	extern CODEXTACTICS_API const FName CameraZoom;
 
 	// --- Orders and selection -----------------------------------------------------------------------------------
@@ -241,8 +257,9 @@ namespace PlayerCommands
 	CODEXTACTICS_API const FPlayerCommandInfo* Find(FName Id);
 
 	/**
-	 * Pattern match used by the tutorial: exact id, "*" (anything), or a "Prefix.*" / "Prefix*" wildcard.
-	 * Case-insensitive (FName).
+	 * Pattern match used by the tutorial: exact id, "*" (anything), or a "Prefix.*" / "Prefix*" wildcard. A wildcard is a
+	 * plain prefix match, so it spans any number of "." segments ("Camera.*" and "Camera.Pan.*" both match
+	 * "Camera.Pan.Keys"); an id without a wildcard matches exactly only. Case-insensitive (FName).
 	 */
 	CODEXTACTICS_API bool Matches(const FString& Pattern, FName CommandId);
 
@@ -259,6 +276,12 @@ namespace PlayerCommands
 	 * Safe without a game instance (unit tests): then only the log line.
 	 */
 	CODEXTACTICS_API void Report(const UObject* WorldContext, FName CommandId, const FPlayerCommandContext& Context = FPlayerCommandContext());
+
+	/**
+	 * A hold tick of a continuous command (key pan, edge pan, drags): DeltaSeconds of real time during which the action was
+	 * still going on. Broadcast on the same bus with FPlayerCommandContext::HeldSeconds set; no log line (every frame).
+	 */
+	CODEXTACTICS_API void ReportHold(const UObject* WorldContext, FName CommandId, float DeltaSeconds);
 
 	/** Report with only the acting operative set. */
 	CODEXTACTICS_API void ReportBy(const UObject* WorldContext, FName CommandId, AActor* Operative, AActor* Target = nullptr, bool bPlanned = false);

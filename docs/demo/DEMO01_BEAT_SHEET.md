@@ -216,7 +216,7 @@ Completion events marked (E) need the tutorial command choke point (UX W2). Mark
 - **Goal:** start moving within 20 s of NEW GAME. No standing dialogue.
 - **Teaches:** camera (WASD / edge, wheel, Q/E), click-move.
 - **Walk-and-talk:** `WT_A0_01..06` start on spawn as feed lines while the camera eases onto the squad. Content: HQ drop confirmation, Sokolova on the cold, Engineer on the dead radio. **Replace the 15-line blocking intro** (gap G2).
-- **Hint cards:** `TUT_A0_CAMERA` (pan / zoom / rotate; done after 2 camera commands or 20 s), `TUT_A0_MOVE` (click the ground at the amber ring 12 m ahead; done when the leader enters the ring).
+- **Hint cards:** four STAGED camera cards, each done by real use, no timeout: `TUT_A0_CAM_PAN` (WASD / screen edge for 1 s), `TUT_A0_CAM_ROTATE_KEYS` (Q / E, twice), `TUT_A0_CAM_ROTATE_MOUSE` (hold RMB and drag, 0.5 s), `TUT_A0_CAM_ZOOM` (wheel, twice), `TUT_A0_MOVE` (click the ground at the amber ring 12 m ahead; done when the leader enters the ring).
 - **Setup:** PlayerStart; snowcat wreck (art); `ATutorialMarkerActor` ring at beacon 1 (gap G4); `ADialogueTriggerVolume` (box 10 x 10 m on the start).
 - **Metrics:** start -> beacon 1 = 25 m (11 s walk).
 - **Cold:** Shelter x0.5 (G5: x0.2).

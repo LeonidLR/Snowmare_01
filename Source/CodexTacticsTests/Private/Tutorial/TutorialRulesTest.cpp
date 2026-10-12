@@ -106,6 +106,42 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("A0..A2 + A6"), Data.Beats.Num(), 4);
 	TestEqual(TEXT("start beat"), Data.StartBeat, FName(TEXT("A0")));
+	// A0 camera lesson is STAGED (2026-10-12): pan -> Q/E -> mouse -> zoom -> move, each after the previous, no timeout.
+	const TCHAR* CameraChain[] = { TEXT("A0_cam_pan"), TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom"), TEXT("A0_move") };
+	TestNull(TEXT("the old one-shot camera card is gone"), Data.FindStep(TEXT("A0_camera")));
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(CameraChain); ++Index)
+	{
+		const FTutorialStep* Stage = Data.FindStep(CameraChain[Index]);
+		TestNotNull(CameraChain[Index], Stage);
+		if (Stage && Index > 0)
+		{
+			TestTrue(FString(CameraChain[Index]) + TEXT(" follows the previous stage"),
+				Stage->Trigger.Type == ETutorialTriggerType::AfterStep && Stage->Trigger.Step == FName(CameraChain[Index - 1]));
+		}
+		if (Stage && Index < 4)
+		{
+			TestEqual(FString(CameraChain[Index]) + TEXT(" has no auto-complete timeout"), Stage->Complete.TimeoutSeconds, 0.f);
+			TestTrue(FString(CameraChain[Index]) + TEXT(" is skippable"), Stage->bSkippable);
+			TestFalse(FString(CameraChain[Index]) + TEXT(" never accepts a wildcard of all camera commands"), Stage->Complete.Commands.Contains(TEXT("Camera.*")));
+		}
+	}
+	if (const FTutorialStep* Pan = Data.FindStep(TEXT("A0_cam_pan")))
+	{
+		TestTrue(TEXT("pan: WASD / edge for 1 s"), Pan->Complete.HoldSeconds == 1.f && Pan->Complete.Commands.Contains(TEXT("Camera.Pan.Keys"))
+			&& Pan->Complete.Commands.Contains(TEXT("Camera.Pan.Edge")));
+	}
+	if (const FTutorialStep* Yaw = Data.FindStep(TEXT("A0_cam_rotate_keys")))
+	{
+		TestTrue(TEXT("Q/E: two presses"), Yaw->Complete.Count == 2 && Yaw->Complete.Commands == TArray<FString>{ TEXT("Camera.Rotate.Keys") });
+	}
+	if (const FTutorialStep* Look = Data.FindStep(TEXT("A0_cam_rotate_mouse")))
+	{
+		TestTrue(TEXT("mouse: a 0.5 s drag"), Look->Complete.HoldSeconds == 0.5f && Look->Complete.Commands == TArray<FString>{ TEXT("Camera.Rotate.Mouse") });
+	}
+	if (const FTutorialStep* Zoom = Data.FindStep(TEXT("A0_cam_zoom")))
+	{
+		TestTrue(TEXT("zoom: two notches"), Zoom->Complete.Count == 2 && Zoom->Complete.Commands == TArray<FString>{ TEXT("Camera.Zoom") });
+	}
 	TestNotNull(TEXT("solo card"), Data.FindStep(TEXT("A1_solo")));
 	TestNotNull(TEXT("barrel push card"), Data.FindStep(TEXT("A2_push")));
 	TestNotNull(TEXT("heat pack card"), Data.FindStep(TEXT("A2_heatpack")));
@@ -349,7 +385,7 @@ bool FTutorialTextAndDemoFlagsTest::RunTest(const FString&)
 	TestTrue(TEXT("cyrillic counts as missing"), Manifest.GetTutorialText(TEXT("TUT_RU")).bMissing);
 
 	// Lookup order: manifest, then the DRAFT texts, then the placeholder.
-	TestTrue(TEXT("draft parses"), FNarrativeManifest::ParseDraftTexts(TEXT(R"({"texts":{"TUT_A":{"title":"Draft A","text":"draft a"},"TUT_D":{"title":"Draft","text":"Press {key:Camera.Pan}."},"WT_D":{"text":"Radio draft."},"BEAT_D":{"title":"THE DROP"}}})"),
+	TestTrue(TEXT("draft parses"), FNarrativeManifest::ParseDraftTexts(TEXT(R"({"texts":{"TUT_A":{"title":"Draft A","text":"draft a"},"TUT_D":{"title":"Draft","text":"Press {key:Camera.Pan.Keys}."},"WT_D":{"text":"Radio draft."},"BEAT_D":{"title":"THE DROP"}}})"),
 		Manifest.DraftTutorialTexts, Error));
 	TestEqual(TEXT("manifest wins over the draft"), Manifest.GetTutorialText(TEXT("TUT_A")).Title, FString(TEXT("Split up")));
 	const FTutorialTextView Draft = Manifest.GetTutorialText(TEXT("TUT_D"));
@@ -417,6 +453,145 @@ bool FTutorialDistinctOperativesTest::RunTest(const FString&)
 	FTutorialStepsData FlagOnly;
 	TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"x","beat":"B","complete":{"commands":["Cover.Enter"],"distinct_operatives":true}}]})"), FlagOnly, FlagWarnings, Error);
 	TestTrue(TEXT("warned"), FlagWarnings.ContainsByPredicate([](const FString& Line) { return Line.Contains(TEXT("distinct_operatives")); }));
+	return true;
+}
+
+TUTORIAL_TEST(FTutorialMultiSegmentWildcardTest, "Commands.MultiSegmentWildcard")
+bool FTutorialMultiSegmentWildcardTest::RunTest(const FString&)
+{
+	TestTrue(TEXT("Camera.* spans two segments"), PlayerCommands::Matches(TEXT("Camera.*"), PlayerCommands::CameraPanKeys));
+	TestTrue(TEXT("Camera.* matches the one-segment zoom"), PlayerCommands::Matches(TEXT("Camera.*"), PlayerCommands::CameraZoom));
+	TestTrue(TEXT("Camera.Pan.* matches keys"), PlayerCommands::Matches(TEXT("Camera.Pan.*"), PlayerCommands::CameraPanKeys));
+	TestTrue(TEXT("Camera.Pan.* matches edge"), PlayerCommands::Matches(TEXT("Camera.Pan.*"), PlayerCommands::CameraPanEdge));
+	TestTrue(TEXT("Camera.Pan.* matches drag"), PlayerCommands::Matches(TEXT("Camera.Pan.*"), PlayerCommands::CameraPanDrag));
+	TestFalse(TEXT("Camera.Pan.* does not match rotate"), PlayerCommands::Matches(TEXT("Camera.Pan.*"), PlayerCommands::CameraRotateKeys));
+	TestFalse(TEXT("Camera.Rotate.* does not match zoom"), PlayerCommands::Matches(TEXT("Camera.Rotate.*"), PlayerCommands::CameraZoom));
+	TestTrue(TEXT("Camera.Rotate.* matches keys and mouse"), PlayerCommands::Matches(TEXT("Camera.Rotate.*"), PlayerCommands::CameraRotateKeys)
+		&& PlayerCommands::Matches(TEXT("Camera.Rotate.*"), PlayerCommands::CameraRotateMouse));
+	TestTrue(TEXT("exact multi-segment id"), PlayerCommands::Matches(TEXT("camera.rotate.mouse"), PlayerCommands::CameraRotateMouse));
+	TestFalse(TEXT("an exact id does not match its siblings"), PlayerCommands::Matches(TEXT("Camera.Pan.Keys"), PlayerCommands::CameraPanEdge));
+	TestFalse(TEXT("the old unsplit id is gone"), PlayerCommands::Find(TEXT("Camera.Pan")) != nullptr || PlayerCommands::Find(TEXT("Camera.Rotate")) != nullptr);
+	for (const FName Id : { PlayerCommands::CameraPanKeys, PlayerCommands::CameraPanEdge, PlayerCommands::CameraPanDrag, PlayerCommands::CameraRotateKeys,
+		PlayerCommands::CameraRotateMouse, PlayerCommands::CameraZoom })
+	{
+		TestNotNull(TEXT("registered ") + Id.ToString(), PlayerCommands::Find(Id));
+		TestTrue(TEXT("key cap resolves ") + Id.ToString(), PlayerCommands::FormatKeyToken(Id.ToString()) != FString(TEXT("[")) + Id.ToString() + TEXT("]"));
+	}
+	return true;
+}
+
+TUTORIAL_TEST(FTutorialHoldSecondsTest, "StateMachine.HoldSeconds")
+bool FTutorialHoldSecondsTest::RunTest(const FString&)
+{
+	TestTrue(TEXT("rule: uses and hold both needed"), !TutorialRules::IsProgressMet(1, 1, 0.5f, 1.f) && !TutorialRules::IsProgressMet(0, 1, 2.f, 1.f)
+		&& TutorialRules::IsProgressMet(1, 1, 1.f, 1.f) && TutorialRules::IsProgressMet(2, 2, 0.f, 0.f));
+
+	FTutorialStepsData Data;
+	TArray<FString> Warnings;
+	FString Error;
+	TestTrue(TEXT("parses"), TutorialRules::ParseSteps(TEXT(R"JSON({
+		"beats": [ { "id": "B" } ], "start_beat": "B",
+		"steps": [
+			{ "id": "pan", "beat": "B", "kind": "hint_card", "text_id": "T1", "keys": ["Camera.Pan.Keys"],
+			  "complete": { "commands": ["Camera.Pan.Keys", "Camera.Pan.Edge"], "hold_s": 1.0 } },
+			{ "id": "yaw", "beat": "B", "kind": "hint_card", "text_id": "T2", "trigger": { "type": "after_step", "step": "pan" },
+			  "complete": { "commands": ["Camera.Rotate.Keys"], "count": 2 } },
+			{ "id": "look", "beat": "B", "kind": "hint_card", "text_id": "T3", "trigger": { "type": "after_step", "step": "yaw" },
+			  "complete": { "commands": ["Camera.Rotate.Mouse"], "hold_s": 0.5 } },
+			{ "id": "zoom", "beat": "B", "kind": "hint_card", "text_id": "T4", "trigger": { "type": "after_step", "step": "look" },
+			  "complete": { "commands": ["Camera.Zoom"], "count": 2 } },
+			{ "id": "move", "beat": "B", "kind": "hint_card", "text_id": "T5", "trigger": { "type": "after_step", "step": "zoom" },
+			  "complete": { "commands": ["Order.Move"] } }
+		] })JSON"), Data, Warnings, Error));
+	TestEqual(TEXT("no warnings"), Warnings.Num(), 0);
+	TestEqual(TEXT("hold_s parsed"), Data.FindStep(TEXT("pan"))->Complete.HoldSeconds, 1.f);
+	TestEqual(TEXT("no hold by default"), Data.FindStep(TEXT("yaw"))->Complete.HoldSeconds, 0.f);
+
+	FTutorialStateMachine Machine;
+	Machine.Load(Data);
+	Machine.StartBeat(Data.StartBeat);
+	TestEqual(TEXT("staged: pan first"), Machine.GetActiveCard(), FName(TEXT("pan")));
+	TestEqual(TEXT("later stages idle"), Machine.GetState(TEXT("yaw")), ETutorialStepState::Idle);
+
+	// WASD pressed once: the use counts, the hold is not there yet.
+	Machine.HandleCommand(PlayerCommands::CameraPanKeys);
+	TestEqual(TEXT("one press is not enough"), Machine.GetState(TEXT("pan")), ETutorialStepState::Active);
+	TestEqual(TEXT("press counted"), Machine.GetProgress(TEXT("pan")), 1);
+	for (int32 Frame = 0; Frame < 9; ++Frame)
+	{
+		Machine.HandleCommandHold(PlayerCommands::CameraPanKeys, 0.1f);
+	}
+	TestEqual(TEXT("0.9 s held: still active"), Machine.GetState(TEXT("pan")), ETutorialStepState::Active);
+	Machine.HandleCommandHold(PlayerCommands::CameraPanEdge, 0.1f); // the edge pattern adds to the same total
+	TestEqual(TEXT("1.0 s held (keys + edge): completed"), Machine.GetState(TEXT("pan")), ETutorialStepState::Completed);
+
+	// Staged: WASD alone completes nothing of the later stages; hold ticks never count as uses.
+	Machine.HandleCommand(PlayerCommands::CameraPanKeys);
+	Machine.HandleCommandHold(PlayerCommands::CameraPanKeys, 5.f);
+	Machine.HandleCommand(PlayerCommands::CameraZoom); // not its turn yet (queued yaw ignores zoom)
+	Machine.Tick(2.f);
+	TestEqual(TEXT("rotate keys card shown after the breather"), Machine.GetActiveCard(), FName(TEXT("yaw")));
+	TestEqual(TEXT("zoom did not complete the zoom stage early"), Machine.GetState(TEXT("zoom")), ETutorialStepState::Idle);
+	Machine.HandleCommand(PlayerCommands::CameraRotateKeys);
+	TestEqual(TEXT("one Q/E press: 1 of 2"), Machine.GetState(TEXT("yaw")), ETutorialStepState::Active);
+	Machine.HandleCommandHold(PlayerCommands::CameraRotateKeys, 3.f);
+	TestEqual(TEXT("hold ticks are no uses"), Machine.GetProgress(TEXT("yaw")), 1);
+	Machine.HandleCommand(PlayerCommands::CameraRotateKeys);
+	TestEqual(TEXT("second press completes"), Machine.GetState(TEXT("yaw")), ETutorialStepState::Completed);
+
+	// Mouse free look: the drag start alone is not enough, 0.5 s of drag is.
+	Machine.Tick(2.f);
+	TestEqual(TEXT("free look card"), Machine.GetActiveCard(), FName(TEXT("look")));
+	Machine.HandleCommand(PlayerCommands::CameraRotateMouse);
+	Machine.HandleCommandHold(PlayerCommands::CameraRotateMouse, 0.3f);
+	TestEqual(TEXT("0.3 s drag: active"), Machine.GetState(TEXT("look")), ETutorialStepState::Active);
+	Machine.HandleCommandHold(PlayerCommands::CameraPanKeys, 9.f); // another command's hold does not count
+	TestEqual(TEXT("foreign hold ignored"), Machine.GetState(TEXT("look")), ETutorialStepState::Active);
+	Machine.HandleCommandHold(PlayerCommands::CameraRotateMouse, 0.3f);
+	TestEqual(TEXT("0.6 s drag: completed"), Machine.GetState(TEXT("look")), ETutorialStepState::Completed);
+
+	// Zoom: two wheel notches; then the move card follows. No timeout anywhere in the chain.
+	Machine.Tick(2.f);
+	TestEqual(TEXT("zoom card"), Machine.GetActiveCard(), FName(TEXT("zoom")));
+	Machine.Tick(600.f);
+	TestEqual(TEXT("no auto-complete timeout"), Machine.GetState(TEXT("zoom")), ETutorialStepState::Active);
+	Machine.HandleCommand(PlayerCommands::CameraZoom);
+	Machine.HandleCommand(PlayerCommands::CameraZoom);
+	TestEqual(TEXT("two notches complete"), Machine.GetState(TEXT("zoom")), ETutorialStepState::Completed);
+	Machine.Tick(2.f);
+	TestEqual(TEXT("then the move card"), Machine.GetActiveCard(), FName(TEXT("move")));
+	return true;
+}
+
+TUTORIAL_TEST(FTutorialHoldQueuedTest, "StateMachine.HoldOnlyWhileShown")
+bool FTutorialHoldQueuedTest::RunTest(const FString&)
+{
+	FTutorialStepsData Data;
+	TArray<FString> Warnings;
+	FString Error;
+	TestTrue(TEXT("parses"), TutorialRules::ParseSteps(TEXT(R"JSON({
+		"beats": [ { "id": "B" } ], "start_beat": "B",
+		"steps": [
+			{ "id": "a", "beat": "B", "kind": "hint_card", "text_id": "T1", "complete": { "commands": ["Order.Move"] } },
+			{ "id": "pan", "beat": "B", "kind": "hint_card", "text_id": "T2", "trigger": { "type": "after_step", "step": "a" },
+			  "complete": { "commands": ["Camera.Pan.*"], "hold_s": 1.0 } }
+		] })JSON"), Data, Warnings, Error));
+	FTutorialStateMachine Machine;
+	Machine.Load(Data);
+	Machine.StartBeat(Data.StartBeat);
+	Machine.HandleCommand(PlayerCommands::Move);
+	TestEqual(TEXT("pan is queued behind the breather"), Machine.GetState(TEXT("pan")), ETutorialStepState::Queued);
+	Machine.HandleCommand(PlayerCommands::CameraPanDrag);
+	Machine.HandleCommandHold(PlayerCommands::CameraPanDrag, 2.f);
+	TestEqual(TEXT("hold collected while queued does not count"), Machine.GetHeldSeconds(TEXT("pan")), 0.f);
+	TestEqual(TEXT("still queued (a hold step is never finished silently)"), Machine.GetState(TEXT("pan")), ETutorialStepState::Queued);
+	Machine.Tick(2.f);
+	TestEqual(TEXT("shown"), Machine.GetState(TEXT("pan")), ETutorialStepState::Active);
+	Machine.HandleCommandHold(PlayerCommands::CameraPanDrag, 1.2f); // Camera.Pan.* spans the drag id; the use was counted while queued
+	TestEqual(TEXT("completed by the shown hold"), Machine.GetState(TEXT("pan")), ETutorialStepState::Completed);
+	Warnings.Reset();
+	TestTrue(TEXT("hold_s without commands still parses"), TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"x","text_id":"T","complete":{"event":"E","hold_s":1}}]})"), Data, Warnings, Error));
+	TestTrue(TEXT("...but warns (it could never complete)"), Warnings.ContainsByPredicate([](const FString& Warning) { return Warning.Contains(TEXT("hold_s")); }));
 	return true;
 }
 
