@@ -265,6 +265,12 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	/** "demo": demo game-mode flags (Panic off, vision cones, tutorial, demo HUD preset). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FDemoModeSettings Demo;
+	/**
+	 * "vehicle": {"shells": N} (APC P2, UE-only): the turret's 30 mm shells for this map; -1 = the vehicle's own value
+	 * (Blueprint / weapons_tuning.json "vehicle_weapons.apc_turret.shells_per_map").
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	int32 VehicleShells = -1;
 };
 
 UCLASS(BlueprintType)

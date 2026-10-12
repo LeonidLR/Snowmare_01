@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "Vehicles/VehicleCombatRules.h"
 #include "Vehicles/VehicleRules.h"
 #include "VehiclePawn.generated.h"
 
@@ -12,6 +13,8 @@ class UHeatSourceComponent;
 class USkeletalMesh;
 class USkeletalMeshComponent;
 class UVehicleNavObstacleComponent;
+class UVehicleTurretComponent;
+class AEnemyCharacter;
 
 /** One crew member aboard and his seat. */
 struct CODEXTACTICS_API FVehicleCrewMember
@@ -76,6 +79,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Vehicle")
 	TObjectPtr<UVehicleNavObstacleComponent> NavObstacle;
 
+	/** The turret (P2): autocannon + coaxial MG, manned by the gunner seat. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Vehicle")
+	TObjectPtr<UVehicleTurretComponent> Turret;
+
 	// --- Tunables (the Blueprint is the master copy) -------------------------------------------------------------
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vehicle")
@@ -89,6 +96,14 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vehicle")
 	FVehicleEngineConfig EngineConfig;
+
+	/** Running over small enemies / ramming the Brute (weapons_tuning.json "vehicle_weapons.apc_ram" overrides at BeginPlay). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vehicle")
+	FVehicleCrushConfig CrushConfig;
+
+	/** The fade to black when someone boards / gets out. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vehicle")
+	FVehicleFadeConfig FadeConfig;
 
 	/** Hull box centre relative to the pivot (BTR-82: the pivot is 58 cm behind the bounds centre). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vehicle|Hull")
@@ -132,6 +147,21 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Vehicle|Visual")
 	FName AnimDoorVariable = TEXT("DoorAngle");
 
+	/**
+	 * The vendor ABP's wheel clock (seconds): it turns the wheels by WheelSpeed x WheelSpeedOffset. C++ pins it to
+	 * AnimWheelClockHold every tick and writes WheelSpeed = wheel angle / clock (VehicleRules::GetAnimWheelSpeedForAngle),
+	 * so the wheels show exactly the angle rolled on the ground. None (or a missing variable): WheelSpeed = spin deg/s.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Vehicle|Visual")
+	FName AnimWheelOffsetVariable = TEXT("WheelSpeedOffset");
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Vehicle|Visual", meta = (ClampMin = "0.1"))
+	float AnimWheelClockHold = 1.f;
+
+	/** Rolling direction of the vendor wheel bones for a positive (forward) spin (VehicleCombatSmoke checks it). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Vehicle|Visual")
+	float AnimWheelSpinSign = 1.f;
+
 	/** Door angle when open (vendor ABP units: degrees). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Vehicle|Visual")
 	float DoorOpenAngle = 80.f;
@@ -160,6 +190,27 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Vehicle")
 	bool IsReversing() const { return bHasGoal && (bReverse || bManeuverReverse); }
+
+	/** Signed ground speed actually travelled last tick (cm/s along the heading; 0 when the hull did not move). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Vehicle")
+	float GetGroundSpeed() const { return GroundSpeed; }
+
+	/** Wheel spin applied last tick (deg/s, signed; 0 while the hull stands) and the wheel angle shown (smokes). */
+	float GetWheelSpinRate() const { return LastWheelSpin; }
+	float GetWheelAngle() const { return WheelAngleDeg; }
+
+	/** Reads a float variable of the mesh's anim instance (smokes / diagnostics); false when missing. */
+	bool GetAnimFloat(FName Variable, float& OutValue) const;
+	/** Writes a float variable of the mesh's anim instance (smokes probe the vendor rig). */
+	void SetAnimFloatForProbe(FName Variable, float Value) const { SetAnimFloat(Variable, Value); }
+
+	/** Small enemies run over / Brutes knocked down by this vehicle so far (smokes). */
+	int32 GetCrushCount() const { return CrushCount; }
+	int32 GetRamKnockdownCount() const { return RamKnockdownCount; }
+	/** Seconds the hull was held by a body it may not run over (operative / NPC / standing Brute). */
+	float GetBlockedSeconds() const { return BlockedSeconds; }
+	/** The last body that stopped the hull (smokes). */
+	AActor* GetLastBlocker() const { return LastBlocker.Get(); }
 
 	/** Stopped (speed below CrewConfig.StoppedSpeedCmS and no goal). */
 	bool IsStopped() const;
@@ -207,6 +258,9 @@ public:
 	/** Hull box centre in world space. */
 	FVector GetHullCentreWorld() const;
 
+	/** 2D distance from World to the hull box side (0 inside / on it). */
+	float GetHullDistance2D(const FVector& World) const;
+
 	/** True when World2D lies inside the hull footprint grown by MarginCm. */
 	bool IsInsideFootprint(const FVector& World, float MarginCm = 0.f) const;
 
@@ -228,6 +282,14 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Vehicle", meta = (DisplayName = "On Engine Changed"))
 	void ReceiveEngineChanged(bool bRunning);
 
+	/** Each cannon shell / MG round (sound and extra FX polish; C++ already plays the vendor muzzle flash + tracer). */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Vehicle", meta = (DisplayName = "On Turret Fired"))
+	void ReceiveTurretFired(EVehicleTurretWeapon Weapon, FVector Muzzle);
+
+	/** A small enemy died under the wheels (blood / snow FX, crunch sound polish). */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Vehicle", meta = (DisplayName = "On Ran Over"))
+	void ReceiveRanOver(AActor* Victim, FVector Location);
+
 	/** Fired when the drive ends at its goal (UVehicleSubsystem raises VehicleArrived). */
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnVehicleArrived, AVehiclePawn*);
 	FOnVehicleArrived OnArrived;
@@ -238,8 +300,17 @@ public:
 private:
 	void UpdateDrive(float DeltaSeconds);
 	void ConformToGround(float DeltaSeconds, bool bSnap);
-	bool IsPawnAhead() const;
+	/**
+	 * The bodies in the hull's path this tick (VehicleCombatRules::EvaluateContact): small enemies are crushed (fast) or
+	 * shoved aside (slow), a Brute is knocked down (fast) or stops the hull, operatives / NPCs stop it. Returns true when
+	 * the hull must brake (OutBlocker = who).
+	 */
+	bool HandleContactsAhead(float DeltaSeconds, AActor*& OutBlocker);
+	void CrushEnemy(AEnemyCharacter* Enemy);
+	void RamEnemy(AEnemyCharacter* Enemy);
 	void ApplyVisuals(float YawRateDeg, float DeltaSeconds);
+	/** Writes the wheel angle to the vendor ABP (its clock pinned): also while the vehicle logic is held. */
+	void PushWheelPose(float DeltaSeconds);
 	void SetAnimFloat(FName Variable, float Value) const;
 	void UpdateEngineNoise(float DeltaSeconds);
 	void SetParked(bool bParked);
@@ -260,6 +331,16 @@ private:
 	float BlockedSeconds = 0.f;
 	float NoiseTimer = 0.f;
 	float LastSteer = 0.f;
+	float GroundSpeed = 0.f;
+	float LastWheelSpin = 0.f;
+	float WheelAngleDeg = 0.f;
+	/** Seconds since the drive started from a standstill (the acceleration ramp). */
+	float LaunchSeconds = 0.f;
+	FVector LastTickLocation = FVector::ZeroVector;
+	bool bHasLastTickLocation = false;
+	int32 CrushCount = 0;
+	int32 RamKnockdownCount = 0;
+	TWeakObjectPtr<AActor> LastBlocker;
 	bool bHasGoal = false;
 	bool bRush = false;
 	bool bReverse = false;

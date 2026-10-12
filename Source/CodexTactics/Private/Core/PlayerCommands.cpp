@@ -78,6 +78,7 @@ namespace PlayerCommands
 	const FName VehicleBoard(TEXT("Vehicle.Board"));
 	const FName VehicleDisembark(TEXT("Vehicle.Disembark"));
 	const FName VehicleDrive(TEXT("Vehicle.Drive"));
+	const FName VehicleTurretFire(TEXT("Vehicle.TurretFire"));
 
 	const FName QuickSave(TEXT("System.QuickSave"));
 	const FName QuickLoad(TEXT("System.QuickLoad"));
@@ -192,7 +193,8 @@ namespace PlayerCommands
 			{ TurnBasedOrder, TEXT("LMB"), TEXT("Tactical pause & turn-based"), TEXT("Turn-based select / walk") },
 			{ VehicleBoard, TEXT("Y"), TEXT("Vehicles"), TEXT("Board the nearest vehicle (Alt+Y: whole squad)") },
 			{ VehicleDisembark, TEXT("Y"), TEXT("Vehicles"), TEXT("Get out of the vehicle (Alt+Y: whole squad)") },
-			{ VehicleDrive, TEXT("LMB"), TEXT("Vehicles"), TEXT("Drive there while aboard (double-click: full speed)") },
+			{ VehicleDrive, TEXT("LMB"), TEXT("Vehicles"), TEXT("Drive there while aboard (double-click: full speed; small enemies are run over)") },
+			{ VehicleTurretFire, TEXT("Ctrl+Click"), TEXT("Vehicles"), TEXT("Turret target while aboard (the gunner fires by his posture , . /)") },
 			{ QuickSave, TEXT("F5"), TEXT("Saving & menus"), TEXT("Quick save") },
 			{ QuickLoad, TEXT("F9"), TEXT("Saving & menus"), TEXT("Quick load") },
 			{ ControlsScreen, TEXT("F1"), TEXT("Saving & menus"), TEXT("This controls reference (F1 or Esc closes it)") },
@@ -333,6 +335,9 @@ namespace GameplayEvents
 	const FName VehiclePathBlocked(TEXT("VehiclePathBlocked"));
 	const FName TutorialLocked(TEXT("Tutorial.Locked"));
 	const FName ItemLooted(TEXT("ItemLooted"));
+	const FName VehicleTurretFired(TEXT("VehicleTurretFired"));
+	const FName VehicleTurretKill(TEXT("VehicleTurretKill"));
+	const FName VehicleRunOver(TEXT("VehicleRunOver"));
 
 	void Raise(const UObject* WorldContext, FName EventName, AActor* Subject)
 	{

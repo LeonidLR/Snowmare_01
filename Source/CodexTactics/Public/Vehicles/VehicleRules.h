@@ -81,6 +81,16 @@ struct CODEXTACTICS_API FVehicleDriveConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drive", meta = (ClampMin = "1"))
 	float BrakingCmS2 = 600.f;
 
+	/**
+	 * Moving off from a standstill the acceleration ramps up from LaunchAccelerationFraction to full over this many seconds
+	 * (13 t do not jump to speed: the start reads as a heavy vehicle pulling away, user report 2026-10-12).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drive", meta = (ClampMin = "0"))
+	float AccelerationRampSeconds = 0.8f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drive", meta = (ClampMin = "0.05", ClampMax = "1"))
+	float LaunchAccelerationFraction = 0.3f;
+
 	/** Gameplay minimum turning radius (design 7 m): the yaw rate never exceeds speed / radius. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drive", meta = (ClampMin = "50"))
 	float MinTurnRadiusCm = 700.f;
@@ -284,8 +294,29 @@ namespace VehicleRules
 	/** Hearing radius of the engine for patrols (data-driven, 0 when off). */
 	CODEXTACTICS_API float GetNoiseRadiusCm(EVehicleEngineState State, const FVehicleEngineConfig& Config);
 
-	/** Wheel spin for the vendor ABP's WheelSpeed (deg/s, signed). */
+	/** Wheel spin (deg/s, signed) that rolls a wheel of WheelRadiusCm at SpeedCmS without slipping: v / r. */
 	CODEXTACTICS_API float GetWheelSpinDegPerSec(float SpeedCmS, float WheelRadiusCm);
+
+	/**
+	 * Wheel spin (deg/s, signed) for the ground speed the hull ACTUALLY travelled (cm/s; reverse spins backwards): the
+	 * no-slip spin x Sign; exactly 0 below 1 cm/s (no spin while the hull stands: path request, K-turn stop, braking at 0).
+	 */
+	CODEXTACTICS_API float GetAnimWheelSpeed(float GroundSpeedCmS, float WheelRadiusCm, float Sign);
+
+	/** The wheel angle (deg, 0..360) after DeltaSeconds of SpinDegPerSec. */
+	CODEXTACTICS_API float StepWheelAngle(float WheelAngleDeg, float SpinDegPerSec, float DeltaSeconds);
+
+	/**
+	 * The vendor ABP (ABP_East_APC_BTR82) turns the wheel bones by WheelSpeed x WheelSpeedOffset, where WheelSpeedOffset is
+	 * its own clock (seconds, + DeltaTime each update, wraps at 360) — built for the showcase's constant speed: any change
+	 * of WheelSpeed multiplies the whole elapsed time and the wheels whirl / slip (user report 2026-10-12). Driving it, C++
+	 * pins the clock (WheelSpeedOffset = OffsetHold before each update, so it reads OffsetHold + DeltaTime) and writes
+	 * WheelSpeed = the wanted wheel angle / that clock: the bone shows exactly WheelAngleDeg.
+	 */
+	CODEXTACTICS_API float GetAnimWheelSpeedForAngle(float WheelAngleDeg, float OffsetHold, float DeltaSeconds);
+
+	/** Acceleration factor while pulling away: LaunchAccelerationFraction at 0 s rising linearly to 1 at AccelerationRampSeconds. */
+	CODEXTACTICS_API float GetLaunchAccelerationFactor(float SecondsSinceLaunch, const FVehicleDriveConfig& Config);
 
 	/** Front wheel steering angle (Ackermann, deg) for a yaw rate at Speed, clamped to MaxSteerAngleDeg. */
 	CODEXTACTICS_API float GetSteerAngleDeg(float YawRateDegPerSec, float SpeedCmS, const FVehicleDriveConfig& Config);

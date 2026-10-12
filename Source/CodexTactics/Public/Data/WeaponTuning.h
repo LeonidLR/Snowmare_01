@@ -8,6 +8,8 @@ class UWeaponDataAsset;
 struct FMarksmanConfig;
 struct FEnemyTurnProfile;
 struct FTurnBasedBalance;
+struct FVehicleTurretConfig;
+struct FVehicleCrushConfig;
 enum class EEnemyArchetype : uint8;
 
 /**
@@ -49,6 +51,17 @@ namespace WeaponTuning
 	 * (the last two over DA_Balance's tactical_stance_*_dmg_mult).
 	 */
 	CODEXTACTICS_API void ApplyTurnRules(FTurnBasedBalance& Balance);
+	/**
+	 * The file's "vehicle_weapons" (APC P2, UE-only): "apc_turret" onto Turret (cannon_damage, cannon_splash_radius_m,
+	 * cannon_splash_damage, cannon_shot_interval, cannon_burst_shots, cannon_burst_pause, cannon_range_m, shells_per_map,
+	 * cannon_hit_chance, cannon_armour_factor, mg_damage, mg_rounds_per_second, mg_range_m, mg_hit_chance,
+	 * mg_overheat_seconds, mg_cooldown_seconds, mg_suppression_per_round, mg_suppression_threshold, mg_suppression_stagger,
+	 * traverse_deg_per_sec, dead_zone_m, defensive_radius_m) and "apc_ram" onto Crush (min_crush_speed_mps,
+	 * crush_speed_factor, ram_knockdown_speed_mps, ram_damage, ram_speed_factor, ram_knockdown_play_rate,
+	 * ram_downed_time_scale, crush_downed_brute). Either may be null; missing keys keep the Blueprint values.
+	 */
+	CODEXTACTICS_API void ApplyVehicleWeapons(FVehicleTurretConfig* Turret, FVehicleCrushConfig* Crush);
+
 	/** The file's turn-based values of the archetype's ranged weapon onto its turn profile. */
 	CODEXTACTICS_API void ApplyEnemyTurnWeapon(EEnemyArchetype Archetype, FEnemyTurnProfile& Profile);
 

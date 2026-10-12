@@ -1487,7 +1487,8 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 	}
 
 	// APC P1: with the leader aboard a click on the ground drives his vehicle (double click: full speed); a click on an
-	// operative still selects him; Ctrl / Shift + click wait for the turret (P2).
+	// operative still selects him; Ctrl + click on an enemy = the turret's priority target (P2); Shift + click waits
+	// (watch sector, later).
 	if (UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>(); Vehicles && Vehicles->IsMounted(Leader))
 	{
 		HideCoverPreview();
@@ -1497,7 +1498,12 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 			ControllerCommands::Report(this, PlayerCommands::SelectMember, nullptr, false, false, Picked);
 			return;
 		}
-		if (IsAttackModifierDown() || IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift)
+		if (IsAttackModifierDown())
+		{
+			Vehicles->HandleTurretTargetClick(Leader, Hit.GetActor());
+			return;
+		}
+		if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift)
 			|| Hit.GetActor() == Vehicles->GetVehicleOf(Leader))
 		{
 			return;

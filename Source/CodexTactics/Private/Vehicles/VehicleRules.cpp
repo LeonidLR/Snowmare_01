@@ -363,6 +363,37 @@ namespace VehicleRules
 		return WheelRadiusCm > 0.f ? FMath::RadiansToDegrees(SpeedCmS / WheelRadiusCm) : 0.f;
 	}
 
+	float GetAnimWheelSpeed(float GroundSpeedCmS, float WheelRadiusCm, float Sign)
+	{
+		if (FMath::Abs(GroundSpeedCmS) < 1.f)
+		{
+			return 0.f;
+		}
+		return GetWheelSpinDegPerSec(GroundSpeedCmS, WheelRadiusCm) * Sign;
+	}
+
+	float StepWheelAngle(float WheelAngleDeg, float SpinDegPerSec, float DeltaSeconds)
+	{
+		const float Next = FMath::Fmod(WheelAngleDeg + SpinDegPerSec * FMath::Max(0.f, DeltaSeconds), 360.f);
+		return Next < 0.f ? Next + 360.f : Next;
+	}
+
+	float GetAnimWheelSpeedForAngle(float WheelAngleDeg, float OffsetHold, float DeltaSeconds)
+	{
+		const float Clock = FMath::Max(0.01f, OffsetHold + FMath::Max(0.f, DeltaSeconds));
+		return WheelAngleDeg / Clock;
+	}
+
+	float GetLaunchAccelerationFactor(float SecondsSinceLaunch, const FVehicleDriveConfig& Config)
+	{
+		const float Floor = FMath::Clamp(Config.LaunchAccelerationFraction, 0.05f, 1.f);
+		if (Config.AccelerationRampSeconds <= 0.f)
+		{
+			return 1.f;
+		}
+		return FMath::Lerp(Floor, 1.f, FMath::Clamp(SecondsSinceLaunch / Config.AccelerationRampSeconds, 0.f, 1.f));
+	}
+
 	float GetSteerAngleDeg(float YawRateDegPerSec, float SpeedCmS, const FVehicleDriveConfig& Config)
 	{
 		if (FMath::Abs(SpeedCmS) < 1.f)

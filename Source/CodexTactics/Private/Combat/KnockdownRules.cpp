@@ -127,6 +127,17 @@ namespace KnockdownRules
 		return State;
 	}
 
+	void ScaleTimeline(FKnockdownState& State, float& InOutGetUpPlayRate, float PlayRate, float DownedTimeScale)
+	{
+		const float Rate = FMath::Max(0.05f, PlayRate > 0.f ? PlayRate : 1.f);
+		const float Downed = DownedTimeScale > 0.f ? DownedTimeScale : 1.f;
+		const float OldGetUpRate = InOutGetUpPlayRate > 0.f ? InOutGetUpPlayRate : 1.f;
+		State.FallDuration /= Rate; // the fall clip normally plays at 1
+		State.GetUpDuration *= OldGetUpRate / Rate; // = get-up clip length / Rate
+		State.DownedDuration *= Downed;
+		InOutGetUpPlayRate = Rate;
+	}
+
 	bool AreTimersFrozen(bool bTacticalPause, bool bDialoguePause)
 	{
 		return bTacticalPause || bDialoguePause;

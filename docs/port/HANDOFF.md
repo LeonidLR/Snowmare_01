@@ -508,6 +508,43 @@ vehicle pawns). Commands `Vehicle.Board` / `Vehicle.Disembark` / `Vehicle.Drive`
 = seat), `VehicleDisembarked`, `VehicleDriveStarted`, `VehicleArrived`, `VehiclePathBlocked`; `ATutorialTriggerVolume` «Activated By:
 Vehicle». Tests `CodexTactics.Vehicle.*` (10), smoke `VehicleSmoke`; editor script `Scripts/Editor/setup_apc_vehicle.py`.
 
+**Vehicles P2 + user requests (2026-10-12, branch `agents/apc2`)** — `Vehicles/VehicleCombatRules` (pure: `FVehicleTurretConfig`
+(cannon 70 dmg + 1.5 m splash 35, 3-shell bursts 0.5 s / pause 1.2 s, 40 m, 60 shells per map, hit 0.9, armour factor 0.25 = the HE
+shell mostly ignores the Brute's hide; MG 18 dmg x 8 rounds/s, 35 m, hit 0.8, overheats in 4 s / cools in 3 s, suppression 8 per
+round -> at 40 a 0.5 s stagger; traverse 60 deg/s, elevation -4..+60, dead zone 4 m from the hull side, Defensive radius 20 m),
+`ChooseTarget` (Ctrl+click priority in any posture; Passive holds; Defensive only once provoked and within 20 m; Aggressive any;
+a Brute within 20 m first, else the nearest; never in the dead zone / out of sight / range), `ChooseWeapon` (cannon for a Brute /
+marksman / group of 3 / priority while shells last, MG for the rest; an overheated MG means small targets wait), `StepHeat`,
+`AddSuppression`, `GetCannonDamage`, `GetShellsForMap`, `GetHudLine`; `FVehicleCrushConfig` + `EvaluateContact` (operative /
+friendly -> Brake; small enemy -> Crush >= 1.5 m/s else Push aside; Brute -> KnockDown >= 4 m/s unless re-knock immune, else Block;
+a downed Brute -> Block (option `bCrushDownedRammed`); flying drone -> None), `GetSpeedAfterImpacts` (x0.9 per crush, x0.25 per ram);
+`FVehicleFadeConfig` + `FVehicleFadeTimeline` (0.25 s out / hold >= 0.15 s / 0.25 s in, joins while going black, a request during the
+fade-in queues one more cycle, hold <= 1 s) + `ShouldStartGroupFade` (the first at a door waits <= 8 s for the mates who will
+reach their doors in that time: one fade for the squad, a straggler gets his own)). `Vehicles/VehicleTurretComponent` (`UVehicleTurretComponent` on `AVehiclePawn::Turret`: gunner = the Gunner seat;
+retarget every 0.25 s from LOS traces (ECC_Visibility) from the muzzle socket `gun_jntSocket`; slews the vendor ABP
+`TurretHorizontalAngle` / `GunElevation` (signs measured by VehicleCombatSmoke); damage through `UHealthComponent::TakeDamage`
+(numbers, armour, downed x1.33 as for any hit; `AttackerSource` = the gunner's name = his kill stats), tracers
+(`UCombatFeedbackSubsystem::SpawnTracer`, every other MG round), muzzle flash = the vendor Cascade `PS_MuzzleFire_01` attached to the
+socket, noise (`NotifySquadNoise` Explosion / Gunshot, once a second); shells saved in `world_state.vehicles[].shells`; held without a
+gunner / in turn-based / in the world AI pause). `AVehiclePawn` additions: `CrushConfig` / `FadeConfig`, `HandleContactsAhead`
+(replaces the P1 "brake for every pawn" sweep: a brake zone as long as the braking distance + 1 m, a contact zone = the last metre of
+the hull + 60 cm; `CrushEnemy` = body thrown beside the hull + `ApplyDirectHealthLoss` with the driver's name (normal death chain:
+corpse, kill stats, XP, waves) + "CRUSHED" text + `VehicleRunOver`; `RamEnemy` = ram damage 40 + `UKnockdownComponent::
+ForceKnockDownScaled(.., 0.65, 1.5)` (new: the fall and get-up clips at an absolute 0.65 rate, downed x1.5; `KnockdownRules::
+ScaleTimeline`) + 80 cm shove), the wheels from the MEASURED ground speed (displacement per tick): the vendor ABP turns the wheels by
+`WheelSpeed x WheelSpeedOffset` where `WheelSpeedOffset` is its own clock (seconds) — any speed change multiplied the whole elapsed
+time (the whirl / slip the user saw); C++ now pins that clock to 1 s each tick and writes `WheelSpeed = wheel angle / clock`
+(`VehicleRules::GetAnimWheelSpeedForAngle`), the wheel angle integrating ground speed / 60 cm; the acceleration ramps from 30 % to full
+over 0.8 s when pulling away (`GetLaunchAccelerationFactor`); BlueprintImplementableEvents On Turret Fired / On Ran Over (sound / FX
+polish). `UVehicleSubsystem`: boarding / getting out through the fade (`ShouldFade`: the vehicle's fade on, real time, not paused;
+the ones at a door wait for the group, then mount on black; exits all go on black once the hull stands; camera `SnapFocusOnTarget`
+on black; Slate overlay z 9000, hit-test invisible, real-time clock, watchdog), `HandleTurretTargetClick` (Ctrl+click with the leader
+aboard; command `Vehicle.TurretFire`). Data: `Content/Data/Weapons/weapons_tuning.json` "vehicle_weapons" {"apc_turret", "apc_ram"}
+(`WeaponTuning::ApplyVehicleWeapons`, dumped by `DumpWeaponTuning`, kept by the Wave Editor), level JSON `"vehicle": {"shells": N}`
+(`FLevelCombatConfig::VehicleShells`). HUD: `DrawCombatModeBadge` adds "TURRET AGG   30mm 57/60   MG heat 40%" while the leader is
+aboard. Events `VehicleTurretFired` (Kind Cannon per shell / MachineGun per second of fire), `VehicleTurretKill`, `VehicleRunOver`.
+Tests `CodexTactics.Vehicle.*` (18), smokes `VehicleSmoke` (+ fades) / `VehicleCombatSmoke`, dev still `VehicleTurretShot`.
+
 **Editor scripts** (`Scripts/Editor/`, run with `UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script=<abs path>`):
 `create_movement_test_map.py` (regenerates the test map — **overwrites manual edits, avoid**),
 `add_level_objects_to_movement_test.py` (adds barrel / barricades / mines / supply crates by label, keeps edits;
@@ -714,9 +751,20 @@ rest as before (`VOL_A1_BEACON3/4`, `VOL_A1_RIDGE` / `_FAR`, `VOL_A2_CAMP` Beat 
    automatically (Engineer drives, Commander guns, the rest ride; anyone if absent). With the leader aboard **LMB on the ground** =
    drive there (double click = full speed; a short goal behind = reverse; the camera follows). **Y** again = the selected get out,
    **Alt+Y** = everyone (they exit on the side away from known enemies and take cover at the hull). Clicking the APC itself is still
-   "take cover at its hull". The action bar shows **BOARD [Y]** near a vehicle and **EXIT [Y]** aboard. P1 limits: no driving /
-   boarding in the tactical pause or turn-based (feed line), turn-based entry refused while anyone is aboard, no turret (P2), no
-   damage (P4), engine noise only breaks patrols.
+   "take cover at its hull". The action bar shows **BOARD [Y]** near a vehicle and **EXIT [Y]** aboard. Limits (kept by the user
+   2026-10-12): no driving / boarding in the tactical pause or turn-based (feed line), turn-based entry refused while anyone is
+   aboard, no damage yet (P4), engine noise only breaks patrols.
+   **P2 (2026-10-12):** boarding / getting out is a quick fade to black (no climbing animation; one fade for the group). With a
+   second operative aboard (gunner seat) the **turret** fires on its own by the gunner's fire posture (`,` `.` `/`), **Ctrl+click**
+   an enemy = its target; the HUD shows `TURRET AGG 30mm 57/60 MG heat 40%`. Nothing within 4 m of the hull can be shot (drive off or
+   get out). Driving through small enemies (>= 1.5 m/s) **runs them over**; a Brute is knocked down at >= 4 m/s and stops the APC;
+   operatives are never run over.
+   **P2 tunables:** Details -> **Turret** component -> Config (cannon / MG / mount numbers; `weapons_tuning.json`
+   "vehicle_weapons.apc_turret" overrides at play — edit the JSON or the Wave Editor file, it is the master copy at runtime; shells
+   per map also by level JSON `"vehicle": {"shells": N}`); **Crush Config** (crushable / rammed archetypes, crush 1.5 m/s, knockdown
+   4 m/s, ram damage, slowdowns, the Brute's fall play rate 0.65 / downed x1.5, run over a downed Brute) - JSON "apc_ram" overrides;
+   **Fade Config** (on / off, 0.25 / 0.15 / 0.25 s, max hold 1 s, group wait 8 s). Polish events in BP_APC_BTR82: **On
+   Turret Fired** (weapon, muzzle: the cannon / MG sound), **On Ran Over** (victim, location: crunch + blood / snow FX).
 5. **Nav agents (DefaultEngine.ini, for any map):** `SupportedAgents` = `Default` (35 / 144: the engine's former implicit agent,
    infantry unchanged) + `Vehicle` (200 / 300, step 40, `bCanFly=True` so no ground pawn ever picks it). Keep the order (the nav areas
    address the agents by index 0 / 1). Opening an old map shows no change except the tag rule above.
@@ -1038,6 +1086,20 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
   mutate / load / diff in place and after travel, policy, autosaves) + `SaveLoadSmoke`.
 
 ## 7. Open user decisions / questions
+
+- **APC P2 (2026-10-12) - choices made by Claude, to confirm:** (1) **run-over decision changed by the user**: small enemies
+  (hound, frostbitten, cutter, spitter, marksman - the marksman treated as small as asked) die under the wheels at >= 1.5 m/s
+  (credit = the driver); slower they are shoved aside without braking; (2) a **downed Brute is not run over** (the APC stops
+  against him; `bCrushDownedRammed` / JSON `crush_downed_brute` switches it); (3) the ram deals 40 to the Brute and **no damage to
+  the hull** yet (no hull health until P4; `HullRamDamage` 0 is kept for P4); (4) the Brute's knockdown clips play at an absolute
+  0.65x (fall 1.4 s, get-up ~2.5 s) and he stays down 0.9 s (1.5 x 0.6 s); (5) the turret holds fire in **Passive** even when
+  attacked (as operatives), Ctrl+click always fires; the cannon is used for a Brute / marksman / a group of 3 / a priority target,
+  an overheated MG makes small targets wait (shells are kept for big threats); (6) **MG suppression** = after 5 hits in a row the
+  enemy is pinned 0.5 s (stagger), as there is no enemy suppression meter; (7) the turret also fires in exploration (no
+  phase gate; a turret hit starts an ambush like any hit); (8) a Ctrl+click on a barrel / object is ignored (enemies only for
+  now); (9) no sounds: the project has no weapon sounds yet (BP event On Turret Fired; TANDEM request 20); muzzle flash = the
+  vendor Cascade emitter, tracers = the operatives' tracers; (10) enemy AI does not dodge the moving APC (small enemies are run over
+  by design); while parked the hull is carved out of the infantry navmesh as before.
 
 - **APC P1 (2026-10-12) - choices made by Claude inside the approved design, to confirm:** (1) the tactical pause refuses vehicle
   orders (board / get out / drive) with a feed line instead of planning them (the task allowed "planned if simple"); (2) turn-based
@@ -1452,6 +1514,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 | Commit | What |
 | (this, agents/work) | **Squad gathers at the fire (user decision 2026-10-12).** `WarmIdleRules::ShouldPullFollower` + `UWarmIdleSubsystem::GetFollowerPullTarget` (outer-ring slot per follower, order opt-out, lapse) + the hook in `USquadSubsystem::UpdateFollower`; `FTacticalHeatConfig::bWarmPullFollowers` / `WarmPullMaxDistance` (`tactical_heat.json` `warm_pull_followers`, `warm_pull_max_distance`). Test `WarmIdle.PullFollowers`; `WarmIdleSmoke` scene 7 (campfire + stove, order / guard / solo / wave fight). Also: WarmIdleSmoke no longer dies on the barrel's fire puddle (`ResetBodies`), `[Health]` death log in `UHealthComponent::Die`. Section 6 «Weather idle poses». |
 | (this, agents/tutA1) | **Demo 01 A0-A1 redesign (user decision 2026-10-12): sprint locked until warmed up, hut loot lesson, heat pack in A1, gust safety.** Generic tutorial command locks (beat / step `lock` / `unlock`, saved as `"locks"`, rebuilt for old saves; `UTutorialSubsystem::CheckCommandLocked` / `FilterCommand`, `TutorialRules::ResolveLockedCommand`: locked sprint -> walk in `HandleWorldHit` (ground + object double click), event `Tutorial.Locked(.<Id>)`), trigger `condition` + `requires`, step `condition` (skip when due and false), step `actions` (`cold_bump` -> new `UColdSurvivalComponent::AddColdShock` / `ColdRules::ApplyColdShock`), `focus: coldest_operative` (`{focus}`, card view `FocusOperative`), kind `feed`; `ProcessTransitions` drains follow-ups; inputs (commands / events / volumes) now only count for steps already running when they arrive (a follower started by a completion no longer takes the same heat pack). New event `ItemLooted(.<Item>)` (crate take / Take all / crate-pile drag). Level JSON `squad_loadout.heat_packs_count` (`LoadoutRules::StartingHeatPacks`, game-mode spawn; demo = 0; Wave Editor type). `demo_01_steps.json` A0-A2 rewritten (A0 lock + `A0_nosprint` feed; A1 select -> box -> hut loot `VOL_A1_HUT` -> solo -> regroup -> `A1_gust` -> `A1_heatpack` (coldest) / `A1_wt_nopack` / `A1_heatpack_mate` -> `A1_wt_warmed` unlock -> `A1_sprint` -> guard / stance / vault; A2 unlock safety, `A2_wt_cold` on beat start, `A2_coldbar` dropped, `A2_heatpack` remedial); drafts for all A1 ids; beat sheet rev 3; controller mouse position zero-initialised (deterministic headless double click). Tests `CodexTactics.Tutorial.Lock.* / Action.GustTimeout / Condition.Trigger / Schema.DemoFileA0A1Flow / Demo.HeatPackLoadout`; `TutorialSmoke` extended (real demo file A0 -> A1). Verified: build, `test.ps1 -Changed` (123 unit tests, 37 smokes PASS; LevelWaveSmoke = the known flaky wave-2 spawn spacing, passed alone on the third run; SniperSmoke passed on its re-run), SoloRejoin / WarmIdle smokes PASS, Jev audit PASS. |
+| (this, agents/apc2) | **APC P2 turret + user requests 2026-10-12 (run over / ram the Brute / boarding fade / wheel slip).** `Vehicles/VehicleCombatRules` (turret target by posture, dead zone, weapon choice, heat, suppression, shells per map; crush / ram contact rules; fade timeline + group wait), `UVehicleTurretComponent` (gunner seat, LOS from `gun_jntSocket`, ABP turret yaw / gun pitch, cannon HE + splash + shells, MG + overheat + suppression, tracers, vendor muzzle flash, noise, kill credit, `VehicleTurretFired` / `VehicleTurretKill`), `AVehiclePawn::HandleContactsAhead` (small enemies crushed >= 1.5 m/s as proper kills credited to the driver + `VehicleRunOver`, pushed when slower; Brute knocked down >= 4 m/s via the new `UKnockdownComponent::ForceKnockDownScaled` (0.65x clips, downed x1.5) or blocks; operatives / NPCs braked for; brake zone = braking distance), wheels from the measured ground speed with the vendor ABP clock pinned (the whirl / slip fix) + launch acceleration ramp, `UVehicleSubsystem` fades (0.25 / 0.15 / 0.25 s, one per group, real time, watchdog, camera snap on black), Ctrl+click turret target (`Vehicle.TurretFire`), HUD turret line, save shells, `weapons_tuning.json` "vehicle_weapons", level JSON `"vehicle": {"shells"}`. Tests `CodexTactics.Vehicle.*` 18 (8 new), `VehicleCombatSmoke` (new), `VehicleSmoke` (+ 4 fade checks), still `VehicleTurretShot`. Verified: build; unit tests `test.ps1 -Changed` 122 / 122 (incl. `CodexTactics.Vehicle.*` 18 / 18); smokes 48 / 48 PASS (`VehicleSmoke`, `VehicleCombatSmoke`, Movement, Cover / CoverHug / CoverEvent, LevelWave, SaveRoundTrip / SaveLoad, ControlsScreen, Tutorial, Knockdown, Squad / Formation ones, ...) + `HordeIntroSmoke` PASS; `-CheckMap` OK; Jev audit PASS; still `Saved/Screenshots/APC/TurretFire.png` (main folder). |
 | (this, agents/camlesson) | **Staged camera lesson (user feedback 2026-10-12: WASD alone finished the camera card).** `Camera.Pan` / `Camera.Rotate` split into `Camera.Pan.Keys / .Edge / .Drag`, `Camera.Rotate.Keys / .Mouse` (+ `Camera.Zoom`), reported from the real handlers (`ATacticalCameraPawn::UpdatePan / UpdateRotation`, `ACodexTacticsPlayerController` Q/E, RMB / MMB drag start, wheel); continuous ones report once per action + `PlayerCommands::ReportHold` ticks. New completion `hold_s` (see §6 Tutorial). Beat A0 = four sequential cards (pan -> Q/E -> mouse look -> zoom) then `A0_move`, no timeout; draft texts `TUT_A0_CAM_*` replace `TUT_A0_CAMERA` (TANDEM #17 ids updated). Tests `CodexTactics.Tutorial.Commands.MultiSegmentWildcard`, `.StateMachine.HoldSeconds`, `.HoldOnlyWhileShown`, `.Schema.DemoFile` (four-stage order); `FrontendControlsTest` ids; `TutorialSmoke` drives the four stages with real `InputKey`. |
 | (this, agents/work) | **Weather idle poses (user request + fire-role design 2026-10-12).** Pack `/Game/90+_Weather_Animations` (junction in agents) Cold sets IK-retargeted (M4 `RTG_UE5Manny_UE4Manny`, Blend to Source off in memory) to `Content/Characters/Operatives/Anims/Weather/Male|Female` by `Scripts/Editor/setup_operative_weather_animation.py`, which also fills the new `UOperativeAnimInstance` class defaults (ColdIdle / HandWarm / SitWarm x Male / Female; ABP_Operative backed up to `Saved/Backups/weather_anim_*`; graph untouched). New `Survival/WarmIdleRules` (exploration-only gate, interrupts, solo pose, fire roles by cold, rings / slot pick / facing, gender, clip sequence, exit style), `UWarmIdleSubsystem` (decisions at 10 Hz, spots on the NavMesh, walks, facing, per-operative order serial), anim layer `OperativeAnimInstanceWarmIdle.cpp` (FullBodySlot, End / blend-out, weapon hidden; the sniper idle yields), `AOperativeCharacter::GetMoveOrderSerial / GetLastAttackedTime / WarmSpotSource`, `URelocationSubsystem::HasActiveTask`, follower hold in `USquadSubsystem::UpdateFollower`, `FColdEnvironment::HeatWarmthMultiplier` (combat x0.5). Tuning keys in `tactical_heat.json`. Tests `CodexTactics.Survival.WarmIdle.*` (8), smoke `WarmIdleSmoke [shot]` (test_map rule `warm-idle`); TacticalHeat / Barrel / Knockdown / Movement / SoloRejoin / Tutorial / Sniper / Cold smokes pass. Section 6 «Weather idle poses». |
 | (this, agents/apc) | **APC BTR-82 phases P0 + P1 (user decisions 2026-10-12, `docs/vehicles/APC_00..02`).** P0: `Config/DefaultEngine.ini` two nav agents (Default = the former implicit 35 / 144, infantry unchanged; Vehicle 200 / 300, step 40, `bCanFly=True`), opt-in vehicle navmesh per bounds volume (tag `VehicleNav`), `NavArea_NoVehicle`, `AVehiclePawn` (kinematic on the Vehicle navmesh: pure pursuit without corner cutting, 7 m turning radius, K-turn, auto reverse, pawn sweep, ground conform; hull box = blocking + cover; parked footprint carves the infantry navmesh; vendor ABP variables by name; cabin heat; engine noise for patrols), `Scripts/Editor/setup_apc_vehicle.py` (BP_APC_BTR82 NOT created: the user's editor had the main project open). P1: `UVehicleSubsystem` (Y / Alt + Y board / get out, seats Engineer driver / Commander gunner, exits away from threats into cover at the hull, blocked exits refused, drive clicks, save `world_state.vehicles`), controller (drive clicks, the APC click stays cover, TB entry refused while aboard), the IsMounted list (§5 «Vehicles»), commands / events / F1 «Vehicles», action bar BOARD / EXIT, tutorial volume «Activated By: Vehicle». Tests `CodexTactics.Vehicle.*` (10), `VehicleSmoke` (+ every operative / enemy archetype resolves to the infantry navmesh); `ControlsScreenSmoke` / `FrontendControlsTest` expect the 8th section. Verified: build, 384 / 384 unit tests, `test.ps1 -Changed` 65 smokes (LevelWaveSmoke 87 % vs 90 % "on the move" under parallel load, PASS alone; ControlsScreenSmoke fixed for the new section) + RealtimeSelect / HordeIntro / CommanderMode / LevelWave / ControlsScreen / VehicleSmoke PASS, `-CheckMap` OK, Jev audit PASS. How to place it / L_VehicleTest: §6 «APC». |

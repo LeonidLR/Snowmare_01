@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Dom/JsonValue.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "Vehicles/VehicleCombatRules.h"
 #include "Vehicles/VehicleRules.h"
 #include "VehicleSubsystem.generated.h"
 
@@ -28,6 +29,7 @@ class CODEXTACTICS_API UVehicleSubsystem : public UTickableWorldSubsystem
 public:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
+	virtual void Deinitialize() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
 
@@ -78,6 +80,22 @@ public:
 	/** Dismounts at once at Location (load / smokes); no cover order. */
 	void DismountImmediately(AOperativeCharacter* Operative, const FVector& Location);
 
+	// --- Turret (P2) -----------------------------------------------------------------------------------------------
+
+	/**
+	 * Ctrl + click on Target with the leader aboard: the turret's priority target (any posture), reported as
+	 * Vehicle.TurretFire. True when it was a turret order (handled; also when refused: no gunner / not an enemy).
+	 */
+	bool HandleTurretTargetClick(AOperativeCharacter* Leader, AActor* Target);
+
+	// --- Boarding fade (user 2026-10-12: no boarding animations) ---------------------------------------------------
+
+	/** Screen darkness of the boarding fade, 0..1 (real time). */
+	float GetFadeAlpha() const;
+	bool IsFadeActive() const { return Fade.IsActive(); }
+	/** Fades started so far (one per group of boarders / getting out; smokes). */
+	int32 GetFadeCount() const { return FadeCount; }
+
 	// --- Navigation ----------------------------------------------------------------------------------------------
 
 	/**
@@ -113,6 +131,11 @@ private:
 		/** Seconds standing still short of the door (a crowded door, a path dropped by a tile rebuild). */
 		float IdleSeconds = 0.f;
 		int32 Retries = 0;
+		/** At the door, waiting for the group fade (mates still walking up). */
+		bool bReady = false;
+		float ReadySeconds = 0.f;
+		/** Handed to the fade: mounted when the screen is black. */
+		bool bFadeQueued = false;
 	};
 
 	struct FPendingExit
@@ -121,6 +144,8 @@ private:
 		TWeakObjectPtr<AVehiclePawn> Vehicle;
 		FVector Point = FVector::ZeroVector;
 		float ClimbLeft = 0.f;
+		/** Handed to the fade: moved out when the screen is black. */
+		bool bFadeQueued = false;
 	};
 
 	void Mount(AOperativeCharacter* Operative, AVehiclePawn* Vehicle, bool bRaiseEvent);
@@ -135,11 +160,25 @@ private:
 	FText RefusalText(EVehicleRefusal Refusal, const AOperativeCharacter* Operative) const;
 	void HandleArrived(AVehiclePawn* Vehicle);
 	void HandleBlocked(AVehiclePawn* Vehicle);
+	/** Board / exit with a fade now? (real time, the vehicle's fade on; never in the tactical pause / turn-based.) */
+	bool ShouldFade(const AVehiclePawn* Vehicle) const;
+	void RequestFade(const AVehiclePawn* Vehicle);
+	void UpdateFade();
+	/** On black: mounts / moves out everyone handed to the fade, snaps the camera. */
+	void ExecuteFadeQueue();
+	void ShowFadeOverlay();
+	void RemoveFadeOverlay();
 
 	TArray<TWeakObjectPtr<AVehiclePawn>> Vehicles;
 	TMap<TWeakObjectPtr<const AActor>, TWeakObjectPtr<AVehiclePawn>> Mounted;
 	TArray<FPendingBoard> Boarding;
 	TArray<FPendingExit> Exits;
+	FVehicleFadeTimeline Fade;
+	FVehicleFadeConfig FadeConfig;
+	int32 FadeCount = 0;
+	/** Real seconds the current fade has run (watchdog: never stuck black). */
+	float FadeAge = 0.f;
+	TSharedPtr<class SWidget> FadeOverlay;
 };
 
 /** Fast queries for the systems that treat a mounted operative differently (no include of the subsystem's users). */
@@ -150,4 +189,7 @@ namespace VehicleQueries
 
 	/** Its vehicle, nullptr when on foot. */
 	CODEXTACTICS_API AVehiclePawn* GetVehicle(const AActor* Operative);
+
+	/** Walking to a door / waiting there for the boarding fade. */
+	CODEXTACTICS_API bool IsBoarding(const AActor* Operative);
 }

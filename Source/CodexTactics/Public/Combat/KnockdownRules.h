@@ -169,6 +169,14 @@ namespace KnockdownRules
 	CODEXTACTICS_API FKnockdownState Start(const FKnockdownConfig& Config, EKnockdownDirection Direction, EKnockdownCause Cause,
 		float FallClipSeconds, float GetUpClipSeconds, bool bTurnBased);
 
+	/**
+	 * A heavier, slower fall (APC ram on a Brute, 2026-10-12): the fall and the get-up clips both play at the absolute
+	 * PlayRate (< 1 = slower than the clip; the fall normally plays at 1, the get-up at the compressed Start rate, so
+	 * their durations become clip length / PlayRate) and the downed time is scaled by DownedTimeScale. InOutGetUpPlayRate
+	 * is the get-up clip's rate from Start (becomes PlayRate). Values <= 0 count as 1.
+	 */
+	CODEXTACTICS_API void ScaleTimeline(FKnockdownState& State, float& InOutGetUpPlayRate, float PlayRate, float DownedTimeScale);
+
 	/** Timers stop in the tactical pause and while the dialogue / narrative AI pause holds the world. */
 	CODEXTACTICS_API bool AreTimersFrozen(bool bTacticalPause, bool bDialoguePause);
 

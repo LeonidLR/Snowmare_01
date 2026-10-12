@@ -125,6 +125,8 @@ export interface WeaponTuningFile {
   grenade: GrenadeTuning;
   turn_based_rules?: TurnBasedRulesTuning;
   enemy_weapons?: Record<string, EnemyRangedWeapon>;
+  /** APC P2 (UE-only): turret + ram numbers (Source/.../Data/WeaponTuning.h ApplyVehicleWeapons); kept as-is by the editor. */
+  vehicle_weapons?: Record<string, Record<string, number | boolean>>;
 }
 
 export interface LevelConfig {
