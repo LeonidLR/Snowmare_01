@@ -239,4 +239,60 @@ bool FWarmIdleClipStepsTest::RunTest(const FString&)
 	return true;
 }
 
+WARM_TEST(FWarmIdlePullFollowersTest, "PullFollowers")
+bool FWarmIdlePullFollowersTest::RunTest(const FString&)
+{
+	const FTacticalHeatConfig Config;
+	TestTrue(TEXT("default: on"), Config.bWarmPullFollowers);
+	TestEqual(TEXT("default max pull distance 15 m"), Config.WarmPullMaxDistance, 1500.f);
+	FWarmPullInput Input;
+	Input.bLeaderAtFire = true;
+	Input.FollowerToSource = 1000.f;
+	TestTrue(TEXT("formation follower 10 m away, leader at the fire: pulled"), WarmIdleRules::ShouldPullFollower(Input, Config));
+
+	FWarmPullInput Far = Input;
+	Far.FollowerToSource = 1600.f;
+	TestFalse(TEXT("farther than 15 m: not pulled"), WarmIdleRules::ShouldPullFollower(Far, Config));
+	Far.bPulling = true;
+	TestTrue(TEXT("a pull in progress survives a detour past 15 m"), WarmIdleRules::ShouldPullFollower(Far, Config));
+
+	FWarmPullInput Off = Input;
+	FTacticalHeatConfig Disabled;
+	Disabled.bWarmPullFollowers = false;
+	TestFalse(TEXT("flag off: formation as before"), WarmIdleRules::ShouldPullFollower(Off, Disabled));
+	FTacticalHeatConfig Short;
+	Short.WarmPullMaxDistance = 800.f;
+	TestFalse(TEXT("tuned max distance 8 m: 10 m is out"), WarmIdleRules::ShouldPullFollower(Input, Short));
+
+	FWarmPullInput Combat = Input;
+	Combat.bExploration = false;
+	TestFalse(TEXT("combat / ambush / pause / turn-based: not pulled"), WarmIdleRules::ShouldPullFollower(Combat, Config));
+	FWarmPullInput Solo = Input;
+	Solo.bInFormation = false;
+	TestFalse(TEXT("solo mode / guard: not pulled"), WarmIdleRules::ShouldPullFollower(Solo, Config));
+	FWarmPullInput Ordered = Input;
+	Ordered.bOrdered = true;
+	TestFalse(TEXT("explicit order to the follower: he leaves"), WarmIdleRules::ShouldPullFollower(Ordered, Config));
+	FWarmPullInput Away = Input;
+	Away.bLeaderAtFire = false;
+	TestFalse(TEXT("the leader is not at a fire (or left the zone): normal formation follow"), WarmIdleRules::ShouldPullFollower(Away, Config));
+	Away.bPulling = true;
+	TestFalse(TEXT("... also for a pull in progress"), WarmIdleRules::ShouldPullFollower(Away, Config));
+	FWarmPullInput Busy = Input;
+	Busy.bFollowerFree = false;
+	TestFalse(TEXT("knocked down / in cover / threatened / busy follower: not pulled"), WarmIdleRules::ShouldPullFollower(Busy, Config));
+
+	// The JSON keys (Unreal master: Content/Data/Survival/tactical_heat.json) read and write back.
+	TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+	Json->SetBoolField(TEXT("warm_pull_followers"), false);
+	Json->SetNumberField(TEXT("warm_pull_max_distance"), 900.0);
+	const FTacticalHeatConfig FromJson = TacticalHeatTuning::FromJson(*Json);
+	TestFalse(TEXT("json: warm_pull_followers"), FromJson.bWarmPullFollowers);
+	TestEqual(TEXT("json: warm_pull_max_distance"), FromJson.WarmPullMaxDistance, 900.f);
+	const TSharedRef<FJsonObject> Back = TacticalHeatTuning::ToJson(FromJson);
+	TestFalse(TEXT("json round trip: flag"), Back->GetBoolField(TEXT("warm_pull_followers")));
+	TestEqual(TEXT("json round trip: distance"), static_cast<float>(Back->GetNumberField(TEXT("warm_pull_max_distance"))), 900.f);
+	return true;
+}
+
 #endif

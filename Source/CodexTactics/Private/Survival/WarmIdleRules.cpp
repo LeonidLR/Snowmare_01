@@ -104,6 +104,12 @@ namespace WarmIdleRules
 		return Roles;
 	}
 
+	bool ShouldPullFollower(const FWarmPullInput& Input, const FTacticalHeatConfig& Config)
+	{
+		return Config.bWarmPullFollowers && Input.bExploration && Input.bInFormation && !Input.bOrdered && Input.bLeaderAtFire
+			&& Input.bFollowerFree && (Input.bPulling || Input.FollowerToSource <= Config.WarmPullMaxDistance);
+	}
+
 	int32 RingCapacity(float Radius, float Spacing)
 	{
 		if (Radius <= 0.f || Spacing <= 0.f)

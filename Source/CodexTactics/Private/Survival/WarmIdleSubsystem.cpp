@@ -31,6 +31,8 @@ namespace
 	constexpr float SpotProbeHalfHeight = 60.f;
 	/** A walk that ends farther than this from the spot after stopping counts as failed, cm. */
 	constexpr float WalkGiveUpDistance = 120.f;
+	/** A squad pull that was not asked about for this long lapses, s (the follower repath runs every 0.2 s; a stance change may hold it a while). */
+	constexpr double PullLapseSeconds = 3.0;
 
 	UOperativeAnimInstance* AnimOf(const AOperativeCharacter& Operative)
 	{
@@ -435,8 +437,6 @@ void UWarmIdleSubsystem::Evaluate(float DeltaSeconds)
 	const FTacticalHeatConfig& Config = TacticalHeatTuning::Get();
 	const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 	const bool bExploration = !Flow || WarmIdleRules::IsExplorationPhase(Flow->GetPhase(), Flow->GetCombatMode());
-	const UInteractionSubsystem* Interaction = World->GetSubsystem<UInteractionSubsystem>();
-	const URelocationSubsystem* Relocation = World->GetSubsystem<URelocationSubsystem>();
 	const double Now = World->GetTimeSeconds();
 
 	TMap<TWeakObjectPtr<AActor>, TArray<AOperativeCharacter*>> Candidates;
@@ -465,10 +465,9 @@ void UWarmIdleSubsystem::Evaluate(float DeltaSeconds)
 		Input.bInCover = Operative->bInCover;
 		Input.bCarrying = Operative->bCarrying;
 		Input.bVaulting = Operative->IsVaulting();
-		Input.bBusy = Operative->IsPanicking() || Operative->IsRaging() || (Interaction && Interaction->HasUseOrder(Operative))
-			|| (Relocation && (Relocation->HasActiveTask(Operative) || Relocation->HasPlannedTask(Operative)));
+		Input.bBusy = IsBusy(*Operative);
 		Input.bMoving = bMoving || bOrdered;
-		Input.bThreat = Now - Operative->GetLastAttackedTime() < ThreatHoldSeconds || (bExploration && Operative->IsEnemySpottedInCone());
+		Input.bThreat = IsThreatened(*Operative, Now, bExploration);
 		Input.Stance = Operative->GetStance();
 		Input.Cold = Operative->ColdLevel;
 		Input.IdleSeconds = State.IdleSeconds;
@@ -557,4 +556,176 @@ void UWarmIdleSubsystem::Evaluate(float DeltaSeconds)
 			It.RemoveCurrent();
 		}
 	}
+	// A pull the squad stopped asking about (solo mode, held followers, a guard, a fight: UpdateFollower no longer runs) lapses, so a
+	// stale source never reads as "being pulled" and the reserved ring slot is free again.
+	for (auto It = Pulls.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid())
+		{
+			It.RemoveCurrent();
+		}
+		else if (It.Value().Source.IsValid() && (!bExploration || Now - It.Value().LastQuery > PullLapseSeconds))
+		{
+			It.Value().Source.Reset();
+			It.Value().Slot = INDEX_NONE;
+		}
+	}
+}
+
+bool UWarmIdleSubsystem::IsThreatened(const AOperativeCharacter& Operative, double Now, bool bExploration) const
+{
+	return Now - Operative.GetLastAttackedTime() < ThreatHoldSeconds || (bExploration && Operative.IsEnemySpottedInCone());
+}
+
+bool UWarmIdleSubsystem::IsBusy(const AOperativeCharacter& Operative) const
+{
+	const UWorld* World = GetWorld();
+	const UInteractionSubsystem* Interaction = World ? World->GetSubsystem<UInteractionSubsystem>() : nullptr;
+	const URelocationSubsystem* Relocation = World ? World->GetSubsystem<URelocationSubsystem>() : nullptr;
+	return Operative.IsPanicking() || Operative.IsRaging() || (Interaction && Interaction->HasUseOrder(&Operative))
+		|| (Relocation && (Relocation->HasActiveTask(&Operative) || Relocation->HasPlannedTask(&Operative)));
+}
+
+FVector UWarmIdleSubsystem::ChoosePullTarget(const AOperativeCharacter& Follower, const AActor& Source, float Reach, int32& OutSlot) const
+{
+	OutSlot = INDEX_NONE;
+	const FVector From = Follower.GetActorLocation();
+	if (const FGroup* Group = Groups.Find(TWeakObjectPtr<AActor>(const_cast<AActor*>(&Source))); Group && Group->bRingsBuilt && !Group->Outer.IsEmpty())
+	{
+		// The standing ring of the source: not a blocked place, not one a member holds, not one another pulled follower reserved.
+		TArray<bool> Taken = Group->OuterBlocked;
+		for (const TWeakObjectPtr<AOperativeCharacter>& Member : Group->Members)
+		{
+			const FMemberState* State = States.Find(Member);
+			if (State && !State->bInnerRing && Taken.IsValidIndex(State->Slot))
+			{
+				Taken[State->Slot] = true;
+			}
+		}
+		for (const TPair<TWeakObjectPtr<AOperativeCharacter>, FPullState>& Other : Pulls)
+		{
+			if (Other.Key.Get() != &Follower && Other.Value.Source.Get() == &Source && Taken.IsValidIndex(Other.Value.Slot))
+			{
+				Taken[Other.Value.Slot] = true;
+			}
+		}
+		OutSlot = WarmIdleRules::PickSlot(Group->Outer, Taken, Group->Center, From);
+		if (Group->Outer.IsValidIndex(OutSlot))
+		{
+			return Group->Outer[OutSlot];
+		}
+		OutSlot = INDEX_NONE;
+	}
+	// No ring: a point inside the zone on the side he comes from.
+	const FVector Center = Source.GetActorLocation();
+	return Center + (From - Center).GetSafeNormal2D() * FMath::Min(Reach * 0.6f, 150.f);
+}
+
+AActor* UWarmIdleSubsystem::GetFollowerPullSource(const AOperativeCharacter* Follower) const
+{
+	const FPullState* Pull = Pulls.Find(TWeakObjectPtr<AOperativeCharacter>(const_cast<AOperativeCharacter*>(Follower)));
+	return Pull ? Pull->Source.Get() : nullptr;
+}
+
+bool UWarmIdleSubsystem::GetFollowerPullTarget(AOperativeCharacter& Follower, const AOperativeCharacter& Leader, FFollowerPull& OutPull)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	const FTacticalHeatConfig& Config = TacticalHeatTuning::Get();
+	FPullState& Pull = Pulls.FindOrAdd(&Follower);
+	Pull.LastQuery = World->GetTimeSeconds();
+	const bool bOrdered = Pull.bSerialKnown && Pull.OrderSerial != Follower.GetMoveOrderSerial();
+	Pull.OrderSerial = Follower.GetMoveOrderSerial();
+	Pull.bSerialKnown = true;
+
+	const auto EndPull = [&Pull]()
+	{
+		Pull.Source.Reset();
+		Pull.Slot = INDEX_NONE;
+	};
+
+	// The fire: the one he is pulled to, else the one the leader holds a warm spot at.
+	const bool bPulling = Pull.Source.IsValid();
+	AActor* Source = Pull.Source.Get();
+	float Reach = Pull.Reach;
+	if (!Source)
+	{
+		Source = Leader.WarmSpotSource.Get();
+		Reach = Leader.WarmSpotReach;
+	}
+	const FVector LeaderAt = Leader.GetActorLocation();
+	if (Pull.OptOutSource.IsValid() && FVector::Dist2D(LeaderAt, Pull.OptOutSource->GetActorLocation()) > Pull.OptOutReach)
+	{
+		Pull.OptOutSource.Reset(); // the leader left that fire: the next one pulls him again
+	}
+	if (!Source)
+	{
+		EndPull();
+		return false;
+	}
+	if (bOrdered)
+	{
+		Pull.OptOutSource = Source; // an explicit order: that follower leaves the pull
+		Pull.OptOutReach = Reach;
+		EndPull();
+		return false;
+	}
+	if (Pull.OptOutSource.Get() == Source)
+	{
+		EndPull();
+		return false;
+	}
+	// The fire must still burn (a burnt-out barrel / a spent stove gathers nobody).
+	const UHeatSourceComponent* Heat = Source->FindComponentByClass<UHeatSourceComponent>();
+	if (!Heat || !Heat->IsHeatActive())
+	{
+		EndPull();
+		return false;
+	}
+
+	const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+	FWarmIdleInput Free;
+	Free.bExploration = !UWorldAIPauseSubsystem::IsPausedIn(World) && (!Flow || WarmIdleRules::IsExplorationPhase(Flow->GetPhase(), Flow->GetCombatMode()));
+	const UHealthComponent* Health = Follower.HealthComponent;
+	const UColdSurvivalComponent* Cold = Follower.ColdSurvival;
+	Free.bAlive = !Health || Health->IsAlive();
+	Free.bKnockedDown = Follower.IsKnockedDown();
+	Free.bFrostbitten = Cold && Cold->IsFrostbitten();
+	Free.bInCover = Follower.bInCover;
+	Free.bCarrying = Follower.bCarrying;
+	Free.bVaulting = Follower.IsVaulting();
+	Free.bBusy = IsBusy(Follower);
+	Free.bThreat = IsThreatened(Follower, World->GetTimeSeconds(), Free.bExploration);
+	Free.Stance = Follower.GetStance();
+	Free.IdleSeconds = Config.WarmIdleDelaySeconds; // walking to the fire is not "moving" for the pull
+
+	FWarmPullInput Input;
+	Input.bExploration = Free.bExploration;
+	Input.bInFormation = !Follower.bGuarding;
+	Input.bLeaderAtFire = FVector::Dist2D(LeaderAt, Source->GetActorLocation()) <= Reach;
+	Input.bPulling = bPulling;
+	Input.bFollowerFree = WarmIdleRules::CanHoldWarmPose(Free, Config);
+	Input.FollowerToSource = FVector::Dist2D(Follower.GetActorLocation(), Source->GetActorLocation());
+	if (!WarmIdleRules::ShouldPullFollower(Input, Config))
+	{
+		EndPull();
+		return false;
+	}
+	if (!bPulling)
+	{
+		Pull.Source = Source;
+		Pull.Reach = Reach;
+		Pull.Target = ChoosePullTarget(Follower, *Source, Reach, Pull.Slot);
+		UE_LOG(LogCodexTactics, Display, TEXT("[WarmIdle] %s is pulled to %s (%.0f cm away, ring slot %d)"), *Follower.DisplayName.ToString(),
+			*Source->GetName(), Input.FollowerToSource, Pull.Slot);
+	}
+	OutPull.Target = Pull.Target;
+	OutPull.Fire = Source->GetActorLocation();
+	const float ToTarget = FVector::Dist2D(Follower.GetActorLocation(), Pull.Target);
+	OutPull.bArrived = ToTarget <= Config.WarmSpotArriveTolerance + Follower.MovementConfig.AcceptanceRadius
+		|| (Input.FollowerToSource <= Reach && !Follower.IsMoving());
+	return true;
 }

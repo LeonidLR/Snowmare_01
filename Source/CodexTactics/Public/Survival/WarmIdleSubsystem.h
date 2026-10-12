@@ -22,6 +22,10 @@ struct FTacticalHeatConfig;
  * the fire. An order (AOperativeCharacter::GetMoveOrderSerial) frees only the ordered operative; a parked follower keeps his spot
  * while the leader stays in that warm zone (ShouldFollowerHoldWarmSpot, read by USquadSubsystem). A threat, combat start, knockdown,
  * cover or a task ends the pose (UOperativeAnimInstance plays the End clip / blends out).
+ * Squad gathers at the fire (user decision 2026-10-12, FTacticalHeatConfig::bWarmPullFollowers): while the leader holds a warm spot at a
+ * barrel / campfire / stove, USquadSubsystem::UpdateFollower asks GetFollowerPullTarget and walks the followers to that source's ring
+ * instead of their formation slots (exploration formation only; solo / guard / explicit orders / threats / combat are not pulled);
+ * once they stand in the zone the normal flow above gives them roles (the coldest sit) and spots.
  */
 UCLASS()
 class CODEXTACTICS_API UWarmIdleSubsystem : public UTickableWorldSubsystem
@@ -38,6 +42,27 @@ public:
 
 	/** A parked follower keeps his warm spot while the leader is within the warm zone of that spot's heat source. */
 	static bool ShouldFollowerHoldWarmSpot(const AOperativeCharacter& Follower, const AOperativeCharacter& Leader);
+
+	/** Where a pulled follower goes (GetFollowerPullTarget). */
+	struct FFollowerPull
+	{
+		/** A spot on the source's outer ring (or a point inside its warm zone when no ring is built). */
+		FVector Target = FVector::ZeroVector;
+		/** The heat source's location (to face it). */
+		FVector Fire = FVector::ZeroVector;
+		/** At the target (or standing inside the zone): the squad parks him there and the normal flow takes over. */
+		bool bArrived = false;
+	};
+
+	/**
+	 * Squad gathers at the fire (WarmIdleRules::ShouldPullFollower): true when Follower, an exploration-formation follower, is to walk
+	 * to the heat source Leader is warming at instead of his formation slot. An explicit order to him (GetMoveOrderSerial) drops him from
+	 * the pull until the leader leaves that fire. Called from USquadSubsystem::UpdateFollower at the repath rate.
+	 */
+	bool GetFollowerPullTarget(AOperativeCharacter& Follower, const AOperativeCharacter& Leader, FFollowerPull& OutPull);
+
+	/** The source Follower is pulled to now (smokes / debug); nullptr when none. */
+	AActor* GetFollowerPullSource(const AOperativeCharacter* Follower) const;
 
 	/** Decision state of one operative (smokes / debug). */
 	struct FDebugState
@@ -82,6 +107,23 @@ private:
 		TWeakObjectPtr<AActor> GaveUpSource;
 	};
 
+	/** The squad pull of one follower (see GetFollowerPullTarget). */
+	struct FPullState
+	{
+		uint32 OrderSerial = 0;
+		bool bSerialKnown = false;
+		/** World time of the last GetFollowerPullTarget call: the squad stopped asking (solo / held / guard / a fight) -> the pull lapses. */
+		double LastQuery = 0.0;
+		TWeakObjectPtr<AActor> Source;
+		float Reach = 0.f;
+		FVector Target = FVector::ZeroVector;
+		/** Reserved outer-ring slot (INDEX_NONE: none), so two pulled followers do not pick the same one. */
+		int32 Slot = INDEX_NONE;
+		/** Ordered away from this fire: not pulled again until the leader leaves its warm zone. */
+		TWeakObjectPtr<AActor> OptOutSource;
+		float OptOutReach = 0.f;
+	};
+
 	struct FGroup
 	{
 		TWeakObjectPtr<AActor> Source;
@@ -105,9 +147,16 @@ private:
 	void AssignSlot(FGroup& Group, AOperativeCharacter& Operative, FMemberState& State);
 	void DriveMember(FGroup& Group, AOperativeCharacter& Operative, FMemberState& State, const FTacticalHeatConfig& Config);
 	void Release(AOperativeCharacter& Operative, FMemberState& State);
+	/** An enemy in his cone, a combat target or a recent hit. */
+	bool IsThreatened(const AOperativeCharacter& Operative, double Now, bool bExploration) const;
+	/** Panic, rage, a use order or a relocation task of his own. */
+	bool IsBusy(const AOperativeCharacter& Operative) const;
+	/** The outer-ring slot (or a point in the zone) Follower walks to at Source. */
+	FVector ChoosePullTarget(const AOperativeCharacter& Follower, const AActor& Source, float Reach, int32& OutSlot) const;
 	void RequestPose(AOperativeCharacter& Operative, FMemberState& State, EWarmIdlePose Pose, EWarmExitReason Reason);
 
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FMemberState> States;
 	TMap<TWeakObjectPtr<AActor>, FGroup> Groups;
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FPullState> Pulls;
 	float Accumulator = 0.f;
 };

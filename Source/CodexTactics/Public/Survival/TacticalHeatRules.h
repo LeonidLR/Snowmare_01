@@ -251,6 +251,17 @@ struct CODEXTACTICS_API FTacticalHeatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "10"))
 	float WarmSpotWalkSpeed = 160.f;
 
+	/**
+	 * Squad gathers at the fire (user decision 2026-10-12): in exploration formation, while the leader sits / stands at a warm spot of a
+	 * barrel / campfire / stove, the followers walk to that source's ring instead of their formation slots (WarmIdleRules::ShouldPullFollower).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle")
+	bool bWarmPullFollowers = true;
+
+	/** A follower farther than this from the source (2D) is not pulled in, cm (15 m). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "0"))
+	float WarmPullMaxDistance = 1500.f;
+
 	// --- Common ---
 
 	/** Extra distance counted as inside a new source's warm zone (the old sources keep Godot's 50 cm). */
