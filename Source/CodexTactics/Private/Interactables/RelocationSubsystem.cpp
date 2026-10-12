@@ -790,6 +790,13 @@ bool URelocationSubsystem::HasPlannedTask(const AOperativeCharacter* Worker) con
 	return PlannedTasks.ContainsByPredicate([Worker](const FRelocateTask& Task) { return Task.Worker.Get() == Worker; });
 }
 
+bool URelocationSubsystem::HasActiveTask(const AOperativeCharacter* Worker) const
+{
+	return Tasks.ContainsByPredicate([Worker](const FRelocateTask& Task) { return Task.Worker.Get() == Worker; })
+		|| DeployTasks.ContainsByPredicate([Worker](const FDeployTask& Task) { return Task.Worker.Get() == Worker; })
+		|| TripwireTasks.ContainsByPredicate([Worker](const FTripwireTask& Task) { return Task.Worker.Get() == Worker; });
+}
+
 void URelocationSubsystem::ClearPlannedTask(const AOperativeCharacter* Worker)
 {
 	PlannedTasks.RemoveAll([Worker](const FRelocateTask& Task) { return Task.Worker.Get() == Worker; });

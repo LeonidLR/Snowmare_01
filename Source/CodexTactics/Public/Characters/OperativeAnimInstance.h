@@ -6,6 +6,7 @@
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/RifleLocomotionRules.h"
 #include "Survival/ColdRules.h"
+#include "Survival/WarmIdleRules.h"
 #include "Tactics/CoverTypes.h"
 #include "OperativeAnimInstance.generated.h"
 
@@ -54,6 +55,37 @@ struct CODEXTACTICS_API FOperativeAnimSet
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Play Rate", meta = (ClampMin = "1"))
 	float CrawlClipSpeed = 55.f;
+};
+
+/**
+ * One weather idle clip set (user request 2026-10-12, /Game/90+_Weather_Animations NEW_version/Cold retargeted by
+ * Scripts/Editor/setup_operative_weather_animation.py): 1Start, 2Loop, 3Tranzit, 4Loop (She Cold_Fire_*: 5Loop), 5Tranzit, 6End.
+ * Missing transit / LoopB: LoopA repeats; missing End: the pose blends out.
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FWarmIdleClipSet
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather")
+	TObjectPtr<UAnimSequenceBase> Start;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather")
+	TObjectPtr<UAnimSequenceBase> LoopA;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather")
+	TObjectPtr<UAnimSequenceBase> TransitAB;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather")
+	TObjectPtr<UAnimSequenceBase> LoopB;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather")
+	TObjectPtr<UAnimSequenceBase> TransitBA;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weather")
+	TObjectPtr<UAnimSequenceBase> End;
+
+	bool IsValid() const { return LoopA != nullptr; }
 };
 
 /** Clip slots blended by the native locomotion. */
@@ -922,6 +954,79 @@ public:
 	/** In the fire-ready pose (entered, not yet left through the exit transition). */
 	bool IsInCoverFirePose() const { return bCoverInFirePose; }
 
+	// --- Weather idle poses (user request 2026-10-12; Survival/WarmIdleRules, UWarmIdleSubsystem decides the pose, this layer plays
+	// it on FullBodySlot - no graph change). Exploration only; cosmetic: any move / order / threat / knockdown ends it at once. The
+	// sets are filled by Scripts/Editor/setup_operative_weather_animation.py (clips retargeted onto the operative / female skeletons). ---
+
+	/** Play the weather poses (untick to leave the graph's idle on). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation")
+	bool bUseWarmIdleClips = true;
+
+	/** Cold idle (Cold_1): shivering while cold and idle out of any warm zone. Male (AS_He_*, recruits too) / female (AS_She_*). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation")
+	FWarmIdleClipSet ColdIdleMale;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation")
+	FWarmIdleClipSet ColdIdleFemale;
+
+	/** Standing hand warming (Cold_Fire_1): a burning barrel, the outer ring at a campfire / stove. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation")
+	FWarmIdleClipSet HandWarmMale;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation")
+	FWarmIdleClipSet HandWarmFemale;
+
+	/** Sitting at the fire (Cold_Fire_2): the inner ring at a campfire / stove. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation")
+	FWarmIdleClipSet SitWarmMale;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation")
+	FWarmIdleClipSet SitWarmFemale;
+
+	/** Each loop clip plays this many times (random in the range) before the transit to the other loop. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation", meta = (ClampMin = "1"))
+	int32 WarmIdleLoopsMin = 2;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation", meta = (ClampMin = "1"))
+	int32 WarmIdleLoopsMax = 4;
+
+	/** Blend into the start clip / between the clips of a set, s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation", meta = (ClampMin = "0"))
+	float WarmIdleBlendSeconds = 0.3f;
+
+	/** Blend-out when an order / move / threat interrupts the pose (orders take priority), s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation", meta = (ClampMin = "0"))
+	float WarmIdleInterruptBlendSeconds = 0.2f;
+
+	/** Above this ground speed the pose is cut (the operative walks), cm/s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation", meta = (ClampMin = "0"))
+	float WarmIdleStillSpeed = 15.f;
+
+	/** Hide the weapon in the hands while a weather pose plays (the clips use both hands). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation")
+	bool bHideWeaponInWarmIdle = true;
+
+	/** The weather pose playing now (graph hook for the user's own states). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Weather Animation")
+	EWarmIdlePose WarmIdlePose = EWarmIdlePose::None;
+
+	/** A weather pose owns the FullBody slot now (start / loops / transits / end clip). */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Weather Animation")
+	bool bWarmIdleActive = false;
+
+	/** The pose UWarmIdleSubsystem wants (None = end it; the layer ends it cleanly). */
+	void SetWarmIdleRequest(EWarmIdlePose Pose, EWarmExitReason ExitReason = EWarmExitReason::NoLongerWanted);
+	EWarmIdlePose GetWarmIdleRequest() const { return WarmIdleRequest; }
+
+	/** The clip set of a pose for this body (female set for the Female Soldier, else male). */
+	const FWarmIdleClipSet* GetWarmClipSet(EWarmIdlePose Pose) const;
+	bool UsesFemaleWarmClips() const;
+
+	/** Smokes: the step / clip playing, the clips started in order (capped). */
+	EWarmClipStep GetWarmClipStep() const { return WarmStep; }
+	UAnimSequenceBase* GetWarmClip() const { return WarmClip.Get(); }
+	const TArray<FString>& GetWarmClipLog() const { return WarmClipLog; }
+
 	// --- Rifle_2 locomotion (ABP_Operative_Rifle2, Scripts/Editor/setup_operative_rifle2_animation.py; RifleLocomotionRules) ---
 
 	/** Runs the Idle / Turn / Start / Walk / Stop machine below (set on ABP_Operative_Rifle2's defaults). */
@@ -1139,6 +1244,28 @@ private:
 	bool bSniperWasPosed = false;
 	bool bSniperTransitionPlaying = false;
 	TArray<FString> SniperClipLog;
+
+	// Weather layer (OperativeAnimInstanceWarmIdle.cpp).
+	void UpdateWarmIdleLayer(const AOperativeCharacter& Operative);
+	/** Plays one clip of the active set on FullBodySlot (the previous one fades out under it), logs it. */
+	bool PlayWarmClip(EWarmClipStep Step, float BlendIn);
+	/** Ends the active pose with Style (End clip / blend-out / cut). */
+	void EndWarmPose(EWarmExitStyle Style);
+	void ResetWarmState();
+	void SetWarmWeaponHidden(bool bHidden);
+	EWarmIdlePose WarmIdleRequest = EWarmIdlePose::None;
+	EWarmExitReason WarmExitReason = EWarmExitReason::NoLongerWanted;
+	/** The pose whose set plays (stays set through its End clip). */
+	EWarmIdlePose WarmActivePose = EWarmIdlePose::None;
+	EWarmClipStep WarmStep = EWarmClipStep::None;
+	int32 WarmLoopsDone = 0;
+	int32 WarmLoopsTarget = 2;
+	TWeakObjectPtr<UAnimMontage> WarmMontage;
+	TWeakObjectPtr<UAnimSequenceBase> WarmClip;
+	TArray<FString> WarmClipLog;
+	bool bWarmWeaponHidden = false;
+	bool bWarmWeaponWasVisible = true;
+	TOptional<bool> bWarmFemaleCached;
 
 	// Rifle_2 machine.
 	void EnterRifleLocoState(ERifleLocoState NewState, UAnimSequence* Clip);

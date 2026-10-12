@@ -155,6 +155,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Relocation")
 	bool HasPlannedTask(const AOperativeCharacter* Worker) const;
 
+	/** Worker runs a relocation, a deploy or a tripwire task now (walking up / working). */
+	bool HasActiveTask(const AOperativeCharacter* Worker) const;
+
 	/** Drops Worker's planned (pause) relocation: another order for him replaces it. */
 	void ClearPlannedTask(const AOperativeCharacter* Worker);
 

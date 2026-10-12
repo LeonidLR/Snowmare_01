@@ -12,6 +12,7 @@
 #include "Interactables/HeatSourceComponent.h"
 #include "Data/TacticalHeatTuning.h"
 #include "Survival/TacticalHeatRules.h"
+#include "Survival/WarmIdleRules.h"
 #include "UI/GameMessageSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "ColdSurvival"
@@ -139,6 +140,9 @@ FColdEnvironment UColdSurvivalComponent::GatherEnvironment() const
 
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	Environment.bPreparation = Flow && Flow->GetPhase() == ECodexGamePhase::Preparation;
+	// User request 2026-10-12: warming at a heat source is slower in a wave fight / ambush than while exploring.
+	Environment.HeatWarmthMultiplier = WarmIdleRules::GetHeatSourceWarmthMultiplier(TacticalHeatTuning::Get(),
+		Flow && WarmIdleRules::IsCombatForWarming(Flow->GetPhase()));
 
 	// Godot cold_rate_modifier: the level wave's cold_drain_mult, overridden inside a camera zone.
 	if (const UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>())

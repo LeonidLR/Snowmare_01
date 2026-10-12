@@ -21,7 +21,8 @@ namespace ColdRules
 		if (Environment.bWarm || Environment.bPreparation || Environment.ZoneMultiplier <= 0.001f)
 		{
 			const float Boost = 1.f + Fortitude * Config.FortitudeWarmupPerPoint;
-			const float WarmRate = FMath::Max(Config.WarmthRecoveryRate * Boost, Environment.WarmthRateOverride); // Sprint 15 sources
+			const float WarmRate = FMath::Max(Config.WarmthRecoveryRate * Boost, Environment.WarmthRateOverride) // Sprint 15 sources
+				* (Environment.bWarm ? FMath::Max(0.f, Environment.HeatWarmthMultiplier) : 1.f); // 2026-10-12: x0.5 in a fight
 			return FMath::Max(0.f, Cold - WarmRate * DeltaSeconds);
 		}
 		if (Environment.bSprinting)
