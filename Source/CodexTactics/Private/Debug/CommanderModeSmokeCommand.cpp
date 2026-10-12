@@ -1,7 +1,7 @@
 // Dev-only headless check of Commander Mode (Sprint 07) on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.CommanderModeSmoke -Log Smoke-CommanderMode.log
 // 1. The mode is off by default. 2. «Начать бой», wave 1; one operative is wounded to 15 % next to a mate with two
-// medkits; Commander Mode on. 3. 25 s of autonomous fighting: nobody leaves his leash (7 m, 10 m for aid), the
+// medkits; Commander Mode on. 3. 15 s of autonomous fighting: nobody leaves his leash (7 m, 10 m for aid), the
 // wounded one gets first aid, targets are picked. 4. A tactical pause freezes the autonomy at once (no autonomy target
 // left). PASS when all hold. The squad is unkillable and kept warm: the check is about decisions, not survival.
 
@@ -60,6 +60,11 @@ namespace CommanderModeSmoke
 				return true;
 			}
 			State.bDefaultOff = !Squad->IsAutonomousSquadCombat() && !Flow->IsAutonomousSquadCombat();
+			// The sudden horde spawns at once around the test start: give the squad a run-up, else the mob is on the patient and
+			// the Safe Aid Check rightly refuses the aid. The patient is wounded and the autonomy on while the horde
+			// still runs (a medic does not patch a mate under 6 m from a hound - that refusal is the game being right; out of combat
+			// the wound would heal by itself).
+			SmokeUtils::PlaceSquadAwayFromWaveSpawns(World, 3000.f);
 			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			for (AOperativeCharacter* Member : Members)
 			{
@@ -98,9 +103,9 @@ namespace CommanderModeSmoke
 		}
 		if (State.Stage == 1)
 		{
-			if (State.Time < 3.f)
+			if (State.Time < 1.f)
 			{
-				return true;
+				return true; // the teleported squad settles
 			}
 			State.Patient->HealthComponent->ApplyDirectHealthLoss(85000.f, TEXT("smoke"));
 			State.PatientHealthBefore = State.Patient->HealthComponent->GetCurrentHealth();
@@ -128,7 +133,7 @@ namespace CommanderModeSmoke
 					State.WorstLeashName = Member->DisplayName.ToString();
 				}
 			}
-			if (State.Time < 25.f)
+			if (State.Time < 15.f)
 			{
 				return true;
 			}

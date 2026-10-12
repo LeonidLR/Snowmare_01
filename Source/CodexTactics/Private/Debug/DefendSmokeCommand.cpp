@@ -175,6 +175,11 @@ namespace DefendSmoke
 					Patient->GetActorRotation(), false, true);
 				Patient->HealthComponent->ApplyDirectHealthLoss(85000.f, TEXT("smoke"));
 			}
+			// AidMoves counts the whole squad: only the defender may carry medkits, else a free mate patches the wounded one (right).
+			for (AOperativeCharacter* Mate : Squad->GetMembers())
+			{
+				Mate->MedkitsCount = 0;
+			}
 			Defender->MedkitsCount = 2;
 			State.AidRefusedBefore = Autonomy->GetStats().AidRefusedDefense;
 			State.AidMovesBefore = Autonomy->GetStats().AidMoves;
