@@ -381,12 +381,34 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	// Static order (user decision 2026-10-12).
+	// Static order (user decision 2026-10-12, rev 4: sprint locked on the A0 stretch only, unlocked at beacon 1).
 	TestTrue(TEXT("A0 locks sprint"), Data.Beats[0].Id == FName(TEXT("A0")) && Data.Beats[0].Lock.Contains(TEXT("Order.Sprint")));
+	TestTrue(TEXT("A1 (beacon 1) unlocks sprint"), Data.Beats[1].Id == FName(TEXT("A1")) && Data.Beats[1].Unlock.Contains(TEXT("Order.Sprint")) && Data.Beats[1].Lock.IsEmpty());
 	TestTrue(TEXT("A2 unlocks sprint (safety)"), Data.Beats[2].Id == FName(TEXT("A2")) && Data.Beats[2].Unlock.Contains(TEXT("Order.Sprint")));
 	const FTutorialStep* NoSprint = Data.FindStep(TEXT("A0_nosprint"));
 	TestTrue(TEXT("A0_nosprint: a feed line on the first locked sprint, once"), NoSprint && NoSprint->Kind == ETutorialStepKind::Feed && NoSprint->bOnce
 		&& NoSprint->TextId == FName(TEXT("TUT_A0_NOSPRINT")) && NoSprint->Trigger.Event == TEXT("Tutorial.Locked.Order.Sprint"));
+	const FTutorialStep* SprintCard = Data.FindStep(TEXT("A1_sprint"));
+	TestTrue(TEXT("A1_sprint: the run card opens beat A1 (beat start, Order.Sprint)"), SprintCard && SprintCard->Beat == FName(TEXT("A1"))
+		&& SprintCard->Trigger.Type == ETutorialTriggerType::BeatStart && SprintCard->TextId == FName(TEXT("TUT_A1_SPRINT"))
+		&& SprintCard->Complete.Commands.Contains(PlayerCommands::Sprint.ToString()));
+	const FTutorialStep* SelectCard = Data.FindStep(TEXT("A1_select"));
+	TestTrue(TEXT("select follows the run card"), SelectCard && SelectCard->Trigger.Type == ETutorialTriggerType::AfterStep && SelectCard->Trigger.Step == FName(TEXT("A1_sprint")));
+	TestNull(TEXT("no sprint unlock step any more (WT_A1_WARMED)"), Data.FindStep(TEXT("A1_wt_warmed")));
+	TestNull(TEXT("no 'back to the hut' remedial line (the packs are starter packs)"), Data.FindStep(TEXT("A1_wt_nopack")));
+	const FTutorialStep* Resupply = Data.FindStep(TEXT("A1_wt_resupply"));
+	TestTrue(TEXT("A1_wt_resupply: the Commander's WT_A1_RESUPPLY line after the heat pack lesson"), Resupply && Resupply->Kind == ETutorialStepKind::WalkTalk
+		&& Resupply->Trigger.Type == ETutorialTriggerType::AfterStep && Resupply->Trigger.Step == FName(TEXT("A1_heatpack_mate"))
+		&& Resupply->Lines.Num() == 1 && Resupply->Lines[0].TextId == FName(TEXT("WT_A1_RESUPPLY")) && Resupply->Lines[0].Speaker == TEXT("Commander"));
+	const FTutorialStep* HutObjective = Data.FindStep(TEXT("A1_obj_hut"));
+	TestTrue(TEXT("A1_obj_hut keeps its id, shows after the heat pack lesson (not at the beat start), done on ItemLooted.HeatPack"), HutObjective
+		&& HutObjective->Kind == ETutorialStepKind::Objective && HutObjective->TextId == FName(TEXT("OBJ_A1_HUT"))
+		&& HutObjective->Trigger.Type == ETutorialTriggerType::AfterStep && HutObjective->Trigger.Step == FName(TEXT("A1_heatpack_mate"))
+		&& HutObjective->Complete.Event == TEXT("ItemLooted.HeatPack"));
+	const FTutorialStep* Stocked = Data.FindStep(TEXT("A1_wt_stocked"));
+	TestTrue(TEXT("closing line after the loot, no unlock"), Stocked && Stocked->Trigger.Step == FName(TEXT("A1_loot_take")) && Stocked->Unlock.IsEmpty());
+	const FTutorialStep* GuardCard = Data.FindStep(TEXT("A1_guard"));
+	TestTrue(TEXT("guard at beacon 3"), GuardCard && GuardCard->Trigger.Type == ETutorialTriggerType::Volume && GuardCard->Trigger.Volume == FName(TEXT("VOL_A1_BEACON3")));
 	const FTutorialStep* GustStep = Data.FindStep(TEXT("A1_gust"));
 	TestTrue(TEXT("gust: 20 s after solo, only below 40 %, cold_bump 20"), GustStep && GustStep->Trigger.Type == ETutorialTriggerType::AfterStep
 		&& GustStep->Trigger.Step == FName(TEXT("A1_solo")) && GustStep->Trigger.DelaySeconds == 20.f && GustStep->Conditions.Num() == 1
@@ -395,9 +417,6 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	const FTutorialStep* Warmed = Data.FindStep(TEXT("A1_wt_warmed"));
-	TestTrue(TEXT("WT_A1_WARMED unlocks sprint"), Warmed && Warmed->Unlock.Contains(TEXT("Order.Sprint")) && Warmed->Lines.Num() == 1
-		&& Warmed->Lines[0].TextId == FName(TEXT("WT_A1_WARMED")));
 	TestTrue(TEXT("heat pack card focuses the coldest"), Data.FindStep(TEXT("A1_heatpack")) && Data.FindStep(TEXT("A1_heatpack"))->Focus == FName(TEXT("coldest_operative")));
 	TestNull(TEXT("no A2 cold-bar card (the cold is taught in A1)"), Data.FindStep(TEXT("A2_coldbar")));
 	TestTrue(TEXT("A2 heat pack card is remedial only"), Data.FindStep(TEXT("A2_heatpack")) && Data.FindStep(TEXT("A2_heatpack"))->Trigger.Type == ETutorialTriggerType::Condition);
@@ -428,9 +447,9 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 		}
 	}
 
-	// Dynamic run through A0 -> A1 with a fake squad (cold %, heat packs carried).
+	// Dynamic run through A0 -> A1 with a fake squad (cold %, heat packs carried: one starter pack per operative).
 	float Cold = 5.f;
-	float Packs = 0.f; // demo loadout: nobody starts with a heat pack
+	float Packs = 3.f;
 	FTutorialStateMachine Machine;
 	Machine.StatProvider = [&Cold, &Packs](FName Stat) { return Stat == FName(TEXT("squad_heat_packs")) ? Packs : Cold; };
 	Machine.Load(Data);
@@ -445,27 +464,22 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 		Pump(Machine, 2.f);
 		TestTrue(FString(Camera) + TEXT(" skipped"), Machine.SkipStep(Camera));
 	}
+	TestTrue(TEXT("A0: still locked on the whole stretch to beacon 1"), Machine.IsCommandLocked(PlayerCommands::Sprint));
 	Machine.HandleVolume(TEXT("VOL_A0_BEACON1"), NAME_None, TEXT("A1"));
 	TestEqual(TEXT("beacon 1 starts A1"), Machine.GetCurrentBeat(), FName(TEXT("A1")));
-	TestTrue(TEXT("A1: still locked"), Machine.IsCommandLocked(PlayerCommands::Sprint));
-	Pump(Machine, 5.f);
-	TestEqual(TEXT("A1: select first"), Machine.GetActiveCard(), FName(TEXT("A1_select")));
+	TestFalse(TEXT("A1: sprint unlocked at beacon 1"), Machine.IsCommandLocked(PlayerCommands::Sprint));
+	TestEqual(TEXT("A1: a double click sprints"), TutorialRules::ResolveLockedCommand(Machine.GetLocks(), PlayerCommands::Sprint), PlayerCommands::Sprint);
+	Pump(Machine, 3.f);
+	TestEqual(TEXT("A1: the run card first"), Machine.GetActiveCard(), FName(TEXT("A1_sprint")));
+	TestEqual(TEXT("the hut objective is not up yet"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Idle);
+	Machine.HandleCommand(PlayerCommands::Sprint);
+	TestEqual(TEXT("a sprint completes it"), Machine.GetState(TEXT("A1_sprint")), ETutorialStepState::Completed);
+	Pump(Machine, 2.f);
+	TestEqual(TEXT("then select"), Machine.GetActiveCard(), FName(TEXT("A1_select")));
 	Machine.HandleCommand(PlayerCommands::SelectMember);
 	Pump(Machine, 2.f);
 	TestEqual(TEXT("then box select"), Machine.GetActiveCard(), FName(TEXT("A1_box")));
 	Machine.HandleCommand(PlayerCommands::SelectBox);
-	Machine.HandleVolume(TEXT("VOL_A1_HUT"), NAME_None, NAME_None);
-	Pump(Machine, 2.f);
-	TestEqual(TEXT("hut: open the crate"), Machine.GetActiveCard(), FName(TEXT("A1_loot_open")));
-	Machine.HandleCommand(PlayerCommands::LootCrate);
-	Pump(Machine, 2.f);
-	TestEqual(TEXT("then take the heat pack"), Machine.GetActiveCard(), FName(TEXT("A1_loot_take")));
-	Packs = 3.f;
-	Machine.HandleEvent(TEXT("ItemLooted"));
-	Machine.HandleEvent(TEXT("ItemLooted.HeatPack"));
-	TestEqual(TEXT("taking it completes the card"), Machine.GetState(TEXT("A1_loot_take")), ETutorialStepState::Completed);
-	TestEqual(TEXT("and the hut objective"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Completed);
-	TestEqual(TEXT("solo not yet"), Machine.GetState(TEXT("A1_solo")), ETutorialStepState::Idle);
 	Machine.HandleVolume(TEXT("VOL_A1_BEACON2"), NAME_None, NAME_None);
 	Pump(Machine, 2.f);
 	TestEqual(TEXT("the crack: solo"), Machine.GetActiveCard(), FName(TEXT("A1_solo")));
@@ -481,24 +495,37 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	Cold = ColdRules::ApplyColdShock(Cold, GustStep->Actions[0].Amount, GustStep->Actions[0].MinLevel); // what the runtime does on show
 	TestTrue(TEXT("the gust leaves everyone at Chills"), Cold >= 40.f);
 	Pump(Machine, 2.f);
-	TestEqual(TEXT("then the heat pack card"), Machine.GetActiveCard(), FName(TEXT("A1_heatpack")));
-	TestEqual(TEXT("packs carried: no remedial line"), Machine.GetState(TEXT("A1_wt_nopack")), ETutorialStepState::Idle);
-	TestTrue(TEXT("still locked while cold"), Machine.IsCommandLocked(PlayerCommands::Sprint));
+	TestEqual(TEXT("then the heat pack card (starter packs: no remedial line exists)"), Machine.GetActiveCard(), FName(TEXT("A1_heatpack")));
+	TestEqual(TEXT("the resupply line waits for the lesson"), Machine.GetState(TEXT("A1_wt_resupply")), ETutorialStepState::Idle);
+	TestEqual(TEXT("and so does the hut objective"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Idle);
+	TestFalse(TEXT("sprint stays unlocked while cold (no dependency on the heat pack)"), Machine.IsCommandLocked(PlayerCommands::Sprint));
 	Machine.HandleEvent(TEXT("ItemUsed.HEAT_PACK"));
 	Cold = 7.f;
+	Packs = 2.f;
 	TestEqual(TEXT("using a heat pack completes it"), Machine.GetState(TEXT("A1_heatpack")), ETutorialStepState::Completed);
 	Pump(Machine, 1.5f);
 	TestEqual(FString::Printf(TEXT("nobody else cold: the mate card is skipped (%s)"), TutorialRules::StateName(Machine.GetState(TEXT("A1_heatpack_mate")))),
 		Machine.GetState(TEXT("A1_heatpack_mate")), ETutorialStepState::Skipped);
 	Pump(Machine, 1.5f);
-	TestEqual(TEXT("WT_A1_WARMED played"), Machine.GetState(TEXT("A1_wt_warmed")), ETutorialStepState::Completed);
-	TestFalse(TEXT("sprint unlocked after warming up"), Machine.IsCommandLocked(PlayerCommands::Sprint));
+	TestEqual(TEXT("WT_A1_RESUPPLY played"), Machine.GetState(TEXT("A1_wt_resupply")), ETutorialStepState::Completed);
+	TestEqual(TEXT("and the hut objective is up"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Active);
+	TestEqual(TEXT("hut loot cards not before the hut"), Machine.GetState(TEXT("A1_loot_open")), ETutorialStepState::Idle);
+	Machine.HandleVolume(TEXT("VOL_A1_HUT"), NAME_None, NAME_None);
 	Pump(Machine, 2.f);
-	TestEqual(TEXT("the run card"), Machine.GetActiveCard(), FName(TEXT("A1_sprint")));
-	Machine.HandleCommand(PlayerCommands::Sprint);
-	TestEqual(TEXT("a sprint completes it"), Machine.GetState(TEXT("A1_sprint")), ETutorialStepState::Completed);
-	Pump(Machine, 4.f);
-	TestEqual(TEXT("then the rest of A1: guard"), Machine.GetActiveCard(), FName(TEXT("A1_guard")));
+	TestEqual(TEXT("hut: open the crate"), Machine.GetActiveCard(), FName(TEXT("A1_loot_open")));
+	Machine.HandleCommand(PlayerCommands::LootCrate);
+	Pump(Machine, 2.f);
+	TestEqual(TEXT("then take the heat packs"), Machine.GetActiveCard(), FName(TEXT("A1_loot_take")));
+	Packs = 5.f;
+	Machine.HandleEvent(TEXT("ItemLooted"));
+	Machine.HandleEvent(TEXT("ItemLooted.HeatPack"));
+	TestEqual(TEXT("taking them completes the card"), Machine.GetState(TEXT("A1_loot_take")), ETutorialStepState::Completed);
+	TestEqual(TEXT("and the hut objective"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Completed);
+	Pump(Machine, 2.f);
+	TestEqual(TEXT("the closing line played"), Machine.GetState(TEXT("A1_wt_stocked")), ETutorialStepState::Completed);
+	Machine.HandleVolume(TEXT("VOL_A1_BEACON3"), NAME_None, NAME_None);
+	Pump(Machine, 2.f);
+	TestEqual(TEXT("then the rest of A1: guard at beacon 3"), Machine.GetActiveCard(), FName(TEXT("A1_guard")));
 	return true;
 }
 
@@ -507,6 +534,7 @@ bool FTutorialDemoLoadoutTest::RunTest(const FString&)
 {
 	TestEqual(TEXT("role kit kept without a level value"), LoadoutRules::StartingHeatPacks(2, -1, 3), 2);
 	TestEqual(TEXT("level heat_packs_count 0 replaces the kit"), LoadoutRules::StartingHeatPacks(2, 0, 3), 0);
+	TestEqual(TEXT("level heat_packs_count 1 replaces the kit: one each"), LoadoutRules::StartingHeatPacks(2, 1, 3), 1);
 	TestEqual(TEXT("level value clamped to the stack"), LoadoutRules::StartingHeatPacks(1, 5, 3), 3);
 	TestEqual(TEXT("kit clamped to the stack"), LoadoutRules::StartingHeatPacks(5, -1, 3), 3);
 	FLevelCombatConfig Level;
@@ -516,7 +544,11 @@ bool FTutorialDemoLoadoutTest::RunTest(const FString&)
 	TestTrue(TEXT("parse without"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"x"})"), TEXT("x"), Level, Error));
 	TestEqual(TEXT("absent: -1 (role kit)"), Level.SquadLoadout.HeatPacksCount, -1);
 	TestTrue(FString::Printf(TEXT("demo level loads (%s)"), *Error), LevelJsonRules::LoadLevel(TEXT("L_Demo01_A_FrozenLake.json"), Level, Error));
-	TestEqual(TEXT("Demo 01: the squad starts without heat packs (they come from the A1 hut crate)"), Level.SquadLoadout.HeatPacksCount, 0);
+	TestEqual(TEXT("Demo 01: every operative starts with 1 heat pack (the A1 heat pack lesson); the hut crate holds more"), Level.SquadLoadout.HeatPacksCount, 1);
+	for (const int32 RoleKit : { 0, 1, 2, 3 })
+	{
+		TestEqual(FString::Printf(TEXT("role kit %d: the demo value wins, 1 pack each"), RoleKit), LoadoutRules::StartingHeatPacks(RoleKit, Level.SquadLoadout.HeatPacksCount, 3), 1);
+	}
 	return true;
 }
 
