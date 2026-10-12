@@ -10,6 +10,7 @@ struct FEnemyTurnProfile;
 struct FTurnBasedBalance;
 struct FVehicleTurretConfig;
 struct FVehicleCrushConfig;
+struct FVehicleHullConfig;
 enum class EEnemyArchetype : uint8;
 
 /**
@@ -58,9 +59,12 @@ namespace WeaponTuning
 	 * mg_overheat_seconds, mg_cooldown_seconds,
 	 * traverse_deg_per_sec, dead_zone_m, defensive_radius_m) and "apc_ram" onto Crush (min_crush_speed_mps,
 	 * crush_speed_factor, ram_knockdown_speed_mps, ram_damage, ram_speed_factor, ram_knockdown_play_rate,
-	 * ram_downed_time_scale, crush_downed_brute). Either may be null; missing keys keep the Blueprint values.
+	 * ram_downed_time_scale, crush_downed_brute, hull_ram_damage) and (P4) "apc_hull" onto Hull (max_hp, small_melee_factor,
+	 * heavy_melee_factor, acid_factor, rifle_factor, explosion_factor, mine_damage, other_factor, low_health_fraction,
+	 * repair_seconds, other_repair_seconds, repair_fraction, enemy_weight_small, enemy_weight_large, enemy_awareness_m).
+	 * Any may be null; missing keys keep the Blueprint values.
 	 */
-	CODEXTACTICS_API void ApplyVehicleWeapons(FVehicleTurretConfig* Turret, FVehicleCrushConfig* Crush);
+	CODEXTACTICS_API void ApplyVehicleWeapons(FVehicleTurretConfig* Turret, FVehicleCrushConfig* Crush, FVehicleHullConfig* Hull = nullptr);
 
 	/** The file's turn-based values of the archetype's ranged weapon onto its turn profile. */
 	CODEXTACTICS_API void ApplyEnemyTurnWeapon(EEnemyArchetype Archetype, FEnemyTurnProfile& Profile);

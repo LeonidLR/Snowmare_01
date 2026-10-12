@@ -4,6 +4,7 @@
 #include "Dom/JsonValue.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Vehicles/VehicleCombatRules.h"
+#include "Vehicles/VehicleHullRules.h"
 #include "Vehicles/VehicleRules.h"
 #include "VehicleSubsystem.generated.h"
 
@@ -20,6 +21,9 @@ class ANavMeshBoundsVolume;
  * Mounted operatives stay squad members, co-located with the vehicle (attached, hidden, no collision, movement off); a
  * short list of systems checks IsMounted (enemy targeting / perception, damage, auto fire, formation, autonomy, move
  * orders, mines / tripwires, turn-based entry). UE-only.
+ * P4 (2026-10-12): a hull at 0 HP ejects its crew (fade in real time, the safe side, into hull cover); Y near a disabled
+ * vehicle sends the Engineer to repair it (walk to the hull, ~5 s, VehicleRepaired); blasts / mines reach the hull
+ * (ApplyBlastToVehicles); enemies ask FindEnemyTargetVehicle; the save keeps hull health / disabled.
  */
 UCLASS()
 class CODEXTACTICS_API UVehicleSubsystem : public UTickableWorldSubsystem
@@ -88,6 +92,37 @@ public:
 	 */
 	bool HandleTurretTargetClick(AOperativeCharacter* Leader, AActor* Target);
 
+	// --- Hull (P4) ---------------------------------------------------------------------------------------------------
+
+	/**
+	 * The hull of Vehicle reached 0 HP: everyone aboard gets out at once (forced: also in the tactical pause; the fade in
+	 * real time) on the side away from known threats into hull cover; boarders still walking up are turned away.
+	 * Returns how many are getting out.
+	 */
+	int32 EjectCrew(AVehiclePawn* Vehicle);
+
+	/**
+	 * Y near a disabled Vehicle: the Engineer among Operatives (anyone when HullConfig.OtherRepairSeconds > 0) walks to the
+	 * hull and repairs it (RepairSeconds at the hull; a new order / a knockdown interrupts). True when a repair was ordered.
+	 */
+	bool OrderRepair(const TArray<AOperativeCharacter*>& Operatives, AVehiclePawn* Vehicle);
+
+	bool IsRepairing(const AOperativeCharacter* Operative) const;
+
+	/** 0..1 while someone works at Vehicle's hull (0 when nobody does / still walking). */
+	float GetRepairProgress(const AVehiclePawn* Vehicle) const;
+
+	/**
+	 * A blast at Centre reaches every vehicle whose hull side is within Radius: DamageAtHullDistance(hull distance) as
+	 * Explosion damage; the vehicle that set the charge off itself (TriggeredBy: a mine / tripwire under its wheels) takes
+	 * the flat mine damage instead (VehicleHullRules::GetBlastHullDamage).
+	 */
+	static void ApplyBlastToVehicles(UWorld* World, const FVector& Centre, float Radius, TFunctionRef<float(float)> DamageAtHullDistance,
+		const AVehiclePawn* TriggeredBy, const FString& Source);
+
+	/** The manned vehicle an enemy at From goes for (VehicleHullRules::IsEnemyTarget; the nearest hull), nullptr when none. */
+	AVehiclePawn* FindEnemyTargetVehicle(const FVector& From, bool bHordeKnowsSquad, float* OutHullDistanceCm = nullptr) const;
+
 	// --- Boarding fade (user 2026-10-12: no boarding animations) ---------------------------------------------------
 
 	/** Screen darkness of the boarding fade, 0..1 (real time). */
@@ -138,6 +173,18 @@ private:
 		bool bFadeQueued = false;
 	};
 
+	struct FPendingRepair
+	{
+		TWeakObjectPtr<AOperativeCharacter> Operative;
+		TWeakObjectPtr<AVehiclePawn> Vehicle;
+		/** < 0: walking to the hull; >= 0: working. */
+		float WorkLeft = -1.f;
+		float WorkTotal = 1.f;
+		float Age = 0.f;
+		float IdleSeconds = 0.f;
+		int32 Retries = 0;
+	};
+
 	struct FPendingExit
 	{
 		TWeakObjectPtr<AOperativeCharacter> Operative;
@@ -152,6 +199,12 @@ private:
 	void Unmount(AOperativeCharacter* Operative, const FVector& Location, bool bTakeCover);
 	void UpdateBoarding(float DeltaTime);
 	void UpdateExits(float DeltaTime);
+	void UpdateRepairs(float DeltaTime);
+	void HandleDisabled(AVehiclePawn* Vehicle);
+	/** Exit points round Vehicle on the infantry navmesh (projected) and whether each is free of bodies / other exits. */
+	void GatherExitPoints(const AVehiclePawn& Vehicle, TArray<FVector>& OutCandidates, TArray<bool>& OutFree) const;
+	/** Sends Worker towards the side of Vehicle's hull nearest him (projected on the infantry navmesh). */
+	bool WalkToHull(AOperativeCharacter* Worker, const AVehiclePawn& Vehicle) const;
 	void UpdateDoors();
 	void StripVehicleAgentFromBounds();
 	TArray<FVector> GatherKnownThreats(const FVector& Around) const;
@@ -173,6 +226,7 @@ private:
 	TMap<TWeakObjectPtr<const AActor>, TWeakObjectPtr<AVehiclePawn>> Mounted;
 	TArray<FPendingBoard> Boarding;
 	TArray<FPendingExit> Exits;
+	TArray<FPendingRepair> Repairs;
 	FVehicleFadeTimeline Fade;
 	FVehicleFadeConfig FadeConfig;
 	int32 FadeCount = 0;

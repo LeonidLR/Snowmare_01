@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "Vehicles/VehicleCombatRules.h"
+#include "Vehicles/VehicleHullRules.h"
 #include "Vehicles/VehicleRules.h"
 #include "VehiclePawn.generated.h"
 
@@ -10,6 +11,10 @@ class AOperativeCharacter;
 class UAnimInstance;
 class UBoxComponent;
 class UHeatSourceComponent;
+class UParticleSystem;
+class UParticleSystemComponent;
+class UStaticMesh;
+class UStaticMeshComponent;
 class USkeletalMesh;
 class USkeletalMeshComponent;
 class UVehicleNavObstacleComponent;
@@ -32,7 +37,9 @@ enum class EVehicleDriveResult : uint8
 	StartedPartial,
 	NoDriver,
 	/** No vehicle navmesh under the vehicle or around the goal. */
-	NoPath
+	NoPath,
+	/** The hull is disabled (P4): no engine until the Engineer repairs it. */
+	Disabled
 };
 
 /**
@@ -42,7 +49,10 @@ enum class EVehicleDriveResult : uint8
  * hull box, carves the infantry navmesh while parked (UVehicleNavObstacleComponent), heats the cabin while the engine runs
  * and is heard by patrols. Crew members are mounted by UVehicleSubsystem (hidden, attached, co-located).
  * The visual Blueprint (BP_APC_BTR82) only sets the mesh / ABP; C++ feeds the vendor ABP's variables (WheelSpeed,
- * WheelsAngle, DoorAngle, ...) by name and raises On Visual Drive / On Doors Changed for polish. UE-only.
+ * WheelsAngle, DoorAngle, ...) by name and raises On Visual Drive / On Doors Changed for polish.
+ * P4 (2026-10-12): the hull has health and an armour profile per damage source (VehicleHullRules); the crew inside is never
+ * hit (the hull takes it). At 0 HP it is DISABLED, never destroyed: engine off, no driving, the turret silent, the damaged
+ * model + wreck smoke, the crew ejected (UVehicleSubsystem); the Engineer repairs it (Y) to RepairFraction. UE-only.
  */
 UCLASS(Blueprintable)
 class CODEXTACTICS_API AVehiclePawn : public APawn
@@ -83,6 +93,14 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Vehicle")
 	TObjectPtr<UVehicleTurretComponent> Turret;
 
+	/** The disabled hull's model (P4; hidden while it runs; vendor SM_East_APC_BTR82_Damaged when empty). No collision. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Vehicle")
+	TObjectPtr<UStaticMeshComponent> DamagedMesh;
+
+	/** Smoke over the disabled hull (P4; vendor Cascade PS_Wreckage_01 when empty; a Niagara one is a Gemini request). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Vehicle")
+	TObjectPtr<UParticleSystemComponent> DamagedSmoke;
+
 	// --- Tunables (the Blueprint is the master copy) -------------------------------------------------------------
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vehicle")
@@ -104,6 +122,10 @@ public:
 	/** The fade to black when someone boards / gets out. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vehicle")
 	FVehicleFadeConfig FadeConfig;
+
+	/** Hull health, armour per source, repair (P4; weapons_tuning.json "vehicle_weapons.apc_hull" overrides at BeginPlay). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vehicle")
+	FVehicleHullConfig HullConfig;
 
 	/** Hull box centre relative to the pivot (BTR-82: the pivot is 58 cm behind the bounds centre). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vehicle|Hull")
@@ -136,6 +158,14 @@ public:
 	/** Anim class used with DefaultMesh. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Vehicle|Visual")
 	TSoftClassPtr<UAnimInstance> DefaultAnimClass;
+
+	/** The disabled model used when DamagedMesh has none (loaded the first time the hull is disabled). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Vehicle|Visual")
+	TSoftObjectPtr<UStaticMesh> DefaultDamagedMesh;
+
+	/** The wreck smoke used when DamagedSmoke has no template. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Vehicle|Visual")
+	TSoftObjectPtr<UParticleSystem> DefaultWreckSmoke;
 
 	/** Vendor ABP variables driven by name (float / double; missing ones are skipped). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Vehicle|Visual")
@@ -221,6 +251,41 @@ public:
 	/** The "Vehicle" agent's navmesh, or nullptr. */
 	class ANavigationData* GetVehicleNavData() const;
 
+	// --- Hull (P4) ---------------------------------------------------------------------------------------------------
+
+	/**
+	 * Damage to the hull: Amount through the armour factor of Source (VehicleHullRules::GetHullDamage; a Mine = the flat
+	 * mine damage). Damage number, VehicleDamaged event (Kind = the source), feed line at the low mark; at 0 HP the hull is
+	 * disabled (OnDisabled: the subsystem ejects the crew). Nothing once disabled. Returns the health lost.
+	 */
+	float ApplyHullDamage(float Amount, EVehicleDamageSource Source, const FString& AttackerName, AActor* Attacker = nullptr);
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Vehicle")
+	float GetHullHealth() const { return HullState.Health; }
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Vehicle")
+	float GetHullMaxHealth() const { return FMath::Max(1.f, HullConfig.MaxHealth); }
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Vehicle")
+	bool IsDisabled() const { return HullState.bDisabled; }
+
+	const FVehicleHullState& GetHullState() const { return HullState; }
+
+	/** Health lost to Source so far (smokes / telemetry). */
+	float GetDamageTaken(EVehicleDamageSource Source) const;
+
+	/** The Engineer's repair is done: running again at RepairFraction (VehicleRepaired is raised by the subsystem). */
+	void RepairHull();
+
+	/** Saved hull (load): health / disabled, the visuals and engine follow. */
+	void RestoreHull(float Health, bool bDisabled);
+
+	/** The point of the hull footprint's side nearest From, at ground level (enemies close in on it). */
+	FVector GetClosestHullPoint(const FVector& From) const;
+
+	/** Where an attacker stands to hit the hull: the nearest hull point pushed StandOffCm out of the side, ground level. */
+	FVector GetHullAttackPoint(const FVector& From, float StandOffCm) const;
+
 	// --- Crew (UVehicleSubsystem mounts / dismounts) -------------------------------------------------------------
 
 	const TArray<FVehicleCrewMember>& GetCrew() const { return Crew; }
@@ -290,12 +355,23 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Vehicle", meta = (DisplayName = "On Ran Over"))
 	void ReceiveRanOver(AActor* Victim, FVector Location);
 
+	/** The hull took damage (P4; sparks / clang polish; Damage after the armour). */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Vehicle", meta = (DisplayName = "On Hull Damaged"))
+	void ReceiveHullDamaged(float Damage, EVehicleDamageSource Source);
+
+	/** Disabled at 0 HP / repaired (P4; C++ already swaps to DamagedMesh and runs DamagedSmoke). */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Vehicle", meta = (DisplayName = "On Disabled Changed"))
+	void ReceiveDisabledChanged(bool bDisabled);
+
 	/** Fired when the drive ends at its goal (UVehicleSubsystem raises VehicleArrived). */
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnVehicleArrived, AVehiclePawn*);
 	FOnVehicleArrived OnArrived;
 
 	/** Fired when a drive gives up (blocked for too long / no progress). */
 	FOnVehicleArrived OnDriveBlocked;
+
+	/** The hull was disabled (0 HP, P4): the subsystem ejects the crew. */
+	FOnVehicleArrived OnDisabled;
 
 private:
 	void UpdateDrive(float DeltaSeconds);
@@ -317,6 +393,8 @@ private:
 	void ApplyNavObstacleBox();
 	void ReseatCrew();
 	void FinishDrive(bool bArrived);
+	/** Damaged model + wreck smoke on, the running model off (and back). */
+	void ApplyDisabledVisuals(bool bDisabled);
 
 	TArray<FVehicleCrewMember> Crew;
 	TArray<FVector> PathPoints;
@@ -351,4 +429,8 @@ private:
 	bool bEngineRunning = false;
 	bool bDoorsOpen = false;
 	bool bParkedState = true;
+	/** Hull health / disabled (P4); set from HullConfig at BeginPlay unless a save restored it first. */
+	FVehicleHullState HullState;
+	bool bHullInitialised = false;
+	float DamageBySource[8] = {};
 };

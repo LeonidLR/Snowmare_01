@@ -703,6 +703,11 @@ void ACodexTacticsHUD::DrawCombatModeBadge()
 		const FLinearColor TurretColor = !Turret->GetGunner() || Turret->IsMgOverheated() || Turret->GetShellsLeft() <= 0
 			? FLinearColor(1.f, 0.45f, 0.3f) : FLinearColor(0.85f, 0.95f, 1.f);
 		DrawCentered(StripUnsupportedGlyphs(Turret->GetHudLine()), TurretColor, FLinearColor(0.f, 0.f, 0.f, 0.5f), 1.f);
+		// APC P4: the hull's health line («HULL 840/1200»), red below the low mark.
+		const float HullFraction = Vehicle->GetHullHealth() / Vehicle->GetHullMaxHealth();
+		const FLinearColor HullColor = HullFraction <= Vehicle->HullConfig.LowHealthFraction ? FLinearColor(1.f, 0.35f, 0.3f)
+			: (HullFraction < 0.6f ? FLinearColor(1.f, 0.8f, 0.35f) : FLinearColor(0.85f, 0.95f, 1.f));
+		DrawCentered(VehicleHullRules::GetHudLine(Vehicle->GetHullState(), Vehicle->HullConfig, 0.f), HullColor, FLinearColor(0.f, 0.f, 0.f, 0.5f), 1.f);
 	}
 	// Blast gate paced by the generator and the waves (user request 2026-10-11): «BLAST DOOR 37% — GENERATOR OFFLINE».
 	if (const AGateActor* Gate = AGateActor::FindLevelGate(GetWorld()); Gate && Gate->ShouldShowStatus())
@@ -949,6 +954,23 @@ void ACodexTacticsHUD::DrawWorldLabels()
 		if (!It->IsHidden() && It->GetOverheadLabel(Label))
 		{
 			Draw(*It, Label);
+		}
+	}
+	// APC P4: a damaged / disabled hull shows its state over the vehicle («HULL 840/1200», «HULL DISABLED - Engineer [Y] repairs»).
+	if (const UVehicleSubsystem* Vehicles = World->GetSubsystem<UVehicleSubsystem>())
+	{
+		for (const AVehiclePawn* Vehicle : Vehicles->GetVehicles())
+		{
+			if (Vehicle->IsHidden() || (!Vehicle->IsDisabled() && Vehicle->GetHullHealth() >= Vehicle->GetHullMaxHealth()))
+			{
+				continue;
+			}
+			FOverheadLabel Label;
+			Label.Text = FString::Printf(TEXT("%s: %s"), *Vehicle->DisplayName.ToString(),
+				*VehicleHullRules::GetHudLine(Vehicle->GetHullState(), Vehicle->HullConfig, Vehicles->GetRepairProgress(Vehicle)));
+			Label.Color = Vehicle->IsDisabled() ? FLinearColor(1.f, 0.4f, 0.3f) : FLinearColor(1.f, 0.85f, 0.45f);
+			Label.HeightCm = Vehicle->HullCentre.Z + Vehicle->HullHalfExtent.Z + 60.f;
+			Draw(Vehicle, Label);
 		}
 	}
 }

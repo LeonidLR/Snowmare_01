@@ -332,7 +332,25 @@
       "ram_speed_factor": 0.25,
       "ram_knockdown_play_rate": 0.65,
       "ram_downed_time_scale": 1.5,
-      "crush_downed_brute": false
+      "crush_downed_brute": false,
+      "hull_ram_damage": 30
+    },
+    "apc_hull": {
+      "max_hp": 1200,
+      "small_melee_factor": 0.1,
+      "heavy_melee_factor": 1,
+      "acid_factor": 0.5,
+      "rifle_factor": 0.25,
+      "explosion_factor": 1,
+      "mine_damage": 250,
+      "other_factor": 1,
+      "low_health_fraction": 0.25,
+      "repair_seconds": 5,
+      "other_repair_seconds": 0,
+      "repair_fraction": 0.5,
+      "enemy_weight_small": 1,
+      "enemy_weight_large": 0.85,
+      "enemy_awareness_m": 40
     }
   }
 }

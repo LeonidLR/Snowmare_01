@@ -79,6 +79,7 @@ namespace PlayerCommands
 	const FName VehicleDisembark(TEXT("Vehicle.Disembark"));
 	const FName VehicleDrive(TEXT("Vehicle.Drive"));
 	const FName VehicleTurretFire(TEXT("Vehicle.TurretFire"));
+	const FName VehicleRepair(TEXT("Vehicle.Repair"));
 
 	const FName QuickSave(TEXT("System.QuickSave"));
 	const FName QuickLoad(TEXT("System.QuickLoad"));
@@ -194,7 +195,8 @@ namespace PlayerCommands
 			{ VehicleBoard, TEXT("Y"), TEXT("Vehicles"), TEXT("Board the nearest vehicle (Alt+Y: whole squad)") },
 			{ VehicleDisembark, TEXT("Y"), TEXT("Vehicles"), TEXT("Get out of the vehicle (Alt+Y: whole squad)") },
 			{ VehicleDrive, TEXT("LMB"), TEXT("Vehicles"), TEXT("Drive there while aboard (double-click: full speed; small enemies are run over)") },
-			{ VehicleTurretFire, TEXT("Ctrl+Click"), TEXT("Vehicles"), TEXT("Turret target while aboard (the gunner fires by his posture , . /)") },
+			{ VehicleTurretFire, TEXT("Ctrl+Click"), TEXT("Vehicles"), TEXT("Turret target while aboard (the gunner fires by his posture , . /); a barrel / trapped object gets a cannon shell") },
+			{ VehicleRepair, TEXT("Y"), TEXT("Vehicles"), TEXT("Repair a disabled vehicle (the Engineer, ~5 s at the hull)") },
 			{ QuickSave, TEXT("F5"), TEXT("Saving & menus"), TEXT("Quick save") },
 			{ QuickLoad, TEXT("F9"), TEXT("Saving & menus"), TEXT("Quick load") },
 			{ ControlsScreen, TEXT("F1"), TEXT("Saving & menus"), TEXT("This controls reference (F1 or Esc closes it)") },
@@ -338,6 +340,9 @@ namespace GameplayEvents
 	const FName VehicleTurretFired(TEXT("VehicleTurretFired"));
 	const FName VehicleTurretKill(TEXT("VehicleTurretKill"));
 	const FName VehicleRunOver(TEXT("VehicleRunOver"));
+	const FName VehicleDamaged(TEXT("VehicleDamaged"));
+	const FName VehicleDisabled(TEXT("VehicleDisabled"));
+	const FName VehicleRepaired(TEXT("VehicleRepaired"));
 
 	void Raise(const UObject* WorldContext, FName EventName, AActor* Subject)
 	{

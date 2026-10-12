@@ -323,9 +323,13 @@ void UActionBarWidget::Refresh()
 		const bool bAboard = Vehicles && Vehicles->IsMounted(Leader);
 		const AVehiclePawn* Near = Vehicles && !bAboard ? Vehicles->FindNearestVehicle(Leader->GetActorLocation(), 3000.f) : nullptr;
 		VehicleButton->SetVisibility(bAboard || Near ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-		BarVehicleText->SetText(bAboard ? LOCTEXT("VehicleExit", "EXIT\n[Y]") : LOCTEXT("VehicleBoard", "BOARD\n[Y]"));
+		// APC P4: a disabled vehicle near: REPAIR (the Engineer).
+		const bool bRepair = !bAboard && Near && Near->IsDisabled();
+		BarVehicleText->SetText(bAboard ? LOCTEXT("VehicleExit", "EXIT\n[Y]")
+			: (bRepair ? LOCTEXT("VehicleRepair", "REPAIR\n[Y]") : LOCTEXT("VehicleBoard", "BOARD\n[Y]")));
 		VehicleButton->SetToolTipText(bAboard ? LOCTEXT("VehicleExitTip", "Get out of the vehicle [Y] (Alt+Y: whole squad)")
-			: LOCTEXT("VehicleBoardTip", "Board the vehicle [Y] (Alt+Y: whole squad)"));
+			: (bRepair ? LOCTEXT("VehicleRepairTip", "The vehicle is disabled: the Engineer repairs it [Y] (~5 s at the hull)")
+				: LOCTEXT("VehicleBoardTip", "Board the vehicle [Y] (Alt+Y: whole squad)")));
 	}
 	if (PostureButtons.Num() == 3)
 	{

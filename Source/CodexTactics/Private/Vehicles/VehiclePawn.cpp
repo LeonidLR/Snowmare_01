@@ -16,6 +16,11 @@
 #include "UI/FloatingTextSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Particles/ParticleSystem.h"
+#include "Particles/ParticleSystemComponent.h"
+#include "UI/GameMessageSubsystem.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
@@ -68,9 +73,24 @@ AVehiclePawn::AVehiclePawn()
 	NavObstacle = CreateDefaultSubobject<UVehicleNavObstacleComponent>(TEXT("NavObstacle"));
 	Turret = CreateDefaultSubobject<UVehicleTurretComponent>(TEXT("Turret"));
 
+	// P4: the disabled hull's model + wreck smoke (vendor BP's DamagedModel / DamagedSmoke), shown only at 0 HP.
+	DamagedMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DamagedMesh"));
+	DamagedMesh->SetupAttachment(Root);
+	DamagedMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	DamagedMesh->SetCanEverAffectNavigation(false);
+	DamagedMesh->SetGenerateOverlapEvents(false);
+	DamagedMesh->SetHiddenInGame(true);
+	DamagedMesh->SetVisibility(false);
+	DamagedSmoke = CreateDefaultSubobject<UParticleSystemComponent>(TEXT("DamagedSmoke"));
+	DamagedSmoke->SetupAttachment(Root);
+	DamagedSmoke->SetRelativeLocation(FVector(HullCentre.X + 120.f, 0.f, HullCentre.Z + HullHalfExtent.Z));
+	DamagedSmoke->bAutoActivate = false;
+
 	DisplayName = NSLOCTEXT("CodexVehicle", "ApcName", "APC");
 	DefaultMesh = TSoftObjectPtr<USkeletalMesh>(FSoftObjectPath(TEXT("/Game/VigilanteContent/Vehicles/East_APC_BTR82/SK_East_APC_BTR82.SK_East_APC_BTR82")));
 	DefaultAnimClass = TSoftClassPtr<UAnimInstance>(FSoftObjectPath(TEXT("/Game/VigilanteContent/Vehicles/East_APC_BTR82/ABP_East_APC_BTR82.ABP_East_APC_BTR82_C")));
+	DefaultDamagedMesh = TSoftObjectPtr<UStaticMesh>(FSoftObjectPath(TEXT("/Game/VigilanteContent/Vehicles/East_APC_BTR82/Damaged/SM_East_APC_BTR82_Damaged.SM_East_APC_BTR82_Damaged")));
+	DefaultWreckSmoke = TSoftObjectPtr<UParticleSystem>(FSoftObjectPath(TEXT("/Game/VigilanteContent/Vehicles/East_APC_BTR82/FX/PS_Wreckage_01_East_APC_BTR82.PS_Wreckage_01_East_APC_BTR82")));
 	// Side doors between axles 2 and 3 (x -20 cm), the rear hatch; on the ground, 1 m off the hull (outside the parked
 	// footprint carve + 40 cm and the infantry agent radius 35 cm: a point inside it was unreachable, 2026-10-12).
 	EntryPoints = { FVector(-20.f, -(153.f + 100.f), 0.f), FVector(-20.f, 153.f + 100.f, 0.f), FVector(58.f - 389.f - 100.f, 0.f, 0.f) };
@@ -110,7 +130,12 @@ void AVehiclePawn::ApplyNavObstacleBox()
 void AVehiclePawn::BeginPlay()
 {
 	Super::BeginPlay();
-	WeaponTuning::ApplyVehicleWeapons(nullptr, &CrushConfig);
+	WeaponTuning::ApplyVehicleWeapons(nullptr, &CrushConfig, &HullConfig);
+	if (!bHullInitialised)
+	{
+		bHullInitialised = true;
+		HullState = VehicleHullRules::MakeFullHull(HullConfig);
+	}
 	CurrentYaw = GetActorRotation().Yaw;
 	ApplyNavObstacleBox();
 	ConformToGround(0.f, true);
@@ -145,6 +170,10 @@ ANavigationData* AVehiclePawn::GetVehicleNavData() const
 
 EVehicleDriveResult AVehiclePawn::DriveTo(const FVector& InGoal, bool bInRush)
 {
+	if (HullState.bDisabled)
+	{
+		return EVehicleDriveResult::Disabled;
+	}
 	if (!HasDriver())
 	{
 		return EVehicleDriveResult::NoDriver;
@@ -552,6 +581,11 @@ void AVehiclePawn::RamEnemy(AEnemyCharacter* Enemy)
 		if (Knockdown->ForceKnockDownScaled(Side, EKnockdownCause::HeavyHit, CrushConfig.RamKnockdownPlayRate, CrushConfig.RamDownedTimeScale))
 		{
 			++RamKnockdownCount;
+			// P4: a fast ram costs the hull a little too.
+			if (CrushConfig.HullRamDamage > 0.f)
+			{
+				ApplyHullDamage(CrushConfig.HullRamDamage, EVehicleDamageSource::Ram, Enemy->GetName(), Enemy);
+			}
 			// Thrown back off the bumper so the hull does not stand in the fallen body.
 			const FVector Away = (Enemy->GetActorLocation() - GetHullCentreWorld()).GetSafeNormal2D();
 			Enemy->SetActorLocation(Enemy->GetActorLocation() + Away * 80.f, true, nullptr, ETeleportType::TeleportPhysics);
@@ -806,6 +840,7 @@ void AVehiclePawn::SetCrewSeat(AOperativeCharacter* Operative, EVehicleSeat Seat
 
 void AVehiclePawn::SetEngineRunning(bool bRunning)
 {
+	bRunning &= !HullState.bDisabled; // a disabled hull has no engine (P4)
 	const bool bChanged = bEngineRunning != bRunning;
 	bEngineRunning = bRunning;
 	if (CabinHeat)
@@ -883,4 +918,172 @@ bool AVehiclePawn::GetCoverProbe(const FVector& ClickPoint, const FVector& ViewD
 	OutPoint = Frame.TransformPosition(FVector(HullCentre.X + Point.X + Normal.X * 5.f, HullCentre.Y + Point.Y + Normal.Y * 5.f, 120.f));
 	OutNormal = Frame.TransformVectorNoScale(FVector(Normal.X, Normal.Y, 0.f)).GetSafeNormal();
 	return true;
+}
+
+// --- Hull (P4) ---------------------------------------------------------------------------------------------------
+
+static_assert(static_cast<int32>(EVehicleDamageSource::Other) == 7, "DamageBySource holds one slot per EVehicleDamageSource");
+
+float AVehiclePawn::GetDamageTaken(EVehicleDamageSource Source) const
+{
+	const int32 Index = static_cast<int32>(Source);
+	return Index >= 0 && Index < 8 ? DamageBySource[Index] : 0.f;
+}
+
+float AVehiclePawn::ApplyHullDamage(float Amount, EVehicleDamageSource Source, const FString& AttackerName, AActor* Attacker)
+{
+	if (!bHullInitialised)
+	{
+		bHullInitialised = true;
+		HullState = VehicleHullRules::MakeFullHull(HullConfig);
+	}
+	const float HullDamage = VehicleHullRules::GetHullDamage(Amount, Source, HullConfig);
+	float Dealt = 0.f;
+	const EVehicleHullChange Change = VehicleHullRules::ApplyDamage(HullState, HullDamage, HullConfig, Dealt);
+	if (Change == EVehicleHullChange::None)
+	{
+		return 0.f;
+	}
+	DamageBySource[static_cast<int32>(Source)] += Dealt;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] %s hull hit by %s (%s): %.1f -> %.1f (health %.0f / %.0f)"), *GetName(), *AttackerName,
+		*VehicleHullRules::GetSourceName(Source), Amount, Dealt, HullState.Health, GetHullMaxHealth());
+	if (UFloatingTextSubsystem* Floating = GetWorld()->GetSubsystem<UFloatingTextSubsystem>())
+	{
+		const FVector Above = GetHullCentreWorld() + FVector(0.f, 0.f, HullHalfExtent.Z + 80.f);
+		Floating->Spawn(Above + FVector(FMath::FRandRange(-60.f, 60.f), FMath::FRandRange(-60.f, 60.f), 0.f),
+			FString::Printf(TEXT("-%d"), FMath::Max(1, FMath::RoundToInt(Dealt))), FLinearColor(1.f, 0.75f, 0.3f), 0.8f, 100.f);
+	}
+	ReceiveHullDamaged(Dealt, Source);
+	FGameplayEventContext Event;
+	Event.Subject = Attacker;
+	Event.Target = this;
+	Event.Kind = FName(*VehicleHullRules::GetSourceName(Source));
+	Event.Location = GetActorLocation();
+	GameplayEvents::RaiseWithContext(this, GameplayEvents::VehicleDamaged, Event);
+	const AOperativeCharacter* Driver = GetOccupant(EVehicleSeat::Driver);
+	const FText Speaker = Driver ? Driver->DisplayName : DisplayName;
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	if (Change == EVehicleHullChange::DamagedLow && Messages)
+	{
+		Messages->PostMessage(Speaker, FText::Format(NSLOCTEXT("CodexVehicle", "HullLow", "The {0} won't take much more - hull at {1}%!"), DisplayName,
+			FMath::RoundToInt(HullState.Health / GetHullMaxHealth() * 100.f)));
+	}
+	if (Change == EVehicleHullChange::Disabled)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] %s DISABLED (last hit: %s, %s)"), *GetName(), *AttackerName, *VehicleHullRules::GetSourceName(Source));
+		StopDriving();
+		SetParked(true);
+		SetEngineRunning(false);
+		ApplyDisabledVisuals(true);
+		ReceiveDisabledChanged(true);
+		if (Messages)
+		{
+			Messages->PostMessage(Speaker, FText::Format(NSLOCTEXT("CodexVehicle", "HullDisabled", "The {0} is dead in the snow - everybody out!"), DisplayName));
+		}
+		OnDisabled.Broadcast(this); // the subsystem ejects the crew and raises VehicleDisabled
+	}
+	return Dealt;
+}
+
+void AVehiclePawn::RepairHull()
+{
+	const bool bWasDisabled = HullState.bDisabled;
+	VehicleHullRules::Repair(HullState, HullConfig);
+	bHullInitialised = true;
+	if (bWasDisabled)
+	{
+		ApplyDisabledVisuals(false);
+		ReceiveDisabledChanged(false);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] %s repaired: health %.0f / %.0f"), *GetName(), HullState.Health, GetHullMaxHealth());
+}
+
+void AVehiclePawn::RestoreHull(float Health, bool bDisabled)
+{
+	const bool bWasDisabled = HullState.bDisabled;
+	HullState = VehicleHullRules::RestoreHull(Health, bDisabled, HullConfig);
+	bHullInitialised = true;
+	if (HullState.bDisabled)
+	{
+		StopDriving();
+		SetEngineRunning(false);
+	}
+	if (bWasDisabled != HullState.bDisabled)
+	{
+		ApplyDisabledVisuals(HullState.bDisabled);
+		ReceiveDisabledChanged(HullState.bDisabled);
+	}
+}
+
+void AVehiclePawn::ApplyDisabledVisuals(bool bDisabled)
+{
+	if (DamagedMesh)
+	{
+		if (bDisabled && !DamagedMesh->GetStaticMesh())
+		{
+			if (UStaticMesh* Wreck = DefaultDamagedMesh.LoadSynchronous())
+			{
+				DamagedMesh->SetStaticMesh(Wreck);
+			}
+		}
+		// Swap only when there is a damaged model to show (else the running model stays: never an invisible hull).
+		const bool bSwap = bDisabled && DamagedMesh->GetStaticMesh() != nullptr;
+		DamagedMesh->SetHiddenInGame(!bSwap);
+		DamagedMesh->SetVisibility(bSwap);
+		if (Mesh)
+		{
+			Mesh->SetVisibility(!bSwap, false);
+		}
+	}
+	if (DamagedSmoke)
+	{
+		if (bDisabled && !DamagedSmoke->Template)
+		{
+			if (UParticleSystem* Smoke = DefaultWreckSmoke.LoadSynchronous())
+			{
+				DamagedSmoke->SetTemplate(Smoke);
+			}
+		}
+		if (bDisabled && DamagedSmoke->Template)
+		{
+			DamagedSmoke->ActivateSystem(true);
+		}
+		else
+		{
+			DamagedSmoke->DeactivateSystem();
+		}
+	}
+}
+
+FVector AVehiclePawn::GetClosestHullPoint(const FVector& From) const
+{
+	const FTransform Frame(FRotator(0.f, CurrentYaw, 0.f), GetActorLocation());
+	const FVector Local = Frame.InverseTransformPosition(From);
+	float X = FMath::Clamp(Local.X, HullCentre.X - HullHalfExtent.X, HullCentre.X + HullHalfExtent.X);
+	float Y = FMath::Clamp(Local.Y, HullCentre.Y - HullHalfExtent.Y, HullCentre.Y + HullHalfExtent.Y);
+	if (FMath::IsNearlyEqual(X, Local.X) && FMath::IsNearlyEqual(Y, Local.Y))
+	{
+		// Inside the footprint: out through the nearest side.
+		const float ToFront = HullCentre.X + HullHalfExtent.X - Local.X;
+		const float ToBack = Local.X - (HullCentre.X - HullHalfExtent.X);
+		const float ToLeft = Local.Y - (HullCentre.Y - HullHalfExtent.Y);
+		const float ToRight = HullCentre.Y + HullHalfExtent.Y - Local.Y;
+		const float Nearest = FMath::Min(FMath::Min(ToFront, ToBack), FMath::Min(ToLeft, ToRight));
+		X = Nearest == ToFront ? HullCentre.X + HullHalfExtent.X : (Nearest == ToBack ? HullCentre.X - HullHalfExtent.X : X);
+		Y = Nearest == ToLeft ? HullCentre.Y - HullHalfExtent.Y : (Nearest == ToRight ? HullCentre.Y + HullHalfExtent.Y : Y);
+	}
+	return Frame.TransformPosition(FVector(X, Y, 0.f));
+}
+
+FVector AVehiclePawn::GetHullAttackPoint(const FVector& From, float StandOffCm) const
+{
+	const FTransform Frame(FRotator(0.f, CurrentYaw, 0.f), GetActorLocation());
+	const FVector Point = GetClosestHullPoint(From);
+	const FVector LocalPoint = Frame.InverseTransformPosition(Point);
+	// The side's outward normal (corners: both components).
+	FVector2D Normal(0.f, 0.f);
+	Normal.X = FMath::IsNearlyEqual(LocalPoint.X, HullCentre.X + HullHalfExtent.X, 1.f) ? 1.f : (FMath::IsNearlyEqual(LocalPoint.X, HullCentre.X - HullHalfExtent.X, 1.f) ? -1.f : 0.f);
+	Normal.Y = FMath::IsNearlyEqual(LocalPoint.Y, HullCentre.Y + HullHalfExtent.Y, 1.f) ? 1.f : (FMath::IsNearlyEqual(LocalPoint.Y, HullCentre.Y - HullHalfExtent.Y, 1.f) ? -1.f : 0.f);
+	Normal = Normal.GetSafeNormal();
+	return Frame.TransformPosition(FVector(LocalPoint.X + Normal.X * StandOffCm, LocalPoint.Y + Normal.Y * StandOffCm, 0.f));
 }

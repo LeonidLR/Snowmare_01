@@ -220,9 +220,9 @@ struct CODEXTACTICS_API FVehicleCrushConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ram")
 	bool bCrushDownedRammed = false;
 
-	/** Damage the hull takes from a ram (P4 damage: no hull health yet, kept for the damage phase). */
+	/** Damage the hull takes from a fast ram of a Brute (P4: "costs the hull a little"; Ram source, no armour factor). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ram", meta = (ClampMin = "0"))
-	float HullRamDamage = 0.f;
+	float HullRamDamage = 30.f;
 };
 
 /** Boarding / disembarking fade (user 2026-10-12: no boarding animations, a quick fade to black and back). */

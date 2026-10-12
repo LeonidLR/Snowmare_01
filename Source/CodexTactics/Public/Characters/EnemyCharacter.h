@@ -580,6 +580,17 @@ protected:
 	/** Godot enemy_frost_spitter.gd _process_enemy_behavior. */
 	void TickSpitter(float DeltaTime);
 
+	/** APC P4: the manned vehicle this enemy would go for (UVehicleSubsystem::FindEnemyTargetVehicle), nullptr when none. */
+	class AVehiclePawn* FindVehicleTarget() const;
+
+	/**
+	 * APC P4: a ranged enemy against a manned vehicle (spitter / cryo drone acid, the marksman's rifle): closes to within
+	 * RangeCm of the hull with a line from MuzzleHeightCm over the feet to the hull, then hits it every CooldownSeconds
+	 * (HitChance) with Damage through the hull's armour for its archetype.
+	 */
+	void TickRangedVsVehicle(class AVehiclePawn& Vehicle, float DeltaTime, float RangeCm, float Damage, float CooldownSeconds, float MuzzleHeightCm,
+		float HitChance);
+
 	/**
 	 * The behaviour part of Tick (targets, attacks, movement); Tick then turns the body (UpdateMovementFacing).
 	 * Archetypes with their own brain (AMarksmanEnemyCharacter) override it.

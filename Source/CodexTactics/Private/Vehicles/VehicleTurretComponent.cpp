@@ -18,6 +18,11 @@
 #include "Particles/ParticleSystem.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "Vehicles/VehiclePawn.h"
+#include "Combat/TargetedShotRules.h"
+#include "Interactables/BarrelActor.h"
+#include "Interactables/InteractableActor.h"
+#include "Interactables/ProximityMineActor.h"
+#include "UI/GameMessageSubsystem.h"
 
 UVehicleTurretComponent::UVehicleTurretComponent()
 {
@@ -233,7 +238,8 @@ void UVehicleTurretComponent::Retarget()
 void UVehicleTurretComponent::UpdateAim(float DeltaTime)
 {
 	const AVehiclePawn* Vehicle = GetVehicle();
-	if (const AEnemyCharacter* Target = CurrentTarget.Get())
+	const AActor* Target = ObjectTarget.IsValid() ? ObjectTarget.Get() : static_cast<const AActor*>(CurrentTarget.Get());
+	if (Target)
 	{
 		const FVector Pivot = Vehicle->GetHullCentreWorld() + FVector(0.f, 0.f, Vehicle->HullHalfExtent.Z);
 		const FVector To = Target->GetActorLocation() - Pivot;
@@ -275,12 +281,11 @@ void UVehicleTurretComponent::TickComponent(float DeltaTime, ELevelTick TickType
 		}
 	}
 	AOperativeCharacter* Gunner = GetGunner();
-	const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-	const bool bTurnBased = Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased;
-	const bool bHeld = !Gunner || bTurnBased || UWorldAIPauseSubsystem::IsPausedIn(World);
+	const bool bHeld = IsHeld();
 	bMgFiringNow = false;
 	if (bHeld)
 	{
+		ObjectTarget.Reset();
 		CurrentTarget.Reset();
 		CurrentWeapon = EVehicleTurretWeapon::None;
 		MgHeat = VehicleCombatRules::StepHeat(MgHeat, false, DeltaTime, bMgOverheated, Config);
@@ -290,6 +295,30 @@ void UVehicleTurretComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	MgFiredEventTimer = FMath::Max(0.f, MgFiredEventTimer - DeltaTime);
 	NoiseTimer = FMath::Max(0.f, NoiseTimer - DeltaTime);
 	RetargetTimer -= DeltaTime;
+	// P4: a Ctrl+click object order goes first - one shell once the gun points at it.
+	if (AActor* Object = ObjectTarget.Get())
+	{
+		ObjectTargetAge += DeltaTime;
+		const EVehicleObjectShot Check = CheckObjectShot(Object);
+		if (Check != EVehicleObjectShot::None || ObjectTargetAge > ObjectTargetTimeoutSeconds)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] turret drops the object order %s (%s, %.1f s)"), *Object->GetName(),
+				*StaticEnum<EVehicleObjectShot>()->GetNameStringByValue(static_cast<int64>(Check)), ObjectTargetAge);
+			ObjectTarget.Reset();
+		}
+		else
+		{
+			CurrentTarget.Reset();
+			CurrentWeapon = EVehicleTurretWeapon::Cannon;
+			UpdateAim(DeltaTime);
+			if (CannonTimer <= 0.f && VehicleCombatRules::IsAimed(FMath::FindDeltaAngleDegrees(TurretYaw, DesiredYaw), GunPitch - DesiredPitch, Config))
+			{
+				FireCannonAtObject(Object, Gunner);
+			}
+			MgHeat = VehicleCombatRules::StepHeat(MgHeat, false, DeltaTime, bMgOverheated, Config);
+			return;
+		}
+	}
 	const AEnemyCharacter* Current = CurrentTarget.Get();
 	if (RetargetTimer <= 0.f || (Current && (Current->IsDying() || !Current->GetHealthComponent() || !Current->GetHealthComponent()->IsAlive())))
 	{
@@ -476,4 +505,128 @@ void UVehicleTurretComponent::RaiseFired(AActor* Target, EVehicleTurretWeapon We
 	Event.Kind = Weapon == EVehicleTurretWeapon::Cannon ? FName(TEXT("Cannon")) : FName(TEXT("MachineGun"));
 	Event.Location = Target ? Target->GetActorLocation() : FVector::ZeroVector;
 	GameplayEvents::RaiseWithContext(this, GameplayEvents::VehicleTurretFired, Event);
+}
+
+// --- Object shots (P4) ----------------------------------------------------------------------------------------------
+
+bool UVehicleTurretComponent::IsHeld() const
+{
+	const UWorld* World = GetWorld();
+	const AVehiclePawn* Vehicle = GetVehicle();
+	const UGameFlowSubsystem* Flow = World ? World->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	const bool bTurnBased = Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased;
+	return !GetGunner() || bTurnBased || UWorldAIPauseSubsystem::IsPausedIn(World) || !Vehicle || Vehicle->IsDisabled();
+}
+
+bool UVehicleTurretComponent::HasLineOfFireToObject(const FVector& From, const AActor* Object) const
+{
+	const AVehiclePawn* Vehicle = GetVehicle();
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(VehicleTurretObjectLine), false, Vehicle);
+	if (Vehicle)
+	{
+		for (const FVehicleCrewMember& Member : Vehicle->GetCrew())
+		{
+			Params.AddIgnoredActor(Member.Operative.Get());
+		}
+	}
+	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	{
+		Params.AddIgnoredActor(*It); // the shell is aimed at the object, past the pack
+	}
+	FVector Origin;
+	FVector Extent;
+	Object->GetActorBounds(true, Origin, Extent);
+	FHitResult Hit;
+	if (!GetWorld()->LineTraceSingleByChannel(Hit, From, Origin, ECC_Visibility, Params))
+	{
+		return true;
+	}
+	// The object itself (or something attached to it) takes the shell; a wall / rock in between does not.
+	const AActor* Blocker = Hit.GetActor();
+	return Blocker == Object || (Blocker && Blocker->GetAttachParentActor() == Object) || FVector::Dist(Hit.ImpactPoint, Origin) <= Extent.Size() + 30.f;
+}
+
+EVehicleObjectShot UVehicleTurretComponent::CheckObjectShot(const AActor* Object) const
+{
+	const AVehiclePawn* Vehicle = GetVehicle();
+	VehicleHullRules::FObjectShotCheck Check;
+	const ETargetedShotKind Kind = AOperativeCharacter::ClassifyShotTarget(Object);
+	const ABarrelActor* Barrel = Cast<ABarrelActor>(Object);
+	const AInteractableActor* Interactable = Cast<AInteractableActor>(Object);
+	Check.bShootable = Object && Vehicle
+		&& ((Kind == ETargetedShotKind::Barrel && Barrel && !Barrel->IsBurning())
+			|| ((Kind == ETargetedShotKind::Mine || Kind == ETargetedShotKind::Crate || Kind == ETargetedShotKind::TrappedObject) && Interactable && Interactable->bTrapped));
+	if (!Check.bShootable)
+	{
+		return VehicleHullRules::CheckObjectShot(Check);
+	}
+	const FVector Muzzle = GetMuzzleLocation();
+	Check.bHasGunner = GetGunner() != nullptr;
+	Check.bDisabled = Vehicle->IsDisabled();
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	Check.bHeld = (Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased) || UWorldAIPauseSubsystem::IsPausedIn(GetWorld());
+	Check.ShellsLeft = bShellsInitialised ? ShellsLeft : VehicleCombatRules::GetShellsForMap(-1, Config);
+	Check.DistanceCm = FVector::Dist(Muzzle, Object->GetActorLocation());
+	Check.HullDistanceCm = Vehicle->GetHullDistance2D(Object->GetActorLocation());
+	Check.CannonRangeCm = Config.CannonRangeCm;
+	Check.DeadZoneCm = Config.DeadZoneCm;
+	// The line (a trace) last: only when everything else allows the shot.
+	const EVehicleObjectShot Early = VehicleHullRules::CheckObjectShot(Check);
+	if (Early != EVehicleObjectShot::None)
+	{
+		return Early;
+	}
+	Check.bLineOfFire = HasLineOfFireToObject(Muzzle, Object);
+	return VehicleHullRules::CheckObjectShot(Check);
+}
+
+EVehicleObjectShot UVehicleTurretComponent::SetObjectTarget(AActor* Object)
+{
+	InitShells();
+	const EVehicleObjectShot Check = CheckObjectShot(Object);
+	if (Check == EVehicleObjectShot::None)
+	{
+		ObjectTarget = Object;
+		ObjectTargetAge = 0.f;
+		CurrentTarget.Reset();
+		BurstLeft = 0;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] turret: object order %s (%.1f m)"), *Object->GetName(),
+			FVector::Dist(GetMuzzleLocation(), Object->GetActorLocation()) / 100.f);
+	}
+	return Check;
+}
+
+void UVehicleTurretComponent::FireCannonAtObject(AActor* Object, AOperativeCharacter* Gunner)
+{
+	const FVector Muzzle = GetMuzzleLocation();
+	const ETargetedShotKind Kind = AOperativeCharacter::ClassifyShotTarget(Object);
+	FVector Origin;
+	FVector Extent;
+	Object->GetActorBounds(true, Origin, Extent);
+	--ShellsLeft;
+	++CannonShots;
+	++ObjectShots;
+	BurstLeft = 0;
+	CannonTimer = Config.CannonBurstPauseSeconds;
+	ObjectTarget.Reset();
+	if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+	{
+		Feedback->SpawnTracer(Muzzle, Origin, FLinearColor(1.f, 0.55f, 0.15f), EDamageType::Explosive);
+	}
+	PlayMuzzleFlash(true);
+	if (NoiseTimer <= 0.f)
+	{
+		NoiseTimer = 1.f;
+		AEnemyCharacter::NotifySquadNoise(GetWorld(), GetOwner()->GetActorLocation(), ESquadNoise::Explosion);
+	}
+	const FText Shooter = Gunner ? Gunner->DisplayName : (GetVehicle() ? GetVehicle()->DisplayName : FText::GetEmpty());
+	UE_LOG(LogCodexTactics, Display, TEXT("[Vehicle] cannon shell at %s (%d shells left)"), *Object->GetName(), ShellsLeft);
+	RaiseFired(Object, EVehicleTurretWeapon::Cannon);
+	// The detonation an operative's targeted shot would set off (a barrel blast, a mine, a trap).
+	const bool bWentOff = AOperativeCharacter::DetonateShotTarget(Object, Kind, Shooter);
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(Shooter, bWentOff ? NSLOCTEXT("CodexVehicle", "ShellObjectBoom", "Shell on target - it went up!")
+			: NSLOCTEXT("CodexVehicle", "ShellObjectDud", "Shell on target - nothing went off."));
+	}
 }

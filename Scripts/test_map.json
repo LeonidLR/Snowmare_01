@@ -12,7 +12,7 @@
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
-    "VehicleSmoke", "VehicleCombatSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
@@ -356,9 +356,9 @@
     },
     {
       "name": "vehicles",
-      "globs": ["Source/**/Vehicles/**", "Source/**/Debug/VehicleSmoke*", "Source/**/Debug/VehicleCombatSmoke*", "Source/**/Debug/VehicleTurretShot*", "Source/CodexTacticsTests/Private/Vehicles/**", "Content/Vehicles/**", "Scripts/Editor/setup_apc_vehicle.py"],
+      "globs": ["Source/**/Vehicles/**", "Source/**/Debug/VehicleSmoke*", "Source/**/Debug/VehicleCombatSmoke*", "Source/**/Debug/VehicleDamageSmoke*", "Source/**/Debug/VehicleTurretShot*", "Source/**/Debug/VehicleDisabledShot*", "Source/CodexTacticsTests/Private/Vehicles/**", "Content/Vehicles/**", "Scripts/Editor/setup_apc_vehicle.py"],
       "tests": ["CodexTactics.Vehicle", "CodexTactics.UI.Frontend.Controls", "CodexTactics.Tutorial"],
-      "smokes": ["VehicleSmoke", "VehicleCombatSmoke", "CoverHugSmoke", "MovementSmoke", "SaveRoundTripSmoke", "ActionBarSmoke", "ControlsScreenSmoke"]
+      "smokes": ["VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "CoverHugSmoke", "MovementSmoke", "SaveRoundTripSmoke", "ActionBarSmoke", "ControlsScreenSmoke"]
     },
     {
       "name": "maps-and-content",

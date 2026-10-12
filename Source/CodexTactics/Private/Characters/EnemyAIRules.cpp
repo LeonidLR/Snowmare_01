@@ -85,6 +85,20 @@ int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy,
 		}
 	}
 	Consider(EEnemyTargetKind::Operative, bSmallEnemy ? 1.f : 0.7f);
+	// APC P4: a manned vehicle (the crew inside cannot be hit: the hull is the target), at its own weight.
+	for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+	{
+		const FEnemyTargetCandidate& Candidate = Candidates[Index];
+		if (Candidate.Kind == EEnemyTargetKind::Vehicle && Candidate.bUsable)
+		{
+			const float Effective = FVector::Dist(Enemy, Candidate.Location) * Candidate.Weight;
+			if (Effective < MinDistance)
+			{
+				MinDistance = Effective;
+				Best = Index;
+			}
+		}
+	}
 	if (!bSmallEnemy && Config.bCanTargetTurrets)
 	{
 		for (int32 Index = 0; Index < Candidates.Num(); ++Index)
