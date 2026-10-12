@@ -112,8 +112,11 @@ bool FVehicleTurretWeaponTest::RunTest(const FString&)
 	// Shells: the level JSON overrides the per-map default; damage + splash.
 	TestEqual(TEXT("level override"), VehicleCombatRules::GetShellsForMap(12, Config), 12);
 	TestEqual(TEXT("default 60"), VehicleCombatRules::GetShellsForMap(-1, Config), 60);
-	TestEqual(TEXT("direct hit 70"), VehicleCombatRules::GetCannonDamage(0.f, true, Config), 70.f);
-	TestEqual(TEXT("splash 35 within 1.5 m"), VehicleCombatRules::GetCannonDamage(120.f, false, Config), 35.f);
+	// User 2026-10-12 ("too powerful"): 45 direct / 20 splash (radius 1.5 m kept), bursts of 2.
+	TestEqual(TEXT("direct hit 45"), VehicleCombatRules::GetCannonDamage(0.f, true, Config), 45.f);
+	TestEqual(TEXT("splash 20 within 1.5 m"), VehicleCombatRules::GetCannonDamage(120.f, false, Config), 20.f);
+	TestEqual(TEXT("bursts of 2 shells"), Config.CannonBurstShots, 2);
+	TestEqual(TEXT("0.5 s apart, 1.2 s pause"), Config.CannonShotIntervalSeconds + Config.CannonBurstPauseSeconds, 1.7f);
 	TestEqual(TEXT("nothing beyond"), VehicleCombatRules::GetCannonDamage(200.f, false, Config), 0.f);
 	TestTrue(TEXT("HUD line"), VehicleCombatRules::GetHudLine(true, 57, 60, 0.4f, false, ESquadFirePosture::Aggressive).Contains(TEXT("57/60")));
 	TestTrue(TEXT("HUD overheat"), VehicleCombatRules::GetHudLine(true, 57, 60, 1.f, true, ESquadFirePosture::Aggressive).Contains(TEXT("OVERHEAT")));

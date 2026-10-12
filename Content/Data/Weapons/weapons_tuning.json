@@ -304,11 +304,11 @@
   },
   "vehicle_weapons": {
     "apc_turret": {
-      "cannon_damage": 70,
+      "cannon_damage": 45,
       "cannon_splash_radius_m": 1.5,
-      "cannon_splash_damage": 35,
+      "cannon_splash_damage": 20,
       "cannon_shot_interval": 0.5,
-      "cannon_burst_shots": 3,
+      "cannon_burst_shots": 2,
       "cannon_burst_pause": 1.2,
       "cannon_range_m": 40,
       "shells_per_map": 60,
