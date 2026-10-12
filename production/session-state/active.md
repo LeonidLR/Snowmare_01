@@ -14,6 +14,21 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Checkpoint 2026-10-12 (end of day)
+- Done 10-11/12: cover fixes (hug, shimmy, wall clearance), knockdown tuning, sudden horde intro (running-mass trigger,
+  flyover, free pause w/o radius), repath throttle, audit (`docs/port/audit_2026-10-11.md`), Sprint 15 heat, vision cones,
+  M16 25 m, guard posts, ambush on any map, blast door + beacon, F1 Controls, tutorial core + Demo 01 lake A0-A1 rev 4
+  (`docs/demo/DEMO01_BEAT_SHEET.md`, `Content/Data/Tutorial/demo_01_steps.json`, per-map level JSON
+  `Content/Data/LevelJson/L_Demo01_A_FrozenLake.json`), weather idle poses + squad gathers at fires, APC P0-P2+P4
+  (`docs/vehicles/`; Y/Alt+Y board, drive, turret, run-over, Brute knockdown, hull damage/repair), placed-enemy archetype net.
+- User maps committed: `L_Demo01_A_FrozenLake`, `L_VehicleTest`. Studio roles = Gemini Game Studios defs in
+  `C:/Users/Zephyrus15Duo/Documents/Codex/.agents/agents/*.json`, run as Claude subagents.
+- Next: user builds A1 hut/markers per rev 4 (hut near the crack), then A2 camp (barrel lesson), A3+ per beat sheet;
+  APC P3 (turn-based parked turret); open APC P4 confirmations (HANDOFF §7); audit batches (enemy registry, HUD caches,
+  debug module, bot gate); Gemini requests #15-#21.
+- Rules: one agents worktree (+ temp ones removed junctions-first via [IO.Directory]::Delete), back up user files + hash
+  check before every merge, beep instead of phone files when the user is at the PC.
+
 ## Checkpoint 2026-10-09 (end of day, main 763ca9c pushed)
 - Done today: F9 quick load + black load cover (4b31144); Sniper-pack death clips for operatives / Marksman (4c75003);
   Female Soldier = Medic-Sapper body + sniper rifle only for her, fires kneeling / prone only (c2478dd, ac61f69);
