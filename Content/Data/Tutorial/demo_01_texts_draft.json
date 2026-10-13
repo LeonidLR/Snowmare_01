@@ -1,5 +1,5 @@
 {
-  "_comment": "DRAFT placeholder tutorial texts (Demo 01 A0-A2), used only when narrative_manifest.json has no entry for the id (FNarrativeManifest::DraftTutorialTexts). To be replaced by the sheet Tutorial tab (TANDEM request 17). {key:<CommandId>} = the key cap, {focus} = the operative a 'focus' card is about.",
+  "_comment": "DRAFT placeholder tutorial texts (Demo 01 A0-A4, rev 5 flow 2026-10-13), used only when narrative_manifest.json has no entry for the id (FNarrativeManifest::DraftTutorialTexts). To be replaced by the sheet Tutorial tab (TANDEM request 17). {key:<CommandId>} = the key cap, {focus} = the operative a 'focus' card is about. English only (in-game text).",
   "texts": {
     "WT_A0_BRIEFING_1": {
       "text": "Cold Silence, this is HQ. Drop confirmed. You're on the ice, three klicks south of the Sector-17 weather station."
@@ -11,29 +11,30 @@
       "text": "The station went dark forty hours ago. Find out why. And keep moving — standing still on that ice will kill you."
     },
     "WT_A0_01": {
-      "text": "Follow the beacons north. The fishermen marked the safe ice."
-    },
-    "WT_A0_02": {
-      "text": "You heard him. Eyes open, one step at a time."
-    },
-    "WT_A0_03": {
-      "text": "Minus thirty and dropping. Watch your hands — fingers go first."
-    },
-    "WT_A0_04": {
-      "text": "Radio's dead. Not static — dead. Like something is eating the signal."
-    },
-    "WT_A0_05": {
-      "text": "Then we do it the old way. Beacon one, twenty-five metres."
+      "text": "Follow the beacons north. The fishermen marked the safe ice. HQ out."
     },
     "WT_A0_06": {
-      "text": "Move out."
+      "text": "Copy. Move out."
     },
     "TUT_BEAT_A0": {
       "title": "THE DROP"
     },
+    "TUT_A0_WAIT_HQ": {
+      "text": "Hold on — HQ is talking."
+    },
+    "TUT_A0_NOSPRINT": {
+      "text": "No running yet — save your strength."
+    },
+    "TUT_A0_NOINVENTORY": {
+      "text": "Not now. Packs stay closed until we need them."
+    },
     "TUT_A0_CAM_PAN": {
       "title": "CAMERA — MOVE",
       "text": "Move the camera with {key:Camera.Pan.Keys} or by pushing the cursor to the screen edge."
+    },
+    "TUT_A0_CAM_PAN_DRAG": {
+      "title": "CAMERA — DRAG",
+      "text": "Hold the middle mouse button (the wheel) and drag to pan the camera."
     },
     "TUT_A0_CAM_ROTATE_KEYS": {
       "title": "CAMERA — TURN",
@@ -49,13 +50,10 @@
     },
     "TUT_A0_MOVE": {
       "title": "MOVE",
-      "text": "Click the ground to move the squad. Head for the amber ring at beacon one."
+      "text": "Click the ground to move the squad. Walk to the amber ring at beacon one."
     },
     "OBJ_A0_BEACON1": {
       "text": "Reach beacon one"
-    },
-    "TUT_A0_NOSPRINT": {
-      "text": "No running yet — save your strength."
     },
     "TUT_BEAT_A1": {
       "title": "THE CROSSING"
@@ -67,21 +65,74 @@
       "text": "Resupply heat packs at the fishermen's hut"
     },
     "WT_A1_01": {
-      "text": "Beacon one. The ice holds out here, we can pick up the pace."
+      "text": "Beacon one. The ice holds out here."
     },
     "WT_A1_02": {
-      "text": "Run where it's open, but nobody gets ahead of the squad."
+      "text": "Steady pace. Nobody gets ahead of the squad."
     },
     "WT_A1_03": {
-      "text": "Running keeps the blood moving. Stand still out here and the cold gets in fast."
+      "text": "Save your breath for the far side. Beacon two is past the crack."
+    },
+    "WT_A1_04": {
+      "text": "Crack ahead — and somebody rigged a plank bridge over it. Fishermen's work."
+    },
+    "WT_A1_05": {
+      "text": "That thing won't take two of us at once. One at a time."
+    },
+    "WT_A1_06": {
+      "text": "I'll go first. The wind's stronger out on the edge."
     },
     "TUT_A1_SELECT": {
       "title": "SELECT",
       "text": "Press {key:Select.Member} (1 / 2 / 3) or click an operative to put him in the lead."
     },
+    "TUT_A1_SOLO": {
+      "title": "ONE AT A TIME",
+      "text": "Press {key:Squad.Solo}: the others hold while the selected operative crosses alone. Walk him over the bridge, then select the next one."
+    },
+    "TUT_A1_BRIDGE_REFUSED": {
+      "text": "Only one on the bridge! Wait until he is across, then send the next."
+    },
+    "TUT_A1_REGROUP": {
+      "title": "REGROUP",
+      "text": "Press {key:Squad.Regroup} again: the squad falls back into formation behind the leader."
+    },
     "TUT_A1_BOX": {
       "title": "SELECT A GROUP",
-      "text": "Hold the left mouse button and drag a box over several operatives to order them together."
+      "text": "Hold the left mouse button and drag a box over the whole squad, then click the ground: everyone moves together."
+    },
+    "WT_A1_BANTER_1": {
+      "text": "Minus thirty and dropping. Watch your hands — fingers go first."
+    },
+    "WT_A1_BANTER_2": {
+      "text": "Radio's dead. Not static — dead. Like something is eating the signal."
+    },
+    "WT_A1_BANTER_3": {
+      "text": "Forty hours dark. If anyone is still alive up there, they're colder than we are."
+    },
+    "WT_A1_BANTER_4": {
+      "text": "Then we don't waste time. Beacons north, eyes open."
+    },
+    "WT_A1_GUST": {
+      "text": "Feel that gust? It goes straight through the coat."
+    },
+    "TUT_A1_HEATPACK": {
+      "title": "HEAT PACK",
+      "text": "{focus} is the coldest — past 40 % the shivering starts. Select him and press {key:Item.HeatPack} to crack his heat pack, or open the inventory ({key:Inventory.Open}) and drag a mate's pack onto him."
+    },
+    "TUT_A1_HEATPACK_MATE": {
+      "title": "HEAT PACK",
+      "text": "{focus} is still freezing. Same again: select him and press {key:Item.HeatPack}, or drag a heat pack onto him in the inventory ({key:Inventory.Open})."
+    },
+    "WT_A1_WARMED": {
+      "text": "Better. Now keep the blood moving — running warms you up faster than any pack."
+    },
+    "TUT_A1_SPRINT": {
+      "title": "RUN",
+      "text": "Running warms you up. Double-click the ground to run."
+    },
+    "WT_A1_RESUPPLY": {
+      "text": "We're nearly out of heat packs. The fishermen's hut is close — let's check it."
     },
     "WT_A1_HUT": {
       "text": "A crate. Fishermen always keep something warm in there."
@@ -94,47 +145,8 @@
       "title": "TAKE IT",
       "text": "Take the heat packs: click their line in the crate window, or Take all."
     },
-    "WT_A1_04": {
-      "text": "Crack ahead. I'll check how far it runs — alone, quieter."
-    },
-    "WT_A1_05": {
-      "text": "Go. We hold here, keep low."
-    },
-    "WT_A1_06": {
-      "text": "Wind's stronger out on the edge. Won't be long."
-    },
-    "TUT_A1_SOLO": {
-      "title": "SPLIT UP",
-      "text": "Select the Engineer and press {key:Squad.Solo}: he scouts the crack alone, the others hold crouched where they stand."
-    },
-    "TUT_A1_REGROUP": {
-      "title": "REGROUP",
-      "text": "Press {key:Squad.Regroup} again: the squad falls back into formation behind the leader."
-    },
-    "WT_A1_GUST": {
-      "text": "Feel that gust? It goes straight through the coat."
-    },
-    "TUT_A1_HEATPACK": {
-      "title": "HEAT PACK",
-      "text": "{focus} is the coldest — past 40 % the shivering starts. Select him and press {key:Item.HeatPack} to crack his heat pack (or drag a mate's pack onto him in the inventory)."
-    },
-    "WT_A1_RESUPPLY": {
-      "text": "We're nearly out of heat packs. The fishermen's hut is close — let's check it."
-    },
-    "TUT_A1_HEATPACK_MATE": {
-      "title": "HEAT PACK",
-      "text": "{focus} is still freezing. Same again: select him and press {key:Item.HeatPack}, or drag a mate's heat pack onto him in the inventory."
-    },
     "WT_A1_STOCKED": {
       "text": "Packs in the kit. That should hold us to the camp. Back to the beacons."
-    },
-    "TUT_A1_SPRINT": {
-      "title": "RUN",
-      "text": "Double-click the ground to run. Running keeps you warm."
-    },
-    "TUT_A2_HEATPACK": {
-      "title": "HEAT PACK",
-      "text": "{focus} is freezing again. A heat pack works anywhere: {key:Item.HeatPack}, or drag it onto him in the inventory."
     },
     "WT_A1_07": {
       "text": "Formation. Close it up, eyes on the beacons."
@@ -143,11 +155,59 @@
       "text": "Keep the gaps small. Nobody wanders off alone on this ice."
     },
     "WT_A1_09": {
-      "text": "Beacon four next. The wind's picking up out there."
+      "text": "The camp is next. I can smell the fish from here."
     },
-    "TUT_A1_GUARD": {
-      "title": "GUARD",
-      "text": "Press {key:Squad.Guard}: the leader holds this spot while the others go on. Press it again to rejoin."
+    "TUT_BEAT_A2": {
+      "title": "THE CAMP"
+    },
+    "OBJ_A2_WARM": {
+      "text": "Warm up: find a barrel and light it"
+    },
+    "WT_A2_01": {
+      "text": "Fingers first, then the trigger finger. We need heat again."
+    },
+    "WT_A2_02": {
+      "text": "Barrels by the huts. Fishermen kept fires."
+    },
+    "WT_A2_03": {
+      "text": "And matches — we have three. Don't waste them."
+    },
+    "WT_A2_04": {
+      "text": "One barrel, one match. Let's find a spot out of the wind."
+    },
+    "WT_A2_05": {
+      "text": "Not out here in the wind. Roll it to the hut."
+    },
+    "TUT_A2_PUSH": {
+      "title": "PUSH THE BARREL",
+      "text": "Click the barrel, choose Push, then click where it should stand. Put it by the hut wall, out of the wind."
+    },
+    "TUT_A2_LIGHT": {
+      "title": "LIGHT IT",
+      "text": "Click the barrel and choose Light (one match). Everyone within 5 m warms up."
+    },
+    "TUT_A2_HEATPACK": {
+      "title": "HEAT PACK",
+      "text": "{focus} is freezing again. A heat pack works anywhere: {key:Item.HeatPack}, or drag it onto him in the inventory."
+    },
+    "TUT_A2_TOOCOLD": {
+      "title": "TOO COLD TO LIFT",
+      "text": "Above 80 % cold nobody can push. Select the warmest operative ({key:Select.Member}) and let him do it."
+    },
+    "TUT_BEAT_A3": {
+      "title": "THE APPROACH"
+    },
+    "OBJ_A3_OVERLOOK": {
+      "text": "Approach the complex carefully"
+    },
+    "WT_A3_01": {
+      "text": "That's the complex. The PMC left in a hurry — expect mines and wires on the easy paths."
+    },
+    "WT_A3_02": {
+      "text": "Wires at shin height, mines on the shortcuts. Watch your step and stay behind cover."
+    },
+    "WT_A3_03": {
+      "text": "Stay low. Out here low means warm, too."
     },
     "WT_A1_10": {
       "text": "Get low. The wind cuts less down there."
@@ -160,11 +220,60 @@
     },
     "TUT_A1_STANCE": {
       "title": "STANCE",
-      "text": "{key:Stance.Crouch} crouch, {key:Stance.Prone} prone, {key:Stance.Stand} stand. Hold Alt for the whole squad ({key:Stance.Squad.Prone}). Lower = less wind."
+      "text": "{key:Stance.Crouch} crouch, {key:Stance.Prone} prone, {key:Stance.Stand} stand. Hold Alt for the whole squad ({key:Stance.Squad.Prone}). Lower = less wind, harder to spot."
     },
     "TUT_A1_VAULT": {
       "title": "LOW RIDGE",
       "text": "Click the ground beyond the ridge: the squad climbs over low obstacles on its own."
+    },
+    "TUT_A3_FENCE": {
+      "title": "LOW FENCE",
+      "text": "Too low to walk under. Go prone ({key:Stance.Prone}; {key:Stance.Squad.Prone} for the whole squad) and crawl under the fence."
+    },
+    "TUT_A3_FENCE_REFUSED": {
+      "text": "Too low — get down and crawl."
+    },
+    "TUT_A6_COVER": {
+      "title": "COVER",
+      "text": "Click a wall or a ridge to preview a cover slot, click again to take it. Cover also halves the wind."
+    },
+    "TUT_A6_SQUAD": {
+      "title": "EVERYONE IN COVER",
+      "text": "Press {key:Select.Member} (2 / 3) and give each operative his own cover."
+    },
+    "OBJ_A6_SQUAD_COVER": {
+      "text": "Put every operative into cover"
+    },
+    "OBJ_A6_BOUND": {
+      "text": "Move cover to cover (4 times)"
+    },
+    "TUT_A3_MINE": {
+      "title": "MINE SPOTTED",
+      "text": "The squad stops. Go round it, or select the Medic-Sapper ({key:Select.Member} 3), click the mine and choose Defuse — or {key:Attack.TargetedShot} it from more than 4 m."
+    },
+    "TUT_A3_WIRE": {
+      "title": "TRIPWIRE",
+      "text": "A wire at shin height. Crawl under it prone ({key:Stance.Prone}), or let the Medic-Sapper disarm it: click the wire, choose Disarm."
+    },
+    "TUT_BEAT_A4": {
+      "title": "THE AMBUSH"
+    },
+    "WT_A4_01": {
+      "text": "Contact. Two frozen ones on a loop between the sheds — and dogs. Nobody fire."
+    },
+    "WT_A4_02": {
+      "text": "They don't see us yet. We pick the ground, not them."
+    },
+    "WT_A4_03": {
+      "text": "A wire across their path and they do our work for us."
+    },
+    "TUT_A4_CONES": {
+      "title": "WHAT THEY SEE",
+      "text": "Press {key:View.VisionCones} to show the enemies' vision cones on the ground. Stay out of them — prone you are much harder to spot."
+    },
+    "TUT_A4_TRIPWIRE": {
+      "title": "AMBUSH",
+      "text": "Open the inventory ({key:Inventory.Open}) and rig a tripwire across the patrol's path: click anchor A, then anchor B. Costs two grenades."
     }
   }
 }

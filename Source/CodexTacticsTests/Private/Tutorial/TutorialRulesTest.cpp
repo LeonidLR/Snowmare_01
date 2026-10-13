@@ -104,10 +104,10 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	{
 		AddError(TEXT("demo file warning: ") + Warning);
 	}
-	TestEqual(TEXT("A0..A2 + A6"), Data.Beats.Num(), 4);
+	TestEqual(TEXT("A0..A4 (rev 5)"), Data.Beats.Num(), 5);
 	TestEqual(TEXT("start beat"), Data.StartBeat, FName(TEXT("A0")));
-	// A0 camera lesson is STAGED (2026-10-12): pan -> Q/E -> mouse -> zoom -> move, each after the previous, no timeout.
-	const TCHAR* CameraChain[] = { TEXT("A0_cam_pan"), TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom"), TEXT("A0_move") };
+	// A0 camera lesson is STAGED (2026-10-12; MMB drag added 2026-10-13): pan -> MMB drag -> Q/E -> mouse -> zoom -> move, each after the previous, no timeout.
+	const TCHAR* CameraChain[] = { TEXT("A0_cam_pan"), TEXT("A0_cam_pan_drag"), TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom"), TEXT("A0_move") };
 	TestNull(TEXT("the old one-shot camera card is gone"), Data.FindStep(TEXT("A0_camera")));
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(CameraChain); ++Index)
 	{
@@ -118,7 +118,7 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 			TestTrue(FString(CameraChain[Index]) + TEXT(" follows the previous stage"),
 				Stage->Trigger.Type == ETutorialTriggerType::AfterStep && Stage->Trigger.Step == FName(CameraChain[Index - 1]));
 		}
-		if (Stage && Index < 4)
+		if (Stage && Index < 5)
 		{
 			TestEqual(FString(CameraChain[Index]) + TEXT(" has no auto-complete timeout"), Stage->Complete.TimeoutSeconds, 0.f);
 			TestTrue(FString(CameraChain[Index]) + TEXT(" is skippable"), Stage->bSkippable);
@@ -129,6 +129,11 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	{
 		TestTrue(TEXT("pan: WASD / edge for 1 s"), Pan->Complete.HoldSeconds == 1.f && Pan->Complete.Commands.Contains(TEXT("Camera.Pan.Keys"))
 			&& Pan->Complete.Commands.Contains(TEXT("Camera.Pan.Edge")));
+	}
+	if (const FTutorialStep* Drag = Data.FindStep(TEXT("A0_cam_pan_drag")))
+	{
+		TestTrue(TEXT("MMB drag: a 0.5 s drag (user addition 2026-10-13)"), Drag->Complete.HoldSeconds == 0.5f && Drag->Complete.Commands == TArray<FString>{ TEXT("Camera.Pan.Drag") }
+			&& Drag->TextId == FName(TEXT("TUT_A0_CAM_PAN_DRAG")));
 	}
 	if (const FTutorialStep* Yaw = Data.FindStep(TEXT("A0_cam_rotate_keys")))
 	{
@@ -145,12 +150,17 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	TestNotNull(TEXT("solo card"), Data.FindStep(TEXT("A1_solo")));
 	TestNotNull(TEXT("barrel push card"), Data.FindStep(TEXT("A2_push")));
 	TestNotNull(TEXT("heat pack card"), Data.FindStep(TEXT("A2_heatpack")));
-	// A6 sample: each operative into cover (distinct operatives) and "enter cover 4 times".
-	const FTutorialStep* SquadCover = Data.FindStep(TEXT("A6_squad_cover"));
-	TestTrue(TEXT("A6 each operative into cover"), SquadCover && SquadCover->Complete.bDistinctSubjects
+	// A3 approach (rev 5, was the A6 sample): each operative into cover (distinct operatives) and "enter cover 4 times".
+	const FTutorialStep* SquadCover = Data.FindStep(TEXT("A3_squad_cover"));
+	TestTrue(TEXT("A3 each operative into cover"), SquadCover && SquadCover->Complete.bDistinctSubjects
 		&& SquadCover->Complete.Event == TEXT("CoverEntered") && SquadCover->Complete.Count == 3);
-	const FTutorialStep* Bound = Data.FindStep(TEXT("A6_bound"));
-	TestTrue(TEXT("A6 enter cover 4 times"), Bound && !Bound->Complete.bDistinctSubjects && Bound->Complete.Count == 4);
+	const FTutorialStep* Bound = Data.FindStep(TEXT("A3_bound"));
+	TestTrue(TEXT("A3 enter cover 4 times"), Bound && !Bound->Complete.bDistinctSubjects && Bound->Complete.Count == 4);
+	const FTutorialStep* Fence = Data.FindStep(TEXT("A3_fence"));
+	TestTrue(TEXT("A3 low fence: every operative crawls under (CrawlGapPassed x3 distinct)"), Fence && Fence->Complete.bDistinctSubjects
+		&& Fence->Complete.Event == TEXT("CrawlGapPassed") && Fence->Complete.Count == 3 && Fence->Trigger.Volume == FName(TEXT("VOL_A3_FENCE")));
+	const FTutorialStep* Cones = Data.FindStep(TEXT("A4_cones"));
+	TestTrue(TEXT("A4 vision-cone toggle card (View.VisionCones)"), Cones && Cones->Complete.Commands.Contains(PlayerCommands::ToggleVisionCones.ToString()));
 	for (const FTutorialStep& Step : Data.Steps)
 	{
 		TestFalse(TEXT("never blocking"), Step.bBlocking);

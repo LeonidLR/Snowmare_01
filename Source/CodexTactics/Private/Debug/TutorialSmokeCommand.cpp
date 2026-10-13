@@ -16,14 +16,18 @@
 //  8. the STAGED camera lesson (beat CAM, user feedback 2026-10-12) through real InputKey: W held ~1.7 s completes the pan
 //     stage (hold_s 1.0) and nothing else; Q + E (count 2), a ~1 s RMB drag (hold_s 0.5) and two wheel notches complete
 //     the next stages in order, and WASD / Q / the wheel never complete a stage that is not theirs;
-//  9. the REAL demo_01_steps.json, A0 -> A1 (user decision 2026-10-12, rev 4): sprint locked on the A0 stretch - a double click
-//     through HandleWorldHit walks (not sprinting) and TUT_A0_NOSPRINT reaches the feed exactly once; tutorial OFF = no lock;
-//     beacon 1 (beat A1) UNLOCKS sprint and shows the TUT_A1_SPRINT card (a double click now sprints and completes it), then
-//     select / box; solo with B, regroup with B; 20 s after solo with no cold zone the gust plays and every operative gets +20
-//     cold (>= 42 %); the heat-pack card focuses the coldest operative and his own STARTER heat pack (one each, the demo
-//     loadout) completes it (then the mate card); only then WT_A1_RESUPPLY plays and the hut objective A1_obj_hut shows; hut:
-//     the crate opened (Loot.Open) and the heat packs taken (ItemLooted.HeatPack) complete the loot cards and the objective,
-//     the closing line plays, and the guard card waits for beacon 3.
+//     the camera chain also has the MMB drag-pan stage (user addition 2026-10-13): a ~1 s middle-button drag completes it;
+//  9. the REAL demo_01_steps.json, A0 -> A1 (user flow 2026-10-13, rev 5): the level opens with the HQ radio only - a ground
+//     click during it is refused (Order.Move locked, TUT_A0_WAIT_HQ once) and the camera cards wait; W and an MMB drag during
+//     the radio go into the command history, so after the radio the pan and drag stages are PRECREDITED (never shown, two
+//     "already done" feed ticks) and Q/E is the first card; sprint is locked (a double click walks, TUT_A0_NOSPRINT once), the
+//     inventory drawer stays closed (TUT_A0_NOINVENTORY once) and U is refused; beacon 1 (beat A1) unlocks NOTHING; the crack:
+//     select (key 2) -> the one-at-a-time bridge card completed by three BridgeCrossed events (the bridge actor itself is
+//     BridgeFenceSmoke's job) -> regroup with B -> box -> the squad banter; 20 s after the crossing the gust (+20 cold, >= 42 %);
+//     the heat-pack card UNLOCKS the inventory / items (the drawer opens now), the coldest uses his own starter pack, the mate
+//     card; THEN the sprint card unlocks sprint (a double click sprints), THEN WT_A1_RESUPPLY + the hut objective; the hut loot
+//     cards and the closing line; beacon 3 plays the formation lines with no guard card; the save's tutorial section carries the
+//     command history; O toggles the player's enemy vision cones (View.VisionCones).
 // Saves go to Saved/SmokeSaves/Tutorial (exclusive in Scripts/test_map.json).
 
 #include "CoreMinimal.h"
@@ -56,6 +60,9 @@
 #include "Tutorial/TutorialSubsystem.h"
 #include "Tutorial/TutorialTriggerVolume.h"
 #include "UI/CodexTacticsHUD.h"
+#include "UI/InventoryDrawerWidget.h"
+#include "Combat/VisionConeComponent.h"
+#include "Dom/JsonObject.h"
 #include "UI/DialogueSubsystem.h"
 #include "UI/TutorialOverlayWidget.h"
 #include "Components/BoxComponent.h"
@@ -76,11 +83,13 @@ namespace TutorialSmoke
 			  "trigger": { "type": "after_step", "step": "solo_card" }, "complete": { "commands": ["Squad.Regroup"] } },
 			{ "id": "cam_pan", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_PAN", "keys": ["Camera.Pan.Keys"],
 			  "trigger": { "type": "manual" }, "complete": { "commands": ["Camera.Pan.Keys", "Camera.Pan.Edge"], "hold_s": 1.0 } },
-			{ "id": "cam_yaw", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_YAW", "keys": ["Camera.Rotate.Keys"],
-			  "trigger": { "type": "after_step", "step": "cam_pan" }, "complete": { "commands": ["Camera.Rotate.Keys"], "count": 2 } },
-			{ "id": "cam_look", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_LOOK", "keys": ["Camera.Rotate.Mouse"],
+			{ "id": "cam_drag", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_DRAG", "keys": ["Camera.Pan.Drag"],
+			  "trigger": { "type": "after_step", "step": "cam_pan" }, "complete": { "commands": ["Camera.Pan.Drag"], "hold_s": 0.5 } },
+			{ "id": "cam_yaw", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_YAW", "keys": ["Camera.Rotate.Keys"], "precredit": false,
+			  "trigger": { "type": "after_step", "step": "cam_drag" }, "complete": { "commands": ["Camera.Rotate.Keys"], "count": 2 } },
+			{ "id": "cam_look", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_LOOK", "keys": ["Camera.Rotate.Mouse"], "precredit": false,
 			  "trigger": { "type": "after_step", "step": "cam_yaw" }, "complete": { "commands": ["Camera.Rotate.Mouse"], "hold_s": 0.5 } },
-			{ "id": "cam_zoom", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_ZOOM", "keys": ["Camera.Zoom"],
+			{ "id": "cam_zoom", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_ZOOM", "keys": ["Camera.Zoom"], "precredit": false,
 			  "trigger": { "type": "after_step", "step": "cam_look" }, "complete": { "commands": ["Camera.Zoom"], "count": 2 } },
 			{ "id": "cam_move", "beat": "CAM", "kind": "hint_card", "text_id": "TUT_SMOKE_CAM_MOVE", "keys": ["Order.Move"],
 			  "trigger": { "type": "after_step", "step": "cam_zoom" }, "complete": { "commands": ["Order.Move"] } }
@@ -226,7 +235,7 @@ namespace TutorialSmoke
 		ACodexTacticsHUD* Hud = PC ? PC->GetHUD<ACodexTacticsHUD>() : nullptr;
 		UTutorialOverlayWidget* Overlay = Hud ? Hud->GetTutorialOverlay() : nullptr;
 		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-		if (!Leader || !Tutorial || !Saves || !PC || !Overlay || State.Time > 330.f)
+		if (!Leader || !Tutorial || !Saves || !PC || !Overlay || State.Time > 360.f)
 		{
 			Check(State, false, FString::Printf(TEXT("world ready / timeout (stage %d, overlay %d)"), State.Stage, Overlay ? 1 : 0));
 			return Finish(State, false);
@@ -461,13 +470,41 @@ namespace TutorialSmoke
 		}
 		case 13:
 		{
+			if (Tutorial->GetStepState(TEXT("cam_drag")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("cam_drag")) == ETutorialStepState::Active && Overlay->GetShownCardKeys().ToString() == TEXT("[MMB drag]"),
+				FString::Printf(TEXT("stage 1b: MMB drag card shown after the breather (keys '%s')"), *Overlay->GetShownCardKeys().ToString()));
+			Tap(PC, State, EKeys::W); // WASD must not finish the drag stage
+			PressKey(PC, EKeys::MiddleMouseButton, IE_Pressed); // held ~1 s: Camera.Pan.Drag hold ticks
+			State.Stage = 48;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 48:
+		{
+			if (State.StageTime < 1.0f)
+			{
+				return true;
+			}
+			PressKey(PC, EKeys::MiddleMouseButton, IE_Released);
+			Check(State, Tutorial->GetStepState(TEXT("cam_drag")) == ETutorialStepState::Completed && Tutorial->GetStepProgress(TEXT("cam_drag")) == 1,
+				FString::Printf(TEXT("a ~1 s MMB drag completes the drag-pan stage (%.2f s held); W did not"), Tutorial->GetMachine().GetHeldSeconds(TEXT("cam_drag"))));
+			State.Stage = 49;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 49:
+		{
 			if (Tutorial->GetStepState(TEXT("cam_yaw")) != ETutorialStepState::Active && State.StageTime < 6.f)
 			{
 				return true;
 			}
 			Check(State, Tutorial->GetStepState(TEXT("cam_yaw")) == ETutorialStepState::Active, TEXT("stage 2: Q/E card shown after the breather"));
 			Tap(PC, State, EKeys::W); // WASD alone must not finish the rotate stage
-			Next(State);
+			State.Stage = 14;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 14:
@@ -566,7 +603,7 @@ namespace TutorialSmoke
 			Next(State);
 			return true;
 		}
-		// --- The real demo file, A0 -> A1 (user decision 2026-10-12, rev 4): sprint lock on A0 only, unlock at beacon 1, starter heat packs, resupply ---
+		// --- The real demo file, A0 -> A1 (user flow 2026-10-13, rev 5): HQ radio only + move lock, precredit, sprint / inventory locks, bridge, heat pack unlocks, hut ---
 		case 27:
 		{
 			ACodexTacticsPlayerController* CodexPC = Cast<ACodexTacticsPlayerController>(PC);
@@ -576,10 +613,11 @@ namespace TutorialSmoke
 				return Finish(State, false);
 			}
 			Check(State, Tutorial->LoadStepsFile(TEXT("demo_01_steps.json")), TEXT("demo_01_steps.json loaded"));
-			Check(State, Tutorial->GetCurrentBeat() == FName(TEXT("A0")) && Tutorial->IsCommandLocked(PlayerCommands::Sprint),
-				TEXT("A0: sprint locked from the start"));
+			Check(State, Tutorial->GetCurrentBeat() == FName(TEXT("A0")) && Tutorial->IsCommandLocked(PlayerCommands::Sprint)
+				&& Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen) && Tutorial->IsCommandLocked(PlayerCommands::UseHeatPack),
+				TEXT("A0: sprint, the inventory and the items locked from the start"));
 			Tutorial->SetTutorialEnabled(false);
-			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Sprint), TEXT("tutorial OFF: no locks"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Sprint) && !Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen), TEXT("tutorial OFF: no locks"));
 			Tutorial->SetTutorialEnabled(true);
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
@@ -587,69 +625,114 @@ namespace TutorialSmoke
 				Member->HeatPacksCount = 1; // the demo loadout (level JSON heat_packs_count 1: one starter pack per operative)
 			}
 			State.NoSprintLinesBefore = CountMessages(World, TEXT("No running yet"));
-			DoubleClickAhead(World, CodexPC, Leader);
 			Next(State);
 			return true;
 		}
 		case 28:
 		{
-			if (State.StageTime < 0.6f)
+			if (Tutorial->GetStepState(TEXT("A0_radio_hq")) != ETutorialStepState::Active && State.StageTime < 6.f)
 			{
 				return true;
 			}
+			Check(State, Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Active && Overlay->IsSubtitleShown(),
+				TEXT("A0 opens with the HQ radio in the subtitle strip"));
+			Check(State, !Overlay->IsCardShown() && Tutorial->GetStepState(TEXT("A0_cam_pan")) == ETutorialStepState::Idle, TEXT("no lesson card while HQ talks"));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::Move), TEXT("moves locked while HQ talks"));
+			// A click on the ground during the radio: nothing moves, one feed line.
 			ACodexTacticsPlayerController* CodexPC = Cast<ACodexTacticsPlayerController>(PC);
-			Check(State, Leader->IsMoving() && !Leader->IsSprinting(), FString::Printf(TEXT("locked double click: the leader walks (moving %d, sprinting %d)"),
-				Leader->IsMoving() ? 1 : 0, Leader->IsSprinting() ? 1 : 0));
-			Check(State, Tutorial->GetLockedRefusalCount() == 1, FString::Printf(TEXT("one locked sprint reported (%d)"), Tutorial->GetLockedRefusalCount()));
-			Check(State, Tutorial->GetStepState(TEXT("A0_nosprint")) == ETutorialStepState::Completed
-				&& CountMessages(World, TEXT("No running yet")) == State.NoSprintLinesBefore + 1, TEXT("TUT_A0_NOSPRINT in the feed once"));
-			DoubleClickAhead(World, CodexPC, Leader);
-			Next(State);
+			const FVector Forward = Leader->GetActorForwardVector().GetSafeNormal2D();
+			const FVector Spot = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Forward * 500.f);
+			CodexPC->HandleWorldHit(FHitResult(nullptr, nullptr, Spot - FVector(0.f, 0.f, 90.f), FVector::UpVector));
+			State.LeaderStart = Leader->GetActorLocation();
+			// The player pans with W, then MMB-drags, while HQ talks: those camera stages must be precredited later (one at a time:
+			// the key pan is suppressed while a drag pan runs).
+			PressKey(PC, EKeys::W, IE_Pressed);
+			State.Stage = 50;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 50:
+		{
+			if (State.StageTime < 1.4f)
+			{
+				return true;
+			}
+			PressKey(PC, EKeys::W, IE_Released);
+			PressKey(PC, EKeys::MiddleMouseButton, IE_Pressed);
+			State.Stage = 29;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 29:
 		{
-			if (State.StageTime < 0.6f)
+			if (State.StageTime < 0.9f)
 			{
 				return true;
 			}
-			Check(State, !Leader->IsSprinting() && Tutorial->GetLockedRefusalCount() == 2
-				&& CountMessages(World, TEXT("No running yet")) == State.NoSprintLinesBefore + 1, TEXT("second locked double click: walks, no second line"));
-			Leader->StopOperative();
-			// Beacon 1: A1 starts. The A0 camera cards / briefing are skipped (the smoke tests the A1 order).
-			Check(State, Tutorial->StartBeat(TEXT("A1")), TEXT("A1 started"));
-			for (const TCHAR* Id : { TEXT("A0_walk_talk"), TEXT("A0_cam_pan"), TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom"),
-				TEXT("A0_move"), TEXT("A1_wt_start") })
-			{
-				Tutorial->SkipStep(Id);
-			}
-			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Sprint), TEXT("beacon 1 (beat A1): sprint unlocked"));
+			PressKey(PC, EKeys::MiddleMouseButton, IE_Released);
+			Check(State, !Leader->IsMoving() && FVector::Dist2D(Leader->GetActorLocation(), State.LeaderStart) < 30.f && Tutorial->GetLockedRefusalCount() == 1,
+				FString::Printf(TEXT("the click during the radio was refused (moved %.0f cm, %d refusals)"), FVector::Dist2D(Leader->GetActorLocation(), State.LeaderStart),
+					Tutorial->GetLockedRefusalCount()));
+			Check(State, Tutorial->GetStepState(TEXT("A0_wait_hq")) == ETutorialStepState::Completed && CountMessages(World, TEXT("HQ is talking")) == 1,
+				TEXT("TUT_A0_WAIT_HQ in the feed once"));
+			Check(State, Tutorial->GetMachine().GetCommandUse(PlayerCommands::CameraPanKeys).HeldSeconds >= 1.f
+				&& Tutorial->GetMachine().GetCommandUse(PlayerCommands::CameraPanDrag).HeldSeconds >= 0.5f,
+				FString::Printf(TEXT("command history recorded the pan (%.2f s) and the MMB drag (%.2f s) during the radio"),
+					Tutorial->GetMachine().GetCommandUse(PlayerCommands::CameraPanKeys).HeldSeconds, Tutorial->GetMachine().GetCommandUse(PlayerCommands::CameraPanDrag).HeldSeconds));
+			Check(State, Tutorial->SkipStep(TEXT("A0_radio_hq")), TEXT("radio skipped (ends the intro)"));
 			Next(State);
 			return true;
 		}
 		case 30:
 		{
-			if (Tutorial->GetStepState(TEXT("A1_sprint")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			if (Tutorial->GetStepState(TEXT("A0_cam_rotate_keys")) != ETutorialStepState::Active && State.StageTime < 6.f)
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_sprint")) == ETutorialStepState::Active, TEXT("TUT_A1_SPRINT card is the first A1 card"));
-			Check(State, Tutorial->GetStepState(TEXT("A1_obj_hut")) == ETutorialStepState::Idle && Tutorial->GetStepState(TEXT("A1_wt_resupply")) == ETutorialStepState::Idle,
-				TEXT("the hut objective / resupply line are not up at the beat start"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Move), TEXT("after the radio: moves unlocked"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_cam_pan")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A0_cam_pan_drag")) == ETutorialStepState::Completed
+				&& Tutorial->GetPrecreditedCount() == 2, FString::Printf(TEXT("pan and MMB drag precredited from the history (%d precredited)"), Tutorial->GetPrecreditedCount()));
+			Check(State, CountMessages(World, TEXT("already done")) == 2, TEXT("two unobtrusive 'already done' ticks in the feed"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_cam_rotate_keys")) == ETutorialStepState::Active, TEXT("Q/E is the first card shown"));
+			for (const TCHAR* Id : { TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom") })
+			{
+				Tutorial->SkipStep(Id);
+			}
+			// Locked sprint: a double click walks; locked inventory: I does nothing but a line; locked heat pack: U does nothing.
 			DoubleClickAhead(World, Cast<ACodexTacticsPlayerController>(PC), Leader);
 			Next(State);
 			return true;
 		}
 		case 31:
 		{
-			if (State.StageTime < 0.4f)
+			if (State.StageTime < 0.6f)
 			{
 				return true;
 			}
-			Check(State, Leader->IsSprinting(), TEXT("a double click now sprints"));
-			Check(State, Tutorial->GetStepState(TEXT("A1_sprint")) == ETutorialStepState::Completed && Tutorial->GetLockedRefusalCount() == 2,
-				TEXT("Order.Sprint completes TUT_A1_SPRINT (no new locked refusal)"));
+			Check(State, Leader->IsMoving() && !Leader->IsSprinting(), FString::Printf(TEXT("locked double click: the leader walks (moving %d, sprinting %d)"),
+				Leader->IsMoving() ? 1 : 0, Leader->IsSprinting() ? 1 : 0));
+			Check(State, Tutorial->GetStepState(TEXT("A0_nosprint")) == ETutorialStepState::Completed
+				&& CountMessages(World, TEXT("No running yet")) == State.NoSprintLinesBefore + 1, TEXT("TUT_A0_NOSPRINT in the feed once"));
 			Leader->StopOperative();
+			const int32 PacksBefore = Leader->HeatPacksCount;
+			const int32 RefusalsBefore = Tutorial->GetLockedRefusalCount();
+			Hud->ToggleInventoryDrawer();
+			Check(State, !Hud->GetInventoryDrawer() || !Hud->GetInventoryDrawer()->IsOpen(), TEXT("locked inventory: the drawer stays closed"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_noinventory")) == ETutorialStepState::Completed && CountMessages(World, TEXT("Packs stay closed")) == 1,
+				TEXT("TUT_A0_NOINVENTORY in the feed once"));
+			Leader->ColdLevel = 50.f;
+			Cast<ACodexTacticsPlayerController>(PC)->UseSquadItem(EPersonalItem::HeatPack);
+			Check(State, Leader->HeatPacksCount == PacksBefore && Tutorial->GetLockedRefusalCount() == RefusalsBefore + 2,
+				FString::Printf(TEXT("locked heat pack: U refused, the pack stays (%d -> %d, refusals +%d)"), PacksBefore, Leader->HeatPacksCount,
+					Tutorial->GetLockedRefusalCount() - RefusalsBefore));
+			Leader->ColdLevel = 0.f;
+			// Beacon 1: A1 starts; sprint stays locked (rev 5).
+			Check(State, Tutorial->StartBeat(TEXT("A1")), TEXT("A1 started"));
+			Tutorial->SkipStep(TEXT("A0_move"));
+			Tutorial->SkipStep(TEXT("A1_wt_start"));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::Sprint) && Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen),
+				TEXT("beacon 1 (beat A1): sprint and inventory STILL locked"));
+			Check(State, EnterVolume(World, Leader, TEXT("VOL_A1_BEACON2")), TEXT("the crack volume fires"));
 			Next(State);
 			return true;
 		}
@@ -659,109 +742,121 @@ namespace TutorialSmoke
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Active, TEXT("select follows the run card"));
-			Tutorial->SkipStep(TEXT("A1_select")); // select / box have their own coverage (this smoke tests the cold / heat pack / resupply order)
-			Tutorial->SkipStep(TEXT("A1_box"));
-			Check(State, EnterVolume(World, Leader, TEXT("VOL_A1_BEACON2")), TEXT("the crack volume fires"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Active, TEXT("the crack: the select card"));
+			Tutorial->SkipStep(TEXT("A1_wt_bridge"));
+			Tap(PC, State, EKeys::Two); // select operative 2 through the real input path
 			Next(State);
 			return true;
 		}
 		case 33:
 		{
-			if (Tutorial->GetStepState(TEXT("A1_solo")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			if (Tutorial->GetStepState(TEXT("A1_solo")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Active, TEXT("solo card"));
-			Tutorial->SkipStep(TEXT("A1_wt_scout"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Completed, TEXT("key 2 selected a member and completed the card"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Active, TEXT("the one-at-a-time bridge card"));
+			Squad->SetLeaderByIndex(0);
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				Member->ColdLevel = 5.f; // no cold zone here: nobody reaches Chills in 20 s at x1
 			}
-			PressKey(PC, EKeys::B, IE_Pressed);
+			// The crossing itself is BridgeFenceSmoke's job: here the bridge's events drive the lesson.
+			Tutorial->NotifyEvent(TEXT("BridgeRefused"), Squad->GetMembers()[1]->GetFName());
+			Check(State, Tutorial->GetStepState(TEXT("A1_bridge_refused")) == ETutorialStepState::Completed && CountMessages(World, TEXT("Only one on the bridge")) == 1,
+				TEXT("the bridge creak feed line once"));
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Tutorial->NotifyEvent(TEXT("BridgeCrossed"), Member->GetFName());
+				State.ColdAtSolo.Add(Member, Member->ColdLevel);
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Completed, TEXT("three crossings complete the bridge card"));
 			Next(State);
 			return true;
 		}
 		case 34:
 		{
-			PressKey(PC, EKeys::B, IE_Released);
-			if (State.StageTime < 0.3f)
+			if (Tutorial->GetStepState(TEXT("A1_regroup")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
 				return true;
 			}
-			Check(State, Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Completed, TEXT("B: solo on, the card done"));
-			for (AOperativeCharacter* Member : Squad->GetMembers())
-			{
-				State.ColdAtSolo.Add(Member, Member->ColdLevel);
-			}
+			Check(State, Tutorial->GetStepState(TEXT("A1_regroup")) == ETutorialStepState::Active, TEXT("regroup card after the bridge"));
+			Squad->ToggleSoloMode(); // the squad stands in solo mode after the crossing
+			PressKey(PC, EKeys::B, IE_Pressed);
 			Next(State);
 			return true;
 		}
 		case 35:
 		{
-			if (Tutorial->GetStepState(TEXT("A1_regroup")) != ETutorialStepState::Active && State.StageTime < 10.f)
+			PressKey(PC, EKeys::B, IE_Released);
+			if (Tutorial->GetStepState(TEXT("A1_box")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_regroup")) == ETutorialStepState::Active, TEXT("regroup card after solo"));
-			PressKey(PC, EKeys::B, IE_Pressed);
+			Check(State, !Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A1_regroup")) == ETutorialStepState::Completed, TEXT("B: regrouped, the card done"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_box")) == ETutorialStepState::Active, TEXT("then the box select card"));
+			Tutorial->SkipStep(TEXT("A1_box"));
 			Next(State);
 			return true;
 		}
 		case 36:
 		{
-			PressKey(PC, EKeys::B, IE_Released);
+			const ETutorialStepState Banter = Tutorial->GetStepState(TEXT("A1_wt_banter"));
+			if (Banter != ETutorialStepState::Active && Banter != ETutorialStepState::Completed && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, Banter == ETutorialStepState::Active || Banter == ETutorialStepState::Completed, TEXT("the squad banter plays after the bridge"));
+			Tutorial->SkipStep(TEXT("A1_wt_banter"));
+			Next(State);
+			return true;
+		}
+		case 37:
+		{
 			if (Tutorial->GetStepState(TEXT("A1_gust")) == ETutorialStepState::Waiting && State.StageTime < 25.f)
 			{
 				return true;
 			}
-			Check(State, !Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A1_regroup")) == ETutorialStepState::Completed, TEXT("B again: regrouped"));
 			const ETutorialStepState Gust = Tutorial->GetStepState(TEXT("A1_gust"));
 			Check(State, Gust == ETutorialStepState::Active || Gust == ETutorialStepState::Completed,
-				FString::Printf(TEXT("~20 s after solo with nobody at Chills: the gust plays (%s)"), TutorialRules::StateName(Gust)));
+				FString::Printf(TEXT("~20 s after the crossing with nobody at Chills: the gust plays (%s)"), TutorialRules::StateName(Gust)));
 			for (const TPair<TWeakObjectPtr<AOperativeCharacter>, float>& Entry : State.ColdAtSolo)
 			{
 				if (const AOperativeCharacter* Member = Entry.Key.Get())
 				{
 					Check(State, Member->ColdLevel >= Entry.Value + 20.f - 0.01f && Member->ColdLevel >= 42.f - 0.01f,
-						FString::Printf(TEXT("gust: %s %.0f%% at solo -> %.0f%% (+20, at least 42)"), *Member->DisplayName.ToString(), Entry.Value, Member->ColdLevel));
+						FString::Printf(TEXT("gust: %s %.0f%% -> %.0f%% (+20, at least 42)"), *Member->DisplayName.ToString(), Entry.Value, Member->ColdLevel));
 				}
 			}
 			Next(State);
 			return true;
 		}
-		case 37:
+		case 38:
 		{
 			if (Tutorial->GetStepState(TEXT("A1_heatpack")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
 				return true;
 			}
 			Check(State, Tutorial->GetStepState(TEXT("A1_heatpack")) == ETutorialStepState::Active, TEXT("heat pack card at Chills"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen) && !Tutorial->IsCommandLocked(PlayerCommands::UseHeatPack),
+				TEXT("the heat pack card UNLOCKS the inventory and the items"));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::Sprint), TEXT("sprint still locked until the lesson is done"));
 			const FTutorialCardView View = Tutorial->GetCardView();
 			AOperativeCharacter* Focus = Tutorial->GetFocusOperative(TEXT("A1_heatpack"));
 			const AOperativeCharacter* Now = Coldest(Squad);
-			Check(State, Focus && View.FocusOperative == Focus && Now && Focus->ColdLevel >= Now->ColdLevel - 1.f
-				&& View.Body.ToString().Contains(Focus->DisplayName.ToString()),
-				FString::Printf(TEXT("the card targets the coldest: %s %.0f%% (coldest now %s %.0f%%), body '%s'"), Focus ? *Focus->DisplayName.ToString() : TEXT("-"),
-					Focus ? Focus->ColdLevel : -1.f, Now ? *Now->DisplayName.ToString() : TEXT("-"), Now ? Now->ColdLevel : -1.f, *View.Body.ToString()));
-			int32 StarterPacks = 0;
-			for (const AOperativeCharacter* Member : Squad->GetMembers())
-			{
-				StarterPacks += Member->HeatPacksCount == 1 ? 1 : 0;
-			}
-			Check(State, StarterPacks == Squad->GetMembers().Num(), FString::Printf(TEXT("every operative carries his starter heat pack (%d of %d with exactly 1)"),
-				StarterPacks, Squad->GetMembers().Num()));
-			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Sprint), TEXT("sprint stays unlocked while cold (no dependency on the heat pack)"));
-			Check(State, Tutorial->GetStepState(TEXT("A1_wt_resupply")) == ETutorialStepState::Idle && Tutorial->GetStepState(TEXT("A1_obj_hut")) == ETutorialStepState::Idle,
-				TEXT("no resupply line / hut objective before the lesson is done"));
-			// His own starter pack (the U key path: UseHeatPack(User == Target)).
+			Check(State, Focus && View.FocusOperative == Focus && Now && Focus->ColdLevel >= Now->ColdLevel - 1.f && View.Body.ToString().Contains(Focus->DisplayName.ToString()),
+				FString::Printf(TEXT("the card targets the coldest: %s %.0f%%, body '%s'"), Focus ? *Focus->DisplayName.ToString() : TEXT("-"), Focus ? Focus->ColdLevel : -1.f,
+					*View.Body.ToString()));
+			Hud->ToggleInventoryDrawer();
+			Check(State, Hud->GetInventoryDrawer() && Hud->GetInventoryDrawer()->IsOpen(), TEXT("the inventory drawer opens now (unlocked)"));
+			Hud->ToggleInventoryDrawer();
 			UTacticalHeatSubsystem* Heat = World->GetSubsystem<UTacticalHeatSubsystem>();
 			Check(State, Focus && Heat && Heat->UseHeatPack(Focus, Focus), TEXT("his own starter heat pack used on the coldest"));
 			Check(State, Tutorial->GetStepState(TEXT("A1_heatpack")) == ETutorialStepState::Completed, TEXT("using a heat pack completes the card"));
 			Next(State);
 			return true;
 		}
-		case 38:
+		case 39:
 		{
 			if (Tutorial->GetStepState(TEXT("A1_heatpack_mate")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
@@ -775,17 +870,43 @@ namespace TutorialSmoke
 			Next(State);
 			return true;
 		}
-		case 39:
+		case 40:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_sprint")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A1_sprint")) == ETutorialStepState::Active, TEXT("'running warms you up': the sprint card after the lesson"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Sprint), TEXT("sprint UNLOCKED by the sprint card"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_obj_hut")) == ETutorialStepState::Idle && Tutorial->GetStepState(TEXT("A1_wt_resupply")) == ETutorialStepState::Idle,
+				TEXT("no resupply line / hut objective before the sprint card is done"));
+			Tutorial->SkipStep(TEXT("A1_wt_warm"));
+			DoubleClickAhead(World, Cast<ACodexTacticsPlayerController>(PC), Leader);
+			Next(State);
+			return true;
+		}
+		case 41:
+		{
+			if (State.StageTime < 0.4f)
+			{
+				return true;
+			}
+			Check(State, Leader->IsSprinting(), TEXT("a double click now sprints"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_sprint")) == ETutorialStepState::Completed, TEXT("Order.Sprint completes the sprint card"));
+			Leader->StopOperative();
+			Next(State);
+			return true;
+		}
+		case 42:
 		{
 			const ETutorialStepState Resupply = Tutorial->GetStepState(TEXT("A1_wt_resupply"));
 			if (Resupply != ETutorialStepState::Active && Resupply != ETutorialStepState::Completed && State.StageTime < 8.f)
 			{
 				return true;
 			}
-			Check(State, Resupply == ETutorialStepState::Active || Resupply == ETutorialStepState::Completed, TEXT("WT_A1_RESUPPLY plays after the heat pack lesson"));
+			Check(State, Resupply == ETutorialStepState::Active || Resupply == ETutorialStepState::Completed, TEXT("WT_A1_RESUPPLY plays after the sprint card"));
 			Check(State, Tutorial->GetStepState(TEXT("A1_obj_hut")) == ETutorialStepState::Active, TEXT("the hut objective (OBJ_A1_HUT) shows with it"));
-			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Sprint), TEXT("sprint still unlocked"));
-			// The fisherman's hut: the crate with 3 heat packs, the leader walks in.
+			// The fishermen's hut: the crate with 3 heat packs, the leader walks in.
 			FActorSpawnParameters Params;
 			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			const FVector Side = Leader->GetActorRightVector().GetSafeNormal2D();
@@ -803,7 +924,7 @@ namespace TutorialSmoke
 			Next(State);
 			return true;
 		}
-		case 40:
+		case 43:
 		{
 			if (Tutorial->GetStepState(TEXT("A1_loot_open")) != ETutorialStepState::Active && State.StageTime < 6.f)
 			{
@@ -815,7 +936,7 @@ namespace TutorialSmoke
 			Next(State);
 			return true;
 		}
-		case 41:
+		case 44:
 		{
 			if (Tutorial->GetStepState(TEXT("A1_loot_take")) != ETutorialStepState::Active && State.StageTime < 6.f)
 			{
@@ -834,7 +955,7 @@ namespace TutorialSmoke
 			Next(State);
 			return true;
 		}
-		case 42:
+		case 45:
 		{
 			const ETutorialStepState Stocked = Tutorial->GetStepState(TEXT("A1_wt_stocked"));
 			if (Stocked != ETutorialStepState::Active && Stocked != ETutorialStepState::Completed && State.StageTime < 8.f)
@@ -842,18 +963,40 @@ namespace TutorialSmoke
 				return true;
 			}
 			Check(State, Stocked == ETutorialStepState::Active || Stocked == ETutorialStepState::Completed, TEXT("the closing line plays after the loot"));
-			Check(State, Tutorial->GetStepState(TEXT("A1_guard")) == ETutorialStepState::Idle, TEXT("the guard card waits for beacon 3"));
 			Check(State, EnterVolume(World, Leader, TEXT("VOL_A1_BEACON3")), TEXT("beacon 3 volume fires"));
+			Tutorial->SkipStep(TEXT("A1_wt_stocked"));
 			Next(State);
 			return true;
 		}
-		case 43:
+		case 46:
 		{
-			if (Tutorial->GetStepState(TEXT("A1_guard")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			const ETutorialStepState Formation = Tutorial->GetStepState(TEXT("A1_wt_regroup"));
+			if (Formation != ETutorialStepState::Active && Formation != ETutorialStepState::Completed && State.StageTime < 8.f)
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_guard")) == ETutorialStepState::Active, TEXT("the guard card at beacon 3"));
+			Check(State, Formation == ETutorialStepState::Active || Formation == ETutorialStepState::Completed, TEXT("beacon 3: the formation lines"));
+			Check(State, Tutorial->GetMachine().GetActiveCard().IsNone(), TEXT("no guard card at beacon 3 any more (guard moves to the horde beat)"));
+			// Save round trip of the command history: the "tutorial" section carries it.
+			const TSharedPtr<FJsonObject> Saved = Tutorial->CaptureSaveState();
+			const TSharedPtr<FJsonObject>* History = nullptr;
+			Check(State, Saved.IsValid() && Saved->TryGetObjectField(TEXT("history"), History) && (*History)->HasField(PlayerCommands::CameraPanKeys.ToString()),
+				TEXT("the save's tutorial section carries the command history"));
+			// The vision-cone toggle (user decision 2026-10-13): O through the real input path flips the player setting and reports View.VisionCones.
+			const bool bConesBefore = UVisionConeComponent::IsPlayerEnemyConesOn();
+			Tap(PC, State, EKeys::O);
+			State.Focus = nullptr;
+			State.NoSprintLinesBefore = bConesBefore ? 1 : 0;
+			Next(State);
+			return true;
+		}
+		case 47:
+		{
+			const bool bConesBefore = State.NoSprintLinesBefore == 1;
+			Check(State, UVisionConeComponent::IsPlayerEnemyConesOn() != bConesBefore, TEXT("O toggles the player's enemy vision cones"));
+			Check(State, Tutorial->GetMachine().GetCommandUse(PlayerCommands::ToggleVisionCones).Count == 1, TEXT("View.VisionCones reported once"));
+			Check(State, CountMessages(World, TEXT("Vision cones")) >= 1, TEXT("a feed line says ON / OFF"));
+			UVisionConeComponent::SetPlayerEnemyCones(bConesBefore);
 			return Finish(State, true);
 		}
 		default:
