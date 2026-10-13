@@ -616,7 +616,49 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 ## 6. Data / content status
 
-### Tutorial: how the user places volumes / markers and edits steps (Demo 01, 2026-10-11; rev 5 2026-10-13)
+### Tutorial: how the user places volumes / markers and edits steps (Demo 01, 2026-10-11; rev 5 2026-10-13; rev 5b 2026-10-13)
+
+**Demo 01 rev 5b (2026-10-13, six user requests; no map change needed):** (1) **HQ radio + camera lesson together**: `A0_radio_hq`
+(beat start +1 s) is a talk-on-the-move (locks NOTHING: the squad may walk and run while HQ talks); the staged camera chain starts at beat
+start +2 s on its own; `A0_obj_beacon` shows with the radio; the walk card `A0_move` uses the new **`"step": [ "A0_cam_zoom",
+"A0_radio_hq" ]`** (after_step LIST: the last of them to finish fires it). `A0_wait_hq` / `A0_nosprint` and their texts are gone.
+**Layout:** the hint card lives in a bottom-left column (`UTutorialOverlayWidget::CardLeftMargin` 24 + at most `CardMaxWidth` 460, a
+SizeBox); the radio strip stays bottom-centre with `StripSideReserve` (508) kept free on BOTH sides, so it can never reach the card column
+on any aspect ratio (a narrow screen only wraps the line). (2) **Dialogue skip (every level):** Enter tap = the next line (on the
+release), Enter held 0.6 s (`DialogueRules::SkipHoldSeconds`) = the whole conversation ends AS IF PLAYED OUT (completed: followers fire,
+lock / unlock lists apply); the radio strip shows "n / m  [Enter] next · [Hold Enter] skip" + a clickable **SKIP** (non-focusable); in the
+turn-based fight Enter stays "end turn", the strip says "SKIP: end the conversation". Commands `Dialogue.Next` / `Dialogue.Skip` (F1 rows,
+"Saving & menus"; never locked). The story dialogue window (`UDialogueSubsystem`, a separate panel) takes the same key: Enter tap = next
+(on the release now), hold = skip, Space = next, Esc = skip as before. All radio lines are logged when the speech starts (nothing is lost
+by a skip); telemetry `line_advanced` / `speech_skipped`. Code: `UTutorialSubsystem::AdvanceSpeechLine / SkipSpeech / IsSpeechActive`,
+`ACodexTacticsPlayerController::EnterPressed / EnterReleased / ApplyDialogueKey` (hold checked in PlayerTick, real time).
+(3) **Less cold on this map:** level JSON top-level **`"cold_rate_mult"`** (default 1 = every other level unchanged; clamped >= 0;
+`FLevelCombatConfig::ColdRateMult` -> `FColdEnvironment::LevelMultiplier`), multiplied with the wave's `cold_drain_mult` / a camera
+zone in `ColdRules::StepCold` (exploration and fights); warming, the sprint warm-up and cold shocks (the tutorial gust: still +20 / at
+least 42 %) are not scaled. `L_Demo01_A_FrozenLake.json`: **0.8**. Wave Editor: panel «Холод уровня» (`LevelColdPanel`,
+`utils/levelSettings.ts` get/set/validateColdRate, 0..3), schema + `types.ts`. (4) **Sprint is never locked** (A0 lock, the A2 safety
+entry and the `A1_sprint` unlock removed; `A1_sprint` is the plain tip "RUNNING KEEPS YOU WARM", timeout 20 s); the heat-pack lesson
+still always starts through the gust safety. (5) see (1). (6) **PROGRESSIVE UNLOCK:** beat A0 locks every family not taught yet
+(`Stance.* Squad.* Posture.* Cover.* Object.* Item.* Inventory.* Loot.* Trap.* Deploy.* Attack.* Grenade.* Flare.* Weapon.* Time.* TB.*
+Vehicle.* View.* Order.WatchSector`); never locked: `Camera.*`, `Order.Move / Sprint / Interact`, `Select.*`, `Dialogue.*`, `System.*`.
+Unlocks: `A1_solo` Squad.Solo/Regroup, `A1_heatpack` Inventory.* / Item.*, `A1_loot_open` Loot.*, `A2_push` Object.Relocate, `A2_light`
+Object.LightBarrel, `A3_stance` / `A3_fence` Stance.*, `A3_cover` Cover.*, `A3_mine` Trap.DisarmMine + Attack.TargetedShot, `A3_wire`
+Trap.DisarmTripwire, `A4_cones` View.VisionCones, `A4_tripwire` Deploy.Tripwire; beats A2 / A3 / A4 repeat the earlier unlocks as a
+safety. Everything else (pause / turn-based, guard, autonomy, postures, weapons, grenades, flares, deploys, set trap, vehicles, watch
+sector, Object.Use) stays locked until its later beat (beat sheet §11 lock table, placeholder step ids) - or until the SAFETY
+unlock-all: a wave / horde fight starts (phase WaveCombat) or the player switches the tutorial OFF (it does not lock again when switched
+back on). **Lock rules:** unlocking one command out of a wider lock adds an exception entry `"!Trap.DisarmMine"` (saved with the locks;
+a later lock of the family takes it back; `TutorialRules::PatternCovers` / `ApplyLockChanges`); a locked press is refused by its handler
+(`ACodexTacticsPlayerController::RefuseIfLocked` at every key / click handler; `UInteractionSubsystem` confirm / loot / set trap,
+`URelocationSubsystem::StartRelocate`, `UActionBarWidget::SelectWeapon`); a click at a wall while Cover is locked is a plain ground
+order (silent); ONE short "TRAINING: Not yet - follow the training." feed line per command family, none when a step reacts to that
+`Tutorial.Locked.<id>` event (A0_noinventory). (7) **Beacon 1 reached early:** when a later beat starts, the hint cards of earlier beats
+still running are dropped (precredited when the history satisfies them, else skipped) and their after_step followers drop with them;
+radios / walk-and-talks / objectives of earlier beats go on; a manual / event / volume card of an earlier beat still shows (remedial).
+`HandleVolume` now applies volume COMPLETIONS before the beat the volume starts (the walk card that asked for beacon 1 completes).
+Checks: `CodexTactics.Tutorial.Lock.Exceptions / Lock.ProgressiveDemo / Trigger.AfterStepList / Beat.EarlierCardsDropped /
+Schema.DemoFileA0A1Flow`, `CodexTactics.Dialogue.SkipKey`, `CodexTactics.Cold.LevelColdRateMult`, `CodexTactics.LevelJson.ParseContract`,
+TutorialSmoke stages 27-69. Smokes 2026-10-13: Tutorial, Movement, Cold, Dialogue, ControlsScreen, RealTimeControl, Relocation, SaveRoundTrip, PauseMenu, TacticalHeat, WarmIdle, BridgeFence, Stance PASS; LevelWave PASS on the re-run (spawn-crowd checks are load-sensitive); VisionConeSmoke still fails on the known §9 check (cone 1400 cm vs the M16 range, untouched).
 
 **Demo 01 rev 5 (2026-10-13, the user's new flow; `docs/demo/DEMO01_BEAT_SHEET.md` §4 / §10.1 has the full per-beat list) - what changes
 in `L_Demo01_A_FrozenLake`:** (1) `VOL_A0_BEACON1` (Beat Id `A1`) stays; it no longer unlocks anything (sprint unlocks after the heat pack
@@ -694,8 +736,8 @@ lesson uses these starter packs, the hut crate restocks).
    `precredited`); fewer uses than needed seed the card's progress (one Q press before the Q/E card = 1 of 2). `"precredit": false` for
    lessons that must happen at that moment (regroup, the sprint card, loot open, the tripwire). Event / volume completions and `"once":
    false` cards never precredit. The history is saved in the tutorial section (`"history"`) and forgotten by RESET TUTORIAL. Lock targets
-   today: `Order.Sprint` (degrades to a walk), `Order.Move` (refused: `HandleWorldHit`), `Inventory.Open` (the drawer stays closed),
-   `Item.*` (U / H / J / K / L and item drags refused); each refusal raises `Tutorial.Locked.<Id>` once per try.
+   today: every player command family (rev 5b progressive unlock, see the block at the top); `Order.Sprint` degrades to a walk,
+   everything else is refused by its handler; each refusal raises `Tutorial.Locked.<Id>` once per try.
    `"distinct_operatives": true` (2026-10-12): each operative's event counts once, so `count` = how many
    different operatives must do it ("put each operative into cover": `{"event": "CoverEntered", "count": 3, "distinct_operatives": true}`;
    "enter cover 4 times": `{"event": "CoverEntered", "count": 4}`). **`hold_s` (2026-10-12):** accumulated seconds a CONTINUOUS command was
@@ -717,7 +759,8 @@ lesson uses these starter packs, the hut crate restocks).
 6. **Overlay look**: a WBP child of `UTutorialOverlayWidget` set as the HUD's `TutorialOverlayWidgetClass`, with widgets named
    `TutorialHintCard` (Border), `TutorialCardTitle`, `TutorialCardBody`, `TutorialCardKeys`, `TutorialCardProgress`,
    `TutorialCardDone` (TextBlocks), `TutorialSkipButton`, `TutorialTracker` (VerticalBox) + `TutorialObjective1..3`,
-   `TutorialRadioStrip` (Border), `TutorialRadioSpeaker`, `TutorialRadioLine`, `TutorialRetryPanel`, `TutorialRetryText`,
+   `TutorialRadioStrip` (Border), `TutorialRadioSpeaker`, `TutorialRadioLine`, `TutorialRadioHint` (TextBlock, rev 5b),
+   `TutorialRadioSkipButton` (Button, rev 5b; make it non-focusable), `TutorialRetryPanel`, `TutorialRetryText`,
    `TutorialRetryButton`, `TutorialContinueButton`. Keep panels Self-Hit-Test-Invisible (only the buttons take clicks).
 7. **Testers' log**: `Saved/Tutorial/tutorial.jsonl` (one JSON per line: session, map, event shown / completed /
    completed_silently / skipped / timed_out / beat_started / lesson_downed / retry / enabled / disabled, step, beat, active_s, game_s).
@@ -1664,6 +1707,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 ## 10. Change log (newest first)
 
 | Commit | What |
+| (this, agents/work) | **Demo 01 rev 5b (six user requests 2026-10-13).** HQ radio = talk on the move (no Move lock, `A0_wait_hq` / `A0_nosprint` removed) with the staged camera lesson alongside (beat start +2 s); `A0_move` after `"step": ["A0_cam_zoom", "A0_radio_hq"]` (new after_step LIST, `FTutorialTrigger::AfterSteps`); card column / radio strip layout that never overlaps (`UTutorialOverlayWidget::CardMaxWidth` / `StripSideReserve`). Dialogue skip on every level: Enter tap = next line, hold 0.6 s = skip all (finished as played out), SKIP button on the strip, story dialogue window too; `Dialogue.Next / .Skip` commands + F1 rows; `DialogueRules::ResolveDialogueKey`. Level JSON `cold_rate_mult` (0.8 on Frozen Lake; `ColdRules` `LevelMultiplier`, Wave Editor «Холод уровня»). Sprint never locked (`A1_sprint` = plain tip). PROGRESSIVE UNLOCK: A0 locks every untaught family, lessons unlock (exception entries `!<id>`), lock gates in every input handler, one "Not yet" feed line per family, unlock-all on a fight / tutorial OFF. Leftover hint cards of earlier beats dropped when a later beat starts (beacon 1 early); volume completions before the volume's beat start. Tests `Tutorial.Lock.Exceptions / Lock.ProgressiveDemo / Trigger.AfterStepList / Beat.EarlierCardsDropped`, `Dialogue.SkipKey`, `Cold.LevelColdRateMult`; TutorialSmoke extended. |
 | (this, agents/work) | **Demo 01 rev 5 Phase 1 (the user's new 15-step flow 2026-10-13; beat sheet rev 5).** Tutorial engine: **precredit** (command history in `FTutorialStateMachine` (`GetCommandHistory / GetCommandUse`), `TutorialRules::CanPrecredit / IsPrecreditSatisfied / CountHistoryUses`, step `"precredit"` (default true, once-only command cards), partial progress seeding, `FTutorialTransition::bPrecredited` -> feed tick "✓ ... already done" + telemetry `precredited`, save `"history"`), new lock targets `Inventory.Open` (new command, I key, `ACodexTacticsHUD::ToggleInventoryDrawer`), `Item.*` (`UseSquadItem`, `HandleTransferRequest`), `Order.Move` refused in `HandleWorldHit`. **Player vision-cone toggle** `View.VisionCones` (O, pause-menu `VisionConesButton`, `UVisionConeComponent::SetPlayerEnemyCones` / CVar `Codex.VisionCones.Enemies`, `VisionConeRules::ResolveVisible(.., bPlayerToggle)` enemies only, event `VisionConesToggled(.On/.Off)`). **Level obstacles** `Level/BridgeCrossingVolume` (one-at-a-time span, refusal line + `OnBridgeCreak`, traffic hold), `Level/CrawlGapActor` (+ `UNavArea_CrawlOnly`, `UNavFilter_NoCrawl`; `RequestMove` filter unless prone; `UNavFilter_NoVault` excludes it), `Level/LevelObstacleRules`, `AOperativeCharacter::SetTrafficHold / IsTrafficHeld` honoured by `USquadSubsystem::UpdateFollower`, events `BridgeEntered / Refused / Crossed`, `CrawlGapRefused / Passed`. Data: `demo_01_steps.json` rev 5 (A0 HQ radio + move lock, staged camera + `A0_cam_pan_drag`, A1 bridge / regroup / box / banter / heat pack unlock / sprint unlock / hut, A2, A3 stances / vault / fence / cover / traps, A4 cones / tripwire), `demo_01_texts_draft.json` (English drafts for every id). Tests `CodexTactics.Tutorial.Precredit.*`, `CodexTactics.Level.*`, `Schema.DemoFile` / `Schema.DemoFileA0A1Flow` rev 5, `Combat.VisionCone.ToggleAndColours`, `UI.Frontend.*`; smokes `TutorialSmoke` (rev 5), `BridgeFenceSmoke` (new). Docs: beat sheet rev 5 (§1.3 encounter groups design, §4 beats A0-A10, §9.0 gap table, §10.1 map build list, §11 phases, §12 questions), HANDOFF §5 / §6 / §7 / §8, TANDEM #17 ids. |
 | (this, agents/tutA1b) | **Demo 01 A0-A1 rev 4 (user decision 2026-10-12 after the playtest: "with sprint blocked the squad freezes 100 %, too hard").** `demo_01_steps.json`: sprint LOCKED only on the A0 stretch (`A0_nosprint` once); beat A1 `unlock`s it at beacon 1 and the first A1 card is `A1_sprint` (`TUT_A1_SPRINT`) -> `A1_select` -> `A1_box` (both now `after_step`) -> solo at the crack (`VOL_A1_BEACON2`, wind zone + the gust) -> regroup -> `A1_heatpack` (+ `A1_heatpack_mate`) with the STARTER packs. New `A1_wt_resupply` (`WT_A1_RESUPPLY`, Commander) and `A1_obj_hut` (id kept; trigger now `after_step A1_heatpack_mate` +1 s instead of the beat start) -> hut loot cards (`VOL_A1_HUT`: `A1_loot_open` -> `A1_loot_take`, the crate holds 3) -> closing line `A1_wt_stocked` (`WT_A1_STOCKED`); `A1_guard` moved to `VOL_A1_BEACON3` (it used to follow the run card). Removed: `A1_wt_nopack` / `WT_A1_NOPACK`, `A1_wt_warmed` / `WT_A1_WARMED`. Level JSON `squad_loadout.heat_packs_count` 0 -> 1 (PER OPERATIVE: `LoadoutRules::StartingHeatPacks` replaces the role kit of each; 1 each). Drafts: `WT_A1_01-03`, `OBJ_A1_HUT`, `TUT_A1_HEATPACK(_MATE)` rewritten, `WT_A1_RESUPPLY` / `WT_A1_STOCKED` new. Comments only: `WaveConfigTypes.h`, game mode, Wave Editor `types.ts`. Beat sheet rev 4 (decisions block + A0 / A1), TANDEM #17 ids. Tests `Schema.DemoFileA0A1Flow` (rewritten: lock on A0 only, unlock at A1, order, resupply, objective timing) and `Demo.HeatPackLoadout` (1 each); `TutorialSmoke` (real demo file: locked double click walks, beacon 1 unlocks + sprint card + a double click sprints, solo, gust, heat pack on the coldest with his own starter pack, mate card, resupply line + hut objective only after the lesson, hut loot open / take, closing line, guard at beacon 3). Verified: build; `test.ps1 -Changed` unit 57 / 57, smokes 24 / 24 PASS (Tutorial, Movement, SaveRoundTrip, CoverEvent, Mission, ...), `LootSmoke` PASS, Jev audit PASS. **Placement note for the user:** the squad now reaches the hut AFTER the crack and the heat pack lesson ("the hut is close"): move `VOL_A1_HUT` / the hut towards the crack or the way to beacon 3 if it sits far back near beacon 1; marker `A1_obj_hut` shows only from the resupply line. The leader takes what fits his stack (max 3) from the 3-pack crate; the rest stays in the crate window. |
 | (this, agents/work) | **Fix: placed enemies get their archetype from their class (user bug 2026-10-12: a BP_Enemy_Brute on a patrol route played a 45 HP hound).** `EnemyAIRules::ResolvePlacedArchetype` (instance override > the game mode's `EnemyClasses` reverse lookup over the class chain (IsChildOf-aware) > the class default); `AEnemyCharacter::ResolvePlacedArchetype` at BeginPlay unless a spawner scope is active (`AEnemyCharacter::FScopedSpawnArchetype`, used by `UWaveSubsystem::SpawnEnemy` and the save load), one log line per placed enemy, `WasPlacedInLevel`. Test `CodexTactics.Characters.EnemyAI.PlacedArchetype`, smoke `EnemyArchetypeSmoke`. The enemy BPs are untouched. |
