@@ -75,21 +75,21 @@
       "text": "Crack ahead — and somebody rigged a plank bridge over it. Fishermen's work."
     },
     "WT_A1_05": {
-      "text": "That thing won't take two of us at once. One at a time."
+      "text": "One at a time — the planks won't hold two."
     },
-    "WT_A1_06": {
-      "text": "I'll go first. The wind's stronger out on the edge."
+    "OBJ_A1_BRIDGE": {
+      "text": "Cross the bridge one at a time"
     },
     "TUT_A1_SELECT": {
       "title": "SELECT",
       "text": "Press {key:Select.Member} (1 / 2 / 3) or click an operative to put him in the lead."
     },
     "TUT_A1_SOLO": {
-      "title": "ONE AT A TIME",
-      "text": "Press {key:Squad.Solo}: the others hold while the selected operative crosses alone. Walk him over the bridge, then select the next one."
+      "title": "SOLO",
+      "text": "Press {key:Squad.Solo}: the others hold their spots while you move the selected operative alone."
     },
     "TUT_A1_BRIDGE_REFUSED": {
-      "text": "Only one on the bridge! Wait until he is across, then send the next."
+      "text": "One at a time on the bridge! The next one waits at the edge."
     },
     "TUT_A1_REGROUP": {
       "title": "REGROUP",

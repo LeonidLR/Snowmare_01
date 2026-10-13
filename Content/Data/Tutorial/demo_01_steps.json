@@ -5,8 +5,8 @@
     "Texts are ids only (TUT_*, WT_*, OBJ_*): English text comes from the narrative manifest 'tutorial' section (TANDEM request #17), else",
     "Content/Data/Tutorial/demo_01_texts_draft.json, else '[EN missing: <id>]'. Command ids: Source/CodexTactics/Public/Core/PlayerCommands.h.",
     "Beats implemented here (Phase 1 = user steps 1-9 + the standalone A3 fence / A4 cone cards): A0 drop (the HQ radio talks while the squad may",
-    "already walk / run and the staged camera lesson runs alongside; 'click to walk' + 'double-click to run' right after the camera chain, rev 5c), A1 crossing (shaky bridge one at a time = select +",
-    "solo, regroup, box, squad banter, cold -> heat pack = inventory unlock, 'running keeps you warm' tip, hut loot), A2 camp (barrel push + light),",
+    "already walk / run and the staged camera lesson runs alongside; 'click to walk' + 'double-click to run' right after the camera chain, rev 5c), A1 crossing (the shaky bridge holds the followers: one at a",
+    "time on its own, rev 5c; squad banter, cold -> heat pack = inventory unlock, 'running keeps you warm' tip, hut: select + solo, loot, regroup, box), A2 camp (barrel push + light),",
     "A3 approach (stances, vault, low fence crawl, cover, mines / wires spotted), A4 ambush (vision-cone toggle, tripwire; the fight itself is Phase 2).",
     "Beats A5-A8 are designed in the beat sheet only.",
     "PROGRESSIVE UNLOCK (user request 2026-10-13, beat sheet section 'Locks'): beat A0 locks every command family not taught yet; camera, Order.*",
@@ -127,54 +127,30 @@
       ]
     },
     {
-      "_comment": "User flow step 4: the crevasse at beacon 2 with the shaky bridge (ABridgeCrossingVolume, capacity 1). VOL_A1_BEACON2 (kept) is the approach.",
+      "_comment": "User flow step 4 (rev 5c 2026-10-13: the bridge teaches NOTHING - no select / solo): the crevasse at beacon 2 with the shaky bridge (ABridgeCrossingVolume, capacity 1) holds the followers at the edge on its own, so the squad crosses one at a time automatically. VOL_A1_BEACON2 is the approach. A short line, then the objective is done when all three are across.",
       "id": "A1_wt_bridge", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
       "lines": [
         { "speaker": "Engineer", "text_id": "WT_A1_04" },
-        { "speaker": "Commander", "text_id": "WT_A1_05" },
-        { "speaker": "Engineer", "text_id": "WT_A1_06" }
+        { "speaker": "Commander", "text_id": "WT_A1_05" }
       ]
     },
     {
-      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
-      "keys": ["Select.Member"],
+      "_comment": "Done when every operative has crossed (BridgeCrossed x3, distinct operatives; the bridge refuses a second body itself). Never precredited (event completion). The marker Step Id A1_bridge shows it.",
+      "id": "A1_bridge", "beat": "A1", "kind": "objective", "text_id": "OBJ_A1_BRIDGE",
       "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
-      "complete": { "commands": ["Select.Member"], "timeout_s": 30 }
-    },
-    {
-      "_comment": "Id A1_solo kept for the user's marker (the solo point moved from the wind scout spot to the bridge). Done when every operative has crossed; the bridge itself refuses a second body (BridgeRefused). Never precredited (event completion).",
-      "id": "A1_solo", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SOLO",
-      "keys": ["Select.Member", "Squad.Solo"],
-      "unlock": ["Squad.Solo", "Squad.Regroup"],
-      "trigger": { "type": "after_step", "step": "A1_select" },
       "complete": { "event": "BridgeCrossed", "count": 3, "distinct_operatives": true, "timeout_s": 240 }
     },
     {
-      "_comment": "The bridge creaked (a second operative stopped at the edge): one feed line with the key hint.",
+      "_comment": "The bridge creaked (the player sent a second operative on while one is crossing): one feed line.",
       "id": "A1_bridge_refused", "beat": "A1", "kind": "feed", "text_id": "TUT_A1_BRIDGE_REFUSED",
       "trigger": { "type": "event", "event": "BridgeRefused" },
       "lines": [ { "speaker": "Commander", "text_id": "TUT_A1_BRIDGE_REFUSED" } ]
     },
     {
-      "_comment": "Not precredited: the squad may stand in solo mode now and must actually regroup.",
-      "id": "A1_regroup", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_REGROUP",
-      "keys": ["Squad.Regroup"],
-      "precredit": false,
-      "trigger": { "type": "after_step", "step": "A1_solo", "delay_s": 2 },
-      "complete": { "commands": ["Squad.Regroup"], "timeout_s": 60 }
-    },
-    {
-      "_comment": "Orchestrator default 2026-10-13: box select is taught after the bridge (gather everyone with a box and go on).",
-      "id": "A1_box", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_BOX",
-      "keys": ["Select.Box"],
-      "trigger": { "type": "after_step", "step": "A1_regroup" },
-      "complete": { "commands": ["Select.Box"], "timeout_s": 30 }
-    },
-    {
       "_comment": "User flow step 5: the squad walk-and-talk (the banter that used to open A0) plays after the bridge.",
       "id": "A1_wt_banter", "beat": "A1", "kind": "walk_talk",
-      "trigger": { "type": "after_step", "step": "A1_box", "delay_s": 1 },
+      "trigger": { "type": "after_step", "step": "A1_bridge", "delay_s": 1 },
       "lines": [
         { "speaker": "Medic-Sapper", "text_id": "WT_A1_BANTER_1" },
         { "speaker": "Engineer", "text_id": "WT_A1_BANTER_2" },
@@ -185,7 +161,7 @@
     {
       "_comment": "Tutorial safety (kept from rev 3): 20 s after the crossing, if nobody is at Chills (40 %) yet - the player kept out of the wind zone, ran (running warms; sprint is free from the start since 2026-10-13) or the level's cold_rate_mult 0.8 kept it low - a scripted gust: the line + every operative +20 cold, at least 42 % (a cold shock: never scaled by cold_rate_mult) so the heat-pack lesson always starts.",
       "id": "A1_gust", "beat": "A1", "kind": "walk_talk",
-      "trigger": { "type": "after_step", "step": "A1_solo", "delay_s": 20 },
+      "trigger": { "type": "after_step", "step": "A1_bridge", "delay_s": 20 },
       "condition": { "stat": "squad_cold_max", "below": 40 },
       "action": { "type": "cold_bump", "amount": 20, "min_level": 42 },
       "lines": [ { "speaker": "Medic-Sapper", "text_id": "WT_A1_GUST" } ]
@@ -195,7 +171,7 @@
       "id": "A1_heatpack", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HEATPACK",
       "keys": ["Item.HeatPack", "Inventory.Open"], "focus": "coldest_operative",
       "unlock": ["Inventory.*", "Item.*"],
-      "trigger": { "type": "condition", "requires": ["A1_solo"] },
+      "trigger": { "type": "condition", "requires": ["A1_bridge"] },
       "condition": { "stat": "squad_cold_max", "at_least": 40 },
       "complete": { "event": "ItemUsed.HEAT_PACK", "timeout_s": 90 }
     },
@@ -230,17 +206,32 @@
       "complete": { "event": "ItemLooted.HeatPack" }
     },
     {
-      "_comment": "Loot lesson in the fishermen's hut (VOL_A1_HUT; the crate holds 3 heat packs).",
+      "_comment": "The fishermen's hut (VOL_A1_HUT). Rev 5c: selection + Solo are taught here (moved from the bridge).",
       "id": "A1_wt_hut", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A1_HUT" },
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A1_HUT" } ]
+    },
+    {
+      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
+      "keys": ["Select.Member"],
+      "trigger": { "type": "volume", "volume": "VOL_A1_HUT" },
+      "complete": { "commands": ["Select.Member"], "timeout_s": 30 }
+    },
+    {
+      "_comment": "Solo on (B): the others hold their spots while the selected operative moves alone. Unlocks Squad.Solo / Squad.Regroup. Not precredited (Solo must be ON now).",
+      "id": "A1_solo", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SOLO",
+      "keys": ["Select.Member", "Squad.Solo"],
+      "unlock": ["Squad.Solo", "Squad.Regroup"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A1_select" },
+      "complete": { "commands": ["Squad.Solo"], "timeout_s": 45 }
     },
     {
       "id": "A1_loot_open", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_LOOT_OPEN",
       "keys": ["Loot.Open"],
       "unlock": ["Loot.*"],
       "precredit": false,
-      "trigger": { "type": "volume", "volume": "VOL_A1_HUT" },
+      "trigger": { "type": "after_step", "step": "A1_solo" },
       "complete": { "commands": ["Loot.Open"], "timeout_s": 60 }
     },
     {
@@ -253,6 +244,21 @@
       "id": "A1_wt_stocked", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 1 },
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A1_STOCKED" } ]
+    },
+    {
+      "_comment": "Not precredited: the squad stands in solo mode and must actually regroup (Solo off).",
+      "id": "A1_regroup", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_REGROUP",
+      "keys": ["Squad.Regroup"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 2 },
+      "complete": { "commands": ["Squad.Regroup"], "timeout_s": 60 }
+    },
+    {
+      "_comment": "Box select moved from the bridge (rev 5c: the squad arrives over the bridge together, there is nothing to gather there) to after the hut regroup.",
+      "id": "A1_box", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_BOX",
+      "keys": ["Select.Box"],
+      "trigger": { "type": "after_step", "step": "A1_regroup" },
+      "complete": { "commands": ["Select.Box"], "timeout_s": 30 }
     },
     {
       "_comment": "Beacon 3: formation lines (the guard card moved to the horde beat A8: the Engineer guards the repaired generator).",
