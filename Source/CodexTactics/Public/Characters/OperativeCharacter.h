@@ -140,6 +140,8 @@ public:
 
 	/** Counts OrderMoveTo calls (not the replay of a deferred one): a change = this operative was given an order (weather idle). */
 	uint32 GetMoveOrderSerial() const { return MoveOrderSerial; }
+	/** Actors holding him in place (SetTrafficHold); stale entries are dropped by IsTrafficHeld. */
+	mutable TArray<TWeakObjectPtr<const AActor>> TrafficHoldSources;
 
 	/** World time of the last attack on him (hit or dodged; -1e9 = never). */
 	double GetLastAttackedTime() const { return LastAttackedTime; }
@@ -166,6 +168,15 @@ public:
 	/** Stops any movement immediately. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
 	void StopOperative();
+
+	/**
+	 * Traffic hold (Demo 01 level obstacles, 2026-10-13): a level actor (ABridgeCrossingVolume waiting for a free span,
+	 * ACrawlGapActor refusing a standing body) holds this operative where he stands - the formation does not pull him
+	 * (USquadSubsystem::UpdateFollower returns early) and his own moves are stopped by the actor. Several sources may
+	 * hold him at once; he is free when none is left (or the source is gone).
+	 */
+	void SetTrafficHold(const AActor* Source, bool bHeld);
+	bool IsTrafficHeld() const;
 
 	/** Changes stance; sprinting ends unless standing. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")

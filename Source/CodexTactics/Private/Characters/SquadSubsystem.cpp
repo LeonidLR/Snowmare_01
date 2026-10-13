@@ -750,6 +750,17 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	{
 		return;
 	}
+	// Level obstacles (2026-10-13): a follower held at a one-at-a-time bridge or a low fence waits where he stands until the
+	// actor releases him (the formation would otherwise push him back in every repath).
+	if (Operative->IsTrafficHeld())
+	{
+		if (Operative->GetVelocity().SizeSquared2D() > 25.f)
+		{
+			Operative->StopOperative();
+		}
+		Follower.RepathTimeRemaining = 0.f;
+		return;
+	}
 
 	// Followers copy the moving leader's sprint. Deviation (user decision 2026-10-01): every operative keeps the stance
 	// he was given — no copy of the leader's stance (Godot can_sync_stance); only Alt + Z / C / V sets the whole squad.
