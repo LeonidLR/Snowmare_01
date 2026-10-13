@@ -928,6 +928,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
 	EOperativeOrderResult OrderShimmyTo(const FCoverSlot& Target);
 
+	/**
+	 * Manual corner peek (user request 2026-10-13, Demo 01 rev 5c; command Cover.CornerPeek): in high cover, go to the exposed
+	 * edge on Side (EdgeAlongCm = its position along the wall from the cover slot, + = along the slot's RightTangent; the
+	 * controller finds it with CoverFacingRules::FindPeekEdge) and hold the corner-aim pose there - leaning out, rifle up - also
+	 * with no enemy around, until another order (a move / another cover / a shimmy / the other corner; leaving the cover).
+	 * Turn-based: only where he already stands at that corner (a shimmy is a grid move there; the pose itself costs no AP),
+	 * else Refused. Unreachable when the wall gives no slot there.
+	 */
+	EOperativeOrderResult OrderCornerPeek(ECoverFacing Side, float EdgeAlongCm);
+
+	/** A manual corner peek is ordered and not released yet (he may still be walking to the corner). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
+	bool IsManualCornerPeek() const { return bManualCornerPeek; }
+
+	/** The ordered corner of the manual peek (valid while IsManualCornerPeek). */
+	ECoverFacing GetManualCornerPeekSide() const { return ManualCornerPeekSide; }
+
+	/** At the ordered corner now (in high cover, not shimmying, the edge exposed on that side): the peek pose is held. */
+	bool IsManualCornerPeekSpot() const;
+
+	/** Manual peeks that reached their pose (the CornerPeek event; smokes / stats). */
+	int32 GetManualCornerPeekCount() const { return ManualCornerPeekCount; }
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
 	void SetCoverFireMode(ECoverFireMode Mode);
 
@@ -1665,6 +1688,12 @@ private:
 	FString LastCornerAimTraceReason;
 	/** Sustained corner aim state (IsCornerAimActive). */
 	bool bCornerAimActive = false;
+	/** Manual corner peek (OrderCornerPeek): ordered side, the CornerPeek event still due, the shimmy it orders keeps it. */
+	bool bManualCornerPeek = false;
+	ECoverFacing ManualCornerPeekSide = ECoverFacing::Right;
+	bool bManualCornerPeekEventPending = false;
+	bool bCornerPeekOrdering = false;
+	int32 ManualCornerPeekCount = 0;
 	double CornerAimLastTargetTime = -1.0e9;
 	double CornerAimEndTime = -1.0e9;
 	double CornerAimDuckUntil = -1.0e9;

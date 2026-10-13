@@ -34,6 +34,15 @@ public:
 	/** Shows the ghost of Operative at Slot, facing away from the wall, in the cover idle of the slot's height. */
 	void ShowFor(const AOperativeCharacter& Operative, const FCoverSlot& Slot);
 
+	/**
+	 * The manual corner peek preview (rev 5c, hovering the edge of his own wall): the ghost at the corner stand point Slot in
+	 * the corner-aim pose of Side (cvr_*_fire_idle: leaning out, rifle up) - distinct from the cover-entry ghost.
+	 */
+	void ShowCornerPeekFor(const AOperativeCharacter& Operative, const FCoverSlot& Slot, ECoverFacing Side);
+
+	/** The ghost shows a corner peek pose (ShowCornerPeekFor) rather than a cover entry. */
+	bool IsCornerPeekPose() const { return bShown && bCornerPeekPose; }
+
 	void Hide();
 
 	bool IsShown() const { return bShown; }
@@ -52,6 +61,8 @@ public:
 
 private:
 	UMaterialInterface* ResolveBaseMaterial(const AOperativeCharacter& InOperative) const;
+	/** ShowFor / ShowCornerPeekFor: the ghost at Slot facing Facing, in the cover idle or (bFireIdle) the corner fire stance. */
+	void ShowPose(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Facing, bool bFireIdle);
 
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Cover")
 	TObjectPtr<USceneComponent> Root;
@@ -68,4 +79,5 @@ private:
 	TWeakObjectPtr<AOperativeCharacter> Operative;
 	FCoverSlot Slot;
 	bool bShown = false;
+	bool bCornerPeekPose = false;
 };

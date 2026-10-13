@@ -194,6 +194,49 @@ bool FCoverCornerPoseSnapTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+COVER_FACING_TEST(FCoverCornerPeekEdgeHitTest, "CornerPeekEdgeHit")
+bool FCoverCornerPeekEdgeHitTest::RunTest(const FString& Parameters)
+{
+	// Manual corner peek by click (user request 2026-10-13, rev 5c): which clicks mean "the edge of my wall".
+	using namespace CoverFacingRules;
+	const FCoverSlot Slot = CoverFacingTest::MakeSlot(true, 150.f, true, 120.f); // left edge 1.5 m (-Y), right edge 1.2 m (+Y)
+	ECoverFacing Side = ECoverFacing::Left;
+	float Edge = 0.f;
+	TestTrue(TEXT("the wall face 20 cm in from the right edge"), FindPeekEdge(Slot, FVector(-45.f, 100.f, 90.f), nullptr, Side, Edge)
+		&& Side == ECoverFacing::Right && FMath::IsNearlyEqual(Edge, 120.f));
+	TestTrue(TEXT("the end face of the wall (behind the face plane, at the edge)"), FindPeekEdge(Slot, FVector(-60.f, 120.f, 90.f), nullptr, Side, Edge)
+		&& Side == ECoverFacing::Right);
+	TestTrue(TEXT("the top of the wall near the right edge"), FindPeekEdge(Slot, FVector(-65.f, 110.f, 300.f), nullptr, Side, Edge) && Side == ECoverFacing::Right);
+	TestTrue(TEXT("40 cm past the edge (the cursor slipped off the corner)"), FindPeekEdge(Slot, FVector(-45.f, 160.f, 90.f), nullptr, Side, Edge)
+		&& Side == ECoverFacing::Right);
+	TestFalse(TEXT("1 m past the edge: not the wall any more"), FindPeekEdge(Slot, FVector(-45.f, 220.f, 90.f), nullptr, Side, Edge));
+	TestFalse(TEXT("the middle of the wall: a shimmy, no peek"), FindPeekEdge(Slot, FVector(-45.f, 0.f, 90.f), nullptr, Side, Edge));
+	TestFalse(TEXT("80 cm in from the edge: still a shimmy"), FindPeekEdge(Slot, FVector(-45.f, 40.f, 90.f), nullptr, Side, Edge));
+	TestTrue(TEXT("near the left edge: the left corner"), FindPeekEdge(Slot, FVector(-45.f, -120.f, 90.f), nullptr, Side, Edge)
+		&& Side == ECoverFacing::Left && FMath::IsNearlyEqual(Edge, -150.f));
+	TestFalse(TEXT("2 m in front of the wall (a ground click)"), FindPeekEdge(Slot, FVector(155.f, 110.f, 0.f), nullptr, Side, Edge));
+	TestFalse(TEXT("far behind the wall"), FindPeekEdge(Slot, FVector(-400.f, 110.f, 90.f), nullptr, Side, Edge));
+	TestFalse(TEXT("a closed side (the wall goes on) has no edge to peek round"),
+		FindPeekEdge(CoverFacingTest::MakeSlot(), FVector(-45.f, 110.f, 90.f), nullptr, Side, Edge));
+	FCoverSlot Low = Slot;
+	Low.Height = ECoverHeight::LowCover;
+	TestFalse(TEXT("low cover: fired over the top, no corner peek"), FindPeekEdge(Low, FVector(-45.f, 100.f, 90.f), nullptr, Side, Edge));
+	// A long wall: the end lies beyond his slot's corner probes; a slot traced near the click knows it.
+	const FCoverSlot Long = CoverFacingTest::MakeSlot();
+	FCoverSlot Probe = CoverFacingTest::MakeSlot(false, 0.f, true, 30.f);
+	Probe.WorldLocation = FVector(0.f, 400.f, 0.f);
+	Probe.WallPoint = FVector(-45.f, 400.f, 90.f);
+	TestTrue(TEXT("long wall: the probed slot's edge 4.3 m along"), FindPeekEdge(Long, FVector(-45.f, 420.f, 90.f), &Probe, Side, Edge)
+		&& Side == ECoverFacing::Right && FMath::IsNearlyEqual(Edge, 430.f));
+	FCoverSlot Other = Probe;
+	Other.WallNormal = FVector(0.f, 1.f, 0.f);
+	TestFalse(TEXT("a probe on another wall (round the corner) is ignored"), FindPeekEdge(Long, FVector(-45.f, 420.f, 90.f), &Other, Side, Edge));
+	// Where he stands for the peek: the clip side's stand-off short of the edge.
+	TestEqual(TEXT("right edge at 120, stand-off 57: stand at 63"), CornerPeekStandAlong(ECoverFacing::Right, 120.f, 57.f), 63.f, 0.01f);
+	TestEqual(TEXT("left edge at -150, stand-off 28: stand at -122"), CornerPeekStandAlong(ECoverFacing::Left, -150.f, 28.f), -122.f, 0.01f);
+	return true;
+}
+
 COVER_FACING_TEST(FCoverCornerStandOffPerClipSideTest, "CornerStandOffPerClipSide")
 bool FCoverCornerStandOffPerClipSideTest::RunTest(const FString& Parameters)
 {

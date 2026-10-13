@@ -260,6 +260,10 @@
       "title": "EVERYONE IN COVER",
       "text": "Press {key:Select.Member} (2 / 3) and give each operative his own cover."
     },
+    "TUT_A3_PEEK": {
+      "title": "PEEK ROUND THE CORNER",
+      "text": "In cover at a high wall, click the END of the wall ({key:Cover.CornerPeek}): he moves to that corner and leans out, rifle up, until your next order."
+    },
     "OBJ_A6_SQUAD_COVER": {
       "text": "Put every operative into cover"
     },

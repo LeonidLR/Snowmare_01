@@ -171,6 +171,23 @@ public:
 	/** The slot the leader would take for a wall under the cursor hit (smokes / HUD). */
 	bool FindCoverSlotForHit(const FHitResult& Hit, FCoverSlot& OutSlot) const;
 
+	/**
+	 * Manual corner peek (user request 2026-10-13, rev 5c): Hit lies on the exposed END of Operative's own high cover (his wall
+	 * actor; CoverFacingRules::FindPeekEdge, a slot probed near the click for an edge beyond his slot's probes). OutEdgeAlongCm
+	 * = the edge along the wall from his cover slot (AOperativeCharacter::OrderCornerPeek).
+	 */
+	bool FindCornerPeekForHit(const AOperativeCharacter* Operative, const FHitResult& Hit, ECoverFacing& OutSide, float& OutEdgeAlongCm) const;
+
+	/**
+	 * The corner peek preview under the cursor (PlayerTick; smokes call it with their own hit): over an edge of Operative's cover
+	 * the peek ghost (ACoverGhostActor::ShowCornerPeekFor, the corner-aim pose) stands at that corner and the cursor becomes the
+	 * crosshair; else both are cleared. Null Hit = clear. True while it is shown.
+	 */
+	bool UpdateCornerPeekHover(AOperativeCharacter* Operative, const FHitResult* Hit);
+
+	/** The corner peek preview ghost is up (smokes). */
+	bool IsCornerPeekPreviewShown() const;
+
 	/** Godot Alt + Z / C / V: the whole squad changes stance (prone refused while anyone moves). */
 	void SetEntireSquadStance(EOperativeStance Stance);
 
@@ -389,6 +406,18 @@ private:
 	FCoverSlot CoverPreviewSlot;
 	TWeakObjectPtr<AOperativeCharacter> CoverPreviewOperative;
 	bool bCoverPreviewTurnBased = false;
+
+	/** Rev 5c manual corner peek preview: its own ghost, the cursor, the last hover probe (cached while the cursor rests). */
+	UPROPERTY(Transient)
+	TObjectPtr<class ACoverGhostActor> CornerPeekGhost;
+	bool bCornerPeekCursor = false;
+	TWeakObjectPtr<AActor> PeekHoverActor;
+	TWeakObjectPtr<AOperativeCharacter> PeekHoverOperative;
+	FVector PeekHoverPoint = FVector(TNumericLimits<float>::Max());
+	FVector PeekHoverSlotLocation = FVector::ZeroVector;
+	bool bPeekHoverEdge = false;
+	ECoverFacing PeekHoverSide = ECoverFacing::Right;
+	float PeekHoverEdgeAlong = 0.f;
 
 	/** Godot _set_squad_tactical_cease_fire. */
 	void SetSquadCeaseFire(bool bCease);

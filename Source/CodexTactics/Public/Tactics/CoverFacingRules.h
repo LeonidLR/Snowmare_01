@@ -57,6 +57,23 @@ struct CODEXTACTICS_API FCoverFacingConfig
 	float FireReadyHoldSeconds = 4.f;
 };
 
+/**
+ * Manual corner peek by click (user request 2026-10-13, Demo 01 rev 5c): in high cover, a click on the exposed END of his own
+ * wall (the last EdgeHitCm of its front face, its end face or its top there) sends the operative to that corner into the
+ * corner-aim pose (leaning out, rifle up), held until another order. Tested in CodexTactics.Tactics.Cover.CornerPeekEdgeHit.
+ */
+struct CODEXTACTICS_API FCoverPeekConfig
+{
+	/** The click counts as the edge from this far in from the edge along the wall, cm. */
+	float EdgeHitCm = 75.f;
+	/** ... up to this far past it (the end face, the cursor slipping off the corner), cm. */
+	float PastEdgeCm = 60.f;
+	/** At most this far in front of the wall face (a click on the face itself is ~0), cm. */
+	float MaxFrontCm = 60.f;
+	/** At most this far behind the face (the wall's top / end face: its thickness), cm. */
+	float MaxBehindCm = 250.f;
+};
+
 /** How a threat is known (lower = stronger). */
 enum class ECoverThreatSource : uint8
 {
@@ -223,6 +240,17 @@ namespace CoverFacingRules
 	 */
 	CODEXTACTICS_API bool IsWithinWallSpan(const FCoverSlot& Slot, const FVector& Point, float MarginCm = 0.f);
 
+	/**
+	 * Manual corner peek (rev 5c): the exposed edge of Current's high cover that a click at Click picks, if any. Edges come from
+	 * Current (within its probe range) and, for a long wall, from Probe (a slot of the same wall traced near the click; may be
+	 * null). OutEdgeAlongCm = the edge's position along the wall from Current.WorldLocation (+ = along RightTangent). The click
+	 * must lie within FCoverPeekConfig::EdgeHitCm inside the edge .. PastEdgeCm past it, and no further than MaxFrontCm in front
+	 * of / MaxBehindCm behind the wall face; the nearest qualifying edge wins. Low cover never peeks (it is fired over the top).
+	 */
+	CODEXTACTICS_API bool FindPeekEdge(const FCoverSlot& Current, const FVector& Click, const FCoverSlot* Probe, ECoverFacing& OutSide,
+		float& OutEdgeAlongCm, const FCoverPeekConfig& Config = FCoverPeekConfig());
+	/** Where he stands for the peek, along the wall from the same origin as EdgeAlongCm: StandOffCm short of the edge, on its inner side. */
+	CODEXTACTICS_API float CornerPeekStandAlong(ECoverFacing Side, float EdgeAlongCm, float StandOffCm);
 	/** Clip array index of a facing side: 0 = Right (pack *_L = his own right, back to the wall), 1 = Left (pack *_R). */
 	CODEXTACTICS_API int32 ClipIndex(ECoverFacing Facing);
 }
