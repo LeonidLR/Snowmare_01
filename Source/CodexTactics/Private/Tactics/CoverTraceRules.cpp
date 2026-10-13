@@ -132,10 +132,27 @@ namespace CoverTraceRules
 
 		bool FindGround(UWorld* World, const FVector& Around, const TArray<const AActor*>& Ignored, float& OutGroundZ)
 		{
-			FHitResult Hit;
-			if (CoverTrace(World, Around + FVector(0.f, 0.f, 250.f), Around - FVector(0.f, 0.f, 300.f), Ignored, Hit))
+			// From 2.5 m above the click down. Under an overhang (rev 5c, 2026-10-13: the fishermen's hut roof juts out over its
+			// door wall) that start lies inside the roof (an initial-overlap hit at the start) or above it (the roof top is hit):
+			// then once more from just above the click, so the ground under the eaves is found. A surface well above the click
+			// is kept only when nothing is found below it (a mound in front of a low wall: the old behaviour).
+			FHitResult High;
+			const bool bHigh = CoverTrace(World, Around + FVector(0.f, 0.f, 250.f), Around - FVector(0.f, 0.f, 300.f), Ignored, High)
+				&& !High.bStartPenetrating;
+			if (bHigh && High.ImpactPoint.Z <= Around.Z + 30.f)
 			{
-				OutGroundZ = Hit.ImpactPoint.Z;
+				OutGroundZ = High.ImpactPoint.Z;
+				return true;
+			}
+			FHitResult Low;
+			if (CoverTrace(World, Around + FVector(0.f, 0.f, 30.f), Around - FVector(0.f, 0.f, 300.f), Ignored, Low) && !Low.bStartPenetrating)
+			{
+				OutGroundZ = Low.ImpactPoint.Z;
+				return true;
+			}
+			if (bHigh)
+			{
+				OutGroundZ = High.ImpactPoint.Z;
 				return true;
 			}
 			return false;

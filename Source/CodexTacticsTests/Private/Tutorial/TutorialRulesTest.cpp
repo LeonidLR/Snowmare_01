@@ -106,8 +106,10 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("A0..A4 (rev 5)"), Data.Beats.Num(), 5);
 	TestEqual(TEXT("start beat"), Data.StartBeat, FName(TEXT("A0")));
-	// A0 camera lesson is STAGED (2026-10-12; MMB drag added 2026-10-13): pan -> MMB drag -> Q/E -> mouse -> zoom -> move, each after the previous, no timeout.
-	const TCHAR* CameraChain[] = { TEXT("A0_cam_pan"), TEXT("A0_cam_pan_drag"), TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom"), TEXT("A0_move") };
+	// A0 camera lesson is STAGED (2026-10-12; MMB drag added 2026-10-13): pan -> MMB drag -> Q/E -> mouse -> zoom, each after the previous,
+	// no timeout; then the movement lesson (rev 5c 2026-10-13): click to walk -> double-click to run.
+	const TCHAR* CameraChain[] = { TEXT("A0_cam_pan"), TEXT("A0_cam_pan_drag"), TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom"),
+		TEXT("A0_move"), TEXT("A0_sprint") };
 	TestNull(TEXT("the old one-shot camera card is gone"), Data.FindStep(TEXT("A0_camera")));
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(CameraChain); ++Index)
 	{
@@ -146,6 +148,16 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	if (const FTutorialStep* Zoom = Data.FindStep(TEXT("A0_cam_zoom")))
 	{
 		TestTrue(TEXT("zoom: two notches"), Zoom->Complete.Count == 2 && Zoom->Complete.Commands == TArray<FString>{ TEXT("Camera.Zoom") });
+	}
+	if (const FTutorialStep* Walk = Data.FindStep(TEXT("A0_move")))
+	{
+		TestTrue(TEXT("click to walk: one move order, precreditable (rev 5c)"), Walk->Complete.Commands == TArray<FString>{ TEXT("Order.Move") }
+			&& Walk->Complete.Volume.IsNone() && TutorialRules::CanPrecredit(*Walk));
+	}
+	if (const FTutorialStep* Run = Data.FindStep(TEXT("A0_sprint")))
+	{
+		TestTrue(TEXT("double-click to run: one sprint order, precreditable (rev 5c)"), Run->Complete.Commands == TArray<FString>{ TEXT("Order.Sprint") }
+			&& Run->TextId == FName(TEXT("TUT_A0_SPRINT")) && TutorialRules::CanPrecredit(*Run));
 	}
 	TestNotNull(TEXT("solo card"), Data.FindStep(TEXT("A1_solo")));
 	TestNotNull(TEXT("barrel push card"), Data.FindStep(TEXT("A2_push")));
@@ -463,6 +475,69 @@ bool FTutorialDistinctOperativesTest::RunTest(const FString&)
 	FTutorialStepsData FlagOnly;
 	TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"x","beat":"B","complete":{"commands":["Cover.Enter"],"distinct_operatives":true}}]})"), FlagOnly, FlagWarnings, Error);
 	TestTrue(TEXT("warned"), FlagWarnings.ContainsByPredicate([](const FString& Line) { return Line.Contains(TEXT("distinct_operatives")); }));
+	return true;
+}
+
+TUTORIAL_TEST(FTutorialInVolumeDistinctFromTest, "StateMachine.InVolumeDistinctFrom")
+bool FTutorialInVolumeDistinctFromTest::RunTest(const FString&)
+{
+	// Demo 01 rev 5c (designer review 2026-10-13): the tactical hut entry - cover entered INSIDE a volume ("in_volume"), three
+	// different operatives across three steps ("distinct_from"), and a volume step done by someone already standing there.
+	FTutorialStepsData Data;
+	TArray<FString> Warnings;
+	FString Error;
+	TestTrue(TEXT("parse"), TutorialRules::ParseSteps(TEXT(R"({"start_beat":"B","beats":[{"id":"B"}],"steps":[
+		{"id":"go","beat":"B","kind":"hint_card","text_id":"T","complete":{"commands":["Squad.Solo"]}},
+		{"id":"left","beat":"B","kind":"hint_card","text_id":"T","trigger":{"type":"after_step","step":"go"},
+		 "complete":{"event":"CoverEntered","in_volume":"DOOR_L","distinct_from":["right","enter"]}},
+		{"id":"right","beat":"B","kind":"hint_card","text_id":"T","trigger":{"type":"after_step","step":"go"},
+		 "complete":{"event":"CoverEntered","in_volume":"DOOR_R","distinct_from":["left","enter"]}},
+		{"id":"enter","beat":"B","kind":"hint_card","text_id":"T","trigger":{"type":"after_step","step":"go"},
+		 "complete":{"volume":"INSIDE","distinct_from":["left","right"]}}]})"), Data, Warnings, Error));
+	TestEqual(FString::Printf(TEXT("no warnings (%s)"), Warnings.Num() ? *Warnings[0] : TEXT("")), Warnings.Num(), 0);
+	const FTutorialStep* Left = Data.FindStep(TEXT("left"));
+	TestTrue(TEXT("in_volume / distinct_from parsed"), Left && Left->Complete.InVolume == FName(TEXT("DOOR_L"))
+		&& Left->Complete.DistinctFrom == TArray<FName>{ FName(TEXT("right")), FName(TEXT("enter")) });
+
+	FTutorialStateMachine Machine;
+	Machine.Load(Data);
+	Machine.StartBeat(TEXT("B"));
+	Machine.HandleCommand(TEXT("Squad.Solo"));
+	TestTrue(TEXT("the three parts run together (one card shown, two queued)"), Machine.GetState(TEXT("left")) == ETutorialStepState::Queued
+		|| Machine.GetState(TEXT("left")) == ETutorialStepState::Active);
+	TestEqual(TEXT("enter queued"), Machine.GetState(TEXT("enter")), ETutorialStepState::Queued);
+	// in_volume: the event counts only where the step asks for it; no subject never counts.
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("A"));
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("A"), { TEXT("ELSEWHERE") });
+	Machine.HandleEvent(TEXT("CoverEntered"), NAME_None, { TEXT("DOOR_L") });
+	TestEqual(TEXT("not in the volume / no subject: nothing"), Machine.GetProgress(TEXT("left")) + Machine.GetProgress(TEXT("right")), 0);
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("A"), { TEXT("OUTER"), TEXT("DOOR_L") });
+	TestEqual(TEXT("A left of the door: done"), Machine.GetState(TEXT("left")), ETutorialStepState::Completed);
+	TestTrue(TEXT("A recorded as its contributor"), Machine.GetContributors(TEXT("left")) && Machine.GetContributors(TEXT("left"))->Contains(FName(TEXT("A"))));
+	// distinct_from: A may not be the right-hand man nor the one who goes in.
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("A"), { TEXT("DOOR_R") });
+	TestEqual(TEXT("A again on the right: refused"), Machine.GetState(TEXT("right")) == ETutorialStepState::Completed, false);
+	Machine.HandleVolume(TEXT("INSIDE"), NAME_None, NAME_None, TEXT("A"));
+	TestFalse(TEXT("A walking in: refused"), Machine.GetState(TEXT("enter")) == ETutorialStepState::Completed);
+	Machine.HandleVolume(TEXT("INSIDE"), NAME_None, NAME_None);
+	TestFalse(TEXT("a volume entry without a subject never counts for distinct_from"), Machine.GetState(TEXT("enter")) == ETutorialStepState::Completed);
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("B"), { TEXT("DOOR_R") });
+	TestEqual(TEXT("B right of the door: done"), Machine.GetState(TEXT("right")), ETutorialStepState::Completed);
+	// Volume presence: C already stands inside when the step runs.
+	TestFalse(TEXT("presence of a stacker does not count"), Machine.HandleVolumePresence(TEXT("INSIDE"), TEXT("B")));
+	TestFalse(TEXT("presence in another volume does not count"), Machine.HandleVolumePresence(TEXT("DOOR_L"), TEXT("C")));
+	TestTrue(TEXT("C standing inside counts"), Machine.HandleVolumePresence(TEXT("INSIDE"), TEXT("C")));
+	TestEqual(TEXT("the third operative completes 'go in'"), Machine.GetState(TEXT("enter")), ETutorialStepState::Completed);
+
+	// Errors / warnings.
+	FTutorialStepsData Bad;
+	TestFalse(TEXT("distinct_from naming an unknown step fails"), TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"x","beat":"B","text_id":"T",
+		"complete":{"event":"E","distinct_from":["nope"]}}]})"), Bad, Warnings, Error));
+	TestTrue(TEXT("error names it"), Error.Contains(TEXT("nope")));
+	TArray<FString> SoftWarnings;
+	TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"x","beat":"B","text_id":"T","complete":{"commands":["Squad.Solo"],"in_volume":"V"}}]})"),
+		Bad, SoftWarnings, Error);
+	TestTrue(TEXT("in_volume without an event is warned"), SoftWarnings.ContainsByPredicate([](const FString& Line) { return Line.Contains(TEXT("in_volume")); }));
 	return true;
 }
 

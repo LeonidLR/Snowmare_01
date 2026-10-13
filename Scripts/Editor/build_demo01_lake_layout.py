@@ -12,6 +12,11 @@ between the two largest floor slabs plus the plank that spans it [a graybox crac
 the fishermen's hut = the Shelter ACameraZoneVolume holding a loot crate [a point 40 m past the bridge]. Everything from
 beacon 3 on (camp, approach, fence, field, overlook, patrols, compound) is laid out east of the hut along +X.
 No enemies are placed (beat sheet §1.3: placed enemies turn the level into an ambush level); patrol routes + TargetPoints only.
+Rev 5c (designer review 2026-10-13): the TACTICAL HUT ENTRY - the hut's walls and door are read from its geometry (axis-aligned
+walls >= 1.8 m round the Shelter zone; the door = the widest opening of the side facing the approach from the bridge);
+VOL_A1_HUT_APPROACH (~10 m in front of the door), VOL_A1_DOOR_L / VOL_A1_DOOR_R (the outer wall left / right of the door as
+seen by the arriving squad), VOL_A1_HUT = the interior only (inset 40 cm, Any Operative, Fire Once off), markers
+A1_hut_stack_l / _r / _enter; a door wider than 2.6 m with no wall to hug on one side gets a graybox jamb there (review).
 
 Modes (env CODEX_LAYOUT_MODE):
   build (default)  editor commandlet: duplicate the source map to the target if the target does not exist yet
@@ -472,8 +477,9 @@ def build():
 
     if want_volume("VOL_A1_BEACON2"):
         p.volume("VOL_A1_BEACON2", bridge_x0 - 450, bridge_y, (250, 500, 150), anchor="4.5 m before the bridge (west end)")
-    if want_marker("A1_solo"):
-        p.marker("A1_solo", bridge_x0 - 180, bridge_y, 120, anchor="near end of the bridge")
+    # Rev 5c: the bridge teaches nothing; its marker shows the crossing objective (was Step Id A1_solo).
+    if want_marker("A1_bridge"):
+        p.marker("A1_bridge", bridge_x0 - 180, bridge_y, 120, anchor="near end of the bridge (crossing objective)")
     span_half = (bridge_x1 - bridge_x0) * 0.5 + 100.0
     bridge_cx = (bridge_x0 + bridge_x1) * 0.5
     gz = p.ground(bridge_x1 - 50, bridge_y, "bridge")
@@ -502,9 +508,16 @@ def build():
         report("anchor hut: zone %s centre (%.0f, %.0f) extent (%.0f, %.0f); crate %s"
                % (hut["zone"].get_actor_label(), hc.x, hc.y, he.x, he.y, hut["crate"].get_actor_label()))
         hut_x, hut_y = hc.x, hc.y
-        if want_volume("VOL_A1_HUT"):
-            p.volume("VOL_A1_HUT", hc.x, hc.y, (max(100.0, he.x - 90), max(100.0, he.y - 80), 150), any_operative=True,
-                     anchor=hut_anchor + ", over the floor")
+        frame = find_hut_frame(p, hc, he)
+        if frame is None:
+            p.warnings.append("hut %s: walls / interior not recognised (needs 4 axis-aligned walls >= 1.8 m round the zone) - "
+                              "VOL_A1_HUT over the zone, no door entry placed - review" % hut["zone"].get_actor_label())
+            if want_volume("VOL_A1_HUT"):
+                vol = p.volume("VOL_A1_HUT", hc.x, hc.y, (max(100.0, he.x - 90), max(100.0, he.y - 80), 150), any_operative=True,
+                               anchor=hut_anchor + ", over the floor")
+                vol.set_editor_property("fire_once", False)
+        else:
+            build_hut_entry(p, frame, (bridge_x1, bridge_y), hut_anchor, want_volume, want_marker)
         if want_marker("A1_loot_open"):
             cl = hut["crate"].get_actor_location()
             p.marker("A1_loot_open", cl.x, cl.y, 90, anchor="on the user's hut crate", beacon=False)
@@ -759,6 +772,199 @@ def build():
     dump(TARGET_MAP, "%s_after_%s.json" % (TARGET_MAP.split("/")[-1], stamp))
 
 
+def find_hut_frame(p, centre, extent):
+    """The hut's frame from its geometry (rev 5c): colliding static meshes >= 1.8 m tall and <= 80 cm thick round the hut's
+    Shelter zone (bounds + 1.5 m); axis-aligned walls only. Returns {"walls", "west", "east", "south", "north", "x0", "x1",
+    "y0", "y1"} (x0..x1 / y0..y1 = between the inner faces of the outer walls) or None."""
+    walls = []
+    for a in p.actors.get_all_level_actors():
+        if not isinstance(a, unreal.StaticMeshActor):
+            continue
+        if a.static_mesh_component.get_collision_enabled() == unreal.CollisionEnabled.NO_COLLISION:
+            continue
+        o, e = a.get_actor_bounds(False)
+        if e.z * 2 < 180 or abs(o.x - centre.x) > extent.x + 150 or abs(o.y - centre.y) > extent.y + 150:
+            continue
+        if min(e.x, e.y) > 40 or max(e.x, e.y) < 20:
+            continue
+        walls.append({"actor": a, "o": o, "e": e, "long": "x" if e.x >= e.y else "y"})
+    ns = [w for w in walls if w["long"] == "y" and w["e"].y * 2 >= 300]
+    ew = [w for w in walls if w["long"] == "x" and w["e"].x * 2 >= 300]
+    if len(ns) < 2 or len(ew) < 2:
+        return None
+    west, east = min(ns, key=lambda w: w["o"].x), max(ns, key=lambda w: w["o"].x)
+    south, north = min(ew, key=lambda w: w["o"].y), max(ew, key=lambda w: w["o"].y)
+    f = {"walls": walls, "west": west, "east": east, "south": south, "north": north,
+         "x0": west["o"].x + west["e"].x, "x1": east["o"].x - east["e"].x,
+         "y0": south["o"].y + south["e"].y, "y1": north["o"].y - north["e"].y}
+    return f if f["x1"] - f["x0"] > 200 and f["y1"] - f["y0"] > 200 else None
+
+
+def hut_sides(f):
+    """Per side: the outward normal, the tangent axis, the outer face, the side wall band and the covered intervals along it."""
+    sides = {}
+    for name, wall, normal in (("N", f["north"], (0.0, 1.0)), ("S", f["south"], (0.0, -1.0)),
+                               ("E", f["east"], (1.0, 0.0)), ("W", f["west"], (-1.0, 0.0))):
+        along = "x" if name in ("N", "S") else "y"
+        across = "y" if along == "x" else "x"
+        line = getattr(wall["o"], across)
+        thick = getattr(wall["e"], across)
+        face = line + (thick if normal[0] + normal[1] > 0 else -thick)
+        span = (f["x0"], f["x1"]) if along == "x" else (f["y0"], f["y1"])
+        covered = []
+        for w in f["walls"]:
+            o, e = w["o"], w["e"]
+            lo, hi = getattr(o, across) - getattr(e, across), getattr(o, across) + getattr(e, across)
+            if hi < line - thick + 5 or lo > line + thick - 5:
+                continue  # not on this side's wall band
+            covered.append((getattr(o, along) - getattr(e, along), getattr(o, along) + getattr(e, along)))
+        covered.sort()
+        runs = []
+        for lo, hi in covered:
+            if runs and lo <= runs[-1][1] + 2:
+                runs[-1][1] = max(runs[-1][1], hi)
+            else:
+                runs.append([lo, hi])
+        gaps = []
+        cursor = span[0]
+        for lo, hi in runs:
+            if lo > cursor + 1 and lo > span[0]:
+                gaps.append((cursor, min(lo, span[1])))
+            cursor = max(cursor, hi)
+        if cursor < span[1] - 1:
+            gaps.append((cursor, span[1]))
+        gaps = [g for g in gaps if g[1] - g[0] >= 80]
+        sides[name] = {"wall": wall, "normal": normal, "along": along, "across": across, "line": line, "thick": thick,
+                       "face": face, "runs": runs, "gap": max(gaps, key=lambda g: g[1] - g[0]) if gaps else None}
+    return sides
+
+
+def build_hut_entry(p, f, approach_from, hut_anchor, want_volume, want_marker):
+    """Rev 5c tactical hut entry: the door (the widest opening of the side facing the squad's approach), the two stack volumes
+    hugging the outer wall left / right of it, the interior volume, the approach volume, markers, a graybox jamb if a side of
+    a wide door has no wall to hug."""
+    cx, cy = (f["x0"] + f["x1"]) * 0.5, (f["y0"] + f["y1"]) * 0.5
+    sides = hut_sides(f)
+    dx, dy = cx - approach_from[0], cy - approach_from[1]
+    dl = math.hypot(dx, dy) or 1.0
+    facing = sorted(sides, key=lambda n: -(sides[n]["normal"][0] * -dx / dl + sides[n]["normal"][1] * -dy / dl))
+    report("hut frame: interior X %.0f..%.0f, Y %.0f..%.0f; openings %s; sides by facing the approach: %s"
+           % (f["x0"], f["x1"], f["y0"], f["y1"], {n: (sides[n]["gap"] and [round(v) for v in sides[n]["gap"]]) for n in sides},
+              facing))
+    door_side = next((n for n in facing if sides[n]["gap"]), None)
+    if door_side is None:
+        p.warnings.append("hut: no door opening >= 80 cm found in its walls - no door entry placed, review")
+        return
+    if door_side != facing[0]:
+        p.warnings.append("hut: the side facing the approach (%s) has no opening; the door is taken on side %s - review"
+                          % (facing[0], door_side))
+    sd = sides[door_side]
+    g0, g1 = sd["gap"]
+    nx, ny = sd["normal"]
+    along_x = sd["along"] == "x"
+
+    def run_length(end, upward):
+        """Length of the outer wall continuing from a door end (a wall to hug beside the door)."""
+        for lo, hi in sd["runs"]:
+            if upward and abs(lo - end) <= 3:
+                return hi - lo, (lo, hi)
+            if not upward and abs(hi - end) <= 3:
+                return hi - lo, (lo, hi)
+        return 0.0, None
+
+    low_len, low_run = run_length(g0, False)
+    high_len, high_run = run_length(g1, True)
+    width = g1 - g0
+    report("hut door on side %s: along %s %.0f..%.0f (%.0f cm wide); wall to hug beside it: low end %.0f cm, high end %.0f cm"
+           % (door_side, sd["along"].upper(), g0, g1, width, low_len, high_len))
+
+    def point(along, out):
+        """World XY at `along` on the door side's tangent axis, `out` cm off the outer face (negative = inside)."""
+        c = sd["face"] + out * (nx + ny)
+        return (along, c) if along_x else (c, along)
+
+    wall = sd["wall"]
+    base_z = wall["o"].z - wall["e"].z
+    height = wall["e"].z * 2
+    door_width_target = 200.0
+    for end in ("low", "high"):
+        run_len = low_len if end == "low" else high_len
+        if run_len >= 150:
+            continue
+        if width - door_width_target < 120:
+            p.warnings.append("hut door side %s, %s end: only %.0f cm of wall to hug and the door is too narrow for a jamb - "
+                              "that stack spot may give no cover, review" % (door_side, end, run_len))
+            continue
+        # A graybox jamb (rev 5c): narrows the wide opening to ~2 m and gives the stacker a wall beside the door.
+        length = width - door_width_target if (low_len >= 150 or high_len >= 150) else max(150.0, (width - door_width_target) * 0.5)
+        run = low_run if end == "low" else high_run
+        if end == "low":
+            a0 = run[0] if run else g0
+            a1 = g0 + length
+            g0 = a1
+        else:
+            a0 = g1 - length
+            a1 = run[1] if run else g1
+            g1 = a0
+        mid = (a0 + a1) * 0.5
+        jx, jy = (mid, sd["line"]) if along_x else (sd["line"], mid)
+        size = (a1 - a0, sd["thick"] * 2, height) if along_x else (sd["thick"] * 2, a1 - a0, height)
+        jamb = p.block("HutDoor_Jamb_%s" % ("L" if end == "low" else "R"), "HutEntry", jx, jy, size, base_z=base_z,
+                       material=wall["actor"].static_mesh_component.get_material(0),
+                       anchor="graybox door jamb (rev 5c) beside the hut door, %.0f cm" % (a1 - a0))
+        p.warnings.append("hut door: graybox jamb %s added (%.0f cm, %.0f cm high) - the user's doorway was %.0f cm wide with "
+                          "no wall to hug on that side; the door is now %.0f cm - review / replace with art"
+                          % (jamb.get_actor_label(), a1 - a0, height, width, g1 - g0))
+        if end == "low":
+            low_len = a1 - (run[0] if run else a0)
+        else:
+            high_len = (run[1] if run else a1) - a0
+    width = g1 - g0
+    door_c = (g0 + g1) * 0.5
+    # Left / right as seen by the squad arriving at the door (facing -normal): UE right = yaw + 90 deg.
+    yaw = math.atan2(-ny, -nx)
+    rx, ry = math.cos(yaw + math.pi * 0.5), math.sin(yaw + math.pi * 0.5)
+    high_is_right = (rx if along_x else ry) > 0
+    gz = p.ground(*point(door_c, 200.0), what="hut door")
+    stack_len = 250.0
+    for end in ("low", "high"):
+        right = (end == "high") == high_is_right
+        vid = "VOL_A1_DOOR_R" if right else "VOL_A1_DOOR_L"
+        step = "A1_hut_stack_r" if right else "A1_hut_stack_l"
+        if end == "low":
+            a0, a1 = g0 - stack_len, g0 + 20
+            spot = g0 - 90
+        else:
+            a0, a1 = g1 - 20, g1 + stack_len
+            spot = g1 + 90
+        mid = (a0 + a1) * 0.5
+        vx, vy = point(mid, 60.0)
+        extent = ((a1 - a0) * 0.5, 60.0, 150.0) if along_x else (60.0, (a1 - a0) * 0.5, 150.0)
+        if want_volume(vid):
+            p.volume(vid, vx, vy, extent, any_operative=True, base_z=gz,
+                     anchor="outer wall %s of the hut door (as seen arriving), 2.5 m along it, 1.2 m out" % ("right" if right else "left"))
+        if want_marker(step):
+            mx, my = point(spot, 55.0)
+            p.marker(step, mx, my, 70, anchor="stack spot %s of the door" % ("right" if right else "left"))
+    # The interior only (the stackers outside never stand in it): inset 40 cm from the inner wall faces.
+    if want_volume("VOL_A1_HUT"):
+        vol = p.volume("VOL_A1_HUT", cx, cy, ((f["x1"] - f["x0"]) * 0.5 - 40, (f["y1"] - f["y0"]) * 0.5 - 40, 150), any_operative=True,
+                       anchor=hut_anchor + ", the interior only (inset 40 cm), Fire Once off", base_z=gz)
+        vol.set_editor_property("fire_once", False)
+    else:
+        p.warnings.append("VOL_A1_HUT is the user's: make it cover the INTERIOR only and set Fire Once off (rev 5c) - review")
+    if want_marker("A1_hut_enter"):
+        inner = sd["face"] - (nx + ny) * (sd["thick"] * 2 + 120)
+        mx, my = (door_c, inner) if along_x else (inner, door_c)
+        p.marker("A1_hut_enter", mx, my, 90, anchor="1.2 m inside the door")
+    if want_volume("VOL_A1_HUT_APPROACH"):
+        ax, ay = point(door_c, 1000.0)
+        extent = (1200.0, 300.0, 150.0) if along_x else (300.0, 1200.0, 150.0)
+        p.volume("VOL_A1_HUT_APPROACH", ax, ay, extent, anchor="10 m in front of the hut door, 24 m wide")
+    report("hut entry: door side %s, door %.0f cm at %s %.0f; left = %s end" % (door_side, width, sd["along"].upper(), door_c,
+                                                                                 "high" if not high_is_right else "low"))
+
+
 def set_contents(crate, values):
     """FLootContents: every count 0 except values (the beat sheet lists exact crate contents)."""
     contents = crate.get_editor_property("contents")
@@ -788,9 +994,10 @@ def steps_volume_ids():
     ids = set()
     for step in data.get("steps", []):
         for key in ("trigger", "complete"):
-            v = (step.get(key) or {}).get("volume")
-            if v:
-                ids.add(v)
+            for field in ("volume", "in_volume"):  # rev 5c: cover entered INSIDE a volume (the hut door)
+                v = (step.get(key) or {}).get(field)
+                if v:
+                    ids.add(v)
     beats = [b["id"] for b in data.get("beats", [])]
     return sorted(ids), beats
 
@@ -887,7 +1094,8 @@ def verify(game):
     f_e = unreal.Vector(fl.x + 300, fl.y, fl.z + 60)
 
     chain = [("PlayerStart", unreal.Vector(start.x, start.y, start.z - 30)), ("VOL_A0_BEACON1", centre("VOL_A0_BEACON1")),
-             ("VOL_A1_BEACON2", centre("VOL_A1_BEACON2")), ("bridge far end", b_e), ("VOL_A1_HUT", centre("VOL_A1_HUT")),
+             ("VOL_A1_BEACON2", centre("VOL_A1_BEACON2")), ("bridge far end", b_e),
+             ("VOL_A1_HUT_APPROACH", centre("VOL_A1_HUT_APPROACH")), ("VOL_A1_HUT", centre("VOL_A1_HUT")),
              ("VOL_A1_BEACON3", centre("VOL_A1_BEACON3")), ("VOL_A2_CAMP", centre("VOL_A2_CAMP")),
              ("VOL_A3_APPROACH", centre("VOL_A3_APPROACH")), ("VOL_A3_WIND", centre("VOL_A3_WIND")),
              ("VOL_A3_RIDGE", centre("VOL_A3_RIDGE")), ("VOL_A3_RIDGE_FAR", centre("VOL_A3_RIDGE_FAR")),
@@ -901,6 +1109,7 @@ def verify(game):
         valid, pts, length, partial = game.path(a, b, no_crawl)
         game.check(valid and not partial, "path %s -> %s (standing): valid=%s partial=%s %.0f m" % (na, nb, valid, partial,
                                                                                                   length / 100))
+    verify_hut_entry(game, by_id, centre, no_crawl)
     # The crack: the path from the west bank to the far end crosses on the bridge only. The crack line = where the ground
     # trace finds nothing (a floor gap) 4 m beside the planks; a graybox crack blocks the traces too, so fall back to the span.
     holes = []
@@ -999,6 +1208,71 @@ def verify(game):
     game.check(not floating, "%d tagged actors on the ground%s" % (checked, (": " + "; ".join(floating)) if floating else ""))
 
 
+def box_of(volume):
+    """(centre, extent) of a tutorial volume's box (axis-aligned in this layout)."""
+    return volume.get_actor_location(), volume.get_editor_property("box").get_scaled_box_extent()
+
+
+def in_box(point, box, margin=0.0):
+    c, e = box
+    return abs(point.x - c.x) <= e.x + margin and abs(point.y - c.y) <= e.y + margin
+
+
+def slot_field(slot, name):
+    return slot.get_editor_property(name)
+
+
+def verify_hut_entry(game, by_id, centre, no_crawl):
+    """Rev 5c tactical hut entry: the door volumes, their cover (a high wall with the door edge exposed, the slot inside the
+    stack volume and outside the interior volume), reachable spots, the interior volume repeatable."""
+    hut = (by_id.get("VOL_A1_HUT") or [None])[0]
+    approach = centre("VOL_A1_HUT_APPROACH")
+    if hut is None or approach is None:
+        game.check(False, "hut entry: VOL_A1_HUT / VOL_A1_HUT_APPROACH missing")
+        return
+    game.check(not hut.get_editor_property("fire_once"), "VOL_A1_HUT: Fire Once off (the third operative may walk in after a stacker)")
+    hut_box = box_of(hut)
+    markers = {name_str(m.get_editor_property("step_id")): m for m in game.all_of(unreal.TutorialMarkerActor)}
+    valid, _, length, partial = game.path(approach, centre("VOL_A1_HUT"), no_crawl)
+    game.check(valid and not partial, "hut entry: approach -> inside (through the door): valid=%s partial=%s %.0f m" % (valid, partial, length / 100))
+    for vid, step in (("VOL_A1_DOOR_L", "A1_hut_stack_l"), ("VOL_A1_DOOR_R", "A1_hut_stack_r")):
+        vol = (by_id.get(vid) or [None])[0]
+        marker = markers.get(step)
+        if vol is None or marker is None:
+            game.check(False, "hut entry: %s / marker %s missing" % (vid, step))
+            continue
+        c, e = box_of(vol)
+        game.check(not (abs(c.x - hut_box[0].x) <= e.x + hut_box[1].x and abs(c.y - hut_box[0].y) <= e.y + hut_box[1].y),
+                   "%s does not overlap the interior volume VOL_A1_HUT" % vid)
+        # The wall: the volume's long side nearest the hut interior.
+        if e.x < e.y:
+            sign = 1.0 if hut_box[0].x > c.x else -1.0
+            face = unreal.Vector(c.x + sign * e.x, marker.get_actor_location().y, 0)
+            direction = unreal.Vector(sign, 0, 0)
+        else:
+            sign = 1.0 if hut_box[0].y > c.y else -1.0
+            face = unreal.Vector(marker.get_actor_location().x, c.y + sign * e.y, 0)
+            direction = unreal.Vector(0, sign, 0)
+        z, _ = game.ground(face.x - direction.x * 80, face.y - direction.y * 80, top=200.0)  # under the hut's eaves
+        face.z = (z if z is not None else 0.0) + 90
+        res = unreal.CoverQueryLibrary.find_cover_slot_at(game.world, face, direction)
+        ok, slot = (res[0], res[1]) if isinstance(res, tuple) else (res is not None, res)
+        if not ok or slot is None:
+            game.check(False, "%s: the wall at the stack spot (%.0f, %.0f) gives NO cover slot" % (vid, face.x, face.y))
+            continue
+        loc = slot_field(slot, "world_location")
+        height = unreal.CoverQueryLibrary.get_cover_height_name(slot)
+        edges = "L %s %.0f / R %s %.0f" % (slot_field(slot, "left_edge_exposed"), slot_field(slot, "left_edge_distance_cm"),
+                                            slot_field(slot, "right_edge_exposed"), slot_field(slot, "right_edge_distance_cm"))
+        near_edge = min([d for flag, d in ((slot_field(slot, "left_edge_exposed"), slot_field(slot, "left_edge_distance_cm")),
+                                            (slot_field(slot, "right_edge_exposed"), slot_field(slot, "right_edge_distance_cm"))) if flag] or [9999])
+        game.check(height == "High" and in_box(loc, (c, e)) and not in_box(loc, hut_box, 40.0) and near_edge <= 200,
+                   "%s: cover slot %s at (%.0f, %.0f), wall top %.0f cm, edges %s; inside %s, outside VOL_A1_HUT (+40 cm), door edge %.0f cm"
+                   % (vid, height, loc.x, loc.y, slot_field(slot, "wall_top_cm"), edges, vid, near_edge))
+        valid, _, length, partial = game.path(approach, unreal.Vector(loc.x, loc.y, loc.z + 60), no_crawl)
+        game.check(valid and not partial, "%s: the stack spot is reachable from the approach (%.0f m)" % (vid, length / 100))
+
+
 def shots(game):
     """Top-down stills (overview + three close-ups) from an in-game camera; labels written for the annotate step."""
     w = game.world
@@ -1011,7 +1285,7 @@ def shots(game):
             text = effective_volume_id(a)
             kind = "volume"
             e = a.get_editor_property("box").get_scaled_box_extent()
-            labels.append({"text": text, "kind": kind, "x": l.x, "y": l.y, "ex": e.x, "ey": e.y,
+            labels.append({"text": text, "kind": kind, "x": l.x, "y": l.y, "ex": e.x, "ey": e.y, "z": l.z - e.z,
                            "auto": TAG in [str(t) for t in a.tags]})
             continue
         if cls.startswith("StaticMeshActor") and TAG in [str(t) for t in a.tags]:
@@ -1021,7 +1295,8 @@ def shots(game):
                      "HighGround_Platform": "high ground 2 m", "Base_Roof": "PMC base (graybox)",
                      "Camp_Hut1_Roof": "camp hut 1", "Overlook_LowCover": "overlook cover",
                      "Container_A4_North": "patrol choke 3 m", "Rock_A3_GapNorth": "field exit gap",
-                     "Cover_A3_1_Low": "cover field"}
+                     "Cover_A3_1_Low": "cover field", "HutDoor_Jamb_L": "door jamb (graybox)",
+                     "HutDoor_Jamb_R": "door jamb (graybox)"}
             if e.x < 20000 or label.startswith("LowFence"):
                 labels.append({"text": names.get(label, ""), "kind": "struct", "x": o.x, "y": o.y, "ex": e.x, "ey": e.y})
             continue
@@ -1058,7 +1333,7 @@ def shots(game):
         elif cls.startswith(("BarricadeActor",)):
             text, kind = "barricade", "object"
         if text:
-            labels.append({"text": text, "kind": kind, "x": l.x, "y": l.y})
+            labels.append({"text": text, "kind": kind, "x": l.x, "y": l.y, "z": l.z})
     xs = [q["x"] for q in labels]
     ys = [q["y"] for q in labels]
     views = [("top", min(xs) - 1500, max(xs) + 1500, min(ys) - 1500, max(ys) + 1500)]
@@ -1070,12 +1345,24 @@ def shots(game):
         return (min(q["x"] for q in pts) - margin, max(q["x"] for q in pts) + margin,
                 min(q["y"] for q in pts) - margin, max(q["y"] for q in pts) + margin) if pts else None
 
+    hut_names = ["VOL_A1_HUT", "VOL_A1_DOOR_L", "VOL_A1_DOOR_R", "VOL_A1_HUT_APPROACH"]
     for name, names in (("crossing", ["VOL_A0_BEACON1", "VOL_A1_BEACON2", "VOL_A1_HUT"]),
                         ("approach", ["VOL_A1_BEACON3", "VOL_A2_CAMP", "VOL_A3_APPROACH", "VOL_A3_FIELD"]),
                         ("compound", ["VOL_A3_FIELD", "VOL_A4_OVERLOOK", "VOL_A5_BASE", "VOL_A6_HIGH"])):
         s = span(names)
         if s:
             views.append((name,) + s)
+    # Rev 5c: the hut entry - top-down with the hut roof hidden for the shot, and a perspective view from the approach.
+    roof = None
+    hut_vol = vol.get("VOL_A1_HUT")
+    if hut_vol:
+        for a in game.all_of(unreal.StaticMeshActor):
+            o, e = a.get_actor_bounds(False)
+            if abs(o.x - hut_vol["x"]) < hut_vol["ex"] + 300 and abs(o.y - hut_vol["y"]) < hut_vol["ey"] + 300 and e.z < 60 and o.z > 200:
+                roof = a
+        s = span(["VOL_A1_HUT", "VOL_A1_DOOR_L", "VOL_A1_DOOR_R"], 500)
+        if s:
+            views.append(("hut",) + s)
     res_x, res_y = 3840, 2160
     fov = 30.0
     meta = {"labels": labels, "views": [], "res": [res_x, res_y]}
@@ -1094,8 +1381,25 @@ def shots(game):
         height = width / (2.0 * math.tan(math.radians(fov * 0.5)))
         transform = unreal.Transform(unreal.Vector(cx, cy, height), unreal.Rotator(pitch=-89.9, yaw=-90.0, roll=0.0),
                                      unreal.Vector(1, 1, 1))
-        cams.append((name, camera, transform))
+        hide = [roof] if name == "hut" and roof else []
+        cams.append((name, camera, transform, hide, fov))
         meta["views"].append({"name": name, "cx": cx, "cy": cy, "width_cm": width, "file": "demo01_autolayout_raw_%s.png" % name})
+    # Perspective view of the hut door from the approach side: 9 m out, 5 m up, looking at the door.
+    door_l, door_r = vol.get("VOL_A1_DOOR_L"), vol.get("VOL_A1_DOOR_R")
+    if hut_vol and door_l and door_r:
+        dx, dy = (door_l["x"] + door_r["x"]) * 0.5, (door_l["y"] + door_r["y"]) * 0.5
+        ox, oy = dx - hut_vol["x"], dy - hut_vol["y"]
+        n = math.hypot(ox, oy) or 1.0
+        ox, oy = ox / n, oy / n
+        z0 = door_l.get("z", 0.0)
+        loc = unreal.Vector(dx + ox * 900, dy + oy * 900, z0 + 500)
+        look_yaw = math.degrees(math.atan2(-oy, -ox))
+        look_pitch = -math.degrees(math.atan2(500 - 100, 900))
+        angle_fov = 60.0
+        transform = unreal.Transform(loc, unreal.Rotator(pitch=look_pitch, yaw=look_yaw, roll=0.0), unreal.Vector(1, 1, 1))
+        cams.append(("hut_angle", camera, transform, [], angle_fov))
+        meta["views"].append({"name": "hut_angle", "file": "demo01_autolayout_raw_hut_angle.png",
+                              "proj": {"loc": [loc.x, loc.y, loc.z], "pitch": look_pitch, "yaw": look_yaw, "fov": angle_fov}})
     with open(SAVED + "Screenshots/demo01_autolayout_labels.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=1)
     return cams
@@ -1145,7 +1449,10 @@ def game_main(mode):
                     REPORT.append("RESULT: PASS (%d shots)" % len(state["cams"]))
                     finish()
                     return
-                name, cam, transform = state["cams"][state["shot"]]
+                name, cam, transform, hide, view_fov = state["cams"][state["shot"]]
+                for a in hide:
+                    a.set_actor_hidden_in_game(True)
+                cam.get_editor_property("camera_component").set_editor_property("field_of_view", view_fov)
                 cam.root_component.set_mobility(unreal.ComponentMobility.MOVABLE)
                 cam.set_actor_transform(transform, False, True)
                 pc = unreal.GameplayStatics.get_player_controller(w, 0)
@@ -1155,13 +1462,19 @@ def game_main(mode):
                 state["wait"] = state["t"] + 4.0
                 return
             if state["stage"] == 2 and state["t"] >= state["wait"]:
-                name, cam, transform = state["cams"][state["shot"]]
+                name, cam, transform, hide, view_fov = state["cams"][state["shot"]]
                 unreal.SystemLibrary.execute_console_command(
                     w, "HighResShot 3840x2160 filename=demo01_autolayout_raw_%s.png" % name)
                 REPORT.append("shot %s requested" % name)
                 state["shot"] += 1
-                state["stage"] = 1
+                state["stage"] = 3
                 state["wait"] = state["t"] + 6.0
+                state["shown_again"] = hide
+                return
+            if state["stage"] == 3 and state["t"] >= state["wait"]:
+                for a in state.get("shown_again") or []:
+                    a.set_actor_hidden_in_game(False)  # the hut roof back after the top-down hut shot
+                state["stage"] = 1
         except Exception as exc:
             import traceback
             REPORT.append("EXCEPTION: " + repr(exc))
@@ -1201,17 +1514,45 @@ def annotate():
             continue
         img = Image.open(raw).convert("RGB")
         w, h = img.size
-        s = w / view["width_cm"]
+        proj = view.get("proj")
+        s = w / view["width_cm"] if not proj else 1.0
 
-        def px(x, y):
-            return w * 0.5 + (x - view["cx"]) * s, h * 0.5 + (y - view["cy"]) * s
+        def px(x, y, z=0.0):
+            if not proj:
+                return w * 0.5 + (x - view["cx"]) * s, h * 0.5 + (y - view["cy"]) * s
+            # Perspective (UE: X forward, Y right, Z up; horizontal FOV).
+            cp, sp = math.cos(math.radians(proj["pitch"])), math.sin(math.radians(proj["pitch"]))
+            cyw, syw = math.cos(math.radians(proj["yaw"])), math.sin(math.radians(proj["yaw"]))
+            fwd = (cp * cyw, cp * syw, sp)
+            right = (-syw, cyw, 0.0)
+            up = (-sp * cyw, -sp * syw, cp)
+            d = (x - proj["loc"][0], y - proj["loc"][1], z - proj["loc"][2])
+            depth = sum(a * b for a, b in zip(d, fwd))
+            if depth < 10:
+                return -9999, -9999
+            focal = (w * 0.5) / math.tan(math.radians(proj["fov"] * 0.5))
+            return (w * 0.5 + sum(a * b for a, b in zip(d, right)) / depth * focal,
+                    h * 0.5 - sum(a * b for a, b in zip(d, up)) / depth * focal)
 
         draw = ImageDraw.Draw(img, "RGBA")
         taken = []
         for q in meta["labels"]:
             c = colours.get(q["kind"], (255, 255, 255))
-            x, y = px(q["x"], q["y"])
-            if q["kind"] == "struct":
+            qz = q.get("z", 0.0)
+            x, y = px(q["x"], q["y"], qz)
+            if proj and q["kind"] == "zone":
+                continue  # perspective close-up: cold / camera zones would only clutter the door
+            if proj and q["kind"] in ("volume", "struct", "bridge") and "ex" in q:
+                corners = [px(q["x"] + sx * q["ex"], q["y"] + sy * q["ey"], qz) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+                if all(cx > -5000 for cx, _ in corners):
+                    draw.polygon(corners, outline=c + (255,), fill=c + (40,))
+                if not q["text"]:
+                    continue
+            elif proj:
+                draw.ellipse([x - 7, y - 7, x + 7, y + 7], fill=c + (255,), outline=(0, 0, 0, 255))
+            if proj:
+                pass
+            elif q["kind"] == "struct":
                 x0, y0 = px(q["x"] - q["ex"], q["y"] - q["ey"])
                 x1, y1 = px(q["x"] + q["ex"], q["y"] + q["ey"])
                 draw.rectangle([x0, y0, max(x1, x0 + 2), max(y1, y0 + 2)], outline=(40, 60, 90, 255), width=2,
@@ -1240,7 +1581,7 @@ def annotate():
             draw.text((x + 11, ty), text, fill=c + (255,), font=f)
         draw.rectangle([0, 0, w, 44], fill=(0, 0, 0, 200))
         draw.text((12, 8), "Demo 01 Frozen Lake - AutoLayout (%s). +X right. Amber = tutorial volumes, blue = cold zones / bridge / "
-                  "crawl gap, red = PMC traps, pink = patrol loops. 1 px = %.1f cm" % (view["name"], 1 / s),
+                  "crawl gap, red = PMC traps, pink = patrol loops. %s" % (view["name"], "perspective" if proj else "1 px = %.1f cm" % (1 / s)),
                   fill=(255, 255, 255), font=small)
         out = shots_dir + ("demo01_autolayout_top.png" if view["name"] == "top" else "demo01_autolayout_%s.png" % view["name"])
         img.save(out)

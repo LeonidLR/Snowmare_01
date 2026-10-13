@@ -53,9 +53,20 @@ UMaterialInterface* ACoverGhostActor::ResolveBaseMaterial(const AOperativeCharac
 
 void ACoverGhostActor::ShowFor(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot)
 {
+	ShowPose(InOperative, InSlot, InOperative.PredictCoverFacing(InSlot), false);
+}
+
+void ACoverGhostActor::ShowCornerPeekFor(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Side)
+{
+	ShowPose(InOperative, InSlot, Side, true);
+}
+
+void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Facing, bool bFireIdle)
+{
 	Operative = const_cast<AOperativeCharacter*>(&InOperative);
 	Slot = InSlot;
 	bShown = true;
+	bCornerPeekPose = bFireIdle;
 	UMaterialInterface* Base = ResolveBaseMaterial(InOperative);
 	if (Base && (!Material || Material->Parent != Base))
 	{
@@ -67,7 +78,6 @@ void ACoverGhostActor::ShowFor(const AOperativeCharacter& InOperative, const FCo
 		Material->SetVectorParameterValue(TEXT("Color"), InOperative.GetSilhouetteColor());
 	}
 	// Back to the wall (actor yaw = wall normal); the side he would face only picks the _L/_R idle clip (CoverFacingRules).
-	const ECoverFacing Facing = InOperative.PredictCoverFacing(InSlot);
 	const float HalfHeight = InOperative.GetSimpleCollisionHalfHeight();
 	SetActorLocationAndRotation(InSlot.WorldLocation + FVector(0.f, 0.f, HalfHeight), FRotator(0.f, CoverFacingRules::FacingYaw(InSlot, Facing), 0.f));
 
@@ -86,11 +96,15 @@ void ACoverGhostActor::ShowFor(const AOperativeCharacter& InOperative, const FCo
 		Body->SetOverlayMaterial(Material); // the same overlay technique as the operatives' see-through silhouette
 		// The cover idle of the slot's height and facing side (the plain idle while no cover clips are assigned).
 		const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Source->GetAnimInstance());
-		const bool bCrouched = CoverRules::DefaultStanceFor(InSlot.Height) == EOperativeStance::Crouching;
+		// The peek is taken in his current stance; a cover entry in the slot height's default one.
+		const bool bCrouched = bFireIdle ? InOperative.GetStance() == EOperativeStance::Crouching
+			: CoverRules::DefaultStanceFor(InSlot.Height) == EOperativeStance::Crouching;
 		UAnimSequenceBase* Clip = nullptr;
 		if (Anim)
 		{
-			const TArray<TObjectPtr<UAnimSequenceBase>>& Idles = bCrouched ? Anim->CoverCrouchIdle : Anim->CoverStandIdle;
+			// The corner peek preview: the corner fire stance (cvr_*_fire_idle, leaning out round the edge, rifle up).
+			const TArray<TObjectPtr<UAnimSequenceBase>>& Idles = bFireIdle ? (bCrouched ? Anim->CoverCrouchFireIdle : Anim->CoverStandFireIdle)
+				: (bCrouched ? Anim->CoverCrouchIdle : Anim->CoverStandIdle);
 			const int32 Wanted = CoverFacingRules::ClipIndex(Facing);
 			Clip = Idles.IsValidIndex(Wanted) && Idles[Wanted] ? Idles[Wanted].Get() : nullptr;
 			for (int32 Index = 0; !Clip && Index < Idles.Num(); ++Index)

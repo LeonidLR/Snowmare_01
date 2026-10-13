@@ -3387,6 +3387,11 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		CoverThreatSeenTime = -1.0e9;
 		CoverShotTarget.Reset();
 		CoverFacing = PredictCoverFacing(Slot);
+		if (!bQuietCoverEntry)
+		{
+			bManualCornerPeek = false; // another wall: a manual peek belongs to the old one
+			bManualCornerPeekEventPending = false;
+		}
 	}
 	// Back to the wall, on the slot (the feet keep their ground height), facing along the wall towards the threat side.
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
@@ -3511,6 +3516,11 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 		RaiseCoverEvent(GameplayEvents::CoverLeft, CoverSlot, CurrentCoverHeight == ECoverHeight::HighCover ? FName(TEXT("High")) : FName(TEXT("Low")));
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: left the cover (%s)"), *DisplayName.ToString(), *Reason);
+	if (!bQuietCoverLeaveRequest)
+	{
+		bManualCornerPeek = false; // a move / another cover ends the manual corner peek (the open-shot step-off comes back to it)
+		bManualCornerPeekEventPending = false;
+	}
 	bInCover = false;
 	CurrentCoverHeight = ECoverHeight::None;
 	bShimmying = false;
@@ -3546,6 +3556,11 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 	// From where the body IS: while a shimmy runs CoverSlot is still the slot it started from (a reversing order whose
 	// target is on the old side of that slot used to get the old direction: right-moving body, left clip, no turn).
 	const float Along = CoverTraceRules::AlongWallDistanceFrom(CoverSlot, GetActorLocation(), Target.WorldLocation);
+	if (!bCornerPeekOrdering && bManualCornerPeek)
+	{
+		bManualCornerPeek = false; // a shimmy is another order: the manual corner peek ends
+		bManualCornerPeekEventPending = false;
+	}
 	if (FMath::Abs(Along) < 10.f)
 	{
 		return EOperativeOrderResult::Accepted; // already there
@@ -3687,6 +3702,15 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 	if (!bCornerAimActive && !bIsReloading && WantsCornerHold() && !(bCornerAutoDuck && GetWorld() && GetWorld()->GetTimeSeconds() < CornerAimDuckUntil))
 	{
 		BeginCornerAim();
+	}
+	// Manual corner peek (rev 5c): the pose is reached - CornerPeek once per order (the tutorial / telemetry).
+	if (bManualCornerPeekEventPending && bCornerAimActive && IsManualCornerPeekSpot())
+	{
+		bManualCornerPeekEventPending = false;
+		++ManualCornerPeekCount;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: corner peek - leaning out at the %s corner, holding the aim"), *DisplayName.ToString(),
+			ManualCornerPeekSide == ECoverFacing::Left ? TEXT("left") : TEXT("right"));
+		RaiseCoverEvent(GameplayEvents::CornerPeek, CoverSlot, ManualCornerPeekSide == ECoverFacing::Left ? FName(TEXT("Left")) : FName(TEXT("Right")));
 	}
 	if (CVarDebugCornerAim.GetValueOnGameThread() > 0 && GetWorld())
 	{
@@ -3855,6 +3879,10 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 			CoverFacing = Edge;
 		}
 	}
+	if (bManualCornerPeek)
+	{
+		CoverFacing = ManualCornerPeekSide; // the ordered corner, whatever the threat side (until another order)
+	}
 	const bool bWasAtCorner = bAtCoverCorner;
 	bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, Config);
 	if (bAtCoverCorner && !bWasAtCorner && bInCover && !bShimmying)
@@ -3865,7 +3893,7 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: turns along the wall to the %s (threat %s)"), *DisplayName.ToString(),
 			CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"), bHasCoverThreat ? TEXT("known") : TEXT("none, nearest edge"));
-		bCoverSnapPending |= bAllowSnap && !bShimmying;
+		bCoverSnapPending |= bAllowSnap && !bShimmying && !bManualCornerPeek;
 	}
 }
 
@@ -4140,6 +4168,8 @@ void AOperativeCharacter::BeginCornerAim()
 	if (!bCornerAimActive)
 	{
 		bCornerAimActive = true;
+		bIsCornerLeaning = true; // leaned out (exposed) from the first frame of the aim, not one update later
+		LeanTimer = FMath::Max(LeanTimer, 0.2f);
 		CornerAimEvalTimer = 0.f;
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: leans out round the corner and holds the fire stance"), *DisplayName.ToString());
 	}
@@ -4271,7 +4301,7 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 		EndCornerAim(ECornerAimDecision::DuckToReload, TEXT("reloading"));
 		return;
 	}
-	if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !IsCornerHoldSpot())
+	if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !IsCornerHoldSpot() && !IsManualCornerPeekSpot())
 	{
 		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no longer at the exposed edge"));
 		return;
@@ -4319,7 +4349,9 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 		LastCornerAimTraceReason = Reason;
 		UE_LOG(LogCodexTactics, Display, TEXT("[CornerAim] %s: %s"), *DisplayName.ToString(), *CornerAimLabel);
 	}
-	if (Decision != ECornerAimDecision::StayAndFire && bCornerAutoDuck)
+	// A manual corner peek holds with no target at all (only the safety / reload breaks of the legacy mode apply to it).
+	if (Decision != ECornerAimDecision::StayAndFire && bCornerAutoDuck
+		&& !(Decision == ECornerAimDecision::ReturnNoTargets && IsManualCornerPeekSpot()))
 	{
 		EndCornerAim(Decision, Reason);
 	}
@@ -4328,9 +4360,9 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 void AOperativeCharacter::TrySnapToCoverCorner()
 {
 	bCoverSnapPending = false;
-	if (!bInCover || bShimmying || IsRaging() || IsPanicking())
+	if (!bInCover || bShimmying || IsRaging() || IsPanicking() || bManualCornerPeek)
 	{
-		return;
+		return; // (a manual corner peek walks to its own corner)
 	}
 	const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
 	if (TurnBased && TurnBased->IsActive())
@@ -4393,8 +4425,70 @@ bool AOperativeCharacter::IsCornerHoldSpot() const
 		&& bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
 }
 
+bool AOperativeCharacter::IsManualCornerPeekSpot() const
+{
+	return bManualCornerPeek && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight == ECoverHeight::HighCover
+		&& CoverFacing == ManualCornerPeekSide && bAtCoverCorner && CoverSlot.IsEdgeExposed(ManualCornerPeekSide);
+}
+
+EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, float EdgeAlongCm)
+{
+	if (!bInCover || CurrentCoverHeight != ECoverHeight::HighCover)
+	{
+		return EOperativeOrderResult::Unreachable; // a low cover is fired over the top anywhere: no corner to peek round
+	}
+	if (IsRaging() || IsPanicking() || IsKnockedDown())
+	{
+		return EOperativeOrderResult::Refused;
+	}
+	const FCoverFacingConfig Config = GetCoverFacingConfig();
+	const float StandOff = CoverFacingRules::CornerStandOff(Side, Stance == EOperativeStance::Crouching, Config);
+	const float Stand = CoverFacingRules::CornerPeekStandAlong(Side, EdgeAlongCm, StandOff);
+	const float BodyAlong = CoverTraceRules::AlongWallDistanceFrom(CoverSlot, CoverSlot.WorldLocation, GetActorLocation());
+	const bool bThere = FMath::Abs(Stand - BodyAlong) <= Config.CornerSnapToleranceCm + 10.f && !bShimmying;
+	const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	if (TurnBased && TurnBased->IsActive() && !bThere)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: corner peek refused in turn-based (%.0f cm from the corner: a grid move first)"),
+			*DisplayName.ToString(), FMath::Abs(Stand - BodyAlong));
+		return EOperativeOrderResult::Refused;
+	}
+	if (bCornerAimActive && CoverFacing != Side)
+	{
+		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("the other corner"));
+	}
+	if (!bThere)
+	{
+		FCoverSlot Target;
+		if (!CoverTraceRules::FindShimmySlot(GetWorld(), CoverSlot, CoverSlot.WallPoint + CoverSlot.RightTangent() * Stand, Target))
+		{
+			return EOperativeOrderResult::Unreachable;
+		}
+		TGuardValue<bool> Ordering(bCornerPeekOrdering, true);
+		const EOperativeOrderResult Result = OrderShimmyTo(Target);
+		if (Result != EOperativeOrderResult::Accepted)
+		{
+			return Result;
+		}
+	}
+	bManualCornerPeek = true;
+	ManualCornerPeekSide = Side;
+	CoverFacing = Side; // walks to it facing forward; the facing stays on that corner (UpdateCoverFacing)
+	bCoverSnapPending = false;
+	bManualCornerPeekEventPending = true;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: corner peek ordered at the %s corner (edge %.0f cm along the wall, stand %.0f, %s)"),
+		*DisplayName.ToString(), Side == ECoverFacing::Left ? TEXT("left") : TEXT("right"), EdgeAlongCm, Stand,
+		bThere ? TEXT("already there") : TEXT("shimmies there"));
+	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("CORNER PEEK"), FLinearColor(0.9f, 0.85f, 0.4f));
+	return EOperativeOrderResult::Accepted;
+}
+
 bool AOperativeCharacter::WantsCornerHold() const
 {
+	if (IsManualCornerPeekSpot())
+	{
+		return true; // the player ordered the corner aim (rev 5c): held with or without a fight
+	}
 	if (!IsCornerHoldSpot())
 	{
 		return false;

@@ -7,6 +7,11 @@
 // decided (melee counted as suppression / flank, every hit counted). Checks: A — no duck for safety at all, a run of
 // >= 8 consecutive corner shots without a break (only reloads may break it); B — every duck for safety has a ranged
 // reason. Counts: shots, ducks by reason, steps off the wall (open shots).
+// First (rev 5c, user request 2026-10-13) the MANUAL CORNER PEEK, exploring with no enemy in the world: in cover at the middle
+// of the 6 m wall, hovering its end shows the peek preview (ghost + crosshair cursor) and the middle does not; a click on the
+// end (ACodexTacticsPlayerController::TryHandleCoverClick) sends him there - he reaches the corner, leans out in the corner aim
+// and HOLDS it with nobody around (CornerPeek once), a move order releases it; again in the legacy cover mode
+// (bCornerHoldAtEdge off, bCornerAutoDuck on: no "no targets" return), where a shimmy order releases it.
 
 #include "CoreMinimal.h"
 
@@ -24,6 +29,7 @@
 #include "Combat/WaveSubsystem.h"
 #include "Components/StaticMeshComponent.h"
 #include "Containers/Ticker.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
@@ -56,6 +62,10 @@ namespace CornerHoldSmoke
 		FVector R = FVector::RightVector;
 		float GroundZ = 0.f;
 		TWeakObjectPtr<AOperativeCharacter> Op;
+		/** Rev 5c manual corner peek phase: the wall, the peek pass (0 = default cover mode, 1 = legacy), frames the aim broke. */
+		TWeakObjectPtr<AStaticMeshActor> Wall;
+		int32 PeekPass = 0;
+		int32 PeekBrokenFrames = 0;
 		FPhase Phase[3];
 		int32 LastLean = 0;
 		int32 LastOpen = 0;
@@ -305,7 +315,7 @@ namespace CornerHoldSmoke
 		State.Time += 0.05f;
 		State.StageTime += 0.05f;
 		UWorld* World = WeakWorld.Get();
-		if (!World || State.Time > 240.f)
+		if (!World || State.Time > 300.f)
 		{
 			return World ? Finish(State) : false;
 		}
@@ -324,8 +334,6 @@ namespace CornerHoldSmoke
 			{
 				return true;
 			}
-			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			Op = Squad->GetLeader();
 			State.Op = Op;
 			// Headless: the pose (and with it the rifle) is only evaluated when forced - the barrel checks need the real pose.
@@ -341,6 +349,156 @@ namespace CornerHoldSmoke
 			State.R = FVector::CrossProduct(FVector::UpVector, State.F);
 			State.P = Op->GetActorLocation();
 			State.GroundZ = State.P.Z - Op->GetSimpleCollisionHalfHeight();
+			// Exploring first (the manual corner peek phase): nobody in the world.
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				It->Destroy();
+			}
+			int32 Index = 0;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->HealthComponent->SetMaxHealth(100000.f);
+				if (Member != Op)
+				{
+					Member->StopOperative();
+					Member->TeleportTo(State.P - State.F * 1500.f + State.R * (Index++ % 2 == 0 ? 400.f : -400.f), State.F.Rotation(), false, true);
+				}
+			}
+			Op->ReserveAmmo = 600;
+			const FVector WallCentre = State.P + State.F * 400.f;
+			State.Wall = SpawnBlock(World, FVector(WallCentre.X, WallCentre.Y, State.GroundZ + 150.f), State.F.Rotation(), FVector(0.4f, 6.f, 3.f));
+			State.Stage = 20;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// --- Manual corner peek (rev 5c), exploring: no fight, no enemy ---
+		case 20:
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			if (State.PeekPass == 1)
+			{
+				Op->bCornerHoldAtEdge = false; // the legacy cover mode (CoverSmoke / CoverCrouchSmoke run it)
+				Op->bCornerAutoDuck = true;
+			}
+			FCoverSlot Middle;
+			const bool bFound = CoverTraceRules::FindCoverSlotAt(World, State.P + State.F * 380.f + FVector(0.f, 0.f, 90.f), State.F, Middle);
+			Check(State, bFound && Op->OrderTakeCover(Middle, false) == EOperativeOrderResult::Accepted,
+				FString::Printf(TEXT("peek pass %d: cover at the middle of the 6 m wall (no enemy, no fight)"), State.PeekPass));
+			State.Stage = 21;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 21:
+		{
+			if ((!Op->bInCover || Op->bShimmying || State.StageTime < 2.5f) && State.StageTime < 12.f)
+			{
+				return true;
+			}
+			int32 Enemies = 0;
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				++Enemies;
+			}
+			Check(State, Op->bInCover && Op->IsInHighCover() && !Op->IsCornerAimActive() && Enemies == 0,
+				FString::Printf(TEXT("peek pass %d: hugging the wall's middle, no corner aim, %d enemies"), State.PeekPass, Enemies));
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			AStaticMeshActor* Wall = State.Wall.Get();
+			if (!PC || !Wall)
+			{
+				Check(State, false, TEXT("controller / wall"));
+				return Finish(State);
+			}
+			// The wall's end on its -R side (the corner the fight phases use), 20 cm in from the end, on the face he hugs.
+			const FVector Centre = State.P + State.F * 400.f;
+			const FHitResult EdgeHit(Wall, Wall->GetStaticMeshComponent(), Centre - State.F * 20.f - State.R * 280.f + FVector(0.f, 0.f, State.GroundZ + 150.f - Centre.Z),
+				-State.F);
+			const FHitResult MiddleHit(Wall, Wall->GetStaticMeshComponent(), Centre - State.F * 20.f + State.R * 30.f + FVector(0.f, 0.f, State.GroundZ + 150.f - Centre.Z),
+				-State.F);
+			ECoverFacing Side = ECoverFacing::Left;
+			float Edge = 0.f;
+			const bool bEdge = PC->FindCornerPeekForHit(Op, EdgeHit, Side, Edge);
+			Check(State, bEdge && FMath::Abs(Edge) > 250.f,
+				FString::Printf(TEXT("the wall's end is a corner peek target (edge %.0f cm along, beyond his slot's probes)"), Edge));
+			Check(State, PC->UpdateCornerPeekHover(Op, &EdgeHit) && PC->IsCornerPeekPreviewShown() && PC->CurrentMouseCursor == EMouseCursor::Crosshairs,
+				TEXT("hovering the end: the peek ghost + the crosshair cursor"));
+			Check(State, !PC->UpdateCornerPeekHover(Op, &MiddleHit) && !PC->IsCornerPeekPreviewShown() && PC->CurrentMouseCursor != EMouseCursor::Crosshairs,
+				TEXT("hovering the middle: no peek preview (a click there is a shimmy)"));
+			const int32 PeeksBefore = Op->GetManualCornerPeekCount();
+			Check(State, PC->TryHandleCoverClick(EdgeHit, nullptr) && Op->IsManualCornerPeek() && Op->GetManualCornerPeekCount() == PeeksBefore,
+				TEXT("a click on the end orders the corner peek (the pose is not reached yet)"));
+			State.PeekBrokenFrames = 0;
+			State.Stage = 22;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 22:
+			if (!(Op->bAtCoverCorner && Op->IsCornerAimActive() && Op->bIsCornerLeaning) && State.StageTime < 10.f)
+			{
+				return true;
+			}
+			Check(State, Op->bInCover && Op->bAtCoverCorner && Op->IsCornerAimActive() && Op->IsManualCornerPeek() && Op->bIsCornerLeaning,
+				FString::Printf(TEXT("peek pass %d: at the corner, leaning out in the corner aim (%.1f s)"), State.PeekPass, State.StageTime));
+			Check(State, Op->GetManualCornerPeekCount() == State.PeekPass + 1, TEXT("CornerPeek raised once"));
+			State.Stage = 23;
+			State.StageTime = 0.f;
+			return true;
+		case 23:
+		{
+			State.PeekBrokenFrames += Op->IsCornerAimActive() && Op->bAtCoverCorner ? 0 : 1;
+			if (State.StageTime < 4.f)
+			{
+				return true;
+			}
+			Check(State, State.PeekBrokenFrames == 0 && Op->IsCornerAimActive() && Op->IsManualCornerPeek(),
+				FString::Printf(TEXT("peek pass %d: held 4 s with nobody around (broken in %d frames)"), State.PeekPass, State.PeekBrokenFrames));
+			if (State.PeekPass == 0)
+			{
+				Op->OrderMoveTo(State.P, false); // another order: a move
+			}
+			else
+			{
+				FCoverSlot Middle;
+				CoverTraceRules::FindShimmySlot(World, Op->GetCoverSlot(), State.P + State.F * 380.f + FVector(0.f, 0.f, 90.f), Middle);
+				Op->OrderShimmyTo(Middle); // another order: a shimmy
+			}
+			State.Stage = 24;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 24:
+		{
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			Check(State, !Op->IsCornerAimActive() && !Op->IsManualCornerPeek() && (State.PeekPass == 0 ? !Op->bInCover : Op->bInCover),
+				FString::Printf(TEXT("peek pass %d: the %s releases the peek"), State.PeekPass, State.PeekPass == 0 ? TEXT("move order") : TEXT("shimmy order")));
+			if (State.PeekPass == 0)
+			{
+				State.PeekPass = 1;
+				State.Stage = 20;
+				State.StageTime = 0.f;
+				return true;
+			}
+			Op->bCornerHoldAtEdge = true;
+			Op->bCornerAutoDuck = false;
+			Op->OrderMoveTo(State.P, false);
+			State.Stage = 25;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 25:
+		{
+			if (State.StageTime < 3.f)
+			{
+				return true;
+			}
+			// The fights.
+			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			// The wave stays alive with a frozen hound far away; the spawned wave goes.
 			AEnemyCharacter* Parked = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::FrostHound,
 				FVector(State.P.X, State.P.Y, State.GroundZ + 100.f) - State.F * 6000.f, State.F.Rotation());
@@ -356,19 +514,6 @@ namespace CornerHoldSmoke
 				Parked->CustomTimeDilation = 0.f;
 				Parked->SetActorTickEnabled(false);
 			}
-			int32 Index = 0;
-			for (AOperativeCharacter* Member : Squad->GetMembers())
-			{
-				Member->HealthComponent->SetMaxHealth(100000.f);
-				if (Member != Op)
-				{
-					Member->StopOperative();
-					Member->TeleportTo(State.P - State.F * 1500.f + State.R * (Index++ % 2 == 0 ? 400.f : -400.f), State.F.Rotation(), false, true);
-				}
-			}
-			Op->ReserveAmmo = 600;
-			const FVector WallCentre = State.P + State.F * 400.f;
-			SpawnBlock(World, FVector(WallCentre.X, WallCentre.Y, State.GroundZ + 150.f), State.F.Rotation(), FVector(0.4f, 6.f, 3.f));
 			State.Stage = 1;
 			State.StageTime = 0.f;
 			return true;

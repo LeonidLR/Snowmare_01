@@ -82,6 +82,34 @@ bool FTutorialStateMachine::IsArmed(int32 Index) const
 	return true;
 }
 
+bool FTutorialStateMachine::IsSubjectAllowed(int32 Index, FName SubjectId) const
+{
+	const TArray<FName>& DistinctFrom = Data.Steps[Index].Complete.DistinctFrom;
+	if (DistinctFrom.IsEmpty())
+	{
+		return true;
+	}
+	if (SubjectId.IsNone())
+	{
+		return false; // "distinct_from" needs to know who did it
+	}
+	for (const FName Other : DistinctFrom)
+	{
+		const int32 OtherIndex = IndexOf(Other);
+		if (Runtime.IsValidIndex(OtherIndex) && Runtime[OtherIndex].Contributors.Contains(SubjectId))
+		{
+			return false; // he already did the other part (stood left of the door: he is not the one who goes in)
+		}
+	}
+	return true;
+}
+
+const TSet<FName>* FTutorialStateMachine::GetContributors(FName StepId) const
+{
+	const int32 Index = IndexOf(StepId);
+	return Runtime.IsValidIndex(Index) ? &Runtime[Index].Contributors : nullptr;
+}
+
 float FTutorialStateMachine::ReadStat(FName Stat) const
 {
 	return StatProvider ? StatProvider(Stat) : 0.f;
@@ -181,6 +209,7 @@ void FTutorialStateMachine::Fire(int32 Index, bool bForce)
 	State.HeldSeconds = 0.f;
 	State.TriggerHits = 0;
 	State.CountedSubjects.Reset();
+	State.Contributors.Reset();
 	State.bLocksApplied = false;
 	if (Step.Trigger.DelaySeconds > 0.f)
 	{
@@ -411,7 +440,7 @@ void FTutorialStateMachine::HandleCommand(FName CommandId)
 	}
 }
 
-void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId)
+void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId, const TArray<FName>& SubjectVolumes)
 {
 	if (EventName.IsNone() || !IsLoaded())
 	{
@@ -424,6 +453,14 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId)
 		const FTutorialCompletion& Complete = Data.Steps[Index].Complete;
 		if (WasRunning[Index] && TutorialRules::IsRunning(Runtime[Index].State) && !Complete.Event.IsEmpty() && TutorialRules::MatchesName(Complete.Event, EventName))
 		{
+			if (!Complete.InVolume.IsNone() && !SubjectVolumes.Contains(Complete.InVolume))
+			{
+				continue; // "in_volume": not where the lesson asks for it (e.g. cover entered, but not beside the door)
+			}
+			if (!IsSubjectAllowed(Index, SubjectId))
+			{
+				continue; // "distinct_from": this operative already did another part of the lesson
+			}
 			if (Complete.bDistinctSubjects)
 			{
 				bool bAlreadyCounted = true;
@@ -435,6 +472,10 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId)
 				{
 					continue; // no subject, or this operative already counted
 				}
+			}
+			if (!SubjectId.IsNone())
+			{
+				Runtime[Index].Contributors.Add(SubjectId);
 			}
 			AddProgress(Index, 1, Complete.Count);
 		}
@@ -465,7 +506,37 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId)
 	}
 }
 
-void FTutorialStateMachine::HandleVolume(FName VolumeId, FName StepId, FName BeatId)
+bool FTutorialStateMachine::CountVolumeCompletions(FName VolumeId, FName SubjectId, const TArray<bool>& WasRunning)
+{
+	bool bCounted = false;
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		if (WasRunning[Index] && TutorialRules::IsRunning(Runtime[Index].State) && Data.Steps[Index].Complete.Volume == VolumeId
+			&& IsSubjectAllowed(Index, SubjectId))
+		{
+			if (!SubjectId.IsNone())
+			{
+				Runtime[Index].Contributors.Add(SubjectId);
+			}
+			AddProgress(Index, 1, 1);
+			bCounted = true;
+		}
+	}
+	return bCounted;
+}
+
+bool FTutorialStateMachine::HandleVolumePresence(FName VolumeId, FName SubjectId)
+{
+	if (!IsLoaded() || VolumeId.IsNone())
+	{
+		return false;
+	}
+	const bool bCounted = CountVolumeCompletions(VolumeId, SubjectId, RunningSnapshot());
+	PumpQueues();
+	return bCounted;
+}
+
+void FTutorialStateMachine::HandleVolume(FName VolumeId, FName StepId, FName BeatId, FName SubjectId)
 {
 	if (!IsLoaded())
 	{
@@ -475,14 +546,7 @@ void FTutorialStateMachine::HandleVolume(FName VolumeId, FName StepId, FName Bea
 	{
 		// Completions first, before a beat this volume starts drops the earlier beat's leftover cards (the walk card that asked
 		// for this very place is completed, not dropped). Only steps already running when this input came count it.
-		const TArray<bool> WasRunning = RunningSnapshot();
-		for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
-		{
-			if (WasRunning[Index] && TutorialRules::IsRunning(Runtime[Index].State) && Data.Steps[Index].Complete.Volume == VolumeId)
-			{
-				AddProgress(Index, 1, 1);
-			}
-		}
+		CountVolumeCompletions(VolumeId, SubjectId, RunningSnapshot());
 	}
 	if (!BeatId.IsNone())
 	{

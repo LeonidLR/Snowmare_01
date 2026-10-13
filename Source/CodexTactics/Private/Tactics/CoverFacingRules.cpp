@@ -251,6 +251,66 @@ namespace CoverFacingRules
 		return !(Slot.bRightEdgeExposed && Along > Slot.RightEdgeDistanceCm + MarginCm);
 	}
 
+	bool FindPeekEdge(const FCoverSlot& Current, const FVector& Click, const FCoverSlot* Probe, ECoverFacing& OutSide, float& OutEdgeAlongCm,
+		const FCoverPeekConfig& Config)
+	{
+		if (!Current.IsValid() || Current.Height != ECoverHeight::HighCover)
+		{
+			return false;
+		}
+		const float Depth = DepthInFrontOfWall(Current, Click);
+		if (Depth > Config.MaxFrontCm || Depth < -Config.MaxBehindCm)
+		{
+			return false; // out in front of the wall (a ground click) or far behind it
+		}
+		const FVector Right = Current.RightTangent();
+		const float Along = static_cast<float>(FVector::DotProduct(Click - Current.WorldLocation, Right));
+		struct FEdge
+		{
+			ECoverFacing Side;
+			float AlongCm;
+		};
+		TArray<FEdge, TInlineAllocator<4>> Edges;
+		auto AddEdges = [&Edges](const FCoverSlot& Slot, float Offset)
+		{
+			if (Slot.bRightEdgeExposed)
+			{
+				Edges.Add({ ECoverFacing::Right, Offset + Slot.RightEdgeDistanceCm });
+			}
+			if (Slot.bLeftEdgeExposed)
+			{
+				Edges.Add({ ECoverFacing::Left, Offset - Slot.LeftEdgeDistanceCm });
+			}
+		};
+		AddEdges(Current, 0.f);
+		if (Probe && Probe->IsValid() && Probe->Height == ECoverHeight::HighCover
+			&& FVector::DotProduct(Probe->WallNormal.GetSafeNormal2D(), Current.WallNormal.GetSafeNormal2D()) > 0.9f)
+		{
+			AddEdges(*Probe, static_cast<float>(FVector::DotProduct(Probe->WorldLocation - Current.WorldLocation, Right)));
+		}
+		bool bFound = false;
+		float Best = TNumericLimits<float>::Max();
+		for (const FEdge& Edge : Edges)
+		{
+			// > 0: the click lies on the wall, this far in from the edge; < 0: past the edge.
+			const float Inward = Edge.Side == ECoverFacing::Right ? Edge.AlongCm - Along : Along - Edge.AlongCm;
+			if (Inward > Config.EdgeHitCm || Inward < -Config.PastEdgeCm || FMath::Abs(Inward) >= Best)
+			{
+				continue;
+			}
+			Best = FMath::Abs(Inward);
+			OutSide = Edge.Side;
+			OutEdgeAlongCm = Edge.AlongCm;
+			bFound = true;
+		}
+		return bFound;
+	}
+
+	float CornerPeekStandAlong(ECoverFacing Side, float EdgeAlongCm, float StandOffCm)
+	{
+		return Side == ECoverFacing::Right ? EdgeAlongCm - StandOffCm : EdgeAlongCm + StandOffCm;
+	}
+
 	int32 ClipIndex(ECoverFacing Facing)
 	{
 		// Pack _L = his own right as he stands back to the wall (the pack names its sides facing the wall).

@@ -5,8 +5,8 @@
     "Texts are ids only (TUT_*, WT_*, OBJ_*): English text comes from the narrative manifest 'tutorial' section (TANDEM request #17), else",
     "Content/Data/Tutorial/demo_01_texts_draft.json, else '[EN missing: <id>]'. Command ids: Source/CodexTactics/Public/Core/PlayerCommands.h.",
     "Beats implemented here (Phase 1 = user steps 1-9 + the standalone A3 fence / A4 cone cards): A0 drop (the HQ radio talks while the squad may",
-    "already walk / run and the staged camera lesson runs alongside; the walk card after both), A1 crossing (shaky bridge one at a time = select +",
-    "solo, regroup, box, squad banter, cold -> heat pack = inventory unlock, 'running keeps you warm' tip, hut loot), A2 camp (barrel push + light),",
+    "already walk / run and the staged camera lesson runs alongside; 'click to walk' + 'double-click to run' right after the camera chain, rev 5c), A1 crossing (the shaky bridge holds the followers: one at a",
+    "time on its own, rev 5c; squad banter, cold -> heat pack = inventory unlock, 'running keeps you warm' tip, hut: a tactical entry = select + solo + cover at the door, loot, regroup, box), A2 camp (barrel push + light),",
     "A3 approach (stances, vault, low fence crawl, cover, mines / wires spotted), A4 ambush (vision-cone toggle, tripwire; the fight itself is Phase 2).",
     "Beats A5-A8 are designed in the beat sheet only.",
     "PROGRESSIVE UNLOCK (user request 2026-10-13, beat sheet section 'Locks'): beat A0 locks every command family not taught yet; camera, Order.*",
@@ -16,7 +16,9 @@
     "Leftover hint cards of an earlier beat are dropped when a later beat starts (beacon 1 reached during the camera lesson: precredited or skipped).",
     "'precredit' (default true): a command card the player already did before it was due is completed without showing it.",
     "Volume ids (VOL_*) are the VolumeId / StepId of ATutorialTriggerVolume actors placed in L_Demo01_A_FrozenLake:",
-    "VOL_A0_BEACON1 (BeatId A1, at beacon 1), VOL_A1_BEACON2 (the crack / the bridge approach, kept), VOL_A1_HUT (hut floor, Any Operative, kept),",
+    "VOL_A0_BEACON1 (BeatId A1, at beacon 1), VOL_A1_BEACON2 (the crack / the bridge approach, kept), VOL_A1_HUT_APPROACH (rev 5c, Leader, ~10 m in front of",
+    "the hut door), VOL_A1_DOOR_L / VOL_A1_DOOR_R (rev 5c: the wall left / right of the door, cover 'in_volume' filters), VOL_A1_HUT (the hut INTERIOR only, Any",
+    "Operative, Fire Once OFF),",
     "VOL_A1_BEACON3 (kept), VOL_A2_CAMP (BeatId A2, kept), VOL_A3_APPROACH (BeatId A3, NEW: the complex comes into view), VOL_A3_WIND (was",
     "VOL_A1_BEACON4: move it to the approach), VOL_A3_RIDGE / VOL_A3_RIDGE_FAR (were VOL_A1_RIDGE / _FAR: move them), VOL_A3_FENCE (NEW: in front of",
     "the ACrawlGapActor low fence), VOL_A3_FIELD (was VOL_A6_FIELD: the cover field on the approach), VOL_A4_OVERLOOK (BeatId A4, NEW: the patrols",
@@ -34,9 +36,9 @@
         "Grenade.*", "Flare.*", "Weapon.*", "Time.*", "TB.*", "Vehicle.*", "View.*", "Order.WatchSector"] },
     { "id": "A1", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A1" },
     { "id": "A2", "lesson": true, "checkpoint": false, "title_id": "TUT_BEAT_A2",
-      "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*"] },
+      "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*"] },
     { "id": "A3", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A3",
-      "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Object.Relocate", "Object.LightBarrel"] },
+      "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Object.Relocate", "Object.LightBarrel"] },
     { "id": "A4", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A4",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Object.Relocate", "Object.LightBarrel", "Stance.*", "Cover.*",
         "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot"] }
@@ -98,11 +100,18 @@
       "complete": { "commands": ["Camera.Zoom"], "count": 2 }
     },
     {
-      "_comment": "User flow step 3: walk to beacon 1, after BOTH the camera chain and the HQ radio ('step' list: the last of them to finish fires it). Location-bound (volume completion, never precredited); the squad may already be there - then beat A1 has started and this card is dropped.",
+      "_comment": "Movement lesson right after the camera lesson (rev 5c, user request 2026-10-13): 'Click to walk' as soon as the camera chain ends (no longer waits for the HQ radio), done on a move order; precredited when the player already walked. The beacon objective (A0_obj_beacon) still asks for beacon 1. Beacon 1 reached early (beat A1): the leftover A0 cards are dropped (precredited or skipped).",
       "id": "A0_move", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_MOVE",
       "keys": ["Order.Move"],
-      "trigger": { "type": "after_step", "step": ["A0_cam_zoom", "A0_radio_hq"] },
-      "complete": { "volume": "VOL_A0_BEACON1", "timeout_s": 60 }
+      "trigger": { "type": "after_step", "step": "A0_cam_zoom" },
+      "complete": { "commands": ["Order.Move"], "timeout_s": 60 }
+    },
+    {
+      "_comment": "Then 'Double-click to run' (rev 5c), done on a sprint order; precredited when the player already ran. Sprint is never locked (rev 5b).",
+      "id": "A0_sprint", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_SPRINT",
+      "keys": ["Order.Sprint"],
+      "trigger": { "type": "after_step", "step": "A0_move" },
+      "complete": { "commands": ["Order.Sprint"], "timeout_s": 60 }
     },
 
     {
@@ -120,54 +129,30 @@
       ]
     },
     {
-      "_comment": "User flow step 4: the crevasse at beacon 2 with the shaky bridge (ABridgeCrossingVolume, capacity 1). VOL_A1_BEACON2 (kept) is the approach.",
+      "_comment": "User flow step 4 (rev 5c 2026-10-13: the bridge teaches NOTHING - no select / solo): the crevasse at beacon 2 with the shaky bridge (ABridgeCrossingVolume, capacity 1) holds the followers at the edge on its own, so the squad crosses one at a time automatically. VOL_A1_BEACON2 is the approach. A short line, then the objective is done when all three are across.",
       "id": "A1_wt_bridge", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
       "lines": [
         { "speaker": "Engineer", "text_id": "WT_A1_04" },
-        { "speaker": "Commander", "text_id": "WT_A1_05" },
-        { "speaker": "Engineer", "text_id": "WT_A1_06" }
+        { "speaker": "Commander", "text_id": "WT_A1_05" }
       ]
     },
     {
-      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
-      "keys": ["Select.Member"],
+      "_comment": "Done when every operative has crossed (BridgeCrossed x3, distinct operatives; the bridge refuses a second body itself). Never precredited (event completion). The marker Step Id A1_bridge shows it.",
+      "id": "A1_bridge", "beat": "A1", "kind": "objective", "text_id": "OBJ_A1_BRIDGE",
       "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
-      "complete": { "commands": ["Select.Member"], "timeout_s": 30 }
-    },
-    {
-      "_comment": "Id A1_solo kept for the user's marker (the solo point moved from the wind scout spot to the bridge). Done when every operative has crossed; the bridge itself refuses a second body (BridgeRefused). Never precredited (event completion).",
-      "id": "A1_solo", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SOLO",
-      "keys": ["Select.Member", "Squad.Solo"],
-      "unlock": ["Squad.Solo", "Squad.Regroup"],
-      "trigger": { "type": "after_step", "step": "A1_select" },
       "complete": { "event": "BridgeCrossed", "count": 3, "distinct_operatives": true, "timeout_s": 240 }
     },
     {
-      "_comment": "The bridge creaked (a second operative stopped at the edge): one feed line with the key hint.",
+      "_comment": "The bridge creaked (the player sent a second operative on while one is crossing): one feed line.",
       "id": "A1_bridge_refused", "beat": "A1", "kind": "feed", "text_id": "TUT_A1_BRIDGE_REFUSED",
       "trigger": { "type": "event", "event": "BridgeRefused" },
       "lines": [ { "speaker": "Commander", "text_id": "TUT_A1_BRIDGE_REFUSED" } ]
     },
     {
-      "_comment": "Not precredited: the squad may stand in solo mode now and must actually regroup.",
-      "id": "A1_regroup", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_REGROUP",
-      "keys": ["Squad.Regroup"],
-      "precredit": false,
-      "trigger": { "type": "after_step", "step": "A1_solo", "delay_s": 2 },
-      "complete": { "commands": ["Squad.Regroup"], "timeout_s": 60 }
-    },
-    {
-      "_comment": "Orchestrator default 2026-10-13: box select is taught after the bridge (gather everyone with a box and go on).",
-      "id": "A1_box", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_BOX",
-      "keys": ["Select.Box"],
-      "trigger": { "type": "after_step", "step": "A1_regroup" },
-      "complete": { "commands": ["Select.Box"], "timeout_s": 30 }
-    },
-    {
       "_comment": "User flow step 5: the squad walk-and-talk (the banter that used to open A0) plays after the bridge.",
       "id": "A1_wt_banter", "beat": "A1", "kind": "walk_talk",
-      "trigger": { "type": "after_step", "step": "A1_box", "delay_s": 1 },
+      "trigger": { "type": "after_step", "step": "A1_bridge", "delay_s": 1 },
       "lines": [
         { "speaker": "Medic-Sapper", "text_id": "WT_A1_BANTER_1" },
         { "speaker": "Engineer", "text_id": "WT_A1_BANTER_2" },
@@ -178,7 +163,7 @@
     {
       "_comment": "Tutorial safety (kept from rev 3): 20 s after the crossing, if nobody is at Chills (40 %) yet - the player kept out of the wind zone, ran (running warms; sprint is free from the start since 2026-10-13) or the level's cold_rate_mult 0.8 kept it low - a scripted gust: the line + every operative +20 cold, at least 42 % (a cold shock: never scaled by cold_rate_mult) so the heat-pack lesson always starts.",
       "id": "A1_gust", "beat": "A1", "kind": "walk_talk",
-      "trigger": { "type": "after_step", "step": "A1_solo", "delay_s": 20 },
+      "trigger": { "type": "after_step", "step": "A1_bridge", "delay_s": 20 },
       "condition": { "stat": "squad_cold_max", "below": 40 },
       "action": { "type": "cold_bump", "amount": 20, "min_level": 42 },
       "lines": [ { "speaker": "Medic-Sapper", "text_id": "WT_A1_GUST" } ]
@@ -188,7 +173,7 @@
       "id": "A1_heatpack", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HEATPACK",
       "keys": ["Item.HeatPack", "Inventory.Open"], "focus": "coldest_operative",
       "unlock": ["Inventory.*", "Item.*"],
-      "trigger": { "type": "condition", "requires": ["A1_solo"] },
+      "trigger": { "type": "condition", "requires": ["A1_bridge"] },
       "condition": { "stat": "squad_cold_max", "at_least": 40 },
       "complete": { "event": "ItemUsed.HEAT_PACK", "timeout_s": 90 }
     },
@@ -200,17 +185,16 @@
       "complete": { "event": "ItemUsed.HEAT_PACK", "timeout_s": 40 }
     },
     {
-      "_comment": "User flow step 7: 'running keeps you warm' - a plain tip since 2026-10-13 (sprint is never locked any more).",
+      "_comment": "User flow step 7: 'running keeps you warm' - a survival line + tip (the run itself is taught in A0 since rev 5c).",
       "id": "A1_wt_warm", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_heatpack_mate" },
       "lines": [ { "speaker": "Medic-Sapper", "text_id": "WT_A1_WARMED" } ]
     },
     {
+      "_comment": "Survival tip, not a control lesson (rev 5c: running is taught in A0 by A0_sprint): no command completion, it shows for 10 s (skippable). Its followers (resupply line, hut objective) fire when it ends.",
       "id": "A1_sprint", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SPRINT",
-      "keys": ["Order.Sprint"],
-      "precredit": false,
       "trigger": { "type": "after_step", "step": "A1_heatpack_mate", "delay_s": 1 },
-      "complete": { "commands": ["Order.Sprint"], "timeout_s": 20 }
+      "complete": { "timeout_s": 10 }
     },
     {
       "_comment": "User flow step 8 (resupply, rev 4 order kept): after the sprint card the squad is 'nearly out' -> the hut. The user's TutorialMarkerActor with Step Id A1_obj_hut shows from here.",
@@ -224,9 +208,55 @@
       "complete": { "event": "ItemLooted.HeatPack" }
     },
     {
-      "_comment": "Loot lesson in the fishermen's hut (VOL_A1_HUT; the crate holds 3 heat packs).",
+      "_comment": "Rev 5c (designer review 2026-10-13): the TACTICAL HUT ENTRY teaches selection + Solo + cover. VOL_A1_HUT_APPROACH (Leader, ~10 m in front of the door) starts the walk-and-talk and the select card; then Solo; then one operative hugs the wall LEFT of the door (cover inside VOL_A1_DOOR_L), a second one RIGHT of it (VOL_A1_DOOR_R), the third goes in (VOL_A1_HUT = the interior only, Any Operative, Fire Once off) - three DIFFERENT operatives ('distinct_from'). The three entry cards are queued together, so they count in any order (one card on screen at a time). Markers: Step Id A1_hut_stack_l / A1_hut_stack_r / A1_hut_enter. Left / right as seen by the squad approaching the door.",
+      "id": "A1_wt_hut_approach", "beat": "A1", "kind": "walk_talk",
+      "trigger": { "type": "volume", "volume": "VOL_A1_HUT_APPROACH" },
+      "lines": [
+        { "speaker": "Commander", "text_id": "WT_A1_HUT_APPROACH_1" },
+        { "speaker": "Engineer", "text_id": "WT_A1_HUT_APPROACH_2" },
+        { "speaker": "Commander", "text_id": "WT_A1_HUT_APPROACH_3" }
+      ]
+    },
+    {
+      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
+      "keys": ["Select.Member"],
+      "trigger": { "type": "volume", "volume": "VOL_A1_HUT_APPROACH" },
+      "complete": { "commands": ["Select.Member"], "timeout_s": 30 }
+    },
+    {
+      "_comment": "Solo on (B): the others hold their spots while the selected operative moves alone. Unlocks Squad.Solo / Squad.Regroup. Not precredited (Solo must be ON now).",
+      "id": "A1_solo", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SOLO",
+      "keys": ["Select.Member", "Squad.Solo"],
+      "unlock": ["Squad.Solo", "Squad.Regroup"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A1_select" },
+      "complete": { "commands": ["Squad.Solo"], "timeout_s": 45 }
+    },
+    {
+      "_comment": "Cover is taught here now (rev 5c; A3_cover is the refresher in the cover field). Done when an operative settles in cover inside VOL_A1_DOOR_L (CoverEntered + in_volume).",
+      "id": "A1_hut_stack_l", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HUT_STACK_L",
+      "keys": ["Select.Member", "Cover.Preview", "Cover.Enter"],
+      "unlock": ["Cover.*"],
+      "trigger": { "type": "after_step", "step": "A1_solo" },
+      "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_L", "distinct_from": ["A1_hut_stack_r", "A1_hut_enter"], "timeout_s": 90 }
+    },
+    {
+      "id": "A1_hut_stack_r", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HUT_STACK_R",
+      "keys": ["Select.Member", "Cover.Enter"],
+      "trigger": { "type": "after_step", "step": "A1_solo" },
+      "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_R", "distinct_from": ["A1_hut_stack_l", "A1_hut_enter"], "timeout_s": 90 }
+    },
+    {
+      "_comment": "The third operative walks in (VOL_A1_HUT covers the interior only: the two at the door never stand in it). One already inside when the card comes counts at once (volume presence).",
+      "id": "A1_hut_enter", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HUT_ENTER",
+      "keys": ["Select.Member", "Order.Move"],
+      "trigger": { "type": "after_step", "step": "A1_solo" },
+      "complete": { "volume": "VOL_A1_HUT", "distinct_from": ["A1_hut_stack_l", "A1_hut_stack_r"], "timeout_s": 90 }
+    },
+    {
+      "_comment": "Inside: the crate (the two at the door hold their positions until the regroup).",
       "id": "A1_wt_hut", "beat": "A1", "kind": "walk_talk",
-      "trigger": { "type": "volume", "volume": "VOL_A1_HUT" },
+      "trigger": { "type": "after_step", "step": "A1_hut_enter" },
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A1_HUT" } ]
     },
     {
@@ -234,7 +264,7 @@
       "keys": ["Loot.Open"],
       "unlock": ["Loot.*"],
       "precredit": false,
-      "trigger": { "type": "volume", "volume": "VOL_A1_HUT" },
+      "trigger": { "type": "after_step", "step": "A1_hut_enter" },
       "complete": { "commands": ["Loot.Open"], "timeout_s": 60 }
     },
     {
@@ -247,6 +277,21 @@
       "id": "A1_wt_stocked", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 1 },
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A1_STOCKED" } ]
+    },
+    {
+      "_comment": "Not precredited: the squad stands in solo mode (two at the door, one inside) and must actually regroup (Solo off).",
+      "id": "A1_regroup", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_REGROUP",
+      "keys": ["Squad.Regroup"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 2 },
+      "complete": { "commands": ["Squad.Regroup"], "timeout_s": 60 }
+    },
+    {
+      "_comment": "Box select moved from the bridge (rev 5c: the squad arrives over the bridge together, there is nothing to gather there) to after the hut regroup.",
+      "id": "A1_box", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_BOX",
+      "keys": ["Select.Box"],
+      "trigger": { "type": "after_step", "step": "A1_regroup" },
+      "complete": { "commands": ["Select.Box"], "timeout_s": 30 }
     },
     {
       "_comment": "Beacon 3: formation lines (the guard card moved to the horde beat A8: the Engineer guards the repaired generator).",
@@ -363,7 +408,7 @@
       "lines": [ { "speaker": "Medic-Sapper", "text_id": "TUT_A3_FENCE_REFUSED" } ]
     },
     {
-      "_comment": "Cover on the approach (the former A6 sample: VOL_A6_FIELD -> VOL_A3_FIELD): one into cover, then each operative into his own cover (user decision 2026-10-11: manual per operative).",
+      "_comment": "Cover on the approach (the former A6 sample: VOL_A6_FIELD -> VOL_A3_FIELD): one into cover, then each operative into his own cover (user decision 2026-10-11: manual per operative). Since rev 5c cover is first taught at the hut door (A1_hut_stack_l unlocks Cover.*): this is the refresher in a real cover field.",
       "id": "A3_cover", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A6_COVER",
       "keys": ["Cover.Enter"],
       "unlock": ["Cover.*"],
@@ -380,6 +425,13 @@
       "keys": ["Select.Member", "Cover.Enter"],
       "trigger": { "type": "after_step", "step": "A3_cover", "delay_s": 2 },
       "complete": { "event": "CoverEntered", "count": 2, "distinct_operatives": true, "timeout_s": 45 }
+    },
+    {
+      "_comment": "Optional corner-peek card (rev 5c, user request 2026-10-13): in high cover a click on the END of the wall sends the operative to that corner, leaning out in the corner aim until the next order (command Cover.CornerPeek, event CornerPeek). Done when one does it, or after 45 s.",
+      "id": "A3_peek", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_PEEK",
+      "keys": ["Cover.CornerPeek"],
+      "trigger": { "type": "after_step", "step": "A3_squad_card", "delay_s": 1 },
+      "complete": { "event": "CornerPeek", "timeout_s": 45 }
     },
     {
       "id": "A3_bound", "beat": "A3", "kind": "objective", "text_id": "OBJ_A6_BOUND",

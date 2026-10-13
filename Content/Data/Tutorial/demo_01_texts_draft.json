@@ -1,5 +1,5 @@
 {
-  "_comment": "DRAFT placeholder tutorial texts (Demo 01 A0-A4, rev 5 flow 2026-10-13), used only when narrative_manifest.json has no entry for the id (FNarrativeManifest::DraftTutorialTexts). To be replaced by the sheet Tutorial tab (TANDEM request 17). {key:<CommandId>} = the key cap, {focus} = the operative a 'focus' card is about. English only (in-game text).",
+  "_comment": "DRAFT placeholder tutorial texts (Demo 01 A0-A4, rev 5c flow 2026-10-13), used only when narrative_manifest.json has no entry for the id (FNarrativeManifest::DraftTutorialTexts). To be replaced by the sheet Tutorial tab (TANDEM request 17). {key:<CommandId>} = the key cap, {focus} = the operative a 'focus' card is about. English only (in-game text).",
   "texts": {
     "WT_A0_BRIEFING_1": {
       "text": "Cold Silence, this is HQ. Drop confirmed. You're on the ice, three klicks south of the Sector-17 weather station."
@@ -43,8 +43,12 @@
       "text": "Zoom in and out with {key:Camera.Zoom}."
     },
     "TUT_A0_MOVE": {
-      "title": "MOVE",
-      "text": "Click the ground to move the squad. Walk to the amber ring at beacon one."
+      "title": "CLICK TO WALK",
+      "text": "Click the ground ({key:Order.Move}): the squad walks there. Follow the beacons to the amber ring at beacon one."
+    },
+    "TUT_A0_SPRINT": {
+      "title": "DOUBLE-CLICK TO RUN",
+      "text": "Double-click the ground ({key:Order.Sprint}) to run there. Running is faster and keeps the body warm."
     },
     "OBJ_A0_BEACON1": {
       "text": "Reach beacon one"
@@ -71,25 +75,46 @@
       "text": "Crack ahead — and somebody rigged a plank bridge over it. Fishermen's work."
     },
     "WT_A1_05": {
-      "text": "That thing won't take two of us at once. One at a time."
+      "text": "One at a time — the planks won't hold two."
     },
-    "WT_A1_06": {
-      "text": "I'll go first. The wind's stronger out on the edge."
+    "OBJ_A1_BRIDGE": {
+      "text": "Cross the bridge one at a time"
+    },
+    "WT_A1_HUT_APPROACH_1": {
+      "text": "We're approaching the house. Go in carefully."
+    },
+    "WT_A1_HUT_APPROACH_2": {
+      "text": "Door's open. Could be anything in there."
+    },
+    "WT_A1_HUT_APPROACH_3": {
+      "text": "Stack up on the door. One each side, one goes in."
     },
     "TUT_A1_SELECT": {
       "title": "SELECT",
-      "text": "Press {key:Select.Member} (1 / 2 / 3) or click an operative to put him in the lead."
+      "text": "Press {key:Select.Member} (1 / 2 / 3) or click an operative: your orders go to him."
     },
     "TUT_A1_SOLO": {
-      "title": "ONE AT A TIME",
-      "text": "Press {key:Squad.Solo}: the others hold while the selected operative crosses alone. Walk him over the bridge, then select the next one."
+      "title": "SOLO",
+      "text": "Press {key:Squad.Solo}: the others hold their spots while you move the selected operative alone."
+    },
+    "TUT_A1_HUT_STACK_L": {
+      "title": "LEFT OF THE DOOR",
+      "text": "Click the wall left of the door (amber ring) to preview the cover, click again: he hugs the wall beside the door."
+    },
+    "TUT_A1_HUT_STACK_R": {
+      "title": "RIGHT OF THE DOOR",
+      "text": "Select another operative ({key:Select.Member}) and put him against the wall right of the door."
+    },
+    "TUT_A1_HUT_ENTER": {
+      "title": "GO IN",
+      "text": "Select the third operative and click inside the hut. The two at the door hold their positions."
     },
     "TUT_A1_BRIDGE_REFUSED": {
-      "text": "Only one on the bridge! Wait until he is across, then send the next."
+      "text": "One at a time on the bridge! The next one waits at the edge."
     },
     "TUT_A1_REGROUP": {
       "title": "REGROUP",
-      "text": "Press {key:Squad.Regroup} again: the squad falls back into formation behind the leader."
+      "text": "Press {key:Squad.Regroup} again: Solo ends, the two at the door leave their posts and the squad falls back into formation."
     },
     "TUT_A1_BOX": {
       "title": "SELECT A GROUP",
@@ -123,17 +148,17 @@
     },
     "TUT_A1_SPRINT": {
       "title": "RUNNING KEEPS YOU WARM",
-      "text": "On the move the body stays warm: double-click the ground to run. Standing still on the ice cools the squad down."
+      "text": "Keep moving: a run ({key:Order.Sprint}) warms the body faster than a walk. Standing still on the ice cools the squad down."
     },
     "WT_A1_RESUPPLY": {
       "text": "We're nearly out of heat packs. The fishermen's hut is close — let's check it."
     },
     "WT_A1_HUT": {
-      "text": "A crate. Fishermen always keep something warm in there."
+      "text": "Clear. And a crate - fishermen always keep something warm in there."
     },
     "TUT_A1_LOOT_OPEN": {
       "title": "SUPPLY CRATE",
-      "text": "Click the crate: the leader walks up and opens it."
+      "text": "Click the crate: the selected operative walks up and opens it."
     },
     "TUT_A1_LOOT_TAKE": {
       "title": "TAKE IT",
@@ -234,6 +259,10 @@
     "TUT_A6_SQUAD": {
       "title": "EVERYONE IN COVER",
       "text": "Press {key:Select.Member} (2 / 3) and give each operative his own cover."
+    },
+    "TUT_A3_PEEK": {
+      "title": "PEEK ROUND THE CORNER",
+      "text": "In cover at a high wall, click the END of the wall ({key:Cover.CornerPeek}): he moves to that corner and leans out, rifle up, until your next order."
     },
     "OBJ_A6_SQUAD_COVER": {
       "text": "Put every operative into cover"

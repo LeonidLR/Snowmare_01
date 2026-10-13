@@ -61,10 +61,24 @@ public:
 	 * counts as a use and never fires first_use.
 	 */
 	void HandleCommandHold(FName CommandId, float DeltaSeconds);
-	/** A gameplay event; SubjectId (the operative's id) feeds "distinct_operatives" completions. */
-	void HandleEvent(FName EventName, FName SubjectId = NAME_None);
-	/** A squad member entered a tutorial volume: VolumeId for "volume" triggers / completions, StepId / BeatId start them directly. */
-	void HandleVolume(FName VolumeId, FName StepId, FName BeatId);
+	/**
+	 * A gameplay event; SubjectId (the operative's id) feeds "distinct_operatives" / "distinct_from" completions; SubjectVolumes =
+	 * the ids of the tutorial volumes the subject stands in now ("in_volume" completions; the runtime fills it).
+	 */
+	void HandleEvent(FName EventName, FName SubjectId = NAME_None, const TArray<FName>& SubjectVolumes = TArray<FName>());
+	/**
+	 * A squad member (SubjectId) entered a tutorial volume: VolumeId for "volume" triggers / completions, StepId / BeatId start them
+	 * directly.
+	 */
+	void HandleVolume(FName VolumeId, FName StepId, FName BeatId, FName SubjectId = NAME_None);
+	/**
+	 * A squad member already STANDS in the volume when a step that completes there starts running (queued / shown): counts for the
+	 * "volume" completions of the running steps only (no triggers, no beat start) - the third operative who walked into the hut
+	 * before the "go in" card came still completes it. Returns true when a step counted it.
+	 */
+	bool HandleVolumePresence(FName VolumeId, FName SubjectId);
+	/** Operatives who counted for a step's completion so far (distinct_from; runtime only). */
+	const TSet<FName>* GetContributors(FName StepId) const;
 	/** Starts a beat (only forward unless bAllowBackwards). Returns true when the current beat changed. */
 	bool StartBeat(FName BeatId, bool bAllowBackwards = false);
 	/** Fires a step now (manual triggers, replay). False when it may not trigger (running, or once and finished). */
@@ -131,6 +145,8 @@ private:
 		bool bEverFinished = false;
 		/** Subjects already counted by a distinct_operatives completion. */
 		TSet<FName> CountedSubjects;
+		/** Every subject whose event / volume entry counted for this step (distinct_from of other steps). */
+		TSet<FName> Contributors;
 		/** The step's lock / unlock were applied (once per trigger). */
 		bool bLocksApplied = false;
 	};
@@ -150,6 +166,10 @@ private:
 	bool AreAfterStepsFinished(int32 Index) const;
 	/** Every "trigger.requires" step has been triggered at least once. */
 	bool IsArmed(int32 Index) const;
+	/** SubjectId may count for the step's completion under "distinct_from" (it counted for none of those steps). */
+	bool IsSubjectAllowed(int32 Index, FName SubjectId) const;
+	/** Counts a volume entry / presence of SubjectId for every running step completing in VolumeId; true when one counted. */
+	bool CountVolumeCompletions(FName VolumeId, FName SubjectId, const TArray<bool>& WasRunning);
 	float ReadStat(FName Stat) const;
 	bool AreConditionsMet(int32 Index) const;
 	void ApplyStepLocks(int32 Index);

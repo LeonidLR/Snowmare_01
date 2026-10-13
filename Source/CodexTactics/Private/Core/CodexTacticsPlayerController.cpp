@@ -34,6 +34,7 @@
 #include "UI/DialogueSubsystem.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
+#include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverGhostActor.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/GorkyGridManager.h"
@@ -406,6 +407,17 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	if (HasCoverPreview() && (WasInputKeyJustPressed(EKeys::RightMouseButton) || WasInputKeyJustPressed(EKeys::Escape)))
 	{
 		HideCoverPreview();
+	}
+
+	// Rev 5c manual corner peek: hovering the end of the leader's (turn-based: the active unit's) high cover previews the peek.
+	{
+		UTurnBasedCombatSubsystem* PeekTurnBased = GetActiveTurnBased();
+		USquadSubsystem* PeekSquad = GetSquad();
+		AOperativeCharacter* PeekOperative = PeekTurnBased ? PeekTurnBased->GetActiveUnit() : (PeekSquad ? PeekSquad->GetLeader() : nullptr);
+		FHitResult PeekHit;
+		const bool bPeekHit = PeekOperative && PeekOperative->IsInHighCover() && !IsDialogueOpen() && !bRelocateSelectMode
+			&& GetHitResultUnderCursor(ECC_Visibility, false, PeekHit);
+		UpdateCornerPeekHover(PeekOperative, bPeekHit ? &PeekHit : nullptr);
 	}
 
 	// Turn-based: the cursor frame on the hovered cell and, in attack mode, its hit chance (Godot set_hovered_cell).
@@ -2508,6 +2520,35 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	{
 		return false;
 	}
+	// Manual corner peek (user request 2026-10-13, rev 5c): in high cover, a click on the END of his own wall (its last ~75 cm,
+	// its end face or its top there) sends him to that corner, leaning out in the corner-aim pose until another order.
+	{
+		ECoverFacing PeekSide = ECoverFacing::Right;
+		float PeekEdge = 0.f;
+		const UTutorialSubsystem* PeekTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
+		if (!bAlt && Operative->IsInHighCover() && !(PeekTutorial && PeekTutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek))
+			&& FindCornerPeekForHit(Operative, Hit, PeekSide, PeekEdge))
+		{
+			HideCoverPreview();
+			UpdateCornerPeekHover(Operative, nullptr);
+			const EOperativeOrderResult Result = Operative->OrderCornerPeek(PeekSide, PeekEdge);
+			UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+			if (Result == EOperativeOrderResult::Accepted)
+			{
+				ControllerCommands::Report(this, PlayerCommands::CoverCornerPeek, nullptr, false, false, Operative, Hit.ImpactPoint);
+				if (Messages)
+				{
+					Messages->PostMessage(Operative->DisplayName, LOCTEXT("CornerPeek", "🎯 Covering the corner."));
+				}
+			}
+			else if (Messages)
+			{
+				Messages->PostMessage(LOCTEXT("HQ", "HQ"), TurnBased ? LOCTEXT("CornerPeekTurnBased", "⚠️ Turn-based: move to the corner first (the peek itself costs no AP).")
+					: LOCTEXT("CornerPeekRefused", "⚠️ Can't get to that corner."));
+			}
+			return true;
+		}
+	}
 	// A floor / ramp is a move target, not a wall (Alt + click probes anyway: a wall edge may have been clicked); the
 	// vehicle's roof is always its hull.
 	if (FMath::Abs(Hit.ImpactNormal.Z) > 0.3f && !bAlt && !bVehicle)
@@ -2565,6 +2606,102 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	bCoverPreviewTurnBased = TurnBased != nullptr;
 	ShowCoverPreview(Operative, Slot);
 	ControllerCommands::Report(this, PlayerCommands::CoverPreview, nullptr, false, false, Operative, Slot.WorldLocation);
+	return true;
+}
+
+bool ACodexTacticsPlayerController::FindCornerPeekForHit(const AOperativeCharacter* Operative, const FHitResult& Hit, ECoverFacing& OutSide,
+	float& OutEdgeAlongCm) const
+{
+	if (!Operative || !Operative->IsInHighCover())
+	{
+		return false;
+	}
+	const FCoverSlot& Slot = Operative->GetCoverSlot();
+	const AActor* HitActor = Hit.GetActor();
+	if (!HitActor || (Slot.WallActor.IsValid() && HitActor != Slot.WallActor.Get()))
+	{
+		return false; // only the end of HIS wall (another wall's corner is a cover click there)
+	}
+	if (CoverFacingRules::FindPeekEdge(Slot, Hit.ImpactPoint, nullptr, OutSide, OutEdgeAlongCm))
+	{
+		return true;
+	}
+	// A long wall: its end lies beyond the corner probes of his slot - probe the wall next to the click (a click on the end face
+	// or the top past the last face point: a little further in).
+	const float Along = CoverTraceRules::AlongWallDistance(Slot, Hit.ImpactPoint);
+	const FVector Inward = Slot.RightTangent() * (Along > 0.f ? -1.f : 1.f);
+	for (const float Back : { 0.f, 40.f, 80.f })
+	{
+		FCoverSlot Probe;
+		if (CoverTraceRules::FindShimmySlot(GetWorld(), Slot, Hit.ImpactPoint + Inward * Back, Probe))
+		{
+			return CoverFacingRules::FindPeekEdge(Slot, Hit.ImpactPoint, &Probe, OutSide, OutEdgeAlongCm);
+		}
+	}
+	return false;
+}
+
+bool ACodexTacticsPlayerController::IsCornerPeekPreviewShown() const
+{
+	return CornerPeekGhost && CornerPeekGhost->IsShown();
+}
+
+bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* Operative, const FHitResult* Hit)
+{
+	bool bEdge = false;
+	const UTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
+	if (Operative && Hit && Operative->IsInHighCover() && !Operative->bShimmying
+		&& !(Tutorial && Tutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek)))
+	{
+		// The probe traces only when the cursor moved over the wall (or he moved): cached while it rests.
+		if (Hit->GetActor() != PeekHoverActor.Get() || Operative != PeekHoverOperative.Get()
+			|| FVector::DistSquared(Hit->ImpactPoint, PeekHoverPoint) > FMath::Square(5.f)
+			|| FVector::DistSquared2D(Operative->GetCoverSlot().WorldLocation, PeekHoverSlotLocation) > FMath::Square(5.f))
+		{
+			PeekHoverActor = Hit->GetActor();
+			PeekHoverOperative = Operative;
+			PeekHoverPoint = Hit->ImpactPoint;
+			PeekHoverSlotLocation = Operative->GetCoverSlot().WorldLocation;
+			bPeekHoverEdge = FindCornerPeekForHit(Operative, *Hit, PeekHoverSide, PeekHoverEdgeAlong);
+		}
+		bEdge = bPeekHoverEdge;
+	}
+	if (!bEdge)
+	{
+		if (CornerPeekGhost && CornerPeekGhost->IsShown())
+		{
+			CornerPeekGhost->Hide();
+		}
+		if (bCornerPeekCursor)
+		{
+			CurrentMouseCursor = DefaultMouseCursor;
+			bCornerPeekCursor = false;
+		}
+		return false;
+	}
+	if (!CornerPeekGhost)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		CornerPeekGhost = GetWorld()->SpawnActor<ACoverGhostActor>(Operative->GetActorLocation(), FRotator::ZeroRotator, Params);
+	}
+	if (CornerPeekGhost)
+	{
+		// The corner stand point: the cover slot moved along the wall to the stand-off from that edge.
+		FCoverSlot Corner = Operative->GetCoverSlot();
+		const float StandOff = CoverFacingRules::CornerStandOff(PeekHoverSide, Operative->GetStance() == EOperativeStance::Crouching,
+			Operative->GetCoverFacingConfig());
+		const FVector Shift = Corner.RightTangent() * CoverFacingRules::CornerPeekStandAlong(PeekHoverSide, PeekHoverEdgeAlong, StandOff);
+		Corner.WorldLocation += Shift;
+		Corner.WallPoint += Shift;
+		if (!CornerPeekGhost->IsShown() || !CornerPeekGhost->IsCornerPeekPose()
+			|| FVector::DistSquared2D(CornerPeekGhost->GetSlot().WorldLocation, Corner.WorldLocation) > 1.f)
+		{
+			CornerPeekGhost->ShowCornerPeekFor(*Operative, Corner, PeekHoverSide);
+		}
+	}
+	CurrentMouseCursor = EMouseCursor::Crosshairs;
+	bCornerPeekCursor = true;
 	return true;
 }
 

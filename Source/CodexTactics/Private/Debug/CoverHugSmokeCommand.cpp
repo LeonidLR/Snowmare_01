@@ -12,6 +12,7 @@
 //  3. shimmies away from the edge and back to it: with no threat he walks FORWARD both ways (walk_fwd_loop_*), never the
 //     backward clip, and stands hugging at the corner again.
 // Every frame in cover the closest skin bone to the wall plane is sampled: nothing stays inside the wall (no clipping).
+// Finally (rev 5c) a roof slab is laid over the wall's front (eaves): clicks on the wall under it still find the high cover.
 
 #include "CoreMinimal.h"
 
@@ -482,6 +483,23 @@ namespace CoverHugSmoke
 			CheckHug(State, *Op, Anim, TEXT("corner after the shimmy"), true);
 			Check(State, !State.bSawCornerAim && !State.bSawFirePose, TEXT("corner after the shimmy: never stepped out into the fire stance"));
 			CheckNoClipping(State, TEXT("shimmies"));
+			{
+				// Eaves (rev 5c, the Demo 01 fishermen's hut): a roof slab 3.3-3.8 m up juts 1.2 m out over the wall's front. A click
+				// on the wall under it still finds the high cover (CoverTraceRules::FindGround once started inside the roof).
+				const float GroundZ = State.P.Z - Op->GetSimpleCollisionHalfHeight();
+				const FVector Roof = State.P + State.F * 560.f;
+				AStaticMeshActor* Eaves = SpawnBlock(World, FVector(Roof.X, Roof.Y, GroundZ + 355.f), State.F.Rotation(), FVector(2.f, 5.f, 0.5f));
+				const FVector R = FVector::CrossProduct(FVector::UpVector, State.F);
+				for (const float ClickZ : { 100.f, 200.f, 290.f })
+				{
+					FCoverSlot Slot;
+					const FVector Click = State.P + State.F * 580.f + R * 100.f + FVector(0.f, 0.f, GroundZ - State.P.Z + ClickZ);
+					const bool bFound = Eaves && CoverTraceRules::FindCoverSlotAt(World, Click, State.F, Slot);
+					Check(State, bFound && Slot.Height == ECoverHeight::HighCover && FMath::Abs(Slot.WorldLocation.Z - GroundZ) < 30.f,
+						FString::Printf(TEXT("under eaves: a click %.0f cm up the wall finds the high cover (found %d, height %d, slot z %.0f, ground %.0f)"),
+							ClickZ, bFound ? 1 : 0, static_cast<int32>(Slot.Height), Slot.WorldLocation.Z, GroundZ));
+				}
+			}
 			return Finish(State, true);
 		}
 		default:

@@ -161,6 +161,11 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName CoverCorner;
 	/** A click along the operative's own wall: shimmy. */
 	extern CODEXTACTICS_API const FName CoverShimmy;
+	/**
+	 * In high cover, a click on the exposed END (edge) of his own wall: he shimmies to that corner and holds the corner-aim pose
+	 * (leaning out, rifle up) until another order, also with no enemy around (user request 2026-10-13, Demo 01 rev 5c).
+	 */
+	extern CODEXTACTICS_API const FName CoverCornerPeek;
 	/** N: corner lean / blind fire. */
 	extern CODEXTACTICS_API const FName CoverFireMode;
 
@@ -353,6 +358,11 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName CoverShimmy;
 	/** An operative in high cover reached the exposed corner on his facing side. */
 	extern CODEXTACTICS_API const FName CornerReached;
+	/**
+	 * A manual corner peek (Cover.CornerPeek) began: he leans out at the corner in the corner-aim pose (Subject = him, Kind =
+	 * "Left" / "Right"; once per order).
+	 */
+	extern CODEXTACTICS_API const FName CornerPeek;
 	/** An operative climbed into a vehicle (Subject = him, Target = the vehicle, Kind = his seat "Driver" / "Gunner" / "Passenger"). */
 	extern CODEXTACTICS_API const FName VehicleBoarded;
 	/** An operative climbed out (Subject = him, Target = the vehicle). */

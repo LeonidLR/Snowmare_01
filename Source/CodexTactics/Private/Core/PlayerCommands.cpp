@@ -38,6 +38,7 @@ namespace PlayerCommands
 	const FName CoverEnter(TEXT("Cover.Enter"));
 	const FName CoverCorner(TEXT("Cover.Corner"));
 	const FName CoverShimmy(TEXT("Cover.Shimmy"));
+	const FName CoverCornerPeek(TEXT("Cover.CornerPeek"));
 	const FName CoverFireMode(TEXT("Cover.FireMode"));
 
 	const FName Relocate(TEXT("Object.Relocate"));
@@ -163,6 +164,7 @@ namespace PlayerCommands
 			{ CoverEnter, TEXT("Click again"), TEXT("Combat"), TEXT("Take the cover slot") },
 			{ CoverCorner, TEXT("Click corner"), TEXT("Combat"), TEXT("Take a corner slot") },
 			{ CoverShimmy, TEXT("Click along wall"), TEXT("Combat"), TEXT("Shimmy along the wall") },
+			{ CoverCornerPeek, TEXT("Click wall edge"), TEXT("Combat"), TEXT("In cover: go to that corner and hold the aim round it") },
 			{ CoverFireMode, TEXT("N"), TEXT("Combat"), TEXT("Corner lean / blind fire") },
 			{ Relocate, TEXT("Click > Push"), TEXT("Items & traps"), TEXT("Push / relocate an object") },
 			{ LightBarrel, TEXT("Click > Light"), TEXT("Items & traps"), TEXT("Light a barrel with a match") },
@@ -338,6 +340,7 @@ namespace GameplayEvents
 	const FName CoverLeft(TEXT("CoverLeft"));
 	const FName CoverShimmy(TEXT("CoverShimmy"));
 	const FName CornerReached(TEXT("CornerReached"));
+	const FName CornerPeek(TEXT("CornerPeek"));
 	const FName VehicleBoarded(TEXT("VehicleBoarded"));
 	const FName VehicleDisembarked(TEXT("VehicleDisembarked"));
 	const FName VehicleDriveStarted(TEXT("VehicleDriveStarted"));

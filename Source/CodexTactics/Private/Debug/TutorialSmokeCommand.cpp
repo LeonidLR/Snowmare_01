@@ -22,15 +22,17 @@
 //     hint + SKIP on the strip; C and Space are refused with ONE "Not yet" feed line per family (none for a repeat); the first
 //     camera card shows WHILE HQ talks (card and strip never overlap: laid-out rects, or the layout constants headless); W
 //     completes the pan, Q/E pressed early PRECREDIT the Q/E stage after the MMB drag; Enter tap = the next radio line, Enter
-//     held 0.6 s = the whole radio ends COMPLETED (Dialogue.Next / .Skip reported once each) and the walk card follows only
-//     after the camera chain too; a reset A0 + beacon 1 reached EARLY drops the camera chain and the walk card cleanly while
+//     held 0.6 s = the whole radio ends COMPLETED (Dialogue.Next / .Skip reported once each); the walk and run cards (rev 5c)
+//     follow the camera chain and are precredited (the leader ran during the radio); a reset A0 + beacon 1 reached EARLY drops the camera chain and the walk card cleanly while
 //     the radio plays on (SKIP ends it, A1's banter follows); the inventory drawer stays closed (TUT_A0_NOINVENTORY once), U
 //     is refused; the crack:
-//     select (key 2) -> the one-at-a-time bridge card completed by three BridgeCrossed events (the bridge actor itself is
-//     BridgeFenceSmoke's job) -> regroup with B -> box -> the squad banter; 20 s after the crossing the gust (+20 cold, >= 42 %);
+//     rev 5c: a line + the crossing objective completed by three BridgeCrossed events, no select / solo card (the bridge actor
+//     itself is BridgeFenceSmoke's job) -> the squad banter; 20 s after the crossing the gust (+20 cold, >= 42 %);
 //     the heat-pack card UNLOCKS the inventory / items (the drawer opens now), the coldest uses his own starter pack, the mate
-//     card; THEN the 'running keeps you warm' tip (a double click sprints), THEN WT_A1_RESUPPLY + the hut objective; the hut loot
-//     cards and the closing line; beacon 3 plays the formation lines with no guard card; the save's tutorial section carries the
+//     card; THEN the 'running keeps you warm' survival tip (a double click sprints, the tip stays), THEN WT_A1_RESUPPLY + the hut objective; the hut:
+//     the approach line, select (key 2) -> Solo (B) -> the tactical entry (rev 5c: the third operative already inside the hut
+//     completes "go in" by volume presence; cover entered in VOL_A1_DOOR_R / _L by two DIFFERENT operatives, through the event
+//     bus; cover elsewhere does not count) -> the loot cards and the closing line -> regroup (B) -> box; beacon 3 plays the formation lines with no guard card; the save's tutorial section carries the
 //     command history; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
 //     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
 //     (tap = next line, hold = skip).
@@ -130,6 +132,8 @@ namespace TutorialSmoke
 		/** The leader's heat packs just before he empties the hut crate. */
 		int32 HeatPacksBeforeLoot = 0;
 		TWeakObjectPtr<AOperativeCharacter> Focus;
+		/** Rev 5c hut entry: the small VOL_A1_HUT round the third operative. */
+		TWeakObjectPtr<ATutorialTriggerVolume> HutVolume;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -182,6 +186,34 @@ namespace TutorialSmoke
 		Volume->VolumeId = VolumeId;
 		Volume->BeatId = BeatId;
 		return Volume->TryActivate(Leader);
+	}
+
+	/** A small tutorial volume (VolumeId, Any Operative, not fire-once) around one operative: the hut door / interior stand-ins. */
+	ATutorialTriggerVolume* SpawnVolumeAround(UWorld* World, const AOperativeCharacter* Operative, FName VolumeId, float HalfSizeCm = 40.f)
+	{
+		const FTransform Transform(FRotator::ZeroRotator, Operative->GetActorLocation());
+		ATutorialTriggerVolume* Volume = World->SpawnActorDeferred<ATutorialTriggerVolume>(ATutorialTriggerVolume::StaticClass(), Transform, nullptr, nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (!Volume)
+		{
+			return nullptr;
+		}
+		Volume->VolumeId = VolumeId;
+		Volume->ActivatedBy = ETutorialVolumeFilter::AnyOperative;
+		Volume->bFireOnce = false;
+		Volume->Box->SetBoxExtent(FVector(HalfSizeCm, HalfSizeCm, 150.f));
+		Volume->FinishSpawning(Transform);
+		return Volume;
+	}
+
+	/** A settled cover entry of Operative as the cover code raises it (subject + slot), through the event bus. */
+	void RaiseCoverEntered(UWorld* World, AOperativeCharacter* Operative)
+	{
+		FGameplayEventContext Context;
+		Context.Subject = Operative;
+		Context.Kind = FName(TEXT("High"));
+		Context.Location = Operative->GetActorLocation();
+		GameplayEvents::RaiseWithContext(World, GameplayEvents::CoverEntered, Context);
 	}
 
 	AOperativeCharacter* Coldest(USquadSubsystem* Squad)
@@ -813,7 +845,7 @@ namespace TutorialSmoke
 			PressKey(PC, EKeys::Enter, IE_Released);
 			Check(State, Tutorial->GetMachine().GetCommandUse(PlayerCommands::DialogueSkip).Count == 1
 				&& Tutorial->GetMachine().GetCommandUse(PlayerCommands::DialogueNext).Count == 1, TEXT("Dialogue.Skip reported once; the release adds no extra line"));
-			Check(State, Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Idle, TEXT("radio over, camera chain still running: no walk card yet"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Idle, TEXT("camera chain still running: no walk card yet"));
 			for (const TCHAR* Id : { TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom") })
 			{
 				Tutorial->SkipStep(Id);
@@ -824,13 +856,19 @@ namespace TutorialSmoke
 		}
 		case 61:
 		{
-			if (Tutorial->GetStepState(TEXT("A0_move")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			if (Tutorial->GetStepState(TEXT("A0_sprint")) != ETutorialStepState::Completed && State.StageTime < 6.f)
 			{
 				// the queued zoom card shows after the breather: skip it once it is up
 				Tutorial->SkipStep(TEXT("A0_cam_zoom"));
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Active, TEXT("radio skipped + camera chain done: its follower, the walk card, shows"));
+			// Rev 5c (user request 2026-10-13): 'click to walk' then 'double-click to run' follow the camera chain at once; the leader
+			// already ran during the radio (stage 28: a double click = Order.Move + Order.Sprint), so both are precredited.
+			Check(State, Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A0_sprint")) == ETutorialStepState::Completed
+				&& Tutorial->GetPrecreditedCount() == 3 && CountMessages(World, TEXT("already done")) == 3,
+				FString::Printf(TEXT("camera chain done: the walk and run cards follow and are precredited (the leader ran during the radio; %d precredited)"),
+					Tutorial->GetPrecreditedCount()));
+			Check(State, Tutorial->GetStepState(TEXT("A0_obj_beacon")) == ETutorialStepState::Active, TEXT("the beacon objective still asks for beacon 1"));
 			// Beacon 1 reached EARLY (user request 2026-10-13): a fresh A0, the radio and the first camera card still up.
 			Tutorial->ResetTutorial();
 			State.Stage = 62;
@@ -853,8 +891,8 @@ namespace TutorialSmoke
 			Check(State, Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A0_obj_beacon")) == ETutorialStepState::Completed,
 				TEXT("the radio keeps playing; the beacon objective is done"));
 			Check(State, Tutorial->SkipSpeech(), TEXT("the strip's SKIP (SkipSpeech) ends the radio"));
-			Check(State, Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Skipped,
-				TEXT("radio completed; the A0 walk card is dropped, never shown"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Skipped
+				&& Tutorial->GetStepState(TEXT("A0_sprint")) == ETutorialStepState::Skipped, TEXT("radio completed; the A0 walk / run cards are dropped, never shown"));
 			State.Stage = 63;
 			State.StageTime = 0.f;
 			return true;
@@ -889,51 +927,63 @@ namespace TutorialSmoke
 		}
 		case 32:
 		{
-			if (Tutorial->GetStepState(TEXT("A1_select")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			// Rev 5c (designer review 2026-10-13): the bridge teaches nothing - a short line + the crossing objective; the bridge
+			// actor holds the followers itself (one at a time on its own). Selection + Solo are taught at the hut (stages 33-35).
+			if (Tutorial->GetStepState(TEXT("A1_bridge")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Active, TEXT("the crack: the select card"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_bridge")) == ETutorialStepState::Active && Tutorial->GetMachine().GetActiveCard().IsNone(),
+				TEXT("the crack: the crossing objective, no select / solo card"));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::SoloOn), TEXT("the bridge unlocks nothing (solo is taught at the hut)"));
 			Tutorial->SkipStep(TEXT("A1_wt_bridge"));
-			Tap(PC, State, EKeys::Two); // select operative 2 through the real input path
-			Next(State);
-			return true;
-		}
-		case 33:
-		{
-			if (Tutorial->GetStepState(TEXT("A1_solo")) != ETutorialStepState::Active && State.StageTime < 8.f)
-			{
-				return true;
-			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Completed, TEXT("key 2 selected a member and completed the card"));
-			Check(State, Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Active, TEXT("the one-at-a-time bridge card"));
-			Squad->SetLeaderByIndex(0);
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				Member->ColdLevel = 5.f; // no cold zone here: nobody reaches Chills in 20 s at x1
 			}
 			// The crossing itself is BridgeFenceSmoke's job: here the bridge's events drive the lesson.
 			Tutorial->NotifyEvent(TEXT("BridgeRefused"), Squad->GetMembers()[1]->GetFName());
-			Check(State, Tutorial->GetStepState(TEXT("A1_bridge_refused")) == ETutorialStepState::Completed && CountMessages(World, TEXT("Only one on the bridge")) == 1,
+			Check(State, Tutorial->GetStepState(TEXT("A1_bridge_refused")) == ETutorialStepState::Completed && CountMessages(World, TEXT("One at a time on the bridge")) == 1,
 				TEXT("the bridge creak feed line once"));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				Tutorial->NotifyEvent(TEXT("BridgeCrossed"), Member->GetFName());
 				State.ColdAtSolo.Add(Member, Member->ColdLevel);
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Completed, TEXT("three crossings complete the bridge card"));
-			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::SoloOn) && !Tutorial->IsCommandLocked(PlayerCommands::Regroup), TEXT("the bridge card unlocked solo / regroup (B)"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_bridge")) == ETutorialStepState::Completed, TEXT("three crossings complete the crossing objective"));
+			State.Stage = 36;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 33:
+		{
+			// The hut (rev 5c): select first, then Solo.
+			if (Tutorial->GetStepState(TEXT("A1_select")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Active, TEXT("the hut approach: the select card"));
+			const ETutorialStepState Approach = Tutorial->GetStepState(TEXT("A1_wt_hut_approach"));
+			Check(State, TutorialRules::IsRunning(Approach) || Approach == ETutorialStepState::Completed,
+				FString::Printf(TEXT("the approach walk-and-talk plays (or waits for the line before it: %s)"), TutorialRules::StateName(Approach)));
+			Tutorial->SkipStep(TEXT("A1_wt_hut_approach"));
+			Tap(PC, State, EKeys::Two); // select operative 2 through the real input path
 			Next(State);
 			return true;
 		}
 		case 34:
 		{
-			if (Tutorial->GetStepState(TEXT("A1_regroup")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			if (Tutorial->GetStepState(TEXT("A1_solo")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_regroup")) == ETutorialStepState::Active, TEXT("regroup card after the bridge"));
-			Squad->ToggleSoloMode(); // the squad stands in solo mode after the crossing
+			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Completed, TEXT("key 2 selected a member and completed the card"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::SoloOn)
+				&& !Tutorial->IsCommandLocked(PlayerCommands::Regroup), TEXT("then the Solo card, which unlocks B"));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::CoverEnter), TEXT("cover still locked before the door cards"));
+			// The third operative already stands INSIDE the hut (a small VOL_A1_HUT round him) before the entry cards run: the
+			// "go in" card must count him at once (volume presence, rev 5c).
+			State.HutVolume = SpawnVolumeAround(World, Squad->GetMembers()[2], TEXT("VOL_A1_HUT"));
 			PressKey(PC, EKeys::B, IE_Pressed);
 			Next(State);
 			return true;
@@ -941,14 +991,41 @@ namespace TutorialSmoke
 		case 35:
 		{
 			PressKey(PC, EKeys::B, IE_Released);
-			if (Tutorial->GetStepState(TEXT("A1_box")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			Check(State, Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Completed, TEXT("B: solo on, the card done"));
+			Squad->SetLeaderByIndex(0); // the loot stages count the first operative's heat packs (State.HeatPacksBeforeLoot)
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_enter")) == ETutorialStepState::Completed, FString::Printf(
+				TEXT("the third operative already inside the hut completes 'go in' at once (volume presence; %s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A1_hut_enter")))));
+			State.Stage = 72;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 72:
+		{
+			// The door (rev 5c): cover entered INSIDE VOL_A1_DOOR_L / _R by two different operatives (in_volume + distinct_from).
+			if (Tutorial->GetStepState(TEXT("A1_hut_stack_l")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
 				return true;
 			}
-			Check(State, !Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A1_regroup")) == ETutorialStepState::Completed, TEXT("B: regrouped, the card done"));
-			Check(State, Tutorial->GetStepState(TEXT("A1_box")) == ETutorialStepState::Active, TEXT("then the box select card"));
-			Tutorial->SkipStep(TEXT("A1_box"));
-			Next(State);
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_l")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::CoverEnter),
+				TEXT("left of the door: the card shows and unlocks cover"));
+			AOperativeCharacter* First = Squad->GetMembers()[0];
+			AOperativeCharacter* Second = Squad->GetMembers()[1];
+			RaiseCoverEntered(World, Second);
+			Check(State, Tutorial->GetStepProgress(TEXT("A1_hut_stack_l")) == 0 && Tutorial->GetStepProgress(TEXT("A1_hut_stack_r")) == 0,
+				TEXT("cover entered away from the door counts for neither side"));
+			SpawnVolumeAround(World, Second, TEXT("VOL_A1_DOOR_R"));
+			Check(State, Tutorial->GetTutorialVolumesAt(Second->GetActorLocation()).Contains(FName(TEXT("VOL_A1_DOOR_R"))), TEXT("the subject stands in VOL_A1_DOOR_R"));
+			RaiseCoverEntered(World, Second);
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_r")) == ETutorialStepState::Completed, TEXT("cover right of the door: the queued right card completes"));
+			SpawnVolumeAround(World, Second, TEXT("VOL_A1_DOOR_L"));
+			RaiseCoverEntered(World, Second);
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_l")) == ETutorialStepState::Active, TEXT("the same operative left of the door does not count (distinct_from)"));
+			SpawnVolumeAround(World, First, TEXT("VOL_A1_DOOR_L"));
+			RaiseCoverEntered(World, First);
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_l")) == ETutorialStepState::Completed, TEXT("another operative left of the door completes it"));
+			State.Stage = 43;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 36:
@@ -1043,7 +1120,8 @@ namespace TutorialSmoke
 				return true;
 			}
 			Check(State, Leader->IsSprinting(), TEXT("a double click now sprints"));
-			Check(State, Tutorial->GetStepState(TEXT("A1_sprint")) == ETutorialStepState::Completed, TEXT("Order.Sprint completes the sprint card"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_sprint")) == ETutorialStepState::Active, TEXT("rev 5c: the survival tip is no control lesson (a sprint does not end it)"));
+			Check(State, Tutorial->SkipStep(TEXT("A1_sprint")), TEXT("the tip is skippable (else it ends after 10 s)"));
 			Leader->StopOperative();
 			Next(State);
 			return true;
@@ -1071,8 +1149,9 @@ namespace TutorialSmoke
 			Crate->Contents = Contents;
 			State.Crate = Crate;
 			State.HeatPacksBeforeLoot = Leader->HeatPacksCount;
-			Check(State, EnterVolume(World, Leader, TEXT("VOL_A1_HUT")), TEXT("the hut volume fires"));
-			Next(State);
+			Check(State, EnterVolume(World, Leader, TEXT("VOL_A1_HUT_APPROACH")), TEXT("the hut approach volume fires"));
+			State.Stage = 33;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 43:
@@ -1114,9 +1193,36 @@ namespace TutorialSmoke
 				return true;
 			}
 			Check(State, Stocked == ETutorialStepState::Active || Stocked == ETutorialStepState::Completed, TEXT("the closing line plays after the loot"));
-			Check(State, EnterVolume(World, Leader, TEXT("VOL_A1_BEACON3")), TEXT("beacon 3 volume fires"));
 			Tutorial->SkipStep(TEXT("A1_wt_stocked"));
-			Next(State);
+			State.Stage = 70;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 70:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_regroup")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A1_regroup")) == ETutorialStepState::Active && Squad->IsSoloMode(), TEXT("regroup card after the loot (still in solo)"));
+			PressKey(PC, EKeys::B, IE_Pressed);
+			State.Stage = 71;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 71:
+		{
+			PressKey(PC, EKeys::B, IE_Released);
+			if (Tutorial->GetStepState(TEXT("A1_box")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, !Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A1_regroup")) == ETutorialStepState::Completed, TEXT("B: regrouped, the card done"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_box")) == ETutorialStepState::Active, TEXT("then the box select card (moved from the bridge)"));
+			Tutorial->SkipStep(TEXT("A1_box"));
+			Check(State, EnterVolume(World, Leader, TEXT("VOL_A1_BEACON3")), TEXT("beacon 3 volume fires"));
+			State.Stage = 46;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 46:

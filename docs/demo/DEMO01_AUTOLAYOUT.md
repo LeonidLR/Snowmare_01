@@ -1,7 +1,11 @@
 # Demo 01 «Frozen Lake»: auto layout (2026-10-13)
 
 The user asked: "build everything on the level yourself (beacons / volumes / markers / objects); I will adjust positions by
-hand afterwards". This is that first pass, made by script on a **copy** of the user's map. Nothing is committed yet.
+hand afterwards". This is that first pass, made by script on a **copy** of the user's map (committed on `agents/work`, 0ea2635).
+
+**Rev 5c (2026-10-13, the designer's review: "looks good for a start"):** the copy was re-laid in place (no fresh copy; the
+user's map untouched, SHA256 checked) with the **tactical hut entry** (§2a) and the bridge marker re-id'd `A1_solo` ->
+**`A1_bridge`** (the bridge teaches nothing now). 101 actors placed (was 94). Verify **PASS**, screenshots re-shot (§4).
 
 | What | Where |
 |---|---|
@@ -36,10 +40,10 @@ Coordinates are world cm (centre of a volume, ground point of the others). +X = 
 | Actor | Class | Id / settings | Position | Relative to |
 |---|---|---|---|---|
 | VOL_A1_BEACON2 | TutorialTriggerVolume | Leader, box 5 x 10 m | (-6928, 1804) | 4.5 m before the user's plank (west end) |
-| Marker_A1_solo | TutorialMarkerActor | Step `A1_solo`, ring 1.2 m | (-6658, 1804) | near end of the bridge |
+| Marker_A1_bridge | TutorialMarkerActor | Step `A1_bridge` (rev 5c; was `A1_solo`), ring 1.2 m | (-6658, 1804) | near end of the bridge |
 | BridgeCrossing_A1 | BridgeCrossingVolume | Capacity 1, span 6.9 x 2 x 2.5 m, local X along the span | (-6231, 1804, 124) | user plank `Floor3` + 1 m each end |
 | WindZone_A1_FarBank | CameraZoneVolume | Blizzard x2.5, camera switch off, 12 x 12 m | (-5285, 1804) | far side of the bridge |
-| VOL_A1_HUT | TutorialTriggerVolume | Any Operative, over the hut floor | (-2180, -7090) | user hut (`Trigger_BoatsCabin`) |
+| VOL_A1_HUT | TutorialTriggerVolume | Any Operative, **Fire Once off**, the hut INTERIOR only (inner wall faces - 40 cm), 9.7 x 6 m (rev 5c) | (-2197, -7113) | user hut walls (§2a) |
 | Marker_A1_loot_open | TutorialMarkerActor | Step `A1_loot_open`, ring 0.9 m around the crate | (-1740, -7010) | user's hut crate |
 | VOL_A1_BEACON3 | TutorialTriggerVolume | Leader | (2520, -5290) | hut + (47, 18) m |
 | VOL_A2_CAMP | TutorialTriggerVolume | **Beat A2**, Leader | (5820, -4690) | hut + (80, 24) m, 22 m before camp hut 1 |
@@ -81,9 +85,34 @@ Coordinates are world cm (centre of a volume, ground point of the others). +X = 
 | BeaconPole_01..10 | StaticMeshActor (cylinder) | 4 m amber-road poles, no collision | every ~25 m: beacon 1 -> bridge -> hut -> beacon 3 -> camp | |
 | NavMeshBounds_AutoLayout | NavMeshBoundsVolume | covers every placed actor + 20 m (X -19400..34300, Y -9100..6500, Z -300..700) | | the user's bounds stop at X 10343 |
 
-Counts: TutorialTriggerVolume 14, TutorialMarkerActor 2, CameraZoneVolume 4, BridgeCrossingVolume 1, CrawlGapActor 1,
+Counts (rev 5c): TutorialTriggerVolume 17, TutorialMarkerActor 5, CameraZoneVolume 4, BridgeCrossingVolume 1, CrawlGapActor 1,
 ProximityMineActor 2, PMCTripwireActor 1, PatrolRouteActor 2, TargetPoint 4, BarrelActor 5, LootCrateActor 2, BarricadeActor 2,
-CameraActor 1, NavMeshBoundsVolume 1, StaticMeshActor 52 (graybox).
+CameraActor 1, NavMeshBoundsVolume 1, StaticMeshActor 53 (graybox; + the door jamb).
+
+### 2a. The tactical hut entry (rev 5c, `demo_01_steps.json` `A1_wt_hut_approach` .. `A1_hut_enter`)
+
+Read from the user's hut geometry (`find_hut_frame` / `hut_sides` / `build_hut_entry` in the script): the walls are the
+axis-aligned static meshes >= 1.8 m tall round the Shelter zone `Trigger_BoatsCabin` - west `Cube` (X -2747), east `Cube3`
+(X -1647), south `Cube4` (Y -7478), north `Cube6` (Y -6748, X -2317..-1614), 50 cm thick, 3.5 m high (+ the roof `Cube7`
+3.3-3.8 m, which juts ~1.9 m out over the north wall). Interior X -2722..-1672, Y -7453..-6773. **The door = the only opening:
+the north side, X -2722..-2317 (4.04 m), between the west wall's end and `Cube6`** - the side facing the approach from the
+bridge (it comes from the north-west), so the choice is not ambiguous. Left / right = as seen by the squad arriving (facing
+south): left = west (-X), right = east (+X).
+
+| Actor | Class | Id / settings | Position | Why |
+|---|---|---|---|---|
+| **HutDoor_Jamb_L** | StaticMeshActor (engine cube, the hut wall's own material) | 2.54 x 0.5 x 3.5 m, collision, affects the navmesh | X -2772..-2518 on the north wall line (Y -6748) | **graybox, review / replace with art:** the 4 m opening had no wall to hug on its west side (only the 50 cm end of the west wall); the jamb narrows the door to **2.0 m** (X -2518..-2317) and gives the left stacker a wall |
+| VOL_A1_DOOR_L | TutorialTriggerVolume | Any Operative; the cover `in_volume` filter of `A1_hut_stack_l` | (-2632, -6663), 2.7 x 1.2 x 3 m | the jamb's outer face, from the door edge 2.5 m west, 1.2 m out |
+| VOL_A1_DOOR_R | TutorialTriggerVolume | Any Operative; `in_volume` of `A1_hut_stack_r` | (-2202, -6663), 2.7 x 1.2 x 3 m | `Cube6`'s outer face, from the door edge 2.5 m east, 1.2 m out |
+| VOL_A1_HUT | TutorialTriggerVolume | see the table above (interior only, Fire Once off) | (-2197, -7113) | the stackers outside never stand in it; any operative may enter after a stacker |
+| VOL_A1_HUT_APPROACH | TutorialTriggerVolume | Leader | (-2417, -5723), 24 x 6 m | 10 m in front of the door: the walk-and-talk + the select card |
+| Marker_A1_hut_stack_l / _r | TutorialMarkerActor | Step `A1_hut_stack_l` / `_r`, ring 0.7 m | (-2607, -6668) / (-2227, -6668) | 90 cm from each door edge, 55 cm off the wall |
+| Marker_A1_hut_enter | TutorialMarkerActor | Step `A1_hut_enter`, ring 0.9 m | (-2417, -6893) | 1.2 m inside the door |
+
+Cover there (in-game check, `CoverQueryLibrary.find_cover_slot_at`): **left** slot (-2607, -6669) high (wall top 380 = the roof),
+door edge 89 cm, the hut's NW corner 164 cm; **right** slot (-2227, -6678) high, door edge 91 cm. Both reachable from the
+approach (10 m). The roof's eaves over the north wall broke every cover click under them (the cover trace's ground search
+started inside the roof slab): fixed in C++ (`CoverTraceRules::FindGround`, rev 5c; `CoverHugSmoke` eaves check).
 
 **Not placed on purpose:** enemies (placed enemies turn the level into an ambush level, beat sheet §1.3 - Phase 2 adds
 `EncounterGroup`), quest objects (canister / generator / console `AInteractableActor`s - A7 is designed only; a GateTerminal would
@@ -102,7 +131,8 @@ The gameplay actors (volumes, markers, bridge, crawl gap, zones, mines, wire, ro
 ## 4. Verification (2026-10-13, all on the copy)
 
 - **Build** (`Saved/Logs/Demo01Layout.txt`): 94 placed, saved; a second run removes the 94 tagged actors and places them again
-  (idempotent, same result). The user's map SHA256 is unchanged after every run.
+  (idempotent, same result). The user's map SHA256 is unchanged after every run. **Rev 5c (in the agents' worktree):** the 94 old
+  tagged actors removed, 101 placed, saved; the user's map unchanged (worktree `7d31703f...`, main folder `3622cd28...`).
 - **In game** (`-game -nullrhi`, mode `verify`, `Saved/Logs/Demo01LayoutVerify.txt`): **RESULT: PASS**.
   - Every volume id used by `demo_01_steps.json` exists exactly once (VOL_A0_BEACON1, VOL_A1_BEACON2, VOL_A1_BEACON3, VOL_A1_HUT,
     VOL_A2_CAMP, VOL_A3_FENCE, VOL_A3_FIELD, VOL_A3_RIDGE, VOL_A3_RIDGE_FAR, VOL_A3_WIND, VOL_A4_OVERLOOK); beats A1-A4 each have a
@@ -116,15 +146,26 @@ The gameplay actors (volumes, markers, bridge, crawl gap, zones, mines, wire, ro
   - The low fence: the standing path through it is partial (stops at the fence, 2 m); the prone (default filter) path goes under
     through the gap.
   - Patrol loops: 61 m / 39 m, every leg walkable and unobstructed (path / straight <= 1.01).
-  - 35 tagged gameplay actors stand on the ground (within 40 cm of a downward trace).
+  - 35 tagged gameplay actors stand on the ground (within 40 cm of a downward trace) (rev 5c: 41).
+  - **Rev 5c hut entry** (all ok): every id of the steps incl. `in_volume` (`VOL_A1_DOOR_L/_R`, `VOL_A1_HUT_APPROACH`) exists once;
+    bridge far end -> `VOL_A1_HUT_APPROACH` 82 m -> `VOL_A1_HUT` (through the door) 14 m; `VOL_A1_HUT` Fire Once off; neither
+    door volume overlaps the interior volume; the wall at each stack spot gives a HIGH cover slot inside its door volume, outside
+    `VOL_A1_HUT` (+40 cm), with the door edge <= 2 m; both spots reachable from the approach.
 - **With the demo level JSON** (`-LevelJson=L_Demo01_A_FrozenLake.json`): demo mode + tutorial (`demo_01_steps.json`) load and the
   same checks pass. Note: the copy has another map name, so WITHOUT that switch it gets the default `level_01_outpost.json` (no
   tutorial) - see §5.
 - **Screenshots** (mode `shots`, `-game -RenderOffscreen`, a top-down in-game camera, HighResShot 3840 x 2160; labels drawn on
-  by `annotate` from the actors' positions): `Saved/Screenshots/demo01_autolayout_top.png` and the three close-ups.
+  by `annotate` from the actors' positions): `Saved/Screenshots/demo01_autolayout_top.png` and the three close-ups. **Rev 5c**
+  (worktree `Saved/Screenshots/`): re-shot top + close-ups, plus `demo01_autolayout_hut.png` (top-down, the hut roof hidden for the
+  shot) and `demo01_autolayout_hut_angle.png` (perspective from the approach, labels projected with the camera).
 
 ## 5. Review items (moved / ambiguous / for the user)
 
+0. **Rev 5c, the hut door:** (a) the graybox **`HutDoor_Jamb_L`** (2.54 m, folder `AutoLayout_Demo01/HutEntry`) narrows the 4 m doorway
+   to 2 m so the left stacker has a wall - replace it with art or widen your hut's door wall; (b) the hut's camera zone
+   `Trigger_BoatsCabin` reaches 33 cm past the north wall: the stack slots stand 12-21 cm outside it (a stacker made leader keeps the
+   outside camera) - if you enlarge the zone northwards the fixed interior camera would switch on at the door; (c) VOL_A1_HUT must stay
+   **Fire Once off** if you re-place it by hand (a stacker walking in first must not use it up).
 1. **The hut is 96 m from the bridge** (beat sheet: "close to the far side"). Kept where the user put it; move the hut or accept the walk.
 2. **The user's crevasse is 1.2 m wide** (beat sheet: 2 m) and the plank is 1.23 m wide (navmesh strip ~0.5 m). It works (verified);
    widen the plank to ~2 m if operatives queue awkwardly.
@@ -137,8 +178,8 @@ The gameplay actors (volumes, markers, bridge, crawl gap, zones, mines, wire, ro
    the approach at + 132 m, the overlook at + 255 m, the compound at + 305 m. All of it is "moved, review": positions are a first pass
    for the user to drag.
 7. Beats A5 / A6 do not exist in `demo_01_steps.json` yet (Phase 2): their volumes do nothing until then (an unknown beat is ignored).
-8. Unrelated to the map, seen in the log: `Tutorial: step A0_move: after_step names an unknown step "None"` - `demo_01_steps.json`
-   now gives `A0_move` an array of `after_step` steps that the C++ on main does not read yet (the other agent's tutorial change).
+8. ~~Unrelated to the map, seen in the log: `Tutorial: step A0_move: after_step names an unknown step "None"`~~ - gone (rev 5b
+   merged; rev 5c `A0_move` follows `A0_cam_zoom` only).
 
 ## 6. How to rerun on the user's latest map
 
@@ -148,6 +189,7 @@ The script never touches the user's map. To redo the layout from the user's late
 $p  = "C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics"
 $ue = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64"
 # 1. Back up the user's map (copy + SHA256) as usual.
+# (Rev 5c ran these from the agents' worktree with its own binaries: $p = "...\CodexTactics-agents"; no CODEX_LAYOUT_FRESH.)
 # 2. Rebuild the copy from the user's map (FRESH=1 deletes the old copy first; without it the existing copy is re-laid in place,
 #    keeping hand edits on untagged actors of the copy).
 $env:CODEX_LAYOUT_FRESH = "1"; $env:CODEX_LAYOUT_MODE = "build"

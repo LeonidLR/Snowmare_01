@@ -27,7 +27,9 @@
 #include "UI/DialogueRules.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
+#include "Components/BoxComponent.h"
 #include "Engine/Engine.h"
+#include "EngineUtils.h"
 
 #define LOCTEXT_NAMESPACE "TutorialSubsystem"
 
@@ -369,7 +371,74 @@ void UTutorialSubsystem::HandleBusEvent(FName EventName, AActor* Subject)
 	{
 		return;
 	}
-	NotifyEvent(EventName, Subject ? Subject->GetFName() : NAME_None);
+	if (!Subject || !IsTutorialActive() || EventName.IsNone())
+	{
+		NotifyEvent(EventName, Subject ? Subject->GetFName() : NAME_None);
+		return;
+	}
+	// "in_volume" completions (rev 5c): where the subject stands when the event happens (only looked up when a step asks).
+	const bool bAnyInVolume = Machine.GetData().Steps.ContainsByPredicate([](const FTutorialStep& Step) { return !Step.Complete.InVolume.IsNone(); });
+	Machine.HandleEvent(EventName, Subject->GetFName(), bAnyInVolume ? GetTutorialVolumesAt(Subject->GetActorLocation()) : TArray<FName>());
+	ProcessTransitions();
+}
+
+TArray<FName> UTutorialSubsystem::GetTutorialVolumesAt(const FVector& Location) const
+{
+	TArray<FName> Out;
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return Out;
+	}
+	for (TActorIterator<ATutorialTriggerVolume> It(World); It; ++It)
+	{
+		const UBoxComponent* Box = It->Box;
+		const FName Id = It->GetEffectiveVolumeId();
+		if (!Box || Id.IsNone())
+		{
+			continue;
+		}
+		const FVector Local = Box->GetComponentTransform().InverseTransformPosition(Location);
+		const FVector Extent = Box->GetUnscaledBoxExtent();
+		if (FMath::Abs(Local.X) <= Extent.X && FMath::Abs(Local.Y) <= Extent.Y && FMath::Abs(Local.Z) <= Extent.Z)
+		{
+			Out.AddUnique(Id);
+		}
+	}
+	return Out;
+}
+
+void UTutorialSubsystem::CountVolumePresence(const FTutorialStep& Step)
+{
+	UWorld* World = GetWorld();
+	const USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (!World || !Squad || Step.Complete.Volume.IsNone())
+	{
+		return;
+	}
+	for (TActorIterator<ATutorialTriggerVolume> It(World); It; ++It)
+	{
+		if (It->GetEffectiveVolumeId() != Step.Complete.Volume || !It->Box || It->ActivatedBy == ETutorialVolumeFilter::Vehicle)
+		{
+			continue;
+		}
+		TArray<AActor*> Inside;
+		It->Box->GetOverlappingActors(Inside, AOperativeCharacter::StaticClass());
+		for (AActor* Actor : Inside)
+		{
+			AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Actor);
+			if (!Operative || !Squad->GetMembers().Contains(Operative)
+				|| (It->ActivatedBy == ETutorialVolumeFilter::Leader && Squad->GetLeader() != Operative))
+			{
+				continue;
+			}
+			if (Machine.HandleVolumePresence(Step.Complete.Volume, Operative->GetFName()))
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s - %s already stands in %s"), *Step.Id.ToString(), *Operative->DisplayName.ToString(),
+					*Step.Complete.Volume.ToString());
+			}
+		}
+	}
 }
 
 void UTutorialSubsystem::NotifyEvent(FName EventName, FName SubjectId)
@@ -463,7 +532,7 @@ bool UTutorialSubsystem::NotifyVolumeEntered(ATutorialTriggerVolume* Volume, AOp
 	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial volume %s (volume %s, step %s, beat %s) entered by %s"), *Volume->GetName(),
 		*Volume->GetEffectiveVolumeId().ToString(), *Volume->StepId.ToString(), *Volume->BeatId.ToString(),
 		Operative ? *Operative->DisplayName.ToString() : TEXT("?"));
-	Machine.HandleVolume(Volume->GetEffectiveVolumeId(), Volume->StepId, Volume->BeatId);
+	Machine.HandleVolume(Volume->GetEffectiveVolumeId(), Volume->StepId, Volume->BeatId, Operative ? Operative->GetFName() : NAME_None);
 	ProcessTransitions();
 	return true;
 }
@@ -548,6 +617,12 @@ void UTutorialSubsystem::ProcessTransitions()
 			}
 			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s %s -> %s%s"), *Transition.StepId.ToString(), TutorialRules::StateName(Transition.From),
 				TutorialRules::StateName(Transition.To), Transition.bSilent ? TEXT(" (silent)") : TEXT(""));
+			if ((Transition.To == ETutorialStepState::Queued || Transition.To == ETutorialStepState::Active) && !Step->Complete.Volume.IsNone())
+			{
+				// A squad member may already stand where the step asks for (rev 5c: the third operative walked into the hut before
+				// the "go in" card): counts at once; the completion arrives with the next drain round.
+				CountVolumePresence(*Step);
+			}
 			if (Transition.To == ETutorialStepState::Active)
 			{
 				WriteTelemetry(TEXT("shown"), Step->Id, Step->Beat, 0.f);
