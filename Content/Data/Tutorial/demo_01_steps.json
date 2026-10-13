@@ -5,7 +5,7 @@
     "Texts are ids only (TUT_*, WT_*, OBJ_*): English text comes from the narrative manifest 'tutorial' section (TANDEM request #17), else",
     "Content/Data/Tutorial/demo_01_texts_draft.json, else '[EN missing: <id>]'. Command ids: Source/CodexTactics/Public/Core/PlayerCommands.h.",
     "Beats implemented here (Phase 1 = user steps 1-9 + the standalone A3 fence / A4 cone cards): A0 drop (the HQ radio talks while the squad may",
-    "already walk / run and the staged camera lesson runs alongside; the walk card after both), A1 crossing (shaky bridge one at a time = select +",
+    "already walk / run and the staged camera lesson runs alongside; 'click to walk' + 'double-click to run' right after the camera chain, rev 5c), A1 crossing (shaky bridge one at a time = select +",
     "solo, regroup, box, squad banter, cold -> heat pack = inventory unlock, 'running keeps you warm' tip, hut loot), A2 camp (barrel push + light),",
     "A3 approach (stances, vault, low fence crawl, cover, mines / wires spotted), A4 ambush (vision-cone toggle, tripwire; the fight itself is Phase 2).",
     "Beats A5-A8 are designed in the beat sheet only.",
@@ -98,11 +98,18 @@
       "complete": { "commands": ["Camera.Zoom"], "count": 2 }
     },
     {
-      "_comment": "User flow step 3: walk to beacon 1, after BOTH the camera chain and the HQ radio ('step' list: the last of them to finish fires it). Location-bound (volume completion, never precredited); the squad may already be there - then beat A1 has started and this card is dropped.",
+      "_comment": "Movement lesson right after the camera lesson (rev 5c, user request 2026-10-13): 'Click to walk' as soon as the camera chain ends (no longer waits for the HQ radio), done on a move order; precredited when the player already walked. The beacon objective (A0_obj_beacon) still asks for beacon 1. Beacon 1 reached early (beat A1): the leftover A0 cards are dropped (precredited or skipped).",
       "id": "A0_move", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_MOVE",
       "keys": ["Order.Move"],
-      "trigger": { "type": "after_step", "step": ["A0_cam_zoom", "A0_radio_hq"] },
-      "complete": { "volume": "VOL_A0_BEACON1", "timeout_s": 60 }
+      "trigger": { "type": "after_step", "step": "A0_cam_zoom" },
+      "complete": { "commands": ["Order.Move"], "timeout_s": 60 }
+    },
+    {
+      "_comment": "Then 'Double-click to run' (rev 5c), done on a sprint order; precredited when the player already ran. Sprint is never locked (rev 5b).",
+      "id": "A0_sprint", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_SPRINT",
+      "keys": ["Order.Sprint"],
+      "trigger": { "type": "after_step", "step": "A0_move" },
+      "complete": { "commands": ["Order.Sprint"], "timeout_s": 60 }
     },
 
     {
@@ -200,17 +207,16 @@
       "complete": { "event": "ItemUsed.HEAT_PACK", "timeout_s": 40 }
     },
     {
-      "_comment": "User flow step 7: 'running keeps you warm' - a plain tip since 2026-10-13 (sprint is never locked any more).",
+      "_comment": "User flow step 7: 'running keeps you warm' - a survival line + tip (the run itself is taught in A0 since rev 5c).",
       "id": "A1_wt_warm", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_heatpack_mate" },
       "lines": [ { "speaker": "Medic-Sapper", "text_id": "WT_A1_WARMED" } ]
     },
     {
+      "_comment": "Survival tip, not a control lesson (rev 5c: running is taught in A0 by A0_sprint): no command completion, it shows for 10 s (skippable). Its followers (resupply line, hut objective) fire when it ends.",
       "id": "A1_sprint", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SPRINT",
-      "keys": ["Order.Sprint"],
-      "precredit": false,
       "trigger": { "type": "after_step", "step": "A1_heatpack_mate", "delay_s": 1 },
-      "complete": { "commands": ["Order.Sprint"], "timeout_s": 20 }
+      "complete": { "timeout_s": 10 }
     },
     {
       "_comment": "User flow step 8 (resupply, rev 4 order kept): after the sprint card the squad is 'nearly out' -> the hut. The user's TutorialMarkerActor with Step Id A1_obj_hut shows from here.",

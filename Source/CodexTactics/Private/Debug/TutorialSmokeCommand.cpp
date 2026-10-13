@@ -22,14 +22,14 @@
 //     hint + SKIP on the strip; C and Space are refused with ONE "Not yet" feed line per family (none for a repeat); the first
 //     camera card shows WHILE HQ talks (card and strip never overlap: laid-out rects, or the layout constants headless); W
 //     completes the pan, Q/E pressed early PRECREDIT the Q/E stage after the MMB drag; Enter tap = the next radio line, Enter
-//     held 0.6 s = the whole radio ends COMPLETED (Dialogue.Next / .Skip reported once each) and the walk card follows only
-//     after the camera chain too; a reset A0 + beacon 1 reached EARLY drops the camera chain and the walk card cleanly while
+//     held 0.6 s = the whole radio ends COMPLETED (Dialogue.Next / .Skip reported once each); the walk and run cards (rev 5c)
+//     follow the camera chain and are precredited (the leader ran during the radio); a reset A0 + beacon 1 reached EARLY drops the camera chain and the walk card cleanly while
 //     the radio plays on (SKIP ends it, A1's banter follows); the inventory drawer stays closed (TUT_A0_NOINVENTORY once), U
 //     is refused; the crack:
 //     select (key 2) -> the one-at-a-time bridge card completed by three BridgeCrossed events (the bridge actor itself is
 //     BridgeFenceSmoke's job) -> regroup with B -> box -> the squad banter; 20 s after the crossing the gust (+20 cold, >= 42 %);
 //     the heat-pack card UNLOCKS the inventory / items (the drawer opens now), the coldest uses his own starter pack, the mate
-//     card; THEN the 'running keeps you warm' tip (a double click sprints), THEN WT_A1_RESUPPLY + the hut objective; the hut loot
+//     card; THEN the 'running keeps you warm' survival tip (a double click sprints, the tip stays), THEN WT_A1_RESUPPLY + the hut objective; the hut loot
 //     cards and the closing line; beacon 3 plays the formation lines with no guard card; the save's tutorial section carries the
 //     command history; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
 //     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
@@ -813,7 +813,7 @@ namespace TutorialSmoke
 			PressKey(PC, EKeys::Enter, IE_Released);
 			Check(State, Tutorial->GetMachine().GetCommandUse(PlayerCommands::DialogueSkip).Count == 1
 				&& Tutorial->GetMachine().GetCommandUse(PlayerCommands::DialogueNext).Count == 1, TEXT("Dialogue.Skip reported once; the release adds no extra line"));
-			Check(State, Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Idle, TEXT("radio over, camera chain still running: no walk card yet"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Idle, TEXT("camera chain still running: no walk card yet"));
 			for (const TCHAR* Id : { TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom") })
 			{
 				Tutorial->SkipStep(Id);
@@ -824,13 +824,19 @@ namespace TutorialSmoke
 		}
 		case 61:
 		{
-			if (Tutorial->GetStepState(TEXT("A0_move")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			if (Tutorial->GetStepState(TEXT("A0_sprint")) != ETutorialStepState::Completed && State.StageTime < 6.f)
 			{
 				// the queued zoom card shows after the breather: skip it once it is up
 				Tutorial->SkipStep(TEXT("A0_cam_zoom"));
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Active, TEXT("radio skipped + camera chain done: its follower, the walk card, shows"));
+			// Rev 5c (user request 2026-10-13): 'click to walk' then 'double-click to run' follow the camera chain at once; the leader
+			// already ran during the radio (stage 28: a double click = Order.Move + Order.Sprint), so both are precredited.
+			Check(State, Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A0_sprint")) == ETutorialStepState::Completed
+				&& Tutorial->GetPrecreditedCount() == 3 && CountMessages(World, TEXT("already done")) == 3,
+				FString::Printf(TEXT("camera chain done: the walk and run cards follow and are precredited (the leader ran during the radio; %d precredited)"),
+					Tutorial->GetPrecreditedCount()));
+			Check(State, Tutorial->GetStepState(TEXT("A0_obj_beacon")) == ETutorialStepState::Active, TEXT("the beacon objective still asks for beacon 1"));
 			// Beacon 1 reached EARLY (user request 2026-10-13): a fresh A0, the radio and the first camera card still up.
 			Tutorial->ResetTutorial();
 			State.Stage = 62;
@@ -853,8 +859,8 @@ namespace TutorialSmoke
 			Check(State, Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A0_obj_beacon")) == ETutorialStepState::Completed,
 				TEXT("the radio keeps playing; the beacon objective is done"));
 			Check(State, Tutorial->SkipSpeech(), TEXT("the strip's SKIP (SkipSpeech) ends the radio"));
-			Check(State, Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Skipped,
-				TEXT("radio completed; the A0 walk card is dropped, never shown"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Skipped
+				&& Tutorial->GetStepState(TEXT("A0_sprint")) == ETutorialStepState::Skipped, TEXT("radio completed; the A0 walk / run cards are dropped, never shown"));
 			State.Stage = 63;
 			State.StageTime = 0.f;
 			return true;
@@ -1043,7 +1049,8 @@ namespace TutorialSmoke
 				return true;
 			}
 			Check(State, Leader->IsSprinting(), TEXT("a double click now sprints"));
-			Check(State, Tutorial->GetStepState(TEXT("A1_sprint")) == ETutorialStepState::Completed, TEXT("Order.Sprint completes the sprint card"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_sprint")) == ETutorialStepState::Active, TEXT("rev 5c: the survival tip is no control lesson (a sprint does not end it)"));
+			Check(State, Tutorial->SkipStep(TEXT("A1_sprint")), TEXT("the tip is skippable (else it ends after 10 s)"));
 			Leader->StopOperative();
 			Next(State);
 			return true;

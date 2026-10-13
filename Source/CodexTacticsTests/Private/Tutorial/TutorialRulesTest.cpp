@@ -106,8 +106,10 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("A0..A4 (rev 5)"), Data.Beats.Num(), 5);
 	TestEqual(TEXT("start beat"), Data.StartBeat, FName(TEXT("A0")));
-	// A0 camera lesson is STAGED (2026-10-12; MMB drag added 2026-10-13): pan -> MMB drag -> Q/E -> mouse -> zoom -> move, each after the previous, no timeout.
-	const TCHAR* CameraChain[] = { TEXT("A0_cam_pan"), TEXT("A0_cam_pan_drag"), TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom"), TEXT("A0_move") };
+	// A0 camera lesson is STAGED (2026-10-12; MMB drag added 2026-10-13): pan -> MMB drag -> Q/E -> mouse -> zoom, each after the previous,
+	// no timeout; then the movement lesson (rev 5c 2026-10-13): click to walk -> double-click to run.
+	const TCHAR* CameraChain[] = { TEXT("A0_cam_pan"), TEXT("A0_cam_pan_drag"), TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom"),
+		TEXT("A0_move"), TEXT("A0_sprint") };
 	TestNull(TEXT("the old one-shot camera card is gone"), Data.FindStep(TEXT("A0_camera")));
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(CameraChain); ++Index)
 	{
@@ -146,6 +148,16 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	if (const FTutorialStep* Zoom = Data.FindStep(TEXT("A0_cam_zoom")))
 	{
 		TestTrue(TEXT("zoom: two notches"), Zoom->Complete.Count == 2 && Zoom->Complete.Commands == TArray<FString>{ TEXT("Camera.Zoom") });
+	}
+	if (const FTutorialStep* Walk = Data.FindStep(TEXT("A0_move")))
+	{
+		TestTrue(TEXT("click to walk: one move order, precreditable (rev 5c)"), Walk->Complete.Commands == TArray<FString>{ TEXT("Order.Move") }
+			&& Walk->Complete.Volume.IsNone() && TutorialRules::CanPrecredit(*Walk));
+	}
+	if (const FTutorialStep* Run = Data.FindStep(TEXT("A0_sprint")))
+	{
+		TestTrue(TEXT("double-click to run: one sprint order, precreditable (rev 5c)"), Run->Complete.Commands == TArray<FString>{ TEXT("Order.Sprint") }
+			&& Run->TextId == FName(TEXT("TUT_A0_SPRINT")) && TutorialRules::CanPrecredit(*Run));
 	}
 	TestNotNull(TEXT("solo card"), Data.FindStep(TEXT("A1_solo")));
 	TestNotNull(TEXT("barrel push card"), Data.FindStep(TEXT("A2_push")));

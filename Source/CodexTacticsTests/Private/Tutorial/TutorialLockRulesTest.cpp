@@ -401,8 +401,12 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestTrue(TEXT("the camera lesson starts WITH the radio (beat start + 2 s), independent of it"), Pan && Pan->Trigger.Type == ETutorialTriggerType::BeatStart
 		&& Pan->Trigger.DelaySeconds > Radio->Trigger.DelaySeconds && Pan->Unlock.IsEmpty());
 	const FTutorialStep* Walk = Data.FindStep(TEXT("A0_move"));
-	TestTrue(TEXT("the walk card waits for BOTH the camera chain and the radio"), Walk && Walk->Trigger.Type == ETutorialTriggerType::AfterStep
-		&& Walk->Trigger.AfterSteps.Contains(FName(TEXT("A0_cam_zoom"))) && Walk->Trigger.AfterSteps.Contains(FName(TEXT("A0_radio_hq"))));
+	TestTrue(TEXT("rev 5c: 'click to walk' right after the camera chain (no longer waits for the radio), done on a move order"), Walk
+		&& Walk->Trigger.Type == ETutorialTriggerType::AfterStep && Walk->Trigger.AfterSteps == TArray<FName>{ FName(TEXT("A0_cam_zoom")) }
+		&& Walk->Complete.Commands == TArray<FString>{ PlayerCommands::Move.ToString() } && Walk->Complete.Volume.IsNone());
+	const FTutorialStep* RunCard = Data.FindStep(TEXT("A0_sprint"));
+	TestTrue(TEXT("rev 5c: then 'double-click to run', done on a sprint order"), RunCard && RunCard->Trigger.Step == FName(TEXT("A0_move"))
+		&& RunCard->Complete.Commands == TArray<FString>{ PlayerCommands::Sprint.ToString() } && RunCard->Lock.IsEmpty());
 	const FTutorialStep* Objective = Data.FindStep(TEXT("A0_obj_beacon"));
 	TestTrue(TEXT("the beacon objective shows with the radio"), Objective && Objective->Trigger.Type == ETutorialTriggerType::BeatStart);
 	TestTrue(TEXT("A0_noinventory: a feed line on the first locked inventory"), Data.FindStep(TEXT("A0_noinventory"))
@@ -429,9 +433,9 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestTrue(TEXT("heat pack card focuses the coldest and UNLOCKS the inventory / items"), HeatPack && HeatPack->Focus == FName(TEXT("coldest_operative"))
 		&& HeatPack->Unlock.Contains(TEXT("Inventory.*")) && HeatPack->Unlock.Contains(TEXT("Item.*")) && HeatPack->Trigger.Requires.Contains(FName(TEXT("A1_solo"))));
 	const FTutorialStep* SprintCard = Data.FindStep(TEXT("A1_sprint"));
-	TestTrue(TEXT("A1_sprint: 'running keeps you warm' after the heat pack lesson, a plain tip (unlocks nothing)"), SprintCard
+	TestTrue(TEXT("A1_sprint: 'running keeps you warm' after the heat pack lesson, a survival tip (no command completion, unlocks nothing; rev 5c)"), SprintCard
 		&& SprintCard->Trigger.Type == ETutorialTriggerType::AfterStep && SprintCard->Trigger.Step == FName(TEXT("A1_heatpack_mate")) && SprintCard->Unlock.IsEmpty()
-		&& SprintCard->Complete.Commands.Contains(PlayerCommands::Sprint.ToString()) && SprintCard->Complete.TimeoutSeconds > 0.f);
+		&& SprintCard->Complete.Commands.IsEmpty() && !SprintCard->Complete.HasCondition() && SprintCard->Complete.TimeoutSeconds > 0.f);
 	const FTutorialStep* Resupply = Data.FindStep(TEXT("A1_wt_resupply"));
 	TestTrue(TEXT("A1_wt_resupply after the sprint card"), Resupply && Resupply->Trigger.Type == ETutorialTriggerType::AfterStep && Resupply->Trigger.Step == FName(TEXT("A1_sprint"))
 		&& Resupply->Lines.Num() == 1 && Resupply->Lines[0].TextId == FName(TEXT("WT_A1_RESUPPLY")));
@@ -504,14 +508,21 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 		Machine.Tick(1.6f);
 		TestTrue(FString(Camera) + TEXT(" skipped"), Machine.SkipStep(Camera));
 	}
-	TestEqual(TEXT("camera chain done, the radio still talks: no walk card yet"), Machine.GetState(TEXT("A0_move")), ETutorialStepState::Idle);
-	Machine.CompleteStep(TEXT("A0_radio_hq")); // played out, or Enter-held / SKIP (both finish it as completed)
 	Machine.Tick(1.6f);
-	TestEqual(TEXT("radio over + camera chain over: the walk card"), Machine.GetActiveCard(), FName(TEXT("A0_move")));
+	TestEqual(TEXT("rev 5c: camera chain done, the radio still talks: 'click to walk' shows at once"), Machine.GetActiveCard(), FName(TEXT("A0_move")));
+	TestEqual(TEXT("the radio still plays"), Machine.GetActiveSpeech(), FName(TEXT("A0_radio_hq")));
+	Machine.HandleCommand(PlayerCommands::Move);
+	TestEqual(TEXT("a move order completes the walk card"), Machine.GetState(TEXT("A0_move")), ETutorialStepState::Completed);
+	Machine.Tick(1.6f);
+	TestEqual(TEXT("then 'double-click to run'"), Machine.GetActiveCard(), FName(TEXT("A0_sprint")));
+	Machine.HandleCommand(PlayerCommands::Sprint);
+	TestEqual(TEXT("a sprint order completes the run card"), Machine.GetState(TEXT("A0_sprint")), ETutorialStepState::Completed);
+	Machine.CompleteStep(TEXT("A0_radio_hq")); // played out, or Enter-held / SKIP (both finish it as completed)
 	Machine.ConsumeTransitions();
+	TestEqual(TEXT("the beacon objective still waits for beacon 1"), Machine.GetState(TEXT("A0_obj_beacon")), ETutorialStepState::Active);
 	Machine.HandleVolume(TEXT("VOL_A0_BEACON1"), NAME_None, TEXT("A1"));
 	TestEqual(TEXT("beacon 1 starts A1"), Machine.GetCurrentBeat(), FName(TEXT("A1")));
-	TestEqual(TEXT("the walk card completes at beacon 1"), Machine.GetState(TEXT("A0_move")), ETutorialStepState::Completed);
+	TestEqual(TEXT("the beacon objective completes at beacon 1"), Machine.GetState(TEXT("A0_obj_beacon")), ETutorialStepState::Completed);
 	TestTrue(TEXT("A1: the inventory still locked until the heat pack lesson"), Machine.IsCommandLocked(PlayerCommands::InventoryOpen));
 	TestTrue(TEXT("A1: solo locked until the bridge card"), Machine.IsCommandLocked(PlayerCommands::SoloOn));
 	Pump(Machine, 2.f);
@@ -556,11 +567,13 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	Pump(Machine, 1.5f);
 	TestEqual(TEXT("nobody else cold: the mate card is skipped"), Machine.GetState(TEXT("A1_heatpack_mate")), ETutorialStepState::Skipped);
 	Pump(Machine, 1.5f);
-	TestEqual(TEXT("'running keeps you warm': the tip card"), Machine.GetActiveCard(), FName(TEXT("A1_sprint")));
+	TestEqual(TEXT("'running keeps you warm': the survival tip (not precredited by the A0 sprint)"), Machine.GetActiveCard(), FName(TEXT("A1_sprint")));
 	TestEqual(TEXT("a double click sprints (never locked)"), TutorialRules::ResolveLockedCommand(Machine.GetLocks(), PlayerCommands::Sprint), PlayerCommands::Sprint);
 	TestEqual(TEXT("the hut objective waits for the tip"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Idle);
 	Machine.HandleCommand(PlayerCommands::Sprint);
-	TestEqual(TEXT("a sprint completes the card"), Machine.GetState(TEXT("A1_sprint")), ETutorialStepState::Completed);
+	TestEqual(TEXT("a sprint does not end the tip (no control lesson any more)"), Machine.GetState(TEXT("A1_sprint")), ETutorialStepState::Active);
+	Pump(Machine, 10.f);
+	TestEqual(TEXT("the tip ends after its 10 s"), Machine.GetState(TEXT("A1_sprint")), ETutorialStepState::TimedOut);
 	Pump(Machine, 2.f);
 	TestEqual(TEXT("WT_A1_RESUPPLY played"), Machine.GetState(TEXT("A1_wt_resupply")), ETutorialStepState::Completed);
 	TestEqual(TEXT("and the hut objective is up"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Active);
