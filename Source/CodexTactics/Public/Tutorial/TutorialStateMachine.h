@@ -27,7 +27,10 @@ struct CODEXTACTICS_API FTutorialTransition
  * Idle -> (trigger) -> Waiting (delay_s) -> Queued -> Active -> Completed | Skipped | TimedOut.
  * Display slots: one hint card at a time with a breather between cards, up to MaxObjectives objectives, one radio /
  * walk-and-talk step at a time. A queued step counts commands / events too and finishes silently when done before it
- * was shown (UX brief rule 6). Once-steps never re-trigger; others may after they finished. UTutorialSubsystem feeds it
+ * was shown (UX brief rule 6). Once-steps never re-trigger; others may after they finished. When a later beat starts (the
+ * squad walked on, e.g. reached beacon 1 during the A0 camera lesson), the running hint cards of earlier beats and the
+ * after_step cards that would follow them are dropped (precredited or skipped, DropEarlierBeatCard); radio / walk-and-talk
+ * and objectives of earlier beats go on. UTutorialSubsystem feeds it
  * commands, events, volumes and time, and drains ConsumeTransitions().
  */
 class CODEXTACTICS_API FTutorialStateMachine
@@ -94,6 +97,11 @@ public:
 
 	/** True when a lock pattern in force matches CommandId (beat / step "lock"; see FTutorialStep::Lock). */
 	bool IsCommandLocked(FName CommandId) const;
+	/**
+	 * Drops every lock in force (a wave / horde fight started, the tutorial was switched off: the game must never stay
+	 * crippled). Later beat / step "lock" lists still apply. False when nothing was locked.
+	 */
+	bool UnlockAll();
 	/** The lock patterns in force, in the order they were added. */
 	const TArray<FString>& GetLocks() const { return Locks; }
 	/**
@@ -129,6 +137,17 @@ private:
 
 	int32 IndexOf(FName StepId) const;
 	bool CanTrigger(int32 Index) const;
+	/** The step is a hint card of a beat before the current one (the story has moved on past it). */
+	bool IsEarlierBeatCard(int32 Index) const;
+	/**
+	 * Drops a leftover hint card of an earlier beat without showing it any more: completed when the player's command history
+	 * already satisfies it ("precredit"), else skipped. Its followers fire as usual (a chain of leftovers drops in one go).
+	 */
+	void DropEarlierBeatCard(int32 Index);
+	/** Completes the step and marks its transition as precredited (the player had already done the lesson). */
+	void FinishPrecredited(int32 Index);
+	/** Every step of an after_step trigger's "step" list has finished at least once (FTutorialTrigger::AfterSteps). */
+	bool AreAfterStepsFinished(int32 Index) const;
 	/** Every "trigger.requires" step has been triggered at least once. */
 	bool IsArmed(int32 Index) const;
 	float ReadStat(FName Stat) const;

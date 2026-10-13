@@ -106,12 +106,15 @@ namespace TutorialRules
 	CODEXTACTICS_API bool IsConditionMet(const TArray<FTutorialCondition>& Conditions, TFunctionRef<float(FName)> Stat);
 
 	/**
-	 * Applies a step's / beat's lock changes to the patterns in force: Unlock first (removes equal patterns, case-insensitive;
-	 * "*" removes all), then Lock (adds new patterns). Returns true when the set changed.
+	 * Applies a step's / beat's lock changes to the entries in force: Unlock first, then Lock. Returns true when the set
+	 * changed. Unlock removes every lock pattern it covers (PatternCovers; "*" removes all); when a wider lock still covers
+	 * it, an exception entry "!<pattern>" frees just that part (Demo 01 progressive unlock, user request 2026-10-13: beat A0
+	 * locks "Trap.*", the mine card frees "Trap.DisarmMine"). Lock adds a pattern and takes back the exceptions it covers.
+	 * Exceptions no lock covers any more are dropped. Entries are saved as they are (the save's "locks").
 	 */
 	CODEXTACTICS_API bool ApplyLockChanges(TArray<FString>& InOutLocks, const TArray<FString>& Lock, const TArray<FString>& Unlock);
 
-	/** True when any lock pattern matches the command (PlayerCommands::Matches). */
+	/** True when a lock pattern matches the command (PlayerCommands::Matches) and no "!" exception entry frees it. */
 	CODEXTACTICS_API bool IsCommandLocked(const TArray<FString>& Locks, FName CommandId);
 
 	/**
@@ -122,6 +125,15 @@ namespace TutorialRules
 
 	/** "Tutorial.Locked.<CommandId>": the specific event a locked command raises next to "Tutorial.Locked". */
 	CODEXTACTICS_API FName MakeLockedEventName(FName CommandId);
+
+	/**
+	 * True when every command id Inner can match is also matched by Outer ("Trap.*" covers "Trap.DisarmMine" and
+	 * "Trap.Disarm*"; "*" covers all; an exact id covers only itself). Case-insensitive.
+	 */
+	CODEXTACTICS_API bool PatternCovers(const FString& Outer, const FString& Inner);
+
+	/** "Stance" for "Stance.Squad.Prone": the part before the first '.' (the whole id without one); the lock hint is per family. */
+	CODEXTACTICS_API FString GetCommandFamily(FName CommandId);
 
 	// --- Precredit (user decision 2026-10-13: a lesson already done before its card appears counts as done) ---------------
 

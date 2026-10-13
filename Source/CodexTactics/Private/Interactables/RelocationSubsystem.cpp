@@ -1,5 +1,6 @@
 #include "Interactables/RelocationSubsystem.h"
 #include "Core/PlayerCommands.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "Interactables/CampfireActor.h"
 #include "Interactables/PortableStoveActor.h"
 #include "Components/BoxComponent.h"
@@ -144,6 +145,10 @@ bool URelocationSubsystem::CheckLift(const AOperativeCharacter& Worker, const AI
 
 bool URelocationSubsystem::StartRelocate(AInteractableActor* Target, AOperativeCharacter* Worker)
 {
+	if (UTutorialSubsystem::CheckCommandLocked(this, PlayerCommands::Relocate))
+	{
+		return false; // the push lesson comes at the A2 camp (Demo 01 progressive unlock)
+	}
 	if (!Target)
 	{
 		return false;

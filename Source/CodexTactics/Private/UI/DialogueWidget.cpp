@@ -131,7 +131,7 @@ void UDialogueWidget::BuildDefaultLayout()
 	UHorizontalBox* BottomBar = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("DialogBottomBar"));
 	Content->AddChildToVerticalBox(BottomBar);
 	UTextBlock* Hint = MakeText(TEXT("DialogHintText"), 10, DialogHintColor, false);
-	Hint->SetText(LOCTEXT("Hint", "[Space] next, [Esc] skip"));
+	Hint->SetText(LOCTEXT("Hint", "[Space / Enter] next, hold [Enter] or [Esc] skip"));
 	UHorizontalBoxSlot* HintSlot = BottomBar->AddChildToHorizontalBox(Hint);
 	HintSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	HintSlot->SetVerticalAlignment(VAlign_Center);

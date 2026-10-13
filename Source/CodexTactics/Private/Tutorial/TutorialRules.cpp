@@ -349,7 +349,12 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			}
 			Step.Trigger.Volume = FName(*JsonString(Trigger, TEXT("volume")));
 			Step.Trigger.Event = JsonString(Trigger, TEXT("event"));
-			Step.Trigger.Step = FName(*JsonString(Trigger, TEXT("step")));
+			// "step": one id, or an array of ids that must ALL have finished (FTutorialTrigger::AfterSteps).
+			for (const FString& AfterStep : JsonStrings(Trigger, TEXT("step")))
+			{
+				Step.Trigger.AfterSteps.AddUnique(FName(*AfterStep));
+			}
+			Step.Trigger.Step = Step.Trigger.AfterSteps.IsEmpty() ? NAME_None : Step.Trigger.AfterSteps[0];
 			Step.Trigger.Command = JsonString(Trigger, TEXT("command"));
 			Step.Trigger.Count = FMath::Max(1, static_cast<int32>(JsonNumber(Trigger, TEXT("count"), 1.0)));
 			Step.Trigger.DelaySeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Trigger, TEXT("delay_s"), 0.0)));
@@ -455,10 +460,21 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 
 	for (const FTutorialStep& Step : OutData.Steps)
 	{
-		if (Step.Trigger.Type == ETutorialTriggerType::AfterStep && OutData.FindStepIndex(Step.Trigger.Step) == INDEX_NONE)
+		if (Step.Trigger.Type == ETutorialTriggerType::AfterStep)
 		{
-			OutError = FString::Printf(TEXT("step %s: after_step names an unknown step \"%s\""), *Step.Id.ToString(), *Step.Trigger.Step.ToString());
-			return false;
+			if (Step.Trigger.AfterSteps.IsEmpty())
+			{
+				OutError = FString::Printf(TEXT("step %s: after_step needs \"step\""), *Step.Id.ToString());
+				return false;
+			}
+			for (const FName AfterStep : Step.Trigger.AfterSteps)
+			{
+				if (OutData.FindStepIndex(AfterStep) == INDEX_NONE)
+				{
+					OutError = FString::Printf(TEXT("step %s: after_step names an unknown step \"%s\""), *Step.Id.ToString(), *AfterStep.ToString());
+					return false;
+				}
+			}
 		}
 		if ((Step.Trigger.Type == ETutorialTriggerType::Event || Step.Trigger.Type == ETutorialTriggerType::FailureRetry) && Step.Trigger.Event.IsEmpty())
 		{
@@ -686,6 +702,17 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 	return true;
 }
 
+FString TutorialRules::GetCommandFamily(FName CommandId)
+{
+	FString Family = CommandId.ToString();
+	int32 Dot = INDEX_NONE;
+	if (Family.FindChar(TEXT('.'), Dot))
+	{
+		Family.LeftInline(Dot);
+	}
+	return Family;
+}
+
 bool TutorialRules::CanPrecredit(const FTutorialStep& Step)
 {
 	// Remedial / repeatable cards ("once": false, failure_retry) remind: their history never counts.
@@ -789,28 +816,78 @@ bool TutorialRules::IsConditionMet(const TArray<FTutorialCondition>& Conditions,
 	return true;
 }
 
+bool TutorialRules::PatternCovers(const FString& Outer, const FString& Inner)
+{
+	const FString OuterTrimmed = Outer.TrimStartAndEnd();
+	const FString InnerTrimmed = Inner.TrimStartAndEnd();
+	if (OuterTrimmed.IsEmpty() || InnerTrimmed.IsEmpty())
+	{
+		return false;
+	}
+	if (OuterTrimmed == TEXT("*"))
+	{
+		return true;
+	}
+	if (OuterTrimmed.EndsWith(TEXT("*")))
+	{
+		const FString Prefix = OuterTrimmed.LeftChop(1);
+		const FString InnerBody = InnerTrimmed.EndsWith(TEXT("*")) ? InnerTrimmed.LeftChop(1) : InnerTrimmed;
+		return InnerBody.StartsWith(Prefix, ESearchCase::IgnoreCase);
+	}
+	return !InnerTrimmed.EndsWith(TEXT("*")) && OuterTrimmed.Equals(InnerTrimmed, ESearchCase::IgnoreCase);
+}
+
 bool TutorialRules::ApplyLockChanges(TArray<FString>& InOutLocks, const TArray<FString>& Lock, const TArray<FString>& Unlock)
 {
-	bool bChanged = false;
+	// Entries: lock patterns ("Stance.*") and exceptions ("!Trap.DisarmMine": a command freed out of a wider lock).
+	auto IsException = [](const FString& Entry) { return Entry.StartsWith(TEXT("!")); };
+	const TArray<FString> Before = InOutLocks;
 	for (const FString& Pattern : Unlock)
 	{
+		if (Pattern.IsEmpty())
+		{
+			continue;
+		}
 		if (Pattern == TEXT("*"))
 		{
-			bChanged |= InOutLocks.Num() > 0;
 			InOutLocks.Reset();
 			continue;
 		}
-		bChanged |= InOutLocks.RemoveAll([&Pattern](const FString& Existing) { return Existing.Equals(Pattern, ESearchCase::IgnoreCase); }) > 0;
+		// Every lock inside the unlocked pattern goes ("Stance.*" frees "Stance.Squad.*" too).
+		InOutLocks.RemoveAll([&Pattern, &IsException](const FString& Existing) { return !IsException(Existing) && PatternCovers(Pattern, Existing); });
+		// A wider lock still covers it ("Trap.*" when "Trap.DisarmMine" is taught): keep that lock, free this part.
+		const bool bStillCovered = InOutLocks.ContainsByPredicate([&Pattern, &IsException](const FString& Existing)
+		{
+			return !IsException(Existing) && PatternCovers(Existing, Pattern);
+		});
+		const FString Exception = TEXT("!") + Pattern;
+		if (bStillCovered && !InOutLocks.ContainsByPredicate([&Exception](const FString& Existing) { return Existing.Equals(Exception, ESearchCase::IgnoreCase); }))
+		{
+			InOutLocks.Add(Exception);
+		}
 	}
 	for (const FString& Pattern : Lock)
 	{
-		if (!Pattern.IsEmpty() && !InOutLocks.ContainsByPredicate([&Pattern](const FString& Existing) { return Existing.Equals(Pattern, ESearchCase::IgnoreCase); }))
+		if (Pattern.IsEmpty() || IsException(Pattern))
+		{
+			continue;
+		}
+		// A new lock takes back the exceptions it covers.
+		InOutLocks.RemoveAll([&Pattern, &IsException](const FString& Existing) { return IsException(Existing) && PatternCovers(Pattern, Existing.Mid(1)); });
+		if (!InOutLocks.ContainsByPredicate([&Pattern](const FString& Existing) { return Existing.Equals(Pattern, ESearchCase::IgnoreCase); }))
 		{
 			InOutLocks.Add(Pattern);
-			bChanged = true;
 		}
 	}
-	return bChanged;
+	// Exceptions no lock covers any more are dropped.
+	InOutLocks.RemoveAll([&InOutLocks, &IsException](const FString& Existing)
+	{
+		return IsException(Existing) && !InOutLocks.ContainsByPredicate([&Existing, &IsException](const FString& Other)
+		{
+			return !IsException(Other) && PatternCovers(Other, Existing.Mid(1));
+		});
+	});
+	return InOutLocks != Before;
 }
 
 bool TutorialRules::IsCommandLocked(const TArray<FString>& Locks, FName CommandId)
@@ -819,14 +896,22 @@ bool TutorialRules::IsCommandLocked(const TArray<FString>& Locks, FName CommandI
 	{
 		return false;
 	}
+	bool bLocked = false;
 	for (const FString& Pattern : Locks)
 	{
-		if (PlayerCommands::Matches(Pattern, CommandId))
+		if (Pattern.StartsWith(TEXT("!")))
 		{
-			return true;
+			if (PlayerCommands::Matches(Pattern.Mid(1), CommandId))
+			{
+				return false; // taught: freed out of a wider lock
+			}
+		}
+		else if (!bLocked && PlayerCommands::Matches(Pattern, CommandId))
+		{
+			bLocked = true;
 		}
 	}
-	return false;
+	return bLocked;
 }
 
 FName TutorialRules::MakeLockedEventName(FName CommandId)

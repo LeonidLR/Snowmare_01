@@ -14,6 +14,7 @@
 #include "Interactables/TripwireActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/UseOrderRules.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 
 bool UInteractionSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -111,6 +112,10 @@ void UInteractionSubsystem::TrapActionMenu()
 	CloseMenu();
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (UTutorialSubsystem::CheckCommandLocked(this, PlayerCommands::SetTrap))
+	{
+		return; // not taught yet (Demo 01 progressive unlock)
+	}
 	if (Target && Leader && Target->TrapWithGrenade(Leader))
 	{
 		PlayerCommands::ReportBy(this, PlayerCommands::SetTrap, Leader, Target);
@@ -184,6 +189,10 @@ void UInteractionSubsystem::ConfirmActionMenu()
 	CloseMenu();
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (Target && Leader && !bDisabled && UTutorialSubsystem::CheckCommandLocked(this, InteractionCommands::ForConfirm(*Target)))
+	{
+		return; // defuse / light / use not taught yet (Demo 01 progressive unlock)
+	}
 	if (Target && Leader && !bDisabled)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("Action confirmed on %s by %s"), *Target->GetName(), *Leader->DisplayName.ToString());
@@ -414,9 +423,9 @@ void UInteractionSubsystem::RelocateActionMenu()
 
 void UInteractionSubsystem::OpenLootDialog(ALootCrateActor* Crate)
 {
-	if (!Crate)
+	if (!Crate || UTutorialSubsystem::CheckCommandLocked(this, PlayerCommands::LootCrate))
 	{
-		return;
+		return; // the loot lesson comes in the hut (Demo 01 progressive unlock)
 	}
 	CloseMenu();
 	LootCrate = Crate;

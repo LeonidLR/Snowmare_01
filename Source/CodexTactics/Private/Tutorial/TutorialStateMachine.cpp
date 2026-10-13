@@ -47,6 +47,23 @@ bool FTutorialStateMachine::CanTrigger(int32 Index) const
 	return TutorialRules::IsFinished(State.State) && !Data.Steps[Index].bOnce;
 }
 
+bool FTutorialStateMachine::AreAfterStepsFinished(int32 Index) const
+{
+	if (!Data.Steps.IsValidIndex(Index))
+	{
+		return false;
+	}
+	for (const FName AfterStep : Data.Steps[Index].Trigger.AfterSteps)
+	{
+		const int32 AfterIndex = IndexOf(AfterStep);
+		if (!Runtime.IsValidIndex(AfterIndex) || !Runtime[AfterIndex].bEverFinished)
+		{
+			return false; // "step": [ ... ]: the last of them to finish fires the follower
+		}
+	}
+	return true;
+}
+
 bool FTutorialStateMachine::IsArmed(int32 Index) const
 {
 	if (!Data.Steps.IsValidIndex(Index))
@@ -96,6 +113,13 @@ TArray<bool> FTutorialStateMachine::RunningSnapshot() const
 		Out.Add(TutorialRules::IsRunning(State.State));
 	}
 	return Out;
+}
+
+bool FTutorialStateMachine::UnlockAll()
+{
+	const bool bHad = !Locks.IsEmpty();
+	Locks.Reset();
+	return bHad;
 }
 
 bool FTutorialStateMachine::IsCommandLocked(FName CommandId) const
@@ -167,9 +191,49 @@ void FTutorialStateMachine::Fire(int32 Index, bool bForce)
 	Enqueue(Index);
 }
 
+bool FTutorialStateMachine::IsEarlierBeatCard(int32 Index) const
+{
+	if (!Data.Steps.IsValidIndex(Index) || Data.Steps[Index].Kind != ETutorialStepKind::HintCard)
+	{
+		return false;
+	}
+	const int32 BeatIndex = Data.FindBeatIndex(Data.Steps[Index].Beat);
+	return BeatIndex != INDEX_NONE && CurrentBeatIndex != INDEX_NONE && BeatIndex < CurrentBeatIndex;
+}
+
+void FTutorialStateMachine::DropEarlierBeatCard(int32 Index)
+{
+	if (TutorialRules::IsPrecreditSatisfied(Data.Steps[Index], History))
+	{
+		FinishPrecredited(Index);
+		return;
+	}
+	Finish(Index, ETutorialStepState::Skipped);
+}
+
+void FTutorialStateMachine::FinishPrecredited(int32 Index)
+{
+	const FName StepId = Data.Steps[Index].Id;
+	Finish(Index, ETutorialStepState::Completed);
+	for (int32 Back = Transitions.Num() - 1; Back >= 0; --Back)
+	{
+		if (Transitions[Back].StepId == StepId && Transitions[Back].To == ETutorialStepState::Completed)
+		{
+			Transitions[Back].bPrecredited = true;
+			break;
+		}
+	}
+}
+
 void FTutorialStateMachine::Enqueue(int32 Index)
 {
 	SetState(Index, ETutorialStepState::Queued);
+	if (Data.Steps[Index].Trigger.Type == ETutorialTriggerType::AfterStep && IsEarlierBeatCard(Index))
+	{
+		// The next card of a chain whose beat is over (beacon 1 reached during the camera lesson): never shown now.
+		DropEarlierBeatCard(Index);
+		return;
+	}
 	if (!AreConditionsMet(Index))
 	{
 		// Due but its condition does not hold (e.g. the gust when someone is already cold): skipped silently, followers go on.
@@ -179,16 +243,7 @@ void FTutorialStateMachine::Enqueue(int32 Index)
 	if (TutorialRules::IsPrecreditSatisfied(Data.Steps[Index], History))
 	{
 		// The player already did this (panned the camera during the HQ intro, ...): done without the card, followers go on.
-		const FName StepId = Data.Steps[Index].Id;
-		Finish(Index, ETutorialStepState::Completed);
-		for (int32 Back = Transitions.Num() - 1; Back >= 0; --Back)
-		{
-			if (Transitions[Back].StepId == StepId && Transitions[Back].To == ETutorialStepState::Completed)
-			{
-				Transitions[Back].bPrecredited = true;
-				break;
-			}
-		}
+		FinishPrecredited(Index);
 		return;
 	}
 	Queue.AddUnique(Index);
@@ -222,7 +277,8 @@ void FTutorialStateMachine::Finish(int32 Index, ETutorialStepState FinalState)
 	for (int32 Other = 0; Other < Data.Steps.Num(); ++Other)
 	{
 		const FTutorialTrigger& Trigger = Data.Steps[Other].Trigger;
-		if (Trigger.Type == ETutorialTriggerType::AfterStep && Trigger.Step == FinishedId)
+		if (Trigger.Type == ETutorialTriggerType::AfterStep && (Trigger.Step == FinishedId || Trigger.AfterSteps.Contains(FinishedId))
+			&& AreAfterStepsFinished(Other))
 		{
 			Fire(Other);
 		}
@@ -415,13 +471,10 @@ void FTutorialStateMachine::HandleVolume(FName VolumeId, FName StepId, FName Bea
 	{
 		return;
 	}
-	if (!BeatId.IsNone())
-	{
-		StartBeat(BeatId);
-	}
 	if (!VolumeId.IsNone())
 	{
-		// Only steps already running when this input came count it (a follower started by a completion must not take the same input).
+		// Completions first, before a beat this volume starts drops the earlier beat's leftover cards (the walk card that asked
+		// for this very place is completed, not dropped). Only steps already running when this input came count it.
 		const TArray<bool> WasRunning = RunningSnapshot();
 		for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 		{
@@ -430,6 +483,13 @@ void FTutorialStateMachine::HandleVolume(FName VolumeId, FName StepId, FName Bea
 				AddProgress(Index, 1, 1);
 			}
 		}
+	}
+	if (!BeatId.IsNone())
+	{
+		StartBeat(BeatId);
+	}
+	if (!VolumeId.IsNone())
+	{
 		for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 		{
 			const FTutorialTrigger& Trigger = Data.Steps[Index].Trigger;
@@ -464,6 +524,14 @@ bool FTutorialStateMachine::StartBeat(FName BeatId, bool bAllowBackwards)
 	}
 	CurrentBeatIndex = BeatIndex;
 	TutorialRules::ApplyLockChanges(Locks, Data.Beats[BeatIndex].Lock, Data.Beats[BeatIndex].Unlock);
+	// Leftover hint cards of the beats the squad has left (waiting, queued or shown) are dropped; their chains follow.
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		if (IsEarlierBeatCard(Index) && TutorialRules::IsRunning(Runtime[Index].State))
+		{
+			DropEarlierBeatCard(Index);
+		}
+	}
 	FTutorialTransition& Transition = Transitions.AddDefaulted_GetRef();
 	Transition.Type = FTutorialTransition::EType::BeatStarted;
 	Transition.BeatId = BeatId;

@@ -206,6 +206,7 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 	Machine.Load(Data);
 	LockedRefusals = 0;
 	PrecreditedCount = 0;
+	LockHintFamilies.Reset();
 	FocusOperatives.Reset();
 	SpeechStep = NAME_None;
 	SpeechLines.Reset();
@@ -258,6 +259,10 @@ void UTutorialSubsystem::SetTutorialEnabled(bool bEnabled)
 	if (bWas != bEnabled)
 	{
 		WriteTelemetry(bEnabled ? TEXT("enabled") : TEXT("disabled"), NAME_None, Machine.GetCurrentBeat(), 0.f);
+	}
+	if (!bEnabled)
+	{
+		UnlockAllCommands(TEXT("tutorial switched off")); // switching it on again does not lock the taught-later commands back
 	}
 	RefreshMarkers();
 }
@@ -408,6 +413,8 @@ void UTutorialSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexComb
 	LastPhase = Phase;
 	if (Phase == ECodexGamePhase::WaveCombat)
 	{
+		// Safety (user request 2026-10-13): a wave / horde fight never runs with tutorial locks (no stance / pause / weapons).
+		UnlockAllCommands(TEXT("a fight started"));
 		NotifyEvent(GameplayEvents::CombatStarted);
 	}
 	else if (Previous == ECodexGamePhase::WaveCombat)
@@ -497,6 +504,7 @@ bool UTutorialSubsystem::ReplayStep(FName StepId)
 void UTutorialSubsystem::ResetTutorial()
 {
 	Machine.ResetProgress();
+	LockHintFamilies.Reset();
 	FocusOperatives.Reset();
 	SpeechStep = NAME_None;
 	SpeechLines.Reset();
@@ -734,7 +742,40 @@ bool UTutorialSubsystem::CheckCommandLocked(const UObject* WorldContext, FName C
 	Tutorial->WriteTelemetry(TEXT("command_locked"), NAME_None, Tutorial->GetCurrentBeat(), 0.f);
 	GameplayEvents::Raise(World, GameplayEvents::TutorialLocked);
 	GameplayEvents::Raise(World, TutorialRules::MakeLockedEventName(CommandId));
+	Tutorial->PostLockHint(CommandId);
 	return true;
+}
+
+void UTutorialSubsystem::PostLockHint(FName CommandId)
+{
+	const FName LockedEvent = TutorialRules::MakeLockedEventName(CommandId);
+	for (const FTutorialStep& Step : Machine.GetData().Steps)
+	{
+		if (Step.Trigger.Type == ETutorialTriggerType::Event && TutorialRules::MatchesName(Step.Trigger.Event, LockedEvent))
+		{
+			return; // the steps file has its own line for this one (TUT_A0_NOINVENTORY)
+		}
+	}
+	const FString Family = TutorialRules::GetCommandFamily(CommandId);
+	bool bAlready = false;
+	LockHintFamilies.Add(Family, &bAlready);
+	if (bAlready)
+	{
+		return;
+	}
+	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+	{
+		Messages->PostMessage(LOCTEXT("TrainingSpeaker", "TRAINING"), LOCTEXT("LockHint", "Not yet - follow the training."));
+	}
+}
+
+void UTutorialSubsystem::UnlockAllCommands(const TCHAR* Reason)
+{
+	if (Machine.UnlockAll())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: every command unlocked (%s)"), Reason);
+		WriteTelemetry(TEXT("unlock_all"), NAME_None, Machine.GetCurrentBeat(), 0.f);
+	}
 }
 
 FName UTutorialSubsystem::FilterCommand(const UObject* WorldContext, FName CommandId)
@@ -904,6 +945,8 @@ FTutorialSubtitleView UTutorialSubsystem::GetSubtitleView() const
 	View.Line = FText::FromString(Line.Text);
 	View.SpeakerColor = FLinearColor::FromSRGBColor(Style.NameColor.ToFColor(false));
 	View.SecondsLeft = SpeechLineLeft;
+	View.LineIndex = SpeechIndex;
+	View.LineCount = SpeechLines.Num();
 	return View;
 }
 
@@ -1001,15 +1044,57 @@ void UTutorialSubsystem::TickSpeech(float DeltaSeconds)
 		SpeechLineLeft = SpeechLines[SpeechIndex].Duration;
 		return;
 	}
+	EndSpeech();
+}
+
+void UTutorialSubsystem::EndSpeech()
+{
 	const FName Done = SpeechStep;
 	SpeechStep = NAME_None;
 	SpeechLines.Reset();
+	SpeechIndex = 0;
+	SpeechLineLeft = 0.f;
 	const FTutorialStep* Step = Machine.GetData().FindStep(Done);
 	// Lines played out: the step is done unless it waits for something else (then it stays until that / its timeout).
 	if (Step && !Step->Complete.HasCondition())
 	{
 		Machine.CompleteStep(Done);
 	}
+}
+
+bool UTutorialSubsystem::IsSpeechActive() const
+{
+	return IsTutorialActive() && !SpeechStep.IsNone() && SpeechLines.IsValidIndex(SpeechIndex);
+}
+
+bool UTutorialSubsystem::AdvanceSpeechLine()
+{
+	if (!IsSpeechActive())
+	{
+		return false;
+	}
+	const FName StepId = SpeechStep;
+	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s line %d / %d advanced by the player"), *StepId.ToString(), SpeechIndex + 1, SpeechLines.Num());
+	WriteTelemetry(TEXT("line_advanced"), StepId, Machine.GetCurrentBeat(), 0.f);
+	SpeechLineLeft = 0.f;
+	TickSpeech(0.f); // the same path as a line running out: the next line, or the end of the step
+	ProcessTransitions();
+	return true;
+}
+
+bool UTutorialSubsystem::SkipSpeech()
+{
+	if (!IsSpeechActive())
+	{
+		return false;
+	}
+	const FName StepId = SpeechStep;
+	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s skipped by the player at line %d / %d (finished as played out)"), *StepId.ToString(),
+		SpeechIndex + 1, SpeechLines.Num());
+	WriteTelemetry(TEXT("speech_skipped"), StepId, Machine.GetCurrentBeat(), 0.f);
+	EndSpeech();
+	ProcessTransitions();
+	return true;
 }
 
 // --- Lesson downs, checkpoint ---------------------------------------------------------------------------------------
