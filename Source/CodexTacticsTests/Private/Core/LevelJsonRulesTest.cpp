@@ -46,6 +46,12 @@ bool FLevelJsonParseTest::RunTest(const FString&)
 		TestEqual(TEXT("Damage mult default"), One.Modifiers.EnemyDamageMult, 1.f);
 		TestEqual(TEXT("Wave 3 kept its index"), Config.Waves[1].WaveIndex, 3);
 	}
+	TestEqual(TEXT("cold_rate_mult default 1 (every other level unchanged)"), Config.ColdRateMult, 1.f);
+	FLevelCombatConfig Cold;
+	TestTrue(TEXT("cold_rate_mult parses"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"c","cold_rate_mult":0.8})"), TEXT("c"), Cold, Error));
+	TestEqual(TEXT("cold_rate_mult 0.8"), Cold.ColdRateMult, 0.8f, 0.0001f);
+	LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"c","cold_rate_mult":-2})"), TEXT("c"), Cold, Error);
+	TestEqual(TEXT("cold_rate_mult clamps to >= 0"), Cold.ColdRateMult, 0.f);
 	TestEqual(TEXT("Loadout default mode"), Config.SquadLoadout.SimulationMode, FString(TEXT("EXPLORE_AND_COLLECT")));
 	TestEqual(TEXT("Loadout default ammo"), Config.SquadLoadout.M16Ammo, 120);
 

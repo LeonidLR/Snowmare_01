@@ -10,6 +10,7 @@
     "description": { "type": "string", "description": "Краткое описание задачи на рубеже" },
     "prep_phase_duration": { "type": "number", "minimum": 0, "default": 60.0, "description": "Длительность начальной подготовки к обороне в секундах" },
     "wave_rest_duration": { "type": "number", "minimum": 0, "default": 20.0, "description": "Длительность передышки между волнами в секундах" },
+    "cold_rate_mult": { "type": "number", "minimum": 0, "default": 1.0, "description": "UE: level-wide multiplier of the cold accumulation (exploration and fights), multiplied with the wave cold_drain_mult / camera zones; 1 = unchanged" },
     "horde_enabled": { "type": "boolean", "default": true, "description": "UE: орда после 4 минут боя в реальном времени (Content/Data/AI/horde.json); false — выключить на этом уровне" },
     "gate_open_mode": { "type": "string", "enum": ["generator_waves", "instant"], "default": "generator_waves", "description": "UE: blast gate — generator_waves: the terminal only unlocks the servos, the door creeps open during the wave fight only while the generator works and opens fully after the final wave is cleared; instant: the terminal opens it at once" },
     "gate_progress_per_second": { "type": "number", "minimum": 0, "default": 0.004, "description": "UE: door progress (0..1) per second of wave fight with the generator up (0.004 = 0.4 %/s)" },

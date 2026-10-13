@@ -2,6 +2,8 @@
 #include "AI/WorldAIPauseSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/WaveSubsystem.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/WaveConfigTypes.h"
 #include "Camera/CameraZoneVolume.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
@@ -167,6 +169,12 @@ FColdEnvironment UColdSurvivalComponent::GatherEnvironment() const
 	if (const UWaveSubsystem* Waves = GetWorld()->GetSubsystem<UWaveSubsystem>())
 	{
 		Environment.ZoneMultiplier = Waves->GetColdDrainMultiplier();
+	}
+	// Level JSON "cold_rate_mult" (user request 2026-10-13): level-wide, on top of the wave / zone multiplier.
+	const ACodexTacticsGameMode* GameMode = GetWorld()->GetAuthGameMode<ACodexTacticsGameMode>();
+	if (const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr)
+	{
+		Environment.LevelMultiplier = Level->Config.ColdRateMult;
 	}
 	const FVector Location = Operative->GetActorLocation();
 	for (TActorIterator<ACameraZoneVolume> It(GetWorld()); It; ++It)

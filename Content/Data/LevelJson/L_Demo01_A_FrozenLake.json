@@ -7,6 +7,7 @@
   "wave_rest_duration": 20,
   "combat_start": "button",
   "horde_enabled": false,
+  "cold_rate_mult": 0.8,
   "gate_open_mode": "generator_waves",
   "demo": {
     "panic": false,

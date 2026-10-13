@@ -14,7 +14,7 @@ import { EnemyWeaponsPanel } from './components/EnemyWeaponsPanel';
 import { CommanderROEPanel } from './components/CommanderROEPanel';
 import { StealthCombatPanel } from './components/StealthCombatPanel';
 import { applyLevelEncounterPatch } from './utils/stealthCombat';
-import { BlastDoorPanel, DemoPanel } from './components/LevelSettingsPanels';
+import { BlastDoorPanel, DemoPanel, LevelColdPanel } from './components/LevelSettingsPanels';
 import { validateLevelSettings } from './utils/levelSettings';
 import { Activity, Terminal, Loader2, Swords, Plus, Snowflake, X, Wifi, WifiOff } from 'lucide-react';
 import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2, Eye } from 'lucide-react';
@@ -778,10 +778,11 @@ export const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Настройки уровня (не волны): бластовая дверь и демо / туториал */}
+        {/* Настройки уровня (не волны): бластовая дверь, демо / туториал, холод уровня */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <BlastDoorPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
           <DemoPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
+          <LevelColdPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
         </div>
 
         {/* ❄️ Карточка мониторинга холода последнего боя прямо в конфигураторе волн */}
