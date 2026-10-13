@@ -14,6 +14,25 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Checkpoint 2026-10-13 (end of day)
+- Done: Demo 01 tutorial rev 5 / 5b / 5c (user flow 2026-10-13, `docs/demo/DEMO01_BEAT_SHEET.md` decisions block):
+  HQ radio runs with the staged camera lesson (+ MMB drag), then click-walk / double-click-run cards; precredit (actions
+  done earlier count); dialogue skip (Enter = next line, hold / SKIP = whole talk; TB: SKIP button only); sprint never
+  locked, no move lock; progressive command unlocks (untaught commands locked, unlock-all on combat start / tutorial off);
+  level `cold_rate_mult` (0.8 on the lake); shaky bridge (`ABridgeCrossingVolume`, no solo lesson) ; low fence
+  (`ACrawlGapActor`, prone only); vision-cone toggle O + pause menu; tactical hut entry (select + Solo, stack left/right
+  of the door, third enters, then loot); click-to-peek wall corners (`Cover.CornerPeek`, high cover); roof-overhang cover
+  fix. Auto layout: `Scripts/Editor/build_demo01_lake_layout.py` (idempotent, tag `AutoLayout_Demo01`) + review copy
+  `/Game/Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout` (own level JSON), doc `docs/demo/DEMO01_AUTOLAYOUT.md`.
+- User's original `L_Demo01_A_FrozenLake.umap` is modified locally and NOT committed (backups `Saved/Backups/user_wip_20261013_*`).
+- Waiting on the user: review the copy (hut door jamb graybox narrows the 4 m door to 2 m; hut camera zone 33 cm past
+  the north wall; crate holds 1 heat pack, beat wants 3; keep box select or not); then swap the copy into the original
+  (or rerun the script on his map with `CODEX_LAYOUT_TARGET`). Open questions: vision-cone key O / persist; patrol
+  Panic / TB.
+- Next: Phase 2 = encounter groups (pre-horde patrol fight, beat sheet §1.3) + beats A4-A10 (ambush, trapped crate,
+  defence prep, canister quest, horde lessons: pause, AUTO, generator repair + Engineer guard).
+- Smoke names need the `Smoke` suffix (`MovementSmoke`), short names silently time out. CornerHoldSmoke can need a rerun under load.
+
 ## Checkpoint 2026-10-12 (end of day)
 - Done 10-11/12: cover fixes (hug, shimmy, wall clearance), knockdown tuning, sudden horde intro (running-mass trigger,
   flyover, free pause w/o radius), repath throttle, audit (`docs/port/audit_2026-10-11.md`), Sprint 15 heat, vision cones,
