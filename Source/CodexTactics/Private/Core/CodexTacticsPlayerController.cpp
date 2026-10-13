@@ -28,6 +28,7 @@
 #include "Core/PlayerCommands.h"
 #include "Core/SaveGameSubsystem.h"
 #include "UI/CodexTacticsHUD.h"
+#include "Combat/VisionConeComponent.h"
 #include "UI/ProfileDialogWidget.h"
 #include "UI/DialogueSubsystem.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
@@ -293,6 +294,9 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ACodexTacticsPlayerController::DialogueSkip).bExecuteWhenPaused = true;
 	// F1: the Controls reference opens / closes at any time (it pauses the world itself, so it runs while paused).
 	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &ACodexTacticsPlayerController::ControlsKey).bExecuteWhenPaused = true;
+	// Demo 01 (2026-10-13): I = the inventory drawer (a tutorial lock target), O = the enemies' vision cones (Commandos style).
+	InputComponent->BindKey(EKeys::I, IE_Pressed, this, &ACodexTacticsPlayerController::InventoryKey);
+	InputComponent->BindKey(EKeys::O, IE_Pressed, this, &ACodexTacticsPlayerController::VisionConesKey);
 
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!Input)
@@ -645,6 +649,11 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
 	if (!Leader || !Messages || BlockRealTimeOrder())
+	{
+		return;
+	}
+	// Tutorial lock (Demo 01, 2026-10-13): items stay locked until the heat pack lesson ("Item.HeatPack" / "Item.Use").
+	if (UTutorialSubsystem::CheckCommandLocked(this, Item == EPersonalItem::HeatPack ? PlayerCommands::UseHeatPack : PlayerCommands::UseItem))
 	{
 		return;
 	}
@@ -1172,6 +1181,29 @@ void ACodexTacticsPlayerController::ControlsKey()
 	}
 }
 
+void ACodexTacticsPlayerController::InventoryKey()
+{
+	if (ACodexTacticsHUD* Hud = GetHUD<ACodexTacticsHUD>())
+	{
+		Hud->ToggleInventoryDrawer();
+	}
+}
+
+void ACodexTacticsPlayerController::VisionConesKey()
+{
+	const bool bOn = !UVisionConeComponent::IsPlayerEnemyConesOn();
+	UVisionConeComponent::SetPlayerEnemyCones(bOn);
+	ControllerCommands::Report(this, PlayerCommands::ToggleVisionCones);
+	GameplayEvents::Raise(this, GameplayEvents::VisionConesToggled);
+	GameplayEvents::Raise(this, FName(*(GameplayEvents::VisionConesToggled.ToString() + (bOn ? TEXT(".On") : TEXT(".Off")))));
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), bOn
+			? LOCTEXT("VisionConesOn", "Vision cones ON: what the enemy can see is drawn on the ground.")
+			: LOCTEXT("VisionConesOff", "Vision cones OFF."));
+	}
+}
+
 void ACodexTacticsPlayerController::DialogueSkip()
 {
 	ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(GetHUD());
@@ -1672,6 +1704,12 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 	LastClickTime = bDoubleClick ? -1.0 : Now;
 	LastClickPosition = MousePosition;
 
+	// Tutorial command lock (Demo 01, 2026-10-13): no move orders at all while HQ talks (the A0 intro locks "Order.Move");
+	// the refusal raises "Tutorial.Locked.Order.Move" for the one-time feed line, nothing else happens.
+	if (UTutorialSubsystem::FilterCommand(this, PlayerCommands::Move).IsNone())
+	{
+		return;
+	}
 	// Clicking an object sends the leader to it (running on a double click); its action menu opens on arrival.
 	if (AInteractableActor* Interactable = Cast<AInteractableActor>(Hit.GetActor()))
 	{

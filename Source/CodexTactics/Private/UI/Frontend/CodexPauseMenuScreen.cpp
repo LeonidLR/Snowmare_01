@@ -1,5 +1,6 @@
 #include "UI/Frontend/CodexPauseMenuScreen.h"
 #include "Blueprint/WidgetTree.h"
+#include "Combat/VisionConeComponent.h"
 #include "Components/Border.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
@@ -81,7 +82,14 @@ namespace
 		{ TEXT("ControlsButton"), TEXT("Controls") },
 		{ TEXT("TutorialButton"), TEXT("Tutorial") },
 		{ TEXT("ResetTutorialButton"), TEXT("ResetTutorial") },
+		{ TEXT("VisionConesButton"), TEXT("VisionCones") },
 	};
+
+	FText VisionConesLabel()
+	{
+		return UVisionConeComponent::IsPlayerEnemyConesOn() ? NSLOCTEXT("CodexPauseMenu", "VisionConesOn", "VISION CONES: ON")
+			: NSLOCTEXT("CodexPauseMenu", "VisionConesOff", "VISION CONES: OFF");
+	}
 }
 
 void UCodexPauseMenuScreen::NativeOnInitialized()
@@ -107,10 +115,12 @@ void UCodexPauseMenuScreen::EnsureExtraEntries()
 			continue;
 		}
 		const FText Label = FName(Extra.EntryId) == TEXT("Controls") ? LOCTEXT("Controls", "CONTROLS")
-			: FName(Extra.EntryId) == TEXT("Tutorial") ? LOCTEXT("TutorialOn", "TUTORIAL: ON") : LOCTEXT("ResetTutorial", "RESET TUTORIAL");
+			: FName(Extra.EntryId) == TEXT("Tutorial") ? LOCTEXT("TutorialOn", "TUTORIAL: ON")
+			: FName(Extra.EntryId) == TEXT("VisionCones") ? VisionConesLabel() : LOCTEXT("ResetTutorial", "RESET TUTORIAL");
 		UCodexMenuButton* Button = MakeEntryButton(*WidgetTree, Extra.WidgetName, Extra.EntryId, Label, FText::GetEmpty());
 		Button->SetDescriptionText(FName(Extra.EntryId) == TEXT("Controls") ? LOCTEXT("ControlsDesc", "Every key and command (F1 anywhere).")
 			: FName(Extra.EntryId) == TEXT("Tutorial") ? LOCTEXT("TutorialDesc", "Show or hide the tutorial hints (saved in your profile).")
+			: FName(Extra.EntryId) == TEXT("VisionCones") ? LOCTEXT("VisionConesDesc", "Draw what the enemies can see on the ground (also the O key).")
 			: LOCTEXT("ResetTutorialDesc", "Forget the tutorial progress and start it again."));
 		UPanelSlot* PanelSlot = Parent->InsertChildAt(++Index, Button);
 		if (UVerticalBoxSlot* BoxSlot = Cast<UVerticalBoxSlot>(PanelSlot))
@@ -131,6 +141,10 @@ void UCodexPauseMenuScreen::RefreshTutorialEntries()
 	{
 		const UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr;
 		Reset->SetEntryEnabled(Tutorial && Tutorial->HasSteps(), LOCTEXT("NoTutorial", "This level has no tutorial."));
+	}
+	if (UCodexMenuButton* Cones = FindEntryButton(TEXT("VisionCones")))
+	{
+		Cones->SetButtonText(VisionConesLabel());
 	}
 }
 
@@ -191,6 +205,12 @@ void UCodexPauseMenuScreen::OnEntryActivated(FName EntryId)
 	else if (EntryId == TEXT("Controls") && UI)
 	{
 		UI->ToggleControlsScreen();
+	}
+	else if (EntryId == TEXT("VisionCones"))
+	{
+		// User decision 2026-10-13 (Commandos style): the player's enemy vision-cone toggle, also on the O key.
+		UVisionConeComponent::SetPlayerEnemyCones(!UVisionConeComponent::IsPlayerEnemyConesOn());
+		RefreshTutorialEntries();
 	}
 	else if (EntryId == TEXT("Tutorial"))
 	{
@@ -264,6 +284,7 @@ void UCodexPauseMenuScreen::BuildDefaultTree(UWidgetTree& Tree) const
 		{ TEXT("ControlsButton"), TEXT("Controls"), LOCTEXT("Controls", "CONTROLS"), LOCTEXT("ControlsDesc", "Every key and command (F1 anywhere).") },
 		{ TEXT("TutorialButton"), TEXT("Tutorial"), LOCTEXT("TutorialOn", "TUTORIAL: ON"), LOCTEXT("TutorialDesc", "Show or hide the tutorial hints (saved in your profile).") },
 		{ TEXT("ResetTutorialButton"), TEXT("ResetTutorial"), LOCTEXT("ResetTutorial", "RESET TUTORIAL"), LOCTEXT("ResetTutorialDesc", "Forget the tutorial progress and start it again.") },
+		{ TEXT("VisionConesButton"), TEXT("VisionCones"), LOCTEXT("VisionConesOff", "VISION CONES: OFF"), LOCTEXT("VisionConesDesc", "Draw what the enemies can see on the ground (also the O key).") },
 		{ TEXT("QuitToMenuButton"), TEXT("QuitToMenu"), LOCTEXT("QuitToMenu", "QUIT TO MAIN MENU"), LOCTEXT("QuitToMenuDesc", "Leave the mission for the main menu.") },
 		{ TEXT("QuitGameButton"), TEXT("QuitGame"), LOCTEXT("QuitGame", "QUIT GAME"), LOCTEXT("QuitGameDesc", "Quit to the desktop.") },
 	};

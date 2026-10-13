@@ -76,9 +76,10 @@ namespace VisionConeRules
 
 	/**
 	 * Whether the cone is drawn. GlobalMode = console Codex.Debug.VisionCones: 0 every cone off, 1 every cone on, anything
-	 * else (-1, the default) the actor's own bShowVisionCone. Never for a dead / dying character.
+	 * else (-1, the default) the actor's own bShowVisionCone, or bPlayerToggle (the player's enemy-cone toggle, O / pause menu,
+	 * user decision 2026-10-13: Commandos style; enemies pass it, operatives pass false). Never for a dead / dying character.
 	 */
-	CODEXTACTICS_API bool ResolveVisible(int32 GlobalMode, bool bActorSetting, bool bAlive);
+	CODEXTACTICS_API bool ResolveVisible(int32 GlobalMode, bool bActorSetting, bool bAlive, bool bPlayerToggle = false);
 
 	/** Enemy cone state: engaged -> Alert; on patrol / guard: searching or suspicion > 0 -> Suspicious, else Idle. */
 	CODEXTACTICS_API EVisionConeState GetEnemyState(bool bOnPatrol, bool bSearching, float Suspicion);

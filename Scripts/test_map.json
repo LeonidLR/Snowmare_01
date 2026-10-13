@@ -30,7 +30,7 @@
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "ControlsScreenSmoke",
-    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke"
+    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke"
   ],
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run",
@@ -47,7 +47,7 @@
     "PatrolAmbushSmoke": { "map": "/Game/Maps/L_PatrolTest" },
     "VisionConeSmoke": { "map": "/Game/Maps/L_PatrolTest" }
   },
-  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "EncounterProbe", "VehicleTurretShot"],
+  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot"],
   "rules": [
     {
       "name": "warm-idle",
@@ -266,9 +266,15 @@
     },
     {
       "name": "vision-cone",
-      "globs": ["Source/**/Combat/VisionCone*", "Source/**/Debug/VisionConeSmoke*"],
-      "tests": ["CodexTactics.Combat.VisionCone", "CodexTactics.AI.Perception"],
-      "smokes": ["VisionConeSmoke"]
+      "globs": ["Source/**/Combat/VisionCone*", "Source/**/Debug/VisionConeSmoke*", "Source/**/UI/Frontend/CodexPauseMenuScreen*"],
+      "tests": ["CodexTactics.Combat.VisionCone", "CodexTactics.AI.Perception", "CodexTactics.UI.Frontend.Controls"],
+      "smokes": ["VisionConeSmoke", "PauseMenuSmoke"]
+    },
+    {
+      "name": "level-obstacles",
+      "globs": ["Source/**/Level/**", "Source/**/Debug/BridgeFenceSmoke*", "Source/**/Interactables/VaultNavigation*"],
+      "tests": ["CodexTactics.Level", "CodexTactics.Tutorial"],
+      "smokes": ["BridgeFenceSmoke", "MovementSmoke", "StanceSmoke", "VaultSmoke", "SoloRejoinSmoke", "TripwireSmoke"]
     },
     {
       "name": "cold-survival",

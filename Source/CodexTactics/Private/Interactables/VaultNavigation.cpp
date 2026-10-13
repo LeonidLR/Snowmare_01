@@ -1,5 +1,6 @@
 #include "Interactables/VaultNavigation.h"
 #include "Interactables/TripwireActor.h"
+#include "Level/CrawlGapActor.h"
 #include "Components/PrimitiveComponent.h"
 #include "GameFramework/Actor.h"
 #include "Interactables/BarricadeActor.h"
@@ -28,6 +29,11 @@ UNavFilter_NoVault::UNavFilter_NoVault()
 	Wire.AreaClass = UNavArea_Tripwire::StaticClass();
 	Wire.bOverrideTravelCost = true;
 	Wire.TravelCostOverride = 1.f;
+	// Low fences (ACrawlGapActor, 2026-10-13): enemies never crawl, so the crawl-only strip is closed to them as well
+	// (the blocking bar would otherwise stop them mid-path).
+	FNavigationFilterArea& Crawl = Areas.AddDefaulted_GetRef();
+	Crawl.AreaClass = UNavArea_CrawlOnly::StaticClass();
+	Crawl.bIsExcluded = true;
 }
 
 namespace VaultNavigation

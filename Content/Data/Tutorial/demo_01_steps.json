@@ -1,68 +1,91 @@
 {
   "_comment": [
-    "Demo 01 'Frozen Lake' tutorial steps, beats A0-A2 + the A6 cover sample (docs/demo/DEMO01_BEAT_SHEET.md section 4). Read at runtime by UTutorialSubsystem",
+    "Demo 01 'Frozen Lake' tutorial steps, REV 5 (user flow 2026-10-13; docs/demo/DEMO01_BEAT_SHEET.md). Read at runtime by UTutorialSubsystem",
     "(the level JSON 'demo': {'tutorial': true, 'tutorial_steps': 'demo_01_steps.json'} selects this file). Schema: HANDOFF section 6 'Tutorial'.",
     "Texts are ids only (TUT_*, WT_*, OBJ_*): English text comes from the narrative manifest 'tutorial' section (TANDEM request #17), else",
     "Content/Data/Tutorial/demo_01_texts_draft.json, else '[EN missing: <id>]'. Command ids: Source/CodexTactics/Public/Core/PlayerCommands.h.",
+    "Beats implemented here (Phase 1 = user steps 1-9 + the standalone A3 fence / A4 cone cards): A0 drop (HQ radio only, then the staged camera",
+    "lesson, walk to beacon 1), A1 crossing (shaky bridge one at a time = select + solo, regroup, box, squad banter, cold -> heat pack = inventory",
+    "unlock, 'running warms you' = sprint unlock, hut loot), A2 camp (barrel push + light), A3 approach (stances, vault, low fence crawl, cover,",
+    "mines / wires spotted), A4 ambush (vision-cone toggle, tripwire; the fight itself is Phase 2). Beats A5-A8 are designed in the beat sheet only.",
+    "Locks: beat A0 locks Order.Sprint + Inventory.* + Item.*; the HQ intro step locks Order.Move while it plays (the first camera card unlocks it);",
+    "A1_heatpack unlocks Inventory.* / Item.*; A1_sprint unlocks Order.Sprint (after the heat pack lesson: 'running warms you up'); A2 repeats the",
+    "unlocks as a safety. 'precredit' (default true): a command card the player already did before it was due is completed without showing it.",
     "Volume ids (VOL_*) are the VolumeId / StepId of ATutorialTriggerVolume actors placed in L_Demo01_A_FrozenLake:",
-    "VOL_A0_BEACON1 (BeatId A1), VOL_A1_HUT (inside the fishing hut with the heat-pack crate), VOL_A1_BEACON2 (the crack: solo point), VOL_A1_BEACON3,",
-    "VOL_A1_BEACON4, VOL_A1_RIDGE, VOL_A1_RIDGE_FAR, VOL_A2_CAMP (BeatId A2), VOL_A6_FIELD (the A6 ridge field entrance).",
-    "A0-A1 order (user decision 2026-10-12, rev 4 after the playtest 'with sprint blocked the squad freezes 100 %, too hard'): sprint is LOCKED only on the A0 stretch",
-    "(camera -> beacon 1; a double click walks) and UNLOCKED at beacon 1 (beat A1 'unlock' + the TUT_A1_SPRINT card) -> select -> box select -> solo at the crack",
-    "(wind zone + the gust safety) -> regroup -> heat pack on the coldest (the squad STARTS with 1 heat pack per operative: level JSON squad_loadout.heat_packs_count 1,",
-    "a per-operative count) -> radio line WT_A1_RESUPPLY + objective A1_obj_hut (nearly out of heat packs, the hut is close) -> hut: open the crate, take the",
-    "heat packs (the crate holds 3) -> closing line -> guard (beacon 3) -> stances -> vault -> camp. The sprint lock no longer depends on the heat pack.",
-    "Cover events (raised when an operative SETTLES in a slot, not on the order): CoverEntered (+ .High / .Low), CoverShimmy, CornerReached, CoverLeft;",
-    "'distinct_operatives': true counts each operative once. Loot: command Loot.Open (crate opened), event ItemLooted.<Item> (ItemLooted.HeatPack).",
-    "Heat pack used: event ItemUsed.HEAT_PACK (U key and a pack dragged onto a cold mate). Locked command tried: event Tutorial.Locked.<CommandId>."
+    "VOL_A0_BEACON1 (BeatId A1, at beacon 1), VOL_A1_BEACON2 (the crack / the bridge approach, kept), VOL_A1_HUT (hut floor, Any Operative, kept),",
+    "VOL_A1_BEACON3 (kept), VOL_A2_CAMP (BeatId A2, kept), VOL_A3_APPROACH (BeatId A3, NEW: the complex comes into view), VOL_A3_WIND (was",
+    "VOL_A1_BEACON4: move it to the approach), VOL_A3_RIDGE / VOL_A3_RIDGE_FAR (were VOL_A1_RIDGE / _FAR: move them), VOL_A3_FENCE (NEW: in front of",
+    "the ACrawlGapActor low fence), VOL_A3_FIELD (was VOL_A6_FIELD: the cover field on the approach), VOL_A4_OVERLOOK (BeatId A4, NEW: the patrols",
+    "come into view). New level actors: ABridgeCrossingVolume over the crack (events BridgeEntered / BridgeRefused / BridgeCrossed), ACrawlGapActor",
+    "(events CrawlGapRefused / CrawlGapPassed). Heat pack used: event ItemUsed.HEAT_PACK; loot: Loot.Open / ItemLooted.HeatPack; locked command",
+    "tried: event Tutorial.Locked.<CommandId>; cover events CoverEntered (+ .High / .Low), CoverShimmy, CornerReached ('distinct_operatives': true",
+    "counts each operative once); the player's vision-cone toggle: command View.VisionCones (O), event VisionConesToggled(.On/.Off)."
   ],
   "version": 1,
   "id": "demo_01_frozen_lake",
   "start_beat": "A0",
   "beats": [
-    { "id": "A0", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A0", "lock": ["Order.Sprint"] },
-    { "id": "A1", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A1", "unlock": ["Order.Sprint"] },
-    { "id": "A2", "lesson": true, "checkpoint": false, "title_id": "TUT_BEAT_A2", "unlock": ["Order.Sprint"] },
-    { "id": "A6", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A6" }
+    { "id": "A0", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A0", "lock": ["Order.Sprint", "Inventory.*", "Item.*"] },
+    { "id": "A1", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A1" },
+    { "id": "A2", "lesson": true, "checkpoint": false, "title_id": "TUT_BEAT_A2", "unlock": ["Order.Sprint", "Inventory.*", "Item.*"] },
+    { "id": "A3", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A3" },
+    { "id": "A4", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A4" }
   ],
   "steps": [
     {
-      "id": "A0_walk_talk", "beat": "A0", "kind": "walk_talk",
-      "trigger": { "type": "beat_start", "delay_s": 1.5 },
+      "_comment": "User flow step 1: the level opens with radio / HQ ONLY - no lessons, no orders while HQ talks (Order.Move locked until the camera lesson starts).",
+      "id": "A0_radio_hq", "beat": "A0", "kind": "radio",
+      "trigger": { "type": "beat_start", "delay_s": 1.0 },
+      "lock": ["Order.Move"],
       "lines": [
         { "speaker": "HQ", "text_id": "WT_A0_BRIEFING_1" },
         { "speaker": "Commander", "text_id": "WT_A0_BRIEFING_2" },
         { "speaker": "HQ", "text_id": "WT_A0_BRIEFING_3" },
         { "speaker": "HQ", "text_id": "WT_A0_01" },
-        { "speaker": "Commander", "text_id": "WT_A0_02" },
-        { "speaker": "Medic-Sapper", "text_id": "WT_A0_03" },
-        { "speaker": "Engineer", "text_id": "WT_A0_04" },
-        { "speaker": "Medic-Sapper", "text_id": "WT_A0_05" },
         { "speaker": "Commander", "text_id": "WT_A0_06" }
       ]
     },
     {
+      "_comment": "A click on the ground while HQ talks: one feed line, nothing moves (the intro step locked Order.Move).",
+      "id": "A0_wait_hq", "beat": "A0", "kind": "feed", "text_id": "TUT_A0_WAIT_HQ",
+      "trigger": { "type": "event", "event": "Tutorial.Locked.Order.Move" },
+      "lines": [ { "speaker": "Commander", "text_id": "TUT_A0_WAIT_HQ" } ]
+    },
+    {
       "id": "A0_obj_beacon", "beat": "A0", "kind": "objective", "text_id": "OBJ_A0_BEACON1",
-      "trigger": { "type": "beat_start" },
+      "trigger": { "type": "after_step", "step": "A0_radio_hq" },
       "complete": { "volume": "VOL_A0_BEACON1" }
     },
     {
-      "_comment": "Sprint is locked from the start (beat A0 'lock'): a double click walks. The first try puts one line in the message feed (no card slot needed).",
+      "_comment": "Sprint is locked from the start (beat A0 'lock') until the 'running warms you up' card after the heat pack lesson: a double click walks; the first try puts one line in the feed.",
       "id": "A0_nosprint", "beat": "A0", "kind": "feed", "text_id": "TUT_A0_NOSPRINT",
       "trigger": { "type": "event", "event": "Tutorial.Locked.Order.Sprint" },
       "lines": [ { "speaker": "Commander", "text_id": "TUT_A0_NOSPRINT" } ]
     },
     {
-      "_comment": "Camera lesson, STAGED (user feedback 2026-10-12): pan -> turn with Q/E -> free look with the mouse -> zoom -> move. No timeout: each card waits for the real input (skippable). hold_s = accumulated time the continuous input was active while the card was shown.",
+      "_comment": "Inventory and items are locked until the heat pack lesson (user flow step 1): one feed line on the first try.",
+      "id": "A0_noinventory", "beat": "A0", "kind": "feed", "text_id": "TUT_A0_NOINVENTORY",
+      "trigger": { "type": "event", "event": "Tutorial.Locked.Inventory.Open" },
+      "lines": [ { "speaker": "Commander", "text_id": "TUT_A0_NOINVENTORY" } ]
+    },
+    {
+      "_comment": "Camera lesson, STAGED, after the HQ radio (user flow step 2): pan -> MMB drag pan (user addition 2026-10-13) -> turn with Q/E -> free look -> zoom -> move. No timeout: each card waits for the real input (skippable). hold_s = accumulated time the continuous input was active while the card was shown. 'precredit' (default): a stage the player already did earlier (e.g. during the radio) is ticked off without showing.",
       "id": "A0_cam_pan", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_CAM_PAN",
       "keys": ["Camera.Pan.Keys"],
-      "trigger": { "type": "beat_start", "delay_s": 2 },
+      "trigger": { "type": "after_step", "step": "A0_radio_hq", "delay_s": 1 },
+      "unlock": ["Order.Move"],
       "complete": { "commands": ["Camera.Pan.Keys", "Camera.Pan.Edge"], "hold_s": 1.0 }
+    },
+    {
+      "id": "A0_cam_pan_drag", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_CAM_PAN_DRAG",
+      "keys": ["Camera.Pan.Drag"],
+      "trigger": { "type": "after_step", "step": "A0_cam_pan" },
+      "complete": { "commands": ["Camera.Pan.Drag"], "hold_s": 0.5 }
     },
     {
       "id": "A0_cam_rotate_keys", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_CAM_ROTATE_KEYS",
       "keys": ["Camera.Rotate.Keys"],
-      "trigger": { "type": "after_step", "step": "A0_cam_pan" },
+      "trigger": { "type": "after_step", "step": "A0_cam_pan_drag" },
       "complete": { "commands": ["Camera.Rotate.Keys"], "count": 2 }
     },
     {
@@ -78,6 +101,7 @@
       "complete": { "commands": ["Camera.Zoom"], "count": 2 }
     },
     {
+      "_comment": "User flow step 3: walk (no sprint) to beacon 1. Location-bound: never precredited (volume completion).",
       "id": "A0_move", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_MOVE",
       "keys": ["Order.Move"],
       "trigger": { "type": "after_step", "step": "A0_cam_zoom" },
@@ -99,26 +123,8 @@
       ]
     },
     {
-      "_comment": "Sprint is unlocked by the beat A1 'unlock' at beacon 1 (not by this card, so a queued card never delays it); this card teaches the double click. Rev 4: the lock only covers the A0 stretch.",
-      "id": "A1_sprint", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SPRINT",
-      "keys": ["Order.Sprint"],
-      "trigger": { "type": "beat_start" },
-      "complete": { "commands": ["Order.Sprint"], "timeout_s": 30 }
-    },
-    {
-      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
-      "keys": ["Select.Member"],
-      "trigger": { "type": "after_step", "step": "A1_sprint" },
-      "complete": { "commands": ["Select.Member"], "timeout_s": 30 }
-    },
-    {
-      "id": "A1_box", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_BOX",
-      "keys": ["Select.Box"],
-      "trigger": { "type": "after_step", "step": "A1_select" },
-      "complete": { "commands": ["Select.Box"], "timeout_s": 30 }
-    },
-    {
-      "id": "A1_wt_scout", "beat": "A1", "kind": "walk_talk",
+      "_comment": "User flow step 4: the crevasse at beacon 2 with the shaky bridge (ABridgeCrossingVolume, capacity 1). VOL_A1_BEACON2 (kept) is the approach.",
+      "id": "A1_wt_bridge", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
       "lines": [
         { "speaker": "Engineer", "text_id": "WT_A1_04" },
@@ -127,19 +133,52 @@
       ]
     },
     {
-      "id": "A1_solo", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SOLO",
-      "keys": ["Select.Member", "Squad.Solo"],
+      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
+      "keys": ["Select.Member"],
       "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
-      "complete": { "commands": ["Squad.Solo"], "timeout_s": 45 }
+      "complete": { "commands": ["Select.Member"], "timeout_s": 30 }
     },
     {
+      "_comment": "Id A1_solo kept for the user's marker (the solo point moved from the wind scout spot to the bridge). Done when every operative has crossed; the bridge itself refuses a second body (BridgeRefused). Never precredited (event completion).",
+      "id": "A1_solo", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SOLO",
+      "keys": ["Select.Member", "Squad.Solo"],
+      "trigger": { "type": "after_step", "step": "A1_select" },
+      "complete": { "event": "BridgeCrossed", "count": 3, "distinct_operatives": true, "timeout_s": 240 }
+    },
+    {
+      "_comment": "The bridge creaked (a second operative stopped at the edge): one feed line with the key hint.",
+      "id": "A1_bridge_refused", "beat": "A1", "kind": "feed", "text_id": "TUT_A1_BRIDGE_REFUSED",
+      "trigger": { "type": "event", "event": "BridgeRefused" },
+      "lines": [ { "speaker": "Commander", "text_id": "TUT_A1_BRIDGE_REFUSED" } ]
+    },
+    {
+      "_comment": "Not precredited: the squad may stand in solo mode now and must actually regroup.",
       "id": "A1_regroup", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_REGROUP",
       "keys": ["Squad.Regroup"],
-      "trigger": { "type": "after_step", "step": "A1_solo", "delay_s": 6 },
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A1_solo", "delay_s": 2 },
       "complete": { "commands": ["Squad.Regroup"], "timeout_s": 60 }
     },
     {
-      "_comment": "Tutorial safety: 20 s after solo started, if nobody is at Chills (40 %) yet - e.g. the player kept out of the wind zone - a scripted gust: the line + every operative +20 cold, at least 42 % so the heat-pack lesson always starts.",
+      "_comment": "Orchestrator default 2026-10-13: box select is taught after the bridge (gather everyone with a box and go on).",
+      "id": "A1_box", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_BOX",
+      "keys": ["Select.Box"],
+      "trigger": { "type": "after_step", "step": "A1_regroup" },
+      "complete": { "commands": ["Select.Box"], "timeout_s": 30 }
+    },
+    {
+      "_comment": "User flow step 5: the squad walk-and-talk (the banter that used to open A0) plays after the bridge.",
+      "id": "A1_wt_banter", "beat": "A1", "kind": "walk_talk",
+      "trigger": { "type": "after_step", "step": "A1_box", "delay_s": 1 },
+      "lines": [
+        { "speaker": "Medic-Sapper", "text_id": "WT_A1_BANTER_1" },
+        { "speaker": "Engineer", "text_id": "WT_A1_BANTER_2" },
+        { "speaker": "Medic-Sapper", "text_id": "WT_A1_BANTER_3" },
+        { "speaker": "Commander", "text_id": "WT_A1_BANTER_4" }
+      ]
+    },
+    {
+      "_comment": "Tutorial safety (kept from rev 3): 20 s after the crossing, if nobody is at Chills (40 %) yet - e.g. the player kept out of the wind zone on the far side - a scripted gust: the line + every operative +20 cold, at least 42 % so the heat-pack lesson always starts.",
       "id": "A1_gust", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_solo", "delay_s": 20 },
       "condition": { "stat": "squad_cold_max", "below": 40 },
@@ -147,33 +186,48 @@
       "lines": [ { "speaker": "Medic-Sapper", "text_id": "WT_A1_GUST" } ]
     },
     {
-      "_comment": "Heat pack USE lesson with the STARTER packs (level JSON squad_loadout.heat_packs_count 1 = one per operative): select the coldest and press U, or drag a mate's pack onto him.",
+      "_comment": "User flow step 6: heat pack USE lesson with the STARTER packs (level JSON squad_loadout.heat_packs_count 1 = one per operative). The inventory and items UNLOCK here (step 'unlock'). Focus = the coldest; never precredited.",
       "id": "A1_heatpack", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HEATPACK",
-      "keys": ["Item.HeatPack"], "focus": "coldest_operative",
+      "keys": ["Item.HeatPack", "Inventory.Open"], "focus": "coldest_operative",
+      "unlock": ["Inventory.*", "Item.*"],
       "trigger": { "type": "condition", "requires": ["A1_solo"] },
       "condition": { "stat": "squad_cold_max", "at_least": 40 },
       "complete": { "event": "ItemUsed.HEAT_PACK", "timeout_s": 90 }
     },
     {
       "id": "A1_heatpack_mate", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HEATPACK_MATE",
-      "keys": ["Item.HeatPack"], "focus": "coldest_operative",
+      "keys": ["Item.HeatPack", "Inventory.Open"], "focus": "coldest_operative",
       "trigger": { "type": "after_step", "step": "A1_heatpack", "delay_s": 1 },
       "condition": { "stat": "squad_cold_max", "at_least": 40 },
       "complete": { "event": "ItemUsed.HEAT_PACK", "timeout_s": 40 }
     },
     {
-      "_comment": "Resupply (rev 4): after the heat pack lesson the squad is 'nearly out' -> the hut. The user's TutorialMarkerActor with Step Id A1_obj_hut shows from here (no longer from the beat start).",
-      "id": "A1_wt_resupply", "beat": "A1", "kind": "walk_talk",
+      "_comment": "User flow step 7: 'running warms you up' -> sprint UNLOCKS here (step 'unlock', applied when the card shows or, never shown, when it finishes).",
+      "id": "A1_wt_warm", "beat": "A1", "kind": "walk_talk",
+      "trigger": { "type": "after_step", "step": "A1_heatpack_mate" },
+      "lines": [ { "speaker": "Medic-Sapper", "text_id": "WT_A1_WARMED" } ]
+    },
+    {
+      "id": "A1_sprint", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SPRINT",
+      "keys": ["Order.Sprint"],
+      "precredit": false,
+      "unlock": ["Order.Sprint"],
       "trigger": { "type": "after_step", "step": "A1_heatpack_mate", "delay_s": 1 },
+      "complete": { "commands": ["Order.Sprint"], "timeout_s": 45 }
+    },
+    {
+      "_comment": "User flow step 8 (resupply, rev 4 order kept): after the sprint card the squad is 'nearly out' -> the hut. The user's TutorialMarkerActor with Step Id A1_obj_hut shows from here.",
+      "id": "A1_wt_resupply", "beat": "A1", "kind": "walk_talk",
+      "trigger": { "type": "after_step", "step": "A1_sprint", "delay_s": 1 },
       "lines": [ { "speaker": "Commander", "text_id": "WT_A1_RESUPPLY" } ]
     },
     {
       "id": "A1_obj_hut", "beat": "A1", "kind": "objective", "text_id": "OBJ_A1_HUT",
-      "trigger": { "type": "after_step", "step": "A1_heatpack_mate", "delay_s": 1 },
+      "trigger": { "type": "after_step", "step": "A1_sprint", "delay_s": 1 },
       "complete": { "event": "ItemLooted.HeatPack" }
     },
     {
-      "_comment": "Loot lesson in the fisherman's hut (VOL_A1_HUT; the crate holds 3 heat packs).",
+      "_comment": "Loot lesson in the fishermen's hut (VOL_A1_HUT; the crate holds 3 heat packs).",
       "id": "A1_wt_hut", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A1_HUT" },
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A1_HUT" } ]
@@ -181,6 +235,7 @@
     {
       "id": "A1_loot_open", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_LOOT_OPEN",
       "keys": ["Loot.Open"],
+      "precredit": false,
       "trigger": { "type": "volume", "volume": "VOL_A1_HUT" },
       "complete": { "commands": ["Loot.Open"], "timeout_s": 60 }
     },
@@ -191,12 +246,12 @@
       "complete": { "event": "ItemLooted.HeatPack", "timeout_s": 60 }
     },
     {
-      "_comment": "Closing line after the resupply (no unlock any more: sprint was unlocked at beacon 1).",
       "id": "A1_wt_stocked", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 1 },
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A1_STOCKED" } ]
     },
     {
+      "_comment": "Beacon 3: formation lines (the guard card moved to the horde beat A8: the Engineer guards the repaired generator).",
       "id": "A1_wt_regroup", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A1_BEACON3" },
       "lines": [
@@ -205,36 +260,9 @@
         { "speaker": "Engineer", "text_id": "WT_A1_09" }
       ]
     },
-    {
-      "_comment": "Rev 4: anchored to beacon 3 (it used to follow the run card, which now opens the beat).",
-      "id": "A1_guard", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_GUARD",
-      "keys": ["Squad.Guard"],
-      "trigger": { "type": "volume", "volume": "VOL_A1_BEACON3" },
-      "complete": { "commands": ["Squad.Guard"], "timeout_s": 15 }
-    },
-    {
-      "id": "A1_wt_wind", "beat": "A1", "kind": "walk_talk",
-      "trigger": { "type": "volume", "volume": "VOL_A1_BEACON4" },
-      "lines": [
-        { "speaker": "Medic-Sapper", "text_id": "WT_A1_10" },
-        { "speaker": "Commander", "text_id": "WT_A1_11" },
-        { "speaker": "Medic-Sapper", "text_id": "WT_A1_12" }
-      ]
-    },
-    {
-      "id": "A1_stance", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_STANCE",
-      "keys": ["Stance.Crouch", "Stance.Prone", "Stance.Stand", "Stance.Squad.Prone"],
-      "trigger": { "type": "volume", "volume": "VOL_A1_BEACON4" },
-      "complete": { "commands": ["Stance.*"], "count": 2, "timeout_s": 45 }
-    },
-    {
-      "id": "A1_vault", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_VAULT",
-      "keys": ["Order.Move"],
-      "trigger": { "type": "volume", "volume": "VOL_A1_RIDGE" },
-      "complete": { "volume": "VOL_A1_RIDGE_FAR", "timeout_s": 30 }
-    },
 
     {
+      "_comment": "User flow step 9 (A2, VOL_A2_CAMP): cold again, need heat again - find a barrel, push it into the lee and light it (existing lesson).",
       "id": "A2_obj_warm", "beat": "A2", "kind": "objective", "text_id": "OBJ_A2_WARM",
       "trigger": { "type": "beat_start" },
       "complete": { "event": "BarrelLit" }
@@ -281,38 +309,116 @@
       "trigger": { "type": "failure_retry", "event": "RelocationRefused" },
       "complete": { "commands": ["Select.Member"], "timeout_s": 20 }
     },
+
     {
-      "id": "A6_cover", "beat": "A6", "kind": "hint_card", "text_id": "TUT_A6_COVER",
+      "_comment": "User flow step 10 (A3, VOL_A3_APPROACH): the cautious approach to the complex - mines and wires, cover, stances, vault, crawl under the low fence. Sprint is NOT locked here.",
+      "id": "A3_wt_approach", "beat": "A3", "kind": "walk_talk",
+      "trigger": { "type": "beat_start", "delay_s": 1 },
+      "lines": [
+        { "speaker": "Commander", "text_id": "WT_A3_01" },
+        { "speaker": "Medic-Sapper", "text_id": "WT_A3_02" },
+        { "speaker": "Engineer", "text_id": "WT_A3_03" }
+      ]
+    },
+    {
+      "id": "A3_obj_overlook", "beat": "A3", "kind": "objective", "text_id": "OBJ_A3_OVERLOOK",
+      "trigger": { "type": "beat_start" },
+      "complete": { "volume": "VOL_A4_OVERLOOK" }
+    },
+    {
+      "_comment": "Stances at the wind strip (was A1 beacon 4: VOL_A1_BEACON4 -> VOL_A3_WIND). Precredited if the player already used two stance keys.",
+      "id": "A3_wt_wind", "beat": "A3", "kind": "walk_talk",
+      "trigger": { "type": "volume", "volume": "VOL_A3_WIND" },
+      "lines": [
+        { "speaker": "Medic-Sapper", "text_id": "WT_A1_10" },
+        { "speaker": "Commander", "text_id": "WT_A1_11" },
+        { "speaker": "Medic-Sapper", "text_id": "WT_A1_12" }
+      ]
+    },
+    {
+      "id": "A3_stance", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A1_STANCE",
+      "keys": ["Stance.Crouch", "Stance.Prone", "Stance.Stand", "Stance.Squad.Prone"],
+      "trigger": { "type": "volume", "volume": "VOL_A3_WIND" },
+      "complete": { "commands": ["Stance.*"], "count": 2, "timeout_s": 45 }
+    },
+    {
+      "_comment": "Vault over a low ridge (was A1: VOL_A1_RIDGE / VOL_A1_RIDGE_FAR -> VOL_A3_RIDGE / VOL_A3_RIDGE_FAR).",
+      "id": "A3_vault", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A1_VAULT",
+      "keys": ["Order.Move"],
+      "trigger": { "type": "volume", "volume": "VOL_A3_RIDGE" },
+      "complete": { "volume": "VOL_A3_RIDGE_FAR", "timeout_s": 30 }
+    },
+    {
+      "_comment": "The low fence (ACrawlGapActor): only prone bodies crawl under; a standing one is stopped by the actor (CrawlGapRefused). Done when every operative came out on the other side.",
+      "id": "A3_fence", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_FENCE",
+      "keys": ["Stance.Prone", "Stance.Squad.Prone"],
+      "trigger": { "type": "volume", "volume": "VOL_A3_FENCE" },
+      "complete": { "event": "CrawlGapPassed", "count": 3, "distinct_operatives": true, "timeout_s": 180 }
+    },
+    {
+      "id": "A3_fence_refused", "beat": "A3", "kind": "feed", "text_id": "TUT_A3_FENCE_REFUSED",
+      "trigger": { "type": "event", "event": "CrawlGapRefused" },
+      "lines": [ { "speaker": "Medic-Sapper", "text_id": "TUT_A3_FENCE_REFUSED" } ]
+    },
+    {
+      "_comment": "Cover on the approach (the former A6 sample: VOL_A6_FIELD -> VOL_A3_FIELD): one into cover, then each operative into his own cover (user decision 2026-10-11: manual per operative).",
+      "id": "A3_cover", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A6_COVER",
       "keys": ["Cover.Enter"],
-      "trigger": { "type": "volume", "volume": "VOL_A6_FIELD" },
+      "trigger": { "type": "volume", "volume": "VOL_A3_FIELD" },
       "complete": { "event": "CoverEntered", "timeout_s": 60 }
     },
     {
-      "id": "A6_squad_cover", "beat": "A6", "kind": "objective", "text_id": "OBJ_A6_SQUAD_COVER",
-      "trigger": { "type": "after_step", "step": "A6_cover" },
+      "id": "A3_squad_cover", "beat": "A3", "kind": "objective", "text_id": "OBJ_A6_SQUAD_COVER",
+      "trigger": { "type": "after_step", "step": "A3_cover" },
       "complete": { "event": "CoverEntered", "count": 3, "distinct_operatives": true }
     },
     {
-      "id": "A6_squad_card", "beat": "A6", "kind": "hint_card", "text_id": "TUT_A6_SQUAD",
+      "id": "A3_squad_card", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A6_SQUAD",
       "keys": ["Select.Member", "Cover.Enter"],
-      "trigger": { "type": "after_step", "step": "A6_cover", "delay_s": 2 },
+      "trigger": { "type": "after_step", "step": "A3_cover", "delay_s": 2 },
       "complete": { "event": "CoverEntered", "count": 2, "distinct_operatives": true, "timeout_s": 45 }
     },
     {
-      "id": "A6_bound", "beat": "A6", "kind": "objective", "text_id": "OBJ_A6_BOUND",
-      "trigger": { "type": "after_step", "step": "A6_cover" },
+      "id": "A3_bound", "beat": "A3", "kind": "objective", "text_id": "OBJ_A6_BOUND",
+      "trigger": { "type": "after_step", "step": "A3_cover" },
       "complete": { "event": "CoverEntered", "count": 4 }
     },
     {
-      "id": "A6_shimmy", "beat": "A6", "kind": "hint_card", "text_id": "TUT_A6_SHIMMY",
-      "keys": ["Cover.Shimmy"],
-      "trigger": { "type": "after_step", "step": "A6_squad_card" },
-      "complete": { "event": "CoverShimmy", "timeout_s": 40 }
+      "_comment": "PMC traps on the approach: a hidden mine spotted (any operative) / a wire spotted -> one card each, done by dealing with it (or it times out).",
+      "id": "A3_mine", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_MINE",
+      "keys": ["Select.Member", "Trap.DisarmMine", "Attack.TargetedShot"],
+      "trigger": { "type": "event", "event": "MineSpotted" },
+      "complete": { "commands": ["Trap.DisarmMine", "Attack.TargetedShot"], "timeout_s": 40 }
     },
     {
-      "id": "A6_corner", "beat": "A6", "kind": "hint_card", "text_id": "TUT_A6_CORNER",
-      "trigger": { "type": "after_step", "step": "A6_shimmy" },
-      "complete": { "event": "CornerReached", "timeout_s": 40 }
+      "id": "A3_wire", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_WIRE",
+      "keys": ["Stance.Prone", "Trap.DisarmTripwire"],
+      "trigger": { "type": "event", "event": "TripwireSpotted" },
+      "complete": { "commands": ["Trap.DisarmTripwire", "Stance.Prone", "Stance.Squad.Prone"], "timeout_s": 40 }
+    },
+
+    {
+      "_comment": "User flow step 11 (A4, VOL_A4_OVERLOOK): the patrols come into view. Phase 1 ships the vision-cone toggle card and the tripwire card; the ambush fight itself (patrol encounter group) is Phase 2 (beat sheet rev 5 section 1.3).",
+      "id": "A4_wt_contact", "beat": "A4", "kind": "walk_talk",
+      "trigger": { "type": "beat_start" },
+      "lines": [
+        { "speaker": "Medic-Sapper", "text_id": "WT_A4_01" },
+        { "speaker": "Commander", "text_id": "WT_A4_02" },
+        { "speaker": "Engineer", "text_id": "WT_A4_03" }
+      ]
+    },
+    {
+      "id": "A4_cones", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_CONES",
+      "keys": ["View.VisionCones"],
+      "trigger": { "type": "beat_start", "delay_s": 2 },
+      "complete": { "commands": ["View.VisionCones"], "timeout_s": 40 }
+    },
+    {
+      "id": "A4_tripwire", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_TRIPWIRE",
+      "keys": ["Inventory.Open", "Deploy.Tripwire"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A4_cones" },
+      "complete": { "commands": ["Deploy.Tripwire"], "timeout_s": 120 }
     }
   ]
 }

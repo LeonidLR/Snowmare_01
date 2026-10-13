@@ -113,6 +113,11 @@ bool FVisionConeToggleTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("1 shows an actor set off"), ResolveVisible(1, false, true));
 	TestFalse(TEXT("dead: never"), ResolveVisible(1, true, false));
 	TestTrue(TEXT("other values act like -1"), ResolveVisible(7, true, true) && !ResolveVisible(7, false, true));
+	// The player's enemy-cone toggle (O / pause menu, 2026-10-13): shows an enemy set off, never beats the debug 0, never the dead.
+	TestTrue(TEXT("player toggle shows an actor set off"), ResolveVisible(-1, false, true, true));
+	TestFalse(TEXT("debug 0 beats the player toggle"), ResolveVisible(0, false, true, true));
+	TestFalse(TEXT("player toggle: dead stays hidden"), ResolveVisible(-1, false, false, true));
+	TestFalse(TEXT("player toggle off: actor setting rules"), ResolveVisible(-1, false, true, false));
 
 	// Enemy states.
 	TestTrue(TEXT("engaged = alert"), GetEnemyState(false, false, 0.f) == EVisionConeState::Alert);

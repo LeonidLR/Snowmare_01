@@ -13,6 +13,7 @@
 #include "Characters/RageComponent.h"
 #include "Characters/VaultRules.h"
 #include "Interactables/VaultNavigation.h"
+#include "Level/CrawlGapActor.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -477,9 +478,12 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& Destinatio
 	{
 		return EOperativeOrderResult::NoController;
 	}
+	// Low fences (ACrawlGapActor, 2026-10-13): only a prone body may path through a crawl-only area; standing / crouched the
+	// path goes round (or ends at the fence as a partial path, where the fence refuses him with the "go prone" hint).
+	const TSubclassOf<UNavigationQueryFilter> Filter = Stance == EOperativeStance::Prone ? nullptr : UNavFilter_NoCrawl::StaticClass();
 	const EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
 		Destination, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
-		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false);
+		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, Filter);
 	if (Result == EPathFollowingRequestResult::Failed)
 	{
 		bHasMoveOrder = false;
@@ -487,6 +491,25 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& Destinatio
 	}
 	bHasMoveOrder = Result == EPathFollowingRequestResult::RequestSuccessful;
 	return EOperativeOrderResult::Accepted;
+}
+
+void AOperativeCharacter::SetTrafficHold(const AActor* Source, bool bHeld)
+{
+	if (!Source)
+	{
+		return;
+	}
+	TrafficHoldSources.RemoveAll([Source](const TWeakObjectPtr<const AActor>& Entry) { return !Entry.IsValid() || Entry.Get() == Source; });
+	if (bHeld)
+	{
+		TrafficHoldSources.Add(Source);
+	}
+}
+
+bool AOperativeCharacter::IsTrafficHeld() const
+{
+	TrafficHoldSources.RemoveAll([](const TWeakObjectPtr<const AActor>& Entry) { return !Entry.IsValid(); });
+	return TrafficHoldSources.Num() > 0;
 }
 
 void AOperativeCharacter::StopOperative()

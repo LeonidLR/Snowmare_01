@@ -474,9 +474,37 @@ through `ACodexTacticsHUD::GodotColor` (sRGB → linear) in UMG and canvas.
   crate / pile drag in `USquadTransferSubsystem`). Level JSON `squad_loadout.heat_packs_count` (`FSquadLoadout::HeatPacksCount`,
   `LoadoutRules::StartingHeatPacks`, applied at spawn by the game mode; -1 = the tactical_heat.json role kit).
 - **Rev 4 (2026-10-12, playtest "too hard"):** `demo_01_steps.json` locks sprint on the A0 stretch only; beat A1 `unlock`s it at beacon 1 (card `A1_sprint` first, then select / box); starter heat pack 1 per operative (`heat_packs_count: 1`); `A1_wt_nopack` / `A1_wt_warmed` removed; `A1_wt_resupply` (`WT_A1_RESUPPLY`) + `A1_obj_hut` (id kept) trigger after the heat pack lesson; guard on `VOL_A1_BEACON3`. Beat sheet rev 4.
-- Tests `CodexTactics.Tutorial.*` (9 + 8: `Lock.Rules`, `Lock.Schema`, `Lock.LockUnlock`, `Lock.Saved`, `Action.GustTimeout`,
-  `Condition.Trigger`, `Schema.DemoFileA0A1Flow`, `Demo.HeatPackLoadout`), smoke `TutorialSmoke` (exclusive; now also runs the real
-  demo file A0 -> A1), `SaveRoundTripSmoke` covers the "tutorial" save section.
+- **Rev 5 (2026-10-13, the user's new 15-step Demo 01 flow; beat sheet rev 5):** `demo_01_steps.json` beats A0-A4: HQ radio
+  only at the start (`A0_radio_hq` locks `Order.Move` while it plays; `ACodexTacticsPlayerController::HandleWorldHit` refuses a
+  locked move: `FilterCommand(Order.Move).IsNone()`), the staged camera lesson after it (+ `A0_cam_pan_drag` MMB drag), beat A0 locks
+  `Order.Sprint` + `Inventory.*` + `Item.*`; the crack = the one-at-a-time bridge (`A1_solo` done on `BridgeCrossed` x3 distinct);
+  regroup -> box -> banter; the heat pack card `unlock`s `Inventory.*` / `Item.*`; the sprint card `unlock`s `Order.Sprint`; hut;
+  A2 barrel; A3 approach (stances / vault / low fence `CrawlGapPassed` x3 / cover / `MineSpotted` / `TripwireSpotted` cards); A4
+  `View.VisionCones` + `Deploy.Tripwire` cards. **Precredit** (user addition): `FTutorialStateMachine` keeps the command history
+  (`GetCommandHistory / GetCommandUse`: uses + hold seconds per command id since the steps loaded, every `HandleCommand` /
+  `HandleCommandHold`); when a once-only command hint card becomes due and `TutorialRules::IsPrecreditSatisfied` holds it is
+  completed without showing (`FTutorialTransition::bPrecredited`; the runtime posts one feed tick "✓ <title> - already done.",
+  telemetry `precredited`, `UTutorialSubsystem::GetPrecreditedCount`); partial uses seed the card's progress (`CountHistoryUses`);
+  step `"precredit": false` opts out; event / volume completions and `"once": false` cards never precredit; the history is saved
+  (`"history": {id: {count, held_s}}`) and reset with the tutorial. **New lock targets:** `Inventory.Open` (I key /
+  `ACodexTacticsHUD::ToggleInventoryDrawer`, reported on opening), `Item.*` (`UseSquadItem`, `HandleTransferRequest` item drags).
+  **New commands / events:** `Inventory.Open` (I), `View.VisionCones` (O; `UVisionConeComponent::SetPlayerEnemyCones`, CVar
+  `Codex.VisionCones.Enemies`, `VisionConeRules::ResolveVisible(.., bPlayerToggle)` for enemies only, pause menu entry
+  `VisionConesButton` / `VisionCones`), events `BridgeEntered / BridgeRefused / BridgeCrossed`, `CrawlGapRefused / CrawlGapPassed`,
+  `VisionConesToggled(.On/.Off)`. **Level obstacles (`Level/`):** `ABridgeCrossingVolume` (Span box, Capacity 1 default, 0 =
+  unlimited, `bAffectsEnemies`, refusal feed line + BP event `OnBridgeCreak`; occupants / waiting; a refused operative is
+  stopped and gets an `AOperativeCharacter::SetTrafficHold` the formation honours in `USquadSubsystem::UpdateFollower`; released
+  when the span is free or he walks off; `BridgeRules`), `ACrawlGapActor` (hidden blocking Bar from `ClearanceCm` 90 to `BarTopCm`
+  200, `Approach` zone, a `UNavArea_CrawlOnly` modifier over the footprint via `UVehicleNavObstacleComponent`;
+  `AOperativeCharacter::RequestMove` passes `UNavFilter_NoCrawl` unless prone; `UNavFilter_NoVault` (enemies) excludes it too; a
+  standing / crouched operative walking at the fence is stopped + held + hinted (`CrawlGapRules`), a prone one passes and raises
+  `CrawlGapPassed` on the far side), pure rules `Level/LevelObstacleRules`. Tests `CodexTactics.Tutorial.Precredit.*` (2),
+  `CodexTactics.Level.*` (2), `Schema.DemoFile` / `Schema.DemoFileA0A1Flow` rewritten for rev 5, `Combat.VisionCone.ToggleAndColours`
+  (+ player toggle), `UI.Frontend.*` (new command rows / pause entry); smokes `TutorialSmoke` (rev 5 order, precredit, locks, MMB
+  drag, O toggle), `BridgeFenceSmoke` (new: the actors on L_MovementTest).
+- Tests `CodexTactics.Tutorial.*` (9 + 8 + 2: `Lock.Rules`, `Lock.Schema`, `Lock.LockUnlock`, `Lock.Saved`, `Action.GustTimeout`,
+  `Condition.Trigger`, `Schema.DemoFileA0A1Flow`, `Demo.HeatPackLoadout`, `Precredit.Rules`, `Precredit.StateMachine`), smoke
+  `TutorialSmoke` (exclusive; runs the real demo file A0 -> A1), `SaveRoundTripSmoke` covers the "tutorial" save section.
 
 **Vehicles (APC BTR-82, phases P0 + P1, 2026-10-12, UE-only; design `docs/vehicles/APC_00..02`)** — kinematic, nav-driven
 (approach B, no Chaos). `Vehicles/VehicleRules` (pure: seats `AssignSeats` Engineer driver / Commander gunner / anyone if absent, 7
@@ -588,7 +616,27 @@ clips), `setup_operative_animation.py` (ABP + BP wiring, M16 offset from Godot).
 
 ## 6. Data / content status
 
-### Tutorial: how the user places volumes / markers and edits steps (Demo 01, 2026-10-11)
+### Tutorial: how the user places volumes / markers and edits steps (Demo 01, 2026-10-11; rev 5 2026-10-13)
+
+**Demo 01 rev 5 (2026-10-13, the user's new flow; `docs/demo/DEMO01_BEAT_SHEET.md` §4 / §10.1 has the full per-beat list) - what changes
+in `L_Demo01_A_FrozenLake`:** (1) `VOL_A0_BEACON1` (Beat Id `A1`) stays; it no longer unlocks anything (sprint unlocks after the heat pack
+lesson). (2) **The crevasse at beacon 2**: keep `VOL_A1_BEACON2` as the bridge approach and lay a NEW **`BridgeCrossingVolume`** (Place
+Actors -> "Bridge Crossing Volume") over the planks: local X along the span, the Span box ~1 m longer than the planks at each end, ~2 m wide;
+Capacity 1 (default). The planks are your art / navmesh strip; the crack itself must block the navmesh so the planks are the only way. A
+second operative stepping on is stopped at the edge ("The bridge won't hold two!"), followers wait; BP event `On Bridge Creak` for a
+sound. Optional marker Step Id `A1_solo` at the near end. Put the x2.5 wind `ACameraZoneVolume` on the FAR side of the bridge. (3) The hut
+as before (`VOL_A1_HUT`, 3-pack crate, marker `A1_obj_hut`), near the far side. (4) `VOL_A1_BEACON3` stays (formation lines; no guard card
+any more - guard is taught at the generator in the horde beat). (5) **Move / re-id to the approach of the complex:** `VOL_A1_BEACON4` ->
+`VOL_A3_WIND` (Any Operative; a x2.5 wind strip), `VOL_A1_RIDGE` -> `VOL_A3_RIDGE`, `VOL_A1_RIDGE_FAR` -> `VOL_A3_RIDGE_FAR`, `VOL_A6_FIELD` ->
+`VOL_A3_FIELD`. (6) NEW volumes: `VOL_A3_APPROACH` (Beat Id `A3`) where the complex first shows; `VOL_A3_FENCE` (Any Operative) 3-4 m before
+the low fence; `VOL_A4_OVERLOOK` (Beat Id `A4`) where the patrols come into view. (7) **The low fence**: your fence mesh (bottom rail ~0.9 m)
++ a NEW **`CrawlGapActor`** (Place Actors -> "Crawl Gap Actor") on the fence line: local X across the fence, `Gap Width Cm` = the fence
+length, `Clearance Cm` 90 (a prone capsule is 80 cm), `Bar Top Cm` 200; close the line otherwise (rocks / wall) within ~15 m or the standing
+path simply walks round. Standing / crouched bodies are stopped with "Too low - go prone and crawl under."; prone ones crawl through;
+enemies never path under. (8) A3 traps: 2 hidden `AProximityMineActor` on the shortcut, 1 `APMCTripwireActor` across the obvious gap. (9) A4:
+2 `APatrolRouteActor` loops + `BP_Enemy_Frostbitten` x2 + `BP_Enemy_Hound` x2 (the skirmish logic = Phase 2, beat sheet §1.3; keep
+`combat_start: "button"`). **Keys for the tester:** I = inventory drawer (locked until the heat pack lesson), O = enemy vision cones
+(also the pause menu "VISION CONES: ON / OFF").
 
 **Draft texts:** `Content/Data/Tutorial/demo_01_texts_draft.json` supplies placeholder texts for ids missing from the narrative manifest (A0, A1 and the A2 heat-pack card since 2026-10-12); replace by the sheet (request #17) and delete entries as the manifest gains them.
 
@@ -640,7 +688,15 @@ lesson uses these starter packs, the hut crate restocks).
    trigger without a condition and `requires` naming an unknown step are parse ERRORS. Events for loot: `Loot.Open` (command, crate
    window opened), `ItemLooted` / `ItemLooted.<Item>` (`HeatPack`, `Medkit`, ... - taken into an operative's kit); heat pack used:
    `ItemUsed.HEAT_PACK`. Patterns:
-   exact, `"Prefix.*"`, `"*"`. `"distinct_operatives": true` (2026-10-12): each operative's event counts once, so `count` = how many
+   exact, `"Prefix.*"`, `"*"`. **`"precredit"` (2026-10-13, default true):** a once-only hint card completed by COMMANDS whose completion
+   the player's command history already satisfies when the card becomes due (uses / hold time since the steps loaded, recorded even while
+   a radio plays or a card is not up) is completed at once without showing ("✓ <title> - already done." in the feed, telemetry
+   `precredited`); fewer uses than needed seed the card's progress (one Q press before the Q/E card = 1 of 2). `"precredit": false` for
+   lessons that must happen at that moment (regroup, the sprint card, loot open, the tripwire). Event / volume completions and `"once":
+   false` cards never precredit. The history is saved in the tutorial section (`"history"`) and forgotten by RESET TUTORIAL. Lock targets
+   today: `Order.Sprint` (degrades to a walk), `Order.Move` (refused: `HandleWorldHit`), `Inventory.Open` (the drawer stays closed),
+   `Item.*` (U / H / J / K / L and item drags refused); each refusal raises `Tutorial.Locked.<Id>` once per try.
+   `"distinct_operatives": true` (2026-10-12): each operative's event counts once, so `count` = how many
    different operatives must do it ("put each operative into cover": `{"event": "CoverEntered", "count": 3, "distinct_operatives": true}`;
    "enter cover 4 times": `{"event": "CoverEntered", "count": 4}`). **`hold_s` (2026-10-12):** accumulated seconds a CONTINUOUS command was
    active while the card is SHOWN (never during the card breather, never while merely queued), in addition to `count` uses:
@@ -1136,6 +1192,14 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 
 ## 7. Open user decisions / questions
 
+- **Demo 01 rev 5 (2026-10-13) - defaults chosen by the orchestrator, to confirm (beat sheet §12):** (1) the shaky bridge REFUSES a
+  second operative at the edge (no fall / damage) - keep, or sway and dump both? (2) the low fence is MANUAL prone (a standing order
+  stops with a hint) - keep, or auto-prone through it? (3) moves are refused while the HQ intro plays ("Hold on - HQ is talking.") -
+  keep? (4) vision cones on `O`, a session setting (not saved) - OK / save it in the profile? (5) the pre-horde patrol (beat sheet
+  §1.3 encounter groups): 2 frozen + 2 hounds, turn-based allowed, Panic off? (6) stances / vault / cover volumes move to the approach
+  (`VOL_A3_*`), guard moves to the generator beat - OK? (7) precredit on by default for command cards except regroup / sprint / loot
+  open / tripwire - OK?
+
 - **Placed-enemy archetype (2026-10-12, user-approved fix):** an enemy placed in a level (not made by the wave spawner / a save
   load) whose `Archetype` field equals its class default now takes the archetype the game mode's `EnemyClasses` maps to its
   Blueprint (or a parent of it); a value changed on the instance wins; an unmapped class keeps its class default (C++
@@ -1254,6 +1318,13 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 
 ## 8. Next steps (in order)
 
+- **Demo 01 rev 5 (2026-10-13):** user: place / re-id the volumes and the two new actors (§6 «Tutorial» rev 5 block; beat sheet §10.1),
+  answer §7 «Demo 01 rev 5». Phase 2 (beat sheet §11): encounter groups (§1.3: `EncounterGroup` on `AEnemyCharacter` /
+  `APatrolRouteActor`, `ULevelEncounterSubsystem` skirmish state, `UWaveSubsystem::AdoptLevelEnemies` filter, level JSON `encounters`,
+  `EncounterStarted / Cleared` events, `EncounterSkirmishSmoke`), A4 fight steps, A5 trapped crate steps (+ `TrapDefused` event), A6
+  defence prep steps (+ `ObjectTrapped`, relocation kind, `HighGroundTaken`). Phase 3: A7 canister, A8 pause, A9 AUTO, A10 generator
+  repair + guard (subject on `Squad.Guard`), debrief. Then TANDEM #17 (all rev 5 text ids) and #18.
+
 - **APC (2026-10-12, branch `agents/apc`):** user: run `Scripts/Editor/setup_apc_vehicle.py` with the editor closed (or make
   `BP_APC_BTR82` by hand, §6 «APC»), build `L_VehicleTest` (§6), answer §7 «APC P1». Next phases: P2 turret (gunner seat, posture
   auto-fire, Ctrl+click target, ammo, ABP aim), P3 turn-based (vehicle as a multi-cell occupant, parked turret 3 AP, get out 2 AP),
@@ -1346,6 +1417,16 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 8. Content: level, VFX, cutscene; character "twisted" look issue (§6).
 
 ## 9. Known gaps / tech debt
+
+- **Demo 01 rev 5 (2026-10-13):** (1) `VisionConeSmoke` fails on `agents/work` at "operative cone range = weapon range x stance (1400 cm,
+  weapon m16)": the leader's cone reads `VisionConeRangeCm` (1400) instead of the M16 range, i.e. `bVisionConeRangeFromWeapon` is off on
+  the operative that spawns on L_PatrolTest; nothing of rev 5 touches that path (check the user's BP_Operative defaults / main). (2)
+  `UNavigationSystemV1::FindPathToLocationSynchronously(.., UNavFilter_NoCrawl)` returned a FULL path through a crawl-only strip in
+  `BridgeFenceSmoke` while the operative's own `RequestMove` with the same filter ends before the fence (the behaviour that matters);
+  the smoke logs the query result as info only - investigate the filter class handling of the synchronous query. (3) The bridge keeps
+  no memory of a refused operative's destination: a box-selected group ordered across stops at the edge and must be re-ordered
+  (formation followers continue on their own); option: re-issue `LastMoveDestination` when admitted. (4) The crawl-only area has
+  cost 1: a prone body goes straight under; standing bodies path round when the fence is open at the ends (design: close the line).
 
 - **Sprint 15 heat gaps (2026-10-11):** no flamethrower in the arsenal (puddle hook `AFirePuddleActor::SpawnAt` unused but by the
   barrel); no night / darkness system (the flare's "removes night accuracy penalties" has no hook); no gas canister refill item; the stove
@@ -1583,6 +1664,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 ## 10. Change log (newest first)
 
 | Commit | What |
+| (this, agents/work) | **Demo 01 rev 5 Phase 1 (the user's new 15-step flow 2026-10-13; beat sheet rev 5).** Tutorial engine: **precredit** (command history in `FTutorialStateMachine` (`GetCommandHistory / GetCommandUse`), `TutorialRules::CanPrecredit / IsPrecreditSatisfied / CountHistoryUses`, step `"precredit"` (default true, once-only command cards), partial progress seeding, `FTutorialTransition::bPrecredited` -> feed tick "✓ ... already done" + telemetry `precredited`, save `"history"`), new lock targets `Inventory.Open` (new command, I key, `ACodexTacticsHUD::ToggleInventoryDrawer`), `Item.*` (`UseSquadItem`, `HandleTransferRequest`), `Order.Move` refused in `HandleWorldHit`. **Player vision-cone toggle** `View.VisionCones` (O, pause-menu `VisionConesButton`, `UVisionConeComponent::SetPlayerEnemyCones` / CVar `Codex.VisionCones.Enemies`, `VisionConeRules::ResolveVisible(.., bPlayerToggle)` enemies only, event `VisionConesToggled(.On/.Off)`). **Level obstacles** `Level/BridgeCrossingVolume` (one-at-a-time span, refusal line + `OnBridgeCreak`, traffic hold), `Level/CrawlGapActor` (+ `UNavArea_CrawlOnly`, `UNavFilter_NoCrawl`; `RequestMove` filter unless prone; `UNavFilter_NoVault` excludes it), `Level/LevelObstacleRules`, `AOperativeCharacter::SetTrafficHold / IsTrafficHeld` honoured by `USquadSubsystem::UpdateFollower`, events `BridgeEntered / Refused / Crossed`, `CrawlGapRefused / Passed`. Data: `demo_01_steps.json` rev 5 (A0 HQ radio + move lock, staged camera + `A0_cam_pan_drag`, A1 bridge / regroup / box / banter / heat pack unlock / sprint unlock / hut, A2, A3 stances / vault / fence / cover / traps, A4 cones / tripwire), `demo_01_texts_draft.json` (English drafts for every id). Tests `CodexTactics.Tutorial.Precredit.*`, `CodexTactics.Level.*`, `Schema.DemoFile` / `Schema.DemoFileA0A1Flow` rev 5, `Combat.VisionCone.ToggleAndColours`, `UI.Frontend.*`; smokes `TutorialSmoke` (rev 5), `BridgeFenceSmoke` (new). Docs: beat sheet rev 5 (§1.3 encounter groups design, §4 beats A0-A10, §9.0 gap table, §10.1 map build list, §11 phases, §12 questions), HANDOFF §5 / §6 / §7 / §8, TANDEM #17 ids. |
 | (this, agents/tutA1b) | **Demo 01 A0-A1 rev 4 (user decision 2026-10-12 after the playtest: "with sprint blocked the squad freezes 100 %, too hard").** `demo_01_steps.json`: sprint LOCKED only on the A0 stretch (`A0_nosprint` once); beat A1 `unlock`s it at beacon 1 and the first A1 card is `A1_sprint` (`TUT_A1_SPRINT`) -> `A1_select` -> `A1_box` (both now `after_step`) -> solo at the crack (`VOL_A1_BEACON2`, wind zone + the gust) -> regroup -> `A1_heatpack` (+ `A1_heatpack_mate`) with the STARTER packs. New `A1_wt_resupply` (`WT_A1_RESUPPLY`, Commander) and `A1_obj_hut` (id kept; trigger now `after_step A1_heatpack_mate` +1 s instead of the beat start) -> hut loot cards (`VOL_A1_HUT`: `A1_loot_open` -> `A1_loot_take`, the crate holds 3) -> closing line `A1_wt_stocked` (`WT_A1_STOCKED`); `A1_guard` moved to `VOL_A1_BEACON3` (it used to follow the run card). Removed: `A1_wt_nopack` / `WT_A1_NOPACK`, `A1_wt_warmed` / `WT_A1_WARMED`. Level JSON `squad_loadout.heat_packs_count` 0 -> 1 (PER OPERATIVE: `LoadoutRules::StartingHeatPacks` replaces the role kit of each; 1 each). Drafts: `WT_A1_01-03`, `OBJ_A1_HUT`, `TUT_A1_HEATPACK(_MATE)` rewritten, `WT_A1_RESUPPLY` / `WT_A1_STOCKED` new. Comments only: `WaveConfigTypes.h`, game mode, Wave Editor `types.ts`. Beat sheet rev 4 (decisions block + A0 / A1), TANDEM #17 ids. Tests `Schema.DemoFileA0A1Flow` (rewritten: lock on A0 only, unlock at A1, order, resupply, objective timing) and `Demo.HeatPackLoadout` (1 each); `TutorialSmoke` (real demo file: locked double click walks, beacon 1 unlocks + sprint card + a double click sprints, solo, gust, heat pack on the coldest with his own starter pack, mate card, resupply line + hut objective only after the lesson, hut loot open / take, closing line, guard at beacon 3). Verified: build; `test.ps1 -Changed` unit 57 / 57, smokes 24 / 24 PASS (Tutorial, Movement, SaveRoundTrip, CoverEvent, Mission, ...), `LootSmoke` PASS, Jev audit PASS. **Placement note for the user:** the squad now reaches the hut AFTER the crack and the heat pack lesson ("the hut is close"): move `VOL_A1_HUT` / the hut towards the crack or the way to beacon 3 if it sits far back near beacon 1; marker `A1_obj_hut` shows only from the resupply line. The leader takes what fits his stack (max 3) from the 3-pack crate; the rest stays in the crate window. |
 | (this, agents/work) | **Fix: placed enemies get their archetype from their class (user bug 2026-10-12: a BP_Enemy_Brute on a patrol route played a 45 HP hound).** `EnemyAIRules::ResolvePlacedArchetype` (instance override > the game mode's `EnemyClasses` reverse lookup over the class chain (IsChildOf-aware) > the class default); `AEnemyCharacter::ResolvePlacedArchetype` at BeginPlay unless a spawner scope is active (`AEnemyCharacter::FScopedSpawnArchetype`, used by `UWaveSubsystem::SpawnEnemy` and the save load), one log line per placed enemy, `WasPlacedInLevel`. Test `CodexTactics.Characters.EnemyAI.PlacedArchetype`, smoke `EnemyArchetypeSmoke`. The enemy BPs are untouched. |
 | (this, agents/work) | **APC cannon nerf (user 2026-10-12: "too powerful").** `weapons_tuning.json` `vehicle_weapons.apc_turret` + the `FVehicleTurretConfig` defaults: shell 70 -> 45, splash 35 -> 20 (radius 1.5 m kept), bursts 3 -> 2 shells (0.5 s apart, 1.2 s pause kept); MG unchanged. Test `Turret.WeaponAmmoHeat` expects 45 / 20 / 2. |

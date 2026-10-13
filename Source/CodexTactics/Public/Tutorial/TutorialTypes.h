@@ -169,6 +169,13 @@ struct CODEXTACTICS_API FTutorialStep
 	TArray<FTutorialAction> Actions;
 	/** "focus": "coldest_operative" -> the card names / marks the coldest squad member ({focus} token in the text). */
 	FName Focus;
+	/**
+	 * "precredit" (default true; user decision 2026-10-13): a hint card completed by COMMANDS whose completion the player's
+	 * command history (counts / hold time since the level started, FTutorialStateMachine) already satisfies when the step
+	 * becomes due is completed at once without showing the card (a brief feed tick instead). False for lessons that must be
+	 * done at that moment (a location, a specific target). Event / volume completions are never precredited.
+	 */
+	bool bPrecredit = true;
 };
 
 struct CODEXTACTICS_API FTutorialBeat
@@ -199,6 +206,13 @@ struct CODEXTACTICS_API FTutorialStepsData
 	int32 FindBeatIndex(FName BeatId) const;
 };
 
+/** One command's use history (precredit): uses since the level started and the accumulated hold time of a continuous command. */
+struct CODEXTACTICS_API FTutorialCommandUse
+{
+	int32 Count = 0;
+	float HeldSeconds = 0.f;
+};
+
 /** Saved tutorial progress (the "tutorial" section of a save). */
 struct CODEXTACTICS_API FTutorialProgress
 {
@@ -211,6 +225,8 @@ struct CODEXTACTICS_API FTutorialProgress
 	TArray<FString> Locks;
 	/** The save had a "locks" array (older saves: the locks are rebuilt from the beat and the finished steps). */
 	bool bHasLocks = false;
+	/** Player command history ("history": {id: {count, held_s}}) for precredited lessons. */
+	TMap<FName, FTutorialCommandUse> History;
 
-	bool IsEmpty() const { return Finished.IsEmpty() && Pending.IsEmpty() && CurrentBeat.IsNone() && Locks.IsEmpty(); }
+	bool IsEmpty() const { return Finished.IsEmpty() && Pending.IsEmpty() && CurrentBeat.IsNone() && Locks.IsEmpty() && History.IsEmpty(); }
 };

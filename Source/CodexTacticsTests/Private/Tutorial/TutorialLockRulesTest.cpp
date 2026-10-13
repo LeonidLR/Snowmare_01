@@ -381,69 +381,87 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	// Static order (user decision 2026-10-12, rev 4: sprint locked on the A0 stretch only, unlocked at beacon 1).
-	TestTrue(TEXT("A0 locks sprint"), Data.Beats[0].Id == FName(TEXT("A0")) && Data.Beats[0].Lock.Contains(TEXT("Order.Sprint")));
-	TestTrue(TEXT("A1 (beacon 1) unlocks sprint"), Data.Beats[1].Id == FName(TEXT("A1")) && Data.Beats[1].Unlock.Contains(TEXT("Order.Sprint")) && Data.Beats[1].Lock.IsEmpty());
-	TestTrue(TEXT("A2 unlocks sprint (safety)"), Data.Beats[2].Id == FName(TEXT("A2")) && Data.Beats[2].Unlock.Contains(TEXT("Order.Sprint")));
+	// Static order (user flow 2026-10-13, rev 5): HQ radio only at the start; sprint + inventory locked until after the heat pack lesson.
+	TestTrue(TEXT("A0 locks sprint, the inventory and the items"), Data.Beats[0].Id == FName(TEXT("A0")) && Data.Beats[0].Lock.Contains(TEXT("Order.Sprint"))
+		&& Data.Beats[0].Lock.Contains(TEXT("Inventory.*")) && Data.Beats[0].Lock.Contains(TEXT("Item.*")));
+	TestTrue(TEXT("A1 (beacon 1) unlocks nothing any more (rev 5: sprint waits for the heat pack lesson)"), Data.Beats[1].Id == FName(TEXT("A1"))
+		&& Data.Beats[1].Unlock.IsEmpty() && Data.Beats[1].Lock.IsEmpty());
+	TestTrue(TEXT("A2 unlocks sprint + inventory (safety)"), Data.Beats[2].Id == FName(TEXT("A2")) && Data.Beats[2].Unlock.Contains(TEXT("Order.Sprint"))
+		&& Data.Beats[2].Unlock.Contains(TEXT("Inventory.*")));
+	const FTutorialStep* Radio = Data.FindStep(TEXT("A0_radio_hq"));
+	TestTrue(TEXT("A0_radio_hq: HQ radio at the beat start, locks Order.Move while it plays"), Radio && Radio->Kind == ETutorialStepKind::Radio
+		&& Radio->Trigger.Type == ETutorialTriggerType::BeatStart && Radio->Lock.Contains(TEXT("Order.Move")) && Radio->Lines.Num() >= 4
+		&& Radio->Lines[0].Speaker == TEXT("HQ"));
+	const FTutorialStep* Pan = Data.FindStep(TEXT("A0_cam_pan"));
+	TestTrue(TEXT("the camera lesson starts only after the radio and unlocks Order.Move"), Pan && Pan->Trigger.Type == ETutorialTriggerType::AfterStep
+		&& Pan->Trigger.Step == FName(TEXT("A0_radio_hq")) && Pan->Unlock.Contains(TEXT("Order.Move")));
+	const FTutorialStep* WaitHq = Data.FindStep(TEXT("A0_wait_hq"));
+	TestTrue(TEXT("A0_wait_hq: a feed line on a click during the radio"), WaitHq && WaitHq->Kind == ETutorialStepKind::Feed && WaitHq->Trigger.Event == TEXT("Tutorial.Locked.Order.Move"));
 	const FTutorialStep* NoSprint = Data.FindStep(TEXT("A0_nosprint"));
 	TestTrue(TEXT("A0_nosprint: a feed line on the first locked sprint, once"), NoSprint && NoSprint->Kind == ETutorialStepKind::Feed && NoSprint->bOnce
 		&& NoSprint->TextId == FName(TEXT("TUT_A0_NOSPRINT")) && NoSprint->Trigger.Event == TEXT("Tutorial.Locked.Order.Sprint"));
+	TestTrue(TEXT("A0_noinventory: a feed line on the first locked inventory"), Data.FindStep(TEXT("A0_noinventory"))
+		&& Data.FindStep(TEXT("A0_noinventory"))->Trigger.Event == TEXT("Tutorial.Locked.Inventory.Open"));
+	for (const TCHAR* Gone : { TEXT("A0_walk_talk"), TEXT("A1_wt_scout"), TEXT("A1_guard"), TEXT("A1_stance"), TEXT("A1_vault"), TEXT("A1_wt_wind"), TEXT("A6_cover") })
+	{
+		TestNull(FString::Printf(TEXT("%s is gone in rev 5"), Gone), Data.FindStep(Gone));
+	}
+	const FTutorialStep* Select = Data.FindStep(TEXT("A1_select"));
+	TestTrue(TEXT("A1_select at the crack (VOL_A1_BEACON2 kept)"), Select && Select->Trigger.Type == ETutorialTriggerType::Volume && Select->Trigger.Volume == FName(TEXT("VOL_A1_BEACON2")));
+	const FTutorialStep* Solo = Data.FindStep(TEXT("A1_solo"));
+	TestTrue(TEXT("A1_solo (id kept for the marker): done when all three crossed the bridge"), Solo && Solo->Trigger.Type == ETutorialTriggerType::AfterStep
+		&& Solo->Trigger.Step == FName(TEXT("A1_select")) && Solo->Complete.Event == TEXT("BridgeCrossed") && Solo->Complete.Count == 3 && Solo->Complete.bDistinctSubjects
+		&& !TutorialRules::CanPrecredit(*Solo));
+	const FTutorialStep* Regroup = Data.FindStep(TEXT("A1_regroup"));
+	TestTrue(TEXT("regroup after the bridge, never precredited"), Regroup && Regroup->Trigger.Step == FName(TEXT("A1_solo")) && !Regroup->bPrecredit);
+	const FTutorialStep* Box = Data.FindStep(TEXT("A1_box"));
+	TestTrue(TEXT("box select after the regroup (orchestrator default)"), Box && Box->Trigger.Type == ETutorialTriggerType::AfterStep && Box->Trigger.Step == FName(TEXT("A1_regroup")));
+	const FTutorialStep* Banter = Data.FindStep(TEXT("A1_wt_banter"));
+	TestTrue(TEXT("the squad banter plays after the bridge (after the box card)"), Banter && Banter->Kind == ETutorialStepKind::WalkTalk && Banter->Trigger.Step == FName(TEXT("A1_box"))
+		&& Banter->Lines.Num() == 4);
+	const FTutorialStep* HeatPack = Data.FindStep(TEXT("A1_heatpack"));
+	TestTrue(TEXT("heat pack card focuses the coldest and UNLOCKS the inventory / items"), HeatPack && HeatPack->Focus == FName(TEXT("coldest_operative"))
+		&& HeatPack->Unlock.Contains(TEXT("Inventory.*")) && HeatPack->Unlock.Contains(TEXT("Item.*")) && HeatPack->Trigger.Requires.Contains(FName(TEXT("A1_solo"))));
 	const FTutorialStep* SprintCard = Data.FindStep(TEXT("A1_sprint"));
-	TestTrue(TEXT("A1_sprint: the run card opens beat A1 (beat start, Order.Sprint)"), SprintCard && SprintCard->Beat == FName(TEXT("A1"))
-		&& SprintCard->Trigger.Type == ETutorialTriggerType::BeatStart && SprintCard->TextId == FName(TEXT("TUT_A1_SPRINT"))
+	TestTrue(TEXT("A1_sprint: 'running warms you up' after the heat pack lesson UNLOCKS sprint"), SprintCard && SprintCard->Trigger.Type == ETutorialTriggerType::AfterStep
+		&& SprintCard->Trigger.Step == FName(TEXT("A1_heatpack_mate")) && SprintCard->Unlock.Contains(TEXT("Order.Sprint")) && !SprintCard->bPrecredit
 		&& SprintCard->Complete.Commands.Contains(PlayerCommands::Sprint.ToString()));
-	const FTutorialStep* SelectCard = Data.FindStep(TEXT("A1_select"));
-	TestTrue(TEXT("select follows the run card"), SelectCard && SelectCard->Trigger.Type == ETutorialTriggerType::AfterStep && SelectCard->Trigger.Step == FName(TEXT("A1_sprint")));
-	TestNull(TEXT("no sprint unlock step any more (WT_A1_WARMED)"), Data.FindStep(TEXT("A1_wt_warmed")));
-	TestNull(TEXT("no 'back to the hut' remedial line (the packs are starter packs)"), Data.FindStep(TEXT("A1_wt_nopack")));
 	const FTutorialStep* Resupply = Data.FindStep(TEXT("A1_wt_resupply"));
-	TestTrue(TEXT("A1_wt_resupply: the Commander's WT_A1_RESUPPLY line after the heat pack lesson"), Resupply && Resupply->Kind == ETutorialStepKind::WalkTalk
-		&& Resupply->Trigger.Type == ETutorialTriggerType::AfterStep && Resupply->Trigger.Step == FName(TEXT("A1_heatpack_mate"))
-		&& Resupply->Lines.Num() == 1 && Resupply->Lines[0].TextId == FName(TEXT("WT_A1_RESUPPLY")) && Resupply->Lines[0].Speaker == TEXT("Commander"));
+	TestTrue(TEXT("A1_wt_resupply after the sprint card"), Resupply && Resupply->Trigger.Type == ETutorialTriggerType::AfterStep && Resupply->Trigger.Step == FName(TEXT("A1_sprint"))
+		&& Resupply->Lines.Num() == 1 && Resupply->Lines[0].TextId == FName(TEXT("WT_A1_RESUPPLY")));
 	const FTutorialStep* HutObjective = Data.FindStep(TEXT("A1_obj_hut"));
-	TestTrue(TEXT("A1_obj_hut keeps its id, shows after the heat pack lesson (not at the beat start), done on ItemLooted.HeatPack"), HutObjective
-		&& HutObjective->Kind == ETutorialStepKind::Objective && HutObjective->TextId == FName(TEXT("OBJ_A1_HUT"))
-		&& HutObjective->Trigger.Type == ETutorialTriggerType::AfterStep && HutObjective->Trigger.Step == FName(TEXT("A1_heatpack_mate"))
-		&& HutObjective->Complete.Event == TEXT("ItemLooted.HeatPack"));
-	const FTutorialStep* Stocked = Data.FindStep(TEXT("A1_wt_stocked"));
-	TestTrue(TEXT("closing line after the loot, no unlock"), Stocked && Stocked->Trigger.Step == FName(TEXT("A1_loot_take")) && Stocked->Unlock.IsEmpty());
-	const FTutorialStep* GuardCard = Data.FindStep(TEXT("A1_guard"));
-	TestTrue(TEXT("guard at beacon 3"), GuardCard && GuardCard->Trigger.Type == ETutorialTriggerType::Volume && GuardCard->Trigger.Volume == FName(TEXT("VOL_A1_BEACON3")));
+	TestTrue(TEXT("A1_obj_hut keeps its id, shows after the sprint card, done on ItemLooted.HeatPack"), HutObjective && HutObjective->Kind == ETutorialStepKind::Objective
+		&& HutObjective->Trigger.Step == FName(TEXT("A1_sprint")) && HutObjective->Complete.Event == TEXT("ItemLooted.HeatPack"));
 	const FTutorialStep* GustStep = Data.FindStep(TEXT("A1_gust"));
-	TestTrue(TEXT("gust: 20 s after solo, only below 40 %, cold_bump 20"), GustStep && GustStep->Trigger.Type == ETutorialTriggerType::AfterStep
+	TestTrue(TEXT("gust: 20 s after the crossing, only below 40 %, cold_bump 20"), GustStep && GustStep->Trigger.Type == ETutorialTriggerType::AfterStep
 		&& GustStep->Trigger.Step == FName(TEXT("A1_solo")) && GustStep->Trigger.DelaySeconds == 20.f && GustStep->Conditions.Num() == 1
 		&& !GustStep->Conditions[0].bAtLeast && GustStep->Conditions[0].Value == 40.f && GustStep->Actions.Num() == 1 && GustStep->Actions[0].Amount == 20.f);
 	if (!GustStep || GustStep->Actions.IsEmpty())
 	{
 		return false;
 	}
-	TestTrue(TEXT("heat pack card focuses the coldest"), Data.FindStep(TEXT("A1_heatpack")) && Data.FindStep(TEXT("A1_heatpack"))->Focus == FName(TEXT("coldest_operative")));
-	TestNull(TEXT("no A2 cold-bar card (the cold is taught in A1)"), Data.FindStep(TEXT("A2_coldbar")));
+	TestTrue(TEXT("stances moved to the approach (A3, VOL_A3_WIND)"), Data.FindStep(TEXT("A3_stance")) && Data.FindStep(TEXT("A3_stance"))->Trigger.Volume == FName(TEXT("VOL_A3_WIND")));
 	TestTrue(TEXT("A2 heat pack card is remedial only"), Data.FindStep(TEXT("A2_heatpack")) && Data.FindStep(TEXT("A2_heatpack"))->Trigger.Type == ETutorialTriggerType::Condition);
 	for (const FTutorialStep& Step : Data.Steps)
 	{
-		const int32 Beat = Data.FindBeatIndex(Step.Beat);
 		TestFalse(FString::Printf(TEXT("%s: no ColdTier event trigger (it would jump beats)"), *Step.Id.ToString()),
 			Step.Trigger.Type == ETutorialTriggerType::Event && Step.Trigger.Event.StartsWith(TEXT("ColdTier")));
-		// Every A0 / A1 text has at least a draft (no [EN missing] in the reworked beats).
-		if (Beat <= 1)
+		// Every text of the implemented beats has at least a draft (no [EN missing]).
+		TArray<FName> Ids;
+		if (!Step.TextId.IsNone())
 		{
-			TArray<FName> Ids;
-			if (!Step.TextId.IsNone())
-			{
-				Ids.Add(Step.TextId);
-			}
-			for (const FTutorialLine& Line : Step.Lines)
-			{
-				Ids.Add(Line.TextId);
-			}
-			for (const FName Id : Ids)
-			{
-				const FString Text = FNarrativeManifest::Get().GetTutorialText(Id.ToString()).Text;
-				const FString Title = FNarrativeManifest::Get().GetTutorialText(Id.ToString()).Title;
-				TestFalse(FString::Printf(TEXT("%s text %s exists"), *Step.Id.ToString(), *Id.ToString()),
-					(Text.IsEmpty() || Text.StartsWith(TEXT("[EN missing"))) && Title.IsEmpty());
-			}
+			Ids.Add(Step.TextId);
+		}
+		for (const FTutorialLine& Line : Step.Lines)
+		{
+			Ids.Add(Line.TextId);
+		}
+		for (const FName Id : Ids)
+		{
+			const FString Text = FNarrativeManifest::Get().GetTutorialText(Id.ToString()).Text;
+			const FString Title = FNarrativeManifest::Get().GetTutorialText(Id.ToString()).Title;
+			TestFalse(FString::Printf(TEXT("%s text %s exists"), *Step.Id.ToString(), *Id.ToString()),
+				(Text.IsEmpty() || Text.StartsWith(TEXT("[EN missing"))) && Title.IsEmpty());
 		}
 	}
 
@@ -454,59 +472,87 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	Machine.StatProvider = [&Cold, &Packs](FName Stat) { return Stat == FName(TEXT("squad_heat_packs")) ? Packs : Cold; };
 	Machine.Load(Data);
 	Machine.StartBeat(Data.StartBeat);
-	TestTrue(TEXT("A0: sprint locked from the start"), Machine.IsCommandLocked(PlayerCommands::Sprint));
-	TestEqual(TEXT("A0: a double click walks"), TutorialRules::ResolveLockedCommand(Machine.GetLocks(), PlayerCommands::Sprint), PlayerCommands::Move);
-	Machine.HandleEvent(TutorialRules::MakeLockedEventName(PlayerCommands::Sprint));
-	TestEqual(TEXT("A0: TUT_A0_NOSPRINT shows at once"), Machine.GetState(TEXT("A0_nosprint")), ETutorialStepState::Active);
-	Pump(Machine, 3.f);
-	for (const TCHAR* Camera : { TEXT("A0_cam_pan"), TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom") })
+	TestTrue(TEXT("A0: sprint and the inventory locked from the start"), Machine.IsCommandLocked(PlayerCommands::Sprint) && Machine.IsCommandLocked(PlayerCommands::InventoryOpen)
+		&& Machine.IsCommandLocked(PlayerCommands::UseHeatPack));
+	Machine.Tick(1.1f); // the radio's 1 s delay (no Pump: it would play the radio out at once)
+	TestEqual(TEXT("A0: the HQ radio plays first, no card"), Machine.GetActiveSpeech(), FName(TEXT("A0_radio_hq")));
+	TestEqual(TEXT("A0: no camera card during the radio"), Machine.GetActiveCard(), FName());
+	TestTrue(TEXT("A0: moves locked while HQ talks"), Machine.IsCommandLocked(PlayerCommands::Move));
+	TestEqual(TEXT("A0: a locked move is refused (no fallback)"), TutorialRules::ResolveLockedCommand(Machine.GetLocks(), PlayerCommands::Move), FName());
+	Machine.HandleEvent(TutorialRules::MakeLockedEventName(PlayerCommands::Move));
+	TestEqual(TEXT("A0: TUT_A0_WAIT_HQ shows at once"), Machine.GetState(TEXT("A0_wait_hq")), ETutorialStepState::Active);
+	// The player pans with WASD and MMB-drags while HQ talks: those camera stages are precredited later.
+	Machine.HandleCommand(PlayerCommands::CameraPanKeys);
+	Machine.HandleCommandHold(PlayerCommands::CameraPanKeys, 1.5f);
+	Machine.HandleCommand(PlayerCommands::CameraPanDrag);
+	Machine.HandleCommandHold(PlayerCommands::CameraPanDrag, 0.8f);
+	Machine.CompleteStep(TEXT("A0_radio_hq"));
+	Pump(Machine, 1.5f);
+	TestFalse(TEXT("after the radio: moves unlocked by the first camera card"), Machine.IsCommandLocked(PlayerCommands::Move));
+	TestEqual(TEXT("pan precredited (done during the radio)"), Machine.GetState(TEXT("A0_cam_pan")), ETutorialStepState::Completed);
+	TestEqual(TEXT("MMB drag precredited"), Machine.GetState(TEXT("A0_cam_pan_drag")), ETutorialStepState::Completed);
+	TestEqual(TEXT("Q/E is the first card shown"), Machine.GetActiveCard(), FName(TEXT("A0_cam_rotate_keys")));
+	for (const TCHAR* Camera : { TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom") })
 	{
 		Pump(Machine, 2.f);
 		TestTrue(FString(Camera) + TEXT(" skipped"), Machine.SkipStep(Camera));
 	}
-	TestTrue(TEXT("A0: still locked on the whole stretch to beacon 1"), Machine.IsCommandLocked(PlayerCommands::Sprint));
+	Machine.HandleEvent(TutorialRules::MakeLockedEventName(PlayerCommands::Sprint));
+	TestEqual(TEXT("A0: TUT_A0_NOSPRINT shows at once"), Machine.GetState(TEXT("A0_nosprint")), ETutorialStepState::Active);
+	TestTrue(TEXT("A0: sprint still locked on the whole stretch to beacon 1"), Machine.IsCommandLocked(PlayerCommands::Sprint));
 	Machine.HandleVolume(TEXT("VOL_A0_BEACON1"), NAME_None, TEXT("A1"));
 	TestEqual(TEXT("beacon 1 starts A1"), Machine.GetCurrentBeat(), FName(TEXT("A1")));
-	TestFalse(TEXT("A1: sprint unlocked at beacon 1"), Machine.IsCommandLocked(PlayerCommands::Sprint));
-	TestEqual(TEXT("A1: a double click sprints"), TutorialRules::ResolveLockedCommand(Machine.GetLocks(), PlayerCommands::Sprint), PlayerCommands::Sprint);
-	Pump(Machine, 3.f);
-	TestEqual(TEXT("A1: the run card first"), Machine.GetActiveCard(), FName(TEXT("A1_sprint")));
-	TestEqual(TEXT("the hut objective is not up yet"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Idle);
-	Machine.HandleCommand(PlayerCommands::Sprint);
-	TestEqual(TEXT("a sprint completes it"), Machine.GetState(TEXT("A1_sprint")), ETutorialStepState::Completed);
+	TestTrue(TEXT("A1: sprint STILL locked (rev 5)"), Machine.IsCommandLocked(PlayerCommands::Sprint));
+	TestEqual(TEXT("A1: a double click still walks"), TutorialRules::ResolveLockedCommand(Machine.GetLocks(), PlayerCommands::Sprint), PlayerCommands::Move);
 	Pump(Machine, 2.f);
-	TestEqual(TEXT("then select"), Machine.GetActiveCard(), FName(TEXT("A1_select")));
+	TestEqual(TEXT("no card before the crack"), Machine.GetActiveCard(), FName());
+	Machine.HandleVolume(TEXT("VOL_A1_BEACON2"), NAME_None, NAME_None);
+	Pump(Machine, 2.f);
+	TestEqual(TEXT("the crack: select first"), Machine.GetActiveCard(), FName(TEXT("A1_select")));
 	Machine.HandleCommand(PlayerCommands::SelectMember);
+	Pump(Machine, 2.f);
+	TestEqual(TEXT("then the one-at-a-time bridge card"), Machine.GetActiveCard(), FName(TEXT("A1_solo")));
+	Machine.HandleEvent(TEXT("BridgeRefused"), TEXT("Op2"));
+	TestEqual(TEXT("the bridge creak line plays once"), Machine.GetState(TEXT("A1_bridge_refused")), ETutorialStepState::Active);
+	Machine.HandleEvent(TEXT("BridgeCrossed"), TEXT("Op1"));
+	Machine.HandleEvent(TEXT("BridgeCrossed"), TEXT("Op1"));
+	TestEqual(TEXT("the same operative twice counts once"), Machine.GetProgress(TEXT("A1_solo")), 1);
+	Machine.HandleEvent(TEXT("BridgeCrossed"), TEXT("Op2"));
+	Machine.HandleEvent(TEXT("BridgeCrossed"), TEXT("Op3"));
+	TestEqual(TEXT("three distinct crossings complete it"), Machine.GetState(TEXT("A1_solo")), ETutorialStepState::Completed);
+	Pump(Machine, 4.f);
+	TestEqual(TEXT("regroup card 2 s after the crossing"), Machine.GetActiveCard(), FName(TEXT("A1_regroup")));
+	Machine.HandleCommand(PlayerCommands::Regroup);
 	Pump(Machine, 2.f);
 	TestEqual(TEXT("then box select"), Machine.GetActiveCard(), FName(TEXT("A1_box")));
 	Machine.HandleCommand(PlayerCommands::SelectBox);
-	Machine.HandleVolume(TEXT("VOL_A1_BEACON2"), NAME_None, NAME_None);
 	Pump(Machine, 2.f);
-	TestEqual(TEXT("the crack: solo"), Machine.GetActiveCard(), FName(TEXT("A1_solo")));
-	Machine.HandleCommand(PlayerCommands::SoloOn);
-	Pump(Machine, 8.f);
-	TestEqual(TEXT("regroup card 6 s after solo"), Machine.GetActiveCard(), FName(TEXT("A1_regroup")));
-	Machine.HandleCommand(PlayerCommands::Regroup);
-	Pump(Machine, 8.f);
+	TestEqual(TEXT("then the squad banter"), Machine.GetState(TEXT("A1_wt_banter")), ETutorialStepState::Completed);
 	TestEqual(TEXT("no heat-pack card while nobody is cold"), Machine.GetState(TEXT("A1_heatpack")), ETutorialStepState::Idle);
-	TestTrue(TEXT("the gust has not come yet (16 s after solo)"), Machine.GetState(TEXT("A1_gust")) == ETutorialStepState::Waiting);
-	Pump(Machine, 5.f);
-	TestEqual(TEXT("20 s after solo, nobody at Chills: the gust played"), Machine.GetState(TEXT("A1_gust")), ETutorialStepState::Completed);
+	TestEqual(TEXT("the gust has not come yet (10 s after the crossing)"), Machine.GetState(TEXT("A1_gust")), ETutorialStepState::Waiting);
+	Pump(Machine, 13.f);
+	TestEqual(TEXT("20 s after the crossing, nobody at Chills: the gust played"), Machine.GetState(TEXT("A1_gust")), ETutorialStepState::Completed);
 	Cold = ColdRules::ApplyColdShock(Cold, GustStep->Actions[0].Amount, GustStep->Actions[0].MinLevel); // what the runtime does on show
 	TestTrue(TEXT("the gust leaves everyone at Chills"), Cold >= 40.f);
 	Pump(Machine, 2.f);
-	TestEqual(TEXT("then the heat pack card (starter packs: no remedial line exists)"), Machine.GetActiveCard(), FName(TEXT("A1_heatpack")));
-	TestEqual(TEXT("the resupply line waits for the lesson"), Machine.GetState(TEXT("A1_wt_resupply")), ETutorialStepState::Idle);
-	TestEqual(TEXT("and so does the hut objective"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Idle);
-	TestFalse(TEXT("sprint stays unlocked while cold (no dependency on the heat pack)"), Machine.IsCommandLocked(PlayerCommands::Sprint));
+	TestEqual(TEXT("then the heat pack card"), Machine.GetActiveCard(), FName(TEXT("A1_heatpack")));
+	TestFalse(TEXT("the heat pack card UNLOCKS the inventory and the items"), Machine.IsCommandLocked(PlayerCommands::InventoryOpen) || Machine.IsCommandLocked(PlayerCommands::UseHeatPack));
+	TestTrue(TEXT("sprint still locked until the lesson is done"), Machine.IsCommandLocked(PlayerCommands::Sprint));
+	TestEqual(TEXT("the sprint card waits for the lesson"), Machine.GetState(TEXT("A1_sprint")), ETutorialStepState::Idle);
 	Machine.HandleEvent(TEXT("ItemUsed.HEAT_PACK"));
 	Cold = 7.f;
 	Packs = 2.f;
 	TestEqual(TEXT("using a heat pack completes it"), Machine.GetState(TEXT("A1_heatpack")), ETutorialStepState::Completed);
 	Pump(Machine, 1.5f);
-	TestEqual(FString::Printf(TEXT("nobody else cold: the mate card is skipped (%s)"), TutorialRules::StateName(Machine.GetState(TEXT("A1_heatpack_mate")))),
-		Machine.GetState(TEXT("A1_heatpack_mate")), ETutorialStepState::Skipped);
+	TestEqual(TEXT("nobody else cold: the mate card is skipped"), Machine.GetState(TEXT("A1_heatpack_mate")), ETutorialStepState::Skipped);
 	Pump(Machine, 1.5f);
+	TestEqual(TEXT("'running warms you up': the sprint card"), Machine.GetActiveCard(), FName(TEXT("A1_sprint")));
+	TestFalse(TEXT("sprint UNLOCKED by the sprint card"), Machine.IsCommandLocked(PlayerCommands::Sprint));
+	TestEqual(TEXT("a double click sprints now"), TutorialRules::ResolveLockedCommand(Machine.GetLocks(), PlayerCommands::Sprint), PlayerCommands::Sprint);
+	TestEqual(TEXT("the hut objective waits for the sprint card"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Idle);
+	Machine.HandleCommand(PlayerCommands::Sprint);
+	TestEqual(TEXT("a sprint completes the card"), Machine.GetState(TEXT("A1_sprint")), ETutorialStepState::Completed);
+	Pump(Machine, 2.f);
 	TestEqual(TEXT("WT_A1_RESUPPLY played"), Machine.GetState(TEXT("A1_wt_resupply")), ETutorialStepState::Completed);
 	TestEqual(TEXT("and the hut objective is up"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Active);
 	TestEqual(TEXT("hut loot cards not before the hut"), Machine.GetState(TEXT("A1_loot_open")), ETutorialStepState::Idle);
@@ -525,7 +571,24 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("the closing line played"), Machine.GetState(TEXT("A1_wt_stocked")), ETutorialStepState::Completed);
 	Machine.HandleVolume(TEXT("VOL_A1_BEACON3"), NAME_None, NAME_None);
 	Pump(Machine, 2.f);
-	TestEqual(TEXT("then the rest of A1: guard at beacon 3"), Machine.GetActiveCard(), FName(TEXT("A1_guard")));
+	TestEqual(TEXT("beacon 3: formation lines, no guard card any more (guard moves to the horde beat)"), Machine.GetState(TEXT("A1_wt_regroup")), ETutorialStepState::Completed);
+	TestEqual(TEXT("no card at beacon 3"), Machine.GetActiveCard(), FName());
+	// A3 approach: the stance card is precredited when the player already used two stance keys.
+	Machine.HandleCommand(PlayerCommands::StanceCrouch);
+	Machine.HandleCommand(PlayerCommands::StanceStand);
+	Machine.HandleVolume(TEXT("VOL_A3_APPROACH"), NAME_None, TEXT("A3"));
+	Machine.HandleVolume(TEXT("VOL_A3_WIND"), NAME_None, NAME_None);
+	TestEqual(TEXT("A3 stance card precredited from the history"), Machine.GetState(TEXT("A3_stance")), ETutorialStepState::Completed);
+	Machine.HandleVolume(TEXT("VOL_A3_FENCE"), NAME_None, NAME_None);
+	Pump(Machine, 2.f);
+	TestEqual(TEXT("the low fence card shows (event-completed: never precredited)"), Machine.GetActiveCard(), FName(TEXT("A3_fence")));
+	Machine.HandleEvent(TEXT("CrawlGapRefused"), TEXT("Op1"));
+	TestEqual(TEXT("the 'go prone' feed line"), Machine.GetState(TEXT("A3_fence_refused")), ETutorialStepState::Active);
+	for (const TCHAR* Op : { TEXT("Op1"), TEXT("Op2"), TEXT("Op3") })
+	{
+		Machine.HandleEvent(TEXT("CrawlGapPassed"), Op);
+	}
+	TestEqual(TEXT("three crawl-throughs complete the fence card"), Machine.GetState(TEXT("A3_fence")), ETutorialStepState::Completed);
 	return true;
 }
 

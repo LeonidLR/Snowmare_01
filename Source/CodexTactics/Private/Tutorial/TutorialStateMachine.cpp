@@ -19,6 +19,13 @@ void FTutorialStateMachine::ResetProgress()
 	UsedCommands.Reset();
 	Transitions.Reset();
 	Locks.Reset();
+	History.Reset();
+}
+
+FTutorialCommandUse FTutorialStateMachine::GetCommandUse(FName CommandId) const
+{
+	const FTutorialCommandUse* Use = History.Find(CommandId);
+	return Use ? *Use : FTutorialCommandUse();
 }
 
 int32 FTutorialStateMachine::IndexOf(FName StepId) const
@@ -144,7 +151,9 @@ void FTutorialStateMachine::Fire(int32 Index, bool bForce)
 		}
 	}
 	FRuntime& State = Runtime[Index];
-	State.Progress = 0;
+	// Partial precredit: uses the player already made count towards the card (one Q press before the Q/E card = 1 of 2); hold
+	// time is never seeded (it must be collected while the card is up).
+	State.Progress = TutorialRules::CanPrecredit(Step) ? FMath::Min(TutorialRules::CountHistoryUses(Step, History), Step.Complete.Count) : 0;
 	State.HeldSeconds = 0.f;
 	State.TriggerHits = 0;
 	State.CountedSubjects.Reset();
@@ -165,6 +174,21 @@ void FTutorialStateMachine::Enqueue(int32 Index)
 	{
 		// Due but its condition does not hold (e.g. the gust when someone is already cold): skipped silently, followers go on.
 		Finish(Index, ETutorialStepState::Skipped);
+		return;
+	}
+	if (TutorialRules::IsPrecreditSatisfied(Data.Steps[Index], History))
+	{
+		// The player already did this (panned the camera during the HQ intro, ...): done without the card, followers go on.
+		const FName StepId = Data.Steps[Index].Id;
+		Finish(Index, ETutorialStepState::Completed);
+		for (int32 Back = Transitions.Num() - 1; Back >= 0; --Back)
+		{
+			if (Transitions[Back].StepId == StepId && Transitions[Back].To == ETutorialStepState::Completed)
+			{
+				Transitions[Back].bPrecredited = true;
+				break;
+			}
+		}
 		return;
 	}
 	Queue.AddUnique(Index);
@@ -222,6 +246,7 @@ void FTutorialStateMachine::HandleCommandHold(FName CommandId, float DeltaSecond
 	{
 		return;
 	}
+	History.FindOrAdd(CommandId).HeldSeconds += DeltaSeconds;
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 	{
 		const FTutorialCompletion& Complete = Data.Steps[Index].Complete;
@@ -304,6 +329,7 @@ void FTutorialStateMachine::HandleCommand(FName CommandId)
 	{
 		return;
 	}
+	++History.FindOrAdd(CommandId).Count;
 	// Only steps already running when this input came count it (a follower started by a completion must not take the same input).
 	const TArray<bool> WasRunning = RunningSnapshot();
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
@@ -633,6 +659,7 @@ FTutorialProgress FTutorialStateMachine::ExportProgress() const
 	Progress.CurrentBeat = GetCurrentBeat();
 	Progress.Locks = Locks;
 	Progress.bHasLocks = true;
+	Progress.History = History;
 	for (int32 Index = 0; Index < Runtime.Num(); ++Index)
 	{
 		const FRuntime& State = Runtime[Index];
@@ -652,6 +679,7 @@ void FTutorialStateMachine::ImportProgress(const FTutorialProgress& Progress)
 {
 	ResetProgress();
 	CurrentBeatIndex = Data.FindBeatIndex(Progress.CurrentBeat);
+	History = Progress.History;
 	for (const TPair<FName, ETutorialStepState>& Entry : Progress.Finished)
 	{
 		const int32 Index = IndexOf(Entry.Key);

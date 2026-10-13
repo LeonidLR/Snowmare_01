@@ -282,6 +282,9 @@ public:
 	/** Locked commands refused since the steps were loaded (smokes). */
 	int32 GetLockedRefusalCount() const { return LockedRefusals; }
 
+	/** Hint cards completed from the command history without being shown ("precredit", smokes). */
+	int32 GetPrecreditedCount() const { return PrecreditedCount; }
+
 	/**
 	 * A step condition stat now: "squad_cold_max" / "squad_cold_min" (cold % of the living squad members), "leader_cold",
 	 * "squad_heat_packs" (heat packs carried by the whole squad).
@@ -365,6 +368,7 @@ private:
 	bool bRetryPrompt = false;
 	int32 LessonDownCount = 0;
 	int32 LockedRefusals = 0;
+	int32 PrecreditedCount = 0;
 	/** Operative each shown "focus" step is about (resolved when it shows). */
 	TMap<FName, TWeakObjectPtr<AOperativeCharacter>> FocusOperatives;
 	float SquadBindTimer = 0.f;

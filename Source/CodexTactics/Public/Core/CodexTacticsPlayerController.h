@@ -217,6 +217,10 @@ private:
 	void DialogueSkip();
 	/** F1: opens / closes the Controls reference (UCodexUISubsystem::ToggleControlsScreen); also while the world is paused. */
 	void ControlsKey();
+	/** I: opens / closes the inventory drawer (ACodexTacticsHUD::ToggleInventoryDrawer; the tutorial may lock it). */
+	void InventoryKey();
+	/** O: shows / hides the enemies' vision cones (UVisionConeComponent::SetPlayerEnemyCones; user decision 2026-10-13). */
+	void VisionConesKey();
 	void SelectMember1() { SelectMember(0); }
 	void SelectMember2() { SelectMember(1); }
 	void SelectMember3() { SelectMember(2); }

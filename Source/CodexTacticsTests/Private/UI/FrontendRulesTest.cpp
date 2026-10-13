@@ -108,7 +108,7 @@ bool FFrontendTreeContractTest::RunTest(const FString&)
 		{ UCodexMainMenuScreen::StaticClass(), { TEXT("ContinueButton"), TEXT("NewGameButton"), TEXT("LoadGameButton"), TEXT("OptionsButton"),
 			TEXT("CreditsButton"), TEXT("QuitButton"), TEXT("DescriptionText"), TEXT("BackHintText") } },
 		{ UCodexPauseMenuScreen::StaticClass(), { TEXT("ResumeButton"), TEXT("SaveButton"), TEXT("LoadButton"), TEXT("OptionsButton"),
-			TEXT("ControlsButton"), TEXT("TutorialButton"), TEXT("ResetTutorialButton"), TEXT("QuitToMenuButton"), TEXT("QuitGameButton"), TEXT("DescriptionText"), TEXT("StatusText") } },
+			TEXT("ControlsButton"), TEXT("TutorialButton"), TEXT("ResetTutorialButton"), TEXT("VisionConesButton"), TEXT("QuitToMenuButton"), TEXT("QuitGameButton"), TEXT("DescriptionText"), TEXT("StatusText") } },
 		{ UCodexSaveSlotsScreen::StaticClass(), { TEXT("TitleText"), TEXT("SlotList"), TEXT("EmptyText"), TEXT("SlotNameBox"), TEXT("SaveButton"),
 			TEXT("DeleteButton"), TEXT("BackButton"), TEXT("StatusText") } },
 		{ UCodexConfirmDialog::StaticClass(), { TEXT("BackgroundBlur"), TEXT("TitleText"), TEXT("MessageText"), TEXT("YesButton"), TEXT("NoButton"), TEXT("OkButton") } },

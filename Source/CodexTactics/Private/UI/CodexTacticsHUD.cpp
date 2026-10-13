@@ -61,6 +61,8 @@
 #include "UI/Frontend/CodexUITags.h"
 #include "UI/MissionFailedWidget.h"
 #include "UI/TutorialOverlayWidget.h"
+#include "Tutorial/TutorialSubsystem.h"
+#include "Core/PlayerCommands.h"
 #include "HAL/IConsoleManager.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "UI/GameMessageSubsystem.h"
@@ -1282,6 +1284,16 @@ void ACodexTacticsHUD::ToggleInventoryDrawer()
 	{
 		return;
 	}
+	// Tutorial lock (Demo 01 user decision 2026-10-13: the inventory stays closed until the heat pack lesson); opening reports
+	// "Inventory.Open" (I / the action bar button), closing reports nothing.
+	if (!InventoryDrawer->IsOpen())
+	{
+		if (UTutorialSubsystem::CheckCommandLocked(this, PlayerCommands::InventoryOpen))
+		{
+			return;
+		}
+		PlayerCommands::Report(this, PlayerCommands::InventoryOpen);
+	}
 	InventoryDrawer->Toggle();
 	if (InventoryDrawer->IsOpen() && ActionBar && ActionBar->IsWeaponSelectorOpen())
 	{
@@ -1336,6 +1348,10 @@ ETransferRequestOutcome ACodexTacticsHUD::HandleTransferRequest(const FTransferR
 	if (PC && PC->BlockRealTimeOrder())
 	{
 		return ETransferRequestOutcome::Failed; // the optional real-time order lock (hint posted)
+	}
+	if (UTutorialSubsystem::CheckCommandLocked(this, PlayerCommands::UseItem))
+	{
+		return ETransferRequestOutcome::Failed; // tutorial: items locked until the heat pack lesson (Demo 01, 2026-10-13)
 	}
 	auto Post = [this, Operative](const TCHAR* Text)
 	{
