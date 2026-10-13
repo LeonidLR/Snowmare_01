@@ -1813,8 +1813,8 @@ void AEnemyCharacter::UpdateVisionCone(float DeltaTime)
 	}
 	const bool bAlive = !bIsDying && HealthComponent && HealthComponent->IsAlive();
 	const bool bOnPatrol = IsOnPatrol();
-	const bool bVisible = VisionConeRules::ResolveVisible(UVisionConeComponent::GetGlobalMode(), bShowVisionCone, bAlive)
-		&& (bOnPatrol || bShowVisionConeWhenEngaged);
+	const bool bVisible = VisionConeRules::ResolveVisible(UVisionConeComponent::GetGlobalMode(), bShowVisionCone, bAlive,
+		UVisionConeComponent::IsPlayerEnemyConesOn()) && (bOnPatrol || bShowVisionConeWhenEngaged);
 	if (!bVisible && !VisionCone->IsConeShown())
 	{
 		return;

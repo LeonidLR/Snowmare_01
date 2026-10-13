@@ -40,7 +40,7 @@ namespace ControlsTest
 		PlayerCommands::EndTurn, PlayerCommands::NextUnit, PlayerCommands::TurnBasedAttack, PlayerCommands::TurnBasedOrder,
 		PlayerCommands::QuickSave, PlayerCommands::QuickLoad, PlayerCommands::ControlsScreen, PlayerCommands::PauseMenu,
 		PlayerCommands::VehicleBoard, PlayerCommands::VehicleDisembark, PlayerCommands::VehicleDrive, PlayerCommands::VehicleTurretFire,
-		PlayerCommands::VehicleRepair,
+		PlayerCommands::VehicleRepair, PlayerCommands::InventoryOpen, PlayerCommands::ToggleVisionCones,
 		};
 	}
 }
@@ -128,7 +128,7 @@ bool FControlsScreenSetupTest::RunTest(const FString&)
 	TestTrue(TEXT("F1 works from the pause menu"), UCodexPauseMenuScreen::StaticClass()->GetDefaultObject<UCodexActivatableScreen>()->bHandlesControlsHotkey);
 	UWidgetTree* PauseTree = NewObject<UWidgetTree>(GetTransientPackage());
 	Cast<ICodexDefaultTree>(UCodexPauseMenuScreen::StaticClass()->GetDefaultObject())->BuildDefaultTree(*PauseTree);
-	for (const TCHAR* Name : { TEXT("ControlsButton"), TEXT("TutorialButton"), TEXT("ResetTutorialButton") })
+	for (const TCHAR* Name : { TEXT("ControlsButton"), TEXT("TutorialButton"), TEXT("ResetTutorialButton"), TEXT("VisionConesButton") })
 	{
 		TestNotNull(*FString::Printf(TEXT("Pause tree has %s"), Name), PauseTree->FindWidget(FName(Name)));
 	}

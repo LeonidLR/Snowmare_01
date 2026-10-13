@@ -10,6 +10,8 @@ namespace VisionConeConsole
 {
 	static TAutoConsoleVariable<int32> CVarVisionCones(TEXT("Codex.Debug.VisionCones"), -1,
 		TEXT("Vision cones on the ground (operatives and enemies): 0 all off, 1 all on, -1 each character's bShowVisionCone (default)."));
+	static TAutoConsoleVariable<int32> CVarPlayerEnemyCones(TEXT("Codex.VisionCones.Enemies"), 0,
+		TEXT("The player's enemy vision-cone toggle (O / pause menu): 1 every living enemy's cone is drawn, 0 each enemy's own setting (default)."));
 }
 
 UVisionConeComponent::UVisionConeComponent(const FObjectInitializer& ObjectInitializer)
@@ -30,6 +32,16 @@ UVisionConeComponent::UVisionConeComponent(const FObjectInitializer& ObjectIniti
 int32 UVisionConeComponent::GetGlobalMode()
 {
 	return VisionConeConsole::CVarVisionCones.GetValueOnGameThread();
+}
+
+bool UVisionConeComponent::IsPlayerEnemyConesOn()
+{
+	return VisionConeConsole::CVarPlayerEnemyCones.GetValueOnGameThread() != 0;
+}
+
+void UVisionConeComponent::SetPlayerEnemyCones(bool bOn)
+{
+	VisionConeConsole::CVarPlayerEnemyCones->Set(bOn ? 1 : 0, ECVF_SetByCode);
 }
 
 int32 UVisionConeComponent::GetFillVertexCount() const

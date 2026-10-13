@@ -122,4 +122,21 @@ namespace TutorialRules
 
 	/** "Tutorial.Locked.<CommandId>": the specific event a locked command raises next to "Tutorial.Locked". */
 	CODEXTACTICS_API FName MakeLockedEventName(FName CommandId);
+
+	// --- Precredit (user decision 2026-10-13: a lesson already done before its card appears counts as done) ---------------
+
+	/**
+	 * A step that may be precredited: a once-only hint card with "precredit" on whose completion is by commands only (no event /
+	 * volume). Remedial / repeatable cards ("once": false) never are.
+	 */
+	CODEXTACTICS_API bool CanPrecredit(const FTutorialStep& Step);
+
+	/** Uses the history already holds for the step's commands (partial credit seeds the card's progress when it fires). */
+	CODEXTACTICS_API int32 CountHistoryUses(const FTutorialStep& Step, const TMap<FName, FTutorialCommandUse>& History);
+
+	/**
+	 * The player's command history already satisfies the step's completion: the uses of every command its "complete.commands"
+	 * patterns match sum to at least Count, and their hold time to at least "hold_s". False when CanPrecredit is false.
+	 */
+	CODEXTACTICS_API bool IsPrecreditSatisfied(const FTutorialStep& Step, const TMap<FName, FTutorialCommandUse>& History);
 }

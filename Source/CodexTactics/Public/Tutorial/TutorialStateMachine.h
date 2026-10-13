@@ -16,6 +16,8 @@ struct CODEXTACTICS_API FTutorialTransition
 	ETutorialStepState To = ETutorialStepState::Idle;
 	/** Finished while queued: never shown. */
 	bool bSilent = false;
+	/** Completed from the player's command history before it was shown ("precredit"): the lesson was already done. */
+	bool bPrecredited = false;
 	/** Seconds the step was shown before this change. */
 	float ActiveSeconds = 0.f;
 };
@@ -94,6 +96,12 @@ public:
 	bool IsCommandLocked(FName CommandId) const;
 	/** The lock patterns in force, in the order they were added. */
 	const TArray<FString>& GetLocks() const { return Locks; }
+	/**
+	 * The player's command history since the steps were loaded (every HandleCommand / HandleCommandHold, whether or not a step
+	 * counted it): "precredit" completes a due command card the history already satisfies (TutorialRules::IsPrecreditSatisfied).
+	 */
+	const TMap<FName, FTutorialCommandUse>& GetCommandHistory() const { return History; }
+	FTutorialCommandUse GetCommandUse(FName CommandId) const;
 
 	// --- Save -------------------------------------------------------------------------------------------------------
 	FTutorialProgress ExportProgress() const;
@@ -148,4 +156,5 @@ private:
 	TSet<FName> UsedCommands;
 	TArray<FTutorialTransition> Transitions;
 	TArray<FString> Locks;
+	TMap<FName, FTutorialCommandUse> History;
 };

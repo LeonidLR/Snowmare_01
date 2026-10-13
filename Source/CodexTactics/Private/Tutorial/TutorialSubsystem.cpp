@@ -205,6 +205,7 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 	Machine.StatProvider = [this](FName Stat) { return GetConditionStat(Stat); };
 	Machine.Load(Data);
 	LockedRefusals = 0;
+	PrecreditedCount = 0;
 	FocusOperatives.Reset();
 	SpeechStep = NAME_None;
 	SpeechLines.Reset();
@@ -551,8 +552,21 @@ void UTutorialSubsystem::ProcessTransitions()
 			else if (TutorialRules::IsFinished(Transition.To))
 			{
 				const TCHAR* Event = Transition.To == ETutorialStepState::Skipped ? TEXT("skipped")
-					: (Transition.To == ETutorialStepState::TimedOut ? TEXT("timed_out") : (Transition.bSilent ? TEXT("completed_silently") : TEXT("completed")));
+					: (Transition.To == ETutorialStepState::TimedOut ? TEXT("timed_out")
+					: (Transition.bPrecredited ? TEXT("precredited") : (Transition.bSilent ? TEXT("completed_silently") : TEXT("completed"))));
 				WriteTelemetry(Event, Step->Id, Step->Beat, Transition.ActiveSeconds);
+				if (Transition.bPrecredited)
+				{
+					// The lesson was already done before its card was due (user decision 2026-10-13): one unobtrusive tick in the feed.
+					++PrecreditedCount;
+					const FString Title = Step->TextId.IsNone() ? Step->Id.ToString() : FNarrativeManifest::Get().GetTutorialText(Step->TextId.ToString()).Title;
+					UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s precredited from the command history (%s)"), *Step->Id.ToString(), *Title);
+					if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+					{
+						Messages->PostMessage(LOCTEXT("TrainingSpeaker", "TRAINING"), FText::Format(LOCTEXT("Precredited", "✓ {0} - already done."),
+							FText::FromString(Title.IsEmpty() ? Step->Id.ToString() : Title)));
+					}
+				}
 				if (Transition.From == ETutorialStepState::Active && Transition.To == ETutorialStepState::Completed)
 				{
 					if (Step->Kind == ETutorialStepKind::HintCard)

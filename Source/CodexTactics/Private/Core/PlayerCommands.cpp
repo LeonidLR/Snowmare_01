@@ -85,6 +85,8 @@ namespace PlayerCommands
 	const FName QuickLoad(TEXT("System.QuickLoad"));
 	const FName ControlsScreen(TEXT("System.Controls"));
 	const FName PauseMenu(TEXT("System.PauseMenu"));
+	const FName InventoryOpen(TEXT("Inventory.Open"));
+	const FName ToggleVisionCones(TEXT("View.VisionCones"));
 
 	const TArray<const TCHAR*>& GetSections()
 	{
@@ -164,6 +166,7 @@ namespace PlayerCommands
 			{ LightBarrel, TEXT("Click > Light"), TEXT("Items & traps"), TEXT("Light a barrel with a match") },
 			{ UseObject, TEXT("Click > Use"), TEXT("Items & traps"), TEXT("Use an object") },
 			{ UseHeatPack, TEXT("U"), TEXT("Items & traps"), TEXT("Use a heat pack") },
+			{ InventoryOpen, TEXT("I"), TEXT("Items & traps"), TEXT("Open / close the inventory drawer (drag items onto a mate)") },
 			{ UseItem, TEXT("H/J/K/L"), TEXT("Items & traps"), TEXT("Medkit / food") },
 			{ LootCrate, TEXT("Click crate"), TEXT("Items & traps"), TEXT("Open a supply crate") },
 			{ LootTake, TEXT("Take"), TEXT("Items & traps"), TEXT("Take supplies") },
@@ -179,6 +182,7 @@ namespace PlayerCommands
 			{ DeployOther, TEXT("Inventory"), TEXT("Items & traps"), TEXT("Set up a campfire / stove") },
 			{ TargetedShot, TEXT("Ctrl+Click"), TEXT("Combat"), TEXT("Targeted shot") },
 			{ PriorityTarget, TEXT("Click enemy"), TEXT("Combat"), TEXT("Priority target") },
+			{ ToggleVisionCones, TEXT("O"), TEXT("Combat"), TEXT("Show / hide the enemies' vision cones on the ground") },
 			{ GrenadeAim, TEXT("G"), TEXT("Combat"), TEXT("Grenade") },
 			{ GrenadeThrow, TEXT("LMB"), TEXT("Combat"), TEXT("Throw the grenade") },
 			{ FlareAim, TEXT("Shift+G"), TEXT("Combat"), TEXT("Signal flare") },
@@ -343,6 +347,12 @@ namespace GameplayEvents
 	const FName VehicleDamaged(TEXT("VehicleDamaged"));
 	const FName VehicleDisabled(TEXT("VehicleDisabled"));
 	const FName VehicleRepaired(TEXT("VehicleRepaired"));
+	const FName BridgeEntered(TEXT("BridgeEntered"));
+	const FName BridgeRefused(TEXT("BridgeRefused"));
+	const FName BridgeCrossed(TEXT("BridgeCrossed"));
+	const FName CrawlGapRefused(TEXT("CrawlGapRefused"));
+	const FName CrawlGapPassed(TEXT("CrawlGapPassed"));
+	const FName VisionConesToggled(TEXT("VisionConesToggled"));
 
 	void Raise(const UObject* WorldContext, FName EventName, AActor* Subject)
 	{

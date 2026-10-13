@@ -250,6 +250,10 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName QuickLoad;
 	/** F1: the Controls reference screen (a UI hotkey: listed here for the screen, never reported). */
 	extern CODEXTACTICS_API const FName ControlsScreen;
+	/** "Inventory.Open": the inventory drawer opened (I / action bar); a tutorial lock target (Demo 01: locked until the heat pack lesson). */
+	extern CODEXTACTICS_API const FName InventoryOpen;
+	/** "View.VisionCones": the player toggled the enemy vision cones (O / pause menu), Commandos style. */
+	extern CODEXTACTICS_API const FName ToggleVisionCones;
 	/** Esc: the pause menu (listed here for the screen, never reported). */
 	extern CODEXTACTICS_API const FName PauseMenu;
 
@@ -375,6 +379,18 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName VehicleDisabled;
 	/** A disabled hull was repaired (Subject = the repairer, Target = the vehicle). */
 	extern CODEXTACTICS_API const FName VehicleRepaired;
+	/** An operative stepped onto a one-at-a-time bridge (ABridgeCrossingVolume; Subject = the operative). */
+	extern CODEXTACTICS_API const FName BridgeEntered;
+	/** The bridge was full: an operative was stopped at its edge ("The bridge won't hold two!"; Subject = the operative). */
+	extern CODEXTACTICS_API const FName BridgeRefused;
+	/** An operative left the bridge on the far side (Subject = the operative). */
+	extern CODEXTACTICS_API const FName BridgeCrossed;
+	/** A standing / crouched operative was stopped at a low fence ("Too low - go prone"; Subject = the operative). */
+	extern CODEXTACTICS_API const FName CrawlGapRefused;
+	/** A prone operative crawled under a low fence and came out on the far side (Subject = the operative). */
+	extern CODEXTACTICS_API const FName CrawlGapPassed;
+	/** The player toggled the enemy vision cones ("VisionConesToggled.On" / ".Off" are raised too). */
+	extern CODEXTACTICS_API const FName VisionConesToggled;
 
 	/** Broadcasts UCodexEventBus::OnGameplayEvent (no-op without a game instance) and logs it. */
 	CODEXTACTICS_API void Raise(const UObject* WorldContext, FName EventName, AActor* Subject = nullptr);

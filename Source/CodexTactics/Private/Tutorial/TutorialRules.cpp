@@ -316,7 +316,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		const FString Where = TEXT("step ") + Id;
 		WarnUnknownKeys(Object, { TEXT("id"), TEXT("beat"), TEXT("kind"), TEXT("text_id"), TEXT("keys"), TEXT("trigger"), TEXT("complete"),
 			TEXT("once"), TEXT("skippable"), TEXT("blocking"), TEXT("lines"), TEXT("condition"), TEXT("lock"), TEXT("unlock"), TEXT("action"),
-			TEXT("actions"), TEXT("focus") }, Where, OutWarnings);
+			TEXT("actions"), TEXT("focus"), TEXT("precredit") }, Where, OutWarnings);
 		FTutorialStep Step;
 		Step.Id = FName(*Id);
 		Step.Beat = FName(*JsonString(Object, TEXT("beat")));
@@ -328,6 +328,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		Step.TextId = FName(*JsonString(Object, TEXT("text_id")));
 		Step.Keys = JsonStrings(Object, TEXT("keys"));
 		Step.bOnce = JsonBool(Object, TEXT("once"), true);
+		Step.bPrecredit = JsonBool(Object, TEXT("precredit"), true);
 		Step.bSkippable = JsonBool(Object, TEXT("skippable"), true);
 		if (JsonBool(Object, TEXT("blocking"), false))
 		{
@@ -606,6 +607,18 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 		Locks.Add(MakeShared<FJsonValueString>(Lock));
 	}
 	Object->SetArrayField(TEXT("locks"), Locks);
+	const TSharedRef<FJsonObject> History = MakeShared<FJsonObject>();
+	TArray<FName> Commands;
+	Progress.History.GetKeys(Commands);
+	Commands.Sort(FNameLexicalLess());
+	for (const FName Command : Commands)
+	{
+		const TSharedRef<FJsonObject> Use = MakeShared<FJsonObject>();
+		Use->SetNumberField(TEXT("count"), Progress.History[Command].Count);
+		Use->SetNumberField(TEXT("held_s"), Progress.History[Command].HeldSeconds);
+		History->SetObjectField(Command.ToString(), Use);
+	}
+	Object->SetObjectField(TEXT("history"), History);
 	return Object;
 }
 
@@ -656,7 +669,57 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 			}
 		}
 	}
+	const TSharedPtr<FJsonObject>* History = nullptr;
+	if (Object.TryGetObjectField(TEXT("history"), History))
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*History)->Values)
+		{
+			const TSharedPtr<FJsonObject> Use = Entry.Value.IsValid() ? Entry.Value->AsObject() : nullptr;
+			if (Use.IsValid() && !Entry.Key.IsEmpty())
+			{
+				FTutorialCommandUse& Stored = OutProgress.History.Add(FName(*Entry.Key));
+				Stored.Count = FMath::Max(0, static_cast<int32>(TutorialRulesLocal::JsonNumber(Use, TEXT("count"), 0.0)));
+				Stored.HeldSeconds = FMath::Max(0.f, static_cast<float>(TutorialRulesLocal::JsonNumber(Use, TEXT("held_s"), 0.0)));
+			}
+		}
+	}
 	return true;
+}
+
+bool TutorialRules::CanPrecredit(const FTutorialStep& Step)
+{
+	// Remedial / repeatable cards ("once": false, failure_retry) remind: their history never counts.
+	return Step.bPrecredit && Step.bOnce && Step.Kind == ETutorialStepKind::HintCard && Step.Complete.Commands.Num() > 0 && Step.Complete.Event.IsEmpty()
+		&& Step.Complete.Volume.IsNone();
+}
+
+int32 TutorialRules::CountHistoryUses(const FTutorialStep& Step, const TMap<FName, FTutorialCommandUse>& History)
+{
+	int32 Uses = 0;
+	for (const TPair<FName, FTutorialCommandUse>& Entry : History)
+	{
+		Uses += CountsCommand(Step, Entry.Key) ? Entry.Value.Count : 0;
+	}
+	return Uses;
+}
+
+bool TutorialRules::IsPrecreditSatisfied(const FTutorialStep& Step, const TMap<FName, FTutorialCommandUse>& History)
+{
+	if (!CanPrecredit(Step))
+	{
+		return false;
+	}
+	int32 Uses = 0;
+	float Held = 0.f;
+	for (const TPair<FName, FTutorialCommandUse>& Entry : History)
+	{
+		if (CountsCommand(Step, Entry.Key))
+		{
+			Uses += Entry.Value.Count;
+			Held += Entry.Value.HeldSeconds;
+		}
+	}
+	return IsProgressMet(Uses, Step.Complete.Count, Held, Step.Complete.HoldSeconds);
 }
 
 FString TutorialRules::BuildTelemetryLine(const FTutorialTelemetryEntry& Entry)

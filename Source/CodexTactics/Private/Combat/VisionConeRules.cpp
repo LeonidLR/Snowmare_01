@@ -111,13 +111,13 @@ bool VisionConeRules::IsInsideCone(const FVector& Origin, const FVector& Forward
 	return FVector::DotProduct(Facing, To / Distance) >= FMath::Cos(FMath::DegreesToRadians(ClampHalfAngle(HalfAngleDeg))) - KINDA_SMALL_NUMBER;
 }
 
-bool VisionConeRules::ResolveVisible(int32 GlobalMode, bool bActorSetting, bool bAlive)
+bool VisionConeRules::ResolveVisible(int32 GlobalMode, bool bActorSetting, bool bAlive, bool bPlayerToggle)
 {
 	if (!bAlive || GlobalMode == 0)
 	{
 		return false;
 	}
-	return GlobalMode == 1 || bActorSetting;
+	return GlobalMode == 1 || bActorSetting || bPlayerToggle;
 }
 
 EVisionConeState VisionConeRules::GetEnemyState(bool bOnPatrol, bool bSearching, float Suspicion)

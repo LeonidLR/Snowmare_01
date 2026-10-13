@@ -91,6 +91,14 @@ public:
 	/** Console Codex.Debug.VisionCones: 0 all off, 1 all on, -1 (default) each actor's bShowVisionCone. */
 	static int32 GetGlobalMode();
 
+	/**
+	 * The player's enemy-cone toggle (user decision 2026-10-13, Commandos style): O / the pause menu entry / console
+	 * Codex.VisionCones.Enemies. On, every living enemy's cone is drawn (operatives keep their own setting); the debug CVar
+	 * 0 still hides everything. Not saved between sessions (a session setting).
+	 */
+	static bool IsPlayerEnemyConesOn();
+	static void SetPlayerEnemyCones(bool bOn);
+
 private:
 	void Rebuild(float RangeCm, float HalfAngleDeg);
 	void ApplyColor();
