@@ -87,6 +87,8 @@ namespace PlayerCommands
 	const FName PauseMenu(TEXT("System.PauseMenu"));
 	const FName InventoryOpen(TEXT("Inventory.Open"));
 	const FName ToggleVisionCones(TEXT("View.VisionCones"));
+	const FName DialogueNext(TEXT("Dialogue.Next"));
+	const FName DialogueSkip(TEXT("Dialogue.Skip"));
 
 	const TArray<const TCHAR*>& GetSections()
 	{
@@ -205,6 +207,8 @@ namespace PlayerCommands
 			{ QuickLoad, TEXT("F9"), TEXT("Saving & menus"), TEXT("Quick load") },
 			{ ControlsScreen, TEXT("F1"), TEXT("Saving & menus"), TEXT("This controls reference (F1 or Esc closes it)") },
 			{ PauseMenu, TEXT("Esc"), TEXT("Saving & menus"), TEXT("Pause menu: save, load, options, tutorial") },
+			{ DialogueNext, TEXT("Enter"), TEXT("Saving & menus"), TEXT("Dialogue / radio: next line") },
+			{ DialogueSkip, TEXT("Hold Enter"), TEXT("Saving & menus"), TEXT("Dialogue / radio: skip the whole conversation (or click SKIP on the radio strip)") },
 		};
 		return Registry;
 	}

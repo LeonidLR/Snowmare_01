@@ -131,6 +131,12 @@ struct CODEXTACTICS_API FColdEnvironment
 	bool bPreparation = false;
 	/** Zone multiplier: 0 closed bunker, 0.5 shelter, 1 open, 2.5 blizzard. */
 	float ZoneMultiplier = 1.f;
+	/**
+	 * Level-wide cold rate (level JSON "cold_rate_mult", default 1; user request 2026-10-13: 0.8 on Demo 01 Frozen Lake):
+	 * multiplies the open-air accumulation on top of the zone / wave multiplier (exploration and fights alike). Warming,
+	 * the sprint warm-up and scripted cold shocks (tutorial gust) are not scaled.
+	 */
+	float LevelMultiplier = 1.f;
 	bool bElevated = false;
 	/** Actually running in a sprint (not just the sprint order while standing). */
 	bool bSprinting = false;

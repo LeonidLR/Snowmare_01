@@ -24,6 +24,16 @@ class CODEXTACTICS_API UTutorialOverlayWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	/**
+	 * Default layout (user request 2026-10-13: the radio strip and the hint card must never overlap, they now show together
+	 * in A0): the card lives in a bottom-left COLUMN (CardLeftMargin + at most CardMaxWidth wide); the radio strip is centred
+	 * at the bottom with StripSideReserve kept free on BOTH sides, so it stays centred and can never reach the card column on
+	 * any aspect ratio (a narrow screen only wraps the line more).
+	 */
+	static constexpr float CardLeftMargin = 24.f;
+	static constexpr float CardMaxWidth = 460.f;
+	static constexpr float StripSideReserve = CardLeftMargin + CardMaxWidth + 24.f;
+
 	/** Pulls the views from UTutorialSubsystem (also called by smokes). */
 	void Refresh();
 
@@ -35,6 +45,11 @@ public:
 	FText GetShownSpeaker() const;
 	int32 GetShownObjectiveCount() const;
 	bool IsRetryShown() const;
+	/** The radio strip's key hint ("[Enter] next  .  [Hold Enter] skip") and whether its SKIP button is shown (smokes). */
+	FText GetShownRadioHint() const;
+	bool IsRadioSkipShown() const;
+	/** Last laid-out rectangles of the card and the strip; false before both were laid out (headless runs). */
+	bool GetCardAndStripRects(FSlateRect& OutCard, FSlateRect& OutStrip) const;
 	/** Edge arrows drawn on the last refresh (smokes). */
 	int32 GetEdgePointerCount() const { return EdgePointers.Num(); }
 
@@ -77,6 +92,12 @@ protected:
 	TObjectPtr<UTextBlock> TutorialRadioSpeaker;
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial", meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TutorialRadioLine;
+	/** "2 / 5   [Enter] next  .  [Hold Enter] skip" (dialogue skip, user request 2026-10-13). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial", meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> TutorialRadioHint;
+	/** Skips the whole radio / walk-and-talk conversation (UTutorialSubsystem::SkipSpeech). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial", meta = (BindWidgetOptional))
+	TObjectPtr<UButton> TutorialRadioSkipButton;
 
 	// --- Lesson retry prompt ---
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial", meta = (BindWidgetOptional))
@@ -99,6 +120,8 @@ private:
 
 	UFUNCTION()
 	void HandleSkipClicked();
+	UFUNCTION()
+	void HandleRadioSkipClicked();
 	UFUNCTION()
 	void HandleRetryClicked();
 	UFUNCTION()

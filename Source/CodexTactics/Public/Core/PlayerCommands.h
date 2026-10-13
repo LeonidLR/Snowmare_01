@@ -256,6 +256,13 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName ToggleVisionCones;
 	/** Esc: the pause menu (listed here for the screen, never reported). */
 	extern CODEXTACTICS_API const FName PauseMenu;
+	/**
+	 * Enter (tap): the next line of the shown conversation - the story dialogue window or a tutorial radio / walk-and-talk
+	 * (user request 2026-10-13). Never locked by the tutorial.
+	 */
+	extern CODEXTACTICS_API const FName DialogueNext;
+	/** Enter held ~0.6 s / the SKIP button on the radio strip: the whole conversation ends as if it had played out. */
+	extern CODEXTACTICS_API const FName DialogueSkip;
 
 	/** Every command with its default key label (registry order = Controls screen order). */
 	CODEXTACTICS_API const TArray<FPlayerCommandInfo>& GetRegistry();

@@ -241,6 +241,14 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	ECombatStartMode CombatStart = ECombatStartMode::Auto;
 
+	/**
+	 * "cold_rate_mult": level-wide multiplier of the cold accumulation (FColdEnvironment::LevelMultiplier), multiplied with the
+	 * wave's "cold_drain_mult" / a camera zone's multiplier, never instead of them. 1 = unchanged (default); clamped to >= 0.
+	 * UE-only (user request 2026-10-13: 0.8 on L_Demo01_A_FrozenLake).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	float ColdRateMult = 1.f;
+
 	/** "patrol_search_seconds": how long patrols hunt after a trap; <= 0 = enemy_perception.json (60 s). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	float PatrolSearchSeconds = -1.f;

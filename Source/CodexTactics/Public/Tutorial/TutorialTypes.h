@@ -99,6 +99,12 @@ struct CODEXTACTICS_API FTutorialTrigger
 	/** Event name pattern (exact, "Prefix.*" or "*"). */
 	FString Event;
 	FName Step;
+	/**
+	 * "after_step" with "step": [ ... ] (an array): EVERY listed step must have finished (completed, skipped or timed out);
+	 * the last of them to finish fires the trigger (e.g. the walk card waits for both the HQ radio and the camera chain).
+	 * Always holds Step first; a single "step" string leaves it with that one id.
+	 */
+	TArray<FName> AfterSteps;
 	/** Command id pattern for first_use. */
 	FString Command;
 	int32 Count = 1;

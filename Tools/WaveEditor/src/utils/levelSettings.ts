@@ -176,8 +176,38 @@ export function isGateFieldInvalid(key: GateField['key'], values: GateValues, wa
   return !Number.isInteger(value) || value < 0 || value > Math.max(0, waveCount);
 }
 
-/** All level-settings errors of a level (gate + demo); used to block the save. */
+// ---- Level cold ("cold_rate_mult", FLevelCombatConfig::ColdRateMult) ----
+
+export const COLD_RATE_DEFAULT = 1.0;
+export const COLD_RATE_MIN = 0;
+export const COLD_RATE_MAX = 3;
+export const COLD_RATE_HINT =
+  'cold_rate_mult: level-wide multiplier of the cold build-up in exploration and fights (UE ColdRules). Multiplied with each wave\'s ' +
+  'cold_drain_mult and camera zones, never instead of them. 1 = unchanged (absent key); 0.8 = 20 % less cold (Demo 01 Frozen Lake). ' +
+  'Warming, the sprint warm-up and scripted cold shocks (tutorial gust) are not scaled.';
+
+/** Effective level cold multiplier (absent / invalid key = 1). */
+export function getColdRateMult(level: LevelLike): number {
+  return typeof level.cold_rate_mult === 'number' ? level.cold_rate_mult : COLD_RATE_DEFAULT;
+}
+
+/** Sets "cold_rate_mult"; undefined / NaN / exactly 1 removes the key (the game default). The rest of the level is kept. */
+export function setColdRateMult(level: LevelLike, value: number | undefined): LevelLike {
+  const next: LevelLike = { ...level };
+  if (value === undefined || Number.isNaN(value) || value === COLD_RATE_DEFAULT) delete next.cold_rate_mult;
+  else next.cold_rate_mult = value;
+  return next;
+}
+
+export function validateColdRate(value: number): string[] {
+  if (!Number.isFinite(value) || value < COLD_RATE_MIN || value > COLD_RATE_MAX) {
+    return [`Холод уровня: число ${COLD_RATE_MIN}..${COLD_RATE_MAX} (1 = как обычно)`];
+  }
+  return [];
+}
+
+/** All level-settings errors of a level (gate + demo + cold); used to block the save. */
 export function validateLevelSettings(level: LevelLike): string[] {
   const waves = Array.isArray(level.waves) ? level.waves.length : 0;
-  return [...validateGate(getGate(level), waves), ...validateDemo(getDemo(level))];
+  return [...validateGate(getGate(level), waves), ...validateDemo(getDemo(level)), ...validateColdRate(getColdRateMult(level))];
 }

@@ -35,4 +35,22 @@ bool FDialogueButtonTextTest::RunTest(const FString&)
 	return true;
 }
 
+DIALOGUE_TEST(FDialogueKeyTest, "SkipKey")
+bool FDialogueKeyTest::RunTest(const FString&)
+{
+	// User request 2026-10-13: Enter tap = next line (on the release), hold 0.6 s = skip the whole conversation (once, while held).
+	using namespace DialogueRules;
+	TestEqual(TEXT("threshold"), SkipHoldSeconds, 0.6f);
+	TestTrue(TEXT("still held, short: nothing yet"), ResolveDialogueKey(0.2f, false, false) == EDialogueKeyAction::None);
+	TestTrue(TEXT("tap released: next line"), ResolveDialogueKey(0.2f, true, false) == EDialogueKeyAction::NextLine);
+	TestTrue(TEXT("held to the threshold: skip all"), ResolveDialogueKey(0.6f, false, false) == EDialogueKeyAction::SkipAll);
+	TestTrue(TEXT("released after a long hold that has not fired yet: skip all"), ResolveDialogueKey(1.f, true, false) == EDialogueKeyAction::SkipAll);
+	TestTrue(TEXT("the release after the skip fired: nothing (no extra next line)"), ResolveDialogueKey(1.f, true, true) == EDialogueKeyAction::None);
+	TestTrue(TEXT("held on after the skip: nothing"), ResolveDialogueKey(2.f, false, true) == EDialogueKeyAction::None);
+	TestTrue(TEXT("custom threshold"), ResolveDialogueKey(0.3f, false, false, 0.25f) == EDialogueKeyAction::SkipAll);
+	const FString Hint = GetSkipHintText(TEXT("Enter"), TEXT("Hold Enter")).ToString();
+	TestTrue(FString::Printf(TEXT("hint names both keys: '%s'"), *Hint), Hint.Contains(TEXT("[Enter] next")) && Hint.Contains(TEXT("[Hold Enter] skip")));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

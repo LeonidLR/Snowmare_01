@@ -57,4 +57,22 @@ FText DialogueRules::GetProgressText(int32 LineIndex, int32 LineCount)
 	return FText::FromString(FString::Printf(TEXT("[%d / %d]"), LineIndex + 1, LineCount));
 }
 
+EDialogueKeyAction DialogueRules::ResolveDialogueKey(float HeldSeconds, bool bReleased, bool bSkipFired, float HoldThreshold)
+{
+	if (bSkipFired)
+	{
+		return EDialogueKeyAction::None;
+	}
+	if (HeldSeconds >= HoldThreshold)
+	{
+		return EDialogueKeyAction::SkipAll;
+	}
+	return bReleased ? EDialogueKeyAction::NextLine : EDialogueKeyAction::None;
+}
+
+FText DialogueRules::GetSkipHintText(const FString& NextKeyLabel, const FString& SkipKeyLabel)
+{
+	return FText::Format(LOCTEXT("SkipHint", "[{0}] next  ·  [{1}] skip"), FText::FromString(NextKeyLabel), FText::FromString(SkipKeyLabel));
+}
+
 #undef LOCTEXT_NAMESPACE

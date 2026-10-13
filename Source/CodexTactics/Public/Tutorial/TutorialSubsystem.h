@@ -104,6 +104,13 @@ struct CODEXTACTICS_API FTutorialSubtitleView
 	/** Seconds left on this line. */
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial")
 	float SecondsLeft = 0.f;
+
+	/** 0-based index of the shown line and the step's line count ("2 / 5"). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial")
+	int32 LineIndex = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial")
+	int32 LineCount = 0;
 };
 
 /** The "Retry from checkpoint" prompt after a lesson down. */
@@ -199,6 +206,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tutorial")
 	bool SkipStep(FName StepId);
 
+	// --- Dialogue skip (user request 2026-10-13: radio / walk-and-talk, every level) -----------------------------------
+
+	/** A radio / walk-and-talk line is on screen now (the Enter key and the strip's SKIP act on it). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tutorial")
+	bool IsSpeechActive() const;
+
+	/**
+	 * Enter (tap): the next line at once; after the last one the step ends exactly as if it had played out. False when no
+	 * speech is shown. The lines are already in the log (all of them are logged when the speech starts).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tutorial")
+	bool AdvanceSpeechLine();
+
+	/**
+	 * Enter (hold) / the strip's SKIP: the whole conversation ends now, exactly as if it had played out (COMPLETED, not
+	 * skipped: its after_step followers fire and its lock / unlock lists apply, e.g. the walk card after the HQ radio).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tutorial")
+	bool SkipSpeech();
+
 	/** Replays a finished step (pause menu "replay" later). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tutorial")
 	bool ReplayStep(FName StepId);
@@ -266,9 +293,10 @@ public:
 	bool IsCommandLocked(FName CommandId) const;
 
 	/**
-	 * THE lock choke point for order handlers: true when CommandId is locked now; the caller then degrades the order (a locked
-	 * sprint walks, no error line) and this raises "Tutorial.Locked" + "Tutorial.Locked.<CommandId>" (a "feed" / card step can
-	 * react once). False without a tutorial (tutorial OFF = no locks).
+	 * THE lock choke point for order handlers: true when CommandId is locked now; the caller then refuses / degrades the order
+	 * and this raises "Tutorial.Locked" + "Tutorial.Locked.<CommandId>" (a "feed" / card step can react once). When no step
+	 * reacts to that event, ONE short feed line per command family ("Stance", "Time", ...) says it is not taught yet (Demo 01
+	 * progressive unlock, user request 2026-10-13). False without a tutorial (tutorial OFF = no locks).
 	 */
 	static bool CheckCommandLocked(const UObject* WorldContext, FName CommandId);
 
@@ -281,6 +309,9 @@ public:
 
 	/** Locked commands refused since the steps were loaded (smokes). */
 	int32 GetLockedRefusalCount() const { return LockedRefusals; }
+
+	/** "Not taught yet" feed lines posted (one per command family, smokes). */
+	int32 GetLockHintCount() const { return LockHintFamilies.Num(); }
 
 	/** Hint cards completed from the command history without being shown ("precredit", smokes). */
 	int32 GetPrecreditedCount() const { return PrecreditedCount; }
@@ -319,6 +350,8 @@ private:
 	void RefreshMarkers();
 	void StartSpeech(FName StepId);
 	void TickSpeech(float DeltaSeconds);
+	/** The speech step's lines are over (played out, advanced past the last one or skipped): it completes unless it waits for more. */
+	void EndSpeech();
 	bool HandleLethalHit(UHealthComponent* Health, const FString& Source);
 	void WriteTelemetry(const FString& Event, FName StepId, FName BeatId, float ActiveSeconds) const;
 	TArray<FSpokenLine> ResolveLines(const FTutorialStep& Step) const;
@@ -368,6 +401,12 @@ private:
 	bool bRetryPrompt = false;
 	int32 LessonDownCount = 0;
 	int32 LockedRefusals = 0;
+	/** Command families ("Stance", "Time", ...) that already got their "not taught yet" feed line. */
+	TSet<FString> LockHintFamilies;
+	/** Posts the "not taught yet" line for CommandId's family once, unless a step of the file reacts to its locked event. */
+	void PostLockHint(FName CommandId);
+	/** Drops every lock (a fight started / the tutorial was switched off) and logs why. */
+	void UnlockAllCommands(const TCHAR* Reason);
 	int32 PrecreditedCount = 0;
 	/** Operative each shown "focus" step is about (resolved when it shows). */
 	TMap<FName, TWeakObjectPtr<AOperativeCharacter>> FocusOperatives;

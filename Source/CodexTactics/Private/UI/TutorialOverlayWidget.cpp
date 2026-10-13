@@ -8,12 +8,16 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Rendering/DrawElements.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
+#include "UI/CodexButtonFocus.h"
+#include "UI/DialogueRules.h"
 #include "Tutorial/TutorialMarkerActor.h"
 #include "Tutorial/TutorialSubsystem.h"
 
@@ -47,6 +51,7 @@ namespace TutorialOverlayLocal
 		Text->SetText(Label);
 		Button->SetContent(Text);
 		Button->SetVisibility(ESlateVisibility::Visible); // the only hit-testable parts of the overlay
+		CodexButtonFocus::Disable(Button); // a focused button would take Enter / the game keys after a click
 		return Button;
 	}
 }
@@ -70,15 +75,19 @@ void UTutorialOverlayWidget::BuildDefaultLayout()
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	WidgetTree->RootWidget = Root;
 
-	// Hint card: bottom left, above the action bar row.
+	// Hint card: bottom left, above the action bar row, in a column at most CardMaxWidth wide (never under the radio strip).
+	USizeBox* CardColumn = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("TutorialCardColumn"));
+	CardColumn->SetMaxDesiredWidth(CardMaxWidth);
+	CardColumn->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	TutorialHintCard = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("TutorialHintCard"));
 	TutorialHintCard->SetBrushColor(CardColor);
 	TutorialHintCard->SetPadding(FMargin(16.f, 12.f));
 	TutorialHintCard->SetVisibility(ESlateVisibility::Collapsed);
-	UOverlaySlot* CardSlot = Root->AddChildToOverlay(TutorialHintCard);
+	CardColumn->SetContent(TutorialHintCard);
+	UOverlaySlot* CardSlot = Root->AddChildToOverlay(CardColumn);
 	CardSlot->SetHorizontalAlignment(HAlign_Left);
 	CardSlot->SetVerticalAlignment(VAlign_Bottom);
-	CardSlot->SetPadding(FMargin(24.f, 0.f, 0.f, 150.f));
+	CardSlot->SetPadding(FMargin(CardLeftMargin, 0.f, 0.f, 150.f));
 	UVerticalBox* CardBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("TutorialCardBox"));
 	CardBox->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	TutorialHintCard->SetContent(CardBox);
@@ -92,9 +101,9 @@ void UTutorialOverlayWidget::BuildDefaultLayout()
 	ProgressSlot->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
 	ProgressSlot->SetVerticalAlignment(VAlign_Center);
 	TutorialCardBody = MakeText(WidgetTree, TEXT("TutorialCardBody"), 13, BodyColor, true);
-	TutorialCardBody->SetWrapTextAt(420.f);
+	TutorialCardBody->SetWrapTextAt(CardMaxWidth - 40.f);
 	CardBox->AddChildToVerticalBox(TutorialCardBody)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
-	TutorialCardKeys = MakeText(WidgetTree, TEXT("TutorialCardKeys"), 15, KeyColor);
+	TutorialCardKeys = MakeText(WidgetTree, TEXT("TutorialCardKeys"), 15, KeyColor, true);
 	CardBox->AddChildToVerticalBox(TutorialCardKeys)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 	UHorizontalBox* Footer = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("TutorialCardFooter"));
 	Footer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
@@ -122,7 +131,7 @@ void UTutorialOverlayWidget::BuildDefaultLayout()
 		TutorialTracker->AddChildToVerticalBox(Line)->SetPadding(FMargin(0.f, 2.f));
 	}
 
-	// Radio / walk-and-talk strip: bottom centre, above the action bar.
+	// Radio / walk-and-talk strip: bottom centre, above the action bar; StripSideReserve stays free on both sides (the card column).
 	TutorialRadioStrip = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("TutorialRadioStrip"));
 	TutorialRadioStrip->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 0.6f));
 	TutorialRadioStrip->SetPadding(FMargin(18.f, 8.f));
@@ -130,15 +139,29 @@ void UTutorialOverlayWidget::BuildDefaultLayout()
 	UOverlaySlot* RadioSlot = Root->AddChildToOverlay(TutorialRadioStrip);
 	RadioSlot->SetHorizontalAlignment(HAlign_Center);
 	RadioSlot->SetVerticalAlignment(VAlign_Bottom);
-	RadioSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 118.f));
+	RadioSlot->SetPadding(FMargin(StripSideReserve, 0.f, StripSideReserve, 118.f));
+	UVerticalBox* RadioColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("TutorialRadioColumn"));
+	RadioColumn->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	TutorialRadioStrip->SetContent(RadioColumn);
 	UHorizontalBox* RadioBox = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("TutorialRadioBox"));
 	RadioBox->SetVisibility(ESlateVisibility::HitTestInvisible);
-	TutorialRadioStrip->SetContent(RadioBox);
+	RadioColumn->AddChildToVerticalBox(RadioBox);
 	TutorialRadioSpeaker = MakeText(WidgetTree, TEXT("TutorialRadioSpeaker"), 14, TitleColor);
 	RadioBox->AddChildToHorizontalBox(TutorialRadioSpeaker)->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
 	TutorialRadioLine = MakeText(WidgetTree, TEXT("TutorialRadioLine"), 14, BodyColor, true);
 	TutorialRadioLine->SetWrapTextAt(760.f);
-	RadioBox->AddChildToHorizontalBox(TutorialRadioLine);
+	RadioBox->AddChildToHorizontalBox(TutorialRadioLine)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	UHorizontalBox* RadioFooter = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("TutorialRadioFooter"));
+	RadioFooter->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	RadioColumn->AddChildToVerticalBox(RadioFooter)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+	TutorialRadioHint = MakeText(WidgetTree, TEXT("TutorialRadioHint"), 11, FLinearColor(0.7f, 0.72f, 0.75f));
+	UHorizontalBoxSlot* HintSlot = RadioFooter->AddChildToHorizontalBox(TutorialRadioHint);
+	HintSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	HintSlot->SetVerticalAlignment(VAlign_Center);
+	TutorialRadioSkipButton = MakeButton(WidgetTree, TEXT("TutorialRadioSkipButton"), TEXT("TutorialRadioSkipLabel"), LOCTEXT("RadioSkip", "SKIP"));
+	UHorizontalBoxSlot* RadioSkipSlot = RadioFooter->AddChildToHorizontalBox(TutorialRadioSkipButton);
+	RadioSkipSlot->SetHorizontalAlignment(HAlign_Right);
+	RadioSkipSlot->SetPadding(FMargin(12.f, 0.f, 0.f, 0.f));
 
 	// Lesson retry prompt: upper centre.
 	TutorialRetryPanel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("TutorialRetryPanel"));
@@ -169,6 +192,10 @@ void UTutorialOverlayWidget::BindButtons()
 	if (TutorialSkipButton)
 	{
 		TutorialSkipButton->OnClicked.AddUniqueDynamic(this, &UTutorialOverlayWidget::HandleSkipClicked);
+	}
+	if (TutorialRadioSkipButton)
+	{
+		TutorialRadioSkipButton->OnClicked.AddUniqueDynamic(this, &UTutorialOverlayWidget::HandleRadioSkipClicked);
 	}
 	if (TutorialRetryButton)
 	{
@@ -253,7 +280,8 @@ void UTutorialOverlayWidget::Refresh()
 	const FTutorialSubtitleView Subtitle = Tutorial ? Tutorial->GetSubtitleView() : FTutorialSubtitleView();
 	if (TutorialRadioStrip)
 	{
-		TutorialRadioStrip->SetVisibility(Subtitle.bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		// Self-hit-test-invisible: the world still takes clicks through the strip, only its SKIP button is clickable.
+		TutorialRadioStrip->SetVisibility(Subtitle.bVisible ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
 	}
 	if (Subtitle.bVisible)
 	{
@@ -265,6 +293,19 @@ void UTutorialOverlayWidget::Refresh()
 		if (TutorialRadioLine)
 		{
 			TutorialRadioLine->SetText(Subtitle.Line);
+		}
+		if (TutorialRadioHint)
+		{
+			// In the turn-based fight Enter ends the turn, so only the SKIP button skips there.
+			const UTurnBasedCombatSubsystem* TurnBased = World ? World->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+			const FText Keys = TurnBased && TurnBased->IsActive() ? LOCTEXT("RadioHintTurnBased", "SKIP: end the conversation")
+				: DialogueRules::GetSkipHintText(PlayerCommands::GetKeyLabel(PlayerCommands::DialogueNext), PlayerCommands::GetKeyLabel(PlayerCommands::DialogueSkip));
+			TutorialRadioHint->SetText(Subtitle.LineCount > 1
+				? FText::Format(LOCTEXT("RadioHintProgress", "{0} / {1}    {2}"), Subtitle.LineIndex + 1, Subtitle.LineCount, Keys) : Keys);
+		}
+		if (TutorialRadioSkipButton)
+		{
+			TutorialRadioSkipButton->SetVisibility(ESlateVisibility::Visible);
 		}
 	}
 
@@ -364,6 +405,14 @@ void UTutorialOverlayWidget::HandleSkipClicked()
 	}
 }
 
+void UTutorialOverlayWidget::HandleRadioSkipClicked()
+{
+	if (UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr; Tutorial && Tutorial->SkipSpeech())
+	{
+		PlayerCommands::Report(this, PlayerCommands::DialogueSkip);
+	}
+}
+
 void UTutorialOverlayWidget::HandleRetryClicked()
 {
 	if (UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr)
@@ -418,6 +467,33 @@ int32 UTutorialOverlayWidget::GetShownObjectiveCount() const
 		Count += Line && Line->GetVisibility() != ESlateVisibility::Collapsed ? 1 : 0;
 	}
 	return Count;
+}
+
+FText UTutorialOverlayWidget::GetShownRadioHint() const
+{
+	return TutorialRadioHint ? TutorialRadioHint->GetText() : FText::GetEmpty();
+}
+
+bool UTutorialOverlayWidget::IsRadioSkipShown() const
+{
+	return IsSubtitleShown() && TutorialRadioSkipButton && TutorialRadioSkipButton->GetVisibility() == ESlateVisibility::Visible;
+}
+
+bool UTutorialOverlayWidget::GetCardAndStripRects(FSlateRect& OutCard, FSlateRect& OutStrip) const
+{
+	if (!TutorialHintCard || !TutorialRadioStrip)
+	{
+		return false;
+	}
+	const FGeometry& Card = TutorialHintCard->GetCachedGeometry();
+	const FGeometry& Strip = TutorialRadioStrip->GetCachedGeometry();
+	if (Card.GetLocalSize().IsNearlyZero() || Strip.GetLocalSize().IsNearlyZero())
+	{
+		return false;
+	}
+	OutCard = Card.GetLayoutBoundingRect();
+	OutStrip = Strip.GetLayoutBoundingRect();
+	return true;
 }
 
 bool UTutorialOverlayWidget::IsRetryShown() const

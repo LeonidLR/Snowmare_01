@@ -19,12 +19,6 @@
     "TUT_BEAT_A0": {
       "title": "THE DROP"
     },
-    "TUT_A0_WAIT_HQ": {
-      "text": "Hold on — HQ is talking."
-    },
-    "TUT_A0_NOSPRINT": {
-      "text": "No running yet — save your strength."
-    },
     "TUT_A0_NOINVENTORY": {
       "text": "Not now. Packs stay closed until we need them."
     },
@@ -128,8 +122,8 @@
       "text": "Better. Now keep the blood moving — running warms you up faster than any pack."
     },
     "TUT_A1_SPRINT": {
-      "title": "RUN",
-      "text": "Running warms you up. Double-click the ground to run."
+      "title": "RUNNING KEEPS YOU WARM",
+      "text": "On the move the body stays warm: double-click the ground to run. Standing still on the ice cools the squad down."
     },
     "WT_A1_RESUPPLY": {
       "text": "We're nearly out of heat packs. The fishermen's hut is close — let's check it."

@@ -208,8 +208,26 @@ private:
 	/** True while a story dialogue blocks world orders (Godot _unhandled_input). */
 	bool IsDialogueOpen() const;
 	void DialogueNext();
-	/** Enter: next dialogue line, or end the squad turn in turn-based combat. */
+	/**
+	 * Enter: the dialogue key while a story dialogue or a tutorial radio / walk-and-talk line is up (tap = next line on the
+	 * release, hold DialogueRules::SkipHoldSeconds = skip the whole conversation); otherwise end the squad turn in
+	 * turn-based combat (there the tutorial speech is skipped with the strip's SKIP button instead).
+	 */
 	void EnterPressed();
+	void EnterReleased();
+	/** The conversation Enter acts on now: the story dialogue window first, else the tutorial speech (not in turn-based). */
+	bool HasDialogueForKey() const;
+	/** Next line (bSkipAll false) or skip the whole conversation on that conversation; reports Dialogue.Next / Dialogue.Skip. */
+	void ApplyDialogueKey(bool bSkipAll);
+	/** Enter is down on a conversation (press time in real seconds; the hold works in the tactical pause too). */
+	bool bDialogueKeyDown = false;
+	bool bDialogueSkipFired = false;
+	double DialogueKeyDownTime = 0.0;
+	/**
+	 * Demo 01 progressive unlock (user request 2026-10-13): true when the tutorial locks CommandId now; the handler then does
+	 * nothing (UTutorialSubsystem::CheckCommandLocked raises "Tutorial.Locked.<id>" and one short feed line per family).
+	 */
+	bool RefuseIfLocked(FName CommandId) const;
 	/** Tab: next operative in turn-based combat. */
 	void TabPressed();
 	/** Turn-based combat subsystem while a grid fight is running, else null. */

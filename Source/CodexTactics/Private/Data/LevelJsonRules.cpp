@@ -134,6 +134,7 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 		return false;
 	}
 	Config.PatrolSearchSeconds = LevelJsonNumber(Root, TEXT("patrol_search_seconds"), -1.f);
+	Config.ColdRateMult = FMath::Max(0.f, LevelJsonNumber(Root, TEXT("cold_rate_mult"), 1.f));
 	// UE-only (user request 2026-10-06): the horde after a long real-time fight (defaults in Content/Data/AI/horde.json).
 	bool bHordeEnabled = true;
 	Config.bHordeEnabled = !Root->TryGetBoolField(TEXT("horde_enabled"), bHordeEnabled) || bHordeEnabled;

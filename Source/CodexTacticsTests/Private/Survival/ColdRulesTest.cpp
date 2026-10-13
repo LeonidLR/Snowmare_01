@@ -30,6 +30,44 @@ bool FColdAccumulationTest::RunTest(const FString&)
 	return true;
 }
 
+COLD_TEST(FColdLevelMultiplierTest, "LevelColdRateMult")
+bool FColdLevelMultiplierTest::RunTest(const FString&)
+{
+	// User request 2026-10-13: level JSON "cold_rate_mult" (0.8 on Demo 01 Frozen Lake) scales the open-air accumulation only.
+	const FColdConfig Config;
+	FColdEnvironment Open;
+	const float Base = ColdRules::StepCold(Config, 0.f, 10.f, Open, EOperativeStance::Standing, 0.f);
+	FColdEnvironment Less = Open;
+	Less.LevelMultiplier = 0.8f;
+	TestEqual(TEXT("0.8: 20 % less cold"), ColdRules::StepCold(Config, 0.f, 10.f, Less, EOperativeStance::Standing, 0.f), Base * 0.8f, 0.001f);
+	FColdEnvironment Wave = Less;
+	Wave.ZoneMultiplier = 1.5f; // the wave's cold_drain_mult (or a camera zone)
+	TestEqual(TEXT("multiplied with the wave / zone multiplier, not instead of it"), ColdRules::StepCold(Config, 0.f, 10.f, Wave, EOperativeStance::Standing, 0.f),
+		Base * 1.5f * 0.8f, 0.001f);
+	FColdEnvironment None = Open;
+	None.LevelMultiplier = 0.f;
+	TestEqual(TEXT("0: no accumulation (but no warming either)"), ColdRules::StepCold(Config, 30.f, 10.f, None, EOperativeStance::Standing, 0.f), 30.f, 0.001f);
+	FColdEnvironment Negative = Open;
+	Negative.LevelMultiplier = -1.f;
+	TestEqual(TEXT("negative clamps to 0"), ColdRules::StepCold(Config, 30.f, 10.f, Negative, EOperativeStance::Standing, 0.f), 30.f, 0.001f);
+	FColdEnvironment Warm = Less;
+	Warm.bWarm = true;
+	FColdEnvironment WarmBase = Open;
+	WarmBase.bWarm = true;
+	TestEqual(TEXT("warming not scaled"), ColdRules::StepCold(Config, 50.f, 1.f, Warm, EOperativeStance::Standing, 0.f),
+		ColdRules::StepCold(Config, 50.f, 1.f, WarmBase, EOperativeStance::Standing, 0.f), 0.001f);
+	FColdEnvironment Sprint = Less;
+	Sprint.bSprinting = true;
+	FColdEnvironment SprintBase = Open;
+	SprintBase.bSprinting = true;
+	TestEqual(TEXT("the sprint warm-up not scaled"), ColdRules::StepCold(Config, 50.f, 1.f, Sprint, EOperativeStance::Standing, 0.f),
+		ColdRules::StepCold(Config, 50.f, 1.f, SprintBase, EOperativeStance::Standing, 0.f), 0.001f);
+	// The tutorial gust is a cold shock: +20, at least 42 % whatever the level rate (the heat-pack lesson still starts).
+	TestEqual(TEXT("gust from 5 %"), ColdRules::ApplyColdShock(5.f, 20.f, 42.f), 42.f, 0.001f);
+	TestEqual(TEXT("gust from 30 %"), ColdRules::ApplyColdShock(30.f, 20.f, 42.f), 50.f, 0.001f);
+	return true;
+}
+
 COLD_TEST(FColdWarmingTest, "WarmingNearHeatClosedZoneAndPreparation")
 bool FColdWarmingTest::RunTest(const FString&)
 {

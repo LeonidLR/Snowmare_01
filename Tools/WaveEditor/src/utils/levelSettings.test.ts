@@ -6,11 +6,35 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   GATE_DEFAULTS, getDemo, getGate, isGateFieldInvalid, setDemoEnabled, setDemoKey, setGateKey, validateDemo, validateGate,
-  validateLevelSettings,
+  validateLevelSettings, getColdRateMult, setColdRateMult, validateColdRate,
 } from './levelSettings.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const OUTPOST = path.join(ROOT, 'Content/Data/LevelJson/level_01_outpost.json');
+const FROZEN_LAKE = path.join(ROOT, 'Content/Data/LevelJson/L_Demo01_A_FrozenLake.json');
+
+test('cold_rate_mult: absent = 1, set / remove keeps the other keys, 1 is written as an absent key', () => {
+  assert.equal(getColdRateMult({}), 1);
+  const level = { level_id: 'x', demo: { tutorial: true }, waves: [] };
+  const less = setColdRateMult(level, 0.8);
+  assert.equal(less.cold_rate_mult, 0.8);
+  assert.deepEqual(less.demo, level.demo);
+  assert.equal('cold_rate_mult' in level, false, 'input not mutated');
+  assert.equal('cold_rate_mult' in setColdRateMult(less, 1), false);
+  assert.equal('cold_rate_mult' in setColdRateMult(less, undefined), false);
+  assert.deepEqual(validateColdRate(0.8), []);
+  assert.deepEqual(validateColdRate(0), []);
+  assert.equal(validateColdRate(-0.1).length, 1);
+  assert.equal(validateColdRate(NaN).length, 1);
+  assert.equal(validateColdRate(3.5).length, 1);
+  assert.equal(validateLevelSettings({ waves: [], cold_rate_mult: -1 }).length, 1);
+});
+
+test('L_Demo01_A_FrozenLake.json: less cold (cold_rate_mult 0.8, user request 2026-10-13)', () => {
+  const level = JSON.parse(fs.readFileSync(FROZEN_LAKE, 'utf-8'));
+  assert.equal(getColdRateMult(level), 0.8);
+  assert.deepEqual(validateLevelSettings(level), []);
+});
 
 test('gate: absent keys read as the game defaults', () => {
   assert.deepEqual(getGate({}), GATE_DEFAULTS);

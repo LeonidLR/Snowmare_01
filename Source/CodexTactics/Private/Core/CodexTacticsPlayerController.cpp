@@ -30,6 +30,7 @@
 #include "UI/CodexTacticsHUD.h"
 #include "Combat/VisionConeComponent.h"
 #include "UI/ProfileDialogWidget.h"
+#include "UI/DialogueRules.h"
 #include "UI/DialogueSubsystem.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
@@ -280,6 +281,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	// Plain X (the chord without Ctrl): Godot switch_weapon cycle.
 	InputComponent->BindKey(FInputChord(EKeys::X), IE_Pressed, this, &ACodexTacticsPlayerController::CycleWeaponKey);
 	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACodexTacticsPlayerController::EnterPressed);
+	// Enter released: a short tap advances the dialogue line (a hold skips the conversation in PlayerTick).
+	InputComponent->BindKey(EKeys::Enter, IE_Released, this, &ACodexTacticsPlayerController::EnterReleased);
 	InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ACodexTacticsPlayerController::TabPressed);
 	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ACodexTacticsPlayerController::ProfilePressed);
 	// Sprint 12: N = cover fire mode (corner lean / blind fire) of the selected operative(s).
@@ -338,6 +341,17 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+
+	// Enter held on a conversation: skip it all once the hold threshold is reached (real time, also in the tactical pause).
+	if (bDialogueKeyDown && !bDialogueSkipFired)
+	{
+		const EDialogueKeyAction Action = DialogueRules::ResolveDialogueKey(static_cast<float>(FPlatformTime::Seconds() - DialogueKeyDownTime), false, false);
+		if (Action == EDialogueKeyAction::SkipAll)
+		{
+			bDialogueSkipFired = true;
+			ApplyDialogueKey(true);
+		}
+	}
 
 	// Selection box: LMB held and dragged past the threshold (not in the grid fight, where clicks are grid orders).
 	if (bLmbDown)
@@ -513,15 +527,16 @@ bool ACodexTacticsPlayerController::IsRealTimeOrderLocked() const
 
 void ACodexTacticsPlayerController::ApplyFirePosture(ESquadFirePosture Posture, bool bSquadWide)
 {
-	if (IsDialogueOpen())
+	const FName PostureCommand = Posture == ESquadFirePosture::Passive ? PlayerCommands::PosturePassive
+		: (Posture == ESquadFirePosture::Defensive ? PlayerCommands::PostureDefensive : PlayerCommands::PostureAggressive);
+	if (IsDialogueOpen() || RefuseIfLocked(PostureCommand))
 	{
 		return;
 	}
 	if (USquadSubsystem* Squad = GetSquad())
 	{
 		Squad->ApplyPostureOrder(Posture, bSquadWide);
-		ControllerCommands::Report(this, Posture == ESquadFirePosture::Passive ? PlayerCommands::PosturePassive
-			: (Posture == ESquadFirePosture::Defensive ? PlayerCommands::PostureDefensive : PlayerCommands::PostureAggressive), nullptr, false, bSquadWide);
+		ControllerCommands::Report(this, PostureCommand, nullptr, false, bSquadWide);
 	}
 }
 
@@ -553,6 +568,10 @@ bool ACodexTacticsPlayerController::BlockRealTimeOrder()
 
 void ACodexTacticsPlayerController::ToggleAutonomy()
 {
+	if (RefuseIfLocked(PlayerCommands::Autonomy))
+	{
+		return;
+	}
 	if (USquadSubsystem* Squad = GetSquad())
 	{
 		Squad->ToggleAutonomousSquadCombat();
@@ -608,7 +627,7 @@ void ACodexTacticsPlayerController::GuardKey()
 	{
 		return; // Ctrl + T is Commander Mode
 	}
-	if (!GetActiveTurnBased() && BlockRealTimeOrder())
+	if ((!GetActiveTurnBased() && BlockRealTimeOrder()) || RefuseIfLocked(PlayerCommands::Guard))
 	{
 		return;
 	}
@@ -766,7 +785,7 @@ void ACodexTacticsPlayerController::StartFlareAim()
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
-	if (!Leader || !Grenades || BlockRealTimeOrder())
+	if (!Leader || !Grenades || BlockRealTimeOrder() || RefuseIfLocked(PlayerCommands::FlareAim))
 	{
 		return;
 	}
@@ -791,7 +810,7 @@ void ACodexTacticsPlayerController::GrenadeKey()
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
-	if (!Leader || !Grenades || !Messages || BlockRealTimeOrder())
+	if (!Leader || !Grenades || !Messages || BlockRealTimeOrder() || RefuseIfLocked(PlayerCommands::GrenadeAim))
 	{
 		return;
 	}
@@ -865,7 +884,7 @@ void ACodexTacticsPlayerController::DeployAbility()
 		}
 		return;
 	}
-	if (BlockRealTimeOrder())
+	if (BlockRealTimeOrder() || RefuseIfLocked(PlayerCommands::DeployStart))
 	{
 		return;
 	}
@@ -902,6 +921,10 @@ void ACodexTacticsPlayerController::RotatePlacement()
 	{
 		return;
 	}
+	else if (RefuseIfLocked(PlayerCommands::Reload))
+	{
+		return;
+	}
 	else if (AOperativeCharacter* Leader = GetSquad() ? GetSquad()->GetLeader() : nullptr)
 	{
 		// Godot main.gd KEY_R outside placement / the grid fight: reload.
@@ -923,7 +946,8 @@ void ACodexTacticsPlayerController::CycleWeaponKey()
 	// Godot main.gd KEY_X -> player.gd switch_weapon: the next arsenal weapon, with the grenade aim when it is the grenade.
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	if (!Leader || Leader->AvailableWeapons.IsEmpty() || GetActiveTurnBased() || IsDialogueOpen() || BlockRealTimeOrder())
+	if (!Leader || Leader->AvailableWeapons.IsEmpty() || GetActiveTurnBased() || IsDialogueOpen() || BlockRealTimeOrder()
+		|| RefuseIfLocked(PlayerCommands::CycleWeapon))
 	{
 		return;
 	}
@@ -970,6 +994,12 @@ void ACodexTacticsPlayerController::SpacePressed()
 	if (IsDialogueOpen())
 	{
 		DialogueNext(); // Godot: Space advances the dialogue instead of pausing
+		return;
+	}
+	// Demo 01 progressive unlock (user request 2026-10-13): no tactical pause / turn-based before it is taught. A fight
+	// (wave / horde) unlocks every tutorial lock, so Space always works there.
+	if (!GetActiveTurnBased() && RefuseIfLocked(PlayerCommands::TacticalPause))
+	{
 		return;
 	}
 	SpaceInput.Press();
@@ -1123,6 +1153,11 @@ void ACodexTacticsPlayerController::PostHeadquarters(const FText& Text) const
 	}
 }
 
+bool ACodexTacticsPlayerController::RefuseIfLocked(FName CommandId) const
+{
+	return UTutorialSubsystem::CheckCommandLocked(this, CommandId);
+}
+
 bool ACodexTacticsPlayerController::IsDialogueOpen() const
 {
 	const UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>();
@@ -1137,11 +1172,64 @@ void ACodexTacticsPlayerController::DialogueNext()
 	}
 }
 
-void ACodexTacticsPlayerController::EnterPressed()
+bool ACodexTacticsPlayerController::HasDialogueForKey() const
 {
 	if (IsDialogueOpen())
 	{
-		DialogueNext();
+		return true;
+	}
+	const UTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
+	return Tutorial && Tutorial->IsSpeechActive() && !GetActiveTurnBased();
+}
+
+void ACodexTacticsPlayerController::ApplyDialogueKey(bool bSkip)
+{
+	bool bDone = false;
+	if (UDialogueSubsystem* Dialogue = GetWorld()->GetSubsystem<UDialogueSubsystem>(); Dialogue && Dialogue->IsDialogueOpen())
+	{
+		if (bSkip)
+		{
+			Dialogue->SkipDialogue();
+		}
+		else
+		{
+			Dialogue->AdvanceLine();
+		}
+		bDone = true;
+	}
+	else if (UTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>())
+	{
+		bDone = bSkip ? Tutorial->SkipSpeech() : Tutorial->AdvanceSpeechLine();
+	}
+	if (bDone)
+	{
+		ControllerCommands::Report(this, bSkip ? PlayerCommands::DialogueSkip : PlayerCommands::DialogueNext);
+	}
+}
+
+void ACodexTacticsPlayerController::EnterReleased()
+{
+	if (!bDialogueKeyDown)
+	{
+		return;
+	}
+	bDialogueKeyDown = false;
+	const EDialogueKeyAction Action = DialogueRules::ResolveDialogueKey(static_cast<float>(FPlatformTime::Seconds() - DialogueKeyDownTime), true, bDialogueSkipFired);
+	bDialogueSkipFired = false;
+	if (Action != EDialogueKeyAction::None)
+	{
+		ApplyDialogueKey(Action == EDialogueKeyAction::SkipAll);
+	}
+}
+
+void ACodexTacticsPlayerController::EnterPressed()
+{
+	if (HasDialogueForKey())
+	{
+		// The dialogue key (user request 2026-10-13): the release decides "next line", a hold skips (PlayerTick).
+		bDialogueKeyDown = true;
+		bDialogueSkipFired = false;
+		DialogueKeyDownTime = FPlatformTime::Seconds();
 	}
 	else if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 	{
@@ -1191,6 +1279,10 @@ void ACodexTacticsPlayerController::InventoryKey()
 
 void ACodexTacticsPlayerController::VisionConesKey()
 {
+	if (RefuseIfLocked(PlayerCommands::ToggleVisionCones))
+	{
+		return;
+	}
 	const bool bOn = !UVisionConeComponent::IsPlayerEnemyConesOn();
 	UVisionConeComponent::SetPlayerEnemyCones(bOn);
 	ControllerCommands::Report(this, PlayerCommands::ToggleVisionCones);
@@ -1736,6 +1828,10 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
 	// Godot Shift + click on the ground: turn the leader and fix the observation sector.
 	if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
 	{
+		if (RefuseIfLocked(PlayerCommands::WatchSector))
+		{
+			return;
+		}
 		Leader->SetFacingPoint(Hit.ImpactPoint);
 		ControllerCommands::Report(this, PlayerCommands::WatchSector, nullptr, false, false, Leader, Hit.ImpactPoint);
 		UFloatingTextSubsystem::SpawnAboveOperative(Leader, TEXT("👁️ WATCH SECTOR"), FLinearColor(0.2f, 0.9f, 1.f));
@@ -1790,7 +1886,7 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 {
 	USquadSubsystem* Squad = GetSquad();
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
-	if (!Squad)
+	if (!Squad || RefuseIfLocked(ControllerCommands::ForStance(Stance, true)))
 	{
 		return;
 	}
@@ -1873,6 +1969,10 @@ void ACodexTacticsPlayerController::SelectMember(int32 RosterIndex)
 
 void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 {
+	if (RefuseIfLocked(ControllerCommands::ForStance(Stance, false)))
+	{
+		return;
+	}
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
 	{
 		if (Stance == EOperativeStance::Standing && TurnBased->IsActiveUnitKnockedDown())
@@ -1940,6 +2040,10 @@ void ACodexTacticsPlayerController::ToggleSoloMode()
 	}
 	if (USquadSubsystem* Squad = GetSquad())
 	{
+		if (RefuseIfLocked(Squad->IsSoloMode() ? PlayerCommands::Regroup : PlayerCommands::SoloOn))
+		{
+			return;
+		}
 		Squad->ToggleSoloMode();
 		ControllerCommands::Report(this, Squad->IsSoloMode() ? PlayerCommands::SoloOn : PlayerCommands::Regroup);
 	}
@@ -2033,7 +2137,7 @@ void ACodexTacticsPlayerController::AssignDefenseUnderCursor()
 	USquadSubsystem* Squad = GetSquad();
 	USquadAutonomySubsystem* Autonomy = GetWorld()->GetSubsystem<USquadAutonomySubsystem>();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	if (!Leader || !Autonomy || GetActiveTurnBased() || BlockRealTimeOrder())
+	if (!Leader || !Autonomy || GetActiveTurnBased() || BlockRealTimeOrder() || RefuseIfLocked(PlayerCommands::HoldLine))
 	{
 		return;
 	}
@@ -2155,7 +2259,7 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
-	if (!Leader || !Messages)
+	if (!Leader || !Messages || RefuseIfLocked(PlayerCommands::TargetedShot))
 	{
 		return;
 	}
@@ -2278,6 +2382,10 @@ void ACodexTacticsPlayerController::CycleLeaderStance()
 	{
 		Next = EOperativeStance::Standing; // Godot: prone is skipped while moving
 	}
+	if (RefuseIfLocked(ControllerCommands::ForStance(Next, false)))
+	{
+		return;
+	}
 	// Godot _cycle_leader_stance, without the squad sync (user decision 2026-10-01): the selected operative only.
 	Leader->SetStance(Next);
 	ControllerCommands::Report(this, ControllerCommands::ForStance(Next, false));
@@ -2288,7 +2396,7 @@ void ACodexTacticsPlayerController::ToggleRelocateSelectMode()
 	URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>();
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
-	if (BlockRealTimeOrder())
+	if (BlockRealTimeOrder() || RefuseIfLocked(PlayerCommands::Relocate))
 	{
 		return;
 	}
@@ -2380,6 +2488,11 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	AOperativeCharacter* Operative = TurnBased ? TurnBased->GetActiveUnit() : (Squad ? Squad->GetLeader() : nullptr);
 	AActor* HitActor = Hit.GetActor();
 	if (!Operative || !HitActor || IsRealTimeOrderLocked() || bRelocateSelectMode)
+	{
+		return false;
+	}
+	// Cover not taught yet (tutorial lock): a click at a wall stays a plain ground order, silently (no "locked" line for a walk).
+	if (const UTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>(); Tutorial && Tutorial->IsCommandLocked(PlayerCommands::CoverPreview))
 	{
 		return false;
 	}
@@ -2582,6 +2695,10 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 
 void ACodexTacticsPlayerController::VehicleKey(bool bSquadWide)
 {
+	if (RefuseIfLocked(PlayerCommands::VehicleBoard))
+	{
+		return;
+	}
 	if (UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>())
 	{
 		// The hovered vehicle wins when several are near (design 1.1).
@@ -2603,7 +2720,7 @@ void ACodexTacticsPlayerController::VehicleKeyPressed()
 
 void ACodexTacticsPlayerController::ToggleCoverFireModeKey()
 {
-	if (IsDialogueOpen())
+	if (IsDialogueOpen() || RefuseIfLocked(PlayerCommands::CoverFireMode))
 	{
 		return;
 	}

@@ -28,6 +28,7 @@
 #include "UI/CodexTacticsHUD.h"
 #include "UI/InventoryDrawerWidget.h"
 #include "UI/InventoryDragDropOperation.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
 #include "Characters/FirePostureRules.h"
 
@@ -519,6 +520,11 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 	USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	if (!Leader || (WeaponId == TEXT("grenade") && Leader->GrenadesCount <= 0))
+	{
+		return false;
+	}
+	// Demo 01 progressive unlock: weapons / grenades are taught with the first fight.
+	if (UTutorialSubsystem::CheckCommandLocked(this, WeaponId == TEXT("grenade") ? PlayerCommands::GrenadeAim : PlayerCommands::CycleWeapon))
 	{
 		return false;
 	}

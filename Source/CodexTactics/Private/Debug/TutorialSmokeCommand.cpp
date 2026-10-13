@@ -17,17 +17,23 @@
 //     stage (hold_s 1.0) and nothing else; Q + E (count 2), a ~1 s RMB drag (hold_s 0.5) and two wheel notches complete
 //     the next stages in order, and WASD / Q / the wheel never complete a stage that is not theirs;
 //     the camera chain also has the MMB drag-pan stage (user addition 2026-10-13): a ~1 s middle-button drag completes it;
-//  9. the REAL demo_01_steps.json, A0 -> A1 (user flow 2026-10-13, rev 5): the level opens with the HQ radio only - a ground
-//     click during it is refused (Order.Move locked, TUT_A0_WAIT_HQ once) and the camera cards wait; W and an MMB drag during
-//     the radio go into the command history, so after the radio the pan and drag stages are PRECREDITED (never shown, two
-//     "already done" feed ticks) and Q/E is the first card; sprint is locked (a double click walks, TUT_A0_NOSPRINT once), the
-//     inventory drawer stays closed (TUT_A0_NOINVENTORY once) and U is refused; beacon 1 (beat A1) unlocks NOTHING; the crack:
+//  9. the REAL demo_01_steps.json, A0 -> A1 (rev 5b, user requests 2026-10-13): progressive unlock - inventory / stances / pause
+//     locked at A0, move / sprint / camera free; the HQ radio is a talk on the move (a double click RUNS during it) with the key
+//     hint + SKIP on the strip; C and Space are refused with ONE "Not yet" feed line per family (none for a repeat); the first
+//     camera card shows WHILE HQ talks (card and strip never overlap: laid-out rects, or the layout constants headless); W
+//     completes the pan, Q/E pressed early PRECREDIT the Q/E stage after the MMB drag; Enter tap = the next radio line, Enter
+//     held 0.6 s = the whole radio ends COMPLETED (Dialogue.Next / .Skip reported once each) and the walk card follows only
+//     after the camera chain too; a reset A0 + beacon 1 reached EARLY drops the camera chain and the walk card cleanly while
+//     the radio plays on (SKIP ends it, A1's banter follows); the inventory drawer stays closed (TUT_A0_NOINVENTORY once), U
+//     is refused; the crack:
 //     select (key 2) -> the one-at-a-time bridge card completed by three BridgeCrossed events (the bridge actor itself is
 //     BridgeFenceSmoke's job) -> regroup with B -> box -> the squad banter; 20 s after the crossing the gust (+20 cold, >= 42 %);
 //     the heat-pack card UNLOCKS the inventory / items (the drawer opens now), the coldest uses his own starter pack, the mate
-//     card; THEN the sprint card unlocks sprint (a double click sprints), THEN WT_A1_RESUPPLY + the hut objective; the hut loot
+//     card; THEN the 'running keeps you warm' tip (a double click sprints), THEN WT_A1_RESUPPLY + the hut objective; the hut loot
 //     cards and the closing line; beacon 3 plays the formation lines with no guard card; the save's tutorial section carries the
-//     command history; O toggles the player's enemy vision cones (View.VisionCones).
+//     command history; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
+//     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
+//     (tap = next line, hold = skip).
 // Saves go to Saved/SmokeSaves/Tutorial (exclusive in Scripts/test_map.json).
 
 #include "CoreMinimal.h"
@@ -67,6 +73,9 @@
 #include "UI/TutorialOverlayWidget.h"
 #include "Components/BoxComponent.h"
 #include "GameFramework/WorldSettings.h"
+#include "GameFlow/GameFlowSubsystem.h"
+#include "Data/DialogueSequenceAsset.h"
+#include "UObject/Package.h"
 
 namespace TutorialSmoke
 {
@@ -110,10 +119,14 @@ namespace TutorialSmoke
 		int64 TelemetrySizeAtStart = 0;
 		/** A key tapped in the previous stage: released at the start of the next tick. */
 		FKey PendingRelease;
-		/** Demo-file part: the hut crate, the cold of each operative when solo started, NOSPRINT feed lines before. */
+		/** Demo-file part: the hut crate, the cold of each operative when solo started. */
 		TWeakObjectPtr<ALootCrateActor> Crate;
 		TMap<TWeakObjectPtr<AOperativeCharacter>, float> ColdAtSolo;
-		int32 NoSprintLinesBefore = 0;
+		/** Rev 5b part: refusals / "Not yet" lines before a locked key, the radio line before Enter, the cone setting before O. */
+		int32 RefusalsBefore = 0;
+		int32 NotYetBefore = 0;
+		int32 LineIndexBefore = 0;
+		bool bConesBefore = false;
 		/** The leader's heat packs just before he empties the hut crate. */
 		int32 HeatPacksBeforeLoot = 0;
 		TWeakObjectPtr<AOperativeCharacter> Focus;
@@ -156,6 +169,18 @@ namespace TutorialSmoke
 		ATutorialTriggerVolume* Volume = World->SpawnActor<ATutorialTriggerVolume>(Leader->GetActorLocation() + FVector(0.f, 0.f, 3000.f),
 			FRotator::ZeroRotator, Params);
 		Volume->VolumeId = VolumeId;
+		return Volume->TryActivate(Leader);
+	}
+
+	/** Spawns a tutorial volume that starts BeatId (like VOL_A0_BEACON1) under the leader and enters it. */
+	bool EnterBeatVolume(UWorld* World, AOperativeCharacter* Leader, FName VolumeId, FName BeatId)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ATutorialTriggerVolume* Volume = World->SpawnActor<ATutorialTriggerVolume>(Leader->GetActorLocation() + FVector(0.f, 0.f, 3000.f),
+			FRotator::ZeroRotator, Params);
+		Volume->VolumeId = VolumeId;
+		Volume->BeatId = BeatId;
 		return Volume->TryActivate(Leader);
 	}
 
@@ -603,7 +628,8 @@ namespace TutorialSmoke
 			Next(State);
 			return true;
 		}
-		// --- The real demo file, A0 -> A1 (user flow 2026-10-13, rev 5): HQ radio only + move lock, precredit, sprint / inventory locks, bridge, heat pack unlocks, hut ---
+		// --- The real demo file (rev 5b, user requests 2026-10-13): talk on the move + camera lesson alongside, Enter / hold-Enter skip,
+		// progressive unlock (C / Space refused at A0), early beacon 1, bridge, heat pack, hut ---
 		case 27:
 		{
 			ACodexTacticsPlayerController* CodexPC = Cast<ACodexTacticsPlayerController>(PC);
@@ -613,18 +639,24 @@ namespace TutorialSmoke
 				return Finish(State, false);
 			}
 			Check(State, Tutorial->LoadStepsFile(TEXT("demo_01_steps.json")), TEXT("demo_01_steps.json loaded"));
-			Check(State, Tutorial->GetCurrentBeat() == FName(TEXT("A0")) && Tutorial->IsCommandLocked(PlayerCommands::Sprint)
-				&& Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen) && Tutorial->IsCommandLocked(PlayerCommands::UseHeatPack),
-				TEXT("A0: sprint, the inventory and the items locked from the start"));
+			Check(State, Tutorial->GetCurrentBeat() == FName(TEXT("A0")) && Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen)
+				&& Tutorial->IsCommandLocked(PlayerCommands::StanceCrouch) && Tutorial->IsCommandLocked(PlayerCommands::TacticalPause),
+				TEXT("A0: the inventory, the stances and the pause locked from the start (progressive unlock)"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Move) && !Tutorial->IsCommandLocked(PlayerCommands::Sprint)
+				&& !Tutorial->IsCommandLocked(PlayerCommands::CameraPanKeys) && !Tutorial->IsCommandLocked(PlayerCommands::SelectMember),
+				TEXT("A0: move, sprint, camera and selection free from the very start"));
 			Tutorial->SetTutorialEnabled(false);
-			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Sprint) && !Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen), TEXT("tutorial OFF: no locks"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::StanceCrouch) && !Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen), TEXT("tutorial OFF: no locks"));
 			Tutorial->SetTutorialEnabled(true);
+			Check(State, Tutorial->LoadStepsFile(TEXT("demo_01_steps.json")) && Tutorial->IsCommandLocked(PlayerCommands::StanceCrouch),
+				TEXT("reloaded after the OFF check: A0 locks back"));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				Member->ColdLevel = 0.f;
 				Member->HeatPacksCount = 1; // the demo loadout (level JSON heat_packs_count 1: one starter pack per operative)
+				Member->SetStance(EOperativeStance::Standing);
 			}
-			State.NoSprintLinesBefore = CountMessages(World, TEXT("No running yet"));
+			State.NotYetBefore = CountMessages(World, TEXT("Not yet"));
 			Next(State);
 			return true;
 		}
@@ -636,104 +668,223 @@ namespace TutorialSmoke
 			}
 			Check(State, Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Active && Overlay->IsSubtitleShown(),
 				TEXT("A0 opens with the HQ radio in the subtitle strip"));
-			Check(State, !Overlay->IsCardShown() && Tutorial->GetStepState(TEXT("A0_cam_pan")) == ETutorialStepState::Idle, TEXT("no lesson card while HQ talks"));
-			Check(State, Tutorial->IsCommandLocked(PlayerCommands::Move), TEXT("moves locked while HQ talks"));
-			// A click on the ground during the radio: nothing moves, one feed line.
-			ACodexTacticsPlayerController* CodexPC = Cast<ACodexTacticsPlayerController>(PC);
-			const FVector Forward = Leader->GetActorForwardVector().GetSafeNormal2D();
-			const FVector Spot = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Forward * 500.f);
-			CodexPC->HandleWorldHit(FHitResult(nullptr, nullptr, Spot - FVector(0.f, 0.f, 90.f), FVector::UpVector));
+			Check(State, Overlay->IsRadioSkipShown() && Overlay->GetShownRadioHint().ToString().Contains(TEXT("[Enter] next"))
+				&& Overlay->GetShownRadioHint().ToString().Contains(TEXT("[Hold Enter] skip")),
+				FString::Printf(TEXT("the strip shows SKIP and the key hint '%s'"), *Overlay->GetShownRadioHint().ToString()));
+			Check(State, Tutorial->GetStepState(TEXT("A0_obj_beacon")) == ETutorialStepState::Active, TEXT("the beacon objective shows with the radio"));
+			// Talk on the move (user request 2026-10-13): the squad may run while HQ talks. C and Space are not taught yet.
 			State.LeaderStart = Leader->GetActorLocation();
-			// The player pans with W, then MMB-drags, while HQ talks: those camera stages must be precredited later (one at a time:
-			// the key pan is suppressed while a drag pan runs).
-			PressKey(PC, EKeys::W, IE_Pressed);
-			State.Stage = 50;
+			State.RefusalsBefore = Tutorial->GetLockedRefusalCount();
+			DoubleClickAhead(World, Cast<ACodexTacticsPlayerController>(PC), Leader);
+			Tap(PC, State, EKeys::C);
+			State.Stage = 51;
 			State.StageTime = 0.f;
 			return true;
 		}
-		case 50:
+		case 51:
+			Tap(PC, State, EKeys::SpaceBar);
+			State.Stage = 52;
+			State.StageTime = 0.f;
+			return true;
+		case 52:
 		{
-			if (State.StageTime < 1.4f)
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			Check(State, Leader->IsMoving() && Leader->IsSprinting(), FString::Printf(TEXT("during the radio a double click runs (moving %d, sprinting %d)"),
+				Leader->IsMoving() ? 1 : 0, Leader->IsSprinting() ? 1 : 0));
+			Check(State, Leader->GetStance() == EOperativeStance::Standing, TEXT("C at A0: refused, the leader stays standing"));
+			Check(State, !Flow || Flow->GetCombatMode() != ECodexCombatMode::TacticalPause, TEXT("Space at A0: refused, no tactical pause"));
+			Check(State, Tutorial->GetLockedRefusalCount() >= State.RefusalsBefore + 2 && CountMessages(World, TEXT("Not yet")) == State.NotYetBefore + 2,
+				FString::Printf(TEXT("two refusals, one short 'Not yet' line per family (stance, time): %d lines"), CountMessages(World, TEXT("Not yet")) - State.NotYetBefore));
+			Leader->StopOperative();
+			Tap(PC, State, EKeys::C);
+			State.Stage = 53;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 53:
+		{
+			if (Tutorial->GetStepState(TEXT("A0_cam_pan")) != ETutorialStepState::Active && State.StageTime < 5.f)
+			{
+				return true;
+			}
+			Check(State, CountMessages(World, TEXT("Not yet")) == State.NotYetBefore + 2, TEXT("C again: no second 'Not yet' line for the same family"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_cam_pan")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Active,
+				TEXT("the first camera card shows WHILE HQ talks"));
+			Overlay->Refresh();
+			Check(State, Overlay->IsCardShown() && Overlay->IsSubtitleShown(), TEXT("card and radio strip on screen together"));
+			FSlateRect CardRect;
+			FSlateRect StripRect;
+			if (Overlay->GetCardAndStripRects(CardRect, StripRect))
+			{
+				Check(State, !FSlateRect::DoRectanglesIntersect(CardRect, StripRect), FString::Printf(TEXT("card (%.0f..%.0f) and strip (%.0f..%.0f) do not overlap"),
+					CardRect.Left, CardRect.Right, StripRect.Left, StripRect.Right));
+			}
+			else
+			{
+				Check(State, UTutorialOverlayWidget::StripSideReserve >= UTutorialOverlayWidget::CardLeftMargin + UTutorialOverlayWidget::CardMaxWidth,
+					TEXT("no layout headless: the strip keeps the card column free by construction"));
+			}
+			PressKey(PC, EKeys::W, IE_Pressed);
+			State.Stage = 54;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 54:
+		{
+			if (State.StageTime < 1.3f)
 			{
 				return true;
 			}
 			PressKey(PC, EKeys::W, IE_Released);
-			PressKey(PC, EKeys::MiddleMouseButton, IE_Pressed);
-			State.Stage = 29;
+			Check(State, Tutorial->GetStepState(TEXT("A0_cam_pan")) == ETutorialStepState::Completed, TEXT("W held: the pan stage done during the radio"));
+			State.Stage = 55;
 			State.StageTime = 0.f;
 			return true;
 		}
-		case 29:
+		case 55:
 		{
-			if (State.StageTime < 0.9f)
+			if (Tutorial->GetStepState(TEXT("A0_cam_pan_drag")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A0_cam_pan_drag")) == ETutorialStepState::Active, TEXT("the MMB drag card next"));
+			Tap(PC, State, EKeys::Q); // Q / E early: the Q/E card is precredited when it is due
+			State.Stage = 56;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 56:
+			Tap(PC, State, EKeys::E);
+			State.Stage = 57;
+			State.StageTime = 0.f;
+			return true;
+		case 57:
+			PressKey(PC, EKeys::MiddleMouseButton, IE_Pressed);
+			State.Stage = 58;
+			State.StageTime = 0.f;
+			return true;
+		case 58:
+		{
+			if (State.StageTime < 0.8f)
 			{
 				return true;
 			}
 			PressKey(PC, EKeys::MiddleMouseButton, IE_Released);
-			Check(State, !Leader->IsMoving() && FVector::Dist2D(Leader->GetActorLocation(), State.LeaderStart) < 30.f && Tutorial->GetLockedRefusalCount() == 1,
-				FString::Printf(TEXT("the click during the radio was refused (moved %.0f cm, %d refusals)"), FVector::Dist2D(Leader->GetActorLocation(), State.LeaderStart),
-					Tutorial->GetLockedRefusalCount()));
-			Check(State, Tutorial->GetStepState(TEXT("A0_wait_hq")) == ETutorialStepState::Completed && CountMessages(World, TEXT("HQ is talking")) == 1,
-				TEXT("TUT_A0_WAIT_HQ in the feed once"));
-			Check(State, Tutorial->GetMachine().GetCommandUse(PlayerCommands::CameraPanKeys).HeldSeconds >= 1.f
-				&& Tutorial->GetMachine().GetCommandUse(PlayerCommands::CameraPanDrag).HeldSeconds >= 0.5f,
-				FString::Printf(TEXT("command history recorded the pan (%.2f s) and the MMB drag (%.2f s) during the radio"),
-					Tutorial->GetMachine().GetCommandUse(PlayerCommands::CameraPanKeys).HeldSeconds, Tutorial->GetMachine().GetCommandUse(PlayerCommands::CameraPanDrag).HeldSeconds));
-			Check(State, Tutorial->SkipStep(TEXT("A0_radio_hq")), TEXT("radio skipped (ends the intro)"));
-			Next(State);
+			Check(State, Tutorial->GetStepState(TEXT("A0_cam_pan_drag")) == ETutorialStepState::Completed, TEXT("a ~0.8 s MMB drag completes the drag stage"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_cam_rotate_keys")) == ETutorialStepState::Completed && Tutorial->GetPrecreditedCount() == 1
+				&& CountMessages(World, TEXT("already done")) == 1, FString::Printf(TEXT("Q/E precredited from the history (%d precredited)"), Tutorial->GetPrecreditedCount()));
+			// Dialogue skip (user request 2026-10-13): Enter tap = the next line.
+			const FTutorialSubtitleView View = Tutorial->GetSubtitleView();
+			Check(State, View.bVisible && View.StepId == FName(TEXT("A0_radio_hq")) && View.LineIndex + 1 < View.LineCount,
+				FString::Printf(TEXT("the radio still talks (line %d / %d)"), View.LineIndex + 1, View.LineCount));
+			State.LineIndexBefore = View.LineIndex;
+			Tap(PC, State, EKeys::Enter);
+			State.Stage = 59;
+			State.StageTime = 0.f;
 			return true;
 		}
-		case 30:
+		case 59:
 		{
-			if (Tutorial->GetStepState(TEXT("A0_cam_rotate_keys")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			if (State.StageTime < 0.1f)
 			{
 				return true;
 			}
-			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Move), TEXT("after the radio: moves unlocked"));
-			Check(State, Tutorial->GetStepState(TEXT("A0_cam_pan")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A0_cam_pan_drag")) == ETutorialStepState::Completed
-				&& Tutorial->GetPrecreditedCount() == 2, FString::Printf(TEXT("pan and MMB drag precredited from the history (%d precredited)"), Tutorial->GetPrecreditedCount()));
-			Check(State, CountMessages(World, TEXT("already done")) == 2, TEXT("two unobtrusive 'already done' ticks in the feed"));
-			Check(State, Tutorial->GetStepState(TEXT("A0_cam_rotate_keys")) == ETutorialStepState::Active, TEXT("Q/E is the first card shown"));
-			for (const TCHAR* Id : { TEXT("A0_cam_rotate_keys"), TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom") })
+			const FTutorialSubtitleView View = Tutorial->GetSubtitleView();
+			Check(State, View.bVisible && View.LineIndex == State.LineIndexBefore + 1,
+				FString::Printf(TEXT("Enter tap: the next line at once (%d -> %d)"), State.LineIndexBefore + 1, View.LineIndex + 1));
+			Check(State, Tutorial->GetMachine().GetCommandUse(PlayerCommands::DialogueNext).Count == 1, TEXT("Dialogue.Next reported"));
+			PressKey(PC, EKeys::Enter, IE_Pressed); // held: the whole radio is skipped after 0.6 s
+			State.Stage = 60;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 60:
+		{
+			if (State.StageTime < 0.85f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Completed && !Overlay->IsSubtitleShown(),
+				FString::Printf(TEXT("Enter held 0.6 s: the radio ends as if played out (%s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A0_radio_hq")))));
+			PressKey(PC, EKeys::Enter, IE_Released);
+			Check(State, Tutorial->GetMachine().GetCommandUse(PlayerCommands::DialogueSkip).Count == 1
+				&& Tutorial->GetMachine().GetCommandUse(PlayerCommands::DialogueNext).Count == 1, TEXT("Dialogue.Skip reported once; the release adds no extra line"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Idle, TEXT("radio over, camera chain still running: no walk card yet"));
+			for (const TCHAR* Id : { TEXT("A0_cam_rotate_mouse"), TEXT("A0_cam_zoom") })
 			{
 				Tutorial->SkipStep(Id);
 			}
-			// Locked sprint: a double click walks; locked inventory: I does nothing but a line; locked heat pack: U does nothing.
-			DoubleClickAhead(World, Cast<ACodexTacticsPlayerController>(PC), Leader);
-			Next(State);
+			State.Stage = 61;
+			State.StageTime = 0.f;
 			return true;
 		}
-		case 31:
+		case 61:
 		{
-			if (State.StageTime < 0.6f)
+			if (Tutorial->GetStepState(TEXT("A0_move")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				// the queued zoom card shows after the breather: skip it once it is up
+				Tutorial->SkipStep(TEXT("A0_cam_zoom"));
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Active, TEXT("radio skipped + camera chain done: its follower, the walk card, shows"));
+			// Beacon 1 reached EARLY (user request 2026-10-13): a fresh A0, the radio and the first camera card still up.
+			Tutorial->ResetTutorial();
+			State.Stage = 62;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 62:
+		{
+			if ((Tutorial->GetStepState(TEXT("A0_cam_pan")) != ETutorialStepState::Active || Tutorial->GetStepState(TEXT("A0_radio_hq")) != ETutorialStepState::Active)
+				&& State.StageTime < 6.f)
 			{
 				return true;
 			}
-			Check(State, Leader->IsMoving() && !Leader->IsSprinting(), FString::Printf(TEXT("locked double click: the leader walks (moving %d, sprinting %d)"),
-				Leader->IsMoving() ? 1 : 0, Leader->IsSprinting() ? 1 : 0));
-			Check(State, Tutorial->GetStepState(TEXT("A0_nosprint")) == ETutorialStepState::Completed
-				&& CountMessages(World, TEXT("No running yet")) == State.NoSprintLinesBefore + 1, TEXT("TUT_A0_NOSPRINT in the feed once"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_cam_pan")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Active,
+				TEXT("reset: radio and the first camera card up again"));
+			Check(State, EnterBeatVolume(World, Leader, TEXT("VOL_A0_BEACON1"), TEXT("A1")), TEXT("beacon 1 volume (beat A1) entered early"));
+			Check(State, Tutorial->GetCurrentBeat() == FName(TEXT("A1")), TEXT("early beacon: A1 started"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_cam_pan")) == ETutorialStepState::Skipped && Tutorial->GetStepState(TEXT("A0_cam_zoom")) == ETutorialStepState::Skipped
+				&& Tutorial->GetMachine().GetActiveCard() != FName(TEXT("A0_cam_pan")), TEXT("the leftover camera chain is dropped cleanly"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Active && Tutorial->GetStepState(TEXT("A0_obj_beacon")) == ETutorialStepState::Completed,
+				TEXT("the radio keeps playing; the beacon objective is done"));
+			Check(State, Tutorial->SkipSpeech(), TEXT("the strip's SKIP (SkipSpeech) ends the radio"));
+			Check(State, Tutorial->GetStepState(TEXT("A0_radio_hq")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A0_move")) == ETutorialStepState::Skipped,
+				TEXT("radio completed; the A0 walk card is dropped, never shown"));
+			State.Stage = 63;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 63:
+		{
+			const ETutorialStepState Start = Tutorial->GetStepState(TEXT("A1_wt_start"));
+			if (Start != ETutorialStepState::Active && Start != ETutorialStepState::Completed && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			Check(State, Start == ETutorialStepState::Active || Start == ETutorialStepState::Completed, TEXT("A1's walk-and-talk plays after the radio"));
+			Tutorial->SkipStep(TEXT("A1_wt_start"));
 			Leader->StopOperative();
 			const int32 PacksBefore = Leader->HeatPacksCount;
-			const int32 RefusalsBefore = Tutorial->GetLockedRefusalCount();
 			Hud->ToggleInventoryDrawer();
 			Check(State, !Hud->GetInventoryDrawer() || !Hud->GetInventoryDrawer()->IsOpen(), TEXT("locked inventory: the drawer stays closed"));
 			Check(State, Tutorial->GetStepState(TEXT("A0_noinventory")) == ETutorialStepState::Completed && CountMessages(World, TEXT("Packs stay closed")) == 1,
-				TEXT("TUT_A0_NOINVENTORY in the feed once"));
+				TEXT("TUT_A0_NOINVENTORY in the feed once (its own line, no generic one)"));
+			const int32 RefusalsBefore = Tutorial->GetLockedRefusalCount();
 			Leader->ColdLevel = 50.f;
 			Cast<ACodexTacticsPlayerController>(PC)->UseSquadItem(EPersonalItem::HeatPack);
-			Check(State, Leader->HeatPacksCount == PacksBefore && Tutorial->GetLockedRefusalCount() == RefusalsBefore + 2,
-				FString::Printf(TEXT("locked heat pack: U refused, the pack stays (%d -> %d, refusals +%d)"), PacksBefore, Leader->HeatPacksCount,
-					Tutorial->GetLockedRefusalCount() - RefusalsBefore));
+			Check(State, Leader->HeatPacksCount == PacksBefore && Tutorial->GetLockedRefusalCount() > RefusalsBefore,
+				FString::Printf(TEXT("locked heat pack: U refused, the pack stays (%d -> %d)"), PacksBefore, Leader->HeatPacksCount));
 			Leader->ColdLevel = 0.f;
-			// Beacon 1: A1 starts; sprint stays locked (rev 5).
-			Check(State, Tutorial->StartBeat(TEXT("A1")), TEXT("A1 started"));
-			Tutorial->SkipStep(TEXT("A0_move"));
-			Tutorial->SkipStep(TEXT("A1_wt_start"));
-			Check(State, Tutorial->IsCommandLocked(PlayerCommands::Sprint) && Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen),
-				TEXT("beacon 1 (beat A1): sprint and inventory STILL locked"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Sprint) && Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen),
+				TEXT("beacon 1 (beat A1): sprint free, inventory still locked"));
 			Check(State, EnterVolume(World, Leader, TEXT("VOL_A1_BEACON2")), TEXT("the crack volume fires"));
-			Next(State);
+			State.Stage = 32;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 32:
@@ -771,6 +922,7 @@ namespace TutorialSmoke
 				State.ColdAtSolo.Add(Member, Member->ColdLevel);
 			}
 			Check(State, Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Completed, TEXT("three crossings complete the bridge card"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::SoloOn) && !Tutorial->IsCommandLocked(PlayerCommands::Regroup), TEXT("the bridge card unlocked solo / regroup (B)"));
 			Next(State);
 			return true;
 		}
@@ -840,7 +992,7 @@ namespace TutorialSmoke
 			Check(State, Tutorial->GetStepState(TEXT("A1_heatpack")) == ETutorialStepState::Active, TEXT("heat pack card at Chills"));
 			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen) && !Tutorial->IsCommandLocked(PlayerCommands::UseHeatPack),
 				TEXT("the heat pack card UNLOCKS the inventory and the items"));
-			Check(State, Tutorial->IsCommandLocked(PlayerCommands::Sprint), TEXT("sprint still locked until the lesson is done"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Sprint), TEXT("sprint free all along (never locked since 2026-10-13)"));
 			const FTutorialCardView View = Tutorial->GetCardView();
 			AOperativeCharacter* Focus = Tutorial->GetFocusOperative(TEXT("A1_heatpack"));
 			const AOperativeCharacter* Now = Coldest(Squad);
@@ -876,8 +1028,7 @@ namespace TutorialSmoke
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_sprint")) == ETutorialStepState::Active, TEXT("'running warms you up': the sprint card after the lesson"));
-			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::Sprint), TEXT("sprint UNLOCKED by the sprint card"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_sprint")) == ETutorialStepState::Active, TEXT("'running keeps you warm': the tip card after the lesson"));
 			Check(State, Tutorial->GetStepState(TEXT("A1_obj_hut")) == ETutorialStepState::Idle && Tutorial->GetStepState(TEXT("A1_wt_resupply")) == ETutorialStepState::Idle,
 				TEXT("no resupply line / hut objective before the sprint card is done"));
 			Tutorial->SkipStep(TEXT("A1_wt_warm"));
@@ -980,23 +1131,110 @@ namespace TutorialSmoke
 			// Save round trip of the command history: the "tutorial" section carries it.
 			const TSharedPtr<FJsonObject> Saved = Tutorial->CaptureSaveState();
 			const TSharedPtr<FJsonObject>* History = nullptr;
-			Check(State, Saved.IsValid() && Saved->TryGetObjectField(TEXT("history"), History) && (*History)->HasField(PlayerCommands::CameraPanKeys.ToString()),
+			Check(State, Saved.IsValid() && Saved->TryGetObjectField(TEXT("history"), History) && (*History)->HasField(PlayerCommands::SelectMember.ToString()),
 				TEXT("the save's tutorial section carries the command history"));
-			// The vision-cone toggle (user decision 2026-10-13): O through the real input path flips the player setting and reports View.VisionCones.
-			const bool bConesBefore = UVisionConeComponent::IsPlayerEnemyConesOn();
+			// The vision-cone toggle (user decision 2026-10-13) is taught by its A4 card: O in A1 is refused.
+			State.bConesBefore = UVisionConeComponent::IsPlayerEnemyConesOn();
 			Tap(PC, State, EKeys::O);
 			State.Focus = nullptr;
-			State.NoSprintLinesBefore = bConesBefore ? 1 : 0;
 			Next(State);
 			return true;
 		}
 		case 47:
 		{
-			const bool bConesBefore = State.NoSprintLinesBefore == 1;
-			Check(State, UVisionConeComponent::IsPlayerEnemyConesOn() != bConesBefore, TEXT("O toggles the player's enemy vision cones"));
+			Check(State, UVisionConeComponent::IsPlayerEnemyConesOn() == State.bConesBefore
+				&& Tutorial->GetMachine().GetCommandUse(PlayerCommands::ToggleVisionCones).Count == 0, TEXT("O in A1: refused (taught by the A4 card)"));
+			Check(State, Tutorial->TriggerStep(TEXT("A4_cones")) && Tutorial->GetCurrentBeat() == FName(TEXT("A4")), TEXT("A4 started with the cone card"));
+			State.Stage = 69;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 69:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_cones")) != ETutorialStepState::Active && State.StageTime < 5.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_cones")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::ToggleVisionCones),
+				TEXT("the A4 cone card (shown 2 s after the beat start) unlocks O"));
+			Tap(PC, State, EKeys::O);
+			State.Stage = 64;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 64:
+		{
+			Check(State, UVisionConeComponent::IsPlayerEnemyConesOn() != State.bConesBefore, TEXT("O toggles the player's enemy vision cones"));
 			Check(State, Tutorial->GetMachine().GetCommandUse(PlayerCommands::ToggleVisionCones).Count == 1, TEXT("View.VisionCones reported once"));
 			Check(State, CountMessages(World, TEXT("Vision cones")) >= 1, TEXT("a feed line says ON / OFF"));
-			UVisionConeComponent::SetPlayerEnemyCones(bConesBefore);
+			UVisionConeComponent::SetPlayerEnemyCones(State.bConesBefore);
+			// After the stance lesson (A3; A4 repeats it as a safety) C is accepted.
+			Leader->SetStance(EOperativeStance::Standing);
+			Tap(PC, State, EKeys::C);
+			State.Stage = 65;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 65:
+		{
+			if (State.StageTime < 0.2f)
+			{
+				return true;
+			}
+			Check(State, Leader->GetStance() == EOperativeStance::Crouching, TEXT("C after the stance lesson: the leader crouches"));
+			Leader->SetStance(EOperativeStance::Standing);
+			State.RefusalsBefore = Tutorial->GetLockedRefusalCount();
+			Tap(PC, State, EKeys::SpaceBar);
+			State.Stage = 66;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 66:
+		{
+			Check(State, Tutorial->GetLockedRefusalCount() == State.RefusalsBefore + 1, TEXT("Space in A4: still refused (the pause is taught in the horde beat)"));
+			// Tutorial OFF (pause menu) unlocks everything, and switching it back on does not lock again.
+			Tutorial->SetTutorialEnabled(false);
+			Tutorial->SetTutorialEnabled(true);
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::TacticalPause) && !Tutorial->IsCommandLocked(PlayerCommands::GrenadeAim)
+				&& !Tutorial->IsCommandLocked(PlayerCommands::VehicleBoard), TEXT("tutorial OFF: every command unlocked (stays so when it is back on)"));
+			// The story dialogue window takes the same key: Enter tap = next line, Enter held = skip.
+			UDialogueSequenceAsset* Sequence = NewObject<UDialogueSequenceAsset>(GetTransientPackage());
+			Sequence->Title = TEXT("Smoke");
+			for (const TCHAR* Text : { TEXT("Line one."), TEXT("Line two."), TEXT("Line three.") })
+			{
+				FDialogueLine Line;
+				Line.Text = Text;
+				Sequence->Lines.Add(Line);
+			}
+			UDialogueSubsystem* Dialogue = World->GetSubsystem<UDialogueSubsystem>();
+			Dialogue->StartDialogue(Sequence);
+			Check(State, Dialogue->IsDialogueOpen() && Dialogue->GetLineIndex() == 0, TEXT("story dialogue open"));
+			Tap(PC, State, EKeys::Enter);
+			State.Stage = 67;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 67:
+		{
+			if (State.StageTime < 0.1f)
+			{
+				return true;
+			}
+			const UDialogueSubsystem* Dialogue = World->GetSubsystem<UDialogueSubsystem>();
+			Check(State, Dialogue->IsDialogueOpen() && Dialogue->GetLineIndex() == 1, FString::Printf(TEXT("story dialogue: Enter tap -> line %d"), Dialogue->GetLineIndex() + 1));
+			PressKey(PC, EKeys::Enter, IE_Pressed);
+			State.Stage = 68;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 68:
+		{
+			if (State.StageTime < 0.85f)
+			{
+				return true;
+			}
+			Check(State, !World->GetSubsystem<UDialogueSubsystem>()->IsDialogueOpen(), TEXT("story dialogue: Enter held 0.6 s skips the rest"));
+			PressKey(PC, EKeys::Enter, IE_Released);
 			return Finish(State, true);
 		}
 		default:

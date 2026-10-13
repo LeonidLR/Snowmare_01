@@ -141,6 +141,8 @@ export interface LevelConfig {
   squad_loadout?: SquadLoadoutConfig;
   /** UE: how the fight starts — auto (ambush when the map has patrols) | ambush | button (LevelEncounterRules). */
   combat_start?: 'auto' | 'ambush' | 'button';
+  /** UE: level-wide cold build-up multiplier (exploration + fights), multiplied with the waves' cold_drain_mult; absent = 1. */
+  cold_rate_mult?: number;
   /** UE: patrol search time after a trap on this level, s (absent / -1: enemy_perception.json search.duration_seconds). */
   patrol_search_seconds?: number;
   /** UE horde after 4 min of real-time fight (Content/Data/AI/horde.json); false switches it off for the level. */
