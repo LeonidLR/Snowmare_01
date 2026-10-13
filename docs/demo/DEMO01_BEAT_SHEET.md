@@ -1,22 +1,32 @@
-# DEMO 01: Beat Sheet and Graybox Spec: «Frozen Lake» -> «Auto-Repair Garage»
+# DEMO 01: Beat Sheet and Graybox Spec: «Frozen Lake» -> «Auto-Repair Garage» — REV 5
 
-> **User decisions 2026-10-11 (rev 2 review):** scope = **Location A «Frozen Lake» only** for now (one map `L_Demo01_A_FrozenLake`); the garage, the map transfer and the 4-minute horde are postponed. Generator: **knocked out only, repairable** (never a mission loss). PMC tripwires: **hidden until spotted, cold lowers the disarm chance, anyone may try (role chance)**. Followers in cover: **NO automatic stacking — cover is taught as manual orders per operative** (G7 dropped; the cover beat asks the player to put each operative into cover). Lesson failures before the lake fight: **a lethal hit only downs the operative at 1 HP and he GETS UP by himself (current behaviour of the tutorial lesson guard; "Retry from checkpoint" stays available; nobody lies until Retry)**; normal rules in the fight. Barrel push in live real time stays **pause-only** (2026-10-08 rule). **The Frozen Lake has NO enemies before the attack** (2026-10-11): it is a normal level that teaches the basic mechanics; the only dangers before the fight are cold and PMC traps (mines, tripwires, trapped crates). No stealth / patrol / vision-cone / guard-post lesson beats on the lake (none were in beats A0-A7; A6 already states "no enemies"; `demo_01_steps.json` has none); enemies appear only in the A8-A10 attack. Patrols, guard posts and stealth belong to the postponed garage (B). Cautious cover-to-cover approach (A6) stays. Beat numbering A0-A12 and the ~45 min estimate are unchanged. **Intro briefing window OFF on the demo level; its content becomes A0 walk-and-talk** (level JSON `demo.intro_dialogue: false`, the default when a `demo` object exists; ids `WT_A0_BRIEFING_1..3`, texts via the narrative sheet). Open: Susanin rescue + enemy counts (recommendation stands), TB rule fixes, housekeeping commit.
+> **User flow 2026-10-13 (rev 5, AUTHORITATIVE; supersedes rev 4 and the 2026-10-11 decision "no enemies on the lake before the attack").** The designer's new Demo 01 flow, in his order: (1) the level opens with **radio / HQ only** - no lessons, no actions while HQ talks; **the inventory is locked, sprint is locked**; (2) the staged camera lesson; (3) walk to beacon 1 (walking only); (4) a crevasse with a **shaky bridge: the squad crosses ONE AT A TIME** = select an operative + Solo; (5) after the bridge the squad walk-and-talk (the banter that used to open A0; the HQ briefing stays at the start); (6) the warming lesson: **heat pack** (every operative starts with 1, `squad_loadout.heat_packs_count: 1`), **the inventory unlocks here**, the gust safety stays; (7) "running warms you up" -> **sprint unlocks here** (not at beacon 1); (8) the fishermen's hut: supplies / loot, more heat packs (existing hut lesson, resupply line + objective); (9) move on; cold again, need heat again; they find a barrel -> **light the barrel** (existing A2 lesson); (10) approach the complex **cautiously** (sprint not locked): mines and tripwires, look for cover, **crawl prone under a low fence**; stances and vaulting are taught here; (11) they spot enemies: **patrolling frozen (zombie-type) + a pair of hounds**; the player lays an ambush with **tripwires**; a **vision-cone toggle (Commandos style, hotkey + menu entry)**; a small fight; (12) inside the base: look around, another supply spot, **one crate is booby-trapped -> disarm**; (13) Commander: "be ready for a flank attack, prepare the place": **move barricades, mine (booby-trap) barricades, move barrels (ambush or warmth), take dominant / high positions (colder up there)**; (14) the **canister (fuel) quest**; (15) the **horde** lessons: first the **tactical pause**, second **automatic mode (Commander Mode / AUTO)**, third: after the first attack the horde wrecks the generator -> **repair it with the Engineer and make it his guard point**.
 
-> **User decisions 2026-10-12 (rev 3, A0-A2 redesign; the sprint lock / starter-loadout parts are superseded by rev 4 below):** **sprint is LOCKED until warmed up** — sprinting warms the body (2026-10-01 rule), so a player who runs never meets the cold lesson; a double click walks from A0 on (one feed line `TUT_A0_NOSPRINT` on the first try) and `WT_A1_WARMED` unlocks it after the heat-pack lesson (beat A2 unlocks it as a safety). **Heat pack moved from A2 to A1**, after a new **loot lesson in a fisherman's hut** (crate with 3 heat packs; the squad starts WITHOUT heat packs: level JSON `squad_loadout.heat_packs_count: 0`). **Wind zone at the solo point** (`ACameraZoneVolume` x2.5, the user places it) **+ a gust safety**: 20 s after solo, if nobody is at Chills (40 %), a scripted gust (`WT_A1_GUST`) gives every operative +20 cold (at least 42 %), data-driven in the step (`cold_bump`). The heat-pack card names / marks the coldest operative. A2 keeps the barrel push / light; its heat-pack card is remedial only; the A2 cold-bar card is gone. Engine side: generic tutorial command locks (`lock` / `unlock` on beats and steps, saved), condition triggers + `requires`, step actions, `feed` kind (HANDOFF §6 «Tutorial»).
-
-> **User decisions 2026-10-12 (rev 4, after the playtest: "with sprint blocked the squad freezes 100 %; it's too hard"):** the sprint lock now covers **only the A0 stretch** (camera -> beacon 1; a double click walks, one feed line `TUT_A0_NOSPRINT`). **Beacon 1 (beat A1 start) UNLOCKS sprint** and shows the card `TUT_A1_SPRINT` ("Double-click to run. Running keeps you warm."); the unlock no longer depends on the heat pack (`WT_A1_WARMED` is gone; beat A2 keeps its unlock as a harmless safety). A1 order: sprint card -> select -> box select -> **solo at the crack** (`VOL_A1_BEACON2`, wind zone x2.5 + the existing gust safety, 20 s after solo if nobody is at Chills) -> regroup. **The heat pack USE lesson uses STARTER packs: every operative spawns with 1** (level JSON `squad_loadout.heat_packs_count: 1`, a PER-OPERATIVE count: `LoadoutRules::StartingHeatPacks` replaces the role kit of each), the card is focused on the coldest (`TUT_A1_HEATPACK`) plus the optional mate card. **Then the resupply: radio / walk-and-talk `WT_A1_RESUPPLY` (Commander: "We're nearly out of heat packs. The fishermen's hut is close — let's check it.") + objective `OBJ_A1_HUT` "Resupply heat packs at the fishermen's hut"** (step id `A1_obj_hut` kept for the user's marker, but its trigger is now after the heat pack lesson, not the beat start) -> **hut loot lesson** (`VOL_A1_HUT`: open the crate, take the heat packs; the crate holds 3) -> a closing line (`WT_A1_STOCKED`) -> guard (now at beacon 3), stances, vault, camp as before. The A2 remedial heat pack card stays.
+> **Defaults set by the orchestrator 2026-10-13 (implemented; the user may change any of them):**
+> - **Shaky bridge:** a second operative is NOT allowed on while one is crossing: the bridge creaks, the second stops at the edge with a feed line ("The bridge won't hold two!"), no damage, no falling. Formation followers wait at the bridge end until it is free. A generic placeable C++ actor (`ABridgeCrossingVolume`, Capacity 1 by default, data-driven per instance), usable on any map.
+> - **Low fence:** MANUAL prone - standing / crouched operatives cannot pass (the move stops at the fence with the hint "Too low - go prone"), prone ones crawl under. Generic placeable C++ actor (`ACrawlGapActor`); pathing: non-prone paths route around or end at the fence (crawl-only navmesh area closed to `UNavFilter_NoCrawl`), prone paths may go under; enemies never path under.
+> - **Box select** is taught after the bridge (regroup everyone with a box and go on). **Guard** is taught in step 15 (the Engineer guarding the repaired generator), not in A1 any more.
+> - **Inventory lock:** a tutorial lock target for the inventory drawer (`Inventory.Open`, key I / action bar) and item use (`Item.*`: U and H/J/K/L, item drags), unlocked by the heat-pack lesson card.
+> - **HQ intro:** the radio step also locks `Order.Move` while it plays (a click gets one feed line "Hold on - HQ is talking."); the first camera card unlocks moves.
+> - **Precredit** (user addition 2026-10-13): a command lesson the player already performed before its card is due (panned / rotated / zoomed, MMB-dragged, selected a member, used stance keys, ... since the level started, even during the HQ intro) completes without showing the card (one feed tick "already done"); partial uses seed the card's progress; opt-out per step `"precredit": false` (location- / target-bound lessons: regroup, sprint, loot open, tripwire); event / volume completions are never precredited.
+> - **Camera lesson** (user addition 2026-10-13): a separate staged step for the **middle-mouse drag pan** (`A0_cam_pan_drag`, `TUT_A0_CAM_PAN_DRAG`) after the WASD / edge pan and before Q/E.
 
 > **Change log**
-> - **2026-10-12 rev 4:** sprint locked on the A0 stretch only, unlocked at beacon 1; starter heat pack 1 per operative; heat pack lesson after the crack; resupply line + hut objective after the lesson, then the hut loot lesson. §4 A0 / A1.
-> - **2026-10-12 rev 3:** A0-A2 reordered (sprint locked until warmed; hut loot lesson; heat pack in A1 with the wind zone + gust safety; A2 barrel only + remedial heat pack). §4 A0 / A1 / A2.
-> - **2026-10-11 rev 2:** barrel relocation in exploration / RT / pause / TB (new §2.5; beats A2, A4, A7, §5 W1–W3, B2–B3).
->   Squad-placed traps: mines, tripwires, and booby-trapping objects ("mining a barricade") (new §2.6; beats A7, §5 W2, B1–B3).
->   **No feeling of safety (sudden horde, no 60 s prep):** A7 becomes "read the ground": approach signs, a hidden east lane, choke points.
->   Also in A7: turret training (deploy, rotate, power from the generator) and the generator as the key object (heat, turret power, door).
->   Engineer repair moments; the new blast-door rule (opens only while the generator runs, full after W3; another agent implements it).
->   Lake waves on three lanes + the breach; anticipation debrief (§5.3); garage door traps before the 4-min horde.
->   Mechanics check (§9), build lists (§10), questions (§12) updated. Barrel heat radius corrected to 5.5 m.
+> - **2026-10-13 rev 5:** the user's new 15-step flow (above): HQ-only intro + move lock, bridge one-at-a-time (select + solo) at the crack, banter after the bridge, heat pack = inventory unlock, "running warms you" = sprint unlock, hut, barrel, cautious approach (stances / vault / low fence / cover / traps), patrol ambush with the vision-cone toggle and tripwires, base + trapped crate, defence prep, canister quest, horde (pause / AUTO / generator repair + guard). Beats renumbered A0-A10 (§4). New: §1.3 encounter groups design (placed patrols vs the quest-triggered horde), §9.0 mechanics gap table, §10.1 map build list per beat with exact ids, §11 phased plan, §12 questions. Phase 1 (steps 1-9) + the fence / cone features implemented (`demo_01_steps.json` rev 5, HANDOFF §6).
+> - 2026-10-12 rev 4: sprint locked on the A0 stretch only, unlocked at beacon 1; starter heat pack 1 per operative; heat pack lesson after the crack; resupply line + hut objective after the lesson, then the hut loot lesson. (Superseded by rev 5 where it conflicts.)
+> - 2026-10-12 rev 3: A0-A2 reordered (sprint locked until warmed; hut loot lesson; heat pack in A1 with the wind zone + gust safety; A2 barrel only + remedial heat pack).
+> - 2026-10-11 rev 2: barrel relocation in exploration / RT / pause / TB (§2.5); squad-placed traps (§2.6); A7 "read the ground"; lake waves on three lanes + the breach; garage door traps before the 4-min horde.
 > - 2026-10-11 rev 1: first draft (Lead Level Designer).
+
+> **Earlier decision blocks (rev 2-4) are kept below for history; where they conflict with rev 5, rev 5 wins.** Still valid from them: scope = Location A only (garage postponed); generator knocked out only, repairable; PMC tripwires hidden until spotted, cold lowers the disarm chance, anyone may try; cover = manual orders per operative (G7 dropped); lesson failures = downed at 1 HP + "Retry from checkpoint"; barrel push in live real time stays pause-only; intro briefing window OFF (`demo.intro_dialogue: false`); starter heat pack 1 per operative; the gust safety.
+
+> **History of the earlier decision blocks:**
+>
+> **User decisions 2026-10-11 (rev 2 review):** scope = **Location A «Frozen Lake» only** for now (one map `L_Demo01_A_FrozenLake`); the garage, the map transfer and the 4-minute horde are postponed. Generator: **knocked out only, repairable** (never a mission loss). PMC tripwires: **hidden until spotted, cold lowers the disarm chance, anyone may try (role chance)**. Followers in cover: **NO automatic stacking — cover is taught as manual orders per operative** (G7 dropped; the cover beat asks the player to put each operative into cover). Lesson failures before the lake fight: **a lethal hit only downs the operative at 1 HP and he GETS UP by himself (current behaviour of the tutorial lesson guard; "Retry from checkpoint" stays available; nobody lies until Retry)**; normal rules in the fight. Barrel push in live real time stays **pause-only** (2026-10-08 rule). **The Frozen Lake has NO enemies before the attack** (2026-10-11): it is a normal level that teaches the basic mechanics; the only dangers before the fight are cold and PMC traps (mines, tripwires, trapped crates). No stealth / patrol / vision-cone / guard-post lesson beats on the lake (none were in beats A0-A7; A6 already states "no enemies"; `demo_01_steps.json` has none); enemies appear only in the A8-A10 attack. Patrols, guard posts and stealth belong to the postponed garage (B). Cautious cover-to-cover approach (A6) stays. Beat numbering A0-A12 and the ~45 min estimate are unchanged. **Intro briefing window OFF on the demo level; its content becomes A0 walk-and-talk** (level JSON `demo.intro_dialogue: false`, the default when a `demo` object exists; ids `WT_A0_BRIEFING_1..3`, texts via the narrative sheet). Open: Susanin rescue + enemy counts (recommendation stands), TB rule fixes, housekeeping commit.
+>
+> **User decisions 2026-10-12 (rev 3, A0-A2 redesign; the sprint lock / starter-loadout parts are superseded by rev 4 below):** **sprint is LOCKED until warmed up** — sprinting warms the body (2026-10-01 rule), so a player who runs never meets the cold lesson; a double click walks from A0 on (one feed line `TUT_A0_NOSPRINT` on the first try) and `WT_A1_WARMED` unlocks it after the heat-pack lesson (beat A2 unlocks it as a safety). **Heat pack moved from A2 to A1**, after a new **loot lesson in a fisherman's hut** (crate with 3 heat packs; the squad starts WITHOUT heat packs: level JSON `squad_loadout.heat_packs_count: 0`). **Wind zone at the solo point** (`ACameraZoneVolume` x2.5, the user places it) **+ a gust safety**: 20 s after solo, if nobody is at Chills (40 %), a scripted gust (`WT_A1_GUST`) gives every operative +20 cold (at least 42 %), data-driven in the step (`cold_bump`). The heat-pack card names / marks the coldest operative. A2 keeps the barrel push / light; its heat-pack card is remedial only; the A2 cold-bar card is gone. Engine side: generic tutorial command locks (`lock` / `unlock` on beats and steps, saved), condition triggers + `requires`, step actions, `feed` kind (HANDOFF §6 «Tutorial»).
+>
+> **User decisions 2026-10-12 (rev 4, after the playtest: "with sprint blocked the squad freezes 100 %; it's too hard"):** the sprint lock now covers **only the A0 stretch** (camera -> beacon 1; a double click walks, one feed line `TUT_A0_NOSPRINT`). **Beacon 1 (beat A1 start) UNLOCKS sprint** and shows the card `TUT_A1_SPRINT` ("Double-click to run. Running keeps you warm."); the unlock no longer depends on the heat pack (`WT_A1_WARMED` is gone; beat A2 keeps its unlock as a harmless safety). A1 order: sprint card -> select -> box select -> **solo at the crack** (`VOL_A1_BEACON2`, wind zone x2.5 + the existing gust safety, 20 s after solo if nobody is at Chills) -> regroup. **The heat pack USE lesson uses STARTER packs: every operative spawns with 1** (level JSON `squad_loadout.heat_packs_count: 1`, a PER-OPERATIVE count: `LoadoutRules::StartingHeatPacks` replaces the role kit of each), the card is focused on the coldest (`TUT_A1_HEATPACK`) plus the optional mate card. **Then the resupply: radio / walk-and-talk `WT_A1_RESUPPLY` (Commander: "We're nearly out of heat packs. The fishermen's hut is close — let's check it.") + objective `OBJ_A1_HUT` "Resupply heat packs at the fishermen's hut"** (step id `A1_obj_hut` kept for the user's marker, but its trigger is now after the heat pack lesson, not the beat start) -> **hut loot lesson** (`VOL_A1_HUT`: open the crate, take the heat packs; the crate holds 3) -> a closing line (`WT_A1_STOCKED`) -> guard (now at beacon 3), stances, vault, camp as before. The A2 remedial heat pack card stays.
 
 Target path: `docs/demo/DEMO01_BEAT_SHEET.md`. Author: Lead Level Designer (studio role), creative-director lens applied.
 Status: DRAFT for the user's review. Where this sheet and `05_producer_plan.md` disagree, this sheet wins, because it follows
@@ -38,8 +48,7 @@ Sources checked in code (read-only): `SquadFireRules` (elevation), `DeployableRu
 The game starts from the CommonUI menu with NEW GAME. Three operatives (Commander, Engineer, Medic-Sapper Sokolova) set off across a frozen lake
 in a rising wind, **talking as they walk**. The lake teaches the body: move, split up, regroup, crouch, go prone. Then it teaches the cold:
 barrel and heat pack. Then the buildings: scout inside, loot crates, learn that the **PMC left traps in the worst places**, and
-that **numb fingers cannot disarm a mine**. Stage two is a **quest across the ice**: find fuel, siphon diesel from a stranded APC
-(approached **cover to cover, like soldiers**), power the weather station. The radio mast's power-up wakes the lake. The station-yard
+that **numb fingers cannot disarm a mine**. Stage two (rev 5): the squad approaches the PMC complex **cautiously** (stances, a crawl under a low fence, cover, mines and wires), lays a **tripwire ambush for a patrol** (two frozen, two hounds; vision cones on), loots the base (one crate is wired), **prepares the defence** (barricades, mines, barrels, the roof) and finds the **fuel canister** for the generator. The radio mast's power-up wakes the lake. The station-yard
 fight is taught in **three forms** (real time -> tactical pause -> turn-based). It brings a **flank breach** through the boathouse
 and a **freezing survivor (Susanin)** to rescue. The squad then takes the road to a **closed auto-repair garage**: patrols, tripwires,
 mines, an ambush. If that fight runs past **4 minutes**, a **second horde** arrives, so the player learns to finish fast from the **mezzanine**.
@@ -80,7 +89,20 @@ What does not exist: "open the NEXT map and bring only the squad". Applying an A
 Narrative bridge: after the A fight the boathouse gate stays open, and the road east leads to "the PMC motor pool". `ALocationExitVolume` sits 15 m
 down the road. Feed line `WT_A12_01`, then a fade, then B. B opens on the yard edge with walk-and-talk `WT_B0_*`.
 
----
+### 1.3 Encounter groups: placed patrols BEFORE the horde on the same map (rev 5 architecture; design now, implement in Phase 2)
+
+**The problem (facts from code, 2026-10-13):** `ULevelEncounterSubsystem::OnWorldBeginPlay` puts EVERY `AEnemyCharacter` present at begin play into `LevelEnemies`; `LevelEncounterRules::ShouldStartAmbush` turns a level with placed enemies / patrol routes into an **ambush level** when `combat_start` is Auto; with `combat_start: "button"` (the Frozen Lake JSON) the fight only starts from the quest console, so placed patrols would never be fought as a wave - but `AEnemyCharacter` still detects and attacks the squad, `NotifyHostileContact` is ignored on a non-ambush level, and `UWaveSubsystem::AdoptLevelEnemies` (ambush wave 1) adopts every living enemy in the world. Step 11 needs a **pre-horde patrol encounter** (two frozen + two hounds, a real small fight with a proper end) and steps 14-15 need the **quest-triggered horde waves** afterwards, on one map.
+
+**Options:**
+
+| Option | How | Cost | Verdict |
+|---|---|---|---|
+| A. **Encounter groups** (minimal clean) | A new `UPROPERTY EncounterGroup` (FName, EditInstanceOnly) on `AEnemyCharacter` (default `None` = today's behaviour) + `APatrolRouteActor` passes its group to its patrol. Level JSON gets `"encounters": [{ "id": "A4_PATROL", "kind": "skirmish", "enemies": "group:A4_PATROL", "start": "contact", "on_cleared": "event:EncounterCleared.A4_PATROL" }]`. `ULevelEncounterSubsystem` keeps **one state per group**: a group's contact (sight / hearing / damage / trap) starts a **skirmish** = the real-time fight rules (squad auto fire, pause allowed, TB allowed) **without** `FGameFlowStateMachine::StartAmbushCombat` (phase stays Exploration-with-contact: a new `ECodexGamePhase::Skirmish` or a flag `bSkirmish` on the flow). The skirmish ends when the group's enemies are dead -> `EncounterCleared(.<Id>)` gameplay event (tutorial / quest hooks) -> back to Exploration. `AdoptLevelEnemies` adopts only enemies with `EncounterGroup == None` (today's semantics for pure ambush maps) - grouped enemies are never pulled into the horde waves. Patrol detection on a non-ambush level calls `NotifyHostileContact(Group)` instead of being ignored. | **M** (2-3 d): flow phase / flag + HUD badge "CONTACT", encounter state + JSON, `AdoptLevelEnemies` filter, `NotifyHostileContact` group routing, save (`world_state.encounters`), `EncounterSkirmishSmoke`, tests `CodexTactics.GameFlow.Encounter.*` | **Recommended** |
+| B. Spawn the patrols from a wave | The step-11 patrols are not placed but spawned by a dedicated "wave 0" with `combat_start: button` and a patrol route assignment in the JSON | S code, but the enemies arrive as a wave (the horde HUD, the free pause, "WAVE 1 / 3", wave victory panel) - wrong feel for a stealth ambush; no patrol routes from JSON today | Reject |
+| C. Second map for the base | Steps 10-15 on `L_Demo01_B_*` with the lake as a pure tutorial | Reuses the A -> B transfer design (§1.2 option A, M) but splits the user's single level in two | Fallback only |
+
+**Decision (proposed): A.** Minimal contract: `EncounterGroup` on the enemy + route, the `encounters` JSON block, the skirmish sub-state, `EncounterCleared` events, `AdoptLevelEnemies` ignoring grouped enemies. Nothing changes for L_PatrolTest / outpost ambush maps (no group = today). Implement only after Phase 1 is in main and the user has placed the step-11 patrol (`APatrolRouteActor` x2 + `BP_Enemy_Frostbitten` x2 + `BP_Enemy_Hound` x2 with `EncounterGroup = A4_PATROL`). Open question for the user: should the skirmish allow turn-based (the grid refuses on uneven ground anyway) and should the Panic system be on for it (the demo flag turns Panic off)?
+
 
 ## 2. Global design rules and metrics (both locations)
 
@@ -211,234 +233,108 @@ North up. Base ground Z = 0. Ice is flat (+-0.2 m). Pressure ridges are the low 
 
 ---
 
-## 4. Location A: beats
+## 4. Location A: beats (rev 5 order = the user's 15 steps)
 
-Format per beat: **Goal / Teaches (key) / Walk-and-talk / Hint cards / Setup (place) / Metrics / Cold / Success-fail / Checkpoint / min**.
-Completion events marked (E) need the tutorial command choke point (UX W2). Marked (X) they exist today.
+Format per beat: **Goal / Teaches (key) / Walk-and-talk / Hint cards (step ids of `demo_01_steps.json`) / Setup (place) / Metrics / Cold / Success-fail / Checkpoint / min**.
+**Status** per beat: DONE = steps + engine in `agents/work` (Phase 1); DESIGNED = this sheet only (Phase 2 / 3). Completion events marked (E) are raised by the code today.
+
+| Beat | User step | Status | Volume that starts it |
+|---|---|---|---|
+| A0 The drop | 1-3 | DONE | start beat |
+| A1 The crossing | 4-8 | DONE | `VOL_A0_BEACON1` (Beat Id `A1`) |
+| A2 The camp | 9 | DONE (unchanged lesson) | `VOL_A2_CAMP` (Beat Id `A2`) |
+| A3 The approach | 10 | DONE (steps + fence / cover / stance / trap cards) | `VOL_A3_APPROACH` (Beat Id `A3`) |
+| A4 The ambush | 11 | PARTIAL (cone toggle + tripwire cards DONE; the patrol skirmish = §1.3, Phase 2) | `VOL_A4_OVERLOOK` (Beat Id `A4`) |
+| A5 Inside the base | 12 | DESIGNED | `VOL_A5_BASE` (Beat Id `A5`) |
+| A6 Prepare the defence | 13 | DESIGNED | `VOL_A6_PREP` (Beat Id `A6`) or after A5's disarm |
+| A7 The canister | 14 | DESIGNED (quest chain exists) | the generator terminal first look |
+| A8 The horde: pause | 15a | DESIGNED | `CombatStarted` (E) |
+| A9 The horde: AUTO | 15b | DESIGNED | wave 2 start |
+| A10 Generator down: repair + guard | 15c | DESIGNED | generator breakdown (E) |
 
 ### STAGE 1: LEARN TO MOVE AND SURVIVE
 
-#### A0. Menu -> drop (cold open)
-- **Goal:** start moving within 20 s of NEW GAME. No standing dialogue.
-- **Teaches:** camera (WASD / edge, wheel, Q/E), click-move. **Sprint is LOCKED on this stretch only** (rev 3, narrowed in rev 4 after the playtest: a locked sprint all the way froze the squad 100 %): sprinting warms the body (2026-10-01 rule); the lock ends at beacon 1.
-- **Walk-and-talk:** `WT_A0_BRIEFING_1..3` + `WT_A0_01..06` start on spawn as subtitle lines while the camera eases onto the squad. Content: HQ drop confirmation, Sokolova on the cold, Engineer on the dead radio. **Replace the 15-line blocking intro** (gap G2).
-- **Hint cards:** four STAGED camera cards, each done by real use, no timeout: `TUT_A0_CAM_PAN` (WASD / screen edge for 1 s), `TUT_A0_CAM_ROTATE_KEYS` (Q / E, twice), `TUT_A0_CAM_ROTATE_MOUSE` (hold RMB and drag, 0.5 s), `TUT_A0_CAM_ZOOM` (wheel, twice), `TUT_A0_MOVE` (click the ground at the amber ring 12 m ahead; done when the leader enters the ring).
-- **Sprint lock:** a double click walks (no error line). The first try puts ONE line in the message feed: Commander `TUT_A0_NOSPRINT` "No running yet — save your strength." (step `A0_nosprint`, kind `feed`, event `Tutorial.Locked.Order.Sprint`, once). Beacon 1 (beat A1) unlocks sprint.
-- **Setup:** PlayerStart; snowcat wreck (art); `ATutorialMarkerActor` ring at beacon 1 (gap G4); `ATutorialTriggerVolume` `VOL_A0_BEACON1` (Beat Id `A1`) at beacon 1.
-- **Metrics:** start -> beacon 1 = 25 m (11 s walk).
-- **Cold:** Shelter x0.5 (G5: x0.2).
-- **Success:** leader at beacon 1. **Fail:** none.
-- **Checkpoint:** `CP_A0` = mission start.
-- **~1.5 min**
+#### A0. The drop: HQ radio, camera, walk to beacon 1 (user steps 1-3) - DONE
+- **Goal:** listen to HQ, learn the camera, walk 25 m to beacon 1. Nothing else.
+- **Teaches:** the camera (WASD / edge, **MMB drag**, Q/E, RMB look, wheel), click-move. **Locked:** sprint (a double click walks, one feed line `TUT_A0_NOSPRINT`), the inventory and items (`Inventory.*`, `Item.*`: I / the action-bar button do nothing but one feed line `TUT_A0_NOINVENTORY`; U / H / J / K / L refused), and - only while HQ talks - moves (`Order.Move`: one feed line `TUT_A0_WAIT_HQ`).
+- **Radio (`A0_radio_hq`, kind `radio`, beat start + 1 s):** `WT_A0_BRIEFING_1` (HQ) -> `WT_A0_BRIEFING_2` (Commander) -> `WT_A0_BRIEFING_3` (HQ) -> `WT_A0_01` (HQ: "follow the beacons ... HQ out") -> `WT_A0_06` (Commander: "Copy. Move out."). The squad banter (`WT_A0_02..05` of rev 4) moved to A1 after the bridge as `WT_A1_BANTER_1..4`.
+- **Hint cards, STAGED, only after the radio ends:** `A0_cam_pan` (`TUT_A0_CAM_PAN`, WASD / edge 1 s; **unlocks `Order.Move`**) -> `A0_cam_pan_drag` (`TUT_A0_CAM_PAN_DRAG`, hold MMB and drag 0.5 s; user addition 2026-10-13; `Camera.Pan.Drag` is reported by `CameraDragPanStart` + hold ticks from `ATacticalCameraPawn::UpdatePan`) -> `A0_cam_rotate_keys` (Q/E x2) -> `A0_cam_rotate_mouse` (RMB drag 0.5 s) -> `A0_cam_zoom` (wheel x2) -> `A0_move` (`TUT_A0_MOVE`: "walk to the amber ring"; done in `VOL_A0_BEACON1`). **Precredit:** any camera stage the player already did (e.g. panned while HQ talked) is ticked off without showing ("already done" feed line) and the chain continues.
+- **Objective:** `A0_obj_beacon` `OBJ_A0_BEACON1` "Reach beacon one" (from the radio's end).
+- **Setup (user):** PlayerStart; snowcat wreck (art); `TutorialMarkerActor` ring (Step Id `A0_move`) at beacon 1; `TutorialTriggerVolume` `VOL_A0_BEACON1` (Beat Id `A1`) at beacon 1 (as placed).
+- **Metrics:** start -> beacon 1 = 25 m (11 s walk). **Cold:** Shelter x0.5. **Checkpoint:** `CP_A0` = mission start. **~2 min** (radio ~25 s + camera ~45 s + walk).
 
-#### A1. The crossing: run, select, split up, cold, heat pack, resupply (rev 4, 2026-10-12)
-- **Goal:** cross 130 m of ice to the fishing camp; on the way learn running, selection, solo / regroup, the cold, the heat pack and looting a crate.
-- **Teaches, in this order:** **double-click sprint (unlocked at beacon 1)** -> select 1/2/3 -> drag box-select -> **B solo** (the Engineer scouts the crack, the others hold crouched) -> **B regroup** -> **the cold bites** (wind zone at the solo point; gust safety) -> **heat pack on the coldest operative** (starter packs) -> "we're nearly out" -> **loot the hut crate** (3 heat packs) -> T guard -> C / V / Z stances, Alt = squad -> vault a low ridge.
-- **Walk-and-talk:** `WT_A1_01-03` (beacon 1: the ice holds, run where it's open, running keeps the blood moving), `WT_A1_04-06` (beacon 2, the crack: the Engineer volunteers to scout = SOLO), `WT_A1_GUST` (the gust, Medic-Sapper), `WT_A1_RESUPPLY` (Commander, after the heat pack lesson: "We're nearly out of heat packs. The fishermen's hut is close — let's check it."), `WT_A1_HUT` (in the hut: "a crate, fishermen always keep something warm in there"), `WT_A1_STOCKED` (Engineer, closing line after the loot), `WT_A1_07-09` (beacon 3, formation), `WT_A1_10-12` (beacon 4, wind: get low). Removed in rev 4: `WT_A1_WARMED`, `WT_A1_NOPACK`.
-- **Hint cards in order (step ids in `demo_01_steps.json`):**
-  1. `A1_sprint` `TUT_A1_SPRINT` at the beat start (beacon 1; "Double-click the ground to run. Running keeps you warm."; done on `Order.Sprint`, 30 s timeout). **The sprint unlock is the beat A1 `unlock`**, not the card, so a queued card never delays it. Then `A1_select` `TUT_A1_SELECT` (1/2/3 or click; `Select.Member`) -> `A1_box` `TUT_A1_BOX` (drag a box; `Select.Box`).
-  2. `A1_solo` `TUT_A1_SOLO` at beacon 2 (`VOL_A1_BEACON2`; `Squad.Solo`) -> `A1_regroup` `TUT_A1_REGROUP` 6 s later (`Squad.Regroup`).
-  3. **Gust safety** `A1_gust` (walk-and-talk `WT_A1_GUST`): 20 s after solo started, ONLY if nobody has reached Chills (40 %), every operative gets +20 cold, at least 42 % (action `cold_bump`, data in the step: `amount` 20, `min_level` 42).
-  4. **Heat pack USE lesson** `A1_heatpack` `TUT_A1_HEATPACK` as soon as anyone is >= 40 % (condition trigger, armed by the solo card): names and marks the COLDEST operative ("select him and press U to crack his heat pack, or drag a mate's pack onto him"); done on `ItemUsed.HEAT_PACK`, 90 s timeout. Every operative carries his own starter pack (1 each, see Loadout), so the lesson never depends on a crate. `A1_heatpack_mate` `TUT_A1_HEATPACK_MATE` only if another operative is still >= 40 %.
-  5. **Resupply** (1 s after the lesson): `A1_wt_resupply` `WT_A1_RESUPPLY` + objective `A1_obj_hut` `OBJ_A1_HUT` "Resupply heat packs at the fishermen's hut" (done on event `ItemLooted.HeatPack`; the user's `TutorialMarkerActor` with Step Id `A1_obj_hut` shows from here, not from the beat start).
-  6. **Hut loot lesson** (volume `VOL_A1_HUT`): `A1_loot_open` `TUT_A1_LOOT_OPEN` ("click the crate"; done on `Loot.Open`) -> `A1_loot_take` `TUT_A1_LOOT_TAKE` ("take the heat packs"; done on event `ItemLooted.HeatPack`) -> closing line `A1_wt_stocked`.
-  7. Then as before: `A1_guard` `TUT_A1_GUARD` (now at `VOL_A1_BEACON3`; it used to follow the run card, which now opens the beat), `A1_stance` `TUT_A1_STANCE` (beacon 4), `A1_vault` `TUT_A1_VAULT` (ridge).
-- **Setup:** beacons 1-5 (art + amber light); **the fisherman's hut** (rev 4: the squad now visits it AFTER the crack and the heat pack lesson, "the hut is close": best near the crack / beacon 2 or on the way back to beacon 3, shore side, ~10-15 m off the beacon line): interior with its own fixed-camera `ACameraZoneVolume` (Shelter x0.5), an `ALootCrateActor` inside (Contents: see below), a `TutorialTriggerVolume` `VOL_A1_HUT` filling the hut floor (Activated By: Any Operative); optional `TutorialMarkerActor` on the crate with Step Id `A1_loot_open`. **The crack** at beacon 2 with `VOL_A1_BEACON2` and, at the solo scout point 20 m off the line on the crack edge, a **wind `ACameraZoneVolume` x2.5** (camera switch off), ~12 x 12 m; optional marker with Step Id `A1_solo` on that spot. 3 pressure ridges (one `Vault` tag, 0.8 m high, 8 m long; `VOL_A1_RIDGE` / `VOL_A1_RIDGE_FAR`); `VOL_A1_BEACON3`, `VOL_A1_BEACON4`.
-- **Crate Contents (`LootCrateActor` -> Details -> CodexTactics|Loot -> Contents):** **Heat Packs = 3** (a resupply of one per operative; the looter takes what fits his stack, `heat_pack_max_stack` 3, the rest stays in the crate window), every other field 0 (Medkits, Canned Food, Bread, Chocolate, Matches, all Ammo, Firewood, Flares, Turrets, Barricades, Mines; Bonus ids empty), Trapped off. Why 3: the squad has used 1-2 of its starter packs by then; three restock one each.
-- **Loadout:** level JSON `squad_loadout.heat_packs_count: 1` (key semantics: heat packs EACH starting operative spawns with, replacing the role kit C1 / E1 / M2 of every operative; -1 = the role kit): every operative starts with exactly 1 heat pack (3 for the squad); the hut crate restocks.
-- **Metrics:** corridor 130 x 30 m, beacons 25 m apart; solo scout point 20 m off the line (<= 26 m camera distance). Wind zone x2.5 at the scout point: the Engineer gains ~2 %/s there, the others ~0.8 %/s holding crouched -> Chills within ~20-25 s; the gust covers a player who avoids the zone.
-- **Cold:** Standard x1, the solo point x2.5 (wind). Sprint is unlocked from beacon 1 (the lock only covers the A0 stretch); running warms, so the cold lesson relies on the solo wind zone and the gust safety.
-- **Success:** leader inside the camp volume. **Fail:** none (cold cannot kill before A2 at these rates; the heat pack lesson brings everyone back under 40 %, the hut restocks).
-- **Checkpoint:** `CP_A1` at beacon 1 (beat start).
-- **~5 min**
+#### A1. The crossing: the shaky bridge, regroup, banter, cold, heat pack, running, the hut (user steps 4-8) - DONE
+- **Goal:** cross the crevasse one at a time, warm up, resupply, reach the camp.
+- **Teaches, in this order:** select 1/2/3 -> **B Solo, one at a time over the bridge** -> **B regroup** -> **drag box-select** -> (banter) -> **the cold bites** -> **heat pack on the coldest (inventory UNLOCKS)** -> **"running warms you up" (sprint UNLOCKS)** -> "we're nearly out" -> **loot the hut crate** (3 heat packs) -> formation lines at beacon 3. Guard / stances / vault are NOT here any more (guard -> A10, stances / vault -> A3).
+- **Walk-and-talk:** `A1_wt_start` (`WT_A1_01-03`, beacon 1: "the ice holds", "steady pace", "save your breath for the far side"), `A1_wt_bridge` at `VOL_A1_BEACON2` (`WT_A1_04-06`: "a plank bridge over the crack ... won't take two of us at once ... I'll go first"), `A1_wt_banter` after the box card (`WT_A1_BANTER_1..4`: cold, dead radio, forty hours dark, "beacons north"), `A1_gust` (`WT_A1_GUST`, the safety), `A1_wt_warm` (`WT_A1_WARMED`: "running warms you up faster than any pack"), `A1_wt_resupply` (`WT_A1_RESUPPLY`), `A1_wt_hut` (`WT_A1_HUT`), `A1_wt_stocked` (`WT_A1_STOCKED`), `A1_wt_regroup` at `VOL_A1_BEACON3` (`WT_A1_07-09`).
+- **Hint cards in order:**
+  1. `A1_select` `TUT_A1_SELECT` at `VOL_A1_BEACON2` (1/2/3 or click; precredited if the player selected someone before).
+  2. `A1_solo` `TUT_A1_SOLO` ("Press B: the others hold while the selected operative crosses alone. Walk him over, then select the next one."). Done on **`BridgeCrossed` x3 distinct operatives** (E, `ABridgeCrossingVolume`), timeout 240 s. The bridge itself refuses a second body (`BridgeRefused` (E): his own feed line "The bridge won't hold two!"; the tutorial adds `TUT_A1_BRIDGE_REFUSED` once: "Only one on the bridge! Wait until he is across, then send the next."). Followers in formation wait at the edge on their own (traffic hold), so the lesson also works without Solo - Solo just makes it clean.
+  3. `A1_regroup` `TUT_A1_REGROUP` 2 s after the crossing (B; never precredited) -> `A1_box` `TUT_A1_BOX` ("drag a box over the whole squad, then click the ground").
+  4. **Gust safety** `A1_gust`: 20 s after the crossing, only if nobody is at Chills (40 %): +20 cold, at least 42 % (`cold_bump`).
+  5. **Heat pack** `A1_heatpack` `TUT_A1_HEATPACK` as soon as anyone is >= 40 % (condition, armed by the crossing): names / marks the coldest; **the card UNLOCKS `Inventory.*` + `Item.*`** ("select him and press U, or open the inventory (I) and drag a mate's pack onto him"); done on `ItemUsed.HEAT_PACK` (E). `A1_heatpack_mate` if another operative is still >= 40 %.
+  6. **Running** `A1_sprint` `TUT_A1_SPRINT` ("Running warms you up. Double-click the ground to run."), **UNLOCKS `Order.Sprint`**; done on `Order.Sprint`; never precredited (a locked sprint never reached the history).
+  7. **Resupply** 1 s later: `A1_wt_resupply` + objective `A1_obj_hut` `OBJ_A1_HUT` (done on `ItemLooted.HeatPack` (E); the user's marker with Step Id `A1_obj_hut` shows from here).
+  8. **Hut loot** (`VOL_A1_HUT`): `A1_loot_open` (`Loot.Open`; never precredited) -> `A1_loot_take` (`ItemLooted.HeatPack`) -> `A1_wt_stocked`.
+- **Setup (user):** beacons 1-5 (art + amber light). **The crevasse at beacon 2** with the user's `VOL_A1_BEACON2` (kept: it is now the bridge approach, Activated By: Only The Leader) and a NEW **`BridgeCrossingVolume`** (Place Actors -> "Bridge Crossing Volume") laid over the planks: local X along the span, Span box ~1 m longer than the planks at each end, 2 m wide, 2.5 m tall; Capacity 1 (default); the planks themselves are the user's art (a `Vault`-free static mesh or a navmesh strip over the crack - the volume does not block, it only refuses). Optional `TutorialMarkerActor` with Step Id `A1_solo` at the near end. A **wind `ACameraZoneVolume` x2.5** (camera switch off) ~12 x 12 m on the FAR side of the bridge so the crossing costs cold (the gust covers the rest). **The fishermen's hut** as placed (interior `ACameraZoneVolume` Shelter + fixed camera, `ALootCrateActor` Heat Packs 3, `VOL_A1_HUT` Any Operative, marker `A1_loot_open` optional) - close to the far side of the bridge ("the hut is close"). `VOL_A1_BEACON3` as placed. **Remove / re-id:** `VOL_A1_BEACON4`, `VOL_A1_RIDGE`, `VOL_A1_RIDGE_FAR` move to the A3 approach as `VOL_A3_WIND`, `VOL_A3_RIDGE`, `VOL_A3_RIDGE_FAR` (see A3).
+- **Loadout:** `squad_loadout.heat_packs_count: 1` (unchanged). **Metrics:** corridor 130 x 30 m; bridge 4-6 m long (the crack 2 m wide + banks). **Cold:** Standard x1, far side x2.5. **Success:** leader inside `VOL_A2_CAMP`. **Fail:** none. **Checkpoint:** `CP_A1` at beacon 1. **~6 min**
 
-#### A2. The cold bites: barrel
-- **Goal:** get everyone <= 30 % cold.
-- **Teaches:** read the cold bars / vignette; **move a barrel in exploration** (click barrel -> menu -> **Push** -> ghost -> click the spot, see §2.5) **into the wind shadow of hut 1** where the squad shelters; **light it with a match** (menu -> Light); warm zone 5.5 m; crouch / prone slow the cold; **"too cold to lift" at 80 %** (send the warmest member). The heat pack is taught in A1 now (rev 3); here only as a remedial card.
-- **Walk-and-talk:** `WT_A2_01-04` at the A2 beat start (no longer on the first cold tier: the cold tier is reached in A1 now). Sokolova: "Fingers first, then the trigger finger." Commander: "Barrels by the huts. Fishermen kept fires." `WT_A2_05` Engineer: "Not out here in the wind. Roll it to the hut."
-- **Hint cards:**
-  - `TUT_A2_PUSH` (marker on barrel 1: "Click the barrel -> Push, then click where it should stand. Put it by the hut wall." Done on `RelocationDone` (E) with the barrel within 3 m of the hut-1 wall marker).
-  - `TUT_A2_LIGHT` (done on barrel lit (E)).
-  - `TUT_A2_HEATPACK` **remedial only**: after the light card, if someone is >= 60 % and the squad still carries a pack (focus on the coldest; done on item used).
-  - `TUT_A2_TOOCOLD` (remedial, on the "too cold to lift" refusal: "Above 80 % cold nobody can lift. Send the warmest operative (1/2/3).").
-  - (`TUT_A2_COLDBAR` dropped: the cold bars are explained by the A1 heat-pack card.)
-- **Setup:**
-  - Barrel 1 (unlit) at the **open ice edge, 10 m from hut 1**, in the wind (x1), and an amber floor decal "wind shadow" spot against hut 1's lee wall.
-  - Barrel 2 (unlit) 6 m from barrel 1 (spare, second match).
-  - Matches 3 in the loadout (JSON `squad_loadout`); heat packs: whatever is left of the starter packs and the A1 crate.
-  - Hut 1: door **2.0 m** (the only hut a barrel may be pushed into: the barrel is 1.2 m wide); interior Shelter x0.5 + fixed camera (first building entry, see A3).
-  - Optional: a `ACameraZoneVolume` **Shelter x0.5** (camera switch off) 4 x 6 m along the lee wall, so "by the wall" really is warmer.
-- **Metrics:** push distance 10 m (inside the 15 m radius; ~6 s of pushing). The lit barrel's 5.5 m disc must cover the lee-wall zone and the hut door; in the hut, 6 x 4 m, it covers the whole floor. It burns 35 s, enough to go from 50 % to 0 % at 8 %/s.
-- **Cold:** outside x1, lee wall x0.5, hut Shelter x0.5.
-- **Success:** barrel pushed and lit, all <= 30 %. **Fail:** none (spare barrel; heat packs; if the player lights it in place, the push card stays and the debrief notes "barrel push skipped").
-- **Checkpoint:** none (A1 is close). Beat start unlocks sprint (safety if A1 was cut short).
-- **~3 min**
+#### A2. The camp: cold again, a barrel (user step 9) - DONE (unchanged)
+- **Goal / Teaches:** as rev 4: push the barrel into the hut's lee (`A2_push`, `RelocationDone` (E)), light it (`A2_light`, `BarrelLit` (E)); remedial `A2_heatpack` (>= 60 % and a pack left), `A2_toocold` on `RelocationRefused`. Beat A2 `unlock`s sprint + inventory as a safety.
+- **Walk-and-talk:** `A2_wt_cold` (`WT_A2_01-04`: "we need heat again ... barrels by the huts ... matches, three"), `A2_wt_roll` (`WT_A2_05`).
+- **Setup:** as rev 4 (barrel 1 10 m from hut 1 in the wind, spare barrel 2, hut 1 door 2.0 m, lee zone). **~3 min**
 
-#### A3. Buildings: the leader scouts inside
-- **Goal:** explore the three camp buildings; find the note that names the PMC.
-- **Teaches:** entering a building = **fixed interior camera; the others hold the perimeter outside** (existing camera-zone rule). This is the second, natural form of "split up". Read a note (narrative element). Loot a clean crate (loot dialog, take all). Open the inventory drawer.
-- **Walk-and-talk:** `WT_A3_01-03` on entering the shed: "PMC stencils. They didn't leave in a hurry. They left things for us."
-- **Hint cards:** `TUT_A3_ENTER` ("the squad holds outside while you scout"), `TUT_A3_LOOT` (done on container looted (E)), `TUT_A3_DRAWER` (done on drawer opened (E)).
-- **Setup:** 3 `ACameraZoneVolume` (one per hut, Environment Shelter, own `CameraActor` placed high in a corner, looking down at 55-60 deg, not isometric, so the interior reads), 1 clean `ALootCrateActor` (canned food 2, matches 2, M16 ammo 30), `ANarrativeElementActor` note `NOTE_A3_PMC` ("Depot: north shore. Don't go near the shed door. - K."), 1 `ADialogueTriggerVolume`.
-- **Metrics:** huts 6 x 4 m, door 1.6 m, interior wall height 2.6 m (with a ceiling the fixed camera must sit inside); shed 8 x 6 m with 2 doors (a loop teaches "buildings have two exits").
-- **Cold:** Shelter x0.5 inside, x1 outside.
-- **Success:** note read and crate looted. **Fail:** none.
-- **Checkpoint:** `CP_A3` on leaving the camp toward the depot.
-- **~4 min**
+### STAGE 2: THE COMPLEX
 
-#### A4. The PMC depot: traps, and cold hands cannot disarm
-- **Goal:** get into the depot shed and loot the trapped crate (grenades, tripwire kit, heat pack).
-- **Teaches:** **hidden mines** (spotted at 4.5 m, 6 m for the sapper; the squad stops; Ctrl+click to shoot from afar or defuse); **PMC tripwire on the shed door** (prone passes under; Medic-Sapper disarms it and keeps the grenades); **trapped crate** (defusal menu shows the chance); **cold reduces the chance** (§2.2); stance (crouch +10, prone +25); role (use the Medic-Sapper, key 3).
-- **Walk-and-talk:** `WT_A4_01` (mine spotted: Sokolova "Nobody move."), `WT_A4_02-03` (tripwire spotted: "Wire at shin height. They like doors."), `WT_A4_04` (cold chance < 45 %: "My hands are shaking. I need heat first.").
-- **Hint cards:** `TUT_A4_MINE` (spotted (X `OnMineSpotted`) -> "select 3 (Medic-Sapper), click the mine -> Defuse; or Ctrl+click to shoot it from > 4 m"), `TUT_A4_WIRE` (prone under it **or** disarm), `TUT_A4_CHANCE` (when the defusal menu opens with chance < 60 %: "Cold costs up to 50 % chance. Warm up at the barrel, then crouch or go prone"), `TUT_A4_TRAP_CRATE` (done on defused).
-- **Setup:**
-  - 2 hidden `AProximityMineActor` (level mines, not `bPlacedBySquad`) on the **shortcut** between the sandbag ring and the shed (straight line 25 m). The long path round the fence (40 m) is clean. Mines 5 m apart.
-  - 1 **PMC tripwire** across the shed door (1.6 m span, 30 cm): **G3 DONE 2026-10-12** - place an `APMCTripwireActor` («PMC Tripwire») and drag its AnchorA / AnchorB handles to the door jambs (HANDOFF §6 «How to place a PMC tripwire»).
-  - 1 trapped `ALootCrateActor` inside the shed (`bTrapped`; contents: 2 grenades, 1 tripwire kit (2 grenades), 1 heat pack, 1 medkit).
-  - 1 clean crate in the guard hut (ammo).
-  - **1 unlit barrel 12 m from the shed door** by the guard hut (warm-up spot for the defusal lesson). Push reprise without a card unless the player stalls: "Bring the fire to the door". Pushed to within 4 m of the door, its 5.5 m disc covers the Medic-Sapper while she works. The bonus card `TUT_A4_FIREDOOR` appears if her chance reads < 60 % for 20 s.
-  - Shed interior: Shelter x0.5 so cold barely moves while disarming.
-- **Metrics:** shed 10 x 8 x 3 m, door 1.6 m wide (the wire spans it); sandbag ring low 1.0 m; mine spacing 5 m (one spot reveals one mine, which stops the squad before the second); barrel 12 m from the door, pushed to <= 4 m (warm while defusing, cold rise ~0).
-- **Cold:** outside x1 (the squad arrives at ~30-50 % from A3, so the first chance reads 58-73 % for the Medic-Sapper crouched, worse standing).
-- **Success:** trapped crate looted. **Fail:** a detonation is survivable at full HP (85-140 dmg is high: **set the demo trap damage 60 and the mine damage 80 on these placed actors**, which are editable per actor). A death of a non-commander here = permanent loss; producer decision D4 (downed-not-dead in lessons) still applies.
-- **Checkpoint:** `CP_A4` at the depot gate (before the mines).
-- **~5 min**
+#### A3. The approach: cautious - stances, vault, the low fence, cover, PMC traps (user step 10) - DONE (steps)
+- **Goal:** get from the camp to the overlook of the complex without triggering a trap; learn to move like soldiers.
+- **Teaches:** C / V / Z + Alt (stances), vault a low ridge, **crawl prone under a low fence** (`ACrawlGapActor`), cover (click a wall, each operative his own cover, bound cover to cover), **hidden mines** (`MineSpotted` (E): go round / Medic-Sapper defuses / Ctrl+click), **PMC tripwires** (`TripwireSpotted` (E): prone under or disarm). Sprint stays unlocked (the user: cautious, not forbidden).
+- **Walk-and-talk:** `A3_wt_approach` (`WT_A3_01-03`: "the PMC left in a hurry - expect mines and wires on the easy paths ... stay behind cover ... low means warm, too"), `A3_wt_wind` at `VOL_A3_WIND` (`WT_A1_10-12` reused: "get low ... down low is also how you get under a wire").
+- **Hint cards:** `A3_stance` `TUT_A1_STANCE` at `VOL_A3_WIND` (two stance keys; precredited if already used) -> `A3_vault` `TUT_A1_VAULT` (`VOL_A3_RIDGE` -> `VOL_A3_RIDGE_FAR`) -> `A3_fence` `TUT_A3_FENCE` at `VOL_A3_FENCE` ("go prone, Alt+V for all, crawl under"; done on **`CrawlGapPassed` x3 distinct** (E); the fence posts its own "Too low - go prone and crawl under." and the tutorial adds `TUT_A3_FENCE_REFUSED` once) -> `A3_cover` `TUT_A6_COVER` at `VOL_A3_FIELD` (`CoverEntered` (E)) + `A3_squad_card` `TUT_A6_SQUAD` (2 distinct) + objectives `A3_squad_cover` (3 distinct) / `A3_bound` (4 entries) -> event cards `A3_mine` `TUT_A3_MINE` (on `MineSpotted`) and `A3_wire` `TUT_A3_WIRE` (on `TripwireSpotted`). Objective `A3_obj_overlook` `OBJ_A3_OVERLOOK` "Approach the complex carefully" (done in `VOL_A4_OVERLOOK`).
+- **Setup (user):** `VOL_A3_APPROACH` (Beat Id `A3`) where the complex first shows; a wind strip `ACameraZoneVolume` x2.5 with `VOL_A3_WIND` (Any Operative); one `Vault`-tagged ridge 0.8 m with `VOL_A3_RIDGE` before and `VOL_A3_RIDGE_FAR` after it; **a low fence** = the user's fence mesh (bottom rail ~0.9 m, no collision of its own below the rail, or collision that matches the bar) + a NEW **`CrawlGapActor`** (Place Actors -> "Crawl Gap Actor") on the fence line: local X across the fence, `Gap Width Cm` = the gap length (default 4 m), `Clearance Cm` 90, `Bar Top Cm` 200 (the actor's hidden Bar blocks standing / crouched capsules; the fence must leave no other way round within ~15 m, or the standing path simply walks round - fine too, but then nobody learns to crawl: put it in a fence line / between rocks); `VOL_A3_FENCE` (Any Operative) 3-4 m in front of it; the cover field = 4-6 pieces (low 1.0 m / high 2.2 m, 5-6 m apart, see rev 2 A6 metrics) with `VOL_A3_FIELD` at its entrance; 2 hidden `AProximityMineActor` (level mines, damage 80) on the shortcut; 1 `APMCTripwireActor` across the obvious gap (HANDOFF §6 «How to place a PMC tripwire»); `VOL_A4_OVERLOOK` (Beat Id `A4`) at the spot where the patrols come into view.
+- **Cold:** x1; the wind strip x2.5 (short). **Checkpoint:** `CP_A3` at the beat start. **~5 min**
 
-### STAGE 2: THE QUEST: NAVIGATE, MOVE LIKE SOLDIERS
+#### A4. The ambush: patrols, vision cones, tripwires, a small fight (user step 11) - PARTIAL
+- **Goal:** spot the patrol (2 frozen + 2 hounds), read their cones, lay a tripwire on their loop, finish the fight.
+- **Teaches:** **O / pause-menu "VISION CONES: ON" = the enemies' vision cones** (DONE: `View.VisionCones`, `UVisionConeComponent::SetPlayerEnemyCones`, F1 Controls row, pause-menu entry, event `VisionConesToggled.On/.Off`), stealth basics (prone x0.35-0.4 visibility, hearing by gait), **Drawer -> Tripwire: two anchors across the patrol path** (DONE as a card: `Deploy.Tripwire`; the mechanic exists), then the fight (real time; pause allowed; no new verbs).
+- **Walk-and-talk:** `A4_wt_contact` (`WT_A4_01-03`: "two frozen ones on a loop ... and dogs. Nobody fire ... we pick the ground ... a wire across their path"). DESIGNED: `WT_A4_04` on the first trap kill, `WT_A4_05` on the skirmish cleared.
+- **Hint cards:** `A4_cones` `TUT_A4_CONES` (beat start + 2 s; `View.VisionCones`) -> `A4_tripwire` `TUT_A4_TRIPWIRE` (`Deploy.Tripwire`, never precredited). DESIGNED (Phase 2, needs §1.3): `A4_wait` ("wait prone behind cover until the loop brings them to the wire"), `A4_fight` on `EncounterStarted.A4_PATROL` ("they're on you: real time; Space pauses"), objective `A4_obj_clear` done on `EncounterCleared.A4_PATROL`.
+- **Setup (user):** `VOL_A4_OVERLOOK` (Beat Id `A4`); 2 `APatrolRouteActor` loops (one 40-60 m loop for the 2 frozen at walk 1.9 m/s, one shorter loop for the 2 hounds) in the yard in front of the base, both **crossing one 2-4 m choke** (the wire spot) 15-25 m from the overlook; 2 `BP_Enemy_Frostbitten` + 2 `BP_Enemy_Hound` on the routes with **`EncounterGroup = A4_PATROL`** (Phase 2 field; until then they are plain placed enemies and the level JSON must stay `combat_start: "button"`); cover at the overlook (low 1.0 m). Grenades 2 per operative = one tripwire kit.
+- **Cold:** x1. **Checkpoint:** `CP_A4` at the overlook. **~5 min**
 
-The existing hard-coded chain (`FQuestChainState`) is reused with lake fiction, so no new quest code is needed:
+#### A5. Inside the base: look around, supplies, a booby-trapped crate (user step 12) - DESIGNED
+- **Teaches:** interior fixed camera (the leader scouts, the squad holds outside - existing camera-zone rule), a clean crate (loot, take all), **a trapped crate: the defusal menu with the chance, cold lowers it (§2.2), crouch / prone raise it, the Medic-Sapper (3)**.
+- **Walk-and-talk:** `WT_A5_01-03` ("PMC stencils ... they left things for us ... that one's wired - see the lid").
+- **Hint cards:** `A5_enter` `TUT_A5_ENTER` (fixed camera), `A5_loot` (clean crate, `Loot.Open` / `ItemLooted`), `A5_trap` `TUT_A5_TRAP` on the trapped crate's menu (done on `Trap.DisarmObject` / event `TrapDefused` (E to add)), `A5_chance` `TUT_A5_CHANCE` remedial when the shown chance < 60 % ("warm up first; crouch or go prone").
+- **Setup (user):** `VOL_A5_BASE` (Beat Id `A5`) at the base door; 2-3 `ACameraZoneVolume` interiors (Shelter + fixed camera); 1 clean `ALootCrateActor` (ammo 30, medkit 1, matches 2); 1 trapped `ALootCrateActor` (`bTrapped`, trap damage 60: grenades 2, heat pack 1, canned food 1); 1 unlit barrel outside (warm-up spot). **~4 min**
 
-| Chain step (code type) | Lake fiction | Where | From previous |
-|---|---|---|---|
-| Station terminal first look | "Station dark, generator dry" (objective set by the chain start) | A7 station, 70 m E of the depot | - |
-| `Canister` | Jerrycan at the ice-road cache, **beacon 7** | A5 west | 110 m |
-| `Vehicle` | Stranded PMC APC: siphon diesel | A6 ridge field, centre-north | 70 m |
-| `Generator` | Station generator shed | A7 | 80 m |
-| `GateTerminal` | Radio-mast console that powers the boathouse gate | A7 main building | 15 m |
+#### A6. Prepare the defence: barricades, mines, barrels, high ground (user step 13) - DESIGNED
+- **Teaches (all mechanics exist, §2.5 / §2.6):** **move a barricade** (click -> Push, 15 m, like a barrel; deploy from supply with F), **mine a barricade** (click -> Set trap: 1 grenade, 85 / 4 m, enemy contact 1.8 m), **move barrels** (ambush: Ctrl+click later; warmth: light it), **high ground** (feet >= 0.5 m above = +25 % range, +15 % damage, over low cover; **colder up there**: elevated wind x2 at Z >= 1.4 m) - the Commander's line says both sides.
+- **Walk-and-talk:** `WT_A6_01` Commander: "They'll come from the flanks when the mast lights up. Make this place ours." `WT_A6_02-05` per lesson; `WT_A6_06` Medic-Sapper on the roof: "Good eyes up here. Bad wind."
+- **Hint cards:** `A6_barricade_move` (`RelocationDone` with a barricade (E: Kind)), `A6_barricade_trap` (`ObjectTrapped` (E to add)), `A6_barrel` (`RelocationDone` barrel), `A6_high` (an operative with feet >= 0.5 m above the yard inside `VOL_A6_HIGH`; new event `HighGroundTaken` or a volume completion), `A6_high_cold` feed when his cold rises faster up there. No forced checklist (as rev 2 A7): the console / canister objective appears after any 3 of them.
+- **Setup (user):** `VOL_A6_PREP` (Beat Id `A6`); 2 placed barricades (`ABarricadeActor`) + loadout barricades 1 / mines 2 / turret 1; 3 barrels; a roof / catwalk 1.5-3 m high with stairs 1.2 m (TB refuses up there, by design) and `VOL_A6_HIGH` on it; the generator shed (A7 / A10). **~5 min**
 
-#### A5. Find the fuel: navigation
-- **Goal:** find the canister using the note plus the beacons.
-- **Teaches:** read the objective banner; follow the numbered beacons; use the map-less navigation language (amber = path); optional heat-pack use in a blizzard strip.
-- **Walk-and-talk:** `WT_A5_01-04` (Engineer at the dead generator: "Dry. The PMC's cache was on the ice road, marker seven." Commander: "Seven. Follow the lamps west.").
-- **Hint cards:** `TUT_A5_OBJECTIVE` (points at the objective tracker), `TUT_A5_BEACON` (the world marker on beacon 7 appears after 30 s without progress: gap G4).
-- **Setup:** beacons 6-7 with **painted numbers** (art, 1 m high digits on the lamp post); canister `AInteractableActor` (`ObjectType = Canister`) on a tarp sled at beacon 7; optional `ACameraZoneVolume` **Blizzard x2.5**, 20 m strip, camera switch off, between beacons 6 and 7.
-- **Metrics:** station -> beacon 7 = 110 m (50 s walk, 15 s sprint); the beacon lamp must be visible from 60 m at camera distance 26 m (lamp light radius >= 8 m, emissive).
-- **Cold:** x1 (x2.5 strip: ~10 s inside = +25 %).
-- **Success:** canister picked up (X `EQuestEvent::CanisterPickedUp`). **Fail:** none.
-- **Checkpoint:** `CP_A5` on pickup.
-- **~4 min**
+#### A7. The canister: fuel for the generator (user step 14) - DESIGNED (quest chain exists)
+- **Teaches:** the objective tracker, beacons / markers to a far object, the hard-coded `FQuestChainState` (`Canister` -> `Generator` -> `GateTerminal`; the `Vehicle` step is skipped or kept as the APC siphon if the user places the APC).
+- **Walk-and-talk:** `WT_A7_01-03` (Engineer at the dry generator: "the PMC's fuel cache is on the ice road, marker seven").
+- **Hint cards:** `A7_objective` (the tracker), `A7_marker` (world marker after 30 s). **Setup:** canister `AInteractableActor` (ObjectType Canister) 60-110 m away with a beacon; generator `AInteractableActor`; console (GateTerminal). Fuelling the generator (quest event) is the point where the user's "horde" begins: the console / mast wakes the lake (`TriggerCombatZone`, `combat_start: "button"` as today). **~4 min**
 
-#### A6. The stranded APC: cover-to-cover approach (the user's "move carefully" addition)
-- **Goal:** reach the APC across the ridge field **as soldiers do**: cover to cover, no running in the open. Then siphon the diesel.
-- **Fiction:** the APC is PMC. Its hatch is open and there are boot prints, so someone may be inside. **There are no enemies** (a placed enemy would turn the level into an ambush level). The threat is suspected only: fresh tracks, a still-warm stove in the container, a radio crackling inside the APC (sound cue). The lesson is the posture, not survival.
-- **Teaches (in order):**
-  1. **Wall hug / cover slot:** click a high partition, the ghost appears; click again to confirm. The operative stands with his back to the wall.
-  2. **Low cover:** click a low ridge. He crouches behind it (default stance for low cover).
-  3. **Shimmy:** click further along the same wall; he slides along it.
-  4. **Corner peek / hold:** take a slot near a corner (<= 2 m from the edge). With no known threat he plays the corner look-at idle; teach that the corner is where you look and fire from (Ctrl+click = corner shot later in the fight).
-  5. **Bound between partitions:** the next cover is 5-6 m away; move in a crouch (C) between them.
-  6. **Cover = warmth:** wind chill is halved in cover (feed line + card), which matters because the field is x1.
-  7. **Squad stacks on you:** followers take nearby slots on the same cover. **This does not exist** (gap G7, see below). Until it lands, teach "select each operative (1/2/3) and put each into cover", which is the slow version.
-- **Walk-and-talk:** `WT_A6_01` (entering the field: Commander "Tracks. Fresh. We go wall to wall."), `WT_A6_02` (first cover: Sokolova "Out of the wind, at least."), `WT_A6_03` (at the last partition: Engineer "Radio's alive in there... it's a loop. Recording."), `WT_A6_04` (APC reached: relief beat).
-- **Hint cards:**
-  - `TUT_A6_COVER`: "Click a wall to preview cover, click again to take it." Done on cover entered (E) at a high slot.
-  - `TUT_A6_LOWCOVER`: "Low cover: you crouch behind it and fire over it." Done on cover entered (E) at a low slot.
-  - `TUT_A6_SHIMMY`: "Click along the same wall to slide." Done on shimmy (E).
-  - `TUT_A6_CORNER`: "Corners are where you look and fire from. Stop near an edge." Done on a slot with an exposed edge (E).
-  - `TUT_A6_BOUND`: "Crouch (C) and move to the next cover. Don't stop in the open." Done on 3 cover entries in the zone within 90 s each.
-  - `TUT_A6_SQUAD`: "Press 2 / 3 and give each their own cover." (G7 dropped by the user.) Done on `CoverEntered` by 2 / 3 different operatives (`distinct_operatives`, sample steps `A6_squad_card` / `A6_squad_cover` in `demo_01_steps.json`, 2026-10-12).
-  - **Completion of A6:** leader reaches the APC slot volume AND >= 4 cover entries in the field (any mix, including 1 high, 1 low, 1 shimmy). Not hard-gated: walking straight in also works, but the cards stay and the debrief (UX W11) notes "cover lesson skipped".
-- **Setup:**
-  - **Ridge-field lane** 60 m long, 20 m wide, leading to the APC from the south-west.
-  - 6 cover pieces, alternating: P1 high 2.2 m x 4 m (concrete ice slab, corner on the APC side); P2 low 1.0 m x 5 m (pressure ridge); P3 high 2.4 m x 6 m (wrecked container, **two corners**, both reachable only by shimmy, so the shimmy lesson lives here); P4 low 1.0 m x 3 m; P5 high 2.2 m x 4 m; P6 = the APC itself (7 x 3 x 2.6 m, high, corners at both ends).
-  - Spacing **5-6 m** between pieces (bounding at crouch speed = 4-5 s exposed).
-  - Offset each piece **2-3 m laterally** from the previous so the line of advance zigzags (players must aim clicks).
-  - **No piece longer than 6 m** (corners must stay within the 2 m probe from a mid-slot when needed: P3 is the exception, which forces shimmy).
-  - 1 `ADialogueTriggerVolume` per step (4).
-  - 2 tutorial trigger volumes.
-  - APC: `AInteractableActor` `ObjectType = Vehicle` (siphon), interaction side = rear hatch, which must face the last cover (P5).
-  - Optional: an empty trapped crate behind P5 to keep the trap reflex alive (bTrapped, damage 60).
-- **Metrics:** lane 60 x 20 m. High pieces 2.2-2.6 m (hide a standing body; the camera occlusion is 3.1-3.7 m behind, so place the next piece **in front** of the occluded strip from the camera's default yaw -45 deg). Low pieces 1.0 m. Piece spacing 5-6 m. The open stretch never exceeds 7 m.
-- **Cold:** x1 in the open, **x0.5 in cover** (existing). Arriving cold is fine: the station (Closed) is the next stop.
-- **Success:** diesel siphoned (X quest event). **Fail:** none.
-- **Checkpoint:** `CP_A6` at P1.
-- **~5 min**
+### STAGE 3: THE HORDE (user step 15)
 
-#### A7. Power the generator, READ THE GROUND, prepare (no answers given)
-**Design principle (user, rev 2):** the sudden horde start removed the 60 s preparation. The player must **stop feeling safe** and must **not be told where the attack comes from**. A7 teaches him to **read the terrain and anticipate**: approach lanes, choke points and environmental spawn signs. Then he decides where the wire, the mines, the barricade and the **turret** go, and what to protect: the **generator**. Without it there is no heat, the turret has no power, and the **blast door** does not open.
+#### A8. Wave 1: the tactical pause - DESIGNED
+- **Teaches:** tap Space = pause, orders in the stopped world, release. (The sudden start already opens the free pause: `HordeIntroRules`.)
+- **Cards:** `A8_realtime` on `CombatStarted` (E), `A8_pause` `TUT_A8_PAUSE` ("Tap Space: time stops, click to give orders, Space again to release"; done on `Time.Pause` + `Time.Resume`), `A8_generator` feed on the first generator damage.
 
-**Gate rule (being implemented by another agent; this sheet assumes it):** the blast door (`AGateActor`, the boathouse hangar = the way out to the road) starts opening when the console is powered. It opens **very slowly during the whole fight** and **only while the generator runs**; when the generator is down, opening **pauses**. It is **fully open only after wave 3 is cleared**, so the squad cannot retreat inside early. The door's progress is the fight's visible clock.
+#### A9. Wave 2: automatic mode (Commander Mode / AUTO) - DESIGNED
+- **Teaches:** Ctrl+T (`Squad.Autonomy`): the squad fights on its own within the anchor leash, posture keys , . /.
+- **Cards:** `A9_auto` `TUT_A9_AUTO` at wave 2 start ("Ctrl+T: the squad takes cover and fires on its own; you give the big orders"), done on `Squad.Autonomy`; `A9_posture` optional.
 
-- **Goal:** start the generator; walk the perimeter and find the approach signs; set the defence; then power the console.
-- **Teaches (in this order):**
-  1. **Generator = the heart.** Warm zone 4 m, it powers the turret (a powered turret is itself a heat source of 4.5 m), and it drives the door. It has **200 HP**, and **small enemies prefer it** (target weight 0.4 x vs squad 1 x: hounds rush it from the start of a wave).
-  2. **Read the ground (recon walk).** Three approach signs around the yard (below). Nothing marks them as spawns. The cards ask questions; the radio gives fiction.
-  3. **Place your traps where the signs point** (§2.6): mines on a lane (Medic-Sapper: mishap 2 % vs 10 % + cold), a **tripwire across a choke** (2 grenades; friendly fire on), a **barricade** in a gap, **mine the barricade** (Set trap: 85 / 4 m, enemy contact 1.8 m).
-  4. **Turret** (loadout 1, routed to the Commander): F -> Turret -> ghost, **R rotates**, click; 3 AP in TB. Range **12 m**, 16 dmg / 0.45 s, 120 HP, walls block, a barricade in its line = 60 %. **Unpowered when the generator is down.** The right answer is the one that covers the generator **and** a lane. The card never says which.
-  5. **Barrels as bombs:** push dump barrels onto a lane you expect (exploration push, 15 m); in the fight, Ctrl+click.
-  6. **Who repairs:** the **Engineer** (key 2) repairs the generator in **2.5 s** (others 5 s) and a turret in **2 s** (others 4 s). Keep him near the generator.
-- **Walk-and-talk / radio (fiction, never the answer):**
-  - `WT_A7_01-03` generator starts: "Heat. Real heat." Engineer: "And it hums like a dinner bell."
-  - `WT_A7_04` Commander: "Before we light that mast, we walk the perimeter. All of it."
-  - `WT_A7_05` HQ: "Satellite thermal is useless in this weather, Captain. Animals use gullies, and the east cliffs have one."
-  - `WT_A7_06` Sokolova at the west sign: "Fishermen's path. Somebody dragged something along it. Recently."
-  - `WT_A7_07` Engineer at the shed: "The door's clawed. Whatever came here wanted the warm thing."
-  - `WT_A7_08` Sokolova laying a mine: "Mines are mine. Steady hands, warm hands."
-  - `WT_A7_09` before the console: "The mast will light up like a flare. Anything on this lake will hear it."
-- **Hint cards (questions first, keys second; one at a time):**
-  - `TUT_A7_GENERATOR` (on start): "This generator is your heat, your turret's power and the door. What will they go for first?"
-  - `TUT_A7_RECON`: "Walk the perimeter. Tracks, broken fences, carcasses: where did they come from?" Done when the leader has visited >= 2 of the 3 sign volumes (E).
-  - `TUT_A7_MINE`: "Mines go where they will run. Select 3, F -> Mine." Done on `DeployablePlaced(Mine)` (E).
-  - `TUT_A7_WIRE`: "A wire belongs in a narrow place they must pass. Drawer -> Tripwire: anchor A, anchor B. Friendly fire is on." Done on `TripwireRigged` (E).
-  - `TUT_A7_TURRET`: "F -> Turret, R rotates. It needs the generator's power. Reach 12 m." Done on `DeployablePlaced(Turret)` (E).
-  - `TUT_A7_BARRICADE` + `TUT_A7_TRAPOBJ`: "F -> Barricade. Then click it -> Set trap: whoever touches it, regrets it." Done on `DeployablePlaced(Barricade)` + `ObjectTrapped` (E).
-  - `TUT_A7_BARRELS`: "Fuel burns. Put it where they will bunch." Done on a `RelocationDone(Barrel)` (E).
-  - `TUT_A7_REPAIR` (shown now, completed in the fight): "If the generator stops, send the Engineer (2): he repairs it twice as fast."
-  - `TUT_A7_SAVE` (F5; the autosave also fires before combat (X)).
-  - The console card appears after `TUT_A7_RECON` + any 3 of the placement cards, or when the player uses the console anyway. There is **no forced checklist**: the debrief grades the result (§5.3).
-- **Setup:**
-  - Generator `AInteractableActor` (Generator, 200 HP) in a **generator shed 4 x 3 m at the yard's NE corner**, 6 m from the yard's east edge: exposed on purpose, close to the hidden east lane.
-  - Console `AInteractableActor` (GateTerminal) in the main building's radio room.
-  - `AGateActor` = the boathouse hangar **blast door** at the yard's SE corner (DoorSize 40 x 350 x 400 per leaf).
-  - `ACameraZoneVolume` main building **Closed** (fixed camera ON). `TargetPoint` tagged `CombatStart` in the yard centre (dev "Start battle" only).
-  - **Approach signs** (art + a `ATutorialTriggerVolume` 6 x 6 m each, gap G1):
-    - **N (obvious):** the open ice and the pressure ridge 30-35 m out. Nothing to find: it is visible.
-    - **E (the hidden lane, to be discovered):** a **cliff gully** 35 m E of the yard, screened from the yard by a **2.5 m snow drift** and the generator shed. Tells: a **trail of hound tracks** (decal, 30 m long) from the gully to the shed, **claw marks** on the shed door, a **gnawed PMC body** 15 m E, an occasional **howl from the east** (3D audio).
-    - **W (shore path):** the fishermen's path along the west shore. Tells: a **broken fence**, a **drag trail with blood**, an ice-fishing hole with a torn net. (Susanin comes this way in W3.)
-    - **S (the breach):** the boathouse **bulkhead wall plate is dented and frost-split** (art only). It hints but never confirms: the "never feel safe" lesson.
-  - Fuel dump: 3 barrels 10 m behind the north line. Loadout **mines 2, barricades 1, turret 1**, matches 3; grenades 2 per operative + 4 from the A4 crate.
-- **Metrics:**
-  - Main building 18 x 10 m, corridor 2 m wide, rooms 8 x 8 and 8 x 6 m, 2 exits (front 1.6 m, yard side 1.6 m). Generator to console 20 m.
-  - **Choke points** (where a wire / barricade fits): the **east gully mouth 3 m wide** (between the drift and the cliff, the best wire spot); the **west fence gap 2.5 m**; **two 3 m gaps** in the north sandbag line. Tripwire span 1-5 m, barricade 3 m long.
-  - **Mines** 8-15 m out on a lane (the 3.5 m blast must not reach the line; the squad takes 75 %).
-  - **Turret**: generator-to-east-drift 8 m, so a turret 3-5 m south-west of the shed covers both the shed and the drift edge within 12 m. Covering the north lane from there is impossible: one turret, one choice.
-  - **Barrels** 8-12 m out: the 5.5 m blast stays off the line, and they sit inside the 25 m M16 range.
-  - Keep one gap open: the squad's own way out, and the reason to say "go prone under your wire".
-- **Cold:** Closed x0 inside, generator 4 m warm zone outside. Recon outside is x1; the drift and gully are x1 in the open. Prep near the generator keeps a slow preparer warm.
-- **Success:** console used -> door starts opening -> `TriggerCombatZone` -> the sudden wave 1 spawns. **Fail:** none.
-- **Checkpoint:** autosave **BeforeCombat** (existing) = `CP_A7`.
-- **~6 min** (recon + prep)
+#### A10. Generator down: repair with the Engineer, make it his guard point - DESIGNED
+- **Trigger:** the horde wrecks the generator after wave 1 (existing: small enemies weigh it 0.4x; breakdown at 0 HP, heat off, turrets unpowered; design: wave 1 spawns the 2 hounds on the generator lane so it happens).
+- **Teaches:** select the Engineer (2), click the generator -> Repair (2.5 s; `GeneratorRepaired` (E)); then **T = Guard on him next to it** ("he holds this spot while the others fight") - the guard lesson moved here from A1.
+- **Cards:** `A10_repair` `TUT_A10_REPAIR` on the breakdown (done on `GeneratorRepaired`), `A10_guard` `TUT_A10_GUARD` after it (done on `Squad.Guard` by the Engineer: `distinct` subject = the Engineer -> needs the command context's operative; add `Squad.Guard` subject reporting), `WT_A10_01-02`.
+- **Setup (user):** generator shed at the yard edge nearest the hidden lane (rev 2 A7 metrics), spawn points N / E / W as in the level JSON. Debrief / end card as rev 2 §5.3.
 
-### STAGE 3: THE LAKE FIGHT (three forms, breach, rescue): see §5
-
-#### A8-A10. Station-yard fight (3 sudden waves)
-Detailed in §5. ~9 min including the between-wave panels.
-
-#### A11. Aftermath
-- **Goal:** catch breath, loot the station locker, regroup with Susanin (member 4).
-- **Teaches:** post-combat recovery (the deployables return to the supply; existing); Susanin as a squad member (select 4); medkit H on the wounded.
-- **Walk-and-talk:** `WT_A11_01-05` (Susanin intro banter: who he is, "the garage on the east road, the PMC motor pool. They had a heater and a radio.").
-- **Setup:** 1 clean crate in the station (medkits 2, ammo, heat packs 2).
-- **Checkpoint:** autosave **AfterCombat** (existing) = `CP_A11`.
-- **~2 min**
-
-#### A12. The road east (transition)
-- **Goal:** walk through the boathouse gate onto the road; the level ends.
-- **Walk-and-talk:** `WT_A12_01-03` (walking).
-- **Setup:** `ALocationExitVolume` (gap G8) 15 m past the gate, 20 x 10 m, target `L_Demo01_B_Garage`; blocked-off road beyond (snow wall).
-- **~1 min**
-
----
 
 ## 5. Combat section A: three forms, flank breach, rescue
 
@@ -612,7 +508,37 @@ See §8. ~5 min.
 
 ---
 
-## 9. Mechanics check (everything the user named)
+## 9. Mechanics check
+
+### 9.0 Mechanics gap table for the rev 5 flow (2026-10-13; S < 1 d, M 1-3 d, L > 3 d)
+
+| User step | Mechanic | Status | Effort | Files |
+|---|---|---|---|---|
+| 1 | HQ-only intro, no actions (move lock while the radio plays) | **DONE** | S | `demo_01_steps.json` (`A0_radio_hq` lock / `A0_cam_pan` unlock), `ACodexTacticsPlayerController::HandleWorldHit` (`FilterCommand(Order.Move)`) |
+| 1 | Inventory lock (drawer + item use + item drag) | **DONE** | S | `PlayerCommands::InventoryOpen` ("Inventory.Open", key I), `ACodexTacticsHUD::ToggleInventoryDrawer` / `HandleTransferRequest`, `ACodexTacticsPlayerController::UseSquadItem` / `InventoryKey` |
+| 1, 7 | Sprint lock until "running warms you up" | **DONE** | S | beat A0 `lock`, `A1_sprint` `unlock` |
+| 2 | Staged camera lesson + MMB drag stage | **DONE** | S | `A0_cam_pan_drag`; `Camera.Pan.Drag` already reported (`CameraDragPanStart`, `UpdatePan` hold ticks) |
+| - | Precredit (lessons already done count as done; command history saved) | **DONE** | M | `FTutorialStateMachine` history, `TutorialRules::CanPrecredit / IsPrecreditSatisfied / CountHistoryUses`, `"precredit"` key, save `"history"`, feed tick in `UTutorialSubsystem::ProcessTransitions` |
+| 4 | Shaky bridge, one at a time, followers wait | **DONE** | M | `Level/BridgeCrossingVolume`, `Level/LevelObstacleRules` (BridgeRules), `AOperativeCharacter::SetTrafficHold`, `USquadSubsystem::UpdateFollower`, events `BridgeEntered / BridgeRefused / BridgeCrossed`, smoke `BridgeFenceSmoke` |
+| 5 | Walk-and-talk after the bridge | **DONE** | S | `A1_wt_banter` |
+| 6 | Heat pack lesson (starter packs, gust safety, coldest focus) + inventory unlock | **DONE** | S | `A1_heatpack` `unlock` |
+| 8 | Hut loot (resupply line + objective, 3-pack crate) | **DONE** (rev 4) | - | `A1_obj_hut`, `VOL_A1_HUT` |
+| 9 | Barrel push + light | **DONE** (rev 3) | - | A2 steps |
+| 10 | Stances, vault | **DONE** (moved to A3) | S | `A3_stance`, `A3_vault`, volumes `VOL_A3_WIND / RIDGE / RIDGE_FAR` |
+| 10 | Crawl prone under a low fence (manual prone; non-prone paths refused / routed round) | **DONE** | M | `Level/CrawlGapActor` (+ `UNavArea_CrawlOnly`, `UNavFilter_NoCrawl`), `AOperativeCharacter::RequestMove` filter, `UNavFilter_NoVault` (enemies), events `CrawlGapRefused / CrawlGapPassed`, `BridgeFenceSmoke` |
+| 10 | Cover lesson (manual per operative), mine / wire spotted cards | **DONE** (cards) | S | `A3_cover`, `A3_mine`, `A3_wire`; mechanics existed |
+| 11 | Player vision-cone toggle (hotkey + menu) | **DONE** | S | `PlayerCommands::ToggleVisionCones` ("View.VisionCones", key O), `UVisionConeComponent::SetPlayerEnemyCones` / CVar `Codex.VisionCones.Enemies`, `VisionConeRules::ResolveVisible(.., bPlayerToggle)`, pause menu `VisionConesButton` |
+| 11 | Patrol encounter before the horde on the same map (frozen + hounds, skirmish with an end) | **NEW - designed §1.3** | M | `AEnemyCharacter::EncounterGroup`, `ULevelEncounterSubsystem` groups + skirmish state, `UWaveSubsystem::AdoptLevelEnemies` filter, level JSON `encounters`, `EncounterStarted / EncounterCleared` events |
+| 11 | Tripwire ambush card | **DONE** (card) | S | `A4_tripwire`; `Deploy.Tripwire` existed (Sprint 09) |
+| 12 | Trapped crate disarm, cold chance | exists; **steps needed** | S | A5 steps; event `TrapDefused` to add (`UInteractionSubsystem` defusal path) |
+| 13 | Move barricades / barrels, mine a barricade | exists (§2.5 / §2.6); **steps needed** | S | A6 steps; `RelocationDone` carries the object kind? (verify: add `Kind` to the event context), `ObjectTrapped` event to add |
+| 13 | High ground, "colder up there" | exists (`SquadFireRules::GetElevationAdvantage`, `FColdConfig::ElevatedHeight`) ; **feedback + steps needed** | S | event `HighGroundTaken` or a volume; feed line |
+| 14 | Canister quest | exists (`FQuestChainState`) ; **steps needed** | S | A7 steps; optional JSON skip of the `Vehicle` step if no APC on the lake |
+| 15a | Tactical pause lesson | exists; **steps needed** | S | A8 steps (`Time.Pause` / `Time.Resume` reported) |
+| 15b | Commander Mode / AUTO lesson | exists (`Squad.Autonomy`, Ctrl+T) ; **steps needed** | S | A9 steps |
+| 15c | Generator wrecked -> Engineer repair -> guard point | exists (breakdown / repair / `Squad.Guard`) ; **steps + event subject needed** | S | A10 steps; `GeneratorRepaired` event on the bus (verify), `Squad.Guard` reported with the operative as subject |
+
+### 9.1 Rev 2 table (kept for reference; "no enemies before the attack" rows are superseded by rev 5)
 
 | User item | Status | System / file | What is needed |
 |---|---|---|---|
@@ -651,7 +577,7 @@ See §8. ~5 min.
 | **Engineer repairs barricades** | **MISSING** | Barricades 200 HP, no repair action | G18 (S): «Repair» on a damaged barricade (Engineer 3 s, others 6 s, +50 % HP) |
 | **Reading the terrain (approach signs)** | **MISSING (content + tutorial)** | Spawn lanes exist (`EnemySpawnPoint.SpawnLane`, type filter); signs are art | User art (tracks, claw marks, fence gaps, howls) + `ATutorialTriggerVolume` sign volumes (G1) + debrief (G16) |
 
-### 9.1 G7 proposal: "squad stacks on the leader's cover" (minimal)
+### 9.2 G7 proposal: "squad stacks on the leader's cover" (minimal)
 - **When:** the leader confirms a cover slot (any phase, real time or pause) and the followers are in formation (not solo, not guard, not under a direct order).
 - **What:** each follower gets the nearest free slot within **6 m** of the leader's slot. First on the same wall (slots 1.2 m apart along the wall via `CoverTraceRules::FindShimmySlot`). Then on another cover surface within 6 m, probed from the formation positions. Same cover class: low -> crouch; high -> stand with the back to the wall. If no slot is found, the follower crouches at his formation point.
 - **Leave:** when the leader moves away more than 3 m, followers leave cover and resume formation (the existing `LeaveCoverToMove`).
@@ -663,16 +589,33 @@ See §8. ~5 min.
 
 ## 10. Build lists
 
-### 10.1 User: Location A (block out in this order)
-1. `L_Demo01_A_FrozenLake`: ground plane ~260 x 180 m **at Z = 0**, NavMeshBounds over everything, World Settings GameMode = demo A BP.
-2. **Critical path graybox:** A0 shore + PlayerStart -> beacons 1-7 (cylinders + point lights) -> camp (3 boxes 6 x 4, 8 x 6) -> depot (10 x 8 shed, 5 x 4 hut, sandbag ring) -> station (18 x 10 building, generator shed 4 x 3, boathouse 12 x 8 with GateActor) -> road east.
-3. **Station yard arena** 30 x 30 m flat: 4 low walls 1.0 x 4 m, 2 high blocks 2.2 x 3 m, 3 barrels; the ice north open 25 m then a ridge at 30-35 m.
-4. **A6 ridge field:** 6 cover pieces per §4 A6 (heights 2.2 / 1.0 / 2.4 / 1.0 / 2.2 / APC 2.6 m; 5-6 m spacing; 2-3 m zigzag).
-5. A1 ridges (one `Vault`-tagged 0.8 m) + the 2 m crack (nav blocker).
-6. Place actors: quest objects (Canister, Vehicle, Generator, GateTerminal), `CombatStart` target point, `EnemySpawnPoint` x4 on the ice N (lane `NORTH_ICE`, 2 also `WEST_SHORE`), 1 dynamic `EnemySpawnPoint` behind the boathouse (`bIsDynamic`, chance 1.0, count 3), `SusaninSpawn` target point + unlit barrel 2.5 m away, barrels (A2 x2, A4 x1, arena x3), crates (A3 clean, A4 trapped + clean, A6 optional trapped, A11 clean), 2 level mines (A4), the PMC door charge / tripwire (A4), notes (A3, A5).
-6b. **Rev 2 (anticipation):** generator shed at the yard NE corner; the east gully + 2.5 m drift; west fence gap 2.5 m; approach-sign art (hound tracks decal, claw marks, PMC body, drag trail, dented bulkhead); spawn points named `NORTH_ICE` x2, `EAST_GULLY` (hounds only), `WEST_SHORE`, dynamic `BOATHOUSE_BULKHEAD`; fuel dump 3 barrels; barrel 1 at 10 m from hut 1 + lee-wall spot; hut 1 door 2.0 m; depot barrel 12 m from the shed door; TB-pad barrel 3 m in front of the line.
-7. Volumes: `ACameraZoneVolume` (A0 Shelter switch off; huts / shed Shelter + fixed cameras; station Closed + fixed camera; optional A5 blizzard strip), `ADialogueTriggerVolume` per `WT_*` row, tutorial trigger volumes (when G-layer lands), `ACheckpointVolume`s (G6), `ALocationExitVolume` (G8).
-8. Art pass later (beacons with numbers, PMC stencils, APC, ice cracks).
+### 10.1 User: Location A map build list per beat (rev 5; exact Volume Id / Step Id names)
+
+Every volume below is an `ATutorialTriggerVolume` (Place Actors -> "Tutorial Trigger Volume"; Details -> CodexTactics|Tutorial) unless stated. "Leader" = Activated By: Only The Leader (default), "Any" = Any Operative. Markers are `ATutorialMarkerActor` (Step Id shown while that step is up).
+
+| Beat | Place | Exact ids / settings | Notes |
+|---|---|---|---|
+| A0 | PlayerStart, snowcat wreck, beacon 1 pole | marker Step Id `A0_move` at beacon 1; volume **`VOL_A0_BEACON1`** Beat Id **`A1`** (Leader) | as placed today |
+| A1 | **The crevasse at beacon 2**: the crack (2 m, nav blocker) + the user's plank bridge (walkable mesh / navmesh strip across) | volume **`VOL_A1_BEACON2`** (kept, Leader) 3-5 m before the bridge; NEW **`BridgeCrossingVolume`** over the planks: local X along the span, Span box = planks + 1 m at each end, 2 m wide, Capacity 1; optional marker Step Id **`A1_solo`** at the near end | the volume refuses, it does not block: the planks must be the only way across |
+| A1 | Wind zone on the far side | `ACameraZoneVolume`, Cold Multiplier **2.5**, camera switch off, ~12 x 12 m | the gust safety covers a player who skirts it |
+| A1 | The fishermen's hut | interior `ACameraZoneVolume` (Shelter x0.5, fixed camera), `ALootCrateActor` Contents Heat Packs **3** (rest 0, not trapped), volume **`VOL_A1_HUT`** (Any) over the floor, optional marker Step Id **`A1_loot_open`**, marker Step Id **`A1_obj_hut`** (the resupply objective) | as placed; near the far side of the bridge |
+| A1 | Beacon 3 | volume **`VOL_A1_BEACON3`** (Leader) | as placed; no guard card any more |
+| A1 -> A3 | **Move / re-id:** `VOL_A1_BEACON4` -> **`VOL_A3_WIND`**, `VOL_A1_RIDGE` -> **`VOL_A3_RIDGE`**, `VOL_A1_RIDGE_FAR` -> **`VOL_A3_RIDGE_FAR`**; `VOL_A6_FIELD` -> **`VOL_A3_FIELD`** | the stance / vault / cover lessons live on the approach to the complex now | rename the Volume Id (or re-place the boxes there) |
+| A2 | The camp | volume **`VOL_A2_CAMP`** Beat Id **`A2`** (Leader); barrel 1 unlit 10 m from hut 1 in the wind; barrel 2 spare; hut 1 door 2.0 m + lee `ACameraZoneVolume` Shelter | as rev 4 |
+| A3 | Approach start | NEW volume **`VOL_A3_APPROACH`** Beat Id **`A3`** (Leader) where the complex first shows | |
+| A3 | Wind strip | `ACameraZoneVolume` x2.5 (camera off) + volume **`VOL_A3_WIND`** (Any) | stance card + "get low" lines |
+| A3 | Vault ridge | `Vault`-tagged ridge 0.8 m high, 8 m long; volume **`VOL_A3_RIDGE`** (Leader) before, **`VOL_A3_RIDGE_FAR`** (Leader) after | |
+| A3 | **The low fence** | the user's fence mesh (bottom rail ~0.9 m); NEW **`CrawlGapActor`** on the fence line: local X across the fence, Gap Width Cm = fence length, Clearance Cm 90, Bar Top Cm 200; the fence line must be closed otherwise (rocks / wall) within ~15 m; volume **`VOL_A3_FENCE`** (Any) 3-4 m before it | standing / crouched bodies are stopped and hinted; prone crawls under; enemies path round |
+| A3 | Cover field | 4-6 pieces (low 1.0 m / high 2.2 m, 5-6 m apart, zigzag 2-3 m); volume **`VOL_A3_FIELD`** (Leader) at its entrance | rev 2 A6 metrics |
+| A3 | PMC traps | 2 `AProximityMineActor` (hidden, damage 80) 5 m apart on the shortcut; 1 `APMCTripwireActor` across the obvious gap (HANDOFF §6) | cards fire on `MineSpotted` / `TripwireSpotted` |
+| A4 | The overlook | NEW volume **`VOL_A4_OVERLOOK`** Beat Id **`A4`** (Leader) with low cover (1.0 m) where the yard is visible | |
+| A4 | The patrols | 2 `APatrolRouteActor` loops crossing one 2-4 m choke 15-25 m from the overlook; `BP_Enemy_Frostbitten` x2 + `BP_Enemy_Hound` x2 on them (`Assigned Patrol Route`); **Phase 2:** `Encounter Group = A4_PATROL` on all four | until §1.3 lands, keep `combat_start: "button"` in the level JSON (the patrols still detect and attack) |
+| A5 | The base | NEW volume **`VOL_A5_BASE`** Beat Id **`A5`** at the door; interiors `ACameraZoneVolume` (Shelter + fixed camera); 1 clean crate; 1 **trapped** `ALootCrateActor` (bTrapped, trap damage 60); 1 unlit barrel outside | Phase 2 steps |
+| A6 | Defence prep | NEW volume **`VOL_A6_PREP`** Beat Id **`A6`**; 2 `ABarricadeActor`; 3 barrels; a roof / catwalk >= 1.5 m with stairs 1.2 m and volume **`VOL_A6_HIGH`** (Any) on it; generator shed | Phase 2 steps |
+| A7 | Quest | canister `AInteractableActor` (Canister) + beacon 60-110 m away; generator `AInteractableActor` (Generator, 200 HP); console `AInteractableActor` (GateTerminal); `TargetPoint` tag `CombatStart` | existing quest chain |
+| A8-A10 | Arena | `EnemySpawnPoint` x4 (lanes `NORTH_ICE` x2, `EAST_GULLY` hounds only, `WEST_SHORE`), 1 dynamic point `BOATHOUSE_BULKHEAD`; generator shed at the yard edge nearest the east lane | as rev 2 §5 |
+
+**Checks after placing:** PIE on `L_Demo01_A_FrozenLake`: the log prints `Tutorial: N steps, 5 beats loaded (demo_01_frozen_lake)`; a `Tutorial volume ... entered by ...` line when the leader walks into a volume; `Bridge ...: X steps on / refused / crossed` and `CrawlGap ...: X stopped / crawled through` lines from the new actors. Headless: `Scripts/smoke.ps1 -Command CodexTactics.TutorialSmoke` (the step order) and `CodexTactics.BridgeFenceSmoke` (the actors on L_MovementTest).
 
 ### 10.2 User: Location B (block out in this order)
 1. `L_Demo01_B_Garage`: yard 70 x 50 at Z = 0, NavMeshBounds, GameMode B BP.
@@ -712,25 +655,24 @@ Critical path for the user to start building: none. Every actor needed for a gra
 
 ---
 
-## 11. Total length
+## 11. Phased plan (rev 5)
 
-| Part | Beats | First-time minutes |
-|---|---|---|
-| A Stage 1 (learn) | A0-A4 | 17.5 |
-| A Stage 2 (quest + recon / prep) | A5-A7 | 15 |
-| A Stage 3 (fight) + aftermath | A8-A12 | 12 |
-| B | B0-B4 | 16 |
-| **Total** | | **~47-52 min** (veteran ~30). Cut list (§2.4) -> ~35-38 min |
+| Phase | Scope | Status | Verification |
+|---|---|---|---|
+| **1** | User steps 1-9 end to end: HQ-only intro + move lock, staged camera (+ MMB drag), precredit, sprint / inventory locks and their unlock points, the shaky bridge actor, banter after the bridge, regroup / box, heat pack, hut, barrel. Standalone: the low fence actor (step 10), the vision-cone toggle (step 11). Steps / texts rev 5, HANDOFF §6. | **DONE 2026-10-13 (agents/work)** | build; unit `CodexTactics.Tutorial.*` (incl. `Precredit.*`, `Schema.DemoFile`, `Schema.DemoFileA0A1Flow`), `CodexTactics.Level.*`, `CodexTactics.Combat.VisionCone.*`, `CodexTactics.UI.Frontend.*`; smokes `TutorialSmoke` (rev 5 order), `BridgeFenceSmoke` (new), Movement / Stance / Tripwire / Inventory / Cover / SaveRoundTrip / PauseMenu / VisionCone / SoloRejoin / Vault / ControlsScreen / CoverEvent / PMCTripwire / Transfer / Guard / SaveLoad |
+| **2** | Step 11-13: §1.3 encounter groups (skirmish before the horde, `AdoptLevelEnemies` filter, `EncounterStarted / Cleared` events), A4 fight steps, A5 trapped-crate steps (+ `TrapDefused` event), A6 defence-prep steps (+ `ObjectTrapped`, relocation kind, `HighGroundTaken`). | designed | `EncounterSkirmishSmoke` (new), `DeployableSmoke`, `RelocationSmoke`, `AmbushSmoke`, `PatrolAmbushSmoke` must stay green (no-group = today) |
+| **3** | Steps 14-15: A7 canister steps (quest chain), A8 pause card, A9 AUTO card, A10 generator repair + guard (event subject for `Squad.Guard`), wave 1 hounds on the generator lane, debrief / end card (§5.3, G16). | designed | `QuestChainSmoke`, `GateGeneratorSmoke`, `BotRepairSmoke`, `HordeIntroSmoke`, `GuardSmoke`, `CommanderModeSmoke` |
+| **4** | Content polish: narrative sheet Tutorial tab (TANDEM #17: all `TUT_* / WT_* / OBJ_*` ids of rev 5), marker material (#18), bridge creak / fence sounds (user BP events `OnBridgeCreak`), telemetry digest with Jev. | open | playtest |
 
----
+## 12. Questions for the user (rev 5; with recommendations)
 
-## 12. Questions for the user (with recommendations)
+1. **Bridge rule** (default implemented: a second operative is refused at the edge, no damage): keep, or should a second body make the bridge **sway and dump both in the crack** (damage + "Retry")? *Recommended: keep the refusal* (the lesson is Solo, not punishment); a creak sound on the BP event `OnBridgeCreak` sells it.
+2. **Low fence** (default: MANUAL prone; a standing order stops with a hint): keep, or **auto-prone** when the leader is ordered through (he lies down, crawls, stands up on the other side)? *Recommended: manual for the lesson* (it teaches V / Alt+V); auto-prone could be a later option on the actor (`bAutoProne`).
+3. **Move lock during the HQ intro** (default: clicks are refused with "Hold on - HQ is talking."): keep, or let the player walk while HQ talks? *Recommended: keep* - the user asked for "no actions during it"; the radio is ~25 s.
+4. **Vision cones key**: `O` chosen (free key; `I` = inventory). OK, or another key? Not saved between sessions (a session setting) - should it be saved in the profile like the tutorial switch? *Recommended: save it* (S).
+5. **Pre-horde patrol** (§1.3): skirmish with turn-based allowed and Panic off (the demo flag)? And how many: 2 frozen + 2 hounds as the user said, or 2 + 1 to keep the first fight gentle? *Recommended: 2 + 2 with the tripwire doing the work; TB allowed; Panic off.*
+6. **Stances / vault moved to the approach (A3)**: the user's `VOL_A1_BEACON4 / RIDGE / RIDGE_FAR` and `VOL_A6_FIELD` must be renamed / re-placed (`VOL_A3_*`). OK? (Alternative: keep a short stance card in A1 as well - but the user put stances in step 10.)
+7. **Guard moved to A10** (the Engineer at the generator): OK, or also a short guard card earlier (e.g. at the overlook: "T = hold the overlook")?
+8. **Precredit scope**: default ON for every command card except regroup / sprint / loot-open / tripwire. Should the **select card** at the bridge also be forced (the player may have selected someone by accident)? *Recommended: leave it precredited* - selecting again costs nothing and the bridge card asks for it anyway.
 
-1. **Two maps or one?** *Recommended: two maps* (`L_Demo01_A_FrozenLake`, `L_Demo01_B_Garage`) plus a squad carry-over (G8). One map would pull the garage enemies into the lake fight (every enemy in the world joins an ambush / wave), and the lake would turn into an ambush level. Fixing that is a large refactor.
-2. **Rescue and enemy counts.** *Recommended:* **Susanin** (the existing recruit) in lake wave 3, 28 m west, saved by walking up or by fire, carried into the garage. Lake waves on **three lanes** (N 4-6, the hidden E gully 2 hounds going for the generator, W 2-4) + 3 breach hounds in W2. Garage 8 placed + an 8-enemy horde. **No Marksman** in demo 1.
-3. **Generator in the lake fight:** can the generator be **destroyed for good**, or only knocked out (repairable)? *Recommended: only knocked out* (today's rule: breakdown at 0 HP, repair restores it), with the cost being heat, turret power and door time, never a game over.
-4. **The 4-minute horde in the garage: real or only a warning? And should turn-based time count?** *Recommended: real*, with a radio warning at 3:00 and a visible fight clock, and spawns pulled into the yard (20-40 m). Today **pause and turn-based stop the clock**, so a TB-only player never meets the horde. Recommendation: keep that rule (TB is the "safe but slow" option) and say it on the hint card. The alternative is to count each TB round as ~10 s.
-5. **PMC tripwires:** should they be **hidden until spotted** like mines, should **cold lower the disarm chance** as it does for mines, and may **anyone** disarm (role chance) or only the Medic-Sapper (today: 3 s, medic only, no cold)? *Recommended: hidden; cold applies; anyone may try with the role chance* (the Medic-Sapper stays the obvious pick: 88 % vs 58 % for the Commander).
-6. **Followers in cover (G7) and barrels in live real time (G19):** (a) when the leader takes cover, should the formation **stack into nearby cover automatically**? *Recommended: yes* (exploration and real time; not solo / guard / TB). (b) A **direct barrel push in live real time** is off today by your 2026-10-08 decision, so it is taught as a pause order. Keep it that way? *Recommended: keep* (moving a barrel is a plan, and the pause is the planning mode).
-
-Выполнено моделью: Claude Opus 5.5 (claude-opus-5-5)
+Выполнено моделью: Claude Fable 5.1 (claude-fable-5-1)
