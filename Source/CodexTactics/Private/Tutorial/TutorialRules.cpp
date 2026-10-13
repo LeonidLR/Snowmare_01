@@ -373,7 +373,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		{
 			const TSharedPtr<FJsonObject> Complete = *CompleteObject;
 			WarnUnknownKeys(Complete, { TEXT("command"), TEXT("commands"), TEXT("event"), TEXT("count"), TEXT("volume"), TEXT("timeout_s"),
-				TEXT("distinct_operatives"), TEXT("hold_s") },
+				TEXT("distinct_operatives"), TEXT("hold_s"), TEXT("in_volume"), TEXT("distinct_from") },
 				Where + TEXT(" complete"), OutWarnings);
 			Step.Complete.Commands = JsonStrings(Complete, TEXT("commands"));
 			Step.Complete.Commands.Append(JsonStrings(Complete, TEXT("command")));
@@ -383,6 +383,19 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			Step.Complete.TimeoutSeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Complete, TEXT("timeout_s"), 0.0)));
 			Step.Complete.bDistinctSubjects = JsonBool(Complete, TEXT("distinct_operatives"), false);
 			Step.Complete.HoldSeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Complete, TEXT("hold_s"), 0.0)));
+			Step.Complete.InVolume = FName(*JsonString(Complete, TEXT("in_volume")));
+			for (const FString& Other : JsonStrings(Complete, TEXT("distinct_from")))
+			{
+				Step.Complete.DistinctFrom.AddUnique(FName(*Other));
+			}
+			if (!Step.Complete.InVolume.IsNone() && Step.Complete.Event.IsEmpty())
+			{
+				OutWarnings.Add(Where + TEXT(": \"in_volume\" only filters events - no \"event\" given"));
+			}
+			if (!Step.Complete.DistinctFrom.IsEmpty() && Step.Complete.Event.IsEmpty() && Step.Complete.Volume.IsNone())
+			{
+				OutWarnings.Add(Where + TEXT(": \"distinct_from\" only filters events / volume entries - neither given"));
+			}
 			if (Step.Complete.bDistinctSubjects && Step.Complete.Event.IsEmpty())
 			{
 				OutWarnings.Add(Where + TEXT(": \"distinct_operatives\" only counts events - no \"event\" given"));
@@ -486,6 +499,14 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		{
 			OutError = FString::Printf(TEXT("step %s: trigger \"condition\" needs a \"condition\""), *Step.Id.ToString());
 			return false;
+		}
+		for (const FName Other : Step.Complete.DistinctFrom)
+		{
+			if (OutData.FindStepIndex(Other) == INDEX_NONE || Other == Step.Id)
+			{
+				OutError = FString::Printf(TEXT("step %s: complete \"distinct_from\" names an unknown step \"%s\""), *Step.Id.ToString(), *Other.ToString());
+				return false;
+			}
 		}
 		for (const FName Required : Step.Trigger.Requires)
 		{

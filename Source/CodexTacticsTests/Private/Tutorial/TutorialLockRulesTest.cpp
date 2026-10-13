@@ -430,7 +430,22 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 			Step.Trigger.Volume == FName(TEXT("VOL_A1_BEACON2")) && (Step.Keys.Contains(TEXT("Squad.Solo")) || Step.Keys.Contains(TEXT("Select.Member"))));
 	}
 	const FTutorialStep* Select = Data.FindStep(TEXT("A1_select"));
-	TestTrue(TEXT("A1_select at the hut"), Select && Select->Trigger.Type == ETutorialTriggerType::Volume && Select->Trigger.Volume == FName(TEXT("VOL_A1_HUT")));
+	TestTrue(TEXT("A1_select on the approach to the hut"), Select && Select->Trigger.Type == ETutorialTriggerType::Volume
+		&& Select->Trigger.Volume == FName(TEXT("VOL_A1_HUT_APPROACH")));
+	// Rev 5c part 3: the tactical hut entry - left of the door, right of the door, the third goes in (three different operatives).
+	const FTutorialStep* StackL = Data.FindStep(TEXT("A1_hut_stack_l"));
+	const FTutorialStep* StackR = Data.FindStep(TEXT("A1_hut_stack_r"));
+	const FTutorialStep* Enter = Data.FindStep(TEXT("A1_hut_enter"));
+	TestTrue(TEXT("left of the door: cover entered in VOL_A1_DOOR_L, not by the other two; unlocks cover"), StackL && StackL->Trigger.Step == FName(TEXT("A1_solo"))
+		&& StackL->Complete.Event == TEXT("CoverEntered") && StackL->Complete.InVolume == FName(TEXT("VOL_A1_DOOR_L")) && StackL->Unlock.Contains(TEXT("Cover.*"))
+		&& StackL->Complete.DistinctFrom.Contains(FName(TEXT("A1_hut_stack_r"))) && StackL->Complete.DistinctFrom.Contains(FName(TEXT("A1_hut_enter"))));
+	TestTrue(TEXT("right of the door: cover entered in VOL_A1_DOOR_R, not by the other two"), StackR && StackR->Trigger.Step == FName(TEXT("A1_solo"))
+		&& StackR->Complete.Event == TEXT("CoverEntered") && StackR->Complete.InVolume == FName(TEXT("VOL_A1_DOOR_R"))
+		&& StackR->Complete.DistinctFrom.Contains(FName(TEXT("A1_hut_stack_l"))) && StackR->Complete.DistinctFrom.Contains(FName(TEXT("A1_hut_enter"))));
+	TestTrue(TEXT("the third goes in: VOL_A1_HUT entered by neither stacker"), Enter && Enter->Trigger.Step == FName(TEXT("A1_solo"))
+		&& Enter->Complete.Volume == FName(TEXT("VOL_A1_HUT")) && Enter->Complete.DistinctFrom.Contains(FName(TEXT("A1_hut_stack_l")))
+		&& Enter->Complete.DistinctFrom.Contains(FName(TEXT("A1_hut_stack_r"))));
+	TestTrue(TEXT("the loot lesson follows the entry"), Data.FindStep(TEXT("A1_loot_open")) && Data.FindStep(TEXT("A1_loot_open"))->Trigger.Step == FName(TEXT("A1_hut_enter")));
 	const FTutorialStep* Solo = Data.FindStep(TEXT("A1_solo"));
 	TestTrue(TEXT("A1_solo after the select card: Solo ON (never precredited), unlocks solo / regroup"), Solo && Solo->Trigger.Type == ETutorialTriggerType::AfterStep
 		&& Solo->Trigger.Step == FName(TEXT("A1_select")) && Solo->Complete.Commands == TArray<FString>{ PlayerCommands::SoloOn.ToString() }
@@ -586,16 +601,40 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("and the hut objective is up"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Active);
 	TestEqual(TEXT("hut loot cards not before the hut"), Machine.GetState(TEXT("A1_loot_open")), ETutorialStepState::Idle);
 	TestTrue(TEXT("crates locked before the hut lesson"), Machine.IsCommandLocked(PlayerCommands::LootCrate));
-	Machine.HandleVolume(TEXT("VOL_A1_HUT"), NAME_None, NAME_None);
+	Machine.HandleVolume(TEXT("VOL_A1_HUT_APPROACH"), NAME_None, NAME_None, TEXT("Op1"));
 	Pump(Machine, 2.f);
+	TestEqual(TEXT("approaching the hut: the walk-and-talk played"), Machine.GetState(TEXT("A1_wt_hut_approach")), ETutorialStepState::Completed);
 	TestEqual(TEXT("hut: select first (rev 5c: moved from the bridge)"), Machine.GetActiveCard(), FName(TEXT("A1_select")));
 	Machine.HandleCommand(PlayerCommands::SelectMember);
 	Pump(Machine, 2.f);
 	TestEqual(TEXT("then Solo"), Machine.GetActiveCard(), FName(TEXT("A1_solo")));
 	TestFalse(TEXT("the solo card unlocks solo / regroup"), Machine.IsCommandLocked(PlayerCommands::SoloOn) || Machine.IsCommandLocked(PlayerCommands::Regroup));
+	TestTrue(TEXT("cover still locked before the door"), Machine.IsCommandLocked(PlayerCommands::CoverEnter));
 	Machine.HandleCommand(PlayerCommands::SoloOn);
 	TestEqual(TEXT("B: solo on completes it"), Machine.GetState(TEXT("A1_solo")), ETutorialStepState::Completed);
 	Pump(Machine, 2.f);
+	TestEqual(TEXT("the door: left side first"), Machine.GetActiveCard(), FName(TEXT("A1_hut_stack_l")));
+	TestTrue(TEXT("right side and 'go in' queued (they count meanwhile)"), Machine.GetState(TEXT("A1_hut_stack_r")) == ETutorialStepState::Queued
+		&& Machine.GetState(TEXT("A1_hut_enter")) == ETutorialStepState::Queued);
+	TestFalse(TEXT("the door card unlocks cover"), Machine.IsCommandLocked(PlayerCommands::CoverPreview) || Machine.IsCommandLocked(PlayerCommands::CoverEnter));
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op2"));
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op2"), { TEXT("VOL_A1_HUT_APPROACH") });
+	TestEqual(TEXT("cover somewhere else does not count"), Machine.GetProgress(TEXT("A1_hut_stack_l")) + Machine.GetProgress(TEXT("A1_hut_stack_r")), 0);
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op2"), { TEXT("VOL_A1_DOOR_R") });
+	TestEqual(TEXT("Op2 right of the door first: the queued right card completes silently"), Machine.GetState(TEXT("A1_hut_stack_r")), ETutorialStepState::Completed);
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op2"), { TEXT("VOL_A1_DOOR_L") });
+	TestEqual(TEXT("the same operative on the left does not count (distinct_from)"), Machine.GetState(TEXT("A1_hut_stack_l")), ETutorialStepState::Active);
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op1"), { TEXT("VOL_A1_DOOR_L") });
+	TestEqual(TEXT("Op1 left of the door completes the left card"), Machine.GetState(TEXT("A1_hut_stack_l")), ETutorialStepState::Completed);
+	Machine.HandleVolume(TEXT("VOL_A1_HUT"), NAME_None, NAME_None, TEXT("Op1"));
+	Machine.HandleVolume(TEXT("VOL_A1_HUT"), NAME_None, NAME_None, TEXT("Op2"));
+	TestEqual(TEXT("a stacker walking in is not the third man"), Machine.GetState(TEXT("A1_hut_enter")), ETutorialStepState::Queued);
+	Pump(Machine, 2.f);
+	TestEqual(TEXT("then 'go in'"), Machine.GetActiveCard(), FName(TEXT("A1_hut_enter")));
+	Machine.HandleVolume(TEXT("VOL_A1_HUT"), NAME_None, NAME_None, TEXT("Op3"));
+	TestEqual(TEXT("Op3 inside completes it"), Machine.GetState(TEXT("A1_hut_enter")), ETutorialStepState::Completed);
+	Pump(Machine, 2.f);
+	TestEqual(TEXT("inside: the line played"), Machine.GetState(TEXT("A1_wt_hut")), ETutorialStepState::Completed);
 	TestEqual(TEXT("hut: open the crate"), Machine.GetActiveCard(), FName(TEXT("A1_loot_open")));
 	TestFalse(TEXT("the hut card unlocks the crates"), Machine.IsCommandLocked(PlayerCommands::LootCrate) || Machine.IsCommandLocked(PlayerCommands::LootTake));
 	Machine.HandleCommand(PlayerCommands::LootCrate);
@@ -757,7 +796,8 @@ bool FTutorialProgressiveDemoTest::RunTest(const FString&)
 		TArray<FName> StillLocked;
 	};
 	const TArray<FLesson> Lessons = {
-		{ TEXT("A1_solo"), { PlayerCommands::SoloOn, PlayerCommands::Regroup }, { PlayerCommands::Guard, PlayerCommands::Autonomy } },
+		{ TEXT("A1_solo"), { PlayerCommands::SoloOn, PlayerCommands::Regroup }, { PlayerCommands::Guard, PlayerCommands::Autonomy, PlayerCommands::CoverEnter } },
+		{ TEXT("A1_hut_stack_l"), { PlayerCommands::CoverPreview, PlayerCommands::CoverEnter, PlayerCommands::CoverFireMode }, { PlayerCommands::HoldLine } },
 		{ TEXT("A1_heatpack"), { PlayerCommands::InventoryOpen, PlayerCommands::UseHeatPack, PlayerCommands::UseItem }, { PlayerCommands::LootCrate } },
 		{ TEXT("A1_loot_open"), { PlayerCommands::LootCrate, PlayerCommands::LootTake }, { PlayerCommands::Relocate } },
 		{ TEXT("A2_push"), { PlayerCommands::Relocate }, { PlayerCommands::LightBarrel, PlayerCommands::UseObject } },

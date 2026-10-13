@@ -30,7 +30,9 @@
 //     itself is BridgeFenceSmoke's job) -> the squad banter; 20 s after the crossing the gust (+20 cold, >= 42 %);
 //     the heat-pack card UNLOCKS the inventory / items (the drawer opens now), the coldest uses his own starter pack, the mate
 //     card; THEN the 'running keeps you warm' survival tip (a double click sprints, the tip stays), THEN WT_A1_RESUPPLY + the hut objective; the hut:
-//     select (key 2) -> Solo (B) -> the loot cards and the closing line -> regroup (B) -> box; beacon 3 plays the formation lines with no guard card; the save's tutorial section carries the
+//     the approach line, select (key 2) -> Solo (B) -> the tactical entry (rev 5c: the third operative already inside the hut
+//     completes "go in" by volume presence; cover entered in VOL_A1_DOOR_R / _L by two DIFFERENT operatives, through the event
+//     bus; cover elsewhere does not count) -> the loot cards and the closing line -> regroup (B) -> box; beacon 3 plays the formation lines with no guard card; the save's tutorial section carries the
 //     command history; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
 //     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
 //     (tap = next line, hold = skip).
@@ -130,6 +132,8 @@ namespace TutorialSmoke
 		/** The leader's heat packs just before he empties the hut crate. */
 		int32 HeatPacksBeforeLoot = 0;
 		TWeakObjectPtr<AOperativeCharacter> Focus;
+		/** Rev 5c hut entry: the small VOL_A1_HUT round the third operative. */
+		TWeakObjectPtr<ATutorialTriggerVolume> HutVolume;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -182,6 +186,34 @@ namespace TutorialSmoke
 		Volume->VolumeId = VolumeId;
 		Volume->BeatId = BeatId;
 		return Volume->TryActivate(Leader);
+	}
+
+	/** A small tutorial volume (VolumeId, Any Operative, not fire-once) around one operative: the hut door / interior stand-ins. */
+	ATutorialTriggerVolume* SpawnVolumeAround(UWorld* World, const AOperativeCharacter* Operative, FName VolumeId, float HalfSizeCm = 40.f)
+	{
+		const FTransform Transform(FRotator::ZeroRotator, Operative->GetActorLocation());
+		ATutorialTriggerVolume* Volume = World->SpawnActorDeferred<ATutorialTriggerVolume>(ATutorialTriggerVolume::StaticClass(), Transform, nullptr, nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (!Volume)
+		{
+			return nullptr;
+		}
+		Volume->VolumeId = VolumeId;
+		Volume->ActivatedBy = ETutorialVolumeFilter::AnyOperative;
+		Volume->bFireOnce = false;
+		Volume->Box->SetBoxExtent(FVector(HalfSizeCm, HalfSizeCm, 150.f));
+		Volume->FinishSpawning(Transform);
+		return Volume;
+	}
+
+	/** A settled cover entry of Operative as the cover code raises it (subject + slot), through the event bus. */
+	void RaiseCoverEntered(UWorld* World, AOperativeCharacter* Operative)
+	{
+		FGameplayEventContext Context;
+		Context.Subject = Operative;
+		Context.Kind = FName(TEXT("High"));
+		Context.Location = Operative->GetActorLocation();
+		GameplayEvents::RaiseWithContext(World, GameplayEvents::CoverEntered, Context);
 	}
 
 	AOperativeCharacter* Coldest(USquadSubsystem* Squad)
@@ -930,7 +962,11 @@ namespace TutorialSmoke
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Active, TEXT("the hut: the select card"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Active, TEXT("the hut approach: the select card"));
+			const ETutorialStepState Approach = Tutorial->GetStepState(TEXT("A1_wt_hut_approach"));
+			Check(State, TutorialRules::IsRunning(Approach) || Approach == ETutorialStepState::Completed,
+				FString::Printf(TEXT("the approach walk-and-talk plays (or waits for the line before it: %s)"), TutorialRules::StateName(Approach)));
+			Tutorial->SkipStep(TEXT("A1_wt_hut_approach"));
 			Tap(PC, State, EKeys::Two); // select operative 2 through the real input path
 			Next(State);
 			return true;
@@ -944,6 +980,10 @@ namespace TutorialSmoke
 			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Completed, TEXT("key 2 selected a member and completed the card"));
 			Check(State, Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::SoloOn)
 				&& !Tutorial->IsCommandLocked(PlayerCommands::Regroup), TEXT("then the Solo card, which unlocks B"));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::CoverEnter), TEXT("cover still locked before the door cards"));
+			// The third operative already stands INSIDE the hut (a small VOL_A1_HUT round him) before the entry cards run: the
+			// "go in" card must count him at once (volume presence, rev 5c).
+			State.HutVolume = SpawnVolumeAround(World, Squad->GetMembers()[2], TEXT("VOL_A1_HUT"));
 			PressKey(PC, EKeys::B, IE_Pressed);
 			Next(State);
 			return true;
@@ -953,6 +993,37 @@ namespace TutorialSmoke
 			PressKey(PC, EKeys::B, IE_Released);
 			Check(State, Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Completed, TEXT("B: solo on, the card done"));
 			Squad->SetLeaderByIndex(0); // the loot stages count the first operative's heat packs (State.HeatPacksBeforeLoot)
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_enter")) == ETutorialStepState::Completed, FString::Printf(
+				TEXT("the third operative already inside the hut completes 'go in' at once (volume presence; %s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A1_hut_enter")))));
+			State.Stage = 72;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 72:
+		{
+			// The door (rev 5c): cover entered INSIDE VOL_A1_DOOR_L / _R by two different operatives (in_volume + distinct_from).
+			if (Tutorial->GetStepState(TEXT("A1_hut_stack_l")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_l")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::CoverEnter),
+				TEXT("left of the door: the card shows and unlocks cover"));
+			AOperativeCharacter* First = Squad->GetMembers()[0];
+			AOperativeCharacter* Second = Squad->GetMembers()[1];
+			RaiseCoverEntered(World, Second);
+			Check(State, Tutorial->GetStepProgress(TEXT("A1_hut_stack_l")) == 0 && Tutorial->GetStepProgress(TEXT("A1_hut_stack_r")) == 0,
+				TEXT("cover entered away from the door counts for neither side"));
+			SpawnVolumeAround(World, Second, TEXT("VOL_A1_DOOR_R"));
+			Check(State, Tutorial->GetTutorialVolumesAt(Second->GetActorLocation()).Contains(FName(TEXT("VOL_A1_DOOR_R"))), TEXT("the subject stands in VOL_A1_DOOR_R"));
+			RaiseCoverEntered(World, Second);
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_r")) == ETutorialStepState::Completed, TEXT("cover right of the door: the queued right card completes"));
+			SpawnVolumeAround(World, Second, TEXT("VOL_A1_DOOR_L"));
+			RaiseCoverEntered(World, Second);
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_l")) == ETutorialStepState::Active, TEXT("the same operative left of the door does not count (distinct_from)"));
+			SpawnVolumeAround(World, First, TEXT("VOL_A1_DOOR_L"));
+			RaiseCoverEntered(World, First);
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_l")) == ETutorialStepState::Completed, TEXT("another operative left of the door completes it"));
 			State.Stage = 43;
 			State.StageTime = 0.f;
 			return true;
@@ -1078,7 +1149,7 @@ namespace TutorialSmoke
 			Crate->Contents = Contents;
 			State.Crate = Crate;
 			State.HeatPacksBeforeLoot = Leader->HeatPacksCount;
-			Check(State, EnterVolume(World, Leader, TEXT("VOL_A1_HUT")), TEXT("the hut volume fires"));
+			Check(State, EnterVolume(World, Leader, TEXT("VOL_A1_HUT_APPROACH")), TEXT("the hut approach volume fires"));
 			State.Stage = 33;
 			State.StageTime = 0.f;
 			return true;

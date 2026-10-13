@@ -130,6 +130,18 @@ struct CODEXTACTICS_API FTutorialCompletion
 	bool bDistinctSubjects = false;
 	/** Entering this volume completes the step. */
 	FName Volume;
+	/**
+	 * "in_volume" (rev 5c, 2026-10-13): an event counts only when its subject (the operative) stands inside a tutorial volume
+	 * with this id (ATutorialTriggerVolume::GetEffectiveVolumeId) at that moment - "cover entered at the left side of the door".
+	 * Events without a subject, or a subject outside every such volume, never count then.
+	 */
+	FName InVolume;
+	/**
+	 * "distinct_from" (rev 5c): an operative who already counted for any of these steps never counts here (events and volume
+	 * entries; needs a subject) - three DIFFERENT operatives for "left of the door", "right of the door" and "the one who goes
+	 * in". Who counted is runtime state (not saved: after a load mid-lesson any operative may count again).
+	 */
+	TArray<FName> DistinctFrom;
 	/** > 0: an active step that is not done after this many seconds times out (hides; counts as finished). */
 	float TimeoutSeconds = 0.f;
 	/**

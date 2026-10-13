@@ -190,6 +190,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tutorial")
 	void NotifyEvent(FName EventName, FName SubjectId = NAME_None);
 
+	/** Ids of the tutorial volumes (ATutorialTriggerVolume::GetEffectiveVolumeId) whose box holds Location ("in_volume" completions). */
+	TArray<FName> GetTutorialVolumesAt(const FVector& Location) const;
+
 	/** A squad member entered a tutorial volume; false when it did not count (tutorial off, required beat not reached). */
 	bool NotifyVolumeEntered(ATutorialTriggerVolume* Volume, AOperativeCharacter* Operative);
 
@@ -358,6 +361,8 @@ private:
 	/** A step was shown: focus, world actions, feed lines. */
 	void HandleStepShown(const FTutorialStep& Step);
 	void RunActions(const FTutorialStep& Step);
+	/** The step completes in a volume: the squad members standing in it already count (FTutorialStateMachine::HandleVolumePresence). */
+	void CountVolumePresence(const FTutorialStep& Step);
 	/** {focus} -> the focused operative's name. */
 	FString ResolveFocusToken(const FString& Text, FName StepId) const;
 	AOperativeCharacter* FindColdestMember() const;
