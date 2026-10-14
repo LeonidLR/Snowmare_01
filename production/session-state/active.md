@@ -14,6 +14,23 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Checkpoint 2026-10-14 (end of day)
+- Done today: Demo 01 rev 5d-5g (heat pack sharing with Shift+drag, barrel into the ruin, corner peek near edge + low
+  cover, place dialogue `cancel_on`, traps avoided only in AUTO, tripwire disarm fix, sprint locked until the first heat
+  pack, prone dives on the move with root motion, monotonic tutorial progress by location, NO autosaves (checkpoints +
+  F5 only) + tutorial save round-trip fixes, orders survive a selection change, followers leave cover to follow, lake
+  cold x0.4, instant arrival cards, interior EXIT arrows + M camera toggle); editable squad roster
+  `BP_CodexTacticsGameMode` (user switched the Medic-Sapper back to the regular operative); status report
+  `docs/port/PROJECT_STATUS_2026-10-14.md`.
+- Cleanup day task 1 DONE: `OperativeCharacter.cpp` 4867 -> 306 lines, split into per-cluster files of the same class
+  (byte-identical definitions; components = stage 2, plan in `docs/port/REFACTOR_OPERATIVE_2026-10.md` §4, controller
+  split proposal §6). Verified on main: build, 449/449 unit tests, 15 smokes PASS.
+- Next (cleanup day continues, effort high for task 2): (2) flaky / failing smokes: PanicSmoke (fails on the base too —
+  environment changed), SquadControlSmoke («Alt + V refused while moving», fails on base — likely the new prone-dive
+  rule), VisionConeSmoke (1400 cm), CornerHold / TurnBasedAim / Knockdown pass only on rerun; (3) merge the two lake maps
+  with the user; (4) audit batches. Open user questions: SAVE GAME in the pause menu, box select after the hut, cone key
+  persistence, patrol Panic/TB, APC numbers; EXIT arrow look (graybox), hut doors found = 1.
+
 ## Planned: cleanup day (user decision 2026-10-14, after the rev 5g agent)
 No new features. (1) Split `OperativeCharacter.cpp` (~4.9k lines) into components (cover / stance + prone dive / sniper),
 behaviour unchanged, smokes as the safety net; look at `CodexTacticsPlayerController.cpp` (~2.9k) too. (2) Stabilise the
