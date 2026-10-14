@@ -1,4 +1,5 @@
 #include "Characters/OperativeCharacter.h"
+#include "Characters/OperativeCharacterInternal.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Characters/OperativeHitRules.h"
 #include "Combat/KnockdownComponent.h"
@@ -39,18 +40,6 @@ namespace
 {
 	TAutoConsoleVariable<int32> CVarDebugCornerAim(TEXT("Codex.Debug.CornerAim"), 0,
 		TEXT("1: the sustained corner aim's decision, its reason and inputs over the operatives in cover."));
-
-	/** Spitters, cryo drones and marksmen shoot from a distance; hounds, cutters, frostbitten and brutes close in. */
-	bool IsRangedEnemyActor(const AActor* Actor)
-	{
-		const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Actor);
-		if (!Enemy)
-		{
-			return false;
-		}
-		const EEnemyArchetype Type = Enemy->GetArchetype();
-		return Type == EEnemyArchetype::Spitter || Type == EEnemyArchetype::CryoDrone || Type == EEnemyArchetype::Marksman;
-	}
 }
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/SightRules.h"
@@ -89,12 +78,6 @@ namespace
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
-
-namespace
-{
-	/** Speed below which an operative without a move order counts as standing still, cm/s. */
-	constexpr float MovingSpeedThreshold = 15.f;
-}
 
 AOperativeCharacter::AOperativeCharacter()
 {
@@ -319,7 +302,6 @@ void AOperativeCharacter::ApplyBodyColor()
 	}
 }
 
-
 void AOperativeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (SelectionRing)
@@ -345,485 +327,6 @@ bool AOperativeCharacter::IsRaging() const
 bool AOperativeCharacter::IsPanicking() const
 {
 	return PanicComponent && PanicComponent->IsPanicking();
-}
-
-EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destination, bool bSprint)
-{
-	if (!bPendingMoveReplay)
-	{
-		++MoveOrderSerial; // every real order (player, interaction, relocation, bot) - the weather idle pose of THIS operative ends
-	}
-	if (IsRaging())
-	{
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ ENRAGED! IGNORING ORDERS!"), FLinearColor(1.f, 0.4f, 0.1f));
-		return EOperativeOrderResult::Refused;
-	}
-	if (IsPanicking())
-	{
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ PANICKING! IGNORING ORDERS!"), FLinearColor(1.f, 0.3f, 0.3f));
-		return EOperativeOrderResult::Refused;
-	}
-	// Sprint 14: knocked down — the order waits and runs once he is up (the latest one wins).
-	if (IsKnockedDown())
-	{
-		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
-		KnockdownComponent->BufferOrder([WeakThis, Destination, bSprint]()
-		{
-			if (AOperativeCharacter* Self = WeakThis.Get())
-			{
-				Self->OrderMoveTo(Destination, bSprint);
-			}
-		});
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("KNOCKED DOWN - ORDER QUEUED"), FLinearColor(1.f, 0.7f, 0.2f));
-		return EOperativeOrderResult::Accepted;
-	}
-	// Sprint 12: a move order away from the wall leaves the cover (a cover / shimmy order keeps it; so does the planned
-	// walk to the pending slot that the tactical pause releases).
-	const bool bToPendingSlot = bHasPendingCover && FVector::Dist2D(Destination, PendingCoverSlot.WorldLocation) <= 60.f;
-	if (!bCoverMoveOrder && !bPendingMoveReplay && !bToPendingSlot)
-	{
-		if (bInCover)
-		{
-			LeaveCover(TEXT("move order"));
-		}
-		bHasPendingCover = false;
-	}
-	// Commander Mode (Sprint 07-B): every player move order pins the anchor the autonomy fights around.
-	if (!bAutonomousOrder && !bPendingMoveReplay)
-	{
-		TacticalAnchor = SquadAutonomyRules::MakeAnchor(SquadROE::Get(), GetActorLocation(), Destination, GetActorRotation());
-	}
-	// User decision 2026-10-01: a sprint order (double click) stands a prone operative up — he rises in place, then runs;
-	// any move ordered while he is getting up starts once he is up. SetStance arms the settle time, so the hold below covers
-	// both this stand-up and a stance clip that is already playing (bug 2026-10-11: a move must never slide a rooted body).
-	if (bSprint && Stance == EOperativeStance::Prone && !bCarrying
-		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded()))
-	{
-		SetStance(EOperativeStance::Standing);
-	}
-	const float RiseDelay = GetMoveHoldSeconds();
-	if (OperativeMovementRules::ShouldDeferMove(RiseDelay) && GetWorld())
-	{
-		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
-		GetWorld()->GetTimerManager().SetTimer(PendingMoveTimer, FTimerDelegate::CreateLambda([WeakThis, Destination, bSprint]()
-		{
-			if (AOperativeCharacter* Self = WeakThis.Get())
-			{
-				TGuardValue<bool> Replay(Self->bPendingMoveReplay, true);
-				Self->OrderMoveTo(Destination, bSprint);
-			}
-		}), RiseDelay, false);
-		bHasMoveOrder = true;
-		bOwnMoveOrder = true;
-		return EOperativeOrderResult::Accepted;
-	}
-	if (bSprint && CanSprint())
-	{
-		// A sprint order stands a crouching operative up (Godot set_target).
-		if (Stance == EOperativeStance::Crouching)
-		{
-			Stance = EOperativeStance::Standing;
-		}
-		bSprinting = true;
-	}
-	else
-	{
-		bSprinting = false;
-	}
-	ApplyMovementParams();
-	const EOperativeOrderResult Result = RequestMove(Destination);
-	bOwnMoveOrder = bHasMoveOrder; // rev 5g: his own order (the formation leaves him alone until it is done)
-	UE_LOG(LogCodexTactics, Display, TEXT("%s: move to (%.0f, %.0f)%s -> %s"), *DisplayName.ToString(), Destination.X, Destination.Y,
-		bSprinting ? TEXT(" sprint") : TEXT(""), Result == EOperativeOrderResult::Accepted ? TEXT("accepted")
-		: Result == EOperativeOrderResult::Unreachable ? TEXT("unreachable") : TEXT("no controller"));
-	return Result;
-}
-
-EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, float Speed)
-{
-	if (IsPanicking() || IsKnockedDown())
-	{
-		return EOperativeOrderResult::Refused; // the panic moves him (Godot _process_panic_movement); knocked down: he lies
-	}
-	if (bInCover || bHasPendingCover)
-	{
-		return EOperativeOrderResult::Refused; // Sprint 12: he holds his wall like a guard; the formation does not pull him
-	}
-	if (IsHoldingForSniperShot())
-	{
-		return EOperativeOrderResult::Refused; // kneeling for an ordered sniper shot: the formation waits for her
-	}
-	// A stance change is playing (the follower rises from prone / crouch, or lies down): the clip roots him, so no formation move
-	// until it ends. The squad retries after GetMoveHoldSeconds (it keeps the slot, the order is not dropped).
-	if (OperativeMovementRules::ShouldDeferMove(GetMoveHoldSeconds()))
-	{
-		return EOperativeOrderResult::Refused;
-	}
-	bOwnMoveOrder = false; // a formation move replaces any own order
-	ApplyMovementParams(Speed);
-	return RequestMove(Destination);
-}
-
-float AOperativeCharacter::GetMoveHoldSeconds() const
-{
-	const UWorld* World = GetWorld();
-	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
-	return OperativeMovementRules::ComputeMoveHold(World ? StanceSettleUntil - World->GetTimeSeconds() : 0.f,
-		Anim ? Anim->GetStanceTransitionTimeLeft() : 0.f);
-}
-
-EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& Destination)
-{
-	if (VehicleQueries::IsMounted(this))
-	{
-		return EOperativeOrderResult::Refused; // APC P1: aboard he rides (Y gets him out)
-	}
-	LastMoveDestination = Destination;
-	ClearIdleFacing();
-	AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
-	if (!AIController)
-	{
-		return EOperativeOrderResult::NoController;
-	}
-	// Low fences (ACrawlGapActor, 2026-10-13): only a prone body may path through a crawl-only area; standing / crouched the
-	// path goes round (or ends at the fence as a partial path, where the fence refuses him with the "go prone" hint).
-	// Known traps (rev 5e, game designer 2026-10-14): only the squad AUTO mode (Ctrl+T) paths round a spotted / own wire or mine;
-	// a player's order is literal - through the wire if that is the way (TripwireRules::ChooseOperativeMoveFilter).
-	const USquadSubsystem* MoveSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
-	TSubclassOf<UNavigationQueryFilter> Filter;
-	switch (TripwireRules::ChooseOperativeMoveFilter(Stance == EOperativeStance::Prone, MoveSquad && MoveSquad->IsAutonomousSquadCombat()))
-	{
-	case TripwireRules::EOperativeMoveFilter::NoCrawl: Filter = UNavFilter_NoCrawl::StaticClass(); break;
-	case TripwireRules::EOperativeMoveFilter::TrapLiteral: Filter = UNavFilter_TrapLiteral::StaticClass(); break;
-	case TripwireRules::EOperativeMoveFilter::NoCrawlTrapLiteral: Filter = UNavFilter_NoCrawlTrapLiteral::StaticClass(); break;
-	default: break;
-	}
-	const EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
-		Destination, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
-		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, Filter);
-	if (Result == EPathFollowingRequestResult::Failed)
-	{
-		bHasMoveOrder = false;
-		return EOperativeOrderResult::Unreachable;
-	}
-	bHasMoveOrder = Result == EPathFollowingRequestResult::RequestSuccessful;
-	return EOperativeOrderResult::Accepted;
-}
-
-void AOperativeCharacter::SetTrafficHold(const AActor* Source, bool bHeld)
-{
-	if (!Source)
-	{
-		return;
-	}
-	TrafficHoldSources.RemoveAll([Source](const TWeakObjectPtr<const AActor>& Entry) { return !Entry.IsValid() || Entry.Get() == Source; });
-	if (bHeld)
-	{
-		TrafficHoldSources.Add(Source);
-	}
-}
-
-bool AOperativeCharacter::IsTrafficHeld() const
-{
-	TrafficHoldSources.RemoveAll([](const TWeakObjectPtr<const AActor>& Entry) { return !Entry.IsValid(); });
-	return TrafficHoldSources.Num() > 0;
-}
-
-void AOperativeCharacter::StopOperative()
-{
-	if (AController* OwnerController = GetController())
-	{
-		OwnerController->StopMovement();
-	}
-	GetCharacterMovement()->StopMovementImmediately();
-	bHasMoveOrder = false;
-	bOwnMoveOrder = false;
-	bSprinting = false;
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(PendingMoveTimer);
-	}
-	ApplyMovementParams();
-}
-
-float AOperativeCharacter::GetStanceChangeDelay(EOperativeStance From, EOperativeStance To) const
-{
-	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
-	if (!Anim || From == To)
-	{
-		return 0.f;
-	}
-	const UAnimSequenceBase* Clip = From == EOperativeStance::Prone
-		? (To == EOperativeStance::Crouching ? Anim->ProneToCrouchAnimation.Get() : Anim->ProneToStandAnimation.Get())
-		: To == EOperativeStance::Prone ? (From == EOperativeStance::Crouching ? Anim->CrouchToProneAnimation.Get() : Anim->StandToProneAnimation.Get())
-		: To == EOperativeStance::Crouching ? Anim->StandToCrouchAnimation.Get() : Anim->CrouchToStandAnimation.Get();
-	return Clip ? FMath::Max(0.f, Clip->GetPlayLength() / FMath::Max(Anim->StanceTransitionPlayRate, 0.1f) - Anim->StanceTransitionBlendTime) : 0.f;
-}
-
-void AOperativeCharacter::SetStance(EOperativeStance NewStance)
-{
-	if (Stance == NewStance || IsKnockedDown())
-	{
-		return; // knocked down: he gets up standing (the get-up clip)
-	}
-	// Godot: a frostbitten operative physically cannot get up from the snow.
-	if (ColdSurvival && ColdSurvival->IsFrostbitten() && NewStance != EOperativeStance::Prone)
-	{
-		UE_LOG(LogCodexTactics, Display, TEXT("%s: frostbitten, cannot leave prone"), *DisplayName.ToString());
-		return;
-	}
-	// User decision 2026-10-01: getting up from prone needs a full stop — a crawling operative stops, then rises in place.
-	if (Stance == EOperativeStance::Prone && NewStance != EOperativeStance::Prone
-		&& (bHasMoveOrder || GetVelocity().SizeSquared2D() > 100.f))
-	{
-		StopOperative();
-	}
-	const EOperativeStance OldStance = Stance;
-	// The stance clip starts on the next anim update: hold moves for its length from now (not at the wall — the cover clips
-	// carry their own timing through the anim instance).
-	StanceSettleUntil = GetWorld() && !bInCover ? GetWorld()->GetTimeSeconds() + GetStanceChangeDelay(OldStance, NewStance) : 0.f;
-	Stance = NewStance;
-	if (Stance != EOperativeStance::Standing)
-	{
-		bSprinting = false;
-	}
-
-	if (HealthComponent)
-	{
-		float DefMult = 1.0f;
-		if (Stance == EOperativeStance::Crouching)
-		{
-			DefMult = 0.75f;
-		}
-		else if (Stance == EOperativeStance::Prone)
-		{
-			DefMult = 0.50f;
-		}
-		HealthComponent->SetDefenseMultiplier(DefMult);
-	}
-
-	ApplyStanceCapsule();
-	ApplyMovementParams();
-	UE_LOG(LogCodexTactics, Display, TEXT("%s: stance %s -> %s"), *DisplayName.ToString(),
-		*GetStanceDisplayName(OldStance).ToString(), *GetStanceDisplayName(Stance).ToString());
-	OnStanceChanged.Broadcast(this, OldStance, Stance);
-	ReceiveStanceChanged(OldStance, Stance);
-}
-
-EProneEntry AOperativeCharacter::DropProne()
-{
-	const float Speed = static_cast<float>(GetVelocity().Size2D());
-	const bool bBlocked = bInCover || bHasPendingCover || bCarrying || bVaulting || IsKnockedDown() || VehicleQueries::IsMounted(this);
-	EProneEntry Entry = OperativeMovementRules::DecideProneEntry(MovementConfig, Stance, Speed, bSprinting, bHasMoveOrder, bBlocked);
-	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
-	const EProneDive Dive = Entry == EProneEntry::DiveFromRun ? EProneDive::FromRun : Entry == EProneEntry::DiveFromWalk ? EProneDive::FromWalk : EProneDive::None;
-	UAnimSequenceBase* Clip = Anim ? Anim->GetProneDiveClip(Dive) : nullptr;
-	if (Dive != EProneDive::None && !Clip)
-	{
-		Entry = EProneEntry::StopThenProne; // no dive clip (the pack is missing): the old way, stopped first
-	}
-	else if (Dive != EProneDive::None && !Clip->HasRootMotion())
-	{
-		// Rev 5f: the dive moves the capsule by the clip's root motion; a clip without it would dive in place and snap back.
-		UE_LOG(LogCodexTactics, Warning, TEXT("%s: dive clip %s has no root motion (enable Root Motion on it, or use the RM copies of "
-			"Scripts/Editor/create_prone_dive_root_motion_clips.py): stop, then prone"), *DisplayName.ToString(), *Clip->GetName());
-		Entry = EProneEntry::StopThenProne;
-	}
-	switch (Entry)
-	{
-	case EProneEntry::Refused:
-		return Entry;
-	case EProneEntry::StopThenProne:
-		StopOperative();
-		SetStance(EOperativeStance::Prone);
-		break;
-	case EProneEntry::InPlace:
-		SetStance(EOperativeStance::Prone);
-		break;
-	default:
-	{
-		// Rev 5f: the dive is ROOT MOTION (the clip carries the capsule through the movement component; the body never leaves it).
-		// He faces his run; the anim instance sees ProneDive with the new stance and plays the clip on the full-body slot.
-		const FVector Direction = GetVelocity().GetSafeNormal2D().IsNearlyZero() ? GetActorForwardVector().GetSafeNormal2D() : GetVelocity().GetSafeNormal2D();
-		const float Rate = FMath::Max(Anim->StanceTransitionPlayRate, 0.1f);
-		ProneDive = Dive;
-		ProneDiveClip = Clip;
-		ProneDiveLength = Clip->GetPlayLength() / Rate;
-		ProneDiveStartTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-		bProneDiveHadOrder = bHasMoveOrder;
-		ProneDiveGoal = LastMoveDestination;
-		SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
-		SetStance(EOperativeStance::Prone);
-		StanceSettleUntil = 0.f; // the dive itself moves him: no stand-still hold
-		ProneDiveStart = GetActorLocation();
-		// How far the clip carries him (its root track through the mesh transform, as the movement component applies it) and how
-		// fast it enters; stretched by his momentum, shortened by the navmesh ahead (an obstacle / a ledge: a shorter slide).
-		const FTransform MeshTransform = GetMesh()->GetComponentTransform();
-		const float ClipTravel = static_cast<float>(MeshTransform.TransformVector(GetProneDiveRoot(Clip->GetPlayLength())).Size2D());
-		constexpr float EntryWindow = 0.2f;
-		const float ClipEntrySpeed = static_cast<float>(MeshTransform.TransformVector(GetProneDiveRoot(EntryWindow)).Size2D()) / EntryWindow * Rate;
-		const float WantedTravel = ClipTravel * FMath::Max(1.f, MovementConfig.ProneDiveMaxMomentumScale);
-		float AllowedTravel = WantedTravel;
-		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
-		FNavLocation StartOnNav;
-		if (Nav && Nav->ProjectPointToNavigation(ProneDiveStart, StartOnNav, FVector(60.f, 60.f, 250.f)))
-		{
-			FVector Hit;
-			const FVector Wanted = StartOnNav.Location + Direction * WantedTravel;
-			if (Nav->NavigationRaycast(GetWorld(), StartOnNav.Location, Wanted, Hit))
-			{
-				AllowedTravel = static_cast<float>(FVector::Dist2D(StartOnNav.Location, Hit)) - GetCapsuleComponent()->GetScaledCapsuleRadius();
-			}
-		}
-		const float Scale = OperativeMovementRules::ComputeProneDiveTranslationScale(Speed, ClipEntrySpeed, MovementConfig.ProneDiveMaxMomentumScale,
-			ClipTravel, AllowedTravel);
-		ProneDiveSavedRootMotionScale = GetAnimRootMotionTranslationScale();
-		SetAnimRootMotionTranslationScale(Scale);
-		bProneDiveSavedWalkOffLedges = GetCharacterMovement()->bCanWalkOffLedges;
-		GetCharacterMovement()->bCanWalkOffLedges = false;
-		UE_LOG(LogCodexTactics, Display, TEXT("%s: prone dive from %s at %.0f cm/s (%s, %.2f s; clip %.0f cm entering at %.0f cm/s, x%.2f -> %.0f cm, "
-			"allowed %.0f cm; %s)"), *DisplayName.ToString(), Dive == EProneDive::FromRun ? TEXT("a run") : TEXT("a walk"), Speed, *Clip->GetName(),
-			ProneDiveLength, ClipTravel, ClipEntrySpeed, Scale, ClipTravel * Scale, AllowedTravel,
-			bProneDiveHadOrder ? TEXT("then crawls on if the goal is ahead") : TEXT("then stays"));
-		break;
-	}
-	}
-	return Entry;
-}
-
-FVector AOperativeCharacter::GetProneDiveRoot(float Time) const
-{
-	const UAnimSequence* Sequence = Cast<UAnimSequence>(ProneDiveClip.Get());
-	if (!Sequence)
-	{
-		return FVector::ZeroVector;
-	}
-	const FAnimExtractContext Start(0.0);
-	const FAnimExtractContext Now(static_cast<double>(FMath::Clamp(Time, 0.f, Sequence->GetPlayLength())));
-	return Sequence->ExtractRootTrackTransform(Now, nullptr).GetTranslation() - Sequence->ExtractRootTrackTransform(Start, nullptr).GetTranslation();
-}
-
-void AOperativeCharacter::UpdateProneDive(float DeltaSeconds)
-{
-	if (ProneDive == EProneDive::None)
-	{
-		return;
-	}
-	const UWorld* World = GetWorld();
-	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
-	const float Elapsed = World ? static_cast<float>(World->GetTimeSeconds() - ProneDiveStartTime) : ProneDiveLength;
-	// The clip starts on the next anim update; once it has stopped playing (or its time is up) the root motion is over.
-	const bool bClipPlaying = Anim && Anim->GetStanceTransitionPosition(ProneDiveClip.Get()) >= 0.f;
-	if (Stance != EOperativeStance::Prone || IsKnockedDown() || bInCover || !ProneDiveClip.IsValid() || Elapsed >= ProneDiveLength + 0.1f
-		|| (Elapsed > 0.3f && !bClipPlaying))
-	{
-		EndProneDive();
-	}
-}
-
-void AOperativeCharacter::EndProneDive()
-{
-	if (ProneDive == EProneDive::None)
-	{
-		return;
-	}
-	ProneDive = EProneDive::None;
-	ProneDiveClip.Reset();
-	SetAnimRootMotionTranslationScale(ProneDiveSavedRootMotionScale);
-	GetCharacterMovement()->bCanWalkOffLedges = bProneDiveSavedWalkOffLedges;
-	ApplyMovementParams(); // the crawl speed for the rest of the move
-	const float Travel = static_cast<float>(FVector::Dist2D(ProneDiveStart, GetActorLocation()));
-	const bool bCrawlOn = bHasMoveOrder && OperativeMovementRules::ShouldCrawlOnAfterDive(ProneDiveStart, GetActorLocation(), ProneDiveGoal,
-		MovementConfig.AcceptanceRadius);
-	if (bCrawlOn)
-	{
-		RequestMove(ProneDiveGoal); // a fresh path from where the dive ended (it may have slid past a corner of the old one)
-	}
-	else if (bHasMoveOrder)
-	{
-		StopOperative(); // the dive carried him to / past the goal
-	}
-	UE_LOG(LogCodexTactics, Display, TEXT("%s: prone dive done after %.0f cm (%s)"), *DisplayName.ToString(), Travel,
-		bCrawlOn ? TEXT("crawling on to the goal") : TEXT("lying where the dive ended"));
-}
-
-const FOperativeStanceShape& AOperativeCharacter::GetStanceShape(EOperativeStance InStance) const
-{
-	switch (InStance)
-	{
-	case EOperativeStance::Crouching: return CrouchingShape;
-	case EOperativeStance::Prone: return ProneShape;
-	default: return StandingShape;
-	}
-}
-
-FText AOperativeCharacter::GetStanceDisplayName(EOperativeStance InStance)
-{
-	switch (InStance)
-	{
-	case EOperativeStance::Crouching: return NSLOCTEXT("CodexTactics", "StanceCrouching", "CROUCHED");
-	case EOperativeStance::Prone: return NSLOCTEXT("CodexTactics", "StanceProne", "PRONE");
-	default: return NSLOCTEXT("CodexTactics", "StanceStanding", "STANDING");
-	}
-}
-
-bool AOperativeCharacter::UsesPlaceholderBody() const
-{
-	const USkeletalMeshComponent* SkeletalMesh = GetMesh();
-	return !SkeletalMesh || !SkeletalMesh->GetSkeletalMeshAsset();
-}
-
-void AOperativeCharacter::UpdatePlaceholderVisibility()
-{
-	const bool bPlaceholder = UsesPlaceholderBody();
-	if (BodyMesh)
-	{
-		BodyMesh->SetVisibility(bPlaceholder);
-		BodyMesh->SetCollisionEnabled(bPlaceholder ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
-	}
-	if (FacingMarker)
-	{
-		FacingMarker->SetVisibility(bPlaceholder);
-	}
-	if (WeaponMesh)
-	{
-		WeaponMesh->SetVisibility(!bPlaceholder);
-	}
-}
-
-void AOperativeCharacter::ApplyStanceCapsule()
-{
-	UCapsuleComponent* Capsule = GetCapsuleComponent();
-	const float OldHalf = Capsule->GetUnscaledCapsuleHalfHeight();
-	const float NewHalf = FMath::Max(GetStanceShape(Stance).CapsuleHalfHeight, Capsule->GetUnscaledCapsuleRadius());
-	if (!FMath::IsNearlyEqual(OldHalf, NewHalf))
-	{
-		Capsule->SetCapsuleHalfHeight(NewHalf);
-		// Keep the feet where they were.
-		AddActorWorldOffset(FVector(0.f, 0.f, (NewHalf - OldHalf) * Capsule->GetShapeScale()), false, nullptr, ETeleportType::TeleportPhysics);
-	}
-	if (bMeshBaseCaptured)
-	{
-		FVector MeshLocation = GetMesh()->GetRelativeLocation();
-		MeshLocation.Z = MeshBaseZ + (StandingShape.CapsuleHalfHeight - NewHalf);
-		GetMesh()->SetRelativeLocation(MeshLocation);
-	}
-}
-
-void AOperativeCharacter::UpdatePlaceholderPose(float Alpha)
-{
-	if (!BodyMesh || !FacingMarker || !BodyMesh->IsVisible())
-	{
-		return;
-	}
-	const FOperativeStanceShape& Shape = GetStanceShape(Stance);
-	const float FeetZ = -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight();
-	const FVector BodyLocation(0.f, 0.f, FeetZ + Shape.PlaceholderCenterHeight);
-	const FVector MarkerLocation = Shape.MarkerOffset + FVector(0.f, 0.f, FeetZ);
-	const FQuat BodyRotation = FQuat::Slerp(BodyMesh->GetRelativeRotation().Quaternion(), Shape.PlaceholderRotation.Quaternion(), Alpha);
-	BodyMesh->SetRelativeLocationAndRotation(FMath::Lerp(BodyMesh->GetRelativeLocation(), BodyLocation, Alpha), BodyRotation);
-	BodyMesh->SetRelativeScale3D(FMath::Lerp(BodyMesh->GetRelativeScale3D(), Shape.PlaceholderScale, Alpha));
-	FacingMarker->SetRelativeLocation(FMath::Lerp(FacingMarker->GetRelativeLocation(), MarkerLocation, Alpha));
 }
 
 void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
@@ -983,63 +486,6 @@ void AOperativeCharacter::SpawnRemainsLoot()
 	Remains->Tags.Add(TEXT("CorpseLoot"));
 }
 
-void AOperativeCharacter::SetSprinting(bool bNewSprinting)
-{
-	const bool bAllowed = bNewSprinting && CanSprint() && Stance == EOperativeStance::Standing;
-	if (bSprinting != bAllowed)
-	{
-		bSprinting = bAllowed;
-		ApplyMovementParams();
-	}
-}
-
-void AOperativeCharacter::HandleMoveFinished()
-{
-	bHasMoveOrder = false;
-	bOwnMoveOrder = false;
-	bSprinting = false;
-	ApplyMovementParams();
-
-	// Sprint 12: arrived at the cover slot ordered -> press against the wall.
-	if (bHasPendingCover)
-	{
-		if (FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation) <= 150.f)
-		{
-			bHasPendingCover = false;
-			EnterCover(PendingCoverSlot);
-			return;
-		}
-		UE_LOG(LogCodexTactics, Display, TEXT("%s: cover slot not reached (%.0f cm off), stays in the open"), *DisplayName.ToString(),
-			FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation));
-		bHasPendingCover = false;
-		if (bInCover)
-		{
-			LeaveCover(TEXT("shimmy target not reached"));
-		}
-	}
-
-	// Godot _on_movement_destination_reached: behind a barricade in combat (not frostbitten) the operative takes cover.
-	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	const bool bCombat = (Flow && Flow->GetPhase() != ECodexGamePhase::Exploration) || CurrentCombatTarget.IsValid();
-	if (!bCombat || Stance == EOperativeStance::Crouching || (ColdSurvival && ColdSurvival->IsFrostbitten()) || !IsBehindBarricade())
-	{
-		return;
-	}
-	SetStance(EOperativeStance::Crouching);
-	UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🛡️ IN COVER (-35% damage)"), FLinearColor(0.3f, 0.9f, 1.f));
-	const double Now = GetWorld()->GetTimeSeconds();
-	if (Now - LastCoverChatterTime >= 5.0)
-	{
-		LastCoverChatterTime = Now;
-		const TCHAR* Callouts[] = { TEXT("🛡️ In cover!"), TEXT("🛡️ In cover, holding the sector!"),
-			TEXT("🛡️ Behind the barricade, ready to fight!"), TEXT("🛡️ In position behind the shield, watching!") };
-		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
-		{
-			Messages->PostMessage(DisplayName, FText::FromString(Callouts[FMath::RandRange(0, 3)]));
-		}
-	}
-}
-
 bool AOperativeCharacter::IsBehindBarricade() const
 {
 	UWorld* World = GetWorld();
@@ -1064,16 +510,6 @@ bool AOperativeCharacter::IsBehindBarricade() const
 		}
 	}
 	return false;
-}
-
-void AOperativeCharacter::SetFacingPoint(const FVector& Point)
-{
-	StopOperative();
-	const FVector Direction = (Point - GetActorLocation()).GetSafeNormal2D();
-	if (!Direction.IsNearlyZero())
-	{
-		SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
-	}
 }
 
 int32 AOperativeCharacter::GetItemCount(EPersonalItem Item) const
@@ -1192,63 +628,6 @@ EDeployableType AOperativeCharacter::CycleDeployableType()
 	return SelectedDeployType;
 }
 
-void AOperativeCharacter::SetCarrying(bool bNewCarrying)
-{
-	bCarrying = bNewCarrying;
-	if (bCarrying)
-	{
-		bSprinting = false; // Godot can_sprint: no sprint while carrying
-	}
-	ApplyMovementParams();
-}
-
-bool AOperativeCharacter::IsWounded() const
-{
-	// Godot is_wounded: below the wounded threshold of max health (bWounded forces it, e.g. in tests).
-	return bWounded || (HealthComponent && HealthComponent->GetMaxHealth() > 0.f
-		&& HealthComponent->GetCurrentHealth() / HealthComponent->GetMaxHealth() < MovementConfig.WoundedHealthThreshold);
-}
-
-bool AOperativeCharacter::CanSprint() const
-{
-	return !bCarrying && OperativeMovementRules::CanSprint(MovementConfig, Stance, ColdLevel, IsWounded());
-}
-
-float AOperativeCharacter::GetMaxSpeed() const
-{
-	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, Stance, bSprinting, IsWounded(), bCarrying) * ColdSpeedMultiplier;
-}
-
-void AOperativeCharacter::HandleHealthChanged(float NewHealth, float MaxHealth, float Delta)
-{
-	if (bSprinting && !CanSprint())
-	{
-		bSprinting = false;
-	}
-	ApplyMovementParams(); // the wounded speed follows the health
-}
-
-void AOperativeCharacter::SetColdSpeedMultiplier(float Multiplier)
-{
-	if (!FMath::IsNearlyEqual(ColdSpeedMultiplier, Multiplier))
-	{
-		ColdSpeedMultiplier = Multiplier;
-		ApplyMovementParams();
-	}
-}
-
-bool AOperativeCharacter::IsMoving() const
-{
-	return bHasMoveOrder || GetVelocity().Size2D() > MovingSpeedThreshold;
-}
-
-void AOperativeCharacter::ApplyMovementParams(float SpeedOverride)
-{
-	UCharacterMovementComponent* Movement = GetCharacterMovement();
-	Movement->MaxWalkSpeed = SpeedOverride >= 0.f ? SpeedOverride : GetMaxSpeed();
-	Movement->RotationRate = FRotator(0.f, OperativeMovementRules::GetTurnRate(MovementConfig, Stance), 0.f);
-}
-
 void AOperativeCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -1349,213 +728,6 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 	}
 	const FLinearColor Color = VisionConeRules::GetStateColor(bVisionConeSpotted ? EVisionConeState::Spotted : EVisionConeState::Clear);
 	VisionCone->UpdateCone(bVisible, GetVisionConeRange(), VisionConeHalfAngleDeg, Color, DeltaTime);
-}
-
-float AOperativeCharacter::GetVaultSpeed() const
-{
-	return bVaulting ? FVector::Dist2D(VaultStart, VaultLanding) / FMath::Max(VaultDuration, 0.1f) : 0.f;
-}
-
-void AOperativeCharacter::UpdateVaultTrigger(float DeltaTime)
-{
-	VaultCooldown = FMath::Max(0.f, VaultCooldown - DeltaTime);
-	const AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
-	const UPathFollowingComponent* PathFollowing = AIController ? AIController->GetPathFollowingComponent() : nullptr;
-	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	if (!PathFollowing || PathFollowing->GetStatus() != EPathFollowingStatus::Moving || Stance == EOperativeStance::Prone
-		|| VaultCooldown > 0.f || (Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased))
-	{
-		BlockedTimer = 0.f;
-		return;
-	}
-	// Godot is_blocked: wanting to move but hardly moving.
-	BlockedTimer = GetVelocity().Size2D() < 25.f ? BlockedTimer + DeltaTime : 0.f;
-	const bool bBlocked = BlockedTimer > 0.2f;
-	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-	const bool bLeader = !Squad || Squad->GetLeader() == this;
-	// Followers climb only when their way is blocked (Godot follower_vault_only_when_blocked).
-	if (!bLeader && !bBlocked)
-	{
-		return;
-	}
-	FVector Direction = PathFollowing->GetCurrentDirection();
-	if (Direction.IsNearlyZero())
-	{
-		Direction = GetActorForwardVector();
-	}
-	TryVault(Direction, bBlocked);
-}
-
-bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBlocked)
-{
-	UWorld* World = GetWorld();
-	if (bVaulting || !World || !HealthComponent || !HealthComponent->IsAlive())
-	{
-		return false;
-	}
-	// Godot: no vaulting on the run — a running operative goes round, unless it has come to a stop.
-	if (bSprinting && GetVelocity().Size2D() > 20.f && !bForceWhenBlocked)
-	{
-		return false;
-	}
-	const FVector Direction = FVector(InDirection.X, InDirection.Y, 0.f).GetSafeNormal();
-	if (Direction.IsNearlyZero())
-	{
-		return false;
-	}
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(OperativeVault), false, this);
-	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
-	{
-		Params.AddIgnoredActor(*It);
-	}
-	const FVector Location = GetActorLocation();
-	const float HalfHeight = GetSimpleCollisionHalfHeight();
-	float GroundZ = Location.Z - HalfHeight;
-	FHitResult GroundHit;
-	if (World->LineTraceSingleByChannel(GroundHit, Location, Location - FVector(0.f, 0.f, HalfHeight + 250.f), ECC_Visibility, Params))
-	{
-		GroundZ = GroundHit.ImpactPoint.Z;
-	}
-	// 1. Something within reach at knee height, marked vaultable.
-	FCollisionObjectQueryParams Objects;
-	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
-	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
-	const FVector ProbeStart(Location.X, Location.Y, GroundZ + VaultRules::ProbeHeight);
-	FHitResult Front;
-	if (!World->LineTraceSingleByObjectType(Front, ProbeStart, ProbeStart + Direction * VaultRules::ApproachDistance, Objects, Params)
-		|| !VaultNavigation::IsVaultable(Front.GetActor()))
-	{
-		return false;
-	}
-	// 2. Its height.
-	const FVector TopProbe = Front.ImpactPoint + Direction * 20.f;
-	FHitResult Top;
-	if (!World->LineTraceSingleByObjectType(Top, FVector(TopProbe.X, TopProbe.Y, GroundZ + 200.f), FVector(TopProbe.X, TopProbe.Y, GroundZ - 20.f),
-		Objects, Params))
-	{
-		return false;
-	}
-	const float Height = Top.ImpactPoint.Z - GroundZ;
-	// 3. Firm ground behind it, where the capsule fits: further out while the spot is still on / in the obstacle (user
-	// report 2026-10-04: vaulting along a 3 m barricade landed inside it, he was pushed up and stuck on top).
-	FVector LandingXY = Front.ImpactPoint + Direction * VaultRules::LandingDistance;
-	FHitResult Land;
-	bool bLanding = false;
-	bool bLandingFree = false;
-	FCollisionQueryParams FitParams(SCENE_QUERY_STAT(OperativeVaultLanding), false, this);
-	for (float Extra = 0.f; Extra <= 240.f && !bLandingFree; Extra += 60.f)
-	{
-		LandingXY = Front.ImpactPoint + Direction * (VaultRules::LandingDistance + Extra);
-		bLanding = World->LineTraceSingleByChannel(Land, FVector(LandingXY.X, LandingXY.Y, GroundZ + 200.f),
-			FVector(LandingXY.X, LandingXY.Y, GroundZ - 200.f), ECC_Visibility, Params);
-		if (!bLanding || VaultNavigation::IsVaultable(Land.GetActor()) || Land.GetActor() == Front.GetActor())
-		{
-			continue; // the trace stops on the obstacle itself: still above it
-		}
-		const FVector Centre(LandingXY.X, LandingXY.Y, Land.ImpactPoint.Z + HalfHeight + 2.f);
-		bLandingFree = !World->OverlapAnyTestByChannel(Centre, FQuat::Identity, ECC_Pawn,
-			FCollisionShape::MakeCapsule(GetCapsuleComponent()->GetScaledCapsuleRadius(), HalfHeight), FitParams);
-	}
-	if (!bLandingFree || !VaultRules::CanVault(Height, bLanding, bLanding ? Land.ImpactPoint.Z - GroundZ : 0.f))
-	{
-		return false;
-	}
-
-	// Go: remember where the walk was heading, fly the arc with the collision off.
-	bVaultResume = false;
-	if (const AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController()))
-	{
-		if (const UPathFollowingComponent* PathFollowing = AIController->GetPathFollowingComponent(); PathFollowing && PathFollowing->GetPath().IsValid())
-		{
-			VaultResumeTarget = PathFollowing->GetPath()->GetDestinationLocation();
-			bVaultResume = true;
-		}
-	}
-	if (AController* OwnerController = GetController())
-	{
-		OwnerController->StopMovement();
-	}
-	const bool bRunning = bSprinting || GetVelocity().Size2D() > MovementConfig.WalkSpeed * 1.1f;
-	GetCharacterMovement()->StopMovementImmediately();
-	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
-	SetActorEnableCollision(false);
-	if (bInCover)
-	{
-		LeaveCover(TEXT("vault"));
-	}
-	bHasPendingCover = false;
-	bVaulting = true;
-	VaultTimer = 0.f;
-	VaultDuration = VaultRules::Duration(bRunning);
-	VaultHeight = FMath::Max(30.f, Height);
-	VaultStart = Location;
-	VaultLanding = FVector(LandingXY.X, LandingXY.Y, Land.ImpactPoint.Z + HalfHeight);
-	SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
-	UE_LOG(LogCodexTactics, Log, TEXT("%s vaults over %s (%.0f cm)"), *DisplayName.ToString(), *Front.GetActor()->GetName(), Height);
-	return true;
-}
-
-bool AOperativeCharacter::UpdateObstacleStepOff(float DeltaTime)
-{
-	// Safety net: standing on an obstacle top for 0.3 s -> a short vault arc down to the nearest free ground.
-	ObstacleTopTime = VaultNavigation::IsStandingOnObstacle(*this) ? ObstacleTopTime + DeltaTime : 0.f;
-	FVector Spot;
-	if (ObstacleTopTime < 0.3f || !VaultNavigation::FindStepOffSpot(*this, Spot))
-	{
-		return false;
-	}
-	ObstacleTopTime = 0.f;
-	bVaultResume = bHasMoveOrder;
-	VaultResumeTarget = LastMoveDestination;
-	if (AController* OwnerController = GetController())
-	{
-		OwnerController->StopMovement();
-	}
-	GetCharacterMovement()->StopMovementImmediately();
-	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
-	SetActorEnableCollision(false);
-	if (bInCover)
-	{
-		LeaveCover(TEXT("vault"));
-	}
-	bHasPendingCover = false;
-	bVaulting = true;
-	VaultTimer = 0.f;
-	VaultDuration = 0.5f;
-	VaultHeight = 30.f;
-	VaultStart = GetActorLocation();
-	VaultLanding = Spot;
-	UE_LOG(LogCodexTactics, Display, TEXT("[Vault] %s stepped off an obstacle top"), *DisplayName.ToString());
-	return true;
-}
-
-void AOperativeCharacter::UpdateVault(float DeltaTime)
-{
-	VaultTimer += DeltaTime;
-	const float Alpha = FMath::Clamp(VaultTimer / FMath::Max(VaultDuration, 0.1f), 0.f, 1.f);
-	SetActorLocation(VaultRules::Position(VaultStart, VaultLanding, VaultHeight, Alpha));
-	if (Alpha < 1.f)
-	{
-		return;
-	}
-	bVaulting = false;
-	VaultCooldown = VaultRules::Cooldown;
-	SetActorLocation(VaultLanding);
-	SetActorEnableCollision(true);
-	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-	// Godot vault_resume_target: carry on unless the destination was the landing spot (or behind it).
-	const FVector VaultDirection = (VaultLanding - VaultStart).GetSafeNormal2D();
-	const FVector ToTarget = VaultResumeTarget - VaultLanding;
-	if (bVaultResume && ToTarget.Size2D() > 60.f && FVector::DotProduct(VaultDirection, ToTarget.GetSafeNormal2D()) >= 0.1f)
-	{
-		ApplyMovementParams();
-		RequestMove(VaultResumeTarget);
-	}
-	else
-	{
-		bHasMoveOrder = false;
-	}
-	bVaultResume = false;
 }
 
 void AOperativeCharacter::SetGroupSelected(bool bSelected, bool bInMultiSelectionIn)
@@ -1888,25 +1060,6 @@ bool AOperativeCharacter::CanShoot() const
 	return true;
 }
 
-namespace
-{
-	FVector ShotFeet(const AActor* Actor)
-	{
-		const ACharacter* Character = Cast<ACharacter>(Actor);
-		return Actor->GetActorLocation() - FVector(0.f, 0.f, Character ? Character->GetSimpleCollisionHalfHeight() : 0.f);
-	}
-
-	bool IsLiveEnemy(const AActor* Actor)
-	{
-		if (!IsValid(Actor) || !Actor->ActorHasTag(FName(TEXT("Enemy"))) || Actor->IsHidden())
-		{
-			return false;
-		}
-		const UHealthComponent* Health = Actor->FindComponentByClass<UHealthComponent>();
-		return !Health || Health->IsAlive();
-	}
-}
-
 bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FShootCandidate& Out, bool& bOutBarricadeBlocked) const
 {
 	bOutBarricadeBlocked = false;
@@ -1917,8 +1070,8 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	{
 		return false;
 	}
-	const FVector MyFeet = ShotFeet(this);
-	const FVector EnemyFeet = ShotFeet(Enemy);
+	const FVector MyFeet = OperativeCharacterInternal::ShotFeet(this);
+	const FVector EnemyFeet = OperativeCharacterInternal::ShotFeet(Enemy);
 	// Sprint 12: nothing to fire round / over from this cover (a full wall without a corner). User decision 2026-10-06:
 	// only a target behind the wall / around the corner needs that; one out on the open side gets a normal shot.
 	const bool bCornerShot = IsCornerShotTarget(EnemyFeet);
@@ -1996,7 +1149,7 @@ AEnemyGhostActor* AOperativeCharacter::GetBlindFireTarget() const
 bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShootCandidate& Out) const
 {
 	UWorld* World = GetWorld();
-	const FVector MyFeet = ShotFeet(this);
+	const FVector MyFeet = OperativeCharacterInternal::ShotFeet(this);
 	const FVector GhostFeet = Ghost.GetLastKnownFeet();
 	const bool bCornerShot = IsCornerShotTarget(GhostFeet);
 	if (bCornerShot && !CanFireFromCover())
@@ -2055,7 +1208,7 @@ AActor* AOperativeCharacter::FindBestCombatTarget() const
 	bool bBlocked = false;
 	if (AActor* Priority = ManualPriorityTarget.Get())
 	{
-		if (!IsLiveEnemy(Priority))
+		if (!OperativeCharacterInternal::IsLiveEnemy(Priority))
 		{
 			ManualPriorityTarget.Reset();
 		}
@@ -2068,7 +1221,7 @@ AActor* AOperativeCharacter::FindBestCombatTarget() const
 	float BestDistance = TNumericLimits<float>::Max();
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
-		if (IsLiveEnemy(*It) && EvaluateShotLine(*It, false, Candidate, bBlocked) && Candidate.Distance < BestDistance)
+		if (OperativeCharacterInternal::IsLiveEnemy(*It) && EvaluateShotLine(*It, false, Candidate, bBlocked) && Candidate.Distance < BestDistance)
 		{
 			BestDistance = Candidate.Distance;
 			Best = Candidate.Enemy;
@@ -2081,13 +1234,7 @@ bool AOperativeCharacter::CanHitEnemy(AActor* Enemy) const
 {
 	FShootCandidate Candidate;
 	bool bBlocked = false;
-	return IsLiveEnemy(Enemy) && EvaluateShotLine(Enemy, true, Candidate, bBlocked);
-}
-
-EOperativeOrderResult AOperativeCharacter::AutonomousMoveTo(const FVector& Destination)
-{
-	TGuardValue<bool> Autonomous(bAutonomousOrder, true);
-	return OrderMoveTo(Destination, false);
+	return OperativeCharacterInternal::IsLiveEnemy(Enemy) && EvaluateShotLine(Enemy, true, Candidate, bBlocked);
 }
 
 bool AOperativeCharacter::HealAlly(AOperativeCharacter& Patient)
@@ -2121,7 +1268,7 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	// 1. The manual priority target (Ctrl + click) while it can be hit.
 	if (AActor* Priority = ManualPriorityTarget.Get())
 	{
-		if (!IsLiveEnemy(Priority))
+		if (!OperativeCharacterInternal::IsLiveEnemy(Priority))
 		{
 			ManualPriorityTarget.Reset();
 		}
@@ -2144,13 +1291,13 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 		AActor* Source = BlindFireSource.Get();
 		if (!Ghost)
 		{
-			if (Source && IsLiveEnemy(Source))
+			if (Source && OperativeCharacterInternal::IsLiveEnemy(Source))
 			{
 				ManualPriorityTarget = Source;
 			}
 			BlindFireSource.Reset();
 		}
-		else if (!Source || !IsLiveEnemy(Source))
+		else if (!Source || !OperativeCharacterInternal::IsLiveEnemy(Source))
 		{
 			BlindFireGhost.Reset();
 			BlindFireSource.Reset();
@@ -2174,7 +1321,7 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	// 1b. Commander Mode: the target the ROE policy picked (Sprint 07-C).
 	if (AActor* Chosen = AutonomyTarget.Get())
 	{
-		if (!IsLiveEnemy(Chosen))
+		if (!OperativeCharacterInternal::IsLiveEnemy(Chosen))
 		{
 			AutonomyTarget.Reset();
 		}
@@ -2191,7 +1338,7 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	int32 BarricadeBlocked = 0;
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
-		if (!IsLiveEnemy(*It))
+		if (!OperativeCharacterInternal::IsLiveEnemy(*It))
 		{
 			continue;
 		}
@@ -2217,13 +1364,13 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	}
 	Visible.Sort([](const FShootCandidate& A, const FShootCandidate& B) { return A.Distance < B.Distance; });
 	const FShootCandidate& Closest = Visible[0];
-	const FShootCandidate* Current = IsLiveEnemy(CurrentCombatTarget.Get())
+	const FShootCandidate* Current = OperativeCharacterInternal::IsLiveEnemy(CurrentCombatTarget.Get())
 		? Visible.FindByPredicate([this](const FShootCandidate& Entry) { return Entry.Enemy == CurrentCombatTarget.Get(); }) : nullptr;
 	// A melee enemy closing in on him at a cover (a flank rush while he holds the corner, user PIE video CoverBug_02
 	// 2026-10-07) takes over at once. Out in the open the Godot stance reaction delay below stays (parity: SquadFireSmoke
 	// "flank hound taken after 0.15 s, not at once").
 	if ((bInCover || bOpenShotReturnPending) && Current && Closest.Enemy != Current->Enemy && Closest.Distance <= FlankRushBreakCm
-		&& !IsRangedEnemyActor(Closest.Enemy))
+		&& !OperativeCharacterInternal::IsRangedEnemyActor(Closest.Enemy))
 	{
 		CurrentCombatTarget = Closest.Enemy;
 		PendingFlankTarget.Reset();
@@ -2553,7 +1700,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	}
 	// Blind fire at a silhouette: -80 %, and nothing to hit once the enemy left that spot (Sprint 08-F). Cover blind fire
 	// (Sprint 12, head down): -40 %. Both apply multiplied, floored at the tunable minimum (user decision 2026-10-06).
-	if (bBlindShot && FVector::Dist2D(ShotFeet(Target), BlindAimPoint) > SightRules::BlindFireHitRadiusCm)
+	if (bBlindShot && FVector::Dist2D(OperativeCharacterInternal::ShotFeet(Target), BlindAimPoint) > SightRules::BlindFireHitRadiusCm)
 	{
 		HitChance = 0.f; // the enemy left the silhouette's spot
 	}
@@ -2763,7 +1910,7 @@ bool AOperativeCharacter::GetAimTargetPoint(FVector& OutPoint) const
 		}
 	}
 	const AActor* Combat = CurrentCombatTarget.Get();
-	if (Combat && IsLiveEnemy(Combat))
+	if (Combat && OperativeCharacterInternal::IsLiveEnemy(Combat))
 	{
 		OutPoint = Combat->GetActorLocation();
 		return true;
@@ -2801,7 +1948,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
 	const bool bRealTimeFight = !Flow || (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime);
 	AActor* Target = CurrentCombatTarget.Get();
-	if (bRealTimeFight && !bSprinting && !bCarrying && !IsPanicking() && Target && IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
+	if (bRealTimeFight && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
 	{
 		bFacingCombatTarget = true;
 		const float Yaw = (Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw - BarrelYawOffset;
@@ -3165,7 +2312,7 @@ float AOperativeCharacter::ResolveIncomingHit(EOperativeHitKind Kind, float Amou
 	RecentIncomingDamage += Final;
 	bHasLastHitSource = true; // before the health loss: the hit reaction / death fall read it
 	LastHitSource = AttackerActor ? AttackerActor->GetActorLocation() : GetActorLocation() + GetActorForwardVector() * 100.f;
-	if (IsRangedEnemyActor(AttackerActor))
+	if (OperativeCharacterInternal::IsRangedEnemyActor(AttackerActor))
 	{
 		RecentRangedDamage += Final; // the corner-aim duck counts only what the corner protects from (2026-10-07 horde fix)
 	}
@@ -3282,9 +2429,9 @@ bool AOperativeCharacter::TryAIGrenadeThrow()
 	TArray<FVector> Enemies;
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
-		if (IsLiveEnemy(*It))
+		if (OperativeCharacterInternal::IsLiveEnemy(*It))
 		{
-			Enemies.Add(ShotFeet(*It));
+			Enemies.Add(OperativeCharacterInternal::ShotFeet(*It));
 		}
 	}
 	TArray<FVector> Allies;
@@ -4388,7 +3535,7 @@ FCornerAimSituation AOperativeCharacter::GatherCornerAimSituation() const
 		{
 			continue;
 		}
-		const bool bRanged = IsRangedEnemyActor(Enemy);
+		const bool bRanged = OperativeCharacterInternal::IsRangedEnemyActor(Enemy);
 		const float Distance = static_cast<float>(FVector::Dist2D(Here, Enemy->GetActorLocation()));
 		const bool bOpenSide = !IsCornerShotTarget(Enemy->GetActorLocation());
 		if (Enemy->GetCurrentTarget() == this && Distance <= 3000.f)
