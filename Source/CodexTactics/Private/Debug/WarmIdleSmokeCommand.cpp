@@ -497,8 +497,10 @@ namespace WarmIdleSmoke
 				Commander->ColdLevel = 60.f;
 				Medic->ColdLevel = 60.f;
 				Engineer->ColdLevel = 10.f;
-				Check(State, Anim(Medic) && Anim(Medic)->UsesFemaleWarmClips() && Anim(Commander) && !Anim(Commander)->UsesFemaleWarmClips(),
-					TEXT("gender: the medic uses AS_She_*, the commander AS_He_*"));
+				// The medic's body follows the designer's roster (BP_CodexTacticsGameMode, 2026-10-14): She clips only on the Female Soldier body.
+				const bool bMedicFemale = Medic->GetMesh()->GetSkeletalMeshAsset() && Medic->GetMesh()->GetSkeletalMeshAsset()->GetName().Contains(TEXT("Female"));
+				Check(State, Anim(Medic) && Anim(Medic)->UsesFemaleWarmClips() == bMedicFemale && Anim(Commander) && !Anim(Commander)->UsesFemaleWarmClips(),
+					FString::Printf(TEXT("gender: the medic uses %s, the commander AS_He_*"), bMedicFemale ? TEXT("AS_She_*") : TEXT("AS_He_*")));
 			}
 			else
 			{
@@ -507,7 +509,7 @@ namespace WarmIdleSmoke
 			}
 			if (InPose(Commander, EWarmIdlePose::ColdIdle) && InPose(Medic, EWarmIdlePose::ColdIdle) && State.StageTime >= 4.f)
 			{
-				Check(State, Played(Commander, TEXT("AS_He_Cold_1_1Start")) && Played(Medic, TEXT("AS_She_Cold_1_1Start")),
+				Check(State, Played(Commander, TEXT("AS_He_Cold_1_1Start")) && Played(Medic, Anim(Medic)->UsesFemaleWarmClips() ? TEXT("AS_She_Cold_1_1Start") : TEXT("AS_He_Cold_1_1Start")),
 					FString::Printf(TEXT("cold + idle: cold idle started (%s; %s)"), *PoseText(Commander), *PoseText(Medic)));
 				Check(State, !Anim(Engineer)->bWarmIdleActive, FString::Printf(TEXT("the warm engineer does not shiver (%s)"), *PoseText(Engineer)));
 				Check(State, !Commander->WeaponMesh->IsVisible(), TEXT("weapon hidden while shivering"));
