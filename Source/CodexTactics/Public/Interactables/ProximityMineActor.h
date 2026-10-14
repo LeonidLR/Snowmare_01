@@ -87,6 +87,12 @@ public:
 
 	virtual bool NeedsDefusal() const override { return bTrapped; }
 
+	/**
+	 * Rev 5e: a live mine the squad knows of (spotted, or its own) carries the known-trap nav area (UNavArea_Tripwire, trigger
+	 * radius + 20 cm): only the AUTO mode's paths go round it (TripwireRules::ChooseOperativeMoveFilter), player orders are literal.
+	 */
+	bool HasKnownTrapNav() const { return KnownTrapNav != nullptr; }
+
 protected:
 	virtual void DescribeForMenu(const AOperativeCharacter* Leader, FText& OutTitle, FText& OutDescription, FText& OutConfirm,
 		bool& bOutDisabled) const override;
@@ -95,6 +101,11 @@ private:
 	void UpdateVisuals();
 	void ScanForSpotters();
 	void HandleSpotted(AOperativeCharacter* Spotter);
+	/** Adds / removes the known-trap nav area (revealed, live, not blown). */
+	void UpdateKnownTrapNav();
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UNavModifierComponent> KnownTrapNav;
 
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Mine")
 	bool bRevealed = false;

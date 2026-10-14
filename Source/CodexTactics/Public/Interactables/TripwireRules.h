@@ -84,4 +84,27 @@ namespace TripwireRules
 	 * Default luck: Medic-Sapper 60 + 10 + 35 / 2 = 87.5 %, Engineer 70 %, Commander 57.5 % (warm hands).
 	 */
 	CODEXTACTICS_API FDefusalChance GetHostileDisarmChance(EOperativeRole Role, float Luck, float ColdLevel, int32 FailedAttempts, bool bWarned);
+
+	/**
+	 * Rev 5e (game designer 2026-10-14): known traps (a spotted PMC wire, the squad's own wire, a spotted / squad mine) are
+	 * avoided by the operatives' paths ONLY in the squad AUTO mode (Commander Mode, Ctrl+T: USquadSubsystem::IsAutonomousSquadCombat).
+	 * In normal player control a move order is executed literally: through a wire / onto a mine if that is the way.
+	 */
+	CODEXTACTICS_API bool ShouldAvoidKnownTraps(bool bSquadAutonomyOn);
+
+	/** The navigation query filter an operative's move uses (AOperativeCharacter::RequestMove maps it to a filter class). */
+	enum class EOperativeMoveFilter : uint8
+	{
+		/** Prone, AUTO: the default filter (crawl-only areas open, known traps costly). */
+		Default,
+		/** Standing / crouched, AUTO: crawl-only areas closed, known traps costly (UNavFilter_NoCrawl). */
+		NoCrawl,
+		/** Prone, player control: known traps cost nothing (UNavFilter_TrapLiteral). */
+		TrapLiteral,
+		/** Standing / crouched, player control: crawl-only closed, known traps cost nothing (UNavFilter_NoCrawlTrapLiteral). */
+		NoCrawlTrapLiteral
+	};
+
+	/** The filter for a move: prone bodies may crawl under low fences; known traps are avoided only in the AUTO mode. */
+	CODEXTACTICS_API EOperativeMoveFilter ChooseOperativeMoveFilter(bool bProne, bool bSquadAutonomyOn);
 }

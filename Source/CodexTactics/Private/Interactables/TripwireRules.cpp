@@ -68,3 +68,17 @@ FDefusalChance TripwireRules::GetHostileDisarmChance(EOperativeRole Role, float 
 {
 	return DeployableRules::CalculateDefusal(Role, EOperativeStance::Crouching, Luck, ColdLevel, FailedAttempts, bWarned);
 }
+
+bool TripwireRules::ShouldAvoidKnownTraps(bool bSquadAutonomyOn)
+{
+	return bSquadAutonomyOn;
+}
+
+TripwireRules::EOperativeMoveFilter TripwireRules::ChooseOperativeMoveFilter(bool bProne, bool bSquadAutonomyOn)
+{
+	if (ShouldAvoidKnownTraps(bSquadAutonomyOn))
+	{
+		return bProne ? EOperativeMoveFilter::Default : EOperativeMoveFilter::NoCrawl;
+	}
+	return bProne ? EOperativeMoveFilter::TrapLiteral : EOperativeMoveFilter::NoCrawlTrapLiteral;
+}

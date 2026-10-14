@@ -132,3 +132,21 @@ bool FTripwireHostileDisarmTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("warm commander: a good roll disarms"), DeployableRules::ResolveDefusal(Commander, bWarmWarned, WarmFailed, 10.f, 99.f) == EDefusalResult::Success);
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTripwireKnownTrapPathingTest, "CodexTactics.Interactables.Tripwire.KnownTrapPathingAutoOnly",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FTripwireKnownTrapPathingTest::RunTest(const FString& Parameters)
+{
+	// Rev 5e (game designer 2026-10-14): spotted wires / mines are avoided automatically ONLY in the squad AUTO mode (Ctrl+T);
+	// in normal player control (exploration and ordinary combat) a move order is literal - through the wire if that is the way.
+	using namespace TripwireRules;
+	TestFalse(TEXT("player control: no automatic avoidance"), ShouldAvoidKnownTraps(false));
+	TestTrue(TEXT("AUTO mode: known traps are avoided"), ShouldAvoidKnownTraps(true));
+	TestTrue(TEXT("standing, player control: crawl areas closed, traps literal"),
+		ChooseOperativeMoveFilter(false, false) == EOperativeMoveFilter::NoCrawlTrapLiteral);
+	TestTrue(TEXT("prone, player control: traps literal (crawl areas open)"), ChooseOperativeMoveFilter(true, false) == EOperativeMoveFilter::TrapLiteral);
+	TestTrue(TEXT("standing, AUTO: crawl areas closed, traps costly"), ChooseOperativeMoveFilter(false, true) == EOperativeMoveFilter::NoCrawl);
+	TestTrue(TEXT("prone, AUTO: the default filter (traps costly)"), ChooseOperativeMoveFilter(true, true) == EOperativeMoveFilter::Default);
+	return true;
+}

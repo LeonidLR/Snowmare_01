@@ -14,6 +14,8 @@
 #include "Characters/VaultRules.h"
 #include "Interactables/VaultNavigation.h"
 #include "Level/CrawlGapActor.h"
+#include "Interactables/TripwireActor.h"
+#include "Interactables/TripwireRules.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -480,7 +482,17 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& Destinatio
 	}
 	// Low fences (ACrawlGapActor, 2026-10-13): only a prone body may path through a crawl-only area; standing / crouched the
 	// path goes round (or ends at the fence as a partial path, where the fence refuses him with the "go prone" hint).
-	const TSubclassOf<UNavigationQueryFilter> Filter = Stance == EOperativeStance::Prone ? nullptr : UNavFilter_NoCrawl::StaticClass();
+	// Known traps (rev 5e, game designer 2026-10-14): only the squad AUTO mode (Ctrl+T) paths round a spotted / own wire or mine;
+	// a player's order is literal - through the wire if that is the way (TripwireRules::ChooseOperativeMoveFilter).
+	const USquadSubsystem* MoveSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	TSubclassOf<UNavigationQueryFilter> Filter;
+	switch (TripwireRules::ChooseOperativeMoveFilter(Stance == EOperativeStance::Prone, MoveSquad && MoveSquad->IsAutonomousSquadCombat()))
+	{
+	case TripwireRules::EOperativeMoveFilter::NoCrawl: Filter = UNavFilter_NoCrawl::StaticClass(); break;
+	case TripwireRules::EOperativeMoveFilter::TrapLiteral: Filter = UNavFilter_TrapLiteral::StaticClass(); break;
+	case TripwireRules::EOperativeMoveFilter::NoCrawlTrapLiteral: Filter = UNavFilter_NoCrawlTrapLiteral::StaticClass(); break;
+	default: break;
+	}
 	const EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
 		Destination, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
 		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, Filter);
