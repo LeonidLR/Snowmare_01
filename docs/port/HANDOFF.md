@@ -780,11 +780,24 @@ lesson uses these starter packs, the hut crate restocks).
   Skeletal Mesh Asset = `SK_Female_soldier` (Anim Class stays ABP_Operative); (3) add the extra parts as Skeletal Mesh
   components attached to Mesh (set *Leader Pose Component* to Mesh in the Construction Script, or use the same skeleton) /
   Static Mesh components on a socket; (4) Compile + Save; PIE: the log shows «Medic-Sapper: member Blueprint
-  BP_Operative_FemaleSoldier_C». Another name or another member: the game mode has no Blueprint of its own, so change the
-  C++ default in `ACodexTacticsGameMode::ACodexTacticsGameMode` (or ask Claude). Note 2026-10-11: the main folder holds an
+  BP_Operative_FemaleSoldier_C». Another name or another member: edit the roster in `BP_CodexTacticsGameMode` (next bullet, no code). Note 2026-10-11: the main folder holds an
   untracked `BP_FemleSoldier` (typo; child of BP_Operative with `SK_Female_Soldier_Backpack`) - it is NOT picked up until it is
   renamed to `BP_Operative_FemaleSoldier`. Checks: `CodexTactics.Core.SquadSpawn.*`, `SniperSmoke` stage 0 (class + body
   for both branches).
+
+- **Where to edit the squad: `BP_CodexTacticsGameMode` (user decision 2026-10-14).** `/Game/Blueprints/BP_CodexTacticsGameMode`
+  (child of `ACodexTacticsGameMode`, created by `Scripts/Editor/create_gamemode_blueprint.py`, idempotent) is the project
+  default game mode (`Config/DefaultEngine.ini` `GlobalDefaultGameMode`). Open it -> **Class Defaults** -> category
+  **CodexTactics|Squad** -> **Squad Roster** (rows are titled with the member name; order = selection keys 1..N). Per row: name,
+  colour, spawn offset, fortitude, role, luck, accuracy, **Body Mesh**, **Member Blueprint**, **Extra Weapons**. All values are
+  inherited from the C++ constructor until a row is changed (the script logs 3 rows on creation). **Give the Medic-Sapper (row 2)
+  the regular operative back:** clear her *Member Blueprint* (BP_Operative_FemaleSoldier) AND her *Body Mesh*
+  (SK_Female_soldier) -> she spawns from `OperativeBlueprint` (BP_Operative) with its mesh (`SquadSpawnRules::ChooseMemberClass`,
+  test `Core.SquadSpawn.MemberBlueprintSelection`); clearing only one of them keeps the other. Keep *Extra Weapons* if she
+  should keep the sniper rifle (it stays on slot 3 by user decision). Compile + Save, PIE. Trap: once the designer edits the
+  roster array in the Blueprint, the whole array is stored there and later C++ default changes no longer reach it. Other game
+  mode defaults (balance assets, `LevelJsonFile`, enemy classes) are editable in the same Class Defaults. No map overrides the
+  game mode; code reads it through `GetAuthGameMode<ACodexTacticsGameMode>()` (works for the child).
 
 - **Tactical heat data (Sprint 15, 2026-10-11).** `Content/Data/Survival/tactical_heat.json` (staged as UFS) holds every value of
   `FTacticalHeatConfig` (snake_case keys, cm / s / cold points / AP): heat pack 35 / 45 s / x0.5 / 1 AP / stack 3; campfire 350 cm /
@@ -1711,6 +1724,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 ## 10. Change log (newest first)
 
 | Commit | What |
+| (this, agents/work) | **Designer-editable squad: `BP_CodexTacticsGameMode` (user decision 2026-10-14).** New Blueprint child of `ACodexTacticsGameMode` at `/Game/Blueprints/BP_CodexTacticsGameMode` (`Scripts/Editor/create_gamemode_blueprint.py`, idempotent, logs the 3 inherited roster rows) is now `GlobalDefaultGameMode` in `Config/DefaultEngine.ini`; `SquadRoster` is `EditAnywhere, BlueprintReadOnly` with `TitleProperty="DisplayName"`, `FSquadMemberSpawn` fields got display names + tooltips (clear Member Blueprint AND Body Mesh = the regular operative). How to edit: §6 «Where to edit the squad». Verified: build, `Core` / `UI.Frontend` / `Characters` unit tests, smokes Movement / Tutorial / SaveRoundTrip / Frontend / Sniper / WeaponSelector PASS; logs show `Game class is 'BP_CodexTacticsGameMode_C'` and `Medic-Sapper: member Blueprint BP_Operative_FemaleSoldier_C`. |
 | (this, agents/work) | **Demo 01 rev 5d part 2 - the barrel lesson inside a half-ruined building (designer request 2026-10-14).** `A2_wt_ruin` (indoors: warm up, and a fire inside doesn't give you away), `A2_push` / `A2_light` / `A2_obj_warm` complete only with the barrel in `VOL_A2_RUIN` (`in_volume`, the barrel is the event subject), `A2_wt_roll` removed; campfire patrol alert indoors x0.4 (`campfire_indoor_noise_multiplier`, `TacticalHeatRules::GetCampfireNoiseRadius`, `ACampfireActor::IsIndoors`; barrels alert nobody - future item). Review copy, additive section `AutoLayout_Demo01_5d` (11 actors: ruin graybox, VOL_A2_RUIN, Shelter zone, marker A2_push, Ruin_Barrel); verify + a real in-game push PASS; screenshots re-shot incl. `_ruin` / `_ruin_angle`. |
 | (this, agents/work) | **Demo 01 rev 5d part 1 - share the heat packs after the hut loot (designer request 2026-10-14).** `A1_share` objective + `A1_share_card` (complete when every operative carries >= 1 heat pack and >= 1 was handed over; precredited when already true); tutorial engine: `complete.condition` (`FTutorialCompletion::Conditions`, polled), stats `squad_min_heat_packs` / `heat_packs_given`; transfer: Shift on the drawer drop hands a heat pack over instead of cracking it on a cold mate (`FTransferRequest::bHandOverOnly`, `TacticalHeatRules::ShouldCrackHeatPackOnDrop`), counter `GetHandedOverCount`, event `ItemGiven(.<Item>)`, command `Item.Give`. Layout script: ADDITIVE mode (`CODEX_LAYOUT_MODE=additive`, tag `AutoLayout_Demo01_5d`, `EDITS_5D`). Tests `Tutorial.Condition.Completion`, `Schema.DemoFileA0A1Flow`, `Survival.TacticalHeat.HeatPackUse`, Controls registry; TransferSmoke, TutorialSmoke 73-74. |
 | (this, agents/work) | **Demo 01 rev 5d part 3 - corner peek click on the NEAR edge (user bug 2026-10-14, every level).** `TryHandleCoverClick` checks the peek edge before the 120 cm "click near an operative selects him" rule (`CoverFacingRules::CornerPeekClickWins`); `OrderCornerPeek` via `CoverFacingRules::DecideCornerPeekOrder` (in place / shimmy / turn-based refusal; in place when the last cm cannot be probed but he is at that corner). Tests `Tactics.Cover.CornerPeekNearEdge`; `CornerHoldSmoke` near-edge passes (both ends, standing / crouched facing away). |

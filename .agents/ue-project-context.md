@@ -49,7 +49,7 @@
 ## Gameplay framework
 | Role | Class |
 |---|---|
-| GameMode | `ACodexTacticsGameMode` (spawns the squad, level config, balance assets) |
+| GameMode | `ACodexTacticsGameMode` (spawns the squad, level config, balance assets); project default = its Blueprint child `/Game/Blueprints/BP_CodexTacticsGameMode` (designer edits Squad Roster there) |
 | GameState | `ACodexTacticsGameState` |
 | PlayerController | `ACodexTacticsPlayerController` |
 | PlayerState | [none custom] |

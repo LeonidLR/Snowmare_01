@@ -19,44 +19,49 @@ class ACampfireActor;
 class ASignalFlareActor;
 class AFirePuddleActor;
 
-/** One squad member spawned at mission start. */
+/**
+ * One squad member spawned at mission start (a row of ACodexTacticsGameMode::SquadRoster). Designer-editable in
+ * BP_CodexTacticsGameMode -> Class Defaults -> CodexTactics|Squad -> Squad Roster.
+ */
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FSquadMemberSpawn
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	/** Name shown in the HUD and in the editor row title. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad", meta = (DisplayName = "Display Name"))
 	FText DisplayName;
 
 	/** Placeholder body tint. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad", meta = (DisplayName = "Color"))
 	FLinearColor Color = FLinearColor::White;
 
 	/** Spawn offset from the player start (X forward, Y right), cm. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad", meta = (DisplayName = "Spawn Offset"))
 	FVector Offset = FVector::ZeroVector;
 
 	/** Cold resistance (Godot player.gd fortitude: commander 15, engineer 25, medic-sapper 20). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad", meta = (DisplayName = "Fortitude"))
 	float Fortitude = 15.f;
 
 	/** Squad role (defusal skill, deployable routing). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad", meta = (DisplayName = "Role"))
 	EOperativeRole Role = EOperativeRole::Commander;
 
 	/** Luck, % (Godot: commander 25, engineer 30, medic-sapper 35). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad", meta = (DisplayName = "Luck (%)"))
 	float Luck = 25.f;
 
 	/** Marksmanship, % (Godot player.gd accuracy: commander 90, engineer 75, medic-sapper 85). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad", meta = (DisplayName = "Accuracy (%)"))
 	float Accuracy = 90.f;
 
 	/**
 	 * Body of this member instead of the operative Blueprint's mesh (same AnimBP; empty = the Blueprint's). User request
-	 * 2026-10-09: the Medic-Sapper is /Game/Female_Soldier/Mesh/SK_Female_soldier.
+	 * 2026-10-09: the Medic-Sapper is /Game/Female_Soldier/Mesh/SK_Female_soldier. To give the member the regular
+	 * operative, clear this AND Member Blueprint.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad", meta = (DisplayName = "Body Mesh"))
 	TSoftObjectPtr<class USkeletalMesh> BodyMesh;
 
 	/**
@@ -64,12 +69,16 @@ struct CODEXTACTICS_API FSquadMemberSpawn
 	 * Soldier's backpack; make it a child of BP_Operative so collision / AnimBP / tunables stay). Set and loadable -> the
 	 * member spawns from it and BodyMesh is NOT applied (the Blueprint owns the look); empty or missing -> the game mode's
 	 * OperativeBlueprint + BodyMesh (a missing asset only logs a line). Role, stats and weapons still come from this entry.
+	 * To give the member the regular operative, clear this AND Body Mesh.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad", meta = (DisplayName = "Member Blueprint"))
 	TSoftClassPtr<AOperativeCharacter> MemberBlueprint;
 
-	/** Weapons this member carries on top of the starting arsenal (user request 2026-10-09: the Medic-Sapper's sniper rifle). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	/**
+	 * Weapons this member carries on top of the starting arsenal (user request 2026-10-09: the Medic-Sapper's sniper rifle;
+	 * it stays on slot 3 by user decision). They follow the M16 in the X weapon cycle.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad", meta = (DisplayName = "Extra Weapons"))
 	TArray<TSoftObjectPtr<UWeaponDataAsset>> ExtraWeapons;
 };
 
@@ -184,8 +193,14 @@ public:
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Dialogue")
 	TSoftObjectPtr<UDialogueSequenceAsset> DialogueVictory;
 
-	/** Squad roster in selection order (keys 1..N). */
-	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
+	/**
+	 * Squad roster, editable in BP_CodexTacticsGameMode -> Class Defaults -> CodexTactics|Squad -> Squad Roster. The order is
+	 * the selection order: row 0 = key 1, row 1 = key 2, ... To give a slot the regular operative (BP_Operative), clear
+	 * its Member Blueprint AND Body Mesh. Extra Weapons adds weapons on top of the starting arsenal (the sniper rifle
+	 * stays on slot 3, user decision). Role / stats / weapons always come from the row, the look from Member Blueprint
+	 * (else the game mode's OperativeBlueprint + Body Mesh).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Squad", meta = (DisplayName = "Squad Roster", TitleProperty = "DisplayName"))
 	TArray<FSquadMemberSpawn> SquadRoster;
 
 	/**
