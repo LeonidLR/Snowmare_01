@@ -2516,18 +2516,18 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	}
 	// APC P1: the vehicle is a Pawn but its hull is cover (the click on the APC stays "take cover", user decision 2026-10-12).
 	const bool bVehicle = HitActor->IsA<AVehiclePawn>();
-	if (FindClickedMember(Hit) || (HitActor->IsA<APawn>() && !bVehicle) || HitActor->ActorHasTag(FName(TEXT("Enemy"))))
-	{
-		return false;
-	}
 	// Manual corner peek (user request 2026-10-13, rev 5c): in high cover, a click on the END of his own wall (its last ~75 cm,
 	// its end face or its top there) sends him to that corner, leaning out in the corner-aim pose until another order.
+	// Rev 5d (user bug 2026-10-14): decided BEFORE the "a click near an operative picks him" proximity rule - the corner he
+	// already stands at lies inside SelectRadius, so the near-edge click selected him and nothing happened (the hover, which
+	// has no such rule, showed the peek ghost). A click on a body (the hit actor is a pawn) never reaches this.
 	{
 		ECoverFacing PeekSide = ECoverFacing::Right;
 		float PeekEdge = 0.f;
 		const UTutorialSubsystem* PeekTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
-		if (!bAlt && Operative->IsInHighCover() && !(PeekTutorial && PeekTutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek))
-			&& FindCornerPeekForHit(Operative, Hit, PeekSide, PeekEdge))
+		const bool bPeekEdge = !bAlt && Operative->IsInHighCover() && !(PeekTutorial && PeekTutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek))
+			&& !HitActor->IsA<APawn>() && FindCornerPeekForHit(Operative, Hit, PeekSide, PeekEdge);
+		if (CoverFacingRules::CornerPeekClickWins(bPeekEdge, HitActor->IsA<AOperativeCharacter>()))
 		{
 			HideCoverPreview();
 			UpdateCornerPeekHover(Operative, nullptr);
@@ -2548,6 +2548,10 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 			}
 			return true;
 		}
+	}
+	if (FindClickedMember(Hit) || (HitActor->IsA<APawn>() && !bVehicle) || HitActor->ActorHasTag(FName(TEXT("Enemy"))))
+	{
+		return false;
 	}
 	// A floor / ramp is a move target, not a wall (Alt + click probes anyway: a wall edge may have been clicked); the
 	// vehicle's roof is always its hull.

@@ -4445,14 +4445,18 @@ EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, fl
 	const float StandOff = CoverFacingRules::CornerStandOff(Side, Stance == EOperativeStance::Crouching, Config);
 	const float Stand = CoverFacingRules::CornerPeekStandAlong(Side, EdgeAlongCm, StandOff);
 	const float BodyAlong = CoverTraceRules::AlongWallDistanceFrom(CoverSlot, CoverSlot.WorldLocation, GetActorLocation());
-	const bool bThere = FMath::Abs(Stand - BodyAlong) <= Config.CornerSnapToleranceCm + 10.f && !bShimmying;
+	// Rev 5d (user bug 2026-10-14): at / near the clicked corner the aim starts in place; turn-based anywhere at that corner.
+	const bool bAtThatCorner = CoverFacingRules::IsAtCorner(CoverSlot, Side, Config);
 	const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
-	if (TurnBased && TurnBased->IsActive() && !bThere)
+	const CoverFacingRules::ECornerPeekOrder Order = CoverFacingRules::DecideCornerPeekOrder(Stand, BodyAlong, bShimmying, bAtThatCorner,
+		TurnBased && TurnBased->IsActive(), Config);
+	if (Order == CoverFacingRules::ECornerPeekOrder::Refused)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: corner peek refused in turn-based (%.0f cm from the corner: a grid move first)"),
 			*DisplayName.ToString(), FMath::Abs(Stand - BodyAlong));
 		return EOperativeOrderResult::Refused;
 	}
+	bool bThere = Order == CoverFacingRules::ECornerPeekOrder::PoseInPlace;
 	if (bCornerAimActive && CoverFacing != Side)
 	{
 		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("the other corner"));
@@ -4462,13 +4466,20 @@ EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, fl
 		FCoverSlot Target;
 		if (!CoverTraceRules::FindShimmySlot(GetWorld(), CoverSlot, CoverSlot.WallPoint + CoverSlot.RightTangent() * Stand, Target))
 		{
-			return EOperativeOrderResult::Unreachable;
+			if (!bAtThatCorner || bShimmying)
+			{
+				return EOperativeOrderResult::Unreachable;
+			}
+			bThere = true; // the last few cm cannot be probed (the wall's very end): his slot already counts as at that corner
 		}
-		TGuardValue<bool> Ordering(bCornerPeekOrdering, true);
-		const EOperativeOrderResult Result = OrderShimmyTo(Target);
-		if (Result != EOperativeOrderResult::Accepted)
+		else
 		{
-			return Result;
+			TGuardValue<bool> Ordering(bCornerPeekOrdering, true);
+			const EOperativeOrderResult Result = OrderShimmyTo(Target);
+			if (Result != EOperativeOrderResult::Accepted)
+			{
+				return Result;
+			}
 		}
 	}
 	bManualCornerPeek = true;

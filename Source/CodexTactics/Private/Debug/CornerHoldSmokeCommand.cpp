@@ -12,6 +12,9 @@
 // end (ACodexTacticsPlayerController::TryHandleCoverClick) sends him there - he reaches the corner, leans out in the corner aim
 // and HOLDS it with nobody around (CornerPeek once), a move order releases it; again in the legacy cover mode
 // (bCornerHoldAtEdge off, bCornerAutoDuck on: no "no targets" return), where a shimmy order releases it.
+// Then (rev 5d, user bug 2026-10-14) the NEAR EDGE: in cover 50 cm from an end (he snaps to that corner), a click 20 cm in from
+// that end - inside the 120 cm "a click near an operative picks him" radius - must start the corner aim at once (handled as a
+// peek, not a selection; < 2.5 s, < 40 cm moved): the -R end and the +R end standing, then both crouched facing the other way.
 
 #include "CoreMinimal.h"
 
@@ -66,6 +69,10 @@ namespace CornerHoldSmoke
 		TWeakObjectPtr<AStaticMeshActor> Wall;
 		int32 PeekPass = 0;
 		int32 PeekBrokenFrames = 0;
+		/** Rev 5d near-edge passes (0..3: -R end / +R end standing, then crouched facing the other way); where the click found him. */
+		int32 NearPass = 0;
+		FVector NearClickBody = FVector::ZeroVector;
+		int32 NearPeeksBefore = 0;
 		FPhase Phase[3];
 		int32 LastLean = 0;
 		int32 LastOpen = 0;
@@ -486,7 +493,112 @@ namespace CornerHoldSmoke
 			Op->bCornerHoldAtEdge = true;
 			Op->bCornerAutoDuck = false;
 			Op->OrderMoveTo(State.P, false);
-			State.Stage = 25;
+			State.NearPass = 0;
+			State.Stage = 30;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// --- Rev 5d (user bug 2026-10-14): the click on the edge he ALREADY hugs (inside the 120 cm "click near an operative picks
+		// him" radius) must start the corner aim at once - both ends, standing and crouched, facing either way ---
+		case 30:
+		{
+			if (State.StageTime < 2.5f)
+			{
+				return true;
+			}
+			const float EndSign = State.NearPass % 2 == 0 ? -1.f : 1.f; // -R end, then +R end
+			FCoverSlot NearEnd;
+			const bool bFound = CoverTraceRules::FindCoverSlotAt(World, State.P + State.F * 380.f + State.R * (EndSign * 250.f) + FVector(0.f, 0.f, 90.f),
+				State.F, NearEnd);
+			Check(State, bFound && Op->OrderTakeCover(NearEnd, false) == EOperativeOrderResult::Accepted,
+				FString::Printf(TEXT("near pass %d: cover 50 cm from the %s end of the wall"), State.NearPass, EndSign < 0.f ? TEXT("-R") : TEXT("+R")));
+			State.Stage = 31;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 31:
+		{
+			if ((!Op->bInCover || Op->bShimmying || State.StageTime < 2.5f) && State.StageTime < 12.f)
+			{
+				return true;
+			}
+			if (State.NearPass >= 2 && Op->GetStance() != EOperativeStance::Crouching)
+			{
+				Op->SetStance(EOperativeStance::Crouching); // crouched passes: the crouched stand-offs differ (a few cm shimmy)
+				State.StageTime = 0.f;
+				return true;
+			}
+			if (State.NearPass >= 2 && State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			AStaticMeshActor* Wall = State.Wall.Get();
+			if (!PC || !Wall)
+			{
+				Check(State, false, TEXT("controller / wall"));
+				return Finish(State);
+			}
+			const float EndSign = State.NearPass % 2 == 0 ? -1.f : 1.f;
+			const FVector Centre = State.P + State.F * 400.f;
+			// 20 cm in from that end on the face he hugs: well inside SelectRadius of his body.
+			const FHitResult EdgeHit(Wall, Wall->GetStaticMeshComponent(),
+				Centre - State.F * 20.f + State.R * (EndSign * 280.f) + FVector(0.f, 0.f, State.GroundZ + 150.f - Centre.Z), -State.F);
+			const float BodyToClick = static_cast<float>(FVector::Dist2D(Op->GetActorLocation(), EdgeHit.ImpactPoint));
+			ECoverFacing Side = ECoverFacing::Left;
+			float Edge = 0.f;
+			const bool bEdge = PC->FindCornerPeekForHit(Op, EdgeHit, Side, Edge);
+			if (State.NearPass >= 2)
+			{
+				// Facing the other way along the wall when the click comes (a threat seen earlier on the other side).
+				Op->CoverFacing = Side == ECoverFacing::Left ? ECoverFacing::Right : ECoverFacing::Left;
+			}
+			Check(State, Op->bInCover && Op->IsInHighCover() && bEdge && FMath::Abs(Edge) < 120.f && BodyToClick < PC->SelectRadius,
+				FString::Printf(TEXT("near pass %d (%s, %s): hugging the %s end, the click 20 cm in from it is %.0f cm from his body (select radius %.0f), edge %.0f cm along"),
+					State.NearPass, State.NearPass >= 2 ? TEXT("crouched") : TEXT("standing"), State.NearPass >= 2 ? TEXT("facing away") : TEXT("facing it"),
+					Side == ECoverFacing::Left ? TEXT("left") : TEXT("right"), BodyToClick, PC->SelectRadius, Edge));
+			Check(State, PC->UpdateCornerPeekHover(Op, &EdgeHit) && PC->IsCornerPeekPreviewShown(), TEXT("near edge hovered: the peek ghost shows"));
+			const int32 PeeksBefore = Op->GetManualCornerPeekCount();
+			State.NearClickBody = Op->GetActorLocation();
+			const bool bHandled = PC->TryHandleCoverClick(EdgeHit, nullptr);
+			Check(State, bHandled && Op->IsManualCornerPeek() && Op->GetManualCornerPeekCount() == PeeksBefore,
+				FString::Printf(TEXT("near pass %d: the click on the near edge orders the corner peek (handled %d, not a selection)"), State.NearPass, bHandled ? 1 : 0));
+			State.NearPeeksBefore = PeeksBefore;
+			State.Stage = 32;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 32:
+		{
+			if (!(Op->bAtCoverCorner && Op->IsCornerAimActive() && Op->bIsCornerLeaning) && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			const float Moved = static_cast<float>(FVector::Dist2D(Op->GetActorLocation(), State.NearClickBody));
+			Check(State, Op->bInCover && Op->bAtCoverCorner && Op->IsCornerAimActive() && Op->IsManualCornerPeek() && Op->bIsCornerLeaning
+				&& Op->GetManualCornerPeekCount() == State.NearPeeksBefore + 1 && State.StageTime < 2.5f && Moved < 40.f,
+				FString::Printf(TEXT("near pass %d: corner aim at once (%.2f s, moved %.0f cm, CornerPeek %d -> %d)"), State.NearPass, State.StageTime,
+					Moved, State.NearPeeksBefore, Op->GetManualCornerPeekCount()));
+			State.Stage = 33;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 33:
+		{
+			State.PeekBrokenFrames += Op->IsCornerAimActive() ? 0 : 1;
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			Check(State, Op->IsCornerAimActive() && Op->IsManualCornerPeek(), FString::Printf(TEXT("near pass %d: held"), State.NearPass));
+			if (State.NearPass == 3)
+			{
+				Op->SetStance(EOperativeStance::Standing); // the fights below run standing
+			}
+			Op->OrderMoveTo(State.P, false);
+			State.PeekBrokenFrames = 0;
+			++State.NearPass;
+			State.Stage = State.NearPass < 4 ? 30 : 25;
 			State.StageTime = 0.f;
 			return true;
 		}

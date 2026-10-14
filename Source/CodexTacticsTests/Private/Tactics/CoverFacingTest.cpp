@@ -237,6 +237,57 @@ bool FCoverCornerPeekEdgeHitTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+COVER_FACING_TEST(FCoverCornerPeekNearEdgeTest, "CornerPeekNearEdge")
+bool FCoverCornerPeekNearEdgeTest::RunTest(const FString& Parameters)
+{
+	// Rev 5d (user bug 2026-10-14): he hugs a high wall at its left end; hovering that end showed the peek ghost, the click did
+	// nothing (the proximity "click near an operative picks him" rule ate it). The far end worked.
+	using namespace CoverFacingRules;
+	const FCoverFacingConfig Config;
+	// Click precedence: the edge of his own wall wins over the 120 cm proximity selection; his body still selects.
+	TestTrue(TEXT("near-edge click on his wall: the peek, not a selection"), CornerPeekClickWins(true, false));
+	TestFalse(TEXT("a click on an operative's body: a selection"), CornerPeekClickWins(true, true));
+	TestFalse(TEXT("not a peek edge: the other click rules"), CornerPeekClickWins(false, false));
+
+	// Every end / facing / stance: snapped to the corner (the stand point) -> the aim starts in place, real time and turn-based.
+	struct FCase
+	{
+		ECoverFacing Side;
+		bool bCrouched;
+		const TCHAR* Name;
+	};
+	for (const FCase& Case : { FCase{ ECoverFacing::Left, false, TEXT("left end, standing") }, FCase{ ECoverFacing::Right, false, TEXT("right end, standing") },
+		FCase{ ECoverFacing::Left, true, TEXT("left end, crouched") }, FCase{ ECoverFacing::Right, true, TEXT("right end, crouched") } })
+	{
+		const float StandOff = CornerStandOff(Case.Side, Case.bCrouched, Config);
+		const float Edge = Case.Side == ECoverFacing::Right ? StandOff : -StandOff; // the slot (body at 0) sits at the stand-off
+		const float Stand = CornerPeekStandAlong(Case.Side, Edge, StandOff);
+		TestEqual(FString::Printf(TEXT("%s: the stand point is where he is"), Case.Name), Stand, 0.f, 0.01f);
+		const FCoverSlot Slot = CoverFacingTest::MakeSlot(Case.Side == ECoverFacing::Left, StandOff, Case.Side == ECoverFacing::Right, StandOff);
+		const bool bAtCorner = IsAtCorner(Slot, Case.Side, Config);
+		TestTrue(FString::Printf(TEXT("%s: his slot is at that corner"), Case.Name), bAtCorner);
+		TestTrue(FString::Printf(TEXT("%s: real time -> pose in place"), Case.Name),
+			DecideCornerPeekOrder(Stand, 0.f, false, bAtCorner, false, Config) == ECornerPeekOrder::PoseInPlace);
+		TestTrue(FString::Printf(TEXT("%s: turn-based -> pose in place (no AP)"), Case.Name),
+			DecideCornerPeekOrder(Stand, 0.f, false, bAtCorner, true, Config) == ECornerPeekOrder::PoseInPlace);
+		// Near but not at the stand point (40 cm off, the edge 40 cm further): real time shimmies the few cm, turn-based poses
+		// where he is (at that corner), a body far from the corner is refused in turn-based.
+		const float Off = Case.Side == ECoverFacing::Right ? -40.f : 40.f;
+		TestTrue(FString::Printf(TEXT("%s: 40 cm short -> shimmy then pose"), Case.Name),
+			DecideCornerPeekOrder(Stand, Off, false, true, false, Config) == ECornerPeekOrder::ShimmyThenPose);
+		TestTrue(FString::Printf(TEXT("%s: 40 cm short, turn-based at that corner -> pose in place"), Case.Name),
+			DecideCornerPeekOrder(Stand, Off, false, true, true, Config) == ECornerPeekOrder::PoseInPlace);
+		TestTrue(FString::Printf(TEXT("%s: 3 m away, turn-based -> refused"), Case.Name),
+			DecideCornerPeekOrder(Stand, Off * 7.5f, false, false, true, Config) == ECornerPeekOrder::Refused);
+	}
+	// Within the tolerance (stand-off + 15 + 10 cm): in place; a running shimmy is never "in place".
+	TestTrue(TEXT("20 cm off the stand point: in place"), DecideCornerPeekOrder(0.f, 20.f, false, true, false, Config) == ECornerPeekOrder::PoseInPlace);
+	TestTrue(TEXT("30 cm off: a short shimmy"), DecideCornerPeekOrder(0.f, 30.f, false, true, false, Config) == ECornerPeekOrder::ShimmyThenPose);
+	TestTrue(TEXT("still shimmying: shimmy again (real time)"), DecideCornerPeekOrder(0.f, 0.f, true, true, false, Config) == ECornerPeekOrder::ShimmyThenPose);
+	TestTrue(TEXT("still shimmying, turn-based: refused"), DecideCornerPeekOrder(0.f, 0.f, true, true, true, Config) == ECornerPeekOrder::Refused);
+	return true;
+}
+
 COVER_FACING_TEST(FCoverCornerStandOffPerClipSideTest, "CornerStandOffPerClipSide")
 bool FCoverCornerStandOffPerClipSideTest::RunTest(const FString& Parameters)
 {

@@ -311,6 +311,26 @@ namespace CoverFacingRules
 		return Side == ECoverFacing::Right ? EdgeAlongCm - StandOffCm : EdgeAlongCm + StandOffCm;
 	}
 
+	bool CornerPeekClickWins(bool bPeekEdgeOfOwnWall, bool bHitSquadBody)
+	{
+		return bPeekEdgeOfOwnWall && !bHitSquadBody;
+	}
+
+	ECornerPeekOrder DecideCornerPeekOrder(float StandAlongCm, float BodyAlongCm, bool bShimmying, bool bAtThatCorner, bool bTurnBased,
+		const FCoverFacingConfig& Config)
+	{
+		const bool bAtStandPoint = !bShimmying && FMath::Abs(StandAlongCm - BodyAlongCm) <= Config.CornerSnapToleranceCm + 10.f;
+		if (bAtStandPoint)
+		{
+			return ECornerPeekOrder::PoseInPlace;
+		}
+		if (bTurnBased)
+		{
+			return bAtThatCorner && !bShimmying ? ECornerPeekOrder::PoseInPlace : ECornerPeekOrder::Refused;
+		}
+		return ECornerPeekOrder::ShimmyThenPose;
+	}
+
 	int32 ClipIndex(ECoverFacing Facing)
 	{
 		// Pack _L = his own right as he stands back to the wall (the pack names its sides facing the wall).
