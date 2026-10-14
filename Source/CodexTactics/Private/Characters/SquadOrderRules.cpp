@@ -16,4 +16,17 @@ namespace SquadOrderRules
 	{
 		return !bOnOwnOrder;
 	}
+
+	bool ShouldLeaveCoverToFollow(const FCoverFollowFacts& Facts, float LeaveDistanceCm)
+	{
+		if (!Facts.bInCover || Facts.bOnOwnOrder || Facts.bFollowersHolding || Facts.bGuarding || !Facts.bFormationActive)
+		{
+			return false;
+		}
+		if (!Facts.bLeaderMoving || Facts.bLeaderTakingCover)
+		{
+			return false;
+		}
+		return Facts.DistanceToSlotCm > LeaveDistanceCm;
+	}
 }

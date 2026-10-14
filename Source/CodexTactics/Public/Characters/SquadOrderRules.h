@@ -11,6 +11,8 @@
  *   operative is selected afterwards, in Solo mode and in group (formation) mode. Only a new order to HIM, Regroup / Solo off,
  *   or game events (knockdown, panic, rage, a combat reaction, a level obstacle holding him) change it.
  * - Group mode: the old leader who still walks to his ordered goal finishes it and only then joins the new leader's formation.
+ * - Group mode: a follower hugging a wall leaves the cover and follows once the leader walks away from him (Solo mode, guards
+ *   and the fight keep their own rules: Solo holds, guards are no followers, the formation is off in a fight).
  */
 namespace SquadOrderRules
 {
@@ -42,4 +44,34 @@ namespace SquadOrderRules
 
 	// Regroup / Solo off ends the followers' own MOVE orders (AOperativeCharacter::ReleaseOwnMoveOrder): the formation takes
 	// everybody back at once; a running use / object task still finishes first.
+
+	/** A follower in cover leaves it once his formation slot is this far from him while the leader walks, cm. */
+	constexpr float CoverLeaveSlotDistanceCm = 400.f;
+
+	/** The situation of one formation follower who stands in cover. */
+	struct FCoverFollowFacts
+	{
+		/** He hugs a wall (AOperativeCharacter::IsInCover). */
+		bool bInCover = false;
+		/** He still walks to his own order (e.g. the cover order itself): nothing changes until it is done. */
+		bool bOnOwnOrder = false;
+		/** Solo mode / a camera-zone perimeter hold: the followers hold where they are. */
+		bool bFollowersHolding = false;
+		/** Guard (T): he holds his spot (guards are no formation followers anyway). */
+		bool bGuarding = false;
+		/** The exploration formation is on (off in preparation / any fight: the autonomy / ROE rules decide there). */
+		bool bFormationActive = true;
+		/** The leader walks (a move order or a visible velocity). */
+		bool bLeaderMoving = false;
+		/**
+		 * The leader is in cover or walks to a cover slot: the squad is stacking up (e.g. two at a door), the ones already in
+		 * cover stay.
+		 */
+		bool bLeaderTakingCover = false;
+		/** Distance from him to his formation slot around the leader, cm. */
+		float DistanceToSlotCm = 0.f;
+	};
+
+	/** Group mode: the follower leaves the cover (the cover-exit to walk) and follows the leader in formation. */
+	CODEXTACTICS_API bool ShouldLeaveCoverToFollow(const FCoverFollowFacts& Facts, float LeaveDistanceCm = CoverLeaveSlotDistanceCm);
 }

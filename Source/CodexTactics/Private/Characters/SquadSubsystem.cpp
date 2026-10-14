@@ -418,6 +418,11 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 				// Rev 5g: Regroup ends a follower's own move order - everybody comes back to the leader (a use / object task
 				// still finishes first, SquadOrderRules).
 				Operative->ReleaseOwnMoveOrder();
+				// ... and a follower hugging a wall (e.g. stacked at a door in Solo) leaves it ("Teammates leave cover and regroup").
+				if (Operative->bInCover)
+				{
+					Operative->LeaveCoverToMove(TEXT("regroup"));
+				}
 				Operative->SetStance(LeaderRef->GetStance());
 				UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🏃 REGROUPING"), FLinearColor(1.f, 0.85f, 0.2f));
 			}
@@ -877,6 +882,38 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	SlotLocation.Z = Operative->GetActorLocation().Z;
 
 	const float Distance = FVector::Dist2D(Operative->GetActorLocation(), SlotLocation);
+	// Rev 5g (game designer 2026-10-14): in group mode a follower hugging a wall leaves the cover and follows once the leader walks
+	// away (Solo / holding returned above, guards are no followers, the formation is off in a fight - the autonomy / ROE rules
+	// decide there). A leader stacking up at cover himself keeps the ones already in cover where they are.
+	if (Operative->bInCover)
+	{
+		SquadOrderRules::FCoverFollowFacts CoverFacts;
+		CoverFacts.bInCover = true;
+		CoverFacts.bFollowersHolding = bFollowersHolding;
+		CoverFacts.bGuarding = Operative->bGuarding;
+		CoverFacts.bFormationActive = IsFormationActive();
+		CoverFacts.bLeaderMoving = bLeaderMoving;
+		CoverFacts.bLeaderTakingCover = LeaderRef.bInCover || LeaderRef.HasPendingCover();
+		CoverFacts.DistanceToSlotCm = Distance;
+		if (!SquadOrderRules::ShouldLeaveCoverToFollow(CoverFacts))
+		{
+			return; // he holds his wall (FollowTo would refuse anyway)
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: the leader walks away (slot %.0f cm off) - leaves the cover and follows"),
+			*Operative->DisplayName.ToString(), Distance);
+		Operative->LeaveCoverToMove(TEXT("follows the leader"));
+		// Crouched at a low wall: he stands up to walk with a standing leader (the clip roots him, the next repath walks him).
+		if (Operative->GetStance() == EOperativeStance::Crouching && LeaderRef.GetStance() == EOperativeStance::Standing)
+		{
+			Operative->SetStance(EOperativeStance::Standing);
+		}
+		if (const float LeaveHold = Operative->GetMoveHoldSeconds(); OperativeMovementRules::ShouldDeferMove(LeaveHold))
+		{
+			Follower.bParked = false;
+			Follower.RepathTimeRemaining = LeaveHold;
+			return;
+		}
+	}
 	float Speed = SquadFormation::ComputeFollowerSpeed(FormationConfig, Operative->GetMaxSpeed(), Distance, Follower.Slot, TimeSeconds, bLeaderMoving);
 	// A parked follower restarts only once the slot (it wanders) is clearly away: stopping and restarting every repath
 	// made the legs tremble between the idle and the walk (user report 2026-10-01).
