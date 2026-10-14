@@ -279,6 +279,8 @@ private:
 	void DrawSpaceCharge();
 	/** Top centre: the combat time mode label with its Space hints, and the selected operative's fire posture with the , . / hints. */
 	void DrawCombatModeBadge();
+	/** Rev 5g: "[M] Outside view" / "[M] Interior view" bottom right while the leader is inside a building with an interior camera. */
+	void DrawInteriorViewHint();
 	/** Per-operative fire posture marker over every living operative (letter P / D / A in the posture colour). */
 	void DrawPostureMarkers();
 	/** Sprint 14: «[KNOCKED DOWN]» badge + recovery bar over every knocked-down unit (squad and enemies). */

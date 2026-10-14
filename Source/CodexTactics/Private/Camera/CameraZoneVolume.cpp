@@ -1,7 +1,9 @@
 #include "Camera/CameraZoneVolume.h"
 #include "Camera/CameraActor.h"
+#include "Camera/InteriorExitRules.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "CodexTactics.h"
 #include "Combat/DeathCinematicSubsystem.h"
 #include "Combat/HordeIntroSubsystem.h"
 #include "Components/BoxComponent.h"
@@ -114,13 +116,35 @@ void ACameraZoneVolume::Tick(float DeltaSeconds)
 	const UDeathCinematicSubsystem* DeathCam = World->GetSubsystem<UDeathCinematicSubsystem>();
 	// The horde flyover (2026-10-11) owns the camera the same way.
 	const UHordeIntroSubsystem* HordeIntro = World->GetSubsystem<UHordeIntroSubsystem>();
-	const bool bWantCamera = IsZoneActive() && TargetCamera
-		&& CameraZoneRules::IsCameraAllowed(Modes, Flow ? Flow->GetCombatMode() : ECodexCombatMode::None)
-		&& !(DeathCam && DeathCam->IsFocusActive()) && !(HordeIntro && HordeIntro->IsFlyoverActive());
+	// Rev 5g: the player's outside view (M) keeps the normal camera while he stays inside.
+	const bool bWantCamera = InteriorExitRules::ShouldShowZoneCamera(IsZoneActive(), TargetCamera != nullptr,
+		CameraZoneRules::IsCameraAllowed(Modes, Flow ? Flow->GetCombatMode() : ECodexCombatMode::None),
+		(DeathCam && DeathCam->IsFocusActive()) || (HordeIntro && HordeIntro->IsFlyoverActive()), bPlayerOutsideView);
 	if (bWantCamera != bCameraShown)
 	{
 		ShowZoneCamera(bWantCamera);
 	}
+}
+
+bool ACameraZoneVolume::TogglePlayerOutsideView()
+{
+	if (!IsZoneActive())
+	{
+		return false;
+	}
+	bPlayerOutsideView = !bPlayerOutsideView;
+	UE_LOG(LogCodexTactics, Display, TEXT("Camera zone %s: %s view"), *GetName(), bPlayerOutsideView ? TEXT("outside (player)") : TEXT("interior"));
+	return bPlayerOutsideView;
+}
+
+FTransform ACameraZoneVolume::GetZoneTransform() const
+{
+	return FTransform(Box->GetComponentRotation(), Box->GetComponentLocation());
+}
+
+FVector ACameraZoneVolume::GetZoneHalfExtent() const
+{
+	return Box->GetUnscaledBoxExtent() * Box->GetComponentScale().GetAbs();
 }
 
 void ACameraZoneVolume::ShowZoneCamera(bool bShow)
@@ -177,13 +201,15 @@ void ACameraZoneVolume::Deactivate()
 		Explorer->bInCameraZone = false;
 	}
 	ActiveExplorer.Reset();
+	bPlayerOutsideView = false; // the next visit starts with the interior camera again
 	if (bCameraShown)
 	{
 		ShowZoneCamera(false);
 	}
 	if (USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 	{
-		Squad->SetFollowersHolding(false);
+		// Rev 5g: Solo keeps its own hold (the scout leaving a building must not pull the others out after him).
+		Squad->SetFollowersHolding(Squad->IsSoloMode());
 	}
 	if (!ExitMessage.IsEmpty())
 	{
