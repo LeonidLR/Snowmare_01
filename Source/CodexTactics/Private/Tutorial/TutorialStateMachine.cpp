@@ -5,7 +5,186 @@
 void FTutorialStateMachine::Load(const FTutorialStepsData& InData)
 {
 	Data = InData;
+	RebuildRoute();
 	ResetProgress();
+}
+
+// --- Rev 5f: the route (monotonic progress by location) -------------------------------------------------------------
+
+namespace TutorialRoute
+{
+	// Keys: the start of a beat = 3 * (its first step index); a volume TRIGGER of step i = 3 * i + 1; a volume COMPLETION of
+	// step i = 3 * i + 2 (the trigger volume of a step lies before the volume it completes in).
+	int32 BeatStartKey(int32 FirstStepIndex) { return 3 * FirstStepIndex; }
+	int32 TriggerKey(int32 StepIndex) { return 3 * StepIndex + 1; }
+	int32 CompletionKey(int32 StepIndex) { return 3 * StepIndex + 2; }
+}
+
+void FTutorialStateMachine::RebuildRoute()
+{
+	StepRoute.Reset();
+	auto Offer = [this](FName VolumeId, int32 Key, int32 BeatIndex)
+	{
+		if (VolumeId.IsNone() || Key == INDEX_NONE)
+		{
+			return;
+		}
+		FRoutePoint& Point = StepRoute.FindOrAdd(VolumeId);
+		if (!Point.IsValid() || Key < Point.Key)
+		{
+			Point.Key = Key;
+			Point.BeatIndex = BeatIndex;
+		}
+	};
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		const FTutorialStep& Step = Data.Steps[Index];
+		const int32 BeatIndex = Data.FindBeatIndex(Step.Beat);
+		if (Step.Trigger.Type == ETutorialTriggerType::Volume)
+		{
+			Offer(Step.Trigger.Volume, TutorialRoute::TriggerKey(Index), BeatIndex);
+		}
+		// A completion of a step that runs from its beat start ("go to the camp" shown when the beat begins) names the place the
+		// beat leads to: the END of that beat, not its start.
+		int32 CompletionIndex = Index;
+		if (Step.Trigger.Type == ETutorialTriggerType::BeatStart)
+		{
+			for (int32 Other = Index + 1; Other < Data.Steps.Num(); ++Other)
+			{
+				CompletionIndex = Data.Steps[Other].Beat == Step.Beat ? Other : CompletionIndex;
+			}
+		}
+		Offer(Step.Complete.Volume, TutorialRoute::CompletionKey(CompletionIndex), BeatIndex);
+		Offer(Step.Complete.InVolume, TutorialRoute::CompletionKey(CompletionIndex), BeatIndex);
+	}
+}
+
+void FTutorialStateMachine::RegisterVolumeBeat(FName VolumeId, FName BeatId)
+{
+	if (!VolumeId.IsNone() && !BeatId.IsNone())
+	{
+		VolumeBeats.Add(VolumeId, BeatId);
+	}
+}
+
+FTutorialStateMachine::FRoutePoint FTutorialStateMachine::GetBeatStartPoint(int32 BeatIndex) const
+{
+	FRoutePoint Point;
+	if (!Data.Beats.IsValidIndex(BeatIndex))
+	{
+		return Point;
+	}
+	Point.BeatIndex = BeatIndex;
+	Point.Key = TutorialRoute::BeatStartKey(Data.Steps.Num());
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		if (Data.FindBeatIndex(Data.Steps[Index].Beat) >= BeatIndex)
+		{
+			Point.Key = TutorialRoute::BeatStartKey(Index);
+			break;
+		}
+	}
+	return Point;
+}
+
+FTutorialStateMachine::FRoutePoint FTutorialStateMachine::GetVolumeRoutePoint(FName VolumeId) const
+{
+	FRoutePoint Point;
+	if (const FRoutePoint* FromSteps = StepRoute.Find(VolumeId))
+	{
+		Point = *FromSteps;
+	}
+	if (const FName* Beat = VolumeBeats.Find(VolumeId))
+	{
+		const FRoutePoint BeatStart = GetBeatStartPoint(Data.FindBeatIndex(*Beat));
+		if (BeatStart.IsValid() && (!Point.IsValid() || BeatStart.Key > Point.Key || (BeatStart.Key == Point.Key && BeatStart.BeatIndex > Point.BeatIndex)))
+		{
+			Point = BeatStart;
+		}
+	}
+	return Point;
+}
+
+void FTutorialStateMachine::PassStep(int32 Index)
+{
+	if (!Runtime.IsValidIndex(Index) || Runtime[Index].State != ETutorialStepState::Idle)
+	{
+		return;
+	}
+	// Straight to Queued without a transition: Finish reports one silent Idle-less change Queued -> Skipped.
+	Runtime[Index].State = ETutorialStepState::Queued;
+	Runtime[Index].StateSeconds = 0.f;
+	const FName StepId = Data.Steps[Index].Id;
+	const int32 Mark = Transitions.Num();
+	Finish(Index, ETutorialStepState::Skipped);
+	for (int32 Back = Mark; Back < Transitions.Num(); ++Back)
+	{
+		if (Transitions[Back].StepId == StepId && Transitions[Back].To == ETutorialStepState::Skipped)
+		{
+			Transitions[Back].bPassed = true;
+			break;
+		}
+	}
+}
+
+void FTutorialStateMachine::PassRouteBefore(const FRoutePoint& Point)
+{
+	if (!Point.IsValid())
+	{
+		return;
+	}
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		const FTutorialStep& Step = Data.Steps[Index];
+		if (Data.FindBeatIndex(Step.Beat) > Point.BeatIndex)
+		{
+			continue; // a later beat's step is never "behind"
+		}
+		const FRuntime& State = Runtime[Index];
+		if (State.State == ETutorialStepState::Idle && !State.bEverFinished && Step.bOnce && Step.Trigger.Type == ETutorialTriggerType::Volume)
+		{
+			const FRoutePoint Trigger = GetVolumeRoutePoint(Step.Trigger.Volume);
+			if (Trigger.IsValid() && Trigger.Key < Point.Key)
+			{
+				// The squad walked past that place without setting it off (a skipped beacon): the step never starts, but its
+				// unlocks apply and whatever follows it goes on.
+				PassStep(Index);
+			}
+		}
+		else if (TutorialRules::IsRunning(State.State) && !Step.Complete.Volume.IsNone())
+		{
+			const FRoutePoint Goal = GetVolumeRoutePoint(Step.Complete.Volume);
+			if (Goal.IsValid() && Goal.Key < Point.Key)
+			{
+				// "Go to X" and the squad is already past X: an objective is done, a card is dropped.
+				const int32 Mark = Transitions.Num();
+				Finish(Index, Step.Kind == ETutorialStepKind::Objective ? ETutorialStepState::Completed : ETutorialStepState::Skipped);
+				for (int32 Back = Mark; Back < Transitions.Num(); ++Back)
+				{
+					if (Transitions[Back].StepId == Step.Id && TutorialRules::IsFinished(Transitions[Back].To))
+					{
+						Transitions[Back].bPassed = true;
+						break;
+					}
+				}
+			}
+		}
+	}
+}
+
+void FTutorialStateMachine::ApplyArrival(FName VolumeId, FName BeatId)
+{
+	RegisterVolumeBeat(VolumeId, BeatId);
+	const FRoutePoint Point = VolumeId.IsNone() ? GetBeatStartPoint(Data.FindBeatIndex(BeatId)) : GetVolumeRoutePoint(VolumeId);
+	if (!Point.IsValid())
+	{
+		return;
+	}
+	if (Data.Beats.IsValidIndex(Point.BeatIndex) && Point.BeatIndex > CurrentBeatIndex)
+	{
+		StartBeat(Data.Beats[Point.BeatIndex].Id); // a later beat's place reached from any earlier beat
+	}
+	PassRouteBefore(Point);
 }
 
 void FTutorialStateMachine::ResetProgress()
@@ -238,14 +417,29 @@ void FTutorialStateMachine::Fire(int32 Index, bool bForce)
 	Enqueue(Index);
 }
 
-bool FTutorialStateMachine::IsEarlierBeatCard(int32 Index) const
+bool FTutorialStateMachine::IsEarlierBeatStep(int32 Index) const
 {
-	if (!Data.Steps.IsValidIndex(Index) || Data.Steps[Index].Kind != ETutorialStepKind::HintCard)
+	if (!Data.Steps.IsValidIndex(Index))
 	{
 		return false;
 	}
 	const int32 BeatIndex = Data.FindBeatIndex(Data.Steps[Index].Beat);
 	return BeatIndex != INDEX_NONE && CurrentBeatIndex != INDEX_NONE && BeatIndex < CurrentBeatIndex;
+}
+
+bool FTutorialStateMachine::IsEarlierBeatCard(int32 Index) const
+{
+	return IsEarlierBeatStep(Index) && Data.Steps[Index].Kind == ETutorialStepKind::HintCard;
+}
+
+void FTutorialStateMachine::DropEarlierBeatStep(int32 Index)
+{
+	if (Data.Steps[Index].Kind == ETutorialStepKind::HintCard)
+	{
+		DropEarlierBeatCard(Index);
+		return;
+	}
+	Finish(Index, ETutorialStepState::Skipped);
 }
 
 void FTutorialStateMachine::DropEarlierBeatCard(int32 Index)
@@ -326,10 +520,11 @@ void FTutorialStateMachine::CancelMatching(FName FinishedStep, FName EventName, 
 void FTutorialStateMachine::Enqueue(int32 Index)
 {
 	SetState(Index, ETutorialStepState::Queued);
-	if (Data.Steps[Index].Trigger.Type == ETutorialTriggerType::AfterStep && IsEarlierBeatCard(Index))
+	if (Data.Steps[Index].Trigger.Type == ETutorialTriggerType::AfterStep && IsEarlierBeatStep(Index))
 	{
-		// The next card of a chain whose beat is over (beacon 1 reached during the camera lesson): never shown now.
-		DropEarlierBeatCard(Index);
+		// The next step of a chain whose beat is over (beacon 1 reached during the camera lesson; rev 5f: also the walk-and-talks /
+		// objectives that would follow a step passed on the way): never shown now.
+		DropEarlierBeatStep(Index);
 		return;
 	}
 	if (IsCancelDue(Index))
@@ -630,14 +825,15 @@ void FTutorialStateMachine::HandleVolume(FName VolumeId, FName StepId, FName Bea
 		// Completions first, before a beat this volume starts drops the earlier beat's leftover cards (the walk card that asked
 		// for this very place is completed, not dropped). Only steps already running when this input came count it.
 		CountVolumeCompletions(VolumeId, SubjectId, RunningSnapshot());
-		CancelMatching(NAME_None, NAME_None, VolumeId);
 	}
-	if (!BeatId.IsNone())
+	// Rev 5f: monotonic progress by location - a later beat's / later step's place starts that beat and passes what lies behind.
+	if (!VolumeId.IsNone() || !BeatId.IsNone())
 	{
-		StartBeat(BeatId);
+		ApplyArrival(VolumeId, BeatId);
 	}
 	if (!VolumeId.IsNone())
 	{
+		CancelMatching(NAME_None, NAME_None, VolumeId); // after the beat start: its own talk about this place is dropped too
 		for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 		{
 			const FTutorialTrigger& Trigger = Data.Steps[Index].Trigger;
@@ -678,6 +874,31 @@ bool FTutorialStateMachine::StartBeat(FName BeatId, bool bAllowBackwards)
 		if (IsEarlierBeatCard(Index) && TutorialRules::IsRunning(Runtime[Index].State))
 		{
 			DropEarlierBeatCard(Index);
+		}
+	}
+	// Rev 5f (monotonic route): what the earlier beats still wait for at a PLACE is behind the squad now. Volume steps that never
+	// started are passed (their unlocks apply), "go to X" objectives are done, walk-and-talks still waiting for the speech slot
+	// are dropped (never played later). A radio / walk-and-talk on screen plays out; interaction objectives (an event / condition:
+	// share the heat packs, light the barrel) keep running in parallel - they block nothing of the new beat.
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		if (!IsEarlierBeatStep(Index))
+		{
+			continue;
+		}
+		const FTutorialStep& Step = Data.Steps[Index];
+		const ETutorialStepState State = Runtime[Index].State;
+		if (State == ETutorialStepState::Idle && !Runtime[Index].bEverFinished && Step.bOnce && Step.Trigger.Type == ETutorialTriggerType::Volume)
+		{
+			PassStep(Index);
+		}
+		else if (TutorialRules::IsRunning(State) && Step.Kind == ETutorialStepKind::Objective && !Step.Complete.Volume.IsNone())
+		{
+			Finish(Index, ETutorialStepState::Completed);
+		}
+		else if ((State == ETutorialStepState::Waiting || State == ETutorialStepState::Queued) && Step.Kind == ETutorialStepKind::WalkTalk)
+		{
+			CancelStep(Index);
 		}
 	}
 	FTutorialTransition& Transition = Transitions.AddDefaulted_GetRef();
@@ -888,6 +1109,18 @@ FTutorialProgress FTutorialStateMachine::ExportProgress() const
 		{
 			Progress.Pending.Add(Data.Steps[Index].Id);
 		}
+		// Rev 5f: how far a running step got, and who counted for any step (distinct_from of the others).
+		const bool bRunning = TutorialRules::IsRunning(State.State);
+		if ((bRunning && (State.Progress > 0 || State.HeldSeconds > 0.f || !State.CountedSubjects.IsEmpty())) || !State.Contributors.IsEmpty())
+		{
+			FTutorialStepProgress& Step = Progress.StepProgress.Add(Data.Steps[Index].Id);
+			Step.Progress = bRunning ? State.Progress : 0;
+			Step.HeldSeconds = bRunning ? State.HeldSeconds : 0.f;
+			Step.Subjects = bRunning ? State.CountedSubjects.Array() : TArray<FName>();
+			Step.Contributors = State.Contributors.Array();
+			Step.Subjects.Sort(FNameLexicalLess());
+			Step.Contributors.Sort(FNameLexicalLess());
+		}
 	}
 	return Progress;
 }
@@ -926,11 +1159,27 @@ void FTutorialStateMachine::ImportProgress(const FTutorialProgress& Progress)
 			}
 		}
 	}
+	// Rev 5f: who counted for which step (finished ones too: "distinct_from" of the steps still running).
+	for (const TPair<FName, FTutorialStepProgress>& Entry : Progress.StepProgress)
+	{
+		const int32 Index = IndexOf(Entry.Key);
+		if (Runtime.IsValidIndex(Index))
+		{
+			Runtime[Index].Contributors = TSet<FName>(Entry.Value.Contributors);
+		}
+	}
 	for (const FName StepId : Progress.Pending)
 	{
 		const int32 Index = IndexOf(StepId);
 		if (Runtime.IsValidIndex(Index) && Runtime[Index].State == ETutorialStepState::Idle)
 		{
+			// Rev 5f: the step goes on from where it was (two of three across the bridge stay counted), not from 0.
+			if (const FTutorialStepProgress* Saved = Progress.StepProgress.Find(StepId))
+			{
+				Runtime[Index].Progress = Saved->Progress;
+				Runtime[Index].HeldSeconds = Saved->HeldSeconds;
+				Runtime[Index].CountedSubjects = TSet<FName>(Saved->Subjects);
+			}
 			Enqueue(Index);
 		}
 	}

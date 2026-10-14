@@ -143,12 +143,12 @@ namespace EventBusSmoke
 		}
 
 		USaveGameSubsystem* Saves = World->GetSubsystem<USaveGameSubsystem>();
-		Check(State, Saves && Saves->SaveGame(TEXT("autosave_eventbus")) && Probe->Count(TEXT("saved")) == 1 && Probe->LastSlot == TEXT("autosave_eventbus"),
+		Check(State, Saves && Saves->SaveGame(TEXT("eventbus_smoke")) && Probe->Count(TEXT("saved")) == 1 && Probe->LastSlot == TEXT("eventbus_smoke"),
 			TEXT("game_saved with the slot"));
-		Check(State, Saves && Saves->LoadGame(TEXT("autosave_eventbus")) && Probe->Count(TEXT("loaded")) == 1, TEXT("game_loaded"));
+		Check(State, Saves && Saves->LoadGame(TEXT("eventbus_smoke")) && Probe->Count(TEXT("loaded")) == 1, TEXT("game_loaded"));
 		if (Saves)
 		{
-			Saves->DeleteSave(TEXT("autosave_eventbus"));
+			Saves->DeleteSave(TEXT("eventbus_smoke"));
 		}
 
 		Members[2]->HealthComponent->ApplyDirectHealthLoss(100000.f, TEXT("Smoke"));

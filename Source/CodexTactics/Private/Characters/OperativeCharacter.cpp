@@ -78,6 +78,7 @@ namespace
 #include "Camera/PlayerCameraManager.h"
 #include "GameFramework/PlayerController.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "NavigationSystem.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Data/TacticalHeatTuning.h"
 #include "Survival/TacticalHeatSubsystem.h"
@@ -617,6 +618,13 @@ EProneEntry AOperativeCharacter::DropProne()
 	{
 		Entry = EProneEntry::StopThenProne; // no dive clip (the pack is missing): the old way, stopped first
 	}
+	else if (Dive != EProneDive::None && !Clip->HasRootMotion())
+	{
+		// Rev 5f: the dive moves the capsule by the clip's root motion; a clip without it would dive in place and snap back.
+		UE_LOG(LogCodexTactics, Warning, TEXT("%s: dive clip %s has no root motion (enable Root Motion on it, or use the RM copies of "
+			"Scripts/Editor/create_prone_dive_root_motion_clips.py): stop, then prone"), *DisplayName.ToString(), *Clip->GetName());
+		Entry = EProneEntry::StopThenProne;
+	}
 	switch (Entry)
 	{
 	case EProneEntry::Refused:
@@ -630,25 +638,49 @@ EProneEntry AOperativeCharacter::DropProne()
 		break;
 	default:
 	{
-		// The dive: the anim instance sees ProneDive with the new stance and plays the clip; the capsule keeps the move.
+		// Rev 5f: the dive is ROOT MOTION (the clip carries the capsule through the movement component; the body never leaves it).
+		// He faces his run; the anim instance sees ProneDive with the new stance and plays the clip on the full-body slot.
 		const FVector Direction = GetVelocity().GetSafeNormal2D().IsNearlyZero() ? GetActorForwardVector().GetSafeNormal2D() : GetVelocity().GetSafeNormal2D();
-		const bool bHadOrder = bHasMoveOrder;
+		const float Rate = FMath::Max(Anim->StanceTransitionPlayRate, 0.1f);
 		ProneDive = Dive;
 		ProneDiveClip = Clip;
-		ProneDiveLength = Clip->GetPlayLength() / FMath::Max(Anim->StanceTransitionPlayRate, 0.1f);
+		ProneDiveLength = Clip->GetPlayLength() / Rate;
 		ProneDiveStartTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-		ProneDiveMeshBase = GetMesh()->GetRelativeLocation();
+		bProneDiveHadOrder = bHasMoveOrder;
+		ProneDiveGoal = LastMoveDestination;
+		SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
 		SetStance(EOperativeStance::Prone);
 		StanceSettleUntil = 0.f; // the dive itself moves him: no stand-still hold
-		if (!bHadOrder)
+		ProneDiveStart = GetActorLocation();
+		// How far the clip carries him (its root track through the mesh transform, as the movement component applies it) and how
+		// fast it enters; stretched by his momentum, shortened by the navmesh ahead (an obstacle / a ledge: a shorter slide).
+		const FTransform MeshTransform = GetMesh()->GetComponentTransform();
+		const float ClipTravel = static_cast<float>(MeshTransform.TransformVector(GetProneDiveRoot(Clip->GetPlayLength())).Size2D());
+		constexpr float EntryWindow = 0.2f;
+		const float ClipEntrySpeed = static_cast<float>(MeshTransform.TransformVector(GetProneDiveRoot(EntryWindow)).Size2D()) / EntryWindow * Rate;
+		const float WantedTravel = ClipTravel * FMath::Max(1.f, MovementConfig.ProneDiveMaxMomentumScale);
+		float AllowedTravel = WantedTravel;
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+		FNavLocation StartOnNav;
+		if (Nav && Nav->ProjectPointToNavigation(ProneDiveStart, StartOnNav, FVector(60.f, 60.f, 250.f)))
 		{
-			// Momentum without an order: the dive carries him forward by the clip's travel (on the navmesh), then he stops.
-			const float Travel = static_cast<float>(GetProneDiveRoot(Clip->GetPlayLength()).Size2D());
-			RequestMove(GetActorLocation() + Direction * Travel);
+			FVector Hit;
+			const FVector Wanted = StartOnNav.Location + Direction * WantedTravel;
+			if (Nav->NavigationRaycast(GetWorld(), StartOnNav.Location, Wanted, Hit))
+			{
+				AllowedTravel = static_cast<float>(FVector::Dist2D(StartOnNav.Location, Hit)) - GetCapsuleComponent()->GetScaledCapsuleRadius();
+			}
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("%s: prone dive from %s at %.0f cm/s (%s, %.2f s, %s)"), *DisplayName.ToString(),
-			Dive == EProneDive::FromRun ? TEXT("a run") : TEXT("a walk"), Speed, *Clip->GetName(), ProneDiveLength,
-			bHadOrder ? TEXT("crawls on to the goal") : TEXT("then stops"));
+		const float Scale = OperativeMovementRules::ComputeProneDiveTranslationScale(Speed, ClipEntrySpeed, MovementConfig.ProneDiveMaxMomentumScale,
+			ClipTravel, AllowedTravel);
+		ProneDiveSavedRootMotionScale = GetAnimRootMotionTranslationScale();
+		SetAnimRootMotionTranslationScale(Scale);
+		bProneDiveSavedWalkOffLedges = GetCharacterMovement()->bCanWalkOffLedges;
+		GetCharacterMovement()->bCanWalkOffLedges = false;
+		UE_LOG(LogCodexTactics, Display, TEXT("%s: prone dive from %s at %.0f cm/s (%s, %.2f s; clip %.0f cm entering at %.0f cm/s, x%.2f -> %.0f cm, "
+			"allowed %.0f cm; %s)"), *DisplayName.ToString(), Dive == EProneDive::FromRun ? TEXT("a run") : TEXT("a walk"), Speed, *Clip->GetName(),
+			ProneDiveLength, ClipTravel, ClipEntrySpeed, Scale, ClipTravel * Scale, AllowedTravel,
+			bProneDiveHadOrder ? TEXT("then crawls on if the goal is ahead") : TEXT("then stays"));
 		break;
 	}
 	}
@@ -675,26 +707,14 @@ void AOperativeCharacter::UpdateProneDive(float DeltaSeconds)
 	}
 	const UWorld* World = GetWorld();
 	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
-	const float Rate = Anim ? FMath::Max(Anim->StanceTransitionPlayRate, 0.1f) : 1.f;
 	const float Elapsed = World ? static_cast<float>(World->GetTimeSeconds() - ProneDiveStartTime) : ProneDiveLength;
-	const float Position = Anim && Anim->GetStanceTransitionPosition(ProneDiveClip.Get()) >= 0.f ? Anim->GetStanceTransitionPosition(ProneDiveClip.Get())
-		: Elapsed * Rate;
-	if (Stance != EOperativeStance::Prone || IsKnockedDown() || bInCover || Elapsed >= ProneDiveLength + 0.05f || !ProneDiveClip.IsValid())
+	// The clip starts on the next anim update; once it has stopped playing (or its time is up) the root motion is over.
+	const bool bClipPlaying = Anim && Anim->GetStanceTransitionPosition(ProneDiveClip.Get()) >= 0.f;
+	if (Stance != EOperativeStance::Prone || IsKnockedDown() || bInCover || !ProneDiveClip.IsValid() || Elapsed >= ProneDiveLength + 0.1f
+		|| (Elapsed > 0.3f && !bClipPlaying))
 	{
 		EndProneDive();
-		return;
 	}
-	// The capsule follows the move at the clip's root speed; the clip's own root travel is cancelled on the mesh, so the body
-	// is where the capsule is (root motion by hand: the clip has none enabled and is the user's asset).
-	const float Step = 0.05f;
-	const float RootSpeed = static_cast<float>((GetProneDiveRoot(Position + Step) - GetProneDiveRoot(Position)).Size2D()) / Step * Rate;
-	GetCharacterMovement()->MaxWalkSpeed = FMath::Max(RootSpeed, 10.f);
-	const FVector Root = GetProneDiveRoot(Position);
-	const FVector Cancel = GetMesh()->GetRelativeRotation().RotateVector(FVector(Root.X, Root.Y, 0.f)) * GetMesh()->GetRelativeScale3D().X;
-	FVector MeshLocation = GetMesh()->GetRelativeLocation();
-	MeshLocation.X = ProneDiveMeshBase.X - Cancel.X;
-	MeshLocation.Y = ProneDiveMeshBase.Y - Cancel.Y;
-	GetMesh()->SetRelativeLocation(MeshLocation);
 }
 
 void AOperativeCharacter::EndProneDive()
@@ -705,12 +725,22 @@ void AOperativeCharacter::EndProneDive()
 	}
 	ProneDive = EProneDive::None;
 	ProneDiveClip.Reset();
-	FVector MeshLocation = GetMesh()->GetRelativeLocation();
-	MeshLocation.X = ProneDiveMeshBase.X;
-	MeshLocation.Y = ProneDiveMeshBase.Y;
-	GetMesh()->SetRelativeLocation(MeshLocation);
+	SetAnimRootMotionTranslationScale(ProneDiveSavedRootMotionScale);
+	GetCharacterMovement()->bCanWalkOffLedges = bProneDiveSavedWalkOffLedges;
 	ApplyMovementParams(); // the crawl speed for the rest of the move
-	UE_LOG(LogCodexTactics, Display, TEXT("%s: prone dive done (%s)"), *DisplayName.ToString(), bHasMoveOrder ? TEXT("crawling on") : TEXT("lying"));
+	const float Travel = static_cast<float>(FVector::Dist2D(ProneDiveStart, GetActorLocation()));
+	const bool bCrawlOn = bHasMoveOrder && OperativeMovementRules::ShouldCrawlOnAfterDive(ProneDiveStart, GetActorLocation(), ProneDiveGoal,
+		MovementConfig.AcceptanceRadius);
+	if (bCrawlOn)
+	{
+		RequestMove(ProneDiveGoal); // a fresh path from where the dive ended (it may have slid past a corner of the old one)
+	}
+	else if (bHasMoveOrder)
+	{
+		StopOperative(); // the dive carried him to / past the goal
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("%s: prone dive done after %.0f cm (%s)"), *DisplayName.ToString(), Travel,
+		bCrawlOn ? TEXT("crawling on to the goal") : TEXT("lying where the dive ended"));
 }
 
 const FOperativeStanceShape& AOperativeCharacter::GetStanceShape(EOperativeStance InStance) const

@@ -37,7 +37,7 @@
       "lock": ["Stance.*", "Squad.*", "Posture.*", "Cover.*", "Object.*", "Item.*", "Inventory.*", "Loot.*", "Trap.*", "Deploy.*", "Attack.*",
         "Grenade.*", "Flare.*", "Weapon.*", "Time.*", "TB.*", "Vehicle.*", "View.*", "Order.WatchSector", "Order.Sprint"] },
     { "id": "A1", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A1" },
-    { "id": "A2", "lesson": true, "checkpoint": false, "title_id": "TUT_BEAT_A2",
+    { "id": "A2", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A2",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Order.Sprint"] },
     { "id": "A3", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A3",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Object.Relocate", "Object.LightBarrel",

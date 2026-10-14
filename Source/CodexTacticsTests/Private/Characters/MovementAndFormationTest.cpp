@@ -258,6 +258,32 @@ bool FMovementProneDiveTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+MOVEMENT_TEST(FMovementProneDiveScaleTest, "Movement.ProneDiveMomentum")
+bool FMovementProneDiveScaleTest::RunTest(const FString& Parameters)
+{
+	// Rev 5f (game designer 2026-10-14: "he stops dead, dives in place, then snaps back"): the dive carries him by root motion, stretched
+	// by his momentum (entry speed / the clip's entry speed, at most MaxMomentumScale) and shortened by what lies ahead.
+	using namespace OperativeMovementRules;
+	const FOperativeMovementConfig Config;
+	TestEqual(TEXT("momentum cap 1.4 (data: MovementConfig)"), Config.ProneDiveMaxMomentumScale, 1.4f);
+	TestEqual(TEXT("sprint 725 into the run clip (entering at 355 cm/s), open ground: capped momentum"),
+		ComputeProneDiveTranslationScale(725.f, 355.f, 1.4f, 344.f, 10000.f), 1.4f);
+	TestEqual(TEXT("a walk at the clip's own pace: the clip's travel"), ComputeProneDiveTranslationScale(190.f, 195.f, 1.4f, 311.f, 10000.f), 1.f);
+	TestTrue(TEXT("a slightly faster walk: a little farther"), FMath::IsNearlyEqual(ComputeProneDiveTranslationScale(234.f, 195.f, 1.4f, 311.f, 10000.f), 1.2f, 0.001f));
+	TestTrue(TEXT("a wall / the navmesh edge 2 m ahead: shortened to 2 m"),
+		FMath::IsNearlyEqual(ComputeProneDiveTranslationScale(725.f, 355.f, 1.4f, 344.f, 200.f) * 344.f, 200.f, 0.01f));
+	TestEqual(TEXT("blocked right in front: no slide"), ComputeProneDiveTranslationScale(725.f, 355.f, 1.4f, 344.f, -20.f), 0.f);
+	TestEqual(TEXT("no clip travel: the momentum only"), ComputeProneDiveTranslationScale(725.f, 355.f, 1.4f, 0.f, 100.f), 1.4f);
+	// After a dive on a move order: crawl on only while the goal is still ahead.
+	const FVector Start(0.f, 0.f, 0.f);
+	const FVector End(480.f, 0.f, 0.f);
+	TestTrue(TEXT("goal 10 m ahead: crawls on"), ShouldCrawlOnAfterDive(Start, End, FVector(1480.f, 0.f, 0.f), 50.f));
+	TestTrue(TEXT("goal ahead to the side (the path turns): crawls on"), ShouldCrawlOnAfterDive(Start, End, FVector(600.f, 400.f, 0.f), 50.f));
+	TestFalse(TEXT("goal reached by the dive: stays"), ShouldCrawlOnAfterDive(Start, End, FVector(500.f, 10.f, 0.f), 50.f));
+	TestFalse(TEXT("goal behind (the dive carried him past it): stays"), ShouldCrawlOnAfterDive(Start, End, FVector(300.f, 0.f, 0.f), 50.f));
+	return true;
+}
+
 #undef MOVEMENT_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

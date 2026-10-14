@@ -245,9 +245,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tutorial")
 	void DismissRetryPrompt() { bRetryPrompt = false; }
 
-	/** Saves the "checkpoint" slot now (beat start does it on its own). */
+	/**
+	 * Saves the "checkpoint" slot now (a beat with "checkpoint": true does it when it starts: the previous stage is done). Rev 5f:
+	 * the ONLY save the game writes on its own (no autosaves); never while a save is being loaded (IsLoadPending), never in the
+	 * fight (CanSaveNow), not in headless checks unless USaveGameSubsystem::bCheckpointsEnabled.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tutorial")
 	bool SaveCheckpoint();
+
+	/** A save waits to be applied to this world (F9 / Continue / LOAD reopened the map; UMissionSessionSubsystem::HasPendingLoad). */
+	bool IsLoadPending() const;
 
 	// --- Queries ----------------------------------------------------------------------------------------------------
 

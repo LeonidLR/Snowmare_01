@@ -21,8 +21,10 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FOnSaveAppliedNative, UWorld*, const FStrin
  * Loading restores them on the current level (LoadGame) or reopens the saved map first (LoadGameWithTravel, the
  * "Continue" / "Load Game" path of a menu).
  *
- * Save policy (user decision 2026-10-08): saving only outside combat (CanSaveNow); autosave right before a fight starts
- * (wave / ambush start, written with the pre-combat phase) and right after it ends (wave cleared / victory).
+ * Save policy (user decision 2026-10-08): saving only outside combat (CanSaveNow). Rev 5f (user decision 2026-10-14, after a
+ * save bug): NO automatic saves - the only saves are the tutorial checkpoints (UTutorialSubsystem::SaveCheckpoint, slot
+ * "checkpoint") and the player's own: F5 (QuickSave) and the pause menu's SAVE GAME (SaveToSlotWithMessage). Nothing else
+ * calls SaveGame; CodexTactics.Save.Policy.NoAutosave guards that. Legacy "autosave" files on disk are hidden (GetAllSaves).
  * Godot reference: Scripts/managers/save_manager.gd, main.gd _perform_quick_save / _on_save_slot_requested /
  * _on_load_slot_requested.
  */
@@ -38,8 +40,8 @@ public:
 	virtual void Deinitialize() override;
 
 	/**
-	 * Godot save_game: writes the slot unconditionally (the policy is checked by the player-facing entry points QuickSave /
-	 * SaveToSlotWithMessage and by the autosave). CustomTitle empty: the slot name, or "Autosave / Quicksave: <stage>".
+	 * Godot save_game: writes the slot unconditionally (the policy is checked by the callers: QuickSave / SaveToSlotWithMessage /
+	 * the tutorial checkpoint). CustomTitle empty: the slot name, or "Quicksave: <stage>" / "Checkpoint: <stage>".
 	 */
 	bool SaveGame(const FString& SlotName, const FString& CustomTitle = FString(), const FString& Author = TEXT("Commander"));
 
@@ -52,14 +54,14 @@ public:
 	 */
 	bool LoadGameWithTravel(const FString& SlotName);
 
-	/** Newest slot (any type) for "Continue"; empty without saves. */
+	/** Newest listed slot (checkpoint / quicksave / manual; never a legacy autosave) for "Continue"; empty without saves. */
 	FString GetContinueSlot() const;
 
 	bool HasSave(const FString& SlotName) const;
 	bool DeleteSave(const FString& SlotName) const;
 	bool GetSaveInfo(const FString& SlotName, FSaveSlotInfo& OutInfo) const;
-	/** Every slot, newest first (Godot get_all_saves). */
-	TArray<FSaveSlotInfo> GetAllSaves() const;
+	/** Every slot, newest first (Godot get_all_saves); rev 5f: legacy "autosave" files only with bIncludeHidden. */
+	TArray<FSaveSlotInfo> GetAllSaves(bool bIncludeHidden = false) const;
 	FString SuggestNextSlotName() const;
 
 	/** Save policy now (SaveGameRules::GetSaveBlockReason of the flow phase). */
@@ -72,8 +74,9 @@ public:
 	bool QuickSave();
 
 	/**
-	 * F9: reopens the newest save (GetContinueSlot, any type) with LoadGameWithTravel, so the level starts straight in the
-	 * saved state. Loading is always allowed (also in combat); feed line "No saves to load" without saves.
+	 * F9: reopens the newest QUICKSAVE or CHECKPOINT (SaveGameRules::PickQuickLoadIndex; rev 5f - manual saves are loaded from the
+	 * menu) with LoadGameWithTravel, so the level starts straight in the saved state. Loading is always allowed (also in combat);
+	 * feed line "No quicksave or checkpoint to load" without one.
 	 */
 	bool QuickLoad();
 
@@ -83,19 +86,15 @@ public:
 	/** Load from the dialog with the feed line (Godot _on_load_slot_requested). */
 	bool LoadFromSlotWithMessage(const FString& SlotName);
 
-	/** Writes the autosave slot for Moment (BeforeCombat: with the pre-combat phase). False when off or failed. */
-	bool Autosave(EAutosaveMoment Moment);
-
 	/**
-	 * Automatic saves on (default) — off for headless dev checks started with -ExecCmds (they must not write
-	 * Saved/SaveGames behind each other's back); a check that tests the autosave turns it on. CVar Codex.Save.Autosave 0
-	 * turns it off everywhere.
+	 * Tutorial checkpoints may be written (default) - off for headless dev checks started with -ExecCmds (they must not write
+	 * Saved/SaveGames behind each other's back) unless CVar Codex.Save.HeadlessCheckpoints is 1 (it survives a level travel); a
+	 * check that tests checkpoints turns it on. Rev 5f: there is no other automatic save.
 	 */
-	bool bAutosaveEnabled = true;
+	bool bCheckpointsEnabled = true;
 
-	/** Autosaves written in this world and the last one's moment (smokes). */
-	int32 GetAutosaveCount() const { return AutosaveCount; }
-	EAutosaveMoment GetLastAutosaveMoment() const { return LastAutosaveMoment; }
+	/** Saves written in this world (any slot, smokes: proves that nothing saves behind the player's back). */
+	int32 GetWrittenSaveCount() const { return WrittenSaveCount; }
 
 	/** Current stage for the save metadata (Godot compute_current_stage_name). */
 	FString GetCurrentStageName() const;
@@ -112,22 +111,12 @@ public:
 	FString SaveDirectoryOverride;
 
 private:
-	/** BeforeCombat autosave: the flow is already in the fight, the save records the moment before it. */
-	struct FPreCombatOverride
-	{
-		bool bActive = false;
-		bool bAmbush = false;
-		int32 WaveIndex = 1;
-	};
-
-	TSharedRef<FJsonObject> BuildSaveData(const FString& SlotName, const FString& Title, const FString& Author,
-		const FPreCombatOverride& PreCombat) const;
+	TSharedRef<FJsonObject> BuildSaveData(const FString& SlotName, const FString& Title, const FString& Author) const;
 	void ApplySaveData(const TSharedRef<FJsonObject>& Data);
-	bool WriteSave(const FString& SlotName, const FString& CustomTitle, const FString& Author, const FPreCombatOverride& PreCombat);
+	bool WriteSave(const FString& SlotName, const FString& CustomTitle, const FString& Author);
 	FString GetSavePath(const FString& SlotName) const;
 	void Post(const FString& Speaker, const FString& Text) const;
 
-	void HandleFlowTransition(ECodexGamePhase OldPhase, ECodexGamePhase NewPhase, ECodexCombatMode NewMode);
 	void ApplyPendingLoad();
 
 	/**
@@ -138,12 +127,10 @@ private:
 	void HideLoadCover();
 	void RemoveLoadCover();
 
-	FDelegateHandle FlowTransitionHandle;
 	FTimerHandle PendingLoadTimer;
 	FTimerHandle LoadCoverTimer;
 	TSharedPtr<class SWidget> LoadCoverWidget;
 	/** Platform time the cover fade-out started (< 0: fully opaque). */
 	double LoadCoverFadeStart = -1.0;
-	int32 AutosaveCount = 0;
-	EAutosaveMoment LastAutosaveMoment = EAutosaveMoment::None;
+	int32 WrittenSaveCount = 0;
 };

@@ -185,11 +185,14 @@ public:
 	/**
 	 * Rev 5e item 6 (user request 2026-10-14): a player's prone order, also while moving (OperativeMovementRules::DecideProneEntry
 	 * with MovementConfig.ProneDiveMinWalkSpeed / ProneDiveMinRunSpeed): standing and walking / sprinting fast enough he DIVES prone
-	 * on the move - the walk / run-to-prone clip (UOperativeAnimInstance::GetProneDiveClip) plays while the capsule follows his
-	 * move at the clip's root speed (the root translation is cancelled on the mesh; he stays on the navmesh by path following);
-	 * with a move order he crawls on to its goal afterwards, without one (momentum) the dive carries him forward by the clip's
-	 * length and he stops. Slower / crouched: he stops, then lies down in place. Still: in place. In cover, carrying, vaulting,
-	 * aboard or knocked down a moving body is refused as before. Turn-based stance changes stay on the grid (AP rules).
+	 * on the move - the walk / run-to-prone clip (UOperativeAnimInstance::GetProneDiveClip) plays with ROOT MOTION (rev 5f: the
+	 * clip's root travel moves the capsule through the CharacterMovementComponent - collision, floor, no walking off a ledge; the
+	 * body never leaves the capsule, so nothing snaps back), stretched by his momentum (MovementConfig.ProneDiveMaxMomentumScale)
+	 * and shortened by the navmesh ahead (OperativeMovementRules::ComputeProneDiveTranslationScale). After it: with a move order
+	 * whose goal is still ahead he crawls on to it, else he stays where the dive ended (ShouldCrawlOnAfterDive). A dive clip
+	 * without Enable Root Motion falls back to "stop, then lie down". Slower / crouched: he stops, then lies down in place. Still:
+	 * in place. In cover, carrying, vaulting, aboard or knocked down a moving body is refused as before. Turn-based stance
+	 * changes stay on the grid (AP rules).
 	 */
 	EProneEntry DropProne();
 
@@ -1765,16 +1768,20 @@ private:
 	/** World time (s) until which the stance change armed by SetStance holds him still (before the anim instance starts the clip). */
 	float StanceSettleUntil = 0.f;
 
-	/** Rev 5e item 6: the prone dive on the move (DropProne / UpdateProneDive). */
+	/** Rev 5e item 6 / rev 5f: the prone dive on the move with root motion (DropProne / UpdateProneDive). */
 	EProneDive ProneDive = EProneDive::None;
 	double ProneDiveStartTime = 0.0;
 	float ProneDiveLength = 0.f;
-	/** The mesh's relative XY at the dive start (the root translation of the clip is cancelled from it). */
-	FVector ProneDiveMeshBase = FVector::ZeroVector;
 	TWeakObjectPtr<UAnimSequenceBase> ProneDiveClip;
-	/** The dive drives the capsule along the move at the clip's root speed. */
+	/** Where the dive started, the move order it interrupted (goal) and the movement settings it changes for its length. */
+	FVector ProneDiveStart = FVector::ZeroVector;
+	FVector ProneDiveGoal = FVector::ZeroVector;
+	bool bProneDiveHadOrder = false;
+	float ProneDiveSavedRootMotionScale = 1.f;
+	bool bProneDiveSavedWalkOffLedges = true;
+	/** Ends the dive when its clip is over (or he is knocked down / in cover / stood up). */
 	void UpdateProneDive(float DeltaSeconds);
-	/** Ends the dive: the mesh back on its base, the crawl speed. */
+	/** Ends the dive: root motion scale and ledges restored, the crawl speed; crawls on to a goal still ahead, else stays. */
 	void EndProneDive();
 	/** Root bone translation of the dive clip at Time (component space), cm. */
 	FVector GetProneDiveRoot(float Time) const;

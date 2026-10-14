@@ -186,10 +186,14 @@ public:
 	bool bForceUnderFireForTesting = false;
 
 	/**
-	 * Units of Item handed from one squad mate to another (Give executed, not cracked on him) since the level started; runtime
-	 * only, not saved. The Demo 01 tutorial stat "heat_packs_given" (rev 5d: share the hut's heat packs) reads it.
+	 * Units of Item handed from one squad mate to another (Give executed, not cracked on him) since the level started. The Demo 01
+	 * tutorial stat "heat_packs_given" (rev 5d: share the hut's heat packs) reads it. Rev 5f: saved ("squad_transfer" in the
+	 * save, USaveGameSubsystem) - before, a load mid-lesson forgot the hand-over and the share lesson asked for another one.
 	 */
 	int32 GetHandedOverCount(ETransferItem InItem) const { return HandedOver.FindRef(InItem); }
+	const TMap<ETransferItem, int32>& GetHandedOverCounts() const { return HandedOver; }
+	/** Rev 5f: the counts as a save holds them (replaces the session's). */
+	void RestoreHandedOverCounts(const TMap<ETransferItem, int32>& Counts) { HandedOver = Counts; }
 
 private:
 	AOperativeCharacter* FindMate(const FVector& CursorPoint, AActor* HitActor, bool bAllowLeader) const;

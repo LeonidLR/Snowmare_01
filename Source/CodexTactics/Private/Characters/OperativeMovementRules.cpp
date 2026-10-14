@@ -85,4 +85,25 @@ namespace OperativeMovementRules
 		}
 		return EProneEntry::StopThenProne;
 	}
+
+	float ComputeProneDiveTranslationScale(float EntrySpeed, float ClipEntrySpeed, float MaxMomentumScale, float ClipTravel, float AllowedTravel)
+	{
+		const float Momentum = ClipEntrySpeed > KINDA_SMALL_NUMBER ? FMath::Clamp(EntrySpeed / ClipEntrySpeed, 1.f, FMath::Max(1.f, MaxMomentumScale)) : 1.f;
+		if (ClipTravel <= KINDA_SMALL_NUMBER)
+		{
+			return Momentum;
+		}
+		return FMath::Clamp(FMath::Min(Momentum, AllowedTravel / ClipTravel), 0.f, Momentum);
+	}
+
+	bool ShouldCrawlOnAfterDive(const FVector& DiveStart, const FVector& DiveEnd, const FVector& Goal, float AcceptanceRadius)
+	{
+		const FVector ToGoal = FVector(Goal.X - DiveEnd.X, Goal.Y - DiveEnd.Y, 0.f);
+		if (ToGoal.Size() <= AcceptanceRadius)
+		{
+			return false; // arrived
+		}
+		const FVector Direction = FVector(DiveEnd.X - DiveStart.X, DiveEnd.Y - DiveStart.Y, 0.f).GetSafeNormal();
+		return Direction.IsNearlyZero() || FVector::DotProduct(ToGoal, Direction) >= 0.f; // behind him: the dive carried him past it
+	}
 }

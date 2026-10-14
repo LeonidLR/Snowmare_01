@@ -95,6 +95,14 @@ struct CODEXTACTICS_API FOperativeMovementConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stance", meta = (ClampMin = "0"))
 	float ProneDiveMinRunSpeed = 75.f;
 
+	/**
+	 * Rev 5f (game designer 2026-10-14: "he must keep his momentum"): the dive's root motion is stretched by the entry speed over the
+	 * clip's own entry speed, up to this factor (1 = exactly the clip's travel: walk 3.1 m, run 3.4 m). The run clip enters at
+	 * ~3.5 m/s while a sprint is ~7 m/s: 1.4 lets a sprint dive slide ~4.8 m. Never more than the navmesh ahead allows.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stance", meta = (ClampMin = "1", ClampMax = "3"))
+	float ProneDiveMaxMomentumScale = 1.4f;
+
 	/** Acceleration, cm/s^2. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Acceleration", meta = (ClampMin = "0"))
 	float Acceleration = 1400.f;
@@ -166,4 +174,18 @@ namespace OperativeMovementRules
 	 */
 	CODEXTACTICS_API EProneEntry DecideProneEntry(const FOperativeMovementConfig& Config, EOperativeStance Stance, float Speed2D, bool bSprinting,
 		bool bHasMoveOrder, bool bBlocked);
+
+	/**
+	 * Rev 5f: the root-motion translation scale of a dive (ACharacter::SetAnimRootMotionTranslationScale). Momentum: EntrySpeed /
+	 * ClipEntrySpeed, clamped to [1, MaxMomentumScale]; then never more than AllowedTravel / ClipTravel (the navmesh / a wall ahead
+	 * shortens the slide - he never slides through an obstacle or off a ledge). 0 when nothing is allowed.
+	 */
+	CODEXTACTICS_API float ComputeProneDiveTranslationScale(float EntrySpeed, float ClipEntrySpeed, float MaxMomentumScale, float ClipTravel,
+		float AllowedTravel);
+
+	/**
+	 * Rev 5f: after a dive that interrupted a move order - true when the goal still lies ahead (not behind the dive direction
+	 * Start -> End, farther than AcceptanceRadius): he crawls on; false: the dive carried him there / past it, he stays.
+	 */
+	CODEXTACTICS_API bool ShouldCrawlOnAfterDive(const FVector& DiveStart, const FVector& DiveEnd, const FVector& Goal, float AcceptanceRadius);
 }

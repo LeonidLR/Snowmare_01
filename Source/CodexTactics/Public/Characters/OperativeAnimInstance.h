@@ -224,17 +224,21 @@ public:
 
 	/**
 	 * Rev 5e item 6 (user request 2026-10-14): prone while moving - the walk-to-prone / run-to-prone dives, full body. They play
-	 * instead of StandToProneAnimation when AOperativeCharacter::DropProne dives (GetProneDive). Empty = loaded at start from the
-	 * user's /Game/Crawl_MocapAnimPack/Animations/Transitions_Set/Crawl_from_Walk / Crawl_from_Run (the pack's own skeleton,
-	 * the same as the prone clips above - not the RTGT copies, which are on the UE5 Manny skeleton). Their root bone travels
-	 * ~3.1 / 3.4 m forward (no root motion enabled): AOperativeCharacter moves the capsule along at that speed and cancels the
-	 * root translation on the mesh.
+	 * instead of StandToProneAnimation when AOperativeCharacter::DropProne dives (GetProneDive). Rev 5f: they must have ROOT MOTION
+	 * (the clip's root travel moves the capsule; root locked on the first frame). Empty = loaded at start from the Claude-owned
+	 * copies /Game/Characters/Operatives/Anims/ProneDive/AS_Crawl_from_Walk_RM / AS_Crawl_from_Run_RM (made from the user's
+	 * /Game/Crawl_MocapAnimPack/Animations/Transitions_Set/Crawl_from_Walk / Crawl_from_Run by
+	 * Scripts/Editor/create_prone_dive_root_motion_clips.py with Enable Root Motion on; the root travels 3.1 / 3.4 m forward).
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
 	TObjectPtr<UAnimSequenceBase> WalkToProneAnimation;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
 	TObjectPtr<UAnimSequenceBase> RunToProneAnimation;
+
+	/** Rev 5f: blend-in of a dive clip, s (short: the dive's root motion is weighted by the montage while it blends in). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions", meta = (ClampMin = "0"))
+	float ProneDiveBlendInSeconds = 0.08f;
 
 	/** The dive going on now (None = no dive); for the AnimBP. */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")

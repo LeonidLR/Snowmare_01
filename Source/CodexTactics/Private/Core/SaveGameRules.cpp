@@ -20,9 +20,13 @@ FString SaveGameRules::SanitizeSlotName(const FString& Raw)
 FString SaveGameRules::GetSaveType(const FString& SlotName)
 {
 	const FString Lower = FText::FromString(SlotName).ToLower().ToString();
-	if (Lower.Contains(TEXT("auto")))
+	if (Lower.StartsWith(GetCheckpointSlotName()))
 	{
-		return TEXT("autosave");
+		return TEXT("checkpoint");
+	}
+	if (Lower.StartsWith(TEXT("auto")))
+	{
+		return TEXT("autosave"); // a legacy automatic save (rev 5f: nothing writes one any more)
 	}
 	if (Lower.Contains(TEXT("quick")) || Lower.Contains(TEXT("быстр")) /* legacy Russian slot names ("Быстрое") */) // cyrillic-ok: legacy Russian data
 	{
@@ -107,9 +111,46 @@ FString SaveGameRules::GetSquadSummary(const TArray<TPair<float, float>>& Health
 	return FString::Printf(TEXT("Operatives: %d/%d | HP: %d%%"), Alive, HealthAndMax.Num(), FMath::RoundToInt(TotalPct / HealthAndMax.Num()));
 }
 
-FString SaveGameRules::GetAutosaveSlotName()
+FString SaveGameRules::GetCheckpointSlotName()
 {
-	return TEXT("autosave");
+	return TEXT("checkpoint");
+}
+
+FString SaveGameRules::GetQuicksaveSlotName()
+{
+	return TEXT("quicksave");
+}
+
+bool SaveGameRules::IsListedSaveType(const FString& SaveType)
+{
+	return SaveType != TEXT("autosave");
+}
+
+FString SaveGameRules::GetSaveTypeLabel(const FString& SaveType)
+{
+	if (SaveType == TEXT("checkpoint"))
+	{
+		return TEXT("CHECKPOINT");
+	}
+	if (SaveType == TEXT("quicksave"))
+	{
+		return TEXT("QUICKSAVE");
+	}
+	return SaveType == TEXT("autosave") ? TEXT("OLD AUTOSAVE") : TEXT("SAVE");
+}
+
+int32 SaveGameRules::PickQuickLoadIndex(const TArray<FSaveSlotInfo>& Slots)
+{
+	int32 Best = INDEX_NONE;
+	for (int32 Index = 0; Index < Slots.Num(); ++Index)
+	{
+		const FString& Type = Slots[Index].SaveType;
+		if ((Type == TEXT("quicksave") || Type == TEXT("checkpoint")) && (Best == INDEX_NONE || Slots[Index].Timestamp > Slots[Best].Timestamp))
+		{
+			Best = Index;
+		}
+	}
+	return Best;
 }
 
 ESaveBlockReason SaveGameRules::GetSaveBlockReason(ECodexGamePhase Phase)
@@ -140,19 +181,6 @@ FText SaveGameRules::GetSaveBlockText(ESaveBlockReason Reason)
 	default:
 		return FText::GetEmpty();
 	}
-}
-
-EAutosaveMoment SaveGameRules::GetAutosaveMoment(ECodexGamePhase OldPhase, ECodexGamePhase NewPhase)
-{
-	if (NewPhase == ECodexGamePhase::WaveCombat && OldPhase != ECodexGamePhase::WaveCombat && OldPhase != ECodexGamePhase::GameOver)
-	{
-		return EAutosaveMoment::BeforeCombat;
-	}
-	if (NewPhase == ECodexGamePhase::WaveCleared && OldPhase == ECodexGamePhase::WaveCombat)
-	{
-		return EAutosaveMoment::AfterCombat;
-	}
-	return EAutosaveMoment::None;
 }
 
 FSaveLoadFlow SaveGameRules::ResolveLoadFlow(int32 Version, ECodexGamePhase SavedPhase, bool bCombatUnlocked, bool bPreparationActive,
