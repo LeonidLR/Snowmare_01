@@ -5,6 +5,8 @@ Keep it current: every commit that adds / changes a system updates §5 (system m
 
 Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 
+**Project status report (non-technical, for planning): `docs/port/PROJECT_STATUS_2026-10-14.md`.**
+
 ---
 
 ## 1. Read first (in this order)

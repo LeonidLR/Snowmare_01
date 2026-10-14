@@ -1,5 +1,7 @@
 # Tandem: Claude (code, logic, animation) + Gemini (optimization, shaders)
 
+Project status for planning (2026-10-14): `docs/port/PROJECT_STATUS_2026-10-14.md`.
+
 ## Roles (user decision 2026-10-01 — replaces the 2026-09-28 architect / implementer split)
 
 | | Claude | Gemini |
