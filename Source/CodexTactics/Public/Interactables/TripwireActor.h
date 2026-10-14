@@ -4,6 +4,7 @@
 #include "Interactables/InteractableActor.h"
 #include "Interactables/TripwireRules.h"
 #include "NavAreas/NavArea.h"
+#include "NavFilters/NavigationQueryFilter.h"
 #include "TripwireActor.generated.h"
 
 class UBoxComponent;
@@ -12,8 +13,10 @@ class UNavModifierComponent;
 class UStaticMeshComponent;
 
 /**
- * Navmesh area along an armed tripwire: costly for the squad's default query filter (operatives path around their own
- * wires, Sprint 09-C), cost 1 for the enemies (UNavFilter_NoVault overrides it: they do not know about it).
+ * Navmesh area over a KNOWN trap: an armed tripwire the squad knows of (its own / a spotted PMC wire) and, since rev 5e, a
+ * spotted / squad mine. Costly for the squad's default query filter, cost 1 for the enemies (UNavFilter_NoVault overrides
+ * it: they do not know about it). Rev 5e (game designer 2026-10-14): the operatives use the costly filter only in the squad
+ * AUTO mode (TripwireRules::ChooseOperativeMoveFilter); in player control their moves take the *TrapLiteral filters below.
  */
 UCLASS()
 class CODEXTACTICS_API UNavArea_Tripwire : public UNavArea
@@ -22,6 +25,26 @@ class CODEXTACTICS_API UNavArea_Tripwire : public UNavArea
 
 public:
 	UNavArea_Tripwire();
+};
+
+/** Rev 5e: player control, prone - known traps cost nothing (the order is literal: he crawls / walks where he was sent). */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_TrapLiteral : public UNavigationQueryFilter
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_TrapLiteral();
+};
+
+/** Rev 5e: player control, standing / crouched - crawl-only areas closed (UNavFilter_NoCrawl) and known traps cost nothing. */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_NoCrawlTrapLiteral : public UNavigationQueryFilter
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_NoCrawlTrapLiteral();
 };
 
 /** Who rigged a wire: the squad (friendly fire on everyone) or the PMC (a level trap that only operatives set off). */
@@ -138,6 +161,12 @@ public:
 	/** Shows a hidden PMC wire; with a Spotter the squad stops and he warns (the mine rule). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tripwire")
 	void Reveal(AOperativeCharacter* Spotter = nullptr);
+
+	/**
+	 * Rev 5e: the armed, spotted, not-preview wire whose band (TripwireRules::ClickSnapCm) contains Point (ground level, within
+	 * 1 m in height): a click there means the wire (discoverability - the wire is a thin bar). nullptr when none.
+	 */
+	static ATripwireActor* FindClickableWireNear(const UWorld* World, const FVector& Point);
 
 	/** Who may disarm it (squad wire: the Medic-Sapper; PMC wire: anyone). */
 	bool CanBeDisarmedBy(const AOperativeCharacter* Operative) const;

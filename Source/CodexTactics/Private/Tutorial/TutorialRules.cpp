@@ -316,7 +316,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		const FString Where = TEXT("step ") + Id;
 		WarnUnknownKeys(Object, { TEXT("id"), TEXT("beat"), TEXT("kind"), TEXT("text_id"), TEXT("keys"), TEXT("trigger"), TEXT("complete"),
 			TEXT("once"), TEXT("skippable"), TEXT("blocking"), TEXT("lines"), TEXT("condition"), TEXT("lock"), TEXT("unlock"), TEXT("action"),
-			TEXT("actions"), TEXT("focus"), TEXT("precredit") }, Where, OutWarnings);
+			TEXT("actions"), TEXT("focus"), TEXT("precredit"), TEXT("cancel_on") }, Where, OutWarnings);
 		FTutorialStep Step;
 		Step.Id = FName(*Id);
 		Step.Beat = FName(*JsonString(Object, TEXT("beat")));
@@ -433,6 +433,26 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			Action.MinLevel = FMath::Clamp(static_cast<float>(JsonNumber(ActionObject, TEXT("min_level"), 0.0)), 0.f, 100.f);
 			Step.Actions.Add(Action);
 		}
+		// Rev 5e: "cancel_on": { "step": id | [ids], "event": pattern, "volume": id | [ids] } (FTutorialCancelOn).
+		const TSharedPtr<FJsonObject>* CancelObject = nullptr;
+		if (Object->TryGetObjectField(TEXT("cancel_on"), CancelObject))
+		{
+			const TSharedPtr<FJsonObject> Cancel = *CancelObject;
+			WarnUnknownKeys(Cancel, { TEXT("step"), TEXT("event"), TEXT("volume") }, Where + TEXT(" cancel_on"), OutWarnings);
+			for (const FString& Other : JsonStrings(Cancel, TEXT("step")))
+			{
+				Step.CancelOn.Steps.AddUnique(FName(*Other));
+			}
+			Step.CancelOn.Event = JsonString(Cancel, TEXT("event"));
+			for (const FString& Volume : JsonStrings(Cancel, TEXT("volume")))
+			{
+				Step.CancelOn.Volumes.AddUnique(FName(*Volume));
+			}
+			if (!Step.CancelOn.IsSet())
+			{
+				OutWarnings.Add(Where + TEXT(": \"cancel_on\" names no step / event / volume"));
+			}
+		}
 		Step.Focus = FName(*JsonString(Object, TEXT("focus")));
 		if (!Step.Focus.IsNone() && !IsKnownFocus(Step.Focus))
 		{
@@ -510,6 +530,14 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			if (OutData.FindStepIndex(Other) == INDEX_NONE || Other == Step.Id)
 			{
 				OutError = FString::Printf(TEXT("step %s: complete \"distinct_from\" names an unknown step \"%s\""), *Step.Id.ToString(), *Other.ToString());
+				return false;
+			}
+		}
+		for (const FName Other : Step.CancelOn.Steps)
+		{
+			if (OutData.FindStepIndex(Other) == INDEX_NONE || Other == Step.Id)
+			{
+				OutError = FString::Printf(TEXT("step %s: \"cancel_on\" names an unknown step \"%s\""), *Step.Id.ToString(), *Other.ToString());
 				return false;
 			}
 		}

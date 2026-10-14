@@ -254,9 +254,9 @@ namespace CoverFacingRules
 	bool FindPeekEdge(const FCoverSlot& Current, const FVector& Click, const FCoverSlot* Probe, ECoverFacing& OutSide, float& OutEdgeAlongCm,
 		const FCoverPeekConfig& Config)
 	{
-		if (!Current.IsValid() || Current.Height != ECoverHeight::HighCover)
+		if (!Current.IsValid())
 		{
-			return false;
+			return false; // rev 5e: high AND low cover (the crouched corner stance round the end of a low wall)
 		}
 		const float Depth = DepthInFrontOfWall(Current, Click);
 		if (Depth > Config.MaxFrontCm || Depth < -Config.MaxBehindCm)
@@ -283,7 +283,7 @@ namespace CoverFacingRules
 			}
 		};
 		AddEdges(Current, 0.f);
-		if (Probe && Probe->IsValid() && Probe->Height == ECoverHeight::HighCover
+		if (Probe && Probe->IsValid() && Probe->Height == Current.Height
 			&& FVector::DotProduct(Probe->WallNormal.GetSafeNormal2D(), Current.WallNormal.GetSafeNormal2D()) > 0.9f)
 		{
 			AddEdges(*Probe, static_cast<float>(FVector::DotProduct(Probe->WorldLocation - Current.WorldLocation, Right)));

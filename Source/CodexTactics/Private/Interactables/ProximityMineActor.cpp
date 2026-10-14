@@ -14,6 +14,8 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/RelocationSubsystem.h"
+#include "Interactables/TripwireActor.h"
+#include "NavModifierComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -98,6 +100,24 @@ void AProximityMineActor::UpdateVisuals()
 	{
 		Material->SetVectorParameterValue(TEXT("Color"), bPlacedBySquad ? SquadColor : HostileColor);
 	}
+	UpdateKnownTrapNav();
+}
+
+void AProximityMineActor::UpdateKnownTrapNav()
+{
+	const bool bKnown = bRevealed && bTrapped && !bDetonated && (HasActorBegunPlay() || IsActorBeginningPlay()) && !IsActorBeingDestroyed();
+	if (bKnown && !KnownTrapNav)
+	{
+		KnownTrapNav = NewObject<UNavModifierComponent>(this);
+		KnownTrapNav->SetAreaClass(UNavArea_Tripwire::StaticClass());
+		KnownTrapNav->FailsafeExtent = FVector(TriggerRadius + 20.f, TriggerRadius + 20.f, 60.f);
+		KnownTrapNav->RegisterComponent();
+	}
+	else if (!bKnown && KnownTrapNav)
+	{
+		KnownTrapNav->DestroyComponent();
+		KnownTrapNav = nullptr;
+	}
 }
 
 void AProximityMineActor::Tick(float DeltaSeconds)
@@ -119,6 +139,10 @@ void AProximityMineActor::Tick(float DeltaSeconds)
 	}
 	if (!bTrapped)
 	{
+		if (KnownTrapNav)
+		{
+			UpdateKnownTrapNav(); // defused: no trap any more
+		}
 		return;
 	}
 	if (!bRevealed)

@@ -5,6 +5,9 @@
 // ABP_Operative, crouch -> prone and prone -> standing play their transition clips and a prone shot plays the
 // full-body prone fire clip. Then (user decision 2026-10-01): a crawling operative told to crouch stops first and
 // rises in place; a sprint order (double click) to a prone operative stands him up in place, then he runs.
+// Rev 5e item 6 (user request 2026-10-14): prone on the move - walking (>= 30 cm/s) the prone order dives with the walk clip
+// (Crawl_from_Walk) without stopping, the capsule keeps going and he crawls on to the goal; sprinting (>= 75 cm/s) the run
+// clip (Crawl_from_Run); walking slower than 30 cm/s the old way: he stops, then lies down in place (Crawl_from_Act).
 
 #include "CoreMinimal.h"
 
@@ -18,6 +21,8 @@
 #include "CodexTactics.h"
 #include "Debug/SmokeUtils.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "NavigationSystem.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "TimerManager.h"
@@ -38,6 +43,11 @@ namespace StanceSmoke
 		float FireMinPelvis = TNumericLimits<float>::Max();
 		float FireMaxPelvis = 0.f;
 		FString FireSamples;
+		/** Rev 5e dive passes. */
+		FVector DiveStart = FVector::ZeroVector;
+		float DiveSpeedAtOrder = 0.f;
+		EProneEntry DiveEntry = EProneEntry::InPlace;
+		float MinSpeedDuringDive = TNumericLimits<float>::Max();
 	};
 
 	/** Pelvis above the feet stays below this while lying (lying ~15 cm, crouched ~50, standing ~90). */
@@ -210,6 +220,115 @@ namespace StanceSmoke
 		case 11:
 		case 15:
 		case 18:
+			return false;
+		// --- Rev 5e item 6: prone on the move ---
+		case 20:
+			Check(State, Leader, EOperativeStance::Standing);
+			State.DiveStart = Leader->GetActorLocation();
+			Leader->OrderMoveTo(SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Leader->GetActorForwardVector() * 1500.f), false);
+			return false;
+		case 21:
+		{
+			// Walking (~220 cm/s): the prone order dives on the move.
+			State.DiveSpeedAtOrder = static_cast<float>(Leader->GetVelocity().Size2D());
+			State.DiveStart = Leader->GetActorLocation();
+			State.DiveEntry = Leader->DropProne();
+			State.MinSpeedDuringDive = TNumericLimits<float>::Max();
+			CheckFullBodyClipSoon(World, State, Leader, TEXT("walk->prone dive"), [](const UOperativeAnimInstance& Anim) { return Anim.WalkToProneAnimation.Get(); });
+			TWeakObjectPtr<AOperativeCharacter> WeakLeader(Leader);
+			TSharedRef<FTimerHandle> Sampler = MakeShared<FTimerHandle>();
+			TSharedRef<int32> Ticks = MakeShared<int32>(0);
+			World->GetTimerManager().SetTimer(*Sampler, FTimerDelegate::CreateLambda([&State, WeakLeader, Sampler, Ticks, World]()
+			{
+				const AOperativeCharacter* L = WeakLeader.Get();
+				if (!L || ++*Ticks > 20)
+				{
+					World->GetTimerManager().ClearTimer(*Sampler);
+					return;
+				}
+				State.MinSpeedDuringDive = FMath::Min(State.MinSpeedDuringDive, static_cast<float>(L->GetVelocity().Size2D()));
+			}), 0.05f, true);
+			const bool bOk = State.DiveEntry == EProneEntry::DiveFromWalk && Leader->GetStance() == EOperativeStance::Prone
+				&& Leader->GetProneDive() == EProneDive::FromWalk && State.DiveSpeedAtOrder >= Leader->MovementConfig.ProneDiveMinWalkSpeed;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke walk %.0f cm/s -> prone order: entry %d, dive %d, stance prone %d -> %s"), State.DiveSpeedAtOrder,
+				static_cast<int32>(State.DiveEntry), static_cast<int32>(Leader->GetProneDive()), Leader->GetStance() == EOperativeStance::Prone ? 1 : 0,
+				bOk ? TEXT("ok") : TEXT("BAD"));
+			State.bOk &= bOk;
+			return false;
+		}
+		case 23:
+		{
+			const float Moved = static_cast<float>(FVector::Dist2D(Leader->GetActorLocation(), State.DiveStart));
+			const bool bOk = Leader->GetStance() == EOperativeStance::Prone && !Leader->IsProneDiving() && Moved > 120.f && State.MinSpeedDuringDive > 20.f
+				&& FMath::IsNearlyEqual(FeetZ(Leader), State.StartFeetZ, 15.f);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke walk dive: no stop (min speed %.0f cm/s during the clip), carried %.0f cm in 2 s, dive over %d, still on his order (moving %d) -> %s"),
+				State.MinSpeedDuringDive, Moved, Leader->IsProneDiving() ? 0 : 1, Leader->IsMoving() ? 1 : 0, bOk ? TEXT("ok") : TEXT("BAD"));
+			State.bOk &= bOk;
+			Leader->StopOperative();
+			Leader->SetStance(EOperativeStance::Standing);
+			return false;
+		}
+		case 26:
+			Check(State, Leader, EOperativeStance::Standing);
+			Leader->OrderMoveTo(SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() - Leader->GetActorForwardVector() * 1800.f), true);
+			return false;
+		case 27:
+		{
+			// Sprinting: the run dive.
+			State.DiveSpeedAtOrder = static_cast<float>(Leader->GetVelocity().Size2D());
+			const bool bSprinting = Leader->IsSprinting();
+			State.DiveStart = Leader->GetActorLocation();
+			State.DiveEntry = Leader->DropProne();
+			CheckFullBodyClipSoon(World, State, Leader, TEXT("run->prone dive"), [](const UOperativeAnimInstance& Anim) { return Anim.RunToProneAnimation.Get(); });
+			const bool bOk = bSprinting && State.DiveEntry == EProneEntry::DiveFromRun && Leader->GetProneDive() == EProneDive::FromRun;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke sprint %.0f cm/s (sprinting %d) -> prone order: run dive %d -> %s"), State.DiveSpeedAtOrder, bSprinting ? 1 : 0,
+				Leader->GetProneDive() == EProneDive::FromRun ? 1 : 0, bOk ? TEXT("ok") : TEXT("BAD"));
+			State.bOk &= bOk;
+			return false;
+		}
+		case 29:
+		{
+			const float Moved = static_cast<float>(FVector::Dist2D(Leader->GetActorLocation(), State.DiveStart));
+			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+			FNavLocation OnNav;
+			const bool bOnNav = Nav && Nav->ProjectPointToNavigation(Leader->GetActorLocation(), OnNav, FVector(50.f, 50.f, 200.f));
+			const bool bOk = Leader->GetStance() == EOperativeStance::Prone && !Leader->IsProneDiving() && Moved > 150.f && bOnNav;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke run dive: prone, carried %.0f cm, on the navmesh %d -> %s"), Moved, bOnNav ? 1 : 0, bOk ? TEXT("ok") : TEXT("BAD"));
+			State.bOk &= bOk;
+			Leader->StopOperative();
+			Leader->SetStance(EOperativeStance::Standing);
+			return false;
+		}
+		case 32:
+			Check(State, Leader, EOperativeStance::Standing);
+			Leader->OrderMoveTo(SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Leader->GetActorForwardVector() * 600.f), false);
+			Leader->GetCharacterMovement()->MaxWalkSpeed = 20.f; // a slow walk, below the 30 cm/s dive threshold
+			return false;
+		case 33:
+		{
+			Leader->GetCharacterMovement()->MaxWalkSpeed = 20.f;
+			State.DiveSpeedAtOrder = static_cast<float>(Leader->GetVelocity().Size2D());
+			State.DiveEntry = Leader->DropProne();
+			CheckFullBodyClipSoon(World, State, Leader, TEXT("slow walk->stop->prone"), [](const UOperativeAnimInstance& Anim) { return Anim.StandToProneAnimation.Get(); });
+			const bool bOk = State.DiveEntry == EProneEntry::StopThenProne && !Leader->IsProneDiving() && !Leader->IsMoving()
+				&& Leader->GetStance() == EOperativeStance::Prone;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke slow walk %.0f cm/s -> prone order: stopped first, lies down in place (entry %d) -> %s"),
+				State.DiveSpeedAtOrder, static_cast<int32>(State.DiveEntry), bOk ? TEXT("ok") : TEXT("BAD"));
+			State.bOk &= bOk;
+			return false;
+		}
+		case 35:
+			Leader->SetStance(EOperativeStance::Standing);
+			return false;
+		case 22:
+		case 24:
+		case 25:
+		case 28:
+		case 30:
+		case 31:
+		case 34:
+		case 36:
+		case 37:
 			return false;
 		default:
 			Check(State, Leader, EOperativeStance::Standing);

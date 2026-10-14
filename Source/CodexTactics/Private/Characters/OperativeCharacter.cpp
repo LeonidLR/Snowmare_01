@@ -14,6 +14,8 @@
 #include "Characters/VaultRules.h"
 #include "Interactables/VaultNavigation.h"
 #include "Level/CrawlGapActor.h"
+#include "Interactables/TripwireActor.h"
+#include "Interactables/TripwireRules.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -61,6 +63,7 @@ namespace
 #include "EngineUtils.h"
 #include "Characters/FacingRules.h"
 #include "Characters/OperativeAnimInstance.h"
+#include "Animation/AnimSequence.h"
 #include "Characters/AimOffsetRules.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
@@ -480,7 +483,17 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& Destinatio
 	}
 	// Low fences (ACrawlGapActor, 2026-10-13): only a prone body may path through a crawl-only area; standing / crouched the
 	// path goes round (or ends at the fence as a partial path, where the fence refuses him with the "go prone" hint).
-	const TSubclassOf<UNavigationQueryFilter> Filter = Stance == EOperativeStance::Prone ? nullptr : UNavFilter_NoCrawl::StaticClass();
+	// Known traps (rev 5e, game designer 2026-10-14): only the squad AUTO mode (Ctrl+T) paths round a spotted / own wire or mine;
+	// a player's order is literal - through the wire if that is the way (TripwireRules::ChooseOperativeMoveFilter).
+	const USquadSubsystem* MoveSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	TSubclassOf<UNavigationQueryFilter> Filter;
+	switch (TripwireRules::ChooseOperativeMoveFilter(Stance == EOperativeStance::Prone, MoveSquad && MoveSquad->IsAutonomousSquadCombat()))
+	{
+	case TripwireRules::EOperativeMoveFilter::NoCrawl: Filter = UNavFilter_NoCrawl::StaticClass(); break;
+	case TripwireRules::EOperativeMoveFilter::TrapLiteral: Filter = UNavFilter_TrapLiteral::StaticClass(); break;
+	case TripwireRules::EOperativeMoveFilter::NoCrawlTrapLiteral: Filter = UNavFilter_NoCrawlTrapLiteral::StaticClass(); break;
+	default: break;
+	}
 	const EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
 		Destination, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
 		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, Filter);
@@ -590,6 +603,114 @@ void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 		*GetStanceDisplayName(OldStance).ToString(), *GetStanceDisplayName(Stance).ToString());
 	OnStanceChanged.Broadcast(this, OldStance, Stance);
 	ReceiveStanceChanged(OldStance, Stance);
+}
+
+EProneEntry AOperativeCharacter::DropProne()
+{
+	const float Speed = static_cast<float>(GetVelocity().Size2D());
+	const bool bBlocked = bInCover || bHasPendingCover || bCarrying || bVaulting || IsKnockedDown() || VehicleQueries::IsMounted(this);
+	EProneEntry Entry = OperativeMovementRules::DecideProneEntry(MovementConfig, Stance, Speed, bSprinting, bHasMoveOrder, bBlocked);
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	const EProneDive Dive = Entry == EProneEntry::DiveFromRun ? EProneDive::FromRun : Entry == EProneEntry::DiveFromWalk ? EProneDive::FromWalk : EProneDive::None;
+	UAnimSequenceBase* Clip = Anim ? Anim->GetProneDiveClip(Dive) : nullptr;
+	if (Dive != EProneDive::None && !Clip)
+	{
+		Entry = EProneEntry::StopThenProne; // no dive clip (the pack is missing): the old way, stopped first
+	}
+	switch (Entry)
+	{
+	case EProneEntry::Refused:
+		return Entry;
+	case EProneEntry::StopThenProne:
+		StopOperative();
+		SetStance(EOperativeStance::Prone);
+		break;
+	case EProneEntry::InPlace:
+		SetStance(EOperativeStance::Prone);
+		break;
+	default:
+	{
+		// The dive: the anim instance sees ProneDive with the new stance and plays the clip; the capsule keeps the move.
+		const FVector Direction = GetVelocity().GetSafeNormal2D().IsNearlyZero() ? GetActorForwardVector().GetSafeNormal2D() : GetVelocity().GetSafeNormal2D();
+		const bool bHadOrder = bHasMoveOrder;
+		ProneDive = Dive;
+		ProneDiveClip = Clip;
+		ProneDiveLength = Clip->GetPlayLength() / FMath::Max(Anim->StanceTransitionPlayRate, 0.1f);
+		ProneDiveStartTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+		ProneDiveMeshBase = GetMesh()->GetRelativeLocation();
+		SetStance(EOperativeStance::Prone);
+		StanceSettleUntil = 0.f; // the dive itself moves him: no stand-still hold
+		if (!bHadOrder)
+		{
+			// Momentum without an order: the dive carries him forward by the clip's travel (on the navmesh), then he stops.
+			const float Travel = static_cast<float>(GetProneDiveRoot(Clip->GetPlayLength()).Size2D());
+			RequestMove(GetActorLocation() + Direction * Travel);
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("%s: prone dive from %s at %.0f cm/s (%s, %.2f s, %s)"), *DisplayName.ToString(),
+			Dive == EProneDive::FromRun ? TEXT("a run") : TEXT("a walk"), Speed, *Clip->GetName(), ProneDiveLength,
+			bHadOrder ? TEXT("crawls on to the goal") : TEXT("then stops"));
+		break;
+	}
+	}
+	return Entry;
+}
+
+FVector AOperativeCharacter::GetProneDiveRoot(float Time) const
+{
+	const UAnimSequence* Sequence = Cast<UAnimSequence>(ProneDiveClip.Get());
+	if (!Sequence)
+	{
+		return FVector::ZeroVector;
+	}
+	const FAnimExtractContext Start(0.0);
+	const FAnimExtractContext Now(static_cast<double>(FMath::Clamp(Time, 0.f, Sequence->GetPlayLength())));
+	return Sequence->ExtractRootTrackTransform(Now, nullptr).GetTranslation() - Sequence->ExtractRootTrackTransform(Start, nullptr).GetTranslation();
+}
+
+void AOperativeCharacter::UpdateProneDive(float DeltaSeconds)
+{
+	if (ProneDive == EProneDive::None)
+	{
+		return;
+	}
+	const UWorld* World = GetWorld();
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	const float Rate = Anim ? FMath::Max(Anim->StanceTransitionPlayRate, 0.1f) : 1.f;
+	const float Elapsed = World ? static_cast<float>(World->GetTimeSeconds() - ProneDiveStartTime) : ProneDiveLength;
+	const float Position = Anim && Anim->GetStanceTransitionPosition(ProneDiveClip.Get()) >= 0.f ? Anim->GetStanceTransitionPosition(ProneDiveClip.Get())
+		: Elapsed * Rate;
+	if (Stance != EOperativeStance::Prone || IsKnockedDown() || bInCover || Elapsed >= ProneDiveLength + 0.05f || !ProneDiveClip.IsValid())
+	{
+		EndProneDive();
+		return;
+	}
+	// The capsule follows the move at the clip's root speed; the clip's own root travel is cancelled on the mesh, so the body
+	// is where the capsule is (root motion by hand: the clip has none enabled and is the user's asset).
+	const float Step = 0.05f;
+	const float RootSpeed = static_cast<float>((GetProneDiveRoot(Position + Step) - GetProneDiveRoot(Position)).Size2D()) / Step * Rate;
+	GetCharacterMovement()->MaxWalkSpeed = FMath::Max(RootSpeed, 10.f);
+	const FVector Root = GetProneDiveRoot(Position);
+	const FVector Cancel = GetMesh()->GetRelativeRotation().RotateVector(FVector(Root.X, Root.Y, 0.f)) * GetMesh()->GetRelativeScale3D().X;
+	FVector MeshLocation = GetMesh()->GetRelativeLocation();
+	MeshLocation.X = ProneDiveMeshBase.X - Cancel.X;
+	MeshLocation.Y = ProneDiveMeshBase.Y - Cancel.Y;
+	GetMesh()->SetRelativeLocation(MeshLocation);
+}
+
+void AOperativeCharacter::EndProneDive()
+{
+	if (ProneDive == EProneDive::None)
+	{
+		return;
+	}
+	ProneDive = EProneDive::None;
+	ProneDiveClip.Reset();
+	FVector MeshLocation = GetMesh()->GetRelativeLocation();
+	MeshLocation.X = ProneDiveMeshBase.X;
+	MeshLocation.Y = ProneDiveMeshBase.Y;
+	GetMesh()->SetRelativeLocation(MeshLocation);
+	ApplyMovementParams(); // the crawl speed for the rest of the move
+	UE_LOG(LogCodexTactics, Display, TEXT("%s: prone dive done (%s)"), *DisplayName.ToString(), bHasMoveOrder ? TEXT("crawling on") : TEXT("lying"));
 }
 
 const FOperativeStanceShape& AOperativeCharacter::GetStanceShape(EOperativeStance InStance) const
@@ -1097,6 +1218,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	UpdatePlaceholderPose(1.f - FMath::Exp(-StanceBlendSpeed * DeltaTime));
+	UpdateProneDive(DeltaTime);
 	if (bVaulting)
 	{
 		UpdateVault(DeltaTime);
@@ -3631,9 +3753,9 @@ bool AOperativeCharacter::CanFireFromCover() const
 FVector AOperativeCharacter::GetCoverFireOrigin() const
 {
 	const FVector Muzzle = GetMuzzleLocation();
-	if (!bInCover || CurrentCoverHeight != ECoverHeight::HighCover)
+	if (!bInCover || (CurrentCoverHeight != ECoverHeight::HighCover && !(bCornerAimActive && IsManualCornerPeekSpot())))
 	{
-		return Muzzle;
+		return Muzzle; // low cover: over the top (a manual low-cover corner peek fires round its end, rev 5e)
 	}
 	return CornerFireOriginFor(CoverSlot, CoverFacing, Muzzle);
 }
@@ -4427,22 +4549,29 @@ bool AOperativeCharacter::IsCornerHoldSpot() const
 
 bool AOperativeCharacter::IsManualCornerPeekSpot() const
 {
-	return bManualCornerPeek && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight == ECoverHeight::HighCover
+	return bManualCornerPeek && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight != ECoverHeight::None
 		&& CoverFacing == ManualCornerPeekSide && bAtCoverCorner && CoverSlot.IsEdgeExposed(ManualCornerPeekSide);
 }
 
 EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, float EdgeAlongCm)
 {
-	if (!bInCover || CurrentCoverHeight != ECoverHeight::HighCover)
+	if (!IsInPeekableCover())
 	{
-		return EOperativeOrderResult::Unreachable; // a low cover is fired over the top anywhere: no corner to peek round
+		return EOperativeOrderResult::Unreachable;
 	}
 	if (IsRaging() || IsPanicking() || IsKnockedDown())
 	{
 		return EOperativeOrderResult::Refused;
 	}
+	// Rev 5e (game designer 2026-10-14): low cover peeks too - crouched, round the end of the low wall / barricade (the crouched
+	// corner stance cvr_crch_fire_idle_L / _R steps out sideways; baseline pose, the user polishes the AnimBP).
+	const bool bLowCover = CurrentCoverHeight == ECoverHeight::LowCover;
+	if (bLowCover && Stance == EOperativeStance::Standing)
+	{
+		SetStance(EOperativeStance::Crouching);
+	}
 	const FCoverFacingConfig Config = GetCoverFacingConfig();
-	const float StandOff = CoverFacingRules::CornerStandOff(Side, Stance == EOperativeStance::Crouching, Config);
+	const float StandOff = CoverFacingRules::CornerStandOff(Side, bLowCover || Stance == EOperativeStance::Crouching, Config);
 	const float Stand = CoverFacingRules::CornerPeekStandAlong(Side, EdgeAlongCm, StandOff);
 	const float BodyAlong = CoverTraceRules::AlongWallDistanceFrom(CoverSlot, CoverSlot.WorldLocation, GetActorLocation());
 	// Rev 5d (user bug 2026-10-14): at / near the clicked corner the aim starts in place; turn-based anywhere at that corner.
@@ -4517,12 +4646,14 @@ bool AOperativeCharacter::WantsCornerHold() const
 
 FVector AOperativeCharacter::GetStanceAimOrigin() const
 {
-	return bInCover && bCornerAimActive && CurrentCoverHeight == ECoverHeight::HighCover ? GetCoverFireOrigin() : GetMuzzleLocation();
+	return bInCover && bCornerAimActive && (CurrentCoverHeight == ECoverHeight::HighCover || IsManualCornerPeekSpot()) ? GetCoverFireOrigin()
+		: GetMuzzleLocation();
 }
 
 FVector AOperativeCharacter::GetStanceAimBaseDirection() const
 {
-	if (bInCover && CurrentCoverHeight == ECoverHeight::HighCover && (bCornerAimActive || IsCornerHoldSpot()))
+	if (bInCover && ((CurrentCoverHeight == ECoverHeight::HighCover && (bCornerAimActive || IsCornerHoldSpot()))
+		|| (bCornerAimActive && IsManualCornerPeekSpot())))
 	{
 		return CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg);
 	}

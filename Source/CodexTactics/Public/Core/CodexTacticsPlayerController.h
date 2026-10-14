@@ -140,7 +140,7 @@ public:
 	class AHoldSphereActor* GetHoldSphere() const { return HoldSphere; }
 
 	/** Everything a left click on the world does once the modes above had their say (select, move, interact, ...). */
-	void HandleWorldHit(const FHitResult& Hit);
+	void HandleWorldHit(const FHitResult& InHit);
 
 	// --- Tactical cover (Sprint 12) ---
 
@@ -411,6 +411,8 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> CornerPeekGhost;
 	bool bCornerPeekCursor = false;
+	/** Rev 5e: the hand cursor over a spotted tripwire (or the ground right next to it). */
+	bool bTrapHoverCursor = false;
 	TWeakObjectPtr<AActor> PeekHoverActor;
 	TWeakObjectPtr<AOperativeCharacter> PeekHoverOperative;
 	FVector PeekHoverPoint = FVector(TNumericLimits<float>::Max());

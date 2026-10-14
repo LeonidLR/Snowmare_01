@@ -229,6 +229,35 @@ bool FStanceMoveHoldRuleTest::RunTest(const FString&)
 	return true;
 }
 
+MOVEMENT_TEST(FMovementProneDiveTest, "Movement.ProneDiveThresholds")
+bool FMovementProneDiveTest::RunTest(const FString& Parameters)
+{
+	// Rev 5e item 6 (user request 2026-10-14; was "cannot go prone while moving"): walking >= 30 cm/s dives with the walk clip,
+	// sprinting >= 75 cm/s with the run clip, slower for the gait (or crouched) stops first; still = in place; cover / carrying
+	// (blocked) while moving = refused as before.
+	using namespace OperativeMovementRules;
+	const FOperativeMovementConfig Config;
+	TestEqual(TEXT("walk threshold 30 cm/s (data: MovementConfig)"), Config.ProneDiveMinWalkSpeed, 30.f);
+	TestEqual(TEXT("run threshold 75 cm/s"), Config.ProneDiveMinRunSpeed, 75.f);
+	const EOperativeStance Up = EOperativeStance::Standing;
+	TestTrue(TEXT("still: in place"), DecideProneEntry(Config, Up, 0.f, false, false, false) == EProneEntry::InPlace);
+	TestTrue(TEXT("still and blocked: in place (cover)"), DecideProneEntry(Config, Up, 0.f, false, false, true) == EProneEntry::InPlace);
+	TestTrue(TEXT("walking 220 cm/s: walk dive"), DecideProneEntry(Config, Up, 220.f, false, true, false) == EProneEntry::DiveFromWalk);
+	TestTrue(TEXT("walking exactly 30: walk dive"), DecideProneEntry(Config, Up, 30.f, false, true, false) == EProneEntry::DiveFromWalk);
+	TestTrue(TEXT("walking 25: stop, then prone"), DecideProneEntry(Config, Up, 25.f, false, true, false) == EProneEntry::StopThenProne);
+	TestTrue(TEXT("sprinting 725: run dive"), DecideProneEntry(Config, Up, 725.f, true, true, false) == EProneEntry::DiveFromRun);
+	TestTrue(TEXT("sprinting 75: run dive"), DecideProneEntry(Config, Up, 75.f, true, true, false) == EProneEntry::DiveFromRun);
+	TestTrue(TEXT("sprinting but only 60 (accelerating): stop, then prone"), DecideProneEntry(Config, Up, 60.f, true, true, false) == EProneEntry::StopThenProne);
+	TestTrue(TEXT("a move order just issued (speed 0): stop, then prone"), DecideProneEntry(Config, Up, 0.f, false, true, false) == EProneEntry::StopThenProne);
+	TestTrue(TEXT("crouched walking 125: stop, then prone (the dives start upright)"),
+		DecideProneEntry(Config, EOperativeStance::Crouching, 125.f, false, true, false) == EProneEntry::StopThenProne);
+	TestTrue(TEXT("moving in cover / carrying: refused as before"), DecideProneEntry(Config, Up, 220.f, false, true, true) == EProneEntry::Refused);
+	FOperativeMovementConfig Tuned = Config;
+	Tuned.ProneDiveMinWalkSpeed = 250.f;
+	TestTrue(TEXT("the threshold is data: 250 -> walking 220 stops first"), DecideProneEntry(Tuned, Up, 220.f, false, true, false) == EProneEntry::StopThenProne);
+	return true;
+}
+
 #undef MOVEMENT_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

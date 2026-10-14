@@ -12,6 +12,33 @@ enum class EOperativeStance : uint8
 	Prone
 };
 
+/** How an operative goes prone from a moving body (rev 5e item 6, user request 2026-10-14). */
+UENUM(BlueprintType)
+enum class EProneDive : uint8
+{
+	/** No dive: lies down in place (the stand / crouch -> prone clip). */
+	None,
+	/** Walking: the walk-to-prone dive (Crawl_MocapAnimPack Crawl_from_Walk), carried on along the move. */
+	FromWalk,
+	/** Running (sprint): the run-to-prone dive (Crawl_from_Run). */
+	FromRun
+};
+
+/** What a prone order does with the body as it is (OperativeMovementRules::DecideProneEntry). */
+enum class EProneEntry : uint8
+{
+	/** Standing / crouched still: lies down in place. */
+	InPlace,
+	/** Moving slower than the dive threshold of his gait (or crouched): stops, then lies down in place. */
+	StopThenProne,
+	/** Walking at least ProneDiveMinWalkSpeed: dives prone while moving (EProneDive::FromWalk). */
+	DiveFromWalk,
+	/** Sprinting at least ProneDiveMinRunSpeed: dives prone while moving (EProneDive::FromRun). */
+	DiveFromRun,
+	/** Moving where a dive is not allowed (in cover, carrying, vaulting, aboard, knocked down): refused, as before. */
+	Refused
+};
+
 /**
  * Movement tuning of an operative, in UE units (cm, cm/s, deg/s).
  * Defaults are the values the Godot build actually runs with: resources/balance.tres
@@ -56,6 +83,17 @@ struct CODEXTACTICS_API FOperativeMovementConfig
 	/** Cold level (percent) from which sprinting is impossible. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Speed", meta = (ClampMin = "0", ClampMax = "100"))
 	float MaxColdToSprint = 60.f;
+
+	/**
+	 * Rev 5e (user request 2026-10-14): a prone order while WALKING at least this fast dives prone on the move (walk-to-prone clip),
+	 * slower he stops first and lies down in place, cm/s.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stance", meta = (ClampMin = "0"))
+	float ProneDiveMinWalkSpeed = 30.f;
+
+	/** Rev 5e: a prone order while SPRINTING at least this fast dives prone on the move (run-to-prone clip), cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stance", meta = (ClampMin = "0"))
+	float ProneDiveMinRunSpeed = 75.f;
 
 	/** Acceleration, cm/s^2. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Acceleration", meta = (ClampMin = "0"))
@@ -116,4 +154,16 @@ namespace OperativeMovementRules
 
 	/** True when a move issued now waits for the stance change (it is queued / retried after ComputeMoveHold seconds). */
 	CODEXTACTICS_API bool ShouldDeferMove(float MoveHoldSeconds);
+
+	/** Below this ground speed, cm/s, and without a move order a body counts as standing still for a prone order. */
+	constexpr float ProneStillSpeedCm = 10.f;
+
+	/**
+	 * Rev 5e item 6 (user request 2026-10-14; was "cannot go prone while moving - come to a full stop first"): a prone order with
+	 * the body moving at Speed2D. Still -> InPlace; a blocked body (cover, carrying, vault, aboard, knocked down) that moves ->
+	 * Refused; standing and sprinting >= ProneDiveMinRunSpeed -> DiveFromRun, standing and walking >= ProneDiveMinWalkSpeed ->
+	 * DiveFromWalk; anything slower for its gait, or crouched (the dives start from an upright body) -> StopThenProne.
+	 */
+	CODEXTACTICS_API EProneEntry DecideProneEntry(const FOperativeMovementConfig& Config, EOperativeStance Stance, float Speed2D, bool bSprinting,
+		bool bHasMoveOrder, bool bBlocked);
 }

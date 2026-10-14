@@ -44,6 +44,8 @@
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/RelocationRules.h"
 #include "Interactables/RelocationSubsystem.h"
+#include "Interactables/TripwireActor.h"
+#include "Components/BoxComponent.h"
 #include "Misc/App.h"
 #include "UI/GameMessageSubsystem.h"
 
@@ -409,15 +411,29 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		HideCoverPreview();
 	}
 
-	// Rev 5c manual corner peek: hovering the end of the leader's (turn-based: the active unit's) high cover previews the peek.
+	// Rev 5c manual corner peek: hovering the end of the leader's (turn-based: the active unit's) cover - high, or low since rev 5e -
+	// previews the peek.
 	{
 		UTurnBasedCombatSubsystem* PeekTurnBased = GetActiveTurnBased();
 		USquadSubsystem* PeekSquad = GetSquad();
 		AOperativeCharacter* PeekOperative = PeekTurnBased ? PeekTurnBased->GetActiveUnit() : (PeekSquad ? PeekSquad->GetLeader() : nullptr);
 		FHitResult PeekHit;
-		const bool bPeekHit = PeekOperative && PeekOperative->IsInHighCover() && !IsDialogueOpen() && !bRelocateSelectMode
+		const bool bPeekHit = PeekOperative && PeekOperative->IsInPeekableCover() && !IsDialogueOpen() && !bRelocateSelectMode
 			&& GetHitResultUnderCursor(ECC_Visibility, false, PeekHit);
 		UpdateCornerPeekHover(PeekOperative, bPeekHit ? &PeekHit : nullptr);
+		// Rev 5e: a spotted tripwire (or the ground right next to it) under the cursor: the hand cursor - a click opens its menu.
+		FHitResult TrapHit;
+		const bool bTrap = !bCornerPeekCursor && !IsDialogueOpen() && GetHitResultUnderCursor(ECC_Visibility, false, TrapHit)
+			&& (Cast<ATripwireActor>(TrapHit.GetActor()) || (!Cast<APawn>(TrapHit.GetActor()) && !Cast<AInteractableActor>(TrapHit.GetActor())
+				&& ATripwireActor::FindClickableWireNear(GetWorld(), TrapHit.ImpactPoint)));
+		if (bTrap != bTrapHoverCursor)
+		{
+			bTrapHoverCursor = bTrap;
+			if (bTrap || !bCornerPeekCursor)
+			{
+				CurrentMouseCursor = bTrap ? EMouseCursor::Hand : DefaultMouseCursor.GetValue();
+			}
+		}
 	}
 
 	// Turn-based: the cursor frame on the hovered cell and, in attack mode, its hit chance (Godot set_hovered_cell).
@@ -1563,8 +1579,19 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 	}
 }
 
-void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
+void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 {
+	// Rev 5e (user bug 2026-10-14, "the tripwire cannot be disarmed"): the wire is an 8 cm bar at shin height - a click on the ground
+	// next to a spotted wire (TripwireRules::ClickSnapCm) means the wire (its Disarm menu), as hovering shows (the hand cursor).
+	FHitResult Hit = InHit;
+	if (!Cast<AInteractableActor>(InHit.GetActor()) && !Cast<APawn>(InHit.GetActor()))
+	{
+		if (ATripwireActor* Wire = ATripwireActor::FindClickableWireNear(GetWorld(), InHit.ImpactPoint))
+		{
+			Hit = FHitResult(Wire, Wire->Box.Get(), InHit.ImpactPoint, InHit.ImpactNormal);
+			UE_LOG(LogCodexTactics, Display, TEXT("Click next to the spotted wire %s: taken as a click on it"), *Wire->GetName());
+		}
+	}
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	if (!Leader)
@@ -1902,25 +1929,22 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 	{
 		return;
 	}
-	// Godot _set_entire_squad_stance: nobody lies down while the squad moves.
-	if (Stance == EOperativeStance::Prone)
-	{
-		for (const AOperativeCharacter* Member : Squad->GetMembers())
-		{
-			if (Member->IsMoving() || Member->GetVelocity().SizeSquared2D() > 100.f)
-			{
-				if (Messages)
-				{
-					Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("SquadProneMoving", "⚠️ The squad cannot go prone while moving! Come to a full stop first."));
-				}
-				return;
-			}
-		}
-	}
+	// Rev 5e item 6 (user request 2026-10-14; Godot _set_entire_squad_stance refused while the squad moved): each member goes
+	// prone his own way - a walking / running one dives on the move, a slow one stops first, one in cover / carrying stays up.
 	const TCHAR* Name = Stance == EOperativeStance::Prone ? TEXT("PRONE") : (Stance == EOperativeStance::Crouching ? TEXT("CROUCHED") : TEXT("STANDING"));
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
-		Member->SetStance(Stance);
+		if (Stance == EOperativeStance::Prone)
+		{
+			if (Member->DropProne() == EProneEntry::Refused)
+			{
+				continue;
+			}
+		}
+		else
+		{
+			Member->SetStance(Stance);
+		}
 		UFloatingTextSubsystem::SpawnAboveOperative(Member, FString::Printf(TEXT("👥 SQUAD: %s"), Name), FLinearColor(0.3f, 0.95f, 1.f));
 	}
 	if (Messages)
@@ -2012,8 +2036,9 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 		return;
 	}
 
-	// Godot check: cannot go prone while moving!
-	if (Stance == EOperativeStance::Prone && (Leader->IsMoving() || Leader->GetVelocity().SizeSquared2D() > 10.f))
+	// Rev 5e item 6 (user request 2026-10-14; was the Godot check "cannot go prone while moving"): walking / running he dives
+	// prone on the move, slower he stops first (AOperativeCharacter::DropProne); only in cover / carrying / vaulting is it refused.
+	if (Stance == EOperativeStance::Prone && Leader->DropProne() == EProneEntry::Refused)
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
@@ -2025,7 +2050,10 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 
 	// Deviation (user decision 2026-10-01; Godot _sync_squad_stances made the others follow): only the selected
 	// operative changes his stance — the whole squad only with Alt + Z / C / V (SetEntireSquadStance).
-	Leader->SetStance(Stance);
+	if (Stance != EOperativeStance::Prone)
+	{
+		Leader->SetStance(Stance);
+	}
 	ControllerCommands::Report(this, ControllerCommands::ForStance(Stance, false));
 
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
@@ -2390,16 +2418,20 @@ void ACodexTacticsPlayerController::CycleLeaderStance()
 		return;
 	}
 	EOperativeStance Next = static_cast<EOperativeStance>((static_cast<int32>(Leader->GetStance()) + 1) % 3);
-	if (Next == EOperativeStance::Prone && (Leader->IsMoving() || Leader->GetVelocity().SizeSquared2D() > 10.f))
-	{
-		Next = EOperativeStance::Standing; // Godot: prone is skipped while moving
-	}
 	if (RefuseIfLocked(ControllerCommands::ForStance(Next, false)))
 	{
 		return;
 	}
+	// Rev 5e item 6: prone on the move dives / stops first (DropProne); refused (cover, carrying) -> skipped to standing (Godot).
+	if (Next == EOperativeStance::Prone && Leader->DropProne() == EProneEntry::Refused)
+	{
+		Next = EOperativeStance::Standing;
+	}
 	// Godot _cycle_leader_stance, without the squad sync (user decision 2026-10-01): the selected operative only.
-	Leader->SetStance(Next);
+	if (Next != EOperativeStance::Prone)
+	{
+		Leader->SetStance(Next);
+	}
 	ControllerCommands::Report(this, ControllerCommands::ForStance(Next, false));
 }
 
@@ -2509,14 +2541,9 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		return false;
 	}
 	const bool bAlt = IsSquadWideModifierDown();
-	// Objects (barricades, barrels, crates, quest objects) keep their click meaning; Alt + click takes cover at them.
-	if (HitActor->IsA<AInteractableActor>() && !bAlt)
-	{
-		return false;
-	}
 	// APC P1: the vehicle is a Pawn but its hull is cover (the click on the APC stays "take cover", user decision 2026-10-12).
 	const bool bVehicle = HitActor->IsA<AVehiclePawn>();
-	// Manual corner peek (user request 2026-10-13, rev 5c): in high cover, a click on the END of his own wall (its last ~75 cm,
+	// Manual corner peek (user request 2026-10-13, rev 5c; low cover too since rev 5e): a click on the END of his own wall (its last ~75 cm,
 	// its end face or its top there) sends him to that corner, leaning out in the corner-aim pose until another order.
 	// Rev 5d (user bug 2026-10-14): decided BEFORE the "a click near an operative picks him" proximity rule - the corner he
 	// already stands at lies inside SelectRadius, so the near-edge click selected him and nothing happened (the hover, which
@@ -2525,7 +2552,7 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		ECoverFacing PeekSide = ECoverFacing::Right;
 		float PeekEdge = 0.f;
 		const UTutorialSubsystem* PeekTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
-		const bool bPeekEdge = !bAlt && Operative->IsInHighCover() && !(PeekTutorial && PeekTutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek))
+		const bool bPeekEdge = !bAlt && Operative->IsInPeekableCover() && !(PeekTutorial && PeekTutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek))
 			&& !HitActor->IsA<APawn>() && FindCornerPeekForHit(Operative, Hit, PeekSide, PeekEdge);
 		if (CoverFacingRules::CornerPeekClickWins(bPeekEdge, HitActor->IsA<AOperativeCharacter>()))
 		{
@@ -2548,6 +2575,12 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 			}
 			return true;
 		}
+	}
+	// Objects (barricades, barrels, crates, quest objects) keep their click meaning; Alt + click takes cover at them. (Rev 5e: checked
+	// after the corner peek - the end of the barricade he crouches behind is a peek edge, its middle still opens its menu.)
+	if (HitActor->IsA<AInteractableActor>() && !bAlt)
+	{
+		return false;
 	}
 	if (FindClickedMember(Hit) || (HitActor->IsA<APawn>() && !bVehicle) || HitActor->ActorHasTag(FName(TEXT("Enemy"))))
 	{
@@ -2616,7 +2649,7 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 bool ACodexTacticsPlayerController::FindCornerPeekForHit(const AOperativeCharacter* Operative, const FHitResult& Hit, ECoverFacing& OutSide,
 	float& OutEdgeAlongCm) const
 {
-	if (!Operative || !Operative->IsInHighCover())
+	if (!Operative || !Operative->IsInPeekableCover())
 	{
 		return false;
 	}
@@ -2654,7 +2687,7 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 {
 	bool bEdge = false;
 	const UTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
-	if (Operative && Hit && Operative->IsInHighCover() && !Operative->bShimmying
+	if (Operative && Hit && Operative->IsInPeekableCover() && !Operative->bShimmying
 		&& !(Tutorial && Tutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek)))
 	{
 		// The probe traces only when the cursor moved over the wall (or he moved): cached while it rests.
@@ -2693,8 +2726,8 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 	{
 		// The corner stand point: the cover slot moved along the wall to the stand-off from that edge.
 		FCoverSlot Corner = Operative->GetCoverSlot();
-		const float StandOff = CoverFacingRules::CornerStandOff(PeekHoverSide, Operative->GetStance() == EOperativeStance::Crouching,
-			Operative->GetCoverFacingConfig());
+		const float StandOff = CoverFacingRules::CornerStandOff(PeekHoverSide, Operative->GetStance() == EOperativeStance::Crouching
+			|| Operative->CurrentCoverHeight == ECoverHeight::LowCover, Operative->GetCoverFacingConfig());
 		const FVector Shift = Corner.RightTangent() * CoverFacingRules::CornerPeekStandAlong(PeekHoverSide, PeekHoverEdgeAlong, StandOff);
 		Corner.WorldLocation += Shift;
 		Corner.WallPoint += Shift;

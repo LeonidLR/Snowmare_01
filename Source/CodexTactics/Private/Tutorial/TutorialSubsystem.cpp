@@ -663,10 +663,22 @@ void UTutorialSubsystem::ProcessTransitions()
 						FlashObjectives.Add(Step->Id, 1.2f);
 					}
 				}
-				if (SpeechStep == Step->Id)
+				if (SpeechStep == Step->Id && Transition.bCancelled && SpeechLines.IsValidIndex(SpeechIndex))
+				{
+					// Rev 5e "cancel_on": the line on screen runs out, the rest of the conversation is dropped (a new speech may
+					// replace it at once - the machine's speech slot is free).
+					UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s cancelled at line %d / %d (no longer relevant)"), *Step->Id.ToString(),
+						SpeechIndex + 1, SpeechLines.Num());
+					SpeechLines.SetNum(SpeechIndex + 1);
+				}
+				else if (SpeechStep == Step->Id)
 				{
 					SpeechStep = NAME_None;
 					SpeechLines.Reset();
+				}
+				if (Transition.bCancelled)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s dropped by its cancel_on"), *Step->Id.ToString());
 				}
 			}
 		}

@@ -10,7 +10,14 @@
 //     the second (forced miss + detonation roll) pulls the pin: blast, the wire is gone, TripwireTriggered;
 //  4. a second wire: the Medic-Sapper disarms it in 3 s (forced success): gone, +2 grenades, TripwireDisarmed;
 //  5. a third wire: the engineer lying prone on it - no trip; standing up on it - trip;
-//  6. save / load: a hidden wire and a spotted wire saved; after revealing the first and removing the second the load
+//  6. rev 5e (game designer 2026-10-14) known-trap pathing: a spotted wire across the way - the player-control filter's path runs
+//     straight through it, the AUTO filter's path goes round; with the squad AUTO mode OFF a move order through the spotted wire
+//     is literal (the commander walks into it and trips it), with AUTO ON (Ctrl+T) the same order goes round it (no trip); a
+//     spotted mine gets the known-trap area too (literal path over it, AUTO path round it);
+//  7. rev 5e (user bug 2026-10-14, "the tripwire cannot be disarmed") the REAL input: a click on the ground 25 cm beside a spotted
+//     wire (ACodexTacticsPlayerController::HandleWorldHit) is taken as a click on the wire - the engineer walks up (not into it),
+//     the action menu «Disarm» opens, confirming it disarms the wire (TripwireDisarmed, +2 grenades); the label says "click to disarm";
+//  8. save / load: a hidden wire and a spotted wire saved; after revealing the first and removing the second the load
 //     restores both (hidden / spotted, armed, PMC).
 // Saves go to Saved/SmokeSaves/PMCTripwire (exclusive in Scripts/test_map.json).
 
@@ -27,7 +34,9 @@
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Containers/Ticker.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "Core/PlayerCommands.h"
+#include "Interactables/InteractionSubsystem.h"
 #include "Core/SaveGameSubsystem.h"
 #include "Debug/EventBusProbe.h"
 #include "Debug/SmokeUtils.h"
@@ -36,8 +45,12 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
+#include "Interactables/ProximityMineActor.h"
 #include "Interactables/TripwireActor.h"
 #include "Interactables/TripwireRules.h"
+#include "Level/CrawlGapActor.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 #include "Misc/Paths.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/OverheadLabel.h"
@@ -68,6 +81,7 @@ namespace PMCTripwireSmoke
 		float HoundHealth = 0.f;
 		float CommanderHealth = 0.f;
 		int32 MedicGrenades = 0;
+		TWeakObjectPtr<AProximityMineActor> Mine;
 		bool bCheckedWorking = false;
 		TStrongObjectPtr<UEventBusProbe> Probe;
 	};
@@ -121,6 +135,42 @@ namespace PMCTripwireSmoke
 			Member->SetStance(EOperativeStance::Standing);
 			Place(Member, State.Centre - State.F * 1000.f + State.R * (Index++ * 200.f - 200.f));
 		}
+	}
+
+	/** The path polyline from From to To with a filter class; empty when none. */
+	TArray<FVector> PathPoints(UWorld* World, const FVector& From, const FVector& To, TSubclassOf<UNavigationQueryFilter> Filter)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, From, To, nullptr, Filter) : nullptr;
+		return Path && Path->IsValid() ? Path->PathPoints : TArray<FVector>();
+	}
+
+	/** The path crosses the wire segment A-B (2D). */
+	bool PathCrossesWire(const TArray<FVector>& Points, const FVector& A, const FVector& B)
+	{
+		for (int32 Index = 1; Index < Points.Num(); ++Index)
+		{
+			FVector Hit;
+			if (FMath::SegmentIntersection2D(FVector(Points[Index - 1].X, Points[Index - 1].Y, 0.f), FVector(Points[Index].X, Points[Index].Y, 0.f),
+				FVector(A.X, A.Y, 0.f), FVector(B.X, B.Y, 0.f), Hit))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Closest 2D approach of the path to Point, cm. */
+	float PathClearance(const TArray<FVector>& Points, const FVector& Point)
+	{
+		float Best = TNumericLimits<float>::Max();
+		for (int32 Index = 1; Index < Points.Num(); ++Index)
+		{
+			const FVector P0(Points[Index - 1].X, Points[Index - 1].Y, 0.f);
+			const FVector P1(Points[Index].X, Points[Index].Y, 0.f);
+			Best = FMath::Min(Best, static_cast<float>(FMath::PointDistToSegment(FVector(Point.X, Point.Y, 0.f), P0, P1)));
+		}
+		return Best;
 	}
 
 	bool IsClickable(const ATripwireActor* Wire)
@@ -406,6 +456,219 @@ namespace PMCTripwireSmoke
 			}
 			Check(State, !State.Wire.IsValid() && State.Probe->CountEvent(GameplayEvents::TripwireTriggered, State.Engineer->GetFName()) == 1,
 				TEXT("standing up on the wire trips it (TripwireTriggered by the engineer)"));
+			// Rev 5e: known-trap pathing - a spotted wire across the way, the squad AUTO mode off.
+			ParkSquad(Squad, State);
+			Squad->SetAutonomousSquadCombat(false);
+			ATripwireActor* Wire = SpawnWire(World, State, State.Centre);
+			State.Wire = Wire;
+			if (Wire)
+			{
+				Wire->Reveal();
+			}
+			State.Stage = 20;
+			State.Time = 0.f;
+			return true;
+		}
+		case 20:
+		{
+			if (State.Time < 2.f)
+			{
+				return true; // the known-trap area is in the navmesh
+			}
+			ATripwireActor* Wire = State.Wire.Get();
+			const FVector From = State.Centre - State.F * 350.f + FVector(0.f, 0.f, 90.f);
+			const FVector To = State.Centre + State.F * 350.f + FVector(0.f, 0.f, 90.f);
+			const TArray<FVector> Literal = PathPoints(World, From, To, UNavFilter_NoCrawlTrapLiteral::StaticClass());
+			const TArray<FVector> Avoid = PathPoints(World, From, To, UNavFilter_NoCrawl::StaticClass());
+			Check(State, Wire && Literal.Num() >= 2 && PathCrossesWire(Literal, Wire->GetAnchorA(), Wire->GetAnchorB()),
+				FString::Printf(TEXT("player-control filter: the path runs straight through the spotted wire (%d points)"), Literal.Num()));
+			Check(State, Wire && Avoid.Num() >= 2 && !PathCrossesWire(Avoid, Wire->GetAnchorA(), Wire->GetAnchorB()),
+				FString::Printf(TEXT("AUTO filter: the path goes round the spotted wire (%d points)"), Avoid.Num()));
+			// A literal order: the commander, AUTO off, sent through the spotted wire.
+			AOperativeCharacter* Commander = State.Commander.Get();
+			Place(Commander, State.Centre - State.F * 350.f);
+			Commander->SetStance(EOperativeStance::Standing);
+			Squad->SetLeader(Commander);
+			Check(State, !Squad->IsAutonomousSquadCombat() && Commander->OrderMoveTo(State.Centre + State.F * 350.f, false) == EOperativeOrderResult::Accepted,
+				TEXT("AUTO off: the commander is ordered across the spotted wire"));
+			State.Stage = 21;
+			State.Time = 0.f;
+			return true;
+		}
+		case 21:
+		{
+			if (State.Wire.IsValid() && State.Time < 8.f)
+			{
+				return true;
+			}
+			Check(State, !State.Wire.IsValid() && State.Probe->CountEvent(GameplayEvents::TripwireTriggered, State.Commander->GetFName()) == 1,
+				FString::Printf(TEXT("player control: the order is literal - he walks into the spotted wire and trips it (%.1f s)"), State.Time));
+			ParkSquad(Squad, State);
+			ATripwireActor* Wire = SpawnWire(World, State, State.Centre);
+			State.Wire = Wire;
+			if (Wire)
+			{
+				Wire->Reveal();
+			}
+			Squad->SetAutonomousSquadCombat(true); // Ctrl+T
+			State.Stage = 22;
+			State.Time = 0.f;
+			return true;
+		}
+		case 22:
+		{
+			if (State.Time < 2.f)
+			{
+				return true;
+			}
+			AOperativeCharacter* Commander = State.Commander.Get();
+			Place(Commander, State.Centre - State.F * 350.f);
+			Check(State, Squad->IsAutonomousSquadCombat() && Commander->OrderMoveTo(State.Centre + State.F * 350.f, false) == EOperativeOrderResult::Accepted,
+				TEXT("AUTO on (Ctrl+T): the same order across the spotted wire"));
+			State.Stage = 23;
+			State.Time = 0.f;
+			return true;
+		}
+		case 23:
+		{
+			AOperativeCharacter* Commander = State.Commander.Get();
+			const float Left = static_cast<float>(FVector::Dist2D(Commander->GetActorLocation(), State.Centre + State.F * 350.f));
+			if (Left > 120.f && State.Wire.IsValid() && State.Time < 12.f)
+			{
+				return true;
+			}
+			Check(State, State.Wire.IsValid() && State.Wire->IsArmed() && Left <= 120.f
+				&& State.Probe->CountEvent(GameplayEvents::TripwireTriggered, Commander->GetFName()) == 1,
+				FString::Printf(TEXT("AUTO mode: he goes round the spotted wire and arrives (%.0f cm left, %.1f s), no trip"), Left, State.Time));
+			Squad->SetAutonomousSquadCombat(false);
+			if (ATripwireActor* Wire = State.Wire.Get())
+			{
+				Wire->Destroy();
+			}
+			ParkSquad(Squad, State);
+			// A spotted mine: the same known-trap area (rev 5e; mines had no avoidance before).
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			AProximityMineActor* Mine = World->SpawnActor<AProximityMineActor>(State.Centre + FVector(0.f, 0.f, 30.f), FRotator::ZeroRotator, Params);
+			State.Mine = Mine;
+			Check(State, Mine && !Mine->IsRevealed() && !Mine->HasKnownTrapNav(), TEXT("a hidden mine has no path cost"));
+			if (Mine)
+			{
+				Mine->Reveal();
+			}
+			State.Stage = 24;
+			State.Time = 0.f;
+			return true;
+		}
+		case 24:
+		{
+			if (State.Time < 2.f)
+			{
+				return true;
+			}
+			AProximityMineActor* Mine = State.Mine.Get();
+			const FVector From = State.Centre - State.F * 400.f + FVector(0.f, 0.f, 90.f);
+			const FVector To = State.Centre + State.F * 400.f + FVector(0.f, 0.f, 90.f);
+			const TArray<FVector> Literal = PathPoints(World, From, To, UNavFilter_NoCrawlTrapLiteral::StaticClass());
+			const TArray<FVector> Avoid = PathPoints(World, From, To, UNavFilter_NoCrawl::StaticClass());
+			const float LiteralClear = PathClearance(Literal, State.Centre);
+			const float AvoidClear = PathClearance(Avoid, State.Centre);
+			Check(State, Mine && Mine->HasKnownTrapNav() && Literal.Num() >= 2 && Avoid.Num() >= 2 && LiteralClear < 60.f && AvoidClear > 140.f,
+				FString::Printf(TEXT("a spotted mine: known-trap area; the literal path passes %.0f cm from it, the AUTO path %.0f cm"), LiteralClear, AvoidClear));
+			if (Mine)
+			{
+				Mine->Destroy();
+			}
+			// Rev 5e: the real click path - a spotted wire, the engineer (leader, warm) clicks the ground right beside it.
+			ParkSquad(Squad, State);
+			ATripwireActor* Wire = SpawnWire(World, State, State.Centre);
+			State.Wire = Wire;
+			if (Wire)
+			{
+				Wire->Reveal();
+				Wire->DefusalRollForTesting = 0.f; // a good roll (the odds are HostileDisarmRoleCold's job)
+				Wire->DefusalExplosionRollForTesting = 99.f;
+			}
+			AOperativeCharacter* Engineer = State.Engineer.Get();
+			Engineer->SetStance(EOperativeStance::Standing);
+			Place(Engineer, State.Centre - State.F * 350.f);
+			Squad->SetLeader(Engineer);
+			State.MedicGrenades = Engineer->GrenadesCount;
+			State.Stage = 26;
+			State.Time = 0.f;
+			return true;
+		}
+		case 26:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			ATripwireActor* Wire = State.Wire.Get();
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			if (!Wire || !PC)
+			{
+				Check(State, false, TEXT("wire / controller"));
+				return Finish(State);
+			}
+			FOverheadLabel Label;
+			Check(State, Wire->GetOverheadLabel(Label) && Label.Text.Contains(TEXT("click to disarm")),
+				FString::Printf(TEXT("the spotted wire's label says how: '%s'"), *Label.Text));
+			// The ground 25 cm in front of the wire (on the engineer's side), no actor hit - what a slightly-off cursor gives.
+			const FVector Ground = State.Centre - State.F * 25.f + State.R * 40.f;
+			Check(State, ATripwireActor::FindClickableWireNear(World, Ground) == Wire && !ATripwireActor::FindClickableWireNear(World, State.Centre - State.F * 120.f),
+				TEXT("the ground 25 cm beside the wire counts as the wire (hand cursor), 1.2 m away does not"));
+			FHitResult GroundHit;
+			GroundHit.ImpactPoint = Ground;
+			GroundHit.Location = Ground;
+			GroundHit.ImpactNormal = FVector::UpVector;
+			GroundHit.Normal = FVector::UpVector;
+			GroundHit.bBlockingHit = true;
+			PC->HandleWorldHit(GroundHit);
+			State.Stage = 27;
+			State.Time = 0.f;
+			return true;
+		}
+		case 27:
+		{
+			UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
+			ATripwireActor* Wire = State.Wire.Get();
+			if (Wire && Interactions && !Interactions->IsActionMenuOpen() && State.Time < 10.f)
+			{
+				return true;
+			}
+			Check(State, Wire && Interactions && Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Wire && Wire->IsArmed(),
+				FString::Printf(TEXT("the click walked the engineer up to the wire (not into it) and opened its menu (%.1f s)"), State.Time));
+			if (Interactions && Interactions->IsActionMenuOpen())
+			{
+				Interactions->ConfirmActionMenu(); // «Disarm (4 s)»
+			}
+			Check(State, Wire && Wire->IsDisarming(), TEXT("Disarm confirmed: he works on it"));
+			State.Stage = 28;
+			State.Time = 0.f;
+			return true;
+		}
+		case 28:
+		{
+			if (State.Wire.IsValid() && State.Time < 7.f)
+			{
+				return true;
+			}
+			AOperativeCharacter* Engineer = State.Engineer.Get();
+			Check(State, !State.Wire.IsValid() && State.Probe->CountEvent(GameplayEvents::TripwireDisarmed, Engineer->GetFName()) == 1
+				&& Engineer->GrenadesCount == State.MedicGrenades + 2 && State.Probe->CountEvent(GameplayEvents::TripwireTriggered, Engineer->GetFName()) == 1,
+				FString::Printf(TEXT("the real input disarms the PMC wire: gone after %.1f s, TripwireDisarmed by the engineer, +%d grenades, no new trip"), State.Time,
+					Engineer->GrenadesCount - State.MedicGrenades));
+			State.Stage = 25;
+			State.Time = 0.f;
+			return true;
+		}
+		case 25:
+		{
+			if (State.Time < 0.5f)
+			{
+				return true;
+			}
 			// Save / load: one hidden, one spotted wire.
 			ParkSquad(Squad, State);
 			ATripwireActor* HiddenWire = SpawnWire(World, State, State.Centre);

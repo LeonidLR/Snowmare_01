@@ -182,6 +182,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
 	void SetStance(EOperativeStance NewStance);
 
+	/**
+	 * Rev 5e item 6 (user request 2026-10-14): a player's prone order, also while moving (OperativeMovementRules::DecideProneEntry
+	 * with MovementConfig.ProneDiveMinWalkSpeed / ProneDiveMinRunSpeed): standing and walking / sprinting fast enough he DIVES prone
+	 * on the move - the walk / run-to-prone clip (UOperativeAnimInstance::GetProneDiveClip) plays while the capsule follows his
+	 * move at the clip's root speed (the root translation is cancelled on the mesh; he stays on the navmesh by path following);
+	 * with a move order he crawls on to its goal afterwards, without one (momentum) the dive carries him forward by the clip's
+	 * length and he stops. Slower / crouched: he stops, then lies down in place. Still: in place. In cover, carrying, vaulting,
+	 * aboard or knocked down a moving body is refused as before. Turn-based stance changes stay on the grid (AP rules).
+	 */
+	EProneEntry DropProne();
+
+	/** The dive going on now (None = none; the anim instance plays its clip). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
+	EProneDive GetProneDive() const { return ProneDive; }
+
+	bool IsProneDiving() const { return ProneDive != EProneDive::None; }
+
 	/** Starts or stops sprinting; ignored when sprinting is not allowed. */
 	void SetSprinting(bool bNewSprinting);
 
@@ -929,7 +946,8 @@ public:
 	EOperativeOrderResult OrderShimmyTo(const FCoverSlot& Target);
 
 	/**
-	 * Manual corner peek (user request 2026-10-13, Demo 01 rev 5c; command Cover.CornerPeek): in high cover, go to the exposed
+	 * Manual corner peek (user request 2026-10-13, Demo 01 rev 5c; command Cover.CornerPeek): in high cover - and, rev 5e (game
+	 * designer 2026-10-14), crouched behind LOW cover (the crouched corner stance cvr_crch_fire_idle leans out round its end) - go to the exposed
 	 * edge on Side (EdgeAlongCm = its position along the wall from the cover slot, + = along the slot's RightTangent; the
 	 * controller finds it with CoverFacingRules::FindPeekEdge) and hold the corner-aim pose there - leaning out, rifle up - also
 	 * with no enemy around, until another order (a move / another cover / a shimmy / the other corner; leaving the cover).
@@ -946,7 +964,7 @@ public:
 	/** The ordered corner of the manual peek (valid while IsManualCornerPeek). */
 	ECoverFacing GetManualCornerPeekSide() const { return ManualCornerPeekSide; }
 
-	/** At the ordered corner now (in high cover, not shimmying, the edge exposed on that side): the peek pose is held. */
+	/** At the ordered corner now (in cover - high or low - not shimmying, the edge exposed on that side): the peek pose is held. */
 	bool IsManualCornerPeekSpot() const;
 
 	/** Manual peeks that reached their pose (the CornerPeek event; smokes / stats). */
@@ -963,6 +981,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
 	bool IsInHighCover() const { return bInCover && CurrentCoverHeight == ECoverHeight::HighCover; }
+
+	/** In cover at a wall whose ends can be peeked round: high cover, or low cover crouched (rev 5e, 2026-10-14). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
+	bool IsInPeekableCover() const { return bInCover && CurrentCoverHeight != ECoverHeight::None; }
 
 	/** A shot is possible from this cover: low cover (over the top) or an exposed corner on the facing side. */
 	bool CanFireFromCover() const;
@@ -1742,6 +1764,20 @@ private:
 
 	/** World time (s) until which the stance change armed by SetStance holds him still (before the anim instance starts the clip). */
 	float StanceSettleUntil = 0.f;
+
+	/** Rev 5e item 6: the prone dive on the move (DropProne / UpdateProneDive). */
+	EProneDive ProneDive = EProneDive::None;
+	double ProneDiveStartTime = 0.0;
+	float ProneDiveLength = 0.f;
+	/** The mesh's relative XY at the dive start (the root translation of the clip is cancelled from it). */
+	FVector ProneDiveMeshBase = FVector::ZeroVector;
+	TWeakObjectPtr<UAnimSequenceBase> ProneDiveClip;
+	/** The dive drives the capsule along the move at the clip's root speed. */
+	void UpdateProneDive(float DeltaSeconds);
+	/** Ends the dive: the mesh back on its base, the crawl speed. */
+	void EndProneDive();
+	/** Root bone translation of the dive clip at Time (component space), cm. */
+	FVector GetProneDiveRoot(float Time) const;
 
 	/** Seconds until a stance clip that starts now / is playing lets the operative walk (0 without a clip). */
 	float GetStanceChangeDelay(EOperativeStance From, EOperativeStance To) const;

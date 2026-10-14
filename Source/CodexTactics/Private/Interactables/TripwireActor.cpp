@@ -19,6 +19,7 @@
 #include "Interactables/DeployableRules.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TripwireRules.h"
+#include "Level/CrawlGapActor.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "NavModifierComponent.h"
 #include "TimerManager.h"
@@ -43,8 +44,35 @@ namespace TripwireLook
 
 UNavArea_Tripwire::UNavArea_Tripwire()
 {
-	DefaultCost = 25.f; // the squad goes round its own wire when there is any way round
+	DefaultCost = 25.f; // AUTO mode: the squad goes round a known trap when there is any way round
 	DrawColor = FColor(255, 160, 0);
+}
+
+namespace TripwireNav
+{
+	/** Known traps cost nothing (a literal player order; rev 5e). */
+	void AddLiteralTrapArea(TArray<FNavigationFilterArea>& Areas)
+	{
+		FNavigationFilterArea& Wire = Areas.AddDefaulted_GetRef();
+		Wire.AreaClass = UNavArea_Tripwire::StaticClass();
+		Wire.bOverrideTravelCost = true;
+		Wire.TravelCostOverride = 1.f;
+		Wire.bOverrideEnteringCost = true;
+		Wire.EnteringCostOverride = 0.f;
+	}
+}
+
+UNavFilter_TrapLiteral::UNavFilter_TrapLiteral()
+{
+	TripwireNav::AddLiteralTrapArea(Areas);
+}
+
+UNavFilter_NoCrawlTrapLiteral::UNavFilter_NoCrawlTrapLiteral()
+{
+	TripwireNav::AddLiteralTrapArea(Areas);
+	FNavigationFilterArea& Crawl = Areas.AddDefaulted_GetRef();
+	Crawl.AreaClass = UNavArea_CrawlOnly::StaticClass();
+	Crawl.bIsExcluded = true;
 }
 
 ATripwireActor::ATripwireActor()
@@ -226,8 +254,9 @@ void ATripwireActor::Setup(const FVector& GroundA, const FVector& GroundB, bool 
 	{
 		Ignored.Add(RiggedBy);
 	}
-	// The squad's path cost: a 1.2 m wide band along the wire (a PMC wire only once the squad knows of it).
-	NavBox->SetBoxExtent(FVector(Length * 0.5f + 30.f, 60.f, 40.f));
+	// The squad's path cost (AUTO mode, rev 5e): a 1.2 m wide band along the wire, 80 cm past each anchor so a path round its end
+	// keeps a body clear of the peg (a PMC wire only once the squad knows of it).
+	NavBox->SetBoxExtent(FVector(Length * 0.5f + 80.f, 60.f, 40.f));
 	ApplyConcealment();
 }
 
@@ -237,6 +266,9 @@ void ATripwireActor::EnsureNavModifier()
 	{
 		NavModifier = NewObject<UNavModifierComponent>(this);
 		NavModifier->SetAreaClass(UNavArea_Tripwire::StaticClass());
+		// The shapes of the wire are no navigation geometry (CanEverAffectNavigation false): the modifier uses its failsafe box -
+		// sized to the 1.2 m band along the wire (actor space: X along it), not the 2 x 2 m default.
+		NavModifier->FailsafeExtent = NavBox->GetUnscaledBoxExtent();
 		NavModifier->RegisterComponent();
 	}
 }
@@ -301,7 +333,9 @@ void ATripwireActor::Reveal(AOperativeCharacter* Spotter)
 	const FRotator Facing = (GetActorLocation() - Spotter->GetActorLocation()).Rotation();
 	Spotter->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 	UFloatingTextSubsystem::SpawnAboveOperative(Spotter, TEXT("⚠️ TRIPWIRE SPOTTED!"), FLinearColor(1.f, 0.85f, 0.1f));
-	PostLine(Spotter->DisplayName, LOCTEXT("Spotted", "⚠️ Tripwire! Wire at shin height - everyone hold position!"));
+	PostLine(Spotter->DisplayName, IsHostile()
+		? LOCTEXT("SpottedHow", "⚠️ Tripwire! Wire at shin height - everyone hold position! Click the wire to disarm it (anyone can try, the Medic-Sapper is best), or crawl under it.")
+		: LOCTEXT("Spotted", "⚠️ Tripwire! Wire at shin height - everyone hold position!"));
 	GameplayEvents::Raise(this, GameplayEvents::TripwireSpotted, Spotter);
 	if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
 	{
@@ -466,6 +500,35 @@ void ATripwireActor::Detonate()
 	Destroy();
 }
 
+ATripwireActor* ATripwireActor::FindClickableWireNear(const UWorld* World, const FVector& Point)
+{
+	if (!World)
+	{
+		return nullptr;
+	}
+	ATripwireActor* Best = nullptr;
+	float BestDistance = TNumericLimits<float>::Max();
+	for (TActorIterator<ATripwireActor> It(World); It; ++It)
+	{
+		ATripwireActor* Wire = *It;
+		if (!Wire->bSetUp || Wire->bPreview || Wire->bTripped || Wire->IsConcealed() || Wire->IsActorBeingDestroyed()
+			|| FMath::Abs(Point.Z - (Wire->GetActorLocation().Z - TripwireRules::WireHeightCm)) > 100.f)
+		{
+			continue;
+		}
+		const FVector2D A(Wire->WireA.X, Wire->WireA.Y);
+		const FVector2D B(Wire->WireB.X, Wire->WireB.Y);
+		const FVector2D Click(Point.X, Point.Y);
+		const float Distance = TripwireRules::DistanceToWire(Click, A, B);
+		if (TripwireRules::IsClickOnWire(Click, A, B) && Distance < BestDistance)
+		{
+			Best = Wire;
+			BestDistance = Distance;
+		}
+	}
+	return Best;
+}
+
 bool ATripwireActor::CanBeDisarmedBy(const AOperativeCharacter* Operative) const
 {
 	return Operative && TripwireRules::CanDisarm(IsHostile(), Operative->SquadRole);
@@ -602,7 +665,8 @@ bool ATripwireActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	}
 	if (IsHostile())
 	{
-		OutLabel.Text = bDisarming ? TEXT("⚠️ PMC Tripwire (disarming)") : TEXT("⚠️ PMC Tripwire");
+		// Rev 5e (user bug 2026-10-14): say how to deal with it - a click on the wire opens its Disarm menu.
+		OutLabel.Text = bDisarming ? TEXT("⚠️ PMC Tripwire (disarming)") : TEXT("⚠️ PMC Tripwire - click to disarm");
 		OutLabel.Color = FLinearColor(1.f, 0.25f, 0.15f);
 		OutLabel.HeightCm = 50.f;
 		return true;

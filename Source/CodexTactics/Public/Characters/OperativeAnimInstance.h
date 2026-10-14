@@ -222,6 +222,30 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
 	TObjectPtr<UAnimSequenceBase> CrouchToStandAnimation;
 
+	/**
+	 * Rev 5e item 6 (user request 2026-10-14): prone while moving - the walk-to-prone / run-to-prone dives, full body. They play
+	 * instead of StandToProneAnimation when AOperativeCharacter::DropProne dives (GetProneDive). Empty = loaded at start from the
+	 * user's /Game/Crawl_MocapAnimPack/Animations/Transitions_Set/Crawl_from_Walk / Crawl_from_Run (the pack's own skeleton,
+	 * the same as the prone clips above - not the RTGT copies, which are on the UE5 Manny skeleton). Their root bone travels
+	 * ~3.1 / 3.4 m forward (no root motion enabled): AOperativeCharacter moves the capsule along at that speed and cancels the
+	 * root translation on the mesh.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
+	TObjectPtr<UAnimSequenceBase> WalkToProneAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
+	TObjectPtr<UAnimSequenceBase> RunToProneAnimation;
+
+	/** The dive going on now (None = no dive); for the AnimBP. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions")
+	EProneDive ProneDive = EProneDive::None;
+
+	/** The dive clip of Dive (WalkToProneAnimation / RunToProneAnimation), nullptr when unset / None. */
+	UAnimSequenceBase* GetProneDiveClip(EProneDive Dive) const;
+
+	/** Position (s) of the stance clip Clip playing now on the full-body slot; negative when it is not the one playing. */
+	float GetStanceTransitionPosition(const UAnimSequenceBase* Clip) const;
+
 	/** Blend in / out of a transition clip, s (Godot xfade 0.15). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Stance Transitions", meta = (ClampMin = "0"))
 	float StanceTransitionBlendTime = 0.15f;

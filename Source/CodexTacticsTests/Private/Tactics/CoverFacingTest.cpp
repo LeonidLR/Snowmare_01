@@ -220,7 +220,8 @@ bool FCoverCornerPeekEdgeHitTest::RunTest(const FString& Parameters)
 		FindPeekEdge(CoverFacingTest::MakeSlot(), FVector(-45.f, 110.f, 90.f), nullptr, Side, Edge));
 	FCoverSlot Low = Slot;
 	Low.Height = ECoverHeight::LowCover;
-	TestFalse(TEXT("low cover: fired over the top, no corner peek"), FindPeekEdge(Low, FVector(-45.f, 100.f, 90.f), nullptr, Side, Edge));
+	TestTrue(TEXT("rev 5e: low cover peeks too (the crouched corner stance round its end)"), FindPeekEdge(Low, FVector(-45.f, 100.f, 90.f), nullptr, Side, Edge)
+		&& Side == ECoverFacing::Right);
 	// A long wall: the end lies beyond his slot's corner probes; a slot traced near the click knows it.
 	const FCoverSlot Long = CoverFacingTest::MakeSlot();
 	FCoverSlot Probe = CoverFacingTest::MakeSlot(false, 0.f, true, 30.f);
@@ -285,6 +286,49 @@ bool FCoverCornerPeekNearEdgeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("30 cm off: a short shimmy"), DecideCornerPeekOrder(0.f, 30.f, false, true, false, Config) == ECornerPeekOrder::ShimmyThenPose);
 	TestTrue(TEXT("still shimmying: shimmy again (real time)"), DecideCornerPeekOrder(0.f, 0.f, true, true, false, Config) == ECornerPeekOrder::ShimmyThenPose);
 	TestTrue(TEXT("still shimmying, turn-based: refused"), DecideCornerPeekOrder(0.f, 0.f, true, true, true, Config) == ECornerPeekOrder::Refused);
+	return true;
+}
+
+COVER_FACING_TEST(FCoverCornerPeekLowCoverTest, "CornerPeekLowCover")
+bool FCoverCornerPeekLowCoverTest::RunTest(const FString& Parameters)
+{
+	// Rev 5e (game designer 2026-10-14): crouched behind a LOW wall / barricade, a click on its end = the crouched corner peek.
+	using namespace CoverFacingRules;
+	const FCoverFacingConfig Config;
+	FCoverSlot Low = CoverFacingTest::MakeSlot(true, 140.f, true, 110.f);
+	Low.Height = ECoverHeight::LowCover;
+	Low.WallPoint.Z = 50.f;
+	ECoverFacing Side = ECoverFacing::Left;
+	float Edge = 0.f;
+	TestTrue(TEXT("the low wall's face near its right end"), FindPeekEdge(Low, FVector(-45.f, 80.f, 50.f), nullptr, Side, Edge)
+		&& Side == ECoverFacing::Right && FMath::IsNearlyEqual(Edge, 110.f));
+	TestTrue(TEXT("the TOP of the low wall at its left end (behind the face plane)"), FindPeekEdge(Low, FVector(-60.f, -125.f, 100.f), nullptr, Side, Edge)
+		&& Side == ECoverFacing::Left && FMath::IsNearlyEqual(Edge, -140.f));
+	TestFalse(TEXT("the middle of the low wall: no peek (a shimmy / over the top)"), FindPeekEdge(Low, FVector(-45.f, 0.f, 50.f), nullptr, Side, Edge));
+	TestFalse(TEXT("a ground click in front of it: no peek"), FindPeekEdge(Low, FVector(160.f, 100.f, 0.f), nullptr, Side, Edge));
+	// A long low wall: a probe slot of the same height gives the far end; a high probe (another obstacle) is ignored.
+	const FCoverSlot LongLow = [] { FCoverSlot Slot = CoverFacingTest::MakeSlot(); Slot.Height = ECoverHeight::LowCover; return Slot; }();
+	FCoverSlot Probe = CoverFacingTest::MakeSlot(false, 0.f, true, 30.f);
+	Probe.Height = ECoverHeight::LowCover;
+	Probe.WorldLocation = FVector(0.f, 400.f, 0.f);
+	TestTrue(TEXT("long low wall: the low probe's edge"), FindPeekEdge(LongLow, FVector(-45.f, 420.f, 50.f), &Probe, Side, Edge)
+		&& Side == ECoverFacing::Right && FMath::IsNearlyEqual(Edge, 430.f));
+	Probe.Height = ECoverHeight::HighCover;
+	TestFalse(TEXT("a probe of another height is not his wall"), FindPeekEdge(LongLow, FVector(-45.f, 420.f, 50.f), &Probe, Side, Edge));
+	// Low cover = crouched: the crouched stand-offs (pack _L 65, _R 49) and the near-edge rule at both ends.
+	for (const ECoverFacing End : { ECoverFacing::Left, ECoverFacing::Right })
+	{
+		const float StandOff = CornerStandOff(End, true, Config);
+		TestEqual(TEXT("crouched stand-off"), StandOff, End == ECoverFacing::Right ? 65.f : 49.f, 0.01f);
+		FCoverSlot AtEnd = CoverFacingTest::MakeSlot(End == ECoverFacing::Left, StandOff, End == ECoverFacing::Right, StandOff);
+		AtEnd.Height = ECoverHeight::LowCover;
+		const float EdgeAlong = End == ECoverFacing::Right ? StandOff : -StandOff;
+		TestTrue(TEXT("crouched at the low wall's end: the near-edge click poses in place"),
+			DecideCornerPeekOrder(CornerPeekStandAlong(End, EdgeAlong, StandOff), 0.f, false, IsAtCorner(AtEnd, End, Config), false, Config) == ECornerPeekOrder::PoseInPlace);
+		TestTrue(TEXT("... also in turn-based (no AP)"),
+			DecideCornerPeekOrder(CornerPeekStandAlong(End, EdgeAlong, StandOff), 0.f, false, IsAtCorner(AtEnd, End, Config), true, Config) == ECornerPeekOrder::PoseInPlace);
+	}
+	TestTrue(TEXT("the near-edge click on his own low wall wins over the proximity selection"), CornerPeekClickWins(true, false));
 	return true;
 }
 

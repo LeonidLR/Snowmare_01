@@ -18,6 +18,8 @@ struct CODEXTACTICS_API FTutorialTransition
 	bool bSilent = false;
 	/** Completed from the player's command history before it was shown ("precredit"): the lesson was already done. */
 	bool bPrecredited = false;
+	/** Dropped by its "cancel_on" (rev 5e): a running speech keeps only the line on screen, nothing is played later. */
+	bool bCancelled = false;
 	/** Seconds the step was shown before this change. */
 	float ActiveSeconds = 0.f;
 };
@@ -162,6 +164,12 @@ private:
 	void DropEarlierBeatCard(int32 Index);
 	/** Completes the step and marks its transition as precredited (the player had already done the lesson). */
 	void FinishPrecredited(int32 Index);
+	/** Rev 5e "cancel_on": a step named in the step's cancel list has finished already. */
+	bool IsCancelDue(int32 Index) const;
+	/** Rev 5e: drops a running step as Skipped and marks its transition bCancelled (FTutorialCancelOn). */
+	void CancelStep(int32 Index);
+	/** Rev 5e: cancels every running step whose "cancel_on" matches (a finished step / an event / a volume entry). */
+	void CancelMatching(FName FinishedStep, FName EventName, FName VolumeId);
 	/** Every step of an after_step trigger's "step" list has finished at least once (FTutorialTrigger::AfterSteps). */
 	bool AreAfterStepsFinished(int32 Index) const;
 	/** Every "trigger.requires" step has been triggered at least once. */
