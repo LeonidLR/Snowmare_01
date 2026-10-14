@@ -414,6 +414,14 @@ void FTutorialStateMachine::Fire(int32 Index, bool bForce)
 		SetState(Index, ETutorialStepState::Waiting);
 		return;
 	}
+	// Rev 5g (game designer 2026-10-14, "waiting for instructions" on arrival): a card that a PLACE starts (a volume / a beat start)
+	// shows at once - the breather after the card the player just finished does not hold it back.
+	// Forced starts (replay / dev trigger) keep the breather.
+	if (!bForce && Step.Kind == ETutorialStepKind::HintCard
+		&& (Step.Trigger.Type == ETutorialTriggerType::Volume || Step.Trigger.Type == ETutorialTriggerType::BeatStart))
+	{
+		CardBreatherLeft = 0.f;
+	}
 	Enqueue(Index);
 }
 
@@ -444,6 +452,7 @@ void FTutorialStateMachine::DropEarlierBeatStep(int32 Index)
 
 void FTutorialStateMachine::DropEarlierBeatCard(int32 Index)
 {
+	TGuardValue<bool> NoBreather(bNoBreatherOnFinish, true); // rev 5g: a new beat's place - its card shows at once
 	if (TutorialRules::IsPrecreditSatisfied(Data.Steps[Index], History))
 	{
 		FinishPrecredited(Index);
@@ -487,7 +496,10 @@ void FTutorialStateMachine::CancelStep(int32 Index)
 	}
 	const FName StepId = Data.Steps[Index].Id;
 	const int32 Mark = Transitions.Num();
-	Finish(Index, ETutorialStepState::Skipped);
+	{
+		TGuardValue<bool> NoBreather(bNoBreatherOnFinish, true); // rev 5g: what replaces it (the arrival's card) shows at once
+		Finish(Index, ETutorialStepState::Skipped);
+	}
 	for (int32 Back = Mark; Back < Transitions.Num(); ++Back)
 	{
 		if (Transitions[Back].StepId == StepId && Transitions[Back].To == ETutorialStepState::Skipped)
@@ -571,7 +583,7 @@ void FTutorialStateMachine::Finish(int32 Index, ETutorialStepState FinalState)
 	const bool bWasActive = Runtime[Index].State == ETutorialStepState::Active;
 	const FTutorialStep& Step = Data.Steps[Index];
 	Queue.Remove(Index);
-	if (bWasActive && Step.Kind == ETutorialStepKind::HintCard)
+	if (bWasActive && Step.Kind == ETutorialStepKind::HintCard && !bNoBreatherOnFinish)
 	{
 		CardBreatherLeft = CardBreatherSeconds;
 	}

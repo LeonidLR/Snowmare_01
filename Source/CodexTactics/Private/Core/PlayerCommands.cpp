@@ -11,6 +11,8 @@ namespace PlayerCommands
 	const FName CameraRotateKeys(TEXT("Camera.Rotate.Keys"));
 	const FName CameraRotateMouse(TEXT("Camera.Rotate.Mouse"));
 	const FName CameraZoom(TEXT("Camera.Zoom"));
+	const FName CameraInteriorView(TEXT("Camera.InteriorView"));
+	const FName ExitBuilding(TEXT("Order.ExitBuilding"));
 
 	const FName Move(TEXT("Order.Move"));
 	const FName Sprint(TEXT("Order.Sprint"));
@@ -141,7 +143,9 @@ namespace PlayerCommands
 			{ CameraRotateKeys, TEXT("Q/E"), TEXT("Movement & camera"), TEXT("Turn the camera in 45 degree steps") },
 			{ CameraRotateMouse, TEXT("RMB drag"), TEXT("Movement & camera"), TEXT("Turn the camera freely with the mouse") },
 			{ CameraZoom, TEXT("Wheel"), TEXT("Movement & camera"), TEXT("Zoom in / out") },
+			{ CameraInteriorView, TEXT("M"), TEXT("Movement & camera"), TEXT("Inside a building: switch between the interior camera and the outside view") },
 			{ Move, TEXT("LMB"), TEXT("Movement & camera"), TEXT("Move to the clicked spot") },
+			{ ExitBuilding, TEXT("LMB on EXIT"), TEXT("Movement & camera"), TEXT("Inside a building: click an EXIT arrow at a door - the squad (Solo: the selected operative) walks out") },
 			{ Sprint, TEXT("Double-click"), TEXT("Movement & camera"), TEXT("Sprint to the clicked spot") },
 			{ WatchSector, TEXT("Shift+Click"), TEXT("Movement & camera"), TEXT("Watch a sector") },
 			{ SelectMember, TEXT("1-4"), TEXT("Squad"), TEXT("Select an operative") },

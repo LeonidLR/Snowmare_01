@@ -113,6 +113,13 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName CameraRotateMouse;
 	/** Mouse wheel: one notch of zoom in / out ("Camera.Zoom"). */
 	extern CODEXTACTICS_API const FName CameraZoom;
+	/**
+	 * M inside a building (a camera zone with a fixed interior camera): the interior camera <-> the normal top-down view
+	 * ("Camera.InteriorView"; rev 5g, never locked).
+	 */
+	extern CODEXTACTICS_API const FName CameraInteriorView;
+	/** A click on an EXIT arrow at a door of the building whose interior camera shows: walk out ("Order.ExitBuilding"; never locked). */
+	extern CODEXTACTICS_API const FName ExitBuilding;
 
 	// --- Orders and selection -----------------------------------------------------------------------------------
 	/** LMB on the ground: the leader (or the selected group) walks there (planned in the tactical pause). */

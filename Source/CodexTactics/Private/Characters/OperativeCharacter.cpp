@@ -414,6 +414,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 			}
 		}), RiseDelay, false);
 		bHasMoveOrder = true;
+		bOwnMoveOrder = true;
 		return EOperativeOrderResult::Accepted;
 	}
 	if (bSprint && CanSprint())
@@ -431,6 +432,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	}
 	ApplyMovementParams();
 	const EOperativeOrderResult Result = RequestMove(Destination);
+	bOwnMoveOrder = bHasMoveOrder; // rev 5g: his own order (the formation leaves him alone until it is done)
 	UE_LOG(LogCodexTactics, Display, TEXT("%s: move to (%.0f, %.0f)%s -> %s"), *DisplayName.ToString(), Destination.X, Destination.Y,
 		bSprinting ? TEXT(" sprint") : TEXT(""), Result == EOperativeOrderResult::Accepted ? TEXT("accepted")
 		: Result == EOperativeOrderResult::Unreachable ? TEXT("unreachable") : TEXT("no controller"));
@@ -457,6 +459,7 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	{
 		return EOperativeOrderResult::Refused;
 	}
+	bOwnMoveOrder = false; // a formation move replaces any own order
 	ApplyMovementParams(Speed);
 	return RequestMove(Destination);
 }
@@ -534,6 +537,7 @@ void AOperativeCharacter::StopOperative()
 	}
 	GetCharacterMovement()->StopMovementImmediately();
 	bHasMoveOrder = false;
+	bOwnMoveOrder = false;
 	bSprinting = false;
 	if (UWorld* World = GetWorld())
 	{
@@ -992,6 +996,7 @@ void AOperativeCharacter::SetSprinting(bool bNewSprinting)
 void AOperativeCharacter::HandleMoveFinished()
 {
 	bHasMoveOrder = false;
+	bOwnMoveOrder = false;
 	bSprinting = false;
 	ApplyMovementParams();
 

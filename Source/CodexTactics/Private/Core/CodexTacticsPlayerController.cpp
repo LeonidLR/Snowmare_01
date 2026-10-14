@@ -9,6 +9,8 @@
 #include "Framework/Application/IInputProcessor.h"
 #include "Characters/SquadFormation.h"
 #include "Camera/TacticalCameraPawn.h"
+#include "Camera/InteriorExitArrowActor.h"
+#include "Camera/InteriorExitSubsystem.h"
 #include "Characters/RecruitSubsystem.h"
 #include "Combat/HoldSphereActor.h"
 #include "Combat/CombatTimeModeRules.h"
@@ -303,6 +305,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	// Demo 01 (2026-10-13): I = the inventory drawer (a tutorial lock target), O = the enemies' vision cones (Commandos style).
 	InputComponent->BindKey(EKeys::I, IE_Pressed, this, &ACodexTacticsPlayerController::InventoryKey);
 	InputComponent->BindKey(EKeys::O, IE_Pressed, this, &ACodexTacticsPlayerController::VisionConesKey);
+	// Rev 5g: M = interior camera <-> outside view inside a building (a free key; F1 row Camera.InteriorView).
+	InputComponent->BindKey(EKeys::M, IE_Pressed, this, &ACodexTacticsPlayerController::InteriorViewKey);
 
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!Input)
@@ -423,8 +427,15 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		UpdateCornerPeekHover(PeekOperative, bPeekHit ? &PeekHit : nullptr);
 		// Rev 5e: a spotted tripwire (or the ground right next to it) under the cursor: the hand cursor - a click opens its menu.
 		FHitResult TrapHit;
-		const bool bTrap = !bCornerPeekCursor && !IsDialogueOpen() && GetHitResultUnderCursor(ECC_Visibility, false, TrapHit)
-			&& (Cast<ATripwireActor>(TrapHit.GetActor()) || (!Cast<APawn>(TrapHit.GetActor()) && !Cast<AInteractableActor>(TrapHit.GetActor())
+		const bool bCursorHit = !bCornerPeekCursor && !IsDialogueOpen() && GetHitResultUnderCursor(ECC_Visibility, false, TrapHit);
+		// Rev 5g: an EXIT arrow under the cursor lights up and shows the hand too.
+		AInteriorExitArrowActor* HoveredExit = bCursorHit ? Cast<AInteriorExitArrowActor>(TrapHit.GetActor()) : nullptr;
+		if (UInteriorExitSubsystem* Exits = GetWorld()->GetSubsystem<UInteriorExitSubsystem>())
+		{
+			Exits->SetHoveredArrow(HoveredExit);
+		}
+		const bool bTrap = bCursorHit && (HoveredExit || Cast<ATripwireActor>(TrapHit.GetActor())
+			|| (!Cast<APawn>(TrapHit.GetActor()) && !Cast<AInteractableActor>(TrapHit.GetActor())
 				&& ATripwireActor::FindClickableWireNear(GetWorld(), TrapHit.ImpactPoint)));
 		if (bTrap != bTrapHoverCursor)
 		{
@@ -1324,6 +1335,24 @@ void ACodexTacticsPlayerController::VisionConesKey()
 	}
 }
 
+void ACodexTacticsPlayerController::InteriorViewKey()
+{
+	// Never locked (a camera command): the player must always be able to see his way out.
+	UInteriorExitSubsystem* Exits = GetWorld()->GetSubsystem<UInteriorExitSubsystem>();
+	bool bOutside = false;
+	if (!Exits || !Exits->ToggleInteriorView(bOutside))
+	{
+		return; // not inside a building with an interior camera
+	}
+	ControllerCommands::Report(this, PlayerCommands::CameraInteriorView);
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), bOutside
+			? LOCTEXT("InteriorViewOutside", "Outside view - [M] back to the interior camera.")
+			: LOCTEXT("InteriorViewInside", "Interior camera - [M] outside view."));
+	}
+}
+
 void ACodexTacticsPlayerController::DialogueSkip()
 {
 	ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(GetHUD());
@@ -1596,6 +1625,17 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	if (!Leader)
 	{
+		return;
+	}
+
+	// Rev 5g (user request 2026-10-14): an EXIT arrow at a door of the building whose interior camera shows - the squad (Solo: the
+	// selected operatives) walks out. Never locked; the arrows are hidden in turn-based combat.
+	if (AInteriorExitArrowActor* ExitArrow = Cast<AInteriorExitArrowActor>(Hit.GetActor()))
+	{
+		if (UInteriorExitSubsystem* Exits = GetWorld()->GetSubsystem<UInteriorExitSubsystem>(); Exits && Exits->OrderExit(ExitArrow) > 0)
+		{
+			ControllerCommands::Report(this, PlayerCommands::ExitBuilding, ExitArrow, false, !Squad->IsSoloMode(), nullptr, ExitArrow->GetExitTarget());
+		}
 		return;
 	}
 

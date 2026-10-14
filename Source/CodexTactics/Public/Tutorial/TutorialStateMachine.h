@@ -251,6 +251,11 @@ private:
 	TArray<int32> Queue;
 	int32 CurrentBeatIndex = INDEX_NONE;
 	float CardBreatherLeft = 0.f;
+	/**
+	 * Rev 5g (game designer 2026-10-14, "waiting for instructions" on arrival): a card that is CANCELLED (cancel_on) or DROPPED
+	 * because the squad moved on to a later beat arms no breather - the arrival's own card shows at once.
+	 */
+	bool bNoBreatherOnFinish = false;
 	float RemedialCooldownLeft = 0.f;
 	TSet<FName> UsedCommands;
 	TArray<FTutorialTransition> Transitions;

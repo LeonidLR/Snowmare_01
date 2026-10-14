@@ -41,7 +41,7 @@ namespace ControlsTest
 		PlayerCommands::QuickSave, PlayerCommands::QuickLoad, PlayerCommands::ControlsScreen, PlayerCommands::PauseMenu,
 		PlayerCommands::VehicleBoard, PlayerCommands::VehicleDisembark, PlayerCommands::VehicleDrive, PlayerCommands::VehicleTurretFire,
 		PlayerCommands::VehicleRepair, PlayerCommands::InventoryOpen, PlayerCommands::GiveItem, PlayerCommands::ToggleVisionCones,
-		PlayerCommands::DialogueNext, PlayerCommands::DialogueSkip,
+		PlayerCommands::DialogueNext, PlayerCommands::DialogueSkip, PlayerCommands::CameraInteriorView, PlayerCommands::ExitBuilding,
 		};
 	}
 }

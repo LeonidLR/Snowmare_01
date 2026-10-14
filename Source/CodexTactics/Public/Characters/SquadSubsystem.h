@@ -148,6 +148,12 @@ public:
 	/** Max scout distance from followers in solo mode before auto-exit (cm, 25m matching Godot). */
 	static constexpr float SoloModeMaxDistance = 2500.f;
 
+	/**
+	 * Rev 5g (game designer 2026-10-14): Operative executes an order of his own - a move, a use walk-up, a push / deploy task
+	 * (SquadOrderRules::IsOnOwnOrder). A leader switch / Solo never cancels it; the formation takes him only once it is done.
+	 */
+	bool IsOnOwnOrder(const AOperativeCharacter* Operative) const;
+
 	/** Formation slot of a follower, or INDEX_NONE for the leader / unknown actors. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	int32 GetFormationSlot(const AOperativeCharacter* Operative) const;

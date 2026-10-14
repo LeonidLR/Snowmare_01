@@ -256,6 +256,11 @@ private:
 	void InventoryKey();
 	/** O: shows / hides the enemies' vision cones (UVisionConeComponent::SetPlayerEnemyCones; user decision 2026-10-13). */
 	void VisionConesKey();
+	/**
+	 * Rev 5g (user request 2026-10-14): M inside a building - the fixed interior camera <-> the normal top-down view
+	 * (UInteriorExitSubsystem::ToggleInteriorView; command Camera.InteriorView, never locked).
+	 */
+	void InteriorViewKey();
 	void SelectMember1() { SelectMember(0); }
 	void SelectMember2() { SelectMember(1); }
 	void SelectMember3() { SelectMember(2); }

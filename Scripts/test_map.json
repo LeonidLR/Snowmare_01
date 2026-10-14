@@ -29,7 +29,7 @@
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugSmoke", "CoverHugMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
-    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke",
+    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke"
   ],
   "smokeOptions": {
@@ -44,6 +44,7 @@
     "EventBusSmoke": { "exclusive": true },
     "CombatMoveSmoke": { "knownFail": true },
     "MainMenuSmoke": { "map": "/Game/Maps/L_MainMenu" },
+    "InteriorExitSmoke": { "map": "/Game/Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout" },
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" },
     "PatrolAmbushSmoke": { "map": "/Game/Maps/L_PatrolTest" },
     "VisionConeSmoke": { "map": "/Game/Maps/L_PatrolTest" }
@@ -225,9 +226,9 @@
     },
     {
       "name": "operative-movement-squad",
-      "globs": ["Source/**/Characters/OperativeCharacter*", "Source/**/Characters/OperativeAIController*", "Source/**/Characters/OperativeMovement*", "Source/**/Characters/SquadFormation*", "Source/**/Characters/SquadSubsystem*", "Source/**/Characters/FacingRules*", "Source/**/Characters/Vault*", "Source/**/Characters/RecruitSubsystem*"],
+      "globs": ["Source/**/Characters/OperativeCharacter*", "Source/**/Characters/OperativeAIController*", "Source/**/Characters/OperativeMovement*", "Source/**/Characters/SquadFormation*", "Source/**/Characters/SquadSubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/FacingRules*", "Source/**/Characters/Vault*", "Source/**/Characters/RecruitSubsystem*"],
       "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault"],
-      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke"]
+      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "RealtimeSelectSmoke"]
     },
     {
       "name": "panic",
@@ -303,9 +304,9 @@
     },
     {
       "name": "camera",
-      "globs": ["Source/**/Camera/**"],
+      "globs": ["Source/**/Camera/**", "Source/**/Debug/InteriorExitSmoke*"],
       "tests": ["CodexTactics.Camera", "CodexTactics.GameFlow.Phases"],
-      "smokes": ["CameraZoneSmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke"]
+      "smokes": ["CameraZoneSmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke", "InteriorExitSmoke"]
     },
     {
       "name": "death-cinematic",

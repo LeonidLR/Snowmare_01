@@ -2,6 +2,9 @@
 #include "Survival/WarmIdleSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Characters/SquadOrderRules.h"
+#include "Interactables/InteractionSubsystem.h"
+#include "Interactables/RelocationSubsystem.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -149,16 +152,22 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 	if (Leader.Get() != NewLeader)
 	{
 		Leader = NewLeader;
-		// Drop the formation move the new leader was following; it now waits for player orders.
-		NewLeader->StopOperative();
+		// Drop the formation move the new leader was following; it now waits for player orders. Rev 5g (game designer
+		// 2026-10-14): an order of his own runs on (selecting him must not cancel it - SquadOrderRules).
+		if (SquadOrderRules::ShouldStopOnBecomingLeader(IsOnOwnOrder(NewLeader)))
+		{
+			NewLeader->StopOperative();
+		}
 		FormationHeading = NewLeader->GetActorForwardVector();
 		RebuildFollowers();
 		if (bIsSoloMode)
 		{
-			// Reapply holding and crouch to followers in solo mode
+			// Reapply holding and crouch to followers in solo mode. Rev 5g: the old leader (or anyone) still executing his own
+			// order finishes it first, then holds where it ended (bug: selecting another operative in Solo stopped him).
 			for (FFollowerState& Follower : Followers)
 			{
-				if (AOperativeCharacter* Operative = Follower.Operative.Get())
+				if (AOperativeCharacter* Operative = Follower.Operative.Get();
+					Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)))
 				{
 					Operative->StopOperative();
 					Operative->SetStance(EOperativeStance::Crouching);
@@ -219,7 +228,9 @@ void USquadSubsystem::SetFollowersHolding(bool bHold)
 	bFollowersHolding = bHold;
 	for (FFollowerState& Follower : Followers)
 	{
-		if (AOperativeCharacter* Operative = Follower.Operative.Get(); Operative && bHold)
+		// Rev 5g: holding stops the formation walks; an order of his own still finishes (he holds where it ends).
+		if (AOperativeCharacter* Operative = Follower.Operative.Get();
+			Operative && bHold && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)))
 		{
 			Operative->StopOperative();
 		}
@@ -363,10 +374,12 @@ void USquadSubsystem::EnterSoloMode()
 	bIsSoloMode = true;
 	SetFollowersHolding(true);
 
-	// Followers crouch when holding in solo mode (Godot solo_wait_stance = 1 / CROUCHING)
+	// Followers crouch when holding in solo mode (Godot solo_wait_stance = 1 / CROUCHING); one still on his own order walks on in
+	// his stance (rev 5g).
 	for (FFollowerState& Follower : Followers)
 	{
-		if (AOperativeCharacter* Operative = Follower.Operative.Get())
+		if (AOperativeCharacter* Operative = Follower.Operative.Get();
+			Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)))
 		{
 			Operative->SetStance(EOperativeStance::Crouching);
 			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🛡️ GUARD: CROUCHED"), FLinearColor(0.3f, 0.9f, 0.4f));
@@ -402,6 +415,14 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 		{
 			if (AOperativeCharacter* Operative = Follower.Operative.Get())
 			{
+				// Rev 5g: Regroup ends a follower's own move order - everybody comes back to the leader (a use / object task
+				// still finishes first, SquadOrderRules).
+				Operative->ReleaseOwnMoveOrder();
+				// ... and a follower hugging a wall (e.g. stacked at a door in Solo) leaves it ("Teammates leave cover and regroup").
+				if (Operative->bInCover)
+				{
+					Operative->LeaveCoverToMove(TEXT("regroup"));
+				}
 				Operative->SetStance(LeaderRef->GetStance());
 				UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🏃 REGROUPING"), FLinearColor(1.f, 0.85f, 0.2f));
 			}
@@ -605,6 +626,26 @@ void USquadSubsystem::ExecutePlannedOrders()
 	PauseOrigins.Reset();
 }
 
+bool USquadSubsystem::IsOnOwnOrder(const AOperativeCharacter* Operative) const
+{
+	if (!Operative)
+	{
+		return false;
+	}
+	SquadOrderRules::FOwnOrderFacts Facts;
+	Facts.bOwnMoveOrder = Operative->HasOwnMoveOrder();
+	const UWorld* World = GetWorld();
+	if (const UInteractionSubsystem* Interaction = World ? World->GetSubsystem<UInteractionSubsystem>() : nullptr)
+	{
+		Facts.bUseOrder = Interaction->HasUseOrder(Operative);
+	}
+	if (const URelocationSubsystem* Relocation = World ? World->GetSubsystem<URelocationSubsystem>() : nullptr)
+	{
+		Facts.bObjectTask = Relocation->HasActiveTask(Operative);
+	}
+	return SquadOrderRules::IsOnOwnOrder(Facts);
+}
+
 int32 USquadSubsystem::GetFormationSlot(const AOperativeCharacter* Operative) const
 {
 	for (const FFollowerState& Follower : Followers)
@@ -762,6 +803,15 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		return;
 	}
 
+	// Rev 5g (game designer 2026-10-14): a follower executing an order of his own (the old leader after a selection switch, a group
+	// move, a use / push task) finishes it; the formation takes him on the next repath after it ended.
+	if (IsOnOwnOrder(Operative))
+	{
+		Follower.bParked = false;
+		Follower.RepathTimeRemaining = 0.f;
+		return;
+	}
+
 	// Followers copy the moving leader's sprint. Deviation (user decision 2026-10-01): every operative keeps the stance
 	// he was given — no copy of the leader's stance (Godot can_sync_stance); only Alt + Z / C / V sets the whole squad.
 	Operative->SetSprinting(LeaderRef.IsSprinting());
@@ -832,6 +882,38 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	SlotLocation.Z = Operative->GetActorLocation().Z;
 
 	const float Distance = FVector::Dist2D(Operative->GetActorLocation(), SlotLocation);
+	// Rev 5g (game designer 2026-10-14): in group mode a follower hugging a wall leaves the cover and follows once the leader walks
+	// away (Solo / holding returned above, guards are no followers, the formation is off in a fight - the autonomy / ROE rules
+	// decide there). A leader stacking up at cover himself keeps the ones already in cover where they are.
+	if (Operative->bInCover)
+	{
+		SquadOrderRules::FCoverFollowFacts CoverFacts;
+		CoverFacts.bInCover = true;
+		CoverFacts.bFollowersHolding = bFollowersHolding;
+		CoverFacts.bGuarding = Operative->bGuarding;
+		CoverFacts.bFormationActive = IsFormationActive();
+		CoverFacts.bLeaderMoving = bLeaderMoving;
+		CoverFacts.bLeaderTakingCover = LeaderRef.bInCover || LeaderRef.HasPendingCover();
+		CoverFacts.DistanceToSlotCm = Distance;
+		if (!SquadOrderRules::ShouldLeaveCoverToFollow(CoverFacts))
+		{
+			return; // he holds his wall (FollowTo would refuse anyway)
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: the leader walks away (slot %.0f cm off) - leaves the cover and follows"),
+			*Operative->DisplayName.ToString(), Distance);
+		Operative->LeaveCoverToMove(TEXT("follows the leader"));
+		// Crouched at a low wall: he stands up to walk with a standing leader (the clip roots him, the next repath walks him).
+		if (Operative->GetStance() == EOperativeStance::Crouching && LeaderRef.GetStance() == EOperativeStance::Standing)
+		{
+			Operative->SetStance(EOperativeStance::Standing);
+		}
+		if (const float LeaveHold = Operative->GetMoveHoldSeconds(); OperativeMovementRules::ShouldDeferMove(LeaveHold))
+		{
+			Follower.bParked = false;
+			Follower.RepathTimeRemaining = LeaveHold;
+			return;
+		}
+	}
 	float Speed = SquadFormation::ComputeFollowerSpeed(FormationConfig, Operative->GetMaxSpeed(), Distance, Follower.Slot, TimeSeconds, bLeaderMoving);
 	// A parked follower restarts only once the slot (it wanders) is clearly away: stopping and restarting every repath
 	// made the legs tremble between the idle and the walk (user report 2026-10-01).

@@ -5,6 +5,12 @@
 // first (the stand-up / kneel / lie-down clip plays in place) and only then walks to his formation slot.
 // Variants: prone followers + standing leader, crouched followers + standing leader, prone followers + crawling leader.
 // Headless runs do not refresh bone poses: the actor locations, the stance and the move-hold (clip) state are checked.
+// Rev 5g (game designer play-test 2026-10-14), after the variants:
+//  - orders survive a selection switch: group mode - A ordered 10 m away, B selected: A reaches his goal, then joins B's
+//    formation; Solo - A ordered 9 m away, B selected: A reaches it and holds there, the third mate stays put;
+//  - followers in cover: B ordered into cover through a selection switch (his order runs on); group mode with the leader
+//    standing he stays at the wall; Solo on + the leader 6 m away: he stays; Solo off (Regroup): he leaves the cover and
+//    rejoins; back into cover, then the leader walks 15 m away in group mode: B leaves the cover and reaches the formation.
 
 #include "CoreMinimal.h"
 
@@ -14,6 +20,10 @@
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/HealthComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Tactics/CoverTraceRules.h"
 #include "Containers/Ticker.h"
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
@@ -60,6 +70,20 @@ namespace SoloRejoinSmoke
 		int32 Failures = 0;
 		FVector LeaderStart = FVector::ZeroVector;
 		TArray<FFollowerProbe> Probes;
+
+		// Rev 5g order / cover phases.
+		TWeakObjectPtr<AOperativeCharacter> A;
+		TWeakObjectPtr<AOperativeCharacter> B;
+		TWeakObjectPtr<AOperativeCharacter> C;
+		FVector Target = FVector::ZeroVector;
+		FVector Mark = FVector::ZeroVector;
+		float MinToTarget = 1.0e9f;
+		bool bFlag = false;
+		FVector P = FVector::ZeroVector;
+		FVector F = FVector::ForwardVector;
+		FVector R = FVector::RightVector;
+		FCoverSlot Slot;
+		TWeakObjectPtr<AStaticMeshActor> Wall;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -71,6 +95,10 @@ namespace SoloRejoinSmoke
 	bool Finish(const FState& State, bool bComplete)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
+		if (State.Wall.IsValid())
+		{
+			State.Wall->Destroy();
+		}
 		FPlatformMisc::RequestExit(false, TEXT("SoloRejoinSmoke"));
 		return false;
 	}
@@ -94,6 +122,279 @@ namespace SoloRejoinSmoke
 		return Followers;
 	}
 
+	AStaticMeshActor* SpawnWall(UWorld* World, const FVector& Centre, const FRotator& Rotation, const FVector& Scale)
+	{
+		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		AStaticMeshActor* Block = Cube ? World->SpawnActorDeferred<AStaticMeshActor>(AStaticMeshActor::StaticClass(),
+			FTransform(Rotation, Centre, Scale), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn) : nullptr;
+		if (!Block)
+		{
+			return nullptr;
+		}
+		Block->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+		Block->GetStaticMeshComponent()->SetStaticMesh(Cube);
+		Block->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+		Block->GetStaticMeshComponent()->SetCanEverAffectNavigation(true);
+		Block->FinishSpawning(FTransform(Rotation, Centre, Scale));
+		return Block;
+	}
+
+	/** Every operative standing and still at the test start, A (roster 0) leading. */
+	void ResetSquad(UWorld* World, USquadSubsystem* Squad, FState& State)
+	{
+		if (Squad->IsSoloMode())
+		{
+			Squad->ExitSoloMode(false, 0.f);
+		}
+		SmokeUtils::PlaceSquadAtTestStart(World);
+		const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+		for (AOperativeCharacter* Member : Members)
+		{
+			Member->LeaveCover(TEXT("smoke reset"));
+			Member->StopOperative();
+			Member->SetStance(EOperativeStance::Standing);
+		}
+		State.A = Members[0];
+		State.B = Members[1];
+		State.C = Members[2];
+		Squad->SetLeader(Members[0]);
+	}
+
+	/** Rev 5g phases (stage 100+): orders survive a selection switch; followers in cover in group / Solo mode. */
+	bool StepOrders(UWorld* World, USquadSubsystem* Squad, FState& State)
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Member->ColdLevel = 0.f;
+		}
+		AOperativeCharacter* A = State.A.Get();
+		AOperativeCharacter* B = State.B.Get();
+		AOperativeCharacter* C = State.C.Get();
+		if (State.Stage > 100 && (!A || !B || !C))
+		{
+			Check(State, false, TEXT("[orders] squad members gone"));
+			return Finish(State, false);
+		}
+		switch (State.Stage)
+		{
+		case 100:
+			ResetSquad(World, Squad, State);
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->HealthComponent->SetMaxHealth(100000.f);
+			}
+			NextStage(State);
+			return true;
+		case 101:
+		{
+			if (State.StageTime < SettleSeconds)
+			{
+				return true;
+			}
+			// Group mode: A (leader) gets a move order 10 m ahead, then the player selects B.
+			State.Target = SmokeUtils::ClearPoint(World, A->GetActorLocation(), A->GetActorLocation() + A->GetActorForwardVector() * 1000.f);
+			State.MinToTarget = 1.0e9f;
+			A->OrderMoveTo(State.Target, false);
+			Squad->SetLeader(B);
+			Check(State, Squad->GetLeader() == B && A->HasOwnMoveOrder() && A->IsMoving(),
+				TEXT("[orders/group] A ordered 10 m ahead, B selected: A keeps his order (not stopped, not re-anchored)"));
+			NextStage(State);
+			return true;
+		}
+		case 102:
+		{
+			State.MinToTarget = FMath::Min(State.MinToTarget, static_cast<float>(FVector::Dist2D(A->GetActorLocation(), State.Target)));
+			if (State.MinToTarget > 150.f && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, State.MinToTarget <= 150.f, FString::Printf(TEXT("[orders/group] A reached his ordered goal after B was selected (%.0f cm off)"), State.MinToTarget));
+			NextStage(State);
+			return true;
+		}
+		case 103:
+		{
+			const float ToB = FVector::Dist2D(A->GetActorLocation(), B->GetActorLocation());
+			if (ToB > 600.f && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, ToB <= 600.f, FString::Printf(TEXT("[orders/group] then A joined the new leader's formation (%.0f cm from B)"), ToB));
+			NextStage(State);
+			return true;
+		}
+		case 104:
+			// Solo: A leads, Solo on (B and C hold crouched).
+			Squad->SetLeader(A);
+			Squad->EnterSoloMode();
+			NextStage(State);
+			return true;
+		case 105:
+		{
+			if (State.StageTime < SettleSeconds)
+			{
+				return true;
+			}
+			State.Target = SmokeUtils::ClearPoint(World, A->GetActorLocation(), A->GetActorLocation() - A->GetActorForwardVector() * 900.f);
+			State.MinToTarget = 1.0e9f;
+			State.Mark = C->GetActorLocation();
+			A->OrderMoveTo(State.Target, false);
+			Squad->SetLeader(B);
+			Check(State, Squad->IsSoloMode() && Squad->GetLeader() == B && A->HasOwnMoveOrder() && A->IsMoving(),
+				TEXT("[orders/solo] A ordered 9 m away, B selected in Solo: A keeps walking (was: stopped)"));
+			NextStage(State);
+			return true;
+		}
+		case 106:
+		{
+			State.MinToTarget = FMath::Min(State.MinToTarget, static_cast<float>(FVector::Dist2D(A->GetActorLocation(), State.Target)));
+			if (State.MinToTarget > 150.f && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, State.MinToTarget <= 150.f, FString::Printf(TEXT("[orders/solo] A reached his ordered goal (%.0f cm off)"), State.MinToTarget));
+			NextStage(State);
+			return true;
+		}
+		case 107:
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			const float AtGoal = FVector::Dist2D(A->GetActorLocation(), State.Target);
+			const float CMoved = FVector::Dist2D(C->GetActorLocation(), State.Mark);
+			Check(State, AtGoal < 200.f && CMoved < 50.f && Squad->IsSoloMode(),
+				FString::Printf(TEXT("[orders/solo] A holds at his goal (%.0f cm), the third mate stayed put (moved %.0f cm)"), AtGoal, CMoved));
+			NextStage(State);
+			return true;
+		}
+		case 108:
+			// Cover: a fresh start, an 8 m wall 4 m ahead of the squad.
+			ResetSquad(World, Squad, State);
+			NextStage(State);
+			return true;
+		case 109:
+		{
+			if (State.StageTime < SettleSeconds)
+			{
+				return true;
+			}
+			State.F = A->GetActorForwardVector().GetSafeNormal2D();
+			State.R = FVector::CrossProduct(FVector::UpVector, State.F);
+			State.P = A->GetActorLocation();
+			const float GroundZ = State.P.Z - A->GetSimpleCollisionHalfHeight();
+			const FVector WallCentre = State.P + State.F * 400.f;
+			State.Wall = SpawnWall(World, FVector(WallCentre.X, WallCentre.Y, GroundZ + 150.f), State.F.Rotation(), FVector(0.4f, 8.f, 3.f));
+			Check(State, State.Wall.IsValid(), TEXT("[cover] 8 m wall spawned 4 m ahead"));
+			NextStage(State);
+			return true;
+		}
+		case 110:
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true; // the navmesh rebuilds around the wall
+			}
+			const bool bSlot = CoverTraceRules::FindCoverSlotAt(World, State.P + State.F * 380.f + State.R * 200.f + FVector(0.f, 0.f, 90.f), State.F, State.Slot);
+			Check(State, bSlot, TEXT("[cover] a cover slot on the wall"));
+			if (!bSlot)
+			{
+				return Finish(State, false);
+			}
+			// The player selects B, orders him into cover and selects A again: B's cover order runs on (rev 5g item 1).
+			Squad->SetLeader(B);
+			B->OrderTakeCover(State.Slot, false);
+			Squad->SetLeader(A);
+			NextStage(State);
+			return true;
+		}
+		case 111:
+		{
+			if (!B->bInCover && State.StageTime < 12.f)
+			{
+				return true;
+			}
+			Check(State, B->bInCover, TEXT("[cover] B (ordered, then A selected) reached the wall and took cover"));
+			NextStage(State);
+			return true;
+		}
+		case 112:
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			Check(State, B->bInCover, TEXT("[cover] group mode, leader standing: B stays in cover"));
+			// Solo on, the leader walks 6 m away: B holds his wall.
+			Squad->EnterSoloMode();
+			State.Target = SmokeUtils::ClearPoint(World, A->GetActorLocation(), A->GetActorLocation() - State.F * 600.f);
+			A->OrderMoveTo(State.Target, false);
+			NextStage(State);
+			return true;
+		}
+		case 113:
+		{
+			if ((A->IsMoving() || State.StageTime < 2.f) && State.StageTime < 12.f)
+			{
+				return true;
+			}
+			const float Apart = FVector::Dist2D(A->GetActorLocation(), B->GetActorLocation());
+			Check(State, B->bInCover && Apart > 450.f, FString::Printf(TEXT("[cover] Solo, leader %.0f cm away: B stays in cover"), Apart));
+			// Regroup (Solo off): B leaves the wall and rejoins.
+			Squad->ExitSoloMode(false, 0.f);
+			NextStage(State);
+			return true;
+		}
+		case 114:
+		{
+			const float ToA = FVector::Dist2D(A->GetActorLocation(), B->GetActorLocation());
+			if ((B->bInCover || ToA > 600.f) && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, !B->bInCover && ToA <= 600.f, FString::Printf(TEXT("[cover] Regroup: B left the cover and rejoined (%.0f cm from A)"), ToA));
+			// B back into cover (selected, ordered, A selected again), then A walks 15 m away in group mode.
+			Squad->SetLeader(B);
+			B->OrderTakeCover(State.Slot, false);
+			Squad->SetLeader(A);
+			NextStage(State);
+			return true;
+		}
+		case 115:
+		{
+			if (!B->bInCover && State.StageTime < 12.f)
+			{
+				return true;
+			}
+			Check(State, B->bInCover, TEXT("[cover] B in cover again"));
+			State.Mark = A->GetActorLocation();
+			State.Target = SmokeUtils::ClearPoint(World, A->GetActorLocation(), A->GetActorLocation() - State.F * 1500.f);
+			A->OrderMoveTo(State.Target, false);
+			State.bFlag = false;
+			NextStage(State);
+			return true;
+		}
+		case 116:
+		{
+			State.bFlag |= !B->bInCover;
+			const float ToA = FVector::Dist2D(A->GetActorLocation(), B->GetActorLocation());
+			const bool bArrived = !A->IsMoving() && State.StageTime > 2.f;
+			if ((!bArrived || ToA > 600.f) && State.StageTime < 25.f)
+			{
+				return true;
+			}
+			const float Walked = FVector::Dist2D(A->GetActorLocation(), State.Mark);
+			Check(State, State.bFlag && !B->bInCover && Walked > 1000.f && ToA <= 600.f,
+				FString::Printf(TEXT("[cover] group mode: the leader walked %.0f cm away, B left the cover %d and reached the formation (%.0f cm from A)"),
+					Walked, State.bFlag ? 1 : 0, ToA));
+			return Finish(State, true);
+		}
+		default:
+			return Finish(State, false);
+		}
+	}
+
 	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State, float DeltaTime)
 	{
 		UWorld* World = WeakWorld.Get();
@@ -109,14 +410,19 @@ namespace SoloRejoinSmoke
 		}
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-		if (!Leader || Squad->GetMembers().Num() < 3 || State.Time > 160.f)
+		if (!Leader || Squad->GetMembers().Num() < 3 || State.Time > 330.f)
 		{
 			Check(State, false, FString::Printf(TEXT("squad / timeout (stage %d, variant %d)"), State.Stage, State.Variant));
 			return Finish(State, false);
 		}
 		if (State.Variant >= UE_ARRAY_COUNT(Variants))
 		{
-			return Finish(State, true);
+			if (State.Stage < 100)
+			{
+				State.Stage = 100;
+				State.StageTime = 0.f;
+			}
+			return StepOrders(World, Squad, State);
 		}
 		const FVariant& Variant = Variants[State.Variant];
 		const TArray<AOperativeCharacter*> Followers = GetFollowers(Squad);
@@ -292,7 +598,7 @@ namespace SoloRejoinSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.SoloRejoinSmoke"),
-		TEXT("Dev check: squad prone -> solo -> solo off: followers stand up in place, then walk to the leader (no sliding); logs PASS/FAIL, then exits."),
+		TEXT("Dev check: squad prone -> solo -> solo off: followers stand up in place, then walk to the leader (no sliding); orders survive a selection switch (group / Solo); followers in cover follow a leader walking away in group mode; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

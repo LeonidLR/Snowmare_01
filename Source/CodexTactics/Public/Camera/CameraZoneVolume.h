@@ -102,6 +102,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Camera")
 	bool IsZoneCameraShown() const { return bCameraShown; }
 
+	/**
+	 * Rev 5g (user request 2026-10-14): the player's M key while the leader is inside - the normal top-down camera instead of the
+	 * fixed interior one (and back). Lasts until the leader leaves the zone (Deactivate) or M again. Returns the new state; false
+	 * (no change) while the zone is not active.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Camera")
+	bool TogglePlayerOutsideView();
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Camera")
+	bool IsPlayerOutsideView() const { return bPlayerOutsideView; }
+
+	/** The zone box in world space: transform (no scale) and scaled half extent (doorway search, exit markers). */
+	FTransform GetZoneTransform() const;
+	FVector GetZoneHalfExtent() const;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Camera")
 	FText ZoneName;
 
@@ -122,6 +137,7 @@ private:
 	/** Blends to the zone camera / back to the player's pawn. */
 	void ShowZoneCamera(bool bShow);
 	bool bCameraShown = false;
+	bool bPlayerOutsideView = false;
 	FText GetEnvironmentLabel() const;
 	void PostMessage(const FText& Text) const;
 

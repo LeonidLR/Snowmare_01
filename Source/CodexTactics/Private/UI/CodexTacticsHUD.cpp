@@ -1,4 +1,7 @@
 #include "UI/CodexTacticsHUD.h"
+#include "Camera/CameraZoneVolume.h"
+#include "Camera/InteriorExitSubsystem.h"
+#include "Core/PlayerCommands.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Survival/TacticalHeatRules.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -419,6 +422,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawDefenseMarkers();
 	DrawSpaceCharge();
 	DrawCombatModeBadge();
+	DrawInteriorViewHint();
 	DrawPostureMarkers();
 	DrawKnockdownBars();
 	DrawHordeWarning();
@@ -633,6 +637,32 @@ void ACodexTacticsHUD::DrawSpaceCharge()
 	const float BarY = Y + H * 1.1f + 6.f;
 	DrawRect(FLinearColor(0.1f, 0.1f, 0.12f, 0.85f), X - 140.f, BarY, 280.f, 22.f);
 	DrawRect(FLinearColor(0.3f, 0.55f, 0.85f, 0.95f), X - 138.f, BarY + 2.f, 276.f * FCombatTimeModeRules::GetHoldProgress(Held, Limit), 18.f);
+}
+
+void ACodexTacticsHUD::DrawInteriorViewHint()
+{
+	const UInteriorExitSubsystem* Exits = GetWorld()->GetSubsystem<UInteriorExitSubsystem>();
+	const ACameraZoneVolume* Zone = Exits ? Exits->GetLeaderZone() : nullptr;
+	if (!Zone || !Zone->TargetCamera || (!Zone->IsZoneCameraShown() && !Zone->IsPlayerOutsideView()))
+	{
+		return;
+	}
+	const FString Key = PlayerCommands::GetKeyLabel(PlayerCommands::CameraInteriorView);
+	const FString Text = Zone->IsPlayerOutsideView()
+		? FString::Printf(TEXT("[%s] Interior view"), *Key)
+		: FString::Printf(TEXT("[%s] Outside view   ·   click EXIT at a door to leave"), *Key);
+	UFont* Font = GEngine->GetSmallFont();
+	float W = 0.f;
+	float H = 0.f;
+	Canvas->StrLen(Font, Text, W, H);
+	// Bottom right, clear of the message feed (top right) and the action bar (bottom centre).
+	const float X = Canvas->SizeX - W - 28.f;
+	const float Y = Canvas->SizeY - H - 110.f;
+	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.55f), X - 10.f, Y - 4.f, W + 20.f, H + 8.f);
+	FCanvasTextItem Item(FVector2D(X, Y), FText::FromString(Text), Font, FLinearColor(1.f, 0.72f, 0.25f));
+	Item.bOutlined = true;
+	Item.OutlineColor = FLinearColor::Black;
+	Canvas->DrawItem(Item);
 }
 
 void ACodexTacticsHUD::DrawCombatModeBadge()

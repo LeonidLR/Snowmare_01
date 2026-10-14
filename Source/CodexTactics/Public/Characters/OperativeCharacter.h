@@ -160,6 +160,17 @@ public:
 	EOperativeOrderResult FollowTo(const FVector& Destination, float Speed);
 
 	/**
+	 * Rev 5g (game designer 2026-10-14): a move order of his OWN is running (OrderMoveTo: player, interaction walk-up, relocation,
+	 * autonomy, bot) - not a formation move (FollowTo). Ends on arrival / failure (HandleMoveFinished), StopOperative, a formation
+	 * move or ReleaseOwnMoveOrder. USquadSubsystem leaves such a follower alone (SquadOrderRules::IsOnOwnOrder), so selecting
+	 * another operative never cancels it.
+	 */
+	bool HasOwnMoveOrder() const { return bOwnMoveOrder && bHasMoveOrder; }
+
+	/** Regroup / Solo off: the walk goes on, but it no longer counts as his own order (the next formation repath takes him back). */
+	void ReleaseOwnMoveOrder() { bOwnMoveOrder = false; }
+
+	/**
 	 * Seconds he must stand still while a stance change plays (OperativeMovementRules::ComputeMoveHold): the settle time armed by
 	 * SetStance plus the stance clip already playing. Moves issued meanwhile wait (OrderMoveTo queues, FollowTo refuses).
 	 */
@@ -1756,6 +1767,8 @@ private:
 	float ColdSpeedMultiplier = 1.f;
 	bool bSprinting = false;
 	bool bHasMoveOrder = false;
+	/** The running move is an order of his own (OrderMoveTo), not a formation move (HasOwnMoveOrder). */
+	bool bOwnMoveOrder = false;
 	/** The last RequestMove destination (the walk resumes there after jumping off an obstacle top). */
 	FVector LastMoveDestination = FVector::ZeroVector;
 	uint32 MoveOrderSerial = 0;

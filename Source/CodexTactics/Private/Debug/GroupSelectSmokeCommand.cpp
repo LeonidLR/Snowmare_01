@@ -38,6 +38,7 @@ namespace GroupSelectSmoke
 		int32 Stage = 0;
 		int32 Failures = 0;
 		TArray<FVector> Targets;
+		TArray<float> MinDistances;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -58,7 +59,7 @@ namespace GroupSelectSmoke
 		State.Time += StepSeconds;
 		State.StageTime += StepSeconds;
 		UWorld* World = WeakWorld.Get();
-		if (!World || State.Time > 40.f)
+		if (!World || State.Time > 65.f)
 		{
 			return World ? Finish(State, false) : false;
 		}
@@ -74,6 +75,60 @@ namespace GroupSelectSmoke
 			{
 				return true;
 			}
+			// Rev 5g (game designer 2026-10-14), exploration (formation on): the two followers are box-selected and sent 6 m ahead
+			// as a group, then the player picks the third by number (the group is dropped, both become followers again): they
+			// finish their group move first (they used to be pulled straight back into the formation), then rejoin it.
+			Squad->SetLeader(Members[0]);
+			Squad->SetSelectedGroup({ Members[1], Members[2] });
+			const FVector ExploreDestination = SmokeUtils::ClearPoint(World, Members[1]->GetActorLocation(),
+				Members[1]->GetActorLocation() + Members[1]->GetActorForwardVector() * 600.f);
+			FVector GroupAverage = (Members[1]->GetActorLocation() + Members[2]->GetActorLocation()) / 2.f;
+			PC->OrderGroupMove(ExploreDestination, false, false);
+			State.Targets = SquadFormation::ComputeGroupTargets(ExploreDestination, GroupAverage, FVector::ForwardVector, 2);
+			Squad->SetLeader(Members[0]);
+			Check(State, !Squad->HasMultiSelection() && Members[1]->HasOwnMoveOrder() && Members[2]->HasOwnMoveOrder(),
+				TEXT("exploration: group of two ordered, then the third picked: both keep their group move"));
+			State.MinDistances = { 1.0e9f, 1.0e9f };
+			State.Stage = 10;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 10:
+		{
+			for (int32 Index = 0; Index < 2; ++Index)
+			{
+				State.MinDistances[Index] = FMath::Min(State.MinDistances[Index],
+					static_cast<float>(FVector::Dist2D(Members[Index + 1]->GetActorLocation(), State.Targets[Index])));
+			}
+			const bool bBothThere = State.MinDistances[0] < 150.f && State.MinDistances[1] < 150.f;
+			if (!bBothThere && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			for (int32 Index = 0; Index < 2; ++Index)
+			{
+				Check(State, State.MinDistances[Index] < 150.f, FString::Printf(TEXT("exploration: %s reached its group slot after the selection switch (%.0f cm off)"),
+					*Members[Index + 1]->DisplayName.ToString(), State.MinDistances[Index]));
+			}
+			State.Stage = 11;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 11:
+		{
+			const float Far = FMath::Max(FVector::Dist2D(Members[1]->GetActorLocation(), Members[0]->GetActorLocation()),
+				FVector::Dist2D(Members[2]->GetActorLocation(), Members[0]->GetActorLocation()));
+			if (Far > 500.f && State.StageTime < 10.f)
+			{
+				return true;
+			}
+			Check(State, Far <= 500.f, FString::Printf(TEXT("exploration: then both rejoined the leader's formation (farthest %.0f cm)"), Far));
+			State.Stage = 12;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 12:
+		{
 			// Preparation: operatives act on their own (no formation following).
 			// Preparation-phase behaviour: the old prepared start (a "sudden_start": false wave; default since 2026-10-11 is the sudden horde).
 			SmokeUtils::UsePreparedWaveStart();

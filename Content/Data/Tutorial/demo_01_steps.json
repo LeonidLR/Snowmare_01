@@ -166,7 +166,7 @@
       ]
     },
     {
-      "_comment": "Tutorial safety (kept from rev 3): 20 s after the crossing, if nobody is at Chills (40 %) yet - the player kept out of the wind zone, or the level's cold_rate_mult 0.8 kept it low (rev 5e: sprint is locked until the heat pack lesson, so walking only the squad is usually past 40 % at the bridge and the gust is skipped) - a scripted gust: the line + every operative +20 cold, at least 42 % (a cold shock: never scaled by cold_rate_mult) so the heat-pack lesson always starts.",
+      "_comment": "Tutorial safety (kept from rev 3): 20 s after the crossing, if nobody is at Chills (40 %) yet - the player kept out of the wind zone, or the level's cold_rate_mult kept it low (0.4 since rev 5g: walking only the squad is ~45 % once across, so the gust is usually skipped) - a scripted gust: the line + every operative +20 cold, at least 42 % (a cold shock: never scaled by cold_rate_mult) so the heat-pack lesson always starts.",
       "id": "A1_gust", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_bridge", "delay_s": 20 },
       "condition": { "stat": "squad_cold_max", "below": 40 },
@@ -196,12 +196,13 @@
       "lines": [ { "speaker": "Medic-Sapper", "text_id": "WT_A1_WARMED" } ]
     },
     {
-      "_comment": "Rev 5e (user decision 2026-10-14): THE SPRINT LESSON right after the heat pack lesson - 'By the way - running keeps you warm. Double-click to run.' UNLOCKS Order.Sprint (locked since A0), done on a sprint order; never precredited (running was impossible before). Its followers (resupply line, hut objective) fire when it ends (60 s timeout).",
+      "_comment": "Rev 5e (user decision 2026-10-14): THE SPRINT LESSON right after the heat pack lesson - 'By the way - running keeps you warm. Double-click to run.' UNLOCKS Order.Sprint (locked since A0), done on a sprint order; never precredited (running was impossible before). Its followers (resupply line, hut objective) fire when it ends (60 s timeout). Rev 5g (game designer 2026-10-14, 'waiting for instructions' on arrival): still up at the hut approach it is dropped there (cancel_on; its unlock stays) so the hut-entry select card shows at once (a cancelled card arms no breather).",
       "id": "A1_sprint", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SPRINT",
       "keys": ["Order.Sprint"],
       "unlock": ["Order.Sprint"],
       "precredit": false,
       "trigger": { "type": "after_step", "step": "A1_heatpack_mate", "delay_s": 1 },
+      "cancel_on": { "volume": "VOL_A1_HUT_APPROACH" },
       "complete": { "commands": ["Order.Sprint"], "timeout_s": 60 }
     },
     {
@@ -346,7 +347,7 @@
       ]
     },
     {
-      "_comment": "Rev 5d: the walk-and-talk about the ruin (Engineer / Commander): warm up by a barrel indoors, and a fire inside does not give you away like an open campfire. Plays after the cold lines; the push card shows with it. Rev 5e: dropped once the barrel burns in the ruin (A2_light finished) - never talked about afterwards.",
+      "_comment": "Rev 5d: the walk-and-talk about the ruin (Engineer / Commander): warm up by a barrel indoors, and a fire inside does not give you away like an open campfire. Plays after the cold lines (rev 5g: while the push card is already up). Rev 5e: dropped once the barrel burns in the ruin (A2_light finished) - never talked about afterwards.",
       "id": "A2_wt_ruin", "beat": "A2", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A2_wt_cold" },
       "cancel_on": { "step": "A2_light" },
@@ -357,11 +358,11 @@
       ]
     },
     {
-      "_comment": "Rev 5d: push the barrel INTO the ruin - done when a barrel is set down inside VOL_A2_RUIN (RelocationDone, subject = the barrel). Out of combat a push runs at once; in a live fight only from the tactical pause (Object.Relocate rule 2026-10-08) - the card says so. The marker with Step Id A2_push rings the spot inside the ruin.",
+      "_comment": "Rev 5d: push the barrel INTO the ruin - done when a barrel is set down inside VOL_A2_RUIN (RelocationDone, subject = the barrel). Out of combat a push runs at once; in a live fight only from the tactical pause (Object.Relocate rule 2026-10-08) - the card says so. The marker with Step Id A2_push rings the spot inside the ruin. Rev 5g (game designer 2026-10-14: the player waited ~20 s for the cold lines before the task showed): the card shows ON ARRIVAL (beat start = VOL_A2_CAMP, or VOL_A2_RUIN reached first), with the objective; the cold / ruin lines play alongside (radio strip bottom centre, card bottom left).",
       "id": "A2_push", "beat": "A2", "kind": "hint_card", "text_id": "TUT_A2_PUSH",
       "keys": ["Object.Relocate"],
       "unlock": ["Object.Relocate"],
-      "trigger": { "type": "after_step", "step": "A2_wt_cold", "delay_s": 1 },
+      "trigger": { "type": "beat_start" },
       "complete": { "event": "RelocationDone", "in_volume": "VOL_A2_RUIN", "timeout_s": 180 }
     },
     {
