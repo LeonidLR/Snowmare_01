@@ -502,6 +502,21 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 		&& Bridge->Complete.bDistinctSubjects && Bridge->Unlock.IsEmpty());
 	const FTutorialStep* BridgeTalk = Data.FindStep(TEXT("A1_wt_bridge"));
 	TestTrue(TEXT("a short line at the bridge"), BridgeTalk && BridgeTalk->Trigger.Volume == FName(TEXT("VOL_A1_BEACON2")) && BridgeTalk->Lines.Num() == 2);
+	// Rev 5e (game designer 2026-10-14): talk about a place ends when it is no longer relevant (cancel_on).
+	TestTrue(TEXT("rev 5e: the bridge lines are dropped once the squad is across"), BridgeTalk && BridgeTalk->CancelOn.Steps.Contains(FName(TEXT("A1_bridge"))));
+	const FTutorialStep* StartTalk = Data.FindStep(TEXT("A1_wt_start"));
+	TestTrue(TEXT("rev 5e: 'beacon two is past the crack' dropped at the crack"), StartTalk && StartTalk->CancelOn.Volumes.Contains(FName(TEXT("VOL_A1_BEACON2"))));
+	for (const TCHAR* PlaceTalk : { TEXT("A1_wt_hut_approach"), TEXT("A1_wt_hut"), TEXT("A1_wt_stocked"), TEXT("A1_wt_resupply"), TEXT("A2_wt_ruin") })
+	{
+		const FTutorialStep* Talk = Data.FindStep(PlaceTalk);
+		TestTrue(FString::Printf(TEXT("rev 5e: %s has a cancel_on"), PlaceTalk), Talk && Talk->CancelOn.IsSet());
+	}
+	for (const TCHAR* Line : { TEXT("WT_A1_BANTER_1"), TEXT("WT_A1_BANTER_2"), TEXT("WT_A1_BANTER_3"), TEXT("WT_A1_BANTER_4") })
+	{
+		const FString Text = FNarrativeManifest::Get().GetTutorialText(Line).Text;
+		TestFalse(FString::Printf(TEXT("the post-bridge banter %s does not talk about the bridge"), Line),
+			Text.Contains(TEXT("bridge")) || Text.Contains(TEXT("plank")) || Text.Contains(TEXT("crack")));
+	}
 	for (const FTutorialStep& Step : Data.Steps)
 	{
 		TestFalse(FString::Printf(TEXT("%s: nothing at the bridge teaches select / solo"), *Step.Id.ToString()),
@@ -1061,6 +1076,85 @@ bool FTutorialEarlierBeatDropTest::RunTest(const FString&)
 	Remedial.TriggerStep(TEXT("pan"));
 	Remedial.Tick(2.5f);
 	TestTrue(TEXT("a manually fired earlier-beat card is not dropped (only chain followers are)"), TutorialRules::IsRunning(Remedial.GetState(TEXT("pan"))));
+	return true;
+}
+
+TUTORIAL_LOCK_TEST(FTutorialCancelOnTest, "StateMachine.CancelOn")
+bool FTutorialCancelOnTest::RunTest(const FString&)
+{
+	// Rev 5e (game designer 2026-10-14): the bridge lines kept playing long after the crossing. A radio / walk-and-talk with
+	// "cancel_on" is dropped when the place / moment it talks about is over - queued ones are never played later.
+	const TCHAR* Json = TEXT(R"JSON({
+		"id": "cancel", "start_beat": "A1", "beats": [ { "id": "A1" } ],
+		"steps": [
+			{ "id": "blocker", "beat": "A1", "kind": "walk_talk", "trigger": { "type": "manual" }, "lines": [ { "text_id": "WT_A" } ] },
+			{ "id": "crossing", "beat": "A1", "kind": "objective", "trigger": { "type": "manual" }, "complete": { "event": "Crossed" } },
+			{ "id": "bridge_talk", "beat": "A1", "kind": "walk_talk", "trigger": { "type": "manual" }, "cancel_on": { "step": "crossing" },
+			  "lines": [ { "text_id": "WT_B" }, { "text_id": "WT_C" } ] },
+			{ "id": "late_talk", "beat": "A1", "kind": "walk_talk", "trigger": { "type": "manual" }, "cancel_on": { "step": ["crossing"] },
+			  "lines": [ { "text_id": "WT_D" } ] },
+			{ "id": "event_talk", "beat": "A1", "kind": "walk_talk", "trigger": { "type": "manual" }, "cancel_on": { "event": "Gone.*" },
+			  "lines": [ { "text_id": "WT_E" } ] },
+			{ "id": "place_talk", "beat": "A1", "kind": "radio", "trigger": { "type": "manual" }, "cancel_on": { "volume": "VOL_NEXT" },
+			  "lines": [ { "text_id": "WT_F" } ] },
+			{ "id": "after_bridge", "beat": "A1", "kind": "objective", "trigger": { "type": "after_step", "step": "bridge_talk" }, "complete": { "event": "Never" } }
+		] })JSON");
+	FTutorialStepsData Data;
+	if (!TutorialLockTestData::Parse(*this, Json, Data))
+	{
+		return false;
+	}
+	TestTrue(TEXT("cancel_on parsed (step / event / volume)"), Data.FindStep(TEXT("bridge_talk"))->CancelOn.Steps == TArray<FName>{ FName(TEXT("crossing")) }
+		&& Data.FindStep(TEXT("event_talk"))->CancelOn.Event == TEXT("Gone.*") && Data.FindStep(TEXT("place_talk"))->CancelOn.Volumes.Contains(FName(TEXT("VOL_NEXT"))));
+	FTutorialStateMachine Machine;
+	Machine.Load(Data);
+	Machine.StartBeat(TEXT("A1"));
+	Machine.TriggerStep(TEXT("blocker"));
+	Machine.TriggerStep(TEXT("crossing"));
+	Machine.TriggerStep(TEXT("bridge_talk"));
+	TestEqual(TEXT("the bridge talk waits behind another conversation"), Machine.GetState(TEXT("bridge_talk")), ETutorialStepState::Queued);
+	Machine.ConsumeTransitions();
+	Machine.HandleEvent(TEXT("Crossed"), TEXT("Op1"));
+	TestEqual(TEXT("crossing done"), Machine.GetState(TEXT("crossing")), ETutorialStepState::Completed);
+	TestEqual(TEXT("the queued bridge talk is dropped, not played later"), Machine.GetState(TEXT("bridge_talk")), ETutorialStepState::Skipped);
+	bool bCancelFlag = false;
+	for (const FTutorialTransition& Transition : Machine.ConsumeTransitions())
+	{
+		bCancelFlag |= Transition.StepId == FName(TEXT("bridge_talk")) && Transition.bCancelled && Transition.bSilent;
+	}
+	TestTrue(TEXT("the transition is flagged cancelled (silent: never shown)"), bCancelFlag);
+	TestEqual(TEXT("its after_step follower still fires"), Machine.GetState(TEXT("after_bridge")), ETutorialStepState::Active);
+	Machine.CompleteStep(TEXT("blocker"));
+	Machine.Tick(0.1f);
+	TestEqual(TEXT("the freed speech slot does not bring the bridge talk back"), Machine.GetActiveSpeech(), FName());
+	Machine.TriggerStep(TEXT("late_talk"));
+	TestEqual(TEXT("a talk triggered after its place is over is skipped at once"), Machine.GetState(TEXT("late_talk")), ETutorialStepState::Skipped);
+	// Shown: dropped too (the runtime lets the line on screen run out).
+	Machine.TriggerStep(TEXT("event_talk"));
+	TestEqual(TEXT("the event talk plays"), Machine.GetActiveSpeech(), FName(TEXT("event_talk")));
+	Machine.HandleEvent(TEXT("Other"));
+	TestEqual(TEXT("another event does not cancel it"), Machine.GetState(TEXT("event_talk")), ETutorialStepState::Active);
+	Machine.ConsumeTransitions();
+	Machine.HandleEvent(TEXT("Gone.Now"));
+	TestEqual(TEXT("the matching event drops the shown talk"), Machine.GetState(TEXT("event_talk")), ETutorialStepState::Skipped);
+	bool bShownCancel = false;
+	for (const FTutorialTransition& Transition : Machine.ConsumeTransitions())
+	{
+		bShownCancel |= Transition.StepId == FName(TEXT("event_talk")) && Transition.bCancelled && Transition.From == ETutorialStepState::Active;
+	}
+	TestTrue(TEXT("shown -> cancelled transition"), bShownCancel);
+	Machine.TriggerStep(TEXT("place_talk"));
+	Machine.HandleVolume(TEXT("VOL_OTHER"), NAME_None, NAME_None, TEXT("Op1"));
+	TestEqual(TEXT("another volume: still talking"), Machine.GetState(TEXT("place_talk")), ETutorialStepState::Active);
+	Machine.HandleVolume(TEXT("VOL_NEXT"), NAME_None, NAME_None, TEXT("Op1"));
+	TestEqual(TEXT("the squad reached the next place: dropped"), Machine.GetState(TEXT("place_talk")), ETutorialStepState::Skipped);
+	// An unknown step in cancel_on is a parse error.
+	FTutorialStepsData Bad;
+	TArray<FString> Warnings;
+	FString Error;
+	TestFalse(TEXT("cancel_on with an unknown step: parse error"), TutorialRules::ParseSteps(TEXT(R"JSON({ "id": "bad", "beats": [ { "id": "A1" } ], "steps": [
+		{ "id": "t", "beat": "A1", "kind": "walk_talk", "trigger": { "type": "manual" }, "cancel_on": { "step": "nope" }, "lines": [ { "text_id": "WT_A" } ] } ] })JSON"),
+		Bad, Warnings, Error));
 	return true;
 }
 

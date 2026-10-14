@@ -160,6 +160,23 @@ struct CODEXTACTICS_API FTutorialCompletion
 	bool HasCondition() const { return Commands.Num() > 0 || !Event.IsEmpty() || !Volume.IsNone() || !Conditions.IsEmpty(); }
 };
 
+/**
+ * "cancel_on" (rev 5e, game designer 2026-10-14: the bridge lines kept playing long after the crossing): the step is dropped as
+ * soon as the place / moment it talks about is over - one of "step" (string or array: that step FINISHED - completed, skipped or
+ * timed out), "event" (a gameplay event pattern happened) or "volume" (a squad member entered that tutorial volume). Waiting /
+ * queued: skipped silently (never played later); shown: a radio / walk-and-talk lets the line on screen run out and drops the rest,
+ * any other kind hides. Already due when the step would queue (the step named here finished before): skipped at once. The
+ * cancelled step finishes as Skipped, so its after_step followers still fire.
+ */
+struct CODEXTACTICS_API FTutorialCancelOn
+{
+	TArray<FName> Steps;
+	FString Event;
+	TArray<FName> Volumes;
+
+	bool IsSet() const { return Steps.Num() > 0 || !Event.IsEmpty() || Volumes.Num() > 0; }
+};
+
 struct CODEXTACTICS_API FTutorialStep
 {
 	FName Id;
@@ -201,6 +218,8 @@ struct CODEXTACTICS_API FTutorialStep
 	 * done at that moment (a location, a specific target). Event / volume completions are never precredited.
 	 */
 	bool bPrecredit = true;
+	/** "cancel_on" (rev 5e): when the step stops being relevant (FTutorialCancelOn). */
+	FTutorialCancelOn CancelOn;
 };
 
 struct CODEXTACTICS_API FTutorialBeat

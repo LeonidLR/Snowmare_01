@@ -272,6 +272,57 @@ void FTutorialStateMachine::FinishPrecredited(int32 Index)
 	}
 }
 
+bool FTutorialStateMachine::IsCancelDue(int32 Index) const
+{
+	for (const FName Other : Data.Steps[Index].CancelOn.Steps)
+	{
+		const int32 OtherIndex = IndexOf(Other);
+		if (Runtime.IsValidIndex(OtherIndex) && Runtime[OtherIndex].bEverFinished && !TutorialRules::IsRunning(Runtime[OtherIndex].State))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void FTutorialStateMachine::CancelStep(int32 Index)
+{
+	if (!Runtime.IsValidIndex(Index) || !TutorialRules::IsRunning(Runtime[Index].State))
+	{
+		return;
+	}
+	const FName StepId = Data.Steps[Index].Id;
+	const int32 Mark = Transitions.Num();
+	Finish(Index, ETutorialStepState::Skipped);
+	for (int32 Back = Mark; Back < Transitions.Num(); ++Back)
+	{
+		if (Transitions[Back].StepId == StepId && Transitions[Back].To == ETutorialStepState::Skipped)
+		{
+			Transitions[Back].bCancelled = true;
+			break;
+		}
+	}
+}
+
+void FTutorialStateMachine::CancelMatching(FName FinishedStep, FName EventName, FName VolumeId)
+{
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		const FTutorialCancelOn& Cancel = Data.Steps[Index].CancelOn;
+		if (!Cancel.IsSet() || !TutorialRules::IsRunning(Runtime[Index].State))
+		{
+			continue;
+		}
+		const bool bMatch = (!FinishedStep.IsNone() && Cancel.Steps.Contains(FinishedStep))
+			|| (!EventName.IsNone() && !Cancel.Event.IsEmpty() && TutorialRules::MatchesName(Cancel.Event, EventName))
+			|| (!VolumeId.IsNone() && Cancel.Volumes.Contains(VolumeId));
+		if (bMatch)
+		{
+			CancelStep(Index);
+		}
+	}
+}
+
 void FTutorialStateMachine::Enqueue(int32 Index)
 {
 	SetState(Index, ETutorialStepState::Queued);
@@ -279,6 +330,12 @@ void FTutorialStateMachine::Enqueue(int32 Index)
 	{
 		// The next card of a chain whose beat is over (beacon 1 reached during the camera lesson): never shown now.
 		DropEarlierBeatCard(Index);
+		return;
+	}
+	if (IsCancelDue(Index))
+	{
+		// Rev 5e: what it talks about is already over (the bridge line due after the crossing): never played.
+		CancelStep(Index);
 		return;
 	}
 	if (!AreConditionsMet(Index))
@@ -327,6 +384,7 @@ void FTutorialStateMachine::Finish(int32 Index, ETutorialStepState FinalState)
 	ApplyStepLocks(Index); // a step that never showed still applies its locks (never lost)
 	SetState(Index, FinalState, /*bSilent*/ !bWasActive);
 	const FName FinishedId = Step.Id;
+	CancelMatching(FinishedId, NAME_None, NAME_None); // rev 5e: talk about this step's place / moment is over
 	for (int32 Other = 0; Other < Data.Steps.Num(); ++Other)
 	{
 		const FTutorialTrigger& Trigger = Data.Steps[Other].Trigger;
@@ -504,6 +562,7 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId, const 
 			AddProgress(Index, 1, Complete.Count);
 		}
 	}
+	CancelMatching(NAME_None, EventName, NAME_None);
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 	{
 		const FTutorialTrigger& Trigger = Data.Steps[Index].Trigger;
@@ -571,6 +630,7 @@ void FTutorialStateMachine::HandleVolume(FName VolumeId, FName StepId, FName Bea
 		// Completions first, before a beat this volume starts drops the earlier beat's leftover cards (the walk card that asked
 		// for this very place is completed, not dropped). Only steps already running when this input came count it.
 		CountVolumeCompletions(VolumeId, SubjectId, RunningSnapshot());
+		CancelMatching(NAME_None, NAME_None, VolumeId);
 	}
 	if (!BeatId.IsNone())
 	{

@@ -938,7 +938,8 @@ namespace TutorialSmoke
 			Check(State, Tutorial->GetStepState(TEXT("A1_bridge")) == ETutorialStepState::Active && Tutorial->GetMachine().GetActiveCard().IsNone(),
 				TEXT("the crack: the crossing objective, no select / solo card"));
 			Check(State, Tutorial->IsCommandLocked(PlayerCommands::SoloOn), TEXT("the bridge unlocks nothing (solo is taught at the hut)"));
-			Tutorial->SkipStep(TEXT("A1_wt_bridge"));
+			Check(State, TutorialRules::IsRunning(Tutorial->GetStepState(TEXT("A1_wt_bridge"))),
+				FString::Printf(TEXT("the bridge lines play at the approach (%s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A1_wt_bridge")))));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				Member->ColdLevel = 5.f; // no cold zone here: nobody reaches Chills in 20 s at x1
@@ -953,6 +954,14 @@ namespace TutorialSmoke
 				State.ColdAtSolo.Add(Member, Member->ColdLevel);
 			}
 			Check(State, Tutorial->GetStepState(TEXT("A1_bridge")) == ETutorialStepState::Completed, TEXT("three crossings complete the crossing objective"));
+			// Rev 5e (game designer 2026-10-14): once across, what is left of the bridge talk is dropped (never played later).
+			{
+				const FTutorialSubtitleView Talk = Tutorial->GetSubtitleView();
+				Check(State, Tutorial->GetStepState(TEXT("A1_wt_bridge")) == ETutorialStepState::Skipped
+					&& (!Talk.bVisible || Talk.StepId != FName(TEXT("A1_wt_bridge")) || Talk.LineIndex + 1 >= Talk.LineCount),
+					FString::Printf(TEXT("across: the bridge talk is cancelled (%s), at most the line on screen finishes"),
+						TutorialRules::StateName(Tutorial->GetStepState(TEXT("A1_wt_bridge")))));
+			}
 			State.Stage = 36;
 			State.StageTime = 0.f;
 			return true;

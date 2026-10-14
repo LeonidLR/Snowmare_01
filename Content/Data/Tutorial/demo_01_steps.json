@@ -13,6 +13,7 @@
     "(move / sprint / walk-up), Select.*, Dialogue.* and System.* are never locked. Each lesson step unlocks what it teaches ('unlock'; a single",
     "command out of a wider lock becomes a '!<id>' exception); every later beat repeats the earlier unlocks as a safety; a wave / horde fight or",
     "the tutorial switched OFF unlocks everything (UTutorialSubsystem). A locked press: one 'Not yet - follow the training.' feed line per family.",
+    "'cancel_on' (rev 5e): a radio / walk-and-talk about a place or a moment is dropped when it is over (the bridge lines once the squad is across; never queued to play later).",
     "Leftover hint cards of an earlier beat are dropped when a later beat starts (beacon 1 reached during the camera lesson: precredited or skipped).",
     "'precredit' (default true): a command card the player already did before it was due is completed without showing it.",
     "Volume ids (VOL_*) are the VolumeId / StepId of ATutorialTriggerVolume actors placed in L_Demo01_A_FrozenLake:",
@@ -120,8 +121,10 @@
       "complete": { "volume": "VOL_A2_CAMP" }
     },
     {
+      "_comment": "Rev 5e (game designer 2026-10-14: talk about a place must end when the squad has left it): 'beacon two is past the crack' is dropped once the squad reaches the crack (the bridge lines take over) or has crossed.",
       "id": "A1_wt_start", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "beat_start" },
+      "cancel_on": { "volume": "VOL_A1_BEACON2", "step": "A1_bridge" },
       "lines": [
         { "speaker": "Engineer", "text_id": "WT_A1_01" },
         { "speaker": "Commander", "text_id": "WT_A1_02" },
@@ -129,9 +132,10 @@
       ]
     },
     {
-      "_comment": "User flow step 4 (rev 5c 2026-10-13: the bridge teaches NOTHING - no select / solo): the crevasse at beacon 2 with the shaky bridge (ABridgeCrossingVolume, capacity 1) holds the followers at the edge on its own, so the squad crosses one at a time automatically. VOL_A1_BEACON2 is the approach. A short line, then the objective is done when all three are across.",
+      "_comment": "User flow step 4 (rev 5c 2026-10-13: the bridge teaches NOTHING - no select / solo): the crevasse at beacon 2 with the shaky bridge (ABridgeCrossingVolume, capacity 1) holds the followers at the edge on its own, so the squad crosses one at a time automatically. VOL_A1_BEACON2 is the approach. A short line, then the objective is done when all three are across. Rev 5e (game designer 2026-10-14): the two lines (~9 s) play on the approach / during the crossing (one at a time takes ~10 s); once all three are across (A1_bridge finished) whatever is left of them is dropped, never played later (cancel_on).",
       "id": "A1_wt_bridge", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
+      "cancel_on": { "step": "A1_bridge" },
       "lines": [
         { "speaker": "Engineer", "text_id": "WT_A1_04" },
         { "speaker": "Commander", "text_id": "WT_A1_05" }
@@ -200,6 +204,7 @@
       "_comment": "User flow step 8 (resupply, rev 4 order kept): after the sprint card the squad is 'nearly out' -> the hut. The user's TutorialMarkerActor with Step Id A1_obj_hut shows from here.",
       "id": "A1_wt_resupply", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_sprint", "delay_s": 1 },
+      "cancel_on": { "volume": "VOL_A1_HUT_APPROACH", "step": "A1_obj_hut" },
       "lines": [ { "speaker": "Commander", "text_id": "WT_A1_RESUPPLY" } ]
     },
     {
@@ -211,6 +216,7 @@
       "_comment": "Rev 5c (designer review 2026-10-13): the TACTICAL HUT ENTRY teaches selection + Solo + cover. VOL_A1_HUT_APPROACH (Leader, ~10 m in front of the door) starts the walk-and-talk and the select card; then Solo; then one operative hugs the wall LEFT of the door (cover inside VOL_A1_DOOR_L), a second one RIGHT of it (VOL_A1_DOOR_R), the third goes in (VOL_A1_HUT = the interior only, Any Operative, Fire Once off) - three DIFFERENT operatives ('distinct_from'). The three entry cards are queued together, so they count in any order (one card on screen at a time). Markers: Step Id A1_hut_stack_l / A1_hut_stack_r / A1_hut_enter. Left / right as seen by the squad approaching the door.",
       "id": "A1_wt_hut_approach", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A1_HUT_APPROACH" },
+      "cancel_on": { "step": "A1_hut_enter" },
       "lines": [
         { "speaker": "Commander", "text_id": "WT_A1_HUT_APPROACH_1" },
         { "speaker": "Engineer", "text_id": "WT_A1_HUT_APPROACH_2" },
@@ -254,9 +260,10 @@
       "complete": { "volume": "VOL_A1_HUT", "distinct_from": ["A1_hut_stack_l", "A1_hut_stack_r"], "timeout_s": 90 }
     },
     {
-      "_comment": "Inside: the crate (the two at the door hold their positions until the regroup).",
+      "_comment": "Inside: the crate (the two at the door hold their positions until the regroup). Rev 5e: dropped once the crate is open (A1_loot_open finished); the approach lines are dropped once the third man is inside, the resupply line once the squad is at the hut, the 'split them up' line once the packs are shared.",
       "id": "A1_wt_hut", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_hut_enter" },
+      "cancel_on": { "step": "A1_loot_open" },
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A1_HUT" } ]
     },
     {
@@ -276,6 +283,7 @@
     {
       "id": "A1_wt_stocked", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 1 },
+      "cancel_on": { "step": "A1_share" },
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A1_STOCKED" } ]
     },
     {
@@ -325,6 +333,7 @@
     {
       "id": "A2_wt_cold", "beat": "A2", "kind": "walk_talk",
       "trigger": { "type": "beat_start", "delay_s": 1 },
+      "cancel_on": { "step": "A2_light" },
       "lines": [
         { "speaker": "Medic-Sapper", "text_id": "WT_A2_01" },
         { "speaker": "Commander", "text_id": "WT_A2_02" },
@@ -333,9 +342,10 @@
       ]
     },
     {
-      "_comment": "Rev 5d: the walk-and-talk about the ruin (Engineer / Commander): warm up by a barrel indoors, and a fire inside does not give you away like an open campfire. Plays after the cold lines; the push card shows with it.",
+      "_comment": "Rev 5d: the walk-and-talk about the ruin (Engineer / Commander): warm up by a barrel indoors, and a fire inside does not give you away like an open campfire. Plays after the cold lines; the push card shows with it. Rev 5e: dropped once the barrel burns in the ruin (A2_light finished) - never talked about afterwards.",
       "id": "A2_wt_ruin", "beat": "A2", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A2_wt_cold" },
+      "cancel_on": { "step": "A2_light" },
       "lines": [
         { "speaker": "Engineer", "text_id": "WT_A2_RUIN_1" },
         { "speaker": "Commander", "text_id": "WT_A2_RUIN_2" },
