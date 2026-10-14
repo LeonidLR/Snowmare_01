@@ -14,6 +14,14 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Planned: cleanup day (user decision 2026-10-14, after the rev 5g agent)
+No new features. (1) Split `OperativeCharacter.cpp` (~4.9k lines) into components (cover / stance + prone dive / sniper),
+behaviour unchanged, smokes as the safety net; look at `CodexTacticsPlayerController.cpp` (~2.9k) too. (2) Stabilise the
+flaky smokes (CornerHold, Cover, LevelWave, GroupSelect, TurnBlastDeath, EnemyTactics, Knockdown) and fix the
+VisionConeSmoke 1400 cm failure. (3) Reconcile the review copy `Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout` with the
+user's original into ONE working map (with the user). (4) Audit batches from `docs/port/audit_2026-10-11.md` (enemy
+registry, HUD caches, debug module, bot gate). Proposed cadence: one cleanup day every 1-2 weeks.
+
 ## Checkpoint 2026-10-13 (end of day)
 - Done: Demo 01 tutorial rev 5 / 5b / 5c (user flow 2026-10-13, `docs/demo/DEMO01_BEAT_SHEET.md` decisions block):
   HQ radio runs with the staged camera lesson (+ MMB drag), then click-walk / double-click-run cards; precredit (actions
