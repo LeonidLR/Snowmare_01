@@ -187,7 +187,16 @@
       "title": "THE CAMP"
     },
     "OBJ_A2_WARM": {
-      "text": "Warm up: find a barrel and light it"
+      "text": "Warm up: push the barrel into the ruin and light it"
+    },
+    "WT_A2_RUIN_1": {
+      "text": "See that ruin? Three walls and half a roof. Roll the barrel in there."
+    },
+    "WT_A2_RUIN_2": {
+      "text": "Good call. Inside, the walls keep the wind off - we can warm up by a barrel in there."
+    },
+    "WT_A2_RUIN_3": {
+      "text": "And above all, a fire in there doesn't give us away. An open campfire on the ice is a beacon for anything out there."
     },
     "WT_A2_01": {
       "text": "Fingers first, then the trigger finger. We need heat again."
@@ -205,12 +214,12 @@
       "text": "Not out here in the wind. Roll it to the hut."
     },
     "TUT_A2_PUSH": {
-      "title": "PUSH THE BARREL",
-      "text": "Click the barrel, choose Push, then click where it should stand. Put it by the hut wall, out of the wind."
+      "title": "PUSH IT INSIDE",
+      "text": "Click the barrel, choose Push, then click a spot INSIDE the ruin (the ring) - through the wide gap in its wall. Out of a fight it rolls at once; in a fight only in the tactical pause ({key:Time.Pause})."
     },
     "TUT_A2_LIGHT": {
       "title": "LIGHT IT",
-      "text": "Click the barrel and choose Light (one match). Everyone within 5 m warms up."
+      "text": "Click the barrel and choose Light (one match). Everyone within 5 m warms up - and inside the walls nobody sees the fire."
     },
     "TUT_A2_HEATPACK": {
       "title": "HEAT PACK",

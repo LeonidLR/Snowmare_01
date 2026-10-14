@@ -35,6 +35,7 @@ namespace TacticalHeatTuning
 		{ TEXT("campfire_wind_height"), &FTacticalHeatConfig::CampfireWindHeight },
 		{ TEXT("campfire_noise_radius"), &FTacticalHeatConfig::CampfireNoiseRadius },
 		{ TEXT("campfire_noise_interval_seconds"), &FTacticalHeatConfig::CampfireNoiseIntervalSeconds },
+		{ TEXT("campfire_indoor_noise_multiplier"), &FTacticalHeatConfig::CampfireIndoorNoiseMultiplier },
 		{ TEXT("stove_heat_radius"), &FTacticalHeatConfig::StoveHeatRadius },
 		{ TEXT("stove_gas_capacity_seconds"), &FTacticalHeatConfig::StoveGasCapacitySeconds },
 		{ TEXT("stove_gas_seconds_per_round"), &FTacticalHeatConfig::StoveGasSecondsPerRound },

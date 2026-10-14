@@ -99,6 +99,13 @@ struct CODEXTACTICS_API FTacticalHeatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campfire", meta = (ClampMin = "0.5"))
 	float CampfireNoiseIntervalSeconds = 10.f;
 
+	/**
+	 * Rev 5d (designer request 2026-10-14, "a fire inside doesn't give you away like an open campfire"): a campfire kindled indoors
+	 * (inside an ACameraZoneVolume of environment Closed or Shelter) alerts patrols only within CampfireNoiseRadius x this.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campfire", meta = (ClampMin = "0", ClampMax = "1"))
+	float CampfireIndoorNoiseMultiplier = 0.4f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campfire", meta = (ClampMin = "0"))
 	int32 CampfireBuildActionPoints = 3;
 
@@ -338,6 +345,12 @@ namespace TacticalHeatRules
 
 	/** The fire's base is at or above CampfireWindHeight. */
 	CODEXTACTICS_API bool IsWindExposed(const FTacticalHeatConfig& Config, float GroundZ);
+
+	/**
+	 * Rev 5d: the radius within which a burning campfire makes patrols search (the crackle and the smoke column): CampfireNoiseRadius
+	 * in the open, x CampfireIndoorNoiseMultiplier (clamped 0..1) indoors - walls and a roof hide the light and the smoke.
+	 */
+	CODEXTACTICS_API float GetCampfireNoiseRadius(const FTacticalHeatConfig& Config, bool bIndoors);
 
 	/** Burn time one turn-based round takes off: total / rounds (rounds clamped to >= 1). */
 	CODEXTACTICS_API float SecondsPerRound(float TotalSeconds, int32 Rounds);

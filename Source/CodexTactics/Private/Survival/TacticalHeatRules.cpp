@@ -148,4 +148,10 @@ namespace TacticalHeatRules
 	{
 		return Config.StartingLoadout.IsValidIndex(RoleIndex) ? Config.StartingLoadout[RoleIndex] : FTacticalHeatLoadout();
 	}
+
+	float GetCampfireNoiseRadius(const FTacticalHeatConfig& Config, bool bIndoors)
+	{
+		const float Radius = FMath::Max(0.f, Config.CampfireNoiseRadius);
+		return bIndoors ? Radius * FMath::Clamp(Config.CampfireIndoorNoiseMultiplier, 0.f, 1.f) : Radius;
+	}
 }

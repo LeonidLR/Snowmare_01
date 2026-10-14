@@ -571,6 +571,19 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 		return false;
 	}
 	TestTrue(TEXT("stances moved to the approach (A3, VOL_A3_WIND)"), Data.FindStep(TEXT("A3_stance")) && Data.FindStep(TEXT("A3_stance"))->Trigger.Volume == FName(TEXT("VOL_A3_WIND")));
+	// Rev 5d (designer request 2026-10-14): the barrel goes INTO the half-ruined building (VOL_A2_RUIN) and is lit there.
+	const FTutorialStep* RuinTalk = Data.FindStep(TEXT("A2_wt_ruin"));
+	const FTutorialStep* Push = Data.FindStep(TEXT("A2_push"));
+	const FTutorialStep* Light = Data.FindStep(TEXT("A2_light"));
+	const FTutorialStep* Warm = Data.FindStep(TEXT("A2_obj_warm"));
+	TestTrue(TEXT("rev 5d: the ruin walk-and-talk (Engineer / Commander) after the cold lines"), RuinTalk && RuinTalk->Kind == ETutorialStepKind::WalkTalk
+		&& RuinTalk->Trigger.Step == FName(TEXT("A2_wt_cold")) && RuinTalk->Lines.Num() == 3 && RuinTalk->Lines[0].Speaker == TEXT("Engineer"));
+	TestTrue(TEXT("rev 5d: push done only when the barrel is set down inside VOL_A2_RUIN"), Push && Push->Complete.Event == TEXT("RelocationDone")
+		&& Push->Complete.InVolume == FName(TEXT("VOL_A2_RUIN")) && Push->Unlock.Contains(PlayerCommands::Relocate.ToString()));
+	TestTrue(TEXT("rev 5d: then light it there"), Light && Light->Trigger.Step == FName(TEXT("A2_push")) && Light->Complete.Event == TEXT("BarrelLit")
+		&& Light->Complete.InVolume == FName(TEXT("VOL_A2_RUIN")));
+	TestTrue(TEXT("rev 5d: the warm-up objective asks for the fire in the ruin"), Warm && Warm->Complete.InVolume == FName(TEXT("VOL_A2_RUIN")));
+	TestNull(TEXT("rev 5d: the 'roll it to the hut' radio is gone"), Data.FindStep(TEXT("A2_wt_roll")));
 	TestTrue(TEXT("A2 heat pack card is remedial only"), Data.FindStep(TEXT("A2_heatpack")) && Data.FindStep(TEXT("A2_heatpack"))->Trigger.Type == ETutorialTriggerType::Condition);
 	for (const FTutorialStep& Step : Data.Steps)
 	{
