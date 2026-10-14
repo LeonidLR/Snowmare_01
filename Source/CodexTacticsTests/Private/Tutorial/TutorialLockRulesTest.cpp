@@ -1212,6 +1212,181 @@ bool FTutorialCancelOnTest::RunTest(const FString&)
 	return true;
 }
 
+namespace TutorialRouteTestData
+{
+	// Rev 5f (game designer 2026-10-14): a beacon chain inside beat B1, then the camp beat B2 (the camp volume carries Beat Id B2,
+	// the ruin volume does not - the barrel lesson asks for it with "in_volume").
+	const TCHAR* Route = TEXT(R"JSON({
+		"id": "route", "start_beat": "B1",
+		"beats": [ { "id": "B1", "lock": ["Order.Sprint"] }, { "id": "B2" } ],
+		"steps": [
+			{ "id": "b1_obj", "beat": "B1", "kind": "objective", "trigger": { "type": "beat_start" }, "complete": { "volume": "VOL_CAMP" } },
+			{ "id": "b1_talk", "beat": "B1", "kind": "walk_talk", "trigger": { "type": "volume", "volume": "VOL_BEACON1" }, "lines": [ { "text_id": "WT_A" } ] },
+			{ "id": "b1_beacon1", "beat": "B1", "kind": "objective", "unlock": ["Order.Sprint"], "trigger": { "type": "volume", "volume": "VOL_BEACON1" },
+			  "complete": { "event": "Crossed" } },
+			{ "id": "b1_after", "beat": "B1", "kind": "walk_talk", "trigger": { "type": "after_step", "step": "b1_beacon1" }, "lines": [ { "text_id": "WT_B" } ] },
+			{ "id": "b1_goto2", "beat": "B1", "kind": "objective", "trigger": { "type": "after_step", "step": "b1_beacon1" }, "complete": { "volume": "VOL_BEACON2" } },
+			{ "id": "b1_card", "beat": "B1", "kind": "hint_card", "trigger": { "type": "volume", "volume": "VOL_BEACON2" }, "complete": { "commands": ["Squad.Solo"] } },
+			{ "id": "b1_share", "beat": "B1", "kind": "objective", "trigger": { "type": "manual" }, "complete": { "event": "Shared" } },
+			{ "id": "b1_late", "beat": "B1", "kind": "objective", "trigger": { "type": "after_step", "step": "b1_card" }, "complete": { "event": "Never" } },
+			{ "id": "b1_beacon3", "beat": "B1", "kind": "walk_talk", "trigger": { "type": "volume", "volume": "VOL_BEACON3" }, "lines": [ { "text_id": "WT_C" } ] },
+			{ "id": "b2_obj", "beat": "B2", "kind": "objective", "trigger": { "type": "beat_start" }, "complete": { "event": "BarrelLit", "in_volume": "VOL_RUIN" } },
+			{ "id": "b2_talk", "beat": "B2", "kind": "walk_talk", "trigger": { "type": "beat_start", "delay_s": 1 }, "lines": [ { "text_id": "WT_D" } ] },
+			{ "id": "b2_push", "beat": "B2", "kind": "hint_card", "trigger": { "type": "after_step", "step": "b2_talk", "delay_s": 1 },
+			  "complete": { "event": "RelocationDone", "in_volume": "VOL_RUIN" } }
+		] })JSON");
+
+	bool WasPassed(const TArray<FTutorialTransition>& Transitions, FName StepId)
+	{
+		return Transitions.ContainsByPredicate([StepId](const FTutorialTransition& Transition) { return Transition.StepId == StepId && Transition.bPassed; });
+	}
+}
+
+TUTORIAL_LOCK_TEST(FTutorialRouteSkippedBeaconTest, "Route.SkippedBeacon")
+bool FTutorialRouteSkippedBeaconTest::RunTest(const FString&)
+{
+	using namespace TutorialLockTestData;
+	using namespace TutorialRouteTestData;
+	FTutorialStepsData Data;
+	if (!Parse(*this, Route, Data))
+	{
+		return false;
+	}
+	// The route order follows the file; a beat volume lies at its beat's start, a beat-start "go to" names the END of its beat.
+	FTutorialStateMachine Machine;
+	Machine.Load(Data);
+	Machine.RegisterVolumeBeat(TEXT("VOL_CAMP"), TEXT("B2"));
+	const int32 KeyBeacon1 = Machine.GetVolumeRoutePoint(TEXT("VOL_BEACON1")).Key;
+	const int32 KeyBeacon2 = Machine.GetVolumeRoutePoint(TEXT("VOL_BEACON2")).Key;
+	const int32 KeyBeacon3 = Machine.GetVolumeRoutePoint(TEXT("VOL_BEACON3")).Key;
+	const int32 KeyCamp = Machine.GetVolumeRoutePoint(TEXT("VOL_CAMP")).Key;
+	const int32 KeyRuin = Machine.GetVolumeRoutePoint(TEXT("VOL_RUIN")).Key;
+	TestTrue(FString::Printf(TEXT("route order beacon1 %d < beacon2 %d < beacon3 %d < camp %d < ruin %d"), KeyBeacon1, KeyBeacon2, KeyBeacon3, KeyCamp, KeyRuin),
+		KeyBeacon1 >= 0 && KeyBeacon1 < KeyBeacon2 && KeyBeacon2 < KeyBeacon3 && KeyBeacon3 < KeyCamp && KeyCamp < KeyRuin);
+	TestEqual(TEXT("the camp volume belongs to B2 (its Beat Id)"), Machine.GetVolumeRoutePoint(TEXT("VOL_CAMP")).BeatIndex, 1);
+	TestEqual(TEXT("the ruin volume belongs to B2 (the steps that use it)"), Machine.GetVolumeRoutePoint(TEXT("VOL_RUIN")).BeatIndex, 1);
+	TestFalse(TEXT("an unused volume has no place"), Machine.GetVolumeRoutePoint(TEXT("VOL_NOWHERE")).IsValid());
+
+	// 1. Beacon 1 skipped, beacon 2 reached: a LATER STEP's volume of the same beat counts.
+	Machine.StartBeat(TEXT("B1"));
+	Machine.ConsumeTransitions();
+	TestTrue(TEXT("sprint locked in B1"), Machine.IsCommandLocked(PlayerCommands::Sprint));
+	Machine.HandleVolume(TEXT("VOL_BEACON2"), NAME_None, NAME_None, TEXT("Op1"));
+	TArray<FTutorialTransition> Transitions = Machine.ConsumeTransitions();
+	TestEqual(TEXT("beacon 1 talk: passed, never played"), Machine.GetState(TEXT("b1_talk")), ETutorialStepState::Skipped);
+	TestEqual(TEXT("beacon 1 objective: passed"), Machine.GetState(TEXT("b1_beacon1")), ETutorialStepState::Skipped);
+	TestTrue(TEXT("both reported as passed on the way"), WasPassed(Transitions, TEXT("b1_talk")) && WasPassed(Transitions, TEXT("b1_beacon1")));
+	TestFalse(TEXT("the passed step's unlock applies (sprint free)"), Machine.IsCommandLocked(PlayerCommands::Sprint));
+	TestTrue(TEXT("its same-beat follower runs"), TutorialRules::IsRunning(Machine.GetState(TEXT("b1_after"))));
+	TestTrue(TEXT("beacon 2's own card started"), TutorialRules::IsRunning(Machine.GetState(TEXT("b1_card"))));
+	TestEqual(TEXT("still B1"), Machine.GetCurrentBeat(), FName(TEXT("B1")));
+	TestTrue(TEXT("the camp objective still waits (the camp lies ahead)"), TutorialRules::IsRunning(Machine.GetState(TEXT("b1_obj"))));
+	Machine.TriggerStep(TEXT("b1_share")); // an interaction lesson still open when the squad walks on
+
+	// 2. Beacon 3 skipped, the camp reached: B2 starts, everything behind is passed, nothing blocks the barrel lesson.
+	Machine.HandleVolume(TEXT("VOL_CAMP"), NAME_None, TEXT("B2"), TEXT("Op1"));
+	Transitions = Machine.ConsumeTransitions();
+	TestEqual(TEXT("B2 started"), Machine.GetCurrentBeat(), FName(TEXT("B2")));
+	TestEqual(TEXT("'go to the camp' completed"), Machine.GetState(TEXT("b1_obj")), ETutorialStepState::Completed);
+	TestEqual(TEXT("'go to beacon 2' (behind the camp) completed"), Machine.GetState(TEXT("b1_goto2")), ETutorialStepState::Completed);
+	TestEqual(TEXT("beacon 3 talk passed"), Machine.GetState(TEXT("b1_beacon3")), ETutorialStepState::Skipped);
+	TestTrue(TEXT("beacon 3 reported passed"), WasPassed(Transitions, TEXT("b1_beacon3")));
+	TestEqual(TEXT("the B1 card is dropped"), Machine.GetState(TEXT("b1_card")), ETutorialStepState::Skipped);
+	TestEqual(TEXT("its follower of an earlier beat never starts"), Machine.GetState(TEXT("b1_late")), ETutorialStepState::Skipped);
+	TestEqual(TEXT("the open interaction objective keeps running in parallel"), Machine.GetState(TEXT("b1_share")), ETutorialStepState::Active);
+	Pump(Machine, 4.f);
+	TestEqual(TEXT("the barrel card shows (nothing of B1 blocks it)"), Machine.GetActiveCard(), FName(TEXT("b2_push")));
+	Machine.HandleEvent(TEXT("Shared"), TEXT("Op1"));
+	TestEqual(TEXT("the parallel objective can still be finished"), Machine.GetState(TEXT("b1_share")), ETutorialStepState::Completed);
+
+	// 3. Walking back to beacon 1 changes nothing (progress never goes backwards).
+	Machine.HandleVolume(TEXT("VOL_BEACON1"), NAME_None, NAME_None, TEXT("Op1"));
+	TestEqual(TEXT("back at beacon 1: still B2"), Machine.GetCurrentBeat(), FName(TEXT("B2")));
+	TestEqual(TEXT("the barrel card stays"), Machine.GetActiveCard(), FName(TEXT("b2_push")));
+
+	// 4. Straight from the start into the ruin (no beat volume at all on the way): B2 starts there.
+	FTutorialStateMachine Ruin;
+	Ruin.Load(Data);
+	Ruin.StartBeat(TEXT("B1"));
+	Ruin.HandleVolume(TEXT("VOL_RUIN"), NAME_None, NAME_None, TEXT("Op2"));
+	TestEqual(TEXT("ruin first: B2 started"), Ruin.GetCurrentBeat(), FName(TEXT("B2")));
+	TestEqual(TEXT("ruin first: 'go to the camp' completed"), Ruin.GetState(TEXT("b1_obj")), ETutorialStepState::Completed);
+	TestTrue(TEXT("ruin first: every B1 volume step passed"), Ruin.GetState(TEXT("b1_beacon1")) == ETutorialStepState::Skipped
+		&& Ruin.GetState(TEXT("b1_card")) == ETutorialStepState::Skipped && Ruin.GetState(TEXT("b1_beacon3")) == ETutorialStepState::Skipped);
+	TestFalse(TEXT("ruin first: B1's unlocks applied on the way"), Ruin.IsCommandLocked(PlayerCommands::Sprint));
+	Pump(Ruin, 4.f);
+	TestEqual(TEXT("ruin first: the barrel card shows"), Ruin.GetActiveCard(), FName(TEXT("b2_push")));
+	return true;
+}
+
+TUTORIAL_LOCK_TEST(FTutorialRouteDemoChainTest, "Route.DemoChain")
+bool FTutorialRouteDemoChainTest::RunTest(const FString&)
+{
+	using namespace TutorialLockTestData;
+	FTutorialStepsData Data;
+	TArray<FString> Warnings;
+	FString Error;
+	if (!TestTrue(FString::Printf(TEXT("demo file loads (%s)"), *Error), TutorialRules::LoadStepsFile(TEXT("demo_01_steps.json"), Data, Warnings, Error)))
+	{
+		return false;
+	}
+	FTutorialStateMachine Machine;
+	Machine.Load(Data);
+	// The beat volumes of the map (L_Demo01_A_FrozenLake / the review copy): what UTutorialSubsystem registers from the level.
+	Machine.RegisterVolumeBeat(TEXT("VOL_A0_BEACON1"), TEXT("A1"));
+	Machine.RegisterVolumeBeat(TEXT("VOL_A2_CAMP"), TEXT("A2"));
+	Machine.RegisterVolumeBeat(TEXT("VOL_A3_APPROACH"), TEXT("A3"));
+	Machine.RegisterVolumeBeat(TEXT("VOL_A4_OVERLOOK"), TEXT("A4"));
+	// A0 -> A4 the route is monotonic: every place lies after the one before it (the whole chain, checked for the skipped-beacon trap).
+	const TCHAR* RouteOrder[] = { TEXT("VOL_A0_BEACON1"), TEXT("VOL_A1_BEACON2"), TEXT("VOL_A1_HUT_APPROACH"), TEXT("VOL_A1_DOOR_L"), TEXT("VOL_A1_DOOR_R"),
+		TEXT("VOL_A1_HUT"), TEXT("VOL_A1_BEACON3"), TEXT("VOL_A2_CAMP"), TEXT("VOL_A2_RUIN"), TEXT("VOL_A3_APPROACH"), TEXT("VOL_A3_WIND"), TEXT("VOL_A3_RIDGE"),
+		TEXT("VOL_A3_RIDGE_FAR"), TEXT("VOL_A3_FENCE"), TEXT("VOL_A3_FIELD"), TEXT("VOL_A4_OVERLOOK") };
+	const TCHAR* RouteBeat[] = { TEXT("A1"), TEXT("A1"), TEXT("A1"), TEXT("A1"), TEXT("A1"), TEXT("A1"), TEXT("A1"), TEXT("A2"), TEXT("A2"), TEXT("A3"), TEXT("A3"),
+		TEXT("A3"), TEXT("A3"), TEXT("A3"), TEXT("A3"), TEXT("A4") };
+	int32 Previous = INDEX_NONE;
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(RouteOrder); ++Index)
+	{
+		const FTutorialStateMachine::FRoutePoint Point = Machine.GetVolumeRoutePoint(RouteOrder[Index]);
+		const FName Beat = Data.Beats.IsValidIndex(Point.BeatIndex) ? Data.Beats[Point.BeatIndex].Id : NAME_None;
+		TestTrue(FString::Printf(TEXT("%s on the route after the one before (%d > %d), beat %s"), RouteOrder[Index], Point.Key, Previous, *Beat.ToString()),
+			Point.IsValid() && Point.Key > Previous && Beat == FName(RouteBeat[Index]));
+		Previous = Point.Key;
+	}
+
+	// The squad skips beacon 1, the hut and beacon 3 and walks into the RUIN first (the review map 2026-10-14: the hut moved south,
+	// the camp volume lies north of the ruin): A1 then A2 start, the barrel lesson runs.
+	Machine.StartBeat(TEXT("A0"));
+	Pump(Machine, 3.f);
+	Machine.HandleVolume(TEXT("VOL_A1_BEACON2"), NAME_None, NAME_None, TEXT("Op1"));
+	TestEqual(TEXT("the crack reached without beacon 1: A1"), Machine.GetCurrentBeat(), FName(TEXT("A1")));
+	TestEqual(TEXT("'reach beacon 1' completed"), Machine.GetState(TEXT("A0_obj_beacon")), ETutorialStepState::Completed);
+	TestEqual(TEXT("the 'beacon two is past the crack' talk is dropped at the crack"), Machine.GetState(TEXT("A1_wt_start")), ETutorialStepState::Skipped);
+	TestTrue(TEXT("the bridge objective runs"), TutorialRules::IsRunning(Machine.GetState(TEXT("A1_bridge"))));
+	Pump(Machine, 2.f);
+	Machine.HandleVolume(TEXT("VOL_A2_RUIN"), NAME_None, NAME_None, TEXT("Op2"));
+	TestEqual(TEXT("the ruin reached without the camp volume: A2"), Machine.GetCurrentBeat(), FName(TEXT("A2")));
+	TestEqual(TEXT("'go to the camp' completed"), Machine.GetState(TEXT("A1_obj_camp")), ETutorialStepState::Completed);
+	TestTrue(TEXT("the hut / beacon 3 steps that never started are passed"), Machine.GetState(TEXT("A1_select")) == ETutorialStepState::Skipped
+		&& Machine.GetState(TEXT("A1_wt_hut_approach")) == ETutorialStepState::Skipped && Machine.GetState(TEXT("A1_wt_regroup")) == ETutorialStepState::Skipped);
+	Pump(Machine, 40.f);
+	TestTrue(FString::Printf(TEXT("the barrel push card runs (%s)"), TutorialRules::StateName(Machine.GetState(TEXT("A2_push")))),
+		TutorialRules::IsRunning(Machine.GetState(TEXT("A2_push"))));
+
+	// A3: the approach volume skipped, the fence reached first - the stance / vault cards behind are passed (their unlocks apply).
+	Machine.HandleVolume(TEXT("VOL_A3_FENCE"), NAME_None, NAME_None, TEXT("Op1"));
+	TestEqual(TEXT("the fence reached without the approach volume: A3"), Machine.GetCurrentBeat(), FName(TEXT("A3")));
+	TestTrue(TEXT("stance / vault cards passed"), Machine.GetState(TEXT("A3_stance")) == ETutorialStepState::Skipped
+		&& Machine.GetState(TEXT("A3_vault")) == ETutorialStepState::Skipped && Machine.GetState(TEXT("A3_wt_wind")) == ETutorialStepState::Skipped);
+	TestFalse(TEXT("stances unlocked on the way"), Machine.IsCommandLocked(TEXT("Stance.Prone")));
+	TestTrue(TEXT("the fence card runs"), TutorialRules::IsRunning(Machine.GetState(TEXT("A3_fence"))));
+	// A4 straight from the fence (the cover field volume skipped).
+	Machine.HandleVolume(TEXT("VOL_A4_OVERLOOK"), NAME_None, NAME_None, TEXT("Op1"));
+	TestEqual(TEXT("the overlook (Beat Id registered from the level): A4"), Machine.GetCurrentBeat(), FName(TEXT("A4")));
+	TestEqual(TEXT("'reach the overlook' completed"), Machine.GetState(TEXT("A3_obj_overlook")), ETutorialStepState::Completed);
+	TestEqual(TEXT("the cover field card passed"), Machine.GetState(TEXT("A3_cover")), ETutorialStepState::Skipped);
+	return true;
+}
+
 #undef TUTORIAL_LOCK_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

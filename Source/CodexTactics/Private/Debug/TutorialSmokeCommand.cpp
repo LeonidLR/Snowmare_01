@@ -35,7 +35,9 @@
 //     the approach line, select (key 2) -> Solo (B) -> the tactical entry (rev 5c: the third operative already inside the hut
 //     completes "go in" by volume presence; cover entered in VOL_A1_DOOR_R / _L by two DIFFERENT operatives, through the event
 //     bus; cover elsewhere does not count) -> the loot cards and the closing line -> (rev 5d) the share card + objective: the
-//     looter hands a heat pack to each mate with none (Shift + drag, into his kit), both complete -> regroup (B) -> box; beacon 3 plays the formation lines with no guard card; the save's tutorial section carries the
+//     looter hands a heat pack to each mate with none (Shift + drag, into his kit), both complete -> regroup (B) -> box; (rev 5f) the squad is TELEPORTED past beacon 3 into the camp volume: A2 starts, beacon 3 is passed (its
+//     lines never play), the cold / ruin lines, the push card (unlocks the push; a push outside VOL_A2_RUIN does not count), the light card,
+//     the warm objective; the save's tutorial section carries the
 //     command history; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
 //     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
 //     (tap = next line, hold = skip).
@@ -462,8 +464,8 @@ namespace TutorialSmoke
 			Check(State, Tutorial->StartBeat(TEXT("FIGHT")) && !Tutorial->IsLessonBeat(), TEXT("fight beat started (not a lesson)"));
 			Check(State, Engineer && !Engineer->HealthComponent->LethalDamageGuard.Execute(Engineer->HealthComponent, TEXT("TutorialSmoke")),
 				TEXT("fight beat: the lethal-hit guard lets the blow kill"));
-			// Tutorial off: nothing shows.
-			Tutorial->TriggerStep(TEXT("solo_card"));
+			// Tutorial off: nothing shows. (Rev 5f: the fight beat passed the L0 volume card on the way - replay it to have one on screen.)
+			Tutorial->ReplayStep(TEXT("solo_card"));
 			Tutorial->SetTutorialEnabled(false);
 			Overlay->Refresh();
 			Check(State, !Overlay->IsCardShown() && !Overlay->IsSubtitleShown() && !State.Marker->IsMarkerShown(), TEXT("tutorial OFF hides the card, strip and marker"));
@@ -1299,20 +1301,80 @@ namespace TutorialSmoke
 			Check(State, !Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A1_regroup")) == ETutorialStepState::Completed, TEXT("B: regrouped, the card done"));
 			Check(State, Tutorial->GetStepState(TEXT("A1_box")) == ETutorialStepState::Active, TEXT("then the box select card (moved from the bridge)"));
 			Tutorial->SkipStep(TEXT("A1_box"));
-			Check(State, EnterVolume(World, Leader, TEXT("VOL_A1_BEACON3")), TEXT("beacon 3 volume fires"));
+			// Rev 5f (game designer 2026-10-14: the barrel lesson never started when the squad came to the camp another way): the
+			// squad is TELEPORTED past beacon 3 (its volume never fires) straight into the camp volume (Beat Id A2, entered through
+			// the real overlap path): A2 starts from A1, beacon 3 is passed, the ruin / barrel steps run.
+			{
+				const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
+				const FVector Camp = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Ahead * 900.f);
+				for (int32 Index = 0; Index < Squad->GetMembers().Num(); ++Index)
+				{
+					AOperativeCharacter* Member = Squad->GetMembers()[Index];
+					Member->StopOperative();
+					Member->SetActorLocation(Camp + FVector(0.f, (Index - 1) * 120.f, 0.f), false, nullptr, ETeleportType::TeleportPhysics);
+				}
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				ATutorialTriggerVolume* CampVolume = World->SpawnActorDeferred<ATutorialTriggerVolume>(ATutorialTriggerVolume::StaticClass(),
+					FTransform(Leader->GetActorLocation()), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				CampVolume->VolumeId = TEXT("VOL_A2_CAMP");
+				CampVolume->BeatId = TEXT("A2");
+				CampVolume->Box->SetBoxExtent(FVector(300.f, 300.f, 150.f));
+				CampVolume->FinishSpawning(FTransform(Leader->GetActorLocation()));
+				CampVolume->CheckOverlapping(); // the leader stands in it (the overlap may already have fired on spawn)
+				Check(State, CampVolume->HasFired() && Tutorial->GetCurrentBeat() == FName(TEXT("A2")),
+					FString::Printf(TEXT("teleported past beacon 3 into the camp volume: A2 started (beat %s)"), *Tutorial->GetCurrentBeat().ToString()));
+				Check(State, Tutorial->GetStepState(TEXT("A1_wt_regroup")) == ETutorialStepState::Skipped
+					&& Tutorial->GetStepState(TEXT("A1_obj_camp")) == ETutorialStepState::Completed,
+					TEXT("beacon 3 passed on the way (its lines never play), 'reach the camp' done"));
+			}
+			State.Stage = 80;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 80:
+		{
+			// The A2 cold lines / the ruin lines play, then the push card (skip the talk so the smoke does not wait ~25 s).
+			if (Tutorial->IsSpeechActive())
+			{
+				Tutorial->SkipSpeech();
+			}
+			if (Tutorial->GetStepState(TEXT("A2_push")) != ETutorialStepState::Active && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A2_push")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::Relocate),
+				FString::Printf(TEXT("the barrel-into-the-ruin card shows and unlocks the push (%s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A2_push")))));
+			Check(State, TutorialRules::IsRunning(Tutorial->GetStepState(TEXT("A2_obj_warm"))), TEXT("the 'warm up in the ruin' objective runs"));
+			// The barrel set down outside the ruin does not count; inside VOL_A2_RUIN it does (the event's subject = the barrel).
+			AOperativeCharacter* Third = Squad->GetMembers()[2];
+			GameplayEvents::Raise(World, GameplayEvents::RelocationDone, Third);
+			Check(State, Tutorial->GetStepState(TEXT("A2_push")) == ETutorialStepState::Active, TEXT("a push that ends outside the ruin does not count"));
+			SpawnVolumeAround(World, Third, TEXT("VOL_A2_RUIN"), 80.f);
+			GameplayEvents::Raise(World, GameplayEvents::RelocationDone, Third);
+			Check(State, Tutorial->GetStepState(TEXT("A2_push")) == ETutorialStepState::Completed, TEXT("the barrel pushed into the ruin completes the push card"));
+			State.Stage = 81;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 81:
+		{
+			if (Tutorial->GetStepState(TEXT("A2_light")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A2_light")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::LightBarrel),
+				TEXT("then the 'light it' card (unlocks the barrel fire)"));
+			GameplayEvents::Raise(World, GameplayEvents::BarrelLit, Squad->GetMembers()[2]);
+			Check(State, Tutorial->GetStepState(TEXT("A2_light")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A2_obj_warm")) == ETutorialStepState::Completed,
+				TEXT("the barrel lit in the ruin: card and objective done"));
 			State.Stage = 46;
 			State.StageTime = 0.f;
 			return true;
 		}
 		case 46:
 		{
-			const ETutorialStepState Formation = Tutorial->GetStepState(TEXT("A1_wt_regroup"));
-			if (Formation != ETutorialStepState::Active && Formation != ETutorialStepState::Completed && State.StageTime < 8.f)
-			{
-				return true;
-			}
-			Check(State, Formation == ETutorialStepState::Active || Formation == ETutorialStepState::Completed, TEXT("beacon 3: the formation lines"));
-			Check(State, Tutorial->GetMachine().GetActiveCard().IsNone(), TEXT("no guard card at beacon 3 any more (guard moves to the horde beat)"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_wt_regroup")) == ETutorialStepState::Skipped, TEXT("beacon 3's formation lines were passed (never played later)"));
 			// Save round trip of the command history: the "tutorial" section carries it.
 			const TSharedPtr<FJsonObject> Saved = Tutorial->CaptureSaveState();
 			const TSharedPtr<FJsonObject>* History = nullptr;
@@ -1328,10 +1390,10 @@ namespace TutorialSmoke
 		case 47:
 		{
 			Check(State, UVisionConeComponent::IsPlayerEnemyConesOn() == State.bConesBefore
-				&& Tutorial->GetMachine().GetCommandUse(PlayerCommands::ToggleVisionCones).Count == 0, TEXT("O in A1: refused (taught by the A4 card)"));
+				&& Tutorial->GetMachine().GetCommandUse(PlayerCommands::ToggleVisionCones).Count == 0, TEXT("O in A2: refused (taught by the A4 card)"));
 			// Rev 5e (user bug 2026-10-14, "the tripwire cannot be disarmed"): the disarm used to unlock only when the A3 wire card SHOWED
 			// (queued behind the field's cards for minutes). A wire spotted now: the disarm is free at once and a feed line says how.
-			Check(State, Tutorial->IsCommandLocked(PlayerCommands::DisarmTripwire), TEXT("A1: the tripwire disarm is not taught yet"));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::DisarmTripwire), TEXT("A2: the tripwire disarm is not taught yet"));
 			Tutorial->NotifyEvent(TEXT("TripwireSpotted"), Leader->GetFName());
 			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::DisarmTripwire) && !Tutorial->IsCommandLocked(PlayerCommands::DisarmMine)
 				&& Tutorial->GetStepState(TEXT("A3_wire_spotted")) == ETutorialStepState::Completed && CountMessages(World, TEXT("Click the wire and choose Disarm")) == 1,

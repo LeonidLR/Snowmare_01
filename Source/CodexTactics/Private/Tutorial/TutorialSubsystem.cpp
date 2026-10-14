@@ -207,6 +207,14 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 {
 	Machine.StatProvider = [this](FName Stat) { return GetConditionStat(Stat); };
 	Machine.Load(Data);
+	// Rev 5f (monotonic route): the place of every beat volume of the level (a volume that starts a beat lies at its start).
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<ATutorialTriggerVolume> It(World); It; ++It)
+		{
+			Machine.RegisterVolumeBeat(It->GetEffectiveVolumeId(), It->BeatId);
+		}
+	}
 	LockedRefusals = 0;
 	PrecreditedCount = 0;
 	LockHintFamilies.Reset();
@@ -616,8 +624,9 @@ void UTutorialSubsystem::ProcessTransitions()
 			{
 				continue;
 			}
-			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s %s -> %s%s"), *Transition.StepId.ToString(), TutorialRules::StateName(Transition.From),
-				TutorialRules::StateName(Transition.To), Transition.bSilent ? TEXT(" (silent)") : TEXT(""));
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s %s -> %s%s%s"), *Transition.StepId.ToString(), TutorialRules::StateName(Transition.From),
+				TutorialRules::StateName(Transition.To), Transition.bSilent ? TEXT(" (silent)") : TEXT(""),
+				Transition.bPassed ? TEXT(" (passed on the way: the squad reached a later place first)") : TEXT(""));
 			if ((Transition.To == ETutorialStepState::Queued || Transition.To == ETutorialStepState::Active) && !Step->Complete.Volume.IsNone())
 			{
 				// A squad member may already stand where the step asks for (rev 5c: the third operative walked into the hut before
@@ -635,7 +644,7 @@ void UTutorialSubsystem::ProcessTransitions()
 			}
 			else if (TutorialRules::IsFinished(Transition.To))
 			{
-				const TCHAR* Event = Transition.To == ETutorialStepState::Skipped ? TEXT("skipped")
+				const TCHAR* Event = Transition.bPassed ? TEXT("passed") : Transition.To == ETutorialStepState::Skipped ? TEXT("skipped")
 					: (Transition.To == ETutorialStepState::TimedOut ? TEXT("timed_out")
 					: (Transition.bPrecredited ? TEXT("precredited") : (Transition.bSilent ? TEXT("completed_silently") : TEXT("completed"))));
 				WriteTelemetry(Event, Step->Id, Step->Beat, Transition.ActiveSeconds);

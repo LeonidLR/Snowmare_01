@@ -20,6 +20,11 @@ struct CODEXTACTICS_API FTutorialTransition
 	bool bPrecredited = false;
 	/** Dropped by its "cancel_on" (rev 5e): a running speech keeps only the line on screen, nothing is played later. */
 	bool bCancelled = false;
+	/**
+	 * Rev 5f (monotonic route): finished because the squad arrived at a LATER place first - a volume-triggered step that never
+	 * started (skipped, its unlocks apply, its after_step followers fire) or a "go to X" step whose X lies behind.
+	 */
+	bool bPassed = false;
 	/** Seconds the step was shown before this change. */
 	float ActiveSeconds = 0.f;
 };
@@ -31,9 +36,18 @@ struct CODEXTACTICS_API FTutorialTransition
  * walk-and-talk step at a time. A queued step counts commands / events too and finishes silently when done before it
  * was shown (UX brief rule 6). Once-steps never re-trigger; others may after they finished. When a later beat starts (the
  * squad walked on, e.g. reached beacon 1 during the A0 camera lesson), the running hint cards of earlier beats and the
- * after_step cards that would follow them are dropped (precredited or skipped, DropEarlierBeatCard); radio / walk-and-talk
- * and objectives of earlier beats go on. UTutorialSubsystem feeds it
- * commands, events, volumes and time, and drains ConsumeTransitions().
+ * after_step cards that would follow them are dropped (precredited or skipped, DropEarlierBeatCard); a shown radio /
+ * walk-and-talk and the interaction objectives of earlier beats go on.
+ * Rev 5f (game designer 2026-10-14: the barrel lesson never started when the squad came to the camp another way): progress is
+ * MONOTONIC BY LOCATION. Every tutorial volume has a place on the route (GetVolumeRoutePoint: the file order of the steps that
+ * use it, or the start of the beat a volume actor starts - RegisterVolumeBeat). Entering a volume (ApplyArrival) starts its
+ * beat when that beat is later than the current one, then passes everything that lies BEHIND it on the route: once-steps
+ * triggered by an earlier volume that never started are finished as Skipped without showing (bPassed: unlocks apply,
+ * after_step followers fire, so nothing waits for a place the squad walked past), running steps that complete at an earlier
+ * volume ("go to X") are completed (objectives) or dropped (cards). A new beat also passes the earlier beats' volume steps,
+ * completes their "go to" objectives, drops their waiting walk-and-talks and every after_step follower that would start later;
+ * earlier interaction objectives (event / condition, e.g. share the heat packs) keep running in parallel - they block nothing.
+ * UTutorialSubsystem feeds it commands, events, volumes and time, and drains ConsumeTransitions().
  */
 class CODEXTACTICS_API FTutorialStateMachine
 {
@@ -81,6 +95,26 @@ public:
 	bool HandleVolumePresence(FName VolumeId, FName SubjectId);
 	/** Operatives who counted for a step's completion so far (distinct_from; runtime only). */
 	const TSet<FName>* GetContributors(FName StepId) const;
+
+	/** A place on the tutorial route (rev 5f): Key orders the places (larger = later), BeatIndex = the beat the place belongs to. */
+	struct FRoutePoint
+	{
+		int32 Key = INDEX_NONE;
+		int32 BeatIndex = INDEX_NONE;
+		bool IsValid() const { return Key != INDEX_NONE; }
+	};
+	/**
+	 * Rev 5f: a volume actor in the level starts BeatId (ATutorialTriggerVolume::BeatId): its place on the route is the start of
+	 * that beat. The runtime registers every volume of the world when the steps load; HandleVolume registers the entered one too.
+	 * Kept across Load (world data).
+	 */
+	void RegisterVolumeBeat(FName VolumeId, FName BeatId);
+	/**
+	 * Where VolumeId lies on the route: the earliest step that uses it (a volume trigger before that step's completion; a
+	 * completion of a step started at its beat start - "go to the camp" - counts as the END of that beat), or the start of the
+	 * registered beat, whichever is later. Invalid for a volume no step uses and no beat starts.
+	 */
+	FRoutePoint GetVolumeRoutePoint(FName VolumeId) const;
 	/** Starts a beat (only forward unless bAllowBackwards). Returns true when the current beat changed. */
 	bool StartBeat(FName BeatId, bool bAllowBackwards = false);
 	/** Fires a step now (manual triggers, replay). False when it may not trigger (running, or once and finished). */
@@ -157,6 +191,20 @@ private:
 	bool CanTrigger(int32 Index) const;
 	/** The step is a hint card of a beat before the current one (the story has moved on past it). */
 	bool IsEarlierBeatCard(int32 Index) const;
+	/** The step belongs to a beat before the current one (any kind). */
+	bool IsEarlierBeatStep(int32 Index) const;
+	/** Rev 5f: a follower of an earlier beat that became due after the story moved on - cards as DropEarlierBeatCard, others skipped. */
+	void DropEarlierBeatStep(int32 Index);
+	/** Rev 5f: an Idle once-step is finished as Skipped without ever starting (bPassed); its locks apply, its followers fire. */
+	void PassStep(int32 Index);
+	/** Rev 5f: the squad arrived at VolumeId (actor beat BeatId): starts a later beat, passes what lies behind on the route. */
+	void ApplyArrival(FName VolumeId, FName BeatId);
+	/** Rev 5f: passes every step behind Point (see the class comment). */
+	void PassRouteBefore(const FRoutePoint& Point);
+	/** Rev 5f: route keys of the steps' volumes (Load). */
+	void RebuildRoute();
+	/** The route point of the start of BeatIndex (before its first step). */
+	FRoutePoint GetBeatStartPoint(int32 BeatIndex) const;
 	/**
 	 * Drops a leftover hint card of an earlier beat without showing it any more: completed when the player's command history
 	 * already satisfies it ("precredit"), else skipped. Its followers fire as usual (a chain of leftovers drops in one go).
@@ -208,4 +256,7 @@ private:
 	TArray<FTutorialTransition> Transitions;
 	TArray<FString> Locks;
 	TMap<FName, FTutorialCommandUse> History;
+	/** Rev 5f: the place of each volume the steps use (RebuildRoute) and the beats volume actors start (RegisterVolumeBeat). */
+	TMap<FName, FRoutePoint> StepRoute;
+	TMap<FName, FName> VolumeBeats;
 };
