@@ -227,9 +227,16 @@ namespace SniperSmoke
 					Check(State, Expected && Member->GetClass() == Expected, FString::Printf(TEXT("Medic-Sapper class %s = %s (%s)"),
 						*GetNameSafe(Member->GetClass()), *GetNameSafe(Expected),
 						bApplyBodyMesh ? TEXT("member Blueprint missing: BP_Operative + BodyMesh") : TEXT("her member Blueprint")));
-					if (bApplyBodyMesh)
+					if (bApplyBodyMesh && !Entry->BodyMesh.IsNull())
 					{
-						Check(State, bFemale, FString::Printf(TEXT("Medic-Sapper body = SK_Female_soldier (%s)"), Body ? *Body->GetName() : TEXT("none")));
+						// The roster's BodyMesh (the designer edits it in BP_CodexTacticsGameMode since 2026-10-14).
+						Check(State, Body && Body->GetName() == Entry->BodyMesh.GetAssetName(), FString::Printf(TEXT("Medic-Sapper body = roster BodyMesh %s (%s)"),
+							*Entry->BodyMesh.GetAssetName(), Body ? *Body->GetName() : TEXT("none")));
+					}
+					else if (bApplyBodyMesh)
+					{
+						// No member Blueprint and no BodyMesh: the regular operative from the game mode's Blueprint.
+						Check(State, Body != nullptr && !bFemale, FString::Printf(TEXT("Medic-Sapper body = the regular operative (%s)"), *GetNameSafe(Body)));
 					}
 					else
 					{

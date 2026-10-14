@@ -88,6 +88,8 @@ namespace SaveRoundTripSmoke
 		int32 Stage = 0;
 		int32 Failures = 0;
 		TMap<FString, FString> SnapshotA;
+		/** The Medic-Sapper's body before the save (whatever the designer's roster gives her; 2026-10-14 the roster is a BP). */
+		FString MedicBodyBefore;
 		TMap<FString, FString> SnapshotTravel;
 		bool bTravelApplied = false;
 		FDelegateHandle AppliedHandle;
@@ -600,6 +602,7 @@ namespace SaveRoundTripSmoke
 		const int32 MarksmanWaypoint = Marksman ? Marksman->GetPatrolWaypointIndex() : -1;
 
 		State.SnapshotA = Snapshot(*Saves);
+		State.MedicBodyBefore = Medic && Medic->GetMesh()->GetSkeletalMeshAsset() ? Medic->GetMesh()->GetSkeletalMeshAsset()->GetName() : FString();
 		FText Hint;
 		Check(State, Saves->CanSaveNow(&Hint) && Hint.IsEmpty(), TEXT("exploration: saving allowed"));
 		Check(State, Saves->SaveToSlotWithMessage(Slot) && Saves->HasSave(Slot), TEXT("saved \"roundtrip\""));
@@ -730,8 +733,8 @@ namespace SaveRoundTripSmoke
 			&& Tutorial->GetStepState(TEXT("rt_skip")) == ETutorialStepState::Skipped && Tutorial->GetStepState(TEXT("rt_obj")) == ETutorialStepState::Active
 			&& Tutorial->GetCurrentBeat() == FName(TEXT("T0")), TEXT("tutorial: completed / skipped steps, the shown objective and the beat restored"));
 		Check(State, Medic->IsSniperWeaponEquipped() && Medic->CurrentClip == 3 && Medic->GetMesh()->GetSkeletalMeshAsset()
-			&& Medic->GetMesh()->GetSkeletalMeshAsset()->GetName() == TEXT("SK_Female_soldier"),
-			FString::Printf(TEXT("Medic-Sapper: Female Soldier body, sniper rifle back in hands [%d/%d]"), Medic->CurrentClip, Medic->ReserveAmmo));
+			&& Medic->GetMesh()->GetSkeletalMeshAsset()->GetName() == State.MedicBodyBefore,
+			FString::Printf(TEXT("Medic-Sapper: same body (%s), sniper rifle back in hands [%d/%d]"), *State.MedicBodyBefore, Medic->CurrentClip, Medic->ReserveAmmo));
 		const ABarrelActor* Barrel = FindNamed<ABarrelActor>(World, State.BarrelName);
 		Check(State, Barrel && Barrel->IsBurning(), TEXT("barrel burns again at its pushed spot"));
 		int32 SquadMines = 0;
