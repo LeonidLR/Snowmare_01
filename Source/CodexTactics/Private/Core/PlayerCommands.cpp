@@ -165,7 +165,7 @@ namespace PlayerCommands
 			{ CoverEnter, TEXT("Click again"), TEXT("Combat"), TEXT("Take the cover slot") },
 			{ CoverCorner, TEXT("Click corner"), TEXT("Combat"), TEXT("Take a corner slot") },
 			{ CoverShimmy, TEXT("Click along wall"), TEXT("Combat"), TEXT("Shimmy along the wall") },
-			{ CoverCornerPeek, TEXT("Click wall edge"), TEXT("Combat"), TEXT("In cover: go to that corner and hold the aim round it") },
+			{ CoverCornerPeek, TEXT("Click wall edge"), TEXT("Combat"), TEXT("In cover (high, or crouched at low cover): go to that corner and hold the aim round it") },
 			{ CoverFireMode, TEXT("N"), TEXT("Combat"), TEXT("Corner lean / blind fire") },
 			{ Relocate, TEXT("Click > Push"), TEXT("Items & traps"), TEXT("Push / relocate an object") },
 			{ LightBarrel, TEXT("Click > Light"), TEXT("Items & traps"), TEXT("Light a barrel with a match") },

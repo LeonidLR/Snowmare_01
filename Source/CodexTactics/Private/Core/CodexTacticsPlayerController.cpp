@@ -409,13 +409,14 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		HideCoverPreview();
 	}
 
-	// Rev 5c manual corner peek: hovering the end of the leader's (turn-based: the active unit's) high cover previews the peek.
+	// Rev 5c manual corner peek: hovering the end of the leader's (turn-based: the active unit's) cover - high, or low since rev 5e -
+	// previews the peek.
 	{
 		UTurnBasedCombatSubsystem* PeekTurnBased = GetActiveTurnBased();
 		USquadSubsystem* PeekSquad = GetSquad();
 		AOperativeCharacter* PeekOperative = PeekTurnBased ? PeekTurnBased->GetActiveUnit() : (PeekSquad ? PeekSquad->GetLeader() : nullptr);
 		FHitResult PeekHit;
-		const bool bPeekHit = PeekOperative && PeekOperative->IsInHighCover() && !IsDialogueOpen() && !bRelocateSelectMode
+		const bool bPeekHit = PeekOperative && PeekOperative->IsInPeekableCover() && !IsDialogueOpen() && !bRelocateSelectMode
 			&& GetHitResultUnderCursor(ECC_Visibility, false, PeekHit);
 		UpdateCornerPeekHover(PeekOperative, bPeekHit ? &PeekHit : nullptr);
 	}
@@ -2509,14 +2510,9 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		return false;
 	}
 	const bool bAlt = IsSquadWideModifierDown();
-	// Objects (barricades, barrels, crates, quest objects) keep their click meaning; Alt + click takes cover at them.
-	if (HitActor->IsA<AInteractableActor>() && !bAlt)
-	{
-		return false;
-	}
 	// APC P1: the vehicle is a Pawn but its hull is cover (the click on the APC stays "take cover", user decision 2026-10-12).
 	const bool bVehicle = HitActor->IsA<AVehiclePawn>();
-	// Manual corner peek (user request 2026-10-13, rev 5c): in high cover, a click on the END of his own wall (its last ~75 cm,
+	// Manual corner peek (user request 2026-10-13, rev 5c; low cover too since rev 5e): a click on the END of his own wall (its last ~75 cm,
 	// its end face or its top there) sends him to that corner, leaning out in the corner-aim pose until another order.
 	// Rev 5d (user bug 2026-10-14): decided BEFORE the "a click near an operative picks him" proximity rule - the corner he
 	// already stands at lies inside SelectRadius, so the near-edge click selected him and nothing happened (the hover, which
@@ -2525,7 +2521,7 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		ECoverFacing PeekSide = ECoverFacing::Right;
 		float PeekEdge = 0.f;
 		const UTutorialSubsystem* PeekTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
-		const bool bPeekEdge = !bAlt && Operative->IsInHighCover() && !(PeekTutorial && PeekTutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek))
+		const bool bPeekEdge = !bAlt && Operative->IsInPeekableCover() && !(PeekTutorial && PeekTutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek))
 			&& !HitActor->IsA<APawn>() && FindCornerPeekForHit(Operative, Hit, PeekSide, PeekEdge);
 		if (CoverFacingRules::CornerPeekClickWins(bPeekEdge, HitActor->IsA<AOperativeCharacter>()))
 		{
@@ -2548,6 +2544,12 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 			}
 			return true;
 		}
+	}
+	// Objects (barricades, barrels, crates, quest objects) keep their click meaning; Alt + click takes cover at them. (Rev 5e: checked
+	// after the corner peek - the end of the barricade he crouches behind is a peek edge, its middle still opens its menu.)
+	if (HitActor->IsA<AInteractableActor>() && !bAlt)
+	{
+		return false;
 	}
 	if (FindClickedMember(Hit) || (HitActor->IsA<APawn>() && !bVehicle) || HitActor->ActorHasTag(FName(TEXT("Enemy"))))
 	{
@@ -2616,7 +2618,7 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 bool ACodexTacticsPlayerController::FindCornerPeekForHit(const AOperativeCharacter* Operative, const FHitResult& Hit, ECoverFacing& OutSide,
 	float& OutEdgeAlongCm) const
 {
-	if (!Operative || !Operative->IsInHighCover())
+	if (!Operative || !Operative->IsInPeekableCover())
 	{
 		return false;
 	}
@@ -2654,7 +2656,7 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 {
 	bool bEdge = false;
 	const UTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
-	if (Operative && Hit && Operative->IsInHighCover() && !Operative->bShimmying
+	if (Operative && Hit && Operative->IsInPeekableCover() && !Operative->bShimmying
 		&& !(Tutorial && Tutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek)))
 	{
 		// The probe traces only when the cursor moved over the wall (or he moved): cached while it rests.
@@ -2693,8 +2695,8 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 	{
 		// The corner stand point: the cover slot moved along the wall to the stand-off from that edge.
 		FCoverSlot Corner = Operative->GetCoverSlot();
-		const float StandOff = CoverFacingRules::CornerStandOff(PeekHoverSide, Operative->GetStance() == EOperativeStance::Crouching,
-			Operative->GetCoverFacingConfig());
+		const float StandOff = CoverFacingRules::CornerStandOff(PeekHoverSide, Operative->GetStance() == EOperativeStance::Crouching
+			|| Operative->CurrentCoverHeight == ECoverHeight::LowCover, Operative->GetCoverFacingConfig());
 		const FVector Shift = Corner.RightTangent() * CoverFacingRules::CornerPeekStandAlong(PeekHoverSide, PeekHoverEdgeAlong, StandOff);
 		Corner.WorldLocation += Shift;
 		Corner.WallPoint += Shift;

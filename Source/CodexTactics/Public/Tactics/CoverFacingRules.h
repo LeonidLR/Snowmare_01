@@ -245,7 +245,8 @@ namespace CoverFacingRules
 	 * Current (within its probe range) and, for a long wall, from Probe (a slot of the same wall traced near the click; may be
 	 * null). OutEdgeAlongCm = the edge's position along the wall from Current.WorldLocation (+ = along RightTangent). The click
 	 * must lie within FCoverPeekConfig::EdgeHitCm inside the edge .. PastEdgeCm past it, and no further than MaxFrontCm in front
-	 * of / MaxBehindCm behind the wall face; the nearest qualifying edge wins. Low cover never peeks (it is fired over the top).
+	 * of / MaxBehindCm behind the wall face; the nearest qualifying edge wins. Rev 5e (2026-10-14): low cover peeks too (crouched
+	 * round its end); a probe slot of another cover height is ignored.
 	 */
 	CODEXTACTICS_API bool FindPeekEdge(const FCoverSlot& Current, const FVector& Click, const FCoverSlot* Probe, ECoverFacing& OutSide,
 		float& OutEdgeAlongCm, const FCoverPeekConfig& Config = FCoverPeekConfig());

@@ -3631,9 +3631,9 @@ bool AOperativeCharacter::CanFireFromCover() const
 FVector AOperativeCharacter::GetCoverFireOrigin() const
 {
 	const FVector Muzzle = GetMuzzleLocation();
-	if (!bInCover || CurrentCoverHeight != ECoverHeight::HighCover)
+	if (!bInCover || (CurrentCoverHeight != ECoverHeight::HighCover && !(bCornerAimActive && IsManualCornerPeekSpot())))
 	{
-		return Muzzle;
+		return Muzzle; // low cover: over the top (a manual low-cover corner peek fires round its end, rev 5e)
 	}
 	return CornerFireOriginFor(CoverSlot, CoverFacing, Muzzle);
 }
@@ -4427,22 +4427,29 @@ bool AOperativeCharacter::IsCornerHoldSpot() const
 
 bool AOperativeCharacter::IsManualCornerPeekSpot() const
 {
-	return bManualCornerPeek && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight == ECoverHeight::HighCover
+	return bManualCornerPeek && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight != ECoverHeight::None
 		&& CoverFacing == ManualCornerPeekSide && bAtCoverCorner && CoverSlot.IsEdgeExposed(ManualCornerPeekSide);
 }
 
 EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, float EdgeAlongCm)
 {
-	if (!bInCover || CurrentCoverHeight != ECoverHeight::HighCover)
+	if (!IsInPeekableCover())
 	{
-		return EOperativeOrderResult::Unreachable; // a low cover is fired over the top anywhere: no corner to peek round
+		return EOperativeOrderResult::Unreachable;
 	}
 	if (IsRaging() || IsPanicking() || IsKnockedDown())
 	{
 		return EOperativeOrderResult::Refused;
 	}
+	// Rev 5e (game designer 2026-10-14): low cover peeks too - crouched, round the end of the low wall / barricade (the crouched
+	// corner stance cvr_crch_fire_idle_L / _R steps out sideways; baseline pose, the user polishes the AnimBP).
+	const bool bLowCover = CurrentCoverHeight == ECoverHeight::LowCover;
+	if (bLowCover && Stance == EOperativeStance::Standing)
+	{
+		SetStance(EOperativeStance::Crouching);
+	}
 	const FCoverFacingConfig Config = GetCoverFacingConfig();
-	const float StandOff = CoverFacingRules::CornerStandOff(Side, Stance == EOperativeStance::Crouching, Config);
+	const float StandOff = CoverFacingRules::CornerStandOff(Side, bLowCover || Stance == EOperativeStance::Crouching, Config);
 	const float Stand = CoverFacingRules::CornerPeekStandAlong(Side, EdgeAlongCm, StandOff);
 	const float BodyAlong = CoverTraceRules::AlongWallDistanceFrom(CoverSlot, CoverSlot.WorldLocation, GetActorLocation());
 	// Rev 5d (user bug 2026-10-14): at / near the clicked corner the aim starts in place; turn-based anywhere at that corner.
@@ -4517,12 +4524,14 @@ bool AOperativeCharacter::WantsCornerHold() const
 
 FVector AOperativeCharacter::GetStanceAimOrigin() const
 {
-	return bInCover && bCornerAimActive && CurrentCoverHeight == ECoverHeight::HighCover ? GetCoverFireOrigin() : GetMuzzleLocation();
+	return bInCover && bCornerAimActive && (CurrentCoverHeight == ECoverHeight::HighCover || IsManualCornerPeekSpot()) ? GetCoverFireOrigin()
+		: GetMuzzleLocation();
 }
 
 FVector AOperativeCharacter::GetStanceAimBaseDirection() const
 {
-	if (bInCover && CurrentCoverHeight == ECoverHeight::HighCover && (bCornerAimActive || IsCornerHoldSpot()))
+	if (bInCover && ((CurrentCoverHeight == ECoverHeight::HighCover && (bCornerAimActive || IsCornerHoldSpot()))
+		|| (bCornerAimActive && IsManualCornerPeekSpot())))
 	{
 		return CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg);
 	}

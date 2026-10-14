@@ -97,7 +97,7 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 		// The cover idle of the slot's height and facing side (the plain idle while no cover clips are assigned).
 		const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Source->GetAnimInstance());
 		// The peek is taken in his current stance; a cover entry in the slot height's default one.
-		const bool bCrouched = bFireIdle ? InOperative.GetStance() == EOperativeStance::Crouching
+		const bool bCrouched = bFireIdle ? InOperative.GetStance() == EOperativeStance::Crouching || InSlot.Height == ECoverHeight::LowCover
 			: CoverRules::DefaultStanceFor(InSlot.Height) == EOperativeStance::Crouching;
 		UAnimSequenceBase* Clip = nullptr;
 		if (Anim)

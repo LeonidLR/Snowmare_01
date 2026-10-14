@@ -929,7 +929,8 @@ public:
 	EOperativeOrderResult OrderShimmyTo(const FCoverSlot& Target);
 
 	/**
-	 * Manual corner peek (user request 2026-10-13, Demo 01 rev 5c; command Cover.CornerPeek): in high cover, go to the exposed
+	 * Manual corner peek (user request 2026-10-13, Demo 01 rev 5c; command Cover.CornerPeek): in high cover - and, rev 5e (game
+	 * designer 2026-10-14), crouched behind LOW cover (the crouched corner stance cvr_crch_fire_idle leans out round its end) - go to the exposed
 	 * edge on Side (EdgeAlongCm = its position along the wall from the cover slot, + = along the slot's RightTangent; the
 	 * controller finds it with CoverFacingRules::FindPeekEdge) and hold the corner-aim pose there - leaning out, rifle up - also
 	 * with no enemy around, until another order (a move / another cover / a shimmy / the other corner; leaving the cover).
@@ -946,7 +947,7 @@ public:
 	/** The ordered corner of the manual peek (valid while IsManualCornerPeek). */
 	ECoverFacing GetManualCornerPeekSide() const { return ManualCornerPeekSide; }
 
-	/** At the ordered corner now (in high cover, not shimmying, the edge exposed on that side): the peek pose is held. */
+	/** At the ordered corner now (in cover - high or low - not shimmying, the edge exposed on that side): the peek pose is held. */
 	bool IsManualCornerPeekSpot() const;
 
 	/** Manual peeks that reached their pose (the CornerPeek event; smokes / stats). */
@@ -963,6 +964,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
 	bool IsInHighCover() const { return bInCover && CurrentCoverHeight == ECoverHeight::HighCover; }
+
+	/** In cover at a wall whose ends can be peeked round: high cover, or low cover crouched (rev 5e, 2026-10-14). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
+	bool IsInPeekableCover() const { return bInCover && CurrentCoverHeight != ECoverHeight::None; }
 
 	/** A shot is possible from this cover: low cover (over the top) or an exposed corner on the facing side. */
 	bool CanFireFromCover() const;

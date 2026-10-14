@@ -455,7 +455,7 @@
       "complete": { "event": "CoverEntered", "count": 2, "distinct_operatives": true, "timeout_s": 45 }
     },
     {
-      "_comment": "Optional corner-peek card (rev 5c, user request 2026-10-13): in high cover a click on the END of the wall sends the operative to that corner, leaning out in the corner aim until the next order (command Cover.CornerPeek, event CornerPeek). Done when one does it, or after 45 s.",
+      "_comment": "Optional corner-peek card (rev 5c, user request 2026-10-13; low cover too since rev 5e): in cover a click on the END of the wall sends the operative to that corner, leaning out in the corner aim until the next order (command Cover.CornerPeek, event CornerPeek). Done when one does it, or after 45 s.",
       "id": "A3_peek", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_PEEK",
       "keys": ["Cover.CornerPeek"],
       "trigger": { "type": "after_step", "step": "A3_squad_card", "delay_s": 1 },

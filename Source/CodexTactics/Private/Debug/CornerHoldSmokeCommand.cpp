@@ -15,6 +15,9 @@
 // Then (rev 5d, user bug 2026-10-14) the NEAR EDGE: in cover 50 cm from an end (he snaps to that corner), a click 20 cm in from
 // that end - inside the 120 cm "a click near an operative picks him" radius - must start the corner aim at once (handled as a
 // peek, not a selection; < 2.5 s, < 40 cm moved): the -R end and the +R end standing, then both crouched facing the other way.
+// Then (rev 5e, game designer 2026-10-14) LOW cover: crouched behind a 1 m high, 4 m long wall 10 m to the right - hovering its end
+// shows the peek ghost, a click on the -R end from the middle sends him there (crouched corner aim cvr_crch_fire_idle, held), and in
+// cover 50 cm from the +R end a click 20 cm in from that end starts the crouched corner aim at once (the near-edge rule).
 
 #include "CoreMinimal.h"
 
@@ -73,6 +76,9 @@ namespace CornerHoldSmoke
 		int32 NearPass = 0;
 		FVector NearClickBody = FVector::ZeroVector;
 		int32 NearPeeksBefore = 0;
+		/** Rev 5e low-cover passes (0: from the middle to the -R end, 1: the near +R end), the low wall. */
+		TWeakObjectPtr<AStaticMeshActor> LowWall;
+		int32 LowPass = 0;
 		FPhase Phase[3];
 		int32 LastLean = 0;
 		int32 LastOpen = 0;
@@ -598,7 +604,134 @@ namespace CornerHoldSmoke
 			Op->OrderMoveTo(State.P, false);
 			State.PeekBrokenFrames = 0;
 			++State.NearPass;
-			State.Stage = State.NearPass < 4 ? 30 : 25;
+			State.Stage = State.NearPass < 4 ? 30 : 40;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// --- Rev 5e (game designer 2026-10-14): the corner peek from LOW cover, both ends, crouched ---
+		case 40:
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			const FVector LowCentre = State.P + State.R * 1000.f + State.F * 400.f;
+			if (!State.LowWall.IsValid())
+			{
+				State.LowWall = SpawnBlock(World, FVector(LowCentre.X, LowCentre.Y, State.GroundZ + 50.f), State.F.Rotation(), FVector(0.4f, 4.f, 1.f));
+				State.StageTime = 0.f;
+				return true; // the navmesh rebuilds round it
+			}
+			const float EndSign = State.LowPass == 0 ? 0.f : 1.f; // the middle, then 50 cm from the +R end
+			FCoverSlot Slot;
+			const bool bFound = CoverTraceRules::FindCoverSlotAt(World, FVector(LowCentre.X, LowCentre.Y, State.GroundZ + 50.f) - State.F * 20.f
+				+ State.R * (EndSign * 150.f), State.F, Slot);
+			Check(State, bFound && Slot.Height == ECoverHeight::LowCover && Op->OrderTakeCover(Slot, false) == EOperativeOrderResult::Accepted,
+				FString::Printf(TEXT("low pass %d: low cover at the %s of the 1 m wall"), State.LowPass, State.LowPass == 0 ? TEXT("middle") : TEXT("+R end")));
+			State.Stage = 41;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 41:
+		{
+			if ((!Op->bInCover || Op->bShimmying || State.StageTime < 3.f) && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			AStaticMeshActor* LowWall = State.LowWall.Get();
+			if (!PC || !LowWall)
+			{
+				Check(State, false, TEXT("controller / low wall"));
+				return Finish(State);
+			}
+			const float EndSign = State.LowPass == 0 ? -1.f : 1.f;
+			const FVector LowCentre = State.P + State.R * 1000.f + State.F * 400.f;
+			const FHitResult EdgeHit(LowWall, LowWall->GetStaticMeshComponent(),
+				FVector(LowCentre.X, LowCentre.Y, State.GroundZ + 50.f) - State.F * 20.f + State.R * (EndSign * 180.f), -State.F);
+			ECoverFacing Side = ECoverFacing::Left;
+			float Edge = 0.f;
+			const bool bEdge = PC->FindCornerPeekForHit(Op, EdgeHit, Side, Edge);
+			Check(State, Op->bInCover && Op->CurrentCoverHeight == ECoverHeight::LowCover && Op->GetStance() == EOperativeStance::Crouching
+				&& Op->IsInPeekableCover() && !Op->IsInHighCover() && bEdge,
+				FString::Printf(TEXT("low pass %d: crouched in LOW cover, the %s end is a peek edge (%.0f cm along, click %.0f cm from his body)"), State.LowPass,
+					EndSign < 0.f ? TEXT("-R") : TEXT("+R"), Edge, FVector::Dist2D(Op->GetActorLocation(), EdgeHit.ImpactPoint)));
+			Check(State, PC->UpdateCornerPeekHover(Op, &EdgeHit) && PC->IsCornerPeekPreviewShown() && PC->CurrentMouseCursor == EMouseCursor::Crosshairs,
+				TEXT("hovering the low wall's end: the peek ghost + crosshair"));
+			State.NearPeeksBefore = Op->GetManualCornerPeekCount();
+			State.NearClickBody = Op->GetActorLocation();
+			Check(State, PC->TryHandleCoverClick(EdgeHit, nullptr) && Op->IsManualCornerPeek(),
+				FString::Printf(TEXT("low pass %d: the click on the end orders the crouched corner peek"), State.LowPass));
+			State.PeekBrokenFrames = 0;
+			State.Stage = 42;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 42:
+		{
+			if (!(Op->bAtCoverCorner && Op->IsCornerAimActive() && Op->bIsCornerLeaning) && State.StageTime < 10.f)
+			{
+				return true;
+			}
+			const float Moved = static_cast<float>(FVector::Dist2D(Op->GetActorLocation(), State.NearClickBody));
+			Check(State, Op->bInCover && Op->bAtCoverCorner && Op->IsCornerAimActive() && Op->IsManualCornerPeek() && Op->bIsCornerLeaning
+				&& Op->GetStance() == EOperativeStance::Crouching && Op->GetManualCornerPeekCount() == State.NearPeeksBefore + 1,
+				FString::Printf(TEXT("low pass %d: at the end of the low wall, crouched corner aim (%.2f s, moved %.0f cm, CornerPeek %d)"), State.LowPass,
+					State.StageTime, Moved, Op->GetManualCornerPeekCount() - State.NearPeeksBefore));
+			if (State.LowPass == 1)
+			{
+				Check(State, State.StageTime < 2.5f && Moved < 40.f, FString::Printf(TEXT("low pass 1: the near-edge click poses at once (%.2f s, %.0f cm)"), State.StageTime, Moved));
+			}
+			State.Stage = 43;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 43:
+		{
+			State.PeekBrokenFrames += Op->IsCornerAimActive() ? 0 : 1;
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			FString Clip;
+			float MontageWeight = 0.f;
+			float SlotWeight = 0.f;
+			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
+			if (Anim)
+			{
+				Anim->GetCoverPlayback(Clip, MontageWeight, SlotWeight);
+			}
+			const bool bHasCrouchClips = Anim && Anim->CoverCrouchFireIdle.Num() > 0 && Anim->CoverCrouchFireIdle[0];
+			Check(State, State.PeekBrokenFrames == 0 && Op->IsCornerAimActive() && Op->IsManualCornerPeek() && Op->bInCover,
+				FString::Printf(TEXT("low pass %d: held 2 s with nobody around (broken %d frames)"), State.LowPass, State.PeekBrokenFrames));
+			Check(State, !bHasCrouchClips || Clip.Contains(TEXT("crch_fire")),
+				FString::Printf(TEXT("low pass %d: the crouched corner stance plays (%s)"), State.LowPass, *Clip));
+			Op->OrderMoveTo(State.P, false); // another order releases the peek
+			State.Stage = 44;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 44:
+		{
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			Check(State, !Op->IsCornerAimActive() && !Op->IsManualCornerPeek() && !Op->bInCover,
+				FString::Printf(TEXT("low pass %d: a move order releases the low-cover peek"), State.LowPass));
+			if (State.LowPass == 0)
+			{
+				State.LowPass = 1;
+				State.Stage = 40;
+				State.StageTime = 0.f;
+				return true;
+			}
+			if (AStaticMeshActor* LowWall = State.LowWall.Get())
+			{
+				LowWall->Destroy();
+			}
+			Op->SetStance(EOperativeStance::Standing); // the fights below run standing
+			State.Stage = 25;
 			State.StageTime = 0.f;
 			return true;
 		}
