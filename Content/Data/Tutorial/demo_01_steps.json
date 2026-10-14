@@ -6,7 +6,7 @@
     "Content/Data/Tutorial/demo_01_texts_draft.json, else '[EN missing: <id>]'. Command ids: Source/CodexTactics/Public/Core/PlayerCommands.h.",
     "Beats implemented here (Phase 1 = user steps 1-9 + the standalone A3 fence / A4 cone cards): A0 drop (the HQ radio talks while the squad may",
     "already walk / run and the staged camera lesson runs alongside; 'click to walk' + 'double-click to run' right after the camera chain, rev 5c), A1 crossing (the shaky bridge holds the followers: one at a",
-    "time on its own, rev 5c; squad banter, cold -> heat pack = inventory unlock, 'running keeps you warm' tip, hut: a tactical entry = select + solo + cover at the door, loot, regroup, box), A2 camp (barrel push + light),",
+    "time on its own, rev 5c; squad banter, cold -> heat pack = inventory unlock, 'running keeps you warm' tip, hut: a tactical entry = select + solo + cover at the door, loot, share the heat packs (rev 5d), regroup, box), A2 camp (barrel push + light),",
     "A3 approach (stances, vault, low fence crawl, cover, mines / wires spotted), A4 ambush (vision-cone toggle, tripwire; the fight itself is Phase 2).",
     "Beats A5-A8 are designed in the beat sheet only.",
     "PROGRESSIVE UNLOCK (user request 2026-10-13, beat sheet section 'Locks'): beat A0 locks every command family not taught yet; camera, Order.*",
@@ -279,11 +279,23 @@
       "lines": [ { "speaker": "Engineer", "text_id": "WT_A1_STOCKED" } ]
     },
     {
-      "_comment": "Not precredited: the squad stands in solo mode (two at the door, one inside) and must actually regroup (Solo off).",
+      "_comment": "Rev 5d (game designer 2026-10-14): share the hut's heat packs - every operative carries at least one AND at least one pack was handed over between squad mates (stat heat_packs_given, since the level started), so the hand-over is always practised once. Always solvable: 3 starter packs (1 each) - the 1-2 used in the heat pack lesson + the crate's 3 >= 3, stack max 3 each. Precredited when it already holds (the looter handed them out before the card came). The real input: select the looter, open the inventory (I), hold Shift and drag a heat pack onto a mate (his body or his action-bar portrait); without Shift a cold mate cracks it at once (Sprint 15).",
+      "id": "A1_share", "beat": "A1", "kind": "objective", "text_id": "OBJ_A1_SHARE",
+      "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 2 },
+      "complete": { "condition": [ { "stat": "squad_min_heat_packs", "at_least": 1 }, { "stat": "heat_packs_given", "at_least": 1 } ] }
+    },
+    {
+      "id": "A1_share_card", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SHARE",
+      "keys": ["Select.Member", "Inventory.Open", "Item.Give"],
+      "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 2 },
+      "complete": { "condition": [ { "stat": "squad_min_heat_packs", "at_least": 1 }, { "stat": "heat_packs_given", "at_least": 1 } ], "timeout_s": 120 }
+    },
+    {
+      "_comment": "Not precredited: the squad stands in solo mode (two at the door, one inside) and must actually regroup (Solo off). Rev 5d: after the share card.",
       "id": "A1_regroup", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_REGROUP",
       "keys": ["Squad.Regroup"],
       "precredit": false,
-      "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 2 },
+      "trigger": { "type": "after_step", "step": "A1_share_card", "delay_s": 1 },
       "complete": { "commands": ["Squad.Regroup"], "timeout_s": 60 }
     },
     {

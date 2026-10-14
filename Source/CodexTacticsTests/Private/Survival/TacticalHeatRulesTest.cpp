@@ -28,6 +28,12 @@ bool FHeatPackResetTest::RunTest(const FString&)
 	TestFalse(TEXT("not frostbitten: nothing to clear"), TacticalHeatRules::ApplyHeatPack(Config, 50.f, false).bClearsFrostbite);
 	TestFalse(TEXT("warm: refused"), TacticalHeatRules::CanUseHeatPack(0.f, false));
 	TestTrue(TEXT("cold: usable"), TacticalHeatRules::CanUseHeatPack(12.f, false));
+	// Rev 5d: a heat pack dropped on a mate is cracked on a cold one, handed over to a warm one - and always handed over with Shift.
+	TestTrue(TEXT("drop on a cold mate: cracked on him"), TacticalHeatRules::ShouldCrackHeatPackOnDrop(12.f, false, false));
+	TestTrue(TEXT("drop on a frostbitten mate: cracked on him"), TacticalHeatRules::ShouldCrackHeatPackOnDrop(0.f, true, false));
+	TestFalse(TEXT("drop on a warm mate: handed over"), TacticalHeatRules::ShouldCrackHeatPackOnDrop(0.f, false, false));
+	TestFalse(TEXT("Shift + drop on a cold mate: handed over (kept for later)"), TacticalHeatRules::ShouldCrackHeatPackOnDrop(55.f, false, true));
+	TestFalse(TEXT("Shift + drop on a frostbitten mate: handed over"), TacticalHeatRules::ShouldCrackHeatPackOnDrop(90.f, true, true));
 	TestEqual(TEXT("1 AP, stack 3"), Config.HeatPackActionPoints * 10 + Config.HeatPackMaxStack, 13);
 	return true;
 }

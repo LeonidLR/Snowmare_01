@@ -93,7 +93,10 @@ namespace TutorialRules
 
 	// --- Conditions, command locks, actions (2026-10-12, Demo 01 A0-A1 redesign) ---------------------------------------
 
-	/** Condition stats the runtime provides: "squad_cold_max", "squad_cold_min", "leader_cold", "squad_heat_packs". */
+	/**
+	 * Condition stats the runtime provides: "squad_cold_max", "squad_cold_min", "leader_cold", "squad_heat_packs",
+	 * "squad_min_heat_packs", "heat_packs_given" (rev 5d).
+	 */
 	CODEXTACTICS_API bool IsKnownStat(FName Stat);
 
 	/** Action types: "cold_bump". */

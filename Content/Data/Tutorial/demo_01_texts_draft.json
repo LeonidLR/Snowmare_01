@@ -165,7 +165,14 @@
       "text": "Take the heat packs: click their line in the crate window, or Take all."
     },
     "WT_A1_STOCKED": {
-      "text": "Packs in the kit. That should hold us to the camp. Back to the beacons."
+      "text": "Heat packs in the kit. Split them up - nobody walks on without one."
+    },
+    "OBJ_A1_SHARE": {
+      "text": "Share the heat packs: everyone carries at least one"
+    },
+    "TUT_A1_SHARE": {
+      "title": "SHARE THE HEAT PACKS",
+      "text": "Select the one who took them ({key:Select.Member}), open the inventory ({key:Inventory.Open}), hold Shift and drag a heat pack onto a teammate - his body or his portrait on the action bar. He walks over and hands it over. (Without Shift a cold mate cracks it at once.)"
     },
     "WT_A1_07": {
       "text": "Formation. Close it up, eyes on the beacons."

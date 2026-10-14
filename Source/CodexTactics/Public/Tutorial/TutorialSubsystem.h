@@ -321,7 +321,8 @@ public:
 
 	/**
 	 * A step condition stat now: "squad_cold_max" / "squad_cold_min" (cold % of the living squad members), "leader_cold",
-	 * "squad_heat_packs" (heat packs carried by the whole squad).
+	 * "squad_heat_packs" (heat packs carried by the whole squad), "squad_min_heat_packs" (the fewest any living member carries),
+	 * "heat_packs_given" (heat packs handed between squad mates since the level started, USquadTransferSubsystem; rev 5d).
 	 */
 	float GetConditionStat(FName Stat) const;
 

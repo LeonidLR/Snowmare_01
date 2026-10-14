@@ -22,6 +22,9 @@ Modes (env CODEX_LAYOUT_MODE):
   build (default)  editor commandlet: duplicate the source map to the target if the target does not exist yet
                    (CODEX_LAYOUT_FRESH=1 deletes the target first), place the layout, save, dump before / after.
   dump             editor commandlet: dump the target (or CODEX_LAYOUT_TARGET) to Saved/LayoutDumps.
+  additive         editor commandlet (rev 5d, the user edits the copy by hand): load the EXISTING target, delete only the
+                   AutoLayout_Demo01_5d actors, apply EDITS_5D, place the rev 5d section again; saved only when something
+                   changed (no fresh copy, no reset of anything else). Report: Saved/Logs/Demo01Layout5d.txt.
   verify           in game (-game -nullrhi): volume ids vs demo_01_steps.json, nav paths along the critical path, the bridge
                    as the only crossing, the fence (standing path refused, prone path through), actors on the ground.
                    Result: Saved/Logs/Demo01LayoutVerify.txt ("RESULT: PASS / FAIL").
@@ -58,6 +61,15 @@ SOURCE_MAP = os.environ.get("CODEX_LAYOUT_SOURCE", "/Game/Maps/L_Demo01_A_Frozen
 TARGET_MAP = os.environ.get("CODEX_LAYOUT_TARGET", "/Game/Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout")
 TAG = "AutoLayout_Demo01"
 FOLDER = "AutoLayout_Demo01"
+# Rev 5d (2026-10-14): the ADDITIVE section. The review copy is the user's now (he edits it by hand): mode "additive" never
+# resets / moves / deletes any existing actor (incl. the AutoLayout_Demo01 ones he may have repositioned); it deletes and
+# re-places only actors tagged TAG_5D, and touches pre-existing actors only through the explicit, minimal edits of EDITS_5D.
+TAG_5D = "AutoLayout_Demo01_5d"
+FOLDER_5D = "AutoLayout_Demo01_5d"
+# The ONLY changes the additive mode makes to pre-existing actors (idempotent, each logged old -> new; DEMO01_AUTOLAYOUT.md section 8).
+EDITS_5D = [
+    ("hut_crate_heat_packs", "the hut's ALootCrateActor (inside the hut's Shelter camera zone): Contents.HeatPacks = 3 (nothing else)"),
+]
 
 # §10.1 re-ids of the user's A1 volumes (they belong to the A3 approach now).
 RENAMES = {
@@ -186,7 +198,9 @@ def dump(map_path, out_name):
 # ----------------------------------------------------------------------------------------------------------------------
 
 class Placer:
-    def __init__(self):
+    def __init__(self, tag=None, folder=None):
+        self.tag = tag or TAG          # the tag this run places (and only ever deletes)
+        self.folder = folder or FOLDER
         self.actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
         self.world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
         self.placed = []
@@ -205,7 +219,7 @@ class Placer:
         self.surfaces = []
         self.landscapes = []
         for a in self.actors.get_all_level_actors():
-            if TAG in [str(t) for t in a.tags]:
+            if self.tag in [str(t) for t in a.tags]:
                 continue
             if isinstance(a, unreal.LandscapeProxy):
                 self.landscapes.append(a)
@@ -242,8 +256,8 @@ class Placer:
     def spawn(self, cls, label, location, yaw=0.0, section="Misc", anchor="", ident="", pitch=0.0):
         actor = self.actors.spawn_actor_from_class(cls, location, unreal.Rotator(pitch=pitch, yaw=yaw, roll=0.0))
         actor.set_actor_label(label)
-        actor.set_folder_path(FOLDER + "/" + section)
-        actor.set_editor_property("tags", [TAG])
+        actor.set_folder_path(self.folder + "/" + section)
+        actor.set_editor_property("tags", [self.tag])
         self.placed.append(actor)
         self.table.append({"label": label, "class": cls.static_class().get_name(), "id": ident,
                            "x": round(location.x), "y": round(location.y), "z": round(location.z),
@@ -268,7 +282,7 @@ class Placer:
         if hidden:
             actor.set_actor_hidden_in_game(True)
         if tags:
-            actor.set_editor_property("tags", [TAG] + list(tags))
+            actor.set_editor_property("tags", [self.tag] + list(tags))
         return actor
 
     def wall(self, label, section, a, b, height, thickness=40.0, base_z=None, anchor="", tags=()):
@@ -965,6 +979,83 @@ def build_hut_entry(p, f, approach_from, hut_anchor, want_volume, want_marker):
                                                                                  "high" if not high_is_right else "low"))
 
 
+def additive():
+    """Rev 5d ADDITIVE section on the user's latest review copy (TAG_5D actors + EDITS_5D only)."""
+    lib = unreal.EditorAssetLibrary
+    level_editor = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+    if not lib.does_asset_exist(TARGET_MAP):
+        report("ERROR: %s does not exist (the additive mode never makes a copy)" % TARGET_MAP)
+        return
+    if not level_editor.load_level(TARGET_MAP):
+        report("ERROR: could not load " + TARGET_MAP)
+        return
+    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    before = dump(TARGET_MAP, "%s_5d_before_%s.json" % (TARGET_MAP.split("/")[-1], stamp))
+    p = Placer(TAG_5D, FOLDER_5D)
+    removed = 0
+    for a in p.actors.get_all_level_actors():
+        if TAG_5D in [str(t) for t in a.tags]:
+            p.actors.destroy_actor(a)
+            removed += 1
+    report("removed %d old %s actors (nothing else is ever deleted)" % (removed, TAG_5D))
+    p.collect_ground()
+    changes = removed
+    anchors = find_anchors(p.actors.get_all_level_actors())
+
+    # ---- EDITS_5D: the minimal edits of pre-existing actors -------------------------------------------------------
+    hut = anchors["hut"]
+    if hut is None:
+        p.warnings.append("edit hut_crate_heat_packs: no hut crate found (a LootCrateActor inside a Shelter camera zone) - not edited, review")
+    else:
+        crate = hut["crate"]
+        contents = crate.get_editor_property("contents")
+        old = contents.get_editor_property("heat_packs")
+        if old != 3:
+            contents.set_editor_property("heat_packs", 3)
+            crate.set_editor_property("contents", contents)
+            changes += 1
+            report("EDIT hut_crate_heat_packs: %s (%s) Contents.HeatPacks %s -> 3" % (crate.get_actor_label(), crate.get_name(), old))
+        else:
+            report("EDIT hut_crate_heat_packs: %s (%s) already holds Heat Packs 3 - unchanged" % (crate.get_actor_label(), crate.get_name()))
+
+    # ---- rev 5d sections (new actors, tag AutoLayout_Demo01_5d) ----------------------------------------------------
+    for build_section in SECTIONS_5D:
+        build_section(p, anchors)
+    changes += len(p.placed)
+
+    if changes == 0:
+        report("nothing to change: the map is NOT saved")
+    else:
+        # Saved navmesh actors stay empty at runtime when saved from a commandlet (HANDOFF section 2): generated data, not user content.
+        navmeshes = [a for a in p.actors.get_all_level_actors() if isinstance(a, unreal.RecastNavMesh)]
+        for a in navmeshes:
+            p.actors.destroy_actor(a)
+        report("destroyed %d generated RecastNavMesh actors (rebuilt at load, RuntimeGeneration=Dynamic)" % len(navmeshes))
+        report("saved=%s" % level_editor.save_current_level())
+    report("placed %d %s actors" % (len(p.placed), TAG_5D))
+    for w in p.warnings:
+        report("REVIEW: " + w)
+    os.makedirs(SAVED + "LayoutDumps", exist_ok=True)
+    with open(SAVED + "LayoutDumps/demo01_autolayout_5d_table.json", "w", encoding="utf-8") as f:
+        json.dump({"table": p.table, "warnings": p.warnings}, f, indent=1, ensure_ascii=False)
+    after = dump(TARGET_MAP, "%s_5d_after_%s.json" % (TARGET_MAP.split("/")[-1], stamp))
+    # Proof that nothing pre-existing moved: every actor of the "before" dump (but the 5d ones / the generated navmesh) is still
+    # there with the same transform.
+    now = {a["name"]: a for a in after["actors"]}
+    moved = []
+    for a in before["actors"]:
+        if TAG_5D in a["tags"] or a["class"].endswith("RecastNavMesh"):
+            continue
+        b = now.get(a["name"])
+        if b is None or b["location"] != a["location"] or b["rotation"] != a["rotation"] or b["scale"] != a["scale"]:
+            moved.append(a["label"])
+    report("pre-existing actors moved / deleted: %d %s" % (len(moved), moved))
+
+
+# Rev 5d section builders: f(placer, anchors), each places only TAG_5D actors.
+SECTIONS_5D = []
+
+
 def set_contents(crate, values):
     """FLootContents: every count 0 except values (the beat sheet lists exact crate contents)."""
     contents = crate.get_editor_property("contents")
@@ -1600,13 +1691,15 @@ def main():
         if mode == "dump":
             unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).load_level(TARGET_MAP)
             dump(TARGET_MAP, "%s_%s.json" % (TARGET_MAP.split("/")[-1], datetime.datetime.now().strftime("%Y%m%d_%H%M%S")))
+        elif mode == "additive":
+            additive()
         else:
             build()
     except Exception as exc:
         import traceback
         report("EXCEPTION: " + repr(exc))
         report(traceback.format_exc())
-    flush_report("Demo01Layout.txt")
+    flush_report("Demo01Layout5d.txt" if mode == "additive" else "Demo01Layout.txt")
 
 
 main()

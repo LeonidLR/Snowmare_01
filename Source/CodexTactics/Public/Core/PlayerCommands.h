@@ -255,6 +255,11 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName QuickLoad;
 	/** F1: the Controls reference screen (a UI hotkey: listed here for the screen, never reported). */
 	extern CODEXTACTICS_API const FName ControlsScreen;
+	/**
+	 * "Item.Give": an item dragged from the inventory drawer onto a squad mate (his model or his action-bar portrait) is handed
+	 * over; with Shift held a heat pack goes into his kit even when he is cold (rev 5d). Reported when the hand-over is requested.
+	 */
+	extern CODEXTACTICS_API const FName GiveItem;
 	/** "Inventory.Open": the inventory drawer opened (I / action bar); a tutorial lock target (Demo 01: locked until the heat pack lesson). */
 	extern CODEXTACTICS_API const FName InventoryOpen;
 	/** "View.VisionCones": the player toggled the enemy vision cones (O / pause menu), Commandos style. */
@@ -384,6 +389,12 @@ namespace GameplayEvents
 	 * "ItemLooted.<Kind>" ("ItemLooted.HeatPack").
 	 */
 	extern CODEXTACTICS_API const FName ItemLooted;
+	/**
+	 * An item went from one squad mate's kit into another's (a drawer drag onto him; a heat pack cracked on a cold mate is
+	 * ItemUsed instead). Subject = the giver, Target = the recipient, Kind = the item ("HeatPack", ...); also raised as
+	 * "ItemGiven.<Kind>" ("ItemGiven.HeatPack"). Rev 5d (2026-10-14).
+	 */
+	extern CODEXTACTICS_API const FName ItemGiven;
 	/** The turret fired (Subject = the gunner, Target = the enemy, Kind = "Cannon" per shell / "MachineGun" per second of fire). */
 	extern CODEXTACTICS_API const FName VehicleTurretFired;
 	/** The turret killed an enemy (Subject = the gunner, Target = the enemy, Kind = "Cannon" / "MachineGun"). */
@@ -420,4 +431,7 @@ namespace GameplayEvents
 
 	/** "ItemLooted" and "ItemLooted.<ItemKind>" for Count > 0 units of ItemKind taken by Collector from Container. */
 	CODEXTACTICS_API void RaiseItemLooted(const UObject* WorldContext, AActor* Collector, AActor* Container, FName ItemKind, int32 Count);
+
+	/** "ItemGiven" and "ItemGiven.<ItemKind>" for Count > 0 units of ItemKind handed from Giver to Recipient. */
+	CODEXTACTICS_API void RaiseItemGiven(const UObject* WorldContext, AActor* Giver, AActor* Recipient, FName ItemKind, int32 Count);
 }

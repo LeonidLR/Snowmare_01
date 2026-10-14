@@ -172,6 +172,10 @@ private:
 	bool CountVolumeCompletions(FName VolumeId, FName SubjectId, const TArray<bool>& WasRunning);
 	float ReadStat(FName Stat) const;
 	bool AreConditionsMet(int32 Index) const;
+	/** The step's "complete.condition" clauses exist and all hold now (rev 5d). */
+	bool IsCompletionConditionMet(int32 Index) const;
+	/** Completes every queued / shown step whose "complete.condition" holds now (rev 5d; Tick). */
+	void PollConditionCompletions();
 	void ApplyStepLocks(int32 Index);
 	void PollConditionTriggers();
 	/** Which steps are running now (inputs only count for steps that were running when they came). */

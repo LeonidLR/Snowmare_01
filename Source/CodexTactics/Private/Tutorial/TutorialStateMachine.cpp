@@ -120,6 +120,24 @@ bool FTutorialStateMachine::AreConditionsMet(int32 Index) const
 	return TutorialRules::IsConditionMet(Data.Steps[Index].Conditions, [this](FName Stat) { return ReadStat(Stat); });
 }
 
+bool FTutorialStateMachine::IsCompletionConditionMet(int32 Index) const
+{
+	const TArray<FTutorialCondition>& Clauses = Data.Steps[Index].Complete.Conditions;
+	return !Clauses.IsEmpty() && TutorialRules::IsConditionMet(Clauses, [this](FName Stat) { return ReadStat(Stat); });
+}
+
+void FTutorialStateMachine::PollConditionCompletions()
+{
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		const ETutorialStepState State = Runtime[Index].State;
+		if ((State == ETutorialStepState::Queued || State == ETutorialStepState::Active) && IsCompletionConditionMet(Index))
+		{
+			Finish(Index, ETutorialStepState::Completed); // queued: silently (done before the card came up)
+		}
+	}
+}
+
 void FTutorialStateMachine::ApplyStepLocks(int32 Index)
 {
 	FRuntime& State = Runtime[Index];
@@ -272,6 +290,12 @@ void FTutorialStateMachine::Enqueue(int32 Index)
 	if (TutorialRules::IsPrecreditSatisfied(Data.Steps[Index], History))
 	{
 		// The player already did this (panned the camera during the HQ intro, ...): done without the card, followers go on.
+		FinishPrecredited(Index);
+		return;
+	}
+	if (Data.Steps[Index].bPrecredit && IsCompletionConditionMet(Index))
+	{
+		// Rev 5d: the world already is as the step asks (the looter handed the heat packs out before the card came): done.
 		FinishPrecredited(Index);
 		return;
 	}
@@ -682,6 +706,7 @@ void FTutorialStateMachine::Tick(float DeltaSeconds)
 		}
 	}
 	PollConditionTriggers();
+	PollConditionCompletions();
 	PumpQueues();
 }
 

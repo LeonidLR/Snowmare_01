@@ -504,9 +504,9 @@ int32 USquadTransferSubsystem::Execute(const FTransferRequest& InRequest)
 			return 0;
 		}
 		// Sprint 15: a heat pack dropped on a cold / frostbitten mate is cracked on him at once (one pack, 1 AP in turn-based);
-		// on a warm mate it is handed over like any item.
+		// on a warm mate - or with Shift held on the drop (rev 5d, bHandOverOnly) - it is handed over like any item.
 		if (InRequest.Item == ETransferItem::HeatPack && Recipient->ColdSurvival
-			&& TacticalHeatRules::CanUseHeatPack(Recipient->ColdLevel, Recipient->ColdSurvival->IsFrostbitten()))
+			&& TacticalHeatRules::ShouldCrackHeatPackOnDrop(Recipient->ColdLevel, Recipient->ColdSurvival->IsFrostbitten(), InRequest.bHandOverOnly))
 		{
 			UTacticalHeatSubsystem* Heat = GetWorld()->GetSubsystem<UTacticalHeatSubsystem>();
 			EHeatPackRefusal Refusal = EHeatPackRefusal::None;
@@ -532,6 +532,12 @@ int32 USquadTransferSubsystem::Execute(const FTransferRequest& InRequest)
 		}
 		Post(Operative->DisplayName, FString::Printf(TEXT("🟣 Handed %s to %s!%s"), *Result.Feedback, *Recipient->DisplayName.ToString(),
 			Result.bClampedByCapacity ? TEXT(" (no room for more)") : TEXT("")));
+		HandedOver.FindOrAdd(InRequest.Item) += Result.Moved;
+		if (const UEnum* ItemEnum = StaticEnum<ETransferItem>())
+		{
+			GameplayEvents::RaiseItemGiven(this, Operative, Recipient, FName(*ItemEnum->GetNameStringByValue(static_cast<int64>(InRequest.Item))),
+				Result.Moved);
+		}
 		return Result.Moved;
 	}
 	case ETransferAction::DropToGround:

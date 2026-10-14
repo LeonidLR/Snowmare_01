@@ -320,6 +320,13 @@ namespace TacticalHeatRules
 	/** A heat pack helps when the operative is cold or frostbitten. */
 	CODEXTACTICS_API bool CanUseHeatPack(float Cold, bool bFrostbitten);
 
+	/**
+	 * A heat pack dropped on a squad mate (inventory drawer drag, Sprint 15): cracked on him at once when he is cold / frostbitten
+	 * (CanUseHeatPack), else handed over into his kit. Rev 5d (designer request 2026-10-14, sharing the hut's heat packs): with
+	 * bHandOverOnly (Shift held on the drop) it is always handed over - a cold mate keeps it for later.
+	 */
+	CODEXTACTICS_API bool ShouldCrackHeatPackOnDrop(float Cold, bool bFrostbitten, bool bHandOverOnly);
+
 	/** Cold - reduction (>= 0), frostbite cleared, the buffer restarts at its full length. */
 	CODEXTACTICS_API FHeatPackResult ApplyHeatPack(const FTacticalHeatConfig& Config, float Cold, bool bFrostbitten);
 

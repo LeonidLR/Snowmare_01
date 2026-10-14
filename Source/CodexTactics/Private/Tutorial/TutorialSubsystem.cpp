@@ -1,6 +1,7 @@
 #include "Tutorial/TutorialSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Characters/SquadTransferSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
@@ -768,9 +769,15 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 		const AOperativeCharacter* Leader = Squad->GetLeader();
 		return Leader ? Leader->ColdLevel : 0.f;
 	}
+	if (Stat == FName(TEXT("heat_packs_given")))
+	{
+		const USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>();
+		return Transfer ? static_cast<float>(Transfer->GetHandedOverCount(ETransferItem::HeatPack)) : 0.f;
+	}
 	float ColdMax = 0.f;
 	float ColdMin = 0.f;
 	int32 HeatPacks = 0;
+	int32 MinHeatPacks = 0;
 	int32 Alive = 0;
 	for (const AOperativeCharacter* Member : Squad->GetMembers())
 	{
@@ -781,6 +788,7 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 		ColdMax = Alive == 0 ? Member->ColdLevel : FMath::Max(ColdMax, Member->ColdLevel);
 		ColdMin = Alive == 0 ? Member->ColdLevel : FMath::Min(ColdMin, Member->ColdLevel);
 		HeatPacks += Member->HeatPacksCount;
+		MinHeatPacks = Alive == 0 ? Member->HeatPacksCount : FMath::Min(MinHeatPacks, Member->HeatPacksCount);
 		++Alive;
 	}
 	if (Stat == FName(TEXT("squad_cold_max")))
@@ -794,6 +802,10 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 	if (Stat == FName(TEXT("squad_heat_packs")))
 	{
 		return static_cast<float>(HeatPacks);
+	}
+	if (Stat == FName(TEXT("squad_min_heat_packs")))
+	{
+		return static_cast<float>(MinHeatPacks);
 	}
 	return 0.f;
 }

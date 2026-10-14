@@ -169,7 +169,7 @@ The gameplay actors (volumes, markers, bridge, crawl gap, zones, mines, wire, ro
 1. **The hut is 96 m from the bridge** (beat sheet: "close to the far side"). Kept where the user put it; move the hut or accept the walk.
 2. **The user's crevasse is 1.2 m wide** (beat sheet: 2 m) and the plank is 1.23 m wide (navmesh strip ~0.5 m). It works (verified);
    widen the plank to ~2 m if operatives queue awkwardly.
-3. **The user's hut crate holds Heat Packs 1** (beat sheet: 3, the resupply lesson). Not changed (user actor).
+3. ~~**The user's hut crate holds Heat Packs 1**~~ - rev 5d: the user set it to 3 in his copy (2026-10-14); the additive edit `hut_crate_heat_packs` (section 8) keeps it at 3.
 4. **`VOL_A0_BEACON1` carries its id in Step Id**, Volume Id empty: it works (Volume Id falls back to Step Id) but the volume also
    tries to start a step named `VOL_A0_BEACON1` (harmless no-op). Cleaner: move the id to Volume Id, clear Step Id.
 5. **The low fence closes the whole map width** (so the crawl lesson is forced). The squad can only return west by crawling; open a
@@ -226,3 +226,35 @@ original name (or with `-LevelJson=L_Demo01_A_FrozenLake.json` in a standalone g
 3. Open the map, PIE: the log prints `Demo mode: ... tutorial 1 (demo_01_steps.json)`, `Tutorial volume ... entered by ...` lines,
    `Bridge ...` / `CrawlGap ...` lines at the new actors.
 4. Commit the map + the script + this doc after the user's review (orchestrator decision).
+
+## 8. Rev 5d: the ADDITIVE section (2026-10-14) - the copy is the user's now
+
+The user edits the review copy by hand, so from rev 5d on the script **never resets, moves or deletes his actors** (including the
+`AutoLayout_Demo01` ones he may have moved). Mode **`additive`** loads the EXISTING copy (never a fresh duplicate), deletes and
+re-places **only** actors tagged **`AutoLayout_Demo01_5d`** (Outliner folder `AutoLayout_Demo01_5d/...`), applies the explicit edits
+below, saves only when something changed, and writes `Saved/Logs/Demo01Layout5d.txt` (incl. a proof line "pre-existing actors moved /
+deleted: 0 []") and dumps `Saved/LayoutDumps/..._5d_before_* / _5d_after_*.json`. The old `build` mode must not be run on the copy any more.
+
+**Edits of pre-existing actors (the complete list, `EDITS_5D` in the script):**
+
+| Edit | Actor | Property | Value | Why |
+|---|---|---|---|---|
+| `hut_crate_heat_packs` | the user's `LootCrateActor` inside the hut's Shelter zone (`Trigger_BoatsCabin`) | `Contents.HeatPacks` only | 3 | rev 5d heat pack sharing (3 starters - 1-2 used + 3 >= 3); the user's 2026-10-14 copy already had 3 -> unchanged |
+
+Besides these, a save drops the generated `RecastNavMesh-*` actors (navigation data, not user content; HANDOFF section 2: a
+commandlet-saved navmesh stays empty at runtime, the map rebuilds it at load).
+
+**Rerun on the user's latest copy** (e.g. he edited it again in the main checkout; run with the editor of THAT checkout closed):
+
+```powershell
+$p  = "C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics"   # or ...\CodexTactics-agents
+$ue = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64"
+# 0. Back up the copy first (copy + SHA256):
+$bk = "$p\Saved\Backups\autolayout_$(Get-Date -Format yyyyMMdd_HHmm)"; New-Item -ItemType Directory -Force $bk | Out-Null
+Copy-Item "$p\Content\Maps\Dev\L_Demo01_A_FrozenLake_AutoLayout.umap" $bk; Get-FileHash "$bk\*.umap"
+# 1. The additive section (only AutoLayout_Demo01_5d actors + EDITS_5D):
+$env:CODEX_LAYOUT_MODE = "additive"
+& "$ue\UnrealEditor-Cmd.exe" "$p\CodexTactics.uproject" -run=pythonscript "-script=$p\Scripts\Editor\build_demo01_lake_layout.py" -unattended -nullrhi -nosplash
+Get-Content "$p\Saved\Logs\Demo01Layout5d.txt"
+# 2. Verify in game (section 6 step 3: the same command with CODEX_LAYOUT_MODE = "verify"), 3. shots + annotate (section 6 step 4).
+```

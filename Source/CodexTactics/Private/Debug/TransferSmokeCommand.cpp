@@ -237,6 +237,29 @@ namespace TransferSmoke
 
 			Check(State, Hud->HandleTransferDropOnActor(Leader, ETransferItem::Medkit, Leader, Leader->GetActorLocation()) == ETransferRequestOutcome::Failed,
 				TEXT("drop on himself: nothing happens"));
+
+			// Rev 5d (sharing the hut's heat packs): a heat pack dropped on a cold mate is cracked on him (Sprint 15); with Shift held
+			// it goes into his kit (kept for later), counts for "heat_packs_given" and raises ItemGiven.HeatPack.
+			{
+				Leader->HeatPacksCount = 2;
+				Engineer->HeatPacksCount = 0;
+				Engineer->ColdLevel = 50.f;
+				const int32 HandedBefore = Transfer->GetHandedOverCount(ETransferItem::HeatPack);
+				const bool bModifierUp = !Hud->IsHandOverModifierDown();
+				const ETransferRequestOutcome Cracked = Drop(ETransferItem::HeatPack); // outcome first: the message reads the result
+				Check(State, bModifierUp && Cracked == ETransferRequestOutcome::Transferred && Leader->HeatPacksCount == 1
+					&& Engineer->HeatPacksCount == 0 && Engineer->ColdLevel < 50.f && Transfer->GetHandedOverCount(ETransferItem::HeatPack) == HandedBefore,
+					FString::Printf(TEXT("heat pack dropped on a cold mate: cracked on him (cold %.0f, packs %d / %d)"), Engineer->ColdLevel, Leader->HeatPacksCount,
+						Engineer->HeatPacksCount));
+				Engineer->ColdLevel = 50.f;
+				Hud->bForceHandOverModifierForTesting = true;
+				const ETransferRequestOutcome HandedOver = Drop(ETransferItem::HeatPack);
+				Check(State, HandedOver == ETransferRequestOutcome::Transferred && Leader->HeatPacksCount == 0 && Engineer->HeatPacksCount == 1
+					&& Engineer->ColdLevel >= 49.f && Transfer->GetHandedOverCount(ETransferItem::HeatPack) == HandedBefore + 1,
+					FString::Printf(TEXT("Shift + drop on the same cold mate: handed over into his kit (cold %.0f, packs %d / %d, handed over %d)"), Engineer->ColdLevel,
+						Leader->HeatPacksCount, Engineer->HeatPacksCount, Transfer->GetHandedOverCount(ETransferItem::HeatPack)));
+				Hud->bForceHandOverModifierForTesting = false;
+			}
 			Drawer->Close();
 
 			// Far away, under fire: blocked with the feed line.

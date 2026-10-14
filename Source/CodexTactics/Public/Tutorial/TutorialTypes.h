@@ -72,7 +72,8 @@ struct CODEXTACTICS_API FTutorialLine
 /**
  * One clause of a step "condition" (JSON {"stat": "squad_cold_max", "at_least": 40} or {"stat": ..., "below": 40}). Stats
  * come from the runtime (UTutorialSubsystem::GetConditionStat): "squad_cold_max", "squad_cold_min", "leader_cold",
- * "squad_heat_packs". All clauses of a step must hold (AND).
+ * "squad_heat_packs", "squad_min_heat_packs" (the fewest any living operative carries), "heat_packs_given" (heat packs handed
+ * between squad mates since the level started; rev 5d). All clauses of a step must hold (AND).
  */
 struct CODEXTACTICS_API FTutorialCondition
 {
@@ -149,8 +150,14 @@ struct CODEXTACTICS_API FTutorialCompletion
 	 * many seconds in total while the step is shown (hold ticks, PlayerCommands::ReportHold). 0 = count only.
 	 */
 	float HoldSeconds = 0.f;
+	/**
+	 * "condition" inside "complete" (rev 5d, 2026-10-14): world-state clauses (same syntax as the step "condition") polled while
+	 * the step runs - it completes as soon as all hold ("every operative carries a heat pack"). Already true when the step becomes
+	 * due: completed at once without showing (precredited, unless "precredit": false - then it finishes on the first poll).
+	 */
+	TArray<FTutorialCondition> Conditions;
 
-	bool HasCondition() const { return Commands.Num() > 0 || !Event.IsEmpty() || !Volume.IsNone(); }
+	bool HasCondition() const { return Commands.Num() > 0 || !Event.IsEmpty() || !Volume.IsNone() || !Conditions.IsEmpty(); }
 };
 
 struct CODEXTACTICS_API FTutorialStep

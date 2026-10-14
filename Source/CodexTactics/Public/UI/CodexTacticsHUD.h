@@ -133,6 +133,15 @@ public:
 	 */
 	ETransferRequestOutcome HandleTransferDropOnActor(AOperativeCharacter* Sender, ETransferItem Item, AActor* TargetActor, const FVector& Point);
 
+	/**
+	 * Shift is held (rev 5d, designer request 2026-10-14): a drawer drop on a squad mate hands a heat pack over into his kit even
+	 * when he is cold (FTransferRequest::bHandOverOnly) instead of cracking it on him.
+	 */
+	bool IsHandOverModifierDown() const;
+
+	/** Smokes: IsHandOverModifierDown() reads true (no real key state headless). */
+	bool bForceHandOverModifierForTesting = false;
+
 	/** Sprint 13 take-out drag (crate loot line) dropped on Taker (model / portrait / drawer). */
 	ETransferRequestOutcome HandleTakeDrop(AActor* Container, ETransferItem Item, AOperativeCharacter* Taker);
 

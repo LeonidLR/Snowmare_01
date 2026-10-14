@@ -47,6 +47,11 @@ namespace TacticalHeatRules
 		return bFrostbitten || Cold > 0.f;
 	}
 
+	bool ShouldCrackHeatPackOnDrop(float Cold, bool bFrostbitten, bool bHandOverOnly)
+	{
+		return !bHandOverOnly && CanUseHeatPack(Cold, bFrostbitten);
+	}
+
 	FHeatPackResult ApplyHeatPack(const FTacticalHeatConfig& Config, float Cold, bool bFrostbitten)
 	{
 		FHeatPackResult Result;
