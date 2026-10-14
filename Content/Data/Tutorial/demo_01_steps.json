@@ -5,12 +5,13 @@
     "Texts are ids only (TUT_*, WT_*, OBJ_*): English text comes from the narrative manifest 'tutorial' section (TANDEM request #17), else",
     "Content/Data/Tutorial/demo_01_texts_draft.json, else '[EN missing: <id>]'. Command ids: Source/CodexTactics/Public/Core/PlayerCommands.h.",
     "Beats implemented here (Phase 1 = user steps 1-9 + the standalone A3 fence / A4 cone cards): A0 drop (the HQ radio talks while the squad may",
-    "already walk / run and the staged camera lesson runs alongside; 'click to walk' + 'double-click to run' right after the camera chain, rev 5c), A1 crossing (the shaky bridge holds the followers: one at a",
-    "time on its own, rev 5c; squad banter, cold -> heat pack = inventory unlock, 'running keeps you warm' tip, hut: a tactical entry = select + solo + cover at the door, loot, share the heat packs (rev 5d), regroup, box), A2 camp (rev 5d: push the barrel into the half-ruined building + light it there),",
+    "already walk and the staged camera lesson runs alongside; 'click to walk' right after the camera chain, rev 5c; sprint locked until A1, rev 5e), A1 crossing (the shaky bridge holds the followers: one at a",
+    "time on its own, rev 5c; squad banter, cold -> heat pack = inventory unlock, 'double-click to run' = sprint unlock (rev 5e), hut: a tactical entry = select + solo + cover at the door, loot, share the heat packs (rev 5d), regroup, box), A2 camp (rev 5d: push the barrel into the half-ruined building + light it there),",
     "A3 approach (stances, vault, low fence crawl, cover, mines / wires spotted), A4 ambush (vision-cone toggle, tripwire; the fight itself is Phase 2).",
     "Beats A5-A8 are designed in the beat sheet only.",
-    "PROGRESSIVE UNLOCK (user request 2026-10-13, beat sheet section 'Locks'): beat A0 locks every command family not taught yet; camera, Order.*",
-    "(move / sprint / walk-up), Select.*, Dialogue.* and System.* are never locked. Each lesson step unlocks what it teaches ('unlock'; a single",
+    "PROGRESSIVE UNLOCK (user request 2026-10-13, beat sheet section 'Locks'): beat A0 locks every command family not taught yet; camera, Order.Move /",
+    "Order.Interact (walk-up), Select.*, Dialogue.* and System.* are never locked; SPRINT is locked again from the level start until the heat pack lesson (rev 5e,",
+    "user decision 2026-10-14: A1_sprint 'double-click to run' unlocks it; a locked double click walks, one line A0_nosprint). Each lesson step unlocks what it teaches ('unlock'; a single",
     "command out of a wider lock becomes a '!<id>' exception); every later beat repeats the earlier unlocks as a safety; a wave / horde fight or",
     "the tutorial switched OFF unlocks everything (UTutorialSubsystem). A locked press: one 'Not yet - follow the training.' feed line per family.",
     "'cancel_on' (rev 5e): a radio / walk-and-talk about a place or a moment is dropped when it is over (the bridge lines once the squad is across; never queued to play later).",
@@ -34,16 +35,16 @@
   "beats": [
     { "id": "A0", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A0",
       "lock": ["Stance.*", "Squad.*", "Posture.*", "Cover.*", "Object.*", "Item.*", "Inventory.*", "Loot.*", "Trap.*", "Deploy.*", "Attack.*",
-        "Grenade.*", "Flare.*", "Weapon.*", "Time.*", "TB.*", "Vehicle.*", "View.*", "Order.WatchSector"] },
+        "Grenade.*", "Flare.*", "Weapon.*", "Time.*", "TB.*", "Vehicle.*", "View.*", "Order.WatchSector", "Order.Sprint"] },
     { "id": "A1", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A1" },
     { "id": "A2", "lesson": true, "checkpoint": false, "title_id": "TUT_BEAT_A2",
-      "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*"] },
+      "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Order.Sprint"] },
     { "id": "A3", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A3",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Object.Relocate", "Object.LightBarrel",
-        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot"] },
+        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Order.Sprint"] },
     { "id": "A4", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A4",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Object.Relocate", "Object.LightBarrel", "Stance.*", "Cover.*",
-        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot"] }
+        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Order.Sprint"] }
   ],
   "steps": [
     {
@@ -109,11 +110,10 @@
       "complete": { "commands": ["Order.Move"], "timeout_s": 60 }
     },
     {
-      "_comment": "Then 'Double-click to run' (rev 5c), done on a sprint order; precredited when the player already ran. Sprint is never locked (rev 5b).",
-      "id": "A0_sprint", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_SPRINT",
-      "keys": ["Order.Sprint"],
-      "trigger": { "type": "after_step", "step": "A0_move" },
-      "complete": { "commands": ["Order.Sprint"], "timeout_s": 60 }
+      "_comment": "Rev 5e (user decision 2026-10-14, reverses rev 5b 'sprint never locked'): no 'double-click to run' card here any more - sprint is locked until the heat pack lesson (A1_sprint teaches it). A double click while it is locked walks; the first try gets this one line (no card, no generic 'Not yet').",
+      "id": "A0_nosprint", "beat": "A0", "kind": "feed", "text_id": "TUT_A0_NOSPRINT",
+      "trigger": { "type": "event", "event": "Tutorial.Locked.Order.Sprint" },
+      "lines": [ { "speaker": "Commander", "text_id": "TUT_A0_NOSPRINT" } ]
     },
 
     {
@@ -166,7 +166,7 @@
       ]
     },
     {
-      "_comment": "Tutorial safety (kept from rev 3): 20 s after the crossing, if nobody is at Chills (40 %) yet - the player kept out of the wind zone, ran (running warms; sprint is free from the start since 2026-10-13) or the level's cold_rate_mult 0.8 kept it low - a scripted gust: the line + every operative +20 cold, at least 42 % (a cold shock: never scaled by cold_rate_mult) so the heat-pack lesson always starts.",
+      "_comment": "Tutorial safety (kept from rev 3): 20 s after the crossing, if nobody is at Chills (40 %) yet - the player kept out of the wind zone, or the level's cold_rate_mult 0.8 kept it low (rev 5e: sprint is locked until the heat pack lesson, so walking only the squad is usually past 40 % at the bridge and the gust is skipped) - a scripted gust: the line + every operative +20 cold, at least 42 % (a cold shock: never scaled by cold_rate_mult) so the heat-pack lesson always starts.",
       "id": "A1_gust", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_bridge", "delay_s": 20 },
       "condition": { "stat": "squad_cold_max", "below": 40 },
@@ -190,16 +190,19 @@
       "complete": { "event": "ItemUsed.HEAT_PACK", "timeout_s": 40 }
     },
     {
-      "_comment": "User flow step 7: 'running keeps you warm' - a survival line + tip (the run itself is taught in A0 since rev 5c).",
+      "_comment": "User flow step 7: the squad feels better after the packs (rev 5e: 'running keeps you warm' moved into the sprint card right after it).",
       "id": "A1_wt_warm", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "after_step", "step": "A1_heatpack_mate" },
       "lines": [ { "speaker": "Medic-Sapper", "text_id": "WT_A1_WARMED" } ]
     },
     {
-      "_comment": "Survival tip, not a control lesson (rev 5c: running is taught in A0 by A0_sprint): no command completion, it shows for 10 s (skippable). Its followers (resupply line, hut objective) fire when it ends.",
+      "_comment": "Rev 5e (user decision 2026-10-14): THE SPRINT LESSON right after the heat pack lesson - 'By the way - running keeps you warm. Double-click to run.' UNLOCKS Order.Sprint (locked since A0), done on a sprint order; never precredited (running was impossible before). Its followers (resupply line, hut objective) fire when it ends (60 s timeout).",
       "id": "A1_sprint", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SPRINT",
+      "keys": ["Order.Sprint"],
+      "unlock": ["Order.Sprint"],
+      "precredit": false,
       "trigger": { "type": "after_step", "step": "A1_heatpack_mate", "delay_s": 1 },
-      "complete": { "timeout_s": 10 }
+      "complete": { "commands": ["Order.Sprint"], "timeout_s": 60 }
     },
     {
       "_comment": "User flow step 8 (resupply, rev 4 order kept): after the sprint card the squad is 'nearly out' -> the hut. The user's TutorialMarkerActor with Step Id A1_obj_hut shows from here.",

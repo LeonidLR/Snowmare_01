@@ -46,9 +46,8 @@
       "title": "CLICK TO WALK",
       "text": "Click the ground ({key:Order.Move}): the squad walks there. Follow the beacons to the amber ring at beacon one."
     },
-    "TUT_A0_SPRINT": {
-      "title": "DOUBLE-CLICK TO RUN",
-      "text": "Double-click the ground ({key:Order.Sprint}) to run there. Running is faster and keeps the body warm."
+    "TUT_A0_NOSPRINT": {
+      "text": "Save your strength - walk for now."
     },
     "OBJ_A0_BEACON1": {
       "text": "Reach beacon one"
@@ -144,11 +143,11 @@
       "text": "{focus} is still freezing. Same again: select him and press {key:Item.HeatPack}, or drag a heat pack onto him in the inventory ({key:Inventory.Open})."
     },
     "WT_A1_WARMED": {
-      "text": "Better. Now keep the blood moving — running warms you up faster than any pack."
+      "text": "Better. The feeling is coming back to my fingers."
     },
     "TUT_A1_SPRINT": {
-      "title": "RUNNING KEEPS YOU WARM",
-      "text": "Keep moving: a run ({key:Order.Sprint}) warms the body faster than a walk. Standing still on the ice cools the squad down."
+      "title": "DOUBLE-CLICK TO RUN",
+      "text": "By the way - running keeps you warm. Double-click the ground ({key:Order.Sprint}) to run there."
     },
     "WT_A1_RESUPPLY": {
       "text": "We're nearly out of heat packs. The fishermen's hut is close — let's check it."
