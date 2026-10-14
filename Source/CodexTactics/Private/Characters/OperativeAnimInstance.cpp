@@ -71,6 +71,17 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 			Health->OnDied.AddUniqueDynamic(this, &UOperativeAnimInstance::HandleDied);
 		}
 	}
+	// Prone dives (rev 5e item 6): the crawl pack's own transitions (same skeleton as the prone clips the ABP already plays).
+	if (!WalkToProneAnimation)
+	{
+		WalkToProneAnimation = LoadObject<UAnimSequenceBase>(nullptr,
+			TEXT("/Game/Crawl_MocapAnimPack/Animations/Transitions_Set/Crawl_from_Walk.Crawl_from_Walk"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
+	if (!RunToProneAnimation)
+	{
+		RunToProneAnimation = LoadObject<UAnimSequenceBase>(nullptr,
+			TEXT("/Game/Crawl_MocapAnimPack/Animations/Transitions_Set/Crawl_from_Run.Crawl_from_Run"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
 	// Corner-ready pose (user rule 2026-10-06): until setup_operative_cover_animation.py assigns it, take the M4 pack's
 	// look-at idles when the pack is in the project and the other cover clips come from it.
 	if (bUseNativeCoverClips && (CoverStandIdle.ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; })))
@@ -435,6 +446,26 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 	}
 }
 
+UAnimSequenceBase* UOperativeAnimInstance::GetProneDiveClip(EProneDive Dive) const
+{
+	switch (Dive)
+	{
+	case EProneDive::FromWalk: return WalkToProneAnimation.Get();
+	case EProneDive::FromRun: return RunToProneAnimation.Get();
+	default: return nullptr;
+	}
+}
+
+float UOperativeAnimInstance::GetStanceTransitionPosition(const UAnimSequenceBase* Clip) const
+{
+	const UAnimMontage* Montage = StanceTransitionMontage.Get();
+	if (!Clip || !Montage || !Montage_IsPlaying(Montage) || !IsPlayingSlotAnimation(Clip, FullBodySlot))
+	{
+		return -1.f;
+	}
+	return Montage_GetPosition(Montage);
+}
+
 bool UOperativeAnimInstance::IsPlayingStanceTransition() const
 {
 	const UAnimMontage* Montage = StanceTransitionMontage.Get();
@@ -522,6 +553,18 @@ void UOperativeAnimInstance::UpdateStanceTransition()
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[CoverAnim] stance change in cover without a cover switch (native %d, shimmy %d)"),
 			bUseNativeCoverClips ? 1 : 0, bShimmying ? 1 : 0);
+	}
+	// Prone on the move (rev 5e item 6): the walk / run dive replaces the lie-down clip (the character carries the capsule along).
+	if (Stance == EOperativeStance::Prone && ProneDive != EProneDive::None)
+	{
+		if (UAnimSequenceBase* Dive = GetProneDiveClip(ProneDive))
+		{
+			StopSlotAnimation(StanceTransitionBlendTime, UpperBodySlot);
+			StanceTransitionMontage = PlaySlotAnimationAsDynamicMontage(Dive, FullBodySlot, StanceTransitionBlendTime, StanceTransitionBlendTime,
+				StanceTransitionPlayRate);
+			UE_LOG(LogCodexTactics, Display, TEXT("[StanceAnim] prone dive: %s"), *Dive->GetName());
+			return;
+		}
 	}
 	// Sniper rifle in hands, standing still (user request 2026-10-09): the pack's kneel / prone / rise clips.
 	if (UAnimSequenceBase* SniperClip = PickSniperTransition(From, Stance))
@@ -843,6 +886,7 @@ void UOperativeAnimInstance::UpdateState()
 	// The stance first (user request 2026-10-07): entering a crouched cover from a standing run picked the STANDING
 	// enter clip because the cover layer still saw last frame's stance.
 	Stance = Operative->GetStance();
+	ProneDive = Operative->GetProneDive();
 	bIsCrouching = Stance == EOperativeStance::Crouching;
 	bIsProne = Stance == EOperativeStance::Prone;
 	bIsReloading = Operative->bIsReloading;

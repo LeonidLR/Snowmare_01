@@ -1929,25 +1929,22 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 	{
 		return;
 	}
-	// Godot _set_entire_squad_stance: nobody lies down while the squad moves.
-	if (Stance == EOperativeStance::Prone)
-	{
-		for (const AOperativeCharacter* Member : Squad->GetMembers())
-		{
-			if (Member->IsMoving() || Member->GetVelocity().SizeSquared2D() > 100.f)
-			{
-				if (Messages)
-				{
-					Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("SquadProneMoving", "⚠️ The squad cannot go prone while moving! Come to a full stop first."));
-				}
-				return;
-			}
-		}
-	}
+	// Rev 5e item 6 (user request 2026-10-14; Godot _set_entire_squad_stance refused while the squad moved): each member goes
+	// prone his own way - a walking / running one dives on the move, a slow one stops first, one in cover / carrying stays up.
 	const TCHAR* Name = Stance == EOperativeStance::Prone ? TEXT("PRONE") : (Stance == EOperativeStance::Crouching ? TEXT("CROUCHED") : TEXT("STANDING"));
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
-		Member->SetStance(Stance);
+		if (Stance == EOperativeStance::Prone)
+		{
+			if (Member->DropProne() == EProneEntry::Refused)
+			{
+				continue;
+			}
+		}
+		else
+		{
+			Member->SetStance(Stance);
+		}
 		UFloatingTextSubsystem::SpawnAboveOperative(Member, FString::Printf(TEXT("👥 SQUAD: %s"), Name), FLinearColor(0.3f, 0.95f, 1.f));
 	}
 	if (Messages)
@@ -2039,8 +2036,9 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 		return;
 	}
 
-	// Godot check: cannot go prone while moving!
-	if (Stance == EOperativeStance::Prone && (Leader->IsMoving() || Leader->GetVelocity().SizeSquared2D() > 10.f))
+	// Rev 5e item 6 (user request 2026-10-14; was the Godot check "cannot go prone while moving"): walking / running he dives
+	// prone on the move, slower he stops first (AOperativeCharacter::DropProne); only in cover / carrying / vaulting is it refused.
+	if (Stance == EOperativeStance::Prone && Leader->DropProne() == EProneEntry::Refused)
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
@@ -2052,7 +2050,10 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 
 	// Deviation (user decision 2026-10-01; Godot _sync_squad_stances made the others follow): only the selected
 	// operative changes his stance — the whole squad only with Alt + Z / C / V (SetEntireSquadStance).
-	Leader->SetStance(Stance);
+	if (Stance != EOperativeStance::Prone)
+	{
+		Leader->SetStance(Stance);
+	}
 	ControllerCommands::Report(this, ControllerCommands::ForStance(Stance, false));
 
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
@@ -2417,16 +2418,20 @@ void ACodexTacticsPlayerController::CycleLeaderStance()
 		return;
 	}
 	EOperativeStance Next = static_cast<EOperativeStance>((static_cast<int32>(Leader->GetStance()) + 1) % 3);
-	if (Next == EOperativeStance::Prone && (Leader->IsMoving() || Leader->GetVelocity().SizeSquared2D() > 10.f))
-	{
-		Next = EOperativeStance::Standing; // Godot: prone is skipped while moving
-	}
 	if (RefuseIfLocked(ControllerCommands::ForStance(Next, false)))
 	{
 		return;
 	}
+	// Rev 5e item 6: prone on the move dives / stops first (DropProne); refused (cover, carrying) -> skipped to standing (Godot).
+	if (Next == EOperativeStance::Prone && Leader->DropProne() == EProneEntry::Refused)
+	{
+		Next = EOperativeStance::Standing;
+	}
 	// Godot _cycle_leader_stance, without the squad sync (user decision 2026-10-01): the selected operative only.
-	Leader->SetStance(Next);
+	if (Next != EOperativeStance::Prone)
+	{
+		Leader->SetStance(Next);
+	}
 	ControllerCommands::Report(this, ControllerCommands::ForStance(Next, false));
 }
 

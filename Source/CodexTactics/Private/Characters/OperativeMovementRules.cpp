@@ -60,4 +60,29 @@ namespace OperativeMovementRules
 	{
 		return MoveHoldSeconds > MoveHoldThreshold;
 	}
+
+	EProneEntry DecideProneEntry(const FOperativeMovementConfig& Config, EOperativeStance Stance, float Speed2D, bool bSprinting,
+		bool bHasMoveOrder, bool bBlocked)
+	{
+		if (!bHasMoveOrder && Speed2D < ProneStillSpeedCm)
+		{
+			return EProneEntry::InPlace;
+		}
+		if (bBlocked)
+		{
+			return EProneEntry::Refused;
+		}
+		if (Stance == EOperativeStance::Standing)
+		{
+			if (bSprinting && Speed2D >= Config.ProneDiveMinRunSpeed)
+			{
+				return EProneEntry::DiveFromRun;
+			}
+			if (!bSprinting && Speed2D >= Config.ProneDiveMinWalkSpeed)
+			{
+				return EProneEntry::DiveFromWalk;
+			}
+		}
+		return EProneEntry::StopThenProne;
+	}
 }

@@ -182,6 +182,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
 	void SetStance(EOperativeStance NewStance);
 
+	/**
+	 * Rev 5e item 6 (user request 2026-10-14): a player's prone order, also while moving (OperativeMovementRules::DecideProneEntry
+	 * with MovementConfig.ProneDiveMinWalkSpeed / ProneDiveMinRunSpeed): standing and walking / sprinting fast enough he DIVES prone
+	 * on the move - the walk / run-to-prone clip (UOperativeAnimInstance::GetProneDiveClip) plays while the capsule follows his
+	 * move at the clip's root speed (the root translation is cancelled on the mesh; he stays on the navmesh by path following);
+	 * with a move order he crawls on to its goal afterwards, without one (momentum) the dive carries him forward by the clip's
+	 * length and he stops. Slower / crouched: he stops, then lies down in place. Still: in place. In cover, carrying, vaulting,
+	 * aboard or knocked down a moving body is refused as before. Turn-based stance changes stay on the grid (AP rules).
+	 */
+	EProneEntry DropProne();
+
+	/** The dive going on now (None = none; the anim instance plays its clip). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
+	EProneDive GetProneDive() const { return ProneDive; }
+
+	bool IsProneDiving() const { return ProneDive != EProneDive::None; }
+
 	/** Starts or stops sprinting; ignored when sprinting is not allowed. */
 	void SetSprinting(bool bNewSprinting);
 
@@ -1747,6 +1764,20 @@ private:
 
 	/** World time (s) until which the stance change armed by SetStance holds him still (before the anim instance starts the clip). */
 	float StanceSettleUntil = 0.f;
+
+	/** Rev 5e item 6: the prone dive on the move (DropProne / UpdateProneDive). */
+	EProneDive ProneDive = EProneDive::None;
+	double ProneDiveStartTime = 0.0;
+	float ProneDiveLength = 0.f;
+	/** The mesh's relative XY at the dive start (the root translation of the clip is cancelled from it). */
+	FVector ProneDiveMeshBase = FVector::ZeroVector;
+	TWeakObjectPtr<UAnimSequenceBase> ProneDiveClip;
+	/** The dive drives the capsule along the move at the clip's root speed. */
+	void UpdateProneDive(float DeltaSeconds);
+	/** Ends the dive: the mesh back on its base, the crawl speed. */
+	void EndProneDive();
+	/** Root bone translation of the dive clip at Time (component space), cm. */
+	FVector GetProneDiveRoot(float Time) const;
 
 	/** Seconds until a stance clip that starts now / is playing lets the operative walk (0 without a clip). */
 	float GetStanceChangeDelay(EOperativeStance From, EOperativeStance To) const;
