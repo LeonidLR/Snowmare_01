@@ -770,7 +770,7 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	// the follower - he stays put until the clip ends, then the next repath sends him to his slot.
 	if (const float MoveHold = Operative->GetMoveHoldSeconds(); OperativeMovementRules::ShouldDeferMove(MoveHold))
 	{
-		if (Operative->GetVelocity().SizeSquared2D() > 25.f)
+		if (Operative->GetVelocity().SizeSquared2D() > 25.f && !Operative->IsProneDiving()) // rev 5f: a dive slides on (root motion)
 		{
 			Operative->StopOperative(); // walking when the stance change started
 		}

@@ -8,6 +8,11 @@
 // Rev 5e item 6 (user request 2026-10-14): prone on the move - walking (>= 30 cm/s) the prone order dives with the walk clip
 // (Crawl_from_Walk) without stopping, the capsule keeps going and he crawls on to the goal; sprinting (>= 75 cm/s) the run
 // clip (Crawl_from_Run); walking slower than 30 cm/s the old way: he stops, then lies down in place (Crawl_from_Act).
+// Rev 5f (game designer 2026-10-14: "he stops dead, dives in place, then the mesh snaps back"): the dive is ROOT MOTION. Every frame of
+// the sprint dive is sampled (capsule and pelvis along the run direction, the mesh's offset on the capsule): the capsule carries
+// >= 2.5 m, neither the capsule nor the body ever jumps back > 10 cm, the mesh never leaves its place on the capsule and the body
+// lies where the dive ended (no snap when the clip hands over to the prone idle). The same sprint dive with the Female Soldier
+// body (BP_Operative_FemaleSoldier's mesh and mesh transform, another skeleton) on the leader.
 
 #include "CoreMinimal.h"
 
@@ -16,6 +21,7 @@
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Components/StaticMeshComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -23,9 +29,11 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "NavigationSystem.h"
+#include "Containers/Ticker.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "TimerManager.h"
+#include "AIController.h"
 
 namespace StanceSmoke
 {
@@ -48,7 +56,108 @@ namespace StanceSmoke
 		float DiveSpeedAtOrder = 0.f;
 		EProneEntry DiveEntry = EProneEntry::InPlace;
 		float MinSpeedDuringDive = TNumericLimits<float>::Max();
+		/** Rev 5f: the operative wearing the Female Soldier body for the second sprint dive, and the body he had before. */
+		TWeakObjectPtr<AOperativeCharacter> Female;
+		TWeakObjectPtr<USkeletalMesh> MaleMesh;
+		FTransform MaleMeshTransform;
 	};
+
+	/** Rev 5f: one operative's dive sampled every frame (capsule / pelvis along the run direction, the mesh offset on the capsule). */
+	struct FDiveTrace
+	{
+		TWeakObjectPtr<AOperativeCharacter> Who;
+		FVector Start = FVector::ZeroVector;
+		FVector Direction = FVector::ForwardVector;
+		FVector MeshBase = FVector::ZeroVector;
+		double StartTime = 0.0;
+		/** X = seconds, Y = capsule along, Z = pelvis along (cm from the start), W = the mesh's XY offset from its base. */
+		TArray<FVector4> Samples;
+		FTSTicker::FDelegateHandle Handle;
+	};
+
+	float Along(const FDiveTrace& Trace, const FVector& Point)
+	{
+		return static_cast<float>(FVector::DotProduct(FVector(Point.X - Trace.Start.X, Point.Y - Trace.Start.Y, 0.f), Trace.Direction));
+	}
+
+	/** Samples Who every frame for Seconds from now (the dive must start right after this call). */
+	TSharedRef<FDiveTrace> StartDiveTrace(AOperativeCharacter* Who, float Seconds)
+	{
+		TSharedRef<FDiveTrace> Trace = MakeShared<FDiveTrace>();
+		Trace->Who = Who;
+		Trace->Start = Who->GetActorLocation();
+		const FVector Velocity = Who->GetVelocity();
+		Trace->Direction = Velocity.GetSafeNormal2D().IsNearlyZero() ? Who->GetActorForwardVector().GetSafeNormal2D() : Velocity.GetSafeNormal2D();
+		Trace->MeshBase = Who->GetMesh()->GetRelativeLocation();
+		Trace->StartTime = Who->GetWorld()->GetTimeSeconds();
+		Trace->Handle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Trace, Seconds](float)
+		{
+			const AOperativeCharacter* W = Trace->Who.Get();
+			if (!W || !W->GetWorld())
+			{
+				return false;
+			}
+			const float T = static_cast<float>(W->GetWorld()->GetTimeSeconds() - Trace->StartTime);
+			if (Trace->Samples.IsEmpty() || T > Trace->Samples.Last().X + 0.001f)
+			{
+				const FVector Offset = W->GetMesh()->GetRelativeLocation() - Trace->MeshBase;
+				Trace->Samples.Add(FVector4(T, Along(*Trace, W->GetActorLocation()), Along(*Trace, W->GetMesh()->GetBoneLocation(TEXT("pelvis"))),
+					FVector(Offset.X, Offset.Y, 0.f).Size()));
+			}
+			return T < Seconds;
+		}));
+		return Trace;
+	}
+
+	/**
+	 * The dive checks of rev 5f: the capsule carried >= MinTravel; neither the capsule nor the pelvis jumped back > 10 cm between two
+	 * frames (the old dive slid the body ahead and snapped it back); the mesh stayed on the capsule; the pelvis ends where the body
+	 * then lies (no snap at the hand-over to the prone idle: the pelvis-to-capsule offset at the dive's end vs 0.6 s later).
+	 */
+	void CheckDiveTrace(FState& State, const FDiveTrace& Trace, const TCHAR* What, float MinTravel, float DiveEndSeconds)
+	{
+		float MaxCapsuleBack = 0.f;
+		float MaxPelvisBack = 0.f;
+		float MaxMeshOffset = 0.f;
+		FString Frames;
+		float NextLog = 0.f;
+		float PelvisOffsetAtEnd = 0.f;
+		bool bHaveEnd = false;
+		for (int32 Index = 0; Index < Trace.Samples.Num(); ++Index)
+		{
+			const FVector4& S = Trace.Samples[Index];
+			if (Index > 0)
+			{
+				MaxCapsuleBack = FMath::Max(MaxCapsuleBack, static_cast<float>(Trace.Samples[Index - 1].Y - S.Y));
+				MaxPelvisBack = FMath::Max(MaxPelvisBack, static_cast<float>(Trace.Samples[Index - 1].Z - S.Z));
+			}
+			MaxMeshOffset = FMath::Max(MaxMeshOffset, static_cast<float>(S.W));
+			if (S.X >= NextLog)
+			{
+				Frames += FString::Printf(TEXT(" %.2fs:%.0f/%.0f"), S.X, S.Y, S.Z);
+				NextLog += 0.1f;
+			}
+			if (!bHaveEnd && S.X >= DiveEndSeconds)
+			{
+				PelvisOffsetAtEnd = static_cast<float>(S.Z - S.Y);
+				bHaveEnd = true;
+			}
+		}
+		const FVector4 Last = Trace.Samples.IsEmpty() ? FVector4(0.f, 0.f, 0.f, 0.f) : Trace.Samples.Last();
+		const float Travel = static_cast<float>(Last.Y);
+		const float PelvisOffsetLying = static_cast<float>(Last.Z - Last.Y);
+		const float Snap = bHaveEnd ? FMath::Abs(PelvisOffsetLying - PelvisOffsetAtEnd) : 999.f;
+		const bool bOk = Travel >= MinTravel && MaxCapsuleBack <= 10.f && MaxPelvisBack <= 10.f && MaxMeshOffset <= 1.f && Snap <= 15.f;
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s frames (t: capsule / pelvis cm along the run):%s"), What, *Frames);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %d frames, capsule travel %.0f cm (>= %.0f), largest step back capsule %.1f / pelvis %.1f cm (<= 10), "
+			"mesh off its place on the capsule %.1f cm (0), pelvis-to-capsule %.0f cm at the dive's end -> %.0f cm lying (snap %.1f cm, <= 15) -> %s"),
+			What, Trace.Samples.Num(), Travel, MinTravel, MaxCapsuleBack, MaxPelvisBack, MaxMeshOffset, PelvisOffsetAtEnd, PelvisOffsetLying, Snap,
+			bOk ? TEXT("ok") : TEXT("BAD"));
+		State.bOk &= bOk;
+	}
+
+	TSharedPtr<FDiveTrace> LeaderDive;
+	TSharedPtr<FDiveTrace> FemaleDive;
 
 	/** Pelvis above the feet stays below this while lying (lying ~15 cm, crouched ~50, standing ~90). */
 	constexpr float ProneMaxPelvis = 40.f;
@@ -278,6 +387,7 @@ namespace StanceSmoke
 			State.DiveSpeedAtOrder = static_cast<float>(Leader->GetVelocity().Size2D());
 			const bool bSprinting = Leader->IsSprinting();
 			State.DiveStart = Leader->GetActorLocation();
+			LeaderDive = StartDiveTrace(Leader, 2.6f);
 			State.DiveEntry = Leader->DropProne();
 			CheckFullBodyClipSoon(World, State, Leader, TEXT("run->prone dive"), [](const UOperativeAnimInstance& Anim) { return Anim.RunToProneAnimation.Get(); });
 			const bool bOk = bSprinting && State.DiveEntry == EProneEntry::DiveFromRun && Leader->GetProneDive() == EProneDive::FromRun;
@@ -292,9 +402,16 @@ namespace StanceSmoke
 			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 			FNavLocation OnNav;
 			const bool bOnNav = Nav && Nav->ProjectPointToNavigation(Leader->GetActorLocation(), OnNav, FVector(50.f, 50.f, 200.f));
-			const bool bOk = Leader->GetStance() == EOperativeStance::Prone && !Leader->IsProneDiving() && Moved > 150.f && bOnNav;
+			const bool bOk = Leader->GetStance() == EOperativeStance::Prone && !Leader->IsProneDiving() && Moved > 250.f && bOnNav;
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke run dive: prone, carried %.0f cm, on the navmesh %d -> %s"), Moved, bOnNav ? 1 : 0, bOk ? TEXT("ok") : TEXT("BAD"));
 			State.bOk &= bOk;
+			if (LeaderDive.IsValid())
+			{
+				const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Leader->GetMesh()->GetAnimInstance());
+				const float DiveSeconds = Anim && Anim->RunToProneAnimation ? Anim->RunToProneAnimation->GetPlayLength() / FMath::Max(Anim->StanceTransitionPlayRate, 0.1f) : 1.2f;
+				CheckDiveTrace(State, *LeaderDive, *FString::Printf(TEXT("sprint dive (%s, %s)"), *Leader->DisplayName.ToString(),
+					*GetNameSafe(Leader->GetMesh()->GetSkeletalMeshAsset())), 250.f, DiveSeconds);
+			}
 			Leader->StopOperative();
 			Leader->SetStance(EOperativeStance::Standing);
 			return false;
@@ -320,6 +437,84 @@ namespace StanceSmoke
 		case 35:
 			Leader->SetStance(EOperativeStance::Standing);
 			return false;
+		// --- Rev 5f: the same sprint dive with the Female Soldier body (another skeleton) ---
+		case 38:
+		{
+			// The Female Soldier body (BP_Operative_FemaleSoldier: SK_Female_Soldier, Female_Soldier_Skeleton) put on the leader exactly as
+			// her Blueprint sets it (mesh asset + the mesh component's transform), so the dive runs through the same squad / controller path.
+			UClass* FemaleClass = LoadClass<AOperativeCharacter>(nullptr, TEXT("/Game/Characters/Operatives/BP_Operative_FemaleSoldier.BP_Operative_FemaleSoldier_C"));
+			const AOperativeCharacter* FemaleDefaults = FemaleClass ? FemaleClass->GetDefaultObject<AOperativeCharacter>() : nullptr;
+			USkeletalMesh* FemaleMesh = FemaleDefaults && FemaleDefaults->GetMesh() ? FemaleDefaults->GetMesh()->GetSkeletalMeshAsset() : nullptr;
+			State.MaleMesh = Leader->GetMesh()->GetSkeletalMeshAsset();
+			State.MaleMeshTransform = Leader->GetMesh()->GetRelativeTransform();
+			if (FemaleMesh)
+			{
+				Leader->GetMesh()->SetSkeletalMeshAsset(FemaleMesh);
+				Leader->GetMesh()->SetRelativeTransform(FemaleDefaults->GetMesh()->GetRelativeTransform());
+			}
+			const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Leader->GetMesh()->GetAnimInstance());
+			const bool bOk = FemaleMesh && Anim && Anim->RunToProneAnimation;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke female body on %s: %s (skeleton %s), anim %s -> %s"), *Leader->DisplayName.ToString(), *GetNameSafe(FemaleMesh),
+				FemaleMesh ? *GetNameSafe(FemaleMesh->GetSkeleton()) : TEXT("-"), *GetNameSafe(Anim ? Anim->GetClass() : nullptr), bOk ? TEXT("ok") : TEXT("BAD"));
+			State.bOk &= bOk;
+			State.Female = Leader;
+			return false;
+		}
+		case 40:
+			if (AOperativeCharacter* Female = State.Female.Get())
+			{
+				const FVector Goal = SmokeUtils::ClearPoint(World, Female->GetActorLocation(), Female->GetActorLocation() - Female->GetActorForwardVector() * 1800.f);
+				const EOperativeOrderResult Order = Female->OrderMoveTo(Goal, true);
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke female move order: result %d, goal %.0f cm away, controller %s, mode %d, knocked %d, stance %d"),
+					static_cast<int32>(Order), FVector::Dist2D(Goal, Female->GetActorLocation()), *GetNameSafe(Female->GetController()),
+					static_cast<int32>(Female->GetCharacterMovement()->MovementMode.GetValue()), Female->IsKnockedDown() ? 1 : 0, static_cast<int32>(Female->GetStance()));
+				// The prone order once she runs at full sprint (a freshly spawned body first lands and accelerates; at most 3 s).
+				TWeakObjectPtr<AOperativeCharacter> WeakFemale(Female);
+				TSharedRef<FTimerHandle> Poll = MakeShared<FTimerHandle>();
+				TSharedRef<float> Waited = MakeShared<float>(0.f);
+				World->GetTimerManager().SetTimer(*Poll, FTimerDelegate::CreateLambda([&State, WeakFemale, Poll, Waited, World]()
+				{
+					AOperativeCharacter* F = WeakFemale.Get();
+					*Waited += 0.05f;
+					const float Speed = F ? static_cast<float>(F->GetVelocity().Size2D()) : 0.f;
+					if (F && (Speed < F->GetCharacterMovement()->MaxWalkSpeed * 0.9f || !F->IsSprinting()) && *Waited < 3.f)
+					{
+						return;
+					}
+					World->GetTimerManager().ClearTimer(*Poll);
+					if (!F)
+					{
+						return;
+					}
+					FemaleDive = StartDiveTrace(F, 2.6f);
+					const EProneEntry Entry = F->DropProne();
+					const bool bOk = Entry == EProneEntry::DiveFromRun && F->GetProneDive() == EProneDive::FromRun;
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke female sprint %.0f cm/s after %.2f s (sprinting %d) -> prone order: entry %d, run dive %d -> %s"), Speed,
+						*Waited, F->IsSprinting() ? 1 : 0, static_cast<int32>(Entry), F->GetProneDive() == EProneDive::FromRun ? 1 : 0, bOk ? TEXT("ok") : TEXT("BAD"));
+					State.bOk &= bOk;
+				}), 0.05f, true);
+			}
+			return false;
+		case 41:
+			return false;
+		case 45:
+			if (AOperativeCharacter* Female = State.Female.Get())
+			{
+				const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Female->GetMesh()->GetAnimInstance());
+				const float DiveSeconds = Anim && Anim->RunToProneAnimation ? Anim->RunToProneAnimation->GetPlayLength() / FMath::Max(Anim->StanceTransitionPlayRate, 0.1f) : 1.2f;
+				if (FemaleDive.IsValid())
+				{
+					CheckDiveTrace(State, *FemaleDive, *FString::Printf(TEXT("female sprint dive (%s)"), *GetNameSafe(Female->GetMesh()->GetSkeletalMeshAsset())), 250.f, DiveSeconds);
+				}
+				if (State.MaleMesh.IsValid())
+				{
+					Female->StopOperative();
+					Female->SetStance(EOperativeStance::Standing);
+					Female->GetMesh()->SetSkeletalMeshAsset(State.MaleMesh.Get());
+					Female->GetMesh()->SetRelativeTransform(State.MaleMeshTransform);
+				}
+			}
+			return false;
 		case 22:
 		case 24:
 		case 25:
@@ -329,6 +524,11 @@ namespace StanceSmoke
 		case 34:
 		case 36:
 		case 37:
+		case 39:
+		case 42:
+		case 43:
+		case 44:
+		case 46:
 			return false;
 		default:
 			Check(State, Leader, EOperativeStance::Standing);

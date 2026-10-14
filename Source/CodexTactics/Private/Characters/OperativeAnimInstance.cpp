@@ -71,16 +71,25 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 			Health->OnDied.AddUniqueDynamic(this, &UOperativeAnimInstance::HandleDied);
 		}
 	}
-	// Prone dives (rev 5e item 6): the crawl pack's own transitions (same skeleton as the prone clips the ABP already plays).
+	// Prone dives (rev 5e item 6, rev 5f): the root-motion copies of the crawl pack's transitions (Claude-owned, made by
+	// Scripts/Editor/create_prone_dive_root_motion_clips.py; same skeleton as the prone clips the ABP already plays). The pack's
+	// originals have no root motion: the dive would fall back to "stop, then lie down" (AOperativeCharacter::DropProne).
 	if (!WalkToProneAnimation)
 	{
 		WalkToProneAnimation = LoadObject<UAnimSequenceBase>(nullptr,
-			TEXT("/Game/Crawl_MocapAnimPack/Animations/Transitions_Set/Crawl_from_Walk.Crawl_from_Walk"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+			TEXT("/Game/Characters/Operatives/Anims/ProneDive/AS_Crawl_from_Walk_RM.AS_Crawl_from_Walk_RM"), nullptr, LOAD_NoWarn | LOAD_Quiet);
 	}
 	if (!RunToProneAnimation)
 	{
 		RunToProneAnimation = LoadObject<UAnimSequenceBase>(nullptr,
-			TEXT("/Game/Crawl_MocapAnimPack/Animations/Transitions_Set/Crawl_from_Run.Crawl_from_Run"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+			TEXT("/Game/Characters/Operatives/Anims/ProneDive/AS_Crawl_from_Run_RM.AS_Crawl_from_Run_RM"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
+	// The dive's root motion comes from a montage: an AnimBP set to ignore root motion would leave the capsule behind the body.
+	if (RootMotionMode == ERootMotionMode::NoRootMotionExtraction || RootMotionMode == ERootMotionMode::IgnoreRootMotion)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("%s: root motion mode %d -> from montages only (the prone dive is root motion)"), *GetName(),
+			static_cast<int32>(RootMotionMode.GetValue()));
+		RootMotionMode = ERootMotionMode::RootMotionFromMontagesOnly;
 	}
 	// Corner-ready pose (user rule 2026-10-06): until setup_operative_cover_animation.py assigns it, take the M4 pack's
 	// look-at idles when the pack is in the project and the other cover clips come from it.
@@ -560,9 +569,11 @@ void UOperativeAnimInstance::UpdateStanceTransition()
 		if (UAnimSequenceBase* Dive = GetProneDiveClip(ProneDive))
 		{
 			StopSlotAnimation(StanceTransitionBlendTime, UpperBodySlot);
-			StanceTransitionMontage = PlaySlotAnimationAsDynamicMontage(Dive, FullBodySlot, StanceTransitionBlendTime, StanceTransitionBlendTime,
+			// Rev 5f: a short blend-in - the root motion is weighted by the montage, a long one would brake the run for a moment.
+			StanceTransitionMontage = PlaySlotAnimationAsDynamicMontage(Dive, FullBodySlot, ProneDiveBlendInSeconds, StanceTransitionBlendTime,
 				StanceTransitionPlayRate);
-			UE_LOG(LogCodexTactics, Display, TEXT("[StanceAnim] prone dive: %s"), *Dive->GetName());
+			UE_LOG(LogCodexTactics, Display, TEXT("[StanceAnim] prone dive: %s (root motion %d, blend-in %.2f s)"), *Dive->GetName(),
+				Dive->HasRootMotion() ? 1 : 0, ProneDiveBlendInSeconds);
 			return;
 		}
 	}
