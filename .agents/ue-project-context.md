@@ -53,7 +53,7 @@
 | GameState | `ACodexTacticsGameState` |
 | PlayerController | `ACodexTacticsPlayerController` |
 | PlayerState | [none custom] |
-| Pawn / Character | `ATacticalCameraPawn` (player pawn = camera); squad `AOperativeCharacter` (BP_Operative), enemies `AEnemyCharacter` |
+| Pawn / Character | `ATacticalCameraPawn` (player pawn = camera); squad `AOperativeCharacter` (BP_Operative; one header, members defined in one `Private/Characters/OperativeCharacter<Cluster>.cpp` per cluster - Movement, Stance, Vault, Overlays, Inventory, Progression, Health, Weapons, Combat, Aim, TargetedShots, Cover, CoverEntry, CornerAim, Sniper; map `docs/port/REFACTOR_OPERATIVE_2026-10.md`), enemies `AEnemyCharacter` |
 | GameInstance | engine default |
 
 **Subsystems:** `UCodexEventBus`, `UMissionSessionSubsystem` (UGameInstanceSubsystem); world subsystems: GameFlow, Mission, Squad, Wave, WaveVictory, TurnBasedCombat, Interaction, Relocation, RadiusRing, Grenade, CombatFeedback, Quest, Dialogue, GameMessage, FloatingText, Recruit, SquadTransfer, SaveGame.

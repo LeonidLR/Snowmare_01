@@ -6,7 +6,7 @@ future change touches a small file — **behaviour unchanged**. Branch `agents/w
 
 ## 1. Map of the file before the split (base fdf53a7)
 
-The file held 133 member definitions of one class plus file-local helpers. Responsibility clusters (function lines, the
+The file held 168 member definitions (the constructor + 167) of one class plus file-local helpers. Responsibility clusters (function lines, the
 blank lines / includes / helpers in between not counted):
 
 | Cluster | Lines | Members | Calls into other clusters | Read from outside (approx. files) |
@@ -119,7 +119,57 @@ In order of increasing coupling — each one its own cleanup step with its own v
 
 ## 5. Result
 
-(filled in after the split — line counts before -> after, verification)
+Commits on `agents/work` (base `fdf53a7`): `718d05f` (this map), `8fbbeee` (Movement, Stance, Vault + the shared
+helpers header), `1d13112` (Cover, CoverEntry, CornerAim), `57ed89b` (Combat, Aim, TargetedShots, Weapons), then the last
+step (Health, Inventory, Progression, Overlays, include trim of the core file, the class comment, the unit test, the impact
+map rules, HANDOFF / project context).
+
+Line counts, `Private/Characters/` (header `OperativeCharacter.h` 1 826 -> 1 830: only the class comment's layout note):
+
+| File | Lines |
+|---|---:|
+| `OperativeCharacter.cpp` | 4 867 -> 306 |
+| `OperativeCharacterCombat.cpp` | 780 |
+| `OperativeCharacterCover.cpp` | 702 |
+| `OperativeCharacterCornerAim.cpp` | 455 |
+| `OperativeCharacterMovement.cpp` | 362 |
+| `OperativeCharacterHealth.cpp` | 361 |
+| `OperativeCharacterWeapons.cpp` | 338 |
+| `OperativeCharacterStance.cpp` | 301 |
+| `OperativeCharacterTargetedShots.cpp` | 278 |
+| `OperativeCharacterSniper.cpp` | 241 (unchanged) |
+| `OperativeCharacterCoverEntry.cpp` | 238 |
+| `OperativeCharacterAim.cpp` | 235 |
+| `OperativeCharacterVault.cpp` | 225 |
+| `OperativeCharacterOverlays.cpp` | 225 |
+| `OperativeCharacterInventory.cpp` | 152 |
+| `OperativeCharacterProgression.cpp` | 127 |
+| `OperativeCharacterInternal.h` | 43 (new) |
+
+Verbatim check: all 168 definitions present exactly once, byte-identical to the base apart from the qualified helper calls
+(`OperativeCharacterInternal::IsLiveEnemy` / `ShotFeet` / `IsRangedEnemyActor`). The only non-mechanical fix: the movement
+file needed `Navigation/PathFollowingComponent.h` (`EPathFollowingRequestResult`), which the old file got from its long
+include list.
+
+Unit tests: 448 before -> 449 after (new `CodexTactics.Characters.OperativeUnits.WorldFreeMembers`: world-free members of
+the stance, movement, inventory, progression, cover, corner aim, targeted shots, weapons, health and overlay units on one
+operative, against the pure rules they wrap).
+
+Build: unity build + a full non-unity build (`-DisableUnity`: every split file compiles on its own includes) succeed.
+
+Smokes, same 69-smoke list before (unmodified base `fdf53a7` build) and after (final tree), `smoke_parallel.ps1 -Jobs 3`:
+
+| Result | Before (base) | After (split) |
+|---|---|---|
+| PASS | 63 + the 6 exclusive ones (Tutorial, TutorialSave, SaveRoundTrip, SaveLoad, PMCTripwire, ControlsScreen) | 65 (exclusives included) |
+| PASS only on the lone re-run | CornerHold, TurnBasedAim | Knockdown |
+| FAIL | SquadControl («Alt + V refused while moving»), VisionCone (known 1400 cm) | SquadControl (same check), VisionCone (same), Panic |
+
+PanicSmoke («fled ~500 cm, away from the hound (600 -> 180..370 cm)») passed in the base run but failed after; an A/B
+check rebuilt the **unmodified base sources** in the same tree two hours later and it failed the same way twice, so it is
+not caused by the split (something in the environment changed between the runs; follow-up for the cleanup day's flaky-smoke
+task). The step smokes run after each commit (movement 9, cover 12, combat 12, final sanity 9) all passed (CornerHold on the
+lone re-run, as on the base).
 
 ## 6. `ACodexTacticsPlayerController` (2 972 lines): split proposal (no code change today)
 

@@ -227,8 +227,38 @@
     {
       "name": "operative-movement-squad",
       "globs": ["Source/**/Characters/OperativeCharacter*", "Source/**/Characters/OperativeAIController*", "Source/**/Characters/OperativeMovement*", "Source/**/Characters/SquadFormation*", "Source/**/Characters/SquadSubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/FacingRules*", "Source/**/Characters/Vault*", "Source/**/Characters/RecruitSubsystem*"],
-      "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault"],
+      "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault", "CodexTactics.Characters.OperativeUnits", "CodexTactics.Movement"],
       "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "RealtimeSelectSmoke"]
+    },
+    {
+      "name": "operative-cover-units",
+      "globs": ["Source/**/Characters/OperativeCharacterCover*", "Source/**/Characters/OperativeCharacterCornerAim*"],
+      "tests": ["CodexTactics.Tactics.Cover", "CodexTactics.Characters.OperativeUnits"],
+      "smokes": ["CoverSmoke", "CoverEventSmoke", "CoverHugSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugMedicSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke", "TurnBasedAimSmoke"]
+    },
+    {
+      "name": "operative-combat-units",
+      "globs": ["Source/**/Characters/OperativeCharacterCombat*", "Source/**/Characters/OperativeCharacterAim*", "Source/**/Characters/OperativeCharacterTargetedShots*", "Source/**/Characters/OperativeCharacterWeapons*"],
+      "tests": ["CodexTactics.Combat", "CodexTactics.Characters.Arsenal", "CodexTactics.Characters.OperativeUnits", "CodexTactics.Squad.Posture"],
+      "smokes": ["SquadFireSmoke", "TargetedShotSmoke", "PostureSmoke", "AimOffsetSmoke", "TurnBasedAimSmoke", "AIGrenadeSmoke", "WeaponSelectorSmoke", "SniperSmoke", "CoverSmoke", "CornerHoldSmoke", "PauseBarrelOrderSmoke"]
+    },
+    {
+      "name": "operative-health-units",
+      "globs": ["Source/**/Characters/OperativeCharacterHealth*"],
+      "tests": ["CodexTactics.Combat.Health", "CodexTactics.Combat.Knockdown", "CodexTactics.Combat.DeathCinematic", "CodexTactics.Characters.OperativeUnits"],
+      "smokes": ["KnockdownSmoke", "FloatingTextSmoke", "DeathCamSmoke", "RecruitDeathSmoke", "TurnBlastDeathSmoke", "CoverSmoke", "MissionSmoke"]
+    },
+    {
+      "name": "operative-inventory-units",
+      "globs": ["Source/**/Characters/OperativeCharacterInventory*", "Source/**/Characters/OperativeCharacterProgression*"],
+      "tests": ["CodexTactics.Characters.PersonalItems", "CodexTactics.Characters.Progression", "CodexTactics.Transfer", "CodexTactics.Characters.OperativeUnits"],
+      "smokes": ["InventorySmoke", "TransferSmoke", "ProgressionSmoke", "DeployableSmoke", "TacticalHeatSmoke", "CommanderModeSmoke"]
+    },
+    {
+      "name": "operative-overlay-units",
+      "globs": ["Source/**/Characters/OperativeCharacterOverlays*"],
+      "tests": ["CodexTactics.Combat.VisionCone", "CodexTactics.Characters.OperativeUnits"],
+      "smokes": ["SilhouetteSmoke", "GroupSelectSmoke", "RealtimeSelectSmoke"]
     },
     {
       "name": "panic",

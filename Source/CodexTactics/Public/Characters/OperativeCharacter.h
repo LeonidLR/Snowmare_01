@@ -118,6 +118,10 @@ struct FShootCandidate
  * _process_leader_movement).
  * Meant to be subclassed by a Blueprint (BP_Operative) that owns the look: skeletal mesh, AnimBP, materials,
  * capsule and stance shapes. Without a skeletal mesh a tinted placeholder cylinder shows the stance.
+ * Source layout (cleanup day 2026-10-14, docs/port/REFACTOR_OPERATIVE_2026-10.md): the members are defined in one
+ * translation unit per cluster under Private/Characters/ - OperativeCharacter.cpp (core, Tick), OperativeCharacterMovement,
+ * Stance (+ prone dive), Vault, Overlays (selection ring, silhouette, vision cone), Inventory, Progression, Health (hits,
+ * knockdown, death), Weapons, Combat (target selection, fire), Aim, TargetedShots, Cover, CoverEntry, CornerAim, Sniper.
  */
 UCLASS(Blueprintable)
 class CODEXTACTICS_API AOperativeCharacter : public ACharacter
