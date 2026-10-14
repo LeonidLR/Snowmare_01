@@ -14,7 +14,8 @@ class UTacticalHeatTimerComponent;
  * of flamethrower fuel) — F / the drawer's «Campfire» line, the placement ghost, the walk, then it is kindled. It warms the whole
  * squad within CampfireHeatRadius (3.5 m) for CampfireBurnSeconds (75 s; 4 turn-based rounds; -20 % on high ground in the wind),
  * then stays as ashes (BurntOut) that can be rekindled with new materials. Risk: the crackle and the smoke column make every
- * patrol within CampfireNoiseRadius (15 m) start a search at the fire (again every CampfireNoiseIntervalSeconds while it burns).
+ * patrol within CampfireNoiseRadius (15 m) start a search at the fire (again every CampfireNoiseIntervalSeconds while it burns);
+ * indoors (inside a Closed / Shelter ACameraZoneVolume) only within x CampfireIndoorNoiseMultiplier (0.4: 6 m; rev 5d).
  * Not packable, not relocatable, cannot be trapped. UE-only; no Godot reference.
  */
 UCLASS(Blueprintable)
@@ -39,6 +40,9 @@ public:
 
 	/** Patrols within the noise radius start a search here; returns how many were alerted. */
 	int32 AlertPatrols();
+
+	/** Rev 5d: inside a Closed / Shelter camera zone (walls and a roof): the noise radius shrinks (GetCampfireNoiseRadius). */
+	bool IsIndoors() const;
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Campfire")
 	bool IsBurning() const;

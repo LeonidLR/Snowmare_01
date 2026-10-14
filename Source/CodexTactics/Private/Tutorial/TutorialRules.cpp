@@ -138,7 +138,7 @@ namespace TutorialRulesLocal
 			Condition.Stat = FName(*JsonString(Clause, TEXT("stat")));
 			if (!TutorialRules::IsKnownStat(Condition.Stat))
 			{
-				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs)"),
+				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs | squad_min_heat_packs | heat_packs_given)"),
 					*Where, *Condition.Stat.ToString());
 				return false;
 			}
@@ -373,7 +373,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		{
 			const TSharedPtr<FJsonObject> Complete = *CompleteObject;
 			WarnUnknownKeys(Complete, { TEXT("command"), TEXT("commands"), TEXT("event"), TEXT("count"), TEXT("volume"), TEXT("timeout_s"),
-				TEXT("distinct_operatives"), TEXT("hold_s"), TEXT("in_volume"), TEXT("distinct_from") },
+				TEXT("distinct_operatives"), TEXT("hold_s"), TEXT("in_volume"), TEXT("distinct_from"), TEXT("condition") },
 				Where + TEXT(" complete"), OutWarnings);
 			Step.Complete.Commands = JsonStrings(Complete, TEXT("commands"));
 			Step.Complete.Commands.Append(JsonStrings(Complete, TEXT("command")));
@@ -403,6 +403,11 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			if (Step.Complete.HoldSeconds > 0.f && Step.Complete.Commands.IsEmpty())
 			{
 				OutWarnings.Add(Where + TEXT(": \"hold_s\" only counts command hold time - no \"commands\" given (it would never complete)"));
+			}
+			// Rev 5d: "complete": { "condition": ... } - world-state completion (polled while the step runs).
+			if (!ParseConditions(Complete, Where + TEXT(" complete"), Step.Complete.Conditions, OutWarnings, OutError))
+			{
+				return false;
 			}
 		}
 
@@ -803,7 +808,8 @@ FString TutorialRules::FormatKeys(const TArray<FString>& Keys)
 
 bool TutorialRules::IsKnownStat(FName Stat)
 {
-	static const FName Stats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs") };
+	static const FName Stats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
+		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given") };
 	for (const FName Known : Stats)
 	{
 		if (Stat == Known)

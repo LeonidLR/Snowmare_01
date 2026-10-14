@@ -28,6 +28,18 @@ bool FHeatPackResetTest::RunTest(const FString&)
 	TestFalse(TEXT("not frostbitten: nothing to clear"), TacticalHeatRules::ApplyHeatPack(Config, 50.f, false).bClearsFrostbite);
 	TestFalse(TEXT("warm: refused"), TacticalHeatRules::CanUseHeatPack(0.f, false));
 	TestTrue(TEXT("cold: usable"), TacticalHeatRules::CanUseHeatPack(12.f, false));
+	// Rev 5d: a heat pack dropped on a mate is cracked on a cold one, handed over to a warm one - and always handed over with Shift.
+	TestTrue(TEXT("drop on a cold mate: cracked on him"), TacticalHeatRules::ShouldCrackHeatPackOnDrop(12.f, false, false));
+	TestTrue(TEXT("drop on a frostbitten mate: cracked on him"), TacticalHeatRules::ShouldCrackHeatPackOnDrop(0.f, true, false));
+	TestFalse(TEXT("drop on a warm mate: handed over"), TacticalHeatRules::ShouldCrackHeatPackOnDrop(0.f, false, false));
+	TestFalse(TEXT("Shift + drop on a cold mate: handed over (kept for later)"), TacticalHeatRules::ShouldCrackHeatPackOnDrop(55.f, false, true));
+	TestFalse(TEXT("Shift + drop on a frostbitten mate: handed over"), TacticalHeatRules::ShouldCrackHeatPackOnDrop(90.f, true, true));
+	// Rev 5d: a campfire indoors (Closed / Shelter zone) gives itself away within 40 % of the open-air noise radius.
+	TestEqual(TEXT("campfire in the open: 15 m"), TacticalHeatRules::GetCampfireNoiseRadius(Config, false), 1500.f, 0.01f);
+	TestEqual(TEXT("campfire indoors: 6 m"), TacticalHeatRules::GetCampfireNoiseRadius(Config, true), 600.f, 0.01f);
+	FTacticalHeatConfig Loud = Config;
+	Loud.CampfireIndoorNoiseMultiplier = 3.f;
+	TestEqual(TEXT("indoor multiplier clamped to 1 (never louder inside)"), TacticalHeatRules::GetCampfireNoiseRadius(Loud, true), 1500.f, 0.01f);
 	TestEqual(TEXT("1 AP, stack 3"), Config.HeatPackActionPoints * 10 + Config.HeatPackMaxStack, 13);
 	return true;
 }

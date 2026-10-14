@@ -76,6 +76,12 @@ struct CODEXTACTICS_API FTransferRequest
 	FVector Point = FVector::ZeroVector;
 	ETransferItem Item = ETransferItem::Medkit;
 	int32 Quantity = 0;
+	/**
+	 * Give only (rev 5d, designer request 2026-10-14): hand a heat pack into the mate's kit even when he is cold (Shift held on
+	 * the drawer drop, ACodexTacticsHUD::HandleTransferDropOnActor). Without it a heat pack dropped on a cold / frostbitten mate
+	 * is cracked on him at once (Sprint 15; TacticalHeatRules::ShouldCrackHeatPackOnDrop).
+	 */
+	bool bHandOverOnly = false;
 
 	static FTransferRequest MakeGive(AOperativeCharacter* Sender, AOperativeCharacter* InRecipient, ETransferItem InItem, int32 InQuantity = 0);
 	static FTransferRequest MakeDrop(AOperativeCharacter* Sender, const FVector& InPoint, ETransferItem InItem, int32 InQuantity = 0);
@@ -179,6 +185,12 @@ public:
 	/** Smokes: treat every sender as under fire (forces the Blocked branch out of range). */
 	bool bForceUnderFireForTesting = false;
 
+	/**
+	 * Units of Item handed from one squad mate to another (Give executed, not cracked on him) since the level started; runtime
+	 * only, not saved. The Demo 01 tutorial stat "heat_packs_given" (rev 5d: share the hut's heat packs) reads it.
+	 */
+	int32 GetHandedOverCount(ETransferItem InItem) const { return HandedOver.FindRef(InItem); }
+
 private:
 	AOperativeCharacter* FindMate(const FVector& CursorPoint, AActor* HitActor, bool bAllowLeader) const;
 	void Post(const FText& Speaker, const FString& Text) const;
@@ -205,6 +217,8 @@ private:
 	};
 	FPendingTransfer Pending;
 	FTimerHandle PendingTimer;
+	/** GetHandedOverCount. */
+	TMap<ETransferItem, int32> HandedOver;
 
 	bool bTransferring = false;
 	ETransferItem Item = ETransferItem::Medkit;

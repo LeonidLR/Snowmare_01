@@ -934,7 +934,8 @@ public:
 	 * controller finds it with CoverFacingRules::FindPeekEdge) and hold the corner-aim pose there - leaning out, rifle up - also
 	 * with no enemy around, until another order (a move / another cover / a shimmy / the other corner; leaving the cover).
 	 * Turn-based: only where he already stands at that corner (a shimmy is a grid move there; the pose itself costs no AP),
-	 * else Refused. Unreachable when the wall gives no slot there.
+	 * else Refused. Unreachable when the wall gives no slot there. Rev 5d (CoverFacingRules::DecideCornerPeekOrder): already
+	 * at / near that corner the aim starts in place (no shimmy within CornerSnapToleranceCm + 10 cm of the stand point).
 	 */
 	EOperativeOrderResult OrderCornerPeek(ECoverFacing Side, float EdgeAlongCm);
 

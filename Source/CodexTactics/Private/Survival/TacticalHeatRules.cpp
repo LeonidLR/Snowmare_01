@@ -47,6 +47,11 @@ namespace TacticalHeatRules
 		return bFrostbitten || Cold > 0.f;
 	}
 
+	bool ShouldCrackHeatPackOnDrop(float Cold, bool bFrostbitten, bool bHandOverOnly)
+	{
+		return !bHandOverOnly && CanUseHeatPack(Cold, bFrostbitten);
+	}
+
 	FHeatPackResult ApplyHeatPack(const FTacticalHeatConfig& Config, float Cold, bool bFrostbitten)
 	{
 		FHeatPackResult Result;
@@ -142,5 +147,11 @@ namespace TacticalHeatRules
 	FTacticalHeatLoadout GetLoadout(const FTacticalHeatConfig& Config, int32 RoleIndex)
 	{
 		return Config.StartingLoadout.IsValidIndex(RoleIndex) ? Config.StartingLoadout[RoleIndex] : FTacticalHeatLoadout();
+	}
+
+	float GetCampfireNoiseRadius(const FTacticalHeatConfig& Config, bool bIndoors)
+	{
+		const float Radius = FMath::Max(0.f, Config.CampfireNoiseRadius);
+		return bIndoors ? Radius * FMath::Clamp(Config.CampfireIndoorNoiseMultiplier, 0.f, 1.f) : Radius;
 	}
 }

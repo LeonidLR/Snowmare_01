@@ -1318,13 +1318,30 @@ ETransferRequestOutcome ACodexTacticsHUD::HandleTransferDropOnActor(AOperativeCh
 	}
 	if (AOperativeCharacter* Recipient = Transfer->ResolveDropRecipient(Sender, TargetActor, Point))
 	{
-		return HandleTransferRequest(FTransferRequest::MakeGive(Sender, Recipient, Item));
+		// Rev 5d (designer request 2026-10-14): Shift held on the drop hands a heat pack over even to a cold mate (kept for later).
+		FTransferRequest Give = FTransferRequest::MakeGive(Sender, Recipient, Item);
+		Give.bHandOverOnly = IsHandOverModifierDown();
+		return HandleTransferRequest(Give);
 	}
 	if (Cast<AOperativeCharacter>(TargetActor) == Sender)
 	{
 		return ETransferRequestOutcome::Failed; // dropped on himself: nothing to do
 	}
 	return HandleTransferRequest(FTransferRequest::MakeDrop(Sender, Point, Item));
+}
+
+bool ACodexTacticsHUD::IsHandOverModifierDown() const
+{
+	if (bForceHandOverModifierForTesting)
+	{
+		return true;
+	}
+	if (FSlateApplication::IsInitialized() && FSlateApplication::Get().GetModifierKeys().IsShiftDown())
+	{
+		return true;
+	}
+	const APlayerController* PC = GetOwningPlayerController();
+	return PC && (PC->IsInputKeyDown(EKeys::LeftShift) || PC->IsInputKeyDown(EKeys::RightShift));
 }
 
 ETransferRequestOutcome ACodexTacticsHUD::HandleTakeDrop(AActor* Container, ETransferItem Item, AOperativeCharacter* Taker)
@@ -1374,13 +1391,18 @@ ETransferRequestOutcome ACodexTacticsHUD::HandleTransferRequest(const FTransferR
 			return ETransferRequestOutcome::Failed;
 		}
 	}
-	// Sprint 15: a heat pack dropped on a cold / frostbitten mate is used on him (one pack, no split dialog).
+	// Sprint 15: a heat pack dropped on a cold / frostbitten mate is used on him (one pack, no split dialog); with Shift held
+	// (rev 5d, bHandOverOnly) it is handed over like any item.
 	if (const AOperativeCharacter* Mate = Request.Action == ETransferAction::Give && Request.Item == ETransferItem::HeatPack ? Request.Recipient.Get() : nullptr;
-		Mate && Mate->ColdSurvival && TacticalHeatRules::CanUseHeatPack(Mate->ColdLevel, Mate->ColdSurvival->IsFrostbitten()))
+		Mate && Mate->ColdSurvival && TacticalHeatRules::ShouldCrackHeatPackOnDrop(Mate->ColdLevel, Mate->ColdSurvival->IsFrostbitten(), Request.bHandOverOnly))
 	{
 		FTransferRequest Use = Request;
 		Use.Quantity = 1;
 		return Transfer->Request(Use);
+	}
+	if (Request.Action == ETransferAction::Give)
+	{
+		PlayerCommands::ReportBy(this, PlayerCommands::GiveItem, Operative, Request.Recipient.Get());
 	}
 	const int32 MaxQuantity = Transfer->GetMaxQuantity(Request);
 	if (MaxQuantity <= 0)

@@ -32,7 +32,8 @@
 //     card; THEN the 'running keeps you warm' survival tip (a double click sprints, the tip stays), THEN WT_A1_RESUPPLY + the hut objective; the hut:
 //     the approach line, select (key 2) -> Solo (B) -> the tactical entry (rev 5c: the third operative already inside the hut
 //     completes "go in" by volume presence; cover entered in VOL_A1_DOOR_R / _L by two DIFFERENT operatives, through the event
-//     bus; cover elsewhere does not count) -> the loot cards and the closing line -> regroup (B) -> box; beacon 3 plays the formation lines with no guard card; the save's tutorial section carries the
+//     bus; cover elsewhere does not count) -> the loot cards and the closing line -> (rev 5d) the share card + objective: the
+//     looter hands a heat pack to each mate with none (Shift + drag, into his kit), both complete -> regroup (B) -> box; beacon 3 plays the formation lines with no guard card; the save's tutorial section carries the
 //     command history; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
 //     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
 //     (tap = next line, hold = skip).
@@ -44,6 +45,7 @@
 
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Characters/SquadTransferSubsystem.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Core/PlayerCommands.h"
 #include "Interactables/InteractionSubsystem.h"
@@ -1194,6 +1196,68 @@ namespace TutorialSmoke
 			}
 			Check(State, Stocked == ETutorialStepState::Active || Stocked == ETutorialStepState::Completed, TEXT("the closing line plays after the loot"));
 			Tutorial->SkipStep(TEXT("A1_wt_stocked"));
+			State.Stage = 73;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// Rev 5d (designer request 2026-10-14): share the hut's heat packs - everyone carries one, at least one handed over.
+		case 73:
+		{
+			const ETutorialStepState Card = Tutorial->GetStepState(TEXT("A1_share_card"));
+			if (Card != ETutorialStepState::Active && Card != ETutorialStepState::Completed && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			USquadTransferSubsystem* Transfer = World->GetSubsystem<USquadTransferSubsystem>();
+			int32 MinPacks = MAX_int32;
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				MinPacks = FMath::Min(MinPacks, Member->HeatPacksCount);
+			}
+			const bool bGivenBefore = Transfer && Transfer->GetHandedOverCount(ETransferItem::HeatPack) > 0;
+			Check(State, Card == (MinPacks >= 1 && bGivenBefore ? ETutorialStepState::Completed : ETutorialStepState::Active)
+				&& Tutorial->GetStepState(TEXT("A1_share")) == Card, FString::Printf(TEXT("after the loot: the share card + objective (fewest packs %d, handed over before %d)"),
+					MinPacks, bGivenBefore ? 1 : 0));
+			Check(State, Tutorial->GetConditionStat(TEXT("squad_min_heat_packs")) == static_cast<float>(MinPacks), TEXT("stat squad_min_heat_packs"));
+			// The looter hands a pack to every mate with none (Shift + drag: into his kit, even when he is cold), else one to anybody.
+			int32 Gave = 0;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Transfer && Member != Leader && Member->HeatPacksCount == 0 && Leader->HeatPacksCount > 0)
+				{
+					FTransferRequest Give = FTransferRequest::MakeGive(Leader, Member, ETransferItem::HeatPack, 1);
+					Give.bHandOverOnly = true;
+					Gave += Transfer->Execute(Give);
+				}
+			}
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Transfer && Gave == 0 && Member != Leader && Leader->HeatPacksCount > 1 && Member->HeatPacksCount < TacticalHeatTuning::Get().HeatPackMaxStack)
+				{
+					FTransferRequest Give = FTransferRequest::MakeGive(Leader, Member, ETransferItem::HeatPack, 1);
+					Give.bHandOverOnly = true;
+					Gave += Transfer->Execute(Give);
+				}
+			}
+			Check(State, Gave > 0 || bGivenBefore, FString::Printf(TEXT("the looter handed %d heat pack(s) over (Shift + drag)"), Gave));
+			Next(State);
+			return true;
+		}
+		case 74:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_share_card")) != ETutorialStepState::Completed && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			int32 MinPacks = MAX_int32;
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				MinPacks = FMath::Min(MinPacks, Member->HeatPacksCount);
+			}
+			Check(State, MinPacks >= 1 && Tutorial->GetConditionStat(TEXT("heat_packs_given")) >= 1.f
+				&& Tutorial->GetStepState(TEXT("A1_share_card")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A1_share")) == ETutorialStepState::Completed,
+				FString::Printf(TEXT("everyone carries a heat pack (fewest %d), handed over %.0f: the card and the objective done"), MinPacks,
+					Tutorial->GetConditionStat(TEXT("heat_packs_given"))));
 			State.Stage = 70;
 			State.StageTime = 0.f;
 			return true;

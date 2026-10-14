@@ -87,6 +87,7 @@ namespace PlayerCommands
 	const FName ControlsScreen(TEXT("System.Controls"));
 	const FName PauseMenu(TEXT("System.PauseMenu"));
 	const FName InventoryOpen(TEXT("Inventory.Open"));
+	const FName GiveItem(TEXT("Item.Give"));
 	const FName ToggleVisionCones(TEXT("View.VisionCones"));
 	const FName DialogueNext(TEXT("Dialogue.Next"));
 	const FName DialogueSkip(TEXT("Dialogue.Skip"));
@@ -171,6 +172,7 @@ namespace PlayerCommands
 			{ UseObject, TEXT("Click > Use"), TEXT("Items & traps"), TEXT("Use an object") },
 			{ UseHeatPack, TEXT("U"), TEXT("Items & traps"), TEXT("Use a heat pack") },
 			{ InventoryOpen, TEXT("I"), TEXT("Items & traps"), TEXT("Open / close the inventory drawer (drag items onto a mate)") },
+			{ GiveItem, TEXT("Shift+Drag"), TEXT("Items & traps"), TEXT("Hand an item to a mate (drag onto him; Shift: a heat pack is kept, not used)") },
 			{ UseItem, TEXT("H/J/K/L"), TEXT("Items & traps"), TEXT("Medkit / food") },
 			{ LootCrate, TEXT("Click crate"), TEXT("Items & traps"), TEXT("Open a supply crate") },
 			{ LootTake, TEXT("Take"), TEXT("Items & traps"), TEXT("Take supplies") },
@@ -348,6 +350,7 @@ namespace GameplayEvents
 	const FName VehiclePathBlocked(TEXT("VehiclePathBlocked"));
 	const FName TutorialLocked(TEXT("Tutorial.Locked"));
 	const FName ItemLooted(TEXT("ItemLooted"));
+	const FName ItemGiven(TEXT("ItemGiven"));
 	const FName VehicleTurretFired(TEXT("VehicleTurretFired"));
 	const FName VehicleTurretKill(TEXT("VehicleTurretKill"));
 	const FName VehicleRunOver(TEXT("VehicleRunOver"));
@@ -414,6 +417,24 @@ namespace GameplayEvents
 		}
 		RaiseWithContext(WorldContext, ItemLooted, Context);
 		RaiseWithContext(WorldContext, FName(*(ItemLooted.ToString() + TEXT(".") + ItemKind.ToString())), Context);
+	}
+
+	void RaiseItemGiven(const UObject* WorldContext, AActor* Giver, AActor* Recipient, FName ItemKind, int32 Count)
+	{
+		if (Count <= 0 || ItemKind.IsNone())
+		{
+			return;
+		}
+		FGameplayEventContext Context;
+		Context.Subject = Giver;
+		Context.Target = Recipient;
+		Context.Kind = ItemKind;
+		if (Recipient)
+		{
+			Context.Location = Recipient->GetActorLocation();
+		}
+		RaiseWithContext(WorldContext, ItemGiven, Context);
+		RaiseWithContext(WorldContext, FName(*(ItemGiven.ToString() + TEXT(".") + ItemKind.ToString())), Context);
 	}
 }
 

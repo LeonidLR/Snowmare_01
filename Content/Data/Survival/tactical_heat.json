@@ -15,6 +15,7 @@
   "campfire_flame_fuel_cost": 10,
   "campfire_noise_radius": 1500,
   "campfire_noise_interval_seconds": 10,
+  "campfire_indoor_noise_multiplier": 0.4,
   "campfire_build_action_points": 3,
   "stove_heat_radius": 220,
   "stove_gas_capacity_seconds": 180,

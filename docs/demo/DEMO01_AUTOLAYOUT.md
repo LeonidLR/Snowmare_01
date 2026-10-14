@@ -3,6 +3,10 @@
 The user asked: "build everything on the level yourself (beacons / volumes / markers / objects); I will adjust positions by
 hand afterwards". This is that first pass, made by script on a **copy** of the user's map (committed on `agents/work`, 0ea2635).
 
+**Rev 5d (2026-10-14): the copy is the user's now (he edits it by hand) - only the ADDITIVE mode may run on it (section 8):
+the ruin of the A2 barrel lesson (tag `AutoLayout_Demo01_5d`), no pre-existing actor moved. Verify PASS (incl. a real barrel push
+into the ruin), screenshots re-shot (incl. `_ruin.png` / `_ruin_angle.png`).**
+
 **Rev 5c (2026-10-13, the designer's review: "looks good for a start"):** the copy was re-laid in place (no fresh copy; the
 user's map untouched, SHA256 checked) with the **tactical hut entry** (§2a) and the bridge marker re-id'd `A1_solo` ->
 **`A1_bridge`** (the bridge teaches nothing now). 101 actors placed (was 94). Verify **PASS**, screenshots re-shot (§4).
@@ -169,7 +173,7 @@ The gameplay actors (volumes, markers, bridge, crawl gap, zones, mines, wire, ro
 1. **The hut is 96 m from the bridge** (beat sheet: "close to the far side"). Kept where the user put it; move the hut or accept the walk.
 2. **The user's crevasse is 1.2 m wide** (beat sheet: 2 m) and the plank is 1.23 m wide (navmesh strip ~0.5 m). It works (verified);
    widen the plank to ~2 m if operatives queue awkwardly.
-3. **The user's hut crate holds Heat Packs 1** (beat sheet: 3, the resupply lesson). Not changed (user actor).
+3. ~~**The user's hut crate holds Heat Packs 1**~~ - rev 5d: the user set it to 3 in his copy (2026-10-14); the additive edit `hut_crate_heat_packs` (section 8) keeps it at 3.
 4. **`VOL_A0_BEACON1` carries its id in Step Id**, Volume Id empty: it works (Volume Id falls back to Step Id) but the volume also
    tries to start a step named `VOL_A0_BEACON1` (harmless no-op). Cleaner: move the id to Volume Id, clear Step Id.
 5. **The low fence closes the whole map width** (so the crawl lesson is forced). The squad can only return west by crawling; open a
@@ -182,6 +186,9 @@ The gameplay actors (volumes, markers, bridge, crawl gap, zones, mines, wire, ro
    merged; rev 5c `A0_move` follows `A0_cam_zoom` only).
 
 ## 6. How to rerun on the user's latest map
+
+> **Rev 5d: do NOT run `build` (or `CODEX_LAYOUT_FRESH`) on the review copy any more - it re-lays every `AutoLayout_Demo01` actor
+> and would undo the user's hand edits. Use the ADDITIVE mode of section 8; steps 3-4 below (verify, shots) stay valid.**
 
 The script never touches the user's map. To redo the layout from the user's latest version (e.g. after he edited the original):
 
@@ -226,3 +233,61 @@ original name (or with `-LevelJson=L_Demo01_A_FrozenLake.json` in a standalone g
 3. Open the map, PIE: the log prints `Demo mode: ... tutorial 1 (demo_01_steps.json)`, `Tutorial volume ... entered by ...` lines,
    `Bridge ...` / `CrawlGap ...` lines at the new actors.
 4. Commit the map + the script + this doc after the user's review (orchestrator decision).
+
+## 8. Rev 5d: the ADDITIVE section (2026-10-14) - the copy is the user's now
+
+The user edits the review copy by hand, so from rev 5d on the script **never resets, moves or deletes his actors** (including the
+`AutoLayout_Demo01` ones he may have moved). Mode **`additive`** loads the EXISTING copy (never a fresh duplicate), deletes and
+re-places **only** actors tagged **`AutoLayout_Demo01_5d`** (Outliner folder `AutoLayout_Demo01_5d/...`), applies the explicit edits
+below, saves only when something changed, and writes `Saved/Logs/Demo01Layout5d.txt` (incl. a proof line "pre-existing actors moved /
+deleted: 0 []") and dumps `Saved/LayoutDumps/..._5d_before_* / _5d_after_*.json`. The old `build` mode must not be run on the copy any more.
+
+**Edits of pre-existing actors (the complete list, `EDITS_5D` in the script):**
+
+| Edit | Actor | Property | Value | Why |
+|---|---|---|---|---|
+| `hut_crate_heat_packs` | the user's `LootCrateActor` inside the hut's Shelter zone (`Trigger_BoatsCabin`) | `Contents.HeatPacks` only | 3 | rev 5d heat pack sharing (3 starters - 1-2 used + 3 >= 3); the user's 2026-10-14 copy already had 3 -> unchanged |
+
+**What the additive section places (11 actors, tag `AutoLayout_Demo01_5d`, folder `AutoLayout_Demo01_5d/...`):**
+
+| Actor | Class | Settings | Position | Why |
+|---|---|---|---|---|
+| Ruin_Wall_S | StaticMeshActor | back wall, whole, 6 m x 2.6 m | Y -6950, X 7000..7600 | graybox ruin (review / replace with art) |
+| Ruin_Wall_W | StaticMeshActor | 3 m standing (its north end fallen), 2.6 m | X 7000 | |
+| Ruin_Wall_E_High / Ruin_Wall_E_Rubble | StaticMeshActor | 2 m broken to 2.0 m, then 2 m of 0.6 m rubble (low cover), then open | X 7600 | |
+| Ruin_Wall_N_W / Ruin_Wall_N_E | StaticMeshActor | stubs 1.2 m (1.6 m high) / 1.2 m (2.2 m high) either side of the **3.6 m gap** (X 7120..7480) | Y -6450 | the wide gap to push through, facing the camp |
+| Ruin_Roof_Partial | StaticMeshActor | 3.9 x 3.2 m over the south-west third at 2.6 m, no navmesh effect | | "half the roof is gone" |
+| VOL_A2_RUIN | TutorialTriggerVolume | Any Operative, Fire Once off, 4.8 x 3.8 m | (7300, -6700) | `in_volume` of `A2_push` / `A2_light` / `A2_obj_warm` |
+| Ruin_Interior_Shelter | CameraZoneVolume | Shelter (cold x0.5), camera switch off | (7300, -6700) | out of the wind; a campfire here counts as indoors (alert x0.4) |
+| Marker_A2_push | TutorialMarkerActor | Step `A2_push`, ring 1.1 m | (7300, -6740) | where the barrel goes |
+| Ruin_Barrel | BarrelActor | unlit | (7300, -5800) | 6.5 m in front of the gap, straight push path; the user's camp barrels are untouched |
+
+Placed relative to the (pre-existing) `VOL_A2_CAMP`: ruin centre = its centre + (14.8, -20.1) m - if the user moves the camp volume,
+a rerun moves only the ruin with it.
+
+**Verification (2026-10-14, `Saved/Logs/Demo01LayoutVerify.txt` RESULT: PASS):** everything of section 4 still passes on the user's
+copy, plus `VOL_A2_RUIN` once, Fire Once off, the barrel outside; `VOL_A2_CAMP` -> inside the ruin 25 m; 4 / 4 interior spots
+reachable (room for three operatives and the barrel); push path barrel -> interior 8.0 m (straight 8.0 m) crossing the wall line at
+X 7300 inside the gap; then a REAL push in game (`URelocationSubsystem::ExecuteRelocate`, an operative behind the barrel): the barrel
+ends inside the ruin after 14 s, the 4 interior spots still reachable. Additive runs: first 11 placed, a rerun removed / re-placed
+the same 11, "pre-existing actors moved / deleted: 0" both times; the user's map `L_Demo01_A_FrozenLake.umap` unchanged (`3622cd28...`).
+Screenshots (`Saved/Screenshots/`): `demo01_autolayout_top.png`, `_crossing`, `_approach`, `_compound`, `_hut`, `_hut_angle`,
+**`_ruin`** (top-down, the partial roof hidden) and **`_ruin_angle`** (perspective from the barrel's side).
+
+Besides these, a save drops the generated `RecastNavMesh-*` actors (navigation data, not user content; HANDOFF section 2: a
+commandlet-saved navmesh stays empty at runtime, the map rebuilds it at load).
+
+**Rerun on the user's latest copy** (e.g. he edited it again in the main checkout; run with the editor of THAT checkout closed):
+
+```powershell
+$p  = "C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics"   # or ...\CodexTactics-agents
+$ue = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64"
+# 0. Back up the copy first (copy + SHA256):
+$bk = "$p\Saved\Backups\autolayout_$(Get-Date -Format yyyyMMdd_HHmm)"; New-Item -ItemType Directory -Force $bk | Out-Null
+Copy-Item "$p\Content\Maps\Dev\L_Demo01_A_FrozenLake_AutoLayout.umap" $bk; Get-FileHash "$bk\*.umap"
+# 1. The additive section (only AutoLayout_Demo01_5d actors + EDITS_5D):
+$env:CODEX_LAYOUT_MODE = "additive"
+& "$ue\UnrealEditor-Cmd.exe" "$p\CodexTactics.uproject" -run=pythonscript "-script=$p\Scripts\Editor\build_demo01_lake_layout.py" -unattended -nullrhi -nosplash
+Get-Content "$p\Saved\Logs\Demo01Layout5d.txt"
+# 2. Verify in game (section 6 step 3: the same command with CODEX_LAYOUT_MODE = "verify"), 3. shots + annotate (section 6 step 4).
+```

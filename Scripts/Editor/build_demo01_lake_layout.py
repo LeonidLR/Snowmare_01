@@ -22,6 +22,9 @@ Modes (env CODEX_LAYOUT_MODE):
   build (default)  editor commandlet: duplicate the source map to the target if the target does not exist yet
                    (CODEX_LAYOUT_FRESH=1 deletes the target first), place the layout, save, dump before / after.
   dump             editor commandlet: dump the target (or CODEX_LAYOUT_TARGET) to Saved/LayoutDumps.
+  additive         editor commandlet (rev 5d, the user edits the copy by hand): load the EXISTING target, delete only the
+                   AutoLayout_Demo01_5d actors, apply EDITS_5D, place the rev 5d section again; saved only when something
+                   changed (no fresh copy, no reset of anything else). Report: Saved/Logs/Demo01Layout5d.txt.
   verify           in game (-game -nullrhi): volume ids vs demo_01_steps.json, nav paths along the critical path, the bridge
                    as the only crossing, the fence (standing path refused, prone path through), actors on the ground.
                    Result: Saved/Logs/Demo01LayoutVerify.txt ("RESULT: PASS / FAIL").
@@ -58,6 +61,15 @@ SOURCE_MAP = os.environ.get("CODEX_LAYOUT_SOURCE", "/Game/Maps/L_Demo01_A_Frozen
 TARGET_MAP = os.environ.get("CODEX_LAYOUT_TARGET", "/Game/Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout")
 TAG = "AutoLayout_Demo01"
 FOLDER = "AutoLayout_Demo01"
+# Rev 5d (2026-10-14): the ADDITIVE section. The review copy is the user's now (he edits it by hand): mode "additive" never
+# resets / moves / deletes any existing actor (incl. the AutoLayout_Demo01 ones he may have repositioned); it deletes and
+# re-places only actors tagged TAG_5D, and touches pre-existing actors only through the explicit, minimal edits of EDITS_5D.
+TAG_5D = "AutoLayout_Demo01_5d"
+FOLDER_5D = "AutoLayout_Demo01_5d"
+# The ONLY changes the additive mode makes to pre-existing actors (idempotent, each logged old -> new; DEMO01_AUTOLAYOUT.md section 8).
+EDITS_5D = [
+    ("hut_crate_heat_packs", "the hut's ALootCrateActor (inside the hut's Shelter camera zone): Contents.HeatPacks = 3 (nothing else)"),
+]
 
 # §10.1 re-ids of the user's A1 volumes (they belong to the A3 approach now).
 RENAMES = {
@@ -186,7 +198,9 @@ def dump(map_path, out_name):
 # ----------------------------------------------------------------------------------------------------------------------
 
 class Placer:
-    def __init__(self):
+    def __init__(self, tag=None, folder=None):
+        self.tag = tag or TAG          # the tag this run places (and only ever deletes)
+        self.folder = folder or FOLDER
         self.actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
         self.world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
         self.placed = []
@@ -205,7 +219,7 @@ class Placer:
         self.surfaces = []
         self.landscapes = []
         for a in self.actors.get_all_level_actors():
-            if TAG in [str(t) for t in a.tags]:
+            if self.tag in [str(t) for t in a.tags]:
                 continue
             if isinstance(a, unreal.LandscapeProxy):
                 self.landscapes.append(a)
@@ -242,8 +256,8 @@ class Placer:
     def spawn(self, cls, label, location, yaw=0.0, section="Misc", anchor="", ident="", pitch=0.0):
         actor = self.actors.spawn_actor_from_class(cls, location, unreal.Rotator(pitch=pitch, yaw=yaw, roll=0.0))
         actor.set_actor_label(label)
-        actor.set_folder_path(FOLDER + "/" + section)
-        actor.set_editor_property("tags", [TAG])
+        actor.set_folder_path(self.folder + "/" + section)
+        actor.set_editor_property("tags", [self.tag])
         self.placed.append(actor)
         self.table.append({"label": label, "class": cls.static_class().get_name(), "id": ident,
                            "x": round(location.x), "y": round(location.y), "z": round(location.z),
@@ -268,7 +282,7 @@ class Placer:
         if hidden:
             actor.set_actor_hidden_in_game(True)
         if tags:
-            actor.set_editor_property("tags", [TAG] + list(tags))
+            actor.set_editor_property("tags", [self.tag] + list(tags))
         return actor
 
     def wall(self, label, section, a, b, height, thickness=40.0, base_z=None, anchor="", tags=()):
@@ -965,6 +979,123 @@ def build_hut_entry(p, f, approach_from, hut_anchor, want_volume, want_marker):
                                                                                  "high" if not high_is_right else "low"))
 
 
+def additive():
+    """Rev 5d ADDITIVE section on the user's latest review copy (TAG_5D actors + EDITS_5D only)."""
+    lib = unreal.EditorAssetLibrary
+    level_editor = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+    if not lib.does_asset_exist(TARGET_MAP):
+        report("ERROR: %s does not exist (the additive mode never makes a copy)" % TARGET_MAP)
+        return
+    if not level_editor.load_level(TARGET_MAP):
+        report("ERROR: could not load " + TARGET_MAP)
+        return
+    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    before = dump(TARGET_MAP, "%s_5d_before_%s.json" % (TARGET_MAP.split("/")[-1], stamp))
+    p = Placer(TAG_5D, FOLDER_5D)
+    removed = 0
+    for a in p.actors.get_all_level_actors():
+        if TAG_5D in [str(t) for t in a.tags]:
+            p.actors.destroy_actor(a)
+            removed += 1
+    report("removed %d old %s actors (nothing else is ever deleted)" % (removed, TAG_5D))
+    p.collect_ground()
+    changes = removed
+    anchors = find_anchors(p.actors.get_all_level_actors())
+
+    # ---- EDITS_5D: the minimal edits of pre-existing actors -------------------------------------------------------
+    hut = anchors["hut"]
+    if hut is None:
+        p.warnings.append("edit hut_crate_heat_packs: no hut crate found (a LootCrateActor inside a Shelter camera zone) - not edited, review")
+    else:
+        crate = hut["crate"]
+        contents = crate.get_editor_property("contents")
+        old = contents.get_editor_property("heat_packs")
+        if old != 3:
+            contents.set_editor_property("heat_packs", 3)
+            crate.set_editor_property("contents", contents)
+            changes += 1
+            report("EDIT hut_crate_heat_packs: %s (%s) Contents.HeatPacks %s -> 3" % (crate.get_actor_label(), crate.get_name(), old))
+        else:
+            report("EDIT hut_crate_heat_packs: %s (%s) already holds Heat Packs 3 - unchanged" % (crate.get_actor_label(), crate.get_name()))
+
+    # ---- rev 5d sections (new actors, tag AutoLayout_Demo01_5d) ----------------------------------------------------
+    for build_section in SECTIONS_5D:
+        build_section(p, anchors)
+    changes += len(p.placed)
+
+    if changes == 0:
+        report("nothing to change: the map is NOT saved")
+    else:
+        # Saved navmesh actors stay empty at runtime when saved from a commandlet (HANDOFF section 2): generated data, not user content.
+        navmeshes = [a for a in p.actors.get_all_level_actors() if isinstance(a, unreal.RecastNavMesh)]
+        for a in navmeshes:
+            p.actors.destroy_actor(a)
+        report("destroyed %d generated RecastNavMesh actors (rebuilt at load, RuntimeGeneration=Dynamic)" % len(navmeshes))
+        report("saved=%s" % level_editor.save_current_level())
+    report("placed %d %s actors" % (len(p.placed), TAG_5D))
+    for w in p.warnings:
+        report("REVIEW: " + w)
+    os.makedirs(SAVED + "LayoutDumps", exist_ok=True)
+    with open(SAVED + "LayoutDumps/demo01_autolayout_5d_table.json", "w", encoding="utf-8") as f:
+        json.dump({"table": p.table, "warnings": p.warnings}, f, indent=1, ensure_ascii=False)
+    after = dump(TARGET_MAP, "%s_5d_after_%s.json" % (TARGET_MAP.split("/")[-1], stamp))
+    # Proof that nothing pre-existing moved: every actor of the "before" dump (but the 5d ones / the generated navmesh) is still
+    # there with the same transform.
+    now = {a["name"]: a for a in after["actors"]}
+    moved = []
+    for a in before["actors"]:
+        if TAG_5D in a["tags"] or a["class"].endswith("RecastNavMesh"):
+            continue
+        b = now.get(a["name"])
+        if b is None or b["location"] != a["location"] or b["rotation"] != a["rotation"] or b["scale"] != a["scale"]:
+            moved.append(a["label"])
+    report("pre-existing actors moved / deleted: %d %s" % (len(moved), moved))
+
+
+def build_ruin_5d(p, anchors):
+    """Rev 5d A2 barrel lesson: a half-ruined building near the camp (graybox), the barrel OUTSIDE it on a straight push path
+    through the wide gap of its north wall, VOL_A2_RUIN over the interior, a Shelter camera zone (no camera switch) and the
+    marker A2_push on the spot inside. Placed relative to VOL_A2_CAMP (the user's / auto camp volume, wherever he moved it):
+    the ruin centre 15 m east and 20 m south of it (the camp hut stands east of the volume). Only TAG_5D actors."""
+    # Any pre-existing VOL_A2_CAMP (the auto layout's one, possibly moved by the user, or his own).
+    camp = next((a for a in p.actors.get_all_level_actors() if is_class(a, "TutorialTriggerVolume")
+                 and effective_volume_id(a) == "VOL_A2_CAMP" and TAG_5D not in [str(t) for t in a.tags]), None)
+    if camp is None:
+        p.warnings.append("ruin: no VOL_A2_CAMP in the map - the ruin is not placed, review")
+        return
+    cl = camp.get_actor_location()
+    cx, cy = cl.x + 1480, cl.y - 2010
+    anchor = "VOL_A2_CAMP + (15, -20) m (south of the camp hut)"
+    report("ruin: centre (%.0f, %.0f) from VOL_A2_CAMP (%.0f, %.0f)" % (cx, cy, cl.x, cl.y))
+    hx, hy = 300.0, 250.0                    # half size: 6 x 5 m between the wall lines
+    x0, x1, y0, y1 = cx - hx, cx + hx, cy - hy, cy + hy
+    gap0, gap1 = cx - 180, cx + 180          # the wide gap (3.6 m) in the north wall, facing the camp
+    # Broken walls (40 cm thick; high cover 2.6 m where whole, 1.6-2.2 m where broken, low rubble 0.6 m).
+    walls = (("Ruin_Wall_S", (x0, y0), (x1, y0), 260),             # the back wall, whole
+             ("Ruin_Wall_W", (x0, y0), (x0, cy + 50), 260),        # west: 3 m standing, its north end fallen
+             ("Ruin_Wall_E_High", (x1, y0), (x1, cy - 50), 200),   # east: 2 m broken to 2 m
+             ("Ruin_Wall_E_Rubble", (x1, cy - 50), (x1, cy + 150), 60),  # then rubble (low cover), then open
+             ("Ruin_Wall_N_W", (x0, y1), (gap0, y1), 160),         # stubs either side of the wide gap
+             ("Ruin_Wall_N_E", (gap1, y1), (x1, y1), 220))
+    for label, a, b, h in walls:
+        p.wall(label, "Ruin", a, b, h, anchor=anchor)
+    gz = p.ground(cx, cy, "ruin")
+    # A partial roof: only over the south-west third (the rest fell in); no navmesh on it.
+    p.block("Ruin_Roof_Partial", "Ruin", x0 + 175, y0 + 140, (390, 320, 15), base_z=gz + 260, nav=False,
+            anchor="half the roof is gone (graybox)")
+    vol = p.volume("VOL_A2_RUIN", cx, cy, (hx - 60, hy - 60, 150), any_operative=True, anchor=anchor + ", the interior (inset 40 cm)")
+    vol.set_editor_property("fire_once", False)
+    p.zone("Ruin_Interior_Shelter", cx, cy, (hx - 20, hy - 20, 200), unreal.CameraZoneEnvironment.SHELTER, zone_name="Ruin",
+           anchor="the ruin's interior: out of the wind (cold x0.5, no camera switch)")
+    p.marker("A2_push", cx, cy - 40, 110, anchor="the spot inside the ruin the barrel goes to")
+    # The barrel: 6.5 m north of the gap, on the straight line through it (clear of the camp hut / racks).
+    p.thing(unreal.BarrelActor, "Ruin_Barrel", cx, y1 + 650, 70, 0, "Ruin", "outside the ruin, 6.5 m in front of the wide gap")
+
+
+# Rev 5d section builders: f(placer, anchors), each places only TAG_5D actors.
+SECTIONS_5D = [build_ruin_5d]
+
+
 def set_contents(crate, values):
     """FLootContents: every count 0 except values (the beat sheet lists exact crate contents)."""
     contents = crate.get_editor_property("contents")
@@ -1007,6 +1138,7 @@ class Game:
         self.world = world
         self.ok = True
         self.lines = []
+        self.ruin = None
 
     def check(self, ok, what):
         self.lines.append(("ok   " if ok else "FAIL ") + what)
@@ -1110,6 +1242,7 @@ def verify(game):
         game.check(valid and not partial, "path %s -> %s (standing): valid=%s partial=%s %.0f m" % (na, nb, valid, partial,
                                                                                                   length / 100))
     verify_hut_entry(game, by_id, centre, no_crawl)
+    game.ruin = verify_ruin(game, by_id, centre, no_crawl)
     # The crack: the path from the west bank to the far end crosses on the bridge only. The crack line = where the ground
     # trace finds nothing (a floor gap) 4 m beside the planks; a graybox crack blocks the traces too, so fall back to the span.
     holes = []
@@ -1179,7 +1312,7 @@ def verify(game):
     checked = 0
     crates = game.all_of(unreal.LootCrateActor)
     for a in game.all_of(unreal.Actor):
-        if TAG not in [str(t) for t in a.tags]:
+        if TAG not in [str(t) for t in a.tags] and TAG_5D not in [str(t) for t in a.tags]:
             continue
         cls = a.get_class().get_name()
         if cls.startswith(("NavMeshBoundsVolume", "CameraActor", "StaticMeshActor", "CameraZoneVolume", "BridgeCrossingVolume")):
@@ -1206,6 +1339,72 @@ def verify(game):
         if z is None or abs(bottom - z) > 40:
             floating.append("%s (%s): bottom %.0f, ground %s" % (a.get_name(), cls, bottom, z))
     game.check(not floating, "%d tagged actors on the ground%s" % (checked, (": " + "; ".join(floating)) if floating else ""))
+
+
+def verify_ruin(game, by_id, centre, no_crawl):
+    """Rev 5d: the ruin is reachable and roomy, the barrel stands outside it with a clear push path through the gap."""
+    ruin = (by_id.get("VOL_A2_RUIN") or [None])[0]
+    camp = centre("VOL_A2_CAMP")
+    barrel = next((b for b in game.all_of(unreal.BarrelActor) if b.get_actor_label() == "Ruin_Barrel"), None)
+    if ruin is None or camp is None or barrel is None:
+        game.check(False, "ruin: VOL_A2_RUIN / VOL_A2_CAMP / Ruin_Barrel missing")
+        return None
+    game.check(not ruin.get_editor_property("fire_once"), "VOL_A2_RUIN: Fire Once off")
+    rc, re = box_of(ruin)
+    bl = barrel.get_actor_location()
+    game.check(not in_box(bl, (rc, re), 60.0), "Ruin_Barrel stands OUTSIDE the ruin (%.0f, %.0f)" % (bl.x, bl.y))
+    z, _ = game.ground(rc.x, rc.y, [ruin], 200.0)
+    inside = unreal.Vector(rc.x, rc.y, (z if z is not None else 0.0) + 60)
+    valid, _, length, partial = game.path(camp, inside, no_crawl)
+    game.check(valid and not partial, "ruin: VOL_A2_CAMP -> inside the ruin (standing): valid=%s partial=%s %.0f m" % (valid, partial, length / 100))
+    # Room for the squad + the barrel: four spots spread over the interior are on the navmesh and reachable.
+    spots = 0
+    for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+        q = unreal.Vector(rc.x + sx * (re.x - 60), rc.y + sy * (re.y - 60), inside.z)
+        valid, _, length, partial = game.path(camp, q, no_crawl)
+        spots += 1 if valid and not partial else 0
+    game.check(spots == 4, "ruin: %d / 4 interior spots reachable (room for three operatives and the barrel)" % spots)
+    # The push path: from the barrel to the interior, nearly straight, crossing the north wall line only inside the gap.
+    # From just in front of the barrel (the barrel itself cuts a hole in the navmesh) to the interior.
+    d = math.hypot(inside.x - bl.x, inside.y - bl.y) or 1.0
+    start = unreal.Vector(bl.x + (inside.x - bl.x) / d * 100, bl.y + (inside.y - bl.y) / d * 100, inside.z)
+    valid, pts, length, partial = game.path(start, inside, no_crawl)
+    straight = math.hypot(inside.x - start.x, inside.y - start.y)
+    gap = [a for a in game.all_of(unreal.StaticMeshActor) if a.get_actor_label() in ("Ruin_Wall_N_W", "Ruin_Wall_N_E")]
+    ok_gap = True
+    if len(gap) == 2:
+        bounds = sorted([a.get_actor_bounds(False) for a in gap], key=lambda b: b[0].x)
+        g0, g1 = bounds[0][0].x + bounds[0][1].x, bounds[1][0].x - bounds[1][1].x
+        wall_y = bounds[0][0].y
+        xs = []
+        for a, b in zip(pts, pts[1:]):
+            if (a.y - wall_y) * (b.y - wall_y) < 0:
+                xs.append(a.x + (b.x - a.x) * (wall_y - a.y) / (b.y - a.y))
+        ok_gap = bool(xs) and all(g0 + 40 <= x <= g1 - 40 for x in xs)
+        game.lines.append("info ruin gap X %.0f..%.0f (%.0f cm), push path crosses the wall line at X %s" % (g0, g1, g1 - g0, [round(x) for x in xs]))
+    game.check(valid and not partial and length <= straight * 1.15 + 50 and ok_gap,
+               "ruin: push path barrel -> inside through the wide gap: valid=%s partial=%s %.1f m (straight %.1f m)" % (valid, partial, length / 100, straight / 100))
+    return {"barrel": barrel, "box": (rc, re), "inside": inside, "camp": camp}
+
+
+def start_ruin_push(game, ruin):
+    """Rev 5d: an operative really pushes Ruin_Barrel into the ruin (URelocationSubsystem::ExecuteRelocate, as the Push order)."""
+    ops = game.all_of(unreal.OperativeCharacter)
+    # (no SubsystemBlueprintLibrary in game Python: the world subsystem is found by its object name under the world)
+    relocation = unreal.find_object(game.world, "RelocationSubsystem_0")
+    if not ops or relocation is None:
+        game.check(False, "ruin push: no operative / relocation subsystem")
+        return None
+    worker = ops[0]
+    bl = ruin["barrel"].get_actor_location()
+    inside = ruin["inside"]
+    d = unreal.Vector(inside.x - bl.x, inside.y - bl.y, 0.0)
+    n = math.hypot(d.x, d.y) or 1.0
+    stand = unreal.Vector(bl.x - d.x / n * 250, bl.y - d.y / n * 250, inside.z + 40)
+    worker.set_actor_location(stand, False, True)
+    relocation.execute_relocate(worker, ruin["barrel"], unreal.Vector(inside.x, inside.y, bl.z), 0.0, False)
+    game.lines.append("info ruin push: %s ordered to push the barrel from (%.0f, %.0f) into the ruin" % (worker.get_name(), bl.x, bl.y))
+    return {"worker": worker, "relocation": relocation}
 
 
 def box_of(volume):
@@ -1286,9 +1485,9 @@ def shots(game):
             kind = "volume"
             e = a.get_editor_property("box").get_scaled_box_extent()
             labels.append({"text": text, "kind": kind, "x": l.x, "y": l.y, "ex": e.x, "ey": e.y, "z": l.z - e.z,
-                           "auto": TAG in [str(t) for t in a.tags]})
+                           "auto": TAG in [str(t) for t in a.tags] or TAG_5D in [str(t) for t in a.tags]})
             continue
-        if cls.startswith("StaticMeshActor") and TAG in [str(t) for t in a.tags]:
+        if cls.startswith("StaticMeshActor") and (TAG in [str(t) for t in a.tags] or TAG_5D in [str(t) for t in a.tags]):
             o, e = a.get_actor_bounds(False)
             label = a.get_actor_label()
             names = {"LowFence_North": "LOW FENCE (closed line)", "VaultRidge_A3": "vault ridge 0.8 m",
@@ -1296,7 +1495,8 @@ def shots(game):
                      "Camp_Hut1_Roof": "camp hut 1", "Overlook_LowCover": "overlook cover",
                      "Container_A4_North": "patrol choke 3 m", "Rock_A3_GapNorth": "field exit gap",
                      "Cover_A3_1_Low": "cover field", "HutDoor_Jamb_L": "door jamb (graybox)",
-                     "HutDoor_Jamb_R": "door jamb (graybox)"}
+                     "HutDoor_Jamb_R": "door jamb (graybox)", "Ruin_Wall_S": "RUIN (half-ruined, graybox)",
+                     "Ruin_Wall_E_Rubble": "rubble 0.6 m", "Ruin_Roof_Partial": "partial roof"}
             if e.x < 20000 or label.startswith("LowFence"):
                 labels.append({"text": names.get(label, ""), "kind": "struct", "x": o.x, "y": o.y, "ex": e.x, "ey": e.y})
             continue
@@ -1363,6 +1563,14 @@ def shots(game):
         s = span(["VOL_A1_HUT", "VOL_A1_DOOR_L", "VOL_A1_DOOR_R"], 500)
         if s:
             views.append(("hut",) + s)
+    # Rev 5d: the ruin (top-down, its partial roof hidden for the shot) + a perspective from the barrel's side.
+    ruin_vol = vol.get("VOL_A2_RUIN")
+    ruin_roof = None
+    if ruin_vol:
+        ruin_roof = next((a for a in game.all_of(unreal.StaticMeshActor) if a.get_actor_label() == "Ruin_Roof_Partial"), None)
+        s = span(["VOL_A2_RUIN"], 900)
+        if s:
+            views.append(("ruin",) + s)
     res_x, res_y = 3840, 2160
     fov = 30.0
     meta = {"labels": labels, "views": [], "res": [res_x, res_y]}
@@ -1381,7 +1589,7 @@ def shots(game):
         height = width / (2.0 * math.tan(math.radians(fov * 0.5)))
         transform = unreal.Transform(unreal.Vector(cx, cy, height), unreal.Rotator(pitch=-89.9, yaw=-90.0, roll=0.0),
                                      unreal.Vector(1, 1, 1))
-        hide = [roof] if name == "hut" and roof else []
+        hide = [roof] if name == "hut" and roof else ([ruin_roof] if name == "ruin" and ruin_roof else [])
         cams.append((name, camera, transform, hide, fov))
         meta["views"].append({"name": name, "cx": cx, "cy": cy, "width_cm": width, "file": "demo01_autolayout_raw_%s.png" % name})
     # Perspective view of the hut door from the approach side: 9 m out, 5 m up, looking at the door.
@@ -1400,6 +1608,17 @@ def shots(game):
         cams.append(("hut_angle", camera, transform, [], angle_fov))
         meta["views"].append({"name": "hut_angle", "file": "demo01_autolayout_raw_hut_angle.png",
                               "proj": {"loc": [loc.x, loc.y, loc.z], "pitch": look_pitch, "yaw": look_yaw, "fov": angle_fov}})
+    if ruin_vol:
+        bar = next((q for q in labels if q["kind"] == "object" and abs(q["x"] - ruin_vol["x"]) < 400 and 0 < q["y"] - ruin_vol["y"] < 1200), None)
+        ox, oy = (bar["x"], bar["y"] + 500) if bar else (ruin_vol["x"], ruin_vol["y"] + 1200)
+        loc = unreal.Vector(ox + 300, oy, ruin_vol.get("z", 0.0) + 650)
+        look_yaw = math.degrees(math.atan2(ruin_vol["y"] - oy, ruin_vol["x"] - ox - 300))
+        dist = math.hypot(ruin_vol["x"] - ox - 300, ruin_vol["y"] - oy)
+        look_pitch = -math.degrees(math.atan2(650 - 100, dist))
+        transform = unreal.Transform(loc, unreal.Rotator(pitch=look_pitch, yaw=look_yaw, roll=0.0), unreal.Vector(1, 1, 1))
+        cams.append(("ruin_angle", camera, transform, [], 60.0))
+        meta["views"].append({"name": "ruin_angle", "file": "demo01_autolayout_raw_ruin_angle.png",
+                              "proj": {"loc": [loc.x, loc.y, loc.z], "pitch": look_pitch, "yaw": look_yaw, "fov": 60.0}})
     with open(SAVED + "Screenshots/demo01_autolayout_labels.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=1)
     return cams
@@ -1432,6 +1651,11 @@ def game_main(mode):
                 game = Game(w)
                 if mode == "verify":
                     verify(game)
+                    push = start_ruin_push(game, game.ruin) if game.ruin else None
+                    if push:
+                        # Rev 5d: wait for the real push into the ruin (stage 10).
+                        state.update({"game": game, "push": push, "stage": 10, "wait": state["t"] + 90.0})
+                        return
                     REPORT.extend(game.lines)
                     REPORT.append("RESULT: %s" % ("PASS" if game.ok else "FAIL"))
                     finish()
@@ -1443,6 +1667,25 @@ def game_main(mode):
                 state["cams"] = shots(game)
                 state["stage"] = 1
                 state["wait"] = state["t"] + 3.0
+                return
+            if state["stage"] == 10:
+                game, ruin, push = state["game"], state["game"].ruin, state["push"]
+                bl = ruin["barrel"].get_actor_location()
+                done = in_box(bl, ruin["box"]) and push["relocation"].get_active_task_count() == 0
+                if not done and state["t"] < state["wait"]:
+                    return
+                game.check(done, "ruin push: the barrel was pushed INTO the ruin (now at (%.0f, %.0f), %.0f s)" % (bl.x, bl.y, state["t"] - (state["wait"] - 90.0)))
+                # With the barrel inside, the squad still fits round it.
+                spots = 0
+                rc, re = ruin["box"]
+                for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+                    q = unreal.Vector(rc.x + sx * (re.x - 60), rc.y + sy * (re.y - 60), ruin["inside"].z)
+                    valid, _, _, partial = game.path(ruin["camp"], q, unreal.NavFilter_NoCrawl.static_class())
+                    spots += 1 if valid and not partial else 0
+                game.check(spots >= 3, "ruin: with the barrel inside, %d / 4 interior spots still reachable" % spots)
+                REPORT.extend(game.lines)
+                REPORT.append("RESULT: %s" % ("PASS" if game.ok else "FAIL"))
+                finish()
                 return
             if state["stage"] == 1 and state["t"] >= state["wait"]:
                 if state["shot"] >= len(state["cams"]):
@@ -1600,13 +1843,15 @@ def main():
         if mode == "dump":
             unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).load_level(TARGET_MAP)
             dump(TARGET_MAP, "%s_%s.json" % (TARGET_MAP.split("/")[-1], datetime.datetime.now().strftime("%Y%m%d_%H%M%S")))
+        elif mode == "additive":
+            additive()
         else:
             build()
     except Exception as exc:
         import traceback
         report("EXCEPTION: " + repr(exc))
         report(traceback.format_exc())
-    flush_report("Demo01Layout.txt")
+    flush_report("Demo01Layout5d.txt" if mode == "additive" else "Demo01Layout.txt")
 
 
 main()

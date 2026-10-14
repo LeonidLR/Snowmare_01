@@ -371,6 +371,84 @@ bool FTutorialConditionTriggerTest::RunTest(const FString&)
 	return true;
 }
 
+TUTORIAL_LOCK_TEST(FTutorialConditionCompletionTest, "Condition.Completion")
+bool FTutorialConditionCompletionTest::RunTest(const FString&)
+{
+	// Rev 5d (designer request 2026-10-14): "complete": { "condition": ... } - the heat pack share task after the hut loot.
+	const TCHAR* Json = TEXT(R"JSON({
+		"id": "share", "start_beat": "A1", "beats": [ { "id": "A1" } ],
+		"steps": [
+			{ "id": "loot", "beat": "A1", "kind": "hint_card", "text_id": "T", "trigger": { "type": "manual" }, "complete": { "event": "ItemLooted.HeatPack" } },
+			{ "id": "share", "beat": "A1", "kind": "objective", "text_id": "T", "trigger": { "type": "after_step", "step": "loot" },
+			  "complete": { "condition": [ { "stat": "squad_min_heat_packs", "at_least": 1 }, { "stat": "heat_packs_given", "at_least": 1 } ] } },
+			{ "id": "share_card", "beat": "A1", "kind": "hint_card", "text_id": "T", "trigger": { "type": "after_step", "step": "loot", "delay_s": 1 },
+			  "complete": { "condition": [ { "stat": "squad_min_heat_packs", "at_least": 1 }, { "stat": "heat_packs_given", "at_least": 1 } ], "timeout_s": 60 } },
+			{ "id": "regroup", "beat": "A1", "kind": "hint_card", "text_id": "T", "trigger": { "type": "after_step", "step": "share_card" },
+			  "complete": { "commands": ["Squad.Regroup"] } }
+		] })JSON");
+	FTutorialStepsData Data;
+	if (!TutorialLockTestData::Parse(*this, Json, Data))
+	{
+		return false;
+	}
+	TestTrue(TEXT("parsed: two completion clauses, counts as a completion"), Data.FindStep(TEXT("share"))->Complete.Conditions.Num() == 2
+		&& Data.FindStep(TEXT("share"))->Complete.HasCondition());
+	float MinPacks = 0.f;
+	float Given = 0.f;
+	auto Provider = [&MinPacks, &Given](FName Stat) { return Stat == FName(TEXT("heat_packs_given")) ? Given : MinPacks; };
+	{
+		FTutorialStateMachine Machine;
+		Machine.StatProvider = Provider;
+		Machine.Load(Data);
+		Machine.StartBeat(TEXT("A1"));
+		Machine.TriggerStep(TEXT("loot"));
+		Machine.Tick(0.1f);
+		Machine.HandleEvent(TEXT("ItemLooted.HeatPack"));
+		Machine.Tick(2.f);
+		TestEqual(TEXT("one mate has none: the objective is up"), Machine.GetState(TEXT("share")), ETutorialStepState::Active);
+		TestEqual(TEXT("... and the card"), Machine.GetState(TEXT("share_card")), ETutorialStepState::Active);
+		MinPacks = 1.f;
+		Machine.Tick(0.1f);
+		TestEqual(TEXT("everyone has one, but nothing was handed over: still up"), Machine.GetState(TEXT("share")), ETutorialStepState::Active);
+		Given = 1.f;
+		Machine.Tick(0.1f);
+		TestEqual(TEXT("handed over + everyone carries one: objective done"), Machine.GetState(TEXT("share")), ETutorialStepState::Completed);
+		TestEqual(TEXT("card done"), Machine.GetState(TEXT("share_card")), ETutorialStepState::Completed);
+		Machine.Tick(2.f);
+		TestTrue(TEXT("its follower runs"), TutorialRules::IsRunning(Machine.GetState(TEXT("regroup"))));
+	}
+	{
+		// The looter already handed them out before the cards were due: precredited, never shown.
+		MinPacks = 1.f;
+		Given = 2.f;
+		FTutorialStateMachine Machine;
+		Machine.StatProvider = Provider;
+		Machine.Load(Data);
+		Machine.StartBeat(TEXT("A1"));
+		Machine.TriggerStep(TEXT("loot"));
+		Machine.Tick(0.1f);
+		Machine.HandleEvent(TEXT("ItemLooted.HeatPack"));
+		TArray<FTutorialTransition> Transitions = Machine.ConsumeTransitions();
+		Machine.Tick(2.f);
+		Transitions.Append(Machine.ConsumeTransitions());
+		TestEqual(TEXT("precredit: objective completed"), Machine.GetState(TEXT("share")), ETutorialStepState::Completed);
+		TestEqual(TEXT("precredit: card completed"), Machine.GetState(TEXT("share_card")), ETutorialStepState::Completed);
+		TestTrue(TEXT("... marked precredited, never shown"), Transitions.ContainsByPredicate([](const FTutorialTransition& T)
+			{ return T.StepId == FName(TEXT("share_card")) && T.To == ETutorialStepState::Completed && T.bPrecredited && T.bSilent; })
+			&& !Transitions.ContainsByPredicate([](const FTutorialTransition& T) { return T.StepId == FName(TEXT("share_card")) && T.To == ETutorialStepState::Active; }));
+	}
+	{
+		// Unknown stat in a completion condition: a parse error.
+		FTutorialStepsData Bad;
+		TArray<FString> Warnings;
+		FString Error;
+		TestFalse(TEXT("unknown completion stat is an error"), TutorialRules::ParseSteps(TEXT(R"JSON({ "id": "x", "steps": [ { "id": "s", "kind": "objective",
+			"complete": { "condition": { "stat": "squad_mood", "at_least": 1 } } } ] })JSON"), Bad, Warnings, Error));
+	}
+	TestTrue(TEXT("new stats known"), TutorialRules::IsKnownStat(TEXT("squad_min_heat_packs")) && TutorialRules::IsKnownStat(TEXT("heat_packs_given")));
+	return true;
+}
+
 TUTORIAL_LOCK_TEST(FTutorialDemoFlowTest, "Schema.DemoFileA0A1Flow")
 bool FTutorialDemoFlowTest::RunTest(const FString&)
 {
@@ -450,8 +528,22 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestTrue(TEXT("A1_solo after the select card: Solo ON (never precredited), unlocks solo / regroup"), Solo && Solo->Trigger.Type == ETutorialTriggerType::AfterStep
 		&& Solo->Trigger.Step == FName(TEXT("A1_select")) && Solo->Complete.Commands == TArray<FString>{ PlayerCommands::SoloOn.ToString() }
 		&& !TutorialRules::CanPrecredit(*Solo) && Solo->Unlock.Contains(TEXT("Squad.Solo")) && Solo->Unlock.Contains(TEXT("Squad.Regroup")));
+	// Rev 5d (designer request 2026-10-14): share the hut's heat packs - everyone carries one and at least one was handed over.
+	const FTutorialStep* Share = Data.FindStep(TEXT("A1_share"));
+	const FTutorialStep* ShareCard = Data.FindStep(TEXT("A1_share_card"));
+	auto IsShareCondition = [](const FTutorialStep* Step)
+	{
+		return Step && Step->Complete.Conditions.Num() == 2 && Step->Complete.Conditions.ContainsByPredicate([](const FTutorialCondition& C)
+			{ return C.Stat == FName(TEXT("squad_min_heat_packs")) && C.bAtLeast && C.Value == 1.f; })
+			&& Step->Complete.Conditions.ContainsByPredicate([](const FTutorialCondition& C)
+			{ return C.Stat == FName(TEXT("heat_packs_given")) && C.bAtLeast && C.Value == 1.f; }) && Step->bPrecredit;
+	};
+	TestTrue(TEXT("rev 5d: the share objective after the loot, done when everyone carries a pack and one was handed over"), Share
+		&& Share->Kind == ETutorialStepKind::Objective && Share->Trigger.Step == FName(TEXT("A1_loot_take")) && IsShareCondition(Share));
+	TestTrue(TEXT("rev 5d: the share card (how to hand an item over) with the same completion"), ShareCard && ShareCard->Kind == ETutorialStepKind::HintCard
+		&& ShareCard->Trigger.Step == FName(TEXT("A1_loot_take")) && IsShareCondition(ShareCard) && ShareCard->Keys.Contains(PlayerCommands::GiveItem.ToString()));
 	const FTutorialStep* Regroup = Data.FindStep(TEXT("A1_regroup"));
-	TestTrue(TEXT("regroup after the hut loot, never precredited"), Regroup && Regroup->Trigger.Step == FName(TEXT("A1_loot_take")) && !Regroup->bPrecredit);
+	TestTrue(TEXT("regroup after the share card, never precredited"), Regroup && Regroup->Trigger.Step == FName(TEXT("A1_share_card")) && !Regroup->bPrecredit);
 	const FTutorialStep* Box = Data.FindStep(TEXT("A1_box"));
 	TestTrue(TEXT("box select after the regroup (moved from the bridge)"), Box && Box->Trigger.Type == ETutorialTriggerType::AfterStep && Box->Trigger.Step == FName(TEXT("A1_regroup")));
 	const FTutorialStep* Banter = Data.FindStep(TEXT("A1_wt_banter"));
@@ -479,6 +571,19 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 		return false;
 	}
 	TestTrue(TEXT("stances moved to the approach (A3, VOL_A3_WIND)"), Data.FindStep(TEXT("A3_stance")) && Data.FindStep(TEXT("A3_stance"))->Trigger.Volume == FName(TEXT("VOL_A3_WIND")));
+	// Rev 5d (designer request 2026-10-14): the barrel goes INTO the half-ruined building (VOL_A2_RUIN) and is lit there.
+	const FTutorialStep* RuinTalk = Data.FindStep(TEXT("A2_wt_ruin"));
+	const FTutorialStep* Push = Data.FindStep(TEXT("A2_push"));
+	const FTutorialStep* Light = Data.FindStep(TEXT("A2_light"));
+	const FTutorialStep* Warm = Data.FindStep(TEXT("A2_obj_warm"));
+	TestTrue(TEXT("rev 5d: the ruin walk-and-talk (Engineer / Commander) after the cold lines"), RuinTalk && RuinTalk->Kind == ETutorialStepKind::WalkTalk
+		&& RuinTalk->Trigger.Step == FName(TEXT("A2_wt_cold")) && RuinTalk->Lines.Num() == 3 && RuinTalk->Lines[0].Speaker == TEXT("Engineer"));
+	TestTrue(TEXT("rev 5d: push done only when the barrel is set down inside VOL_A2_RUIN"), Push && Push->Complete.Event == TEXT("RelocationDone")
+		&& Push->Complete.InVolume == FName(TEXT("VOL_A2_RUIN")) && Push->Unlock.Contains(PlayerCommands::Relocate.ToString()));
+	TestTrue(TEXT("rev 5d: then light it there"), Light && Light->Trigger.Step == FName(TEXT("A2_push")) && Light->Complete.Event == TEXT("BarrelLit")
+		&& Light->Complete.InVolume == FName(TEXT("VOL_A2_RUIN")));
+	TestTrue(TEXT("rev 5d: the warm-up objective asks for the fire in the ruin"), Warm && Warm->Complete.InVolume == FName(TEXT("VOL_A2_RUIN")));
+	TestNull(TEXT("rev 5d: the 'roll it to the hut' radio is gone"), Data.FindStep(TEXT("A2_wt_roll")));
 	TestTrue(TEXT("A2 heat pack card is remedial only"), Data.FindStep(TEXT("A2_heatpack")) && Data.FindStep(TEXT("A2_heatpack"))->Trigger.Type == ETutorialTriggerType::Condition);
 	for (const FTutorialStep& Step : Data.Steps)
 	{
@@ -506,8 +611,14 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	// Dynamic run through A0 -> A1 with a fake squad (cold %, heat packs carried: one starter pack per operative).
 	float Cold = 5.f;
 	float Packs = 3.f;
+	float MinPacks = 0.f;
+	float Given = 0.f;
 	FTutorialStateMachine Machine;
-	Machine.StatProvider = [&Cold, &Packs](FName Stat) { return Stat == FName(TEXT("squad_heat_packs")) ? Packs : Cold; };
+	Machine.StatProvider = [&Cold, &Packs, &MinPacks, &Given](FName Stat)
+	{
+		return Stat == FName(TEXT("squad_heat_packs")) ? Packs : Stat == FName(TEXT("squad_min_heat_packs")) ? MinPacks
+			: Stat == FName(TEXT("heat_packs_given")) ? Given : Cold;
+	};
 	Machine.Load(Data);
 	Machine.StartBeat(Data.StartBeat);
 	TestTrue(TEXT("A0: the inventory, stances and the pause locked from the start"), Machine.IsCommandLocked(PlayerCommands::InventoryOpen)
@@ -647,7 +758,16 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("and the hut objective"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Completed);
 	Pump(Machine, 2.5f);
 	TestEqual(TEXT("the closing line played"), Machine.GetState(TEXT("A1_wt_stocked")), ETutorialStepState::Completed);
-	TestEqual(TEXT("regroup card after the loot"), Machine.GetActiveCard(), FName(TEXT("A1_regroup")));
+	// Rev 5d: share the heat packs (one mate has none; then the looter hands them out).
+	TestEqual(TEXT("rev 5d: the share card after the loot"), Machine.GetActiveCard(), FName(TEXT("A1_share_card")));
+	TestEqual(TEXT("rev 5d: the share objective with it"), Machine.GetState(TEXT("A1_share")), ETutorialStepState::Active);
+	MinPacks = 1.f;
+	Given = 2.f;
+	Machine.Tick(0.1f);
+	TestTrue(TEXT("everyone carries one + handed over: card and objective done"), Machine.GetState(TEXT("A1_share_card")) == ETutorialStepState::Completed
+		&& Machine.GetState(TEXT("A1_share")) == ETutorialStepState::Completed);
+	Pump(Machine, 3.f);
+	TestEqual(TEXT("regroup card after the share card"), Machine.GetActiveCard(), FName(TEXT("A1_regroup")));
 	Machine.HandleCommand(PlayerCommands::Regroup);
 	Pump(Machine, 2.f);
 	TestEqual(TEXT("then box select"), Machine.GetActiveCard(), FName(TEXT("A1_box")));

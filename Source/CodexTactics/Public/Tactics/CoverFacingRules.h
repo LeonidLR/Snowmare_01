@@ -251,6 +251,34 @@ namespace CoverFacingRules
 		float& OutEdgeAlongCm, const FCoverPeekConfig& Config = FCoverPeekConfig());
 	/** Where he stands for the peek, along the wall from the same origin as EdgeAlongCm: StandOffCm short of the edge, on its inner side. */
 	CODEXTACTICS_API float CornerPeekStandAlong(ECoverFacing Side, float EdgeAlongCm, float StandOffCm);
+
+	/**
+	 * Rev 5d (user bug 2026-10-14): a click on the peek edge of HIS OWN wall wins over the "a click near an operative picks him"
+	 * proximity rule (ACodexTacticsPlayerController::FindClickedMember, SelectRadius 120 cm): the edge he already stands at lies
+	 * well inside that radius, so the near-edge click used to select him (nothing happened) while the hover showed the peek ghost.
+	 * Only a click on a squad member's BODY (the hit actor is the member) still selects.
+	 */
+	CODEXTACTICS_API bool CornerPeekClickWins(bool bPeekEdgeOfOwnWall, bool bHitSquadBody);
+
+	/** What OrderCornerPeek does (rev 5d). */
+	enum class ECornerPeekOrder : uint8
+	{
+		/** He already stands at the corner: the corner aim starts where he is (no shimmy, no AP in turn-based). */
+		PoseInPlace,
+		/** Real time / tactical pause: shimmy the rest of the way to the stand point, then the corner aim. */
+		ShimmyThenPose,
+		/** Turn-based and not at that corner: refused ("move to the corner first"). */
+		Refused,
+	};
+
+	/**
+	 * Rev 5d: the corner peek order from where the body is. StandAlongCm / BodyAlongCm: the stand point / the body along the wall
+	 * (same origin); bAtThatCorner: his cover slot already counts as at that corner (IsAtCorner on that side, the pose condition).
+	 * In place = within CornerSnapToleranceCm + 10 of the stand point and not shimmying, or - turn-based, where grid cells do not
+	 * line up with stand-offs - anywhere at that corner. Otherwise real time / pause shimmy there; turn-based refuses.
+	 */
+	CODEXTACTICS_API ECornerPeekOrder DecideCornerPeekOrder(float StandAlongCm, float BodyAlongCm, bool bShimmying, bool bAtThatCorner,
+		bool bTurnBased, const FCoverFacingConfig& Config = FCoverFacingConfig());
 	/** Clip array index of a facing side: 0 = Right (pack *_L = his own right, back to the wall), 1 = Left (pack *_R). */
 	CODEXTACTICS_API int32 ClipIndex(ECoverFacing Facing);
 }

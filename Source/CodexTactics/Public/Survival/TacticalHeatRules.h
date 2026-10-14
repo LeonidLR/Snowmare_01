@@ -99,6 +99,13 @@ struct CODEXTACTICS_API FTacticalHeatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campfire", meta = (ClampMin = "0.5"))
 	float CampfireNoiseIntervalSeconds = 10.f;
 
+	/**
+	 * Rev 5d (designer request 2026-10-14, "a fire inside doesn't give you away like an open campfire"): a campfire kindled indoors
+	 * (inside an ACameraZoneVolume of environment Closed or Shelter) alerts patrols only within CampfireNoiseRadius x this.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campfire", meta = (ClampMin = "0", ClampMax = "1"))
+	float CampfireIndoorNoiseMultiplier = 0.4f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campfire", meta = (ClampMin = "0"))
 	int32 CampfireBuildActionPoints = 3;
 
@@ -320,6 +327,13 @@ namespace TacticalHeatRules
 	/** A heat pack helps when the operative is cold or frostbitten. */
 	CODEXTACTICS_API bool CanUseHeatPack(float Cold, bool bFrostbitten);
 
+	/**
+	 * A heat pack dropped on a squad mate (inventory drawer drag, Sprint 15): cracked on him at once when he is cold / frostbitten
+	 * (CanUseHeatPack), else handed over into his kit. Rev 5d (designer request 2026-10-14, sharing the hut's heat packs): with
+	 * bHandOverOnly (Shift held on the drop) it is always handed over - a cold mate keeps it for later.
+	 */
+	CODEXTACTICS_API bool ShouldCrackHeatPackOnDrop(float Cold, bool bFrostbitten, bool bHandOverOnly);
+
 	/** Cold - reduction (>= 0), frostbite cleared, the buffer restarts at its full length. */
 	CODEXTACTICS_API FHeatPackResult ApplyHeatPack(const FTacticalHeatConfig& Config, float Cold, bool bFrostbitten);
 
@@ -331,6 +345,12 @@ namespace TacticalHeatRules
 
 	/** The fire's base is at or above CampfireWindHeight. */
 	CODEXTACTICS_API bool IsWindExposed(const FTacticalHeatConfig& Config, float GroundZ);
+
+	/**
+	 * Rev 5d: the radius within which a burning campfire makes patrols search (the crackle and the smoke column): CampfireNoiseRadius
+	 * in the open, x CampfireIndoorNoiseMultiplier (clamped 0..1) indoors - walls and a roof hide the light and the smoke.
+	 */
+	CODEXTACTICS_API float GetCampfireNoiseRadius(const FTacticalHeatConfig& Config, bool bIndoors);
 
 	/** Burn time one turn-based round takes off: total / rounds (rounds clamped to >= 1). */
 	CODEXTACTICS_API float SecondsPerRound(float TotalSeconds, int32 Rounds);
