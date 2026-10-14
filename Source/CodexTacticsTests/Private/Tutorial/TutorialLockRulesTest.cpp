@@ -1435,6 +1435,77 @@ bool FTutorialSaveRunningProgressTest::RunTest(const FString&)
 	return true;
 }
 
+// Rev 5g (game designer 2026-10-14): "waiting for instructions" on arrival - the task card shows at once (<= ~1 s), the talk
+// plays alongside. A2 (camp volume or the ruin reached first) with an A1 card still up; the hut approach with the sprint card up.
+TUTORIAL_LOCK_TEST(FTutorialArrivalCardsAtOnceTest, "Arrival.CardsAtOnce")
+bool FTutorialArrivalCardsAtOnceTest::RunTest(const FString&)
+{
+	FTutorialStepsData Data;
+	TArray<FString> Warnings;
+	FString Error;
+	if (!TestTrue(FString::Printf(TEXT("demo file loads (%s)"), *Error), TutorialRules::LoadStepsFile(TEXT("demo_01_steps.json"), Data, Warnings, Error)))
+	{
+		return false;
+	}
+	const FTutorialStep* Push = Data.FindStep(TEXT("A2_push"));
+	TestTrue(TEXT("A2_push starts with its beat (no longer after the cold lines)"), Push && Push->Trigger.Type == ETutorialTriggerType::BeatStart
+		&& Push->Trigger.DelaySeconds <= 0.f);
+	const FTutorialStep* Sprint = Data.FindStep(TEXT("A1_sprint"));
+	TestTrue(TEXT("the sprint card is dropped at the hut approach"), Sprint && Sprint->CancelOn.Volumes.Contains(FName(TEXT("VOL_A1_HUT_APPROACH"))));
+
+	for (const TCHAR* Arrival : { TEXT("VOL_A2_CAMP"), TEXT("VOL_A2_RUIN"), TEXT("VOL_A2_CAMP+done") })
+	{
+		const FString ArrivalId(Arrival);
+		const bool bCardDoneJustBefore = ArrivalId.EndsWith(TEXT("+done"));
+		FTutorialStateMachine Machine;
+		Machine.Load(Data);
+		Machine.RegisterVolumeBeat(TEXT("VOL_A2_CAMP"), TEXT("A2"));
+		Machine.StartBeat(TEXT("A1"));
+		Machine.CompleteStep(TEXT("A1_wt_start")); // the A1 opening lines played out (a line on screen would play out first)
+		Machine.TriggerStep(TEXT("A1_box"));
+		Machine.Tick(0.1f);
+		TestEqual(TEXT("an A1 card is up"), Machine.GetActiveCard(), FName(TEXT("A1_box")));
+		if (bCardDoneJustBefore)
+		{
+			Machine.HandleCommand(PlayerCommands::SelectBox); // the player finished it a moment before arriving: its breather runs
+		}
+		Machine.HandleVolume(FName(*ArrivalId.Replace(TEXT("+done"), TEXT(""))), NAME_None, NAME_None, TEXT("Op1"));
+		Machine.Tick(0.1f);
+		TestEqual(FString::Printf(TEXT("%s: beat A2"), Arrival), Machine.GetCurrentBeat(), FName(TEXT("A2")));
+		TestEqual(FString::Printf(TEXT("%s: the push card shows at once (no breather after the dropped A1 card)"), Arrival),
+			Machine.GetActiveCard(), FName(TEXT("A2_push")));
+		TestTrue(FString::Printf(TEXT("%s: the warm-up objective shows at once"), Arrival), Machine.GetActiveObjectives().Contains(FName(TEXT("A2_obj_warm"))));
+		TestFalse(FString::Printf(TEXT("%s: the push is unlocked"), Arrival), Machine.IsCommandLocked(TEXT("Object.Relocate")));
+		Machine.Tick(1.f);
+		TestEqual(FString::Printf(TEXT("%s: the cold lines play alongside the card"), Arrival), Machine.GetActiveSpeech(), FName(TEXT("A2_wt_cold")));
+		TestEqual(FString::Printf(TEXT("%s: the card stays up while they play"), Arrival), Machine.GetActiveCard(), FName(TEXT("A2_push")));
+	}
+
+	FTutorialStateMachine Hut;
+	Hut.Load(Data);
+	Hut.StartBeat(TEXT("A1"));
+	Hut.TriggerStep(TEXT("A1_sprint"));
+	Hut.Tick(1.1f); // its trigger delay (1 s after the mate card)
+	TestEqual(TEXT("the sprint card is up"), Hut.GetActiveCard(), FName(TEXT("A1_sprint")));
+	Hut.HandleVolume(TEXT("VOL_A1_HUT_APPROACH"), NAME_None, NAME_None, TEXT("Op1"));
+	TestEqual(TEXT("the hut approach drops the sprint card"), Hut.GetState(TEXT("A1_sprint")), ETutorialStepState::Skipped);
+	TestEqual(TEXT("the select card shows at once"), Hut.GetActiveCard(), FName(TEXT("A1_select")));
+	TestFalse(TEXT("sprint stays unlocked"), Hut.IsCommandLocked(PlayerCommands::Sprint));
+
+	// A card the player completes still gets the 1.5 s breather before the next one (UX brief).
+	FTutorialStateMachine Breather;
+	Breather.Load(Data);
+	Breather.StartBeat(TEXT("A1"));
+	Breather.TriggerStep(TEXT("A1_select"));
+	Breather.Tick(0.1f);
+	Breather.HandleCommand(PlayerCommands::SelectMember);
+	Breather.Tick(0.5f);
+	TestNotEqual(TEXT("after a completed card the next waits for the breather"), Breather.GetActiveCard(), FName(TEXT("A1_solo")));
+	Breather.Tick(1.2f);
+	TestEqual(TEXT("then the next card shows"), Breather.GetActiveCard(), FName(TEXT("A1_solo")));
+	return true;
+}
+
 #undef TUTORIAL_LOCK_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

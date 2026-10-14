@@ -976,12 +976,13 @@ namespace TutorialSmoke
 		}
 		case 33:
 		{
-			// The hut (rev 5c): select first, then Solo.
-			if (Tutorial->GetStepState(TEXT("A1_select")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			// The hut (rev 5c): select first, then Solo. Rev 5g: the select card shows on arrival (<= ~1 s).
+			if (Tutorial->GetStepState(TEXT("A1_select")) != ETutorialStepState::Active && State.StageTime < 1.5f)
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Active, TEXT("the hut approach: the select card"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Active,
+				FString::Printf(TEXT("the hut approach: the select card on arrival (%.2f s)"), State.StageTime));
 			const ETutorialStepState Approach = Tutorial->GetStepState(TEXT("A1_wt_hut_approach"));
 			Check(State, TutorialRules::IsRunning(Approach) || Approach == ETutorialStepState::Completed,
 				FString::Printf(TEXT("the approach walk-and-talk plays (or waits for the line before it: %s)"), TutorialRules::StateName(Approach)));
@@ -1334,23 +1335,28 @@ namespace TutorialSmoke
 		}
 		case 80:
 		{
-			// The A2 cold lines / the ruin lines play, then the push card (skip the talk so the smoke does not wait ~25 s).
-			if (Tutorial->IsSpeechActive())
-			{
-				Tutorial->SkipSpeech();
-			}
-			if (Tutorial->GetStepState(TEXT("A2_push")) != ETutorialStepState::Active && State.StageTime < 15.f)
+			// Rev 5g (game designer 2026-10-14): the push card and the objective show ON ARRIVAL (<= ~1 s); the cold / ruin lines play
+			// alongside (they used to come first: ~20 s of waiting for instructions). Nothing is skipped before the check.
+			if (Tutorial->GetStepState(TEXT("A2_push")) != ETutorialStepState::Active && State.StageTime < 1.5f)
 			{
 				return true;
 			}
 			Check(State, Tutorial->GetStepState(TEXT("A2_push")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::Relocate),
-				FString::Printf(TEXT("the barrel-into-the-ruin card shows and unlocks the push (%s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A2_push")))));
+				FString::Printf(TEXT("the barrel-into-the-ruin card shows on arrival (%.2f s) and unlocks the push (%s)"), State.StageTime,
+					TutorialRules::StateName(Tutorial->GetStepState(TEXT("A2_push")))));
 			Check(State, TutorialRules::IsRunning(Tutorial->GetStepState(TEXT("A2_obj_warm"))), TEXT("the 'warm up in the ruin' objective runs"));
+			Check(State, TutorialRules::IsRunning(Tutorial->GetStepState(TEXT("A2_wt_cold"))),
+				FString::Printf(TEXT("the cold lines run alongside the card (%s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A2_wt_cold")))));
+			if (Tutorial->IsSpeechActive())
+			{
+				Tutorial->SkipSpeech(); // the smoke does not wait ~25 s for the talk
+			}
 			// The barrel set down outside the ruin does not count; inside VOL_A2_RUIN it does (the event's subject = the barrel).
 			AOperativeCharacter* Third = Squad->GetMembers()[2];
 			GameplayEvents::Raise(World, GameplayEvents::RelocationDone, Third);
 			Check(State, Tutorial->GetStepState(TEXT("A2_push")) == ETutorialStepState::Active, TEXT("a push that ends outside the ruin does not count"));
-			SpawnVolumeAround(World, Third, TEXT("VOL_A2_RUIN"), 80.f);
+			// 4 m: the follower may still walk to his formation slot after the teleport (rev 5g: the card shows at once now).
+			SpawnVolumeAround(World, Third, TEXT("VOL_A2_RUIN"), 400.f);
 			GameplayEvents::Raise(World, GameplayEvents::RelocationDone, Third);
 			Check(State, Tutorial->GetStepState(TEXT("A2_push")) == ETutorialStepState::Completed, TEXT("the barrel pushed into the ruin completes the push card"));
 			State.Stage = 81;
