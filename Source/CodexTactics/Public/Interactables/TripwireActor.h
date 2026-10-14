@@ -162,6 +162,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tripwire")
 	void Reveal(AOperativeCharacter* Spotter = nullptr);
 
+	/**
+	 * Rev 5e: the armed, spotted, not-preview wire whose band (TripwireRules::ClickSnapCm) contains Point (ground level, within
+	 * 1 m in height): a click there means the wire (discoverability - the wire is a thin bar). nullptr when none.
+	 */
+	static ATripwireActor* FindClickableWireNear(const UWorld* World, const FVector& Point);
+
 	/** Who may disarm it (squad wire: the Medic-Sapper; PMC wire: anyone). */
 	bool CanBeDisarmedBy(const AOperativeCharacter* Operative) const;
 

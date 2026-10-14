@@ -105,6 +105,16 @@ namespace TripwireRules
 		NoCrawlTrapLiteral
 	};
 
+	/**
+	 * Rev 5e (user bug 2026-10-14: "the tripwire cannot be disarmed"): the wire itself is an 8 cm bar at shin height - hard to hit
+	 * with the cursor. A click / hover on the ground within this of a spotted wire counts as a click on the wire (its menu:
+	 * Disarm), cm.
+	 */
+	inline constexpr float ClickSnapCm = 40.f;
+
+	/** The click point (2D) is on / next to the wire segment A-B (ClickSnapCm). */
+	CODEXTACTICS_API bool IsClickOnWire(const FVector2D& Click, const FVector2D& A, const FVector2D& B, float SnapCm = ClickSnapCm);
+
 	/** The filter for a move: prone bodies may crawl under low fences; known traps are avoided only in the AUTO mode. */
 	CODEXTACTICS_API EOperativeMoveFilter ChooseOperativeMoveFilter(bool bProne, bool bSquadAutonomyOn);
 }

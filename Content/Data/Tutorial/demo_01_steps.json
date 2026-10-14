@@ -39,7 +39,8 @@
     { "id": "A2", "lesson": true, "checkpoint": false, "title_id": "TUT_BEAT_A2",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*"] },
     { "id": "A3", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A3",
-      "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Object.Relocate", "Object.LightBarrel"] },
+      "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Object.Relocate", "Object.LightBarrel",
+        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot"] },
     { "id": "A4", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A4",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Object.Relocate", "Object.LightBarrel", "Stance.*", "Cover.*",
         "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot"] }
@@ -473,6 +474,19 @@
       "unlock": ["Trap.DisarmMine", "Attack.TargetedShot"],
       "trigger": { "type": "event", "event": "MineSpotted" },
       "complete": { "commands": ["Trap.DisarmMine", "Attack.TargetedShot"], "timeout_s": 40 }
+    },
+    {
+      "_comment": "Rev 5e (user bug 2026-10-14: 'the tripwire cannot be disarmed'): the disarm stayed LOCKED until the wire card SHOWED, and the card queued behind the cover / peek / mine cards of the field for minutes (the 'Not yet' line comes once per family: later refusals were silent). Now beat A3 (VOL_A3_APPROACH) unlocks Trap.DisarmMine / Trap.DisarmTripwire / Attack.TargetedShot, and a feed line says how at the moment a wire / mine is spotted (a feed never waits for a slot). The cards stay as the longer explanation.",
+      "id": "A3_wire_spotted", "beat": "A3", "kind": "feed", "text_id": "TUT_A3_WIRE_SPOTTED",
+      "unlock": ["Trap.DisarmTripwire"],
+      "trigger": { "type": "event", "event": "TripwireSpotted" },
+      "lines": [ { "speaker": "TRAINING", "text_id": "TUT_A3_WIRE_SPOTTED" } ]
+    },
+    {
+      "id": "A3_mine_spotted", "beat": "A3", "kind": "feed", "text_id": "TUT_A3_MINE_SPOTTED",
+      "unlock": ["Trap.DisarmMine", "Attack.TargetedShot"],
+      "trigger": { "type": "event", "event": "MineSpotted" },
+      "lines": [ { "speaker": "TRAINING", "text_id": "TUT_A3_MINE_SPOTTED" } ]
     },
     {
       "id": "A3_wire", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_WIRE",

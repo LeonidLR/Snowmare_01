@@ -14,7 +14,10 @@
 //     straight through it, the AUTO filter's path goes round; with the squad AUTO mode OFF a move order through the spotted wire
 //     is literal (the commander walks into it and trips it), with AUTO ON (Ctrl+T) the same order goes round it (no trip); a
 //     spotted mine gets the known-trap area too (literal path over it, AUTO path round it);
-//  7. save / load: a hidden wire and a spotted wire saved; after revealing the first and removing the second the load
+//  7. rev 5e (user bug 2026-10-14, "the tripwire cannot be disarmed") the REAL input: a click on the ground 25 cm beside a spotted
+//     wire (ACodexTacticsPlayerController::HandleWorldHit) is taken as a click on the wire - the engineer walks up (not into it),
+//     the action menu «Disarm» opens, confirming it disarms the wire (TripwireDisarmed, +2 grenades); the label says "click to disarm";
+//  8. save / load: a hidden wire and a spotted wire saved; after revealing the first and removing the second the load
 //     restores both (hidden / spotted, armed, PMC).
 // Saves go to Saved/SmokeSaves/PMCTripwire (exclusive in Scripts/test_map.json).
 
@@ -31,7 +34,9 @@
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Containers/Ticker.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "Core/PlayerCommands.h"
+#include "Interactables/InteractionSubsystem.h"
 #include "Core/SaveGameSubsystem.h"
 #include "Debug/EventBusProbe.h"
 #include "Debug/SmokeUtils.h"
@@ -574,6 +579,86 @@ namespace PMCTripwireSmoke
 			{
 				Mine->Destroy();
 			}
+			// Rev 5e: the real click path - a spotted wire, the engineer (leader, warm) clicks the ground right beside it.
+			ParkSquad(Squad, State);
+			ATripwireActor* Wire = SpawnWire(World, State, State.Centre);
+			State.Wire = Wire;
+			if (Wire)
+			{
+				Wire->Reveal();
+				Wire->DefusalRollForTesting = 0.f; // a good roll (the odds are HostileDisarmRoleCold's job)
+				Wire->DefusalExplosionRollForTesting = 99.f;
+			}
+			AOperativeCharacter* Engineer = State.Engineer.Get();
+			Engineer->SetStance(EOperativeStance::Standing);
+			Place(Engineer, State.Centre - State.F * 350.f);
+			Squad->SetLeader(Engineer);
+			State.MedicGrenades = Engineer->GrenadesCount;
+			State.Stage = 26;
+			State.Time = 0.f;
+			return true;
+		}
+		case 26:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			ATripwireActor* Wire = State.Wire.Get();
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			if (!Wire || !PC)
+			{
+				Check(State, false, TEXT("wire / controller"));
+				return Finish(State);
+			}
+			FOverheadLabel Label;
+			Check(State, Wire->GetOverheadLabel(Label) && Label.Text.Contains(TEXT("click to disarm")),
+				FString::Printf(TEXT("the spotted wire's label says how: '%s'"), *Label.Text));
+			// The ground 25 cm in front of the wire (on the engineer's side), no actor hit - what a slightly-off cursor gives.
+			const FVector Ground = State.Centre - State.F * 25.f + State.R * 40.f;
+			Check(State, ATripwireActor::FindClickableWireNear(World, Ground) == Wire && !ATripwireActor::FindClickableWireNear(World, State.Centre - State.F * 120.f),
+				TEXT("the ground 25 cm beside the wire counts as the wire (hand cursor), 1.2 m away does not"));
+			FHitResult GroundHit;
+			GroundHit.ImpactPoint = Ground;
+			GroundHit.Location = Ground;
+			GroundHit.ImpactNormal = FVector::UpVector;
+			GroundHit.Normal = FVector::UpVector;
+			GroundHit.bBlockingHit = true;
+			PC->HandleWorldHit(GroundHit);
+			State.Stage = 27;
+			State.Time = 0.f;
+			return true;
+		}
+		case 27:
+		{
+			UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
+			ATripwireActor* Wire = State.Wire.Get();
+			if (Wire && Interactions && !Interactions->IsActionMenuOpen() && State.Time < 10.f)
+			{
+				return true;
+			}
+			Check(State, Wire && Interactions && Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Wire && Wire->IsArmed(),
+				FString::Printf(TEXT("the click walked the engineer up to the wire (not into it) and opened its menu (%.1f s)"), State.Time));
+			if (Interactions && Interactions->IsActionMenuOpen())
+			{
+				Interactions->ConfirmActionMenu(); // «Disarm (4 s)»
+			}
+			Check(State, Wire && Wire->IsDisarming(), TEXT("Disarm confirmed: he works on it"));
+			State.Stage = 28;
+			State.Time = 0.f;
+			return true;
+		}
+		case 28:
+		{
+			if (State.Wire.IsValid() && State.Time < 7.f)
+			{
+				return true;
+			}
+			AOperativeCharacter* Engineer = State.Engineer.Get();
+			Check(State, !State.Wire.IsValid() && State.Probe->CountEvent(GameplayEvents::TripwireDisarmed, Engineer->GetFName()) == 1
+				&& Engineer->GrenadesCount == State.MedicGrenades + 2 && State.Probe->CountEvent(GameplayEvents::TripwireTriggered, Engineer->GetFName()) == 1,
+				FString::Printf(TEXT("the real input disarms the PMC wire: gone after %.1f s, TripwireDisarmed by the engineer, +%d grenades, no new trip"), State.Time,
+					Engineer->GrenadesCount - State.MedicGrenades));
 			State.Stage = 25;
 			State.Time = 0.f;
 			return true;

@@ -1323,6 +1323,13 @@ namespace TutorialSmoke
 		{
 			Check(State, UVisionConeComponent::IsPlayerEnemyConesOn() == State.bConesBefore
 				&& Tutorial->GetMachine().GetCommandUse(PlayerCommands::ToggleVisionCones).Count == 0, TEXT("O in A1: refused (taught by the A4 card)"));
+			// Rev 5e (user bug 2026-10-14, "the tripwire cannot be disarmed"): the disarm used to unlock only when the A3 wire card SHOWED
+			// (queued behind the field's cards for minutes). A wire spotted now: the disarm is free at once and a feed line says how.
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::DisarmTripwire), TEXT("A1: the tripwire disarm is not taught yet"));
+			Tutorial->NotifyEvent(TEXT("TripwireSpotted"), Leader->GetFName());
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::DisarmTripwire) && !Tutorial->IsCommandLocked(PlayerCommands::DisarmMine)
+				&& Tutorial->GetStepState(TEXT("A3_wire_spotted")) == ETutorialStepState::Completed && CountMessages(World, TEXT("Click the wire and choose Disarm")) == 1,
+				FString::Printf(TEXT("a wire spotted: disarm unlocked at once (beat %s), the 'how to disarm' feed line posted"), *Tutorial->GetCurrentBeat().ToString()));
 			Check(State, Tutorial->TriggerStep(TEXT("A4_cones")) && Tutorial->GetCurrentBeat() == FName(TEXT("A4")), TEXT("A4 started with the cone card"));
 			State.Stage = 69;
 			State.StageTime = 0.f;

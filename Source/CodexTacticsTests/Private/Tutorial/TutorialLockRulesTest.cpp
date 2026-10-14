@@ -939,7 +939,7 @@ bool FTutorialProgressiveDemoTest::RunTest(const FString&)
 		{ TEXT("A2_light"), { PlayerCommands::LightBarrel }, { PlayerCommands::UseObject } },
 		{ TEXT("A3_stance"), { PlayerCommands::StanceCrouch, PlayerCommands::StanceProne, PlayerCommands::SquadStanceProne }, { PlayerCommands::TacticalPause } },
 		{ TEXT("A3_cover"), { PlayerCommands::CoverPreview, PlayerCommands::CoverEnter, PlayerCommands::CoverFireMode }, { PlayerCommands::HoldLine } },
-		{ TEXT("A3_mine"), { PlayerCommands::DisarmMine, PlayerCommands::TargetedShot }, { PlayerCommands::DisarmTripwire, PlayerCommands::SetTrap, PlayerCommands::PriorityTarget } },
+		{ TEXT("A3_mine"), { PlayerCommands::DisarmMine, PlayerCommands::TargetedShot }, { PlayerCommands::SetTrap, PlayerCommands::PriorityTarget } },
 		{ TEXT("A3_wire"), { PlayerCommands::DisarmTripwire }, { PlayerCommands::DisarmTrap } },
 		{ TEXT("A4_cones"), { PlayerCommands::ToggleVisionCones }, { PlayerCommands::GrenadeAim } },
 		{ TEXT("A4_tripwire"), { PlayerCommands::DeployTripwire }, { PlayerCommands::DeployMine, PlayerCommands::DeployStart } },
@@ -957,6 +957,38 @@ bool FTutorialProgressiveDemoTest::RunTest(const FString&)
 		{
 			TestTrue(FString::Printf(TEXT("after %s, %s is still locked"), Lesson.Step, *Id.ToString()), Machine.IsCommandLocked(Id));
 		}
+	}
+	// Rev 5e (user bug 2026-10-14, "the tripwire cannot be disarmed"): beat A3 itself frees the trap disarms - not only the card,
+	// which queued behind the field's cover / peek / mine cards while the disarm stayed locked.
+	{
+		FTutorialStateMachine Approach;
+		Approach.Load(Data);
+		Approach.StartBeat(TEXT("A0"));
+		Approach.StartBeat(TEXT("A3"));
+		TestFalse(TEXT("rev 5e: beat A3 (the approach) unlocks the tripwire / mine disarm and the targeted shot"), Approach.IsCommandLocked(PlayerCommands::DisarmTripwire)
+			|| Approach.IsCommandLocked(PlayerCommands::DisarmMine) || Approach.IsCommandLocked(PlayerCommands::TargetedShot));
+		TestTrue(TEXT("... but not the other trap commands"), Approach.IsCommandLocked(PlayerCommands::SetTrap) && Approach.IsCommandLocked(PlayerCommands::DisarmTrap));
+		// A wire spotted before beat A3 (the player wandered off the route): the feed line fires, starts A3 and frees the disarm at once.
+		FTutorialStateMachine Early;
+		Early.Load(Data);
+		Early.StartBeat(TEXT("A0"));
+		Early.StartBeat(TEXT("A2"));
+		TestTrue(TEXT("A2: the tripwire disarm still locked"), Early.IsCommandLocked(PlayerCommands::DisarmTripwire));
+		Early.HandleEvent(TEXT("TripwireSpotted"), TEXT("Op1"));
+		TestFalse(TEXT("a wire spotted: the disarm is free at once (feed line, no slot to wait for)"), Early.IsCommandLocked(PlayerCommands::DisarmTripwire));
+		TestTrue(TEXT("the spotted feed line fired"), Early.GetState(TEXT("A3_wire_spotted")) != ETutorialStepState::Idle);
+		// While the cover cards of the field hold the card slot, the wire card waits - the disarm does not.
+		FTutorialStateMachine Busy;
+		Busy.Load(Data);
+		Busy.StartBeat(TEXT("A0"));
+		Busy.StartBeat(TEXT("A3"));
+		Busy.HandleVolume(TEXT("VOL_A3_FIELD"), NAME_None, NAME_None);
+		Busy.Tick(2.f);
+		Busy.HandleEvent(TEXT("MineSpotted"), TEXT("Op1"));
+		Busy.HandleEvent(TEXT("TripwireSpotted"), TEXT("Op1"));
+		Busy.Tick(0.5f);
+		TestTrue(TEXT("the wire card is still queued behind the field cards"), Busy.GetState(TEXT("A3_wire")) == ETutorialStepState::Queued);
+		TestFalse(TEXT("... yet the wire can be disarmed"), Busy.IsCommandLocked(PlayerCommands::DisarmTripwire));
 	}
 	// Taught only in the later (not implemented) beats: locked through A4.
 	for (const FName Id : { PlayerCommands::TacticalPause, PlayerCommands::TurnBasedEnter, PlayerCommands::EndTurn, PlayerCommands::Guard, PlayerCommands::Autonomy,

@@ -150,3 +150,22 @@ bool FTripwireKnownTrapPathingTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("prone, AUTO: the default filter (traps costly)"), ChooseOperativeMoveFilter(true, true) == EOperativeMoveFilter::Default);
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTripwireClickSnapTest, "CodexTactics.Interactables.Tripwire.ClickSnap",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FTripwireClickSnapTest::RunTest(const FString& Parameters)
+{
+	// Rev 5e (user bug 2026-10-14: "the tripwire cannot be disarmed"): the wire is an 8 cm bar - a click on the ground next to it
+	// counts as a click on the wire (its Disarm menu).
+	using namespace TripwireRules;
+	const FVector2D A(-150.f, 0.f);
+	const FVector2D B(150.f, 0.f);
+	TestTrue(TEXT("on the wire"), IsClickOnWire(FVector2D(0.f, 0.f), A, B));
+	TestTrue(TEXT("30 cm beside it"), IsClickOnWire(FVector2D(40.f, 30.f), A, B));
+	TestTrue(TEXT("just past a peg"), IsClickOnWire(FVector2D(180.f, 0.f), A, B));
+	TestFalse(TEXT("60 cm beside it: a ground click (a move order)"), IsClickOnWire(FVector2D(0.f, 60.f), A, B));
+	TestFalse(TEXT("1 m past the peg"), IsClickOnWire(FVector2D(250.f, 0.f), A, B));
+	TestEqual(TEXT("snap 40 cm"), ClickSnapCm, 40.f);
+	return true;
+}

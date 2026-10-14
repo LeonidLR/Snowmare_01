@@ -333,7 +333,9 @@ void ATripwireActor::Reveal(AOperativeCharacter* Spotter)
 	const FRotator Facing = (GetActorLocation() - Spotter->GetActorLocation()).Rotation();
 	Spotter->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 	UFloatingTextSubsystem::SpawnAboveOperative(Spotter, TEXT("⚠️ TRIPWIRE SPOTTED!"), FLinearColor(1.f, 0.85f, 0.1f));
-	PostLine(Spotter->DisplayName, LOCTEXT("Spotted", "⚠️ Tripwire! Wire at shin height - everyone hold position!"));
+	PostLine(Spotter->DisplayName, IsHostile()
+		? LOCTEXT("SpottedHow", "⚠️ Tripwire! Wire at shin height - everyone hold position! Click the wire to disarm it (anyone can try, the Medic-Sapper is best), or crawl under it.")
+		: LOCTEXT("Spotted", "⚠️ Tripwire! Wire at shin height - everyone hold position!"));
 	GameplayEvents::Raise(this, GameplayEvents::TripwireSpotted, Spotter);
 	if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
 	{
@@ -498,6 +500,35 @@ void ATripwireActor::Detonate()
 	Destroy();
 }
 
+ATripwireActor* ATripwireActor::FindClickableWireNear(const UWorld* World, const FVector& Point)
+{
+	if (!World)
+	{
+		return nullptr;
+	}
+	ATripwireActor* Best = nullptr;
+	float BestDistance = TNumericLimits<float>::Max();
+	for (TActorIterator<ATripwireActor> It(World); It; ++It)
+	{
+		ATripwireActor* Wire = *It;
+		if (!Wire->bSetUp || Wire->bPreview || Wire->bTripped || Wire->IsConcealed() || Wire->IsActorBeingDestroyed()
+			|| FMath::Abs(Point.Z - (Wire->GetActorLocation().Z - TripwireRules::WireHeightCm)) > 100.f)
+		{
+			continue;
+		}
+		const FVector2D A(Wire->WireA.X, Wire->WireA.Y);
+		const FVector2D B(Wire->WireB.X, Wire->WireB.Y);
+		const FVector2D Click(Point.X, Point.Y);
+		const float Distance = TripwireRules::DistanceToWire(Click, A, B);
+		if (TripwireRules::IsClickOnWire(Click, A, B) && Distance < BestDistance)
+		{
+			Best = Wire;
+			BestDistance = Distance;
+		}
+	}
+	return Best;
+}
+
 bool ATripwireActor::CanBeDisarmedBy(const AOperativeCharacter* Operative) const
 {
 	return Operative && TripwireRules::CanDisarm(IsHostile(), Operative->SquadRole);
@@ -634,7 +665,8 @@ bool ATripwireActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	}
 	if (IsHostile())
 	{
-		OutLabel.Text = bDisarming ? TEXT("⚠️ PMC Tripwire (disarming)") : TEXT("⚠️ PMC Tripwire");
+		// Rev 5e (user bug 2026-10-14): say how to deal with it - a click on the wire opens its Disarm menu.
+		OutLabel.Text = bDisarming ? TEXT("⚠️ PMC Tripwire (disarming)") : TEXT("⚠️ PMC Tripwire - click to disarm");
 		OutLabel.Color = FLinearColor(1.f, 0.25f, 0.15f);
 		OutLabel.HeightCm = 50.f;
 		return true;

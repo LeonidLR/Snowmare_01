@@ -44,6 +44,8 @@
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/RelocationRules.h"
 #include "Interactables/RelocationSubsystem.h"
+#include "Interactables/TripwireActor.h"
+#include "Components/BoxComponent.h"
 #include "Misc/App.h"
 #include "UI/GameMessageSubsystem.h"
 
@@ -419,6 +421,19 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		const bool bPeekHit = PeekOperative && PeekOperative->IsInPeekableCover() && !IsDialogueOpen() && !bRelocateSelectMode
 			&& GetHitResultUnderCursor(ECC_Visibility, false, PeekHit);
 		UpdateCornerPeekHover(PeekOperative, bPeekHit ? &PeekHit : nullptr);
+		// Rev 5e: a spotted tripwire (or the ground right next to it) under the cursor: the hand cursor - a click opens its menu.
+		FHitResult TrapHit;
+		const bool bTrap = !bCornerPeekCursor && !IsDialogueOpen() && GetHitResultUnderCursor(ECC_Visibility, false, TrapHit)
+			&& (Cast<ATripwireActor>(TrapHit.GetActor()) || (!Cast<APawn>(TrapHit.GetActor()) && !Cast<AInteractableActor>(TrapHit.GetActor())
+				&& ATripwireActor::FindClickableWireNear(GetWorld(), TrapHit.ImpactPoint)));
+		if (bTrap != bTrapHoverCursor)
+		{
+			bTrapHoverCursor = bTrap;
+			if (bTrap || !bCornerPeekCursor)
+			{
+				CurrentMouseCursor = bTrap ? EMouseCursor::Hand : DefaultMouseCursor.GetValue();
+			}
+		}
 	}
 
 	// Turn-based: the cursor frame on the hovered cell and, in attack mode, its hit chance (Godot set_hovered_cell).
@@ -1564,8 +1579,19 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 	}
 }
 
-void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& Hit)
+void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 {
+	// Rev 5e (user bug 2026-10-14, "the tripwire cannot be disarmed"): the wire is an 8 cm bar at shin height - a click on the ground
+	// next to a spotted wire (TripwireRules::ClickSnapCm) means the wire (its Disarm menu), as hovering shows (the hand cursor).
+	FHitResult Hit = InHit;
+	if (!Cast<AInteractableActor>(InHit.GetActor()) && !Cast<APawn>(InHit.GetActor()))
+	{
+		if (ATripwireActor* Wire = ATripwireActor::FindClickableWireNear(GetWorld(), InHit.ImpactPoint))
+		{
+			Hit = FHitResult(Wire, Wire->Box.Get(), InHit.ImpactPoint, InHit.ImpactNormal);
+			UE_LOG(LogCodexTactics, Display, TEXT("Click next to the spotted wire %s: taken as a click on it"), *Wire->GetName());
+		}
+	}
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	if (!Leader)

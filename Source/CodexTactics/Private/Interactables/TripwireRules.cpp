@@ -82,3 +82,8 @@ TripwireRules::EOperativeMoveFilter TripwireRules::ChooseOperativeMoveFilter(boo
 	}
 	return bProne ? EOperativeMoveFilter::TrapLiteral : EOperativeMoveFilter::NoCrawlTrapLiteral;
 }
+
+bool TripwireRules::IsClickOnWire(const FVector2D& Click, const FVector2D& A, const FVector2D& B, float SnapCm)
+{
+	return DistanceToWire(Click, A, B) <= FMath::Max(0.f, SnapCm);
+}
