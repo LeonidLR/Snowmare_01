@@ -77,6 +77,8 @@ namespace CoverSmoke
 		FVector SlotEntered = FVector::ZeroVector;
 		float FortitudeCut = 0.f;
 		bool bSampled = false;
+		/** When the held corner aim ended (stage 12; -1 = not yet). */
+		float AimEndTime = -1.f;
 		bool bAllowLeaderFire = false;
 		bool bSawLean = false;
 		bool bAnimSawLean = false;
@@ -645,13 +647,23 @@ namespace CoverSmoke
 			{
 				return true; // no target any more (fire held): back after the grace period
 			}
+			if (State.AimEndTime < 0.f)
+			{
+				State.AimEndTime = State.Time; // the anim instance mirrors bLeaning on its next update: check after it
+				return true;
+			}
+			if (State.Time < State.AimEndTime + 0.1f)
+			{
+				return true;
+			}
 			const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
 			Check(State, State.bAnimSawLean, TEXT("AnimInstance: bLeaning during the shot"));
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: cover fire clips played %d -> %d"), State.ClipsBefore, Anim ? Anim->GetCoverClipsPlayed() : -1);
 			Check(State, !Op->IsCornerAimActive() && Op->GetLastCornerAimBreak() == ECornerAimDecision::ReturnNoTargets && State.Time >= 1.4f,
 				FString::Printf(TEXT("... the aim ends with no target after the grace period (%.1f s, %s)"), State.Time,
 					CoverDecisionRules::CornerAimDecisionName(Op->GetLastCornerAimBreak())));
-			Check(State, !Op->bIsCornerLeaning && Op->bInCover && Anim && !Anim->bLeaning, TEXT("... and back behind the corner"));
+			Check(State, !Op->bIsCornerLeaning && Op->bInCover && Anim && !Anim->bLeaning, FString::Printf(TEXT("... and back behind the corner (leaning %d, in cover %d, anim leaning %d, height %d, manual peek %d)"),
+				Op->bIsCornerLeaning ? 1 : 0, Op->bInCover ? 1 : 0, Anim && Anim->bLeaning ? 1 : 0, static_cast<int32>(Op->CurrentCoverHeight), Op->IsManualCornerPeek() ? 1 : 0));
 			// The cover ghost wears the operatives' see-through silhouette (OverlayMaterial MID of M_Silhouette).
 			FActorSpawnParameters Params;
 			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
