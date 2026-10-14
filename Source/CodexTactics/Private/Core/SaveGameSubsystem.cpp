@@ -7,6 +7,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/RecruitSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
+#include "Characters/SquadTransferSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
@@ -66,8 +67,9 @@ namespace
 
 namespace
 {
-	TAutoConsoleVariable<int32> CVarSaveAutosave(TEXT("Codex.Save.Autosave"), 1,
-		TEXT("Autosave before a fight starts and after it ends (save policy 2026-10-08). 0 = off."));
+	TAutoConsoleVariable<int32> CVarHeadlessCheckpoints(TEXT("Codex.Save.HeadlessCheckpoints"), 0,
+		TEXT("1 = tutorial checkpoints are written in headless dev checks started with -ExecCmds too (off by default there: the checks ")
+		TEXT("must not write Saved/SaveGames behind each other's back). Rev 5f: there are no other automatic saves."));
 
 	/** Sprint 13: a stash as {"RifleAmmo": 15, ...} (ETransferItem names). */
 	TSharedRef<FJsonObject> SaveStash(const UItemStashComponent* Stash)
@@ -595,7 +597,7 @@ namespace
 		return Route;
 	}
 
-	TSharedRef<FJsonObject> SaveEnemy(const AEnemyCharacter* Enemy, bool bPreCombat)
+	TSharedRef<FJsonObject> SaveEnemy(const AEnemyCharacter* Enemy)
 	{
 		TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
 		Entry->SetStringField(TEXT("name"), Enemy->GetName());
@@ -609,14 +611,7 @@ namespace
 		Entry->SetStringField(TEXT("route"), Enemy->AssignedPatrolRoute ? Enemy->AssignedPatrolRoute->GetName() : FString());
 		const AEnemyCharacter* Leader = Enemy->GetEscortLeader();
 		Entry->SetStringField(TEXT("escort_leader"), Leader ? Leader->GetName() : FString());
-		FEnemyPatrolSnapshot Snapshot = Enemy->CapturePatrolSnapshot();
-		if (bPreCombat && (Enemy->AssignedPatrolRoute || Leader))
-		{
-			// The ambush autosave: the patrol that just detected the squad is back on duty, not alerted.
-			Snapshot.bOnPatrol = true;
-			Snapshot.bSearching = false;
-			Snapshot.Suspicion = 0.f;
-		}
+		const FEnemyPatrolSnapshot Snapshot = Enemy->CapturePatrolSnapshot();
 		TSharedRef<FJsonObject> Patrol = MakeShared<FJsonObject>();
 		Patrol->SetBoolField(TEXT("active"), Snapshot.bOnPatrol);
 		Patrol->SetNumberField(TEXT("waypoint"), Snapshot.WaypointIndex);
@@ -667,20 +662,19 @@ void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	// Headless dev checks (-ExecCmds) run side by side and must not write Saved/SaveGames behind each other's back.
-	bAutosaveEnabled = !FString(FCommandLine::Get()).Contains(TEXT("-ExecCmds"));
+	bCheckpointsEnabled = !FString(FCommandLine::Get()).Contains(TEXT("-ExecCmds")) || CVarHeadlessCheckpoints.GetValueOnGameThread() != 0;
 }
 
 void USaveGameSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
-	if (UGameFlowSubsystem* Flow = InWorld.GetSubsystem<UGameFlowSubsystem>())
-	{
-		FlowTransitionHandle = Flow->OnBeforeGameFlowChanged.AddUObject(this, &USaveGameSubsystem::HandleFlowTransition);
-	}
+	// Rev 5f (user decision 2026-10-14): no autosave on a flow change (fight start / wave cleared) any more.
 	const UGameInstance* GameInstance = InWorld.GetGameInstance();
 	const UMissionSessionSubsystem* Session = GameInstance ? GameInstance->GetSubsystem<UMissionSessionSubsystem>() : nullptr;
 	if (Session && Session->HasPendingLoad())
 	{
+		// The whole reopened world uses the directory of the slot being loaded (smokes: their own folder; rev 5f).
+		SaveDirectoryOverride = Session->PendingLoadDirectory;
 		// Before the first rendered frame: the level's own start stays hidden until the save is in place.
 		ShowLoadCover(InWorld);
 		// After every actor began play and the mission start (squad, loadout) ran.
@@ -752,13 +746,6 @@ void USaveGameSubsystem::RemoveLoadCover()
 void USaveGameSubsystem::Deinitialize()
 {
 	RemoveLoadCover();
-	if (UWorld* World = GetWorld())
-	{
-		if (UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>())
-		{
-			Flow->OnBeforeGameFlowChanged.Remove(FlowTransitionHandle);
-		}
-	}
 	Super::Deinitialize();
 }
 
@@ -804,11 +791,10 @@ FString USaveGameSubsystem::GetCurrentStageName() const
 
 TSharedRef<FJsonObject> USaveGameSubsystem::CaptureWorldState() const
 {
-	return BuildSaveData(TEXT("snapshot"), TEXT("snapshot"), TEXT("snapshot"), FPreCombatOverride());
+	return BuildSaveData(TEXT("snapshot"), TEXT("snapshot"), TEXT("snapshot"));
 }
 
-TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotName, const FString& Title, const FString& Author,
-	const FPreCombatOverride& PreCombat) const
+TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotName, const FString& Title, const FString& Author) const
 {
 	UWorld* World = GetWorld();
 	const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
@@ -827,18 +813,10 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 
 	TSharedRef<FJsonObject> GameState = MakeShared<FJsonObject>();
 	const ECodexGamePhase LivePhase = Flow ? Flow->GetPhase() : ECodexGamePhase::Exploration;
-	ECodexGamePhase Phase = LivePhase;
-	bool bCombatUnlocked = Flow && Flow->IsCombatUnlocked();
-	int32 WaveIndex = Flow ? FMath::Max(1, Flow->GetWaveIndex()) : 1;
-	float PreparationLeft = Flow && LivePhase == ECodexGamePhase::Preparation ? Flow->GetPreparationTimeRemaining() : 0.f;
-	if (PreCombat.bActive)
-	{
-		// The fight has just begun: the save holds the moment before it (preparation of the wave / exploration before the ambush).
-		Phase = PreCombat.bAmbush ? ECodexGamePhase::Exploration : ECodexGamePhase::Preparation;
-		bCombatUnlocked = !PreCombat.bAmbush;
-		WaveIndex = PreCombat.bAmbush ? 1 : FMath::Max(1, PreCombat.WaveIndex);
-		PreparationLeft = 0.f; // the full preparation / rest
-	}
+	const ECodexGamePhase Phase = LivePhase;
+	const bool bCombatUnlocked = Flow && Flow->IsCombatUnlocked();
+	const int32 WaveIndex = Flow ? FMath::Max(1, Flow->GetWaveIndex()) : 1;
+	const float PreparationLeft = Flow && LivePhase == ECodexGamePhase::Preparation ? Flow->GetPreparationTimeRemaining() : 0.f;
 	GameState->SetBoolField(TEXT("is_game_started"), true);
 	GameState->SetBoolField(TEXT("is_combat_phase_unlocked"), bCombatUnlocked);
 	GameState->SetBoolField(TEXT("is_preparation_active"), Phase == ECodexGamePhase::Preparation);
@@ -848,7 +826,7 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	// Version 2.
 	GameState->SetStringField(TEXT("phase"), SaveGameRules::PhaseToString(Phase));
 	GameState->SetNumberField(TEXT("preparation_time_left"), PreparationLeft);
-	GameState->SetBoolField(TEXT("is_ambush_fight"), Flow && Flow->IsAmbushFight() && !PreCombat.bActive);
+	GameState->SetBoolField(TEXT("is_ambush_fight"), Flow && Flow->IsAmbushFight());
 	GameState->SetStringField(TEXT("squad_posture"), Squad ? SaveEnumName(Squad->GetSquadPosture()) : FString());
 	GameState->SetBoolField(TEXT("autonomous_combat"), Squad && Squad->IsAutonomousSquadCombat());
 
@@ -958,7 +936,7 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	TArray<TSharedPtr<FJsonValue>> Enemies;
 	for (const AEnemyCharacter* Enemy : EnemyActors)
 	{
-		Enemies.Add(MakeShared<FJsonValueObject>(SaveEnemy(Enemy, PreCombat.bActive && PreCombat.bAmbush)));
+		Enemies.Add(MakeShared<FJsonValueObject>(SaveEnemy(Enemy)));
 	}
 	WorldState->SetArrayField(TEXT("enemies"), Enemies);
 	// APC P1: vehicles (transform, crew + seats); the crew's operatives are saved in "squad" as usual.
@@ -1003,38 +981,52 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 			Data->SetObjectField(TEXT("tutorial"), TutorialState);
 		}
 	}
+	// Rev 5f: items handed between squad mates (the tutorial's "heat_packs_given" share lesson reads it).
+	if (const USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>())
+	{
+		const TSharedRef<FJsonObject> HandedOver = MakeShared<FJsonObject>();
+		for (const TPair<ETransferItem, int32>& Entry : Transfer->GetHandedOverCounts())
+		{
+			HandedOver->SetNumberField(SaveEnumName(Entry.Key), Entry.Value);
+		}
+		const TSharedRef<FJsonObject> TransferState = MakeShared<FJsonObject>();
+		TransferState->SetObjectField(TEXT("handed_over"), HandedOver);
+		Data->SetObjectField(TEXT("squad_transfer"), TransferState);
+	}
 	return Data;
 }
 
-bool USaveGameSubsystem::WriteSave(const FString& SlotName, const FString& CustomTitle, const FString& Author, const FPreCombatOverride& PreCombat)
+bool USaveGameSubsystem::WriteSave(const FString& SlotName, const FString& CustomTitle, const FString& Author)
 {
 	const FString Slot = SaveGameRules::SanitizeSlotName(SlotName);
 	const FString Type = SaveGameRules::GetSaveType(Slot);
 	FString Title = CustomTitle;
 	if (Title.IsEmpty())
 	{
-		Title = Type == TEXT("autosave") ? TEXT("Autosave: ") + GetCurrentStageName()
+		Title = Type == TEXT("checkpoint") ? TEXT("Checkpoint: ") + GetCurrentStageName()
 			: (Type == TEXT("quicksave") ? TEXT("Quicksave: ") + GetCurrentStageName() : Slot);
 	}
 	FString Json;
 	const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Json);
-	if (!FJsonSerializer::Serialize(BuildSaveData(Slot, Title, Author, PreCombat), Writer))
+	if (!FJsonSerializer::Serialize(BuildSaveData(Slot, Title, Author), Writer))
 	{
 		return false;
 	}
 	IFileManager::Get().MakeDirectory(*GetSaveDirectory(), true);
 	const bool bSaved = FFileHelper::SaveStringToFile(Json, *GetSavePath(Slot), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	WrittenSaveCount += bSaved ? 1 : 0;
+	UE_LOG(LogCodexTactics, Display, TEXT("Save: \"%s\" (%s) %s"), *Slot, *Type, bSaved ? TEXT("written") : TEXT("FAILED"));
 	UCodexEventBus* Bus = UCodexEventBus::Get(this);
 	if (bSaved && Bus)
 	{
-		Bus->OnGameSaved.Broadcast(Slot, Type == TEXT("autosave"));
+		Bus->OnGameSaved.Broadcast(Slot, Type == TEXT("checkpoint")); // rev 5f: the only save the game writes on its own
 	}
 	return bSaved;
 }
 
 bool USaveGameSubsystem::SaveGame(const FString& SlotName, const FString& CustomTitle, const FString& Author)
 {
-	return WriteSave(SlotName, CustomTitle, Author, FPreCombatOverride());
+	return WriteSave(SlotName, CustomTitle, Author);
 }
 
 bool USaveGameSubsystem::LoadGame(const FString& SlotName)
@@ -1112,7 +1104,7 @@ void USaveGameSubsystem::ApplyPendingLoad()
 
 FString USaveGameSubsystem::GetContinueSlot() const
 {
-	const TArray<FSaveSlotInfo> All = GetAllSaves();
+	const TArray<FSaveSlotInfo> All = GetAllSaves(); // legacy autosaves are not listed: never "continued"
 	return All.IsEmpty() ? FString() : All[0].SlotName;
 }
 
@@ -1143,6 +1135,24 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 	if (UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>(); Tutorial && Data->TryGetObjectField(TEXT("tutorial"), TutorialState))
 	{
 		Tutorial->RestoreSaveState(**TutorialState);
+	}
+	// Rev 5f: items handed between squad mates (older saves: the session's counts stay).
+	const TSharedPtr<FJsonObject>* TransferState = nullptr;
+	const TSharedPtr<FJsonObject>* HandedOverState = nullptr;
+	if (USquadTransferSubsystem* Transfer = World->GetSubsystem<USquadTransferSubsystem>();
+		Transfer && Data->TryGetObjectField(TEXT("squad_transfer"), TransferState) && (*TransferState)->TryGetObjectField(TEXT("handed_over"), HandedOverState))
+	{
+		TMap<ETransferItem, int32> Counts;
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*HandedOverState)->Values)
+		{
+			ETransferItem Item = ETransferItem::Medkit;
+			double Count = 0.0;
+			if (LoadEnumName(Entry.Key, Item) && Entry.Value.IsValid() && Entry.Value->TryGetNumber(Count))
+			{
+				Counts.Add(Item, FMath::Max(0, static_cast<int32>(Count)));
+			}
+		}
+		Transfer->RestoreHandedOverCounts(Counts);
 	}
 
 	// 0. Susanin first, so a recruited Susanin takes his squad entry below.
@@ -1567,7 +1577,7 @@ bool USaveGameSubsystem::GetSaveInfo(const FString& SlotName, FSaveSlotInfo& Out
 	return true;
 }
 
-TArray<FSaveSlotInfo> USaveGameSubsystem::GetAllSaves() const
+TArray<FSaveSlotInfo> USaveGameSubsystem::GetAllSaves(bool bIncludeHidden) const
 {
 	TArray<FSaveSlotInfo> Saves;
 	TArray<FString> Files;
@@ -1575,7 +1585,7 @@ TArray<FSaveSlotInfo> USaveGameSubsystem::GetAllSaves() const
 	for (const FString& File : Files)
 	{
 		FSaveSlotInfo Info;
-		if (GetSaveInfo(FPaths::GetBaseFilename(File), Info))
+		if (GetSaveInfo(FPaths::GetBaseFilename(File), Info) && (bIncludeHidden || SaveGameRules::IsListedSaveType(Info.SaveType)))
 		{
 			Saves.Add(Info);
 		}
@@ -1618,19 +1628,23 @@ bool USaveGameSubsystem::QuickSave()
 		Post(TEXT("SYSTEM"), FString::Printf(TEXT("⛔ %s."), *Reason.ToString()));
 		return false;
 	}
-	const bool bSaved = SaveGame(TEXT("quicksave"), TEXT("Quicksave"));
+	const bool bSaved = SaveGame(SaveGameRules::GetQuicksaveSlotName());
 	Post(TEXT("SYSTEM"), bSaved ? TEXT("⚡ Game quicksaved [F5]!") : TEXT("❌ Quicksave failed!"));
 	return bSaved;
 }
 
 bool USaveGameSubsystem::QuickLoad()
 {
-	const FString Slot = GetContinueSlot();
+	// Rev 5f: the newest of the quicksave and the tutorial checkpoint (manual saves are loaded from the menu).
+	const TArray<FSaveSlotInfo> All = GetAllSaves();
+	const int32 Pick = SaveGameRules::PickQuickLoadIndex(All);
+	const FString Slot = All.IsValidIndex(Pick) ? All[Pick].SlotName : FString();
 	if (Slot.IsEmpty())
 	{
-		Post(TEXT("SYSTEM"), TEXT("⛔ No saves to load."));
+		Post(TEXT("SYSTEM"), TEXT("⛔ No quicksave or checkpoint to load."));
 		return false;
 	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Save: F9 loads \"%s\" (%s, the newest quicksave / checkpoint)"), *Slot, *All[Pick].SaveType);
 	const bool bLoading = LoadGameWithTravel(Slot);
 	if (!bLoading)
 	{
@@ -1665,34 +1679,4 @@ bool USaveGameSubsystem::LoadFromSlotWithMessage(const FString& SlotName)
 		Post(TEXT("SYSTEM"), FString::Printf(TEXT("📂 Save \"%s\" loaded!"), *SlotName));
 	}
 	return bLoaded;
-}
-
-bool USaveGameSubsystem::Autosave(EAutosaveMoment Moment)
-{
-	if (Moment == EAutosaveMoment::None || !bAutosaveEnabled || CVarSaveAutosave.GetValueOnGameThread() == 0)
-	{
-		return false;
-	}
-	FPreCombatOverride PreCombat;
-	if (Moment == EAutosaveMoment::BeforeCombat)
-	{
-		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-		PreCombat.bActive = true;
-		PreCombat.bAmbush = Flow && Flow->IsAmbushFight();
-		PreCombat.WaveIndex = Flow ? FMath::Max(1, Flow->GetWaveIndex()) : 1;
-	}
-	const bool bSaved = WriteSave(SaveGameRules::GetAutosaveSlotName(), FString(), TEXT("Commander"), PreCombat);
-	if (bSaved)
-	{
-		++AutosaveCount;
-		LastAutosaveMoment = Moment;
-		UE_LOG(LogCodexTactics, Display, TEXT("Save: autosave (%s)"), Moment == EAutosaveMoment::BeforeCombat ? TEXT("before combat") : TEXT("after combat"));
-		Post(TEXT("SYSTEM"), TEXT("💾 Autosaved."));
-	}
-	return bSaved;
-}
-
-void USaveGameSubsystem::HandleFlowTransition(ECodexGamePhase OldPhase, ECodexGamePhase NewPhase, ECodexCombatMode NewMode)
-{
-	Autosave(SaveGameRules::GetAutosaveMoment(OldPhase, NewPhase));
 }

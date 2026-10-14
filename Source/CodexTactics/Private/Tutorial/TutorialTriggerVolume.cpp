@@ -64,11 +64,14 @@ bool ATutorialTriggerVolume::TryActivate(AActor* Actor)
 		return false;
 	}
 	UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>();
+	// Rev 5f: used up BEFORE the tutorial reacts, so a checkpoint written by the beat this volume starts saves it as fired.
+	const bool bWasFired = bFired;
+	bFired = true;
 	if (!Tutorial || !Tutorial->NotifyVolumeEntered(this, Operative))
 	{
+		bFired = bWasFired;
 		return false;
 	}
-	bFired = true;
 	return true;
 }
 

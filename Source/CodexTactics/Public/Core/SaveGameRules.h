@@ -11,7 +11,10 @@ struct CODEXTACTICS_API FSaveSlotInfo
 	FString Title;
 	int64 Timestamp = 0;
 	FString DateTime;
-	/** "manual", "quicksave" or "autosave". */
+	/**
+	 * "checkpoint" (a tutorial beat checkpoint), "quicksave" (F5), "manual" (the pause menu's SAVE GAME) or "autosave" (a LEGACY
+	 * file written before rev 5f: hidden from every list, never loaded by F9 / Continue, left on disk).
+	 */
 	FString SaveType;
 	FString Author;
 	FString StageName;
@@ -30,20 +33,10 @@ enum class ESaveBlockReason : uint8
 	None,
 	/** A wave / ambush fight is on (real time, tactical pause or turn-based). */
 	Combat,
-	/** The pre-combat cutscene runs (the fight is about to start; the autosave follows). */
+	/** The pre-combat cutscene runs (the fight is about to start). */
 	Cutscene,
 	/** The mission is lost. */
 	GameOver
-};
-
-/** When an automatic save is written (save policy 2026-10-08). */
-enum class EAutosaveMoment : uint8
-{
-	None,
-	/** Right before a fight starts (wave start / ambush start): written with the pre-combat phase. */
-	BeforeCombat,
-	/** Right after a fight ends (wave cleared / victory). */
-	AfterCombat
 };
 
 /** Game flow to restore from a save (see SaveGameRules::ResolveLoadFlow). */
@@ -70,8 +63,13 @@ namespace SaveGameRules
 	 */
 	constexpr int32 CurrentSaveVersion = 2;
 
-	/** Slot of the automatic saves (the "auto" in the name makes it an autosave, Godot save_manager.gd). */
-	CODEXTACTICS_API FString GetAutosaveSlotName();
+	/**
+	 * Rev 5f (user decision 2026-10-14, after a save bug): NO automatic saves at all. The only saves are the tutorial CHECKPOINTS
+	 * (slot GetCheckpointSlotName, written when a tutorial beat with "checkpoint": true starts - i.e. the previous stage is done;
+	 * "Retry from checkpoint") and the player's own saves: F5 (GetQuicksaveSlotName) and the pause menu's SAVE GAME (named slots).
+	 */
+	CODEXTACTICS_API FString GetCheckpointSlotName();
+	CODEXTACTICS_API FString GetQuicksaveSlotName();
 
 	/** Save policy: Exploration / Preparation / WaveCleared / PostCombat allow saving; the fight, cutscene and game over do not. */
 	CODEXTACTICS_API ESaveBlockReason GetSaveBlockReason(ECodexGamePhase Phase);
@@ -79,8 +77,6 @@ namespace SaveGameRules
 	/** Player-facing reason ("Saving is disabled during combat"); empty for None. */
 	CODEXTACTICS_API FText GetSaveBlockText(ESaveBlockReason Reason);
 
-	/** A phase change that writes an autosave: into WaveCombat from outside it = BeforeCombat, WaveCombat -> WaveCleared = AfterCombat. */
-	CODEXTACTICS_API EAutosaveMoment GetAutosaveMoment(ECodexGamePhase OldPhase, ECodexGamePhase NewPhase);
 
 	/**
 	 * The flow a load resumes in. Version 1 (no phase): preparation / wave -> Preparation of the saved wave, else
@@ -99,8 +95,20 @@ namespace SaveGameRules
 	/** Godot sanitize_slot_name: trims, replaces \ / : * ? " < > | with _, strips leading / trailing dots; empty -> "Leonid_01". */
 	CODEXTACTICS_API FString SanitizeSlotName(const FString& Raw);
 
-	/** "autosave" if the slot name contains "auto", "quicksave" for "quick" (or the legacy Russian "быстр"), else "manual". */
+	/**
+	 * "checkpoint" for a slot named checkpoint*, "autosave" for a LEGACY auto* slot (rev 5f: hidden), "quicksave" for one containing
+	 * "quick" (or the legacy Russian "быстр"), else "manual".
+	 */
 	CODEXTACTICS_API FString GetSaveType(const FString& SlotName);
+
+	/** Rev 5f: false for the legacy "autosave" files - never listed, never picked by F9 / Continue (and never deleted). */
+	CODEXTACTICS_API bool IsListedSaveType(const FString& SaveType);
+
+	/** Rev 5f: the label the load list shows in front of a slot's title: "CHECKPOINT", "QUICKSAVE", "SAVE". */
+	CODEXTACTICS_API FString GetSaveTypeLabel(const FString& SaveType);
+
+	/** Rev 5f: the slot F9 loads - the newest (highest Timestamp) quicksave or checkpoint; INDEX_NONE when there is none. */
+	CODEXTACTICS_API int32 PickQuickLoadIndex(const TArray<FSaveSlotInfo>& Slots);
 
 	/** Godot suggest_next_slot_name: Prefix_NN with NN = highest existing Prefix_NN + 1 (two digits). */
 	CODEXTACTICS_API FString SuggestNextSlotName(const TArray<FString>& ExistingSlots, const FString& Prefix = TEXT("Leonid"));

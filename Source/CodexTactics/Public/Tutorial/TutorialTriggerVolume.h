@@ -70,6 +70,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tutorial")
 	void ResetVolume() { bFired = false; }
 
+	/** Rev 5f: the fired flag as a save holds it (UTutorialSubsystem::RestoreSaveState; a used-up volume stays used up after a load). */
+	void SetFired(bool bInFired) { bFired = bInFired; }
+
 	/** Actor walked in: filter, once, then the tutorial; true when it fired (also used by smokes). */
 	bool TryActivate(AActor* Actor);
 

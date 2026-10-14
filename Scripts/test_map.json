@@ -29,7 +29,7 @@
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugSmoke", "CoverHugMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
-    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "ControlsScreenSmoke",
+    "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke"
   ],
   "smokeOptions": {
@@ -37,6 +37,7 @@
     "SaveLoadSmoke": { "exclusive": true },
     "SaveRoundTripSmoke": { "exclusive": true },
     "TutorialSmoke": { "exclusive": true },
+    "TutorialSaveSmoke": { "exclusive": true, "map": "/Game/Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json" },
     "PMCTripwireSmoke": { "exclusive": true },
     "PauseMenuSmoke": { "exclusive": true },
     "ControlsScreenSmoke": { "exclusive": true },
@@ -67,7 +68,7 @@
       "globs": ["Source/**/Tutorial/**", "Source/**/Core/PlayerCommands*", "Source/**/Core/DemoModeSubsystem*", "Source/**/UI/TutorialOverlay*",
         "Source/**/Debug/TutorialSmoke*", "Content/Data/Tutorial/**"],
       "tests": ["CodexTactics.Tutorial", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": ["TutorialSmoke", "CoverEventSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke"]
+      "smokes": ["TutorialSmoke", "TutorialSaveSmoke", "CoverEventSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke"]
     },
     {
       "name": "sniper",
@@ -316,7 +317,7 @@
       "name": "save-load",
       "globs": ["Source/**/Core/SaveGame*", "Source/**/Core/SavePolicy*"],
       "tests": ["CodexTactics.Core.SaveGame", "CodexTactics.Save"],
-      "smokes": ["SaveRoundTripSmoke", "SaveLoadSmoke", "PauseMenuSmoke", "EventBusSmoke", "FrontendSmoke", "GateGeneratorSmoke"]
+      "smokes": ["SaveRoundTripSmoke", "SaveLoadSmoke", "TutorialSaveSmoke", "PauseMenuSmoke", "EventBusSmoke", "FrontendSmoke", "GateGeneratorSmoke"]
     },
     {
       "name": "mission-flow",

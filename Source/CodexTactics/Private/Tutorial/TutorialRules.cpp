@@ -689,6 +689,31 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 		History->SetObjectField(Command.ToString(), Use);
 	}
 	Object->SetObjectField(TEXT("history"), History);
+	// Rev 5f: how far the running steps got and who counted for which step.
+	const TSharedRef<FJsonObject> Runtime = MakeShared<FJsonObject>();
+	TArray<FName> StepIds;
+	Progress.StepProgress.GetKeys(StepIds);
+	StepIds.Sort(FNameLexicalLess());
+	auto NameArray = [](const TArray<FName>& Names)
+	{
+		TArray<TSharedPtr<FJsonValue>> Values;
+		for (const FName Name : Names)
+		{
+			Values.Add(MakeShared<FJsonValueString>(Name.ToString()));
+		}
+		return Values;
+	};
+	for (const FName StepId : StepIds)
+	{
+		const FTutorialStepProgress& Step = Progress.StepProgress[StepId];
+		const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+		Entry->SetNumberField(TEXT("progress"), Step.Progress);
+		Entry->SetNumberField(TEXT("held_s"), Step.HeldSeconds);
+		Entry->SetArrayField(TEXT("subjects"), NameArray(Step.Subjects));
+		Entry->SetArrayField(TEXT("contributors"), NameArray(Step.Contributors));
+		Runtime->SetObjectField(StepId.ToString(), Entry);
+	}
+	Object->SetObjectField(TEXT("runtime"), Runtime);
 	return Object;
 }
 
@@ -751,6 +776,38 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 				Stored.Count = FMath::Max(0, static_cast<int32>(TutorialRulesLocal::JsonNumber(Use, TEXT("count"), 0.0)));
 				Stored.HeldSeconds = FMath::Max(0.f, static_cast<float>(TutorialRulesLocal::JsonNumber(Use, TEXT("held_s"), 0.0)));
 			}
+		}
+	}
+	const TSharedPtr<FJsonObject>* Runtime = nullptr;
+	if (Object.TryGetObjectField(TEXT("runtime"), Runtime))
+	{
+		auto ReadNames = [](const TSharedPtr<FJsonObject>& Entry, const TCHAR* Field, TArray<FName>& Out)
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
+			if (Entry->TryGetArrayField(Field, Values))
+			{
+				for (const TSharedPtr<FJsonValue>& Value : *Values)
+				{
+					FString Text;
+					if (Value.IsValid() && Value->TryGetString(Text) && !Text.IsEmpty())
+					{
+						Out.AddUnique(FName(*Text));
+					}
+				}
+			}
+		};
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*Runtime)->Values)
+		{
+			const TSharedPtr<FJsonObject> Step = Entry.Value.IsValid() ? Entry.Value->AsObject() : nullptr;
+			if (!Step.IsValid() || Entry.Key.IsEmpty())
+			{
+				continue;
+			}
+			FTutorialStepProgress& Stored = OutProgress.StepProgress.Add(FName(*Entry.Key));
+			Stored.Progress = FMath::Max(0, static_cast<int32>(TutorialRulesLocal::JsonNumber(Step, TEXT("progress"), 0.0)));
+			Stored.HeldSeconds = FMath::Max(0.f, static_cast<float>(TutorialRulesLocal::JsonNumber(Step, TEXT("held_s"), 0.0)));
+			ReadNames(Step, TEXT("subjects"), Stored.Subjects);
+			ReadNames(Step, TEXT("contributors"), Stored.Contributors);
 		}
 	}
 	return true;

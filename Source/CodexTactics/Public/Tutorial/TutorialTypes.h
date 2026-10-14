@@ -257,6 +257,18 @@ struct CODEXTACTICS_API FTutorialCommandUse
 	float HeldSeconds = 0.f;
 };
 
+/**
+ * Rev 5f (save round trip): how far one step got - a running step's counted uses / hold time / counted operatives, and who counted
+ * for it ("distinct_from" of other steps; kept for finished steps too).
+ */
+struct CODEXTACTICS_API FTutorialStepProgress
+{
+	int32 Progress = 0;
+	float HeldSeconds = 0.f;
+	TArray<FName> Subjects;
+	TArray<FName> Contributors;
+};
+
 /** Saved tutorial progress (the "tutorial" section of a save). */
 struct CODEXTACTICS_API FTutorialProgress
 {
@@ -271,6 +283,11 @@ struct CODEXTACTICS_API FTutorialProgress
 	bool bHasLocks = false;
 	/** Player command history ("history": {id: {count, held_s}}) for precredited lessons. */
 	TMap<FName, FTutorialCommandUse> History;
+	/**
+	 * Rev 5f ("runtime": {id: {progress, held_s, subjects, contributors}}): before rev 5f a load restarted every running step from 0
+	 * (e.g. two of three across the bridge -> the objective waited for crossings that never came) and forgot who did which part.
+	 */
+	TMap<FName, FTutorialStepProgress> StepProgress;
 
 	bool IsEmpty() const { return Finished.IsEmpty() && Pending.IsEmpty() && CurrentBeat.IsNone() && Locks.IsEmpty() && History.IsEmpty(); }
 };

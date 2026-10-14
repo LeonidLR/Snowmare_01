@@ -1109,6 +1109,18 @@ FTutorialProgress FTutorialStateMachine::ExportProgress() const
 		{
 			Progress.Pending.Add(Data.Steps[Index].Id);
 		}
+		// Rev 5f: how far a running step got, and who counted for any step (distinct_from of the others).
+		const bool bRunning = TutorialRules::IsRunning(State.State);
+		if ((bRunning && (State.Progress > 0 || State.HeldSeconds > 0.f || !State.CountedSubjects.IsEmpty())) || !State.Contributors.IsEmpty())
+		{
+			FTutorialStepProgress& Step = Progress.StepProgress.Add(Data.Steps[Index].Id);
+			Step.Progress = bRunning ? State.Progress : 0;
+			Step.HeldSeconds = bRunning ? State.HeldSeconds : 0.f;
+			Step.Subjects = bRunning ? State.CountedSubjects.Array() : TArray<FName>();
+			Step.Contributors = State.Contributors.Array();
+			Step.Subjects.Sort(FNameLexicalLess());
+			Step.Contributors.Sort(FNameLexicalLess());
+		}
 	}
 	return Progress;
 }
@@ -1147,11 +1159,27 @@ void FTutorialStateMachine::ImportProgress(const FTutorialProgress& Progress)
 			}
 		}
 	}
+	// Rev 5f: who counted for which step (finished ones too: "distinct_from" of the steps still running).
+	for (const TPair<FName, FTutorialStepProgress>& Entry : Progress.StepProgress)
+	{
+		const int32 Index = IndexOf(Entry.Key);
+		if (Runtime.IsValidIndex(Index))
+		{
+			Runtime[Index].Contributors = TSet<FName>(Entry.Value.Contributors);
+		}
+	}
 	for (const FName StepId : Progress.Pending)
 	{
 		const int32 Index = IndexOf(StepId);
 		if (Runtime.IsValidIndex(Index) && Runtime[Index].State == ETutorialStepState::Idle)
 		{
+			// Rev 5f: the step goes on from where it was (two of three across the bridge stay counted), not from 0.
+			if (const FTutorialStepProgress* Saved = Progress.StepProgress.Find(StepId))
+			{
+				Runtime[Index].Progress = Saved->Progress;
+				Runtime[Index].HeldSeconds = Saved->HeldSeconds;
+				Runtime[Index].CountedSubjects = TSet<FName>(Saved->Subjects);
+			}
 			Enqueue(Index);
 		}
 	}

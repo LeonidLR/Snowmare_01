@@ -13,8 +13,10 @@
 //     reset, the hound killed, an extra enemy spawned), load in place, SNAPSHOT again: every field must match (each
 //     mismatch is listed) plus direct checks of the world.
 //  2. Save policy: cutscene and fight refuse F5 / dialog saves (CanSaveNow hint "Saving is disabled during combat",
-//     which the frontend pause screen shows), also in the tactical pause; autosave right before the wave (written as its preparation) and right
-//     after it is cleared; loading the after-combat autosave resumes the next wave's preparation.
+//     which the frontend pause screen shows), also in the tactical pause; rev 5f (user decision 2026-10-14): NOTHING is saved on
+//     its own - the wave start, the pause and the wave cleared write no file (no autosave); F5 after the wave resumes the next
+//     wave's preparation; a legacy "autosave" file on disk is hidden from the list / Continue / F9; F9 picks the newest of the
+//     quicksave and the checkpoint (a newer manual save does not count).
 //     Tutorial progress (Demo 01): completed / skipped / shown steps and the beat survive the round trip.
 //  3. Load with travel ("Continue"): the map is reopened, the save applied to the fresh world and its SNAPSHOT diffed
 //     against the first one (runtime routes / enemies / mine / tripwire / turret recreated, killed level enemies stay dead).
@@ -346,7 +348,7 @@ namespace SaveRoundTripSmoke
 		}
 		Saves->SaveDirectoryOverride = FPaths::ProjectSavedDir() / TEXT("SmokeSaves");
 		IFileManager::Get().DeleteDirectory(*Saves->SaveDirectoryOverride, false, true);
-		Saves->bAutosaveEnabled = true;
+		Saves->bCheckpointsEnabled = true;
 
 		const FVector F = Commander->GetActorForwardVector().GetSafeNormal2D();
 		const FVector R = FVector::CrossProduct(FVector::UpVector, F);
@@ -804,7 +806,15 @@ namespace SaveRoundTripSmoke
 			TEXT("postures back (squad Passive, engineer Defensive)"));
 	}
 
-	// --- Stage 2: save policy and autosaves ---
+	// --- Stage 2: save policy; rev 5f: no automatic saves ---
+
+	/** Save files in the smoke's save directory. */
+	int32 CountSaveFiles(const USaveGameSubsystem& Saves)
+	{
+		TArray<FString> Files;
+		IFileManager::Get().FindFiles(Files, *(Saves.GetSaveDirectory() / TEXT("*.json")), true, false);
+		return Files.Num();
+	}
 
 	void PolicyAndAutosave(UWorld* World, FState& State)
 	{
@@ -817,19 +827,18 @@ namespace SaveRoundTripSmoke
 		}
 		Saves->DeleteSave(TEXT("quicksave"));
 		FText Hint;
-		// Sudden horde start (user decision 2026-10-11): no cutscene / preparation; the autosave runs at the spawn moment,
-		// before the horde intro, and nothing can be saved from then on.
+		// Sudden horde start (user decision 2026-10-11): no cutscene / preparation; nothing can be saved from then on. Rev 5f (user
+		// decision 2026-10-14): the fight start writes NO save (the autosave before the wave is gone).
 		Check(State, Saves->CanSaveNow(), TEXT("exploration: saving allowed"));
-		const int32 Before = Saves->GetAutosaveCount();
+		const int32 WrittenBefore = Saves->GetWrittenSaveCount();
+		const int32 FilesBefore = CountSaveFiles(*Saves);
 		Check(State, Flow->TriggerCombatZone() == EGameFlowResult::Ok && Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->IsAwaitingHordeIntro(),
 			TEXT("wave 1 started suddenly (horde intro armed)"));
-		Check(State, Saves->GetAutosaveCount() == Before + 1 && Saves->GetLastAutosaveMoment() == EAutosaveMoment::BeforeCombat
-			&& Saves->HasSave(SaveGameRules::GetAutosaveSlotName()), TEXT("autosave right before the wave"));
+		Check(State, Saves->GetWrittenSaveCount() == WrittenBefore && CountSaveFiles(*Saves) == FilesBefore && !Saves->HasSave(TEXT("autosave")),
+			TEXT("no autosave when the wave starts (rev 5f)"));
 		Check(State, !Saves->CanSaveNow(&Hint) && Hint.ToString() == TEXT("Saving is disabled during combat"),
 			FString::Printf(TEXT("sudden wave: saving refused (\"%s\")"), *Hint.ToString()));
 		SmokeUtils::ReleaseHordeIntroPause(Flow);
-		const TSharedPtr<FJsonObject> PreCombat = ReadSaveFile(*Saves, SaveGameRules::GetAutosaveSlotName());
-		Check(State, SavedPhase(PreCombat) == TEXT("Preparation"), FString::Printf(TEXT("pre-combat autosave holds the preparation (%s)"), *SavedPhase(PreCombat)));
 
 		const bool bFightRefused = !Saves->CanSaveNow(&Hint);
 		Check(State, bFightRefused && Hint.ToString() == TEXT("Saving is disabled during combat"), FString::Printf(TEXT("fight: \"%s\""), *Hint.ToString()));
@@ -840,19 +849,55 @@ namespace SaveRoundTripSmoke
 			Check(State, Flow->GetCombatMode() == ECodexCombatMode::TacticalPause && !Saves->CanSaveNow(), TEXT("tactical pause: saving refused"));
 			Flow->ToggleTacticalPause();
 		}
-		Check(State, Saves->GetAutosaveCount() == Before + 1, TEXT("no autosave inside the fight (pause)"));
+		Check(State, Saves->GetWrittenSaveCount() == WrittenBefore, TEXT("nothing saved inside the fight (pause)"));
 
-		Check(State, Flow->NotifyWaveCleared() == EGameFlowResult::Ok && Saves->GetAutosaveCount() == Before + 2
-			&& Saves->GetLastAutosaveMoment() == EAutosaveMoment::AfterCombat, TEXT("autosave right after the wave is cleared"));
-		const TSharedPtr<FJsonObject> PostCombat = ReadSaveFile(*Saves, SaveGameRules::GetAutosaveSlotName());
-		Check(State, SavedPhase(PostCombat) == TEXT("WaveCleared") && Saves->CanSaveNow(), TEXT("after the wave: saving allowed, autosave holds WaveCleared"));
+		Check(State, Flow->NotifyWaveCleared() == EGameFlowResult::Ok && Saves->GetWrittenSaveCount() == WrittenBefore && CountSaveFiles(*Saves) == FilesBefore,
+			TEXT("no autosave when the wave is cleared (rev 5f)"));
+		Check(State, Saves->CanSaveNow() && Saves->QuickSave() && SavedPhase(ReadSaveFile(*Saves, TEXT("quicksave"))) == TEXT("WaveCleared"),
+			TEXT("after the wave: F5 allowed, the quicksave holds WaveCleared"));
 		const FGameFlowConfig& Config = Flow->GetConfig();
 		const FSaveLoadFlow Expected = SaveGameRules::ResolveLoadFlow(2, ECodexGamePhase::WaveCleared, true, false, false, 1, Config.TotalWaves, false,
 			Config.bAmbushSingleFight);
-		const bool bAutoLoaded = Saves->LoadGame(SaveGameRules::GetAutosaveSlotName());
-		Check(State, bAutoLoaded && Flow->GetPhase() == Expected.Phase && Flow->GetWaveIndex() == Expected.WaveIndex,
-			FString::Printf(TEXT("after-combat autosave resumes %s of wave %d"), *UEnum::GetValueAsString(Flow->GetPhase()), Flow->GetWaveIndex()));
-		Check(State, Saves->GetAutosaveCount() == Before + 2, TEXT("loading writes no autosave"));
+		const int32 WrittenBeforeLoad = Saves->GetWrittenSaveCount();
+		const bool bQuickLoaded = Saves->LoadGame(TEXT("quicksave"));
+		Check(State, bQuickLoaded && Flow->GetPhase() == Expected.Phase && Flow->GetWaveIndex() == Expected.WaveIndex,
+			FString::Printf(TEXT("the after-the-wave quicksave resumes %s of wave %d"), *UEnum::GetValueAsString(Flow->GetPhase()), Flow->GetWaveIndex()));
+		Check(State, Saves->GetWrittenSaveCount() == WrittenBeforeLoad, TEXT("loading writes no save"));
+
+		// Rev 5f: a legacy autosave file (written by an older build) stays on disk but is never listed / continued / F9-loaded.
+		const FString Legacy = Saves->GetSaveDirectory() / TEXT("autosave.json");
+		if (TSharedPtr<FJsonObject> LegacyData = ReadSaveFile(*Saves, Slot))
+		{
+			// The NEWEST file on disk: an old build's autosave written after everything else.
+			LegacyData->SetStringField(TEXT("slot_name"), TEXT("autosave"));
+			LegacyData->SetStringField(TEXT("save_type"), TEXT("autosave"));
+			LegacyData->SetStringField(TEXT("title"), TEXT("Autosave: legacy"));
+			LegacyData->SetNumberField(TEXT("timestamp"), static_cast<double>(FDateTime::UtcNow().ToUnixTimestamp() + 3600));
+			FString LegacyJson;
+			FJsonSerializer::Serialize(LegacyData.ToSharedRef(), TJsonWriterFactory<>::Create(&LegacyJson));
+			FFileHelper::SaveStringToFile(LegacyJson, *Legacy);
+		}
+		const TArray<FSaveSlotInfo> Listed = Saves->GetAllSaves();
+		const TArray<FSaveSlotInfo> All = Saves->GetAllSaves(/*bIncludeHidden*/ true);
+		const bool bListed = Listed.ContainsByPredicate([](const FSaveSlotInfo& Info) { return Info.SlotName == TEXT("autosave"); });
+		Check(State, IFileManager::Get().FileExists(*Legacy) && !bListed && All.Num() == Listed.Num() + 1 && Saves->GetContinueSlot() != TEXT("autosave"),
+			FString::Printf(TEXT("legacy autosave file kept on disk but hidden (listed %d, on disk %d, continue \"%s\")"), Listed.Num(), All.Num(), *Saves->GetContinueSlot()));
+		// F9 = the newest of the quicksave and the checkpoint; a newer manual save does not count.
+		FPlatformProcess::Sleep(1.1f); // the save timestamp has whole seconds
+		Check(State, Saves->SaveGame(SaveGameRules::GetCheckpointSlotName(), TEXT("Checkpoint: smoke")), TEXT("a checkpoint written after the quicksave"));
+		FPlatformProcess::Sleep(1.1f);
+		Check(State, Saves->SaveGame(TEXT("manual_newest"), TEXT("manual_newest")), TEXT("a manual save written last"));
+		const TArray<FSaveSlotInfo> AfterManual = Saves->GetAllSaves();
+		const int32 Pick = SaveGameRules::PickQuickLoadIndex(AfterManual);
+		Check(State, AfterManual.IsValidIndex(Pick) && AfterManual[Pick].SlotName == SaveGameRules::GetCheckpointSlotName() && AfterManual[0].SlotName == TEXT("manual_newest"),
+			FString::Printf(TEXT("F9 picks the checkpoint (newer than the quicksave), not the newest manual save (%s)"), AfterManual.IsValidIndex(Pick) ? *AfterManual[Pick].SlotName : TEXT("none")));
+		FPlatformProcess::Sleep(1.1f);
+		Check(State, Saves->QuickSave(), TEXT("F5 again"));
+		const TArray<FSaveSlotInfo> AfterF5 = Saves->GetAllSaves();
+		const int32 PickF5 = SaveGameRules::PickQuickLoadIndex(AfterF5);
+		Check(State, AfterF5.IsValidIndex(PickF5) && AfterF5[PickF5].SlotName == TEXT("quicksave"), TEXT("then F9 picks the newer quicksave"));
+		Saves->DeleteSave(TEXT("manual_newest"));
+		Saves->DeleteSave(SaveGameRules::GetCheckpointSlotName());
 	}
 
 	bool Step(TSharedRef<FState> StatePtr)

@@ -1387,6 +1387,54 @@ bool FTutorialRouteDemoChainTest::RunTest(const FString&)
 	return true;
 }
 
+TUTORIAL_LOCK_TEST(FTutorialSaveRunningProgressTest, "Save.RunningProgress")
+bool FTutorialSaveRunningProgressTest::RunTest(const FString&)
+{
+	// Rev 5f (save round trip): a running step goes on from where it was after a load (two of three across the bridge stay counted, the
+	// same operative never counts twice), and who did which part survives ("distinct_from" of the steps still running).
+	const TCHAR* Json = TEXT(R"JSON({
+		"id": "progress", "start_beat": "A1", "beats": [ { "id": "A1", "lock": ["Order.Sprint"] } ],
+		"steps": [
+			{ "id": "bridge", "beat": "A1", "kind": "objective", "trigger": { "type": "beat_start" },
+			  "complete": { "event": "BridgeCrossed", "count": 3, "distinct_operatives": true } },
+			{ "id": "left", "beat": "A1", "kind": "hint_card", "trigger": { "type": "beat_start" },
+			  "complete": { "event": "CoverEntered", "distinct_from": ["right"] } },
+			{ "id": "right", "beat": "A1", "kind": "objective", "trigger": { "type": "beat_start" },
+			  "complete": { "event": "CoverEntered.Right", "distinct_from": ["left"] } }
+		] })JSON");
+	FTutorialStepsData Data;
+	if (!TutorialLockTestData::Parse(*this, Json, Data))
+	{
+		return false;
+	}
+	FTutorialStateMachine Machine;
+	Machine.Load(Data);
+	Machine.StartBeat(TEXT("A1"));
+	Machine.Tick(2.f);
+	Machine.HandleEvent(TEXT("BridgeCrossed"), TEXT("Op1"));
+	Machine.HandleEvent(TEXT("BridgeCrossed"), TEXT("Op2"));
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op1")); // Op1 did the left part
+	TestEqual(TEXT("left done by Op1"), Machine.GetState(TEXT("left")), ETutorialStepState::Completed);
+	TestEqual(TEXT("two of three across"), Machine.GetProgress(TEXT("bridge")), 2);
+
+	FTutorialProgress Loaded;
+	TestTrue(TEXT("the save object loads"), TutorialRules::LoadProgress(*TutorialRules::SaveProgress(Machine.ExportProgress(), true), Loaded));
+	FTutorialStateMachine Restored;
+	Restored.Load(Data);
+	Restored.ImportProgress(Loaded);
+	TestEqual(TEXT("after the load: still two of three"), Restored.GetProgress(TEXT("bridge")), 2);
+	TestTrue(TEXT("the lock survives"), Restored.IsCommandLocked(PlayerCommands::Sprint));
+	Restored.HandleEvent(TEXT("BridgeCrossed"), TEXT("Op2"));
+	TestEqual(TEXT("the same operative does not count twice"), Restored.GetProgress(TEXT("bridge")), 2);
+	Restored.HandleEvent(TEXT("CoverEntered.Right"), TEXT("Op1"));
+	TestTrue(TEXT("Op1 did the left part: he does not count for the right one (distinct_from kept)"), TutorialRules::IsRunning(Restored.GetState(TEXT("right"))));
+	Restored.HandleEvent(TEXT("BridgeCrossed"), TEXT("Op3"));
+	TestEqual(TEXT("the third operative completes the crossing"), Restored.GetState(TEXT("bridge")), ETutorialStepState::Completed);
+	Restored.HandleEvent(TEXT("CoverEntered.Right"), TEXT("Op2"));
+	TestEqual(TEXT("another operative completes the right part"), Restored.GetState(TEXT("right")), ETutorialStepState::Completed);
+	return true;
+}
+
 #undef TUTORIAL_LOCK_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -1,6 +1,7 @@
 #include "UI/Frontend/CodexSaveBridge.h"
 #include "Core/MissionSessionSubsystem.h"
 #include "Core/MissionSubsystem.h"
+#include "Core/SaveGameRules.h"
 #include "Core/SaveGameSubsystem.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -30,7 +31,17 @@ TArray<FCodexSaveSlotView> CodexSaveBridge::ListSlots(const UWorld* World)
 		{
 			FCodexSaveSlotView View;
 			View.SlotName = Info.SlotName;
-			View.Title = Info.Title.IsEmpty() ? Info.SlotName : Info.Title;
+			View.Kind = SaveGameRules::GetSaveTypeLabel(Info.SaveType);
+			// Rev 5f: the kind is part of the line (the slot entry WBP has no own field for it): "CHECKPOINT - A1 The crossing".
+			FString Title = Info.Title.IsEmpty() ? Info.SlotName : Info.Title;
+			for (const TCHAR* Prefix : { TEXT("Checkpoint: "), TEXT("Quicksave: "), TEXT("Checkpoint"), TEXT("Quicksave") })
+			{
+				if (Info.SaveType != TEXT("manual") && Title.RemoveFromStart(Prefix))
+				{
+					break;
+				}
+			}
+			View.Title = Info.SaveType == TEXT("manual") ? Title : (Title.IsEmpty() ? View.Kind : FString::Printf(TEXT("%s - %s"), *View.Kind, *Title));
 			View.DateTime = Info.DateTime;
 			const FString Map = Info.MapName.IsEmpty() ? FString() : FPackageName::GetShortName(Info.MapName);
 			View.Level = Map.IsEmpty() ? Info.StageName : FString::Printf(TEXT("%s - %s"), *Map, *Info.StageName);

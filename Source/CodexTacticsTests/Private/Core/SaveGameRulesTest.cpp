@@ -15,7 +15,9 @@ bool FSaveGameRulesTest::RunTest(const FString&)
 	TestEqual(TEXT("invalid characters"), SaveGameRules::SanitizeSlotName(TEXT(" a/b:c*d? ")), FString(TEXT("a_b_c_d_")));
 	TestEqual(TEXT("dots trimmed"), SaveGameRules::SanitizeSlotName(TEXT(".slot.")), FString(TEXT("slot")));
 
-	TestEqual(TEXT("autosave"), SaveGameRules::GetSaveType(TEXT("autosave")), FString(TEXT("autosave")));
+	TestEqual(TEXT("legacy autosave"), SaveGameRules::GetSaveType(TEXT("autosave")), FString(TEXT("autosave")));
+	TestEqual(TEXT("checkpoint (rev 5f)"), SaveGameRules::GetSaveType(TEXT("checkpoint")), FString(TEXT("checkpoint")));
+	TestEqual(TEXT("'auto' inside a player's name stays manual (rev 5f)"), SaveGameRules::GetSaveType(TEXT("Leonid_autumn")), FString(TEXT("manual")));
 	TestEqual(TEXT("quicksave"), SaveGameRules::GetSaveType(TEXT("QuickSave")), FString(TEXT("quicksave")));
 	TestEqual(TEXT("Быстрое"), SaveGameRules::GetSaveType(TEXT("Быстрое")), FString(TEXT("quicksave")));
 	TestEqual(TEXT("manual"), SaveGameRules::GetSaveType(TEXT("Leonid_02")), FString(TEXT("manual")));

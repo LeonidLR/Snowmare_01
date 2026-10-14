@@ -10,7 +10,10 @@ class UWorld;
 struct FCodexSaveSlotView
 {
 	FString SlotName;
+	/** Rev 5f: "CHECKPOINT - <beat>" / "QUICKSAVE - <stage>" / the manual save's own title (the kind is always visible). */
 	FString Title;
+	/** Rev 5f: "CHECKPOINT", "QUICKSAVE" or "SAVE" (SaveGameRules::GetSaveTypeLabel). */
+	FString Kind;
 	FString DateTime;
 	/** Level / stage name. */
 	FString Level;
@@ -30,7 +33,7 @@ namespace CodexSaveBridge
 	/** The world's save subsystem with the session's directory override applied, or null. */
 	CODEXTACTICS_API USaveGameSubsystem* GetSaves(const UWorld* World);
 
-	/** Every slot, newest first. */
+	/** Every listed slot, newest first (rev 5f: checkpoints, quicksaves and manual saves, labelled; legacy autosave files hidden). */
 	CODEXTACTICS_API TArray<FCodexSaveSlotView> ListSlots(const UWorld* World);
 
 	CODEXTACTICS_API bool HasAnySave(const UWorld* World);

@@ -315,7 +315,7 @@ namespace TutorialSmoke
 		{
 			Saves->SaveDirectoryOverride = SaveDir();
 			IFileManager::Get().DeleteDirectory(*SaveDir(), false, true);
-			Saves->bAutosaveEnabled = true;
+			Saves->bCheckpointsEnabled = true;
 			State.TelemetrySizeAtStart = FMath::Max<int64>(0, IFileManager::Get().FileSize(*Tutorial->GetTelemetryPath()));
 			const FVector Forward = Leader->GetActorForwardVector().GetSafeNormal2D();
 			const FVector Spot = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Forward * 700.f);

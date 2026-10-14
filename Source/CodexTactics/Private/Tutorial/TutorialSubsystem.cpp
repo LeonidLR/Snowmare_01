@@ -6,6 +6,8 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
 #include "Core/DemoModeSubsystem.h"
+#include "Core/MissionSessionSubsystem.h"
+#include "Core/SaveGameRules.h"
 #include "Core/SaveGameSubsystem.h"
 #include "Data/NarrativeManifest.h"
 #include "Dom/JsonObject.h"
@@ -290,6 +292,13 @@ void UTutorialSubsystem::Tick(float DeltaTime)
 	}
 	if (!bInitDone)
 	{
+		if (IsLoadPending())
+		{
+			// Rev 5f (save bug): a save is about to be applied (F9 / Continue / LOAD reopened the map). Starting the tutorial now
+			// would start beat A0 and write its CHECKPOINT over the very slot being loaded (F9 to a checkpoint came back at the
+			// level start). Wait: the load hands its progress over (DeferredProgress) and the steps load right after it.
+			return;
+		}
 		bInitDone = true; // the game mode read the level in StartPlay; the demo flags are applied on the first tick
 		InitFromLevel();
 	}
@@ -1246,11 +1255,24 @@ bool UTutorialSubsystem::HandleLethalHit(UHealthComponent* Health, const FString
 	return true;
 }
 
+bool UTutorialSubsystem::IsLoadPending() const
+{
+	const UWorld* World = GetWorld();
+	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	const UMissionSessionSubsystem* Session = GameInstance ? GameInstance->GetSubsystem<UMissionSessionSubsystem>() : nullptr;
+	return Session && Session->HasPendingLoad();
+}
+
 bool UTutorialSubsystem::SaveCheckpoint()
 {
 	USaveGameSubsystem* Saves = GetWorld() ? GetWorld()->GetSubsystem<USaveGameSubsystem>() : nullptr;
-	if (!Saves || !Saves->bAutosaveEnabled)
+	if (!Saves || !Saves->bCheckpointsEnabled)
 	{
+		return false;
+	}
+	if (IsLoadPending())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: no checkpoint at beat %s (a save is being loaded)"), *Machine.GetCurrentBeat().ToString());
 		return false;
 	}
 	FText Reason;
@@ -1259,7 +1281,11 @@ bool UTutorialSubsystem::SaveCheckpoint()
 		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: no checkpoint at beat %s (%s)"), *Machine.GetCurrentBeat().ToString(), *Reason.ToString());
 		return false;
 	}
-	const bool bSaved = Saves->SaveGame(CheckpointSlot, FString::Printf(TEXT("Checkpoint: %s"), *Machine.GetCurrentBeat().ToString()));
+	const FTutorialBeat* Beat = Machine.GetCurrentBeatData();
+	const FString BeatTitle = Beat && !Beat->TitleId.IsNone() ? GetTutorialText(Beat->TitleId).ToString() : FString();
+	const FString Title = BeatTitle.IsEmpty() || BeatTitle.StartsWith(TEXT("[EN missing")) ? FString::Printf(TEXT("Checkpoint: %s"), *Machine.GetCurrentBeat().ToString())
+		: FString::Printf(TEXT("Checkpoint: %s - %s"), *Machine.GetCurrentBeat().ToString(), *BeatTitle);
+	const bool bSaved = Saves->SaveGame(CheckpointSlot, Title);
 	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: checkpoint %s at beat %s"), bSaved ? TEXT("saved") : TEXT("FAILED"), *Machine.GetCurrentBeat().ToString());
 	return bSaved;
 }
@@ -1282,16 +1308,44 @@ bool UTutorialSubsystem::RetryFromCheckpoint()
 
 TSharedPtr<FJsonObject> UTutorialSubsystem::CaptureSaveState() const
 {
+	TSharedPtr<FJsonObject> Object;
 	if (!Machine.IsLoaded() && DeferredProgress.IsSet())
 	{
-		return TutorialRules::SaveProgress(DeferredProgress.GetValue(), IsTutorialEnabled());
+		Object = TutorialRules::SaveProgress(DeferredProgress.GetValue(), IsTutorialEnabled());
 	}
-	const FTutorialProgress Progress = Machine.ExportProgress();
-	if (!Machine.IsLoaded() && Progress.IsEmpty())
+	else
 	{
-		return nullptr;
+		const FTutorialProgress Progress = Machine.ExportProgress();
+		if (!Machine.IsLoaded() && Progress.IsEmpty())
+		{
+			return nullptr;
+		}
+		Object = TutorialRules::SaveProgress(Progress, IsTutorialEnabled());
 	}
-	return TutorialRules::SaveProgress(Progress, IsTutorialEnabled());
+	// Rev 5f (save round trip): which tutorial volumes are used up (actor names) - before, a load in place (Retry from checkpoint)
+	// kept the volumes the squad had walked through after the checkpoint used up, so their steps never fired again; and the
+	// command families that already got their "Not yet" line.
+	TArray<TSharedPtr<FJsonValue>> Fired;
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<ATutorialTriggerVolume> It(World); It; ++It)
+		{
+			if (It->HasFired())
+			{
+				Fired.Add(MakeShared<FJsonValueString>(It->GetName()));
+			}
+		}
+	}
+	Object->SetArrayField(TEXT("volumes_fired"), Fired);
+	TArray<FString> Families = LockHintFamilies.Array();
+	Families.Sort();
+	TArray<TSharedPtr<FJsonValue>> Hints;
+	for (const FString& Family : Families)
+	{
+		Hints.Add(MakeShared<FJsonValueString>(Family));
+	}
+	Object->SetArrayField(TEXT("lock_hints"), Hints);
+	return Object;
 }
 
 void UTutorialSubsystem::RestoreSaveState(const FJsonObject& Object)
@@ -1300,6 +1354,41 @@ void UTutorialSubsystem::RestoreSaveState(const FJsonObject& Object)
 	if (!TutorialRules::LoadProgress(Object, Progress))
 	{
 		return;
+	}
+	// Rev 5f: the volumes are used up exactly as in the save (an older save without the list: none is, re-entering one is harmless
+	// - progress is monotonic by location).
+	TSet<FString> Fired;
+	const TArray<TSharedPtr<FJsonValue>>* FiredList = nullptr;
+	if (Object.TryGetArrayField(TEXT("volumes_fired"), FiredList))
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *FiredList)
+		{
+			FString Name;
+			if (Value.IsValid() && Value->TryGetString(Name))
+			{
+				Fired.Add(Name);
+			}
+		}
+	}
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<ATutorialTriggerVolume> It(World); It; ++It)
+		{
+			It->SetFired(Fired.Contains(It->GetName()));
+		}
+	}
+	LockHintFamilies.Reset();
+	const TArray<TSharedPtr<FJsonValue>>* Hints = nullptr;
+	if (Object.TryGetArrayField(TEXT("lock_hints"), Hints))
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *Hints)
+		{
+			FString Family;
+			if (Value.IsValid() && Value->TryGetString(Family) && !Family.IsEmpty())
+			{
+				LockHintFamilies.Add(Family);
+			}
+		}
 	}
 	if (!Machine.IsLoaded())
 	{
