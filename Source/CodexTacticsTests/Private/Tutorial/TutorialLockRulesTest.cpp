@@ -836,7 +836,7 @@ bool FTutorialDemoLoadoutTest::RunTest(const FString&)
 	TestTrue(TEXT("parse without"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"x"})"), TEXT("x"), Level, Error));
 	TestEqual(TEXT("absent: -1 (role kit)"), Level.SquadLoadout.HeatPacksCount, -1);
 	TestTrue(FString::Printf(TEXT("demo level loads (%s)"), *Error), LevelJsonRules::LoadLevel(TEXT("L_Demo01_A_FrozenLake.json"), Level, Error));
-	TestEqual(TEXT("Frozen Lake: less cold (cold_rate_mult 0.8, user request 2026-10-13)"), Level.ColdRateMult, 0.8f, 0.0001f);
+	TestEqual(TEXT("Frozen Lake: less cold (cold_rate_mult 0.4: 0.8 user request 2026-10-13, halved again rev 5g 2026-10-14)"), Level.ColdRateMult, 0.4f, 0.0001f);
 	TestEqual(TEXT("Demo 01: every operative starts with 1 heat pack (the A1 heat pack lesson); the hut crate holds more"), Level.SquadLoadout.HeatPacksCount, 1);
 	for (const int32 RoleKit : { 0, 1, 2, 3 })
 	{
