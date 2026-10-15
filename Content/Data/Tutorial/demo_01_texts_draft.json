@@ -265,11 +265,19 @@
       "text": "Click the ground beyond the ridge: the squad climbs over low obstacles on its own."
     },
     "TUT_A3_FENCE": {
-      "title": "LOW FENCE",
-      "text": "Too low to walk under. Go prone ({key:Stance.Prone}; {key:Stance.Squad.Prone} for the whole squad) and crawl under the fence."
+      "title": "LOW FENCE - STOP",
+      "text": "Too low to walk under. We go one at a time: press {key:Squad.Solo} (Solo) - the others hold their spots."
     },
-    "TUT_A3_FENCE_REFUSED": {
-      "text": "Too low — get down and crawl."
+    "TUT_A3_FENCE_CRAWL": {
+      "title": "ONE BY ONE ({progress} / {count} through)",
+      "text": "Select an operative ({key:Select.Member}), go prone ({key:Stance.Prone}) and click beyond the gap: he crawls under. The next one goes when he is through."
+    },
+    "TUT_A3_ONE_BY_ONE": {
+      "text": "Not yet - one by one."
+    },
+    "TUT_A3_COVER_EACH": {
+      "title": "TAKE COVER ONE BY ONE ({progress} / {count} in cover)",
+      "text": "Stay in Solo. Select an operative and click a wall: he hugs it. Each one takes his own cover."
     },
     "TUT_A6_COVER": {
       "title": "COVER",

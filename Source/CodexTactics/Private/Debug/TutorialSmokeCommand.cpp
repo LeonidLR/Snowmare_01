@@ -42,7 +42,10 @@
 //     the warm objective; the save's tutorial section carries the
 //     command history; (rev 5i) the A3 approach: the squad is held, a standing click to the ridge is refused ("Crouch first"), C
 //     crouches the leader, the click is accepted, beyond the ridge still refused, the followers copy the crouch and the card completes
-//     when all are low in VOL_A3_RIDGE; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
+//     when all are low in VOL_A3_RIDGE; (rev 5i) the fence one by one: held, nobody past before Solo, B -> "one by one 0 / 3",
+//     standing refused ("Go prone first"), prone the first goes, a second refused meanwhile ("One at a time"), CrawlGapPassed frees
+//     the turn ("1 / 3"), three through -> free; B (regroup) refused "Not yet - one by one.", each into his own cover (3 distinct),
+//     then the peek card frees Regroup; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
 //     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
 //     (tap = next line, hold = skip); (rev 5i) SKIP TUTORIAL from A0: the button shows in A0, the pause menu entry asks and No
 //     keeps it, the button asks with the world paused and Yes skips - no cards / strip / objectives, C and the inventory (locked at
@@ -1586,7 +1589,147 @@ namespace TutorialSmoke
 				Member->StopOperative();
 				Member->SetStance(EOperativeStance::Standing);
 			}
+			Tutorial->SkipStep(TEXT("A3_stance"));
+			Tutorial->SkipStep(TEXT("A3_vault"));
+			State.Stage = 110;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// Rev 5i item 4 (game designer 2026-10-15): the low fence ONE BY ONE - stop, Solo, then each operative prone under the gap, one at
+		// a time; then each into his own cover; Regroup refused meanwhile. A real 8 x 8 m VOL_A3_FENCE round the squad, "past the fence"
+		// 10 m ahead; the crawl-throughs are the fence actor's CrawlGapPassed events (raised here - the gap itself is CrawlGap / BridgeFence smokes' job).
+		case 110:
+		{
+			if (Squad->IsSoloMode())
+			{
+				Squad->ToggleSoloMode();
+			}
+			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
+			State.HutPoint = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Ahead * 1000.f);
+			ATutorialTriggerVolume* Fence = SpawnVolumeAt(World, Leader->GetActorLocation(), TEXT("VOL_A3_FENCE"), 400.f);
+			Fence->bFireOnce = true;
+			Check(State, Fence->HasFired() || Fence->TryActivate(Leader), TEXT("the fence volume fires"));
 			Next(State);
+			return true;
+		}
+		case 111:
+		{
+			if (Tutorial->GetStepState(TEXT("A3_fence")) != ETutorialStepState::Active && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A3_fence")) == ETutorialStepState::Active && Tutorial->IsConfining()
+				&& Tutorial->IsCommandLocked(PlayerCommands::Regroup), TEXT("rev 5i: the fence: the stop / Solo card, the squad held, Regroup locked"));
+			State.ConfinedBefore = Tutorial->GetConfinedRefusalCount();
+			ClickAt(PC, State.HutPoint);
+			Check(State, Tutorial->GetConfinedRefusalCount() == State.ConfinedBefore + 1, TEXT("rev 5i: before Solo nobody may go past the fence"));
+			PressKey(PC, EKeys::B, IE_Pressed);
+			Next(State);
+			return true;
+		}
+		case 112:
+		{
+			PressKey(PC, EKeys::B, IE_Released);
+			if (Tutorial->GetStepState(TEXT("A3_fence_crawl")) != ETutorialStepState::Active && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			Check(State, Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A3_fence")) == ETutorialStepState::Completed
+				&& Tutorial->GetStepState(TEXT("A3_fence_crawl")) == ETutorialStepState::Active, TEXT("rev 5i: B - Solo on, then the 'one by one' card"));
+			Check(State, Tutorial->GetCardView().Title.ToString().Contains(TEXT("0 / 3")),
+				FString::Printf(TEXT("rev 5i: the card counts '0 / 3 through' ('%s')"), *Tutorial->GetCardView().Title.ToString()));
+			AOperativeCharacter* First = Squad->GetMembers()[0];
+			AOperativeCharacter* Second = Squad->GetMembers()[1];
+			State.HoldLinesBefore = CountMessages(World, TEXT("Go prone first - then crawl under."));
+			Check(State, First->OrderMoveTo(State.HutPoint, false) == EOperativeOrderResult::Refused
+				&& CountMessages(World, TEXT("Go prone first - then crawl under.")) == State.HoldLinesBefore + 1,
+				TEXT("rev 5i: standing, past the fence is refused ('Go prone first - then crawl under.')"));
+			First->DropProne();
+			Second->DropProne();
+			Next(State);
+			return true;
+		}
+		case 113:
+		{
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			AOperativeCharacter* First = Squad->GetMembers()[0];
+			AOperativeCharacter* Second = Squad->GetMembers()[1];
+			AOperativeCharacter* Third = Squad->GetMembers()[2];
+			Check(State, First->GetStance() == EOperativeStance::Prone && First->OrderMoveTo(State.HutPoint, false) == EOperativeOrderResult::Accepted,
+				TEXT("rev 5i: prone, the first one may crawl past the fence (his turn)"));
+			State.HoldLinesBefore = CountMessages(World, TEXT("One at a time - wait until he is through."));
+			Check(State, Second->OrderMoveTo(State.HutPoint + FVector(0.f, 150.f, 0.f), false) == EOperativeOrderResult::Refused
+				&& CountMessages(World, TEXT("One at a time - wait until he is through.")) == State.HoldLinesBefore + 1,
+				TEXT("rev 5i: a second one prone is refused while the first crosses ('One at a time')"));
+			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, First);
+			Check(State, Tutorial->GetStepProgress(TEXT("A3_fence_crawl")) == 1 && Tutorial->GetCardView().Title.ToString().Contains(TEXT("1 / 3")),
+				FString::Printf(TEXT("rev 5i: the first through: '1 / 3' ('%s')"), *Tutorial->GetCardView().Title.ToString()));
+			Check(State, Second->OrderMoveTo(State.HutPoint + FVector(0.f, 150.f, 0.f), false) == EOperativeOrderResult::Accepted,
+				TEXT("rev 5i: then the second one may go"));
+			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, Second);
+			Check(State, Third->OrderMoveTo(State.HutPoint, false) == EOperativeOrderResult::Refused, TEXT("rev 5i: the third standing: refused"));
+			Third->DropProne();
+			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, Third);
+			Check(State, Tutorial->GetStepState(TEXT("A3_fence_crawl")) == ETutorialStepState::Completed && !Tutorial->IsConfining(),
+				TEXT("rev 5i: three through: the crossing done, the squad free"));
+			State.RefusalsBefore = Tutorial->GetLockedRefusalCount();
+			State.NotYetBefore = CountMessages(World, TEXT("Not yet - one by one."));
+			PressKey(PC, EKeys::B, IE_Pressed);
+			Next(State);
+			return true;
+		}
+		case 114:
+		{
+			PressKey(PC, EKeys::B, IE_Released);
+			Check(State, Squad->IsSoloMode() && Tutorial->GetLockedRefusalCount() == State.RefusalsBefore + 1
+				&& CountMessages(World, TEXT("Not yet - one by one.")) == State.NotYetBefore + 1,
+				TEXT("rev 5i: B (regroup) refused after the crossing - 'Not yet - one by one.', still in Solo"));
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->StopOperative();
+			}
+			Next(State);
+			return true;
+		}
+		case 115:
+		{
+			if (Tutorial->GetStepState(TEXT("A3_cover")) != ETutorialStepState::Active && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A3_cover")) == ETutorialStepState::Active && Tutorial->GetCardView().Title.ToString().Contains(TEXT("0 / 3")),
+				FString::Printf(TEXT("rev 5i: then 'take cover one by one' ('%s')"), *Tutorial->GetCardView().Title.ToString()));
+			RaiseCoverEntered(World, Squad->GetMembers()[0]);
+			RaiseCoverEntered(World, Squad->GetMembers()[0]);
+			Check(State, Tutorial->GetStepProgress(TEXT("A3_cover")) == 1, TEXT("rev 5i: one operative counts once"));
+			RaiseCoverEntered(World, Squad->GetMembers()[1]);
+			RaiseCoverEntered(World, Squad->GetMembers()[2]);
+			Check(State, Tutorial->GetStepState(TEXT("A3_cover")) == ETutorialStepState::Completed, TEXT("rev 5i: three different operatives in cover: done"));
+			Next(State);
+			return true;
+		}
+		case 116:
+		{
+			if (Tutorial->GetStepState(TEXT("A3_peek")) != ETutorialStepState::Active && State.StageTime < 5.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A3_peek")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::Regroup),
+				TEXT("rev 5i: then the peek lesson, which frees Regroup"));
+			if (Squad->IsSoloMode())
+			{
+				Squad->ToggleSoloMode();
+			}
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->StopOperative();
+				Member->SetStance(EOperativeStance::Standing);
+			}
+			State.Stage = 104;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 104:

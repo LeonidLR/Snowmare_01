@@ -440,42 +440,44 @@
       "complete": { "volume": "VOL_A3_RIDGE_FAR", "timeout_s": 30 }
     },
     {
-      "_comment": "The low fence (ACrawlGapActor): only prone bodies crawl under; a standing one is stopped by the actor (CrawlGapRefused). Done when every operative came out on the other side.",
+      "_comment": "Rev 5i (game designer 2026-10-15): the low fence (ACrawlGapActor) is crossed ONE BY ONE. Arriving at VOL_A3_FENCE (Any Operative, 3.5 m before the fence) the squad STOPS and is held there (confine); first Solo (B) - done at once when the squad already is in Solo (condition squad_solo, precredited). Regroup is locked from here until every operative is in his own cover beyond the fence (A3_peek unlocks it; a press says 'Not yet - one by one.').",
       "id": "A3_fence", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_FENCE",
-      "keys": ["Stance.Prone", "Stance.Squad.Prone"],
-      "unlock": ["Stance.*"],
+      "keys": ["Squad.Solo"],
+      "unlock": ["Stance.*", "Squad.Solo"],
+      "lock": ["Squad.Regroup"],
       "trigger": { "type": "volume", "volume": "VOL_A3_FENCE" },
-      "complete": { "event": "CrawlGapPassed", "count": 3, "distinct_operatives": true, "timeout_s": 180 }
+      "confine": { "volume": "VOL_A3_FENCE", "stop": true },
+      "complete": { "condition": [ { "stat": "squad_solo", "at_least": 1 } ] }
     },
     {
-      "id": "A3_fence_refused", "beat": "A3", "kind": "feed", "text_id": "TUT_A3_FENCE_REFUSED",
-      "trigger": { "type": "event", "event": "CrawlGapRefused" },
-      "lines": [ { "speaker": "Medic-Sapper", "text_id": "TUT_A3_FENCE_REFUSED" } ]
+      "_comment": "Rev 5i: then each operative: select him, go prone (V), crawl under the gap - one at a time. Held at the fence area; an order past the fence is allowed only for a PRONE operative and only when nobody else is crossing (his turn ends with his CrawlGapPassed); standing: 'Go prone first - then crawl under.', another crossing: 'One at a time - wait until he is through.'. Alt+V still works but every operative counts separately (3 distinct). The card shows '{progress} / {count} through'.",
+      "id": "A3_fence_crawl", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_FENCE_CRAWL",
+      "keys": ["Select.Member", "Stance.Prone"],
+      "trigger": { "type": "after_step", "step": "A3_fence" },
+      "confine": { "volume": "VOL_A3_FENCE", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } },
+      "complete": { "event": "CrawlGapPassed", "count": 3, "distinct_operatives": true }
     },
     {
-      "_comment": "Cover on the approach (the former A6 sample: VOL_A6_FIELD -> VOL_A3_FIELD): one into cover, then each operative into his own cover (user decision 2026-10-11: manual per operative). Since rev 5c cover is first taught at the hut door (A1_hut_stack_l unlocks Cover.*): this is the refresher in a real cover field.",
-      "id": "A3_cover", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A6_COVER",
-      "keys": ["Cover.Enter"],
+      "_comment": "Rev 5i: Regroup is locked during the crossing and the cover lesson: one line instead of the generic 'Not yet' (any press, every time).",
+      "id": "A3_regroup_refused", "beat": "A3", "kind": "feed", "text_id": "TUT_A3_ONE_BY_ONE",
+      "once": false,
+      "trigger": { "type": "event", "event": "Tutorial.Locked.Squad.Regroup", "requires": ["A3_fence"] },
+      "lines": [ { "speaker": "TRAINING", "text_id": "TUT_A3_ONE_BY_ONE" } ]
+    },
+    {
+      "_comment": "Rev 5i (game designer 2026-10-15): beyond the fence, still in Solo, each operative into his OWN cover - one order each, three different operatives (CoverEntered, distinct; the only operatives who can take cover now are past the fence). Replaces the rev 5c refresher (VOL_A3_FIELD card + squad card + squad-cover objective). The cover field lessons (bound, the peek that reveals the mines) follow only after it. '{progress} / {count} in cover'.",
+      "id": "A3_cover", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_COVER_EACH",
+      "keys": ["Select.Member", "Cover.Enter"],
       "unlock": ["Cover.*"],
-      "trigger": { "type": "volume", "volume": "VOL_A3_FIELD" },
-      "complete": { "event": "CoverEntered", "timeout_s": 60 }
-    },
-    {
-      "id": "A3_squad_cover", "beat": "A3", "kind": "objective", "text_id": "OBJ_A6_SQUAD_COVER",
-      "trigger": { "type": "after_step", "step": "A3_cover" },
+      "trigger": { "type": "after_step", "step": "A3_fence_crawl" },
       "complete": { "event": "CoverEntered", "count": 3, "distinct_operatives": true }
     },
     {
-      "id": "A3_squad_card", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A6_SQUAD",
-      "keys": ["Select.Member", "Cover.Enter"],
-      "trigger": { "type": "after_step", "step": "A3_cover", "delay_s": 2 },
-      "complete": { "event": "CoverEntered", "count": 2, "distinct_operatives": true, "timeout_s": 45 }
-    },
-    {
-      "_comment": "Corner peek card (rev 5c; low cover too since rev 5e). Rev 5h (game designer 2026-10-15): the peek is meaningful - two hidden mines (SpotEventTag A3PeekMines, map section AutoLayout_Demo01_5h) lie beyond the corner of the first high wall (marker A3_peek); leaning out round a corner spots hidden traps in the peek sight cone (AOperativeCharacter::PeekSpotConfig). Done when those mines are known (condition stat traps_spotted.A3PeekMines: also precredited when they were found before the card), or after 90 s. The mine card A3_mine (MineSpotted) follows: disarm or go round.",
+      "_comment": "Corner peek card (rev 5c; low cover too since rev 5e). Rev 5h (game designer 2026-10-15): the peek is meaningful - two hidden mines (SpotEventTag A3PeekMines, map section AutoLayout_Demo01_5h) lie beyond the corner of the first high wall (marker A3_peek); leaning out round a corner spots hidden traps in the peek sight cone (AOperativeCharacter::PeekSpotConfig). Done when those mines are known (condition stat traps_spotted.A3PeekMines: also precredited when they were found before the card), or after 90 s. The mine card A3_mine (MineSpotted) follows: disarm or go round. Rev 5i: after the cover-each card; frees Regroup again.",
       "id": "A3_peek", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_PEEK",
       "keys": ["Cover.CornerPeek"],
-      "trigger": { "type": "after_step", "step": "A3_squad_card", "delay_s": 1 },
+      "unlock": ["Squad.Regroup"],
+      "trigger": { "type": "after_step", "step": "A3_cover", "delay_s": 1 },
       "complete": { "condition": [ { "stat": "traps_spotted.A3PeekMines", "at_least": 1 } ], "timeout_s": 90 }
     },
     {

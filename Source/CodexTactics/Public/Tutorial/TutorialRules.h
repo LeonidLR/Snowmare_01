@@ -95,7 +95,8 @@ namespace TutorialRules
 
 	/**
 	 * Condition stats the runtime provides: "squad_cold_max", "squad_cold_min", "leader_cold", "squad_heat_packs",
-	 * "squad_min_heat_packs", "heat_packs_given" (rev 5d).
+	 * "squad_min_heat_packs", "heat_packs_given" (rev 5d), "squad_solo" (rev 5i: 1 in Solo), "traps_spotted.<tag>" (rev 5h),
+	 * "squad_not_low_in.<volume>" (rev 5i).
 	 */
 	CODEXTACTICS_API bool IsKnownStat(FName Stat);
 

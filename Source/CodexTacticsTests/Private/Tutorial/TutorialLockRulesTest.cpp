@@ -643,11 +643,13 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	float MinPacks = 0.f;
 	float Given = 0.f;
 	float NotLow = 3.f;
+	float SquadSolo = 0.f;
 	FTutorialStateMachine Machine;
-	Machine.StatProvider = [&Cold, &Packs, &MinPacks, &Given, &NotLow](FName Stat)
+	Machine.StatProvider = [&Cold, &Packs, &MinPacks, &Given, &NotLow, &SquadSolo](FName Stat)
 	{
 		return Stat == FName(TEXT("squad_heat_packs")) ? Packs : Stat == FName(TEXT("squad_min_heat_packs")) ? MinPacks
-			: Stat == FName(TEXT("heat_packs_given")) ? Given : !TutorialRules::ParseNotLowInStat(Stat).IsNone() ? NotLow : Cold;
+			: Stat == FName(TEXT("heat_packs_given")) ? Given : !TutorialRules::ParseNotLowInStat(Stat).IsNone() ? NotLow
+			: Stat == FName(TEXT("squad_solo")) ? SquadSolo : Cold;
 	};
 	Machine.Load(Data);
 	Machine.StartBeat(Data.StartBeat);
@@ -854,14 +856,35 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestTrue(TEXT("A3: the pause still locked (taught in the horde beat)"), Machine.IsCommandLocked(PlayerCommands::TacticalPause));
 	Machine.HandleVolume(TEXT("VOL_A3_FENCE"), NAME_None, NAME_None);
 	Pump(Machine, 2.f);
-	TestEqual(TEXT("the low fence card shows (event-completed: never precredited)"), Machine.GetActiveCard(), FName(TEXT("A3_fence")));
-	Machine.HandleEvent(TEXT("CrawlGapRefused"), TEXT("Op1"));
-	TestEqual(TEXT("the 'go prone' feed line"), Machine.GetState(TEXT("A3_fence_refused")), ETutorialStepState::Active);
+	// Rev 5i: the fence - stop + Solo, then one by one (prone, one at a time), then each into his own cover; Regroup locked meanwhile.
+	TestEqual(TEXT("rev 5i: the low fence: the stop / Solo card"), Machine.GetActiveCard(), FName(TEXT("A3_fence")));
+	TestTrue(TEXT("rev 5i: held at the fence, Regroup locked"), Machine.IsConfined() && Machine.IsCommandLocked(PlayerCommands::Regroup));
+	Machine.HandleEvent(TEXT("Tutorial.Locked.Squad.Regroup"));
+	TestTrue(TEXT("rev 5i: a refused regroup gets 'Not yet - one by one.'"), Machine.GetState(TEXT("A3_regroup_refused")) != ETutorialStepState::Idle);
+	SquadSolo = 1.f;
+	Pump(Machine, 2.f);
+	TestEqual(TEXT("rev 5i: Solo on: the stop card done"), Machine.GetState(TEXT("A3_fence")), ETutorialStepState::Completed);
+	TestEqual(TEXT("rev 5i: then one by one"), Machine.GetActiveCard(), FName(TEXT("A3_fence_crawl")));
+	FTutorialConfineView Crossing;
+	TestTrue(TEXT("rev 5i: the crossing is held, prone one at a time"), Machine.GetActiveConfine(Crossing) && Crossing.Spec.ExitStance == FName(TEXT("prone")));
 	for (const TCHAR* Op : { TEXT("Op1"), TEXT("Op2"), TEXT("Op3") })
 	{
+		Machine.TakeConfineExitTurn(Op);
 		Machine.HandleEvent(TEXT("CrawlGapPassed"), Op);
 	}
-	TestEqual(TEXT("three crawl-throughs complete the fence card"), Machine.GetState(TEXT("A3_fence")), ETutorialStepState::Completed);
+	TestEqual(TEXT("three crawl-throughs complete the crossing card"), Machine.GetState(TEXT("A3_fence_crawl")), ETutorialStepState::Completed);
+	TestFalse(TEXT("rev 5i: all through: no longer held"), Machine.IsConfined());
+	Pump(Machine, 2.f);
+	TestEqual(TEXT("rev 5i: then each into his own cover (still in Solo)"), Machine.GetActiveCard(), FName(TEXT("A3_cover")));
+	TestTrue(TEXT("rev 5i: Regroup still locked"), Machine.IsCommandLocked(PlayerCommands::Regroup));
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op1"));
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op1"));
+	TestEqual(TEXT("rev 5i: the same operative twice counts once"), Machine.GetProgress(TEXT("A3_cover")), 1);
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op2"));
+	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op3"));
+	TestEqual(TEXT("rev 5i: three in cover: done"), Machine.GetState(TEXT("A3_cover")), ETutorialStepState::Completed);
+	Pump(Machine, 3.f);
+	TestFalse(TEXT("rev 5i: then the peek card frees Regroup"), Machine.IsCommandLocked(PlayerCommands::Regroup));
 	return true;
 }
 
@@ -1039,7 +1062,7 @@ bool FTutorialProgressiveDemoTest::RunTest(const FString&)
 		Busy.Load(Data);
 		Busy.StartBeat(TEXT("A0"));
 		Busy.StartBeat(TEXT("A3"));
-		Busy.HandleVolume(TEXT("VOL_A3_FIELD"), NAME_None, NAME_None);
+		Busy.TriggerStep(TEXT("A3_cover"));
 		Busy.Tick(2.f);
 		Busy.HandleEvent(TEXT("MineSpotted"), TEXT("Op1"));
 		Busy.HandleEvent(TEXT("TripwireSpotted"), TEXT("Op1"));
@@ -1387,9 +1410,9 @@ bool FTutorialRouteDemoChainTest::RunTest(const FString&)
 	// A0 -> A4 the route is monotonic: every place lies after the one before it (the whole chain, checked for the skipped-beacon trap).
 	const TCHAR* RouteOrder[] = { TEXT("VOL_A0_BEACON1"), TEXT("VOL_A1_BEACON2"), TEXT("VOL_A1_HUT_APPROACH"), TEXT("VOL_A1_DOOR_L"), TEXT("VOL_A1_DOOR_R"),
 		TEXT("VOL_A1_HUT"), TEXT("VOL_A1_BEACON3"), TEXT("VOL_A2_CAMP"), TEXT("VOL_A2_RUIN"), TEXT("VOL_A3_APPROACH"), TEXT("VOL_A3_WIND"), TEXT("VOL_A3_RIDGE"),
-		TEXT("VOL_A3_RIDGE_FAR"), TEXT("VOL_A3_FENCE"), TEXT("VOL_A3_FIELD"), TEXT("VOL_A4_OVERLOOK") };
+		TEXT("VOL_A3_RIDGE_FAR"), TEXT("VOL_A3_FENCE"), TEXT("VOL_A4_OVERLOOK") };
 	const TCHAR* RouteBeat[] = { TEXT("A1"), TEXT("A1"), TEXT("A1"), TEXT("A1"), TEXT("A1"), TEXT("A1"), TEXT("A1"), TEXT("A2"), TEXT("A2"), TEXT("A3"), TEXT("A3"),
-		TEXT("A3"), TEXT("A3"), TEXT("A3"), TEXT("A3"), TEXT("A4") };
+		TEXT("A3"), TEXT("A3"), TEXT("A3"), TEXT("A4") };
 	int32 Previous = INDEX_NONE;
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(RouteOrder); ++Index)
 	{
@@ -1427,11 +1450,16 @@ bool FTutorialRouteDemoChainTest::RunTest(const FString&)
 		&& Machine.GetState(TEXT("A3_vault")) == ETutorialStepState::Skipped && Machine.GetState(TEXT("A3_wt_wind")) == ETutorialStepState::Skipped);
 	TestFalse(TEXT("stances unlocked on the way"), Machine.IsCommandLocked(TEXT("Stance.Prone")));
 	TestTrue(TEXT("the fence card runs"), TutorialRules::IsRunning(Machine.GetState(TEXT("A3_fence"))));
-	// A4 straight from the fence (the cover field volume skipped).
+	// Rev 5i: held at the fence - the overlook does not start A4 while the crossing lesson holds the squad.
+	Machine.HandleVolume(TEXT("VOL_A4_OVERLOOK"), NAME_None, NAME_None, TEXT("Op1"));
+	TestEqual(TEXT("rev 5i: held at the fence: the overlook changes nothing"), Machine.GetCurrentBeat(), FName(TEXT("A3")));
+	Machine.ReleaseConfines(); // the tutorial switched off and on / a fight
+	// A4 straight from the fence (the cover field skipped).
 	Machine.HandleVolume(TEXT("VOL_A4_OVERLOOK"), NAME_None, NAME_None, TEXT("Op1"));
 	TestEqual(TEXT("the overlook (Beat Id registered from the level): A4"), Machine.GetCurrentBeat(), FName(TEXT("A4")));
 	TestEqual(TEXT("'reach the overlook' completed"), Machine.GetState(TEXT("A3_obj_overlook")), ETutorialStepState::Completed);
-	TestEqual(TEXT("the cover field card passed"), Machine.GetState(TEXT("A3_cover")), ETutorialStepState::Skipped);
+	TestTrue(TEXT("the A3 fence / cover cards are dropped"), !TutorialRules::IsRunning(Machine.GetState(TEXT("A3_fence")))
+		&& !TutorialRules::IsRunning(Machine.GetState(TEXT("A3_cover"))));
 	return true;
 }
 

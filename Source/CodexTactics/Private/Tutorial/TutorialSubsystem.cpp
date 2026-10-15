@@ -872,6 +872,10 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 	{
 		return 0.f;
 	}
+	if (Stat == FName(TEXT("squad_solo")))
+	{
+		return Squad->IsSoloMode() ? 1.f : 0.f; // rev 5i: the squad is in Solo (B) now
+	}
 	if (Stat == FName(TEXT("leader_cold")))
 	{
 		const AOperativeCharacter* Leader = Squad->GetLeader();
@@ -1345,8 +1349,14 @@ FTutorialCardView UTutorialSubsystem::BuildCardView(FName StepId, bool bDone) co
 	if (!Step->TextId.IsNone())
 	{
 		const FTutorialTextView Text = FNarrativeManifest::Get().GetTutorialText(Step->TextId.ToString());
-		View.Title = FText::FromString(ResolveFocusToken(Text.Title, StepId));
-		View.Body = FText::FromString(PlayerCommands::ResolveKeyTokens(ResolveFocusToken(Text.Text, StepId)));
+		// Rev 5i: {progress} / {count} = how far the card's completion got ("1 / 3 through").
+		auto Progress = [this, Step, StepId](const FString& In)
+		{
+			return In.Replace(TEXT("{progress}"), *FString::FromInt(FMath::Min(Machine.GetProgress(StepId), Step->Complete.Count)))
+				.Replace(TEXT("{count}"), *FString::FromInt(Step->Complete.Count));
+		};
+		View.Title = FText::FromString(Progress(ResolveFocusToken(Text.Title, StepId)));
+		View.Body = FText::FromString(PlayerCommands::ResolveKeyTokens(Progress(ResolveFocusToken(Text.Text, StepId))));
 	}
 	if (AOperativeCharacter* Focus = GetFocusOperative(StepId))
 	{

@@ -139,7 +139,7 @@ namespace TutorialRulesLocal
 			Condition.Stat = FName(*JsonString(Clause, TEXT("stat")));
 			if (!TutorialRules::IsKnownStat(Condition.Stat))
 			{
-				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs | squad_min_heat_packs | heat_packs_given | traps_spotted.<tag> | squad_not_low_in.<volume>)"),
+				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs | squad_min_heat_packs | heat_packs_given | squad_solo | traps_spotted.<tag> | squad_not_low_in.<volume>)"),
 					*Where, *Condition.Stat.ToString());
 				return false;
 			}
@@ -1068,7 +1068,7 @@ bool TutorialRules::IsKnownStat(FName Stat)
 		return true;
 	}
 	static const FName Stats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
-		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given") };
+		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo") };
 	for (const FName Known : Stats)
 	{
 		if (Stat == Known)
