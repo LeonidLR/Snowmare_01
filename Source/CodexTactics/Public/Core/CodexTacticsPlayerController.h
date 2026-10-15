@@ -41,6 +41,9 @@ class AOperativeCharacter;
  * only — the box-selected group, else the leader you control; Alt + , . / = the whole squad (like Alt + Z / C / V for
  * the stance). The action bar buttons follow the same rule (Alt + click = squad). USquadSubsystem::ApplyPostureOrder.
  * Input actions are created in code for now; they move to assets once the editor setup exists.
+ * Layout (cleanup 2026-10-15): one class, members defined per input area in Private/Core/CodexTacticsPlayerController*.cpp -
+ * the main file (input setup, PlayerTick, shared queries), Selection, Orders (HandleWorldHit), Stance, Items, Time, Menus,
+ * Camera, Cover; shared helpers in CodexTacticsPlayerControllerInternal.h (docs/port/REFACTOR_CONTROLLER_2026-10.md).
  * Godot reference: Scenes/movements/main.gd (_input, raycast_from_mouse, _select_squad_member_by_index).
  */
 UCLASS()

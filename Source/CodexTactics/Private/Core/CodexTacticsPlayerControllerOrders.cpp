@@ -1,0 +1,729 @@
+// ACodexTacticsPlayerController: orders - real-time order lock, fire postures, autonomy, guard, group moves,
+// HandleWorldHit (the click dispatcher), defence lines, Ctrl + click targeted shots, cease fire, vehicle keys.
+// Split out of CodexTacticsPlayerController.cpp verbatim (cleanup 2026-10-15; map: docs/port/REFACTOR_CONTROLLER_2026-10.md).
+// Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
+
+#include "Core/CodexTacticsPlayerController.h"
+#include "Core/CodexTacticsPlayerControllerInternal.h"
+#include "Characters/SquadAutonomySubsystem.h"
+#include "Combat/EnemyGhostActor.h"
+#include "Combat/TacticalSightSubsystem.h"
+#include "Characters/SquadFormation.h"
+#include "Camera/InteriorExitArrowActor.h"
+#include "Camera/InteriorExitSubsystem.h"
+#include "Characters/RecruitSubsystem.h"
+#include "Combat/CombatTimeModeRules.h"
+#include "Interactables/BarrelActor.h"
+#include "Interactables/DeployableActor.h"
+#include "UI/FloatingTextSubsystem.h"
+#include "Combat/HealthComponent.h"
+#include "CodexTactics.h"
+#include "Combat/CombatFeedbackSubsystem.h"
+#include "Core/PlayerCommands.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Tutorial/TutorialSubsystem.h"
+#include "Interactables/LootCrateActor.h"
+#include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/InteractableActor.h"
+#include "Interactables/InteractionSubsystem.h"
+#include "Interactables/RelocationSubsystem.h"
+#include "Interactables/TripwireActor.h"
+#include "Components/BoxComponent.h"
+#include "Misc/App.h"
+#include "UI/GameMessageSubsystem.h"
+#include "Characters/EnemyCharacter.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
+#include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
+#include "Engine/World.h"
+#include "HAL/PlatformTime.h"
+#include "Vehicles/VehiclePawn.h"
+#include "Vehicles/VehicleSubsystem.h"
+
+#define LOCTEXT_NAMESPACE "CodexTacticsPlayerController"
+
+namespace OrderLock
+{
+	// User request 2026-10-06 (RTS control): orders run at once in the real-time fight by default; 0 restores the
+	// 2026-10-05 lock (orders only in the tactical pause).
+	TAutoConsoleVariable<int32> CVarRealTimeOrders(TEXT("Codex.RealTimeOrders"), 1,
+		TEXT("1: orders run at once in a real-time wave fight (RTS control, default, user request 2026-10-06); 0: only in the tactical pause (2026-10-05 lock)"));
+}
+
+bool ACodexTacticsPlayerController::IsRealTimeOrderLocked() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	return Flow && FCombatTimeModeRules::GetOrderDispatch(Flow->GetPhase(), Flow->GetCombatMode(),
+		OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) == ECombatOrderDispatch::Blocked;
+}
+
+void ACodexTacticsPlayerController::ApplyFirePosture(ESquadFirePosture Posture, bool bSquadWide)
+{
+	const FName PostureCommand = Posture == ESquadFirePosture::Passive ? PlayerCommands::PosturePassive
+		: (Posture == ESquadFirePosture::Defensive ? PlayerCommands::PostureDefensive : PlayerCommands::PostureAggressive);
+	if (IsDialogueOpen() || RefuseIfLocked(PostureCommand))
+	{
+		return;
+	}
+	if (USquadSubsystem* Squad = GetSquad())
+	{
+		Squad->ApplyPostureOrder(Posture, bSquadWide);
+		ControllerCommands::Report(this, PostureCommand, nullptr, false, bSquadWide);
+	}
+}
+
+bool ACodexTacticsPlayerController::BlockRealTimeOrder()
+{
+	if (!IsRealTimeOrderLocked())
+	{
+		return false;
+	}
+	const double Now = FPlatformTime::Seconds();
+	if (Now - LastOrderLockHintTime > 2.0)
+	{
+		LastOrderLockHintTime = Now;
+		PostHeadquarters(LOCTEXT("OrdersLocked",
+			"⏸ In combat, orders are given only in tactical pause [SPACE]. In real time the squad acts autonomously [Ctrl+T]."));
+	}
+	return true;
+}
+
+void ACodexTacticsPlayerController::ToggleAutonomy()
+{
+	if (RefuseIfLocked(PlayerCommands::Autonomy))
+	{
+		return;
+	}
+	if (USquadSubsystem* Squad = GetSquad())
+	{
+		Squad->ToggleAutonomousSquadCombat();
+		ControllerCommands::Report(this, PlayerCommands::Autonomy);
+	}
+}
+
+void ACodexTacticsPlayerController::GuardKey()
+{
+	if (IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl))
+	{
+		return; // Ctrl + T is Commander Mode
+	}
+	if ((!GetActiveTurnBased() && BlockRealTimeOrder()) || RefuseIfLocked(PlayerCommands::Guard))
+	{
+		return;
+	}
+	if (const UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsBusy())
+	{
+		return;
+	}
+	if (USquadSubsystem* Squad = GetSquad(); Squad && Squad->GetLeader())
+	{
+		Squad->ToggleGuard(Squad->GetLeader());
+		ControllerCommands::Report(this, PlayerCommands::Guard);
+	}
+}
+
+void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, bool bSprint, bool bPlan)
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader)
+	{
+		return;
+	}
+	// The leader first, then the others in selection order (Godot sorted_group).
+	TArray<AOperativeCharacter*> Group = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
+	Group.Remove(Leader);
+	Group.Insert(Leader, 0);
+	// APC P1: the ones aboard ride with the vehicle (Y gets them out first).
+	Group.RemoveAll([](const AOperativeCharacter* Member) { return VehicleQueries::IsMounted(Member); });
+	if (Group.IsEmpty())
+	{
+		return;
+	}
+	FVector Average = FVector::ZeroVector;
+	for (const AOperativeCharacter* Member : Group)
+	{
+		Average += Member->GetActorLocation();
+	}
+	Average /= Group.Num();
+	const FVector CameraForward = PlayerCameraManager ? PlayerCameraManager->GetCameraRotation().Vector() : FVector::ForwardVector;
+	const TArray<FVector> Targets = SquadFormation::ComputeGroupTargets(Destination, Average, CameraForward, Group.Num());
+
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	UInteractionSubsystem* UseOrders = GetWorld()->GetSubsystem<UInteractionSubsystem>();
+	for (int32 Index = 0; Index < Group.Num(); ++Index)
+	{
+		if (UseOrders)
+		{
+			UseOrders->CancelUseOrder(Group[Index]); // a move order replaces a planned / running "Ignite"
+		}
+		if (UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>())
+		{
+			Vehicles->CancelBoarding(Group[Index]); // ... and a walk to the APC's door
+		}
+		if (bPlan)
+		{
+			const FVector Planned = Squad->PlanMove(Group[Index], Targets[Index], bSprint, Flow ? Flow->GetPauseOrderRadius() : 1200.f);
+			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+			{
+				Feedback->SpawnWaypointMarker(Planned);
+			}
+		}
+		else
+		{
+			Group[Index]->OrderMoveTo(Targets[Index], bSprint);
+			// Sprint 06-B: where each operative was sent (a fading ping; the new order replaces the old pings).
+			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+			{
+				Feedback->SpawnMovePing(Targets[Index], Index == 0);
+			}
+		}
+	}
+	if (Messages && Group.Num() > 1)
+	{
+		const FText Line = bPlan
+			? FText::Format(bSprint ? LOCTEXT("GroupPlanSprint", "🏃 [PLAN] Group sprint planned ({0} operatives)!")
+				: LOCTEXT("GroupPlanMove", "📋 [PLAN] Group move planned ({0} operatives)!"), Group.Num())
+			: FText::Format(LOCTEXT("GroupMove", "🏃 Group ({0} operatives) moving into position!"), Group.Num());
+		Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), Line);
+	}
+}
+
+void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
+{
+	// Rev 5e (user bug 2026-10-14, "the tripwire cannot be disarmed"): the wire is an 8 cm bar at shin height - a click on the ground
+	// next to a spotted wire (TripwireRules::ClickSnapCm) means the wire (its Disarm menu), as hovering shows (the hand cursor).
+	FHitResult Hit = InHit;
+	if (!Cast<AInteractableActor>(InHit.GetActor()) && !Cast<APawn>(InHit.GetActor()))
+	{
+		if (ATripwireActor* Wire = ATripwireActor::FindClickableWireNear(GetWorld(), InHit.ImpactPoint))
+		{
+			Hit = FHitResult(Wire, Wire->Box.Get(), InHit.ImpactPoint, InHit.ImpactNormal);
+			UE_LOG(LogCodexTactics, Display, TEXT("Click next to the spotted wire %s: taken as a click on it"), *Wire->GetName());
+		}
+	}
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader)
+	{
+		return;
+	}
+
+	// Rev 5g (user request 2026-10-14): an EXIT arrow at a door of the building whose interior camera shows - the squad (Solo: the
+	// selected operatives) walks out. Never locked; the arrows are hidden in turn-based combat.
+	if (AInteriorExitArrowActor* ExitArrow = Cast<AInteriorExitArrowActor>(Hit.GetActor()))
+	{
+		if (UInteriorExitSubsystem* Exits = GetWorld()->GetSubsystem<UInteriorExitSubsystem>(); Exits && Exits->OrderExit(ExitArrow) > 0)
+		{
+			ControllerCommands::Report(this, PlayerCommands::ExitBuilding, ExitArrow, false, !Squad->IsSoloMode(), nullptr, ExitArrow->GetExitTarget());
+		}
+		return;
+	}
+
+	// Turn-based combat: the grid handles every click (select, attack, walk). Ctrl + click = the attack order, as in
+	// real time and in the tactical pause (user request 2026-10-06; Shift no longer attacks on the grid).
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
+	{
+		// Sprint 12: a wall click on the grid previews / confirms a cover slot snapped to a cell.
+		if (!IsAttackModifierDown() && TryHandleCoverClick(Hit, TurnBased))
+		{
+			return;
+		}
+		HideCoverPreview();
+		TurnBased->HandleWorldClick(Hit.ImpactPoint, Hit.GetActor(), IsAttackModifierDown());
+		ControllerCommands::Report(this, IsAttackModifierDown() ? PlayerCommands::TurnBasedAttack : PlayerCommands::TurnBasedOrder, Hit.GetActor(),
+			false, false, TurnBased->GetActiveUnit(), Hit.ImpactPoint);
+		return;
+	}
+
+	// Real-time fight (user decision 2026-10-05): a click picks an operative (leader + camera), nothing else.
+	if (IsRealTimeOrderLocked())
+	{
+		bRelocateSelectMode = false;
+		if (AOperativeCharacter* Picked = FindClickedMember(Hit))
+		{
+			Squad->SetLeader(Picked);
+			ControllerCommands::Report(this, PlayerCommands::SelectMember, nullptr, false, false, Picked);
+			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			{
+				Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), Picked->DisplayName));
+			}
+		}
+		else
+		{
+			BlockRealTimeOrder();
+		}
+		return;
+	}
+
+	// Action bar "MOVE": the clicked object is picked up for relocation.
+	if (bRelocateSelectMode)
+	{
+		if (AInteractableActor* Object = Cast<AInteractableActor>(Hit.GetActor()))
+		{
+			bRelocateSelectMode = false;
+			if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
+			{
+				Relocation->StartRelocate(Object, Leader);
+			}
+		}
+		return;
+	}
+
+	// APC P1: with the leader aboard a click on the ground drives his vehicle (double click: full speed); a click on an
+	// operative still selects him; Ctrl + click on an enemy = the turret's priority target (P2); Shift + click waits
+	// (watch sector, later).
+	if (UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>(); Vehicles && Vehicles->IsMounted(Leader))
+	{
+		HideCoverPreview();
+		if (AOperativeCharacter* Picked = FindClickedMember(Hit))
+		{
+			Squad->SetLeader(Picked);
+			ControllerCommands::Report(this, PlayerCommands::SelectMember, nullptr, false, false, Picked);
+			return;
+		}
+		if (IsAttackModifierDown())
+		{
+			Vehicles->HandleTurretTargetClick(Leader, Hit.GetActor());
+			return;
+		}
+		if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift)
+			|| Hit.GetActor() == Vehicles->GetVehicleOf(Leader))
+		{
+			return;
+		}
+		FVector2D DriveMouse;
+		GetMousePosition(DriveMouse.X, DriveMouse.Y);
+		const double DriveNow = FApp::GetCurrentTime();
+		const bool bDriveDoubleClick = LastClickTime >= 0.0 && DriveNow - LastClickTime <= DoubleClickSeconds
+			&& FVector2D::Distance(DriveMouse, LastClickPosition) <= DoubleClickPixels;
+		LastClickTime = bDriveDoubleClick ? -1.0 : DriveNow;
+		LastClickPosition = DriveMouse;
+		Vehicles->HandleDriveClick(Leader, Hit.ImpactPoint, bDriveDoubleClick);
+		return;
+	}
+
+	// Sprint 08-F: a click on a silhouette (last known / heard position) orders blind fire at it (-80 % accuracy); the
+	// hidden enemy itself cannot be clicked.
+	if (UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>(); Sight && Sight->IsActive())
+	{
+		if (AEnemyGhostActor* Ghost = Sight->FindGhostNear(Hit.ImpactPoint, 150.f))
+		{
+			TArray<AOperativeCharacter*> Shooters = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
+			for (AOperativeCharacter* Shooter : Shooters)
+			{
+				Shooter->SetBlindFireTarget(Ghost);
+			}
+			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			{
+				Messages->PostMessage(Leader->DisplayName, LOCTEXT("BlindFire", "🎯 Blind fire at the silhouette (accuracy −80%)!"));
+			}
+			return;
+		}
+		if (AActor* HitActor = Hit.GetActor(); HitActor && HitActor->ActorHasTag(FName(TEXT("Enemy"))) && !Sight->IsVisibleToSquad(HitActor))
+		{
+			return;
+		}
+	}
+
+	// Ctrl + click: targeted fire only, never a move or a selection.
+	if (IsAttackModifierDown())
+	{
+		HideCoverPreview();
+		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		if (!Flow || Flow->GetCombatMode() != ECodexCombatMode::TurnBased)
+		{
+			IssueTargetedShot(Hit.GetActor());
+		}
+		return;
+	}
+
+	// Sprint 12: a click on a wall (Alt + click on a barricade / any object) = cover preview / confirm / shimmy; every
+	// other click drops a pending preview and goes on as before (a ground order also leaves the cover: OrderMoveTo).
+	if (TryHandleCoverClick(Hit, nullptr))
+	{
+		return;
+	}
+	HideCoverPreview();
+
+	// Godot main.gd plain-click rules during a fight (before the usual walk-up):
+	const UGameFlowSubsystem* ClickFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const bool bWave = ClickFlow && ClickFlow->GetPhase() == ECodexGamePhase::WaveCombat;
+	const bool bClickPause = ClickFlow && ClickFlow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+	const bool bPreparation = ClickFlow && ClickFlow->GetPhase() == ECodexGamePhase::Preparation;
+	UGameMessageSubsystem* ClickMessages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	// 0.5: a live enemy becomes the priority target (no Ctrl needed while a wave is on).
+	if (AActor* HitActor = Hit.GetActor(); bWave && HitActor && HitActor->ActorHasTag(FName(TEXT("Enemy"))))
+	{
+		const UHealthComponent* EnemyHealth = HitActor->FindComponentByClass<UHealthComponent>();
+		if (!EnemyHealth || EnemyHealth->IsAlive())
+		{
+			Leader->AssignPriorityTarget(HitActor);
+			ControllerCommands::Report(this, PlayerCommands::PriorityTarget, HitActor);
+			if (ClickMessages)
+			{
+				const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(HitActor);
+				ClickMessages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🎯 Priority target set: %s!"),
+					Enemy ? *Enemy->GetEnemyDisplayName() : TEXT("Enemy"))));
+			}
+			return;
+		}
+	}
+	// 0: set-up items and movable objects can't be moved mid-fight; in the pause / preparation a set-up item opens its
+	// menu at once and a movable object is picked up for relocation right away.
+	if (AInteractableActor* Object = Cast<AInteractableActor>(Hit.GetActor()))
+	{
+		const bool bDeployable = Object->IsA<ADeployableActor>();
+		// Godot is_zone_solo: the leader alone in a camera zone may move / take objects mid-wave.
+		const bool bZoneSolo = Leader && Leader->bInCameraZone;
+		// User decision 2026-10-08: a barrel in the fight (real time or pause) opens its menu at once - "Ignite (1 match)"
+		// sends the operative to light it (planned in the pause), "Push out" is offered in the pause only.
+		if (Object->IsA<ABarrelActor>() && bWave)
+		{
+			if (UInteractionSubsystem* ClickInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+			{
+				ClickInteractions->OpenMenuNow(Object);
+			}
+			return;
+		}
+		if ((bDeployable || Object->bCanBeRelocated) && bWave && !bClickPause && !bZoneSolo)
+		{
+			if (ClickMessages)
+			{
+				ClickMessages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("NoMoveInFight", "⚠️ Objects cannot be relocated during combat! Use tactical pause [SPACE]."));
+			}
+			if (UInteractionSubsystem* ClickInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+			{
+				ClickInteractions->CancelInteraction();
+			}
+			return;
+		}
+		if (bDeployable && (bPreparation || bClickPause))
+		{
+			if (UInteractionSubsystem* ClickInteractions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+			{
+				ClickInteractions->OpenMenuNow(Object);
+			}
+			return;
+		}
+		if (!bDeployable && Object->bCanBeRelocated && (bClickPause || (bWave && bZoneSolo)))
+		{
+			if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
+			{
+				Relocation->StartRelocate(Object, Leader);
+			}
+			return;
+		}
+	}
+
+	// Godot "is_unrecruited": a click on the recruit rescues / talks to him (or walks the leader up to him).
+	if (URecruitSubsystem* Recruits = GetWorld()->GetSubsystem<URecruitSubsystem>(); Recruits && Recruits->IsRecruit(Hit.GetActor()))
+	{
+		if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+		{
+			Interactions->CancelInteraction();
+		}
+		Recruits->HandleRecruitClicked(false);
+		return;
+	}
+
+	AOperativeCharacter* SelectedMember = FindClickedMember(Hit);
+
+	UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>();
+	if (SelectedMember)
+	{
+		if (Interactions)
+		{
+			Interactions->CancelInteraction();
+		}
+		Squad->SetLeader(SelectedMember);
+		ControllerCommands::Report(this, PlayerCommands::SelectMember, nullptr, false, false, SelectedMember);
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"),
+				FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), SelectedMember->DisplayName));
+		}
+		LastClickTime = -1.0;
+		return;
+	}
+
+	FVector2D MousePosition = FVector2D::ZeroVector; // stays zero without a viewport (headless smokes)
+	GetMousePosition(MousePosition.X, MousePosition.Y);
+	const double Now = FApp::GetCurrentTime(); // real time, but follows a fixed-step (bot) run
+	const bool bDoubleClick = LastClickTime >= 0.0
+		&& Now - LastClickTime <= DoubleClickSeconds
+		&& FVector2D::Distance(MousePosition, LastClickPosition) <= DoubleClickPixels;
+	LastClickTime = bDoubleClick ? -1.0 : Now;
+	LastClickPosition = MousePosition;
+
+	// Tutorial command lock (Demo 01, 2026-10-13): no move orders at all while HQ talks (the A0 intro locks "Order.Move");
+	// the refusal raises "Tutorial.Locked.Order.Move" for the one-time feed line, nothing else happens.
+	if (UTutorialSubsystem::FilterCommand(this, PlayerCommands::Move).IsNone())
+	{
+		return;
+	}
+	// Clicking an object sends the leader to it (running on a double click); its action menu opens on arrival.
+	if (AInteractableActor* Interactable = Cast<AInteractableActor>(Hit.GetActor()))
+	{
+		if (Interactions)
+		{
+			// Tutorial command lock (Demo 01: no running until warmed up in A1): a locked sprint walks there instead.
+			Interactions->RequestInteraction(Interactable, bDoubleClick && UTutorialSubsystem::FilterCommand(this, PlayerCommands::Sprint) == PlayerCommands::Sprint);
+			ControllerCommands::Report(this, PlayerCommands::Interact, Interactable);
+		}
+		return;
+	}
+	if (Interactions)
+	{
+		Interactions->CancelInteraction();
+	}
+
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const ECodexCombatMode Mode = Flow ? Flow->GetCombatMode() : ECodexCombatMode::None;
+	if (Mode == ECodexCombatMode::TurnBased)
+	{
+		// Grid combat handles clicks itself (turn-based step).
+		return;
+	}
+	// Godot Shift + click on the ground: turn the leader and fix the observation sector.
+	if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
+	{
+		if (RefuseIfLocked(PlayerCommands::WatchSector))
+		{
+			return;
+		}
+		Leader->SetFacingPoint(Hit.ImpactPoint);
+		ControllerCommands::Report(this, PlayerCommands::WatchSector, nullptr, false, false, Leader, Hit.ImpactPoint);
+		UFloatingTextSubsystem::SpawnAboveOperative(Leader, TEXT("👁️ WATCH SECTOR"), FLinearColor(0.2f, 0.9f, 1.f));
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Watch sector locked!"), Leader->DisplayName));
+		}
+		return;
+	}
+	// RTS control (user request 2026-10-06): a ground click moves the squad at once in the real-time fight and is planned
+	// in the tactical pause; only the old lock (Codex.RealTimeOrders 0) keeps the Godot «moves only in the pause» rule.
+	const ECombatOrderDispatch Dispatch = Flow ? FCombatTimeModeRules::GetOrderDispatch(Flow->GetPhase(), Mode,
+		OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) : ECombatOrderDispatch::Execute;
+	if (Dispatch == ECombatOrderDispatch::Blocked)
+	{
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("MoveOnlyInPause", "During combat, moving is only possible in tactical pause [SPACE]!"));
+		}
+		return;
+	}
+	// Rev 5i (game designer 2026-10-15): a tutorial confinement holds the squad in an area - a click outside it is refused with one
+	// feed line and reported as no order (the members' own orders are judged again in OrderMoveTo).
+	if (!UTutorialSubsystem::CheckConfinedOrder(this, Leader, Hit.ImpactPoint))
+	{
+		return;
+	}
+	// Tutorial command lock (Demo 01 user decision 2026-10-12: no running until warmed up in A1): a locked sprint is
+	// degraded to a walk without any error line; the lock raises "Tutorial.Locked" for the one-time hint.
+	const bool bSprint = bDoubleClick && UTutorialSubsystem::FilterCommand(this, PlayerCommands::Sprint) == PlayerCommands::Sprint;
+	// Godot double click: sprint, or why not.
+	if (bSprint)
+	{
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			if (!Leader->CanSprint() && Leader->ColdLevel >= Leader->MovementConfig.MaxColdToSprint)
+			{
+				Messages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🥶 %s is frozen (%d%% cold) and cannot run! Walking."),
+					*Leader->DisplayName.ToString(), FMath::FloorToInt(Leader->ColdLevel))));
+			}
+			else if (!Leader->CanSprint() && Leader->IsWounded() && Leader->HealthComponent)
+			{
+				Messages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🩹 %s is badly wounded (%d/%d HP) and cannot run! Walking."),
+					*Leader->DisplayName.ToString(), FMath::FloorToInt(Leader->HealthComponent->GetCurrentHealth()), FMath::FloorToInt(Leader->HealthComponent->GetMaxHealth()))));
+			}
+			else if (Leader->CanSprint())
+			{
+				Messages->PostMessage(Leader->DisplayName, LOCTEXT("SprintOrder", "🏃 Run to position!"));
+			}
+		}
+	}
+	OrderGroupMove(Hit.ImpactPoint, bSprint, Dispatch == ECombatOrderDispatch::Queue);
+	ControllerCommands::Report(this, bSprint ? PlayerCommands::Sprint : PlayerCommands::Move, nullptr, Dispatch == ECombatOrderDispatch::Queue,
+		Squad->HasMultiSelection(), Leader, Hit.ImpactPoint);
+}
+
+void ACodexTacticsPlayerController::AssignDefenseUnderCursor()
+{
+	USquadSubsystem* Squad = GetSquad();
+	USquadAutonomySubsystem* Autonomy = GetWorld()->GetSubsystem<USquadAutonomySubsystem>();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader || !Autonomy || GetActiveTurnBased() || BlockRealTimeOrder() || RefuseIfLocked(PlayerCommands::HoldLine))
+	{
+		return;
+	}
+	FHitResult Hit;
+	if (!GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+	{
+		return;
+	}
+	AInteractableActor* Object = Cast<AInteractableActor>(Hit.GetActor());
+	TArray<AOperativeCharacter*> Defenders = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
+	for (AOperativeCharacter* Defender : Defenders)
+	{
+		Autonomy->SetDefenseObjective(Defender, Object, Hit.ImpactPoint);
+	}
+	ControllerCommands::Report(this, PlayerCommands::HoldLine, Object, false, Defenders.Num() > 1, Leader, Hit.ImpactPoint);
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("DefenseLine", "🛡 [HOLD LINE] {0}: hold at all costs!{1}"),
+			Object ? Object->DisplayName : LOCTEXT("DefensePoint", "Point"),
+			Squad->IsAutonomousSquadCombat() ? FText::GetEmpty() : LOCTEXT("DefenseNeedsAuto", " (turn on autonomy [Ctrl+T] - the operatives will hold the line themselves)")));
+	}
+}
+
+void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	if (!Leader || !Messages || RefuseIfLocked(PlayerCommands::TargetedShot))
+	{
+		return;
+	}
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const bool bPaused = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+	const ETargetedShotKind Kind = AOperativeCharacter::ClassifyShotTarget(HitActor);
+	UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>();
+	if (Kind != ETargetedShotKind::None && Feedback)
+	{
+		// Godot _highlight_target_feedback (not on destroyed crates) + a plan marker in the pause.
+		const ALootCrateActor* Crate = Cast<ALootCrateActor>(HitActor);
+		if (!Crate || !Crate->IsDestroyed())
+		{
+			Feedback->HighlightTarget(HitActor);
+		}
+		if (bPaused)
+		{
+			FVector Origin;
+			FVector Extent;
+			HitActor->GetActorBounds(true, Origin, Extent);
+			Feedback->SpawnWaypointMarker(FVector(Origin.X, Origin.Y, Origin.Z - Extent.Z));
+		}
+	}
+	if (bPaused && Kind != ETargetedShotKind::None)
+	{
+		Leader->PlanTargetedShot(HitActor);
+	}
+	if (Kind != ETargetedShotKind::None)
+	{
+		ControllerCommands::Report(this, PlayerCommands::TargetedShot, HitActor, bPaused);
+	}
+
+	switch (Kind)
+	{
+	case ETargetedShotKind::Enemy:
+	{
+		// Ambush level (user request 2026-10-06): attacking an enemy opens the fight — no "Start combat" needed. The
+		// priority target below then makes the squad fire at once (the real-time fight is on).
+		if (!bPaused)
+		{
+			ULevelEncounterSubsystem::NotifyHostileContactIn(GetWorld(), EAmbushTrigger::AttackOrder, HitActor);
+		}
+		const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(HitActor);
+		const FText EnemyName = Enemy ? FText::FromString(Enemy->GetEnemyDisplayName()) : LOCTEXT("Enemy", "Enemy");
+		if (bPaused)
+		{
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("PlanEnemy", "📋 [PLAN] Aimed fire assigned on: {0}!"), EnemyName));
+		}
+		else
+		{
+			Leader->SetManualPriorityTarget(HitActor);
+			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("PriorityEnemy", "🎯 Priority target set: {0}!"), EnemyName));
+		}
+		break;
+	}
+	case ETargetedShotKind::Barrel:
+		if (bPaused)
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanBarrel", "📋 [PLAN] Shot at the fuel barrel planned! [SPACE - fire]"));
+		}
+		else if (Leader->ShootAtObject(HitActor))
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("ShotBarrel", "💥 Aimed shot at the fuel barrel!"));
+		}
+		break;
+	case ETargetedShotKind::Mine:
+		if (bPaused)
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanMine", "📋 [PLAN] Aimed shot at the mine planned! [SPACE - fire]"));
+		}
+		else
+		{
+			Leader->ShootAtObject(HitActor);
+		}
+		break;
+	case ETargetedShotKind::Crate:
+		if (bPaused)
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanCrate", "📋 [PLAN] Shot at the supply crate planned! [SPACE - fire]"));
+		}
+		else
+		{
+			Leader->ShootAtObject(HitActor);
+		}
+		break;
+	case ETargetedShotKind::TrappedObject:
+		if (bPaused)
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("PlanTrapped", "📋 [PLAN] Remote detonation of the tripwire planned! [SPACE - fire]"));
+		}
+		else
+		{
+			Leader->ShootAtObject(HitActor);
+		}
+		break;
+	default:
+		Messages->PostMessage(Leader->DisplayName, LOCTEXT("TargetHint", "Pick an enemy, barrel, mine or crate for aimed fire [Ctrl+Click]!"));
+		break;
+	}
+}
+
+void ACodexTacticsPlayerController::SetSquadCeaseFire(bool bCease)
+{
+	if (bCeaseFireSet == bCease)
+	{
+		return;
+	}
+	bCeaseFireSet = bCease;
+	if (USquadSubsystem* Squad = GetSquad())
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Member->bTacticalCeaseFire = bCease;
+		}
+	}
+}
+
+void ACodexTacticsPlayerController::VehicleKey(bool bSquadWide)
+{
+	if (RefuseIfLocked(PlayerCommands::VehicleBoard))
+	{
+		return;
+	}
+	if (UVehicleSubsystem* Vehicles = GetWorld()->GetSubsystem<UVehicleSubsystem>())
+	{
+		// The hovered vehicle wins when several are near (design 1.1).
+		FHitResult Hover;
+		AVehiclePawn* Hovered = GetHitResultUnderCursor(ECC_Visibility, false, Hover) ? Cast<AVehiclePawn>(Hover.GetActor()) : nullptr;
+		HideCoverPreview();
+		Vehicles->HandleBoardKey(bSquadWide, Hovered);
+	}
+}
+
+void ACodexTacticsPlayerController::VehicleKeyPressed()
+{
+	if (IsDialogueOpen())
+	{
+		return;
+	}
+	VehicleKey(IsSquadWideModifierDown());
+}
+
+#undef LOCTEXT_NAMESPACE

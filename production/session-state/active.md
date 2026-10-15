@@ -39,6 +39,9 @@ Check the skeleton vs the operatives' (as with the crawl clips: use the matching
 - Cleanup day task 1 DONE: `OperativeCharacter.cpp` 4867 -> 306 lines, split into per-cluster files of the same class
   (byte-identical definitions; components = stage 2, plan in `docs/port/REFACTOR_OPERATIVE_2026-10.md` §4, controller
   split proposal §6). Verified on main: build, 449/449 unit tests, 15 smokes PASS.
+- Controller split DONE on `agents/work` (2026-10-15, not merged yet): `CodexTacticsPlayerController.cpp` 2978 -> 446 lines,
+  9 units by input area, byte-identical definitions; 470/470 unit tests, 46/46 smokes before and after. Map + the
+  `HandleWorldHit` break-up plan: `docs/port/REFACTOR_CONTROLLER_2026-10.md`.
 - Next (cleanup day continues, effort high for task 2): (2) flaky / failing smokes: PanicSmoke (fails on the base too —
   environment changed), SquadControlSmoke («Alt + V refused while moving», fails on base — likely the new prone-dive
   rule), VisionConeSmoke (1400 cm), CornerHold / TurnBasedAim / Knockdown pass only on rerun; (3) merge the two lake maps
