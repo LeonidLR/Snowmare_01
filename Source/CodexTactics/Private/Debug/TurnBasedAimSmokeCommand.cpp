@@ -72,6 +72,11 @@ namespace TurnBasedAimSmoke
 		float MaxAlpha = 0.f;
 		float MaxAbsYaw = 0.f;
 		int32 Frames = 0;
+		/** Combat target changes while sampled: each may swing the twist once across its clamp (a real retarget, not jitter). */
+		int32 TargetSwitches = 0;
+		TWeakObjectPtr<AActor> LastTarget;
+		/** The twist clamp (AimYawClampDegrees) seen while sampling. */
+		float YawClamp = 60.f;
 	};
 
 	struct FState
@@ -86,6 +91,8 @@ namespace TurnBasedAimSmoke
 		FPhaseStats Walk;
 		FPhaseStats StandAfter;
 		bool bMoveStarted = false;
+		/** A reload seen after leaving turn-based (the aim offset is off while it runs). */
+		bool bSawReloadAfterExit = false;
 		float LogTimer = 0.f;
 		// Crouched corner case (AnimOffset_Bug_02): the leader crouched at the right-hand edge of a wall, hounds rushing in.
 		FPhaseStats Corner;
@@ -138,6 +145,16 @@ namespace TurnBasedAimSmoke
 		}
 		Stats.Seconds += DeltaSeconds;
 		++Stats.Frames;
+		AActor* Target = Op.GetCurrentCombatTarget();
+		if (Target && Stats.LastTarget.IsValid() && Target != Stats.LastTarget.Get())
+		{
+			++Stats.TargetSwitches;
+		}
+		if (Target)
+		{
+			Stats.LastTarget = Target;
+		}
+		Stats.YawClamp = Anim->AimYawClampDegrees;
 		Stats.AimYaw.Add(Anim->AimYaw);
 		Stats.AimPitch.Add(Anim->AimPitch);
 		Stats.MaxAlpha = FMath::Max(Stats.MaxAlpha, Anim->AimOffsetAlpha);
@@ -175,12 +192,17 @@ namespace TurnBasedAimSmoke
 	{
 		const float Seconds = FMath::Max(Stats.Seconds, 0.01f);
 		UE_LOG(LogCodexTactics, Display,
-			TEXT("Smoke: %s %s - %.1f s, %d frames: AimYaw max step %.1f deg, %d reversals (%.1f/s), travel %.0f deg/s, max |yaw| %.0f; AimPitch max step %.1f, %d reversals; barrel max step %.1f deg, %d reversals (%.1f/s); alpha max %.2f"),
+			TEXT("Smoke: %s %s - %.1f s, %d frames: AimYaw max step %.1f deg, %d reversals (%.1f/s), travel %.0f deg/s, max |yaw| %.0f, %d target switches; AimPitch max step %.1f, %d reversals; barrel max step %.1f deg, %d reversals (%.1f/s); alpha max %.2f"),
 			*Who, Name, Stats.Seconds, Stats.Frames, Stats.AimYaw.MaxDelta, Stats.AimYaw.Reversals, Stats.AimYaw.Reversals / Seconds, Stats.AimYaw.Travel / Seconds, Stats.MaxAbsYaw,
-			Stats.AimPitch.MaxDelta, Stats.AimPitch.Reversals, Stats.Barrel.MaxDelta, Stats.Barrel.Reversals, Stats.Barrel.Reversals / Seconds, Stats.MaxAlpha);
+			Stats.TargetSwitches, Stats.AimPitch.MaxDelta, Stats.AimPitch.Reversals, Stats.Barrel.MaxDelta, Stats.Barrel.Reversals, Stats.Barrel.Reversals / Seconds, Stats.MaxAlpha);
 		Check(State, Stats.AimYaw.MaxDelta <= 8.f, FString::Printf(TEXT("%s %s: AimYaw changes smoothly (max %.1f deg per frame)"), *Who, Name, Stats.AimYaw.MaxDelta));
 		Check(State, Stats.AimYaw.Reversals <= FMath::CeilToInt(2.f * Seconds), FString::Printf(TEXT("%s %s: AimYaw does not oscillate (%d reversals in %.1f s)"), *Who, Name, Stats.AimYaw.Reversals, Stats.Seconds));
-		Check(State, Stats.AimYaw.Travel / Seconds <= 60.f, FString::Printf(TEXT("%s %s: the upper body does not sweep back and forth (%.0f deg/s of AimYaw travel)"), *Who, Name, Stats.AimYaw.Travel / Seconds));
+		// 60 deg/s of twist travel, plus one full swing across the clamp (2 x AimYawClampDegrees) per combat retarget: with the
+		// hounds rushing from both sides the number of retargets is luck (30..77 deg/s seen 2026-10-15 for the same, correct
+		// behaviour); the jitter of AnimOffset_Bug_01 swings WITHOUT a retarget (and the reversal check above stays).
+		const float TravelBudget = 60.f * Seconds + 2.f * Stats.YawClamp * Stats.TargetSwitches;
+		Check(State, Stats.AimYaw.Travel <= TravelBudget, FString::Printf(TEXT("%s %s: the upper body does not sweep back and forth (%.0f deg/s of AimYaw travel, %.0f deg in all, budget %.0f with %d retargets)"),
+			*Who, Name, Stats.AimYaw.Travel / Seconds, Stats.AimYaw.Travel, TravelBudget, Stats.TargetSwitches));
 		Check(State, Stats.Barrel.Reversals <= FMath::CeilToInt(2.f * Seconds) + 2, FString::Printf(TEXT("%s %s: the rifle does not jitter (%d barrel reversals in %.1f s)"), *Who, Name, Stats.Barrel.Reversals, Stats.Seconds));
 	}
 
@@ -463,17 +485,21 @@ namespace TurnBasedAimSmoke
 		}
 		case 6:
 		{
-			// Back in real time the offset eases in again (alpha 1).
-			if (State.StageTime < 1.f)
+			// Back in real time the offset eases in again (alpha 1). A condition, not a fixed second: leaving turn-based often
+			// starts the auto reload ("Changing mags") and the offset is legitimately off while he reloads (AimOffsetRules:
+			// bReloading), so after 1 s it could read 0.00 depending on whose clip ran dry (flaky 2026-10-15).
+			AOperativeCharacter* Op = State.Units.Num() > 0 ? State.Units[0].Get() : nullptr;
+			const UOperativeAnimInstance* Anim = Op && Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
+			State.bSawReloadAfterExit |= Op && Op->bIsReloading;
+			if (State.StageTime < 1.f || (Anim && !Anim->bAimOffsetInTurnBased && Anim->AimOffsetAlpha <= 0.99f && State.StageTime < 10.f))
 			{
 				return true;
 			}
-			AOperativeCharacter* Op = State.Units.Num() > 0 ? State.Units[0].Get() : nullptr;
-			const UOperativeAnimInstance* Anim = Op && Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
 			if (Anim && !Anim->bAimOffsetInTurnBased)
 			{
 				Check(State, !TurnBased->IsActive() && Anim->AimOffsetAlpha > 0.99f,
-					FString::Printf(TEXT("back in real time the aim offset is on again (alpha %.2f)"), Anim->AimOffsetAlpha));
+					FString::Printf(TEXT("back in real time the aim offset is on again (alpha %.2f after %.1f s%s)"), Anim->AimOffsetAlpha, State.StageTime,
+						State.bSawReloadAfterExit ? TEXT(", a reload in between") : TEXT("")));
 			}
 			return Finish(State);
 		}

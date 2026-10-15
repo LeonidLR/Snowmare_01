@@ -59,7 +59,7 @@ namespace GroupSelectSmoke
 		State.Time += StepSeconds;
 		State.StageTime += StepSeconds;
 		UWorld* World = WeakWorld.Get();
-		if (!World || State.Time > 65.f)
+		if (!World || State.Time > 90.f)
 		{
 			return World ? Finish(State, false) : false;
 		}
@@ -167,12 +167,18 @@ namespace GroupSelectSmoke
 		}
 		case 1:
 		{
-			if (State.StageTime < 7.f)
+			// Leader (Members[1]) first, then Members[0], Members[2] in selection order. Waits until all three stand in their
+			// slots (cap 15 s) instead of a fixed 7 s: under load the walk (and its path requests) can take longer.
+			const AOperativeCharacter* Order[] = { Members[1], Members[0], Members[2] };
+			bool bAllThere = true;
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				bAllThere &= FVector::Dist2D(Order[Index]->GetActorLocation(), State.Targets[Index]) < 150.f && Order[Index]->GetVelocity().Size2D() < 10.f;
+			}
+			if (State.StageTime < 2.f || (!bAllThere && State.StageTime < 15.f))
 			{
 				return true;
 			}
-			// Leader (Members[1]) first, then Members[0], Members[2] in selection order.
-			const AOperativeCharacter* Order[] = { Members[1], Members[0], Members[2] };
 			for (int32 Index = 0; Index < 3; ++Index)
 			{
 				const float Distance = FVector::Dist2D(Order[Index]->GetActorLocation(), State.Targets[Index]);
@@ -191,8 +197,7 @@ namespace GroupSelectSmoke
 			Flow->FinishPreparation();
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
-				It->CustomTimeDilation = 0.f;
-				It->SetActorLocation(It->GetActorLocation() + FVector(0.f, 0.f, -5000.f), false, nullptr, ETeleportType::TeleportPhysics);
+				SmokeUtils::ParkEnemyFarAway(*It); // far in 2D too: the sudden horde spawns around the squad
 			}
 			Check(State, Flow->ToggleTacticalPause() == EGameFlowResult::Ok && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause,
 				TEXT("tactical pause"));
@@ -240,7 +245,13 @@ namespace GroupSelectSmoke
 		}
 		case 3:
 		{
-			if (State.StageTime < 4.f)
+			// All three walk once the pause ends: condition (each 1.5 m off its start), cap 10 s instead of a fixed 4 s.
+			bool bAllMoved = true;
+			for (int32 Index = 0; Index < Members.Num() && Index < State.PauseStarts.Num(); ++Index)
+			{
+				bAllMoved &= FVector::Dist2D(Members[Index]->GetActorLocation(), State.PauseStarts[Index]) > 150.f;
+			}
+			if (!bAllMoved && State.StageTime < 10.f)
 			{
 				return true;
 			}

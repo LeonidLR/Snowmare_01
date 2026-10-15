@@ -65,6 +65,17 @@ bool FMineBlastTest::RunTest(const FString&)
 	return true;
 }
 
+DEPLOYABLE_TEST(FArmingCountdownTest, "ArmingCountdownNeverNegative")
+bool FArmingCountdownTest::RunTest(const FString& Parameters)
+{
+	// A mine / tripwire arming countdown stops at 0: the saved "arming_left" must load back unchanged (SaveRoundTripSmoke).
+	TestEqual(TEXT("counts down"), DeployableRules::StepArmingCountdown(1.5f, 0.5f), 1.f, 1e-5f);
+	TestEqual(TEXT("an overshooting frame lands on 0, not -0.033"), DeployableRules::StepArmingCountdown(0.01f, 1.f / 30.f), 0.f);
+	TestEqual(TEXT("armed stays 0"), DeployableRules::StepArmingCountdown(0.f, 0.1f), 0.f);
+	TestEqual(TEXT("a negative delta never re-arms"), DeployableRules::StepArmingCountdown(0.f, -0.1f), 0.f);
+	return true;
+}
+
 #undef DEPLOYABLE_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

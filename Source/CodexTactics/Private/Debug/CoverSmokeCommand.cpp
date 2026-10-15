@@ -743,11 +743,17 @@ namespace CoverSmoke
 		case 16:
 		{
 			Sight->Refresh();
-			if (!Op->bInCover && State.Time < 10.f)
+			// In cover AND arrived at that slot: when his own cover AI took the old slot again right after the smoke's LeaveCover
+			// (a threat 7 m away, autonomous Hold), the order becomes a 5 m shimmy along the same wall, not a run - in cover at
+			// once but still walking when the fixed 3.5 s below ran out (flaky 2026-10-15). Cap 12 s.
+			const bool bArrived = Op->bInCover && !Op->bShimmying
+				&& FVector::Dist2D(Op->GetActorLocation(), State.Slot.WorldLocation) < 120.f;
+			if (!bArrived && State.Time < 12.f)
 			{
 				return true;
 			}
-			Check(State, Op->bInCover, FString::Printf(TEXT("in the right-hand corner cover after %.1f s"), State.Time));
+			Check(State, bArrived, FString::Printf(TEXT("in the right-hand corner cover after %.1f s (%.0f cm off the slot)"), State.Time,
+				FVector::Dist2D(Op->GetActorLocation(), State.Slot.WorldLocation)));
 			if (const UOperativeAnimInstance* Anim0 = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr)
 			{
 				State.ClipLogMark = Anim0->GetCoverClipLog().Num();

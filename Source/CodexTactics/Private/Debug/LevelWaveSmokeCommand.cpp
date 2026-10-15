@@ -6,7 +6,8 @@
 //    _spawn_custom_json_wave (the level's wave 1 count, nothing queued)
 //    around the level's enemy spawn points, and the wave's cold_drain_mult reaches the squad's cold;
 // 3. (user report 2026-10-04: wave 2 spawned into one point, the enemies inside each other, standing still) for waves 1
-//    and 2: nobody spawns inside another enemy, everyone stands on the navmesh, and 6 s later they are on the move.
+//    and 2: nobody spawns inside another enemy, everyone stands on the navmesh, and they get on the move (>= 90 % walked
+//    1.5 m off their spot; polled up to 20 s - a 55-enemy horde path-finds through the async nav queue, slower under load).
 
 #include "CoreMinimal.h"
 
@@ -104,8 +105,8 @@ namespace LevelWaveSmoke
 		Check(State, OnNav == Enemies.Num(), FString::Printf(TEXT("wave %d: %d / %d on the navmesh"), State.Wave, OnNav, Enemies.Num()));
 	}
 
-	/** 6 s after the spawn: (nearly) everyone has walked off its spawn spot. */
-	void CheckMoving(FState& State)
+	/** (Nearly) everyone has walked off its spawn spot: >= 90 % of the living 1.5 m away. bReport logs the check. */
+	bool CheckMoving(FState& State, bool bReport)
 	{
 		int32 Moved = 0;
 		int32 Alive = 0;
@@ -117,7 +118,12 @@ namespace LevelWaveSmoke
 				Moved += FVector::Dist2D(Enemy->GetActorLocation(), Entry.Value) > 150.f ? 1 : 0;
 			}
 		}
-		Check(State, Alive > 0 && Moved * 10 >= Alive * 9, FString::Printf(TEXT("wave %d: %d / %d on the move after 6 s"), State.Wave, Moved, Alive));
+		const bool bOk = Alive > 0 && Moved * 10 >= Alive * 9;
+		if (bReport)
+		{
+			Check(State, bOk, FString::Printf(TEXT("wave %d: %d / %d on the move after %.1f s"), State.Wave, Moved, Alive, State.StageTime));
+		}
+		return bOk;
 	}
 
 	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
@@ -125,7 +131,7 @@ namespace LevelWaveSmoke
 		State.Time += StepSeconds;
 		State.StageTime += StepSeconds;
 		UWorld* World = WeakWorld.Get();
-		if (!World || State.Time > 45.f)
+		if (!World || State.Time > 90.f)
 		{
 			return World ? Finish(State, false) : false;
 		}
@@ -168,11 +174,12 @@ namespace LevelWaveSmoke
 		}
 		case 1:
 		case 3:
-			if (State.StageTime < 6.f)
+			// Condition, not a fixed 6 s: the horde path-finds through the async nav queue (slower with 3 games side by side).
+			if (State.StageTime < 2.f || (!CheckMoving(State, false) && State.StageTime < 20.f))
 			{
 				return true;
 			}
-			CheckMoving(State);
+			CheckMoving(State, true);
 			if (State.Stage == 3)
 			{
 				return Finish(State, true);
@@ -183,9 +190,11 @@ namespace LevelWaveSmoke
 			Waves->StartWave(2);
 			State.Stage = 2;
 			State.StageTime = 0.f;
-			return true;
+			return Step(WeakWorld, State); // spawned at once: check the spots in this very frame
 		case 2:
-			if (State.StageTime < 0.5f)
+			// The spawn checks on the spawn spots themselves: as soon as the wave is out (it spawns whole), not a fixed 0.5 s
+			// later - by then the horde already runs and two hounds can brush past each other (75 cm, flaky 2026-10-15).
+			if (Waves->GetRemainingSpawnCount() > 0 && State.StageTime < 5.f)
 			{
 				return true;
 			}

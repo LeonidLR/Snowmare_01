@@ -1,8 +1,9 @@
 // Dev-only console command for a headless squad control check on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.SquadControlSmoke
 // Godot player.gd / main.gd: below 50 % health an operative is wounded (no sprint, slower); Alt + stance changes the
-// whole squad («👥 ОТРЯД», order line) but nobody lies down while someone moves; Shift + click turns the leader;
-// an operative arriving next to a barricade in combat crouches in cover («IN COVER»).
+// whole squad («👥 ОТРЯД», order line); Alt + V while the leader walks: rev 5e (user request 2026-10-14) replaced Godot's
+// refusal - a walking / running member dives prone on the move, a slow one stops first, the still ones drop in place;
+// Shift + click turns the leader; an operative arriving next to a barricade in combat crouches in cover («IN COVER»).
 
 #include "CoreMinimal.h"
 
@@ -116,22 +117,46 @@ namespace SquadControlSmoke
 			Leader->SetFacingPoint(Right);
 			Check(State, Leader->GetActorForwardVector().Dot((Right - Leader->GetActorLocation()).GetSafeNormal2D()) > 0.99f, TEXT("Shift + click: leader faces the point"));
 
-			// Combat: nobody lies down while someone moves.
+			// Combat: Alt + V while the leader walks (rev 5e: each member goes prone his own way, nobody is refused).
 			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
-			Leader->OrderMoveTo(Leader->GetActorLocation() + Leader->GetActorForwardVector() * 600.f, false);
+			Leader->OrderMoveTo(SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Leader->GetActorForwardVector() * 800.f), false);
 			++State.Stage;
 			State.StageTime = 0.f;
 			return true;
 		}
 		case 1:
 		{
-			if (State.StageTime < 0.5f)
+			// Wait until he really walks (a loaded machine may still be accelerating at a fixed 0.5 s).
+			const float Speed = static_cast<float>(Leader->GetVelocity().Size2D());
+			if (State.StageTime < 0.5f || (Speed < 100.f && State.StageTime < 5.f))
 			{
 				return true;
 			}
 			PC->SetEntireSquadStance(EOperativeStance::Prone);
-			Check(State, Leader->GetStance() != EOperativeStance::Prone && HasMessage(World, TEXT("while moving")), TEXT("Alt + V refused while moving"));
+			bool bAllProne = true;
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				bAllProne &= Member->GetStance() == EOperativeStance::Prone;
+			}
+			Check(State, bAllProne && !HasMessage(World, TEXT("while moving")) && Floating->HasShown(TEXT("SQUAD: PRONE")),
+				FString::Printf(TEXT("Alt + V while the leader walks (%.0f cm/s): nobody refused, the whole squad goes prone"), Speed));
+			Check(State, Leader->IsProneDiving() || !Leader->HasOwnMoveOrder(),
+				FString::Printf(TEXT("the walking leader dives on the move or stops first (dive %d)"), static_cast<int32>(Leader->GetProneDive())));
+			++State.Stage;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 2:
+		{
+			// The dive ends prone (root motion carried him; the clip may take a while on a loaded machine).
+			if (Leader->IsProneDiving() && State.StageTime < 10.f)
+			{
+				return true;
+			}
+			Check(State, !Leader->IsProneDiving() && Leader->GetStance() == EOperativeStance::Prone,
+				FString::Printf(TEXT("the leader lies prone after the dive (%.1f s)"), State.StageTime));
 			Leader->StopOperative();
+			PC->SetEntireSquadStance(EOperativeStance::Standing);
 
 			// Arrival next to a barricade in combat: cover.
 			AOperativeCharacter* Mover = Squad->GetMembers()[1];
@@ -146,7 +171,7 @@ namespace SquadControlSmoke
 			State.StageTime = 0.f;
 			return true;
 		}
-		case 2:
+		case 3:
 		{
 			AOperativeCharacter* Mover = State.Mover.Get();
 			if (Mover && Mover->GetStance() != EOperativeStance::Crouching && State.StageTime < 8.f)

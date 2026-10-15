@@ -128,6 +128,22 @@ namespace SmokeUtils
 		return Point;
 	}
 
+	/**
+	 * Takes a live enemy out of the picture without ending its wave: frozen (CustomTimeDilation 0) and parked 1 km to the
+	 * side and 50 m down. Moving it only down is not enough: many game queries are 2D (panic repulsion, nearest-enemy
+	 * distance, vision cones, threat checks), and L_MovementTest's sudden horde (55) spawns right around the squad, so an
+	 * enemy "under the floor" still pushes / scares from where it stood (PanicSmoke 2026-10-15).
+	 */
+	inline void ParkEnemyFarAway(AActor* Enemy)
+	{
+		if (!Enemy)
+		{
+			return;
+		}
+		Enemy->CustomTimeDilation = 0.f;
+		Enemy->SetActorLocation(Enemy->GetActorLocation() + FVector(100000.f, 0.f, -5000.f), false, nullptr, ETeleportType::TeleportPhysics);
+	}
+
 	/** Design-coordinate point of L_MovementTest (layout at the origin, yaw 0) -> world point of the current layout. */
 	inline FVector LevelPoint(const UWorld* World, const FVector& DesignPoint)
 	{
