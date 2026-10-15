@@ -1,5 +1,8 @@
 # Demo 01 «Frozen Lake»: auto layout (2026-10-13)
 
+> **2026-10-15: ONE lake map.** The review copy became the working map: `/Game/Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout` was saved over `/Game/Maps/L_Demo01_A_FrozenLake` (editor Save As, user decision) and the copy + its level JSON were removed. Every path below that names the `Dev/...AutoLayout` copy now means `/Game/Maps/L_Demo01_A_FrozenLake`. Backups of both old maps: `Saved/Backups/maps_before_swap_20261015_0917`.
+
+
 The user asked: "build everything on the level yourself (beacons / volumes / markers / objects); I will adjust positions by
 hand afterwards". This is that first pass, made by script on a **copy** of the user's map (committed on `agents/work`, 0ea2635).
 

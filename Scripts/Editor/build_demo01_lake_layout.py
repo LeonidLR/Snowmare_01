@@ -38,10 +38,10 @@ Run (editor of THIS project closed is safest; another project's editor may stay 
   The game modes run through the console command `py <file>`, which cannot take a path with spaces from -ExecCmds and
   -ExecutePythonScript is editor-only: copy this file to a path without spaces first (e.g. %TEMP%\demo01_layout.py).
   set CODEX_LAYOUT_MODE=verify
-  UnrealEditor-Cmd.exe CodexTactics.uproject /Game/Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout -game -nullrhi -unattended
+  UnrealEditor-Cmd.exe CodexTactics.uproject /Game/Maps/L_Demo01_A_FrozenLake -game -nullrhi -unattended
       -nosound -ExecCmds="py %TEMP%\demo01_layout.py"
   set CODEX_LAYOUT_MODE=shots
-  UnrealEditor.exe CodexTactics.uproject /Game/Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout -game -RenderOffscreen -ResX=1920
+  UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_Demo01_A_FrozenLake -game -RenderOffscreen -ResX=1920
       -ResY=1080 -nosound -unattended -ExecCmds="py %TEMP%\demo01_layout.py"
   python <this file> annotate
 The whole sequence for PowerShell is in docs/demo/DEMO01_AUTOLAYOUT.md.
@@ -58,7 +58,7 @@ except ImportError:  # system python: the annotate step only
     unreal = None
 
 SOURCE_MAP = os.environ.get("CODEX_LAYOUT_SOURCE", "/Game/Maps/L_Demo01_A_FrozenLake")
-TARGET_MAP = os.environ.get("CODEX_LAYOUT_TARGET", "/Game/Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout")
+TARGET_MAP = os.environ.get("CODEX_LAYOUT_TARGET", "/Game/Maps/L_Demo01_A_FrozenLake")
 TAG = "AutoLayout_Demo01"
 FOLDER = "AutoLayout_Demo01"
 # Rev 5d (2026-10-14): the ADDITIVE section. The review copy is the user's now (he edits it by hand): mode "additive" never

@@ -1,6 +1,6 @@
 // Dev-only headless check of saving / loading WITH the Demo 01 tutorial on the designer's review map (rev 5f, user decision
 // 2026-10-14 "no autosaves - only checkpoints + F5", and the save bug he hit):
-//   Scripts/smoke_parallel.ps1 -Commands TutorialSaveSmoke   (map /Game/Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout,
+//   Scripts/smoke_parallel.ps1 -Commands TutorialSaveSmoke   (map /Game/Maps/L_Demo01_A_FrozenLake,
 //   -LevelJson=L_Demo01_A_FrozenLake.json; both from Scripts/test_map.json)
 // Saves go to Saved/SmokeSaves/TutorialSave (also in the reopened world: the pending load carries the directory).
 //  1. The tutorial runs from the level (A0). The leader is put into the level's VOL_A0_BEACON1 -> A1 starts and writes the A1

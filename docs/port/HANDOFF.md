@@ -7,6 +7,8 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 
 **Project status report (non-technical, for planning): `docs/port/PROJECT_STATUS_2026-10-14.md`.**
 
+**2026-10-15: one Demo 01 lake map** `/Game/Maps/L_Demo01_A_FrozenLake` (the former review copy `Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout` saved over it; the copy is gone; older mentions of the copy below mean this map). The layout script `Scripts/Editor/build_demo01_lake_layout.py` now targets it by default — use only its `additive` mode on it.
+
 ---
 
 ## 1. Read first (in this order)
