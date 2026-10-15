@@ -242,6 +242,12 @@
       "smokes": ["EnemyAISmoke", "EnemyArchetypeSmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke", "PatrolAmbushSmoke"]
     },
     {
+      "name": "hud-canvas",
+      "globs": ["Source/**/UI/CodexTacticsHUD*", "Source/**/UI/HudTextCache*"],
+      "tests": ["CodexTactics.UI.HudTextCache"],
+      "smokes": ["BannersSmoke", "FloatingTextSmoke", "ActionBarSmoke", "NarrativeSmoke", "VehicleDamageSmoke"]
+    },
+    {
       "name": "enemy-registry",
       "globs": ["Source/**/Combat/EnemyRegistry*", "Source/**/Combat/EncounterQueries*", "Source/**/Debug/EnemyPerfProbe*"],
       "tests": ["CodexTactics.Combat.EnemyRegistry"],

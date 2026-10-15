@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
 #include "Interactables/ActionMenuTypes.h"
+#include "UI/HudTextCache.h"
 #include "CodexTacticsHUD.generated.h"
 
 class AOperativeCharacter;
@@ -291,7 +292,22 @@ private:
 	static FLinearColor PostureMarkerColor(ESquadFirePosture Posture);
 	/** Overhead labels of enemies and deployables / the generator (Godot overhead Label3D). */
 	void DrawWorldLabels();
-	/** Splits Text into lines no wider than MaxWidth pixels. */
+	/** Splits Text into lines no wider than MaxWidth pixels (HudTextCache::WrapWords with the canvas font). */
 	TArray<FString> WrapText(const FString& Text, UFont* Font, float Scale, float MaxWidth) const;
 	FString DescribeOperative(const AOperativeCharacter& Operative, bool bLeader) const;
+	/** Drops the text caches when the font / feed width / scale they were measured with changed. */
+	void ValidateTextCaches(UFont* Font, float FeedWrapWidth, float FeedScale);
+
+	// Audit 2026-10-11 P6 / P7: text work done once per text instead of every frame (keys are the raw texts).
+	/** World label (DrawWorldLabels): glyph-stripped lines + measured sizes. */
+	HudTextCache::TBoundedStringCache<HudTextCache::FLabelLayout> LabelLayouts;
+	/** Message feed: the glyph-stripped, wrapped lines of a message text. */
+	HudTextCache::TBoundedStringCache<TArray<FString>> FeedWraps;
+	/** Message feed speaker names (glyph-stripped, upper case). */
+	HudTextCache::TBoundedStringCache<FString> FeedSpeakers;
+	/** Floating combat texts (glyph-stripped). */
+	HudTextCache::TBoundedStringCache<FString> StrippedFloatingTexts;
+	TWeakObjectPtr<UFont> CachedTextFont;
+	float CachedFeedWrapWidth = -1.f;
+	float CachedFeedScale = -1.f;
 };

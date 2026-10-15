@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "UObject/ObjectKey.h"
 #include "Characters/FirePostureRules.h"
 #include "ActionBarWidget.generated.h"
 
@@ -101,6 +102,14 @@ protected:
 	TObjectPtr<UTextBlock> BarStanceText;
 
 private:
+	/**
+	 * Sets the tooltip only when its text changed: UWidget::SetToolTipText builds a new SToolTip on every call and Refresh
+	 * runs every frame (audit 2026-10-11 P8).
+	 */
+	void SetToolTipIfChanged(UWidget* Widget, const FText& Text);
+	/** The tooltip text last applied per widget. */
+	TMap<TObjectKey<UWidget>, FString> AppliedToolTips;
+
 	void BuildDefaultLayout();
 	UTextBlock* MakeText(const FName& Name, int32 Size, const FLinearColor& Color);
 	UButton* MakeSlotButton(const FName& Name, const FLinearColor& Color, float Width, float Height, UTextBlock* Label, class UHorizontalBox* Row);

@@ -278,6 +278,75 @@ void UActionBarWidget::NativeOnInitialized()
 	}
 }
 
+// Dirty checks for the per-frame Refresh (audit 2026-10-11 P8): a setter only runs when the value changed, so an unchanged
+// bar costs no Slate invalidation / tooltip rebuild. The visible result is the same as setting everything every frame.
+namespace ActionBarDirty
+{
+	void SetText(UTextBlock* Block, const FText& Text)
+	{
+		if (Block && !Block->GetText().ToString().Equals(Text.ToString(), ESearchCase::CaseSensitive))
+		{
+			Block->SetText(Text);
+		}
+	}
+
+	void SetTextColor(UTextBlock* Block, const FSlateColor& Color)
+	{
+		if (Block && !(Block->GetColorAndOpacity() == Color))
+		{
+			Block->SetColorAndOpacity(Color);
+		}
+	}
+
+	void SetBackground(UButton* Button, const FLinearColor& Color)
+	{
+		if (Button && Button->GetBackgroundColor() != Color)
+		{
+			Button->SetBackgroundColor(Color);
+		}
+	}
+
+	void SetBrush(UBorder* Border, const FLinearColor& Color)
+	{
+		if (Border && Border->GetBrushColor() != Color)
+		{
+			Border->SetBrushColor(Color);
+		}
+	}
+
+	void SetPadding(UBorder* Border, const FMargin& Padding)
+	{
+		if (Border && Border->GetPadding() != Padding)
+		{
+			Border->SetPadding(Padding);
+		}
+	}
+
+	void SetPercent(UProgressBar* Bar, float Percent)
+	{
+		if (Bar && Bar->GetPercent() != Percent)
+		{
+			Bar->SetPercent(Percent);
+		}
+	}
+}
+
+void UActionBarWidget::SetToolTipIfChanged(UWidget* Widget, const FText& Text)
+{
+	if (!Widget)
+	{
+		return;
+	}
+	FString& Applied = AppliedToolTips.FindOrAdd(Widget);
+	const FString& Wanted = Text.ToString();
+	if (Applied.Equals(Wanted, ESearchCase::CaseSensitive) && !Applied.IsEmpty())
+	{
+		return;
+	}
+	Applied = Wanted;
+	Widget->SetToolTipText(Text);
+}
+
 void UActionBarWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
@@ -294,26 +363,26 @@ void UActionBarWidget::Refresh()
 	}
 	if (BarWeaponText)
 	{
-		BarWeaponText->SetText(FText::FromString(ACodexTacticsHUD::StripUnsupportedGlyphs(GetWeaponText().ToString())));
+		ActionBarDirty::SetText(BarWeaponText, FText::FromString(ACodexTacticsHUD::StripUnsupportedGlyphs(GetWeaponText().ToString())));
 		// Godot: the weapon slot turns red (modulate 1.5, 0.4, 0.4) while the turn-based attack mode is on.
 		const UTurnBasedCombatSubsystem* AimTurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
 		const bool bAiming = AimTurnBased && AimTurnBased->IsActive() && AimTurnBased->IsAttackMode();
-		BarWeaponText->SetColorAndOpacity(FSlateColor(bAiming ? FLinearColor(1.f, 0.4f, 0.4f) : BarTextColor));
+		ActionBarDirty::SetTextColor(BarWeaponText, FSlateColor(bAiming ? FLinearColor(1.f, 0.4f, 0.4f) : BarTextColor));
 	}
 	if (BarGuardText && GuardButton)
 	{
 		// Godot: «HELD» (green) while the leader guards its spot.
-		BarGuardText->SetText(Leader->bGuarding ? LOCTEXT("GuardOn", "HELD") : LOCTEXT("Guard", "GUARD"));
-		GuardButton->SetBackgroundColor(Leader->bGuarding ? BarGreen : BarWhite * 0.6f);
-		GuardButton->SetToolTipText(Leader->bGuarding ? LOCTEXT("GuardOnTip", "Operative is on a guard point! Press [T] to rejoin the squad")
+		ActionBarDirty::SetText(BarGuardText, Leader->bGuarding ? LOCTEXT("GuardOn", "HELD") : LOCTEXT("Guard", "GUARD"));
+		ActionBarDirty::SetBackground(GuardButton, Leader->bGuarding ? BarGreen : BarWhite * 0.6f);
+		SetToolTipIfChanged(GuardButton, Leader->bGuarding ? LOCTEXT("GuardOnTip", "Operative is on a guard point! Press [T] to rejoin the squad")
 			: LOCTEXT("GuardTip", "Hold position (guard flank / rear) [T]"));
 	}
 	if (BarAutonomyText && AutonomyButton)
 	{
 		const bool bAutonomy = Squad->IsAutonomousSquadCombat();
-		BarAutonomyText->SetText(bAutonomy ? LOCTEXT("AutoOn", "AUTO\nON") : LOCTEXT("AutoOff", "AUTO\nOFF"));
-		AutonomyButton->SetBackgroundColor(bAutonomy ? BarGreen : BarWhite * 0.6f);
-		AutonomyButton->SetToolTipText(bAutonomy
+		ActionBarDirty::SetText(BarAutonomyText, bAutonomy ? LOCTEXT("AutoOn", "AUTO\nON") : LOCTEXT("AutoOff", "AUTO\nOFF"));
+		ActionBarDirty::SetBackground(AutonomyButton, bAutonomy ? BarGreen : BarWhite * 0.6f);
+		SetToolTipIfChanged(AutonomyButton, bAutonomy
 			? LOCTEXT("AutoOnTip", "Autonomy ON: operatives fight on their own within 7 m of the order point. Click: manual control [Ctrl+T]")
 			: LOCTEXT("AutoOffTip", "Autonomy OFF: manual control. Click: operatives fight on their own at the order point [Ctrl+T]"));
 	}
@@ -326,9 +395,9 @@ void UActionBarWidget::Refresh()
 		VehicleButton->SetVisibility(bAboard || Near ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 		// APC P4: a disabled vehicle near: REPAIR (the Engineer).
 		const bool bRepair = !bAboard && Near && Near->IsDisabled();
-		BarVehicleText->SetText(bAboard ? LOCTEXT("VehicleExit", "EXIT\n[Y]")
+		ActionBarDirty::SetText(BarVehicleText, bAboard ? LOCTEXT("VehicleExit", "EXIT\n[Y]")
 			: (bRepair ? LOCTEXT("VehicleRepair", "REPAIR\n[Y]") : LOCTEXT("VehicleBoard", "BOARD\n[Y]")));
-		VehicleButton->SetToolTipText(bAboard ? LOCTEXT("VehicleExitTip", "Get out of the vehicle [Y] (Alt+Y: whole squad)")
+		SetToolTipIfChanged(VehicleButton, bAboard ? LOCTEXT("VehicleExitTip", "Get out of the vehicle [Y] (Alt+Y: whole squad)")
 			: (bRepair ? LOCTEXT("VehicleRepairTip", "The vehicle is disabled: the Engineer repairs it [Y] (~5 s at the hull)")
 				: LOCTEXT("VehicleBoardTip", "Board the vehicle [Y] (Alt+Y: whole squad)")));
 	}
@@ -348,14 +417,14 @@ void UActionBarWidget::Refresh()
 		{
 			const bool bOn = bCommon && Order[Index] == Current;
 			const FLinearColor OnColor = Index == 0 ? FLinearColor(0.45f, 0.5f, 0.55f) : (Index == 1 ? FLinearColor(0.85f, 0.6f, 0.1f) : BarRed);
-			PostureButtons[Index]->SetBackgroundColor(bOn ? OnColor : BarWhite * 0.35f);
+			ActionBarDirty::SetBackground(PostureButtons[Index], bOn ? OnColor : BarWhite * 0.35f);
 		}
 	}
 	if (IsWeaponSelectorOpen())
 	{
 		for (int32 Index = 0; Index < SelectorTexts.Num(); ++Index)
 		{
-			SelectorTexts[Index]->SetText(GetSelectorText(Index));
+			ActionBarDirty::SetText(SelectorTexts[Index], GetSelectorText(Index));
 		}
 		const USquadSubsystem* BarSquad = GetWorld()->GetSubsystem<USquadSubsystem>();
 		const AOperativeCharacter* BarLeader = BarSquad ? BarSquad->GetLeader() : nullptr;
@@ -377,19 +446,19 @@ void UActionBarWidget::Refresh()
 		if (BarTurnBased && BarTurnBased->IsActive())
 		{
 			// Godot: «🟢 MOVE» (move mode, green) / «⚪ MOVE» (attack mode).
-			BarRelocateText->SetText(LOCTEXT("MoveMode", "MOVE"));
-			BarRelocateText->SetColorAndOpacity(FSlateColor(BarTurnBased->IsAttackMode() ? FLinearColor::White : FLinearColor(0.4f, 1.f, 0.4f)));
+			ActionBarDirty::SetText(BarRelocateText, LOCTEXT("MoveMode", "MOVE"));
+			ActionBarDirty::SetTextColor(BarRelocateText, FSlateColor(BarTurnBased->IsAttackMode() ? FLinearColor::White : FLinearColor(0.4f, 1.f, 0.4f)));
 		}
 		else
 		{
-			BarRelocateText->SetText(bActive ? LOCTEXT("RelocateActive", "ACTIVE") : LOCTEXT("Relocate", "MOVE"));
-			BarRelocateText->SetColorAndOpacity(FSlateColor(BarTextColor));
+			ActionBarDirty::SetText(BarRelocateText, bActive ? LOCTEXT("RelocateActive", "ACTIVE") : LOCTEXT("Relocate", "MOVE"));
+			ActionBarDirty::SetTextColor(BarRelocateText, FSlateColor(BarTextColor));
 		}
 	}
 	if (BarStanceText)
 	{
 		const EOperativeStance Stance = Leader->GetStance();
-		BarStanceText->SetText(Stance == EOperativeStance::Prone ? LOCTEXT("P", "P") : (Stance == EOperativeStance::Crouching ? LOCTEXT("C", "C") : LOCTEXT("S", "S")));
+		ActionBarDirty::SetText(BarStanceText, Stance == EOperativeStance::Prone ? LOCTEXT("P", "P") : (Stance == EOperativeStance::Crouching ? LOCTEXT("C", "C") : LOCTEXT("S", "S")));
 	}
 
 	TArray<AOperativeCharacter*> Members = Squad->GetMembers();
@@ -398,13 +467,13 @@ void UActionBarWidget::Refresh()
 	{
 		FActionBarSquadSlot& SquadSlot = Slots[Index];
 		const AOperativeCharacter* Member = Members.IsValidIndex(Index) ? Members[Index] : nullptr;
-		SquadSlot.Label->SetText(GetSlotText(Index));
 		SquadSlot.Button->SetIsEnabled(Member != nullptr);
 		SquadSlot.HealthBar->SetVisibility(Member ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
 		SquadSlot.ColdBar->SetVisibility(Member ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
 		if (!Member)
 		{
-			SquadSlot.Frame->SetBrushColor(BarSlotBorder);
+			ActionBarDirty::SetText(SquadSlot.Label, GetSlotText(Index));
+			ActionBarDirty::SetBrush(SquadSlot.Frame, BarSlotBorder);
 			continue;
 		}
 		const bool bLeader = Member == Leader;
@@ -412,21 +481,21 @@ void UActionBarWidget::Refresh()
 		const bool bInCover = Member->IsInBarricadeCover();
 		const bool bHolding = Member->bGuarding || (Squad->IsSoloMode() && !bLeader);
 		// Per-operative fire posture letter P / D / A (user request 2026-10-06), then the cover / hold mark.
-		SquadSlot.Label->SetText(FText::FromString(FString::Printf(TEXT("%s %s%s"), *GetSlotText(Index).ToString(),
+		ActionBarDirty::SetText(SquadSlot.Label, FText::FromString(FString::Printf(TEXT("%s %s%s"), *GetSlotText(Index).ToString(),
 			*FirePostureRules::GetLetter(Squad->GetEffectivePosture(Member)), bInCover || bHolding ? TEXT(" ●") : TEXT(""))));
-		SquadSlot.Button->SetToolTipText(Member->bGuarding
+		SetToolTipIfChanged(SquadSlot.Button, Member->bGuarding
 			? LOCTEXT("SlotGuardTip", "GUARD POINT: position held [T]")
 			: bHolding ? LOCTEXT("SlotHoldTip", "HOLDING: operative dug in at cover in solo mode [B]")
 			: bInCover ? LOCTEXT("SlotCoverTip", "In cover behind a barricade (-35% incoming damage, +15% accuracy)")
 			: bLeader && Squad->IsSoloMode() ? LOCTEXT("SlotSoloTip", "SOLO SCOUTING [B]")
 			: FText::Format(LOCTEXT("SlotSelectTip", "Select operative [{0}] · fire mode: {1}"), Index + 1,
 				FText::FromString(FirePostureRules::GetLabel(Squad->GetEffectivePosture(Member)))));
-		SquadSlot.Button->SetBackgroundColor(bLeader ? BarLeaderOrange : bHolding ? FLinearColor::FromSRGBColor(FColor(46, 89, 166)) : BarOrange);
-		SquadSlot.Frame->SetBrushColor(bInCover ? FLinearColor::FromSRGBColor(FColor(77, 255, 128)) : bLeader ? BarLeaderBorder
+		ActionBarDirty::SetBackground(SquadSlot.Button, bLeader ? BarLeaderOrange : bHolding ? FLinearColor::FromSRGBColor(FColor(46, 89, 166)) : BarOrange);
+		ActionBarDirty::SetBrush(SquadSlot.Frame, bInCover ? FLinearColor::FromSRGBColor(FColor(77, 255, 128)) : bLeader ? BarLeaderBorder
 			: bHolding ? FLinearColor::FromSRGBColor(FColor(51, 230, 255)) : BarSlotBorder);
-		SquadSlot.Frame->SetPadding(FMargin(bLeader ? 3.f : (bInCover || bHolding ? 2.f : 1.f)));
-		SquadSlot.HealthBar->SetPercent(Member->HealthComponent ? Member->HealthComponent->GetHealthFraction() : 0.f);
-		SquadSlot.ColdBar->SetPercent(Member->ColdLevel / 100.f);
+		ActionBarDirty::SetPadding(SquadSlot.Frame, FMargin(bLeader ? 3.f : (bInCover || bHolding ? 2.f : 1.f)));
+		ActionBarDirty::SetPercent(SquadSlot.HealthBar, Member->HealthComponent ? Member->HealthComponent->GetHealthFraction() : 0.f);
+		ActionBarDirty::SetPercent(SquadSlot.ColdBar, Member->ColdLevel / 100.f);
 	}
 }
 
