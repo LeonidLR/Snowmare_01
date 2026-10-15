@@ -173,6 +173,9 @@ lone re-run, as on the base).
 
 ## 6. `ACodexTacticsPlayerController` (2 972 lines): split proposal (no code change today)
 
+**Done 2026-10-15** (refreshed against the grown file): layout, verification and the `HandleWorldHit` follow-up plan in
+`docs/port/REFACTOR_CONTROLLER_2026-10.md`.
+
 Same technique (translation units of one class; header unchanged), by input domain. Function line counts from base fdf53a7:
 
 | Proposed file | Members | ~Lines |

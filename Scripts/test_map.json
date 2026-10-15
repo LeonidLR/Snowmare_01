@@ -392,6 +392,54 @@
       "smokes": ["MovementSmoke", "CombatFlowSmoke", "ClickRulesSmoke", "PauseBarrelOrderSmoke", "MissionSmoke", "ActionBarSmoke", "SaveLoadSmoke", "PauseMenuSmoke"]
     },
     {
+      "name": "controller-selection",
+      "globs": ["Source/**/Core/CodexTacticsPlayerControllerSelection*"],
+      "tests": ["CodexTactics.Core.ControllerUnits"],
+      "smokes": ["RealtimeSelectSmoke", "GroupSelectSmoke", "SoloRejoinSmoke", "ActionBarSmoke", "TrapSoloSmoke"]
+    },
+    {
+      "name": "controller-orders",
+      "globs": ["Source/**/Core/CodexTacticsPlayerControllerOrders*"],
+      "tests": ["CodexTactics.Core.ControllerUnits"],
+      "smokes": ["ClickRulesSmoke", "PauseBarrelOrderSmoke", "TargetedShotSmoke", "RealTimeControlSmoke", "GuardSmoke", "DefendSmoke", "CommanderModeSmoke", "PostureSmoke", "InteriorExitSmoke", "VehicleSmoke", "VehicleCombatSmoke", "RelocationSmoke", "BarrelSmoke", "TrapSoloSmoke"]
+    },
+    {
+      "name": "controller-stance",
+      "globs": ["Source/**/Core/CodexTacticsPlayerControllerStance*"],
+      "tests": ["CodexTactics.Core.ControllerUnits"],
+      "smokes": ["StanceSmoke", "SquadControlSmoke", "ActionBarSmoke"]
+    },
+    {
+      "name": "controller-items",
+      "globs": ["Source/**/Core/CodexTacticsPlayerControllerItems*"],
+      "tests": ["CodexTactics.Core.ControllerUnits"],
+      "smokes": ["GrenadeSmoke", "GrenadeAnimSmoke", "DeployableSmoke", "InventorySmoke", "WeaponSelectorSmoke", "RelocationSmoke", "TacticalHeatSmoke", "PMCTripwireSmoke"]
+    },
+    {
+      "name": "controller-time",
+      "globs": ["Source/**/Core/CodexTacticsPlayerControllerTime*"],
+      "tests": ["CodexTactics.Core.ControllerUnits"],
+      "smokes": ["CombatFlowSmoke", "RealTimeControlSmoke", "HoldSphereSmoke", "TurnBasedSmoke", "TurnSelectSmoke"]
+    },
+    {
+      "name": "controller-menus",
+      "globs": ["Source/**/Core/CodexTacticsPlayerControllerMenus*"],
+      "tests": ["CodexTactics.Core.ControllerUnits"],
+      "smokes": ["DialogueSmoke", "PauseMenuSmoke", "ControlsScreenSmoke", "SaveLoadSmoke", "ProgressionSmoke", "InventorySmoke"]
+    },
+    {
+      "name": "controller-camera",
+      "globs": ["Source/**/Core/CodexTacticsPlayerControllerCamera*"],
+      "tests": ["CodexTactics.Core.ControllerUnits"],
+      "smokes": ["CameraZoneSmoke", "InteriorExitSmoke", "TurnBasedCameraSmoke", "TutorialSmoke"]
+    },
+    {
+      "name": "controller-cover",
+      "globs": ["Source/**/Core/CodexTacticsPlayerControllerCover*"],
+      "tests": ["CodexTactics.Core.ControllerUnits"],
+      "smokes": ["CoverSmoke", "CoverHugSmoke", "CornerEntrySmoke", "PeekMinesSmoke", "VehicleSmoke"]
+    },
+    {
       "name": "event-bus",
       "globs": ["Source/**/Subsystems/**"],
       "tests": ["CodexTactics.Core"],

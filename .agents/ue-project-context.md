@@ -51,7 +51,7 @@
 |---|---|
 | GameMode | `ACodexTacticsGameMode` (spawns the squad, level config, balance assets); project default = its Blueprint child `/Game/Blueprints/BP_CodexTacticsGameMode` (designer edits Squad Roster there) |
 | GameState | `ACodexTacticsGameState` |
-| PlayerController | `ACodexTacticsPlayerController` |
+| PlayerController | `ACodexTacticsPlayerController` (one header, members defined in one `Private/Core/CodexTacticsPlayerController<Area>.cpp` per input area - main, Selection, Orders, Stance, Items, Time, Menus, Camera, Cover; map `docs/port/REFACTOR_CONTROLLER_2026-10.md`) |
 | PlayerState | [none custom] |
 | Pawn / Character | `ATacticalCameraPawn` (player pawn = camera); squad `AOperativeCharacter` (BP_Operative; one header, members defined in one `Private/Characters/OperativeCharacter<Cluster>.cpp` per cluster - Movement, Stance, Vault, Overlays, Inventory, Progression, Health, Weapons, Combat, Aim, TargetedShots, Cover, CoverEntry, CornerAim, Sniper; map `docs/port/REFACTOR_OPERATIVE_2026-10.md`), enemies `AEnemyCharacter` |
 | GameInstance | engine default |
