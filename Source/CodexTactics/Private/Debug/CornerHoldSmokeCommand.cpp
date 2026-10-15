@@ -950,7 +950,15 @@ namespace CornerHoldSmoke
 			}
 			Track(State, Phase);
 			SamplePosture(State, Op);
-			if (!State.bFlankSpawned || State.StageTime < State.FlankStart + 20.f)
+			int32 FlankDown = 0;
+			for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : State.Flank)
+			{
+				FlankDown += !Enemy.IsValid() || Enemy->IsDying() || !Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive() ? 1 : 0;
+			}
+			// 20 s of the rush, then until 3 of them are down (cap 45 s): how many fall in a fixed 20 s is the hit / crit
+			// rolls' luck (2 or 3 of 5 with 9-10 open shots, flaky 2026-10-15); the behaviour checked is that he turns to
+			// them and his open-stance shots bring them down.
+			if (!State.bFlankSpawned || State.StageTime < State.FlankStart + 20.f || (FlankDown < 3 && State.StageTime < State.FlankStart + 45.f))
 			{
 				if (State.bFlankSpawned && State.FlankStart < 0.f)
 				{
@@ -958,16 +966,11 @@ namespace CornerHoldSmoke
 				}
 				return true;
 			}
-			int32 FlankDown = 0;
-			for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : State.Flank)
-			{
-				FlankDown += !Enemy.IsValid() || Enemy->IsDying() || !Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive() ? 1 : 0;
-			}
 			const int32 FlankOpenShots = Op->GetCoverOpenShots() - State.FlankOpenShotsBefore;
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: flank rush - %d of %d down, %d open shots, cover leaves %d, facing flips %d, IK below 0.9 in %d of %d frames"),
 				FlankDown, State.Flank.Num(), FlankOpenShots, State.CoverLeaves, State.FacingFlips, State.IKLow, State.IKSamples);
 			Check(State, FlankOpenShots >= 3, FString::Printf(TEXT("flank rush: he turns to them and fires in the open stance (%d open shots)"), FlankOpenShots));
-			Check(State, FlankDown >= 3, FString::Printf(TEXT("flank rush: %d of %d down"), FlankDown, State.Flank.Num()));
+			Check(State, FlankDown >= 3, FString::Printf(TEXT("flank rush: %d of %d down (%.1f s)"), FlankDown, State.Flank.Num(), State.StageTime - State.FlankStart));
 			Check(State, State.CoverLeaves == 1, FString::Printf(TEXT("flank rush: exactly one posture switch off the corner to face them (%d)"), State.CoverLeaves));
 			Check(State, State.IKLow * 20 <= State.IKSamples, FString::Printf(TEXT("flank rush: the left hand holds the rifle (IK < 0.9 in %d of %d frames)"), State.IKLow, State.IKSamples));
 			// Whole run.

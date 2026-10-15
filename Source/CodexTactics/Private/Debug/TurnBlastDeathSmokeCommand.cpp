@@ -140,7 +140,8 @@ namespace TurnBlastDeathSmoke
 		}
 		case 10:
 		{
-			if (TurnBased->IsActive() && TurnBased->IsShotPending() && State.StageTime < 4.f)
+			// The shot waits for the shooter to turn on target and the attack timeline (frame-rate dependent): generous cap.
+			if (TurnBased->IsActive() && TurnBased->IsShotPending() && State.StageTime < 12.f)
 			{
 				return true;
 			}

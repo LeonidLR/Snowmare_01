@@ -198,7 +198,10 @@ namespace KnockdownSmoke
 			if (AEnemyCharacter* Brute = State.Brute.Get())
 			{
 				// Frozen until the scripted blow: its own AI must not strike first (a 40+ HP hit = a chance-based heavy hit).
+				// CustomTimeDilation 0 alone is not enough: TickBehavior still runs with DeltaTime 0 and its AttackTimer starts at
+				// 0, so a brute spawned in reach struck on its first tick (cause HeavyHit, flaky 2026-10-15) - no tick at all.
 				Brute->CustomTimeDilation = 0.f;
+				Brute->SetActorTickEnabled(false);
 			}
 			Next();
 			return true;

@@ -183,12 +183,13 @@ namespace EnemyTacticsSmoke
 		}
 		case 3:
 		{
-			if (State.StageTime < 2.5f)
+			// Condition (3 m farther from the squad), cap 8 s instead of a fixed 2.5 s: the fall-back path request is async.
+			AEnemyCharacter* Broken = State.Broken.Get();
+			const float Distance = Broken ? FVector::Dist2D(Broken->GetActorLocation(), State.Centre) : 0.f;
+			if (Broken && Distance <= State.BrokenStartDistance + 300.f && State.StageTime < 8.f)
 			{
 				return true;
 			}
-			AEnemyCharacter* Broken = State.Broken.Get();
-			const float Distance = Broken ? FVector::Dist2D(Broken->GetActorLocation(), State.Centre) : 0.f;
 			Check(State, Broken && Distance > State.BrokenStartDistance + 300.f,
 				FString::Printf(TEXT("runs back: %.0f -> %.0f cm from the squad (fallbacks %d)"), State.BrokenStartDistance, Distance, Tactics->GetFallBacks()));
 			return Finish(State, true);
