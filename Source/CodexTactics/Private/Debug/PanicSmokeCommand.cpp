@@ -95,12 +95,13 @@ namespace PanicSmoke
 					State.Engineer = Member;
 				}
 			}
-			// A real-time wave: its enemies frozen far away, one frozen, unkillable hound 6 m from Susanin.
+			// A real-time wave: its enemies frozen far away, one frozen, unkillable hound 6 m from Susanin. Far away in 2D, not just
+			// under the floor: the flight is steered away from every enemy within 20 m in 2D, and the sudden horde (55) spawns
+			// around the squad - parked only 50 m down, they pushed him towards the hound (fled 500 cm, 600 -> 283 cm, 2026-10-15).
 			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
-				It->CustomTimeDilation = 0.f;
-				It->SetActorLocation(It->GetActorLocation() + FVector(0.f, 0.f, -5000.f), false, nullptr, ETeleportType::TeleportPhysics);
+				SmokeUtils::ParkEnemyFarAway(*It);
 			}
 			State.Hound = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::FrostHound,
 				Susanin->GetActorLocation() + Susanin->GetActorForwardVector() * 600.f + FVector(0.f, 0.f, 20.f));

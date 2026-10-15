@@ -4,7 +4,8 @@
 //   UnrealEditor.exe CodexTactics.uproject /Game/Maps/L_PatrolTest -game -RenderOffscreen -ResX=1600 -ResY=900
 //     -ExecCmds="CodexTactics.VisionConeSmoke Shot"   -> Saved/Screenshots/<platform>/vision_cones.png
 // Checks: every operative and enemy carries a UVisionConeComponent, hidden by default (bShowVisionCone false); the actor
-// toggle shows it; the operative cone = its weapon range x stance multiplier, +-35 deg (Godot 70 deg full), 34 fill
+// toggle shows it; the operative cone = its weapon range x stance multiplier when bVisionConeRangeFromWeapon is on, else
+// VisionConeRangeCm (BP_Operative turns the flag OFF: Godot's fixed 14 m cone; both ways checked), +-35 deg (Godot 70 deg full), 34 fill
 // vertices (Godot 32 segments), at the feet; red once an enemy stands in it (Godot spotted); the enemy cone = its
 // perception (standing sight range, field-of-view half angle), idle colour while it guards, amber while it searches
 // (range x1.25); console Codex.Debug.VisionCones 0 hides every cone, 1 shows every cone, -1 back to the actors.
@@ -47,7 +48,17 @@ namespace VisionConeSmoke
 		TWeakObjectPtr<AEnemyCharacter> Brute;
 		TWeakObjectPtr<AEnemyCharacter> Hound;
 		float BruteRange = 0.f;
+		/** The leader's bVisionConeRangeFromWeapon as his Blueprint set it (restored after the other way is checked). */
+		bool bRangeFromWeapon = false;
 	};
+
+	/** What the operative's cone should reach: weapon range x stance with bVisionConeRangeFromWeapon, else VisionConeRangeCm. */
+	float ExpectedConeRange(const AOperativeCharacter* Operative)
+	{
+		return Operative->bVisionConeRangeFromWeapon && Operative->CurrentWeapon
+			? Operative->CurrentWeapon->AttackRangeCm * SquadFireRules::GetPostureRangeMultiplier(Operative->GetStance())
+			: Operative->VisionConeRangeCm;
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -175,11 +186,12 @@ namespace VisionConeSmoke
 				bOthersHidden &= Member == Leader || !Shown(Member);
 			}
 			Check(State, bOthersHidden, TEXT("the other operatives keep theirs hidden (per-actor setting)"));
-			const float Expected = Leader->CurrentWeapon ? Leader->CurrentWeapon->AttackRangeCm * SquadFireRules::GetPostureRangeMultiplier(Leader->GetStance())
-				: Leader->VisionConeRangeCm;
-			Check(State, FMath::IsNearlyEqual(Cone->GetConeRangeCm(), Expected, 1.f),
-				FString::Printf(TEXT("operative cone range = weapon range x stance (%.0f cm, weapon %s)"), Cone->GetConeRangeCm(),
-					Leader->CurrentWeapon ? *Leader->CurrentWeapon->WeaponId : TEXT("-")));
+			// BP_Operative sets bVisionConeRangeFromWeapon OFF (Godot's fixed 14 m cone): check the Blueprint's way here, the
+			// other way in stage 11 (the flag flipped on this one leader, then restored).
+			State.bRangeFromWeapon = Leader->bVisionConeRangeFromWeapon;
+			Check(State, FMath::IsNearlyEqual(Cone->GetConeRangeCm(), ExpectedConeRange(Leader), 1.f),
+				FString::Printf(TEXT("operative cone range (range from weapon %d): %.0f cm, expected %.0f (weapon %s)"), State.bRangeFromWeapon ? 1 : 0,
+					Cone->GetConeRangeCm(), ExpectedConeRange(Leader), Leader->CurrentWeapon ? *Leader->CurrentWeapon->WeaponId : TEXT("-")));
 			Check(State, FMath::IsNearlyEqual(Cone->GetConeHalfAngleDeg(), 35.f, 0.01f), TEXT("operative cone +-35 deg (Godot 70 deg full)"));
 			Check(State, Cone->GetFillVertexCount() == 34, FString::Printf(TEXT("32 segments: 34 fill vertices (%d)"), Cone->GetFillVertexCount()));
 			const float FeetZ = Leader->GetActorLocation().Z - Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
@@ -196,6 +208,23 @@ namespace VisionConeSmoke
 				FString::Printf(TEXT("brute cone = its perception (%.0f cm / +-%.0f deg)"), Brute->VisionCone->GetConeRangeCm(), Brute->VisionCone->GetConeHalfAngleDeg()));
 			const FLinearColor Idle = Brute->VisionCone->GetShownColor();
 			Check(State, Brute->IsGuardingPost() && Idle.B > Idle.R, FString::Printf(TEXT("guarding brute: idle colour %s"), *Idle.ToString()));
+			Leader->bVisionConeRangeFromWeapon = !State.bRangeFromWeapon;
+			State.Stage = 11;
+			State.Time = 0.f;
+			return true;
+		}
+		case 11:
+		{
+			if (State.Time < 0.3f)
+			{
+				return true;
+			}
+			// The other way of the flag (cone range follows on the next tick).
+			const float Expected = ExpectedConeRange(Leader);
+			Check(State, FMath::IsNearlyEqual(Leader->VisionCone->GetConeRangeCm(), Expected, 1.f),
+				FString::Printf(TEXT("bVisionConeRangeFromWeapon %d: cone %.0f cm, expected %.0f (%s)"), Leader->bVisionConeRangeFromWeapon ? 1 : 0,
+					Leader->VisionCone->GetConeRangeCm(), Expected, Leader->bVisionConeRangeFromWeapon ? TEXT("weapon range x stance") : TEXT("VisionConeRangeCm")));
+			Leader->bVisionConeRangeFromWeapon = State.bRangeFromWeapon;
 			SetGlobal(0);
 			State.Stage = 2;
 			State.Time = 0.f;
