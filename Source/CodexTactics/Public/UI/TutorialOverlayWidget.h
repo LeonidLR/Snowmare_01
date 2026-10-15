@@ -52,6 +52,13 @@ public:
 	bool GetCardAndStripRects(FSlateRect& OutCard, FSlateRect& OutStrip) const;
 	/** Edge arrows drawn on the last refresh (smokes). */
 	int32 GetEdgePointerCount() const { return EdgePointers.Num(); }
+	/** Rev 5i: the SKIP TUTORIAL button is shown (the start beat, smokes). */
+	bool IsSkipTutorialShown() const;
+	/**
+	 * Rev 5i: what the SKIP TUTORIAL button does - pauses the game and asks "Skip the tutorial? All controls unlock." (Yes / No,
+	 * the Modal layer's confirm dialog); Yes = UTutorialSubsystem::SkipTutorial. The pause is undone either way.
+	 */
+	void RequestSkipTutorial();
 
 protected:
 	virtual void NativeOnInitialized() override;
@@ -99,6 +106,11 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial", meta = (BindWidgetOptional))
 	TObjectPtr<UButton> TutorialRadioSkipButton;
 
+	// --- Skip the whole tutorial (rev 5i) ---
+	/** "SKIP TUTORIAL", top right, while the tutorial is in its start beat (UTutorialSubsystem::IsSkipOfferShown). */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial", meta = (BindWidgetOptional))
+	TObjectPtr<UButton> TutorialSkipAllButton;
+
 	// --- Lesson retry prompt ---
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial", meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> TutorialRetryPanel;
@@ -126,6 +138,8 @@ private:
 	void HandleRetryClicked();
 	UFUNCTION()
 	void HandleContinueClicked();
+	UFUNCTION()
+	void HandleSkipAllClicked();
 
 	/** Arrow tip + direction in local widget space. */
 	struct FEdgePointer

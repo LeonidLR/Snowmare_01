@@ -42,7 +42,9 @@
 //     the warm objective; the save's tutorial section carries the
 //     command history; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
 //     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
-//     (tap = next line, hold = skip).
+//     (tap = next line, hold = skip); (rev 5i) SKIP TUTORIAL from A0: the button shows in A0, the pause menu entry asks and No
+//     keeps it, the button asks with the world paused and Yes skips - no cards / strip / objectives, C and the inventory (locked at
+//     A0) work, every command free, one feed line; the save says skipped, RESET starts it again, loading the save skips it again.
 // Saves go to Saved/SmokeSaves/Tutorial (exclusive in Scripts/test_map.json).
 
 #include "CoreMinimal.h"
@@ -81,6 +83,11 @@
 #include "Dom/JsonObject.h"
 #include "UI/DialogueSubsystem.h"
 #include "UI/TutorialOverlayWidget.h"
+#include "UI/Frontend/CodexConfirmDialog.h"
+#include "UI/Frontend/CodexPauseMenuScreen.h"
+#include "UI/Frontend/CodexUISubsystem.h"
+#include "UI/Frontend/CodexUITags.h"
+#include "Kismet/GameplayStatics.h"
 #include "Components/BoxComponent.h"
 #include "GameFramework/WorldSettings.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -1602,6 +1609,99 @@ namespace TutorialSmoke
 			}
 			Check(State, !World->GetSubsystem<UDialogueSubsystem>()->IsDialogueOpen(), TEXT("story dialogue: Enter held 0.6 s skips the rest"));
 			PressKey(PC, EKeys::Enter, IE_Released);
+			State.Stage = 90;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// Rev 5i (game designer 2026-10-15): SKIP TUTORIAL at the very start - the button during A0 and the pause menu entry, both confirmed.
+		case 90:
+		{
+			Check(State, Tutorial->LoadStepsFile(TEXT("demo_01_steps.json")) && Tutorial->GetCurrentBeat() == FName(TEXT("A0")), TEXT("skip: the demo tutorial again from A0"));
+			Overlay->Refresh();
+			Check(State, Overlay->IsSkipTutorialShown() && Tutorial->IsSkipOfferShown(), TEXT("rev 5i: A0 shows the SKIP TUTORIAL button"));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen) && Tutorial->IsCommandLocked(PlayerCommands::StanceCrouch),
+				TEXT("A0 locks are in force before the skip"));
+			UCodexUISubsystem* UI = UCodexUISubsystem::Get(World);
+			ACodexTacticsHUD* GameHud = Cast<ACodexTacticsHUD>(PC->GetHUD());
+			if (!UI || !GameHud)
+			{
+				Check(State, false, TEXT("UI subsystem + HUD for the skip dialog"));
+				return Finish(State, false);
+			}
+			// The pause menu entry: confirm dialog, No keeps the tutorial.
+			Check(State, GameHud->HandleEscape() && UGameplayStatics::IsGamePaused(World), TEXT("Esc: pause menu"));
+			UCodexPauseMenuScreen* Pause = Cast<UCodexPauseMenuScreen>(UI->GetTopScreen(CodexUITags::Layer_GameMenu));
+			Check(State, Pause != nullptr, TEXT("pause menu on the GameMenu layer"));
+			if (Pause)
+			{
+				Pause->ActivateEntry(TEXT("SkipTutorial"));
+				UCodexConfirmDialog* Ask = Cast<UCodexConfirmDialog>(UI->GetTopScreen(CodexUITags::Layer_Modal));
+				Check(State, Ask != nullptr, TEXT("rev 5i: pause menu SKIP TUTORIAL asks for confirmation"));
+				if (Ask)
+				{
+					Ask->Cancel();
+				}
+				Check(State, !Tutorial->IsTutorialSkipped() && Tutorial->IsTutorialActive(), TEXT("rev 5i: No keeps the tutorial"));
+				Pause->Resume();
+			}
+			// The on-screen button: the world pauses while it asks; Yes skips.
+			Overlay->RequestSkipTutorial();
+			UCodexConfirmDialog* Confirm = Cast<UCodexConfirmDialog>(UI->GetTopScreen(CodexUITags::Layer_Modal));
+			Check(State, Confirm != nullptr && UGameplayStatics::IsGamePaused(World), TEXT("rev 5i: the SKIP TUTORIAL button asks (Yes / No) with the world paused"));
+			if (Confirm)
+			{
+				Confirm->Confirm();
+			}
+			Check(State, Tutorial->IsTutorialSkipped() && !Tutorial->IsTutorialActive() && !UGameplayStatics::IsGamePaused(World),
+				TEXT("rev 5i: Yes skips the tutorial, the world runs again"));
+			Leader->SetStance(EOperativeStance::Standing);
+			State.RefusalsBefore = Tutorial->GetLockedRefusalCount();
+			Tap(PC, State, EKeys::C);
+			Next(State);
+			return true;
+		}
+		case 91:
+		{
+			if (State.StageTime < 0.2f)
+			{
+				return true;
+			}
+			Overlay->Refresh();
+			Check(State, !Overlay->IsCardShown() && !Overlay->IsSubtitleShown() && Overlay->GetShownObjectiveCount() == 0 && !Overlay->IsSkipTutorialShown(),
+				TEXT("rev 5i: skipped - no card, no radio strip, no objectives, no SKIP button"));
+			Check(State, Leader->GetStance() == EOperativeStance::Crouching && Tutorial->GetLockedRefusalCount() == State.RefusalsBefore,
+				TEXT("rev 5i: skipped - C (locked at A0) is accepted: the leader crouches"));
+			Leader->SetStance(EOperativeStance::Standing);
+			bool bAllFree = true;
+			for (const FPlayerCommandInfo& Info : PlayerCommands::GetRegistry())
+			{
+				bAllFree &= !Tutorial->IsCommandLocked(Info.Id);
+			}
+			Check(State, bAllFree && UTutorialSubsystem::FilterCommand(World, PlayerCommands::Sprint) == PlayerCommands::Sprint,
+				TEXT("rev 5i: skipped - every command is accepted (sprint sprints)"));
+			Hud->ToggleInventoryDrawer();
+			Check(State, Hud->GetInventoryDrawer() && Hud->GetInventoryDrawer()->IsOpen(), TEXT("rev 5i: skipped - the inventory opens (locked at A0)"));
+			Hud->ToggleInventoryDrawer();
+			Check(State, CountMessages(World, TEXT("Tutorial skipped")) == 1, TEXT("rev 5i: one 'Tutorial skipped' feed line"));
+			// Save round trip: a load keeps it skipped (RESET TUTORIAL in between starts it again, the load skips it again).
+			const TSharedPtr<FJsonObject> Saved = Tutorial->CaptureSaveState();
+			bool bSavedSkipped = false;
+			Check(State, Saved.IsValid() && Saved->TryGetBoolField(TEXT("skipped"), bSavedSkipped) && bSavedSkipped, TEXT("rev 5i: the save's tutorial section says skipped"));
+			Check(State, Saves->SaveGame(TEXT("skiptest"), TEXT("Skip test")), TEXT("saved the skipped run"));
+			Tutorial->ResetTutorial();
+			Check(State, !Tutorial->IsTutorialSkipped() && Tutorial->IsTutorialActive(), TEXT("rev 5i: RESET TUTORIAL starts it again"));
+			Check(State, Saves->LoadGame(TEXT("skiptest")), TEXT("loaded the skipped run in place"));
+			Next(State);
+			return true;
+		}
+		case 92:
+		{
+			if (!Tutorial->IsTutorialSkipped() && State.StageTime < 2.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->IsTutorialSkipped() && !Tutorial->IsTutorialActive() && !Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen),
+				TEXT("rev 5i: after the load the tutorial stays skipped"));
 			return Finish(State, true);
 		}
 		default:

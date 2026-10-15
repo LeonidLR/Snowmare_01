@@ -81,6 +81,7 @@ namespace
 	const FPauseExtraEntry ExtraEntries[] = {
 		{ TEXT("ControlsButton"), TEXT("Controls") },
 		{ TEXT("TutorialButton"), TEXT("Tutorial") },
+		{ TEXT("SkipTutorialButton"), TEXT("SkipTutorial") },
 		{ TEXT("ResetTutorialButton"), TEXT("ResetTutorial") },
 		{ TEXT("VisionConesButton"), TEXT("VisionCones") },
 	};
@@ -116,10 +117,12 @@ void UCodexPauseMenuScreen::EnsureExtraEntries()
 		}
 		const FText Label = FName(Extra.EntryId) == TEXT("Controls") ? LOCTEXT("Controls", "CONTROLS")
 			: FName(Extra.EntryId) == TEXT("Tutorial") ? LOCTEXT("TutorialOn", "TUTORIAL: ON")
+			: FName(Extra.EntryId) == TEXT("SkipTutorial") ? LOCTEXT("SkipTutorial", "SKIP TUTORIAL")
 			: FName(Extra.EntryId) == TEXT("VisionCones") ? VisionConesLabel() : LOCTEXT("ResetTutorial", "RESET TUTORIAL");
 		UCodexMenuButton* Button = MakeEntryButton(*WidgetTree, Extra.WidgetName, Extra.EntryId, Label, FText::GetEmpty());
 		Button->SetDescriptionText(FName(Extra.EntryId) == TEXT("Controls") ? LOCTEXT("ControlsDesc", "Every key and command (F1 anywhere).")
 			: FName(Extra.EntryId) == TEXT("Tutorial") ? LOCTEXT("TutorialDesc", "Show or hide the tutorial hints (saved in your profile).")
+			: FName(Extra.EntryId) == TEXT("SkipTutorial") ? LOCTEXT("SkipTutorialDesc", "Skip the whole tutorial for this mission: all controls unlock.")
 			: FName(Extra.EntryId) == TEXT("VisionCones") ? LOCTEXT("VisionConesDesc", "Draw what the enemies can see on the ground (also the O key).")
 			: LOCTEXT("ResetTutorialDesc", "Forget the tutorial progress and start it again."));
 		UPanelSlot* PanelSlot = Parent->InsertChildAt(++Index, Button);
@@ -137,10 +140,17 @@ void UCodexPauseMenuScreen::RefreshTutorialEntries()
 	{
 		Toggle->SetButtonText(UTutorialSubsystem::IsTutorialEnabled() ? LOCTEXT("TutorialOn", "TUTORIAL: ON") : LOCTEXT("TutorialOff", "TUTORIAL: OFF"));
 	}
+	const UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr;
 	if (UCodexMenuButton* Reset = FindEntryButton(TEXT("ResetTutorial")))
 	{
-		const UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr;
 		Reset->SetEntryEnabled(Tutorial && Tutorial->HasSteps(), LOCTEXT("NoTutorial", "This level has no tutorial."));
+	}
+	if (UCodexMenuButton* Skip = FindEntryButton(TEXT("SkipTutorial")))
+	{
+		// Rev 5i: always offered while the tutorial runs (the on-screen button only in its start beat).
+		Skip->SetEntryEnabled(Tutorial && Tutorial->IsTutorialActive(), !Tutorial || !Tutorial->HasSteps() ? LOCTEXT("NoTutorial", "This level has no tutorial.")
+			: Tutorial->IsTutorialSkipped() ? LOCTEXT("TutorialSkippedHint", "The tutorial is skipped for this mission (RESET TUTORIAL starts it again).")
+			: LOCTEXT("TutorialOffHint", "The tutorial is switched off."));
 	}
 	if (UCodexMenuButton* Cones = FindEntryButton(TEXT("VisionCones")))
 	{
@@ -220,6 +230,24 @@ void UCodexPauseMenuScreen::OnEntryActivated(FName EntryId)
 			RefreshTutorialEntries();
 		}
 	}
+	else if (EntryId == TEXT("SkipTutorial") && UI)
+	{
+		// Rev 5i (game designer 2026-10-15): the whole tutorial off for this run, after a Yes / No (a misclick must not cost it).
+		TWeakObjectPtr<UTutorialSubsystem> Tutorial(GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr);
+		TWeakObjectPtr<UCodexPauseMenuScreen> WeakThis(this);
+		UI->ShowConfirm(ECodexConfirmType::YesNo, LOCTEXT("SkipTutorialTitle", "SKIP TUTORIAL"),
+			LOCTEXT("SkipTutorialMessage", "Skip the tutorial? All controls unlock."), [Tutorial, WeakThis](ECodexConfirmResult Result)
+			{
+				if (Result == ECodexConfirmResult::Confirmed && Tutorial.IsValid())
+				{
+					Tutorial->SkipTutorial();
+				}
+				if (WeakThis.IsValid())
+				{
+					WeakThis->RefreshTutorialEntries();
+				}
+			});
+	}
 	else if (EntryId == TEXT("ResetTutorial") && UI)
 	{
 		TWeakObjectPtr<UTutorialSubsystem> Tutorial(GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr);
@@ -283,6 +311,7 @@ void UCodexPauseMenuScreen::BuildDefaultTree(UWidgetTree& Tree) const
 		{ TEXT("OptionsButton"), TEXT("Options"), LOCTEXT("Options", "OPTIONS"), LOCTEXT("OptionsDesc", "Graphics, audio and controls.") },
 		{ TEXT("ControlsButton"), TEXT("Controls"), LOCTEXT("Controls", "CONTROLS"), LOCTEXT("ControlsDesc", "Every key and command (F1 anywhere).") },
 		{ TEXT("TutorialButton"), TEXT("Tutorial"), LOCTEXT("TutorialOn", "TUTORIAL: ON"), LOCTEXT("TutorialDesc", "Show or hide the tutorial hints (saved in your profile).") },
+		{ TEXT("SkipTutorialButton"), TEXT("SkipTutorial"), LOCTEXT("SkipTutorial", "SKIP TUTORIAL"), LOCTEXT("SkipTutorialDesc", "Skip the whole tutorial for this mission: all controls unlock.") },
 		{ TEXT("ResetTutorialButton"), TEXT("ResetTutorial"), LOCTEXT("ResetTutorial", "RESET TUTORIAL"), LOCTEXT("ResetTutorialDesc", "Forget the tutorial progress and start it again.") },
 		{ TEXT("VisionConesButton"), TEXT("VisionCones"), LOCTEXT("VisionConesOff", "VISION CONES: OFF"), LOCTEXT("VisionConesDesc", "Draw what the enemies can see on the ground (also the O key).") },
 		{ TEXT("QuitToMenuButton"), TEXT("QuitToMenu"), LOCTEXT("QuitToMenu", "QUIT TO MAIN MENU"), LOCTEXT("QuitToMenuDesc", "Leave the mission for the main menu.") },

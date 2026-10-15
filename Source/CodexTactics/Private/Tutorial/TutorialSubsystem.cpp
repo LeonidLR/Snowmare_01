@@ -90,6 +90,15 @@ namespace TutorialConsole
 				Tutorial->SkipActiveCard();
 			}
 		}));
+	static FAutoConsoleCommandWithWorldAndArgs SkipTutorialCommand(TEXT("Codex.Tutorial.SkipTutorial"),
+		TEXT("SKIP TUTORIAL without the confirm dialog: the tutorial is off for this run, every lock / confinement released."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World)
+		{
+			if (UTutorialSubsystem* Tutorial = World ? World->GetSubsystem<UTutorialSubsystem>() : nullptr)
+			{
+				Tutorial->SkipTutorial();
+			}
+		}));
 	static FAutoConsoleCommandWithWorldAndArgs ResetCommand(TEXT("Codex.Tutorial.Reset"), TEXT("Forgets the tutorial progress and starts it again."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World)
 		{
@@ -265,7 +274,43 @@ bool UTutorialSubsystem::IsTutorialEnabled()
 
 bool UTutorialSubsystem::IsTutorialActive() const
 {
-	return Machine.IsLoaded() && IsTutorialEnabled();
+	return Machine.IsLoaded() && IsTutorialEnabled() && !bSkipped;
+}
+
+bool UTutorialSubsystem::SkipTutorial()
+{
+	if (!Machine.IsLoaded() || bSkipped)
+	{
+		return false;
+	}
+	bSkipped = true;
+	UnlockAllCommands(TEXT("tutorial skipped")); // locks + the confinement in force
+	SpeechStep = NAME_None; // the radio / walk-and-talk strip goes with the rest (story dialogue windows are not the tutorial's)
+	SpeechLines.Reset();
+	FlashCard = NAME_None;
+	FlashObjectives.Reset();
+	bRetryPrompt = false;
+	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: SKIPPED by the player at beat %s (off for this run, every control unlocked)"),
+		*Machine.GetCurrentBeat().ToString());
+	WriteTelemetry(TEXT("tutorial_skipped"), NAME_None, Machine.GetCurrentBeat(), 0.f);
+	PlayerCommands::Report(this, PlayerCommands::SkipTutorial);
+	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+	{
+		Messages->PostMessage(LOCTEXT("TrainingSpeaker", "TRAINING"), LOCTEXT("TutorialSkipped", "Tutorial skipped - all controls unlocked."));
+	}
+	RefreshMarkers();
+	return true;
+}
+
+bool UTutorialSubsystem::IsSkipOfferShown() const
+{
+	if (!IsTutorialActive())
+	{
+		return false;
+	}
+	const FTutorialStepsData& Data = Machine.GetData();
+	const FName StartBeat = !Data.StartBeat.IsNone() ? Data.StartBeat : (Data.Beats.IsValidIndex(0) ? Data.Beats[0].Id : NAME_None);
+	return !StartBeat.IsNone() && Machine.GetCurrentBeat() == StartBeat;
 }
 
 void UTutorialSubsystem::SetTutorialEnabled(bool bEnabled)
@@ -580,9 +625,9 @@ bool UTutorialSubsystem::SkipActiveCard()
 
 bool UTutorialSubsystem::SkipStep(FName StepId)
 {
-	const bool bSkipped = !StepId.IsNone() && Machine.SkipStep(StepId);
+	const bool bStepSkipped = !StepId.IsNone() && Machine.SkipStep(StepId);
 	ProcessTransitions();
-	return bSkipped;
+	return bStepSkipped;
 }
 
 bool UTutorialSubsystem::ReplayStep(FName StepId)
@@ -594,6 +639,7 @@ bool UTutorialSubsystem::ReplayStep(FName StepId)
 
 void UTutorialSubsystem::ResetTutorial()
 {
+	bSkipped = false; // rev 5i: RESET TUTORIAL starts a skipped tutorial again
 	Machine.ResetProgress();
 	LockHintFamilies.Reset();
 	FocusOperatives.Reset();
@@ -1607,6 +1653,7 @@ TSharedPtr<FJsonObject> UTutorialSubsystem::CaptureSaveState() const
 		Hints.Add(MakeShared<FJsonValueString>(Family));
 	}
 	Object->SetArrayField(TEXT("lock_hints"), Hints);
+	Object->SetBoolField(TEXT("skipped"), bSkipped); // rev 5i: SKIP TUTORIAL stays skipped after a load
 	return Object;
 }
 
@@ -1639,6 +1686,8 @@ void UTutorialSubsystem::RestoreSaveState(const FJsonObject& Object)
 			It->SetFired(Fired.Contains(It->GetName()));
 		}
 	}
+	bool bSavedSkipped = false;
+	bSkipped = Object.TryGetBoolField(TEXT("skipped"), bSavedSkipped) && bSavedSkipped;
 	LockHintFamilies.Reset();
 	const TArray<TSharedPtr<FJsonValue>>* Hints = nullptr;
 	if (Object.TryGetArrayField(TEXT("lock_hints"), Hints))

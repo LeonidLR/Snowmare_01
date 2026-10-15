@@ -170,9 +170,26 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tutorial")
 	bool HasSteps() const { return Machine.IsLoaded(); }
 
-	/** Steps loaded and the player's tutorial setting on. */
+	/** Steps loaded, the player's tutorial setting on and the tutorial not skipped for this run. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tutorial")
 	bool IsTutorialActive() const;
+
+	/**
+	 * Rev 5i (game designer 2026-10-15): SKIP TUTORIAL - the tutorial is off for THIS run (the player's ON / OFF setting is not
+	 * touched): every lock and confinement is released, cards / objectives / radio / walk-and-talk lines disappear (the story
+	 * dialogue windows of the level go on), no more checkpoints, normal death rules; the quest / wave flow is not affected. Saved
+	 * ("skipped" in the tutorial section): a load keeps it skipped. RESET TUTORIAL starts it again. False without steps / already
+	 * skipped. Callers confirm with the player first (the overlay button and the pause menu entry ask Yes / No).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tutorial")
+	bool SkipTutorial();
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tutorial")
+	bool IsTutorialSkipped() const { return bSkipped; }
+
+	/** The SKIP TUTORIAL button is offered on screen: the tutorial runs and is still in its start beat (Demo 01: A0). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tutorial")
+	bool IsSkipOfferShown() const;
 
 	/** The player's tutorial setting (console Codex.Tutorial.Enabled; saved to Saved/Tutorial/profile.json). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tutorial")
@@ -468,6 +485,8 @@ private:
 	/** Progress loaded before the steps (a save applied before the level's steps file was read): applied by LoadSteps. */
 	TOptional<FTutorialProgress> DeferredProgress;
 
+	/** Rev 5i: SKIP TUTORIAL for this run (saved). */
+	bool bSkipped = false;
 	/** Rev 5i: the confinement serial last seen (FTutorialStateMachine::GetConfineSerial) and the refusals so far. */
 	int32 SeenConfineSerial = 0;
 	int32 ConfinedRefusals = 0;

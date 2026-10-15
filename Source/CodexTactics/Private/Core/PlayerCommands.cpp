@@ -93,6 +93,7 @@ namespace PlayerCommands
 	const FName ToggleVisionCones(TEXT("View.VisionCones"));
 	const FName DialogueNext(TEXT("Dialogue.Next"));
 	const FName DialogueSkip(TEXT("Dialogue.Skip"));
+	const FName SkipTutorial(TEXT("System.SkipTutorial"));
 
 	const TArray<const TCHAR*>& GetSections()
 	{
@@ -217,6 +218,7 @@ namespace PlayerCommands
 			{ PauseMenu, TEXT("Esc"), TEXT("Saving & menus"), TEXT("Pause menu: save, load, options, tutorial") },
 			{ DialogueNext, TEXT("Enter"), TEXT("Saving & menus"), TEXT("Dialogue / radio: next line") },
 			{ DialogueSkip, TEXT("Hold Enter"), TEXT("Saving & menus"), TEXT("Dialogue / radio: skip the whole conversation (or click SKIP on the radio strip)") },
+			{ SkipTutorial, TEXT("Esc menu"), TEXT("Saving & menus"), TEXT("Skip the whole tutorial: SKIP TUTORIAL in the pause menu (or the button at the mission start); all controls unlock") },
 		};
 		return Registry;
 	}
