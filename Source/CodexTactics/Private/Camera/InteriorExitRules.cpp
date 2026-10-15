@@ -58,4 +58,13 @@ namespace InteriorExitRules
 	{
 		return bZoneCameraShown && !bTurnBased;
 	}
+
+	bool ShouldRescanExits(bool bNavBuilding, bool bScannedWhileBuilding, int32 ExitsFound, int32 Rescans, int32 InMaxRescans)
+	{
+		if (bNavBuilding)
+		{
+			return false; // wait for the build: a search now reads a half-built navmesh
+		}
+		return bScannedWhileBuilding || (ExitsFound == 0 && Rescans < InMaxRescans);
+	}
 }

@@ -171,10 +171,15 @@ namespace InteriorExitSmoke
 		{
 		case 0:
 		{
-			if (State.StageTime < 3.f)
+			// Fix 2026-10-15 (failed once under -Jobs 3: "EXIT arrows at the doorways: 0"): the map's navmesh is built at load; wait for
+			// the build as a CONDITION (placing on / searching a half-built navmesh found no doorway), not a fixed 3 s.
+			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+			const bool bNavBuilding = !Nav || Nav->IsNavigationBuildInProgress();
+			if (State.StageTime < 1.f || (bNavBuilding && State.StageTime < 60.f))
 			{
 				return true;
 			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke navmesh %s after %.1f s"), bNavBuilding ? TEXT("STILL BUILDING") : TEXT("built"), State.StageTime);
 			// The tutorial would lock / talk: off for this check (camera and exit commands are never locked anyway).
 			if (IConsoleVariable* Tutorial = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Tutorial.Enabled")))
 			{
@@ -198,7 +203,8 @@ namespace InteriorExitSmoke
 		}
 		case 1:
 		{
-			if ((!Zone->IsZoneCameraShown() || Exits->GetArrows().IsEmpty()) && State.StageTime < 4.f)
+			// The subsystem searches the doorways again every 0.5 s while none was found (InteriorExitRules::ShouldRescanExits).
+			if ((!Zone->IsZoneCameraShown() || Exits->GetArrows().IsEmpty()) && State.StageTime < 12.f)
 			{
 				return true;
 			}

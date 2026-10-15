@@ -67,6 +67,21 @@ bool FInteriorExitScopeAndViewTest::RunTest(const FString&)
 	return true;
 }
 
+INTERIOR_EXIT_TEST(FInteriorExitRescanTest, "RescanUntilNavReady")
+bool FInteriorExitRescanTest::RunTest(const FString&)
+{
+	using namespace InteriorExitRules;
+	// Fix 2026-10-15: InteriorExitSmoke under load cached "0 doors" found on a navmesh still being built at load.
+	TestFalse(TEXT("navmesh still building: wait"), ShouldRescanExits(true, true, 0, 0));
+	TestTrue(TEXT("built after a search during the build: once more"), ShouldRescanExits(false, true, 2, 3));
+	TestTrue(TEXT("nothing found: search again"), ShouldRescanExits(false, false, 0, 0));
+	TestTrue(TEXT("nothing found: still within the cap"), ShouldRescanExits(false, false, 0, MaxRescans - 1));
+	TestFalse(TEXT("nothing found after the cap: believe it (a building without doors)"), ShouldRescanExits(false, false, 0, MaxRescans));
+	TestFalse(TEXT("doors found on a built navmesh: keep them"), ShouldRescanExits(false, false, 1, 0));
+	TestTrue(TEXT("the cap covers several seconds"), MaxRescans * RescanIntervalSeconds >= 5.f);
+	return true;
+}
+
 #undef INTERIOR_EXIT_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

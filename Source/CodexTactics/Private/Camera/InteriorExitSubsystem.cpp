@@ -103,8 +103,27 @@ void UInteriorExitSubsystem::Tick(float DeltaTime)
 		}
 		return;
 	}
+	const double Now = FPlatformTime::Seconds(); // real time: the tactical pause must not stall the re-search
 	if (ShownZone.Get() != Shown)
 	{
+		ClearArrows();
+		Rescans = 0;
+		ShowArrows(Shown);
+		NextRescanTime = Now + InteriorExitRules::RescanIntervalSeconds;
+		return;
+	}
+	if (Now < NextRescanTime)
+	{
+		return;
+	}
+	NextRescanTime = Now + InteriorExitRules::RescanIntervalSeconds;
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	const bool bNavBuilding = Nav && Nav->IsNavigationBuildInProgress();
+	if (InteriorExitRules::ShouldRescanExits(bNavBuilding, bScannedWhileNavBuilding, LastExitsFound, Rescans))
+	{
+		++Rescans;
+		UE_LOG(LogCodexTactics, Display, TEXT("[InteriorExit] %s: doorway search again (%d: last %d found%s)"), *Shown->GetName(), Rescans,
+			LastExitsFound, bScannedWhileNavBuilding ? TEXT(", navmesh was building") : TEXT(""));
 		ClearArrows();
 		ShowArrows(Shown);
 	}
@@ -189,6 +208,9 @@ void UInteriorExitSubsystem::ShowArrows(ACameraZoneVolume* Zone)
 	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	const FVector FloorHint = Leader ? Leader->GetActorLocation() : Zone->GetActorLocation();
 	const TArray<FInteriorExit> Exits = FindExits(Zone, FloorHint);
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	bScannedWhileNavBuilding = Nav && Nav->IsNavigationBuildInProgress();
+	LastExitsFound = Exits.Num();
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	for (const FInteriorExit& Exit : Exits)

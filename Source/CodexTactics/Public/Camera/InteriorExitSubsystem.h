@@ -69,4 +69,9 @@ private:
 
 	TWeakObjectPtr<ACameraZoneVolume> ShownZone;
 	TArray<TWeakObjectPtr<AInteriorExitArrowActor>> Arrows;
+	/** Doorway re-search (InteriorExitRules::ShouldRescanExits): the last result, whether the navmesh was building, the count, when next. */
+	int32 LastExitsFound = 0;
+	bool bScannedWhileNavBuilding = false;
+	int32 Rescans = 0;
+	double NextRescanTime = 0.0;
 };
