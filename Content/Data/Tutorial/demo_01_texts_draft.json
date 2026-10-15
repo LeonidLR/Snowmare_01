@@ -287,17 +287,17 @@
     },
     "TUT_A3_MINE": {
       "title": "MINE SPOTTED",
-      "text": "The squad stops. Go round it, or select the Medic-Sapper ({key:Select.Member} 3), click the mine and choose Defuse — or {key:Attack.TargetedShot} it from more than 4 m."
+      "text": "The squad stops and holds - move them one by one (B regroups). Go round it, or select the Medic-Sapper ({key:Select.Member} 3), click the mine and choose Defuse — or {key:Attack.TargetedShot} it from more than 4 m."
     },
     "TUT_A3_WIRE": {
       "title": "TRIPWIRE",
       "text": "A wire at shin height. ANYONE can disarm it: click the red wire (or the ground right next to it - the cursor turns into a hand), the operative walks up, choose Disarm. Cold fingers lower the chance - the Medic-Sapper is best. Or crawl under it prone ({key:Stance.Prone})."
     },
     "TUT_A3_WIRE_SPOTTED": {
-      "text": "Tripwire spotted. Click the wire and choose Disarm - anyone can try, the Medic-Sapper is best. Or crawl under it prone."
+      "text": "Tripwire spotted - squad holding. Click the wire and choose Disarm - anyone can try, the Medic-Sapper is best. Or crawl under it prone, one by one."
     },
     "TUT_A3_MINE_SPOTTED": {
-      "text": "Mine spotted. Click it and choose Defuse (the Medic-Sapper is best), go round it, or Ctrl+click it from more than 4 m to blow it."
+      "text": "Mine spotted - squad holding. Move them one by one: click it and choose Defuse (the Medic-Sapper is best), go round it, or Ctrl+click it from more than 4 m to blow it."
     },
     "TUT_BEAT_A4": {
       "title": "THE AMBUSH"

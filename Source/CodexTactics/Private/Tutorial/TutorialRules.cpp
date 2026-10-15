@@ -1,4 +1,5 @@
 #include "Tutorial/TutorialRules.h"
+#include "Interactables/TrapSpotRules.h"
 #include "Core/PlayerCommands.h"
 #include "Dom/JsonObject.h"
 #include "Misc/FileHelper.h"
@@ -138,7 +139,7 @@ namespace TutorialRulesLocal
 			Condition.Stat = FName(*JsonString(Clause, TEXT("stat")));
 			if (!TutorialRules::IsKnownStat(Condition.Stat))
 			{
-				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs | squad_min_heat_packs | heat_packs_given)"),
+				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs | squad_min_heat_packs | heat_packs_given | traps_spotted.<tag>)"),
 					*Where, *Condition.Stat.ToString());
 				return false;
 			}
@@ -893,6 +894,11 @@ FString TutorialRules::FormatKeys(const TArray<FString>& Keys)
 
 bool TutorialRules::IsKnownStat(FName Stat)
 {
+	// Rev 5h: "traps_spotted.<SpotEventTag>" counts the spotted traps of a tagged group (TrapSpotRules::ParseSpottedStatTag).
+	if (!TrapSpotRules::ParseSpottedStatTag(Stat).IsNone())
+	{
+		return true;
+	}
 	static const FName Stats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
 		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given") };
 	for (const FName Known : Stats)

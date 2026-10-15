@@ -30,7 +30,7 @@
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
-    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke"
+    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -138,13 +138,20 @@
       "name": "deployables",
       "globs": ["Source/**/Interactables/Deployable*", "Source/**/Interactables/Barricade*", "Source/**/Interactables/Turret*", "Source/**/Interactables/ProximityMine*"],
       "tests": ["CodexTactics.Deployable"],
-      "smokes": ["DeployableSmoke", "TurretSmoke", "BarricadeContactSmoke", "TurnBasedDeploySmoke", "TurnBasedBarricadeSmoke", "PrepDeploySmoke", "BarricadeTurnContactSmoke"]
+      "smokes": ["DeployableSmoke", "TrapSoloSmoke", "TurretSmoke", "BarricadeContactSmoke", "TurnBasedDeploySmoke", "TurnBasedBarricadeSmoke", "PrepDeploySmoke", "BarricadeTurnContactSmoke"]
     },
     {
       "name": "tripwire",
       "globs": ["Source/**/Interactables/Tripwire*", "Source/**/Debug/PMCTripwireSmoke*", "Source/**/Debug/TripwireSmoke*"],
       "tests": ["CodexTactics.Interactables.Tripwire"],
-      "smokes": ["PMCTripwireSmoke", "TripwireSmoke", "DeployableSmoke", "SaveRoundTripSmoke"]
+      "smokes": ["PMCTripwireSmoke", "TripwireSmoke", "DeployableSmoke", "SaveRoundTripSmoke", "TrapSoloSmoke"]
+    },
+    {
+      "name": "trap-spotting",
+      "_comment": "Rev 5h (2026-10-15): a spotted hidden trap stops the squad + Solo; the corner peek reveals hidden traps; the A3 peek mines.",
+      "globs": ["Source/**/Interactables/TrapSpot*", "Source/**/Debug/TrapSoloSmoke*"],
+      "tests": ["CodexTactics.Interactables.TrapSpot", "CodexTactics.Tutorial"],
+      "smokes": ["TrapSoloSmoke", "PMCTripwireSmoke", "DeployableSmoke"]
     },
     {
       "name": "interactables-core",
@@ -241,7 +248,7 @@
       "name": "operative-movement-squad",
       "globs": ["Source/**/Characters/OperativeCharacter*", "Source/**/Characters/OperativeAIController*", "Source/**/Characters/OperativeMovement*", "Source/**/Characters/SquadFormation*", "Source/**/Characters/SquadSubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/FacingRules*", "Source/**/Characters/Vault*", "Source/**/Characters/RecruitSubsystem*"],
       "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault", "CodexTactics.Characters.OperativeUnits", "CodexTactics.Movement"],
-      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "RealtimeSelectSmoke"]
+      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "RealtimeSelectSmoke", "TrapSoloSmoke"]
     },
     {
       "name": "operative-cover-units",

@@ -225,21 +225,34 @@ void AProximityMineActor::ScanForSpotters()
 	}
 }
 
-void AProximityMineActor::HandleSpotted(AOperativeCharacter* Spotter)
+bool AProximityMineActor::IsHiddenTrap() const
+{
+	return !bRevealed && bTrapped && !bDetonated && ArmingTimeLeft <= 0.f && (!bPlacedBySquad || bFriendlyFire);
+}
+
+void AProximityMineActor::RevealByPeek(AOperativeCharacter* Spotter)
+{
+	if (Spotter && IsHiddenTrap())
+	{
+		HandleSpotted(Spotter, true);
+	}
+}
+
+void AProximityMineActor::HandleSpotted(AOperativeCharacter* Spotter, bool bByPeek)
 {
 	Reveal();
-	// Godot _on_mine_spotted: the whole squad stops, the spotter faces the mine and warns on the radio.
-	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	UE_LOG(LogCodexTactics, Display, TEXT("%s: spotted by %s%s"), *GetName(), *Spotter->DisplayName.ToString(), bByPeek ? TEXT(" (corner peek)") : TEXT(""));
+	// Godot _on_mine_spotted: the whole squad stops, the spotter faces the mine and warns on the radio. Rev 5h: a peek spotter keeps
+	// his corner pose; the squad switches to Solo (NotifyTrapSpotted -> USquadSubsystem::HoldForSpottedTrap).
+	if (!bByPeek)
 	{
-		for (AOperativeCharacter* Member : Squad->GetMembers())
-		{
-			Member->StopOperative();
-		}
+		const FRotator Facing = (GetActorLocation() - Spotter->GetActorLocation()).Rotation();
+		Spotter->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 	}
-	const FRotator Facing = (GetActorLocation() - Spotter->GetActorLocation()).Rotation();
-	Spotter->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 	UFloatingTextSubsystem::SpawnAboveOperative(Spotter, TEXT("⚠️ MINE SPOTTED!"), FLinearColor(1.f, 0.85f, 0.1f));
-	PostLine(Spotter->DisplayName, LOCTEXT("Spotted", "⚠️ Mine! Everyone hold position!"));
+	PostLine(Spotter->DisplayName, bByPeek ? LOCTEXT("SpottedPeek", "⚠️ Mines past this corner! Everyone hold position!")
+		: LOCTEXT("Spotted", "⚠️ Mine! Everyone hold position!"));
+	NotifyTrapSpotted(Spotter, bByPeek, LOCTEXT("TrapName", "Mine"));
 	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
 	{
 		Bus->OnMineSpotted.Broadcast(this, Spotter);

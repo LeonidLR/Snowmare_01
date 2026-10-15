@@ -13,6 +13,8 @@
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/InteractableActor.h"
+#include "Interactables/TrapSpotRules.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/App.h"
@@ -798,6 +800,16 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 	{
 		const AOperativeCharacter* Leader = Squad->GetLeader();
 		return Leader ? Leader->ColdLevel : 0.f;
+	}
+	if (const FName TrapTag = TrapSpotRules::ParseSpottedStatTag(Stat); !TrapTag.IsNone())
+	{
+		// Rev 5h: the traps of a tagged group (AInteractableActor::SpotEventTag) the squad knows of (spotted; dealt with = known).
+		int32 Spotted = 0;
+		for (TActorIterator<AInteractableActor> It(GetWorld()); It; ++It)
+		{
+			Spotted += It->SpotEventTag == TrapTag && !It->IsHiddenTrap() ? 1 : 0;
+		}
+		return static_cast<float>(Spotted);
 	}
 	if (Stat == FName(TEXT("heat_packs_given")))
 	{

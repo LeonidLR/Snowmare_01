@@ -823,6 +823,7 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	GameState->SetBoolField(TEXT("is_wave_active"), Phase == ECodexGamePhase::WaveCombat);
 	GameState->SetNumberField(TEXT("current_wave_index"), WaveIndex);
 	GameState->SetBoolField(TEXT("is_solo_mode"), Squad && Squad->IsSoloMode());
+	GameState->SetBoolField(TEXT("is_trap_solo"), Squad && Squad->IsTrapSolo()); // rev 5h: Solo after a spotted trap (no leash)
 	// Version 2.
 	GameState->SetStringField(TEXT("phase"), SaveGameRules::PhaseToString(Phase));
 	GameState->SetNumberField(TEXT("preparation_time_left"), PreparationLeft);
@@ -1249,6 +1250,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			{
 				Squad->ExitSoloMode();
 			}
+			Squad->RestoreTrapSolo(SaveBool(*GameState, TEXT("is_trap_solo"), false));
 			ESquadFirePosture Posture = FirePostureRules::DefaultPosture;
 			if (LoadEnumName(SaveString(*GameState, TEXT("squad_posture")), Posture))
 			{

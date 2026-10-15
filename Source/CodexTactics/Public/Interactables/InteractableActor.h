@@ -135,6 +135,21 @@ public:
 
 	virtual ETrapFlavor GetTrapFlavor() const { return ETrapFlavor::Object; }
 
+	// --- Hidden traps (Demo 01 rev 5h, every level): a level mine / PMC tripwire the squad has not spotted yet ---
+
+	/** A live trap the squad does not know of yet (a corner peek can reveal it, AOperativeCharacter::UpdatePeekTrapSpotting). */
+	virtual bool IsHiddenTrap() const { return false; }
+
+	/** Reveals a hidden trap as spotted by Spotter's corner peek (the normal spot response; the spotter keeps his pose). */
+	virtual void RevealByPeek(AOperativeCharacter* Spotter) {}
+
+	/**
+	 * Rev 5h: a group name for tutorial steps / scripts: spotting this trap also raises "TrapSpotted.<tag>" and counts in the
+	 * tutorial condition stat "traps_spotted.<tag>" (Demo 01: A3PeekMines = the mines beyond the A3 peek corner). Empty = none.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Trap")
+	FName SpotEventTag;
+
 	/** Blueprint hook for explosion VFX / sound. */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Trap", meta = (DisplayName = "On Exploded"))
 	void ReceiveExploded(float Radius);
@@ -159,6 +174,12 @@ protected:
 
 	/** Posts a feed line. */
 	void PostLine(const FText& Speaker, const FText& Text) const;
+
+	/**
+	 * Rev 5h: the squad's side of a spotted hidden trap - everyone stops and the Solo switch (USquadSubsystem::HoldForSpottedTrap),
+	 * then the events "TrapSpotted" / "TrapSpotted.Peek" / "TrapSpotted.<SpotEventTag>" (Subject = the spotter).
+	 */
+	void NotifyTrapSpotted(AOperativeCharacter* Spotter, bool bByPeek, const FText& TrapName);
 
 public:
 

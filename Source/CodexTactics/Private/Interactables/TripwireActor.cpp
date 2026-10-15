@@ -311,31 +311,48 @@ void ATripwireActor::SetPreviewValid(bool bValid)
 
 void ATripwireActor::Reveal(AOperativeCharacter* Spotter)
 {
+	RevealBy(Spotter, false);
+}
+
+bool ATripwireActor::IsHiddenTrap() const
+{
+	return IsConcealed() && bSetUp && !bPreview && !bTripped && ArmingLeft <= 0.f;
+}
+
+void ATripwireActor::RevealByPeek(AOperativeCharacter* Spotter)
+{
+	if (Spotter && IsHiddenTrap())
+	{
+		RevealBy(Spotter, true);
+	}
+}
+
+void ATripwireActor::RevealBy(AOperativeCharacter* Spotter, bool bByPeek)
+{
 	if (!IsConcealed())
 	{
 		return;
 	}
 	bSpotted = true;
 	ApplyConcealment();
-	UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s: spotted by %s"), *GetName(), Spotter ? *Spotter->DisplayName.ToString() : TEXT("-"));
+	UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s: spotted by %s%s"), *GetName(), Spotter ? *Spotter->DisplayName.ToString() : TEXT("-"),
+		bByPeek ? TEXT(" (corner peek)") : TEXT(""));
 	if (!Spotter)
 	{
 		return;
 	}
-	// The mine rule (Godot _on_mine_spotted): the whole squad stops, the spotter faces the wire and warns.
-	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	// The mine rule (Godot _on_mine_spotted): the whole squad stops, the spotter faces the wire and warns. Rev 5h: a peek spotter
+	// keeps his corner pose; the squad switches to Solo (NotifyTrapSpotted -> USquadSubsystem::HoldForSpottedTrap).
+	if (!bByPeek)
 	{
-		for (AOperativeCharacter* Member : Squad->GetMembers())
-		{
-			Member->StopOperative();
-		}
+		const FRotator Facing = (GetActorLocation() - Spotter->GetActorLocation()).Rotation();
+		Spotter->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 	}
-	const FRotator Facing = (GetActorLocation() - Spotter->GetActorLocation()).Rotation();
-	Spotter->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 	UFloatingTextSubsystem::SpawnAboveOperative(Spotter, TEXT("⚠️ TRIPWIRE SPOTTED!"), FLinearColor(1.f, 0.85f, 0.1f));
 	PostLine(Spotter->DisplayName, IsHostile()
 		? LOCTEXT("SpottedHow", "⚠️ Tripwire! Wire at shin height - everyone hold position! Click the wire to disarm it (anyone can try, the Medic-Sapper is best), or crawl under it.")
 		: LOCTEXT("Spotted", "⚠️ Tripwire! Wire at shin height - everyone hold position!"));
+	NotifyTrapSpotted(Spotter, bByPeek, LOCTEXT("TrapName", "Tripwire"));
 	GameplayEvents::Raise(this, GameplayEvents::TripwireSpotted, Spotter);
 	if (URelocationSubsystem* Relocation = GetWorld()->GetSubsystem<URelocationSubsystem>())
 	{
