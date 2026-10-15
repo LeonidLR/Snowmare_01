@@ -1,5 +1,7 @@
 # Demo 01 «Frozen Lake»: auto layout (2026-10-13)
 
+> **2026-10-15 rev 5h:** additive section `AutoLayout_Demo01_5h` (the A3 corner-peek mines, §9); the additive mode now runs the sections named in `CODEX_LAYOUT_SECTIONS` (default `5h` = only the newest; `5d,5h` = both).
+
 > **2026-10-15: ONE lake map.** The review copy became the working map: `/Game/Maps/Dev/L_Demo01_A_FrozenLake_AutoLayout` was saved over `/Game/Maps/L_Demo01_A_FrozenLake` (editor Save As, user decision) and the copy + its level JSON were removed. Every path below that names the `Dev/...AutoLayout` copy now means `/Game/Maps/L_Demo01_A_FrozenLake`. Backups of both old maps: `Saved/Backups/maps_before_swap_20261015_0917`.
 
 
@@ -294,3 +296,34 @@ $env:CODEX_LAYOUT_MODE = "additive"
 Get-Content "$p\Saved\Logs\Demo01Layout5d.txt"
 # 2. Verify in game (section 6 step 3: the same command with CODEX_LAYOUT_MODE = "verify"), 3. shots + annotate (section 6 step 4).
 ```
+
+## 9. Rev 5h: the A3 corner-peek mines (2026-10-15, additive section `5h`)
+
+The game designer's play-test: the A3 card "peek around the corner" should be meaningful - hidden mines lie beyond that corner and the
+peek reveals them (C++: the corner peek spots hidden traps in its 60 deg / 12 m sight cone, HANDOFF §5). Section **`5h`** (tag
+**`AutoLayout_Demo01_5h`**, folder `AutoLayout_Demo01_5h/...`), placed relative to the first high wall of the cover field (the
+`Cover_A3_*_High` nearest `VOL_A3_FIELD` = `Cover_A3_2_High`, wherever the user moved it); no pre-existing actor is edited.
+
+| Actor | Class | Settings | Position (worktree map 2026-10-15) | Why |
+|---|---|---|---|---|
+| Marker_A3_peek | TutorialMarkerActor | Step `A3_peek`, ring 0.7 m | (19345, -3380) | the wall's OUTER (-Y, away from the lane) corner on the approach face: where to peek |
+| PMC_Mine_A3_Peek_1 | ProximityMineActor | hidden level mine, damage 80, **Spot Event Tag `A3PeekMines`** | (20220, -3490) | wall centre + 8 m beyond, 2 m towards the outer end: 8.7 m from the wall face |
+| PMC_Mine_A3_Peek_2 | ProximityMineActor | same | (20370, -3240) | 9.5 m beyond, 0.5 m back: 10.2 m from the face, in front of `Cover_A3_4_High` (the next bound) |
+
+Rules the placement keeps (checked by `verify`): both mines further than 6 m (mine spot 4.5 m + the Medic-Sapper's 1.5 m) from the wall's
+approach face / the cover slot and the lane (7.5 m+), within 12 m and 30 deg of the corner-aim direction round that corner (corner +
+100 deg outward from along the wall) with a clear line of sight (8.7 m / 9 deg and 10.5 m / 4 deg); the cover slot at the marker is
+HIGH and reachable from the field entrance (17 m).
+
+**Verification (2026-10-15, worktree):** additive run `Saved/Logs/Demo01Layout5h.txt`: 0 removed, 3 placed, saved, "pre-existing actors
+moved / deleted: 0" (the 2 generated RecastNavMesh actors dropped as always); backup before the run
+`Saved/Backups/lake_before_5h_*/L_Demo01_A_FrozenLake.umap` (SHA256 `458f015a...`). In-game verify `Saved/Logs/Demo01LayoutVerify.txt`
+**RESULT: PASS** incl. the new `peek:` lines; `PeekMinesSmoke` PASS (no spot from cover, both spotted by the peek).
+
+**Rerun on the user's latest map** (e.g. he edited it in the main checkout; run with that checkout's editor closed): back the map up, then
+```powershell
+$env:CODEX_LAYOUT_MODE = "additive"; $env:CODEX_LAYOUT_SECTIONS = "5h"
+& "$ue\UnrealEditor-Cmd.exe" "$p\CodexTactics.uproject" -run=pythonscript "-script=$p\Scripts\Editor\build_demo01_lake_layout.py" -unattended -nullrhi -nosplash
+Get-Content "$p\Saved\Logs\Demo01Layout5h.txt"
+```
+(a rerun deletes and re-places only the three `AutoLayout_Demo01_5h` actors; `CODEX_LAYOUT_SECTIONS=5d` re-places the ruin, `5d,5h` both).

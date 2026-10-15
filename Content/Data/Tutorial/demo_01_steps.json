@@ -460,11 +460,11 @@
       "complete": { "event": "CoverEntered", "count": 2, "distinct_operatives": true, "timeout_s": 45 }
     },
     {
-      "_comment": "Optional corner-peek card (rev 5c, user request 2026-10-13; low cover too since rev 5e): in cover a click on the END of the wall sends the operative to that corner, leaning out in the corner aim until the next order (command Cover.CornerPeek, event CornerPeek). Done when one does it, or after 45 s.",
+      "_comment": "Corner peek card (rev 5c; low cover too since rev 5e). Rev 5h (game designer 2026-10-15): the peek is meaningful - two hidden mines (SpotEventTag A3PeekMines, map section AutoLayout_Demo01_5h) lie beyond the corner of the first high wall (marker A3_peek); leaning out round a corner spots hidden traps in the peek sight cone (AOperativeCharacter::PeekSpotConfig). Done when those mines are known (condition stat traps_spotted.A3PeekMines: also precredited when they were found before the card), or after 90 s. The mine card A3_mine (MineSpotted) follows: disarm or go round.",
       "id": "A3_peek", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_PEEK",
       "keys": ["Cover.CornerPeek"],
       "trigger": { "type": "after_step", "step": "A3_squad_card", "delay_s": 1 },
-      "complete": { "event": "CornerPeek", "timeout_s": 45 }
+      "complete": { "condition": [ { "stat": "traps_spotted.A3PeekMines", "at_least": 1 } ], "timeout_s": 90 }
     },
     {
       "id": "A3_bound", "beat": "A3", "kind": "objective", "text_id": "OBJ_A6_BOUND",

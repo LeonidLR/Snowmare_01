@@ -15,6 +15,8 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/InteractableActor.h"
+#include "Interactables/TrapSpotRules.h"
 #include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverTraceRules.h"
@@ -452,4 +454,67 @@ void AOperativeCharacter::UpdateOpenShotReturn()
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: back to the wall after the open shot"), *DisplayName.ToString());
 	TGuardValue<bool> Quiet(bQuietCoverEntryRequest, true);
 	EnterCover(OpenShotReturnSlot);
+}
+
+bool AOperativeCharacter::IsPeekingRoundCorner() const
+{
+	return bInCover && bCornerAimActive && (IsManualCornerPeekSpot() || IsCornerHoldSpot());
+}
+
+void AOperativeCharacter::UpdatePeekTrapSpotting(float DeltaTime)
+{
+	UWorld* World = GetWorld();
+	if (!World || !PeekSpotConfig.bEnabled || !IsPeekingRoundCorner() || !HealthComponent || !HealthComponent->IsAlive())
+	{
+		PeekSpotTimer = 0.f; // the first look comes at once when he leans out
+		return;
+	}
+	PeekSpotTimer -= DeltaTime;
+	if (PeekSpotTimer > 0.f)
+	{
+		return;
+	}
+	PeekSpotTimer = FMath::Max(0.02f, PeekSpotConfig.IntervalSeconds);
+	// The proximity rule of the traps: no spotting in the wave fight (the turn-based grid / the fight own the traps there).
+	const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+	if (Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat)
+	{
+		return;
+	}
+	const FVector Origin = GetCoverFireOrigin();
+	const FVector Direction = CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg);
+	TArray<AInteractableActor*> Found;
+	for (TActorIterator<AInteractableActor> It(World); It; ++It)
+	{
+		AInteractableActor* Trap = *It;
+		if (!Trap->IsHiddenTrap())
+		{
+			continue;
+		}
+		const FVector Target = Trap->GetActorLocation() + FVector(0.f, 0.f, PeekSpotConfig.TargetHeightCm);
+		if (!TrapSpotRules::IsInPeekSightCone(Origin, Direction, Target, PeekSpotConfig.RangeCm, PeekSpotConfig.HalfAngleDeg))
+		{
+			continue;
+		}
+		if (PeekSpotConfig.bRequireLineOfSight)
+		{
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(PeekTrapSight), false, this);
+			Params.AddIgnoredActor(Trap);
+			FHitResult Hit;
+			if (World->LineTraceSingleByChannel(Hit, Origin, Target, ECC_Visibility, Params) && !Cast<APawn>(Hit.GetActor()))
+			{
+				continue; // a wall / rock in between (a squad mate or an enemy does not hide it)
+			}
+		}
+		Found.Add(Trap);
+	}
+	// Revealed after the scan: each reveal stops the squad and may switch it to Solo (it must not change the set being iterated).
+	for (AInteractableActor* Trap : Found)
+	{
+		if (IsValid(Trap) && Trap->IsHiddenTrap())
+		{
+			Trap->RevealByPeek(this);
+			++PeekSpottedCount;
+		}
+	}
 }

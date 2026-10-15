@@ -11,6 +11,7 @@
 #include "Characters/FirePostureRules.h"
 #include "Combat/TargetedShotRules.h"
 #include "Interactables/DeployableRules.h"
+#include "Interactables/TrapSpotRules.h"
 #include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverTypes.h"
@@ -988,6 +989,20 @@ public:
 	/** Manual peeks that reached their pose (the CornerPeek event; smokes / stats). */
 	int32 GetManualCornerPeekCount() const { return ManualCornerPeekCount; }
 
+	/**
+	 * Demo 01 rev 5h (every level): leaning out round a corner now - the corner aim of a manual peek or of the corner hold.
+	 * While it holds, hidden traps in his peek sight cone are spotted (PeekSpotConfig, UpdatePeekTrapSpotting).
+	 */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
+	bool IsPeekingRoundCorner() const;
+
+	/** Rev 5h: the corner peek reveals hidden traps in its sight cone (range, cone, line of sight; TrapSpotRules). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek")
+	FTrapPeekSpotConfig PeekSpotConfig;
+
+	/** Hidden traps this operative revealed by peeking (smokes / stats). */
+	int32 GetPeekSpottedCount() const { return PeekSpottedCount; }
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
 	void SetCoverFireMode(ECoverFireMode Mode);
 
@@ -1745,6 +1760,10 @@ private:
 	void BeginCornerAim();
 	/** Re-evaluates DecideCornerAim while leaned out (every 0.1 s). */
 	void UpdateCornerAim(float DeltaTime);
+	/** Rev 5h: while peeking round a corner, reveals the hidden traps in the peek sight cone (every PeekSpotConfig.IntervalSeconds). */
+	void UpdatePeekTrapSpotting(float DeltaTime);
+	float PeekSpotTimer = 0.f;
+	int32 PeekSpottedCount = 0;
 	/** The corner-aim inputs gathered from the world (targets, fire on him, laser, grenade, flank). */
 	FCornerAimSituation GatherCornerAimSituation() const;
 	/** Range and line of fire to a silhouette's aim point (barricades by SquadFireRules::JudgeLine). */

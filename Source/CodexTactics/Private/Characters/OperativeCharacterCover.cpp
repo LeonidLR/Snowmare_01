@@ -439,6 +439,8 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 			ManualCornerPeekSide == ECoverFacing::Left ? TEXT("left") : TEXT("right"));
 		RaiseCoverEvent(GameplayEvents::CornerPeek, CoverSlot, ManualCornerPeekSide == ECoverFacing::Left ? FName(TEXT("Left")) : FName(TEXT("Right")));
 	}
+	// Rev 5h: leaning out round the corner he sees what lies beyond it - hidden traps there are spotted.
+	UpdatePeekTrapSpotting(DeltaTime);
 	if (CVarDebugCornerAim.GetValueOnGameThread() > 0 && GetWorld())
 	{
 		const double Now = GetWorld()->GetTimeSeconds();
