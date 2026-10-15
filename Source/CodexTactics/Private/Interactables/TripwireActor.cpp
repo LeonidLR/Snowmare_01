@@ -383,7 +383,7 @@ void ATripwireActor::Tick(float DeltaSeconds)
 	}
 	if (ArmingLeft > 0.f)
 	{
-		ArmingLeft -= DeltaSeconds;
+		ArmingLeft = DeployableRules::StepArmingCountdown(ArmingLeft, DeltaSeconds); // never negative: saves round-trip exactly
 		if (ArmingLeft <= 0.f)
 		{
 			UFloatingTextSubsystem::SpawnAboveMine(this, TEXT("🪤 TRIPWIRE ARMED"), FLinearColor(1.f, 0.6f, 0.2f));

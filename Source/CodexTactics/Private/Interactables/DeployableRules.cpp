@@ -90,6 +90,11 @@ int32 DeployableRules::PickRecoveryRecipient(const TArray<int32>& CarriedInOrder
 	return INDEX_NONE;
 }
 
+float DeployableRules::StepArmingCountdown(float SecondsLeft, float DeltaSeconds)
+{
+	return FMath::Max(0.f, SecondsLeft - FMath::Max(0.f, DeltaSeconds));
+}
+
 FText DeployableRules::GetDefusalStanceName(EOperativeStance Stance)
 {
 	switch (Stance)

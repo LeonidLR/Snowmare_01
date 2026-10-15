@@ -97,6 +97,12 @@ namespace DeployableRules
 	 */
 	CODEXTACTICS_API int32 PickRecoveryRecipient(const TArray<int32>& CarriedInOrder, int32 MaxCarried);
 
+	/**
+	 * One tick of a mine / tripwire arming countdown: never below 0 (an overshoot of one frame was saved as a negative
+	 * "arming_left" and loaded back as 0, so a save -> load round trip changed the world; cleanup day 2026-10-15).
+	 */
+	CODEXTACTICS_API float StepArmingCountdown(float SecondsLeft, float DeltaSeconds);
+
 	/** "Standing" / "Crouched" / "Prone" (Godot defusal stance names). */
 	CODEXTACTICS_API FText GetDefusalStanceName(EOperativeStance Stance);
 

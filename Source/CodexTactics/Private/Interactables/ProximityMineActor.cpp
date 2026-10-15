@@ -13,6 +13,7 @@
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/DeployableRules.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TripwireActor.h"
 #include "NavModifierComponent.h"
@@ -129,7 +130,7 @@ void AProximityMineActor::Tick(float DeltaSeconds)
 	}
 	if (ArmingTimeLeft > 0.f)
 	{
-		ArmingTimeLeft -= DeltaSeconds;
+		ArmingTimeLeft = DeployableRules::StepArmingCountdown(ArmingTimeLeft, DeltaSeconds); // never negative: saves round-trip exactly
 		if (ArmingTimeLeft <= 0.f)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("%s armed"), *GetName());
