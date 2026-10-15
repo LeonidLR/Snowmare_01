@@ -1,5 +1,7 @@
 #include "Interactables/InteractableActor.h"
 #include "Interactables/DeployableRules.h"
+#include "Interactables/TrapSpotRules.h"
+#include "Core/PlayerCommands.h"
 #include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Combat/KnockdownComponent.h"
@@ -126,6 +128,24 @@ void AInteractableActor::PostLine(const FText& Speaker, const FText& Text) const
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Messages->PostMessage(Speaker, Text);
+	}
+}
+
+void AInteractableActor::NotifyTrapSpotted(AOperativeCharacter* Spotter, bool bByPeek, const FText& TrapName)
+{
+	if (USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)
+	{
+		Squad->HoldForSpottedTrap(Spotter, TrapName);
+	}
+	GameplayEvents::Raise(this, GameplayEvents::TrapSpotted, Spotter);
+	if (bByPeek)
+	{
+		GameplayEvents::Raise(this, FName(*(GameplayEvents::TrapSpotted.ToString() + TEXT(".Peek"))), Spotter);
+	}
+	const FName GroupEvent = TrapSpotRules::GroupEventName(SpotEventTag);
+	if (!GroupEvent.IsNone())
+	{
+		GameplayEvents::Raise(this, GroupEvent, Spotter);
 	}
 }
 

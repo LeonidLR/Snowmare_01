@@ -358,6 +358,11 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName CombatEnded;
 	/** A hidden PMC tripwire was spotted (Subject = the spotter). */
 	extern CODEXTACTICS_API const FName TripwireSpotted;
+	/**
+	 * Rev 5h: any hidden trap (level mine, PMC tripwire) was spotted (Subject = the spotter). Also "TrapSpotted.Peek" when a corner
+	 * peek revealed it and "TrapSpotted.<SpotEventTag>" for a trap of a tagged group (AInteractableActor::SpotEventTag).
+	 */
+	extern CODEXTACTICS_API const FName TrapSpotted;
 	/** A tripwire was disarmed (Subject = the disarmer). */
 	extern CODEXTACTICS_API const FName TripwireDisarmed;
 	/** A tripwire's pin was pulled (Subject = whoever crossed it, none for a failed disarm). */

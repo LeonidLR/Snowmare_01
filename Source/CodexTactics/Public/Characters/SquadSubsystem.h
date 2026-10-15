@@ -98,6 +98,21 @@ public:
 	bool IsSoloMode() const { return bIsSoloMode; }
 
 	/**
+	 * Demo 01 rev 5h (game designer 2026-10-15, every level): a hidden trap was spotted (AInteractableActor::NotifyTrapSpotted).
+	 * Everyone stops (the Godot rule); exploring with the formation outside the AUTO mode the squad also switches to Solo
+	 * (TrapSpotRules::DecideSquadResponse): each operative holds, a box-selected group drops to the selected operative, so the
+	 * next order moves him alone - "Mine spotted - squad holding. Move them one by one." Regroup (B) as usual. A Solo entered
+	 * this way has no 25 m leash (a leash regroup would walk the formation through the traps) until the player regroups.
+	 */
+	void HoldForSpottedTrap(AOperativeCharacter* Spotter, const FText& TrapName);
+
+	/** Solo entered by a spotted trap (no leash; see HoldForSpottedTrap). */
+	bool IsTrapSolo() const { return bIsSoloMode && bTrapSolo; }
+
+	/** Save-game load: the trap Solo flag (after the Solo state itself is restored). */
+	void RestoreTrapSolo(bool bInTrapSolo) { bTrapSolo = bIsSoloMode && bInTrapSolo; }
+
+	/**
 	 * Commander Mode (Sprint 07-A): squad members fight on their own around their move-order anchors
 	 * (USquadAutonomySubsystem). Off by default: the classic fully manual control is unchanged.
 	 */
@@ -202,6 +217,9 @@ private:
 	UFUNCTION()
 	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);
 
+	/** EnterSoloMode body; bForTrap: the trap hold (no leash, operatives in cover keep their stance, the trap line instead). */
+	void EnterSoloModeInternal(bool bForTrap);
+
 	UFUNCTION()
 	void HandleTacticalPauseReleased();
 
@@ -236,6 +254,8 @@ private:
 	float SlotSwapCooldownRemaining = 0.f;
 	bool bFollowersHolding = false;
 	bool bIsSoloMode = false;
+	/** Rev 5h: the Solo was entered by a spotted trap (no leash). */
+	bool bTrapSolo = false;
 	bool bAutonomousSquadCombat = false;
 
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> PauseOrigins;

@@ -340,6 +340,7 @@ namespace GameplayEvents
 	const FName CombatStarted(TEXT("CombatStarted"));
 	const FName CombatEnded(TEXT("CombatEnded"));
 	const FName TripwireSpotted(TEXT("TripwireSpotted"));
+	const FName TrapSpotted(TEXT("TrapSpotted"));
 	const FName TripwireDisarmed(TEXT("TripwireDisarmed"));
 	const FName TripwireTriggered(TEXT("TripwireTriggered"));
 	const FName CoverEntered(TEXT("CoverEntered"));

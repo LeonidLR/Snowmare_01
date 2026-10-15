@@ -30,7 +30,7 @@
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
-    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke"
+    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -53,6 +53,7 @@
     "CombatMoveSmoke": { "knownFail": true },
     "MainMenuSmoke": { "map": "/Game/Maps/L_MainMenu" },
     "InteriorExitSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
+    "PeekMinesSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake" },
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" },
     "PatrolAmbushSmoke": { "map": "/Game/Maps/L_PatrolTest" },
     "VisionConeSmoke": { "map": "/Game/Maps/L_PatrolTest" },
@@ -82,7 +83,7 @@
       "globs": ["Source/**/Tutorial/**", "Source/**/Core/PlayerCommands*", "Source/**/Core/DemoModeSubsystem*", "Source/**/UI/TutorialOverlay*",
         "Source/**/Debug/TutorialSmoke*", "Content/Data/Tutorial/**"],
       "tests": ["CodexTactics.Tutorial", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": ["TutorialSmoke", "TutorialSaveSmoke", "CoverEventSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke"]
+      "smokes": ["TutorialSmoke", "TutorialSaveSmoke", "CoverEventSmoke", "SaveRoundTripSmoke", "ControlsScreenSmoke", "PMCTripwireSmoke", "PeekMinesSmoke"]
     },
     {
       "name": "sniper",
@@ -138,13 +139,20 @@
       "name": "deployables",
       "globs": ["Source/**/Interactables/Deployable*", "Source/**/Interactables/Barricade*", "Source/**/Interactables/Turret*", "Source/**/Interactables/ProximityMine*"],
       "tests": ["CodexTactics.Deployable"],
-      "smokes": ["DeployableSmoke", "TurretSmoke", "BarricadeContactSmoke", "TurnBasedDeploySmoke", "TurnBasedBarricadeSmoke", "PrepDeploySmoke", "BarricadeTurnContactSmoke"]
+      "smokes": ["DeployableSmoke", "TrapSoloSmoke", "TurretSmoke", "BarricadeContactSmoke", "TurnBasedDeploySmoke", "TurnBasedBarricadeSmoke", "PrepDeploySmoke", "BarricadeTurnContactSmoke"]
     },
     {
       "name": "tripwire",
       "globs": ["Source/**/Interactables/Tripwire*", "Source/**/Debug/PMCTripwireSmoke*", "Source/**/Debug/TripwireSmoke*"],
       "tests": ["CodexTactics.Interactables.Tripwire"],
-      "smokes": ["PMCTripwireSmoke", "TripwireSmoke", "DeployableSmoke", "SaveRoundTripSmoke"]
+      "smokes": ["PMCTripwireSmoke", "TripwireSmoke", "DeployableSmoke", "SaveRoundTripSmoke", "TrapSoloSmoke"]
+    },
+    {
+      "name": "trap-spotting",
+      "_comment": "Rev 5h (2026-10-15): a spotted hidden trap stops the squad + Solo; the corner peek reveals hidden traps; the A3 peek mines.",
+      "globs": ["Source/**/Interactables/TrapSpot*", "Source/**/Debug/TrapSoloSmoke*", "Source/**/Debug/PeekMinesSmoke*"],
+      "tests": ["CodexTactics.Interactables.TrapSpot", "CodexTactics.Tutorial"],
+      "smokes": ["TrapSoloSmoke", "PeekMinesSmoke", "PMCTripwireSmoke", "DeployableSmoke"]
     },
     {
       "name": "interactables-core",
@@ -241,13 +249,13 @@
       "name": "operative-movement-squad",
       "globs": ["Source/**/Characters/OperativeCharacter*", "Source/**/Characters/OperativeAIController*", "Source/**/Characters/OperativeMovement*", "Source/**/Characters/SquadFormation*", "Source/**/Characters/SquadSubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/FacingRules*", "Source/**/Characters/Vault*", "Source/**/Characters/RecruitSubsystem*"],
       "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault", "CodexTactics.Characters.OperativeUnits", "CodexTactics.Movement"],
-      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "RealtimeSelectSmoke"]
+      "smokes": ["MovementSmoke", "StanceSmoke", "FacingSmoke", "VaultSmoke", "GroupSelectSmoke", "SquadControlSmoke", "GuardSmoke", "LeftHandIKSmoke", "RecruitDeathSmoke", "SoloRejoinSmoke", "RealtimeSelectSmoke", "TrapSoloSmoke", "RoofCutawaySmoke"]
     },
     {
       "name": "operative-cover-units",
       "globs": ["Source/**/Characters/OperativeCharacterCover*", "Source/**/Characters/OperativeCharacterCornerAim*"],
       "tests": ["CodexTactics.Tactics.Cover", "CodexTactics.Characters.OperativeUnits"],
-      "smokes": ["CoverSmoke", "CoverEventSmoke", "CoverHugSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugMedicSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke", "TurnBasedAimSmoke"]
+      "smokes": ["CoverSmoke", "CoverEventSmoke", "CoverHugSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugMedicSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke", "TurnBasedAimSmoke", "PeekMinesSmoke"]
     },
     {
       "name": "operative-combat-units",
@@ -347,9 +355,9 @@
     },
     {
       "name": "camera",
-      "globs": ["Source/**/Camera/**", "Source/**/Debug/InteriorExitSmoke*"],
+      "globs": ["Source/**/Camera/**", "Source/**/Debug/InteriorExitSmoke*", "Source/**/Debug/RoofCutawaySmoke*"],
       "tests": ["CodexTactics.Camera", "CodexTactics.GameFlow.Phases"],
-      "smokes": ["CameraZoneSmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke", "InteriorExitSmoke"]
+      "smokes": ["CameraZoneSmoke", "RoofCutawaySmoke", "HordeIntroSmoke", "CameraZoneModeSmoke", "TurnBasedCameraSmoke", "SilhouetteSmoke", "DeathCamSmoke", "InteriorExitSmoke"]
     },
     {
       "name": "death-cinematic",
@@ -415,7 +423,7 @@
       "name": "maps-and-content",
       "globs": ["Content/Maps/**"],
       "tests": [],
-      "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "CameraZoneSmoke", "QuestChainSmoke"]
+      "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "CameraZoneSmoke", "QuestChainSmoke", "PeekMinesSmoke", "InteriorExitSmoke"]
     },
     {
       "name": "no-verification",

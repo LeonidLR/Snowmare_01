@@ -22,9 +22,13 @@ Modes (env CODEX_LAYOUT_MODE):
   build (default)  editor commandlet: duplicate the source map to the target if the target does not exist yet
                    (CODEX_LAYOUT_FRESH=1 deletes the target first), place the layout, save, dump before / after.
   dump             editor commandlet: dump the target (or CODEX_LAYOUT_TARGET) to Saved/LayoutDumps.
-  additive         editor commandlet (rev 5d, the user edits the copy by hand): load the EXISTING target, delete only the
-                   AutoLayout_Demo01_5d actors, apply EDITS_5D, place the rev 5d section again; saved only when something
-                   changed (no fresh copy, no reset of anything else). Report: Saved/Logs/Demo01Layout5d.txt.
+  additive         editor commandlet (rev 5d, the user edits the copy by hand): load the EXISTING target and, for each section
+                   named in CODEX_LAYOUT_SECTIONS (default "5h" = the newest only; "5d,5h" = both), delete only that section's
+                   tagged actors (AutoLayout_Demo01_5d / AutoLayout_Demo01_5h), apply its explicit edits (EDITS_5D for 5d) and
+                   place it again; saved only when something changed (no fresh copy, no reset of anything else).
+                   Report: Saved/Logs/Demo01Layout<sections>.txt (e.g. Demo01Layout5h.txt).
+                   Rev 5h (2026-10-15): the A3 corner-peek mines - two hidden mines (SpotEventTag A3PeekMines) beyond the
+                   outer corner of the first high wall of the A3 cover field + the marker A3_peek at that corner.
   verify           in game (-game -nullrhi): volume ids vs demo_01_steps.json, nav paths along the critical path, the bridge
                    as the only crossing, the fence (standing path refused, prone path through), actors on the ground.
                    Result: Saved/Logs/Demo01LayoutVerify.txt ("RESULT: PASS / FAIL").
@@ -70,6 +74,14 @@ FOLDER_5D = "AutoLayout_Demo01_5d"
 EDITS_5D = [
     ("hut_crate_heat_packs", "the hut's ALootCrateActor (inside the hut's Shelter camera zone): Contents.HeatPacks = 3 (nothing else)"),
 ]
+# Rev 5h (2026-10-15, game designer play-test): the corner-peek lesson's mines. Only new actors (no edits of pre-existing ones).
+TAG_5H = "AutoLayout_Demo01_5h"
+FOLDER_5H = "AutoLayout_Demo01_5h"
+PEEK_TAG = "A3PeekMines"          # AInteractableActor::SpotEventTag of the two mines (tutorial stat traps_spotted.A3PeekMines)
+PEEK_SPOT_RANGE_CM = 1200.0       # FTrapPeekSpotConfig defaults (AOperativeCharacter::PeekSpotConfig)
+PEEK_HALF_ANGLE_DEG = 30.0
+CORNER_AIM_OUTWARD_DEG = 100.0    # AOperativeCharacter::CornerAimOutwardDeg
+PROXIMITY_SPOT_MAX_CM = 600.0     # mine spot range 4.5 m + the Medic-Sapper's 1.5 m
 
 # §10.1 re-ids of the user's A1 volumes (they belong to the A3 approach now).
 RENAMES = {
@@ -979,10 +991,21 @@ def build_hut_entry(p, f, approach_from, hut_anchor, want_volume, want_marker):
                                                                                  "high" if not high_is_right else "low"))
 
 
+def selected_sections():
+    """CODEX_LAYOUT_SECTIONS ("5h" by default: only the newest section; "5d,5h" re-places both)."""
+    names = [n.strip() for n in os.environ.get("CODEX_LAYOUT_SECTIONS", "5h").split(",") if n.strip()]
+    return [n for n in names if n in SECTIONS]
+
+
 def additive():
-    """Rev 5d ADDITIVE section on the user's latest review copy (TAG_5D actors + EDITS_5D only)."""
+    """ADDITIVE sections on the user's latest map: per selected section only its tagged actors (+ its explicit edits)."""
     lib = unreal.EditorAssetLibrary
     level_editor = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+    sections = selected_sections()
+    report("additive sections: %s" % sections)
+    if not sections:
+        report("ERROR: no known section in CODEX_LAYOUT_SECTIONS=%r (known: %s)" % (os.environ.get("CODEX_LAYOUT_SECTIONS"), sorted(SECTIONS)))
+        return
     if not lib.does_asset_exist(TARGET_MAP):
         report("ERROR: %s does not exist (the additive mode never makes a copy)" % TARGET_MAP)
         return
@@ -990,66 +1013,80 @@ def additive():
         report("ERROR: could not load " + TARGET_MAP)
         return
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    before = dump(TARGET_MAP, "%s_5d_before_%s.json" % (TARGET_MAP.split("/")[-1], stamp))
-    p = Placer(TAG_5D, FOLDER_5D)
-    removed = 0
-    for a in p.actors.get_all_level_actors():
-        if TAG_5D in [str(t) for t in a.tags]:
-            p.actors.destroy_actor(a)
-            removed += 1
-    report("removed %d old %s actors (nothing else is ever deleted)" % (removed, TAG_5D))
-    p.collect_ground()
-    changes = removed
-    anchors = find_anchors(p.actors.get_all_level_actors())
+    suffix = "".join(sections)
+    before = dump(TARGET_MAP, "%s_%s_before_%s.json" % (TARGET_MAP.split("/")[-1], suffix, stamp))
+    tags = [SECTIONS[name]["tag"] for name in sections]
+    changes = 0
+    placed = 0
+    tables = {}
+    for name in sections:
+        section = SECTIONS[name]
+        p = Placer(section["tag"], section["folder"])
+        removed = 0
+        for a in p.actors.get_all_level_actors():
+            if section["tag"] in [str(t) for t in a.tags]:
+                p.actors.destroy_actor(a)
+                removed += 1
+        report("[%s] removed %d old %s actors (nothing else is ever deleted)" % (name, removed, section["tag"]))
+        p.collect_ground()
+        changes += removed
+        anchors = find_anchors(p.actors.get_all_level_actors())
+        for edit in section["edits"]:
+            changes += edit(p, anchors)
+        for build_section in section["builders"]:
+            build_section(p, anchors)
+        changes += len(p.placed)
+        placed += len(p.placed)
+        report("[%s] placed %d %s actors" % (name, len(p.placed), section["tag"]))
+        for w in p.warnings:
+            report("REVIEW: " + w)
+        tables[name] = {"table": p.table, "warnings": p.warnings}
 
-    # ---- EDITS_5D: the minimal edits of pre-existing actors -------------------------------------------------------
-    hut = anchors["hut"]
-    if hut is None:
-        p.warnings.append("edit hut_crate_heat_packs: no hut crate found (a LootCrateActor inside a Shelter camera zone) - not edited, review")
-    else:
-        crate = hut["crate"]
-        contents = crate.get_editor_property("contents")
-        old = contents.get_editor_property("heat_packs")
-        if old != 3:
-            contents.set_editor_property("heat_packs", 3)
-            crate.set_editor_property("contents", contents)
-            changes += 1
-            report("EDIT hut_crate_heat_packs: %s (%s) Contents.HeatPacks %s -> 3" % (crate.get_actor_label(), crate.get_name(), old))
-        else:
-            report("EDIT hut_crate_heat_packs: %s (%s) already holds Heat Packs 3 - unchanged" % (crate.get_actor_label(), crate.get_name()))
-
-    # ---- rev 5d sections (new actors, tag AutoLayout_Demo01_5d) ----------------------------------------------------
-    for build_section in SECTIONS_5D:
-        build_section(p, anchors)
-    changes += len(p.placed)
-
+    actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     if changes == 0:
         report("nothing to change: the map is NOT saved")
     else:
         # Saved navmesh actors stay empty at runtime when saved from a commandlet (HANDOFF section 2): generated data, not user content.
-        navmeshes = [a for a in p.actors.get_all_level_actors() if isinstance(a, unreal.RecastNavMesh)]
+        navmeshes = [a for a in actors.get_all_level_actors() if isinstance(a, unreal.RecastNavMesh)]
         for a in navmeshes:
-            p.actors.destroy_actor(a)
+            actors.destroy_actor(a)
         report("destroyed %d generated RecastNavMesh actors (rebuilt at load, RuntimeGeneration=Dynamic)" % len(navmeshes))
         report("saved=%s" % level_editor.save_current_level())
-    report("placed %d %s actors" % (len(p.placed), TAG_5D))
-    for w in p.warnings:
-        report("REVIEW: " + w)
+    report("placed %d actors in all (%s)" % (placed, ", ".join(tags)))
     os.makedirs(SAVED + "LayoutDumps", exist_ok=True)
-    with open(SAVED + "LayoutDumps/demo01_autolayout_5d_table.json", "w", encoding="utf-8") as f:
-        json.dump({"table": p.table, "warnings": p.warnings}, f, indent=1, ensure_ascii=False)
-    after = dump(TARGET_MAP, "%s_5d_after_%s.json" % (TARGET_MAP.split("/")[-1], stamp))
-    # Proof that nothing pre-existing moved: every actor of the "before" dump (but the 5d ones / the generated navmesh) is still
-    # there with the same transform.
+    for name, table in tables.items():
+        with open(SAVED + "LayoutDumps/demo01_autolayout_%s_table.json" % name, "w", encoding="utf-8") as f:
+            json.dump(table, f, indent=1, ensure_ascii=False)
+    after = dump(TARGET_MAP, "%s_%s_after_%s.json" % (TARGET_MAP.split("/")[-1], suffix, stamp))
+    # Proof that nothing pre-existing moved: every actor of the "before" dump (but the re-placed sections / the generated navmesh)
+    # is still there with the same transform.
     now = {a["name"]: a for a in after["actors"]}
     moved = []
     for a in before["actors"]:
-        if TAG_5D in a["tags"] or a["class"].endswith("RecastNavMesh"):
+        if any(t in a["tags"] for t in tags) or a["class"].endswith("RecastNavMesh"):
             continue
         b = now.get(a["name"])
         if b is None or b["location"] != a["location"] or b["rotation"] != a["rotation"] or b["scale"] != a["scale"]:
             moved.append(a["label"])
     report("pre-existing actors moved / deleted: %d %s" % (len(moved), moved))
+
+
+def edit_hut_crate_heat_packs(p, anchors):
+    """EDITS_5D: the hut crate holds 3 heat packs (only that field). Returns the number of changes."""
+    hut = anchors["hut"]
+    if hut is None:
+        p.warnings.append("edit hut_crate_heat_packs: no hut crate found (a LootCrateActor inside a Shelter camera zone) - not edited, review")
+        return 0
+    crate = hut["crate"]
+    contents = crate.get_editor_property("contents")
+    old = contents.get_editor_property("heat_packs")
+    if old != 3:
+        contents.set_editor_property("heat_packs", 3)
+        crate.set_editor_property("contents", contents)
+        report("EDIT hut_crate_heat_packs: %s (%s) Contents.HeatPacks %s -> 3" % (crate.get_actor_label(), crate.get_name(), old))
+        return 1
+    report("EDIT hut_crate_heat_packs: %s (%s) already holds Heat Packs 3 - unchanged" % (crate.get_actor_label(), crate.get_name()))
+    return 0
 
 
 def build_ruin_5d(p, anchors):
@@ -1094,6 +1131,97 @@ def build_ruin_5d(p, anchors):
 
 # Rev 5d section builders: f(placer, anchors), each places only TAG_5D actors.
 SECTIONS_5D = [build_ruin_5d]
+
+
+def peek_wall_frame(actors):
+    """Rev 5h: the first high wall of the A3 cover field (the Cover_A3_*_High wall nearest VOL_A3_FIELD) and its frame: centre,
+    half sizes, the unit vectors towards the approach (the field entrance side), beyond it, and along it towards its OUTER end
+    (away from the field's lane). None when the field volume / wall is missing."""
+    field = next((a for a in actors if is_class(a, "TutorialTriggerVolume") and effective_volume_id(a) == "VOL_A3_FIELD"), None)
+    walls = [a for a in actors if isinstance(a, unreal.StaticMeshActor) and a.get_actor_label().startswith("Cover_A3_")
+             and a.get_actor_label().endswith("High")]
+    if field is None or not walls:
+        return None
+    fl = field.get_actor_location()
+    wall = min(walls, key=lambda a: math.hypot(a.get_actor_location().x - fl.x, a.get_actor_location().y - fl.y))
+    o, e = wall.get_actor_bounds(False)
+    if e.y > e.x:  # the wall runs along Y, faces X
+        approach = (math.copysign(1.0, fl.x - o.x), 0.0)
+        outer = (0.0, math.copysign(1.0, o.y - fl.y) if abs(o.y - fl.y) > 1 else 1.0)
+        half_long, half_thick = e.y, e.x
+    else:
+        approach = (0.0, math.copysign(1.0, fl.y - o.y))
+        outer = (math.copysign(1.0, o.x - fl.x) if abs(o.x - fl.x) > 1 else 1.0, 0.0)
+        half_long, half_thick = e.x, e.y
+    beyond = (-approach[0], -approach[1])
+    return {"wall": wall, "o": o, "e": e, "approach": approach, "beyond": beyond, "outer": outer,
+            "half_long": half_long, "half_thick": half_thick, "field": fl}
+
+
+def peek_points(frame):
+    """The marker spot (on the approach face at the outer end), the two mine spots beyond the corner, the corner point a peek
+    looks from (the lean-out muzzle ~60 cm past the end) and the corner-aim direction (CoverFacingRules::CornerAimDirection:
+    100 deg outward from along the wall, towards beyond it)."""
+    o, ap, be, ou = frame["o"], frame["approach"], frame["beyond"], frame["outer"]
+    hl, ht = frame["half_long"], frame["half_thick"]
+
+    def at(a_off, o_off):  # a_off along "approach" (negative = beyond), o_off along "outer", from the wall centre
+        return (o.x + ap[0] * a_off + ou[0] * o_off, o.y + ap[1] * a_off + ou[1] * o_off)
+
+    marker = at(ht + 55.0, hl - 60.0)
+    mines = [at(-800.0, 200.0), at(-950.0, -50.0)]
+    corner = at(ht + 45.0, hl + 60.0)
+    rad = math.radians(CORNER_AIM_OUTWARD_DEG)
+    aim = (ou[0] * math.cos(rad) + be[0] * math.sin(rad), ou[1] * math.cos(rad) + be[1] * math.sin(rad))
+    return {"marker": marker, "mines": mines, "corner": corner, "aim": aim}
+
+
+def approach_face_points(frame, out_cm=50.0, step_cm=25.0):
+    """Points along the wall's approach face, out_cm in front of it (where an operative in cover stands)."""
+    o, ap, ou = frame["o"], frame["approach"], frame["outer"]
+    n = int(frame["half_long"] * 2 // step_cm) + 1
+    pts = []
+    for k in range(n + 1):
+        off = -frame["half_long"] + k * (2 * frame["half_long"] / max(1, n))
+        pts.append((o.x + ap[0] * (frame["half_thick"] + out_cm) + ou[0] * off, o.y + ap[1] * (frame["half_thick"] + out_cm) + ou[1] * off))
+    return pts
+
+
+def build_peek_mines_5h(p, anchors):
+    """Rev 5h A3 corner-peek lesson (game designer 2026-10-15): two hidden mines beyond the OUTER corner of the first high wall of
+    the cover field - out of the proximity spot range (4.5 m, Medic-Sapper 6 m) from the wall and the lane, inside the peek sight
+    cone (12 m, 60 deg) round that corner, right where the squad would bound next - and the marker A3_peek at that corner (shown
+    while the card "Peek around the corner and check what's ahead" is up). Only TAG_5H actors."""
+    actors = [a for a in p.actors.get_all_level_actors() if TAG_5H not in [str(t) for t in a.tags]]
+    frame = peek_wall_frame(actors)
+    if frame is None:
+        p.warnings.append("peek mines: no VOL_A3_FIELD / Cover_A3_*_High wall in the map - not placed, review")
+        return
+    pts = peek_points(frame)
+    wall = frame["wall"]
+    anchor = "beyond the outer corner of %s (the first high wall of the A3 cover field)" % wall.get_actor_label()
+    report("peek wall %s centre (%.0f, %.0f) half (%.0f, %.0f); approach %s, outer end %s"
+           % (wall.get_actor_label(), frame["o"].x, frame["o"].y, frame["e"].x, frame["e"].y, frame["approach"], frame["outer"]))
+    p.marker("A3_peek", pts["marker"][0], pts["marker"][1], 70, anchor="the outer corner of %s, on the approach face" % wall.get_actor_label())
+    face = approach_face_points(frame)
+    for i, (x, y) in enumerate(pts["mines"]):
+        mine = p.thing(unreal.ProximityMineActor, "PMC_Mine_A3_Peek_%d" % (i + 1), x, y, 30, 0, "PeekMines", anchor,
+                       "hidden, damage 80, SpotEventTag " + PEEK_TAG)
+        mine.set_editor_property("explosion_damage", 80.0)
+        mine.set_editor_property("placed_by_squad", False)
+        mine.set_editor_property("spot_event_tag", PEEK_TAG)
+        near_face = min(math.hypot(x - fx, y - fy) for fx, fy in face)
+        report("peek mine %d at (%.0f, %.0f): %.1f m from the wall's approach face, %.1f m from the corner"
+               % (i + 1, x, y, near_face / 100, math.hypot(x - pts["corner"][0], y - pts["corner"][1]) / 100))
+        if near_face < PROXIMITY_SPOT_MAX_CM + 50:
+            p.warnings.append("peek mine %d is only %.1f m from the wall's face (the Medic-Sapper spots at 6 m) - review" % (i + 1, near_face / 100))
+
+
+# The additive sections: name -> tag / folder / explicit edits of pre-existing actors / builders (CODEX_LAYOUT_SECTIONS).
+SECTIONS = {
+    "5d": {"tag": TAG_5D, "folder": FOLDER_5D, "edits": [edit_hut_crate_heat_packs], "builders": SECTIONS_5D},
+    "5h": {"tag": TAG_5H, "folder": FOLDER_5H, "edits": [], "builders": [build_peek_mines_5h]},
+}
 
 
 def set_contents(crate, values):
@@ -1243,6 +1371,7 @@ def verify(game):
                                                                                                   length / 100))
     verify_hut_entry(game, by_id, centre, no_crawl)
     game.ruin = verify_ruin(game, by_id, centre, no_crawl)
+    verify_peek_mines(game, centre, no_crawl)
     # The crack: the path from the west bank to the far end crosses on the bridge only. The crack line = where the ground
     # trace finds nothing (a floor gap) 4 m beside the planks; a graybox crack blocks the traces too, so fall back to the span.
     holes = []
@@ -1312,7 +1441,7 @@ def verify(game):
     checked = 0
     crates = game.all_of(unreal.LootCrateActor)
     for a in game.all_of(unreal.Actor):
-        if TAG not in [str(t) for t in a.tags] and TAG_5D not in [str(t) for t in a.tags]:
+        if TAG not in [str(t) for t in a.tags] and TAG_5D not in [str(t) for t in a.tags] and TAG_5H not in [str(t) for t in a.tags]:
             continue
         cls = a.get_class().get_name()
         if cls.startswith(("NavMeshBoundsVolume", "CameraActor", "StaticMeshActor", "CameraZoneVolume", "BridgeCrossingVolume")):
@@ -1385,6 +1514,52 @@ def verify_ruin(game, by_id, centre, no_crawl):
     game.check(valid and not partial and length <= straight * 1.15 + 50 and ok_gap,
                "ruin: push path barrel -> inside through the wide gap: valid=%s partial=%s %.1f m (straight %.1f m)" % (valid, partial, length / 100, straight / 100))
     return {"barrel": barrel, "box": (rc, re), "inside": inside, "camp": camp}
+
+
+def verify_peek_mines(game, centre, no_crawl):
+    """Rev 5h: the A3 peek mines - two hidden mines tagged A3PeekMines; the marker A3_peek at a HIGH cover slot of the wall; no
+    mine within the proximity spot range (6 m) of the wall's approach face or the slot; both inside the peek sight cone of that
+    corner (12 m, 60 deg) with a clear line of sight; the slot reachable from the field entrance."""
+    mines = [m for m in game.all_of(unreal.ProximityMineActor) if name_str(m.get_editor_property("spot_event_tag")) == PEEK_TAG]
+    markers = [m for m in game.all_of(unreal.TutorialMarkerActor) if name_str(m.get_editor_property("step_id")) == "A3_peek"]
+    game.check(len(mines) == 2 and all(not m.is_revealed() for m in mines), "peek: two hidden mines tagged %s (%d)" % (PEEK_TAG, len(mines)))
+    game.check(len(markers) == 1, "peek: the marker A3_peek exists once (%d)" % len(markers))
+    frame = peek_wall_frame(game.all_of(unreal.Actor))
+    if len(mines) != 2 or len(markers) != 1 or frame is None:
+        game.check(False, "peek: wall / mines / marker missing")
+        return
+    pts = peek_points(frame)
+    ml = markers[0].get_actor_location()
+    z, _ = game.ground(ml.x, ml.y, [markers[0]], 200.0)
+    gz = z if z is not None else 0.0
+    ap = frame["approach"]
+    face = unreal.Vector(ml.x - ap[0] * 50, ml.y - ap[1] * 50, gz + 90)
+    res = unreal.CoverQueryLibrary.find_cover_slot_at(game.world, face, unreal.Vector(-ap[0], -ap[1], 0))
+    ok, slot = (res[0], res[1]) if isinstance(res, tuple) else (res is not None, res)
+    height = unreal.CoverQueryLibrary.get_cover_height_name(slot) if ok and slot is not None else "None"
+    game.check(ok and height == "High", "peek: HIGH cover slot at the marker (%s)" % height)
+    sl = slot_field(slot, "world_location") if ok and slot is not None else ml
+    entrance = centre("VOL_A3_FIELD")
+    valid, _, length, partial = game.path(entrance, unreal.Vector(sl.x, sl.y, gz + 60), no_crawl)
+    game.check(valid and not partial, "peek: VOL_A3_FIELD -> the cover slot (standing): valid=%s partial=%s %.0f m" % (valid, partial, length / 100))
+    corner = unreal.Vector(pts["corner"][0], pts["corner"][1], gz + 140)
+    aim = pts["aim"]
+    face_pts = approach_face_points(frame)
+    for m in mines:
+        l = m.get_actor_location()
+        d_slot = math.hypot(l.x - sl.x, l.y - sl.y)
+        d_face = min(math.hypot(l.x - fx, l.y - fy) for fx, fy in face_pts)
+        game.check(d_slot > PROXIMITY_SPOT_MAX_CM and d_face > PROXIMITY_SPOT_MAX_CM,
+                   "peek: %s out of the proximity spot range from cover (slot %.1f m, wall face %.1f m > 6 m)" % (m.get_name(), d_slot / 100, d_face / 100))
+        dx, dy = l.x - corner.x, l.y - corner.y
+        dist = math.hypot(dx, dy)
+        ang = math.degrees(math.acos(max(-1.0, min(1.0, (dx * aim[0] + dy * aim[1]) / max(dist, 1.0)))))
+        hit = unreal.SystemLibrary.line_trace_single(game.world, corner, unreal.Vector(l.x, l.y, l.z + 20), unreal.TraceTypeQuery.TRACE_TYPE_QUERY1,
+                                                     False, [m], unreal.DrawDebugTrace.NONE, True)
+        blocked = bool(hit.to_tuple()[0]) if hit is not None else False
+        game.check(dist <= PEEK_SPOT_RANGE_CM and ang <= PEEK_HALF_ANGLE_DEG and not blocked,
+                   "peek: %s inside the peek sight cone of the corner (%.1f m <= 12 m, %.0f deg <= 30 deg, line of sight %s)"
+                   % (m.get_name(), dist / 100, ang, "blocked" if blocked else "clear"))
 
 
 def start_ruin_push(game, ruin):
@@ -1851,7 +2026,7 @@ def main():
         import traceback
         report("EXCEPTION: " + repr(exc))
         report(traceback.format_exc())
-    flush_report("Demo01Layout5d.txt" if mode == "additive" else "Demo01Layout.txt")
+    flush_report(("Demo01Layout%s.txt" % "".join(selected_sections())) if mode == "additive" else "Demo01Layout.txt")
 
 
 main()

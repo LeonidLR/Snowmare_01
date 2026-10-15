@@ -460,11 +460,11 @@
       "complete": { "event": "CoverEntered", "count": 2, "distinct_operatives": true, "timeout_s": 45 }
     },
     {
-      "_comment": "Optional corner-peek card (rev 5c, user request 2026-10-13; low cover too since rev 5e): in cover a click on the END of the wall sends the operative to that corner, leaning out in the corner aim until the next order (command Cover.CornerPeek, event CornerPeek). Done when one does it, or after 45 s.",
+      "_comment": "Corner peek card (rev 5c; low cover too since rev 5e). Rev 5h (game designer 2026-10-15): the peek is meaningful - two hidden mines (SpotEventTag A3PeekMines, map section AutoLayout_Demo01_5h) lie beyond the corner of the first high wall (marker A3_peek); leaning out round a corner spots hidden traps in the peek sight cone (AOperativeCharacter::PeekSpotConfig). Done when those mines are known (condition stat traps_spotted.A3PeekMines: also precredited when they were found before the card), or after 90 s. The mine card A3_mine (MineSpotted) follows: disarm or go round.",
       "id": "A3_peek", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_PEEK",
       "keys": ["Cover.CornerPeek"],
       "trigger": { "type": "after_step", "step": "A3_squad_card", "delay_s": 1 },
-      "complete": { "event": "CornerPeek", "timeout_s": 45 }
+      "complete": { "condition": [ { "stat": "traps_spotted.A3PeekMines", "at_least": 1 } ], "timeout_s": 90 }
     },
     {
       "id": "A3_bound", "beat": "A3", "kind": "objective", "text_id": "OBJ_A6_BOUND",
@@ -480,15 +480,15 @@
       "complete": { "commands": ["Trap.DisarmMine", "Attack.TargetedShot"], "timeout_s": 40 }
     },
     {
-      "_comment": "Rev 5e (user bug 2026-10-14: 'the tripwire cannot be disarmed'): the disarm stayed LOCKED until the wire card SHOWED, and the card queued behind the cover / peek / mine cards of the field for minutes (the 'Not yet' line comes once per family: later refusals were silent). Now beat A3 (VOL_A3_APPROACH) unlocks Trap.DisarmMine / Trap.DisarmTripwire / Attack.TargetedShot, and a feed line says how at the moment a wire / mine is spotted (a feed never waits for a slot). The cards stay as the longer explanation.",
+      "_comment": "Rev 5e (user bug 2026-10-14: 'the tripwire cannot be disarmed'): the disarm stayed LOCKED until the wire card SHOWED, and the card queued behind the cover / peek / mine cards of the field for minutes (the 'Not yet' line comes once per family: later refusals were silent). Now beat A3 (VOL_A3_APPROACH) unlocks Trap.DisarmMine / Trap.DisarmTripwire / Attack.TargetedShot, and a feed line says how at the moment a wire / mine is spotted (a feed never waits for a slot). The cards stay as the longer explanation. Rev 5h: a spotted trap switches the squad to Solo, so these lines also free Squad.Solo / Squad.Regroup (B) in case a trap is met before the hut lesson.",
       "id": "A3_wire_spotted", "beat": "A3", "kind": "feed", "text_id": "TUT_A3_WIRE_SPOTTED",
-      "unlock": ["Trap.DisarmTripwire"],
+      "unlock": ["Trap.DisarmTripwire", "Squad.Solo", "Squad.Regroup"],
       "trigger": { "type": "event", "event": "TripwireSpotted" },
       "lines": [ { "speaker": "TRAINING", "text_id": "TUT_A3_WIRE_SPOTTED" } ]
     },
     {
       "id": "A3_mine_spotted", "beat": "A3", "kind": "feed", "text_id": "TUT_A3_MINE_SPOTTED",
-      "unlock": ["Trap.DisarmMine", "Attack.TargetedShot"],
+      "unlock": ["Trap.DisarmMine", "Attack.TargetedShot", "Squad.Solo", "Squad.Regroup"],
       "trigger": { "type": "event", "event": "MineSpotted" },
       "lines": [ { "speaker": "TRAINING", "text_id": "TUT_A3_MINE_SPOTTED" } ]
     },

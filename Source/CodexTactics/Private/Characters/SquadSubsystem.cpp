@@ -5,6 +5,7 @@
 #include "Characters/SquadOrderRules.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/RelocationSubsystem.h"
+#include "Interactables/TrapSpotRules.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -365,6 +366,11 @@ bool USquadSubsystem::ToggleAutonomousSquadCombat()
 
 void USquadSubsystem::EnterSoloMode()
 {
+	EnterSoloModeInternal(false);
+}
+
+void USquadSubsystem::EnterSoloModeInternal(bool bForTrap)
+{
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	if (!LeaderRef)
 	{
@@ -372,14 +378,15 @@ void USquadSubsystem::EnterSoloMode()
 	}
 
 	bIsSoloMode = true;
+	bTrapSolo = bForTrap;
 	SetFollowersHolding(true);
 
 	// Followers crouch when holding in solo mode (Godot solo_wait_stance = 1 / CROUCHING); one still on his own order walks on in
-	// his stance (rev 5g).
+	// his stance (rev 5g). Rev 5h: the trap hold leaves an operative in cover as he is (a crouch would drop a corner peek's pose).
 	for (FFollowerState& Follower : Followers)
 	{
 		if (AOperativeCharacter* Operative = Follower.Operative.Get();
-			Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)))
+			Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)) && !(bForTrap && Operative->bInCover))
 		{
 			Operative->SetStance(EOperativeStance::Crouching);
 			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🛡️ GUARD: CROUCHED"), FLinearColor(0.3f, 0.9f, 0.4f));
@@ -387,11 +394,48 @@ void USquadSubsystem::EnterSoloMode()
 	}
 	UFloatingTextSubsystem::SpawnAboveOperative(LeaderRef, TEXT("👤 SOLO MODE [B]"), FLinearColor(0.2f, 0.9f, 1.f));
 
-	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	if (UGameMessageSubsystem* Messages = bForTrap ? nullptr : GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Messages->PostMessage(LeaderRef->DisplayName,
 			FText::Format(LOCTEXT("SoloModeOn", "👤 [SOLO MODE: ON] {0} scouts alone (max 25 m). Teammates hold their positions, crouched!"),
 				LeaderRef->DisplayName));
+	}
+}
+
+void USquadSubsystem::HoldForSpottedTrap(AOperativeCharacter* Spotter, const FText& TrapName)
+{
+	// Godot _on_mine_spotted: the whole squad stops.
+	int32 Living = 0;
+	for (AOperativeCharacter* Member : GetMembers())
+	{
+		Member->StopOperative();
+		Living += Member->HealthComponent && Member->HealthComponent->IsAlive() ? 1 : 0;
+	}
+	const ETrapSpotResponse Response = TrapSpotRules::DecideSquadResponse(IsFormationActive(), bAutonomousSquadCombat, Living);
+	UE_LOG(LogCodexTactics, Display, TEXT("Trap spotted (%s) by %s: squad holds%s"), *TrapName.ToString(),
+		Spotter ? *Spotter->DisplayName.ToString() : TEXT("-"), Response == ETrapSpotResponse::HoldAndSolo ? TEXT(", Solo on")
+		: bAutonomousSquadCombat ? TEXT(" (AUTO: paths go round it, no Solo)") : TEXT(" (no Solo)"));
+	if (Response != ETrapSpotResponse::HoldAndSolo)
+	{
+		return;
+	}
+	AOperativeCharacter* LeaderRef = Leader.Get();
+	if (LeaderRef && HasMultiSelection())
+	{
+		SetSelectedGroup({ LeaderRef }, false); // the next order goes to the selected operative alone
+	}
+	if (!bIsSoloMode)
+	{
+		EnterSoloModeInternal(true);
+	}
+	else
+	{
+		bTrapSolo = true; // already scouting alone: the leash is off now as well
+	}
+	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	{
+		Messages->PostMessage(LOCTEXT("TrapSpeaker", "SQUAD"),
+			FText::Format(LOCTEXT("TrapHold", "{0} spotted - squad holding. Move them one by one (B regroups)."), TrapName));
 	}
 }
 
@@ -403,6 +447,7 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 	}
 
 	bIsSoloMode = false;
+	bTrapSolo = false;
 	SetFollowersHolding(false);
 
 	AOperativeCharacter* LeaderRef = Leader.Get();
@@ -709,7 +754,7 @@ void USquadSubsystem::Tick(float DeltaTime)
 		return;
 	}
 
-	if (bIsSoloMode)
+	if (bIsSoloMode && !bTrapSolo) // rev 5h: no leash after a spotted trap (a regroup would walk the formation through it)
 	{
 		float MaxDist = 0.f;
 		for (const FFollowerState& Follower : Followers)

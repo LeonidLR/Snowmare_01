@@ -8,7 +8,8 @@
  * Anti-personnel mine. While armed (bTrapped) it blows up when an enemy or an operative (except the one walking up
  * to defuse it) comes within TriggerRadius: ExplosionDamage within ExplosionRadius to enemies, 75 % to operatives.
  * Mines placed by the squad arm after ArmingDelay. Mines lying on the level are hidden under the snow until an
- * operative spots them (4.5 m, sapper +1.5 m): the squad stops and reports it; pushed objects are dropped.
+ * operative spots them (4.5 m, sapper +1.5 m) or a corner peek reveals them (rev 5h): the squad stops (and switches to Solo,
+ * USquadSubsystem::HoldForSpottedTrap) and reports it; pushed objects are dropped.
  * Its collision box is the trigger area (not blocking), so operatives stop outside it to defuse.
  * Godot reference: Scenes/movements/deployables/mine.gd, player.gd `_check_for_hidden_mines` / `_on_mine_spotted`.
  */
@@ -25,6 +26,9 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void DetonateTrap(bool bByShot = false, const FText& InstigatorName = FText::GetEmpty()) override;
 	virtual ETrapFlavor GetTrapFlavor() const override { return ETrapFlavor::Mine; }
+	/** Rev 5h: armed, not revealed, not the squad's own friendly-safe mine. */
+	virtual bool IsHiddenTrap() const override;
+	virtual void RevealByPeek(AOperativeCharacter* Spotter) override;
 
 	/** Blows the mine up (Godot detonate). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Mine")
@@ -100,7 +104,8 @@ protected:
 private:
 	void UpdateVisuals();
 	void ScanForSpotters();
-	void HandleSpotted(AOperativeCharacter* Spotter);
+	/** Revealed + the squad's spot response; bByPeek: found by a corner peek (the spotter keeps his pose). */
+	void HandleSpotted(AOperativeCharacter* Spotter, bool bByPeek = false);
 	/** Adds / removes the known-trap nav area (revealed, live, not blown). */
 	void UpdateKnownTrapNav();
 

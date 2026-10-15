@@ -162,6 +162,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Tripwire")
 	void Reveal(AOperativeCharacter* Spotter = nullptr);
 
+	/** Rev 5h: a hostile wire laid and armed, not spotted yet. */
+	virtual bool IsHiddenTrap() const override;
+	virtual void RevealByPeek(AOperativeCharacter* Spotter) override;
+
 	/**
 	 * Rev 5e: the armed, spotted, not-preview wire whose band (TripwireRules::ClickSnapCm) contains Point (ground level, within
 	 * 1 m in height): a click there means the wire (discoverability - the wire is a thin bar). nullptr when none.
@@ -251,6 +255,9 @@ private:
 	/** Wide box the nav modifier reads (no blocking). */
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Tripwire")
 	TObjectPtr<UBoxComponent> NavBox;
+
+	/** Reveal: shown; with a Spotter the squad's spot response (bByPeek: found by a corner peek, the spotter keeps his pose). */
+	void RevealBy(AOperativeCharacter* Spotter, bool bByPeek);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNavModifierComponent> NavModifier;
