@@ -327,3 +327,44 @@ $env:CODEX_LAYOUT_MODE = "additive"; $env:CODEX_LAYOUT_SECTIONS = "5h"
 Get-Content "$p\Saved\Logs\Demo01Layout5h.txt"
 ```
 (a rerun deletes and re-places only the three `AutoLayout_Demo01_5h` actors; `CODEX_LAYOUT_SECTIONS=5d` re-places the ruin, `5d,5h` both).
+
+## 10. Rev 5i: the A3 lesson mines only in the green zone, found only by the peek (2026-10-15, additive section `5i`)
+
+The game designer's play-test (a marked screenshot): an operative in cover at a LOW wall of the field spotted a mine before the peek
+lesson (a crossed-out red disc) - the lesson order broke. **Which mine:** the rev 5 "shortcut" mines of the field, `PMC_Mine_A3_1`
+(19720, -2540) / `PMC_Mine_A3_2` (20220, -2440) (`AutoLayout_Demo01`, the straight line through the middle of the field) - 6-7 m
+from the cover slot of `Cover_A3_3_Low`, inside the Medic-Sapper's 6 m spot range (the two 5h peek mines lie 8.7 / 10.2 m from any
+cover). **The green zone** = beyond the peek corner of the first high wall (`Cover_A3_2_High`), in front of the next high wall
+(`Cover_A3_4_High`): the peek sight cone of that corner (12 m, 60 deg). Section **`5i`** (tag `AutoLayout_Demo01_5i` reserved;
+**no new actors, only explicit edits**, `EDITS_5I`):
+
+| Edit | Actor | Change |
+|---|---|---|
+| `field_mines_to_green_zone` | `PMC_Mine_A3_1` | (19720, -2540) -> **(19950, -3560)** (peek frame offset (-530, +270)); SpotEventTag `A3PeekMines`; **SpotRequiresStep `A3_peek`** |
+| `field_mines_to_green_zone` | `PMC_Mine_A3_2` | (20220, -2440) -> **(20100, -3330)** (peek frame offset (-680, +40)); SpotEventTag `A3PeekMines`; SpotRequiresStep `A3_peek` |
+| `peek_mines_require_step` | `PMC_Mine_A3_Peek_1` / `_2` (5h) | SpotRequiresStep `A3_peek` (the 5h builder now sets it too) |
+
+The places are computed from the peek wall's frame (`FIELD_MINE_FRAME_OFFSETS`), so a rerun on a map where the user moved the wall
+moves them with it. With the two 5h mines the four lesson mines form a small minefield 2-2.8 m apart (the trigger radius is 1.6 m)
+just beyond that corner, near the corner-aim axis: the in-game lean-out muzzle stands ~40 cm nearer the wall than the script's
+corner point, and a sight line steeper than ~0.24 towards the lane clips the wall's end (found by the smoke; the first two tries
+were blocked). **C++ (every level):** `AInteractableActor::SpotRequiresStep` - until that tutorial step has started, the trap is not
+spotted by proximity (only a corner peek reveals it); ignored with the tutorial off / skipped or on a level without that step
+(`TrapSpotRules::AllowsProximitySpot`); the peek's line of sight now ignores every hidden trap (a mine never hides another one).
+
+**Verification (2026-10-15, worktree):** additive run `Saved/Logs/Demo01Layout5i.txt` (backup before the first run:
+`Saved/Backups/lake_before_5i_20261015_1612/L_Demo01_A_FrozenLake.umap`, SHA256 `ee0eb221...`); "pre-existing actors moved /
+deleted: the two field mines (expected by the explicit edits)"; in-game verify `Saved/Logs/Demo01LayoutVerify.txt` **RESULT: PASS**
+(four hidden lesson mines tagged A3PeekMines, all waiting for A3_peek, **no other mine in the cover field**, each > 6 m from the peek
+wall's face / slot and inside the peek cone with a clear sight line); **PeekMinesSmoke PASS** (before the peek lesson an operative
+is put 3 m from every lesson mine and in front of every `Cover_A3_*` face - 13 probe points: nothing spotted; then the corner peek
+spots all four). Overhead still: **`Saved/Screenshots/a3_mines_green_zone.png`** (the green cone = the zone, red = the four mines,
+grey crosses = where the field mines were).
+
+**Rerun on the user's latest map** (back it up first; run with that checkout's editor closed):
+```powershell
+$env:CODEX_LAYOUT_MODE = "additive"; $env:CODEX_LAYOUT_SECTIONS = "5i"
+& "$ue\UnrealEditor-Cmd.exe" "$p\CodexTactics.uproject" -run=pythonscript "-script=$p\Scripts\Editor\build_demo01_lake_layout.py" -unattended -nullrhi -nosplash
+Get-Content "$p\Saved\Logs\Demo01Layout5i.txt"
+```
+(the C++ property `SpotRequiresStep` must be compiled into that checkout's editor first; `5h,5i` re-places the peek mines and then edits.)

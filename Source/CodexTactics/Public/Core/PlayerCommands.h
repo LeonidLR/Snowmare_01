@@ -280,6 +280,11 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName DialogueNext;
 	/** Enter held ~0.6 s / the SKIP button on the radio strip: the whole conversation ends as if it had played out. */
 	extern CODEXTACTICS_API const FName DialogueSkip;
+	/**
+	 * Rev 5i: SKIP TUTORIAL (the button at the mission start / the pause menu entry, after a Yes / No confirm): the tutorial is off for
+	 * this run, every lock and confinement is released. No hotkey; never locked.
+	 */
+	extern CODEXTACTICS_API const FName SkipTutorial;
 
 	/** Every command with its default key label (registry order = Controls screen order). */
 	CODEXTACTICS_API const TArray<FPlayerCommandInfo>& GetRegistry();

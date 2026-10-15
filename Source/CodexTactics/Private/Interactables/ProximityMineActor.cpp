@@ -210,9 +210,9 @@ void AProximityMineActor::ScanForSpotters()
 		return;
 	}
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-	if (!Squad || (bPlacedBySquad && !bFriendlyFire))
+	if (!Squad || (bPlacedBySquad && !bFriendlyFire) || !CanBeSpottedByProximity())
 	{
-		return;
+		return; // rev 5i: a lesson mine waits for its step (only a corner peek reveals it before)
 	}
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{

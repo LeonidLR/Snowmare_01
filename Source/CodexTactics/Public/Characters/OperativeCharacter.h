@@ -1580,8 +1580,12 @@ private:
 	void HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase);
 	/** The capsule's Pawn response before a knockdown (restored when he is up). */
 	TEnumAsByte<ECollisionResponse> KnockdownSavedPawnResponse = ECR_Block;
-	/** Pushes max speed and turn rate for the current state into CharacterMovement. */
-	EOperativeOrderResult RequestMove(const FVector& Destination);
+	/**
+	 * The one path request of every operative move. Rev 5i: under a tutorial confinement (UTutorialSubsystem) an own order whose
+	 * destination or path end lies outside the allowed area is refused (with the feed line); a formation move (bFormationMove) is
+	 * pulled into the holding area instead.
+	 */
+	EOperativeOrderResult RequestMove(const FVector& Destination, bool bFormationMove = false);
 	/** Resizes the capsule for the stance, keeping the feet in place and the skeletal mesh on the ground. */
 	void ApplyStanceCapsule();
 	/** Shows the placeholder only without a skeletal mesh. */

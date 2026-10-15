@@ -13,11 +13,14 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
+#include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
 #include "Rendering/DrawElements.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "UI/CodexButtonFocus.h"
 #include "UI/DialogueRules.h"
+#include "UI/Frontend/CodexUISubsystem.h"
 #include "Tutorial/TutorialMarkerActor.h"
 #include "Tutorial/TutorialSubsystem.h"
 
@@ -163,6 +166,15 @@ void UTutorialOverlayWidget::BuildDefaultLayout()
 	RadioSkipSlot->SetHorizontalAlignment(HAlign_Right);
 	RadioSkipSlot->SetPadding(FMargin(12.f, 0.f, 0.f, 0.f));
 
+	// Rev 5i: SKIP TUTORIAL, top right, while the tutorial is in its start beat (the pause menu entry stays available later).
+	TutorialSkipAllButton = MakeButton(WidgetTree, TEXT("TutorialSkipAllButton"), TEXT("TutorialSkipAllLabel"), LOCTEXT("SkipTutorial", "SKIP TUTORIAL"));
+	TutorialSkipAllButton->SetBackgroundColor(FLinearColor(0.45f, 0.28f, 0.05f, 0.95f));
+	TutorialSkipAllButton->SetVisibility(ESlateVisibility::Collapsed);
+	UOverlaySlot* SkipAllSlot = Root->AddChildToOverlay(TutorialSkipAllButton);
+	SkipAllSlot->SetHorizontalAlignment(HAlign_Right);
+	SkipAllSlot->SetVerticalAlignment(VAlign_Top);
+	SkipAllSlot->SetPadding(FMargin(0.f, 92.f, 18.f, 0.f));
+
 	// Lesson retry prompt: upper centre.
 	TutorialRetryPanel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("TutorialRetryPanel"));
 	TutorialRetryPanel->SetBrushColor(CardColor);
@@ -204,6 +216,10 @@ void UTutorialOverlayWidget::BindButtons()
 	if (TutorialContinueButton)
 	{
 		TutorialContinueButton->OnClicked.AddUniqueDynamic(this, &UTutorialOverlayWidget::HandleContinueClicked);
+	}
+	if (TutorialSkipAllButton)
+	{
+		TutorialSkipAllButton->OnClicked.AddUniqueDynamic(this, &UTutorialOverlayWidget::HandleSkipAllClicked);
 	}
 }
 
@@ -325,6 +341,10 @@ void UTutorialOverlayWidget::Refresh()
 			TutorialRetryButton->SetIsEnabled(Retry.bHasCheckpoint);
 		}
 	}
+	if (TutorialSkipAllButton)
+	{
+		TutorialSkipAllButton->SetVisibility(Tutorial && Tutorial->IsSkipOfferShown() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
 	UpdateEdgePointers();
 }
 
@@ -427,6 +447,48 @@ void UTutorialOverlayWidget::HandleContinueClicked()
 	{
 		Tutorial->DismissRetryPrompt();
 	}
+}
+
+void UTutorialOverlayWidget::HandleSkipAllClicked()
+{
+	RequestSkipTutorial();
+}
+
+void UTutorialOverlayWidget::RequestSkipTutorial()
+{
+	UWorld* World = GetWorld();
+	UTutorialSubsystem* Tutorial = World ? World->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	UCodexUISubsystem* UI = UCodexUISubsystem::Get(this);
+	if (!Tutorial || !UI || !Tutorial->IsTutorialActive())
+	{
+		return;
+	}
+	// A misclick must not cost the tutorial: Yes / No first, the world paused meanwhile (the squad does not walk on).
+	const bool bWasPaused = UGameplayStatics::IsGamePaused(World);
+	UGameplayStatics::SetGamePaused(World, true);
+	TWeakObjectPtr<UTutorialSubsystem> WeakTutorial(Tutorial);
+	TWeakObjectPtr<UWorld> WeakWorld(World);
+	UI->ShowConfirm(ECodexConfirmType::YesNo, LOCTEXT("SkipTutorialTitle", "SKIP TUTORIAL"), LOCTEXT("SkipTutorialMessage", "Skip the tutorial? All controls unlock."),
+		[WeakTutorial, WeakWorld, bWasPaused](ECodexConfirmResult Result)
+		{
+			if (UWorld* ResultWorld = WeakWorld.Get(); ResultWorld && !bWasPaused)
+			{
+				UGameplayStatics::SetGamePaused(ResultWorld, false);
+			}
+			if (Result == ECodexConfirmResult::Confirmed && WeakTutorial.IsValid())
+			{
+				WeakTutorial->SkipTutorial();
+			}
+			if (FSlateApplication::IsInitialized())
+			{
+				FSlateApplication::Get().SetAllUserFocusToGameViewport(); // the dialog's buttons must not keep the game keys
+			}
+		});
+}
+
+bool UTutorialOverlayWidget::IsSkipTutorialShown() const
+{
+	return TutorialSkipAllButton && TutorialSkipAllButton->GetVisibility() == ESlateVisibility::Visible;
 }
 
 bool UTutorialOverlayWidget::IsCardShown() const

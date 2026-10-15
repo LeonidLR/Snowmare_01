@@ -163,15 +163,23 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	TestNotNull(TEXT("solo card"), Data.FindStep(TEXT("A1_solo")));
 	TestNotNull(TEXT("barrel push card"), Data.FindStep(TEXT("A2_push")));
 	TestNotNull(TEXT("heat pack card"), Data.FindStep(TEXT("A2_heatpack")));
-	// A3 approach (rev 5, was the A6 sample): each operative into cover (distinct operatives) and "enter cover 4 times".
-	const FTutorialStep* SquadCover = Data.FindStep(TEXT("A3_squad_cover"));
-	TestTrue(TEXT("A3 each operative into cover"), SquadCover && SquadCover->Complete.bDistinctSubjects
-		&& SquadCover->Complete.Event == TEXT("CoverEntered") && SquadCover->Complete.Count == 3);
+	// A3 approach (rev 5i): beyond the fence each operative into his own cover (distinct operatives), then "enter cover 4 times".
+	const FTutorialStep* SquadCover = Data.FindStep(TEXT("A3_cover"));
+	TestTrue(TEXT("rev 5i: A3 each operative into his own cover after the crawl"), SquadCover && SquadCover->Complete.bDistinctSubjects
+		&& SquadCover->Complete.Event == TEXT("CoverEntered") && SquadCover->Complete.Count == 3 && SquadCover->Trigger.Step == FName(TEXT("A3_fence_crawl")));
+	TestTrue(TEXT("rev 5i: the old field refresher cards are gone"), !Data.FindStep(TEXT("A3_squad_cover")) && !Data.FindStep(TEXT("A3_squad_card")));
 	const FTutorialStep* Bound = Data.FindStep(TEXT("A3_bound"));
 	TestTrue(TEXT("A3 enter cover 4 times"), Bound && !Bound->Complete.bDistinctSubjects && Bound->Complete.Count == 4);
 	const FTutorialStep* Fence = Data.FindStep(TEXT("A3_fence"));
-	TestTrue(TEXT("A3 low fence: every operative crawls under (CrawlGapPassed x3 distinct)"), Fence && Fence->Complete.bDistinctSubjects
-		&& Fence->Complete.Event == TEXT("CrawlGapPassed") && Fence->Complete.Count == 3 && Fence->Trigger.Volume == FName(TEXT("VOL_A3_FENCE")));
+	const FTutorialStep* Crawl = Data.FindStep(TEXT("A3_fence_crawl"));
+	TestTrue(TEXT("rev 5i: A3 low fence: stop + Solo first (held at the fence)"), Fence && Fence->Trigger.Volume == FName(TEXT("VOL_A3_FENCE"))
+		&& Fence->Confine.Volume == FName(TEXT("VOL_A3_FENCE")) && Fence->Confine.bStop && Fence->Complete.Conditions.Num() == 1
+		&& Fence->Complete.Conditions[0].Stat == FName(TEXT("squad_solo")) && Fence->Lock.Contains(TEXT("Squad.Regroup")));
+	TestTrue(TEXT("rev 5i: then one by one: every operative crawls under (CrawlGapPassed x3 distinct), prone, one at a time"), Crawl
+		&& Crawl->Complete.bDistinctSubjects && Crawl->Complete.Event == TEXT("CrawlGapPassed") && Crawl->Complete.Count == 3
+		&& Crawl->Trigger.Step == FName(TEXT("A3_fence")) && Crawl->Confine.ExitStance == FName(TEXT("prone"))
+		&& Crawl->Confine.ExitEvent == TEXT("CrawlGapPassed") && !Crawl->Keys.Contains(TEXT("Stance.Squad.Prone")));
+	TestTrue(TEXT("rev 5i: no second 'too low' line (the fence posts its own)"), !Data.FindStep(TEXT("A3_fence_refused")));
 	const FTutorialStep* Cones = Data.FindStep(TEXT("A4_cones"));
 	TestTrue(TEXT("A4 vision-cone toggle card (View.VisionCones)"), Cones && Cones->Complete.Commands.Contains(PlayerCommands::ToggleVisionCones.ToString()));
 	for (const FTutorialStep& Step : Data.Steps)

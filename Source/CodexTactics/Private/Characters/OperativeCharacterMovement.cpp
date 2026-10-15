@@ -20,8 +20,11 @@
 #include "Interactables/TripwireRules.h"
 #include "Level/CrawlGapActor.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "NavigationData.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "TimerManager.h"
+#include "Tutorial/TutorialRules.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
@@ -46,6 +49,11 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	if (IsPanicking())
 	{
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⚠️ PANICKING! IGNORING ORDERS!"), FLinearColor(1.f, 0.3f, 0.3f));
+		return EOperativeOrderResult::Refused;
+	}
+	// Rev 5i: a tutorial confinement holds the squad in an area - refused before anything changes (he keeps his cover, his walk).
+	if (!bPendingMoveReplay && !UTutorialSubsystem::CheckConfinedOrder(this, this, Destination))
+	{
 		return EOperativeOrderResult::Refused;
 	}
 	// Sprint 14: knocked down — the order waits and runs once he is up (the latest one wins).
@@ -138,6 +146,30 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	{
 		return EOperativeOrderResult::Refused; // kneeling for an ordered sniper shot: the formation waits for her
 	}
+	// Rev 5i: a tutorial confinement asks for a stance ("crouch first"): a follower copies the leader's low stance before he
+	// follows, else he holds (the squad retries, as for a stance clip below).
+	if (const UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr; Tutorial && Tutorial->IsConfining())
+	{
+		const FName Need = Tutorial->GetConfineStance();
+		if (!Need.IsNone() && !TutorialRules::StanceSatisfies(UTutorialSubsystem::GetStanceName(Stance), Need))
+		{
+			const USquadSubsystem* FollowSquad = GetWorld()->GetSubsystem<USquadSubsystem>();
+			const AOperativeCharacter* Leader = FollowSquad ? FollowSquad->GetLeader() : nullptr;
+			if (Leader && Leader != this && TutorialRules::StanceSatisfies(UTutorialSubsystem::GetStanceName(Leader->GetStance()), Need)
+				&& !OperativeMovementRules::ShouldDeferMove(GetMoveHoldSeconds()))
+			{
+				if (Leader->GetStance() == EOperativeStance::Prone)
+				{
+					DropProne();
+				}
+				else
+				{
+					SetStance(Leader->GetStance());
+				}
+			}
+			return EOperativeOrderResult::Refused;
+		}
+	}
 	// A stance change is playing (the follower rises from prone / crouch, or lies down): the clip roots him, so no formation move
 	// until it ends. The squad retries after GetMoveHoldSeconds (it keeps the slot, the order is not dropped).
 	if (OperativeMovementRules::ShouldDeferMove(GetMoveHoldSeconds()))
@@ -146,7 +178,7 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	}
 	bOwnMoveOrder = false; // a formation move replaces any own order
 	ApplyMovementParams(Speed);
-	return RequestMove(Destination);
+	return RequestMove(Destination, /*bFormationMove*/ true);
 }
 
 float AOperativeCharacter::GetMoveHoldSeconds() const
@@ -157,11 +189,28 @@ float AOperativeCharacter::GetMoveHoldSeconds() const
 		Anim ? Anim->GetStanceTransitionTimeLeft() : 0.f);
 }
 
-EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& Destination)
+EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestination, bool bFormationMove)
 {
 	if (VehicleQueries::IsMounted(this))
 	{
 		return EOperativeOrderResult::Refused; // APC P1: aboard he rides (Y gets him out)
+	}
+	// Rev 5i (game designer 2026-10-15): a tutorial confinement keeps the squad in its area. Own orders are judged (cover orders,
+	// shimmies, replays of deferred orders reach this without OrderMoveTo's check); formation moves are pulled into the area.
+	FVector Destination = InDestination;
+	UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	const bool bConfined = Tutorial && Tutorial->IsConfining();
+	if (bConfined)
+	{
+		if (bFormationMove)
+		{
+			Tutorial->ClampIntoConfinement(Destination);
+		}
+		else if (!UTutorialSubsystem::CheckConfinedOrder(this, this, Destination))
+		{
+			bHasMoveOrder = false;
+			return EOperativeOrderResult::Refused;
+		}
 	}
 	LastMoveDestination = Destination;
 	ClearIdleFacing();
@@ -190,6 +239,26 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& Destinatio
 	{
 		bHasMoveOrder = false;
 		return EOperativeOrderResult::Unreachable;
+	}
+	// Rev 5i: the PATH END counts too (a destination inside the area reached only by a partial path ending outside).
+	if (bConfined && Result == EPathFollowingRequestResult::RequestSuccessful)
+	{
+		const UPathFollowingComponent* PathFollowing = AIController->GetPathFollowingComponent();
+		const FNavPathSharedPtr Path = PathFollowing ? PathFollowing->GetPath() : nullptr;
+		if (Path.IsValid() && Path->IsValid() && Path->GetPathPoints().Num() > 0)
+		{
+			const ETutorialConfineVerdict EndVerdict = Tutorial->JudgeMove(*this, Path->GetEndLocation(), /*bTakeTurn*/ false);
+			if (EndVerdict != ETutorialConfineVerdict::Allowed)
+			{
+				AIController->StopMovement();
+				bHasMoveOrder = false;
+				if (!bFormationMove)
+				{
+					Tutorial->ReportConfinedRefusal(EndVerdict, this);
+				}
+				return EOperativeOrderResult::Refused;
+			}
+		}
 	}
 	bHasMoveOrder = Result == EPathFollowingRequestResult::RequestSuccessful;
 	return EOperativeOrderResult::Accepted;

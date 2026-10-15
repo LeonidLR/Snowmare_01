@@ -22,6 +22,7 @@
 #include "Tactics/CoverRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 
@@ -52,6 +53,11 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot
 	if (bInCover && CoverTraceRules::IsSameWall(CoverSlot, Slot))
 	{
 		return OrderShimmyTo(Slot);
+	}
+	// Rev 5i: a tutorial confinement refuses cover outside its area before he leaves the cover he holds.
+	if (!UTutorialSubsystem::CheckConfinedOrder(this, this, Slot.WorldLocation))
+	{
+		return EOperativeOrderResult::Refused;
 	}
 	if (bInCover)
 	{

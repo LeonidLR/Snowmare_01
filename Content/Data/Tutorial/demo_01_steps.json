@@ -218,7 +218,7 @@
       "complete": { "event": "ItemLooted.HeatPack" }
     },
     {
-      "_comment": "Rev 5c (designer review 2026-10-13): the TACTICAL HUT ENTRY teaches selection + Solo + cover. VOL_A1_HUT_APPROACH (Leader, ~10 m in front of the door) starts the walk-and-talk and the select card; then Solo; then one operative hugs the wall LEFT of the door (cover inside VOL_A1_DOOR_L), a second one RIGHT of it (VOL_A1_DOOR_R), the third goes in (VOL_A1_HUT = the interior only, Any Operative, Fire Once off) - three DIFFERENT operatives ('distinct_from'). The three entry cards are queued together, so they count in any order (one card on screen at a time). Markers: Step Id A1_hut_stack_l / A1_hut_stack_r / A1_hut_enter. Left / right as seen by the squad approaching the door.",
+      "_comment": "Rev 5c (designer review 2026-10-13): the TACTICAL HUT ENTRY teaches Solo + selection + cover. Rev 5i (game designer 2026-10-15: 'they just run everyone inside and skip the lesson'): VOL_A1_HUT_APPROACH (Leader, ~10 m in front of the door) starts the walk-and-talk and the SOLO card, which CONFINES the squad to the approach area until the third operative is inside (A1_hut_enter finished): move orders outside it are refused ('Hold here - follow the training.'), formation moves stay inside; VOL_A1_DOOR_L opens when its card is up, then VOL_A1_DOOR_R, then VOL_A1_HUT - so the order is enforced (left, right, then the third goes in; three DIFFERENT operatives, 'distinct_from'). Released on completion, tutorial OFF / SKIP TUTORIAL, a fight. No timeouts on these cards (the card's Skip still skips one lesson). Markers: Step Id A1_hut_stack_l / A1_hut_stack_r / A1_hut_enter. Left / right as seen by the squad approaching the door.",
       "id": "A1_wt_hut_approach", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A1_HUT_APPROACH" },
       "cancel_on": { "step": "A1_hut_enter" },
@@ -229,40 +229,43 @@
       ]
     },
     {
-      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
-      "keys": ["Select.Member"],
-      "trigger": { "type": "volume", "volume": "VOL_A1_HUT_APPROACH" },
-      "complete": { "commands": ["Select.Member"], "timeout_s": 30 }
-    },
-    {
-      "_comment": "Solo on (B): the others hold their spots while the selected operative moves alone. Unlocks Squad.Solo / Squad.Regroup. Not precredited (Solo must be ON now).",
+      "_comment": "Rev 5i: Solo FIRST (the designer's order: B, then pick the operative, then send him). Unlocks Squad.Solo / Squad.Regroup. Not precredited (Solo must be ON now). Holds the squad in the approach area (confine).",
       "id": "A1_solo", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SOLO",
-      "keys": ["Select.Member", "Squad.Solo"],
+      "keys": ["Squad.Solo"],
       "unlock": ["Squad.Solo", "Squad.Regroup"],
       "precredit": false,
-      "trigger": { "type": "after_step", "step": "A1_select" },
-      "complete": { "commands": ["Squad.Solo"], "timeout_s": 45 }
+      "trigger": { "type": "volume", "volume": "VOL_A1_HUT_APPROACH" },
+      "confine": { "volume": "VOL_A1_HUT_APPROACH", "allow": ["VOL_A1_DOOR_L", "VOL_A1_DOOR_R", "VOL_A1_HUT"], "until": "A1_hut_enter" },
+      "complete": { "commands": ["Squad.Solo"] }
     },
     {
-      "_comment": "Cover is taught here now (rev 5c; A3_cover is the refresher in the cover field). Done when an operative settles in cover inside VOL_A1_DOOR_L (CoverEntered + in_volume).",
+      "_comment": "Rev 5i: select the operative to send (1 / 2 / 3 or a click on him / his portrait). Not precredited: selections made earlier in the level do not count.",
+      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
+      "keys": ["Select.Member"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A1_solo" },
+      "complete": { "commands": ["Select.Member"] }
+    },
+    {
+      "_comment": "Cover is taught here now (rev 5c; A3 is the refresher in the cover field). Done when an operative settles in cover inside VOL_A1_DOOR_L (CoverEntered + in_volume).",
       "id": "A1_hut_stack_l", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HUT_STACK_L",
       "keys": ["Select.Member", "Cover.Preview", "Cover.Enter"],
       "unlock": ["Cover.*"],
-      "trigger": { "type": "after_step", "step": "A1_solo" },
-      "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_L", "distinct_from": ["A1_hut_stack_r", "A1_hut_enter"], "timeout_s": 90 }
+      "trigger": { "type": "after_step", "step": "A1_select" },
+      "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_L", "distinct_from": ["A1_hut_stack_r", "A1_hut_enter"] }
     },
     {
       "id": "A1_hut_stack_r", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HUT_STACK_R",
       "keys": ["Select.Member", "Cover.Enter"],
-      "trigger": { "type": "after_step", "step": "A1_solo" },
-      "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_R", "distinct_from": ["A1_hut_stack_l", "A1_hut_enter"], "timeout_s": 90 }
+      "trigger": { "type": "after_step", "step": "A1_select" },
+      "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_R", "distinct_from": ["A1_hut_stack_l", "A1_hut_enter"] }
     },
     {
-      "_comment": "The third operative walks in (VOL_A1_HUT covers the interior only: the two at the door never stand in it). One already inside when the card comes counts at once (volume presence).",
+      "_comment": "The third operative walks in (VOL_A1_HUT covers the interior only: the two at the door never stand in it). Rev 5i: the hut opens only when this card is up; the confinement ends when it finishes.",
       "id": "A1_hut_enter", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HUT_ENTER",
       "keys": ["Select.Member", "Order.Move"],
-      "trigger": { "type": "after_step", "step": "A1_solo" },
-      "complete": { "volume": "VOL_A1_HUT", "distinct_from": ["A1_hut_stack_l", "A1_hut_stack_r"], "timeout_s": 90 }
+      "trigger": { "type": "after_step", "step": "A1_select" },
+      "complete": { "volume": "VOL_A1_HUT", "distinct_from": ["A1_hut_stack_l", "A1_hut_stack_r"] }
     },
     {
       "_comment": "Inside: the crate (the two at the door hold their positions until the regroup). Rev 5e: dropped once the crate is open (A1_loot_open finished); the approach lines are dropped once the third man is inside, the resupply line once the squad is at the hut, the 'split them up' line once the packs are shared.",
@@ -404,6 +407,15 @@
       "complete": { "volume": "VOL_A4_OVERLOOK" }
     },
     {
+      "_comment": "Rev 5i (game designer 2026-10-15): the complex comes into view ('That's the complex. The PMC left in a hurry ...') - the squad is STOPPED and held at the approach (VOL_A3_APPROACH, Beat A3, Leader) and moves up to the first low obstacle ahead, the vault ridge (VaultRidge_A3, 0.8 m; its approach side VOL_A3_RIDGE) only CROUCHED: every move order of a standing operative is refused ('Crouch first - stay low.'), followers copy the leader's low stance before they follow; the corridor approach -> ridge front is allowed (span), nothing beyond. Done when every living operative is crouched / prone inside VOL_A3_RIDGE (stat squad_not_low_in). Unlocks the stances here (they were locked until the wind card). A volume trigger, not the beat start: a squad that reached A3 another way (the fence first) passes it.",
+      "id": "A3_low", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_LOW",
+      "keys": ["Stance.Crouch", "Stance.Squad.Crouch"],
+      "unlock": ["Stance.*"],
+      "trigger": { "type": "volume", "volume": "VOL_A3_APPROACH" },
+      "confine": { "volume": "VOL_A3_APPROACH", "allow": ["VOL_A3_RIDGE"], "span": true, "stop": true, "stance": "crouch" },
+      "complete": { "condition": [ { "stat": "squad_not_low_in.VOL_A3_RIDGE", "below": 1 } ] }
+    },
+    {
       "_comment": "Stances at the wind strip (was A1 beacon 4: VOL_A1_BEACON4 -> VOL_A3_WIND). Precredited if the player already used two stance keys.",
       "id": "A3_wt_wind", "beat": "A3", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A3_WIND" },
@@ -428,42 +440,44 @@
       "complete": { "volume": "VOL_A3_RIDGE_FAR", "timeout_s": 30 }
     },
     {
-      "_comment": "The low fence (ACrawlGapActor): only prone bodies crawl under; a standing one is stopped by the actor (CrawlGapRefused). Done when every operative came out on the other side.",
+      "_comment": "Rev 5i (game designer 2026-10-15): the low fence (ACrawlGapActor) is crossed ONE BY ONE. Arriving at VOL_A3_FENCE (Any Operative, 3.5 m before the fence) the squad STOPS and is held there (confine); first Solo (B) - done at once when the squad already is in Solo (condition squad_solo, precredited). Regroup is locked from here until every operative is in his own cover beyond the fence (A3_peek unlocks it; a press says 'Not yet - one by one.').",
       "id": "A3_fence", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_FENCE",
-      "keys": ["Stance.Prone", "Stance.Squad.Prone"],
-      "unlock": ["Stance.*"],
+      "keys": ["Squad.Solo"],
+      "unlock": ["Stance.*", "Squad.Solo"],
+      "lock": ["Squad.Regroup"],
       "trigger": { "type": "volume", "volume": "VOL_A3_FENCE" },
-      "complete": { "event": "CrawlGapPassed", "count": 3, "distinct_operatives": true, "timeout_s": 180 }
+      "confine": { "volume": "VOL_A3_FENCE", "stop": true },
+      "complete": { "condition": [ { "stat": "squad_solo", "at_least": 1 } ] }
     },
     {
-      "id": "A3_fence_refused", "beat": "A3", "kind": "feed", "text_id": "TUT_A3_FENCE_REFUSED",
-      "trigger": { "type": "event", "event": "CrawlGapRefused" },
-      "lines": [ { "speaker": "Medic-Sapper", "text_id": "TUT_A3_FENCE_REFUSED" } ]
+      "_comment": "Rev 5i: then each operative: select him, go prone (V), crawl under the gap - one at a time. Held at the fence area; an order past the fence is allowed only for a PRONE operative and only when nobody else is crossing (his turn ends with his CrawlGapPassed); standing: 'Go prone first - then crawl under.', another crossing: 'One at a time - wait until he is through.'. Alt+V still works but every operative counts separately (3 distinct). The card shows '{progress} / {count} through'.",
+      "id": "A3_fence_crawl", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_FENCE_CRAWL",
+      "keys": ["Select.Member", "Stance.Prone"],
+      "trigger": { "type": "after_step", "step": "A3_fence" },
+      "confine": { "volume": "VOL_A3_FENCE", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } },
+      "complete": { "event": "CrawlGapPassed", "count": 3, "distinct_operatives": true }
     },
     {
-      "_comment": "Cover on the approach (the former A6 sample: VOL_A6_FIELD -> VOL_A3_FIELD): one into cover, then each operative into his own cover (user decision 2026-10-11: manual per operative). Since rev 5c cover is first taught at the hut door (A1_hut_stack_l unlocks Cover.*): this is the refresher in a real cover field.",
-      "id": "A3_cover", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A6_COVER",
-      "keys": ["Cover.Enter"],
+      "_comment": "Rev 5i: Regroup is locked during the crossing and the cover lesson: one line instead of the generic 'Not yet' (any press, every time).",
+      "id": "A3_regroup_refused", "beat": "A3", "kind": "feed", "text_id": "TUT_A3_ONE_BY_ONE",
+      "once": false,
+      "trigger": { "type": "event", "event": "Tutorial.Locked.Squad.Regroup", "requires": ["A3_fence"] },
+      "lines": [ { "speaker": "TRAINING", "text_id": "TUT_A3_ONE_BY_ONE" } ]
+    },
+    {
+      "_comment": "Rev 5i (game designer 2026-10-15): beyond the fence, still in Solo, each operative into his OWN cover - one order each, three different operatives (CoverEntered, distinct; the only operatives who can take cover now are past the fence). Replaces the rev 5c refresher (VOL_A3_FIELD card + squad card + squad-cover objective). The cover field lessons (bound, the peek that reveals the mines) follow only after it. '{progress} / {count} in cover'.",
+      "id": "A3_cover", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_COVER_EACH",
+      "keys": ["Select.Member", "Cover.Enter"],
       "unlock": ["Cover.*"],
-      "trigger": { "type": "volume", "volume": "VOL_A3_FIELD" },
-      "complete": { "event": "CoverEntered", "timeout_s": 60 }
-    },
-    {
-      "id": "A3_squad_cover", "beat": "A3", "kind": "objective", "text_id": "OBJ_A6_SQUAD_COVER",
-      "trigger": { "type": "after_step", "step": "A3_cover" },
+      "trigger": { "type": "after_step", "step": "A3_fence_crawl" },
       "complete": { "event": "CoverEntered", "count": 3, "distinct_operatives": true }
     },
     {
-      "id": "A3_squad_card", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A6_SQUAD",
-      "keys": ["Select.Member", "Cover.Enter"],
-      "trigger": { "type": "after_step", "step": "A3_cover", "delay_s": 2 },
-      "complete": { "event": "CoverEntered", "count": 2, "distinct_operatives": true, "timeout_s": 45 }
-    },
-    {
-      "_comment": "Corner peek card (rev 5c; low cover too since rev 5e). Rev 5h (game designer 2026-10-15): the peek is meaningful - two hidden mines (SpotEventTag A3PeekMines, map section AutoLayout_Demo01_5h) lie beyond the corner of the first high wall (marker A3_peek); leaning out round a corner spots hidden traps in the peek sight cone (AOperativeCharacter::PeekSpotConfig). Done when those mines are known (condition stat traps_spotted.A3PeekMines: also precredited when they were found before the card), or after 90 s. The mine card A3_mine (MineSpotted) follows: disarm or go round.",
+      "_comment": "Corner peek card (rev 5c; low cover too since rev 5e). Rev 5h (game designer 2026-10-15): the peek is meaningful - two hidden mines (SpotEventTag A3PeekMines, map section AutoLayout_Demo01_5h) lie beyond the corner of the first high wall (marker A3_peek); leaning out round a corner spots hidden traps in the peek sight cone (AOperativeCharacter::PeekSpotConfig). Done when those mines are known (condition stat traps_spotted.A3PeekMines: also precredited when they were found before the card), or after 90 s. The mine card A3_mine (MineSpotted) follows: disarm or go round. Rev 5i: after the cover-each card; frees Regroup again.",
       "id": "A3_peek", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_PEEK",
       "keys": ["Cover.CornerPeek"],
-      "trigger": { "type": "after_step", "step": "A3_squad_card", "delay_s": 1 },
+      "unlock": ["Squad.Regroup"],
+      "trigger": { "type": "after_step", "step": "A3_cover", "delay_s": 1 },
       "complete": { "condition": [ { "stat": "traps_spotted.A3PeekMines", "at_least": 1 } ], "timeout_s": 90 }
     },
     {

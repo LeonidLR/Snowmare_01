@@ -95,7 +95,8 @@ namespace TutorialRules
 
 	/**
 	 * Condition stats the runtime provides: "squad_cold_max", "squad_cold_min", "leader_cold", "squad_heat_packs",
-	 * "squad_min_heat_packs", "heat_packs_given" (rev 5d).
+	 * "squad_min_heat_packs", "heat_packs_given" (rev 5d), "squad_solo" (rev 5i: 1 in Solo), "traps_spotted.<tag>" (rev 5h),
+	 * "squad_not_low_in.<volume>" (rev 5i).
 	 */
 	CODEXTACTICS_API bool IsKnownStat(FName Stat);
 
@@ -154,4 +155,30 @@ namespace TutorialRules
 	 * patterns match sum to at least Count, and their hold time to at least "hold_s". False when CanPrecredit is false.
 	 */
 	CODEXTACTICS_API bool IsPrecreditSatisfied(const FTutorialStep& Step, const TMap<FName, FTutorialCommandUse>& History);
+
+	// --- Confine (rev 5i, game designer 2026-10-15: hold the squad in an area until the lesson is done) ---------------------
+
+	/**
+	 * Rev 5i: "squad_not_low_in.<VolumeId>" -> VolumeId (else NAME_None): the condition stat counting the living squad members that are
+	 * NOT crouched / prone inside that tutorial volume ({"stat": "squad_not_low_in.VOL_A3_RIDGE", "below": 1} = everyone is down there).
+	 */
+	CODEXTACTICS_API FName ParseNotLowInStat(FName Stat);
+
+	/** "crouch" / "crouched" / "crouching" -> crouch, "prone", "stand" / "standing" -> stand; anything else NAME_None. */
+	CODEXTACTICS_API FName NormalizeStance(const FString& Text);
+
+	/** Have ("stand" | "crouch" | "prone") is low enough for Need (none / stand = any; crouch = crouched or prone; prone = prone). */
+	CODEXTACTICS_API bool StanceSatisfies(FName Have, FName Need);
+
+	/**
+	 * May an operative (OperativeId, in OperativeStance) be sent to a destination under the confinement? bDestinationInside = the
+	 * destination (and the path end) lies in the allowed area (the runtime tests the geometry). Order of the rules: the confinement's
+	 * "stance" (every order) -> inside = allowed -> no "exit" = Outside -> got through already = allowed -> the exit stance -> the
+	 * one-at-a-time turn (another operative holds it = NotYourTurn). The caller takes the turn when an outside order is allowed.
+	 */
+	CODEXTACTICS_API ETutorialConfineVerdict JudgeConfinedMove(const FTutorialConfineView& Confine, FName OperativeId, FName OperativeStance,
+		bool bDestinationInside);
+
+	/** "allowed" / "outside" / "stance" / "exit_stance" / "not_your_turn" (logs, telemetry). */
+	CODEXTACTICS_API const TCHAR* ConfineVerdictName(ETutorialConfineVerdict Verdict);
 }

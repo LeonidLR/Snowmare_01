@@ -139,7 +139,7 @@ namespace TutorialRulesLocal
 			Condition.Stat = FName(*JsonString(Clause, TEXT("stat")));
 			if (!TutorialRules::IsKnownStat(Condition.Stat))
 			{
-				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs | squad_min_heat_packs | heat_packs_given | traps_spotted.<tag>)"),
+				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs | squad_min_heat_packs | heat_packs_given | squad_solo | traps_spotted.<tag> | squad_not_low_in.<volume>)"),
 					*Where, *Condition.Stat.ToString());
 				return false;
 			}
@@ -317,7 +317,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		const FString Where = TEXT("step ") + Id;
 		WarnUnknownKeys(Object, { TEXT("id"), TEXT("beat"), TEXT("kind"), TEXT("text_id"), TEXT("keys"), TEXT("trigger"), TEXT("complete"),
 			TEXT("once"), TEXT("skippable"), TEXT("blocking"), TEXT("lines"), TEXT("condition"), TEXT("lock"), TEXT("unlock"), TEXT("action"),
-			TEXT("actions"), TEXT("focus"), TEXT("precredit"), TEXT("cancel_on") }, Where, OutWarnings);
+			TEXT("actions"), TEXT("focus"), TEXT("precredit"), TEXT("cancel_on"), TEXT("confine") }, Where, OutWarnings);
 		FTutorialStep Step;
 		Step.Id = FName(*Id);
 		Step.Beat = FName(*JsonString(Object, TEXT("beat")));
@@ -454,6 +454,47 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 				OutWarnings.Add(Where + TEXT(": \"cancel_on\" names no step / event / volume"));
 			}
 		}
+		// Rev 5i: "confine": { "volume", "allow", "until", "stop", "span", "stance", "exit": { "stance", "one_at_a_time" } } (FTutorialConfine).
+		const TSharedPtr<FJsonObject>* ConfineObject = nullptr;
+		if (Object->TryGetObjectField(TEXT("confine"), ConfineObject))
+		{
+			const TSharedPtr<FJsonObject> Confine = *ConfineObject;
+			WarnUnknownKeys(Confine, { TEXT("volume"), TEXT("allow"), TEXT("until"), TEXT("stop"), TEXT("span"), TEXT("stance"), TEXT("exit") },
+				Where + TEXT(" confine"), OutWarnings);
+			Step.Confine.Volume = FName(*JsonString(Confine, TEXT("volume")));
+			if (Step.Confine.Volume.IsNone())
+			{
+				OutError = Where + TEXT(": \"confine\" needs \"volume\" (the holding area)");
+				return false;
+			}
+			for (const FString& Allow : JsonStrings(Confine, TEXT("allow")))
+			{
+				Step.Confine.Allow.AddUnique(FName(*Allow));
+			}
+			Step.Confine.Until = FName(*JsonString(Confine, TEXT("until")));
+			Step.Confine.bStop = JsonBool(Confine, TEXT("stop"), false);
+			Step.Confine.bSpan = JsonBool(Confine, TEXT("span"), false);
+			const FString StanceText = JsonString(Confine, TEXT("stance"));
+			Step.Confine.Stance = NormalizeStance(StanceText);
+			if (!StanceText.IsEmpty() && Step.Confine.Stance.IsNone())
+			{
+				OutError = FString::Printf(TEXT("%s: unknown confine stance \"%s\" (crouch | prone)"), *Where, *StanceText);
+				return false;
+			}
+			const TSharedPtr<FJsonObject>* ExitObject = nullptr;
+			if (Confine->TryGetObjectField(TEXT("exit"), ExitObject))
+			{
+				WarnUnknownKeys(*ExitObject, { TEXT("stance"), TEXT("one_at_a_time") }, Where + TEXT(" confine exit"), OutWarnings);
+				const FString ExitStanceText = JsonString(*ExitObject, TEXT("stance"));
+				Step.Confine.ExitStance = NormalizeStance(ExitStanceText);
+				if (!ExitStanceText.IsEmpty() && Step.Confine.ExitStance.IsNone())
+				{
+					OutError = FString::Printf(TEXT("%s: unknown confine exit stance \"%s\" (crouch | prone)"), *Where, *ExitStanceText);
+					return false;
+				}
+				Step.Confine.ExitEvent = JsonString(*ExitObject, TEXT("one_at_a_time"));
+			}
+		}
 		Step.Focus = FName(*JsonString(Object, TEXT("focus")));
 		if (!Step.Focus.IsNone() && !IsKnownFocus(Step.Focus))
 		{
@@ -541,6 +582,11 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 				OutError = FString::Printf(TEXT("step %s: \"cancel_on\" names an unknown step \"%s\""), *Step.Id.ToString(), *Other.ToString());
 				return false;
 			}
+		}
+		if (!Step.Confine.Until.IsNone() && OutData.FindStepIndex(Step.Confine.Until) == INDEX_NONE)
+		{
+			OutError = FString::Printf(TEXT("step %s: \"confine\" \"until\" names an unknown step \"%s\""), *Step.Id.ToString(), *Step.Confine.Until.ToString());
+			return false;
 		}
 		for (const FName Required : Step.Trigger.Requires)
 		{
@@ -715,6 +761,18 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 		Runtime->SetObjectField(StepId.ToString(), Entry);
 	}
 	Object->SetObjectField(TEXT("runtime"), Runtime);
+	// Rev 5i: the confinements started so far (a released one must stay released after a load).
+	TArray<TSharedPtr<FJsonValue>> Confines;
+	for (const FTutorialConfineProgress& Confine : Progress.Confines)
+	{
+		const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+		Entry->SetStringField(TEXT("step"), Confine.Owner.ToString());
+		Entry->SetBoolField(TEXT("released"), Confine.bReleased);
+		Entry->SetStringField(TEXT("holder"), Confine.ExitHolder.IsNone() ? FString() : Confine.ExitHolder.ToString());
+		Entry->SetArrayField(TEXT("passed"), NameArray(Confine.Passed));
+		Confines.Add(MakeShared<FJsonValueObject>(Entry));
+	}
+	Object->SetArrayField(TEXT("confines"), Confines);
 	return Object;
 }
 
@@ -811,7 +869,117 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 			ReadNames(Step, TEXT("contributors"), Stored.Contributors);
 		}
 	}
+	const TArray<TSharedPtr<FJsonValue>>* Confines = nullptr;
+	if (Object.TryGetArrayField(TEXT("confines"), Confines))
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *Confines)
+		{
+			const TSharedPtr<FJsonObject> Entry = Value.IsValid() ? Value->AsObject() : nullptr;
+			FString Owner;
+			if (!Entry.IsValid() || !Entry->TryGetStringField(TEXT("step"), Owner) || Owner.IsEmpty())
+			{
+				continue;
+			}
+			FTutorialConfineProgress& Stored = OutProgress.Confines.AddDefaulted_GetRef();
+			Stored.Owner = FName(*Owner);
+			Stored.bReleased = TutorialRulesLocal::JsonBool(Entry, TEXT("released"), false);
+			const FString Holder = TutorialRulesLocal::JsonString(Entry, TEXT("holder"));
+			Stored.ExitHolder = Holder.IsEmpty() ? NAME_None : FName(*Holder);
+			const TArray<TSharedPtr<FJsonValue>>* Passed = nullptr;
+			if (Entry->TryGetArrayField(TEXT("passed"), Passed))
+			{
+				for (const TSharedPtr<FJsonValue>& Name : *Passed)
+				{
+					FString Text;
+					if (Name.IsValid() && Name->TryGetString(Text) && !Text.IsEmpty())
+					{
+						Stored.Passed.AddUnique(FName(*Text));
+					}
+				}
+			}
+		}
+	}
 	return true;
+}
+
+FName TutorialRules::ParseNotLowInStat(FName Stat)
+{
+	static const FString Prefix(TEXT("squad_not_low_in."));
+	const FString Name = Stat.ToString();
+	return Name.StartsWith(Prefix) && Name.Len() > Prefix.Len() ? FName(*Name.Mid(Prefix.Len())) : NAME_None;
+}
+
+FName TutorialRules::NormalizeStance(const FString& Text)
+{
+	const FString Lower = Text.TrimStartAndEnd().ToLower();
+	if (Lower == TEXT("crouch") || Lower == TEXT("crouched") || Lower == TEXT("crouching"))
+	{
+		return FName(TEXT("crouch"));
+	}
+	if (Lower == TEXT("prone"))
+	{
+		return FName(TEXT("prone"));
+	}
+	if (Lower == TEXT("stand") || Lower == TEXT("standing"))
+	{
+		return FName(TEXT("stand"));
+	}
+	return NAME_None;
+}
+
+bool TutorialRules::StanceSatisfies(FName Have, FName Need)
+{
+	if (Need.IsNone() || Need == FName(TEXT("stand")))
+	{
+		return true;
+	}
+	if (Need == FName(TEXT("crouch")))
+	{
+		return Have == FName(TEXT("crouch")) || Have == FName(TEXT("prone")); // lower than crouched is low enough
+	}
+	return Have == Need;
+}
+
+ETutorialConfineVerdict TutorialRules::JudgeConfinedMove(const FTutorialConfineView& Confine, FName OperativeId, FName OperativeStance, bool bDestinationInside)
+{
+	if (!StanceSatisfies(OperativeStance, Confine.Spec.Stance))
+	{
+		return ETutorialConfineVerdict::Stance;
+	}
+	if (bDestinationInside)
+	{
+		return ETutorialConfineVerdict::Allowed;
+	}
+	if (!Confine.Spec.HasExit())
+	{
+		return ETutorialConfineVerdict::Outside;
+	}
+	if (!OperativeId.IsNone() && Confine.Passed.Contains(OperativeId))
+	{
+		return ETutorialConfineVerdict::Allowed; // through already: free to move on
+	}
+	if (!StanceSatisfies(OperativeStance, Confine.Spec.ExitStance))
+	{
+		return ETutorialConfineVerdict::ExitStance;
+	}
+	if (!Confine.Spec.ExitEvent.IsEmpty() && !Confine.ExitHolder.IsNone() && Confine.ExitHolder != OperativeId)
+	{
+		return ETutorialConfineVerdict::NotYourTurn;
+	}
+	return ETutorialConfineVerdict::Allowed;
+}
+
+const TCHAR* TutorialRules::ConfineVerdictName(ETutorialConfineVerdict Verdict)
+{
+	switch (Verdict)
+	{
+	case ETutorialConfineVerdict::Allowed: return TEXT("allowed");
+	case ETutorialConfineVerdict::Outside: return TEXT("outside");
+	case ETutorialConfineVerdict::Stance: return TEXT("stance");
+	case ETutorialConfineVerdict::ExitStance: return TEXT("exit_stance");
+	case ETutorialConfineVerdict::NotYourTurn: return TEXT("not_your_turn");
+	default: return TEXT("?");
+	}
 }
 
 FString TutorialRules::GetCommandFamily(FName CommandId)
@@ -895,12 +1063,12 @@ FString TutorialRules::FormatKeys(const TArray<FString>& Keys)
 bool TutorialRules::IsKnownStat(FName Stat)
 {
 	// Rev 5h: "traps_spotted.<SpotEventTag>" counts the spotted traps of a tagged group (TrapSpotRules::ParseSpottedStatTag).
-	if (!TrapSpotRules::ParseSpottedStatTag(Stat).IsNone())
+	if (!TrapSpotRules::ParseSpottedStatTag(Stat).IsNone() || !ParseNotLowInStat(Stat).IsNone())
 	{
 		return true;
 	}
 	static const FName Stats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
-		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given") };
+		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo") };
 	for (const FName Known : Stats)
 	{
 		if (Stat == Known)

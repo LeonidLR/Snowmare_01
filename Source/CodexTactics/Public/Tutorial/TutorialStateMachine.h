@@ -161,6 +161,24 @@ public:
 	const TMap<FName, FTutorialCommandUse>& GetCommandHistory() const { return History; }
 	FTutorialCommandUse GetCommandUse(FName CommandId) const;
 
+	// --- Confine (rev 5i, game designer 2026-10-15) --------------------------------------------------------------------
+	/**
+	 * A confinement is in force (a step with "confine" was triggered and its "until" step has not finished; FTutorialConfine). While
+	 * it holds, the route does not move (an arrival at another volume neither starts a beat nor passes steps) and a step that
+	 * completes in one of its "allow" areas counts only while it is SHOWN (the lesson's order: right of the door only after left).
+	 */
+	bool IsConfined() const;
+	/** The confinement in force: its spec, the areas open now, the exit turn; false when none. */
+	bool GetActiveConfine(FTutorialConfineView& Out) const;
+	/** Ends the confinement in force (the tutorial was switched off / skipped, a fight started). False when none held. */
+	bool ReleaseConfines();
+	/** "exit.one_at_a_time": an order outside the area was allowed for SubjectId - his turn (no-op while another holds it). */
+	void TakeConfineExitTurn(FName SubjectId);
+	/** The turn holder was ordered back into the area: the turn is free again. */
+	void ReturnConfineExitTurn(FName SubjectId);
+	/** Changes whenever a confinement starts or ends (the runtime stops the squad when one starts). */
+	int32 GetConfineSerial() const { return ConfineSerial; }
+
 	// --- Save -------------------------------------------------------------------------------------------------------
 	FTutorialProgress ExportProgress() const;
 	/** Restores finished steps and the beat; pending steps are queued again (no transitions for the finished ones). */
@@ -264,4 +282,29 @@ private:
 	/** Rev 5f: the place of each volume the steps use (RebuildRoute) and the beats volume actors start (RegisterVolumeBeat). */
 	TMap<FName, FRoutePoint> StepRoute;
 	TMap<FName, FName> VolumeBeats;
+
+	/** Rev 5i: a started confinement (FTutorialConfine of the step Owner). At most one is not released. */
+	struct FConfineRuntime
+	{
+		int32 Owner = INDEX_NONE;
+		bool bReleased = false;
+		FName ExitHolder;
+		TArray<FName> Passed;
+	};
+	TArray<FConfineRuntime> Confines;
+	int32 ConfineSerial = 0;
+	/** Index into Confines of the confinement in force, INDEX_NONE when none. */
+	int32 FindActiveConfine() const;
+	/** The step that ends the confinement of Owner ("until", else Owner itself). */
+	int32 GetConfineUntilIndex(int32 Owner) const;
+	/** An "allow" area is open: no step completes there, or one that does is shown / finished. */
+	bool IsConfineAreaOpen(FName VolumeId) const;
+	/** The step completes in an "allow" area of the confinement in force and is not shown: its completion waits (lesson order). */
+	bool IsCompletionHeldByConfine(int32 Index) const;
+	/** The step was triggered: its "confine" starts (replacing any other). */
+	void StartConfine(int32 Index);
+	/** Releases the confinement whose "until" step just finished. */
+	void ReleaseConfinesUntil(int32 FinishedIndex);
+	/** "exit.one_at_a_time": the exit event named SubjectId - he got through, the turn is free. */
+	void NoteConfineEvent(FName EventName, FName SubjectId);
 };

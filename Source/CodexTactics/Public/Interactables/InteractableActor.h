@@ -150,6 +150,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Trap")
 	FName SpotEventTag;
 
+	/**
+	 * Rev 5i (game designer 2026-10-15): a tutorial step id - until that step has started, this hidden trap cannot be spotted by
+	 * walking near it, only by a corner peek (Demo 01: the A3 lesson mines, "A3_peek"). Ignored without an active tutorial or when
+	 * the steps file has no such step. Empty = the normal proximity rule. Set by the layout script (section 5i).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Trap")
+	FName SpotRequiresStep;
+
+	/** The proximity scan may spot this trap now (SpotRequiresStep, TrapSpotRules::AllowsProximitySpot); the peek always may. */
+	bool CanBeSpottedByProximity() const;
+
 	/** Blueprint hook for explosion VFX / sound. */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Trap", meta = (DisplayName = "On Exploded"))
 	void ReceiveExploded(float Radius);

@@ -81,4 +81,18 @@ bool FTrapSpotGroupTest::RunTest(const FString&)
 	return true;
 }
 
+// Rev 5i (game designer 2026-10-15): the A3 lesson mines can be spotted only by the peek until the peek lesson starts.
+TRAP_SPOT_TEST(FTrapSpotProximityGateTest, "ProximityGate")
+bool FTrapSpotProximityGateTest::RunTest(const FString&)
+{
+	using namespace TrapSpotRules;
+	const FName Step(TEXT("A3_peek"));
+	TestTrue(TEXT("no requirement: the normal proximity rule"), AllowsProximitySpot(NAME_None, true, true, false));
+	TestFalse(TEXT("the lesson step not started yet: only a peek reveals it"), AllowsProximitySpot(Step, true, true, false));
+	TestTrue(TEXT("the lesson step started (shown / done): proximity spots it again"), AllowsProximitySpot(Step, true, true, true));
+	TestTrue(TEXT("tutorial OFF / skipped / an ordinary level: the normal rule"), AllowsProximitySpot(Step, false, false, false));
+	TestTrue(TEXT("a step the steps file does not have: the normal rule (never a trap nobody can spot)"), AllowsProximitySpot(Step, true, false, false));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

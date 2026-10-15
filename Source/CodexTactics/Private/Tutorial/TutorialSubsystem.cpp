@@ -90,6 +90,15 @@ namespace TutorialConsole
 				Tutorial->SkipActiveCard();
 			}
 		}));
+	static FAutoConsoleCommandWithWorldAndArgs SkipTutorialCommand(TEXT("Codex.Tutorial.SkipTutorial"),
+		TEXT("SKIP TUTORIAL without the confirm dialog: the tutorial is off for this run, every lock / confinement released."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World)
+		{
+			if (UTutorialSubsystem* Tutorial = World ? World->GetSubsystem<UTutorialSubsystem>() : nullptr)
+			{
+				Tutorial->SkipTutorial();
+			}
+		}));
 	static FAutoConsoleCommandWithWorldAndArgs ResetCommand(TEXT("Codex.Tutorial.Reset"), TEXT("Forgets the tutorial progress and starts it again."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World)
 		{
@@ -116,6 +125,30 @@ namespace TutorialConsole
 			}
 		}));
 #endif
+}
+
+namespace TutorialConfineLocal
+{
+	/** Margin around an allowed volume: a destination projected to the navmesh / a path end may lie just outside the box. */
+	constexpr float AreaMarginCm = 50.f;
+	/** Height margin: volumes are placed at ground level, clicks hit the floor or a wall face. */
+	constexpr float AreaMarginZCm = 300.f;
+	/** A formation target pulled into the allowed area stays this far inside its sides. */
+	constexpr float ClampInsetCm = 60.f;
+	/** "squad_not_low_in.<volume>": an operative within this distance of the volume's box counts as there (followers round the leader). */
+	constexpr float NearVolumeCm = 300.f;
+
+	bool IsInsideBox(const UBoxComponent& Box, const FVector& Point, float MarginXY, float MarginZ)
+	{
+		const FVector Local = Box.GetComponentTransform().InverseTransformPosition(Point);
+		const FVector Scale = Box.GetComponentTransform().GetScale3D().GetAbs();
+		const FVector Extent = Box.GetUnscaledBoxExtent();
+		// The margins are world cm: convert them to the box's local units.
+		const float MX = Scale.X > KINDA_SMALL_NUMBER ? MarginXY / Scale.X : MarginXY;
+		const float MY = Scale.Y > KINDA_SMALL_NUMBER ? MarginXY / Scale.Y : MarginXY;
+		const float MZ = Scale.Z > KINDA_SMALL_NUMBER ? MarginZ / Scale.Z : MarginZ;
+		return FMath::Abs(Local.X) <= Extent.X + MX && FMath::Abs(Local.Y) <= Extent.Y + MY && FMath::Abs(Local.Z) <= Extent.Z + MZ;
+	}
 }
 
 bool UTutorialSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -220,6 +253,8 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 		}
 	}
 	LockedRefusals = 0;
+	ConfinedRefusals = 0;
+	ConfineLineTimes.Reset();
 	PrecreditedCount = 0;
 	LockHintFamilies.Reset();
 	FocusOperatives.Reset();
@@ -263,7 +298,43 @@ bool UTutorialSubsystem::IsTutorialEnabled()
 
 bool UTutorialSubsystem::IsTutorialActive() const
 {
-	return Machine.IsLoaded() && IsTutorialEnabled();
+	return Machine.IsLoaded() && IsTutorialEnabled() && !bSkipped;
+}
+
+bool UTutorialSubsystem::SkipTutorial()
+{
+	if (!Machine.IsLoaded() || bSkipped)
+	{
+		return false;
+	}
+	bSkipped = true;
+	UnlockAllCommands(TEXT("tutorial skipped")); // locks + the confinement in force
+	SpeechStep = NAME_None; // the radio / walk-and-talk strip goes with the rest (story dialogue windows are not the tutorial's)
+	SpeechLines.Reset();
+	FlashCard = NAME_None;
+	FlashObjectives.Reset();
+	bRetryPrompt = false;
+	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: SKIPPED by the player at beat %s (off for this run, every control unlocked)"),
+		*Machine.GetCurrentBeat().ToString());
+	WriteTelemetry(TEXT("tutorial_skipped"), NAME_None, Machine.GetCurrentBeat(), 0.f);
+	PlayerCommands::Report(this, PlayerCommands::SkipTutorial);
+	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+	{
+		Messages->PostMessage(LOCTEXT("TrainingSpeaker", "TRAINING"), LOCTEXT("TutorialSkipped", "Tutorial skipped - all controls unlocked."));
+	}
+	RefreshMarkers();
+	return true;
+}
+
+bool UTutorialSubsystem::IsSkipOfferShown() const
+{
+	if (!IsTutorialActive())
+	{
+		return false;
+	}
+	const FTutorialStepsData& Data = Machine.GetData();
+	const FName StartBeat = !Data.StartBeat.IsNone() ? Data.StartBeat : (Data.Beats.IsValidIndex(0) ? Data.Beats[0].Id : NAME_None);
+	return !StartBeat.IsNone() && Machine.GetCurrentBeat() == StartBeat;
 }
 
 void UTutorialSubsystem::SetTutorialEnabled(bool bEnabled)
@@ -578,9 +649,9 @@ bool UTutorialSubsystem::SkipActiveCard()
 
 bool UTutorialSubsystem::SkipStep(FName StepId)
 {
-	const bool bSkipped = !StepId.IsNone() && Machine.SkipStep(StepId);
+	const bool bStepSkipped = !StepId.IsNone() && Machine.SkipStep(StepId);
 	ProcessTransitions();
-	return bSkipped;
+	return bStepSkipped;
 }
 
 bool UTutorialSubsystem::ReplayStep(FName StepId)
@@ -592,6 +663,7 @@ bool UTutorialSubsystem::ReplayStep(FName StepId)
 
 void UTutorialSubsystem::ResetTutorial()
 {
+	bSkipped = false; // rev 5i: RESET TUTORIAL starts a skipped tutorial again
 	Machine.ResetProgress();
 	LockHintFamilies.Reset();
 	FocusOperatives.Reset();
@@ -703,6 +775,10 @@ void UTutorialSubsystem::ProcessTransitions()
 			}
 		}
 	}
+	if (Machine.GetConfineSerial() != SeenConfineSerial)
+	{
+		HandleConfineChanged(); // rev 5i: a confinement started / ended
+	}
 	RefreshMarkers();
 }
 
@@ -796,6 +872,10 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 	{
 		return 0.f;
 	}
+	if (Stat == FName(TEXT("squad_solo")))
+	{
+		return Squad->IsSoloMode() ? 1.f : 0.f; // rev 5i: the squad is in Solo (B) now
+	}
 	if (Stat == FName(TEXT("leader_cold")))
 	{
 		const AOperativeCharacter* Leader = Squad->GetLeader();
@@ -810,6 +890,27 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 			Spotted += It->SpotEventTag == TrapTag && !It->IsHiddenTrap() ? 1 : 0;
 		}
 		return static_cast<float>(Spotted);
+	}
+	if (const FName LowVolume = TutorialRules::ParseNotLowInStat(Stat); !LowVolume.IsNone())
+	{
+		// Rev 5i: the living members NOT crouched / prone at that volume - inside its box or within 3 m of it, where followers in
+		// formation stand round a leader sent into it (0 = the whole squad is down there).
+		const TArray<const ATutorialTriggerVolume*> LowVolumes = FindVolumes(LowVolume);
+		int32 NotLow = 0;
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (!Member || (Member->HealthComponent && !Member->HealthComponent->IsAlive()))
+			{
+				continue;
+			}
+			const bool bLow = TutorialRules::StanceSatisfies(GetStanceName(Member->GetStance()), FName(TEXT("crouch")));
+			const bool bThere = LowVolumes.ContainsByPredicate([Member](const ATutorialTriggerVolume* Volume)
+			{
+				return TutorialConfineLocal::IsInsideBox(*Volume->Box, Member->GetActorLocation(), TutorialConfineLocal::NearVolumeCm, TutorialConfineLocal::AreaMarginZCm);
+			});
+			NotLow += bLow && bThere ? 0 : 1;
+		}
+		return static_cast<float>(NotLow);
 	}
 	if (Stat == FName(TEXT("heat_packs_given")))
 	{
@@ -905,6 +1006,267 @@ void UTutorialSubsystem::UnlockAllCommands(const TCHAR* Reason)
 		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: every command unlocked (%s)"), Reason);
 		WriteTelemetry(TEXT("unlock_all"), NAME_None, Machine.GetCurrentBeat(), 0.f);
 	}
+	// Rev 5i: the squad is never held in an area in a fight / with the tutorial off.
+	if (Machine.ReleaseConfines())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: confinement released (%s)"), Reason);
+		WriteTelemetry(TEXT("confine_released"), NAME_None, Machine.GetCurrentBeat(), 0.f);
+		SeenConfineSerial = Machine.GetConfineSerial();
+	}
+}
+
+// --- Confine (rev 5i) -----------------------------------------------------------------------------------------------
+
+
+TArray<const ATutorialTriggerVolume*> UTutorialSubsystem::FindVolumes(FName VolumeId) const
+{
+	TArray<const ATutorialTriggerVolume*> Out;
+	if (UWorld* World = GetWorld(); World && !VolumeId.IsNone())
+	{
+		for (TActorIterator<ATutorialTriggerVolume> It(World); It; ++It)
+		{
+			if (It->Box && It->GetEffectiveVolumeId() == VolumeId)
+			{
+				Out.Add(*It);
+			}
+		}
+	}
+	return Out;
+}
+
+bool UTutorialSubsystem::IsConfining() const
+{
+	return IsTutorialActive() && Machine.IsConfined();
+}
+
+FName UTutorialSubsystem::GetStanceName(EOperativeStance Stance)
+{
+	switch (Stance)
+	{
+	case EOperativeStance::Crouching: return FName(TEXT("crouch"));
+	case EOperativeStance::Prone: return FName(TEXT("prone"));
+	default: return FName(TEXT("stand"));
+	}
+}
+
+FName UTutorialSubsystem::GetConfineStance() const
+{
+	FTutorialConfineView Confine;
+	return IsTutorialActive() && Machine.GetActiveConfine(Confine) ? Confine.Spec.Stance : NAME_None;
+}
+
+bool UTutorialSubsystem::IsInsideConfinement(const FVector& Point) const
+{
+	FTutorialConfineView Confine;
+	if (!IsTutorialActive() || !Machine.GetActiveConfine(Confine))
+	{
+		return true;
+	}
+	using namespace TutorialConfineLocal;
+	if (Confine.Spec.bSpan)
+	{
+		// "span": one box round every area (the corridor between the holding volume and the allowed ones).
+		FBox Span(ForceInit);
+		for (const FName Area : Confine.Areas)
+		{
+			for (const ATutorialTriggerVolume* Volume : FindVolumes(Area))
+			{
+				Span += Volume->Box->Bounds.GetBox();
+			}
+		}
+		return Span.IsValid && Span.ExpandBy(FVector(AreaMarginCm, AreaMarginCm, AreaMarginZCm)).IsInsideOrOn(Point);
+	}
+	for (const FName Area : Confine.Areas)
+	{
+		for (const ATutorialTriggerVolume* Volume : FindVolumes(Area))
+		{
+			if (IsInsideBox(*Volume->Box, Point, AreaMarginCm, AreaMarginZCm))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool UTutorialSubsystem::ClampIntoConfinement(FVector& InOutDestination) const
+{
+	FTutorialConfineView Confine;
+	if (!IsTutorialActive() || !Machine.GetActiveConfine(Confine) || IsInsideConfinement(InOutDestination))
+	{
+		return false;
+	}
+	using namespace TutorialConfineLocal;
+	// The nearest point of the allowed area (a formation slot just past the far edge stays at that edge, not back at the start).
+	bool bFound = false;
+	FVector Best = InOutDestination;
+	auto Offer = [&bFound, &Best, &InOutDestination](const FVector& Candidate)
+	{
+		if (!bFound || FVector::DistSquared2D(Candidate, InOutDestination) < FVector::DistSquared2D(Best, InOutDestination))
+		{
+			Best = Candidate;
+			bFound = true;
+		}
+	};
+	if (Confine.Spec.bSpan)
+	{
+		FBox Span(ForceInit);
+		for (const FName Area : Confine.Areas)
+		{
+			for (const ATutorialTriggerVolume* Volume : FindVolumes(Area))
+			{
+				Span += Volume->Box->Bounds.GetBox();
+			}
+		}
+		if (Span.IsValid)
+		{
+			const FVector Min = Span.Min + FVector(ClampInsetCm, ClampInsetCm, 0.f);
+			const FVector Max = Span.Max - FVector(ClampInsetCm, ClampInsetCm, 0.f);
+			Offer(FVector(FMath::Clamp(InOutDestination.X, Min.X, FMath::Max(Min.X, Max.X)), FMath::Clamp(InOutDestination.Y, Min.Y, FMath::Max(Min.Y, Max.Y)),
+				InOutDestination.Z));
+		}
+	}
+	else
+	{
+		for (const FName Area : Confine.Areas)
+		{
+			for (const ATutorialTriggerVolume* Volume : FindVolumes(Area))
+			{
+				const FTransform& Transform = Volume->Box->GetComponentTransform();
+				const FVector Scale = Transform.GetScale3D().GetAbs();
+				const FVector Extent = Volume->Box->GetUnscaledBoxExtent();
+				FVector Local = Transform.InverseTransformPosition(InOutDestination);
+				const float HalfX = FMath::Max(0.f, Extent.X - (Scale.X > KINDA_SMALL_NUMBER ? ClampInsetCm / Scale.X : 0.f));
+				const float HalfY = FMath::Max(0.f, Extent.Y - (Scale.Y > KINDA_SMALL_NUMBER ? ClampInsetCm / Scale.Y : 0.f));
+				Local.X = FMath::Clamp(Local.X, -HalfX, HalfX);
+				Local.Y = FMath::Clamp(Local.Y, -HalfY, HalfY);
+				const FVector Clamped = Transform.TransformPosition(Local);
+				Offer(FVector(Clamped.X, Clamped.Y, InOutDestination.Z));
+			}
+		}
+	}
+	if (!bFound)
+	{
+		return false; // no such volume in this world: nothing to pull towards (orders are still judged against the areas)
+	}
+	InOutDestination = Best;
+	return true;
+}
+
+ETutorialConfineVerdict UTutorialSubsystem::JudgeMove(const AOperativeCharacter& Operative, const FVector& Destination, bool bTakeTurn)
+{
+	FTutorialConfineView Confine;
+	if (!IsTutorialActive() || !Machine.GetActiveConfine(Confine))
+	{
+		return ETutorialConfineVerdict::Allowed;
+	}
+	const bool bInside = IsInsideConfinement(Destination);
+	// A move along his own wall (a shimmy, the corner peek) is not a new position: only the area counts for it.
+	const FName Stance = Operative.bInCover && !Confine.Spec.Stance.IsNone() ? Confine.Spec.Stance : GetStanceName(Operative.GetStance());
+	const ETutorialConfineVerdict Verdict = TutorialRules::JudgeConfinedMove(Confine, Operative.GetFName(), Stance, bInside);
+	if (bTakeTurn && Verdict == ETutorialConfineVerdict::Allowed && Confine.Spec.HasExit())
+	{
+		if (!bInside)
+		{
+			Machine.TakeConfineExitTurn(Operative.GetFName());
+		}
+		else if (IsInsideConfinement(Operative.GetActorLocation()))
+		{
+			Machine.ReturnConfineExitTurn(Operative.GetFName()); // called back into the area before he got through
+		}
+	}
+	return Verdict;
+}
+
+void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, const AOperativeCharacter* Operative)
+{
+	if (Verdict == ETutorialConfineVerdict::Allowed)
+	{
+		return;
+	}
+	++ConfinedRefusals;
+	FTutorialConfineView Confine;
+	Machine.GetActiveConfine(Confine);
+	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: move of %s refused by the confinement of %s (%s)"), Operative ? *Operative->DisplayName.ToString() : TEXT("?"),
+		*Confine.Owner.ToString(), TutorialRules::ConfineVerdictName(Verdict));
+	WriteTelemetry(TEXT("confine_refused"), Confine.Owner, Machine.GetCurrentBeat(), 0.f);
+	GameplayEvents::Raise(this, FName(TEXT("Tutorial.Confined")));
+	const double Now = FPlatformTime::Seconds();
+	double& Last = ConfineLineTimes.FindOrAdd(static_cast<uint8>(Verdict), -1.0e9);
+	if (Now - Last < 1.0)
+	{
+		return; // a group order refused for each member: one line
+	}
+	Last = Now;
+	const bool bProne = (Verdict == ETutorialConfineVerdict::ExitStance ? Confine.Spec.ExitStance : Confine.Spec.Stance) == FName(TEXT("prone"));
+	FText Line;
+	switch (Verdict)
+	{
+	case ETutorialConfineVerdict::Stance:
+		Line = bProne ? LOCTEXT("ConfineProne", "Go prone first.") : LOCTEXT("ConfineCrouch", "Crouch first - stay low.");
+		break;
+	case ETutorialConfineVerdict::ExitStance:
+		Line = bProne ? LOCTEXT("ConfineExitProne", "Go prone first - then crawl under.") : LOCTEXT("ConfineExitCrouch", "Crouch first - stay low.");
+		break;
+	case ETutorialConfineVerdict::NotYourTurn:
+		Line = LOCTEXT("ConfineTurn", "One at a time - wait until he is through.");
+		break;
+	default:
+		Line = LOCTEXT("ConfineHold", "Hold here - follow the training.");
+		break;
+	}
+	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+	{
+		Messages->PostMessage(LOCTEXT("TrainingSpeaker", "TRAINING"), Line);
+	}
+}
+
+bool UTutorialSubsystem::CheckConfinedOrder(const UObject* WorldContext, const AOperativeCharacter* Operative, const FVector& Destination)
+{
+	UWorld* World = GEngine && WorldContext ? GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::ReturnNull) : nullptr;
+	UTutorialSubsystem* Tutorial = World ? World->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	if (!Tutorial || !Operative || !Tutorial->IsConfining())
+	{
+		return true;
+	}
+	const ETutorialConfineVerdict Verdict = Tutorial->JudgeMove(*Operative, Destination, /*bTakeTurn*/ true);
+	if (Verdict == ETutorialConfineVerdict::Allowed)
+	{
+		return true;
+	}
+	Tutorial->ReportConfinedRefusal(Verdict, Operative);
+	return false;
+}
+
+void UTutorialSubsystem::HandleConfineChanged()
+{
+	SeenConfineSerial = Machine.GetConfineSerial();
+	FTutorialConfineView Confine;
+	if (!IsTutorialActive() || !Machine.GetActiveConfine(Confine))
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: no confinement in force"));
+		return;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s holds the squad in %s (areas: %s)%s%s"), *Confine.Owner.ToString(), *Confine.Spec.Volume.ToString(),
+		*FString::JoinBy(Confine.Areas, TEXT(", "), [](FName Area) { return Area.ToString(); }), Confine.Spec.bStop ? TEXT(", stop") : TEXT(""),
+		Confine.Spec.Stance.IsNone() ? TEXT("") : *FString::Printf(TEXT(", stance %s"), *Confine.Spec.Stance.ToString()));
+	WriteTelemetry(TEXT("confine_started"), Confine.Owner, Machine.GetCurrentBeat(), 0.f);
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+	{
+		if (!Member || !Member->IsMoving())
+		{
+			continue;
+		}
+		// "stop": everyone stops where he is; otherwise only a walk that would end outside the area (ordered before the squad arrived).
+		const bool bOutside = JudgeMove(*Member, Member->GetLastMoveDestination(), /*bTakeTurn*/ false) != ETutorialConfineVerdict::Allowed;
+		if (Confine.Spec.bStop || bOutside)
+		{
+			Member->StopOperative();
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s stopped by the confinement (%s)"), *Member->DisplayName.ToString(),
+				Confine.Spec.bStop ? TEXT("stop") : TEXT("his walk led outside"));
+		}
+	}
 }
 
 FName UTutorialSubsystem::FilterCommand(const UObject* WorldContext, FName CommandId)
@@ -987,8 +1349,14 @@ FTutorialCardView UTutorialSubsystem::BuildCardView(FName StepId, bool bDone) co
 	if (!Step->TextId.IsNone())
 	{
 		const FTutorialTextView Text = FNarrativeManifest::Get().GetTutorialText(Step->TextId.ToString());
-		View.Title = FText::FromString(ResolveFocusToken(Text.Title, StepId));
-		View.Body = FText::FromString(PlayerCommands::ResolveKeyTokens(ResolveFocusToken(Text.Text, StepId)));
+		// Rev 5i: {progress} / {count} = how far the card's completion got ("1 / 3 through").
+		auto Progress = [this, Step, StepId](const FString& In)
+		{
+			return In.Replace(TEXT("{progress}"), *FString::FromInt(FMath::Min(Machine.GetProgress(StepId), Step->Complete.Count)))
+				.Replace(TEXT("{count}"), *FString::FromInt(Step->Complete.Count));
+		};
+		View.Title = FText::FromString(Progress(ResolveFocusToken(Text.Title, StepId)));
+		View.Body = FText::FromString(PlayerCommands::ResolveKeyTokens(Progress(ResolveFocusToken(Text.Text, StepId))));
 	}
 	if (AOperativeCharacter* Focus = GetFocusOperative(StepId))
 	{
@@ -1357,6 +1725,7 @@ TSharedPtr<FJsonObject> UTutorialSubsystem::CaptureSaveState() const
 		Hints.Add(MakeShared<FJsonValueString>(Family));
 	}
 	Object->SetArrayField(TEXT("lock_hints"), Hints);
+	Object->SetBoolField(TEXT("skipped"), bSkipped); // rev 5i: SKIP TUTORIAL stays skipped after a load
 	return Object;
 }
 
@@ -1389,6 +1758,8 @@ void UTutorialSubsystem::RestoreSaveState(const FJsonObject& Object)
 			It->SetFired(Fired.Contains(It->GetName()));
 		}
 	}
+	bool bSavedSkipped = false;
+	bSkipped = Object.TryGetBoolField(TEXT("skipped"), bSavedSkipped) && bSavedSkipped;
 	LockHintFamilies.Reset();
 	const TArray<TSharedPtr<FJsonValue>>* Hints = nullptr;
 	if (Object.TryGetArrayField(TEXT("lock_hints"), Hints))

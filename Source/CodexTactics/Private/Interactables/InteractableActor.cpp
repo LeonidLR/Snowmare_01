@@ -22,6 +22,7 @@
 #include "Interactables/TurretActor.h"
 #include "TimerManager.h"
 #include "Quests/QuestSubsystem.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
 
 #define LOCTEXT_NAMESPACE "InteractableActor"
@@ -129,6 +130,19 @@ void AInteractableActor::PostLine(const FText& Speaker, const FText& Text) const
 	{
 		Messages->PostMessage(Speaker, Text);
 	}
+}
+
+bool AInteractableActor::CanBeSpottedByProximity() const
+{
+	if (SpotRequiresStep.IsNone())
+	{
+		return true;
+	}
+	const UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	const bool bActive = Tutorial && Tutorial->IsTutorialActive();
+	const bool bKnown = bActive && Tutorial->GetMachine().GetData().FindStep(SpotRequiresStep) != nullptr;
+	const bool bStarted = bKnown && Tutorial->GetStepState(SpotRequiresStep) != ETutorialStepState::Idle;
+	return TrapSpotRules::AllowsProximitySpot(SpotRequiresStep, bActive, bKnown, bStarted);
 }
 
 void AInteractableActor::NotifyTrapSpotted(AOperativeCharacter* Spotter, bool bByPeek, const FText& TrapName)
