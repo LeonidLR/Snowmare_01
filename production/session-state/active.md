@@ -20,6 +20,14 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
   flaky list empty (HANDOFF section 9); game fix: arming countdown clamp. Next: (3) merge the two lake maps with the user,
   (4) audit batches.
 
+## Queued (user 2026-10-15, after the rev 5i agent): Polygonmaker interaction clips
+`/Game/Polygonmaker/Animations/Interactions/UE4/` (untracked user pack — don't commit it unless asked):
+`Anim_Regular_chest_open` (crate opening, before the loot window), `Anim_Regular_chest_search` (after picking an item
+or Take All), `Anim_Regular_idle_cold` (occasional random variant mixed with the existing shiver poses),
+`Anim_Regular_pickup_ground` (after a successful mine AND tripwire disarm; standing = full body, crouched = upper body
+only, prone = nothing for now, another clip later). Disarm approach distance much closer (~60-80 cm, now ~2 m).
+Check the skeleton vs the operatives' (as with the crawl clips: use the matching variant, never retarget/edit user assets).
+
 ## Checkpoint 2026-10-14 (end of day)
 - Done today: Demo 01 rev 5d-5g (heat pack sharing with Shift+drag, barrel into the ruin, corner peek near edge + low
   cover, place dialogue `cancel_on`, traps avoided only in AUTO, tripwire disarm fix, sprint locked until the first heat
