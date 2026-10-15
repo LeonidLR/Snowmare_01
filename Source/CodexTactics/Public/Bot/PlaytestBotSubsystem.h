@@ -14,6 +14,15 @@ class AEnemyCharacter;
 class AOperativeCharacter;
 
 /**
+ * The playtest bot exists in development builds only (audit 2026-10-11 #3, "bot gate"): in Test / Shipping the subsystem
+ * is never created, -CodexBot / the CodexTactics.Bot command / the Codex.Bot.* console variables do not exist, so a
+ * shipped game cannot be driven, quit (RequestExitWithStatus) or made to write Saved/Telemetry by it.
+ */
+#ifndef CODEX_WITH_PLAYTEST_BOT
+#define CODEX_WITH_PLAYTEST_BOT (!(UE_BUILD_SHIPPING || UE_BUILD_TEST))
+#endif
+
+/**
  * Autonomous playtest bot (Godot archive tools/bot/bot_driver.gd + smart_tactical_bot.gd): plays the level through —
  * exploration (collects loot crates and loose deployables), the combat zone, the profile's defences in the first
  * preparation, every wave with the tactical decisions (grenade at clusters, leader fallback, barricade or wall cover
@@ -38,6 +47,13 @@ class CODEXTACTICS_API UPlaytestBotSubsystem : public UTickableWorldSubsystem
 	GENERATED_BODY()
 
 public:
+	/** Never in Test / Shipping builds (CODEX_WITH_PLAYTEST_BOT); otherwise as any world subsystem. */
+	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
+	/** Game and PIE worlds only: no bot object in editor / preview / inactive worlds. */
+	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
+	/** The bot gate as a pure rule (tests): the world types and builds the bot may exist in. */
+	static bool IsBotAllowed(EWorldType::Type WorldType);
+
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;

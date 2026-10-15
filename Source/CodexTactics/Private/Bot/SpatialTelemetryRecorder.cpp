@@ -289,7 +289,7 @@ void FSpatialTelemetryRecorder::RecordFrame()
 		}
 		if (It->GetVelocity().Size2D() < 35.f && FVector::Dist2D(Location, Stall.Anchor) < 150.f)
 		{
-			Stall.Seconds += TickInterval;
+			Stall.Seconds += static_cast<float>(TickInterval);
 		}
 		else
 		{
