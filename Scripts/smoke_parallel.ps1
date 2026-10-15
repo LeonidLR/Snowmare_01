@@ -8,7 +8,12 @@
 # Names may carry the "CodexTactics." prefix or not. Per-check options (exclusive / extra args / knownFail) come from Scripts\test_map.json.
 # Shared files: SaveLoadSmoke / PauseMenuSmoke (Saved\SmokeSaves) and EventBusSmoke (Saved\SaveGames slot) are "exclusive": they run alone
 # after the parallel batch. Every other check only writes its own log. A check that fails in the parallel batch is re-run alone once
-# (load can slow it down; the table marks that as PASS*); -NoRetry disables that.
+# (load can slow it down; the table marks that as PASS*); -NoRetry disables that. Every run ends with a "needed a re-run" line
+# that splits the PASS* smokes into known flaky (Scripts\test_map.json "knownFlaky", with the reason) and NEW flaky ones.
+# Clock: every smoke runs on a FIXED game step by default (test_map.json smokeDefaults: -UseFixedTimeStep -FPS=<fixedStepFps>
+# [-FixedSeed]): each frame advances the game by exactly 1/FPS whatever the machine load, so 3 games side by side see the same
+# frames as one alone (no frame-time dependent results) and, unthrottled, a smoke runs several times faster than real time.
+# -RealTime (all) or a smoke's "realTime": true option runs it on the wall clock as before.
 # Build lock: taken ONCE for the whole batch (children are plain engine processes, they never touch it). If the caller already holds it
 # (CODEX_LOCK_HELD=1: verify_all, test.ps1 -Changed) nothing is taken here.
 param(
@@ -18,6 +23,7 @@ param(
     [int]$TimeoutSeconds = 300,
     [switch]$Serial,
     [switch]$NoRetry,
+    [switch]$RealTime,
     [string]$ResultJson = ""
 )
 
@@ -44,10 +50,21 @@ function Get-Option([string]$Name, [string]$Key, $Default) {
     return $Default
 }
 
+# Fixed game step arguments for a smoke ("" on the wall clock: -RealTime, the smoke's realTime option, or no smokeDefaults).
+function Get-ClockArgs([string]$Name) {
+    $defaults = $TestMap.PSObject.Properties["smokeDefaults"]
+    if ($RealTime -or (Get-Option $Name "realTime" $false) -or -not $defaults) { return "" }
+    $fps = [int](Get-Option $Name "fixedStepFps" $defaults.Value.fixedStepFps) # a smoke may need a finer step (per-frame metrics)
+    if ($fps -le 0) { return "" }
+    $clock = "-UseFixedTimeStep -FPS=$fps"
+    if ($defaults.Value.fixedSeed) { $clock += " -FixedSeed" }
+    return $clock
+}
+
 function Start-SmokeProcess([string]$Name, [string]$Suffix) {
     $log = Join-Path $LogDir "Smoke-$Name$Suffix.log"
     Remove-Item $log -ErrorAction SilentlyContinue # a stale log must never pass for this run's result
-    $extra = Get-Option $Name "extra" ""
+    $extra = (Get-Option $Name "extra" "") + " " + (Get-ClockArgs $Name)
     $map = Get-Option $Name "map" $Map
     # Start-Process takes one argument string: quote the paths (the project path has a space).
     $gameArgs = "`"$Project`" $map -game -nullrhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=CodexTactics.$Name`" `"-abslog=$log`" $extra"
@@ -93,7 +110,8 @@ $final = @()
 try {
     $exclusive = @($Names | Where-Object { Get-Option $_ "exclusive" $false })
     $shared = @($Names | Where-Object { $_ -notin $exclusive })
-    Write-Host ("[smoke_parallel] {0} smokes, {1} at a time{2}" -f $Names.Count, $Jobs, $(if ($exclusive.Count) { ", exclusive alone afterwards: " + ($exclusive -join ", ") } else { "" }))
+    $clockNote = $(if ($RealTime) { "wall clock" } else { $c = Get-ClockArgs ""; if ($c) { "fixed step ($c)" } else { "wall clock" } })
+    Write-Host ("[smoke_parallel] {0} smokes, {1} at a time, {2}{3}" -f $Names.Count, $Jobs, $clockNote, $(if ($exclusive.Count) { ", exclusive alone afterwards: " + ($exclusive -join ", ") } else { "" }))
     $results = @()
     if ($shared.Count) { $results += Invoke-Batch $shared $Jobs "" }
     $retried = @{}
@@ -129,11 +147,23 @@ Write-Host ("{0,-26} {1,-11} {2,8}" -f "Smoke", "Result", "Seconds")
 foreach ($f in ($final | Sort-Object Name)) { Write-Host ("{0,-26} {1,-11} {2,8:N1}" -f $f.Name, $f.State, $f.Seconds) }
 $bad = @($final | Where-Object { $_.State -eq "FAIL" })
 $flaky = @($final | Where-Object { $_.State -eq "PASS*" })
+# Flakiness summary: which smokes needed the re-run, known (test_map.json knownFlaky) or new.
+$knownFlaky = $TestMap.PSObject.Properties["knownFlaky"]
+$knownFlakyNames = @(if ($knownFlaky) { $knownFlaky.Value.PSObject.Properties | Where-Object { $_.Name -notlike "_*" } | ForEach-Object Name })
+if ($flaky.Count) {
+    $newFlaky = @($flaky | Where-Object { $_.Name -notin $knownFlakyNames } | ForEach-Object Name)
+    $oldFlaky = @($flaky | Where-Object { $_.Name -in $knownFlakyNames } | ForEach-Object { "{0} ({1})" -f $_.Name, $knownFlaky.Value.($_.Name) })
+    Write-Host ("[smoke_parallel] needed a re-run: {0}" -f (($flaky | ForEach-Object Name) -join ", ")) -ForegroundColor Yellow
+    if ($newFlaky.Count) { Write-Host ("[smoke_parallel]   NEW flaky (not in test_map.json knownFlaky): {0}" -f ($newFlaky -join ", ")) -ForegroundColor Yellow }
+    if ($oldFlaky.Count) { Write-Host ("[smoke_parallel]   known flaky: {0}" -f ($oldFlaky -join "; ")) }
+} elseif (-not $NoRetry -and $Jobs -gt 1) {
+    Write-Host "[smoke_parallel] needed a re-run: none"
+}
 $known = @($final | Where-Object { $_.State -eq "KNOWN-FAIL" })
 Write-Host ("[smoke_parallel] {0} run, {1} failed, {2} passed only on the re-run (PASS*), {3} known-fail; wall {4:N0} s, sum of checks {5:N0} s" -f
     $final.Count, $bad.Count, $flaky.Count, $known.Count, $sw.Elapsed.TotalSeconds, ($final | Measure-Object Seconds -Sum).Sum)
 if (-not $ResultJson) { $ResultJson = Join-Path $LogDir "SmokeParallel-last.json" }
-@{ jobs = $Jobs; wallSeconds = [Math]::Round($sw.Elapsed.TotalSeconds, 1); results = $final } | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 $ResultJson
+@{ jobs = $Jobs; wallSeconds = [Math]::Round($sw.Elapsed.TotalSeconds, 1); rerunPassed = @($flaky | ForEach-Object Name); results = $final } | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 $ResultJson
 if ($bad.Count -gt 0) {
     Write-Host ("FAILED: {0}  (logs: Saved\Logs\Smoke-<Name>[-alone].log)" -f (($bad | ForEach-Object Name) -join ", ")) -ForegroundColor Red
     exit 1

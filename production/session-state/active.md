@@ -14,6 +14,12 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Cleanup day task 2 (2026-10-15, agents/work, not merged)
+- Smokes trustworthy: fixed 60 fps game step in `smoke_parallel.ps1`, Panic / SquadControl / VisionCone fixed, the flaky list
+  (CornerHold, TurnBasedAim, Knockdown, Cover, LevelWave, GroupSelect, TurnBlastDeath, EnemyTactics, Facing) fixed, known
+  flaky list empty (HANDOFF section 9); game fix: arming countdown clamp. Next: (3) merge the two lake maps with the user,
+  (4) audit batches.
+
 ## Checkpoint 2026-10-14 (end of day)
 - Done today: Demo 01 rev 5d-5g (heat pack sharing with Shift+drag, barrel into the ruin, corner peek near edge + low
   cover, place dialogue `cancel_on`, traps avoided only in AUTO, tripwire disarm fix, sprint locked until the first heat
