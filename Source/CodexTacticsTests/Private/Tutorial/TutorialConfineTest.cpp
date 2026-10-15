@@ -256,6 +256,65 @@ bool FTutorialConfineExitTurnTest::RunTest(const FString&)
 	return true;
 }
 
+// Rev 5i item 3 (game designer 2026-10-15): at the A3 approach the squad stops and moves up to the low ridge only crouched.
+TUTORIAL_CONFINE_TEST(FTutorialConfineDemoA3LowTest, "DemoA3Low")
+bool FTutorialConfineDemoA3LowTest::RunTest(const FString&)
+{
+	TestEqual(TEXT("stat squad_not_low_in.<volume> parses"), TutorialRules::ParseNotLowInStat(TEXT("squad_not_low_in.VOL_A3_RIDGE")), FName(TEXT("VOL_A3_RIDGE")));
+	TestTrue(TEXT("other stats are not it"), TutorialRules::ParseNotLowInStat(TEXT("squad_cold_max")).IsNone() && TutorialRules::IsKnownStat(TEXT("squad_not_low_in.X")));
+	FTutorialStepsData Data;
+	TArray<FString> Warnings;
+	FString Error;
+	if (!TestTrue(FString::Printf(TEXT("demo file loads (%s)"), *Error), TutorialRules::LoadStepsFile(TEXT("demo_01_steps.json"), Data, Warnings, Error)))
+	{
+		return false;
+	}
+	const FTutorialStep* Low = Data.FindStep(TEXT("A3_low"));
+	TestTrue(TEXT("A3_low: a card on VOL_A3_APPROACH, unlocks the stances, holds crouched in the corridor approach -> ridge, stops the squad"), Low
+		&& Low->Kind == ETutorialStepKind::HintCard && Low->Trigger.Type == ETutorialTriggerType::Volume && Low->Trigger.Volume == FName(TEXT("VOL_A3_APPROACH"))
+		&& Low->Unlock.Contains(TEXT("Stance.*")) && Low->Confine.Volume == FName(TEXT("VOL_A3_APPROACH")) && Low->Confine.Allow.Contains(FName(TEXT("VOL_A3_RIDGE")))
+		&& Low->Confine.bSpan && Low->Confine.bStop && Low->Confine.Stance == FName(TEXT("crouch")) && Low->Complete.Conditions.Num() == 1
+		&& Low->Complete.Conditions[0].Stat == FName(TEXT("squad_not_low_in.VOL_A3_RIDGE")) && !Low->Complete.Conditions[0].bAtLeast && Low->Complete.TimeoutSeconds == 0.f);
+	TestTrue(TEXT("its keys: crouch / squad crouch"), Low && Low->Keys.Contains(TEXT("Stance.Crouch")) && Low->Keys.Contains(TEXT("Stance.Squad.Crouch")));
+
+	float NotLow = 3.f;
+	FTutorialStateMachine Machine;
+	Machine.Load(Data);
+	Machine.StatProvider = [&NotLow](FName Stat) { return Stat == FName(TEXT("squad_not_low_in.VOL_A3_RIDGE")) ? NotLow : 0.f; };
+	Machine.RegisterVolumeBeat(TEXT("VOL_A3_APPROACH"), TEXT("A3"));
+	Machine.StartBeat(TEXT("A0"));
+	Machine.StartBeat(TEXT("A2"));
+	TestTrue(TEXT("stances still locked in A2"), Machine.IsCommandLocked(TEXT("Stance.Crouch")));
+	Machine.HandleVolume(TEXT("VOL_A3_APPROACH"), NAME_None, TEXT("A3"), TEXT("Op1"));
+	Machine.Tick(0.1f);
+	TestEqual(TEXT("the approach starts A3"), Machine.GetCurrentBeat(), FName(TEXT("A3")));
+	TestTrue(TEXT("the squad is held at the approach, crouched"), Machine.IsConfined());
+	TestEqual(TEXT("the 'stay low' card shows at once"), Machine.GetActiveCard(), FName(TEXT("A3_low")));
+	TestFalse(TEXT("crouch unlocked by the card"), Machine.IsCommandLocked(TEXT("Stance.Crouch")) || Machine.IsCommandLocked(TEXT("Stance.Squad.Crouch")));
+	Machine.HandleVolume(TEXT("VOL_A3_WIND"), NAME_None, NAME_None, TEXT("Op1"));
+	Machine.Tick(1.f);
+	TestEqual(TEXT("the wind strip's stance card waits behind it"), Machine.GetActiveCard(), FName(TEXT("A3_low")));
+	NotLow = 1.f;
+	Machine.Tick(0.5f);
+	TestEqual(TEXT("one still standing / outside: not done"), Machine.GetState(TEXT("A3_low")), ETutorialStepState::Active);
+	NotLow = 0.f;
+	Machine.Tick(0.5f);
+	TestEqual(TEXT("everyone crouched at the ridge: done"), Machine.GetState(TEXT("A3_low")), ETutorialStepState::Completed);
+	TestFalse(TEXT("and free"), Machine.IsConfined());
+
+	// The fence reached first (the approach skipped): the card is passed, nothing holds the squad, the stances are free.
+	FTutorialStateMachine Fence;
+	Fence.Load(Data);
+	Fence.StartBeat(TEXT("A0"));
+	Fence.StartBeat(TEXT("A2"));
+	Fence.HandleVolume(TEXT("VOL_A3_FENCE"), NAME_None, NAME_None, TEXT("Op1"));
+	TestEqual(TEXT("fence first: A3_low passed"), Fence.GetState(TEXT("A3_low")), ETutorialStepState::Skipped);
+	TestFalse(TEXT("fence first: the stances unlocked on the way"), Fence.IsCommandLocked(TEXT("Stance.Crouch")));
+	FTutorialConfineView View;
+	TestTrue(TEXT("fence first: not held at the approach"), !Fence.GetActiveConfine(View) || View.Spec.Volume != FName(TEXT("VOL_A3_APPROACH")));
+	return true;
+}
+
 #undef TUTORIAL_CONFINE_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -252,6 +252,10 @@
     "WT_A1_12": {
       "text": "And remember — down low is also how you get under a wire."
     },
+    "TUT_A3_LOW": {
+      "title": "STAY LOW",
+      "text": "Stop. Crouch and move up to the low wall. {key:Stance.Crouch} crouches the selected operative, {key:Stance.Squad.Crouch} the whole squad."
+    },
     "TUT_A1_STANCE": {
       "title": "STANCE",
       "text": "{key:Stance.Crouch} crouch, {key:Stance.Prone} prone, {key:Stance.Stand} stand. Hold Alt for the whole squad ({key:Stance.Squad.Prone}). Lower = less wind, harder to spot."

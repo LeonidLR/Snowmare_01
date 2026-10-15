@@ -157,6 +157,12 @@ namespace TutorialRules
 
 	// --- Confine (rev 5i, game designer 2026-10-15: hold the squad in an area until the lesson is done) ---------------------
 
+	/**
+	 * Rev 5i: "squad_not_low_in.<VolumeId>" -> VolumeId (else NAME_None): the condition stat counting the living squad members that are
+	 * NOT crouched / prone inside that tutorial volume ({"stat": "squad_not_low_in.VOL_A3_RIDGE", "below": 1} = everyone is down there).
+	 */
+	CODEXTACTICS_API FName ParseNotLowInStat(FName Stat);
+
 	/** "crouch" / "crouched" / "crouching" -> crouch, "prone", "stand" / "standing" -> stand; anything else NAME_None. */
 	CODEXTACTICS_API FName NormalizeStance(const FString& Text);
 

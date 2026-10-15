@@ -407,6 +407,15 @@
       "complete": { "volume": "VOL_A4_OVERLOOK" }
     },
     {
+      "_comment": "Rev 5i (game designer 2026-10-15): the complex comes into view ('That's the complex. The PMC left in a hurry ...') - the squad is STOPPED and held at the approach (VOL_A3_APPROACH, Beat A3, Leader) and moves up to the first low obstacle ahead, the vault ridge (VaultRidge_A3, 0.8 m; its approach side VOL_A3_RIDGE) only CROUCHED: every move order of a standing operative is refused ('Crouch first - stay low.'), followers copy the leader's low stance before they follow; the corridor approach -> ridge front is allowed (span), nothing beyond. Done when every living operative is crouched / prone inside VOL_A3_RIDGE (stat squad_not_low_in). Unlocks the stances here (they were locked until the wind card). A volume trigger, not the beat start: a squad that reached A3 another way (the fence first) passes it.",
+      "id": "A3_low", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_LOW",
+      "keys": ["Stance.Crouch", "Stance.Squad.Crouch"],
+      "unlock": ["Stance.*"],
+      "trigger": { "type": "volume", "volume": "VOL_A3_APPROACH" },
+      "confine": { "volume": "VOL_A3_APPROACH", "allow": ["VOL_A3_RIDGE"], "span": true, "stop": true, "stance": "crouch" },
+      "complete": { "condition": [ { "stat": "squad_not_low_in.VOL_A3_RIDGE", "below": 1 } ] }
+    },
+    {
       "_comment": "Stances at the wind strip (was A1 beacon 4: VOL_A1_BEACON4 -> VOL_A3_WIND). Precredited if the player already used two stance keys.",
       "id": "A3_wt_wind", "beat": "A3", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A3_WIND" },

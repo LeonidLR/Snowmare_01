@@ -127,6 +127,30 @@ namespace TutorialConsole
 #endif
 }
 
+namespace TutorialConfineLocal
+{
+	/** Margin around an allowed volume: a destination projected to the navmesh / a path end may lie just outside the box. */
+	constexpr float AreaMarginCm = 50.f;
+	/** Height margin: volumes are placed at ground level, clicks hit the floor or a wall face. */
+	constexpr float AreaMarginZCm = 300.f;
+	/** A formation target pulled into the allowed area stays this far inside its sides. */
+	constexpr float ClampInsetCm = 60.f;
+	/** "squad_not_low_in.<volume>": an operative within this distance of the volume's box counts as there (followers round the leader). */
+	constexpr float NearVolumeCm = 300.f;
+
+	bool IsInsideBox(const UBoxComponent& Box, const FVector& Point, float MarginXY, float MarginZ)
+	{
+		const FVector Local = Box.GetComponentTransform().InverseTransformPosition(Point);
+		const FVector Scale = Box.GetComponentTransform().GetScale3D().GetAbs();
+		const FVector Extent = Box.GetUnscaledBoxExtent();
+		// The margins are world cm: convert them to the box's local units.
+		const float MX = Scale.X > KINDA_SMALL_NUMBER ? MarginXY / Scale.X : MarginXY;
+		const float MY = Scale.Y > KINDA_SMALL_NUMBER ? MarginXY / Scale.Y : MarginXY;
+		const float MZ = Scale.Z > KINDA_SMALL_NUMBER ? MarginZ / Scale.Z : MarginZ;
+		return FMath::Abs(Local.X) <= Extent.X + MX && FMath::Abs(Local.Y) <= Extent.Y + MY && FMath::Abs(Local.Z) <= Extent.Z + MZ;
+	}
+}
+
 bool UTutorialSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
@@ -863,6 +887,27 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 		}
 		return static_cast<float>(Spotted);
 	}
+	if (const FName LowVolume = TutorialRules::ParseNotLowInStat(Stat); !LowVolume.IsNone())
+	{
+		// Rev 5i: the living members NOT crouched / prone at that volume - inside its box or within 3 m of it, where followers in
+		// formation stand round a leader sent into it (0 = the whole squad is down there).
+		const TArray<const ATutorialTriggerVolume*> LowVolumes = FindVolumes(LowVolume);
+		int32 NotLow = 0;
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (!Member || (Member->HealthComponent && !Member->HealthComponent->IsAlive()))
+			{
+				continue;
+			}
+			const bool bLow = TutorialRules::StanceSatisfies(GetStanceName(Member->GetStance()), FName(TEXT("crouch")));
+			const bool bThere = LowVolumes.ContainsByPredicate([Member](const ATutorialTriggerVolume* Volume)
+			{
+				return TutorialConfineLocal::IsInsideBox(*Volume->Box, Member->GetActorLocation(), TutorialConfineLocal::NearVolumeCm, TutorialConfineLocal::AreaMarginZCm);
+			});
+			NotLow += bLow && bThere ? 0 : 1;
+		}
+		return static_cast<float>(NotLow);
+	}
 	if (Stat == FName(TEXT("heat_packs_given")))
 	{
 		const USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>();
@@ -968,27 +1013,6 @@ void UTutorialSubsystem::UnlockAllCommands(const TCHAR* Reason)
 
 // --- Confine (rev 5i) -----------------------------------------------------------------------------------------------
 
-namespace TutorialConfineLocal
-{
-	/** Margin around an allowed volume: a destination projected to the navmesh / a path end may lie just outside the box. */
-	constexpr float AreaMarginCm = 50.f;
-	/** Height margin: volumes are placed at ground level, clicks hit the floor or a wall face. */
-	constexpr float AreaMarginZCm = 300.f;
-	/** A formation target pulled into the holding volume stays this far inside its sides. */
-	constexpr float ClampInsetCm = 60.f;
-
-	bool IsInsideBox(const UBoxComponent& Box, const FVector& Point, float MarginXY, float MarginZ)
-	{
-		const FVector Local = Box.GetComponentTransform().InverseTransformPosition(Point);
-		const FVector Scale = Box.GetComponentTransform().GetScale3D().GetAbs();
-		const FVector Extent = Box.GetUnscaledBoxExtent();
-		// The margins are world cm: convert them to the box's local units.
-		const float MX = Scale.X > KINDA_SMALL_NUMBER ? MarginXY / Scale.X : MarginXY;
-		const float MY = Scale.Y > KINDA_SMALL_NUMBER ? MarginXY / Scale.Y : MarginXY;
-		const float MZ = Scale.Z > KINDA_SMALL_NUMBER ? MarginZ / Scale.Z : MarginZ;
-		return FMath::Abs(Local.X) <= Extent.X + MX && FMath::Abs(Local.Y) <= Extent.Y + MY && FMath::Abs(Local.Z) <= Extent.Z + MZ;
-	}
-}
 
 TArray<const ATutorialTriggerVolume*> UTutorialSubsystem::FindVolumes(FName VolumeId) const
 {
@@ -1068,22 +1092,60 @@ bool UTutorialSubsystem::ClampIntoConfinement(FVector& InOutDestination) const
 	{
 		return false;
 	}
-	const TArray<const ATutorialTriggerVolume*> Holding = FindVolumes(Confine.Spec.Volume);
-	if (Holding.IsEmpty())
+	using namespace TutorialConfineLocal;
+	// The nearest point of the allowed area (a formation slot just past the far edge stays at that edge, not back at the start).
+	bool bFound = false;
+	FVector Best = InOutDestination;
+	auto Offer = [&bFound, &Best, &InOutDestination](const FVector& Candidate)
+	{
+		if (!bFound || FVector::DistSquared2D(Candidate, InOutDestination) < FVector::DistSquared2D(Best, InOutDestination))
+		{
+			Best = Candidate;
+			bFound = true;
+		}
+	};
+	if (Confine.Spec.bSpan)
+	{
+		FBox Span(ForceInit);
+		for (const FName Area : Confine.Areas)
+		{
+			for (const ATutorialTriggerVolume* Volume : FindVolumes(Area))
+			{
+				Span += Volume->Box->Bounds.GetBox();
+			}
+		}
+		if (Span.IsValid)
+		{
+			const FVector Min = Span.Min + FVector(ClampInsetCm, ClampInsetCm, 0.f);
+			const FVector Max = Span.Max - FVector(ClampInsetCm, ClampInsetCm, 0.f);
+			Offer(FVector(FMath::Clamp(InOutDestination.X, Min.X, FMath::Max(Min.X, Max.X)), FMath::Clamp(InOutDestination.Y, Min.Y, FMath::Max(Min.Y, Max.Y)),
+				InOutDestination.Z));
+		}
+	}
+	else
+	{
+		for (const FName Area : Confine.Areas)
+		{
+			for (const ATutorialTriggerVolume* Volume : FindVolumes(Area))
+			{
+				const FTransform& Transform = Volume->Box->GetComponentTransform();
+				const FVector Scale = Transform.GetScale3D().GetAbs();
+				const FVector Extent = Volume->Box->GetUnscaledBoxExtent();
+				FVector Local = Transform.InverseTransformPosition(InOutDestination);
+				const float HalfX = FMath::Max(0.f, Extent.X - (Scale.X > KINDA_SMALL_NUMBER ? ClampInsetCm / Scale.X : 0.f));
+				const float HalfY = FMath::Max(0.f, Extent.Y - (Scale.Y > KINDA_SMALL_NUMBER ? ClampInsetCm / Scale.Y : 0.f));
+				Local.X = FMath::Clamp(Local.X, -HalfX, HalfX);
+				Local.Y = FMath::Clamp(Local.Y, -HalfY, HalfY);
+				const FVector Clamped = Transform.TransformPosition(Local);
+				Offer(FVector(Clamped.X, Clamped.Y, InOutDestination.Z));
+			}
+		}
+	}
+	if (!bFound)
 	{
 		return false; // no such volume in this world: nothing to pull towards (orders are still judged against the areas)
 	}
-	const UBoxComponent& Box = *Holding[0]->Box;
-	const FTransform& Transform = Box.GetComponentTransform();
-	const FVector Scale = Transform.GetScale3D().GetAbs();
-	const FVector Extent = Box.GetUnscaledBoxExtent();
-	FVector Local = Transform.InverseTransformPosition(InOutDestination);
-	const float InsetX = Scale.X > KINDA_SMALL_NUMBER ? TutorialConfineLocal::ClampInsetCm / Scale.X : 0.f;
-	const float InsetY = Scale.Y > KINDA_SMALL_NUMBER ? TutorialConfineLocal::ClampInsetCm / Scale.Y : 0.f;
-	Local.X = FMath::Clamp(Local.X, -FMath::Max(0.f, Extent.X - InsetX), FMath::Max(0.f, Extent.X - InsetX));
-	Local.Y = FMath::Clamp(Local.Y, -FMath::Max(0.f, Extent.Y - InsetY), FMath::Max(0.f, Extent.Y - InsetY));
-	const FVector Clamped = Transform.TransformPosition(Local);
-	InOutDestination = FVector(Clamped.X, Clamped.Y, InOutDestination.Z);
+	InOutDestination = Best;
 	return true;
 }
 

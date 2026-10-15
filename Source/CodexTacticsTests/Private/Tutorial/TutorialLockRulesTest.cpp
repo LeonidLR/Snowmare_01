@@ -642,11 +642,12 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	float Packs = 3.f;
 	float MinPacks = 0.f;
 	float Given = 0.f;
+	float NotLow = 3.f;
 	FTutorialStateMachine Machine;
-	Machine.StatProvider = [&Cold, &Packs, &MinPacks, &Given](FName Stat)
+	Machine.StatProvider = [&Cold, &Packs, &MinPacks, &Given, &NotLow](FName Stat)
 	{
 		return Stat == FName(TEXT("squad_heat_packs")) ? Packs : Stat == FName(TEXT("squad_min_heat_packs")) ? MinPacks
-			: Stat == FName(TEXT("heat_packs_given")) ? Given : Cold;
+			: Stat == FName(TEXT("heat_packs_given")) ? Given : !TutorialRules::ParseNotLowInStat(Stat).IsNone() ? NotLow : Cold;
 	};
 	Machine.Load(Data);
 	Machine.StartBeat(Data.StartBeat);
@@ -841,7 +842,13 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	Machine.HandleCommand(PlayerCommands::StanceCrouch);
 	Machine.HandleCommand(PlayerCommands::StanceStand);
 	Machine.HandleVolume(TEXT("VOL_A3_APPROACH"), NAME_None, TEXT("A3"));
+	// Rev 5i: the complex in view - held at the approach until everyone is crouched at the low ridge.
+	TestTrue(TEXT("rev 5i: the approach holds the squad (crouch to the ridge)"), Machine.IsConfined() && Machine.GetState(TEXT("A3_low")) == ETutorialStepState::Active);
+	TestFalse(TEXT("rev 5i: the 'stay low' card unlocks crouch"), Machine.IsCommandLocked(PlayerCommands::StanceCrouch));
 	Machine.HandleVolume(TEXT("VOL_A3_WIND"), NAME_None, NAME_None);
+	NotLow = 0.f;
+	Machine.Tick(0.1f);
+	TestTrue(TEXT("rev 5i: all low at the ridge: done, free"), Machine.GetState(TEXT("A3_low")) == ETutorialStepState::Completed && !Machine.IsConfined());
 	TestEqual(TEXT("A3 stance card precredited from the history"), Machine.GetState(TEXT("A3_stance")), ETutorialStepState::Completed);
 	TestFalse(TEXT("the stance card (even precredited) unlocks the stances"), Machine.IsCommandLocked(PlayerCommands::StanceProne) || Machine.IsCommandLocked(PlayerCommands::SquadStanceProne));
 	TestTrue(TEXT("A3: the pause still locked (taught in the horde beat)"), Machine.IsCommandLocked(PlayerCommands::TacticalPause));
@@ -986,6 +993,7 @@ bool FTutorialProgressiveDemoTest::RunTest(const FString&)
 		{ TEXT("A1_loot_open"), { PlayerCommands::LootCrate, PlayerCommands::LootTake }, { PlayerCommands::Relocate } },
 		{ TEXT("A2_push"), { PlayerCommands::Relocate }, { PlayerCommands::LightBarrel, PlayerCommands::UseObject } },
 		{ TEXT("A2_light"), { PlayerCommands::LightBarrel }, { PlayerCommands::UseObject } },
+		{ TEXT("A3_low"), { PlayerCommands::StanceCrouch, PlayerCommands::SquadStanceCrouch }, { PlayerCommands::TacticalPause } },
 		{ TEXT("A3_stance"), { PlayerCommands::StanceCrouch, PlayerCommands::StanceProne, PlayerCommands::SquadStanceProne }, { PlayerCommands::TacticalPause } },
 		{ TEXT("A3_cover"), { PlayerCommands::CoverPreview, PlayerCommands::CoverEnter, PlayerCommands::CoverFireMode }, { PlayerCommands::HoldLine } },
 		{ TEXT("A3_mine"), { PlayerCommands::DisarmMine, PlayerCommands::TargetedShot }, { PlayerCommands::SetTrap, PlayerCommands::PriorityTarget } },

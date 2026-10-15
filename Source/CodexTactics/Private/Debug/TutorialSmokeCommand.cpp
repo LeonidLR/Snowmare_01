@@ -40,7 +40,9 @@
 //     looter hands a heat pack to each mate with none (Shift + drag, into his kit), both complete -> regroup (B) -> box; (rev 5f) the squad is TELEPORTED past beacon 3 into the camp volume: A2 starts, beacon 3 is passed (its
 //     lines never play), the cold / ruin lines, the push card (unlocks the push; a push outside VOL_A2_RUIN does not count), the light card,
 //     the warm objective; the save's tutorial section carries the
-//     command history; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
+//     command history; (rev 5i) the A3 approach: the squad is held, a standing click to the ridge is refused ("Crouch first"), C
+//     crouches the leader, the click is accepted, beyond the ridge still refused, the followers copy the crouch and the card completes
+//     when all are low in VOL_A3_RIDGE; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
 //     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
 //     (tap = next line, hold = skip); (rev 5i) SKIP TUTORIAL from A0: the button shows in A0, the pause menu entry asks and No
 //     keeps it, the button asks with the world paused and Yes skips - no cards / strip / objectives, C and the inventory (locked at
@@ -326,7 +328,7 @@ namespace TutorialSmoke
 		ACodexTacticsHUD* Hud = PC ? PC->GetHUD<ACodexTacticsHUD>() : nullptr;
 		UTutorialOverlayWidget* Overlay = Hud ? Hud->GetTutorialOverlay() : nullptr;
 		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-		if (!Leader || !Tutorial || !Saves || !PC || !Overlay || State.Time > 360.f)
+		if (!Leader || !Tutorial || !Saves || !PC || !Overlay || State.Time > 600.f)
 		{
 			Check(State, false, FString::Printf(TEXT("world ready / timeout (stage %d, overlay %d)"), State.Stage, Overlay ? 1 : 0));
 			return Finish(State, false);
@@ -1500,6 +1502,95 @@ namespace TutorialSmoke
 			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::DisarmTripwire) && !Tutorial->IsCommandLocked(PlayerCommands::DisarmMine)
 				&& Tutorial->GetStepState(TEXT("A3_wire_spotted")) == ETutorialStepState::Completed && CountMessages(World, TEXT("Click the wire and choose Disarm")) == 1,
 				FString::Printf(TEXT("a wire spotted: disarm unlocked at once (beat %s), the 'how to disarm' feed line posted"), *Tutorial->GetCurrentBeat().ToString()));
+			State.Stage = 100;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// Rev 5i item 3 (game designer 2026-10-15): the complex comes into view - the squad is stopped and moves up to the low ridge
+		// only crouched. A real 8 x 8 m VOL_A3_APPROACH round the squad, the ridge front (VOL_A3_RIDGE, 8 x 8 m) 12 m ahead.
+		case 100:
+		{
+			Tutorial->SkipStep(TEXT("A3_wire")); // the wire card of the spot above would hold the card slot
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->SetStance(EOperativeStance::Standing);
+			}
+			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
+			State.HutPoint = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Ahead * 1200.f);
+			Check(State, FVector::Dist2D(State.HutPoint, Leader->GetActorLocation()) > 900.f,
+				FString::Printf(TEXT("the ridge stand-in lies ahead (%.0f cm)"), FVector::Dist2D(State.HutPoint, Leader->GetActorLocation())));
+			SpawnVolumeAt(World, State.HutPoint, TEXT("VOL_A3_RIDGE"), 400.f);
+			ATutorialTriggerVolume* Approach = SpawnVolumeAt(World, Leader->GetActorLocation(), TEXT("VOL_A3_APPROACH"), 400.f);
+			Approach->ActivatedBy = ETutorialVolumeFilter::Leader;
+			Approach->bFireOnce = true;
+			Check(State, Approach->HasFired() || Approach->TryActivate(Leader), TEXT("the A3 approach volume fires"));
+			Next(State);
+			return true;
+		}
+		case 101:
+		{
+			if (Tutorial->GetStepState(TEXT("A3_low")) != ETutorialStepState::Active && State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A3_low")) == ETutorialStepState::Active && Tutorial->IsConfining() && Tutorial->GetConfineStance() == FName(TEXT("crouch")),
+				FString::Printf(TEXT("rev 5i: the approach: the 'stay low' card, the squad held crouched (%s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A3_low")))));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::StanceCrouch) && !Tutorial->IsCommandLocked(PlayerCommands::SquadStanceCrouch),
+				TEXT("rev 5i: the card unlocks crouch / squad crouch"));
+			State.ConfinedBefore = Tutorial->GetConfinedRefusalCount();
+			State.HoldLinesBefore = CountMessages(World, TEXT("Crouch first - stay low."));
+			ClickAt(PC, State.HutPoint);
+			Check(State, Tutorial->GetConfinedRefusalCount() == State.ConfinedBefore + 1 && CountMessages(World, TEXT("Crouch first - stay low.")) == State.HoldLinesBefore + 1
+				&& !Leader->HasOwnMoveOrder(), TEXT("rev 5i: standing, a click towards the ridge is refused ('Crouch first - stay low.')"));
+			Tap(PC, State, EKeys::C); // the leader crouches; the followers copy it when they follow
+			Next(State);
+			return true;
+		}
+		case 102:
+		{
+			if (State.StageTime < 0.4f)
+			{
+				return true;
+			}
+			Check(State, Leader->GetStance() == EOperativeStance::Crouching, TEXT("C: the leader crouches"));
+			State.ConfinedBefore = Tutorial->GetConfinedRefusalCount();
+			Check(State, Leader->OrderMoveTo(State.HutPoint + Leader->GetActorForwardVector().GetSafeNormal2D() * 1500.f, false)
+				== EOperativeOrderResult::Refused, TEXT("rev 5i: crouched, beyond the ridge is still refused"));
+			ClickAt(PC, State.HutPoint);
+			Check(State, Tutorial->GetConfinedRefusalCount() == State.ConfinedBefore + 1 && Leader->HasOwnMoveOrder(),
+				TEXT("rev 5i: crouched, the click to the ridge is accepted"));
+			Next(State);
+			return true;
+		}
+		case 103:
+		{
+			if (Tutorial->GetStepState(TEXT("A3_low")) != ETutorialStepState::Completed && State.StageTime < 30.f)
+			{
+				return true;
+			}
+			int32 Low = 0;
+			FString Where;
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Low += Member->GetStance() != EOperativeStance::Standing ? 1 : 0;
+				const FVector Off = Member->GetActorLocation() - State.HutPoint;
+				Where += FString::Printf(TEXT(" %s (%.0f, %.0f, %.0f)"), *Member->DisplayName.ToString(), Off.X, Off.Y, Off.Z);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: squad round the ridge stand-in:%s"), *Where);
+			Check(State, Tutorial->GetStepState(TEXT("A3_low")) == ETutorialStepState::Completed && Low == Squad->GetMembers().Num(),
+				FString::Printf(TEXT("rev 5i: the whole squad reached the ridge crouched (the followers copied the leader: %d / %d low, %.1f s, not low in the volume %.0f)"),
+					Low, Squad->GetMembers().Num(), State.StageTime, Tutorial->GetConditionStat(TEXT("squad_not_low_in.VOL_A3_RIDGE"))));
+			Check(State, !Tutorial->IsConfining(), TEXT("rev 5i: done - the squad is free"));
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->StopOperative();
+				Member->SetStance(EOperativeStance::Standing);
+			}
+			Next(State);
+			return true;
+		}
+		case 104:
+		{
 			Check(State, Tutorial->TriggerStep(TEXT("A4_cones")) && Tutorial->GetCurrentBeat() == FName(TEXT("A4")), TEXT("A4 started with the cone card"));
 			State.Stage = 69;
 			State.StageTime = 0.f;

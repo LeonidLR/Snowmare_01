@@ -139,7 +139,7 @@ namespace TutorialRulesLocal
 			Condition.Stat = FName(*JsonString(Clause, TEXT("stat")));
 			if (!TutorialRules::IsKnownStat(Condition.Stat))
 			{
-				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs | squad_min_heat_packs | heat_packs_given | traps_spotted.<tag>)"),
+				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs | squad_min_heat_packs | heat_packs_given | traps_spotted.<tag> | squad_not_low_in.<volume>)"),
 					*Where, *Condition.Stat.ToString());
 				return false;
 			}
@@ -902,6 +902,13 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 	return true;
 }
 
+FName TutorialRules::ParseNotLowInStat(FName Stat)
+{
+	static const FString Prefix(TEXT("squad_not_low_in."));
+	const FString Name = Stat.ToString();
+	return Name.StartsWith(Prefix) && Name.Len() > Prefix.Len() ? FName(*Name.Mid(Prefix.Len())) : NAME_None;
+}
+
 FName TutorialRules::NormalizeStance(const FString& Text)
 {
 	const FString Lower = Text.TrimStartAndEnd().ToLower();
@@ -1056,7 +1063,7 @@ FString TutorialRules::FormatKeys(const TArray<FString>& Keys)
 bool TutorialRules::IsKnownStat(FName Stat)
 {
 	// Rev 5h: "traps_spotted.<SpotEventTag>" counts the spotted traps of a tagged group (TrapSpotRules::ParseSpottedStatTag).
-	if (!TrapSpotRules::ParseSpottedStatTag(Stat).IsNone())
+	if (!TrapSpotRules::ParseSpottedStatTag(Stat).IsNone() || !ParseNotLowInStat(Stat).IsNone())
 	{
 		return true;
 	}
