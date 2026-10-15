@@ -511,6 +511,28 @@ FVector AInteractableActor::GetApproachPoint(const FVector& FromLocation) const
 	return Closest + Outward * ApproachStandOff;
 }
 
+FVector AInteractableActor::GetDisarmApproachPoint(const FVector& From) const
+{
+	const FVector Focus = GetDisarmFocusPoint(From);
+	const FVector2D Point = TrapApproachRules::MineApproachPoint(FVector2D(Focus), FVector2D(From), TrapApproachRules::GoalDistance(DisarmStandOffCm));
+	return FVector(Point.X, Point.Y, From.Z);
+}
+
+FVector AInteractableActor::GetInteractionApproachPoint(const FVector& From) const
+{
+	return UsesDisarmApproach() ? GetDisarmApproachPoint(From) : GetApproachPoint(From);
+}
+
+bool AInteractableActor::IsInInteractionReach(const FVector& Location, bool bStillWalking) const
+{
+	if (UsesDisarmApproach())
+	{
+		return TrapApproachRules::IsAtDisarmSpot(FVector::Dist2D(Location, GetDisarmFocusPoint(Location)), DisarmStandOffCm, DisarmReachToleranceCm,
+			bStillWalking);
+	}
+	return GetDistanceTo(Location) <= InteractionDistance;
+}
+
 void AInteractableActor::HandleGeneratorStarted()
 {
 	HeatSource->SetHeatActive(true);

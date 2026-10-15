@@ -187,6 +187,18 @@ void AProximityMineActor::Tick(float DeltaSeconds)
 		{
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
+				// 2026-10-15: the defuser now works ~60 cm from the charge, inside the trigger radius: once he stepped in as the
+				// approaching defuser he is ignored until he steps out again (menu, crouched work, a slip, the walk away).
+				const float MemberDistance = FVector::Dist2D(Location, Member->GetActorLocation());
+				if (TrapApproachRules::UpdateDefuserLease(Member == DefuserLease.Get(), Member == ApproachingDefuser.Get(), MemberDistance, TriggerRadius))
+				{
+					DefuserLease = Member;
+					continue;
+				}
+				if (Member == DefuserLease.Get())
+				{
+					DefuserLease.Reset();
+				}
 				if (Member == ApproachingDefuser.Get() || !Member->HealthComponent || !Member->HealthComponent->IsAlive() || VehicleQueries::IsMounted(Member))
 				{
 					continue;

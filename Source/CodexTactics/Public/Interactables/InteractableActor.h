@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "Interactables/ActionMenuTypes.h"
 #include "Interactables/DeployableRules.h"
+#include "Interactables/TrapApproachRules.h"
 #include "Data/CombatTypes.h"
 #include "Quests/QuestChain.h"
 #include "InteractableActor.generated.h"
@@ -203,6 +204,35 @@ public:
 
 	/** Nearest reachable point next to the object for an operative coming from FromLocation. */
 	FVector GetApproachPoint(const FVector& FromLocation) const;
+
+	// --- Disarm approach (game designer 2026-10-15, every level; TrapApproachRules): a click on a live trap walks the operative right
+	// up to it (DisarmStandOffCm from the charge / the wire line, on his side - never onto the mine), facing it; the menu opens there. ---
+
+	/** The operative's root ends this far from the charge / the wire line, cm (data per instance / Blueprint). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Trap", meta = (ClampMin = "0"))
+	float DisarmStandOffCm = TrapApproachRules::DefaultStandOffCm;
+
+	/** The disarm spot counts as reached within the stand-off + this, cm (the move's acceptance radius is 25 cm). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Trap", meta = (ClampMin = "0"))
+	float DisarmReachToleranceCm = TrapApproachRules::DefaultReachToleranceCm;
+
+	/** A click on this object now means walking up to disarm it (a spotted live mine, a laid wire). */
+	virtual bool UsesDisarmApproach() const { return false; }
+
+	/** The point of the charge nearest to From (a mine: its centre; a wire: the closest point of the wire). */
+	virtual FVector GetDisarmFocusPoint(const FVector& From) const { return GetActorLocation(); }
+
+	/** Where the operative stands to disarm it (TrapApproachRules::MineApproachPoint around the focus point; Z of From). */
+	virtual FVector GetDisarmApproachPoint(const FVector& From) const;
+
+	/** The interaction walk's goal: the disarm spot for a trap, else GetApproachPoint. */
+	FVector GetInteractionApproachPoint(const FVector& From) const;
+
+	/**
+	 * Close enough for the menu / the action: the disarm spot for a trap (bStillWalking: he walks on until the stand-off + 10 cm, see
+	 * TrapApproachRules::IsAtDisarmSpot), else within InteractionDistance of the box.
+	 */
+	bool IsInInteractionReach(const FVector& Location, bool bStillWalking = false) const;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Interactables")
 	EInteractableType ObjectType = EInteractableType::GateTerminal;

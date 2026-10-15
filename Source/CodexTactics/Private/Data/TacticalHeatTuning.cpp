@@ -69,7 +69,9 @@ namespace TacticalHeatTuning
 		{ TEXT("warm_spot_spacing"), &FTacticalHeatConfig::WarmSpotSpacing },
 		{ TEXT("warm_spot_arrive_tolerance"), &FTacticalHeatConfig::WarmSpotArriveTolerance },
 		{ TEXT("warm_spot_walk_speed"), &FTacticalHeatConfig::WarmSpotWalkSpeed },
-		{ TEXT("warm_pull_max_distance"), &FTacticalHeatConfig::WarmPullMaxDistance } };
+		{ TEXT("warm_pull_max_distance"), &FTacticalHeatConfig::WarmPullMaxDistance },
+		{ TEXT("cold_idle_variant_chance"), &FTacticalHeatConfig::ColdIdleVariantChance },
+		{ TEXT("cold_idle_variant_cooldown_seconds"), &FTacticalHeatConfig::ColdIdleVariantCooldownSeconds } };
 
 	static const FIntKey IntKeys[] = {
 		{ TEXT("heat_pack_action_points"), &FTacticalHeatConfig::HeatPackActionPoints },
@@ -84,7 +86,8 @@ namespace TacticalHeatTuning
 		{ TEXT("flare_turn_rounds"), &FTacticalHeatConfig::FlareTurnRounds },
 		{ TEXT("flare_max_carried"), &FTacticalHeatConfig::FlareMaxCarried },
 		{ TEXT("puddle_turn_rounds"), &FTacticalHeatConfig::PuddleTurnRounds },
-		{ TEXT("warm_min_sitters"), &FTacticalHeatConfig::WarmMinSitters } };
+		{ TEXT("warm_min_sitters"), &FTacticalHeatConfig::WarmMinSitters },
+		{ TEXT("cold_idle_variant_loops"), &FTacticalHeatConfig::ColdIdleVariantLoops } };
 
 	/** Loadout rows by role (EOperativeRole order). */
 	static const TCHAR* const RoleKeys[] = { TEXT("commander"), TEXT("engineer"), TEXT("medic_sapper"), TEXT("recruit") };

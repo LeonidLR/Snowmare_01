@@ -4,6 +4,7 @@
 
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -607,9 +608,10 @@ void ATripwireActor::ExecuteAction(AOperativeCharacter* User)
 		return;
 	}
 	Disarmer = User;
+	DisarmerStance = User->GetStance();
 	bDisarming = true;
 	User->StopOperative();
-	User->SetFacingPoint(GetActorLocation());
+	User->SetFacingPoint(GetDisarmFocusPoint(User->GetActorLocation())); // 2026-10-15: the wire point in front of him
 	// The squad wire: flat under it; a PMC wire: crouched over the fuze, as a mine.
 	User->SetStance(IsHostile() ? EOperativeStance::Crouching : EOperativeStance::Prone);
 	PostLine(User->DisplayName, LOCTEXT("Disarming", "🪤 Disarming the tripwire, stay back!"));
@@ -628,7 +630,7 @@ void ATripwireActor::FinishDisarm()
 	}
 	if (IsHostile())
 	{
-		ResolveHostileDisarm(User);
+		ResolveHostileDisarm(User, DisarmerStance);
 		return;
 	}
 	const bool bFumble = FMath::FRand() < TripwireRules::DisarmFumbleChance;
@@ -638,10 +640,28 @@ void ATripwireActor::FinishDisarm()
 		: LOCTEXT("Disarmed", "🪤 Tripwire disarmed. +{0} grenades"), Returned));
 	UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s disarmed by %s: +%d grenades"), *GetName(), *User->DisplayName.ToString(), Returned);
 	GameplayEvents::Raise(this, GameplayEvents::TripwireDisarmed, User);
+	// The squad's own wire is disarmed lying under it: he stays prone, and prone has no pickup clip yet (logged, nothing plays).
+	if (UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(User))
+	{
+		Anim->PlayInteraction(EOperativeInteractionAnim::PickupGround, User->GetStance());
+	}
 	Destroy();
 }
 
-EDefusalResult ATripwireActor::ResolveHostileDisarm(AOperativeCharacter* User)
+FVector ATripwireActor::GetDisarmFocusPoint(const FVector& From) const
+{
+	const FVector2D Closest = TrapApproachRules::ClosestPointOnWire(FVector2D(WireA), FVector2D(WireB), FVector2D(From));
+	return FVector(Closest.X, Closest.Y, GetActorLocation().Z - TripwireRules::WireHeightCm);
+}
+
+FVector ATripwireActor::GetDisarmApproachPoint(const FVector& From) const
+{
+	const FVector2D Point = TrapApproachRules::WireApproachPoint(FVector2D(WireA), FVector2D(WireB), FVector2D(From),
+		TrapApproachRules::GoalDistance(DisarmStandOffCm));
+	return FVector(Point.X, Point.Y, From.Z);
+}
+
+EDefusalResult ATripwireActor::ResolveHostileDisarm(AOperativeCharacter* User, EOperativeStance OriginalStance)
 {
 	const FDefusalChance Odds = GetDefusalChance(User);
 	const EDefusalResult Result = AttemptDefusal(User); // a detonation trips the wire (DetonateTrap)
@@ -657,6 +677,16 @@ EDefusalResult ATripwireActor::ResolveHostileDisarm(AOperativeCharacter* User)
 		User->GrenadesCount += GrenadesRecovered;
 		PostLine(User->DisplayName, FText::Format(LOCTEXT("PMCDisarmed", "🪤 PMC tripwire disarmed. +{0} grenades"), GrenadesRecovered));
 		GameplayEvents::Raise(this, GameplayEvents::TripwireDisarmed, User);
+		// Game designer 2026-10-15 (as the mine): a standing operative stands up again after the crouched work and picks the grenades
+		// up (full-body clip rising from the low pose); crouched: the upper-body pickup over the crouched legs; prone: none yet.
+		if (OriginalStance == EOperativeStance::Standing && User->GetStance() != EOperativeStance::Standing)
+		{
+			User->SetStance(EOperativeStance::Standing);
+		}
+		if (UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(User))
+		{
+			Anim->PlayInteraction(EOperativeInteractionAnim::PickupGround, OriginalStance);
+		}
 		Destroy();
 	}
 	return Result;
@@ -668,9 +698,9 @@ bool ATripwireActor::TryTurnBasedDisarm(AOperativeCharacter* User)
 	{
 		return false;
 	}
-	const FRotator Facing = (GetActorLocation() - User->GetActorLocation()).Rotation();
+	const FRotator Facing = (GetDisarmFocusPoint(User->GetActorLocation()) - User->GetActorLocation()).Rotation();
 	User->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
-	ResolveHostileDisarm(User);
+	ResolveHostileDisarm(User, User->GetStance()); // no stance change on the grid: the pickup by his stance
 	return true;
 }
 

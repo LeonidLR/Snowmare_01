@@ -212,4 +212,9 @@ namespace WarmIdleRules
 			return bHasEndClip ? EWarmExitStyle::PlayEnd : EWarmExitStyle::QuickBlend;
 		}
 	}
+
+	bool ShouldPlayColdVariant(float Roll01, float Chance, float SecondsSinceLast, float CooldownSeconds, bool bHasVariantClip)
+	{
+		return bHasVariantClip && Chance > 0.f && SecondsSinceLast >= FMath::Max(0.f, CooldownSeconds) && Roll01 < Chance;
+	}
 }

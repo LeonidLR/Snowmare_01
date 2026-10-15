@@ -1,5 +1,6 @@
 #include "Interactables/InteractionSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -38,17 +39,19 @@ bool UInteractionSubsystem::RequestInteraction(AInteractableActor* Target, bool 
 	CloseMenu();
 	ClearDefuser(Pending.Get());
 	Pending = Target;
-	// Godot: walking up to a mine with a single click marks the leader as the defuser (the mine ignores them).
+	// Godot: walking up to a mine with a single click marks the leader as the defuser (the mine ignores them). 2026-10-15: the
+	// disarm spot is INSIDE a mine's trigger radius now, so a double click (sprint) on a live mine marks him too.
 	if (ADeployableActor* Deployable = Cast<ADeployableActor>(Target))
 	{
-		Deployable->ApproachingDefuser = bSprint ? nullptr : Leader;
+		Deployable->ApproachingDefuser = bSprint && !Target->UsesDisarmApproach() ? nullptr : Leader;
 	}
 	if (TryOpenMenu())
 	{
 		return true;
 	}
 
-	const FVector Approach = Target->GetApproachPoint(Leader->GetActorLocation());
+	// A live trap: right up to it (DisarmStandOffCm from the charge / the wire, on his side); anything else: next to its box.
+	const FVector Approach = Target->GetInteractionApproachPoint(Leader->GetActorLocation());
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	if (Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause)
 	{
@@ -142,11 +145,18 @@ bool UInteractionSubsystem::TryOpenMenu()
 		Pending.Reset();
 		return false;
 	}
-	if (Target->GetDistanceTo(Leader->GetActorLocation()) > Target->InteractionDistance)
+	if (!Target->IsInInteractionReach(Leader->GetActorLocation(), Leader->IsMoving()))
 	{
 		return false;
 	}
 	Pending.Reset();
+	if (Target->UsesDisarmApproach())
+	{
+		// At the disarm spot: he stops and faces the charge / the wire before the menu (2026-10-15).
+		Leader->SetFacingPoint(Target->GetDisarmFocusPoint(Leader->GetActorLocation()));
+		UE_LOG(LogCodexTactics, Display, TEXT("%s at the disarm spot of %s: %.0f cm from it"), *Leader->DisplayName.ToString(), *Target->GetName(),
+			FVector::Dist2D(Leader->GetActorLocation(), Target->GetDisarmFocusPoint(Leader->GetActorLocation())));
+	}
 	OpenMenuFor(Target, Leader);
 	return true;
 }
@@ -453,6 +463,7 @@ void UInteractionSubsystem::LootItem(ELootItem Item)
 	const FText Taken = Crate->TakeItem(Item, Leader);
 	if (!Taken.IsEmpty())
 	{
+		PlayChestSearch(*Leader);
 		PlayerCommands::ReportBy(this, PlayerCommands::LootTake, Leader, Crate);
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
@@ -470,6 +481,7 @@ void UInteractionSubsystem::LootAll()
 	if (Crate && Leader)
 	{
 		Crate->TakeAll(Leader);
+		PlayChestSearch(*Leader);
 		PlayerCommands::ReportBy(this, PlayerCommands::LootTake, Leader, Crate);
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
@@ -477,6 +489,16 @@ void UInteractionSubsystem::LootAll()
 		}
 	}
 	CloseLootDialog();
+}
+
+void UInteractionSubsystem::PlayChestSearch(AOperativeCharacter& Collector) const
+{
+	// Game designer 2026-10-15: after Take / Take All he rummages in the crate (cosmetic; the items moved at once). Standing: full
+	// body, crouched: upper body, prone / tactical pause: nothing. A search already playing goes on.
+	if (UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(&Collector))
+	{
+		Anim->PlayInteraction(EOperativeInteractionAnim::ChestSearch, Collector.GetStance());
+	}
 }
 
 void UInteractionSubsystem::CancelActionMenu()

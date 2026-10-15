@@ -3,11 +3,15 @@
 // 1. pick up an abandoned barricade (goes to the engineer), 2. F: the engineer hands it to the commander, who sets it
 // up (two clicks), 3. a hidden mine next to the squad is spotted, 4. the medic-sapper defuses it lying down and
 // takes it, 5. a barrel is trapped with a grenade, 6. a mine blast hurts an operative nearby.
+// 2026-10-15 (game designer): the medic-sapper walks right up to the mine (<= 0.9 m from the charge, not on it, facing it), the mine
+// ignores her while she stands inside its trigger radius (a cancelled menu included), and a standing defuser plays the pickup clip
+// on the full body after the success.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -46,6 +50,11 @@ namespace DeployableSmoke
 		bool bTrap = false;
 		bool bBlast = false;
 		int32 DefuseTries = 0;
+		/** 2026-10-15: walk-up distance / facing, the defuser lease through a cancelled menu, the standing pickup clip. */
+		bool bApproach = false;
+		bool bLease = false;
+		bool bPickup = false;
+		bool bCancelled = false;
 	};
 
 	AOperativeCharacter* FindRole(UWorld* World, EOperativeRole Role)
@@ -77,9 +86,11 @@ namespace DeployableSmoke
 
 	void Finish(FState& State)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke pickUp=%d deploy=%d spotted=%d defused=%d trap=%d blast=%d"), State.bPickUp ? 1 : 0,
-			State.bDeploy ? 1 : 0, State.bSpotted ? 1 : 0, State.bDefused ? 1 : 0, State.bTrap ? 1 : 0, State.bBlast ? 1 : 0);
-		const bool bPass = State.bPickUp && State.bDeploy && State.bSpotted && State.bDefused && State.bTrap && State.bBlast;
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke pickUp=%d deploy=%d spotted=%d defused=%d trap=%d blast=%d approach=%d lease=%d pickupClip=%d"), State.bPickUp ? 1 : 0,
+			State.bDeploy ? 1 : 0, State.bSpotted ? 1 : 0, State.bDefused ? 1 : 0, State.bTrap ? 1 : 0, State.bBlast ? 1 : 0, State.bApproach ? 1 : 0,
+			State.bLease ? 1 : 0, State.bPickup ? 1 : 0);
+		const bool bPass = State.bPickUp && State.bDeploy && State.bSpotted && State.bDefused && State.bTrap && State.bBlast && State.bApproach
+			&& State.bLease && State.bPickup;
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bPass ? TEXT("PASS") : TEXT("FAIL"));
 		State.Phase = EPhase::Done;
 		FPlatformMisc::RequestExit(false, TEXT("DeployableSmoke"));
@@ -176,12 +187,38 @@ namespace DeployableSmoke
 			return true;
 
 		case EPhase::DefuseMenu:
-			if (Interactions->IsActionMenuOpen())
+			if (Interactions->IsActionMenuOpen() && State.Mine.IsValid() && !State.bCancelled)
 			{
-				// Dismantling crouches the defuser (Godot): luck 100 keeps the odds at 99 %, failures are retried.
+				// 2026-10-15: she stands right at the mine (<= 0.9 m from the charge, not on it), facing it; a cancel leaves her there.
+				const FVector ToMine = (State.Mine->GetActorLocation() - Medic->GetActorLocation()).GetSafeNormal2D();
+				const float Distance = static_cast<float>(FVector::Dist2D(Medic->GetActorLocation(), State.Mine->GetActorLocation()));
+				const float FacingDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Medic->GetActorForwardVector().GetSafeNormal2D(), ToMine), -1.0, 1.0)));
+				State.bApproach = Distance <= 90.f && Distance >= 30.f && FacingDeg <= 30.f;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke mine walk-up: %.0f cm from the charge (trigger %.0f), facing %.0f deg: %s"), Distance,
+					State.Mine->TriggerRadius, FacingDeg, State.bApproach ? TEXT("ok") : TEXT("WRONG"));
+				Interactions->CancelActionMenu();
+				State.bCancelled = true;
+				State.PhaseTime = 0.f;
+				return true;
+			}
+			if (State.bCancelled && !State.bLease && State.PhaseTime >= 1.f)
+			{
+				// Inside the trigger radius with the menu closed: the lease keeps the mine quiet.
+				State.bLease = State.Mine.IsValid() && State.Mine->GetDefuserLease() == Medic;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke menu cancelled inside the trigger radius: mine %s, lease %d"), State.Mine.IsValid() ? TEXT("quiet") : TEXT("BLEW UP"),
+					State.Mine.IsValid() && State.Mine->GetDefuserLease() == Medic ? 1 : 0);
+				if (State.Mine.IsValid())
+				{
+					Interactions->RequestInteraction(State.Mine.Get());
+				}
+				return true;
+			}
+			if (Interactions->IsActionMenuOpen() && State.bLease)
+			{
+				// Dismantling crouches the defuser (Godot): luck 100 keeps the odds at 99 %, failures are retried. She stays STANDING
+				// before the work (2026-10-15: the pickup after the success is then the full-body clip, rising from the crouch).
 				Medic->Luck = 100.f;
 				++State.DefuseTries;
-				Medic->SetStance(EOperativeStance::Prone);
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke mine menu \"%s\" / \"%s\""), *Interactions->GetActionMenu().Title.ToString(),
 					*Interactions->GetActionMenu().ConfirmText.ToString());
 				Interactions->ConfirmActionMenu();
@@ -203,6 +240,10 @@ namespace DeployableSmoke
 			else if (State.PhaseTime >= 2.f)
 			{
 				State.bDefused = !State.Mine.IsValid() && Medic->MinesCount == 1 && Medic->HealthComponent->GetCurrentHealth() >= Medic->HealthComponent->GetMaxHealth();
+				const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Medic);
+				State.bPickup = Anim && Anim->GetInteractionClipLog().Contains(TEXT("PickupGround@FullBody")) && Medic->GetStance() == EOperativeStance::Standing;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke pickup after the mine: stance %d, clips %s"), static_cast<int32>(Medic->GetStance()),
+					Anim ? *FString::Join(Anim->GetInteractionClipLog(), TEXT(", ")) : TEXT("-"));
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke defused: mine gone=%d medic mines=%d hp=%.0f"), State.Mine.IsValid() ? 0 : 1,
 					Medic->MinesCount, Medic->HealthComponent->GetCurrentHealth());
 				Enter(State, EPhase::Trap);

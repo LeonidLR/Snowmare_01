@@ -101,9 +101,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Loot")
 	FLootContents Contents;
 
-	/** Lid opening before the dialog, s (Godot timer 1.8). */
+	/**
+	 * Lid opening before the dialog when no chest-open clip plays (prone, none assigned), s (Godot timer 1.8). With the clip
+	 * (2026-10-15) the window opens as it ends; in the tactical pause at once (InteractionAnimRules::GetLootWindowDelay).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Loot", meta = (ClampMin = "0"))
 	float OpenSeconds = 1.8f;
+
+	/** Seconds the last StartOpening waited for the loot window (smokes). */
+	float GetLastOpenDelaySeconds() const { return LastOpenDelaySeconds; }
 
 	/** Crouched defusal work, s (Godot timer 2.0). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Loot", meta = (ClampMin = "0"))
@@ -126,4 +132,6 @@ private:
 
 	UPROPERTY(VisibleInstanceOnly, Category = "CodexTactics|Loot")
 	bool bDestroyed = false;
+
+	float LastOpenDelaySeconds = 0.f;
 };

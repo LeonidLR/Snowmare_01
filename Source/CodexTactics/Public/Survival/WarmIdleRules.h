@@ -45,7 +45,9 @@ enum class EWarmClipStep : uint8
 	TransitAB,
 	LoopB,
 	TransitBA,
-	End
+	End,
+	/** Game designer 2026-10-15: an occasional variant clip inside the cold idle (ColdIdleVariants), then back to the loop. */
+	Variant
 };
 
 /** Role of an operative at a campfire / stove. */
@@ -194,4 +196,11 @@ namespace WarmIdleRules
 
 	/** How a pose ends for Reason (PlayEnd only when the set has an End clip). */
 	CODEXTACTICS_API EWarmExitStyle GetExitStyle(EWarmExitReason Reason, bool bHasEndClip);
+
+	/**
+	 * Game designer 2026-10-15 ("so it isn't monotonous"): at the end of a cold-idle loop clip a variant clip (Polygonmaker
+	 * Anim_Regular_idle_cold) plays instead with probability Chance (Roll01 in [0, 1)), at most once per CooldownSeconds (counted from
+	 * the pose start / the last variant). tactical_heat.json cold_idle_variant_chance / cold_idle_variant_cooldown_seconds.
+	 */
+	CODEXTACTICS_API bool ShouldPlayColdVariant(float Roll01, float Chance, float SecondsSinceLast, float CooldownSeconds, bool bHasVariantClip);
 }

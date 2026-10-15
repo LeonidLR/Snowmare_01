@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Characters/OperativeMovementRules.h"
 #include "Interactables/InteractableActor.h"
 #include "DeployableActor.generated.h"
 
@@ -64,5 +65,6 @@ protected:
 	virtual void OnPickedUpBy(AOperativeCharacter& Recipient) {}
 
 private:
-	void FinishDismantle(TWeakObjectPtr<AOperativeCharacter> WeakUser, bool bWasStanding);
+	/** Resolves the work; OriginalStance = his stance before he crouched for it (restored if standing; picks the pickup clip). */
+	void FinishDismantle(TWeakObjectPtr<AOperativeCharacter> WeakUser, EOperativeStance OriginalStance);
 };

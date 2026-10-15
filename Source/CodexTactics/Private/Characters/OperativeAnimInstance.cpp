@@ -91,6 +91,8 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 			static_cast<int32>(RootMotionMode.GetValue()));
 		RootMotionMode = ERootMotionMode::RootMotionFromMontagesOnly;
 	}
+	// Interaction clips + the cold idle variant (game designer 2026-10-15): Claude-owned montages / the pack clip when unset.
+	LoadDefaultInteractionClips();
 	// Corner-ready pose (user rule 2026-10-06): until setup_operative_cover_animation.py assigns it, take the M4 pack's
 	// look-at idles when the pack is in the project and the other cover clips come from it.
 	if (bUseNativeCoverClips && (CoverStandIdle.ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; })))
@@ -506,6 +508,10 @@ void UOperativeAnimInstance::UpdateStanceTransition()
 	{
 		return; // knocked down: the get-up clip ends standing, no stance clip on top
 	}
+	if (IsInteractionClipActive() && InteractionLayer == EInteractionAnimLayer::FullBody)
+	{
+		return; // the full-body pickup after a crouched disarm carries the stand-up itself (it starts low and rises)
+	}
 	if (bInCover && bUseNativeCoverClips && bCoverEnteredThisFrame)
 	{
 		return; // the cover enter clip carries the stance change (stand -> crouch at a low cover)
@@ -912,6 +918,7 @@ void UOperativeAnimInstance::UpdateState()
 		bIsFrostbitten = Cold->IsFrostbitten();
 		bIsWeaponFrozen = Cold->IsWeaponFrozen();
 	}
+	UpdateInteractionLayer(*Operative); // before the weather / sniper layers: an interaction clip keeps both off
 	UpdateWarmIdleLayer(*Operative); // before the sniper layer: a weather pose keeps the sniper idle off
 	UpdateSniperLayer(*Operative);
 	UpdateLeftHandIK(*Operative, StateDeltaSeconds);

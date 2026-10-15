@@ -3,11 +3,15 @@
 // 1. an intact crate opens without a menu and shows the loot dialog; one stack, then «Забрать ВСЁ» go to the leader;
 // 2. the empty crate only posts the Godot line; 3. a trapped crate (medic-sapper, prone) is defused, opened and its
 // turret / barricades / mines are taken; 4. a trapped crate that blows up loses its contents.
+// Interaction clips (game designer 2026-10-15): the standing commander plays the chest-open clip on the full body BEFORE the
+// window opens (the window waits for it: delay ~2.75 s after the clip started), the chest-search clip after a single take and
+// is not restarted by Take All; the medic-sapper, crouched after the defusal, opens / searches on the upper body.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -41,7 +45,24 @@ namespace LootSmoke
 		bool bDefuse = false;
 		bool bBlast = false;
 		int32 DefuseTries = 0;
+		/** Interaction clips: game time the chest-open clip was first seen, the checks. */
+		float ChestOpenSeenAt = -1.f;
+		bool bOpenClip = false;
+		bool bSearchClip = false;
+		bool bCrouchClips = false;
 	};
+
+	bool HasClip(const AOperativeCharacter* Operative, const TCHAR* Entry)
+	{
+		const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Operative);
+		return Anim && Anim->GetInteractionClipLog().Contains(FString(Entry));
+	}
+
+	int32 CountClip(const AOperativeCharacter* Operative, const TCHAR* Entry)
+	{
+		const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Operative);
+		return Anim ? Anim->GetInteractionClipLog().FilterByPredicate([Entry](const FString& Each) { return Each == Entry; }).Num() : 0;
+	}
 
 	AOperativeCharacter* FindRole(UWorld* World, EOperativeRole Role)
 	{
@@ -78,9 +99,11 @@ namespace LootSmoke
 
 	void Finish(FState& State)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke open=%d take=%d empty=%d defuse=%d blast=%d"), State.bOpen ? 1 : 0, State.bTake ? 1 : 0,
-			State.bEmpty ? 1 : 0, State.bDefuse ? 1 : 0, State.bBlast ? 1 : 0);
-		const bool bPass = State.bOpen && State.bTake && State.bEmpty && State.bDefuse && State.bBlast;
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke open=%d take=%d empty=%d defuse=%d blast=%d openClip=%d searchClip=%d crouchClips=%d"),
+			State.bOpen ? 1 : 0, State.bTake ? 1 : 0, State.bEmpty ? 1 : 0, State.bDefuse ? 1 : 0, State.bBlast ? 1 : 0,
+			State.bOpenClip ? 1 : 0, State.bSearchClip ? 1 : 0, State.bCrouchClips ? 1 : 0);
+		const bool bPass = State.bOpen && State.bTake && State.bEmpty && State.bDefuse && State.bBlast && State.bOpenClip && State.bSearchClip
+			&& State.bCrouchClips;
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bPass ? TEXT("PASS") : TEXT("FAIL"));
 		State.Phase = EPhase::Done;
 		FPlatformMisc::RequestExit(false, TEXT("LootSmoke"));
@@ -116,12 +139,30 @@ namespace LootSmoke
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke unexpected menu on an intact crate"));
 				Interactions->CancelActionMenu();
 			}
+			if (State.ChestOpenSeenAt < 0.f && HasClip(Commander, TEXT("ChestOpen@FullBody")))
+			{
+				State.ChestOpenSeenAt = State.Time;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke chest-open clip started at %.2f s, window open=%d"), State.Time,
+					Interactions->GetLootCrate() ? 1 : 0);
+			}
 			if (Interactions->GetLootCrate() == State.Crate.Get() && State.Crate.IsValid())
 			{
 				State.bOpen = true;
+				// The clip came first and the window waited for it (the delay is the clip minus its blend-out).
+				const float Waited = State.ChestOpenSeenAt >= 0.f ? State.Time - State.ChestOpenSeenAt : -1.f;
+				State.bOpenClip = State.ChestOpenSeenAt >= 0.f && State.Crate->GetLastOpenDelaySeconds() >= 2.f
+					&& Waited >= State.Crate->GetLastOpenDelaySeconds() - StepSeconds - 0.05f;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke window opened %.2f s after the chest-open clip (delay %.2f s): %s"), Waited,
+					State.Crate->GetLastOpenDelaySeconds(), State.bOpenClip ? TEXT("ok") : TEXT("WRONG"));
 				Interactions->LootItem(ELootItem::Medkit);
+				const bool bSearchAfterOne = HasClip(Commander, TEXT("ChestSearch@FullBody"));
 				const bool bOne = Commander->MedkitsCount == State.MedkitsBefore + 2 && State.Crate->Contents.Medkits == 0;
 				Interactions->LootAll();
+				const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Commander);
+				State.bSearchClip = bSearchAfterOne && CountClip(Commander, TEXT("ChestSearch@FullBody")) == 1 && Anim
+					&& Anim->InteractionAnim == EOperativeInteractionAnim::ChestSearch;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke chest search: after the take %d, after Take All %d search(es), playing %d"), bSearchAfterOne ? 1 : 0,
+					CountClip(Commander, TEXT("ChestSearch@FullBody")), Anim ? static_cast<int32>(Anim->InteractionAnim) : -1);
 				State.bTake = bOne && Commander->ReserveAmmo == State.AmmoBefore + 60 && State.Crate->IsLooted()
 					&& !Interactions->GetLootCrate();
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke looted: medkits %d -> %d, reserve %d -> %d, looted=%d"), State.MedkitsBefore,
@@ -159,6 +200,11 @@ namespace LootSmoke
 			if (State.Trapped.IsValid() && Interactions->GetLootCrate() == State.Trapped.Get())
 			{
 				Interactions->LootAll();
+				// Crouched after the defusal work: both crate clips on the upper body (the legs keep the crouch).
+				State.bCrouchClips = Medic->GetStance() == EOperativeStance::Crouching && HasClip(Medic, TEXT("ChestOpen@UpperBody"))
+					&& HasClip(Medic, TEXT("ChestSearch@UpperBody")) && !HasClip(Medic, TEXT("ChestOpen@FullBody"));
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke medic-sapper (stance %d) crate clips: %s"), static_cast<int32>(Medic->GetStance()),
+					UOperativeAnimInstance::Of(Medic) ? *FString::Join(UOperativeAnimInstance::Of(Medic)->GetInteractionClipLog(), TEXT(", ")) : TEXT("-"));
 				State.bDefuse = !State.Trapped->bTrapped && Medic->TurretsCount == 1 && Medic->BarricadesCount == 2 && Medic->MinesCount == 2;
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke defused crate: turrets=%d barricades=%d mines=%d"), Medic->TurretsCount,
 					Medic->BarricadesCount, Medic->MinesCount);

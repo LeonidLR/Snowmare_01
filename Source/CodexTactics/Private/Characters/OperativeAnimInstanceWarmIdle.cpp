@@ -11,7 +11,10 @@
 #include "Characters/OperativeCharacter.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Data/TacticalHeatTuning.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/World.h"
+#include "Survival/TacticalHeatRules.h"
 
 namespace
 {
@@ -81,13 +84,17 @@ bool UOperativeAnimInstance::PlayWarmClip(EWarmClipStep Step, float BlendIn)
 	case EWarmClipStep::LoopB: Clip = Set->LoopB; break;
 	case EWarmClipStep::TransitBA: Clip = Set->TransitBA; break;
 	case EWarmClipStep::End: Clip = Set->End; break;
+	case EWarmClipStep::Variant:
+		Clip = ColdIdleVariants.IsEmpty() ? nullptr : ColdIdleVariants[FMath::RandRange(0, ColdIdleVariants.Num() - 1)].Get();
+		break;
 	default: break;
 	}
-	if (!Clip)
+	if (!Clip || Clip->IsA<UAnimMontage>())
 	{
 		return false;
 	}
-	UAnimMontage* Montage = PlayCoverMontage(Clip, FAlphaBlendArgs(BlendIn), WarmIdleBlendSeconds, 1.f, 1);
+	const int32 Loops = Step == EWarmClipStep::Variant ? FMath::Max(1, TacticalHeatTuning::Get().ColdIdleVariantLoops) : 1;
+	UAnimMontage* Montage = PlayCoverMontage(Clip, FAlphaBlendArgs(BlendIn), WarmIdleBlendSeconds, 1.f, Loops);
 	if (!Montage)
 	{
 		return false;
@@ -149,7 +156,9 @@ void UOperativeAnimInstance::SetWarmWeaponHidden(bool bHidden)
 
 void UOperativeAnimInstance::UpdateWarmIdleLayer(const AOperativeCharacter& Operative)
 {
-	const bool bBodyTaken = bIsDead || bKnockedDown || bInCover || bIsVaulting || Operative.bCarrying;
+	// An interaction clip (crate, pickup) owns the body too (OperativeAnimInstanceInteraction.cpp).
+	const bool bBodyTaken = bIsDead || bKnockedDown || bInCover || bIsVaulting || Operative.bCarrying || IsInteractionClipActive();
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	const bool bMovingNow = Speed > WarmIdleStillSpeed;
 	UAnimMontage* Montage = WarmMontage.Get();
 	const bool bPlaying = Montage && Montage_IsPlaying(Montage);
@@ -181,7 +190,15 @@ void UOperativeAnimInstance::UpdateWarmIdleLayer(const AOperativeCharacter& Oper
 		{
 			const float Rate = FMath::Max(FMath::Abs(Montage_GetPlayRate(Montage)), 0.01f);
 			const float Left = (Montage->GetPlayLength() - Montage_GetPosition(Montage)) / Rate;
-			if (Left <= WarmIdleBlendSeconds + WarmHandoffMargin)
+			if (Left <= WarmIdleBlendSeconds + WarmHandoffMargin && WarmStep == EWarmClipStep::Variant)
+			{
+				// Back to the loop the variant replaced (its loop count goes on).
+				if (!PlayWarmClip(WarmVariantReturn, WarmIdleBlendSeconds))
+				{
+					PlayWarmClip(EWarmClipStep::LoopA, WarmIdleBlendSeconds);
+				}
+			}
+			else if (Left <= WarmIdleBlendSeconds + WarmHandoffMargin)
 			{
 				const FWarmIdleClipSet* Set = GetWarmClipSet(WarmActivePose);
 				const bool bLoop = WarmStep == EWarmClipStep::LoopA || WarmStep == EWarmClipStep::LoopB;
@@ -201,7 +218,22 @@ void UOperativeAnimInstance::UpdateWarmIdleLayer(const AOperativeCharacter& Oper
 				{
 					WarmLoopsTarget = FMath::RandRange(FMath::Max(1, WarmIdleLoopsMin), FMath::Max(WarmIdleLoopsMin, WarmIdleLoopsMax));
 				}
-				if (!PlayWarmClip(Next, WarmIdleBlendSeconds))
+				// Game designer 2026-10-15: now and then the cold idle variant instead of the next loop clip (not monotonous).
+				const FTacticalHeatConfig& Heat = TacticalHeatTuning::Get();
+				const bool bVariant = WarmActivePose == EWarmIdlePose::ColdIdle && bLoop
+					&& (Next == EWarmClipStep::LoopA || Next == EWarmClipStep::LoopB)
+					&& WarmIdleRules::ShouldPlayColdVariant(FMath::FRand(), Heat.ColdIdleVariantChance, static_cast<float>(Now - LastColdVariantTime),
+						Heat.ColdIdleVariantCooldownSeconds, !ColdIdleVariants.IsEmpty())
+					&& PlayWarmClip(EWarmClipStep::Variant, WarmIdleBlendSeconds);
+				if (bVariant)
+				{
+					WarmVariantReturn = Next;
+					LastColdVariantTime = Now;
+					++ColdVariantsPlayed;
+					UE_LOG(LogCodexTactics, Display, TEXT("[WarmIdle] %s: cold idle variant %s (%d)"), *Operative.DisplayName.ToString(),
+						WarmClip.IsValid() ? *WarmClip->GetName() : TEXT("-"), ColdVariantsPlayed);
+				}
+				else if (!PlayWarmClip(Next, WarmIdleBlendSeconds))
 				{
 					PlayWarmClip(EWarmClipStep::LoopA, WarmIdleBlendSeconds);
 				}
@@ -214,6 +246,7 @@ void UOperativeAnimInstance::UpdateWarmIdleLayer(const AOperativeCharacter& Oper
 	{
 		WarmActivePose = WarmIdleRequest;
 		WarmLoopsDone = 0;
+		LastColdVariantTime = Now; // the variant cooldown counts from the pose start
 		WarmLoopsTarget = FMath::RandRange(FMath::Max(1, WarmIdleLoopsMin), FMath::Max(WarmIdleLoopsMin, WarmIdleLoopsMax));
 		if (!PlayWarmClip(EWarmClipStep::Start, WarmIdleBlendSeconds) && !PlayWarmClip(EWarmClipStep::LoopA, WarmIdleBlendSeconds))
 		{
@@ -223,5 +256,5 @@ void UOperativeAnimInstance::UpdateWarmIdleLayer(const AOperativeCharacter& Oper
 
 	bWarmIdleActive = WarmActivePose != EWarmIdlePose::None;
 	WarmIdlePose = WarmActivePose;
-	SetWarmWeaponHidden(bHideWeaponInWarmIdle && bWarmIdleActive && !bIsDead);
+	SetWarmWeaponHidden(!bIsDead && ((bHideWeaponInWarmIdle && bWarmIdleActive) || (bHideWeaponInInteraction && IsInteractionClipActive())));
 }
