@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Characters/OperativeMovementRules.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/TripwireRules.h"
 #include "NavAreas/NavArea.h"
@@ -226,6 +227,12 @@ public:
 	virtual bool CanReceiveTrap() const override { return false; }
 	virtual bool GetOverheadLabel(FOverheadLabel& OutLabel) const override;
 
+	/** 2026-10-15: a laid, visible, live wire is walked right up to - DisarmStandOffCm from the closest wire point, on his side. */
+	virtual bool UsesDisarmApproach() const override { return bSetUp && !bPreview && !bTripped && IsSpotted(); }
+	/** The closest point of the wire (ground level under it). */
+	virtual FVector GetDisarmFocusPoint(const FVector& From) const override;
+	virtual FVector GetDisarmApproachPoint(const FVector& From) const override;
+
 	/** Blueprint hook for the pin click / the blast effects (no sound / VFX code in C++ yet). */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Tripwire", meta = (DisplayName = "On Pin Pulled"))
 	void ReceivePinPulled();
@@ -233,8 +240,11 @@ public:
 private:
 	void Detonate();
 	void FinishDisarm();
-	/** One PMC wire disarm attempt by User (mine formula); success removes the wire and hands over the grenades. */
-	EDefusalResult ResolveHostileDisarm(AOperativeCharacter* User);
+	/**
+	 * One PMC wire disarm attempt by User (mine formula); success removes the wire, hands over the grenades, stands him up again if
+	 * OriginalStance (before the crouched work) was standing and plays the pickup clip for it.
+	 */
+	EDefusalResult ResolveHostileDisarm(AOperativeCharacter* User, EOperativeStance OriginalStance);
 	/** Lays the placed wire from AnchorA / AnchorB (ground-projected) and arms it. */
 	void ArmFromPlacement();
 	/** Editor / pre-Setup look: wire and pegs between the local anchors. */
@@ -279,6 +289,8 @@ private:
 	/** Ignored by the trigger until they leave the wire (the rigger). */
 	TArray<TWeakObjectPtr<AActor>> Ignored;
 	TWeakObjectPtr<AOperativeCharacter> Disarmer;
+	/** The disarmer's stance before the work (the pickup clip and the stand-up after a success follow it). */
+	EOperativeStance DisarmerStance = EOperativeStance::Standing;
 	FTimerHandle FuseTimer;
 	FTimerHandle DisarmTimer;
 };

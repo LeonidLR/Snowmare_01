@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
+#include "Characters/InteractionAnimRules.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/RifleLocomotionRules.h"
 #include "Survival/ColdRules.h"
@@ -86,6 +87,35 @@ struct CODEXTACTICS_API FWarmIdleClipSet
 	TObjectPtr<UAnimSequenceBase> End;
 
 	bool IsValid() const { return LoopA != nullptr; }
+};
+
+/**
+ * One interaction clip (game designer 2026-10-15): the standing (FullBody slot) and the crouched (upper-body slot) montage of the same
+ * Polygonmaker clip, made by Scripts/Editor/setup_operative_interaction_animation.py. A missing / wrongly slotted UpperBody montage
+ * falls back to the FullBody montage's clip played on the upper-body slot.
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FOperativeInteractionClip
+{
+	GENERATED_BODY()
+
+	FOperativeInteractionClip() = default;
+	explicit FOperativeInteractionClip(float InFullBodyStartSeconds) : FullBodyStartSeconds(InFullBodyStartSeconds) {}
+
+	/** Standing: the whole body (slot FullBody). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction")
+	TObjectPtr<UAnimMontage> FullBody;
+
+	/** Crouched: the upper-body layer (the ABP's UpperBodySlot), the legs keep the crouch pose. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction")
+	TObjectPtr<UAnimMontage> UpperBody;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (ClampMin = "0.1"))
+	float PlayRate = 1.f;
+
+	/** Where the FullBody montage starts, s (0 = its start). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (ClampMin = "0"))
+	float FullBodyStartSeconds = 0.f;
 };
 
 /** Clip slots blended by the native locomotion. */
@@ -1055,6 +1085,80 @@ public:
 	UAnimSequenceBase* GetWarmClip() const { return WarmClip.Get(); }
 	const TArray<FString>& GetWarmClipLog() const { return WarmClipLog; }
 
+	/**
+	 * Game designer 2026-10-15 ("so it isn't monotonous"): variant clips mixed into the cold idle (both bodies), played instead of a
+	 * loop clip now and then (tactical_heat.json cold_idle_variant_chance / _cooldown_seconds / _loops, WarmIdleRules::ShouldPlayColdVariant).
+	 * Empty = the user's Polygonmaker /Game/Polygonmaker/Animations/Interactions/UE4/Anim_Regular_idle_cold (UE4 mannequin rig, played
+	 * by bone name) is loaded at start. Sequences only (a montage asset is skipped).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Weather Animation")
+	TArray<TObjectPtr<UAnimSequenceBase>> ColdIdleVariants;
+
+	/** Smokes: cold idle variants started. */
+	int32 GetColdVariantsPlayed() const { return ColdVariantsPlayed; }
+
+	// --- Interaction clips (game designer 2026-10-15; OperativeAnimInstanceInteraction.cpp, InteractionAnimRules). A crate is opened
+	// (chest open, then the loot window), searched after Take / Take All (chest search), a disarmed charge picked up (pickup ground).
+	// Standing: the FullBody montage; crouched: the UpperBody montage (the graph's layered blend from spine_01 - the legs keep the
+	// crouch); prone: nothing yet. Cosmetic: any movement, knockdown, death, cover, vault or carrying cuts it. No graph change. ---
+
+	/** Play the interaction clips (untick: none, the loot window keeps the crate's OpenSeconds). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation")
+	bool bUseInteractionClips = true;
+
+	/** Empty montages = the Claude-owned /Game/Characters/Operatives/Anims/Interactions/AM_Interact_ChestOpen(_Upper) loaded at start. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation")
+	FOperativeInteractionClip ChestOpenClip;
+
+	/** Empty = AM_Interact_ChestSearch(_Upper). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation")
+	FOperativeInteractionClip ChestSearchClip;
+
+	/**
+	 * Empty = AM_Interact_PickupGround(_Upper). FullBodyStartSeconds 1.0: after the crouched disarm work the standing operative's
+	 * clip starts low (pelvis 82 -> 64 cm at 1.4 s, the hands at the ground; measured by the setup script) and rises with the charge.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation")
+	FOperativeInteractionClip PickupGroundClip = FOperativeInteractionClip(1.f);
+
+	/** Above this ground speed an interaction clip is cut (he walks), cm/s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation", meta = (ClampMin = "0"))
+	float InteractionStillSpeed = 20.f;
+
+	/** Blend-out when a move / another layer cuts the clip, s. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation", meta = (ClampMin = "0"))
+	float InteractionInterruptBlendSeconds = 0.15f;
+
+	/** Hide the weapon in the hands while an interaction clip plays (the clips are unarmed, both hands). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation")
+	bool bHideWeaponInInteraction = true;
+
+	/** The interaction clip playing now (graph hook) and where. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation")
+	EOperativeInteractionAnim InteractionAnim = EOperativeInteractionAnim::None;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation")
+	EInteractionAnimLayer InteractionLayer = EInteractionAnimLayer::None;
+
+	/**
+	 * Plays Anim on the layer of ChoiceStance (InteractionAnimRules::ChooseLayer): standing full body, crouched upper body, prone none;
+	 * never while time stands still (tactical pause). Returns the seconds until the clip ends (0 = nothing plays). A chest search
+	 * already playing is not restarted (its time left is returned).
+	 */
+	float PlayInteraction(EOperativeInteractionAnim Anim, EOperativeStance ChoiceStance);
+
+	/** Blend-out of Anim's montage, s (the loot window opens when the chest-open clip starts to blend out). */
+	float GetInteractionBlendOutSeconds(EOperativeInteractionAnim Anim) const;
+
+	/** An interaction clip owns its layer now. */
+	bool IsInteractionClipActive() const { return InteractionAnim != EOperativeInteractionAnim::None; }
+
+	/** Smokes: "<clip>@<layer>" of every interaction clip started (capped). */
+	const TArray<FString>& GetInteractionClipLog() const { return InteractionClipLog; }
+
+	/** The operative anim instance of Actor's mesh, or nullptr. */
+	static UOperativeAnimInstance* Of(const AActor* Actor);
+
 	// --- Rifle_2 locomotion (ABP_Operative_Rifle2, Scripts/Editor/setup_operative_rifle2_animation.py; RifleLocomotionRules) ---
 
 	/** Runs the Idle / Turn / Start / Walk / Stop machine below (set on ABP_Operative_Rifle2's defaults). */
@@ -1280,8 +1384,23 @@ private:
 	/** Ends the active pose with Style (End clip / blend-out / cut). */
 	void EndWarmPose(EWarmExitStyle Style);
 	void ResetWarmState();
+	/** Hides / shows the weapon in the hands for a weather pose or an interaction clip (restores what was visible). */
 	void SetWarmWeaponHidden(bool bHidden);
 	EWarmIdlePose WarmIdleRequest = EWarmIdlePose::None;
+	/** Cold idle variant: the loop step to go back to after it, the game time of the pose start / the last variant, the count. */
+	EWarmClipStep WarmVariantReturn = EWarmClipStep::LoopA;
+	double LastColdVariantTime = 0.0;
+	int32 ColdVariantsPlayed = 0;
+
+	// Interaction layer (OperativeAnimInstanceInteraction.cpp).
+	/** Loads the Claude-owned montages / the cold variant clip into empty fields (NativeInitializeAnimation). */
+	void LoadDefaultInteractionClips();
+	/** Cuts the clip on movement / another layer taking the body; resets the state once it ended. */
+	void UpdateInteractionLayer(const AOperativeCharacter& Operative);
+	const FOperativeInteractionClip* GetInteractionClip(EOperativeInteractionAnim Anim) const;
+	void ResetInteractionState();
+	TWeakObjectPtr<UAnimMontage> InteractionMontage;
+	TArray<FString> InteractionClipLog;
 	EWarmExitReason WarmExitReason = EWarmExitReason::NoLongerWanted;
 	/** The pose whose set plays (stays set through its End clip). */
 	EWarmIdlePose WarmActivePose = EWarmIdlePose::None;

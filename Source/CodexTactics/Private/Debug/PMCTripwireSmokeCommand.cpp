@@ -17,6 +17,8 @@
 //  7. rev 5e (user bug 2026-10-14, "the tripwire cannot be disarmed") the REAL input: a click on the ground 25 cm beside a spotted
 //     wire (ACodexTacticsPlayerController::HandleWorldHit) is taken as a click on the wire - the engineer walks up (not into it),
 //     the action menu «Disarm» opens, confirming it disarms the wire (TripwireDisarmed, +2 grenades); the label says "click to disarm";
+//  7b. 2026-10-15 (game designer): the walk-up ends <= 0.9 m from the wire line, facing it; after the success a standing disarmer stands
+//     up and plays the pickup clip on the full body, a crouched one on the upper body (stays crouched), a prone one none;
 //  8. save / load: a hidden wire and a spotted wire saved; after revealing the first and removing the second the load
 //     restores both (hidden / spotted, armed, PMC).
 // Saves go to Saved/SmokeSaves/PMCTripwire (exclusive in Scripts/test_map.json).
@@ -26,6 +28,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -83,6 +86,9 @@ namespace PMCTripwireSmoke
 		int32 MedicGrenades = 0;
 		TWeakObjectPtr<AProximityMineActor> Mine;
 		bool bCheckedWorking = false;
+		/** 2026-10-15 disarm walk-up / pickup passes. */
+		bool bRequested = false;
+		int32 PickupsBeforeProne = 0;
 		TStrongObjectPtr<UEventBusProbe> Probe;
 	};
 
@@ -171,6 +177,22 @@ namespace PMCTripwireSmoke
 			Best = FMath::Min(Best, static_cast<float>(FMath::PointDistToSegment(FVector(Point.X, Point.Y, 0.f), P0, P1)));
 		}
 		return Best;
+	}
+
+	/** 2026-10-15: the disarmer stands within 0.9 m of the wire line, facing it (+-30 deg). */
+	void CheckDisarmSpot(FState& State, const AOperativeCharacter* Operative, const ATripwireActor* Wire, const TCHAR* Pass)
+	{
+		if (!Operative || !Wire)
+		{
+			Check(State, false, FString::Printf(TEXT("%s disarm spot: no operative / wire"), Pass));
+			return;
+		}
+		const FVector Focus = Wire->GetDisarmFocusPoint(Operative->GetActorLocation());
+		const float Distance = static_cast<float>(FVector::Dist2D(Operative->GetActorLocation(), Focus));
+		const FVector ToWire = (Focus - Operative->GetActorLocation()).GetSafeNormal2D();
+		const float FacingDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Operative->GetActorForwardVector().GetSafeNormal2D(), ToWire), -1.0, 1.0)));
+		Check(State, Distance <= 90.f && Distance >= 30.f && FacingDeg <= 30.f, FString::Printf(TEXT("%s: disarm spot %.0f cm from the wire line (<= 90, not on it), facing it (%.0f deg)"),
+			Pass, Distance, FacingDeg));
 	}
 
 	bool IsClickable(const ATripwireActor* Wire)
@@ -639,6 +661,7 @@ namespace PMCTripwireSmoke
 			}
 			Check(State, Wire && Interactions && Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Wire && Wire->IsArmed(),
 				FString::Printf(TEXT("the click walked the engineer up to the wire (not into it) and opened its menu (%.1f s)"), State.Time));
+			CheckDisarmSpot(State, State.Engineer.Get(), Wire, TEXT("standing"));
 			if (Interactions && Interactions->IsActionMenuOpen())
 			{
 				Interactions->ConfirmActionMenu(); // «Disarm (4 s)»
@@ -659,6 +682,116 @@ namespace PMCTripwireSmoke
 				&& Engineer->GrenadesCount == State.MedicGrenades + 2 && State.Probe->CountEvent(GameplayEvents::TripwireTriggered, Engineer->GetFName()) == 1,
 				FString::Printf(TEXT("the real input disarms the PMC wire: gone after %.1f s, TripwireDisarmed by the engineer, +%d grenades, no new trip"), State.Time,
 					Engineer->GrenadesCount - State.MedicGrenades));
+			// 2026-10-15: standing before the work -> stood up again, the full-body pickup (rising from the low pose).
+			const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Engineer);
+			Check(State, Engineer->GetStance() == EOperativeStance::Standing && Anim && Anim->GetInteractionClipLog().Contains(TEXT("PickupGround@FullBody")),
+				FString::Printf(TEXT("standing disarmer: stands up, pickup clip on the FULL body (stance %d, clips %s)"), static_cast<int32>(Engineer->GetStance()),
+					Anim ? *FString::Join(Anim->GetInteractionClipLog(), TEXT(", ")) : TEXT("-")));
+			// Next: the same with a crouched disarmer (upper-body pickup, legs stay crouched).
+			ParkSquad(Squad, State);
+			ATripwireActor* Next = SpawnWire(World, State, State.Centre);
+			State.Wire = Next;
+			if (Next)
+			{
+				Next->Reveal();
+				Next->DefusalRollForTesting = 0.f;
+				Next->DefusalExplosionRollForTesting = 99.f;
+			}
+			Place(Engineer, State.Centre - State.F * 350.f);
+			Engineer->SetStance(EOperativeStance::Crouching);
+			Squad->SetLeader(Engineer);
+			State.Stage = 29;
+			State.Time = 0.f;
+			return true;
+		}
+		case 29:
+		{
+			UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
+			ATripwireActor* Wire = State.Wire.Get();
+			if (State.Time < 1.f || !Wire || !Interactions)
+			{
+				if (State.Time >= 1.f)
+				{
+					Check(State, false, TEXT("crouched pass: wire"));
+					return Finish(State);
+				}
+				return true;
+			}
+			if (!State.bRequested)
+			{
+				State.bRequested = true;
+				Interactions->RequestInteraction(Wire); // the click on the wire itself
+				return true;
+			}
+			if (!Interactions->IsActionMenuOpen() && State.Time < 12.f)
+			{
+				return true;
+			}
+			Check(State, Interactions->IsActionMenuOpen() && Interactions->GetMenuTarget() == Wire,
+				FString::Printf(TEXT("crouched: walked up and the Disarm menu opened (%.1f s)"), State.Time));
+			CheckDisarmSpot(State, State.Engineer.Get(), Wire, TEXT("crouched"));
+			if (Interactions->IsActionMenuOpen())
+			{
+				Interactions->ConfirmActionMenu();
+			}
+			State.Stage = 30;
+			State.Time = 0.f;
+			return true;
+		}
+		case 30:
+		{
+			if (State.Wire.IsValid() && State.Time < 7.f)
+			{
+				return true;
+			}
+			AOperativeCharacter* Engineer = State.Engineer.Get();
+			const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Engineer);
+			Check(State, !State.Wire.IsValid() && Engineer->GetStance() == EOperativeStance::Crouching && Anim
+				&& Anim->GetInteractionClipLog().Contains(TEXT("PickupGround@UpperBody")) && Anim->InteractionLayer == EInteractionAnimLayer::UpperBody,
+				FString::Printf(TEXT("crouched disarmer: stays crouched, pickup clip on the UPPER body (clips %s)"),
+					Anim ? *FString::Join(Anim->GetInteractionClipLog(), TEXT(", ")) : TEXT("-")));
+			State.PickupsBeforeProne = Anim ? Anim->GetInteractionClipLog().Num() : 0;
+			// Prone: a third wire disarmed by the engineer lying next to it (the squad's prone rule: no clip yet).
+			ParkSquad(Squad, State);
+			ATripwireActor* Next = SpawnWire(World, State, State.Centre);
+			State.Wire = Next;
+			if (Next)
+			{
+				Next->Reveal();
+				Next->DefusalRollForTesting = 0.f;
+				Next->DefusalExplosionRollForTesting = 99.f;
+			}
+			Engineer->SetStance(EOperativeStance::Prone);
+			Place(Engineer, State.Centre - State.F * 70.f);
+			State.Stage = 31;
+			State.Time = 0.f;
+			return true;
+		}
+		case 31:
+		{
+			if (State.Time < 2.f)
+			{
+				return true;
+			}
+			if (ATripwireActor* Wire = State.Wire.Get(); Wire && !Wire->IsDisarming())
+			{
+				Wire->ExecuteAction(State.Engineer.Get()); // the PMC wire work stance is crouched: he came in prone
+			}
+			State.Stage = 32;
+			State.Time = 0.f;
+			return true;
+		}
+		case 32:
+		{
+			if (State.Wire.IsValid() && State.Time < 7.f)
+			{
+				return true;
+			}
+			const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(State.Engineer.Get());
+			Check(State, !State.Wire.IsValid() && Anim && Anim->GetInteractionClipLog().Num() == State.PickupsBeforeProne,
+				FString::Printf(TEXT("prone disarmer: disarmed, NO pickup clip (prone clip later; %d clips before, %d after)"), State.PickupsBeforeProne,
+					Anim ? Anim->GetInteractionClipLog().Num() : -1));
+			State.Engineer->SetStance(EOperativeStance::Standing);
 			State.Stage = 25;
 			State.Time = 0.f;
 			return true;

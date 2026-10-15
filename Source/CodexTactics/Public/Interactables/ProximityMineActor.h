@@ -29,6 +29,11 @@ public:
 	/** Rev 5h: armed, not revealed, not the squad's own friendly-safe mine. */
 	virtual bool IsHiddenTrap() const override;
 	virtual void RevealByPeek(AOperativeCharacter* Spotter) override;
+	/** 2026-10-15: a visible live mine is walked right up to (DisarmStandOffCm from its centre, on the operative's side). */
+	virtual bool UsesDisarmApproach() const override { return bTrapped && bRevealed && !bDetonated; }
+
+	/** The operative protected from the trigger while he works on it (TrapApproachRules::UpdateDefuserLease), or nullptr. */
+	const AOperativeCharacter* GetDefuserLease() const { return DefuserLease.Get(); }
 
 	/** Blows the mine up (Godot detonate). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Mine")
@@ -117,4 +122,6 @@ private:
 
 	float ArmingTimeLeft = 0.f;
 	bool bDetonated = false;
+	/** The approaching defuser who stepped inside the trigger radius keeps this until he steps out (the walk-up stands at ~60 cm). */
+	TWeakObjectPtr<AOperativeCharacter> DefuserLease;
 };

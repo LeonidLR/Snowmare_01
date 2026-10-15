@@ -2,7 +2,9 @@
 // L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.WarmIdleSmoke
 //  1. cold idle: the commander (male) and the medic (Female Soldier) cold (60 %) and idle in exploration -> the Cold_1 set
-//     (AS_He_* / AS_She_*); an order to the commander ends his pose at once (no busy time) while he walks;
+//     (AS_He_* / AS_She_*); 2026-10-15: with cold_idle_variant_chance forced to 1 (cooldown 0; the run is seeded, -FixedSeed) the
+//     Polygonmaker variant Anim_Regular_idle_cold plays inside the cold idle for both bodies, then the loop goes on; an order to the
+//     commander ends his pose at once (no busy time) while he walks;
 //  2. barrel: a burning barrel next to the commander -> he walks to a hand-warming place ~90 cm from it, faces it, plays
 //     AS_He_Cold_Fire_1 (weapon hidden); the barrel goes out -> the End clip, weapon back;
 //  3. campfire, 3 operatives (cold 55 / 30 / 70): the two coldest (medic, commander) sit on the inner ring (distinct seats,
@@ -63,6 +65,7 @@ namespace WarmIdleSmoke
 	enum class EStage : uint8
 	{
 		ColdIdle,
+		ColdVariant,
 		ColdOrder,
 		BarrelLight,
 		BarrelWarm,
@@ -104,6 +107,8 @@ namespace WarmIdleSmoke
 		FVector HeldMedicAt = FVector::ZeroVector;
 		FVector HeldEngineerAt = FVector::ZeroVector;
 		bool bStageChecked = false;
+		/** The heat config while the cold idle variant is forced (restored after). */
+		TOptional<FTacticalHeatConfig> SavedHeat;
 		/** The squad-gathers scenes run twice: first at a campfire (the leader walks up to it), then at the gas stove (the leader stands at it). */
 		bool bCampfire = true;
 		/** Rendered stills ("shot"): queued photos, the stage machine waits while they are taken. */
@@ -519,8 +524,13 @@ namespace WarmIdleSmoke
 					QueuePhoto(State, Medic, TEXT("cold_idle_female"), 420.f, 25.f, 0.f);
 					return true; // the order follows the photos
 				}
-				Commander->OrderMoveTo(Commander->GetActorLocation() + Commander->GetActorForwardVector() * 300.f, false);
-				Enter(State, EStage::ColdOrder);
+				// The variant inside the cold idle (game designer 2026-10-15): forced chance 1 / cooldown 0 for this stage.
+				State.SavedHeat = Heat;
+				FTacticalHeatConfig Forced = Heat;
+				Forced.ColdIdleVariantChance = 1.f;
+				Forced.ColdIdleVariantCooldownSeconds = 0.f;
+				TacticalHeatTuning::Set(Forced);
+				Enter(State, EStage::ColdVariant);
 			}
 			else if (State.StageTime > 10.f)
 			{
@@ -528,6 +538,29 @@ namespace WarmIdleSmoke
 				Enter(State, EStage::BarrelLight);
 			}
 			return true;
+
+		case EStage::ColdVariant:
+		{
+			Commander->ColdLevel = FMath::Max(Commander->ColdLevel, 60.f);
+			Medic->ColdLevel = FMath::Max(Medic->ColdLevel, 60.f);
+			const bool bBoth = Anim(Commander)->GetColdVariantsPlayed() >= 1 && Anim(Medic)->GetColdVariantsPlayed() >= 1;
+			if (!bBoth && State.StageTime < 20.f)
+			{
+				return true;
+			}
+			Check(State, bBoth && Played(Commander, TEXT("Anim_Regular_idle_cold")) && Played(Medic, TEXT("Anim_Regular_idle_cold"))
+				&& InPose(Commander, EWarmIdlePose::ColdIdle) && InPose(Medic, EWarmIdlePose::ColdIdle),
+				FString::Printf(TEXT("cold idle variant Anim_Regular_idle_cold plays inside the cold idle (commander %d, medic %d, %.1f s; %s; %s)"),
+					Anim(Commander)->GetColdVariantsPlayed(), Anim(Medic)->GetColdVariantsPlayed(), State.StageTime, *PoseText(Commander), *PoseText(Medic)));
+			if (State.SavedHeat.IsSet())
+			{
+				TacticalHeatTuning::Set(State.SavedHeat.GetValue());
+				State.SavedHeat.Reset();
+			}
+			Commander->OrderMoveTo(Commander->GetActorLocation() + Commander->GetActorForwardVector() * 300.f, false);
+			Enter(State, EStage::ColdOrder);
+			return true;
+		}
 
 		case EStage::ColdOrder:
 			if (State.StageTime >= 0.5f)

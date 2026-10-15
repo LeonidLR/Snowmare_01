@@ -73,4 +73,17 @@ namespace InteriorExitRules
 
 	/** EXIT arrows show while the interior camera is the view, outside turn-based combat (the grid has its own walk rules). */
 	CODEXTACTICS_API bool ShouldShowExitArrows(bool bZoneCameraShown, bool bTurnBased);
+
+	/** Seconds between doorway searches while none was found / the navmesh was still building. */
+	inline constexpr float RescanIntervalSeconds = 0.5f;
+	/** Searches after the first one before "no doorway" is believed (10 s at RescanIntervalSeconds). */
+	inline constexpr int32 MaxRescans = 20;
+
+	/**
+	 * Fix 2026-10-15 (InteriorExitSmoke under load: "EXIT arrows at the doorways: 0"): the automatic search reads the runtime navmesh,
+	 * which a map without a saved RecastNavMesh builds at load (longer under load). Search again: never while the navmesh is still
+	 * building (wait), once after it finished when the last search ran during the build, and while nothing was found (up to
+	 * MaxRescans) - instead of keeping "no doors" for the whole visit.
+	 */
+	CODEXTACTICS_API bool ShouldRescanExits(bool bNavBuilding, bool bScannedWhileBuilding, int32 ExitsFound, int32 Rescans, int32 InMaxRescans = MaxRescans);
 }

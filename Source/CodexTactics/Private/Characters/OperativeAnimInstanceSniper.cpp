@@ -121,7 +121,8 @@ void UOperativeAnimInstance::UpdateSniperLayer(const AOperativeCharacter& Operat
 	bSniperWeapon = Operative.IsSniperWeaponEquipped();
 	const bool bStill = Speed < SniperStillSpeed;
 	const bool bEligible = bSniperWeapon && bUseSniperClips && !bInCover && !bIsDead && !bKnockedDown && !bIsVaulting && !bIsSprinting
-		&& !Operative.bCarrying && bStill && !IsThrowingGrenade() && !bWarmIdleActive;
+		&& !Operative.bCarrying && bStill && !IsThrowingGrenade() && !bWarmIdleActive
+		&& !IsInteractionClipActive(); // a crate / pickup clip owns the body (OperativeAnimInstanceInteraction.cpp)
 	const UAnimMontage* OneShot = SniperOneShotMontage.Get();
 	const bool bOneShotPlaying = OneShot && Montage_IsPlaying(OneShot);
 	// User report 2026-10-09 (she rose between the shots): the next clip takes over BEFORE the one-shot starts its own

@@ -1,7 +1,10 @@
 #include "Interactables/LootCrateActor.h"
 #include "Core/PlayerCommands.h"
+#include "Characters/InteractionAnimRules.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "EngineUtils.h"
@@ -213,9 +216,23 @@ void ALootCrateActor::StartOpening(AOperativeCharacter* Leader)
 	Leader->StopOperative();
 	Leader->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 	ReceiveOpening();
+	// Game designer 2026-10-15: he faces the crate, plays the chest-open clip (standing full body, crouched upper body, prone none),
+	// then the loot window opens as the clip blends out. In the tactical pause time stands still: the window opens at once, no clip
+	// (looting is planning there; the 1.8 s timer used to wait for the release). No clip: the crate's own OpenSeconds.
+	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const bool bTimeFrozen = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+	UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Leader);
+	const float ClipSeconds = Anim && !bTimeFrozen ? Anim->PlayInteraction(EOperativeInteractionAnim::ChestOpen, Leader->GetStance()) : 0.f;
+	LastOpenDelaySeconds = InteractionAnimRules::GetLootWindowDelay(ClipSeconds,
+		Anim ? Anim->GetInteractionBlendOutSeconds(EOperativeInteractionAnim::ChestOpen) : 0.f, OpenSeconds, bTimeFrozen);
+	if (LastOpenDelaySeconds <= 0.f)
+	{
+		FinishOpening(Leader);
+		return;
+	}
 	FTimerHandle Handle;
 	GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateUObject(this, &ALootCrateActor::FinishOpening,
-		TWeakObjectPtr<AOperativeCharacter>(Leader)), FMath::Max(OpenSeconds, 0.01f), false);
+		TWeakObjectPtr<AOperativeCharacter>(Leader)), LastOpenDelaySeconds, false);
 }
 
 void ALootCrateActor::FinishOpening(TWeakObjectPtr<AOperativeCharacter> WeakLeader)

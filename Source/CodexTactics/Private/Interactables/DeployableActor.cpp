@@ -1,4 +1,5 @@
 #include "Interactables/DeployableActor.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
@@ -146,30 +147,40 @@ void ADeployableActor::ExecuteAction(AOperativeCharacter* User)
 	}
 
 	// Godot _execute_tactical_dismantle: face it, crouch, work for 1.1 s, then resolve.
-	const bool bWasStanding = User->GetStance() == EOperativeStance::Standing;
+	const EOperativeStance OriginalStance = User->GetStance();
 	const FRotator Facing = (GetActorLocation() - User->GetActorLocation()).Rotation();
 	User->StopOperative();
 	User->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
 	User->SetStance(EOperativeStance::Crouching);
 	FTimerHandle Handle;
 	GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateUObject(this, &ADeployableActor::FinishDismantle,
-		TWeakObjectPtr<AOperativeCharacter>(User), bWasStanding), FMath::Max(DismantleSeconds, 0.01f), false);
+		TWeakObjectPtr<AOperativeCharacter>(User), OriginalStance), FMath::Max(DismantleSeconds, 0.01f), false);
 }
 
-void ADeployableActor::FinishDismantle(TWeakObjectPtr<AOperativeCharacter> WeakUser, bool bWasStanding)
+void ADeployableActor::FinishDismantle(TWeakObjectPtr<AOperativeCharacter> WeakUser, EOperativeStance OriginalStance)
 {
 	AOperativeCharacter* User = WeakUser.Get();
 	if (!User)
 	{
 		return;
 	}
-	auto StandUp = [User, bWasStanding]()
+	auto StandUp = [User, OriginalStance]()
 	{
-		if (bWasStanding)
+		if (OriginalStance == EOperativeStance::Standing)
 		{
 			User->SetStance(EOperativeStance::Standing);
 		}
 	};
+	// Game designer 2026-10-15: a successful mine disarm ends with the pickup clip by the stance he came in with (standing: full
+	// body, rising from the crouched work; crouched: upper body over the crouched legs; prone: none yet). After StandUp.
+	auto PlayPickup = [User, OriginalStance]()
+	{
+		if (UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(User))
+		{
+			Anim->PlayInteraction(EOperativeInteractionAnim::PickupGround, OriginalStance);
+		}
+	};
+	bool bDisarmed = false;
 	if (NeedsDefusal())
 	{
 		// A detonation may destroy this actor: keep what we need before the attempt.
@@ -177,20 +188,33 @@ void ADeployableActor::FinishDismantle(TWeakObjectPtr<AOperativeCharacter> WeakU
 		if (Result != EDefusalResult::Success || !bDeployable)
 		{
 			StandUp();
+			if (Result == EDefusalResult::Success)
+			{
+				PlayPickup();
+			}
 			return;
 		}
+		bDisarmed = true;
 	}
 	AOperativeCharacter* Recipient = FindRecipient(User);
 	if (!Recipient)
 	{
 		PostLine(User->DisplayName, FullLine(DeployableType));
 		StandUp();
+		if (bDisarmed)
+		{
+			PlayPickup();
+		}
 		return;
 	}
 	Recipient->AddDeployable(DeployableType, 1);
 	OnPickedUpBy(*Recipient);
 	PostLine(User->DisplayName, FText::Format(FoundLine(DeployableType), Recipient->DisplayName));
 	StandUp();
+	if (bDisarmed)
+	{
+		PlayPickup();
+	}
 	Destroy();
 }
 

@@ -148,6 +148,8 @@ private:
 	bool TryOpenMenu();
 	void OpenMenuFor(AInteractableActor* Target, AOperativeCharacter* Leader);
 	void CloseMenu();
+	/** The chest-search clip after Take / Take All (UOperativeAnimInstance::PlayInteraction by his stance). */
+	void PlayChestSearch(AOperativeCharacter& Collector) const;
 	/** Clears the «approaching defuser» mark of a mine (Godot _close_action_menu). */
 	void ClearDefuser(AInteractableActor* Target) const;
 

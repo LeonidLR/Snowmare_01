@@ -269,6 +269,21 @@ struct CODEXTACTICS_API FTacticalHeatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "0"))
 	float WarmPullMaxDistance = 1500.f;
 
+	/**
+	 * Game designer 2026-10-15: inside the cold idle (shivering) a variant clip (UOperativeAnimInstance::ColdIdleVariants, the
+	 * Polygonmaker Anim_Regular_idle_cold) replaces a loop clip with this chance at the end of each loop clip (0 = never) ...
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "0", ClampMax = "1"))
+	float ColdIdleVariantChance = 0.35f;
+
+	/** ... at most once per this many seconds (counted from the pose start / the last variant) ... */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "0"))
+	float ColdIdleVariantCooldownSeconds = 8.f;
+
+	/** ... and plays this many times in a row (the clip is a 0.83 s loop). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WarmIdle", meta = (ClampMin = "1"))
+	int32 ColdIdleVariantLoops = 3;
+
 	// --- Common ---
 
 	/** Extra distance counted as inside a new source's warm zone (the old sources keep Godot's 50 cm). */
