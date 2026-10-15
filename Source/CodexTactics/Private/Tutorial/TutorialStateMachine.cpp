@@ -199,6 +199,8 @@ void FTutorialStateMachine::ResetProgress()
 	Transitions.Reset();
 	Locks.Reset();
 	History.Reset();
+	Confines.Reset();
+	++ConfineSerial;
 }
 
 FTutorialCommandUse FTutorialStateMachine::GetCommandUse(FName CommandId) const
@@ -400,6 +402,10 @@ void FTutorialStateMachine::Fire(int32 Index, bool bForce)
 		}
 	}
 	FRuntime& State = Runtime[Index];
+	if (Step.Confine.IsSet())
+	{
+		StartConfine(Index); // rev 5i: the squad is held from the moment the lesson is triggered (it arrived)
+	}
 	// Partial precredit: uses the player already made count towards the card (one Q press before the Q/E card = 1 of 2); hold
 	// time is never seeded (it must be collected while the card is up).
 	State.Progress = TutorialRules::CanPrecredit(Step) ? FMath::Min(TutorialRules::CountHistoryUses(Step, History), Step.Complete.Count) : 0;
@@ -590,6 +596,7 @@ void FTutorialStateMachine::Finish(int32 Index, ETutorialStepState FinalState)
 	Runtime[Index].bEverFinished = true;
 	ApplyStepLocks(Index); // a step that never showed still applies its locks (never lost)
 	SetState(Index, FinalState, /*bSilent*/ !bWasActive);
+	ReleaseConfinesUntil(Index); // rev 5i: the lesson that held the squad is over
 	const FName FinishedId = Step.Id;
 	CancelMatching(FinishedId, NAME_None, NAME_None); // rev 5e: talk about this step's place / moment is over
 	for (int32 Other = 0; Other < Data.Steps.Num(); ++Other)
@@ -746,6 +753,10 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId, const 
 			{
 				continue; // "in_volume": not where the lesson asks for it (e.g. cover entered, but not beside the door)
 			}
+			if (IsCompletionHeldByConfine(Index))
+			{
+				continue; // rev 5i: a later part of a confined lesson counts only once its card is up
+			}
 			if (!IsSubjectAllowed(Index, SubjectId))
 			{
 				continue; // "distinct_from": this operative already did another part of the lesson
@@ -770,6 +781,7 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId, const 
 		}
 	}
 	CancelMatching(NAME_None, EventName, NAME_None);
+	NoteConfineEvent(EventName, SubjectId);
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 	{
 		const FTutorialTrigger& Trigger = Data.Steps[Index].Trigger;
@@ -802,7 +814,7 @@ bool FTutorialStateMachine::CountVolumeCompletions(FName VolumeId, FName Subject
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 	{
 		if (WasRunning[Index] && TutorialRules::IsRunning(Runtime[Index].State) && Data.Steps[Index].Complete.Volume == VolumeId
-			&& IsSubjectAllowed(Index, SubjectId))
+			&& IsSubjectAllowed(Index, SubjectId) && !IsCompletionHeldByConfine(Index))
 		{
 			if (!SubjectId.IsNone())
 			{
@@ -839,16 +851,23 @@ void FTutorialStateMachine::HandleVolume(FName VolumeId, FName StepId, FName Bea
 		CountVolumeCompletions(VolumeId, SubjectId, RunningSnapshot());
 	}
 	// Rev 5f: monotonic progress by location - a later beat's / later step's place starts that beat and passes what lies behind.
-	if (!VolumeId.IsNone() || !BeatId.IsNone())
+	// Rev 5i: while a confinement holds the squad, the route does not move (an operative in the hut before the entry lesson let
+	// him in must not pass the lesson); the volume's own triggers still fire. Completions above may have released it already.
+	if ((!VolumeId.IsNone() || !BeatId.IsNone()) && !IsConfined())
 	{
 		ApplyArrival(VolumeId, BeatId);
 	}
 	if (!VolumeId.IsNone())
 	{
 		CancelMatching(NAME_None, NAME_None, VolumeId); // after the beat start: its own talk about this place is dropped too
+		const bool bHeld = IsConfined();
 		for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 		{
 			const FTutorialTrigger& Trigger = Data.Steps[Index].Trigger;
+			if (bHeld && Data.FindBeatIndex(Data.Steps[Index].Beat) > CurrentBeatIndex)
+			{
+				continue; // rev 5i: held - a later beat's place does not start that beat (nor end the confinement)
+			}
 			if (Trigger.Type == ETutorialTriggerType::Volume && Trigger.Volume == VolumeId)
 			{
 				Fire(Index);
@@ -880,6 +899,15 @@ bool FTutorialStateMachine::StartBeat(FName BeatId, bool bAllowBackwards)
 	}
 	CurrentBeatIndex = BeatIndex;
 	TutorialRules::ApplyLockChanges(Locks, Data.Beats[BeatIndex].Lock, Data.Beats[BeatIndex].Unlock);
+	// Rev 5i: a confinement of an earlier beat ends when the story moves on.
+	for (FConfineRuntime& Confine : Confines)
+	{
+		if (!Confine.bReleased && Data.Steps.IsValidIndex(Confine.Owner) && Data.FindBeatIndex(Data.Steps[Confine.Owner].Beat) < BeatIndex)
+		{
+			Confine.bReleased = true;
+			++ConfineSerial;
+		}
+	}
 	// Leftover hint cards of the beats the squad has left (waiting, queued or shown) are dropped; their chains follow.
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 	{
@@ -1134,6 +1162,17 @@ FTutorialProgress FTutorialStateMachine::ExportProgress() const
 			Step.Contributors.Sort(FNameLexicalLess());
 		}
 	}
+	for (const FConfineRuntime& Confine : Confines)
+	{
+		if (Data.Steps.IsValidIndex(Confine.Owner))
+		{
+			FTutorialConfineProgress& Saved = Progress.Confines.AddDefaulted_GetRef();
+			Saved.Owner = Data.Steps[Confine.Owner].Id;
+			Saved.bReleased = Confine.bReleased;
+			Saved.ExitHolder = Confine.ExitHolder;
+			Saved.Passed = Confine.Passed;
+		}
+	}
 	return Progress;
 }
 
@@ -1171,6 +1210,20 @@ void FTutorialStateMachine::ImportProgress(const FTutorialProgress& Progress)
 			}
 		}
 	}
+	// Rev 5i: the confinements as saved (a released one stays released; the one in force holds the squad again).
+	for (const FTutorialConfineProgress& Saved : Progress.Confines)
+	{
+		const int32 Owner = IndexOf(Saved.Owner);
+		if (Runtime.IsValidIndex(Owner) && Data.Steps[Owner].Confine.IsSet())
+		{
+			FConfineRuntime& Confine = Confines.AddDefaulted_GetRef();
+			Confine.Owner = Owner;
+			Confine.bReleased = Saved.bReleased;
+			Confine.ExitHolder = Saved.ExitHolder;
+			Confine.Passed = Saved.Passed;
+		}
+	}
+	++ConfineSerial;
 	// Rev 5f: who counted for which step (finished ones too: "distinct_from" of the steps still running).
 	for (const TPair<FName, FTutorialStepProgress>& Entry : Progress.StepProgress)
 	{
@@ -1193,6 +1246,177 @@ void FTutorialStateMachine::ImportProgress(const FTutorialProgress& Progress)
 				Runtime[Index].CountedSubjects = TSet<FName>(Saved->Subjects);
 			}
 			Enqueue(Index);
+		}
+	}
+}
+
+// --- Rev 5i: confine ------------------------------------------------------------------------------------------------
+
+int32 FTutorialStateMachine::FindActiveConfine() const
+{
+	for (int32 Index = Confines.Num() - 1; Index >= 0; --Index)
+	{
+		if (!Confines[Index].bReleased)
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
+bool FTutorialStateMachine::IsConfined() const
+{
+	return FindActiveConfine() != INDEX_NONE;
+}
+
+int32 FTutorialStateMachine::GetConfineUntilIndex(int32 Owner) const
+{
+	if (!Data.Steps.IsValidIndex(Owner))
+	{
+		return INDEX_NONE;
+	}
+	const FName Until = Data.Steps[Owner].Confine.Until;
+	return Until.IsNone() ? Owner : IndexOf(Until);
+}
+
+bool FTutorialStateMachine::IsConfineAreaOpen(FName VolumeId) const
+{
+	bool bGated = false;
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		const FTutorialCompletion& Complete = Data.Steps[Index].Complete;
+		if (Complete.Volume != VolumeId && Complete.InVolume != VolumeId)
+		{
+			continue;
+		}
+		bGated = true;
+		if (Runtime[Index].State == ETutorialStepState::Active || Runtime[Index].bEverFinished)
+		{
+			return true; // its lesson is on screen (or done): the place may be used
+		}
+	}
+	return !bGated;
+}
+
+bool FTutorialStateMachine::IsCompletionHeldByConfine(int32 Index) const
+{
+	const int32 Active = FindActiveConfine();
+	if (Active == INDEX_NONE || !Data.Steps.IsValidIndex(Index) || Runtime[Index].State == ETutorialStepState::Active)
+	{
+		return false;
+	}
+	const FTutorialConfine& Spec = Data.Steps[Confines[Active].Owner].Confine;
+	const FTutorialCompletion& Complete = Data.Steps[Index].Complete;
+	return (!Complete.Volume.IsNone() && Spec.Allow.Contains(Complete.Volume)) || (!Complete.InVolume.IsNone() && Spec.Allow.Contains(Complete.InVolume));
+}
+
+void FTutorialStateMachine::StartConfine(int32 Index)
+{
+	const int32 Until = GetConfineUntilIndex(Index);
+	if (Until != Index && Runtime.IsValidIndex(Until) && Runtime[Until].bEverFinished && !TutorialRules::IsRunning(Runtime[Until].State))
+	{
+		return; // the lesson it waits for is over already
+	}
+	for (FConfineRuntime& Other : Confines)
+	{
+		Other.bReleased = true; // one confinement at a time
+	}
+	Confines.RemoveAll([Index](const FConfineRuntime& Other) { return Other.Owner == Index; });
+	FConfineRuntime& Confine = Confines.AddDefaulted_GetRef();
+	Confine.Owner = Index;
+	++ConfineSerial;
+}
+
+void FTutorialStateMachine::ReleaseConfinesUntil(int32 FinishedIndex)
+{
+	for (FConfineRuntime& Confine : Confines)
+	{
+		if (!Confine.bReleased && GetConfineUntilIndex(Confine.Owner) == FinishedIndex)
+		{
+			Confine.bReleased = true;
+			++ConfineSerial;
+		}
+	}
+}
+
+bool FTutorialStateMachine::ReleaseConfines()
+{
+	bool bReleased = false;
+	for (FConfineRuntime& Confine : Confines)
+	{
+		bReleased |= !Confine.bReleased;
+		Confine.bReleased = true;
+	}
+	if (bReleased)
+	{
+		++ConfineSerial;
+	}
+	return bReleased;
+}
+
+bool FTutorialStateMachine::GetActiveConfine(FTutorialConfineView& Out) const
+{
+	const int32 Active = FindActiveConfine();
+	if (Active == INDEX_NONE)
+	{
+		return false;
+	}
+	const FConfineRuntime& Confine = Confines[Active];
+	const FTutorialStep& Owner = Data.Steps[Confine.Owner];
+	Out = FTutorialConfineView();
+	Out.Owner = Owner.Id;
+	Out.Spec = Owner.Confine;
+	Out.Areas.Add(Owner.Confine.Volume);
+	for (const FName Area : Owner.Confine.Allow)
+	{
+		if (IsConfineAreaOpen(Area))
+		{
+			Out.Areas.AddUnique(Area);
+		}
+	}
+	Out.ExitHolder = Confine.ExitHolder;
+	Out.Passed = Confine.Passed;
+	return true;
+}
+
+void FTutorialStateMachine::TakeConfineExitTurn(FName SubjectId)
+{
+	const int32 Active = FindActiveConfine();
+	if (Active == INDEX_NONE || SubjectId.IsNone())
+	{
+		return;
+	}
+	FConfineRuntime& Confine = Confines[Active];
+	if (!Data.Steps[Confine.Owner].Confine.ExitEvent.IsEmpty() && Confine.ExitHolder.IsNone() && !Confine.Passed.Contains(SubjectId))
+	{
+		Confine.ExitHolder = SubjectId;
+	}
+}
+
+void FTutorialStateMachine::ReturnConfineExitTurn(FName SubjectId)
+{
+	const int32 Active = FindActiveConfine();
+	if (Active != INDEX_NONE && !SubjectId.IsNone() && Confines[Active].ExitHolder == SubjectId)
+	{
+		Confines[Active].ExitHolder = NAME_None;
+	}
+}
+
+void FTutorialStateMachine::NoteConfineEvent(FName EventName, FName SubjectId)
+{
+	const int32 Active = FindActiveConfine();
+	if (Active == INDEX_NONE || SubjectId.IsNone())
+	{
+		return;
+	}
+	FConfineRuntime& Confine = Confines[Active];
+	const FString& ExitEvent = Data.Steps[Confine.Owner].Confine.ExitEvent;
+	if (!ExitEvent.IsEmpty() && TutorialRules::MatchesName(ExitEvent, EventName))
+	{
+		Confine.Passed.AddUnique(SubjectId); // through: free to move on
+		if (Confine.ExitHolder == SubjectId)
+		{
+			Confine.ExitHolder = NAME_None; // the next one may go
 		}
 	}
 }

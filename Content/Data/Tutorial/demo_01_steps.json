@@ -218,7 +218,7 @@
       "complete": { "event": "ItemLooted.HeatPack" }
     },
     {
-      "_comment": "Rev 5c (designer review 2026-10-13): the TACTICAL HUT ENTRY teaches selection + Solo + cover. VOL_A1_HUT_APPROACH (Leader, ~10 m in front of the door) starts the walk-and-talk and the select card; then Solo; then one operative hugs the wall LEFT of the door (cover inside VOL_A1_DOOR_L), a second one RIGHT of it (VOL_A1_DOOR_R), the third goes in (VOL_A1_HUT = the interior only, Any Operative, Fire Once off) - three DIFFERENT operatives ('distinct_from'). The three entry cards are queued together, so they count in any order (one card on screen at a time). Markers: Step Id A1_hut_stack_l / A1_hut_stack_r / A1_hut_enter. Left / right as seen by the squad approaching the door.",
+      "_comment": "Rev 5c (designer review 2026-10-13): the TACTICAL HUT ENTRY teaches Solo + selection + cover. Rev 5i (game designer 2026-10-15: 'they just run everyone inside and skip the lesson'): VOL_A1_HUT_APPROACH (Leader, ~10 m in front of the door) starts the walk-and-talk and the SOLO card, which CONFINES the squad to the approach area until the third operative is inside (A1_hut_enter finished): move orders outside it are refused ('Hold here - follow the training.'), formation moves stay inside; VOL_A1_DOOR_L opens when its card is up, then VOL_A1_DOOR_R, then VOL_A1_HUT - so the order is enforced (left, right, then the third goes in; three DIFFERENT operatives, 'distinct_from'). Released on completion, tutorial OFF / SKIP TUTORIAL, a fight. No timeouts on these cards (the card's Skip still skips one lesson). Markers: Step Id A1_hut_stack_l / A1_hut_stack_r / A1_hut_enter. Left / right as seen by the squad approaching the door.",
       "id": "A1_wt_hut_approach", "beat": "A1", "kind": "walk_talk",
       "trigger": { "type": "volume", "volume": "VOL_A1_HUT_APPROACH" },
       "cancel_on": { "step": "A1_hut_enter" },
@@ -229,40 +229,43 @@
       ]
     },
     {
-      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
-      "keys": ["Select.Member"],
-      "trigger": { "type": "volume", "volume": "VOL_A1_HUT_APPROACH" },
-      "complete": { "commands": ["Select.Member"], "timeout_s": 30 }
-    },
-    {
-      "_comment": "Solo on (B): the others hold their spots while the selected operative moves alone. Unlocks Squad.Solo / Squad.Regroup. Not precredited (Solo must be ON now).",
+      "_comment": "Rev 5i: Solo FIRST (the designer's order: B, then pick the operative, then send him). Unlocks Squad.Solo / Squad.Regroup. Not precredited (Solo must be ON now). Holds the squad in the approach area (confine).",
       "id": "A1_solo", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SOLO",
-      "keys": ["Select.Member", "Squad.Solo"],
+      "keys": ["Squad.Solo"],
       "unlock": ["Squad.Solo", "Squad.Regroup"],
       "precredit": false,
-      "trigger": { "type": "after_step", "step": "A1_select" },
-      "complete": { "commands": ["Squad.Solo"], "timeout_s": 45 }
+      "trigger": { "type": "volume", "volume": "VOL_A1_HUT_APPROACH" },
+      "confine": { "volume": "VOL_A1_HUT_APPROACH", "allow": ["VOL_A1_DOOR_L", "VOL_A1_DOOR_R", "VOL_A1_HUT"], "until": "A1_hut_enter" },
+      "complete": { "commands": ["Squad.Solo"] }
     },
     {
-      "_comment": "Cover is taught here now (rev 5c; A3_cover is the refresher in the cover field). Done when an operative settles in cover inside VOL_A1_DOOR_L (CoverEntered + in_volume).",
+      "_comment": "Rev 5i: select the operative to send (1 / 2 / 3 or a click on him / his portrait). Not precredited: selections made earlier in the level do not count.",
+      "id": "A1_select", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SELECT",
+      "keys": ["Select.Member"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A1_solo" },
+      "complete": { "commands": ["Select.Member"] }
+    },
+    {
+      "_comment": "Cover is taught here now (rev 5c; A3 is the refresher in the cover field). Done when an operative settles in cover inside VOL_A1_DOOR_L (CoverEntered + in_volume).",
       "id": "A1_hut_stack_l", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HUT_STACK_L",
       "keys": ["Select.Member", "Cover.Preview", "Cover.Enter"],
       "unlock": ["Cover.*"],
-      "trigger": { "type": "after_step", "step": "A1_solo" },
-      "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_L", "distinct_from": ["A1_hut_stack_r", "A1_hut_enter"], "timeout_s": 90 }
+      "trigger": { "type": "after_step", "step": "A1_select" },
+      "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_L", "distinct_from": ["A1_hut_stack_r", "A1_hut_enter"] }
     },
     {
       "id": "A1_hut_stack_r", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HUT_STACK_R",
       "keys": ["Select.Member", "Cover.Enter"],
-      "trigger": { "type": "after_step", "step": "A1_solo" },
-      "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_R", "distinct_from": ["A1_hut_stack_l", "A1_hut_enter"], "timeout_s": 90 }
+      "trigger": { "type": "after_step", "step": "A1_select" },
+      "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_R", "distinct_from": ["A1_hut_stack_l", "A1_hut_enter"] }
     },
     {
-      "_comment": "The third operative walks in (VOL_A1_HUT covers the interior only: the two at the door never stand in it). One already inside when the card comes counts at once (volume presence).",
+      "_comment": "The third operative walks in (VOL_A1_HUT covers the interior only: the two at the door never stand in it). Rev 5i: the hut opens only when this card is up; the confinement ends when it finishes.",
       "id": "A1_hut_enter", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HUT_ENTER",
       "keys": ["Select.Member", "Order.Move"],
-      "trigger": { "type": "after_step", "step": "A1_solo" },
-      "complete": { "volume": "VOL_A1_HUT", "distinct_from": ["A1_hut_stack_l", "A1_hut_stack_r"], "timeout_s": 90 }
+      "trigger": { "type": "after_step", "step": "A1_select" },
+      "complete": { "volume": "VOL_A1_HUT", "distinct_from": ["A1_hut_stack_l", "A1_hut_stack_r"] }
     },
     {
       "_comment": "Inside: the crate (the two at the door hold their positions until the regroup). Rev 5e: dropped once the crate is open (A1_loot_open finished); the approach lines are dropped once the third man is inside, the resupply line once the squad is at the hut, the 'split them up' line once the packs are shared.",

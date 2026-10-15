@@ -90,11 +90,11 @@
     },
     "TUT_A1_SELECT": {
       "title": "SELECT",
-      "text": "Press {key:Select.Member} (1 / 2 / 3) or click an operative: your orders go to him."
+      "text": "Now pick who moves: press {key:Select.Member} (1 / 2 / 3) or click an operative or his portrait. Your orders go to him alone."
     },
     "TUT_A1_SOLO": {
       "title": "SOLO",
-      "text": "Press {key:Squad.Solo}: the others hold their spots while you move the selected operative alone."
+      "text": "Hold at the door. Press {key:Squad.Solo}: the others hold their spots while one operative moves alone."
     },
     "TUT_A1_HUT_STACK_L": {
       "title": "LEFT OF THE DOOR",

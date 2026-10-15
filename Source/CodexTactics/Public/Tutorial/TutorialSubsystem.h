@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Characters/OperativeMovementRules.h"
 #include "Core/PlayerCommands.h"
 #include "GameFlow/GameFlowTypes.h"
 #include "Survival/ColdRules.h"
@@ -336,6 +337,43 @@ public:
 	/** The operative a shown step focuses on ("focus"), null when none. */
 	AOperativeCharacter* GetFocusOperative(FName StepId) const;
 
+	// --- Confine (rev 5i, game designer 2026-10-15: hold the squad in an area until the lesson is done) ----------------
+
+	/** The tutorial is active and a step's "confine" holds the squad now (FTutorialConfine). */
+	bool IsConfining() const;
+
+	/**
+	 * Judges a move of Operative to Destination under the confinement in force (Allowed when none): the area test (the open volumes
+	 * of the confinement, or their bounding box with "span"; a 50 cm margin) + TutorialRules::JudgeConfinedMove. bTakeTurn: an
+	 * allowed order outside the area takes the "one_at_a_time" turn, an order inside gives a held turn back (orders, not checks).
+	 */
+	ETutorialConfineVerdict JudgeMove(const AOperativeCharacter& Operative, const FVector& Destination, bool bTakeTurn);
+
+	/** A move order was refused: the verdict's feed line ("Hold here - follow the training.", at most one per verdict per second), "Tutorial.Confined". */
+	void ReportConfinedRefusal(ETutorialConfineVerdict Verdict, const AOperativeCharacter* Operative);
+
+	/**
+	 * THE confine choke point for move orders of the player / interactions / autonomy (AOperativeCharacter::OrderMoveTo,
+	 * OrderTakeCover, RequestMove, the ground click): true when the order may go ahead; false = refused (the line is posted).
+	 * True without a tutorial / confinement.
+	 */
+	static bool CheckConfinedOrder(const UObject* WorldContext, const AOperativeCharacter* Operative, const FVector& Destination);
+
+	/** Point lies in the allowed area of the confinement in force (true when none). */
+	bool IsInsideConfinement(const FVector& Point) const;
+
+	/** A formation move: pulls Destination into the holding volume (its box shrunk by 60 cm). True when it was moved. */
+	bool ClampIntoConfinement(FVector& InOutDestination) const;
+
+	/** The stance every move needs under the confinement in force ("crouch" / "prone"), NAME_None when none. */
+	FName GetConfineStance() const;
+
+	/** "stand" / "crouch" / "prone" (TutorialRules::StanceSatisfies). */
+	static FName GetStanceName(EOperativeStance Stance);
+
+	/** Move orders refused by a confinement since the steps were loaded (smokes). */
+	int32 GetConfinedRefusalCount() const { return ConfinedRefusals; }
+
 	// --- Markers / save ---------------------------------------------------------------------------------------------
 
 	void RegisterMarker(ATutorialMarkerActor* Marker);
@@ -429,4 +467,14 @@ private:
 	FString SessionId;
 	/** Progress loaded before the steps (a save applied before the level's steps file was read): applied by LoadSteps. */
 	TOptional<FTutorialProgress> DeferredProgress;
+
+	/** Rev 5i: the confinement serial last seen (FTutorialStateMachine::GetConfineSerial) and the refusals so far. */
+	int32 SeenConfineSerial = 0;
+	int32 ConfinedRefusals = 0;
+	/** Real time of the last feed line per verdict (one line per verdict per second). */
+	TMap<uint8, double> ConfineLineTimes;
+	/** A confinement started / ended: a start stops the walks that would leave the area (or the whole squad with "stop"). */
+	void HandleConfineChanged();
+	/** The tutorial volumes of the world with this id. */
+	TArray<const ATutorialTriggerVolume*> FindVolumes(FName VolumeId) const;
 };

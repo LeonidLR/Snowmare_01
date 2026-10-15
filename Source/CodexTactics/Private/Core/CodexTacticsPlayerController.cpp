@@ -1932,6 +1932,12 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		}
 		return;
 	}
+	// Rev 5i (game designer 2026-10-15): a tutorial confinement holds the squad in an area - a click outside it is refused with one
+	// feed line and reported as no order (the members' own orders are judged again in OrderMoveTo).
+	if (!UTutorialSubsystem::CheckConfinedOrder(this, Leader, Hit.ImpactPoint))
+	{
+		return;
+	}
 	// Tutorial command lock (Demo 01 user decision 2026-10-12: no running until warmed up in A1): a locked sprint is
 	// degraded to a walk without any error line; the lock raises "Tutorial.Locked" for the one-time hint.
 	const bool bSprint = bDoubleClick && UTutorialSubsystem::FilterCommand(this, PlayerCommands::Sprint) == PlayerCommands::Sprint;

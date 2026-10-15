@@ -177,6 +177,82 @@ struct CODEXTACTICS_API FTutorialCancelOn
 	bool IsSet() const { return Steps.Num() > 0 || !Event.IsEmpty() || Volumes.Num() > 0; }
 };
 
+/**
+ * "confine" (rev 5i, game designer 2026-10-15: "the player just runs everyone into the hut and skips the tactical entry"): while the
+ * confinement holds, the squad is kept in an area - every move order (player clicks, cover orders, walk-ups, autonomy) whose
+ * destination or path end lies outside the allowed area is refused with a short feed line, and formation moves are pulled back
+ * into the holding volume. Starts when the step is triggered (a volume step: the moment the squad arrives), ends when the step named
+ * by "until" (default: the step itself) finishes, when a later beat starts, or when the tutorial is switched off / skipped / a fight
+ * starts (UTutorialSubsystem). One confinement at a time (a new one replaces the old). JSON:
+ *   "confine": { "volume": "VOL_A1_HUT_APPROACH", "allow": ["VOL_A1_DOOR_L", ...], "until": "A1_hut_enter", "stop": true,
+ *                "span": true, "stance": "crouch", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } }
+ */
+struct CODEXTACTICS_API FTutorialConfine
+{
+	/** The holding area (a tutorial volume id): always allowed. */
+	FName Volume;
+	/**
+	 * More areas the squad may be sent to. An area that some step COMPLETES in ("complete.volume" / "complete.in_volume") opens only
+	 * when that step is shown or has finished - the lesson's order ("left of the door, then right, then the third goes in"); an area
+	 * no step completes in is always open.
+	 */
+	TArray<FName> Allow;
+	/** The confinement ends when this step finishes (completed, skipped or timed out); none = the confining step itself. */
+	FName Until;
+	/** "stop": the whole squad stops where it is when the confinement starts (a walk in progress is otherwise only stopped when it heads outside). */
+	bool bStop = false;
+	/** "span": the allowed area is ONE box - the bounding box of the holding volume and every allowed volume (a corridor between them). */
+	bool bSpan = false;
+	/** "stance": "crouch" | "prone" - every move order needs the ordered operative in that stance (crouch: crouched or prone). */
+	FName Stance;
+	/** "exit.stance": an order OUTSIDE the allowed area is allowed for an operative in this stance (with "exit.one_at_a_time"). */
+	FName ExitStance;
+	/**
+	 * "exit.one_at_a_time": only one operative at a time may be sent outside (his turn starts with the first such order and ends when
+	 * this gameplay event names him - e.g. "CrawlGapPassed"; an operative who got through may move on freely).
+	 */
+	FString ExitEvent;
+
+	bool IsSet() const { return !Volume.IsNone(); }
+	bool HasExit() const { return !ExitStance.IsNone() || !ExitEvent.IsEmpty(); }
+};
+
+/** Why a move order is refused by a confinement (TutorialRules::JudgeConfinedMove). */
+enum class ETutorialConfineVerdict : uint8
+{
+	Allowed,
+	/** The destination lies outside the allowed area ("Hold here - follow the training."). */
+	Outside,
+	/** The ordered operative is not in the stance the confinement asks for ("Crouch first - stay low."). */
+	Stance,
+	/** Outside, and not in the exit stance ("Go prone first, then crawl under."). */
+	ExitStance,
+	/** Outside, and another operative's turn ("One at a time - wait until he is through."). */
+	NotYourTurn
+};
+
+/** The confinement in force now (FTutorialStateMachine::GetActiveConfine; the runtime adds the geometry). */
+struct CODEXTACTICS_API FTutorialConfineView
+{
+	FName Owner;
+	FTutorialConfine Spec;
+	/** The holding volume + the allowed volumes open now. */
+	TArray<FName> Areas;
+	/** The operative whose exit turn it is ("one_at_a_time"), none = free. */
+	FName ExitHolder;
+	/** Operatives who got through (the exit event named them). */
+	TArray<FName> Passed;
+};
+
+/** A confinement as the save holds it ("confines": [{"step", "released", "holder", "passed"}]). */
+struct CODEXTACTICS_API FTutorialConfineProgress
+{
+	FName Owner;
+	bool bReleased = false;
+	FName ExitHolder;
+	TArray<FName> Passed;
+};
+
 struct CODEXTACTICS_API FTutorialStep
 {
 	FName Id;
@@ -220,6 +296,8 @@ struct CODEXTACTICS_API FTutorialStep
 	bool bPrecredit = true;
 	/** "cancel_on" (rev 5e): when the step stops being relevant (FTutorialCancelOn). */
 	FTutorialCancelOn CancelOn;
+	/** "confine" (rev 5i): keeps the squad in an area while the lesson runs (FTutorialConfine). */
+	FTutorialConfine Confine;
 };
 
 struct CODEXTACTICS_API FTutorialBeat
@@ -288,6 +366,8 @@ struct CODEXTACTICS_API FTutorialProgress
 	 * (e.g. two of three across the bridge -> the objective waited for crossings that never came) and forgot who did which part.
 	 */
 	TMap<FName, FTutorialStepProgress> StepProgress;
+	/** Rev 5i: the confinements started so far (FTutorialConfineProgress; a released one stays released after a load). */
+	TArray<FTutorialConfineProgress> Confines;
 
 	bool IsEmpty() const { return Finished.IsEmpty() && Pending.IsEmpty() && CurrentBeat.IsNone() && Locks.IsEmpty() && History.IsEmpty(); }
 };
