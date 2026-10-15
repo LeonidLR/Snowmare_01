@@ -1,4 +1,6 @@
 #include "Interactables/LootCrateActor.h"
+#include "Combat/EncounterQueries.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Core/PlayerCommands.h"
 #include "Characters/InteractionAnimRules.h"
 #include "Characters/OperativeAnimInstance.h"
@@ -127,14 +129,14 @@ void ALootCrateActor::Tick(float DeltaSeconds)
 	{
 		return;
 	}
-	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
 	{
-		if (!It->ActorHasTag(FName(TEXT("Enemy"))))
+		if (!Enemy->ActorHasTag(CombatQueries::EnemyTag))
 		{
 			continue;
 		}
-		const UHealthComponent* EnemyHealth = It->FindComponentByClass<UHealthComponent>();
-		if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist(GetActorLocation(), It->GetActorLocation()) <= TrapContactDistance)
+		const UHealthComponent* EnemyHealth = Enemy->FindComponentByClass<UHealthComponent>();
+		if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist(GetActorLocation(), Enemy->GetActorLocation()) <= TrapContactDistance)
 		{
 			DetonateTrap(false, LOCTEXT("EnemyContact", "Enemy contact"));
 			return;

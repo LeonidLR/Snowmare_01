@@ -8,6 +8,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/VisionConeComponent.h"
@@ -52,9 +53,9 @@ bool AOperativeCharacter::IsEnemySpottedInCone() const
 			Params.AddIgnoredActor(Member);
 		}
 	}
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Registered : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
-		const AEnemyCharacter* Enemy = *It;
+		const AEnemyCharacter* Enemy = Registered;
 		if (Enemy->IsDying() || !Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive()
 			|| !VisionConeRules::IsInsideCone(Origin, Forward, Enemy->GetActorLocation(), Range, VisionConeHalfAngleDeg))
 		{

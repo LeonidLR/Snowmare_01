@@ -5,6 +5,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/PlayerCommands.h"
@@ -158,9 +159,9 @@ void UVehicleTurretComponent::GatherCandidates(TArray<VehicleCombatRules::FTurre
 	const AVehiclePawn* Vehicle = GetVehicle();
 	const FVector Muzzle = GetMuzzleLocation();
 	const float Reach = FMath::Max(Config.CannonRangeCm, Config.MgRangeCm) + 200.f;
-	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	for (AEnemyCharacter* Registered : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
-		AEnemyCharacter* Enemy = *It;
+		AEnemyCharacter* Enemy = Registered;
 		const UHealthComponent* Health = Enemy->GetHealthComponent();
 		if (Enemy->IsDying() || (Health && !Health->IsAlive()) || Enemy->IsHidden() || !Enemy->ActorHasTag(TEXT("Enemy"))
 			|| FVector::Dist(Muzzle, Enemy->GetActorLocation()) > Reach)
@@ -408,11 +409,11 @@ void UVehicleTurretComponent::FireCannon(AEnemyCharacter* Target, AOperativeChar
 	PlayMuzzleFlash(true);
 	// Direct hit + splash on everyone round the impact (the gunner's kill credit).
 	TArray<AEnemyCharacter*> Victims;
-	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
-		if (!It->IsDying() && FVector::Dist(It->GetActorLocation(), Impact) <= Config.CannonSplashRadiusCm + 50.f)
+		if (!Enemy->IsDying() && FVector::Dist(Enemy->GetActorLocation(), Impact) <= Config.CannonSplashRadiusCm + 50.f)
 		{
-			Victims.Add(*It);
+			Victims.Add(Enemy);
 		}
 	}
 	if (bHit)
@@ -529,9 +530,9 @@ bool UVehicleTurretComponent::HasLineOfFireToObject(const FVector& From, const A
 			Params.AddIgnoredActor(Member.Operative.Get());
 		}
 	}
-	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
-		Params.AddIgnoredActor(*It); // the shell is aimed at the object, past the pack
+		Params.AddIgnoredActor(Enemy); // the shell is aimed at the object, past the pack
 	}
 	FVector Origin;
 	FVector Extent;

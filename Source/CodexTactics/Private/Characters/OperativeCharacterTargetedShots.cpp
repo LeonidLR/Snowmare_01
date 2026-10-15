@@ -4,6 +4,7 @@
 // shoot_at_crate, set_manual_priority_target).
 
 #include "Characters/OperativeCharacter.h"
+#include "Combat/EncounterQueries.h"
 
 #include "Characters/EnemyCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -36,7 +37,7 @@ ETargetedShotKind AOperativeCharacter::ClassifyShotTarget(const AActor* Target)
 	{
 		return ETargetedShotKind::None;
 	}
-	if (Target->ActorHasTag(FName(TEXT("Enemy"))))
+	if (Target->ActorHasTag(CombatQueries::EnemyTag))
 	{
 		const UHealthComponent* Health = Target->FindComponentByClass<UHealthComponent>();
 		return Health && Health->IsAlive() ? ETargetedShotKind::Enemy : ETargetedShotKind::None;

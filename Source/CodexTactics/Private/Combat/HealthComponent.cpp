@@ -1,4 +1,5 @@
 #include "Combat/HealthComponent.h"
+#include "Combat/EncounterQueries.h"
 #include "Combat/KnockdownComponent.h"
 #include "CodexTactics.h"
 #include "GameFramework/Actor.h"
@@ -9,7 +10,7 @@ namespace
 	/** Godot enemy_base.gd floats its own numbers; operatives (UOperativeCharacter::TakeHit) and objects do not use these. */
 	bool FloatsEnemyNumbers(const AActor* Owner)
 	{
-		return Owner && Owner->ActorHasTag(FName(TEXT("Enemy")));
+		return Owner && Owner->ActorHasTag(CombatQueries::EnemyTag);
 	}
 }
 

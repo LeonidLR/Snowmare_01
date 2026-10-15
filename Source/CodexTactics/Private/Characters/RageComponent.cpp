@@ -1,4 +1,6 @@
 #include "Characters/RageComponent.h"
+#include "Combat/EncounterQueries.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Misc/App.h"
 #include "Subsystems/CodexEventBus.h"
 #include "Characters/OperativeCharacter.h"
@@ -171,11 +173,11 @@ AActor* URageComponent::FindAnyEnemyInReach() const
 		return nullptr;
 	}
 	TArray<AActor*> InReach;
-	for (TActorIterator<AActor> It(World); It; ++It)
+	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
 	{
-		if (It->ActorHasTag(FName(TEXT("Enemy"))) && !IsDeadEnemy(*It) && FVector::Dist(Owner->GetActorLocation(), It->GetActorLocation()) <= 2500.f)
+		if (Enemy->ActorHasTag(CombatQueries::EnemyTag) && !IsDeadEnemy(Enemy) && FVector::Dist(Owner->GetActorLocation(), Enemy->GetActorLocation()) <= 2500.f)
 		{
-			InReach.Add(*It);
+			InReach.Add(Enemy);
 		}
 	}
 	return InReach.IsEmpty() ? nullptr : InReach[FMath::RandRange(0, InReach.Num() - 1)];

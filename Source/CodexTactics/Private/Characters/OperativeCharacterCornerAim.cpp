@@ -9,6 +9,7 @@
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeCharacterInternal.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/GrenadeActor.h"
 #include "Combat/HealthComponent.h"
 #include "Data/WeaponDataAsset.h"
@@ -90,9 +91,9 @@ FCornerAimSituation AOperativeCharacter::GatherCornerAimSituation() const
 	}
 	const FVector Here = GetActorLocation();
 	int32 Shooters = 0;
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Registered : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
-		const AEnemyCharacter* Enemy = *It;
+		const AEnemyCharacter* Enemy = Registered;
 		if (Enemy->IsDying() || !Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive())
 		{
 			continue;
@@ -425,20 +426,20 @@ void AOperativeCharacter::UpdateOpenShotReturn()
 	const float Reach = GetCornerHoldReachDeg();
 	const FVector CornerOrigin = CornerFireOriginFor(OpenShotReturnSlot, OpenShotReturnFacing,
 		FVector(OpenShotReturnSlot.WorldLocation.X, OpenShotReturnSlot.WorldLocation.Y, GetMuzzleLocation().Z));
-	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
-		if (It->IsDying() || !It->GetHealthComponent() || !It->GetHealthComponent()->IsAlive() || It->CustomTimeDilation <= 0.f)
+		if (Enemy->IsDying() || !Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive() || Enemy->CustomTimeDilation <= 0.f)
 		{
 			continue;
 		}
-		const float Distance = static_cast<float>(FVector::Dist2D(It->GetActorLocation(), GetActorLocation()));
+		const float Distance = static_cast<float>(FVector::Dist2D(Enemy->GetActorLocation(), GetActorLocation()));
 		const bool bCoveredByCorner = bOpenShotReturnToCornerHold && CoverFacingRules::IsCornerHoldTarget(OpenShotReturnSlot,
-			OpenShotReturnFacing, CornerOrigin, It->GetActorLocation(), CornerAimOutwardDeg, Reach);
+			OpenShotReturnFacing, CornerOrigin, Enemy->GetActorLocation(), CornerAimOutwardDeg, Reach);
 		// A rusher close by keeps him facing it; one on the open side keeps him out while in sight within 30 m, or - out of
 		// sight for a moment (a pack falling back to flank) - within twice that rush distance (CornerHoldSmoke 2026-10-07:
 		// he stepped back to the wall while two flankers circled out of sight, then out again).
 		const bool bKeepsOut = Distance <= FlankRushBreakCm
-			|| (!bCoveredByCorner && (Distance <= 2.f * FlankRushBreakCm || (!It->IsHidden() && Distance <= 3000.f)));
+			|| (!bCoveredByCorner && (Distance <= 2.f * FlankRushBreakCm || (!Enemy->IsHidden() && Distance <= 3000.f)));
 		if (bKeepsOut)
 		{
 			OpenShotLastTime = World->GetTimeSeconds();

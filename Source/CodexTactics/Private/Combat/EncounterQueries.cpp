@@ -1,4 +1,5 @@
 #include "Combat/EncounterQueries.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
@@ -14,9 +15,9 @@ namespace CombatQueries
 		{
 			return false;
 		}
-		for (TActorIterator<AActor> It(World); It; ++It)
+		for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
 		{
-			if (It->ActorHasTag(EnemyTag) && !It->IsHidden() && FVector::Dist2D(It->GetActorLocation(), Center) <= Radius)
+			if (Enemy->ActorHasTag(EnemyTag) && !Enemy->IsHidden() && FVector::Dist2D(Enemy->GetActorLocation(), Center) <= Radius)
 			{
 				return true;
 			}

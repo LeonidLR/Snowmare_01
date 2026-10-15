@@ -13,7 +13,9 @@
 #include "Characters/RageComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
+#include "Combat/EncounterQueries.h"
 #include "Combat/EnemyGhostActor.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/SightRules.h"
 #include "Combat/TacticalSightSubsystem.h"
@@ -90,14 +92,7 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 		return false;
 	}
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(SquadShotLine), false, this);
-	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
-	{
-		Params.AddIgnoredActor(*It); // the squad
-	}
-	for (TActorIterator<ATurretActor> It(World); It; ++It)
-	{
-		Params.AddIgnoredActor(*It); // Godot "allies"
-	}
+	OperativeCharacterInternal::AddShotLineAllies(World, Params); // the squad + the turrets (Godot "allies"), gathered once per frame
 	EShotLineHit Kind = EShotLineHit::Clear;
 	AActor* HitEnemy = Enemy;
 	FHitResult Hit;
@@ -106,7 +101,7 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 		AActor* Blocker = Hit.GetActor();
 		if (Blocker && Blocker != Enemy)
 		{
-			if (Blocker->ActorHasTag(FName(TEXT("Enemy"))))
+			if (Blocker->ActorHasTag(CombatQueries::EnemyTag))
 			{
 				HitEnemy = bKeepTarget ? Enemy : Blocker;
 			}
@@ -216,9 +211,9 @@ AActor* AOperativeCharacter::FindBestCombatTarget() const
 	}
 	AActor* Best = nullptr;
 	float BestDistance = TNumericLimits<float>::Max();
-	for (TActorIterator<AActor> It(World); It; ++It)
+	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
 	{
-		if (OperativeCharacterInternal::IsLiveEnemy(*It) && EvaluateShotLine(*It, false, Candidate, bBlocked) && Candidate.Distance < BestDistance)
+		if (OperativeCharacterInternal::IsLiveEnemy(Enemy) && EvaluateShotLine(Enemy, false, Candidate, bBlocked) && Candidate.Distance < BestDistance)
 		{
 			BestDistance = Candidate.Distance;
 			Best = Candidate.Enemy;
@@ -310,13 +305,13 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	// 2. Visible enemies, closest first.
 	TArray<FShootCandidate> Visible;
 	int32 BarricadeBlocked = 0;
-	for (TActorIterator<AActor> It(World); It; ++It)
+	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
 	{
-		if (!OperativeCharacterInternal::IsLiveEnemy(*It))
+		if (!OperativeCharacterInternal::IsLiveEnemy(Enemy))
 		{
 			continue;
 		}
-		if (EvaluateShotLine(*It, false, Candidate, bBlocked))
+		if (EvaluateShotLine(Enemy, false, Candidate, bBlocked))
 		{
 			Visible.Add(Candidate);
 		}

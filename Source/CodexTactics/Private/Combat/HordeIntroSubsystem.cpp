@@ -6,6 +6,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/DeathCinematicSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Engine/TargetPoint.h"
@@ -601,9 +602,9 @@ FVector UHordeIntroSubsystem::SquadCentre() const
 void UHordeIntroSubsystem::GatherEnemies(TArray<AEnemyCharacter*>& OutEnemies) const
 {
 	OutEnemies.Reset();
-	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	for (AEnemyCharacter* Registered : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
-		AEnemyCharacter* Enemy = *It;
+		AEnemyCharacter* Enemy = Registered;
 		if (IsValid(Enemy) && !Enemy->IsDying() && (!Enemy->GetHealthComponent() || Enemy->GetHealthComponent()->IsAlive()))
 		{
 			OutEnemies.Add(Enemy);

@@ -7,6 +7,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/KnockdownRules.h"
@@ -730,11 +731,11 @@ void AVehiclePawn::UpdateEngineNoise(float DeltaSeconds)
 	}
 	// Patrols hear the engine (exploration effect; the fight already knows where the squad is).
 	TArray<AEnemyCharacter*> Listeners;
-	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
-		if (It->IsOnPatrol() && !It->IsDying() && FVector::Dist(It->GetActorLocation(), GetActorLocation()) <= Radius)
+		if (Enemy->IsOnPatrol() && !Enemy->IsDying() && FVector::Dist(Enemy->GetActorLocation(), GetActorLocation()) <= Radius)
 		{
-			Listeners.Add(*It);
+			Listeners.Add(Enemy);
 		}
 	}
 	for (AEnemyCharacter* Enemy : Listeners)

@@ -63,7 +63,7 @@
     "SniperSmoke": { "fixedStepFps": 240, "_why": "per-frame body yaw check (max 25 deg in one frame): 41.7 at 30 fps, 20.8 at 60 fps for the same turn" },
     "TutorialSmoke": { "realTime": true, "_why": "the dialogue Enter hold (0.6 s skip) is timed on the wall clock (FPlatformTime, the dialogue pause freezes the game clock); a fixed step runs the game faster than the wall clock, so the held key is too short" }
   },
-  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot"],
+  "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe"],
   "rules": [
     {
       "name": "warm-idle",
@@ -240,6 +240,12 @@
       "globs": ["Source/**/Characters/EnemyCharacter*", "Source/**/Characters/EnemyAI*", "Source/**/Debug/EnemyArchetypeSmoke*", "Source/**/AI/RepathRules*", "Source/**/Debug/RepathProbe*", "Source/**/Data/AITuning*", "Source/**/Data/EnemyPerception*"],
       "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Combat.Enemy", "CodexTactics.AI"],
       "smokes": ["EnemyAISmoke", "EnemyArchetypeSmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke", "PatrolAmbushSmoke"]
+    },
+    {
+      "name": "enemy-registry",
+      "globs": ["Source/**/Combat/EnemyRegistry*", "Source/**/Combat/EncounterQueries*", "Source/**/Debug/EnemyPerfProbe*"],
+      "tests": ["CodexTactics.Combat.EnemyRegistry"],
+      "smokes": ["SquadFireSmoke", "TargetedShotSmoke", "TurretSmoke", "DeployableSmoke", "LootSmoke", "BarricadeContactSmoke", "PanicSmoke", "RageSmoke", "EnemyTacticsSmoke", "LevelWaveSmoke", "CombatFlowSmoke", "RealTimeControlSmoke"]
     },
     {
       "name": "enemy-tactics",

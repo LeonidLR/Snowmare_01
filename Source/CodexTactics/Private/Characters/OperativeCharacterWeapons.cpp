@@ -7,6 +7,7 @@
 
 #include "Characters/OperativeCharacterInternal.h"
 #include "Characters/SquadSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/GrenadeActor.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -273,11 +274,11 @@ bool AOperativeCharacter::TryAIGrenadeThrow()
 	// Godot global_position: operatives at their centre (1 m above the feet), enemies at their feet.
 	auto Centre = [](const AActor* Actor) { return Actor->GetActorLocation() - FVector(0.f, 0.f, Actor->GetSimpleCollisionHalfHeight() - 100.f); };
 	TArray<FVector> Enemies;
-	for (TActorIterator<AActor> It(World); It; ++It)
+	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
 	{
-		if (OperativeCharacterInternal::IsLiveEnemy(*It))
+		if (OperativeCharacterInternal::IsLiveEnemy(Enemy))
 		{
-			Enemies.Add(OperativeCharacterInternal::ShotFeet(*It));
+			Enemies.Add(OperativeCharacterInternal::ShotFeet(Enemy));
 		}
 	}
 	TArray<FVector> Allies;

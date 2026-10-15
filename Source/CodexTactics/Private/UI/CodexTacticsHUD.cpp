@@ -1,6 +1,7 @@
 #include "UI/CodexTacticsHUD.h"
 #include "Camera/CameraZoneVolume.h"
 #include "Camera/InteriorExitSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Core/PlayerCommands.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Survival/TacticalHeatRules.h"
@@ -963,13 +964,13 @@ void ACodexTacticsHUD::DrawWorldLabels()
 			Y += LineHeight;
 		}
 	};
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
 		// Godot: the enemies left in stasis outside a turn-based fight hide their plates.
 		FOverheadLabel Label;
-		if (!It->IsHidden() && (!bTurnBased || TurnBased->GetUnitState(*It)) && It->GetOverheadLabel(Label))
+		if (!Enemy->IsHidden() && (!bTurnBased || TurnBased->GetUnitState(Enemy)) && Enemy->GetOverheadLabel(Label))
 		{
-			Draw(*It, Label);
+			Draw(Enemy, Label);
 		}
 	}
 	for (TActorIterator<AInteractableActor> It(World); It; ++It)

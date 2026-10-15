@@ -4,6 +4,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -137,11 +138,11 @@ void UEnemyTacticsSubsystem::Refresh()
 
 	// The commanded enemies, the closest to the squad first (they claim their targets first).
 	TArray<AEnemyCharacter*> Enemies;
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
-		if (IsCoordinated(*It))
+		if (IsCoordinated(Enemy))
 		{
-			Enemies.Add(*It);
+			Enemies.Add(Enemy);
 		}
 	}
 	Enemies.Sort([&Centre](const AEnemyCharacter& A, const AEnemyCharacter& B)

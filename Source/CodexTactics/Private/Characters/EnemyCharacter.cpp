@@ -40,6 +40,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/EnemyGhostActor.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/VisionConeComponent.h"
 #include "Combat/VisionConeRules.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -89,6 +90,10 @@ void AEnemyCharacter::BeginPlay()
 	GetCharacterMovement()->bOrientRotationToMovement = false;
 
 	Tags.AddUnique(FName(TEXT("Enemy")));
+	if (UEnemyRegistrySubsystem* Registry = GetWorld() ? GetWorld()->GetSubsystem<UEnemyRegistrySubsystem>() : nullptr)
+	{
+		Registry->RegisterEnemy(this); // the per-frame enemy queries read the registry, not a world scan
+	}
 
 	if (HealthComponent)
 	{
@@ -1192,9 +1197,9 @@ void AEnemyCharacter::TickSpitter(float DeltaTime)
 	{
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(SpitterLine), false, this);
 		Params.AddIgnoredActor(Target);
-		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+		for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 		{
-			Params.AddIgnoredActor(*It); // Godot mask: walls and barricades only
+			Params.AddIgnoredActor(Enemy); // Godot mask: walls and barricades only
 		}
 		FHitResult Hit;
 		EShotLineHit Kind = EShotLineHit::Clear;
@@ -1274,9 +1279,9 @@ void AEnemyCharacter::TickRangedVsVehicle(AVehiclePawn& Vehicle, float DeltaTime
 	// The line: the hull must be the first thing the shot meets (walls / rocks in between block it; other enemies do not).
 	const FVector Start = Feet + FVector(0.f, 0.f, MuzzleHeightCm);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(EnemyVehicleLine), false, this);
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
-		Params.AddIgnoredActor(*It);
+		Params.AddIgnoredActor(Enemy);
 	}
 	FHitResult Hit;
 	const bool bLine = !World->LineTraceSingleByChannel(Hit, Start, Vehicle.GetHullCentreWorld(), ECC_Visibility, Params) || Hit.GetActor() == &Vehicle;
@@ -1854,11 +1859,11 @@ void AEnemyCharacter::StartPatrolSearch(const FVector& Location)
 	{
 		Leader->StartPatrolSearch(Location);
 	}
-	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	for (AEnemyCharacter* Mate : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
-		if (*It != this && It->EscortLeader.Get() == this && It->IsOnPatrol() && !It->IsSearching())
+		if (Mate != this && Mate->EscortLeader.Get() == this && Mate->IsOnPatrol() && !Mate->IsSearching())
 		{
-			It->StartPatrolSearch(Location);
+			Mate->StartPatrolSearch(Location);
 		}
 	}
 }
@@ -1983,11 +1988,11 @@ void AEnemyCharacter::NotifySquadNoise(UWorld* World, const FVector& Location, E
 		return;
 	}
 	TArray<AEnemyCharacter*> Listeners;
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Patrol : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
-		if (It->IsOnPatrol() && !It->IsDying())
+		if (Patrol->IsOnPatrol() && !Patrol->IsDying())
 		{
-			Listeners.Add(*It);
+			Listeners.Add(Patrol);
 		}
 	}
 	for (AEnemyCharacter* Enemy : Listeners)
@@ -2147,11 +2152,11 @@ void AEnemyCharacter::PropagatePatrolBreak(const FVector& AlertLocation)
 	{
 		Leader->BreakPatrol(EPatrolAlertCause::PartnerAlert, AlertLocation);
 	}
-	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	for (AEnemyCharacter* Mate : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
-		if (*It != this && It->EscortLeader.Get() == this && It->IsOnPatrol())
+		if (Mate != this && Mate->EscortLeader.Get() == this && Mate->IsOnPatrol())
 		{
-			It->BreakPatrol(EPatrolAlertCause::PartnerAlert, AlertLocation);
+			Mate->BreakPatrol(EPatrolAlertCause::PartnerAlert, AlertLocation);
 		}
 	}
 }
@@ -2178,9 +2183,9 @@ void AEnemyCharacter::AlertPatrolsNearTrap(UWorld* World, const FVector& Locatio
 		return;
 	}
 	TArray<AEnemyCharacter*> Enemies;
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Mate : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
-		Enemies.Add(*It);
+		Enemies.Add(Mate);
 	}
 	for (AEnemyCharacter* Enemy : Enemies)
 	{
@@ -2285,6 +2290,15 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	{
 		TargetHealth->ApplyDamage(Spec, this);
 	}
+}
+
+void AEnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (UEnemyRegistrySubsystem* Registry = GetWorld() ? GetWorld()->GetSubsystem<UEnemyRegistrySubsystem>() : nullptr)
+	{
+		Registry->UnregisterEnemy(this);
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 void AEnemyCharacter::NotifySquadAttacked(AActor* Target)

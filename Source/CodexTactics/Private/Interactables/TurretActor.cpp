@@ -1,4 +1,6 @@
 #include "Interactables/TurretActor.h"
+#include "Combat/EncounterQueries.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "UI/OverheadLabel.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
@@ -129,14 +131,14 @@ void ATurretActor::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	if (bTrapped && !bBroken)
 	{
-		for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+		for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
 		{
-			if (!It->ActorHasTag(FName(TEXT("Enemy"))))
+			if (!Enemy->ActorHasTag(CombatQueries::EnemyTag))
 			{
 				continue;
 			}
-			const UHealthComponent* EnemyHealth = It->FindComponentByClass<UHealthComponent>();
-			if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist(GetActorLocation(), It->GetActorLocation()) <= TrapContactDistance)
+			const UHealthComponent* EnemyHealth = Enemy->FindComponentByClass<UHealthComponent>();
+			if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist(GetActorLocation(), Enemy->GetActorLocation()) <= TrapContactDistance)
 			{
 				DetonateTrap(false, LOCTEXT("EnemyContact", "Enemy contact"));
 				break;
@@ -170,10 +172,10 @@ AActor* ATurretActor::FindTarget(float& OutCover, FVector& OutAim) const
 	const FVector Start = GetActorLocation() + FVector(0.f, 0.f, MuzzleHeight - Box->GetScaledBoxExtent().Z);
 	float Best = AttackRange;
 	AActor* BestTarget = nullptr;
-	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	for (AActor* Candidate : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
 	{
-		AActor* Enemy = *It;
-		if (!Enemy->ActorHasTag(FName(TEXT("Enemy"))))
+		AActor* Enemy = Candidate;
+		if (!Enemy->ActorHasTag(CombatQueries::EnemyTag))
 		{
 			continue;
 		}

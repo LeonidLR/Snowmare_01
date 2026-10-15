@@ -16,6 +16,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/EncounterQueries.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -163,6 +164,10 @@ namespace RealTimeControlSmoke
 				FActorSpawnParameters Params;
 				AStaticMeshActor* Enemy = World->SpawnActor<AStaticMeshActor>(Leader->GetActorLocation() + FVector(500.f, 0.f, 0.f), FRotator::ZeroRotator, Params);
 				Enemy->Tags.Add(CombatQueries::EnemyTag);
+				if (UEnemyRegistrySubsystem* Registry = World->GetSubsystem<UEnemyRegistrySubsystem>())
+				{
+					Registry->RegisterTaggedActor(Enemy); // tagged after the spawn: the enemy queries must see the stand-in
+				}
 				Leader->StopOperative();
 				PC->SpacePressed(); // hold
 				NextStage(State);

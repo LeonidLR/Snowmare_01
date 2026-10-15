@@ -1,4 +1,6 @@
 #include "Interactables/ProximityMineActor.h"
+#include "Combat/EncounterQueries.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Characters/EnemyCharacter.h"
@@ -153,14 +155,14 @@ void AProximityMineActor::Tick(float DeltaSeconds)
 
 	const FVector Location = GetActorLocation();
 	// 1. Enemies always set it off.
-	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
 	{
-		if (!It->ActorHasTag(FName(TEXT("Enemy"))))
+		if (!Enemy->ActorHasTag(CombatQueries::EnemyTag))
 		{
 			continue;
 		}
-		const UHealthComponent* EnemyHealth = It->FindComponentByClass<UHealthComponent>();
-		if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist2D(Location, It->GetActorLocation()) <= TriggerRadius)
+		const UHealthComponent* EnemyHealth = Enemy->FindComponentByClass<UHealthComponent>();
+		if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist2D(Location, Enemy->GetActorLocation()) <= TriggerRadius)
 		{
 			Detonate();
 			return;

@@ -4,6 +4,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
@@ -414,17 +415,17 @@ TArray<FVector> UVehicleSubsystem::GatherKnownThreats(const FVector& Around) con
 {
 	const UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>();
 	TArray<FVector> Threats;
-	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
-		const UHealthComponent* Health = It->GetHealthComponent();
-		if (It->IsDying() || (Health && !Health->IsAlive()) || FVector::Dist2D(It->GetActorLocation(), Around) > 5000.f)
+		const UHealthComponent* Health = Enemy->GetHealthComponent();
+		if (Enemy->IsDying() || (Health && !Health->IsAlive()) || FVector::Dist2D(Enemy->GetActorLocation(), Around) > 5000.f)
 		{
 			continue;
 		}
 		// Known = seen by the squad (or no sight model running); a hidden enemy does not steer the exit.
-		if (!Sight || !Sight->IsActive() || Sight->IsVisibleToSquad(*It))
+		if (!Sight || !Sight->IsActive() || Sight->IsVisibleToSquad(Enemy))
 		{
-			Threats.Add(It->GetActorLocation());
+			Threats.Add(Enemy->GetActorLocation());
 		}
 	}
 	return Threats;

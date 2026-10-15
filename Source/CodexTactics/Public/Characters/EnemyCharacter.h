@@ -60,6 +60,8 @@ public:
 	AEnemyCharacter();
 
 	virtual void BeginPlay() override;
+	/** Leaves the world's UEnemyRegistrySubsystem (registered in BeginPlay). */
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaTime) override;
 
 	/** Configures the enemy according to the archetype stats and visuals. */
