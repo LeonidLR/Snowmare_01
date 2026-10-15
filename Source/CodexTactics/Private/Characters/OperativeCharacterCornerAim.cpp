@@ -484,10 +484,20 @@ void AOperativeCharacter::UpdatePeekTrapSpotting(float DeltaTime)
 	const FVector Origin = GetCoverFireOrigin();
 	const FVector Direction = CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg);
 	TArray<AInteractableActor*> Found;
+	// Rev 5i: a mine lying in the snow never hides another one from the peek (their trigger shapes would block the sight line):
+	// every hidden trap is ignored by the line of sight, only walls / rocks / objects hide a trap.
+	TArray<AActor*> HiddenTraps;
 	for (TActorIterator<AInteractableActor> It(World); It; ++It)
 	{
-		AInteractableActor* Trap = *It;
-		if (!Trap->IsHiddenTrap())
+		if (It->IsHiddenTrap())
+		{
+			HiddenTraps.Add(*It);
+		}
+	}
+	for (AActor* TrapActor : HiddenTraps)
+	{
+		AInteractableActor* Trap = Cast<AInteractableActor>(TrapActor);
+		if (!Trap)
 		{
 			continue;
 		}
@@ -499,7 +509,7 @@ void AOperativeCharacter::UpdatePeekTrapSpotting(float DeltaTime)
 		if (PeekSpotConfig.bRequireLineOfSight)
 		{
 			FCollisionQueryParams Params(SCENE_QUERY_STAT(PeekTrapSight), false, this);
-			Params.AddIgnoredActor(Trap);
+			Params.AddIgnoredActors(HiddenTraps);
 			FHitResult Hit;
 			if (World->LineTraceSingleByChannel(Hit, Origin, Target, ECC_Visibility, Params) && !Cast<APawn>(Hit.GetActor()))
 			{

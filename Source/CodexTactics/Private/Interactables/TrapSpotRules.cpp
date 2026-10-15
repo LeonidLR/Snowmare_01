@@ -31,4 +31,10 @@ namespace TrapSpotRules
 		const FString Name = Stat.ToString();
 		return Name.StartsWith(Prefix) && Name.Len() > Prefix.Len() ? FName(*Name.Mid(Prefix.Len())) : NAME_None;
 	}
+
+	bool AllowsProximitySpot(FName RequiredStep, bool bTutorialActive, bool bStepKnown, bool bStepStarted)
+	{
+		// No requirement, no tutorial (off / skipped / an ordinary level) or a step the steps file does not have: the normal rule.
+		return RequiredStep.IsNone() || !bTutorialActive || !bStepKnown || bStepStarted;
+	}
 }

@@ -369,9 +369,9 @@ void ATripwireActor::ScanForSpotters()
 		return;
 	}
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-	if (!Squad)
+	if (!Squad || !CanBeSpottedByProximity())
 	{
-		return;
+		return; // rev 5i: a lesson trap waits for its step (only a corner peek reveals it before)
 	}
 	const FVector2D A(WireA.X, WireA.Y);
 	const FVector2D B(WireB.X, WireB.Y);

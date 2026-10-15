@@ -74,4 +74,12 @@ namespace TrapSpotRules
 
 	/** Tutorial condition stat "traps_spotted.<Tag>": the tag, or NAME_None when Stat is not of that form. */
 	CODEXTACTICS_API FName ParseSpottedStatTag(FName Stat);
+
+	/**
+	 * Rev 5i (game designer 2026-10-15): may a hidden trap with AInteractableActor::SpotRequiresStep be spotted by PROXIMITY now?
+	 * Only once that tutorial step has started (left Idle) - before it, only a corner peek reveals it (a lesson mine found by
+	 * walking past before the peek lesson broke the lesson order). Always true without a requirement, without an active tutorial
+	 * (OFF / skipped / not a tutorial level) or when the steps file has no such step.
+	 */
+	CODEXTACTICS_API bool AllowsProximitySpot(FName RequiredStep, bool bTutorialActive, bool bStepKnown, bool bStepStarted);
 }

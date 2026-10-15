@@ -29,6 +29,11 @@ Modes (env CODEX_LAYOUT_MODE):
                    Report: Saved/Logs/Demo01Layout<sections>.txt (e.g. Demo01Layout5h.txt).
                    Rev 5h (2026-10-15): the A3 corner-peek mines - two hidden mines (SpotEventTag A3PeekMines) beyond the
                    outer corner of the first high wall of the A3 cover field + the marker A3_peek at that corner.
+                   Rev 5i (2026-10-15): EDITS ONLY (no new actors): the two A3 field mines (PMC_Mine_A3_1 / _2, rev 5 shortcut
+                   mines in the middle of the field - one was spotted from cover before the peek lesson) are moved into the
+                   "green zone" beyond the peek corner (inside the peek sight cone of the first high wall) and become lesson
+                   mines (SpotEventTag A3PeekMines); every lesson mine (+ the two 5h ones) gets SpotRequiresStep A3_peek
+                   (proximity spotting waits for the peek lesson; EDITS_5I).
   verify           in game (-game -nullrhi): volume ids vs demo_01_steps.json, nav paths along the critical path, the bridge
                    as the only crossing, the fence (standing path refused, prone path through), actors on the ground.
                    Result: Saved/Logs/Demo01LayoutVerify.txt ("RESULT: PASS / FAIL").
@@ -82,6 +87,23 @@ PEEK_SPOT_RANGE_CM = 1200.0       # FTrapPeekSpotConfig defaults (AOperativeChar
 PEEK_HALF_ANGLE_DEG = 30.0
 CORNER_AIM_OUTWARD_DEG = 100.0    # AOperativeCharacter::CornerAimOutwardDeg
 PROXIMITY_SPOT_MAX_CM = 600.0     # mine spot range 4.5 m + the Medic-Sapper's 1.5 m
+# Rev 5i (2026-10-15, game designer play-test with a marked screenshot): the A3 lesson mines lie ONLY in the green zone beyond the
+# peek corner and are spotted ONLY by the peek before the A3_peek lesson starts. Section 5i has no actors of its own: its tag is
+# reserved; it edits pre-existing actors only (EDITS_5I, each logged old -> new, idempotent).
+TAG_5I = "AutoLayout_Demo01_5i"
+FOLDER_5I = "AutoLayout_Demo01_5i"
+PEEK_STEP = "A3_peek"              # AInteractableActor::SpotRequiresStep of every A3 lesson mine
+FIELD_MINES = ("PMC_Mine_A3_1", "PMC_Mine_A3_2")   # the rev 5 shortcut mines of the cover field (AutoLayout_Demo01)
+# Their new places in the peek frame of the first high wall (peek_points' at(): along "approach" - negative = beyond the wall -,
+# along "outer" - negative = towards the field's lane): just beyond that wall's corner, in front of the next high wall, near the
+# corner-aim axis (the lean-out muzzle - in game ~40 cm nearer the wall than peek_points' corner - must see past the wall's end:
+# a ray steeper than ~0.24 towards the lane clips it, so these lie on / outside the axis) with the two 5h mines
+# (a small minefield 2-2.5 m apart, more than the 1.6 m trigger radius), > 6 m from the wall's approach face.
+FIELD_MINE_FRAME_OFFSETS = ((-530.0, 270.0), (-680.0, 40.0))
+EDITS_5I = [
+    ("field_mines_to_green_zone", "PMC_Mine_A3_1 / _2: location -> the green zone beyond the peek corner, SpotEventTag A3PeekMines, SpotRequiresStep A3_peek"),
+    ("peek_mines_require_step", "PMC_Mine_A3_Peek_1 / _2 (section 5h): SpotRequiresStep A3_peek"),
+]
 
 # §10.1 re-ids of the user's A1 volumes (they belong to the A3 approach now).
 RENAMES = {
@@ -1068,7 +1090,8 @@ def additive():
         b = now.get(a["name"])
         if b is None or b["location"] != a["location"] or b["rotation"] != a["rotation"] or b["scale"] != a["scale"]:
             moved.append(a["label"])
-    report("pre-existing actors moved / deleted: %d %s" % (len(moved), moved))
+    expected = [label for label in FIELD_MINES] if "5i" in sections else []
+    report("pre-existing actors moved / deleted: %d %s (expected by the explicit edits: %s)" % (len(moved), moved, expected))
 
 
 def edit_hut_crate_heat_packs(p, anchors):
@@ -1210,6 +1233,7 @@ def build_peek_mines_5h(p, anchors):
         mine.set_editor_property("explosion_damage", 80.0)
         mine.set_editor_property("placed_by_squad", False)
         mine.set_editor_property("spot_event_tag", PEEK_TAG)
+        mine.set_editor_property("spot_requires_step", PEEK_STEP)  # rev 5i: found only by the peek before the lesson starts
         near_face = min(math.hypot(x - fx, y - fy) for fx, fy in face)
         report("peek mine %d at (%.0f, %.0f): %.1f m from the wall's approach face, %.1f m from the corner"
                % (i + 1, x, y, near_face / 100, math.hypot(x - pts["corner"][0], y - pts["corner"][1]) / 100))
@@ -1217,10 +1241,64 @@ def build_peek_mines_5h(p, anchors):
             p.warnings.append("peek mine %d is only %.1f m from the wall's face (the Medic-Sapper spots at 6 m) - review" % (i + 1, near_face / 100))
 
 
+def field_mine_targets(actors):
+    """Rev 5i: the green-zone places of the two field mines (world x, y) from the peek frame, None without the frame."""
+    frame = peek_wall_frame(actors)
+    if frame is None:
+        return None, None
+    o, ap, ou = frame["o"], frame["approach"], frame["outer"]
+    return frame, [(o.x + ap[0] * a + ou[0] * b, o.y + ap[1] * a + ou[1] * b) for a, b in FIELD_MINE_FRAME_OFFSETS]
+
+
+def edit_field_mines_5i(p, anchors):
+    """EDITS_5I: PMC_Mine_A3_1 / _2 move into the green zone beyond the peek corner and become lesson mines (tag + step)."""
+    actors = list(p.actors.get_all_level_actors())
+    frame, targets = field_mine_targets(actors)
+    if frame is None:
+        p.warnings.append("edit field_mines_to_green_zone: no VOL_A3_FIELD / Cover_A3_*_High wall - not edited, review")
+        return 0
+    changes = 0
+    for label, (x, y) in zip(FIELD_MINES, targets):
+        mine = next((a for a in actors if isinstance(a, unreal.ProximityMineActor) and a.get_actor_label() == label), None)
+        if mine is None:
+            p.warnings.append("edit field_mines_to_green_zone: %s not in the map - not edited, review" % label)
+            continue
+        old = mine.get_actor_location()
+        z = p.ground(x, y, label) + 30.0
+        moved = math.hypot(old.x - x, old.y - y) > 1.0 or abs(old.z - z) > 1.0
+        if moved:
+            mine.set_actor_location(unreal.Vector(x, y, z), False, False)
+            changes += 1
+        for prop_name, value in (("spot_event_tag", PEEK_TAG), ("spot_requires_step", PEEK_STEP)):
+            if name_str(mine.get_editor_property(prop_name)) != value:
+                mine.set_editor_property(prop_name, value)
+                changes += 1
+        report("EDIT field_mines_to_green_zone: %s (%s) (%.0f, %.0f) -> (%.0f, %.0f)%s, SpotEventTag %s, SpotRequiresStep %s"
+               % (label, mine.get_name(), old.x, old.y, x, y, "" if moved else " (already there)", PEEK_TAG, PEEK_STEP))
+        p.table.append({"label": label, "class": "ProximityMineActor (edited)", "id": PEEK_TAG, "x": round(x), "y": round(y),
+                        "anchor": "the green zone beyond the outer corner of %s (moved from (%.0f, %.0f))" % (frame["wall"].get_actor_label(), old.x, old.y)})
+    return changes
+
+
+def edit_peek_mines_require_step_5i(p, anchors):
+    """EDITS_5I: the two 5h peek mines wait for the A3_peek step too (a rerun of 5h sets it itself)."""
+    changes = 0
+    for a in p.actors.get_all_level_actors():
+        if isinstance(a, unreal.ProximityMineActor) and a.get_actor_label().startswith("PMC_Mine_A3_Peek_"):
+            if name_str(a.get_editor_property("spot_requires_step")) != PEEK_STEP:
+                a.set_editor_property("spot_requires_step", PEEK_STEP)
+                changes += 1
+                report("EDIT peek_mines_require_step: %s SpotRequiresStep -> %s" % (a.get_actor_label(), PEEK_STEP))
+            else:
+                report("EDIT peek_mines_require_step: %s already waits for %s" % (a.get_actor_label(), PEEK_STEP))
+    return changes
+
+
 # The additive sections: name -> tag / folder / explicit edits of pre-existing actors / builders (CODEX_LAYOUT_SECTIONS).
 SECTIONS = {
     "5d": {"tag": TAG_5D, "folder": FOLDER_5D, "edits": [edit_hut_crate_heat_packs], "builders": SECTIONS_5D},
     "5h": {"tag": TAG_5H, "folder": FOLDER_5H, "edits": [], "builders": [build_peek_mines_5h]},
+    "5i": {"tag": TAG_5I, "folder": FOLDER_5I, "edits": [edit_field_mines_5i, edit_peek_mines_require_step_5i], "builders": []},
 }
 
 
@@ -1522,10 +1600,20 @@ def verify_peek_mines(game, centre, no_crawl):
     corner (12 m, 60 deg) with a clear line of sight; the slot reachable from the field entrance."""
     mines = [m for m in game.all_of(unreal.ProximityMineActor) if name_str(m.get_editor_property("spot_event_tag")) == PEEK_TAG]
     markers = [m for m in game.all_of(unreal.TutorialMarkerActor) if name_str(m.get_editor_property("step_id")) == "A3_peek"]
-    game.check(len(mines) == 2 and all(not m.is_revealed() for m in mines), "peek: two hidden mines tagged %s (%d)" % (PEEK_TAG, len(mines)))
+    game.check(len(mines) == 4 and all(not m.is_revealed() for m in mines), "peek: four hidden lesson mines tagged %s (rev 5i: 2 peek + 2 field) (%d)" % (PEEK_TAG, len(mines)))
+    game.check(all(name_str(m.get_editor_property("spot_requires_step")) == PEEK_STEP for m in mines),
+               "peek: every lesson mine waits for the %s step (SpotRequiresStep)" % PEEK_STEP)
+    # Rev 5i: no other (untagged) mine anywhere in the cover field (the green zone holds every mine of the field).
+    walls = [a for a in game.all_of(unreal.StaticMeshActor) if a.get_actor_label().startswith("Cover_A3_")]
+    if walls:
+        xs = [a.get_actor_location().x for a in walls]
+        ys = [a.get_actor_location().y for a in walls]
+        stray = [m.get_name() for m in game.all_of(unreal.ProximityMineActor) if m not in mines
+                 and min(xs) - 800 <= m.get_actor_location().x <= max(xs) + 800 and min(ys) - 800 <= m.get_actor_location().y <= max(ys) + 800]
+        game.check(not stray, "peek: no other mine in the A3 cover field (%s)" % stray)
     game.check(len(markers) == 1, "peek: the marker A3_peek exists once (%d)" % len(markers))
     frame = peek_wall_frame(game.all_of(unreal.Actor))
-    if len(mines) != 2 or len(markers) != 1 or frame is None:
+    if len(mines) < 2 or len(markers) != 1 or frame is None:
         game.check(False, "peek: wall / mines / marker missing")
         return
     pts = peek_points(frame)
@@ -1554,8 +1642,9 @@ def verify_peek_mines(game, centre, no_crawl):
         dx, dy = l.x - corner.x, l.y - corner.y
         dist = math.hypot(dx, dy)
         ang = math.degrees(math.acos(max(-1.0, min(1.0, (dx * aim[0] + dy * aim[1]) / max(dist, 1.0)))))
+        # Rev 5i: the other mines never hide a mine (the peek ignores every hidden trap; AOperativeCharacter::UpdatePeekTrapSpotting).
         hit = unreal.SystemLibrary.line_trace_single(game.world, corner, unreal.Vector(l.x, l.y, l.z + 20), unreal.TraceTypeQuery.TRACE_TYPE_QUERY1,
-                                                     False, [m], unreal.DrawDebugTrace.NONE, True)
+                                                     False, list(game.all_of(unreal.ProximityMineActor)), unreal.DrawDebugTrace.NONE, True)
         blocked = bool(hit.to_tuple()[0]) if hit is not None else False
         game.check(dist <= PEEK_SPOT_RANGE_CM and ang <= PEEK_HALF_ANGLE_DEG and not blocked,
                    "peek: %s inside the peek sight cone of the corner (%.1f m <= 12 m, %.0f deg <= 30 deg, line of sight %s)"
@@ -1746,9 +1835,21 @@ def shots(game):
         s = span(["VOL_A2_RUIN"], 900)
         if s:
             views.append(("ruin",) + s)
+    # Rev 5i: the A3 cover field with the lesson mines and the green zone (the peek sight cone beyond the corner).
+    peek_cone = None
+    frame = peek_wall_frame(game.all_of(unreal.Actor))
+    if frame is not None:
+        pts = peek_points(frame)
+        peek_cone = {"corner": list(pts["corner"]), "aim": list(pts["aim"]), "range": PEEK_SPOT_RANGE_CM, "half_angle": PEEK_HALF_ANGLE_DEG,
+                     "old_mines": [[19720.0, -2540.0], [20220.0, -2440.0]]}
+        field_walls = [a for a in game.all_of(unreal.StaticMeshActor) if a.get_actor_label().startswith("Cover_A3_")]
+        if field_walls:
+            fx = [a.get_actor_location().x for a in field_walls]
+            fy = [a.get_actor_location().y for a in field_walls]
+            views.append(("a3_field", min(fx) - 1500, max(fx) + 900, min(fy) - 1000, max(fy) + 800))
     res_x, res_y = 3840, 2160
     fov = 30.0
-    meta = {"labels": labels, "views": [], "res": [res_x, res_y]}
+    meta = {"labels": labels, "views": [], "res": [res_x, res_y], "peek_cone": peek_cone}
     # Python cannot spawn actors in a game world: the layout's own CameraActor (the base interior camera) is borrowed and
     # moved for each view (nothing is saved in game).
     camera = next((a for a in game.all_of(unreal.CameraActor) if TAG in [str(t) for t in a.tags]), None)
@@ -1997,6 +2098,24 @@ def annotate():
             tw = draw.textlength(text, font=f)
             draw.rectangle([x + 8, ty - 2, x + 14 + tw, ty + 26], fill=(0, 0, 0, 170))
             draw.text((x + 11, ty), text, fill=c + (255,), font=f)
+        cone = meta.get("peek_cone")
+        if view["name"] == "a3_field" and cone and not proj:
+            # Rev 5i: the green zone = the peek sight cone beyond the corner of the first high wall (where the lesson mines lie).
+            cx0, cy0 = cone["corner"]
+            base = math.atan2(cone["aim"][1], cone["aim"][0])
+            poly = [px(cx0, cy0)]
+            for k in range(25):
+                a = base + math.radians(-cone["half_angle"] + 2 * cone["half_angle"] * k / 24.0)
+                poly.append(px(cx0 + math.cos(a) * cone["range"], cy0 + math.sin(a) * cone["range"]))
+            draw.polygon(poly, outline=(40, 220, 60, 255), fill=(40, 220, 60, 60))
+            draw.line(poly + poly[:1], fill=(40, 220, 60, 255), width=5)
+            gx, gy = px(cx0 + cone["aim"][0] * cone["range"] * 0.55, cy0 + cone["aim"][1] * cone["range"] * 0.55)
+            draw.text((gx - 120, gy - 60), "GREEN ZONE (peek cone)", fill=(40, 255, 70, 255), font=font)
+            for ox, oy in cone.get("old_mines", []):
+                x, y = px(ox, oy)
+                draw.line([x - 14, y - 14, x + 14, y + 14], fill=(160, 160, 160, 255), width=4)
+                draw.line([x - 14, y + 14, x + 14, y - 14], fill=(160, 160, 160, 255), width=4)
+                draw.text((x + 16, y + 4), "old mine (moved)", fill=(200, 200, 200, 255), font=small)
         draw.rectangle([0, 0, w, 44], fill=(0, 0, 0, 200))
         draw.text((12, 8), "Demo 01 Frozen Lake - AutoLayout (%s). +X right. Amber = tutorial volumes, blue = cold zones / bridge / "
                   "crawl gap, red = PMC traps, pink = patrol loops. %s" % (view["name"], "perspective" if proj else "1 px = %.1f cm" % (1 / s)),
@@ -2004,6 +2123,9 @@ def annotate():
         out = shots_dir + ("demo01_autolayout_top.png" if view["name"] == "top" else "demo01_autolayout_%s.png" % view["name"])
         img.save(out)
         print("wrote", out)
+        if view["name"] == "a3_field":
+            img.save(shots_dir + "a3_mines_green_zone.png")  # rev 5i: the review still the game designer asked for
+            print("wrote", shots_dir + "a3_mines_green_zone.png")
 
 
 def main():

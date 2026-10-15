@@ -2,12 +2,16 @@
 //   Scripts/smoke_parallel.ps1 -Commands PeekMinesSmoke     (map from Scripts/test_map.json)
 // The map's additive section AutoLayout_Demo01_5h put two hidden mines (SpotEventTag A3PeekMines) beyond the corner of the
 // first high wall of the A3 cover field and the marker A3_peek at that corner. Nothing is saved.
-//  0. the mines and the marker are found; the tutorial card A3_peek forced (beat A3: cover unlocked);
+//  0. the mines and the marker are found (rev 5i: FOUR lesson mines tagged A3PeekMines - the two 5h peek mines + the two field
+//     mines moved into the green zone beyond the peek corner by section 5i - each with SpotRequiresStep A3_peek);
+//     rev 5i: BEFORE the peek lesson an operative is put 3 m from every lesson mine and in front of every Cover_A3_* wall face:
+//     no mine is spotted (proximity spotting waits for the A3_peek step; only a peek may reveal them);
+//     then the tutorial card A3_peek forced (beat A3: cover unlocked);
 //  1. the leader takes cover at that wall next to the marker, the others wait 3 m behind him: after 2 s in cover NO mine is
 //     spotted (no spot before the peek - they lie beyond the proximity spot range, out of view behind the wall);
 //  2. a click on the wall's end (the real input: FindCornerPeekForHit + TryHandleCoverClick) - he leans out round the corner:
-//     both mines spotted by his peek (GetPeekSpottedCount), TrapSpotted.Peek + TrapSpotted.A3PeekMines raised, the squad holds
-//     in Solo (rev 5h trap hold), the stat traps_spotted.A3PeekMines = 2, the card A3_peek completed and the mine card A3_mine
+//     every lesson mine spotted by his peek (GetPeekSpottedCount), TrapSpotted.Peek + TrapSpotted.A3PeekMines raised, the squad
+//     holds in Solo (rev 5h trap hold), the stat traps_spotted.A3PeekMines = their number, the card A3_peek completed and the mine card A3_mine
 //     (disarm / go round) next.
 // Must not assume a squad body (any leader peeks).
 
@@ -55,7 +59,75 @@ namespace PeekMinesSmoke
 		FVector Along = FVector::RightVector;
 		float GroundZ = 0.f;
 		TStrongObjectPtr<UEventBusProbe> Probe;
+		/** Rev 5i: points an operative is put at before the peek lesson (3 m from each mine, in front of each cover wall face). */
+		TArray<FVector> ProbePoints;
+		int32 ProbeIndex = 0;
+		float NearestProbeCm = 1.0e9f;
 	};
+
+	/** Rev 5i: the probe points - never closer than 2.5 m to any mine (the trigger radius is 1.6 m). */
+	void BuildProbePoints(UWorld* World, FState& State)
+	{
+		auto FarFromMines = [&State](const FVector& Point)
+		{
+			float Nearest = 1.0e9f;
+			for (const TWeakObjectPtr<AProximityMineActor>& Mine : State.Mines)
+			{
+				Nearest = Mine.IsValid() ? FMath::Min(Nearest, static_cast<float>(FVector::Dist2D(Mine->GetActorLocation(), Point))) : Nearest;
+			}
+			return Nearest;
+		};
+		for (const TWeakObjectPtr<AProximityMineActor>& Mine : State.Mines)
+		{
+			if (!Mine.IsValid())
+			{
+				continue;
+			}
+			FVector Best = FVector::ZeroVector;
+			float BestClear = -1.f;
+			for (int32 Dir = 0; Dir < 8; ++Dir)
+			{
+				const FVector Point = Mine->GetActorLocation() + FRotator(0.f, Dir * 45.f, 0.f).Vector() * 300.f;
+				float Clear = 1.0e9f;
+				for (const TWeakObjectPtr<AProximityMineActor>& Other : State.Mines)
+				{
+					if (Other.IsValid() && Other != Mine)
+					{
+						Clear = FMath::Min(Clear, static_cast<float>(FVector::Dist2D(Other->GetActorLocation(), Point)));
+					}
+				}
+				if (Clear > BestClear)
+				{
+					BestClear = Clear;
+					Best = Point;
+				}
+			}
+			if (BestClear >= 250.f)
+			{
+				State.ProbePoints.Add(Best);
+			}
+		}
+		for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+		{
+			if (!It->GetActorNameOrLabel().StartsWith(TEXT("Cover_A3_")))
+			{
+				continue;
+			}
+			const FBox Box = It->GetComponentsBoundingBox();
+			const FVector C = Box.GetCenter();
+			const FVector E = Box.GetExtent();
+			const FVector Normal = E.Y > E.X ? FVector(1.f, 0.f, 0.f) : FVector(0.f, 1.f, 0.f);
+			const float Thick = E.Y > E.X ? E.X : E.Y;
+			for (const float Side : { -1.f, 1.f })
+			{
+				const FVector Point = FVector(C.X, C.Y, Box.Min.Z) + Normal * Side * (Thick + 80.f);
+				if (FarFromMines(Point) >= 250.f)
+				{
+					State.ProbePoints.Add(Point);
+				}
+			}
+		}
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -134,9 +206,15 @@ namespace PeekMinesSmoke
 				}
 			}
 			const ATutorialMarkerActor* Marker = State.Marker.Get();
-			Check(State, State.Mines.Num() == 2 && CountRevealed(State) == 0, FString::Printf(TEXT("two hidden mines tagged A3PeekMines (%d)"), State.Mines.Num()));
+			Check(State, State.Mines.Num() == 4 && CountRevealed(State) == 0, FString::Printf(TEXT("rev 5i: four hidden lesson mines tagged A3PeekMines (%d)"), State.Mines.Num()));
+			int32 Gated = 0;
+			for (const TWeakObjectPtr<AProximityMineActor>& Mine : State.Mines)
+			{
+				Gated += Mine.IsValid() && Mine->SpotRequiresStep == FName(TEXT("A3_peek")) ? 1 : 0;
+			}
+			Check(State, Gated == State.Mines.Num(), FString::Printf(TEXT("rev 5i: every lesson mine waits for the A3_peek step (%d / %d)"), Gated, State.Mines.Num()));
 			Check(State, Marker != nullptr, TEXT("the marker A3_peek at the peek corner"));
-			if (State.Mines.Num() != 2 || !Marker)
+			if (State.Mines.Num() < 2 || !Marker)
 			{
 				return Finish(State, false);
 			}
@@ -173,6 +251,47 @@ namespace PeekMinesSmoke
 			State.GroundZ = Box.Min.Z;
 			State.Probe.Reset(NewObject<UEventBusProbe>());
 			State.Probe->ListenGameplayEvents(UCodexEventBus::Get(World));
+			Check(State, Tutorial && Tutorial->IsTutorialActive() && Tutorial->GetStepState(TEXT("A3_peek")) == ETutorialStepState::Idle,
+				TEXT("rev 5i: the tutorial runs, the peek lesson has not started"));
+			BuildProbePoints(World, State);
+			Check(State, State.ProbePoints.Num() >= State.Mines.Num() + 4, FString::Printf(TEXT("rev 5i: %d probe points (3 m from each mine, in front of each Cover_A3_* face)"),
+				State.ProbePoints.Num()));
+			State.Stage = 10;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// Rev 5i: no proximity spot before the peek lesson - an operative is put at every probe point in turn.
+		case 10:
+		{
+			AOperativeCharacter* Prober = Squad->GetMembers().Num() > 1 ? Squad->GetMembers()[1] : Leader;
+			if (State.ProbeIndex > 0 && State.StageTime < 0.6f)
+			{
+				return true;
+			}
+			if (State.ProbeIndex > 0)
+			{
+				for (const TWeakObjectPtr<AProximityMineActor>& Mine : State.Mines)
+				{
+					State.NearestProbeCm = Mine.IsValid() ? FMath::Min(State.NearestProbeCm, static_cast<float>(FVector::Dist(Mine->GetActorLocation(), Prober->GetActorLocation())))
+						: State.NearestProbeCm;
+				}
+			}
+			if (CountRevealed(State) > 0 || State.ProbeIndex >= State.ProbePoints.Num())
+			{
+				Check(State, CountRevealed(State) == 0, FString::Printf(TEXT("rev 5i: no lesson mine spotted from %d probe points before the peek lesson (nearest %.1f m; spot range 4.5 / 6 m)"),
+					State.ProbeIndex, State.NearestProbeCm / 100.f));
+				Next(State);
+				return true;
+			}
+			Prober->StopOperative();
+			Prober->TeleportTo(SmokeUtils::FreeSpot(World, State.ProbePoints[State.ProbeIndex] + FVector(0.f, 0.f, 100.f), Prober), Prober->GetActorRotation(), false, true);
+			++State.ProbeIndex;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 11:
+		{
+			const ATutorialMarkerActor* Marker = State.Marker.Get();
 			if (Tutorial && Tutorial->IsTutorialActive())
 			{
 				Check(State, Tutorial->TriggerStep(TEXT("A3_peek")) && Tutorial->GetCurrentBeat() == FName(TEXT("A3")), TEXT("tutorial: the A3_peek card forced (beat A3)"));
@@ -186,7 +305,8 @@ namespace PeekMinesSmoke
 				const FVector Point = Member == Leader ? Spot : Spot + State.Normal * 300.f + State.Along * (Index++ == 0 ? -150.f : -350.f);
 				Member->TeleportTo(SmokeUtils::FreeSpot(World, Point + FVector(0.f, 0.f, 100.f), Member), State.Normal.Rotation() + FRotator(0.f, 180.f, 0.f), false, true);
 			}
-			Next(State);
+			State.Stage = 1;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 1:
@@ -246,13 +366,13 @@ namespace PeekMinesSmoke
 		}
 		case 4:
 		{
-			if (CountRevealed(State) < 2 && State.StageTime < 12.f)
+			if (CountRevealed(State) < State.Mines.Num() && State.StageTime < 12.f)
 			{
 				return true;
 			}
-			Check(State, Leader->IsPeekingRoundCorner() || CountRevealed(State) == 2, TEXT("he leans out round the corner"));
-			Check(State, CountRevealed(State) == 2 && Leader->GetPeekSpottedCount() == 2,
-				FString::Printf(TEXT("both mines spotted by his peek (%d revealed, %d by the peek, %.1f s)"), CountRevealed(State), Leader->GetPeekSpottedCount(), State.StageTime));
+			Check(State, Leader->IsPeekingRoundCorner() || CountRevealed(State) == State.Mines.Num(), TEXT("he leans out round the corner"));
+			Check(State, CountRevealed(State) == State.Mines.Num() && Leader->GetPeekSpottedCount() == State.Mines.Num(),
+				FString::Printf(TEXT("rev 5i: every lesson mine spotted by his peek (%d revealed, %d by the peek, %.1f s)"), CountRevealed(State), Leader->GetPeekSpottedCount(), State.StageTime));
 			Next(State);
 			return true;
 		}
@@ -262,14 +382,15 @@ namespace PeekMinesSmoke
 			{
 				return true;
 			}
-			Check(State, State.Probe->CountEvent(TEXT("TrapSpotted.Peek")) == 2 && State.Probe->CountEvent(TEXT("TrapSpotted.A3PeekMines")) == 2,
+			Check(State, State.Probe->CountEvent(TEXT("TrapSpotted.Peek")) == State.Mines.Num() && State.Probe->CountEvent(TEXT("TrapSpotted.A3PeekMines")) == State.Mines.Num(),
 				FString::Printf(TEXT("TrapSpotted.Peek / TrapSpotted.A3PeekMines raised (%d / %d)"), State.Probe->CountEvent(TEXT("TrapSpotted.Peek")),
 					State.Probe->CountEvent(TEXT("TrapSpotted.A3PeekMines"))));
 			Check(State, Squad->IsSoloMode() && Squad->IsTrapSolo(), TEXT("the squad holds in Solo (rev 5h trap hold)"));
 			Check(State, Leader->bInCover && Leader->IsManualCornerPeek(), TEXT("the peeking leader keeps his corner pose"));
 			if (Tutorial && Tutorial->IsTutorialActive())
 			{
-				Check(State, FMath::IsNearlyEqual(Tutorial->GetConditionStat(TEXT("traps_spotted.A3PeekMines")), 2.f), TEXT("tutorial stat traps_spotted.A3PeekMines = 2"));
+				Check(State, FMath::IsNearlyEqual(Tutorial->GetConditionStat(TEXT("traps_spotted.A3PeekMines")), static_cast<float>(State.Mines.Num())),
+					FString::Printf(TEXT("tutorial stat traps_spotted.A3PeekMines = %d"), State.Mines.Num()));
 				Check(State, Tutorial->GetStepState(TEXT("A3_peek")) == ETutorialStepState::Completed, TEXT("the card 'Peek around the corner and check what's ahead' completed"));
 				const ETutorialStepState MineCard = Tutorial->GetStepState(TEXT("A3_mine"));
 				Check(State, MineCard == ETutorialStepState::Queued || MineCard == ETutorialStepState::Active || MineCard == ETutorialStepState::Completed,
@@ -298,7 +419,7 @@ namespace PeekMinesSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PeekMinesSmoke"),
-		TEXT("Dev check (Demo 01 rev 5h): the A3 peek corner - no spot from cover, the corner peek reveals both mines beyond it, the card completes."),
+		TEXT("Dev check (Demo 01 rev 5h / 5i): the A3 peek corner - no proximity spot of the lesson mines before the peek lesson, the corner peek reveals them all, the card completes."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
