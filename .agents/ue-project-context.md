@@ -13,7 +13,8 @@
 
 | Module | Host type | Public deps | Private deps | Notes |
 |---|---|---|---|---|
-| CodexTactics | Runtime | Core, CoreUObject, Engine, InputCore, EnhancedInput, GameplayTags, AIModule, GameplayTasks, NavigationSystem, Niagara, UMG, Slate, SlateCore, CommonUI, CommonInput, DeveloperSettings, ProceduralMeshComponent | Json | All gameplay code; `Public/` + `Private/` grouped by system (Core, Combat, Survival, Characters, Data, Subsystems, Camera, Tactics, Interactables, Quests, UI (+ UI/Frontend: CommonUI frontend), Debug) |
+| CodexTactics | Runtime | Core, CoreUObject, Engine, InputCore, EnhancedInput, GameplayTags, AIModule, GameplayTasks, NavigationSystem, Niagara, UMG, Slate, SlateCore, CommonUI, CommonInput, DeveloperSettings, ProceduralMeshComponent | Json | All gameplay code; `Public/` + `Private/` grouped by system (Core, Combat, Survival, Characters, Data, Subsystems, Camera, Tactics, Interactables, Quests, UI (+ UI/Frontend: CommonUI frontend), Bot, ...) |
+| CodexTacticsDev | DeveloperTool | — | Core, CoreUObject, Engine, InputCore, EnhancedInput, GameplayTags, AIModule, NavigationSystem, UMG, Slate, SlateCore, CommonUI, Json, CodexTactics | Dev console commands (`Private/Debug`: smokes, probes, shot commands, `UEventBusProbe`), moved out of the runtime module 2026-10-16 (audit #3); editor + Debug / Development game targets only, never Test / Shipping |
 | CodexTacticsTests | DeveloperTool | — | Core, CoreUObject, Engine, Json, UMG, CommonUI, GameplayTags, CodexTactics | Automation tests `CodexTactics.<System>.<Feature>.<Case>` |
 | CodexTacticsEditor | Editor (PostEngineInit) | — | Core, CoreUObject, Engine, UnrealEd, BlueprintGraph, Kismet, AssetRegistry, ToolsetRegistry, AnimGraph, AnimGraphRuntime, UMG, UMGEditor, CommonUI, CodexTactics | `UBlueprintGraphToolset` — Blueprint / AnimBP graph tools served over the Unreal MCP plugin; `UOperativeAnimGraphLibrary`; `UFrontendWidgetGenerator` (placeholder frontend WBP trees) |
 
@@ -42,7 +43,7 @@
 **Enforced rules:**
 - **No GAS.** Plain C++ components and subsystems.
 - Balance values only via importers from the Godot data (`Scripts/Editor/import_*.py` → DataAssets); never hand-typed.
-- Pure-logic systems live in `*Rules` namespaces with parity tests; every system gets a headless smoke (`Private/Debug/*SmokeCommand.cpp`).
+- Pure-logic systems live in `*Rules` namespaces with parity tests; every system gets a headless smoke (`Source/CodexTacticsDev/Private/Debug/*SmokeCommand.cpp`).
 - Doc comments on public API; IWYU; unity-build-safe names in anonymous namespaces (prefix them per file).
 - `FString::ToUpper/ToLower` do not fold Cyrillic — use `FText::FromString(x).ToUpper()/ToLower()`.
 

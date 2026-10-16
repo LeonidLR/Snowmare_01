@@ -101,14 +101,14 @@ function Resolve-Impact([string[]]$Files, $Map, [int]$QuickCount = 0) {
 function Test-MapCoverage($Map) {
     $problems = @()
     $declared = @()
-    Get-ChildItem (Join-Path $script:VerifyProjectDir "Source\CodexTactics\Private\Debug") -Filter *.cpp | ForEach-Object {
+    Get-ChildItem (Join-Path $script:VerifyProjectDir "Source\CodexTacticsDev\Private\Debug") -Filter *.cpp | ForEach-Object {
         [regex]::Matches((Get-Content $_.FullName -Raw -Encoding UTF8), 'TEXT\("CodexTactics\.(\w+)"\)') | ForEach-Object { $declared += $_.Groups[1].Value }
     }
     foreach ($name in ($declared | Sort-Object -Unique)) {
         if (($Map.smokeRegistry -notcontains $name) -and ($Map.nonSmokeDebugCommands -notcontains $name)) { $problems += "Debug command '$name' is in neither smokeRegistry nor nonSmokeDebugCommands" }
     }
     foreach ($name in $Map.smokeRegistry) {
-        if ($declared -notcontains $name) { $problems += "smokeRegistry '$name' has no console command in Source/CodexTactics/Private/Debug" }
+        if ($declared -notcontains $name) { $problems += "smokeRegistry '$name' has no console command in Source/CodexTacticsDev/Private/Debug" }
         $mapped = @($Map.rules | Where-Object { @($_.smokes) -contains $name }).Count + @($Map.fallback.smokes | Where-Object { $_ -eq $name }).Count
         if ($mapped -eq 0) { $problems += "smoke '$name' is mapped by no rule" }
     }

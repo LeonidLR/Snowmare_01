@@ -15,6 +15,11 @@
                         "LoadingPhase":  "Default"
                     },
                     {
+                        "Name":  "CodexTacticsDev",
+                        "Type":  "DeveloperTool",
+                        "LoadingPhase":  "Default"
+                    },
+                    {
                         "Name":  "CodexTacticsEditor",
                         "Type":  "Editor",
                         "LoadingPhase":  "PostEngineInit"
