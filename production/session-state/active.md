@@ -14,19 +14,28 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
-## Cleanup day task 2 (2026-10-15, agents/work, not merged)
-- Smokes trustworthy: fixed 60 fps game step in `smoke_parallel.ps1`, Panic / SquadControl / VisionCone fixed, the flaky list
-  (CornerHold, TurnBasedAim, Knockdown, Cover, LevelWave, GroupSelect, TurnBlastDeath, EnemyTactics, Facing) fixed, known
-  flaky list empty (HANDOFF section 9); game fix: arming countdown clamp. Next: (3) merge the two lake maps with the user,
-  (4) audit batches.
-
-## Queued (user 2026-10-15, after the rev 5i agent): Polygonmaker interaction clips
-`/Game/Polygonmaker/Animations/Interactions/UE4/` (untracked user pack — don't commit it unless asked):
-`Anim_Regular_chest_open` (crate opening, before the loot window), `Anim_Regular_chest_search` (after picking an item
-or Take All), `Anim_Regular_idle_cold` (occasional random variant mixed with the existing shiver poses),
-`Anim_Regular_pickup_ground` (after a successful mine AND tripwire disarm; standing = full body, crouched = upper body
-only, prone = nothing for now, another clip later). Disarm approach distance much closer (~60-80 cm, now ~2 m).
-Check the skeleton vs the operatives' (as with the crawl clips: use the matching variant, never retarget/edit user assets).
+## Checkpoint 2026-10-15/16 (end of day) — cleanup day DONE
+- Cleanup: (1) OperativeCharacter split (10-14); (2) smokes on a fixed 60 fps step, flaky list emptied, arming-countdown
+  fix; (3) ONE lake map `/Game/Maps/L_Demo01_A_FrozenLake` (review copy saved over it, copy removed; layout script =
+  additive mode only); controller split `CodexTacticsPlayerController.cpp` 2978 -> 446 (`docs/port/REFACTOR_CONTROLLER_2026-10.md`);
+  (4) audit batches: `UEnemyRegistrySubsystem` (world tick -12 % with 55 enemies), HUD text cache, playtest bot gated to
+  dev builds / Game+PIE worlds, ALL dev/debug commands moved to the new DeveloperTool module `Source/CodexTacticsDev`
+  (`Private/Debug/...`; smokes still run the same way).
+- Demo 01 rev 5h-5i: spotted trap -> squad stops + Solo; corner peek reveals hidden traps (A3 lesson mines beyond the
+  peek corner, spotted ONLY by the peek: `SpotRequiresStep`); roof cutaway (`URoofCutawaySubsystem`, Gemini request #22
+  for the dithered fade); tutorial `confine` (hut entry, A3 crouch approach to `VaultRidge_A3`, fence one by one + solo
+  cover); SKIP TUTORIAL button + pause menu. Interaction clips (Polygonmaker pack, untracked): crate open / search,
+  pickup after a disarm by stance, cold idle variant; disarm walk-up ~70 cm.
+- Open / to tell the user: `CLAUDE.md` + `GEMINI.md` still name `Source/CodexTactics/Private/Debug/` for the smoke
+  commands — now `Source/CodexTacticsDev/Private/Debug/` (user's / Gemini's files, not edited). CornerHoldSmoke (~1 in 3:
+  «flank rush: 2 of 5 down», the commander doesn't fire at enemies 1-2 m away for ~40 s — looks like a gameplay bug, also
+  on the old code) and HordeIntroSmoke («planned move runs 0 of 500 cm», failed on the base too) — next to investigate.
+  Remaining audit items: target-selection / enemy-decision tick rates (P2/P4), vault probe (P5), tick on demand (P9),
+  OperativeCharacter.h split, shared smoke harness, Saved/ cleanup. `HandleWorldHit` helper split (REFACTOR_CONTROLLER §5).
+- User questions still open: SAVE GAME in the pause menu, box select after the hut, vision-cone key persistence, patrol
+  Panic/TB, APC numbers; EXIT arrow look; peek mine spot (4 mines 2-2.8 m apart); disarm distance 70 cm; loot window
+  without the clip in tactical pause; Female body in the Polygonmaker clips.
+- Next Demo 01 work: Phase 2 = encounter groups (patrol fight before the horde) + beats A5-A10.
 
 ## Checkpoint 2026-10-14 (end of day)
 - Done today: Demo 01 rev 5d-5g (heat pack sharing with Shift+drag, barrel into the ruin, corner peek near edge + low
