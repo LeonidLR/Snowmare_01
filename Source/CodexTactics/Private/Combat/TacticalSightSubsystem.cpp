@@ -1,4 +1,5 @@
 #include "Combat/TacticalSightSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Survival/TacticalHeatSubsystem.h"
 
@@ -362,12 +363,12 @@ void UTacticalSightSubsystem::Update()
 	{
 		IgnoredPawns.Add(Operative);
 	}
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
-		IgnoredPawns.Add(*It);
-		if (TacticalSight::IsLiveEnemy(*It))
+		IgnoredPawns.Add(Enemy);
+		if (TacticalSight::IsLiveEnemy(Enemy))
 		{
-			Enemies.Add(*It);
+			Enemies.Add(Enemy);
 		}
 	}
 

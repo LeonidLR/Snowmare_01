@@ -14,6 +14,7 @@
 #include "Characters/EnemyCharacter.h"
 #include "CodexTactics.h"
 #include "Debug/SmokeUtils.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/EncounterQueries.h"
 #include "Combat/EnemySpawnPoint.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -173,6 +174,10 @@ namespace CombatFlowSmoke
 				FActorSpawnParameters Params;
 				AStaticMeshActor* Enemy = World->SpawnActor<AStaticMeshActor>(Leader->GetActorLocation() + FVector(500.f, 0.f, 0.f), FRotator::ZeroRotator, Params);
 				Enemy->Tags.Add(CombatQueries::EnemyTag);
+				if (UEnemyRegistrySubsystem* Registry = World->GetSubsystem<UEnemyRegistrySubsystem>())
+				{
+					Registry->RegisterTaggedActor(Enemy); // tagged after the spawn: the enemy queries must see the stand-in
+				}
 				PC->SpacePressed(); // hold near an enemy
 				NextStage(State);
 			}

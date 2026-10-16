@@ -1,4 +1,6 @@
 #include "Interactables/InteractableActor.h"
+#include "Combat/EncounterQueries.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Interactables/DeployableRules.h"
 #include "Interactables/TrapSpotRules.h"
 #include "Core/PlayerCommands.h"
@@ -310,10 +312,10 @@ void AInteractableActor::ApplyBlast(float EnemyDamageBase, float SquadDamageBase
 	// instead of engaging and no ambush fight starts (user amendment 2026-10-06).
 	const AEnemyCharacter::FScopedTrapBlast TrapBlast;
 	// Enemies (Godot group "enemies"; UE actors tagged Enemy with a health component).
-	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	for (AActor* Tagged : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
 	{
-		AActor* Candidate = *It;
-		if (!Candidate || !Candidate->ActorHasTag(FName(TEXT("Enemy"))))
+		AActor* Candidate = Tagged;
+		if (!Candidate || !Candidate->ActorHasTag(CombatQueries::EnemyTag))
 		{
 			continue;
 		}

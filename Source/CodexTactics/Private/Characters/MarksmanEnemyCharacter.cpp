@@ -1,4 +1,5 @@
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "AI/PatrolRouteActor.h"
@@ -365,9 +366,9 @@ bool AMarksmanEnemyCharacter::FindFiringPosition(const AOperativeCharacter* Targ
 	const FVector Aim = Target->GetActorLocation() - FVector(0.f, 0.f, Target->GetSimpleCollisionHalfHeight() - TargetHeight);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(MarksmanFiringPosition), false, this);
 	Params.AddIgnoredActor(Target);
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
-		Params.AddIgnoredActor(*It);
+		Params.AddIgnoredActor(Enemy);
 	}
 	const float Radii[] = { MarksmanConfig.PreferredMinRange + 200.f, (MarksmanConfig.PreferredMinRange + MarksmanConfig.PreferredMaxRange) * 0.5f,
 		MarksmanConfig.PreferredMaxRange - 200.f };
@@ -459,9 +460,9 @@ AMarksmanEnemyCharacter::FMarksmanLine AMarksmanEnemyCharacter::TraceLine(const 
 	Line.End = Target->GetActorLocation() - FVector(0.f, 0.f, Target->GetSimpleCollisionHalfHeight() - TargetHeight);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(MarksmanLine), false, this);
 	Params.AddIgnoredActor(Target);
-	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
-		Params.AddIgnoredActor(*It);
+		Params.AddIgnoredActor(Enemy);
 	}
 	FHitResult Hit;
 	EShotLineHit Kind = EShotLineHit::Clear;

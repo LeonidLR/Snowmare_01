@@ -1,6 +1,7 @@
 #include "UI/CodexTacticsHUD.h"
 #include "Camera/CameraZoneVolume.h"
 #include "Camera/InteriorExitSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Core/PlayerCommands.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Survival/TacticalHeatRules.h"
@@ -162,6 +163,10 @@ FString ACodexTacticsHUD::StripUnsupportedGlyphs(const FString& Text)
 }
 
 ACodexTacticsHUD::ACodexTacticsHUD()
+	: LabelLayouts(512)
+	, FeedWraps(128)
+	, FeedSpeakers(64)
+	, StrippedFloatingTexts(256)
 {
 	ActionMenuWidgetClass = UActionMenuWidget::StaticClass();
 	LootDialogWidgetClass = ULootDialogWidget::StaticClass();
@@ -575,31 +580,29 @@ void ACodexTacticsHUD::UpdateFrostVignette()
 
 TArray<FString> ACodexTacticsHUD::WrapText(const FString& Text, UFont* Font, float Scale, float MaxWidth) const
 {
-	TArray<FString> Lines;
-	TArray<FString> Words;
-	Text.ParseIntoArrayWS(Words);
-	FString Current;
-	for (const FString& Word : Words)
+	return HudTextCache::WrapWords(Text, Scale, MaxWidth, [this, Font](const FString& Candidate)
 	{
-		const FString Candidate = Current.IsEmpty() ? Word : Current + TEXT(" ") + Word;
 		float Width = 0.f;
 		float Height = 0.f;
 		Canvas->StrLen(Font, Candidate, Width, Height);
-		if (Width * Scale > MaxWidth && !Current.IsEmpty())
-		{
-			Lines.Add(Current);
-			Current = Word;
-		}
-		else
-		{
-			Current = Candidate;
-		}
-	}
-	if (!Current.IsEmpty())
+		return FVector2D(Width, Height);
+	});
+}
+
+void ACodexTacticsHUD::ValidateTextCaches(UFont* Font, float FeedWrapWidth, float FeedScale)
+{
+	if (CachedTextFont.Get() != Font)
 	{
-		Lines.Add(Current);
+		CachedTextFont = Font;
+		LabelLayouts.Reset();
+		FeedWraps.Reset();
 	}
-	return Lines;
+	if (FeedWrapWidth >= 0.f && (CachedFeedWrapWidth != FeedWrapWidth || CachedFeedScale != FeedScale))
+	{
+		CachedFeedWrapWidth = FeedWrapWidth; // the canvas was resized
+		CachedFeedScale = FeedScale;
+		FeedWraps.Reset();
+	}
 }
 
 void ACodexTacticsHUD::DrawSpaceCharge()
@@ -910,66 +913,79 @@ void ACodexTacticsHUD::DrawWorldLabels()
 	const UTurnBasedCombatSubsystem* TurnBased = World->GetSubsystem<UTurnBasedCombatSubsystem>();
 	const bool bTurnBased = TurnBased && TurnBased->IsActive();
 	UFont* Font = GEngine->GetSmallFont();
-	auto Draw = [this, Font](const AActor* Actor, const FOverheadLabel& Label)
+	ValidateTextCaches(Font, -1.f, 0.f);
+	auto Measure = [this, Font](const FString& Text)
 	{
-		FVector Origin;
-		FVector Extent;
-		Actor->GetActorBounds(true, Origin, Extent);
+		float W = 0.f;
+		float H = 0.f;
+		Canvas->StrLen(Font, Text, W, H);
+		return FVector2D(W, H);
+	};
+	auto Draw = [this, Font, &Measure](const AActor* Actor, const FOverheadLabel& Label)
+	{
 		const ACharacter* Character = Cast<ACharacter>(Actor);
-		const FVector Base = Character ? Actor->GetActorLocation() - FVector(0.f, 0.f, Character->GetSimpleCollisionHalfHeight())
-			: FVector(Actor->GetActorLocation().X, Actor->GetActorLocation().Y, Origin.Z - Extent.Z);
+		FVector Base;
+		if (Character)
+		{
+			Base = Actor->GetActorLocation() - FVector(0.f, 0.f, Character->GetSimpleCollisionHalfHeight());
+		}
+		else
+		{
+			FVector Origin;
+			FVector Extent;
+			Actor->GetActorBounds(true, Origin, Extent); // only objects stand on their bounds' bottom
+			Base = FVector(Actor->GetActorLocation().X, Actor->GetActorLocation().Y, Origin.Z - Extent.Z);
+		}
 		const FVector Screen = Project(Base + FVector(0.f, 0.f, Label.HeightCm), true);
 		if (Screen.Z <= 0.f)
 		{
 			return;
 		}
-		TArray<FString> Lines;
-		StripUnsupportedGlyphs(Label.Text).TrimStartAndEnd().ParseIntoArrayLines(Lines);
-		if (Lines.IsEmpty() && Label.bHasMarker)
+		// The label's lines are stripped, split, trimmed and measured once per text (audit 2026-10-11 P6).
+		const HudTextCache::FLabelLayout* Layout = &LabelLayouts.FindOrMake(Label.Text, [&Measure](const FString& Text)
 		{
-			Lines.Add(FString()); // marker only (a narrative element seen from afar)
-		}
-		float LineHeight = 0.f;
-		float Width = 0.f;
-		for (const FString& Line : Lines)
+			return HudTextCache::LayoutLabel(StripUnsupportedGlyphs(Text), Measure);
+		});
+		HudTextCache::FLabelLayout MarkerOnly;
+		if (Layout->Lines.IsEmpty() && Label.bHasMarker)
 		{
-			float W = 0.f;
-			float H = 0.f;
-			Canvas->StrLen(Font, Line.TrimStartAndEnd(), W, H);
-			Width = FMath::Max(Width, W);
-			LineHeight = FMath::Max(LineHeight, H);
+			const FVector2D Size = Measure(FString()); // marker only (a narrative element seen from afar)
+			MarkerOnly.Lines.Add(FString());
+			MarkerOnly.LineTexts.Add(FText::GetEmpty());
+			MarkerOnly.LineWidths.Add(static_cast<float>(Size.X));
+			MarkerOnly.Width = static_cast<float>(Size.X);
+			MarkerOnly.LineHeight = static_cast<float>(Size.Y);
+			Layout = &MarkerOnly;
 		}
+		float LineHeight = Layout->LineHeight;
 		if (LineHeight <= 0.f)
 		{
 			LineHeight = Font->GetMaxCharHeight();
 		}
 		const float Marker = Label.bHasMarker ? LineHeight * 0.7f + 4.f : 0.f;
-		float Y = Screen.Y - LineHeight * Lines.Num();
-		for (int32 Index = 0; Index < Lines.Num(); ++Index)
+		float Y = Screen.Y - LineHeight * Layout->Lines.Num();
+		for (int32 Index = 0; Index < Layout->Lines.Num(); ++Index)
 		{
-			const FString Line = Lines[Index].TrimStartAndEnd();
-			float W = 0.f;
-			float H = 0.f;
-			Canvas->StrLen(Font, Line, W, H);
+			const float W = Layout->LineWidths[Index];
 			const float X = Screen.X - (W + (Index == 0 ? Marker : 0.f)) * 0.5f;
 			if (Index == 0 && Label.bHasMarker)
 			{
 				DrawRect(Label.MarkerColor, X, Y + LineHeight * 0.15f, LineHeight * 0.7f, LineHeight * 0.7f);
 			}
-			FCanvasTextItem Item(FVector2D(X + (Index == 0 ? Marker : 0.f), Y), FText::FromString(Line), Font, Label.Color);
+			FCanvasTextItem Item(FVector2D(X + (Index == 0 ? Marker : 0.f), Y), Layout->LineTexts[Index], Font, Label.Color);
 			Item.bOutlined = true;
 			Item.OutlineColor = FLinearColor::Black;
 			Canvas->DrawItem(Item);
 			Y += LineHeight;
 		}
 	};
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
 		// Godot: the enemies left in stasis outside a turn-based fight hide their plates.
 		FOverheadLabel Label;
-		if (!It->IsHidden() && (!bTurnBased || TurnBased->GetUnitState(*It)) && It->GetOverheadLabel(Label))
+		if (!Enemy->IsHidden() && (!bTurnBased || TurnBased->GetUnitState(Enemy)) && Enemy->GetOverheadLabel(Label))
 		{
-			Draw(*It, Label);
+			Draw(Enemy, Label);
 		}
 	}
 	for (TActorIterator<AInteractableActor> It(World); It; ++It)
@@ -1025,7 +1041,7 @@ void ACodexTacticsHUD::DrawFloatingTexts()
 		{
 			continue;
 		}
-		const FString Text = StripUnsupportedGlyphs(Entry.Text);
+		const FString& Text = StrippedFloatingTexts.FindOrMake(Entry.Text, [](const FString& Raw) { return StripUnsupportedGlyphs(Raw); });
 		float W = 0.f;
 		float H = 0.f;
 		Canvas->StrLen(Font, Text, W, H);
@@ -1053,6 +1069,8 @@ void ACodexTacticsHUD::DrawMessageFeed()
 	const float Width = Canvas->SizeX * FeedWidthFraction;
 	const float Left = Canvas->SizeX - Width - Margin;
 	const float LineHeight = Font->GetMaxCharHeight() * Scale + LinePadding;
+	const float WrapWidth = Width - 2.f * Margin;
+	ValidateTextCaches(Font, WrapWidth, Scale);
 
 	// Newest last; collect the visible tail first so the panel can be sized.
 	struct FFeedLine
@@ -1071,8 +1089,14 @@ void ACodexTacticsHUD::DrawMessageFeed()
 			break;
 		}
 		TArray<FFeedLine> Block;
-		Block.Add({ StripUnsupportedGlyphs(Message.Speaker.ToString()).ToUpper(), SpeakerColor });
-		for (const FString& Line : WrapText(StripUnsupportedGlyphs(Message.Text.ToString()), Font, Scale, Width - 2.f * Margin))
+		// Stripped / upper-cased / wrapped once per text and feed width (audit 2026-10-11 P7: the wrap was O(words^2) a frame).
+		Block.Add({ FeedSpeakers.FindOrMake(Message.Speaker.ToString(), [](const FString& Raw) { return StripUnsupportedGlyphs(Raw).ToUpper(); }),
+			SpeakerColor });
+		const TArray<FString> Wrapped = FeedWraps.FindOrMake(Message.Text.ToString(), [this, Font, Scale, WrapWidth](const FString& Raw)
+		{
+			return WrapText(StripUnsupportedGlyphs(Raw), Font, Scale, WrapWidth);
+		});
+		for (const FString& Line : Wrapped)
 		{
 			Block.Add({ Line, TextColor });
 		}

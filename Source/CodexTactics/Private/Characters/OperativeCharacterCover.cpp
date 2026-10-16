@@ -10,6 +10,7 @@
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Combat/EnemyGhostActor.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -533,11 +534,11 @@ bool AOperativeCharacter::GatherCoverThreat(FVector& OutLocation) const
 		}
 	}
 	// Enemies seen now (the tactical sight hides the unseen ones in a fight) and heard / remembered silhouettes.
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
-		if (IsAlive(*It) && !It->IsHidden() && FVector::Dist2D(Here, It->GetActorLocation()) <= Config.MaxThreatDistanceCm)
+		if (IsAlive(Enemy) && !Enemy->IsHidden() && FVector::Dist2D(Here, Enemy->GetActorLocation()) <= Config.MaxThreatDistanceCm)
 		{
-			Add(It->GetActorLocation(), ECoverThreatSource::Visible);
+			Add(Enemy->GetActorLocation(), ECoverThreatSource::Visible);
 		}
 	}
 	for (TActorIterator<AEnemyGhostActor> It(World); It; ++It)

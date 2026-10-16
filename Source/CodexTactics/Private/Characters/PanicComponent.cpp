@@ -1,9 +1,11 @@
 #include "Characters/PanicComponent.h"
+#include "Combat/EncounterQueries.h"
 
 #include "Characters/OperativeCharacter.h"
 #include "Characters/RageComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -31,7 +33,7 @@ namespace
 
 	bool IsLivePanicThreat(const AActor* Actor)
 	{
-		if (!IsValid(Actor) || !Actor->ActorHasTag(FName(TEXT("Enemy"))))
+		if (!IsValid(Actor) || !Actor->ActorHasTag(CombatQueries::EnemyTag))
 		{
 			return false;
 		}
@@ -338,14 +340,14 @@ FVector UPanicComponent::GetFleeDirection()
 	FVector Flee = FVector::ZeroVector;
 	// 1. Away from the enemies within 20 m (closer ones push harder).
 	FVector Repulsion = FVector::ZeroVector;
-	for (TActorIterator<AActor> It(World); It; ++It)
+	for (AActor* Threat : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
 	{
-		if (IsLivePanicThreat(*It))
+		if (IsLivePanicThreat(Threat))
 		{
-			const float Distance = FVector::Dist2D(Here, It->GetActorLocation()) / 100.f;
+			const float Distance = FVector::Dist2D(Here, Threat->GetActorLocation()) / 100.f;
 			if (Distance < 20.f && Distance > 0.01f)
 			{
-				Repulsion += (Here - It->GetActorLocation()).GetSafeNormal2D() / Distance;
+				Repulsion += (Here - Threat->GetActorLocation()).GetSafeNormal2D() / Distance;
 			}
 		}
 	}
@@ -417,11 +419,11 @@ float UPanicComponent::GetNearestEnemyDistance() const
 		return -1.f;
 	}
 	float Nearest = TNumericLimits<float>::Max();
-	for (TActorIterator<AActor> It(World); It; ++It)
+	for (AActor* Threat : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
 	{
-		if (IsLivePanicThreat(*It))
+		if (IsLivePanicThreat(Threat))
 		{
-			Nearest = FMath::Min(Nearest, static_cast<float>(FVector::Dist(Owner->GetActorLocation(), It->GetActorLocation())));
+			Nearest = FMath::Min(Nearest, static_cast<float>(FVector::Dist(Owner->GetActorLocation(), Threat->GetActorLocation())));
 		}
 	}
 	return Nearest < TNumericLimits<float>::Max() ? Nearest / 100.f : -1.f;

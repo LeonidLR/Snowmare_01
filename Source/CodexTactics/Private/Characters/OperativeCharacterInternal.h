@@ -6,8 +6,16 @@
 
 #include "CoreMinimal.h"
 #include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeCharacter.h"
+#include "Combat/EncounterQueries.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Engine/Level.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFramework/Character.h"
+#include "Interactables/TurretActor.h"
+#include "WorldCollision.h"
 
 namespace OperativeCharacterInternal
 {
@@ -33,11 +41,55 @@ namespace OperativeCharacterInternal
 	/** A valid, shown actor tagged "Enemy" whose health component (if any) is alive. */
 	inline bool IsLiveEnemy(const AActor* Actor)
 	{
-		if (!IsValid(Actor) || !Actor->ActorHasTag(FName(TEXT("Enemy"))) || Actor->IsHidden())
+		if (!IsValid(Actor) || !Actor->ActorHasTag(CombatQueries::EnemyTag) || Actor->IsHidden())
 		{
 			return false;
 		}
 		const UHealthComponent* Health = Actor->FindComponentByClass<UHealthComponent>();
 		return !Health || Health->IsAlive();
+	}
+
+	/**
+	 * Adds the squad (every AOperativeCharacter) and the turrets (Godot "allies") to a squad shot line's ignore list.
+	 * EvaluateShotLine runs per candidate enemy per operative per frame: the two world scans are done once per frame
+	 * and world (audit 2026-10-11 P2) and again when an actor was spawned since (the persistent level grew).
+	 */
+	inline void AddShotLineAllies(const UWorld* World, FCollisionQueryParams& Params)
+	{
+		struct FAlliesCache
+		{
+			TWeakObjectPtr<const UWorld> World;
+			uint64 Frame = MAX_uint64;
+			int32 LevelActors = -1;
+			TArray<TWeakObjectPtr<const AActor>> Allies;
+		};
+		static FAlliesCache Cache; // game thread only (actor ticks)
+		if (!World)
+		{
+			return;
+		}
+		const int32 LevelActors = World->PersistentLevel ? World->PersistentLevel->Actors.Num() : 0;
+		if (!UEnemyRegistrySubsystem::IsEnabled() || Cache.World.Get() != World || Cache.Frame != GFrameCounter || Cache.LevelActors != LevelActors)
+		{
+			Cache.World = World;
+			Cache.Frame = GFrameCounter;
+			Cache.LevelActors = LevelActors;
+			Cache.Allies.Reset();
+			for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+			{
+				Cache.Allies.Add(*It); // the squad
+			}
+			for (TActorIterator<ATurretActor> It(World); It; ++It)
+			{
+				Cache.Allies.Add(*It); // Godot "allies"
+			}
+		}
+		for (const TWeakObjectPtr<const AActor>& Ally : Cache.Allies)
+		{
+			if (const AActor* Actor = Ally.Get())
+			{
+				Params.AddIgnoredActor(Actor);
+			}
+		}
 	}
 }

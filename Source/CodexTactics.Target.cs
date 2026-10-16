@@ -9,5 +9,10 @@ public class CodexTacticsTarget : TargetRules
 		DefaultBuildSettings = BuildSettingsVersion.V7;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
 		ExtraModuleNames.Add("CodexTactics");
+		// Dev console commands (smokes / probes) only in Debug / Development games, never in Test / Shipping.
+		if (Target.Configuration != UnrealTargetConfiguration.Test && Target.Configuration != UnrealTargetConfiguration.Shipping)
+		{
+			ExtraModuleNames.Add("CodexTacticsDev");
+		}
 	}
 }

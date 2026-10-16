@@ -1,4 +1,6 @@
 #include "Interactables/BarricadeActor.h"
+#include "Combat/EncounterQueries.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "UI/OverheadLabel.h"
 #include "Characters/EnemyCharacter.h"
@@ -92,12 +94,12 @@ void ABarricadeActor::Tick(float DeltaSeconds)
 	{
 		ContactTimer = ContactTickInterval;
 		TArray<AActor*> Touching;
-		for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+		for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
 		{
-			const UHealthComponent* EnemyHealth = It->ActorHasTag(FName(TEXT("Enemy"))) ? It->FindComponentByClass<UHealthComponent>() : nullptr;
-			if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist(GetActorLocation(), It->GetActorLocation()) <= 220.f)
+			const UHealthComponent* EnemyHealth = Enemy->ActorHasTag(CombatQueries::EnemyTag) ? Enemy->FindComponentByClass<UHealthComponent>() : nullptr;
+			if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist(GetActorLocation(), Enemy->GetActorLocation()) <= 220.f)
 			{
-				Touching.Add(*It);
+				Touching.Add(Enemy);
 			}
 		}
 		for (AActor* Enemy : Touching)
@@ -110,14 +112,14 @@ void ABarricadeActor::Tick(float DeltaSeconds)
 		return;
 	}
 	// Godot _check_enemy_trap_contact: any living enemy within 1.8 m sets the wire off.
-	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
 	{
-		if (!It->ActorHasTag(FName(TEXT("Enemy"))))
+		if (!Enemy->ActorHasTag(CombatQueries::EnemyTag))
 		{
 			continue;
 		}
-		const UHealthComponent* EnemyHealth = It->FindComponentByClass<UHealthComponent>();
-		if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist(GetActorLocation(), It->GetActorLocation()) <= TrapContactDistance)
+		const UHealthComponent* EnemyHealth = Enemy->FindComponentByClass<UHealthComponent>();
+		if (EnemyHealth && EnemyHealth->IsAlive() && FVector::Dist(GetActorLocation(), Enemy->GetActorLocation()) <= TrapContactDistance)
 		{
 			DetonateTrap(false, LOCTEXT("EnemyContact", "Enemy contact"));
 			return;

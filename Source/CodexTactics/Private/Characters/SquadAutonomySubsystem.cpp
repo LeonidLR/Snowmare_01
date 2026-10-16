@@ -1,4 +1,5 @@
 #include "Characters/SquadAutonomySubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 
 #include "Algo/AnyOf.h"
@@ -143,17 +144,17 @@ void USquadAutonomySubsystem::RunDecisions()
 		return;
 	}
 	TArray<FEnemyView> Enemies;
-	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
-		const UHealthComponent* Health = It->GetHealthComponent();
-		if (It->IsDying() || (Health && !Health->IsAlive()))
+		const UHealthComponent* Health = Enemy->GetHealthComponent();
+		if (Enemy->IsDying() || (Health && !Health->IsAlive()))
 		{
 			continue;
 		}
 		FEnemyView View;
-		View.Enemy = *It;
-		View.Location = It->GetActorLocation();
-		if (const AMarksmanEnemyCharacter* Marksman = Cast<AMarksmanEnemyCharacter>(*It))
+		View.Enemy = Enemy;
+		View.Location = Enemy->GetActorLocation();
+		if (const AMarksmanEnemyCharacter* Marksman = Cast<AMarksmanEnemyCharacter>(Enemy))
 		{
 			View.AimTarget = Marksman->IsAimingAtTarget() ? Cast<AOperativeCharacter>(Marksman->GetCurrentTarget()) : nullptr;
 		}

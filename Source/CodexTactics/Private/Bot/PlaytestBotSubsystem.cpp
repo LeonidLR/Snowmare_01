@@ -70,6 +70,7 @@ namespace
 
 namespace BotTuning
 {
+#if CODEX_WITH_PLAYTEST_BOT
 	// Set by Scripts/Tools/jev_ai_coach.py through -dpcvars= for its experiments.
 	static TAutoConsoleVariable<int32> CVarAssault(TEXT("Codex.Bot.MarksmanAssault"), 1, TEXT("Bot storms lone marksmen (0 / 1)"));
 	static TAutoConsoleVariable<float> CVarClearRadius(TEXT("Codex.Bot.AssaultClearRadius"), 1500.f,
@@ -80,6 +81,39 @@ namespace BotTuning
 		TEXT("Bot leader takes a Sprint 12 wall-cover slot when no barricade is near (0 / 1)"));
 	static TAutoConsoleVariable<float> CVarWallCoverRadius(TEXT("Codex.Bot.WallCoverRadius"), 700.f,
 		TEXT("Bot looks for wall cover this far around the leader (cm)"));
+#else
+	// Test / Shipping: no Codex.Bot.* console variables (the subsystem is never created; the defaults keep the code compiling).
+	template <typename ValueType>
+	struct TBotConstant
+	{
+		ValueType Value;
+		ValueType GetValueOnGameThread() const { return Value; }
+	};
+	static const TBotConstant<int32> CVarAssault{ 1 };
+	static const TBotConstant<float> CVarClearRadius{ 1500.f };
+	static const TBotConstant<float> CVarStopDistance{ 900.f };
+	static const TBotConstant<int32> CVarWallCover{ 1 };
+	static const TBotConstant<float> CVarWallCoverRadius{ 700.f };
+#endif
+}
+
+bool UPlaytestBotSubsystem::IsBotAllowed(EWorldType::Type WorldType)
+{
+	return CODEX_WITH_PLAYTEST_BOT && (WorldType == EWorldType::Game || WorldType == EWorldType::PIE);
+}
+
+bool UPlaytestBotSubsystem::ShouldCreateSubsystem(UObject* Outer) const
+{
+#if CODEX_WITH_PLAYTEST_BOT
+	return Super::ShouldCreateSubsystem(Outer);
+#else
+	return false;
+#endif
+}
+
+bool UPlaytestBotSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
+{
+	return IsBotAllowed(WorldType);
 }
 
 void UPlaytestBotSubsystem::OnWorldBeginPlay(UWorld& InWorld)
@@ -1804,6 +1838,7 @@ void UPlaytestBotSubsystem::Finish(const TCHAR* Result, int32 ExitCode)
 	}
 }
 
+#if CODEX_WITH_PLAYTEST_BOT
 namespace PlaytestBotCommand
 {
 	void Run(const TArray<FString>& Args, UWorld* World)
@@ -1827,3 +1862,4 @@ namespace PlaytestBotCommand
 		TEXT("Starts the playtest bot in this game: CodexTactics.Bot [CASUAL|NORMAL|VETERAN] [nocollect] [seed=<n>]."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
+#endif // CODEX_WITH_PLAYTEST_BOT

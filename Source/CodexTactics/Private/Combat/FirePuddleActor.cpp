@@ -1,8 +1,10 @@
 #include "Combat/FirePuddleActor.h"
+#include "Combat/EncounterQueries.h"
 
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Data/TacticalHeatTuning.h"
@@ -112,11 +114,11 @@ int32 AFirePuddleActor::ApplyCorePulse()
 	Spec.StatusTickDamage = Config.PuddleBurningTickDamage;
 	int32 Hit = 0;
 	TArray<AActor*> Victims;
-	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
 	{
-		if (It->ActorHasTag(FName(TEXT("Enemy"))) && InCore(**It))
+		if (Enemy->ActorHasTag(CombatQueries::EnemyTag) && InCore(*Enemy))
 		{
-			Victims.Add(*It);
+			Victims.Add(Enemy);
 		}
 	}
 	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
