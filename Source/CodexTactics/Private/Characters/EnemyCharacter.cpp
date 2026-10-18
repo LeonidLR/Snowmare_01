@@ -121,12 +121,14 @@ namespace EnemyCharacterLocal
 	TOptional<EEnemyArchetype> SpawnArchetype;
 
 	/**
-	 * Bug hunt 2026-10-18 (open user decision, HANDOFF §7): melee enemies close in until they can bite
-	 * (EnemyAIRules::MeleeApproachAcceptance). 0 (default) = the shipped behaviour: they stop at AttackRange x 0.5 + both
-	 * capsule radii, i.e. hounds / frostbitten 1.65-1.75 m off - outside their 1.5 m planar reach.
+	 * Bug hunt 2026-10-18, ON since the user's approval 2026-10-18: melee enemies close in until they can bite
+	 * (EnemyAIRules::MeleeApproachAcceptance). The game value is DATA: Content/Data/AI/ai_tuning.json "cvars"
+	 * "Codex.Enemy.MeleeCloseIn": "1" (applied at StartPlay, Data/AITuning.h). The code default 0 is the old stop (AttackRange
+	 * x 0.5 + both capsule radii = hounds / frostbitten 1.65-1.75 m off, outside their 1.5 m planar reach) and stays for A/B:
+	 * console "Codex.Enemy.MeleeCloseIn 0" or -dpcvars=Codex.Enemy.MeleeCloseIn=0 (wins over the file), or -NoAITuning.
 	 */
 	static TAutoConsoleVariable<int32> CVarMeleeCloseIn(TEXT("Codex.Enemy.MeleeCloseIn"), 0,
-		TEXT("1: melee enemies close in to their bite reach (MoveToActor acceptance minus the capsule radii); 0: the shipped AttackRange x 0.5 stop (1.65-1.75 m off a hound's 1.5 m reach)"));
+		TEXT("1 (ai_tuning.json, the game value since 2026-10-18): melee enemies close in to their bite reach (MoveToActor acceptance minus the capsule radii); 0 (code default, A/B): the old AttackRange x 0.5 stop (1.65-1.75 m off a hound's 1.5 m reach)"));
 }
 
 AEnemyCharacter::FScopedSpawnArchetype::FScopedSpawnArchetype(EEnemyArchetype InArchetype)
@@ -786,7 +788,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 			else
 			{
 				// MoveToActor's reach test adds both capsule radii: AttackRange x 0.5 stops hounds 1.7 m off, out of their own
-				// reach (bug hunt 2026-10-18). Codex.Enemy.MeleeCloseIn 1 closes in to the bite (user decision pending).
+				// reach (bug hunt 2026-10-18). Codex.Enemy.MeleeCloseIn 1 (ai_tuning.json, user approval 2026-10-18) closes in.
 				const float Acceptance = EnemyCharacterLocal::CVarMeleeCloseIn.GetValueOnGameThread() != 0
 					? EnemyAIRules::MeleeApproachAcceptance(AttackRange, FMath::Abs(TargetPosition.Z - Feet.Z), GetSimpleCollisionRadius(),
 						Target->GetSimpleCollisionRadius())
@@ -2336,6 +2338,9 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Target))
 	{
 		const float Dealt = Operative->TakeHit(FinalDamage, EnemyDisplayName, bIsCrit, false, this, bIsCrit ? CritMultiplier : 1.f);
+		// One line per landed blow / bite (melee balance read-outs, e.g. the close-in A/B of 2026-10-18).
+		UE_LOG(LogCodexTactics, Display, TEXT("[Melee] %s hits %s for %.1f%s"), *GetName(), *Operative->DisplayName.ToString(), Dealt,
+			bIsCrit ? TEXT(" (crit)") : TEXT(""));
 		TryKnockDownOperative(Operative, Dealt); // Sprint 14: Brute heavy melee / hound pounce
 		// Godot enemy_frostbitten.gd _attack_target: the blow shoves the operative 2.5 m/s away (velocity added).
 		FVector Push = Operative->GetActorLocation() - GetActorLocation();
