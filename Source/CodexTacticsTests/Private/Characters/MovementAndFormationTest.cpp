@@ -284,6 +284,19 @@ bool FMovementProneDiveScaleTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// Bug hunt 2026-10-18 (HordeIntroSmoke): Detour crowd's "moved too far" finish ended a fresh 5 m order at once (0 cm moved)
+// when the crowd direction pointed away from the goal; it may finish a move only near the path's end.
+MOVEMENT_TEST(FMovementCrowdOvershootFinishTest, "Movement.CrowdOvershootFinishOnlyNearTheEnd")
+bool FMovementCrowdOvershootFinishTest::RunTest(const FString&)
+{
+	using namespace OperativeMovementRules;
+	TestFalse(TEXT("a fresh 5 m order is not finished by the overshoot test"), AllowsCrowdOvershootFinish(500.f));
+	TestFalse(TEXT("2 m from the end: walks on"), AllowsCrowdOvershootFinish(200.f));
+	TestTrue(TEXT("at the range: an overshoot may end it"), AllowsCrowdOvershootFinish(CrowdOvershootTestRangeCm));
+	TestTrue(TEXT("passed the goal by 30 cm: ends"), AllowsCrowdOvershootFinish(30.f));
+	return true;
+}
+
 #undef MOVEMENT_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

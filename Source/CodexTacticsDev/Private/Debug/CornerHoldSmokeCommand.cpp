@@ -1,5 +1,7 @@
 // Dev-only headless check: holding a corner against a horde (2026-10-07 regression; UE-only, no Godot reference):
 //   Scripts/smoke.ps1 -Command CodexTactics.CornerHoldSmoke -Log Smoke-CornerHold.log
+// Optional "Seed=N" reseeds the random rolls (repeat a -FixedSeed run with other rolls); the run traces the leader's fire
+// decisions ([FireTrace], Codex.Debug.FireTrace) and logs the flank rush positions every 2 s (bug hunt 2026-10-18).
 // The leader at the right-hand corner of a 6 m x 3 m wall (spawned at runtime, nothing saved), firing on his own.
 //  A) 10 frost hounds (melee) pour round the corner from behind the wall, one every 0.6 s;
 //  B) a mixed group: 4 frostbitten (melee) + 2 spitters (ranged) behind the wall, round the corner.
@@ -112,6 +114,7 @@ namespace CornerHoldSmoke
 		int32 FlankOpenShotsBefore = 0;
 		bool bFlankSpawned = false;
 		float FlankStart = -1.f;
+		float FlankLogTimer = 0.f;
 	};
 
 	/** Logs and checks one shot: the angle between the aim and the target, by the rules and on the real barrel. */
@@ -220,8 +223,11 @@ namespace CornerHoldSmoke
 			float SlotWeight = 0.f;
 			Anim->GetCoverPlayback(Clip, MontageWeight, SlotWeight);
 			++State.IKSamples;
-			// A rifle-holding pose: not while reloading or throwing a grenade (the left hand leaves the rifle by design).
-			if (Anim->LeftHandIKAlpha < 0.9f && !Op->bIsReloading && !Anim->IsThrowingGrenade() && Anim->bLeftHandIKGripValid)
+			// A rifle-holding pose: not while reloading, throwing a grenade or in a hit reaction (the left hand leaves the rifle
+			// by design; a hound biting him in the open stance plays MM_HitReact_*, 2026-10-18).
+			const UAnimSequenceBase* HitClip = Anim->GetLastHitReactionClip();
+			const bool bHitReacting = HitClip && Anim->IsPlayingSlotAnimation(HitClip, Anim->GetLastHitReactionSlot());
+			if (Anim->LeftHandIKAlpha < 0.9f && !Op->bIsReloading && !Anim->IsThrowingGrenade() && !bHitReacting && Anim->bLeftHandIKGripValid)
 			{
 				++State.IKLow;
 				if (State.IKLow <= 8)
@@ -951,14 +957,50 @@ namespace CornerHoldSmoke
 			Track(State, Phase);
 			SamplePosture(State, Op);
 			int32 FlankDown = 0;
+			int32 FlankGone = 0;
 			for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : State.Flank)
 			{
-				FlankDown += !Enemy.IsValid() || Enemy->IsDying() || !Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive() ? 1 : 0;
+				const bool bDown = !Enemy.IsValid() || Enemy->IsDying() || !Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive();
+				FlankDown += bDown ? 1 : 0;
+				// Gave him up (2026-10-18): a hound / frostbitten that stopped short of its bite (HANDOFF §9 "melee enemies stop
+				// 1.65-1.75 m off", Codex.Enemy.MeleeCloseIn 0) skips him after 3 s ("no way to ...") and runs for the generator
+				// 80 m away - out of the fight, nothing he can do about it.
+				FlankGone += !bDown && Enemy->GetCurrentTarget() != Op && FVector::Dist2D(Enemy->GetActorLocation(), Op->GetActorLocation()) > 1500.f ? 1 : 0;
+			}
+			// Every 2 s: where he and the flankers stand in the wall's frame (F from the leader's start, R from the wall's -R end).
+			if (State.bFlankSpawned && (State.FlankLogTimer -= 0.05f) <= 0.f)
+			{
+				State.FlankLogTimer = 2.f;
+				const FVector Corner = State.P - State.R * 300.f;
+				auto Frame = [&State, &Corner](const FVector& Where)
+				{
+					const FVector D = Where - Corner;
+					return FString::Printf(TEXT("(F %.0f, R %.0f)"), FVector::DotProduct(D, State.F), FVector::DotProduct(D, State.R));
+				};
+				FString Line = FString::Printf(TEXT("Smoke: flank %.1f s - leader %s%s"), State.StageTime, *Frame(Op->GetActorLocation()),
+					Op->bInCover ? TEXT(" in cover") : TEXT(" open"));
+				for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : State.Flank)
+				{
+					if (Enemy.IsValid() && !Enemy->IsDying() && Enemy->GetHealthComponent() && Enemy->GetHealthComponent()->IsAlive())
+					{
+						FHitResult SightHit;
+						FCollisionQueryParams SightParams(SCENE_QUERY_STAT(CornerHoldSmokeSight), false, Op);
+						SightParams.AddIgnoredActor(Enemy.Get());
+						const bool bSightBlocked = World->LineTraceSingleByChannel(SightHit, UTacticalSightSubsystem::EyePoint(*Op),
+							UTacticalSightSubsystem::ProfilePoint(*Enemy), ECC_Visibility, SightParams);
+						Line += FString::Printf(TEXT(" | %s %s %.0f cm%s (sight %s), target %s, v %.0f"), *Enemy->GetName(), *Frame(Enemy->GetActorLocation()),
+							FVector::Dist2D(Enemy->GetActorLocation(), Op->GetActorLocation()), Enemy->IsHidden() ? TEXT(" hidden") : TEXT(""),
+							bSightBlocked && SightHit.GetActor() ? *SightHit.GetActor()->GetName() : TEXT("clear"),
+							Enemy->GetCurrentTarget() ? *Enemy->GetCurrentTarget()->GetName() : TEXT("-"), Enemy->GetVelocity().Size2D());
+					}
+				}
+				UE_LOG(LogCodexTactics, Display, TEXT("%s"), *Line);
 			}
 			// 20 s of the rush, then until 3 of them are down (cap 45 s): how many fall in a fixed 20 s is the hit / crit
 			// rolls' luck (2 or 3 of 5 with 9-10 open shots, flaky 2026-10-15); the behaviour checked is that he turns to
-			// them and his open-stance shots bring them down.
-			if (!State.bFlankSpawned || State.StageTime < State.FlankStart + 20.f || (FlankDown < 3 && State.StageTime < State.FlankStart + 45.f))
+			// them and his open-stance shots bring them down. The ones that gave him up and ran off (FlankGone) end the wait too.
+			if (!State.bFlankSpawned || State.StageTime < State.FlankStart + 20.f
+				|| (FlankDown < 3 && FlankDown + FlankGone < State.Flank.Num() && State.StageTime < State.FlankStart + 45.f))
 			{
 				if (State.bFlankSpawned && State.FlankStart < 0.f)
 				{
@@ -967,10 +1009,11 @@ namespace CornerHoldSmoke
 				return true;
 			}
 			const int32 FlankOpenShots = Op->GetCoverOpenShots() - State.FlankOpenShotsBefore;
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: flank rush - %d of %d down, %d open shots, cover leaves %d, facing flips %d, IK below 0.9 in %d of %d frames"),
-				FlankDown, State.Flank.Num(), FlankOpenShots, State.CoverLeaves, State.FacingFlips, State.IKLow, State.IKSamples);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: flank rush - %d of %d down, %d gave him up (ran off), %d open shots, cover leaves %d, facing flips %d, IK below 0.9 in %d of %d frames"),
+				FlankDown, State.Flank.Num(), FlankGone, FlankOpenShots, State.CoverLeaves, State.FacingFlips, State.IKLow, State.IKSamples);
 			Check(State, FlankOpenShots >= 3, FString::Printf(TEXT("flank rush: he turns to them and fires in the open stance (%d open shots)"), FlankOpenShots));
-			Check(State, FlankDown >= 3, FString::Printf(TEXT("flank rush: %d of %d down (%.1f s)"), FlankDown, State.Flank.Num(), State.StageTime - State.FlankStart));
+			Check(State, FlankDown >= 3 || (FlankDown >= 2 && FlankDown + FlankGone == State.Flank.Num()),
+				FString::Printf(TEXT("flank rush: %d of %d down, %d ran off (%.1f s)"), FlankDown, State.Flank.Num(), FlankGone, State.StageTime - State.FlankStart));
 			Check(State, State.CoverLeaves == 1, FString::Printf(TEXT("flank rush: exactly one posture switch off the corner to face them (%d)"), State.CoverLeaves));
 			Check(State, State.IKLow * 20 <= State.IKSamples, FString::Printf(TEXT("flank rush: the left hand holds the rifle (IK < 0.9 in %d of %d frames)"), State.IKLow, State.IKSamples));
 			// Whole run.
@@ -994,6 +1037,23 @@ namespace CornerHoldSmoke
 	{
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
+		// "Seed=N" (2026-10-18 bug hunt): reseeds the game's random rolls (hit / crit / knockdown / AI), so a run with
+		// -FixedSeed can be repeated with other rolls; every operative's fire decision is traced ([FireTrace]).
+		for (const FString& Arg : Args)
+		{
+			FString Value;
+			if (Arg.StartsWith(TEXT("Seed=")) && Arg.Split(TEXT("="), nullptr, &Value))
+			{
+				const int32 Seed = FCString::Atoi(*Value);
+				FMath::RandInit(Seed);
+				FMath::SRandInit(Seed);
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: random seed %d"), Seed);
+			}
+		}
+		if (IConsoleVariable* FireTrace = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Debug.FireTrace")))
+		{
+			FireTrace->Set(1, ECVF_SetByConsole);
+		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
 			return Step(WeakWorld, *State);

@@ -107,4 +107,30 @@ bool FEnemyPlacedArchetypeTest::RunTest(const FString&)
 	return true;
 }
 
+// Bug hunt 2026-10-18 (CornerHoldSmoke 1 in 3): MoveToActor's reach test adds both capsule radii, so the old acceptance
+// AttackRange x 0.5 stopped a hound 90 + 40 + 40 = 170 cm off while its bite needs <= 150 cm planar (1.8 m to the
+// operative's centre 1 m up). Codex.Enemy.MeleeCloseIn 1 uses MeleeApproachAcceptance (user decision pending).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyMeleeApproachTest, "CodexTactics.Characters.EnemyAI.MeleeApproach",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FEnemyMeleeApproachTest::RunTest(const FString&)
+{
+	TestEqual(TEXT("hound planar reach at 1 m height difference"), EnemyAIRules::MeleeReachPlanar(180.f, 100.f), 149.666f, 0.01f);
+	TestEqual(TEXT("flat: the whole range"), EnemyAIRules::MeleeReachPlanar(180.f, 0.f), 180.f, 0.01f);
+	TestEqual(TEXT("too high: no planar reach"), EnemyAIRules::MeleeReachPlanar(180.f, 200.f), 0.f);
+	// The stall: the old stop distance is outside the bite.
+	const float OldStop = 180.f * 0.5f + 40.f + 40.f;
+	TestFalse(TEXT("old stop 170 cm: no bite"), EnemyAIRules::CanMelee(FMath::Sqrt(FMath::Square(OldStop) + FMath::Square(100.f)), 100.f, 180.f));
+	// The new acceptance: 149.7 - 80 - 15 = 54.7 -> 50 (5 cm steps); the stop (50 + radii) is inside the bite.
+	const float Acceptance = EnemyAIRules::MeleeApproachAcceptance(180.f, 100.f, 40.f, 40.f);
+	TestEqual(TEXT("hound acceptance"), Acceptance, 50.f);
+	const float NewStop = Acceptance + 40.f + 40.f;
+	TestTrue(TEXT("new stop 130 cm: bites"), EnemyAIRules::CanMelee(FMath::Sqrt(FMath::Square(NewStop) + FMath::Square(100.f)), 100.f, 180.f));
+	TestEqual(TEXT("brute (2.4 m): at most range x 0.5"), EnemyAIRules::MeleeApproachAcceptance(240.f, 100.f, 40.f, 40.f), 120.f);
+	TestEqual(TEXT("cutter (2 m)"), EnemyAIRules::MeleeApproachAcceptance(200.f, 100.f, 40.f, 40.f), 75.f);
+	TestEqual(TEXT("never negative (huge capsules)"), EnemyAIRules::MeleeApproachAcceptance(180.f, 100.f, 90.f, 90.f), 0.f);
+	TestEqual(TEXT("a few cm of height jitter keep the request"), EnemyAIRules::MeleeApproachAcceptance(180.f, 101.5f, 40.f, 40.f), 50.f);
+	return true;
+}
+
 #endif

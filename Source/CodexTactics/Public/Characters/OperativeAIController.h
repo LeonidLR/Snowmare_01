@@ -6,7 +6,8 @@
 
 /**
  * Drives one operative over the NavMesh with Detour Crowd avoidance (keeps squad members apart,
- * replacing Godot's separation force and whisker steering in player.gd).
+ * replacing Godot's separation force and whisker steering in player.gd). Path following:
+ * UOperativeCrowdFollowingComponent (no false "moved too far" finish of a fresh order, bug hunt 2026-10-18).
  */
 UCLASS()
 class CODEXTACTICS_API AOperativeAIController : public ADetourCrowdAIController

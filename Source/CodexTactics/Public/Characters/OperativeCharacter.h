@@ -1601,7 +1601,18 @@ private:
 	 * Range (weapon x stance x elevation), dead zone and line of fire to Enemy (Godot _find_shoot_target ray: walls block,
 	 * barricades by SquadFireRules::JudgeLine, another enemy in the way becomes the target unless bKeepTarget).
 	 */
-	bool EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FShootCandidate& Out, bool& bOutBarricadeBlocked) const;
+	bool EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FShootCandidate& Out, bool& bOutBarricadeBlocked,
+		const TCHAR** OutReason = nullptr) const;
+	/** ProcessCombatShooting's body: returns why no shot left this frame ("fired" when one did) and the target it had. */
+	const TCHAR* RunCombatShooting(float DeltaTime, AActor*& OutTarget);
+	/**
+	 * Dev trace (Codex.Debug.FireTrace 1, 2026-10-18 corner hold bug hunt): logs the fire decision when its reason
+	 * changes, and every 2 s while a live enemy is within 5 m and no shot leaves - with the nearest enemies' shot-line
+	 * verdicts and the aim residual.
+	 */
+	void TraceFireDecision(const TCHAR* Reason, const AActor* Target);
+	FString LastFireTraceReason;
+	double LastFireTraceTime = -1.0e9;
 	/** Godot _notify_barricade_blocked (every 3.5 s at most). */
 	void NotifyBarricadeBlocked();
 	float BarricadeBlockNotifyTimer = 0.f;

@@ -20,6 +20,12 @@ namespace SightRules
 	/** Enemies hear an operative this close (cm); a crawling (prone) one only within ProneHearingCm. */
 	inline constexpr float EnemyHearingCm = 1200.f;
 	inline constexpr float ProneHearingCm = 500.f;
+	/**
+	 * The squad notices an enemy this close (2D, cm) without a line of sight (bug hunt 2026-10-18): hounds / frostbitten
+	 * stop 1.65-1.75 m off (outside their bite, HANDOFF §9) - one doing so right behind a wall's corner stayed hidden,
+	 * so the operative holding that corner never fired at it. Below the 2.5-3 m of the sight checks (SightSmoke).
+	 */
+	inline constexpr float SquadTouchRevealCm = 200.f;
 	/** Blind fire at a ghost silhouette: hit chance x (1 - 0.8) (directive -40 %; user decision 2026-10-05 after the Jev check: -80 %). */
 	inline constexpr float BlindFireAccuracyMultiplier = 0.2f;
 	/** A blind shot can only hit the enemy while it is still this close to its ghost (cm). */
@@ -51,6 +57,9 @@ namespace SightRules
 
 	/** How far an enemy hears an operative in Stance, cm. */
 	CODEXTACTICS_API float EnemyHearingRadius(EOperativeStance Stance);
+
+	/** An enemy within SquadTouchRevealCm (2D) of an operative is seen whatever is in between. */
+	CODEXTACTICS_API bool IsWithinTouchReveal(float DistanceCm);
 
 	/** Blind fire hit chance: x0.2, and 0 when the enemy left its ghost's spot. */
 	CODEXTACTICS_API float BlindFireHitChance(float BaseHitChance, float EnemyDistanceFromGhostCm);

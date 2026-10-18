@@ -80,3 +80,17 @@ bool FSightHiddenPoseTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("shown without a hide: untouched"), Mesh->VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::AlwaysTickPose);
 	return true;
 }
+
+// Bug hunt 2026-10-18 (CornerHoldSmoke 1 in 3): a frostbitten waiting 1.7 m off right behind the wall's corner stayed hidden
+// from the operative holding that corner, so he never fired at it; an enemy at arm's length is noticed without a sight line.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightTouchRevealTest, "CodexTactics.Combat.Sight.TouchReveal",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSightTouchRevealTest::RunTest(const FString&)
+{
+	TestTrue(TEXT("a frostbitten stopped 173 cm off behind the corner is noticed"), SightRules::IsWithinTouchReveal(173.f));
+	TestTrue(TEXT("at the reveal distance"), SightRules::IsWithinTouchReveal(SightRules::SquadTouchRevealCm));
+	TestFalse(TEXT("3 m off behind a barricade stays hidden (SightSmoke)"), SightRules::IsWithinTouchReveal(300.f));
+	TestTrue(TEXT("closer than any sight check (2.5 m and up)"), SightRules::SquadTouchRevealCm < 250.f);
+	return true;
+}

@@ -222,6 +222,39 @@ namespace CoverFacingRules
 	 */
 	CODEXTACTICS_API bool WantsCornerHold(bool bAtHoldSpot, bool bInFight, bool bThreatFresh);
 
+	/** How an enemy bears on the return from open shots to the corner hold (ClassifyOpenShotThreat). */
+	enum class EOpenShotThreat : uint8
+	{
+		/** Farther than the rush distance (the older sight / out-of-sight rules decide). */
+		None,
+		/** Within the rush distance and engaged from out here (hittable), not covered by the corner, or on the move: he stays out. */
+		Pins,
+		/** Within the rush distance, waiting round the corner: covered by the corner stance, no shot from out here, standing still. */
+		WaitsRoundCorner,
+		/** The same right at his side (within CornerWaitReleaseCm): only the corner stance can fight it. */
+		WaitsAtHisSide
+	};
+
+	/** A rusher faster than this (2D, cm/s) counts as on the move (ClassifyOpenShotThreat). */
+	inline constexpr float RusherOnTheMoveCmPerSec = 100.f;
+
+	/** An enemy waiting round the corner within this distance (2D, cm) is "at his side" (ClassifyOpenShotThreat). */
+	inline constexpr float CornerWaitReleaseCm = 300.f;
+
+	/** Classifies one enemy for the open-shot return (bHittableFromOpen: a line of fire from where he stands now). */
+	CODEXTACTICS_API EOpenShotThreat ClassifyOpenShotThreat(float DistanceCm, float BreakCm, bool bCoveredByCorner, bool bHittableFromOpen,
+		bool bOnTheMove);
+
+	/**
+	 * Off the wall for open shots from a corner hold: do the enemies within the rush distance keep him in the open stance?
+	 * Yes when any of them pins him (one he engages from out here, one the corner does not cover, one on the move), or
+	 * when the rest wait round the corner farther off (the 2026-10-07 behaviour: one step off the wall per engagement).
+	 * No when none pins him and one waits right at his side round the corner - bug hunt 2026-10-18: a frostbitten
+	 * stopped 1.7 m off behind the corner (with two spitters 6.8 m off behind the wall) kept him out for 40 s without a
+	 * single shot; back at the corner he fights it from the lean-out.
+	 */
+	CODEXTACTICS_API bool OpenShotThreatsKeepHimOut(bool bAnyPins, bool bAnyWaitsRoundCorner, bool bAnyWaitsAtHisSide);
+
 	/**
 	 * Cover entry with a big turn: the actor turns its back to the wall at once and the mesh holds the old yaw while the
 	 * enter clip (whose first frame faces the wall) blends in. Fraction of that turn still held on the mesh: 1 - the clip's

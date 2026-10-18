@@ -102,6 +102,19 @@ namespace EnemyAIRules
 	/** Godot can_melee_attack: within the attack range and at most 1.2 m of height difference. */
 	CODEXTACTICS_API bool CanMelee(float DistanceCm, float HeightDifferenceCm, float AttackRangeCm);
 
+	/** Planar distance at which CanMelee passes for that height difference (sqrt(range^2 - height^2)), cm. */
+	CODEXTACTICS_API float MeleeReachPlanar(float AttackRangeCm, float HeightDifferenceCm);
+
+	/**
+	 * Acceptance radius of the close-in move to a melee target (UE-only, bug hunt 2026-10-18). Godot walks on until
+	 * can_melee_attack; UE's MoveToActor reach test adds both capsule radii to the acceptance, so AttackRange x 0.5
+	 * (90 + 40 + 40 = 170 cm for a hound) stopped hounds / frostbitten 1.65-1.75 m from the operative while the bite
+	 * needs <= 1.5 m planar (1.8 m to his centre 1 m up): they stood there, never bit, gave the target up ("no way").
+	 * Returns min(AttackRange x 0.5, planar reach - both radii - MarginCm floored to 5 cm), at least 0.
+	 */
+	CODEXTACTICS_API float MeleeApproachAcceptance(float AttackRangeCm, float HeightDifferenceCm, float SelfRadiusCm, float GoalRadiusCm,
+		float MarginCm = 15.f);
+
 	/** Godot fire fear steering: away from the fire, bent 0.5 towards the side of the target (when there is one). */
 	CODEXTACTICS_API FVector FleeDirection(const FVector& Enemy, const FVector& Fire, const FVector* Target);
 

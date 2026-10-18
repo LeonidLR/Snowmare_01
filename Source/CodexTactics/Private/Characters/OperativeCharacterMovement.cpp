@@ -16,6 +16,7 @@
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "HAL/IConsoleManager.h"
 #include "Interactables/TripwireActor.h"
 #include "Interactables/TripwireRules.h"
 #include "Level/CrawlGapActor.h"
@@ -33,6 +34,10 @@ namespace
 {
 	/** Speed below which an operative without a move order counts as standing still, cm/s. */
 	constexpr float MovingSpeedThreshold = 15.f;
+
+	/** Dev trace (bug hunt 2026-10-18, HordeIntroSmoke "the planned move runs"): who ends a running move order. */
+	TAutoConsoleVariable<int32> CVarOperativeMoveTrace(TEXT("Codex.Debug.MoveTrace"), 0,
+		TEXT("1: log (with the call stack) every StopOperative that drops a running move order, and every move completion"));
 }
 
 EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destination, bool bSprint)
@@ -261,6 +266,16 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 		}
 	}
 	bHasMoveOrder = Result == EPathFollowingRequestResult::RequestSuccessful;
+	if (CVarOperativeMoveTrace.GetValueOnGameThread() != 0)
+	{
+		const UPathFollowingComponent* TracedFollowing = AIController->GetPathFollowingComponent();
+		const FNavPathSharedPtr TracedPath = TracedFollowing ? TracedFollowing->GetPath() : nullptr;
+		const bool bValidPath = TracedPath.IsValid() && TracedPath->IsValid() && TracedPath->GetPathPoints().Num() > 0;
+		UE_LOG(LogCodexTactics, Display, TEXT("[MoveTrace] %s: path to (%.0f, %.0f): result %d, %d points, length %.0f, partial %d, ends %.0f cm from the goal"),
+			*DisplayName.ToString(), Destination.X, Destination.Y, static_cast<int32>(Result), bValidPath ? TracedPath->GetPathPoints().Num() : 0,
+			bValidPath ? TracedPath->GetLength() : 0.f, bValidPath && TracedPath->IsPartial() ? 1 : 0,
+			bValidPath ? FVector::Dist2D(TracedPath->GetEndLocation(), Destination) : -1.f);
+	}
 	return EOperativeOrderResult::Accepted;
 }
 
@@ -285,6 +300,12 @@ bool AOperativeCharacter::IsTrafficHeld() const
 
 void AOperativeCharacter::StopOperative()
 {
+	if (bHasMoveOrder && CVarOperativeMoveTrace.GetValueOnGameThread() != 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[MoveTrace] %s: StopOperative drops the move order to (%.0f, %.0f)"), *DisplayName.ToString(),
+			LastMoveDestination.X, LastMoveDestination.Y);
+		FDebug::DumpStackTraceToLog(ELogVerbosity::Display);
+	}
 	if (AController* OwnerController = GetController())
 	{
 		OwnerController->StopMovement();

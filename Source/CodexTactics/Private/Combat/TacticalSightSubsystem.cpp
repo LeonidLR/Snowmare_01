@@ -418,7 +418,11 @@ void UTacticalSightSubsystem::Update()
 		for (AOperativeCharacter* Operative : Operatives)
 		{
 			const float Distance = FVector::Dist(Operative->GetActorLocation(), Enemy->GetActorLocation());
-			bHeard |= FVector::Dist2D(Operative->GetActorLocation(), Enemy->GetActorLocation()) <= SightRules::SquadHearingCm;
+			const float Distance2D = static_cast<float>(FVector::Dist2D(Operative->GetActorLocation(), Enemy->GetActorLocation()));
+			bHeard |= Distance2D <= SightRules::SquadHearingCm;
+			// Bug hunt 2026-10-18: an enemy at arm's length is noticed without a line of sight (a frostbitten waiting 1.7 m off
+			// right behind the wall's corner stayed hidden from the corner hold, so it was never fired at).
+			bSeen |= SightRules::IsWithinTouchReveal(Distance2D);
 			if (!bSeen && Distance <= MaxSightCm && HasClearSight(EyePoint(*Operative), Profile))
 			{
 				bSeen = true;

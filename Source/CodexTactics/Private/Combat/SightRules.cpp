@@ -46,6 +46,11 @@ float SightRules::EnemyHearingRadius(EOperativeStance Stance)
 	return Stance == EOperativeStance::Prone ? ProneHearingCm : EnemyHearingCm;
 }
 
+bool SightRules::IsWithinTouchReveal(float DistanceCm)
+{
+	return DistanceCm <= SquadTouchRevealCm;
+}
+
 float SightRules::BlindFireHitChance(float BaseHitChance, float EnemyDistanceFromGhostCm)
 {
 	return EnemyDistanceFromGhostCm <= BlindFireHitRadiusCm ? FMath::Clamp(BaseHitChance * BlindFireAccuracyMultiplier, 0.f, 1.f) : 0.f;
