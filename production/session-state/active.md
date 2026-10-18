@@ -14,6 +14,12 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Idea parked 2026-10-18 (user likes it): WIND for hound scent
+Hounds smell only operatives UPWIND of them (the wind carries the scent toward the hound); approaching from downwind =
+not smelled. A per-level wind direction (level JSON; the lake already has wind zones), shown to the player (a wind
+arrow on the HUD / minimap, snow drift direction). Planned together with the stealth kill. Smell rules done first:
+walls block scent, smell = sniff alert (not instant detection), radius 12 -> 6 m (agents/smell).
+
 ## Queued 2026-10-18 (user decisions), order: bug fix (running) -> stealth lure -> minimap -> Demo 01 patrol fight
 - **Melee close-in ON — 2026-10-18 on agents/work** (user approval; `ai_tuning.json` `Codex.Enemy.MeleeCloseIn` 1; pack flanking = a real detour
   since 2026-10-18 (EnemyTacticsSmoke green)).
