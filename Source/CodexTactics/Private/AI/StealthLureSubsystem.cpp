@@ -244,6 +244,7 @@ int32 UStealthLureSubsystem::EmitNoise(const FVector& Location, EStealthLureKind
 	Spec.DurationSeconds = Params.InvestigateSeconds;
 	Spec.SweepRadiusCm = Params.InvestigateSweepRadiusCm;
 	Spec.ApproachSpeedFraction = Params.ApproachSpeedFraction;
+	Spec.ListenSeconds = Params.ListenSeconds;
 	// EVERY enemy that hears it comes (user correction 2026-10-18: a horde in range = all of them).
 	const TArray<AEnemyCharacter*> Listeners = FindListeners(Location, Kind);
 	for (AEnemyCharacter* Enemy : Listeners)

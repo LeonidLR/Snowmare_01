@@ -80,6 +80,24 @@ struct CODEXTACTICS_API FStealthLureParams
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stealth|Lure", meta = (ClampMin = "0"))
 	float ApproachSpeedFraction = 0.75f;
+
+	/**
+	 * Fix 2026-10-18 (user report: the enemies only turned on the spot): an enemy that heard the noise first stands and
+	 * listens this long, turned towards it, then walks there.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stealth|Lure", meta = (ClampMin = "0"))
+	float ListenSeconds = 0.75f;
+};
+
+/** How far an enemy's navmesh path to a lure noise gets (StealthLureRules::ChooseInvestigatePoint). */
+enum class ELureGoalPath : uint8
+{
+	/** No path was found (or the noise is not on the navmesh). */
+	None,
+	/** The path ends short of the noise: the closest reachable point (another side of a wall without a way round). */
+	Partial,
+	/** The noise point itself is reachable. */
+	Full
 };
 
 /** What the availability check needs to know (gathered by UStealthLureSubsystem). */
@@ -154,6 +172,22 @@ namespace StealthLureRules
 	 * Fraction <= 0 = TrapSearchSpeed (the patrol search pace).
 	 */
 	CODEXTACTICS_API float GetApproachSpeed(float PatrolWalkSpeed, float NormalSpeed, float Fraction, float TrapSearchSpeed);
+
+	/**
+	 * Where an enemy that heard a lure walks to (fix 2026-10-18: a whistle's noise is the whistler's feet, which may lie off the
+	 * enemy's navmesh or behind a wall without a way round, and the old move to the raw point failed and the enemy only turned
+	 * on the spot until its leg timed out): the noise projected onto the navmesh when a full path leads there, else the end of
+	 * the partial path (as close as it can get), else the projected point (the move tries, failures re-path), else the raw noise.
+	 */
+	CODEXTACTICS_API FVector ChooseInvestigatePoint(const FVector& Noise, bool bOnNavmesh, const FVector& OnNavmesh, ELureGoalPath Path, const FVector& PathEnd);
+
+	/** Arrival radius of the walk to a lure noise: at least LureArriveCm (the whistler's body may stand on the point). */
+	CODEXTACTICS_API float GetArriveRadius(float SearchArriveCm, bool bLureFirstLeg);
+
+	constexpr float LureArriveCm = 200.f;
+	/** Refused move requests to the noise before the goal is resolved again; before the enemy searches where it stands. */
+	constexpr int32 RepathAfterFailures = 2;
+	constexpr int32 GiveUpAfterFailures = 5;
 
 	/** Short label of Kind for the action bar ("WHISTLE" / "THROW"). */
 	CODEXTACTICS_API FText GetButtonName(EStealthLureKind Kind);

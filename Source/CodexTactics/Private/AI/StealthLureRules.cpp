@@ -82,6 +82,28 @@ float StealthLureRules::GetApproachSpeed(float PatrolWalkSpeed, float NormalSpee
 	return FMath::Max(FMath::Max(NormalSpeed, 0.f) * Fraction, Floor);
 }
 
+FVector StealthLureRules::ChooseInvestigatePoint(const FVector& Noise, bool bOnNavmesh, const FVector& OnNavmesh, ELureGoalPath Path, const FVector& PathEnd)
+{
+	if (!bOnNavmesh)
+	{
+		return Noise;
+	}
+	switch (Path)
+	{
+	case ELureGoalPath::Partial:
+		return PathEnd;
+	case ELureGoalPath::Full:
+	case ELureGoalPath::None:
+	default:
+		return OnNavmesh;
+	}
+}
+
+float StealthLureRules::GetArriveRadius(float SearchArriveCm, bool bLureFirstLeg)
+{
+	return bLureFirstLeg ? FMath::Max(SearchArriveCm, LureArriveCm) : SearchArriveCm;
+}
+
 FText StealthLureRules::GetButtonName(EStealthLureKind Kind)
 {
 	return Kind == EStealthLureKind::Whistle ? LOCTEXT("Whistle", "WHISTLE") : LOCTEXT("Throw", "THROW");

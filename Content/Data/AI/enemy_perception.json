@@ -18,7 +18,8 @@
     "throw_cooldown_seconds": 6,
     "investigate_seconds": 60,
     "investigate_sweep_radius_m": 4,
-    "approach_speed_fraction": 0.75
+    "approach_speed_fraction": 0.75,
+    "listen_seconds": 0.75
   },
   "archetypes": {
     "FROST_HOUND": {
