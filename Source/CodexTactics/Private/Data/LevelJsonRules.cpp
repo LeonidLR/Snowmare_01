@@ -160,6 +160,37 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 		Config.VehicleShells = FMath::Max(-1, FMath::RoundToInt(LevelJsonNumber(Vehicle, TEXT("shells"), -1.f)));
 	}
 
+	// UE-only (minimap 2026-10-18): the upper floors' walking heights and the mapped area.
+	if (const TSharedPtr<FJsonObject> Minimap = LevelJsonObject(Root, TEXT("minimap")))
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Floors = nullptr;
+		if (Minimap->TryGetArrayField(TEXT("floors_cm"), Floors))
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *Floors)
+			{
+				double Z = 0.0;
+				if (Value.IsValid() && Value->TryGetNumber(Z))
+				{
+					Config.MinimapFloorsCm.Add(static_cast<float>(Z));
+				}
+			}
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Bounds = nullptr;
+		if (Minimap->TryGetArrayField(TEXT("bounds_cm"), Bounds) && Bounds->Num() == 4)
+		{
+			double V[4] = {};
+			bool bNumbers = true;
+			for (int32 Index = 0; Index < 4; ++Index)
+			{
+				bNumbers &= (*Bounds)[Index].IsValid() && (*Bounds)[Index]->TryGetNumber(V[Index]);
+			}
+			if (bNumbers && V[2] > V[0] && V[3] > V[1])
+			{
+				Config.MinimapBoundsCm = FBox2D(FVector2D(V[0], V[1]), FVector2D(V[2], V[3]));
+			}
+		}
+	}
+
 	// UE-only (Demo 01 C10): demo game-mode flags.
 	if (const TSharedPtr<FJsonObject> Demo = LevelJsonObject(Root, TEXT("demo")))
 	{

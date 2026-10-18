@@ -80,6 +80,11 @@ void ACodexTacticsPlayerController::OnClick()
 	{
 		return; // the dialogue panel handles its own clicks
 	}
+	// Minimap (2026-10-18): a click on the corner map / its header / the full map belongs to the map (camera there).
+	if (FVector2D MapMouse; GetMousePosition(MapMouse.X, MapMouse.Y) && HandleMapClick(MapMouse, false))
+	{
+		return;
+	}
 	// A click skips the horde flyover (user decision 2026-10-11) and is not an order; before the trigger it is a normal click.
 	if (UHordeIntroSubsystem* HordeIntro = GetWorld()->GetSubsystem<UHordeIntroSubsystem>(); HordeIntro && HordeIntro->HandleSkipInput(false))
 	{

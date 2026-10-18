@@ -262,6 +262,14 @@ private:
 	TObjectPtr<UTutorialOverlayWidget> TutorialOverlay;
 
 	void DrawMessageFeed();
+	/**
+	 * Minimap (2026-10-18, docs/design/MINIMAP.md; defined in CodexTacticsHUDMinimap.cpp): the MAP | MESSAGES header of the
+	 * top-right panel, the corner map in map mode, the full-screen map (Tab) and the shared view drawing.
+	 */
+	void DrawMinimapHeader();
+	void DrawMinimapPanel();
+	void DrawFullMap();
+	void DrawMapView(class UMinimapSubsystem& Minimap, const struct FMinimapView& View, bool bFull);
 	/** Turn-based attack mode: the hovered cell's hit chance (Godot hit_chance_label). */
 	void DrawHitChanceLabel();
 	/** The box being dragged to select squad members (Godot selection_box_canvas). */

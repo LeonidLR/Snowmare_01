@@ -42,6 +42,10 @@ ATacticalCameraPawn* ACodexTacticsPlayerController::GetCameraPawn() const
 
 void ACodexTacticsPlayerController::OnMouseWheelUp()
 {
+	if (HandleMapWheel(-1.f))
+	{
+		return; // minimap zoom (2026-10-18)
+	}
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
 	{
 		TurnBased->RotateRelocation(+1); // Godot: the wheel rotates the barricade being relocated
@@ -61,6 +65,10 @@ void ACodexTacticsPlayerController::OnMouseWheelUp()
 
 void ACodexTacticsPlayerController::OnMouseWheelDown()
 {
+	if (HandleMapWheel(+1.f))
+	{
+		return;
+	}
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->IsRelocating())
 	{
 		TurnBased->RotateRelocation(-1);
@@ -120,6 +128,11 @@ void ACodexTacticsPlayerController::CameraRotateRight()
 
 void ACodexTacticsPlayerController::CameraDragRotateStart()
 {
+	// Minimap (2026-10-18): RMB on the map = a move order there (the normal ground-click path), never a camera drag.
+	if (FVector2D MapMouse; GetMousePosition(MapMouse.X, MapMouse.Y) && HandleMapClick(MapMouse, true))
+	{
+		return;
+	}
 	// Sprint 10: Shift + RMB assigns a defense line instead of the camera drag.
 	if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
 	{

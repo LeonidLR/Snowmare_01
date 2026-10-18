@@ -120,6 +120,16 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName CameraInteriorView;
 	/** A click on an EXIT arrow at a door of the building whose interior camera shows: walk out ("Order.ExitBuilding"; never locked). */
 	extern CODEXTACTICS_API const FName ExitBuilding;
+	/** Minimap (2026-10-18, docs/design/MINIMAP.md): F2 / the panel header - the top-right panel MAP <-> MESSAGES ("Map.Panel"). */
+	extern CODEXTACTICS_API const FName MapPanel;
+	/** Tab (outside turn-based combat) / F3: the full-screen map opens / closes ("Map.Full"). */
+	extern CODEXTACTICS_API const FName MapFull;
+	/** LMB on the map: the camera moves there ("Map.Camera"). */
+	extern CODEXTACTICS_API const FName MapCamera;
+	/** RMB on the map: the selection walks there (registry row only - reported as Order.Move by the ground-click path). */
+	extern CODEXTACTICS_API const FName MapMove;
+	/** The wheel over the map zooms it ("Map.Zoom"). */
+	extern CODEXTACTICS_API const FName MapZoom;
 
 	// --- Orders and selection -----------------------------------------------------------------------------------
 	/** LMB on the ground: the leader (or the selected group) walks there (planned in the tactical pause). */

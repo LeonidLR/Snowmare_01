@@ -77,6 +77,7 @@
 #include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Vehicles/VehicleTurretComponent.h"
+#include "UI/MinimapSubsystem.h"
 
 namespace
 {
@@ -436,12 +437,27 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawHitChanceLabel();
 	DrawSelectionBox();
 	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
-	DrawMessageFeed();
+	// Minimap (2026-10-18): the top-right panel shows the feed or the map (F2 / its header), Tab the full-screen map.
+	UMinimapSubsystem* Minimap = GetWorld()->GetSubsystem<UMinimapSubsystem>();
+	if (Minimap)
+	{
+		Minimap->UpdateLayout(FVector2D(Canvas->SizeX, Canvas->SizeY), Canvas->SizeX * FeedWidthFraction);
+	}
+	if (!Minimap || Minimap->GetPanelMode() == EMinimapPanelMode::Messages)
+	{
+		DrawMessageFeed();
+	}
+	else
+	{
+		DrawMinimapPanel();
+	}
+	DrawMinimapHeader();
 	const float ObjectiveBottom = DrawObjectiveBanner();
 	if (ShouldDrawStatus())
 	{
 		DrawSquadPanel(ObjectiveBottom + Margin * 0.5f);
 	}
+	DrawFullMap();
 	UpdateFrostVignette();
 }
 
@@ -1171,11 +1187,14 @@ void ACodexTacticsHUD::DrawMessageFeed()
 	}
 
 	const float Height = Lines.Num() * LineHeight + Shown * LinePadding * 2.f + Margin;
-	DrawRect(PanelColor, Left, Margin, Width, Height);
-	float Y = Margin + Margin * 0.5f;
+	// Below the panel's MAP | MESSAGES header (minimap, 2026-10-18).
+	const UMinimapSubsystem* Minimap = GetWorld()->GetSubsystem<UMinimapSubsystem>();
+	const float Top = Minimap && Minimap->GetHeaderRect().bIsValid ? Minimap->GetHeaderRect().Max.Y + 2.f : Margin;
+	DrawRect(PanelColor, Left, Top, Width, Height);
+	float Y = Top + Margin * 0.5f;
 	for (const FFeedLine& Line : Lines)
 	{
-		if (Line.Color == SpeakerColor && Y > Margin * 1.5f)
+		if (Line.Color == SpeakerColor && Y > Top + Margin * 0.5f)
 		{
 			Y += LinePadding * 2.f;
 		}

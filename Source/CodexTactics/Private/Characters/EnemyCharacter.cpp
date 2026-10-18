@@ -8,6 +8,7 @@
 #include "AI/WorldAIPauseSubsystem.h"
 #include "Data/EnemyPerception.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
+#include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "Interactables/VaultNavigation.h"
 #include "Characters/EnemyTacticsSubsystem.h"
@@ -1537,7 +1538,10 @@ void AEnemyCharacter::RestorePatrolSnapshot(APatrolRouteActor* Route, AEnemyChar
 		ActiveSearchSpec.bScent = Snapshot.bScentSearch;
 	}
 	SearchOrigin = Snapshot.SearchOrigin;
+	SearchNoise = Snapshot.SearchOrigin;
 	SearchGoal = Snapshot.SearchOrigin;
+	SearchListenLeft = 0.f;
+	SearchMoveFailures = 0;
 	SearchElapsed = Snapshot.SearchElapsed;
 	SearchLegTime = 0.f;
 	SearchLookLeft = 0.f;
@@ -2076,8 +2080,12 @@ void AEnemyCharacter::StartPatrolSearchWith(const FVector& Location, const FPatr
 	const bool bWasSearching = bSearching;
 	bSearching = true;
 	ActiveSearchSpec = Spec;
-	SearchOrigin = Location;
-	SearchGoal = Location;
+	SearchNoise = Location;
+	// The walk ends where this enemy can get to (fix 2026-10-18: the whistler's own spot may be off its navmesh / unreachable).
+	SearchOrigin = Spec.bLure ? ResolveSearchPoint(Location) : Location;
+	SearchGoal = SearchOrigin;
+	SearchListenLeft = Spec.bLure ? FMath::Max(Spec.ListenSeconds, 0.f) : 0.f;
+	SearchMoveFailures = 0;
 	SearchElapsed = 0.f;
 	SearchLegTime = 0.f;
 	SearchLookLeft = 0.f;
@@ -2147,10 +2155,33 @@ void AEnemyCharacter::TickPatrolSearch(float DeltaTime)
 		}
 		return;
 	}
+	const bool bLureFirstLeg = ActiveSearchSpec.bLure && !bSearchReachedOrigin;
+	if (bLureFirstLeg && SearchListenLeft > 0.f)
+	{
+		// A lure: it stops, turns towards the noise and listens, then walks there.
+		SearchListenLeft -= DeltaTime;
+		if (AIC && GetVelocity().Size2D() > 1.f)
+		{
+			AIC->StopMovement();
+		}
+		const FVector ToNoise = SearchNoise - GetActorLocation();
+		if (!ToNoise.IsNearlyZero(1.f))
+		{
+			FaceYaw(ToNoise.Rotation().Yaw, DeltaTime, 6.f);
+		}
+		return;
+	}
 	const FVector Goal = bSearchReachedOrigin ? SearchGoal : SearchOrigin;
 	SearchLegTime += DeltaTime;
-	if (FVector::Dist2D(GetActorLocation(), Goal) <= Search.ArriveCm || SearchLegTime > Search.LegTimeoutSeconds)
+	if (FVector::Dist2D(GetActorLocation(), Goal) <= StealthLureRules::GetArriveRadius(Search.ArriveCm, bLureFirstLeg)
+		|| SearchLegTime > Search.LegTimeoutSeconds || SearchMoveFailures >= StealthLureRules::GiveUpAfterFailures)
 	{
+		if (SearchMoveFailures >= StealthLureRules::GiveUpAfterFailures || SearchLegTime > Search.LegTimeoutSeconds)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] %s cannot get to %s (%d refused moves, %.1f s): searches from %.0f m off"), *GetName(),
+				*Goal.ToCompactString(), SearchMoveFailures, SearchLegTime, FVector::Dist2D(GetActorLocation(), Goal) / 100.f);
+		}
+		SearchMoveFailures = 0;
 		if (AIC)
 		{
 			AIC->StopMovement();
@@ -2168,8 +2199,27 @@ void AEnemyCharacter::TickPatrolSearch(float DeltaTime)
 		bSearchMoving = true;
 		const float SearchSpeed = PatrolRouteRules::GetSearchSpeed(PatrolWalkSpeed, Search.SpeedMultiplier, BaseWalkSpeed);
 		// A lure: the first leg (to the noise) at the enemy's own pace - hounds come fast, Brutes slowly.
-		IssuePatrolMove(Goal, ActiveSearchSpec.bLure && !bSearchReachedOrigin
+		const bool bIssued = IssuePatrolMove(Goal, bLureFirstLeg
 			? StealthLureRules::GetApproachSpeed(PatrolWalkSpeed, BaseWalkSpeed, ActiveSearchSpec.ApproachSpeedFraction, SearchSpeed) : SearchSpeed);
+		SearchMoveFailures = bIssued ? 0 : SearchMoveFailures + 1;
+		if (!bIssued)
+		{
+			bSearchMoving = false; // ask again next tick (no 1 s wait for a request that was never accepted)
+			if (SearchMoveFailures == StealthLureRules::RepathAfterFailures)
+			{
+				// Re-path: the goal resolved again (the navmesh may have changed), or a reachable point next to it.
+				FVector Repath = bLureFirstLeg ? ResolveSearchPoint(SearchNoise) : Goal;
+				if (const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+				{
+					FNavLocation Near;
+					if (Nav->GetRandomReachablePointInRadius(Repath, 300.f, Near))
+					{
+						Repath = Near.Location;
+					}
+				}
+				(bLureFirstLeg ? SearchOrigin : SearchGoal) = Repath;
+			}
+		}
 	}
 }
 
@@ -2359,14 +2409,46 @@ void AEnemyCharacter::TickPatrolRoute(float DeltaTime)
 	}
 }
 
-void AEnemyCharacter::IssuePatrolMove(const FVector& Goal, float Speed)
+bool AEnemyCharacter::IssuePatrolMove(const FVector& Goal, float Speed)
 {
 	GetCharacterMovement()->MaxWalkSpeed = Speed;
 	bPatrolMoveIssued = true;
 	if (AAIController* AIC = Cast<AAIController>(GetController()))
 	{
-		AIC->MoveToLocation(Goal, 50.f, false, true); // own gating (first issue, 1 s stuck, escort goal moved): never throttled
+		// own gating (first issue, 1 s stuck, escort goal moved): never throttled
+		return AIC->MoveToLocation(Goal, 50.f, false, true) != EPathFollowingRequestResult::Failed;
 	}
+	return false;
+}
+
+FVector AEnemyCharacter::ResolveSearchPoint(const FVector& Noise) const
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	if (!Nav)
+	{
+		return Noise;
+	}
+	const ANavigationData* NavData = Nav->GetNavDataForProps(GetNavAgentPropertiesRef(), GetActorLocation());
+	FNavLocation OnNav;
+	const bool bOnNav = Nav->ProjectPointToNavigation(Noise, OnNav, FVector(150.f, 150.f, 300.f), NavData)
+		|| Nav->ProjectPointToNavigation(Noise, OnNav, FVector(400.f, 400.f, 600.f), NavData);
+	ELureGoalPath PathState = ELureGoalPath::None;
+	FVector PathEnd = bOnNav ? OnNav.Location : Noise;
+	if (bOnNav)
+	{
+		const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, GetActorLocation(), OnNav.Location, const_cast<AEnemyCharacter*>(this));
+		if (Path && Path->IsValid() && Path->PathPoints.Num() > 0)
+		{
+			PathState = Path->IsPartial() ? ELureGoalPath::Partial : ELureGoalPath::Full;
+			PathEnd = Path->PathPoints.Last();
+		}
+	}
+	const FVector Goal = StealthLureRules::ChooseInvestigatePoint(Noise, bOnNav, bOnNav ? OnNav.Location : Noise, PathState, PathEnd);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] %s walks to %s for the noise at %s (%s, %.0f cm off it)"), *GetName(), *Goal.ToCompactString(),
+		*Noise.ToCompactString(), !bOnNav ? TEXT("off the navmesh") : PathState == ELureGoalPath::Full ? TEXT("reachable")
+		: PathState == ELureGoalPath::Partial ? TEXT("partial path: as close as it gets") : TEXT("no path yet"), FVector::Dist2D(Goal, Noise));
+	return Goal;
 }
 
 void AEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertLocation)

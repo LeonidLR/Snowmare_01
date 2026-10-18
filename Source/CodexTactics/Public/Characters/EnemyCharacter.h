@@ -67,6 +67,8 @@ struct CODEXTACTICS_API FPatrolSearchSpec
 	float ApproachSpeedFraction = 0.f;
 	/** A hound investigating the point where it lost a scent (ScentRules, 2026-10-18; AEnemyCharacter::IsInvestigatingScent). */
 	bool bScent = false;
+	/** A lure: stand and listen (turned towards the noise) this long before walking there, s (FStealthLureParams::ListenSeconds). */
+	float ListenSeconds = 0.f;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedDynamic, AEnemyCharacter*, Enemy);
@@ -535,7 +537,13 @@ protected:
 	/** Keeps the 200-350 cm tether to Leader. */
 	void TickEscort(float DeltaTime, const AEnemyCharacter& Leader);
 	/** Moves towards a patrol waypoint / tether point at PatrolWalkSpeed (the marksman walks his own way). */
-	virtual void IssuePatrolMove(const FVector& Goal, float Speed);
+	/** Walks to Goal at Speed (patrol / search / escort moves); false when the move request was refused (no path). */
+	virtual bool IssuePatrolMove(const FVector& Goal, float Speed);
+	/**
+	 * Where a search / lure walk to Noise ends for this enemy (StealthLureRules::ChooseInvestigatePoint): Noise on this agent's
+	 * navmesh when reachable, else the closest reachable point of its path, else the projected / raw point.
+	 */
+	FVector ResolveSearchPoint(const FVector& Noise) const;
 	/**
 	 * The closest living operative it sees now (PerceptionRules::CanSee with the Sprint 08 eye -> profile trace, so a
 	 * prone operative behind 60 cm cover stays hidden); OutDistance / OutRange: distance and the stance sight range.
@@ -577,6 +585,12 @@ protected:
 	bool bSearching = false;
 	FVector SearchOrigin = FVector::ZeroVector;
 	FVector SearchGoal = FVector::ZeroVector;
+	/** The raw noise / blast point (SearchOrigin = where the walk there ends on the navmesh). */
+	FVector SearchNoise = FVector::ZeroVector;
+	/** Lure: listening left before the walk to the noise, s. */
+	float SearchListenLeft = 0.f;
+	/** Refused move requests on the current leg (StealthLureRules::RepathAfterFailures / GiveUpAfterFailures). */
+	int32 SearchMoveFailures = 0;
 	float SearchElapsed = 0.f;
 	float SearchLegTime = 0.f;
 	float SearchLookLeft = 0.f;

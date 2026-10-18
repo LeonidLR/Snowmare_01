@@ -235,12 +235,13 @@ void AMarksmanEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector
 	ULevelEncounterSubsystem::NotifyHostileContactIn(GetWorld(), EAmbushTrigger::PatrolDetection, this);
 }
 
-void AMarksmanEnemyCharacter::IssuePatrolMove(const FVector& Goal, float Speed)
+bool AMarksmanEnemyCharacter::IssuePatrolMove(const FVector& Goal, float Speed)
 {
 	bPatrolMoveIssued = true;
 	ResetAIMoveThrottle(); // the patrol / escort gates its own re-issues (first walk, 1 s stuck): never throttled
 	ExecuteMoveTo(Goal, false);
 	GetCharacterMovement()->MaxWalkSpeed = Speed;
+	return !IsTurnBasedHeld();
 }
 
 bool AMarksmanEnemyCharacter::IsFightOn() const

@@ -194,10 +194,30 @@ bool FStealthLureDataFileTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("investigate 60 s"), L.InvestigateSeconds, 60.f, 0.01f);
 	TestEqual(TEXT("sweep 4 m"), L.InvestigateSweepRadiusCm, 400.f, 0.01f);
 	TestEqual(TEXT("approach x0.75"), L.ApproachSpeedFraction, 0.75f, 0.001f);
+	TestEqual(TEXT("listen 0.75 s before walking to the noise"), L.ListenSeconds, 0.75f, 0.001f);
 	// A file without the section keeps the defaults (older data / a level override).
 	TestTrue(TEXT("a file without \"lure\" applies"), EnemyPerception::ApplyJson(TEXT("{ \"search\": { \"duration_seconds\": 30 } }")));
 	TestEqual(TEXT("no section: default whistle radius"), EnemyPerception::GetLure().WhistleRadiusCm, FStealthLureParams().WhistleRadiusCm);
 	EnemyPerception::ResetToDefaults();
+	return true;
+}
+
+// Fix 2026-10-18 (user report: the whistle only made them turn on the spot): the walk to a lure ends where the enemy can get to.
+STEALTH_LURE_TEST(FStealthLureInvestigatePointTest, "InvestigatePoint")
+bool FStealthLureInvestigatePointTest::RunTest(const FString& Parameters)
+{
+	using namespace StealthLureRules;
+	const FVector Noise(1000.f, 500.f, 2.f);          // the whistler's feet
+	const FVector OnNav(1010.f, 505.f, 12.f);         // projected onto the navmesh
+	const FVector PartialEnd(600.f, 480.f, 10.f);     // the closest reachable point (behind a wall without a way round)
+	TestEqual(TEXT("reachable: the noise on the navmesh"), ChooseInvestigatePoint(Noise, true, OnNav, ELureGoalPath::Full, OnNav), OnNav);
+	TestEqual(TEXT("partial path: as close as it gets (not the unreachable point)"), ChooseInvestigatePoint(Noise, true, OnNav, ELureGoalPath::Partial, PartialEnd), PartialEnd);
+	TestEqual(TEXT("no path yet: the navmesh point (the move tries, refusals re-path)"), ChooseInvestigatePoint(Noise, true, OnNav, ELureGoalPath::None, OnNav), OnNav);
+	TestEqual(TEXT("off the navmesh: the raw noise"), ChooseInvestigatePoint(Noise, false, OnNav, ELureGoalPath::Full, PartialEnd), Noise);
+	TestEqual(TEXT("lure walk arrives within 2 m (the whistler may stand on the point)"), GetArriveRadius(150.f, true), 200.f, 0.01f);
+	TestEqual(TEXT("a wider search arrival stays"), GetArriveRadius(250.f, true), 250.f, 0.01f);
+	TestEqual(TEXT("sweep legs keep the search arrival"), GetArriveRadius(150.f, false), 150.f, 0.01f);
+	TestTrue(TEXT("re-path before giving up"), RepathAfterFailures > 0 && RepathAfterFailures < GiveUpAfterFailures);
 	return true;
 }
 

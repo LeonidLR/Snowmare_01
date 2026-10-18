@@ -162,6 +162,7 @@ FStealthLureParams EnemyPerception::LureFromJson(const FJsonObject& Json, const 
 	ReadNumber(Json, TEXT("investigate_seconds"), Out.InvestigateSeconds);
 	ReadMeters(Json, TEXT("investigate_sweep_radius_m"), Out.InvestigateSweepRadiusCm);
 	ReadNumber(Json, TEXT("approach_speed_fraction"), Out.ApproachSpeedFraction);
+	ReadNumber(Json, TEXT("listen_seconds"), Out.ListenSeconds);
 	return Out;
 }
 

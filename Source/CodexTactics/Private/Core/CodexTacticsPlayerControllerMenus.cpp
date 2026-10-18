@@ -137,7 +137,10 @@ void ACodexTacticsPlayerController::TabPressed()
 	{
 		TurnBased->EndCurrentUnitTurn();
 		ControllerCommands::Report(this, PlayerCommands::NextUnit);
+		return;
 	}
+	// Minimap (2026-10-18): outside turn-based combat Tab opens / closes the full-screen map (F3 works in every mode).
+	FullMapKey();
 }
 
 void ACodexTacticsPlayerController::ControlsKey()
@@ -182,6 +185,11 @@ void ACodexTacticsPlayerController::DialogueSkip()
 	if (Hud && Hud->IsPauseMenuOpen())
 	{
 		Hud->HandleEscape();
+		return;
+	}
+	// Minimap (2026-10-18): Esc closes the full-screen map first.
+	if (CloseFullMap())
+	{
 		return;
 	}
 	// Sudden horde start (user decision 2026-10-11): Esc skips the camera flyover (the free tactical pause stays); before

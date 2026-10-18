@@ -33,6 +33,8 @@ walls block scent, smell = sniff alert (not instant detection), radius 12 -> 6 m
   hearing radius comes (user correction 2026-10-18: e.g. a hound + a marksman together both come; a horde in range =
   all of them come, so luring a horde is pointless). Hounds fast + smell, Brute slow. UI: action-bar
   buttons, hearing circle while aiming, «?» over enemies who heard.
+- **Minimap — DONE 2026-10-18 on agents/work** (`docs/design/MINIMAP.md`, `MinimapSmoke`; F2 panel switch, Tab / F3 full map; to merge after the
+  user's look; Gemini request #24 for the look / capture cost). Original decision:
 - **Minimap** (user decisions 2026-10-18): a RECTANGLE in the top-right corner, in the same panel as the message feed —
   the player switches that panel between MINIMAP and MESSAGES. ISOMETRIC view at roughly the level's starting camera
   angle (very important; not a top-down map); it stays at that starting angle when the player rotates the camera (user

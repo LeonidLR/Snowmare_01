@@ -8,6 +8,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/RecruitSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
+#include "UI/MinimapSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -972,6 +973,11 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	{
 		WorldState->SetObjectField(TEXT("stealth_lure"), Lure->CaptureSave());
 	}
+	// Minimap (2026-10-18): the explored fog of war per floor + the panel choice.
+	if (const UMinimapSubsystem* Minimap = World->GetSubsystem<UMinimapSubsystem>())
+	{
+		WorldState->SetObjectField(TEXT("minimap"), Minimap->CaptureSave());
+	}
 
 	const FString Stage = GetCurrentStageName();
 	TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -1358,6 +1364,15 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 		else
 		{
 			Lure->RestoreSave(FJsonObject());
+		}
+	}
+	// Minimap: the explored fog (older saves: what this session explored stays).
+	if (UMinimapSubsystem* Minimap = World->GetSubsystem<UMinimapSubsystem>())
+	{
+		const TSharedPtr<FJsonObject>* MinimapState = nullptr;
+		if ((*WorldState)->TryGetObjectField(TEXT("minimap"), MinimapState) && MinimapState && MinimapState->IsValid())
+		{
+			Minimap->RestoreSave(**MinimapState);
 		}
 	}
 	// Sprint 13: piles on the ground (older saves have none: the piles of the session are cleared either way).
