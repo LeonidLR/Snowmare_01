@@ -66,7 +66,8 @@ Blueprint can notice the move.
 | `CodexTacticsPlayerControllerMenus.cpp` | `QuickSaveKey`, `QuickLoadKey`, dialogue keys (`IsDialogueOpen`, `DialogueNext`, `HasDialogueForKey`, `ApplyDialogueKey`, `EnterPressed` / `EnterReleased`, `DialogueSkip`), `ProfilePressed`, `TabPressed`, `ControlsKey`, `InventoryKey`, `VisionConesKey`, `RestartMission` |
 | `CodexTacticsPlayerControllerCamera.cpp` | `InteriorViewKey`, `GetCameraPawn`, mouse wheel, rotate keys, RMB drag rotate, MMB drag pan |
 | `CodexTacticsPlayerControllerCover.cpp` | cover ghost (`HasCoverPreview`, `FindCoverSlotForHit`, `TryHandleCoverClick`, `ShowCoverPreview`, `HideCoverPreview`, `ConfirmCoverPreview`), corner peek (`FindCornerPeekForHit`, `IsCornerPeekPreviewShown`, `UpdateCornerPeekHover`), `ToggleCoverFireModeKey` |
-| `CodexTacticsPlayerControllerInternal.h` | `ControllerCommands::Report` / `ForStance` / `ForDeployable` (inline), `extern OrderLock::CVarRealTimeOrders` |
+| `CodexTacticsPlayerControllerMap.cpp` | (2026-10-18, a new area) the minimap: `MapPanelKey` (F2), `FullMapKey` (Tab outside turn-based / F3), `CloseFullMap` (Esc), `IsCursorOverMinimap`, `HandleMapWheel`, `HandleMapClick` (LMB camera / RMB move via `HandleWorldHit`) - `docs/design/MINIMAP.md` |
+| `CodexTacticsPlayerControllerInternal.h` | / `ForStance` / `ForDeployable` (inline), `extern OrderLock::CVarRealTimeOrders` |
 
 Where to put new code: the file of its input area; a helper two units need goes into the internal header (`inline`), a
 helper one unit needs into a prefixed named namespace or `static` function of that unit. A new input area gets a new

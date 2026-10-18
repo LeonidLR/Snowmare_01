@@ -194,6 +194,27 @@ public:
 	/** Godot Alt + Z / C / V: the whole squad changes stance (prone refused while anyone moves). */
 	void SetEntireSquadStance(EOperativeStance Stance);
 
+	// --- Minimap (user decisions 2026-10-18, docs/design/MINIMAP.md; CodexTacticsPlayerControllerMap.cpp) ---
+
+	/** F2 / a click on the panel header: the top-right panel switches MAP <-> MESSAGES (Map.Panel). */
+	void MapPanelKey();
+	/** Tab outside turn-based combat / F3 always: the full-screen map opens / closes (Map.Full). */
+	void FullMapKey();
+	/** Tab: the full map, in turn-based combat the next operative (as before). Public for the smokes. */
+	void TabKey() { TabPressed(); }
+	/**
+	 * A click at Screen (viewport pixels) on the minimap / the full map: the header switches the panel, LMB moves the camera
+	 * there (Map.Camera), RMB orders a move there through HandleWorldHit (every rule of a ground click applies: tutorial locks,
+	 * confinement, the combat dispatch, the turn-based grid). False when Screen is not over the map (the world takes it).
+	 */
+	bool HandleMapClick(const FVector2D& Screen, bool bRightButton);
+	/** The wheel over the map zooms it (Map.Zoom); false when the cursor is not over it. */
+	bool HandleMapWheel(float Notches);
+	/** The mouse cursor is over the corner map / its header / the open full map. */
+	bool IsCursorOverMinimap() const;
+	/** Esc: closes the full map; true when it was open. */
+	bool CloseFullMap();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

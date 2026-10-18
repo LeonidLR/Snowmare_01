@@ -984,8 +984,10 @@ bool FTutorialProgressiveDemoTest::RunTest(const FString&)
 	// Always allowed (user request 2026-10-13): camera, move / sprint / walk-up, selection, dialogue, system.
 	// Rev 5e (user decision 2026-10-14): sprint is locked until the heat pack lesson's sprint card (A1_sprint).
 	// Rev 5g (user request 2026-10-14): leaving a building by its EXIT arrow is never locked either (Camera.InteriorView is a camera id).
+	// Minimap (2026-10-18): the map is a camera-like aid (panel, full map, camera jump, zoom), never locked; its RMB order is an
+	// Order.Move through the normal ground-click path.
 	const TArray<FString> AlwaysFree = { TEXT("Camera."), TEXT("Order.Move"), TEXT("Order.Interact"), TEXT("Order.ExitBuilding"), TEXT("Select."),
-		TEXT("Dialogue."), TEXT("System.") };
+		TEXT("Dialogue."), TEXT("System."), TEXT("Map.") };
 	auto IsAlwaysFree = [&AlwaysFree](FName Id)
 	{
 		return AlwaysFree.ContainsByPredicate([Id](const FString& Prefix) { return Id.ToString().StartsWith(Prefix); });

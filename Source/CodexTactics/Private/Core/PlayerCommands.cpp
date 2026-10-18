@@ -13,6 +13,11 @@ namespace PlayerCommands
 	const FName CameraZoom(TEXT("Camera.Zoom"));
 	const FName CameraInteriorView(TEXT("Camera.InteriorView"));
 	const FName ExitBuilding(TEXT("Order.ExitBuilding"));
+	const FName MapPanel(TEXT("Map.Panel"));
+	const FName MapFull(TEXT("Map.Full"));
+	const FName MapCamera(TEXT("Map.Camera"));
+	const FName MapMove(TEXT("Map.Move"));
+	const FName MapZoom(TEXT("Map.Zoom"));
 
 	const FName Move(TEXT("Order.Move"));
 	const FName Sprint(TEXT("Order.Sprint"));
@@ -147,6 +152,11 @@ namespace PlayerCommands
 			{ CameraRotateMouse, TEXT("RMB drag"), TEXT("Movement & camera"), TEXT("Turn the camera freely with the mouse") },
 			{ CameraZoom, TEXT("Wheel"), TEXT("Movement & camera"), TEXT("Zoom in / out") },
 			{ CameraInteriorView, TEXT("M"), TEXT("Movement & camera"), TEXT("Inside a building: switch between the interior camera and the outside view") },
+			{ MapPanel, TEXT("F2"), TEXT("Movement & camera"), TEXT("Top-right panel: switch between the minimap and the messages (or click its header)") },
+			{ MapFull, TEXT("Tab"), TEXT("Movement & camera"), TEXT("Full-screen map (in turn-based combat: F3 - Tab is the next operative there; Esc closes it)") },
+			{ MapCamera, TEXT("LMB on map"), TEXT("Movement & camera"), TEXT("Move the camera to that spot of the map") },
+			{ MapMove, TEXT("RMB on map"), TEXT("Movement & camera"), TEXT("Send the selection to that spot of the map") },
+			{ MapZoom, TEXT("Wheel on map"), TEXT("Movement & camera"), TEXT("Zoom the map in / out") },
 			{ Move, TEXT("LMB"), TEXT("Movement & camera"), TEXT("Move to the clicked spot") },
 			{ ExitBuilding, TEXT("LMB on EXIT"), TEXT("Movement & camera"), TEXT("Inside a building: click an EXIT arrow at a door - the squad (Solo: the selected operative) walks out") },
 			{ Sprint, TEXT("Double-click"), TEXT("Movement & camera"), TEXT("Sprint to the clicked spot") },

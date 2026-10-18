@@ -9,6 +9,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/App.h"
+#include "UI/MinimapSubsystem.h"
 
 namespace
 {
@@ -147,6 +148,7 @@ void ATacticalCameraPawn::SnapToFollowTarget()
 	}
 	PanOffset = FVector::ZeroVector;
 	TargetPanOffset = FVector::ZeroVector;
+	bLookAtPoint = false;
 	bInitialized = false;
 }
 
@@ -172,6 +174,7 @@ void ATacticalCameraPawn::SetCinematicLock(bool bLocked)
 	if (bLocked && !bCinematicLock)
 	{
 		PreCinematicYaw = TargetYaw;
+		bLookAtPoint = false;
 	}
 	bCinematicLock = bLocked;
 	if (bLocked)
@@ -257,8 +260,21 @@ void ATacticalCameraPawn::SetDragPanning(bool bActive)
 	}
 }
 
+void ATacticalCameraPawn::LookAtPoint(const FVector& WorldPoint)
+{
+	if (bCinematicLock)
+	{
+		return;
+	}
+	bLookAtPoint = true;
+	LookAtTarget = WorldPoint;
+	bPanReturning = false;
+	bDragPanning = false;
+}
+
 void ATacticalCameraPawn::HandleLeaderChanged(AOperativeCharacter* NewLeader)
 {
+	bLookAtPoint = false;
 	SetFollowTarget(NewLeader);
 	// User report 2026-10-05: picking an operative (1-4, a click) centres the camera on him — a WASD / drag pan kept
 	// in the fight view used to leave him off screen.
@@ -303,6 +319,7 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 
 	if (bDragPanning && PC)
 	{
+		bLookAtPoint = false;
 		PlayerCommands::ReportHold(this, PlayerCommands::CameraPanDrag, RealDelta);
 		const FVector2D Delta = ConsumeCursorDelta();
 		const FRotator Yaw(0.f, CurrentYaw, 0.f);
@@ -348,9 +365,26 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 		{
 			PC->GetViewportSize(SizeX, SizeY);
 			EdgeInput = TacticalCameraRules::ComputeEdgeScroll(FVector2D(MouseX, MouseY), FVector2D(SizeX, SizeY), Config.EdgeScrollMargin);
+			// Minimap (2026-10-18): the corner map / the full map are UI - the cursor over them never scrolls the view.
+			if (const UMinimapSubsystem* Minimap = UMinimapSubsystem::Get(this);
+				Minimap && (Minimap->IsFullMapOpen() || Minimap->IsScreenPointOverMap(FVector2D(MouseX, MouseY))))
+			{
+				EdgeInput = FVector2D::ZeroVector;
+			}
 		}
 	}
 	Input = KeyInput + EdgeInput;
+	if (!Input.IsNearlyZero())
+	{
+		bLookAtPoint = false; // the player pans on from the map spot
+	}
+	if (bLookAtPoint)
+	{
+		// Minimap LMB: the view holds the map spot (also while the leader walks).
+		TargetPanOffset = LookAtTarget - Focus;
+		PanOffset = FMath::Lerp(PanOffset, TargetPanOffset, PanAlpha);
+		return;
+	}
 
 	const bool bCombat = IsCombatView();
 	// Demo 01 command choke point: the start of a keyboard / edge pan is reported once per pan (not every frame), then
@@ -428,6 +462,7 @@ void ATacticalCameraPawn::BeginSmoothFocus(float Duration, float TargetDist)
 	TargetPanOffset = FVector::ZeroVector;
 	bDragPanning = false;
 	bPanReturning = false;
+	bLookAtPoint = false;
 }
 
 void ATacticalCameraPawn::SmoothFocusOnTarget(AActor* Target, float Duration, float TargetDist)

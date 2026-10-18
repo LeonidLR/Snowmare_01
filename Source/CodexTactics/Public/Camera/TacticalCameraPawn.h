@@ -49,6 +49,16 @@ public:
 	/** Middle-mouse drag pan on/off; releasing in exploration returns the view to the leader. */
 	void SetDragPanning(bool bActive);
 
+	/**
+	 * Minimap LMB (2026-10-18, docs/design/MINIMAP.md): the view glides to centre WorldPoint and stays there (no drift back to
+	 * the leader, the pan limit lifted) until the next keyboard / edge / drag pan, a leader change or a cinematic.
+	 */
+	void LookAtPoint(const FVector& WorldPoint);
+	bool IsLookingAtPoint() const { return bLookAtPoint; }
+	FVector GetLookAtPoint() const { return LookAtTarget; }
+	/** Where the view is centred now (focus + pan): the point the camera looks at. */
+	FVector GetViewCentre() const { return Focus + PanOffset; }
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Camera")
 	FTacticalCameraConfig Config;
 
@@ -173,6 +183,8 @@ private:
 	FVector TargetPanOffset = FVector::ZeroVector;
 	bool bDragRotating = false;
 	bool bDragPanning = false;
+	bool bLookAtPoint = false;
+	FVector LookAtTarget = FVector::ZeroVector;
 	/** WASD pan input was active last frame (Camera.Pan.Keys is reported once per pan, then as hold ticks). */
 	bool bKeyPanning = false;
 	/** The cursor sat in the screen-edge band last frame (Camera.Pan.Edge, same scheme). */

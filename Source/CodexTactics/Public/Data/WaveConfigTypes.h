@@ -279,6 +279,15 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	int32 VehicleShells = -1;
+	/**
+	 * "minimap": {"floors_cm": [z, ...]} (UE-only, docs/design/MINIMAP.md): world Z (cm) of the walking surface of every
+	 * UPPER floor (2nd, 3rd, ...); empty = auto-detected from stacked walkable surfaces at level start.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	TArray<float> MinimapFloorsCm;
+	/** "minimap": {"bounds_cm": [min_x, min_y, max_x, max_y]}: the mapped area; invalid = the navmesh bounds volumes. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	FBox2D MinimapBoundsCm = FBox2D(ForceInit);
 };
 
 UCLASS(BlueprintType)

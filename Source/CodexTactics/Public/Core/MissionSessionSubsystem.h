@@ -55,4 +55,11 @@ public:
 	FString PendingLoadDirectory;
 
 	bool HasPendingLoad() const { return !PendingLoadSlot.IsEmpty(); }
+
+	/**
+	 * Minimap (2026-10-18, docs/design/MINIMAP.md): what the player last chose for the top-right panel this session
+	 * (-1 = not chosen yet, 0 = messages, 1 = map); UMinimapSubsystem reads it on every level start.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Minimap")
+	int32 MinimapPanelMode = -1;
 };

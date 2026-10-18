@@ -221,6 +221,10 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::O, IE_Pressed, this, &ACodexTacticsPlayerController::VisionConesKey);
 	// Rev 5g: M = interior camera <-> outside view inside a building (a free key; F1 row Camera.InteriorView).
 	InputComponent->BindKey(EKeys::M, IE_Pressed, this, &ACodexTacticsPlayerController::InteriorViewKey);
+	// Minimap (2026-10-18): F2 = the top-right panel MAP <-> MESSAGES, F3 = the full-screen map in any mode (Tab outside
+	// turn-based combat, TabPressed).
+	InputComponent->BindKey(EKeys::F2, IE_Pressed, this, &ACodexTacticsPlayerController::MapPanelKey);
+	InputComponent->BindKey(EKeys::F3, IE_Pressed, this, &ACodexTacticsPlayerController::FullMapKey);
 
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!Input)
@@ -337,13 +341,15 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		UTurnBasedCombatSubsystem* PeekTurnBased = GetActiveTurnBased();
 		USquadSubsystem* PeekSquad = GetSquad();
 		AOperativeCharacter* PeekOperative = PeekTurnBased ? PeekTurnBased->GetActiveUnit() : (PeekSquad ? PeekSquad->GetLeader() : nullptr);
+		// The minimap is UI: nothing in the world is hovered through it.
+		const bool bOverMinimap = IsCursorOverMinimap();
 		FHitResult PeekHit;
-		const bool bPeekHit = PeekOperative && PeekOperative->IsInPeekableCover() && !IsDialogueOpen() && !bRelocateSelectMode
+		const bool bPeekHit = PeekOperative && PeekOperative->IsInPeekableCover() && !IsDialogueOpen() && !bRelocateSelectMode && !bOverMinimap
 			&& GetHitResultUnderCursor(ECC_Visibility, false, PeekHit);
 		UpdateCornerPeekHover(PeekOperative, bPeekHit ? &PeekHit : nullptr);
 		// Rev 5e: a spotted tripwire (or the ground right next to it) under the cursor: the hand cursor - a click opens its menu.
 		FHitResult TrapHit;
-		const bool bCursorHit = !bCornerPeekCursor && !IsDialogueOpen() && GetHitResultUnderCursor(ECC_Visibility, false, TrapHit);
+		const bool bCursorHit = !bCornerPeekCursor && !IsDialogueOpen() && !bOverMinimap && GetHitResultUnderCursor(ECC_Visibility, false, TrapHit);
 		// Rev 5g: an EXIT arrow under the cursor lights up and shows the hand too.
 		AInteriorExitArrowActor* HoveredExit = bCursorHit ? Cast<AInteriorExitArrowActor>(TrapHit.GetActor()) : nullptr;
 		if (UInteriorExitSubsystem* Exits = GetWorld()->GetSubsystem<UInteriorExitSubsystem>())

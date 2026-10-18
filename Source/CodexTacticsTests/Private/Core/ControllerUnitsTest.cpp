@@ -64,7 +64,7 @@ bool FControllerUnitsSourceLayoutTest::RunTest(const FString&)
 		TEXT("CodexTacticsPlayerControllerOrders.cpp"), TEXT("CodexTacticsPlayerControllerStance.cpp"),
 		TEXT("CodexTacticsPlayerControllerItems.cpp"), TEXT("CodexTacticsPlayerControllerTime.cpp"),
 		TEXT("CodexTacticsPlayerControllerMenus.cpp"), TEXT("CodexTacticsPlayerControllerCamera.cpp"),
-		TEXT("CodexTacticsPlayerControllerCover.cpp") };
+		TEXT("CodexTacticsPlayerControllerCover.cpp"), TEXT("CodexTacticsPlayerControllerMap.cpp") };
 	const FString CoreDir = FPaths::ConvertRelativePathToFull(FPaths::GameSourceDir() / TEXT("CodexTactics/Private/Core"));
 	TArray<FString> Found;
 	IFileManager::Get().FindFiles(Found, *(CoreDir / TEXT("CodexTacticsPlayerController*.cpp")), true, false);
