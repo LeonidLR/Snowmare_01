@@ -24,8 +24,20 @@ class CODEXTACTICS_API AGrenadeAimActor : public AActor
 public:
 	AGrenadeAimActor();
 
-	/** Draws the rings and the arc; Thrower is the ground point under the thrower. */
-	void Show(const FVector& ThrowerGround, float MaxRange, const FVector& Target, float BlastRadius, const FVector& Hand);
+	/**
+	 * Draws the rings and the arc; Thrower is the ground point under the thrower. bShowBlastZone false: no pulsing blast zone
+	 * (the stealth lure's hearing circle is the plain ring).
+	 */
+	void Show(const FVector& ThrowerGround, float MaxRange, const FVector& Target, float BlastRadius, const FVector& Hand, bool bShowBlastZone = true);
+
+	/** Only the effect ring at Center (the stealth lure's whistle hearing circle): no range ring, no arc, no blast zone. */
+	void ShowRing(const FVector& Center, float Radius);
+
+	/** Stealth lure colours (pale blue hearing ring, white arc) instead of the grenade's orange / red. */
+	void SetLureStyle(bool bLure);
+
+	/** The lure colours are on (smokes). */
+	bool IsLureStyle() const { return bLureStyle; }
 
 	int32 GetSegmentCount() const;
 
@@ -50,6 +62,11 @@ private:
 	TObjectPtr<class UStaticMeshComponent> BlastZone;
 
 	bool bMaterialsReady = false;
+	bool bLureStyle = false;
+
+	/** The glow instances of RangeRing, BlastRing and Arc (recoloured by SetLureStyle). */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<class UMaterialInstanceDynamic>> GlowInstances;
 };
 
 /** Result of aiming at a point (Godot _get_grenade_aim_info). */
@@ -126,6 +143,21 @@ public:
 
 	AGrenadeAimActor* GetAimActor() const { return AimActor; }
 
+	// --- Stealth lure (user decisions 2026-10-18): the THROW aim of a stone (UStealthLureSubsystem) ---
+
+	/**
+	 * Stone throw aim for Thrower (key 6 / the action bar THROW): the grenade's range ring (StealthLureRules::GetThrowRange by
+	 * stance) and arc, the hearing circle (throw radius) at the aim point and the enemies inside it highlighted
+	 * (UStealthLureSubsystem::UpdatePreview). Refused (feed line) unless the lure is available. The weapon in hands stays.
+	 */
+	bool StartLureAim(AOperativeCharacter* InThrower);
+
+	/** The running aim throws a stone (not a grenade / flare). */
+	bool IsAimingLure() const { return IsAiming() && bLureAim; }
+
+	/** A click while aiming the stone: UStealthLureSubsystem::ThrowAt the clamped point, the aim ends. True when thrown. */
+	bool ThrowLureAtCursor(const FVector& CursorPoint);
+
 private:
 	UFUNCTION()
 	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);
@@ -135,6 +167,10 @@ private:
 
 	TWeakObjectPtr<AOperativeCharacter> Thrower;
 	bool bFlareAim = false;
+	bool bLureAim = false;
+
+	/** Shows the aim actor (spawned on first use) and moves it to the default point ahead of Thrower. */
+	void ShowAimActor(AOperativeCharacter* InThrower);
 
 	UPROPERTY(Transient)
 	TObjectPtr<AGrenadeAimActor> AimActor;

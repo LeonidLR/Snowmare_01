@@ -1,5 +1,6 @@
 #include "Core/SaveGameSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
+#include "AI/StealthLureSubsystem.h"
 #include "AI/PatrolRouteActor.h"
 #include "AIController.h"
 #include "Camera/TacticalCameraPawn.h"
@@ -622,6 +623,14 @@ namespace
 		Patrol->SetArrayField(TEXT("search_origin"), SaveVector(Snapshot.SearchOrigin));
 		Patrol->SetNumberField(TEXT("search_elapsed"), Snapshot.SearchElapsed);
 		Patrol->SetNumberField(TEXT("suspicion"), Snapshot.Suspicion);
+		// Stealth lure (2026-10-18): an investigation keeps its own time / sweep / pace and its «?».
+		if (Snapshot.bSearching && Snapshot.bLureSearch)
+		{
+			Patrol->SetBoolField(TEXT("lure"), true);
+			Patrol->SetNumberField(TEXT("search_duration"), Snapshot.SearchDurationSeconds);
+			Patrol->SetNumberField(TEXT("search_sweep"), Snapshot.SearchSweepRadiusCm);
+			Patrol->SetNumberField(TEXT("search_approach"), Snapshot.SearchApproachSpeedFraction);
+		}
 		Entry->SetObjectField(TEXT("patrol"), Patrol);
 		return Entry;
 	}
@@ -643,6 +652,10 @@ namespace
 		Snapshot.SearchOrigin = LoadVector(*Patrol, TEXT("search_origin"), FVector::ZeroVector);
 		Snapshot.SearchElapsed = SaveFloat(*Patrol, TEXT("search_elapsed"), 0.f);
 		Snapshot.Suspicion = SaveFloat(*Patrol, TEXT("suspicion"), 0.f);
+		Snapshot.bLureSearch = SaveBool(*Patrol, TEXT("lure"), false);
+		Snapshot.SearchDurationSeconds = SaveFloat(*Patrol, TEXT("search_duration"), -1.f);
+		Snapshot.SearchSweepRadiusCm = SaveFloat(*Patrol, TEXT("search_sweep"), -1.f);
+		Snapshot.SearchApproachSpeedFraction = SaveFloat(*Patrol, TEXT("search_approach"), 0.f);
 		return Snapshot;
 	}
 }
@@ -944,6 +957,11 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	if (const UVehicleSubsystem* Vehicles = World->GetSubsystem<UVehicleSubsystem>())
 	{
 		WorldState->SetArrayField(TEXT("vehicles"), Vehicles->CaptureSave());
+	}
+	// Stealth lure (2026-10-18): the running per-operative cooldowns.
+	if (const UStealthLureSubsystem* Lure = World->GetSubsystem<UStealthLureSubsystem>())
+	{
+		WorldState->SetObjectField(TEXT("stealth_lure"), Lure->CaptureSave());
 	}
 
 	const FString Stage = GetCurrentStageName();
@@ -1319,6 +1337,19 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 	if (UVehicleSubsystem* Vehicles = World->GetSubsystem<UVehicleSubsystem>(); Vehicles && (*WorldState)->TryGetArrayField(TEXT("vehicles"), VehicleList))
 	{
 		Vehicles->RestoreSave(*VehicleList);
+	}
+	// Stealth lure: the cooldowns (older saves: everyone ready).
+	if (UStealthLureSubsystem* Lure = World->GetSubsystem<UStealthLureSubsystem>())
+	{
+		const TSharedPtr<FJsonObject>* LureState = nullptr;
+		if ((*WorldState)->TryGetObjectField(TEXT("stealth_lure"), LureState) && LureState && LureState->IsValid())
+		{
+			Lure->RestoreSave(**LureState);
+		}
+		else
+		{
+			Lure->RestoreSave(FJsonObject());
+		}
 	}
 	// Sprint 13: piles on the ground (older saves have none: the piles of the session are cleared either way).
 	for (TActorIterator<ADroppedItemActor> It(World); It; ++It)

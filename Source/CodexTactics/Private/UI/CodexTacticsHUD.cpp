@@ -1,4 +1,5 @@
 #include "UI/CodexTacticsHUD.h"
+#include "AI/StealthLureSubsystem.h"
 #include "Camera/CameraZoneVolume.h"
 #include "Camera/InteriorExitSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
@@ -429,6 +430,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawCombatModeBadge();
 	DrawInteriorViewHint();
 	DrawPostureMarkers();
+	DrawStealthLureMarkers();
 	DrawKnockdownBars();
 	DrawHordeWarning();
 	DrawHitChanceLabel();
@@ -797,6 +799,60 @@ void ACodexTacticsHUD::DrawPostureMarkers()
 		DrawRect(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), X, Y, Box, Box);
 		FCanvasTextItem Item(FVector2D(Screen.X - W * 0.5f, Y + (Box - H) * 0.5f), FText::FromString(Letter), Font, Color);
 		Canvas->DrawItem(Item);
+	}
+}
+
+void ACodexTacticsHUD::DrawStealthLureMarkers()
+{
+	UWorld* World = GetWorld();
+	const UStealthLureSubsystem* Lure = World ? World->GetSubsystem<UStealthLureSubsystem>() : nullptr;
+	if (!Lure)
+	{
+		return;
+	}
+	UFont* Font = GEngine->GetLargeFont();
+	UFont* SmallFont = GEngine->GetSmallFont();
+	const TArray<AEnemyCharacter*> Listeners = Lure->GetPreviewListeners();
+	auto Marker = [this](const AEnemyCharacter* Enemy, UFont* MarkerFont, const FString& Text, const FLinearColor& Color, float LiftCm, float Scale)
+	{
+		FOverheadLabel Label;
+		const float Top = Enemy->GetOverheadLabel(Label) ? Label.HeightCm : Enemy->GetSimpleCollisionHalfHeight() * 2.f;
+		const FVector Feet = Enemy->GetActorLocation() - FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight());
+		const FVector Screen = Project(Feet + FVector(0.f, 0.f, Top + LiftCm), true);
+		if (Screen.Z <= 0.f)
+		{
+			return;
+		}
+		float W = 0.f;
+		float H = 0.f;
+		Canvas->StrLen(MarkerFont, Text, W, H);
+		W *= Scale;
+		H *= Scale;
+		const float PadX = 6.f;
+		const float X = Screen.X - W * 0.5f - PadX;
+		const float Y = Screen.Y - H - 4.f;
+		DrawRect(Color, X - 1.f, Y - 1.f, W + PadX * 2.f + 2.f, H + 6.f);
+		DrawRect(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), X, Y, W + PadX * 2.f, H + 4.f);
+		FCanvasTextItem Item(FVector2D(Screen.X - W * 0.5f, Y + 2.f), FText::FromString(Text), MarkerFont, Color);
+		Item.Scale = FVector2D(Scale, Scale);
+		Item.bOutlined = true;
+		Item.OutlineColor = FLinearColor::Black;
+		Canvas->DrawItem(Item);
+	};
+	for (const AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
+	{
+		if (!Enemy || Enemy->IsHidden() || Enemy->IsDying())
+		{
+			continue;
+		}
+		if (Enemy->IsInvestigatingLure())
+		{
+			Marker(Enemy, Font, TEXT("?"), FLinearColor(1.f, 0.82f, 0.25f), 40.f, 1.6f);
+		}
+		else if (Listeners.Contains(Enemy))
+		{
+			Marker(Enemy, SmallFont, TEXT("HEARS"), FLinearColor(0.35f, 0.85f, 1.f), 40.f, 1.2f);
+		}
 	}
 }
 

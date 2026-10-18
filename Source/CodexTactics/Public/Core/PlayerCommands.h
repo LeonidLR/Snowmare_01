@@ -158,6 +158,13 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName PosturePassive;
 	extern CODEXTACTICS_API const FName PostureDefensive;
 	extern CODEXTACTICS_API const FName PostureAggressive;
+	/**
+	 * Stealth lure (user decisions 2026-10-18): 5 / the action bar WHISTLE - the selected operative whistles (a noise at his
+	 * spot); reported when he whistled. Only exploring undetected; a tutorial lock target (Demo 01: locked until a later lesson).
+	 */
+	extern CODEXTACTICS_API const FName StealthWhistle;
+	/** 6 / the action bar THROW: the stone throw aim starts ("Stealth.Throw" is reported when the stone is thrown). */
+	extern CODEXTACTICS_API const FName StealthThrow;
 
 	// --- Cover ----------------------------------------------------------------------------------------------------
 	/** First click on a wall: the cover ghost (preview). */

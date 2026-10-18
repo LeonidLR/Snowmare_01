@@ -1,4 +1,6 @@
 #include "Combat/GrenadeSubsystem.h"
+#include "AI/StealthLureRules.h"
+#include "AI/StealthLureSubsystem.h"
 #include "Combat/SignalFlareActor.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/TacticalHeatTuning.h"
@@ -81,21 +83,61 @@ void AGrenadeAimActor::SetupMaterials()
 	{
 		return;
 	}
-	const TPair<UInstancedStaticMeshComponent*, FLinearColor> Specs[] = {
-		{ RangeRing, FLinearColor(1.f, 0.72f, 0.15f) },
-		{ BlastRing, FLinearColor(1.f, 0.3f, 0.15f) },
-		{ Arc, FLinearColor(1.f, 0.82f, 0.25f) } };
-	for (const TPair<UInstancedStaticMeshComponent*, FLinearColor>& Spec : Specs)
+	GlowInstances.Reset();
+	for (UInstancedStaticMeshComponent* Component : { RangeRing.Get(), BlastRing.Get(), Arc.Get() })
 	{
 		UMaterialInstanceDynamic* Instance = UMaterialInstanceDynamic::Create(Glow, this);
-		Instance->SetVectorParameterValue(TEXT("Color"), Spec.Value);
 		Instance->SetScalarParameterValue(TEXT("Intensity"), 2.5f);
-		Spec.Key->SetMaterial(0, Instance);
+		Component->SetMaterial(0, Instance);
+		GlowInstances.Add(Instance);
 	}
+	const bool bWanted = bLureStyle;
+	bLureStyle = !bWanted; // force the colours
+	SetLureStyle(bWanted);
 	if (UMaterialInterface* Blast = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/Materials/M_AoeBlast.M_AoeBlast")))
 	{
 		BlastZone->SetMaterial(0, Blast);
 	}
+}
+
+void AGrenadeAimActor::SetLureStyle(bool bLure)
+{
+	if (bLureStyle == bLure && bMaterialsReady)
+	{
+		return;
+	}
+	bLureStyle = bLure;
+	if (GlowInstances.Num() != 3)
+	{
+		return; // applied when the materials are set up
+	}
+	// Grenade: Godot range ring (1, 0.72, 0.15), AoE ring (1, 0.3, 0.15), arc (1, 0.82, 0.25). Lure: a pale blue hearing ring.
+	const FLinearColor Colors[] = {
+		bLure ? FLinearColor(0.35f, 0.45f, 0.55f) : FLinearColor(1.f, 0.72f, 0.15f),
+		bLure ? FLinearColor(0.2f, 0.75f, 1.f) : FLinearColor(1.f, 0.3f, 0.15f),
+		bLure ? FLinearColor(0.9f, 0.95f, 1.f) : FLinearColor(1.f, 0.82f, 0.25f) };
+	// Lure: the range ring dim, the hearing circle bright (it is what the player reads).
+	const float Intensities[] = { bLure ? 0.6f : 2.5f, bLure ? 3.f : 2.5f, bLure ? 1.5f : 2.5f };
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		if (GlowInstances[Index])
+		{
+			GlowInstances[Index]->SetVectorParameterValue(TEXT("Color"), Colors[Index]);
+			GlowInstances[Index]->SetScalarParameterValue(TEXT("Intensity"), Intensities[Index]);
+		}
+	}
+}
+
+void AGrenadeAimActor::ShowRing(const FVector& Center, float Radius)
+{
+	SetupMaterials();
+	TArray<FTransform> Ring;
+	AddCircle(Ring, Center + FVector(0.f, 0.f, 4.f), Radius, 48, GrenadeLineWidth * 1.5f);
+	RangeRing->ClearInstances();
+	Arc->ClearInstances();
+	BlastRing->ClearInstances();
+	BlastRing->AddInstances(Ring, false, true);
+	BlastZone->SetVisibility(false);
 }
 
 void AGrenadeAimActor::AddCircle(TArray<FTransform>& Out, const FVector& Center, float Radius, int32 Segments, float Width)
@@ -109,7 +151,7 @@ void AGrenadeAimActor::AddCircle(TArray<FTransform>& Out, const FVector& Center,
 	}
 }
 
-void AGrenadeAimActor::Show(const FVector& ThrowerGround, float MaxRange, const FVector& Target, float BlastRadius, const FVector& Hand)
+void AGrenadeAimActor::Show(const FVector& ThrowerGround, float MaxRange, const FVector& Target, float BlastRadius, const FVector& Hand, bool bShowBlastZone)
 {
 	SetupMaterials();
 	TArray<FTransform> Range, Blast, ArcSegments;
@@ -133,7 +175,7 @@ void AGrenadeAimActor::Show(const FVector& ThrowerGround, float MaxRange, const 
 	// Godot plane 8.2 m for the 4 m radius: the engine plane is 100 cm.
 	BlastZone->SetWorldLocationAndRotation(Target + FVector(0.f, 0.f, 3.f), FRotator::ZeroRotator);
 	BlastZone->SetWorldScale3D(FVector(BlastRadius * 2.05f / 100.f, BlastRadius * 2.05f / 100.f, 1.f));
-	BlastZone->SetVisibility(true);
+	BlastZone->SetVisibility(bShowBlastZone);
 }
 
 bool AGrenadeAimActor::IsBlastZoneShown() const
@@ -194,6 +236,16 @@ bool UGrenadeSubsystem::StartAim(AOperativeCharacter* InThrower)
 	}
 	Thrower = InThrower;
 	bFlareAim = false;
+	bLureAim = false;
+	ShowAimActor(InThrower);
+	const FText Stance = InThrower->GetStance() == EOperativeStance::Crouching ? LOCTEXT("Crouch", "crouched (max 9 m)")
+		: (InThrower->GetStance() == EOperativeStance::Prone ? LOCTEXT("Prone", "prone (max 6 m)") : LOCTEXT("Stand", "standing (max 12 m)"));
+	Post(InThrower->DisplayName, FText::Format(LOCTEXT("AimPrompt", "🧨 Pick a throw point, {0}. RMB or Esc to cancel."), Stance));
+	return true;
+}
+
+void UGrenadeSubsystem::ShowAimActor(AOperativeCharacter* InThrower)
+{
 	if (!AimActor)
 	{
 		FActorSpawnParameters Params;
@@ -202,23 +254,21 @@ bool UGrenadeSubsystem::StartAim(AOperativeCharacter* InThrower)
 	}
 	if (AimActor)
 	{
+		AimActor->SetLureStyle(bLureAim);
 		AimActor->SetActorHiddenInGame(false);
 	}
 	UpdateAim(InThrower->GetActorLocation() + InThrower->GetActorForwardVector() * 500.f);
-	const FText Stance = InThrower->GetStance() == EOperativeStance::Crouching ? LOCTEXT("Crouch", "crouched (max 9 m)")
-		: (InThrower->GetStance() == EOperativeStance::Prone ? LOCTEXT("Prone", "prone (max 6 m)") : LOCTEXT("Stand", "standing (max 12 m)"));
-	Post(InThrower->DisplayName, FText::Format(LOCTEXT("AimPrompt", "🧨 Pick a throw point, {0}. RMB or Esc to cancel."), Stance));
-	return true;
 }
 
 void UGrenadeSubsystem::CancelAim(bool bRevertWeapon)
 {
-	if (bRevertWeapon && !bFlareAim)
+	if (bRevertWeapon && !bFlareAim && !bLureAim)
 	{
 		TakeFirearm(Thrower.Get());
 	}
 	Thrower.Reset();
 	bFlareAim = false;
+	bLureAim = false;
 	if (AimActor)
 	{
 		AimActor->SetActorHiddenInGame(true);
@@ -234,7 +284,8 @@ FGrenadeAimInfo UGrenadeSubsystem::GetAimInfo(const FVector& CursorPoint) const
 		return Info;
 	}
 	const FVector From = ThrowerActor->GetActorLocation();
-	Info.MaxRange = bFlareAim ? TacticalHeatRules::GetFlareThrowRange(TacticalHeatTuning::Get(), ThrowerActor->GetStance())
+	Info.MaxRange = bLureAim ? StealthLureRules::GetThrowRange(UStealthLureSubsystem::GetParams(), ThrowerActor->GetStance())
+		: bFlareAim ? TacticalHeatRules::GetFlareThrowRange(TacticalHeatTuning::Get(), ThrowerActor->GetStance())
 		: GrenadeRules::EffectiveRange(ThrowerActor->GrenadeThrowRange > 0.f ? ThrowerActor->GrenadeThrowRange : 1200.f, ThrowerActor->GetStance());
 	const float Flat = FVector::Dist2D(From, CursorPoint);
 	Info.bValid = true;
@@ -251,7 +302,20 @@ void UGrenadeSubsystem::UpdateAim(const FVector& CursorPoint)
 	{
 		return;
 	}
-	if ((bFlareAim ? ThrowerActor->FlaresCount : ThrowerActor->GrenadesCount) <= 0)
+	UStealthLureSubsystem* Lure = GetWorld()->GetSubsystem<UStealthLureSubsystem>();
+	if (bLureAim)
+	{
+		// The lure works only exploring undetected: a fight / a detection ends the aim (one line with the reason).
+		const EStealthLureRefusal Refusal = Lure ? Lure->GetAvailability(ThrowerActor, EStealthLureKind::Throw) : EStealthLureRefusal::Unable;
+		if (Refusal != EStealthLureRefusal::None)
+		{
+			Post(ThrowerActor->DisplayName, StealthLureRules::GetRefusalText(EStealthLureKind::Throw, Refusal,
+				Lure ? Lure->GetCooldownLeft(ThrowerActor, EStealthLureKind::Throw) : 0.f));
+			CancelAim(false);
+			return;
+		}
+	}
+	else if ((bFlareAim ? ThrowerActor->FlaresCount : ThrowerActor->GrenadesCount) <= 0)
 	{
 		CancelAim();
 		return;
@@ -260,10 +324,16 @@ void UGrenadeSubsystem::UpdateAim(const FVector& CursorPoint)
 	if (AimActor && Info.bValid)
 	{
 		const FVector Ground = ThrowerActor->GetActorLocation() - FVector(0.f, 0.f, ThrowerActor->GetSimpleCollisionHalfHeight());
-		const float EffectRadius = bFlareAim ? TacticalHeatTuning::Get().FlareRevealRadius
+		const float EffectRadius = bLureAim ? StealthLureRules::GetRadius(UStealthLureSubsystem::GetParams(), EStealthLureKind::Throw)
+			: bFlareAim ? TacticalHeatTuning::Get().FlareRevealRadius
 			: (ThrowerActor->GrenadeEffectRadius > 0.f ? ThrowerActor->GrenadeEffectRadius : 400.f);
+		AimActor->SetLureStyle(bLureAim);
 		AimActor->Show(Ground, Info.MaxRange, Info.Target, EffectRadius,
-			ThrowerActor->GetActorLocation() + FVector(0.f, 0.f, GrenadeRules::HandHeight));
+			ThrowerActor->GetActorLocation() + FVector(0.f, 0.f, GrenadeRules::HandHeight), !bLureAim);
+	}
+	if (bLureAim && Lure && Info.bValid)
+	{
+		Lure->UpdatePreview(Info.Target, EStealthLureKind::Throw, false); // the enemies that would hear it (HUD highlight)
 	}
 }
 
@@ -279,6 +349,11 @@ AGrenadeActor* UGrenadeSubsystem::ThrowAtCursor(const FVector& CursorPoint)
 	if (!Info.bValid)
 	{
 		Post(LOCTEXT("Grenade", "Grenade"), LOCTEXT("NoPoint", "Could not find a landing point."));
+		return nullptr;
+	}
+	if (bLureAim)
+	{
+		ThrowLureAtCursor(CursorPoint);
 		return nullptr;
 	}
 	if (bFlareAim)
@@ -331,6 +406,52 @@ AGrenadeActor* UGrenadeSubsystem::ThrowAt(AOperativeCharacter* InThrower, const 
 	return Grenade;
 }
 
+bool UGrenadeSubsystem::StartLureAim(AOperativeCharacter* InThrower)
+{
+	UStealthLureSubsystem* Lure = GetWorld()->GetSubsystem<UStealthLureSubsystem>();
+	const EStealthLureRefusal Refusal = Lure ? Lure->GetAvailability(InThrower, EStealthLureKind::Throw) : EStealthLureRefusal::Unable;
+	if (Refusal != EStealthLureRefusal::None)
+	{
+		Post(InThrower ? InThrower->DisplayName : LOCTEXT("Squad", "SQUAD"), StealthLureRules::GetRefusalText(EStealthLureKind::Throw, Refusal,
+			Lure ? Lure->GetCooldownLeft(InThrower, EStealthLureKind::Throw) : 0.f));
+		return false;
+	}
+	if (IsAiming())
+	{
+		CancelAim(true);
+	}
+	Thrower = InThrower;
+	bFlareAim = false;
+	bLureAim = true;
+	ShowAimActor(InThrower);
+	const FStealthLureParams Params = UStealthLureSubsystem::GetParams();
+	Post(InThrower->DisplayName, FText::Format(LOCTEXT("LureAim",
+		"Stone: pick a point (max {0} m). Enemies within {1} m of it will come to look. RMB or Esc to cancel."),
+		FMath::RoundToInt(StealthLureRules::GetThrowRange(Params, InThrower->GetStance()) / 100.f),
+		FMath::RoundToInt(StealthLureRules::GetRadius(Params, EStealthLureKind::Throw) / 100.f)));
+	return true;
+}
+
+bool UGrenadeSubsystem::ThrowLureAtCursor(const FVector& CursorPoint)
+{
+	AOperativeCharacter* ThrowerActor = Thrower.Get();
+	UStealthLureSubsystem* Lure = GetWorld()->GetSubsystem<UStealthLureSubsystem>();
+	if (!ThrowerActor || !bLureAim || !Lure)
+	{
+		CancelAim(false);
+		return false;
+	}
+	const FGrenadeAimInfo Info = GetAimInfo(CursorPoint);
+	if (!Info.bValid)
+	{
+		Post(ThrowerActor->DisplayName, LOCTEXT("NoPoint", "Could not find a landing point."));
+		return false;
+	}
+	const bool bThrown = Lure->ThrowAt(ThrowerActor, Info.Target) != nullptr;
+	CancelAim(false);
+	return bThrown;
+}
+
 bool UGrenadeSubsystem::StartFlareAim(AOperativeCharacter* InThrower)
 {
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
@@ -350,17 +471,8 @@ bool UGrenadeSubsystem::StartFlareAim(AOperativeCharacter* InThrower)
 	}
 	Thrower = InThrower;
 	bFlareAim = true;
-	if (!AimActor)
-	{
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		AimActor = GetWorld()->SpawnActor<AGrenadeAimActor>(FVector::ZeroVector, FRotator::ZeroRotator, Params);
-	}
-	if (AimActor)
-	{
-		AimActor->SetActorHiddenInGame(false);
-	}
-	UpdateAim(InThrower->GetActorLocation() + InThrower->GetActorForwardVector() * 500.f);
+	bLureAim = false;
+	ShowAimActor(InThrower);
 	const float Range = TacticalHeatRules::GetFlareThrowRange(TacticalHeatTuning::Get(), InThrower->GetStance());
 	Post(InThrower->DisplayName, FText::Format(LOCTEXT("FlareAim",
 		"🎆 Signal flare [x{0}]: pick a point (max {1} m) or click at my feet to light it here. RMB or Esc to cancel."),
@@ -417,6 +529,11 @@ ASignalFlareActor* UGrenadeSubsystem::LightFlareAtFeet(AOperativeCharacter* Oper
 
 void UGrenadeSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode)
 {
+	// Stealth lure: useless once a fight is on - the stone aim ends.
+	if (IsAimingLure() && !StealthLureRules::IsExploring(Phase, CombatMode))
+	{
+		CancelAim(false);
+	}
 	if (CombatMode != ECodexCombatMode::TurnBased)
 	{
 		return;

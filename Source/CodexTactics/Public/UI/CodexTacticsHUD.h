@@ -284,6 +284,11 @@ private:
 	void DrawInteriorViewHint();
 	/** Per-operative fire posture marker over every living operative (letter P / D / A in the posture colour). */
 	void DrawPostureMarkers();
+	/**
+	 * Stealth lure (user decisions 2026-10-18): a «?» over every enemy investigating a whistle / stone, and «HEARS» over the
+	 * enemies inside the previewed hearing circle (stone aim / WHISTLE hovered; UStealthLureSubsystem::GetPreviewListeners).
+	 */
+	void DrawStealthLureMarkers();
 	/** Sprint 14: «[KNOCKED DOWN]» badge + recovery bar over every knocked-down unit (squad and enemies). */
 	void DrawKnockdownBars();
 	/** Horde warning (UHordeSubsystem): «HORDE!» banner, distance, and an arrow at the screen edge towards it. */

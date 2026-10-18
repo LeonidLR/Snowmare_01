@@ -303,6 +303,15 @@ public:
 	void StartFlareAim();
 
 	/**
+	 * Stealth lure (user decisions 2026-10-18): 5 / the action bar WHISTLE - the selected operative whistles
+	 * (UStealthLureSubsystem::Whistle; refused with a feed line when fighting / detected / on cooldown; a tutorial lock target).
+	 */
+	void StealthWhistleKey();
+
+	/** 6 / the action bar THROW: the stone throw aim (UGrenadeSubsystem::StartLureAim); again while aiming: cancel. */
+	void StealthThrowKey();
+
+	/**
 	 * Inventory drawer turret / barricade / mine (Godot _start_placement_for_type): selects the type, a squad mate hands
 	 * one over when the leader has none, then the placement ghost starts.
 	 */
@@ -384,6 +393,13 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UInputAction>> ItemActions;
+
+	/** Stealth lure keys 5 (whistle) / 6 (throw) - free number keys next to the squad keys 1-4. */
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> StealthWhistleAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> StealthThrowAction;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> QuickSaveAction;

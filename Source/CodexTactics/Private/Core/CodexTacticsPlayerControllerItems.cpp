@@ -5,6 +5,7 @@
 
 #include "Core/CodexTacticsPlayerController.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
+#include "AI/StealthLureSubsystem.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "Data/TacticalHeatTuning.h"
 #include "Survival/TacticalHeatSubsystem.h"
@@ -207,6 +208,38 @@ void ACodexTacticsPlayerController::StartFlareAim()
 	}
 	Grenades->StartFlareAim(Leader);
 	ControllerCommands::Report(this, PlayerCommands::FlareAim);
+}
+
+void ACodexTacticsPlayerController::StealthWhistleKey()
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UStealthLureSubsystem* Lure = GetWorld()->GetSubsystem<UStealthLureSubsystem>();
+	if (!Leader || !Lure || RefuseIfLocked(PlayerCommands::StealthWhistle))
+	{
+		return;
+	}
+	if (Lure->Whistle(Leader))
+	{
+		ControllerCommands::Report(this, PlayerCommands::StealthWhistle, nullptr, false, false, Leader);
+	}
+}
+
+void ACodexTacticsPlayerController::StealthThrowKey()
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
+	if (!Leader || !Grenades || RefuseIfLocked(PlayerCommands::StealthThrow))
+	{
+		return;
+	}
+	if (Grenades->IsAimingLure())
+	{
+		Grenades->CancelAim(false); // the key again: no throw
+		return;
+	}
+	Grenades->StartLureAim(Leader);
 }
 
 void ACodexTacticsPlayerController::GrenadeKey()
