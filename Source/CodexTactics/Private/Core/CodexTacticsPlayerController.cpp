@@ -167,6 +167,9 @@ void ACodexTacticsPlayerController::CreateInputActions()
 		MakeAction(TEXT("IA_UseBread"), EKeys::K),
 		MakeAction(TEXT("IA_UseChocolate"), EKeys::L),
 		MakeAction(TEXT("IA_UseHeatPack"), EKeys::U) }; // Sprint 15
+	// Stealth lure (user decisions 2026-10-18): 5 whistle, 6 stone throw (every letter is taken; 5 / 6 sit next to the squad keys).
+	StealthWhistleAction = MakeAction(TEXT("IA_StealthWhistle"), EKeys::Five);
+	StealthThrowAction = MakeAction(TEXT("IA_StealthThrow"), EKeys::Six);
 	QuickSaveAction = MakeAction(TEXT("IA_QuickSave"), EKeys::F5);
 	QuickLoadAction = MakeAction(TEXT("IA_QuickLoad"), EKeys::F9);
 }
@@ -252,6 +255,8 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 	Input->BindAction(ItemActions[2], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseBread);
 	Input->BindAction(ItemActions[3], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseChocolate);
 	Input->BindAction(ItemActions[4], ETriggerEvent::Started, this, &ACodexTacticsPlayerController::UseHeatPackKey);
+	Input->BindAction(StealthWhistleAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StealthWhistleKey);
+	Input->BindAction(StealthThrowAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::StealthThrowKey);
 	Input->BindAction(QuickSaveAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::QuickSaveKey);
 	Input->BindAction(QuickLoadAction, ETriggerEvent::Started, this, &ACodexTacticsPlayerController::QuickLoadKey);
 }

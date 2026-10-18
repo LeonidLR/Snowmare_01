@@ -84,6 +84,10 @@ public:
 	/** Squad member shown in slot Index (roster order), null for an empty slot. */
 	AOperativeCharacter* GetSlotMember(int32 Index) const;
 
+	/** Stealth lure buttons (smokes): the WHISTLE / THROW label and whether it is enabled. */
+	FText GetStealthButtonText(bool bThrow) const;
+	bool IsStealthButtonEnabled(bool bThrow) const;
+
 	/** Sprint 13: an inventory drag dropped on squad slot Index -> ACodexTacticsHUD::HandleTransferDropOnActor. */
 	ETransferRequestOutcome HandleTransferDropOnSlot(int32 Index, AOperativeCharacter* Sender, ETransferItem Item);
 
@@ -145,6 +149,32 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UButton> VehicleButton;
+
+	/**
+	 * Stealth lure (user decisions 2026-10-18): «WHISTLE [5]» / «THROW [6]» with the cooldown («WHISTLE 4s»), disabled with the
+	 * reason as the tooltip when fighting / detected; hovering WHISTLE previews its hearing circle round the leader and the
+	 * enemies that would hear it.
+	 */
+	UFUNCTION()
+	void HandleStealthWhistle();
+
+	UFUNCTION()
+	void HandleStealthThrow();
+
+	UPROPERTY()
+	TObjectPtr<UButton> StealthWhistleButton;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> StealthWhistleText;
+
+	UPROPERTY()
+	TObjectPtr<UButton> StealthThrowButton;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> StealthThrowText;
+
+	/** Updates both lure buttons (Refresh). */
+	void RefreshStealthButtons(const class AOperativeCharacter& Leader);
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> BarAutonomyText;

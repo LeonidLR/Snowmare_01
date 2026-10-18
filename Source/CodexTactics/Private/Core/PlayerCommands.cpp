@@ -35,6 +35,8 @@ namespace PlayerCommands
 	const FName PosturePassive(TEXT("Posture.Passive"));
 	const FName PostureDefensive(TEXT("Posture.Defensive"));
 	const FName PostureAggressive(TEXT("Posture.Aggressive"));
+	const FName StealthWhistle(TEXT("Stealth.Whistle"));
+	const FName StealthThrow(TEXT("Stealth.Throw"));
 
 	const FName CoverPreview(TEXT("Cover.Preview"));
 	const FName CoverEnter(TEXT("Cover.Enter"));
@@ -163,6 +165,8 @@ namespace PlayerCommands
 			{ Guard, TEXT("T"), TEXT("Squad"), TEXT("Guard this spot / rejoin") },
 			{ Autonomy, TEXT("Ctrl+T"), TEXT("Squad"), TEXT("Commander Mode (autonomous squad)") },
 			{ HoldLine, TEXT("Shift+RMB"), TEXT("Squad"), TEXT("Hold this line at all costs") },
+			{ StealthWhistle, TEXT("5"), TEXT("Squad"), TEXT("Whistle: enemies within earshot come to look at this spot (only while exploring undetected)") },
+			{ StealthThrow, TEXT("6"), TEXT("Squad"), TEXT("Throw a stone: aim, click - enemies near the impact come to look (only while exploring undetected)") },
 			{ PosturePassive, TEXT(","), TEXT("Combat"), TEXT("Fire posture: passive (Alt = squad)") },
 			{ PostureDefensive, TEXT("."), TEXT("Combat"), TEXT("Fire posture: defensive (Alt = squad)") },
 			{ PostureAggressive, TEXT("/"), TEXT("Combat"), TEXT("Fire posture: aggressive (Alt = squad)") },

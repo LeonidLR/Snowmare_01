@@ -42,7 +42,7 @@ namespace ControlsTest
 		PlayerCommands::VehicleBoard, PlayerCommands::VehicleDisembark, PlayerCommands::VehicleDrive, PlayerCommands::VehicleTurretFire,
 		PlayerCommands::VehicleRepair, PlayerCommands::InventoryOpen, PlayerCommands::GiveItem, PlayerCommands::ToggleVisionCones,
 		PlayerCommands::DialogueNext, PlayerCommands::DialogueSkip, PlayerCommands::CameraInteriorView, PlayerCommands::ExitBuilding,
-		PlayerCommands::SkipTutorial,
+		PlayerCommands::SkipTutorial, PlayerCommands::StealthWhistle, PlayerCommands::StealthThrow,
 		};
 	}
 }

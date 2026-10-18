@@ -27,8 +27,12 @@ namespace EnemyPerception
 	static TAutoConsoleVariable<float> CVarHearingOcclusion(TEXT("Codex.Perception.HearingOcclusion"), -1.f,
 		TEXT("Footstep hearing radius x this per wall between the enemy and the operative (0..1; -1: enemy_perception.json, default 0.5)"));
 
+	static TAutoConsoleVariable<float> CVarLureInvestigateSeconds(TEXT("Codex.Lure.InvestigateSeconds"), -1.f,
+		TEXT("Stealth lure: seconds an enemy investigates a whistle / stone (-1: enemy_perception.json lure.investigate_seconds)"));
+
 	static TMap<EEnemyArchetype, FEnemyPerceptionParams> Overrides;
 	static FPatrolSearchParams CurrentSearch;
+	static FStealthLureParams CurrentLure;
 
 	static void ReadMeters(const FJsonObject& Json, const TCHAR* Key, float& OutCm)
 	{
@@ -128,10 +132,44 @@ void EnemyPerception::SetSearch(const FPatrolSearchParams& Search)
 	CurrentSearch = Search;
 }
 
+FStealthLureParams EnemyPerception::GetLure()
+{
+	FStealthLureParams Out = CurrentLure;
+	const float Hearing = FMath::Max(GetTuning().HearingScale, 0.f);
+	Out.WhistleRadiusCm *= Hearing;
+	Out.ThrowRadiusCm *= Hearing;
+	const float Seconds = CVarLureInvestigateSeconds.GetValueOnGameThread();
+	if (Seconds >= 0.f)
+	{
+		Out.InvestigateSeconds = Seconds;
+	}
+	return Out;
+}
+
+void EnemyPerception::SetLure(const FStealthLureParams& Lure)
+{
+	CurrentLure = Lure;
+}
+
+FStealthLureParams EnemyPerception::LureFromJson(const FJsonObject& Json, const FStealthLureParams& Base)
+{
+	FStealthLureParams Out = Base;
+	ReadMeters(Json, TEXT("whistle_radius_m"), Out.WhistleRadiusCm);
+	ReadMeters(Json, TEXT("throw_radius_m"), Out.ThrowRadiusCm);
+	ReadMeters(Json, TEXT("throw_range_m"), Out.ThrowRangeCm);
+	ReadNumber(Json, TEXT("whistle_cooldown_seconds"), Out.WhistleCooldownSeconds);
+	ReadNumber(Json, TEXT("throw_cooldown_seconds"), Out.ThrowCooldownSeconds);
+	ReadNumber(Json, TEXT("investigate_seconds"), Out.InvestigateSeconds);
+	ReadMeters(Json, TEXT("investigate_sweep_radius_m"), Out.InvestigateSweepRadiusCm);
+	ReadNumber(Json, TEXT("approach_speed_fraction"), Out.ApproachSpeedFraction);
+	return Out;
+}
+
 void EnemyPerception::ResetToDefaults()
 {
 	Overrides.Reset();
 	CurrentSearch = FPatrolSearchParams();
+	CurrentLure = FStealthLureParams();
 }
 
 FEnemyPerceptionParams EnemyPerception::ParamsFromJson(const FJsonObject& Json, const FEnemyPerceptionParams& Base)
@@ -182,6 +220,8 @@ bool EnemyPerception::ApplyJson(const FString& Text)
 	const TSharedPtr<FJsonObject>* Search = nullptr;
 	CurrentSearch = Root->TryGetObjectField(TEXT("search"), Search) && Search && Search->IsValid()
 		? SearchFromJson(**Search) : FPatrolSearchParams();
+	const TSharedPtr<FJsonObject>* Lure = nullptr;
+	CurrentLure = Root->TryGetObjectField(TEXT("lure"), Lure) && Lure && Lure->IsValid() ? LureFromJson(**Lure) : FStealthLureParams();
 	const TSharedPtr<FJsonObject>* Archetypes = nullptr;
 	if (Root->TryGetObjectField(TEXT("archetypes"), Archetypes) && Archetypes && Archetypes->IsValid())
 	{
@@ -228,6 +268,10 @@ namespace EnemyPerception
 		const FPatrolSearchParams& S = CurrentSearch;
 		UE_LOG(LogCodexTactics, Display, TEXT("Patrol search: %.0f s, sweep %.0f m, speed x%.2f, perception x%.2f"), S.DurationSeconds,
 			S.SweepRadiusCm / 100.f, S.SpeedMultiplier, S.PerceptionMultiplier);
+		const FStealthLureParams L = GetLure();
+		UE_LOG(LogCodexTactics, Display, TEXT("Stealth lure: whistle %.0f m / %.0f s, throw %.0f m (range %.0f m) / %.0f s, investigate %.0f s within %.0f m, approach x%.2f"),
+			L.WhistleRadiusCm / 100.f, L.WhistleCooldownSeconds, L.ThrowRadiusCm / 100.f, L.ThrowRangeCm / 100.f, L.ThrowCooldownSeconds,
+			L.InvestigateSeconds, L.InvestigateSweepRadiusCm / 100.f, L.ApproachSpeedFraction);
 	}
 
 	static FAutoConsoleCommand DumpPerception(TEXT("CodexTactics.DumpPerception"),

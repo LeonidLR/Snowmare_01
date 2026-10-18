@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "AI/PerceptionRules.h"
+#include "AI/StealthLureRules.h"
 
 class FJsonObject;
 
@@ -36,6 +37,9 @@ struct CODEXTACTICS_API FPerceptionTuning
  *       "suspicion_decay_per_second": 0.5, "hear_walk_m": 7, "hear_run_m": 14, "hear_crouch_walk_m": 3.5, "hear_crawl_m": 1.5,
  *       "hear_gunshot_m": 45, "hear_explosion_m": 60, "smell_radius_m": 12, "hearing_occlusion_per_wall": 0.5 },
  *       "MARKSMAN": {...}, ... } }
+ *     "lure": { "whistle_radius_m": 12, "throw_radius_m": 8, "throw_range_m": 15, "whistle_cooldown_seconds": 10,
+ *               "throw_cooldown_seconds": 6, "investigate_seconds": 60, "investigate_sweep_radius_m": 4,
+ *               "approach_speed_fraction": 0.75 } }   (stealth lure, user decisions 2026-10-18; FStealthLureParams)
  * (footstep radii lowered 2026-10-06 after the user's playtest: run ~10-12 m, walk ~5-6 m, hounds a bit more;
  * hearing_occlusion_per_wall optional, default 0.5 — each wall between the ear and the feet halves the footstep radius).
  * Archetype keys as in the level JSON (LevelJsonRules::ParseEnemyType). A missing key keeps the built-in default
@@ -62,6 +66,14 @@ namespace EnemyPerception
 	 * ULevelEncounterSubsystem, a Codex.Patrol.SearchSeconds >= 0 wins over it). */
 	CODEXTACTICS_API FPatrolSearchParams GetSearch();
 	CODEXTACTICS_API void SetSearch(const FPatrolSearchParams& Search);
+
+	/**
+	 * Stealth lure tuning in force (the "lure" section; Codex.Perception.HearingScale scales both radii like every hearing radius,
+	 * Codex.Lure.InvestigateSeconds >= 0 overrides the investigation time).
+	 */
+	CODEXTACTICS_API FStealthLureParams GetLure();
+	CODEXTACTICS_API void SetLure(const FStealthLureParams& Lure);
+	CODEXTACTICS_API FStealthLureParams LureFromJson(const FJsonObject& Json, const FStealthLureParams& Base = FStealthLureParams());
 
 	/** Back to the built-in defaults (tests). */
 	CODEXTACTICS_API void ResetToDefaults();

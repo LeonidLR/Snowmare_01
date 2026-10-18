@@ -101,6 +101,16 @@ void ACodexTacticsPlayerController::OnClick()
 	if (UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>(); Grenades && Grenades->IsAiming() && !bOrdersLocked)
 	{
 		FVector Point;
+		// Stealth lure: the stone aim throws a stone ("Stealth.Throw" once it flies).
+		if (Grenades->IsAimingLure())
+		{
+			AOperativeCharacter* LureThrower = Grenades->GetThrower();
+			if (GetGrenadeAimPoint(Point) && Grenades->ThrowLureAtCursor(Point))
+			{
+				ControllerCommands::Report(this, PlayerCommands::StealthThrow, nullptr, false, false, LureThrower, Point);
+			}
+			return;
+		}
 		if (GetGrenadeAimPoint(Point))
 		{
 			Grenades->ThrowAtCursor(Point);

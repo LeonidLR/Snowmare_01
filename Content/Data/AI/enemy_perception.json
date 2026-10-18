@@ -9,6 +9,17 @@
     "arrive_m": 1.5,
     "leg_timeout_seconds": 10
   },
+  "lure": {
+    "comment": "Stealth lure (user decisions 2026-10-18, docs/design/STEALTH_LURE.md): WHISTLE = a noise at the operative, THROW = a stone / bolt / cartridge, noise at the impact. Infinite, per-operative cooldown, only while exploring undetected. Every patrol / guard enemy within the radius (walls cut it like footsteps: hearing_occlusion_per_wall) investigates the point for investigate_seconds, sweeping within investigate_sweep_radius_m, then returns to its route / post.",
+    "whistle_radius_m": 12,
+    "throw_radius_m": 8,
+    "throw_range_m": 15,
+    "whistle_cooldown_seconds": 10,
+    "throw_cooldown_seconds": 6,
+    "investigate_seconds": 60,
+    "investigate_sweep_radius_m": 4,
+    "approach_speed_fraction": 0.75
+  },
   "archetypes": {
     "FROST_HOUND": {
       "sight_range_m": 15, "sight_half_angle_deg": 70,

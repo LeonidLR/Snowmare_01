@@ -15,6 +15,8 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
 ## Queued 2026-10-18 (user decisions), order: bug fix (running) -> stealth lure -> minimap -> Demo 01 patrol fight
+- **Stealth lure — DONE 2026-10-18 on agents/work** (keys 5 / 6, `docs/design/STEALTH_LURE.md`, `StealthLureSmoke`; to merge after the
+  user's look). Original decision:
 - **Stealth lure** (before the patrol fight; stealth kill maybe later): any operative can WHISTLE (noise at his own
   position, ~12 m) or THROW a stone / bolt / cartridge (aimed arc like a grenade, noise at the impact point, ~8 m).
   Infinite, per-operative cooldown (no ammo, nothing to pick up). Works ONLY in exploration and only while the squad is

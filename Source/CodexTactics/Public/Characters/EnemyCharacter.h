@@ -40,6 +40,28 @@ struct CODEXTACTICS_API FEnemyPatrolSnapshot
 	FVector SearchOrigin = FVector::ZeroVector;
 	float SearchElapsed = 0.f;
 	float Suspicion = 0.f;
+	/** Stealth lure investigation (2026-10-18): the search's own spec (FPatrolSearchSpec). */
+	bool bLureSearch = false;
+	float SearchDurationSeconds = -1.f;
+	float SearchSweepRadiusCm = -1.f;
+	float SearchApproachSpeedFraction = 0.f;
+};
+
+/**
+ * How a patrol search runs. A trap / a lost leader: the defaults (the level's search time, the 12 m sweep, the search pace).
+ * A stealth lure (user decisions 2026-10-18, UStealthLureSubsystem): its own investigation time, a tight sweep round the
+ * noise and the walk to it at a fraction of the enemy's own speed (hounds fast, Brutes slow).
+ */
+struct CODEXTACTICS_API FPatrolSearchSpec
+{
+	/** Investigating a stealth lure (the HUD's «?» marker, AEnemyCharacter::IsInvestigatingLure). */
+	bool bLure = false;
+	/** Seconds of the search; < 0 = the level's patrol search time. */
+	float DurationSeconds = -1.f;
+	/** Sweep points within this radius of the noise, cm; < 0 = enemy_perception.json search.sweep_radius_m. */
+	float SweepRadiusCm = -1.f;
+	/** Walk to the noise at this fraction of the normal speed (StealthLureRules::GetApproachSpeed); <= 0 = the search pace. */
+	float ApproachSpeedFraction = 0.f;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedDynamic, AEnemyCharacter*, Enemy);
@@ -318,6 +340,37 @@ public:
 	 */
 	virtual void StartPatrolSearch(const FVector& Location);
 
+	/**
+	 * StartPatrolSearch with a spec (the stealth lure's investigation). The spec travels with the search to its leader / escorts;
+	 * a later trap search (default spec) replaces it. No-op off patrol.
+	 */
+	void StartPatrolSearchWith(const FVector& Location, const FPatrolSearchSpec& Spec);
+
+	/**
+	 * Investigating a whistle / thrown stone (stealth lure): searching with a lure spec. Hook for a later stealth kill: while it
+	 * looks around at the noise (HasReachedSearchOrigin) it faces away from where it came from.
+	 */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Patrol")
+	bool IsInvestigatingLure() const { return bSearching && ActiveSearchSpec.bLure; }
+
+	/** The point it searches round (the trap blast / the lure noise). */
+	FVector GetSearchOrigin() const { return SearchOrigin; }
+
+	/** The search walked to its origin already (now sweeping / looking around there). */
+	bool HasReachedSearchOrigin() const { return bSearching && bSearchReachedOrigin; }
+
+	/**
+	 * Off patrol duty and aware of the squad (a target, an alarm point, the horde's knowledge): "the squad is detected" for the
+	 * stealth lure (StealthLureRules::IsHuntingSquad).
+	 */
+	bool IsHuntingSquad() const;
+
+	/**
+	 * World-blocking surfaces (pawns / silhouettes ignored) between its ear and Point, up to PerceptionRules::MaxHearingOccluders
+	 * (the footstep hearing trace; the stealth lure uses it for its noise point).
+	 */
+	int32 CountHearingWallsTo(const FVector& Point) const;
+
 	/** Hunting for the squad after a trap (still on patrol duty, not engaged). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Patrol")
 	bool IsSearching() const { return bSearching; }
@@ -486,6 +539,8 @@ protected:
 	float SearchStuckTime = 0.f;
 	bool bSearchReachedOrigin = false;
 	bool bSearchMoving = false;
+	/** Spec of the running search (default = a trap search). */
+	FPatrolSearchSpec ActiveSearchSpec;
 	float PatrolSuspicion = 0.f;
 	bool bHeldByAIPause = false;
 	/** See SetTurnBasedHeld. */

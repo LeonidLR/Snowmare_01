@@ -1,4 +1,7 @@
 #include "UI/ActionBarWidget.h"
+#include "AI/StealthLureRules.h"
+#include "AI/StealthLureSubsystem.h"
+#include "Core/PlayerCommands.h"
 #include "Blueprint/WidgetTree.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -53,6 +56,9 @@ namespace
 	const FLinearColor BarColdBack = ACodexTacticsHUD::GodotColor(0.04f, 0.08f, 0.15f, 0.9f);
 	const FLinearColor BarTextColor(0.95f, 0.95f, 0.95f);
 	const FLinearColor BarDarkText = ACodexTacticsHUD::GodotColor(0.1f, 0.1f, 0.1f);
+	/** Stealth lure buttons: muted steel blue; brighter while the stone aim runs. */
+	const FLinearColor BarStealthColor = ACodexTacticsHUD::GodotColor(0.18f, 0.32f, 0.42f);
+	const FLinearColor BarStealthActiveColor = ACodexTacticsHUD::GodotColor(0.3f, 0.75f, 0.95f);
 	// Godot WeaponSelectorPanel: bg (0.08, 0.10, 0.14, 0.96), border (0.2, 0.75, 0.95), title (0.4, 0.9, 1.0).
 	const FLinearColor SelectorBack = ACodexTacticsHUD::GodotColor(0.08f, 0.1f, 0.14f, 0.96f);
 	const FLinearColor SelectorBorder = ACodexTacticsHUD::GodotColor(0.2f, 0.75f, 0.95f);
@@ -169,6 +175,14 @@ void UActionBarWidget::BuildDefaultLayout()
 	VehicleButton = MakeSlotButton(TEXT("BarVehicleButton"), BarBlue, 54.f, 56.f, BarVehicleText, Row);
 	VehicleButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleVehicle);
 	VehicleButton->SetVisibility(ESlateVisibility::Collapsed);
+
+	// Stealth lure (user decisions 2026-10-18): whistle / stone throw, only while exploring undetected.
+	StealthWhistleText = MakeText(TEXT("BarWhistleText"), 10, BarTextColor);
+	StealthWhistleButton = MakeSlotButton(TEXT("BarWhistleButton"), BarStealthColor, 58.f, 56.f, StealthWhistleText, Row);
+	StealthWhistleButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleStealthWhistle);
+	StealthThrowText = MakeText(TEXT("BarThrowText"), 10, BarTextColor);
+	StealthThrowButton = MakeSlotButton(TEXT("BarThrowButton"), BarStealthColor, 58.f, 56.f, StealthThrowText, Row);
+	StealthThrowButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleStealthThrow);
 
 	// Fire posture (user request 2026-10-06): three direct-select buttons with their keys , . /
 	PostureButtons.Reset();
@@ -401,6 +415,7 @@ void UActionBarWidget::Refresh()
 			: (bRepair ? LOCTEXT("VehicleRepairTip", "The vehicle is disabled: the Engineer repairs it [Y] (~5 s at the hull)")
 				: LOCTEXT("VehicleBoardTip", "Board the vehicle [Y] (Alt+Y: whole squad)")));
 	}
+	RefreshStealthButtons(*Leader);
 	if (PostureButtons.Num() == 3)
 	{
 		// The posture of the selected operative(s) is highlighted (user decision 2026-10-06; the group's when it shares
@@ -724,6 +739,83 @@ void UActionBarWidget::HandleVehicle()
 	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
 	{
 		PC->VehicleKey(false);
+	}
+	Refresh();
+}
+
+void UActionBarWidget::RefreshStealthButtons(const AOperativeCharacter& Leader)
+{
+	UStealthLureSubsystem* Lure = GetWorld()->GetSubsystem<UStealthLureSubsystem>();
+	if (!Lure || !StealthWhistleButton || !StealthThrowButton)
+	{
+		return;
+	}
+	const UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();
+	const bool bAimingStone = Grenades && Grenades->IsAimingLure();
+	struct FLureButton
+	{
+		EStealthLureKind Kind;
+		UButton* Button;
+		UTextBlock* Text;
+		FName Command;
+	};
+	const FLureButton Buttons[] = {
+		{ EStealthLureKind::Whistle, StealthWhistleButton, StealthWhistleText, PlayerCommands::StealthWhistle },
+		{ EStealthLureKind::Throw, StealthThrowButton, StealthThrowText, PlayerCommands::StealthThrow } };
+	for (const FLureButton& Entry : Buttons)
+	{
+		const EStealthLureRefusal Refusal = Lure->GetAvailability(&Leader, Entry.Kind);
+		const float Left = Lure->GetCooldownLeft(&Leader, Entry.Kind);
+		const bool bEnabled = Refusal == EStealthLureRefusal::None || (Entry.Kind == EStealthLureKind::Throw && bAimingStone);
+		ActionBarDirty::SetText(Entry.Text, StealthLureRules::GetButtonLabel(Entry.Kind, Refusal, Left, PlayerCommands::GetKeyLabel(Entry.Command)));
+		if (Entry.Button->GetIsEnabled() != bEnabled)
+		{
+			Entry.Button->SetIsEnabled(bEnabled);
+		}
+		ActionBarDirty::SetBackground(Entry.Button, Entry.Kind == EStealthLureKind::Throw && bAimingStone ? BarStealthActiveColor : BarStealthColor);
+		const FStealthLureParams Params = UStealthLureSubsystem::GetParams();
+		const FText Ready = Entry.Kind == EStealthLureKind::Whistle
+			? FText::Format(LOCTEXT("WhistleTip", "Whistle [{0}]: every enemy within ~{1} m (less through walls) comes to look at this spot. Cooldown {2} s. Only while exploring undetected."),
+				FText::FromString(PlayerCommands::GetKeyLabel(Entry.Command)), FMath::RoundToInt(Params.WhistleRadiusCm / 100.f),
+				FMath::RoundToInt(Params.WhistleCooldownSeconds))
+			: FText::Format(LOCTEXT("ThrowTip", "Throw a stone [{0}]: aim (max {1} m), click - every enemy within ~{2} m of the impact comes to look. Cooldown {3} s. Only while exploring undetected."),
+				FText::FromString(PlayerCommands::GetKeyLabel(Entry.Command)), FMath::RoundToInt(Params.ThrowRangeCm / 100.f),
+				FMath::RoundToInt(Params.ThrowRadiusCm / 100.f), FMath::RoundToInt(Params.ThrowCooldownSeconds));
+		SetToolTipIfChanged(Entry.Button, Refusal == EStealthLureRefusal::None ? Ready : StealthLureRules::GetRefusalText(Entry.Kind, Refusal, Left));
+	}
+	// Hovering WHISTLE: its hearing circle round the leader and the enemies that would hear it.
+	if (StealthWhistleButton->IsHovered() && Lure->GetAvailability(&Leader, EStealthLureKind::Whistle) == EStealthLureRefusal::None)
+	{
+		Lure->UpdatePreview(Leader.GetActorLocation() - FVector(0.f, 0.f, Leader.GetSimpleCollisionHalfHeight()), EStealthLureKind::Whistle, true);
+	}
+}
+
+FText UActionBarWidget::GetStealthButtonText(bool bThrow) const
+{
+	const UTextBlock* Text = bThrow ? StealthThrowText.Get() : StealthWhistleText.Get();
+	return Text ? Text->GetText() : FText::GetEmpty();
+}
+
+bool UActionBarWidget::IsStealthButtonEnabled(bool bThrow) const
+{
+	const UButton* Button = bThrow ? StealthThrowButton.Get() : StealthWhistleButton.Get();
+	return Button && Button->GetIsEnabled();
+}
+
+void UActionBarWidget::HandleStealthWhistle()
+{
+	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
+	{
+		PC->StealthWhistleKey();
+	}
+	Refresh();
+}
+
+void UActionBarWidget::HandleStealthThrow()
+{
+	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
+	{
+		PC->StealthThrowKey();
 	}
 	Refresh();
 }

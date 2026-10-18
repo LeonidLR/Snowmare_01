@@ -35,7 +35,7 @@
   "beats": [
     { "id": "A0", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A0",
       "lock": ["Stance.*", "Squad.*", "Posture.*", "Cover.*", "Object.*", "Item.*", "Inventory.*", "Loot.*", "Trap.*", "Deploy.*", "Attack.*",
-        "Grenade.*", "Flare.*", "Weapon.*", "Time.*", "TB.*", "Vehicle.*", "View.*", "Order.WatchSector", "Order.Sprint"] },
+        "Grenade.*", "Flare.*", "Weapon.*", "Time.*", "TB.*", "Vehicle.*", "View.*", "Stealth.*", "Order.WatchSector", "Order.Sprint"] },
     { "id": "A1", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A1" },
     { "id": "A2", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A2",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Order.Sprint"] },

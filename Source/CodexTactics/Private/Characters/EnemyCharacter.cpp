@@ -1,4 +1,5 @@
 #include "Characters/EnemyCharacter.h"
+#include "AI/StealthLureRules.h"
 #include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Combat/KnockdownComponent.h"
@@ -1453,6 +1454,10 @@ FEnemyPatrolSnapshot AEnemyCharacter::CapturePatrolSnapshot() const
 	Snapshot.SearchOrigin = SearchOrigin;
 	Snapshot.SearchElapsed = SearchElapsed;
 	Snapshot.Suspicion = PatrolSuspicion;
+	Snapshot.bLureSearch = bSearching && ActiveSearchSpec.bLure;
+	Snapshot.SearchDurationSeconds = ActiveSearchSpec.DurationSeconds;
+	Snapshot.SearchSweepRadiusCm = ActiveSearchSpec.SweepRadiusCm;
+	Snapshot.SearchApproachSpeedFraction = ActiveSearchSpec.ApproachSpeedFraction;
 	return Snapshot;
 }
 
@@ -1486,6 +1491,14 @@ void AEnemyCharacter::RestorePatrolSnapshot(APatrolRouteActor* Route, AEnemyChar
 	bEscortMoving = false;
 	PatrolSuspicion = Snapshot.Suspicion;
 	bSearching = Snapshot.bSearching;
+	ActiveSearchSpec = FPatrolSearchSpec();
+	if (Snapshot.bSearching)
+	{
+		ActiveSearchSpec.bLure = Snapshot.bLureSearch;
+		ActiveSearchSpec.DurationSeconds = Snapshot.SearchDurationSeconds;
+		ActiveSearchSpec.SweepRadiusCm = Snapshot.SearchSweepRadiusCm;
+		ActiveSearchSpec.ApproachSpeedFraction = Snapshot.SearchApproachSpeedFraction;
+	}
 	SearchOrigin = Snapshot.SearchOrigin;
 	SearchGoal = Snapshot.SearchOrigin;
 	SearchElapsed = Snapshot.SearchElapsed;
@@ -1506,6 +1519,12 @@ FEnemyPerceptionParams AEnemyCharacter::GetPatrolPerception() const
 {
 	const FEnemyPerceptionParams Params = GetPerception();
 	return bSearching ? PerceptionRules::Scaled(Params, EnemyPerception::GetSearch().PerceptionMultiplier) : Params;
+}
+
+bool AEnemyCharacter::IsHuntingSquad() const
+{
+	const bool bAlive = !bIsDying && HealthComponent && HealthComponent->IsAlive();
+	return StealthLureRules::IsHuntingSquad(bAlive, IsOnPatrol(), CurrentTarget.IsValid(), bHasPatrolAlertLocation, bKnowsSquadPosition);
 }
 
 int32& AEnemyCharacter::TrapBlastDepth()
@@ -1616,6 +1635,11 @@ AActor* AEnemyCharacter::FindVisibleOperative(const FEnemyPerceptionParams& Para
 
 int32 AEnemyCharacter::CountHearingWalls(const AActor& Target) const
 {
+	return CountHearingWallsTo(Target.GetActorLocation());
+}
+
+int32 AEnemyCharacter::CountHearingWallsTo(const FVector& Point) const
+{
 	UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -1632,7 +1656,7 @@ int32 AEnemyCharacter::CountHearingWalls(const AActor& Target) const
 	}
 	// From the ear to the middle of his body; every blocking surface counts once (its component is skipped after).
 	const FVector Ear = GetActorLocation() + FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() * 0.5f);
-	const FVector Body = Target.GetActorLocation();
+	const FVector Body = Point;
 	int32 Walls = 0;
 	FHitResult Hit;
 	while (Walls < PerceptionRules::MaxHearingOccluders && World->LineTraceSingleByChannel(Hit, Ear, Body, ECC_Visibility, TraceParams))
@@ -1846,12 +1870,18 @@ void AEnemyCharacter::UpdateVisionCone(float DeltaTime)
 
 void AEnemyCharacter::StartPatrolSearch(const FVector& Location)
 {
+	StartPatrolSearchWith(Location, FPatrolSearchSpec());
+}
+
+void AEnemyCharacter::StartPatrolSearchWith(const FVector& Location, const FPatrolSearchSpec& Spec)
+{
 	if (!IsOnPatrol() || bIsDying)
 	{
 		return;
 	}
 	const bool bWasSearching = bSearching;
 	bSearching = true;
+	ActiveSearchSpec = Spec;
 	SearchOrigin = Location;
 	SearchGoal = Location;
 	SearchElapsed = 0.f;
@@ -1864,21 +1894,26 @@ void AEnemyCharacter::StartPatrolSearch(const FVector& Location)
 	bPatrolMoveIssued = false;
 	if (bWasSearching)
 	{
-		return; // a new blast: the search moves there and its clock restarts
+		// A new blast / noise: the search moves there and its clock restarts.
+		UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s moves its search to %s%s"), *GetName(), *Location.ToCompactString(),
+			Spec.bLure ? TEXT(" (lure)") : TEXT(""));
+		return;
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s searches around %s"), *GetName(), *Location.ToCompactString());
-	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] search started by %s at %.1f s"), *GetName(), GetWorld()->GetTimeSeconds());
-	UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❓ SEARCHING"), FLinearColor(1.f, 0.8f, 0.25f));
-	// The whole patrol hunts: its leader and every escort.
+	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s %s around %s"), *GetName(), Spec.bLure ? TEXT("investigates a noise") : TEXT("searches"),
+		*Location.ToCompactString());
+	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] %s started by %s at %.1f s"), Spec.bLure ? TEXT("lure investigation") : TEXT("search"), *GetName(),
+		GetWorld()->GetTimeSeconds());
+	UFloatingTextSubsystem::SpawnAboveEnemy(this, Spec.bLure ? TEXT("? NOISE") : TEXT("❓ SEARCHING"), FLinearColor(1.f, 0.8f, 0.25f));
+	// The whole patrol hunts: its leader and every escort (with the same spec).
 	if (AEnemyCharacter* Leader = EscortLeader.Get(); Leader && Leader->IsOnPatrol() && !Leader->IsSearching())
 	{
-		Leader->StartPatrolSearch(Location);
+		Leader->StartPatrolSearchWith(Location, Spec);
 	}
 	for (AEnemyCharacter* Mate : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
 		if (Mate != this && Mate->EscortLeader.Get() == this && Mate->IsOnPatrol() && !Mate->IsSearching())
 		{
-			Mate->StartPatrolSearch(Location);
+			Mate->StartPatrolSearchWith(Location, Spec);
 		}
 	}
 }
@@ -1887,7 +1922,10 @@ void AEnemyCharacter::TickPatrolSearch(float DeltaTime)
 {
 	const FPatrolSearchParams& Search = EnemyPerception::GetSearch();
 	SearchElapsed += DeltaTime;
-	if (PatrolRouteRules::IsSearchOver(SearchElapsed, ULevelEncounterSubsystem::GetPatrolSearchSecondsIn(GetWorld())))
+	const float Duration = ActiveSearchSpec.DurationSeconds >= 0.f ? ActiveSearchSpec.DurationSeconds
+		: ULevelEncounterSubsystem::GetPatrolSearchSecondsIn(GetWorld());
+	const float SweepRadius = ActiveSearchSpec.SweepRadiusCm >= 0.f ? ActiveSearchSpec.SweepRadiusCm : Search.SweepRadiusCm;
+	if (PatrolRouteRules::IsSearchOver(SearchElapsed, Duration))
 	{
 		EndPatrolSearch();
 		return;
@@ -1900,11 +1938,11 @@ void AEnemyCharacter::TickPatrolSearch(float DeltaTime)
 		FaceYaw(GetActorRotation().Yaw + 60.f, DeltaTime, 1.5f);
 		if (SearchLookLeft <= 0.f)
 		{
-			SearchGoal = PatrolRouteRules::PickSearchPoint(SearchOrigin, Search.SweepRadiusCm, FMath::FRand(), FMath::FRand());
+			SearchGoal = PatrolRouteRules::PickSearchPoint(SearchOrigin, SweepRadius, FMath::FRand(), FMath::FRand());
 			if (const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
 			{
 				FNavLocation Reachable;
-				if (Nav->GetRandomReachablePointInRadius(SearchOrigin, Search.SweepRadiusCm, Reachable))
+				if (SweepRadius > 0.f && Nav->GetRandomReachablePointInRadius(SearchOrigin, SweepRadius, Reachable))
 				{
 					SearchGoal = Reachable.Location;
 				}
@@ -1933,7 +1971,10 @@ void AEnemyCharacter::TickPatrolSearch(float DeltaTime)
 	{
 		SearchStuckTime = 0.f;
 		bSearchMoving = true;
-		IssuePatrolMove(Goal, PatrolRouteRules::GetSearchSpeed(PatrolWalkSpeed, Search.SpeedMultiplier, BaseWalkSpeed));
+		const float SearchSpeed = PatrolRouteRules::GetSearchSpeed(PatrolWalkSpeed, Search.SpeedMultiplier, BaseWalkSpeed);
+		// A lure: the first leg (to the noise) at the enemy's own pace - hounds come fast, Brutes slowly.
+		IssuePatrolMove(Goal, ActiveSearchSpec.bLure && !bSearchReachedOrigin
+			? StealthLureRules::GetApproachSpeed(PatrolWalkSpeed, BaseWalkSpeed, ActiveSearchSpec.ApproachSpeedFraction, SearchSpeed) : SearchSpeed);
 	}
 }
 
@@ -1946,6 +1987,8 @@ void AEnemyCharacter::EndPatrolSearch()
 	bSearching = false;
 	bSearchMoving = false;
 	PatrolSuspicion = 0.f;
+	const bool bWasLure = ActiveSearchSpec.bLure;
+	ActiveSearchSpec = FPatrolSearchSpec();
 	if (AAIController* AIC = Cast<AAIController>(GetController()))
 	{
 		AIC->StopMovement();
@@ -1972,7 +2015,8 @@ void AEnemyCharacter::EndPatrolSearch()
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s gives up the search, back to waypoint %d"), *GetName(), PatrolWaypointIndex);
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] search timed out for %s at %.1f s"), *GetName(), GetWorld()->GetTimeSeconds());
+	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] %s timed out for %s at %.1f s"), bWasLure ? TEXT("lure investigation") : TEXT("search"), *GetName(),
+		GetWorld()->GetTimeSeconds());
 	if (!bIsDying)
 	{
 		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("STAND DOWN"), FLinearColor(0.7f, 0.8f, 0.9f));
