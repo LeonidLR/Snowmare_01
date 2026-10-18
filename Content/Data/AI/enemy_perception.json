@@ -1,5 +1,5 @@
 {
-  "comment": "Enemy perception of the squad before a fight (patrols / search, user request 2026-10-06). Read at game start (Data/EnemyPerception.h); a missing key keeps the built-in default (AI/PerceptionRules.cpp). Distances in meters, angles in degrees (half-angle of the field of view), times in seconds. smell_radius_m only counts for FROST_HOUND. Footstep radii lowered 2026-10-06 (user playtest); every wall between the enemy and the operative multiplies the footstep radius by hearing_occlusion_per_wall (optional per archetype, default 0.5). Placed charges / traps use the trap alert radius (20 m) and start a SEARCH; detection by sight / hearing / smell starts the fight.",
+  "comment": "Enemy perception of the squad before a fight (patrols / search, user request 2026-10-06). Read at game start (Data/EnemyPerception.h); a missing key keeps the built-in default (AI/PerceptionRules.cpp). Distances in meters, angles in degrees (half-angle of the field of view), times in seconds. smell_radius_m only counts for FROST_HOUND (6 m since 2026-10-18; hound scent: every wall between the nose and the operative multiplies it by smell_occlusion_per_wall, a scent only ALERTS the hound - it sniffs sniff_seconds, then follows the scent at scent_follow_speed_fraction x its patrol pace; it detects only within smell_detect_m in open air or by sight; a lost scent is investigated scent_search_seconds within scent_sweep_radius_m, docs/design/STEALTH_LURE.md). Footstep radii lowered 2026-10-06 (user playtest); every wall between the enemy and the operative multiplies the footstep radius by hearing_occlusion_per_wall (optional per archetype, default 0.5). Placed charges / traps use the trap alert radius (20 m) and start a SEARCH; detection by sight / hearing / smell starts the fight.",
   "search": {
     "duration_seconds": 60,
     "sweep_radius_m": 12,
@@ -26,7 +26,9 @@
       "visibility_standing": 1, "visibility_crouching": 0.75, "visibility_prone": 0.4,
       "proximity_m": 3, "time_to_detect_seconds": 0.6, "suspicion_decay_per_second": 0.5,
       "hear_walk_m": 7, "hear_run_m": 14, "hear_crouch_walk_m": 3.5, "hear_crawl_m": 1.5,
-      "hear_gunshot_m": 45, "hear_explosion_m": 60, "smell_radius_m": 12
+      "hear_gunshot_m": 45, "hear_explosion_m": 60, "smell_radius_m": 6,
+      "smell_occlusion_per_wall": 0.3, "smell_detect_m": 2, "sniff_seconds": 2.5, "scent_lost_seconds": 1,
+      "scent_follow_max_seconds": 20, "scent_follow_speed_fraction": 0.8, "scent_search_seconds": 20, "scent_sweep_radius_m": 3
     },
     "MARKSMAN": {
       "sight_range_m": 45, "sight_half_angle_deg": 30,

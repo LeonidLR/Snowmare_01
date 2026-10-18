@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "AI/PatrolRouteRules.h"
 #include "AI/PerceptionRules.h"
+#include "AI/ScentRules.h"
 #include "Characters/EnemyAIRules.h"
 #include "GameFramework/Character.h"
 #include "Data/CombatTypes.h"
@@ -45,6 +46,8 @@ struct CODEXTACTICS_API FEnemyPatrolSnapshot
 	float SearchDurationSeconds = -1.f;
 	float SearchSweepRadiusCm = -1.f;
 	float SearchApproachSpeedFraction = 0.f;
+	/** Investigating a lost hound scent (2026-10-18, FPatrolSearchSpec::bScent). */
+	bool bScentSearch = false;
 };
 
 /**
@@ -62,6 +65,8 @@ struct CODEXTACTICS_API FPatrolSearchSpec
 	float SweepRadiusCm = -1.f;
 	/** Walk to the noise at this fraction of the normal speed (StealthLureRules::GetApproachSpeed); <= 0 = the search pace. */
 	float ApproachSpeedFraction = 0.f;
+	/** A hound investigating the point where it lost a scent (ScentRules, 2026-10-18; AEnemyCharacter::IsInvestigatingScent). */
+	bool bScent = false;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedDynamic, AEnemyCharacter*, Enemy);
@@ -353,6 +358,34 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Patrol")
 	bool IsInvestigatingLure() const { return bSearching && ActiveSearchSpec.bLure; }
 
+	/**
+	 * Hound scent (game designer 2026-10-18, ScentRules): caught a scent and sniffs (Sniffing) or follows it slowly (Following);
+	 * None otherwise. The HUD's scent marker; full detection only close in open air or by sight.
+	 */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Patrol")
+	EHoundScentPhase GetScentPhase() const { return ScentState.Phase; }
+
+	/** Sniffing or following a scent (GetScentPhase != None). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Patrol")
+	bool IsOnScent() const { return ScentState.Phase != EHoundScentPhase::None; }
+
+	/** Where it last smelled an operative (the follow goal / the lost-scent search point). */
+	FVector GetScentPoint() const { return ScentState.ScentPoint; }
+
+	/** Investigating the point where it lost a scent (a patrol search with a scent spec). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Patrol")
+	bool IsInvestigatingScent() const { return bSearching && ActiveSearchSpec.bScent; }
+
+	/**
+	 * Walls the scent from Target passes on its way to the nose: the clearest of a few offset traces (straight, over a low obstacle,
+	 * either side - so a doorway / gap counts as open), each up to PerceptionRules::MaxHearingOccluders.
+	 */
+	int32 CountScentWallsTo(const AActor& Target) const;
+
+	/** Why its patrol broke last (smokes, the Jev coach log); valid once HasBrokenPatrol. */
+	EPatrolAlertCause GetLastPatrolBreakCause() const { return LastPatrolBreakCause; }
+	bool HasBrokenPatrol() const { return bHasBrokenPatrol; }
+
 	/** The point it searches round (the trap blast / the lure noise). */
 	FVector GetSearchOrigin() const { return SearchOrigin; }
 
@@ -521,6 +554,17 @@ protected:
 	bool TickPatrolPerception(float DeltaTime);
 	/** Perception in force on patrol (x the search multiplier while searching). */
 	FEnemyPerceptionParams GetPatrolPerception() const;
+	/**
+	 * The hound's nose this perception step (ScentRules over every living operative within the smell radius, walls counted by
+	 * CountScentWallsTo) -> the scent state machine; true when it detected (the patrol broke).
+	 */
+	bool TickScentPerception(const FEnemyPerceptionParams& Params, float StepSeconds);
+	/** Scent driver while IsOnScent: stand and sniff, or walk slowly to the scent point. True while it drives the hound. */
+	bool TickScentBehavior(float DeltaTime);
+	/** Back to no scent (patrol break, a new patrol, a load). */
+	void ResetScent();
+	/** World-blocking surfaces between From and To (pawns / silhouettes ignored), each component once, up to Max. */
+	int32 CountOccludersBetween(const FVector& From, const FVector& To, int32 Max) const;
 	/** Search driver: blast point, then sweep points, until the search time is over. */
 	void TickPatrolSearch(float DeltaTime);
 	/** Search over: back to the nearest waypoint (route) / the tether (escort). */
@@ -541,6 +585,14 @@ protected:
 	bool bSearchMoving = false;
 	/** Spec of the running search (default = a trap search). */
 	FPatrolSearchSpec ActiveSearchSpec;
+	/** Hound scent episode (ScentRules::Step). */
+	FHoundScentState ScentState;
+	/** Last follow goal sent to the AI (a new move only when the scent point moved). */
+	FVector ScentMoveGoal = FVector::ZeroVector;
+	bool bScentMoveIssued = false;
+	float ScentStuckTime = 0.f;
+	EPatrolAlertCause LastPatrolBreakCause = EPatrolAlertCause::PartnerAlert;
+	bool bHasBrokenPatrol = false;
 	float PatrolSuspicion = 0.f;
 	bool bHeldByAIPause = false;
 	/** See SetTurnBasedHeld. */
