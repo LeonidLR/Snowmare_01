@@ -151,12 +151,41 @@ namespace VisionConeSmoke
 			}
 			Check(State, bAllHave, TEXT("every operative has a VisionCone component on its capsule"));
 			Check(State, bNoneShown, TEXT("operative cones off by default (bShowVisionCone false, Godot shipped them hidden)"));
-			const FVector F = Leader->GetActorForwardVector().GetSafeNormal2D();
-			const FVector R = FVector::CrossProduct(FVector::UpVector, F);
-			const FVector Feet = Leader->GetActorLocation() - FVector(0.f, 0.f, Leader->GetSimpleCollisionHalfHeight());
-			// A brute 14 m straight ahead (inside the leader's cone), a hound 18 m to the side; both face away (guarding).
-			Brute = SpawnGuard(World, EEnemyArchetype::Brute, SmokeUtils::ClearPoint(World, Feet, Feet + F * 1400.f), F);
-			Hound = SpawnGuard(World, EEnemyArchetype::FrostHound, SmokeUtils::ClearPoint(World, Feet, Feet + R * 1800.f), R);
+			// Map-independent (the user's L_PatrolTest edits 2026-10-18): the squad, the brute and the hound go to an empty, flat,
+			// navigable spot of the map (F -6 .. +17 m, R -6 .. +21 m), so no prop the designer moves stands between them.
+			TArray<const AActor*> Ignore;
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Ignore.Add(Member);
+			}
+			if (const APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
+			{
+				Ignore.Add(PC->GetPawn());
+			}
+			const FVector LeaderFeet = Leader->GetActorLocation() - FVector(0.f, 0.f, Leader->GetSimpleCollisionHalfHeight());
+			const SmokeUtils::FClearArena Arena = SmokeUtils::FindClearArena(World, LeaderFeet, Leader->GetActorForwardVector(),
+				FBox2D(FVector2D(-600.f, -600.f), FVector2D(1700.f, 2100.f)), Ignore);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: arena %s at %s facing %s (%d tried, %d blocked by geometry, %d off the navmesh)"),
+				Arena.bFound ? TEXT("found") : TEXT("NOT found"), *Arena.Origin.ToCompactString(), *Arena.Forward.ToCompactString(), Arena.Tried, Arena.Blocked, Arena.OffNav);
+			if (!Arena.bFound)
+			{
+				Check(State, false, TEXT("an empty, flat, navigable spot on the map for the smoke's own set-up"));
+				return Finish(State);
+			}
+			const FVector F = Arena.Forward;
+			const FVector R = Arena.Right;
+			const FVector Feet = Arena.Origin;
+			int32 Index = 0;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				// The leader on the origin facing F, the others behind him (out of his cone).
+				const FVector Spot = SmokeUtils::FreeSpot(World, Feet - F * (Member == Leader ? 0.f : 250.f) + R * (Member == Leader ? 0.f : (++Index == 1 ? -200.f : 200.f)), Member);
+				Member->StopOperative();
+				Member->TeleportTo(Spot, F.Rotation(), false, true);
+			}
+			// A brute 12.5 m straight ahead (well inside the leader's 14 m cone), a hound 18 m to the side; both face away (guarding).
+			Brute = SpawnGuard(World, EEnemyArchetype::Brute, Feet + F * 1250.f, F);
+			Hound = SpawnGuard(World, EEnemyArchetype::FrostHound, Feet + R * 1800.f, R);
 			if (!Brute || !Hound)
 			{
 				Check(State, false, TEXT("brute and hound spawned"));
