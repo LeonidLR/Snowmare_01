@@ -1835,6 +1835,10 @@ bool AEnemyCharacter::TickScentPerception(const FEnemyPerceptionParams& Params, 
 		Sense.Point = Member->GetActorLocation();
 		Sense.bClose = ScentRules::IsCloseDetection(Params, Distance, Walls);
 	}
+	if (bScentHeldByNoise && !Sense.bClose)
+	{
+		Sense.bSmells = false; // a noise took it off a scent: on its way there only the close open-air nose detects
+	}
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	switch (ScentRules::Step(Params, ScentState, Sense, StepSeconds))
 	{
@@ -1921,6 +1925,7 @@ bool AEnemyCharacter::TickScentBehavior(float DeltaTime)
 
 void AEnemyCharacter::ResetScent()
 {
+	bScentHeldByNoise = false;
 	ScentState = FHoundScentState();
 	bScentMoveIssued = false;
 	ScentStuckTime = 0.f;
@@ -2071,16 +2076,79 @@ void AEnemyCharacter::StartPatrolSearch(const FVector& Location)
 	StartPatrolSearchWith(Location, FPatrolSearchSpec());
 }
 
-void AEnemyCharacter::StartPatrolSearchWith(const FVector& Location, const FPatrolSearchSpec& Spec)
+ENoiseReaction AEnemyCharacter::StartPatrolSearchWith(const FVector& Location, const FPatrolSearchSpec& Spec)
+{
+	const ENoiseReaction Reaction = ApplySearchNoise(Location, Spec);
+	if (!StealthLureRules::GoesToNoise(Reaction))
+	{
+		return Reaction;
+	}
+	// The whole patrol searches together, at the NEWEST noise: its leader and every escort of the patrol, searching or not
+	// (fix 2026-10-18: a patrol mate already searching kept sweeping the old point - the hound stayed at the stone).
+	AEnemyCharacter* Root = EscortLeader.Get() ? EscortLeader.Get() : this;
+	TArray<AEnemyCharacter*> Group;
+	if (Root != this)
+	{
+		Group.Add(Root);
+	}
+	for (AEnemyCharacter* Mate : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
+	{
+		if (Mate && Mate != this && Mate->EscortLeader.Get() == Root)
+		{
+			Group.Add(Mate);
+		}
+	}
+	for (AEnemyCharacter* Mate : Group)
+	{
+		if (IsValid(Mate) && Mate->IsOnPatrol() && !Mate->IsDying())
+		{
+			Mate->ApplySearchNoise(Location, Spec);
+		}
+	}
+	return Reaction;
+}
+
+ENoiseReaction AEnemyCharacter::ApplySearchNoise(const FVector& Location, const FPatrolSearchSpec& Spec)
 {
 	if (!IsOnPatrol() || bIsDying)
 	{
-		return;
+		return ENoiseReaction::Ignored;
 	}
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	FNoiseReactionInput Input;
+	Input.bSearching = bSearching;
+	Input.DistanceToCurrentNoiseCm = FVector::Dist2D(SearchNoise, Location);
+	Input.SecondsSinceCurrentNoise = SearchNoiseTime >= 0.0 ? static_cast<float>(Now - SearchNoiseTime) : TNumericLimits<float>::Max();
+	Input.bSniffing = ScentState.Phase == EHoundScentPhase::Sniffing;
+	Input.bFollowingScent = ScentState.Phase == EHoundScentPhase::Following;
+	Input.ScentDistanceCm = FVector::Dist2D(GetActorLocation(), ScentState.ScentPoint);
+	const ENoiseReaction Reaction = StealthLureRules::ReactToNoise(Input);
+	if (Reaction == ENoiseReaction::KeepScent)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] %s keeps following a fresh scent %.1f m away: ignores the noise at %s"), *GetName(),
+			Input.ScentDistanceCm / 100.f, *Location.ToCompactString());
+		return Reaction;
+	}
+	if (Reaction == ENoiseReaction::SameNoise)
+	{
+		return Reaction; // its patrol mate pulled it to this noise an instant ago
+	}
+	// A sniffing hound / one on a far scent: the newer noise wins, the scent is dropped and the nose held until it gets there
+	// (else it would catch the same scent again at once and the noise would be lost). Its own lost-scent search keeps the nose.
+	const bool bDropScent = IsOnScent() && !Spec.bScent;
+	if (bDropScent)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] %s drops the scent (%s, %.1f m away) for the noise at %s"), *GetName(),
+			Input.bSniffing ? TEXT("sniffing") : TEXT("following"), Input.ScentDistanceCm / 100.f, *Location.ToCompactString());
+		ResetScent();
+	}
+	bScentHeldByNoise = bScentHeldByNoise || bDropScent;
 	const bool bWasSearching = bSearching;
+	const FVector OldOrigin = SearchOrigin;
 	bSearching = true;
 	ActiveSearchSpec = Spec;
 	SearchNoise = Location;
+	SearchNoiseTime = Now;
 	// The walk ends where this enemy can get to (fix 2026-10-18: the whistler's own spot may be off its navmesh / unreachable).
 	SearchOrigin = Spec.bLure ? ResolveSearchPoint(Location) : Location;
 	SearchGoal = SearchOrigin;
@@ -2094,31 +2162,51 @@ void AEnemyCharacter::StartPatrolSearchWith(const FVector& Location, const FPatr
 	bSearchMoving = false;
 	bEscortMoving = false;
 	bPatrolMoveIssued = false;
+	if (AAIController* AIC = Cast<AAIController>(GetController()); AIC && bWasSearching)
+	{
+		AIC->StopMovement(); // off the old leg / sweep at once (the listen beat or the new walk follows)
+	}
 	if (bWasSearching)
 	{
-		// A new blast / noise: the search moves there and its clock restarts.
+		// A newer blast / noise: the search moves there and its clock restarts.
 		UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s moves its search to %s%s"), *GetName(), *Location.ToCompactString(),
 			Spec.bLure ? TEXT(" (lure)") : TEXT(""));
-		return;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] %s re-targets its search from %s to %s (%s, newer noise) at %.1f s"), *GetName(),
+			*OldOrigin.ToCompactString(), *SearchOrigin.ToCompactString(), Spec.bLure ? TEXT("lure") : (Spec.bScent ? TEXT("scent") : TEXT("search")), Now);
+		if (Spec.bLure)
+		{
+			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("? NOISE"), FLinearColor(1.f, 0.8f, 0.25f));
+		}
+		return ENoiseReaction::Retarget;
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s %s around %s"), *GetName(),
 		Spec.bLure ? TEXT("investigates a noise") : (Spec.bScent ? TEXT("investigates a lost scent") : TEXT("searches")), *Location.ToCompactString());
-	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] %s started by %s at %.1f s"), Spec.bLure ? TEXT("lure investigation") : TEXT("search"), *GetName(),
-		GetWorld()->GetTimeSeconds());
+	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] %s started by %s at %.1f s"), Spec.bLure ? TEXT("lure investigation") : TEXT("search"), *GetName(), Now);
 	UFloatingTextSubsystem::SpawnAboveEnemy(this, Spec.bLure ? TEXT("? NOISE") : (Spec.bScent ? TEXT("? SCENT") : TEXT("❓ SEARCHING")),
 		FLinearColor(1.f, 0.8f, 0.25f));
-	// The whole patrol hunts: its leader and every escort (with the same spec).
-	if (AEnemyCharacter* Leader = EscortLeader.Get(); Leader && Leader->IsOnPatrol() && !Leader->IsSearching())
+	return ENoiseReaction::Investigate;
+}
+
+float AEnemyCharacter::GetHearingPathLengthTo(const FVector& Point) const
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	if (!Nav)
 	{
-		Leader->StartPatrolSearchWith(Location, Spec);
+		return -1.f;
 	}
-	for (AEnemyCharacter* Mate : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
+	const ANavigationData* NavData = Nav->GetNavDataForProps(GetNavAgentPropertiesRef(), GetActorLocation());
+	FNavLocation OnNav;
+	if (!Nav->ProjectPointToNavigation(Point, OnNav, FVector(150.f, 150.f, 300.f), NavData))
 	{
-		if (Mate != this && Mate->EscortLeader.Get() == this && Mate->IsOnPatrol() && !Mate->IsSearching())
-		{
-			Mate->StartPatrolSearchWith(Location, Spec);
-		}
+		return -1.f;
 	}
+	const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, GetActorLocation(), OnNav.Location, const_cast<AEnemyCharacter*>(this));
+	if (!Path || !Path->IsValid() || Path->IsPartial())
+	{
+		return -1.f;
+	}
+	return Path->GetPathLength() + FVector::Dist2D(OnNav.Location, Point);
 }
 
 void AEnemyCharacter::TickPatrolSearch(float DeltaTime)
@@ -2173,7 +2261,8 @@ void AEnemyCharacter::TickPatrolSearch(float DeltaTime)
 	}
 	const FVector Goal = bSearchReachedOrigin ? SearchGoal : SearchOrigin;
 	SearchLegTime += DeltaTime;
-	if (FVector::Dist2D(GetActorLocation(), Goal) <= StealthLureRules::GetArriveRadius(Search.ArriveCm, bLureFirstLeg)
+	// Arrived: within the arrival radius, or held just short of it (a patrol mate on the point: no 10 s push against him).
+	if (StealthLureRules::HasArrived(FVector::Dist2D(GetActorLocation(), Goal), StealthLureRules::GetArriveRadius(Search.ArriveCm, bLureFirstLeg), SearchStuckTime)
 		|| SearchLegTime > Search.LegTimeoutSeconds || SearchMoveFailures >= StealthLureRules::GiveUpAfterFailures)
 	{
 		if (SearchMoveFailures >= StealthLureRules::GiveUpAfterFailures || SearchLegTime > Search.LegTimeoutSeconds)
@@ -2186,6 +2275,8 @@ void AEnemyCharacter::TickPatrolSearch(float DeltaTime)
 		{
 			AIC->StopMovement();
 		}
+		bScentHeldByNoise = false; // at the noise: the nose works again
+		SearchStuckTime = 0.f; // the next leg starts its own stuck clock
 		bSearchReachedOrigin = true;
 		bSearchMoving = false;
 		SearchLookLeft = FMath::Max(Search.LookAroundSeconds, 0.1f);
@@ -2231,6 +2322,7 @@ void AEnemyCharacter::EndPatrolSearch()
 	}
 	bSearching = false;
 	bSearchMoving = false;
+	bScentHeldByNoise = false;
 	PatrolSuspicion = 0.f;
 	const bool bWasLure = ActiveSearchSpec.bLure;
 	ActiveSearchSpec = FPatrolSearchSpec();

@@ -3,6 +3,10 @@
 // Skips the tutorial, emits a whistle (or 'throw') noise on the navmesh 10 m behind the enemy on patrol / guard duty nearest to the
 // leader (the squad is not moved) and logs every 0.5 s for 20 s each listener's state: distance to the noise, its navmesh path
 // length there (negative = partial), speed, yaw, search flags and its search origin.
+// 'replay' (user report 2026-10-18, L_PatrolTest: «a stone first, then the whistle - they keep spinning at the stone»): the user's
+// own points from his log - a stone at (-281, -2180) 8 s after the start, the whistle at (-1121, -2053) 5.6 s later - with every
+// enemy's distance / walls / navmesh path to the whistle logged before it, then the approach of every enemy for 20 s.
+// 'stone=X,Y' / 'whistle=X,Y' override the two points.
 
 #include "CoreMinimal.h"
 
@@ -30,6 +34,9 @@ namespace LureProbe
 		float Time = 0.f;
 		int32 Stage = 0;
 		bool bThrow = false;
+		bool bReplay = false;
+		FVector2D ReplayStone = FVector2D(-280.92, -2179.70);
+		FVector2D ReplayWhistle = FVector2D(-1121.00, -2052.65);
 		FVector Noise = FVector::ZeroVector;
 		float NextLog = 0.f;
 		TArray<TWeakObjectPtr<AEnemyCharacter>> Listeners;
@@ -70,9 +77,64 @@ namespace LureProbe
 			{
 				Tutorial->SkipTutorial();
 			}
-			State.Stage = 1;
+			State.Stage = State.bReplay ? 10 : 1;
 			State.Time = 0.f;
 			return true;
+		case 10:
+		{
+			// Replay: the stone at the user's impact point once the patrol walks within 7 m of it (as in his game).
+			const FVector Stone(State.ReplayStone.X, State.ReplayStone.Y, Leader->GetActorLocation().Z);
+			bool bNear = false;
+			for (const AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
+			{
+				bNear |= Enemy && Enemy->IsOnPatrol() && FVector::Dist2D(Enemy->GetActorLocation(), Stone) < 700.f;
+			}
+			if ((!bNear && State.Time < 60.f) || State.Time < 2.f || UWorldAIPauseSubsystem::IsPausedIn(World))
+			{
+				return true;
+			}
+			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+			FNavLocation OnNav;
+			const FVector Impact = Nav && Nav->ProjectPointToNavigation(Stone, OnNav, FVector(200.f, 200.f, 600.f)) ? OnNav.Location : Stone;
+			Lure->EmitNoise(Impact, EStealthLureKind::Throw, Leader);
+			UE_LOG(LogCodexTactics, Display, TEXT("[LureProbe] replay stone at %s: %d listeners"), *Impact.ToCompactString(), Lure->GetLastListeners().Num());
+			State.Stage = 11;
+			State.Time = 0.f;
+			return true;
+		}
+		case 11:
+		{
+			// Until every stone listener searches at the impact point (spins there), at least the user's 5.6 s.
+			bool bAllThere = true;
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : Lure->GetLastListeners())
+			{
+				bAllThere &= !Weak.IsValid() || Weak->HasReachedSearchOrigin();
+			}
+			if (State.Time < 5.6f || (!bAllThere && State.Time < 20.f))
+			{
+				return true;
+			}
+			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+			FNavLocation OnNav;
+			const FVector Whistle(State.ReplayWhistle.X, State.ReplayWhistle.Y, Leader->GetActorLocation().Z);
+			State.Noise = Nav && Nav->ProjectPointToNavigation(Whistle, OnNav, FVector(200.f, 200.f, 600.f)) ? OnNav.Location : Whistle;
+			for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
+			{
+				if (Enemy)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[LureProbe] before the whistle: %s at %s, dist %.0f, walls %d, path %.0f, search %d lure %d reached %d origin %s"),
+						*Enemy->GetName(), *Enemy->GetActorLocation().ToCompactString(), FVector::Dist(Enemy->GetActorLocation(), State.Noise + FVector(0.f, 0.f, 60.f)),
+						Enemy->CountHearingWallsTo(State.Noise + FVector(0.f, 0.f, 60.f)), PathLength(World, Enemy, State.Noise), Enemy->IsSearching() ? 1 : 0,
+						Enemy->IsInvestigatingLure() ? 1 : 0, Enemy->HasReachedSearchOrigin() ? 1 : 0, *Enemy->GetSearchOrigin().ToCompactString());
+					State.Listeners.AddUnique(Enemy);
+				}
+			}
+			Lure->EmitNoise(State.Noise, EStealthLureKind::Whistle, Leader);
+			UE_LOG(LogCodexTactics, Display, TEXT("[LureProbe] replay whistle at %s: %d listeners"), *State.Noise.ToCompactString(), Lure->GetLastListeners().Num());
+			State.Stage = 3;
+			State.Time = 0.f;
+			return true;
+		}
 		case 1:
 		{
 			if (State.Time < 2.f || UWorldAIPauseSubsystem::IsPausedIn(World))
@@ -159,6 +221,22 @@ namespace LureProbe
 	{
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->bThrow = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("throw"), ESearchCase::IgnoreCase); });
+		State->bReplay = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("replay"), ESearchCase::IgnoreCase); });
+		for (const FString& Arg : Args)
+		{
+			FString Key;
+			FString Value;
+			FString X;
+			FString Y;
+			if (Arg.Split(TEXT("="), &Key, &Value) && Value.Split(TEXT(","), &X, &Y))
+			{
+				FVector2D& Point = Key.Equals(TEXT("stone"), ESearchCase::IgnoreCase) ? State->ReplayStone : State->ReplayWhistle;
+				if (Key.Equals(TEXT("stone"), ESearchCase::IgnoreCase) || Key.Equals(TEXT("whistle"), ESearchCase::IgnoreCase))
+				{
+					Point = FVector2D(FCString::Atod(*X), FCString::Atod(*Y));
+				}
+			}
+		}
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
@@ -168,7 +246,7 @@ namespace LureProbe
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.LureProbe"),
-		TEXT("Dev probe: a whistle (or 'throw') noise 10 m behind the nearest patrol / guard enemy on this map; logs the listeners' approach for 20 s."),
+		TEXT("Dev probe: a whistle (or 'throw') noise 10 m behind the nearest patrol / guard enemy on this map; logs the listeners' approach for 20 s. 'replay' [stone=X,Y whistle=X,Y]: a stone, then a whistle at the user's points (L_PatrolTest)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

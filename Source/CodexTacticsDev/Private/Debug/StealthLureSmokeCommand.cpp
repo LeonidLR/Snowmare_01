@@ -18,6 +18,13 @@
 //    two guards 5-6 m beyond the wall (the wall halves 12 m: they hear it) must listen briefly, then walk round through the
 //    doorway towards him - their navmesh path to him shrinks by >= 2.5 m within 6 s while he is still there - and reach the
 //    search point next to him (he slips away before they come round the door, so nobody is detected).
+// F. The user's case (L_PatrolTest 2026-10-18: "a stone first, then the whistle - they keep turning at the stone"): behind the
+//    same doorway wall the commander THROWS a stone 9 m beyond it to a guard leader + his escort; once both search at the impact
+//    (looking around there) he WHISTLES. Both must re-target: listen again, then walk through the doorway towards him (path to
+//    him down >= 3 m, planar distance down >= 3 m while he stays), then reach his spot and search it. At least one hears it only
+//    round the wall (the straight line through the wall is muffled below its distance; the walk through the doorway is not).
+// G. Two throws in a row: two guards come to a first stone and search there; a second stone 6 m away (another thrower) moves
+//    their search: they walk to the second point and search there.
 // C. Detected (an enemy hunting the squad): WHISTLE / THROW refused, nothing happens; ready again once it is gone.
 // D. A fight starts (a placed guard breaks its patrol -> the ambush fight): the stone aim ends, both are refused (combat).
 
@@ -101,6 +108,13 @@ namespace StealthLureSmoke
 		/** Stage E: when each guard started walking after the whistle (it listens first). */
 		TMap<TWeakObjectPtr<AEnemyCharacter>, float> StartedAt;
 		TArray<TWeakObjectPtr<AActor>> DoorWalls;
+		/** Stages F / G: the stone points, the enemies, their distance to the whistler, how long they all searched the stone. */
+		FVector StoneA = FVector::ZeroVector;
+		FVector StoneB = FVector::ZeroVector;
+		TArray<TWeakObjectPtr<AEnemyCharacter>> Lured;
+		TMap<TWeakObjectPtr<AEnemyCharacter>, float> DistAtWhistle;
+		TMap<TWeakObjectPtr<AEnemyCharacter>, float> BestDist;
+		float ReachedFor = 0.f;
 		/** Camera anchor of the rendered stills (the camera follows an actor). */
 		TWeakObjectPtr<AActor> ShotAnchor;
 	};
@@ -793,6 +807,298 @@ namespace StealthLureSmoke
 					Enemy->Destroy();
 				}
 			}
+			// F. The user's case at the same doorway wall: a stone beyond it, then the whistle while they search the stone.
+			State.StoneA = SmokeUtils::FreeSpot(World, State.DoorWhistle + State.F * 900.f) - FVector(0.f, 0.f, 92.f);
+			AEnemyCharacter* Leader = SpawnPlaced(World, EEnemyArchetype::Frostbitten, State.StoneA + State.F * 300.f - State.R * 150.f, State.F);
+			AEnemyCharacter* Escort = SpawnPlaced(World, EEnemyArchetype::Spitter, State.StoneA + State.F * 300.f + State.R * 200.f, State.F, false);
+			if (!Leader || !Escort)
+			{
+				Check(State, false, TEXT("stage F guards spawned"));
+				return Finish(State);
+			}
+			Escort->StartPatrol(nullptr, Leader);
+			Encounter->MarkLevelEnemy(Escort);
+			State.Lured = { Leader, Escort };
+			Lure->ResetCooldowns(); // a fresh whistle / throw for the commander (stage E whistled moments ago)
+			Commander->StopOperative();
+			Commander->SetActorLocation(SmokeUtils::FreeSpot(World, State.DoorWhistle, Commander), false, nullptr, ETeleportType::TeleportPhysics);
+			Commander->SetStance(EOperativeStance::Crouching);
+			Next(State, 80);
+			return true;
+		}
+		case 80:
+		{
+			if (State.Time < 2.5f)
+			{
+				return true;
+			}
+			AEnemyCharacter* Leader = State.Lured[0].Get();
+			AEnemyCharacter* Escort = State.Lured[1].Get();
+			Check(State, Leader && Escort && Leader->IsGuardingPost() && Escort->IsOnPatrol() && Escort->GetEscortLeader() == Leader && !AnyHunting(World),
+				TEXT("F: a guard leader with his escort beyond the doorway wall, nobody saw the commander"));
+			if (!Leader || !Escort)
+			{
+				return Finish(State);
+			}
+			State.Stone = Lure->ThrowAt(Commander, State.StoneA);
+			Check(State, State.Stone.IsValid(), FString::Printf(TEXT("F: the commander throws a stone over the wall to %s"), *State.StoneA.ToCompactString()));
+			State.ReachedFor = 0.f;
+			Next(State, 81);
+			return true;
+		}
+		case 81:
+		{
+			// They come to the stone and search there (turning on the spot = the look-around at the impact).
+			const bool bLanded = !State.Stone.IsValid() || !State.Stone->IsFlying();
+			bool bAllThere = bLanded;
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				bAllThere &= Weak.IsValid() && Weak->IsInvestigatingLure() && Weak->HasReachedSearchOrigin();
+			}
+			State.ReachedFor = bAllThere ? State.ReachedFor + 0.1f : 0.f;
+			if (State.ReachedFor < 1.f && State.Time < 25.f && !AnyHunting(World))
+			{
+				return true;
+			}
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				Check(State, Weak.IsValid() && Weak->IsInvestigatingLure() && Weak->HasReachedSearchOrigin() && FVector::Dist2D(Weak->GetSearchOrigin(), State.StoneA) < 100.f,
+					FString::Printf(TEXT("F: %s searches at the stone (origin %.0f cm off it, %.1f s)"), Weak.IsValid() ? *Weak->GetName() : TEXT("?"),
+						Weak.IsValid() ? FVector::Dist2D(Weak->GetSearchOrigin(), State.StoneA) : -1.f, State.Time));
+			}
+			if (AnyHunting(World) || State.Lured.ContainsByPredicate([](const TWeakObjectPtr<AEnemyCharacter>& Weak) { return !Weak.IsValid(); }))
+			{
+				Check(State, false, TEXT("F: nobody detected him at the stone"));
+				return Finish(State);
+			}
+			// The WHISTLE from behind the wall (the real key handler), while they search the stone.
+			State.DoorWhistle = Feet(Commander);
+			const FVector Ear = State.DoorWhistle + FVector(0.f, 0.f, 60.f);
+			const FStealthLureParams Params = EnemyPerception::GetLure();
+			const float SearchMultiplier = EnemyPerception::GetSearch().PerceptionMultiplier;
+			int32 OnlyRoundTheWall = 0;
+			State.PathAtWhistle.Reset();
+			State.BestPath.Reset();
+			State.StartedAt.Reset();
+			State.DistAtWhistle.Reset();
+			State.BestDist.Reset();
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				FStealthLureListener Straight;
+				Straight.bSearching = true;
+				Straight.DistanceCm = FVector::Dist(Weak->GetActorLocation(), Ear);
+				Straight.Walls = Weak->CountHearingWallsTo(Ear);
+				Straight.OcclusionPerWall = Weak->GetPerception().HearingOcclusionPerWall;
+				const bool bStraight = StealthLureRules::Hears(Straight, Params.WhistleRadiusCm, SearchMultiplier);
+				OnlyRoundTheWall += bStraight ? 0 : 1;
+				const float Length = PathLength(World, Weak.Get(), State.DoorWhistle);
+				State.PathAtWhistle.Add(Weak, Length);
+				State.BestPath.Add(Weak, Length);
+				const float Dist = FVector::Dist2D(Weak->GetActorLocation(), State.DoorWhistle);
+				State.DistAtWhistle.Add(Weak, Dist);
+				State.BestDist.Add(Weak, Dist);
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: F: %s at the whistle: straight %.0f cm, %d wall(s), muffled radius %.0f cm (%s), walking path %.0f cm"),
+					*Weak->GetName(), Straight.DistanceCm, Straight.Walls, StealthLureRules::EffectiveRadius(Straight, Params.WhistleRadiusCm, SearchMultiplier),
+					bStraight ? TEXT("heard straight") : TEXT("lost straight"), Length);
+			}
+			PC->StealthWhistleKey();
+			Check(State, Lure->GetLastListeners().Num() >= 1, FString::Printf(TEXT("F: the whistle is heard at the stone (%d listeners)"), Lure->GetLastListeners().Num()));
+			Check(State, OnlyRoundTheWall >= 1, FString::Printf(TEXT("F: %d of them hear it only round the wall, through the doorway"), OnlyRoundTheWall));
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				Check(State, Weak->IsInvestigatingLure() && !Weak->HasReachedSearchOrigin() && FVector::Dist2D(Weak->GetSearchOrigin(), State.DoorWhistle) < 200.f,
+					FString::Printf(TEXT("F: %s re-targets its search from the stone to the whistler (%.0f cm off him)"), *Weak->GetName(),
+						FVector::Dist2D(Weak->GetSearchOrigin(), State.DoorWhistle)));
+			}
+			State.TopSpeed.Reset();
+			Next(State, 82);
+			return true;
+		}
+		case 82:
+		{
+			// He stays crouched behind the wall: they turn, listen, then come for him through the doorway - not spinning at the stone.
+			bool bThrough = false;
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				const AEnemyCharacter* Guard = Weak.Get();
+				if (!Guard)
+				{
+					continue;
+				}
+				const float Length = PathLength(World, Guard, State.DoorWhistle);
+				if (Length > 0.f)
+				{
+					float& Best = State.BestPath.FindOrAdd(Weak, Length);
+					Best = FMath::Min(Best, Length);
+				}
+				float& BestDist = State.BestDist.FindOrAdd(Weak, TNumericLimits<float>::Max());
+				BestDist = FMath::Min(BestDist, static_cast<float>(FVector::Dist2D(Guard->GetActorLocation(), State.DoorWhistle)));
+				if (Guard->GetVelocity().Size2D() > 50.f && !State.StartedAt.Contains(Weak))
+				{
+					State.StartedAt.Add(Weak, State.Time);
+				}
+				bThrough |= FVector::DotProduct(Guard->GetActorLocation() - State.DoorWhistle, State.F) < 200.f;
+			}
+			if (!bThrough && State.Time < 8.f && !AnyHunting(World))
+			{
+				return true;
+			}
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				const float Start = State.PathAtWhistle.FindRef(Weak);
+				const float Best = State.BestPath.FindRef(Weak);
+				const float DistStart = State.DistAtWhistle.FindRef(Weak);
+				const float DistBest = State.BestDist.FindRef(Weak);
+				Check(State, Weak.IsValid() && Start > 0.f && Best <= Start - 300.f && DistBest <= DistStart - 300.f,
+					FString::Printf(TEXT("F: %s walks from the stone to the whistler while he stays (path %.0f -> %.0f cm, distance %.0f -> %.0f cm in %.1f s)"),
+						Weak.IsValid() ? *Weak->GetName() : TEXT("?"), Start, Best, DistStart, DistBest, State.Time));
+				const float* Started = State.StartedAt.Find(Weak);
+				Check(State, Started && *Started >= 0.4f && *Started <= 3.f, FString::Printf(TEXT("F: %s listens first, then sets off (%.1f s after the whistle)"),
+					Weak.IsValid() ? *Weak->GetName() : TEXT("?"), Started ? *Started : -1.f));
+			}
+			Check(State, !AnyHunting(World) && Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("F: nobody detected him yet"));
+			MoveSquad(World, *Squad, State.Hide, -State.F, EOperativeStance::Prone);
+			State.Closest.Reset();
+			State.ArrivedAt.Reset();
+			Next(State, 83);
+			return true;
+		}
+		case 83:
+		{
+			TrackApproach(State, State.Lured, State.DoorWhistle, State.Time);
+			// Arrived = within 2 m, or held just short of it by its mate on the point (StealthLureRules::HasArrived: 2 m + 1.5 m stuck).
+			bool bAll = true;
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				bAll &= Weak.IsValid() && Weak->HasReachedSearchOrigin() && State.Closest.FindRef(Weak) <= 350.f;
+			}
+			if (!bAll && State.Time < 25.f && !AnyHunting(World))
+			{
+				return true;
+			}
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				const float* Arrived = State.ArrivedAt.Find(Weak);
+				Check(State, State.Closest.FindRef(Weak) <= 350.f && Weak.IsValid() && Weak->IsInvestigatingLure() && Weak->HasReachedSearchOrigin(),
+					FString::Printf(TEXT("F: %s reached the whistler's spot and searches near him (closest %.0f cm, within 2 m at %.1f s)"),
+						Weak.IsValid() ? *Weak->GetName() : TEXT("?"), State.Closest.FindRef(Weak), Arrived ? *Arrived : -1.f));
+			}
+			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration && !AnyHunting(World), TEXT("F: no fight (he had left)"));
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				if (AEnemyCharacter* Enemy = Weak.Get())
+				{
+					Enemy->Destroy();
+				}
+			}
+			// G. Two throws in a row: two guards beyond the wall, the engineer and the medic behind it.
+			AEnemyCharacter* GuardA = SpawnPlaced(World, EEnemyArchetype::Frostbitten, State.StoneA + State.F * 300.f - State.R * 150.f, State.F);
+			AEnemyCharacter* GuardB = SpawnPlaced(World, EEnemyArchetype::Spitter, State.StoneA + State.F * 300.f + State.R * 200.f, State.F);
+			if (!GuardA || !GuardB)
+			{
+				Check(State, false, TEXT("stage G guards spawned"));
+				return Finish(State);
+			}
+			State.Lured = { GuardA, GuardB };
+			State.StoneB = SmokeUtils::FreeSpot(World, State.StoneA - State.R * 600.f + State.F * 100.f) - FVector(0.f, 0.f, 92.f);
+			// The whole squad behind the wall (a guard turning to the stone would see the prone commander 17 m off in the open).
+			for (AOperativeCharacter* Member : { Commander, Engineer, Medic })
+			{
+				Member->StopOperative();
+				Member->SetActorLocation(SmokeUtils::FreeSpot(World, State.DoorWhistle - State.R * (Member == Engineer ? 200.f : Member == Medic ? 400.f : 600.f), Member),
+					false, nullptr, ETeleportType::TeleportPhysics);
+				Member->SetStance(EOperativeStance::Crouching);
+			}
+			Next(State, 90);
+			return true;
+		}
+		case 90:
+		{
+			if (State.Time < 2.5f)
+			{
+				return true;
+			}
+			Check(State, State.Lured[0].IsValid() && State.Lured[1].IsValid() && State.Lured[0]->IsGuardingPost() && State.Lured[1]->IsGuardingPost() && !AnyHunting(World),
+				TEXT("G: two guards beyond the wall, the throwers unseen behind it"));
+			State.Stone = Lure->ThrowAt(Engineer, State.StoneA);
+			Check(State, State.Stone.IsValid(), TEXT("G: the engineer throws the first stone"));
+			State.ReachedFor = 0.f;
+			Next(State, 91);
+			return true;
+		}
+		case 91:
+		{
+			const bool bLanded = !State.Stone.IsValid() || !State.Stone->IsFlying();
+			bool bAllThere = bLanded;
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				bAllThere &= Weak.IsValid() && Weak->IsInvestigatingLure() && Weak->HasReachedSearchOrigin();
+			}
+			State.ReachedFor = bAllThere ? State.ReachedFor + 0.1f : 0.f;
+			if (State.ReachedFor < 0.5f && State.Time < 25.f && !AnyHunting(World))
+			{
+				return true;
+			}
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				Check(State, Weak.IsValid() && Weak->IsInvestigatingLure() && Weak->HasReachedSearchOrigin() && FVector::Dist2D(Weak->GetSearchOrigin(), State.StoneA) < 100.f,
+					FString::Printf(TEXT("G: %s searches at the first stone"), Weak.IsValid() ? *Weak->GetName() : TEXT("?")));
+			}
+			if (State.Lured.ContainsByPredicate([](const TWeakObjectPtr<AEnemyCharacter>& Weak) { return !Weak.IsValid(); }))
+			{
+				return Finish(State);
+			}
+			State.Stone = Lure->ThrowAt(Medic, State.StoneB);
+			Check(State, State.Stone.IsValid(), FString::Printf(TEXT("G: the medic throws a second stone %.0f cm from the first"), FVector::Dist2D(State.StoneA, State.StoneB)));
+			Next(State, 92);
+			return true;
+		}
+		case 92:
+		{
+			const bool bLanded = !State.Stone.IsValid() || !State.Stone->IsFlying();
+			if (!bLanded && State.Time < 6.f)
+			{
+				return true;
+			}
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				Check(State, Weak.IsValid() && Weak->IsInvestigatingLure() && !Weak->HasReachedSearchOrigin() && FVector::Dist2D(Weak->GetSearchOrigin(), State.StoneB) < 100.f,
+					FString::Printf(TEXT("G: %s re-targets to the second stone (origin %.0f cm off it)"), Weak.IsValid() ? *Weak->GetName() : TEXT("?"),
+						Weak.IsValid() ? FVector::Dist2D(Weak->GetSearchOrigin(), State.StoneB) : -1.f));
+			}
+			State.Closest.Reset();
+			State.ArrivedAt.Reset();
+			Next(State, 93);
+			return true;
+		}
+		case 93:
+		{
+			TrackApproach(State, State.Lured, State.StoneB, State.Time);
+			bool bAll = true;
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				bAll &= Weak.IsValid() && Weak->HasReachedSearchOrigin() && State.Closest.FindRef(Weak) <= 350.f;
+			}
+			if (!bAll && State.Time < 20.f && !AnyHunting(World))
+			{
+				return true;
+			}
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				const float* Arrived = State.ArrivedAt.Find(Weak);
+				Check(State, State.Closest.FindRef(Weak) <= 350.f && Weak.IsValid() && Weak->HasReachedSearchOrigin() && FVector::Dist2D(Weak->GetSearchOrigin(), State.StoneB) < 100.f,
+					FString::Printf(TEXT("G: %s went to the second stone and searches there (closest %.0f cm, within 2 m at %.1f s)"),
+						Weak.IsValid() ? *Weak->GetName() : TEXT("?"), State.Closest.FindRef(Weak), Arrived ? *Arrived : -1.f));
+			}
+			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration && !AnyHunting(World), TEXT("G: the throwers stay undetected"));
+			for (const TWeakObjectPtr<AEnemyCharacter>& Weak : State.Lured)
+			{
+				if (AEnemyCharacter* Enemy = Weak.Get())
+				{
+					Enemy->Destroy();
+				}
+			}
+			MoveSquad(World, *Squad, State.Hide, -State.F, EOperativeStance::Prone);
 			// C. Detected: a hunter that knows the squad (frozen far away, so it never reaches anyone).
 			Squad->SetLeader(Medic);
 			AEnemyCharacter* Hunter = SpawnPlaced(World, EEnemyArchetype::Frostbitten, State.Hide + State.F * 3500.f, -State.F, false);

@@ -1,6 +1,7 @@
 // CodexTactics.AI.StealthLure.* — stealth lure rules (user decisions 2026-10-18; UE-only, no Godot reference): who hears a
 // whistle / thrown stone (radius, walls muffle it like footsteps, heightened while searching, only patrol / guard duty), the
-// combat / detection gate, the per-operative cooldowns, the approach pace and the data file.
+// combat / detection gate, the per-operative cooldowns, the approach pace, the data file, the noise round walls (walking path) and
+// the re-target rule (a newer noise wins over the point it already investigates).
 
 #include "AI/StealthLureRules.h"
 #include "Data/EnemyPerception.h"
@@ -218,6 +219,104 @@ bool FStealthLureInvestigatePointTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("a wider search arrival stays"), GetArriveRadius(250.f, true), 250.f, 0.01f);
 	TestEqual(TEXT("sweep legs keep the search arrival"), GetArriveRadius(150.f, false), 150.f, 0.01f);
 	TestTrue(TEXT("re-path before giving up"), RepathAfterFailures > 0 && RepathAfterFailures < GiveUpAfterFailures);
+	// Held just short of the point by a patrol mate standing on it: arrived after a short stand, not after the 10 s leg timeout.
+	TestTrue(TEXT("within 2 m: arrived"), HasArrived(199.f, 200.f, 0.f));
+	TestFalse(TEXT("2.08 m and still walking: not yet"), HasArrived(208.f, 200.f, 0.f));
+	TestTrue(TEXT("2.08 m and stuck 0.5 s: arrived"), HasArrived(208.f, 200.f, ArriveStuckSeconds));
+	TestFalse(TEXT("stuck 4 m off: not arrived (the walk is re-issued)"), HasArrived(400.f, 200.f, 2.f));
+	return true;
+}
+
+// Fix 2026-10-18 (user report on L_PatrolTest: a stone first, then the whistle from behind a wall with a doorway - they kept turning
+// at the stone): the noise comes round walls / through doorways, measured as the walking path (numbers from the replay probe).
+STEALTH_LURE_TEST(FStealthLurePathHearingTest, "PathHearing")
+bool FStealthLurePathHearingTest::RunTest(const FString& Parameters)
+{
+	using namespace StealthLureRules;
+	using StealthLureTest::Listener;
+	const float Whistle = 1200.f;
+	const float Search = 1.25f;
+	// The hound at the stone: 7.5 m straight, 1 wall, searching (15 m x 0.5 = 7.5 m - lost before), 10.9 m through the doorway.
+	FStealthLureListener Hound = Listener(751.f, 1);
+	Hound.bSearching = true;
+	TestFalse(TEXT("straight line only: the wall halves 15 m to 7.5 m, 7.51 m is not heard"), Hears(Hound, Whistle, Search));
+	Hound.PathCm = 1089.f;
+	TestTrue(TEXT("round the wall: 10.9 m walk within the 15 m open-air radius (searching)"), Hears(Hound, Whistle, Search));
+	TestTrue(TEXT("the path part alone"), HearsAlongPath(Hound, Whistle, Search));
+	// The marksman: 10.8 m straight, 14.1 m walk: heard while searching (15 m), not while patrolling (12 m).
+	FStealthLureListener Marksman = Listener(1081.f, 1);
+	Marksman.PathCm = 1413.f;
+	Marksman.bSearching = true;
+	TestTrue(TEXT("marksman searching: 14.1 m walk < 15 m"), Hears(Marksman, Whistle, Search));
+	Marksman.bSearching = false;
+	TestFalse(TEXT("marksman on patrol: 14.1 m walk > 12 m"), Hears(Marksman, Whistle, Search));
+	TestEqual(TEXT("open radius on patrol 12 m"), OpenRadius(Marksman, Whistle, Search), 1200.f, 0.01f);
+	// No full path (unknown / partial = -1): only the straight-line rule.
+	FStealthLureListener Closed = Listener(900.f, 1);
+	TestFalse(TEXT("no path: the wall rule alone (9 m > 6 m)"), Hears(Closed, Whistle, Search));
+	// A 12 m wide wall without a doorway: the walk round it is longer than the radius (StealthLureSmoke's frostbitten 8 m beyond).
+	FStealthLureListener Beyond = Listener(800.f, 1);
+	Beyond.PathCm = 1464.f;
+	TestFalse(TEXT("a long detour round a wide wall is not heard"), Hears(Beyond, Whistle, Search));
+	// The gates still apply to the path.
+	FStealthLureListener Held = Hound;
+	Held.bTurnBasedHeld = true;
+	TestFalse(TEXT("turn-based held: never, path or not"), Hears(Held, Whistle, Search));
+	FStealthLureListener Hunting = Hound;
+	Hunting.bOnPatrol = false;
+	TestFalse(TEXT("off patrol duty: never"), HearsAlongPath(Hunting, Whistle, Search));
+	return true;
+}
+
+// Fix 2026-10-18: a NEWER noise re-targets an enemy that already searches / investigates (the whistle after the stone was lost).
+STEALTH_LURE_TEST(FStealthLureRetargetTest, "Retarget")
+bool FStealthLureRetargetTest::RunTest(const FString& Parameters)
+{
+	using namespace StealthLureRules;
+	FNoiseReactionInput Idle;
+	TestTrue(TEXT("not searching: investigates"), ReactToNoise(Idle) == ENoiseReaction::Investigate);
+
+	// Searching at the stone (set 8 s ago), the whistle 10 m away: the newer noise wins.
+	FNoiseReactionInput AtStone;
+	AtStone.bSearching = true;
+	AtStone.DistanceToCurrentNoiseCm = 1000.f;
+	AtStone.SecondsSinceCurrentNoise = 8.f;
+	TestTrue(TEXT("searching the stone, a whistle: re-target"), ReactToNoise(AtStone) == ENoiseReaction::Retarget);
+	// A second stone elsewhere.
+	FNoiseReactionInput SecondStone = AtStone;
+	SecondStone.DistanceToCurrentNoiseCm = 600.f;
+	SecondStone.SecondsSinceCurrentNoise = 3.f;
+	TestTrue(TEXT("a second throw elsewhere: re-target"), ReactToNoise(SecondStone) == ENoiseReaction::Retarget);
+	// The same spot again, later (a second whistle from the same place): a new noise, the search restarts there.
+	FNoiseReactionInput Again = AtStone;
+	Again.DistanceToCurrentNoiseCm = 10.f;
+	Again.SecondsSinceCurrentNoise = 10.f;
+	TestTrue(TEXT("the same spot 10 s later: re-target (restart)"), ReactToNoise(Again) == ENoiseReaction::Retarget);
+	// The same noise this instant (a patrol mate pulled it in, then it heard it itself): nothing changes.
+	FNoiseReactionInput Same = AtStone;
+	Same.DistanceToCurrentNoiseCm = 0.f;
+	Same.SecondsSinceCurrentNoise = 0.f;
+	TestTrue(TEXT("the same noise this instant: unchanged"), ReactToNoise(Same) == ENoiseReaction::SameNoise);
+	Same.DistanceToCurrentNoiseCm = SameNoiseCm + 1.f;
+	TestTrue(TEXT("another point this instant: re-target"), ReactToNoise(Same) == ENoiseReaction::Retarget);
+
+	// Hounds: following a fresh scent close by keeps the nose; sniffing / a far scent re-target.
+	FNoiseReactionInput Following = AtStone;
+	Following.bFollowingScent = true;
+	Following.ScentDistanceCm = 250.f;
+	TestTrue(TEXT("following a scent 2.5 m away: keeps following"), ReactToNoise(Following) == ENoiseReaction::KeepScent);
+	Following.bSearching = false;
+	TestTrue(TEXT("... also when it was not searching"), ReactToNoise(Following) == ENoiseReaction::KeepScent);
+	Following.ScentDistanceCm = ScentHoldsNoiseCm + 50.f;
+	TestTrue(TEXT("following a scent 3.5 m away: the noise wins"), ReactToNoise(Following) == ENoiseReaction::Investigate);
+	FNoiseReactionInput Sniffing;
+	Sniffing.bSniffing = true;
+	Sniffing.ScentDistanceCm = 100.f;
+	TestTrue(TEXT("sniffing (not following yet): the noise wins"), ReactToNoise(Sniffing) == ENoiseReaction::Investigate);
+
+	TestTrue(TEXT("investigate / re-target go to the noise"), GoesToNoise(ENoiseReaction::Investigate) && GoesToNoise(ENoiseReaction::Retarget));
+	TestFalse(TEXT("same noise / scent / ignored do not"), GoesToNoise(ENoiseReaction::SameNoise) || GoesToNoise(ENoiseReaction::KeepScent)
+		|| GoesToNoise(ENoiseReaction::Ignored));
 	return true;
 }
 

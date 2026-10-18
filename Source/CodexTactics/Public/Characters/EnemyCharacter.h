@@ -17,6 +17,7 @@ struct FOverheadLabel;
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 class UVisionConeComponent;
+enum class ENoiseReaction : uint8;
 
 /** A loud squad action enemies can hear (PerceptionRules gunshot / grenade radius). */
 enum class ESquadNoise : uint8
@@ -348,10 +349,20 @@ public:
 	virtual void StartPatrolSearch(const FVector& Location);
 
 	/**
-	 * StartPatrolSearch with a spec (the stealth lure's investigation). The spec travels with the search to its leader / escorts;
-	 * a later trap search (default spec) replaces it. No-op off patrol.
+	 * StartPatrolSearch with a spec (the stealth lure's investigation). The re-target rule (StealthLureRules::ReactToNoise, fix
+	 * 2026-10-18): a NEWER noise wins over the point it already searches / investigates (lure, trap, scent search) - the origin
+	 * moves there, a lure's listening beat plays again, the walk and the clock restart; a hound following a scent closer than
+	 * StealthLureRules::ScentHoldsNoiseCm keeps following; a sniffing hound / one on a far scent drops it and its nose is held
+	 * (only the close open-air detection works) until it reaches the noise. The whole patrol goes along: its leader and every
+	 * escort of the patrol move to the same noise, searching or not. Returns this enemy's reaction (Ignored off patrol duty).
 	 */
-	void StartPatrolSearchWith(const FVector& Location, const FPatrolSearchSpec& Spec);
+	ENoiseReaction StartPatrolSearchWith(const FVector& Location, const FPatrolSearchSpec& Spec);
+
+	/**
+	 * Its navmesh walking path to Point (projected onto its navmesh), cm: how far a sound travels round walls / through doorways
+	 * to it (StealthLureRules::HearsAlongPath). -1 = no navmesh / no full path.
+	 */
+	float GetHearingPathLengthTo(const FVector& Point) const;
 
 	/**
 	 * Investigating a whistle / thrown stone (stealth lure): searching with a lure spec. Hook for a later stealth kill: while it
@@ -579,6 +590,8 @@ protected:
 	void EndPatrolSearch();
 	/** «[Stealth] detection by <sense> at <t> s» log line for the Jev AI coach. */
 	void LogStealthDetection(EPatrolAlertCause Cause, bool bWasSearching) const;
+	/** StartPatrolSearchWith for this enemy alone (the re-target rule, no propagation to its patrol). */
+	ENoiseReaction ApplySearchNoise(const FVector& Location, const FPatrolSearchSpec& Spec);
 	/** World AI held (dialogue, cutscene): stops once and returns true — the behaviour tick does nothing else. */
 	bool HoldForWorldAIPause();
 
@@ -589,6 +602,10 @@ protected:
 	FVector SearchNoise = FVector::ZeroVector;
 	/** Lure: listening left before the walk to the noise, s. */
 	float SearchListenLeft = 0.f;
+	/** World time SearchNoise was set (the re-target rule's same-noise check); < 0 = never. */
+	double SearchNoiseTime = -1.0;
+	/** A noise took it off a scent: its nose only detects close in open air until it reaches the noise (runtime only). */
+	bool bScentHeldByNoise = false;
 	/** Refused move requests on the current leg (StealthLureRules::RepathAfterFailures / GiveUpAfterFailures). */
 	int32 SearchMoveFailures = 0;
 	float SearchElapsed = 0.f;

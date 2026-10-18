@@ -222,6 +222,11 @@ TArray<AEnemyCharacter*> UStealthLureSubsystem::FindListeners(const FVector& Loc
 			continue;
 		}
 		Listener.Walls = Enemy->CountHearingWallsTo(NoisePoint);
+		if (!StealthLureRules::Hears(Listener, Radius, SearchMultiplier))
+		{
+			// Muffled on the straight line: the noise may still come round the wall / through a doorway (its walking path in the open).
+			Listener.PathCm = Enemy->GetHearingPathLengthTo(NoisePoint);
+		}
 		if (StealthLureRules::Hears(Listener, Radius, SearchMultiplier))
 		{
 			Out.Add(Enemy);
@@ -247,12 +252,47 @@ int32 UStealthLureSubsystem::EmitNoise(const FVector& Location, EStealthLureKind
 	Spec.ListenSeconds = Params.ListenSeconds;
 	// EVERY enemy that hears it comes (user correction 2026-10-18: a horde in range = all of them).
 	const TArray<AEnemyCharacter*> Listeners = FindListeners(Location, Kind);
+	// Who was in open-air reach but did not hear it (walls): one line each, the first thing to read when "nobody came".
+	const float OpenRadius = StealthLureRules::GetRadius(Params, Kind);
+	const float SearchMultiplier = EnemyPerception::GetSearch().PerceptionMultiplier;
+	const FVector NoisePoint = Location + FVector(0.f, 0.f, StealthLureInternal::NoiseHeightCm);
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
+	{
+		if (!Enemy || Listeners.Contains(Enemy) || !Enemy->IsOnPatrol() || Enemy->IsDying() || Enemy->IsTurnBasedHeld())
+		{
+			continue;
+		}
+		FStealthLureListener Listener;
+		Listener.bAlive = true;
+		Listener.bOnPatrol = true;
+		Listener.bSearching = Enemy->IsSearching();
+		Listener.DistanceCm = FVector::Dist(Enemy->GetActorLocation(), NoisePoint);
+		Listener.OcclusionPerWall = Enemy->GetPerception().HearingOcclusionPerWall;
+		if (Listener.DistanceCm > StealthLureRules::OpenRadius(Listener, OpenRadius, SearchMultiplier))
+		{
+			continue; // out of reach even in the open
+		}
+		Listener.Walls = Enemy->CountHearingWallsTo(NoisePoint);
+		Listener.PathCm = Enemy->GetHearingPathLengthTo(NoisePoint);
+		if (StealthLureRules::Hears(Listener, OpenRadius, SearchMultiplier))
+		{
+			continue; // defensive: FindListeners has it
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] %s does not hear the %s: %.1f m, %d wall(s), radius %.1f m, walking path %.1f m%s"), *Enemy->GetName(),
+			Kind == EStealthLureKind::Whistle ? TEXT("whistle") : TEXT("stone"), Listener.DistanceCm / 100.f, Listener.Walls,
+			StealthLureRules::EffectiveRadius(Listener, OpenRadius, SearchMultiplier) / 100.f, Listener.PathCm / 100.f,
+			Listener.bSearching ? TEXT(" (searching)") : TEXT(""));
+	}
+	// A NEWER noise re-targets an enemy that already investigates (a stone, a trap, a scent; fix 2026-10-18) - see ReactToNoise.
 	for (AEnemyCharacter* Enemy : Listeners)
 	{
 		if (IsValid(Enemy) && Enemy->IsOnPatrol())
 		{
-			Enemy->StartPatrolSearchWith(Location, Spec);
-			LastListeners.Add(Enemy);
+			const ENoiseReaction Reaction = Enemy->StartPatrolSearchWith(Location, Spec);
+			if (Reaction != ENoiseReaction::KeepScent && Reaction != ENoiseReaction::Ignored)
+			{
+				LastListeners.Add(Enemy);
+			}
 		}
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] lure %s at %s (radius %.0f m, by %s): %d enemies investigate"),
