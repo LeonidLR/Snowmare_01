@@ -15,7 +15,9 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/GateActor.h"
+#include "Engine/OverlapResult.h"
 #include "Engine/StaticMeshActor.h"
+#include "NavMesh/NavMeshBoundsVolume.h"
 #include "NavigationSystem.h"
 #include "NavigationPath.h"
 
@@ -142,6 +144,147 @@ namespace SmokeUtils
 		}
 		Enemy->CustomTimeDilation = 0.f;
 		Enemy->SetActorLocation(Enemy->GetActorLocation() + FVector(100000.f, 0.f, -5000.f), false, nullptr, ETeleportType::TeleportPhysics);
+	}
+
+	/** A smoke's own empty test ground (FindClearArena): Origin on the navmesh, the frame (Forward, Right) the rectangle was checked in. */
+	struct FClearArena
+	{
+		bool bFound = false;
+		FVector Origin = FVector::ZeroVector;
+		FVector Forward = FVector::ForwardVector;
+		FVector Right = FVector::RightVector;
+		/** Candidates tried / rejected by geometry / by the navmesh (logged by the caller). */
+		int32 Tried = 0;
+		int32 Blocked = 0;
+		int32 OffNav = 0;
+	};
+
+	/**
+	 * Is the rectangle Rect (X along Forward, Y along Right, cm from Origin) empty, flat and fully walkable? Empty: nothing that
+	 * blocks pawns or sight, or overlaps pawns (a trigger), stands in it from 0.4 to 3.4 m above Origin (actors in Ignore and
+	 * navmesh bounds volumes do not count). Walkable: every 2.5 m sample is on the navmesh within 0.6 m of Origin's height and
+	 * its four corners are reached by a near-straight navmesh path. Sets bBlocked when the geometry test failed.
+	 */
+	inline bool IsArenaClear(UWorld* World, const FVector& Origin, const FVector& Forward, const FBox2D& Rect, const TArray<const AActor*>& Ignore, bool& bBlocked)
+	{
+		bBlocked = false;
+		UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+		if (!Nav)
+		{
+			return false;
+		}
+		const FVector F = Forward.GetSafeNormal2D();
+		const FVector R = FVector::CrossProduct(FVector::UpVector, F);
+		const FVector2D Mid = Rect.GetCenter();
+		const FVector2D Half = Rect.GetExtent();
+		const FVector BoxCentre = Origin + F * Mid.X + R * Mid.Y + FVector(0.f, 0.f, 40.f + 150.f);
+		TArray<FOverlapResult> Overlaps;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(SmokeArena), false);
+		for (const AActor* Each : Ignore)
+		{
+			Params.AddIgnoredActor(Each);
+		}
+		World->OverlapMultiByObjectType(Overlaps, BoxCentre, F.ToOrientationQuat(), FCollisionObjectQueryParams(FCollisionObjectQueryParams::InitType::AllObjects),
+			FCollisionShape::MakeBox(FVector(Half.X, Half.Y, 150.f)), Params);
+		for (const FOverlapResult& Overlap : Overlaps)
+		{
+			const UPrimitiveComponent* Component = Overlap.GetComponent();
+			const AActor* Owner = Overlap.GetActor();
+			if (!Component || (Owner && Owner->IsA<ANavMeshBoundsVolume>()))
+			{
+				continue;
+			}
+			if (Component->GetCollisionResponseToChannel(ECC_Pawn) != ECR_Ignore || Component->GetCollisionResponseToChannel(ECC_Visibility) == ECR_Block)
+			{
+				bBlocked = true;
+				return false;
+			}
+		}
+		for (float Along = Rect.Min.X; Along <= Rect.Max.X + 1.f; Along += 250.f)
+		{
+			for (float Side = Rect.Min.Y; Side <= Rect.Max.Y + 1.f; Side += 250.f)
+			{
+				FNavLocation OnNav;
+				const FVector Sample = Origin + F * FMath::Min(Along, Rect.Max.X) + R * FMath::Min(Side, Rect.Max.Y);
+				if (!Nav->ProjectPointToNavigation(Sample, OnNav, FVector(40.f, 40.f, 150.f)) || FMath::Abs(OnNav.Location.Z - Origin.Z) > 60.f)
+				{
+					return false;
+				}
+			}
+		}
+		for (const FVector2D& Corner : { Rect.Min, Rect.Max, FVector2D(Rect.Min.X, Rect.Max.Y), FVector2D(Rect.Max.X, Rect.Min.Y) })
+		{
+			const FVector2D Inset = Corner + (Mid - Corner).GetSafeNormal() * 100.f;
+			const FVector Target = Origin + F * Inset.X + R * Inset.Y;
+			const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, Origin, Target);
+			if (!Path || !Path->IsValid() || Path->IsPartial() || Path->GetPathLength() > FVector::Dist2D(Origin, Target) * 1.15f + 150.f)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * An empty spot of the map for a smoke's own set-up (walls, enemies, the squad, all spawned at runtime), so a designer moving
+	 * things on the map cannot break it (the user's L_PatrolTest edits 2026-10-18: an enemy searching a stone saw the squad past
+	 * a prop). Rect = the rectangle the smoke uses (X along Forward, Y along Right, cm from the origin; pass a margin in it).
+	 * Candidate origins on a GridCm grid over the navmesh bounds, the nearest to Hint first, each tried facing HintForward and
+	 * turned 90 / 180 / 270 deg (IsArenaClear). bFound false when the map has no such spot.
+	 */
+	inline FClearArena FindClearArena(UWorld* World, const FVector& Hint, const FVector& HintForward, const FBox2D& Rect, const TArray<const AActor*>& Ignore,
+		float GridCm = 500.f)
+	{
+		FClearArena Arena;
+		UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+		if (!Nav)
+		{
+			return Arena;
+		}
+		FBox Bounds(ForceInit);
+		for (TActorIterator<ANavMeshBoundsVolume> It(World); It; ++It)
+		{
+			Bounds += It->GetComponentsBoundingBox(true);
+		}
+		if (!Bounds.IsValid)
+		{
+			return Arena;
+		}
+		TArray<FVector> Candidates;
+		for (double X = Bounds.Min.X + GridCm * 0.5; X < Bounds.Max.X; X += GridCm)
+		{
+			for (double Y = Bounds.Min.Y + GridCm * 0.5; Y < Bounds.Max.Y; Y += GridCm)
+			{
+				Candidates.Add(FVector(X, Y, Hint.Z));
+			}
+		}
+		Candidates.Sort([&Hint](const FVector& A, const FVector& B) { return FVector::DistSquared2D(A, Hint) < FVector::DistSquared2D(B, Hint); });
+		const FVector Facing = HintForward.GetSafeNormal2D().IsNearlyZero() ? FVector::ForwardVector : HintForward.GetSafeNormal2D();
+		for (const FVector& Candidate : Candidates)
+		{
+			FNavLocation OnNav;
+			if (!Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(GridCm * 0.4f, GridCm * 0.4f, Bounds.GetSize().Z + 1000.f)))
+			{
+				continue;
+			}
+			for (const float Turn : { 0.f, 90.f, 180.f, 270.f })
+			{
+				const FVector F = Facing.RotateAngleAxis(Turn, FVector::UpVector);
+				bool bBlocked = false;
+				++Arena.Tried;
+				if (IsArenaClear(World, OnNav.Location, F, Rect, Ignore, bBlocked))
+				{
+					Arena.bFound = true;
+					Arena.Origin = OnNav.Location;
+					Arena.Forward = F;
+					Arena.Right = FVector::CrossProduct(FVector::UpVector, F);
+					return Arena;
+				}
+				Arena.Blocked += bBlocked ? 1 : 0;
+				Arena.OffNav += bBlocked ? 0 : 1;
+			}
+		}
+		return Arena;
 	}
 
 	/** Design-coordinate point of L_MovementTest (layout at the origin, yaw 0) -> world point of the current layout. */

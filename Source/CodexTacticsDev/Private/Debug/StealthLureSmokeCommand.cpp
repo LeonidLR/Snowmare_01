@@ -1,5 +1,8 @@
 // Dev-only headless check of the stealth lure (user decisions 2026-10-18; UStealthLureSubsystem, docs/design/STEALTH_LURE.md)
-// on L_PatrolTest (nothing saved; everything spawned at runtime):
+// on L_PatrolTest (nothing saved; everything spawned at runtime). Map-independent (user's L_PatrolTest edits 2026-10-18): the map's
+// enemies are removed and the whole set-up (walls, routes, enemies, the squad, its hiding spot) is built in an empty, flat,
+// fully navigable 24 x 55 m spot of the map found at start (SmokeUtils::FindClearArena), so props a designer moves cannot
+// block a path, muffle a noise or open a line of sight the checks did not plan for:
 //   Scripts/smoke_parallel.ps1 -Commands StealthLureSmoke
 //   rendered stills: UnrealEditor.exe <uproject> /Game/Maps/L_PatrolTest -game -RenderOffscreen -ResX=1280 -ResY=720
 //       -ExecCmds="CodexTactics.StealthLureSmoke Shot"  -> Saved/Screenshots/stealth_lure_investigate.png (enemies walking to the
@@ -260,7 +263,10 @@ namespace StealthLureSmoke
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke screenshot %s"), *Path);
 	}
 
-	/** Tracks how close each enemy came to Point (planar) and when it first got within ArriveCm. */
+	/**
+	 * Tracks how close each enemy came to Point (planar) and when it arrived: within 2 m, or (the game's rule,
+	 * StealthLureRules::HasArrived: 2 m + 1.5 m once stuck) searching there held just short of it by a mate on the point.
+	 */
 	void TrackApproach(FState& State, const TArray<TWeakObjectPtr<AEnemyCharacter>>& Enemies, const FVector& Point, float Elapsed)
 	{
 		for (const TWeakObjectPtr<AEnemyCharacter>& Weak : Enemies)
@@ -270,7 +276,9 @@ namespace StealthLureSmoke
 				const float Distance = FVector::Dist2D(Enemy->GetActorLocation(), Point);
 				float& Best = State.Closest.FindOrAdd(Weak, TNumericLimits<float>::Max());
 				Best = FMath::Min(Best, Distance);
-				if (Distance <= 200.f && !State.ArrivedAt.Contains(Weak))
+				const bool bHeldShort = Distance <= 350.f && Enemy->IsInvestigatingLure() && Enemy->HasReachedSearchOrigin()
+					&& FVector::Dist2D(Enemy->GetSearchOrigin(), Point) < 200.f;
+				if ((Distance <= 200.f || bHeldShort) && !State.ArrivedAt.Contains(Weak))
 				{
 					State.ArrivedAt.Add(Weak, Elapsed);
 				}
@@ -342,13 +350,37 @@ namespace StealthLureSmoke
 			Lure->ResetCooldowns();
 			Squad->SetLeader(Commander);
 			Squad->SetSquadPosture(ESquadFirePosture::Passive); // nobody opens fire on an enemy he sees
-			State.F = Commander->GetActorForwardVector().GetSafeNormal2D();
-			State.R = FVector::CrossProduct(FVector::UpVector, State.F);
-			State.P = Feet(Commander);
+			// The followers keep the spots the smoke puts them on (else they walk after the leader, e.g. from the hiding spot
+			// across the field to the whistler, or away from the wall a thrower must stand behind).
+			Squad->SetFollowersHolding(true);
+			// The smoke's own ground: every stage below lies in this rectangle (F -12 .. +12 m, R -33 .. +22 m from P, margins
+			// included): stage A/B round P, the hiding spot 30 m to the left, stages E/F/G 15 m to the left and 9 m back.
+			TArray<const AActor*> Ignore;
+			for (const AOperativeCharacter* Member : Members)
+			{
+				Ignore.Add(Member);
+			}
+			Ignore.Add(PC->GetPawn());
+			const SmokeUtils::FClearArena Arena = SmokeUtils::FindClearArena(World, Feet(Commander), Commander->GetActorForwardVector(),
+				FBox2D(FVector2D(-1200.f, -3300.f), FVector2D(1200.f, 2200.f)), Ignore);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: arena %s at %s facing %s (%d tried, %d blocked by geometry, %d off the navmesh)"),
+				Arena.bFound ? TEXT("found") : TEXT("NOT found"), *Arena.Origin.ToCompactString(), *Arena.Forward.ToCompactString(), Arena.Tried, Arena.Blocked, Arena.OffNav);
+			if (!Arena.bFound)
+			{
+				Check(State, false, TEXT("an empty, flat, navigable 24 x 55 m spot on the map for the smoke's own set-up"));
+				return Finish(State);
+			}
+			State.F = Arena.Forward;
+			State.R = Arena.Right;
+			State.P = Arena.Origin;
 			const FVector P = State.P;
 			const FVector F = State.F;
 			const FVector R = State.R;
 			MoveSquad(World, *Squad, P, -F, EOperativeStance::Standing);
+			for (AOperativeCharacter* Member : Members)
+			{
+				Member->SetActorRotation(F.Rotation());
+			}
 			// A 3 m high, 12 m wide wall 2.5 m ahead: the whistler stands behind it.
 			State.Wall = SpawnWall(World, P + F * 250.f + FVector(0.f, 0.f, 150.f), F.Rotation(), FVector(0.4f, 12.f, 3.f));
 			// The marksman's route 4.2 m beyond the wall, a short loop with long pauses (he stays within the 6 m the wall leaves).
@@ -673,8 +705,7 @@ namespace StealthLureSmoke
 					SmokeUtils::ParkEnemyFarAway(Enemy);
 				}
 			}
-			const FVector W = SmokeUtils::ClearPoint(World, Commander->GetActorLocation(), State.P - State.R * 1500.f - State.F * 900.f);
-			State.DoorWhistle = FVector(W.X, W.Y, State.P.Z);
+			State.DoorWhistle = State.P - State.R * 1500.f - State.F * 900.f; // inside the arena: nothing of the map in the way
 			const FVector WallMid = State.DoorWhistle + State.F * 150.f + FVector(0.f, 0.f, 150.f);
 			// A 14 m wall 1.5 m in front of him (R -700 .. +700) with a 1.6 m doorway at R +320 .. +480.
 			State.DoorWalls.Add(SpawnWall(World, WallMid - State.R * 190.f, State.F.Rotation(), FVector(0.4f, 10.2f, 3.f)));
@@ -980,7 +1011,7 @@ namespace StealthLureSmoke
 			{
 				const float* Arrived = State.ArrivedAt.Find(Weak);
 				Check(State, State.Closest.FindRef(Weak) <= 350.f && Weak.IsValid() && Weak->IsInvestigatingLure() && Weak->HasReachedSearchOrigin(),
-					FString::Printf(TEXT("F: %s reached the whistler's spot and searches near him (closest %.0f cm, within 2 m at %.1f s)"),
+					FString::Printf(TEXT("F: %s reached the whistler's spot and searches near him (closest %.0f cm, arrived at %.1f s)"),
 						Weak.IsValid() ? *Weak->GetName() : TEXT("?"), State.Closest.FindRef(Weak), Arrived ? *Arrived : -1.f));
 			}
 			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration && !AnyHunting(World), TEXT("F: no fight (he had left)"));
@@ -1048,6 +1079,9 @@ namespace StealthLureSmoke
 			{
 				return Finish(State);
 			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: G: medic at %s, second stone %s (%.0f cm off him, range %.0f cm), first stone %s"),
+				*Medic->GetActorLocation().ToCompactString(), *State.StoneB.ToCompactString(), FVector::Dist2D(Medic->GetActorLocation(), State.StoneB),
+				StealthLureRules::GetThrowRange(EnemyPerception::GetLure(), Medic->GetStance()), *State.StoneA.ToCompactString());
 			State.Stone = Lure->ThrowAt(Medic, State.StoneB);
 			Check(State, State.Stone.IsValid(), FString::Printf(TEXT("G: the medic throws a second stone %.0f cm from the first"), FVector::Dist2D(State.StoneA, State.StoneB)));
 			Next(State, 92);
@@ -1087,7 +1121,7 @@ namespace StealthLureSmoke
 			{
 				const float* Arrived = State.ArrivedAt.Find(Weak);
 				Check(State, State.Closest.FindRef(Weak) <= 350.f && Weak.IsValid() && Weak->HasReachedSearchOrigin() && FVector::Dist2D(Weak->GetSearchOrigin(), State.StoneB) < 100.f,
-					FString::Printf(TEXT("G: %s went to the second stone and searches there (closest %.0f cm, within 2 m at %.1f s)"),
+					FString::Printf(TEXT("G: %s went to the second stone and searches there (closest %.0f cm, arrived at %.1f s)"),
 						Weak.IsValid() ? *Weak->GetName() : TEXT("?"), State.Closest.FindRef(Weak), Arrived ? *Arrived : -1.f));
 			}
 			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration && !AnyHunting(World), TEXT("G: the throwers stay undetected"));
@@ -1099,9 +1133,10 @@ namespace StealthLureSmoke
 				}
 			}
 			MoveSquad(World, *Squad, State.Hide, -State.F, EOperativeStance::Prone);
-			// C. Detected: a hunter that knows the squad (frozen far away, so it never reaches anyone).
+			// C. Detected: a hunter that knows the squad (frozen 50 m from the hiding spot, at the far corner of the arena: it never reaches anyone).
 			Squad->SetLeader(Medic);
-			AEnemyCharacter* Hunter = SpawnPlaced(World, EEnemyArchetype::Frostbitten, State.Hide + State.F * 3500.f, -State.F, false);
+			Lure->ResetCooldowns(); // the medic threw in stage G moments ago: C / D check the refusals, not that cooldown
+			AEnemyCharacter* Hunter = SpawnPlaced(World, EEnemyArchetype::Frostbitten, State.P + State.R * 2000.f - State.F * 900.f, -State.F, false);
 			if (!Hunter)
 			{
 				Check(State, false, TEXT("hunter spawned"));
