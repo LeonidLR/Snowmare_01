@@ -142,8 +142,9 @@ bool FPerceptionSmellHoundOnlyTest::RunTest(const FString& Parameters)
 	using namespace PerceptionRules;
 	const FEnemyPerceptionParams Hound = GetArchetypeDefaults(EEnemyArchetype::FrostHound);
 	TestTrue(TEXT("hound can smell"), CanSmell(EEnemyArchetype::FrostHound));
-	TestTrue(TEXT("hound smells at 11 m"), Smells(Hound, 1100.f));
-	TestFalse(TEXT("hound does not smell at 13 m"), Smells(Hound, 1300.f));
+	// 6 m since 2026-10-18 (was 12 m; walls / sniff / follow: CodexTactics.AI.Scent.*).
+	TestTrue(TEXT("hound smells at 5.5 m"), Smells(Hound, 550.f));
+	TestFalse(TEXT("hound does not smell at 6.5 m"), Smells(Hound, 650.f));
 	for (const EEnemyArchetype Type : { EEnemyArchetype::Marksman, EEnemyArchetype::Spitter, EEnemyArchetype::Brute, EEnemyArchetype::Cutter,
 		EEnemyArchetype::Frostbitten })
 	{

@@ -192,6 +192,16 @@ FEnemyPerceptionParams EnemyPerception::ParamsFromJson(const FJsonObject& Json, 
 	ReadMeters(Json, TEXT("smell_radius_m"), Out.SmellRadiusCm);
 	ReadNumber(Json, TEXT("hearing_occlusion_per_wall"), Out.HearingOcclusionPerWall);
 	Out.HearingOcclusionPerWall = FMath::Clamp(Out.HearingOcclusionPerWall, 0.f, 1.f);
+	// Hound scent (2026-10-18, ScentRules): walls cut it, it alerts (sniff -> follow) and detects only close in open air.
+	ReadNumber(Json, TEXT("smell_occlusion_per_wall"), Out.SmellOcclusionPerWall);
+	Out.SmellOcclusionPerWall = FMath::Clamp(Out.SmellOcclusionPerWall, 0.f, 1.f);
+	ReadMeters(Json, TEXT("smell_detect_m"), Out.SmellDetectCm);
+	ReadNumber(Json, TEXT("sniff_seconds"), Out.SniffSeconds);
+	ReadNumber(Json, TEXT("scent_lost_seconds"), Out.ScentLostSeconds);
+	ReadNumber(Json, TEXT("scent_follow_max_seconds"), Out.ScentFollowMaxSeconds);
+	ReadNumber(Json, TEXT("scent_follow_speed_fraction"), Out.ScentFollowSpeedFraction);
+	ReadNumber(Json, TEXT("scent_search_seconds"), Out.ScentSearchSeconds);
+	ReadMeters(Json, TEXT("scent_sweep_radius_m"), Out.ScentSweepRadiusCm);
 	Out.SightHalfAngleDeg = FMath::Clamp(Out.SightHalfAngleDeg, 0.f, 180.f);
 	return Out;
 }
@@ -264,6 +274,13 @@ namespace EnemyPerception
 				*UEnum::GetValueAsString(Archetype), P.SightRangeCm / 100.f, P.SightHalfAngleDeg, P.CrouchingVisibility, P.ProneVisibility,
 				P.TimeToDetectSeconds, P.HearWalkCm / 100.f, P.HearRunCm / 100.f, P.HearCrouchWalkCm / 100.f, P.HearCrawlCm / 100.f,
 				P.HearGunshotCm / 100.f, P.HearExplosionCm / 100.f, P.SmellRadiusCm / 100.f, P.HearingOcclusionPerWall);
+			if (P.SmellRadiusCm > 0.f)
+			{
+				UE_LOG(LogCodexTactics, Display,
+					TEXT("  scent: walls x%.2f each, detects within %.1f m, sniffs %.1f s, follows at x%.2f patrol pace (lost after %.1f s, max %.0f s), lost scent searched %.0f s within %.1f m"),
+					P.SmellOcclusionPerWall, P.SmellDetectCm / 100.f, P.SniffSeconds, P.ScentFollowSpeedFraction, P.ScentLostSeconds, P.ScentFollowMaxSeconds,
+					P.ScentSearchSeconds, P.ScentSweepRadiusCm / 100.f);
+			}
 		}
 		const FPatrolSearchParams& S = CurrentSearch;
 		UE_LOG(LogCodexTactics, Display, TEXT("Patrol search: %.0f s, sweep %.0f m, speed x%.2f, perception x%.2f"), S.DurationSeconds,

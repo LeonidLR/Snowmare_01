@@ -16,6 +16,7 @@
 #include "UI/OverheadLabel.h"
 #include "Characters/EnemyAIController.h"
 #include "UI/FloatingTextSubsystem.h"
+#include "UI/GameMessageSubsystem.h"
 #include "Interactables/TurretActor.h"
 #include "Interactables/HeatSourceComponent.h"
 #include "Interactables/BarricadeActor.h"
@@ -1460,6 +1461,7 @@ void AEnemyCharacter::InitPatrol()
 		bGuardingPost = false; // a route / a leader of its own replaces the guard post
 	}
 	bGuardReturning = false;
+	ResetScent();
 	bPatrolActive = AssignedPatrolRoute != nullptr || EscortLeader.IsValid() || bGuardingPost;
 	bEscortMoving = false;
 	PatrolPhase = EPatrolPhase::Moving;
@@ -1491,6 +1493,7 @@ FEnemyPatrolSnapshot AEnemyCharacter::CapturePatrolSnapshot() const
 	Snapshot.SearchDurationSeconds = ActiveSearchSpec.DurationSeconds;
 	Snapshot.SearchSweepRadiusCm = ActiveSearchSpec.SweepRadiusCm;
 	Snapshot.SearchApproachSpeedFraction = ActiveSearchSpec.ApproachSpeedFraction;
+	Snapshot.bScentSearch = bSearching && ActiveSearchSpec.bScent;
 	return Snapshot;
 }
 
@@ -1531,6 +1534,7 @@ void AEnemyCharacter::RestorePatrolSnapshot(APatrolRouteActor* Route, AEnemyChar
 		ActiveSearchSpec.DurationSeconds = Snapshot.SearchDurationSeconds;
 		ActiveSearchSpec.SweepRadiusCm = Snapshot.SearchSweepRadiusCm;
 		ActiveSearchSpec.ApproachSpeedFraction = Snapshot.SearchApproachSpeedFraction;
+		ActiveSearchSpec.bScent = Snapshot.bScentSearch;
 	}
 	SearchOrigin = Snapshot.SearchOrigin;
 	SearchGoal = Snapshot.SearchOrigin;
@@ -1584,6 +1588,7 @@ void AEnemyCharacter::SetTurnBasedHeld(bool bHeld)
 		bPatrolMoveIssued = false;
 		bEscortMoving = false;
 		bSearchMoving = false;
+		bScentMoveIssued = false;
 	}
 	OnTurnBasedHeldChanged(bHeld);
 }
@@ -1607,6 +1612,7 @@ bool AEnemyCharacter::HoldForWorldAIPause()
 		bPatrolMoveIssued = false;
 		bEscortMoving = false;
 		bSearchMoving = false;
+		bScentMoveIssued = false;
 		UE_LOG(LogCodexTactics, Verbose, TEXT("[Patrol] %s held (world AI paused)"), *GetName());
 	}
 	return true;
@@ -1671,10 +1677,10 @@ int32 AEnemyCharacter::CountHearingWalls(const AActor& Target) const
 	return CountHearingWallsTo(Target.GetActorLocation());
 }
 
-int32 AEnemyCharacter::CountHearingWallsTo(const FVector& Point) const
+int32 AEnemyCharacter::CountOccludersBetween(const FVector& From, const FVector& To, int32 Max) const
 {
 	UWorld* World = GetWorld();
-	if (!World)
+	if (!World || Max <= 0)
 	{
 		return 0;
 	}
@@ -1687,12 +1693,10 @@ int32 AEnemyCharacter::CountHearingWallsTo(const FVector& Point) const
 	{
 		TraceParams.AddIgnoredActor(*It);
 	}
-	// From the ear to the middle of his body; every blocking surface counts once (its component is skipped after).
-	const FVector Ear = GetActorLocation() + FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() * 0.5f);
-	const FVector Body = Point;
+	// Every blocking surface counts once (its component is skipped after).
 	int32 Walls = 0;
 	FHitResult Hit;
-	while (Walls < PerceptionRules::MaxHearingOccluders && World->LineTraceSingleByChannel(Hit, Ear, Body, ECC_Visibility, TraceParams))
+	while (Walls < Max && World->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, TraceParams))
 	{
 		++Walls;
 		if (!Hit.GetComponent())
@@ -1702,6 +1706,34 @@ int32 AEnemyCharacter::CountHearingWallsTo(const FVector& Point) const
 		TraceParams.AddIgnoredComponent(Hit.GetComponent());
 	}
 	return Walls;
+}
+
+int32 AEnemyCharacter::CountHearingWallsTo(const FVector& Point) const
+{
+	// From the ear to the middle of his body.
+	const FVector Ear = GetActorLocation() + FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() * 0.5f);
+	return CountOccludersBetween(Ear, Point, PerceptionRules::MaxHearingOccluders);
+}
+
+int32 AEnemyCharacter::CountScentWallsTo(const AActor& Target) const
+{
+	// From the nose (inside its own capsule, so never inside a wall) to his body, over a low obstacle and to either side of him:
+	// the clearest trace counts, so an open doorway / a gap near the line lets the scent through (ScentRules::CombineTraceWalls).
+	const FVector Body = Target.GetActorLocation();
+	const FVector Nose = GetActorLocation() + GetActorForwardVector().GetSafeNormal2D() * GetSimpleCollisionRadius() * 0.5f;
+	const FVector Side = FVector::CrossProduct(FVector::UpVector, (Body - Nose).GetSafeNormal2D()) * 50.f;
+	const FVector Ends[] = { Body, Body + FVector(0.f, 0.f, 80.f), Body + Side, Body - Side };
+	TArray<int32> Walls;
+	for (const FVector& End : Ends)
+	{
+		const int32 Count = CountOccludersBetween(Nose, End, PerceptionRules::MaxHearingOccluders);
+		Walls.Add(Count);
+		if (Count == 0)
+		{
+			break; // open air: nothing clearer to find
+		}
+	}
+	return ScentRules::CombineTraceWalls(Walls);
 }
 
 bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
@@ -1729,9 +1761,8 @@ bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
 	FPatrolAlertInput Input;
 	Input.bSeesOperative = Seen != nullptr && PatrolSuspicion >= 1.f;
 
-	// Hearing (footsteps by gait) and smell (hounds): no line of sight needed.
+	// Hearing (footsteps by gait): no line of sight needed. Smell (hounds) after it: ScentRules, a scent alerts first.
 	const AActor* Heard = nullptr;
-	const AActor* Smelled = nullptr;
 	const bool bCanSmell = PerceptionRules::CanSmell(Archetype) && Params.SmellRadiusCm > 0.f;
 	if (!Input.bSeesOperative)
 	{
@@ -1751,22 +1782,144 @@ bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
 			{
 				Heard = Member;
 			}
-			if (!Smelled && bCanSmell && PerceptionRules::Smells(Params, Distance))
-			{
-				Smelled = Member;
-			}
 		}
 	}
 	Input.bHearsOperative = Heard != nullptr;
-	Input.bSmellsOperative = Smelled != nullptr;
+	// Smell (game designer 2026-10-18): walls cut the scent, a scent only alerts (sniff -> follow); the nose detects close in open air.
+	if (!Input.bSeesOperative && !Input.bHearsOperative && bCanSmell && !bIsDying && TickScentPerception(Params, Step))
+	{
+		return true;
+	}
 	if (!PatrolRouteRules::ShouldBreakPatrol(Input))
 	{
 		return false;
 	}
-	const AActor* Found = Input.bSeesOperative ? Seen : (Heard ? Heard : Smelled);
-	BreakPatrol(Input.bSeesOperative ? EPatrolAlertCause::Sight : (Heard ? EPatrolAlertCause::Hearing : EPatrolAlertCause::Smell),
-		Found ? Found->GetActorLocation() : GetActorLocation());
+	const AActor* Found = Input.bSeesOperative ? Seen : Heard;
+	BreakPatrol(Input.bSeesOperative ? EPatrolAlertCause::Sight : EPatrolAlertCause::Hearing, Found ? Found->GetActorLocation() : GetActorLocation());
 	return true;
+}
+
+bool AEnemyCharacter::TickScentPerception(const FEnemyPerceptionParams& Params, float StepSeconds)
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	FHoundScentSense Sense;
+	Sense.bSkipSniff = IsInvestigatingScent(); // already on the trail: no second sniff
+	const AOperativeCharacter* Source = nullptr;
+	float SourceDistance = TNumericLimits<float>::Max();
+	int32 SourceWalls = 0;
+	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+	{
+		if (!Member || !Member->HealthComponent || !Member->HealthComponent->IsAlive() || VehicleQueries::IsMounted(Member))
+		{
+			continue;
+		}
+		const float Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
+		// The walls are traced only when the open-air radius reaches him (and he is closer than the best so far).
+		if (Distance > Params.SmellRadiusCm || Distance >= SourceDistance)
+		{
+			continue;
+		}
+		const int32 Walls = CountScentWallsTo(*Member);
+		if (!ScentRules::Smells(Params, Distance, Walls))
+		{
+			continue;
+		}
+		Source = Member;
+		SourceDistance = Distance;
+		SourceWalls = Walls;
+		Sense.bSmells = true;
+		Sense.Point = Member->GetActorLocation();
+		Sense.bClose = ScentRules::IsCloseDetection(Params, Distance, Walls);
+	}
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	switch (ScentRules::Step(Params, ScentState, Sense, StepSeconds))
+	{
+	case EHoundScentAction::StartSniff:
+	{
+		// Stops, nose up: the player sees the scent marker and gets the feed line - time to back off.
+		if (AAIController* AIC = Cast<AAIController>(GetController()))
+		{
+			AIC->StopMovement();
+		}
+		bScentMoveIssued = false;
+		ScentStuckTime = 0.f;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] scent caught by %s at %.1f s (%.0f cm, %d walls)"), *GetName(), Now, SourceDistance, SourceWalls);
+		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("SNIFF..."), FLinearColor(0.65f, 1.f, 0.55f));
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(Source ? Source->DisplayName : FText::FromString(EnemyDisplayName), ScentRules::GetCaughtScentLine());
+		}
+		return false;
+	}
+	case EHoundScentAction::StartFollow:
+		bScentMoveIssued = false;
+		ScentStuckTime = 0.f;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] scent followed by %s at %.1f s towards %s"), *GetName(), Now, *ScentState.ScentPoint.ToCompactString());
+		return false;
+	case EHoundScentAction::Detect:
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] scent close by %s at %.1f s (%.0f cm, open air)"), *GetName(), Now, SourceDistance);
+		BreakPatrol(EPatrolAlertCause::Smell, Sense.Point);
+		return true;
+	case EHoundScentAction::LoseScent:
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] scent lost by %s at %.1f s, investigates %s"), *GetName(), Now, *ScentState.ScentPoint.ToCompactString());
+		bScentMoveIssued = false;
+		FPatrolSearchSpec Spec;
+		Spec.bScent = true;
+		Spec.DurationSeconds = Params.ScentSearchSeconds;
+		Spec.SweepRadiusCm = Params.ScentSweepRadiusCm;
+		StartPatrolSearchWith(ScentState.ScentPoint, Spec);
+		return false;
+	}
+	default:
+		return false;
+	}
+}
+
+bool AEnemyCharacter::TickScentBehavior(float DeltaTime)
+{
+	if (!IsOnScent())
+	{
+		return false;
+	}
+	AAIController* AIC = Cast<AAIController>(GetController());
+	if (ScentState.Phase == EHoundScentPhase::Sniffing)
+	{
+		// Stands and sniffs (no turn: it does not look for him yet).
+		if (AIC && (bScentMoveIssued || GetVelocity().Size2D() > 10.f))
+		{
+			AIC->StopMovement();
+		}
+		bScentMoveIssued = false;
+		return true;
+	}
+	// Following: a cautious walk to where it smells him (the point moves with him while it still smells him).
+	const FVector Goal = ScentState.ScentPoint;
+	if (FVector::Dist2D(GetActorLocation(), Goal) <= 120.f)
+	{
+		if (AIC && bScentMoveIssued)
+		{
+			AIC->StopMovement();
+		}
+		bScentMoveIssued = false;
+		return true; // at the point: the nose decides (close in open air = detected; nothing = a lost scent)
+	}
+	ScentStuckTime = GetVelocity().Size2D() < 10.f ? ScentStuckTime + DeltaTime : 0.f;
+	if (!bScentMoveIssued || FVector::Dist2D(Goal, ScentMoveGoal) > 100.f || ScentStuckTime > 1.f)
+	{
+		ScentStuckTime = 0.f;
+		ScentMoveGoal = Goal;
+		bScentMoveIssued = true;
+		IssuePatrolMove(Goal, ScentRules::GetFollowSpeed(PatrolWalkSpeed, BaseWalkSpeed, GetPatrolPerception().ScentFollowSpeedFraction));
+	}
+	return true;
+}
+
+void AEnemyCharacter::ResetScent()
+{
+	ScentState = FHoundScentState();
+	bScentMoveIssued = false;
+	ScentStuckTime = 0.f;
 }
 
 void AEnemyCharacter::TickPatrolBehavior(float DeltaTime)
@@ -1796,6 +1949,10 @@ void AEnemyCharacter::TickPatrolBehavior(float DeltaTime)
 			BreakPatrol(EPatrolAlertCause::PartnerAlert, Leader->GetActorLocation());
 			return;
 		}
+		if (TickScentBehavior(DeltaTime))
+		{
+			return; // sniffing / following a scent: off the tether for now
+		}
 		if (bSearching)
 		{
 			TickPatrolSearch(DeltaTime);
@@ -1803,6 +1960,10 @@ void AEnemyCharacter::TickPatrolBehavior(float DeltaTime)
 		}
 		TickEscort(DeltaTime, *Leader);
 		return;
+	}
+	if (TickScentBehavior(DeltaTime))
+	{
+		return; // sniffing / following a scent (hounds): the route / post / search waits
 	}
 	if (bSearching)
 	{
@@ -1896,7 +2057,7 @@ void AEnemyCharacter::UpdateVisionCone(float DeltaTime)
 	{
 		return;
 	}
-	const EVisionConeState State = VisionConeRules::GetEnemyState(bOnPatrol, bSearching, PatrolSuspicion);
+	const EVisionConeState State = VisionConeRules::GetEnemyState(bOnPatrol, bSearching || IsOnScent(), PatrolSuspicion);
 	VisionCone->UpdateCone(bVisible, GetVisionConeRange(), GetVisionConeHalfAngle(),
 		VisionConeRules::GetStateColor(State, bSearching ? 1.f : PatrolSuspicion), DeltaTime);
 }
@@ -1932,11 +2093,12 @@ void AEnemyCharacter::StartPatrolSearchWith(const FVector& Location, const FPatr
 			Spec.bLure ? TEXT(" (lure)") : TEXT(""));
 		return;
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s %s around %s"), *GetName(), Spec.bLure ? TEXT("investigates a noise") : TEXT("searches"),
-		*Location.ToCompactString());
+	UE_LOG(LogCodexTactics, Display, TEXT("[Patrol] %s %s around %s"), *GetName(),
+		Spec.bLure ? TEXT("investigates a noise") : (Spec.bScent ? TEXT("investigates a lost scent") : TEXT("searches")), *Location.ToCompactString());
 	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] %s started by %s at %.1f s"), Spec.bLure ? TEXT("lure investigation") : TEXT("search"), *GetName(),
 		GetWorld()->GetTimeSeconds());
-	UFloatingTextSubsystem::SpawnAboveEnemy(this, Spec.bLure ? TEXT("? NOISE") : TEXT("❓ SEARCHING"), FLinearColor(1.f, 0.8f, 0.25f));
+	UFloatingTextSubsystem::SpawnAboveEnemy(this, Spec.bLure ? TEXT("? NOISE") : (Spec.bScent ? TEXT("? SCENT") : TEXT("❓ SEARCHING")),
+		FLinearColor(1.f, 0.8f, 0.25f));
 	// The whole patrol hunts: its leader and every escort (with the same spec).
 	if (AEnemyCharacter* Leader = EscortLeader.Get(); Leader && Leader->IsOnPatrol() && !Leader->IsSearching())
 	{
@@ -2214,6 +2376,9 @@ void AEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertL
 		return;
 	}
 	const bool bWasSearching = bSearching;
+	LastPatrolBreakCause = Cause;
+	bHasBrokenPatrol = true;
+	ResetScent();
 	bPatrolActive = false;
 	bGuardingPost = false;
 	bGuardReturning = false;

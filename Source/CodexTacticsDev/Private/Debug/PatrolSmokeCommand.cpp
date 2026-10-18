@@ -275,6 +275,9 @@ namespace PatrolSmoke
 			}
 			Dialogue->StartDialogue(Intro);
 			Hound->PerceptionOverride.SmellRadiusCm = 10000.f;
+			// Since the hound scent rework (2026-10-18) a scent only alerts: this 100 m nose detects at once, through anything.
+			Hound->PerceptionOverride.SmellDetectCm = 10000.f;
+			Hound->PerceptionOverride.SmellOcclusionPerWall = 1.f;
 			Check(State, Dialogue->IsDialogueOpen() && UWorldAIPauseSubsystem::IsPausedIn(World), TEXT("dialogue open: world AI paused"));
 			State.Stage = 4;
 			State.Time = 0.f;

@@ -91,9 +91,45 @@ struct CODEXTACTICS_API FEnemyPerceptionParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Hearing", meta = (ClampMin = "0"))
 	float HearExplosionCm = 6000.f;
 
-	/** Smells an operative this far, cm (frost hounds only — forced to 0 for every other archetype). */
+	/**
+	 * Smells an operative this far in open air, cm (frost hounds only — forced to 0 for every other archetype). Smell only
+	 * ALERTS (sniff, then follow the scent; ScentRules): it detects within SmellDetectCm. Hound 6 m since 2026-10-18 (was 12 m:
+	 * cold air carries scent poorly).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Smell", meta = (ClampMin = "0"))
 	float SmellRadiusCm = 0.f;
+
+	/** Smell radius x this for every wall between the nose and the operative (0..1; 0.3: one wall 1.8 m, two ~0.5 m). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Smell", meta = (ClampMin = "0", ClampMax = "1"))
+	float SmellOcclusionPerWall = 0.3f;
+
+	/** The nose alone detects an operative this close in open air (no wall), cm (never more than the smell radius). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Smell", meta = (ClampMin = "0"))
+	float SmellDetectCm = 200.f;
+
+	/** Caught a scent: stands and sniffs this long before it follows the scent, s (0 = follows at once). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Smell", meta = (ClampMin = "0"))
+	float SniffSeconds = 2.5f;
+
+	/** The scent counts as lost after this long without it (at the end of the sniff / while following), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Smell", meta = (ClampMin = "0"))
+	float ScentLostSeconds = 1.f;
+
+	/** Gives the trail up after following it this long (then investigates the last scent point), s; 0 = never. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Smell", meta = (ClampMin = "0"))
+	float ScentFollowMaxSeconds = 20.f;
+
+	/** Follows the scent at its patrol walk speed x this (a cautious approach, not a charge). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Smell", meta = (ClampMin = "0"))
+	float ScentFollowSpeedFraction = 0.8f;
+
+	/** A lost scent: investigates the last scent point this long (a patrol search), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Smell", meta = (ClampMin = "0"))
+	float ScentSearchSeconds = 20.f;
+
+	/** ... sweeping points within this radius of it, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Perception|Smell", meta = (ClampMin = "0"))
+	float ScentSweepRadiusCm = 300.f;
 };
 
 /** The patrol search after a trap / placed charge went off (user amendment 2026-10-06). */
@@ -187,7 +223,7 @@ namespace PerceptionRules
 	CODEXTACTICS_API bool HearsGunshot(const FEnemyPerceptionParams& Params, float DistanceCm);
 	CODEXTACTICS_API bool HearsExplosion(const FEnemyPerceptionParams& Params, float DistanceCm);
 
-	/** Smells an operative DistanceCm away (smell radius > 0 only for hounds after Sanitize). */
+	/** Smells an operative DistanceCm away in open air (smell radius > 0 only for hounds after Sanitize; walls: ScentRules). */
 	CODEXTACTICS_API bool Smells(const FEnemyPerceptionParams& Params, float DistanceCm);
 
 	/**

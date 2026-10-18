@@ -624,9 +624,17 @@ namespace
 		Patrol->SetNumberField(TEXT("search_elapsed"), Snapshot.SearchElapsed);
 		Patrol->SetNumberField(TEXT("suspicion"), Snapshot.Suspicion);
 		// Stealth lure (2026-10-18): an investigation keeps its own time / sweep / pace and its «?».
-		if (Snapshot.bSearching && Snapshot.bLureSearch)
+		// A hound's lost-scent investigation (2026-10-18) likewise ("scent").
+		if (Snapshot.bSearching && (Snapshot.bLureSearch || Snapshot.bScentSearch))
 		{
-			Patrol->SetBoolField(TEXT("lure"), true);
+			if (Snapshot.bLureSearch)
+			{
+				Patrol->SetBoolField(TEXT("lure"), true);
+			}
+			if (Snapshot.bScentSearch)
+			{
+				Patrol->SetBoolField(TEXT("scent"), true);
+			}
 			Patrol->SetNumberField(TEXT("search_duration"), Snapshot.SearchDurationSeconds);
 			Patrol->SetNumberField(TEXT("search_sweep"), Snapshot.SearchSweepRadiusCm);
 			Patrol->SetNumberField(TEXT("search_approach"), Snapshot.SearchApproachSpeedFraction);
@@ -653,6 +661,7 @@ namespace
 		Snapshot.SearchElapsed = SaveFloat(*Patrol, TEXT("search_elapsed"), 0.f);
 		Snapshot.Suspicion = SaveFloat(*Patrol, TEXT("suspicion"), 0.f);
 		Snapshot.bLureSearch = SaveBool(*Patrol, TEXT("lure"), false);
+		Snapshot.bScentSearch = SaveBool(*Patrol, TEXT("scent"), false);
 		Snapshot.SearchDurationSeconds = SaveFloat(*Patrol, TEXT("search_duration"), -1.f);
 		Snapshot.SearchSweepRadiusCm = SaveFloat(*Patrol, TEXT("search_sweep"), -1.f);
 		Snapshot.SearchApproachSpeedFraction = SaveFloat(*Patrol, TEXT("search_approach"), 0.f);

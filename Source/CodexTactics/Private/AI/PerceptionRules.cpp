@@ -33,7 +33,7 @@ FEnemyPerceptionParams PerceptionRules::GetArchetypeDefaults(EEnemyArchetype Arc
 	switch (Archetype)
 	{
 	case EEnemyArchetype::FrostHound: // short sight, wide view, good ears, big nose
-		return MakePerception(15.f, 70.f, 0.75f, 0.4f, 0.6f, 7.f, 14.f, 3.5f, 1.5f, 45.f, 60.f, 12.f);
+		return MakePerception(15.f, 70.f, 0.75f, 0.4f, 0.6f, 7.f, 14.f, 3.5f, 1.5f, 45.f, 60.f, 6.f); // smell 12 -> 6 m (2026-10-18)
 	case EEnemyArchetype::Marksman: // long sight through a narrow scope view, average ears
 		return MakePerception(45.f, 30.f, 0.7f, 0.35f, 1.0f, 5.f, 10.f, 2.f, 1.f, 40.f, 60.f, 0.f);
 	case EEnemyArchetype::Spitter:
@@ -62,6 +62,7 @@ FEnemyPerceptionParams PerceptionRules::Sanitize(EEnemyArchetype Archetype, cons
 	}
 	Out.SightHalfAngleDeg = FMath::Clamp(Out.SightHalfAngleDeg, 0.f, 180.f);
 	Out.HearingOcclusionPerWall = FMath::Clamp(Out.HearingOcclusionPerWall, 0.f, 1.f);
+	Out.SmellOcclusionPerWall = FMath::Clamp(Out.SmellOcclusionPerWall, 0.f, 1.f);
 	return Out;
 }
 
