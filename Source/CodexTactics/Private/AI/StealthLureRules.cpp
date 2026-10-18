@@ -58,8 +58,22 @@ bool StealthLureRules::IsHuntingSquad(bool bAlive, bool bOnPatrol, bool bHasTarg
 
 float StealthLureRules::EffectiveRadius(const FStealthLureListener& Listener, float RadiusCm, float SearchPerceptionMultiplier)
 {
-	const float Open = FMath::Max(RadiusCm, 0.f) * (Listener.bSearching ? FMath::Max(SearchPerceptionMultiplier, 0.f) : 1.f);
-	return PerceptionRules::OccludedRadius(Open, Listener.Walls, Listener.OcclusionPerWall);
+	return PerceptionRules::OccludedRadius(OpenRadius(Listener, RadiusCm, SearchPerceptionMultiplier), Listener.Walls, Listener.OcclusionPerWall);
+}
+
+float StealthLureRules::OpenRadius(const FStealthLureListener& Listener, float RadiusCm, float SearchPerceptionMultiplier)
+{
+	return FMath::Max(RadiusCm, 0.f) * (Listener.bSearching ? FMath::Max(SearchPerceptionMultiplier, 0.f) : 1.f);
+}
+
+bool StealthLureRules::HearsAlongPath(const FStealthLureListener& Listener, float RadiusCm, float SearchPerceptionMultiplier)
+{
+	if (!Listener.bAlive || !Listener.bOnPatrol || Listener.bTurnBasedHeld || Listener.PathCm < 0.f)
+	{
+		return false;
+	}
+	const float Open = OpenRadius(Listener, RadiusCm, SearchPerceptionMultiplier);
+	return Open > 0.f && Listener.PathCm <= Open;
 }
 
 bool StealthLureRules::Hears(const FStealthLureListener& Listener, float RadiusCm, float SearchPerceptionMultiplier)
@@ -69,7 +83,26 @@ bool StealthLureRules::Hears(const FStealthLureListener& Listener, float RadiusC
 		return false;
 	}
 	const float Radius = EffectiveRadius(Listener, RadiusCm, SearchPerceptionMultiplier);
-	return Radius > 0.f && Listener.DistanceCm <= Radius;
+	return (Radius > 0.f && Listener.DistanceCm <= Radius) || HearsAlongPath(Listener, RadiusCm, SearchPerceptionMultiplier);
+}
+
+ENoiseReaction StealthLureRules::ReactToNoise(const FNoiseReactionInput& Input)
+{
+	if (Input.bFollowingScent && Input.ScentDistanceCm >= 0.f && Input.ScentDistanceCm <= ScentHoldsNoiseCm)
+	{
+		return ENoiseReaction::KeepScent;
+	}
+	if (Input.bSearching && Input.DistanceToCurrentNoiseCm <= SameNoiseCm && Input.SecondsSinceCurrentNoise >= 0.f
+		&& Input.SecondsSinceCurrentNoise < SameNoiseSeconds)
+	{
+		return ENoiseReaction::SameNoise;
+	}
+	return Input.bSearching ? ENoiseReaction::Retarget : ENoiseReaction::Investigate;
+}
+
+bool StealthLureRules::GoesToNoise(ENoiseReaction Reaction)
+{
+	return Reaction == ENoiseReaction::Investigate || Reaction == ENoiseReaction::Retarget;
 }
 
 float StealthLureRules::GetApproachSpeed(float PatrolWalkSpeed, float NormalSpeed, float Fraction, float TrapSearchSpeed)
@@ -102,6 +135,15 @@ FVector StealthLureRules::ChooseInvestigatePoint(const FVector& Noise, bool bOnN
 float StealthLureRules::GetArriveRadius(float SearchArriveCm, bool bLureFirstLeg)
 {
 	return bLureFirstLeg ? FMath::Max(SearchArriveCm, LureArriveCm) : SearchArriveCm;
+}
+
+bool StealthLureRules::HasArrived(float DistanceCm, float ArriveCm, float StuckSeconds)
+{
+	if (DistanceCm <= ArriveCm)
+	{
+		return true;
+	}
+	return StuckSeconds >= ArriveStuckSeconds && DistanceCm <= ArriveCm + ArriveStuckSlackCm;
 }
 
 FText StealthLureRules::GetButtonName(EStealthLureKind Kind)

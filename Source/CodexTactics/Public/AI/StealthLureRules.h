@@ -129,6 +129,48 @@ struct CODEXTACTICS_API FStealthLureListener
 	int32 Walls = 0;
 	/** Its archetype's HearingOcclusionPerWall (footsteps), 0..1. */
 	float OcclusionPerWall = 0.5f;
+	/**
+	 * Its navmesh walking path to the noise, cm (round walls, through doorways); < 0 = not known / no full path. The noise reaches
+	 * it round a wall in open air when this path fits the open-air radius (fix 2026-10-18, see StealthLureRules::Hears).
+	 */
+	float PathCm = -1.f;
+};
+
+/**
+ * What an enemy on patrol duty does with a new noise that sends it searching (a lure, a trap blast, a campfire, a lost leader)
+ * while it may already be searching / investigating (re-target rule, user report 2026-10-18: a stone first, then the whistle -
+ * the whistle was lost and they kept turning at the stone).
+ */
+enum class ENoiseReaction : uint8
+{
+	/** Off patrol duty / dying (the world call only; the rule never returns it): nothing sends it searching. */
+	Ignored,
+	/** Was not searching: it starts the search / investigation at the noise. */
+	Investigate,
+	/** Was searching / investigating another point: the NEWER noise wins - the origin moves there, it listens again, walks there,
+	 *  and the search clock restarts. */
+	Retarget,
+	/** It is already on this very noise (its patrol mate pulled it in this instant, then it heard it itself): nothing changes. */
+	SameNoise,
+	/** A hound following a fresh scent within ScentHoldsNoiseCm: the nose wins (it is about to find him), the noise is ignored. */
+	KeepScent
+};
+
+/** The enemy's state as the re-target rule sees it. */
+struct CODEXTACTICS_API FNoiseReactionInput
+{
+	/** Searching / investigating already (a trap search, a lure, a lost scent). */
+	bool bSearching = false;
+	/** Planar distance from the point it searches now (its noise) to the new noise, cm. */
+	float DistanceToCurrentNoiseCm = TNumericLimits<float>::Max();
+	/** Seconds since its current noise was set (world time). */
+	float SecondsSinceCurrentNoise = TNumericLimits<float>::Max();
+	/** A hound standing and sniffing a scent it just caught (ScentRules Sniffing). */
+	bool bSniffing = false;
+	/** A hound following a scent (ScentRules Following). */
+	bool bFollowingScent = false;
+	/** Planar distance from the hound to the point it smells the operative at, cm (Following). */
+	float ScentDistanceCm = TNumericLimits<float>::Max();
 };
 
 namespace StealthLureRules
@@ -164,6 +206,37 @@ namespace StealthLureRules
 	 */
 	CODEXTACTICS_API bool Hears(const FStealthLureListener& Listener, float RadiusCm, float SearchPerceptionMultiplier);
 
+	/**
+	 * The noise also travels ROUND walls (fix 2026-10-18, user's L_PatrolTest: a whistle from behind a wall with a doorway was lost
+	 * on enemies 7.5 / 10.8 m away - the straight line crossed the wall, the radius halved to 7.5 m - while their walk through the
+	 * doorway was 10.9 / 14.1 m): Listener.PathCm >= 0 within the open-air radius (x the search multiplier) = heard as in the open.
+	 * Hears() includes it; this is the path part alone.
+	 */
+	CODEXTACTICS_API bool HearsAlongPath(const FStealthLureListener& Listener, float RadiusCm, float SearchPerceptionMultiplier);
+
+	/** Open-air radius of a lure for Listener (x the search multiplier while it searches; no walls), cm. */
+	CODEXTACTICS_API float OpenRadius(const FStealthLureListener& Listener, float RadiusCm, float SearchPerceptionMultiplier);
+
+	/**
+	 * The re-target rule (fix 2026-10-18; every noise that starts a patrol search, not only lures). In order:
+	 * a hound following a scent closer than ScentHoldsNoiseCm keeps following (KeepScent); a noise within SameNoiseCm of its current
+	 * one that was set less than SameNoiseSeconds ago is the same noise (SameNoise); searching = Retarget (the newer noise wins over
+	 * the point it investigates, whatever set it - lure, trap, scent); else Investigate. A sniffing hound / one following a far
+	 * scent re-targets (the caller drops the scent). Stronger stimuli keep priority outside this rule: an enemy that sees / hears
+	 * the squad breaks its patrol, and off patrol duty nothing sends it searching.
+	 */
+	CODEXTACTICS_API ENoiseReaction ReactToNoise(const FNoiseReactionInput& Input);
+
+	/** True when the reaction moves the enemy to the new noise (Investigate / Retarget). */
+	CODEXTACTICS_API bool GoesToNoise(ENoiseReaction Reaction);
+
+	/** A hound following a scent this close to it ignores a new noise (it is about to detect / lose him), cm. */
+	constexpr float ScentHoldsNoiseCm = 300.f;
+	/** Same noise: this close to the current one ... */
+	constexpr float SameNoiseCm = 50.f;
+	/** ... and set this recently (a patrol mate's propagation in the same instant), s. */
+	constexpr float SameNoiseSeconds = 0.1f;
+
 	/** The radius Listener hears a lure at (walls and search multiplier applied), cm. */
 	CODEXTACTICS_API float EffectiveRadius(const FStealthLureListener& Listener, float RadiusCm, float SearchPerceptionMultiplier);
 
@@ -184,7 +257,16 @@ namespace StealthLureRules
 	/** Arrival radius of the walk to a lure noise: at least LureArriveCm (the whistler's body may stand on the point). */
 	CODEXTACTICS_API float GetArriveRadius(float SearchArriveCm, bool bLureFirstLeg);
 
+	/**
+	 * A search / lure leg is over: within ArriveCm, or stuck (standing, StuckSeconds >= ArriveStuckSeconds) within ArriveCm +
+	 * ArriveStuckSlackCm - two enemies walking to the same point block each other there (StealthLureSmoke F: one waited 10 s at
+	 * 2.08 m before its leg timed out).
+	 */
+	CODEXTACTICS_API bool HasArrived(float DistanceCm, float ArriveCm, float StuckSeconds);
+
 	constexpr float LureArriveCm = 200.f;
+	constexpr float ArriveStuckSlackCm = 150.f;
+	constexpr float ArriveStuckSeconds = 0.5f;
 	/** Refused move requests to the noise before the goal is resolved again; before the enemy searches where it stands. */
 	constexpr int32 RepathAfterFailures = 2;
 	constexpr int32 GiveUpAfterFailures = 5;
