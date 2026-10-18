@@ -121,12 +121,14 @@ namespace EnemyCharacterLocal
 	TOptional<EEnemyArchetype> SpawnArchetype;
 
 	/**
-	 * Bug hunt 2026-10-18 (open user decision, HANDOFF §7): melee enemies close in until they can bite
-	 * (EnemyAIRules::MeleeApproachAcceptance). 0 (default) = the shipped behaviour: they stop at AttackRange x 0.5 + both
-	 * capsule radii, i.e. hounds / frostbitten 1.65-1.75 m off - outside their 1.5 m planar reach.
+	 * Bug hunt 2026-10-18, ON since the user's approval 2026-10-18: melee enemies close in until they can bite
+	 * (EnemyAIRules::MeleeApproachAcceptance). The game value is DATA: Content/Data/AI/ai_tuning.json "cvars"
+	 * "Codex.Enemy.MeleeCloseIn": "1" (applied at StartPlay, Data/AITuning.h). The code default 0 is the old stop (AttackRange
+	 * x 0.5 + both capsule radii = hounds / frostbitten 1.65-1.75 m off, outside their 1.5 m planar reach) and stays for A/B:
+	 * console "Codex.Enemy.MeleeCloseIn 0" or -dpcvars=Codex.Enemy.MeleeCloseIn=0 (wins over the file), or -NoAITuning.
 	 */
 	static TAutoConsoleVariable<int32> CVarMeleeCloseIn(TEXT("Codex.Enemy.MeleeCloseIn"), 0,
-		TEXT("1: melee enemies close in to their bite reach (MoveToActor acceptance minus the capsule radii); 0: the shipped AttackRange x 0.5 stop (1.65-1.75 m off a hound's 1.5 m reach)"));
+		TEXT("1 (ai_tuning.json, the game value since 2026-10-18): melee enemies close in to their bite reach (MoveToActor acceptance minus the capsule radii); 0 (code default, A/B): the old AttackRange x 0.5 stop (1.65-1.75 m off a hound's 1.5 m reach)"));
 }
 
 AEnemyCharacter::FScopedSpawnArchetype::FScopedSpawnArchetype(EEnemyArchetype InArchetype)
@@ -646,14 +648,46 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	{
 		Target = Order.Target.Get();
 	}
-	// Flank hysteresis: once round (at the point or within 5 m of him) it goes straight in at that target for good —
-	// no switching back to the detour at the 5 m edge (FacingSmoke: crowding hounds turned back and forth).
+	// Flank detour (user decision 2026-10-18, a real detour): a flanker walks to its flank point first and closes in from there -
+	// or at once when already within bite reach on the flank side; a blocked point / a long detour falls back to straight in.
+	// Latched per target (no switching back to the detour: FacingSmoke's crowding hounds turned back and forth).
 	if (bHasOrder && Order.Role == EEnemyTacticRole::Flank && Target && FlankDoneTarget.Get() != Target)
 	{
 		const FVector MyFeet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
-		if (FVector::Dist2D(MyFeet, GodotPosition(Target)) <= 500.f || FVector::Dist2D(MyFeet, Order.MovePoint) <= 150.f)
+		if (FlankDetourTarget.Get() != Target)
+		{
+			FlankDetourTarget = Target;
+			FlankDetourElapsed = 0.f;
+			FlankDetourStuck = 0.f;
+			FlankDetourProbe = MyFeet;
+		}
+		FlankDetourElapsed += DeltaTime;
+		if (FVector::Dist2D(MyFeet, FlankDetourProbe) > 50.f)
+		{
+			FlankDetourProbe = MyFeet;
+			FlankDetourStuck = 0.f;
+		}
+		else
+		{
+			FlankDetourStuck += DeltaTime;
+		}
+		const FVector TargetFeet = GodotPosition(Target);
+		FFlankDetourInput Detour;
+		Detour.DistanceToPointCm = FVector::Dist2D(MyFeet, Order.MovePoint);
+		Detour.DistanceToTargetCm = FVector::Dist2D(MyFeet, TargetFeet);
+		Detour.BiteReachCm = EnemyAIRules::MeleeReachPlanar(AttackRange, FMath::Abs(Target->GetActorLocation().Z - MyFeet.Z));
+		const FVector FromTarget = (MyFeet - TargetFeet).GetSafeNormal2D();
+		const FVector FlankDirection = (Order.MovePoint - TargetFeet).GetSafeNormal2D();
+		Detour.AngleFromFlankDeg = FlankDirection.IsNearlyZero() ? 180.f
+			: FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(static_cast<float>(FVector::DotProduct(FromTarget, FlankDirection)), -1.f, 1.f)));
+		Detour.ElapsedSeconds = FlankDetourElapsed;
+		Detour.StuckSeconds = FlankDetourStuck;
+		const EFlankDetourResult Result = EnemyTacticsRules::EvaluateFlankDetour(Detour, UEnemyTacticsSubsystem::GetFlankDetourConfig());
+		if (Result != EFlankDetourResult::Continue)
 		{
 			FlankDoneTarget = Target;
+			UE_LOG(LogCodexTactics, Verbose, TEXT("[EnemyTactics] %s flank detour ends after %.1f s: %s (%.0f cm from the point, %.0f deg off the flank)"),
+				*GetName(), FlankDetourElapsed, EnemyTacticsRules::FlankDetourResultName(Result), Detour.DistanceToPointCm, Detour.AngleFromFlankDeg);
 		}
 	}
 	CurrentTarget = Target;
@@ -768,10 +802,9 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 				Face(Target);
 			}
 		}
-		else if (bHasOrder && Order.Role == EEnemyTacticRole::Flank && FlankDoneTarget.Get() != Target
-			&& FVector::Dist2D(Feet, TargetPosition) > 500.f && FVector::Dist2D(Feet, Order.MovePoint) > 150.f)
+		else if (bHasOrder && Order.Role == EEnemyTacticRole::Flank && FlankDoneTarget.Get() != Target)
 		{
-			RequestAIMoveToLocation(AIC, Order.MovePoint, 60.f); // round his side, then in
+			RequestAIMoveToLocation(AIC, Order.MovePoint, 60.f); // round his side, then in (the detour latch above ends it)
 		}
 		else
 		{
@@ -786,7 +819,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 			else
 			{
 				// MoveToActor's reach test adds both capsule radii: AttackRange x 0.5 stops hounds 1.7 m off, out of their own
-				// reach (bug hunt 2026-10-18). Codex.Enemy.MeleeCloseIn 1 closes in to the bite (user decision pending).
+				// reach (bug hunt 2026-10-18). Codex.Enemy.MeleeCloseIn 1 (ai_tuning.json, user approval 2026-10-18) closes in.
 				const float Acceptance = EnemyCharacterLocal::CVarMeleeCloseIn.GetValueOnGameThread() != 0
 					? EnemyAIRules::MeleeApproachAcceptance(AttackRange, FMath::Abs(TargetPosition.Z - Feet.Z), GetSimpleCollisionRadius(),
 						Target->GetSimpleCollisionRadius())
@@ -2336,6 +2369,13 @@ void AEnemyCharacter::AttackTarget(AActor* Target)
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Target))
 	{
 		const float Dealt = Operative->TakeHit(FinalDamage, EnemyDisplayName, bIsCrit, false, this, bIsCrit ? CritMultiplier : 1.f);
+		// One line per landed blow / bite (melee balance read-outs, e.g. the close-in A/B of 2026-10-18), with the side it came
+		// from: the angle between his facing and the attacker (front < 60 < side < 120 < back; pack flanking 2026-10-18).
+		const FVector ToAttacker = (GetActorLocation() - Operative->GetActorLocation()).GetSafeNormal2D();
+		const float FromAngle = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(static_cast<float>(FVector::DotProduct(
+			Operative->GetActorForwardVector().GetSafeNormal2D(), ToAttacker)), -1.f, 1.f)));
+		UE_LOG(LogCodexTactics, Display, TEXT("[Melee] %s hits %s for %.1f%s from the %s (%.0f deg)"), *GetName(), *Operative->DisplayName.ToString(), Dealt,
+			bIsCrit ? TEXT(" (crit)") : TEXT(""), FromAngle < 60.f ? TEXT("front") : (FromAngle <= 120.f ? TEXT("side") : TEXT("back")), FromAngle);
 		TryKnockDownOperative(Operative, Dealt); // Sprint 14: Brute heavy melee / hound pounce
 		// Godot enemy_frostbitten.gd _attack_target: the blow shoves the operative 2.5 m/s away (velocity added).
 		FVector Push = Operative->GetActorLocation() - GetActorLocation();

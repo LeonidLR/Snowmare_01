@@ -49,6 +49,44 @@ struct CODEXTACTICS_API FKnockdownConfig
 	float HoundPounceRunUpSeconds = 1.f;
 	/** A hound knocks somebody down at most this often, s. */
 	float HoundPounceCooldownSeconds = 12.f;
+	/**
+	 * Return to cover after a knockdown (user decision 2026-10-18): an operative a BLAST knocked out of his cover goes back to
+	 * the same slot once he is up - unless enemies are around him (within CoverReturnThreatRadiusCm) or he got an order while down.
+	 */
+	bool bReturnToCoverAfterBlast = true;
+	/** "Enemies around him": a living enemy this close when he is up keeps him out of the cover, cm. */
+	float CoverReturnThreatRadiusCm = 400.f;
+};
+
+/** What decided an operative's return to his cover after a knockdown (KnockdownRules::DecideCoverReturn). */
+enum class EKnockdownCoverReturn : uint8
+{
+	/** Back to the same cover slot. */
+	Return,
+	/** He was not in cover when he fell. */
+	NotInCover,
+	/** Not a blast (a pounce, a Brute's blow, a heavy hit): he is out of his cover because enemies are on him. */
+	NotABlast,
+	/** A blast, but enemies are around him now. */
+	EnemiesClose,
+	/** The player ordered him while he lay (the buffered order wins). */
+	OrderGiven,
+	/** Turn-based fight (the grid moves him; no automatic walk). */
+	TurnBased,
+	/** Dead / the rule is off. */
+	Off
+};
+
+/** The facts the cover-return rule needs, gathered when he is up again. */
+struct FKnockdownCoverReturnInput
+{
+	bool bWasInCover = false;
+	EKnockdownCause Cause = EKnockdownCause::None;
+	/** Living enemies within FKnockdownConfig::CoverReturnThreatRadiusCm of him. */
+	int32 EnemiesClose = 0;
+	bool bOrderGivenWhileDown = false;
+	bool bTurnBased = false;
+	bool bAlive = true;
 };
 
 /** One incoming blow, as the knockdown rules see it. */
@@ -220,4 +258,14 @@ namespace KnockdownRules
 	CODEXTACTICS_API const TCHAR* FallClipName(EKnockdownDirection Direction);
 	CODEXTACTICS_API const TCHAR* GetUpClipName(EKnockdownDirection Direction);
 	CODEXTACTICS_API const TCHAR* DeathClipName(EKnockdownDirection Direction);
+
+	/**
+	 * User rule 2026-10-18: «if enemies surround him, don't return him to cover; if a grenade / blast just happened to explode next
+	 * to him and he fell, return him to cover». Order: Off (rule off / dead) > NotInCover > OrderGiven > TurnBased > NotABlast >
+	 * EnemiesClose > Return.
+	 */
+	CODEXTACTICS_API EKnockdownCoverReturn DecideCoverReturn(const FKnockdownCoverReturnInput& Input, const FKnockdownConfig& Config);
+
+	/** Short name of a decision (logs / smokes). */
+	CODEXTACTICS_API const TCHAR* CoverReturnName(EKnockdownCoverReturn Decision);
 }

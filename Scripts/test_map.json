@@ -30,7 +30,7 @@
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
-    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke"
+    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -239,9 +239,9 @@
     },
     {
       "name": "knockdown",
-      "globs": ["Source/**/Combat/Knockdown*", "Content/Animations_KnockDown/**", "Scripts/Editor/import_knockdown_animations.py"],
+      "globs": ["Source/**/Combat/Knockdown*", "Content/Animations_KnockDown/**", "Scripts/Editor/import_knockdown_animations.py", "Source/**/Debug/KnockdownCoverSmoke*"],
       "tests": ["CodexTactics.Combat.Knockdown"],
-      "smokes": ["KnockdownSmoke", "EnemyHitLayerSmoke", "TurnBasedSmoke", "GrenadeSmoke"]
+      "smokes": ["KnockdownSmoke", "KnockdownCoverSmoke", "EnemyHitLayerSmoke", "TurnBasedSmoke", "GrenadeSmoke"]
     },
     {
       "name": "enemy",
@@ -295,7 +295,7 @@
       "name": "operative-health-units",
       "globs": ["Source/**/Characters/OperativeCharacterHealth*"],
       "tests": ["CodexTactics.Combat.Health", "CodexTactics.Combat.Knockdown", "CodexTactics.Combat.DeathCinematic", "CodexTactics.Characters.OperativeUnits"],
-      "smokes": ["KnockdownSmoke", "FloatingTextSmoke", "DeathCamSmoke", "RecruitDeathSmoke", "TurnBlastDeathSmoke", "CoverSmoke", "MissionSmoke"]
+      "smokes": ["KnockdownSmoke", "KnockdownCoverSmoke", "FloatingTextSmoke", "DeathCamSmoke", "RecruitDeathSmoke", "TurnBlastDeathSmoke", "CoverSmoke", "MissionSmoke"]
     },
     {
       "name": "operative-inventory-units",

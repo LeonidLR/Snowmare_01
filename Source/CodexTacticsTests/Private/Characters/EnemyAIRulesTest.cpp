@@ -1,5 +1,11 @@
 #include "Misc/AutomationTest.h"
 #include "Characters/EnemyAIRules.h"
+#include "Data/AITuning.h"
+#include "HAL/IConsoleManager.h"
+#include "Dom/JsonObject.h"
+#include "Misc/FileHelper.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -109,7 +115,8 @@ bool FEnemyPlacedArchetypeTest::RunTest(const FString&)
 
 // Bug hunt 2026-10-18 (CornerHoldSmoke 1 in 3): MoveToActor's reach test adds both capsule radii, so the old acceptance
 // AttackRange x 0.5 stopped a hound 90 + 40 + 40 = 170 cm off while its bite needs <= 150 cm planar (1.8 m to the
-// operative's centre 1 m up). Codex.Enemy.MeleeCloseIn 1 uses MeleeApproachAcceptance (user decision pending).
+// operative's centre 1 m up). Codex.Enemy.MeleeCloseIn 1 uses MeleeApproachAcceptance (on by data since the user's approval
+// 2026-10-18: CodexTactics.Characters.EnemyAI.MeleeCloseInOnByData).
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyMeleeApproachTest, "CodexTactics.Characters.EnemyAI.MeleeApproach",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -130,6 +137,32 @@ bool FEnemyMeleeApproachTest::RunTest(const FString&)
 	TestEqual(TEXT("cutter (2 m)"), EnemyAIRules::MeleeApproachAcceptance(200.f, 100.f, 40.f, 40.f), 75.f);
 	TestEqual(TEXT("never negative (huge capsules)"), EnemyAIRules::MeleeApproachAcceptance(180.f, 100.f, 90.f, 90.f), 0.f);
 	TestEqual(TEXT("a few cm of height jitter keep the request"), EnemyAIRules::MeleeApproachAcceptance(180.f, 101.5f, 40.f, 40.f), 50.f);
+	return true;
+}
+
+// User approval 2026-10-18: the close-in is the game value, set by DATA (ai_tuning.json "cvars"), the code default (0) stays for A/B.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyMeleeCloseInDataTest, "CodexTactics.Characters.EnemyAI.MeleeCloseInOnByData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FEnemyMeleeCloseInDataTest::RunTest(const FString&)
+{
+	FString Text;
+	if (!TestTrue(TEXT("ai_tuning.json readable"), FFileHelper::LoadFileToString(Text, *AITuning::GetDefaultPath())))
+	{
+		return false;
+	}
+	TSharedPtr<FJsonObject> Root;
+	const TSharedPtr<FJsonObject>* CVars = nullptr;
+	if (!TestTrue(TEXT("ai_tuning.json parses with a \"cvars\" object"), FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root)
+		&& Root.IsValid() && Root->TryGetObjectField(TEXT("cvars"), CVars) && CVars))
+	{
+		return false;
+	}
+	FString Value;
+	TestTrue(TEXT("ai_tuning.json sets Codex.Enemy.MeleeCloseIn"), (*CVars)->TryGetStringField(TEXT("Codex.Enemy.MeleeCloseIn"), Value));
+	TestEqual(TEXT("melee enemies close in to their bite (1)"), Value, FString(TEXT("1")));
+	IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Enemy.MeleeCloseIn"));
+	TestNotNull(TEXT("the A/B console variable exists"), CVar);
 	return true;
 }
 

@@ -20,6 +20,11 @@
 // Then (rev 5e, game designer 2026-10-14) LOW cover: crouched behind a 1 m high, 4 m long wall 10 m to the right - hovering its end
 // shows the peek ghost, a click on the -R end from the middle sends him there (crouched corner aim cvr_crch_fire_idle, held), and in
 // cover 50 cm from the +R end a click 20 cm in from that end starts the crouched corner aim at once (the near-edge rule).
+// Melee close-in (user approval 2026-10-18, ai_tuning.json Codex.Enemy.MeleeCloseIn 1): hounds / frostbitten now reach their bite,
+// so a pounce may knock him down - which takes him out of the corner (Sprint 14: a knockdown leaves cover). The smoke counts his
+// knockdowns per phase; a phase with one accepts the knockdown's DuckForSafety, counts his shots in any stance (he fights on from
+// the open), excludes the downed / get-up frames from the left-hand IK check, and - like a player - re-orders the corner once he is
+// up. Hard requirements stay: he gets up every time, keeps firing, the flank rush is beaten and he survives.
 
 #include "CoreMinimal.h"
 
@@ -57,6 +62,9 @@ namespace CornerHoldSmoke
 		int32 Run = 0;
 		int32 BestRun = 0;
 		int32 Spawned = 0;
+		/** Melee close-in (2026-10-18): his knockdowns in this phase, his shots in any stance (OnShot). */
+		int32 Knockdowns = 0;
+		int32 AnyShots = 0;
 	};
 
 	struct FState
@@ -115,6 +123,21 @@ namespace CornerHoldSmoke
 		bool bFlankSpawned = false;
 		float FlankStart = -1.f;
 		float FlankLogTimer = 0.f;
+		// Melee close-in (2026-10-18): knockdowns, the corner to re-order after one, shots / knockdowns at the flank start.
+		bool bLastDown = false;
+		float SinceUp = 100.f;
+		float SinceIKBlock = 100.f;
+		int32 TotalKnockdowns = 0;
+		int32 LastShotsLogged = 0;
+		FCoverSlot Corner;
+		bool bHasCorner = false;
+		bool bKnockedOutOfCorner = false;
+		float ReorderTimer = 0.f;
+		int32 FlankKnockdownsBefore = 0;
+		int32 FlankShotsBefore = 0;
+		bool bFlankFromCorner = false;
+		float DownTime = 0.f;
+		float LongestDown = 0.f;
 	};
 
 	/** Logs and checks one shot: the angle between the aim and the target, by the rules and on the real barrel. */
@@ -222,12 +245,17 @@ namespace CornerHoldSmoke
 			float MontageWeight = 0.f;
 			float SlotWeight = 0.f;
 			Anim->GetCoverPlayback(Clip, MontageWeight, SlotWeight);
-			++State.IKSamples;
+			State.IKSamples += Op->IsKnockedDown() || State.SinceUp < 1.f || Anim->GetLeftHandIKBlockSeconds() > 0.f ? 0 : 1;
 			// A rifle-holding pose: not while reloading, throwing a grenade or in a hit reaction (the left hand leaves the rifle
 			// by design; a hound biting him in the open stance plays MM_HitReact_*, 2026-10-18).
 			const UAnimSequenceBase* HitClip = Anim->GetLastHitReactionClip();
 			const bool bHitReacting = HitClip && Anim->IsPlayingSlotAnimation(HitClip, Anim->GetLastHitReactionSlot());
-			if (Anim->LeftHandIKAlpha < 0.9f && !Op->bIsReloading && !Anim->IsThrowingGrenade() && !bHitReacting && Anim->bLeftHandIKGripValid)
+			// Knocked down / the first second after the get-up, or an upper-body action blocking the IK (a bite's hit reaction:
+			// the arms react by design, 2026-10-07) and the IK blend back after it: not a rifle-holding pose. Bites land since
+			// the melee close-in (2026-10-18), so hit reactions follow each other in the open.
+			State.SinceIKBlock = Anim->GetLeftHandIKBlockSeconds() > 0.f ? 0.f : State.SinceIKBlock + 0.05f;
+			const bool bRecovering = Op->IsKnockedDown() || State.SinceUp < 1.f || State.SinceIKBlock < Anim->LeftHandIKBlendSeconds + 0.1f;
+			if (Anim->LeftHandIKAlpha < 0.9f && !Op->bIsReloading && !Anim->IsThrowingGrenade() && !bHitReacting && !bRecovering && Anim->bLeftHandIKGripValid)
 			{
 				++State.IKLow;
 				if (State.IKLow <= 8)
@@ -307,6 +335,42 @@ namespace CornerHoldSmoke
 		}
 		State.LastLean = Lean;
 		State.LastOpen = Open;
+		// Melee close-in (2026-10-18): knockdowns (a knockdown leaves cover) and shots in any stance.
+		const bool bDown = Op->IsKnockedDown();
+		if (bDown && !State.bLastDown)
+		{
+			++Phase.Knockdowns;
+			++State.TotalKnockdowns;
+			State.bKnockedOutOfCorner = true;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: the leader is knocked down (%d this phase) - out of the corner"), Phase.Knockdowns);
+		}
+		State.SinceUp = bDown ? 0.f : State.SinceUp + 0.05f;
+		State.DownTime = bDown ? State.DownTime + 0.05f : 0.f;
+		State.LongestDown = FMath::Max(State.LongestDown, State.DownTime);
+		State.bLastDown = bDown;
+		Phase.AnyShots += State.ShotsLogged - State.LastShotsLogged;
+		State.LastShotsLogged = State.ShotsLogged;
+	}
+
+	/**
+	 * After a knockdown took him out of the corner, once he is up again: the player orders the corner again (at most every 3 s).
+	 * Not during the flank rush (he is meant to fight it from the open).
+	 */
+	void ReorderCornerAfterKnockdown(FState& State, AOperativeCharacter* Op)
+	{
+		State.ReorderTimer -= 0.05f;
+		if (!State.bKnockedOutOfCorner || !State.bHasCorner || Op->IsKnockedDown() || State.SinceUp < 0.5f || Op->bInCover || State.ReorderTimer > 0.f)
+		{
+			if (Op->bInCover && Op->bAtCoverCorner)
+			{
+				State.bKnockedOutOfCorner = false;
+			}
+			return;
+		}
+		State.ReorderTimer = 3.f;
+		const EOperativeOrderResult Result = Op->OrderTakeCover(State.Corner, true);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: up again after a knockdown - the player re-orders the corner (%s)"),
+			Result == EOperativeOrderResult::Accepted ? TEXT("accepted") : TEXT("refused"));
 	}
 
 	AEnemyCharacter* SpawnRusher(FState& State, UWorld* World, EEnemyArchetype Type, int32 Index)
@@ -778,6 +842,8 @@ namespace CornerHoldSmoke
 			FCoverSlot Corner;
 			const bool bFound = CoverTraceRules::FindCoverSlotAt(World, State.P + State.F * 380.f - State.R * 250.f + FVector(0.f, 0.f, 90.f), State.F, Corner);
 			Check(State, bFound && Op->OrderTakeCover(Corner, true) == EOperativeOrderResult::Accepted, TEXT("the leader takes the right-hand corner"));
+			State.Corner = Corner;
+			State.bHasCorner = bFound;
 			State.Stage = 2;
 			State.StageTime = 0.f;
 			return true;
@@ -790,6 +856,7 @@ namespace CornerHoldSmoke
 			Check(State, Op->bInCover && Op->bAtCoverCorner, TEXT("at the corner"));
 			State.LastLean = Op->GetCoverLeanShots() + Op->GetCoverBlindShots();
 			State.LastOpen = Op->GetCoverOpenShots();
+			State.LastShotsLogged = State.ShotsLogged;
 			State.Stage = 3;
 			State.StageTime = 0.f;
 			return true;
@@ -805,16 +872,21 @@ namespace CornerHoldSmoke
 			}
 			Track(State, Phase);
 			SamplePosture(State, Op);
+			ReorderCornerAfterKnockdown(State, Op);
 			if (State.StageTime < 28.f)
 			{
 				return true;
 			}
 			LogPhase(TEXT("melee horde"), Phase);
-			Check(State, Phase.Breaks[static_cast<int32>(ECornerAimDecision::DuckForSafety)] == 0,
-				FString::Printf(TEXT("melee horde: no duck for safety (%d)"), Phase.Breaks[static_cast<int32>(ECornerAimDecision::DuckForSafety)]));
+			// A knockdown ends the corner aim as a DuckForSafety ("knocked down"); any other duck for safety is a failure.
+			Check(State, Phase.Breaks[static_cast<int32>(ECornerAimDecision::DuckForSafety)] <= Phase.Knockdowns,
+				FString::Printf(TEXT("melee horde: no duck for safety except his knockdowns (%d ducks, %d knockdowns)"),
+					Phase.Breaks[static_cast<int32>(ECornerAimDecision::DuckForSafety)], Phase.Knockdowns));
 			// User decision 2026-10-07: the corner stance fires along its line; hounds that come round into the open side
 			// are fired at from the open stance (the per-shot aim checks are at the end).
-			Check(State, Phase.Shots >= 2, FString::Printf(TEXT("melee horde: he fires from the corner hold at the wave in its line (%d corner shots)"), Phase.Shots));
+			Check(State, Phase.Shots >= 2 || (Phase.Knockdowns > 0 && Phase.AnyShots >= 2),
+				FString::Printf(TEXT("melee horde: he fires from the corner hold at the wave in its line (%d corner shots, %d in any stance, %d knockdowns)"),
+					Phase.Shots, Phase.AnyShots, Phase.Knockdowns));
 			for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : State.Spawned)
 			{
 				if (Enemy.IsValid())
@@ -841,14 +913,17 @@ namespace CornerHoldSmoke
 			}
 			Track(State, Phase);
 			SamplePosture(State, Op);
+			ReorderCornerAfterKnockdown(State, Op);
 			if (State.StageTime < 30.f)
 			{
 				return true;
 			}
 			LogPhase(TEXT("mixed group"), Phase);
 			// Spitters stop out of the corner stance's line of sight; with the 1D aim offset (no twist) the stance reaches only
-			// its own line - the rest is fought from the open stance.
-			Check(State, Phase.Shots + Phase.OpenShots >= 4, FString::Printf(TEXT("mixed group: he fights them (%d corner + %d open shots)"), Phase.Shots, Phase.OpenShots));
+			// its own line - the rest is fought from the open stance (after a knockdown: from wherever he got up).
+			Check(State, Phase.Shots + Phase.OpenShots >= 4 || (Phase.Knockdowns > 0 && Phase.AnyShots >= 4),
+				FString::Printf(TEXT("mixed group: he fights them (%d corner + %d open shots, %d in any stance, %d knockdowns)"), Phase.Shots,
+					Phase.OpenShots, Phase.AnyShots, Phase.Knockdowns));
 			for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : State.Spawned)
 			{
 				if (Enemy.IsValid())
@@ -882,6 +957,7 @@ namespace CornerHoldSmoke
 			}
 			Track(State, Phase);
 			SamplePosture(State, Op);
+			ReorderCornerAfterKnockdown(State, Op);
 			if (State.StageTime < 26.f)
 			{
 				return true;
@@ -890,8 +966,12 @@ namespace CornerHoldSmoke
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: open-side stream - facing flips %d, cover leaves %d, IK below 0.9 in %d of %d frames"),
 				State.FacingFlips, State.CoverLeaves, State.IKLow, State.IKSamples);
 			Check(State, State.FacingFlips <= 1, FString::Printf(TEXT("open-side stream: the fire stance keeps its side (%d flips)"), State.FacingFlips));
-			Check(State, State.CoverLeaves <= 1, FString::Printf(TEXT("open-side stream: at most one step off the wall per engagement (%d)"), State.CoverLeaves));
-			Check(State, Phase.Shots + Phase.OpenShots >= 8, FString::Printf(TEXT("open-side stream: he keeps firing (%d corner + %d open shots)"), Phase.Shots, Phase.OpenShots));
+			Check(State, State.CoverLeaves <= 1 + Phase.Knockdowns, FString::Printf(TEXT("open-side stream: at most one step off the wall per engagement (%d, + %d knockdowns)"),
+				State.CoverLeaves, Phase.Knockdowns));
+			// Each knockdown costs ~2.7 s on the ground plus the walk back to the corner (~4 of his shots at 0.65 s): with one, 5.
+			Check(State, Phase.Shots + Phase.OpenShots >= 8 || (Phase.Knockdowns > 0 && Phase.AnyShots >= 5),
+				FString::Printf(TEXT("open-side stream: he keeps firing (%d corner + %d open shots, %d in any stance, %d knockdowns)"), Phase.Shots, Phase.OpenShots,
+					Phase.AnyShots, Phase.Knockdowns));
 			Check(State, State.IKLow * 20 <= State.IKSamples, FString::Printf(TEXT("open-side stream: the left hand holds the rifle (IK < 0.9 in %d of %d frames)"), State.IKLow, State.IKSamples));
 			for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : State.Spawned)
 			{
@@ -906,7 +986,8 @@ namespace CornerHoldSmoke
 			return true;
 		}
 		case 6:
-			// Back to the corner after the open-side stream (calm), in the corner hold again.
+			// Back to the corner after the open-side stream (calm), in the corner hold again (re-ordered after a knockdown).
+			ReorderCornerAfterKnockdown(State, Op);
 			if (!(Op->bInCover && Op->IsCornerAimActive()) && State.StageTime < 12.f)
 			{
 				return true;
@@ -938,6 +1019,9 @@ namespace CornerHoldSmoke
 					Op->bInCover && Op->IsCornerAimActive() ? TEXT("holds the corner aim") : TEXT("is NOT in the corner hold"));
 				State.bFlankSpawned = true;
 				State.FlankOpenShotsBefore = Op->GetCoverOpenShots();
+				State.FlankKnockdownsBefore = State.Phase[2].Knockdowns;
+				State.FlankShotsBefore = State.ShotsLogged;
+				State.bFlankFromCorner = Op->bInCover && Op->IsCornerAimActive();
 				ResetPostureCounters(State, Op);
 				const FVector Right = Op->GetActorRightVector().GetSafeNormal2D();
 				const FVector Front = Op->GetActorForwardVector().GetSafeNormal2D();
@@ -1009,12 +1093,17 @@ namespace CornerHoldSmoke
 				return true;
 			}
 			const int32 FlankOpenShots = Op->GetCoverOpenShots() - State.FlankOpenShotsBefore;
+			const int32 FlankKnockdowns = Phase.Knockdowns - State.FlankKnockdownsBefore;
+			const int32 FlankAnyShots = State.ShotsLogged - State.FlankShotsBefore;
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: flank rush - %d of %d down, %d gave him up (ran off), %d open shots, cover leaves %d, facing flips %d, IK below 0.9 in %d of %d frames"),
 				FlankDown, State.Flank.Num(), FlankGone, FlankOpenShots, State.CoverLeaves, State.FacingFlips, State.IKLow, State.IKSamples);
-			Check(State, FlankOpenShots >= 3, FString::Printf(TEXT("flank rush: he turns to them and fires in the open stance (%d open shots)"), FlankOpenShots));
+			Check(State, FlankOpenShots >= 3 || ((FlankKnockdowns > 0 || !State.bFlankFromCorner) && FlankAnyShots >= 3),
+				FString::Printf(TEXT("flank rush: he turns to them and fires in the open stance (%d open shots, %d in any stance, %d knockdowns)"), FlankOpenShots,
+					FlankAnyShots, FlankKnockdowns));
 			Check(State, FlankDown >= 3 || (FlankDown >= 2 && FlankDown + FlankGone == State.Flank.Num()),
 				FString::Printf(TEXT("flank rush: %d of %d down, %d ran off (%.1f s)"), FlankDown, State.Flank.Num(), FlankGone, State.StageTime - State.FlankStart));
-			Check(State, State.CoverLeaves == 1, FString::Printf(TEXT("flank rush: exactly one posture switch off the corner to face them (%d)"), State.CoverLeaves));
+			Check(State, State.CoverLeaves <= 1 + FlankKnockdowns && (State.CoverLeaves >= 1 || !State.bFlankFromCorner),
+				FString::Printf(TEXT("flank rush: exactly one posture switch off the corner to face them (%d, + %d knockdowns)"), State.CoverLeaves, FlankKnockdowns));
 			Check(State, State.IKLow * 20 <= State.IKSamples, FString::Printf(TEXT("flank rush: the left hand holds the rifle (IK < 0.9 in %d of %d frames)"), State.IKLow, State.IKSamples));
 			// Whole run.
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: shots %d - rule residual max %.1f deg (%d over the %.0f deg cone); barrel error mean %.1f max %.1f deg (%d of %d over the cone)"),
@@ -1026,6 +1115,11 @@ namespace CornerHoldSmoke
 			Check(State, State.RuleOverCone == 0, FString::Printf(TEXT("every shot within the aim cone by the rules (%d of %d over, max %.1f deg)"), State.RuleOverCone, State.ShotsLogged, State.RuleMax));
 			Check(State, State.BarrelOverCone == 0, FString::Printf(TEXT("every shot along the real barrel within the cone (%d of %d over, max %.1f deg)"), State.BarrelOverCone, State.BarrelSamples, State.BarrelMax));
 			Check(State, State.Ducks == 0, FString::Printf(TEXT("no duck behind the corner except to reload (%d ducks, %d reloads)"), State.Ducks, State.ReloadDucks));
+			// Melee close-in (2026-10-18): bites and pounces land now - he must come through them.
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: melee toll - %d knockdowns, longest on the ground %.1f s"), State.TotalKnockdowns, State.LongestDown);
+			// Sprint 14 get-up: 0.87 + 0.6 + 0.8 s (x2.08 faster) - never pinned down by chained pounces (re-knock immunity).
+			Check(State, Op->HealthComponent && Op->HealthComponent->IsAlive() && State.LongestDown < 5.f,
+				FString::Printf(TEXT("he survives the four waves and gets up every time (%d knockdowns, longest down %.1f s)"), State.TotalKnockdowns, State.LongestDown));
 			return Finish(State);
 		}
 		default:

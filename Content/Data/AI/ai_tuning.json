@@ -42,6 +42,7 @@
     "traps_laid_per_run": 0.0
   },
   "cvars": {
+    "Codex.Enemy.MeleeCloseIn": "1",
     "Codex.Bot.AssaultClearRadius": "1800",
     "Codex.Perception.SightRangeScale": "0.9"
   },

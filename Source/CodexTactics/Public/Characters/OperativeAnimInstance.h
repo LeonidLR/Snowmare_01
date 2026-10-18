@@ -352,6 +352,9 @@ public:
 	UAnimSequenceBase* GetLastHitReactionClip() const { return LastHitReactionClip.Get(); }
 	FName GetLastHitReactionSlot() const { return LastHitReactionSlot; }
 
+	/** Seconds the left-hand IK stays off for an upper-body action (hit reaction, grenade throw, interaction) - smokes. */
+	float GetLeftHandIKBlockSeconds() const { return LeftHandIKBlockSeconds; }
+
 	/**
 	 * Upper-body grenade throw: walking, running, crouched, prone (Godot grenade_throw_*). Played on UpperBodySlot (the
 	 * graph's layered blend from spine_01) so the legs keep the locomotion. The grenade leaves the hand at the matching

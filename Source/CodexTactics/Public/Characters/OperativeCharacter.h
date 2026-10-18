@@ -15,6 +15,7 @@
 #include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverTypes.h"
+#include "Combat/KnockdownRules.h"
 #include "Combat/KnockdownTypes.h"
 #include "Combat/SniperRules.h"
 #include "OperativeCharacter.generated.h"
@@ -936,6 +937,12 @@ public:
 	/** The cover he stands at (valid while bInCover). */
 	const FCoverSlot& GetCoverSlot() const { return CoverSlot; }
 
+	/**
+	 * Return to cover after a knockdown (user decision 2026-10-18): the decision taken at his last get-up
+	 * (KnockdownRules::DecideCoverReturn; NotInCover before any) - smokes / logs.
+	 */
+	EKnockdownCoverReturn GetLastCoverReturn() const { return LastCoverReturn; }
+
 	/** Fired after EnterCover / LeaveCover (AnimBP, sounds, UI). */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Cover", meta = (DisplayName = "On Cover Changed"))
 	void ReceiveCoverChanged(bool bNowInCover, ECoverHeight Height);
@@ -1578,6 +1585,8 @@ private:
 	FVector LastHitSource = FVector::ZeroVector;
 	/** Knockdown phase change: interrupts (aim, reload, move, cover), frees / restores the capsule and the movement. */
 	void HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase);
+	/** After a get-up: back to the cover slot a blast took him out of, by KnockdownRules::DecideCoverReturn (2026-10-18). */
+	void ReturnToCoverAfterKnockdown();
 	/** The capsule's Pawn response before a knockdown (restored when he is up). */
 	TEnumAsByte<ECollisionResponse> KnockdownSavedPawnResponse = ECR_Block;
 	/**
@@ -1759,6 +1768,12 @@ private:
 	FString LastCornerAimTraceReason;
 	/** Sustained corner aim state (IsCornerAimActive). */
 	bool bCornerAimActive = false;
+	/** The cover slot a knockdown took him out of (bKnockedFromCover), for the return after a blast (2026-10-18). */
+	FCoverSlot KnockdownCoverSlot;
+	bool bKnockedFromCover = false;
+	/** What knocked him down last (the knockdown state is reset by the recovery). */
+	EKnockdownCause KnockdownCause = EKnockdownCause::None;
+	EKnockdownCoverReturn LastCoverReturn = EKnockdownCoverReturn::NotInCover;
 	/** Manual corner peek (OrderCornerPeek): ordered side, the CornerPeek event still due, the shimmy it orders keeps it. */
 	bool bManualCornerPeek = false;
 	ECoverFacing ManualCornerPeekSide = ECoverFacing::Right;

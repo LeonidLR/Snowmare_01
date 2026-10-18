@@ -65,6 +65,9 @@ namespace HordeIntroSmoke
 		bool bWaitChecked = false;
 		FVector PlannedMove = FVector::ZeroVector;
 		float MoveStartDistance = 0.f;
+		/** Melee close-in (2026-10-18): the mover was knocked down while the planned move should start (a pounce interrupts it). */
+		bool bMoverKnockedDown = false;
+		float MoverUpAt = 0.f;
 		TWeakObjectPtr<AOperativeCharacter> Mover;
 		bool bKeyDown = false;
 		int32 SubStep = 0;
@@ -413,6 +416,14 @@ namespace HordeIntroSmoke
 			Check(State, FMath::IsNearlyEqual(WorldDilation(World), 1.f, 0.001f), TEXT("real time dilation 1"));
 			Check(State, Relocation && Relocation->GetActiveDeployCount() >= 1, TEXT("the planned barricade set-up runs"));
 			Check(State, Squad->GetPlannedOrderCount() == 0, TEXT("the planned move was handed out on release"));
+			// Melee close-in (2026-10-18): the horde's hounds now reach the squad, a pounce may have knocked the mover down before the
+			// order (the free pause runs at 0.02: a 2.7 s knockdown lasts the whole planning) - the order is buffered and runs once she
+			// is up (Sprint 14). No new knockdown during the check: the horde is frozen (it is cleared after the check anyway).
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				It->CustomTimeDilation = 0.f;
+				It->SetActorTickEnabled(false);
+			}
 			Next(State);
 			return true;
 		}
@@ -421,7 +432,14 @@ namespace HordeIntroSmoke
 			const AOperativeCharacter* Mover = State.Mover.Get();
 			const float Left = Mover ? FVector::Dist2D(Mover->GetActorLocation(), State.PlannedMove) : -1.f;
 			const bool bOnTheWay = Mover && (Mover->IsMoving() || Left < 150.f || State.MoveStartDistance - Left > 60.f);
-			if (!bOnTheWay && State.StageTime < 1.5f)
+			State.bMoverKnockedDown |= Mover && Mover->IsKnockedDown();
+			// Down: the buffered order waits for the get-up (cap 6 s), then 1.5 s to start.
+			if (Mover && Mover->IsKnockedDown() && State.StageTime < 6.f)
+			{
+				State.MoverUpAt = State.StageTime;
+				return true;
+			}
+			if (!bOnTheWay && State.StageTime < State.MoverUpAt + 1.5f)
 			{
 				return true;
 			}
@@ -436,8 +454,8 @@ namespace HordeIntroSmoke
 					*Mover->DisplayName.ToString(), Mover->IsKnockedDown() ? 1 : 0, Mover->IsPanicking() ? 1 : 0, Mover->IsRaging() ? 1 : 0,
 					static_cast<int32>(Mover->GetStance()), Mover->bInCover ? 1 : 0, Mover->GetVelocity().Size2D(), NearestEnemy);
 			}
-			Check(State, bOnTheWay, FString::Printf(TEXT("the planned move runs (moving %d, %.0f of %.0f cm left)"),
-				Mover && Mover->IsMoving() ? 1 : 0, Left, State.MoveStartDistance));
+			Check(State, bOnTheWay, FString::Printf(TEXT("the planned move runs (moving %d, %.0f of %.0f cm left%s)"),
+				Mover && Mover->IsMoving() ? 1 : 0, Left, State.MoveStartDistance, State.bMoverKnockedDown ? TEXT("; she was down first: the buffered order") : TEXT("")));
 			Waves->ClearAllEnemies();
 			Next(State);
 			return true;

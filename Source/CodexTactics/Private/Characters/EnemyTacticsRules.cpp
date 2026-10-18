@@ -141,20 +141,54 @@ TArray<EEnemyTacticRole> EnemyTacticsRules::AssignRoles(const TArray<FEnemyTacti
 FVector EnemyTacticsRules::FlankPoint(const FVector& Enemy, const FVector& Target, const FVector& SquadCentre, float DistanceCm,
 	float AngleDegrees)
 {
-	FVector Axis = FVector(Target.X - SquadCentre.X, Target.Y - SquadCentre.Y, 0.f).GetSafeNormal();
-	if (Axis.IsNearlyZero())
+	FVector ToEnemy = FVector(Enemy.X - Target.X, Enemy.Y - Target.Y, 0.f).GetSafeNormal();
+	if (ToEnemy.IsNearlyZero())
 	{
-		// A lone target: his side, seen from the enemy.
-		Axis = FVector(Target.X - Enemy.X, Target.Y - Enemy.Y, 0.f).GetSafeNormal();
-		if (Axis.IsNearlyZero())
-		{
-			Axis = FVector::ForwardVector;
-		}
+		ToEnemy = FVector::ForwardVector;
 	}
-	const FVector ToEnemy = FVector(Enemy.X - Target.X, Enemy.Y - Target.Y, 0.f);
-	const float Side = FVector::CrossProduct(Axis, ToEnemy).Z >= 0.f ? 1.f : -1.f;
-	const FVector Direction = Axis.RotateAngleAxis(Side * AngleDegrees, FVector::UpVector);
+	// His outer side: away from the squad's centre (a target at the centre: a fixed side).
+	const FVector Outward = FVector(Target.X - SquadCentre.X, Target.Y - SquadCentre.Y, 0.f).GetSafeNormal();
+	const float Side = Outward.IsNearlyZero() || FVector::CrossProduct(ToEnemy, Outward).Z >= 0.f ? 1.f : -1.f;
+	const FVector Direction = ToEnemy.RotateAngleAxis(Side * AngleDegrees, FVector::UpVector);
 	return FVector(Target.X, Target.Y, Target.Z) + Direction * DistanceCm;
+}
+
+EFlankDetourResult EnemyTacticsRules::EvaluateFlankDetour(const FFlankDetourInput& Input, const FFlankDetourConfig& Config)
+{
+	if (Config.bLegacyFiveMetreCut)
+	{
+		return Input.DistanceToTargetCm <= 500.f || Input.DistanceToPointCm <= Config.ArriveCm ? EFlankDetourResult::LegacyCut : EFlankDetourResult::Continue;
+	}
+	if (Input.DistanceToPointCm <= Config.ArriveCm)
+	{
+		return EFlankDetourResult::AtFlankPoint;
+	}
+	if (Input.DistanceToTargetCm <= Input.BiteReachCm + Config.BiteSlackCm && Input.AngleFromFlankDeg <= Config.SideConeDeg)
+	{
+		return EFlankDetourResult::BiteFromFlank;
+	}
+	if (Input.StuckSeconds >= Config.StuckSeconds)
+	{
+		return EFlankDetourResult::Stuck;
+	}
+	if (Input.ElapsedSeconds >= Config.TimeoutSeconds)
+	{
+		return EFlankDetourResult::Timeout;
+	}
+	return EFlankDetourResult::Continue;
+}
+
+const TCHAR* EnemyTacticsRules::FlankDetourResultName(EFlankDetourResult Result)
+{
+	switch (Result)
+	{
+	case EFlankDetourResult::AtFlankPoint: return TEXT("at the flank point");
+	case EFlankDetourResult::BiteFromFlank: return TEXT("in bite reach on the flank side");
+	case EFlankDetourResult::Stuck: return TEXT("stuck (no progress)");
+	case EFlankDetourResult::Timeout: return TEXT("timeout");
+	case EFlankDetourResult::LegacyCut: return TEXT("within 5 m (legacy)");
+	default: return TEXT("continue");
+	}
 }
 
 bool EnemyTacticsRules::IsBehind(const FVector& TargetLocation, const FVector& TargetForward, const FVector& Enemy)

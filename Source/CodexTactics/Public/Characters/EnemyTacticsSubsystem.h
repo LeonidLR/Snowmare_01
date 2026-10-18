@@ -42,6 +42,9 @@ public:
 	/** The melee archetypes the coordinator commands. */
 	static bool IsCoordinated(const AEnemyCharacter* Enemy);
 
+	/** The flank detour knobs in force (Codex.Enemy.FlankDetour / FlankArriveCm / FlankSideConeDeg / FlankTimeout / FlankStuckSeconds). */
+	static FFlankDetourConfig GetFlankDetourConfig();
+
 	int32 GetFlankOrders() const { return FlankOrders; }
 	int32 GetFallBacks() const { return FallBacks; }
 	int32 GetBackstabs() const { return Backstabs; }
