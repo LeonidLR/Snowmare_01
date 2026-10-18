@@ -35,8 +35,10 @@ struct CODEXTACTICS_API FPerceptionTuning
  *     "archetypes": { "FROST_HOUND": { "sight_range_m": 15, "sight_half_angle_deg": 70, "visibility_standing": 1,
  *       "visibility_crouching": 0.75, "visibility_prone": 0.4, "proximity_m": 3, "time_to_detect_seconds": 0.6,
  *       "suspicion_decay_per_second": 0.5, "hear_walk_m": 7, "hear_run_m": 14, "hear_crouch_walk_m": 3.5, "hear_crawl_m": 1.5,
- *       "hear_gunshot_m": 45, "hear_explosion_m": 60, "smell_radius_m": 12, "hearing_occlusion_per_wall": 0.5 },
- *       "MARKSMAN": {...}, ... } }
+ *       "hear_gunshot_m": 45, "hear_explosion_m": 60, "smell_radius_m": 6, "hearing_occlusion_per_wall": 0.5,
+ *       "smell_occlusion_per_wall": 0.3, "smell_detect_m": 2, "sniff_seconds": 2.5, "scent_lost_seconds": 1,
+ *       "scent_follow_max_seconds": 20, "scent_follow_speed_fraction": 0.8, "scent_search_seconds": 20, "scent_sweep_radius_m": 3 },
+ *       "MARKSMAN": {...}, ... } }   (hound scent, game designer 2026-10-18: ScentRules; all scent keys optional)
  *     "lure": { "whistle_radius_m": 12, "throw_radius_m": 8, "throw_range_m": 15, "whistle_cooldown_seconds": 10,
  *               "throw_cooldown_seconds": 6, "investigate_seconds": 60, "investigate_sweep_radius_m": 4,
  *               "approach_speed_fraction": 0.75 } }   (stealth lure, user decisions 2026-10-18; FStealthLureParams)

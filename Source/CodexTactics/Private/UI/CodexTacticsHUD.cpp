@@ -861,7 +861,13 @@ void ACodexTacticsHUD::DrawStealthLureMarkers()
 		{
 			continue;
 		}
-		if (Enemy->IsInvestigatingLure())
+		if (Enemy->IsOnScent())
+		{
+			// Hound scent (2026-10-18): it caught a scent - sniffing, then following it (green «nose» marker).
+			Marker(Enemy, SmallFont, Enemy->GetScentPhase() == EHoundScentPhase::Sniffing ? TEXT("~ SNIFF ?") : TEXT("~ SCENT ?"),
+				FLinearColor(0.6f, 1.f, 0.5f), 40.f, 1.4f);
+		}
+		else if (Enemy->IsInvestigatingLure() || Enemy->IsInvestigatingScent())
 		{
 			Marker(Enemy, Font, TEXT("?"), FLinearColor(1.f, 0.82f, 0.25f), 40.f, 1.6f);
 		}

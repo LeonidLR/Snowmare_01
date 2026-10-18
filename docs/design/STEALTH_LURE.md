@@ -24,8 +24,35 @@ Source of the rules: the user's decisions of 2026-10-18 in `production/session-s
   2. It sweeps random reachable points within **4 m** of the noise and looks around at each one, for **60 s**.
   3. It then goes back. A patrol returns to the nearest waypoint of its route, a guard walks back to its post, and an escort rejoins its leader.
 - The whole patrol searches together: the leader and the escorts of an enemy that heard the noise come too. This is the existing patrol rule.
-- During the investigation the enemy's sight, hearing and smell are heightened (×1.25), as in any search. A **hound** that comes within its smell radius (12 m, 15 m while searching) smells the operative. This is the existing smell rule. In practice the whistle cannot lure a hound without the hound smelling the whistler, because the whistle radius equals the smell radius. **Use the stone on hounds.**
+- During the investigation the enemy's sight, hearing and smell are heightened (×1.25), as in any search. A **hound** that comes within its smell radius (6 m, 7.5 m while searching) catches the operative's scent. Since 2026-10-18 the scent only alerts it, and walls block it (see §2a). A whistle behind a wall therefore works on hounds too: the hound comes round the wall, sniffs, and the whistler has time to slip away.
 - Enemies that already hunt the squad, dead enemies, and enemies held by a turn-based fight ignore lures.
+
+## 2a. Hound scent (game designer 2026-10-18; user decisions 1, 2 and 4)
+
+The problem was that a frost hound smelled an operative through a wall and detected him at once, before the player could react. Smell was a flat 12 m radius that ignored walls. It now works as follows (exploration and stealth only; the hound's combat behaviour is unchanged):
+
+1. **Walls block scent.** Every world-blocking surface between the hound's nose and the operative multiplies the smell radius by `smell_occlusion_per_wall` (0.3). One wall leaves 1.8 m, two leave about 0.5 m. This is the hearing model (`PerceptionRules::OccludedRadius`, at most 3 walls). The game traces four lines: a straight one, one over a low obstacle (+80 cm), and one 50 cm to each side of the operative. The clearest trace counts (`ScentRules::CombineTraceWalls`), so an open doorway or gap near the line lets the scent through as open air. Pawns do not block scent.
+2. **Smell alerts, it does not detect.** When the hound catches a scent it **stops and sniffs** for `sniff_seconds` (2.5 s). It stands still and does not turn. The player sees a green `~ SNIFF ?` marker over it, a floating `SNIFF...` and the feed line «The hound caught a scent.». Then it **follows the scent slowly** to where it smells the operative, at `scent_follow_speed_fraction` (0.8) × its patrol pace, about 150 cm/s against its ~540 cm/s run. The marker then reads `~ SCENT ?`. It detects the operative only when it is **within `smell_detect_m` (2 m) in open air**, with no wall in between, or when it **sees** him under the usual sight rules.
+3. **Losing the scent.** If the operative moves out of reach, the scent counts as lost after `scent_lost_seconds` (1 s). This happens at the end of the sniff or while the hound follows, and also when the hound has followed for `scent_follow_max_seconds` (20 s). The hound then investigates the last scent point. This is a patrol search with a scent spec (`IsInvestigatingScent`, the amber «?»): `scent_search_seconds` (20 s) within `scent_sweep_radius_m` (3 m). Then it returns to its route or post, like after a lure. If it catches the scent again during that search, it follows at once without a second sniff.
+4. **Radius 6 m** (was 12 m), because cold air carries scent poorly. A hound that came to a whistle (12 m) therefore no longer smells the whistler at once.
+
+Stances change nothing for the nose. No stance effect was added, and wind is not modelled yet.
+
+The player can back off during the sniff, throw a stone elsewhere, or set an ambush where the hound will arrive.
+
+| Key (`enemy_perception.json`, `FROST_HOUND`) | Value | Meaning |
+|---|---|---|
+| `smell_radius_m` | 6 | open-air scent radius (×1.25 while searching; `Codex.Perception.SmellScale`) |
+| `smell_occlusion_per_wall` | 0.3 | radius × this per wall |
+| `smell_detect_m` | 2 | the nose alone detects this close, in open air only (not scaled while searching) |
+| `sniff_seconds` | 2.5 | stands and sniffs before it follows |
+| `scent_lost_seconds` | 1 | no scent this long = lost |
+| `scent_follow_max_seconds` | 20 | gives up a trail it never closes on |
+| `scent_follow_speed_fraction` | 0.8 | follow pace × its patrol walk speed |
+| `scent_search_seconds` | 20 | a lost scent is investigated this long |
+| `scent_sweep_radius_m` | 3 | ... within this radius of the last scent point |
+
+Code: pure rules `AI/ScentRules.*` (`Smells`, `IsCloseDetection`, `Step` = the None → Sniffing → Following state machine with Detect / LoseScent, `GetFollowSpeed`; tests `CodexTactics.AI.Scent.*`). In the world, `AEnemyCharacter::TickScentPerception` is called from the patrol perception and `TickScentBehavior` drives the sniff and the follow before the route, post, escort or search. Other parts: `CountScentWallsTo`, `GetScentPhase` / `IsOnScent` / `IsInvestigatingScent`, the HUD marker in `DrawStealthLureMarkers`. The save stores `patrol.scent` with the search spec. The sniff and follow phases last a few seconds and are not saved. Log lines: `[Stealth] scent caught / followed / close / lost by <hound>`. Smoke: `HoundScentSmoke` (L_PatrolTest). StealthLureSmoke now keeps the hound's nose on.
 
 ## 3. UI
 

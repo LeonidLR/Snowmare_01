@@ -30,9 +30,9 @@ test('cold_rate_mult: absent = 1, set / remove keeps the other keys, 1 is writte
   assert.equal(validateLevelSettings({ waves: [], cold_rate_mult: -1 }).length, 1);
 });
 
-test('L_Demo01_A_FrozenLake.json: less cold (cold_rate_mult 0.8, user request 2026-10-13)', () => {
+test('L_Demo01_A_FrozenLake.json: less cold (cold_rate_mult 0.4, user requests 2026-10-13 / 2026-10-14 rev 5g)', () => {
   const level = JSON.parse(fs.readFileSync(FROZEN_LAKE, 'utf-8'));
-  assert.equal(getColdRateMult(level), 0.8);
+  assert.equal(getColdRateMult(level), 0.4);
   assert.deepEqual(validateLevelSettings(level), []);
 });
 

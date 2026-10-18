@@ -30,7 +30,7 @@
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
-    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "MinimapSmoke"
+    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -58,6 +58,7 @@
     "PatrolAmbushSmoke": { "map": "/Game/Maps/L_PatrolTest" },
     "VisionConeSmoke": { "map": "/Game/Maps/L_PatrolTest" },
     "StealthLureSmoke": { "map": "/Game/Maps/L_PatrolTest" },
+    "HoundScentSmoke": { "map": "/Game/Maps/L_PatrolTest" },
     "CornerHoldSmoke": { "timeout": 600, "_why": "~200 s of game time (four horde phases + the peek passes): ~50 s wall on a free machine with the fixed step, but on the game clock under heavy CPU load (shader compiles) it can need more than the default 300 s" },
     "TurnBasedAimSmoke": { "fixedStepFps": 240, "_why": "its jitter metrics are per frame (max AimYaw step 8 deg, reversals over 0.5 deg): tuned at the uncapped headless rate; at 30 fps one FInterpTo step of a retarget is 25-32 deg" },
     "CoverMoveSmoke": { "fixedStepFps": 240, "_why": "per-frame pop check (max 20 cm of mesh travel away from the wall in one frame): 34 cm at 60 fps for the same eased arc" },
@@ -77,8 +78,15 @@
       "name": "stealth-lure",
       "globs": ["Source/**/AI/StealthLure*", "Source/**/AI/LureStone*", "Source/**/Debug/StealthLureSmoke*", "Content/Data/AI/enemy_perception.json",
         "Source/**/Combat/GrenadeSubsystem*", "Source/**/AI/PatrolRoute*", "Source/**/Characters/EnemyCharacter*"],
-      "tests": ["CodexTactics.AI.StealthLure", "CodexTactics.AI.Perception", "CodexTactics.AI.Patrol"],
-      "smokes": ["StealthLureSmoke", "PatrolAmbushSmoke", "PatrolSmoke", "GrenadeSmoke", "VisionConeSmoke"]
+      "tests": ["CodexTactics.AI.StealthLure", "CodexTactics.AI.Perception", "CodexTactics.AI.Patrol", "CodexTactics.AI.Scent"],
+      "smokes": ["StealthLureSmoke", "HoundScentSmoke", "PatrolAmbushSmoke", "PatrolSmoke", "GrenadeSmoke", "VisionConeSmoke"]
+    },
+    {
+      "name": "hound-scent",
+      "globs": ["Source/**/AI/ScentRules*", "Source/**/AI/PerceptionRules*", "Source/**/Debug/HoundScentSmoke*", "Content/Data/AI/enemy_perception.json",
+        "Source/**/Data/EnemyPerception*", "Source/**/Characters/EnemyCharacter*"],
+      "tests": ["CodexTactics.AI.Scent", "CodexTactics.AI.Perception", "CodexTactics.AI.Patrol"],
+      "smokes": ["HoundScentSmoke", "StealthLureSmoke", "PatrolSmoke", "PatrolAmbushSmoke"]
     },
     {
       "name": "warm-idle",

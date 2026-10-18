@@ -4,8 +4,8 @@
 //   rendered stills: UnrealEditor.exe <uproject> /Game/Maps/L_PatrolTest -game -RenderOffscreen -ResX=1280 -ResY=720
 //       -ExecCmds="CodexTactics.StealthLureSmoke Shot"  -> Saved/Screenshots/stealth_lure_investigate.png (enemies walking to the
 //       whistle with their «?») and stealth_lure_throw_aim.png (the hearing circle of the stone aim, «HEARS» over the enemies in it)
-// A. WHISTLE behind a 3 m wall: a marksman patrolling a spline route 4 m beyond the wall with his hound escort (smell off for
-//    the check: a hound in whistle range would otherwise smell the whistler - by design) and a spitter guard 9 m to the side in
+// A. WHISTLE behind a 3 m wall: a marksman patrolling a spline route 4 m beyond the wall with his hound escort (its nose on:
+//    since the hound scent rework 2026-10-18 the wall cuts its 6 m smell to 1.8 m, it does not smell the whistler) and a spitter guard 9 m to the side in
 //    the open come and investigate the whistle point; a frostbitten guard 8 m beyond the wall (heard in the open, but the wall
 //    halves the 12 m) and a brute guard 15 m away do not. No fight, nobody hunts the squad. A second whistle at once is
 //    refused (10 s cooldown). The squad slips away (prone, 30 m); every lured enemy reaches the point, investigates (shortened
@@ -349,10 +349,7 @@ namespace StealthLureSmoke
 			Hound->StartPatrol(nullptr, Marksman);
 			Encounter->MarkLevelEnemy(Marksman);
 			Encounter->MarkLevelEnemy(Hound);
-			// A hound 4-8 m from the whistler would smell him (12 m) - by design; the lure itself is checked here.
-			Hound->PerceptionOverride = Hound->GetPerception();
-			Hound->PerceptionOverride.SmellRadiusCm = 0.f;
-			Hound->bOverridePerception = true;
+			// The hound keeps its nose (hound scent 2026-10-18): 4-8 m beyond the wall it no longer smells the whistler.
 			State.Marksman = Marksman;
 			State.Hound = Hound;
 			State.Spitter = Spitter;
