@@ -14,6 +14,24 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Queued 2026-10-18 (user decisions), order: bug fix (running) -> stealth lure -> minimap -> Demo 01 patrol fight
+- **Stealth lure** (before the patrol fight; stealth kill maybe later): any operative can WHISTLE (noise at his own
+  position, ~12 m) or THROW a stone / bolt / cartridge (aimed arc like a grenade, noise at the impact point, ~8 m).
+  Infinite, per-operative cooldown (no ammo, nothing to pick up). Works ONLY in exploration and only while the squad is
+  undetected; disabled once combat starts (useless in turn-based / real-time combat). Enemies that hear it investigate
+  the point via the existing perception SEARCH state (~60 s, then back to the route). EVERY enemy inside the lure's
+  hearing radius comes (user correction 2026-10-18: e.g. a hound + a marksman together both come; a horde in range =
+  all of them come, so luring a horde is pointless). Hounds fast + smell, Brute slow. UI: action-bar
+  buttons, hearing circle while aiming, «?» over enemies who heard.
+- **Minimap** (user decisions 2026-10-18): a RECTANGLE in the top-right corner, in the same panel as the message feed —
+  the player switches that panel between MINIMAP and MESSAGES. ISOMETRIC view at roughly the level's starting camera
+  angle (very important; not a top-down map); it stays at that starting angle when the player rotates the camera (user
+  2026-10-18). Shown PER FLOOR: on the ground the ground level; on the 2nd / 3rd floor
+  the map of that floor (geometry above the floor cut away). Fog of war: yes (explored areas only). Full-screen map on
+  Tab. Content: squad (selected highlighted), visible / last-known enemies, objectives / beacons, spotted traps,
+  buildings, doors; wheel = zoom, click = move the camera, RMB = move order. Perf idea: orthographic iso captures per
+  floor once at load + live icons projected with the same matrix.
+
 ## Checkpoint 2026-10-15/16 (end of day) — cleanup day DONE
 - Cleanup: (1) OperativeCharacter split (10-14); (2) smokes on a fixed 60 fps step, flaky list emptied, arming-countdown
   fix; (3) ONE lake map `/Game/Maps/L_Demo01_A_FrozenLake` (review copy saved over it, copy removed; layout script =
