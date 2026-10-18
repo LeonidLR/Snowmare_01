@@ -51,6 +51,51 @@ struct CODEXTACTICS_API FEnemyTacticsTarget
 	bool bCurrent = false;
 };
 
+/**
+ * The flank detour of a Flank-role enemy (user decision 2026-10-18: "a real detour"): it walks to its flank point first and
+ * closes in only from there - or once it is already within bite reach on the flank side. A blocked / unreachable point never
+ * freezes it: after StuckSeconds without progress or TimeoutSeconds in all it goes straight in. Codex.Enemy.Flank* knobs.
+ */
+struct CODEXTACTICS_API FFlankDetourConfig
+{
+	/** At the flank point this close (planar), cm. */
+	float ArriveCm = 150.f;
+	/** "On the flank side": the enemy's direction from the target within this of the flank point's, degrees. */
+	float SideConeDeg = 60.f;
+	/** Within bite reach: the planar bite reach plus this, cm. */
+	float BiteSlackCm = 40.f;
+	/** Gives the detour up after this long, s. */
+	float TimeoutSeconds = 8.f;
+	/** ... or after this long without 50 cm of progress (a blocked point), s. */
+	float StuckSeconds = 1.5f;
+	/** Codex.Enemy.FlankDetour 0: the pre-2026-10-18 cut straight in within 5 m of the target (A/B). */
+	bool bLegacyFiveMetreCut = false;
+};
+
+/** One tick of a flank detour as the rule sees it. */
+struct CODEXTACTICS_API FFlankDetourInput
+{
+	float DistanceToPointCm = 0.f;
+	float DistanceToTargetCm = 0.f;
+	/** Planar bite reach for the height difference (EnemyAIRules::MeleeReachPlanar), cm. */
+	float BiteReachCm = 150.f;
+	/** Angle between (enemy - target) and (flank point - target), degrees. */
+	float AngleFromFlankDeg = 180.f;
+	float ElapsedSeconds = 0.f;
+	float StuckSeconds = 0.f;
+};
+
+/** Why a flank detour ended (Continue = keep walking to the flank point). */
+enum class EFlankDetourResult : uint8
+{
+	Continue,
+	AtFlankPoint,
+	BiteFromFlank,
+	Stuck,
+	Timeout,
+	LegacyCut
+};
+
 enum class EEnemyTacticRole : uint8
 {
 	/** Straight at the target (pins him). */
@@ -84,11 +129,18 @@ namespace EnemyTacticsRules
 	CODEXTACTICS_API EEnemyTacticRole RoleFor(const FEnemyTacticsProfile& Profile, int32 Rank, int32 AttackerCount);
 
 	/**
-	 * A point DistanceCm from Target, AngleDegrees off the axis from the squad's centre through the target (so behind /
-	 * beside him, away from his mates), on the side the enemy already is.
+	 * A point DistanceCm from Target, AngleDegrees off the line from the target to the enemy (so beside him, as seen from the
+	 * enemy), turned to his OUTER side (away from the squad's centre; a target at the centre: a fixed side). Reworked 2026-10-18:
+	 * the old point was AngleDegrees off the centre->target axis towards the enemy - in front of a wing operative of a line.
 	 */
 	CODEXTACTICS_API FVector FlankPoint(const FVector& Enemy, const FVector& Target, const FVector& SquadCentre,
-		float DistanceCm = 450.f, float AngleDegrees = 70.f);
+		float DistanceCm = 450.f, float AngleDegrees = 90.f);
+
+	/** The flank detour: keep walking to the point, or why it ends (FFlankDetourConfig). */
+	CODEXTACTICS_API EFlankDetourResult EvaluateFlankDetour(const FFlankDetourInput& Input, const FFlankDetourConfig& Config);
+
+	/** Short name of a result (logs). */
+	CODEXTACTICS_API const TCHAR* FlankDetourResultName(EFlankDetourResult Result);
 
 	/** The enemy attacks from behind (outside the target's front 120 degrees). */
 	CODEXTACTICS_API bool IsBehind(const FVector& TargetLocation, const FVector& TargetForward, const FVector& Enemy);

@@ -131,3 +131,55 @@ bool FEnemyTacticsMoraleTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("bent towards the pack"), Point.Y > 100.f);
 	return true;
 }
+
+// User decision 2026-10-18: pack flanking is a real detour - the flank point lies beside the target (seen from the enemy) on his
+// outer side, and the flanker closes in only there, or in bite reach on that side; a blocked / long detour goes straight in.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyTacticsFlankDetourTest, "CodexTactics.Characters.EnemyTactics.FlankDetour",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FEnemyTacticsFlankDetourTest::RunTest(const FString& Parameters)
+{
+	// A line of three along X facing +Y; the right wing at (300, 0); a hound 20 m in front of him.
+	const FVector Wing(300.f, 0.f, 0.f);
+	const FVector Point = EnemyTacticsRules::FlankPoint(FVector(300.f, 2000.f, 0.f), Wing, FVector::ZeroVector);
+	TestTrue(TEXT("wing: the point is on his outer side (+X), not in front of him"), Point.X > Wing.X + 300.f && FMath::Abs(Point.Y) < 50.f);
+	const float Off = FMath::RadiansToDegrees(FMath::Acos(static_cast<float>(FVector::DotProduct((Point - Wing).GetSafeNormal2D(), FVector(0.f, 1.f, 0.f)))));
+	TestTrue(FString::Printf(TEXT("approach from there is a side approach (%.0f deg off his facing)"), Off), Off > 60.f);
+	const FVector LeftPoint = EnemyTacticsRules::FlankPoint(FVector(-300.f, 2000.f, 0.f), FVector(-300.f, 0.f, 0.f), FVector::ZeroVector);
+	TestTrue(TEXT("left wing: his outer side (-X)"), LeftPoint.X < -600.f);
+	const FVector Middle = EnemyTacticsRules::FlankPoint(FVector(0.f, 2000.f, 0.f), FVector::ZeroVector, FVector::ZeroVector);
+	TestTrue(TEXT("middle (no outer side): still beside him, 450 cm"), FMath::Abs(Middle.Y) < 50.f && FMath::IsNearlyEqual(static_cast<float>(Middle.Size2D()), 450.f, 1.f));
+
+	FFlankDetourConfig Config;
+	FFlankDetourInput In;
+	In.DistanceToPointCm = 800.f;
+	In.DistanceToTargetCm = 600.f;
+	In.BiteReachCm = 150.f;
+	In.AngleFromFlankDeg = 120.f;
+	In.ElapsedSeconds = 2.f;
+	In.StuckSeconds = 0.2f;
+	using EnemyTacticsRules::EvaluateFlankDetour;
+	TestTrue(TEXT("5 m from him, far from the point: keeps the detour (the old rule cut in here)"), EvaluateFlankDetour(In, Config) == EFlankDetourResult::Continue);
+	FFlankDetourInput Front = In;
+	Front.DistanceToTargetCm = 160.f;
+	Front.AngleFromFlankDeg = 90.f;
+	TestTrue(TEXT("in bite reach but in FRONT of him: keeps going round"), EvaluateFlankDetour(Front, Config) == EFlankDetourResult::Continue);
+	FFlankDetourInput Side = Front;
+	Side.AngleFromFlankDeg = 40.f;
+	TestTrue(TEXT("in bite reach on the flank side: closes in"), EvaluateFlankDetour(Side, Config) == EFlankDetourResult::BiteFromFlank);
+	FFlankDetourInput At = In;
+	At.DistanceToPointCm = 120.f;
+	TestTrue(TEXT("at the flank point: closes in"), EvaluateFlankDetour(At, Config) == EFlankDetourResult::AtFlankPoint);
+	FFlankDetourInput Stuck = In;
+	Stuck.StuckSeconds = 1.6f;
+	TestTrue(TEXT("no progress 1.5 s (blocked point): straight in"), EvaluateFlankDetour(Stuck, Config) == EFlankDetourResult::Stuck);
+	FFlankDetourInput Long = In;
+	Long.ElapsedSeconds = 8.5f;
+	TestTrue(TEXT("8 s of detour: straight in"), EvaluateFlankDetour(Long, Config) == EFlankDetourResult::Timeout);
+	FFlankDetourConfig Legacy;
+	Legacy.bLegacyFiveMetreCut = true;
+	FFlankDetourInput Near = In;
+	Near.DistanceToTargetCm = 480.f;
+	TestTrue(TEXT("A/B: the old rule cuts in within 5 m"), EvaluateFlankDetour(Near, Legacy) == EFlankDetourResult::LegacyCut);
+	return true;
+}

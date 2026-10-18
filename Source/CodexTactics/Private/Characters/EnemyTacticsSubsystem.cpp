@@ -23,6 +23,16 @@ namespace EnemyTacticsTuning
 	static TAutoConsoleVariable<int32> CVarMoraleDeaths(TEXT("Codex.Enemy.MoraleDeathsBonus"), 0,
 		TEXT("Added to the pack-mate deaths nearby that break a fragile enemy's morale"));
 
+	// Flank detour (user decision 2026-10-18): a real detour to the flank point before closing in.
+	static TAutoConsoleVariable<int32> CVarFlankDetour(TEXT("Codex.Enemy.FlankDetour"), 1,
+		TEXT("Flankers walk to their flank point first (1) / the old cut straight in within 5 m of the target (0, A/B)"));
+	static TAutoConsoleVariable<float> CVarFlankArrive(TEXT("Codex.Enemy.FlankArriveCm"), 150.f, TEXT("A flanker is at its flank point this close, cm"));
+	static TAutoConsoleVariable<float> CVarFlankCone(TEXT("Codex.Enemy.FlankSideConeDeg"), 60.f,
+		TEXT("A flanker within bite reach this close (deg) to the flank side of its target closes in at once"));
+	static TAutoConsoleVariable<float> CVarFlankTimeout(TEXT("Codex.Enemy.FlankTimeout"), 8.f, TEXT("A flank detour is given up after this long, s"));
+	static TAutoConsoleVariable<float> CVarFlankStuck(TEXT("Codex.Enemy.FlankStuckSeconds"), 1.5f,
+		TEXT("A flank detour without 50 cm of progress this long (a blocked point) goes straight in, s"));
+
 	constexpr double RefreshSeconds = 0.4;
 	constexpr double FallBackSeconds = 3.5;
 	constexpr double MoraleCooldownSeconds = 20.0;
@@ -51,6 +61,17 @@ namespace EnemyTacticsTuning
 		}
 		return Profile;
 	}
+}
+
+FFlankDetourConfig UEnemyTacticsSubsystem::GetFlankDetourConfig()
+{
+	FFlankDetourConfig Config;
+	Config.bLegacyFiveMetreCut = EnemyTacticsTuning::CVarFlankDetour.GetValueOnGameThread() == 0;
+	Config.ArriveCm = FMath::Max(EnemyTacticsTuning::CVarFlankArrive.GetValueOnGameThread(), 10.f);
+	Config.SideConeDeg = FMath::Clamp(EnemyTacticsTuning::CVarFlankCone.GetValueOnGameThread(), 0.f, 180.f);
+	Config.TimeoutSeconds = FMath::Max(EnemyTacticsTuning::CVarFlankTimeout.GetValueOnGameThread(), 0.f);
+	Config.StuckSeconds = FMath::Max(EnemyTacticsTuning::CVarFlankStuck.GetValueOnGameThread(), 0.1f);
+	return Config;
 }
 
 bool UEnemyTacticsSubsystem::IsCoordinated(const AEnemyCharacter* Enemy)

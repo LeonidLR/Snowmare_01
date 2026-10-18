@@ -647,6 +647,11 @@ protected:
 	bool bFallingBack = false;
 	/** The target this enemy already went round (flank done: straight in from now on). */
 	TWeakObjectPtr<AActor> FlankDoneTarget;
+	/** The running flank detour (2026-10-18): its target, time, progress probe (EnemyTacticsRules::EvaluateFlankDetour). */
+	TWeakObjectPtr<AActor> FlankDetourTarget;
+	float FlankDetourElapsed = 0.f;
+	float FlankDetourStuck = 0.f;
+	FVector FlankDetourProbe = FVector::ZeroVector;
 	/** Seconds standing on a barricade / barrel top (VaultNavigation::IsStandingOnObstacle). */
 	float ObstacleTopTime = 0.f;
 

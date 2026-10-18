@@ -1,7 +1,8 @@
 // Dev-only console command for a headless check of the melee pack tactics (UEnemyTacticsSubsystem) on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.EnemyTacticsSmoke
 // Six hounds come at a three-man line (unkillable, cease-fire): they spread over at least two operatives (cap per
-// target), part of them is sent round the flanks and gets to the squad's side / rear; a badly hurt hound breaks
+// target), part of them is sent round the flanks and gets to the squad's side / rear - since 2026-10-18 a real detour: a flank-role
+// hound comes at its own target from the side / back and bites from there (logged per hound + the side / back bite count); a badly hurt hound breaks
 // (morale) and runs back to the pack.
 
 #include "CoreMinimal.h"
@@ -39,6 +40,11 @@ namespace EnemyTacticsSmoke
 		float SideReached = 0.f;
 		TWeakObjectPtr<AEnemyCharacter> Broken;
 		float BrokenStartDistance = 0.f;
+		/** Pack flanking (2026-10-18): each hound's first contact (within 2.5 m of its target) - angle off his facing, flank role. */
+		TMap<TWeakObjectPtr<AEnemyCharacter>, TPair<float, bool>> Contacts;
+		/** Hounds that ever held a flank order. */
+		TSet<TWeakObjectPtr<AEnemyCharacter>> Flankers;
+		int32 BackstabsBefore = 0;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -145,14 +151,50 @@ namespace EnemyTacticsSmoke
 					{
 						State.SideReached = FMath::Max(State.SideReached, 1.f - static_cast<float>(FVector::DotProduct(To.GetSafeNormal2D(), State.Forward)));
 					}
+					// Pack flanking (2026-10-18): where each hound first comes within 2.5 m of its target (the line faces Forward).
+					FEnemyTacticOrder Order;
+					const bool bFlank = Tactics->GetOrder(Hound.Get(), Order) && Order.Role == EEnemyTacticRole::Flank;
+					if (bFlank)
+					{
+						State.Flankers.Add(Hound);
+					}
+					const AActor* Victim = Hound->GetCurrentTarget();
+					if (Victim && Victim->IsA<AOperativeCharacter>() && !State.Contacts.Contains(Hound)
+						&& FVector::Dist2D(Hound->GetActorLocation(), Victim->GetActorLocation()) <= 250.f)
+					{
+						const FVector Dir = (Hound->GetActorLocation() - Victim->GetActorLocation()).GetSafeNormal2D();
+						const float Angle = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(static_cast<float>(FVector::DotProduct(State.Forward, Dir)), -1.f, 1.f)));
+						State.Contacts.Add(Hound, TPair<float, bool>(Angle, State.Flankers.Contains(Hound)));
+						UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s reaches %s from %.0f deg off his facing (%s, %.1f s)"), *Hound->GetName(), *Victim->GetName(),
+							Angle, State.Flankers.Contains(Hound) ? TEXT("flank role") : TEXT("direct"), State.StageTime);
+					}
 				}
 			}
-			if (State.StageTime < 10.f && State.SideReached < 1.f)
+			// A fixed 10 s window (measures the approach of every hound, not only the first one round).
+			if (State.StageTime < 10.f)
 			{
 				return true;
 			}
+			int32 SideContacts = 0;
+			int32 FlankContacts = 0;
+			int32 FlankSideContacts = 0;
+			for (const TPair<TWeakObjectPtr<AEnemyCharacter>, TPair<float, bool>>& Contact : State.Contacts)
+			{
+				const bool bSide = Contact.Value.Key > 60.f;
+				SideContacts += bSide ? 1 : 0;
+				FlankContacts += Contact.Value.Value ? 1 : 0;
+				FlankSideContacts += Contact.Value.Value && bSide ? 1 : 0;
+			}
+			const int32 Backstabs = Tactics->GetBackstabs() - State.BackstabsBefore;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: approach - %d of %d hounds reached their target from the side / back (> 60 deg), flank role %d of %d; bites from the side / back (backstabs) %d"),
+				SideContacts, State.Contacts.Num(), FlankSideContacts, FlankContacts, Backstabs);
 			Check(State, State.SideReached >= 1.f, FString::Printf(TEXT("a hound reached the squad's side / rear (%.2f, flank orders %d, backstabs %d)"),
 				State.SideReached, Tactics->GetFlankOrders(), Tactics->GetBackstabs()));
+			// User decision 2026-10-18: a REAL flank - a flank-role hound reaches its target from the side / back and bites from there
+			// (not the squad-wide side reach of stalled hounds circling, the pre-close-in artefact).
+			Check(State, FlankSideContacts >= 1, FString::Printf(TEXT("a flank-role hound comes at its target from the side / back (%d of %d)"),
+				FlankSideContacts, FlankContacts));
+			Check(State, Backstabs >= 1, FString::Printf(TEXT("bites land from the side / back (%d)"), Backstabs));
 			// Morale: one hound down to 15 % breaks and runs.
 			for (const TWeakObjectPtr<AEnemyCharacter>& Hound : State.Hounds)
 			{
