@@ -17,6 +17,9 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/KnockdownRules.h"
+#include "Characters/EnemyCharacter.h"
+#include "Combat/EnemyRegistrySubsystem.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -309,6 +312,13 @@ void AOperativeCharacter::HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockd
 	if (OldPhase == EKnockdownPhase::None && NewPhase != EKnockdownPhase::None)
 	{
 		// Interrupts: the walk, sprint, reload, the corner aim / cover (left cleanly), a grenade being aimed.
+		// The cover slot is remembered: a blast knockdown sends him back there once he is up (user decision 2026-10-18).
+		bKnockedFromCover = bInCover;
+		KnockdownCause = KnockdownComponent ? KnockdownComponent->GetState().Cause : EKnockdownCause::None; // reset by the recovery
+		if (bInCover)
+		{
+			KnockdownCoverSlot = CoverSlot;
+		}
 		StopOperative();
 		if (bCornerAimActive)
 		{
@@ -357,5 +367,40 @@ void AOperativeCharacter::HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockd
 			Movement->SetMovementMode(MOVE_Walking);
 			ApplyMovementParams();
 		}
+		ReturnToCoverAfterKnockdown();
+	}
+}
+
+void AOperativeCharacter::ReturnToCoverAfterKnockdown()
+{
+	// User rule 2026-10-18: a blast (grenade, barrel, mine) that just happened to floor him in cover sends him back to the same slot;
+	// surrounded (a pounce / a Brute's blow, or enemies close now) he stays out and the player re-orders; an order given while he
+	// lay wins (the knockdown component runs it right after this).
+	const FKnockdownConfig& Config = KnockdownRules::GetConfig();
+	FKnockdownCoverReturnInput Input;
+	Input.bWasInCover = bKnockedFromCover;
+	Input.Cause = KnockdownCause;
+	Input.bOrderGivenWhileDown = KnockdownComponent && KnockdownComponent->HasBufferedOrder();
+	Input.bAlive = HealthComponent && HealthComponent->IsAlive();
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	Input.bTurnBased = Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased;
+	for (const AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
+	{
+		if (Enemy && !Enemy->IsDying() && Enemy->GetHealthComponent() && Enemy->GetHealthComponent()->IsAlive()
+			&& FVector::Dist2D(Enemy->GetActorLocation(), GetActorLocation()) <= Config.CoverReturnThreatRadiusCm)
+		{
+			++Input.EnemiesClose;
+		}
+	}
+	LastCoverReturn = KnockdownRules::DecideCoverReturn(Input, Config);
+	bKnockedFromCover = false;
+	if (Input.bWasInCover)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Knockdown] %s up again: %s (%d enemies within %.0f cm)"), *DisplayName.ToString(),
+			KnockdownRules::CoverReturnName(LastCoverReturn), Input.EnemiesClose, Config.CoverReturnThreatRadiusCm);
+	}
+	if (LastCoverReturn == EKnockdownCoverReturn::Return && OrderTakeCover(KnockdownCoverSlot, false) != EOperativeOrderResult::Accepted)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Knockdown] %s: the way back to his cover is refused"), *DisplayName.ToString());
 	}
 }

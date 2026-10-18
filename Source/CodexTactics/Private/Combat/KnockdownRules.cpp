@@ -4,6 +4,10 @@
 
 namespace KnockdownTunables
 {
+	static TAutoConsoleVariable<int32> CVarCoverReturn(TEXT("Codex.Knockdown.CoverReturn"), -1,
+		TEXT("After a blast knockdown in cover, back to the same cover slot when no enemy is close (1 / 0; -1 = default 1)."));
+	static TAutoConsoleVariable<float> CVarCoverReturnRadius(TEXT("Codex.Knockdown.CoverReturnThreatRadius"), -1.f,
+		TEXT("A living enemy this close keeps a knocked-down operative out of his cover, cm (-1 = default 400)."));
 	static TAutoConsoleVariable<float> CVarDamageThreshold(TEXT("Codex.Knockdown.DamageThreshold"), -1.f,
 		TEXT("Single-hit damage that knocks down (-1 = default 40)."));
 	static TAutoConsoleVariable<float> CVarExplosionRadius(TEXT("Codex.Knockdown.ExplosionRadius"), -1.f,
@@ -42,6 +46,9 @@ namespace KnockdownRules
 		Config.KnockdownChance = FMath::Clamp(Pick(KnockdownTunables::CVarChance.GetValueOnGameThread(), Defaults.KnockdownChance), 0.f, 1.f);
 		Config.DownedDamageMultiplier = Pick(KnockdownTunables::CVarDownedDamage.GetValueOnGameThread(), Defaults.DownedDamageMultiplier);
 		Config.ReknockImmunitySeconds = Pick(KnockdownTunables::CVarReknock.GetValueOnGameThread(), Defaults.ReknockImmunitySeconds);
+		const int32 CoverReturn = KnockdownTunables::CVarCoverReturn.GetValueOnGameThread();
+		Config.bReturnToCoverAfterBlast = CoverReturn < 0 ? Defaults.bReturnToCoverAfterBlast : CoverReturn != 0;
+		Config.CoverReturnThreatRadiusCm = Pick(KnockdownTunables::CVarCoverReturnRadius.GetValueOnGameThread(), Defaults.CoverReturnThreatRadiusCm);
 		return Config;
 	}
 
@@ -275,5 +282,48 @@ namespace KnockdownRules
 	const TCHAR* DeathClipName(EKnockdownDirection Direction)
 	{
 		return Direction == EKnockdownDirection::Front ? TEXT("Death_Front") : TEXT("Death_Back");
+	}
+}
+
+EKnockdownCoverReturn KnockdownRules::DecideCoverReturn(const FKnockdownCoverReturnInput& Input, const FKnockdownConfig& Config)
+{
+	if (!Config.bReturnToCoverAfterBlast || !Input.bAlive)
+	{
+		return EKnockdownCoverReturn::Off;
+	}
+	if (!Input.bWasInCover)
+	{
+		return EKnockdownCoverReturn::NotInCover;
+	}
+	if (Input.bOrderGivenWhileDown)
+	{
+		return EKnockdownCoverReturn::OrderGiven;
+	}
+	if (Input.bTurnBased)
+	{
+		return EKnockdownCoverReturn::TurnBased;
+	}
+	if (Input.Cause != EKnockdownCause::Explosion)
+	{
+		return EKnockdownCoverReturn::NotABlast;
+	}
+	if (Input.EnemiesClose > 0)
+	{
+		return EKnockdownCoverReturn::EnemiesClose;
+	}
+	return EKnockdownCoverReturn::Return;
+}
+
+const TCHAR* KnockdownRules::CoverReturnName(EKnockdownCoverReturn Decision)
+{
+	switch (Decision)
+	{
+	case EKnockdownCoverReturn::Return: return TEXT("returns to his cover (blast, nobody close)");
+	case EKnockdownCoverReturn::NotInCover: return TEXT("was not in cover");
+	case EKnockdownCoverReturn::NotABlast: return TEXT("stays out (not a blast: enemies on him)");
+	case EKnockdownCoverReturn::EnemiesClose: return TEXT("stays out (enemies around him)");
+	case EKnockdownCoverReturn::OrderGiven: return TEXT("follows the order given while he lay");
+	case EKnockdownCoverReturn::TurnBased: return TEXT("stays (turn-based fight)");
+	default: return TEXT("off");
 	}
 }

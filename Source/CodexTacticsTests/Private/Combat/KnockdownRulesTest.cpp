@@ -286,4 +286,49 @@ bool FKnockdownTurnBasedTest::RunTest(const FString&)
 	return true;
 }
 
+// User rule 2026-10-18: «if enemies surround him, don't return him to cover; if a grenade / blast just happened to explode next to
+// him and he fell, return him to cover». An order given while he lay wins.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKnockdownCoverReturnTest, "CodexTactics.Combat.Knockdown.CoverReturn",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FKnockdownCoverReturnTest::RunTest(const FString&)
+{
+	const FKnockdownConfig Config;
+	TestTrue(TEXT("on by default, 4 m threat radius"), Config.bReturnToCoverAfterBlast && FMath::IsNearlyEqual(Config.CoverReturnThreatRadiusCm, 400.f));
+	FKnockdownCoverReturnInput Blast;
+	Blast.bWasInCover = true;
+	Blast.Cause = EKnockdownCause::Explosion;
+	auto Is = [this, &Config](const TCHAR* What, const FKnockdownCoverReturnInput& Input, EKnockdownCoverReturn Expected)
+	{
+		TestEqual(What, static_cast<int32>(KnockdownRules::DecideCoverReturn(Input, Config)), static_cast<int32>(Expected));
+	};
+	Is(TEXT("a blast in cover, nobody close: back to the cover"), Blast, EKnockdownCoverReturn::Return);
+	FKnockdownCoverReturnInput Surrounded = Blast;
+	Surrounded.EnemiesClose = 2;
+	Is(TEXT("a blast, but enemies around him: stays out"), Surrounded, EKnockdownCoverReturn::EnemiesClose);
+	for (const EKnockdownCause Cause : { EKnockdownCause::Pounce, EKnockdownCause::HeavyMelee, EKnockdownCause::HeavyHit })
+	{
+		FKnockdownCoverReturnInput Melee = Blast;
+		Melee.Cause = Cause;
+		Is(*FString::Printf(TEXT("%s: stays out (they are on him)"), *UEnum::GetValueAsString(Cause)), Melee, EKnockdownCoverReturn::NotABlast);
+	}
+	FKnockdownCoverReturnInput Ordered = Blast;
+	Ordered.bOrderGivenWhileDown = true;
+	Is(TEXT("an order given while he lay wins"), Ordered, EKnockdownCoverReturn::OrderGiven);
+	FKnockdownCoverReturnInput Open = Blast;
+	Open.bWasInCover = false;
+	Is(TEXT("not in cover when he fell: nothing to return to"), Open, EKnockdownCoverReturn::NotInCover);
+	FKnockdownCoverReturnInput Grid = Blast;
+	Grid.bTurnBased = true;
+	Is(TEXT("turn-based: the grid moves him"), Grid, EKnockdownCoverReturn::TurnBased);
+	FKnockdownCoverReturnInput Dead = Blast;
+	Dead.bAlive = false;
+	Is(TEXT("dead: nothing"), Dead, EKnockdownCoverReturn::Off);
+	FKnockdownConfig Off = Config;
+	Off.bReturnToCoverAfterBlast = false;
+	TestEqual(TEXT("rule off (Codex.Knockdown.CoverReturn 0)"), static_cast<int32>(KnockdownRules::DecideCoverReturn(Blast, Off)),
+		static_cast<int32>(EKnockdownCoverReturn::Off));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
