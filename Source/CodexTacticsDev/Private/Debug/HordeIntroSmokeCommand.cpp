@@ -425,6 +425,17 @@ namespace HordeIntroSmoke
 			{
 				return true;
 			}
+			if (!bOnTheWay && Mover)
+			{
+				float NearestEnemy = TNumericLimits<float>::Max();
+				for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+				{
+					NearestEnemy = FMath::Min(NearestEnemy, static_cast<float>(FVector::Dist2D(It->GetActorLocation(), Mover->GetActorLocation())));
+				}
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: the mover %s - knocked down %d, panicking %d, raging %d, stance %d, in cover %d, velocity %.0f, nearest enemy %.0f cm"),
+					*Mover->DisplayName.ToString(), Mover->IsKnockedDown() ? 1 : 0, Mover->IsPanicking() ? 1 : 0, Mover->IsRaging() ? 1 : 0,
+					static_cast<int32>(Mover->GetStance()), Mover->bInCover ? 1 : 0, Mover->GetVelocity().Size2D(), NearestEnemy);
+			}
 			Check(State, bOnTheWay, FString::Printf(TEXT("the planned move runs (moving %d, %.0f of %.0f cm left)"),
 				Mover && Mover->IsMoving() ? 1 : 0, Left, State.MoveStartDistance));
 			Waves->ClearAllEnemies();

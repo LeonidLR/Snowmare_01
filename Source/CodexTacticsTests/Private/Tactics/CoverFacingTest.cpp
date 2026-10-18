@@ -491,6 +491,29 @@ bool FCoverWallSpanTest::RunTest(const FString&)
 	return true;
 }
 
+// Bug hunt 2026-10-18 (CornerHoldSmoke 1 in 3): off the wall for open shots, a frostbitten 1.7 m off round the wall's end
+// (out of his line of fire, covered by the corner stance) with two spitters 6.8 m off behind the wall kept him in the open
+// stance for 40 s without a shot.
+COVER_FACING_TEST(FCoverOpenShotReturnTest, "OpenShotReturnToCornerHold")
+bool FCoverOpenShotReturnTest::RunTest(const FString&)
+{
+	using namespace CoverFacingRules;
+	TestTrue(TEXT("a rusher at his side he can hit: pins him"), ClassifyOpenShotThreat(170.f, 700.f, true, true, false) == EOpenShotThreat::Pins);
+	TestTrue(TEXT("one the corner does not cover: pins him"), ClassifyOpenShotThreat(170.f, 700.f, false, false, false) == EOpenShotThreat::Pins);
+	TestTrue(TEXT("circling round the wall's end (on the move): pins him"), ClassifyOpenShotThreat(170.f, 700.f, true, false, true) == EOpenShotThreat::Pins);
+	TestTrue(TEXT("waiting 1.7 m off round the corner, no shot from here: at his side"),
+		ClassifyOpenShotThreat(173.f, 700.f, true, false, false) == EOpenShotThreat::WaitsAtHisSide);
+	TestTrue(TEXT("a spitter standing 6.8 m off behind the wall: waits round the corner"),
+		ClassifyOpenShotThreat(680.f, 700.f, true, false, false) == EOpenShotThreat::WaitsRoundCorner);
+	TestTrue(TEXT("beyond the rush distance: not this rule"), ClassifyOpenShotThreat(900.f, 700.f, true, false, false) == EOpenShotThreat::None);
+
+	TestTrue(TEXT("anything pinning him: stays out"), OpenShotThreatsKeepHimOut(true, false, true));
+	TestTrue(TEXT("only spitters waiting behind the wall: stays out (2026-10-07: one step off per engagement)"), OpenShotThreatsKeepHimOut(false, true, false));
+	TestFalse(TEXT("the frostbitten at his side + the spitters: back to the corner hold"), OpenShotThreatsKeepHimOut(false, true, true));
+	TestFalse(TEXT("nobody close: back (the other rules permitting)"), OpenShotThreatsKeepHimOut(false, false, false));
+	return true;
+}
+
 #undef COVER_FACING_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

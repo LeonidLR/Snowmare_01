@@ -25,6 +25,7 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
+#include "HAL/IConsoleManager.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/TurretActor.h"
 #include "Survival/ColdSurvivalComponent.h"
@@ -32,6 +33,12 @@
 #include "Tactics/CoverRules.h"
 #include "Telemetry/RunTelemetrySubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
+
+namespace OperativeFireTrace
+{
+	static TAutoConsoleVariable<int32> CVarFireTrace(TEXT("Codex.Debug.FireTrace"), 0,
+		TEXT("Dev trace (2026-10-18): 1 logs every operative's real-time fire decision when its reason changes, and every 2 s while an enemy is within 5 m and no shot leaves"));
+}
 
 bool AOperativeCharacter::IsBehindBarricade() const
 {
@@ -59,14 +66,19 @@ bool AOperativeCharacter::IsBehindBarricade() const
 	return false;
 }
 
-bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FShootCandidate& Out, bool& bOutBarricadeBlocked) const
+bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FShootCandidate& Out, bool& bOutBarricadeBlocked,
+	const TCHAR** OutReason) const
 {
 	bOutBarricadeBlocked = false;
+	const TCHAR* Unused = nullptr;
+	const TCHAR*& Reason = OutReason ? *OutReason : Unused;
+	Reason = TEXT("ok");
 	UWorld* World = GetWorld();
 	// Sprint 08: an enemy the squad does not see is not aimed at (blind fire at its silhouette is an order).
 	if (const UTacticalSightSubsystem* Sight = World ? World->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
 		Sight && Enemy && !Sight->IsVisibleToSquad(Enemy))
 	{
+		Reason = TEXT("not visible to the squad");
 		return false;
 	}
 	const FVector MyFeet = OperativeCharacterInternal::ShotFeet(this);
@@ -76,10 +88,12 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	const bool bCornerShot = IsCornerShotTarget(EnemyFeet);
 	if (bCornerShot && !CanFireFromCover())
 	{
+		Reason = TEXT("corner shot impossible from this cover");
 		return false;
 	}
 	if (!World || SquadFireRules::IsInDeadZone(MyFeet, EnemyFeet))
 	{
+		Reason = TEXT("dead zone");
 		return false;
 	}
 	const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(MyFeet.Z, EnemyFeet.Z);
@@ -89,6 +103,7 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	const float Distance = FVector::Dist(MyFeet + FVector(0.f, 0.f, 100.f), EnemyFeet);
 	if (Distance > Range)
 	{
+		Reason = TEXT("out of range");
 		return false;
 	}
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(SquadShotLine), false, this);
@@ -115,6 +130,7 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	bOutBarricadeBlocked = Verdict.bBarricadeBlocked;
 	if (!Verdict.bCanHit)
 	{
+		Reason = Kind == EShotLineHit::Barricade ? TEXT("line blocked by a barricade") : TEXT("line blocked");
 		return false;
 	}
 	Out.Enemy = HitEnemy;
@@ -405,10 +421,18 @@ void AOperativeCharacter::NotifyBarricadeBlocked()
 
 void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 {
+	AActor* Target = nullptr;
+	const TCHAR* Reason = RunCombatShooting(DeltaTime, Target);
+	TraceFireDecision(Reason, Target);
+}
+
+const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& OutTarget)
+{
+	OutTarget = nullptr;
 	// Godot: a panicking soldier neither shoots nor reloads (can_shoot = false, _process_reloading skipped).
 	if (!bRecruited || bTacticalCeaseFire || !HealthComponent || !HealthComponent->IsAlive() || (IsPanicking() && !IsRaging()))
 	{
-		return;
+		return bTacticalCeaseFire ? TEXT("cease fire") : (IsPanicking() ? TEXT("panicking") : TEXT("not recruited / dead"));
 	}
 
 	if (MisfireCooldownTimer > 0.0f)
@@ -429,7 +453,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 			CurrentClip += Added;
 			ReserveAmmo -= Added;
 		}
-		return;
+		return TEXT("reloading");
 	}
 
 	if (ShootTimer > 0.0f)
@@ -450,7 +474,8 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		{
 			NotifyWeaponFrozen();
 		}
-		return;
+		return IsKnockedDown() ? TEXT("knocked down") : (bSprinting ? TEXT("sprinting") : (bCarrying ? TEXT("carrying")
+			: TEXT("cannot shoot (frozen weapon)")));
 	}
 
 	// Only auto-shoot when in WaveCombat real-time mode (or if no game flow subsystem exists, e.g. standalone test).
@@ -467,14 +492,14 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 					|| !FirePostureRules::MayAutoFireInExploration(GetFirePosture(), Encounter->IsAmbushCombatStart(), Flow->GetPhase(),
 						Flow->IsCombatUnlocked(), USquadSubsystem::GetPostureConfig()))
 				{
-					return;
+					return TEXT("not a real-time fight");
 				}
 				const FShootCandidate Opening = FindShootTarget(DeltaTime, true);
 				if (!Opening.Enemy || Opening.bBlind
 					|| !ULevelEncounterSubsystem::NotifyHostileContactIn(World, EAmbushTrigger::SquadAutoFire, Opening.Enemy))
 				{
 					CurrentCombatTarget.Reset();
-					return;
+					return TEXT("exploring: no opening shot");
 				}
 				UE_LOG(LogCodexTactics, Display, TEXT("%s opens fire on %s (aggressive posture): the ambush fight starts"),
 					*DisplayName.ToString(), *Opening.Enemy->GetName());
@@ -491,7 +516,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 	if (bAutoFire && !bRaging && !bIsReloading && GrenadesCount > 0 && AIGrenadeCooldown <= 0.f && TryAIGrenadeThrow())
 	{
 		ShootTimer = 1.f;
-		return;
+		return TEXT("threw a grenade");
 	}
 
 	const bool bInfiniteRageAmmo = bRaging && RageComponent->Config.bInfiniteAmmo;
@@ -509,7 +534,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		{
 			AutoSwitchOnEmpty();
 		}
-		return;
+		return TEXT("empty clip");
 	}
 
 	// Raging: a random enemy in reach is sprayed (Godot rage_comp.get_chaotic_target, cover 1).
@@ -523,9 +548,10 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		Shot = FindShootTarget(DeltaTime, bAutoFire);
 	}
 	AActor* Target = Shot.Enemy;
+	OutTarget = Target;
 	if (!Target)
 	{
-		return;
+		return bAutoFire ? TEXT("no target") : TEXT("no target (auto fire held by the posture)");
 	}
 
 	// Sniper rifle (user request 2026-10-09, SniperRules): only kneeling / prone and still. A direct order (priority target,
@@ -536,7 +562,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		SniperStep = PrepareSniperShot(Target == ManualPriorityTarget.Get() || Shot.bBlind);
 		if (SniperStep == ESniperFireStep::WaitForMove)
 		{
-			return;
+			return TEXT("sniper: waits for the move");
 		}
 	}
 
@@ -544,7 +570,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 	// wall and fires normally, then comes back to the slot (UpdateOpenShotReturn).
 	if (bInCover && !IsCornerShotTarget(Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation()) && !BeginOpenShotFromCover(Target))
 	{
-		return; // shimmying: the shot waits for the slot
+		return TEXT("open shot waits (shimmying)");
 	}
 
 	// Turn towards target smoothly (the barrel onto it, see UpdateCombatFacing); in cover the back stays to the wall.
@@ -554,7 +580,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 	if (const UOperativeAnimInstance* ArmsAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
 		ArmsAnim && ArmsAnim->IsThrowingGrenade())
 	{
-		return;
+		return TEXT("throwing a grenade");
 	}
 	if (!bInCover)
 	{
@@ -568,7 +594,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		// User rule 2026-10-07: no shot where he does not aim - first the turn, then the shot.
 		if (GetShotAimResidualDeg(AimAt) > AimConeDeg)
 		{
-			return;
+			return TEXT("open stance: turning, outside the aim cone");
 		}
 	}
 
@@ -580,7 +606,7 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		UpdateCoverFacing(/*bAllowSnap*/ false);
 		if (!CoverFacingRules::IsFacingAligned(GetActorRotation().Yaw, CoverSlot, CoverFacing, FCoverFacingConfig().FacingToleranceDeg))
 		{
-			return;
+			return TEXT("cover: facing not aligned");
 		}
 		// Sustained corner aim (user request 2026-10-07): a corner-shot target in sight keeps him leaned out; after a duck
 		// for safety he stays behind the corner for the re-entry delay.
@@ -592,31 +618,86 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 		}
 		else if (Now < CornerAimDuckUntil)
 		{
-			return;
+			return TEXT("cover: re-entry delay after a duck");
 		}
 		// Arriving at an edge: no shot until the snap to the corner stand-off is decided / done (CornerEntrySmoke 2026-10-07:
 		// a shot fired from the wall while side-stepping to the corner, the rifle not on the target).
 		if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && (bCoverSnapPending || (bShimmying && bCoverAutoSnap)))
 		{
-			return;
+			return TEXT("cover: corner snap pending");
 		}
 		// The corner hold stance fires only once the upper body twisted onto the target (user rule 2026-10-07).
 		if (IsCornerHoldSpot() && (!bCornerAimActive || GetShotAimResidualDeg(AimAt) > AimConeDeg))
 		{
-			return;
+			return bCornerAimActive ? TEXT("corner hold: outside the aim cone") : TEXT("corner hold: aim not active");
 		}
 	}
-	if (ShootTimer <= 0.0f && MisfireCooldownTimer <= 0.0f && SniperStep == ESniperFireStep::Ready)
+	if (ShootTimer > 0.0f || MisfireCooldownTimer > 0.0f || SniperStep != ESniperFireStep::Ready)
 	{
-		if (bInCover)
-		{
-			BeginCoverShot(); // Sprint 12: lean out, or keep the head down for a blind shot
-		}
-		TGuardValue<bool> Blind(bBlindShot, Shot.bBlind);
-		TGuardValue<FVector> Aim(BlindAimPoint, Shot.AimPoint);
-		TGuardValue<bool> CoverBlind(bCoverBlindShot, bInCover && CoverFireMode == ECoverFireMode::BlindFire);
-		ShootAtTarget(Target, Shot.Cover);
+		return TEXT("cooldown");
 	}
+	if (bInCover)
+	{
+		BeginCoverShot(); // Sprint 12: lean out, or keep the head down for a blind shot
+	}
+	TGuardValue<bool> Blind(bBlindShot, Shot.bBlind);
+	TGuardValue<FVector> Aim(BlindAimPoint, Shot.AimPoint);
+	TGuardValue<bool> CoverBlind(bCoverBlindShot, bInCover && CoverFireMode == ECoverFireMode::BlindFire);
+	ShootAtTarget(Target, Shot.Cover);
+	return TEXT("fired");
+}
+
+void AOperativeCharacter::TraceFireDecision(const TCHAR* Reason, const AActor* Target)
+{
+	UWorld* World = GetWorld();
+	if (!World || OperativeFireTrace::CVarFireTrace.GetValueOnGameThread() == 0 || bTacticalCeaseFire)
+	{
+		return;
+	}
+	const bool bFired = FCString::Strcmp(Reason, TEXT("fired")) == 0;
+	const bool bCooldown = FCString::Strcmp(Reason, TEXT("cooldown")) == 0;
+	const double Now = World->GetTimeSeconds();
+	// Fired <-> cooldown is the normal rhythm of a burst: not a change worth a line.
+	const bool bRhythm = (bCooldown && LastFireTraceReason == TEXT("fired")) || (bFired && LastFireTraceReason == TEXT("cooldown"));
+	const bool bChanged = LastFireTraceReason != Reason && !bRhythm;
+	if (!bChanged && (bFired || bCooldown || Now - LastFireTraceTime < 2.0))
+	{
+		return;
+	}
+	// The nearest live enemies and why each one is (not) a shot.
+	TArray<TPair<float, AActor*>> Near;
+	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
+	{
+		const UHealthComponent* Health = IsValid(Enemy) ? Enemy->FindComponentByClass<UHealthComponent>() : nullptr;
+		if (IsValid(Enemy) && (!Health || Health->IsAlive()))
+		{
+			Near.Emplace(static_cast<float>(FVector::Dist2D(Enemy->GetActorLocation(), GetActorLocation())), Enemy);
+		}
+	}
+	Near.Sort([](const TPair<float, AActor*>& A, const TPair<float, AActor*>& B) { return A.Key < B.Key; });
+	// Unchanged: a line every 2 s only while no shot leaves with an enemy within 5 m.
+	if (!bChanged && (Near.IsEmpty() || Near[0].Key > 500.f))
+	{
+		return;
+	}
+	LastFireTraceReason = Reason;
+	LastFireTraceTime = Now;
+	FString Enemies;
+	for (int32 Index = 0; Index < FMath::Min(3, Near.Num()); ++Index)
+	{
+		AActor* Enemy = Near[Index].Value;
+		FShootCandidate Candidate;
+		bool bBlocked = false;
+		const TCHAR* LineReason = TEXT("");
+		EvaluateShotLine(Enemy, true, Candidate, bBlocked, &LineReason);
+		Enemies += FString::Printf(TEXT(" | %s %.0f cm: %s%s, residual %.0f deg%s"), *Enemy->GetName(), Near[Index].Key, LineReason,
+			Enemy->IsHidden() ? TEXT(" (hidden)") : TEXT(""), GetShotAimResidualDeg(Enemy->GetActorLocation()),
+			IsCornerShotTarget(Enemy->GetActorLocation()) ? TEXT(" corner") : TEXT(""));
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[FireTrace] %s: %s, target %s | %s, stance %d, clip %d, shoot timer %.2f, return pending %d%s"),
+		*DisplayName.ToString(), Reason, Target ? *Target->GetName() : TEXT("-"),
+		bInCover ? (bCornerAimActive ? TEXT("cover (corner aim)") : TEXT("cover")) : TEXT("open"), static_cast<int32>(Stance),
+		CurrentClip, ShootTimer, bOpenShotReturnPending ? 1 : 0, *Enemies);
 }
 
 bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)

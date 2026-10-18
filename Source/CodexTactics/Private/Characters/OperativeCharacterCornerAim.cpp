@@ -426,6 +426,12 @@ void AOperativeCharacter::UpdateOpenShotReturn()
 	const float Reach = GetCornerHoldReachDeg();
 	const FVector CornerOrigin = CornerFireOriginFor(OpenShotReturnSlot, OpenShotReturnFacing,
 		FVector(OpenShotReturnSlot.WorldLocation.X, OpenShotReturnSlot.WorldLocation.Y, GetMuzzleLocation().Z));
+	// Bug hunt 2026-10-18 (CornerHoldSmoke 1 in 3): a rusher waiting right at his side round the wall's end (covered by the
+	// corner stance, no shot at it from here, standing still) no longer leaves him pinned in the open - he went 40 s without
+	// a shot while a frostbitten stood 1.7 m off behind the corner. Back at the corner he fights it from the lean-out.
+	bool bAnyPins = false;
+	bool bAnyWaitsRoundCorner = false;
+	bool bAnyWaitsAtHisSide = false;
 	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
 	{
 		if (Enemy->IsDying() || !Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive() || Enemy->CustomTimeDilation <= 0.f)
@@ -438,13 +444,25 @@ void AOperativeCharacter::UpdateOpenShotReturn()
 		// A rusher close by keeps him facing it; one on the open side keeps him out while in sight within 30 m, or - out of
 		// sight for a moment (a pack falling back to flank) - within twice that rush distance (CornerHoldSmoke 2026-10-07:
 		// he stepped back to the wall while two flankers circled out of sight, then out again).
-		const bool bKeepsOut = Distance <= FlankRushBreakCm
-			|| (!bCoveredByCorner && (Distance <= 2.f * FlankRushBreakCm || (!Enemy->IsHidden() && Distance <= 3000.f)));
-		if (bKeepsOut)
+		const bool bOnTheMove = Enemy->GetVelocity().SizeSquared2D() > FMath::Square(CoverFacingRules::RusherOnTheMoveCmPerSec);
+		const bool bHittableHere = Distance <= FlankRushBreakCm && bCoveredByCorner && !bOnTheMove ? CanHitEnemy(Enemy) : true; // traced only when it matters
+		switch (CoverFacingRules::ClassifyOpenShotThreat(Distance, FlankRushBreakCm, bCoveredByCorner, bHittableHere, bOnTheMove))
 		{
-			OpenShotLastTime = World->GetTimeSeconds();
+		case CoverFacingRules::EOpenShotThreat::Pins: bAnyPins = true; break;
+		case CoverFacingRules::EOpenShotThreat::WaitsRoundCorner: bAnyWaitsRoundCorner = true; break;
+		case CoverFacingRules::EOpenShotThreat::WaitsAtHisSide: bAnyWaitsAtHisSide = true; break;
+		default:
+			bAnyPins |= !bCoveredByCorner && (Distance <= 2.f * FlankRushBreakCm || (!Enemy->IsHidden() && Distance <= 3000.f));
 			break;
 		}
+		if (bAnyPins)
+		{
+			break;
+		}
+	}
+	if (CoverFacingRules::OpenShotThreatsKeepHimOut(bAnyPins, bAnyWaitsRoundCorner, bAnyWaitsAtHisSide))
+	{
+		OpenShotLastTime = World->GetTimeSeconds();
 	}
 	if (World->GetTimeSeconds() - OpenShotLastTime < OpenShotReturnDelaySeconds || World->GetTimeSeconds() - OpenShotStartTime < OpenShotCommitSeconds
 		|| GetVelocity().SizeSquared2D() > 4.f || bIsReloading)

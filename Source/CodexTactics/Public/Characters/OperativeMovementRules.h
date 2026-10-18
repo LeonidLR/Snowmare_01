@@ -163,6 +163,16 @@ namespace OperativeMovementRules
 	/** True when a move issued now waits for the stance change (it is queued / retried after ComputeMoveHold seconds). */
 	CODEXTACTICS_API bool ShouldDeferMove(float MoveHoldSeconds);
 
+	/** Detour crowd's overshoot ("moved too far") finish is allowed only this close to the path's end, cm (2026-10-18). */
+	constexpr float CrowdOvershootTestRangeCm = 120.f;
+
+	/**
+	 * May the crowd path following finish a move because the agent's direction points away from the goal? Only near the
+	 * path's end, where an overshoot can happen (UOperativeCrowdFollowingComponent). Farther away it ended fresh orders at
+	 * once with 0 cm moved (a stale direction from the last walk / avoidance pushing off a hound on the way).
+	 */
+	CODEXTACTICS_API bool AllowsCrowdOvershootFinish(float DistanceToPathEndCm);
+
 	/** Below this ground speed, cm/s, and without a move order a body counts as standing still for a prone order. */
 	constexpr float ProneStillSpeedCm = 10.f;
 

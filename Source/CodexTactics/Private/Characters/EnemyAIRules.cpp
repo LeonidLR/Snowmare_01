@@ -169,6 +169,18 @@ bool EnemyAIRules::CanMelee(float DistanceCm, float HeightDifferenceCm, float At
 	return DistanceCm <= AttackRangeCm && HeightDifferenceCm <= 120.f;
 }
 
+float EnemyAIRules::MeleeReachPlanar(float AttackRangeCm, float HeightDifferenceCm)
+{
+	return FMath::Sqrt(FMath::Max(0.f, FMath::Square(AttackRangeCm) - FMath::Square(HeightDifferenceCm)));
+}
+
+float EnemyAIRules::MeleeApproachAcceptance(float AttackRangeCm, float HeightDifferenceCm, float SelfRadiusCm, float GoalRadiusCm, float MarginCm)
+{
+	const float Inside = MeleeReachPlanar(AttackRangeCm, HeightDifferenceCm) - SelfRadiusCm - GoalRadiusCm - MarginCm;
+	// Floored to 5 cm: a few cm of feet height jitter must not change the request (a new acceptance = a new MoveTo, RepathRules).
+	return FMath::Clamp(FMath::FloorToFloat(Inside / 5.f) * 5.f, 0.f, FMath::Max(0.f, AttackRangeCm * 0.5f));
+}
+
 FVector EnemyAIRules::FleeDirection(const FVector& Enemy, const FVector& Fire, const FVector* Target)
 {
 	FVector Away = FVector(Enemy.X - Fire.X, Enemy.Y - Fire.Y, 0.f).GetSafeNormal();

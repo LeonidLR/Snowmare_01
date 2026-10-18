@@ -38,6 +38,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "HAL/IConsoleManager.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/EnemyRegistrySubsystem.h"
@@ -117,6 +118,14 @@ namespace EnemyCharacterLocal
 {
 	/** The archetype a spawner is spawning now (FScopedSpawnArchetype); unset = a placed enemy. Game thread only. */
 	TOptional<EEnemyArchetype> SpawnArchetype;
+
+	/**
+	 * Bug hunt 2026-10-18 (open user decision, HANDOFF §7): melee enemies close in until they can bite
+	 * (EnemyAIRules::MeleeApproachAcceptance). 0 (default) = the shipped behaviour: they stop at AttackRange x 0.5 + both
+	 * capsule radii, i.e. hounds / frostbitten 1.65-1.75 m off - outside their 1.5 m planar reach.
+	 */
+	static TAutoConsoleVariable<int32> CVarMeleeCloseIn(TEXT("Codex.Enemy.MeleeCloseIn"), 0,
+		TEXT("1: melee enemies close in to their bite reach (MoveToActor acceptance minus the capsule radii); 0: the shipped AttackRange x 0.5 stop (1.65-1.75 m off a hound's 1.5 m reach)"));
 }
 
 AEnemyCharacter::FScopedSpawnArchetype::FScopedSpawnArchetype(EEnemyArchetype InArchetype)
@@ -775,7 +784,13 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 			}
 			else
 			{
-				RequestAIMoveToActor(AIC, Target, AttackRange * 0.5f);
+				// MoveToActor's reach test adds both capsule radii: AttackRange x 0.5 stops hounds 1.7 m off, out of their own
+				// reach (bug hunt 2026-10-18). Codex.Enemy.MeleeCloseIn 1 closes in to the bite (user decision pending).
+				const float Acceptance = EnemyCharacterLocal::CVarMeleeCloseIn.GetValueOnGameThread() != 0
+					? EnemyAIRules::MeleeApproachAcceptance(AttackRange, FMath::Abs(TargetPosition.Z - Feet.Z), GetSimpleCollisionRadius(),
+						Target->GetSimpleCollisionRadius())
+					: AttackRange * 0.5f;
+				RequestAIMoveToActor(AIC, Target, Acceptance);
 			}
 		}
 	}

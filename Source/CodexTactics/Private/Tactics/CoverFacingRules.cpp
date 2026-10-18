@@ -232,6 +232,24 @@ namespace CoverFacingRules
 		return bAtHoldSpot && (bInFight || bThreatFresh);
 	}
 
+	EOpenShotThreat ClassifyOpenShotThreat(float DistanceCm, float BreakCm, bool bCoveredByCorner, bool bHittableFromOpen, bool bOnTheMove)
+	{
+		if (DistanceCm > BreakCm)
+		{
+			return EOpenShotThreat::None;
+		}
+		if (bHittableFromOpen || !bCoveredByCorner || bOnTheMove)
+		{
+			return EOpenShotThreat::Pins;
+		}
+		return DistanceCm <= CornerWaitReleaseCm ? EOpenShotThreat::WaitsAtHisSide : EOpenShotThreat::WaitsRoundCorner;
+	}
+
+	bool OpenShotThreatsKeepHimOut(bool bAnyPins, bool bAnyWaitsRoundCorner, bool bAnyWaitsAtHisSide)
+	{
+		return bAnyPins || (bAnyWaitsRoundCorner && !bAnyWaitsAtHisSide);
+	}
+
 	float EntryHeldYawFraction(float EnterWeight, bool bClipSeen, float SecondsSinceEntry, float AwaitSeconds)
 	{
 		if (EnterWeight >= 0.f)

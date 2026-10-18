@@ -61,6 +61,11 @@ namespace OperativeMovementRules
 		return MoveHoldSeconds > MoveHoldThreshold;
 	}
 
+	bool AllowsCrowdOvershootFinish(float DistanceToPathEndCm)
+	{
+		return DistanceToPathEndCm <= CrowdOvershootTestRangeCm;
+	}
+
 	EProneEntry DecideProneEntry(const FOperativeMovementConfig& Config, EOperativeStance Stance, float Speed2D, bool bSprinting,
 		bool bHasMoveOrder, bool bBlocked)
 	{
