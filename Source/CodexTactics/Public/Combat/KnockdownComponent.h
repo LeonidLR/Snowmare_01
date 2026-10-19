@@ -122,6 +122,12 @@ public:
 
 	/** Keeps the latest order given while he is down; it runs once he is up (real time and turn-based). */
 	void BufferOrder(TFunction<void()> Order);
+
+	/**
+	 * Rev 2026-10-19 (a load in place must not keep the pre-load world): ends a knockdown at once without its get-up - the held fall /
+	 * get-up montage stops, the buffered order is dropped, the phase goes back to None (the owner restores movement in its handler).
+	 */
+	void ResetForLoad();
 	bool HasBufferedOrder() const { return static_cast<bool>(BufferedOrder); }
 
 	/**

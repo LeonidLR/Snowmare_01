@@ -1323,6 +1323,14 @@ public:
 	 */
 	void ResetBodyOffsets();
 
+	/**
+	 * Rev 2026-10-19 (user: "the save keeps the state the character was in BEFORE the load"): a load in place applies the saved fields on
+	 * this LIVE operative - first everything transient goes: the knockdown (no get-up), panic / stress, cover / pending cover / shimmy /
+	 * corner aim / manual peek, the prone dive (no crawl-on), every montage, the body offsets, the move, the autonomy anchor / target.
+	 * (Player loads reopen the level - USaveGameSubsystem::LoadGameWithTravel - so this is the dev / smoke path.)
+	 */
+	void ResetTransientStateForLoad();
+
 	/** A friendly (squad) grenade that has landed within the danger radius also sends him behind the corner (default off). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
 	bool bCornerAimDuckForFriendlyGrenades = false;

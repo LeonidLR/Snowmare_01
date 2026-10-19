@@ -75,6 +75,13 @@ public:
 
 	void SetStressForTesting(float Value) { Stress = FMath::Clamp(Value, 0.f, 100.f); }
 
+	/** Rev 2026-10-19: a load in place - no panic, no stress carried over from the pre-load fight. */
+	void ResetForLoad()
+	{
+		RecoverFromPanic(TEXT("load"), true);
+		Stress = 0.f;
+	}
+
 	/** Real-time wave combat (panic and stress only build up there; Godot is_combat_active). */
 	bool IsCombatActive() const;
 

@@ -92,13 +92,9 @@ bool CodexSaveBridge::LoadSlot(UWorld* World, const FString& SlotName, bool& bOu
 	{
 		return false;
 	}
-	const FString CurrentMap = World->GetOutermost() ? UWorld::RemovePIEPrefix(World->GetOutermost()->GetName()) : FString();
-	const UMissionSubsystem* Mission = World->GetSubsystem<UMissionSubsystem>();
-	const bool bSameLevel = Mission && Mission->IsMissionWorld() && (Info.MapName.IsEmpty() || Info.MapName == CurrentMap);
-	if (bSameLevel)
-	{
-		return Saves->LoadFromSlotWithMessage(SlotName);
-	}
+	// Rev 2026-10-19 (user: "a load keeps the state the character was in BEFORE the load - data gets mixed"): a load always reopens the
+	// save's level (also the current one) and applies the save to the fresh world behind the load cover - nothing of the pre-load world
+	// (a get-up montage, cover, a body offset, AI paths, timers...) can survive. It used to load in place on the same level.
 	bOutTravelled = true;
 	return LoadWithTravel(World, SlotName);
 }

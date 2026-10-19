@@ -1,4 +1,5 @@
 #include "Core/SaveGameSubsystem.h"
+#include "Interactables/InteractionSubsystem.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "AI/StealthLureSubsystem.h"
@@ -301,7 +302,8 @@ namespace
 
 	void ApplyOperative(AOperativeCharacter* Member, const TSharedPtr<FJsonObject>& Info)
 	{
-		Member->StopOperative();
+		// Rev 2026-10-19: nothing of the pre-load world stays on him (a knockdown's get-up, cover, montages, the body offset, panic...).
+		Member->ResetTransientStateForLoad();
 		// Stance first: changing it moves the capsule; the saved position is the one of the saved stance.
 		Member->SetStance(static_cast<EOperativeStance>(FMath::Clamp(SaveInt(Info, TEXT("current_stance"), 0), 0, 2)));
 		Member->TeleportTo(LoadVector(Info, TEXT("pos"), Member->GetActorLocation()),
@@ -604,12 +606,12 @@ namespace
 	{
 		TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
 		Entry->SetStringField(TEXT("name"), Enemy->GetName());
-		Entry->SetStringField(TEXT("class"), Enemy->GetClass()->GetPathName());
-		Entry->SetStringField(TEXT("archetype"), SaveEnumName(Enemy->GetArchetype()));
 		// Rev 2026-10-19 (user: the patrol speed 65 set on the placed enemy came back as 190 after a load): an enemy the load has to
 		// recreate (no live actor of that name) gets these back; a matched placed actor keeps its own (map) values.
 		Entry->SetNumberField(TEXT("patrol_walk_speed"), Enemy->PatrolWalkSpeed);
 		Entry->SetBoolField(TEXT("level_enemy"), bLevelEnemy);
+		Entry->SetStringField(TEXT("class"), Enemy->GetClass()->GetPathName());
+		Entry->SetStringField(TEXT("archetype"), SaveEnumName(Enemy->GetArchetype()));
 		Entry->SetArrayField(TEXT("pos"), SaveVector(Enemy->GetActorLocation()));
 		Entry->SetNumberField(TEXT("rot_y"), Enemy->GetActorRotation().Yaw);
 		const UHealthComponent* Health = Enemy->GetHealthComponent();
@@ -1160,6 +1162,17 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 		Vehicles->PrepareForLoad();
 	}
 
+	// Rev 2026-10-19: walks to objects / use orders of the pre-load world are dropped.
+	if (UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>())
+	{
+		Interactions->CancelInteraction();
+		Interactions->CloseLootDialog();
+		for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+		{
+			Interactions->CancelUseOrder(Member);
+		}
+	}
+
 	// Whatever was being carried / placed in this session is dropped first (the objects get their saved places below).
 	if (URelocationSubsystem* Relocation = World->GetSubsystem<URelocationSubsystem>())
 	{
@@ -1280,16 +1293,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			{
 				Squad->SetLeader(NewLeader);
 			}
-			const bool bSolo = SaveBool(*GameState, TEXT("is_solo_mode"), false);
-			if (bSolo && !Squad->IsSoloMode())
-			{
-				Squad->EnterSoloMode();
-			}
-			else if (!bSolo && Squad->IsSoloMode())
-			{
-				Squad->ExitSoloMode();
-			}
-			Squad->RestoreTrapSolo(SaveBool(*GameState, TEXT("is_trap_solo"), false));
+			Squad->RestoreSoloForLoad(SaveBool(*GameState, TEXT("is_solo_mode"), false), SaveBool(*GameState, TEXT("is_trap_solo"), false));
 			ESquadFirePosture Posture = FirePostureRules::DefaultPosture;
 			if (LoadEnumName(SaveString(*GameState, TEXT("squad_posture")), Posture))
 			{
@@ -1553,14 +1557,14 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			}
 			else
 			{
-				Enemy->Destroy();
-			}
-		}
-		for (const TPair<FString, TSharedPtr<FJsonObject>>& Pair : Saved)
 				// Rev 2026-10-19: out of the way first - a destroyed actor keeps its name until GC, and the respawn below would get a
 				// new one ("..._C_12"), which the next save stored and a later load (on a fresh level) no longer matched.
 				Enemy->Rename(*MakeUniqueObjectName(Enemy->GetOuter(), Enemy->GetClass(), TEXT("LoadDiscardedEnemy")).ToString(), nullptr,
 					REN_DontCreateRedirectors | REN_ForceNoResetLoaders | REN_NonTransactional);
+				Enemy->Destroy();
+			}
+		}
+		for (const TPair<FString, TSharedPtr<FJsonObject>>& Pair : Saved)
 		{
 			const TSharedPtr<FJsonObject>& Entry = Pair.Value;
 			AEnemyCharacter* Enemy = EnemyBySavedName.FindRef(Pair.Key);
@@ -1589,10 +1593,6 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 					UE_LOG(LogCodexTactics, Warning, TEXT("Save: enemy %s (%s) could not be recreated"), *Pair.Key, *SaveString(Entry, TEXT("class")));
 					continue;
 				}
-				EnemyBySavedName.Add(Pair.Key, Enemy);
-			}
-			if (AAIController* AIC = Cast<AAIController>(Enemy->GetController()))
-			{
 				// Rev 2026-10-19: what the class default does not know - the designer's patrol speed and "placed in the level" (contact with
 				// a level enemy starts the fight on a "button" level; a recreated actor was not recorded at world begin play).
 				Enemy->PatrolWalkSpeed = SaveFloat(Entry, TEXT("patrol_walk_speed"), Enemy->PatrolWalkSpeed);
@@ -1603,6 +1603,10 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 						Encounter->MarkLevelEnemy(Enemy);
 					}
 				}
+				EnemyBySavedName.Add(Pair.Key, Enemy);
+			}
+			if (AAIController* AIC = Cast<AAIController>(Enemy->GetController()))
+			{
 				AIC->StopMovement();
 			}
 			Enemy->TeleportTo(Location, Rotation, false, true);

@@ -45,7 +45,7 @@
     "SaveLoadSmoke": { "exclusive": true },
     "SaveRoundTripSmoke": { "exclusive": true },
     "TutorialSmoke": { "exclusive": true },
-    "TutorialSaveSmoke": { "exclusive": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json" },
+    "TutorialSaveSmoke": { "exclusive": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600 },
     "PMCTripwireSmoke": { "exclusive": true },
     "PauseMenuSmoke": { "exclusive": true },
     "ControlsScreenSmoke": { "exclusive": true },

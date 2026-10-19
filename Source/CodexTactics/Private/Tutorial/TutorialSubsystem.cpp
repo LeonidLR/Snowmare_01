@@ -1743,9 +1743,19 @@ bool UTutorialSubsystem::RetryFromCheckpoint()
 	}
 	WriteTelemetry(TEXT("retry"), NAME_None, Machine.GetCurrentBeat(), 0.f);
 	bRetryPrompt = false;
-	const bool bLoaded = Saves->LoadGame(CheckpointSlot);
 	LessonDownCount = 0;
-	return bLoaded;
+	// Rev 2026-10-19 (user: after "Retry from checkpoint" the Commander was still getting up from the knockdown that made him retry, the
+	// squad fled instead of fighting, Solo did not hold): the checkpoint reopens the level and is applied to the fresh world (as F9).
+	// Steps injected at runtime (a dev command / smoke, not the level's own demo settings) cannot be rebuilt by a reload: those load in
+	// place (USaveGameSubsystem::LoadGame resets every operative's transient state first).
+	const UDemoModeSubsystem* Demo = GetWorld()->GetSubsystem<UDemoModeSubsystem>();
+	const bool bLevelSteps = Demo && Demo->IsDemo() && Demo->GetSettings().bTutorial && Demo->GetSettings().TutorialSteps == StepsFile;
+	if (bLevelSteps)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: retry - the checkpoint reopens the level"));
+		return Saves->LoadGameWithTravel(CheckpointSlot);
+	}
+	return Saves->LoadGame(CheckpointSlot);
 }
 
 // --- Save -----------------------------------------------------------------------------------------------------------
