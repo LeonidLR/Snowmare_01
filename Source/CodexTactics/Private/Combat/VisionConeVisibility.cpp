@@ -16,7 +16,7 @@ namespace
 		return FVector(Dir.X, Dir.Y, HeightCm);
 	}
 
-	void AddDoubleSided(TArray<int32>& Triangles, int32 A, int32 B, int32 C)
+	void AddVisibilityDoubleSided(TArray<int32>& Triangles, int32 A, int32 B, int32 C)
 	{
 		Triangles.Append({ A, B, C, A, C, B });
 	}
@@ -28,13 +28,13 @@ namespace
 		if (StartA < 0.01f && StartB < 0.01f)
 		{
 			Mesh.Vertices.Append({ FVector(0.f, 0.f, HeightCm), PointAt(AngleA, EndA, HeightCm), PointAt(AngleB, EndB, HeightCm) });
-			AddDoubleSided(Mesh.Triangles, Base, Base + 1, Base + 2);
+			AddVisibilityDoubleSided(Mesh.Triangles, Base, Base + 1, Base + 2);
 			return;
 		}
 		Mesh.Vertices.Append({ PointAt(AngleA, StartA, HeightCm), PointAt(AngleA, EndA, HeightCm), PointAt(AngleB, EndB, HeightCm),
 			PointAt(AngleB, StartB, HeightCm) });
-		AddDoubleSided(Mesh.Triangles, Base, Base + 1, Base + 2);
-		AddDoubleSided(Mesh.Triangles, Base, Base + 2, Base + 3);
+		AddVisibilityDoubleSided(Mesh.Triangles, Base, Base + 1, Base + 2);
+		AddVisibilityDoubleSided(Mesh.Triangles, Base, Base + 2, Base + 3);
 	}
 
 	float FarEnd(const FVisionConeRay& Ray)
@@ -88,8 +88,8 @@ namespace
 			const int32 Base = Mesh.Vertices.Num();
 			Mesh.Vertices.Append({ FVector(Points[Index], HeightCm), FVector(Points[Next], HeightCm), FVector(Inner[Next], HeightCm),
 				FVector(Inner[Index], HeightCm) });
-			AddDoubleSided(Mesh.Triangles, Base, Base + 1, Base + 2);
-			AddDoubleSided(Mesh.Triangles, Base, Base + 2, Base + 3);
+			AddVisibilityDoubleSided(Mesh.Triangles, Base, Base + 1, Base + 2);
+			AddVisibilityDoubleSided(Mesh.Triangles, Base, Base + 2, Base + 3);
 		}
 	}
 
