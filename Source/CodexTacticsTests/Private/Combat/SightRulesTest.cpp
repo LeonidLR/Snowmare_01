@@ -4,6 +4,7 @@
 #include "Combat/TacticalSightSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Misc/AutomationTest.h"
+#include "UI/MinimapSubsystem.h"
 #include "UObject/Package.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightHeightsTest, "CodexTactics.Combat.Sight.CoverOcclusion",
@@ -92,5 +93,44 @@ bool FSightTouchRevealTest::RunTest(const FString&)
 	TestTrue(TEXT("at the reveal distance"), SightRules::IsWithinTouchReveal(SightRules::SquadTouchRevealCm));
 	TestFalse(TEXT("3 m off behind a barricade stays hidden (SightSmoke)"), SightRules::IsWithinTouchReveal(300.f));
 	TestTrue(TEXT("closer than any sight check (2.5 m and up)"), SightRules::SquadTouchRevealCm < 250.f);
+	return true;
+}
+
+// Game designer 2026-10-19 (symmetric sight): "prone behind a wall the enemies do not see us, yet we still see them". An operative sees
+// an enemy only along a clear line from HIS eye height for his stance to the enemy's profile - the same rule the enemies use - while
+// exploring too. A 1.2 m wall 1 m in front of him, a man-sized enemy (profile 150 cm) 6 m beyond it.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightEyeHeightWallTest, "CodexTactics.Combat.Sight.EyeHeightVsWall",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSightEyeHeightWallTest::RunTest(const FString&)
+{
+	using namespace SightRules;
+	constexpr float WallTop = 120.f;
+	constexpr float WallAt = 100.f;
+	constexpr float EnemyAt = 700.f;
+	constexpr float EnemyProfile = 150.f;
+	TestFalse(TEXT("prone (25 cm eyes) 1 m behind a 1.2 m wall: the enemy is hidden"),
+		ClearsCover(EyeHeight(EOperativeStance::Prone), EnemyProfile, WallAt, EnemyAt, WallTop));
+	TestFalse(TEXT("crouched (95 cm eyes): still hidden"), ClearsCover(EyeHeight(EOperativeStance::Crouching), EnemyProfile, WallAt, EnemyAt, WallTop));
+	TestTrue(TEXT("standing (160 cm eyes): seen over the wall"), ClearsCover(EyeHeight(EOperativeStance::Standing), EnemyProfile, WallAt, EnemyAt, WallTop));
+	// Symmetric: the same wall hides the prone operative from that enemy (its eyes ~150 cm, his profile 25 cm).
+	TestFalse(TEXT("... and the enemy does not see the prone operative either"), ClearsCover(150.f, ProfileHeight(EOperativeStance::Prone), EnemyAt - WallAt, EnemyAt, WallTop));
+	// A low (60 cm) barricade does not hide a standing enemy from a crouched operative.
+	TestTrue(TEXT("crouched over a 60 cm barricade: seen"), ClearsCover(EyeHeight(EOperativeStance::Crouching), EnemyProfile, WallAt, EnemyAt, CoverHeightCm));
+
+	// When the squad's own sight runs: the fight (real time / pause) and - since 2026-10-19 - exploring.
+	TestTrue(TEXT("exploring: on"), IsSquadSightPhase(ECodexGamePhase::Exploration, ECodexCombatMode::None, true));
+	TestFalse(TEXT("exploring with Codex.Sight.Exploration 0: off (the old rule)"), IsSquadSightPhase(ECodexGamePhase::Exploration, ECodexCombatMode::None, false));
+	TestTrue(TEXT("real-time fight: on"), IsSquadSightPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, false));
+	TestTrue(TEXT("tactical pause: on"), IsSquadSightPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause, true));
+	TestFalse(TEXT("turn-based: its own rules"), IsSquadSightPhase(ECodexGamePhase::WaveCombat, ECodexCombatMode::TurnBased, true));
+	TestFalse(TEXT("after the fight: everything shown"), IsSquadSightPhase(ECodexGamePhase::PostCombat, ECodexCombatMode::None, true));
+
+	// What the player sees for an enemy nobody sees: hidden; a last-known silhouette that fades exploring (with the minimap icon).
+	TestFalse(TEXT("a fresh silhouette stays"), ShouldDropLastKnownGhost(false, false, 3.f));
+	TestTrue(TEXT("exploring: it fades after the minimap's fade time"), ShouldDropLastKnownGhost(false, false, LastKnownFadeSeconds));
+	TestFalse(TEXT("a heard one follows the sound"), ShouldDropLastKnownGhost(false, true, 60.f));
+	TestFalse(TEXT("in a fight it stays (blind fire)"), ShouldDropLastKnownGhost(true, false, 60.f));
+	TestEqual(TEXT("one fade time for the world and the minimap"), UMinimapSubsystem::EnemyFadeSeconds, LastKnownFadeSeconds);
 	return true;
 }

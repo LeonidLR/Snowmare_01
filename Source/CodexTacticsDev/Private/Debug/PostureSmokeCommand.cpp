@@ -1,11 +1,15 @@
-// Dev-only headless check of the fire postures (user request 2026-10-06, FirePostureRules) on L_MovementTest (not saved):
+// Dev-only headless check of the fire postures (user request 2026-10-06, FirePostureRules; semantics 2026-10-19) on L_MovementTest
+// (not saved):
 //   Scripts/smoke.ps1 -Command CodexTactics.PostureSmoke -Log Smoke-Posture.log
-// The level's enemies are removed and the level is made an ambush level; a frost hound (senses off) patrols ~9 m ahead.
+// The level's enemies are removed; the level is a «button» level (like the Demo 01 lake) and a frost hound (senses off), placed in
+// the map (MarkLevelEnemy), patrols ~9 m ahead - contact with it starts the fight (fix 2026-10-19: Aggressive never fired there).
 //   Exploration: Passive and Defensive squads keep quiet (no fight); "/" with the leader selected turns only him
-//   Aggressive, Alt + "/" the whole squad -> they open fire on their own -> the ambush fight starts (SquadAutoFire).
-//   Fight (the hound frozen and tough): Passive -> no shot; Defensive -> no shot until the leader is attacked, then the
-//   leader fires back; a box-selected group gets its own posture (override) while the leader keeps the squad's; the
-//   leader alone gets his own; Alt + key = squad-wide (overrides cleared);
+//   Aggressive, Alt + "/" the whole squad -> they open fire on their own -> the fight starts (SquadAutoFire, the normal
+//   encounter start path).
+//   Fight (the hound frozen and tough): Passive -> no shot; Defensive -> fires at the hound, which hunts the squad (has detected
+//   it), nobody provoked; the hound parked, an UNAWARE guard (placed, on its post, senses off) in sight: Defensive -> no shot until
+//   the leader is attacked, then the leader fires back; a box-selected group gets its own posture (override) while the leader keeps
+//   the squad's; the leader alone gets his own; Alt + key = squad-wide (overrides cleared);
 //   Passive again -> the leader still obeys a Ctrl + click attack order (IssueTargetedShot).
 
 #include "CoreMinimal.h"
@@ -38,6 +42,9 @@ namespace PostureSmoke
 		int32 Stage = 0;
 		int32 Failures = 0;
 		TWeakObjectPtr<AEnemyCharacter> Hound;
+		/** The unaware guard of the Defensive check (stage 5 on). */
+		TWeakObjectPtr<AEnemyCharacter> Guard;
+		FVector GuardSpot = FVector::ZeroVector;
 		/** Shots per operative since the last reset (OnWeaponFiredNative). */
 		TMap<TWeakObjectPtr<AOperativeCharacter>, int32> Shots;
 		bool bBound = false;
@@ -71,6 +78,18 @@ namespace PostureSmoke
 		State.Stage = Stage;
 		State.Time = 0.f;
 		State.Shots.Reset();
+	}
+
+	/** Senses off: only the squad's own fire / the smoke may start anything. */
+	void DeafAndBlind(AEnemyCharacter& Enemy)
+	{
+		Enemy.bOverridePerception = true;
+		Enemy.PerceptionOverride.SightRangeCm = 0.f;
+		Enemy.PerceptionOverride.ProximityCm = 0.f;
+		Enemy.PerceptionOverride.HearWalkCm = Enemy.PerceptionOverride.HearRunCm = 0.f;
+		Enemy.PerceptionOverride.HearCrouchWalkCm = Enemy.PerceptionOverride.HearCrawlCm = 0.f;
+		Enemy.PerceptionOverride.HearGunshotCm = Enemy.PerceptionOverride.HearExplosionCm = 0.f;
+		Enemy.PerceptionOverride.SmellRadiusCm = 0.f;
 	}
 
 	bool Step(TWeakObjectPtr<UWorld> WeakWorld, TSharedRef<FState> StateRef)
@@ -118,6 +137,10 @@ namespace PostureSmoke
 			Hound->CustomTimeDilation = 0.f; // it never attacks; only the smoke's TakeHit does
 			Hound->GetHealthComponent()->Heal(100000.f);
 		}
+		if (AEnemyCharacter* Guard = State.Guard.Get())
+		{
+			Guard->GetHealthComponent()->Heal(100000.f);
+		}
 
 		switch (State.Stage)
 		{
@@ -131,7 +154,8 @@ namespace PostureSmoke
 			{
 				It->Destroy();
 			}
-			Encounter->SetCombatStartOverride(ECombatStartMode::Ambush);
+			// The Demo 01 lake case (fix 2026-10-19): a «button» level whose patrols are placed in the map.
+			Encounter->SetCombatStartOverride(ECombatStartMode::Button);
 			Squad->SetSquadPosture(ESquadFirePosture::Passive);
 			const FVector F = Leader->GetActorForwardVector().GetSafeNormal2D();
 			const FVector R = FVector::CrossProduct(FVector::UpVector, F);
@@ -154,16 +178,13 @@ namespace PostureSmoke
 			Spline->UpdateSpline();
 			Route->bPingPong = true;
 			State.Hound = Hound;
+			State.GuardSpot = A;
 			Hound->GetHealthComponent()->SetMaxHealth(100000.f);
-			// Senses off: only the squad's own fire may start the fight.
-			Hound->bOverridePerception = true;
-			Hound->PerceptionOverride.SightRangeCm = 0.f;
-			Hound->PerceptionOverride.ProximityCm = 0.f;
-			Hound->PerceptionOverride.HearWalkCm = Hound->PerceptionOverride.HearRunCm = 0.f;
-			Hound->PerceptionOverride.HearCrouchWalkCm = Hound->PerceptionOverride.HearCrawlCm = 0.f;
-			Hound->PerceptionOverride.HearGunshotCm = Hound->PerceptionOverride.HearExplosionCm = 0.f;
-			Hound->PerceptionOverride.SmellRadiusCm = 0.f;
+			DeafAndBlind(*Hound);
 			Hound->StartPatrol(Route, nullptr);
+			Encounter->MarkLevelEnemy(Hound); // placed in the map (it has a route: it keeps patrolling)
+			Check(State, !Encounter->IsAmbushCombatStart() && Encounter->IsLevelEnemy(Hound) && Hound->IsOnPatrol(),
+				TEXT("a «button» level, the patrolling hound is a level enemy (the lake setup)"));
 			Check(State, Leader->CanHitEnemy(Hound) || Leader->FindBestCombatTarget() == Hound,
 				TEXT("the hound is in the squad's sight and range"));
 			Next(State, 1);
@@ -209,7 +230,7 @@ namespace PostureSmoke
 				return true;
 			}
 			Check(State, Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime,
-				TEXT("Aggressive: the squad opens fire on the patrol it sees -> the real-time ambush fight"));
+				TEXT("Aggressive (button level, placed patrol): the squad opens fire on the patrol it sees -> the real-time fight"));
 			Check(State, Encounter->GetAmbushStarts() == 1 && Encounter->GetLastTrigger() == EAmbushTrigger::SquadAutoFire,
 				TEXT("started once, by the squad's own fire"));
 			Squad->SetSquadPosture(ESquadFirePosture::Passive);
@@ -227,22 +248,71 @@ namespace PostureSmoke
 			}
 			Check(State, TotalShots(State) == 0, FString::Printf(TEXT("fight, Passive: nobody fires on his own (%d shots)"), TotalShots(State)));
 			Squad->SetSquadPosture(ESquadFirePosture::Defensive);
+			// The (deaf and blind, frozen) hound DETECTS the squad: off its patrol, the leader its target - it hunts the squad.
+			if (Hound)
+			{
+				if (Hound->IsOnPatrol())
+				{
+					Hound->BreakPatrol(EPatrolAlertCause::Sight, Leader->GetActorLocation());
+				}
+				Hound->SetCurrentTargetForTesting(Leader);
+			}
 			Next(State, 5);
 			return true;
 		case 5:
-			if (State.Time < 2.5f)
+		{
+			// User decision 2026-10-19: Defensive engages an enemy that has detected the squad (the hound hunts it now).
+			const int32* LeaderShots = State.Shots.Find(Leader);
+			const bool bHunting = Hound && Hound->IsHuntingSquad();
+			if (TotalShots(State) == 0 && State.Time < 4.f)
 			{
 				return true;
 			}
-			Check(State, TotalShots(State) == 0, FString::Printf(TEXT("fight, Defensive, not attacked: holds fire (%d shots)"), TotalShots(State)));
+			Check(State, bHunting && TotalShots(State) > 0, FString::Printf(TEXT("fight, Defensive: the hound hunts the squad (detected it: %d) -> fired at (%d shots, leader %d)"),
+				bHunting ? 1 : 0, TotalShots(State), LeaderShots ? *LeaderShots : 0));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
-				Check(State, !Member->bProvokedThisFight, FString::Printf(TEXT("%s not provoked yet"), *Member->DisplayName.ToString()));
+				Check(State, !Member->bProvokedThisFight, FString::Printf(TEXT("%s not provoked (fired because the hound detected the squad)"), *Member->DisplayName.ToString()));
 			}
-			Leader->TakeHit(1.f, TEXT("smoke"), false, true, Hound);
+			// An UNAWARE enemy now: the hound parked, a placed guard on its post (senses off, frozen) where the hound started.
+			SmokeUtils::ParkEnemyFarAway(Hound);
+			Hound->SetActorTickEnabled(false);
+			AEnemyCharacter* Guard = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Frostbitten,
+				State.GuardSpot + FVector(0.f, 0.f, 100.f), (State.GuardSpot - Leader->GetActorLocation()).GetSafeNormal2D().Rotation());
+			if (!Guard)
+			{
+				Check(State, false, TEXT("guard spawned"));
+				return Finish(State, false);
+			}
+			State.Guard = Guard;
+			Guard->GetHealthComponent()->SetMaxHealth(100000.f);
+			DeafAndBlind(*Guard);
+			Encounter->MarkLevelEnemy(Guard); // no route: it guards its post (on patrol duty, not hunting)
+			Guard->CustomTimeDilation = 0.f;
+			Guard->SetActorTickEnabled(false);
+			Next(State, 51);
+			return true;
+		}
+		case 51:
+		{
+			AEnemyCharacter* Guard = State.Guard.Get();
+			if (State.Time < 0.5f)
+			{
+				State.Shots.Reset(); // shots already on their way at the hound
+				return true;
+			}
+			if (State.Time < 3.f)
+			{
+				return true;
+			}
+			Check(State, Guard && Guard->IsGuardingPost() && !Guard->IsHuntingSquad() && Leader->CanHitEnemy(Guard),
+				TEXT("the guard is unaware (on its post), in sight and range"));
+			Check(State, TotalShots(State) == 0, FString::Printf(TEXT("fight, Defensive, an unaware enemy, not attacked: holds fire (%d shots)"), TotalShots(State)));
+			Leader->TakeHit(1.f, TEXT("smoke"), false, true, Guard);
 			Check(State, Leader->bProvokedThisFight && Squad->IsSquadProvoked(), TEXT("the attack provokes the leader"));
 			Next(State, 6);
 			return true;
+		}
 		case 6:
 		{
 			const int32* LeaderShots = State.Shots.Find(Leader);
@@ -250,7 +320,7 @@ namespace PostureSmoke
 			{
 				return true;
 			}
-			Check(State, LeaderShots && *LeaderShots > 0, TEXT("Defensive, attacked: the leader fires back"));
+			Check(State, LeaderShots && *LeaderShots > 0, TEXT("Defensive, attacked: the leader fires back (at the unaware guard too)"));
 			// Per-operative override: a box-selected group gets its own posture.
 			TArray<AOperativeCharacter*> Others = Squad->GetMembers();
 			Others.Remove(Leader);
@@ -286,7 +356,7 @@ namespace PostureSmoke
 				return true;
 			}
 			Check(State, TotalShots(State) == 0, TEXT("Passive though provoked: no fire of its own"));
-			PC->IssueTargetedShot(Hound); // Ctrl + click: a direct order
+			PC->IssueTargetedShot(State.Guard.Get()); // Ctrl + click: a direct order
 			Next(State, 8);
 			return true;
 		default:

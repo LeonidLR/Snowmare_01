@@ -7,6 +7,11 @@
 // enemy 11 m off does not perceive a prone operative 1 m behind the barricade, does once he crouches. Animation while
 // hidden (user report 2026-10-06, T-pose silhouettes): the hidden marksman's mesh refreshes its bones every frame and gets
 // its authored tick option back when seen; a heard silhouette ticks (follows + animates), an unheard one is frozen.
+// First, EXPLORING (symmetric sight, game designer 2026-10-19: "prone behind a wall the enemies don't see us, yet we still see them"):
+// a 1.2 m wall 1 m in front of the leader, a frozen frostbitten (senses off) 6 m beyond it, the mates parked far behind: prone ->
+// the squad's sight is on in exploration, the enemy is hidden from the squad and NOT targetable (no shot line, no automatic target,
+// Ctrl + click refused - no fight), only its heard silhouette within 12 m; standing -> seen over the wall and targetable; crouched
+// -> hidden again (95 cm eyes); out of earshot the last-known silhouette fades after 12 s (exploring only).
 
 #include "CoreMinimal.h"
 
@@ -20,6 +25,7 @@
 #include "CodexTactics.h"
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/SightRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -29,6 +35,10 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/BarricadeActor.h"
+#include "Core/CodexTacticsPlayerController.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Components/StaticMeshComponent.h"
 
 namespace SightSmoke
 {
@@ -45,7 +55,26 @@ namespace SightSmoke
 		TWeakObjectPtr<AMarksmanEnemyCharacter> Marksman;
 		FVector GhostFeet = FVector::ZeroVector;
 		EVisibilityBasedAnimTickOption AuthoredTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPose;
+		/** The exploration part (2026-10-19): the 1.2 m wall and the frostbitten behind it. */
+		TWeakObjectPtr<AStaticMeshActor> Wall;
+		TWeakObjectPtr<AEnemyCharacter> Lurker;
 	};
+
+	AStaticMeshActor* SightSmokeSpawnWall(UWorld* World, const FVector& Centre, const FRotator& Rotation, const FVector& Scale)
+	{
+		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		AStaticMeshActor* Block = Cube ? World->SpawnActorDeferred<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform(Rotation, Centre, Scale),
+			nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn) : nullptr;
+		if (!Block)
+		{
+			return nullptr;
+		}
+		Block->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+		Block->GetStaticMeshComponent()->SetStaticMesh(Cube);
+		Block->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+		Block->FinishSpawning(FTransform(Rotation, Centre, Scale));
+		return Block;
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -100,8 +129,146 @@ namespace SightSmoke
 		const auto Hidden = [&]() { return Marksman && !Sight->IsVisibleToSquad(Marksman); };
 		const auto Ghost = [&]() { return Marksman ? Sight->GetGhost(Marksman) : nullptr; };
 	const auto TickOption = [&]() { return Marksman && Marksman->GetMesh() ? Marksman->GetMesh()->VisibilityBasedAnimTickOption : State.AuthoredTickOption; };
+		AEnemyCharacter* Lurker = State.Lurker.Get();
+		const auto LurkerHidden = [&]() { return Lurker && !Sight->IsVisibleToSquad(Lurker); };
 		switch (State.Stage)
 		{
+		case 100:
+		{
+			if (State.Time < 3.f)
+			{
+				return true;
+			}
+			// EXPLORING (symmetric sight 2026-10-19): a 1.2 m wall, a frostbitten 6 m beyond it, the leader prone 1 m behind it.
+			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration && Sight->IsSquadSightActive() && !Sight->IsActive(),
+				TEXT("exploring: the squad's sight runs (the fight rules do not)"));
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				It->Destroy();
+			}
+			State.Op = Squad->GetLeader();
+			Op = State.Op.Get();
+			State.F = Op->GetActorForwardVector().GetSafeNormal2D();
+			State.R = FVector::CrossProduct(FVector::UpVector, State.F);
+			State.P = Op->GetActorLocation();
+			State.GroundZ = Op->GetActorLocation().Z - Op->GetSimpleCollisionHalfHeight();
+			const FVector WallSpot = State.P + State.F * 100.f;
+			State.Wall = SightSmokeSpawnWall(World, FVector(WallSpot.X, WallSpot.Y, State.GroundZ + 60.f), State.F.Rotation(), FVector(0.3f, 5.f, 1.2f));
+			const FVector LurkerSpot = State.P + State.F * 700.f;
+			State.Lurker = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Frostbitten, LurkerSpot + FVector(0.f, 0.f, 100.f), (-State.F).Rotation());
+			Lurker = State.Lurker.Get();
+			if (!Lurker || !State.Wall.IsValid())
+			{
+				Check(State, false, TEXT("wall and frostbitten spawned"));
+				return Finish(State);
+			}
+			Lurker->bOverridePerception = true;
+			Lurker->PerceptionOverride.SightRangeCm = 0.f;
+			Lurker->PerceptionOverride.ProximityCm = 0.f;
+			Lurker->PerceptionOverride.HearWalkCm = Lurker->PerceptionOverride.HearRunCm = 0.f;
+			Lurker->PerceptionOverride.HearCrouchWalkCm = Lurker->PerceptionOverride.HearCrawlCm = 0.f;
+			Lurker->PerceptionOverride.SmellRadiusCm = 0.f;
+			Lurker->CustomTimeDilation = 0.f;
+			Lurker->SetActorTickEnabled(false);
+			Lurker->SetActorLocation(FVector(LurkerSpot.X, LurkerSpot.Y, State.GroundZ + Lurker->GetSimpleCollisionHalfHeight() + 2.f));
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->StopOperative();
+				if (Member != Op)
+				{
+					// The mates far behind (40 m): only the leader's eyes count here.
+					const FVector Back = State.P - State.F * 4000.f + State.R * (Member == Squad->GetMembers().Last() ? 200.f : -200.f);
+					Member->TeleportTo(FVector(Back.X, Back.Y, State.GroundZ + Member->GetSimpleCollisionHalfHeight() + 5.f), State.F.Rotation(), false, true);
+				}
+				Member->SetStance(EOperativeStance::Prone);
+			}
+			State.Stage = 101;
+			State.Time = 0.f;
+			return true;
+		}
+		case 101:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			Sight->Refresh();
+			Check(State, LurkerHidden() && Lurker->IsHidden(), FString::Printf(TEXT("prone 1 m behind the 1.2 m wall (eyes %.0f cm): the frostbitten 6 m beyond it is hidden from the squad"),
+				SightRules::EyeHeight(EOperativeStance::Prone)));
+			Check(State, !Op->CanHitEnemy(Lurker) && Op->FindBestCombatTarget() == nullptr, TEXT("... and not targetable (no shot line, no automatic target)"));
+			if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController()))
+			{
+				Squad->SetLeader(Op);
+				PC->IssueTargetedShot(Lurker); // Ctrl + click on it
+			}
+			Check(State, Op->GetManualPriorityTarget() == nullptr && Flow->GetPhase() == ECodexGamePhase::Exploration,
+				TEXT("Ctrl + click on the unseen enemy: refused ('Can't see it from here'), no fight"));
+			Check(State, Sight->GetGhost(Lurker) && Sight->GetGhost(Lurker)->IsHeard(), TEXT("6 m away it is heard: only a faint silhouette follows the sound"));
+			Op->SetStance(EOperativeStance::Standing);
+			State.Stage = 102;
+			State.Time = 0.f;
+			return true;
+		}
+		case 102:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			Sight->Refresh();
+			Check(State, !LurkerHidden() && !Lurker->IsHidden() && !Sight->GetGhost(Lurker), TEXT("standing (eyes 160 cm): seen over the wall, no silhouette"));
+			Check(State, Op->CanHitEnemy(Lurker), TEXT("... and targetable"));
+			Op->SetStance(EOperativeStance::Crouching);
+			State.Stage = 103;
+			State.Time = 0.f;
+			return true;
+		}
+		case 103:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			Sight->Refresh();
+			Check(State, LurkerHidden() && Sight->GetGhost(Lurker), TEXT("crouched (eyes 95 cm) behind the 1.2 m wall: hidden again, a last-known silhouette"));
+			// Out of earshot (14 m): the silhouette stays frozen, then fades like the minimap's last-known icon (exploring only).
+			const FVector Far = State.P + State.F * 1500.f;
+			Lurker->SetActorLocation(FVector(Far.X, Far.Y, State.GroundZ + Lurker->GetSimpleCollisionHalfHeight() + 2.f));
+			Op->SetStance(EOperativeStance::Prone);
+			State.Stage = 104;
+			State.Time = 0.f;
+			return true;
+		}
+		case 104:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			Sight->Refresh();
+			Check(State, LurkerHidden() && Sight->GetGhost(Lurker) && !Sight->GetGhost(Lurker)->IsHeard(), TEXT("14 m away, unheard: the last-known silhouette stays (frozen)"));
+			State.Stage = 105;
+			State.Time = 0.f;
+			return true;
+		}
+		case 105:
+		{
+			if (Sight->GetGhost(Lurker) && State.Time < 15.f)
+			{
+				return true;
+			}
+			Check(State, LurkerHidden() && !Sight->GetGhost(Lurker) && State.Time >= SightRules::LastKnownFadeSeconds - 2.f,
+				FString::Printf(TEXT("exploring: the last-known silhouette fades after ~%.0f s (gone after %.1f s; the minimap's fade)"), SightRules::LastKnownFadeSeconds, State.Time));
+			if (AStaticMeshActor* Wall = State.Wall.Get())
+			{
+				Wall->Destroy();
+			}
+			Lurker->Destroy();
+			// The Sprint 08 fight part from its start.
+			State.Stage = 0;
+			State.Time = 3.f;
+			return true;
+		}
 		case 0:
 		{
 			if (State.Time < 3.f)
@@ -287,6 +454,7 @@ namespace SightSmoke
 	{
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
+		State->Stage = 100; // the exploration part first (2026-10-19)
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
 			return Step(WeakWorld, *State);
@@ -295,7 +463,7 @@ namespace SightSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.SightSmoke"),
-		TEXT("Dev check of the Sprint 08 line of sight: 60 cm cover, prone / standing, silhouette, demask, symmetry; PASS / FAIL."),
+		TEXT("Dev check of the line of sight: exploring behind a 1.2 m wall (2026-10-19), then the Sprint 08 fight: 60 cm cover, prone / standing, silhouette, demask, symmetry; PASS / FAIL."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

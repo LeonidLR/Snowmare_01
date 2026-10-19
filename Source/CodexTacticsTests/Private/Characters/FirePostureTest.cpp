@@ -145,6 +145,65 @@ bool FPostureIndicatorTest::RunTest(const FString&)
 	return true;
 }
 
+// User decision 2026-10-19 (game designer play-test): the three postures, per TARGET - Passive never opens fire on its own,
+// Defensive returns fire / engages only enemies that attack or have detected the squad, Aggressive fires at any enemy in sight.
+POSTURE_TEST(FPosturePerTargetRulesTest, "PerTargetRules")
+bool FPosturePerTargetRulesTest::RunTest(const FString&)
+{
+	using namespace FirePostureRules;
+	const FFirePostureConfig Config;
+	// Passive: nothing, whatever the enemy does (direct orders are MayFire's business).
+	TestFalse(TEXT("Passive: an unaware enemy"), MayAutoFireAt(ESquadFirePosture::Passive, false, false, false, Config));
+	TestFalse(TEXT("Passive: an enemy that detected the squad"), MayAutoFireAt(ESquadFirePosture::Passive, false, false, true, Config));
+	TestFalse(TEXT("Passive: attacked"), MayAutoFireAt(ESquadFirePosture::Passive, true, true, true, Config));
+	TestFalse(TEXT("Passive: no automatic targets at all"), AllowsAutoTargets(ESquadFirePosture::Passive));
+	// Defensive: only the enemies that hunt the squad - until it is attacked, then any.
+	TestFalse(TEXT("Defensive: an unaware patrol is left alone"), MayAutoFireAt(ESquadFirePosture::Defensive, false, false, false, Config));
+	TestTrue(TEXT("Defensive: an enemy that detected the squad is engaged"), MayAutoFireAt(ESquadFirePosture::Defensive, false, false, true, Config));
+	TestTrue(TEXT("Defensive, attacked: returns fire at any enemy"), MayAutoFireAt(ESquadFirePosture::Defensive, true, true, false, Config));
+	TestFalse(TEXT("Defensive: a mate attacked (own-only default) does not free the unaware ones"),
+		MayAutoFireAt(ESquadFirePosture::Defensive, false, true, false, Config));
+	TestTrue(TEXT("Defensive keeps looking for detecting enemies"), AllowsAutoTargets(ESquadFirePosture::Defensive));
+	TestFalse(TEXT("Defensive, not provoked: no grenades / no target of its own (MayAutoFire)"), MayAutoFire(ESquadFirePosture::Defensive, false, false, Config));
+	// Aggressive: every enemy in sight.
+	TestTrue(TEXT("Aggressive: an unaware enemy"), MayAutoFireAt(ESquadFirePosture::Aggressive, false, false, false, Config));
+	TestTrue(TEXT("Aggressive: automatic targets"), AllowsAutoTargets(ESquadFirePosture::Aggressive));
+	// Data names (the tutorial's set_posture action).
+	ESquadFirePosture Parsed = ESquadFirePosture::Aggressive;
+	TestTrue(TEXT("parse passive"), ParseName(TEXT("passive"), Parsed) && Parsed == ESquadFirePosture::Passive);
+	TestTrue(TEXT("parse Defensive"), ParseName(TEXT("Defensive"), Parsed) && Parsed == ESquadFirePosture::Defensive);
+	TestTrue(TEXT("parse AGGRESSIVE"), ParseName(TEXT("AGGRESSIVE"), Parsed) && Parsed == ESquadFirePosture::Aggressive);
+	TestFalse(TEXT("unknown name"), ParseName(TEXT("berserk"), Parsed));
+	return true;
+}
+
+// Fix 2026-10-19 (game designer: "they see each other, yet the AGGRESSIVE squad does not shoot"): the Demo 01 lake is a «button»
+// level (combat_start "button") with enemies placed in the map; contact with a placed enemy starts the fight there
+// (LevelEncounterRules::ShouldStartFightOnContact), but the exploration opening asked for an AMBUSH level only.
+POSTURE_TEST(FPostureAggressiveButtonLevelTest, "AggressiveOpensFireOnPlacedEnemyOfButtonLevel")
+bool FPostureAggressiveButtonLevelTest::RunTest(const FString&)
+{
+	using namespace FirePostureRules;
+	const FFirePostureConfig Config;
+	const bool bAmbushLevel = false;
+	const bool bLevelHasPlacedEnemies = true;
+	const bool bContactStartsFight = bAmbushLevel || bLevelHasPlacedEnemies; // AOperativeCharacter::RunCombatShooting
+	TestTrue(TEXT("button level + placed patrol: Aggressive opens fire in exploration"),
+		MayAutoFireInExploration(ESquadFirePosture::Aggressive, bContactStartsFight, ECodexGamePhase::Exploration, false, Config));
+	TestTrue(TEXT("... and that contact (a placed enemy) starts the fight"),
+		LevelEncounterRules::ShouldStartFightOnContact(bAmbushLevel, true, ECodexGamePhase::Exploration, false));
+	TestFalse(TEXT("... but not contact with an enemy the map did not place (a wave spawn)"),
+		LevelEncounterRules::ShouldStartFightOnContact(bAmbushLevel, false, ECodexGamePhase::Exploration, false));
+	TestFalse(TEXT("Passive never opens it"), MayAutoFireInExploration(ESquadFirePosture::Passive, bContactStartsFight, ECodexGamePhase::Exploration, false, Config));
+	TestFalse(TEXT("Defensive never opens it (an enemy that detects the squad starts the fight itself)"),
+		MayAutoFireInExploration(ESquadFirePosture::Defensive, bContactStartsFight, ECodexGamePhase::Exploration, false, Config));
+	TestFalse(TEXT("a «button» level without placed enemies stays peaceful"),
+		MayAutoFireInExploration(ESquadFirePosture::Aggressive, false, ECodexGamePhase::Exploration, false, Config));
+	TestFalse(TEXT("not once the fight is unlocked"),
+		MayAutoFireInExploration(ESquadFirePosture::Aggressive, bContactStartsFight, ECodexGamePhase::Exploration, true, Config));
+	return true;
+}
+
 #undef POSTURE_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

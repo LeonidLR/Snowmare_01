@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/OperativeMovementRules.h"
+#include "GameFlow/GameFlowTypes.h"
 
 /**
  * Tactical line of sight (Sprint 08, TANDEM «SPRINT 08 DIRECTIVE: Tactical Line of Sight, Cover Occlusion & Ghost
@@ -39,6 +40,22 @@ namespace SightRules
 	inline constexpr float ForgetSeconds = 20.f;
 	inline constexpr float ForgetArrivalCm = 250.f;
 	inline constexpr float SearchSeconds = 5.f;
+
+	/**
+	 * A last-known silhouette of an enemy the squad lost while EXPLORING fades after this, s (2026-10-19; the minimap's last-known
+	 * enemy icon fades over the same time - UMinimapSubsystem::EnemyFadeSeconds). In a fight the silhouette stays (blind fire).
+	 */
+	inline constexpr float LastKnownFadeSeconds = 12.f;
+
+	/**
+	 * The squad's own sight hides what no operative sees (2026-10-19, symmetric sight: hidden from them = they are hidden from us):
+	 * in a real-time / paused wave fight (the Sprint 08 rules) and - bExplorationSight, Codex.Sight.Exploration - while exploring.
+	 * Never in the turn-based fight (its own rules) or the other phases (preparation, cutscene, after the fight: everything shown).
+	 */
+	CODEXTACTICS_API bool IsSquadSightPhase(ECodexGamePhase Phase, ECodexCombatMode CombatMode, bool bExplorationSight);
+
+	/** An unheard last-known silhouette of an enemy lost while exploring goes after LastKnownFadeSeconds (kept in a fight). */
+	CODEXTACTICS_API bool ShouldDropLastKnownGhost(bool bInFight, bool bHeard, float SecondsSinceLastKnown);
 
 	/** Observer eye height above the feet: standing 160, crouching 95, prone 25 cm. */
 	CODEXTACTICS_API float EyeHeight(EOperativeStance Stance);

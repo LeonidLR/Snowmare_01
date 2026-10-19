@@ -22,6 +22,8 @@ namespace TacticalSight
 {
 	static TAutoConsoleVariable<int32> CVarSight(TEXT("Codex.Sight"), 1,
 		TEXT("Tactical line of sight (Sprint 08): 1 enemies out of sight are hidden / ghosts / enemies pursue last known spots; 0 everybody sees everything"));
+	static TAutoConsoleVariable<int32> CVarSightExploration(TEXT("Codex.Sight.Exploration"), 1,
+		TEXT("Symmetric sight while exploring (2026-10-19): 1 an enemy no operative sees from his stance's eye height is hidden / not targetable in exploration too; 0 everything is shown outside the fight (the old rule)"));
 
 	FVector Feet(const AActor& Actor)
 	{
@@ -59,9 +61,16 @@ bool UTacticalSightSubsystem::IsActive() const
 		&& Flow->GetCombatMode() != ECodexCombatMode::TurnBased;
 }
 
+bool UTacticalSightSubsystem::IsSquadSightActive() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	return Flow && TacticalSight::CVarSight.GetValueOnGameThread() != 0
+		&& SightRules::IsSquadSightPhase(Flow->GetPhase(), Flow->GetCombatMode(), TacticalSight::CVarSightExploration.GetValueOnGameThread() != 0);
+}
+
 void UTacticalSightSubsystem::Tick(float DeltaTime)
 {
-	if (!IsActive())
+	if (!IsSquadSightActive())
 	{
 		if (bWasActive)
 		{
@@ -87,7 +96,7 @@ void UTacticalSightSubsystem::Tick(float DeltaTime)
 
 void UTacticalSightSubsystem::Refresh()
 {
-	if (IsActive())
+	if (IsSquadSightActive())
 	{
 		bWasActive = true;
 		Update();
@@ -158,7 +167,7 @@ void UTacticalSightSubsystem::NotifyFired(AActor* Shooter)
 	DemaskUntil.Add(Shooter, GetWorld()->GetTimeSeconds() + SightRules::DemaskSeconds);
 	++Stats.Demasks;
 	// Muzzle flash: a hidden enemy shows up at once (no wait for the next update).
-	if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Shooter); Enemy && IsActive())
+	if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Shooter); Enemy && IsSquadSightActive())
 	{
 		if (FEnemyState* State = EnemyStates.Find(Enemy); State && State->bHidden)
 		{
@@ -173,7 +182,7 @@ void UTacticalSightSubsystem::NotifyFired(AActor* Shooter)
 
 bool UTacticalSightSubsystem::IsVisibleToSquad(const AActor* Enemy) const
 {
-	if (!bWasActive || !IsActive())
+	if (!bWasActive || !IsSquadSightActive())
 	{
 		return true;
 	}
@@ -188,8 +197,9 @@ bool UTacticalSightSubsystem::GetBelief(const AEnemyCharacter* Enemy, const AAct
 	{
 		return false;
 	}
-	// A horde (UHordeSubsystem) knows where the squad is: always «perceived».
-	if (!bWasActive || !IsActive() || (Enemy && Enemy->bKnowsSquadPosition))
+	// A horde (UHordeSubsystem) knows where the squad is: always «perceived». Exploring (2026-10-19: the squad's sight runs there too)
+	// the enemies' side is the patrol perception: here they "know everything" as before.
+	if (!bWasActive || !bBeliefWasActive || !IsActive() || (Enemy && Enemy->bKnowsSquadPosition))
 	{
 		OutLocation = Operative->GetActorLocation();
 		if (bOutPerceived)
@@ -317,6 +327,7 @@ void UTacticalSightSubsystem::DropGhost(FEnemyState& State)
 void UTacticalSightSubsystem::RestoreAll()
 {
 	bWasActive = false;
+	bBeliefWasActive = false;
 	for (TPair<TWeakObjectPtr<AEnemyCharacter>, FEnemyState>& Pair : EnemyStates)
 	{
 		if (AEnemyCharacter* Enemy = Pair.Key.Get(); Enemy && Pair.Value.bHidden)
@@ -349,6 +360,13 @@ void UTacticalSightSubsystem::Update()
 		return;
 	}
 	const double Now = World->GetTimeSeconds();
+	// The fight rules (enemy knowledge) only in a fight; a new fight starts from fresh knowledge (seeded below).
+	const bool bBelief = IsActive();
+	if (bBelief != bBeliefWasActive)
+	{
+		Intel.Reset();
+		bBeliefWasActive = bBelief;
+	}
 	TArray<AOperativeCharacter*> Operatives;
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
@@ -395,20 +413,21 @@ void UTacticalSightSubsystem::Update()
 		if (!EnemyStates.Contains(Enemy))
 		{
 			EnemyStates.Add(Enemy);
-			// The wave is sent at the squad: a new enemy knows where everybody stood.
-			TMap<TWeakObjectPtr<AOperativeCharacter>, FIntel>& Seeded = Intel.FindOrAdd(Enemy);
+		}
+		if (bBelief && !Intel.Contains(Enemy))
+		{
+			// The wave is sent at the squad: a new enemy (or every enemy when the fight starts) knows where everybody stood.
+			TMap<TWeakObjectPtr<AOperativeCharacter>, FIntel>& Seeded = Intel.Add(Enemy);
 			for (AOperativeCharacter* Operative : Operatives)
 			{
 				Seeded.Add(Operative, { Operative->GetActorLocation(), Now, -1.0, false });
 			}
 		}
-		Intel.FindOrAdd(Enemy);
 	}
 
 	for (AEnemyCharacter* Enemy : Enemies)
 	{
 		FEnemyState& State = EnemyStates.FindChecked(Enemy);
-		TMap<TWeakObjectPtr<AOperativeCharacter>, FIntel>& Known = Intel.FindChecked(Enemy);
 
 		// Squad -> enemy.
 		const FVector Profile = ProfilePoint(*Enemy);
@@ -437,6 +456,7 @@ void UTacticalSightSubsystem::Update()
 			}
 			State.bHidden = false;
 			State.bEverSeen = true;
+			State.LastKnownTime = Now;
 			DropGhost(State);
 		}
 		else
@@ -461,14 +481,25 @@ void UTacticalSightSubsystem::Update()
 					Ghost->SetHeard(true);
 					Stats.HeardGhosts += bWasHeard ? 0 : 1;
 				}
+				State.LastKnownTime = Now;
 			}
 			else if (AEnemyGhostActor* Ghost = State.Ghost.Get())
 			{
 				Ghost->SetHeard(false); // stays where it was last heard
+				// Exploring (2026-10-19): the patrol walks on - the last-known silhouette fades like the minimap's last-known icon.
+				if (SightRules::ShouldDropLastKnownGhost(bBelief, false, static_cast<float>(Now - State.LastKnownTime)))
+				{
+					DropGhost(State);
+				}
 			}
 		}
 
+		if (!bBelief)
+		{
+			continue; // exploring: the enemies perceive the squad through their patrol perception (PerceptionRules)
+		}
 		// Enemy -> squad (symmetric).
+		TMap<TWeakObjectPtr<AOperativeCharacter>, FIntel>& Known = Intel.FindChecked(Enemy);
 		const FVector Eye = EyePoint(*Enemy);
 		for (AOperativeCharacter* Operative : Operatives)
 		{

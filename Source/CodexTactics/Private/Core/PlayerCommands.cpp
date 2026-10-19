@@ -359,6 +359,8 @@ namespace GameplayEvents
 	const FName TrapSpotted(TEXT("TrapSpotted"));
 	const FName TripwireDisarmed(TEXT("TripwireDisarmed"));
 	const FName TripwireTriggered(TEXT("TripwireTriggered"));
+	const FName TripwireTriggeredByEnemy(TEXT("TripwireTriggered.Enemy"));
+	const FName LureHeard(TEXT("StealthLure.Heard"));
 	const FName CoverEntered(TEXT("CoverEntered"));
 	const FName CoverLeft(TEXT("CoverLeft"));
 	const FName CoverShimmy(TEXT("CoverShimmy"));

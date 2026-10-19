@@ -392,9 +392,10 @@
     },
 
     {
-      "_comment": "User flow step 10 (A3, VOL_A3_APPROACH): the cautious approach to the complex - mines and wires, cover, stances, vault, crawl under the low fence. Sprint is NOT locked here.",
+      "_comment": "User flow step 10 (A3, VOL_A3_APPROACH): the cautious approach to the complex - mines and wires, cover, stances, vault, crawl under the low fence. Sprint is NOT locked here. 2026-10-19 (game designer): the squad enters the complex DEFENSIVE ('set_posture' action when the lines play): no fire of its own on enemies that have not spotted it - an Aggressive squad would start the A4 fight by itself the moment a patrol came into view, before the posture lesson.",
       "id": "A3_wt_approach", "beat": "A3", "kind": "walk_talk",
       "trigger": { "type": "beat_start", "delay_s": 1 },
+      "action": { "type": "set_posture", "posture": "defensive" },
       "lines": [
         { "speaker": "Commander", "text_id": "WT_A3_01" },
         { "speaker": "Medic-Sapper", "text_id": "WT_A3_02" },
@@ -515,6 +516,23 @@
     },
 
     {
+      "_comment": "2026-10-19 (game designer play-test): THE POSTURE LESSON right after the trap disarm lesson (A3_wire finished - disarmed, prone, timed out or skipped): the Commander's radio 'Hold your fire' + the card with the three postures and their keys; it unlocks Posture.* (locked since A0) and completes on Posture.Passive (, or Alt + ,) - the stealth part of the complex. BEAT-LESS on purpose: a later beat never drops it (the overlook is only 13 m past the wire). 'requires' A3_cover: a wire spotted before the cover field (the player wandered off) does not arm it. Its A4 twins (A4_posture_radio / A4_posture) teach it at the overlook when the wire was never spotted; whichever pair finishes first cancels the other (cancel_on both ways).",
+      "id": "A3_posture_radio", "kind": "radio",
+      "trigger": { "type": "after_step", "step": "A3_wire", "requires": ["A3_cover"], "delay_s": 1 },
+      "cancel_on": { "step": "A4_posture_radio" },
+      "lines": [ { "speaker": "Commander", "text_id": "WT_A3_POSTURE" } ]
+    },
+    {
+      "id": "A3_posture", "kind": "hint_card", "text_id": "TUT_A3_POSTURE",
+      "keys": ["Posture.Passive", "Posture.Defensive", "Posture.Aggressive"],
+      "unlock": ["Posture.*"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A3_wire", "requires": ["A3_cover"], "delay_s": 1.5 },
+      "cancel_on": { "step": "A4_posture" },
+      "complete": { "commands": ["Posture.Passive"] }
+    },
+
+    {
       "_comment": "User flow step 11 (A4, VOL_A4_OVERLOOK): the patrols come into view. Phase 1 ships the vision-cone toggle card and the tripwire card; the ambush fight itself (patrol encounter group) is Phase 2 (beat sheet rev 5 section 1.3).",
       "id": "A4_wt_contact", "beat": "A4", "kind": "walk_talk",
       "trigger": { "type": "beat_start" },
@@ -532,12 +550,65 @@
       "complete": { "commands": ["View.VisionCones"], "timeout_s": 40 }
     },
     {
+      "_comment": "2026-10-19: the posture lesson at the overlook when the A3 one never ran (the wire was never spotted / was tripped). Cancelled at once when A3_posture_radio / A3_posture already finished; cancels them when it finishes first (cancel_on both ways).",
+      "id": "A4_posture_radio", "beat": "A4", "kind": "radio",
+      "trigger": { "type": "beat_start", "delay_s": 3 },
+      "cancel_on": { "step": "A3_posture_radio" },
+      "lines": [ { "speaker": "Commander", "text_id": "WT_A3_POSTURE" } ]
+    },
+    {
+      "id": "A4_posture", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A3_POSTURE",
+      "keys": ["Posture.Passive", "Posture.Defensive", "Posture.Aggressive"],
+      "unlock": ["Posture.*"],
+      "precredit": false,
+      "trigger": { "type": "beat_start", "delay_s": 3 },
+      "cancel_on": { "step": "A3_posture" },
+      "complete": { "commands": ["Posture.Passive"] }
+    },
+    {
       "id": "A4_tripwire", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_TRIPWIRE",
       "keys": ["Inventory.Open", "Deploy.Tripwire"],
       "unlock": ["Deploy.Tripwire"],
       "precredit": false,
       "trigger": { "type": "after_step", "step": "A4_cones" },
       "complete": { "commands": ["Deploy.Tripwire"], "timeout_s": 120 }
+    },
+    {
+      "_comment": "2026-10-19 b (game designer play-test): SYMMETRIC SIGHT - prone behind cover the patrols cannot see the squad, and the squad cannot see them either (an enemy no operative sees from his eye height is hidden: no plate, no cone, not targetable, no fire; a last-known silhouette fades). The card shows the first time someone lies prone while an enemy is out of the squad's sight (condition: squad_prone >= 1 AND enemies_unseen >= 1; 'requires' A4_cones = only from the overlook on, never in A3 where nobody is out there). Done when he rises / crouches / peeks round the cover, or after 20 s.",
+      "id": "A4_hidden", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_HIDDEN",
+      "keys": ["Stance.Crouch", "Stance.Stand", "Cover.CornerPeek"],
+      "precredit": false,
+      "trigger": { "type": "condition", "requires": ["A4_cones"] },
+      "condition": [ { "stat": "squad_prone", "at_least": 1 }, { "stat": "enemies_unseen", "at_least": 1 } ],
+      "complete": { "commands": ["Stance.Crouch", "Stance.Stand", "Stance.Squad.Crouch", "Stance.Squad.Stand", "Cover.CornerPeek"], "timeout_s": 20 }
+    },
+    {
+      "_comment": "2026-10-19 b (game designer play-test): THE AMBUSH, part 1 - the wire is rigged, now wait until a patrol walks into it (event TripwireTriggered.Enemy: an ENEMY pulled the pin of any wire - the squad's own or a PMC one; the 140-damage blast kills a frostbitten / a hound). 240 s at most: the lure part follows either way (a wire that never caught anyone still leaves two to lure).",
+      "id": "A4_trap_wait", "beat": "A4", "kind": "objective", "text_id": "OBJ_A4_TRAP",
+      "trigger": { "type": "after_step", "step": "A4_tripwire" },
+      "complete": { "event": "TripwireTriggered.Enemy", "timeout_s": 240 }
+    },
+    {
+      "id": "A4_wt_trap", "beat": "A4", "kind": "walk_talk",
+      "trigger": { "type": "event", "event": "TripwireTriggered.Enemy", "requires": ["A4_tripwire"] },
+      "lines": [ { "speaker": "Engineer", "text_id": "WT_A4_04" } ]
+    },
+    {
+      "_comment": "2026-10-19 b: THE AMBUSH, part 2 - the other enemy is LURED: whistle [5] from cover (the noise at the whistler: he comes to you) or throw a stone [6] (the noise where it lands: he goes there). Unlocks Stealth.* (locked since A0). Done when an enemy reacts to a lure - it heard it and investigates (event StealthLure.Heard from UStealthLureSubsystem::EmitNoise; the lure needs exploration and an undetected squad). Never precredited (a lure before the card does not count), 180 s.",
+      "id": "A4_lure", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_LURE",
+      "keys": ["Stealth.Whistle", "Stealth.Throw"],
+      "unlock": ["Stealth.*"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A4_trap_wait", "delay_s": 2 },
+      "complete": { "event": "StealthLure.Heard", "timeout_s": 180 }
+    },
+    {
+      "_comment": "2026-10-19 b: the reminder once he is coming - AGGRESSIVE opens fire the moment he is in sight (the fight starts through the normal path), or Ctrl+click him. Done on Posture.Aggressive, a targeted shot or the fight starting (CombatStarted; a fight unlocks everything anyway); 60 s.",
+      "id": "A4_lure_ambush", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_AMBUSH",
+      "keys": ["Posture.Aggressive", "Attack.TargetedShot"],
+      "precredit": false,
+      "trigger": { "type": "event", "event": "StealthLure.Heard", "requires": ["A4_lure"] },
+      "complete": { "commands": ["Posture.Aggressive", "Attack.TargetedShot"], "event": "CombatStarted", "timeout_s": 60 }
     },
 
     {

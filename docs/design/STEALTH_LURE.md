@@ -91,7 +91,7 @@ Console: `Codex.Perception.HearingScale` scales both radii, like every other hea
 
 ## 5. Tutorial and levels
 
-- **Demo 01**: beat A0 locks `Stealth.*` together with the other families that are not taught yet. There is no lesson for it yet, so it stays locked until the safety unlock-all: a wave or horde fight, or the tutorial switched off. A future lesson unlocks it with `"unlock": ["Stealth.*"]`. The test `CodexTactics.Tutorial.Lock.ProgressiveDemo` checks every registry id, so a new command must appear in the A0 lock.
+- **Demo 01**: beat A0 locks `Stealth.*` together with the other families that are not taught yet. The A4 ambush lesson (2026-10-19 b) teaches it: once a patrol walked into the squad's wire, the card `A4_lure` ("LURE - Whistle [5] from cover to call him to you, or throw a stone [6] ...") unlocks it and completes on the event `StealthLure.Heard` (raised by `EmitNoise` for every enemy it sends investigating: Subject = the enemy, Target = the lurer). On the lake the routes pass 12-16 m from the overlook: the stone works from there, the whistle needs the operative closer (dev probe `CodexTactics.LakeLureProbe`). The test `CodexTactics.Tutorial.Lock.ProgressiveDemo` checks every registry id, so a new command must appear in the A0 lock.
 - **Other levels** (no tutorial, or the tutorial off): always available while exploring undetected.
 - **Tactical pause**: the game has no exploration pause (Space toggles the pause only inside a wave). Because the lure is refused in every fight, a throw cannot be planned in the pause. This is intentional and documented here.
 

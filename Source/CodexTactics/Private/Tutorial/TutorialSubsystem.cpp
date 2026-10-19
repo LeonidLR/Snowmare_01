@@ -1,9 +1,12 @@
 #include "Tutorial/TutorialSubsystem.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Combat/KnockdownComponent.h"
 #include "Core/DemoModeSubsystem.h"
 #include "Core/MissionSessionSubsystem.h"
@@ -840,9 +843,19 @@ void UTutorialSubsystem::HandleStepShown(const FTutorialStep& Step)
 
 void UTutorialSubsystem::RunActions(const FTutorialStep& Step)
 {
-	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	for (const FTutorialAction& Action : Step.Actions)
 	{
+		ESquadFirePosture Posture = ESquadFirePosture::Aggressive;
+		if (Action.Type == FName(TEXT("set_posture")) && Squad && FirePostureRules::ParseName(Action.Posture, Posture))
+		{
+			// 2026-10-19: the Demo 01 squad enters the complex DEFENSIVE (no fire on enemies that have not spotted it) until the posture
+			// lesson - an Aggressive squad would start the A4 fight on its own the moment a patrol came into view.
+			Squad->SetSquadPosture(Posture);
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s set_posture %s"), *Step.Id.ToString(), *FirePostureRules::GetLabel(Posture));
+			WriteTelemetry(TEXT("action_set_posture"), Step.Id, Step.Beat, 0.f);
+			continue;
+		}
 		if (Action.Type == FName(TEXT("cold_bump")) && Squad)
 		{
 			for (AOperativeCharacter* Member : Squad->GetMembers())
@@ -975,6 +988,31 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 		const AOperativeCharacter* Wounded = FindMostWoundedMember();
 		const UHealthComponent* Health = Wounded ? Wounded->HealthComponent.Get() : nullptr;
 		return Health ? 100.f * (1.f - Health->GetCurrentHealth() / FMath::Max(1.f, Health->GetMaxHealth())) : 0.f;
+	}
+	if (Stat == FName(TEXT("squad_prone")))
+	{
+		// 2026-10-19 b: the symmetric-sight card ("prone behind cover they can't see you - but you can't see them either").
+		int32 Prone = 0;
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Prone += Member && (!Member->HealthComponent || Member->HealthComponent->IsAlive()) && Member->GetStance() == EOperativeStance::Prone ? 1 : 0;
+		}
+		return static_cast<float>(Prone);
+	}
+	if (Stat == FName(TEXT("enemies_unseen")))
+	{
+		const UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>();
+		if (!Sight || !Sight->IsSquadSightActive())
+		{
+			return 0.f; // everything shown: nothing is unseen
+		}
+		int32 Unseen = 0;
+		for (const AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
+		{
+			const UHealthComponent* Health = Enemy ? Enemy->GetHealthComponent() : nullptr;
+			Unseen += Enemy && !Enemy->IsDying() && (!Health || Health->IsAlive()) && !Sight->IsVisibleToSquad(Enemy) ? 1 : 0;
+		}
+		return static_cast<float>(Unseen);
 	}
 	if (Stat == FName(TEXT("heat_packs_given")))
 	{

@@ -35,7 +35,12 @@ struct CODEXTACTICS_API FTacticalSightStats
  *   5 m) or that demasked himself by firing; perceived positions are shared with pack mates within 15 m. An enemy
  *   pursues an unperceived operative's last known spot, searches there 5 s and forgets him (or after 20 s) — user decision
  *   2026-10-05. A new enemy knows where the squad stood when it appeared (the wave is sent at them).
- * Outside the fight, in the turn-based fight or with Codex.Sight 0 everything is shown and every enemy knows everything.
+ * Symmetric sight while EXPLORING too (game designer 2026-10-19: "prone behind a wall the enemies do not see us, yet we still see
+ * them"): the squad -> enemies part also runs in exploration (Codex.Sight.Exploration 1) - an enemy no operative sees from his own
+ * eye height (stance) is hidden (no plate / cone / marker, not targetable, no Aggressive fire, the minimap marks it unseen); a seen
+ * one leaves a last-known silhouette that fades after SightRules::LastKnownFadeSeconds (the minimap's fade) unless heard. The
+ * enemies' side in exploration stays the patrol perception (PerceptionRules, same traces); GetBelief = "knows everything" there.
+ * In the turn-based fight, the other phases or with Codex.Sight 0 everything is shown and every enemy knows everything.
  */
 UCLASS()
 class CODEXTACTICS_API UTacticalSightSubsystem : public UTickableWorldSubsystem
@@ -47,8 +52,14 @@ public:
 	virtual TStatId GetStatId() const override;
 	virtual void Deinitialize() override;
 
-	/** The occlusion rules apply now (wave fight, not turn-based, Codex.Sight 1). */
+	/** The fight rules apply now (wave fight, not turn-based, Codex.Sight 1): enemy knowledge (GetBelief), blind fire at silhouettes. */
 	bool IsActive() const;
+
+	/**
+	 * The squad's own sight hides what no operative sees now: IsActive() or exploring (Codex.Sight.Exploration 1, 2026-10-19;
+	 * SightRules::IsSquadSightPhase).
+	 */
+	bool IsSquadSightActive() const;
 
 	/** Runs an update now (smokes; the tick runs one every UpdateInterval). */
 	void Refresh();
@@ -60,7 +71,7 @@ public:
 	void SetCinematicReveal(bool bReveal);
 	bool IsCinematicReveal() const { return bCinematicReveal; }
 
-	/** The squad sees this enemy (always true while inactive). */
+	/** The squad sees this enemy (always true while the squad's sight is off: IsSquadSightActive). */
 	bool IsVisibleToSquad(const AActor* Enemy) const;
 
 	/**
@@ -110,6 +121,8 @@ private:
 	{
 		bool bHidden = false;
 		bool bEverSeen = false;
+		/** World time it was last seen or heard (an exploration silhouette fades SightRules::LastKnownFadeSeconds after it). */
+		double LastKnownTime = 0.0;
 		TWeakObjectPtr<AEnemyGhostActor> Ghost;
 	};
 
@@ -144,4 +157,6 @@ private:
 	bool bCinematicReveal = false;
 	float SummaryTimer = 0.f;
 	bool bWasActive = false;
+	/** The fight rules ran in the last update (the enemies' knowledge is seeded afresh when a fight starts). */
+	bool bBeliefWasActive = false;
 };

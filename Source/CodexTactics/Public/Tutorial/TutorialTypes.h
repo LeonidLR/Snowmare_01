@@ -74,7 +74,9 @@ struct CODEXTACTICS_API FTutorialLine
  * come from the runtime (UTutorialSubsystem::GetConditionStat): "squad_cold_max", "squad_cold_min", "leader_cold", "squad_injury_max"
  * (the share of health the most wounded living member has lost, %: 30 = he is below 70 %; rev 2026-10-19),
  * "squad_heat_packs", "squad_min_heat_packs" (the fewest any living operative carries), "heat_packs_given" (heat packs handed
- * between squad mates since the level started; rev 5d). All clauses of a step must hold (AND).
+ * between squad mates since the level started; rev 5d), "squad_prone" (living operatives lying prone) and "enemies_unseen" (living
+ * enemies no operative sees now - UTacticalSightSubsystem::IsVisibleToSquad; 0 while the squad's sight is off; both 2026-10-19 b).
+ * All clauses of a step must hold (AND).
  */
 struct CODEXTACTICS_API FTutorialCondition
 {
@@ -87,8 +89,13 @@ struct CODEXTACTICS_API FTutorialCondition
 /** A world action a step runs when it is shown (JSON "actions": [{ "type": ... }] or a single "action": {...}). */
 struct CODEXTACTICS_API FTutorialAction
 {
-	/** "cold_bump": every squad member's cold + Amount, raised to at least MinLevel (UColdSurvivalComponent::AddColdShock). */
+	/**
+	 * "cold_bump": every squad member's cold + Amount, raised to at least MinLevel (UColdSurvivalComponent::AddColdShock).
+	 * "set_posture" (2026-10-19): the whole squad's fire posture becomes Posture (USquadSubsystem::SetSquadPosture, overrides cleared).
+	 */
 	FName Type;
+	/** "posture" of a set_posture action: "passive" | "defensive" | "aggressive" (FirePostureRules::ParseName). */
+	FString Posture;
 	float Amount = 0.f;
 	/** "min_level": cold_bump never leaves anyone below this (0 = no floor). */
 	float MinLevel = 0.f;

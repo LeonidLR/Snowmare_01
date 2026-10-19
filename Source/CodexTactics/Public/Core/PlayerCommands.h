@@ -389,6 +389,17 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName TripwireDisarmed;
 	/** A tripwire's pin was pulled (Subject = whoever crossed it, none for a failed disarm). */
 	extern CODEXTACTICS_API const FName TripwireTriggered;
+	/**
+	 * "TripwireTriggered.Enemy" (2026-10-19, the A4 ambush lesson part 1): the pin was pulled by an ENEMY walking into the wire
+	 * (Subject = that enemy); raised right after TripwireTriggered.
+	 */
+	extern CODEXTACTICS_API const FName TripwireTriggeredByEnemy;
+	/**
+	 * "StealthLure.Heard" (2026-10-19, the A4 ambush lesson part 2): an enemy heard a whistle / a stone and investigates it now
+	 * (started or moved its search there; Subject = the enemy, Target = the operative who made the noise, Kind = "Whistle" /
+	 * "Throw", Location = the noise). Once per enemy per noise.
+	 */
+	extern CODEXTACTICS_API const FName LureHeard;
 	/** An operative settled in a cover slot (arrived and pressed to the wall; not on the order). Also "CoverEntered.High" / ".Low". */
 	extern CODEXTACTICS_API const FName CoverEntered;
 	/** An operative left his cover (moved off, ordered elsewhere, knocked out of it). */

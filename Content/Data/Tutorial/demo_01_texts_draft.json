@@ -311,6 +311,13 @@
     "TUT_A3_MINE_SPOTTED": {
       "text": "Mine spotted - squad holding. Move them one by one: click it and choose Defuse (the Medic-Sapper is best), go round it, or Ctrl+click it from more than 4 m to blow it."
     },
+    "WT_A3_POSTURE": {
+      "text": "Hold your fire - shoot only on my command."
+    },
+    "TUT_A3_POSTURE": {
+      "title": "POSTURE",
+      "text": "{key:Posture.Passive} PASSIVE: never fire on their own · {key:Posture.Defensive} DEFENSIVE: return fire · {key:Posture.Aggressive} AGGRESSIVE: shoot any enemy in sight. Alt + key = the whole squad. Go PASSIVE now (Alt + {key:Posture.Passive}) - we sneak in."
+    },
     "TUT_BEAT_A4": {
       "title": "THE AMBUSH"
     },
@@ -330,6 +337,24 @@
     "TUT_A4_TRIPWIRE": {
       "title": "AMBUSH",
       "text": "Open the inventory ({key:Inventory.Open}) and rig a tripwire across the patrol's path: click anchor A, then anchor B. Costs two grenades."
+    },
+    "TUT_A4_HIDDEN": {
+      "title": "OUT OF SIGHT",
+      "text": "Prone behind cover they can't see you - but you can't see them either. Peek ({key:Cover.CornerPeek}) or rise ({key:Stance.Crouch} / {key:Stance.Stand}) to look."
+    },
+    "OBJ_A4_TRAP": {
+      "text": "Wait until the patrol walks into the wire"
+    },
+    "WT_A4_04": {
+      "text": "That's one. The other one is still out there."
+    },
+    "TUT_A4_LURE": {
+      "title": "LURE",
+      "text": "Whistle {key:Stealth.Whistle} from cover to call him to you, or throw a stone {key:Stealth.Throw} to send him where you want. A whistle carries about 12 m (less through cover): from here a stone near his path works best. Only while they have not spotted you."
+    },
+    "TUT_A4_AMBUSH": {
+      "title": "AMBUSH",
+      "text": "He's coming to check the noise. Switch to AGGRESSIVE (Alt + {key:Posture.Aggressive}): the squad opens fire the moment he is in sight - or Ctrl+click him yourself."
     },
     "TUT_MEDKIT": {
       "title": "MEDKIT",

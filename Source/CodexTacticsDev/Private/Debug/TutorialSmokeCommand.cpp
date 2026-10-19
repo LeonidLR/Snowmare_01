@@ -57,7 +57,15 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Characters/FirePostureRules.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Combat/TacticalSightSubsystem.h"
+#include "Combat/WaveSubsystem.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Components/StaticMeshComponent.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -152,6 +160,11 @@ namespace TutorialSmoke
 		int32 NotYetBefore = 0;
 		int32 LineIndexBefore = 0;
 		bool bConesBefore = false;
+		/** 2026-10-19 b: the patrol enemy lured in the A4 lure lesson (stages 130-136). */
+		TWeakObjectPtr<AEnemyCharacter> LureEnemy;
+		/** 2026-10-19 b: the symmetric-sight card (stages 137-139): a 1.2 m wall and an enemy behind it. */
+		TWeakObjectPtr<AActor> SightWall;
+		TWeakObjectPtr<AEnemyCharacter> SightEnemy;
 		/** The leader's heat packs just before he empties the hut crate. */
 		int32 HeatPacksBeforeLoot = 0;
 		TWeakObjectPtr<AOperativeCharacter> Focus;
@@ -1893,6 +1906,60 @@ namespace TutorialSmoke
 			{
 				Squad->SetLeader(Before);
 			}
+			State.Stage = 120;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// 2026-10-19 (game designer): the POSTURE lesson right after the trap disarm lesson (A3_wire finished; the wire card of the A2
+		// spot above was skipped long before the cover field, so the A3 pair is started here by hand - the order of the real file is
+		// CodexTactics.Tutorial.AmbushLesson.*). The squad entered A3 Defensive (the approach lines' set_posture action).
+		case 120:
+		{
+			Check(State, Squad->GetSquadPosture() == ESquadFirePosture::Defensive, FString::Printf(TEXT("the squad entered the complex DEFENSIVE (set_posture action; %s)"),
+				*FirePostureRules::GetLabel(Squad->GetSquadPosture())));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::PosturePassive), TEXT("the posture keys are locked before their lesson"));
+			State.RefusalsBefore = Tutorial->GetLockedRefusalCount();
+			Tap(PC, State, EKeys::Comma);
+			Next(State);
+			return true;
+		}
+		case 121:
+		{
+			if (State.StageTime < 0.2f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetLockedRefusalCount() == State.RefusalsBefore + 1 && Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Defensive,
+				TEXT("',' before the lesson: refused, the posture unchanged"));
+			Check(State, Tutorial->TriggerStep(TEXT("A3_posture_radio")) && Tutorial->TriggerStep(TEXT("A3_posture")), TEXT("the posture lesson starts (radio + card)"));
+			Next(State);
+			return true;
+		}
+		case 122:
+		{
+			if (Tutorial->GetStepState(TEXT("A3_posture")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A3_posture")) == ETutorialStepState::Active, FString::Printf(TEXT("the POSTURE card is up (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A3_posture")))));
+			Check(State, TutorialRules::IsRunning(Tutorial->GetStepState(TEXT("A3_posture_radio"))) || Tutorial->GetStepState(TEXT("A3_posture_radio")) == ETutorialStepState::Completed,
+				TEXT("the Commander's 'Hold your fire' radio plays with it"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::PosturePassive) && !Tutorial->IsCommandLocked(PlayerCommands::PostureAggressive),
+				TEXT("the card unlocks , . /"));
+			Tap(PC, State, EKeys::Comma); // the real key: the selected operative (the leader) goes Passive
+			Next(State);
+			return true;
+		}
+		case 123:
+		{
+			if (State.StageTime < 0.2f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A3_posture")) == ETutorialStepState::Completed && Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Passive,
+				TEXT("',' (Posture.Passive): the leader is PASSIVE, the card completes"));
+			Squad->SetSquadPosture(ESquadFirePosture::Passive); // the rest of the lesson runs with the whole squad Passive (Alt + ,)
 			State.Stage = 104;
 			State.StageTime = 0.f;
 			return true;
@@ -1900,6 +1967,8 @@ namespace TutorialSmoke
 		case 104:
 		{
 			Check(State, Tutorial->TriggerStep(TEXT("A4_cones")) && Tutorial->GetCurrentBeat() == FName(TEXT("A4")), TEXT("A4 started with the cone card"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Skipped || Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Waiting,
+				TEXT("the posture lesson was done in A3: its overlook twin is cancelled (or about to be)"));
 			State.Stage = 69;
 			State.StageTime = 0.f;
 			return true;
@@ -1923,6 +1992,226 @@ namespace TutorialSmoke
 			Check(State, Tutorial->GetMachine().GetCommandUse(PlayerCommands::ToggleVisionCones).Count == 1, TEXT("View.VisionCones reported once"));
 			Check(State, CountMessages(World, TEXT("Vision cones")) >= 1, TEXT("a feed line says ON / OFF"));
 			UVisionConeComponent::SetPlayerEnemyCones(State.bConesBefore);
+			State.Stage = 130;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// 2026-10-19 b (game designer play-test): THE AMBUSH in two parts - part 1 the wire rigged (the card) and a patrol walking into it
+		// (TripwireTriggered.Enemy, raised here: the wire itself is PMCTripwire / Deployable smokes' job), part 2 the other enemy LURED:
+		// the lure card unlocks Stealth.*, a REAL whistle (key 5) brings a guard 8 m away (placed in the map, senses off) to the noise
+		// (StealthLure.Heard completes it), then the reminder card asks for AGGRESSIVE (/).
+		case 130:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_tripwire")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::DeployTripwire),
+				FString::Printf(TEXT("part 1: the tripwire card (unlocks the wire; %s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_tripwire")))));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),
+				TEXT("the lure is still locked"));
+			Tutorial->HandlePlayerCommand(PlayerCommands::DeployTripwire, FPlayerCommandContext()); // rigged (the anchors: Deployable smokes)
+			// The other patrol member: a guard 8 m ahead, placed in the map (on its post), deaf and blind (only the lure moves it).
+			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
+			const FVector Feet = Leader->GetActorLocation() - FVector(0.f, 0.f, Leader->GetSimpleCollisionHalfHeight());
+			const FVector Post = SmokeUtils::ClearPoint(World, Feet, Feet + Ahead * 800.f);
+			AEnemyCharacter* Guard = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Frostbitten, Post + FVector(0.f, 0.f, 100.f), Ahead.Rotation());
+			if (Guard)
+			{
+				Guard->bOverridePerception = true;
+				Guard->PerceptionOverride.SightRangeCm = 0.f;
+				Guard->PerceptionOverride.ProximityCm = 0.f;
+				Guard->PerceptionOverride.HearWalkCm = Guard->PerceptionOverride.HearRunCm = 0.f;
+				Guard->PerceptionOverride.HearCrouchWalkCm = Guard->PerceptionOverride.HearCrawlCm = 0.f;
+				Guard->PerceptionOverride.HearGunshotCm = Guard->PerceptionOverride.HearExplosionCm = 0.f;
+				Guard->PerceptionOverride.SmellRadiusCm = 0.f;
+				Guard->GetHealthComponent()->SetMaxHealth(100000.f);
+				World->GetSubsystem<ULevelEncounterSubsystem>()->MarkLevelEnemy(Guard);
+			}
+			State.LureEnemy = Guard;
+			Next(State);
+			return true;
+		}
+		case 131:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_trap_wait")) != ETutorialStepState::Active && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			AEnemyCharacter* Guard = State.LureEnemy.Get();
+			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Active,
+				TEXT("rigged: the card completes, the objective 'wait until the patrol walks into the wire' shows"));
+			Check(State, Guard && Guard->IsGuardingPost() && !Guard->IsHuntingSquad(), TEXT("the second enemy guards its post, unaware"));
+			Tutorial->NotifyEvent(TEXT("TripwireTriggered.Enemy"), TEXT("BP_Enemy_Frostbitten_Trapped")); // the first one walked into it
+			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Completed, TEXT("part 1: an enemy pulled the pin -> the objective is done"));
+			Next(State);
+			return true;
+		}
+		case 132:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_lure")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Active, FString::Printf(TEXT("part 2: the LURE card (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_lure")))));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && !Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),
+				TEXT("the lure card unlocks whistle / throw"));
+			Check(State, TutorialRules::IsRunning(Tutorial->GetStepState(TEXT("A4_wt_trap"))) || TutorialRules::IsFinished(Tutorial->GetStepState(TEXT("A4_wt_trap"))),
+				TEXT("the 'that's one' line came with the trap kill"));
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->StopOperative();
+			}
+			Tap(PC, State, EKeys::Five); // WHISTLE (the real key) - the guard 8 m away hears it
+			Next(State);
+			return true;
+		}
+		case 133:
+		{
+			const AEnemyCharacter* Guard = State.LureEnemy.Get();
+			if (Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Active && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, Guard && Guard->IsInvestigatingLure(), TEXT("the whistle: the guard leaves its post to investigate"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Completed, FString::Printf(TEXT("StealthLure.Heard completes the lure card (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_lure")))));
+			Next(State);
+			return true;
+		}
+		case 134:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_lure_ambush")) != ETutorialStepState::Active && State.StageTime < 5.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_lure_ambush")) == ETutorialStepState::Active, FString::Printf(TEXT("he is coming: the AMBUSH card (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_lure_ambush")))));
+			// The fight itself is the A4 Phase 2 (and would unlock everything): the guard is taken away before the posture key.
+			if (AEnemyCharacter* Guard = State.LureEnemy.Get())
+			{
+				Guard->Destroy();
+			}
+			Next(State);
+			return true;
+		}
+		case 135:
+		{
+			if (State.StageTime < 0.3f)
+			{
+				return true;
+			}
+			Tap(PC, State, EKeys::Slash); // AGGRESSIVE (the leader)
+			Next(State);
+			return true;
+		}
+		case 136:
+		{
+			if (State.StageTime < 0.2f)
+			{
+				return true;
+			}
+			Check(State, Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Aggressive
+				&& Tutorial->GetStepState(TEXT("A4_lure_ambush")) == ETutorialStepState::Completed, TEXT("'/' AGGRESSIVE completes the ambush card"));
+			Check(State, World->GetSubsystem<UGameFlowSubsystem>()->GetPhase() == ECodexGamePhase::Exploration, TEXT("no fight started in the smoke (Phase 2)"));
+			// The squad holds fire again: an Aggressive squad would open fire on the next enemy it sees (the level is an ambush level
+			// since the guard was placed - "auto" + placed enemies) and the fight would unlock everything.
+			Squad->SetSquadPosture(ESquadFirePosture::Passive);
+			// 2026-10-19 b, symmetric sight: a 1.2 m wall 1 m ahead of the leader, a frozen enemy (senses off) 6 m beyond it.
+			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
+			const float GroundZ = Leader->GetActorLocation().Z - Leader->GetSimpleCollisionHalfHeight();
+			const FVector WallSpot = Leader->GetActorLocation() + Ahead * 100.f;
+			if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+			{
+				const FTransform WallTransform(Ahead.Rotation(), FVector(WallSpot.X, WallSpot.Y, GroundZ + 60.f), FVector(0.3f, 5.f, 1.2f));
+				if (AStaticMeshActor* Wall = World->SpawnActorDeferred<AStaticMeshActor>(AStaticMeshActor::StaticClass(), WallTransform, nullptr, nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+				{
+					Wall->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+					Wall->GetStaticMeshComponent()->SetStaticMesh(Cube);
+					Wall->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+					Wall->FinishSpawning(WallTransform);
+					State.SightWall = Wall;
+				}
+			}
+			const FVector EnemySpot = Leader->GetActorLocation() + Ahead * 700.f;
+			AEnemyCharacter* Hidden = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Frostbitten,
+				FVector(EnemySpot.X, EnemySpot.Y, GroundZ + 100.f), (-Ahead).Rotation());
+			if (Hidden)
+			{
+				Hidden->bOverridePerception = true;
+				Hidden->PerceptionOverride.SightRangeCm = 0.f;
+				Hidden->PerceptionOverride.ProximityCm = 0.f;
+				Hidden->PerceptionOverride.HearWalkCm = Hidden->PerceptionOverride.HearRunCm = 0.f;
+				Hidden->PerceptionOverride.HearCrouchWalkCm = Hidden->PerceptionOverride.HearCrawlCm = 0.f;
+				Hidden->PerceptionOverride.SmellRadiusCm = 0.f;
+				Hidden->CustomTimeDilation = 0.f;
+				Hidden->SetActorTickEnabled(false);
+			}
+			State.SightEnemy = Hidden;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Member != Leader)
+				{
+					Member->SetStance(EOperativeStance::Prone); // the mates (behind the leader) lie low too
+				}
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_hidden")) == ETutorialStepState::Idle, TEXT("no 'out of sight' card while nobody hides from an enemy"));
+			Tap(PC, State, EKeys::V); // the leader goes prone behind the wall
+			State.Stage = 137;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 137:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_hidden")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+			const AEnemyCharacter* Hidden = State.SightEnemy.Get();
+			Check(State, Leader->GetStance() == EOperativeStance::Prone && Hidden && Sight && !Sight->IsVisibleToSquad(Hidden) && Hidden->IsHidden(),
+				TEXT("prone behind the 1.2 m wall: the enemy beyond it is hidden from the squad (symmetric sight)"));
+			Check(State, Tutorial->GetConditionStat(TEXT("enemies_unseen")) >= 1.f && Tutorial->GetConditionStat(TEXT("squad_prone")) >= 1.f,
+				TEXT("stats: an enemy unseen, someone prone"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_hidden")) == ETutorialStepState::Active, FString::Printf(TEXT("the 'OUT OF SIGHT' card (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_hidden")))));
+			Tap(PC, State, EKeys::Z); // rise to look
+			Next(State);
+			return true;
+		}
+		case 138:
+		{
+			if (State.StageTime < 0.6f)
+			{
+				return true;
+			}
+			const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+			const AEnemyCharacter* Hidden = State.SightEnemy.Get();
+			Check(State, Tutorial->GetStepState(TEXT("A4_hidden")) == ETutorialStepState::Completed, TEXT("Z (stand up) completes the card"));
+			Check(State, Hidden && Sight && Sight->IsVisibleToSquad(Hidden) && !Hidden->IsHidden(), TEXT("standing: the enemy is seen over the wall"));
+			if (AActor* Wall = State.SightWall.Get())
+			{
+				Wall->Destroy();
+			}
+			if (AEnemyCharacter* Gone = State.SightEnemy.Get())
+			{
+				Gone->Destroy();
+			}
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->SetStance(EOperativeStance::Standing);
+			}
+			Next(State);
+			return true;
+		}
+		case 139:
+		{
+			if (State.StageTime < 0.3f)
+			{
+				return true;
+			}
 			// After the stance lesson (A3; A4 repeats it as a safety) C is accepted.
 			Leader->SetStance(EOperativeStance::Standing);
 			Tap(PC, State, EKeys::C);
@@ -1932,10 +2221,12 @@ namespace TutorialSmoke
 		}
 		case 65:
 		{
-			if (State.StageTime < 0.2f)
+			if (State.StageTime < 0.2f || (!TutorialRules::IsFinished(Tutorial->GetStepState(TEXT("A4_posture"))) && State.StageTime < 5.f))
 			{
 				return true;
 			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Skipped, FString::Printf(
+				TEXT("the overlook posture twin never shows - A3 taught it (%s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_posture")))));
 			Check(State, Leader->GetStance() == EOperativeStance::Crouching, TEXT("C after the stance lesson: the leader crouches"));
 			Leader->SetStance(EOperativeStance::Standing);
 			State.RefusalsBefore = Tutorial->GetLockedRefusalCount();

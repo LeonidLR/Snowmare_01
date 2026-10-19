@@ -8,7 +8,8 @@
 // 2026-10-11: unrouted placed enemies GUARD their post - for 6 s they neither move nor attack and no fight starts; a trap
 // next to the hound sends it searching (no fight), then it walks back to its post; a squad gunshot they hear wakes them.
 // Even forced to "button" (the worst case) their detection starts the real-time ambush fight once (no cutscene /
-// preparation / horde intro), both enemies are the wave, and the Aggressive squad returns fire.
+// preparation / horde intro), both enemies are the wave, and the Aggressive squad returns fire. The squad is Passive until the fight
+// starts (2026-10-19: an Aggressive squad would open fire on the placed enemies itself, also on a «button» level - PostureSmoke).
 
 #include "CoreMinimal.h"
 
@@ -118,6 +119,9 @@ namespace PatrolAmbushSmoke
 			}
 			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("exploring"));
 			Check(State, Squad->GetSquadPosture() == ESquadFirePosture::Aggressive, TEXT("default squad posture Aggressive"));
+			// Semantics 2026-10-19: an AGGRESSIVE squad opens fire on a placed enemy it sees in exploration (on a «button» level too) -
+			// this smoke is about the enemies starting it: the squad holds fire (Passive) until the fight is on, then Aggressive.
+			Squad->SetSquadPosture(ESquadFirePosture::Passive);
 			const FVector F = Leader->GetActorForwardVector().GetSafeNormal2D();
 			const FVector R = FVector::CrossProduct(FVector::UpVector, F);
 			const FVector Feet = Leader->GetActorLocation() - FVector(0.f, 0.f, Leader->GetSimpleCollisionHalfHeight());
@@ -223,7 +227,8 @@ namespace PatrolAmbushSmoke
 			const UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
 			Check(State, Waves && Waves->GetTotalWaveEnemies() == 2,
 				FString::Printf(TEXT("the placed hound + marksman are the wave (%d, nothing spawned)"), Waves ? Waves->GetTotalWaveEnemies() : -1));
-			// From now on: the squad's own fire (health when the fight started).
+			// From now on: the squad's own fire (health when the fight started) - Aggressive again.
+			Squad->SetSquadPosture(ESquadFirePosture::Aggressive);
 			for (int32 Index = 0; Index < State.Enemies.Num(); ++Index)
 			{
 				const AEnemyCharacter* Enemy = State.Enemies[Index].Get();

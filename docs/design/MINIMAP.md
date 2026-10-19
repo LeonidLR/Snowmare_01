@@ -24,7 +24,7 @@ Source of the rules: the user's decisions of 2026-10-18 in `production/session-s
 | Icon | Shown |
 |---|---|
 | Squad operative | A square in his role colour (`BodyColor`) with a white facing arrow. The selected operative (the leader) is bigger and has a white frame. Box-selected members have the frame too. Operatives on another floor are dimmed. |
-| Enemy | A red diamond while the squad sees it. In a fight this is the sight system's `IsVisibleToSquad`. While exploring, an operative needs a clear line within 25 m. After it is lost, the **last known spot** fades from 65 % to 0 over 12 s. Enemies never seen are not shown. |
+| Enemy | A red diamond while the squad sees it: the sight system's `IsVisibleToSquad` in a fight and, since 2026-10-19 (symmetric sight), while exploring too (eye height by stance; `Codex.Sight.Exploration 0` falls back to the old exploring rule: a clear line within 25 m). After it is lost, the **last known spot** fades from 65 % to 0 over 12 s. Enemies never seen are not shown. |
 | Objective | An amber diamond for every shown tutorial marker / beacon (`ATutorialMarkerActor::IsMarkerShown`), in the marker's colour. Off the map edge it sticks to the edge. |
 | Spotted trap | An orange `X` for every known live mine / PMC tripwire (`UsesDisarmApproach`: revealed, armed, not detonated). Hidden traps are never shown and are left out of the capture. |
 | Door | A green bar across each building doorway (`ABuildingExitMarker`s and the doorways `UInteriorExitSubsystem::FindExits` finds for each camera zone), with `EXIT` on the full map. Shown once explored. |
