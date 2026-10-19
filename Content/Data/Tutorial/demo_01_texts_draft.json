@@ -330,6 +330,10 @@
     "TUT_A4_TRIPWIRE": {
       "title": "AMBUSH",
       "text": "Open the inventory ({key:Inventory.Open}) and rig a tripwire across the patrol's path: click anchor A, then anchor B. Costs two grenades."
+    },
+    "TUT_MEDKIT": {
+      "title": "MEDKIT",
+      "text": "{focus} is wounded. Select him ({key:Select.Member}) and press H to use his medkit - or open the inventory ({key:Inventory.Open}) and click Medkit. No medkit left? Select a teammate, open the inventory and drag a medkit onto {focus}, or loot one from a crate."
     }
   }
 }

@@ -649,7 +649,7 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	{
 		return Stat == FName(TEXT("squad_heat_packs")) ? Packs : Stat == FName(TEXT("squad_min_heat_packs")) ? MinPacks
 			: Stat == FName(TEXT("heat_packs_given")) ? Given : !TutorialRules::ParseNotLowInStat(Stat).IsNone() ? NotLow
-			: Stat == FName(TEXT("squad_solo")) ? SquadSolo : Cold;
+			: Stat == FName(TEXT("squad_solo")) ? SquadSolo : Stat == FName(TEXT("squad_injury_max")) ? 0.f /* nobody hurt: no medkit lesson */ : Cold;
 	};
 	Machine.Load(Data);
 	Machine.StartBeat(Data.StartBeat);

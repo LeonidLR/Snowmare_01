@@ -374,7 +374,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		{
 			const TSharedPtr<FJsonObject> Complete = *CompleteObject;
 			WarnUnknownKeys(Complete, { TEXT("command"), TEXT("commands"), TEXT("event"), TEXT("count"), TEXT("volume"), TEXT("timeout_s"),
-				TEXT("distinct_operatives"), TEXT("hold_s"), TEXT("in_volume"), TEXT("distinct_from"), TEXT("condition") },
+				TEXT("distinct_operatives"), TEXT("hold_s"), TEXT("in_volume"), TEXT("distinct_from"), TEXT("condition"), TEXT("subject") },
 				Where + TEXT(" complete"), OutWarnings);
 			Step.Complete.Commands = JsonStrings(Complete, TEXT("commands"));
 			Step.Complete.Commands.Append(JsonStrings(Complete, TEXT("command")));
@@ -385,6 +385,17 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			Step.Complete.bDistinctSubjects = JsonBool(Complete, TEXT("distinct_operatives"), false);
 			Step.Complete.HoldSeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Complete, TEXT("hold_s"), 0.0)));
 			Step.Complete.InVolume = FName(*JsonString(Complete, TEXT("in_volume")));
+			const FString Subject = JsonString(Complete, TEXT("subject"));
+			if (!Subject.IsEmpty() && Subject != TEXT("focus"))
+			{
+				OutError = FString::Printf(TEXT("%s complete: unknown subject \"%s\" (focus)"), *Where, *Subject);
+				return false;
+			}
+			Step.Complete.bFocusSubject = Subject == TEXT("focus");
+			if (Step.Complete.bFocusSubject && Step.Complete.Event.IsEmpty())
+			{
+				OutWarnings.Add(Where + TEXT(": \"subject\" only filters events - no \"event\" given"));
+			}
 			for (const FString& Other : JsonStrings(Complete, TEXT("distinct_from")))
 			{
 				Step.Complete.DistinctFrom.AddUnique(FName(*Other));
@@ -498,7 +509,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		Step.Focus = FName(*JsonString(Object, TEXT("focus")));
 		if (!Step.Focus.IsNone() && !IsKnownFocus(Step.Focus))
 		{
-			OutError = FString::Printf(TEXT("%s: unknown focus \"%s\" (coldest_operative)"), *Where, *Step.Focus.ToString());
+			OutError = FString::Printf(TEXT("%s: unknown focus \"%s\" (coldest_operative, wounded_operative)"), *Where, *Step.Focus.ToString());
 			return false;
 		}
 
@@ -1068,7 +1079,7 @@ bool TutorialRules::IsKnownStat(FName Stat)
 		return true;
 	}
 	static const FName Stats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
-		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo") };
+		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo"), TEXT("squad_injury_max") };
 	for (const FName Known : Stats)
 	{
 		if (Stat == Known)
@@ -1086,7 +1097,7 @@ bool TutorialRules::IsKnownAction(FName Type)
 
 bool TutorialRules::IsKnownFocus(FName Focus)
 {
-	return Focus == FName(TEXT("coldest_operative"));
+	return Focus == FName(TEXT("coldest_operative")) || Focus == FName(TEXT("wounded_operative"));
 }
 
 bool TutorialRules::IsConditionMet(const TArray<FTutorialCondition>& Conditions, TFunctionRef<float(FName)> Stat)

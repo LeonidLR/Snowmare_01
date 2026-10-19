@@ -243,6 +243,11 @@ bool UTutorialSubsystem::LoadStepsFile(const FString& FileName)
 void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 {
 	Machine.StatProvider = [this](FName Stat) { return GetConditionStat(Stat); };
+	Machine.FocusSubjectProvider = [this](FName StepId)
+	{
+		const AOperativeCharacter* Focus = GetFocusOperative(StepId);
+		return Focus ? Focus->GetFName() : NAME_None;
+	};
 	Machine.Load(Data);
 	// Rev 5f (monotonic route): the place of every beat volume of the level (a volume that starts a beat lies at its start).
 	if (UWorld* World = GetWorld())
@@ -549,8 +554,10 @@ void UTutorialSubsystem::HandleMineSpotted(AActor* Mine, AOperativeCharacter* Sp
 
 void UTutorialSubsystem::HandleItemUsed(AOperativeCharacter* Soldier, const FString& ItemId)
 {
-	NotifyEvent(GameplayEvents::ItemUsed);
-	NotifyEvent(FName(*(GameplayEvents::ItemUsed.ToString() + TEXT(".") + ItemId)));
+	// Subject = the operative the item was used on (rev 2026-10-19: the medkit lesson completes only for its wounded operative).
+	const FName SubjectId = Soldier ? Soldier->GetFName() : NAME_None;
+	NotifyEvent(GameplayEvents::ItemUsed, SubjectId);
+	NotifyEvent(FName(*(GameplayEvents::ItemUsed.ToString() + TEXT(".") + ItemId)), SubjectId);
 }
 
 void UTutorialSubsystem::HandleSoldierDowned(AOperativeCharacter* Soldier)
@@ -710,6 +717,10 @@ void UTutorialSubsystem::ProcessTransitions()
 			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s %s -> %s%s%s"), *Transition.StepId.ToString(), TutorialRules::StateName(Transition.From),
 				TutorialRules::StateName(Transition.To), Transition.bSilent ? TEXT(" (silent)") : TEXT(""),
 				Transition.bPassed ? TEXT(" (passed on the way: the squad reached a later place first)") : TEXT(""));
+			if (Step->Focus == FName(TEXT("wounded_operative")) && !TutorialRules::IsRunning(Transition.From) && TutorialRules::IsRunning(Transition.To))
+			{
+				ChooseFocus(*Step); // rev 2026-10-19: the one who got hurt, fixed from the trigger (a medkit on him must count while it queues)
+			}
 			if ((Transition.To == ETutorialStepState::Queued || Transition.To == ETutorialStepState::Active) && !Step->Complete.Volume.IsNone())
 			{
 				// A squad member may already stand where the step asks for (rev 5c: the third operative walked into the hut before
@@ -784,10 +795,25 @@ void UTutorialSubsystem::ProcessTransitions()
 
 void UTutorialSubsystem::HandleStepShown(const FTutorialStep& Step)
 {
-	if (!Step.Focus.IsNone())
+	if (Step.Focus == FName(TEXT("wounded_operative")))
 	{
-		AOperativeCharacter* Focus = FindColdestMember();
-		FocusOperatives.Add(Step.Id, Focus);
+		AOperativeCharacter* Focus = GetFocusOperative(Step.Id);
+		if (!Focus || (Focus->HealthComponent && !Focus->HealthComponent->IsAlive()))
+		{
+			Focus = ChooseFocus(Step);
+		}
+		if (Focus && Focus->HealthComponent)
+		{
+			const float Percent = 100.f * Focus->HealthComponent->GetCurrentHealth() / FMath::Max(1.f, Focus->HealthComponent->GetMaxHealth());
+			UFloatingTextSubsystem::SpawnAboveOperative(Focus, FString::Printf(TEXT("🩹 WOUNDED: %d%%"), FMath::RoundToInt(Percent)),
+				FLinearColor(1.f, 0.35f, 0.3f));
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s focuses %s (health %.0f%%, medkits %d)"), *Step.Id.ToString(), *Focus->DisplayName.ToString(),
+				Percent, Focus->MedkitsCount);
+		}
+	}
+	else if (!Step.Focus.IsNone())
+	{
+		AOperativeCharacter* Focus = ChooseFocus(Step);
 		if (Focus)
 		{
 			UFloatingTextSubsystem::SpawnAboveOperative(Focus, FString::Printf(TEXT("🥶 COLDEST: %d%%"), FMath::RoundToInt(Focus->ColdLevel)),
@@ -849,6 +875,35 @@ AOperativeCharacter* UTutorialSubsystem::FindColdestMember() const
 	return Coldest;
 }
 
+AOperativeCharacter* UTutorialSubsystem::FindMostWoundedMember() const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	AOperativeCharacter* Wounded = nullptr;
+	float Lowest = TNumericLimits<float>::Max();
+	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+	{
+		const UHealthComponent* Health = Member ? Member->HealthComponent.Get() : nullptr;
+		if (!Health || !Health->IsAlive())
+		{
+			continue;
+		}
+		const float Share = Health->GetCurrentHealth() / FMath::Max(1.f, Health->GetMaxHealth());
+		if (Share < Lowest)
+		{
+			Lowest = Share;
+			Wounded = Member;
+		}
+	}
+	return Wounded;
+}
+
+AOperativeCharacter* UTutorialSubsystem::ChooseFocus(const FTutorialStep& Step)
+{
+	AOperativeCharacter* Focus = Step.Focus == FName(TEXT("wounded_operative")) ? FindMostWoundedMember() : FindColdestMember();
+	FocusOperatives.Add(Step.Id, Focus);
+	return Focus;
+}
+
 AOperativeCharacter* UTutorialSubsystem::GetFocusOperative(FName StepId) const
 {
 	const TWeakObjectPtr<AOperativeCharacter>* Found = FocusOperatives.Find(StepId);
@@ -862,7 +917,9 @@ FString UTutorialSubsystem::ResolveFocusToken(const FString& Text, FName StepId)
 		return Text;
 	}
 	const AOperativeCharacter* Focus = GetFocusOperative(StepId);
-	return Text.Replace(TEXT("{focus}"), Focus ? *Focus->DisplayName.ToString() : TEXT("the coldest operative"));
+	const FTutorialStep* Step = Machine.GetData().FindStep(StepId);
+	const TCHAR* Fallback = Step && Step->Focus == FName(TEXT("wounded_operative")) ? TEXT("the wounded operative") : TEXT("the coldest operative");
+	return Text.Replace(TEXT("{focus}"), Focus ? *Focus->DisplayName.ToString() : Fallback);
 }
 
 float UTutorialSubsystem::GetConditionStat(FName Stat) const
@@ -911,6 +968,13 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 			NotLow += bLow && bThere ? 0 : 1;
 		}
 		return static_cast<float>(NotLow);
+	}
+	if (Stat == FName(TEXT("squad_injury_max")))
+	{
+		// Rev 2026-10-19: the medkit lesson - the share of health the most wounded living member has lost, % (0 = all healthy / none alive).
+		const AOperativeCharacter* Wounded = FindMostWoundedMember();
+		const UHealthComponent* Health = Wounded ? Wounded->HealthComponent.Get() : nullptr;
+		return Health ? 100.f * (1.f - Health->GetCurrentHealth() / FMath::Max(1.f, Health->GetMaxHealth())) : 0.f;
 	}
 	if (Stat == FName(TEXT("heat_packs_given")))
 	{

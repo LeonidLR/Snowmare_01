@@ -45,7 +45,8 @@
 //     when all are low in VOL_A3_RIDGE; (rev 5i) the fence one by one: held, nobody past before Solo, B -> "one by one 0 / 3",
 //     standing refused ("Go prone first"), prone the first goes, a second refused meanwhile ("One at a time"), CrawlGapPassed frees
 //     the turn ("1 / 3"), three through -> free; B (regroup) refused "Not yet - one by one.", each into his own cover (3 distinct),
-//     then the peek card frees Regroup; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
+//     then the peek card frees Regroup; (rev 2026-10-19) a mine blast beside the engineer (everyone carries a medkit) -> the MEDKIT card
+//     focused on him (Item.Use / Inventory.Open free), H on a mate does not count, he presses H -> healed, the card completes; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
 //     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
 //     (tap = next line, hold = skip); (rev 5i) SKIP TUTORIAL from A0: the button shows in A0, the pause menu entry asks and No
 //     keeps it, the button asks with the world paused and Yes skips - no cards / strip / objectives, C and the inventory (locked at
@@ -63,6 +64,7 @@
 #include "Core/PlayerCommands.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "Interactables/LootCrateActor.h"
+#include "Interactables/ProximityMineActor.h"
 #include "Survival/TacticalHeatSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "CodexTactics.h"
@@ -152,6 +154,8 @@ namespace TutorialSmoke
 		/** The leader's heat packs just before he empties the hut crate. */
 		int32 HeatPacksBeforeLoot = 0;
 		TWeakObjectPtr<AOperativeCharacter> Focus;
+		/** Rev 2026-10-19 medkit lesson: the leader before it (given back afterwards). */
+		TWeakObjectPtr<AOperativeCharacter> LeaderBeforeMedkit;
 		/** Rev 5c hut entry: the small VOL_A1_HUT round the third operative. */
 		TWeakObjectPtr<ATutorialTriggerVolume> HutVolume;
 		/** Rev 5i: the hut (a VOL_A1_HUT 10 m ahead, outside the approach area) and the confinement refusals before a check. */
@@ -724,6 +728,7 @@ namespace TutorialSmoke
 				TEXT("reloaded after the OFF check: A0 locks back"));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
+				Member->HealthComponent->Heal(10000.f); // rev 2026-10-19: nobody wounded - the medkit lesson comes later in this smoke
 				Member->ColdLevel = 0.f;
 				Member->HeatPacksCount = 1; // the demo loadout (level JSON heat_packs_count 1: one starter pack per operative)
 				Member->SetStance(EOperativeStance::Standing);
@@ -1294,11 +1299,6 @@ namespace TutorialSmoke
 				return true;
 			}
 			Check(State, Tutorial->GetStepState(TEXT("A1_loot_take")) == ETutorialStepState::Active, TEXT("'take the heat packs' card"));
-			UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
-			Interactions->LootItem(ELootItem::HeatPack);
-			Interactions->CloseLootDialog();
-			const int32 Expected = FMath::Min(TacticalHeatTuning::Get().HeatPackMaxStack, State.HeatPacksBeforeLoot + 3);
-			Check(State, Leader->HeatPacksCount == Expected, FString::Printf(TEXT("the leader took what fits of the 3 heat packs (%d -> %d, stack max %d)"),
 			// Rev 2026-10-19: the take plays the search clip; the heat packs move at its grab (the leader must stand at the crate).
 			if (ALootCrateActor* Crate = State.Crate.Get())
 			{
@@ -1307,8 +1307,8 @@ namespace TutorialSmoke
 				Leader->TeleportTo(FVector(Spot.X, Spot.Y, Leader->GetActorLocation().Z), Leader->GetActorRotation(), false, true);
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke the looter stands %.0f cm from the crate"), Crate->GetDistanceTo(Leader->GetActorLocation()));
 			}
-				State.HeatPacksBeforeLoot, Leader->HeatPacksCount, TacticalHeatTuning::Get().HeatPackMaxStack));
-			Check(State, Tutorial->GetStepState(TEXT("A1_loot_take")) == ETutorialStepState::Completed
+			UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
+			Interactions->LootItem(ELootItem::HeatPack);
 			Check(State, State.Crate.IsValid() && State.Crate->IsSearching() && Leader->HeatPacksCount == State.HeatPacksBeforeLoot
 				&& Tutorial->GetStepState(TEXT("A1_loot_take")) == ETutorialStepState::Active,
 				TEXT("rev 2026-10-19: the take starts the search - the heat packs stay in the crate until its grab"));
@@ -1323,6 +1323,11 @@ namespace TutorialSmoke
 				return true;
 			}
 			UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
+			Interactions->CloseLootDialog();
+			const int32 Expected = FMath::Min(TacticalHeatTuning::Get().HeatPackMaxStack, State.HeatPacksBeforeLoot + 3);
+			Check(State, Leader->HeatPacksCount == Expected, FString::Printf(TEXT("the leader took what fits of the 3 heat packs (%d -> %d, stack max %d)"),
+				State.HeatPacksBeforeLoot, Leader->HeatPacksCount, TacticalHeatTuning::Get().HeatPackMaxStack));
+			Check(State, Tutorial->GetStepState(TEXT("A1_loot_take")) == ETutorialStepState::Completed
 				&& Tutorial->GetStepState(TEXT("A1_obj_hut")) == ETutorialStepState::Completed, TEXT("ItemLooted.HeatPack completes the card and the hut objective"));
 			Tutorial->SkipStep(TEXT("A1_wt_hut"));
 			State.Stage = 45;
@@ -1750,6 +1755,132 @@ namespace TutorialSmoke
 			{
 				Member->StopOperative();
 				Member->SetStance(EOperativeStance::Standing);
+			}
+			State.Stage = 82;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// Rev 2026-10-19 (game designer): the medkit lesson the first time an operative is badly hurt - a mine blast beside the engineer.
+		case 82:
+		{
+			AOperativeCharacter* Engineer = nullptr;
+			bool bEveryoneHasMedkit = true;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->HealthComponent->Heal(10000.f);
+				bEveryoneHasMedkit &= Member->MedkitsCount >= 1;
+				if (Member->SquadRole == EOperativeRole::Engineer)
+				{
+					Engineer = Member;
+				}
+			}
+			Check(State, bEveryoneHasMedkit, TEXT("medkit lesson: every operative carries a medkit at that moment"));
+			State.LeaderBeforeMedkit = Leader;
+			Check(State, Engineer && Tutorial->GetStepState(TEXT("X_medkit")) == ETutorialStepState::Idle, TEXT("medkit lesson: no card while everyone is healthy"));
+			if (!Engineer)
+			{
+				return Finish(State, false);
+			}
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			const FVector Feet = Engineer->GetActorLocation() - FVector(0.f, 0.f, Engineer->GetSimpleCollisionHalfHeight());
+			if (AProximityMineActor* Mine = World->SpawnActor<AProximityMineActor>(Feet + Engineer->GetActorRightVector() * 200.f, FRotator::ZeroRotator, Params))
+			{
+				Mine->Detonate();
+			}
+			const float Share = Engineer->HealthComponent->GetCurrentHealth() / FMath::Max(1.f, Engineer->HealthComponent->GetMaxHealth());
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke medkit lesson: the blast left the engineer at %.0f%%"), Share * 100.f);
+			if (Share >= 0.7f)
+			{
+				Engineer->HealthComponent->ApplyDirectHealthLoss(Engineer->HealthComponent->GetCurrentHealth() - 0.5f * Engineer->HealthComponent->GetMaxHealth(),
+					TEXT("Smoke"));
+			}
+			State.Focus = Engineer;
+			State.Stage = 83;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 83:
+		{
+			// Other lesson cards of the beat may hold the card slot: skipped here so the medkit card shows (it queues behind them in game).
+			const FName Card = Tutorial->GetMachine().GetActiveCard();
+			if (!Card.IsNone() && Card != FName(TEXT("X_medkit")))
+			{
+				Tutorial->SkipStep(Card);
+			}
+			if (Tutorial->GetStepState(TEXT("X_medkit")) != ETutorialStepState::Active && State.StageTime < 12.f)
+			{
+				return true;
+			}
+			AOperativeCharacter* Engineer = State.Focus.Get();
+			Check(State, Tutorial->GetStepState(TEXT("X_medkit")) == ETutorialStepState::Active && Engineer && Tutorial->GetFocusOperative(TEXT("X_medkit")) == Engineer,
+				FString::Printf(TEXT("medkit lesson: the card shows, focused on the wounded engineer (%.1f s)"), State.StageTime));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::UseItem) && !Tutorial->IsCommandLocked(PlayerCommands::InventoryOpen),
+				TEXT("medkit lesson: Item.Use / Inventory.Open are not locked"));
+			// A medkit on someone else does not complete it.
+			AOperativeCharacter* Other = nullptr;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Other = Member != Engineer ? Member : Other;
+			}
+			if (Other)
+			{
+				Other->HealthComponent->ApplyDirectHealthLoss(20.f, TEXT("Smoke"));
+				Squad->SetLeader(Other);
+				Tap(PC, State, EKeys::H);
+			}
+			State.Stage = 84;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 84:
+		{
+			if (State.StageTime < 0.3f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("X_medkit")) == ETutorialStepState::Active, TEXT("medkit lesson: a medkit on a mate does not complete it"));
+			AOperativeCharacter* Engineer = State.Focus.Get();
+			State.HeatPacksBeforeLoot = Engineer ? Engineer->MedkitsCount : 0; // reused: his medkits before H
+			State.CheckpointHealth = Engineer ? Engineer->HealthComponent->GetCurrentHealth() : 0.f;
+			if (Engineer)
+			{
+				Squad->SetLeader(Engineer); // the card's input: select him, press H
+				Tap(PC, State, EKeys::H);
+			}
+			State.Stage = 85;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 85:
+		{
+			if (Tutorial->GetStepState(TEXT("X_medkit")) == ETutorialStepState::Active && State.StageTime < 2.f)
+			{
+				return true;
+			}
+			const AOperativeCharacter* Engineer = State.Focus.Get();
+			Check(State, Engineer && Engineer->MedkitsCount == State.HeatPacksBeforeLoot - 1 && Engineer->HealthComponent->GetCurrentHealth() > State.CheckpointHealth,
+				TEXT("medkit lesson: H used his medkit (healed, one medkit fewer)"));
+			Check(State, Tutorial->GetStepState(TEXT("X_medkit")) == ETutorialStepState::Completed, TEXT("medkit lesson: the medkit on HIM completes the card"));
+			State.Stage = 86;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 86:
+		{
+			// The blast may have floored someone: up again, the earlier leader back, then the A4 part.
+			bool bAnyDown = false;
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				bAnyDown |= Member->IsKnockedDown();
+			}
+			if (bAnyDown && State.StageTime < 10.f)
+			{
+				return true;
+			}
+			if (AOperativeCharacter* Before = State.LeaderBeforeMedkit.Get())
+			{
+				Squad->SetLeader(Before);
 			}
 			State.Stage = 104;
 			State.StageTime = 0.f;

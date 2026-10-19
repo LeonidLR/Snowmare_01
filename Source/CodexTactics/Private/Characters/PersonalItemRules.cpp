@@ -43,4 +43,16 @@ FText PersonalItemRules::GetMissingName(EPersonalItem Item)
 	}
 }
 
+const TCHAR* PersonalItemRules::GetEventId(EPersonalItem Item)
+{
+	switch (Item)
+	{
+	case EPersonalItem::Medkit: return TEXT("MEDKIT");
+	case EPersonalItem::CannedFood: return TEXT("CANNED_FOOD");
+	case EPersonalItem::Bread: return TEXT("BREAD");
+	case EPersonalItem::Chocolate: return TEXT("CHOCOLATE");
+	default: return TEXT("HEAT_PACK");
+	}
+}
+
 #undef LOCTEXT_NAMESPACE

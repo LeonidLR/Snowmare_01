@@ -40,4 +40,10 @@ namespace PersonalItemRules
 
 	/** "medkits", "canned food", "bread", "chocolate" (Godot "%s has no ... in personal inventory!"). */
 	CODEXTACTICS_API FText GetMissingName(EPersonalItem Item);
+
+	/**
+	 * The item id of UCodexEventBus::OnItemUsed (Godot inventory_drawer.gd item_used): "MEDKIT", "CANNED_FOOD", "BREAD", "CHOCOLATE",
+	 * "HEAT_PACK" - the tutorial hears "ItemUsed.<id>" (the medkit lesson: "ItemUsed.MEDKIT" with the healed operative as subject).
+	 */
+	CODEXTACTICS_API const TCHAR* GetEventId(EPersonalItem Item);
 }
