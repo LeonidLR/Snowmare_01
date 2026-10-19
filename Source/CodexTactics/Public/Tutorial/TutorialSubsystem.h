@@ -429,6 +429,10 @@ private:
 	/** {focus} -> the focused operative's name. */
 	FString ResolveFocusToken(const FString& Text, FName StepId) const;
 	AOperativeCharacter* FindColdestMember() const;
+	/** Rev 2026-10-19: the living member with the lowest health share ("focus": "wounded_operative"). */
+	AOperativeCharacter* FindMostWoundedMember() const;
+	/** Picks the step's focus operative now (by its "focus" kind) and remembers it. */
+	AOperativeCharacter* ChooseFocus(const FTutorialStep& Step);
 	FTutorialCardView BuildCardView(FName StepId, bool bDone) const;
 	FText ObjectiveText(FName StepId) const;
 

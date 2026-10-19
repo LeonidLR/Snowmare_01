@@ -8,7 +8,8 @@
 //     shows (clickable), TripwireSpotted with her as the subject;
 //  3. the Commander at 80 % cold: chance = warm chance - 50, disarm takes 5 s; the first attempt only warns (dangerous),
 //     the second (forced miss + detonation roll) pulls the pin: blast, the wire is gone, TripwireTriggered;
-//  4. a second wire: the Medic-Sapper disarms it in 3 s (forced success): gone, +2 grenades, TripwireDisarmed;
+//  4. a second wire: the Medic-Sapper disarms it in 3 s (forced success): gone, +2 grenades, TripwireDisarmed (rev 2026-10-19: the wire
+//     stays, harmless, until the pickup clip's grab; the grenades and TripwireDisarmed come after it - checked standing and crouched);
 //  5. a third wire: the engineer lying prone on it - no trip; standing up on it - trip;
 //  6. rev 5e (game designer 2026-10-14) known-trap pathing: a spotted wire across the way - the player-control filter's path runs
 //     straight through it, the AUTO filter's path goes round; with the squad AUTO mode OFF a move order through the spotted wire
@@ -90,7 +91,52 @@ namespace PMCTripwireSmoke
 		bool bRequested = false;
 		int32 PickupsBeforeProne = 0;
 		TStrongObjectPtr<UEventBusProbe> Probe;
+		/** Rev 2026-10-19: the disarmed wire waiting for the pickup grab (seen when / its delay / what it must not have done yet). */
+		bool bAwaitSeen = false;
+		bool bAwaitWrong = false;
+		float AwaitAt = 0.f;
+		float AwaitDelay = 0.f;
+		int32 AwaitEvents = 0;
+		int32 AwaitGrenades = 0;
 	};
+
+	/**
+	 * Rev 2026-10-19 (game designer: bend down FIRST, then the trap disappears): while the disarmed wire waits for the pickup clip's
+	 * grab it is still there, the grenades are not in the kit and TripwireDisarmed has not been raised. True while it waits.
+	 */
+	bool TrackWirePickup(FState& State, const AOperativeCharacter* Disarmer)
+	{
+		const ATripwireActor* Wire = State.Wire.Get();
+		if (!Wire || !Wire->IsAwaitingPickup() || !Disarmer)
+		{
+			return false;
+		}
+		const int32 Events = State.Probe->CountEvent(GameplayEvents::TripwireDisarmed);
+		if (!State.bAwaitSeen)
+		{
+			State.bAwaitSeen = true;
+			State.AwaitAt = State.Time;
+			State.AwaitDelay = Wire->GetLastPickupDelaySeconds();
+			State.AwaitEvents = Events;
+			State.AwaitGrenades = Disarmer->GrenadesCount;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke wire disarmed, waiting %.2f s for the pickup grab"), State.AwaitDelay);
+		}
+		State.bAwaitWrong |= Events != State.AwaitEvents || Disarmer->GrenadesCount != State.AwaitGrenades || Wire->IsTripped();
+		return true;
+	}
+
+	/** After the wire went: it waited for the grab (delay > 0.2 s) and only then the grenades / event came. */
+	void CheckWirePickupOrder(FState& State, const TCHAR* Who)
+	{
+		const float Held = State.Time - State.AwaitAt;
+		const bool bOk = State.bAwaitSeen && !State.bAwaitWrong && State.AwaitDelay > 0.2f && Held >= State.AwaitDelay - 0.15f
+			&& State.Probe->CountEvent(GameplayEvents::TripwireDisarmed) == State.AwaitEvents + 1;
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s %s: the wire stayed %.2f s after the disarm (grab at %.2f s), the grenades / TripwireDisarmed after it"),
+			bOk ? TEXT("ok  ") : TEXT("FAIL"), Who, State.bAwaitSeen ? Held : -1.f, State.AwaitDelay);
+		State.Failures += bOk ? 0 : 1;
+		State.bAwaitSeen = false;
+		State.bAwaitWrong = false;
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -673,10 +719,12 @@ namespace PMCTripwireSmoke
 		}
 		case 28:
 		{
+			TrackWirePickup(State, State.Engineer.Get());
 			if (State.Wire.IsValid() && State.Time < 7.f)
 			{
 				return true;
 			}
+			CheckWirePickupOrder(State, TEXT("standing"));
 			AOperativeCharacter* Engineer = State.Engineer.Get();
 			Check(State, !State.Wire.IsValid() && State.Probe->CountEvent(GameplayEvents::TripwireDisarmed, Engineer->GetFName()) == 1
 				&& Engineer->GrenadesCount == State.MedicGrenades + 2 && State.Probe->CountEvent(GameplayEvents::TripwireTriggered, Engineer->GetFName()) == 1,
@@ -740,10 +788,12 @@ namespace PMCTripwireSmoke
 		}
 		case 30:
 		{
+			TrackWirePickup(State, State.Engineer.Get());
 			if (State.Wire.IsValid() && State.Time < 7.f)
 			{
 				return true;
 			}
+			CheckWirePickupOrder(State, TEXT("crouched"));
 			AOperativeCharacter* Engineer = State.Engineer.Get();
 			const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Engineer);
 			Check(State, !State.Wire.IsValid() && Engineer->GetStance() == EOperativeStance::Crouching && Anim

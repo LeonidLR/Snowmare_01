@@ -95,13 +95,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
 	void CloseLootDialog();
 
-	/** Loot button of one item: the leader takes it (Godot _on_loot_single_item_pressed). */
+	/**
+	 * Loot button of one item (Godot _on_loot_single_item_pressed). Rev 2026-10-19: the leader searches the crate (chest-search clip)
+	 * and the stack moves into his kit at the clip's grab moment (HandleSearchFinished); refused while the window is not usable.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
 	void LootItem(ELootItem Item);
 
-	/** "Take ALL" (Godot _on_loot_all_pressed). */
+	/** "Take ALL" (Godot _on_loot_all_pressed): the same search; everything moves at the grab and the window closes. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
 	void LootAll();
+
+	/** The crate's search reached its grab moment (Collector null: interrupted, nothing moved): feed line, window refresh / close. */
+	void HandleSearchFinished(ALootCrateActor* Crate, AOperativeCharacter* Collector, bool bAll, const FText& Taken);
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Loot")
 	ALootCrateActor* GetLootCrate() const { return LootCrate.Get(); }
@@ -148,8 +154,6 @@ private:
 	bool TryOpenMenu();
 	void OpenMenuFor(AInteractableActor* Target, AOperativeCharacter* Leader);
 	void CloseMenu();
-	/** The chest-search clip after Take / Take All (UOperativeAnimInstance::PlayInteraction by his stance). */
-	void PlayChestSearch(AOperativeCharacter& Collector) const;
 	/** Clears the «approaching defuser» mark of a mine (Godot _close_action_menu). */
 	void ClearDefuser(AInteractableActor* Target) const;
 

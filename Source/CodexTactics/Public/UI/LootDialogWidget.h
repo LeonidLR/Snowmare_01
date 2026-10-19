@@ -109,5 +109,10 @@ private:
 
 	TWeakObjectPtr<ALootCrateActor> ShownCrate;
 	int32 ShownRevision = -1;
+	/** Rev 2026-10-19: the window showed the crate's search ("Searching...", buttons off) - refreshed when it ends. */
+	bool bShownSearching = false;
+	/** The subtitle the layout / WBP had (restored after a search). */
+	FText DefaultSubtitle;
+	bool bDefaultSubtitleCached = false;
 	TWeakObjectPtr<ULootEntryButton> PressedEntry;
 };

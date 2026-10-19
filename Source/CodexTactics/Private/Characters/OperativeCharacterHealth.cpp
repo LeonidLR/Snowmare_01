@@ -371,6 +371,46 @@ void AOperativeCharacter::HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockd
 	}
 }
 
+void AOperativeCharacter::ResetTransientStateForLoad()
+{
+	bKnockedFromCover = false; // never back to a pre-load wall
+	LastCoverReturn = EKnockdownCoverReturn::NotInCover;
+	if (KnockdownComponent)
+	{
+		KnockdownComponent->ResetForLoad();
+	}
+	if (PanicComponent)
+	{
+		PanicComponent->ResetForLoad();
+	}
+	if (bCornerAimActive)
+	{
+		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("load"));
+	}
+	if (bInCover)
+	{
+		LeaveCover(TEXT("load"));
+	}
+	bHasPendingCover = false;
+	bShimmying = false;
+	ShimmyDirection = 0.f;
+	bManualCornerPeek = false;
+	bManualCornerPeekEventPending = false;
+	if (IsProneDiving())
+	{
+		bProneDiveHadOrder = false; // no crawl-on to a pre-load goal
+		EndProneDive();
+	}
+	TacticalAnchor = FTacticalAnchor();
+	SetAutonomyTarget(nullptr);
+	StopOperative();
+	if (UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+	{
+		Anim->StopAllMontages(0.f); // get-up, interaction, dive, cover, weather pose, fire / reload clips
+	}
+	ResetBodyOffsets();
+}
+
 void AOperativeCharacter::ReturnToCoverAfterKnockdown()
 {
 	// User rule 2026-10-18: a blast (grenade, barrel, mine) that just happened to floor him in cover sends him back to the same slot;

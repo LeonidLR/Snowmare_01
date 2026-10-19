@@ -360,11 +360,14 @@ void UPlaytestBotSubsystem::TickExplore(float DeltaTime)
 		Interactions->ConfirmActionMenu();
 		return;
 	}
-	if (Interactions->GetLootCrate())
+	if (const ALootCrateActor* OpenCrate = Interactions->GetLootCrate())
 	{
-		Interactions->LootAll();
-		Interactions->CloseLootDialog();
-		ExploreTarget.Reset();
+		// Rev 2026-10-19: Take All plays the search clip; the items move at its grab and the window closes itself - wait for it.
+		if (!OpenCrate->IsSearching())
+		{
+			Interactions->LootAll();
+			ExploreTarget.Reset();
+		}
 		return;
 	}
 	// Ambush level: the stealth step decides first (stance, hiding, striking); the loot walk waits while it holds the squad.

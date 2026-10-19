@@ -28,11 +28,39 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInteractionAnimLootWindowDelayTest, "CodexTact
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FInteractionAnimLootWindowDelayTest::RunTest(const FString&)
 {
-	// Chest open 3.0 s, blend-out 0.25: the window opens as it starts to blend out.
-	TestEqual(TEXT("clip first, then the window"), InteractionAnimRules::GetLootWindowDelay(3.f, 0.25f, 1.8f, false), 2.75f);
-	TestEqual(TEXT("no clip (prone / none): the crate's 1.8 s"), InteractionAnimRules::GetLootWindowDelay(0.f, 0.25f, 1.8f, false), 1.8f);
-	TestEqual(TEXT("tactical pause: at once"), InteractionAnimRules::GetLootWindowDelay(3.f, 0.25f, 1.8f, true), 0.f);
-	TestEqual(TEXT("blend-out longer than the clip clamps"), InteractionAnimRules::GetLootWindowDelay(0.1f, 0.25f, 1.8f, false), 0.f);
+	// Rev 2026-10-19 (game designer: the animation FIRST, then the loot): chest open 3.0 s, effect fraction 0.9 -> the window at 2.7 s.
+	const float OpenDelay = InteractionAnimRules::GetEffectDelay(3.f, 0.f, 1.f, 0.9f);
+	TestTrue(TEXT("the lid-open moment of the chest-open clip"), FMath::IsNearlyEqual(OpenDelay, 2.7f, 0.001f));
+	TestEqual(TEXT("clip first, then the window"), InteractionAnimRules::GetLootWindowDelay(OpenDelay, true, 1.8f), OpenDelay);
+	TestEqual(TEXT("no clip (prone / none): the crate's 1.8 s"), InteractionAnimRules::GetLootWindowDelay(0.f, false, 1.8f), 1.8f);
+	TestTrue(TEXT("the window never opens before the clip started"), InteractionAnimRules::GetLootWindowDelay(OpenDelay, true, 1.8f) > 0.f);
+	// Chest search 3.17 s, grab at half: the items move 1.585 s after the click (not before the clip starts).
+	TestTrue(TEXT("search grab"), FMath::IsNearlyEqual(InteractionAnimRules::GetEffectDelay(3.17f, 0.f, 1.f, 0.5f), 1.585f, 0.001f));
+	// Pickup 2.87 s, the standing clip starts at 1.0 s (low pose), grab at 50 % = 1.435 s into the clip -> 0.435 s after its start.
+	TestTrue(TEXT("pickup grab from the low pose"), FMath::IsNearlyEqual(InteractionAnimRules::GetEffectDelay(2.87f, 1.f, 1.f, 0.5f), 0.435f, 0.001f));
+	TestTrue(TEXT("crouched upper-body pickup from 0"), FMath::IsNearlyEqual(InteractionAnimRules::GetEffectDelay(2.87f, 0.f, 1.f, 0.5f), 1.435f, 0.001f));
+	TestTrue(TEXT("play rate 2 halves it"), FMath::IsNearlyEqual(InteractionAnimRules::GetEffectDelay(3.17f, 0.f, 2.f, 0.5f), 0.7925f, 0.001f));
+	TestEqual(TEXT("started past the moment: at once"), InteractionAnimRules::GetEffectDelay(2.87f, 2.f, 1.f, 0.5f), 0.f);
+	TestEqual(TEXT("fraction clamps to the clip"), InteractionAnimRules::GetEffectDelay(3.f, 0.f, 1.f, 1.5f), 3.f);
+	TestEqual(TEXT("no clip length: 0"), InteractionAnimRules::GetEffectDelay(0.f, 0.f, 1.f, 0.5f), 0.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInteractionAnimDispatchTest, "CodexTactics.Characters.InteractionAnim.Dispatch",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FInteractionAnimDispatchTest::RunTest(const FString&)
+{
+	// Rev 2026-10-19: the tactical pause queues the clip (it plays on the release, the effect after it) - it no longer skips it.
+	TestEqual(TEXT("pause: wait for the release"), InteractionAnimRules::GetDispatch(true, EInteractionAnimLayer::FullBody), EInteractionClipDispatch::WaitForRelease);
+	TestEqual(TEXT("pause, prone: still waits"), InteractionAnimRules::GetDispatch(true, EInteractionAnimLayer::None), EInteractionClipDispatch::WaitForRelease);
+	TestEqual(TEXT("standing: clip"), InteractionAnimRules::GetDispatch(false, EInteractionAnimLayer::FullBody), EInteractionClipDispatch::PlayClip);
+	TestEqual(TEXT("crouched: clip"), InteractionAnimRules::GetDispatch(false, EInteractionAnimLayer::UpperBody), EInteractionClipDispatch::PlayClip);
+	TestEqual(TEXT("prone: no clip, the effect at once"), InteractionAnimRules::GetDispatch(false, EInteractionAnimLayer::None), EInteractionClipDispatch::NoClip);
+	// The search lands only for a collector who is still there.
+	TestTrue(TEXT("there"), InteractionAnimRules::ShouldCompleteSearch(true, false, 120.f, 250.f));
+	TestFalse(TEXT("walked off"), InteractionAnimRules::ShouldCompleteSearch(true, false, 400.f, 250.f));
+	TestFalse(TEXT("knocked down"), InteractionAnimRules::ShouldCompleteSearch(true, true, 50.f, 250.f));
+	TestFalse(TEXT("dead"), InteractionAnimRules::ShouldCompleteSearch(false, false, 50.f, 250.f));
 	return true;
 }
 

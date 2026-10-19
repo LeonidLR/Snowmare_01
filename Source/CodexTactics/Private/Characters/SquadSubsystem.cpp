@@ -402,6 +402,29 @@ void USquadSubsystem::EnterSoloModeInternal(bool bForTrap)
 	}
 }
 
+void USquadSubsystem::RestoreSoloForLoad(bool bSolo, bool bInTrapSolo)
+{
+	bIsSoloMode = bSolo;
+	bTrapSolo = bSolo && bInTrapSolo;
+	SetFollowersHolding(bSolo);
+	AOperativeCharacter* LeaderRef = Leader.Get();
+	if (LeaderRef && HasMultiSelection())
+	{
+		SetSelectedGroup({ LeaderRef }, false); // the next order goes to the selected operative alone
+	}
+	if (bSolo)
+	{
+		for (FFollowerState& Follower : Followers)
+		{
+			if (AOperativeCharacter* Operative = Follower.Operative.Get())
+			{
+				Operative->StopOperative(); // they hold where the save put them
+			}
+		}
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Squad: Solo restored by a load: %s%s"), bSolo ? TEXT("ON") : TEXT("off"), bTrapSolo ? TEXT(" (trap Solo)") : TEXT(""));
+}
+
 void USquadSubsystem::HoldForSpottedTrap(AOperativeCharacter* Spotter, const FText& TrapName)
 {
 	// Godot _on_mine_spotted: the whole squad stops.

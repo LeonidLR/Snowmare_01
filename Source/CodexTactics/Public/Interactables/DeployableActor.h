@@ -64,6 +64,9 @@ protected:
 	/** Sprint 15: the item just went into Recipient's supply (a stove hands its gas over). */
 	virtual void OnPickedUpBy(AOperativeCharacter& Recipient) {}
 
+	/** Rev 2026-10-19: the pickup clip's grab after a successful disarm - the feed line, the item into a kit, the actor goes. */
+	virtual void CompleteDisarmPickup(AOperativeCharacter* User) override;
+
 private:
 	/** Resolves the work; OriginalStance = his stance before he crouched for it (restored if standing; picks the pickup clip). */
 	void FinishDismantle(TWeakObjectPtr<AOperativeCharacter> WeakUser, EOperativeStance OriginalStance);

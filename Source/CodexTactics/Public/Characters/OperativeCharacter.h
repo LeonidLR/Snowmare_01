@@ -1311,6 +1311,26 @@ public:
 	/** Visual mesh offset applied now by the run-in blend, actor-local (smokes), cm. */
 	FVector GetCoverEntryMeshOffset() const { return CoverEntryAppliedOffset; }
 
+	/**
+	 * Rev 2026-10-19: how far the mesh stands from the Blueprint's place on the capsule now, horizontally, cm (smokes: 0 out of cover;
+	 * in cover the tracked run-in / wall-push offsets).
+	 */
+	float GetMeshBaseOffsetCm() const;
+
+	/**
+	 * Rev 2026-10-19: drops every transient body offset (cover run-in blend, wall push, entry yaw) and puts the mesh back on its
+	 * Blueprint place on the capsule (a load in place, a teleport).
+	 */
+	void ResetBodyOffsets();
+
+	/**
+	 * Rev 2026-10-19 (user: "the save keeps the state the character was in BEFORE the load"): a load in place applies the saved fields on
+	 * this LIVE operative - first everything transient goes: the knockdown (no get-up), panic / stress, cover / pending cover / shimmy /
+	 * corner aim / manual peek, the prone dive (no crawl-on), every montage, the body offsets, the move, the autonomy anchor / target.
+	 * (Player loads reopen the level - USaveGameSubsystem::LoadGameWithTravel - so this is the dev / smoke path.)
+	 */
+	void ResetTransientStateForLoad();
+
 	/** A friendly (squad) grenade that has landed within the danger radius also sends him behind the corner (default off). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
 	bool bCornerAimDuckForFriendlyGrenades = false;
@@ -1742,7 +1762,11 @@ private:
 	/** The mesh push away from the wall that keeps every skin bone outside it (CoverWallClearanceCm), world cm along the normal. */
 	float UpdateCoverWallClearance(float DeltaTime);
 	float CoverWallPush = 0.f;
-	float CoverWallPushApplied = 0.f;
+	/**
+	 * The wall push applied to the mesh now, actor-local (rev 2026-10-19). It was a scalar re-applied along the CURRENT facing: a turn /
+	 * a teleport / a new wall normal while the push was on left up to ~1.2 m of it on the mesh for good (the body beside its capsule).
+	 */
+	FVector CoverWallPushAppliedLocal = FVector::ZeroVector;
 	FVector CoverWallPushDir = FVector::ForwardVector;
 	/** Skin bones (no IK targets / virtual bones) of the mesh asset the list was built for. */
 	TArray<int32> CoverClearanceBones;
@@ -1811,7 +1835,16 @@ private:
 
 	/** Skeletal mesh Z offset set by the Blueprint for the standing capsule. */
 	float MeshBaseZ = 0.f;
+	/** Rev 2026-10-19: the Blueprint's mesh XY offset and yaw (the body's place on the capsule; EnforceMeshBaseOffset). */
+	FVector2D MeshBaseXY = FVector2D::ZeroVector;
+	float MeshBaseYaw = 0.f;
 	bool bMeshBaseCaptured = false;
+	/**
+	 * Rev 2026-10-19 (user bug: the body ~1 m beside its selection ring, also while walking): the mesh's XY / yaw on the capsule may
+	 * differ from the Blueprint's only by the tracked cover offsets (run-in blend, wall push, entry yaw); anything else is a leftover
+	 * and is put back here every frame (logged).
+	 */
+	void EnforceMeshBaseOffset();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> BodyMaterial;

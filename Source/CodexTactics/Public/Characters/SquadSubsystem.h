@@ -113,6 +113,14 @@ public:
 	void RestoreTrapSolo(bool bInTrapSolo) { bTrapSolo = bIsSoloMode && bInTrapSolo; }
 
 	/**
+	 * Rev 2026-10-19 (user: "Solo looks ON but the squad moves together" after a load): the saved Solo state set as ONE unit - the mode,
+	 * the trap Solo and the followers holding - whatever the world had before the load (the old path only toggled when they differed
+	 * and kept a box-selected group); a multi-selection drops to the leader, holding followers stop. No feed line, no crouch (the
+	 * saved stances stay).
+	 */
+	void RestoreSoloForLoad(bool bSolo, bool bInTrapSolo);
+
+	/**
 	 * Commander Mode (Sprint 07-A): squad members fight on their own around their move-order anchors
 	 * (USquadAutonomySubsystem). Off by default: the classic fully manual control is unchanged.
 	 */

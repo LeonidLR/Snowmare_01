@@ -538,6 +538,18 @@
       "precredit": false,
       "trigger": { "type": "after_step", "step": "A4_cones" },
       "complete": { "commands": ["Deploy.Tripwire"], "timeout_s": 120 }
+    },
+
+    {
+      "_comment": "Rev 2026-10-19 (game designer play-test): the MEDKIT lesson the first time an operative is badly hurt - a mine / tripwire blast, frostbite, a lesson down (the guard leaves him at 1 HP). No beat: it can come in any beat (never dropped by a later beat), once. Trigger: the most wounded living member lost at least 30 % of his health = below 70 % (stat squad_injury_max, data). Focus = that operative (the {focus} name, a WOUNDED line over him). Unlocks what it teaches (the progressive locks must not block it). The real input: select him and press H (his own medkit), or the inventory [I] Medkit line; a mate's medkit: drag it onto him in the inventory (Item.Give), then H. Completes when a medkit heals THAT operative (ItemUsed.MEDKIT with him as the subject - H / the drawer line, or a mate's field aid). Every operative carries 1 medkit (BP default MedkitsCount, the level loadout does not change it; the hut crate holds none).",
+      "id": "X_medkit", "kind": "hint_card", "text_id": "TUT_MEDKIT",
+      "keys": ["Select.Member", "H", "Inventory.Open", "Item.Give"],
+      "focus": "wounded_operative",
+      "unlock": ["Item.Use", "Inventory.Open", "Item.Give"],
+      "precredit": false,
+      "trigger": { "type": "condition" },
+      "condition": { "stat": "squad_injury_max", "at_least": 30 },
+      "complete": { "event": "ItemUsed.MEDKIT", "subject": "focus", "timeout_s": 120 }
     }
   ]
 }

@@ -63,6 +63,11 @@ public:
 	 * (UTutorialSubsystem: the squad's cold / heat packs) or by tests; unset = every stat reads 0.
 	 */
 	TFunction<float(FName)> StatProvider;
+	/**
+	 * The focus operative's id of a step ("focus"; "complete.subject": "focus" counts only his events). Set by the runtime
+	 * (UTutorialSubsystem) or by tests; unset / NAME_None = no focus chosen (any subject counts).
+	 */
+	TFunction<FName(FName StepId)> FocusSubjectProvider;
 
 	/** Replaces the steps and resets all progress. */
 	void Load(const FTutorialStepsData& InData);

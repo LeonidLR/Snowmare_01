@@ -539,15 +539,7 @@ void UInventoryDrawerWidget::Activate(EInventoryDrawerSlot Line)
 		break;
 	default: break;
 	}
-	// Godot inventory_drawer.gd: EventBus.item_used(target_soldier, "MEDKIT" / ...).
-	const TCHAR* ItemId = Line == EInventoryDrawerSlot::Medkit ? TEXT("MEDKIT") : (Line == EInventoryDrawerSlot::CannedFood ? TEXT("CANNED_FOOD")
-		: (Line == EInventoryDrawerSlot::Bread ? TEXT("BREAD") : (Line == EInventoryDrawerSlot::Chocolate ? TEXT("CHOCOLATE") : nullptr)));
-	UCodexEventBus* Bus = UCodexEventBus::Get(this);
-	const USquadSubsystem* ItemSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
-	if (ItemId && Bus && ItemSquad && ItemSquad->GetLeader())
-	{
-		Bus->OnItemUsed.Broadcast(ItemSquad->GetLeader(), ItemId);
-	}
+	// Godot inventory_drawer.gd EventBus.item_used: raised by AOperativeCharacter::UsePersonalItem when the item really was used.
 	Refresh();
 }
 

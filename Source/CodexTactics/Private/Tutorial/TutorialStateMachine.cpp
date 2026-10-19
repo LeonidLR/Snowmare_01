@@ -761,6 +761,14 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId, const 
 			{
 				continue; // "distinct_from": this operative already did another part of the lesson
 			}
+			if (Complete.bFocusSubject && FocusSubjectProvider)
+			{
+				const FName Focus = FocusSubjectProvider(Data.Steps[Index].Id);
+				if (!Focus.IsNone() && Focus != SubjectId)
+				{
+					continue; // "subject": "focus": someone else's event (the medkit healed another operative)
+				}
+			}
 			if (Complete.bDistinctSubjects)
 			{
 				bool bAlreadyCounted = true;

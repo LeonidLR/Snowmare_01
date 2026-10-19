@@ -4,7 +4,6 @@
 
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
-#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -395,9 +394,9 @@ void ATripwireActor::ScanForSpotters()
 void ATripwireActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (bPreview || bTripped || !bSetUp)
+	if (bPreview || bTripped || !bSetUp || IsAwaitingPickup())
 	{
-		return;
+		return; // rev 2026-10-19: a disarmed wire waits harmlessly for the pickup grab
 	}
 	if (ArmingLeft > 0.f)
 	{
@@ -482,7 +481,7 @@ void ATripwireActor::Tick(float DeltaSeconds)
 
 void ATripwireActor::Trip(AActor* Tripper)
 {
-	if (bTripped || bPreview)
+	if (bTripped || bPreview || IsAwaitingPickup())
 	{
 		return;
 	}
@@ -633,18 +632,31 @@ void ATripwireActor::FinishDisarm()
 		ResolveHostileDisarm(User, DisarmerStance);
 		return;
 	}
-	const bool bFumble = FMath::FRand() < TripwireRules::DisarmFumbleChance;
-	const int32 Returned = TripwireRules::GrenadesReturned(bFumble);
-	User->GrenadesCount += Returned;
-	PostLine(User->DisplayName, FText::Format(bFumble ? LOCTEXT("DisarmedFumble", "🪤 Tripwire disarmed, one grenade ruined. +{0} grenade")
-		: LOCTEXT("Disarmed", "🪤 Tripwire disarmed. +{0} grenades"), Returned));
-	UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s disarmed by %s: +%d grenades"), *GetName(), *User->DisplayName.ToString(), Returned);
-	GameplayEvents::Raise(this, GameplayEvents::TripwireDisarmed, User);
-	// The squad's own wire is disarmed lying under it: he stays prone, and prone has no pickup clip yet (logged, nothing plays).
-	if (UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(User))
+	// The squad's own wire is disarmed lying under it: he stays prone, and prone has no pickup clip yet - the grab is at once.
+	BeginDisarmPickup(User, User->GetStance());
+}
+
+void ATripwireActor::CompleteDisarmPickup(AOperativeCharacter* User)
+{
+	PostDeferredDefusalLine();
+	if (IsHostile())
 	{
-		Anim->PlayInteraction(EOperativeInteractionAnim::PickupGround, User->GetStance());
+		if (User)
+		{
+			User->GrenadesCount += GrenadesRecovered;
+			PostLine(User->DisplayName, FText::Format(LOCTEXT("PMCDisarmed", "🪤 PMC tripwire disarmed. +{0} grenades"), GrenadesRecovered));
+		}
 	}
+	else if (User)
+	{
+		const bool bFumble = FMath::FRand() < TripwireRules::DisarmFumbleChance;
+		const int32 Returned = TripwireRules::GrenadesReturned(bFumble);
+		User->GrenadesCount += Returned;
+		PostLine(User->DisplayName, FText::Format(bFumble ? LOCTEXT("DisarmedFumble", "🪤 Tripwire disarmed, one grenade ruined. +{0} grenade")
+			: LOCTEXT("Disarmed", "🪤 Tripwire disarmed. +{0} grenades"), Returned));
+		UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s disarmed by %s: +%d grenades"), *GetName(), *User->DisplayName.ToString(), Returned);
+	}
+	GameplayEvents::Raise(this, GameplayEvents::TripwireDisarmed, User);
 	Destroy();
 }
 
@@ -664,7 +676,11 @@ FVector ATripwireActor::GetDisarmApproachPoint(const FVector& From) const
 EDefusalResult ATripwireActor::ResolveHostileDisarm(AOperativeCharacter* User, EOperativeStance OriginalStance)
 {
 	const FDefusalChance Odds = GetDefusalChance(User);
-	const EDefusalResult Result = AttemptDefusal(User); // a detonation trips the wire (DetonateTrap)
+	EDefusalResult Result = EDefusalResult::Warning;
+	{
+		TGuardValue<bool> DeferLine(bDeferDefusalSuccessLine, true); // the success line waits for the pickup grab
+		Result = AttemptDefusal(User); // a detonation trips the wire (DetonateTrap)
+	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s: PMC disarm by %s (chance %.0f%%, cold -%.0f): %s"), *GetName(), *User->DisplayName.ToString(),
 		Odds.Chance, Odds.ColdPenalty, Result == EDefusalResult::Success ? TEXT("success") : Result == EDefusalResult::Warning ? TEXT("warning")
 			: Result == EDefusalResult::Detonation ? TEXT("detonation") : TEXT("slip"));
@@ -674,20 +690,14 @@ EDefusalResult ATripwireActor::ResolveHostileDisarm(AOperativeCharacter* User, E
 	}
 	if (Result == EDefusalResult::Success)
 	{
-		User->GrenadesCount += GrenadesRecovered;
-		PostLine(User->DisplayName, FText::Format(LOCTEXT("PMCDisarmed", "🪤 PMC tripwire disarmed. +{0} grenades"), GrenadesRecovered));
-		GameplayEvents::Raise(this, GameplayEvents::TripwireDisarmed, User);
 		// Game designer 2026-10-15 (as the mine): a standing operative stands up again after the crouched work and picks the grenades
-		// up (full-body clip rising from the low pose); crouched: the upper-body pickup over the crouched legs; prone: none yet.
+		// up (full-body clip rising from the low pose); crouched: the upper-body pickup over the crouched legs; prone: none (at once).
+		// Rev 2026-10-19: the wire stays (harmless) until the clip's grab moment; then grenades, feed, TripwireDisarmed, removal.
 		if (OriginalStance == EOperativeStance::Standing && User->GetStance() != EOperativeStance::Standing)
 		{
 			User->SetStance(EOperativeStance::Standing);
 		}
-		if (UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(User))
-		{
-			Anim->PlayInteraction(EOperativeInteractionAnim::PickupGround, OriginalStance);
-		}
-		Destroy();
+		BeginDisarmPickup(User, OriginalStance);
 	}
 	return Result;
 }

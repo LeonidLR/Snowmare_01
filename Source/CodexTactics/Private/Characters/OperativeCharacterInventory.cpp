@@ -9,6 +9,7 @@
 #include "Combat/HealthComponent.h"
 #include "Data/TacticalHeatTuning.h"
 #include "Engine/World.h"
+#include "Subsystems/CodexEventBus.h"
 #include "Survival/TacticalHeatSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 
@@ -50,6 +51,12 @@ bool AOperativeCharacter::UsePersonalItem(EPersonalItem Item)
 	int32& Count = Item == EPersonalItem::Medkit ? MedkitsCount
 		: (Item == EPersonalItem::CannedFood ? CannedFoodCount : (Item == EPersonalItem::Bread ? BreadCount : ChocolateCount));
 	--Count;
+	// Godot inventory_drawer.gd item_used: raised here, where the item really was used (H / J / K / L, the drawer line, the bot) - it
+	// used to come only from the drawer, also when the use was refused (rev 2026-10-19, the medkit lesson completes on it).
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnItemUsed.Broadcast(this, PersonalItemRules::GetEventId(Item));
+	}
 	return true;
 }
 
@@ -148,5 +155,9 @@ bool AOperativeCharacter::HealAlly(AOperativeCharacter& Patient)
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("%s gives first aid to %s: +%d HP (%d medkits left)"), *DisplayName.ToString(),
 		*Patient.DisplayName.ToString(), Gained, MedkitsCount);
+	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
+	{
+		Bus->OnItemUsed.Broadcast(&Patient, PersonalItemRules::GetEventId(EPersonalItem::Medkit)); // a medkit healed him
+	}
 	return true;
 }

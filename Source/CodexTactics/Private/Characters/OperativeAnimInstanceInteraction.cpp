@@ -103,8 +103,9 @@ void UOperativeAnimInstance::ResetInteractionState()
 	InteractionMontage.Reset();
 }
 
-float UOperativeAnimInstance::PlayInteraction(EOperativeInteractionAnim Anim, EOperativeStance ChoiceStance)
+FInteractionClipTiming UOperativeAnimInstance::PlayInteractionTimed(EOperativeInteractionAnim Anim, EOperativeStance ChoiceStance)
 {
+	FInteractionClipTiming Timing;
 	const AOperativeCharacter* Operative = BoundOperative.Get();
 	const FOperativeInteractionClip* Clip = GetInteractionClip(Anim);
 	const UWorld* World = GetWorld();
@@ -117,15 +118,9 @@ float UOperativeAnimInstance::PlayInteraction(EOperativeInteractionAnim Anim, EO
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[InteractionAnim] %s: %s not played (stance %d%s%s)"), *Who, InteractionAnimName(Anim),
 			static_cast<int32>(ChoiceStance), bTimeFrozen ? TEXT(", tactical pause") : TEXT(""), Clip && Clip->FullBody ? TEXT("") : TEXT(", no clip"));
-		return 0.f;
+		return Timing;
 	}
 	const float Rate = FMath::Max(0.1f, Clip->PlayRate);
-	// A search already going on is not restarted by the next item taken.
-	if (UAnimMontage* Current = InteractionMontage.Get(); Current && Anim == EOperativeInteractionAnim::ChestSearch && InteractionAnim == Anim
-		&& Montage_IsPlaying(Current))
-	{
-		return FMath::Max(0.f, (Current->GetPlayLength() - Montage_GetPosition(Current)) / Rate);
-	}
 	if (UAnimMontage* Previous = InteractionMontage.Get(); Previous && Montage_IsPlaying(Previous))
 	{
 		Montage_Stop(Clip->FullBody->BlendIn.GetBlendTime(), Previous);
@@ -164,7 +159,7 @@ float UOperativeAnimInstance::PlayInteraction(EOperativeInteractionAnim Anim, EO
 	if (!Played)
 	{
 		UE_LOG(LogCodexTactics, Warning, TEXT("[InteractionAnim] %s: %s failed to start"), *Who, InteractionAnimName(Anim));
-		return 0.f;
+		return Timing;
 	}
 	InteractionMontage = Played;
 	InteractionAnim = Anim;
@@ -177,9 +172,12 @@ float UOperativeAnimInstance::PlayInteraction(EOperativeInteractionAnim Anim, EO
 		InteractionClipLog.RemoveAt(0);
 	}
 	InteractionClipLog.Add(FString::Printf(TEXT("%s@%s"), InteractionAnimName(Anim), LayerName));
-	UE_LOG(LogCodexTactics, Display, TEXT("[InteractionAnim] %s: %s (%s) on %s from %.2f s, %.2f s"), *Who, InteractionAnimName(Anim),
-		*Played->GetName(), LayerName, Start, Seconds);
-	return Seconds;
+	Timing.bPlayed = true;
+	Timing.Seconds = Seconds;
+	Timing.EffectDelaySeconds = FMath::Min(Seconds, InteractionAnimRules::GetEffectDelay(Played->GetPlayLength(), Start, Rate, Clip->EffectFraction));
+	UE_LOG(LogCodexTactics, Display, TEXT("[InteractionAnim] %s: %s (%s) on %s from %.2f s, %.2f s, effect at %.2f s"), *Who, InteractionAnimName(Anim),
+		*Played->GetName(), LayerName, Start, Seconds, Timing.EffectDelaySeconds);
+	return Timing;
 }
 
 void UOperativeAnimInstance::UpdateInteractionLayer(const AOperativeCharacter& Operative)

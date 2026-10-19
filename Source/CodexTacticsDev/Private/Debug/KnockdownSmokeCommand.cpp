@@ -568,6 +568,12 @@ namespace KnockdownSmoke
 				AOperativeCharacter* Mate = State.Mate.Get();
 				Check(State, KnockdownOf(Mate)->DiedWhileDown(), TEXT("squad mate died while down"));
 				CheckClip(State, Mate, TEXT("Death_Front"), TEXT("death from the ground"));
+				// Rev 2026-10-19 (user bug: the body ~1 m beside its capsule): after the knockdowns and get-ups the leader's mesh is on its capsule.
+				if (const AOperativeCharacter* Survivor = State.Leader.Get())
+				{
+					Check(State, Survivor->GetMeshBaseOffsetCm() <= 5.f, FString::Printf(TEXT("after the knockdowns the leader's mesh sits on its capsule (%.1f cm off)"),
+						Survivor->GetMeshBaseOffsetCm()));
+				}
 			}
 			if (!State.bShots)
 			{

@@ -5,6 +5,7 @@
 // CoverTraceRules, CoverDecisionRules, CoverFacingRules.
 
 #include "Characters/OperativeCharacter.h"
+#include "TimerManager.h"
 
 #include "CodexTactics.h"
 #include "Characters/EnemyCharacter.h"
@@ -298,6 +299,37 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 	if (FMath::Abs(Along) < 10.f)
 	{
 		return EOperativeOrderResult::Accepted; // already there
+	}
+	if (Stance == EOperativeStance::Prone)
+	{
+		// Rev 2026-10-19 (user bug: a prone operative in cover, ordered to the corner, crawled BACKWARDS at twice the crawl speed - the
+		// shimmy ran at the crouch pace with the body held facing off the wall): no prone shimmy - he gets up first (low cover: crouched,
+		// high cover: standing), then side-steps. Frostbitten (cannot leave prone): refused.
+		const EOperativeStance Up = CurrentCoverHeight == ECoverHeight::LowCover ? EOperativeStance::Crouching : EOperativeStance::Standing;
+		const float Rise = GetStanceChangeDelay(EOperativeStance::Prone, Up);
+		SetStance(Up);
+		if (Stance == EOperativeStance::Prone)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: shimmy refused - cannot get up from prone"), *DisplayName.ToString());
+			return EOperativeOrderResult::Refused;
+		}
+		if (Rise > 0.05f && GetWorld())
+		{
+			// The side-step starts once he is up (the stance clip; StopOperative / another order clears the timer).
+			const bool bForPeek = bCornerPeekOrdering;
+			TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
+			GetWorld()->GetTimerManager().SetTimer(PendingMoveTimer, FTimerDelegate::CreateLambda([WeakThis, Target, bForPeek]()
+			{
+				AOperativeCharacter* Self = WeakThis.Get();
+				if (Self && Self->bInCover && !Self->IsKnockedDown() && Self->GetStance() != EOperativeStance::Prone)
+				{
+					TGuardValue<bool> Ordering(Self->bCornerPeekOrdering, bForPeek);
+					Self->OrderShimmyTo(Target);
+				}
+			}), Rise, false);
+			UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: gets up from prone first (%.2f s), then side-steps"), *DisplayName.ToString(), Rise);
+			return EOperativeOrderResult::Accepted;
+		}
 	}
 	if (bCornerAimActive)
 	{

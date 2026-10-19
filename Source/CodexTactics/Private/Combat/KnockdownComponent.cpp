@@ -212,6 +212,28 @@ bool UKnockdownComponent::StartKnockdown(EKnockdownDirection Direction, EKnockdo
 	return true;
 }
 
+void UKnockdownComponent::ResetForLoad()
+{
+	BufferedOrder = nullptr;
+	if (UAnimInstance* Anim = GetAnimInstance())
+	{
+		if (UAnimMontage* Montage = PlayingMontage.Get())
+		{
+			Anim->Montage_Stop(0.f, Montage);
+		}
+	}
+	PlayingClip.Reset();
+	PlayingMontage.Reset();
+	const EKnockdownPhase Old = State.Phase;
+	State = FKnockdownState();
+	SecondsSinceGetUp = 1000.f;
+	if (Old != EKnockdownPhase::None)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Knockdown] %s: knockdown dropped by a load"), *GetUnitName());
+		SetPhase(EKnockdownPhase::None, Old);
+	}
+}
+
 void UKnockdownComponent::SetPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase)
 {
 	OnPhaseChanged.Broadcast(NewPhase, OldPhase);

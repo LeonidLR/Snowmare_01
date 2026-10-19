@@ -20,6 +20,24 @@ enum class ELootTier : uint8
 };
 
 /**
+ * Where an operative is with a crate (rev 2026-10-19, game designer: the animation FIRST, then the loot). Click -> Opening (he faces it
+ * and plays the chest-open clip) -> Open (the loot window at the clip's lid-open moment) -> Take / Take All -> Searching (the window
+ * shows "Searching..." with its buttons off; the chest-search clip) -> the items move at the clip's grab moment -> Open again (Take
+ * All closes the window -> Closed).
+ */
+UENUM(BlueprintType)
+enum class ELootSessionState : uint8
+{
+	Closed,
+	/** The chest-open clip plays (or waits for the tactical pause to end); no loot window yet. */
+	Opening,
+	/** The loot window is usable. */
+	Open,
+	/** A take was asked for: the chest-search clip plays (or waits for the release); nothing can be taken meanwhile. */
+	Searching
+};
+
+/**
  * Supply crate. Clicking an intact crate makes the leader open the lid (no menu) and shows the loot dialog after
  * OpenSeconds; single items or everything go into the leader's supply. A trapped crate opens the defusal menu first
  * (2 s crouched work); a detonation wrecks the crate and burns everything inside. Enemies within 1.8 m set the wire
@@ -50,9 +68,34 @@ public:
 	virtual ETrapFlavor GetTrapFlavor() const override { return ETrapFlavor::Crate; }
 	virtual bool CanReceiveTrap() const override { return !bTrapped && !bDestroyed; }
 
-	/** Opens the lid: the loot dialog appears after OpenSeconds. */
+	/**
+	 * Opens the lid: the operative faces the crate and plays the chest-open clip; the loot dialog appears at the clip's lid-open moment
+	 * (no clip: after OpenSeconds). In the tactical pause it waits for the release (time stands still), then plays.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
 	void StartOpening(AOperativeCharacter* Leader);
+
+	/**
+	 * Rev 2026-10-19: Take (Item) / Take All (bAll) from the open window: Collector plays the chest-search clip and the items move at its
+	 * grab moment (UInteractionSubsystem::HandleSearchFinished posts the result). False when the window is not usable now (opening,
+	 * already searching, wrecked, empty).
+	 */
+	bool RequestSearch(AOperativeCharacter* Collector, ELootItem Item, bool bAll);
+
+	/** The loot window was shown without the opening (a dev / smoke shortcut): the session is Open. */
+	void MarkOpen();
+
+	/** The loot window closed: an open session ends (a running search still finishes and moves the items). */
+	void HandleDialogClosed();
+
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Loot")
+	ELootSessionState GetSessionState() const { return SessionState; }
+
+	/** The window shows "Searching..." and takes nothing. */
+	bool IsSearching() const { return SessionState == ELootSessionState::Searching; }
+
+	/** Seconds the last search waited for its grab moment (smokes). */
+	float GetLastSearchDelaySeconds() const { return LastSearchDelaySeconds; }
 
 	/** Moves one stack into Collector's supply; returns the Godot result line ("+2 🩹 Medkit"), empty if none. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Loot")
@@ -111,6 +154,14 @@ public:
 	/** Seconds the last StartOpening waited for the loot window (smokes). */
 	float GetLastOpenDelaySeconds() const { return LastOpenDelaySeconds; }
 
+	/** The search's wait for its grab when no chest-search clip plays (prone, none assigned), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Loot", meta = (ClampMin = "0"))
+	float SearchFallbackSeconds = 0.6f;
+
+	/** The opener / collector may stand this far beyond InteractionDistance when the lid opens / the hand grabs, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Loot", meta = (ClampMin = "0"))
+	float SessionReachSlackCm = 100.f;
+
 	/** Crouched defusal work, s (Godot timer 2.0). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Loot", meta = (ClampMin = "0"))
 	float DefuseSeconds = 2.f;
@@ -127,11 +178,34 @@ private:
 	void UpdateVisuals();
 	/** Moves the authored storable counts of Contents into the stash (idempotent; smokes may refill Contents). */
 	void SyncContentsIntoStash();
-	void FinishOpening(TWeakObjectPtr<AOperativeCharacter> WeakLeader);
+	void FinishOpening();
 	void FinishDefusal(TWeakObjectPtr<AOperativeCharacter> WeakUser);
+	/** Plays the chest-open clip now and arms the window timer. */
+	void BeginOpenClip();
+	/** Plays the chest-search clip now and arms the grab timer. */
+	void BeginSearchClip();
+	void FinishSearch();
+	/** The session operative can still reach the crate (alive, not knocked down, close enough). */
+	bool IsSessionOperativeThere() const;
+	/** Waits for the tactical pause to end (the opening / the search is queued), or stops waiting. */
+	void SetWaitingForRelease(bool bWait);
+	bool IsTimeFrozen() const;
+	void ResetSession();
+
+	UFUNCTION()
+	void HandlePauseReleased();
 
 	UPROPERTY(VisibleInstanceOnly, Category = "CodexTactics|Loot")
 	bool bDestroyed = false;
 
+	UPROPERTY(VisibleInstanceOnly, Category = "CodexTactics|Loot")
+	ELootSessionState SessionState = ELootSessionState::Closed;
+
+	TWeakObjectPtr<AOperativeCharacter> SessionOperative;
+	ELootItem SearchItem = ELootItem::Medkit;
+	bool bSearchAll = false;
+	bool bWaitingForRelease = false;
+	FTimerHandle SessionTimer;
 	float LastOpenDelaySeconds = 0.f;
+	float LastSearchDelaySeconds = 0.f;
 };

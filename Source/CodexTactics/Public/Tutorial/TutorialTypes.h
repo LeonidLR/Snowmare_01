@@ -71,7 +71,8 @@ struct CODEXTACTICS_API FTutorialLine
 
 /**
  * One clause of a step "condition" (JSON {"stat": "squad_cold_max", "at_least": 40} or {"stat": ..., "below": 40}). Stats
- * come from the runtime (UTutorialSubsystem::GetConditionStat): "squad_cold_max", "squad_cold_min", "leader_cold",
+ * come from the runtime (UTutorialSubsystem::GetConditionStat): "squad_cold_max", "squad_cold_min", "leader_cold", "squad_injury_max"
+ * (the share of health the most wounded living member has lost, %: 30 = he is below 70 %; rev 2026-10-19),
  * "squad_heat_packs", "squad_min_heat_packs" (the fewest any living operative carries), "heat_packs_given" (heat packs handed
  * between squad mates since the level started; rev 5d). All clauses of a step must hold (AND).
  */
@@ -143,6 +144,11 @@ struct CODEXTACTICS_API FTutorialCompletion
 	 * in". Who counted is runtime state (not saved: after a load mid-lesson any operative may count again).
 	 */
 	TArray<FName> DistinctFrom;
+	/**
+	 * "subject": "focus" (rev 2026-10-19, the medkit lesson): an event counts only when its subject is the step's focus operative
+	 * (FTutorialStateMachine::FocusSubjectProvider - "the medkit heals THAT operative"). No focus chosen yet: any subject counts.
+	 */
+	bool bFocusSubject = false;
 	/** > 0: an active step that is not done after this many seconds times out (hides; counts as finished). */
 	float TimeoutSeconds = 0.f;
 	/**
@@ -285,7 +291,10 @@ struct CODEXTACTICS_API FTutorialStep
 	TArray<FString> Unlock;
 	/** World actions run by the runtime when the step is shown. */
 	TArray<FTutorialAction> Actions;
-	/** "focus": "coldest_operative" -> the card names / marks the coldest squad member ({focus} token in the text). */
+	/**
+	 * "focus": "coldest_operative" -> the card names / marks the coldest squad member ({focus} token in the text); "wounded_operative"
+	 * (rev 2026-10-19) -> the living member with the lowest health share, chosen when the step is triggered.
+	 */
 	FName Focus;
 	/**
 	 * "precredit" (default true; user decision 2026-10-13): a hint card completed by COMMANDS whose completion the player's

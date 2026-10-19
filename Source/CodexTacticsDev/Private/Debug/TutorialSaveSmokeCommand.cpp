@@ -11,9 +11,12 @@
 //     fresh world: beat A1 (not A0), the dropped talk stays dropped, the bridge still at two of three, the history, sprint still
 //     locked, the hand-over counted, the used-up volumes still used up - and the A1 CHECKPOINT FILE IS UNTOUCHED (before rev 5f the
 //     reopened level started its tutorial at A0 and wrote that checkpoint over the slot being loaded).
-//  4. "Retry from checkpoint" (in place): back at the A1 start - the bridge not started, its volume NOT used up (before rev 5f a load
-//     in place kept every volume walked through after the checkpoint used up, so the bridge lesson never came again), no hand-over;
-//     the leader walks into the crack volume again -> the bridge objective runs.
+//  4. "Retry from checkpoint" (rev 2026-10-19: it REOPENS the level, as F9): back at the A1 start - the bridge not started, its volume
+//     NOT used up, no hand-over; the leader walks into the crack volume again -> the bridge objective runs.
+//  5. Rev 2026-10-19 (user: "the save keeps the state from BEFORE the load"): the Commander is knocked down, Retry -> he is up, idle,
+//     no knockdown, no montage, the mesh on its place on the capsule (<= 5 cm), stance as saved - twice in a row; Solo ON + F5, the
+//     followers walk off, F9 -> Solo and the followers holding, a leader move leaves them in place; an Aggressive squad, a placed
+//     enemy (level enemy) detects it -> the fight starts (WaveCombat, Attack.* unlocked) and the squad shoots it, nobody panics / flees.
 
 #include "CoreMinimal.h"
 
@@ -22,6 +25,15 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
+#include "Animation/AnimInstance.h"
+#include "Characters/EnemyCharacter.h"
+#include "Characters/PanicComponent.h"
+#include "Combat/HealthComponent.h"
+#include "Combat/KnockdownComponent.h"
+#include "Combat/WaveSubsystem.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "GameFlow/GameFlowSubsystem.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
 #include "CodexTactics.h"
 #include "Containers/Ticker.h"
 #include "Core/PlayerCommands.h"
@@ -54,7 +66,46 @@ namespace TutorialSaveSmoke
 		bool bApplied = false;
 		FDelegateHandle AppliedHandle;
 		int32 ZoomUsesAtSave = 0;
+		/** Rev 2026-10-19: loads applied so far, the slot of the last one. */
+		int32 AppliedCount = 0;
+		FString LastAppliedSlot;
+		int32 AppliedBefore = 0;
+		TArray<FVector> FollowerSpots;
+		TWeakObjectPtr<AEnemyCharacter> Enemy;
+		float EnemyHealthAtContact = 0.f;
+		int32 RetriesChecked = 0;
 	};
+
+	void Check(FState& State, bool bOk, const FString& What);
+
+	/** Rev 2026-10-19: everything the user saw survive a load - knockdown, montages, the mesh off its capsule, a stance - is gone. */
+	void CheckCleanAfterLoad(FState& State, USquadSubsystem* Squad, const TCHAR* When)
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			// Everyone: no knockdown / montage / cover / body offset carried over. The leader (the one knocked down): also standing still as
+			// saved; followers may walk to their formation spots and keep a saved crouch (Solo).
+			const UAnimInstance* Anim = Member->GetMesh() ? Member->GetMesh()->GetAnimInstance() : nullptr;
+			const bool bLeader = Member == Squad->GetLeader();
+			const bool bClean = !Member->IsKnockedDown() && !(Anim && Anim->IsAnyMontagePlaying()) && Member->GetMeshBaseOffsetCm() <= 5.f
+				&& !Member->bInCover && (!bLeader || (Member->GetStance() == EOperativeStance::Standing && Member->GetVelocity().Size2D() < 5.f));
+			Check(State, bClean, FString::Printf(TEXT("%s: %s up and idle as saved (knocked %d, montage %d, mesh %.1f cm off, cover %d, stance %d, speed %.0f)"),
+				When, *Member->DisplayName.ToString(), Member->IsKnockedDown() ? 1 : 0, Anim && Anim->IsAnyMontagePlaying() ? 1 : 0,
+				Member->GetMeshBaseOffsetCm(), Member->bInCover ? 1 : 0, static_cast<int32>(Member->GetStance()), Member->GetVelocity().Size2D()));
+		}
+	}
+
+	AOperativeCharacter* FindCommander(USquadSubsystem* Squad)
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (Member->SquadRole == EOperativeRole::Commander)
+			{
+				return Member;
+			}
+		}
+		return Squad->GetLeader();
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -154,7 +205,7 @@ namespace TutorialSaveSmoke
 		State.Time += StepSeconds;
 		State.StageTime += StepSeconds;
 		UWorld* World = FindGameWorld();
-		if (State.Time > 150.f)
+		if (State.Time > 400.f)
 		{
 			Check(State, false, FString::Printf(TEXT("timed out in stage %d"), State.Stage));
 			return Finish(State, false);
@@ -214,6 +265,8 @@ namespace TutorialSaveSmoke
 			State.AppliedHandle = USaveGameSubsystem::OnSaveApplied().AddLambda([StatePtr](UWorld*, const FString& Slot)
 			{
 				StatePtr->bApplied = Slot == SaveGameRules::GetQuicksaveSlotName();
+				++StatePtr->AppliedCount;
+				StatePtr->LastAppliedSlot = Slot;
 			});
 			Check(State, Saves->QuickLoad(), TEXT("F9: the newest quicksave / checkpoint is loaded with the map reopened"));
 			State.Stage = 2;
@@ -242,17 +295,20 @@ namespace TutorialSaveSmoke
 			Check(State, SavedBeat(SaveGameRules::GetCheckpointSlotName()) == TEXT("A1"), FString::Printf(
 				TEXT("the A1 checkpoint was NOT overwritten by the reopened level's start (beat in the file: %s)"), *SavedBeat(SaveGameRules::GetCheckpointSlotName())));
 			Saves->bCheckpointsEnabled = true;
-			Check(State, Tutorial->RetryFromCheckpoint(), TEXT("Retry from checkpoint (in place)"));
+			State.AppliedBefore = State.AppliedCount;
+			Check(State, Tutorial->RetryFromCheckpoint(), TEXT("Retry from checkpoint (rev 2026-10-19: reopens the level)"));
 			State.Stage = 3;
 			State.StageTime = 0.f;
 			return true;
 		}
 		case 3:
 		{
-			if (State.StageTime < 1.f)
+			if ((State.AppliedCount == State.AppliedBefore || State.StageTime < 1.5f) && State.StageTime < 40.f)
 			{
 				return true;
 			}
+			Check(State, State.AppliedCount > State.AppliedBefore && State.LastAppliedSlot == SaveGameRules::GetCheckpointSlotName(),
+				TEXT("retry: the checkpoint applied to the reopened level"));
 			const ATutorialTriggerVolume* Beacon2 = FindVolume(World, TEXT("VOL_A1_BEACON2"));
 			Check(State, Tutorial->GetCurrentBeat() == FName(TEXT("A1")) && Tutorial->GetStepState(TEXT("A1_bridge")) == ETutorialStepState::Idle,
 				FString::Printf(TEXT("retry: back at the A1 start (bridge %s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A1_bridge")))));
@@ -261,6 +317,137 @@ namespace TutorialSaveSmoke
 			Check(State, Tutorial->IsCommandLocked(PlayerCommands::Sprint), TEXT("retry: sprint locked"));
 			Check(State, EnterLevelVolume(World, TEXT("VOL_A1_BEACON2")) && TutorialRules::IsRunning(Tutorial->GetStepState(TEXT("A1_bridge"))),
 				TEXT("retry: walking into the crack again starts the bridge objective"));
+			CheckCleanAfterLoad(State, Squad, TEXT("retry"));
+			State.Stage = 4;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// Rev 2026-10-19: the user's sequence - knocked down, Retry from checkpoint -> NOT getting up from that knockdown (twice).
+		case 4:
+		{
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			AOperativeCharacter* Commander = FindCommander(Squad);
+			const bool bDown = Commander && Commander->KnockdownComponent
+				&& Commander->KnockdownComponent->ForceKnockDown(EKnockdownDirection::Back, EKnockdownCause::HeavyMelee);
+			Check(State, bDown && Commander->IsKnockedDown(), FString::Printf(TEXT("knockdown %d: the Commander on his back"), State.RetriesChecked + 1));
+			State.AppliedBefore = State.AppliedCount;
+			Check(State, Tutorial->RetryFromCheckpoint(), TEXT("Retry from checkpoint while he is down"));
+			State.Stage = 5;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 5:
+		{
+			if ((State.AppliedCount == State.AppliedBefore || State.StageTime < 1.5f) && State.StageTime < 40.f)
+			{
+				return true;
+			}
+			Check(State, State.AppliedCount > State.AppliedBefore, TEXT("the checkpoint applied (level reopened)"));
+			CheckCleanAfterLoad(State, Squad, *FString::Printf(TEXT("retry after knockdown %d"), ++State.RetriesChecked));
+			State.Stage = State.RetriesChecked < 2 ? 4 : 6;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// Solo ON saved -> after F9 Solo really holds the followers.
+		case 6:
+		{
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			Squad->SetLeader(FindCommander(Squad));
+			Squad->EnterSoloMode();
+			FPlatformProcess::Sleep(1.1f); // newer than the checkpoint (whole-second timestamps)
+			Check(State, Squad->IsSoloMode() && Saves->QuickSave(), TEXT("Solo ON, F5"));
+			Squad->ExitSoloMode(); // the pre-load world regroups: the load must put Solo back
+			State.AppliedBefore = State.AppliedCount;
+			Check(State, Saves->QuickLoad(), TEXT("F9 with Solo saved ON"));
+			State.Stage = 7;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 7:
+		{
+			if ((State.AppliedCount == State.AppliedBefore || State.StageTime < 1.5f) && State.StageTime < 40.f)
+			{
+				return true;
+			}
+			Check(State, Squad->IsSoloMode() && Squad->AreFollowersHolding(), FString::Printf(TEXT("after F9: Solo %d, followers holding %d (HUD = movement)"),
+				Squad->IsSoloMode() ? 1 : 0, Squad->AreFollowersHolding() ? 1 : 0));
+			CheckCleanAfterLoad(State, Squad, TEXT("F9 Solo"));
+			State.FollowerSpots.Reset();
+			AOperativeCharacter* Leader = Squad->GetLeader();
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				State.FollowerSpots.Add(Member->GetActorLocation());
+			}
+			if (Leader)
+			{
+				Leader->OrderMoveTo(Leader->GetActorLocation() + Leader->GetActorForwardVector() * 500.f, false);
+			}
+			State.Stage = 8;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 8:
+		{
+			if (State.StageTime < 3.f)
+			{
+				return true;
+			}
+			const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+			const AOperativeCharacter* Leader = Squad->GetLeader();
+			float LeaderMoved = 0.f;
+			float FollowersMoved = 0.f;
+			for (int32 Index = 0; Index < Members.Num() && State.FollowerSpots.IsValidIndex(Index); ++Index)
+			{
+				const float Moved = FVector::Dist2D(Members[Index]->GetActorLocation(), State.FollowerSpots[Index]);
+				(Members[Index] == Leader ? LeaderMoved : FollowersMoved) = FMath::Max(Members[Index] == Leader ? LeaderMoved : FollowersMoved, Moved);
+			}
+			Check(State, LeaderMoved > 150.f && FollowersMoved < 60.f, FString::Printf(TEXT("Solo after the load: the leader walked %.0f cm, the others stayed (max %.0f cm)"),
+				LeaderMoved, FollowersMoved));
+			// The fight after a load: an Aggressive squad, a placed (level) enemy spots it.
+			Squad->ExitSoloMode();
+			Squad->SetSquadPosture(ESquadFirePosture::Aggressive);
+			UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+			ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>();
+			const FVector Ahead = Leader ? Leader->GetActorLocation() + Leader->GetActorForwardVector() * 1100.f : FVector::ZeroVector;
+			AEnemyCharacter* Enemy = Waves && Leader ? Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, Ahead + FVector(0.f, 0.f, 50.f),
+				(-Leader->GetActorForwardVector()).Rotation()) : nullptr;
+			if (!Enemy || !Encounter)
+			{
+				Check(State, false, TEXT("an enemy for the fight after the load"));
+				return Finish(State, false);
+			}
+			Encounter->MarkLevelEnemy(Enemy);
+			State.Enemy = Enemy;
+			State.EnemyHealthAtContact = Enemy->GetHealthComponent()->GetCurrentHealth();
+			ULevelEncounterSubsystem::NotifyHostileContactIn(World, EAmbushTrigger::PatrolDetection, Enemy);
+			State.Stage = 9;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 9:
+		{
+			const AEnemyCharacter* Enemy = State.Enemy.Get();
+			const bool bHit = !Enemy || Enemy->GetHealthComponent()->GetCurrentHealth() < State.EnemyHealthAtContact;
+			if (!bHit && State.StageTime < 12.f)
+			{
+				return true;
+			}
+			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			Check(State, Flow && Flow->GetPhase() == ECodexGamePhase::WaveCombat, TEXT("after the loads: detection by a level enemy starts the fight"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::TargetedShot), TEXT("the fight released the tutorial locks (Attack.*)"));
+			Check(State, bHit, FString::Printf(TEXT("the Aggressive squad shoots the enemy (%.1f s)"), State.StageTime));
+			bool bPanic = false;
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				bPanic |= Member->PanicComponent && Member->PanicComponent->IsPanicking();
+			}
+			Check(State, !bPanic, TEXT("nobody panics / flees"));
 			return Finish(State, true);
 		}
 		default:

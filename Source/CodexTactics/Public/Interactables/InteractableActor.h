@@ -131,6 +131,17 @@ public:
 	/** Can a grenade trap be set here now ("Set trap" button). */
 	virtual bool CanReceiveTrap() const { return !bTrapped; }
 
+	// --- Disarm pickup (rev 2026-10-19, game designer: "the mine disappears first, then he bends down") ---
+
+	/**
+	 * Disarmed and being picked up: the pickup clip plays and the trap stays (harmless: it can not go off, no menu) until the clip's
+	 * grab moment (FOperativeInteractionClip::EffectFraction of AM_Interact_PickupGround), then it goes (CompleteDisarmPickup).
+	 */
+	bool IsAwaitingPickup() const { return bAwaitingPickup; }
+
+	/** Seconds the last disarm pickup waited for its grab moment (smokes). */
+	float GetLastPickupDelaySeconds() const { return LastPickupDelaySeconds; }
+
 	/** World label above the object (Godot overhead Label3D); false = none. The generator shows its state and HP. */
 	virtual bool GetOverheadLabel(FOverheadLabel& OutLabel) const;
 
@@ -192,6 +203,22 @@ protected:
 	 * then the events "TrapSpotted" / "TrapSpotted.Peek" / "TrapSpotted.<SpotEventTag>" (Subject = the spotter).
 	 */
 	void NotifyTrapSpotted(AOperativeCharacter* Spotter, bool bByPeek, const FText& TrapName);
+
+	/**
+	 * A successful disarm: User plays the pickup clip by ClipStance (standing: full body, crouched: upper body, prone: none) and
+	 * CompleteDisarmPickup runs at its grab moment - at once without a clip, after the release in the tactical pause. A cut clip
+	 * (knockdown, an order) does not stop it: the charge was disarmed, it still goes at the grab time.
+	 */
+	void BeginDisarmPickup(AOperativeCharacter* User, EOperativeStance ClipStance);
+
+	/** The grab moment of the disarm pickup: the trap's effect (kit, feed, events) and its removal. User may be null / down. */
+	virtual void CompleteDisarmPickup(AOperativeCharacter* User) {}
+
+	/** While true, AttemptDefusal keeps its success line for PostDeferredDefusalLine (posted at the grab, after the clip). */
+	bool bDeferDefusalSuccessLine = false;
+
+	/** Posts the success line AttemptDefusal kept back (no-op when none). */
+	void PostDeferredDefusalLine();
 
 public:
 
@@ -255,6 +282,23 @@ public:
 	TObjectPtr<UHeatSourceComponent> HeatSource;
 
 private:
+	void StartDisarmPickupClip();
+	void FinishDisarmPickup();
+	/** Posts the defusal success line now or keeps it (bDeferDefusalSuccessLine). */
+	void PostDefusalSuccess(const FText& Speaker, const FText& Line);
+
+	UFUNCTION()
+	void HandlePickupPauseReleased();
+
+	bool bAwaitingPickup = false;
+	bool bPickupWaitsForRelease = false;
+	TWeakObjectPtr<AOperativeCharacter> PickupUser;
+	EOperativeStance PickupStance = EOperativeStance::Standing;
+	FTimerHandle PickupTimer;
+	float LastPickupDelaySeconds = 0.f;
+	FText DeferredDefusalSpeaker;
+	FText DeferredDefusalLine;
+
 	/** Godot EventBus.generator_state_changed. */
 	void BroadcastGeneratorState(bool bPowered) const;
 

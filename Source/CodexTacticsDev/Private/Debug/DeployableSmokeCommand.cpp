@@ -6,6 +6,9 @@
 // 2026-10-15 (game designer): the medic-sapper walks right up to the mine (<= 0.9 m from the charge, not on it, facing it), the mine
 // ignores her while she stands inside its trigger radius (a cancelled menu included), and a standing defuser plays the pickup clip
 // on the full body after the success.
+// Rev 2026-10-19 (game designer: "the mine disappeared first, then he bent down"): after the success the mine STAYS (harmless, no
+// menu) while the pickup clip plays and goes only at its grab moment (~0.44 s into the standing clip that starts low); the kit and
+// the feed lines ("disarmed the mine", "picked up") come at the grab, not before.
 
 #include "CoreMinimal.h"
 
@@ -26,6 +29,7 @@
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "TimerManager.h"
+#include "UI/GameMessageSubsystem.h"
 
 namespace DeployableSmoke
 {
@@ -55,7 +59,29 @@ namespace DeployableSmoke
 		bool bLease = false;
 		bool bPickup = false;
 		bool bCancelled = false;
+		/** Rev 2026-10-19: the disarmed mine was seen waiting for the grab (with the clip playing, nothing in the kit yet), when / how long. */
+		bool bSawAwaiting = false;
+		bool bGrabOrder = true;
+		float AwaitingSeenAt = -1.f;
+		float PickupDelay = 0.f;
+		int32 MinesBefore = 0;
+		int32 FeedBefore = 0;
 	};
+
+	/** A feed line containing Needle was posted after the first Since lines. */
+	bool SmokeFeedSince(UWorld* World, int32 Since, const TCHAR* Needle)
+	{
+		const UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>();
+		const TArray<FGameMessage>& History = Messages ? Messages->GetHistory() : TArray<FGameMessage>();
+		for (int32 Index = FMath::Max(0, Since); Index < History.Num(); ++Index)
+		{
+			if (History[Index].Text.ToString().Contains(Needle))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 
 	AOperativeCharacter* FindRole(UWorld* World, EOperativeRole Role)
 	{
@@ -219,6 +245,8 @@ namespace DeployableSmoke
 				// before the work (2026-10-15: the pickup after the success is then the full-body clip, rising from the crouch).
 				Medic->Luck = 100.f;
 				++State.DefuseTries;
+				State.MinesBefore = Medic->MinesCount;
+				State.FeedBefore = World->GetSubsystem<UGameMessageSubsystem>()->GetHistory().Num();
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke mine menu \"%s\" / \"%s\""), *Interactions->GetActionMenu().Title.ToString(),
 					*Interactions->GetActionMenu().ConfirmText.ToString());
 				Interactions->ConfirmActionMenu();
@@ -231,6 +259,26 @@ namespace DeployableSmoke
 			return true;
 
 		case EPhase::DefuseWait:
+			if (State.Mine.IsValid() && State.Mine->IsAwaitingPickup())
+			{
+				// Disarmed, being picked up: still there, nothing in the kit, the clip already playing, no "disarmed" line yet.
+				const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Medic);
+				const bool bClip = Anim && Anim->GetInteractionClipLog().Contains(TEXT("PickupGround@FullBody"));
+				const bool bQuiet = !SmokeFeedSince(World, State.FeedBefore, TEXT("disarmed the mine"));
+				if (!State.bSawAwaiting)
+				{
+					State.bSawAwaiting = true;
+					State.AwaitingSeenAt = State.Time;
+					State.PickupDelay = State.Mine->GetLastPickupDelaySeconds();
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke mine disarmed, waiting for the grab (%.2f s): clip=%d kit unchanged=%d feed quiet=%d"),
+						State.PickupDelay, bClip ? 1 : 0, Medic->MinesCount == State.MinesBefore ? 1 : 0, bQuiet ? 1 : 0);
+				}
+				if (!bClip || Medic->MinesCount != State.MinesBefore || !bQuiet || State.Mine->IsHidden())
+				{
+					State.bGrabOrder = false;
+				}
+				return true;
+			}
 			if (State.PhaseTime >= 2.f && State.Mine.IsValid() && State.DefuseTries < 4)
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke defusal attempt %d did not clear the mine, retrying"), State.DefuseTries);
@@ -239,7 +287,14 @@ namespace DeployableSmoke
 			}
 			else if (State.PhaseTime >= 2.f)
 			{
-				State.bDefused = !State.Mine.IsValid() && Medic->MinesCount == 1 && Medic->HealthComponent->GetCurrentHealth() >= Medic->HealthComponent->GetMaxHealth();
+				// The grab came after the clip's effect moment, then the kit and the feed.
+				const float Held = State.bSawAwaiting ? State.Time - State.AwaitingSeenAt : -1.f;
+				State.bGrabOrder = State.bGrabOrder && State.bSawAwaiting && State.PickupDelay > 0.2f && Held >= State.PickupDelay - StepSeconds - 0.05f
+					&& SmokeFeedSince(World, State.FeedBefore, TEXT("disarmed the mine"));
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke mine stayed %.2f s after the disarm (grab at %.2f s), feed after the grab=%d: %s"), Held,
+					State.PickupDelay, SmokeFeedSince(World, State.FeedBefore, TEXT("disarmed the mine")) ? 1 : 0, State.bGrabOrder ? TEXT("ok") : TEXT("WRONG"));
+				State.bDefused = !State.Mine.IsValid() && Medic->MinesCount == State.MinesBefore + 1
+					&& Medic->HealthComponent->GetCurrentHealth() >= Medic->HealthComponent->GetMaxHealth() && State.bGrabOrder;
 				const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Medic);
 				State.bPickup = Anim && Anim->GetInteractionClipLog().Contains(TEXT("PickupGround@FullBody")) && Medic->GetStance() == EOperativeStance::Standing;
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke pickup after the mine: stance %d, clips %s"), static_cast<int32>(Medic->GetStance()),

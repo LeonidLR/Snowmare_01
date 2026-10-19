@@ -26,6 +26,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "AI/PatrolRouteActor.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -83,6 +84,9 @@ namespace SaveRoundTripSmoke
 	constexpr float StepSeconds = 0.25f;
 	const TCHAR* Slot = TEXT("roundtrip");
 
+	/** Rev 2026-10-19: the per-instance patrol speed a designer set (the class default is 190). */
+	constexpr float DesignerPatrolSpeed = 65.f;
+
 	struct FState
 	{
 		float Time = 0.f;
@@ -99,6 +103,9 @@ namespace SaveRoundTripSmoke
 		TWeakObjectPtr<AEnemyCharacter> Hound;
 		TWeakObjectPtr<AEnemyCharacter> Searcher;
 		TWeakObjectPtr<APatrolRouteActor> RouteA;
+		/** Rev 2026-10-19: patrol speed checks after the reopened level. */
+		bool bPatrolSpeedWrong = false;
+		float SearchEndedAt = -1.f;
 		TWeakObjectPtr<APatrolRouteActor> RouteB;
 		FString KilledLevelEnemy;
 		FString HurtLevelEnemy;
@@ -562,6 +569,11 @@ namespace SaveRoundTripSmoke
 			Enemy->bOverridePerception = true;
 			Enemy->PerceptionOverride = Senseless();
 		}
+		// Rev 2026-10-19 (user: the designer's patrol speed 65 came back as 190 after a load): a per-instance patrol speed.
+		for (AEnemyCharacter* Enemy : { static_cast<AEnemyCharacter*>(Marksman), Hound, Searcher })
+		{
+			Enemy->PatrolWalkSpeed = DesignerPatrolSpeed;
+		}
 		Marksman->StartPatrol(RouteA, nullptr);
 		Hound->StartPatrol(nullptr, Marksman);
 		Searcher->StartPatrol(RouteB, nullptr);
@@ -799,6 +811,10 @@ namespace SaveRoundTripSmoke
 			bExtraGone &= It->GetName() != ExtraName || ExtraName.IsEmpty();
 		}
 		Check(State, NewHound && NewHound->IsOnPatrol(), TEXT("killed hound recreated, escorting the marksman"));
+		Check(State, NewHound && FMath::IsNearlyEqual(NewHound->PatrolWalkSpeed, DesignerPatrolSpeed) && Marksman
+			&& FMath::IsNearlyEqual(Marksman->PatrolWalkSpeed, DesignerPatrolSpeed),
+			FString::Printf(TEXT("rev 2026-10-19: the recreated hound keeps the designer's patrol speed (%.0f), the marksman too (%.0f)"),
+				NewHound ? NewHound->PatrolWalkSpeed : -1.f, Marksman ? Marksman->PatrolWalkSpeed : -1.f));
 		Check(State, bExtraGone, TEXT("enemy spawned after the save removed"));
 		const AEnemyCharacter* Searcher = State.Searcher.Get();
 		Check(State, Searcher && Searcher->IsSearching(), TEXT("frostbitten still searching"));
@@ -916,7 +932,7 @@ namespace SaveRoundTripSmoke
 			return true;
 		}
 		USaveGameSubsystem* Saves = World->GetSubsystem<USaveGameSubsystem>();
-		if (USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>(); Squad && State.Stage < 3)
+		if (USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>(); Squad && State.Stage < 4)
 		{
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
@@ -1002,6 +1018,65 @@ namespace SaveRoundTripSmoke
 			Check(State, Enemies == 3 + (State.HurtLevelEnemy.IsEmpty() ? 0 : 1), FString::Printf(TEXT("fresh world: %d enemies (patrols recreated)"), Enemies));
 			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 			Check(State, Flow && Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("fresh world resumes the exploration"));
+			// Rev 2026-10-19: the patrollers (recreated in the fresh world: they are not map actors) keep the patrol speed 65.
+			int32 Slow = 0;
+			int32 Patrollers = 0;
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				if (!It->IsActorBeingDestroyed() && (It->IsOnPatrol() || It->IsSearching() || It->GetEscortLeader()))
+				{
+					// The smoke's senseless patrollers (a runtime override, not a saved / map property): blind again in the fresh world.
+					It->bOverridePerception = true;
+					It->PerceptionOverride = Senseless();
+					++Patrollers;
+					Slow += FMath::IsNearlyEqual(It->PatrolWalkSpeed, DesignerPatrolSpeed) ? 1 : 0;
+					if (It->GetArchetype() == EEnemyArchetype::Frostbitten)
+					{
+						State.Searcher = *It; // the route-B frostbitten (searching when saved; its search may already be over)
+					}
+					if (AMarksmanEnemyCharacter* FreshMarksman = Cast<AMarksmanEnemyCharacter>(*It))
+					{
+						FreshMarksman->MarksmanConfig.DetectionRange = 100.f;
+						State.Marksman = FreshMarksman;
+					}
+				}
+			}
+			Check(State, Patrollers == 3 && Slow == 3, FString::Printf(TEXT("after the reopened level: %d of %d patrollers at the designer's patrol speed %.0f"),
+				Slow, Patrollers, DesignerPatrolSpeed));
+			if (AEnemyCharacter* Searcher = State.Searcher.Get(); Searcher && !Searcher->IsSearching())
+			{
+				Searcher->StartPatrolSearch(Searcher->GetActorLocation() + FVector(300.f, 0.f, 0.f)); // a search to come back from
+			}
+			State.Stage = 3;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 3:
+		{
+			// Walking the route after the load, and back on it after the search ends: the designer's speed, not the class default 190.
+			const AEnemyCharacter* Searcher = State.Searcher.Get();
+			const AMarksmanEnemyCharacter* Marksman = State.Marksman.Get();
+			if (Searcher && Searcher->IsSearching() && State.StageTime < 45.f)
+			{
+				if (Marksman && Marksman->IsOnPatrol() && Marksman->GetVelocity().Size2D() > 10.f
+					&& Marksman->GetCharacterMovement()->MaxWalkSpeed > DesignerPatrolSpeed + 1.f)
+				{
+					State.bPatrolSpeedWrong = true;
+				}
+				return true;
+			}
+			State.SearchEndedAt = State.SearchEndedAt < 0.f ? State.StageTime : State.SearchEndedAt;
+			// Back on the route: sampled once he walks again (he may first wait at the nearest waypoint with the search pace still set).
+			const bool bWalking = Searcher && !Searcher->IsSearching() && Searcher->GetVelocity().Size2D() > 10.f;
+			if (!bWalking && State.StageTime < State.SearchEndedAt + 20.f)
+			{
+				return true;
+			}
+			const float Speed = Searcher ? Searcher->GetCharacterMovement()->MaxWalkSpeed : -1.f;
+			Check(State, bWalking && FMath::IsNearlyEqual(Speed, DesignerPatrolSpeed, 1.f) && Searcher->GetVelocity().Size2D() <= DesignerPatrolSpeed + 5.f,
+				FString::Printf(TEXT("the search ended, walking the route again at the patrol speed %.0f (wanted %.0f, moving %.0f cm/s)"), Speed,
+					DesignerPatrolSpeed, Searcher ? Searcher->GetVelocity().Size2D() : -1.f));
+			Check(State, !State.bPatrolSpeedWrong, TEXT("the marksman walked his route at the patrol speed after the load"));
 			return Finish(State, true);
 		}
 		default:
