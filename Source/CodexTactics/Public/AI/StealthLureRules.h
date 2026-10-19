@@ -171,6 +171,10 @@ struct CODEXTACTICS_API FNoiseReactionInput
 	bool bFollowingScent = false;
 	/** Planar distance from the hound to the point it smells the operative at, cm (Following). */
 	float ScentDistanceCm = TNumericLimits<float>::Max();
+	/** Planar distance from the enemy itself to the new noise, cm (< 0: unknown). */
+	float DistanceToSelfCm = -1.f;
+	/** The new noise is a stealth lure (whistle / stone), not a hit / blast / scent. */
+	bool bLure = false;
 };
 
 namespace StealthLureRules
@@ -224,6 +228,10 @@ namespace StealthLureRules
 	 * the point it investigates, whatever set it - lure, trap, scent); else Investigate. A sniffing hound / one following a far
 	 * scent re-targets (the caller drops the scent). Stronger stimuli keep priority outside this rule: an enemy that sees / hears
 	 * the squad breaks its patrol, and off patrol duty nothing sends it searching.
+	 * Fix 2026-10-19 (SaveRoundTripSmoke: a searching Frostbitten in contact with a barricade restarted its search at its own feet
+	 * every second - every contact tick is a "trap event" at its own location - and never left the barricade): a non-lure noise at
+	 * the enemy's own feet (DistanceToSelfCm <= SelfNoiseCm) while it already searches is SameNoise - nothing new to walk to, the
+	 * search keeps its clock and ends on time. A lure at its feet (a stone landing there) still re-targets.
 	 */
 	CODEXTACTICS_API ENoiseReaction ReactToNoise(const FNoiseReactionInput& Input);
 
@@ -236,6 +244,8 @@ namespace StealthLureRules
 	constexpr float SameNoiseCm = 50.f;
 	/** ... and set this recently (a patrol mate's propagation in the same instant), s. */
 	constexpr float SameNoiseSeconds = 0.1f;
+	/** A non-lure noise this close to a searching enemy itself (a hit on it, a blast at its feet) restarts nothing, cm. */
+	constexpr float SelfNoiseCm = 150.f;
 
 	/** The radius Listener hears a lure at (walls and search multiplier applied), cm. */
 	CODEXTACTICS_API float EffectiveRadius(const FStealthLureListener& Listener, float RadiusCm, float SearchPerceptionMultiplier);

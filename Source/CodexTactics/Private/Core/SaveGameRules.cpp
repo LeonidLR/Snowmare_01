@@ -1,4 +1,54 @@
 #include "Core/SaveGameRules.h"
+#include "Dom/JsonObject.h"
+
+namespace
+{
+	FString SaveRulesString(const FJsonObject& Data, const TCHAR* Field, const FString& Fallback)
+	{
+		FString Value;
+		return Data.TryGetStringField(Field, Value) ? Value : Fallback;
+	}
+}
+
+ESaveBlockReason SaveGameRules::GetSaveBlockReason(ECodexGamePhase Phase, bool bDialogueOpen)
+{
+	const ESaveBlockReason ByPhase = GetSaveBlockReason(Phase);
+	return ByPhase != ESaveBlockReason::None ? ByPhase : (bDialogueOpen ? ESaveBlockReason::Dialogue : ESaveBlockReason::None);
+}
+
+bool SaveGameRules::ParseSlotInfo(const FJsonObject& Data, const FString& SlotName, FSaveSlotInfo& OutInfo)
+{
+	if (!Data.HasField(TEXT("version")) && !Data.HasField(TEXT("squad")) && !Data.HasField(TEXT("game_state")) && !Data.HasField(TEXT("world_state")))
+	{
+		return false; // not a save file
+	}
+	const FString Slot = SanitizeSlotName(SlotName);
+	OutInfo = FSaveSlotInfo();
+	OutInfo.SlotName = SaveRulesString(Data, TEXT("slot_name"), Slot);
+	OutInfo.Title = SaveRulesString(Data, TEXT("title"), Slot);
+	double Timestamp = 0.0;
+	Data.TryGetNumberField(TEXT("timestamp"), Timestamp);
+	OutInfo.Timestamp = static_cast<int64>(Timestamp);
+	Data.TryGetStringField(TEXT("datetime_str"), OutInfo.DateTime);
+	OutInfo.SaveType = SaveRulesString(Data, TEXT("save_type"), GetSaveType(Slot));
+	OutInfo.Author = SaveRulesString(Data, TEXT("author"), TEXT("Commander"));
+	OutInfo.StageName = SaveRulesString(Data, TEXT("stage_name"), TEXT("Unknown stage"));
+	Data.TryGetStringField(TEXT("squad_summary"), OutInfo.SquadSummary);
+	const TSharedPtr<FJsonObject>* GameState = nullptr;
+	double Wave = 1.0;
+	if (Data.TryGetObjectField(TEXT("game_state"), GameState) && GameState && GameState->IsValid())
+	{
+		(*GameState)->TryGetNumberField(TEXT("current_wave_index"), Wave);
+	}
+	OutInfo.Wave = static_cast<int32>(Wave);
+	const TArray<TSharedPtr<FJsonValue>>* SquadList = nullptr;
+	OutInfo.SquadCount = Data.TryGetArrayField(TEXT("squad"), SquadList) ? SquadList->Num() : 0;
+	double Version = 1.0;
+	Data.TryGetNumberField(TEXT("version"), Version);
+	OutInfo.Version = static_cast<int32>(Version);
+	Data.TryGetStringField(TEXT("map"), OutInfo.MapName);
+	return true;
+}
 
 FString SaveGameRules::SanitizeSlotName(const FString& Raw)
 {
@@ -178,6 +228,8 @@ FText SaveGameRules::GetSaveBlockText(ESaveBlockReason Reason)
 		return NSLOCTEXT("SaveGameRules", "BlockedCutscene", "Saving is disabled while the battle begins");
 	case ESaveBlockReason::GameOver:
 		return NSLOCTEXT("SaveGameRules", "BlockedGameOver", "Saving is disabled after the mission failed");
+	case ESaveBlockReason::Dialogue:
+		return NSLOCTEXT("SaveGameRules", "BlockedDialogue", "Saving is disabled during a conversation");
 	default:
 		return FText::GetEmpty();
 	}

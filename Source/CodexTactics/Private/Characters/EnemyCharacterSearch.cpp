@@ -73,6 +73,8 @@ ENoiseReaction AEnemyCharacter::ApplySearchNoise(const FVector& Location, const 
 	Input.bSniffing = ScentState.Phase == EHoundScentPhase::Sniffing;
 	Input.bFollowingScent = ScentState.Phase == EHoundScentPhase::Following;
 	Input.ScentDistanceCm = FVector::Dist2D(GetActorLocation(), ScentState.ScentPoint);
+	Input.DistanceToSelfCm = FVector::Dist2D(GetActorLocation(), Location);
+	Input.bLure = Spec.bLure;
 	const ENoiseReaction Reaction = StealthLureRules::ReactToNoise(Input);
 	if (Reaction == ENoiseReaction::KeepScent)
 	{

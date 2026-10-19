@@ -44,6 +44,13 @@ public:
 	/** Where Member stood when the preparation began (Godot initial_prep_station; its spawn spot before that). */
 	FVector GetPrepStation(const AOperativeCharacter* Member) const;
 
+	/** A preparation station was recorded for Member (save game: only recorded ones are written). */
+	bool GetRecordedPrepStation(const AOperativeCharacter* Member, FVector& OutStation) const;
+
+	/** Save-game load (audit 2026-10-19): the kill statistics of the waves already fought and the recorded preparation stations. */
+	void RestoreKillStats(const FSquadKillStats& Stats) { KillStats = Stats; }
+	void RestorePrepStation(AOperativeCharacter* Member, const FVector& Station);
+
 private:
 	UFUNCTION()
 	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);

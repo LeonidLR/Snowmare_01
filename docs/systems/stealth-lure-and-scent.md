@@ -9,6 +9,19 @@
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
+## Re-target rule fix 2026-10-19: a hit on itself is not a new noise
+
+`SaveRoundTripSmoke` failed 3 of 9 runs after the level reopen: the frostbitten searching on route B drifted into the smoke's barricade; every
+contact tick (1 s, `ABarricadeActor::ApplyContactTo` runs under `FScopedTrapBlast` = a trap event) made `HandleDamaged` call
+`StartPatrolSearch(GetActorLocation())`, and `StealthLureRules::ReactToNoise` (669b2d2: a newer noise re-targets a running search) restarted the
+search clock at its own feet every second - the search never ended, the enemy kept sweeping around the barricade and died on it ("damage source
+Barricade"), so the "back on the route after the search" check found nobody. Fix (pure rule + test `AI.StealthLure.Retarget`): a NON-LURE noise
+within `SelfNoiseCm` (1.5 m) of a searching enemy itself is `SameNoise` - nothing new to walk to, the clock keeps running and the search ends on
+time (`FNoiseReactionInput::DistanceToSelfCm / bLure`, filled in `AEnemyCharacter::ApplySearchNoise`). A stone landing at its feet (a lure) still
+re-targets; a hit on an enemy that is NOT searching still starts the search; blasts 1.5 m+ away still re-target. The smoke also starts its searches
+on the side away from the nearest deployable (`SearchOriginAwayFromDeployables`). Scent episodes (phase, timers, scent point) are saved since the
+save audit (`FEnemyPatrolSnapshot::Scent*`, `docs/systems/save-load.md`).
+
 ## Stealth lure (old §5)
 
 **Stealth lure (user decisions 2026-10-18, UE-only; design `docs/design/STEALTH_LURE.md`)** — any operative WHISTLES (`5` / action bar

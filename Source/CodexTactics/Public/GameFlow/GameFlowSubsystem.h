@@ -41,7 +41,7 @@ public:
 	void SetConfig(const FGameFlowConfig& Config) { Machine.SetConfig(Config); }
 
 	/** Save-game load: see FGameFlowStateMachine::RestoreForLoad (PreparationSeconds < 0: the full preparation / rest). */
-	void RestoreForLoad(bool bCombatUnlocked, bool bCombatPhase, int32 WaveIndex, float PreparationSeconds = -1.f);
+	void RestoreForLoad(bool bCombatUnlocked, bool bCombatPhase, int32 WaveIndex, float PreparationSeconds = -1.f, bool bAmbushFight = false);
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|GameFlow")
 	ECodexGamePhase GetPhase() const { return Machine.GetPhase(); }

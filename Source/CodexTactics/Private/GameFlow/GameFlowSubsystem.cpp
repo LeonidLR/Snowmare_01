@@ -69,10 +69,10 @@ void UGameFlowSubsystem::ResetFlow(const FGameFlowConfig& Config)
 	HandleStateChanged(Machine.GetPhase(), Machine.GetCombatMode());
 }
 
-void UGameFlowSubsystem::RestoreForLoad(bool bCombatUnlocked, bool bCombatPhase, int32 WaveIndex, float PreparationSeconds)
+void UGameFlowSubsystem::RestoreForLoad(bool bCombatUnlocked, bool bCombatPhase, int32 WaveIndex, float PreparationSeconds, bool bAmbushFight)
 {
 	SyncSuddenStartOverride();
-	Machine.RestoreForLoad(bCombatUnlocked, bCombatPhase, WaveIndex, PreparationSeconds);
+	Machine.RestoreForLoad(bCombatUnlocked, bCombatPhase, WaveIndex, PreparationSeconds, bAmbushFight);
 	HandleStateChanged(Machine.GetPhase(), Machine.GetCombatMode());
 }
 

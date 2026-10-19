@@ -71,6 +71,13 @@ public:
 	/** Save-game load. */
 	void RestoreHeatBuffer(float SecondsLeft) { HeatBufferSecondsLeft = FMath::Max(0.f, SecondsLeft); }
 
+	/**
+	 * Save-game load (audit 2026-10-19): the sticky cold flags as saved - frostbite (set at the Frostbite tier, cleared only once
+	 * warmed) and the frozen weapon (hysteresis band) are not functions of the cold level alone; the tier is re-derived from the
+	 * owner's restored ColdLevel at once (speed multiplier), silently.
+	 */
+	void RestoreColdState(bool bInFrostbitten, bool bInWeaponFrozen);
+
 	/** Strongest WarmthRate of the active heat sources covering the owner (0 = none sets one). */
 	float GetHeatSourceWarmthRate() const;
 
