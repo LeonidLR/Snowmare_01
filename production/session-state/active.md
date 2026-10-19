@@ -14,6 +14,28 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Checkpoint 2026-10-19 (end of day) — REPORT FOR THE MORNING
+Main pushed. Final verification on main: full unity build OK, unity clashes 0, 545/545 unit tests, 12 smokes green
+(incl. the new SaveCoverage / SaveCoverageLake).
+- Play-test fixes today: anim-first loot / disarm; medkit lesson; every load reopens the level; patrol speed + level
+  enemies survive loads; prone-in-cover stands first; mesh pinned to the capsule; occluded vision cones; Aggressive
+  really fires; posture lesson; A4 ambush part 2 (lure); symmetric squad sight; peek sight (limited cone from the
+  leaned-out eye); role-specific A3 cover rings + the medic finds the mines with his peek cone (layout 5j on the user's
+  map); quick fire = Ctrl + click on a point (object / enemy shots unchanged).
+- Audit (model router): HANDOFF 681 KB -> 24 KB index + `docs/systems/*.md` + CHANGELOG / TRAPS / OPEN_QUESTIONS /
+  NEXT_STEPS / KNOWN_GAPS (Sonnet); `EnemyCharacter.cpp` 2983 -> 291 lines by cluster + TurnBasedCombatSubsystem split
+  plan in `docs/port/REFACTOR_ENEMY_2026-10.md` (Opus high); tutorial engine reference + consolidation + steps schema
+  validator (Opus); save/load audit — format v3, explicit restore order, state inventory, 13 gaps closed (KIA operatives,
+  frostbite flags, cover slot, defence line, random wave events, kill stats, hound scent episode…), corrupt / old /
+  missing-map saves handled, saving blocked during dialogue, the self-noise search loop fixed (Fable high); unity-clash
+  finder in build.ps1 (+ -FullUnity / -NoUnity).
+- Open for the user: GEMINI.md got two link updates (HANDOFF split); CLAUDE.md's description of HANDOFF is outdated
+  (not edited — user's file); the observation «after an automatic open shot the return to a high-cover corner resets
+  crouch to standing» (gameplay decision); save follow-ups (APC repair in progress, auto-sidearm memory, tutorial
+  TriggerHits, objects in flight at save) in `docs/systems/save-load.md`; try one old save slot in the editor.
+- Next: Demo 01 patrol fight before the horde (encounter groups) + beats A5-A10; TurnBasedCombatSubsystem split (plan
+  ready); wind scent + stealth kill (parked).
+
 ## Audit 2026-10-19 evening (user approved, distributed by the model router)
 Order / parallelism (two worktrees): (1) L2 Sonnet — split `docs/port/HANDOFF.md` (668 KB) into a short index +
 `docs/systems/*.md` + `docs/port/CHANGELOG.md` (agents2, agents/audit); (1') L3 Opus high — split `EnemyCharacter.cpp`
