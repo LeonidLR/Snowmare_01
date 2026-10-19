@@ -267,8 +267,26 @@
     {
       "name": "enemy",
       "globs": ["Source/**/Characters/EnemyCharacter*", "Source/**/Characters/EnemyAI*", "Source/**/Debug/EnemyArchetypeSmoke*", "Source/**/AI/RepathRules*", "Source/**/Debug/RepathProbe*", "Source/**/Data/AITuning*", "Source/**/Data/EnemyPerception*"],
-      "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Combat.Enemy", "CodexTactics.AI"],
+      "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Characters.EnemyUnits", "CodexTactics.Combat.Enemy", "CodexTactics.AI"],
       "smokes": ["EnemyAISmoke", "EnemyArchetypeSmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke", "PatrolAmbushSmoke"]
+    },
+    {
+      "name": "enemy-combat-units",
+      "globs": ["Source/**/Characters/EnemyCharacterBehavior*", "Source/**/Characters/EnemyCharacterCombat*", "Source/**/Characters/EnemyCharacterHealth*"],
+      "tests": ["CodexTactics.Characters.EnemyUnits", "CodexTactics.Combat.Enemy", "CodexTactics.Combat.Knockdown", "CodexTactics.Characters.EnemyTactics"],
+      "smokes": ["EnemyAISmoke", "EnemyTacticsSmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "KnockdownSmoke", "HordeIntroSmoke", "DefendSmoke", "VehicleCombatSmoke", "TurnBlastDeathSmoke"]
+    },
+    {
+      "name": "enemy-patrol-units",
+      "globs": ["Source/**/Characters/EnemyCharacterPatrol*", "Source/**/Characters/EnemyCharacterSave*"],
+      "tests": ["CodexTactics.Characters.EnemyUnits", "CodexTactics.AI.Patrol"],
+      "smokes": ["PatrolSmoke", "PatrolAmbushSmoke", "AmbushSmoke", "MarksmanSmoke", "SaveRoundTripSmoke", "SaveLoadSmoke", "TutorialSaveSmoke"]
+    },
+    {
+      "name": "enemy-perception-units",
+      "globs": ["Source/**/Characters/EnemyCharacterPerception*", "Source/**/Characters/EnemyCharacterScent*", "Source/**/Characters/EnemyCharacterSearch*"],
+      "tests": ["CodexTactics.Characters.EnemyUnits", "CodexTactics.AI.Perception", "CodexTactics.AI.Scent", "CodexTactics.AI.StealthLure", "CodexTactics.Combat.VisionCone"],
+      "smokes": ["SightSmoke", "VisionConeSmoke", "StealthLureSmoke", "HoundScentSmoke", "BotStealthSmoke", "PatrolSmoke"]
     },
     {
       "name": "hud-canvas",
