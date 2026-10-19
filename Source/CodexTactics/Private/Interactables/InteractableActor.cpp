@@ -14,6 +14,10 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Characters/InteractionAnimRules.h"
+#include "Characters/OperativeAnimInstance.h"
+#include "CodexTactics.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "EngineUtils.h"
 #include "UI/GameMessageSubsystem.h"
 #include "Components/BoxComponent.h"
@@ -218,7 +222,7 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 		case EDefusalResult::Success:
 			bTrapped = false;
 			bDefused = true;
-			PostLine(Name, FText::Format(LOCTEXT("TripwireDefused", "✅ {0} disarmed the PMC tripwire!"), Name));
+			PostDefusalSuccess(Name, FText::Format(LOCTEXT("TripwireDefused", "✅ {0} disarmed the PMC tripwire!"), Name));
 			break;
 		case EDefusalResult::Detonation:
 			PostLine(Name, LOCTEXT("TripwireBoom", "💥 The pin slipped out of numb fingers! The tripwire went off!"));
@@ -270,7 +274,7 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 	case EDefusalResult::Success:
 		bTrapped = false;
 		bDefused = true;
-		PostLine(Name, Flavor == ETrapFlavor::Turret
+		PostDefusalSuccess(Name, Flavor == ETrapFlavor::Turret
 			? FText::Format(LOCTEXT("TurretDefused", "✅ {0} disarmed the tripwire on the combat turret!"), Name)
 			: Flavor == ETrapFlavor::Crate
 			? FText::Format(LOCTEXT("CrateDefused", "✅ {0} disarmed the tripwire on the supply crate!"), Name)
@@ -601,6 +605,94 @@ void AInteractableActor::FinishGeneratorRepair(TWeakObjectPtr<AOperativeCharacte
 	RepairGenerator();
 	PostLine(WeakUser.IsValid() ? WeakUser->DisplayName : LOCTEXT("Soldier", "Operative"),
 		LOCTEXT("GeneratorRepaired", "✅ The diesel generator is running again! Power grid restored!"));
+}
+
+// --- Disarm pickup (rev 2026-10-19, game designer play-test: the trap vanished first, then he bent down to pick it up) ---
+
+void AInteractableActor::PostDefusalSuccess(const FText& Speaker, const FText& Line)
+{
+	if (bDeferDefusalSuccessLine)
+	{
+		DeferredDefusalSpeaker = Speaker;
+		DeferredDefusalLine = Line;
+		return;
+	}
+	PostLine(Speaker, Line);
+}
+
+void AInteractableActor::PostDeferredDefusalLine()
+{
+	if (!DeferredDefusalLine.IsEmpty())
+	{
+		PostLine(DeferredDefusalSpeaker, DeferredDefusalLine);
+		DeferredDefusalLine = FText::GetEmpty();
+	}
+}
+
+void AInteractableActor::BeginDisarmPickup(AOperativeCharacter* User, EOperativeStance ClipStance)
+{
+	if (bAwaitingPickup)
+	{
+		return;
+	}
+	bAwaitingPickup = true;
+	PickupUser = User;
+	PickupStance = ClipStance;
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	const bool bTimeFrozen = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+	if (InteractionAnimRules::GetDispatch(bTimeFrozen, InteractionAnimRules::ChooseLayer(ClipStance)) == EInteractionClipDispatch::WaitForRelease)
+	{
+		// Time stands still: the clip plays when the pause ends, the charge goes at its grab (it stays harmless meanwhile).
+		bPickupWaitsForRelease = true;
+		if (UGameFlowSubsystem* MutableFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>())
+		{
+			MutableFlow->OnTacticalPauseReleased.AddUniqueDynamic(this, &AInteractableActor::HandlePickupPauseReleased);
+		}
+		return;
+	}
+	StartDisarmPickupClip();
+}
+
+void AInteractableActor::HandlePickupPauseReleased()
+{
+	if (UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr)
+	{
+		Flow->OnTacticalPauseReleased.RemoveDynamic(this, &AInteractableActor::HandlePickupPauseReleased);
+	}
+	if (bPickupWaitsForRelease)
+	{
+		bPickupWaitsForRelease = false;
+		StartDisarmPickupClip();
+	}
+}
+
+void AInteractableActor::StartDisarmPickupClip()
+{
+	AOperativeCharacter* User = PickupUser.Get();
+	UOperativeAnimInstance* Anim = User ? UOperativeAnimInstance::Of(User) : nullptr;
+	const FInteractionClipTiming Clip = Anim ? Anim->PlayInteractionTimed(EOperativeInteractionAnim::PickupGround, PickupStance) : FInteractionClipTiming();
+	LastPickupDelaySeconds = Clip.bPlayed ? Clip.EffectDelaySeconds : 0.f;
+	UE_LOG(LogCodexTactics, Display, TEXT("%s: disarmed - picked up by %s in %.2f s (%s)"), *GetName(), User ? *User->DisplayName.ToString() : TEXT("-"),
+		LastPickupDelaySeconds, Clip.bPlayed ? TEXT("pickup clip") : TEXT("no clip"));
+	if (LastPickupDelaySeconds <= 0.f)
+	{
+		FinishDisarmPickup();
+		return;
+	}
+	GetWorldTimerManager().SetTimer(PickupTimer, FTimerDelegate::CreateUObject(this, &AInteractableActor::FinishDisarmPickup), LastPickupDelaySeconds, false);
+}
+
+void AInteractableActor::FinishDisarmPickup()
+{
+	if (!bAwaitingPickup)
+	{
+		return;
+	}
+	bAwaitingPickup = false;
+	GetWorldTimerManager().ClearTimer(PickupTimer);
+	AOperativeCharacter* User = PickupUser.Get();
+	PickupUser.Reset();
+	CompleteDisarmPickup(User);
 }
 
 #undef LOCTEXT_NAMESPACE

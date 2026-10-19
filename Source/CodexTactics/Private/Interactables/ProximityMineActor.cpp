@@ -284,9 +284,9 @@ void AProximityMineActor::DetonateTrap(bool bByShot, const FText& InstigatorName
 
 void AProximityMineActor::Detonate()
 {
-	if (bDetonated)
+	if (bDetonated || IsAwaitingPickup())
 	{
-		return;
+		return; // rev 2026-10-19: disarmed, in the defuser's hands until the pickup grab
 	}
 	bDetonated = true;
 	bTrapped = false;

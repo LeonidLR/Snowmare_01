@@ -245,6 +245,9 @@ private:
 	 * OriginalStance (before the crouched work) was standing and plays the pickup clip for it.
 	 */
 	EDefusalResult ResolveHostileDisarm(AOperativeCharacter* User, EOperativeStance OriginalStance);
+
+	/** Rev 2026-10-19: the pickup clip's grab after a successful disarm - grenades, feed, TripwireDisarmed, the wire goes. */
+	virtual void CompleteDisarmPickup(AOperativeCharacter* User) override;
 	/** Lays the placed wire from AnchorA / AnchorB (ground-projected) and arms it. */
 	void ArmFromPlacement();
 	/** Editor / pre-Setup look: wire and pegs between the local anchors. */

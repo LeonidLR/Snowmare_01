@@ -149,6 +149,10 @@ bool UInteractionSubsystem::TryOpenMenu()
 		return false;
 	}
 	Pending.Reset();
+	if (Target->IsAwaitingPickup())
+	{
+		return true; // disarmed, being picked up right now (rev 2026-10-19): nothing to open
+	}
 	if (Target->UsesDisarmApproach())
 	{
 		// At the disarm spot: he stops and faces the charge / the wire before the menu (2026-10-15).
@@ -162,6 +166,10 @@ bool UInteractionSubsystem::TryOpenMenu()
 
 void UInteractionSubsystem::OpenMenuFor(AInteractableActor* Target, AOperativeCharacter* Leader)
 {
+	if (Target->IsAwaitingPickup())
+	{
+		return;
+	}
 	if (Target->HandleDirectInteraction(Leader))
 	{
 		return;
@@ -437,7 +445,12 @@ void UInteractionSubsystem::OpenLootDialog(ALootCrateActor* Crate)
 		return; // the loot lesson comes in the hut (Demo 01 progressive unlock)
 	}
 	CloseMenu();
+	if (ALootCrateActor* Previous = LootCrate.Get(); Previous && Previous != Crate)
+	{
+		Previous->HandleDialogClosed();
+	}
 	LootCrate = Crate;
+	Crate->MarkOpen(); // normally ALootCrateActor::FinishOpening (the lid is up); a dev shortcut opens it directly
 	OnLootDialogChanged.Broadcast(true, Crate);
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	PlayerCommands::ReportBy(this, PlayerCommands::LootCrate, Squad ? Squad->GetLeader() : nullptr, Crate);
@@ -445,13 +458,12 @@ void UInteractionSubsystem::OpenLootDialog(ALootCrateActor* Crate)
 
 void UInteractionSubsystem::CloseLootDialog()
 {
-	if (ALootCrateActor* Previous = LootCrate.Get(); Previous && Previous != Crate)
-	{
-		Previous->HandleDialogClosed();
-	}
 	ALootCrateActor* Crate = LootCrate.Get();
-	Crate->MarkOpen(); // normally ALootCrateActor::FinishOpening (the lid is up); a dev shortcut opens it directly
 	LootCrate.Reset();
+	if (Crate)
+	{
+		Crate->HandleDialogClosed(); // a running search still finishes: the items move at its grab
+	}
 	OnLootDialogChanged.Broadcast(false, Crate);
 }
 
@@ -460,10 +472,6 @@ void UInteractionSubsystem::LootItem(ELootItem Item)
 	ALootCrateActor* Crate = LootCrate.Get();
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	if (Crate)
-	{
-		Crate->HandleDialogClosed(); // a running search still finishes: the items move at its grab
-	}
 	if (!Crate || !Leader)
 	{
 		return;
@@ -519,6 +527,7 @@ void UInteractionSubsystem::HandleSearchFinished(ALootCrateActor* Crate, AOperat
 		CloseLootDialog();
 		return;
 	}
+	OnLootDialogChanged.Broadcast(true, Crate); // refresh the list, buttons back on
 }
 
 void UInteractionSubsystem::CancelActionMenu()
@@ -527,7 +536,6 @@ void UInteractionSubsystem::CancelActionMenu()
 }
 
 void UInteractionSubsystem::CloseMenu()
-	OnLootDialogChanged.Broadcast(true, Crate); // refresh the list, buttons back on
 {
 	if (MenuTarget.IsValid())
 	{

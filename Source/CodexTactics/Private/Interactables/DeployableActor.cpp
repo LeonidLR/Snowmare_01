@@ -1,5 +1,4 @@
 #include "Interactables/DeployableActor.h"
-#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
@@ -171,50 +170,57 @@ void ADeployableActor::FinishDismantle(TWeakObjectPtr<AOperativeCharacter> WeakU
 			User->SetStance(EOperativeStance::Standing);
 		}
 	};
-	// Game designer 2026-10-15: a successful mine disarm ends with the pickup clip by the stance he came in with (standing: full
-	// body, rising from the crouched work; crouched: upper body over the crouched legs; prone: none yet). After StandUp.
-	auto PlayPickup = [User, OriginalStance]()
-	{
-		if (UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(User))
-		{
-			Anim->PlayInteraction(EOperativeInteractionAnim::PickupGround, OriginalStance);
-		}
-	};
-	bool bDisarmed = false;
 	if (NeedsDefusal())
 	{
-		// A detonation may destroy this actor: keep what we need before the attempt.
-		const EDefusalResult Result = AttemptDefusal(User);
-		if (Result != EDefusalResult::Success || !bDeployable)
+		// A detonation may destroy this actor: keep what we need before the attempt. The success line waits for the grab.
+		EDefusalResult Result = EDefusalResult::Warning;
 		{
-			StandUp();
-			if (Result == EDefusalResult::Success)
-			{
-				PlayPickup();
-			}
-			return;
+			TGuardValue<bool> DeferLine(bDeferDefusalSuccessLine, true);
+			Result = AttemptDefusal(User);
 		}
-		bDisarmed = true;
+		StandUp();
+		if (Result == EDefusalResult::Success)
+		{
+			// Rev 2026-10-19 (game designer: the mine disappeared first, then he bent down): he plays the pickup clip by the stance he
+			// came in with (standing: full body rising from the crouched work; crouched: upper body; prone: none - at once) and the
+			// charge stays, harmless, until the clip's grab moment (CompleteDisarmPickup): then the feed line, the kit, the removal.
+			BeginDisarmPickup(User, OriginalStance);
+		}
+		return;
 	}
 	AOperativeCharacter* Recipient = FindRecipient(User);
 	if (!Recipient)
 	{
 		PostLine(User->DisplayName, FullLine(DeployableType));
 		StandUp();
-		if (bDisarmed)
-		{
-			PlayPickup();
-		}
 		return;
 	}
 	Recipient->AddDeployable(DeployableType, 1);
 	OnPickedUpBy(*Recipient);
 	PostLine(User->DisplayName, FText::Format(FoundLine(DeployableType), Recipient->DisplayName));
 	StandUp();
-	if (bDisarmed)
+	Destroy();
+}
+
+void ADeployableActor::CompleteDisarmPickup(AOperativeCharacter* User)
+{
+	PostDeferredDefusalLine();
+	if (!bDeployable)
 	{
-		PlayPickup();
+		return; // disarmed in place: this one can not be carried (it stays, harmless)
 	}
+	AOperativeCharacter* Recipient = User ? FindRecipient(User) : nullptr;
+	if (!Recipient)
+	{
+		if (User)
+		{
+			PostLine(User->DisplayName, FullLine(DeployableType)); // nobody has room: it stays, disarmed
+		}
+		return;
+	}
+	Recipient->AddDeployable(DeployableType, 1);
+	OnPickedUpBy(*Recipient);
+	PostLine(User->DisplayName, FText::Format(FoundLine(DeployableType), Recipient->DisplayName));
 	Destroy();
 }
 
