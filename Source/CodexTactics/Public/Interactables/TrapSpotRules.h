@@ -17,9 +17,13 @@ enum class ETrapSpotResponse : uint8
 
 /**
  * Rev 5h: the corner peek reveals hidden traps. While an operative leans out round a corner (the corner aim of a manual peek
- * or of the corner hold), every hidden trap inside his peek sight cone with a line of sight is spotted at once - with
- * certainty, far beyond the proximity spot range (mine 4.5 m, Medic-Sapper +1.5 m). BP_Operative Class Defaults ->
- * Cover|Peek (AOperativeCharacter::PeekSpotConfig).
+ * or of the corner hold), every hidden trap inside his peek sight cone with a line of sight is spotted - with certainty, far
+ * beyond the proximity spot range (mine 4.5 m, Medic-Sapper +1.5 m). BP_Operative Class Defaults -> Cover|Peek
+ * (AOperativeCharacter::PeekSpotConfig).
+ * 2026-10-19 (game designer: "he must PHYSICALLY spot the mines with his peek cone, not all of them at once"): the search looks
+ * from the same leaned-out eye point, in the same aim and the same cone angle as his peek view of enemies (FPeekSightConfig, the
+ * cone drawn for him), only shorter - a mine lies flush with the snow (12 m against 18 m) - and its reach sweeps out from his feet
+ * over SweepSeconds, so the mines are found one by one, the nearest first.
  */
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FTrapPeekSpotConfig
@@ -34,9 +38,13 @@ struct CODEXTACTICS_API FTrapPeekSpotConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek", meta = (ClampMin = "0"))
 	float RangeCm = 1200.f;
 
-	/** Half the sight cone round the corner-aim direction, degrees (30 = a 60 degree cone). */
+	/** Half the sight cone round the corner-aim direction, degrees (45 = the 90 degree peek view cone, FPeekSightConfig; rev 5h: 30). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek", meta = (ClampMin = "0", ClampMax = "180"))
-	float HalfAngleDeg = 30.f;
+	float HalfAngleDeg = 45.f;
+
+	/** The search's reach grows from 0 to RangeCm over this long after he leans out, s (0 = the whole range at once). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek", meta = (ClampMin = "0"))
+	float SweepSeconds = 1.5f;
 
 	/** A wall / rock between the peek and the trap hides it (visibility trace to TargetHeightCm above the trap). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek")
@@ -68,6 +76,9 @@ namespace TrapSpotRules
 	 */
 	CODEXTACTICS_API bool IsInPeekSightCone(const FVector& Origin, const FVector& Direction, const FVector& Target, float RangeCm,
 		float HalfAngleDeg);
+
+	/** The trap search's reach ElapsedSeconds after the lean-out: RangeCm x (Elapsed / SweepSeconds), capped at RangeCm. */
+	CODEXTACTICS_API float PeekSweepRange(float RangeCm, float SweepSeconds, float ElapsedSeconds);
 
 	/** The tutorial / gameplay event raised for a spotted trap of a group: "TrapSpotted.<Tag>" (none for an empty tag). */
 	CODEXTACTICS_API FName GroupEventName(FName SpotEventTag);

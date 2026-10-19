@@ -174,6 +174,15 @@ public:
 	/** The next UpdateCone rebuilds at once (ignores the throttle and the budget). */
 	void RequestRebuild() { bRebuildRequested = true; }
 
+	/**
+	 * Draws the cone from another point and direction than the owner's feet and facing (peek sight, 2026-10-19: a peeking
+	 * operative's cone opens from his leaned-out eye point round the corner): FeetOffset = world offset (planar) from the owner's
+	 * feet, Yaw = the cone's world yaw. Kept until ClearViewOverride.
+	 */
+	void SetViewOverride(const FVector& FeetOffset, float Yaw);
+	void ClearViewOverride();
+	bool HasViewOverride() const { return bViewOverride; }
+
 	UFUNCTION(BlueprintPure, Category = "Vision Cone")
 	bool IsConeShown() const { return bShown; }
 	UFUNCTION(BlueprintPure, Category = "Vision Cone")
@@ -251,6 +260,10 @@ private:
 	TObjectPtr<UMaterialInstanceDynamic> LineMaterial;
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> LightMaterial;
+
+	bool bViewOverride = false;
+	FVector ViewOverrideOffset = FVector::ZeroVector;
+	float ViewOverrideYaw = 0.f;
 
 	float BuiltRange = -1.f;
 	float BuiltHalfAngle = -1.f;

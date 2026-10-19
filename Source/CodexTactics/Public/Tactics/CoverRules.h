@@ -92,4 +92,11 @@ namespace CoverRules
 
 	/** Muzzle for a corner shot: the slot's muzzle moved CornerPeekOffsetCm round the facing's edge. */
 	CODEXTACTICS_API FVector CornerMuzzle(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Muzzle, float OffsetCm);
+
+	/**
+	 * A point of him leaned out round Slot's Facing corner (the only exposed one when Facing is not): Base moved along the wall
+	 * past the edge - max(MinOffsetCm, the edge's distance + 20 cm). The corner shot's muzzle (AOperativeCharacter::CornerFireOriginFor)
+	 * and, 2026-10-19, the peek sight's eye point (PeekSightRules) use it; the height of Base is kept.
+	 */
+	CODEXTACTICS_API FVector CornerLeanPoint(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Base, float MinOffsetCm);
 }

@@ -2,6 +2,7 @@
 // squad and switches it to Solo (TrapSpotRules::DecideSquadResponse); the corner peek reveals hidden traps in its sight cone
 // (TrapSpotRules::IsInPeekSightCone); tagged trap groups for the tutorial ("TrapSpotted.<tag>", stat "traps_spotted.<tag>").
 
+#include "Combat/PeekSightRules.h"
 #include "Interactables/TrapSpotRules.h"
 #include "Misc/AutomationTest.h"
 #include "Tactics/CoverFacingRules.h"
@@ -33,7 +34,8 @@ bool FTrapSpotPeekConeTest::RunTest(const FString&)
 	using namespace TrapSpotRules;
 	const FTrapPeekSpotConfig Config;
 	TestEqual(TEXT("default range 12 m"), Config.RangeCm, 1200.f);
-	TestEqual(TEXT("default cone 60 deg"), Config.HalfAngleDeg * 2.f, 60.f);
+	TestEqual(TEXT("2026-10-19: the peek view's 90 deg cone (FPeekSightConfig)"), Config.HalfAngleDeg, FPeekSightConfig().HalfAngleDeg);
+	TestTrue(TEXT("... shorter than the peek view of enemies (a mine lies flush with the snow)"), Config.RangeCm < FPeekSightConfig().RangeCm);
 	TestTrue(TEXT("line of sight on by default"), Config.bRequireLineOfSight);
 
 	const FVector Origin(0.f, 0.f, 140.f);
@@ -63,6 +65,26 @@ bool FTrapSpotPeekConeTest::RunTest(const FString&)
 	TestFalse(TEXT("right corner: a mine on the near side is not"), IsInPeekSightCone(RightCorner, RightAim, FVector(-600.f, -150.f, 0.f), 1200.f, 30.f));
 	TestFalse(TEXT("right corner: a mine 8 m off along the wall line is not"), IsInPeekSightCone(RightCorner, RightAim, FVector(0.f, -950.f, 0.f), 1200.f, 30.f));
 	TestTrue(TEXT("left corner: beyond the wall too"), IsInPeekSightCone(LeftCorner, LeftAim, FVector(800.f, 100.f, 0.f), 1200.f, 30.f));
+	return true;
+}
+
+TRAP_SPOT_TEST(FTrapSpotPeekSweepTest, "PeekSweep")
+bool FTrapSpotPeekSweepTest::RunTest(const FString&)
+{
+	// 2026-10-19 (game designer: "the mines are spotted one by one as his cone covers them"): the search reaches out from his feet.
+	using namespace TrapSpotRules;
+	const FTrapPeekSpotConfig Config;
+	TestTrue(TEXT("default sweep 1.5 s"), FMath::IsNearlyEqual(Config.SweepSeconds, 1.5f));
+	TestEqual(TEXT("leaning out: nothing yet"), PeekSweepRange(1200.f, 1.5f, 0.f), 0.f);
+	TestEqual(TEXT("half way: 6 m"), PeekSweepRange(1200.f, 1.5f, 0.75f), 600.f);
+	TestEqual(TEXT("done: the whole 12 m"), PeekSweepRange(1200.f, 1.5f, 4.f), 1200.f);
+	TestEqual(TEXT("no sweep: at once"), PeekSweepRange(1200.f, 0.f, 0.f), 1200.f);
+	// A near mine (4 m) is found before a far one (9 m).
+	const FVector Origin(0.f, 0.f, 160.f);
+	const FVector Forward(1.f, 0.f, 0.f);
+	const float At05 = PeekSweepRange(1200.f, 1.5f, 0.6f);
+	TestTrue(TEXT("0.6 s: the 4 m mine is in reach"), IsInPeekSightCone(Origin, Forward, FVector(400.f, 50.f, 0.f), At05, 45.f));
+	TestFalse(TEXT("0.6 s: the 9 m mine is not yet"), IsInPeekSightCone(Origin, Forward, FVector(900.f, -100.f, 0.f), At05, 45.f));
 	return true;
 }
 

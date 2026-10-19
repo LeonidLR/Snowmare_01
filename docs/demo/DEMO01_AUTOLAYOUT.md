@@ -368,3 +368,43 @@ $env:CODEX_LAYOUT_MODE = "additive"; $env:CODEX_LAYOUT_SECTIONS = "5i"
 Get-Content "$p\Saved\Logs\Demo01Layout5i.txt"
 ```
 (the C++ property `SpotRequiresStep` must be compiled into that checkout's editor first; `5h,5i` re-places the peek mines and then edits.)
+
+## 11. Rev 5j: the role-specific cover lesson and the Medic-Sapper's physical peek (2026-10-19, additive section `5j`)
+
+The game designer (a marked screenshot of the A3 cover field: BLUE = the Medic-Sapper behind the tall slab on the left, RED = the
+Commander at the low wall in the middle, ORANGE = the Engineer behind the long low wall in front) wants (1) the "take cover one by
+one" lesson role-specific - each role at HIS spot, any order - and (2) the Medic-Sapper at his slab to spot the mines PHYSICALLY with
+his peek cone, one by one, not all at once. The user's map (snapshot of 2026-10-19 09:40, dump
+`Saved/LayoutDumps/L_Demo01_A_FrozenLake_20261019_165052.json`) has the field as laid out: `Cover_A3_1_Low` (18820, -1690) = the long
+low wall in front (orange), `Cover_A3_2_High` (19420, -3290, 2.2 m, 3 m long) = the tall slab (blue; its outer end -3440 is the 5h
+peek corner, marker `A3_peek` at (19345, -3380)), `Cover_A3_3_Low` (20020, -1890) = the middle low wall (red).
+
+Section **`5j`** (tag `AutoLayout_Demo01_5j`, Outliner `AutoLayout_Demo01_5j/TutorialMarkers`):
+
+| Actor / edit | What | Where |
+|---|---|---|
+| `Marker_A3_cover_MedicSapper` | TutorialMarkerActor, step `A3_cover`, **RoleId `MedicSapper`**, Label MEDIC-SAPPER, blue, ring 1.1 m | (19345, -3380): `Cover_A3_2_High`'s approach face (55 cm out), 60 cm in from its outer end (= the peek corner) |
+| `Marker_A3_cover_Commander` | RoleId `Commander`, COMMANDER, red | (19945, -1890): `Cover_A3_3_Low`'s approach face, centre |
+| `Marker_A3_cover_Engineer` | RoleId `Engineer`, ENGINEER, orange | (18745, -1690): `Cover_A3_1_Low`'s approach face, centre |
+| edit `lesson_mines_into_medic_cone` | `PMC_Mine_A3_1` (19950, -3560) -> **(20000, -3600)**; `PMC_Mine_A3_2` (20100, -3330) -> **(20250, -3480)**; `PMC_Mine_A3_Peek_1` (20220, -3490) -> **(20450, -3700)**; `PMC_Mine_A3_Peek_2` (20370, -3240) -> **(20500, -3500)** (SpotEventTag / SpotRequiresStep ensured) | peek-frame offsets `LESSON_MINE_FRAME_OFFSETS_5J` (-580, 310) / (-830, 190) / (-1030, 410) / (-1080, 210) |
+
+Why the mines moved: the peek now looks from the leaned-out EYE (20 cm past the slab's end, 45 cm off its face, 160 cm) and the
+search sweeps out from it; two of the old places lay only 2-5 cm outside the slab's end on the sight line (a line towards the lane
+clips the end), and once the near mine is revealed its trigger shape used to hide the next one. Now every mine lies on the far side
+of the eye's line along the wall (clear sight, 6.6 / 9.0 / 11.2 / 11.5 m from the eye, -12 .. 0 deg off +X, the cone's aim is +10),
+2-4.6 m apart (trigger radius 1.6 m), > 6.8 m from the medic's slot (his proximity range 6 m). C++ (every level): the peek's line of
+sight ignores spotted armed mines / wires too.
+
+**Verification (2026-10-19, agents2 worktree, on a temporary copy of the user's snapshot - the .umap is NOT committed):** additive
+run `Saved/Logs/Demo01Layout5j.txt`: 3 placed, "pre-existing actors moved / deleted: 4 (expected by the explicit edits: the four
+lesson mines)"; **PeekMinesSmoke PASS** (the three labelled rings shown, the Commander in cover at the Engineer's wall does not count,
+each at his own ring completes A3_cover and the rings hide; no spot before the peek; the Medic-Sapper's peek spots the mines at
+0.8 / 1.3 / 1.5 / 1.5 s, each inside his cone and reach, nearest first; the card A3_peek completes at 4); in-game verify (`CODEX_LAYOUT_MODE=verify`) `Saved/Logs/Demo01LayoutVerify.txt` **RESULT: PASS** (one A3_cover ring per role; each mine > 6.7 m from the medic's slot / the slab's face, inside the 45 deg peek cone of the lean-out eye with a clear sight line).
+
+**Run on the user's latest map** (back it up first; run with that checkout's editor closed; the C++ of this commit - marker
+`RoleId` / `Label` - must be compiled into that checkout's editor first; run AFTER 5h - a 5h re-run puts its two mines back):
+```powershell
+$env:CODEX_LAYOUT_MODE = "additive"; $env:CODEX_LAYOUT_SECTIONS = "5j"
+& "$ue\UnrealEditor-Cmd.exe" "$p\CodexTactics.uproject" -run=pythonscript "-script=$p\Scripts\Editor\build_demo01_lake_layout.py" -unattended -nullrhi -nosplash
+Get-Content "$p\Saved\Logs\Demo01Layout5j.txt"
+```

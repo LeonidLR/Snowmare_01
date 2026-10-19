@@ -6,14 +6,16 @@
 //     mines moved into the green zone beyond the peek corner by section 5i - each with SpotRequiresStep A3_peek);
 //     rev 5i: BEFORE the peek lesson an operative is put 3 m from every lesson mine and in front of every Cover_A3_* wall face:
 //     no mine is spotted (proximity spotting waits for the A3_peek step; only a peek may reveal them);
-//     then the tutorial card A3_peek forced (beat A3: cover unlocked);
-//  1. the leader takes cover at that wall next to the marker, the others wait 3 m behind him: after 2 s in cover NO mine is
-//     spotted (no spot before the peek - they lie beyond the proximity spot range, out of view behind the wall);
-//  2. a click on the wall's end (the real input: FindCornerPeekForHit + TryHandleCoverClick) - he leans out round the corner:
-//     every lesson mine spotted by his peek (GetPeekSpottedCount), TrapSpotted.Peek + TrapSpotted.A3PeekMines raised, the squad
+//  1. rev 5j (game designer 2026-10-19, section 5j): the cover lesson A3_cover forced - three labelled role rings (Medic-Sapper behind
+//     the slab, Commander at the middle low wall, Engineer behind the front low wall); the Commander in cover at the ENGINEER's wall
+//     does not count; each in cover at his own ring completes it (the rings hide); then the A3_peek card. After 2 s in cover NO
+//     mine is spotted (no spot before the peek - beyond the proximity spot range, out of view behind the slab);
+//  2. a click on the slab's end (the real input: FindCornerPeekForHit + TryHandleCoverClick) - the MEDIC-SAPPER leans out: each
+//     lesson mine is spotted only once it lies in his peek cone (the sweeping reach from his leaned-out eyes, line of sight), one
+//     by one, the nearest first; every lesson mine spotted by his peek (GetPeekSpottedCount), TrapSpotted.Peek + TrapSpotted.A3PeekMines raised, the squad
 //     holds in Solo (rev 5h trap hold), the stat traps_spotted.A3PeekMines = their number, the card A3_peek completed and the mine card A3_mine
 //     (disarm / go round) next.
-// Must not assume a squad body (any leader peeks).
+// Needs the map with section 5j (the role rings, the mines in the medic's cone).
 
 #include "CoreMinimal.h"
 
@@ -33,6 +35,7 @@
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/ProximityMineActor.h"
+#include "Interactables/TrapSpotRules.h"
 #include "NavigationSystem.h"
 #include "Subsystems/CodexEventBus.h"
 #include "Tactics/CoverTraceRules.h"
@@ -63,7 +66,27 @@ namespace PeekMinesSmoke
 		TArray<FVector> ProbePoints;
 		int32 ProbeIndex = 0;
 		float NearestProbeCm = 1.0e9f;
+		/** Rev 5j: the role rings of A3_cover (by role id) and the operative of each role. */
+		TMap<FName, TWeakObjectPtr<ATutorialMarkerActor>> RoleRings;
+		TMap<FName, TWeakObjectPtr<AOperativeCharacter>> RoleOps;
+		/** When the medic's lean-out began (stage time), each mine's reveal time after it, the reveal distances in order. */
+		float PeekStart = -1.f;
+		TMap<TWeakObjectPtr<AProximityMineActor>, float> RevealTimes;
+		TArray<float> RevealDistances;
 	};
+
+	/** Orders Operative into cover at the wall of RoleId's ring (the ring stands 55 cm in front of the wall's approach face). */
+	bool TakeCoverAtRing(UWorld* World, AOperativeCharacter& Operative, const FState& State, const TCHAR* RoleId)
+	{
+		const TWeakObjectPtr<ATutorialMarkerActor>* Ring = State.RoleRings.Find(FName(RoleId));
+		if (!Ring || !Ring->IsValid())
+		{
+			return false;
+		}
+		const FVector Face = (*Ring)->GetActorLocation() - State.Normal * 25.f + FVector(0.f, 0.f, 60.f);
+		FCoverSlot Slot;
+		return CoverTraceRules::FindCoverSlotAt(World, Face, -State.Normal, Slot) && Operative.OrderTakeCover(Slot, false) == EOperativeOrderResult::Accepted;
+	}
 
 	/** Rev 5i: the probe points - never closer than 2.5 m to any mine (the trigger radius is 1.6 m). */
 	void BuildProbePoints(UWorld* World, FState& State)
@@ -204,6 +227,10 @@ namespace PeekMinesSmoke
 				{
 					State.Marker = *It;
 				}
+				if (It->StepId == FName(TEXT("A3_cover")) && !It->RoleId.IsNone())
+				{
+					State.RoleRings.Add(It->RoleId, *It);
+				}
 			}
 			const ATutorialMarkerActor* Marker = State.Marker.Get();
 			Check(State, State.Mines.Num() == 4 && CountRevealed(State) == 0, FString::Printf(TEXT("rev 5i: four hidden lesson mines tagged A3PeekMines (%d)"), State.Mines.Num()));
@@ -291,45 +318,113 @@ namespace PeekMinesSmoke
 		}
 		case 11:
 		{
-			const ATutorialMarkerActor* Marker = State.Marker.Get();
-			if (Tutorial && Tutorial->IsTutorialActive())
+			// 2026-10-19 (game designer): the cover lesson is role-specific - each role in cover at HIS ring (step A3_cover, section 5j).
+			Check(State, State.RoleRings.Num() == 3, FString::Printf(TEXT("rev 5j: three role rings of A3_cover (%d)"), State.RoleRings.Num()));
+			if (State.RoleRings.Num() != 3 || !Tutorial || !Tutorial->IsTutorialActive())
 			{
-				Check(State, Tutorial->TriggerStep(TEXT("A3_peek")) && Tutorial->GetCurrentBeat() == FName(TEXT("A3")), TEXT("tutorial: the A3_peek card forced (beat A3)"));
+				return Finish(State, false);
 			}
-			// The leader 1.5 m in front of the wall at the marker, the others 3 m behind him.
-			const FVector Spot = FVector(Marker->GetActorLocation().X, Marker->GetActorLocation().Y, State.GroundZ) + State.Normal * 150.f;
-			int32 Index = 0;
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
-				Member->StopOperative();
-				const FVector Point = Member == Leader ? Spot : Spot + State.Normal * 300.f + State.Along * (Index++ == 0 ? -150.f : -350.f);
-				Member->TeleportTo(SmokeUtils::FreeSpot(World, Point + FVector(0.f, 0.f, 100.f), Member), State.Normal.Rotation() + FRotator(0.f, 180.f, 0.f), false, true);
+				for (const TPair<FName, TWeakObjectPtr<ATutorialMarkerActor>>& Ring : State.RoleRings)
+				{
+					if (Ring.Value.IsValid() && UTutorialSubsystem::GetRoleId(*Member) == Ring.Key)
+					{
+						State.RoleOps.Add(Ring.Key, Member);
+					}
+				}
 			}
+			Check(State, State.RoleOps.Num() == 3, TEXT("rev 5j: an operative for every ring (Medic-Sapper, Commander, Engineer)"));
+			if (State.RoleOps.Num() != 3)
+			{
+				return Finish(State, false);
+			}
+			if (!Squad->IsSoloMode())
+			{
+				Squad->ToggleSoloMode();
+			}
+			Check(State, Tutorial->TriggerStep(TEXT("A3_cover")) && Tutorial->GetCurrentBeat() == FName(TEXT("A3")), TEXT("tutorial: the A3_cover card forced (beat A3)"));
+			// Each one 1.5 m in front of his ring.
+			for (const TPair<FName, TWeakObjectPtr<AOperativeCharacter>>& Pair : State.RoleOps)
+			{
+				AOperativeCharacter* Member = Pair.Value.Get();
+				const FVector Ring = State.RoleRings[Pair.Key]->GetActorLocation();
+				Member->StopOperative();
+				Member->TeleportTo(SmokeUtils::FreeSpot(World, Ring + State.Normal * 150.f + FVector(0.f, 0.f, 100.f), Member), (-State.Normal).Rotation(), false, true);
+			}
+			State.Stage = 12;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 12:
+		{
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A3_cover")) == ETutorialStepState::Active, TEXT("the 'take cover one by one' card is up"));
+			int32 Shown = 0;
+			for (const TPair<FName, TWeakObjectPtr<ATutorialMarkerActor>>& Ring : State.RoleRings)
+			{
+				Shown += Ring.Value.IsValid() && Ring.Value->IsMarkerShown() && !Ring.Value->Label.IsEmpty() ? 1 : 0;
+			}
+			Check(State, Shown == 3, FString::Printf(TEXT("rev 5j: all three labelled role rings shown (%d)"), Shown));
+			// The Commander first walks into the ENGINEER's cover (the wrong spot).
+			Check(State, TakeCoverAtRing(World, *State.RoleOps[TEXT("Commander")].Get(), State, TEXT("Engineer")), TEXT("the Commander takes cover at the ENGINEER's wall"));
+			State.Stage = 13;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 13:
+		{
+			AOperativeCharacter* Commander = State.RoleOps[TEXT("Commander")].Get();
+			if ((!Commander->bInCover || Commander->bShimmying || State.StageTime < 1.5f) && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, Commander->bInCover && Tutorial->GetStepProgress(TEXT("A3_cover")) == 0,
+				FString::Printf(TEXT("rev 5j: the Commander in cover at someone else's spot does not count (%d / 3)"), Tutorial->GetStepProgress(TEXT("A3_cover"))));
+			for (const TCHAR* Role : { TEXT("Commander"), TEXT("Engineer"), TEXT("MedicSapper") })
+			{
+				Check(State, TakeCoverAtRing(World, *State.RoleOps[Role].Get(), State, Role), FString::Printf(TEXT("%s takes cover at his own ring"), Role));
+			}
+			State.Stage = 14;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 14:
+		{
+			if (Tutorial->GetStepState(TEXT("A3_cover")) != ETutorialStepState::Completed && State.StageTime < 20.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A3_cover")) == ETutorialStepState::Completed,
+				FString::Printf(TEXT("rev 5j: each role in cover at his own ring - the card done (%.1f s)"), State.StageTime));
+			int32 Hidden = 0;
+			for (const TPair<FName, TWeakObjectPtr<ATutorialMarkerActor>>& Ring : State.RoleRings)
+			{
+				Hidden += Ring.Value.IsValid() && !Ring.Value->IsMarkerShown() ? 1 : 0;
+			}
+			Check(State, Hidden == 3, TEXT("rev 5j: the rings are gone"));
+			Squad->SetLeader(State.RoleOps[TEXT("MedicSapper")].Get());
 			State.Stage = 1;
 			State.StageTime = 0.f;
 			return true;
 		}
 		case 1:
 		{
-			if (State.StageTime < 1.f)
+			if (Tutorial->GetStepState(TEXT("A3_peek")) != ETutorialStepState::Active && State.StageTime < 8.f)
 			{
 				return true;
 			}
-			FCoverSlot Slot;
-			const FVector Face = FVector(State.Marker->GetActorLocation().X, State.Marker->GetActorLocation().Y, State.GroundZ + 90.f) + State.Normal * 30.f;
-			const bool bFound = CoverTraceRules::FindCoverSlotAt(World, Face, -State.Normal, Slot);
-			Check(State, bFound && Slot.Height == ECoverHeight::HighCover, TEXT("a high cover slot at the marker"));
-			Check(State, bFound && Leader->OrderTakeCover(Slot, false) == EOperativeOrderResult::Accepted, TEXT("the leader takes it"));
+			Check(State, Tutorial->GetStepState(TEXT("A3_peek")) == ETutorialStepState::Active, TEXT("then the peek card"));
 			Next(State);
 			return true;
 		}
 		case 2:
 		{
-			if (!Leader->bInCover && State.StageTime < 15.f)
-			{
-				return true;
-			}
-			Check(State, Leader->bInCover, FString::Printf(TEXT("the leader is in cover at the wall (%.1f s)"), State.StageTime));
+			AOperativeCharacter* Medic = State.RoleOps[TEXT("MedicSapper")].Get();
+			Check(State, Medic->bInCover && Medic->IsInHighCover(), FString::Printf(TEXT("the Medic-Sapper is in HIGH cover behind the slab (%s)"), *Medic->GetActorLocation().ToString()));
 			Next(State);
 			return true;
 		}
@@ -339,6 +434,7 @@ namespace PeekMinesSmoke
 			{
 				return true; // 2 s in cover
 			}
+			AOperativeCharacter* Medic = State.RoleOps[TEXT("MedicSapper")].Get();
 			float Nearest = 1.0e9f;
 			for (const AOperativeCharacter* Member : Squad->GetMembers())
 			{
@@ -347,9 +443,9 @@ namespace PeekMinesSmoke
 					Nearest = Mine.IsValid() ? FMath::Min(Nearest, static_cast<float>(FVector::Dist(Mine->GetActorLocation(), Member->GetActorLocation()))) : Nearest;
 				}
 			}
-			Check(State, CountRevealed(State) == 0 && Leader->GetPeekSpottedCount() == 0,
+			Check(State, CountRevealed(State) == 0 && Medic->GetPeekSpottedCount() == 0,
 				FString::Printf(TEXT("no spot before the peek (nearest operative %.1f m from a mine; spot range 4.5 / 6 m)"), Nearest / 100.f));
-			// The real input: a click on the wall's end on his face, 20 cm in from the end.
+			// The real input: a click on the slab's end on his face, 20 cm in from the end.
 			AStaticMeshActor* Wall = State.Wall.Get();
 			const FBox Box = Wall->GetComponentsBoundingBox();
 			const FVector E = Box.GetExtent();
@@ -359,20 +455,57 @@ namespace PeekMinesSmoke
 			const FHitResult EdgeHit(Wall, Wall->GetStaticMeshComponent(), EdgePoint, State.Normal);
 			ECoverFacing Side = ECoverFacing::Left;
 			float Edge = 0.f;
-			Check(State, PC->FindCornerPeekForHit(Leader, EdgeHit, Side, Edge), TEXT("the wall's end at the marker is a corner peek target"));
-			Check(State, PC->TryHandleCoverClick(EdgeHit, nullptr) && Leader->IsManualCornerPeek(), TEXT("a click on it orders the corner peek"));
+			Check(State, PC->FindCornerPeekForHit(Medic, EdgeHit, Side, Edge), TEXT("the slab's end at his ring is a corner peek target"));
+			Check(State, PC->TryHandleCoverClick(EdgeHit, nullptr) && Medic->IsManualCornerPeek(), TEXT("a click on it orders the Medic-Sapper's corner peek"));
 			Next(State);
 			return true;
 		}
 		case 4:
 		{
+			// 2026-10-19: the mines are spotted PHYSICALLY - each only when it lies in his current peek cone (the trap search's sweeping
+			// reach, line of sight from the leaned-out eyes), one by one.
+			AOperativeCharacter* Medic = State.RoleOps[TEXT("MedicSapper")].Get();
+			if (Medic->IsPeekingRoundCorner() && State.PeekStart < 0.f)
+			{
+				State.PeekStart = State.StageTime;
+			}
+			FVector Eye;
+			FVector Direction;
+			const bool bPeek = Medic->GetPeekSight(Eye, Direction);
+			for (const TWeakObjectPtr<AProximityMineActor>& Mine : State.Mines)
+			{
+				if (!Mine.IsValid() || !Mine->IsRevealed() || State.RevealTimes.Contains(Mine))
+				{
+					continue;
+				}
+				const FVector Target = Mine->GetActorLocation() + FVector(0.f, 0.f, Medic->PeekSpotConfig.TargetHeightCm);
+				const float Since = State.PeekStart >= 0.f ? State.StageTime - State.PeekStart : -1.f;
+				// The smoke samples every 0.1 s: the reach may have grown up to one step since the scan that found it.
+				const float Reach = TrapSpotRules::PeekSweepRange(Medic->PeekSpotConfig.RangeCm, Medic->PeekSpotConfig.SweepSeconds, Since + 0.25f);
+				const bool bInCone = bPeek && TrapSpotRules::IsInPeekSightCone(Eye, Direction, Target, Reach, Medic->PeekSpotConfig.HalfAngleDeg);
+				Check(State, bInCone, FString::Printf(TEXT("%s spotted %.1f s into the peek, inside his peek cone (%.1f m from the leaned-out eyes, reach %.1f m)"),
+					*Mine->GetName(), Since, FVector::Dist2D(Eye, Target) / 100.f, Reach / 100.f));
+				State.RevealTimes.Add(Mine, Since);
+				State.RevealDistances.Add(static_cast<float>(FVector::Dist2D(Eye, Target)));
+			}
 			if (CountRevealed(State) < State.Mines.Num() && State.StageTime < 12.f)
 			{
 				return true;
 			}
-			Check(State, Leader->IsPeekingRoundCorner() || CountRevealed(State) == State.Mines.Num(), TEXT("he leans out round the corner"));
-			Check(State, CountRevealed(State) == State.Mines.Num() && Leader->GetPeekSpottedCount() == State.Mines.Num(),
-				FString::Printf(TEXT("rev 5i: every lesson mine spotted by his peek (%d revealed, %d by the peek, %.1f s)"), CountRevealed(State), Leader->GetPeekSpottedCount(), State.StageTime));
+			Check(State, CountRevealed(State) == State.Mines.Num() && Medic->GetPeekSpottedCount() == State.Mines.Num(),
+				FString::Printf(TEXT("every lesson mine spotted by the Medic-Sapper's peek (%d revealed, %d by the peek, %.1f s)"), CountRevealed(State),
+					Medic->GetPeekSpottedCount(), State.StageTime));
+			TSet<int32> Moments;
+			for (const TPair<TWeakObjectPtr<AProximityMineActor>, float>& Pair : State.RevealTimes)
+			{
+				Moments.Add(FMath::RoundToInt(Pair.Value * 10.f));
+			}
+			bool bNearestFirst = true;
+			for (int32 Index = 1; Index < State.RevealDistances.Num(); ++Index)
+			{
+				bNearestFirst &= State.RevealDistances[Index] + 50.f >= State.RevealDistances[Index - 1];
+			}
+			Check(State, Moments.Num() >= 3 && bNearestFirst, FString::Printf(TEXT("one by one as the cone covers them, the nearest first (%d moments)"), Moments.Num()));
 			Next(State);
 			return true;
 		}
@@ -386,7 +519,8 @@ namespace PeekMinesSmoke
 				FString::Printf(TEXT("TrapSpotted.Peek / TrapSpotted.A3PeekMines raised (%d / %d)"), State.Probe->CountEvent(TEXT("TrapSpotted.Peek")),
 					State.Probe->CountEvent(TEXT("TrapSpotted.A3PeekMines"))));
 			Check(State, Squad->IsSoloMode() && Squad->IsTrapSolo(), TEXT("the squad holds in Solo (rev 5h trap hold)"));
-			Check(State, Leader->bInCover && Leader->IsManualCornerPeek(), TEXT("the peeking leader keeps his corner pose"));
+			Check(State, State.RoleOps[TEXT("MedicSapper")]->bInCover && State.RoleOps[TEXT("MedicSapper")]->IsManualCornerPeek(),
+				TEXT("the peeking Medic-Sapper keeps his corner pose"));
 			if (Tutorial && Tutorial->IsTutorialActive())
 			{
 				Check(State, FMath::IsNearlyEqual(Tutorial->GetConditionStat(TEXT("traps_spotted.A3PeekMines")), static_cast<float>(State.Mines.Num())),

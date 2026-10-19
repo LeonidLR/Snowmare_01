@@ -148,4 +148,17 @@ private:
 		FVector2D Direction = FVector2D(1.f, 0.f);
 	};
 	TArray<FEdgePointer> EdgePointers;
+
+	/** A shown marker's label on screen (2026-10-19: the role spots of the A3 cover lesson name their operative). */
+	struct FMarkerLabel
+	{
+		FVector2D Position = FVector2D::ZeroVector;
+		FText Text;
+		FLinearColor Color = FLinearColor::White;
+	};
+	TArray<FMarkerLabel> MarkerLabels;
+
+public:
+	/** Marker labels drawn now (smokes). */
+	int32 GetMarkerLabelCount() const { return MarkerLabels.Num(); }
 };

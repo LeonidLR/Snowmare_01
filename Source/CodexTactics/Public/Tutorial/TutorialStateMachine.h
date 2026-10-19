@@ -68,6 +68,11 @@ public:
 	 * (UTutorialSubsystem) or by tests; unset / NAME_None = no focus chosen (any subject counts).
 	 */
 	TFunction<FName(FName StepId)> FocusSubjectProvider;
+	/**
+	 * "role_spots" completions (2026-10-19): the subject stands at his role's spot of the step (UTutorialSubsystem: a marker of that
+	 * step with his role, within its ring). Unset = every subject is at his spot.
+	 */
+	TFunction<bool(FName StepId, FName SubjectId)> RoleSpotProvider;
 
 	/** Replaces the steps and resets all progress. */
 	void Load(const FTutorialStepsData& InData);
@@ -98,6 +103,12 @@ public:
 	 * before the "go in" card came still completes it. Returns true when a step counted it.
 	 */
 	bool HandleVolumePresence(FName VolumeId, FName SubjectId);
+	/**
+	 * "role_spots" (2026-10-19): SubjectId already stands at a spot (in cover - the runtime checks that) while the role-spot steps run:
+	 * counts for each running "role_spots" step whose RoleSpotProvider accepts him, with that step's filters (distinct operatives,
+	 * distinct_from, confinement) - never for other steps listening to the same event. True when a step counted him.
+	 */
+	bool HandleRoleSpotPresence(FName SubjectId);
 	/** Operatives who counted for a step's completion so far (distinct_from; runtime only). */
 	const TSet<FName>* GetContributors(FName StepId) const;
 

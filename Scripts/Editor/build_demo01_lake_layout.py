@@ -34,6 +34,10 @@ Modes (env CODEX_LAYOUT_MODE):
                    "green zone" beyond the peek corner (inside the peek sight cone of the first high wall) and become lesson
                    mines (SpotEventTag A3PeekMines); every lesson mine (+ the two 5h ones) gets SpotRequiresStep A3_peek
                    (proximity spotting waits for the peek lesson; EDITS_5I).
+                   Rev 5j (2026-10-19): the ROLE-SPECIFIC cover lesson + the Medic-Sapper's physical peek - three role-spot
+                   rings of the step A3_cover (RoleId / Label / colour: Medic-Sapper blue at Cover_A3_2_High's outer end,
+                   Commander red at Cover_A3_3_Low, Engineer orange at Cover_A3_1_Low) and EDITS_5J: the four lesson mines
+                   moved inside the medic's peek cone from that corner (LESSON_MINE_FRAME_OFFSETS_5J). Run after 5h.
   verify           in game (-game -nullrhi): volume ids vs demo_01_steps.json, nav paths along the critical path, the bridge
                    as the only crossing, the fence (standing path refused, prone path through), actors on the ground.
                    Result: Saved/Logs/Demo01LayoutVerify.txt ("RESULT: PASS / FAIL").
@@ -84,7 +88,7 @@ TAG_5H = "AutoLayout_Demo01_5h"
 FOLDER_5H = "AutoLayout_Demo01_5h"
 PEEK_TAG = "A3PeekMines"          # AInteractableActor::SpotEventTag of the two mines (tutorial stat traps_spotted.A3PeekMines)
 PEEK_SPOT_RANGE_CM = 1200.0       # FTrapPeekSpotConfig defaults (AOperativeCharacter::PeekSpotConfig)
-PEEK_HALF_ANGLE_DEG = 30.0
+PEEK_HALF_ANGLE_DEG = 45.0        # 2026-10-19: the peek view's 90 deg cone (was 30 until rev 5j)
 CORNER_AIM_OUTWARD_DEG = 100.0    # AOperativeCharacter::CornerAimOutwardDeg
 PROXIMITY_SPOT_MAX_CM = 600.0     # mine spot range 4.5 m + the Medic-Sapper's 1.5 m
 # Rev 5i (2026-10-15, game designer play-test with a marked screenshot): the A3 lesson mines lie ONLY in the green zone beyond the
@@ -103,6 +107,36 @@ FIELD_MINE_FRAME_OFFSETS = ((-530.0, 270.0), (-680.0, 40.0))
 EDITS_5I = [
     ("field_mines_to_green_zone", "PMC_Mine_A3_1 / _2: location -> the green zone beyond the peek corner, SpotEventTag A3PeekMines, SpotRequiresStep A3_peek"),
     ("peek_mines_require_step", "PMC_Mine_A3_Peek_1 / _2 (section 5h): SpotRequiresStep A3_peek"),
+]
+
+# Rev 5j (2026-10-19, game designer, marked screenshot of the A3 cover field): ROLE-SPECIFIC cover lesson + the Medic-Sapper's
+# peek PHYSICALLY spots the mines. New actors (tag AutoLayout_Demo01_5j): three role-spot rings of the step A3_cover
+# (ATutorialMarkerActor RoleId + Label + colour): the Medic-Sapper BLUE behind the tall slab Cover_A3_2_High at its outer end (the
+# peek corner, where the 5h marker A3_peek stands), the Commander RED at the middle low wall Cover_A3_3_Low, the Engineer ORANGE
+# behind the long low wall in front Cover_A3_1_Low. Explicit edits (EDITS_5J): the four lesson mines move inside the medic's peek
+# cone from that corner with a clear line of sight past the slab's end (every one on the far side of the eye's line along the
+# wall - a line towards the lane clips the slab's end) at 6.6 / 9.0 / 11.2 / 11.5 m, so the sweeping search finds them one by one.
+# Run it AFTER 5h (a 5h re-run puts its two mines back - run 5j again).
+TAG_5J = "AutoLayout_Demo01_5j"
+FOLDER_5J = "AutoLayout_Demo01_5j"
+ROLE_SPOTS_STEP = "A3_cover"
+# (role id, label, colour, wall label, where along the wall: "outer" = 60 cm in from the end away from the lane, "centre")
+ROLE_SPOTS = (
+    ("MedicSapper", "MEDIC-SAPPER", (0.15, 0.35, 1.0), "Cover_A3_2_High", "outer"),
+    ("Commander", "COMMANDER", (1.0, 0.12, 0.1), "Cover_A3_3_Low", "centre"),
+    ("Engineer", "ENGINEER", (1.0, 0.5, 0.08), "Cover_A3_1_Low", "centre"),
+)
+# The lesson mines in the peek frame of Cover_A3_2_High (peek_points' at(): along "approach" - negative = beyond the wall -, along
+# "outer"): the lean-out eye stands at about at(65, 170) (45 cm off the face, 20 cm past the end); "outer" >= 170 keeps every line
+# of sight outside the slab's end.
+LESSON_MINE_FRAME_OFFSETS_5J = (
+    ("PMC_Mine_A3_1", (-580.0, 310.0)),
+    ("PMC_Mine_A3_2", (-830.0, 190.0)),
+    ("PMC_Mine_A3_Peek_1", (-1030.0, 410.0)),
+    ("PMC_Mine_A3_Peek_2", (-1080.0, 210.0)),
+)
+EDITS_5J = [
+    ("lesson_mines_into_medic_cone", "PMC_Mine_A3_1 / _2, PMC_Mine_A3_Peek_1 / _2: location -> inside the Medic-Sapper's peek cone of Cover_A3_2_High's outer end (LESSON_MINE_FRAME_OFFSETS_5J)"),
 ]
 
 # §10.1 re-ids of the user's A1 volumes (they belong to the A3 approach now).
@@ -190,7 +224,10 @@ def describe(actor):
         if box:
             d["box_extent"] = vec(box.get_scaled_box_extent())
     if is_class(actor, "TutorialMarkerActor"):
-        for k in ("step_id", "beat_id", "ring_radius_cm"):
+        for k in ("step_id", "beat_id", "ring_radius_cm", "role_id", "label"):
+            d[k] = str(prop(actor, k))
+    if is_class(actor, "ProximityMineActor"):
+        for k in ("spot_event_tag", "spot_requires_step"):
             d[k] = str(prop(actor, k))
     if is_class(actor, "CameraZoneVolume"):
         for k in ("environment", "enable_camera_switch", "zone_name"):
@@ -1091,6 +1128,7 @@ def additive():
         if b is None or b["location"] != a["location"] or b["rotation"] != a["rotation"] or b["scale"] != a["scale"]:
             moved.append(a["label"])
     expected = [label for label in FIELD_MINES] if "5i" in sections else []
+    expected += [label for label, _ in LESSON_MINE_FRAME_OFFSETS_5J] if "5j" in sections else []
     report("pre-existing actors moved / deleted: %d %s (expected by the explicit edits: %s)" % (len(moved), moved, expected))
 
 
@@ -1193,7 +1231,7 @@ def peek_points(frame):
 
     marker = at(ht + 55.0, hl - 60.0)
     mines = [at(-800.0, 200.0), at(-950.0, -50.0)]
-    corner = at(ht + 45.0, hl + 60.0)
+    corner = at(ht + 45.0, hl + 20.0)  # 2026-10-19: the peek's lean-out EYE (CoverRules::CornerLeanPoint: 20 cm past the end)
     rad = math.radians(CORNER_AIM_OUTWARD_DEG)
     aim = (ou[0] * math.cos(rad) + be[0] * math.sin(rad), ou[1] * math.cos(rad) + be[1] * math.sin(rad))
     return {"marker": marker, "mines": mines, "corner": corner, "aim": aim}
@@ -1294,11 +1332,89 @@ def edit_peek_mines_require_step_5i(p, anchors):
     return changes
 
 
+def role_spot_points(actors):
+    """Rev 5j: [(role, label, colour, wall label, (x, y))] - each role's ring on the approach face of its wall (55 cm out), or a
+    warning string when the field volume / a wall is missing."""
+    field = next((a for a in actors if is_class(a, "TutorialTriggerVolume") and effective_volume_id(a) == "VOL_A3_FIELD"), None)
+    if field is None:
+        return None, ["role spots: no VOL_A3_FIELD in the map"]
+    fl = field.get_actor_location()
+    out, missing = [], []
+    for role, label, colour, wall_label, where in ROLE_SPOTS:
+        wall = next((a for a in actors if isinstance(a, unreal.StaticMeshActor) and a.get_actor_label() == wall_label), None)
+        if wall is None:
+            missing.append("role spot %s: wall %s not in the map" % (role, wall_label))
+            continue
+        o, e = wall.get_actor_bounds(False)
+        if e.y > e.x:  # runs along Y, faces X
+            ap = (math.copysign(1.0, fl.x - o.x), 0.0)
+            ou = (0.0, math.copysign(1.0, o.y - fl.y) if abs(o.y - fl.y) > 1 else 1.0)
+            hl, ht = e.y, e.x
+        else:
+            ap = (0.0, math.copysign(1.0, fl.y - o.y))
+            ou = (math.copysign(1.0, o.x - fl.x) if abs(o.x - fl.x) > 1 else 1.0, 0.0)
+            hl, ht = e.x, e.y
+        along = hl - 60.0 if where == "outer" else 0.0
+        out.append((role, label, colour, wall_label, (o.x + ap[0] * (ht + 55.0) + ou[0] * along, o.y + ap[1] * (ht + 55.0) + ou[1] * along)))
+    return out, missing
+
+
+def build_role_spots_5j(p, anchors):
+    """Rev 5j: the three role-spot rings of the A3 cover lesson (step A3_cover, one per role, labelled and coloured). Only TAG_5J actors."""
+    actors = [a for a in p.actors.get_all_level_actors() if TAG_5J not in [str(t) for t in a.tags]]
+    spots, missing = role_spot_points(actors)
+    for w in missing:
+        p.warnings.append(w + " - not placed, review")
+    for role, label, colour, wall_label, (x, y) in spots or []:
+        marker = p.marker(ROLE_SPOTS_STEP, x, y, 110, anchor="%s's spot: the approach face of %s" % (role, wall_label))
+        marker.set_actor_label("Marker_A3_cover_" + role)
+        marker.set_editor_property("role_id", role)
+        marker.set_editor_property("label", unreal.Text(label))
+        marker.set_editor_property("color", unreal.LinearColor(colour[0], colour[1], colour[2], 1.0))
+        p.table[-1]["label"] = "Marker_A3_cover_" + role
+        p.table[-1]["id"] = "%s role %s" % (ROLE_SPOTS_STEP, role)
+        report("role spot %s (%s) at (%.0f, %.0f): %s" % (role, label, x, y, wall_label))
+
+
+def edit_lesson_mines_5j(p, anchors):
+    """EDITS_5J: the four A3 lesson mines into the Medic-Sapper's peek cone (explicit, minimal: the location; tag + step ensured)."""
+    actors = list(p.actors.get_all_level_actors())
+    frame = peek_wall_frame(actors)
+    if frame is None:
+        p.warnings.append("edit lesson_mines_into_medic_cone: no VOL_A3_FIELD / Cover_A3_*_High wall - not edited, review")
+        return 0
+    o, ap, ou = frame["o"], frame["approach"], frame["outer"]
+    changes = 0
+    for label, (a_off, o_off) in LESSON_MINE_FRAME_OFFSETS_5J:
+        x, y = o.x + ap[0] * a_off + ou[0] * o_off, o.y + ap[1] * a_off + ou[1] * o_off
+        mine = next((a for a in actors if isinstance(a, unreal.ProximityMineActor) and a.get_actor_label() == label), None)
+        if mine is None:
+            p.warnings.append("edit lesson_mines_into_medic_cone: %s not in the map - not edited, review" % label)
+            continue
+        old = mine.get_actor_location()
+        z = p.ground(x, y, label) + 30.0
+        moved = math.hypot(old.x - x, old.y - y) > 1.0 or abs(old.z - z) > 1.0
+        if moved:
+            mine.set_actor_location(unreal.Vector(x, y, z), False, False)
+            changes += 1
+        for prop_name, value in (("spot_event_tag", PEEK_TAG), ("spot_requires_step", PEEK_STEP)):
+            if name_str(mine.get_editor_property(prop_name)) != value:
+                mine.set_editor_property(prop_name, value)
+                changes += 1
+        report("EDIT lesson_mines_into_medic_cone: %s (%s) (%.0f, %.0f) -> (%.0f, %.0f)%s"
+               % (label, mine.get_name(), old.x, old.y, x, y, "" if moved else " (already there)"))
+        p.table.append({"label": label, "class": "ProximityMineActor (edited)", "id": PEEK_TAG, "x": round(x), "y": round(y),
+                        "anchor": "the Medic-Sapper's peek cone beyond the outer end of %s (moved from (%.0f, %.0f))"
+                                  % (frame["wall"].get_actor_label(), old.x, old.y)})
+    return changes
+
+
 # The additive sections: name -> tag / folder / explicit edits of pre-existing actors / builders (CODEX_LAYOUT_SECTIONS).
 SECTIONS = {
     "5d": {"tag": TAG_5D, "folder": FOLDER_5D, "edits": [edit_hut_crate_heat_packs], "builders": SECTIONS_5D},
     "5h": {"tag": TAG_5H, "folder": FOLDER_5H, "edits": [], "builders": [build_peek_mines_5h]},
     "5i": {"tag": TAG_5I, "folder": FOLDER_5I, "edits": [edit_field_mines_5i, edit_peek_mines_require_step_5i], "builders": []},
+    "5j": {"tag": TAG_5J, "folder": FOLDER_5J, "edits": [edit_lesson_mines_5j], "builders": [build_role_spots_5j]},
 }
 
 
@@ -1612,6 +1728,10 @@ def verify_peek_mines(game, centre, no_crawl):
                  and min(xs) - 800 <= m.get_actor_location().x <= max(xs) + 800 and min(ys) - 800 <= m.get_actor_location().y <= max(ys) + 800]
         game.check(not stray, "peek: no other mine in the A3 cover field (%s)" % stray)
     game.check(len(markers) == 1, "peek: the marker A3_peek exists once (%d)" % len(markers))
+    # Rev 5j: one role-spot ring per role for the A3 cover lesson.
+    rings = [m for m in game.all_of(unreal.TutorialMarkerActor) if name_str(m.get_editor_property("step_id")) == ROLE_SPOTS_STEP]
+    roles = sorted(name_str(m.get_editor_property("role_id")) for m in rings)
+    game.check(roles == sorted(r[0] for r in ROLE_SPOTS), "role spots: one %s ring per role %s" % (ROLE_SPOTS_STEP, roles))
     frame = peek_wall_frame(game.all_of(unreal.Actor))
     if len(mines) < 2 or len(markers) != 1 or frame is None:
         game.check(False, "peek: wall / mines / marker missing")
@@ -1630,7 +1750,7 @@ def verify_peek_mines(game, centre, no_crawl):
     entrance = centre("VOL_A3_FIELD")
     valid, _, length, partial = game.path(entrance, unreal.Vector(sl.x, sl.y, gz + 60), no_crawl)
     game.check(valid and not partial, "peek: VOL_A3_FIELD -> the cover slot (standing): valid=%s partial=%s %.0f m" % (valid, partial, length / 100))
-    corner = unreal.Vector(pts["corner"][0], pts["corner"][1], gz + 140)
+    corner = unreal.Vector(pts["corner"][0], pts["corner"][1], gz + 160)  # the standing eyes leaned out (peek sight, 2026-10-19)
     aim = pts["aim"]
     face_pts = approach_face_points(frame)
     for m in mines:
@@ -1647,7 +1767,7 @@ def verify_peek_mines(game, centre, no_crawl):
                                                      False, list(game.all_of(unreal.ProximityMineActor)), unreal.DrawDebugTrace.NONE, True)
         blocked = bool(hit.to_tuple()[0]) if hit is not None else False
         game.check(dist <= PEEK_SPOT_RANGE_CM and ang <= PEEK_HALF_ANGLE_DEG and not blocked,
-                   "peek: %s inside the peek sight cone of the corner (%.1f m <= 12 m, %.0f deg <= 30 deg, line of sight %s)"
+                   "peek: %s inside the peek sight cone of the corner (%.1f m <= 12 m, %.0f deg <= 45 deg, line of sight %s)"
                    % (m.get_name(), dist / 100, ang, "blocked" if blocked else "clear"))
 
 

@@ -41,6 +41,9 @@ struct CODEXTACTICS_API FTacticalSightStats
  * one leaves a last-known silhouette that fades after SightRules::LastKnownFadeSeconds (the minimap's fade) unless heard. The
  * enemies' side in exploration stays the patrol perception (PerceptionRules, same traces); GetBelief = "knows everything" there.
  * In the turn-based fight, the other phases or with Codex.Sight 0 everything is shown and every enemy knows everything.
+ * Peek sight (game designer 2026-10-19, "peeking out of cover he sees NOTHING"): an operative leaned out round a corner or over a
+ * low wall also sees from that leaned-out eye point, inside his limited peek cone (CanOperativeSee, PeekSightRules), and enemies look
+ * at that point (ProfilePoint).
  */
 UCLASS()
 class CODEXTACTICS_API UTacticalSightSubsystem : public UTickableWorldSubsystem
@@ -92,7 +95,19 @@ public:
 	/** Sight trace between two points, pawns ignored: true when nothing blocks. */
 	bool HasClearSight(const FVector& From, const FVector& To) const;
 
-	/** Observer eye / target profile points of a character (stance heights; enemies by their size or the marksman's stance). */
+	/**
+	 * The squad's sight line of one operative to TargetPoint (an enemy's ProfilePoint): from his own eyes (stance height over the
+	 * capsule, MaxSightCm) or - peek sight, 2026-10-19 - while he peeks (AOperativeCharacter::GetPeekSight) from the leaned-out eye
+	 * point inside his peek cone (PeekSightConfig). Hugging a wall he sees only what his position allows; prone with no peek, nothing
+	 * behind a wall.
+	 */
+	bool CanOperativeSee(const AOperativeCharacter& Operative, const FVector& TargetPoint) const;
+
+	/**
+	 * Observer eye / target profile points of a character (stance heights; enemies by their size or the marksman's stance). A peeking
+	 * operative's profile point is his leaned-out head and shoulder (AOperativeCharacter::GetPeekExposedPoint, 2026-10-19), so enemies
+	 * see the point he looks from; his eye point stays the capsule's (the peek view is CanOperativeSee's second line).
+	 */
 	static FVector EyePoint(const AActor& Actor);
 	static FVector ProfilePoint(const AActor& Actor);
 

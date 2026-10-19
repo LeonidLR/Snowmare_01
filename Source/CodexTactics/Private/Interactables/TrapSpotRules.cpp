@@ -20,6 +20,11 @@ namespace TrapSpotRules
 		return Cos >= FMath::Cos(FMath::DegreesToRadians(FMath::Clamp(HalfAngleDeg, 0.f, 180.f))) - KINDA_SMALL_NUMBER;
 	}
 
+	float PeekSweepRange(float RangeCm, float SweepSeconds, float ElapsedSeconds)
+	{
+		return SweepSeconds <= KINDA_SMALL_NUMBER ? RangeCm : RangeCm * FMath::Clamp(ElapsedSeconds / SweepSeconds, 0.f, 1.f);
+	}
+
 	FName GroupEventName(FName SpotEventTag)
 	{
 		return SpotEventTag.IsNone() ? NAME_None : FName(*FString::Printf(TEXT("TrapSpotted.%s"), *SpotEventTag.ToString()));

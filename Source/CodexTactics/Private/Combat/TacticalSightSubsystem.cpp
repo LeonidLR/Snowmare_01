@@ -10,6 +10,7 @@
 #include "CodexTactics.h"
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/PeekSightRules.h"
 #include "Combat/SightRules.h"
 #include "Components/SkinnedMeshComponent.h"
 #include "Engine/World.h"
@@ -126,6 +127,12 @@ FVector UTacticalSightSubsystem::ProfilePoint(const AActor& Actor)
 {
 	if (const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(&Actor))
 	{
+		// Peek sight (2026-10-19): a peeking operative shows his leaned-out head and shoulder - what he sees from there sees him.
+		FVector Exposed;
+		if (Operative->GetPeekExposedPoint(Exposed))
+		{
+			return Exposed;
+		}
 		return TacticalSight::Feet(Actor) + FVector(0.f, 0.f, SightRules::ProfileHeight(Operative->GetStance()));
 	}
 	if (const AMarksmanEnemyCharacter* Marksman = Cast<AMarksmanEnemyCharacter>(&Actor))
@@ -150,6 +157,21 @@ bool UTacticalSightSubsystem::HasClearSight(const FVector& From, const FVector& 
 	}
 	FHitResult Hit;
 	return !GetWorld()->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, Params) || Cast<APawn>(Hit.GetActor()) != nullptr;
+}
+
+bool UTacticalSightSubsystem::CanOperativeSee(const AOperativeCharacter& Operative, const FVector& TargetPoint) const
+{
+	// His own eyes (stance height over the capsule): what his position allows - hugging a wall, that wall hides what lies behind it.
+	const FVector Eye = EyePoint(Operative);
+	if (FVector::Dist(Eye, TargetPoint) <= MaxSightCm && HasClearSight(Eye, TargetPoint))
+	{
+		return true;
+	}
+	// Peek sight (game designer 2026-10-19): leaned out round a corner / over a low wall, the limited peek cone from that eye point.
+	FVector PeekEye;
+	FVector PeekDirection;
+	return Operative.GetPeekSight(PeekEye, PeekDirection) && PeekSightRules::IsInCone(Operative.PeekSightConfig, PeekEye, PeekDirection, TargetPoint)
+		&& HasClearSight(PeekEye, TargetPoint);
 }
 
 bool UTacticalSightSubsystem::IsDemasked(const AActor* Actor) const
@@ -442,7 +464,7 @@ void UTacticalSightSubsystem::Update()
 			// Bug hunt 2026-10-18: an enemy at arm's length is noticed without a line of sight (a frostbitten waiting 1.7 m off
 			// right behind the wall's corner stayed hidden from the corner hold, so it was never fired at).
 			bSeen |= SightRules::IsWithinTouchReveal(Distance2D);
-			if (!bSeen && Distance <= MaxSightCm && HasClearSight(EyePoint(*Operative), Profile))
+			if (!bSeen && Distance <= MaxSightCm + 100.f && CanOperativeSee(*Operative, Profile))
 			{
 				bSeen = true;
 			}

@@ -270,13 +270,37 @@ FVector UVisionConeComponent::GetOwnerFeet() const
 		return GetComponentLocation();
 	}
 	const ACharacter* Character = Cast<ACharacter>(Owner);
-	return Owner->GetActorLocation() - FVector(0.f, 0.f, Character ? Character->GetSimpleCollisionHalfHeight() : 0.f);
+	const FVector Feet = Owner->GetActorLocation() - FVector(0.f, 0.f, Character ? Character->GetSimpleCollisionHalfHeight() : 0.f);
+	return bViewOverride ? Feet + ViewOverrideOffset : Feet;
 }
 
 float UVisionConeComponent::GetOwnerYaw() const
 {
+	if (bViewOverride)
+	{
+		return ViewOverrideYaw;
+	}
 	const AActor* Owner = GetOwner();
 	return Owner ? static_cast<float>(Owner->GetActorRotation().Yaw) : static_cast<float>(GetComponentRotation().Yaw);
+}
+
+void UVisionConeComponent::SetViewOverride(const FVector& FeetOffset, float Yaw)
+{
+	// The cone jumps to the peek point at once; later moves / turns rebuild as the owner's own (UpdateCone's moved / turned check).
+	bRebuildRequested |= !bViewOverride;
+	bViewOverride = true;
+	ViewOverrideOffset = FVector(FeetOffset.X, FeetOffset.Y, 0.f);
+	ViewOverrideYaw = Yaw;
+}
+
+void UVisionConeComponent::ClearViewOverride()
+{
+	if (bViewOverride)
+	{
+		bViewOverride = false;
+		ViewOverrideOffset = FVector::ZeroVector;
+		bRebuildRequested = true; // back to his own eyes at once
+	}
 }
 
 bool UVisionConeComponent::IsWorthUpdating() const
@@ -665,7 +689,11 @@ void UVisionConeComponent::PlaceAtFeet()
 	const AActor* Owner = GetOwner();
 	const UCapsuleComponent* Capsule = Owner ? Cast<UCapsuleComponent>(Owner->GetRootComponent()) : nullptr;
 	const float FeetZ = Capsule && GetAttachParent() == Capsule ? -Capsule->GetUnscaledCapsuleHalfHeight() : 0.f;
-	const FVector Wanted(0.f, 0.f, FeetZ + HeightAboveFeetCm);
+	FVector Wanted(0.f, 0.f, FeetZ + HeightAboveFeetCm);
+	if (bViewOverride && Capsule && GetAttachParent() == Capsule)
+	{
+		Wanted += Capsule->GetComponentTransform().InverseTransformVectorNoScale(ViewOverrideOffset); // the peek point (relative to the capsule)
+	}
 	if (!GetRelativeLocation().Equals(Wanted, 0.5f))
 	{
 		SetRelativeLocation(Wanted);
