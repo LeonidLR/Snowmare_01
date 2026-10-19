@@ -10,6 +10,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/SightRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/VisionConeComponent.h"
 #include "Combat/VisionConeRules.h"
@@ -92,7 +93,12 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 		}
 	}
 	const FLinearColor Color = VisionConeRules::GetStateColor(bVisionConeSpotted ? EVisionConeState::Spotted : EVisionConeState::Clear);
-	VisionCone->UpdateCone(bVisible, GetVisionConeRange(), VisionConeHalfAngleDeg, Color, DeltaTime);
+	// Occluded cone (game designer 2026-10-19): the squad's sight line (UTacticalSightSubsystem) from his eyes (stance height) to
+	// a man-sized enemy's profile (150 cm); one level, one tone.
+	FVisionConeSightSpec Sight;
+	Sight.EyeHeightCm = SightRules::EyeHeight(Stance);
+	Sight.Levels.Add({ SightRules::ProfileHeight(EOperativeStance::Standing), GetVisionConeRange() });
+	VisionCone->UpdateCone(bVisible, GetVisionConeRange(), VisionConeHalfAngleDeg, Color, DeltaTime, &Sight);
 }
 
 void AOperativeCharacter::SetGroupSelected(bool bSelected, bool bInMultiSelectionIn)
