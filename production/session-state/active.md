@@ -6,10 +6,10 @@ Feature: playtest fixes (tremor / facing / stances) + Gemini's TANDEM requests 1
 Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveEditor, playtest bot + run telemetry (done); next = balance with the bot (user decision), more parity items from PORT_MATRIX
 <!-- /STATUS -->
 
-**The full handoff (state, system map, traps, next steps, change log) is `docs/port/HANDOFF.md`. Read it first.**
+**The handoff index (state, traps, how to work; system map `docs/systems/`, next steps `docs/port/NEXT_STEPS.md`, change log `docs/port/CHANGELOG.md`) is `docs/port/HANDOFF.md`. Read it first.**
 
 ## Mode (user, 2026-09-28)
-- Full port with identical behaviour; work autonomously through PORT_MATRIX / HANDOFF §8, commit each verified
+- Full port with identical behaviour; work autonomously through PORT_MATRIX / docs/port/NEXT_STEPS.md, commit each verified
   system, ask only on real design forks. Godot project is read-only.
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
@@ -148,7 +148,7 @@ registry, HUD caches, debug module, bot gate). Proposed cadence: one cleanup day
 - User maps committed: `L_Demo01_A_FrozenLake`, `L_VehicleTest`. Studio roles = Gemini Game Studios defs in
   `C:/Users/Zephyrus15Duo/Documents/Codex/.agents/agents/*.json`, run as Claude subagents.
 - Next: user builds A1 hut/markers per rev 4 (hut near the crack), then A2 camp (barrel lesson), A3+ per beat sheet;
-  APC P3 (turn-based parked turret); open APC P4 confirmations (HANDOFF §7); audit batches (enemy registry, HUD caches,
+  APC P3 (turn-based parked turret); open APC P4 confirmations (docs/port/OPEN_QUESTIONS.md); audit batches (enemy registry, HUD caches,
   debug module, bot gate); Gemini requests #15-#21.
 - Rules: one agents worktree (+ temp ones removed junctions-first via [IO.Directory]::Delete), back up user files + hash
   check before every merge, beep instead of phone files when the user is at the PC.

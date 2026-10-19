@@ -3,7 +3,7 @@
 # project-code warnings/errors (engine-header deprecation noise excluded), and the log path.
 # Takes the shared build lock (Scripts\agent_lock.ps1) and refuses while this project's Unreal Editor is open.
 # Before UBT it runs Scripts\Tools\find_unity_clashes.py (file-local names defined in two .cpp files of one module: they
-# break a unity blob on main although each branch built - HANDOFF section 2) and prints its findings as yellow warnings.
+# break a unity blob on main although each branch built - docs/port/TRAPS.md) and prints its findings as yellow warnings.
 # Usage: powershell -ExecutionPolicy Bypass -File Scripts\build.ps1 [-Target CodexTacticsEditor] [-Config Development]
 #        [-NoUnity]     every .cpp compiled alone (UBT -DisableUnity): proves each file includes what it uses
 #        [-FullUnity]   unity blobs also for the files changed in git (UBT -DisableAdaptiveUnity): what main's build sees

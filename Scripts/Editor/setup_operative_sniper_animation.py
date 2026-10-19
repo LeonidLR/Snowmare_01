@@ -13,7 +13,7 @@
    (CODEX_RESET_SNIPER_CLIPS=1 overwrites). RifleAimOffset = AO_Rifle_Aim when empty.
 4. Aim offsets: the pack's Offset_F / L / R / U / D poses are copied to /Game/Characters/Operatives/Sniper/AimOffsets as
    additive mesh-space rotation offsets (base = the F pose) and AO_Sniper_Stand / _Knee / _Prone are built (axes Yaw -180..180,
-   Pitch -90..90 like AO_Rifle_Aim; samples at the measured pose angles). The AnimGraph is not touched (HANDOFF section 6).
+   Pitch -90..90 like AO_Rifle_Aim; samples at the measured pose angles). The AnimGraph is not touched (docs/systems/animation-setup.md).
 
 Run with the editor closed:
   UnrealEditor-Cmd.exe CodexTactics.uproject -run=pythonscript -script="<abs path to this file>" -unattended -nullrhi

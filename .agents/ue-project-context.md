@@ -88,4 +88,4 @@
 
 ## Team
 **Size & roles:** one developer (the user: art, animation Blueprints, shaders, design decisions) + AI agents (Claude Code; Gemini on the Godot side / in tandem)
-**Source control:** Git, `main` branch, Conventional Commits · **Docs:** `docs/port/HANDOFF.md` (read first), `docs/port/PORT_MATRIX.md`, `docs/port/TANDEM.md`, `production/session-state/active.md`
+**Source control:** Git, `main` branch, Conventional Commits · **Docs:** `docs/port/HANDOFF.md` (read first; short index), `docs/systems/*.md` (per-system detail), `docs/port/CHANGELOG.md`, `docs/port/PORT_MATRIX.md`, `docs/port/TANDEM.md`, `production/session-state/active.md`

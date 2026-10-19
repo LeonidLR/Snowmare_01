@@ -67,7 +67,7 @@ Rules for the split:
 - Definitions moved verbatim, in their original order; no logic edits. The only textual change inside bodies: the shared
   file-local helpers moved to `Private/Characters/OperativeCharacterInternal.h` (`namespace OperativeCharacterInternal`,
   `inline`), so their calls are qualified (`OperativeCharacterInternal::IsLiveEnemy(...)`). A named namespace, not an
-  anonymous one per file: unity builds merge .cpp files and duplicate anonymous helpers would collide (HANDOFF §2 trap).
+  anonymous one per file: unity builds merge .cpp files and duplicate anonymous helpers would collide (docs/port/TRAPS.md trap).
 - Single-cluster helpers live in their file's anonymous namespace (`MovingSpeedThreshold` -> Movement, `CVarDebugCornerAim`
   -> Cover, `OperativeShotLine` + the same `LOCTEXT_NAMESPACE "OperativeTargetedShots"` -> TargetedShots: localisation keys
   unchanged).
@@ -100,7 +100,7 @@ See §5 for the measured line counts. `Private/Characters/`:
 | `OperativeCharacterInternal.h` | shared helpers `IsRangedEnemyActor`, `ShotFeet`, `IsLiveEnemy` |
 
 Where to put new code: the file of its cluster; a new cluster gets a new `OperativeCharacter<Cluster>.cpp` (plus a row
-here and in HANDOFF §5). The impact map (`Scripts/test_map.json`) routes each file to its cluster's smokes.
+here and in docs/systems/stances-and-movement.md). The impact map (`Scripts/test_map.json`) routes each file to its cluster's smokes.
 
 ## 4. Stage 2 roadmap (components; not done today)
 

@@ -1,7 +1,7 @@
 # APC 02: The Squad Vehicle (BTR-82): Design, Level Design, Tutorial
 
 Roles: Game Designer + Level Designer + UX (studio). Date 2026-10-12. Status: DRAFT for the user's review.
-Sources read: `CLAUDE.md`, `docs/port/HANDOFF.md` (system map, tutorial framework), `docs/demo/DEMO01_BEAT_SHEET.md`
+Sources read: `CLAUDE.md`, `docs/systems/vehicles.md`, `docs/systems/tutorial-engine.md` (formerly the HANDOFF.md system map / tutorial framework), `docs/demo/DEMO01_BEAT_SHEET.md`
 (decisions block, §2.1 metrics, A6/A7, B), `Source/CodexTactics/Public/Core/PlayerCommands.h` + the controller key binds,
 and the APC assets.
 

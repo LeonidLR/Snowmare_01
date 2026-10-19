@@ -27,7 +27,7 @@ user's map untouched, SHA256 checked) with the **tactical hut entry** (§2a) and
 | Screenshots (in-engine top-down captures, labels drawn afterwards) | `Saved/Screenshots/demo01_autolayout_top.png` + close-ups `_crossing.png`, `_approach.png`, `_compound.png` |
 
 Source: `docs/demo/DEMO01_BEAT_SHEET.md` rev 5 §4 (beats) and §10.1 (build list), `Content/Data/Tutorial/demo_01_steps.json`,
-HANDOFF §6 «Tutorial» / «How to place a PMC tripwire».
+`docs/systems/tutorial-engine.md` / `docs/systems/demo01-lake.md` («Tutorial»), `docs/systems/interactables-traps-loot.md` («How to place a PMC tripwire»).
 
 ## 1. What the user's map had (anchors)
 
@@ -279,7 +279,7 @@ the same 11, "pre-existing actors moved / deleted: 0" both times; the user's map
 Screenshots (`Saved/Screenshots/`): `demo01_autolayout_top.png`, `_crossing`, `_approach`, `_compound`, `_hut`, `_hut_angle`,
 **`_ruin`** (top-down, the partial roof hidden) and **`_ruin_angle`** (perspective from the barrel's side).
 
-Besides these, a save drops the generated `RecastNavMesh-*` actors (navigation data, not user content; HANDOFF section 2: a
+Besides these, a save drops the generated `RecastNavMesh-*` actors (navigation data, not user content; docs/port/TRAPS.md: a
 commandlet-saved navmesh stays empty at runtime, the map rebuilds it at load).
 
 **Rerun on the user's latest copy** (e.g. he edited it again in the main checkout; run with the editor of THAT checkout closed):
@@ -300,7 +300,7 @@ Get-Content "$p\Saved\Logs\Demo01Layout5d.txt"
 ## 9. Rev 5h: the A3 corner-peek mines (2026-10-15, additive section `5h`)
 
 The game designer's play-test: the A3 card "peek around the corner" should be meaningful - hidden mines lie beyond that corner and the
-peek reveals them (C++: the corner peek spots hidden traps in its 60 deg / 12 m sight cone, HANDOFF §5). Section **`5h`** (tag
+peek reveals them (C++: the corner peek spots hidden traps in its 60 deg / 12 m sight cone, docs/systems/cover-and-peek.md). Section **`5h`** (tag
 **`AutoLayout_Demo01_5h`**, folder `AutoLayout_Demo01_5h/...`), placed relative to the first high wall of the cover field (the
 `Cover_A3_*_High` nearest `VOL_A3_FIELD` = `Cover_A3_2_High`, wherever the user moved it); no pre-existing actor is edited.
 

@@ -4,7 +4,7 @@
 Idempotent: actors tagged AutoLayout_Demo01 are deleted and placed again on every run; every other actor is left alone,
 except (a) the §10.1 re-ids (VOL_A1_BEACON4 -> VOL_A3_WIND, VOL_A1_RIDGE(_FAR) -> VOL_A3_RIDGE(_FAR), VOL_A6_FIELD ->
 VOL_A3_FIELD) on the user's own volumes when they exist, and (b) the saved RecastNavMesh actors, which are destroyed before
-the save (HANDOFF §2: a commandlet-saved navmesh stays empty at runtime; RuntimeGeneration=Dynamic rebuilds it at load).
+the save (docs/port/TRAPS.md: a commandlet-saved navmesh stays empty at runtime; RuntimeGeneration=Dynamic rebuilds it at load).
 A volume / marker id the user already placed is kept where it is and not placed again.
 
 Anchors read from the map (fallbacks in brackets): PlayerStart; VOL_A0_BEACON1 [PlayerStart + 25 m]; the crevasse = the gap
@@ -838,7 +838,7 @@ def build():
                   0.0, "Navigation", "covers every placed actor + 20 m")
     nav.set_actor_scale3d(unreal.Vector((nx1 - nx0) / 200.0, (ny1 - ny0) / 200.0, 5.0))
 
-    # Saved navmesh actors stay empty at runtime when saved from a commandlet (HANDOFF §2): drop them, built at load.
+    # Saved navmesh actors stay empty at runtime when saved from a commandlet (docs/port/TRAPS.md): drop them, built at load.
     navmeshes = [a for a in p.actors.get_all_level_actors() if isinstance(a, unreal.RecastNavMesh)]
     for a in navmeshes:
         p.actors.destroy_actor(a)
@@ -1105,7 +1105,7 @@ def additive():
     if changes == 0:
         report("nothing to change: the map is NOT saved")
     else:
-        # Saved navmesh actors stay empty at runtime when saved from a commandlet (HANDOFF section 2): generated data, not user content.
+        # Saved navmesh actors stay empty at runtime when saved from a commandlet (docs/port/TRAPS.md): generated data, not user content.
         navmeshes = [a for a in actors.get_all_level_actors() if isinstance(a, unreal.RecastNavMesh)]
         for a in navmeshes:
             actors.destroy_actor(a)
