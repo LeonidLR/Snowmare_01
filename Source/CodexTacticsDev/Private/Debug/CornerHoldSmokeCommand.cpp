@@ -89,6 +89,10 @@ namespace CornerHoldSmoke
 		/** Rev 5e low-cover passes (0: from the middle to the -R end, 1: the near +R end), the low wall. */
 		TWeakObjectPtr<AStaticMeshActor> LowWall;
 		int32 LowPass = 0;
+		/** Rev 2026-10-19 prone pass: he moved while still prone / backwards / too fast (samples). */
+		int32 ProneMoveFrames = 0;
+		int32 BackwardsFrames = 0;
+		float MaxMoveSpeed = 0.f;
 		FPhase Phase[3];
 		int32 LastLean = 0;
 		int32 LastOpen = 0;
@@ -692,7 +696,7 @@ namespace CornerHoldSmoke
 				State.StageTime = 0.f;
 				return true; // the navmesh rebuilds round it
 			}
-			const float EndSign = State.LowPass == 0 ? 0.f : 1.f; // the middle, then 50 cm from the +R end
+			const float EndSign = State.LowPass == 1 ? 1.f : 0.f; // the middle, then 50 cm from the +R end, then (prone pass) the middle
 			FCoverSlot Slot;
 			const bool bFound = CoverTraceRules::FindCoverSlotAt(World, FVector(LowCentre.X, LowCentre.Y, State.GroundZ + 50.f) - State.F * 20.f
 				+ State.R * (EndSign * 150.f), State.F, Slot);
@@ -715,14 +719,25 @@ namespace CornerHoldSmoke
 				Check(State, false, TEXT("controller / low wall"));
 				return Finish(State);
 			}
-			const float EndSign = State.LowPass == 0 ? -1.f : 1.f;
+			const float EndSign = State.LowPass == 1 ? 1.f : -1.f;
 			const FVector LowCentre = State.P + State.R * 1000.f + State.F * 400.f;
+			if (State.LowPass == 2 && Op->GetStance() != EOperativeStance::Prone)
+			{
+				// Rev 2026-10-19 (user bug: prone in cover, ordered to the corner, he crawled BACKWARDS at twice the crawl speed): down first.
+				Op->DropProne();
+				State.ProneMoveFrames = 0;
+				State.BackwardsFrames = 0;
+				State.MaxMoveSpeed = 0.f;
+				Check(State, Op->GetStance() == EOperativeStance::Prone && Op->bInCover, TEXT("prone pass: lying prone in the low cover"));
+				return true;
+			}
 			const FHitResult EdgeHit(LowWall, LowWall->GetStaticMeshComponent(),
 				FVector(LowCentre.X, LowCentre.Y, State.GroundZ + 50.f) - State.F * 20.f + State.R * (EndSign * 180.f), -State.F);
 			ECoverFacing Side = ECoverFacing::Left;
 			float Edge = 0.f;
 			const bool bEdge = PC->FindCornerPeekForHit(Op, EdgeHit, Side, Edge);
-			Check(State, Op->bInCover && Op->CurrentCoverHeight == ECoverHeight::LowCover && Op->GetStance() == EOperativeStance::Crouching
+			Check(State, Op->bInCover && Op->CurrentCoverHeight == ECoverHeight::LowCover
+				&& Op->GetStance() == (State.LowPass == 2 ? EOperativeStance::Prone : EOperativeStance::Crouching)
 				&& Op->IsInPeekableCover() && !Op->IsInHighCover() && bEdge,
 				FString::Printf(TEXT("low pass %d: crouched in LOW cover, the %s end is a peek edge (%.0f cm along, click %.0f cm from his body)"), State.LowPass,
 					EndSign < 0.f ? TEXT("-R") : TEXT("+R"), Edge, FVector::Dist2D(Op->GetActorLocation(), EdgeHit.ImpactPoint)));
@@ -739,9 +754,28 @@ namespace CornerHoldSmoke
 		}
 		case 42:
 		{
+			if (State.LowPass == 2)
+			{
+				// He gets up before he moves; never backwards against his facing, never faster than a crouched shimmy (+10 %).
+				const FVector Velocity = Op->GetVelocity();
+				const float Speed = static_cast<float>(Velocity.Size2D());
+				if (Speed > 20.f)
+				{
+					State.ProneMoveFrames += Op->GetStance() == EOperativeStance::Prone ? 1 : 0;
+					State.BackwardsFrames += FVector::DotProduct(Velocity.GetSafeNormal2D(), Op->GetActorForwardVector().GetSafeNormal2D()) < -0.3f ? 1 : 0;
+					State.MaxMoveSpeed = FMath::Max(State.MaxMoveSpeed, Speed);
+				}
+			}
 			if (!(Op->bAtCoverCorner && Op->IsCornerAimActive() && Op->bIsCornerLeaning) && State.StageTime < 10.f)
 			{
 				return true;
+			}
+			if (State.LowPass == 2)
+			{
+				const float CrouchSpeed = OperativeMovementRules::ComputeMaxSpeed(Op->MovementConfig, EOperativeStance::Crouching, false, false, false);
+				Check(State, State.ProneMoveFrames == 0 && State.BackwardsFrames == 0 && State.MaxMoveSpeed <= CrouchSpeed * 1.1f,
+					FString::Printf(TEXT("prone pass: up before moving (prone moving frames %d), no backwards crawl (%d frames), max %.0f cm/s (crouch %.0f)"),
+						State.ProneMoveFrames, State.BackwardsFrames, State.MaxMoveSpeed, CrouchSpeed));
 			}
 			const float Moved = static_cast<float>(FVector::Dist2D(Op->GetActorLocation(), State.NearClickBody));
 			Check(State, Op->bInCover && Op->bAtCoverCorner && Op->IsCornerAimActive() && Op->IsManualCornerPeek() && Op->bIsCornerLeaning
@@ -789,9 +823,12 @@ namespace CornerHoldSmoke
 			}
 			Check(State, !Op->IsCornerAimActive() && !Op->IsManualCornerPeek() && !Op->bInCover,
 				FString::Printf(TEXT("low pass %d: a move order releases the low-cover peek"), State.LowPass));
-			if (State.LowPass == 0)
+			// Rev 2026-10-19 (user bug: the body ~1 m beside its capsule after cover / prone / corner aim): out of cover the mesh is back.
+			Check(State, Op->GetMeshBaseOffsetCm() <= 5.f, FString::Printf(TEXT("low pass %d: out of cover the mesh sits on its capsule (%.1f cm off)"),
+				State.LowPass, Op->GetMeshBaseOffsetCm()));
+			if (State.LowPass < 2)
 			{
-				State.LowPass = 1;
+				++State.LowPass;
 				State.Stage = 40;
 				State.StageTime = 0.f;
 				return true;

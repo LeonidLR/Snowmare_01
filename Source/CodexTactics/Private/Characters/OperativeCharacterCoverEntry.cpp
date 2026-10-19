@@ -216,13 +216,62 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 	// entry offset / yaw above, so the capsule's jump to the slot is not mistaken for a body in the wall.
 	if (GetMesh())
 	{
+		// Rev 2026-10-19: tracked as the actor-local vector it put on the mesh (as the run-in offset above), so a turn, a teleport or
+		// another wall while it is on never leaves a residue.
 		const float Push = UpdateCoverWallClearance(DeltaTime);
-		if (!FMath::IsNearlyEqual(Push, CoverWallPushApplied, 0.01f))
+		const FVector PushLocal = Push <= 0.f ? FVector::ZeroVector : GetActorRotation().UnrotateVector(CoverWallPushDir * Push);
+		if (!PushLocal.Equals(CoverWallPushAppliedLocal, 0.01))
 		{
-			GetMesh()->AddRelativeLocation(GetActorRotation().UnrotateVector(CoverWallPushDir * (Push - CoverWallPushApplied)));
-			CoverWallPushApplied = Push;
+			GetMesh()->AddRelativeLocation(PushLocal - CoverWallPushAppliedLocal);
+			CoverWallPushAppliedLocal = PushLocal;
 		}
 	}
+}
+
+void AOperativeCharacter::EnforceMeshBaseOffset()
+{
+	USkeletalMeshComponent* SkinMesh = GetMesh();
+	if (!SkinMesh || !bMeshBaseCaptured)
+	{
+		return;
+	}
+	const FVector Tracked = CoverEntryAppliedOffset + CoverWallPushAppliedLocal;
+	const FVector Location = SkinMesh->GetRelativeLocation();
+	const FVector2D Expected = MeshBaseXY + FVector2D(Tracked);
+	const float ExpectedYaw = MeshBaseYaw + CoverEntryAppliedYaw;
+	const float YawError = FMath::Abs(FRotator::NormalizeAxis(SkinMesh->GetRelativeRotation().Yaw - ExpectedYaw));
+	if (FVector2D::Distance(FVector2D(Location), Expected) <= 1.f && YawError <= 0.5f)
+	{
+		return;
+	}
+	UE_LOG(LogCodexTactics, Warning, TEXT("%s: mesh %.0f cm / %.1f deg off its place on the capsule (untracked) - put back"), *DisplayName.ToString(),
+		FVector2D::Distance(FVector2D(Location), Expected), YawError);
+	SkinMesh->SetRelativeLocation(FVector(Expected.X, Expected.Y, Location.Z));
+	FRotator Rotation = SkinMesh->GetRelativeRotation();
+	Rotation.Yaw = ExpectedYaw;
+	SkinMesh->SetRelativeRotation(Rotation);
+}
+
+float AOperativeCharacter::GetMeshBaseOffsetCm() const
+{
+	const USkeletalMeshComponent* SkinMesh = GetMesh();
+	return SkinMesh && bMeshBaseCaptured ? static_cast<float>(FVector2D::Distance(FVector2D(SkinMesh->GetRelativeLocation()), MeshBaseXY)) : 0.f;
+}
+
+void AOperativeCharacter::ResetBodyOffsets()
+{
+	CoverEntryBlendTime = -1.f;
+	CoverEntryGlide = FVector::ZeroVector;
+	CoverEntryClipOffset = FVector::ZeroVector;
+	CoverEntryAppliedOffset = FVector::ZeroVector;
+	CoverEntryYawTime = -1.f;
+	CoverEntryYawOffset = 0.f;
+	CoverEntryAppliedYaw = 0.f;
+	bCoverEntryAwaitClip = false;
+	bBodyYawFree = false;
+	CoverWallPush = 0.f;
+	CoverWallPushAppliedLocal = FVector::ZeroVector;
+	EnforceMeshBaseOffset();
 }
 
 void AOperativeCharacter::StartBodyYawBlend(float OldYaw)

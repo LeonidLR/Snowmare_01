@@ -125,6 +125,8 @@ void AOperativeCharacter::BeginPlay()
 	if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
 	{
 		MeshBaseZ = SkeletalMesh->GetRelativeLocation().Z;
+		MeshBaseXY = FVector2D(SkeletalMesh->GetRelativeLocation());
+		MeshBaseYaw = SkeletalMesh->GetRelativeRotation().Yaw;
 		bMeshBaseCaptured = true;
 		if (WeaponMesh)
 		{
@@ -299,6 +301,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 		UpdateSniperPendingShot(DeltaTime);
 	}
 	UpdateCoverEntryBlend(DeltaTime);
+	EnforceMeshBaseOffset();
 	UpdateSilhouette(DeltaTime);
 	UpdateSelectionRing();
 	UpdateVisionCone(DeltaTime);
