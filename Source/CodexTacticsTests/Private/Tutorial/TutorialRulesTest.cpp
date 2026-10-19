@@ -689,4 +689,161 @@ bool FTutorialHoldQueuedTest::RunTest(const FString&)
 	return true;
 }
 
+// --- Schema validator (2026-10-19 audit: the steps file is checked for unknown keys at every level and for references) ------
+
+namespace TutorialSchemaTestLocal
+{
+	bool HasWarning(const TArray<FString>& Warnings, const TCHAR* Needle)
+	{
+		return Warnings.ContainsByPredicate([Needle](const FString& Warning) { return Warning.Contains(Needle); });
+	}
+}
+
+TUTORIAL_TEST(FTutorialSchemaUnknownKeysTest, "Schema.UnknownKeys")
+bool FTutorialSchemaUnknownKeysTest::RunTest(const FString&)
+{
+	// One unknown key at every level of the schema: each must be warned (the demo file test fails on any warning).
+	const TCHAR* Json = TEXT(R"JSON({
+		"id": "t", "zz_root": 1,
+		"beats": [ { "id": "B", "zz_beat": 1 } ],
+		"steps": [
+			{ "id": "a", "beat": "B", "kind": "radio", "zz_step": 1,
+			  "trigger": { "type": "beat_start", "zz_trigger": 1 },
+			  "condition": { "stat": "squad_cold_max", "at_least": 1, "zz_condition": 1 },
+			  "complete": { "event": "E", "zz_complete": 1, "condition": { "stat": "leader_cold", "below": 5, "zz_complete_condition": 1 } },
+			  "action": { "type": "cold_bump", "amount": 1, "zz_action": 1 },
+			  "cancel_on": { "event": "X", "zz_cancel": 1 },
+			  "confine": { "volume": "V", "zz_confine": 1, "exit": { "stance": "prone", "zz_exit": 1 } },
+			  "lines": [ { "text_id": "L", "zz_line": 1 } ],
+			  "_comment": "underscore keys are comments, never warned" }
+		] })JSON");
+	FTutorialStepsData Data;
+	TArray<FString> Warnings;
+	FString Error;
+	TestTrue(FString::Printf(TEXT("parses (%s)"), *Error), TutorialRules::ParseSteps(Json, Data, Warnings, Error));
+	for (const TCHAR* Key : { TEXT("zz_root"), TEXT("zz_beat"), TEXT("zz_step"), TEXT("zz_trigger"), TEXT("zz_condition"), TEXT("zz_complete"),
+		TEXT("zz_complete_condition"), TEXT("zz_action"), TEXT("zz_cancel"), TEXT("zz_confine"), TEXT("zz_exit"), TEXT("zz_line") })
+	{
+		TestTrue(FString::Printf(TEXT("unknown key %s is warned"), Key), TutorialSchemaTestLocal::HasWarning(Warnings, Key));
+	}
+	TestFalse(TEXT("_comment is not warned"), TutorialSchemaTestLocal::HasWarning(Warnings, TEXT("_comment")));
+	TestEqual(TEXT("exactly the twelve unknown keys"), Warnings.Num(), 12);
+	return true;
+}
+
+TUTORIAL_TEST(FTutorialSchemaReferencesTest, "Schema.References")
+bool FTutorialSchemaReferencesTest::RunTest(const FString&)
+{
+	// Hard errors: every step id reference must name a step.
+	FTutorialStepsData Data;
+	TArray<FString> Warnings;
+	FString Error;
+	const TCHAR* BadReferences[] = {
+		TEXT(R"({"steps":[{"id":"a","trigger":{"type":"after_step","step":["a","zz"]}}]})"),
+		TEXT(R"({"steps":[{"id":"a","trigger":{"type":"manual","requires":["zz"]}}]})"),
+		TEXT(R"({"steps":[{"id":"a","complete":{"event":"E","distinct_from":["zz"]}}]})"),
+		TEXT(R"({"steps":[{"id":"a","complete":{"event":"E","distinct_from":["a"]}}]})"),
+		TEXT(R"({"steps":[{"id":"a","cancel_on":{"step":"zz"}}]})"),
+		TEXT(R"({"steps":[{"id":"a","cancel_on":{"step":"a"}}]})"),
+		TEXT(R"({"steps":[{"id":"a","confine":{"volume":"V","until":"zz"}}]})") };
+	for (const TCHAR* Json : BadReferences)
+	{
+		Error.Reset();
+		TestFalse(FString::Printf(TEXT("bad reference fails: %s"), Json), TutorialRules::ParseSteps(Json, Data, Warnings, Error));
+		TestTrue(FString::Printf(TEXT("names the reference (%s)"), *Error), Error.Contains(TEXT("names an unknown step")));
+	}
+	// Other errors that name the allowed values.
+	TestFalse(TEXT("unknown stat"), TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"a","condition":{"stat":"zz","at_least":1}}]})"), Data, Warnings, Error));
+	TestTrue(TEXT("the stat error lists every stat"), Error.Contains(TEXT("enemies_unseen")) && Error.Contains(TEXT("squad_not_low_in.<volume>")));
+	TestFalse(TEXT("unknown kind"), TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"a","kind":"popup"}]})"), Data, Warnings, Error));
+	TestTrue(TEXT("the kind error lists feed"), Error.Contains(TEXT("feed")));
+	TestFalse(TEXT("unknown subject"), TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"a","complete":{"event":"E","subject":"leader"}}]})"), Data, Warnings, Error));
+	TestFalse(TEXT("set_posture without a posture"), TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"a","action":{"type":"set_posture"}}]})"), Data, Warnings, Error));
+	TestFalse(TEXT("confine without volume"), TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"a","confine":{"allow":["V"]}}]})"), Data, Warnings, Error));
+	TestFalse(TEXT("unknown confine stance"), TutorialRules::ParseSteps(TEXT(R"({"steps":[{"id":"a","confine":{"volume":"V","stance":"kneel"}}]})"), Data, Warnings, Error));
+
+	// Soft cross-checks against the game (ValidateSteps; LoadStepsFile appends them to its warnings).
+	const TCHAR* Json = TEXT(R"JSON({
+		"beats": [ { "id": "B", "lock": ["Nope.*", "Stance.*"], "unlock": ["Squad.Nothing"] } ],
+		"steps": [
+			{ "id": "a", "beat": "B", "text_id": "T", "keys": ["Squad.Nope", "Alt+V", "H", "Squad.Solo"], "complete": { "commands": ["Squad.Gone", "Camera.*"] },
+			  "lock": ["Zap.Zap"], "unlock": ["*"] },
+			{ "id": "b", "beat": "B", "text_id": "T", "trigger": { "type": "first_use", "command": "Teleport" }, "complete": { "event": "E", "subject": "focus" } },
+			{ "id": "c", "beat": "B", "text_id": "T", "trigger": { "type": "after_step", "step": "d" }, "complete": { "commands": ["Order.Move"] } },
+			{ "id": "d", "beat": "B", "text_id": "T", "trigger": { "type": "after_step", "step": "c" }, "complete": { "commands": ["Order.Move"] } }
+		] })JSON");
+	Warnings.Reset();
+	TestTrue(FString::Printf(TEXT("parses (%s)"), *Error), TutorialRules::ParseSteps(Json, Data, Warnings, Error));
+	TestEqual(TEXT("the parser itself has nothing to say"), Warnings.Num(), 0);
+	TutorialRules::ValidateSteps(Data, Warnings);
+	using TutorialSchemaTestLocal::HasWarning;
+	TestTrue(TEXT("beat lock matching no command"), HasWarning(Warnings, TEXT("beat B: lock \"Nope.*\"")));
+	TestTrue(TEXT("beat unlock matching no command"), HasWarning(Warnings, TEXT("beat B: unlock \"Squad.Nothing\"")));
+	TestTrue(TEXT("completion command"), HasWarning(Warnings, TEXT("step a: command \"Squad.Gone\"")));
+	TestTrue(TEXT("step lock"), HasWarning(Warnings, TEXT("step a: lock \"Zap.Zap\"")));
+	TestTrue(TEXT("dotted key cap"), HasWarning(Warnings, TEXT("key \"Squad.Nope\"")));
+	TestTrue(TEXT("first_use command"), HasWarning(Warnings, TEXT("first_use command \"Teleport\"")));
+	TestTrue(TEXT("subject focus without focus"), HasWarning(Warnings, TEXT("step b: \"subject\": \"focus\"")));
+	TestTrue(TEXT("after_step cycle c"), HasWarning(Warnings, TEXT("step c: its after_step chain leads back")));
+	TestTrue(TEXT("after_step cycle d"), HasWarning(Warnings, TEXT("step d: its after_step chain leads back")));
+	TestEqual(TEXT("nothing else (wildcards / literal keys / * are fine)"), Warnings.Num(), 9);
+	return true;
+}
+
+TUTORIAL_TEST(FTutorialDemoFileReferencesTest, "Schema.DemoFileReferences")
+bool FTutorialDemoFileReferencesTest::RunTest(const FString&)
+{
+	// The demo file is clean for the parser AND the validator (LoadStepsFile runs both), and every text it names exists.
+	FTutorialStepsData Data;
+	TArray<FString> Warnings;
+	FString Error;
+	TestTrue(FString::Printf(TEXT("demo_01_steps.json loads (%s)"), *Error), TutorialRules::LoadStepsFile(TEXT("demo_01_steps.json"), Data, Warnings, Error));
+	for (const FString& Warning : Warnings)
+	{
+		AddError(TEXT("demo file warning: ") + Warning);
+	}
+	TArray<FName> TextIds;
+	for (const FTutorialBeat& Beat : Data.Beats)
+	{
+		TextIds.AddUnique(Beat.TitleId);
+	}
+	for (const FTutorialStep& Step : Data.Steps)
+	{
+		TextIds.AddUnique(Step.TextId);
+		for (const FTutorialLine& Line : Step.Lines)
+		{
+			TextIds.AddUnique(Line.TextId);
+		}
+	}
+	TextIds.Remove(NAME_None);
+	TestTrue(TEXT("the demo names texts"), TextIds.Num() > 50);
+	const FNarrativeManifest& Manifest = FNarrativeManifest::Get();
+	for (const FName TextId : TextIds)
+	{
+		const FTutorialTextView Text = Manifest.GetTutorialText(TextId.ToString());
+		const bool bSequence = Manifest.Sequences.Contains(TextId.ToString());
+		TestTrue(FString::Printf(TEXT("text %s exists (manifest / draft / sequence)"), *TextId.ToString()), !Text.bMissing || bSequence);
+		// {key:<CommandId>} tokens of the text must name registered commands (a literal key has no dot).
+		for (const FString& Body : { Text.Title, Text.Text, Text.Radio })
+		{
+			int32 Cursor = 0;
+			int32 Start = INDEX_NONE;
+			while ((Start = Body.Find(TEXT("{key:"), ESearchCase::IgnoreCase, ESearchDir::FromStart, Cursor)) != INDEX_NONE)
+			{
+				const int32 End = Body.Find(TEXT("}"), ESearchCase::CaseSensitive, ESearchDir::FromStart, Start);
+				if (End == INDEX_NONE)
+				{
+					AddError(FString::Printf(TEXT("text %s: unclosed {key:"), *TextId.ToString()));
+					break;
+				}
+				const FString Token = Body.Mid(Start + 5, End - Start - 5);
+				TestTrue(FString::Printf(TEXT("text %s: {key:%s} is a registered command"), *TextId.ToString(), *Token),
+					!Token.Contains(TEXT(".")) || PlayerCommands::Find(FName(*Token)) != nullptr);
+				Cursor = End + 1;
+			}
+		}
+	}
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

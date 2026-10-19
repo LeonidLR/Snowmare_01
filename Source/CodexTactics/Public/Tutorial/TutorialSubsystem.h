@@ -338,16 +338,14 @@ public:
 	/** Locked commands refused since the steps were loaded (smokes). */
 	int32 GetLockedRefusalCount() const { return LockedRefusals; }
 
-	/** "Not taught yet" feed lines posted (one per command family, smokes). */
-	int32 GetLockHintCount() const { return LockHintFamilies.Num(); }
-
 	/** Hint cards completed from the command history without being shown ("precredit", smokes). */
 	int32 GetPrecreditedCount() const { return PrecreditedCount; }
 
 	/**
-	 * A step condition stat now: "squad_cold_max" / "squad_cold_min" (cold % of the living squad members), "leader_cold",
-	 * "squad_heat_packs" (heat packs carried by the whole squad), "squad_min_heat_packs" (the fewest any living member carries),
-	 * "heat_packs_given" (heat packs handed between squad mates since the level started, USquadTransferSubsystem; rev 5d).
+	 * A step condition stat now (TutorialRules::IsKnownStat; meanings in docs/systems/tutorial-engine.md): "squad_cold_max" /
+	 * "squad_cold_min" (cold % of the living squad members), "leader_cold", "squad_heat_packs", "squad_min_heat_packs",
+	 * "heat_packs_given" (USquadTransferSubsystem; rev 5d), "squad_solo", "squad_injury_max", "squad_prone", "enemies_unseen",
+	 * "traps_spotted.<tag>", "squad_not_low_in.<volume>". 0 without a squad.
 	 */
 	float GetConditionStat(FName Stat) const;
 
@@ -422,6 +420,10 @@ private:
 
 	void InitFromLevel();
 	void StartTutorial();
+	/** Hides what the overlay shows on its own (speech strip, confirm flashes, the retry prompt): new steps, skip, reset, a load. */
+	void ClearOverlayState();
+	/** One "TRAINING" line in the message feed. */
+	void PostTrainingLine(const FText& Line) const;
 	void BindWorldEvents();
 	void BindSquadMembers();
 	void ProcessTransitions();
@@ -514,4 +516,6 @@ private:
 	void HandleConfineChanged();
 	/** The tutorial volumes of the world with this id. */
 	TArray<const ATutorialTriggerVolume*> FindVolumes(FName VolumeId) const;
+	/** "span": the bounding box of every volume of these areas (invalid when none is in the world). */
+	FBox GetSpanBox(const TArray<FName>& Areas) const;
 };

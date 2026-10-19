@@ -45,6 +45,25 @@ namespace TutorialRulesLocal
 		return Object.IsValid() && Object->TryGetBoolField(Field, bValue) ? bValue : bDefault;
 	}
 
+	/** The non-empty strings of an array field (absent / not an array = none). */
+	TArray<FString> JsonStringArray(const FJsonObject& Object, const TCHAR* Field)
+	{
+		TArray<FString> Out;
+		const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
+		if (Object.TryGetArrayField(Field, Values))
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *Values)
+			{
+				FString Text;
+				if (Value.IsValid() && Value->TryGetString(Text) && !Text.IsEmpty())
+				{
+					Out.Add(Text);
+				}
+			}
+		}
+		return Out;
+	}
+
 	/** A string or an array of strings. */
 	TArray<FString> JsonStrings(const TSharedPtr<FJsonObject>& Object, const TCHAR* Field)
 	{
@@ -62,19 +81,91 @@ namespace TutorialRulesLocal
 			}
 			return Out;
 		}
-		const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
-		if (Object->TryGetArrayField(Field, Values))
+		return JsonStringArray(*Object, Field);
+	}
+
+	/** The names of an array field, each once (save "subjects" / "contributors" / "passed"). */
+	void JsonUniqueNames(const FJsonObject& Object, const TCHAR* Field, TArray<FName>& Out)
+	{
+		for (const FString& Text : JsonStringArray(Object, Field))
 		{
-			for (const TSharedPtr<FJsonValue>& Value : *Values)
+			Out.AddUnique(FName(*Text));
+		}
+	}
+
+	/** Names as a JSON string array (save). */
+	TArray<TSharedPtr<FJsonValue>> JsonNameValues(const TArray<FName>& Names)
+	{
+		TArray<TSharedPtr<FJsonValue>> Values;
+		for (const FName Name : Names)
+		{
+			Values.Add(MakeShared<FJsonValueString>(Name.ToString()));
+		}
+		return Values;
+	}
+
+	/** The plain condition stats (UTutorialSubsystem::GetConditionStat); the prefixed ones are listed by DescribeKnownStats. */
+	const TCHAR* const PlainConditionStats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
+		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo"), TEXT("squad_injury_max"), TEXT("squad_prone"),
+		TEXT("enemies_unseen") };
+
+	/** "squad_cold_max | ... | traps_spotted.<tag> | squad_not_low_in.<volume>" for the parse error of an unknown stat. */
+	FString DescribeKnownStats()
+	{
+		TArray<FString> Names;
+		for (const TCHAR* Name : PlainConditionStats)
+		{
+			Names.Add(Name);
+		}
+		Names.Add(TEXT("traps_spotted.<tag>"));
+		Names.Add(TEXT("squad_not_low_in.<volume>"));
+		return FString::Join(Names, TEXT(" | "));
+	}
+
+	/**
+	 * Every id names a step of Data (and, unless bSelfAllowed, not Step itself); else OutError =
+	 * "step <id>: <What> names an unknown step "<other>"" and false.
+	 */
+	bool CheckStepReferences(const FTutorialStepsData& Data, const FTutorialStep& Step, const TArray<FName>& Ids, const TCHAR* What, bool bSelfAllowed,
+		FString& OutError)
+	{
+		for (const FName Other : Ids)
+		{
+			if (Data.FindStepIndex(Other) == INDEX_NONE || (!bSelfAllowed && Other == Step.Id))
 			{
-				FString Text;
-				if (Value.IsValid() && Value->TryGetString(Text) && !Text.IsEmpty())
-				{
-					Out.Add(Text);
-				}
+				OutError = FString::Printf(TEXT("step %s: %s names an unknown step \"%s\""), *Step.Id.ToString(), What, *Other.ToString());
+				return false;
 			}
 		}
-		return Out;
+		return true;
+	}
+
+	/** The uses and the hold time the history holds for the commands a step's completion counts (precredit). */
+	FTutorialCommandUse SumHistoryForStep(const FTutorialStep& Step, const TMap<FName, FTutorialCommandUse>& History)
+	{
+		FTutorialCommandUse Sum;
+		for (const TPair<FName, FTutorialCommandUse>& Entry : History)
+		{
+			if (TutorialRules::CountsCommand(Step, Entry.Key))
+			{
+				Sum.Count += Entry.Value.Count;
+				Sum.HeldSeconds += Entry.Value.HeldSeconds;
+			}
+		}
+		return Sum;
+	}
+
+	/** True when some registered player command matches Pattern (exact id, "Prefix.*", "*"). */
+	bool MatchesAnyRegisteredCommand(const FString& Pattern)
+	{
+		for (const FPlayerCommandInfo& Info : PlayerCommands::GetRegistry())
+		{
+			if (PlayerCommands::Matches(Pattern, Info.Id))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	void WarnUnknownKeys(const TSharedPtr<FJsonObject>& Object, std::initializer_list<const TCHAR*> Known, const FString& Where, TArray<FString>& OutWarnings)
@@ -140,8 +231,7 @@ namespace TutorialRulesLocal
 			Condition.Stat = FName(*JsonString(Clause, TEXT("stat")));
 			if (!TutorialRules::IsKnownStat(Condition.Stat))
 			{
-				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (squad_cold_max | squad_cold_min | leader_cold | squad_heat_packs | squad_min_heat_packs | heat_packs_given | squad_solo | traps_spotted.<tag> | squad_not_low_in.<volume>)"),
-					*Where, *Condition.Stat.ToString());
+				OutError = FString::Printf(TEXT("%s: unknown condition stat \"%s\" (%s)"), *Where, *Condition.Stat.ToString(), *DescribeKnownStats());
 				return false;
 			}
 			double Value = 0.0;
@@ -208,19 +298,6 @@ bool TutorialRules::ParseTriggerType(const FString& Text, ETutorialTriggerType& 
 		return true;
 	}
 	return false;
-}
-
-const TCHAR* TutorialRules::KindName(ETutorialStepKind Kind)
-{
-	switch (Kind)
-	{
-	case ETutorialStepKind::HintCard: return TEXT("hint_card");
-	case ETutorialStepKind::Objective: return TEXT("objective");
-	case ETutorialStepKind::Radio: return TEXT("radio");
-	case ETutorialStepKind::WalkTalk: return TEXT("walk_talk");
-	case ETutorialStepKind::Feed: return TEXT("feed");
-	default: return TEXT("?");
-	}
 }
 
 const TCHAR* TutorialRules::StateName(ETutorialStepState State)
@@ -324,7 +401,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		Step.Beat = FName(*JsonString(Object, TEXT("beat")));
 		if (!ParseKind(JsonString(Object, TEXT("kind"), TEXT("hint_card")), Step.Kind))
 		{
-			OutError = FString::Printf(TEXT("%s: unknown kind \"%s\" (hint_card | objective | radio | walk_talk)"), *Where, *JsonString(Object, TEXT("kind")));
+			OutError = FString::Printf(TEXT("%s: unknown kind \"%s\" (hint_card | objective | radio | walk_talk | feed)"), *Where, *JsonString(Object, TEXT("kind")));
 			return false;
 		}
 		Step.TextId = FName(*JsonString(Object, TEXT("text_id")));
@@ -532,6 +609,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			for (const TSharedPtr<FJsonValue>& LineValue : *Lines)
 			{
 				const TSharedPtr<FJsonObject> LineObject = LineValue.IsValid() ? LineValue->AsObject() : nullptr;
+				WarnUnknownKeys(LineObject, { TEXT("speaker"), TEXT("text_id"), TEXT("duration_s") }, Where + TEXT(" line"), OutWarnings);
 				FTutorialLine Line;
 				Line.Speaker = JsonString(LineObject, TEXT("speaker"));
 				Line.TextId = FName(*JsonString(LineObject, TEXT("text_id")));
@@ -571,13 +649,9 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 				OutError = FString::Printf(TEXT("step %s: after_step needs \"step\""), *Step.Id.ToString());
 				return false;
 			}
-			for (const FName AfterStep : Step.Trigger.AfterSteps)
+			if (!CheckStepReferences(OutData, Step, Step.Trigger.AfterSteps, TEXT("after_step"), /*bSelfAllowed*/ true, OutError))
 			{
-				if (OutData.FindStepIndex(AfterStep) == INDEX_NONE)
-				{
-					OutError = FString::Printf(TEXT("step %s: after_step names an unknown step \"%s\""), *Step.Id.ToString(), *AfterStep.ToString());
-					return false;
-				}
+				return false;
 			}
 		}
 		if ((Step.Trigger.Type == ETutorialTriggerType::Event || Step.Trigger.Type == ETutorialTriggerType::FailureRetry) && Step.Trigger.Event.IsEmpty())
@@ -591,34 +665,13 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			OutError = FString::Printf(TEXT("step %s: trigger \"condition\" needs a \"condition\""), *Step.Id.ToString());
 			return false;
 		}
-		for (const FName Other : Step.Complete.DistinctFrom)
+		const TArray<FName> ConfineUntil = Step.Confine.Until.IsNone() ? TArray<FName>() : TArray<FName>{ Step.Confine.Until };
+		if (!CheckStepReferences(OutData, Step, Step.Complete.DistinctFrom, TEXT("complete \"distinct_from\""), /*bSelfAllowed*/ false, OutError)
+			|| !CheckStepReferences(OutData, Step, Step.CancelOn.Steps, TEXT("\"cancel_on\""), /*bSelfAllowed*/ false, OutError)
+			|| !CheckStepReferences(OutData, Step, ConfineUntil, TEXT("\"confine\" \"until\""), /*bSelfAllowed*/ true, OutError)
+			|| !CheckStepReferences(OutData, Step, Step.Trigger.Requires, TEXT("trigger \"requires\""), /*bSelfAllowed*/ true, OutError))
 		{
-			if (OutData.FindStepIndex(Other) == INDEX_NONE || Other == Step.Id)
-			{
-				OutError = FString::Printf(TEXT("step %s: complete \"distinct_from\" names an unknown step \"%s\""), *Step.Id.ToString(), *Other.ToString());
-				return false;
-			}
-		}
-		for (const FName Other : Step.CancelOn.Steps)
-		{
-			if (OutData.FindStepIndex(Other) == INDEX_NONE || Other == Step.Id)
-			{
-				OutError = FString::Printf(TEXT("step %s: \"cancel_on\" names an unknown step \"%s\""), *Step.Id.ToString(), *Other.ToString());
-				return false;
-			}
-		}
-		if (!Step.Confine.Until.IsNone() && OutData.FindStepIndex(Step.Confine.Until) == INDEX_NONE)
-		{
-			OutError = FString::Printf(TEXT("step %s: \"confine\" \"until\" names an unknown step \"%s\""), *Step.Id.ToString(), *Step.Confine.Until.ToString());
 			return false;
-		}
-		for (const FName Required : Step.Trigger.Requires)
-		{
-			if (OutData.FindStepIndex(Required) == INDEX_NONE)
-			{
-				OutError = FString::Printf(TEXT("step %s: trigger \"requires\" names an unknown step \"%s\""), *Step.Id.ToString(), *Required.ToString());
-				return false;
-			}
 		}
 		if (Step.Trigger.Type == ETutorialTriggerType::FirstUse && Step.Trigger.Command.IsEmpty())
 		{
@@ -629,13 +682,6 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		{
 			OutError = FString::Printf(TEXT("step %s: trigger \"beat_start\" needs \"beat\""), *Step.Id.ToString());
 			return false;
-		}
-		for (const FString& Command : Step.Complete.Commands)
-		{
-			if (!Command.EndsWith(TEXT("*")) && !PlayerCommands::Find(FName(*Command)))
-			{
-				OutWarnings.Add(FString::Printf(TEXT("step %s: command \"%s\" is not in the registry (Core/PlayerCommands.h)"), *Step.Id.ToString(), *Command));
-			}
 		}
 	}
 	if (!OutData.StartBeat.IsNone() && OutData.FindBeatIndex(OutData.StartBeat) == INDEX_NONE)
@@ -668,7 +714,78 @@ bool TutorialRules::LoadStepsFile(const FString& FileName, FTutorialStepsData& O
 		OutError = FString::Printf(TEXT("tutorial steps file not found: %s"), *Path);
 		return false;
 	}
-	return ParseSteps(Json, OutData, OutWarnings, OutError);
+	if (!ParseSteps(Json, OutData, OutWarnings, OutError))
+	{
+		return false;
+	}
+	ValidateSteps(OutData, OutWarnings);
+	return true;
+}
+
+void TutorialRules::ValidateSteps(const FTutorialStepsData& Data, TArray<FString>& OutWarnings)
+{
+	using namespace TutorialRulesLocal;
+	auto CheckPatterns = [&OutWarnings](const FString& Where, const TCHAR* What, const TArray<FString>& Patterns)
+	{
+		for (const FString& Pattern : Patterns)
+		{
+			if (!MatchesAnyRegisteredCommand(Pattern))
+			{
+				OutWarnings.Add(FString::Printf(TEXT("%s: %s \"%s\" matches no command in the registry (Core/PlayerCommands.h)"), *Where, What, *Pattern));
+			}
+		}
+	};
+	for (const FTutorialBeat& Beat : Data.Beats)
+	{
+		const FString Where = TEXT("beat ") + Beat.Id.ToString();
+		CheckPatterns(Where, TEXT("lock"), Beat.Lock);
+		CheckPatterns(Where, TEXT("unlock"), Beat.Unlock);
+	}
+	for (const FTutorialStep& Step : Data.Steps)
+	{
+		const FString Where = TEXT("step ") + Step.Id.ToString();
+		CheckPatterns(Where, TEXT("command"), Step.Complete.Commands);
+		CheckPatterns(Where, TEXT("lock"), Step.Lock);
+		CheckPatterns(Where, TEXT("unlock"), Step.Unlock);
+		if (!Step.Trigger.Command.IsEmpty())
+		{
+			CheckPatterns(Where, TEXT("first_use command"), { Step.Trigger.Command });
+		}
+		for (const FString& Key : Step.Keys)
+		{
+			// A key cap is a command id ("Squad.Solo" -> "[B]") or a literal label ("H", "Alt+V"): a dotted token is meant as an id.
+			if (Key.Contains(TEXT(".")) && !Key.Contains(TEXT("+")) && !Key.Contains(TEXT(" ")) && !PlayerCommands::Find(FName(*Key)))
+			{
+				OutWarnings.Add(FString::Printf(TEXT("%s: key \"%s\" looks like a command id but is not in the registry"), *Where, *Key));
+			}
+		}
+		if (Step.Complete.bFocusSubject && Step.Focus.IsNone())
+		{
+			OutWarnings.Add(Where + TEXT(": \"subject\": \"focus\" without a step \"focus\" - any operative counts"));
+		}
+		// after_step chains must not loop back to the step: such a step could never fire.
+		if (Step.Trigger.Type == ETutorialTriggerType::AfterStep)
+		{
+			TArray<FName> Open = Step.Trigger.AfterSteps;
+			TSet<FName> Seen;
+			while (Open.Num() > 0)
+			{
+				const FName Current = Open.Pop();
+				if (Current == Step.Id)
+				{
+					OutWarnings.Add(Where + TEXT(": its after_step chain leads back to itself - it never fires"));
+					break;
+				}
+				bool bAlreadySeen = false;
+				Seen.Add(Current, &bAlreadySeen);
+				const FTutorialStep* Before = bAlreadySeen ? nullptr : Data.FindStep(Current);
+				if (Before && Before->Trigger.Type == ETutorialTriggerType::AfterStep)
+				{
+					Open.Append(Before->Trigger.AfterSteps);
+				}
+			}
+		}
+	}
 }
 
 bool TutorialRules::IsFinished(ETutorialStepState State)
@@ -724,6 +841,7 @@ bool TutorialRules::ShouldDownInsteadOfKill(bool bTutorialEnabled, bool bLessonB
 
 TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Progress, bool bEnabled)
 {
+	using namespace TutorialRulesLocal;
 	const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
 	Object->SetStringField(TEXT("beat"), Progress.CurrentBeat.IsNone() ? FString() : Progress.CurrentBeat.ToString());
 	Object->SetBoolField(TEXT("enabled"), bEnabled);
@@ -736,12 +854,7 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 		Finished->SetStringField(Id.ToString(), StateName(Progress.Finished[Id]));
 	}
 	Object->SetObjectField(TEXT("finished"), Finished);
-	TArray<TSharedPtr<FJsonValue>> Pending;
-	for (const FName Id : Progress.Pending)
-	{
-		Pending.Add(MakeShared<FJsonValueString>(Id.ToString()));
-	}
-	Object->SetArrayField(TEXT("pending"), Pending);
+	Object->SetArrayField(TEXT("pending"), JsonNameValues(Progress.Pending));
 	TArray<TSharedPtr<FJsonValue>> Locks;
 	for (const FString& Lock : Progress.Locks)
 	{
@@ -765,23 +878,14 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 	TArray<FName> StepIds;
 	Progress.StepProgress.GetKeys(StepIds);
 	StepIds.Sort(FNameLexicalLess());
-	auto NameArray = [](const TArray<FName>& Names)
-	{
-		TArray<TSharedPtr<FJsonValue>> Values;
-		for (const FName Name : Names)
-		{
-			Values.Add(MakeShared<FJsonValueString>(Name.ToString()));
-		}
-		return Values;
-	};
 	for (const FName StepId : StepIds)
 	{
 		const FTutorialStepProgress& Step = Progress.StepProgress[StepId];
 		const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
 		Entry->SetNumberField(TEXT("progress"), Step.Progress);
 		Entry->SetNumberField(TEXT("held_s"), Step.HeldSeconds);
-		Entry->SetArrayField(TEXT("subjects"), NameArray(Step.Subjects));
-		Entry->SetArrayField(TEXT("contributors"), NameArray(Step.Contributors));
+		Entry->SetArrayField(TEXT("subjects"), JsonNameValues(Step.Subjects));
+		Entry->SetArrayField(TEXT("contributors"), JsonNameValues(Step.Contributors));
 		Runtime->SetObjectField(StepId.ToString(), Entry);
 	}
 	Object->SetObjectField(TEXT("runtime"), Runtime);
@@ -793,7 +897,7 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 		Entry->SetStringField(TEXT("step"), Confine.Owner.ToString());
 		Entry->SetBoolField(TEXT("released"), Confine.bReleased);
 		Entry->SetStringField(TEXT("holder"), Confine.ExitHolder.IsNone() ? FString() : Confine.ExitHolder.ToString());
-		Entry->SetArrayField(TEXT("passed"), NameArray(Confine.Passed));
+		Entry->SetArrayField(TEXT("passed"), JsonNameValues(Confine.Passed));
 		Confines.Add(MakeShared<FJsonValueObject>(Entry));
 	}
 	Object->SetArrayField(TEXT("confines"), Confines);
@@ -802,6 +906,7 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 
 bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& OutProgress)
 {
+	using namespace TutorialRulesLocal;
 	OutProgress = FTutorialProgress();
 	const TSharedPtr<FJsonObject>* Finished = nullptr;
 	if (!Object.TryGetObjectField(TEXT("finished"), Finished))
@@ -822,31 +927,14 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 	{
 		OutProgress.CurrentBeat = FName(*Beat);
 	}
-	const TArray<TSharedPtr<FJsonValue>>* Pending = nullptr;
-	if (Object.TryGetArrayField(TEXT("pending"), Pending))
+	for (const FString& Id : JsonStringArray(Object, TEXT("pending")))
 	{
-		for (const TSharedPtr<FJsonValue>& Value : *Pending)
-		{
-			FString Id;
-			if (Value.IsValid() && Value->TryGetString(Id) && !Id.IsEmpty())
-			{
-				OutProgress.Pending.Add(FName(*Id));
-			}
-		}
+		OutProgress.Pending.Add(FName(*Id));
 	}
-	const TArray<TSharedPtr<FJsonValue>>* Locks = nullptr;
-	if (Object.TryGetArrayField(TEXT("locks"), Locks))
-	{
-		OutProgress.bHasLocks = true;
-		for (const TSharedPtr<FJsonValue>& Value : *Locks)
-		{
-			FString Pattern;
-			if (Value.IsValid() && Value->TryGetString(Pattern) && !Pattern.IsEmpty())
-			{
-				OutProgress.Locks.Add(Pattern);
-			}
-		}
-	}
+	// An older save without "locks" rebuilds them from the beats / finished steps (FTutorialStateMachine::ImportProgress).
+	const TArray<TSharedPtr<FJsonValue>>* LockValues = nullptr;
+	OutProgress.bHasLocks = Object.TryGetArrayField(TEXT("locks"), LockValues);
+	OutProgress.Locks = JsonStringArray(Object, TEXT("locks"));
 	const TSharedPtr<FJsonObject>* History = nullptr;
 	if (Object.TryGetObjectField(TEXT("history"), History))
 	{
@@ -856,29 +944,14 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 			if (Use.IsValid() && !Entry.Key.IsEmpty())
 			{
 				FTutorialCommandUse& Stored = OutProgress.History.Add(FName(*Entry.Key));
-				Stored.Count = FMath::Max(0, static_cast<int32>(TutorialRulesLocal::JsonNumber(Use, TEXT("count"), 0.0)));
-				Stored.HeldSeconds = FMath::Max(0.f, static_cast<float>(TutorialRulesLocal::JsonNumber(Use, TEXT("held_s"), 0.0)));
+				Stored.Count = FMath::Max(0, static_cast<int32>(JsonNumber(Use, TEXT("count"), 0.0)));
+				Stored.HeldSeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Use, TEXT("held_s"), 0.0)));
 			}
 		}
 	}
 	const TSharedPtr<FJsonObject>* Runtime = nullptr;
 	if (Object.TryGetObjectField(TEXT("runtime"), Runtime))
 	{
-		auto ReadNames = [](const TSharedPtr<FJsonObject>& Entry, const TCHAR* Field, TArray<FName>& Out)
-		{
-			const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
-			if (Entry->TryGetArrayField(Field, Values))
-			{
-				for (const TSharedPtr<FJsonValue>& Value : *Values)
-				{
-					FString Text;
-					if (Value.IsValid() && Value->TryGetString(Text) && !Text.IsEmpty())
-					{
-						Out.AddUnique(FName(*Text));
-					}
-				}
-			}
-		};
 		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*Runtime)->Values)
 		{
 			const TSharedPtr<FJsonObject> Step = Entry.Value.IsValid() ? Entry.Value->AsObject() : nullptr;
@@ -887,10 +960,10 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 				continue;
 			}
 			FTutorialStepProgress& Stored = OutProgress.StepProgress.Add(FName(*Entry.Key));
-			Stored.Progress = FMath::Max(0, static_cast<int32>(TutorialRulesLocal::JsonNumber(Step, TEXT("progress"), 0.0)));
-			Stored.HeldSeconds = FMath::Max(0.f, static_cast<float>(TutorialRulesLocal::JsonNumber(Step, TEXT("held_s"), 0.0)));
-			ReadNames(Step, TEXT("subjects"), Stored.Subjects);
-			ReadNames(Step, TEXT("contributors"), Stored.Contributors);
+			Stored.Progress = FMath::Max(0, static_cast<int32>(JsonNumber(Step, TEXT("progress"), 0.0)));
+			Stored.HeldSeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Step, TEXT("held_s"), 0.0)));
+			JsonUniqueNames(*Step, TEXT("subjects"), Stored.Subjects);
+			JsonUniqueNames(*Step, TEXT("contributors"), Stored.Contributors);
 		}
 	}
 	const TArray<TSharedPtr<FJsonValue>>* Confines = nullptr;
@@ -906,21 +979,10 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 			}
 			FTutorialConfineProgress& Stored = OutProgress.Confines.AddDefaulted_GetRef();
 			Stored.Owner = FName(*Owner);
-			Stored.bReleased = TutorialRulesLocal::JsonBool(Entry, TEXT("released"), false);
-			const FString Holder = TutorialRulesLocal::JsonString(Entry, TEXT("holder"));
+			Stored.bReleased = JsonBool(Entry, TEXT("released"), false);
+			const FString Holder = JsonString(Entry, TEXT("holder"));
 			Stored.ExitHolder = Holder.IsEmpty() ? NAME_None : FName(*Holder);
-			const TArray<TSharedPtr<FJsonValue>>* Passed = nullptr;
-			if (Entry->TryGetArrayField(TEXT("passed"), Passed))
-			{
-				for (const TSharedPtr<FJsonValue>& Name : *Passed)
-				{
-					FString Text;
-					if (Name.IsValid() && Name->TryGetString(Text) && !Text.IsEmpty())
-					{
-						Stored.Passed.AddUnique(FName(*Text));
-					}
-				}
-			}
+			JsonUniqueNames(*Entry, TEXT("passed"), Stored.Passed);
 		}
 	}
 	return true;
@@ -1026,12 +1088,7 @@ bool TutorialRules::CanPrecredit(const FTutorialStep& Step)
 
 int32 TutorialRules::CountHistoryUses(const FTutorialStep& Step, const TMap<FName, FTutorialCommandUse>& History)
 {
-	int32 Uses = 0;
-	for (const TPair<FName, FTutorialCommandUse>& Entry : History)
-	{
-		Uses += CountsCommand(Step, Entry.Key) ? Entry.Value.Count : 0;
-	}
-	return Uses;
+	return TutorialRulesLocal::SumHistoryForStep(Step, History).Count;
 }
 
 bool TutorialRules::IsPrecreditSatisfied(const FTutorialStep& Step, const TMap<FName, FTutorialCommandUse>& History)
@@ -1040,17 +1097,8 @@ bool TutorialRules::IsPrecreditSatisfied(const FTutorialStep& Step, const TMap<F
 	{
 		return false;
 	}
-	int32 Uses = 0;
-	float Held = 0.f;
-	for (const TPair<FName, FTutorialCommandUse>& Entry : History)
-	{
-		if (CountsCommand(Step, Entry.Key))
-		{
-			Uses += Entry.Value.Count;
-			Held += Entry.Value.HeldSeconds;
-		}
-	}
-	return IsProgressMet(Uses, Step.Complete.Count, Held, Step.Complete.HoldSeconds);
+	const FTutorialCommandUse Done = TutorialRulesLocal::SumHistoryForStep(Step, History);
+	return IsProgressMet(Done.Count, Step.Complete.Count, Done.HeldSeconds, Step.Complete.HoldSeconds);
 }
 
 FString TutorialRules::BuildTelemetryLine(const FTutorialTelemetryEntry& Entry)
@@ -1091,12 +1139,9 @@ bool TutorialRules::IsKnownStat(FName Stat)
 	{
 		return true;
 	}
-	static const FName Stats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
-		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo"), TEXT("squad_injury_max"), TEXT("squad_prone"),
-		TEXT("enemies_unseen") };
-	for (const FName Known : Stats)
+	for (const TCHAR* Known : TutorialRulesLocal::PlainConditionStats)
 	{
-		if (Stat == Known)
+		if (Stat == FName(Known))
 		{
 			return true;
 		}

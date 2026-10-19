@@ -33,19 +33,30 @@ namespace TutorialRules
 	CODEXTACTICS_API bool ParseKind(const FString& Text, ETutorialStepKind& OutKind);
 	/** "manual" | "beat_start" | "volume" | "event" | "after_step" | "first_use" | "failure_retry" | "condition". */
 	CODEXTACTICS_API bool ParseTriggerType(const FString& Text, ETutorialTriggerType& OutType);
-	CODEXTACTICS_API const TCHAR* KindName(ETutorialStepKind Kind);
 	CODEXTACTICS_API const TCHAR* StateName(ETutorialStepState State);
 	/** "completed" / "skipped" / "timed_out" -> the state; false for anything else. */
 	CODEXTACTICS_API bool ParseFinishedState(const FString& Text, ETutorialStepState& OutState);
 
 	/**
-	 * Parses a steps file. Errors (invalid JSON, a step without id, a duplicate id, an unknown kind / trigger type, an
-	 * after_step naming an unknown step) fail; soft problems (a beat not declared in "beats" is added, "blocking": true is
-	 * forced off, an unknown key) go to OutWarnings.
+	 * Parses a steps JSON (the schema: docs/systems/tutorial-engine.md). Errors fail (invalid JSON, a step / beat without id, a
+	 * duplicate id, an unknown kind / trigger type / stat / action / focus / subject / confine stance, a trigger without its
+	 * required field, a step id reference - after_step, requires, distinct_from, cancel_on, confine until - naming no step);
+	 * soft problems go to OutWarnings (an unknown key at any level, a beat not declared in "beats" is added, "blocking": true is
+	 * forced off, a filter without the completion it filters, a hint card without completion gets timeout_s 12, ...).
 	 */
 	CODEXTACTICS_API bool ParseSteps(const FString& Json, FTutorialStepsData& OutData, TArray<FString>& OutWarnings, FString& OutError);
 
-	/** Loads Content/Data/Tutorial/<FileName> (a bare name or a path relative to that folder). */
+	/**
+	 * Cross-checks parsed steps against the game (warnings only): every command pattern ("complete.commands", "trigger.command",
+	 * beat / step "lock" / "unlock") matches a registered player command (Core/PlayerCommands.h), a dotted key cap names a
+	 * registered command, "subject": "focus" has a step "focus", and no after_step chain leads back to its own step.
+	 */
+	CODEXTACTICS_API void ValidateSteps(const FTutorialStepsData& Data, TArray<FString>& OutWarnings);
+
+	/**
+	 * Loads Content/Data/Tutorial/<FileName> (a bare name or a path relative to that folder): ParseSteps, then ValidateSteps
+	 * (its findings are appended to OutWarnings).
+	 */
 	CODEXTACTICS_API bool LoadStepsFile(const FString& FileName, FTutorialStepsData& OutData, TArray<FString>& OutWarnings, FString& OutError);
 	CODEXTACTICS_API FString GetTutorialDirectory();
 
@@ -80,7 +91,11 @@ namespace TutorialRules
 	/** Health a downed (not killed) operative keeps. */
 	constexpr float LessonHealthFloor = 1.f;
 
-	/** The progress as the save's "tutorial" object ({"beat", "finished": {id: state}, "pending": [ids]}). */
+	/**
+	 * The progress as the save's "tutorial" object: {"beat", "enabled", "finished": {id: state}, "pending": [ids], "locks": [entries],
+	 * "history": {command: {count, held_s}}, "runtime": {id: {progress, held_s, subjects, contributors}}, "confines": [{step, released,
+	 * holder, passed}]} (UTutorialSubsystem adds "volumes_fired", "lock_hints", "skipped").
+	 */
 	CODEXTACTICS_API TSharedRef<FJsonObject> SaveProgress(const FTutorialProgress& Progress, bool bEnabled);
 	/** Reads the save's "tutorial" object; false when it is not one. */
 	CODEXTACTICS_API bool LoadProgress(const FJsonObject& Object, FTutorialProgress& OutProgress);
@@ -94,16 +109,16 @@ namespace TutorialRules
 	// --- Conditions, command locks, actions (2026-10-12, Demo 01 A0-A1 redesign) ---------------------------------------
 
 	/**
-	 * Condition stats the runtime provides: "squad_cold_max", "squad_cold_min", "leader_cold", "squad_heat_packs",
-	 * "squad_min_heat_packs", "heat_packs_given" (rev 5d), "squad_solo" (rev 5i: 1 in Solo), "traps_spotted.<tag>" (rev 5h),
-	 * "squad_not_low_in.<volume>" (rev 5i).
+	 * Condition stats the runtime provides (UTutorialSubsystem::GetConditionStat): "squad_cold_max", "squad_cold_min", "leader_cold",
+	 * "squad_heat_packs", "squad_min_heat_packs", "heat_packs_given" (rev 5d), "squad_solo" (rev 5i: 1 in Solo), "squad_injury_max",
+	 * "squad_prone", "enemies_unseen" (2026-10-19), "traps_spotted.<tag>" (rev 5h), "squad_not_low_in.<volume>" (rev 5i).
 	 */
 	CODEXTACTICS_API bool IsKnownStat(FName Stat);
 
-	/** Action types: "cold_bump". */
+	/** Action types: "cold_bump", "set_posture". */
 	CODEXTACTICS_API bool IsKnownAction(FName Type);
 
-	/** Focus kinds: "coldest_operative". */
+	/** Focus kinds: "coldest_operative", "wounded_operative". */
 	CODEXTACTICS_API bool IsKnownFocus(FName Focus);
 
 	/** All clauses hold (AND; an empty list holds). Stat returns the current value of a stat. */

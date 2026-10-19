@@ -15,7 +15,7 @@ Every doc starts with a short summary and key files, followed by the old text mo
 | [survival-cold-heat](survival-cold-heat.md) | Cold accumulation / tiers, mobile and tactical heat (campfire, stove, flares, heat packs, fire puddle), weather idle poses and the squad gathering at the fire. |
 | [interactables-traps-loot](interactables-traps-loot.md) | Interaction menus, barrels, relocation, deployables (barricade / mine / turret), loot crates, generator, quest chain and gate, spotted-trap Solo, PMC tripwire how-to. |
 | [waves-horde-encounters](waves-horde-encounters.md) | Phases (Exploration -> Preparation -> WaveCombat -> ...), sudden horde start, horde intro flyover, level enemies / guard posts / ambush start, wave data. |
-| [tutorial-engine](tutorial-engine.md) | Command choke point and locks, tutorial rules / state machine / overlay, demo flags, conditions and actions, role-specific spots, how to place volumes / markers / steps. |
+| [tutorial-engine](tutorial-engine.md) | **The steps JSON schema reference** (every key, default, precedence, save behaviour, examples), command choke point and locks, state machine / overlay, demo flags, how to place volumes / markers / steps; revision history below it. |
 | [demo01-lake](demo01-lake.md) | Per-revision decision blocks of the Demo 01 tutorial level (rev 4 .. rev 5i, 2026-10-19), what the designer places in the lake map, lessons (posture, medkit, A4 ambush). |
 | [save-load](save-load.md) | JSON save slots, format version, save policy (outside combat), load = reopen the level, what each system saves. |
 | [camera-hud-minimap](camera-hud-minimap.md) | Tactical camera and camera zones, roof cutaway, building exits, minimap / full map, HUD, phase banners, action bar. |

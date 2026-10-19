@@ -154,6 +154,28 @@ namespace TutorialConfineLocal
 	}
 }
 
+namespace TutorialSubsystemLocal
+{
+	/** "focus": "wounded_operative" (the medkit lesson); every other focus kind is the coldest operative. */
+	bool IsWoundedFocus(FName Focus)
+	{
+		return Focus == FName(TEXT("wounded_operative"));
+	}
+
+	/** A squad member that counts for the squad stats: present and not dead (no health component = alive). */
+	bool IsLivingOrUntracked(const AOperativeCharacter* Member)
+	{
+		return Member && (!Member->HealthComponent || Member->HealthComponent->IsAlive());
+	}
+
+	/** The tutorial of WorldContext's world (the static choke points), null without one. */
+	UTutorialSubsystem* FindTutorialFor(const UObject* WorldContext)
+	{
+		UWorld* World = GEngine && WorldContext ? GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::ReturnNull) : nullptr;
+		return World ? World->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	}
+}
+
 bool UTutorialSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
@@ -278,11 +300,7 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 	PrecreditedCount = 0;
 	LockHintFamilies.Reset();
 	FocusOperatives.Reset();
-	SpeechStep = NAME_None;
-	SpeechLines.Reset();
-	FlashCard = NAME_None;
-	FlashObjectives.Reset();
-	bRetryPrompt = false;
+	ClearOverlayState();
 	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %d steps, %d beats loaded (%s), enabled %d"), Data.Steps.Num(), Data.Beats.Num(),
 		Data.Id.IsEmpty() ? *StepsFile : *Data.Id, IsTutorialEnabled() ? 1 : 0);
 	WriteTelemetry(TEXT("session_start"), NAME_None, NAME_None, 0.f);
@@ -329,19 +347,12 @@ bool UTutorialSubsystem::SkipTutorial()
 	}
 	bSkipped = true;
 	UnlockAllCommands(TEXT("tutorial skipped")); // locks + the confinement in force
-	SpeechStep = NAME_None; // the radio / walk-and-talk strip goes with the rest (story dialogue windows are not the tutorial's)
-	SpeechLines.Reset();
-	FlashCard = NAME_None;
-	FlashObjectives.Reset();
-	bRetryPrompt = false;
+	ClearOverlayState(); // the radio / walk-and-talk strip goes with the rest (story dialogue windows are not the tutorial's)
 	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: SKIPPED by the player at beat %s (off for this run, every control unlocked)"),
 		*Machine.GetCurrentBeat().ToString());
 	WriteTelemetry(TEXT("tutorial_skipped"), NAME_None, Machine.GetCurrentBeat(), 0.f);
 	PlayerCommands::Report(this, PlayerCommands::SkipTutorial);
-	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
-	{
-		Messages->PostMessage(LOCTEXT("TrainingSpeaker", "TRAINING"), LOCTEXT("TutorialSkipped", "Tutorial skipped - all controls unlocked."));
-	}
+	PostTrainingLine(LOCTEXT("TutorialSkipped", "Tutorial skipped - all controls unlocked."));
 	RefreshMarkers();
 	return true;
 }
@@ -479,18 +490,14 @@ void UTutorialSubsystem::HandlePlayerCommand(FName CommandId, const FPlayerComma
 
 void UTutorialSubsystem::HandleBusEvent(FName EventName, AActor* Subject)
 {
-	if (Subject && Subject->GetWorld() != GetWorld())
+	if ((Subject && Subject->GetWorld() != GetWorld()) || !IsTutorialActive() || EventName.IsNone())
 	{
-		return;
-	}
-	if (!Subject || !IsTutorialActive() || EventName.IsNone())
-	{
-		NotifyEvent(EventName, Subject ? Subject->GetFName() : NAME_None);
 		return;
 	}
 	// "in_volume" completions (rev 5c): where the subject stands when the event happens (only looked up when a step asks).
-	const bool bAnyInVolume = Machine.GetData().Steps.ContainsByPredicate([](const FTutorialStep& Step) { return !Step.Complete.InVolume.IsNone(); });
-	Machine.HandleEvent(EventName, Subject->GetFName(), bAnyInVolume ? GetTutorialVolumesAt(Subject->GetActorLocation()) : TArray<FName>());
+	const bool bAnyInVolume = Subject
+		&& Machine.GetData().Steps.ContainsByPredicate([](const FTutorialStep& Step) { return !Step.Complete.InVolume.IsNone(); });
+	Machine.HandleEvent(EventName, Subject ? Subject->GetFName() : NAME_None, bAnyInVolume ? GetTutorialVolumesAt(Subject->GetActorLocation()) : TArray<FName>());
 	ProcessTransitions();
 }
 
@@ -504,15 +511,8 @@ TArray<FName> UTutorialSubsystem::GetTutorialVolumesAt(const FVector& Location) 
 	}
 	for (TActorIterator<ATutorialTriggerVolume> It(World); It; ++It)
 	{
-		const UBoxComponent* Box = It->Box;
 		const FName Id = It->GetEffectiveVolumeId();
-		if (!Box || Id.IsNone())
-		{
-			continue;
-		}
-		const FVector Local = Box->GetComponentTransform().InverseTransformPosition(Location);
-		const FVector Extent = Box->GetUnscaledBoxExtent();
-		if (FMath::Abs(Local.X) <= Extent.X && FMath::Abs(Local.Y) <= Extent.Y && FMath::Abs(Local.Z) <= Extent.Z)
+		if (It->Box && !Id.IsNone() && TutorialConfineLocal::IsInsideBox(*It->Box, Location, 0.f, 0.f))
 		{
 			Out.AddUnique(Id);
 		}
@@ -690,13 +690,26 @@ void UTutorialSubsystem::ResetTutorial()
 	Machine.ResetProgress();
 	LockHintFamilies.Reset();
 	FocusOperatives.Reset();
+	ClearOverlayState();
+	WriteTelemetry(TEXT("reset"), NAME_None, NAME_None, 0.f);
+	StartTutorial();
+}
+
+void UTutorialSubsystem::ClearOverlayState()
+{
 	SpeechStep = NAME_None;
 	SpeechLines.Reset();
 	FlashCard = NAME_None;
 	FlashObjectives.Reset();
 	bRetryPrompt = false;
-	WriteTelemetry(TEXT("reset"), NAME_None, NAME_None, 0.f);
-	StartTutorial();
+}
+
+void UTutorialSubsystem::PostTrainingLine(const FText& Line) const
+{
+	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+	{
+		Messages->PostMessage(LOCTEXT("TrainingSpeaker", "TRAINING"), Line);
+	}
 }
 
 // --- Transitions, UI state ------------------------------------------------------------------------------------------
@@ -733,7 +746,7 @@ void UTutorialSubsystem::ProcessTransitions()
 			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s %s -> %s%s%s"), *Transition.StepId.ToString(), TutorialRules::StateName(Transition.From),
 				TutorialRules::StateName(Transition.To), Transition.bSilent ? TEXT(" (silent)") : TEXT(""),
 				Transition.bPassed ? TEXT(" (passed on the way: the squad reached a later place first)") : TEXT(""));
-			if (Step->Focus == FName(TEXT("wounded_operative")) && !TutorialRules::IsRunning(Transition.From) && TutorialRules::IsRunning(Transition.To))
+			if (TutorialSubsystemLocal::IsWoundedFocus(Step->Focus) && !TutorialRules::IsRunning(Transition.From) && TutorialRules::IsRunning(Transition.To))
 			{
 				ChooseFocus(*Step); // rev 2026-10-19: the one who got hurt, fixed from the trigger (a medkit on him must count while it queues)
 			}
@@ -764,11 +777,7 @@ void UTutorialSubsystem::ProcessTransitions()
 					++PrecreditedCount;
 					const FString Title = Step->TextId.IsNone() ? Step->Id.ToString() : FNarrativeManifest::Get().GetTutorialText(Step->TextId.ToString()).Title;
 					UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s precredited from the command history (%s)"), *Step->Id.ToString(), *Title);
-					if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
-					{
-						Messages->PostMessage(LOCTEXT("TrainingSpeaker", "TRAINING"), FText::Format(LOCTEXT("Precredited", "✓ {0} - already done."),
-							FText::FromString(Title.IsEmpty() ? Step->Id.ToString() : Title)));
-					}
+					PostTrainingLine(FText::Format(LOCTEXT("Precredited", "✓ {0} - already done."), FText::FromString(Title.IsEmpty() ? Step->Id.ToString() : Title)));
 				}
 				if (Transition.From == ETutorialStepState::Active && Transition.To == ETutorialStepState::Completed)
 				{
@@ -811,7 +820,7 @@ void UTutorialSubsystem::ProcessTransitions()
 
 void UTutorialSubsystem::HandleStepShown(const FTutorialStep& Step)
 {
-	if (Step.Focus == FName(TEXT("wounded_operative")))
+	if (TutorialSubsystemLocal::IsWoundedFocus(Step.Focus))
 	{
 		AOperativeCharacter* Focus = GetFocusOperative(Step.Id);
 		if (!Focus || (Focus->HealthComponent && !Focus->HealthComponent->IsAlive()))
@@ -892,7 +901,7 @@ AOperativeCharacter* UTutorialSubsystem::FindColdestMember() const
 	AOperativeCharacter* Coldest = nullptr;
 	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
 	{
-		const bool bAlive = Member && (!Member->HealthComponent || Member->HealthComponent->IsAlive());
+		const bool bAlive = TutorialSubsystemLocal::IsLivingOrUntracked(Member);
 		if (bAlive && (!Coldest || Member->ColdLevel > Coldest->ColdLevel))
 		{
 			Coldest = Member;
@@ -925,7 +934,7 @@ AOperativeCharacter* UTutorialSubsystem::FindMostWoundedMember() const
 
 AOperativeCharacter* UTutorialSubsystem::ChooseFocus(const FTutorialStep& Step)
 {
-	AOperativeCharacter* Focus = Step.Focus == FName(TEXT("wounded_operative")) ? FindMostWoundedMember() : FindColdestMember();
+	AOperativeCharacter* Focus = TutorialSubsystemLocal::IsWoundedFocus(Step.Focus) ? FindMostWoundedMember() : FindColdestMember();
 	FocusOperatives.Add(Step.Id, Focus);
 	return Focus;
 }
@@ -944,7 +953,7 @@ FString UTutorialSubsystem::ResolveFocusToken(const FString& Text, FName StepId)
 	}
 	const AOperativeCharacter* Focus = GetFocusOperative(StepId);
 	const FTutorialStep* Step = Machine.GetData().FindStep(StepId);
-	const TCHAR* Fallback = Step && Step->Focus == FName(TEXT("wounded_operative")) ? TEXT("the wounded operative") : TEXT("the coldest operative");
+	const TCHAR* Fallback = Step && TutorialSubsystemLocal::IsWoundedFocus(Step->Focus) ? TEXT("the wounded operative") : TEXT("the coldest operative");
 	return Text.Replace(TEXT("{focus}"), Focus ? *Focus->DisplayName.ToString() : Fallback);
 }
 
@@ -982,7 +991,7 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 		int32 NotLow = 0;
 		for (const AOperativeCharacter* Member : Squad->GetMembers())
 		{
-			if (!Member || (Member->HealthComponent && !Member->HealthComponent->IsAlive()))
+			if (!TutorialSubsystemLocal::IsLivingOrUntracked(Member))
 			{
 				continue;
 			}
@@ -1008,7 +1017,7 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 		int32 Prone = 0;
 		for (const AOperativeCharacter* Member : Squad->GetMembers())
 		{
-			Prone += Member && (!Member->HealthComponent || Member->HealthComponent->IsAlive()) && Member->GetStance() == EOperativeStance::Prone ? 1 : 0;
+			Prone += TutorialSubsystemLocal::IsLivingOrUntracked(Member) && Member->GetStance() == EOperativeStance::Prone ? 1 : 0;
 		}
 		return static_cast<float>(Prone);
 	}
@@ -1039,7 +1048,7 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 	int32 Alive = 0;
 	for (const AOperativeCharacter* Member : Squad->GetMembers())
 	{
-		if (!Member || (Member->HealthComponent && !Member->HealthComponent->IsAlive()))
+		if (!TutorialSubsystemLocal::IsLivingOrUntracked(Member))
 		{
 			continue;
 		}
@@ -1075,8 +1084,7 @@ bool UTutorialSubsystem::IsCommandLocked(FName CommandId) const
 
 bool UTutorialSubsystem::CheckCommandLocked(const UObject* WorldContext, FName CommandId)
 {
-	UWorld* World = GEngine && WorldContext ? GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::ReturnNull) : nullptr;
-	UTutorialSubsystem* Tutorial = World ? World->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	UTutorialSubsystem* Tutorial = TutorialSubsystemLocal::FindTutorialFor(WorldContext);
 	if (!Tutorial || !Tutorial->IsCommandLocked(CommandId))
 	{
 		return false;
@@ -1085,8 +1093,8 @@ bool UTutorialSubsystem::CheckCommandLocked(const UObject* WorldContext, FName C
 	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: command %s is locked (beat %s) - degraded"), *CommandId.ToString(),
 		*Tutorial->GetCurrentBeat().ToString());
 	Tutorial->WriteTelemetry(TEXT("command_locked"), NAME_None, Tutorial->GetCurrentBeat(), 0.f);
-	GameplayEvents::Raise(World, GameplayEvents::TutorialLocked);
-	GameplayEvents::Raise(World, TutorialRules::MakeLockedEventName(CommandId));
+	GameplayEvents::Raise(Tutorial->GetWorld(), GameplayEvents::TutorialLocked);
+	GameplayEvents::Raise(Tutorial->GetWorld(), TutorialRules::MakeLockedEventName(CommandId));
 	Tutorial->PostLockHint(CommandId);
 	return true;
 }
@@ -1104,13 +1112,9 @@ void UTutorialSubsystem::PostLockHint(FName CommandId)
 	const FString Family = TutorialRules::GetCommandFamily(CommandId);
 	bool bAlready = false;
 	LockHintFamilies.Add(Family, &bAlready);
-	if (bAlready)
+	if (!bAlready)
 	{
-		return;
-	}
-	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
-	{
-		Messages->PostMessage(LOCTEXT("TrainingSpeaker", "TRAINING"), LOCTEXT("LockHint", "Not yet - follow the training."));
+		PostTrainingLine(LOCTEXT("LockHint", "Not yet - follow the training."));
 	}
 }
 
@@ -1149,6 +1153,20 @@ TArray<const ATutorialTriggerVolume*> UTutorialSubsystem::FindVolumes(FName Volu
 	return Out;
 }
 
+FBox UTutorialSubsystem::GetSpanBox(const TArray<FName>& Areas) const
+{
+	// "span": one box round every area (the corridor between the holding volume and the allowed ones).
+	FBox Span(ForceInit);
+	for (const FName Area : Areas)
+	{
+		for (const ATutorialTriggerVolume* Volume : FindVolumes(Area))
+		{
+			Span += Volume->Box->Bounds.GetBox();
+		}
+	}
+	return Span;
+}
+
 bool UTutorialSubsystem::IsConfining() const
 {
 	return IsTutorialActive() && Machine.IsConfined();
@@ -1180,15 +1198,7 @@ bool UTutorialSubsystem::IsInsideConfinement(const FVector& Point) const
 	using namespace TutorialConfineLocal;
 	if (Confine.Spec.bSpan)
 	{
-		// "span": one box round every area (the corridor between the holding volume and the allowed ones).
-		FBox Span(ForceInit);
-		for (const FName Area : Confine.Areas)
-		{
-			for (const ATutorialTriggerVolume* Volume : FindVolumes(Area))
-			{
-				Span += Volume->Box->Bounds.GetBox();
-			}
-		}
+		const FBox Span = GetSpanBox(Confine.Areas);
 		return Span.IsValid && Span.ExpandBy(FVector(AreaMarginCm, AreaMarginCm, AreaMarginZCm)).IsInsideOrOn(Point);
 	}
 	for (const FName Area : Confine.Areas)
@@ -1225,14 +1235,7 @@ bool UTutorialSubsystem::ClampIntoConfinement(FVector& InOutDestination) const
 	};
 	if (Confine.Spec.bSpan)
 	{
-		FBox Span(ForceInit);
-		for (const FName Area : Confine.Areas)
-		{
-			for (const ATutorialTriggerVolume* Volume : FindVolumes(Area))
-			{
-				Span += Volume->Box->Bounds.GetBox();
-			}
-		}
+		const FBox Span = GetSpanBox(Confine.Areas);
 		if (Span.IsValid)
 		{
 			const FVector Min = Span.Min + FVector(ClampInsetCm, ClampInsetCm, 0.f);
@@ -1330,16 +1333,12 @@ void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, 
 		Line = LOCTEXT("ConfineHold", "Hold here - follow the training.");
 		break;
 	}
-	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
-	{
-		Messages->PostMessage(LOCTEXT("TrainingSpeaker", "TRAINING"), Line);
-	}
+	PostTrainingLine(Line);
 }
 
 bool UTutorialSubsystem::CheckConfinedOrder(const UObject* WorldContext, const AOperativeCharacter* Operative, const FVector& Destination)
 {
-	UWorld* World = GEngine && WorldContext ? GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::ReturnNull) : nullptr;
-	UTutorialSubsystem* Tutorial = World ? World->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	UTutorialSubsystem* Tutorial = TutorialSubsystemLocal::FindTutorialFor(WorldContext);
 	if (!Tutorial || !Operative || !Tutorial->IsConfining())
 	{
 		return true;
@@ -1390,8 +1389,7 @@ FName UTutorialSubsystem::FilterCommand(const UObject* WorldContext, FName Comma
 	{
 		return CommandId;
 	}
-	UWorld* World = GEngine && WorldContext ? GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::ReturnNull) : nullptr;
-	const UTutorialSubsystem* Tutorial = World ? World->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	const UTutorialSubsystem* Tutorial = TutorialSubsystemLocal::FindTutorialFor(WorldContext);
 	return Tutorial ? TutorialRules::ResolveLockedCommand(Tutorial->GetMachine().GetLocks(), CommandId) : CommandId;
 }
 
@@ -1802,11 +1800,8 @@ bool UTutorialSubsystem::HandleLethalHit(UHealthComponent* Health, const FString
 	UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: lesson beat %s - lethal hit (%s) on %s downs instead of killing"), *Machine.GetCurrentBeat().ToString(),
 		*Source, *Operative->DisplayName.ToString());
 	WriteTelemetry(TEXT("lesson_downed"), NAME_None, Machine.GetCurrentBeat(), 0.f);
-	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
-	{
-		Messages->PostMessage(LOCTEXT("TrainingSpeaker", "TRAINING"), FText::Format(LOCTEXT("LessonDowned",
-			"{0} is down - in a real fight that would have been fatal. Retry from the checkpoint or carry on."), Operative->DisplayName));
-	}
+	PostTrainingLine(FText::Format(LOCTEXT("LessonDowned", "{0} is down - in a real fight that would have been fatal. Retry from the checkpoint or carry on."),
+		Operative->DisplayName));
 	// Fall after the damage call has unwound (knockdown starts its clip / capsule changes).
 	TWeakObjectPtr<AOperativeCharacter> WeakOperative(Operative);
 	TWeakObjectPtr<UTutorialSubsystem> WeakThis(this);
@@ -1978,11 +1973,7 @@ void UTutorialSubsystem::RestoreSaveState(const FJsonObject& Object)
 		DeferredProgress = Progress;
 		return;
 	}
-	SpeechStep = NAME_None;
-	SpeechLines.Reset();
-	FlashCard = NAME_None;
-	FlashObjectives.Reset();
-	bRetryPrompt = false;
+	ClearOverlayState();
 	Machine.ImportProgress(Progress);
 	ProcessTransitions();
 	RefreshMarkers();
