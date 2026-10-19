@@ -1847,6 +1847,8 @@ private:
 	/** Rev 5h: while peeking round a corner, reveals the hidden traps in the peek sight cone (every PeekSpotConfig.IntervalSeconds). */
 	void UpdatePeekTrapSpotting(float DeltaTime);
 	float PeekSpotTimer = 0.f;
+	/** How long the current peek has been searching (the trap search's reach sweeps out over PeekSpotConfig.SweepSeconds). */
+	float PeekSpotElapsed = 0.f;
 	int32 PeekSpottedCount = 0;
 	/** The corner-aim inputs gathered from the world (targets, fire on him, laser, grenade, flank). */
 	FCornerAimSituation GatherCornerAimSituation() const;

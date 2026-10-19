@@ -753,6 +753,10 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId, const 
 			{
 				continue; // "in_volume": not where the lesson asks for it (e.g. cover entered, but not beside the door)
 			}
+			if (Complete.bRoleSpots && RoleSpotProvider && !RoleSpotProvider(Data.Steps[Index].Id, SubjectId))
+			{
+				continue; // "role_spots": not at HIS role's spot (the Medic-Sapper in the Commander's cover)
+			}
 			if (IsCompletionHeldByConfine(Index))
 			{
 				continue; // rev 5i: a later part of a confined lesson counts only once its card is up
@@ -832,6 +836,39 @@ bool FTutorialStateMachine::CountVolumeCompletions(FName VolumeId, FName Subject
 			bCounted = true;
 		}
 	}
+	return bCounted;
+}
+
+bool FTutorialStateMachine::HandleRoleSpotPresence(FName SubjectId)
+{
+	if (!IsLoaded() || SubjectId.IsNone())
+	{
+		return false;
+	}
+	bool bCounted = false;
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		const FTutorialCompletion& Complete = Data.Steps[Index].Complete;
+		if (!Complete.bRoleSpots || Complete.Event.IsEmpty() || !TutorialRules::IsRunning(Runtime[Index].State)
+			|| (RoleSpotProvider && !RoleSpotProvider(Data.Steps[Index].Id, SubjectId)) || IsCompletionHeldByConfine(Index)
+			|| !IsSubjectAllowed(Index, SubjectId) || Runtime[Index].Contributors.Contains(SubjectId))
+		{
+			continue;
+		}
+		if (Complete.bDistinctSubjects)
+		{
+			bool bAlreadyCounted = false;
+			Runtime[Index].CountedSubjects.Add(SubjectId, &bAlreadyCounted);
+			if (bAlreadyCounted)
+			{
+				continue;
+			}
+		}
+		Runtime[Index].Contributors.Add(SubjectId);
+		AddProgress(Index, 1, Complete.Count);
+		bCounted = true;
+	}
+	PumpQueues();
 	return bCounted;
 }
 

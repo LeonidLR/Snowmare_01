@@ -354,6 +354,18 @@ public:
 	/** The operative a shown step focuses on ("focus"), null when none. */
 	AOperativeCharacter* GetFocusOperative(FName StepId) const;
 
+	/**
+	 * "role_spots" (2026-10-19, the A3 cover lesson): Operative stands at his role's spot of StepId - within the ring (+ 80 cm) of the
+	 * step's marker whose RoleId is his role. True when the level has no role marker for that step (an older map: any place counts).
+	 */
+	bool IsAtRoleSpot(FName StepId, const AOperativeCharacter& Operative) const;
+
+	/** A role spot of StepId is taken: an operative of RoleId counted for the step (his marker hides). */
+	bool IsRoleSpotDone(FName StepId, FName RoleId) const;
+
+	/** The role id of a role-spot marker / an operative: the EOperativeRole name ("Commander", "Engineer", "MedicSapper"). */
+	static FName GetRoleId(const AOperativeCharacter& Operative);
+
 	// --- Confine (rev 5i, game designer 2026-10-15: hold the squad in an area until the lesson is done) ----------------
 
 	/** The tutorial is active and a step's "confine" holds the squad now (FTutorialConfine). */
@@ -426,6 +438,8 @@ private:
 	void RunActions(const FTutorialStep& Step);
 	/** The step completes in a volume: the squad members standing in it already count (FTutorialStateMachine::HandleVolumePresence). */
 	void CountVolumePresence(const FTutorialStep& Step);
+	/** "role_spots" steps running: every squad member in cover at his role's spot counts (FTutorialStateMachine::HandleRoleSpotPresence). */
+	void CountRoleSpotPresence();
 	/** {focus} -> the focused operative's name. */
 	FString ResolveFocusToken(const FString& Text, FName StepId) const;
 	AOperativeCharacter* FindColdestMember() const;

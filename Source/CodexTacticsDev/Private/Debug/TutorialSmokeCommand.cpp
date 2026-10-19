@@ -1754,12 +1754,57 @@ namespace TutorialSmoke
 			}
 			Check(State, Tutorial->GetStepState(TEXT("A3_cover")) == ETutorialStepState::Active && Tutorial->GetCardView().Title.ToString().Contains(TEXT("0 / 3")),
 				FString::Printf(TEXT("rev 5i: then 'take cover one by one' ('%s')"), *Tutorial->GetCardView().Title.ToString()));
-			RaiseCoverEntered(World, Squad->GetMembers()[0]);
-			RaiseCoverEntered(World, Squad->GetMembers()[0]);
-			Check(State, Tutorial->GetStepProgress(TEXT("A3_cover")) == 1, TEXT("rev 5i: one operative counts once"));
-			RaiseCoverEntered(World, Squad->GetMembers()[1]);
-			RaiseCoverEntered(World, Squad->GetMembers()[2]);
-			Check(State, Tutorial->GetStepState(TEXT("A3_cover")) == ETutorialStepState::Completed, TEXT("rev 5i: three different operatives in cover: done"));
+			// 2026-10-19 (game designer): role-specific - a ring per role (the lake map's section 5j; here spawned 8 m apart): an operative
+			// counts only at HIS ring, any order; his ring hides once he counted.
+			TMap<AOperativeCharacter*, ATutorialMarkerActor*> Rings;
+			AOperativeCharacter* M0 = Squad->GetMembers()[0];
+			AOperativeCharacter* M1 = Squad->GetMembers()[1];
+			AOperativeCharacter* M2 = Squad->GetMembers()[2];
+			const FVector RingBase = M0->GetActorLocation() - FVector(0.f, 0.f, M0->GetSimpleCollisionHalfHeight());
+			// Everyone goes back where he stood afterwards (the rings lie 15 m off: no proximity spot of the smoke's mines from there).
+			TMap<AOperativeCharacter*, FVector> StoodAt;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				StoodAt.Add(Member, Member->GetActorLocation());
+			}
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				AOperativeCharacter* Member = Squad->GetMembers()[Index];
+				const FTransform Where(RingBase + FVector(800.f * Index, 1500.f, 0.f));
+				ATutorialMarkerActor* Ring = World->SpawnActorDeferred<ATutorialMarkerActor>(ATutorialMarkerActor::StaticClass(), Where, nullptr, nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				Ring->StepId = TEXT("A3_cover");
+				Ring->RoleId = UTutorialSubsystem::GetRoleId(*Member);
+				Ring->Label = FText::FromName(Ring->RoleId);
+				Ring->RingRadiusCm = 110.f;
+				Ring->FinishSpawning(Where);
+				Rings.Add(Member, Ring);
+			}
+			auto PutAt = [](AOperativeCharacter* Member, const ATutorialMarkerActor* Ring)
+			{
+				Member->StopOperative();
+				Member->TeleportTo(Ring->GetActorLocation() + FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight() + 5.f), Member->GetActorRotation(), false, true);
+			};
+			Check(State, Rings[M0]->IsMarkerShown() && Rings[M1]->IsMarkerShown() && Rings[M2]->IsMarkerShown(), TEXT("2026-10-19: the three role rings are shown"));
+			PutAt(M0, Rings[M1]);
+			RaiseCoverEntered(World, M0);
+			Check(State, Tutorial->GetStepProgress(TEXT("A3_cover")) == 0, TEXT("2026-10-19: cover at another role's ring does not count"));
+			PutAt(M0, Rings[M0]);
+			RaiseCoverEntered(World, M0);
+			RaiseCoverEntered(World, M0);
+			Check(State, Tutorial->GetStepProgress(TEXT("A3_cover")) == 1, TEXT("rev 5i: one operative counts once (at his own ring)"));
+			Check(State, !Rings[M0]->IsMarkerShown() && Rings[M1]->IsMarkerShown(), TEXT("2026-10-19: his ring hides, the others stay"));
+			PutAt(M2, Rings[M2]);
+			RaiseCoverEntered(World, M2);
+			PutAt(M1, Rings[M1]);
+			RaiseCoverEntered(World, M1);
+			Check(State, Tutorial->GetStepState(TEXT("A3_cover")) == ETutorialStepState::Completed,
+				TEXT("rev 5i: three different operatives in cover, each at his own ring (any order): done"));
+			for (TPair<AOperativeCharacter*, ATutorialMarkerActor*>& Pair : Rings)
+			{
+				Pair.Value->Destroy();
+				Pair.Key->TeleportTo(StoodAt[Pair.Key], Pair.Key->GetActorRotation(), false, true);
+			}
 			Next(State);
 			return true;
 		}

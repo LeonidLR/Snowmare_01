@@ -375,7 +375,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		{
 			const TSharedPtr<FJsonObject> Complete = *CompleteObject;
 			WarnUnknownKeys(Complete, { TEXT("command"), TEXT("commands"), TEXT("event"), TEXT("count"), TEXT("volume"), TEXT("timeout_s"),
-				TEXT("distinct_operatives"), TEXT("hold_s"), TEXT("in_volume"), TEXT("distinct_from"), TEXT("condition"), TEXT("subject") },
+				TEXT("distinct_operatives"), TEXT("hold_s"), TEXT("in_volume"), TEXT("distinct_from"), TEXT("condition"), TEXT("subject"), TEXT("role_spots") },
 				Where + TEXT(" complete"), OutWarnings);
 			Step.Complete.Commands = JsonStrings(Complete, TEXT("commands"));
 			Step.Complete.Commands.Append(JsonStrings(Complete, TEXT("command")));
@@ -386,6 +386,11 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			Step.Complete.bDistinctSubjects = JsonBool(Complete, TEXT("distinct_operatives"), false);
 			Step.Complete.HoldSeconds = FMath::Max(0.f, static_cast<float>(JsonNumber(Complete, TEXT("hold_s"), 0.0)));
 			Step.Complete.InVolume = FName(*JsonString(Complete, TEXT("in_volume")));
+			Step.Complete.bRoleSpots = JsonBool(Complete, TEXT("role_spots"), false);
+			if (Step.Complete.bRoleSpots && Step.Complete.Event.IsEmpty())
+			{
+				OutWarnings.Add(Where + TEXT(": \"role_spots\" only filters events - no \"event\" given"));
+			}
 			const FString Subject = JsonString(Complete, TEXT("subject"));
 			if (!Subject.IsEmpty() && Subject != TEXT("focus"))
 			{

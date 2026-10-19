@@ -13,7 +13,10 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
+#include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Rendering/SlateRenderer.h"
+#include "Styling/CoreStyle.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Rendering/DrawElements.h"
@@ -351,6 +354,7 @@ void UTutorialOverlayWidget::Refresh()
 void UTutorialOverlayWidget::UpdateEdgePointers()
 {
 	EdgePointers.Reset();
+	MarkerLabels.Reset();
 	const UWorld* World = GetWorld();
 	const UTutorialSubsystem* Tutorial = World ? World->GetSubsystem<UTutorialSubsystem>() : nullptr;
 	APlayerController* PC = GetOwningPlayer();
@@ -371,6 +375,19 @@ void UTutorialOverlayWidget::UpdateEdgePointers()
 	constexpr float EdgeMargin = 48.f;
 	for (const ATutorialMarkerActor* Marker : Tutorial->GetVisibleMarkers())
 	{
+		if (!Marker->Label.IsEmpty())
+		{
+			// The label over the beacon (a role spot names its operative), while on screen.
+			FVector2D LabelScreen;
+			const FVector Top = Marker->GetActorLocation() + FVector(0.f, 0.f, Marker->bShowBeacon ? Marker->BeaconHeightCm + 40.f : 60.f);
+			if (PC->ProjectWorldLocationToScreen(Top, LabelScreen, true))
+			{
+				FMarkerLabel& Label = MarkerLabels.AddDefaulted_GetRef();
+				Label.Position = LabelScreen / Scale;
+				Label.Text = Marker->Label;
+				Label.Color = FLinearColor(Marker->Color.R, Marker->Color.G, Marker->Color.B, 1.f);
+			}
+		}
 		if (!Marker->bScreenEdgePointer)
 		{
 			continue;
@@ -406,6 +423,18 @@ int32 UTutorialOverlayWidget::NativePaint(const FPaintArgs& Args, const FGeometr
 	FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const
 {
 	const int32 MaxLayer = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
+	const FSlateFontInfo LabelFont = FCoreStyle::GetDefaultFontStyle("Bold", 16);
+	FSlateRenderer* Renderer = FSlateApplication::IsInitialized() ? FSlateApplication::Get().GetRenderer() : nullptr;
+	for (const FMarkerLabel& Label : Renderer ? MarkerLabels : TArray<FMarkerLabel>())
+	{
+		const TSharedRef<FSlateFontMeasure> FontMeasure = Renderer->GetFontMeasureService();
+		const FVector2D TextSize = FontMeasure->Measure(Label.Text, LabelFont);
+		const FVector2D TopLeft = Label.Position - FVector2D(TextSize.X * 0.5f, TextSize.Y);
+		FSlateDrawElement::MakeText(OutDrawElements, MaxLayer + 1, AllottedGeometry.ToPaintGeometry(TextSize, FSlateLayoutTransform(TopLeft + FVector2D(2.f, 2.f))),
+			Label.Text, LabelFont, ESlateDrawEffect::None, FLinearColor(0.f, 0.f, 0.f, 0.8f));
+		FSlateDrawElement::MakeText(OutDrawElements, MaxLayer + 2, AllottedGeometry.ToPaintGeometry(TextSize, FSlateLayoutTransform(TopLeft)),
+			Label.Text, LabelFont, ESlateDrawEffect::None, Label.Color);
+	}
 	for (const FEdgePointer& Pointer : EdgePointers)
 	{
 		const FVector2D Side(-Pointer.Direction.Y, Pointer.Direction.X);
@@ -414,7 +443,7 @@ int32 UTutorialOverlayWidget::NativePaint(const FPaintArgs& Args, const FGeometr
 		FSlateDrawElement::MakeLines(OutDrawElements, MaxLayer + 1, AllottedGeometry.ToPaintGeometry(), Points, ESlateDrawEffect::None,
 			PointerColor, true, 4.f);
 	}
-	return MaxLayer + 1;
+	return MaxLayer + 2;
 }
 
 void UTutorialOverlayWidget::HandleSkipClicked()

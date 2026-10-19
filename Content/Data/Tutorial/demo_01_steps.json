@@ -467,11 +467,12 @@
     },
     {
       "_comment": "Rev 5i (game designer 2026-10-15): beyond the fence, still in Solo, each operative into his OWN cover - one order each, three different operatives (CoverEntered, distinct; the only operatives who can take cover now are past the fence). Replaces the rev 5c refresher (VOL_A3_FIELD card + squad card + squad-cover objective). The cover field lessons (bound, the peek that reveals the mines) follow only after it. '{progress} / {count} in cover'.",
+      "_comment2": "2026-10-19 (game designer, marked screenshot): ROLE-SPECIFIC - each role has its own spot, a marker ring per role (ATutorialMarkerActor step A3_cover, RoleId + Label, map section AutoLayout_Demo01_5j): the Medic-Sapper (blue) behind the tall slab - the peek corner of A3_peek -, the Commander (red) at the middle low wall, the Engineer (orange) behind the long low wall in front. 'role_spots': an operative counts only in cover at HIS role's ring (any order, distinct; one already there counts too); his ring hides once he is in place. A map without role rings: any cover counts.",
       "id": "A3_cover", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_COVER_EACH",
       "keys": ["Select.Member", "Cover.Enter"],
       "unlock": ["Cover.*"],
       "trigger": { "type": "after_step", "step": "A3_fence_crawl" },
-      "complete": { "event": "CoverEntered", "count": 3, "distinct_operatives": true }
+      "complete": { "event": "CoverEntered", "count": 3, "distinct_operatives": true, "role_spots": true }
     },
     {
       "_comment": "Corner peek card (rev 5c; low cover too since rev 5e). Rev 5h (game designer 2026-10-15): the peek is meaningful - two hidden mines (SpotEventTag A3PeekMines, map section AutoLayout_Demo01_5h) lie beyond the corner of the first high wall (marker A3_peek); leaning out round a corner spots hidden traps in the peek sight cone (AOperativeCharacter::PeekSpotConfig). Done when those mines are known (condition stat traps_spotted.A3PeekMines: also precredited when they were found before the card), or after 90 s. The mine card A3_mine (MineSpotted) follows: disarm or go round. Rev 5i: after the cover-each card; frees Regroup again.",
@@ -479,7 +480,8 @@
       "keys": ["Cover.CornerPeek"],
       "unlock": ["Squad.Regroup"],
       "trigger": { "type": "after_step", "step": "A3_cover", "delay_s": 1 },
-      "complete": { "condition": [ { "stat": "traps_spotted.A3PeekMines", "at_least": 1 } ], "timeout_s": 90 }
+      "_comment2": "2026-10-19 (game designer): the Medic-Sapper at his slab PHYSICALLY spots the mines with his peek cone (the same cone drawn for him, PeekSpotConfig: 90 deg, 12 m for mines, reach sweeping out over 1.5 s - one by one, the nearest first, line of sight from the leaned-out eyes); done when all four lesson mines are spotted that way (or after 90 s).",
+      "complete": { "condition": [ { "stat": "traps_spotted.A3PeekMines", "at_least": 4 } ], "timeout_s": 90 }
     },
     {
       "id": "A3_bound", "beat": "A3", "kind": "objective", "text_id": "OBJ_A6_BOUND",

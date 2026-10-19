@@ -540,8 +540,10 @@ void AOperativeCharacter::UpdatePeekTrapSpotting(float DeltaTime)
 	if (!World || !PeekSpotConfig.bEnabled || !IsPeekingRoundCorner() || !HealthComponent || !HealthComponent->IsAlive())
 	{
 		PeekSpotTimer = 0.f; // the first look comes at once when he leans out
+		PeekSpotElapsed = 0.f;
 		return;
 	}
+	PeekSpotElapsed += DeltaTime;
 	PeekSpotTimer -= DeltaTime;
 	if (PeekSpotTimer > 0.f)
 	{
@@ -564,15 +566,24 @@ void AOperativeCharacter::UpdatePeekTrapSpotting(float DeltaTime)
 		Origin = PeekEye;
 		Direction = PeekDirection;
 	}
+	// 2026-10-19: the reach sweeps out from his feet - the mines are found one by one, the nearest first.
+	const float Reach = TrapSpotRules::PeekSweepRange(PeekSpotConfig.RangeCm, PeekSpotConfig.SweepSeconds, PeekSpotElapsed);
 	TArray<AInteractableActor*> Found;
 	// Rev 5i: a mine lying in the snow never hides another one from the peek (their trigger shapes would block the sight line):
-	// every hidden trap is ignored by the line of sight, only walls / rocks / objects hide a trap.
+	// every hidden trap is ignored by the line of sight, only walls / rocks / objects hide a trap. 2026-10-19: so is an armed mine /
+	// wire already spotted - with the sweeping reach the near mine is revealed first and its trigger shape hid the ones behind it.
 	TArray<AActor*> HiddenTraps;
+	TArray<AActor*> SightIgnored;
 	for (TActorIterator<AInteractableActor> It(World); It; ++It)
 	{
-		if (It->IsHiddenTrap())
+		const bool bTrapHidden = It->IsHiddenTrap();
+		if (bTrapHidden)
 		{
 			HiddenTraps.Add(*It);
+		}
+		if (bTrapHidden || (It->bTrapped && (It->GetTrapFlavor() == ETrapFlavor::Mine || It->GetTrapFlavor() == ETrapFlavor::Tripwire)))
+		{
+			SightIgnored.Add(*It);
 		}
 	}
 	for (AActor* TrapActor : HiddenTraps)
@@ -583,14 +594,14 @@ void AOperativeCharacter::UpdatePeekTrapSpotting(float DeltaTime)
 			continue;
 		}
 		const FVector Target = Trap->GetActorLocation() + FVector(0.f, 0.f, PeekSpotConfig.TargetHeightCm);
-		if (!TrapSpotRules::IsInPeekSightCone(Origin, Direction, Target, PeekSpotConfig.RangeCm, PeekSpotConfig.HalfAngleDeg))
+		if (!TrapSpotRules::IsInPeekSightCone(Origin, Direction, Target, Reach, PeekSpotConfig.HalfAngleDeg))
 		{
 			continue;
 		}
 		if (PeekSpotConfig.bRequireLineOfSight)
 		{
 			FCollisionQueryParams Params(SCENE_QUERY_STAT(PeekTrapSight), false, this);
-			Params.AddIgnoredActors(HiddenTraps);
+			Params.AddIgnoredActors(SightIgnored);
 			FHitResult Hit;
 			if (World->LineTraceSingleByChannel(Hit, Origin, Target, ECC_Visibility, Params) && !Cast<APawn>(Hit.GetActor()))
 			{

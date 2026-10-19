@@ -15,9 +15,9 @@
  * RangeCm, line of sight traced from that point. His own eyes (the capsule) keep seeing what they see. Enemies look at the same
  * leaned-out point (UTacticalSightSubsystem::ProfilePoint): what he sees from there can see him.
  *
- * Why it differs from FTrapPeekSpotConfig (60 deg / 12 m): a man walking upright is seen at a glance over a wide cone; a mine lying
- * flush with the snow needs a focused look - the trap search keeps its narrower, shorter cone (from the same eye point and aim).
- * BP_Operative Class Defaults -> Cover|Peek.
+ * The trap search of the peek (FTrapPeekSpotConfig, rev 5j) looks from the same eye point, in the same aim and the same 90 deg cone,
+ * only shorter (12 m: a mine lies flush with the snow) and with a reach that sweeps out over 1.5 s - the mines are found one by one,
+ * the nearest first, where his drawn cone covers them. BP_Operative Class Defaults -> Cover|Peek.
  */
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FPeekSightConfig

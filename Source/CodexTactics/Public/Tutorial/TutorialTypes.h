@@ -156,6 +156,13 @@ struct CODEXTACTICS_API FTutorialCompletion
 	 * (FTutorialStateMachine::FocusSubjectProvider - "the medkit heals THAT operative"). No focus chosen yet: any subject counts.
 	 */
 	bool bFocusSubject = false;
+	/**
+	 * "role_spots": true (game designer 2026-10-19, the A3 cover lesson: "each role has its own spot"): an event counts only when its
+	 * subject stands at HIS role's spot of this step - a tutorial marker with this step's id and his role (ATutorialMarkerActor::RoleId,
+	 * FTutorialStateMachine::RoleSpotProvider). Also counted while he already stands there (in cover) when the step runs
+	 * (HandleRoleSpotPresence). A level without such markers: any place counts (no soft-lock on an older map).
+	 */
+	bool bRoleSpots = false;
 	/** > 0: an active step that is not done after this many seconds times out (hides; counts as finished). */
 	float TimeoutSeconds = 0.f;
 	/**

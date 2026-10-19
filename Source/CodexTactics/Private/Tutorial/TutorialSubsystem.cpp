@@ -251,6 +251,18 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 		const AOperativeCharacter* Focus = GetFocusOperative(StepId);
 		return Focus ? Focus->GetFName() : NAME_None;
 	};
+	Machine.RoleSpotProvider = [this](FName StepId, FName SubjectId)
+	{
+		const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+		for (const AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+		{
+			if (Member && Member->GetFName() == SubjectId)
+			{
+				return IsAtRoleSpot(StepId, *Member);
+			}
+		}
+		return false; // not a squad member: no role, no spot
+	};
 	Machine.Load(Data);
 	// Rev 5f (monotonic route): the place of every beat volume of the level (a volume that starts a beat lies at its start).
 	if (UWorld* World = GetWorld())
@@ -396,6 +408,7 @@ void UTutorialSubsystem::Tick(float DeltaTime)
 	// Real seconds: hints keep their pace in the tactical pause (0.02 dilation); the pause menu stops the world tick.
 	const float RealDelta = FMath::Min(static_cast<float>(FApp::GetDeltaTime()), 0.25f);
 	Machine.Tick(RealDelta);
+	CountRoleSpotPresence();
 	TickSpeech(RealDelta);
 	FlashCardLeft = FMath::Max(0.f, FlashCardLeft - RealDelta);
 	for (auto It = FlashObjectives.CreateIterator(); It; ++It)
@@ -1382,6 +1395,79 @@ FName UTutorialSubsystem::FilterCommand(const UObject* WorldContext, FName Comma
 	return Tutorial ? TutorialRules::ResolveLockedCommand(Tutorial->GetMachine().GetLocks(), CommandId) : CommandId;
 }
 
+FName UTutorialSubsystem::GetRoleId(const AOperativeCharacter& Operative)
+{
+	return FName(*StaticEnum<EOperativeRole>()->GetNameStringByValue(static_cast<int64>(Operative.SquadRole)));
+}
+
+bool UTutorialSubsystem::IsAtRoleSpot(FName StepId, const AOperativeCharacter& Operative) const
+{
+	const FName Role = GetRoleId(Operative);
+	bool bAnyRoleMarker = false;
+	for (const TWeakObjectPtr<ATutorialMarkerActor>& Weak : Markers)
+	{
+		const ATutorialMarkerActor* Marker = Weak.Get();
+		if (!Marker || Marker->StepId != StepId || Marker->RoleId.IsNone())
+		{
+			continue;
+		}
+		bAnyRoleMarker = true;
+		if (Marker->RoleId == Role
+			&& FVector::Dist2D(Marker->GetActorLocation(), Operative.GetActorLocation()) <= Marker->RingRadiusCm + ATutorialMarkerActor::RoleSpotToleranceCm)
+		{
+			return true;
+		}
+	}
+	return !bAnyRoleMarker;
+}
+
+bool UTutorialSubsystem::IsRoleSpotDone(FName StepId, FName RoleId) const
+{
+	const TSet<FName>* Contributors = Machine.GetContributors(StepId);
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (!Contributors || Contributors->IsEmpty() || !Squad || RoleId.IsNone())
+	{
+		return false;
+	}
+	for (const AOperativeCharacter* Member : Squad->GetMembers())
+	{
+		if (Member && Contributors->Contains(Member->GetFName()) && GetRoleId(*Member) == RoleId)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void UTutorialSubsystem::CountRoleSpotPresence()
+{
+	const FTutorialStepsData& Data = Machine.GetData();
+	const bool bAnyRunning = Data.Steps.ContainsByPredicate([this](const FTutorialStep& Step)
+	{
+		return Step.Complete.bRoleSpots && TutorialRules::IsRunning(Machine.GetState(Step.Id));
+	});
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (!bAnyRunning || !Squad)
+	{
+		return;
+	}
+	bool bCounted = false;
+	for (const AOperativeCharacter* Member : Squad->GetMembers())
+	{
+		// In cover (not on the way along the wall) at his spot: he took his cover there - also before the card came up.
+		if (Member && Member->bInCover && !Member->bShimmying && Member->HealthComponent && Member->HealthComponent->IsAlive()
+			&& Machine.HandleRoleSpotPresence(Member->GetFName()))
+		{
+			bCounted = true;
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s is in cover at his spot (%s)"), *Member->DisplayName.ToString(), *GetRoleId(*Member).ToString());
+		}
+	}
+	if (bCounted)
+	{
+		RefreshMarkers();
+	}
+}
+
 void UTutorialSubsystem::RefreshMarkers()
 {
 	const bool bActive = IsTutorialActive();
@@ -1395,6 +1481,8 @@ void UTutorialSubsystem::RefreshMarkers()
 		{
 			bShow = !Marker->StepId.IsNone() ? Machine.GetState(Marker->StepId) == ETutorialStepState::Active
 				: (!Marker->BeatId.IsNone() && Marker->BeatId == Beat);
+			// A role spot whose operative is in place hides (2026-10-19: the others still show where to go).
+			bShow = bShow && !(!Marker->RoleId.IsNone() && !Marker->StepId.IsNone() && IsRoleSpotDone(Marker->StepId, Marker->RoleId));
 		}
 		Marker->SetMarkerShown(bShow);
 	}

@@ -43,6 +43,21 @@ public:
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "CodexTactics|Tutorial")
 	FName StepId;
 
+	/**
+	 * A role spot (2026-10-19, the A3 cover lesson "each role has its own spot"): the EOperativeRole name of the operative who must
+	 * stand here ("Commander", "Engineer", "MedicSapper"). A "role_spots" step (FTutorialCompletion::bRoleSpots) counts an operative
+	 * only within RingRadiusCm + RoleSpotToleranceCm of his role's marker; the marker hides once he counted. None = any operative.
+	 */
+	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "CodexTactics|Tutorial")
+	FName RoleId;
+
+	/** Text shown over the marker while it is up (the role's name on a role spot); empty = none. Drawn by the tutorial overlay. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Tutorial")
+	FText Label;
+
+	/** A role spot accepts its operative this far beyond the ring (he stands in cover 45 cm off the wall), cm. */
+	static constexpr float RoleSpotToleranceCm = 80.f;
+
 	/** Without StepId: shown while this beat is the current one. */
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "CodexTactics|Tutorial")
 	FName BeatId;
