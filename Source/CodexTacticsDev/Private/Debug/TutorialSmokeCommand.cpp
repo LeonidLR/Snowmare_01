@@ -1299,11 +1299,34 @@ namespace TutorialSmoke
 			Interactions->CloseLootDialog();
 			const int32 Expected = FMath::Min(TacticalHeatTuning::Get().HeatPackMaxStack, State.HeatPacksBeforeLoot + 3);
 			Check(State, Leader->HeatPacksCount == Expected, FString::Printf(TEXT("the leader took what fits of the 3 heat packs (%d -> %d, stack max %d)"),
+			// Rev 2026-10-19: the take plays the search clip; the heat packs move at its grab (the leader must stand at the crate).
+			if (ALootCrateActor* Crate = State.Crate.Get())
+			{
+				Leader->StopOperative();
+				const FVector Spot = Crate->GetApproachPoint(Leader->GetActorLocation());
+				Leader->TeleportTo(FVector(Spot.X, Spot.Y, Leader->GetActorLocation().Z), Leader->GetActorRotation(), false, true);
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke the looter stands %.0f cm from the crate"), Crate->GetDistanceTo(Leader->GetActorLocation()));
+			}
 				State.HeatPacksBeforeLoot, Leader->HeatPacksCount, TacticalHeatTuning::Get().HeatPackMaxStack));
 			Check(State, Tutorial->GetStepState(TEXT("A1_loot_take")) == ETutorialStepState::Completed
+			Check(State, State.Crate.IsValid() && State.Crate->IsSearching() && Leader->HeatPacksCount == State.HeatPacksBeforeLoot
+				&& Tutorial->GetStepState(TEXT("A1_loot_take")) == ETutorialStepState::Active,
+				TEXT("rev 2026-10-19: the take starts the search - the heat packs stay in the crate until its grab"));
+			State.Stage = 29;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 29:
+		{
+			if (State.Crate.IsValid() && State.Crate->IsSearching() && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			UInteractionSubsystem* Interactions = World->GetSubsystem<UInteractionSubsystem>();
 				&& Tutorial->GetStepState(TEXT("A1_obj_hut")) == ETutorialStepState::Completed, TEXT("ItemLooted.HeatPack completes the card and the hut objective"));
 			Tutorial->SkipStep(TEXT("A1_wt_hut"));
-			Next(State);
+			State.Stage = 45;
+			State.StageTime = 0.f;
 			return true;
 		}
 		case 45:

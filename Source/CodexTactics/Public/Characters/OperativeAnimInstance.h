@@ -100,7 +100,8 @@ struct CODEXTACTICS_API FOperativeInteractionClip
 	GENERATED_BODY()
 
 	FOperativeInteractionClip() = default;
-	explicit FOperativeInteractionClip(float InFullBodyStartSeconds) : FullBodyStartSeconds(InFullBodyStartSeconds) {}
+	FOperativeInteractionClip(float InFullBodyStartSeconds, float InEffectFraction)
+		: FullBodyStartSeconds(InFullBodyStartSeconds), EffectFraction(InEffectFraction) {}
 
 	/** Standing: the whole body (slot FullBody). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction")
@@ -116,6 +117,25 @@ struct CODEXTACTICS_API FOperativeInteractionClip
 	/** Where the FullBody montage starts, s (0 = its start). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (ClampMin = "0"))
 	float FullBodyStartSeconds = 0.f;
+
+	/**
+	 * Rev 2026-10-19 (game designer: the animation FIRST, then the effect): the effect moment as a fraction of the whole clip - the
+	 * lid is open (the loot window opens), the hand grabs (the items move), the charge is lifted (the trap disappears). Counted from
+	 * the clip's start, also when the FullBody montage starts later (InteractionAnimRules::GetEffectDelay).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (ClampMin = "0", ClampMax = "1"))
+	float EffectFraction = 0.5f;
+};
+
+/** What PlayInteractionTimed started: the seconds until the clip ends and until its effect moment. */
+struct FInteractionClipTiming
+{
+	/** A clip started (false: none for the stance / no clip / time frozen). */
+	bool bPlayed = false;
+	/** Seconds until the clip ends. */
+	float Seconds = 0.f;
+	/** Seconds until its effect moment (FOperativeInteractionClip::EffectFraction). */
+	float EffectDelaySeconds = 0.f;
 };
 
 /** Clip slots blended by the native locomotion. */
@@ -1109,20 +1129,24 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation")
 	bool bUseInteractionClips = true;
 
-	/** Empty montages = the Claude-owned /Game/Characters/Operatives/Anims/Interactions/AM_Interact_ChestOpen(_Upper) loaded at start. */
+	/**
+	 * Empty montages = the Claude-owned /Game/Characters/Operatives/Anims/Interactions/AM_Interact_ChestOpen(_Upper) loaded at start.
+	 * EffectFraction 0.9 (2.7 s of 3.0): the loot window opens when the lid is up and he looks in, at the end of the clip.
+	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation")
-	FOperativeInteractionClip ChestOpenClip;
+	FOperativeInteractionClip ChestOpenClip = FOperativeInteractionClip(0.f, 0.9f);
 
-	/** Empty = AM_Interact_ChestSearch(_Upper). */
+	/** Empty = AM_Interact_ChestSearch(_Upper). EffectFraction 0.5 (1.6 s of 3.17): the grab - the items move into his kit then. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation")
-	FOperativeInteractionClip ChestSearchClip;
+	FOperativeInteractionClip ChestSearchClip = FOperativeInteractionClip(0.f, 0.5f);
 
 	/**
 	 * Empty = AM_Interact_PickupGround(_Upper). FullBodyStartSeconds 1.0: after the crouched disarm work the standing operative's
 	 * clip starts low (pelvis 82 -> 64 cm at 1.4 s, the hands at the ground; measured by the setup script) and rises with the charge.
+	 * EffectFraction 0.5 (1.43 s of 2.87): the hands close on the charge - the mine / the wire disappears then (rev 2026-10-19).
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation")
-	FOperativeInteractionClip PickupGroundClip = FOperativeInteractionClip(1.f);
+	FOperativeInteractionClip PickupGroundClip = FOperativeInteractionClip(1.f, 0.5f);
 
 	/** Above this ground speed an interaction clip is cut (he walks), cm/s. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Interaction Animation", meta = (ClampMin = "0"))
@@ -1145,12 +1169,15 @@ public:
 
 	/**
 	 * Plays Anim on the layer of ChoiceStance (InteractionAnimRules::ChooseLayer): standing full body, crouched upper body, prone none;
-	 * never while time stands still (tactical pause). Returns the seconds until the clip ends (0 = nothing plays). A chest search
-	 * already playing is not restarted (its time left is returned).
+	 * never while time stands still (tactical pause). Returns the seconds until the clip ends (0 = nothing plays). A clip already
+	 * playing restarts (rev 2026-10-19: every take is its own search, cause -> effect).
 	 */
-	float PlayInteraction(EOperativeInteractionAnim Anim, EOperativeStance ChoiceStance);
+	float PlayInteraction(EOperativeInteractionAnim Anim, EOperativeStance ChoiceStance) { return PlayInteractionTimed(Anim, ChoiceStance).Seconds; }
 
-	/** Blend-out of Anim's montage, s (the loot window opens when the chest-open clip starts to blend out). */
+	/** PlayInteraction with the effect moment (FOperativeInteractionClip::EffectFraction) of the clip that started. */
+	FInteractionClipTiming PlayInteractionTimed(EOperativeInteractionAnim Anim, EOperativeStance ChoiceStance);
+
+	/** Blend-out of Anim's montage, s. */
 	float GetInteractionBlendOutSeconds(EOperativeInteractionAnim Anim) const;
 
 	/** An interaction clip owns its layer now. */

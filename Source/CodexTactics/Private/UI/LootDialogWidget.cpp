@@ -166,6 +166,18 @@ void ULootDialogWidget::ShowCrate(ALootCrateActor* Crate)
 	}
 	ShownCrate = Crate;
 	ShownRevision = Crate->GetStash() ? Crate->GetStash()->GetRevision() : -1;
+	// Rev 2026-10-19 (game designer: cause -> effect): while he searches the crate nothing can be taken - the clip runs, the items
+	// move at its grab moment, then the list refreshes.
+	bShownSearching = Crate->IsSearching();
+	if (SubtitleText)
+	{
+		if (!bDefaultSubtitleCached)
+		{
+			DefaultSubtitle = SubtitleText->GetText();
+			bDefaultSubtitleCached = true;
+		}
+		SubtitleText->SetText(bShownSearching ? LOCTEXT("Searching", "Searching the crate...") : DefaultSubtitle);
+	}
 	const TArray<FLootEntry> Items = Crate->GetItems();
 	EntryButtons.Reset();
 	if (ItemsGrid)
@@ -184,6 +196,7 @@ void ULootDialogWidget::ShowCrate(ALootCrateActor* Crate)
 			Label->SetText(LootClean(Items[Index].GetLabel()));
 			Button->AddChild(Label);
 			Button->Setup(this, Items[Index].Item);
+			Button->SetIsEnabled(!bShownSearching);
 			CodexButtonFocus::Disable(Button);
 			EntryButtons.Add(Button);
 			ItemsGrid->AddChildToUniformGrid(Button, Index / 2, Index % 2); // Godot GridContainer columns = 2
@@ -191,7 +204,7 @@ void ULootDialogWidget::ShowCrate(ALootCrateActor* Crate)
 	}
 	if (LootAllButton)
 	{
-		LootAllButton->SetIsEnabled(!Items.IsEmpty());
+		LootAllButton->SetIsEnabled(!Items.IsEmpty() && !bShownSearching);
 	}
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 }
@@ -207,8 +220,8 @@ void ULootDialogWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	// Sprint 13: items stored / taken by drag & drop (or a pending walk-over) refresh the open list.
 	ALootCrateActor* Crate = ShownCrate.Get();
-	if (Crate && GetVisibility() != ESlateVisibility::Collapsed && Crate->GetStash() && Crate->GetStash()->GetRevision() != ShownRevision
-		&& !PressedEntry.IsValid())
+	if (Crate && GetVisibility() != ESlateVisibility::Collapsed && !PressedEntry.IsValid()
+		&& ((Crate->GetStash() && Crate->GetStash()->GetRevision() != ShownRevision) || Crate->IsSearching() != bShownSearching))
 	{
 		ShowCrate(Crate);
 	}
@@ -230,7 +243,7 @@ UInventoryDragDropOperation* ULootDialogWidget::CreateDragOperation(ELootItem Lo
 {
 	ALootCrateActor* Crate = ShownCrate.Get();
 	ETransferItem Item = ETransferItem::Medkit;
-	const int32 Available = Crate && ItemStash::FromLootItem(LootItem, Item) ? Crate->GetStoredCount(Item) : 0;
+	const int32 Available = Crate && !Crate->IsSearching() && ItemStash::FromLootItem(LootItem, Item) ? Crate->GetStoredCount(Item) : 0;
 	if (Available <= 0)
 	{
 		return nullptr;

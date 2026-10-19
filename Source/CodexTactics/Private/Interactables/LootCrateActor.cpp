@@ -5,6 +5,7 @@
 #include "Characters/InteractionAnimRules.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
+#include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Components/BoxComponent.h"
@@ -208,44 +209,226 @@ void ALootCrateActor::FinishDefusal(TWeakObjectPtr<AOperativeCharacter> WeakUser
 	}
 }
 
+bool ALootCrateActor::IsTimeFrozen() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	return Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+}
+
+void ALootCrateActor::SetWaitingForRelease(bool bWait)
+{
+	UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	bWaitingForRelease = bWait && Flow;
+	if (!Flow)
+	{
+		return;
+	}
+	if (bWaitingForRelease)
+	{
+		Flow->OnTacticalPauseReleased.AddUniqueDynamic(this, &ALootCrateActor::HandlePauseReleased);
+	}
+	else
+	{
+		Flow->OnTacticalPauseReleased.RemoveDynamic(this, &ALootCrateActor::HandlePauseReleased);
+	}
+}
+
+void ALootCrateActor::HandlePauseReleased()
+{
+	SetWaitingForRelease(false);
+	if (SessionState == ELootSessionState::Opening)
+	{
+		BeginOpenClip();
+	}
+	else if (SessionState == ELootSessionState::Searching)
+	{
+		BeginSearchClip();
+	}
+}
+
+void ALootCrateActor::ResetSession()
+{
+	GetWorldTimerManager().ClearTimer(SessionTimer);
+	SetWaitingForRelease(false);
+	SessionState = ELootSessionState::Closed;
+	SessionOperative.Reset();
+}
+
+bool ALootCrateActor::IsSessionOperativeThere() const
+{
+	const AOperativeCharacter* Operative = SessionOperative.Get();
+	if (!Operative || Operative->IsKnockedDown() || (Operative->HealthComponent && !Operative->HealthComponent->IsAlive()))
+	{
+		return false;
+	}
+	return InteractionAnimRules::ShouldCompleteSearch(true, false, GetDistanceTo(Operative->GetActorLocation()),
+		InteractionDistance + SessionReachSlackCm);
+}
+
 void ALootCrateActor::StartOpening(AOperativeCharacter* Leader)
 {
 	if (!Leader || bDestroyed)
 	{
 		return;
 	}
+	if (SessionState == ELootSessionState::Opening || SessionState == ELootSessionState::Searching)
+	{
+		return; // he is at it already
+	}
 	const FRotator Facing = (GetActorLocation() - Leader->GetActorLocation()).Rotation();
 	Leader->StopOperative();
 	Leader->SetActorRotation(FRotator(0.f, Facing.Yaw, 0.f));
-	ReceiveOpening();
-	// Game designer 2026-10-15: he faces the crate, plays the chest-open clip (standing full body, crouched upper body, prone none),
-	// then the loot window opens as the clip blends out. In the tactical pause time stands still: the window opens at once, no clip
-	// (looting is planning there; the 1.8 s timer used to wait for the release). No clip: the crate's own OpenSeconds.
-	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	const bool bTimeFrozen = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
-	UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Leader);
-	const float ClipSeconds = Anim && !bTimeFrozen ? Anim->PlayInteraction(EOperativeInteractionAnim::ChestOpen, Leader->GetStance()) : 0.f;
-	LastOpenDelaySeconds = InteractionAnimRules::GetLootWindowDelay(ClipSeconds,
-		Anim ? Anim->GetInteractionBlendOutSeconds(EOperativeInteractionAnim::ChestOpen) : 0.f, OpenSeconds, bTimeFrozen);
-	if (LastOpenDelaySeconds <= 0.f)
+	SessionOperative = Leader;
+	SessionState = ELootSessionState::Opening;
+	// Rev 2026-10-19 (game designer play-test: "the loot window first, the animation afterwards"): the clip FIRST, the window at its
+	// lid-open moment. In the tactical pause time stands still: the opening is queued and plays on the release (it used to open the
+	// window at once without a clip - the effect before its cause).
+	if (IsTimeFrozen())
 	{
-		FinishOpening(Leader);
+		SetWaitingForRelease(true);
+		PostLine(Leader->DisplayName, FText::Format(LOCTEXT("OpenPlanned", "📋 [PLAN] {0} opens the crate when time runs again. [SPACE - execute]"),
+			Leader->DisplayName));
 		return;
 	}
-	FTimerHandle Handle;
-	GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateUObject(this, &ALootCrateActor::FinishOpening,
-		TWeakObjectPtr<AOperativeCharacter>(Leader)), LastOpenDelaySeconds, false);
+	BeginOpenClip();
 }
 
-void ALootCrateActor::FinishOpening(TWeakObjectPtr<AOperativeCharacter> WeakLeader)
+void ALootCrateActor::BeginOpenClip()
 {
-	if (bDestroyed)
+	AOperativeCharacter* Leader = SessionOperative.Get();
+	if (!Leader || bDestroyed)
+	{
+		ResetSession();
+		return;
+	}
+	ReceiveOpening();
+	UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Leader);
+	const FInteractionClipTiming Clip = Anim ? Anim->PlayInteractionTimed(EOperativeInteractionAnim::ChestOpen, Leader->GetStance()) : FInteractionClipTiming();
+	LastOpenDelaySeconds = InteractionAnimRules::GetLootWindowDelay(Clip.EffectDelaySeconds, Clip.bPlayed, OpenSeconds);
+	UE_LOG(LogCodexTactics, Display, TEXT("Crate %s: %s opens it, the loot window in %.2f s (%s)"), *GetName(), *Leader->DisplayName.ToString(),
+		LastOpenDelaySeconds, Clip.bPlayed ? TEXT("chest-open clip") : TEXT("no clip"));
+	if (LastOpenDelaySeconds <= 0.f)
+	{
+		FinishOpening();
+		return;
+	}
+	GetWorldTimerManager().SetTimer(SessionTimer, FTimerDelegate::CreateUObject(this, &ALootCrateActor::FinishOpening), LastOpenDelaySeconds, false);
+}
+
+void ALootCrateActor::FinishOpening()
+{
+	if (bDestroyed || SessionState != ELootSessionState::Opening)
 	{
 		return;
 	}
-	if (UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>())
+	if (!IsSessionOperativeThere())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Crate %s: the opening was interrupted (the opener left / went down)"), *GetName());
+		ResetSession();
+		return;
+	}
+	SessionState = ELootSessionState::Open;
+	UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>();
+	if (Interactions)
 	{
 		Interactions->OpenLootDialog(this);
+	}
+	if (!Interactions || Interactions->GetLootCrate() != this)
+	{
+		ResetSession(); // refused (the tutorial has not taught looting yet)
+	}
+}
+
+void ALootCrateActor::MarkOpen()
+{
+	if (SessionState == ELootSessionState::Closed)
+	{
+		SessionState = ELootSessionState::Open;
+	}
+}
+
+void ALootCrateActor::HandleDialogClosed()
+{
+	if (SessionState == ELootSessionState::Open)
+	{
+		ResetSession();
+	}
+}
+
+bool ALootCrateActor::RequestSearch(AOperativeCharacter* Collector, ELootItem Item, bool bAll)
+{
+	if (!Collector || bDestroyed || SessionState != ELootSessionState::Open || IsLooted())
+	{
+		return false;
+	}
+	SessionOperative = Collector;
+	SessionState = ELootSessionState::Searching;
+	SearchItem = Item;
+	bSearchAll = bAll;
+	if (IsTimeFrozen())
+	{
+		SetWaitingForRelease(true); // the search plays when time runs again; the window shows "Searching..." meanwhile
+		return true;
+	}
+	BeginSearchClip();
+	return true;
+}
+
+void ALootCrateActor::BeginSearchClip()
+{
+	AOperativeCharacter* Collector = SessionOperative.Get();
+	if (!Collector || bDestroyed)
+	{
+		FinishSearch();
+		return;
+	}
+	UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Collector);
+	const FInteractionClipTiming Clip = Anim ? Anim->PlayInteractionTimed(EOperativeInteractionAnim::ChestSearch, Collector->GetStance()) : FInteractionClipTiming();
+	LastSearchDelaySeconds = InteractionAnimRules::GetLootWindowDelay(Clip.EffectDelaySeconds, Clip.bPlayed, SearchFallbackSeconds);
+	UE_LOG(LogCodexTactics, Display, TEXT("Crate %s: %s searches it, the grab in %.2f s (%s)"), *GetName(), *Collector->DisplayName.ToString(),
+		LastSearchDelaySeconds, Clip.bPlayed ? TEXT("chest-search clip") : TEXT("no clip"));
+	if (LastSearchDelaySeconds <= 0.f)
+	{
+		FinishSearch();
+		return;
+	}
+	GetWorldTimerManager().SetTimer(SessionTimer, FTimerDelegate::CreateUObject(this, &ALootCrateActor::FinishSearch), LastSearchDelaySeconds, false);
+}
+
+void ALootCrateActor::FinishSearch()
+{
+	if (SessionState != ELootSessionState::Searching)
+	{
+		return;
+	}
+	AOperativeCharacter* Collector = SessionOperative.Get();
+	UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>();
+	const bool bWindowShown = Interactions && Interactions->GetLootCrate() == this;
+	const bool bThere = !bDestroyed && IsSessionOperativeThere();
+	SessionState = bWindowShown && bThere && !bSearchAll ? ELootSessionState::Open : ELootSessionState::Closed;
+	if (SessionState == ELootSessionState::Closed)
+	{
+		SessionOperative.Reset();
+	}
+	FText Taken;
+	if (bThere)
+	{
+		if (bSearchAll)
+		{
+			TakeAll(Collector);
+		}
+		else
+		{
+			Taken = TakeItem(SearchItem, Collector);
+		}
+	}
+	else
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Crate %s: the search was interrupted - nothing taken"), *GetName());
+	}
+	if (Interactions)
+	{
+		Interactions->HandleSearchFinished(this, bThere ? Collector : nullptr, bSearchAll, Taken);
 	}
 }
 
@@ -314,6 +497,7 @@ void ALootCrateActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
 	{
 		return;
 	}
+	ResetSession();
 	bDestroyed = true;
 	bTrapped = false;
 	Contents.DestroyAll();
@@ -329,6 +513,7 @@ void ALootCrateActor::DetonateTrap(bool bByShot, const FText& InstigatorName)
 void ALootCrateActor::RestoreSaved(bool bInLooted, bool bInDefused, bool bInDestroyed)
 {
 	const bool bEmpty = bInLooted || bInDestroyed;
+	ResetSession();
 	bDestroyed = bInDestroyed;
 	if (bInDefused || bInDestroyed)
 	{

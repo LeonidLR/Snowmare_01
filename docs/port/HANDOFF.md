@@ -161,7 +161,7 @@ Smokes (dev console commands in `Source/CodexTacticsDev/Private/Debug/` - module
 | `DeathCamSmoke` | 2026-10-08: real-time hit reaction on a walking operative (UpperBody "Fire" slot, FullBody < 0.3, legs walk, a burst plays one); engineer dies -> no failure, death cinematic (slow motion 0.3, input off, camera on him, Knocked_Back on FullBody 1.0) -> camera back on the leader, time / input resume, corpse (held clip, no pawn / click collision, no movement, out of the squad, remains); turn-based grid hit reaction, medic dies -> out of the turn order, fight goes on; commander dies -> focus, fade to black, «THE SQUAD HAS FALLEN», mission failed |
 | `CameraZoneModeSmoke` | 2026-10-08: leader in the bunker zone in a fight: real time = zone camera, tactical pause = gameplay camera, real time again = zone, turn-based = turn-based camera, back to real time = zone (re-evaluated), a death cinematic takes the camera and hands it back |
 | `TurretSmoke` | turret shoots an enemy, generator breakdown unpowers / repair powers, broken turret repaired by the engineer, pick-up, F set-up |
-| `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot; 2026-10-15: the standing commander's chest-open clip (full body) plays BEFORE the window (the window opens 2.75 s after the clip started), the chest search after the single take (Take All does not restart it); the Medic-Sapper, crouched after the defusal, opens / searches on the upper body |
+| `LootSmoke` | crate opens without a menu → loot dialog, one stack + «Забрать ВСЁ», empty crate line, trapped crate defusal + deployables, detonation burns the loot; the Medic-Sapper, crouched after the defusal, opens / searches on the upper body; rev 2026-10-19: the standing commander's chest-open clip (full body) plays first, no window and no take possible while it plays, the window at its lid-open moment (~2.7 s); Take starts the chest search ("Searching...", a second take refused), the medkits move only at its grab (~1.6 s); Take All = a second search (restarted), everything moves at its grab and the window closes |
 | `HudShot [close] [walk] [menu] [place] [shoot] [failed] [mainmenu] [dialogue] [cutscene] [prep] [turnbased] [weapons] [grenade] [inventory] [transfer] [pause] [saves]` (`dialogue`: intro briefing window; `shoot`: slowed-down barrel shot = tracer, target flash, plan marker; `failed`: mission-failed screen; `mainmenu`: run on `/Game/Maps/L_MainMenu`, the frontend title; `saves`: the SAVE GAME slot screen) | rendered screenshot `Saved/Screenshots/WindowsEditor/HudShot.png` (needs rendering, run UnrealEditor.exe -game with `-ExecCmds="CodexTactics.HudShot close"`) |
 | `SniperSmoke` | 2026-10-09: Medic-Sapper = SK_Female_soldier with ABP_Operative (others unchanged), feet on the capsule bottom, rifle on her hand_r; only she has the sniper rifle (right after the M16 in the X cycle, M16 stand-in model, [5/15]); standing idle with it: no shot (stand aim idle loop); priority target while standing -> she kneels by herself (AS_Knee_Aim_Start) -> AS_Knee_Aim_Fire -> bolt; order while walking -> stops, kneels, fires; Aggressive auto fire while walking under a move order: no shot, no stop; arrived -> kneels by herself, fires; prone shot stays prone, last round -> AS_Prone_Aim_Magazine_Reload, clip refilled; Ctrl + click a barrel while standing waits for the kneel, then explodes it; no real-time shot ever standing / moving; turn-based: standing attack = kneel 1 + shot 3 AP, with 3 AP not offered / refused (no AP spent), with the AP she kneels on the grid and fires |
 | `PhoneShots frontend\|combat\|horde\|sniper\|sniperrt\|snipertb\|snipercover` (rendered, offscreen; `sniperrt` / `snipertb` / `snipercover` = the sniper test fights (real time, turn-based, cover) with a follow camera on her and her target, HUD on; `sniper` = the Female Soldier with the sniper rifle: stand idle, stand -> kneel -> fire, kneeling fire, prone fire, own camera framed on her; frames that collide with a still are skipped, renumber before ffmpeg) (rendered, offscreen: `UnrealEditor.exe <uproject> <map> -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound -benchmark -fps=30 -ExecCmds="CodexTactics.PhoneShots frontend"`; map L_MainMenu for `frontend`, L_MovementTest for `combat`) | stills + frame sequences in `Saved/Screenshots/Phone/` for a remote review (title, main menu entries / anchors, quit confirm, pause SAVE on / off, bunker zone, hit reaction, death cinematic, «THE SQUAD HAS FALLEN»); encode the `frames/<clip>` folders with ffmpeg. In-engine capture only |
@@ -1367,14 +1367,29 @@ upper-body layered blend from spine_01 (slot "Fire") play them; `UOperativeAnimI
 fields are empty (like the prone dive clips). Polish later in the montages (sections, notifies) or by assigning own montages in the ABP class
 defaults (`ChestOpenClip` / `ChestSearchClip` / `PickupGroundClip`: FullBody, UpperBody, PlayRate, FullBodyStartSeconds; `ColdIdleVariants`).
 **What plays when (`InteractionAnimRules::ChooseLayer`: standing -> full body, crouched -> upper body with the legs in the crouch, prone -> nothing
-yet):** (1) **crate:** click -> he walks up, `StartOpening` faces it, `AM_Interact_ChestOpen` (3.0 s), the loot window opens when the clip starts to
-blend out (2.75 s; `GetLootWindowDelay`); no clip (prone / unassigned): the crate's `OpenSeconds` 1.8; **tactical pause: the window opens at once,
-no clip** (time stands still there - the old 1.8 s timer waited for the release; looting is planning) - decision documented, revisit if wanted;
-turn-based: the clip plays normally (time runs). (2) **Take / Take All** in the window: `AM_Interact_ChestSearch` (3.17 s, cosmetic; items move at
-once; a search already playing is not restarted). (3) **successful mine / PMC wire disarm:** `AM_Interact_PickupGround` by the stance he had
-BEFORE the crouched work: standing -> he stands up again (the PMC wire now restores standing too, like the mine) and the full-body clip starts at
-`FullBodyStartSeconds` 1.0 (the low pose, so it rises from the crouch with the charge; the stance transition clip is skipped); crouched -> upper body,
-stays crouched; prone -> none. Turn-based wire disarm: by his current stance. The squad's own wire (disarmed lying under it) -> prone -> none.
+yet).** **Rev 2026-10-19 (game designer play-test: "the loot window first, the animation after"; "the mine disappears first, then he bends down"):
+ANIMATION FIRST, THEN THE EFFECT, everywhere.** Each clip has a data value `FOperativeInteractionClip::EffectFraction` (ABP class defaults: ChestOpen
+0.9, ChestSearch 0.5, PickupGround 0.5) = its effect moment as a fraction of the whole clip; `InteractionAnimRules::GetEffectDelay(length, start,
+rate, fraction)` turns it into seconds from the clip's (re)start; `UOperativeAnimInstance::PlayInteractionTimed` returns {played, seconds, effect
+delay}. (1) **crate** (`ALootCrateActor`, session `ELootSessionState` Closed -> Opening -> Open -> Searching): click -> he walks up, `StartOpening`
+faces it, `AM_Interact_ChestOpen` (3.0 s); the loot window opens at its lid-open moment (2.7 s; no clip: the crate's `OpenSeconds` 1.8); while it
+opens nothing can be taken (`RequestSearch` refused) and the window is not there; opener gone / knocked down -> no window. (2) **Take / Take All**
+(`UInteractionSubsystem::LootItem` / `LootAll` -> `ALootCrateActor::RequestSearch`): `AM_Interact_ChestSearch` (3.17 s) starts (restarts for every
+take), the window shows **"Searching the crate..."** with every button (and the drag of a line) off, the items move into his kit only at the clip's
+grab (1.58 s; no clip: `SearchFallbackSeconds` 0.6) - then `ItemLooted.*`, the feed line (`HandleSearchFinished`), the list refreshes (Take All:
+the window closes). The collector walked off / went down before the grab -> nothing moves ("search interrupted"). Closing the window during the
+search: the search still finishes. (3) **successful mine / PMC wire disarm** (`AInteractableActor::BeginDisarmPickup` -> `CompleteDisarmPickup`):
+`AM_Interact_PickupGround` by the stance he had BEFORE the crouched work: standing -> he stands up again and the full-body clip starts at
+`FullBodyStartSeconds` 1.0 (the low pose; the grab 0.43 s later), crouched -> upper body (the grab at 1.43 s), prone -> none (at once). Until the
+grab the trap STAYS, harmless (`IsAwaitingPickup`: the mine's `Detonate` / the wire's `Tick` / `Trip` do nothing, no menu); at the grab: the
+"disarmed" feed line (`AttemptDefusal` keeps it back: `bDeferDefusalSuccessLine`), the mine into a kit / the grenades, `TripwireDisarmed`, the actor
+goes. A cut clip (knockdown, order) does not stop it: the trap still goes at the grab time. The squad's own wire (prone) -> at once. **Tactical
+pause** (time stands still): the opening / the search / the pickup is QUEUED (`EInteractionClipDispatch::WaitForRelease`) and plays when the pause
+ends - the old rule opened the window at once with no clip (effect before cause). A click on a crate in the pause still relocates it (unchanged).
+**Root cause of "window first":** the designer's log (`CodexTactics.log` 2026-10-19 06:43) shows the open clip started 2.75 s before the window,
+so the open order held in real time; what read as effect-first was (a) Take / Take All moved the items AT the click and the search clip played
+afterwards (purely cosmetic), with the window usable during it, (b) the crouched commander's upper-body open clip barely reads, (c) the
+tactical-pause path opened the window instantly without a clip.
 (4) **cold idle variant:** inside the shivering pose (`ColdIdle`), at the end of each loop clip, `Anim_Regular_idle_cold` (0.83 s x
 `cold_idle_variant_loops` 3) replaces the next loop clip with `cold_idle_variant_chance` 0.35, at most once per `cold_idle_variant_cooldown_seconds`
 8 (from the pose start / last variant), then the loop goes on (`EWarmClipStep::Variant`). Data: `Content/Data/Survival/tactical_heat.json`.
@@ -1387,7 +1402,8 @@ the move's 25 cm acceptance radius ends it at ~70 cm), he stops and faces it, th
 The mine's trigger (1.6 m) now contains the defuser: the approaching defuser (a double click on a live mine marks him too now) holds a **lease**
 once inside the radius until he steps out (+30 cm) - menu, cancel, crouched work and a slip are safe; anyone else still sets it off. Disarm AP in
 turn-based unchanged (the wire's 2 AP attempt from 2.2 m, no walk).
-**Verify:** `CodexTactics.Characters.InteractionAnim.*` (2), `CodexTactics.Interactables.TrapApproach.*` (2), `Survival.WarmIdle.ColdVariant`;
+**Verify:** `CodexTactics.Characters.InteractionAnim.*` (3: LayerByStance, LootWindowDelay = effect timings, Dispatch = pause queue / search
+completion), `CodexTactics.Interactables.TrapApproach.*` (2), `Survival.WarmIdle.ColdVariant`;
 LootSmoke, DeployableSmoke, PMCTripwireSmoke, WarmIdleSmoke (rows in §3). Rendered stills: `CodexTactics.InteractionAnimShots` (`UnrealEditor.exe
 ... /Game/Maps/L_MovementTest -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound -benchmark -fps=30 -ExecCmds="CodexTactics.InteractionAnimShots"`)
 -> `Saved/Screenshots/anim_chest_open(_2).png`, `anim_chest_search(_2).png`, `anim_pickup_crouched_upper(_2).png`, `anim_pickup_standing.png`.
@@ -1953,6 +1969,7 @@ Placeholders in phase 1: OPTIONS (text only; the tabbed options screen is a late
 - Targeted shots: the priority target now gets the barricade cover / blocking of `EvaluateShotLine` and is refused
   while raging (panic refusal: panic not ported). The barrel
   line «💥 Прицельный выстрел…» is posted only when the shot actually fires (Godot posts it even when frozen).
+| (this, agents/work) | **fix(loot): the animation first, then the loot (game designer 2026-10-19).** Crate session `ELootSessionState`: the window opens at the chest-open clip's lid-open moment (`EffectFraction` 0.9 = 2.7 s), nothing can be taken before; Take / Take All play the chest search and move the items only at its grab (0.5 = 1.58 s) with the window in "Searching..." (buttons / drag off); tactical pause: queued until the release (was: window at once, no clip). Root cause: the items moved at the click and the search clip was cosmetic afterwards. `InteractionAnimRules::GetEffectDelay` / `GetDispatch` / `ShouldCompleteSearch`, `PlayInteractionTimed`; bot waits for the search. Tests `InteractionAnim.LootWindowDelay` / `.Dispatch`; LootSmoke. |
 - Save / load differences: a load resumes an active wave from its preparation (Godot only flips flags; neither saves
   enemies); «В главное меню» restarts the level with the start menu (Godot shows the menu over the running scene);
   `AAutosaveTrigger` is not ported — Godot's only trigger (gate_kpp.tscn AutosaveTrigger_Gate) has no collision shape

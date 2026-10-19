@@ -1,6 +1,5 @@
 #include "Interactables/InteractionSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
-#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -446,7 +445,12 @@ void UInteractionSubsystem::OpenLootDialog(ALootCrateActor* Crate)
 
 void UInteractionSubsystem::CloseLootDialog()
 {
+	if (ALootCrateActor* Previous = LootCrate.Get(); Previous && Previous != Crate)
+	{
+		Previous->HandleDialogClosed();
+	}
 	ALootCrateActor* Crate = LootCrate.Get();
+	Crate->MarkOpen(); // normally ALootCrateActor::FinishOpening (the lid is up); a dev shortcut opens it directly
 	LootCrate.Reset();
 	OnLootDialogChanged.Broadcast(false, Crate);
 }
@@ -456,21 +460,20 @@ void UInteractionSubsystem::LootItem(ELootItem Item)
 	ALootCrateActor* Crate = LootCrate.Get();
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (Crate)
+	{
+		Crate->HandleDialogClosed(); // a running search still finishes: the items move at its grab
+	}
 	if (!Crate || !Leader)
 	{
 		return;
 	}
-	const FText Taken = Crate->TakeItem(Item, Leader);
-	if (!Taken.IsEmpty())
+	// Rev 2026-10-19 (game designer: cause -> effect): the search clip first, the stack moves at its grab (HandleSearchFinished).
+	if (Crate->RequestSearch(Leader, Item, false))
 	{
-		PlayChestSearch(*Leader);
 		PlayerCommands::ReportBy(this, PlayerCommands::LootTake, Leader, Crate);
-		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
-		{
-			Messages->PostMessage(Leader->DisplayName, FText::Format(NSLOCTEXT("InteractionSubsystem", "LootedOne", "📦 Took from the crate: {0}"), Taken));
-		}
 	}
-	OnLootDialogChanged.Broadcast(true, Crate); // refresh the list
+	OnLootDialogChanged.Broadcast(true, Crate); // "Searching..." (buttons off)
 }
 
 void UInteractionSubsystem::LootAll()
@@ -478,26 +481,43 @@ void UInteractionSubsystem::LootAll()
 	ALootCrateActor* Crate = LootCrate.Get();
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-	if (Crate && Leader)
+	if (!Crate || !Leader)
 	{
-		Crate->TakeAll(Leader);
-		PlayChestSearch(*Leader);
-		PlayerCommands::ReportBy(this, PlayerCommands::LootTake, Leader, Crate);
-		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
-		{
-			Messages->PostMessage(Leader->DisplayName, NSLOCTEXT("InteractionSubsystem", "LootedAll", "📦 Took ALL supplies from the supply crate!"));
-		}
+		return;
 	}
-	CloseLootDialog();
+	if (Crate->RequestSearch(Leader, ELootItem::Medkit, true))
+	{
+		PlayerCommands::ReportBy(this, PlayerCommands::LootTake, Leader, Crate);
+		OnLootDialogChanged.Broadcast(true, Crate); // "Searching..." until the grab closes it
+	}
+	else if (!Crate->IsSearching())
+	{
+		CloseLootDialog(); // nothing (left) to take
+	}
 }
 
-void UInteractionSubsystem::PlayChestSearch(AOperativeCharacter& Collector) const
+void UInteractionSubsystem::HandleSearchFinished(ALootCrateActor* Crate, AOperativeCharacter* Collector, bool bAll, const FText& Taken)
 {
-	// Game designer 2026-10-15: after Take / Take All he rummages in the crate (cosmetic; the items moved at once). Standing: full
-	// body, crouched: upper body, prone / tactical pause: nothing. A search already playing goes on.
-	if (UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(&Collector))
+	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
+	if (Collector && Messages)
 	{
-		Anim->PlayInteraction(EOperativeInteractionAnim::ChestSearch, Collector.GetStance());
+		if (bAll)
+		{
+			Messages->PostMessage(Collector->DisplayName, NSLOCTEXT("InteractionSubsystem", "LootedAll", "📦 Took ALL supplies from the supply crate!"));
+		}
+		else if (!Taken.IsEmpty())
+		{
+			Messages->PostMessage(Collector->DisplayName, FText::Format(NSLOCTEXT("InteractionSubsystem", "LootedOne", "📦 Took from the crate: {0}"), Taken));
+		}
+	}
+	if (!Crate || LootCrate.Get() != Crate)
+	{
+		return; // the window was closed meanwhile
+	}
+	if (bAll || !Collector)
+	{
+		CloseLootDialog();
+		return;
 	}
 }
 
@@ -507,6 +527,7 @@ void UInteractionSubsystem::CancelActionMenu()
 }
 
 void UInteractionSubsystem::CloseMenu()
+	OnLootDialogChanged.Broadcast(true, Crate); // refresh the list, buttons back on
 {
 	if (MenuTarget.IsValid())
 	{
