@@ -11,7 +11,7 @@ Project status for planning (2026-10-14): `docs/port/PROJECT_STATUS_2026-10-14.m
 | The user's | `Content/Maps/L_MovementTest.umap`, the imported packs (Combat_Dog, RifleAnims, Crawl_MocapAnimPack, Post_Apo_Survivor, monsters, Mannequins, …), `Config/DefaultEditor.ini`, `Config/DefaultInput.ini` — never committed by an agent (the map only on the user's word: committed 2026-10-04 as the standard layout; never reset / checkout it) | |
 
 The user assigns the tasks. A file / asset has one owner; the other agent asks instead of editing it.
-Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes` list (only that line), everything else in it is Claude's; `docs/port/HANDOFF.md` / `TANDEM.md` / `PORT_MATRIX.md` — both append.
+Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes` list (only that line), everything else in it is Claude's; `docs/port/HANDOFF.md` (short index) / `docs/port/CHANGELOG.md` / `TANDEM.md` / `PORT_MATRIX.md` — both append.
 
 ## Protocol
 
@@ -30,7 +30,7 @@ Shared: `Scripts/verify_all.ps1` — Gemini adds his perf smokes to its `$Smokes
    committed. Subject prefixes: Claude `feat|fix|refactor(...)`, Gemini `perf|shader|vfx(...)`.
 5. **Performance guard.** Gemini keeps perf smokes (frame-time budgets of typical scenes) in `verify_all.ps1`, so logic changes
    cannot regress performance unnoticed and optimizations cannot break behaviour (the logic smokes run too).
-6. **Handoff.** With every commit update `docs/port/HANDOFF.md` (§10 change log), this file's Log, and PORT_MATRIX.md where a row changes.
+6. **Handoff.** With every commit update `docs/port/CHANGELOG.md` (the change log, the old HANDOFF §10) and the matching `docs/systems/*.md`, this file's Log, and PORT_MATRIX.md where a row changes.
 7. Godot (`Documents/Codex/godot-test-01`) stays read-only for both. Balance values are tuned in Unreal (`DA_GameBalanceConfig`).
 8. **Agents' worktree (2026-10-07).** `../CodexTactics-agents` is a `git worktree` on branch `agents/work` with its own
    Binaries / Intermediate / `Saved/agent.lock`, so agents can build, test and run smokes while the user's editor has the main
@@ -58,8 +58,8 @@ the vendor's Cascade emitters only if the BP adds them (P1 adds none). Keep the 
 
 User decision 2026-10-11: horde waves have no intro cutscene and no 60 s preparation / rest countdown any more — the wave
 spawns at once into a FREE tactical pause (no charge, no timer) and `UHordeIntroSubsystem` flies the camera over the horde
-(wide shot + one shot per new enemy type, real time, world at the pause dilation; Esc / click skip). Details: HANDOFF §5
-«Game flow», §6, §10. For Gemini: the flyover only drives `ATacticalCameraPawn` (new `SetCinematicLock` / `SnapFocusOnTarget`);
+(wide shot + one shot per new enemy type, real time, world at the pause dilation; Esc / click skip). Details: `docs/systems/waves-horde-encounters.md`
+(«Game flow») and `docs/port/CHANGELOG.md`. For Gemini: the flyover only drives `ATacticalCameraPawn` (new `SetCinematicLock` / `SnapFocusOnTarget`);
 no rendering / material change. A second agents' worktree `../CodexTactics-agents2` (protocol 8 junctions) was created for
 this task so it does not collide with `../CodexTactics-agents` (cover bugs); it has its own `Saved/agent.lock`.
 
@@ -78,7 +78,7 @@ The user wants ALL in-game text in English now (Russian removed until a later lo
 ## 📣 SYNC FOR GEMINI — 2026-10-08 (read this first; written by Claude on the user's request)
 
 The user is bringing Gemini in for **narrative design** and wants both agents in sync. Everything below landed on `main`
-between 2026-10-06 and 2026-10-08 (details per commit in HANDOFF §10; `git log --since=2026-10-06`).
+between 2026-10-06 and 2026-10-08 (details per commit in docs/port/CHANGELOG.md; `git log --since=2026-10-06`).
 
 **What changed in the game (gameplay facts a writer must know)**
 - **Stealth & patrols (Sprint 11, 4494854 / a285a9a / 4933631).** Spline patrol routes (`APatrolRouteActor`), hound escorts,
@@ -120,7 +120,7 @@ between 2026-10-06 and 2026-10-08 (details per commit in HANDOFF §10; `git log 
   `Scripts/test.ps1 -Changed` + `Scripts/test.ps1`; nightly → `Scripts/verify_all.ps1` (parallel smokes, ~25 min).
   `Scripts/test_map.json` maps paths → tests / smokes; a new smoke must be registered there (`test.ps1 -CheckMap`).
   Dialogue-related smokes: DialogueSmoke (`-ForceMainMenu`), NarrativeSmoke, MissionSmoke, BannersSmoke, MainMenuSmoke.
-- Conventions unchanged: shared build lock, `$env:CODEX_AGENT = "gemini"`, Conventional Commits, update HANDOFF §10, never touch
+- Conventions unchanged: shared build lock, `$env:CODEX_AGENT = "gemini"`, Conventional Commits, update docs/port/CHANGELOG.md, never touch
   the user's files (maps, `BP_Operative`, ABP graphs, `DefaultEditor.ini`, imported packs).
 - **Open items:** tactical-pause barrel orders + igniting barrels with matches in combat (Claude, in progress); turn-based aim
   offset jitter fix (Claude, `agents/work` fc72c44, merging); bot traps / search untested (no mines on patrol levels — user to
@@ -162,9 +162,9 @@ between 2026-10-06 and 2026-10-08 (details per commit in HANDOFF §10; `git log 
 | User & Gemini → Claude | **9. Sprint 06-B: Ground Move Destination Waypoint Ping:** When issuing a ground move order in real-time or preparation (`ACodexTacticsPlayerController::IssueGroundMove`), spawn a ground destination visual marker/ping via `UCombatFeedbackSubsystem::SpawnWaypointMarker` (or a fading order disc) at `Destination`. The player must clearly see where the operatives were ordered to run. | Done (Claude 2026-10-04) |
 | User & Gemini → Claude | **10. Sprint 06-C: Turn-Based Barricade Infinite Damage Loop Fix:** `ABarricadeActor::Tick` currently continues running real-time contact damage (`ContactTimer -= DeltaSeconds`) during turn-based combat! An enemy adjacent to a spiked/contact barricade gets damaged every frame infinitely. Fix: Freeze barricade contact tick in `ABarricadeActor::Tick` during TurnBased mode (`Flow->GetCombatMode() == TurnBased`), and apply contact damage strictly ONCE per turn round in `UTurnBasedCombatSubsystem` when adjacent. | Done (Claude 2026-10-04) |
 | User & Gemini → Claude | **11. Sprint 06-D: Marksman Combat Wave Aggression & Tactical Advance:** Marksmen currently stay stuck in `Patrol` mode if spawned in a wave or when target is >45m away. Fix: 1) In wave combat / exploration with no route, default state must be `Engage`. 2) If target has no line of sight (`!Line.bHasLos`) or `Distance > PreferredMaxRange`, advance towards squad via NavMesh (`MoveToLocation`), then stop at 20-35m, take low cover/prone, telegraph laser aim, and fire. | Done (Claude 2026-10-04) |
-| User & Gemini → Claude (Opus) | **12. Sprint 14: Механика нокдауна и восстановления (Knockdown & Recovery System):** Реализовать механику сбивания с ног для бойцов и врагов при прыжке гончей (Cutter Pounce), силовом ударе Брута, взрывах (<2.5м) и критических ударах (>=40 урона). Включает: 1) Состояние `EStatusEffect::Knockdown`, 2) Направление падения (спереди -> `Knocked_Back` / `Revive_Back`, сзади -> `Knocked_Front` / `Revive_Front`), 3) Полосу восстановления оглушения в UI (1.5 сек оглушения + анимация подъема ~1.0 сек), 4) Расход 2 AP на подъем в пошаговом бою, 5) Анимационные монтажи из `/Game/Animations_KnockDown`. Полная спецификация ниже. | Done (Claude 2026-10-08, see «Sprint 14» below / HANDOFF §10) |
+| User & Gemini → Claude (Opus) | **12. Sprint 14: Механика нокдауна и восстановления (Knockdown & Recovery System):** Реализовать механику сбивания с ног для бойцов и врагов при прыжке гончей (Cutter Pounce), силовом ударе Брута, взрывах (<2.5м) и критических ударах (>=40 урона). Включает: 1) Состояние `EStatusEffect::Knockdown`, 2) Направление падения (спереди -> `Knocked_Back` / `Revive_Back`, сзади -> `Knocked_Front` / `Revive_Front`), 3) Полосу восстановления оглушения в UI (1.5 сек оглушения + анимация подъема ~1.0 сек), 4) Расход 2 AP на подъем в пошаговом бою, 5) Анимационные монтажи из `/Game/Animations_KnockDown`. Полная спецификация ниже. | Done (Claude 2026-10-08, see «Sprint 14» below / docs/port/CHANGELOG.md) |
 | Claude (frontend) → Claude (save system) | **13. Play time in the save metadata:** the frontend slot list shows "--:--" for the play time; please record the mission play time (seconds) in the save and expose it in `FSaveSlotInfo` (e.g. `PlayTimeSeconds`). The frontend reads it in one place: `UI/Frontend/CodexSaveBridge.cpp ListSlots` (`CodexFrontendRules::FormatPlayTime`). | Open |
-| User & Gemini → Claude (Opus) | **14. Sprint 15: Комплексная система мобильного и тактического тепла (Mobile & Tactical Heat System):** Реализовать систему из 5 источников тепла на базе `UHeatSourceComponent`: 1) Термопакет `EPersonalItem::HeatPack` (-35% холода, снятие `Frostbite`, бафф теплового буфера на 45 с), 2) Костёр `ACampfireActor` (крафт из спички и топлива, радиус 3.5 м, 75 с горения, шум/дым привлекает патрули), 3) Портативная газовая печка `APortableStoveActor` (многоразовый деплойбл `Deploy`/`Pack Up`, баллон на 180 с, радиус 2.2 м, бесшумное пламя без дыма), 4) Сигнальный фальшфейер `ASignalFlareActor` (метаемый, свет + тепло 1.8 м на 40 с + отпугивание зверей/гончих), 5) Термальный след огнемёта/бочек `AFirePuddleActor` (двойная зона: центр $R \le 1.2$ м огонь/урон, периметр $1.2 < R \le 3.5$ м лучистое тепло +12%/с и разморозка оружия). Спецификация ниже. | Done (Claude 2026-10-11, branch `agents/work`, see «Sync 2026-10-11» under the Sprint 15 directive / HANDOFF §10; design gaps waiting for the user: HANDOFF §7) |
+| User & Gemini → Claude (Opus) | **14. Sprint 15: Комплексная система мобильного и тактического тепла (Mobile & Tactical Heat System):** Реализовать систему из 5 источников тепла на базе `UHeatSourceComponent`: 1) Термопакет `EPersonalItem::HeatPack` (-35% холода, снятие `Frostbite`, бафф теплового буфера на 45 с), 2) Костёр `ACampfireActor` (крафт из спички и топлива, радиус 3.5 м, 75 с горения, шум/дым привлекает патрули), 3) Портативная газовая печка `APortableStoveActor` (многоразовый деплойбл `Deploy`/`Pack Up`, баллон на 180 с, радиус 2.2 м, бесшумное пламя без дыма), 4) Сигнальный фальшфейер `ASignalFlareActor` (метаемый, свет + тепло 1.8 м на 40 с + отпугивание зверей/гончих), 5) Термальный след огнемёта/бочек `AFirePuddleActor` (двойная зона: центр $R \le 1.2$ м огонь/урон, периметр $1.2 < R \le 3.5$ м лучистое тепло +12%/с и разморозка оружия). Спецификация ниже. | Done (Claude 2026-10-11, branch `agents/work`, see «Sync 2026-10-11» under the Sprint 15 directive / docs/port/CHANGELOG.md; design gaps waiting for the user: docs/port/OPEN_QUESTIONS.md) |
 | Claude → Gemini | **15. Sprint 15 heat visuals (VFX / materials):** the five heat sources run on placeholder engine shapes + point lights; each actor has a Niagara slot that loads its asset by path once it exists (no code change needed): (1) `/Game/VFX/Heat/NS_Campfire` - log fire + a tall smoke column visible from ~15 m (the smoke is the stealth risk), on `ACampfireActor::FireEffect`; (2) `/Game/VFX/Heat/NS_PortableStove` - small quiet blue gas flame, no smoke, on `APortableStoveActor::FlameEffect`; (3) `/Game/VFX/Heat/NS_SignalFlare` - bright magnesium flare (red / pink-white light, sparks, thin smoke), also usable while it flies, on `ASignalFlareActor` (`ATacticalHeatActor::Effect`); (4) `/Game/VFX/Heat/NS_FirePuddle` - burning napalm / fuel pool 2.4 m wide (core R 1.2 m) with heat shimmer up to 3.5 m, on `AFirePuddleActor`. Optional: meshes / materials for the campfire logs + ashes, the stove, the flare tube and the burnt puddle (Blueprint subclasses via the game mode's `CampfireClass` / `PortableStoveClass` / `SignalFlareClass` / `FirePuddleClass`, or set the mesh on the C++ defaults). Lights: `FireLight` / `FlameLight` / `Light` (intensity / colour EditAnywhere). BlueprintImplementableEvent `On Burning Changed` on each for sound / one-shot VFX. Screenshot of the placeholders: main folder `Saved/Screenshots/Phone/heat_sources.png`. | Open (Gemini) |
 | Claude → Gemini | **16. Vision cone material (user request 2026-10-11):** `UVisionConeComponent` (operatives + enemies, `Combat/VisionConeComponent.h`) draws a flat ground sector (section 0 fill, section 1 outline band; UV0.x = distance / range 0..1, UV0.y = 0..1 across the width; vertex colour alpha = the section's alpha) and for now uses the engine `/Engine/EngineDebugMaterials/M_SimpleUnlitTranslucent`. Please author a translucent unlit material (e.g. `/Game/VFX/Materials/M_VisionCone`) with a vector parameter `Color` (rgb = state colour, a = opacity; the component sets it every frame) and optionally a scalar `Opacity`; nice to have: soft fade towards the range (UV0.x), no depth fighting with snow (depth bias / slight height), readable on snow and at night. Plug it into the `VisionCone` component's `Cone Material` on BP_Operative / BP_Enemy_* or tell Claude the path to make it the C++ default. Colours: operative green (0.12, 0.88, 0.35) / red (0.95, 0.18, 0.18), enemy idle (0.35, 0.65, 1) / amber (1, 0.75, 0.2) / red; fill alpha 0.22, outline 0.85. | Open |
 | Claude → Gemini | **17. Tutorial text pipeline (Demo 01, producer plan §6):** add a **Tutorial** tab to the narrative Google Sheet (`StepID, Kind, Title_EN, Text_EN, Radio_EN`, optional `Speaker_EN`) and export it by `sync_narrative.py` into `narrative_manifest.json` as `"tutorial": { "<id>": { "title_en", "text_en", "radio_en", "speaker_en" } }`. The reader exists: `FNarrativeManifest::GetTutorialText` (C++) / `UTutorialSubsystem::GetTutorialText` (BP); missing ids fall back to the DRAFT placeholders in `Content/Data/Tutorial/demo_01_texts_draft.json` (A0 + A1 + the A2 heat-pack card since 2026-10-12; writer: replace them via the sheet), then show `[EN missing: <id>]`. Ids used now (`Content/Data/Tutorial/demo_01_steps.json`, **rev 5 2026-10-13**; every id has an English draft in `demo_01_texts_draft.json`): cards `TUT_A0_CAM_PAN, TUT_A0_CAM_PAN_DRAG, TUT_A0_CAM_ROTATE_KEYS, TUT_A0_CAM_ROTATE_MOUSE, TUT_A0_CAM_ZOOM, TUT_A0_MOVE, TUT_A0_SPRINT (rev 5c), TUT_A1_SELECT, TUT_A1_HUT_STACK_L, TUT_A1_HUT_STACK_R, TUT_A1_HUT_ENTER (rev 5c), TUT_A1_SOLO, TUT_A1_REGROUP, TUT_A1_BOX, TUT_A1_HEATPACK, TUT_A1_HEATPACK_MATE, TUT_A1_SPRINT, TUT_A1_LOOT_OPEN, TUT_A1_LOOT_TAKE, TUT_A2_PUSH, TUT_A2_LIGHT, TUT_A2_HEATPACK, TUT_A2_TOOCOLD, TUT_A1_STANCE, TUT_A1_VAULT (now in A3), TUT_A3_FENCE, TUT_A6_COVER, TUT_A6_SQUAD (now in A3), TUT_A3_MINE, TUT_A3_WIRE, TUT_A3_PEEK (rev 5c), TUT_A4_CONES, TUT_A4_TRIPWIRE` (dropped: `TUT_A1_GUARD`; `{focus}` = the coldest operative's name); feed lines `TUT_A0_NOINVENTORY, TUT_A1_BRIDGE_REFUSED, TUT_A3_FENCE_REFUSED` (dropped 2026-10-13 rev 5b: `TUT_A0_WAIT_HQ`, `TUT_A0_NOSPRINT`; `TUT_A1_SPRINT` is now the tip "RUNNING KEEPS YOU WARM"); objectives `OBJ_A0_BEACON1, OBJ_A1_CAMP, OBJ_A1_BRIDGE (rev 5c), OBJ_A1_HUT, OBJ_A2_WARM, OBJ_A3_OVERLOOK, OBJ_A6_SQUAD_COVER, OBJ_A6_BOUND`; beat titles `TUT_BEAT_A0..A4`; radio / walk-and-talk lines `WT_A0_BRIEFING_1..3, WT_A0_01, WT_A0_06` (HQ intro), `WT_A1_01..09, WT_A1_HUT_APPROACH_1..3 (rev 5c), WT_A1_BANTER_1..4, WT_A1_GUST, WT_A1_WARMED, WT_A1_RESUPPLY, WT_A1_HUT, WT_A1_STOCKED, WT_A1_10..12 (now in A3), WT_A2_01..05, WT_A3_01..03, WT_A4_01..03` (dropped: `WT_A0_02..05`; rev 5c: `WT_A1_06`) (speaker in the step data; one row per line, or a `sequences` entry per id). Card text may use `{key:<CommandId>}` for key caps (`Core/PlayerCommands.h`); the key never goes into radio lines. Also: trim `DA_DialogueIntro` (beat sheet gap G2). | Open (Gemini) |
@@ -419,7 +419,7 @@ In Real-Time combat, operatives autonomously execute tactical priorities within 
   - `emergency_sidearm_dist_m` (float, default: `3.5`)
 - Expose endpoints in `Tools/WaveEditor/vite.config.ts` (`/api/squad-roe`) and UI controls in `SquadLoadoutControls.tsx` or a new `CommanderROEPanel.tsx`.
 
-### ✅ Sprint 07 status (Claude, 2026-10-05): DONE — see HANDOFF §10 for the details
+### ✅ Sprint 07 status (Claude, 2026-10-05): DONE — see docs/port/CHANGELOG.md for the details
 - 7-A: `USquadSubsystem::bAutonomousSquadCombat` (default false) + `UGameFlowSubsystem::IsAutonomousSquadCombat / IsSquadAutonomyActive`; `CodexTactics.AutonomousSquad [0|1]`, `CodexTactics.ToggleAutonomousCombat`; Ctrl + T (plain T stays the guard); HUD squad panel «АВТОНОМИЯ: ВКЛ / ВЫКЛ / ВКЛ (пауза) [Ctrl+T]». A tactical pause / turn-based fight freezes it (autonomous walks stop, its targets dropped); it resumes on release, the orders given in the pause become the new anchors.
 - 7-B: `FTacticalAnchor` on `AOperativeCharacter`, set by every player `OrderMoveTo` (`AutonomousMoveTo` keeps it).
 - 7-C / 7-D: `USquadAutonomySubsystem` (0.3 s decisions) over pure `SquadAutonomyRules` (tests `Characters.SquadAutonomy.*`), reusing `PlaytestBotRules::CoverStandPoint / CoverScore`.
@@ -492,7 +492,7 @@ Eliminate the unrealistic God-view where all actors across the map are perpetual
   1. Operatives and players can issue targeted attack orders at an LKP Ghost Silhouette (blind fire into suspected cover).
   2. Shots fired at an unconfirmed ghost suffer a flat `-40% accuracy penalty`.
 
-### ✅ Sprint 08 status (Claude, 2026-10-05): DONE — see HANDOFF §10
+### ✅ Sprint 08 status (Claude, 2026-10-05): DONE — see docs/port/CHANGELOG.md
 - User decisions: barricade physically 60 cm (`ABarricadeActor::HeightCm`); enemies that lose an operative go to his last known spot.
 - 8-A..8-F in `SightRules` + `UTacticalSightSubsystem` + `AEnemyGhostActor` (stasis material); tests `Combat.Sight.*`, smoke `CodexTactics.SightSmoke`; `Codex.Sight 0` disables.
 - Not in scope: turn-based grid fight keeps its own grid line of sight (no hiding there).
@@ -543,7 +543,7 @@ An iconic Soviet engineering tripwire mine rigged between two anchors using MUV-
   - Operative with Medic/Sapper role can interact with an active tripwire to disarm it (3.0s interaction).
   - Successful disarm destroys the tripwire and returns **2 grenades** (or 1 on fumble) to the squad inventory.
 
-### ✅ Sprint 09 status (Claude, 2026-10-05): DONE — see HANDOFF §10
+### ✅ Sprint 09 status (Claude, 2026-10-05): DONE — see docs/port/CHANGELOG.md
 - 9-A..9-E: `TripwireRules`, `ATripwireActor`, `URelocationSubsystem::StartTripwirePlacement` (inventory «🪤 Растяжка»); smoke `CodexTactics.TripwireSmoke`.
 - Interpretation: the «Dual F-1 Blast» is one `ApplyBlast` of 140 at the wire's middle (not 2 x 140). No new `EDeployableType` (many switches fall back to Mine): the tripwire is its own placement mode and an `AInteractableActor`.
 - Not in scope: turn-based placement / grid occupancy; sound and VFX (Blueprint events only).
@@ -639,7 +639,7 @@ Claude (Opus 5.5) **MUST** strictly adhere to the following rules:
 
 ---
 
-## ✅ Sprint 10 «Рубеж обороны» (Claude, 2026-10-05): DONE — see HANDOFF §10
+## ✅ Sprint 10 «Рубеж обороны» (Claude, 2026-10-05): DONE — see docs/port/CHANGELOG.md
 - Spec names mapped to the code: «PickTarget» = `SquadAutonomyRules::PickTarget` (new, with `FDefenseDirective`), «CanGiveSafeAid» = new `CanGiveSafeAid` (wraps `IsSafeAidRoute`).
 - User decision: Shift + RMB assigns a defense line only in the tactical pause / outside the fight (the real-time order lock stays).
 - Jev validation 13/16 (81 %) after fixing the intruder ordering it exposed.
@@ -708,7 +708,7 @@ Transition from wave timer defense to real-time stealth infiltration and outpost
 
 ---
 
-## ✅ Sprint 11 «Outpost & stealth patrols» (Claude, 2026-10-06): DONE — see HANDOFF §10
+## ✅ Sprint 11 «Outpost & stealth patrols» (Claude, 2026-10-06): DONE — see docs/port/CHANGELOG.md
 - User decisions: the marksman keeps his legacy `PatrolRoute` points as the fallback when `AssignedPatrolRoute` is null; a tripwire / mine **detonation** alerts patrols within 20 m (`PatrolTrapAlertRadius`), the marksman neighbour alert stays 15 m.
 - Spec deviation: `EscortLeader` is `EditInstanceOnly` without `BlueprintReadWrite` (UHT does not expose `TWeakObjectPtr` to Blueprints); BP access via `GetEscortLeader` / `SetEscortLeader`. Patrols run in any phase (the spec's «in Exploration» would have kept them idle during the preparation the user wanted skipped). A marksman does not escort (only base enemies, e.g. hounds, follow a leader).
 - `BP_PatrolRoute`: not made — place `APatrolRouteActor` directly (Blueprintable if a styled BP is wanted).
@@ -803,7 +803,7 @@ Introduce a full tactical cover system for walls, building edges, and high obsta
 
 ---
 
-## ✅ Sprint 12 «Tactical cover» (Claude, 2026-10-06): DONE — see HANDOFF §10
+## ✅ Sprint 12 «Tactical cover» (Claude, 2026-10-06): DONE — see docs/port/CHANGELOG.md
 - 12-A/B: `CoverTypes.h` (+ `ECoverFireMode`, wall top, corner distances), `CoverTraceRules` (knee / chest / head traces, wall-top trace, 40 cm corner probes, navmesh projection, same-wall shimmy). 130-180 cm walls = low cover (decision).
 - 12-C: `ACoverGhostActor` (M_GhostHologram, the leader's mesh in the cover idle); first wall click = preview, second = confirm (real time sprint / tactical pause plan / turn-based cell snap), Alt + click for barricades and other objects (their plain click is unchanged), RMB / Esc / any other click drops it.
 - 12-D: operative cover state, shimmy (same wall, strafing walk), Z / C at the wall, corner lean (0.9 s exposure per shot) and blind fire (N; -40 %, no headshots); AnimInstance variables `bInCover, CoverHeight, CoverFacing, bShimmying, ShimmyDirection, bLeaning, bBlindFiring` + a C++ FullBody-slot baseline with the M4 Cover Pack clips (enter / idle / shimmy fwd-bwd / fire, L-R by facing). **For the user:** cover states in ABP_Operative's graph (then untick `bUseNativeCoverClips`), a blind-fire clip (none in the pack), check the pack's L / R vs the slot facing by eye, a HUD cover indicator.
@@ -813,7 +813,7 @@ Introduce a full tactical cover system for walls, building edges, and high obsta
 
 ---
 
-## ✅ Sprint 13 «Drag & drop hand-over» (Claude, 2026-10-07): DONE — see HANDOFF §10
+## ✅ Sprint 13 «Drag & drop hand-over» (Claude, 2026-10-07): DONE — see docs/port/CHANGELOG.md
 - 13-1: «ПЕРЕД» retired — `UTransferDialogWidget` deleted (no other user), action bar button and HUD toggle removed; the inventory drawer is the single access point (ammo lines added).
 - 13-2: drawer drag (`UInventoryDragDropOperation`: item, sender, available; purple label visual); drop on an operative's 3D model (drag cancelled over the viewport -> world trace) or on his action bar squad slot -> `ACodexTacticsHUD::HandleTransferDropOnActor`. A press released without a drag still clicks the line.
 - 13-3: range 2 m (`TransferRules::CanTransferTo`, horizontal). Far + free -> walk to 1.5 m and hand over on arrival (cancel on another order / death / 45 s). Far + blocked -> «Слишком далеко для передачи (макс. 2 метра)». **Blocked** = wave fight (real time or turn-based) or turn-based active, a living enemy targeting the sender, or the sender dead / raging / without a path.
@@ -1325,14 +1325,14 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
    - Спавнит бойца и гончую/громилу, наносит силовой удар, проверяет вход в состояние нокдауна, заполнение полосы восстановления, подъём и возвращение управления.
 3. Прогон `verify_all.ps1` — ALL GREEN без регрессий в существующих системах.
 
-## ✅ Sprint 14 «Knockdown & Recovery» (Claude, 2026-10-08): DONE — see HANDOFF §10
+## ✅ Sprint 14 «Knockdown & Recovery» (Claude, 2026-10-08): DONE — see docs/port/CHANGELOG.md
 - 14-1 clips: UE5-Manny FBX (RTGT) -> `/Game/Animations_KnockDown` on the M4 UE5 SK_Mannequin skeleton (compatible with the operative's), `AM_*` montages on `FullBody` (fall / death hold the last frame, get-up blends out); Frostbitten / Brute copies on their own skeletons. Revive_Left unused (no matching fall clip; side hits use back / front).
 - 14-2 rules: `KnockdownRules` + `FKnockdownConfig` (`Codex.Knockdown.*`): |theta| < 90 = Knocked_Back, >= 40 HP, blast < 2.5 m, Brute poise, Fall clip / Downed 1.5 s / GetUp ~1.0 s (max 1.7x), turn-based 2 AP else skip, pause + dialogue freeze, downed ranged x0.6 / melee x1.5.
 - 14-3 `UKnockdownComponent` on operatives and enemies (`EStatusEffect::Knockdown` via `UHealthComponent::HasStatusEffect`): interrupts, capsule / movement, buffered orders, death while down (Death_*), enemy AI prefers downed operatives for melee.
 - 14-4 UI: «[KNOCKED DOWN]» badge + recovery bar over the unit (HUD overhead style), feed lines.
 - 14-5 tests `CodexTactics.Combat.Knockdown.*` (4) + `CodexTactics.KnockdownSmoke` (registered in `Scripts/test_map.json`, rule `knockdown`).
 - Not done / notes: no knockdown for hounds, cutters, marksmen; turn-based ranged enemy shots ignore the prone x0.6 (grid hits bypass TakeHit's modifiers, the melee x1.5 is applied); the hound pounce rule (run-up 1 s, 12 s cooldown) is a design reading of «pounce from a run-up» - tune or disable with `Codex.Knockdown.*` / `FKnockdownConfig`.
-- **Sync 2026-10-11 (Claude, branch `agents/knockdown`, user decisions):** knockdown chance 50 % for everyone (`KnockdownChance` / `Codex.Knockdown.Chance`; heavy hits and Brute heavy blows roll, blasts < 2.5 m and pounces always floor), faster get-up (Downed 0.6 s, GetUp 0.8 s at up to 2.1x: ~2.27 s on the ground), one downed damage multiplier x1.33 for any blow in real time and turn-based (`DownedDamageMultiplier` / `Codex.Knockdown.DownedDamage`; `EKnockdownBlow` and `Codex.Knockdown.DownedRanged/MeleeDamage` removed), turn-based: no free stand-up, the lying operative stays down or orders «GET UP (2 AP) [Z]» (panel entry, `UTurnBasedCombatSubsystem::GetUpActiveUnit`). Details HANDOFF §6 «Knockdown values» / §10. No asset or shader changes.
+- **Sync 2026-10-11 (Claude, branch `agents/knockdown`, user decisions):** knockdown chance 50 % for everyone (`KnockdownChance` / `Codex.Knockdown.Chance`; heavy hits and Brute heavy blows roll, blasts < 2.5 m and pounces always floor), faster get-up (Downed 0.6 s, GetUp 0.8 s at up to 2.1x: ~2.27 s on the ground), one downed damage multiplier x1.33 for any blow in real time and turn-based (`DownedDamageMultiplier` / `Codex.Knockdown.DownedDamage`; `EKnockdownBlow` and `Codex.Knockdown.DownedRanged/MeleeDamage` removed), turn-based: no free stand-up, the lying operative stays down or orders «GET UP (2 AP) [Z]» (panel entry, `UTurnBasedCombatSubsystem::GetUpActiveUnit`). Details docs/systems/combat-and-fire.md «Knockdown values» / docs/port/CHANGELOG.md. No asset or shader changes.
 
 ---
 
@@ -1417,6 +1417,6 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
   pause and its slow-motion flyover), turn-based combat (one round = total / rounds), dialogues and cutscenes.
 - Data: `Content/Data/Survival/tactical_heat.json` (all values + starting loadout); loot +1 heat pack, +1 firewood per crate.
 - Beasts' fear of the flare = the existing fire fear of every active heat source (6 m) — it also covers the campfire / stove / puddle.
-  No night system exists, so "removes night accuracy penalties" has no hook. Design decisions listed in HANDOFF §7 for the user.
+  No night system exists, so "removes night accuracy penalties" has no hook. Design decisions listed in docs/port/OPEN_QUESTIONS.md for the user.
 - Tests `CodexTactics.Survival.TacticalHeat.*` (7) + smoke `CodexTactics.TacticalHeatSmoke` (registered in `Scripts/test_map.json`, rule
   `tactical-heat`); `SaveRoundTripSmoke` covers the new save keys. Visual placeholders only — request #15 to Gemini (Niagara slots by path).

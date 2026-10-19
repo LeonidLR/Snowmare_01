@@ -2,7 +2,7 @@
 
 State 2026-10-08. Rule (user decision): nothing Russian may reach the screen. A missing line shows `[EN missing: <sequence>#<n>]`
 and logs `Narrative: ...` (LogCodexTactics, Warning). Do NOT translate these ad hoc: write them in the Google Sheet, then
-`python Scripts/Narrative/sync_narrative.py` (see HANDOFF §6 "Narrative pipeline").
+`python Scripts/Narrative/sync_narrative.py` (see docs/systems/dialogue-frontend-mission.md "Narrative pipeline").
 
 ## 1. Dialogue sequences (`Content/Data/Narrative/narrative_manifest.json`)
 

@@ -767,7 +767,7 @@ def main():
         for module, name, rel, line in leaks:
             print(f"[macro-leak] {module}: #define {name} never #undef'd: {rel}:{line}")
     if total or not args.quiet:
-        hint = " - rename the file-local names (docs/port/HANDOFF.md §2, unity builds)" if total else ""
+        hint = " - rename the file-local names (docs/port/TRAPS.md, unity builds)" if total else ""
         print(f"find_unity_clashes: {len(cpps)} .cpp files, {total} clash(es){hint}")
     return 1 if total and not args.warn_only else 0
 

@@ -45,7 +45,7 @@ Blueprint can notice the move.
     `extern` in the internal header so Cover reads the same object — a second `static` copy would register the console
     variable twice).
 - `SquadKeys` (one user, BeginPlay) stays a named namespace in the main file — never an anonymous namespace duplicated in
-  two files (HANDOFF §2: unity builds merge the .cpp files).
+  two files (docs/port/TRAPS.md: unity builds merge the .cpp files).
 - Every unit keeps `LOCTEXT_NAMESPACE "CodexTacticsPlayerController"` (keys unchanged) and closes it with
   `#undef LOCTEXT_NAMESPACE` at its end.
 - Each unit includes `Core/CodexTacticsPlayerController.h` first and only the headers it uses (picked by the identifiers it
@@ -71,7 +71,7 @@ Blueprint can notice the move.
 
 Where to put new code: the file of its input area; a helper two units need goes into the internal header (`inline`), a
 helper one unit needs into a prefixed named namespace or `static` function of that unit. A new input area gets a new
-`CodexTacticsPlayerController<Area>.cpp` (+ a row here, in HANDOFF §2 / §5, and a rule in `Scripts/test_map.json`).
+`CodexTacticsPlayerController<Area>.cpp` (+ a row here, in docs/port/TRAPS.md / docs/systems/squad-and-orders.md, and a rule in `Scripts/test_map.json`).
 The impact map routes each unit to its area's smokes (`controller-<area>` rules) on top of the `game-framework` rule.
 
 ## 4. Result

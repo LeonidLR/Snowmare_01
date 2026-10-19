@@ -7,7 +7,7 @@ between you and the shared build lock are in `docs/port/TANDEM.md` — they are 
 Before doing anything in this repository read, in order:
 
 1. `docs/port/TANDEM.md` — roles, who owns which files / assets, «In progress» claims, «Requests».
-2. `docs/port/HANDOFF.md` — current state, system map, environment traps, how to verify, change log.
+2. `docs/port/HANDOFF.md` — short index: current state, environment traps, how to work / verify (the system map is `docs/systems/`, the change log `docs/port/CHANGELOG.md`).
 3. `CLAUDE.md` — project rules (they apply to every agent, not only Claude).
 
 Key rules:
@@ -23,4 +23,4 @@ Key rules:
   files, prefixes `perf|shader|vfx(...)`.
 - The Godot project `Documents/Codex/godot-test-01` is read-only. Never commit the user's map, packs, DefaultEditor.ini or
   DefaultInput.ini.
-- Update HANDOFF.md §10 and TANDEM.md Log with every commit.
+- Update `docs/port/CHANGELOG.md` (the old HANDOFF.md §10) and the TANDEM.md Log with every commit.
