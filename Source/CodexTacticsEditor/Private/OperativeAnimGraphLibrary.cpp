@@ -201,7 +201,7 @@ namespace OperativeAnimGraph
 		return Root;
 	}
 
-	bool CompileAndReport(UAnimBlueprint* AnimBlueprint, UEdGraph* AnimGraph, FString& OutReport)
+	bool CompileAnimGraphAndReport(UAnimBlueprint* AnimBlueprint, UEdGraph* AnimGraph, FString& OutReport)
 	{
 		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBlueprint);
 		FCompilerResultsLog Results;
@@ -289,7 +289,7 @@ namespace OperativeAnimGraph
 		});
 		Build.LinkPose(BeforeFullBody, Slot, TEXT("Source"));
 		Build.LinkPose(Slot, Root, TEXT("Result"));
-		return Build.bOk && CompileAndReport(AnimBlueprint, Root->GetGraph(), OutReport);
+		return Build.bOk && CompileAnimGraphAndReport(AnimBlueprint, Root->GetGraph(), OutReport);
 	}
 }
 
@@ -623,7 +623,7 @@ bool UOperativeAnimGraphLibrary::BuildOperativeLocomotionGraph(UAnimBlueprint* A
 	Build.LinkPose(WithCold, FullBody, TEXT("Source"));
 	Build.LinkPose(FullBody, Root, TEXT("Result"));
 
-	return Build.bOk && CompileAndReport(AnimBlueprint, AnimGraph, OutReport);
+	return Build.bOk && CompileAnimGraphAndReport(AnimBlueprint, AnimGraph, OutReport);
 }
 
 bool UOperativeAnimGraphLibrary::FillDirectionalBlendSpace(UBlendSpace* BlendSpace, UAnimSequence* Idle,

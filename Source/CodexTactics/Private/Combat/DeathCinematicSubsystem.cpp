@@ -51,8 +51,10 @@ void UDeathCinematicSubsystem::NotifyOperativeDied(AOperativeCharacter* Victim, 
 	// A death during a running focus queues up without a second slow motion (user rule: no stacking).
 	Entry.bSlowMo = !IsActive();
 	bDefeatQueued |= bDefeat;
-	if (bDefeat)
+	if (bDefeat && !DefeatVictim.IsValid())
 	{
+		// The FIRST defeat names the failure: the commander falls, the last survivor dies during his cinematic - the
+		// screen still says the commander (it named the survivor: MissionSmoke "wounds reason", 2026-10-19).
 		DefeatVictim = Victim;
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[DeathCam] %s died%s%s"), *Victim->DisplayName.ToString(), bDefeat ? TEXT(" (defeat)") : TEXT(""),

@@ -30,7 +30,7 @@ namespace TutorialConfineTestData
 			{ "id": "later", "beat": "A2", "kind": "objective", "trigger": { "type": "volume", "volume": "LATER" }, "complete": { "event": "Never" } }
 		] })JSON");
 
-	bool Parse(FAutomationTestBase& Test, const TCHAR* Json, FTutorialStepsData& Out)
+	bool ParseConfineSteps(FAutomationTestBase& Test, const TCHAR* Json, FTutorialStepsData& Out)
 	{
 		TArray<FString> Warnings;
 		FString Error;
@@ -69,7 +69,7 @@ bool FTutorialConfineParseTest::RunTest(const FString&)
 		  "confine": { "volume": "V", "allow": ["W", "X"], "until": "t", "stop": true, "span": true, "stance": "crouched",
 		    "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } } },
 		{ "id": "t", "beat": "A", "kind": "hint_card", "trigger": { "type": "manual" }, "complete": { "commands": ["Squad.Solo"] } } ] })JSON");
-	if (!TutorialConfineTestData::Parse(*this, Json, Data))
+	if (!TutorialConfineTestData::ParseConfineSteps(*this, Json, Data))
 	{
 		return false;
 	}
@@ -134,7 +134,7 @@ bool FTutorialConfineFlowTest::RunTest(const FString&)
 {
 	using namespace TutorialConfineTestData;
 	FTutorialStepsData Data;
-	if (!Parse(*this, Hut, Data))
+	if (!ParseConfineSteps(*this, Hut, Data))
 	{
 		return false;
 	}
@@ -218,7 +218,7 @@ bool FTutorialConfineExitTurnTest::RunTest(const FString&)
 		  "confine": { "volume": "FENCE", "stop": true, "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } },
 		  "complete": { "event": "CrawlGapPassed", "count": 3, "distinct_operatives": true } } ] })JSON");
 	FTutorialStepsData Data;
-	if (!Parse(*this, Json, Data))
+	if (!ParseConfineSteps(*this, Json, Data))
 	{
 		return false;
 	}
