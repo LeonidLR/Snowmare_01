@@ -17,6 +17,7 @@
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/QuickFireRules.h"
 #include "Combat/SightRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -440,6 +441,13 @@ void AOperativeCharacter::ProcessCombatShooting(float DeltaTime)
 const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& OutTarget)
 {
 	OutTarget = nullptr;
+	// Quick fire (Ctrl + click on a point, 2026-10-19): an order that could not fire within its budget (cease fire, reload, a frozen weapon, a turn
+	// that never ends) is dropped.
+	if (bQuickFireActive && GetWorld() && GetWorld()->GetTimeSeconds() - QuickFireLastProgressTime > QuickFireRules::GetConfig().OrderTimeoutSeconds)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[QuickFire] %s: order timed out"), *DisplayName.ToString());
+		CancelQuickFire();
+	}
 	// Godot: a panicking soldier neither shoots nor reloads (can_shoot = false, _process_reloading skipped).
 	if (!bRecruited || bTacticalCeaseFire || !HealthComponent || !HealthComponent->IsAlive() || (IsPanicking() && !IsRaging()))
 	{
@@ -487,6 +495,13 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 		}
 		return IsKnockedDown() ? TEXT("knocked down") : (bSprinting ? TEXT("sprinting") : (bCarrying ? TEXT("carrying")
 			: TEXT("cannot shoot (frozen weapon)")));
+	}
+
+	// Quick fire (Ctrl + click on a point, game designer request 2026-10-19): an explicit order - it fires in any phase and under any posture, before
+	// the automatic fire below (OperativeCharacterQuickFire.cpp).
+	if (bQuickFireActive)
+	{
+		return RunQuickFire(DeltaTime, OutTarget);
 	}
 
 	// Only auto-shoot when in WaveCombat real-time mode (or if no game flow subsystem exists, e.g. standalone test).
@@ -816,60 +831,65 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 
 	if (bHit)
 	{
-		// Godot _shoot_at_target: crit on luck (x2), elevation (+15 %), stance, cover and distance factors.
-		const float CritRoll = ForcedCritRollForTesting >= 0.f ? (ForcedCritRollForTesting >= 1.f ? 0.f : 1.f) : FMath::FRand();
-		ForcedCritRollForTesting = -1.f;
-		const bool bCrit = SquadFireRules::IsCrit(Luck + (bRagingShot ? 30.f : 0.f), CritRoll); // rage: +30 luck
-		const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(
-			GetActorLocation().Z - GetSimpleCollisionHalfHeight(), Target->GetActorLocation().Z - Target->GetSimpleCollisionHalfHeight());
-		float DistanceMultiplier = 1.f;
-		if (CurrentWeapon && !CurrentWeapon->DistanceDamageMultipliers.IsEmpty())
-		{
-			DistanceMultiplier = CurrentWeapon->DistanceDamageMultipliers[FMath::Clamp(DistCells - 1, 0, CurrentWeapon->DistanceDamageMultipliers.Num() - 1)];
-		}
-		if (bCrit)
-		{
-			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🎯 CRIT x2!"), FLinearColor(1.f, 0.85f, 0.1f));
-		}
-		else if (Elevation.bElevated)
-		{
-			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⛰️ +15% HEIGHT"), FLinearColor(0.35f, 0.9f, 1.f));
-		}
-
-		FDamageSpec Spec;
-		Spec.Amount = SquadFireRules::ComputeShotDamage(CurrentWeapon ? CurrentWeapon->BaseDamage : 18.0f, Stance, Cover, bCrit, Elevation, DistanceMultiplier)
-			* (bRagingShot ? RageComponent->Config.DamageMultiplier : 1.f);
-		Spec.bIsCritical = bCrit;
-		Spec.bMelee = !UsesAmmo(); // the knife
-		Spec.DamageType = CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic;
-		Spec.ArmorPenetration = CurrentWeapon ? CurrentWeapon->ArmorPenetration : 0.20f;
-		Spec.AttackerSource = DisplayName.ToString();
-		if (CurrentWeapon)
-		{
-			Spec.StatusEffect = CurrentWeapon->StatusEffect;
-			Spec.StatusDuration = CurrentWeapon->StatusDuration;
-			Spec.StatusTickDamage = CurrentWeapon->StatusTickDamage;
-		}
-
-		if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
-		{
-			TargetHealth->TakeDamage(Spec);
-		}
-		// Run telemetry (Godot _record_weapon_shot: hits with their damage, per wave and weapon).
-		if (URunTelemetrySubsystem* Telemetry = GetWorld() ? GetWorld()->GetSubsystem<URunTelemetrySubsystem>() : nullptr)
-		{
-			Telemetry->RecordWeaponHit(this, CurrentWeapon ? CurrentWeapon->WeaponId : FString(TEXT("m16")), Spec.Amount);
-		}
-		// Cryo weapons chill the shooter, fire weapons warm him (Godot self_cold / self_warmth_generation).
-		if (CurrentWeapon && CurrentWeapon->SelfColdGeneration > 0.f)
-		{
-			ColdLevel = FMath::Min(100.f, ColdLevel + CurrentWeapon->SelfColdGeneration);
-		}
-		if (CurrentWeapon && CurrentWeapon->SelfWarmthGeneration > 0.f)
-		{
-			ColdLevel = FMath::Max(0.f, ColdLevel - CurrentWeapon->SelfWarmthGeneration);
-		}
+		ApplyRangedHit(Target, Cover, DistCells, bRagingShot);
 	}
 
 	return bHit;
+}
+
+void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 DistCells, bool bRagingShot)
+{
+	// Godot _shoot_at_target: crit on luck (x2), elevation (+15 %), stance, cover and distance factors.
+	const float CritRoll = ForcedCritRollForTesting >= 0.f ? (ForcedCritRollForTesting >= 1.f ? 0.f : 1.f) : FMath::FRand();
+	ForcedCritRollForTesting = -1.f;
+	const bool bCrit = SquadFireRules::IsCrit(Luck + (bRagingShot ? 30.f : 0.f), CritRoll); // rage: +30 luck
+	const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(
+		GetActorLocation().Z - GetSimpleCollisionHalfHeight(), Target->GetActorLocation().Z - Target->GetSimpleCollisionHalfHeight());
+	float DistanceMultiplier = 1.f;
+	if (CurrentWeapon && !CurrentWeapon->DistanceDamageMultipliers.IsEmpty())
+	{
+		DistanceMultiplier = CurrentWeapon->DistanceDamageMultipliers[FMath::Clamp(DistCells - 1, 0, CurrentWeapon->DistanceDamageMultipliers.Num() - 1)];
+	}
+	if (bCrit)
+	{
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🎯 CRIT x2!"), FLinearColor(1.f, 0.85f, 0.1f));
+	}
+	else if (Elevation.bElevated)
+	{
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("⛰️ +15% HEIGHT"), FLinearColor(0.35f, 0.9f, 1.f));
+	}
+
+	FDamageSpec Spec;
+	Spec.Amount = SquadFireRules::ComputeShotDamage(CurrentWeapon ? CurrentWeapon->BaseDamage : 18.0f, Stance, Cover, bCrit, Elevation, DistanceMultiplier)
+		* (bRagingShot ? RageComponent->Config.DamageMultiplier : 1.f);
+	Spec.bIsCritical = bCrit;
+	Spec.bMelee = !UsesAmmo(); // the knife
+	Spec.DamageType = CurrentWeapon ? CurrentWeapon->DamageType : EDamageType::Kinetic;
+	Spec.ArmorPenetration = CurrentWeapon ? CurrentWeapon->ArmorPenetration : 0.20f;
+	Spec.AttackerSource = DisplayName.ToString();
+	if (CurrentWeapon)
+	{
+		Spec.StatusEffect = CurrentWeapon->StatusEffect;
+		Spec.StatusDuration = CurrentWeapon->StatusDuration;
+		Spec.StatusTickDamage = CurrentWeapon->StatusTickDamage;
+	}
+
+	if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
+	{
+		TargetHealth->TakeDamage(Spec);
+	}
+	// Run telemetry (Godot _record_weapon_shot: hits with their damage, per wave and weapon).
+	if (URunTelemetrySubsystem* Telemetry = GetWorld() ? GetWorld()->GetSubsystem<URunTelemetrySubsystem>() : nullptr)
+	{
+		Telemetry->RecordWeaponHit(this, CurrentWeapon ? CurrentWeapon->WeaponId : FString(TEXT("m16")), Spec.Amount);
+	}
+	// Cryo weapons chill the shooter, fire weapons warm him (Godot self_cold / self_warmth_generation).
+	if (CurrentWeapon && CurrentWeapon->SelfColdGeneration > 0.f)
+	{
+		ColdLevel = FMath::Min(100.f, ColdLevel + CurrentWeapon->SelfColdGeneration);
+	}
+	if (CurrentWeapon && CurrentWeapon->SelfWarmthGeneration > 0.f)
+	{
+		ColdLevel = FMath::Max(0.f, ColdLevel - CurrentWeapon->SelfWarmthGeneration);
+	}
 }

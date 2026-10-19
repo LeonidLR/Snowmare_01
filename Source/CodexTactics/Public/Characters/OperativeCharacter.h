@@ -1469,9 +1469,41 @@ public:
 	 */
 	bool ExecutePlannedTargetedShots();
 
-	void ClearPlannedTargetedShots() { PlannedShots.Reset(); }
+	/** Drops the planned targeted shots and the planned quick fire (pause plans dropped / restarted). */
+	void ClearPlannedTargetedShots() { PlannedShots.Reset(); bQuickFirePlanned = false; }
 
 	int32 GetPlannedTargetedShotCount() const { return PlannedShots.Num(); }
+
+	// --- Quick fire, Ctrl + click on a point (game designer request 2026-10-19; QuickFireRules, OperativeCharacterQuickFire.cpp; UE-only) ---
+
+	/**
+	 * Quick fire order: turn to Point and fire a short burst at it now (QuickFireRules::GetBurstRounds; the weapon's normal
+	 * cadence, ammo, reload, misfire). Enemy (a visible live enemy the player clicked near) is shot with the normal hit rules
+	 * while it is alive, in range and in the line of fire; otherwise every round is area fire at the point (it hits what it
+	 * crosses: an enemy by the area-fire chance, a barrel / mine / trapped object goes off). An explicit order: any fire
+	 * posture, also while exploring (the gunshot is heard). The sniper stops and kneels first (direct-order rule); in cover he
+	 * steps off the wall for it (open shot) and walks back. False when he cannot take it: dead, knocked down, aboard, raging,
+	 * panicking, a weapon without ammo (the knife) or a frozen weapon.
+	 */
+	bool OrderQuickFire(const FVector& Point, AActor* Enemy);
+
+	/** Tactical pause: remembers the quick fire; ExecutePlannedQuickFire (pause release) orders it. False when he cannot fire. */
+	bool PlanQuickFire(const FVector& Point, AActor* Enemy);
+
+	/** Pause release: the planned quick fire becomes an order. True when one was planned and ordered. */
+	bool ExecutePlannedQuickFire();
+
+	/** Drops a running quick fire order (a move order, turn-based combat, the timeout). */
+	void CancelQuickFire();
+
+	bool HasQuickFireOrder() const { return bQuickFireActive; }
+	bool HasPlannedQuickFire() const { return bQuickFirePlanned; }
+	FVector GetQuickFirePoint() const { return QuickFirePoint; }
+	AActor* GetQuickFireTarget() const { return QuickFireTarget.Get(); }
+	/** Rounds this operative fired by quick fire orders since spawn (smokes). */
+	int32 GetQuickFireRoundsFired() const { return QuickFireRoundsFired; }
+	/** Planar angle between his aim direction and the point at his last quick fire round, degrees (smokes). */
+	float GetLastQuickFireAimErrorDeg() const { return LastQuickFireAimErrorDeg; }
 
 	/** Line-of-fire origin: the feet plus the Godot muzzle height of the stance (1.4 / 0.85 / 0.25 m). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat")
@@ -1833,6 +1865,26 @@ private:
 	/** Set while AutonomousMoveTo runs: the move does not re-pin the anchor. */
 	bool bAutonomousOrder = false;
 	TMap<ETargetedShotKind, TWeakObjectPtr<AActor>> PlannedShots;
+
+	/** Quick fire (OperativeCharacterQuickFire.cpp): the running order, called from RunCombatShooting; returns its reason. */
+	const TCHAR* RunQuickFire(float DeltaTime, AActor*& OutTarget);
+	/** One area-fire round towards Aim (no aimed target): ammo, misfire, noise, the trace and what it crosses. */
+	void FireQuickFireRound(const FVector& Aim);
+	/** ShootAtTarget's hit: damage (crit, elevation, stance, cover, distance), telemetry, the weapon's self cold / warmth. */
+	void ApplyRangedHit(AActor* Target, float Cover, int32 DistCells, bool bRagingShot);
+	/** The order can be taken now (OrderQuickFire / PlanQuickFire); spawns the refusal floating text when bExplain. */
+	bool CanTakeQuickFire(bool bExplain);
+	bool bQuickFireActive = false;
+	bool bQuickFirePlanned = false;
+	FVector QuickFirePoint = FVector::ZeroVector;
+	TWeakObjectPtr<AActor> QuickFireTarget;
+	FVector PlannedQuickFirePoint = FVector::ZeroVector;
+	TWeakObjectPtr<AActor> PlannedQuickFireTarget;
+	int32 QuickFireRoundsLeft = 0;
+	/** World time of the order / of its last round (the timeout counts from it). */
+	double QuickFireLastProgressTime = 0.0;
+	int32 QuickFireRoundsFired = 0;
+	float LastQuickFireAimErrorDeg = 0.f;
 
 	/** Placeholder body; hidden automatically once the Blueprint assigns a skeletal mesh. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative", meta = (AllowPrivateAccess = "true"))

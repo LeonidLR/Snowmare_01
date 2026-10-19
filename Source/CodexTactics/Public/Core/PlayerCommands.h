@@ -229,6 +229,8 @@ namespace PlayerCommands
 	// --- Combat ---------------------------------------------------------------------------------------------------
 	/** Ctrl + click: targeted shot (enemy priority, barrel, mine, crate, trapped object). */
 	extern CODEXTACTICS_API const FName TargetedShot;
+	/** Ctrl + click on a point with nothing to aim at (2026-10-19): the selection fires there at once (a tutorial lock under "Attack.*"). */
+	extern CODEXTACTICS_API const FName QuickFire;
 	/** Plain click on a live enemy during a wave: priority target. */
 	extern CODEXTACTICS_API const FName PriorityTarget;
 	/** G: grenade in hand / throw aim. */

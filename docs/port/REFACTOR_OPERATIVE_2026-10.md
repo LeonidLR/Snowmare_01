@@ -92,6 +92,7 @@ See §5 for the measured line counts. `Private/Characters/`:
 | `OperativeCharacterCombat.cpp` | real-time target selection, lines of fire, blind fire, fire posture, `ProcessCombatShooting`, `ShootAtTarget` |
 | `OperativeCharacterAim.cpp` | muzzle, aim point, aim cone residual, combat facing, instant aimed turns |
 | `OperativeCharacterTargetedShots.cpp` | Ctrl + click object shots, planned pause shots |
+| `OperativeCharacterQuickFire.cpp` | (2026-10-19, a new cluster) quick fire (Ctrl + click on a point): `OrderQuickFire` / `PlanQuickFire`, `RunQuickFire` (called from `RunCombatShooting`), area-fire rounds (`docs/design/QUICK_FIRE.md`) |
 | `OperativeCharacterCover.cpp` | cover orders, enter / leave, shimmy, fire mode, facing along the wall, cover events |
 | `OperativeCharacterCoverEntry.cpp` | run-in, enter-clip mesh blend, wall clearance, body-yaw blend |
 | `OperativeCharacterCornerAim.cpp` | corner hold, sustained corner aim, manual corner peek, corner snap, open shots off the wall |

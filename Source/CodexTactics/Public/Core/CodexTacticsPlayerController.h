@@ -21,7 +21,9 @@ class AOperativeCharacter;
  * 1..3: select leader; Z / C / X: stand / crouch / prone (with Alt: whole squad).
  * Camera: wheel zoom, Q/E or arrows rotate, RMB drag rotates, MMB drag pans (WASD / edges are polled by the camera).
  * Ctrl + click: targeted shot by the leader — enemy = priority target, barrel = explode, mine = remote shot (hit chance),
- * supply crate / trapped object = remote detonation; during the tactical pause the shot is planned instead.
+ * supply crate / trapped object = remote detonation; during the tactical pause the shot is planned instead. Ctrl + click
+ * anywhere else (no visible enemy within 1.5 m, nothing shootable hit; user decision 2026-10-19) = quick fire: the
+ * selection turns to the point and fires there at once (IssueCtrlClick -> IssueQuickFire).
  * Ctrl + X: restart the mission (Godot _restart_current_test_mode).
  * While the bottom dialogue is open, orders are blocked: Space / Enter = next line, Esc = skip.
  * Turn-based combat (UTurnBasedCombatSubsystem): click = select / attack an enemy / walk, Ctrl + click = attack (enemy,
@@ -91,6 +93,29 @@ public:
 	 * tactical pause. Clicking anything else posts the hint. Public for headless checks.
 	 */
 	void IssueTargetedShot(AActor* HitActor);
+
+	/**
+	 * Ctrl + click on Hit outside the grid fight (user decision 2026-10-19): a shootable actor (a live enemy, a barrel, a mine,
+	 * a supply crate, a trapped object) or a visible live enemy within ~1.5 m of the point (QuickFireRules::PickTarget) =
+	 * the targeted shot exactly as before (IssueTargetedShot); a squad mate = its hint; anything else = IssueQuickFire.
+	 */
+	void IssueCtrlClick(const FHitResult& Hit);
+
+	/**
+	 * Quick fire at Hit's point (user decision 2026-10-19: Ctrl + click on a point with nothing to aim at): the selected
+	 * operative(s) - the box-selected group, else the leader - turn to it and fire at it at once
+	 * (AOperativeCharacter::OrderQuickFire, area fire; from cover the corner shot / the open shot as a targeted shot).
+	 * Tactical pause: planned (a marker), fired on the release. Turn-based: the active operative's grid attack on an enemy /
+	 * object there, else a hint. Tutorial lock "Attack.QuickFire" (under "Attack.*"). Public for headless checks.
+	 */
+	void IssueQuickFire(const FHitResult& Hit);
+
+	/** RMB pressed / released exactly as the key (IA_CameraDragRotate: the camera drag; it never fires). Headless checks. */
+	void RightMousePressed() { CameraDragRotateStart(); }
+	void RightMouseReleased() { CameraDragRotateStop(); }
+
+	/** Headless checks: Ctrl counts as held (IsAttackModifierDown) - the real Ctrl + click path through HandleWorldHit. */
+	void SetSimulatedAttackModifier(bool bDown) { bSimulatedAttackModifier = bDown; }
 
 	/** Action bar stance slot: Standing -> Crouching -> Prone (prone skipped while moving); the squad follows outside the
 	 * preparation unless in solo mode (Godot _cycle_leader_stance). */
@@ -471,6 +496,9 @@ private:
 	bool bCeaseFireSet = false;
 	double LastClickTime = -1.0;
 	FVector2D LastClickPosition = FVector2D::ZeroVector;
+
+	/** SetSimulatedAttackModifier (smokes). */
+	bool bSimulatedAttackModifier = false;
 
 	/** LMB held on the world (not consumed by a mode on press) and the box drag from BoxStart. */
 	bool bLmbDown = false;
