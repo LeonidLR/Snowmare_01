@@ -14,6 +14,13 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Audit 2026-10-19 evening (user approved, distributed by the model router)
+Order / parallelism (two worktrees): (1) L2 Sonnet — split `docs/port/HANDOFF.md` (668 KB) into a short index +
+`docs/systems/*.md` + `docs/port/CHANGELOG.md` (agents2, agents/audit); (1') L3 Opus high — split `EnemyCharacter.cpp`
+by cluster + a TurnBasedCombatSubsystem split PLAN (agents, agents/work; docs in `docs/port/REFACTOR_ENEMY_2026-10.md`,
+not HANDOFF); then (2) L4 Fable — save/load audit end to end (after the enemy split, same files); (3) L3 — tutorial
+engine reference doc + dedup. Agents append to the new per-system docs once the HANDOFF split is in main.
+
 ## Today 2026-10-19 (play-test fixes)
 Agent A (`CodexTactics-agents`, agents/work) — interactions + save/load:
 1. Crate: open clip FIRST, then the loot window; Take / Take All -> search clip, items move at the grab moment.
