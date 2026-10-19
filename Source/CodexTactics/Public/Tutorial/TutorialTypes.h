@@ -87,8 +87,13 @@ struct CODEXTACTICS_API FTutorialCondition
 /** A world action a step runs when it is shown (JSON "actions": [{ "type": ... }] or a single "action": {...}). */
 struct CODEXTACTICS_API FTutorialAction
 {
-	/** "cold_bump": every squad member's cold + Amount, raised to at least MinLevel (UColdSurvivalComponent::AddColdShock). */
+	/**
+	 * "cold_bump": every squad member's cold + Amount, raised to at least MinLevel (UColdSurvivalComponent::AddColdShock).
+	 * "set_posture" (2026-10-19): the whole squad's fire posture becomes Posture (USquadSubsystem::SetSquadPosture, overrides cleared).
+	 */
 	FName Type;
+	/** "posture" of a set_posture action: "passive" | "defensive" | "aggressive" (FirePostureRules::ParseName). */
+	FString Posture;
 	float Amount = 0.f;
 	/** "min_level": cold_bump never leaves anyone below this (0 = no floor). */
 	float MinLevel = 0.f;

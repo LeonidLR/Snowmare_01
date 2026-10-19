@@ -22,16 +22,35 @@ namespace FirePostureRules
 		}
 	}
 
+	bool MayAutoFireAt(ESquadFirePosture Posture, bool bSelfAttacked, bool bSquadAttacked, bool bTargetHasDetectedSquad,
+		const FFirePostureConfig& Config)
+	{
+		switch (Posture)
+		{
+		case ESquadFirePosture::Passive:
+			return false;
+		case ESquadFirePosture::Defensive:
+			return bTargetHasDetectedSquad || MayAutoFire(Posture, bSelfAttacked, bSquadAttacked, Config);
+		default:
+			return true;
+		}
+	}
+
+	bool AllowsAutoTargets(ESquadFirePosture Posture)
+	{
+		return Posture != ESquadFirePosture::Passive;
+	}
+
 	bool MayFire(ESquadFirePosture Posture, bool bDirectOrder, bool bSelfAttacked, bool bSquadAttacked, const FFirePostureConfig& Config)
 	{
 		return bDirectOrder || MayAutoFire(Posture, bSelfAttacked, bSquadAttacked, Config);
 	}
 
-	bool MayAutoFireInExploration(ESquadFirePosture Posture, bool bAmbushLevel, ECodexGamePhase Phase, bool bCombatUnlocked,
+	bool MayAutoFireInExploration(ESquadFirePosture Posture, bool bContactStartsFight, ECodexGamePhase Phase, bool bCombatUnlocked,
 		const FFirePostureConfig& Config)
 	{
 		return Posture == ESquadFirePosture::Aggressive && Config.bAggressiveOpensFireInExploration
-			&& LevelEncounterRules::ShouldStartAmbush(bAmbushLevel, Phase, bCombatUnlocked);
+			&& LevelEncounterRules::ShouldStartAmbush(bContactStartsFight, Phase, bCombatUnlocked);
 	}
 
 	bool ClearsProvocation(ECodexGamePhase NewPhase)
@@ -80,6 +99,19 @@ namespace FirePostureRules
 		case ESquadFirePosture::Defensive: return ESquadFirePosture::Aggressive;
 		default: return ESquadFirePosture::Passive;
 		}
+	}
+
+	bool ParseName(const FString& Name, ESquadFirePosture& OutPosture)
+	{
+		for (const ESquadFirePosture Posture : { ESquadFirePosture::Passive, ESquadFirePosture::Defensive, ESquadFirePosture::Aggressive })
+		{
+			if (Name.Equals(GetLabel(Posture), ESearchCase::IgnoreCase))
+			{
+				OutPosture = Posture;
+				return true;
+			}
+		}
+		return false;
 	}
 
 	FString GetLabel(ESquadFirePosture Posture)

@@ -303,14 +303,14 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 		TargetSwitchTimer = 0.f;
 		return FShootCandidate();
 	}
-	// 1b. Commander Mode: the target the ROE policy picked (Sprint 07-C).
+	// 1b. Commander Mode: the target the ROE policy picked (Sprint 07-C) - if the posture lets him fire at it on his own.
 	if (AActor* Chosen = AutonomyTarget.Get())
 	{
 		if (!OperativeCharacterInternal::IsLiveEnemy(Chosen))
 		{
 			AutonomyTarget.Reset();
 		}
-		else if (EvaluateShotLine(Chosen, true, Candidate, bBlocked))
+		else if (MayAutoFireAtEnemy(Chosen) && EvaluateShotLine(Chosen, true, Candidate, bBlocked))
 		{
 			CurrentCombatTarget = Chosen;
 			PendingFlankTarget.Reset();
@@ -323,7 +323,8 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 	int32 BarricadeBlocked = 0;
 	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
 	{
-		if (!OperativeCharacterInternal::IsLiveEnemy(Enemy))
+		// User decision 2026-10-19: a Defensive operative leaves the enemies that have not detected the squad alone.
+		if (!OperativeCharacterInternal::IsLiveEnemy(Enemy) || !MayAutoFireAtEnemy(Enemy))
 		{
 			continue;
 		}
@@ -409,6 +410,16 @@ bool AOperativeCharacter::MayAutoFireNow() const
 		USquadSubsystem::GetPostureConfig());
 }
 
+bool AOperativeCharacter::MayAutoFireAtEnemy(const AActor* Enemy) const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	const AEnemyCharacter* Character = Cast<AEnemyCharacter>(Enemy);
+	// Only a character can be "aware" of the squad; any other enemy actor (a turret-like target) counts as aware.
+	const bool bDetected = !Character || Character->IsHuntingSquad();
+	return FirePostureRules::MayAutoFireAt(GetFirePosture(), bProvokedThisFight, Squad && Squad->IsSquadProvoked(), bDetected,
+		USquadSubsystem::GetPostureConfig());
+}
+
 void AOperativeCharacter::NotifyBarricadeBlocked()
 {
 	if (BarricadeBlockNotifyTimer > 0.f)
@@ -488,8 +499,12 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 			if (Flow->GetPhase() != ECodexGamePhase::WaveCombat || Flow->GetCombatMode() != ECodexCombatMode::RealTime)
 			{
 				const ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>();
+				// Fix 2026-10-19 (game designer: "they see each other, the AGGRESSIVE squad never shoots"): the gate asked for an
+				// AMBUSH level only, while contact with an enemy placed in the map starts the fight on a «button» level too (the
+				// Demo 01 lake: combat_start "button" + placed patrols) - the encounter system decides per enemy below.
+				const bool bContactStartsFight = Encounter && (Encounter->IsAmbushCombatStart() || Encounter->GetNumLevelEnemies() > 0);
 				if (!Encounter || bRaging || bIsReloading || ShootTimer > 0.f || (UsesAmmo() && CurrentClip <= 0)
-					|| !FirePostureRules::MayAutoFireInExploration(GetFirePosture(), Encounter->IsAmbushCombatStart(), Flow->GetPhase(),
+					|| !FirePostureRules::MayAutoFireInExploration(GetFirePosture(), bContactStartsFight, Flow->GetPhase(),
 						Flow->IsCombatUnlocked(), USquadSubsystem::GetPostureConfig()))
 				{
 					return TEXT("not a real-time fight");
@@ -508,9 +523,12 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 		}
 	}
 
-	// Fire posture (user request 2026-10-06): Passive / unprovoked Defensive operatives open no fire of their own.
+	// Fire posture (user request 2026-10-06): Passive operatives open no fire of their own; an unprovoked Defensive one only at the
+	// enemies that have detected the squad (FindShootTarget filters them, 2026-10-19) and throws no grenade of its own.
 	// Sprint 12: Commander Mode may hold the fire behind the cover (direct orders still fire).
-	const bool bAutoFire = MayAutoFireNow() && !(bInCover && bCoverHoldFire);
+	const bool bCoverHold = bInCover && bCoverHoldFire;
+	const bool bAutoFire = MayAutoFireNow() && !bCoverHold;
+	const bool bAutoTargets = FirePostureRules::AllowsAutoTargets(GetFirePosture()) && !bCoverHold;
 
 	// Godot: a clustered pack gets a grenade before the rifle (not while raging or reloading).
 	if (bAutoFire && !bRaging && !bIsReloading && GrenadesCount > 0 && AIGrenadeCooldown <= 0.f && TryAIGrenadeThrow())
@@ -545,13 +563,14 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	}
 	else
 	{
-		Shot = FindShootTarget(DeltaTime, bAutoFire);
+		Shot = FindShootTarget(DeltaTime, bAutoTargets);
 	}
 	AActor* Target = Shot.Enemy;
 	OutTarget = Target;
 	if (!Target)
 	{
-		return bAutoFire ? TEXT("no target") : TEXT("no target (auto fire held by the posture)");
+		return bAutoFire ? TEXT("no target") : (bAutoTargets ? TEXT("no target (defensive: none has detected the squad)")
+			: TEXT("no target (auto fire held by the posture)"));
 	}
 
 	// Sniper rifle (user request 2026-10-09, SniperRules): only kneeling / prone and still. A direct order (priority target,

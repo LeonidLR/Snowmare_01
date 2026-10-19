@@ -57,6 +57,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Characters/FirePostureRules.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
@@ -1893,6 +1894,60 @@ namespace TutorialSmoke
 			{
 				Squad->SetLeader(Before);
 			}
+			State.Stage = 120;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// 2026-10-19 (game designer): the POSTURE lesson right after the trap disarm lesson (A3_wire finished; the wire card of the A2
+		// spot above was skipped long before the cover field, so the A3 pair is started here by hand - the order of the real file is
+		// CodexTactics.Tutorial.AmbushLesson.*). The squad entered A3 Defensive (the approach lines' set_posture action).
+		case 120:
+		{
+			Check(State, Squad->GetSquadPosture() == ESquadFirePosture::Defensive, FString::Printf(TEXT("the squad entered the complex DEFENSIVE (set_posture action; %s)"),
+				*FirePostureRules::GetLabel(Squad->GetSquadPosture())));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::PosturePassive), TEXT("the posture keys are locked before their lesson"));
+			State.RefusalsBefore = Tutorial->GetLockedRefusalCount();
+			Tap(PC, State, EKeys::Comma);
+			Next(State);
+			return true;
+		}
+		case 121:
+		{
+			if (State.StageTime < 0.2f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetLockedRefusalCount() == State.RefusalsBefore + 1 && Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Defensive,
+				TEXT("',' before the lesson: refused, the posture unchanged"));
+			Check(State, Tutorial->TriggerStep(TEXT("A3_posture_radio")) && Tutorial->TriggerStep(TEXT("A3_posture")), TEXT("the posture lesson starts (radio + card)"));
+			Next(State);
+			return true;
+		}
+		case 122:
+		{
+			if (Tutorial->GetStepState(TEXT("A3_posture")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A3_posture")) == ETutorialStepState::Active, FString::Printf(TEXT("the POSTURE card is up (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A3_posture")))));
+			Check(State, TutorialRules::IsRunning(Tutorial->GetStepState(TEXT("A3_posture_radio"))) || Tutorial->GetStepState(TEXT("A3_posture_radio")) == ETutorialStepState::Completed,
+				TEXT("the Commander's 'Hold your fire' radio plays with it"));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::PosturePassive) && !Tutorial->IsCommandLocked(PlayerCommands::PostureAggressive),
+				TEXT("the card unlocks , . /"));
+			Tap(PC, State, EKeys::Comma); // the real key: the selected operative (the leader) goes Passive
+			Next(State);
+			return true;
+		}
+		case 123:
+		{
+			if (State.StageTime < 0.2f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A3_posture")) == ETutorialStepState::Completed && Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Passive,
+				TEXT("',' (Posture.Passive): the leader is PASSIVE, the card completes"));
+			Squad->SetSquadPosture(ESquadFirePosture::Passive); // the rest of the lesson runs with the whole squad Passive (Alt + ,)
 			State.Stage = 104;
 			State.StageTime = 0.f;
 			return true;
@@ -1900,6 +1955,8 @@ namespace TutorialSmoke
 		case 104:
 		{
 			Check(State, Tutorial->TriggerStep(TEXT("A4_cones")) && Tutorial->GetCurrentBeat() == FName(TEXT("A4")), TEXT("A4 started with the cone card"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Skipped || Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Waiting,
+				TEXT("the posture lesson was done in A3: its overlook twin is cancelled (or about to be)"));
 			State.Stage = 69;
 			State.StageTime = 0.f;
 			return true;
@@ -1932,10 +1989,12 @@ namespace TutorialSmoke
 		}
 		case 65:
 		{
-			if (State.StageTime < 0.2f)
+			if (State.StageTime < 0.2f || (!TutorialRules::IsFinished(Tutorial->GetStepState(TEXT("A4_posture"))) && State.StageTime < 5.f))
 			{
 				return true;
 			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Skipped, FString::Printf(
+				TEXT("the overlook posture twin never shows - A3 taught it (%s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_posture")))));
 			Check(State, Leader->GetStance() == EOperativeStance::Crouching, TEXT("C after the stance lesson: the leader crouches"));
 			Leader->SetStance(EOperativeStance::Standing);
 			State.RefusalsBefore = Tutorial->GetLockedRefusalCount();

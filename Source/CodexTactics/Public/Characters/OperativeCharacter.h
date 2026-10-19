@@ -873,7 +873,9 @@ public:
 	 * Godot _find_shoot_target(delta): priority target, else the closest visible enemy; a current target is kept until a
 	 * much closer one (stance ratio, or within 3.5 m) stays closer for the stance's reaction delay. Barricade rules
 	 * decide cover (0.8 crouched) and block prone shooters ("🚫 Barricade blocks the shot"). bAllowAutoTargets = false
-	 * (fire posture holds the automatic fire) keeps only the direct orders: priority target and blind fire.
+	 * (fire posture holds the automatic fire) keeps only the direct orders: priority target and blind fire; with it, the
+	 * automatic targets (Commander Mode target, visible enemies) are only those MayAutoFireAtEnemy accepts (Defensive: the
+	 * enemies that have detected the squad until it is provoked).
 	 */
 	FShootCandidate FindShootTarget(float DeltaTime, bool bAllowAutoTargets = true);
 
@@ -1359,8 +1361,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Combat|Posture")
 	ESquadFirePosture GetFirePosture() const;
 
-	/** The posture lets this operative open fire on its own now (provocation included). */
+	/** The posture lets this operative open fire on its own now at ANY enemy (provocation included; autonomous grenades). */
 	bool MayAutoFireNow() const;
+
+	/**
+	 * The posture lets him open fire on his own at THIS enemy (user decision 2026-10-19, FirePostureRules::MayAutoFireAt): Passive
+	 * never, Defensive at an enemy that has detected the squad (AEnemyCharacter::IsHuntingSquad) or once provoked, Aggressive always.
+	 */
+	bool MayAutoFireAtEnemy(const AActor* Enemy) const;
 
 	/** Target switching per stance (Godot stance_target_switch_delay_* / stance_switch_distance_ratio_*; set from the balance). */
 	FSquadFireConfig FireConfig;

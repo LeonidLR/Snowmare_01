@@ -392,9 +392,10 @@
     },
 
     {
-      "_comment": "User flow step 10 (A3, VOL_A3_APPROACH): the cautious approach to the complex - mines and wires, cover, stances, vault, crawl under the low fence. Sprint is NOT locked here.",
+      "_comment": "User flow step 10 (A3, VOL_A3_APPROACH): the cautious approach to the complex - mines and wires, cover, stances, vault, crawl under the low fence. Sprint is NOT locked here. 2026-10-19 (game designer): the squad enters the complex DEFENSIVE ('set_posture' action when the lines play): no fire of its own on enemies that have not spotted it - an Aggressive squad would start the A4 fight by itself the moment a patrol came into view, before the posture lesson.",
       "id": "A3_wt_approach", "beat": "A3", "kind": "walk_talk",
       "trigger": { "type": "beat_start", "delay_s": 1 },
+      "action": { "type": "set_posture", "posture": "defensive" },
       "lines": [
         { "speaker": "Commander", "text_id": "WT_A3_01" },
         { "speaker": "Medic-Sapper", "text_id": "WT_A3_02" },
@@ -515,6 +516,23 @@
     },
 
     {
+      "_comment": "2026-10-19 (game designer play-test): THE POSTURE LESSON right after the trap disarm lesson (A3_wire finished - disarmed, prone, timed out or skipped): the Commander's radio 'Hold your fire' + the card with the three postures and their keys; it unlocks Posture.* (locked since A0) and completes on Posture.Passive (, or Alt + ,) - the stealth part of the complex. BEAT-LESS on purpose: a later beat never drops it (the overlook is only 13 m past the wire). 'requires' A3_cover: a wire spotted before the cover field (the player wandered off) does not arm it. Its A4 twins (A4_posture_radio / A4_posture) teach it at the overlook when the wire was never spotted; whichever pair finishes first cancels the other (cancel_on both ways).",
+      "id": "A3_posture_radio", "kind": "radio",
+      "trigger": { "type": "after_step", "step": "A3_wire", "requires": ["A3_cover"], "delay_s": 1 },
+      "cancel_on": { "step": "A4_posture_radio" },
+      "lines": [ { "speaker": "Commander", "text_id": "WT_A3_POSTURE" } ]
+    },
+    {
+      "id": "A3_posture", "kind": "hint_card", "text_id": "TUT_A3_POSTURE",
+      "keys": ["Posture.Passive", "Posture.Defensive", "Posture.Aggressive"],
+      "unlock": ["Posture.*"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A3_wire", "requires": ["A3_cover"], "delay_s": 1.5 },
+      "cancel_on": { "step": "A4_posture" },
+      "complete": { "commands": ["Posture.Passive"] }
+    },
+
+    {
       "_comment": "User flow step 11 (A4, VOL_A4_OVERLOOK): the patrols come into view. Phase 1 ships the vision-cone toggle card and the tripwire card; the ambush fight itself (patrol encounter group) is Phase 2 (beat sheet rev 5 section 1.3).",
       "id": "A4_wt_contact", "beat": "A4", "kind": "walk_talk",
       "trigger": { "type": "beat_start" },
@@ -530,6 +548,22 @@
       "unlock": ["View.VisionCones"],
       "trigger": { "type": "beat_start", "delay_s": 2 },
       "complete": { "commands": ["View.VisionCones"], "timeout_s": 40 }
+    },
+    {
+      "_comment": "2026-10-19: the posture lesson at the overlook when the A3 one never ran (the wire was never spotted / was tripped). Cancelled at once when A3_posture_radio / A3_posture already finished; cancels them when it finishes first (cancel_on both ways).",
+      "id": "A4_posture_radio", "beat": "A4", "kind": "radio",
+      "trigger": { "type": "beat_start", "delay_s": 3 },
+      "cancel_on": { "step": "A3_posture_radio" },
+      "lines": [ { "speaker": "Commander", "text_id": "WT_A3_POSTURE" } ]
+    },
+    {
+      "id": "A4_posture", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A3_POSTURE",
+      "keys": ["Posture.Passive", "Posture.Defensive", "Posture.Aggressive"],
+      "unlock": ["Posture.*"],
+      "precredit": false,
+      "trigger": { "type": "beat_start", "delay_s": 3 },
+      "cancel_on": { "step": "A3_posture" },
+      "complete": { "commands": ["Posture.Passive"] }
     },
     {
       "id": "A4_tripwire", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_TRIPWIRE",

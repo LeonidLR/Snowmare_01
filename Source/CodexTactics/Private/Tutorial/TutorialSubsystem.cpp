@@ -840,9 +840,19 @@ void UTutorialSubsystem::HandleStepShown(const FTutorialStep& Step)
 
 void UTutorialSubsystem::RunActions(const FTutorialStep& Step)
 {
-	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	for (const FTutorialAction& Action : Step.Actions)
 	{
+		ESquadFirePosture Posture = ESquadFirePosture::Aggressive;
+		if (Action.Type == FName(TEXT("set_posture")) && Squad && FirePostureRules::ParseName(Action.Posture, Posture))
+		{
+			// 2026-10-19: the Demo 01 squad enters the complex DEFENSIVE (no fire on enemies that have not spotted it) until the posture
+			// lesson - an Aggressive squad would start the A4 fight on its own the moment a patrol came into view.
+			Squad->SetSquadPosture(Posture);
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s set_posture %s"), *Step.Id.ToString(), *FirePostureRules::GetLabel(Posture));
+			WriteTelemetry(TEXT("action_set_posture"), Step.Id, Step.Beat, 0.f);
+			continue;
+		}
 		if (Action.Type == FName(TEXT("cold_bump")) && Squad)
 		{
 			for (AOperativeCharacter* Member : Squad->GetMembers())

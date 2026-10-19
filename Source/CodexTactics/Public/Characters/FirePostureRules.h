@@ -15,7 +15,10 @@ enum class ESquadFirePosture : uint8
 {
 	/** "Passive": never open fire on their own, not even when attacked. */
 	Passive,
-	/** "Defensive": hold fire until attacked (self, or any squad member — tunable), then fight back for that fight. */
+	/**
+	 * "Defensive": no fire on enemies that have not spotted the squad; it engages an enemy that has detected the squad (hunts it)
+	 * and, once attacked (self, or any squad member — tunable), fights back at any enemy for that fight (user decision 2026-10-19).
+	 */
 	Defensive,
 	/** "Aggressive": open fire on any enemy in sight at once (the behaviour before postures existed). */
 	Aggressive
@@ -36,8 +39,8 @@ struct CODEXTACTICS_API FFirePostureConfig
 	/** Defensive: an attack on any squad member provokes every defensive operative (false: only the one attacked). */
 	bool bDefensiveSquadWideProvocation = false;
 	/**
-	 * Aggressive: on an ambush level still in exploration, an operative who sees an enemy in weapon range opens fire —
-	 * a squad attack that starts the ambush fight (LevelEncounterRules::ShouldStartAmbush).
+	 * Aggressive: still in exploration, an operative who sees an enemy in weapon range opens fire where contact starts the
+	 * fight (an ambush level, or an enemy placed in the map on a «button» level - LevelEncounterRules::ShouldStartFightOnContact).
 	 */
 	bool bAggressiveOpensFireInExploration = true;
 };
@@ -57,15 +60,29 @@ namespace FirePostureRules
 	 */
 	CODEXTACTICS_API bool MayAutoFire(ESquadFirePosture Posture, bool bSelfAttacked, bool bSquadAttacked, const FFirePostureConfig& Config);
 
+	/**
+	 * Per target (user decision 2026-10-19): may the operative open fire on THIS enemy on its own? Passive never; Defensive at an
+	 * enemy that has detected the squad (bTargetHasDetectedSquad: it hunts the squad - AEnemyCharacter::IsHuntingSquad) or once
+	 * provoked (MayAutoFire); Aggressive at any enemy in sight.
+	 */
+	CODEXTACTICS_API bool MayAutoFireAt(ESquadFirePosture Posture, bool bSelfAttacked, bool bSquadAttacked, bool bTargetHasDetectedSquad,
+		const FFirePostureConfig& Config);
+
+	/** Does the posture allow any automatic target at all (Defensive: only the detecting enemies until provoked)? Passive: no. */
+	CODEXTACTICS_API bool AllowsAutoTargets(ESquadFirePosture Posture);
+
 	/** May it fire at a target now: a direct player order always, otherwise MayAutoFire. */
 	CODEXTACTICS_API bool MayFire(ESquadFirePosture Posture, bool bDirectOrder, bool bSelfAttacked, bool bSquadAttacked,
 		const FFirePostureConfig& Config);
 
 	/**
-	 * Aggressive auto-fire in exploration: allowed only where opening fire starts the ambush fight (ambush level, still
-	 * exploring, fight not yet unlocked) — never on a classic wave map, where exploration stays peaceful.
+	 * Aggressive auto-fire in exploration: allowed only where opening fire can start the fight (bContactStartsFight: an ambush
+	 * level, or a level with enemies placed in the map - contact with one of them starts the fight on a «button» level too, fix
+	 * 2026-10-19: the Demo 01 lake is a «button» level with placed patrols and the Aggressive squad never fired), still
+	 * exploring, fight not yet unlocked — never on a classic wave map without placed enemies, where exploration stays peaceful.
+	 * The encounter system still decides per enemy (ULevelEncounterSubsystem::NotifyHostileContact).
 	 */
-	CODEXTACTICS_API bool MayAutoFireInExploration(ESquadFirePosture Posture, bool bAmbushLevel, ECodexGamePhase Phase, bool bCombatUnlocked,
+	CODEXTACTICS_API bool MayAutoFireInExploration(ESquadFirePosture Posture, bool bContactStartsFight, ECodexGamePhase Phase, bool bCombatUnlocked,
 		const FFirePostureConfig& Config);
 
 	/** Provocations end with the fight: a wave cleared, after the combat, back in exploration or game over. */
@@ -82,6 +99,9 @@ namespace FirePostureRules
 
 	/** Next posture of the cycle Passive -> Defensive -> Aggressive -> Passive. */
 	CODEXTACTICS_API ESquadFirePosture Next(ESquadFirePosture Posture);
+
+	/** Data name "passive" / "defensive" / "aggressive" (case-insensitive; the tutorial "set_posture" action). False when unknown. */
+	CODEXTACTICS_API bool ParseName(const FString& Name, ESquadFirePosture& OutPosture);
 
 	/** "PASSIVE" / "DEFENSIVE" / "AGGRESSIVE". */
 	CODEXTACTICS_API FString GetLabel(ESquadFirePosture Posture);

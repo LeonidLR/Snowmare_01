@@ -311,6 +311,13 @@
     "TUT_A3_MINE_SPOTTED": {
       "text": "Mine spotted - squad holding. Move them one by one: click it and choose Defuse (the Medic-Sapper is best), go round it, or Ctrl+click it from more than 4 m to blow it."
     },
+    "WT_A3_POSTURE": {
+      "text": "Hold your fire - shoot only on my command."
+    },
+    "TUT_A3_POSTURE": {
+      "title": "POSTURE",
+      "text": "{key:Posture.Passive} PASSIVE: never fire on their own · {key:Posture.Defensive} DEFENSIVE: return fire · {key:Posture.Aggressive} AGGRESSIVE: shoot any enemy in sight. Alt + key = the whole squad. Go PASSIVE now (Alt + {key:Posture.Passive}) - we sneak in."
+    },
     "TUT_BEAT_A4": {
       "title": "THE AMBUSH"
     },

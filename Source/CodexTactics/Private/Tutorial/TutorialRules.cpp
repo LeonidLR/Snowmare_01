@@ -1,4 +1,5 @@
 #include "Tutorial/TutorialRules.h"
+#include "Characters/FirePostureRules.h"
 #include "Interactables/TrapSpotRules.h"
 #include "Core/PlayerCommands.h"
 #include "Dom/JsonObject.h"
@@ -433,12 +434,19 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		ActionObjects.Append(JsonObjects(Object, TEXT("action")));
 		for (const TSharedPtr<FJsonObject>& ActionObject : ActionObjects)
 		{
-			WarnUnknownKeys(ActionObject, { TEXT("type"), TEXT("amount"), TEXT("min_level") }, Where + TEXT(" action"), OutWarnings);
+			WarnUnknownKeys(ActionObject, { TEXT("type"), TEXT("amount"), TEXT("min_level"), TEXT("posture") }, Where + TEXT(" action"), OutWarnings);
 			FTutorialAction Action;
 			Action.Type = FName(*JsonString(ActionObject, TEXT("type")));
 			if (!IsKnownAction(Action.Type))
 			{
-				OutError = FString::Printf(TEXT("%s: unknown action type \"%s\" (cold_bump)"), *Where, *Action.Type.ToString());
+				OutError = FString::Printf(TEXT("%s: unknown action type \"%s\" (cold_bump, set_posture)"), *Where, *Action.Type.ToString());
+				return false;
+			}
+			Action.Posture = JsonString(ActionObject, TEXT("posture"));
+			ESquadFirePosture ParsedPosture = ESquadFirePosture::Aggressive;
+			if (Action.Type == FName(TEXT("set_posture")) && !FirePostureRules::ParseName(Action.Posture, ParsedPosture))
+			{
+				OutError = FString::Printf(TEXT("%s: set_posture needs \"posture\": passive | defensive | aggressive (got \"%s\")"), *Where, *Action.Posture);
 				return false;
 			}
 			Action.Amount = static_cast<float>(JsonNumber(ActionObject, TEXT("amount"), 0.0));
@@ -1092,7 +1100,7 @@ bool TutorialRules::IsKnownStat(FName Stat)
 
 bool TutorialRules::IsKnownAction(FName Type)
 {
-	return Type == FName(TEXT("cold_bump"));
+	return Type == FName(TEXT("cold_bump")) || Type == FName(TEXT("set_posture"));
 }
 
 bool TutorialRules::IsKnownFocus(FName Focus)
