@@ -147,7 +147,7 @@ namespace
 		}
 	}
 
-	FString CompileAndReport(UBlueprint* Blueprint)
+	FString CompileBlueprintAndReport(UBlueprint* Blueprint)
 	{
 		FCompilerResultsLog Results;
 		Results.bSilentMode = true;
@@ -345,7 +345,7 @@ FString UBlueprintGraphToolset::ImportGraphNodesText(const FString& AssetPath, c
 	FString Out = FString::Printf(TEXT("Pasted %d node(s) into '%s' (not saved: review and save in the editor).\n"), Imported.Num(), *Graph->GetName());
 	if (bCompile)
 	{
-		Out += CompileAndReport(Blueprint);
+		Out += CompileBlueprintAndReport(Blueprint);
 	}
 	return Out;
 }
@@ -354,7 +354,7 @@ FString UBlueprintGraphToolset::CompileBlueprint(const FString& AssetPath)
 {
 	FString Error;
 	UBlueprint* Blueprint = LoadBlueprint(AssetPath, Error);
-	return Blueprint ? CompileAndReport(Blueprint) : Error;
+	return Blueprint ? CompileBlueprintAndReport(Blueprint) : Error;
 }
 
 #undef LOCTEXT_NAMESPACE

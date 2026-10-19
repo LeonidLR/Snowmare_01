@@ -56,7 +56,7 @@ namespace TutorialLockTestData
 			  "complete": { "event": "Never" } }
 		] })JSON");
 
-	bool Parse(FAutomationTestBase& Test, const TCHAR* Json, FTutorialStepsData& OutData)
+	bool ParseLockSteps(FAutomationTestBase& Test, const TCHAR* Json, FTutorialStepsData& OutData)
 	{
 		TArray<FString> Warnings;
 		FString Error;
@@ -73,7 +73,7 @@ namespace TutorialLockTestData
 	}
 
 	/** Ticks in 0.25 s steps; plays out every speech step at once and completes feed steps (what UTutorialSubsystem does). */
-	void Pump(FTutorialStateMachine& Machine, float Seconds)
+	void PumpLockMachine(FTutorialStateMachine& Machine, float Seconds)
 	{
 		for (float Time = 0.f; Time < Seconds - KINDA_SMALL_NUMBER; Time += 0.25f)
 		{
@@ -149,7 +149,7 @@ TUTORIAL_LOCK_TEST(FTutorialLockSchemaTest, "Lock.Schema")
 bool FTutorialLockSchemaTest::RunTest(const FString&)
 {
 	FTutorialStepsData Data;
-	if (!TutorialLockTestData::Parse(*this, TutorialLockTestData::Conditions, Data))
+	if (!TutorialLockTestData::ParseLockSteps(*this, TutorialLockTestData::Conditions, Data))
 	{
 		return false;
 	}
@@ -159,12 +159,12 @@ bool FTutorialLockSchemaTest::RunTest(const FString&)
 		&& Heat->Conditions[0].Value == 40.f && Heat->Focus == FName(TEXT("coldest_operative")));
 	TestTrue(TEXT("condition as an array"), Data.FindStep(TEXT("nopack")) && !Data.FindStep(TEXT("nopack"))->Conditions[0].bAtLeast);
 	FTutorialStepsData GustData;
-	TutorialLockTestData::Parse(*this, TutorialLockTestData::Gust, GustData);
+	TutorialLockTestData::ParseLockSteps(*this, TutorialLockTestData::Gust, GustData);
 	const FTutorialStep* Gust = GustData.FindStep(TEXT("gust"));
 	TestTrue(TEXT("single action object: cold_bump 20, floor 42"), Gust && Gust->Actions.Num() == 1 && Gust->Actions[0].Type == FName(TEXT("cold_bump"))
 		&& Gust->Actions[0].Amount == 20.f && Gust->Actions[0].MinLevel == 42.f);
 	FTutorialStepsData LockData;
-	TutorialLockTestData::Parse(*this, TutorialLockTestData::Locks, LockData);
+	TutorialLockTestData::ParseLockSteps(*this, TutorialLockTestData::Locks, LockData);
 	TestTrue(TEXT("beat lock / unlock"), LockData.Beats[0].Lock == TArray<FString>{ TEXT("Order.Sprint") } && LockData.Beats[2].Unlock == TArray<FString>{ TEXT("Order.Sprint") });
 	TestTrue(TEXT("step unlock"), LockData.FindStep(TEXT("warmed"))->Unlock == TArray<FString>{ TEXT("Order.Sprint") });
 	TestTrue(TEXT("feed kind"), LockData.FindStep(TEXT("nosprint"))->Kind == ETutorialStepKind::Feed);
@@ -185,7 +185,7 @@ TUTORIAL_LOCK_TEST(FTutorialLockMachineTest, "Lock.LockUnlock")
 bool FTutorialLockMachineTest::RunTest(const FString&)
 {
 	FTutorialStepsData Data;
-	if (!TutorialLockTestData::Parse(*this, TutorialLockTestData::Locks, Data))
+	if (!TutorialLockTestData::ParseLockSteps(*this, TutorialLockTestData::Locks, Data))
 	{
 		return false;
 	}
@@ -239,7 +239,7 @@ TUTORIAL_LOCK_TEST(FTutorialLockSaveTest, "Lock.Saved")
 bool FTutorialLockSaveTest::RunTest(const FString&)
 {
 	FTutorialStepsData Data;
-	if (!TutorialLockTestData::Parse(*this, TutorialLockTestData::Locks, Data))
+	if (!TutorialLockTestData::ParseLockSteps(*this, TutorialLockTestData::Locks, Data))
 	{
 		return false;
 	}
@@ -288,7 +288,7 @@ TUTORIAL_LOCK_TEST(FTutorialGustTimeoutTest, "Action.GustTimeout")
 bool FTutorialGustTimeoutTest::RunTest(const FString&)
 {
 	FTutorialStepsData Data;
-	if (!TutorialLockTestData::Parse(*this, TutorialLockTestData::Gust, Data))
+	if (!TutorialLockTestData::ParseLockSteps(*this, TutorialLockTestData::Gust, Data))
 	{
 		return false;
 	}
@@ -328,7 +328,7 @@ TUTORIAL_LOCK_TEST(FTutorialConditionTriggerTest, "Condition.Trigger")
 bool FTutorialConditionTriggerTest::RunTest(const FString&)
 {
 	FTutorialStepsData Data;
-	if (!TutorialLockTestData::Parse(*this, TutorialLockTestData::Conditions, Data))
+	if (!TutorialLockTestData::ParseLockSteps(*this, TutorialLockTestData::Conditions, Data))
 	{
 		return false;
 	}
@@ -387,7 +387,7 @@ bool FTutorialConditionCompletionTest::RunTest(const FString&)
 			  "complete": { "commands": ["Squad.Regroup"] } }
 		] })JSON");
 	FTutorialStepsData Data;
-	if (!TutorialLockTestData::Parse(*this, Json, Data))
+	if (!TutorialLockTestData::ParseLockSteps(*this, Json, Data))
 	{
 		return false;
 	}
@@ -658,7 +658,7 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestFalse(TEXT("A0: move free from the very start"), Machine.IsCommandLocked(PlayerCommands::Move));
 	TestTrue(TEXT("rev 5e: sprint locked from the level start"), Machine.IsCommandLocked(PlayerCommands::Sprint));
 	TestEqual(TEXT("rev 5e: a locked double click walks"), TutorialRules::ResolveLockedCommand(Machine.GetLocks(), PlayerCommands::Sprint), PlayerCommands::Move);
-	Machine.Tick(1.1f); // the radio's 1 s delay (no Pump: it would play the radio out at once)
+	Machine.Tick(1.1f); // the radio's 1 s delay (no PumpLockMachine: it would play the radio out at once)
 	TestEqual(TEXT("A0: the HQ radio plays"), Machine.GetActiveSpeech(), FName(TEXT("A0_radio_hq")));
 	TestEqual(TEXT("A0: the beacon objective is up with it"), Machine.GetState(TEXT("A0_obj_beacon")), ETutorialStepState::Active);
 	Machine.Tick(1.f);
@@ -700,10 +700,10 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestTrue(TEXT("A1: the inventory still locked until the heat pack lesson"), Machine.IsCommandLocked(PlayerCommands::InventoryOpen));
 	TestTrue(TEXT("A1: solo locked until the hut solo card"), Machine.IsCommandLocked(PlayerCommands::SoloOn));
 	TestTrue(TEXT("rev 5e: A1 (beacon 1): sprint still locked"), Machine.IsCommandLocked(PlayerCommands::Sprint));
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("no card before the crack"), Machine.GetActiveCard(), FName());
 	Machine.HandleVolume(TEXT("VOL_A1_BEACON2"), NAME_None, NAME_None);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("the crack: a line + the crossing objective, no card (rev 5c)"), Machine.GetActiveCard(), FName());
 	TestEqual(TEXT("the crossing objective is up"), Machine.GetState(TEXT("A1_bridge")), ETutorialStepState::Active);
 	TestEqual(TEXT("the bridge line played"), Machine.GetState(TEXT("A1_wt_bridge")), ETutorialStepState::Completed);
@@ -716,16 +716,16 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	Machine.HandleEvent(TEXT("BridgeCrossed"), TEXT("Op2"));
 	Machine.HandleEvent(TEXT("BridgeCrossed"), TEXT("Op3"));
 	TestEqual(TEXT("three distinct crossings complete it"), Machine.GetState(TEXT("A1_bridge")), ETutorialStepState::Completed);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("then the squad banter"), Machine.GetState(TEXT("A1_wt_banter")), ETutorialStepState::Completed);
 	TestEqual(TEXT("no regroup / box card after the bridge (they arrive together)"), Machine.GetActiveCard(), FName());
 	TestEqual(TEXT("no heat-pack card while nobody is cold"), Machine.GetState(TEXT("A1_heatpack")), ETutorialStepState::Idle);
 	TestEqual(TEXT("the gust has not come yet (2 s after the crossing)"), Machine.GetState(TEXT("A1_gust")), ETutorialStepState::Waiting);
-	Pump(Machine, 19.f);
+	PumpLockMachine(Machine, 19.f);
 	TestEqual(TEXT("20 s after the crossing, nobody at Chills: the gust played"), Machine.GetState(TEXT("A1_gust")), ETutorialStepState::Completed);
 	Cold = ColdRules::ApplyColdShock(Cold, GustStep->Actions[0].Amount, GustStep->Actions[0].MinLevel); // what the runtime does on show
 	TestTrue(TEXT("the gust leaves everyone at Chills"), Cold >= 40.f);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("then the heat pack card"), Machine.GetActiveCard(), FName(TEXT("A1_heatpack")));
 	TestFalse(TEXT("the heat pack card UNLOCKS the inventory and the items"), Machine.IsCommandLocked(PlayerCommands::InventoryOpen) || Machine.IsCommandLocked(PlayerCommands::UseHeatPack));
 	TestEqual(TEXT("the sprint lesson waits for the heat pack lesson"), Machine.GetState(TEXT("A1_sprint")), ETutorialStepState::Idle);
@@ -734,16 +734,16 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	Cold = 7.f;
 	Packs = 2.f;
 	TestEqual(TEXT("using a heat pack completes it"), Machine.GetState(TEXT("A1_heatpack")), ETutorialStepState::Completed);
-	Pump(Machine, 1.5f);
+	PumpLockMachine(Machine, 1.5f);
 	TestEqual(TEXT("nobody else cold: the mate card is skipped"), Machine.GetState(TEXT("A1_heatpack_mate")), ETutorialStepState::Skipped);
-	Pump(Machine, 1.5f);
+	PumpLockMachine(Machine, 1.5f);
 	TestEqual(TEXT("rev 5e: right after the heat pack lesson, the sprint lesson 'double-click to run'"), Machine.GetActiveCard(), FName(TEXT("A1_sprint")));
 	TestEqual(TEXT("rev 5e: the card unlocks sprint - a double click sprints now"), TutorialRules::ResolveLockedCommand(Machine.GetLocks(), PlayerCommands::Sprint),
 		PlayerCommands::Sprint);
 	TestEqual(TEXT("the hut objective waits for the sprint lesson"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Idle);
 	Machine.HandleCommand(PlayerCommands::Sprint);
 	TestEqual(TEXT("rev 5e: a sprint order completes the sprint lesson"), Machine.GetState(TEXT("A1_sprint")), ETutorialStepState::Completed);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("WT_A1_RESUPPLY played"), Machine.GetState(TEXT("A1_wt_resupply")), ETutorialStepState::Completed);
 	TestEqual(TEXT("and the hut objective is up"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Active);
 	TestEqual(TEXT("hut loot cards not before the hut"), Machine.GetState(TEXT("A1_loot_open")), ETutorialStepState::Idle);
@@ -758,7 +758,7 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestTrue(TEXT("rev 5i: arriving at the hut approach confines the squad"), Machine.IsConfined());
 	TestTrue(TEXT("rev 5i: only the approach area is open (the door spots / the hut wait for their cards)"),
 		ConfinedAreas() == TArray<FName>{ FName(TEXT("VOL_A1_HUT_APPROACH")) });
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("approaching the hut: the walk-and-talk played"), Machine.GetState(TEXT("A1_wt_hut_approach")), ETutorialStepState::Completed);
 	TestEqual(TEXT("rev 5i: hut: Solo first"), Machine.GetActiveCard(), FName(TEXT("A1_solo")));
 	TestFalse(TEXT("the solo card unlocks solo / regroup"), Machine.IsCommandLocked(PlayerCommands::SoloOn) || Machine.IsCommandLocked(PlayerCommands::Regroup));
@@ -771,12 +771,12 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("a selection before Solo does not complete Solo"), Machine.GetState(TEXT("A1_solo")), ETutorialStepState::Active);
 	Machine.HandleCommand(PlayerCommands::SoloOn);
 	TestEqual(TEXT("B: solo on completes it"), Machine.GetState(TEXT("A1_solo")), ETutorialStepState::Completed);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("rev 5i: then select - shown although Select.Member is in the history (not precredited)"), Machine.GetActiveCard(), FName(TEXT("A1_select")));
 	TestTrue(TEXT("rev 5i: still held after Solo"), Machine.IsConfined());
 	Machine.HandleCommand(PlayerCommands::SelectMember);
 	TestEqual(TEXT("a selection completes it"), Machine.GetState(TEXT("A1_select")), ETutorialStepState::Completed);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("the door: left side first"), Machine.GetActiveCard(), FName(TEXT("A1_hut_stack_l")));
 	TestTrue(TEXT("right side and 'go in' queued"), Machine.GetState(TEXT("A1_hut_stack_r")) == ETutorialStepState::Queued
 		&& Machine.GetState(TEXT("A1_hut_enter")) == ETutorialStepState::Queued);
@@ -790,7 +790,7 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("rev 5i: right of the door before its card does not count (the lesson order)"), Machine.GetState(TEXT("A1_hut_stack_r")), ETutorialStepState::Queued);
 	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op1"), { TEXT("VOL_A1_DOOR_L") });
 	TestEqual(TEXT("Op1 left of the door completes the left card"), Machine.GetState(TEXT("A1_hut_stack_l")), ETutorialStepState::Completed);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("then the right side"), Machine.GetActiveCard(), FName(TEXT("A1_hut_stack_r")));
 	TestTrue(TEXT("rev 5i: the right door spot opens now (the left one stays open), the hut still closed"),
 		ConfinedAreas() == TArray<FName>{ FName(TEXT("VOL_A1_HUT_APPROACH")), FName(TEXT("VOL_A1_DOOR_L")), FName(TEXT("VOL_A1_DOOR_R")) });
@@ -801,25 +801,25 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	Machine.HandleVolume(TEXT("VOL_A1_HUT"), NAME_None, NAME_None, TEXT("Op1"));
 	Machine.HandleVolume(TEXT("VOL_A1_HUT"), NAME_None, NAME_None, TEXT("Op2"));
 	TestEqual(TEXT("a stacker walking in is not the third man"), Machine.GetState(TEXT("A1_hut_enter")), ETutorialStepState::Queued);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("then 'go in'"), Machine.GetActiveCard(), FName(TEXT("A1_hut_enter")));
 	TestTrue(TEXT("rev 5i: the hut opens with the 'go in' card"), ConfinedAreas().Contains(FName(TEXT("VOL_A1_HUT"))));
 	Machine.HandleVolume(TEXT("VOL_A1_HUT"), NAME_None, NAME_None, TEXT("Op3"));
 	TestEqual(TEXT("Op3 inside completes it"), Machine.GetState(TEXT("A1_hut_enter")), ETutorialStepState::Completed);
 	TestFalse(TEXT("rev 5i: the third man inside releases the squad"), Machine.IsConfined());
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("inside: the line played"), Machine.GetState(TEXT("A1_wt_hut")), ETutorialStepState::Completed);
 	TestEqual(TEXT("hut: open the crate"), Machine.GetActiveCard(), FName(TEXT("A1_loot_open")));
 	TestFalse(TEXT("the hut card unlocks the crates"), Machine.IsCommandLocked(PlayerCommands::LootCrate) || Machine.IsCommandLocked(PlayerCommands::LootTake));
 	Machine.HandleCommand(PlayerCommands::LootCrate);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("then take the heat packs"), Machine.GetActiveCard(), FName(TEXT("A1_loot_take")));
 	Packs = 5.f;
 	Machine.HandleEvent(TEXT("ItemLooted"));
 	Machine.HandleEvent(TEXT("ItemLooted.HeatPack"));
 	TestEqual(TEXT("taking them completes the card"), Machine.GetState(TEXT("A1_loot_take")), ETutorialStepState::Completed);
 	TestEqual(TEXT("and the hut objective"), Machine.GetState(TEXT("A1_obj_hut")), ETutorialStepState::Completed);
-	Pump(Machine, 2.5f);
+	PumpLockMachine(Machine, 2.5f);
 	TestEqual(TEXT("the closing line played"), Machine.GetState(TEXT("A1_wt_stocked")), ETutorialStepState::Completed);
 	// Rev 5d: share the heat packs (one mate has none; then the looter hands them out).
 	TestEqual(TEXT("rev 5d: the share card after the loot"), Machine.GetActiveCard(), FName(TEXT("A1_share_card")));
@@ -829,15 +829,15 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	Machine.Tick(0.1f);
 	TestTrue(TEXT("everyone carries one + handed over: card and objective done"), Machine.GetState(TEXT("A1_share_card")) == ETutorialStepState::Completed
 		&& Machine.GetState(TEXT("A1_share")) == ETutorialStepState::Completed);
-	Pump(Machine, 3.f);
+	PumpLockMachine(Machine, 3.f);
 	TestEqual(TEXT("regroup card after the share card"), Machine.GetActiveCard(), FName(TEXT("A1_regroup")));
 	Machine.HandleCommand(PlayerCommands::Regroup);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("then box select"), Machine.GetActiveCard(), FName(TEXT("A1_box")));
 	Machine.HandleCommand(PlayerCommands::SelectBox);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	Machine.HandleVolume(TEXT("VOL_A1_BEACON3"), NAME_None, NAME_None);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("beacon 3: formation lines, no guard card any more (guard moves to the horde beat)"), Machine.GetState(TEXT("A1_wt_regroup")), ETutorialStepState::Completed);
 	TestEqual(TEXT("no card at beacon 3"), Machine.GetActiveCard(), FName());
 	// A3 approach: the stance card is precredited when the player already used two stance keys.
@@ -855,14 +855,14 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestFalse(TEXT("the stance card (even precredited) unlocks the stances"), Machine.IsCommandLocked(PlayerCommands::StanceProne) || Machine.IsCommandLocked(PlayerCommands::SquadStanceProne));
 	TestTrue(TEXT("A3: the pause still locked (taught in the horde beat)"), Machine.IsCommandLocked(PlayerCommands::TacticalPause));
 	Machine.HandleVolume(TEXT("VOL_A3_FENCE"), NAME_None, NAME_None);
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	// Rev 5i: the fence - stop + Solo, then one by one (prone, one at a time), then each into his own cover; Regroup locked meanwhile.
 	TestEqual(TEXT("rev 5i: the low fence: the stop / Solo card"), Machine.GetActiveCard(), FName(TEXT("A3_fence")));
 	TestTrue(TEXT("rev 5i: held at the fence, Regroup locked"), Machine.IsConfined() && Machine.IsCommandLocked(PlayerCommands::Regroup));
 	Machine.HandleEvent(TEXT("Tutorial.Locked.Squad.Regroup"));
 	TestTrue(TEXT("rev 5i: a refused regroup gets 'Not yet - one by one.'"), Machine.GetState(TEXT("A3_regroup_refused")) != ETutorialStepState::Idle);
 	SquadSolo = 1.f;
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("rev 5i: Solo on: the stop card done"), Machine.GetState(TEXT("A3_fence")), ETutorialStepState::Completed);
 	TestEqual(TEXT("rev 5i: then one by one"), Machine.GetActiveCard(), FName(TEXT("A3_fence_crawl")));
 	FTutorialConfineView Crossing;
@@ -874,7 +874,7 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("three crawl-throughs complete the crossing card"), Machine.GetState(TEXT("A3_fence_crawl")), ETutorialStepState::Completed);
 	TestFalse(TEXT("rev 5i: all through: no longer held"), Machine.IsConfined());
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	TestEqual(TEXT("rev 5i: then each into his own cover (still in Solo)"), Machine.GetActiveCard(), FName(TEXT("A3_cover")));
 	TestTrue(TEXT("rev 5i: Regroup still locked"), Machine.IsCommandLocked(PlayerCommands::Regroup));
 	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op1"));
@@ -883,7 +883,7 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op2"));
 	Machine.HandleEvent(TEXT("CoverEntered"), TEXT("Op3"));
 	TestEqual(TEXT("rev 5i: three in cover: done"), Machine.GetState(TEXT("A3_cover")), ETutorialStepState::Completed);
-	Pump(Machine, 3.f);
+	PumpLockMachine(Machine, 3.f);
 	TestFalse(TEXT("rev 5i: then the peek card frees Regroup"), Machine.IsCommandLocked(PlayerCommands::Regroup));
 	return true;
 }
@@ -1120,7 +1120,7 @@ TUTORIAL_LOCK_TEST(FTutorialAfterStepListTest, "Trigger.AfterStepList")
 bool FTutorialAfterStepListTest::RunTest(const FString&)
 {
 	FTutorialStepsData Data;
-	if (!TutorialLockTestData::Parse(*this, TutorialLockTestData::Chain, Data))
+	if (!TutorialLockTestData::ParseLockSteps(*this, TutorialLockTestData::Chain, Data))
 	{
 		return false;
 	}
@@ -1169,7 +1169,7 @@ TUTORIAL_LOCK_TEST(FTutorialEarlierBeatDropTest, "Beat.EarlierCardsDropped")
 bool FTutorialEarlierBeatDropTest::RunTest(const FString&)
 {
 	FTutorialStepsData Data;
-	if (!TutorialLockTestData::Parse(*this, TutorialLockTestData::Chain, Data))
+	if (!TutorialLockTestData::ParseLockSteps(*this, TutorialLockTestData::Chain, Data))
 	{
 		return false;
 	}
@@ -1228,7 +1228,7 @@ bool FTutorialCancelOnTest::RunTest(const FString&)
 			{ "id": "after_bridge", "beat": "A1", "kind": "objective", "trigger": { "type": "after_step", "step": "bridge_talk" }, "complete": { "event": "Never" } }
 		] })JSON");
 	FTutorialStepsData Data;
-	if (!TutorialLockTestData::Parse(*this, Json, Data))
+	if (!TutorialLockTestData::ParseLockSteps(*this, Json, Data))
 	{
 		return false;
 	}
@@ -1322,7 +1322,7 @@ bool FTutorialRouteSkippedBeaconTest::RunTest(const FString&)
 	using namespace TutorialLockTestData;
 	using namespace TutorialRouteTestData;
 	FTutorialStepsData Data;
-	if (!Parse(*this, Route, Data))
+	if (!ParseLockSteps(*this, Route, Data))
 	{
 		return false;
 	}
@@ -1368,7 +1368,7 @@ bool FTutorialRouteSkippedBeaconTest::RunTest(const FString&)
 	TestEqual(TEXT("the B1 card is dropped"), Machine.GetState(TEXT("b1_card")), ETutorialStepState::Skipped);
 	TestEqual(TEXT("its follower of an earlier beat never starts"), Machine.GetState(TEXT("b1_late")), ETutorialStepState::Skipped);
 	TestEqual(TEXT("the open interaction objective keeps running in parallel"), Machine.GetState(TEXT("b1_share")), ETutorialStepState::Active);
-	Pump(Machine, 4.f);
+	PumpLockMachine(Machine, 4.f);
 	TestEqual(TEXT("the barrel card shows (nothing of B1 blocks it)"), Machine.GetActiveCard(), FName(TEXT("b2_push")));
 	Machine.HandleEvent(TEXT("Shared"), TEXT("Op1"));
 	TestEqual(TEXT("the parallel objective can still be finished"), Machine.GetState(TEXT("b1_share")), ETutorialStepState::Completed);
@@ -1388,7 +1388,7 @@ bool FTutorialRouteSkippedBeaconTest::RunTest(const FString&)
 	TestTrue(TEXT("ruin first: every B1 volume step passed"), Ruin.GetState(TEXT("b1_beacon1")) == ETutorialStepState::Skipped
 		&& Ruin.GetState(TEXT("b1_card")) == ETutorialStepState::Skipped && Ruin.GetState(TEXT("b1_beacon3")) == ETutorialStepState::Skipped);
 	TestFalse(TEXT("ruin first: B1's unlocks applied on the way"), Ruin.IsCommandLocked(PlayerCommands::Sprint));
-	Pump(Ruin, 4.f);
+	PumpLockMachine(Ruin, 4.f);
 	TestEqual(TEXT("ruin first: the barrel card shows"), Ruin.GetActiveCard(), FName(TEXT("b2_push")));
 	return true;
 }
@@ -1430,20 +1430,20 @@ bool FTutorialRouteDemoChainTest::RunTest(const FString&)
 	// The squad skips beacon 1, the hut and beacon 3 and walks into the RUIN first (the review map 2026-10-14: the hut moved south,
 	// the camp volume lies north of the ruin): A1 then A2 start, the barrel lesson runs.
 	Machine.StartBeat(TEXT("A0"));
-	Pump(Machine, 3.f);
+	PumpLockMachine(Machine, 3.f);
 	Machine.HandleVolume(TEXT("VOL_A1_BEACON2"), NAME_None, NAME_None, TEXT("Op1"));
 	TestEqual(TEXT("the crack reached without beacon 1: A1"), Machine.GetCurrentBeat(), FName(TEXT("A1")));
 	TestEqual(TEXT("'reach beacon 1' completed"), Machine.GetState(TEXT("A0_obj_beacon")), ETutorialStepState::Completed);
 	TestEqual(TEXT("the 'beacon two is past the crack' talk is dropped at the crack"), Machine.GetState(TEXT("A1_wt_start")), ETutorialStepState::Skipped);
 	TestTrue(TEXT("the bridge objective runs"), TutorialRules::IsRunning(Machine.GetState(TEXT("A1_bridge"))));
-	Pump(Machine, 2.f);
+	PumpLockMachine(Machine, 2.f);
 	Machine.HandleVolume(TEXT("VOL_A2_RUIN"), NAME_None, NAME_None, TEXT("Op2"));
 	TestEqual(TEXT("the ruin reached without the camp volume: A2"), Machine.GetCurrentBeat(), FName(TEXT("A2")));
 	TestEqual(TEXT("'go to the camp' completed"), Machine.GetState(TEXT("A1_obj_camp")), ETutorialStepState::Completed);
 	TestTrue(TEXT("the hut / beacon 3 steps that never started are passed"), Machine.GetState(TEXT("A1_solo")) == ETutorialStepState::Skipped
 		&& Machine.GetState(TEXT("A1_select")) == ETutorialStepState::Skipped && !Machine.IsConfined()
 		&& Machine.GetState(TEXT("A1_wt_hut_approach")) == ETutorialStepState::Skipped && Machine.GetState(TEXT("A1_wt_regroup")) == ETutorialStepState::Skipped);
-	Pump(Machine, 40.f);
+	PumpLockMachine(Machine, 40.f);
 	TestTrue(FString::Printf(TEXT("the barrel push card runs (%s)"), TutorialRules::StateName(Machine.GetState(TEXT("A2_push")))),
 		TutorialRules::IsRunning(Machine.GetState(TEXT("A2_push"))));
 
@@ -1483,7 +1483,7 @@ bool FTutorialSaveRunningProgressTest::RunTest(const FString&)
 			  "complete": { "event": "CoverEntered.Right", "distinct_from": ["left"] } }
 		] })JSON");
 	FTutorialStepsData Data;
-	if (!TutorialLockTestData::Parse(*this, Json, Data))
+	if (!TutorialLockTestData::ParseLockSteps(*this, Json, Data))
 	{
 		return false;
 	}

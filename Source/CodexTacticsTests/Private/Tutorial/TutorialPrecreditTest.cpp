@@ -32,7 +32,7 @@ namespace TutorialPrecreditTestData
 			  "trigger": { "type": "after_step", "step": "regroup" }, "complete": { "event": "CoverEntered" } }
 		] })JSON");
 
-	void Pump(FTutorialStateMachine& Machine, float Seconds)
+	void PumpPrecreditMachine(FTutorialStateMachine& Machine, float Seconds)
 	{
 		for (float Left = Seconds; Left > 0.f; Left -= 0.1f)
 		{
@@ -110,7 +110,7 @@ bool FTutorialPrecreditMachineTest::RunTest(const FString&)
 	FTutorialStateMachine Machine;
 	Machine.Load(Data);
 	Machine.StartBeat(TEXT("A0"));
-	Pump(Machine, 0.5f);
+	PumpPrecreditMachine(Machine, 0.5f);
 	TestEqual(TEXT("the radio plays, no card yet"), Machine.GetActiveSpeech(), FName(TEXT("radio")));
 	// The player pans with WASD and MMB-drags while HQ talks: the history records it although no card counts it.
 	Machine.HandleCommand(PlayerCommands::CameraPanKeys);
@@ -140,15 +140,15 @@ bool FTutorialPrecreditMachineTest::RunTest(const FString&)
 	TestEqual(TEXT("two precredit transitions"), Precredited, 2);
 	TestTrue(TEXT("the precredited steps never went Active"), !Transitions.ContainsByPredicate([](const FTutorialTransition& T)
 		{ return (T.StepId == FName(TEXT("pan")) || T.StepId == FName(TEXT("drag"))) && T.To == ETutorialStepState::Active; }));
-	Pump(Machine, 0.5f);
+	PumpPrecreditMachine(Machine, 0.5f);
 	TestEqual(TEXT("yaw (one press short) is the first card shown"), Machine.GetActiveCard(), FName(TEXT("yaw")));
 	TestEqual(TEXT("partial credit: the earlier Q press seeds 1 of 2"), Machine.GetProgress(TEXT("yaw")), 1);
 	Machine.HandleCommand(PlayerCommands::CameraRotateKeys);
 	TestEqual(TEXT("the second press completes it normally"), Machine.GetState(TEXT("yaw")), ETutorialStepState::Completed);
-	Pump(Machine, 2.f);
+	PumpPrecreditMachine(Machine, 2.f);
 	TestEqual(TEXT("regroup opted out: shown although it was pressed before"), Machine.GetActiveCard(), FName(TEXT("regroup")));
 	Machine.HandleCommand(PlayerCommands::Regroup);
-	Pump(Machine, 2.f);
+	PumpPrecreditMachine(Machine, 2.f);
 	TestEqual(TEXT("the event card follows and is never precredited"), Machine.GetActiveCard(), FName(TEXT("cover")));
 
 	// Export / import keeps the history; a re-triggered command card is precredited from the restored history.
