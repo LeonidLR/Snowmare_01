@@ -1,4 +1,5 @@
 #include "Core/SaveGameSubsystem.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "AI/StealthLureSubsystem.h"
 #include "AI/PatrolRouteActor.h"
@@ -599,12 +600,16 @@ namespace
 		return Route;
 	}
 
-	TSharedRef<FJsonObject> SaveEnemy(const AEnemyCharacter* Enemy)
+	TSharedRef<FJsonObject> SaveEnemy(const AEnemyCharacter* Enemy, bool bLevelEnemy)
 	{
 		TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
 		Entry->SetStringField(TEXT("name"), Enemy->GetName());
 		Entry->SetStringField(TEXT("class"), Enemy->GetClass()->GetPathName());
 		Entry->SetStringField(TEXT("archetype"), SaveEnumName(Enemy->GetArchetype()));
+		// Rev 2026-10-19 (user: the patrol speed 65 set on the placed enemy came back as 190 after a load): an enemy the load has to
+		// recreate (no live actor of that name) gets these back; a matched placed actor keeps its own (map) values.
+		Entry->SetNumberField(TEXT("patrol_walk_speed"), Enemy->PatrolWalkSpeed);
+		Entry->SetBoolField(TEXT("level_enemy"), bLevelEnemy);
 		Entry->SetArrayField(TEXT("pos"), SaveVector(Enemy->GetActorLocation()));
 		Entry->SetNumberField(TEXT("rot_y"), Enemy->GetActorRotation().Yaw);
 		const UHealthComponent* Health = Enemy->GetHealthComponent();
@@ -960,7 +965,8 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	TArray<TSharedPtr<FJsonValue>> Enemies;
 	for (const AEnemyCharacter* Enemy : EnemyActors)
 	{
-		Enemies.Add(MakeShared<FJsonValueObject>(SaveEnemy(Enemy)));
+		const ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>();
+		Enemies.Add(MakeShared<FJsonValueObject>(SaveEnemy(Enemy, Encounter && Encounter->IsLevelEnemy(Enemy))));
 	}
 	WorldState->SetArrayField(TEXT("enemies"), Enemies);
 	// APC P1: vehicles (transform, crew + seats); the crew's operatives are saved in "squad" as usual.
@@ -1551,6 +1557,10 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			}
 		}
 		for (const TPair<FString, TSharedPtr<FJsonObject>>& Pair : Saved)
+				// Rev 2026-10-19: out of the way first - a destroyed actor keeps its name until GC, and the respawn below would get a
+				// new one ("..._C_12"), which the next save stored and a later load (on a fresh level) no longer matched.
+				Enemy->Rename(*MakeUniqueObjectName(Enemy->GetOuter(), Enemy->GetClass(), TEXT("LoadDiscardedEnemy")).ToString(), nullptr,
+					REN_DontCreateRedirectors | REN_ForceNoResetLoaders | REN_NonTransactional);
 		{
 			const TSharedPtr<FJsonObject>& Entry = Pair.Value;
 			AEnemyCharacter* Enemy = EnemyBySavedName.FindRef(Pair.Key);
@@ -1583,6 +1593,16 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			}
 			if (AAIController* AIC = Cast<AAIController>(Enemy->GetController()))
 			{
+				// Rev 2026-10-19: what the class default does not know - the designer's patrol speed and "placed in the level" (contact with
+				// a level enemy starts the fight on a "button" level; a recreated actor was not recorded at world begin play).
+				Enemy->PatrolWalkSpeed = SaveFloat(Entry, TEXT("patrol_walk_speed"), Enemy->PatrolWalkSpeed);
+				if (SaveBool(Entry, TEXT("level_enemy"), false))
+				{
+					if (ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>())
+					{
+						Encounter->MarkLevelEnemy(Enemy);
+					}
+				}
 				AIC->StopMovement();
 			}
 			Enemy->TeleportTo(Location, Rotation, false, true);
