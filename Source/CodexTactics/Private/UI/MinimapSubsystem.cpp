@@ -1,4 +1,4 @@
-﻿#include "UI/MinimapSubsystem.h"
+#include "UI/MinimapSubsystem.h"
 
 #include "AI/NavigationSystemBase.h"
 #include "Camera/BuildingExitMarker.h"
@@ -60,9 +60,9 @@ namespace MinimapSubsystemLocal
 		TEXT("Codex.Minimap.ExposureBias"), 0.f,
 		TEXT("Exposure compensation (stops) added to the minimap captures (the dev command CodexTactics.MinimapRecapture applies a change)."));
 
-	constexpr float Margin = 16.f;
-	constexpr float HeaderHeight = 22.f;
-	constexpr float WalkableNormalZ = 0.7f;
+	constexpr float MinimapPanelMargin = 16.f;
+	constexpr float MinimapHeaderHeight = 22.f;
+	constexpr float MinimapWalkableNormalZ = 0.7f;
 	const FName NoMinimapTag(TEXT("NoMinimap"));
 
 	/**
@@ -234,7 +234,7 @@ FMinimapView UMinimapSubsystem::MakePanelView() const
 	using namespace MinimapSubsystemLocal;
 	const float Width = FMath::Clamp(Viewport.X * 0.26f, 240.f, 560.f);
 	const float Height = Width * 0.72f;
-	const FVector2D Origin(Viewport.X - Margin - Width, Margin + HeaderHeight + 2.f);
+	const FVector2D Origin(Viewport.X - MinimapPanelMargin - Width, MinimapPanelMargin + MinimapHeaderHeight + 2.f);
 	FVector2D Center(0.5f, 0.5f);
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	if (const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr)
@@ -251,7 +251,7 @@ void UMinimapSubsystem::ApplyLayout()
 	using namespace MinimapSubsystemLocal;
 	PanelView = MakePanelView();
 	const float HeaderWidth = PanelMode == EMinimapPanelMode::Map ? PanelView.ScreenSize.X : FMath::Max(FeedWidth, 200.f);
-	HeaderRect = FBox2D(FVector2D(Viewport.X - Margin - HeaderWidth, Margin), FVector2D(Viewport.X - Margin, Margin + HeaderHeight));
+	HeaderRect = FBox2D(FVector2D(Viewport.X - MinimapPanelMargin - HeaderWidth, MinimapPanelMargin), FVector2D(Viewport.X - MinimapPanelMargin, MinimapPanelMargin + MinimapHeaderHeight));
 
 	const FVector2D FullOrigin(Viewport.X * 0.06f, Viewport.Y * 0.09f);
 	const FVector2D FullSize(Viewport.X * 0.88f, Viewport.Y * 0.70f);
@@ -526,7 +526,7 @@ void UMinimapSubsystem::SurfacesBelow(const FVector2D& XY, float TopZ, float Bot
 		{
 			break;
 		}
-		if (Hit.ImpactNormal.Z >= MinimapSubsystemLocal::WalkableNormalZ && !Hit.bStartPenetrating && MinimapSubsystemLocal::IsSolid(Hit))
+		if (Hit.ImpactNormal.Z >= MinimapSubsystemLocal::MinimapWalkableNormalZ && !Hit.bStartPenetrating && MinimapSubsystemLocal::IsSolid(Hit))
 		{
 			OutZ.Add(Hit.ImpactPoint.Z);
 		}
