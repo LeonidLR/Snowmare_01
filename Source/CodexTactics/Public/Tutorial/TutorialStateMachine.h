@@ -150,8 +150,6 @@ public:
 	int32 GetProgress(FName StepId) const;
 	/** Hold seconds collected so far ("complete.hold_s" steps). */
 	float GetHeldSeconds(FName StepId) const;
-	/** Seconds the step has been in its current state. */
-	float GetStateSeconds(FName StepId) const;
 	FName GetActiveCard() const;
 	TArray<FName> GetActiveObjectives() const;
 	FName GetActiveSpeech() const;
@@ -171,10 +169,9 @@ public:
 	/** The lock patterns in force, in the order they were added. */
 	const TArray<FString>& GetLocks() const { return Locks; }
 	/**
-	 * The player's command history since the steps were loaded (every HandleCommand / HandleCommandHold, whether or not a step
-	 * counted it): "precredit" completes a due command card the history already satisfies (TutorialRules::IsPrecreditSatisfied).
+	 * One command of the player's history since the steps were loaded (every HandleCommand / HandleCommandHold, whether or not a
+	 * step counted it): "precredit" completes a due command card the history already satisfies (TutorialRules::IsPrecreditSatisfied).
 	 */
-	const TMap<FName, FTutorialCommandUse>& GetCommandHistory() const { return History; }
 	FTutorialCommandUse GetCommandUse(FName CommandId) const;
 
 	// --- Confine (rev 5i, game designer 2026-10-15) --------------------------------------------------------------------
@@ -231,6 +228,13 @@ private:
 	void DropEarlierBeatStep(int32 Index);
 	/** Rev 5f: an Idle once-step is finished as Skipped without ever starting (bPassed); its locks apply, its followers fire. */
 	void PassStep(int32 Index);
+	/** A volume-triggered once-step that never started: what the route passes when the squad is already beyond its place. */
+	bool IsPassableVolumeStep(int32 Index) const;
+	/**
+	 * Finish + marks the step's own finishing transition with Flag (bPassed / bPrecredited / bCancelled) - the one way every
+	 * "finished because ..." reason reaches the runtime.
+	 */
+	void FinishFlagged(int32 Index, ETutorialStepState FinalState, bool FTutorialTransition::* Flag);
 	/** Rev 5f: the squad arrived at VolumeId (actor beat BeatId): starts a later beat, passes what lies behind on the route. */
 	void ApplyArrival(FName VolumeId, FName BeatId);
 	/** Rev 5f: passes every step behind Point (see the class comment). */
@@ -260,6 +264,14 @@ private:
 	bool IsSubjectAllowed(int32 Index, FName SubjectId) const;
 	/** Counts a volume entry / presence of SubjectId for every running step completing in VolumeId; true when one counted. */
 	bool CountVolumeCompletions(FName VolumeId, FName SubjectId, const TArray<bool>& WasRunning);
+	/**
+	 * The subject filters every event-style count passes (an event, a role-spot presence): "role_spots", the confinement order,
+	 * "distinct_from", "distinct_operatives"; counts it (CountContribution) when they all pass. "in_volume" and "subject": "focus"
+	 * are event-only filters checked by HandleEvent before.
+	 */
+	bool TryCountEventSubject(int32 Index, FName SubjectId);
+	/** SubjectId (if any) becomes a contributor of the step and its progress grows by one towards Needed. */
+	void CountContribution(int32 Index, FName SubjectId, int32 Needed);
 	float ReadStat(FName Stat) const;
 	bool AreConditionsMet(int32 Index) const;
 	/** The step's "complete.condition" clauses exist and all hold now (rev 5d). */

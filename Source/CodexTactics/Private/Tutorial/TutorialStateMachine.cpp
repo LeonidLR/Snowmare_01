@@ -105,6 +105,29 @@ FTutorialStateMachine::FRoutePoint FTutorialStateMachine::GetVolumeRoutePoint(FN
 	return Point;
 }
 
+bool FTutorialStateMachine::IsPassableVolumeStep(int32 Index) const
+{
+	const FTutorialStep& Step = Data.Steps[Index];
+	const FRuntime& State = Runtime[Index];
+	return State.State == ETutorialStepState::Idle && !State.bEverFinished && Step.bOnce && Step.Trigger.Type == ETutorialTriggerType::Volume;
+}
+
+void FTutorialStateMachine::FinishFlagged(int32 Index, ETutorialStepState FinalState, bool FTutorialTransition::* Flag)
+{
+	const FName StepId = Data.Steps[Index].Id;
+	const int32 Mark = Transitions.Num();
+	Finish(Index, FinalState);
+	// The step's own finishing transition is the first one for it after Mark (followers it fires come later).
+	for (int32 Back = Mark; Back < Transitions.Num(); ++Back)
+	{
+		if (Transitions[Back].StepId == StepId && Transitions[Back].To == FinalState)
+		{
+			Transitions[Back].*Flag = true;
+			break;
+		}
+	}
+}
+
 void FTutorialStateMachine::PassStep(int32 Index)
 {
 	if (!Runtime.IsValidIndex(Index) || Runtime[Index].State != ETutorialStepState::Idle)
@@ -114,17 +137,7 @@ void FTutorialStateMachine::PassStep(int32 Index)
 	// Straight to Queued without a transition: Finish reports one silent Idle-less change Queued -> Skipped.
 	Runtime[Index].State = ETutorialStepState::Queued;
 	Runtime[Index].StateSeconds = 0.f;
-	const FName StepId = Data.Steps[Index].Id;
-	const int32 Mark = Transitions.Num();
-	Finish(Index, ETutorialStepState::Skipped);
-	for (int32 Back = Mark; Back < Transitions.Num(); ++Back)
-	{
-		if (Transitions[Back].StepId == StepId && Transitions[Back].To == ETutorialStepState::Skipped)
-		{
-			Transitions[Back].bPassed = true;
-			break;
-		}
-	}
+	FinishFlagged(Index, ETutorialStepState::Skipped, &FTutorialTransition::bPassed);
 }
 
 void FTutorialStateMachine::PassRouteBefore(const FRoutePoint& Point)
@@ -140,8 +153,7 @@ void FTutorialStateMachine::PassRouteBefore(const FRoutePoint& Point)
 		{
 			continue; // a later beat's step is never "behind"
 		}
-		const FRuntime& State = Runtime[Index];
-		if (State.State == ETutorialStepState::Idle && !State.bEverFinished && Step.bOnce && Step.Trigger.Type == ETutorialTriggerType::Volume)
+		if (IsPassableVolumeStep(Index))
 		{
 			const FRoutePoint Trigger = GetVolumeRoutePoint(Step.Trigger.Volume);
 			if (Trigger.IsValid() && Trigger.Key < Point.Key)
@@ -151,22 +163,14 @@ void FTutorialStateMachine::PassRouteBefore(const FRoutePoint& Point)
 				PassStep(Index);
 			}
 		}
-		else if (TutorialRules::IsRunning(State.State) && !Step.Complete.Volume.IsNone())
+		else if (TutorialRules::IsRunning(Runtime[Index].State) && !Step.Complete.Volume.IsNone())
 		{
 			const FRoutePoint Goal = GetVolumeRoutePoint(Step.Complete.Volume);
 			if (Goal.IsValid() && Goal.Key < Point.Key)
 			{
 				// "Go to X" and the squad is already past X: an objective is done, a card is dropped.
-				const int32 Mark = Transitions.Num();
-				Finish(Index, Step.Kind == ETutorialStepKind::Objective ? ETutorialStepState::Completed : ETutorialStepState::Skipped);
-				for (int32 Back = Mark; Back < Transitions.Num(); ++Back)
-				{
-					if (Transitions[Back].StepId == Step.Id && TutorialRules::IsFinished(Transitions[Back].To))
-					{
-						Transitions[Back].bPassed = true;
-						break;
-					}
-				}
+				FinishFlagged(Index, Step.Kind == ETutorialStepKind::Objective ? ETutorialStepState::Completed : ETutorialStepState::Skipped,
+					&FTutorialTransition::bPassed);
 			}
 		}
 	}
@@ -469,16 +473,7 @@ void FTutorialStateMachine::DropEarlierBeatCard(int32 Index)
 
 void FTutorialStateMachine::FinishPrecredited(int32 Index)
 {
-	const FName StepId = Data.Steps[Index].Id;
-	Finish(Index, ETutorialStepState::Completed);
-	for (int32 Back = Transitions.Num() - 1; Back >= 0; --Back)
-	{
-		if (Transitions[Back].StepId == StepId && Transitions[Back].To == ETutorialStepState::Completed)
-		{
-			Transitions[Back].bPrecredited = true;
-			break;
-		}
-	}
+	FinishFlagged(Index, ETutorialStepState::Completed, &FTutorialTransition::bPrecredited);
 }
 
 bool FTutorialStateMachine::IsCancelDue(int32 Index) const
@@ -500,20 +495,8 @@ void FTutorialStateMachine::CancelStep(int32 Index)
 	{
 		return;
 	}
-	const FName StepId = Data.Steps[Index].Id;
-	const int32 Mark = Transitions.Num();
-	{
-		TGuardValue<bool> NoBreather(bNoBreatherOnFinish, true); // rev 5g: what replaces it (the arrival's card) shows at once
-		Finish(Index, ETutorialStepState::Skipped);
-	}
-	for (int32 Back = Mark; Back < Transitions.Num(); ++Back)
-	{
-		if (Transitions[Back].StepId == StepId && Transitions[Back].To == ETutorialStepState::Skipped)
-		{
-			Transitions[Back].bCancelled = true;
-			break;
-		}
-	}
+	TGuardValue<bool> NoBreather(bNoBreatherOnFinish, true); // rev 5g: what replaces it (the arrival's card) shows at once
+	FinishFlagged(Index, ETutorialStepState::Skipped, &FTutorialTransition::bCancelled);
 }
 
 void FTutorialStateMachine::CancelMatching(FName FinishedStep, FName EventName, FName VolumeId)
@@ -602,8 +585,7 @@ void FTutorialStateMachine::Finish(int32 Index, ETutorialStepState FinalState)
 	for (int32 Other = 0; Other < Data.Steps.Num(); ++Other)
 	{
 		const FTutorialTrigger& Trigger = Data.Steps[Other].Trigger;
-		if (Trigger.Type == ETutorialTriggerType::AfterStep && (Trigger.Step == FinishedId || Trigger.AfterSteps.Contains(FinishedId))
-			&& AreAfterStepsFinished(Other))
+		if (Trigger.Type == ETutorialTriggerType::AfterStep && Trigger.AfterSteps.Contains(FinishedId) && AreAfterStepsFinished(Other))
 		{
 			Fire(Other);
 		}
@@ -753,18 +735,6 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId, const 
 			{
 				continue; // "in_volume": not where the lesson asks for it (e.g. cover entered, but not beside the door)
 			}
-			if (Complete.bRoleSpots && RoleSpotProvider && !RoleSpotProvider(Data.Steps[Index].Id, SubjectId))
-			{
-				continue; // "role_spots": not at HIS role's spot (the Medic-Sapper in the Commander's cover)
-			}
-			if (IsCompletionHeldByConfine(Index))
-			{
-				continue; // rev 5i: a later part of a confined lesson counts only once its card is up
-			}
-			if (!IsSubjectAllowed(Index, SubjectId))
-			{
-				continue; // "distinct_from": this operative already did another part of the lesson
-			}
 			if (Complete.bFocusSubject && FocusSubjectProvider)
 			{
 				const FName Focus = FocusSubjectProvider(Data.Steps[Index].Id);
@@ -773,23 +743,7 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId, const 
 					continue; // "subject": "focus": someone else's event (the medkit healed another operative)
 				}
 			}
-			if (Complete.bDistinctSubjects)
-			{
-				bool bAlreadyCounted = true;
-				if (!SubjectId.IsNone())
-				{
-					Runtime[Index].CountedSubjects.Add(SubjectId, &bAlreadyCounted);
-				}
-				if (bAlreadyCounted)
-				{
-					continue; // no subject, or this operative already counted
-				}
-			}
-			if (!SubjectId.IsNone())
-			{
-				Runtime[Index].Contributors.Add(SubjectId);
-			}
-			AddProgress(Index, 1, Complete.Count);
+			TryCountEventSubject(Index, SubjectId);
 		}
 	}
 	CancelMatching(NAME_None, EventName, NAME_None);
@@ -820,6 +774,46 @@ void FTutorialStateMachine::HandleEvent(FName EventName, FName SubjectId, const 
 	}
 }
 
+void FTutorialStateMachine::CountContribution(int32 Index, FName SubjectId, int32 Needed)
+{
+	if (!SubjectId.IsNone())
+	{
+		Runtime[Index].Contributors.Add(SubjectId);
+	}
+	AddProgress(Index, 1, Needed);
+}
+
+bool FTutorialStateMachine::TryCountEventSubject(int32 Index, FName SubjectId)
+{
+	const FTutorialCompletion& Complete = Data.Steps[Index].Complete;
+	if (Complete.bRoleSpots && RoleSpotProvider && !RoleSpotProvider(Data.Steps[Index].Id, SubjectId))
+	{
+		return false; // "role_spots": not at HIS role's spot (the Medic-Sapper in the Commander's cover)
+	}
+	if (IsCompletionHeldByConfine(Index))
+	{
+		return false; // rev 5i: a later part of a confined lesson counts only once its card is up
+	}
+	if (!IsSubjectAllowed(Index, SubjectId))
+	{
+		return false; // "distinct_from": this operative already did another part of the lesson
+	}
+	if (Complete.bDistinctSubjects)
+	{
+		bool bAlreadyCounted = true;
+		if (!SubjectId.IsNone())
+		{
+			Runtime[Index].CountedSubjects.Add(SubjectId, &bAlreadyCounted);
+		}
+		if (bAlreadyCounted)
+		{
+			return false; // no subject, or this operative already counted
+		}
+	}
+	CountContribution(Index, SubjectId, Complete.Count);
+	return true;
+}
+
 bool FTutorialStateMachine::CountVolumeCompletions(FName VolumeId, FName SubjectId, const TArray<bool>& WasRunning)
 {
 	bool bCounted = false;
@@ -828,11 +822,7 @@ bool FTutorialStateMachine::CountVolumeCompletions(FName VolumeId, FName Subject
 		if (WasRunning[Index] && TutorialRules::IsRunning(Runtime[Index].State) && Data.Steps[Index].Complete.Volume == VolumeId
 			&& IsSubjectAllowed(Index, SubjectId) && !IsCompletionHeldByConfine(Index))
 		{
-			if (!SubjectId.IsNone())
-			{
-				Runtime[Index].Contributors.Add(SubjectId);
-			}
-			AddProgress(Index, 1, 1);
+			CountContribution(Index, SubjectId, 1); // one entry completes a "go to X" step
 			bCounted = true;
 		}
 	}
@@ -849,24 +839,14 @@ bool FTutorialStateMachine::HandleRoleSpotPresence(FName SubjectId)
 	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
 	{
 		const FTutorialCompletion& Complete = Data.Steps[Index].Complete;
+		// Already counted for this step (his "CoverEntered" or an earlier presence tick): nothing new. The rest of the filters are
+		// those of the event (TryCountEventSubject), so presence never counts where the event would not.
 		if (!Complete.bRoleSpots || Complete.Event.IsEmpty() || !TutorialRules::IsRunning(Runtime[Index].State)
-			|| (RoleSpotProvider && !RoleSpotProvider(Data.Steps[Index].Id, SubjectId)) || IsCompletionHeldByConfine(Index)
-			|| !IsSubjectAllowed(Index, SubjectId) || Runtime[Index].Contributors.Contains(SubjectId))
+			|| Runtime[Index].Contributors.Contains(SubjectId))
 		{
 			continue;
 		}
-		if (Complete.bDistinctSubjects)
-		{
-			bool bAlreadyCounted = false;
-			Runtime[Index].CountedSubjects.Add(SubjectId, &bAlreadyCounted);
-			if (bAlreadyCounted)
-			{
-				continue;
-			}
-		}
-		Runtime[Index].Contributors.Add(SubjectId);
-		AddProgress(Index, 1, Complete.Count);
-		bCounted = true;
+		bCounted |= TryCountEventSubject(Index, SubjectId);
 	}
 	PumpQueues();
 	return bCounted;
@@ -973,7 +953,7 @@ bool FTutorialStateMachine::StartBeat(FName BeatId, bool bAllowBackwards)
 		}
 		const FTutorialStep& Step = Data.Steps[Index];
 		const ETutorialStepState State = Runtime[Index].State;
-		if (State == ETutorialStepState::Idle && !Runtime[Index].bEverFinished && Step.bOnce && Step.Trigger.Type == ETutorialTriggerType::Volume)
+		if (IsPassableVolumeStep(Index))
 		{
 			PassStep(Index);
 		}
@@ -1092,12 +1072,6 @@ float FTutorialStateMachine::GetHeldSeconds(FName StepId) const
 {
 	const int32 Index = IndexOf(StepId);
 	return Runtime.IsValidIndex(Index) ? Runtime[Index].HeldSeconds : 0.f;
-}
-
-float FTutorialStateMachine::GetStateSeconds(FName StepId) const
-{
-	const int32 Index = IndexOf(StepId);
-	return Runtime.IsValidIndex(Index) ? Runtime[Index].StateSeconds : 0.f;
 }
 
 FName FTutorialStateMachine::GetActiveCard() const
