@@ -56,6 +56,7 @@
 #include "Interactables/PortableStoveActor.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Interactables/BarricadeActor.h"
+#include "Interactables/DeployableActor.h"
 #include "Interactables/DroppedItemActor.h"
 #include "Interactables/GateActor.h"
 #include "Interactables/InteractableActor.h"
@@ -317,6 +318,30 @@ namespace SaveRoundTripSmoke
 		return Params;
 	}
 
+	/**
+	 * A search origin for the frostbitten 3 m from where it stands, on the side AWAY from the nearest deployable (fix 2026-10-19: its
+	 * 12 m search sweep could reach the smoke's barricade, whose contact damage restarted the search every second - the rule is fixed
+	 * too (StealthLureRules::SelfNoiseCm) - and the enemy died on it before the "back on the route" check).
+	 */
+	void StartSearchAwayFromDeployables(UWorld* World, AEnemyCharacter& Searcher)
+	{
+		FVector Away = FVector::ForwardVector;
+		float Nearest = TNumericLimits<float>::Max();
+		for (TActorIterator<ADeployableActor> It(World); It; ++It)
+		{
+			const float Distance = FVector::Dist2D(It->GetActorLocation(), Searcher.GetActorLocation());
+			if (!It->IsActorBeingDestroyed() && Distance < Nearest)
+			{
+				Nearest = Distance;
+				Away = (Searcher.GetActorLocation() - It->GetActorLocation()).GetSafeNormal2D(UE_SMALL_NUMBER, FVector::ForwardVector);
+			}
+		}
+		// A tight 3 m sweep (the default 12 m one could still reach a deployable placed by the map's ClearPoint fall-backs).
+		FPatrolSearchSpec Spec;
+		Spec.SweepRadiusCm = 300.f;
+		Searcher.StartPatrolSearchWith(Searcher.GetActorLocation() + Away * 300.f, Spec);
+	}
+
 	APatrolRouteActor* SpawnRoute(UWorld* World, const TArray<FVector>& Points, float Wait)
 	{
 		FActorSpawnParameters Params;
@@ -432,7 +457,23 @@ namespace SaveRoundTripSmoke
 			Turret->Health->ApplyDirectHealthLoss(30.f, TEXT("Smoke"));
 			Turret->SetPowered(false);
 		}
-		ABarricadeActor* Barricade = Cast<ABarricadeActor>(SpawnDeployable(EDeployableType::Barricade, SmokeUtils::ClearPoint(World, Feet, Feet - F * 500.f + R * 400.f)));
+		// The barricade (its contact damage hurts any enemy within 2.2 m every second) at least 15 m from the frostbitten's route B
+		// (fix 2026-10-19: the map's ClearPoint fall-backs once put it inside that enemy's search sweep, and it died on it after the load).
+		const FVector RouteBStart = SmokeUtils::ClearPoint(World, Feet, Feet + F * 1400.f - R * 900.f);
+		const FVector RouteBEnd = SmokeUtils::ClearPoint(World, RouteBStart, RouteBStart + F * 600.f);
+		FVector BarricadeSpot = SmokeUtils::ClearPoint(World, Feet, Feet - F * 500.f + R * 400.f);
+		for (const FVector& Offset : { -F * 500.f + R * 400.f, -F * 500.f - R * 400.f, -F * 900.f + R * 800.f, F * 500.f + R * 900.f, -F * 1200.f })
+		{
+			const FVector Candidate = SmokeUtils::ClearPoint(World, Feet, Feet + Offset);
+			if (FVector::Dist2D(Candidate, RouteBStart) >= 1500.f && FVector::Dist2D(Candidate, RouteBEnd) >= 1500.f)
+			{
+				BarricadeSpot = Candidate;
+				break;
+			}
+		}
+		ABarricadeActor* Barricade = Cast<ABarricadeActor>(SpawnDeployable(EDeployableType::Barricade, BarricadeSpot));
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke note: barricade %.1f / %.1f m from route B's ends"), FVector::Dist2D(BarricadeSpot, RouteBStart) / 100.f,
+			FVector::Dist2D(BarricadeSpot, RouteBEnd) / 100.f);
 		if (Barricade)
 		{
 			Barricade->Health->ApplyDirectHealthLoss(25.f, TEXT("Smoke"));
@@ -955,7 +996,7 @@ namespace SaveRoundTripSmoke
 			AMarksmanEnemyCharacter* Marksman = State.Marksman.Get();
 			if (State.StageTime > 1.f && State.Searcher.IsValid() && !State.Searcher->IsSearching())
 			{
-				State.Searcher->StartPatrolSearch(State.Searcher->GetActorLocation() + FVector(300.f, 0.f, 0.f));
+				StartSearchAwayFromDeployables(World, *State.Searcher);
 			}
 			const bool bMidRoute = Marksman && Marksman->GetPatrolWaypointIndex() >= 1;
 			if ((!bMidRoute || State.StageTime < 4.f) && State.StageTime < 20.f)
@@ -1045,7 +1086,7 @@ namespace SaveRoundTripSmoke
 				Slow, Patrollers, DesignerPatrolSpeed));
 			if (AEnemyCharacter* Searcher = State.Searcher.Get(); Searcher && !Searcher->IsSearching())
 			{
-				Searcher->StartPatrolSearch(Searcher->GetActorLocation() + FVector(300.f, 0.f, 0.f)); // a search to come back from
+				StartSearchAwayFromDeployables(World, *Searcher); // a search to come back from
 			}
 			State.Stage = 3;
 			State.StageTime = 0.f;

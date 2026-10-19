@@ -97,6 +97,12 @@ ENoiseReaction StealthLureRules::ReactToNoise(const FNoiseReactionInput& Input)
 	{
 		return ENoiseReaction::SameNoise;
 	}
+	// Fix 2026-10-19: a hit / blast at its own feet while it already searches is nothing new to walk to (a barricade's contact
+	// damage every second restarted the search for ever and the enemy died on it).
+	if (Input.bSearching && !Input.bLure && Input.DistanceToSelfCm >= 0.f && Input.DistanceToSelfCm <= SelfNoiseCm)
+	{
+		return ENoiseReaction::SameNoise;
+	}
 	return Input.bSearching ? ENoiseReaction::Retarget : ENoiseReaction::Investigate;
 }
 

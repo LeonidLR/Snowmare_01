@@ -49,6 +49,11 @@ struct CODEXTACTICS_API FEnemyPatrolSnapshot
 	float SearchApproachSpeedFraction = 0.f;
 	/** Investigating a lost hound scent (2026-10-18, FPatrolSearchSpec::bScent). */
 	bool bScentSearch = false;
+	/** Audit 2026-10-19: the hound's running scent episode (EHoundScentPhase as a number, its timers, the scent point). */
+	int32 ScentPhase = 0;
+	float ScentPhaseSeconds = 0.f;
+	float ScentSinceSeconds = 0.f;
+	FVector ScentPoint = FVector::ZeroVector;
 };
 
 /**

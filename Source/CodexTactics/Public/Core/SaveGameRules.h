@@ -25,6 +25,8 @@ struct CODEXTACTICS_API FSaveSlotInfo
 	int32 Version = 1;
 	/** Map the save was made on (package name, e.g. /Game/Maps/L_MovementTest); empty in version 1 saves. */
 	FString MapName;
+	/** The map exists in this build (USaveGameSubsystem::IsSaveMapAvailable; false: the slot is listed but cannot be loaded). */
+	bool bMapAvailable = true;
 };
 
 /** Why saving is not possible right now (save policy, user decision 2026-10-08: only outside combat). */
@@ -36,7 +38,9 @@ enum class ESaveBlockReason : uint8
 	/** The pre-combat cutscene runs (the fight is about to start). */
 	Cutscene,
 	/** The mission is lost. */
-	GameOver
+	GameOver,
+	/** The modal dialogue window is open (audit 2026-10-19: its trigger would be saved as used and the talk never finish). */
+	Dialogue
 };
 
 /** Game flow to restore from a save (see SaveGameRules::ResolveLoadFlow). */
@@ -58,10 +62,13 @@ namespace SaveGameRules
 	 * Save format version. 1: the Godot keys (squad, game_state, quest_state, crates, piles). 2 (2026-10-08): + map,
 	 * flow phase / preparation time / ambush, postures, bonus items, enemies (patrols, dead stay dead), every
 	 * interactable (relocated / burning barrels, deployables, tripwires, traps, generator, hidden quest objects), patrol
-	 * routes, gate, dialogue triggers, narrative elements, Susanin's rescue. Version 1 saves still load (missing
-	 * sections leave the world as it is).
+	 * routes, gate, dialogue triggers, narrative elements, Susanin's rescue. 3 (audit 2026-10-19): + squad members killed in action
+	 * (+ runtime remains crates), the sticky cold flags, the F-key deployable, the cover fire mode, standing orders (defense line,
+	 * cover slot), preparation stations, the mission's event waves + breach done, the rest's cold drain, kill statistics, the
+	 * resumed fight's ambush kind, hound scent episodes, grenade-trap blast values. Every key is optional: version 1 / 2 saves still
+	 * load (missing sections leave the world as the level starts it).
 	 */
-	constexpr int32 CurrentSaveVersion = 2;
+	constexpr int32 CurrentSaveVersion = 3;
 
 	/**
 	 * Rev 5f (user decision 2026-10-14, after a save bug): NO automatic saves at all. The only saves are the tutorial CHECKPOINTS
@@ -73,6 +80,16 @@ namespace SaveGameRules
 
 	/** Save policy: Exploration / Preparation / WaveCleared / PostCombat allow saving; the fight, cutscene and game over do not. */
 	CODEXTACTICS_API ESaveBlockReason GetSaveBlockReason(ECodexGamePhase Phase);
+	/** ... and the open modal dialogue window blocks too (after the phase reasons). */
+	CODEXTACTICS_API ESaveBlockReason GetSaveBlockReason(ECodexGamePhase Phase, bool bDialogueOpen);
+
+	/**
+	 * The slot metadata of a parsed save file (audit 2026-10-19; USaveGameSubsystem::GetSaveInfo): every key optional with the
+	 * defaults below (slot / title = the slot name, type by the slot name, author "Commander", stage "Unknown stage", version 1, no
+	 * map), mistyped keys count as missing. False when Data is no save at all (none of version / squad / game_state / world_state):
+	 * such a file is skipped by the lists and never loaded.
+	 */
+	CODEXTACTICS_API bool ParseSlotInfo(const class FJsonObject& Data, const FString& SlotName, FSaveSlotInfo& OutInfo);
 
 	/** Player-facing reason ("Saving is disabled during combat"); empty for None. */
 	CODEXTACTICS_API FText GetSaveBlockText(ESaveBlockReason Reason);

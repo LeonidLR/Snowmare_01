@@ -107,12 +107,50 @@ public:
 	/** Broadcast after every applied load (in-place or after travel). */
 	static FOnSaveAppliedNative& OnSaveApplied();
 
+	/**
+	 * The restore order (audit 2026-10-19; docs/systems/save-load.md "Restore order"): the names of the steps ApplySaveData runs, in
+	 * order. One table in SaveGameSubsystem.cpp drives both; a new feature plugs its restore into the step it depends on.
+	 */
+	static TArray<FName> GetRestoreOrder();
+
+	/** A save is being applied right now (ApplySaveData): nothing may be written meanwhile (a checkpoint fired by a restored step). */
+	bool IsApplyingSave() const { return bApplyingSave; }
+
+	/** The save's map exists in this build (a slot whose level was renamed / removed cannot be loaded with travel). */
+	static bool IsSaveMapAvailable(const FSaveSlotInfo& Info);
+
 	/** Tests / smokes write their slots elsewhere. */
 	FString SaveDirectoryOverride;
+
+	/** Everything one restore step needs (built once per ApplySaveData; public only for the step table in the .cpp). */
+	struct FSaveRestoreContext
+	{
+		UWorld* World = nullptr;
+		TSharedPtr<FJsonObject> Data;
+		/** Data["world_state"] (null in a corrupt / sectionless file: the world steps do nothing). */
+		TSharedPtr<FJsonObject> WorldState;
+		int32 Version = 1;
+		/** Set by the squad step, consumed by the game-state step. */
+		TObjectPtr<class AOperativeCharacter> NewLeader = nullptr;
+		/** The operatives the squad step restored with their entries (the game-state step applies their standing orders after the squad state). */
+		TArray<TPair<TObjectPtr<class AOperativeCharacter>, TSharedPtr<FJsonObject>>> SquadEntries;
+	};
 
 private:
 	TSharedRef<FJsonObject> BuildSaveData(const FString& SlotName, const FString& Title, const FString& Author) const;
 	void ApplySaveData(const TSharedRef<FJsonObject>& Data);
+	// The restore steps, in GetRestoreOrder (see the table at the top of SaveGameSubsystem.cpp).
+	void RestoreReset(FSaveRestoreContext& Context);
+	void RestoreSquadTransfer(FSaveRestoreContext& Context);
+	void RestoreTutorial(FSaveRestoreContext& Context);
+	void RestoreSquad(FSaveRestoreContext& Context);
+	void RestoreGameState(FSaveRestoreContext& Context);
+	void RestoreQuests(FSaveRestoreContext& Context);
+	void RestoreWorld(FSaveRestoreContext& Context);
+	void RestoreVehicles(FSaveRestoreContext& Context);
+	void RestoreEnemies(FSaveRestoreContext& Context);
+	void RestoreStealth(FSaveRestoreContext& Context);
+	void RestoreUI(FSaveRestoreContext& Context);
 	bool WriteSave(const FString& SlotName, const FString& CustomTitle, const FString& Author);
 	FString GetSavePath(const FString& SlotName) const;
 	void Post(const FString& Speaker, const FString& Text) const;
@@ -133,4 +171,5 @@ private:
 	/** Platform time the cover fade-out started (< 0: fully opaque). */
 	double LoadCoverFadeStart = -1.0;
 	int32 WrittenSaveCount = 0;
+	bool bApplyingSave = false;
 };

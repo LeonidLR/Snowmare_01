@@ -155,7 +155,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSavePolicyVersionTest, "CodexTactics.Save.Poli
 
 bool FSavePolicyVersionTest::RunTest(const FString&)
 {
-	TestEqual(TEXT("current format"), SaveGameRules::CurrentSaveVersion, 2);
+	TestEqual(TEXT("current format (3: audit 2026-10-19)"), SaveGameRules::CurrentSaveVersion, 3);
 	for (const ECodexGamePhase Phase : { ECodexGamePhase::Exploration, ECodexGamePhase::Cutscene, ECodexGamePhase::Preparation,
 		ECodexGamePhase::WaveCombat, ECodexGamePhase::WaveCleared, ECodexGamePhase::PostCombat, ECodexGamePhase::GameOver })
 	{

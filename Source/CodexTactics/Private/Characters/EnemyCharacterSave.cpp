@@ -24,6 +24,11 @@ FEnemyPatrolSnapshot AEnemyCharacter::CapturePatrolSnapshot() const
 	Snapshot.SearchSweepRadiusCm = ActiveSearchSpec.SweepRadiusCm;
 	Snapshot.SearchApproachSpeedFraction = ActiveSearchSpec.ApproachSpeedFraction;
 	Snapshot.bScentSearch = bSearching && ActiveSearchSpec.bScent;
+	// Audit 2026-10-19: a hound sniffing / following at save time used to come back on its route with no scent (a second grace window).
+	Snapshot.ScentPhase = static_cast<int32>(ScentState.Phase);
+	Snapshot.ScentPhaseSeconds = ScentState.PhaseSeconds;
+	Snapshot.ScentSinceSeconds = ScentState.SinceScentSeconds;
+	Snapshot.ScentPoint = ScentState.ScentPoint;
 	return Snapshot;
 }
 
@@ -78,4 +83,12 @@ void AEnemyCharacter::RestorePatrolSnapshot(APatrolRouteActor* Route, AEnemyChar
 	bSearchReachedOrigin = false;
 	bSearchMoving = false;
 	GetCharacterMovement()->MaxWalkSpeed = PatrolWalkSpeed;
+	// The scent episode after StartPatrol's ResetScent (a non-smeller never saved one: phase None).
+	ScentState = FHoundScentState();
+	ScentState.Phase = static_cast<EHoundScentPhase>(FMath::Clamp(Snapshot.ScentPhase, 0, static_cast<int32>(EHoundScentPhase::Following)));
+	ScentState.PhaseSeconds = FMath::Max(0.f, Snapshot.ScentPhaseSeconds);
+	ScentState.SinceScentSeconds = FMath::Max(0.f, Snapshot.ScentSinceSeconds);
+	ScentState.ScentPoint = Snapshot.ScentPoint;
+	bScentMoveIssued = false;
+	ScentStuckTime = 0.f;
 }

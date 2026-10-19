@@ -13,8 +13,14 @@
 #include "UI/MinimapSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
 #include "Characters/SquadSubsystem.h"
+#include "Characters/SquadAutonomySubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/WaveSubsystem.h"
+#include "Combat/WaveVictorySubsystem.h"
+#include "Misc/PackageName.h"
+#include "Tactics/CoverTypes.h"
+#include "UI/DialogueSubsystem.h"
 #include "Components/SplineComponent.h"
 #include "Core/MissionSessionSubsystem.h"
 #include "Data/WeaponDataAsset.h"
@@ -201,6 +207,74 @@ namespace
 		return true;
 	}
 
+	/** Tag of a fallen operative's remains crate (AOperativeCharacter::SpawnRemainsLoot). */
+	const FName SaveCorpseLootTag(TEXT("CorpseLoot"));
+
+	/** A crate spawned during play (a fallen member's remains), not placed in the level: a reopened level has none of them. */
+	bool SaveIsRuntimeCrate(const ALootCrateActor& Crate)
+	{
+		return !Crate.IsNetStartupActor();
+	}
+
+	/** Version 3: the kill statistics of the victory panel (FSquadKillStats) as JSON and back. */
+	TSharedRef<FJsonObject> SaveMemberKills(const FMemberKillStats& Stats)
+	{
+		TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
+		Object->SetNumberField(TEXT("hound"), Stats.Hound);
+		Object->SetNumberField(TEXT("spitter"), Stats.Spitter);
+		Object->SetNumberField(TEXT("brute"), Stats.Brute);
+		Object->SetNumberField(TEXT("total"), Stats.Total);
+		Object->SetNumberField(TEXT("turret"), Stats.TurretKills);
+		Object->SetNumberField(TEXT("mine"), Stats.MineKills);
+		return Object;
+	}
+
+	FMemberKillStats LoadMemberKills(const TSharedPtr<FJsonObject>& Object)
+	{
+		FMemberKillStats Stats;
+		Stats.Hound = SaveInt(Object, TEXT("hound"), 0);
+		Stats.Spitter = SaveInt(Object, TEXT("spitter"), 0);
+		Stats.Brute = SaveInt(Object, TEXT("brute"), 0);
+		Stats.Total = SaveInt(Object, TEXT("total"), 0);
+		Stats.TurretKills = SaveInt(Object, TEXT("turret"), 0);
+		Stats.MineKills = SaveInt(Object, TEXT("mine"), 0);
+		return Stats;
+	}
+
+	TSharedRef<FJsonObject> SaveKillStats(const FSquadKillStats& Stats)
+	{
+		TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
+		Object->SetObjectField(TEXT("commander"), SaveMemberKills(Stats.Commander));
+		Object->SetObjectField(TEXT("engineer"), SaveMemberKills(Stats.Engineer));
+		Object->SetObjectField(TEXT("medic"), SaveMemberKills(Stats.Medic));
+		Object->SetNumberField(TEXT("turret_kills"), Stats.TurretKills);
+		Object->SetNumberField(TEXT("mine_kills"), Stats.MineKills);
+		Object->SetNumberField(TEXT("barricade_kills"), Stats.BarricadeKills);
+		return Object;
+	}
+
+	FSquadKillStats LoadKillStats(const TSharedPtr<FJsonObject>& Object)
+	{
+		FSquadKillStats Stats;
+		const TSharedPtr<FJsonObject>* Member = nullptr;
+		if (Object->TryGetObjectField(TEXT("commander"), Member))
+		{
+			Stats.Commander = LoadMemberKills(*Member);
+		}
+		if (Object->TryGetObjectField(TEXT("engineer"), Member))
+		{
+			Stats.Engineer = LoadMemberKills(*Member);
+		}
+		if (Object->TryGetObjectField(TEXT("medic"), Member))
+		{
+			Stats.Medic = LoadMemberKills(*Member);
+		}
+		Stats.TurretKills = SaveInt(Object, TEXT("turret_kills"), 0);
+		Stats.MineKills = SaveInt(Object, TEXT("mine_kills"), 0);
+		Stats.BarricadeKills = SaveInt(Object, TEXT("barricade_kills"), 0);
+		return Stats;
+	}
+
 	/** Actors the save keeps per object (crates and piles have their own sections; previews / blown charges are skipped). */
 	bool SaveIsTrackedObject(const AInteractableActor* Actor)
 	{
@@ -270,6 +344,43 @@ namespace
 		Soldier->SetNumberField(TEXT("stove_gas_seconds"), Member->StoveGasSeconds);
 		Soldier->SetNumberField(TEXT("heat_buffer_left"), Member->ColdSurvival ? Member->ColdSurvival->GetHeatBufferSecondsLeft() : 0.f);
 		Soldier->SetBoolField(TEXT("is_guarding"), Member->bGuarding);
+		// Version 3 (audit 2026-10-19): a fallen member (he came back alive on a reopened level), the sticky cold flags, the F-key
+		// deployable, the cover fire mode, the standing orders (defense line, cover slot) and the recorded preparation station.
+		Soldier->SetBoolField(TEXT("killed_in_action"), Member->IsKilledInAction());
+		Soldier->SetBoolField(TEXT("frostbitten"), Member->ColdSurvival && Member->ColdSurvival->IsFrostbitten());
+		Soldier->SetBoolField(TEXT("weapon_frozen"), Member->ColdSurvival && Member->ColdSurvival->IsWeaponFrozen());
+		Soldier->SetStringField(TEXT("selected_deploy"), SaveEnumName(Member->SelectedDeployType));
+		Soldier->SetStringField(TEXT("cover_fire_mode"), SaveEnumName(Member->CoverFireMode));
+		if (Member->TacticalAnchor.Defense.IsActive())
+		{
+			const FDefenseDirective& Defense = Member->TacticalAnchor.Defense;
+			TSharedRef<FJsonObject> DefenseState = MakeShared<FJsonObject>();
+			DefenseState->SetStringField(TEXT("actor"), Defense.DefendedActor.IsValid() ? Defense.DefendedActor->GetName() : FString());
+			DefenseState->SetArrayField(TEXT("point"), SaveVector(Defense.DefendedLocation));
+			Soldier->SetObjectField(TEXT("defense"), DefenseState);
+		}
+		if (Member->bInCover && Member->GetCoverSlot().IsValid())
+		{
+			const FCoverSlot& Slot = Member->GetCoverSlot();
+			TSharedRef<FJsonObject> Cover = MakeShared<FJsonObject>();
+			Cover->SetArrayField(TEXT("slot"), SaveVector(Slot.WorldLocation));
+			Cover->SetArrayField(TEXT("wall_point"), SaveVector(Slot.WallPoint));
+			Cover->SetArrayField(TEXT("wall_normal"), SaveVector(Slot.WallNormal));
+			Cover->SetStringField(TEXT("height"), SaveEnumName(Slot.Height));
+			Cover->SetNumberField(TEXT("wall_top"), Slot.WallTopCm);
+			Cover->SetBoolField(TEXT("left_exposed"), Slot.bLeftEdgeExposed);
+			Cover->SetBoolField(TEXT("right_exposed"), Slot.bRightEdgeExposed);
+			Cover->SetNumberField(TEXT("left_distance"), Slot.LeftEdgeDistanceCm);
+			Cover->SetNumberField(TEXT("right_distance"), Slot.RightEdgeDistanceCm);
+			Cover->SetStringField(TEXT("wall_actor"), Slot.WallActor.IsValid() ? Slot.WallActor->GetName() : FString());
+			Soldier->SetObjectField(TEXT("cover"), Cover);
+		}
+		FVector PrepStation = FVector::ZeroVector;
+		if (const UWaveVictorySubsystem* Victory = Member->GetWorld() ? Member->GetWorld()->GetSubsystem<UWaveVictorySubsystem>() : nullptr;
+			Victory && Victory->GetRecordedPrepStation(Member, PrepStation))
+		{
+			Soldier->SetArrayField(TEXT("prep_station"), SaveVector(PrepStation));
+		}
 		// Version 2: the own fire posture ("" = follows the squad) and the bonus items found in crates.
 		Soldier->SetStringField(TEXT("posture_override"), Member->bHasPostureOverride ? SaveEnumName(Member->PostureOverride) : FString());
 		TArray<TSharedPtr<FJsonValue>> Bonus;
@@ -342,6 +453,22 @@ namespace
 			Member->ColdSurvival->RestoreHeatBuffer(SaveFloat(Info, TEXT("heat_buffer_left"), Member->ColdSurvival->GetHeatBufferSecondsLeft()));
 		}
 		Member->bGuarding = SaveBool(Info, TEXT("is_guarding"), false);
+		// Version 3: the sticky cold flags (older saves: re-derived from the cold level on the next cold step), the F-key deployable,
+		// the cover fire mode. The standing orders (defense / cover / prep station) follow in the game-state step (ApplyOperativeOrders).
+		if (Member->ColdSurvival && Info->HasField(TEXT("frostbitten")))
+		{
+			Member->ColdSurvival->RestoreColdState(SaveBool(Info, TEXT("frostbitten"), false), SaveBool(Info, TEXT("weapon_frozen"), false));
+		}
+		EDeployableType Deploy = Member->SelectedDeployType;
+		if (LoadEnumName(SaveString(Info, TEXT("selected_deploy")), Deploy))
+		{
+			Member->SelectedDeployType = Deploy;
+		}
+		ECoverFireMode FireMode = Member->CoverFireMode;
+		if (LoadEnumName(SaveString(Info, TEXT("cover_fire_mode")), FireMode))
+		{
+			Member->SetCoverFireMode(FireMode);
+		}
 		FString Posture;
 		if (Info->TryGetStringField(TEXT("posture_override"), Posture))
 		{
@@ -385,6 +512,89 @@ namespace
 		}
 	}
 
+	/**
+	 * Version 3: a member killed in action (audit 2026-10-19: a reopened level spawned him alive with the default loadout at the
+	 * start point). Health 0 without a death event, then the corpse state (out of the squad, no movement, clicks go to his remains
+	 * - the remains crate is a runtime crate, recreated by the world step). After ApplyOperative (his place, items for the record).
+	 */
+	void ApplyKilledInAction(AOperativeCharacter* Member, const TSharedPtr<FJsonObject>& Info)
+	{
+		if (!SaveBool(Info, TEXT("killed_in_action"), false) || Member->IsKilledInAction())
+		{
+			return;
+		}
+		if (UHealthComponent* Health = Member->HealthComponent)
+		{
+			Health->RestoreHealth(0.f, SaveFloat(Info, TEXT("max_health"), Health->GetMaxHealth()));
+		}
+		Member->RestoreKilledInAction();
+		UE_LOG(LogCodexTactics, Display, TEXT("Save: %s killed in action (as saved)"), *Member->DisplayName.ToString());
+	}
+
+	AActor* SaveFindActorByName(UWorld* World, const FString& Name)
+	{
+		if (Name.IsEmpty())
+		{
+			return nullptr;
+		}
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			if (It->GetName() == Name && !It->IsActorBeingDestroyed())
+			{
+				return *It;
+			}
+		}
+		return nullptr;
+	}
+
+	/**
+	 * Version 3: the standing orders of a living operative - the Commander-Mode defense line ("hold the line at X", it outlives
+	 * fights) and the cover slot he was pressed against - and his recorded preparation station. After the squad state (Solo,
+	 * Commander Mode, formation) is in place: SetAutonomousSquadCombat / RefreshFormation would undo an anchor set before them.
+	 */
+	void ApplyOperativeOrders(UWorld* World, AOperativeCharacter* Member, const TSharedPtr<FJsonObject>& Info)
+	{
+		if (!Member || Member->IsKilledInAction() || !Member->HealthComponent || !Member->HealthComponent->IsAlive())
+		{
+			return;
+		}
+		const TSharedPtr<FJsonObject>* DefenseState = nullptr;
+		if (Info->TryGetObjectField(TEXT("defense"), DefenseState) && DefenseState && DefenseState->IsValid())
+		{
+			if (USquadAutonomySubsystem* Autonomy = World->GetSubsystem<USquadAutonomySubsystem>())
+			{
+				AActor* Defended = SaveFindActorByName(World, SaveString(*DefenseState, TEXT("actor")));
+				Autonomy->SetDefenseObjective(Member, Defended, LoadVector(*DefenseState, TEXT("point"), Member->GetActorLocation()));
+			}
+		}
+		const TSharedPtr<FJsonObject>* Cover = nullptr;
+		if (Info->TryGetObjectField(TEXT("cover"), Cover) && Cover && Cover->IsValid())
+		{
+			FCoverSlot Slot;
+			Slot.WorldLocation = LoadVector(*Cover, TEXT("slot"), Member->GetActorLocation());
+			Slot.WallPoint = LoadVector(*Cover, TEXT("wall_point"), Slot.WorldLocation);
+			Slot.WallNormal = LoadVector(*Cover, TEXT("wall_normal"), FVector::ForwardVector).GetSafeNormal2D(UE_SMALL_NUMBER, FVector::ForwardVector);
+			LoadEnumName(SaveString(*Cover, TEXT("height")), Slot.Height);
+			Slot.WallTopCm = SaveFloat(*Cover, TEXT("wall_top"), 0.f);
+			Slot.bLeftEdgeExposed = SaveBool(*Cover, TEXT("left_exposed"), false);
+			Slot.bRightEdgeExposed = SaveBool(*Cover, TEXT("right_exposed"), false);
+			Slot.LeftEdgeDistanceCm = SaveFloat(*Cover, TEXT("left_distance"), 0.f);
+			Slot.RightEdgeDistanceCm = SaveFloat(*Cover, TEXT("right_distance"), 0.f);
+			Slot.WallActor = SaveFindActorByName(World, SaveString(*Cover, TEXT("wall_actor")));
+			if (Slot.IsValid())
+			{
+				Member->EnterCover(Slot);
+			}
+		}
+		if (Info->HasField(TEXT("prep_station")))
+		{
+			if (UWaveVictorySubsystem* Victory = World->GetSubsystem<UWaveVictorySubsystem>())
+			{
+				Victory->RestorePrepStation(Member, LoadVector(Info, TEXT("prep_station"), Member->GetActorLocation()));
+			}
+		}
+	}
+
 	// --- Interactables (version 2) ---
 
 	TSharedRef<FJsonObject> SaveObject(AInteractableActor* Object)
@@ -399,6 +609,12 @@ namespace
 		Entry->SetBoolField(TEXT("defused"), Object->bDefused);
 		Entry->SetNumberField(TEXT("failed_defusals"), Object->FailedDefusalAttempts);
 		Entry->SetBoolField(TEXT("defusal_warned"), Object->bDefusalWarned);
+		if (Object->bTrapped)
+		{
+			// Version 3: a grenade-rigged trap blasts 4 m (TrapWithGrenade), the class default 3.5 m.
+			Entry->SetNumberField(TEXT("trap_damage"), Object->TrapDamage);
+			Entry->SetNumberField(TEXT("trap_radius"), Object->TrapRadius);
+		}
 		if (Object->ObjectType == EInteractableType::Generator)
 		{
 			Entry->SetNumberField(TEXT("generator_health"), Object->GeneratorHealth);
@@ -479,6 +695,8 @@ namespace
 		Object->bDefused = SaveBool(Entry, TEXT("defused"), Object->bDefused);
 		Object->FailedDefusalAttempts = SaveInt(Entry, TEXT("failed_defusals"), Object->FailedDefusalAttempts);
 		Object->bDefusalWarned = SaveBool(Entry, TEXT("defusal_warned"), Object->bDefusalWarned);
+		Object->TrapDamage = SaveFloat(Entry, TEXT("trap_damage"), Object->TrapDamage);
+		Object->TrapRadius = SaveFloat(Entry, TEXT("trap_radius"), Object->TrapRadius);
 		if (Object->ObjectType == EInteractableType::Generator)
 		{
 			Object->RestoreGeneratorState(SaveFloat(Entry, TEXT("generator_health"), Object->GeneratorHealth),
@@ -840,6 +1058,22 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 			Member->HealthComponent ? Member->HealthComponent->GetMaxHealth() : 100.f);
 		SquadList.Add(MakeShared<FJsonValueObject>(SaveOperative(Member, Squad)));
 	}
+	// Version 3 (audit 2026-10-19): the members killed in action (they left the squad; a reopened level spawned them alive).
+	// Sorted by name: the order does not depend on the actor iteration.
+	TArray<const AOperativeCharacter*> Fallen;
+	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+	{
+		if (It->IsKilledInAction() && !It->IsActorBeingDestroyed() && !(Squad && Squad->GetMembers().Contains(*It)))
+		{
+			Fallen.Add(*It);
+		}
+	}
+	Fallen.Sort([](const AOperativeCharacter& A, const AOperativeCharacter& B) { return A.DisplayName.ToString() < B.DisplayName.ToString(); });
+	for (const AOperativeCharacter* Member : Fallen)
+	{
+		Health.Emplace(0.f, Member->HealthComponent ? Member->HealthComponent->GetMaxHealth() : 100.f);
+		SquadList.Add(MakeShared<FJsonValueObject>(SaveOperative(Member, Squad)));
+	}
 
 	TSharedRef<FJsonObject> GameState = MakeShared<FJsonObject>();
 	const ECodexGamePhase LivePhase = Flow ? Flow->GetPhase() : ECodexGamePhase::Exploration;
@@ -856,10 +1090,24 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	GameState->SetBoolField(TEXT("is_trap_solo"), Squad && Squad->IsTrapSolo()); // rev 5h: Solo after a spotted trap (no leash)
 	// Version 2.
 	GameState->SetStringField(TEXT("phase"), SaveGameRules::PhaseToString(Phase));
+	GameState->SetNumberField(TEXT("wave_index_live"), Flow ? Flow->GetWaveIndex() : 0); // v3: the unclamped index (0 before the first fight; current_wave_index is Godot's >= 1)
 	GameState->SetNumberField(TEXT("preparation_time_left"), PreparationLeft);
 	GameState->SetBoolField(TEXT("is_ambush_fight"), Flow && Flow->IsAmbushFight());
 	GameState->SetStringField(TEXT("squad_posture"), Squad ? SaveEnumName(Squad->GetSquadPosture()) : FString());
 	GameState->SetBoolField(TEXT("autonomous_combat"), Squad && Squad->IsAutonomousSquadCombat());
+	// Version 3 (audit 2026-10-19): the mission's rolled event waves (a reopened level re-rolled them: Susanin's rescue could land on a
+	// wave already fought), the breach done, the last wave's cold drain (in force during the rest) and the kill statistics so far.
+	if (const UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>())
+	{
+		GameState->SetNumberField(TEXT("breach_wave"), Waves->GetDynamicBreachWave());
+		GameState->SetNumberField(TEXT("susanin_wave"), Waves->GetSusaninRescueWave());
+		GameState->SetBoolField(TEXT("breach_triggered"), Waves->IsDynamicBreachTriggered());
+		GameState->SetNumberField(TEXT("cold_drain_mult"), Waves->GetColdDrainMultiplier());
+	}
+	if (const UWaveVictorySubsystem* Victory = World->GetSubsystem<UWaveVictorySubsystem>())
+	{
+		GameState->SetObjectField(TEXT("kill_stats"), SaveKillStats(Victory->GetKillStats()));
+	}
 
 	TSharedRef<FJsonObject> QuestState = MakeShared<FJsonObject>();
 	const FQuestChainState Chain = Quests ? Quests->GetState() : FQuestChainState();
@@ -874,11 +1122,27 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	TSharedRef<FJsonObject> Crates = MakeShared<FJsonObject>();
 	for (TActorIterator<ALootCrateActor> It(World); It; ++It)
 	{
+		if (It->IsActorBeingDestroyed())
+		{
+			continue;
+		}
 		TSharedRef<FJsonObject> Crate = MakeShared<FJsonObject>();
 		Crate->SetBoolField(TEXT("is_looted"), It->IsLooted());
 		Crate->SetBoolField(TEXT("is_defused"), It->bDefused);
 		Crate->SetBoolField(TEXT("is_destroyed"), It->IsDestroyed());
 		Crate->SetObjectField(TEXT("stash"), SaveStash(It->GetSyncedStash())); // Sprint 13: exact contents (two-way crates)
+		// Version 3 (audit 2026-10-19): a crate spawned at runtime (a fallen member's remains) does not exist on a reopened level: its
+		// class, place and name let the load recreate it (a level crate is matched by its actor name as before).
+		if (SaveIsRuntimeCrate(**It))
+		{
+			Crate->SetBoolField(TEXT("runtime"), true);
+			Crate->SetStringField(TEXT("class"), It->GetClass()->GetPathName());
+			Crate->SetArrayField(TEXT("pos"), SaveVector(It->GetActorLocation()));
+			Crate->SetArrayField(TEXT("rot"), SaveRotator(It->GetActorRotation()));
+			Crate->SetStringField(TEXT("crate_name"), It->CrateName.ToString());
+			Crate->SetBoolField(TEXT("hidden"), It->IsHidden());
+			Crate->SetBoolField(TEXT("corpse_loot"), It->Tags.Contains(SaveCorpseLootTag));
+		}
 		Crates->SetObjectField(It->GetName(), Crate);
 	}
 	WorldState->SetObjectField(TEXT("crates"), Crates);
@@ -1042,6 +1306,13 @@ bool USaveGameSubsystem::WriteSave(const FString& SlotName, const FString& Custo
 {
 	const FString Slot = SaveGameRules::SanitizeSlotName(SlotName);
 	const FString Type = SaveGameRules::GetSaveType(Slot);
+	if (bApplyingSave)
+	{
+		// Audit 2026-10-19: a save written while a load is applied would hold a half-restored world (a beat start fired by a restored
+		// step once wrote its checkpoint over the slot being loaded).
+		UE_LOG(LogCodexTactics, Warning, TEXT("Save: \"%s\" (%s) refused - a save is being applied right now"), *Slot, *Type);
+		return false;
+	}
 	FString Title = CustomTitle;
 	if (Title.IsEmpty())
 	{
@@ -1076,19 +1347,29 @@ bool USaveGameSubsystem::LoadGame(const FString& SlotName)
 	FString Json;
 	if (!FFileHelper::LoadFileToString(Json, *GetSavePath(SlotName)))
 	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("Save: \"%s\" not loaded - no file at %s"), *SlotName, *GetSavePath(SlotName));
 		return false;
 	}
 	TSharedPtr<FJsonObject> Data;
 	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Json), Data) || !Data.IsValid())
 	{
+		// Audit 2026-10-19: a truncated / hand-edited file never crashes the game - it is simply not loaded (the list hides it too).
+		UE_LOG(LogCodexTactics, Warning, TEXT("Save: \"%s\" not loaded - the file is not valid JSON (corrupt or truncated)"), *SlotName);
 		return false;
 	}
-	const int32 Version = SaveInt(Data, TEXT("version"), 1);
-	if (Version > SaveGameRules::CurrentSaveVersion)
+	FSaveSlotInfo Info;
+	if (!SaveGameRules::ParseSlotInfo(*Data, SlotName, Info))
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("Save: \"%s\" not loaded - the JSON holds no save sections (squad / game_state / world_state)"), *SlotName);
+		return false;
+	}
+	if (Info.Version > SaveGameRules::CurrentSaveVersion)
 	{
 		UE_LOG(LogCodexTactics, Warning, TEXT("Save \"%s\" has format version %d (this build writes %d): loading what is known."),
-			*SlotName, Version, SaveGameRules::CurrentSaveVersion);
+			*SlotName, Info.Version, SaveGameRules::CurrentSaveVersion);
 	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Save: applying \"%s\" (format %d, map %s, %d squad entries)"), *SlotName, Info.Version,
+		Info.MapName.IsEmpty() ? TEXT("-") : *Info.MapName, Info.SquadCount);
 	ApplySaveData(Data.ToSharedRef());
 	const FString Slot = SaveGameRules::SanitizeSlotName(SlotName);
 	if (UCodexEventBus* Bus = UCodexEventBus::Get(this))
@@ -1107,6 +1388,15 @@ bool USaveGameSubsystem::LoadGameWithTravel(const FString& SlotName)
 	UMissionSessionSubsystem* Session = GameInstance ? GameInstance->GetSubsystem<UMissionSessionSubsystem>() : nullptr;
 	if (!Session || !GetSaveInfo(SlotName, Info))
 	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("Save: \"%s\" cannot be loaded (no readable slot of that name)"), *SlotName);
+		return false;
+	}
+	if (!IsSaveMapAvailable(Info))
+	{
+		// Audit 2026-10-19: a slot whose level was renamed / removed: a travel to it would fail on the engine's default map with the
+		// pending slot still set. Refused with a feed line instead (the slot stays listed, marked by the menu).
+		UE_LOG(LogCodexTactics, Warning, TEXT("Save: \"%s\" cannot be loaded - its map %s is not in this build"), *SlotName, *Info.MapName);
+		Post(TEXT("SYSTEM"), FString::Printf(TEXT("⛔ Save \"%s\" needs the map %s, which is missing."), *SlotName, *FPackageName::GetShortName(Info.MapName)));
 		return false;
 	}
 	Session->PendingLoadSlot = SaveGameRules::SanitizeSlotName(SlotName);
@@ -1115,6 +1405,12 @@ bool USaveGameSubsystem::LoadGameWithTravel(const FString& SlotName)
 	UE_LOG(LogCodexTactics, Display, TEXT("Save: loading \"%s\" on %s (level reopened)"), *Session->PendingLoadSlot, *Map);
 	UGameplayStatics::OpenLevel(World, FName(*Map));
 	return true;
+}
+
+bool USaveGameSubsystem::IsSaveMapAvailable(const FSaveSlotInfo& Info)
+{
+	// A version 1 save names no map: it loads on the current level.
+	return Info.MapName.IsEmpty() || FPackageName::DoesPackageExist(Info.MapName);
 }
 
 void USaveGameSubsystem::ApplyPendingLoad()
@@ -1150,12 +1446,100 @@ FString USaveGameSubsystem::GetContinueSlot() const
 	return All.IsEmpty() ? FString() : All[0].SlotName;
 }
 
+namespace
+{
+	/**
+	 * THE RESTORE ORDER (audit 2026-10-19; docs/systems/save-load.md "Restore order"). ApplySaveData runs these steps top to bottom;
+	 * GetRestoreOrder lists the same names (guard test CodexTactics.Save.Policy.RestoreOrder). Why this order:
+	 *  1 Reset         - nothing of the pre-load world carries over: crews out of the vehicles, walks to objects / use orders / the loot
+	 *                    window and every carry / placement cancelled (the objects get their saved places in World).
+	 *  2 SquadTransfer - the hand-over counts: the tutorial's conditions ("heat_packs_given") read them.
+	 *  3 Tutorial      - progress, used-up volumes, locks, skipped: BEFORE the squad is placed, so a teleport into a volume meets its saved
+	 *                    fired flag (no stale beat start, no checkpoint written over the slot being loaded) and the locks are up first.
+	 *  4 Squad         - Susanin (a recruited one takes his squad entry), every operative (transient state reset, stance, place, stats,
+	 *                    items, weapon), the leader.
+	 *  5 GameState     - flow phase / wave / preparation time, Solo + trap Solo (followers hold), postures, Commander Mode, formation.
+	 *  6 Quests        - the chain (a powered gate starts opening; World snaps the gate right after).
+	 *  7 World         - crates, piles, loose heat sources, gates + the paced creep, dialogue triggers, every interactable (matched by
+	 *                    name / recreated / removed).
+	 *  8 Vehicles      - transforms, hull, shells, crews back in their seats (needs the operatives of 4 and the ground of 7).
+	 *  9 Enemies       - patrol routes (a missing runtime route is rebuilt), living enemies (matched / recreated / removed; dead stay
+	 *                    dead), then patrol / search snapshots once everybody exists (an escort needs its leader).
+	 * 10 Stealth       - the lure cooldowns per operative (needs the squad).
+	 * 11 UI            - minimap fog + panel choice (cosmetic, last).
+	 */
+	struct FSaveRestoreStepEntry
+	{
+		FName Name;
+		void (USaveGameSubsystem::*Step)(USaveGameSubsystem::FSaveRestoreContext&);
+	};
+}
+
+const TArray<FName>& SaveRestoreStepNames()
+{
+	static const TArray<FName> Names = { TEXT("Reset"), TEXT("SquadTransfer"), TEXT("Tutorial"), TEXT("Squad"), TEXT("GameState"), TEXT("Quests"),
+		TEXT("World"), TEXT("Vehicles"), TEXT("Enemies"), TEXT("Stealth"), TEXT("UI") };
+	return Names;
+}
+
+TArray<FName> USaveGameSubsystem::GetRestoreOrder()
+{
+	return SaveRestoreStepNames();
+}
+
 void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 {
-	UWorld* World = GetWorld();
-	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
-	const int32 Version = SaveInt(Data, TEXT("version"), 1);
+	// One table, in GetRestoreOrder's order (the names are checked against it in the unit test, so both stay one list).
+	static const FSaveRestoreStepEntry Steps[] = {
+		{ TEXT("Reset"), &USaveGameSubsystem::RestoreReset },
+		{ TEXT("SquadTransfer"), &USaveGameSubsystem::RestoreSquadTransfer },
+		{ TEXT("Tutorial"), &USaveGameSubsystem::RestoreTutorial },
+		{ TEXT("Squad"), &USaveGameSubsystem::RestoreSquad },
+		{ TEXT("GameState"), &USaveGameSubsystem::RestoreGameState },
+		{ TEXT("Quests"), &USaveGameSubsystem::RestoreQuests },
+		{ TEXT("World"), &USaveGameSubsystem::RestoreWorld },
+		{ TEXT("Vehicles"), &USaveGameSubsystem::RestoreVehicles },
+		{ TEXT("Enemies"), &USaveGameSubsystem::RestoreEnemies },
+		{ TEXT("Stealth"), &USaveGameSubsystem::RestoreStealth },
+		{ TEXT("UI"), &USaveGameSubsystem::RestoreUI },
+	};
+	static_assert(UE_ARRAY_COUNT(Steps) == 11, "keep the step table, SaveRestoreStepNames and the header comment in step");
 
+	FSaveRestoreContext Context;
+	Context.World = GetWorld();
+	Context.Data = Data;
+	Context.Version = SaveInt(Data, TEXT("version"), 1);
+	const TSharedPtr<FJsonObject>* WorldState = nullptr;
+	if (Data->TryGetObjectField(TEXT("world_state"), WorldState) && WorldState && WorldState->IsValid())
+	{
+		Context.WorldState = *WorldState;
+	}
+	else
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("Save: no \"world_state\" section (corrupt or foreign file): the world keeps the level's defaults"));
+	}
+	if (Context.Version < SaveGameRules::CurrentSaveVersion)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Save: format version %d (this build writes %d): missing sections keep the level's defaults"),
+			Context.Version, SaveGameRules::CurrentSaveVersion);
+	}
+
+	// Rev 2026-10-19 (audit): a save written while a load is applied would store a half-restored world (a checkpoint fired by a
+	// restored beat wrote itself over the slot being loaded): WriteSave refuses meanwhile.
+	TGuardValue<bool> ApplyingGuard(bApplyingSave, true);
+	for (const FSaveRestoreStepEntry& Entry : Steps)
+	{
+		UE_LOG(LogCodexTactics, Verbose, TEXT("Save: restore step %s"), *Entry.Name.ToString());
+		(this->*Entry.Step)(Context);
+	}
+}
+
+// --- Restore steps (GetRestoreOrder) ---
+
+void USaveGameSubsystem::RestoreReset(FSaveRestoreContext& Context)
+{
+	UWorld* World = Context.World;
+	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 	// APC P1: everyone out of the vehicles first (the save puts them back aboard below, or where they stood).
 	if (UVehicleSubsystem* Vehicles = World->GetSubsystem<UVehicleSubsystem>())
 	{
@@ -1182,18 +1566,15 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			Relocation->CancelActiveTask(Member);
 		}
 	}
+}
 
-	// Demo 01 tutorial progress (completed / skipped steps, the current beat); older saves have none: progress stays.
-	const TSharedPtr<FJsonObject>* TutorialState = nullptr;
-	if (UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>(); Tutorial && Data->TryGetObjectField(TEXT("tutorial"), TutorialState))
-	{
-		Tutorial->RestoreSaveState(**TutorialState);
-	}
+void USaveGameSubsystem::RestoreSquadTransfer(FSaveRestoreContext& Context)
+{
 	// Rev 5f: items handed between squad mates (older saves: the session's counts stay).
 	const TSharedPtr<FJsonObject>* TransferState = nullptr;
 	const TSharedPtr<FJsonObject>* HandedOverState = nullptr;
-	if (USquadTransferSubsystem* Transfer = World->GetSubsystem<USquadTransferSubsystem>();
-		Transfer && Data->TryGetObjectField(TEXT("squad_transfer"), TransferState) && (*TransferState)->TryGetObjectField(TEXT("handed_over"), HandedOverState))
+	if (USquadTransferSubsystem* Transfer = Context.World->GetSubsystem<USquadTransferSubsystem>();
+		Transfer && Context.Data->TryGetObjectField(TEXT("squad_transfer"), TransferState) && (*TransferState)->TryGetObjectField(TEXT("handed_over"), HandedOverState))
 	{
 		TMap<ETransferItem, int32> Counts;
 		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*HandedOverState)->Values)
@@ -1207,6 +1588,25 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 		}
 		Transfer->RestoreHandedOverCounts(Counts);
 	}
+}
+
+void USaveGameSubsystem::RestoreTutorial(FSaveRestoreContext& Context)
+{
+	// Demo 01 tutorial progress (completed / skipped steps, the current beat); older saves have none: progress stays.
+	const TSharedPtr<FJsonObject>* TutorialState = nullptr;
+	if (UTutorialSubsystem* Tutorial = Context.World->GetSubsystem<UTutorialSubsystem>();
+		Tutorial && Context.Data->TryGetObjectField(TEXT("tutorial"), TutorialState) && TutorialState && TutorialState->IsValid())
+	{
+		Tutorial->RestoreSaveState(**TutorialState);
+	}
+}
+
+void USaveGameSubsystem::RestoreSquad(FSaveRestoreContext& Context)
+{
+	UWorld* World = Context.World;
+	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+	const TSharedRef<FJsonObject> Data = Context.Data.ToSharedRef();
+	const int32 Version = Context.Version;
 
 	// 0. Susanin first, so a recruited Susanin takes his squad entry below.
 	const TSharedPtr<FJsonObject>* SusaninState = nullptr;
@@ -1223,6 +1623,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 				if (!bRecruited && Recruits->GetSusanin() && (*SusaninState)->TryGetObjectField(TEXT("operative"), Operative))
 				{
 					ApplyOperative(Recruits->GetSusanin(), *Operative);
+					ApplyKilledInAction(Recruits->GetSusanin(), *Operative);
 				}
 			}
 			else
@@ -1237,13 +1638,12 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 	}
 
 	// 1. Squad.
-	AOperativeCharacter* NewLeader = nullptr;
 	const TArray<TSharedPtr<FJsonValue>>* SquadList = nullptr;
 	if (Squad && Data->TryGetArrayField(TEXT("squad"), SquadList))
 	{
 		for (const TSharedPtr<FJsonValue>& Value : *SquadList)
 		{
-			const TSharedPtr<FJsonObject> Info = Value->AsObject();
+			const TSharedPtr<FJsonObject> Info = Value.IsValid() ? Value->AsObject() : nullptr;
 			if (!Info.IsValid())
 			{
 				continue;
@@ -1260,69 +1660,118 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			}
 			if (!Member)
 			{
+				// Version 3: a member killed in action before this load left the squad already (an in-place load): matched by name among
+				// every operative of the world (a recruit waiting to be rescued is never one: he has his own Susanin record).
+				for (TActorIterator<AOperativeCharacter> It(World); It && !Member; ++It)
+				{
+					Member = It->IsKilledInAction() && It->DisplayName.ToString() == Name && !It->IsActorBeingDestroyed() ? *It : nullptr;
+				}
+			}
+			if (!Member)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Save: squad member \"%s\" (%s) is not in this level's roster: skipped"), *Name, *Role);
 				continue;
 			}
 			ApplyOperative(Member, Info);
-			if (SaveBool(Info, TEXT("is_leader"), false))
+			ApplyKilledInAction(Member, Info);
+			Context.SquadEntries.Emplace(Member, Info);
+			if (SaveBool(Info, TEXT("is_leader"), false) && !Member->IsKilledInAction())
 			{
-				NewLeader = Member;
+				Context.NewLeader = Member;
 			}
 		}
 	}
+}
 
+void USaveGameSubsystem::RestoreGameState(FSaveRestoreContext& Context)
+{
+	UWorld* World = Context.World;
+	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+	const int32 Version = Context.Version;
 	// 2. Game state (and solo mode, posture, Commander Mode).
 	const TSharedPtr<FJsonObject>* GameState = nullptr;
-	if (Data->TryGetObjectField(TEXT("game_state"), GameState))
+	if (!Context.Data->TryGetObjectField(TEXT("game_state"), GameState))
 	{
-		if (UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>())
+		return;
+	}
+	if (UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>())
+	{
+		ECodexGamePhase SavedPhase = ECodexGamePhase::Exploration;
+		const bool bHasPhase = SaveGameRules::ParsePhase(SaveString(*GameState, TEXT("phase")), SavedPhase);
+		const FGameFlowConfig& Config = Flow->GetConfig();
+		const FSaveLoadFlow Resolved = SaveGameRules::ResolveLoadFlow(bHasPhase ? Version : 1, SavedPhase,
+			SaveBool(*GameState, TEXT("is_combat_phase_unlocked"), false), SaveBool(*GameState, TEXT("is_preparation_active"), false),
+			SaveBool(*GameState, TEXT("is_wave_active"), false), SaveInt(*GameState, TEXT("current_wave_index"), 1), Config.TotalWaves,
+			SaveBool(*GameState, TEXT("is_ambush_fight"), false), Config.bAmbushSingleFight);
+		const bool bSamePreparation = bHasPhase && SavedPhase == ECodexGamePhase::Preparation;
+		// Version 3: an exploration resumes with its unclamped wave index (0 before the first fight: current_wave_index is Godot's >= 1), and
+		// the resumed fight keeps its kind (is_ambush_fight was saved but never read back before the audit).
+		const int32 WaveIndex = Resolved.Phase == ECodexGamePhase::Exploration && bHasPhase && SavedPhase == ECodexGamePhase::Exploration
+			? SaveInt(*GameState, TEXT("wave_index_live"), Resolved.WaveIndex) : Resolved.WaveIndex;
+		Flow->RestoreForLoad(Resolved.bCombatUnlocked, Resolved.Phase == ECodexGamePhase::Preparation, WaveIndex,
+			bSamePreparation ? SaveFloat(*GameState, TEXT("preparation_time_left"), -1.f) : -1.f,
+			Resolved.Phase == ECodexGamePhase::Preparation && SaveBool(*GameState, TEXT("is_ambush_fight"), false));
+	}
+	// Version 3: the mission's event waves, the breach done, the cold drain of the rest, the kill statistics (older saves: the
+	// reopened level's own roll / 1.0 / none - as before).
+	if (UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>(); Waves && (*GameState)->HasField(TEXT("breach_wave")))
+	{
+		Waves->RestoreRandomEvents(SaveInt(*GameState, TEXT("breach_wave"), Waves->GetDynamicBreachWave()),
+			SaveInt(*GameState, TEXT("susanin_wave"), Waves->GetSusaninRescueWave()), SaveBool(*GameState, TEXT("breach_triggered"), false));
+		Waves->RestoreColdDrainMultiplier(SaveFloat(*GameState, TEXT("cold_drain_mult"), 1.f));
+	}
+	const TSharedPtr<FJsonObject>* KillStats = nullptr;
+	if (UWaveVictorySubsystem* Victory = World->GetSubsystem<UWaveVictorySubsystem>();
+		Victory && (*GameState)->TryGetObjectField(TEXT("kill_stats"), KillStats) && KillStats && KillStats->IsValid())
+	{
+		Victory->RestoreKillStats(LoadKillStats(*KillStats));
+	}
+	if (Squad)
+	{
+		if (Context.NewLeader)
 		{
-			ECodexGamePhase SavedPhase = ECodexGamePhase::Exploration;
-			const bool bHasPhase = SaveGameRules::ParsePhase(SaveString(*GameState, TEXT("phase")), SavedPhase);
-			const FGameFlowConfig& Config = Flow->GetConfig();
-			const FSaveLoadFlow Resolved = SaveGameRules::ResolveLoadFlow(bHasPhase ? Version : 1, SavedPhase,
-				SaveBool(*GameState, TEXT("is_combat_phase_unlocked"), false), SaveBool(*GameState, TEXT("is_preparation_active"), false),
-				SaveBool(*GameState, TEXT("is_wave_active"), false), SaveInt(*GameState, TEXT("current_wave_index"), 1), Config.TotalWaves,
-				SaveBool(*GameState, TEXT("is_ambush_fight"), false), Config.bAmbushSingleFight);
-			const bool bSamePreparation = bHasPhase && SavedPhase == ECodexGamePhase::Preparation;
-			Flow->RestoreForLoad(Resolved.bCombatUnlocked, Resolved.Phase == ECodexGamePhase::Preparation, Resolved.WaveIndex,
-				bSamePreparation ? SaveFloat(*GameState, TEXT("preparation_time_left"), -1.f) : -1.f);
+			Squad->SetLeader(Context.NewLeader);
 		}
-		if (Squad)
+		Squad->RestoreSoloForLoad(SaveBool(*GameState, TEXT("is_solo_mode"), false), SaveBool(*GameState, TEXT("is_trap_solo"), false));
+		ESquadFirePosture Posture = FirePostureRules::DefaultPosture;
+		if (LoadEnumName(SaveString(*GameState, TEXT("squad_posture")), Posture))
 		{
-			if (NewLeader)
+			// SetSquadPosture clears the overrides: put the saved ones back.
+			TMap<AOperativeCharacter*, TPair<bool, ESquadFirePosture>> Overrides;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
-				Squad->SetLeader(NewLeader);
+				Overrides.Add(Member, { Member->bHasPostureOverride, Member->PostureOverride });
 			}
-			Squad->RestoreSoloForLoad(SaveBool(*GameState, TEXT("is_solo_mode"), false), SaveBool(*GameState, TEXT("is_trap_solo"), false));
-			ESquadFirePosture Posture = FirePostureRules::DefaultPosture;
-			if (LoadEnumName(SaveString(*GameState, TEXT("squad_posture")), Posture))
+			Squad->SetSquadPosture(Posture);
+			for (const TPair<AOperativeCharacter*, TPair<bool, ESquadFirePosture>>& Entry : Overrides)
 			{
-				// SetSquadPosture clears the overrides: put the saved ones back.
-				TMap<AOperativeCharacter*, TPair<bool, ESquadFirePosture>> Overrides;
-				for (AOperativeCharacter* Member : Squad->GetMembers())
-				{
-					Overrides.Add(Member, { Member->bHasPostureOverride, Member->PostureOverride });
-				}
-				Squad->SetSquadPosture(Posture);
-				for (const TPair<AOperativeCharacter*, TPair<bool, ESquadFirePosture>>& Entry : Overrides)
-				{
-					Entry.Key->bHasPostureOverride = Entry.Value.Key;
-					Entry.Key->PostureOverride = Entry.Value.Value;
-				}
+				Entry.Key->bHasPostureOverride = Entry.Value.Key;
+				Entry.Key->PostureOverride = Entry.Value.Value;
 			}
-			if ((*GameState)->HasField(TEXT("autonomous_combat")))
-			{
-				Squad->SetAutonomousSquadCombat(SaveBool(*GameState, TEXT("autonomous_combat"), false));
-			}
-			Squad->RefreshFormation();
+		}
+		if ((*GameState)->HasField(TEXT("autonomous_combat")))
+		{
+			Squad->SetAutonomousSquadCombat(SaveBool(*GameState, TEXT("autonomous_combat"), false));
+		}
+		Squad->RefreshFormation();
+	}
+	// Version 3: the standing orders of every restored operative (defense line, cover slot, prep station) - after the squad state.
+	for (const TPair<TObjectPtr<AOperativeCharacter>, TSharedPtr<FJsonObject>>& Entry : Context.SquadEntries)
+	{
+		if (IsValid(Entry.Key) && Entry.Value.IsValid())
+		{
+			ApplyOperativeOrders(World, Entry.Key, Entry.Value);
 		}
 	}
+}
 
+void USaveGameSubsystem::RestoreQuests(FSaveRestoreContext& Context)
+{
 	// 3. Quest chain.
 	const TSharedPtr<FJsonObject>* QuestState = nullptr;
-	if (Data->TryGetObjectField(TEXT("quest_state"), QuestState))
+	if (Context.Data->TryGetObjectField(TEXT("quest_state"), QuestState))
 	{
-		if (UQuestSubsystem* Quests = World->GetSubsystem<UQuestSubsystem>())
+		if (UQuestSubsystem* Quests = Context.World->GetSubsystem<UQuestSubsystem>())
 		{
 			FQuestChainState Chain;
 			Chain.bHasEmptyCanister = SaveBool(*QuestState, TEXT("has_empty_canister"), false);
@@ -1332,57 +1781,76 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			Quests->RestoreState(Chain);
 		}
 	}
+}
 
-	// 4. World: supply crates.
-	const TSharedPtr<FJsonObject>* WorldState = nullptr;
-	const TSharedPtr<FJsonObject>* Crates = nullptr;
-	if (Data->TryGetObjectField(TEXT("world_state"), WorldState) && (*WorldState)->TryGetObjectField(TEXT("crates"), Crates))
-	{
-		for (TActorIterator<ALootCrateActor> It(World); It; ++It)
-		{
-			const TSharedPtr<FJsonObject>* Crate = nullptr;
-			if ((*Crates)->TryGetObjectField(It->GetName(), Crate))
-			{
-				It->RestoreSaved(SaveBool(*Crate, TEXT("is_looted"), false), SaveBool(*Crate, TEXT("is_defused"), false),
-					SaveBool(*Crate, TEXT("is_destroyed"), false));
-				const TSharedPtr<FJsonObject>* Stash = nullptr;
-				if (!It->IsDestroyed() && (*Crate)->TryGetObjectField(TEXT("stash"), Stash))
-				{
-					It->GetSyncedStash()->SetContents(LoadStash(*Stash)); // older saves: the authored loot stays
-				}
-			}
-		}
-	}
-	if (!WorldState)
+void USaveGameSubsystem::RestoreWorld(FSaveRestoreContext& Context)
+{
+	UWorld* World = Context.World;
+	const TSharedPtr<FJsonObject>& WorldState = Context.WorldState;
+	if (!WorldState.IsValid())
 	{
 		return;
 	}
-	// APC P1: vehicles back at their places, their crews aboard in their seats (older saves: everyone on foot).
-	const TArray<TSharedPtr<FJsonValue>>* VehicleList = nullptr;
-	if (UVehicleSubsystem* Vehicles = World->GetSubsystem<UVehicleSubsystem>(); Vehicles && (*WorldState)->TryGetArrayField(TEXT("vehicles"), VehicleList))
+	// 4. World: supply crates (version 3: runtime crates - a fallen member's remains - are recreated / removed like deployables).
+	const TSharedPtr<FJsonObject>* Crates = nullptr;
+	if (WorldState->TryGetObjectField(TEXT("crates"), Crates))
 	{
-		Vehicles->RestoreSave(*VehicleList);
-	}
-	// Stealth lure: the cooldowns (older saves: everyone ready).
-	if (UStealthLureSubsystem* Lure = World->GetSubsystem<UStealthLureSubsystem>())
-	{
-		const TSharedPtr<FJsonObject>* LureState = nullptr;
-		if ((*WorldState)->TryGetObjectField(TEXT("stealth_lure"), LureState) && LureState && LureState->IsValid())
+		auto ApplyCrate = [](ALootCrateActor& Crate, const TSharedPtr<FJsonObject>& Entry)
 		{
-			Lure->RestoreSave(**LureState);
+			Crate.RestoreSaved(SaveBool(Entry, TEXT("is_looted"), false), SaveBool(Entry, TEXT("is_defused"), false),
+				SaveBool(Entry, TEXT("is_destroyed"), false));
+			const TSharedPtr<FJsonObject>* Stash = nullptr;
+			if (!Crate.IsDestroyed() && Entry->TryGetObjectField(TEXT("stash"), Stash))
+			{
+				Crate.GetSyncedStash()->SetContents(LoadStash(*Stash)); // older saves: the authored loot stays
+			}
+		};
+		TSet<FString> Seen;
+		TArray<ALootCrateActor*> Existing;
+		for (TActorIterator<ALootCrateActor> It(World); It; ++It)
+		{
+			if (!It->IsActorBeingDestroyed())
+			{
+				Existing.Add(*It);
+			}
 		}
-		else
+		for (ALootCrateActor* Crate : Existing)
 		{
-			Lure->RestoreSave(FJsonObject());
+			const TSharedPtr<FJsonObject>* Entry = nullptr;
+			if ((*Crates)->TryGetObjectField(Crate->GetName(), Entry) && Entry->IsValid())
+			{
+				ApplyCrate(*Crate, *Entry);
+				Seen.Add(Crate->GetName());
+			}
+			else if (SaveIsRuntimeCrate(*Crate))
+			{
+				Crate->Destroy(); // spawned after the save (an in-place load)
+			}
 		}
-	}
-	// Minimap: the explored fog (older saves: what this session explored stays).
-	if (UMinimapSubsystem* Minimap = World->GetSubsystem<UMinimapSubsystem>())
-	{
-		const TSharedPtr<FJsonObject>* MinimapState = nullptr;
-		if ((*WorldState)->TryGetObjectField(TEXT("minimap"), MinimapState) && MinimapState && MinimapState->IsValid())
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Field : (*Crates)->Values)
 		{
-			Minimap->RestoreSave(**MinimapState);
+			const TSharedPtr<FJsonObject> Entry = Field.Value.IsValid() ? Field.Value->AsObject() : nullptr;
+			if (Seen.Contains(Field.Key) || !Entry.IsValid() || !SaveBool(Entry, TEXT("runtime"), false))
+			{
+				continue; // a level crate missing from this world is not recreated
+			}
+			const FString ClassPath = SaveString(Entry, TEXT("class"));
+			UClass* Class = ClassPath.IsEmpty() ? nullptr : LoadClass<ALootCrateActor>(nullptr, *ClassPath);
+			ALootCrateActor* Spawned = Class ? World->SpawnActor<ALootCrateActor>(Class, LoadVector(Entry, TEXT("pos"), FVector::ZeroVector),
+				LoadRotator(Entry, TEXT("rot"), FRotator::ZeroRotator), SaveSpawnParams(Field.Key)) : nullptr;
+			if (!Spawned)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Save: runtime crate %s (%s) could not be recreated"), *Field.Key, *ClassPath);
+				continue;
+			}
+			Spawned->CrateName = FText::FromString(SaveString(Entry, TEXT("crate_name"), Spawned->CrateName.ToString()));
+			Spawned->SetActorHiddenInGame(SaveBool(Entry, TEXT("hidden"), false));
+			if (SaveBool(Entry, TEXT("corpse_loot"), false))
+			{
+				Spawned->OpenSeconds = 0.6f; // AOperativeCharacter::SpawnRemainsLoot: searching a body, no lid
+				Spawned->Tags.AddUnique(SaveCorpseLootTag);
+			}
+			ApplyCrate(*Spawned, Entry);
 		}
 	}
 	// Sprint 13: piles on the ground (older saves have none: the piles of the session are cleared either way).
@@ -1391,7 +1859,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 		It->Destroy();
 	}
 	const TArray<TSharedPtr<FJsonValue>>* Piles = nullptr;
-	if ((*WorldState)->TryGetArrayField(TEXT("dropped_items"), Piles))
+	if (WorldState->TryGetArrayField(TEXT("dropped_items"), Piles))
 	{
 		for (const TSharedPtr<FJsonValue>& Value : *Piles)
 		{
@@ -1411,7 +1879,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 
 	// Sprint 15: signal flares / fire puddles (older saves have none: the session's stay).
 	const TArray<TSharedPtr<FJsonValue>>* HeatSources = nullptr;
-	if ((*WorldState)->TryGetArrayField(TEXT("heat_sources"), HeatSources))
+	if (WorldState->TryGetArrayField(TEXT("heat_sources"), HeatSources))
 	{
 		if (UTacticalHeatSubsystem* Heat = World->GetSubsystem<UTacticalHeatSubsystem>())
 		{
@@ -1421,7 +1889,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 
 	// 5. Version 2: gates (after the quest chain, which starts opening a powered gate), dialogue triggers.
 	const TSharedPtr<FJsonObject>* Gates = nullptr;
-	if ((*WorldState)->TryGetObjectField(TEXT("gates"), Gates))
+	if (WorldState->TryGetObjectField(TEXT("gates"), Gates))
 	{
 		for (TActorIterator<AGateActor> It(World); It; ++It)
 		{
@@ -1434,7 +1902,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 	}
 	// The paced gate's progress (older saves: none, the door starts its creep from 0 again).
 	const TSharedPtr<FJsonObject>* GateProgress = nullptr;
-	(*WorldState)->TryGetObjectField(TEXT("gate_progress"), GateProgress);
+	WorldState->TryGetObjectField(TEXT("gate_progress"), GateProgress);
 	const UQuestSubsystem* GateQuests = World->GetSubsystem<UQuestSubsystem>();
 	for (TActorIterator<AGateActor> It(World); It; ++It)
 	{
@@ -1444,7 +1912,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			bEntry && SaveBool(*Entry, TEXT("final_wave_cleared"), false));
 	}
 	const TSharedPtr<FJsonObject>* Triggers = nullptr;
-	if ((*WorldState)->TryGetObjectField(TEXT("dialogue_triggers"), Triggers))
+	if (WorldState->TryGetObjectField(TEXT("dialogue_triggers"), Triggers))
 	{
 		for (TActorIterator<ADialogueTriggerVolume> It(World); It; ++It)
 		{
@@ -1459,7 +1927,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 	// 6. Version 2: interactables. Saved ones are restored; deployables / tripwires placed after the save are removed and
 	// the ones picked up / blown since are put back.
 	const TSharedPtr<FJsonObject>* Objects = nullptr;
-	if ((*WorldState)->TryGetObjectField(TEXT("objects"), Objects))
+	if (WorldState->TryGetObjectField(TEXT("objects"), Objects))
 	{
 		TSet<FString> Seen;
 		TArray<AInteractableActor*> Existing;
@@ -1490,7 +1958,8 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			{
 				continue;
 			}
-			UClass* Class = LoadClass<AInteractableActor>(nullptr, *SaveString(Entry, TEXT("class")));
+			const FString ClassPath = SaveString(Entry, TEXT("class"));
+			UClass* Class = ClassPath.IsEmpty() ? nullptr : LoadClass<AInteractableActor>(nullptr, *ClassPath);
 			if (!SaveIsDynamicObjectClass(Class))
 			{
 				continue; // a level object missing from this world is not recreated
@@ -1503,7 +1972,30 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 			}
 		}
 	}
+}
 
+void USaveGameSubsystem::RestoreVehicles(FSaveRestoreContext& Context)
+{
+	if (!Context.WorldState.IsValid())
+	{
+		return;
+	}
+	// APC P1: vehicles back at their places, their crews aboard in their seats (older saves: everyone on foot).
+	const TArray<TSharedPtr<FJsonValue>>* VehicleList = nullptr;
+	if (UVehicleSubsystem* Vehicles = Context.World->GetSubsystem<UVehicleSubsystem>(); Vehicles && Context.WorldState->TryGetArrayField(TEXT("vehicles"), VehicleList))
+	{
+		Vehicles->RestoreSave(*VehicleList);
+	}
+}
+
+void USaveGameSubsystem::RestoreEnemies(FSaveRestoreContext& Context)
+{
+	UWorld* World = Context.World;
+	const TSharedPtr<FJsonObject>& WorldState = Context.WorldState;
+	if (!WorldState.IsValid())
+	{
+		return;
+	}
 	// 7. Version 2: patrol routes (a missing runtime route is rebuilt), then the enemies: the living ones of the save come
 	// back where they were with their health and patrol / search; anyone not in the save is gone (dead stay dead).
 	TMap<FString, APatrolRouteActor*> RouteByName;
@@ -1512,7 +2004,7 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 		RouteByName.Add(It->GetName(), *It);
 	}
 	const TSharedPtr<FJsonObject>* Routes = nullptr;
-	if ((*WorldState)->TryGetObjectField(TEXT("patrol_routes"), Routes))
+	if (WorldState->TryGetObjectField(TEXT("patrol_routes"), Routes))
 	{
 		for (const TPair<FString, TSharedPtr<FJsonValue>>& Field : (*Routes)->Values)
 		{
@@ -1526,105 +2018,145 @@ void USaveGameSubsystem::ApplySaveData(const TSharedRef<FJsonObject>& Data)
 		}
 	}
 	const TArray<TSharedPtr<FJsonValue>>* Enemies = nullptr;
-	if ((*WorldState)->TryGetArrayField(TEXT("enemies"), Enemies))
+	if (!WorldState->TryGetArrayField(TEXT("enemies"), Enemies))
 	{
-		TMap<FString, TSharedPtr<FJsonObject>> Saved;
-		for (const TSharedPtr<FJsonValue>& Value : *Enemies)
+		return;
+	}
+	TMap<FString, TSharedPtr<FJsonObject>> Saved;
+	for (const TSharedPtr<FJsonValue>& Value : *Enemies)
+	{
+		const TSharedPtr<FJsonObject> Entry = Value.IsValid() ? Value->AsObject() : nullptr;
+		if (Entry.IsValid())
 		{
-			const TSharedPtr<FJsonObject> Entry = Value.IsValid() ? Value->AsObject() : nullptr;
-			if (Entry.IsValid())
-			{
-				Saved.Add(SaveString(Entry, TEXT("name")), Entry);
-			}
+			Saved.Add(SaveString(Entry, TEXT("name")), Entry);
 		}
-		TMap<FString, AEnemyCharacter*> EnemyBySavedName;
-		TArray<AEnemyCharacter*> Living;
-		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	}
+	TMap<FString, AEnemyCharacter*> EnemyBySavedName;
+	TArray<AEnemyCharacter*> Living;
+	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+	{
+		if (!It->IsActorBeingDestroyed())
 		{
-			if (!It->IsActorBeingDestroyed())
-			{
-				Living.Add(*It);
-			}
+			Living.Add(*It);
 		}
-		for (AEnemyCharacter* Enemy : Living)
+	}
+	for (AEnemyCharacter* Enemy : Living)
+	{
+		const TSharedPtr<FJsonObject>* Entry = Saved.Find(Enemy->GetName());
+		const bool bUsable = Entry && !Enemy->IsDying() && Enemy->GetHealthComponent() && Enemy->GetHealthComponent()->IsAlive()
+			&& SaveString(*Entry, TEXT("class")) == Enemy->GetClass()->GetPathName();
+		if (bUsable)
 		{
-			const TSharedPtr<FJsonObject>* Entry = Saved.Find(Enemy->GetName());
-			const bool bUsable = Entry && !Enemy->IsDying() && Enemy->GetHealthComponent() && Enemy->GetHealthComponent()->IsAlive()
-				&& SaveString(*Entry, TEXT("class")) == Enemy->GetClass()->GetPathName();
-			if (bUsable)
-			{
-				EnemyBySavedName.Add(Enemy->GetName(), Enemy);
-			}
-			else
-			{
-				// Rev 2026-10-19: out of the way first - a destroyed actor keeps its name until GC, and the respawn below would get a
-				// new one ("..._C_12"), which the next save stored and a later load (on a fresh level) no longer matched.
-				Enemy->Rename(*MakeUniqueObjectName(Enemy->GetOuter(), Enemy->GetClass(), TEXT("LoadDiscardedEnemy")).ToString(), nullptr,
-					REN_DontCreateRedirectors | REN_ForceNoResetLoaders | REN_NonTransactional);
-				Enemy->Destroy();
-			}
+			EnemyBySavedName.Add(Enemy->GetName(), Enemy);
 		}
-		for (const TPair<FString, TSharedPtr<FJsonObject>>& Pair : Saved)
+		else
 		{
-			const TSharedPtr<FJsonObject>& Entry = Pair.Value;
-			AEnemyCharacter* Enemy = EnemyBySavedName.FindRef(Pair.Key);
-			const FVector Location = LoadVector(Entry, TEXT("pos"), FVector::ZeroVector);
-			const FRotator Rotation(0.f, SaveFloat(Entry, TEXT("rot_y"), 0.f), 0.f);
+			// Rev 2026-10-19: out of the way first - a destroyed actor keeps its name until GC, and the respawn below would get a
+			// new one ("..._C_12"), which the next save stored and a later load (on a fresh level) no longer matched.
+			Enemy->Rename(*MakeUniqueObjectName(Enemy->GetOuter(), Enemy->GetClass(), TEXT("LoadDiscardedEnemy")).ToString(), nullptr,
+				REN_DontCreateRedirectors | REN_ForceNoResetLoaders | REN_NonTransactional);
+			Enemy->Destroy();
+		}
+	}
+	for (const TPair<FString, TSharedPtr<FJsonObject>>& Pair : Saved)
+	{
+		const TSharedPtr<FJsonObject>& Entry = Pair.Value;
+		AEnemyCharacter* Enemy = EnemyBySavedName.FindRef(Pair.Key);
+		const FVector Location = LoadVector(Entry, TEXT("pos"), FVector::ZeroVector);
+		const FRotator Rotation(0.f, SaveFloat(Entry, TEXT("rot_y"), 0.f), 0.f);
+		if (!Enemy)
+		{
+			const FString ClassPath = SaveString(Entry, TEXT("class"));
+			UClass* Class = ClassPath.IsEmpty() ? nullptr : LoadClass<AEnemyCharacter>(nullptr, *ClassPath);
+			EEnemyArchetype Archetype = EEnemyArchetype::FrostHound;
+			const bool bSavedArchetype = LoadEnumName(SaveString(Entry, TEXT("archetype")), Archetype);
+			{
+				// A saved enemy is no placed one: its saved archetype, not a class lookup (the archetype-safety net).
+				TOptional<AEnemyCharacter::FScopedSpawnArchetype> SpawnScope;
+				if (bSavedArchetype)
+				{
+					SpawnScope.Emplace(Archetype);
+				}
+				Enemy = Class ? World->SpawnActor<AEnemyCharacter>(Class, Location, Rotation, SaveSpawnParams(Pair.Key)) : nullptr;
+			}
+			if (Enemy && bSavedArchetype)
+			{
+				Enemy->InitializeArchetype(Archetype);
+			}
 			if (!Enemy)
 			{
-				UClass* Class = LoadClass<AEnemyCharacter>(nullptr, *SaveString(Entry, TEXT("class")));
-				EEnemyArchetype Archetype = EEnemyArchetype::FrostHound;
-				const bool bSavedArchetype = LoadEnumName(SaveString(Entry, TEXT("archetype")), Archetype);
-				{
-					// A saved enemy is no placed one: its saved archetype, not a class lookup (the archetype-safety net).
-					TOptional<AEnemyCharacter::FScopedSpawnArchetype> SpawnScope;
-					if (bSavedArchetype)
-					{
-						SpawnScope.Emplace(Archetype);
-					}
-					Enemy = Class ? World->SpawnActor<AEnemyCharacter>(Class, Location, Rotation, SaveSpawnParams(Pair.Key)) : nullptr;
-				}
-				if (Enemy && bSavedArchetype)
-				{
-					Enemy->InitializeArchetype(Archetype);
-				}
-				if (!Enemy)
-				{
-					UE_LOG(LogCodexTactics, Warning, TEXT("Save: enemy %s (%s) could not be recreated"), *Pair.Key, *SaveString(Entry, TEXT("class")));
-					continue;
-				}
-				// Rev 2026-10-19: what the class default does not know - the designer's patrol speed and "placed in the level" (contact with
-				// a level enemy starts the fight on a "button" level; a recreated actor was not recorded at world begin play).
-				Enemy->PatrolWalkSpeed = SaveFloat(Entry, TEXT("patrol_walk_speed"), Enemy->PatrolWalkSpeed);
-				if (SaveBool(Entry, TEXT("level_enemy"), false))
-				{
-					if (ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>())
-					{
-						Encounter->MarkLevelEnemy(Enemy);
-					}
-				}
-				EnemyBySavedName.Add(Pair.Key, Enemy);
+				UE_LOG(LogCodexTactics, Warning, TEXT("Save: enemy %s (%s) could not be recreated"), *Pair.Key, *ClassPath);
+				continue;
 			}
-			if (AAIController* AIC = Cast<AAIController>(Enemy->GetController()))
+			// Rev 2026-10-19: what the class default does not know - the designer's patrol speed and "placed in the level" (contact with
+			// a level enemy starts the fight on a "button" level; a recreated actor was not recorded at world begin play).
+			Enemy->PatrolWalkSpeed = SaveFloat(Entry, TEXT("patrol_walk_speed"), Enemy->PatrolWalkSpeed);
+			if (SaveBool(Entry, TEXT("level_enemy"), false))
 			{
-				AIC->StopMovement();
+				if (ULevelEncounterSubsystem* Encounter = World->GetSubsystem<ULevelEncounterSubsystem>())
+				{
+					Encounter->MarkLevelEnemy(Enemy);
+				}
 			}
-			Enemy->TeleportTo(Location, Rotation, false, true);
-			if (UHealthComponent* EnemyHealth = Enemy->GetHealthComponent())
-			{
-				const float Max = SaveFloat(Entry, TEXT("max_health"), EnemyHealth->GetMaxHealth());
-				EnemyHealth->RestoreHealth(FMath::Max(1.f, SaveFloat(Entry, TEXT("health"), Max)), Max);
-			}
+			EnemyBySavedName.Add(Pair.Key, Enemy);
 		}
-		// Patrols once everybody exists (an escort needs its leader).
-		for (const TPair<FString, TSharedPtr<FJsonObject>>& Pair : Saved)
+		if (AAIController* AIC = Cast<AAIController>(Enemy->GetController()))
 		{
-			if (AEnemyCharacter* Enemy = EnemyBySavedName.FindRef(Pair.Key))
-			{
-				APatrolRouteActor* Route = RouteByName.FindRef(SaveString(Pair.Value, TEXT("route")));
-				AEnemyCharacter* Leader = EnemyBySavedName.FindRef(SaveString(Pair.Value, TEXT("escort_leader")));
-				Enemy->RestorePatrolSnapshot(Route, Leader, LoadPatrol(Pair.Value));
-			}
+			AIC->StopMovement();
+		}
+		Enemy->TeleportTo(Location, Rotation, false, true);
+		if (UHealthComponent* EnemyHealth = Enemy->GetHealthComponent())
+		{
+			const float Max = SaveFloat(Entry, TEXT("max_health"), EnemyHealth->GetMaxHealth());
+			EnemyHealth->RestoreHealth(FMath::Max(1.f, SaveFloat(Entry, TEXT("health"), Max)), Max);
+		}
+	}
+	// Patrols once everybody exists (an escort needs its leader).
+	for (const TPair<FString, TSharedPtr<FJsonObject>>& Pair : Saved)
+	{
+		if (AEnemyCharacter* Enemy = EnemyBySavedName.FindRef(Pair.Key))
+		{
+			APatrolRouteActor* Route = RouteByName.FindRef(SaveString(Pair.Value, TEXT("route")));
+			AEnemyCharacter* Leader = EnemyBySavedName.FindRef(SaveString(Pair.Value, TEXT("escort_leader")));
+			Enemy->RestorePatrolSnapshot(Route, Leader, LoadPatrol(Pair.Value));
+		}
+	}
+}
+
+void USaveGameSubsystem::RestoreStealth(FSaveRestoreContext& Context)
+{
+	if (!Context.WorldState.IsValid())
+	{
+		return;
+	}
+	// Stealth lure: the cooldowns (older saves: everyone ready).
+	if (UStealthLureSubsystem* Lure = Context.World->GetSubsystem<UStealthLureSubsystem>())
+	{
+		const TSharedPtr<FJsonObject>* LureState = nullptr;
+		if (Context.WorldState->TryGetObjectField(TEXT("stealth_lure"), LureState) && LureState && LureState->IsValid())
+		{
+			Lure->RestoreSave(**LureState);
+		}
+		else
+		{
+			Lure->RestoreSave(FJsonObject());
+		}
+	}
+}
+
+void USaveGameSubsystem::RestoreUI(FSaveRestoreContext& Context)
+{
+	if (!Context.WorldState.IsValid())
+	{
+		return;
+	}
+	// Minimap: the explored fog (older saves: what this session explored stays).
+	if (UMinimapSubsystem* Minimap = Context.World->GetSubsystem<UMinimapSubsystem>())
+	{
+		const TSharedPtr<FJsonObject>* MinimapState = nullptr;
+		if (Context.WorldState->TryGetObjectField(TEXT("minimap"), MinimapState) && MinimapState && MinimapState->IsValid())
+		{
+			Minimap->RestoreSave(**MinimapState);
 		}
 	}
 }
@@ -1638,23 +2170,14 @@ bool USaveGameSubsystem::GetSaveInfo(const FString& SlotName, FSaveSlotInfo& Out
 	{
 		return false;
 	}
-	const FString Slot = SaveGameRules::SanitizeSlotName(SlotName);
-	OutInfo.SlotName = Data->HasField(TEXT("slot_name")) ? Data->GetStringField(TEXT("slot_name")) : Slot;
-	OutInfo.Title = Data->HasField(TEXT("title")) ? Data->GetStringField(TEXT("title")) : Slot;
-	double Timestamp = 0.0;
-	Data->TryGetNumberField(TEXT("timestamp"), Timestamp);
-	OutInfo.Timestamp = static_cast<int64>(Timestamp);
-	Data->TryGetStringField(TEXT("datetime_str"), OutInfo.DateTime);
-	OutInfo.SaveType = Data->HasField(TEXT("save_type")) ? Data->GetStringField(TEXT("save_type")) : SaveGameRules::GetSaveType(Slot);
-	OutInfo.Author = Data->HasField(TEXT("author")) ? Data->GetStringField(TEXT("author")) : TEXT("Commander");
-	OutInfo.StageName = Data->HasField(TEXT("stage_name")) ? Data->GetStringField(TEXT("stage_name")) : TEXT("Unknown stage");
-	Data->TryGetStringField(TEXT("squad_summary"), OutInfo.SquadSummary);
-	const TSharedPtr<FJsonObject>* GameState = nullptr;
-	OutInfo.Wave = Data->TryGetObjectField(TEXT("game_state"), GameState) ? SaveInt(*GameState, TEXT("current_wave_index"), 1) : 1;
-	const TArray<TSharedPtr<FJsonValue>>* SquadList = nullptr;
-	OutInfo.SquadCount = Data->TryGetArrayField(TEXT("squad"), SquadList) ? SquadList->Num() : 0;
-	OutInfo.Version = SaveInt(Data, TEXT("version"), 1);
-	Data->TryGetStringField(TEXT("map"), OutInfo.MapName);
+	// Audit 2026-10-19: the pure parser (missing / mistyped keys -> defaults; a JSON that is no save at all -> false, the file is skipped
+	// by the lists: CodexTactics.Save.Policy.SlotInfo).
+	if (!SaveGameRules::ParseSlotInfo(*Data, SlotName, OutInfo))
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("Save: \"%s\" skipped - the JSON holds no save sections"), *SlotName);
+		return false;
+	}
+	OutInfo.bMapAvailable = IsSaveMapAvailable(OutInfo);
 	return true;
 }
 
@@ -1688,7 +2211,9 @@ FString USaveGameSubsystem::SuggestNextSlotName() const
 ESaveBlockReason USaveGameSubsystem::GetSaveBlockReason() const
 {
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	return Flow ? SaveGameRules::GetSaveBlockReason(Flow->GetPhase()) : ESaveBlockReason::None;
+	// Audit 2026-10-19: no save while the modal dialogue window is open (its trigger is saved as used: the talk would never finish).
+	const UDialogueSubsystem* Dialogue = GetWorld() ? GetWorld()->GetSubsystem<UDialogueSubsystem>() : nullptr;
+	return SaveGameRules::GetSaveBlockReason(Flow ? Flow->GetPhase() : ECodexGamePhase::Exploration, Dialogue && Dialogue->IsDialogueOpen());
 }
 
 bool USaveGameSubsystem::CanSaveNow(FText* OutReason) const

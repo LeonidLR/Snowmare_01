@@ -95,6 +95,18 @@ public:
 	int32 GetSusaninRescueWave() const { return SusaninRescueWave; }
 	void SetRandomEventWaves(int32 BreachWave, int32 SusaninWave) { DynamicBreachWave = BreachWave; SusaninRescueWave = SusaninWave; }
 	bool IsDynamicBreachTriggered() const { return bDynamicBreachTriggered; }
+	/**
+	 * Save-game load (audit 2026-10-19): the mission's rolled event waves and whether the breach already happened - a reopened
+	 * level re-rolls them in Initialize, which moved the Susanin rescue onto a wave already played.
+	 */
+	void RestoreRandomEvents(int32 BreachWave, int32 SusaninWave, bool bBreachTriggered)
+	{
+		DynamicBreachWave = BreachWave;
+		SusaninRescueWave = SusaninWave;
+		bDynamicBreachTriggered = bBreachTriggered;
+	}
+	/** Save-game load: the last level wave's cold drain multiplier (it stays in force during the rest between waves). */
+	void RestoreColdDrainMultiplier(float Multiplier) { ColdDrainMultiplier = Multiplier > 0.f ? Multiplier : 1.f; }
 	int32 GetPendingRandomEventCount() const { return PendingRandomEvents.Num(); }
 
 	/**

@@ -75,6 +75,25 @@ FVector UWaveVictorySubsystem::GetPrepStation(const AOperativeCharacter* Member)
 	return Station ? *Station : (Member ? Member->GetActorLocation() : FVector::ZeroVector);
 }
 
+bool UWaveVictorySubsystem::GetRecordedPrepStation(const AOperativeCharacter* Member, FVector& OutStation) const
+{
+	const FVector* Station = PrepStations.Find(const_cast<AOperativeCharacter*>(Member));
+	if (!Station)
+	{
+		return false;
+	}
+	OutStation = *Station;
+	return true;
+}
+
+void UWaveVictorySubsystem::RestorePrepStation(AOperativeCharacter* Member, const FVector& Station)
+{
+	if (Member)
+	{
+		PrepStations.Add(Member, Station);
+	}
+}
+
 void UWaveVictorySubsystem::RecordPrepStations(bool bOverwrite)
 {
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();

@@ -276,6 +276,9 @@
 - Targeted shots: the priority target now gets the barricade cover / blocking of `EvaluateShotLine` and is refused
   while raging (panic refusal: panic not ported). The barrel
   line «💥 Прицельный выстрел…» is posted only when the shot actually fires (Godot posts it even when frozen).
+- Save / load: the full state inventory (SAVED / DERIVED / GAP per owner), the restore order and the open follow-ups (APC repair in progress,
+  autonomy primary-weapon memory, tutorial multi-hit trigger counts, a stone / grenade in flight, the manual corner peek) are in
+  `docs/systems/save-load.md` (audit 2026-10-19, format version 3).
 - Save / load differences: a load resumes an active wave from its preparation (Godot only flips flags; neither saves
   enemies); «В главное меню» restarts the level with the start menu (Godot shows the menu over the running scene);
   `AAutosaveTrigger` is not ported — Godot's only trigger (gate_kpp.tscn AutosaveTrigger_Gate) has no collision shape

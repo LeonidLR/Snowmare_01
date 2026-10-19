@@ -125,9 +125,10 @@ public:
 	/**
 	 * Save-game load (Godot SaveManager _deserialize_game_state sets is_combat_phase_unlocked / is_preparation_active /
 	 * is_wave_active / current_wave_index): Exploration before the combat, otherwise the preparation of the saved wave
-	 * (an active wave is resumed from its preparation — enemies are not saved, like in Godot).
+	 * (an active wave is resumed from its preparation — enemies are not saved, like in Godot). bInAmbushFight: the fight
+	 * being resumed started by ambush (audit 2026-10-19: saved as is_ambush_fight, it was never read back).
 	 */
-	void RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex, float InPreparationSeconds = -1.f);
+	void RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex, float InPreparationSeconds = -1.f, bool bInAmbushFight = false);
 
 	/**
 	 * Advances real-time timers: pause cooldown, tactical pause (not the free one), preparation. A preparation of a

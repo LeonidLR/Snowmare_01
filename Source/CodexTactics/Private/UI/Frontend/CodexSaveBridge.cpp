@@ -45,6 +45,11 @@ TArray<FCodexSaveSlotView> CodexSaveBridge::ListSlots(const UWorld* World)
 			View.DateTime = Info.DateTime;
 			const FString Map = Info.MapName.IsEmpty() ? FString() : FPackageName::GetShortName(Info.MapName);
 			View.Level = Map.IsEmpty() ? Info.StageName : FString::Printf(TEXT("%s - %s"), *Map, *Info.StageName);
+			if (!Info.bMapAvailable)
+			{
+				// Audit 2026-10-19: the level was renamed / removed since; LoadSlot refuses it (the entry stays, so the player can delete it).
+				View.Level += LOCTEXT("MapMissing", " - MAP MISSING").ToString();
+			}
 			// The save metadata has no play time yet (TANDEM request «play time in the save metadata»).
 			View.PlayTime = CodexFrontendRules::FormatPlayTime(-1.f);
 			View.Timestamp = Info.Timestamp;

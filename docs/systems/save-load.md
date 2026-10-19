@@ -1,12 +1,176 @@
 # Save / load
 
-> `USaveGameSubsystem` writes JSON slots (`Saved/SaveGames/<slot>.json`); saving is only allowed outside combat. Since 2026-10-19 every load reopens the
-> level and nothing of the old world is kept. Audit: `docs/port/save_audit.md`.
+> `USaveGameSubsystem` writes JSON slots (`Saved/SaveGames/<slot>.json`, format **version 3** since the audit of 2026-10-19); saving is only allowed
+> outside combat and outside the modal dialogue window. Every load reopens the level and applies the save to the fresh world in one explicit
+> **restore order** (11 steps, `USaveGameSubsystem::GetRestoreOrder`). The **state inventory** below says, per owner, what is saved, what is
+> derived on purpose and what is still open. Old audit (2026-10-08): `docs/port/save_audit.md`.
 >
 > Key files:
-> - `Core/SaveGameSubsystem.*`, `CodexSaveBridge`, `Core/MissionSessionSubsystem`; tests `CodexTactics.Save.Policy.*`, `Core.SaveGame.Rules`; smokes `SaveLoadSmoke`, `SaveRoundTripSmoke`
+> - `Core/SaveGameSubsystem.*` (the step table at the top of the .cpp), `Core/SaveGameRules.*` (pure: slot info parsing, policy, load flow),
+>   `CodexSaveBridge`, `Core/MissionSessionSubsystem`; per-system hooks: `AEnemyCharacter::CapturePatrolSnapshot / RestorePatrolSnapshot`
+>   (`EnemyCharacterSave.cpp`), `UTutorialSubsystem::CaptureSaveState / RestoreSaveState`, `UVehicleSubsystem::CaptureSave / RestoreSave`,
+>   `UStealthLureSubsystem`, `UMinimapSubsystem`, `UTacticalHeatSubsystem::SaveLooseSources`, `UWaveSubsystem::RestoreRandomEvents`,
+>   `UWaveVictorySubsystem::RestoreKillStats`, `UColdSurvivalComponent::RestoreColdState`, `AOperativeCharacter::RestoreKilledInAction`.
+> - Tests `CodexTactics.Save.Policy.*` (7: BlockReason, NoAutosave, LoadFlow, Version, RestoreOrder, SlotInfo, DialogueBlock) + `Core.SaveGame.Rules`;
+>   smokes `SaveRoundTripSmoke`, `SaveCoverageSmoke` / `SaveCoverageLakeSmoke` (live-world dump diff), `SaveLoadSmoke`, `TutorialSaveSmoke`, `PauseMenuSmoke`.
+>
+> Sections: Restore order | State inventory | How to add saved state | Robustness | Follow-ups | Old text (§6).
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
+
+## Restore order (audit 2026-10-19)
+
+`ApplySaveData` runs ONE table of steps (`SaveGameSubsystem.cpp`, `FSaveRestoreStepEntry Steps[]`); `USaveGameSubsystem::GetRestoreOrder()` returns the same
+names and the unit test `CodexTactics.Save.Policy.RestoreOrder` pins both the sequence and the invariants below. While the steps run, `IsApplyingSave()` is
+true and `WriteSave` refuses every save (a beat start fired by a restored step once wrote its checkpoint over the slot being loaded).
+
+| # | Step | What it restores | Why here |
+|---|---|---|---|
+| 1 | `Reset` | crews out of the vehicles (`PrepareForLoad`), walks to objects / use orders / the loot window cancelled, every carry / placement cancelled | nothing of the pre-load world may carry over; the objects get their saved places in `World` |
+| 2 | `SquadTransfer` | the hand-over counts (`squad_transfer.handed_over`) | the tutorial's conditions (`heat_packs_given`) read them |
+| 3 | `Tutorial` | progress, used-up volumes, locks, lock hints, skipped | BEFORE the squad is placed: a teleport into a volume meets its saved fired flag (no stale beat start, no checkpoint over the slot) and the locks are up before any restored order |
+| 4 | `Squad` | Susanin (rescue / recruited / his record), every operative: `ResetTransientStateForLoad`, stance, place, stats, items, weapon, cold flags, F-key deployable, cover fire mode, **killed in action** (`ApplyKilledInAction`), the leader | the state steps below act on restored operatives |
+| 5 | `GameState` | flow phase / wave / preparation left / ambush kind, event waves + breach + cold drain, kill statistics, leader, Solo + trap Solo (followers hold), postures, Commander Mode, formation; THEN the standing orders of every operative (`ApplyOperativeOrders`: defense line, cover slot, prep station) | `SetAutonomousSquadCombat` / `RefreshFormation` would undo an anchor or a cover set before them |
+| 6 | `Quests` | the quest chain | a powered gate starts opening; `World` snaps the gate right after |
+| 7 | `World` | crates (level ones matched by name, runtime ones - remains - recreated / removed), piles, loose heat sources, gates + the paced creep, dialogue triggers, every interactable (matched by name + class / dynamic ones recreated / removed) | the ground everything else stands on |
+| 8 | `Vehicles` | transforms, hull, shells, crews back in their seats | needs the operatives (4) and the world (7) |
+| 9 | `Enemies` | routes (a missing runtime route rebuilt), living enemies (matched / recreated / removed - dead stay dead), then every patrol / search / scent snapshot once everybody exists | an escort needs its leader; the search sweep needs the world |
+| 10 | `Stealth` | lure cooldowns per operative | needs the squad |
+| 11 | `UI` | minimap fog + panel | cosmetic, last |
+
+Out of band: the pending-load flag (`UMissionSessionSubsystem::PendingLoadSlot`) is consumed BEFORE `LoadGame` runs; the load cover hides the level's own
+start until step 11 is done; `OnSaveApplied` fires after the steps (smokes dump the world there).
+
+## State inventory (audit 2026-10-19)
+
+Verdicts: **SAVED** (written and restored), **DERIVED** (recomputed or legitimately default on a reopened level - the fresh world starts it; combat-only state
+cannot exist in a save because saves are refused in combat), **GAP** (open; listed under follow-ups). Keys are the JSON keys; "op" = a `squad[]` entry.
+
+### Operatives (`AOperativeCharacter` + components)
+
+| State | Verdict | Key / where |
+|---|---|---|
+| place, yaw, stance | SAVED | op `pos`, `rot_y`, `current_stance` (stance first: the capsule moves) |
+| health / max, cold level, fortitude, level / EXP / stat points, accuracy, luck | SAVED | op fields (`RestoreHealth`: no damage event) |
+| weapon in hands, clip / reserve per weapon, extra ammo, bonus items | SAVED | `current_weapon_id`, `ammo_inventory`, `extra_ammo`, `bonus_items` |
+| items (matches, deployables, medkits, food, grenades, heat packs, firewood, flares, stoves, stove gas), heat buffer | SAVED | op counts, `heat_buffer_left` |
+| guard (T), own fire posture | SAVED | `is_guarding`, `posture_override` |
+| **killed in action** (a fallen member lying as a corpse, out of the squad) + his remains crate | SAVED (v3) | `killed_in_action` (every KIA operative of the world is written, `current_health` 0) -> `RestoreKilledInAction`; the remains crate is a runtime crate (`crates.<name>.runtime` + class / pos / name / `corpse_loot`) |
+| **frostbite flag, frozen weapon** (sticky, not a function of the cold level) | SAVED (v3) | `frostbitten`, `weapon_frozen` -> `UColdSurvivalComponent::RestoreColdState` (tier re-derived silently) |
+| cold tier / speed multiplier | DERIVED | from the restored cold level |
+| **F-key deployable** (`SelectedDeployType`), **cover fire mode** (N) | SAVED (v3) | `selected_deploy`, `cover_fire_mode` |
+| **cover slot** (pressed against a wall out of combat) | SAVED (v3) | `cover` {slot, wall point / normal, height, top, edges, wall actor} -> `EnterCover` after the squad state |
+| **defense line** (Commander Mode "hold the line at X") | SAVED (v3) | `defense` {actor, point} -> `USquadAutonomySubsystem::SetDefenseObjective` after the squad state |
+| **preparation station** (where he stood when the preparation began) | SAVED (v3) | `prep_station` -> `UWaveVictorySubsystem::RestorePrepStation` |
+| tactical anchor of a plain move order (leash pin) | DERIVED | re-anchored at the saved spot by Commander Mode; only the facing / radius differ |
+| knockdown, panic / stress, rage, status-effect timers, reload / shoot timers, prone dive, vault, carry task, planned pause orders, quick fire, planned shots, targets, corner aim, shimmy, manual corner peek, montages, body offsets | DERIVED | combat / seconds-long; `ResetTransientStateForLoad` drops whatever an in-place load would carry |
+| autonomy "primary weapon" memory (`PrimaryWeaponId` / on the auto sidearm) | GAP (minor) | re-learned from the weapon in hands: saved on the auto-drawn pistol, the autonomy treats the pistol as primary |
+| selection, selection ring, silhouette, vision cone toggle | DERIVED | UI; the O key is session-only by user decision |
+
+### Squad and recruits
+
+| State | Verdict | Key |
+|---|---|---|
+| leader, Solo / trap Solo (followers holding), squad posture, Commander Mode | SAVED | `is_leader`, `game_state.is_solo_mode / is_trap_solo / squad_posture / autonomous_combat` |
+| hand-over counts (tutorial share lesson) | SAVED | `squad_transfer.handed_over` |
+| Susanin: recruited, rescue happened, his own record while waiting | SAVED | `susanin.*` (+ `killed_in_action` inside his record) |
+| provoked flags, formation slots, selection group, pause plans, deferred shots | DERIVED | per fight / rebuilt |
+| defense markers (`UDefenseMarkerSubsystem`) | DERIVED | drawn every tick from the restored defense directives |
+
+### Game flow, waves, mission
+
+| State | Verdict | Key |
+|---|---|---|
+| phase (mapped by `ResolveLoadFlow`), wave, combat unlocked, preparation time left | SAVED | `game_state.phase / current_wave_index / is_combat_phase_unlocked / preparation_time_left` |
+| **ambush kind of a resumed fight** | SAVED (v3) | `is_ambush_fight` -> `RestoreForLoad(..., bAmbushFight)` (was written, never read back) |
+| **event waves** (flank breach, Susanin rescue) + **breach done** | SAVED (v3) | `breach_wave`, `susanin_wave`, `breach_triggered` -> `UWaveSubsystem::RestoreRandomEvents` (a reopened level re-rolled them: the rescue could land on a wave already fought) |
+| **cold drain of the rest between waves** | SAVED (v3) | `cold_drain_mult` -> `RestoreColdDrainMultiplier` |
+| **kill statistics** (victory panel) | SAVED (v3) | `kill_stats` -> `UWaveVictorySubsystem::RestoreKillStats` |
+| pause charges / cooldown, turn-based uses, free pause, horde clocks, horde intro, turn-based grid state, wave spawns | DERIVED | combat-only / full outside combat |
+| mission intro seen, objective text, `bCombatFinished`, feed / floating-text history, run telemetry | DERIVED | a loaded save starts without the intro; the objective is recomputed; telemetry counts the run from the load (analytics only) |
+| encounter "ambush started" counter, console overrides | DERIVED | the fight itself is in the phase / combat unlocked |
+
+### Enemies and AI
+
+| State | Verdict | Key |
+|---|---|---|
+| living enemies: name, class, archetype, place, health, route, escort leader, patrol speed, placed-in-level marker | SAVED | `world_state.enemies[]` (+ `patrol_routes` for runtime routes); anyone missing from the save is removed (dead stay dead) |
+| patrol progress (waypoint, direction, phase, wait), suspicion, search (origin, elapsed, lure / scent spec) | SAVED | `patrol.*` (`FEnemyPatrolSnapshot`) |
+| **hound scent episode** (sniffing / following, timers, scent point) | SAVED (v3) | `patrol.scent_phase / scent_phase_s / scent_since_s / scent_point` |
+| guard post of a placed enemy | DERIVED | the fresh level's BeginPlay re-runs `TryStartGuardPost` before the snapshot (`RestorePatrolSnapshot` keeps `bGuardingPost`) |
+| lure "stand and listen" beat, same-noise stamp, search leg bookkeeping | DERIVED | re-walks to the origin; seconds |
+| combat state (target, attack timers, fire fear, flank detour, morale, pounce), status effects, wave modifiers, marksman engage state | DERIVED | combat-only |
+| lure stone / grenade in flight | GAP (negligible) | ~1 s window; the thrower's cooldown is kept |
+| marksman legacy `PatrolIndex` (legacy point routes) | GAP (legacy maps only) | spline routes are saved |
+| last-known silhouettes (`UTacticalSightSubsystem` ghosts), minimap enemy memory | DERIVED | fade within 12 s anyway |
+
+### World objects
+
+| State | Verdict | Key |
+|---|---|---|
+| every interactable by name + class: place, hidden, collision, trap (trapped / defused / attempts / warned), generator health / broken, barrel fire, mine (owner / revealed / arming), tripwire (anchors / arming / PMC / spotted), barricade + turret health, turret power / broken, note read, campfire / stove timer | SAVED | `world_state.objects.<name>` (deployables + tripwires recreated / removed) |
+| **grenade-trap blast values** (4 m / 85 vs the class 3.5 m) | SAVED (v3) | `trap_damage`, `trap_radius` |
+| crates (looted / defused / destroyed / exact stash), piles, loose heat actors (flares, puddles), gates + paced creep, dialogue triggers | SAVED | `crates` (+ runtime crates), `dropped_items`, `heat_sources`, `gates`, `gate_progress`, `dialogue_triggers` |
+| vehicles: transform, hull, disabled, shells, crews + seats | SAVED | `vehicles[]` |
+| APC repair in progress, drive order, MG heat, turret target, doors / engine | DERIVED (repair: GAP low) | the engine follows the crew; a repair under way must be re-ordered |
+| campfire wind flag, puddle source label, flare thrower, barricade contact timer, disarm walk-ups, placement ghosts | DERIVED | cosmetic / seconds |
+
+### Tutorial, UI, camera
+
+| State | Verdict | Key |
+|---|---|---|
+| step states + progress + contributors (role spots), beat, locks, command history (precredit), confines, used-up volumes, lock hints, skipped | SAVED | `tutorial.*` (`UTutorialSubsystem::CaptureSaveState`; tutorial files are the tutorial agent's) |
+| multi-hit trigger counts (`TriggerHits`), speech playback position, breather / remedial timers, focus operative, retry prompt | DERIVED (TriggerHits: GAP low, tutorial domain) | a speech replays from its first line; a pending `trigger.count` step restarts at 0 |
+| minimap fog per floor, panel choice | SAVED | `world_state.minimap` (+ `UMissionSessionSubsystem::MinimapPanelMode` for the session) |
+| camera zoom / yaw / pan, full map open, HUD drawer, banners, feed history, roof cutaway, exit arrows, camera zones | DERIVED | UI; the camera snaps to the restored leader |
+| dialogue window in progress | SAVE REFUSED (v3) | `ESaveBlockReason::Dialogue` ("Saving is disabled during a conversation"): its trigger would be saved as used and the talk never finish |
+
+## How to add saved state for a new feature
+
+1. **Decide the verdict first** (write it into the inventory above): SAVED, or DERIVED with the reason (combat-only, recomputed, cosmetic). Saves are only
+   written in Exploration / Preparation / WaveCleared / PostCombat with no dialogue open, and EVERY player load reopens the level: anything not saved comes
+   back as the level starts it.
+2. **Give the owner a save hook pair** on its own class / subsystem (`CaptureX / RestoreX`, or a plain setter `RestoreX` - no damage / UI events, no
+   float texts; see `UColdSurvivalComponent::RestoreColdState`). Keep the JSON building in `SaveGameSubsystem.cpp`.
+3. **Write the keys** in the matching section of `BuildSaveData` (`squad[]` entry via `SaveOperative`, `game_state`, `world_state.<section>`, `objects.<name>`
+   via `SaveObject`, `enemies[]` via `SaveEnemy` / `FEnemyPatrolSnapshot`). Every key is OPTIONAL: older saves must load without it.
+4. **Restore in the step that has its dependencies** (`GetRestoreOrder` table above): a per-operative value in `ApplyOperative` (step 4), a standing order in
+   `ApplyOperativeOrders` (end of step 5, after Solo / Commander Mode / formation), world objects in step 7, enemy state in the snapshot (step 9), a per-squad
+   subsystem after the squad (10), UI last (11). Read with `SaveInt / SaveFloat / SaveBool / SaveString / LoadVector / LoadEnumName` (missing key = the fallback
+   you pass), never `GetXField` on a key that may be absent. A new ordered concern = a new row in the step table + the names list + the RestoreOrder test.
+5. **Order inside a step**: ApplyOperative resets transient state and sets the stance BEFORE the teleport; anything that `RefreshFormation` /
+   `SetAutonomousSquadCombat` / `SetSquadPosture` would undo goes AFTER them.
+6. **Bump nothing unless the semantics change** (new optional keys do not need a version); when a version bump is due, document the key list at
+   `SaveGameRules::CurrentSaveVersion` and update `CodexTactics.Save.Policy.Version`.
+7. **Prove it**: a mutation in `SaveRoundTripSmoke::BuildWorld` (the saved-data diff) AND a line in `SaveCoverageSmoke::DumpWorld` + `BuildWorld` (the live
+   dump diff, independent of the JSON - this is what finds a key you forgot). Run `smoke_parallel.ps1 -Commands SaveRoundTripSmoke,SaveCoverageSmoke,SaveCoverageLakeSmoke,TutorialSaveSmoke`.
+8. **Docs**: the inventory row above, a CHANGELOG row.
+
+## Robustness (audit 2026-10-19)
+
+- **Corrupt / foreign / sparse files never crash**: `GetAllSaves` skips a file that is not JSON or holds none of `version / squad / game_state / world_state`
+  (`SaveGameRules::ParseSlotInfo`, test `Save.Policy.SlotInfo`; a log line names the file); `LoadGame` refuses the same two with a warning; a sparse /
+  version 1 / 2 file loads with the defaults of every missing key (a missing `world_state` logs a warning and leaves the world as the level starts it); a
+  future version logs "loading what is known". Every read goes through the fallback helpers; enum names that do not parse keep the current value.
+- **Version field**: `version` (3), `SaveGameRules::CurrentSaveVersion`; the key history is documented at the constant.
+- **Missing map**: `FSaveSlotInfo::bMapAvailable` (`USaveGameSubsystem::IsSaveMapAvailable`, `FPackageName::DoesPackageExist`); the load list shows
+  "MAP MISSING" after the level name (`CodexSaveBridge::ListSlots`); `LoadGameWithTravel` (F9, Continue, LOAD GAME, Retry) refuses it with a feed line
+  instead of travelling to a level that does not exist; the slot stays listed so the player can delete it. Version 1 saves (no map) load on the current level.
+- **No save while a load is applied**: `WriteSave` refuses while `IsApplyingSave()` (log line).
+- **No save during a dialogue**: `ESaveBlockReason::Dialogue` in `CanSaveNow` (F5, SAVE GAME, the tutorial checkpoint all go through it).
+- Smoke coverage: `SaveCoverageSmoke` writes a truncated file, a foreign JSON and a copy of the quicksave pointing at a missing map beside the real
+  quicksave: the list skips / marks them, loads refuse them, F9 still picks the quicksave; afterwards a sparse version-1 file loads in place.
+
+## Follow-ups left open by the audit
+
+- **APC repair in progress** (`UVehicleSubsystem::Repairs`) is dropped by `PrepareForLoad`: the Engineer stands idle after a load, the hull keeps its saved
+  HP; re-orderable (low).
+- **Autonomy primary-weapon memory** (`USquadAutonomySubsystem` `PrimaryWeaponId` / `bOnAutoSidearm`): a save on the auto-drawn sidearm makes it the
+  "primary" after a load (minor).
+- **Tutorial `TriggerHits`** of a pending multi-hit step (tutorial agent's files): restarts at 0 after a load (low).
+- **Lure stone / grenade in flight** at the save moment: lost (~1 s window; cosmetic); **marksman legacy `PatrolIndex`** (legacy point routes only).
+- **Manual corner peek** is not restored with the cover slot (the slot is; a peek is a click away).
+- The user's own saves from before version 3 keep loading (every new key is optional) - a quick manual check of one old slot in the editor is still worth doing.
 
 ## Save system (old §6)
 

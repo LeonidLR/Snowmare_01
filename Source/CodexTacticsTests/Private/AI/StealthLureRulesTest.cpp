@@ -299,6 +299,19 @@ bool FStealthLureRetargetTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the same noise this instant: unchanged"), ReactToNoise(Same) == ENoiseReaction::SameNoise);
 	Same.DistanceToCurrentNoiseCm = SameNoiseCm + 1.f;
 	TestTrue(TEXT("another point this instant: re-target"), ReactToNoise(Same) == ENoiseReaction::Retarget);
+	// Fix 2026-10-19: a hit at its own feet while searching (barricade contact every second, a blast on it) restarts nothing ...
+	FNoiseReactionInput SelfHit = AtStone;
+	SelfHit.DistanceToSelfCm = 0.f;
+	TestTrue(TEXT("hurt where it stands while searching: the same search"), ReactToNoise(SelfHit) == ENoiseReaction::SameNoise);
+	SelfHit.DistanceToSelfCm = SelfNoiseCm + 1.f;
+	TestTrue(TEXT("a blast 1.5 m+ away: re-target"), ReactToNoise(SelfHit) == ENoiseReaction::Retarget);
+	// ... a stone landing at its feet is a lure: it turns to it; not searching yet: a hit on itself starts the search.
+	SelfHit.DistanceToSelfCm = 0.f;
+	SelfHit.bLure = true;
+	TestTrue(TEXT("a stone at its feet: re-target"), ReactToNoise(SelfHit) == ENoiseReaction::Retarget);
+	SelfHit.bLure = false;
+	SelfHit.bSearching = false;
+	TestTrue(TEXT("not searching: a hit on itself starts the search"), ReactToNoise(SelfHit) == ENoiseReaction::Investigate);
 
 	// Hounds: following a fresh scent close by keeps the nose; sniffing / a far scent re-target.
 	FNoiseReactionInput Following = AtStone;

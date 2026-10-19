@@ -254,13 +254,14 @@ EGameFlowResult FGameFlowStateMachine::FinishPostCombat()
 	return EGameFlowResult::Ok;
 }
 
-void FGameFlowStateMachine::RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex, float InPreparationSeconds)
+void FGameFlowStateMachine::RestoreForLoad(bool bInCombatUnlocked, bool bInCombatPhase, int32 InWaveIndex, float InPreparationSeconds, bool bInAmbushFight)
 {
 	const FGameFlowConfig Saved = Config;
 	Reset(Saved);
 	bCombatUnlocked = bInCombatUnlocked;
 	if (bInCombatUnlocked && bInCombatPhase)
 	{
+		bAmbushFight = bInAmbushFight; // the resumed fight keeps its kind (single-fight ambush rules after its wave)
 		WaveIndex = FMath::Max(1, InWaveIndex);
 		PreparationTimeRemaining = WaveIndex > 1 ? Config.WaveRestDuration : Config.PreparationDuration;
 		if (InPreparationSeconds > 0.f)

@@ -263,6 +263,18 @@ void UColdSurvivalComponent::StepCold(float DeltaSeconds)
 	}
 }
 
+void UColdSurvivalComponent::RestoreColdState(bool bInFrostbitten, bool bInWeaponFrozen)
+{
+	bFrostbitten = bInFrostbitten;
+	bWeaponFrozen = bInWeaponFrozen;
+	if (const AOperativeCharacter* Owner = Operative.Get())
+	{
+		// The tier of the restored cold level now (no float text: nothing changed for the player, he loaded the moment as it was).
+		Tier = ColdRules::GetTier(Owner->ColdLevel);
+		ApplyTierEffects(Tier);
+	}
+}
+
 void UColdSurvivalComponent::ApplyTierEffects(EColdTier NewTier)
 {
 	if (AOperativeCharacter* Owner = Operative.Get())
