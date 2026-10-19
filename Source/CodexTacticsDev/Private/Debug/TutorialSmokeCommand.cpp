@@ -77,6 +77,7 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
 #include "InputKeyEventArgs.h"
+#include "Misc/App.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "TimerManager.h"
@@ -154,6 +155,8 @@ namespace TutorialSmoke
 		/** The leader's heat packs just before he empties the hut crate. */
 		int32 HeatPacksBeforeLoot = 0;
 		TWeakObjectPtr<AOperativeCharacter> Focus;
+		/** The engine frame of the last step (one step per frame). */
+		uint64 LastFrame = 0;
 		/** Rev 2026-10-19 medkit lesson: the leader before it (given back afterwards). */
 		TWeakObjectPtr<AOperativeCharacter> LeaderBeforeMedkit;
 		/** Rev 5c hut entry: the small VOL_A1_HUT round the third operative. */
@@ -322,8 +325,16 @@ namespace TutorialSmoke
 		{
 			return false;
 		}
-		State.Time += DeltaTime;
-		State.StageTime += DeltaTime;
+		// One step per engine frame on the GAME clock (rev 2026-10-19: under a loaded parallel batch the ticker's wall delta ran the stage
+		// timers ahead of the game - a 0.1 s wait passed within the frame of the key press, a 15 s walk timed out after 8 s of game time).
+		if (GFrameCounter == State.LastFrame)
+		{
+			return true;
+		}
+		State.LastFrame = GFrameCounter;
+		const float GameDelta = static_cast<float>(FApp::GetDeltaTime());
+		State.Time += GameDelta;
+		State.StageTime += GameDelta;
 		if (State.Time < 3.f)
 		{
 			return true;
