@@ -5,6 +5,10 @@
 // Turn-based fight with enemies around; each operative stands 2 s, walks 3-4 cells, stands 2 s. Every frame: AimYaw,
 // AimPitch, AimOffsetAlpha and the barrel's yaw relative to the actor (the real pose, the AO included). Fails on a
 // frame-to-frame AimYaw jump > 8 deg or more than 2 direction reversals per second (AimYaw or the barrel) - the jitter.
+// First a real-time crouched corner phase (AnimOffset_Bug_02): 8 hounds rush round a wall's corner; the turn-based part's
+// enemies are parked 1 km off meanwhile, and a hound that gets within 4 m of the squad is parked too (since the melee
+// close-in, dee6c44, it would bite / pounce the leader out of his crouch - not what this phase measures), as is one that
+// swings out of the corner stance's field (an open shot would take him off the wall; 2026-10-19).
 
 #include "CoreMinimal.h"
 
@@ -104,7 +108,22 @@ namespace TurnBasedAimSmoke
 		int32 Spawned = 0;
 		TArray<TWeakObjectPtr<AEnemyCharacter>> Rushers;
 		TWeakObjectPtr<AStaticMeshActor> Wall;
+		/** The turn-based part's enemies, parked far off (SmokeUtils::ParkEnemyFarAway) during the corner phase, and where they stood. */
+		TArray<TPair<TWeakObjectPtr<AEnemyCharacter>, FVector>> Parked;
+		/** Rushers taken out at RusherReachCm from a squad member (before they could bite / pounce). */
+		int32 RushersStopped = 0;
+		/** Rushers taken out when they swung out of the corner stance's field (onto his open flank). */
+		int32 RushersOutOfField = 0;
+		/** Sampled corner-phase frames the leader spent out of his cover (an open shot would show here). */
+		int32 CornerFramesOutOfCover = 0;
 	};
+
+	/**
+	 * A rusher this close (2D) to a squad member is taken out of the corner phase: since the melee close-in (dee6c44) a hound
+	 * that arrives bites, and a bite after a run-up is a pounce that knocks the leader down - out of his crouch and his corner,
+	 * which is not what this phase measures (the aim offset while hounds rush round the corner). A bite needs <= 150 cm.
+	 */
+	constexpr float RusherReachCm = 400.f;
 
 	AStaticMeshActor* SpawnBlock(UWorld* World, const FVector& Centre, const FRotator& Rotation, const FVector& Scale)
 	{
@@ -267,9 +286,12 @@ namespace TurnBasedAimSmoke
 			State.Wall = SpawnBlock(World, FVector(WallCentre.X, WallCentre.Y, State.GroundZ + 150.f), F.Rotation(), FVector(0.4f, 6.f, 3.f));
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
-				It->CustomTimeDilation = 0.f; // the turn-based enemies wait far off until the turn-based part
+				// The turn-based enemies wait far off until the turn-based part: 1 km to the side (out of sight - 30 m behind
+				// him was still in sight: he stepped off the wall for an open shot at the Brute and the corner phase ran in the
+				// open), frozen with their tick off (CustomTimeDilation 0 alone still lets TickBehavior strike).
+				State.Parked.Emplace(*It, It->GetActorLocation());
+				SmokeUtils::ParkEnemyFarAway(*It);
 				It->SetActorTickEnabled(false);
-				It->SetActorLocation(It->GetActorLocation() - F * 3000.f);
 			}
 			State.Stage = 10;
 			State.StageTime = 0.f;
@@ -303,7 +325,11 @@ namespace TurnBasedAimSmoke
 		}
 		case 12:
 		{
-			// Crouched corner hold, hounds rushing round the corner and along the open side (the video).
+			// Crouched corner hold, hounds rushing round the corner (the video): alternately straight from ahead past the corner
+			// and diagonally from the front-right, so the target switches sides of his aim. Both are corner-hold targets. A
+			// hound along his open flank (in front of the wall, outside the corner stance's reach) is not used any more: since
+			// the open-shot rule he steps off the wall for it and comes back standing - the corner phase would not be a
+			// crouched corner hold (CornerHoldSmoke checks the open shots; 2026-10-19).
 			AOperativeCharacter* Leader = Squad->GetLeader();
 			State.SpawnTimer -= DeltaSeconds;
 			if (State.Spawned < 8 && State.SpawnTimer <= 0.f && State.StageTime > 1.5f)
@@ -311,22 +337,63 @@ namespace TurnBasedAimSmoke
 				State.SpawnTimer = 0.9f;
 				const int32 I = State.Spawned++;
 				const FVector Where = I % 2 == 0 ? State.P + State.F * (1300.f + 60.f * I) - State.R * 380.f
-					: State.P + State.F * (150.f + 40.f * I) - State.R * (1100.f + 50.f * I);
+					: State.P + State.F * (1000.f + 40.f * I) - State.R * (1000.f + 50.f * I);
 				if (AEnemyCharacter* Hound = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::FrostHound,
 					FVector(Where.X, Where.Y, State.GroundZ + 100.f), (-State.F).Rotation()))
 				{
 					State.Rushers.Add(Hound);
 				}
 			}
+			for (const TWeakObjectPtr<AEnemyCharacter>& Hound : State.Rushers)
+			{
+				if (!Hound.IsValid() || !Hound->IsActorTickEnabled())
+				{
+					continue;
+				}
+				// A hound that swings out of the corner stance's field (pathing round onto his open flank, now or within a
+				// quarter second) is parked too: he would step off the wall for an open shot at it and re-enter the high cover
+				// standing (the open-shot rule) - the phase measures the crouched corner hold, not that rule (CornerHoldSmoke).
+				const FVector HoundAt = Hound->GetActorLocation();
+				const bool bLeftCornerField = Leader->bInCover && !Leader->IsCoverOpenShotActive()
+					&& (!Leader->IsCornerShotTarget(HoundAt) || !Leader->IsCornerShotTarget(HoundAt + Hound->GetVelocity() * 0.25f));
+				if (bLeftCornerField)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s left the corner stance's field (%.0f cm from %s) - taken out of the corner phase"),
+						*Hound->GetName(), FVector::Dist2D(Leader->GetActorLocation(), HoundAt), *Leader->DisplayName.ToString());
+					SmokeUtils::ParkEnemyFarAway(Hound.Get());
+					Hound->SetActorTickEnabled(false);
+					++State.RushersOutOfField;
+					continue;
+				}
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					const float Distance = Member ? FVector::Dist2D(Member->GetActorLocation(), Hound->GetActorLocation()) : BIG_NUMBER;
+					if (Distance < RusherReachCm)
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s reached %s (%.0f cm) - taken out of the corner phase before it can bite"),
+							*Hound->GetName(), *Member->DisplayName.ToString(), Distance);
+						SmokeUtils::ParkEnemyFarAway(Hound.Get());
+						Hound->SetActorTickEnabled(false);
+						++State.RushersStopped;
+						break;
+					}
+				}
+			}
 			if (State.StageTime > 1.5f)
 			{
 				Sample(State, State.Corner, *Leader, DeltaSeconds);
+				State.CornerFramesOutOfCover += Leader->bInCover ? 0 : 1;
 			}
 			if (State.StageTime < 13.f)
 			{
 				return true;
 			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: corner phase - %d hounds rushed in, %d taken out at %.0f cm from the squad, %d when they left the corner stance's field"),
+				State.Spawned, State.RushersStopped, RusherReachCm, State.RushersOutOfField);
 			Check(State, Leader->GetStance() == EOperativeStance::Crouching, TEXT("crouched at the corner"));
+			Check(State, State.CornerFramesOutOfCover == 0, FString::Printf(TEXT("held the corner the whole phase (%d sampled frames out of cover)"),
+				State.CornerFramesOutOfCover));
+			Check(State, State.Corner.TargetSwitches >= 2, FString::Printf(TEXT("the hounds kept him switching targets round the corner (%d switches)"), State.Corner.TargetSwitches));
 			Report(State, Leader->DisplayName.ToString(), TEXT("crouched corner, hounds rushing"), State.Corner);
 			for (const TWeakObjectPtr<AEnemyCharacter>& Hound : State.Rushers)
 			{
@@ -348,11 +415,14 @@ namespace TurnBasedAimSmoke
 			{
 				Member->bTacticalCeaseFire = false;
 			}
-			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			for (const TPair<TWeakObjectPtr<AEnemyCharacter>, FVector>& Entry : State.Parked)
 			{
-				It->CustomTimeDilation = 1.f;
-				It->SetActorTickEnabled(true);
-				It->SetActorLocation(It->GetActorLocation() + State.F * 3000.f);
+				if (AEnemyCharacter* Enemy = Entry.Key.Get())
+				{
+					Enemy->SetActorLocation(Entry.Value, false, nullptr, ETeleportType::TeleportPhysics);
+					Enemy->CustomTimeDilation = 1.f;
+					Enemy->SetActorTickEnabled(true);
+				}
 			}
 			State.Stage = 1;
 			State.StageTime = 0.f;
