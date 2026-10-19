@@ -47,6 +47,7 @@
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/VisionConeComponent.h"
 #include "Combat/VisionConeRules.h"
+#include "Combat/SightRules.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -2067,8 +2068,15 @@ void AEnemyCharacter::UpdateVisionCone(float DeltaTime)
 		return;
 	}
 	const EVisionConeState State = VisionConeRules::GetEnemyState(bOnPatrol, bSearching || IsOnScent(), PatrolSuspicion);
+	// Occluded cone (game designer 2026-10-19): the sight lines of FindVisibleOperative from its eyes to a standing (full
+	// tone + light tone) and a crouched operative's profile (full tone only) at their perception ranges.
+	const FEnemyPerceptionParams Params = GetPatrolPerception();
+	FVisionConeSightSpec Sight;
+	Sight.EyeHeightCm = static_cast<float>(UTacticalSightSubsystem::EyePoint(*this).Z - (GetActorLocation().Z - GetSimpleCollisionHalfHeight()));
+	Sight.Levels.Add({ SightRules::ProfileHeight(EOperativeStance::Standing), PerceptionRules::EffectiveSightRange(Params, EOperativeStance::Standing) });
+	Sight.Levels.Add({ SightRules::ProfileHeight(EOperativeStance::Crouching), PerceptionRules::EffectiveSightRange(Params, EOperativeStance::Crouching) });
 	VisionCone->UpdateCone(bVisible, GetVisionConeRange(), GetVisionConeHalfAngle(),
-		VisionConeRules::GetStateColor(State, bSearching ? 1.f : PatrolSuspicion), DeltaTime);
+		VisionConeRules::GetStateColor(State, bSearching ? 1.f : PatrolSuspicion), DeltaTime, &Sight);
 }
 
 void AEnemyCharacter::StartPatrolSearch(const FVector& Location)
