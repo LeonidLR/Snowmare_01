@@ -41,10 +41,10 @@
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Order.Sprint"] },
     { "id": "A3", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A3",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Object.Relocate", "Object.LightBarrel",
-        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Order.Sprint"] },
+        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Attack.QuickFire", "Order.Sprint"] },
     { "id": "A4", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A4",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Object.Relocate", "Object.LightBarrel", "Stance.*", "Cover.*",
-        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Order.Sprint"] }
+        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Attack.QuickFire", "Order.Sprint"] }
   ],
   "steps": [
     {

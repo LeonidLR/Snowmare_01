@@ -1,5 +1,5 @@
 // ACodexTacticsPlayerController: orders - real-time order lock, fire postures, autonomy, guard, group moves,
-// HandleWorldHit (the click dispatcher), defence lines, Ctrl + click targeted shots, cease fire, vehicle keys.
+// HandleWorldHit (the click dispatcher), defence lines, Ctrl + click targeted shots, Ctrl + click quick fire at a point, cease fire, vehicle keys.
 // Split out of CodexTacticsPlayerController.cpp verbatim (cleanup 2026-10-15; map: docs/port/REFACTOR_CONTROLLER_2026-10.md).
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
@@ -19,6 +19,8 @@
 #include "Combat/HealthComponent.h"
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
+#include "Combat/QuickFireRules.h"
 #include "Core/PlayerCommands.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
@@ -162,6 +164,7 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 		{
 			Vehicles->CancelBoarding(Group[Index]); // ... and a walk to the APC's door
 		}
+		Group[Index]->CancelQuickFire(); // ... and a quick fire burst (2026-10-19)
 		if (bPlan)
 		{
 			const FVector Planned = Squad->PlanMove(Group[Index], Targets[Index], bSprint, Flow ? Flow->GetPauseOrderRadius() : 1200.f);
@@ -323,18 +326,24 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		}
 		if (AActor* HitActor = Hit.GetActor(); HitActor && HitActor->ActorHasTag(FName(TEXT("Enemy"))) && !Sight->IsVisibleToSquad(HitActor))
 		{
+			// The unseen enemy is no target; Ctrl + click there is fire at that point (it may still be hit, 2026-10-19).
+			if (IsAttackModifierDown())
+			{
+				HideCoverPreview();
+				IssueQuickFire(Hit);
+			}
 			return;
 		}
 	}
 
-	// Ctrl + click: targeted fire only, never a move or a selection.
+	// Ctrl + click: fire only, never a move or a selection - the targeted shot at an enemy / object, else at the point.
 	if (IsAttackModifierDown())
 	{
 		HideCoverPreview();
 		const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 		if (!Flow || Flow->GetCombatMode() != ECodexCombatMode::TurnBased)
 		{
-			IssueTargetedShot(Hit.GetActor());
+			IssueCtrlClick(Hit);
 		}
 		return;
 	}
@@ -691,6 +700,156 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 		Messages->PostMessage(Leader->DisplayName, LOCTEXT("TargetHint", "Pick an enemy, barrel, mine or crate for aimed fire [Ctrl+Click]!"));
 		break;
 	}
+}
+
+void ACodexTacticsPlayerController::IssueCtrlClick(const FHitResult& Hit)
+{
+	AActor* HitActor = Hit.GetActor();
+	// A shootable actor under the cursor (a live enemy the squad sees, a barrel, a mine, a crate, a trapped object): the
+	// targeted shot, unchanged. A squad mate: its hint (no fire at the squad).
+	if (AOperativeCharacter::ClassifyShotTarget(HitActor) != ETargetedShotKind::None || Cast<AOperativeCharacter>(HitActor))
+	{
+		IssueTargetedShot(HitActor);
+		return;
+	}
+	// A visible live enemy within ~1.5 m of the point: the targeted shot at it (a click on the snow at its feet).
+	UWorld* World = GetWorld();
+	const UTacticalSightSubsystem* Sight = World ? World->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
+	TArray<AActor*> EnemyActors;
+	TArray<FQuickFireCandidate> Candidates;
+	for (AActor* Each : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
+	{
+		if (!IsValid(Each))
+		{
+			continue;
+		}
+		const UHealthComponent* Health = Each->FindComponentByClass<UHealthComponent>();
+		FQuickFireCandidate Candidate;
+		Candidate.Location = Each->GetActorLocation();
+		Candidate.bAlive = !Health || Health->IsAlive();
+		Candidate.bVisible = !Each->IsHidden() && (!Sight || Sight->IsVisibleToSquad(Each));
+		Candidates.Add(Candidate);
+		EnemyActors.Add(Each);
+	}
+	const int32 Picked = QuickFireRules::PickTarget(Hit.ImpactPoint, Candidates, QuickFireRules::GetConfig().EnemyPickRadiusCm);
+	if (Picked != INDEX_NONE)
+	{
+		IssueTargetedShot(EnemyActors[Picked]);
+		return;
+	}
+	// Nothing to aim at: the selection fires at the point.
+	IssueQuickFire(Hit);
+}
+
+void ACodexTacticsPlayerController::IssueQuickFire(const FHitResult& Hit)
+{
+	UWorld* World = GetWorld();
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UGameMessageSubsystem* Messages = World ? World->GetSubsystem<UGameMessageSubsystem>() : nullptr;
+	if (!World || !Leader || IsDialogueOpen() || RefuseIfLocked(PlayerCommands::QuickFire))
+	{
+		return;
+	}
+	const FQuickFireConfig& Config = QuickFireRules::GetConfig();
+	const FVector Point = Hit.ImpactPoint;
+
+	// A visible live enemy near the point (squad sight: what nobody sees is never picked - a round at the point may still hit
+	// it by the trace). IssueCtrlClick sends such a click to the targeted shot; a direct call fires the burst at it.
+	const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+	TArray<AActor*> EnemyActors;
+	TArray<FQuickFireCandidate> Candidates;
+	for (AActor* Each : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
+	{
+		if (!IsValid(Each))
+		{
+			continue;
+		}
+		const UHealthComponent* Health = Each->FindComponentByClass<UHealthComponent>();
+		FQuickFireCandidate Candidate;
+		Candidate.Location = Each->GetActorLocation();
+		Candidate.bAlive = !Health || Health->IsAlive();
+		Candidate.bVisible = !Each->IsHidden() && (!Sight || Sight->IsVisibleToSquad(Each));
+		Candidates.Add(Candidate);
+		EnemyActors.Add(Each);
+	}
+	const int32 Picked = QuickFireRules::PickTarget(Point, Candidates, Config.EnemyPickRadiusCm);
+	AActor* Enemy = Picked != INDEX_NONE ? EnemyActors[Picked] : nullptr;
+
+	// Turn-based: the active operative's grid attack (its AP rules) on the enemy / object there; no fire at an empty spot.
+	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
+	{
+		if (TurnBased->IsBusy())
+		{
+			return;
+		}
+		AActor* GridTarget = Enemy ? Enemy
+			: (AOperativeCharacter::ClassifyShotTarget(Hit.GetActor()) != ETargetedShotKind::None ? Hit.GetActor() : nullptr);
+		if (!GridTarget)
+		{
+			if (Messages)
+			{
+				Messages->PostMessage(LOCTEXT("TacticsSpeaker", "TACTICS"), LOCTEXT("QuickFireTurnBased",
+					"Turn-based: Ctrl + click an enemy, a barrel or a trapped object to attack it (its AP). Fire at an empty spot is real time only."));
+			}
+			return;
+		}
+		HideCoverPreview();
+		AOperativeCharacter* Active = TurnBased->GetActiveUnit();
+		TurnBased->HandleWorldClick(GridTarget == Hit.GetActor() ? Point : GridTarget->GetActorLocation(), GridTarget, /*bAttackOrder*/ true);
+		ControllerCommands::Report(this, PlayerCommands::QuickFire, GridTarget, false, false, Active, Point);
+		return;
+	}
+	if (BlockRealTimeOrder())
+	{
+		return; // only with the optional real-time order lock (Codex.RealTimeOrders 0)
+	}
+
+	// Who: the box-selected group, else the operative you control (Solo too); nobody aboard a vehicle.
+	TArray<AOperativeCharacter*> Shooters = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
+	Shooters.RemoveAll([](const AOperativeCharacter* Member) { return !Member || VehicleQueries::IsMounted(Member); });
+	const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+	const bool bPlan = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+	int32 Accepted = 0;
+	for (AOperativeCharacter* Shooter : Shooters)
+	{
+		Accepted += (bPlan ? Shooter->PlanQuickFire(Point, Enemy) : Shooter->OrderQuickFire(Point, Enemy)) ? 1 : 0;
+	}
+	if (Accepted == 0)
+	{
+		return; // each refusal shows over the operative (enraged, panicking, knife, frozen weapon)
+	}
+	HideCoverPreview();
+	// Firing at a visible enemy is an attack order (an ambush level / a placed enemy: the fight starts, as Ctrl + click); the
+	// gunshot itself is heard by the patrols in any case.
+	if (Enemy && !bPlan)
+	{
+		ULevelEncounterSubsystem::NotifyHostileContactIn(World, EAmbushTrigger::AttackOrder, Enemy);
+	}
+	if (UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
+	{
+		const FVector Marker = Enemy ? Enemy->GetActorLocation() - FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight()) : Point;
+		if (bPlan)
+		{
+			Feedback->SpawnWaypointMarker(Marker);
+		}
+		else
+		{
+			Feedback->SpawnFirePing(Marker);
+		}
+		if (Enemy)
+		{
+			Feedback->HighlightTarget(Enemy);
+		}
+	}
+	if (Messages)
+	{
+		const FText Speaker = Accepted > 1 ? LOCTEXT("SquadSpeaker", "SQUAD") : Leader->DisplayName;
+		Messages->PostMessage(Speaker, bPlan
+			? FText::Format(LOCTEXT("QuickFirePlanned", "📋 [PLAN] Fire at the point planned ({0})! [SPACE - fire]"), Accepted)
+			: LOCTEXT("QuickFire", "Fire!"));
+	}
+	ControllerCommands::Report(this, PlayerCommands::QuickFire, Enemy, bPlan, Accepted > 1, Leader, Point);
 }
 
 void ACodexTacticsPlayerController::SetSquadCeaseFire(bool bCease)

@@ -45,6 +45,8 @@ public:
 
 	/** Right-mouse drag rotation on/off. */
 	void SetDragRotating(bool bActive);
+	/** RMB is held for the free-look drag (smokes). */
+	bool IsDragRotating() const { return bDragRotating; }
 
 	/** Middle-mouse drag pan on/off; releasing in exploration returns the view to the leader. */
 	void SetDragPanning(bool bActive);

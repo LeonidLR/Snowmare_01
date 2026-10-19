@@ -42,6 +42,15 @@ public:
 	/** Live move pings (smokes). */
 	int32 GetMovePingCount() const;
 
+	/**
+	 * Quick fire (Ctrl + click on a point, 2026-10-19): a short orange disc where the selection fires (0.4 m, fading in Duration s); a new one
+	 * replaces the previous one.
+	 */
+	void SpawnFirePing(const FVector& GroundLocation, float Duration = 1.2f);
+
+	/** Quick fire pings spawned since the world began (smokes). */
+	int32 GetFirePingsSpawned() const { return FirePingsSpawned; }
+
 	int32 GetPlannedMarkerCount() const;
 
 	/** Red aim flash: light above the target (4.5 m, 0.45 s) and an overlay on its meshes (0.4 s): the red see-through
@@ -70,4 +79,7 @@ private:
 	TArray<TWeakObjectPtr<ACombatFeedbackActor>> PlannedMarkers;
 
 	TArray<TWeakObjectPtr<ACombatFeedbackActor>> MovePings;
+
+	TWeakObjectPtr<ACombatFeedbackActor> FirePing;
+	int32 FirePingsSpawned = 0;
 };

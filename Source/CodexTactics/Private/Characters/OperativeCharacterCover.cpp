@@ -556,13 +556,21 @@ bool AOperativeCharacter::GatherCoverThreat(FVector& OutLocation) const
 		Candidate.Source = Source;
 		Candidate.DistanceCm = static_cast<float>(FVector::Dist2D(Here, Location));
 	};
-	// The enemy he is ordered to / does shoot at (while it is in sight; out of sight its silhouette counts as heard).
-	for (const AActor* Priority : { CoverShotTarget.Get(), ManualPriorityTarget.Get(), CurrentCombatTarget.Get() })
+	// The enemy he is ordered to / does shoot at (while it is in sight; out of sight its silhouette counts as heard). A quick
+	// fire order (Ctrl + click on a point, 2026-10-19): its point.
+	if (bQuickFireActive)
 	{
-		if (Priority && IsAlive(Priority) && !Priority->IsHidden())
+		Add(QuickFirePoint, ECoverThreatSource::PriorityTarget);
+	}
+	else
+	{
+		for (const AActor* Priority : { CoverShotTarget.Get(), ManualPriorityTarget.Get(), CurrentCombatTarget.Get() })
 		{
-			Add(Priority->GetActorLocation(), ECoverThreatSource::PriorityTarget);
-			break;
+			if (Priority && IsAlive(Priority) && !Priority->IsHidden())
+			{
+				Add(Priority->GetActorLocation(), ECoverThreatSource::PriorityTarget);
+				break;
+			}
 		}
 	}
 	// Enemies seen now (the tactical sight hides the unseen ones in a fight) and heard / remembered silhouettes.

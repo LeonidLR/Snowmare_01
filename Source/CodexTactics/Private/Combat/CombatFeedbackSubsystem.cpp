@@ -97,6 +97,21 @@ void UCombatFeedbackSubsystem::SpawnMovePing(const FVector& GroundLocation, bool
 	}
 }
 
+void UCombatFeedbackSubsystem::SpawnFirePing(const FVector& GroundLocation, float Duration)
+{
+	if (FirePing.IsValid())
+	{
+		FirePing->Destroy();
+	}
+	const FVector Location = GroundLocation + FVector(0.f, 0.f, 5.f);
+	if (ACombatFeedbackActor* Ping = SpawnFeedback(Location))
+	{
+		Ping->SetupDisc(Location, 40.f, 4.f, FLinearColor(1.f, 0.45f, 0.1f), 3.f, Duration);
+		FirePing = Ping;
+		++FirePingsSpawned;
+	}
+}
+
 int32 UCombatFeedbackSubsystem::GetMovePingCount() const
 {
 	int32 Count = 0;

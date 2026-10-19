@@ -562,7 +562,12 @@ void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatM
 
 void USquadSubsystem::HandleTacticalPauseReleased()
 {
-	// Godot execute_planned_tactical_orders: targeted shots first, then moves.
+	// Godot execute_planned_tactical_orders: targeted shots first, then moves. Quick fire (Ctrl + click on a point, 2026-10-19) before them: the
+	// planned burst becomes an order now (it waits for its own turn / reload, see AOperativeCharacter::OrderQuickFire).
+	for (AOperativeCharacter* Member : GetMembers())
+	{
+		Member->ExecutePlannedQuickFire();
+	}
 	for (AOperativeCharacter* Member : GetMembers())
 	{
 		if (Member->ExecutePlannedTargetedShots())

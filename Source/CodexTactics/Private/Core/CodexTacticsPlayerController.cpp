@@ -421,7 +421,7 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 
 bool ACodexTacticsPlayerController::IsAttackModifierDown() const
 {
-	return IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl);
+	return bSimulatedAttackModifier || IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl);
 }
 
 bool ACodexTacticsPlayerController::IsSquadWideModifierDown() const

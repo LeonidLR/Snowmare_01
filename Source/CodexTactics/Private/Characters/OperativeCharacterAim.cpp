@@ -89,7 +89,8 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
 	const bool bRealTimeFight = !Flow || (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime);
 	AActor* Target = CurrentCombatTarget.Get();
-	if (bRealTimeFight && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
+	// A quick fire order (Ctrl + click on a point) turns him to its point itself (RunQuickFire): no pull back to the combat target meanwhile.
+	if (bRealTimeFight && !bQuickFireActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
 	{
 		bFacingCombatTarget = true;
 		const float Yaw = (Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw - BarrelYawOffset;
