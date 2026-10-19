@@ -14,6 +14,23 @@ Task: Unreal is the reference: level JSON at runtime, Wave Editor in Tools/WaveE
 - Gemini may take over at any time: keep HANDOFF.md, PORT_MATRIX.md and TANDEM.md current with every commit.
 - The user may close / reopen the Unreal Editor for builds (graceful close only).
 
+## Today 2026-10-19 (play-test fixes)
+Agent A (`CodexTactics-agents`, agents/work) — interactions + save/load:
+1. Crate: open clip FIRST, then the loot window; Take / Take All -> search clip, items move at the grab moment.
+2. Mine / tripwire disarm: bend down first, the trap disappears at the grab moment.
+3. Medkit tutorial lesson on the first injury (mine / tripwire / cold / lesson down).
+4. Patrol speed set by the designer (65 cm/s) resets to 190 after a checkpoint load (and after a search?).
+5. After a load: operatives flee instead of fighting (even AGGRESSIVE); Solo shows ON but the squad moves in formation.
+6. After a load: a prone operative ordered to run to cover crawls backwards fast; the mesh stays ~1 m off the capsule
+   (ring vs body, clicks / aim off) even during normal locomotion.
+7. ROOT: a load must reproduce exactly the saved state — every load path (Retry, F9, Continue, LOAD) = full level
+   reload, nothing transient from the pre-load world (repro: knocked down -> load -> he is mid get-up).
+Agent B (`CodexTactics-agents2`, agents/cones) — vision cones clipped by obstacles (visibility polygon, low-cover
+«standing only» tone, matches SightRules, throttled).
+Pending in main: 8bc194c (smoke arenas) built? no — build + push with the next merge. User map edits:
+L_Demo01_A_FrozenLake modified (keep, back up before merges).
+Then: Demo 01 patrol fight (encounter groups) + A5-A10; wind scent + stealth kill (parked).
+
 ## Idea parked 2026-10-18 (user likes it): WIND for hound scent
 Hounds smell only operatives UPWIND of them (the wind carries the scent toward the hound); approaching from downwind =
 not smelled. A per-level wind direction (level JSON; the lake already has wind zones), shown to the player (a wind
