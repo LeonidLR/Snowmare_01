@@ -18,6 +18,7 @@
 #include "Combat/KnockdownRules.h"
 #include "Combat/KnockdownTypes.h"
 #include "Combat/SniperRules.h"
+#include "Combat/PeekSightRules.h"
 #include "OperativeCharacter.generated.h"
 
 class UMaterialInterface;
@@ -1011,6 +1012,27 @@ public:
 
 	/** Hidden traps this operative revealed by peeking (smokes / stats). */
 	int32 GetPeekSpottedCount() const { return PeekSpottedCount; }
+
+	/**
+	 * Peek sight (game designer 2026-10-19: "peeking out of cover he sees NOTHING"): while he leans out round a corner (corner aim /
+	 * corner hold of high cover, the crouched corner lean of low cover) or aims over a low wall, a limited view - this cone round the
+	 * pose's aim - opens from the leaned-out eye point (PeekSightRules). Used by the squad's sight (UTacticalSightSubsystem: revealing,
+	 * targeting, posture fire), his drawn vision cone and - the other way round - the enemies looking at him.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek")
+	FPeekSightConfig PeekSightConfig;
+
+	/** The pose his peek view looks from now (None: not peeking - his own eyes only). */
+	EPeekSightPose GetPeekSightPose() const;
+
+	/**
+	 * While peeking (GetPeekSightPose != None): OutEye = the leaned-out eye point (past the corner edge / above the low wall top),
+	 * OutDirection = the pose's aim direction after the upper-body twist (planar unit). False when not peeking.
+	 */
+	bool GetPeekSight(FVector& OutEye, FVector& OutDirection) const;
+
+	/** While peeking: the point an observer sees of him (the leaned-out head and shoulder, profile height). False when not peeking. */
+	bool GetPeekExposedPoint(FVector& OutPoint) const;
 
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
 	void SetCoverFireMode(ECoverFireMode Mode);

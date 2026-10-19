@@ -18,6 +18,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Data/WeaponDataAsset.h"
 #include "Components/StaticMeshComponent.h"
 #include "Containers/Ticker.h"
 #include "Engine/StaticMesh.h"
@@ -251,6 +252,12 @@ namespace CornerEntrySmoke
 	void BeginTrace(FState& State, const TCHAR* What)
 	{
 		State.BreaksAtStart = AimBreaks(State.Op.Get());
+		// Peek sight (2026-10-19): from the corner he sees the threat behind the wall all the time now and fires more - the trace checks
+		// the pose, not the magazine: a full clip, so no reload falls into a trace (the corner reload is CornerHoldSmoke's).
+		if (AOperativeCharacter* Traced = State.Op.Get(); Traced && Traced->CurrentWeapon)
+		{
+			Traced->CurrentClip = FMath::Max(Traced->CurrentClip, Traced->CurrentWeapon->MaxClipSize);
+		}
 		State.bTracing = true;
 		State.TraceTime = 0.f;
 		State.SettledTime = -1.f;
@@ -288,7 +295,10 @@ namespace CornerEntrySmoke
 		Check(State, StepOuts <= 1, FString::Printf(TEXT("%s: steps out into the fire stance once (%d idle -> fire transitions)"), *What, StepOuts));
 		if (bWantFireIdle)
 		{
-			Check(State, Dominant.Contains(TEXT("fire_idle")) && Op.IsCornerAimActive(),
+			// The fire stance or a shot from it (peek sight, 2026-10-19: a threat behind the wall is seen from the corner, so a trace may end
+			// mid-shot - cvr_*_fire_L / _R plays from the held stance).
+			const bool bCornerFirePose = Dominant.Contains(TEXT("fire_idle")) || Dominant.EndsWith(TEXT("_fire_L")) || Dominant.EndsWith(TEXT("_fire_R"));
+			Check(State, bCornerFirePose && Op.IsCornerAimActive(),
 				FString::Printf(TEXT("%s: ends in the corner fire stance (%s, aim %d)"), *What, *Dominant, Op.IsCornerAimActive() ? 1 : 0));
 		}
 	}

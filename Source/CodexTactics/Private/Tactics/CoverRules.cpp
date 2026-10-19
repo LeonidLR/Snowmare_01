@@ -127,4 +127,12 @@ namespace CoverRules
 		const FVector Side = Facing == ECoverFacing::Right ? Slot.RightTangent() : -Slot.RightTangent();
 		return Muzzle + Side * OffsetCm;
 	}
+
+	FVector CornerLeanPoint(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Base, float MinOffsetCm)
+	{
+		// Round the facing's corner (or the only exposed one).
+		const ECoverFacing Side = Slot.IsEdgeExposed(Facing) ? Facing : (Slot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right);
+		const float EdgeDistance = Side == ECoverFacing::Left ? Slot.LeftEdgeDistanceCm : Slot.RightEdgeDistanceCm;
+		return CornerMuzzle(Slot, Side, Base, FMath::Max(MinOffsetCm, EdgeDistance + 20.f));
+	}
 }

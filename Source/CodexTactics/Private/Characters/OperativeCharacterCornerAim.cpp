@@ -12,14 +12,18 @@
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/GrenadeActor.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/PeekSightRules.h"
+#include "Combat/SightRules.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "HAL/IConsoleManager.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/TrapSpotRules.h"
 #include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverFacingRules.h"
+#include "Tactics/CoverRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -480,6 +484,56 @@ bool AOperativeCharacter::IsPeekingRoundCorner() const
 	return bInCover && bCornerAimActive && (IsManualCornerPeekSpot() || IsCornerHoldSpot());
 }
 
+namespace OperativePeekSight
+{
+	static TAutoConsoleVariable<int32> CVarPeekSight(TEXT("Codex.Sight.Peek"), 1,
+		TEXT("Peek sight (2026-10-19): 1 a peeking operative sees from his leaned-out eyes in the peek cone (and is seen there); 0 the old rule (his capsule's eyes only)"));
+}
+
+EPeekSightPose AOperativeCharacter::GetPeekSightPose() const
+{
+	if (!bInCover || !PeekSightConfig.bEnabled || OperativePeekSight::CVarPeekSight.GetValueOnGameThread() == 0 || (HealthComponent && !HealthComponent->IsAlive()))
+	{
+		return EPeekSightPose::None;
+	}
+	return PeekSightRules::DecidePose(CurrentCoverHeight, Stance, bCornerAimActive, IsManualCornerPeekSpot() || IsCornerHoldSpot());
+}
+
+bool AOperativeCharacter::GetPeekSight(FVector& OutEye, FVector& OutDirection) const
+{
+	const EPeekSightPose Pose = GetPeekSightPose();
+	if (Pose == EPeekSightPose::None)
+	{
+		return false;
+	}
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const float EyeCm = SightRules::EyeHeight(Stance);
+	if (Pose == EPeekSightPose::CornerLean)
+	{
+		// The eyes leaned out past the corner edge as far as the corner shot's muzzle (CornerFireOriginFor), the aim of the corner stance.
+		OutEye = CoverRules::CornerLeanPoint(CoverSlot, CoverFacing, Feet + FVector(0.f, 0.f, EyeCm), CoverRules::GetConfig().CornerPeekOffsetCm);
+		OutDirection = PeekSightRules::TwistedDirection(CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg), GetAppliedAimYaw());
+		return true;
+	}
+	// Over the top of a low wall: the head above its top, looking across it.
+	OutEye = PeekSightRules::OverTopEyePoint(PeekSightConfig, Feet, CoverSlot.WallNormal, EyeCm, CoverSlot.WallTopCm);
+	OutDirection = (-CoverSlot.WallNormal).GetSafeNormal2D();
+	return true;
+}
+
+bool AOperativeCharacter::GetPeekExposedPoint(FVector& OutPoint) const
+{
+	FVector Eye;
+	FVector Direction;
+	if (!GetPeekSight(Eye, Direction))
+	{
+		return false;
+	}
+	// The head and shoulder out there: the profile point as far below the leaned-out eyes as the stance's profile is below its eyes.
+	OutPoint = Eye - FVector(0.f, 0.f, FMath::Max(0.f, SightRules::EyeHeight(Stance) - SightRules::ProfileHeight(Stance)));
+	return true;
+}
+
 void AOperativeCharacter::UpdatePeekTrapSpotting(float DeltaTime)
 {
 	UWorld* World = GetWorld();
@@ -500,8 +554,16 @@ void AOperativeCharacter::UpdatePeekTrapSpotting(float DeltaTime)
 	{
 		return;
 	}
-	const FVector Origin = GetCoverFireOrigin();
-	const FVector Direction = CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg);
+	// 2026-10-19: from the same leaned-out eye point and aim as the peek sight of enemies (GetPeekSight), the narrower trap cone.
+	FVector Origin = GetCoverFireOrigin();
+	FVector Direction = CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg);
+	FVector PeekEye;
+	FVector PeekDirection;
+	if (GetPeekSight(PeekEye, PeekDirection))
+	{
+		Origin = PeekEye;
+		Direction = PeekDirection;
+	}
 	TArray<AInteractableActor*> Found;
 	// Rev 5i: a mine lying in the snow never hides another one from the peek (their trigger shapes would block the sight line):
 	// every hidden trap is ignored by the line of sight, only walls / rocks / objects hide a trap.

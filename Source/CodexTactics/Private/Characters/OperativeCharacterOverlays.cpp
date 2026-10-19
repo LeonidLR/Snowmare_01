@@ -43,9 +43,22 @@ bool AOperativeCharacter::IsEnemySpottedInCone() const
 	{
 		return false;
 	}
-	const float Range = GetVisionConeRange();
-	const FVector Origin = GetActorLocation();
-	const FVector Forward = GetActorForwardVector();
+	float Range = GetVisionConeRange();
+	float HalfAngle = VisionConeHalfAngleDeg;
+	FVector Origin = GetActorLocation();
+	FVector Forward = GetActorForwardVector();
+	FVector Eye = UTacticalSightSubsystem::EyePoint(*this);
+	// Peek sight (2026-10-19): peeking, the cone is the peek cone from the leaned-out eyes.
+	FVector PeekEye;
+	FVector PeekDirection;
+	if (GetPeekSight(PeekEye, PeekDirection))
+	{
+		Range = PeekSightConfig.RangeCm;
+		HalfAngle = PeekSightConfig.HalfAngleDeg;
+		Origin = PeekEye;
+		Forward = PeekDirection;
+		Eye = PeekEye;
+	}
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(VisionConeSpot), false, this);
 	if (const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
 	{
@@ -58,13 +71,12 @@ bool AOperativeCharacter::IsEnemySpottedInCone() const
 	{
 		const AEnemyCharacter* Enemy = Registered;
 		if (Enemy->IsDying() || !Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive()
-			|| !VisionConeRules::IsInsideCone(Origin, Forward, Enemy->GetActorLocation(), Range, VisionConeHalfAngleDeg))
+			|| !VisionConeRules::IsInsideCone(Origin, Forward, Enemy->GetActorLocation(), Range, HalfAngle))
 		{
 			continue;
 		}
 		// Godot: a ray from the eyes to the enemy's body; a barricade still counts as seen unless prone.
 		FHitResult Hit;
-		const FVector Eye = UTacticalSightSubsystem::EyePoint(*this);
 		const FVector Body = Enemy->GetActorLocation() + FVector(0.f, 0.f, 60.f);
 		if (!World->LineTraceSingleByChannel(Hit, Eye, Body, ECC_Visibility, Params) || Hit.GetActor() == Enemy
 			|| Cast<APawn>(Hit.GetActor()) || (Hit.GetActor() && Hit.GetActor()->IsA<ABarricadeActor>() && Stance != EOperativeStance::Prone))
@@ -97,8 +109,26 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 	// a man-sized enemy's profile (150 cm); one level, one tone.
 	FVisionConeSightSpec Sight;
 	Sight.EyeHeightCm = SightRules::EyeHeight(Stance);
-	Sight.Levels.Add({ SightRules::ProfileHeight(EOperativeStance::Standing), GetVisionConeRange() });
-	VisionCone->UpdateCone(bVisible, GetVisionConeRange(), VisionConeHalfAngleDeg, Color, DeltaTime, &Sight);
+	float Range = GetVisionConeRange();
+	float HalfAngle = VisionConeHalfAngleDeg;
+	// Peek sight (game designer 2026-10-19): leaned out round a corner / over a low wall the cone is the limited peek cone, drawn from
+	// the leaned-out eye point in the pose's aim (what UTacticalSightSubsystem::CanOperativeSee reveals).
+	FVector PeekEye;
+	FVector PeekDirection;
+	if (bVisible && GetPeekSight(PeekEye, PeekDirection))
+	{
+		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		VisionCone->SetViewOverride(PeekEye - Feet, static_cast<float>(PeekDirection.Rotation().Yaw));
+		Sight.EyeHeightCm = static_cast<float>(PeekEye.Z - Feet.Z);
+		Range = PeekSightConfig.RangeCm;
+		HalfAngle = PeekSightConfig.HalfAngleDeg;
+	}
+	else
+	{
+		VisionCone->ClearViewOverride();
+	}
+	Sight.Levels.Add({ SightRules::ProfileHeight(EOperativeStance::Standing), Range });
+	VisionCone->UpdateCone(bVisible, Range, HalfAngle, Color, DeltaTime, &Sight);
 }
 
 void AOperativeCharacter::SetGroupSelected(bool bSelected, bool bInMultiSelectionIn)

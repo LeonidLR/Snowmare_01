@@ -406,10 +406,7 @@ FVector AOperativeCharacter::GetCoverFireOrigin() const
 
 FVector AOperativeCharacter::CornerFireOriginFor(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Muzzle)
 {
-	// Round the facing's corner (or the only exposed one).
-	const ECoverFacing Side = Slot.IsEdgeExposed(Facing) ? Facing : (Slot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right);
-	const float EdgeDistance = Side == ECoverFacing::Left ? Slot.LeftEdgeDistanceCm : Slot.RightEdgeDistanceCm;
-	return CoverRules::CornerMuzzle(Slot, Side, Muzzle, FMath::Max(CoverRules::GetConfig().CornerPeekOffsetCm, EdgeDistance + 20.f));
+	return CoverRules::CornerLeanPoint(Slot, Facing, Muzzle, CoverRules::GetConfig().CornerPeekOffsetCm);
 }
 
 bool AOperativeCharacter::IsHiddenInCoverFrom(const FVector& ObserverLocation) const
