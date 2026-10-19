@@ -10,6 +10,10 @@
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
+## Code layout (cleanup 2026-10-19)
+
+`AEnemyCharacter` is one header (`Public/Characters/EnemyCharacter.h`) and ten translation units under `Private/Characters/`, one per cluster (map, rules and verification: [REFACTOR_ENEMY_2026-10](../port/REFACTOR_ENEMY_2026-10.md)): `EnemyCharacter.cpp` (ctor, BeginPlay / EndPlay, Tick, facing, AI move requests, turn-based / world-AI-pause holds, overhead label), `EnemyCharacterArchetype.cpp` (spawn archetype scope, archetype defaults, knockdown config, wave modifiers, balance), `EnemyCharacterBehavior.cpp` (`TickBehavior`: fire fear, pack order + flank detour, melee close-in and the `Codex.Enemy.MeleeCloseIn` CVar; target selection, fire zones), `EnemyCharacterCombat.cpp` (blows, object / vehicle attacks, spitter, cutter jump), `EnemyCharacterHealth.cpp` (knockdown hooks, damage, trap blast scope, death), `EnemyCharacterPatrol.cpp` (routes, escorts, guard posts, patrol break), `EnemyCharacterSave.cpp` (patrol snapshot), `EnemyCharacterPerception.cpp` (sight / hearing, vision cone, squad noise), `EnemyCharacterScent.cpp` (hound scent), `EnemyCharacterSearch.cpp` (patrol search, stealth lure). New code goes into its cluster's unit; a file-local helper needs a FILE-UNIQUE name (unity blobs merge the units). Tests `CodexTactics.Characters.EnemyUnits.*`.
+
 ## Enemy registry (old §5)
 
 - `Combat/EnemyRegistrySubsystem` + `EnemyRegistryRules` (cleanup 2026-10-16, audit 2026-10-11 #2 / P2-P3; Godot: the "enemies"

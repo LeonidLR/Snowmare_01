@@ -80,6 +80,12 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedNative, AEnemyCharacter*);
  * Tagged "Enemy" for combat queries and targeting.
  * Configurable via EEnemyArchetype (Hound, Spitter, Brute, Frostbitten).
  * Godot reference: Scenes/movements/enemy_base.gd.
+ * Layout (cleanup 2026-10-19, docs/port/REFACTOR_ENEMY_2026-10.md): the members are defined in one EnemyCharacter<Cluster>.cpp
+ * per cluster under Private/Characters/ - the main file (ctor, lifecycle, Tick, facing, move requests, holds, label),
+ * Archetype (archetype defaults, wave modifiers, balance), Behavior (TickBehavior: fire fear, flank detour, melee close-in;
+ * target selection), Combat (attacks, spitter, cutter jump), Health (knockdown hooks, damage, death), Patrol (routes, escorts,
+ * guard posts, patrol break), Save (patrol snapshot), Perception (sight / hearing, vision cone, squad noise), Scent (hound
+ * scent), Search (patrol search, stealth lure).
  */
 UCLASS()
 class CODEXTACTICS_API AEnemyCharacter : public ACharacter
