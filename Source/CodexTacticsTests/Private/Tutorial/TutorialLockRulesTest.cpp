@@ -1026,6 +1026,7 @@ bool FTutorialProgressiveDemoTest::RunTest(const FString&)
 		{ TEXT("A3_posture"), { PlayerCommands::PosturePassive, PlayerCommands::PostureDefensive, PlayerCommands::PostureAggressive }, { PlayerCommands::Autonomy } },
 		{ TEXT("A4_cones"), { PlayerCommands::ToggleVisionCones }, { PlayerCommands::GrenadeAim } },
 		{ TEXT("A4_tripwire"), { PlayerCommands::DeployTripwire }, { PlayerCommands::DeployMine, PlayerCommands::DeployStart } },
+		{ TEXT("A4_lure"), { PlayerCommands::StealthWhistle, PlayerCommands::StealthThrow }, { PlayerCommands::GrenadeAim } },
 	};
 	for (const FLesson& Lesson : Lessons)
 	{

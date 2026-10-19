@@ -58,7 +58,10 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Characters/FirePostureRules.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Combat/WaveSubsystem.h"
+#include "GameFlow/LevelEncounterSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -153,6 +156,8 @@ namespace TutorialSmoke
 		int32 NotYetBefore = 0;
 		int32 LineIndexBefore = 0;
 		bool bConesBefore = false;
+		/** 2026-10-19 b: the patrol enemy lured in the A4 lure lesson (stages 130-136). */
+		TWeakObjectPtr<AEnemyCharacter> LureEnemy;
 		/** The leader's heat packs just before he empties the hut crate. */
 		int32 HeatPacksBeforeLoot = 0;
 		TWeakObjectPtr<AOperativeCharacter> Focus;
@@ -1980,6 +1985,129 @@ namespace TutorialSmoke
 			Check(State, Tutorial->GetMachine().GetCommandUse(PlayerCommands::ToggleVisionCones).Count == 1, TEXT("View.VisionCones reported once"));
 			Check(State, CountMessages(World, TEXT("Vision cones")) >= 1, TEXT("a feed line says ON / OFF"));
 			UVisionConeComponent::SetPlayerEnemyCones(State.bConesBefore);
+			State.Stage = 130;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// 2026-10-19 b (game designer play-test): THE AMBUSH in two parts - part 1 the wire rigged (the card) and a patrol walking into it
+		// (TripwireTriggered.Enemy, raised here: the wire itself is PMCTripwire / Deployable smokes' job), part 2 the other enemy LURED:
+		// the lure card unlocks Stealth.*, a REAL whistle (key 5) brings a guard 8 m away (placed in the map, senses off) to the noise
+		// (StealthLure.Heard completes it), then the reminder card asks for AGGRESSIVE (/).
+		case 130:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_tripwire")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Active && !Tutorial->IsCommandLocked(PlayerCommands::DeployTripwire),
+				FString::Printf(TEXT("part 1: the tripwire card (unlocks the wire; %s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_tripwire")))));
+			Check(State, Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),
+				TEXT("the lure is still locked"));
+			Tutorial->HandlePlayerCommand(PlayerCommands::DeployTripwire, FPlayerCommandContext()); // rigged (the anchors: Deployable smokes)
+			// The other patrol member: a guard 8 m ahead, placed in the map (on its post), deaf and blind (only the lure moves it).
+			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
+			const FVector Feet = Leader->GetActorLocation() - FVector(0.f, 0.f, Leader->GetSimpleCollisionHalfHeight());
+			const FVector Post = SmokeUtils::ClearPoint(World, Feet, Feet + Ahead * 800.f);
+			AEnemyCharacter* Guard = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Frostbitten, Post + FVector(0.f, 0.f, 100.f), Ahead.Rotation());
+			if (Guard)
+			{
+				Guard->bOverridePerception = true;
+				Guard->PerceptionOverride.SightRangeCm = 0.f;
+				Guard->PerceptionOverride.ProximityCm = 0.f;
+				Guard->PerceptionOverride.HearWalkCm = Guard->PerceptionOverride.HearRunCm = 0.f;
+				Guard->PerceptionOverride.HearCrouchWalkCm = Guard->PerceptionOverride.HearCrawlCm = 0.f;
+				Guard->PerceptionOverride.HearGunshotCm = Guard->PerceptionOverride.HearExplosionCm = 0.f;
+				Guard->PerceptionOverride.SmellRadiusCm = 0.f;
+				Guard->GetHealthComponent()->SetMaxHealth(100000.f);
+				World->GetSubsystem<ULevelEncounterSubsystem>()->MarkLevelEnemy(Guard);
+			}
+			State.LureEnemy = Guard;
+			Next(State);
+			return true;
+		}
+		case 131:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_trap_wait")) != ETutorialStepState::Active && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			AEnemyCharacter* Guard = State.LureEnemy.Get();
+			Check(State, Tutorial->GetStepState(TEXT("A4_tripwire")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Active,
+				TEXT("rigged: the card completes, the objective 'wait until the patrol walks into the wire' shows"));
+			Check(State, Guard && Guard->IsGuardingPost() && !Guard->IsHuntingSquad(), TEXT("the second enemy guards its post, unaware"));
+			Tutorial->NotifyEvent(TEXT("TripwireTriggered.Enemy"), TEXT("BP_Enemy_Frostbitten_Trapped")); // the first one walked into it
+			Check(State, Tutorial->GetStepState(TEXT("A4_trap_wait")) == ETutorialStepState::Completed, TEXT("part 1: an enemy pulled the pin -> the objective is done"));
+			Next(State);
+			return true;
+		}
+		case 132:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_lure")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Active, FString::Printf(TEXT("part 2: the LURE card (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_lure")))));
+			Check(State, !Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && !Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),
+				TEXT("the lure card unlocks whistle / throw"));
+			Check(State, TutorialRules::IsRunning(Tutorial->GetStepState(TEXT("A4_wt_trap"))) || TutorialRules::IsFinished(Tutorial->GetStepState(TEXT("A4_wt_trap"))),
+				TEXT("the 'that's one' line came with the trap kill"));
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->StopOperative();
+			}
+			Tap(PC, State, EKeys::Five); // WHISTLE (the real key) - the guard 8 m away hears it
+			Next(State);
+			return true;
+		}
+		case 133:
+		{
+			const AEnemyCharacter* Guard = State.LureEnemy.Get();
+			if (Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Active && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, Guard && Guard->IsInvestigatingLure(), TEXT("the whistle: the guard leaves its post to investigate"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Completed, FString::Printf(TEXT("StealthLure.Heard completes the lure card (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_lure")))));
+			Next(State);
+			return true;
+		}
+		case 134:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_lure_ambush")) != ETutorialStepState::Active && State.StageTime < 5.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_lure_ambush")) == ETutorialStepState::Active, FString::Printf(TEXT("he is coming: the AMBUSH card (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_lure_ambush")))));
+			// The fight itself is the A4 Phase 2 (and would unlock everything): the guard is taken away before the posture key.
+			if (AEnemyCharacter* Guard = State.LureEnemy.Get())
+			{
+				Guard->Destroy();
+			}
+			Next(State);
+			return true;
+		}
+		case 135:
+		{
+			if (State.StageTime < 0.3f)
+			{
+				return true;
+			}
+			Tap(PC, State, EKeys::Slash); // AGGRESSIVE (the leader)
+			Next(State);
+			return true;
+		}
+		case 136:
+		{
+			if (State.StageTime < 0.2f)
+			{
+				return true;
+			}
+			Check(State, Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Aggressive
+				&& Tutorial->GetStepState(TEXT("A4_lure_ambush")) == ETutorialStepState::Completed, TEXT("'/' AGGRESSIVE completes the ambush card"));
+			Check(State, World->GetSubsystem<UGameFlowSubsystem>()->GetPhase() == ECodexGamePhase::Exploration, TEXT("no fight started in the smoke (Phase 2)"));
 			// After the stance lesson (A3; A4 repeats it as a safety) C is accepted.
 			Leader->SetStance(EOperativeStance::Standing);
 			Tap(PC, State, EKeys::C);

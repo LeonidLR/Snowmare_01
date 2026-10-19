@@ -573,6 +573,34 @@
       "trigger": { "type": "after_step", "step": "A4_cones" },
       "complete": { "commands": ["Deploy.Tripwire"], "timeout_s": 120 }
     },
+    {
+      "_comment": "2026-10-19 b (game designer play-test): THE AMBUSH, part 1 - the wire is rigged, now wait until a patrol walks into it (event TripwireTriggered.Enemy: an ENEMY pulled the pin of any wire - the squad's own or a PMC one; the 140-damage blast kills a frostbitten / a hound). 240 s at most: the lure part follows either way (a wire that never caught anyone still leaves two to lure).",
+      "id": "A4_trap_wait", "beat": "A4", "kind": "objective", "text_id": "OBJ_A4_TRAP",
+      "trigger": { "type": "after_step", "step": "A4_tripwire" },
+      "complete": { "event": "TripwireTriggered.Enemy", "timeout_s": 240 }
+    },
+    {
+      "id": "A4_wt_trap", "beat": "A4", "kind": "walk_talk",
+      "trigger": { "type": "event", "event": "TripwireTriggered.Enemy", "requires": ["A4_tripwire"] },
+      "lines": [ { "speaker": "Engineer", "text_id": "WT_A4_04" } ]
+    },
+    {
+      "_comment": "2026-10-19 b: THE AMBUSH, part 2 - the other enemy is LURED: whistle [5] from cover (the noise at the whistler: he comes to you) or throw a stone [6] (the noise where it lands: he goes there). Unlocks Stealth.* (locked since A0). Done when an enemy reacts to a lure - it heard it and investigates (event StealthLure.Heard from UStealthLureSubsystem::EmitNoise; the lure needs exploration and an undetected squad). Never precredited (a lure before the card does not count), 180 s.",
+      "id": "A4_lure", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_LURE",
+      "keys": ["Stealth.Whistle", "Stealth.Throw"],
+      "unlock": ["Stealth.*"],
+      "precredit": false,
+      "trigger": { "type": "after_step", "step": "A4_trap_wait", "delay_s": 2 },
+      "complete": { "event": "StealthLure.Heard", "timeout_s": 180 }
+    },
+    {
+      "_comment": "2026-10-19 b: the reminder once he is coming - AGGRESSIVE opens fire the moment he is in sight (the fight starts through the normal path), or Ctrl+click him. Done on Posture.Aggressive, a targeted shot or the fight starting (CombatStarted; a fight unlocks everything anyway); 60 s.",
+      "id": "A4_lure_ambush", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_AMBUSH",
+      "keys": ["Posture.Aggressive", "Attack.TargetedShot"],
+      "precredit": false,
+      "trigger": { "type": "event", "event": "StealthLure.Heard", "requires": ["A4_lure"] },
+      "complete": { "commands": ["Posture.Aggressive", "Attack.TargetedShot"], "event": "CombatStarted", "timeout_s": 60 }
+    },
 
     {
       "_comment": "Rev 2026-10-19 (game designer play-test): the MEDKIT lesson the first time an operative is badly hurt - a mine / tripwire blast, frostbite, a lesson down (the guard leaves him at 1 HP). No beat: it can come in any beat (never dropped by a later beat), once. Trigger: the most wounded living member lost at least 30 % of his health = below 70 % (stat squad_injury_max, data). Focus = that operative (the {focus} name, a WOUNDED line over him). Unlocks what it teaches (the progressive locks must not block it). The real input: select him and press H (his own medkit), or the inventory [I] Medkit line; a mate's medkit: drag it onto him in the inventory (Item.Give), then H. Completes when a medkit heals THAT operative (ItemUsed.MEDKIT with him as the subject - H / the drawer line, or a mate's field aid). Every operative carries 1 medkit (BP default MedkitsCount, the level loadout does not change it; the hut crate holds none).",

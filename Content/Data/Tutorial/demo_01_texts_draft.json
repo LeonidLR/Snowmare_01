@@ -338,6 +338,20 @@
       "title": "AMBUSH",
       "text": "Open the inventory ({key:Inventory.Open}) and rig a tripwire across the patrol's path: click anchor A, then anchor B. Costs two grenades."
     },
+    "OBJ_A4_TRAP": {
+      "text": "Wait until the patrol walks into the wire"
+    },
+    "WT_A4_04": {
+      "text": "That's one. The other one is still out there."
+    },
+    "TUT_A4_LURE": {
+      "title": "LURE",
+      "text": "Whistle {key:Stealth.Whistle} from cover to call him to you, or throw a stone {key:Stealth.Throw} to send him where you want. A whistle carries about 12 m (less through cover): from here a stone near his path works best. Only while they have not spotted you."
+    },
+    "TUT_A4_AMBUSH": {
+      "title": "AMBUSH",
+      "text": "He's coming to check the noise. Switch to AGGRESSIVE (Alt + {key:Posture.Aggressive}): the squad opens fire the moment he is in sight - or Ctrl+click him yourself."
+    },
     "TUT_MEDKIT": {
       "title": "MEDKIT",
       "text": "{focus} is wounded. Select him ({key:Select.Member}) and press H to use his medkit - or open the inventory ({key:Inventory.Open}) and click Medkit. No medkit left? Select a teammate, open the inventory and drag a medkit onto {focus}, or loot one from a crate."

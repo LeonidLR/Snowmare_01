@@ -496,6 +496,10 @@ void ATripwireActor::Trip(AActor* Tripper)
 	UFloatingTextSubsystem::SpawnAboveMine(this, TEXT("❗ CLICK!"), FLinearColor(1.f, 0.85f, 0.2f));
 	UE_LOG(LogCodexTactics, Display, TEXT("Tripwire %s: pin pulled by %s"), *GetName(), Tripper ? *Tripper->GetName() : TEXT("-"));
 	GameplayEvents::Raise(this, GameplayEvents::TripwireTriggered, Tripper);
+	if (Tripper && Tripper->IsA<AEnemyCharacter>())
+	{
+		GameplayEvents::Raise(this, GameplayEvents::TripwireTriggeredByEnemy, Tripper); // the ambush lesson: a patrol walked into it
+	}
 	ReceivePinPulled();
 	GetWorldTimerManager().SetTimer(FuseTimer, FTimerDelegate::CreateUObject(this, &ATripwireActor::Detonate), TripwireRules::FuseDelaySeconds, false);
 }

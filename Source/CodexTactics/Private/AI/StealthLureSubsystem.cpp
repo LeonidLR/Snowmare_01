@@ -292,6 +292,13 @@ int32 UStealthLureSubsystem::EmitNoise(const FVector& Location, EStealthLureKind
 			if (Reaction != ENoiseReaction::KeepScent && Reaction != ENoiseReaction::Ignored)
 			{
 				LastListeners.Add(Enemy);
+				// The lure worked on it (the Demo 01 A4 lure lesson completes on it, 2026-10-19).
+				FGameplayEventContext Context;
+				Context.Subject = Enemy;
+				Context.Target = const_cast<AActor*>(Source);
+				Context.Kind = Kind == EStealthLureKind::Whistle ? FName(TEXT("Whistle")) : FName(TEXT("Throw"));
+				Context.Location = Location;
+				GameplayEvents::RaiseWithContext(this, GameplayEvents::LureHeard, Context);
 			}
 		}
 	}

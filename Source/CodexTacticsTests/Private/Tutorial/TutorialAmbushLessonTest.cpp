@@ -8,7 +8,8 @@
 
 // Demo 01, game designer play-test 2026-10-19 (beat sheet decision block "2026-10-19 b"): the A3 -> A4 lessons on the real
 // demo_01_steps.json - the posture lesson right after the trap disarm (with its A4 twin when the wire was never spotted), the
-// squad entering the complex Defensive ("set_posture" action).
+// squad entering the complex Defensive ("set_posture" action), the ambush in two parts (a patrol walks into the wire, the other
+// one is lured: whistle / stone).
 
 #define TUTORIAL_AMBUSH_TEST(TestClass, TestPath) \
 	IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, "CodexTactics.Tutorial.AmbushLesson." TestPath, \
@@ -192,6 +193,96 @@ bool FTutorialAmbushPostureFallbackTest::RunTest(const FString&)
 	Settle(Early);
 	TestEqual(TEXT("an early wire: no posture lesson (requires A3_cover)"), Early.GetState(TEXT("A3_posture")), ETutorialStepState::Idle);
 	TestFalse(TEXT("... and the keys stay locked"), PostureFree(Early));
+	return true;
+}
+
+TUTORIAL_AMBUSH_TEST(FTutorialAmbushLureSchemaTest, "LureSchema")
+bool FTutorialAmbushLureSchemaTest::RunTest(const FString&)
+{
+	FTutorialStepsData Data;
+	if (!TutorialAmbushTestData::LoadDemo(*this, Data))
+	{
+		return false;
+	}
+	// The events the steps wait for are the ones the game raises.
+	TestEqual(TEXT("an enemy pulled the pin"), GameplayEvents::TripwireTriggeredByEnemy, FName(TEXT("TripwireTriggered.Enemy")));
+	TestEqual(TEXT("a lure was heard"), GameplayEvents::LureHeard, FName(TEXT("StealthLure.Heard")));
+	const FTutorialStep* Wait = Data.FindStep(TEXT("A4_trap_wait"));
+	TestTrue(TEXT("part 1: the objective after the wire card, done when an enemy walks into a wire"), Wait && Wait->Kind == ETutorialStepKind::Objective
+		&& Wait->Beat == FName(TEXT("A4")) && Wait->Trigger.Type == ETutorialTriggerType::AfterStep && Wait->Trigger.Step == FName(TEXT("A4_tripwire"))
+		&& Wait->Complete.Event == GameplayEvents::TripwireTriggeredByEnemy.ToString() && Wait->Complete.TimeoutSeconds > 0.f);
+	const FTutorialStep* Lure = Data.FindStep(TEXT("A4_lure"));
+	TestTrue(TEXT("part 2: the lure card after part 1, keys 5 / 6, unlocks Stealth.*, done on StealthLure.Heard"), Lure && Lure->Kind == ETutorialStepKind::HintCard
+		&& Lure->Trigger.Type == ETutorialTriggerType::AfterStep && Lure->Trigger.Step == FName(TEXT("A4_trap_wait"))
+		&& Lure->Keys.Contains(PlayerCommands::StealthWhistle.ToString()) && Lure->Keys.Contains(PlayerCommands::StealthThrow.ToString())
+		&& Lure->Unlock.Contains(TEXT("Stealth.*")) && Lure->Complete.Event == GameplayEvents::LureHeard.ToString() && !Lure->bPrecredit);
+	const FTutorialStep* Ambush = Data.FindStep(TEXT("A4_lure_ambush"));
+	TestTrue(TEXT("the AGGRESSIVE reminder when the lure worked"), Ambush && Ambush->Trigger.Type == ETutorialTriggerType::Event
+		&& Ambush->Trigger.Event == GameplayEvents::LureHeard.ToString() && Ambush->Trigger.Requires.Contains(TEXT("A4_lure"))
+		&& Ambush->Complete.Commands.Contains(PlayerCommands::PostureAggressive.ToString()) && Ambush->Complete.Event == TEXT("CombatStarted"));
+	// A0 locks the lure until its lesson (STEALTH_LURE.md §5).
+	TestTrue(TEXT("A0 locks Stealth.*"), Data.Beats.Num() > 0 && Data.Beats[0].Lock.Contains(TEXT("Stealth.*")));
+	return true;
+}
+
+TUTORIAL_AMBUSH_TEST(FTutorialAmbushLureFlowTest, "TrapThenLure")
+bool FTutorialAmbushLureFlowTest::RunTest(const FString&)
+{
+	using namespace TutorialAmbushTestData;
+	FTutorialStepsData Data;
+	if (!LoadDemo(*this, Data))
+	{
+		return false;
+	}
+	FTutorialStateMachine Machine;
+	Machine.Load(Data);
+	IntoTheField(Machine);
+	Machine.StartBeat(TEXT("A4"));
+	Settle(Machine);
+	Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
+	Settle(Machine);
+	Machine.HandleCommand(PlayerCommands::PosturePassive); // the overlook posture card (no wire in this run)
+	Settle(Machine);
+	TestEqual(TEXT("the tripwire card"), Machine.GetState(TEXT("A4_tripwire")), ETutorialStepState::Active);
+	TestTrue(TEXT("the lure is locked before its lesson"), Machine.IsCommandLocked(PlayerCommands::StealthWhistle) && Machine.IsCommandLocked(PlayerCommands::StealthThrow));
+	Machine.HandleCommand(PlayerCommands::DeployTripwire);
+	Settle(Machine);
+	TestEqual(TEXT("part 1: wait for the patrol"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Active);
+	Machine.HandleEvent(TEXT("TripwireTriggered"), TEXT("Engineer")); // an operative tripping a wire is no ambush
+	TestEqual(TEXT("a wire tripped by the squad does not count"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Active);
+	Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("BP_Enemy_Frostbitten_C_3"));
+	TestEqual(TEXT("a patrol walked into the wire: part 1 done"), Machine.GetState(TEXT("A4_trap_wait")), ETutorialStepState::Completed);
+	TestTrue(TEXT("the 'that's one' line"), Machine.GetState(TEXT("A4_wt_trap")) != ETutorialStepState::Idle);
+	Settle(Machine);
+	TestEqual(TEXT("part 2: the lure card"), Machine.GetState(TEXT("A4_lure")), ETutorialStepState::Active);
+	TestFalse(TEXT("... unlocks whistle and throw"), Machine.IsCommandLocked(PlayerCommands::StealthWhistle) || Machine.IsCommandLocked(PlayerCommands::StealthThrow));
+	Machine.HandleCommand(PlayerCommands::StealthWhistle);
+	Machine.HandleEvent(TEXT("StealthLure.Whistle"), TEXT("Commander"));
+	TestEqual(TEXT("a whistle nobody heard does not count"), Machine.GetState(TEXT("A4_lure")), ETutorialStepState::Active);
+	Machine.HandleEvent(GameplayEvents::LureHeard, TEXT("BP_Enemy_Hound_C_3"));
+	TestEqual(TEXT("the remaining enemy heard it and investigates: done"), Machine.GetState(TEXT("A4_lure")), ETutorialStepState::Completed);
+	Settle(Machine);
+	TestEqual(TEXT("the AGGRESSIVE reminder"), Machine.GetState(TEXT("A4_lure_ambush")), ETutorialStepState::Active);
+	Machine.HandleEvent(GameplayEvents::CombatStarted, NAME_None);
+	TestEqual(TEXT("the fight starting completes it"), Machine.GetState(TEXT("A4_lure_ambush")), ETutorialStepState::Completed);
+
+	// The wire never caught anyone: the lure lesson still follows (the objective times out).
+	FTutorialStateMachine Slow;
+	Slow.Load(Data);
+	IntoTheField(Slow);
+	Slow.StartBeat(TEXT("A4"));
+	Settle(Slow);
+	Slow.HandleCommand(PlayerCommands::ToggleVisionCones);
+	Settle(Slow);
+	Slow.HandleCommand(PlayerCommands::PosturePassive);
+	Settle(Slow);
+	Slow.HandleCommand(PlayerCommands::DeployTripwire);
+	for (int32 Tick = 0; Tick < 260; ++Tick)
+	{
+		Slow.Tick(1.f);
+	}
+	TestEqual(TEXT("no catch: the wait times out"), Slow.GetState(TEXT("A4_trap_wait")), ETutorialStepState::TimedOut);
+	TestTrue(TEXT("... and the lure card comes anyway"), TutorialRules::IsRunning(Slow.GetState(TEXT("A4_lure"))) || TutorialRules::IsFinished(Slow.GetState(TEXT("A4_lure"))));
 	return true;
 }
 
