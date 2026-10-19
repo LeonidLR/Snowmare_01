@@ -338,6 +338,10 @@
       "title": "AMBUSH",
       "text": "Open the inventory ({key:Inventory.Open}) and rig a tripwire across the patrol's path: click anchor A, then anchor B. Costs two grenades."
     },
+    "TUT_A4_HIDDEN": {
+      "title": "OUT OF SIGHT",
+      "text": "Prone behind cover they can't see you - but you can't see them either. Peek ({key:Cover.CornerPeek}) or rise ({key:Stance.Crouch} / {key:Stance.Stand}) to look."
+    },
     "OBJ_A4_TRAP": {
       "text": "Wait until the patrol walks into the wire"
     },

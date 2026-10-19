@@ -13,6 +13,7 @@
 #include "Combat/EnemyGhostActor.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/SightRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/StaticMeshComponent.h"
@@ -1104,12 +1105,16 @@ void UMinimapSubsystem::RefreshStaticLists()
 	}
 }
 
+static_assert(UMinimapSubsystem::EnemyFadeSeconds == SightRules::LastKnownFadeSeconds,
+	"the minimap's last-known enemy icon and the exploration silhouette fade together (2026-10-19)");
+
 void UMinimapSubsystem::UpdateEnemyMemory()
 {
 	UWorld* World = GetWorld();
 	const double Now = MinimapSubsystemLocal::NowSeconds(World);
 	const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
-	const bool bSightActive = Sight && Sight->IsActive();
+	// 2026-10-19: the squad's sight runs while exploring too - the map marks seen exactly what the world shows (eye height by stance).
+	const bool bSightActive = Sight && Sight->IsSquadSightActive();
 	const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 	TArray<const AOperativeCharacter*, TInlineAllocator<8>> Watchers;
 	for (const AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())

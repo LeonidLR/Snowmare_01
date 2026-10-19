@@ -423,7 +423,7 @@ TArray<FVector> UVehicleSubsystem::GatherKnownThreats(const FVector& Around) con
 			continue;
 		}
 		// Known = seen by the squad (or no sight model running); a hidden enemy does not steer the exit.
-		if (!Sight || !Sight->IsActive() || Sight->IsVisibleToSquad(Enemy))
+		if (!Sight || Sight->IsVisibleToSquad(Enemy)) // true while the squad's sight is off
 		{
 			Threats.Add(Enemy->GetActorLocation());
 		}

@@ -74,7 +74,9 @@ struct CODEXTACTICS_API FTutorialLine
  * come from the runtime (UTutorialSubsystem::GetConditionStat): "squad_cold_max", "squad_cold_min", "leader_cold", "squad_injury_max"
  * (the share of health the most wounded living member has lost, %: 30 = he is below 70 %; rev 2026-10-19),
  * "squad_heat_packs", "squad_min_heat_packs" (the fewest any living operative carries), "heat_packs_given" (heat packs handed
- * between squad mates since the level started; rev 5d). All clauses of a step must hold (AND).
+ * between squad mates since the level started; rev 5d), "squad_prone" (living operatives lying prone) and "enemies_unseen" (living
+ * enemies no operative sees now - UTacticalSightSubsystem::IsVisibleToSquad; 0 while the squad's sight is off; both 2026-10-19 b).
+ * All clauses of a step must hold (AND).
  */
 struct CODEXTACTICS_API FTutorialCondition
 {

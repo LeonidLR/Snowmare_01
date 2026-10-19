@@ -574,6 +574,15 @@
       "complete": { "commands": ["Deploy.Tripwire"], "timeout_s": 120 }
     },
     {
+      "_comment": "2026-10-19 b (game designer play-test): SYMMETRIC SIGHT - prone behind cover the patrols cannot see the squad, and the squad cannot see them either (an enemy no operative sees from his eye height is hidden: no plate, no cone, not targetable, no fire; a last-known silhouette fades). The card shows the first time someone lies prone while an enemy is out of the squad's sight (condition: squad_prone >= 1 AND enemies_unseen >= 1; 'requires' A4_cones = only from the overlook on, never in A3 where nobody is out there). Done when he rises / crouches / peeks round the cover, or after 20 s.",
+      "id": "A4_hidden", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_HIDDEN",
+      "keys": ["Stance.Crouch", "Stance.Stand", "Cover.CornerPeek"],
+      "precredit": false,
+      "trigger": { "type": "condition", "requires": ["A4_cones"] },
+      "condition": [ { "stat": "squad_prone", "at_least": 1 }, { "stat": "enemies_unseen", "at_least": 1 } ],
+      "complete": { "commands": ["Stance.Crouch", "Stance.Stand", "Stance.Squad.Crouch", "Stance.Squad.Stand", "Cover.CornerPeek"], "timeout_s": 20 }
+    },
+    {
       "_comment": "2026-10-19 b (game designer play-test): THE AMBUSH, part 1 - the wire is rigged, now wait until a patrol walks into it (event TripwireTriggered.Enemy: an ENEMY pulled the pin of any wire - the squad's own or a PMC one; the 140-damage blast kills a frostbitten / a hound). 240 s at most: the lure part follows either way (a wire that never caught anyone still leaves two to lure).",
       "id": "A4_trap_wait", "beat": "A4", "kind": "objective", "text_id": "OBJ_A4_TRAP",
       "trigger": { "type": "after_step", "step": "A4_tripwire" },

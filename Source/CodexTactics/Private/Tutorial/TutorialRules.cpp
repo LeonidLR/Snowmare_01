@@ -1087,7 +1087,8 @@ bool TutorialRules::IsKnownStat(FName Stat)
 		return true;
 	}
 	static const FName Stats[] = { TEXT("squad_cold_max"), TEXT("squad_cold_min"), TEXT("leader_cold"), TEXT("squad_heat_packs"),
-		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo"), TEXT("squad_injury_max") };
+		TEXT("squad_min_heat_packs"), TEXT("heat_packs_given"), TEXT("squad_solo"), TEXT("squad_injury_max"), TEXT("squad_prone"),
+		TEXT("enemies_unseen") };
 	for (const FName Known : Stats)
 	{
 		if (Stat == Known)

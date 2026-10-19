@@ -304,11 +304,11 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		return;
 	}
 
-	// Sprint 08-F: a click on a silhouette (last known / heard position) orders blind fire at it (-80 % accuracy); the
-	// hidden enemy itself cannot be clicked.
-	if (UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>(); Sight && Sight->IsActive())
+	// Sprint 08-F: a click on a silhouette (last known / heard position) orders blind fire at it (-80 % accuracy, a fight only); the
+	// hidden enemy itself cannot be clicked (2026-10-19: exploring too - symmetric sight).
+	if (UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>(); Sight && Sight->IsSquadSightActive())
 	{
-		if (AEnemyGhostActor* Ghost = Sight->FindGhostNear(Hit.ImpactPoint, 150.f))
+		if (AEnemyGhostActor* Ghost = Sight->IsActive() ? Sight->FindGhostNear(Hit.ImpactPoint, 150.f) : nullptr)
 		{
 			TArray<AOperativeCharacter*> Shooters = Squad->HasMultiSelection() ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>{ Leader };
 			for (AOperativeCharacter* Shooter : Shooters)
@@ -590,6 +590,14 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const bool bPaused = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
 	const ETargetedShotKind Kind = AOperativeCharacter::ClassifyShotTarget(HitActor);
+	// 2026-10-19 (symmetric sight): exploring, an enemy no operative sees is no target - the order would start the fight at an
+	// enemy the squad cannot see (in a fight the priority is kept until it shows up, as before).
+	if (const UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>(); Sight && Kind == ETargetedShotKind::Enemy
+		&& Sight->IsSquadSightActive() && !Sight->IsActive() && !Sight->IsVisibleToSquad(HitActor))
+	{
+		Messages->PostMessage(Leader->DisplayName, LOCTEXT("TargetUnseen", "Can't see it from here."));
+		return;
+	}
 	UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>();
 	if (Kind != ETargetedShotKind::None && Feedback)
 	{

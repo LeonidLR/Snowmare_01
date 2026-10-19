@@ -60,7 +60,11 @@
 #include "Characters/FirePostureRules.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Components/StaticMeshComponent.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
@@ -158,6 +162,9 @@ namespace TutorialSmoke
 		bool bConesBefore = false;
 		/** 2026-10-19 b: the patrol enemy lured in the A4 lure lesson (stages 130-136). */
 		TWeakObjectPtr<AEnemyCharacter> LureEnemy;
+		/** 2026-10-19 b: the symmetric-sight card (stages 137-139): a 1.2 m wall and an enemy behind it. */
+		TWeakObjectPtr<AActor> SightWall;
+		TWeakObjectPtr<AEnemyCharacter> SightEnemy;
 		/** The leader's heat packs just before he empties the hut crate. */
 		int32 HeatPacksBeforeLoot = 0;
 		TWeakObjectPtr<AOperativeCharacter> Focus;
@@ -2108,6 +2115,103 @@ namespace TutorialSmoke
 			Check(State, Squad->GetEffectivePosture(Leader) == ESquadFirePosture::Aggressive
 				&& Tutorial->GetStepState(TEXT("A4_lure_ambush")) == ETutorialStepState::Completed, TEXT("'/' AGGRESSIVE completes the ambush card"));
 			Check(State, World->GetSubsystem<UGameFlowSubsystem>()->GetPhase() == ECodexGamePhase::Exploration, TEXT("no fight started in the smoke (Phase 2)"));
+			// The squad holds fire again: an Aggressive squad would open fire on the next enemy it sees (the level is an ambush level
+			// since the guard was placed - "auto" + placed enemies) and the fight would unlock everything.
+			Squad->SetSquadPosture(ESquadFirePosture::Passive);
+			// 2026-10-19 b, symmetric sight: a 1.2 m wall 1 m ahead of the leader, a frozen enemy (senses off) 6 m beyond it.
+			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
+			const float GroundZ = Leader->GetActorLocation().Z - Leader->GetSimpleCollisionHalfHeight();
+			const FVector WallSpot = Leader->GetActorLocation() + Ahead * 100.f;
+			if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+			{
+				const FTransform WallTransform(Ahead.Rotation(), FVector(WallSpot.X, WallSpot.Y, GroundZ + 60.f), FVector(0.3f, 5.f, 1.2f));
+				if (AStaticMeshActor* Wall = World->SpawnActorDeferred<AStaticMeshActor>(AStaticMeshActor::StaticClass(), WallTransform, nullptr, nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+				{
+					Wall->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+					Wall->GetStaticMeshComponent()->SetStaticMesh(Cube);
+					Wall->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+					Wall->FinishSpawning(WallTransform);
+					State.SightWall = Wall;
+				}
+			}
+			const FVector EnemySpot = Leader->GetActorLocation() + Ahead * 700.f;
+			AEnemyCharacter* Hidden = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Frostbitten,
+				FVector(EnemySpot.X, EnemySpot.Y, GroundZ + 100.f), (-Ahead).Rotation());
+			if (Hidden)
+			{
+				Hidden->bOverridePerception = true;
+				Hidden->PerceptionOverride.SightRangeCm = 0.f;
+				Hidden->PerceptionOverride.ProximityCm = 0.f;
+				Hidden->PerceptionOverride.HearWalkCm = Hidden->PerceptionOverride.HearRunCm = 0.f;
+				Hidden->PerceptionOverride.HearCrouchWalkCm = Hidden->PerceptionOverride.HearCrawlCm = 0.f;
+				Hidden->PerceptionOverride.SmellRadiusCm = 0.f;
+				Hidden->CustomTimeDilation = 0.f;
+				Hidden->SetActorTickEnabled(false);
+			}
+			State.SightEnemy = Hidden;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Member != Leader)
+				{
+					Member->SetStance(EOperativeStance::Prone); // the mates (behind the leader) lie low too
+				}
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A4_hidden")) == ETutorialStepState::Idle, TEXT("no 'out of sight' card while nobody hides from an enemy"));
+			Tap(PC, State, EKeys::V); // the leader goes prone behind the wall
+			State.Stage = 137;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 137:
+		{
+			if (Tutorial->GetStepState(TEXT("A4_hidden")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+			const AEnemyCharacter* Hidden = State.SightEnemy.Get();
+			Check(State, Leader->GetStance() == EOperativeStance::Prone && Hidden && Sight && !Sight->IsVisibleToSquad(Hidden) && Hidden->IsHidden(),
+				TEXT("prone behind the 1.2 m wall: the enemy beyond it is hidden from the squad (symmetric sight)"));
+			Check(State, Tutorial->GetConditionStat(TEXT("enemies_unseen")) >= 1.f && Tutorial->GetConditionStat(TEXT("squad_prone")) >= 1.f,
+				TEXT("stats: an enemy unseen, someone prone"));
+			Check(State, Tutorial->GetStepState(TEXT("A4_hidden")) == ETutorialStepState::Active, FString::Printf(TEXT("the 'OUT OF SIGHT' card (%s)"),
+				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_hidden")))));
+			Tap(PC, State, EKeys::Z); // rise to look
+			Next(State);
+			return true;
+		}
+		case 138:
+		{
+			if (State.StageTime < 0.6f)
+			{
+				return true;
+			}
+			const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+			const AEnemyCharacter* Hidden = State.SightEnemy.Get();
+			Check(State, Tutorial->GetStepState(TEXT("A4_hidden")) == ETutorialStepState::Completed, TEXT("Z (stand up) completes the card"));
+			Check(State, Hidden && Sight && Sight->IsVisibleToSquad(Hidden) && !Hidden->IsHidden(), TEXT("standing: the enemy is seen over the wall"));
+			if (AActor* Wall = State.SightWall.Get())
+			{
+				Wall->Destroy();
+			}
+			if (AEnemyCharacter* Gone = State.SightEnemy.Get())
+			{
+				Gone->Destroy();
+			}
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->SetStance(EOperativeStance::Standing);
+			}
+			Next(State);
+			return true;
+		}
+		case 139:
+		{
+			if (State.StageTime < 0.3f)
+			{
+				return true;
+			}
 			// After the stance lesson (A3; A4 repeats it as a safety) C is accepted.
 			Leader->SetStance(EOperativeStance::Standing);
 			Tap(PC, State, EKeys::C);

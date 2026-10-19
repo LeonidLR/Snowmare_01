@@ -286,6 +286,63 @@ bool FTutorialAmbushLureFlowTest::RunTest(const FString&)
 	return true;
 }
 
+// Symmetric sight (2026-10-19 b): "Prone behind cover they can't see you - but you can't see them either" - the first time someone
+// lies prone while an enemy is out of the squad's sight, from the overlook on.
+TUTORIAL_AMBUSH_TEST(FTutorialAmbushHiddenCardTest, "OutOfSightCard")
+bool FTutorialAmbushHiddenCardTest::RunTest(const FString&)
+{
+	using namespace TutorialAmbushTestData;
+	FTutorialStepsData Data;
+	if (!LoadDemo(*this, Data))
+	{
+		return false;
+	}
+	TestTrue(TEXT("known stats"), TutorialRules::IsKnownStat(TEXT("squad_prone")) && TutorialRules::IsKnownStat(TEXT("enemies_unseen")));
+	const FTutorialStep* Card = Data.FindStep(TEXT("A4_hidden"));
+	if (!TestNotNull(TEXT("the out-of-sight card"), Card))
+	{
+		return false;
+	}
+	TestTrue(TEXT("A4, condition-triggered from the overlook on (requires A4_cones)"), Card->Beat == FName(TEXT("A4"))
+		&& Card->Trigger.Type == ETutorialTriggerType::Condition && Card->Trigger.Requires.Contains(TEXT("A4_cones")) && Card->Conditions.Num() == 2);
+	float Prone = 0.f;
+	float Unseen = 0.f;
+	FTutorialStateMachine Machine;
+	Machine.StatProvider = [&Prone, &Unseen](FName Stat)
+	{
+		return Stat == FName(TEXT("squad_prone")) ? Prone : (Stat == FName(TEXT("enemies_unseen")) ? Unseen : 0.f);
+	};
+	Machine.Load(Data);
+	IntoTheField(Machine);
+	Prone = 3.f;
+	Unseen = 1.f;
+	Settle(Machine);
+	TestEqual(TEXT("A3 (the fence, prone): nothing - the card belongs to the overlook"), Machine.GetState(TEXT("A4_hidden")), ETutorialStepState::Idle);
+	TestEqual(TEXT("... and it does not start A4"), Machine.GetCurrentBeat(), FName(TEXT("A3")));
+	Prone = 0.f;
+	Machine.StartBeat(TEXT("A4"));
+	Settle(Machine);
+	Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
+	Settle(Machine);
+	Machine.HandleCommand(PlayerCommands::PosturePassive);
+	Settle(Machine);
+	TestEqual(TEXT("standing: no card"), Machine.GetState(TEXT("A4_hidden")), ETutorialStepState::Idle);
+	Unseen = 0.f;
+	Prone = 1.f;
+	Settle(Machine);
+	TestEqual(TEXT("prone, every enemy in sight: no card"), Machine.GetState(TEXT("A4_hidden")), ETutorialStepState::Idle);
+	Unseen = 1.f;
+	Machine.Tick(0.1f);
+	TestNotEqual(TEXT("prone with an enemy out of sight: the card is due"), Machine.GetState(TEXT("A4_hidden")), ETutorialStepState::Idle);
+	// One card at a time: finish the tripwire card that came after the cones.
+	Machine.HandleCommand(PlayerCommands::DeployTripwire);
+	Settle(Machine);
+	TestEqual(TEXT("the out-of-sight card shows"), Machine.GetState(TEXT("A4_hidden")), ETutorialStepState::Active);
+	Machine.HandleCommand(PlayerCommands::StanceStand);
+	TestEqual(TEXT("rising to look completes it"), Machine.GetState(TEXT("A4_hidden")), ETutorialStepState::Completed);
+	return true;
+}
+
 #undef TUTORIAL_AMBUSH_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

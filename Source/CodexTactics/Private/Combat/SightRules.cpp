@@ -1,5 +1,19 @@
 #include "Combat/SightRules.h"
 
+bool SightRules::IsSquadSightPhase(ECodexGamePhase Phase, ECodexCombatMode CombatMode, bool bExplorationSight)
+{
+	if (Phase == ECodexGamePhase::WaveCombat)
+	{
+		return CombatMode != ECodexCombatMode::TurnBased;
+	}
+	return bExplorationSight && Phase == ECodexGamePhase::Exploration;
+}
+
+bool SightRules::ShouldDropLastKnownGhost(bool bInFight, bool bHeard, float SecondsSinceLastKnown)
+{
+	return !bInFight && !bHeard && SecondsSinceLastKnown >= LastKnownFadeSeconds;
+}
+
 float SightRules::EyeHeight(EOperativeStance Stance)
 {
 	switch (Stance)
