@@ -13,7 +13,7 @@
   },
   "smokeRegistry": [
     "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyArchetypeSmoke", "PmcFighterSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
-    "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
+    "StanceSmoke", "OptimizedCharacterSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
     "WeaponSelectorSmoke", "GrenadeSmoke", "GuardSmoke", "InventorySmoke", "TransferSmoke", "SaveLoadSmoke",
@@ -70,6 +70,12 @@
   },
   "nonSmokeDebugCommands": ["FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe"],
   "rules": [
+    {
+      "name": "optimized-character",
+      "globs": ["Source/**/Debug/OptimizedCharacterSmoke*", "Content/Characters/Operatives/Optimized/**", "Content/Characters/Materials/**"],
+      "tests": [],
+      "smokes": ["OptimizedCharacterSmoke"]
+    },
     {
       "name": "minimap",
       "globs": ["Source/**/UI/Minimap*", "Source/**/UI/CodexTacticsHUDMinimap*", "Source/**/Core/CodexTacticsPlayerControllerMap*", "Source/**/Debug/MinimapSmoke*",

@@ -31,3 +31,6 @@ ArtPipeline/**
 !ArtPipeline/**/*.md
 !ArtPipeline/**/*.json
 
+
+# content snapshots of the import guard (large, local only)
+ArtPipeline/**/content_*_import.json

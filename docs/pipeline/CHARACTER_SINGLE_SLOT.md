@@ -73,7 +73,8 @@ Scripts (source of truth, re-runnable for any character; paths / names / resolut
 | 4 bake | `Scripts/Pipeline/blender_bake.py` | same wrapper |
 | 5 export | `Scripts/Pipeline/blender_export.py` | same wrapper |
 | 6 review | `Scripts/Pipeline/blender_review.py` | same wrapper |
-| 7 import (prepared, not run yet) | `Scripts/Pipeline/unreal_import_optimized.py` | headless editor, needs the user's editor closed |
+| 7 import | `Scripts/Pipeline/unreal_import_optimized.py` | `Scripts/Pipeline/run_unreal_import.ps1 -AssetDir ArtPipeline/... -Dest /Game/Characters/Operatives/Optimized/<Name>` (no editor may run; Content snapshot before / after via `content_snapshot.py`) |
+| 8 in-game check | `Source/CodexTacticsDev/Private/Debug/OptimizedCharacterSmokeCommand.cpp` | `Scripts/smoke_parallel.ps1 -Commands OptimizedCharacterSmoke` (asserts); rendered stills: see the file header |
 | shared | `pipeline_common.py` (paths, FBX import in cm, PNG writer), `material_graph.py` (UE graph -> Blender nodes, texture roles) | |
 
 Outputs per asset folder: `01_Source/inventory.json` (+ `texture_roles.json`, `slot_decisions.json`: ground-truth
@@ -162,3 +163,19 @@ TC_Masks (final values), Sheen BC4, no Emissive; a character master material (Op
 BaseColor + Fresnel * Sheen, ORM unpacked without Power, Normal); reuse `SK_Post_Apo_Survivor_a_PhysicsAsset`;
 regenerate LODs; then the in-game smoke (slot count, draw calls, animation poke-through especially at the removed
 boot shafts / glove cuffs / mask back).
+
+### Stage 7-8 (pilot, 2026-10-20)
+
+- Import (`run_unreal_import.ps1`): refuses to run while any UnrealEditor process is up and over existing assets (unless
+  `-AllowExisting`), snapshots every .uasset / .umap outside the new folders before and after (path + size + mtime, sha1 of
+  the git-tracked ones): 0 added / removed / changed. New assets only: `/Game/Characters/Operatives/Optimized/Post_Apo_Survivor_a/`
+  (SK_..._1slot, MI_..., T_..._BaseColor / Normal / ORM / Sheen) and `/Game/Characters/Materials/M_CharacterMaster`.
+  Lessons: UE 5.8 imports the FBX through Interchange even with `FbxImportUI` options (warning "invalid bind poses" for the
+  added `root` bone, harmless); texture parameters of a new master need a default texture of the matching sampler type or
+  the material does not compile; LODs are generated in Unreal (`regenerate_lod`, 3 LODs: 49 994 / 12 497 / 6 248 tris).
+- In-game (`CodexTactics.OptimizedCharacterSmoke`, own arena, fixed 60 fps): the leader keeps the original body, the second
+  operative gets the optimized one at runtime (same anim class / mesh transform, LOD0 forced for the stills); idle, walk,
+  crouch, prone, aim, vault (each body airborne), low cover. Asserts: 1 slot (MI of M_CharacterMaster, 4 textures),
+  LOD0 ~50k, >= 3 LODs, same skeleton + physics asset, bounds within 10 %, no warnings about the new assets, hands away
+  from the reference pose in every state (no T-pose). Texture memory from the platform data (rendered run): original
+  437.3 MB in 44 textures -> optimized 36.0 MB in 4. Under -nullrhi the platform data is not loaded (logged as 0).

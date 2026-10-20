@@ -11,7 +11,7 @@ Creates ONLY new assets under --dest (never touches the source pack, Blueprints 
   T_<Name>_BaseColor       sRGB, TC_Default (BC1), TEXTUREGROUP_Character
   T_<Name>_Normal          TC_Normalmap (BC5), DirectX (no flip), TEXTUREGROUP_CharacterNormalMap
   T_<Name>_ORM             linear, TC_Masks, TEXTUREGROUP_CharacterSpecular (R=AO G=Roughness B=Metallic, final values)
-  T_<Name>_Sheen           linear, TC_Alpha (BC4)
+  T_<Name>_Sheen           linear, TC_Grayscale (G8, 1K)
   M_CharacterMaster        (once, in --master-dir) Opaque: BaseColor * Tint + Fresnel * Sheen, ORM unpacked, Normal
   MI_<Name>                instance of the master with the four textures
 """
@@ -32,6 +32,8 @@ def parse():
     p.add_argument("--dest", required=True)
     p.add_argument("--master-dir", default="/Game/Characters/Materials")
     p.add_argument("--master-name", default="M_CharacterMaster")
+    p.add_argument("--lods", type=int, default=3, help="LOD count generated in Unreal (LOD0 = the imported mesh)")
+    p.add_argument("--allow-existing", action="store_true", help="re-import over assets already in --dest")
     return p.parse_args(argv)
 
 
@@ -61,10 +63,29 @@ def texture(path, dest, name, srgb, compression, group):
     return tex
 
 
-def master_material(directory, name):
+def set_master_defaults(mat, defaults):
+    """Texture parameters need a default texture of the matching sampler type or the material does not compile."""
+    mel = unreal.MaterialEditingLibrary
+    for e in mel.get_material_expressions(mat):
+        if isinstance(e, unreal.MaterialExpressionTextureSampleParameter2D):
+            name = str(e.get_editor_property("parameter_name"))
+            if name in defaults:
+                e.set_editor_property("texture", defaults[name])
+    mel.recompile_material(mat)
+    try:
+        st = mel.get_statistics(mat)
+        unreal.log("PIPELINE_IMPORT master stats: vs %s ps %s samplers %s" % (
+            st.num_vertex_shader_instructions, st.num_pixel_shader_instructions, st.num_samplers))
+    except Exception as exc:
+        unreal.log_warning("master stats unavailable: %s" % exc)
+
+
+def master_material(directory, name, defaults):
     path = "%s/%s" % (directory, name)
     if unreal.EditorAssetLibrary.does_asset_exist(path):
-        return unreal.load_asset(path)
+        mat = unreal.load_asset(path)
+        set_master_defaults(mat, defaults)
+        return mat
     mel = unreal.MaterialEditingLibrary
     mat = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, directory, unreal.Material,
                                                                   unreal.MaterialFactoryNew())
@@ -78,7 +99,7 @@ def master_material(directory, name):
     bc = tex_param("BaseColor", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, -900, -300)
     nrm = tex_param("Normal", unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL, -900, 300)
     orm = tex_param("ORM", unreal.MaterialSamplerType.SAMPLERTYPE_MASKS, -900, 0)
-    sheen = tex_param("Sheen", unreal.MaterialSamplerType.SAMPLERTYPE_ALPHA, -900, -600)
+    sheen = tex_param("Sheen", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_GRAYSCALE, -900, -600)
     tint = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -900, -800)
     tint.set_editor_property("parameter_name", "Tint")
     tint.set_editor_property("default_value", unreal.LinearColor(1, 1, 1, 1))
@@ -97,8 +118,11 @@ def master_material(directory, name):
     mel.connect_material_property(orm, "G", unreal.MaterialProperty.MP_ROUGHNESS)
     mel.connect_material_property(orm, "B", unreal.MaterialProperty.MP_METALLIC)
     mel.connect_material_property(nrm, "RGB", unreal.MaterialProperty.MP_NORMAL)
-    mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH)
-    mel.recompile_material(mat)
+    try:
+        mel.set_base_material_usage(mat, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH)
+    except Exception:
+        mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH)
+    set_master_defaults(mat, defaults)
     return mat
 
 
@@ -109,6 +133,13 @@ def main():
     short = inv["name"].replace("SK_", "", 1)
     baked = os.path.join(args.asset_dir, "04_Textures_Baked")
     fbx = os.path.join(args.asset_dir, "05_Export", inv["name"] + "_1slot.fbx")
+    # do no harm: refuse to run over existing assets unless asked to
+    existing = [str(a) for a in unreal.EditorAssetLibrary.list_assets(args.dest, recursive=True)]         if unreal.EditorAssetLibrary.does_directory_exist(args.dest) else []
+    master_path = "%s/%s" % (args.master_dir, args.master_name)
+    if existing and not args.allow_existing:
+        raise RuntimeError("assets already in %s: %s (use --allow-existing to re-import)" % (args.dest, existing))
+    unreal.log("PIPELINE_IMPORT existing in dest: %s; master exists: %s" % (
+        existing, unreal.EditorAssetLibrary.does_asset_exist(master_path)))
     skeleton = unreal.load_asset(inv["skeleton"])
     physics = unreal.load_asset(inv["physics_asset"]) if inv.get("physics_asset") else None
 
@@ -122,12 +153,16 @@ def main():
         "ORM": texture(os.path.join(baked, "T_%s_ORM.png" % short), args.dest, "T_%s_ORM" % short,
                        False, tc.TC_MASKS, tg.TEXTUREGROUP_CHARACTER_SPECULAR),
         "Sheen": texture(os.path.join(baked, "T_%s_Sheen.png" % short), args.dest, "T_%s_Sheen" % short,
-                         False, tc.TC_ALPHA, tg.TEXTUREGROUP_CHARACTER),
+                         False, tc.TC_GRAYSCALE, tg.TEXTUREGROUP_CHARACTER),
     }
 
-    master = master_material(args.master_dir, args.master_name)
-    mi = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
-        "MI_%s" % short, args.dest, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    master = master_material(args.master_dir, args.master_name, tex)
+    mi_path = "%s/MI_%s" % (args.dest, short)
+    if unreal.EditorAssetLibrary.does_asset_exist(mi_path):
+        mi = unreal.load_asset(mi_path)
+    else:
+        mi = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
+            "MI_%s" % short, args.dest, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
     mel = unreal.MaterialEditingLibrary
     mel.set_material_instance_parent(mi, master)
     for k, t in tex.items():
@@ -160,6 +195,12 @@ def main():
     mesh.set_editor_property("materials", [m0])
     if physics:
         mesh.set_editor_property("physics_asset", physics)
+    sms = unreal.get_editor_subsystem(unreal.SkeletalMeshEditorSubsystem)
+    if args.lods > 1:
+        sms.regenerate_lod(mesh, new_lod_count=args.lods, regenerate_even_if_imported=False, generate_base_lod=False)
+    lods = [{"lod": i, "verts": sms.get_num_verts(mesh, i), "sections": sms.get_num_sections(mesh, i)}
+            for i in range(sms.get_lod_count(mesh))]
+    unreal.log("PIPELINE_IMPORT lods %s skeleton %s" % (json.dumps(lods), mesh.skeleton.get_path_name()))
 
     saved = []
     for a in [mesh, mi, master] + list(tex.values()):
