@@ -64,6 +64,8 @@
 
 #if !UE_BUILD_SHIPPING
 
+class APatrolRouteActor;
+
 #include "Characters/FirePostureRules.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -119,6 +121,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "EngineUtils.h"
 #include "Camera/TacticalCameraPawn.h"
+#include "AI/PatrolRouteActor.h"
 #include "Level/BridgeCrossingVolume.h"
 #include "UI/MinimapSubsystem.h"
 
@@ -197,6 +200,9 @@ namespace TutorialSmoke
 		TWeakObjectPtr<ATutorialMarkerActor> BridgeMarker;
 		bool bBridgeMarkerEverShown = false;
 		int32 GuideArrowChecks = 0;
+		/** 2026-10-20 ambush by one operative: the patrol route of the wire spot, a held mate. */
+		TWeakObjectPtr<APatrolRouteActor> AmbushRoute;
+		TWeakObjectPtr<AOperativeCharacter> AmbushMate;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -2144,6 +2150,14 @@ namespace TutorialSmoke
 		}
 		case 104:
 		{
+			// 2026-10-20: the overlook (the ambush holds the pair there) and a patrol route 12 m ahead (the ambusher's wire spot).
+			SpawnVolumeAt(World, Leader->GetActorLocation(), TEXT("VOL_A4_OVERLOOK"), 600.f);
+			{
+				const FVector RouteSpot = Leader->GetActorLocation() + Leader->GetActorForwardVector().GetSafeNormal2D() * 1200.f;
+				FActorSpawnParameters RouteParams;
+				RouteParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				State.AmbushRoute = World->SpawnActor<APatrolRouteActor>(APatrolRouteActor::StaticClass(), FTransform(RouteSpot), RouteParams);
+			}
 			Check(State, Tutorial->TriggerStep(TEXT("A4_cones")) && Tutorial->GetCurrentBeat() == FName(TEXT("A4")), TEXT("A4 started with the cone card"));
 			Check(State, Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Skipped || Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Waiting,
 				TEXT("the posture lesson was done in A3: its overlook twin is cancelled (or about to be)"));
@@ -2188,6 +2202,36 @@ namespace TutorialSmoke
 				FString::Printf(TEXT("part 1: the tripwire card (unlocks the wire; %s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_tripwire")))));
 			Check(State, Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),
 				TEXT("the lure is still locked"));
+			// 2026-10-20 (game designer): the ambush is done by ONE operative - the Medic-Sapper; Solo with her selected, the others held.
+			{
+				AOperativeCharacter* Ambusher = Tutorial->GetFocusOperative(TEXT("A4_tripwire"));
+				AOperativeCharacter* Mate = nullptr;
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					Mate = Mate ? Mate : (Member != Ambusher ? Member : nullptr);
+				}
+				Check(State, Ambusher && Ambusher->SquadRole == EOperativeRole::MedicSapper && Squad->IsSoloMode() && Squad->GetLeader() == Ambusher
+					&& Tutorial->IsConfining() && Tutorial->GetCardView().Title.ToString().Contains(Ambusher->DisplayName.ToString().ToUpper()),
+					FString::Printf(TEXT("ambush: the Medic-Sapper alone (%s), Solo on with her selected, the squad held, the card names her ('%s')"),
+						Ambusher ? *Ambusher->DisplayName.ToString() : TEXT("-"), *Tutorial->GetCardView().Title.ToString()));
+				const FTutorialGuideView& Guide = Tutorial->GetGuideView();
+				const APatrolRouteActor* Route = State.AmbushRoute.Get();
+				Check(State, Guide.bValid && Guide.Guide.Kind == ETutorialGuideKind::Spot && Route
+					&& FVector::Dist2D(Guide.Location, Route->GetActorLocation()) < 200.f,
+					FString::Printf(TEXT("ambush: the current target is the wire spot on the patrol route (%s, %.0f cm from the route)"),
+						*UTutorialSubsystem::DescribeGuide(Guide.Guide), Route ? FVector::Dist2D(Guide.Location, Route->GetActorLocation()) : -1.f));
+				const FVector Far = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Leader->GetActorForwardVector().GetSafeNormal2D() * 1000.f);
+				const int32 LinesBefore = CountMessages(World, TEXT("handles it"));
+				Check(State, Mate && Mate->OrderMoveTo(Far, false) == EOperativeOrderResult::Refused && CountMessages(World, TEXT("handles it")) == LinesBefore + 1,
+					FString::Printf(TEXT("ambush: %s's order off the overlook is refused ('Hold here - <Name> handles it.')"), Mate ? *Mate->DisplayName.ToString() : TEXT("-")));
+				Check(State, Ambusher && UTutorialSubsystem::CheckConfinedOrder(World, Ambusher, Far) && Ambusher->OrderMoveTo(Far, false) != EOperativeOrderResult::Refused,
+					TEXT("ambush: the Medic-Sapper may go anywhere"));
+				if (Ambusher)
+				{
+					Ambusher->StopOperative();
+				}
+				State.AmbushMate = Mate;
+			}
 			Tutorial->HandlePlayerCommand(PlayerCommands::DeployTripwire, FPlayerCommandContext()); // rigged (the anchors: Deployable smokes)
 			// The other patrol member: a guard 8 m ahead, placed in the map (on its post), deaf and blind (only the lure moves it).
 			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
@@ -2255,6 +2299,13 @@ namespace TutorialSmoke
 			Check(State, Guard && Guard->IsInvestigatingLure(), TEXT("the whistle: the guard leaves its post to investigate"));
 			Check(State, Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Completed, FString::Printf(TEXT("StealthLure.Heard completes the lure card (%s)"),
 				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_lure")))));
+			// 2026-10-20: parts 1 + 2 done by her alone - the hold is released, the pair may move again (fire support).
+			if (AOperativeCharacter* Mate = State.AmbushMate.Get())
+			{
+				const FVector Far = SmokeUtils::ClearPoint(World, Mate->GetActorLocation(), Mate->GetActorLocation() + Mate->GetActorForwardVector().GetSafeNormal2D() * 1000.f);
+				Check(State, !Tutorial->IsConfining() && UTutorialSubsystem::CheckConfinedOrder(World, Mate, Far),
+					TEXT("ambush: the lure done - the hold is released, the others may move"));
+			}
 			Next(State);
 			return true;
 		}
@@ -2296,6 +2347,9 @@ namespace TutorialSmoke
 			// The squad holds fire again: an Aggressive squad would open fire on the next enemy it sees (the level is an ambush level
 			// since the guard was placed - "auto" + placed enemies) and the fight would unlock everything.
 			Squad->SetSquadPosture(ESquadFirePosture::Passive);
+			// 2026-10-20: the ambush left the Medic-Sapper selected (Solo): the sight check below is laid out round the first operative again.
+			Squad->SetLeaderByIndex(0);
+			Leader = Squad->GetLeader();
 			// 2026-10-19 b, symmetric sight: a 1.2 m wall 1 m ahead of the leader, a frozen enemy (senses off) 6 m beyond it.
 			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
 			const float GroundZ = Leader->GetActorLocation().Z - Leader->GetSimpleCollisionHalfHeight();

@@ -335,26 +335,26 @@
       "text": "Press {key:View.VisionCones} to show the enemies' vision cones on the ground. Stay out of them — prone you are much harder to spot."
     },
     "TUT_A4_TRIPWIRE": {
-      "title": "AMBUSH",
-      "text": "Open the inventory ({key:Inventory.Open}) and rig a tripwire across the patrol's path: click anchor A, then anchor B. Costs two grenades."
+      "title": "AMBUSH - {focus} ALONE",
+      "text": "{focus} sets the ambush; the other two hold the overlook as fire support. She is selected (Solo): open the inventory ({key:Inventory.Open}), choose the tripwire and click anchor A, then anchor B across the patrol's path - the marker shows the nearest point of the route. Costs two grenades."
     },
     "TUT_A4_HIDDEN": {
       "title": "OUT OF SIGHT",
       "text": "Prone behind cover they can't see you - but you can't see them either. Peek ({key:Cover.CornerPeek}) or rise ({key:Stance.Crouch} / {key:Stance.Stand}) to look."
     },
     "OBJ_A4_TRAP": {
-      "text": "Wait until the patrol walks into the wire"
+      "text": "{focus}: back behind the low cover - wait until the patrol walks into the wire"
     },
     "WT_A4_04": {
       "text": "That's one. The other one is still out there."
     },
     "TUT_A4_LURE": {
-      "title": "LURE",
-      "text": "Whistle {key:Stealth.Whistle} from cover to call him to you, or throw a stone {key:Stealth.Throw} to send him where you want. A whistle carries about 12 m (less through cover): from here a stone near his path works best. Only while they have not spotted you."
+      "title": "LURE - {focus}",
+      "text": "Now the other one. {focus}: from behind the low cover at the overlook throw a stone {key:Stealth.Throw} near his path - he goes to the noise. A whistle {key:Stealth.Whistle} calls him to you (about 12 m, less through cover). Only while they have not spotted you."
     },
     "TUT_A4_AMBUSH": {
-      "title": "AMBUSH",
-      "text": "He's coming to check the noise. Switch to AGGRESSIVE (Alt + {key:Posture.Aggressive}): the squad opens fire the moment he is in sight - or Ctrl+click him yourself."
+      "title": "AMBUSH - OPEN FIRE",
+      "text": "He's coming to check the noise. The squad is free again - the two at the overlook are your fire support. Switch to AGGRESSIVE (Alt + {key:Posture.Aggressive}): everyone opens fire the moment he is in sight - or Ctrl+click him yourself."
     },
     "TUT_MEDKIT": {
       "title": "MEDKIT",

@@ -207,6 +207,15 @@ namespace TutorialRules
 	CODEXTACTICS_API bool ProjectToView(const FVector& CameraLocation, const FRotator& CameraRotation, float HorizontalFovDegrees, const FVector2D& ViewSize,
 		const FVector& World, FVector2D& OutScreen);
 
+	/** The runtime spots a "guide": "@<name>" may name (2026-10-20): "@patrol_route". */
+	CODEXTACTICS_API bool IsKnownGuideSpot(FName Guide);
+
+	/**
+	 * "focus": "role:<EOperativeRole>" (2026-10-20, the A4 ambusher) -> the role name ("MedicSapper"), else NAME_None. Chosen when the
+	 * step is triggered: the living operative of that role, else the leader.
+	 */
+	CODEXTACTICS_API FName ParseRoleFocus(FName Focus);
+
 	/** The arrow's distance label: "42 m" (rounded metres, never negative). */
 	CODEXTACTICS_API FString FormatGuideDistance(float DistanceCm);
 

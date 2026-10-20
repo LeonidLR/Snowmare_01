@@ -110,7 +110,7 @@ Beat-less steps are never "earlier": a later beat never drops them.
 | `condition` | clause object or array (AND) | [] | Gate checked when the step becomes due (section 2, step 3); for a `condition` trigger it is also the trigger. |
 | `lock` / `unlock` | string or array | [] | Applied once per trigger: when the step is shown, or when it finishes without ever showing (section 7). |
 | `action` / `actions` | object or array | [] | World actions run when the step is **shown** (section 10). Both keys may be used; they are merged. |
-| `focus` | `coldest_operative` / `wounded_operative` | none | The operative the step is about (section 10). |
+| `focus` | `coldest_operative` / `wounded_operative` / `role:<Commander \| Engineer \| MedicSapper \| Recruit>` | none | The operative the step is about (section 10). |
 | `once` | bool | true | See section 2. |
 | `skippable` | bool | true | The card's Skip button / `Codex.Tutorial.Skip` may skip it while running. |
 | `blocking` | bool | false | Forced false (warning when true): the tutorial never blocks the game. |
@@ -256,10 +256,13 @@ neither comparator: error. Stats (`UTutorialSubsystem::GetConditionStat`, "livin
 
 **Actions** (run when the step is SHOWN; a walk_talk waits for the speech slot):
 `{"type": "cold_bump", "amount": 20, "min_level": 42}` - every squad member's cold + amount, raised to at least `min_level` (0-100; a cold shock, not
-scaled by the level's cold rate); `{"type": "set_posture", "posture": "passive" | "defensive" | "aggressive"}` - the whole squad's fire posture
+scaled by the level's cold rate); `{"type": "solo_focus"}` (2026-10-20) - Solo ON and the step's focus operative selected (he alone takes the orders);
+`{"type": "set_posture", "posture": "passive" | "defensive" | "aggressive"}` - the whole squad's fire posture
 (overrides cleared; missing / unknown posture: error). Unknown type: error.
 
-**Focus:** `coldest_operative` = the living member with the most cold, chosen when the step is shown; `wounded_operative` = the living member with the
+**Focus:** `role:<EOperativeRole>` (2026-10-20, the A4 ambusher) = the living operative of that role, chosen when the step is TRIGGERED (so a
+confinement's `free` operative is known at once), else the leader; a floating "<NAME>: YOUR TASK" over him when shown; `{focus}` also works in
+objective texts. `coldest_operative` = the living member with the most cold, chosen when the step is shown; `wounded_operative` = the living member with the
 lowest health share, chosen when the step starts running (so a medkit on him counts while the card queues) and re-chosen when shown if he is gone. The
 card shows him (`FTutorialCardView::FocusOperative / FocusName`), a floating line over him (`COLDEST` / `WOUNDED`), and `{focus}` in the card title /
 body and feed lines becomes his name (fallback "the coldest / wounded operative"). `"complete": {"subject": "focus"}` counts only his events.
@@ -293,6 +296,7 @@ had already finished when this step becomes due, it is cancelled immediately. It
 | `stance` | `crouch` / `prone` | none | Every move order needs the ordered operative that low (crouch = crouched or prone). An operative in cover counts as low enough (shimmy / peek). |
 | `exit.stance` | `crouch` / `prone` | none | Orders OUTSIDE the area are allowed for an operative in this stance. |
 | `exit.one_at_a_time` | event pattern | "" | Only one operative at a time may be outside; his turn ends when this event names him (he is then free to move on). |
+| `free` | `"focus"` | none | 2026-10-20: the step's focus operative is never held (he does the lesson alone, anywhere); everyone else may move only inside the areas - an order outside is refused with "Hold here - <Name> handles it." (verdict `HeldBack`). A `free` without a step `focus`: warning. |
 
 - **Starts** when the step is triggered (before its delay; a `volume` step: the moment the squad arrives) - unless its `until` step already finished.
   One at a time: a new confinement releases the old one.
@@ -301,7 +305,8 @@ had already finished when this step becomes due, it is cancelled immediately. It
   in one of its `allow` areas counts only while it is shown.
 - **Move orders** (player clicks, cover orders, walk-ups, autonomy: `UTutorialSubsystem::CheckConfinedOrder`) are judged by
   `TutorialRules::JudgeConfinedMove`: `stance` -> destination inside (50 cm margin, 3 m height) = allowed -> no `exit` = refused -> already through =
-  allowed -> `exit.stance` -> another operative holds the turn = refused. A refusal posts one feed line per verdict per second and raises
+  allowed -> `exit.stance` -> another operative holds the turn = refused (with `free`: the free operative is always allowed first; the others
+  inside = allowed, outside = `HeldBack`). A refusal posts one feed line per verdict per second and raises
   `Tutorial.Confined`; formation moves are pulled into the area instead (`ClampIntoConfinement`, 60 cm inside).
 
 ### 13. Runtime features outside the JSON
@@ -399,7 +404,9 @@ appears the moment an action completes. Priority, first match wins:
    beat) - the next beacon, the next beat's start volume. A place whose steps are all done is skipped.
 4. **The place reached last** when the data names nothing further (A4: the overlook - hold there).
 
-`"guide": "none"` on a step: it names nothing (the next rule decides). An explicit `guide` the level cannot show (no such volume /
+`"guide": "none"` on a step: it names nothing (the next rule decides). `"guide": "@patrol_route"` (a **spot** the runtime computes,
+`ETutorialGuideKind::Spot`): the point of the level's patrol routes (`APatrolRouteActor` waypoints, a loop closed) nearest to the step's focus
+operative (else the leader) - where the A4 ambusher rigs the wire; no patrol route in the level: the automatic choice. Unknown `@` spots: warning. An explicit `guide` the level cannot show (no such volume /
 markers) falls back to the automatic choice (the log says `NOT in the level`).
 
 **Route progress** (`GetRouteProgressKey`): the furthest place reached - an arrival (`HandleVolume`, not while a confinement holds), a

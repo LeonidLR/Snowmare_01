@@ -232,6 +232,11 @@ struct CODEXTACTICS_API FTutorialConfine
 	 * this gameplay event names him - e.g. "CrawlGapPassed"; an operative who got through may move on freely).
 	 */
 	FString ExitEvent;
+	/**
+	 * "free": "focus" (2026-10-20, the A4 ambush by ONE operative): the confining step's focus operative is not held at all - he moves
+	 * anywhere, the others stay in the area ("Hold here - <Name> handles it.").
+	 */
+	bool bFreeFocus = false;
 
 	bool IsSet() const { return !Volume.IsNone(); }
 	bool HasExit() const { return !ExitStance.IsNone() || !ExitEvent.IsEmpty(); }
@@ -248,7 +253,9 @@ enum class ETutorialConfineVerdict : uint8
 	/** Outside, and not in the exit stance ("Go prone first, then crawl under."). */
 	ExitStance,
 	/** Outside, and another operative's turn ("One at a time - wait until he is through."). */
-	NotYourTurn
+	NotYourTurn,
+	/** Outside while the lesson belongs to another operative ("free": "focus"; "Hold here - <Name> handles it."). */
+	HeldBack
 };
 
 /** The confinement in force now (FTutorialStateMachine::GetActiveConfine; the runtime adds the geometry). */
@@ -262,6 +269,8 @@ struct CODEXTACTICS_API FTutorialConfineView
 	FName ExitHolder;
 	/** Operatives who got through (the exit event named them). */
 	TArray<FName> Passed;
+	/** "free": "focus" - the operative who is not held (the owner step's focus; none = not chosen yet / not free). */
+	FName FreeOperative;
 };
 
 /** A confinement as the save holds it ("confines": [{"step", "released", "holder", "passed"}]). */
@@ -347,7 +356,12 @@ enum class ETutorialGuideKind : uint8
 	/** The level's markers of a step (ATutorialMarkerActor::StepId == Id; the runtime picks the nearest shown one). */
 	StepMarkers,
 	/** A tutorial volume (the runtime shows a guide beacon on the ground at its box). */
-	Volume
+	Volume,
+	/**
+	 * A spot the runtime computes ("guide": "@<name>", 2026-10-20): "@patrol_route" = the point of the level's patrol routes nearest
+	 * to the step's focus operative (where the A4 ambusher rigs the wire). The guide beacon stands there.
+	 */
+	Spot
 };
 
 /** The current navigation target: exactly one at a time - the HUD edge arrow and the highlighted minimap icon point at it. */

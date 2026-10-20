@@ -531,7 +531,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			Action.Type = FName(*JsonString(ActionObject, TEXT("type")));
 			if (!IsKnownAction(Action.Type))
 			{
-				OutError = FString::Printf(TEXT("%s: unknown action type \"%s\" (cold_bump, set_posture)"), *Where, *Action.Type.ToString());
+				OutError = FString::Printf(TEXT("%s: unknown action type \"%s\" (cold_bump, set_posture, solo_focus)"), *Where, *Action.Type.ToString());
 				return false;
 			}
 			Action.Posture = JsonString(ActionObject, TEXT("posture"));
@@ -570,8 +570,16 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		if (Object->TryGetObjectField(TEXT("confine"), ConfineObject))
 		{
 			const TSharedPtr<FJsonObject> Confine = *ConfineObject;
-			WarnUnknownKeys(Confine, { TEXT("volume"), TEXT("allow"), TEXT("until"), TEXT("stop"), TEXT("span"), TEXT("stance"), TEXT("exit") },
+			WarnUnknownKeys(Confine, { TEXT("volume"), TEXT("allow"), TEXT("until"), TEXT("stop"), TEXT("span"), TEXT("stance"), TEXT("exit"), TEXT("free") },
 				Where + TEXT(" confine"), OutWarnings);
+			// 2026-10-20: "free": "focus" - the step's focus operative is not held (the A4 ambusher).
+			const FString FreeText = JsonString(Confine, TEXT("free"));
+			if (!FreeText.IsEmpty() && FreeText != TEXT("focus"))
+			{
+				OutError = FString::Printf(TEXT("%s: unknown confine \"free\" \"%s\" (focus)"), *Where, *FreeText);
+				return false;
+			}
+			Step.Confine.bFreeFocus = FreeText == TEXT("focus");
 			Step.Confine.Volume = FName(*JsonString(Confine, TEXT("volume")));
 			if (Step.Confine.Volume.IsNone())
 			{
@@ -609,7 +617,8 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		Step.Focus = FName(*JsonString(Object, TEXT("focus")));
 		if (!Step.Focus.IsNone() && !IsKnownFocus(Step.Focus))
 		{
-			OutError = FString::Printf(TEXT("%s: unknown focus \"%s\" (coldest_operative, wounded_operative)"), *Where, *Step.Focus.ToString());
+			OutError = FString::Printf(TEXT("%s: unknown focus \"%s\" (coldest_operative, wounded_operative, role:<Commander | Engineer | MedicSapper>)"), *Where,
+				*Step.Focus.ToString());
 			return false;
 		}
 
@@ -778,6 +787,14 @@ void TutorialRules::ValidateSteps(const FTutorialStepsData& Data, TArray<FString
 			&& (Step.Guide.IsNone() || Data.FindStepIndex(Step.Guide) != INDEX_NONE))
 		{
 			OutWarnings.Add(Where + TEXT(": \"beyond\" on a step without a place (no volume trigger / completion / guide volume) - the route does not move"));
+		}
+		if (Step.Guide.ToString().StartsWith(TEXT("@")) && !IsKnownGuideSpot(Step.Guide))
+		{
+			OutWarnings.Add(FString::Printf(TEXT("%s: unknown guide spot \"%s\" (@patrol_route)"), *Where, *Step.Guide.ToString()));
+		}
+		if (Step.Confine.bFreeFocus && Step.Focus.IsNone())
+		{
+			OutWarnings.Add(Where + TEXT(": confine \"free\": \"focus\" without a step \"focus\" - nobody is free"));
 		}
 		if (!Step.Guide.IsNone() && Step.Guide == Step.Id)
 		{
@@ -1118,6 +1135,10 @@ bool TutorialRules::StanceSatisfies(FName Have, FName Need)
 
 ETutorialConfineVerdict TutorialRules::JudgeConfinedMove(const FTutorialConfineView& Confine, FName OperativeId, FName OperativeStance, bool bDestinationInside)
 {
+	if (Confine.Spec.bFreeFocus && !OperativeId.IsNone() && OperativeId == Confine.FreeOperative)
+	{
+		return ETutorialConfineVerdict::Allowed; // 2026-10-20: the one who does the lesson is never held
+	}
 	if (!StanceSatisfies(OperativeStance, Confine.Spec.Stance))
 	{
 		return ETutorialConfineVerdict::Stance;
@@ -1125,6 +1146,11 @@ ETutorialConfineVerdict TutorialRules::JudgeConfinedMove(const FTutorialConfineV
 	if (bDestinationInside)
 	{
 		return ETutorialConfineVerdict::Allowed;
+	}
+	if (Confine.Spec.bFreeFocus)
+	{
+		// 2026-10-20: one operative does the lesson; the rest hold the area whatever their stance.
+		return !OperativeId.IsNone() && OperativeId == Confine.FreeOperative ? ETutorialConfineVerdict::Allowed : ETutorialConfineVerdict::HeldBack;
 	}
 	if (!Confine.Spec.HasExit())
 	{
@@ -1154,6 +1180,7 @@ const TCHAR* TutorialRules::ConfineVerdictName(ETutorialConfineVerdict Verdict)
 	case ETutorialConfineVerdict::Stance: return TEXT("stance");
 	case ETutorialConfineVerdict::ExitStance: return TEXT("exit_stance");
 	case ETutorialConfineVerdict::NotYourTurn: return TEXT("not_your_turn");
+	case ETutorialConfineVerdict::HeldBack: return TEXT("held_back");
 	default: return TEXT("?");
 	}
 }
@@ -1241,12 +1268,36 @@ bool TutorialRules::IsKnownStat(FName Stat)
 
 bool TutorialRules::IsKnownAction(FName Type)
 {
-	return Type == FName(TEXT("cold_bump")) || Type == FName(TEXT("set_posture"));
+	return Type == FName(TEXT("cold_bump")) || Type == FName(TEXT("set_posture")) || Type == FName(TEXT("solo_focus"));
 }
 
 bool TutorialRules::IsKnownFocus(FName Focus)
 {
-	return Focus == FName(TEXT("coldest_operative")) || Focus == FName(TEXT("wounded_operative"));
+	return Focus == FName(TEXT("coldest_operative")) || Focus == FName(TEXT("wounded_operative")) || !ParseRoleFocus(Focus).IsNone();
+}
+
+FName TutorialRules::ParseRoleFocus(FName Focus)
+{
+	static const FString Prefix(TEXT("role:"));
+	const FString Name = Focus.ToString();
+	if (!Name.StartsWith(Prefix))
+	{
+		return NAME_None;
+	}
+	const FString Role = Name.Mid(Prefix.Len());
+	for (const TCHAR* Known : { TEXT("Commander"), TEXT("Engineer"), TEXT("MedicSapper"), TEXT("Recruit") })
+	{
+		if (Role == Known)
+		{
+			return FName(Known);
+		}
+	}
+	return NAME_None;
+}
+
+bool TutorialRules::IsKnownGuideSpot(FName Guide)
+{
+	return Guide == FName(TEXT("@patrol_route"));
 }
 
 bool TutorialRules::IsConditionMet(const TArray<FTutorialCondition>& Conditions, TFunctionRef<float(FName)> Stat)

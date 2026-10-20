@@ -22,6 +22,21 @@ locked on Demo 01 until the safety unlock-all - a wave / horde fight or the tuto
 
 ## Decision blocks, newest first (old §6 «Tutorial» section)
 
+**Demo 01 2026-10-20 b (game designer: "two stay in place, one sets up the ambush; now it doesn't work well"): the A4 ambush by ONE operative.**
+**Decision (Claude):** the ambusher is the **Medic-Sapper** - traps are her job (the A3 peek spot is hers too), a fixed role reads clearer than
+"whoever you select first after the card", and every card can name her (dead / missing: the leader at that moment). `A4_tripwire` (after the
+cone card) now carries `"focus": "role:MedicSapper"`, the action **`solo_focus`** (Solo ON with her selected), **`"confine": {"volume":
+"VOL_A4_OVERLOOK", "free": "focus", "until": "A4_lure", "stop": true}`** (the squad stops; the other two are held at the overlook: an order of
+theirs off it is refused with "Hold here - Medic-Sapper handles it."; she alone moves anywhere) and **`"guide": "@patrol_route"`** (the current
+target = the nearest point of the patrol routes: where the wire goes). Part 1 (`A4_trap_wait`, objective "{focus}: back behind the low cover -
+wait ...") and part 2 (`A4_lure`, "LURE - {focus}: ... throw a stone ...") guide to the overlook (the low cover); the hold ends when the lure is
+done (`until A4_lure`), a fight starts, the tutorial is switched off / skipped. `A4_lure_ambush` ("OPEN FIRE") tells the player the squad is free
+and the two at the overlook are the fire support. Texts `TUT_A4_TRIPWIRE` / `OBJ_A4_TRAP` / `TUT_A4_LURE` / `TUT_A4_AMBUSH` (draft). Engine (every
+level): focus kind `role:<role>` (chosen at the trigger), confine `free: focus` (verdict `HeldBack`), action `solo_focus`, guide spot
+`@patrol_route`. Tests `CodexTactics.Tutorial.AmbushLesson.OneOperative`; TutorialSmoke stage 130 (the card names her, Solo with her selected,
+the target on the patrol route, a mate's order refused with the line, hers accepted) and 133 (after the lure the pair may move again).
+**Map:** nothing new (the patrol routes are the wire spots; a marker with Step Id `A4_tripwire` would take precedence if the user wants a fixed spot).
+
 **Demo 01 2026-10-20 (the game designer's play-test of the lake): the bridge marker came back; nothing showed where to go after the hut.**
 **Root cause** (his telemetry, session `A6DB…`): `A1_bridge` (objective, triggered at `VOL_A1_BEACON2`, completed only by three
 `BridgeCrossed` events) was shown at 71 s, the squad got across without three bridge crossings, did the whole hut lesson - and the

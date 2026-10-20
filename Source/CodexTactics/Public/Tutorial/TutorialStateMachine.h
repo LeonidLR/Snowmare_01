@@ -80,6 +80,8 @@ public:
 	TFunction<bool(FName StepId)> StepMarkerProvider;
 	/** The level has a tutorial volume with this id (a guide target needs one). Unset = every volume exists. */
 	TFunction<bool(FName VolumeId)> VolumeProvider;
+	/** The runtime can show the spot "@<name>" for this step (ETutorialGuideKind::Spot). Unset = no spot can be shown. */
+	TFunction<bool(FName Spot, FName StepId)> SpotProvider;
 
 	/** Replaces the steps and resets all progress. */
 	void Load(const FTutorialStepsData& InData);

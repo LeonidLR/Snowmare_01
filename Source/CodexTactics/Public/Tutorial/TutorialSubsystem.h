@@ -548,6 +548,8 @@ private:
 	TWeakObjectPtr<ATutorialMarkerActor> GuideBeacon;
 	TArray<TWeakObjectPtr<ATutorialTriggerVolume>> GuideVolumes;
 	bool bRefreshingGuide = false;
+	/** "@patrol_route" (2026-10-20): the patrol routes' point nearest to the step's focus operative; false when the level has none. */
+	bool ResolveGuideSpot(FName Spot, FName StepId, FVector& OutLocation) const;
 	/** Resolves Machine.GetGuide() in the world (nearest marker / the beacon at the volume), logs + telemetry when it changes. */
 	void RefreshGuide();
 	/** The registered volume with this id nearest to Near, null when the level has none. */

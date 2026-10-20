@@ -192,7 +192,8 @@ FTutorialStateMachine::FRoutePoint FTutorialStateMachine::GetStepPlaceAt(int32 I
 		return FRoutePoint();
 	}
 	const FTutorialStep& Step = Data.Steps[Index];
-	const FName GuideVolume = !Step.Guide.IsNone() && Data.FindStepIndex(Step.Guide) == INDEX_NONE ? Step.Guide : NAME_None;
+	const FName GuideVolume = !Step.Guide.IsNone() && Data.FindStepIndex(Step.Guide) == INDEX_NONE && !Step.Guide.ToString().StartsWith(TEXT("@"))
+		? Step.Guide : NAME_None;
 	for (const FName Volume : { GuideVolume, Step.Complete.Volume, Step.Complete.InVolume, Step.Trigger.Volume })
 	{
 		const FRoutePoint Point = Volume.IsNone() ? FRoutePoint() : GetVolumeRoutePoint(Volume);
@@ -285,7 +286,15 @@ bool FTutorialStateMachine::GetStepGuide(int32 Index, bool bInHand, int32 Progre
 	}
 	if (!Step.Guide.IsNone())
 	{
-		if (Data.FindStepIndex(Step.Guide) != INDEX_NONE)
+		if (Step.Guide.ToString().StartsWith(TEXT("@")))
+		{
+			if (SpotProvider && SpotProvider(Step.Guide, Step.Id))
+			{
+				Out = { ETutorialGuideKind::Spot, Step.Guide, Step.Id }; // a spot the runtime computes (the ambusher's wire spot)
+				return true;
+			}
+		}
+		else if (Data.FindStepIndex(Step.Guide) != INDEX_NONE)
 		{
 			if (StepMarkerProvider && StepMarkerProvider(Step.Guide))
 			{
@@ -1676,6 +1685,10 @@ bool FTutorialStateMachine::GetActiveConfine(FTutorialConfineView& Out) const
 	}
 	Out.ExitHolder = Confine.ExitHolder;
 	Out.Passed = Confine.Passed;
+	if (Owner.Confine.bFreeFocus && FocusSubjectProvider)
+	{
+		Out.FreeOperative = FocusSubjectProvider(Owner.Id); // 2026-10-20: the operative who does the lesson alone
+	}
 	return true;
 }
 
