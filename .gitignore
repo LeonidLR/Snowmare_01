@@ -24,3 +24,10 @@ Tools/WaveEditor/dist/
 
 # Claude Code personal settings
 .claude/settings.local.json
+
+# DCC working area: keep only docs / manifests in git
+ArtPipeline/**
+!ArtPipeline/**/
+!ArtPipeline/**/*.md
+!ArtPipeline/**/*.json
+
