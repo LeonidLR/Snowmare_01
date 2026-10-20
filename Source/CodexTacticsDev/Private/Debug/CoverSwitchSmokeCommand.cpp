@@ -21,7 +21,11 @@
 //  9 corner to corner (game designer 2026-10-20, second pass): from A's end (facing left, towards B) hovering B's FAR end shows the ghost at
 //    B's NEAR corner on its front face in the mirrored pose (facing right) + the dash path; a double-click on B's SIDE face (the face
 //    towards him) still dashes diagonally to that front-face corner and he arrives facing right (mirrored), at the corner.
-//    Shot mode adds cover_corner_switch_preview.png / _dash / _settled.
+//    Shot mode adds cover_corner_switch_preview.png / _dash / _settled;
+// 10 the committed target is the hovered ghost (user bug 2026-10-20: "the ghost is right, I click it again - he ends round the corner"),
+//    through the controller's click path (HandleWorldHit, the real double-click timing): from A's end, hover B's near edge - its END face
+//    (towards A) and its front face near the edge - then click: the first click starts no order and its ghost stays where the hover ghost
+//    stood (same corner, same pose); a double-click / a slow second click commits exactly that slot and side (switch / ordinary run).
 
 #include "CoreMinimal.h"
 
@@ -91,6 +95,11 @@ namespace CoverSwitchSmoke
 		int32 ShotsTaken = 0;
 		/** Shot mode: when the run-in clip was first seen on this dash, stage time. */
 		float SwitchSeenAt = -1.f;
+		/** 10: the click case (0 end face double, 1 front face double, 2 front face slow), its hit, the hovered ghost. */
+		int32 ClickCase = 0;
+		FHitResult ClickHit;
+		FVector HoverAt = FVector::ZeroVector;
+		ECoverFacing HoverFacing = ECoverFacing::Right;
 		/** 9: his facing at A's end before the corner-to-corner dash; the dash's start. */
 		ECoverFacing FacingBefore = ECoverFacing::Right;
 		FVector DashStart = FVector::ZeroVector;
@@ -664,11 +673,98 @@ namespace CoverSwitchSmoke
 			}
 			Check(State, bJoined, TEXT("7: the two others joined at B (in cover or prone behind it)"));
 			Check(State, B && C && B->GetCoverSwitchCount() == 0 && C->GetCoverSwitchCount() == 0, TEXT("7: only the leader dashed in through the run-in clip"));
-			// 8: the pause in a fight - Solo, only the leader.
+			// 10 (before the fight: real-time fight clicks only select): the hovered ghost is the committed target.
 			Squad->EnterSoloMode();
 			ResetSquad(Squad, State, FVector2D(0.f, 100.f));
 			Op->OrderTakeCover(State.SlotAEnd, false);
-			Next(State, 17);
+			State.ClickCase = 0;
+			Next(State, 27);
+			return true;
+		}
+		case 27:
+		{
+			if ((!Settled(Op) || State.StageTime < 1.5f) && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			const TCHAR* CaseName = State.ClickCase == 0 ? TEXT("B's end face, double-click") : State.ClickCase == 1 ? TEXT("B's front face near the edge, double-click")
+				: TEXT("B's front face near the edge, slow second click");
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(CoverSwitchSmokeClick), false);
+			for (const TWeakObjectPtr<AOperativeCharacter>& Each : State.Members)
+			{
+				Params.AddIgnoredActor(Each.Get());
+			}
+			const FVector Eye = State.ClickCase == 0 ? State.P + State.F * (NearFaceBC + 20.f) + State.R * 400.f : State.P + State.F * 150.f + State.R * 575.f;
+			const FVector Along = State.ClickCase == 0 ? State.R : State.F;
+			const FVector Start = Eye + FVector(0.f, 0.f, State.GroundZ - State.P.Z + 120.f);
+			World->LineTraceSingleByChannel(State.ClickHit, Start, Start + Along * 500.f, ECC_Visibility, Params);
+			// The hover: its ghost.
+			const bool bHover = State.ClickHit.GetActor() == State.Walls[1].Get() && PC->UpdateCoverSwitchHover(Op, &State.ClickHit) && PC->IsCoverSwitchHoverShown();
+			const ACoverGhostActor* HoverGhost = PC->GetCoverSwitchGhost();
+			State.HoverAt = HoverGhost ? HoverGhost->GetSlot().WorldLocation : FVector::ZeroVector;
+			State.HoverFacing = HoverGhost ? HoverGhost->GetShownFacing() : ECoverFacing::Left;
+			Check(State, bHover && FMath::Abs(AlongR(State, State.HoverAt) - 607.f) < 25.f && State.HoverFacing == ECoverFacing::Right,
+				FString::Printf(TEXT("10 (%s): the hover ghost at B's near corner on its front face (R %.0f), mirrored (facing right)"), CaseName, AlongR(State, State.HoverAt)));
+			// The first click: a preview only - no order, and its ghost where the hover ghost stood.
+			PC->HandleWorldHit(State.ClickHit);
+			const ACoverGhostActor* ClickGhost = PC->GetCoverPreviewGhost();
+			Check(State, PC->HasCoverPreview() && Op->bInCover && !Op->HasPendingCover() && !Op->IsMoving(),
+				FString::Printf(TEXT("10 (%s): the first click starts no order (in cover %d, pending %d)"), CaseName, Op->bInCover ? 1 : 0, Op->HasPendingCover() ? 1 : 0));
+			Check(State, ClickGhost && ClickGhost->IsShown() && FVector::Dist2D(ClickGhost->GetSlot().WorldLocation, State.HoverAt) < 5.f
+				&& ClickGhost->GetShownFacing() == State.HoverFacing,
+				FString::Printf(TEXT("10 (%s): ... its ghost stays where the hover ghost stood (%.0f cm off), same pose"), CaseName,
+					ClickGhost ? FVector::Dist2D(ClickGhost->GetSlot().WorldLocation, State.HoverAt) : -1.f));
+			if (State.ClickCase == 2)
+			{
+				Next(State, 28); // the slow second click after the double-click time
+				return true;
+			}
+			State.Target = State.SlotB;
+			State.bExpectSwitch = true;
+			State.ExpectedClip = TEXT("anim_M4_std_jog_fwd_L_to_cvr_std_idle_L");
+			State.bSawSprint = State.bSawOutOfCover = State.bSawSwitchEntry = false;
+			State.SwitchCountBefore = Op->GetCoverSwitchCount();
+			State.StartDistance = static_cast<float>(FVector::Dist2D(Op->GetActorLocation(), State.HoverAt));
+			PC->HandleWorldHit(State.ClickHit); // the second click at once: a double-click
+			Check(State, PC->WasLastCoverConfirmSwitch() && Op->HasPendingCoverSwitch() && FVector::Dist2D(Op->GetPendingCoverSlot().WorldLocation, State.HoverAt) < 5.f,
+				FString::Printf(TEXT("10 (%s): the double-click commits the hovered slot (%.0f cm off it), as the switch"), CaseName,
+					FVector::Dist2D(Op->GetPendingCoverSlot().WorldLocation, State.HoverAt)));
+			Next(State, 29);
+			return true;
+		}
+		case 28:
+		{
+			if (State.StageTime < 0.6f)
+			{
+				return true;
+			}
+			State.Target = State.SlotB;
+			State.bExpectSwitch = false;
+			State.bSawSprint = State.bSawOutOfCover = State.bSawSwitchEntry = false;
+			State.SwitchCountBefore = Op->GetCoverSwitchCount();
+			State.StartDistance = static_cast<float>(FVector::Dist2D(Op->GetActorLocation(), State.HoverAt));
+			PC->HandleWorldHit(State.ClickHit);
+			Check(State, !PC->WasLastCoverConfirmSwitch() && Op->HasPendingCover() && FVector::Dist2D(Op->GetPendingCoverSlot().WorldLocation, State.HoverAt) < 5.f,
+				FString::Printf(TEXT("10 (slow second click): the ordinary cover order to the hovered slot (%.0f cm off it), no switch"),
+					FVector::Dist2D(Op->GetPendingCoverSlot().WorldLocation, State.HoverAt)));
+			Next(State, 29);
+			return true;
+		}
+		case 29:
+		{
+			if (!CheckArrival(State, Op, TEXT("10 (hovered = committed)")))
+			{
+				return true;
+			}
+			const FCoverSlot& Arrived = Op->GetCoverSlot();
+			Check(State, FVector::Dist2D(Arrived.WorldLocation, State.HoverAt) < 10.f && FVector::DotProduct(Arrived.WallNormal, -State.F) > 0.9f
+				&& Op->CoverFacing == State.HoverFacing,
+				FString::Printf(TEXT("10 case %d: in cover exactly where the ghost stood (%.0f cm off, front face %d), facing as it did"), State.ClickCase,
+					FVector::Dist2D(Arrived.WorldLocation, State.HoverAt), FVector::DotProduct(Arrived.WallNormal, -State.F) > 0.9f ? 1 : 0));
+			ResetSquad(Squad, State, FVector2D(0.f, 100.f));
+			Op->OrderTakeCover(State.SlotAEnd, false);
+			++State.ClickCase;
+			Next(State, State.ClickCase <= 2 ? 27 : 17); // then 8: the pause in a fight
 			return true;
 		}
 		case 17:

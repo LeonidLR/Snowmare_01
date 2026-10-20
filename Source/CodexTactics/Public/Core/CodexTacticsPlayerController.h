@@ -185,6 +185,8 @@ public:
 	void HideCoverPreview();
 	bool HasCoverPreview() const;
 	const FCoverSlot& GetCoverPreviewSlot() const { return CoverPreviewSlot; }
+	/** The click ghost (smokes: where it stands, the pose it shows). */
+	const class ACoverGhostActor* GetCoverPreviewGhost() const { return CoverGhost; }
 
 	/**
 	 * Orders the previewed cover: the walk now, planned in the pause, the grid walk in turn-based combat. A GROUP order
@@ -561,6 +563,13 @@ private:
 	/** The previewed cover is a switch target for the previewed operative (decided at ShowCoverPreview; the dash line). */
 	bool bCoverPreviewSwitchable = false;
 	FVector CoverPreviewSwitchTarget = FVector::ZeroVector;
+	/**
+	 * A switchable preview's resolved target (the other object's nearest corner, ResolveCoverSwitchSlot) and arrival side: the click ghost
+	 * shows it and the confirm - double (the switch) or slow (the ordinary cover order) - commits exactly it (bug 2026-10-20: the ghost
+	 * jumped to the clicked end face and a slow second click sent him round the corner).
+	 */
+	FCoverSlot CoverPreviewResolvedSlot;
+	ECoverFacing CoverPreviewArrivalFacing = ECoverFacing::Right;
 	ECoverSwitchVerdict LastCoverSwitchVerdict = ECoverSwitchVerdict::NotInCover;
 	bool bLastCoverConfirmSwitch = false;
 
