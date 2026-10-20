@@ -47,6 +47,13 @@ struct CODEXTACTICS_API FPeekSightConfig
 	/** Aiming over a low wall he leans this far towards it, cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek", meta = (ClampMin = "0"))
 	float OverTopLeanCm = 25.f;
+
+	/**
+	 * Round a corner the head is leaned out in FRONT of the wall's face line, away from the wall, cm (2026-10-20: measured on the clips'
+	 * head bone, 32-43 cm in front of the capsule): the peek eye point is moved that far along the wall normal so it matches the visible head.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek", meta = (ClampMin = "0"))
+	float CornerLeanDepthCm = 35.f;
 };
 
 /** What the peek view looks from (PeekSightRules::DecidePose). */
@@ -76,6 +83,12 @@ namespace PeekSightRules
 	/** The over-the-top eye point: Feet + the eye height, OverTopLeanCm towards the wall (WallNormal points away from it). */
 	CODEXTACTICS_API FVector OverTopEyePoint(const FPeekSightConfig& Config, const FVector& Feet, const FVector& WallNormal, float StanceEyeCm,
 		float WallTopCm);
+
+	/**
+	 * The corner-lean eye point: the lean point past the edge (CoverRules::CornerLeanPoint) moved CornerLeanDepthCm out along the wall normal
+	 * (WallNormal points away from the wall), where the leaned-out head really is.
+	 */
+	CODEXTACTICS_API FVector CornerLeanEyePoint(const FPeekSightConfig& Config, const FVector& LeanPoint, const FVector& WallNormal);
 
 	/** BaseDirection turned by YawDeg (the upper-body twist), planar unit. */
 	CODEXTACTICS_API FVector TwistedDirection(const FVector& BaseDirection, float YawDeg);

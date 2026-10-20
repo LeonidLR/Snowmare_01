@@ -28,6 +28,11 @@ namespace PeekSightRules
 		return Feet - WallNormal.GetSafeNormal2D() * Config.OverTopLeanCm + FVector(0.f, 0.f, OverTopEyeHeight(Config, StanceEyeCm, WallTopCm));
 	}
 
+	FVector CornerLeanEyePoint(const FPeekSightConfig& Config, const FVector& LeanPoint, const FVector& WallNormal)
+	{
+		return LeanPoint + WallNormal.GetSafeNormal2D() * Config.CornerLeanDepthCm;
+	}
+
 	FVector TwistedDirection(const FVector& BaseDirection, float YawDeg)
 	{
 		const FVector Base = BaseDirection.GetSafeNormal2D();

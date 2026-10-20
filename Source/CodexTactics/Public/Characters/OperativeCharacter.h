@@ -1308,6 +1308,24 @@ public:
 	float CoverEnterDecelSeconds = 0.4f;
 
 	/**
+	 * Low cover corner peek (2026-10-20): the cancelled sideways root step of the crouched fire stance is let through over this long when the
+	 * peek starts (he visibly leans out past the wall's end) and cancelled again when it is over, s.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.05"))
+	float CoverLeanBlendSeconds = 0.25f;
+
+	/**
+	 * Corner peek (2026-10-20): the mesh leans this much further out past the wall's end than the clip's own step-out, per pack clip side, cm.
+	 * Measured on the head bone: the _L clips (his right corner) put the head 25 cm past the edge, the _R ones (his left corner) only 14 cm -
+	 * his head sits right over the pelvis - so _R gets +11. A tracked, eased mesh offset (CoverEntryAppliedOffset), gone when the peek is over;
+	 * the stand-off is NOT shortened instead: hugging the wall 17 cm from its end lets his eyes see round it (PeekSightSmoke).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CornerLeanExtraPackLCm = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CornerLeanExtraPackRCm = 11.f;
+
+	/**
 	 * Wall clearance (user report 2026-10-11: the body / rifle sank into the wall - during a cover entry the old run pose,
 	 * held on the turned mesh, blends with the enter clip and swings a hand through the wall): while in cover the closest
 	 * skin bone to the wall plane is kept this far out; the mesh is pushed out along the wall normal by what is missing,
@@ -1829,6 +1847,13 @@ private:
 	 * a teleport / a new wall normal while the push was on left up to ~1.2 m of it on the mesh for good (the body beside its capsule).
 	 */
 	FVector CoverWallPushAppliedLocal = FVector::ZeroVector;
+	/**
+	 * Low cover: share of the fire stance's sideways root step that is cancelled on the mesh (1 = over the top, where he stands; 0 = the corner
+	 * peek, where the step is the lean out past the wall's end - 2026-10-20). Eased by UpdateCoverEntryBlend over CoverLeanBlendSeconds.
+	 */
+	float CoverLeanCancelAlpha = 1.f;
+	/** The corner peek's extra lean share (0..1, CornerLeanExtraPack*Cm), eased by UpdateCoverEntryBlend. */
+	float CornerLeanExtraAlpha = 0.f;
 	FVector CoverWallPushDir = FVector::ForwardVector;
 	/** Skin bones (no IK targets / virtual bones) of the mesh asset the list was built for. */
 	TArray<int32> CoverClearanceBones;
