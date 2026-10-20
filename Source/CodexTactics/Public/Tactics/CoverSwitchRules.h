@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Tactics/CoverTypes.h"
+#include "Tactics/CoverWrapRules.h"
 
 /**
  * Wall-edge cover switch (game designer 2026-10-20; UE-only, no Godot reference): an operative in cover at a wall EDGE (an exposed
@@ -74,6 +75,24 @@ struct CODEXTACTICS_API FCoverSwitchTrack
 	float Length() const { return Times.Num() > 0 ? Times.Last() : 0.f; }
 };
 
+/**
+ * Corner-to-corner switch (game designer 2026-10-20, second pass): the corner of the other cover he dashes to (ChooseSwitchCorner). The
+ * slot stands SlotPoint (OffsetCm off the face, the stand-off of Facing short of the corner); Facing = the side of that corner along the
+ * face, i.e. he arrives facing back along the new wall towards the open side he came over, ready to peek round that corner.
+ */
+struct CODEXTACTICS_API FCoverSwitchCorner
+{
+	int32 Edge = INDEX_NONE;
+	int32 Vertex = INDEX_NONE;
+	FVector2D Corner = FVector2D::ZeroVector;
+	FVector2D SlotPoint = FVector2D::ZeroVector;
+	FVector2D Normal = FVector2D::ZeroVector;
+	ECoverFacing Facing = ECoverFacing::Right;
+	float DistanceCm = 0.f;
+
+	bool IsValid() const { return Edge != INDEX_NONE; }
+};
+
 /** Where to start which run-in clip (ChooseClipStart). Approach INDEX_NONE = no usable clip. */
 struct CODEXTACTICS_API FCoverSwitchClipStart
 {
@@ -135,6 +154,25 @@ namespace CoverSwitchRules
 	 * slot, world XY). The heading rule keeps a clip that comes in from the other side out even when its body happens to be close
 	 * (a runner already level with the slot). Approach INDEX_NONE when no sample qualifies.
 	 */
+	/**
+	 * Corner-to-corner switch (game designer 2026-10-20: "from the corner I stand at, dash to the NEAREST corner of the other cover,
+	 * arriving in the mirrored pose"): over the faces of Target (a counter-clockwise footprint) on the protected side - their outward normal
+	 * within acos(MinNormalDot) of ProtectedNormal (his own wall's normal: the side the threat is not on) - and both their convex ends, the
+	 * corner slot nearest to From (2D). No face on that side: the clicked face ClickedEdge only. A tie keeps the clicked face. Each slot
+	 * stands OffsetCm off the face and StandOffCm(facing) short of its corner (never past the face's middle). False when none.
+	 */
+	CODEXTACTICS_API bool ChooseSwitchCorner(const FCoverFootprint& Target, const FVector2D& From, const FVector2D& ProtectedNormal, int32 ClickedEdge,
+		float OffsetCm, TFunctionRef<float(ECoverFacing)> StandOffCm, FCoverSwitchCorner& OutCorner, float MinNormalDot = 0.5f);
+
+	/** The other side (the mirrored pose: his left shoulder to the old wall -> his right shoulder to the new one). */
+	inline ECoverFacing MirrorFacing(ECoverFacing Facing) { return Facing == ECoverFacing::Left ? ECoverFacing::Right : ECoverFacing::Left; }
+
+	/**
+	 * The side he faces on arriving at a switch slot: the nearest exposed edge of Slot within ReachCm (the corner he was sent to); none ->
+	 * Fallback.
+	 */
+	CODEXTACTICS_API ECoverFacing ArrivalFacing(const FCoverSlot& Slot, float ReachCm, ECoverFacing Fallback);
+
 	CODEXTACTICS_API FCoverSwitchClipStart ChooseClipStart(const TArray<FCoverSwitchTrack>& TracksByApproach, const FVector2D& RunnerOffset,
 		float MinClipLeftSeconds, const FVector2D& RunnerDirection = FVector2D::ZeroVector, float MinHeadingDot = 0.5f);
 }

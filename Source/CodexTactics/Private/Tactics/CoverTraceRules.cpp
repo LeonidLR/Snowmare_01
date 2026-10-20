@@ -234,6 +234,7 @@ namespace CoverTraceRules
 		OutSlot.Height = Height;
 		OutSlot.WallTopCm = WallTopCm;
 		OutSlot.WallActor = Chest.GetActor();
+		OutSlot.WallComponent = Chest.GetComponent();
 		// Feet: offset off the wall, on the navmesh (the agent radius already keeps the navmesh ~40 cm off walls).
 		const FVector Raw = ComputeSlotLocation(Chest.ImpactPoint, Normal, Config.SlotOffsetCm, GroundZ);
 		OutSlot.WorldLocation = Raw;

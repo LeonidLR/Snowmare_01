@@ -9,6 +9,7 @@
 #include "Characters/FirePostureRules.h"
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTypes.h"
+#include "Tactics/CoverWrapRules.h"
 #include "CodexTacticsPlayerController.generated.h"
 
 class UInputAction;
@@ -201,7 +202,44 @@ public:
 	 * order); bPlan: planned in the tactical pause (Radius around where each stood). False when nobody goes along (the caller
 	 * then gives the single cover order). Not in turn-based combat (only the active unit moves there).
 	 */
-	bool OrderGroupCover(AOperativeCharacter* Direct, const FCoverSlot& Slot, bool bPlan, float Radius, bool bLeaderSwitch = false);
+	bool OrderGroupCover(AOperativeCharacter* Direct, const FCoverSlot& Slot, bool bPlan, float Radius, bool bLeaderSwitch = false,
+		const FCoverWrapPlan* LeaderWrap = nullptr);
+
+	/**
+	 * Wall-following round the cover object (game designer 2026-10-20, CoverWrapRules): the leader in cover, a click at Point along the
+	 * same object's outline (another face of it, the ground within ~1 m of it) -> he goes there hugging the object (OrderCoverWrap; a box
+	 * selection / group mode: the others take the destination face by the group cover rules; the pause: planned). False (nothing done) when
+	 * it is no wrap (CoverWrapRules verdict, tutorial lock of Cover.Preview / Cover.Shimmy): the click keeps its ordinary meaning.
+	 */
+	bool TryOrderCoverWrap(AOperativeCharacter* Operative, const FVector& Point);
+
+	/** A plain ground click (HandleWorldHit, after the cover click): the wrap when the leader is in cover and the point lies round his object. */
+	bool TryHandleCoverWrapClick(const FHitResult& Hit);
+
+	/**
+	 * The wrap preview under the cursor (PlayerTick; smokes call it with their own hit): the ghost at the destination in its end pose and the
+	 * perimeter path (the HUD draws it: GetCoverPreviewPath). Null Hit = clear. True while it is shown.
+	 */
+	bool UpdateCoverWrapHover(AOperativeCharacter* Operative, const FHitResult* Hit);
+
+	/** The wrap hover ghost is up (smokes). */
+	bool IsCoverWrapHoverShown() const;
+
+	/** The last wrap planned by a click (smokes / log). */
+	ECoverWrapVerdict GetLastCoverWrapVerdict() const { return LastCoverWrapVerdict; }
+
+	/**
+	 * The path the HUD draws for the cover preview under the cursor: the wrap's perimeter path, else the switch dash's navmesh path (diagonal
+	 * from his corner to the other cover's corner). False when neither is shown.
+	 */
+	bool GetCoverPreviewPath(TArray<FVector>& OutPoints) const;
+
+	/** Smokes (rendered stills): the switch / wrap hover set by the smoke stays up (PlayerTick does not follow the real cursor). */
+	bool bFreezeCoverHoverForTesting = false;
+
+	/** The hover ghosts (smokes: the pose they show). */
+	const class ACoverGhostActor* GetCoverSwitchGhost() const { return CoverSwitchGhost; }
+	const class ACoverGhostActor* GetCoverWrapGhost() const { return CoverWrapGhost; }
 
 	/**
 	 * Wall-edge cover switch preview (game designer 2026-10-20; PlayerTick, smokes call it with their own hit): the leader in cover at
@@ -536,6 +574,23 @@ private:
 	FVector SwitchHoverPoint = FVector(TNumericLimits<float>::Max());
 	FVector SwitchHoverSlotLocation = FVector::ZeroVector;
 	bool bSwitchHoverValid = false;
+	/** The switch target's arrival side (the mirrored pose) and the dash's navmesh path (hover and the switchable click ghost). */
+	ECoverFacing CoverSwitchHoverFacing = ECoverFacing::Right;
+	TArray<FVector> CoverSwitchPathPoints;
+	/** Rebuilds CoverSwitchPathPoints: the navmesh path from Operative's feet to To (a straight line when there is none). */
+	void UpdateCoverSwitchPath(const AOperativeCharacter* Operative, const FVector& To);
+
+	/** Wrap round the cover object (2026-10-20): its hover ghost and plan (cached while the cursor rests), the last click's verdict. */
+	UPROPERTY(Transient)
+	TObjectPtr<class ACoverGhostActor> CoverWrapGhost;
+	bool bCoverWrapHoverShown = false;
+	FCoverWrapPlan CoverWrapHoverPlan;
+	TWeakObjectPtr<AOperativeCharacter> CoverWrapHoverOperative;
+	TWeakObjectPtr<AActor> WrapHoverActor;
+	FVector WrapHoverPoint = FVector(TNumericLimits<float>::Max());
+	FVector WrapHoverSlotLocation = FVector::ZeroVector;
+	bool bWrapHoverValid = false;
+	ECoverWrapVerdict LastCoverWrapVerdict = ECoverWrapVerdict::NotInCover;
 
 	/** Rev 5c manual corner peek preview: its own ghost, the cursor, the last hover probe (cached while the cursor rests). */
 	UPROPERTY(Transient)

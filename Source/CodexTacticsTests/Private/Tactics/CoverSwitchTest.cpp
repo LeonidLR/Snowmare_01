@@ -210,6 +210,57 @@ bool FCoverSwitchClickRulesTest::RunTest(const FString&)
 	return true;
 }
 
+COVER_SWITCH_TEST(FCoverSwitchCornerToCornerTest, "CornerToCornerMirrored")
+bool FCoverSwitchCornerToCornerTest::RunTest(const FString&)
+{
+	// The designer's layout (2026-10-20, second pass): block A (X -300..300, Y 0..100), its front face at Y = 0 facing -Y; block B
+	// (X 550..850, Y 150..250) beyond the gap, a little further back. He stands at A's +X end, back to the front face: his right (+RightTangent of
+	// the normal (0, -1)) is +X, so he faces Right, towards the gap. Edges of a box footprint: 0 front (-Y), 1 +X side, 2 back (+Y), 3 -X side.
+	const FCoverFootprint B = CoverWrapRules::MakeBoxFootprint(FVector2D(700.f, 200.f), FVector2D(1.f, 0.f), 150.f, 50.f);
+	const FVector2D From(270.f, -45.f);
+	const FVector2D Protected(0.f, -1.f); // his wall's normal: the threat is on the other side
+	auto StandOff = [](ECoverFacing Facing) { return Facing == ECoverFacing::Right ? 57.f : 28.f; };
+	FCoverSwitchCorner Corner;
+	// The click lands on B's side face towards him (edge 3): still B's FRONT face (the protected side), its nearest end.
+	TestTrue(TEXT("A corner is found"), CoverSwitchRules::ChooseSwitchCorner(B, From, Protected, 3, 45.f, StandOff, Corner));
+	TestEqual(TEXT("... on B's front face (the protected side), not the clicked side face"), Corner.Edge, 0);
+	TestTrue(TEXT("... at its end nearest to him (X 550)"), FVector2D::Distance(Corner.Corner, FVector2D(550.f, 150.f)) < 0.1f);
+	TestEqual(TEXT("... he faces that corner: Left (-X, back over the gap)"), static_cast<int32>(Corner.Facing), static_cast<int32>(ECoverFacing::Left));
+	TestEqual(TEXT("... the mirrored pose of his Right at A"), static_cast<int32>(CoverSwitchRules::MirrorFacing(ECoverFacing::Right)), static_cast<int32>(Corner.Facing));
+	TestTrue(TEXT("... the slot: 45 cm off the face, the Left stand-off (28 cm) in from the corner"), FVector2D::Distance(Corner.SlotPoint, FVector2D(578.f, 105.f)) < 0.5f);
+	// The diagonal dash: across the gap and forward at once (not perpendicular to B's face).
+	const FVector2D Dash = Corner.SlotPoint - From;
+	TestTrue(TEXT("The dash runs diagonally (both along and across the faces)"), FMath::Abs(Dash.X) > 200.f && FMath::Abs(Dash.Y) > 100.f);
+	// A click on B's far end (front face, edge 0) gives the same corner.
+	FCoverSwitchCorner FarClick;
+	CoverSwitchRules::ChooseSwitchCorner(B, From, Protected, 0, 45.f, StandOff, FarClick);
+	TestTrue(TEXT("A click on B's far end: the same nearest corner"), FarClick.Edge == 0 && FVector2D::Distance(FarClick.SlotPoint, Corner.SlotPoint) < 0.5f);
+	// Mirror image (he stands at A's -X end, B beyond it on that side): the other end, facing Right, the Right stand-off.
+	const FCoverFootprint BLeft = CoverWrapRules::MakeBoxFootprint(FVector2D(-700.f, 200.f), FVector2D(1.f, 0.f), 150.f, 50.f);
+	FCoverSwitchCorner Mirror;
+	CoverSwitchRules::ChooseSwitchCorner(BLeft, FVector2D(-272.f, -45.f), Protected, 1, 45.f, StandOff, Mirror);
+	TestTrue(TEXT("Mirror layout: B's front face, its +X end, facing Right"), Mirror.Edge == 0 && Mirror.Facing == ECoverFacing::Right
+		&& FVector2D::Distance(Mirror.SlotPoint, FVector2D(-607.f, 105.f)) < 0.5f);
+	// No face on the protected side (the other object turned 90 deg away from it): the clicked face.
+	FCoverSwitchCorner Fallback;
+	TestTrue(TEXT("No protected face: the clicked face's nearest end"), CoverSwitchRules::ChooseSwitchCorner(B, From, FVector2D(0.f, 0.f), 3, 45.f, StandOff, Fallback)
+		&& Fallback.Edge == 3);
+	// The arrival side from a traced slot: the nearest exposed edge within the reach.
+	FCoverSlot Arrived;
+	Arrived.Height = ECoverHeight::HighCover;
+	Arrived.bLeftEdgeExposed = true;
+	Arrived.LeftEdgeDistanceCm = 28.f;
+	Arrived.bRightEdgeExposed = true;
+	Arrived.RightEdgeDistanceCm = 90.f;
+	TestEqual(TEXT("Arrival facing: the nearer exposed edge"), static_cast<int32>(CoverSwitchRules::ArrivalFacing(Arrived, 100.f, ECoverFacing::Right)),
+		static_cast<int32>(ECoverFacing::Left));
+	Arrived.bLeftEdgeExposed = false;
+	Arrived.RightEdgeDistanceCm = 150.f;
+	TestEqual(TEXT("Arrival facing: no edge within the reach -> the fallback"), static_cast<int32>(CoverSwitchRules::ArrivalFacing(Arrived, 100.f, ECoverFacing::Left)),
+		static_cast<int32>(ECoverFacing::Left));
+	return true;
+}
+
 #undef COVER_SWITCH_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

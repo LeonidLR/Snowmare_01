@@ -95,6 +95,7 @@ See §5 for the measured line counts. `Private/Characters/`:
 | `OperativeCharacterQuickFire.cpp` | (2026-10-19, a new cluster) quick fire (Ctrl + click on a point): `OrderQuickFire` / `PlanQuickFire`, `RunQuickFire` (called from `RunCombatShooting`), area-fire rounds (`docs/design/QUICK_FIRE.md`) |
 | `OperativeCharacterCover.cpp` | cover orders, enter / leave, shimmy, fire mode, facing along the wall, cover events |
 | `OperativeCharacterCoverEntry.cpp` | run-in, enter-clip mesh blend, wall clearance, body-yaw blend |
+| `OperativeCharacterCoverWrap.cpp` | wall-following round the cover object (2026-10-20): the wrap order, steering along the perimeter path, the face per corner, the planned wrap |
 | `OperativeCharacterCornerAim.cpp` | corner hold, sustained corner aim, manual corner peek, corner snap, open shots off the wall |
 | `OperativeCharacterSniper.cpp` | (unchanged) sniper rules, per-role body, grid shot clips |
 | `OperativeCharacterInternal.h` | shared helpers `IsRangedEnemyActor`, `ShotFeet`, `IsLiveEnemy` |

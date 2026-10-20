@@ -76,6 +76,12 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("KNOCKED DOWN - ORDER QUEUED"), FLinearColor(1.f, 0.7f, 0.2f));
 		return EOperativeOrderResult::Accepted;
 	}
+	// The pause's release of a planned wrap round the cover object (2026-10-20): the walk to its goal is the wrap.
+	if (bCoverWrapPlanned && bHasPendingCover && bInCover && !bCoverMoveOrder
+		&& FVector::Dist2D(Destination, CoverWrapPlan.GoalSlot.WorldLocation) <= 60.f)
+	{
+		return StartPlannedCoverWrap();
+	}
 	// Sprint 12: a move order away from the wall leaves the cover (a cover / shimmy order keeps it; so does the planned
 	// walk to the pending slot that the tactical pause releases).
 	const bool bToPendingSlot = bHasPendingCover && FVector::Dist2D(Destination, PendingCoverSlot.WorldLocation) <= 60.f;
@@ -346,6 +352,11 @@ void AOperativeCharacter::SetSprinting(bool bNewSprinting)
 
 void AOperativeCharacter::HandleMoveFinished()
 {
+	// During a wrap round the cover object (2026-10-20) he steers himself: a path following's end (an earlier move stopped) is no arrival.
+	if (ContinueCoverWrapOnArrival())
+	{
+		return;
+	}
 	bHasMoveOrder = false;
 	bOwnMoveOrder = false;
 	bSprinting = false;

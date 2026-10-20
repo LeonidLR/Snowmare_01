@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "CoverTypes.generated.h"
 
+class UPrimitiveComponent;
+
 /**
  * Tactical cover data (Sprint 12, TANDEM «SPRINT 12 DIRECTIVE: Full Tactical Cover System»; UE-only, no Godot
  * reference — Gemini Sprint 12 spec). High cover = walls / buildings an operative hugs back-to-wall; low cover = the
@@ -86,6 +88,9 @@ struct CODEXTACTICS_API FCoverSlot
 
 	/** The wall (barricade, wall mesh, building) when it is an actor. */
 	TWeakObjectPtr<AActor> WallActor;
+
+	/** The component the wall surface belongs to (its footprint is the outline walked round: CoverWrapRules, 2026-10-20). */
+	TWeakObjectPtr<UPrimitiveComponent> WallComponent;
 
 	bool IsValid() const { return Height != ECoverHeight::None; }
 
