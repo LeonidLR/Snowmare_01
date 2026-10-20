@@ -31,12 +31,12 @@
     "source": "2026-10-20 17:49:40",
     "clean": "2026-10-20 18:29:00",
     "atlas": "2026-10-20 20:09:47",
-    "bake": "2026-10-20 20:18:45",
+    "bake": "2026-10-20 23:04:03",
     "export": "2026-10-20 20:18:54",
     "review": "2026-10-20 20:21:45",
     "qa": "2026-10-20 20:21:45",
     "reduce": "2026-10-20 20:08:08",
-    "variant_bake_setup": "2026-10-20 22:43:11"
+    "variant_bake_setup": "2026-10-20 22:53:53"
   },
   "clean": {
     "hair_slots": [],
@@ -425,7 +425,52 @@
       "Normal": "04_Textures_Baked/T_Post_Apo_Survivor_a_Normal.png",
       "ORM": "04_Textures_Baked/T_Post_Apo_Survivor_a_ORM.png",
       "Sheen": "04_Textures_Baked/T_Post_Apo_Survivor_a_Sheen.png"
-    }
+    },
+    "variants": {
+      "Set2": {
+        "outputs": {
+          "BaseColor": "T_Post_Apo_Survivor_a_Set2_BaseColor.png",
+          "Normal": "T_Post_Apo_Survivor_a_Set2_Normal.png",
+          "ORM": "T_Post_Apo_Survivor_a_Set2_ORM.png",
+          "Sheen": "T_Post_Apo_Survivor_a_Set2_Sheen.png"
+        },
+        "emissive_glow_percent": 0.008,
+        "emissive_written": false,
+        "emissive_strength": 1.0,
+        "masked": false,
+        "two_sided": false
+      },
+      "Set3": {
+        "outputs": {
+          "BaseColor": "T_Post_Apo_Survivor_a_Set3_BaseColor.png",
+          "Normal": "T_Post_Apo_Survivor_a_Set3_Normal.png",
+          "ORM": "T_Post_Apo_Survivor_a_Set3_ORM.png",
+          "Sheen": "T_Post_Apo_Survivor_a_Set3_Sheen.png"
+        },
+        "emissive_glow_percent": 0.008,
+        "emissive_written": false,
+        "emissive_strength": 1.0,
+        "masked": false,
+        "two_sided": false
+      }
+    },
+    "extra_variant_runs": [
+      {
+        "variants": [
+          "Set2"
+        ],
+        "ray_miss_percent": 0.09,
+        "warnings": []
+      },
+      {
+        "variants": [
+          "Set2",
+          "Set3"
+        ],
+        "ray_miss_percent": 0.09,
+        "warnings": []
+      }
+    ]
   },
   "export": {
     "fbx": "05_Export/SK_Post_Apo_Survivor_a_1slot.fbx",

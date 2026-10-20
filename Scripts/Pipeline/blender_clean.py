@@ -30,7 +30,8 @@ import material_graph as mg  # noqa: E402
 def parse():
     p = argparse.ArgumentParser()
     p.add_argument("--asset-dir", required=True)
-    p.add_argument("--hair-regex", default=pc.HAIR_REGEX_DEFAULT)
+    # default: pipeline.json "hair_regex" (enemies: "" - visible hair stays, user 2026-10-20), else HAIR_REGEX_DEFAULT
+    p.add_argument("--hair-regex", default=None)
     p.add_argument("--hidden-exclude", default="", help="materials never touched by the hidden-triangle removal")
     p.add_argument("--no-hidden", action="store_true", help="skip the hidden-triangle removal")
     p.add_argument("--dirs", type=int, default=80, help="ray directions on the sphere (about half are used)")
@@ -341,6 +342,8 @@ def tri_counts(mesh):
 def main():
     args = parse()
     paths = pc.Paths(args.asset_dir)
+    if args.hair_regex is None:
+        args.hair_regex = (paths.config or {}).get("hair_regex", pc.HAIR_REGEX_DEFAULT)
     inv = paths.inventory
     pc.reset_scene()
     arm, mesh = pc.import_unreal_mesh(paths)

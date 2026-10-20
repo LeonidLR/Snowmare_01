@@ -26,6 +26,12 @@ def short_name(asset_path):
     return asset_path.split(".")[-1] if asset_path else None
 
 
+def texture_stem(inventory, tex_path):
+    """The png stem of a texture asset in 02_Textures_Source (unreal_export_inventory.texture_file_stems; older
+    inventories without "texture_files": the asset name)."""
+    return (inventory.get("texture_files") or {}).get(tex_path) or short_name(tex_path)
+
+
 # ----------------------------------------------------------------------------------------------- texture roles
 
 def texture_roles(inventory):
@@ -127,9 +133,14 @@ class GraphBuilder:
         if key in self.images:
             return self.images[key]
         import bpy
-        name = short_name(tex_path)
+        name = texture_stem(self.inventory, tex_path)
         file = os.path.join(self.tex_dir, name + ".png")
-        img = bpy.data.images.get(name) or bpy.data.images.load(file, check_existing=True)
+        img = bpy.data.images.get(name)
+        if img is not None and os.path.normcase(os.path.abspath(bpy.path.abspath(img.filepath))) != os.path.normcase(
+                os.path.abspath(file)):
+            img.name = name + "__stale"  # e.g. an FBX image of that name pointing at the vendor's drive
+            img = None
+        img = img or bpy.data.images.load(file, check_existing=True)
         img.name = name
         tinfo = self.inventory["textures"].get(tex_path, {})
         img.colorspace_settings.name = "sRGB" if (tinfo.get("srgb") and not as_normal) else "Non-Color"
@@ -296,6 +307,34 @@ class GraphBuilder:
             self.feed(mix.inputs[idx[1]], self.to_color(a) if mix.data_type == "RGBA" else a)
             self.feed(mix.inputs[idx[2]], self.to_color(b) if mix.data_type == "RGBA" else b)
             return mix.outputs[0 if mix.data_type == "FLOAT" else 2]
+        if kind == "MaterialFunctionCall":
+            fn = str(node.get("material_function", "")).split(".")[-1]
+            if fn in ("CheapContrast", "CheapContrast_RGB", "Contrast_Preserve_Color", "ContrastPreserveColor"):
+                # engine CheapContrast: saturate(lerp(-Contrast, 1 + Contrast, In)); the colour-preserving variant
+                # is approximated the same way per channel (identical at Contrast 0, the usual setting)
+                value = arg("In", "_", None)
+                if value is None:
+                    value = arg("Color", "_", 0.5)
+                contrast = arg("Contrast", "_", 0.0)
+                if not hasattr(contrast, "is_output") and abs(float(contrast)) < 1e-6:
+                    return value
+                if fn.startswith("Contrast"):
+                    self.warnings.append("%s/%s: %s approximated by CheapContrast" % (self.mat.name, prop, fn))
+                low = self.binary("SUBTRACT", 0.0, contrast)
+                span = self.binary("ADD", 1.0, self.binary("MULTIPLY", 2.0, contrast))
+                out = self.binary("ADD", low, self.binary("MULTIPLY", value, span))
+                if self.is_color(out):
+                    clamp = self.node("ShaderNodeMix")
+                    clamp.data_type = "RGBA"
+                    clamp.clamp_result = True
+                    clamp.inputs[0].default_value = 1.0
+                    self.feed(clamp.inputs[7], out)
+                    return clamp.outputs[2]
+                if hasattr(out, "is_output"):
+                    c = self.node("ShaderNodeClamp")
+                    self.feed(c.inputs[0], out)
+                    return c.outputs[0]
+                return min(1.0, max(0.0, out))
         self.warnings.append("%s/%s: unsupported expression %s - default used" % (self.mat.name, prop, kind))
         return DEFAULTS.get(prop, 0.5)
 
@@ -476,6 +515,8 @@ def material_of(inv, name):
 def rebuild_mesh_materials(objects, inv, tex_dir, warnings):
     """Rebuilds every slot material of these objects from the inventory (current translator, current parameters)."""
     done = {}
+    # objects with source uvs first: a low mesh that only has UV_Atlas (variant bake set-up) reuses their materials
+    objects = sorted(objects, key=lambda o: not [u for u in o.data.uv_layers if u.name != "UV_Atlas"])
     for obj in objects:
         uv_layers = [u.name for u in obj.data.uv_layers if u.name != "UV_Atlas"]
         for slot in obj.material_slots:
@@ -484,6 +525,9 @@ def rebuild_mesh_materials(objects, inv, tex_dir, warnings):
             name = slot.material.name
             if name in done:
                 slot.material = done[name]
+                continue
+            if not uv_layers:
+                warnings.append("rebuild: %s on %s kept (object has no source uv)" % (name, obj.name))
                 continue
             path = material_of(inv, name)
             minfo = inv["materials"].get(path) if path else None

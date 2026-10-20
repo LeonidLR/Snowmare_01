@@ -174,6 +174,24 @@ def walk_expression(material, expr, out_name, texture_overrides, depth):
     return d
 
 
+def texture_file_stems(tex_paths):
+    """Png stem per texture asset path: the asset name, or <name>__<folder> when two assets share a name (a pack with
+    texture/set_1, texture/set_2, ... folders holding equally named textures)."""
+    names = {}
+    for tp in tex_paths:
+        names.setdefault(tp.split(".")[-1], []).append(tp)
+    stems = {}
+    for name, group in names.items():
+        for tp in group:
+            folder = tp.rsplit("/", 2)[-2] if tp.count("/") >= 2 else ""
+            stems[tp] = name if len(group) == 1 else "%s__%s" % (name, folder)
+        taken = [stems[tp] for tp in group]
+        if len(set(taken)) != len(taken):  # same name in equally named folders of different packs
+            for index, tp in enumerate(sorted(group)):
+                stems[tp] = "%s__%d" % (name, index + 1)
+    return stems
+
+
 def graph_textures(graph):
     found = set()
 
@@ -303,19 +321,22 @@ def main():
             inv["variants"].append({"name": vname, "slots": resolved,
                                     "unknown_slots": sorted(k for k in mapping if k not in slot_names)})
 
+    inv["texture_files"] = {}  # texture asset path -> png stem in 02_Textures_Source (filled below)
     tex_paths = set()
     for m in inv["materials"].values():
         tex_paths.update(p for p in m["texture_params"].values() if p)
         tex_paths.update(p for p in m["used_textures"] if p)
         tex_paths.update(graph_textures(m.get("graph", {})))
+    stems = texture_file_stems(tex_paths)
     for tp in sorted(tex_paths):
         tex = unreal.load_asset(tp)
         if not tex:
             continue
         info = texture_info(tex)
         inv["textures"][tp] = info
+        inv["texture_files"][tp] = stems[tp]
         if isinstance(tex, unreal.Texture2D) and not args.skip_textures:
-            fn = os.path.join(out_tex, tex.get_name() + ".png")
+            fn = os.path.join(out_tex, stems[tp] + ".png")
             if export(tex, fn, unreal.TextureExporterPNG()):
                 inv["exports"]["textures"][tp] = os.path.relpath(fn, args.out).replace("\\", "/")
 

@@ -4,5 +4,7 @@
   "res": 2048,
   "keep_weights": "head=0.75,bodi=1.0",
   "texel_weights": "head=1.6,bodi=1.0",
-  "hidden_exclude": "head|skin"
+  "hidden_exclude": "head|skin",
+  "hair_regex": "",
+  "notes": "Hair: kept (enemies: visible hair stays, user 2026-10-20; hair under a helmet goes with the hidden test)."
 }

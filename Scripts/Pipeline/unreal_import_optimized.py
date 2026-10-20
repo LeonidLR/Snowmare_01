@@ -186,8 +186,8 @@ def main():
     if only:
         clash = [e for e in existing if any(("_%s_" % v) in e.split("/")[-1] or e.split(".")[-1].endswith("_" + v)
                                             for v in only)]
-        if clash:
-            raise RuntimeError("variant assets already exist: %s" % clash)
+        if clash and not args.allow_existing:  # --allow-existing: re-import these variants' textures + MIs
+            raise RuntimeError("variant assets already exist: %s (use --allow-existing to re-import)" % clash)
     elif existing and not args.allow_existing:
         raise RuntimeError("assets already in %s: %s (use --allow-existing to re-import)" % (args.dest, existing))
     unreal.log("PIPELINE_IMPORT existing in dest: %s; master exists: %s" % (

@@ -596,18 +596,18 @@
   "exports": {
     "mesh_fbx": "01_Source/SK_base_mesh.fbx",
     "textures": {
-      "/Game/mutant_monster_2/texture/set_1/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "02_Textures_Source/T_bodi_BaseColor_Scattering.png",
-      "/Game/mutant_monster_2/texture/set_1/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal.png",
-      "/Game/mutant_monster_2/texture/set_1/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic.png",
-      "/Game/mutant_monster_2/texture/set_2/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "02_Textures_Source/T_bodi_BaseColor_Scattering.png",
-      "/Game/mutant_monster_2/texture/set_2/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal.png",
-      "/Game/mutant_monster_2/texture/set_2/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic.png",
-      "/Game/mutant_monster_2/texture/set_3/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "02_Textures_Source/T_bodi_BaseColor_Scattering.png",
-      "/Game/mutant_monster_2/texture/set_3/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal.png",
-      "/Game/mutant_monster_2/texture/set_3/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic.png",
-      "/Game/mutant_monster_2/texture/set_4/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "02_Textures_Source/T_bodi_BaseColor_Scattering.png",
-      "/Game/mutant_monster_2/texture/set_4/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal.png",
-      "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic.png"
+      "/Game/mutant_monster_2/texture/set_1/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "02_Textures_Source/T_bodi_BaseColor_Scattering__set_1.png",
+      "/Game/mutant_monster_2/texture/set_1/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal__set_1.png",
+      "/Game/mutant_monster_2/texture/set_1/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic__set_1.png",
+      "/Game/mutant_monster_2/texture/set_2/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "02_Textures_Source/T_bodi_BaseColor_Scattering__set_2.png",
+      "/Game/mutant_monster_2/texture/set_2/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal__set_2.png",
+      "/Game/mutant_monster_2/texture/set_2/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic__set_2.png",
+      "/Game/mutant_monster_2/texture/set_3/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "02_Textures_Source/T_bodi_BaseColor_Scattering__set_3.png",
+      "/Game/mutant_monster_2/texture/set_3/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal__set_3.png",
+      "/Game/mutant_monster_2/texture/set_3/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic__set_3.png",
+      "/Game/mutant_monster_2/texture/set_4/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "02_Textures_Source/T_bodi_BaseColor_Scattering__set_4.png",
+      "/Game/mutant_monster_2/texture/set_4/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal__set_4.png",
+      "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic__set_4.png"
     },
     "animations": {}
   },
@@ -644,5 +644,19 @@
       },
       "unknown_slots": []
     }
-  ]
+  ],
+  "texture_files": {
+    "/Game/mutant_monster_2/texture/set_1/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "T_bodi_BaseColor_Scattering__set_1",
+    "/Game/mutant_monster_2/texture/set_1/T_bodi_Normal.T_bodi_Normal": "T_bodi_Normal__set_1",
+    "/Game/mutant_monster_2/texture/set_1/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "T_bodi_OcclusionRoughnessMetallic__set_1",
+    "/Game/mutant_monster_2/texture/set_2/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "T_bodi_BaseColor_Scattering__set_2",
+    "/Game/mutant_monster_2/texture/set_2/T_bodi_Normal.T_bodi_Normal": "T_bodi_Normal__set_2",
+    "/Game/mutant_monster_2/texture/set_2/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "T_bodi_OcclusionRoughnessMetallic__set_2",
+    "/Game/mutant_monster_2/texture/set_3/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "T_bodi_BaseColor_Scattering__set_3",
+    "/Game/mutant_monster_2/texture/set_3/T_bodi_Normal.T_bodi_Normal": "T_bodi_Normal__set_3",
+    "/Game/mutant_monster_2/texture/set_3/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "T_bodi_OcclusionRoughnessMetallic__set_3",
+    "/Game/mutant_monster_2/texture/set_4/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "T_bodi_BaseColor_Scattering__set_4",
+    "/Game/mutant_monster_2/texture/set_4/T_bodi_Normal.T_bodi_Normal": "T_bodi_Normal__set_4",
+    "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "T_bodi_OcclusionRoughnessMetallic__set_4"
+  }
 }

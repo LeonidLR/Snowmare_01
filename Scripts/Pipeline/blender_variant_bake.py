@@ -57,7 +57,8 @@ def main():
         bpy.data.objects.remove(o)
     high = high_meshes[0]
     high.name = paths.high_name
-    for img in [i for i in bpy.data.images if not i.users]:
+    # the FBX images point at the vendor's drive (F:\...): drop them all, the materials are rebuilt from the exported PNGs
+    for img in list(bpy.data.images):
         bpy.data.images.remove(img)
     import blender_clean
     warnings = blender_clean.rebuild_materials(high, inv, paths)
@@ -92,7 +93,7 @@ def main():
     pc.update_summary(paths, "variant_bake_setup", {"variants": wanted, "low_faces": len(low.data.polygons),
                                                     "faces_far_from_high": far, "warnings": warnings[:20]})
     # the regular bake on this set-up, only the named variants, every material projected (the low has no source uv)
-    cmd = [bpy.app.binary_path, "--background", "--factory-startup", "--python",
+    cmd = [bpy.app.binary_path, "--background", "--factory-startup", "--python-exit-code", "3", "--python",
            os.path.join(os.path.dirname(os.path.abspath(__file__)), "blender_bake.py"), "--",
            "--asset-dir", paths.root, "--input-blend", variant_blend, "--only-variants", ",".join(wanted),
            "--project-all", "--no-save"] + bake_args

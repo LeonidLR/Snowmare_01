@@ -48,8 +48,8 @@
     "uv_maps": [
       "UV_Atlas"
     ],
-    "triangles": 19959,
-    "vertices": 10488,
+    "triangles": 19953,
+    "vertices": 11229,
     "vertex_groups": 78,
     "shape_keys": 0,
     "custom_normals": true,

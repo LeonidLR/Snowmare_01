@@ -209,3 +209,48 @@ variants of one body: one reduced mesh + one atlas, one texture set + MI per var
 Per-asset settings live in `ArtPipeline/Characters/<Group>/<Asset>/pipeline.json` (target, keep / texel weights by material
 name). No Blueprint is switched to the optimized meshes (the user's call); `CodexTactics.OptimizedCharacterSmoke` swaps them at
 runtime, one case per asset.
+
+### Look variants (texture / colour sets, user 2026-10-20)
+
+"Bring every colour variant the packs ship": `Scripts/Pipeline/unreal_variant_scan.py` (read-only) finds, for every slot
+material of a body, the pack materials whose path differs only in its numbers (set_1 / set_2, _1st / _2nd, MA_x_1st /
+M_x_2nd_Inst, M_Outfit_Hoodie / M_Outfit_Hoodie_Inst_2nd); materials with the same numbers form one variant, a slot without
+a variant material keeps the mesh's own. Result: `ArtPipeline/Characters/variants.json` and per asset
+`material_sets.json` (fed to the inventory export). One reduced mesh + one atlas per body; one texture set +
+`MI_<Asset>_<Variant>` per variant; the mesh's slot gets its own look's MI. Already imported bodies get extra variants with
+`blender_variant_bake.py` (bake target = the exported low mesh, so the imported mesh stays unchanged) and
+`run_unreal_import.ps1 -VariantsOnly Set2,Set3` (textures + MIs only).
+
+| Body | Variants (the first = the look the mesh carries today) |
+|---|---|
+| Post_Apo_Survivor_a | Set1 (imported as MI_Post_Apo_Survivor_a), Set2 / Set3 = M_Outfit_Hoodie/Pants_Inst_2nd / _3rd |
+| FrozenPMC_Fighter | Default (jacket 4th, arms 2nd, pants 2nd, boot / glove / helmet 1st; imported as MI_FrozenPMC_Fighter), Set1..Set5 = the pack's 1st..5th materials per part (a part without that number keeps its own) |
+| MilitaryZombie_1 / _2 / _3 | Set1, Set2, Set3 (the BP's LookVariants material sets; helmet / hair only exist in set 1) |
+| Brute | Set2 (own), Set1, Set3, Set4 |
+| Marksman | Set1 (own), Set2, Set3, Set4, Set5 |
+| Cutter | Set3 (own), Set1, Set2, Set4 |
+| Hound | Set1 (own), Set2, Set3, Set4, Set5 (M_Combat_Dog_skin_1..5) |
+| Frostbitten | Set4 (own), Set1, Set2, Set3 |
+
+Female_Soldier (operative): the pack has no material sets; its camouflage is a texture parameter of its materials (not
+enumerated).
+
+Traps found in the roll-out (fixed 2026-10-20):
+- Equally named textures in different folders (`military_zombie_set2/texture/set_1/T_bodi_set_2_BaseColor` and
+  `.../set_2/T_bodi_set_2_BaseColor`; also Brute, Cutter, Marksman, Frostbitten): the export wrote them to ONE png, so every
+  variant baked the same look. The inventory now maps each texture to its own png stem (`texture_files`:
+  `<name>__<folder>` for clashing names, `unreal_export_inventory.texture_file_stems`); the Blender side resolves through it
+  (`material_graph.texture_stem`). Inventories without the map keep the old naming.
+- `blender_variant_bake.py`: the low mesh only carries `UV_Atlas`, so the variant materials must sample the high's source uv
+  (`apply_variant` takes the uv from the high); the inner Blender runs with `--python-exit-code` so a failing bake fails the
+  wrapper.
+- The smoke dresses the ORIGINAL body in the variant's source materials from `material_sets.json` (by slot name), so both
+  bodies in a still show the same texture set.
+
+Hair rule (user 2026-10-20): hair is removed ONLY where it is not visible (under helmets / hoods / masks). Enemies keep their
+hair (`pipeline.json` `"hair_regex": ""`; hair under a helmet goes with the hidden-in-all-poses test); operatives use the
+default regex. Brows / lashes that would be lost with the hair (Female_Soldier `M_Female_Soldier_Eyes_Hair`) are painted
+into the skin: `pipeline.json` `"bake_overlay_regex"` imports those faces from the source FBX as a bake-only overlay
+(`blender_bake.build_overlay` / `bake_overlay`: their colour over the baked BaseColor by their opacity; no geometry in the
+low). The translator supports the engine functions CheapContrast / Contrast_Preserve_Color (the latter approximated).
+Emissive stays at the 0.1 % coverage rule (the Female_Soldier helmet beacon, 0.016 %, gets no glow).

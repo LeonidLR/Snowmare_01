@@ -11,7 +11,7 @@
 //  Operatives: the leader wears the original body, the second operative the optimized one (both with the case Blueprint's anim
 //   class and mesh transform); idle, walk, crouch, prone, aim (a frozen hound, one forced shot), vault (each body airborne), cover.
 //  Enemies: two enemies of the case Blueprint placed as deaf guards (they idle), the right one keeps the original body (for a look
-//   variant: the variant's material set), the left one gets the optimized body + the variant's MI; idle, move (a search walk),
+//   variant: the variant's source materials from the pipeline's material_sets.json), the left one gets the optimized body + the variant's MI; idle, move (a search walk),
 //   attack (AttackTarget on an operative put in front), hit (a damage spec), death. Further look variants: an idle still each.
 // Asserts per case: one material slot (an MI of M_CharacterMaster with its four textures, one MI per look variant), LOD0 within
 // the triangle budget, >= 3 LODs, same skeleton and physics asset as the original, bounds within 10 %, no load warnings about
@@ -38,6 +38,10 @@
 #include "Engine/Texture.h"
 #include "Engine/Texture2D.h"
 #include "EngineUtils.h"
+#include "Dom/JsonObject.h"
+#include "Misc/FileHelper.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/FileManager.h"
@@ -204,6 +208,62 @@ namespace OptimizedCharacterSmoke
 		Name.RemoveFromStart(FString::Printf(TEXT("MI_%s"), Runner->Case ? Runner->Case->Asset : TEXT("")));
 		Name.RemoveFromStart(TEXT("_"));
 		return Name.IsEmpty() ? FString(TEXT("default")) : Name;
+	}
+
+	/**
+	 * The original body's materials of a look variant, by slot name: ArtPipeline/Characters/<Group>/<Asset>/material_sets.json
+	 * (the pipeline's variant list; [{"name": "Set1", "slots": {slot: material}}] or [{slot: material}] = Set1..). Empty when the
+	 * asset has no such file or the variant is not listed (the original keeps its own look).
+	 */
+	TMap<FName, FString> SourceLook(const FCase& C, int32 Variant)
+	{
+		TMap<FName, FString> Look;
+		const FString Label = VariantLabel(Variant);
+		const FString File = FPaths::Combine(FPaths::ProjectDir(), TEXT("ArtPipeline/Characters"),
+			C.Kind == EKind::Operative ? TEXT("Operatives") : TEXT("Enemies"), C.Asset, TEXT("material_sets.json"));
+		FString Text;
+		TArray<TSharedPtr<FJsonValue>> Sets;
+		if (!FFileHelper::LoadFileToString(Text, *File) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Sets))
+		{
+			return Look;
+		}
+		for (int32 Index = 0; Index < Sets.Num(); ++Index)
+		{
+			const TSharedPtr<FJsonObject> Set = Sets[Index].IsValid() ? Sets[Index]->AsObject() : nullptr;
+			if (!Set.IsValid())
+			{
+				continue;
+			}
+			FString Name = FString::Printf(TEXT("Set%d"), Index + 1);
+			Set->TryGetStringField(TEXT("name"), Name);
+			if (Name != Label)
+			{
+				continue;
+			}
+			const TSharedPtr<FJsonObject>* Slots = nullptr;
+			const TSharedPtr<FJsonObject> Map = Set->TryGetObjectField(TEXT("slots"), Slots) ? *Slots : Set;
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Map->Values)
+			{
+				FString Path;
+				if (Pair.Value.IsValid() && Pair.Value->TryGetString(Path))
+				{
+					Look.Add(FName(*Pair.Key), Path);
+				}
+			}
+		}
+		return Look;
+	}
+
+	/** Dresses the ORIGINAL body in the source materials of the look variant (so both bodies show the same texture set). */
+	void WearSourceLook(USkeletalMeshComponent* Mesh, const FCase& C, int32 Variant)
+	{
+		for (const TPair<FName, FString>& Slot : SourceLook(C, Variant))
+		{
+			if (UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr, *Slot.Value, nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
+				Mesh->SetMaterialByName(Slot.Key, Material);
+			}
+		}
 	}
 
 	AOperativeCharacter* OpA() { return Cast<AOperativeCharacter>(Runner->Original.Get()); }
@@ -695,6 +755,10 @@ namespace OptimizedCharacterSmoke
 			USkeletalMeshComponent* Mesh = Op->GetMesh();
 			Mesh->EmptyOverrideMaterials();
 			Mesh->SetSkeletalMeshAsset(Lane == 0 ? Original : Optimized);
+			if (Lane == 0)
+			{
+				WearSourceLook(Mesh, C, 0);
+			}
 			Mesh->SetRelativeTransform(MeshTransform);
 			if (AnimClass && Mesh->GetAnimClass() != AnimClass)
 			{
@@ -864,6 +928,7 @@ namespace OptimizedCharacterSmoke
 				}
 				UMaterialInterface* Look = LoadObject<UMaterialInterface>(nullptr, *Runner->Instances[Variant]);
 				OpB()->GetMesh()->SetMaterial(0, Look);
+				WearSourceLook(OpA()->GetMesh(), *Runner->Case, Variant);
 				UE_LOG(LogCodexTactics, Display, TEXT("OptimizedCharacterSmoke: [%s] variant %d = %s"), Runner->Case->Asset, Variant, *VariantLabel(Variant));
 				Check(Look != nullptr, FString::Printf(TEXT("variant %d loads"), Variant));
 				return 30;
@@ -913,14 +978,7 @@ namespace OptimizedCharacterSmoke
 		else
 		{
 			Mesh->SetSkeletalMeshAsset(LoadObject<USkeletalMesh>(nullptr, C.Original));
-			// a Blueprint with look variants (Military Zombie): the original wears the same material set as the optimized MI
-			if (Enemy->LookVariants.MaterialSets.IsValidIndex(Runner->Variant))
-			{
-				for (const TPair<FName, TObjectPtr<UMaterialInterface>>& Slot : Enemy->LookVariants.MaterialSets[Runner->Variant].SlotMaterials)
-				{
-					Mesh->SetMaterialByName(Slot.Key, Slot.Value);
-				}
-			}
+			WearSourceLook(Mesh, C, Runner->Variant); // the same texture set as the optimized MI
 		}
 		Runner->Props.Add(Enemy);
 		return Enemy;

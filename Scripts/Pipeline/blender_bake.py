@@ -265,6 +265,71 @@ class Projector:
             bpy.data.meshes.remove(part.data)
 
 
+def build_overlay(paths, inv, regex, warnings):
+    """Bake-only source (pipeline.json "bake_overlay_regex", user 2026-10-20: Female_Soldier brows / lashes): the faces of
+    the matching materials, imported from the source FBX. They are not part of the low mesh (the clean stage removed them
+    as hair); their colour is painted over the baked BaseColor by their opacity (bake_overlay)."""
+    import re
+    import blender_clean
+    images_before = set(bpy.data.images)
+    arm, meshes, others = pc.import_fbx(paths.source_fbx)
+    if not meshes:
+        raise RuntimeError("overlay: no mesh in %s" % paths.source_fbx)
+    ov = meshes[0]
+    mw = ov.matrix_world.copy()
+    ov.parent = None
+    ov.matrix_world = mw
+    for o in meshes[1:] + others + ([arm] if arm else []):
+        bpy.data.objects.remove(o)
+    for img in [i for i in bpy.data.images if i not in images_before]:  # the vendor's texture paths
+        bpy.data.images.remove(img)
+    for mod in list(ov.modifiers):
+        ov.modifiers.remove(mod)
+    ov.name = "BAKE_overlay"
+    warnings += blender_clean.rebuild_materials(ov, inv, paths)
+    rx = re.compile(regex, re.I)
+    keep = {i for i, sl in enumerate(ov.material_slots) if sl.material and rx.search(sl.material.name)}
+    blender_clean.delete_faces(ov, {f.index for f in ov.data.polygons if f.material_index not in keep})
+    if not ov.data.polygons:
+        warnings.append("overlay: no faces match %r" % regex)
+        bpy.data.objects.remove(ov)
+        return None
+    ov.hide_render = True
+    ov.select_set(False)
+    print("[pipeline] bake overlay: %d faces of %s" % (len(ov.data.polygons),
+                                                       sorted(ov.material_slots[i].material.name for i in keep)))
+    return ov
+
+
+def bake_overlay(mesh, ov, args, res, socket_name):
+    """One channel of the overlay object projected onto the whole low mesh (a ray that finds no overlay leaves alpha 0)."""
+    img = new_image("BAKE_overlay_" + socket_name, res, "Non-Color", (0, 0, 0, 0), float_buffer=True, alpha=True)
+    tmat = target_material("BAKE_overlay_target", img)
+    low_mats = list(mesh.data.materials)
+    for s_ in range(len(low_mats)):
+        mesh.data.materials[s_] = tmat
+    # only the overlay's own (rebuilt) materials; the other FBX slots carry no faces any more
+    own = [sl.material for sl in ov.material_slots
+           if sl.material and sl.material.use_nodes and "OUT_base_color" in sl.material.node_tree.nodes]
+    for m_ in own:
+        wire_emission(m_, socket_name)
+    ov.hide_render = False
+    for o in bpy.context.view_layer.objects:
+        o.select_set(o is mesh or o is ov)
+    bpy.context.view_layer.objects.active = mesh
+    run_bake("emit", 0, selected_to_active=True, args=args)
+    for s_, m_ in enumerate(low_mats):
+        mesh.data.materials[s_] = m_
+    for m_ in own:
+        wire_emission(m_, "normal")
+    ov.hide_render = True
+    ov.select_set(False)
+    mesh.select_set(True)
+    arr = pixels(img)
+    bpy.data.images.remove(img)
+    return arr
+
+
 def look_materials(slot_names, var, inv):
     """Material asset paths the mesh shows in this look (variant or the mesh's own)."""
     merged = inv.get("blender_material_slots", {})
@@ -284,7 +349,10 @@ def look_materials(slot_names, var, inv):
 def apply_variant(mesh, high, slot_names, var, inv, paths, warnings):
     """Look variant (texture set): every slot gets the variant's material, rebuilt from the inventory, on low and high."""
     import material_graph as mg
-    uv_name = mesh.data.uv_layers[0].name
+    # the source uv (never UV_Atlas): from the high when the low only carries the atlas (variant bake set-up)
+    src = high if high else mesh
+    uv_layers = [u.name for u in src.data.uv_layers if u.name != "UV_Atlas"] or [mesh.data.uv_layers[0].name]
+    uv_name = uv_layers[0]
     merged = inv.get("blender_material_slots", {})
     for i, slot in enumerate(slot_names):
         mpath = var["slots"].get(slot) or next((var["slots"].get(s) for s in merged.get(slot, []) if var["slots"].get(s)), None)
@@ -292,7 +360,7 @@ def apply_variant(mesh, high, slot_names, var, inv, paths, warnings):
         if not minfo:
             warnings.append("variant %s: no material for slot %s" % (var["name"], slot))
             continue
-        mat = mg.build_material("%s__%s" % (slot, var["name"]), minfo, inv, paths.tex_source, uv_name, warnings)
+        mat = mg.build_material("%s__%s" % (slot, var["name"]), minfo, inv, paths.tex_source, uv_name, warnings, uv_layers)
         mesh.data.materials[i] = mat
         if high:
             high.data.materials[i] = mat
@@ -347,6 +415,9 @@ def main():
         variants = [v for v in variants if v and v["name"] in wanted]
         if len(variants) != len(wanted):
             raise RuntimeError("variants %s not all in the inventory" % wanted)
+    overlay_regex = (paths.config or {}).get("bake_overlay_regex")
+    overlay = build_overlay(paths, inv, overlay_regex, warnings) if (overlay_regex and mode == "project") else None
+    overlay_pct = None
     red = pc.load_json(paths.report_path).get("reduce", {}).get("per_material", {})
     self_slots = [i for i, n in enumerate(slot_names) if red.get(n, {}).get("ratio", 0) >= 0.999] \
         if high and not args.project_all else []
@@ -398,6 +469,13 @@ def main():
         masked = any("MASKED" in str(m_.get("blend_mode", "")) for m_ in mats)
         two_sided = any(m_.get("two_sided") for m_ in mats)
         bc = bake_channel("base_color", args.res, "base_color", "Non-Color")
+        if overlay:
+            # brows / lashes painted into the skin: overlay colour over the bake by the overlay's opacity
+            oc = bake_overlay(mesh, overlay, args, args.res, "base_color")
+            oa = bake_overlay(mesh, overlay, args, args.res, "opacity")
+            a = (np.clip(oa[..., 0], 0, 1) * (oa[..., 3] > 0.5) * (oc[..., 3] > 0.5))[..., None]
+            bc[..., :3] = bc[..., :3] * (1.0 - a) + oc[..., :3] * a
+            overlay_pct = round(100.0 * float((a[..., 0] > 0.05).mean()), 3)
         # the emit values are linear: encode sRGB for the 8-bit colour texture
         lin = np.clip(bc[..., :3], 0, 1)
         srgb = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * np.power(lin, 1 / 2.4) - 0.055)
@@ -457,7 +535,8 @@ def main():
             "outputs": {k: os.path.basename(tex(k)) for k in ("BaseColor", "Normal", "ORM", "Sheen", "Emissive")
                         if os.path.exists(tex(k))},
             "emissive_glow_percent": glow_pct, "emissive_written": emissive_written,
-            "emissive_strength": round(emissive_scale, 3), "masked": masked, "two_sided": two_sided}
+            "emissive_strength": round(emissive_scale, 3), "masked": masked, "two_sided": two_sided,
+            "overlay_percent": overlay_pct}
         if proj:
             proj.cleanup()
             for sl in mesh.material_slots:

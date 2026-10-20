@@ -1,6 +1,6 @@
 {
   "_doc": "Ground truth: slot -> keep / remove-hair / remove-transparent / remove-hidden / separate-transparent with the reason. Hidden = no ray from the triangle escapes to a viewer in the rest pose, 9 procedural extreme poses and the sampled animation frames (single-sided: back faces do not occlude).",
-  "hair_regex": "hair|(^|_)fur($|_)|eyebrow|(^|_)brows?($|_)|eyelash|(^|_)lashes($|_)|beard|mustache|moustache|groom",
+  "hair_regex": "",
   "slots": {
     "M_armor_set_2": {
       "slot_index": 0,
@@ -40,8 +40,8 @@
     },
     "pasted__hair": {
       "slot_index": 4,
-      "decision": "remove-hair",
-      "reason": "material name matches the hair regex 'hair|(^|_)fur($|_)|eyebrow|(^|_)brows?($|_)|eyelash|(^|_)lashes($|_)|beard|mustache|moustache|groom'",
+      "decision": "keep",
+      "reason": "opaque (masked: needs an opacity mask in the atlas); 0 of 1766 triangles hidden in every test pose and removed",
       "blend_mode": "BLEND_MASKED",
       "two_sided": true,
       "triangles": 1766,

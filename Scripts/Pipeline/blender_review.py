@@ -216,12 +216,13 @@ def png_size(path):
 
 def texture_memory(paths):
     """Estimated GPU memory (full mip chain) of the source textures used by the mesh vs the baked atlas."""
+    import material_graph as mg
     inv = paths.inventory
     roles = pc.load_json(os.path.join(paths.source, "texture_roles.json")).get("textures", {})
     before, detail = 0.0, {}
     for tpath, t in inv["textures"].items():
         name = tpath.split(".")[-1]
-        f = os.path.join(paths.tex_source, name + ".png")
+        f = os.path.join(paths.tex_source, mg.texture_stem(inv, tpath) + ".png")
         if not os.path.exists(f):
             continue
         w, h = png_size(f)
