@@ -7,6 +7,8 @@
 class UAnimBlueprint;
 class UAnimMontage;
 class UBlendSpace;
+class USkeletalMesh;
+class USkeleton;
 
 /**
  * Editor helper that authors the operatives' AnimGraph (called from Scripts/Editor/setup_operative_animation.py).
@@ -96,4 +98,22 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
 	static bool SetMontageSlot(UAnimMontage* Montage, FName SlotName);
+
+	/**
+	 * A skeleton asset built from a skeletal mesh's own bone tree (USkeleton::MergeAllBonesToBoneTree, like the editor's "Create
+	 * Skeleton" but WITHOUT re-pointing the mesh: the mesh asset stays untouched). For a mesh with bones its skeleton lacks
+	 * (Cyberpunk_Explorer_A_UE5: its FBX root "SKM_Cyberpunk_Explorer_A" above the Manny "root" is not in SK_Mannequin, and
+	 * cannot be merged into it - a second root). Translation retargeting modes and slot groups are copied by name from ModesFrom
+	 * (optional), which is also added to its compatible skeletons (asset pickers). Returns the existing asset when PackageName
+	 * already holds one. Not saved. Frozen PMC Fighter, 2026-10-20 (Scripts/Editor/create_frozen_pmc_fighter.py).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static USkeleton* CreateSkeletonFromMesh(USkeletalMesh* Mesh, const FString& PackageName, USkeleton* ModesFrom, FString& OutReport);
+
+	/**
+	 * Points a skeletal mesh (a Claude-owned copy, never a pack asset) at Skeleton, which must hold every mesh bone with the
+	 * same parents (USkeleton::IsCompatibleMesh). Not saved. Frozen PMC Fighter, 2026-10-20.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static bool SetSkeletalMeshSkeleton(USkeletalMesh* Mesh, USkeleton* Skeleton, FString& OutReport);
 };

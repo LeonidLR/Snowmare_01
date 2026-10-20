@@ -16,6 +16,7 @@ Latest work (2026-10-19): quick fire (Ctrl + click on a point), peek sight, symm
 unity-clash finder in `build.ps1`. 2026-10-20 (tutorial, `agents/work`): one current navigation target (edge arrow + minimap highlight, guide
 beacon; places behind never call back - the lake bridge marker bug), the A4 ambush by the Medic-Sapper alone, the A3 fence without the
 one-at-a-time queue, the pacing pass (breather 0.8 s, `Tutorial.Flow.Pacing`) - `docs/systems/tutorial-engine.md` sections 17-18, 554 unit tests.
+2026-10-20 (`agents/pmcfighter`): the Frozen PMC Fighter (`/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/BP_Enemy_FrozenPMC_Fighter`, a Frostbitten variant on the user's Cyberpunk_Explorer_A body with a retargeted copy of the Frostbitten ABP; the pack mesh has a stray FBX root bone - see `docs/systems/animation-setup.md` "Frozen PMC Fighter").
 What is waiting for the user: section 7 (open questions) and `docs/port/NEXT_STEPS.md`.
 
 ---

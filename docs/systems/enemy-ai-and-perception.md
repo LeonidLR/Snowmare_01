@@ -6,7 +6,7 @@
 >
 > Key files:
 > - `Combat/EnemyRegistrySubsystem`, `EnemyRegistryRules`, `Characters/EnemyTacticsRules`, `Characters/EnemyCharacter`, `EnemyAIController`
-> - Data `Content/Data/AI/ai_tuning.json`; smokes `EnemyAISmoke`, `EnemyTacticsSmoke`, `EnemyArchetypeSmoke`
+> - Data `Content/Data/AI/ai_tuning.json`; smokes `EnemyAISmoke`, `EnemyTacticsSmoke`, `EnemyArchetypeSmoke`, `PmcFighterSmoke` (Frozen PMC Fighter, last section)
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
@@ -41,3 +41,30 @@ frozen - after 1.5 s without 50 cm of progress (a blocked / unreachable point) o
 log lines name the side a blow came from (front < 60 < side < 120 < back). Tests `CodexTactics.Characters.EnemyTactics.FlankDetour`; smoke
 `EnemyTacticsSmoke` (per-hound first contact angle, a flank-role hound from the side / back, bites from the side / back).
 
+
+## Frozen PMC Fighter = a Frostbitten variant body (game designer 2026-10-20, branch agents/pmcfighter)
+
+The designer added the pack `/Game/Cyberpunk_Explorer_A` and asked for a new enemy on it animated like the Frostbitten.
+`/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/BP_Enemy_FrozenPMC_Fighter` (made by `Scripts/Editor/create_frozen_pmc_fighter.py`, idempotent,
+never overwrites a saved asset; `CODEX_PMC_REAPPLY=1` re-applies the BP fields) is a **child Blueprint of `BP_Enemy_Frostbitten`**:
+
+- **Why a child BP, not the C++ class:** the archetype then comes from the existing safety net (`EnemyAIRules::ResolvePlacedArchetype` walks the
+  class chain: BP_Enemy_FrozenPMC_Fighter_C -> BP_Enemy_Frostbitten_C = mapped to `Frostbitten`), so stats (60 HP, 2.8 m/s, 15 dmg, light armor,
+  affinities), AI, knockdown (a >= 40 HP hit floors it), vision cone (18 m), kill EXP and every later edit of the Frostbitten Blueprint's AI tunables
+  carry over; no new `EEnemyArchetype`, no game-mode mapping. The child overrides only its look: mesh, ABP, capsule 40 / 90 (written explicitly),
+  mesh z -90 / yaw -90 / scale 1 (the 181 cm body has its feet at its origin and faces +Y like the Frostbitten).
+- **Name:** new `AEnemyCharacter::DisplayNameOverride` (EditDefaultsOnly; `EnemyAIRules::ResolveDisplayName`) = "Frozen PMC" on the nameplate, the
+  feed and the turn-based panel; the Frostbitten keeps "Frostbitten". No balance row of its own (stats = Frostbitten's).
+- **Knockdown clips:** new `bOverrideKnockdownClipFolder` + `KnockdownClipFolder` (`EnemyAIRules::NormalizeKnockdownClipFolder`, applied in
+  `ConfigureKnockdown` when the archetype can fall): "" = `/Game/Animations_KnockDown` itself, the UE5 Manny "RTGT" originals the operatives use (the
+  `Frostbitten/` copies are on the Frostbitten's UE4 skeleton).
+- **Waves:** the wave spawner still spawns `BP_Enemy_Frostbitten` for `frostbitten` (the class mapping is per archetype). The PMC is placed by hand
+  (it is on no map yet) or spawned by code; a `frozen_pmc` wave type would need an archetype or a per-entry class (not done, ask first).
+- Registry / sight / cone / save: inherited from `AEnemyCharacter` (the save stores the class path, so a loaded PMC comes back as a PMC).
+- Tests: unit `CodexTactics.Characters.EnemyAI.VariantBody` (name / folder rules, the child -> Frostbitten resolution),
+  `CodexTactics.Characters.EnemyAssets.FrozenPmcFighter` (the Blueprint as loaded: parent, mesh copy = the pack's geometry / materials / physics
+  asset, ABP + every clip on the mesh's skeleton, same clip set and rates as the Frostbitten's, nameplate, knockdown clips, capsule / offset /
+  facing; skipped without the pack); smoke `PmcFighterSmoke` (placed -> Frostbitten / 60 HP / "Frozen PMC" / cone; spawned like a wave enemy: idle not
+  in the reference pose, feet on the ground, walks to the squad, attacks the leader, hit clip, Manny knockdown, death from the ground, a second one
+  dies standing; `shot` = `Saved/Screenshots/pmc_fighter_*.png`, rendered). Animation route and skeleton facts: [animation-setup](animation-setup.md)
+  "Frozen PMC Fighter".

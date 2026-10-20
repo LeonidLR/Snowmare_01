@@ -669,6 +669,24 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy")
 	FString EnemyDisplayName = TEXT("Frost Hound");
 
+	/**
+	 * Nameplate / feed name of this Blueprint instead of its archetype's (a variant body of an archetype:
+	 * BP_Enemy_FrozenPMC_Fighter = a Frostbitten named "Frozen PMC"). Empty = the archetype's name. Stats stay the archetype's.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Enemy")
+	FString DisplayNameOverride;
+
+	/** Use KnockdownClipFolder instead of the archetype's knockdown clips (a body on another skeleton than the archetype's). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Enemy|Knockdown", meta = (InlineEditConditionToggle))
+	bool bOverrideKnockdownClipFolder = false;
+
+	/**
+	 * Folder under /Game/Animations_KnockDown with this body's Knocked_ / Revive_ / Death_ Back / Front sequences; empty = that
+	 * folder itself (the UE5 Manny clips, used by BP_Enemy_FrozenPMC_Fighter). Only for archetypes that can be knocked down.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Enemy|Knockdown", meta = (EditCondition = "bOverrideKnockdownClipFolder"))
+	FString KnockdownClipFolder;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy")
 	float AttackDamage = 12.0f;
 

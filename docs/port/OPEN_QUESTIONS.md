@@ -4,6 +4,13 @@
 
 ## 7. Open user decisions / questions
 
+- **Frozen PMC Fighter (2026-10-20, agents/pmcfighter) - to check:** (1) it plays the Frostbitten's MONSTER clips (hunched idle, clawing attacks) on a human
+  soldier, as asked - keep, or give it a human set (one ABP class-default change)? (2) the pack mesh `Cyberpunk_Explorer_A_UE5` has a stray FBX root bone
+  `SKM_Cyberpunk_Explorer_A` that its skeleton SK_Mannequin lacks (the editor asks to "save the Skeleton" at every load, no ABP on SK_Mannequin runs on it); the
+  enemy uses a Claude-owned copy of the mesh on its own skeleton. Delete the bone in the pack (Skeletal Mesh editor -> Skeleton Editing) if more bodies of
+  this pack will share the Manny clips. (3) Should waves spawn it (a `frozen_pmc` type needs an archetype or a per-entry class)? Details:
+  `docs/systems/animation-setup.md` "Frozen PMC Fighter".
+
 - **Melee close-in: SHIPPED (user approval 2026-10-18)** - `Content/Data/AI/ai_tuning.json` "cvars" `"Codex.Enemy.MeleeCloseIn": "1"`
   (code default 0 kept for A/B: console / `-dpcvars=Codex.Enemy.MeleeCloseIn=0` / `-NoAITuning`). Open follow-ups from its A/B
   (2026-10-18): (1) ~~pack flanking lost its side attacks~~ - DONE (user decision 2026-10-18, §5 «Pack flanking»: a real detour to

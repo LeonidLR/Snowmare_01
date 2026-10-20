@@ -22,6 +22,10 @@
 #include "Animation/AnimBlueprint.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/BlendSpace.h"
+#include "Animation/Skeleton.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "Engine/SkeletalMesh.h"
+#include "Misc/PackageName.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraphSchema_K2.h"
 #include "K2Node_VariableGet.h"
@@ -756,5 +760,80 @@ bool UOperativeAnimGraphLibrary::SetMontageSlot(UAnimMontage* Montage, FName Slo
 	}
 	Montage->PostEditChange();
 	Montage->MarkPackageDirty();
+	return true;
+}
+
+USkeleton* UOperativeAnimGraphLibrary::CreateSkeletonFromMesh(USkeletalMesh* Mesh, const FString& PackageName, USkeleton* ModesFrom, FString& OutReport)
+{
+	const FString AssetName = FPackageName::GetShortName(PackageName);
+	if (!Mesh || AssetName.IsEmpty() || !FPackageName::IsValidLongPackageName(PackageName))
+	{
+		OutReport = TEXT("no mesh / invalid package name");
+		return nullptr;
+	}
+	if (USkeleton* Existing = LoadObject<USkeleton>(nullptr, *FString::Printf(TEXT("%s.%s"), *PackageName, *AssetName), nullptr, LOAD_NoWarn | LOAD_Quiet))
+	{
+		OutReport = FString::Printf(TEXT("kept %s (%d bones)"), *PackageName, Existing->GetReferenceSkeleton().GetRawBoneNum());
+		return Existing;
+	}
+	UPackage* Package = CreatePackage(*PackageName);
+	USkeleton* Skeleton = NewObject<USkeleton>(Package, FName(*AssetName), RF_Public | RF_Standalone | RF_Transactional);
+	if (!Skeleton->MergeAllBonesToBoneTree(Mesh, /*bShowProgress*/ false))
+	{
+		OutReport = FString::Printf(TEXT("could not merge the bones of %s"), *Mesh->GetName());
+		Skeleton->ClearFlags(RF_Public | RF_Standalone);
+		return nullptr;
+	}
+	const FReferenceSkeleton& Bones = Skeleton->GetReferenceSkeleton();
+	int32 Copied = 0;
+	if (ModesFrom)
+	{
+		const FReferenceSkeleton& FromBones = ModesFrom->GetReferenceSkeleton();
+		for (int32 Index = 0; Index < Bones.GetRawBoneNum(); ++Index)
+		{
+			const int32 From = FromBones.FindBoneIndex(Bones.GetBoneName(Index));
+			if (From != INDEX_NONE)
+			{
+				Skeleton->SetBoneTranslationRetargetingMode(Index, ModesFrom->GetBoneTranslationRetargetingMode(From), /*bChildrenToo*/ false);
+				++Copied;
+			}
+		}
+		for (const FAnimSlotGroup& Group : ModesFrom->GetSlotGroups())
+		{
+			for (const FName& Slot : Group.SlotNames)
+			{
+				Skeleton->SetSlotGroupName(Slot, Group.GroupName);
+			}
+		}
+		Skeleton->AddCompatibleSkeleton(ModesFrom);
+	}
+	Skeleton->SetPreviewMesh(Mesh, /*bMarkAsDirty*/ false);
+	FAssetRegistryModule::AssetCreated(Skeleton);
+	Package->MarkPackageDirty();
+	OutReport = FString::Printf(TEXT("created %s: %d bones (root %s), retargeting modes of %d copied from %s"), *PackageName, Bones.GetRawBoneNum(),
+		Bones.GetRawBoneNum() > 0 ? *Bones.GetBoneName(0).ToString() : TEXT("-"), Copied, ModesFrom ? *ModesFrom->GetName() : TEXT("-"));
+	return Skeleton;
+}
+
+bool UOperativeAnimGraphLibrary::SetSkeletalMeshSkeleton(USkeletalMesh* Mesh, USkeleton* Skeleton, FString& OutReport)
+{
+	if (!Mesh || !Skeleton)
+	{
+		OutReport = TEXT("no mesh / skeleton");
+		return false;
+	}
+	if (!Skeleton->IsCompatibleMesh(Mesh, /*bDoParentChainCheck*/ true))
+	{
+		OutReport = FString::Printf(TEXT("%s does not hold every bone of %s"), *Skeleton->GetName(), *Mesh->GetName());
+		return false;
+	}
+	if (Mesh->GetSkeleton() != Skeleton)
+	{
+		Mesh->Modify();
+		Mesh->SetSkeleton(Skeleton);
+		Skeleton->RebuildLinkup(Mesh);
+		Mesh->MarkPackageDirty();
+	}
+	OutReport = FString::Printf(TEXT("%s -> %s"), *Mesh->GetName(), *Skeleton->GetName());
 	return true;
 }
