@@ -22,6 +22,18 @@ locked on Demo 01 until the safety unlock-all - a wave / horde fight or the tuto
 
 ## Decision blocks, newest first (old §6 «Tutorial» section)
 
+**Demo 01 2026-10-20 d (game designer: "there's no flow - transitions feel forced, I keep waiting for the next instruction"): the pacing pass.**
+Content and order unchanged. (1) The card breather 1.5 -> **0.8 s** (engine, every level). (2) Delays: `A0_cam_pan` 2 -> 1 s (with the radio
+and the objective), `A1_heatpack_mate` / `A1_sprint` / `A1_obj_hut` + `A1_wt_resupply` / `A1_share` + `A1_share_card` / `A1_regroup` /
+`A3_peek` / `A3_posture_radio` / `A3_posture` / `A4_lure` -> 0.5 s, `A4_cones` 2 -> 0.5 s, the A4 posture twin 3 -> 1 s. (3) No card waits for a
+speech (checked: none is an `after_step` follower of a radio / walk-and-talk); objectives never wait for dialogue. (4) Cards that only listed
+keys now say the action: `TUT_A1_STANCE` ("Change stance twice now ..."), `TUT_A1_HUT_ENTER` / `TUT_A3_COVER_EACH` (+ the select key),
+`TUT_A1_LOOT_OPEN`, `TUT_A3_PEEK` (she), `OBJ_A3_OVERLOOK` ("Move up to the overlook - stay low, watch for traps"). (5) Instrumented: the scripted
+pacing test `CodexTactics.Tutorial.Flow.Pacing` (table in [tutorial-engine](tutorial-engine.md) section 18: chained card handovers 1.5-2 s ->
+<= 1 s, seconds without any instruction 14.2 -> 0) and the runtime telemetry `next_instruction` / `no_instruction`; TutorialSmoke stage 153
+checks no gap without an instruction on the guide course. (6) Engine: a `condition` hint card of a beat that is over is dropped when it becomes
+due (the A2 remedial heat pack card fired at the A3 fence in the smoke and held the fence lesson back).
+
 **Demo 01 2026-10-20 c (game designer): the low fence (A3) without the "one at a time" queue.** Solo stays (`A3_fence`), then
 `A3_fence_crawl`: each operative gets his own order to go prone and crawl under the gap - at his own pace, in any order, several at once; only
 the stance is required past the fence (standing: "Go prone first - then crawl under."); the card keeps "{progress} / {count} through"

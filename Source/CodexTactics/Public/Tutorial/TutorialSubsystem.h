@@ -329,6 +329,13 @@ public:
 	const FTutorialGuideView& GetGuideView() const { return GuideView; }
 	/** The runtime guide beacon (shown at a volume target; smokes), null before the first volume target. */
 	ATutorialMarkerActor* GetGuideBeacon() const { return GuideBeacon.Get(); }
+	/**
+	 * Pacing (2026-10-20, telemetry for play-tests and smokes): real seconds with NO actionable instruction on screen (no card, no objective,
+	 * no current target) since the steps loaded, and the longest wait from a completed card to the next card / objective
+	 * (telemetry events "no_instruction" / "next_instruction", active_s = the seconds).
+	 */
+	float GetNoInstructionSeconds() const { return NoInstructionTotal; }
+	float GetMaxNextInstructionSeconds() const { return MaxNextInstructionSeconds; }
 	/** "markers:<step>" / "volume:<id>" / "" - the guide in one string (logs, telemetry, the save's informational "guide"). */
 	static FString DescribeGuide(const FTutorialGuide& Guide);
 
@@ -547,6 +554,14 @@ private:
 	TWeakObjectPtr<ATutorialMarkerActor> GuideBeacon;
 	TArray<TWeakObjectPtr<ATutorialTriggerVolume>> GuideVolumes;
 	bool bRefreshingGuide = false;
+	/** Pacing instrumentation (real seconds): the clock, the last card done, the current / total no-instruction time, the longest wait. */
+	double PacingClock = 0.0;
+	double LastCardDoneAt = -1.0;
+	float NoInstructionRun = 0.f;
+	float NoInstructionTotal = 0.f;
+	float MaxNextInstructionSeconds = 0.f;
+	/** Accumulates the no-instruction time (Tick). */
+	void TickPacing(float RealDelta);
 	/** "@patrol_route" (2026-10-20): the patrol routes' point nearest to the step's focus operative; false when the level has none. */
 	bool ResolveGuideSpot(FName Spot, FName StepId, FVector& OutLocation) const;
 	/** Resolves Machine.GetGuide() in the world (nearest marker / the beacon at the volume), logs + telemetry when it changes. */

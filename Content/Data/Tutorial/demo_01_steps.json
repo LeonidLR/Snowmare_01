@@ -17,6 +17,7 @@
     "'cancel_on' (rev 5e): a radio / walk-and-talk about a place or a moment is dropped when it is over (the bridge lines once the squad is across; never queued to play later).",
     "Leftover hint cards of an earlier beat are dropped when a later beat starts (beacon 1 reached during the camera lesson: precredited or skipped).",
     "'precredit' (default true): a command card the player already did before it was due is completed without showing it.",
+    "2026-10-20 (pacing, game designer: 'no flow - I keep waiting for the next instruction'): the next instruction follows an action within ~1 s (card breather 0.8 s, after_step delays <= 0.5-1 s), dialogue always plays ALONGSIDE the cards (no card waits for a radio / walk-and-talk), every card says the concrete action (verb + key), a step that makes the player wait says why (docs/systems/tutorial-engine.md 'Pacing rules').",
     "2026-10-20 (the current navigation target): exactly one target is shown at a time (edge arrow + highlighted minimap icon): the shown card's 'guide' / markers / completion volume, else a shown objective's markers, else the next place on the route (a guide beacon at that volume). 'guide' names it explicitly (A3_low -> the ridge, the fence crawl -> the field beyond it); 'beyond' passes a place the squad is already past (A1_bridge: all across the crevasse).",
     "Volume ids (VOL_*) are the VolumeId / StepId of ATutorialTriggerVolume actors placed in L_Demo01_A_FrozenLake:",
     "VOL_A0_BEACON1 (BeatId A1, at beacon 1), VOL_A1_BEACON2 (the crack / the bridge approach, kept), VOL_A1_HUT_APPROACH (rev 5c, Leader, ~10 m in front of",
@@ -76,7 +77,7 @@
       "_comment": "Camera lesson, STAGED, WHILE HQ talks (user request 2026-10-13; the card column and the radio strip never overlap): pan -> MMB drag pan -> turn with Q/E -> free look -> zoom, then the walk card. No timeout: each card waits for the real input (skippable). hold_s = accumulated time the continuous input was active while the card was shown. 'precredit' (default): a stage the player already did earlier is ticked off without showing. Beacon 1 reached early (beat A1): the leftover camera cards are dropped.",
       "id": "A0_cam_pan", "beat": "A0", "kind": "hint_card", "text_id": "TUT_A0_CAM_PAN",
       "keys": ["Camera.Pan.Keys"],
-      "trigger": { "type": "beat_start", "delay_s": 2.0 },
+      "trigger": { "type": "beat_start", "delay_s": 1.0 },
       "complete": { "commands": ["Camera.Pan.Keys", "Camera.Pan.Edge"], "hold_s": 1.0 }
     },
     {
@@ -188,7 +189,7 @@
     {
       "id": "A1_heatpack_mate", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HEATPACK_MATE",
       "keys": ["Item.HeatPack", "Inventory.Open"], "focus": "coldest_operative",
-      "trigger": { "type": "after_step", "step": "A1_heatpack", "delay_s": 1 },
+      "trigger": { "type": "after_step", "step": "A1_heatpack", "delay_s": 0.5 },
       "condition": { "stat": "squad_cold_max", "at_least": 40 },
       "complete": { "event": "ItemUsed.HEAT_PACK", "timeout_s": 40 }
     },
@@ -204,7 +205,7 @@
       "keys": ["Order.Sprint"],
       "unlock": ["Order.Sprint"],
       "precredit": false,
-      "trigger": { "type": "after_step", "step": "A1_heatpack_mate", "delay_s": 1 },
+      "trigger": { "type": "after_step", "step": "A1_heatpack_mate", "delay_s": 0.5 },
       "cancel_on": { "volume": "VOL_A1_HUT_APPROACH" },
       "complete": { "commands": ["Order.Sprint"], "timeout_s": 60 }
     },
@@ -218,7 +219,7 @@
     {
       "_comment2": "2026-10-20: the heat packs already taken (the sprint card came late: the bridge was skipped, the hut lesson ran first) -> never shown; beacon 3 reached -> dropped (its marker at the hut must never call the squad back).",
       "id": "A1_obj_hut", "beat": "A1", "kind": "objective", "text_id": "OBJ_A1_HUT",
-      "trigger": { "type": "after_step", "step": "A1_sprint", "delay_s": 1 },
+      "trigger": { "type": "after_step", "step": "A1_sprint", "delay_s": 0.5 },
       "cancel_on": { "step": "A1_loot_take", "volume": "VOL_A1_BEACON3" },
       "complete": { "event": "ItemLooted.HeatPack" }
     },
@@ -302,13 +303,13 @@
     {
       "_comment": "Rev 5d (game designer 2026-10-14): share the hut's heat packs - every operative carries at least one AND at least one pack was handed over between squad mates (stat heat_packs_given, since the level started), so the hand-over is always practised once. Always solvable: 3 starter packs (1 each) - the 1-2 used in the heat pack lesson + the crate's 3 >= 3, stack max 3 each. Precredited when it already holds (the looter handed them out before the card came). The real input: select the looter, open the inventory (I), hold Shift and drag a heat pack onto a mate (his body or his action-bar portrait); without Shift a cold mate cracks it at once (Sprint 15).",
       "id": "A1_share", "beat": "A1", "kind": "objective", "text_id": "OBJ_A1_SHARE",
-      "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 2 },
+      "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 0.5 },
       "complete": { "condition": [ { "stat": "squad_min_heat_packs", "at_least": 1 }, { "stat": "heat_packs_given", "at_least": 1 } ] }
     },
     {
       "id": "A1_share_card", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_SHARE",
       "keys": ["Select.Member", "Inventory.Open", "Item.Give"],
-      "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 2 },
+      "trigger": { "type": "after_step", "step": "A1_loot_take", "delay_s": 0.5 },
       "complete": { "condition": [ { "stat": "squad_min_heat_packs", "at_least": 1 }, { "stat": "heat_packs_given", "at_least": 1 } ], "timeout_s": 120 }
     },
     {
@@ -316,7 +317,7 @@
       "id": "A1_regroup", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_REGROUP",
       "keys": ["Squad.Regroup"],
       "precredit": false,
-      "trigger": { "type": "after_step", "step": "A1_share_card", "delay_s": 1 },
+      "trigger": { "type": "after_step", "step": "A1_share_card", "delay_s": 0.5 },
       "complete": { "commands": ["Squad.Regroup"], "timeout_s": 60 }
     },
     {
@@ -486,7 +487,7 @@
       "id": "A3_peek", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_PEEK",
       "keys": ["Cover.CornerPeek"],
       "unlock": ["Squad.Regroup"],
-      "trigger": { "type": "after_step", "step": "A3_cover", "delay_s": 1 },
+      "trigger": { "type": "after_step", "step": "A3_cover", "delay_s": 0.5 },
       "_comment2": "2026-10-19 (game designer): the Medic-Sapper at his slab PHYSICALLY spots the mines with his peek cone (the same cone drawn for him, PeekSpotConfig: 90 deg, 12 m for mines, reach sweeping out over 1.5 s - one by one, the nearest first, line of sight from the leaned-out eyes); done when all four lesson mines are spotted that way (or after 90 s).",
       "complete": { "condition": [ { "stat": "traps_spotted.A3PeekMines", "at_least": 4 } ], "timeout_s": 90 }
     },
@@ -527,7 +528,7 @@
     {
       "_comment": "2026-10-19 (game designer play-test): THE POSTURE LESSON right after the trap disarm lesson (A3_wire finished - disarmed, prone, timed out or skipped): the Commander's radio 'Hold your fire' + the card with the three postures and their keys; it unlocks Posture.* (locked since A0) and completes on Posture.Passive (, or Alt + ,) - the stealth part of the complex. BEAT-LESS on purpose: a later beat never drops it (the overlook is only 13 m past the wire). 'requires' A3_cover: a wire spotted before the cover field (the player wandered off) does not arm it. Its A4 twins (A4_posture_radio / A4_posture) teach it at the overlook when the wire was never spotted; whichever pair finishes first cancels the other (cancel_on both ways).",
       "id": "A3_posture_radio", "kind": "radio",
-      "trigger": { "type": "after_step", "step": "A3_wire", "requires": ["A3_cover"], "delay_s": 1 },
+      "trigger": { "type": "after_step", "step": "A3_wire", "requires": ["A3_cover"], "delay_s": 0.5 },
       "cancel_on": { "step": "A4_posture_radio" },
       "lines": [ { "speaker": "Commander", "text_id": "WT_A3_POSTURE" } ]
     },
@@ -536,7 +537,7 @@
       "keys": ["Posture.Passive", "Posture.Defensive", "Posture.Aggressive"],
       "unlock": ["Posture.*"],
       "precredit": false,
-      "trigger": { "type": "after_step", "step": "A3_wire", "requires": ["A3_cover"], "delay_s": 1.5 },
+      "trigger": { "type": "after_step", "step": "A3_wire", "requires": ["A3_cover"], "delay_s": 0.5 },
       "cancel_on": { "step": "A4_posture" },
       "complete": { "commands": ["Posture.Passive"] }
     },
@@ -555,13 +556,13 @@
       "id": "A4_cones", "beat": "A4", "kind": "hint_card", "text_id": "TUT_A4_CONES",
       "keys": ["View.VisionCones"],
       "unlock": ["View.VisionCones"],
-      "trigger": { "type": "beat_start", "delay_s": 2 },
+      "trigger": { "type": "beat_start", "delay_s": 0.5 },
       "complete": { "commands": ["View.VisionCones"], "timeout_s": 40 }
     },
     {
       "_comment": "2026-10-19: the posture lesson at the overlook when the A3 one never ran (the wire was never spotted / was tripped). Cancelled at once when A3_posture_radio / A3_posture already finished; cancels them when it finishes first (cancel_on both ways).",
       "id": "A4_posture_radio", "beat": "A4", "kind": "radio",
-      "trigger": { "type": "beat_start", "delay_s": 3 },
+      "trigger": { "type": "beat_start", "delay_s": 1 },
       "cancel_on": { "step": "A3_posture_radio" },
       "lines": [ { "speaker": "Commander", "text_id": "WT_A3_POSTURE" } ]
     },
@@ -570,7 +571,7 @@
       "keys": ["Posture.Passive", "Posture.Defensive", "Posture.Aggressive"],
       "unlock": ["Posture.*"],
       "precredit": false,
-      "trigger": { "type": "beat_start", "delay_s": 3 },
+      "trigger": { "type": "beat_start", "delay_s": 1 },
       "cancel_on": { "step": "A3_posture" },
       "complete": { "commands": ["Posture.Passive"] }
     },
@@ -617,7 +618,7 @@
       "guide": "VOL_A4_OVERLOOK",
       "unlock": ["Stealth.*"],
       "precredit": false,
-      "trigger": { "type": "after_step", "step": "A4_trap_wait", "delay_s": 2 },
+      "trigger": { "type": "after_step", "step": "A4_trap_wait", "delay_s": 0.5 },
       "complete": { "event": "StealthLure.Heard", "timeout_s": 180 }
     },
     {

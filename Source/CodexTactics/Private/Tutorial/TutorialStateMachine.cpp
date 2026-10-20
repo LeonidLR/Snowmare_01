@@ -808,8 +808,12 @@ void FTutorialStateMachine::CancelMatching(FName FinishedStep, FName EventName, 
 void FTutorialStateMachine::Enqueue(int32 Index)
 {
 	SetState(Index, ETutorialStepState::Queued);
-	if (Data.Steps[Index].Trigger.Type == ETutorialTriggerType::AfterStep && IsEarlierBeatStep(Index))
+	const ETutorialTriggerType TriggerType = Data.Steps[Index].Trigger.Type;
+	if ((TriggerType == ETutorialTriggerType::AfterStep
+		|| (TriggerType == ETutorialTriggerType::Condition && Data.Steps[Index].Kind == ETutorialStepKind::HintCard)) && IsEarlierBeatStep(Index))
 	{
+		// 2026-10-20 (pacing): also a condition card of a beat that is over (the A2 remedial heat pack card when the cold rises at the
+		// A3 fence) - it would stand in front of the lesson of the place the squad is at. Event / volume remedial cards still show.
 		// The next step of a chain whose beat is over (beacon 1 reached during the camera lesson; rev 5f: also the walk-and-talks /
 		// objectives that would follow a step passed on the way): never shown now.
 		DropEarlierBeatStep(Index);

@@ -608,8 +608,9 @@ namespace TutorialSmoke
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("regroup_card")) == ETutorialStepState::Active && State.StageTime >= 0.8f,
-				FString::Printf(TEXT("next card after the breather (%.1f s)"), State.StageTime));
+			// 2026-10-20 pacing: the breather is 0.8 s (was 1.5 s) - the next card within ~1 s, but not in the same frame.
+			Check(State, Tutorial->GetStepState(TEXT("regroup_card")) == ETutorialStepState::Active && State.StageTime >= 0.1f && State.StageTime <= 1.2f,
+				FString::Printf(TEXT("next card after the 0.8 s breather (%.1f s after the stage)"), State.StageTime));
 			PressKey(PC, EKeys::B, IE_Pressed);
 			Next(State);
 			return true;
@@ -2350,6 +2351,19 @@ namespace TutorialSmoke
 			Leader = Squad->GetLeader();
 			// 2026-10-19 b, symmetric sight: a 1.2 m wall 1 m ahead of the leader, a frozen enemy (senses off) 6 m beyond it.
 			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
+			{
+				// The mates stand where the ambush left them (Solo): put them behind the leader, out of the enemy's line.
+				int32 Behind = 0;
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					if (Member != Leader)
+					{
+						Member->StopOperative();
+						const FVector Spot = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() - Ahead * (150.f * ++Behind));
+						Member->SetActorLocation(FVector(Spot.X, Spot.Y, Leader->GetActorLocation().Z), false, nullptr, ETeleportType::TeleportPhysics);
+					}
+				}
+			}
 			const float GroundZ = Leader->GetActorLocation().Z - Leader->GetSimpleCollisionHalfHeight();
 			const FVector WallSpot = Leader->GetActorLocation() + Ahead * 100.f;
 			if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
@@ -2774,6 +2788,11 @@ namespace TutorialSmoke
 				return true;
 			}
 			CheckGuideArrow(State, PC, Tutorial, Overlay, TEXT("camera turned away"));
+			// 2026-10-20 pacing instrumentation (the scripted pacing table is CodexTactics.Tutorial.Flow.Pacing): the guide course run.
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke pacing (guide course): %.1f s without any instruction, longest wait after a card %.2f s"),
+				Tutorial->GetNoInstructionSeconds(), Tutorial->GetMaxNextInstructionSeconds());
+			Check(State, Tutorial->GetNoInstructionSeconds() <= 1.f, FString::Printf(TEXT("pacing: never without an instruction on screen since the course loaded (%.1f s)"),
+				Tutorial->GetNoInstructionSeconds()));
 			Check(State, State.GuideArrowChecks >= 1, FString::Printf(TEXT("guide course: the edge arrow was checked off-screen (%d)"), State.GuideArrowChecks));
 			TeleportSquadTo(Squad, State.CourseOrigin + State.CourseForward * 6000.f, State.CourseRight);
 			FireCourseVolume(World, TEXT("VOL_A1_BEACON3"));

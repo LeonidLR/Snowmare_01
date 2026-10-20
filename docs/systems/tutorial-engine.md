@@ -4,7 +4,7 @@
 > `TutorialRules` + `TutorialStateMachine` drive hint cards, objectives, radio lines and feed lines from `Content/Data/Tutorial/*.json`. The content of the
 > actual Demo 01 flow is in [demo01-lake](demo01-lake.md).
 >
-> **The top of this file (sections 1-17) is the authoritative reference of the steps JSON schema and the runtime semantics (current to 2026-10-20).**
+> **The top of this file (sections 1-18) is the authoritative reference of the steps JSON schema and the runtime semantics (current to 2026-10-20).**
 > The revision-by-revision notes it was distilled from are kept verbatim under [History](#history) at the end.
 >
 > Key files:
@@ -33,7 +33,7 @@ markers, feed lines, speech playback, world actions, checkpoints and telemetry. 
 
 | Rule | Detail |
 |---|---|
-| Display slots | one **hint card** at a time, then a 1.5 s breather (`CardBreatherSeconds`); up to 3 **objectives** (`MaxObjectives`); one **radio / walk_talk** speech; a **feed** step takes no slot. Queued steps are shown in the order they queued. |
+| Display slots | one **hint card** at a time, then a 0.8 s breather (`CardBreatherSeconds`; 1.5 s before the 2026-10-20 pacing pass); up to 3 **objectives** (`MaxObjectives`); one **radio / walk_talk** speech; a **feed** step takes no slot. Queued steps are shown in the order they queued. |
 | Counting before shown | Waiting and Queued steps count commands, events and volume entries too; reaching the completion there finishes the step **silently** (never shown). Hold time (`hold_s`) and timeouts run only while Active. |
 | Same input, one step | An input counts only for steps that were already running when it arrived; a follower started by that very input does not take it. |
 | Once | `"once": true` (default): never triggers again after it finished. `false`: may re-trigger after it finished (remedial hints). A running step is never re-triggered. |
@@ -44,6 +44,8 @@ markers, feed lines, speech playback, world actions, checkpoints and telemetry. 
 **When a step becomes due** (after its delay, entering Queued) these checks run in this order, the first that applies wins:
 
 1. an `after_step` follower whose beat is already over -> dropped (a card: precredited if the history satisfies it, else skipped; other kinds skipped);
+   since 2026-10-20 (pacing) also a `condition`-triggered **hint card** of a beat that is over (the A2 remedial heat pack card when the cold
+   rises at the A3 fence would stand in front of the fence lesson); event / volume / manual remedial cards of earlier beats still show;
 2. `cancel_on.step` already finished -> cancelled (Skipped);
 3. step `condition` does not hold -> Skipped silently;
 4. `precredit` from the command history satisfied -> Completed (precredited, not shown);
@@ -441,6 +443,37 @@ so smokes check the arrow), `ComputeEdgePointer`, `FormatGuideDistance`; `Bridge
   "beyond": [ { "stat": "squad_not_across.VOL_A1_BEACON2", "below": 1 } ], "complete": { "event": "BridgeCrossed", "count": 3, "distinct_operatives": true } }
 { "id": "A3_low", "beat": "A3", "guide": "VOL_A3_RIDGE", "trigger": { "type": "volume", "volume": "VOL_A3_APPROACH" }, ... }
 ```
+
+### 18. Pacing rules (2026-10-20, game designer: "there's no flow - I keep waiting for the next instruction")
+
+Every steps file follows these; `CodexTactics.Tutorial.Flow.Pacing` checks the demo file with a scripted player (reaction 1 s, 6 s to walk to a
+target) and logs the table (handover = seconds from a completed card to the next card; no instruction = no card, objective or target):
+
+1. **The next instruction follows an action within ~1 s.** The card breather is 0.8 s (= the confirm flash); an `after_step` follower of a
+   card uses `delay_s` <= 0.5-1 (0.5 when it follows a card: the breather already passed). Arrival cards (`volume` / `beat_start`) show at once
+   (rev 5g) or within 0.5-1 s.
+2. **Dialogue never blocks an instruction.** Radios / walk-and-talks have their own slot and play ALONGSIDE the cards; no card or objective is
+   an `after_step` follower of a speech, and the talk about a place is dropped when it is over (`cancel_on`).
+3. **Never without an instruction.** At every moment a card, an objective or the current navigation target (section 17) is on screen
+   (`UTutorialSubsystem::GetNoInstructionSeconds` = 0); a gap of more than 0.5 s goes to the telemetry as `no_instruction`.
+4. **Every card states the concrete action:** a verb + the key (`{key:<CommandId>}`) or the click ("Select him ({key:Select.Member}) and click
+   ..."). Lists of keys without a verb are not a card.
+5. **A wait says why.** A step that makes the player wait names what he waits for ("wait until the patrol walks into the wire"); waits on the
+   world (cold rising before the heat pack lesson) keep the current target on screen.
+6. **Places behind never call back** (section 17), confinements end with their lesson (section 12).
+7. **A lesson of a beat that is over never interrupts the next one:** a `condition` card of an earlier beat becomes due -> dropped (section 2).
+
+Telemetry for play-tests (`Saved/Tutorial/tutorial.jsonl`): `next_instruction` (active_s = seconds from the last completed card to the next card /
+objective), `no_instruction` (a gap without any instruction), `guide` (the target changed).
+
+Pacing table (2026-10-20, the scripted player on the demo file; "baseline" = `54d68fa` with the 1.5 s breather and no current target,
+"before" = the file before this pass with the 1.5 s breather, "now" = this pass):
+
+| run | cards | handover avg | handover max (chained) | handovers > 1 s | no card / objective | no instruction at all |
+|---|---|---|---|---|---|---|
+| baseline | 32 | 3.91 s | 1.50 s (25.3 s incl. walks) | 28 | 14.2 s | 14.2 s |
+| before | 32 | 3.75 s | 1.50 s | 28 | 14.2 s | 0.0 s |
+| now | 32 | 3.30 s | 0.75-1.0 s | 6 (all walks to the next place, not chained cards) | 9.8 s | 0.0 s |
 
 ## History
 

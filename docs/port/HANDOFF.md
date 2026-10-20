@@ -13,7 +13,10 @@ Last update: 2026-10-19 (split into an index + per-system docs + CHANGELOG; the 
 CommonUI frontend with save / load, minimap, and the Demo 01 tutorial on `/Game/Maps/L_Demo01_A_FrozenLake` (one lake map since 2026-10-15; rev 5j).
 Last recorded test run (CHANGELOG head, quick fire): 529 unit tests green; all smokes are registered in `Scripts/test_map.json`.
 Latest work (2026-10-19): quick fire (Ctrl + click on a point), peek sight, symmetric sight while exploring, occluded vision cones, load = reopen the level,
-unity-clash finder in `build.ps1`. What is waiting for the user: section 7 (open questions) and `docs/port/NEXT_STEPS.md`.
+unity-clash finder in `build.ps1`. 2026-10-20 (tutorial, `agents/work`): one current navigation target (edge arrow + minimap highlight, guide
+beacon; places behind never call back - the lake bridge marker bug), the A4 ambush by the Medic-Sapper alone, the A3 fence without the
+one-at-a-time queue, the pacing pass (breather 0.8 s, `Tutorial.Flow.Pacing`) - `docs/systems/tutorial-engine.md` sections 17-18, 554 unit tests.
+What is waiting for the user: section 7 (open questions) and `docs/port/NEXT_STEPS.md`.
 
 ---
 

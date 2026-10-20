@@ -52,8 +52,11 @@ struct CODEXTACTICS_API FTutorialTransition
 class CODEXTACTICS_API FTutorialStateMachine
 {
 public:
-	/** Seconds between two hint cards (UX brief 03 §2.3: confirm, then a 1.5 s breather). */
-	float CardBreatherSeconds = 1.5f;
+	/**
+	 * Seconds between two hint cards (UX brief 03 §2.3: confirm, then a breather). 2026-10-20 (game designer: "I keep waiting for the next
+	 * instruction"): 0.8 s = the confirm flash, so the next card follows the action within ~1 s (was 1.5 s).
+	 */
+	float CardBreatherSeconds = 0.8f;
 	int32 MaxObjectives = 3;
 	/** At most one failure_retry (remedial) step per this many seconds. */
 	float RemedialCooldownSeconds = 60.f;

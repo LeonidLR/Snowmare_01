@@ -106,7 +106,7 @@
     },
     "TUT_A1_HUT_ENTER": {
       "title": "GO IN",
-      "text": "Select the third operative and click inside the hut. The two at the door hold their positions."
+      "text": "Select the third operative ({key:Select.Member}) and click inside the hut: he walks in. The two at the door hold their positions."
     },
     "TUT_A1_BRIDGE_REFUSED": {
       "text": "One at a time on the bridge! The next one waits at the edge."
@@ -157,7 +157,7 @@
     },
     "TUT_A1_LOOT_OPEN": {
       "title": "SUPPLY CRATE",
-      "text": "Click the crate: the selected operative walks up and opens it."
+      "text": "Click the crate: the operative inside walks up and opens it."
     },
     "TUT_A1_LOOT_TAKE": {
       "title": "TAKE IT",
@@ -232,7 +232,7 @@
       "title": "THE APPROACH"
     },
     "OBJ_A3_OVERLOOK": {
-      "text": "Approach the complex carefully"
+      "text": "Move up to the overlook - stay low, watch for traps"
     },
     "WT_A3_01": {
       "text": "That's the complex. The PMC left in a hurry — expect mines and wires on the easy paths."
@@ -258,7 +258,7 @@
     },
     "TUT_A1_STANCE": {
       "title": "STANCE",
-      "text": "{key:Stance.Crouch} crouch, {key:Stance.Prone} prone, {key:Stance.Stand} stand. Hold Alt for the whole squad ({key:Stance.Squad.Prone}). Lower = less wind, harder to spot."
+      "text": "Change stance twice now: {key:Stance.Crouch} crouch, {key:Stance.Prone} prone, {key:Stance.Stand} stand (hold Alt for the whole squad, {key:Stance.Squad.Prone}). Lower = less wind, harder to spot."
     },
     "TUT_A1_VAULT": {
       "title": "LOW RIDGE",
@@ -277,7 +277,7 @@
     },
     "TUT_A3_COVER_EACH": {
       "title": "TAKE COVER ONE BY ONE ({progress} / {count} in cover)",
-      "text": "Stay in Solo. Each one has his own spot - the rings: Medic-Sapper behind the tall slab (blue), Commander at the middle wall (red), Engineer behind the long wall in front (orange). Select him and click the wall at his ring."
+      "text": "Stay in Solo. Each one has his own spot - the rings: Medic-Sapper behind the tall slab (blue), Commander at the middle wall (red), Engineer behind the long wall in front (orange). Select him ({key:Select.Member}) and click the wall at his ring."
     },
     "TUT_A6_COVER": {
       "title": "COVER",
@@ -289,7 +289,7 @@
     },
     "TUT_A3_PEEK": {
       "title": "CHECK WHAT'S AHEAD",
-      "text": "Peek around the corner and check what's ahead. Medic-Sapper: in cover behind the slab, click the END of the wall ({key:Cover.CornerPeek}) - he leans out, rifle up; whatever his view cone covers is spotted - mines included, one by one."
+      "text": "Peek around the corner and check what's ahead. Medic-Sapper: in cover behind the slab, click the END of the wall ({key:Cover.CornerPeek}) - she leans out, rifle up; whatever her view cone covers is spotted - mines included, one by one."
     },
     "OBJ_A6_SQUAD_COVER": {
       "text": "Put every operative into cover"

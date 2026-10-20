@@ -348,6 +348,8 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 	}
 	LockedRefusals = 0;
 	ConfinedRefusals = 0;
+	LastCardDoneAt = -1.0;
+	NoInstructionRun = NoInstructionTotal = MaxNextInstructionSeconds = 0.f;
 	ConfineLineTimes.Reset();
 	PrecreditedCount = 0;
 	LockHintFamilies.Reset();
@@ -473,6 +475,7 @@ void UTutorialSubsystem::Tick(float DeltaTime)
 	Machine.Tick(RealDelta);
 	CountRoleSpotPresence();
 	TickSpeech(RealDelta);
+	TickPacing(RealDelta);
 	FlashCardLeft = FMath::Max(0.f, FlashCardLeft - RealDelta);
 	for (auto It = FlashObjectives.CreateIterator(); It; ++It)
 	{
@@ -811,6 +814,14 @@ void UTutorialSubsystem::ProcessTransitions()
 			if (Transition.To == ETutorialStepState::Active)
 			{
 				WriteTelemetry(TEXT("shown"), Step->Id, Step->Beat, 0.f);
+				if ((Step->Kind == ETutorialStepKind::HintCard || Step->Kind == ETutorialStepKind::Objective) && LastCardDoneAt >= 0.0)
+				{
+					// Pacing: how long the player waited after his last card for the next instruction.
+					const float Wait = static_cast<float>(PacingClock - LastCardDoneAt);
+					MaxNextInstructionSeconds = FMath::Max(MaxNextInstructionSeconds, Wait);
+					WriteTelemetry(TEXT("next_instruction"), Step->Id, Step->Beat, Wait);
+					LastCardDoneAt = -1.0;
+				}
 				HandleStepShown(*Step);
 				if (Step->Kind == ETutorialStepKind::Radio || Step->Kind == ETutorialStepKind::WalkTalk)
 				{
@@ -835,6 +846,7 @@ void UTutorialSubsystem::ProcessTransitions()
 				{
 					if (Step->Kind == ETutorialStepKind::HintCard)
 					{
+						LastCardDoneAt = PacingClock;
 						FlashCard = Step->Id;
 						FlashCardLeft = FMath::Min(0.8f, Machine.CardBreatherSeconds);
 					}
@@ -1605,6 +1617,24 @@ void UTutorialSubsystem::RefreshMarkers()
 		// 2026-10-20: the current navigation target always shows (a "guide" may name another step's marker; the beacon at a volume).
 		Marker->SetMarkerShown(bActive && (bShow || Marker == GuideMarker));
 	}
+}
+
+void UTutorialSubsystem::TickPacing(float RealDelta)
+{
+	PacingClock += RealDelta;
+	const bool bNothing = Machine.GetActiveCard().IsNone() && Machine.GetActiveObjectives().IsEmpty() && !GuideView.bValid;
+	if (bNothing)
+	{
+		NoInstructionRun += RealDelta;
+		NoInstructionTotal += RealDelta;
+		return;
+	}
+	if (NoInstructionRun > 0.5f)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial pacing: %.1f s without any instruction on screen (beat %s)"), NoInstructionRun, *Machine.GetCurrentBeat().ToString());
+		WriteTelemetry(TEXT("no_instruction"), NAME_None, Machine.GetCurrentBeat(), NoInstructionRun);
+	}
+	NoInstructionRun = 0.f;
 }
 
 FString UTutorialSubsystem::DescribeGuide(const FTutorialGuide& Guide)

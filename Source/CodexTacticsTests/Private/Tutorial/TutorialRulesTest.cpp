@@ -234,10 +234,10 @@ bool FTutorialTriggerCompleteTest::RunTest(const FString&)
 	Machine.HandleCommand(PlayerCommands::SoloOn);
 	TestEqual(TEXT("B completes card1"), Machine.GetState(TEXT("card1")), ETutorialStepState::Completed);
 	TestEqual(TEXT("card2 waits for the breather"), Machine.GetState(TEXT("card2")), ETutorialStepState::Queued);
-	Machine.Tick(1.f);
+	Machine.Tick(0.5f);
 	TestEqual(TEXT("still breathing"), Machine.GetActiveCard(), FName());
-	Machine.Tick(0.6f);
-	TestEqual(TEXT("card2 shown after 1.5 s"), Machine.GetActiveCard(), FName(TEXT("card2")));
+	Machine.Tick(0.4f);
+	TestEqual(TEXT("card2 shown after the 0.8 s breather (2026-10-20 pacing, was 1.5 s)"), Machine.GetActiveCard(), FName(TEXT("card2")));
 	Machine.HandleCommand(PlayerCommands::StanceCrouch);
 	TestEqual(TEXT("count 1 of 2"), Machine.GetProgress(TEXT("card2")), 1);
 	Machine.HandleCommand(PlayerCommands::SquadStanceProne);

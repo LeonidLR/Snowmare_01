@@ -481,8 +481,8 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestTrue(TEXT("A0_radio_hq: HQ radio at the beat start, locks nothing (talk on the move)"), Radio && Radio->Kind == ETutorialStepKind::Radio
 		&& Radio->Trigger.Type == ETutorialTriggerType::BeatStart && Radio->Lock.IsEmpty() && Radio->Lines.Num() >= 4 && Radio->Lines[0].Speaker == TEXT("HQ"));
 	const FTutorialStep* Pan = Data.FindStep(TEXT("A0_cam_pan"));
-	TestTrue(TEXT("the camera lesson starts WITH the radio (beat start + 2 s), independent of it"), Pan && Pan->Trigger.Type == ETutorialTriggerType::BeatStart
-		&& Pan->Trigger.DelaySeconds > Radio->Trigger.DelaySeconds && Pan->Unlock.IsEmpty());
+	TestTrue(TEXT("the camera lesson starts WITH the radio (beat start + 1 s, 2026-10-20 pacing), independent of it"), Pan && Pan->Trigger.Type == ETutorialTriggerType::BeatStart
+		&& Pan->Trigger.DelaySeconds >= Radio->Trigger.DelaySeconds && Pan->Unlock.IsEmpty());
 	const FTutorialStep* Walk = Data.FindStep(TEXT("A0_move"));
 	TestTrue(TEXT("rev 5c: 'click to walk' right after the camera chain (no longer waits for the radio), done on a move order"), Walk
 		&& Walk->Trigger.Type == ETutorialTriggerType::AfterStep && Walk->Trigger.AfterSteps == TArray<FName>{ FName(TEXT("A0_cam_zoom")) }
@@ -1571,7 +1571,7 @@ bool FTutorialArrivalCardsAtOnceTest::RunTest(const FString&)
 	TestEqual(TEXT("rev 5i: the Solo card shows at once"), Hut.GetActiveCard(), FName(TEXT("A1_solo")));
 	TestFalse(TEXT("sprint stays unlocked"), Hut.IsCommandLocked(PlayerCommands::Sprint));
 
-	// A card the player completes still gets the 1.5 s breather before the next one (UX brief).
+	// A card the player completes still gets the breather before the next one (UX brief; 0.8 s since the 2026-10-20 pacing pass).
 	FTutorialStateMachine Breather;
 	Breather.Load(Data);
 	Breather.StartBeat(TEXT("A1"));
