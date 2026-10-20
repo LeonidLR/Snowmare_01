@@ -397,10 +397,9 @@ public:
 
 	/**
 	 * Judges a move of Operative to Destination under the confinement in force (Allowed when none): the area test (the open volumes
-	 * of the confinement, or their bounding box with "span"; a 50 cm margin) + TutorialRules::JudgeConfinedMove. bTakeTurn: an
-	 * allowed order outside the area takes the "one_at_a_time" turn, an order inside gives a held turn back (orders, not checks).
+	 * of the confinement, or their bounding box with "span"; a 50 cm margin) + TutorialRules::JudgeConfinedMove.
 	 */
-	ETutorialConfineVerdict JudgeMove(const AOperativeCharacter& Operative, const FVector& Destination, bool bTakeTurn);
+	ETutorialConfineVerdict JudgeMove(const AOperativeCharacter& Operative, const FVector& Destination);
 
 	/** A move order was refused: the verdict's feed line ("Hold here - follow the training.", at most one per verdict per second), "Tutorial.Confined". */
 	void ReportConfinedRefusal(ETutorialConfineVerdict Verdict, const AOperativeCharacter* Operative);

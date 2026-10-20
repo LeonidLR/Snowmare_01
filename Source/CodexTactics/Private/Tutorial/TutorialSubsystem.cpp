@@ -1397,7 +1397,7 @@ bool UTutorialSubsystem::ClampIntoConfinement(FVector& InOutDestination) const
 	return true;
 }
 
-ETutorialConfineVerdict UTutorialSubsystem::JudgeMove(const AOperativeCharacter& Operative, const FVector& Destination, bool bTakeTurn)
+ETutorialConfineVerdict UTutorialSubsystem::JudgeMove(const AOperativeCharacter& Operative, const FVector& Destination)
 {
 	FTutorialConfineView Confine;
 	if (!IsTutorialActive() || !Machine.GetActiveConfine(Confine))
@@ -1407,19 +1407,7 @@ ETutorialConfineVerdict UTutorialSubsystem::JudgeMove(const AOperativeCharacter&
 	const bool bInside = IsInsideConfinement(Destination);
 	// A move along his own wall (a shimmy, the corner peek) is not a new position: only the area counts for it.
 	const FName Stance = Operative.bInCover && !Confine.Spec.Stance.IsNone() ? Confine.Spec.Stance : GetStanceName(Operative.GetStance());
-	const ETutorialConfineVerdict Verdict = TutorialRules::JudgeConfinedMove(Confine, Operative.GetFName(), Stance, bInside);
-	if (bTakeTurn && Verdict == ETutorialConfineVerdict::Allowed && Confine.Spec.HasExit())
-	{
-		if (!bInside)
-		{
-			Machine.TakeConfineExitTurn(Operative.GetFName());
-		}
-		else if (IsInsideConfinement(Operative.GetActorLocation()))
-		{
-			Machine.ReturnConfineExitTurn(Operative.GetFName()); // called back into the area before he got through
-		}
-	}
-	return Verdict;
+	return TutorialRules::JudgeConfinedMove(Confine, Operative.GetFName(), Stance, bInside);
 }
 
 void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, const AOperativeCharacter* Operative)
@@ -1452,9 +1440,6 @@ void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, 
 	case ETutorialConfineVerdict::ExitStance:
 		Line = bProne ? LOCTEXT("ConfineExitProne", "Go prone first - then crawl under.") : LOCTEXT("ConfineExitCrouch", "Crouch first - stay low.");
 		break;
-	case ETutorialConfineVerdict::NotYourTurn:
-		Line = LOCTEXT("ConfineTurn", "One at a time - wait until he is through.");
-		break;
 	case ETutorialConfineVerdict::HeldBack:
 	{
 		// 2026-10-20: the A4 ambush - one operative does it, the others hold.
@@ -1476,7 +1461,7 @@ bool UTutorialSubsystem::CheckConfinedOrder(const UObject* WorldContext, const A
 	{
 		return true;
 	}
-	const ETutorialConfineVerdict Verdict = Tutorial->JudgeMove(*Operative, Destination, /*bTakeTurn*/ true);
+	const ETutorialConfineVerdict Verdict = Tutorial->JudgeMove(*Operative, Destination);
 	if (Verdict == ETutorialConfineVerdict::Allowed)
 	{
 		return true;
@@ -1506,7 +1491,7 @@ void UTutorialSubsystem::HandleConfineChanged()
 			continue;
 		}
 		// "stop": everyone stops where he is; otherwise only a walk that would end outside the area (ordered before the squad arrived).
-		const bool bOutside = JudgeMove(*Member, Member->GetLastMoveDestination(), /*bTakeTurn*/ false) != ETutorialConfineVerdict::Allowed;
+		const bool bOutside = JudgeMove(*Member, Member->GetLastMoveDestination()) != ETutorialConfineVerdict::Allowed;
 		if (Confine.Spec.bStop || bOutside)
 		{
 			Member->StopOperative();

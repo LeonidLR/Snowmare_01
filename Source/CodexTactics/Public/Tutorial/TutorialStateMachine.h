@@ -213,14 +213,10 @@ public:
 	 * completes in one of its "allow" areas counts only while it is SHOWN (the lesson's order: right of the door only after left).
 	 */
 	bool IsConfined() const;
-	/** The confinement in force: its spec, the areas open now, the exit turn; false when none. */
+	/** The confinement in force: its spec, the areas open now, who got through; false when none. */
 	bool GetActiveConfine(FTutorialConfineView& Out) const;
 	/** Ends the confinement in force (the tutorial was switched off / skipped, a fight started). False when none held. */
 	bool ReleaseConfines();
-	/** "exit.one_at_a_time": an order outside the area was allowed for SubjectId - his turn (no-op while another holds it). */
-	void TakeConfineExitTurn(FName SubjectId);
-	/** The turn holder was ordered back into the area: the turn is free again. */
-	void ReturnConfineExitTurn(FName SubjectId);
 	/** Changes whenever a confinement starts or ends (the runtime stops the squad when one starts). */
 	int32 GetConfineSerial() const { return ConfineSerial; }
 
@@ -362,7 +358,6 @@ private:
 	{
 		int32 Owner = INDEX_NONE;
 		bool bReleased = false;
-		FName ExitHolder;
 		TArray<FName> Passed;
 	};
 	TArray<FConfineRuntime> Confines;
@@ -379,6 +374,6 @@ private:
 	void StartConfine(int32 Index);
 	/** Releases the confinement whose "until" step just finished. */
 	void ReleaseConfinesUntil(int32 FinishedIndex);
-	/** "exit.one_at_a_time": the exit event named SubjectId - he got through, the turn is free. */
+	/** "exit.through": the event named SubjectId - he got through (free to move on). */
 	void NoteConfineEvent(FName EventName, FName SubjectId);
 };

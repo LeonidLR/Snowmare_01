@@ -228,8 +228,8 @@ namespace TutorialRules
 	/**
 	 * May an operative (OperativeId, in OperativeStance) be sent to a destination under the confinement? bDestinationInside = the
 	 * destination (and the path end) lies in the allowed area (the runtime tests the geometry). Order of the rules: the confinement's
-	 * "stance" (every order) -> inside = allowed -> no "exit" = Outside -> got through already = allowed -> the exit stance -> the
-	 * one-at-a-time turn (another operative holds it = NotYourTurn). The caller takes the turn when an outside order is allowed.
+	 * "stance" (every order) -> inside = allowed -> no "exit" = Outside -> got through already = allowed -> the exit stance (each
+	 * operative on his own: no queue since 2026-10-20). "free": "focus": the free operative first = allowed; the others outside = HeldBack.
 	 */
 	CODEXTACTICS_API ETutorialConfineVerdict JudgeConfinedMove(const FTutorialConfineView& Confine, FName OperativeId, FName OperativeStance,
 		bool bDestinationInside);

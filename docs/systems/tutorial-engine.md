@@ -283,7 +283,7 @@ had already finished when this step becomes due, it is cancelled immediately. It
 
 ```json
 "confine": { "volume": "VOL_A1_HUT_APPROACH", "allow": ["VOL_A1_DOOR_L", "VOL_A1_DOOR_R", "VOL_A1_HUT"], "until": "A1_hut_enter",
-             "stop": true, "span": true, "stance": "crouch", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } }
+             "stop": true, "span": true, "stance": "crouch", "exit": { "stance": "prone", "through": "CrawlGapPassed" } }
 ```
 
 | Key | Type | Default | Meaning |
@@ -295,7 +295,7 @@ had already finished when this step becomes due, it is cancelled immediately. It
 | `span` | bool | false | The allowed area is one box: the bounding box of the holding + open allowed volumes. |
 | `stance` | `crouch` / `prone` | none | Every move order needs the ordered operative that low (crouch = crouched or prone). An operative in cover counts as low enough (shimmy / peek). |
 | `exit.stance` | `crouch` / `prone` | none | Orders OUTSIDE the area are allowed for an operative in this stance. |
-| `exit.one_at_a_time` | event pattern | "" | Only one operative at a time may be outside; his turn ends when this event names him (he is then free to move on). |
+| `exit.through` | event pattern | "" | This event names an operative who got through (e.g. `CrawlGapPassed`): from then on he moves freely, any stance. (2026-10-20: the former `exit.one_at_a_time` queue was removed - several may cross at once, each on his own order; an old file gets the unknown-key warning and no queue.) |
 | `free` | `"focus"` | none | 2026-10-20: the step's focus operative is never held (he does the lesson alone, anywhere); everyone else may move only inside the areas - an order outside is refused with "Hold here - <Name> handles it." (verdict `HeldBack`). A `free` without a step `focus`: warning. |
 
 - **Starts** when the step is triggered (before its delay; a `volume` step: the moment the squad arrives) - unless its `until` step already finished.
@@ -305,7 +305,7 @@ had already finished when this step becomes due, it is cancelled immediately. It
   in one of its `allow` areas counts only while it is shown.
 - **Move orders** (player clicks, cover orders, walk-ups, autonomy: `UTutorialSubsystem::CheckConfinedOrder`) are judged by
   `TutorialRules::JudgeConfinedMove`: `stance` -> destination inside (50 cm margin, 3 m height) = allowed -> no `exit` = refused -> already through =
-  allowed -> `exit.stance` -> another operative holds the turn = refused (with `free`: the free operative is always allowed first; the others
+  allowed -> `exit.stance` (each operative on his own, no queue) (with `free`: the free operative is always allowed first; the others
   inside = allowed, outside = `HeldBack`). A refusal posts one feed line per verdict per second and raises
   `Tutorial.Confined`; formation moves are pulled into the area instead (`ClampIntoConfinement`, 60 cm inside).
 
@@ -333,7 +333,7 @@ had already finished when this step becomes due, it is cancelled immediately. It
 | `runtime` | `{step: {progress, held_s, subjects, contributors}}` | a pending step continues its count / hold / counted operatives; contributors are restored for every step (`distinct_from`) |
 | `locks` | entries in force | as saved; an older save without `locks` rebuilds them from the beats up to the current one + the finished steps |
 | `history` | `{command: {count, held_s}}` | precredit history |
-| `confines` | `[{step, released, holder, passed}]` | the confinement in force holds again; a released one stays released |
+| `confines` | `[{step, released, passed}]` | the confinement in force holds again; a released one stays released (an older save's `holder` is ignored) |
 | `enabled` | the player setting | informational (the setting lives in `profile.json`) |
 | `volumes_fired`, `lock_hints`, `skipped` | subsystem | used-up volumes (by actor name), families that already got the "Not yet" line, SKIP TUTORIAL |
 | `route` | the furthest place reached (a volume id; 2026-10-20) | the route progress (its key is recomputed from the volume; an older save: the saved beat's start) - the current target follows from it and the finished steps |
@@ -383,7 +383,7 @@ load; while a load is pending the tutorial does not start (no checkpoint over th
 { "id": "fence", "beat": "A3", "trigger": { "type": "volume", "volume": "VOL_FENCE" }, "confine": { "volume": "VOL_FENCE", "stop": true },
   "complete": { "condition": { "stat": "squad_solo", "at_least": 1 } } }
 { "id": "crawl", "beat": "A3", "trigger": { "type": "after_step", "step": "fence" },
-  "confine": { "volume": "VOL_FENCE", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } },
+  "confine": { "volume": "VOL_FENCE", "exit": { "stance": "prone", "through": "CrawlGapPassed" } },
   "complete": { "event": "CrawlGapPassed", "count": 3, "distinct_operatives": true } }
 { "id": "postures", "beat": "A4", "action": { "type": "set_posture", "posture": "defensive" }, "kind": "radio", "lines": [ { "text_id": "WT_P" } ] }
 ```

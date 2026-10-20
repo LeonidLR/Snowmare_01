@@ -565,7 +565,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 				OutWarnings.Add(Where + TEXT(": \"cancel_on\" names no step / event / volume"));
 			}
 		}
-		// Rev 5i: "confine": { "volume", "allow", "until", "stop", "span", "stance", "exit": { "stance", "one_at_a_time" } } (FTutorialConfine).
+		// Rev 5i: "confine": { "volume", "allow", "until", "stop", "span", "stance", "exit": { "stance", "through" } } (FTutorialConfine).
 		const TSharedPtr<FJsonObject>* ConfineObject = nullptr;
 		if (Object->TryGetObjectField(TEXT("confine"), ConfineObject))
 		{
@@ -603,7 +603,8 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 			const TSharedPtr<FJsonObject>* ExitObject = nullptr;
 			if (Confine->TryGetObjectField(TEXT("exit"), ExitObject))
 			{
-				WarnUnknownKeys(*ExitObject, { TEXT("stance"), TEXT("one_at_a_time") }, Where + TEXT(" confine exit"), OutWarnings);
+				// 2026-10-20: "one_at_a_time" (the fence queue) is gone - an old file gets the unknown-key warning.
+				WarnUnknownKeys(*ExitObject, { TEXT("stance"), TEXT("through") }, Where + TEXT(" confine exit"), OutWarnings);
 				const FString ExitStanceText = JsonString(*ExitObject, TEXT("stance"));
 				Step.Confine.ExitStance = NormalizeStance(ExitStanceText);
 				if (!ExitStanceText.IsEmpty() && Step.Confine.ExitStance.IsNone())
@@ -611,7 +612,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 					OutError = FString::Printf(TEXT("%s: unknown confine exit stance \"%s\" (crouch | prone)"), *Where, *ExitStanceText);
 					return false;
 				}
-				Step.Confine.ExitEvent = JsonString(*ExitObject, TEXT("one_at_a_time"));
+				Step.Confine.ThroughEvent = JsonString(*ExitObject, TEXT("through"));
 			}
 		}
 		Step.Focus = FName(*JsonString(Object, TEXT("focus")));
@@ -933,7 +934,6 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 		const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
 		Entry->SetStringField(TEXT("step"), Confine.Owner.ToString());
 		Entry->SetBoolField(TEXT("released"), Confine.bReleased);
-		Entry->SetStringField(TEXT("holder"), Confine.ExitHolder.IsNone() ? FString() : Confine.ExitHolder.ToString());
 		Entry->SetArrayField(TEXT("passed"), JsonNameValues(Confine.Passed));
 		Confines.Add(MakeShared<FJsonValueObject>(Entry));
 	}
@@ -1019,8 +1019,6 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 			FTutorialConfineProgress& Stored = OutProgress.Confines.AddDefaulted_GetRef();
 			Stored.Owner = FName(*Owner);
 			Stored.bReleased = JsonBool(Entry, TEXT("released"), false);
-			const FString Holder = JsonString(Entry, TEXT("holder"));
-			Stored.ExitHolder = Holder.IsEmpty() ? NAME_None : FName(*Holder);
 			JsonUniqueNames(*Entry, TEXT("passed"), Stored.Passed);
 		}
 	}
@@ -1164,10 +1162,6 @@ ETutorialConfineVerdict TutorialRules::JudgeConfinedMove(const FTutorialConfineV
 	{
 		return ETutorialConfineVerdict::ExitStance;
 	}
-	if (!Confine.Spec.ExitEvent.IsEmpty() && !Confine.ExitHolder.IsNone() && Confine.ExitHolder != OperativeId)
-	{
-		return ETutorialConfineVerdict::NotYourTurn;
-	}
 	return ETutorialConfineVerdict::Allowed;
 }
 
@@ -1179,7 +1173,6 @@ const TCHAR* TutorialRules::ConfineVerdictName(ETutorialConfineVerdict Verdict)
 	case ETutorialConfineVerdict::Outside: return TEXT("outside");
 	case ETutorialConfineVerdict::Stance: return TEXT("stance");
 	case ETutorialConfineVerdict::ExitStance: return TEXT("exit_stance");
-	case ETutorialConfineVerdict::NotYourTurn: return TEXT("not_your_turn");
 	case ETutorialConfineVerdict::HeldBack: return TEXT("held_back");
 	default: return TEXT("?");
 	}

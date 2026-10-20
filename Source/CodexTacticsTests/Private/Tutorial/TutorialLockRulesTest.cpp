@@ -866,11 +866,10 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("rev 5i: Solo on: the stop card done"), Machine.GetState(TEXT("A3_fence")), ETutorialStepState::Completed);
 	TestEqual(TEXT("rev 5i: then one by one"), Machine.GetActiveCard(), FName(TEXT("A3_fence_crawl")));
 	FTutorialConfineView Crossing;
-	TestTrue(TEXT("rev 5i: the crossing is held, prone one at a time"), Machine.GetActiveConfine(Crossing) && Crossing.Spec.ExitStance == FName(TEXT("prone")));
+	TestTrue(TEXT("rev 5i: the crossing is held, prone (each on his own)"), Machine.GetActiveConfine(Crossing) && Crossing.Spec.ExitStance == FName(TEXT("prone")));
 	for (const TCHAR* Op : { TEXT("Op1"), TEXT("Op2"), TEXT("Op3") })
 	{
-		Machine.TakeConfineExitTurn(Op);
-		Machine.HandleEvent(TEXT("CrawlGapPassed"), Op);
+		Machine.HandleEvent(TEXT("CrawlGapPassed"), Op); // 2026-10-20: each on his own order, no queue
 	}
 	TestEqual(TEXT("three crawl-throughs complete the crossing card"), Machine.GetState(TEXT("A3_fence_crawl")), ETutorialStepState::Completed);
 	TestFalse(TEXT("rev 5i: all through: no longer held"), Machine.IsConfined());

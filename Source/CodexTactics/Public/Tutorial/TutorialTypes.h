@@ -205,7 +205,7 @@ struct CODEXTACTICS_API FTutorialCancelOn
  * by "until" (default: the step itself) finishes, when a later beat starts, or when the tutorial is switched off / skipped / a fight
  * starts (UTutorialSubsystem). One confinement at a time (a new one replaces the old). JSON:
  *   "confine": { "volume": "VOL_A1_HUT_APPROACH", "allow": ["VOL_A1_DOOR_L", ...], "until": "A1_hut_enter", "stop": true,
- *                "span": true, "stance": "crouch", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } }
+ *                "span": true, "stance": "crouch", "exit": { "stance": "prone", "through": "CrawlGapPassed" } }
  */
 struct CODEXTACTICS_API FTutorialConfine
 {
@@ -225,13 +225,13 @@ struct CODEXTACTICS_API FTutorialConfine
 	bool bSpan = false;
 	/** "stance": "crouch" | "prone" - every move order needs the ordered operative in that stance (crouch: crouched or prone). */
 	FName Stance;
-	/** "exit.stance": an order OUTSIDE the allowed area is allowed for an operative in this stance (with "exit.one_at_a_time"). */
+	/** "exit.stance": an order OUTSIDE the allowed area is allowed for an operative in this stance - each at his own pace, any order. */
 	FName ExitStance;
 	/**
-	 * "exit.one_at_a_time": only one operative at a time may be sent outside (his turn starts with the first such order and ends when
-	 * this gameplay event names him - e.g. "CrawlGapPassed"; an operative who got through may move on freely).
+	 * "exit.through": this gameplay event names an operative who got through (e.g. "CrawlGapPassed") - he moves on freely, any stance.
+	 * (2026-10-20, game designer: the former "one_at_a_time" queue is gone - several may crawl under the fence at once.)
 	 */
-	FString ExitEvent;
+	FString ThroughEvent;
 	/**
 	 * "free": "focus" (2026-10-20, the A4 ambush by ONE operative): the confining step's focus operative is not held at all - he moves
 	 * anywhere, the others stay in the area ("Hold here - <Name> handles it.").
@@ -239,7 +239,7 @@ struct CODEXTACTICS_API FTutorialConfine
 	bool bFreeFocus = false;
 
 	bool IsSet() const { return !Volume.IsNone(); }
-	bool HasExit() const { return !ExitStance.IsNone() || !ExitEvent.IsEmpty(); }
+	bool HasExit() const { return !ExitStance.IsNone() || !ThroughEvent.IsEmpty(); }
 };
 
 /** Why a move order is refused by a confinement (TutorialRules::JudgeConfinedMove). */
@@ -252,8 +252,6 @@ enum class ETutorialConfineVerdict : uint8
 	Stance,
 	/** Outside, and not in the exit stance ("Go prone first, then crawl under."). */
 	ExitStance,
-	/** Outside, and another operative's turn ("One at a time - wait until he is through."). */
-	NotYourTurn,
 	/** Outside while the lesson belongs to another operative ("free": "focus"; "Hold here - <Name> handles it."). */
 	HeldBack
 };
@@ -265,20 +263,17 @@ struct CODEXTACTICS_API FTutorialConfineView
 	FTutorialConfine Spec;
 	/** The holding volume + the allowed volumes open now. */
 	TArray<FName> Areas;
-	/** The operative whose exit turn it is ("one_at_a_time"), none = free. */
-	FName ExitHolder;
-	/** Operatives who got through (the exit event named them). */
+	/** Operatives who got through (the "exit.through" event named them). */
 	TArray<FName> Passed;
 	/** "free": "focus" - the operative who is not held (the owner step's focus; none = not chosen yet / not free). */
 	FName FreeOperative;
 };
 
-/** A confinement as the save holds it ("confines": [{"step", "released", "holder", "passed"}]). */
+/** A confinement as the save holds it ("confines": [{"step", "released", "passed"}]; an older save's "holder" is ignored). */
 struct CODEXTACTICS_API FTutorialConfineProgress
 {
 	FName Owner;
 	bool bReleased = false;
-	FName ExitHolder;
 	TArray<FName> Passed;
 };
 

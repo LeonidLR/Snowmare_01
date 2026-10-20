@@ -457,12 +457,12 @@
       "complete": { "condition": [ { "stat": "squad_solo", "at_least": 1 } ] }
     },
     {
-      "_comment": "Rev 5i: then each operative: select him, go prone (V), crawl under the gap - one at a time. Held at the fence area; an order past the fence is allowed only for a PRONE operative and only when nobody else is crossing (his turn ends with his CrawlGapPassed); standing: 'Go prone first - then crawl under.', another crossing: 'One at a time - wait until he is through.'. Alt+V still works but every operative counts separately (3 distinct). The card shows '{progress} / {count} through'.",
+      "_comment": "Rev 5i: then each operative: select him, go prone (V), crawl under the gap. Held at the fence area; an order past the fence is allowed only for a PRONE operative (standing: 'Go prone first - then crawl under.'). 2026-10-20 (game designer): NO queue any more - each gets his own order at his own pace, in any order, several at once; one who is through (CrawlGapPassed, 'exit.through') moves on freely. Alt+V still works but every operative counts separately (3 distinct). The card shows '{progress} / {count} through'.",
       "id": "A3_fence_crawl", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_FENCE_CRAWL",
       "keys": ["Select.Member", "Stance.Prone"],
       "guide": "VOL_A3_FIELD",
       "trigger": { "type": "after_step", "step": "A3_fence" },
-      "confine": { "volume": "VOL_A3_FENCE", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } },
+      "confine": { "volume": "VOL_A3_FENCE", "exit": { "stance": "prone", "through": "CrawlGapPassed" } },
       "complete": { "event": "CrawlGapPassed", "count": 3, "distinct_operatives": true }
     },
     {

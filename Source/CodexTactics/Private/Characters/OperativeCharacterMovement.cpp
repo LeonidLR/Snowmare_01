@@ -256,7 +256,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 		const FNavPathSharedPtr Path = PathFollowing ? PathFollowing->GetPath() : nullptr;
 		if (Path.IsValid() && Path->IsValid() && Path->GetPathPoints().Num() > 0)
 		{
-			const ETutorialConfineVerdict EndVerdict = Tutorial->JudgeMove(*this, Path->GetEndLocation(), /*bTakeTurn*/ false);
+			const ETutorialConfineVerdict EndVerdict = Tutorial->JudgeMove(*this, Path->GetEndLocation());
 			if (EndVerdict != ETutorialConfineVerdict::Allowed)
 			{
 				AIController->StopMovement();

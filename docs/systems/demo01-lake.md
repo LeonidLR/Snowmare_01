@@ -22,6 +22,14 @@ locked on Demo 01 until the safety unlock-all - a wave / horde fight or the tuto
 
 ## Decision blocks, newest first (old §6 «Tutorial» section)
 
+**Demo 01 2026-10-20 c (game designer): the low fence (A3) without the "one at a time" queue.** Solo stays (`A3_fence`), then
+`A3_fence_crawl`: each operative gets his own order to go prone and crawl under the gap - at his own pace, in any order, several at once; only
+the stance is required past the fence (standing: "Go prone first - then crawl under."); the card keeps "{progress} / {count} through"
+(`TUT_A3_FENCE_CRAWL` "UNDER THE FENCE"). One who is through (`CrawlGapPassed`) moves on freely. Engine: the `exit.one_at_a_time` queue
+(turn holder, `NotYourTurn`, "One at a time - wait until he is through.") is removed - no other step used it; `exit.through` names the event
+that frees an operative; saves no longer carry `holder`. The regroup refusal line reads "Not yet - each operative crosses the fence and takes
+his own cover first." Tests `Tutorial.Confine.FenceEachOnHisOwn` / `JudgeMove`, `Schema.DemoFileA0A1Flow`; TutorialSmoke stage 113 (two prone at once).
+
 **Demo 01 2026-10-20 b (game designer: "two stay in place, one sets up the ambush; now it doesn't work well"): the A4 ambush by ONE operative.**
 **Decision (Claude):** the ambusher is the **Medic-Sapper** - traps are her job (the A3 peek spot is hers too), a fixed role reads clearer than
 "whoever you select first after the card", and every card can name her (dead / missing: the leader at that moment). `A4_tripwire` (after the

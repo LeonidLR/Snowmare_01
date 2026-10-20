@@ -43,8 +43,8 @@
 //     command history; (rev 5i) the A3 approach: the squad is held, a standing click to the ridge is refused ("Crouch first"), C
 //     crouches the leader, the click is accepted, beyond the ridge still refused, the followers copy the crouch and the card completes
 //     when all are low in VOL_A3_RIDGE; (rev 5i) the fence one by one: held, nobody past before Solo, B -> "one by one 0 / 3",
-//     standing refused ("Go prone first"), prone the first goes, a second refused meanwhile ("One at a time"), CrawlGapPassed frees
-//     the turn ("1 / 3"), three through -> free; B (regroup) refused "Not yet - one by one.", each into his own cover (3 distinct),
+//     standing refused ("Go prone first"), prone the first goes, (2026-10-20) a second prone goes at the same time (no queue), any order
+//     through ("1 / 3"), three through -> free; B (regroup) refused "Not yet - each operative crosses ...", each into his own cover (3 distinct),
 //     then the peek card frees Regroup; (rev 2026-10-19) a mine blast beside the engineer (everyone carries a medkit) -> the MEDKIT card
 //     focused on him (Item.Use / Inventory.Open free), H on a mate does not count, he presses H -> healed, the card completes; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
 //     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
@@ -1786,8 +1786,8 @@ namespace TutorialSmoke
 			State.StageTime = 0.f;
 			return true;
 		}
-		// Rev 5i item 4 (game designer 2026-10-15): the low fence ONE BY ONE - stop, Solo, then each operative prone under the gap, one at
-		// a time; then each into his own cover; Regroup refused meanwhile. A real 8 x 8 m VOL_A3_FENCE round the squad, "past the fence"
+		// Rev 5i item 4 (game designer 2026-10-15): the low fence - stop, Solo, then each operative prone under the gap on his own order
+		// (2026-10-20: no "one at a time" queue - several at once, any order); then each into his own cover; Regroup refused meanwhile. A real 8 x 8 m VOL_A3_FENCE round the squad, "past the fence"
 		// 10 m ahead; the crawl-throughs are the fence actor's CrawlGapPassed events (raised here - the gap itself is CrawlGap / BridgeFence smokes' job).
 		case 110:
 		{
@@ -1826,7 +1826,7 @@ namespace TutorialSmoke
 				return true;
 			}
 			Check(State, Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A3_fence")) == ETutorialStepState::Completed
-				&& Tutorial->GetStepState(TEXT("A3_fence_crawl")) == ETutorialStepState::Active, TEXT("rev 5i: B - Solo on, then the 'one by one' card"));
+				&& Tutorial->GetStepState(TEXT("A3_fence_crawl")) == ETutorialStepState::Active, TEXT("rev 5i: B - Solo on, then the 'under the fence' card"));
 			Check(State, Tutorial->GetCardView().Title.ToString().Contains(TEXT("0 / 3")),
 				FString::Printf(TEXT("rev 5i: the card counts '0 / 3 through' ('%s')"), *Tutorial->GetCardView().Title.ToString()));
 			AOperativeCharacter* First = Squad->GetMembers()[0];
@@ -1850,24 +1850,22 @@ namespace TutorialSmoke
 			AOperativeCharacter* Second = Squad->GetMembers()[1];
 			AOperativeCharacter* Third = Squad->GetMembers()[2];
 			Check(State, First->GetStance() == EOperativeStance::Prone && First->OrderMoveTo(State.HutPoint, false) == EOperativeOrderResult::Accepted,
-				TEXT("rev 5i: prone, the first one may crawl past the fence (his turn)"));
-			State.HoldLinesBefore = CountMessages(World, TEXT("One at a time - wait until he is through."));
-			Check(State, Second->OrderMoveTo(State.HutPoint + FVector(0.f, 150.f, 0.f), false) == EOperativeOrderResult::Refused
-				&& CountMessages(World, TEXT("One at a time - wait until he is through.")) == State.HoldLinesBefore + 1,
-				TEXT("rev 5i: a second one prone is refused while the first crosses ('One at a time')"));
-			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, First);
+				TEXT("rev 5i: prone, the first one may crawl past the fence"));
+			// 2026-10-20 (game designer): no queue - the second one prone goes at the same time, on his own order.
+			Check(State, Second->OrderMoveTo(State.HutPoint + FVector(0.f, 150.f, 0.f), false) == EOperativeOrderResult::Accepted
+				&& CountMessages(World, TEXT("wait until he is through")) == 0,
+				TEXT("2026-10-20: a second one prone may crawl at the same time (no 'one at a time' queue)"));
+			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, Second); // the second one is through first: any order
 			Check(State, Tutorial->GetStepProgress(TEXT("A3_fence_crawl")) == 1 && Tutorial->GetCardView().Title.ToString().Contains(TEXT("1 / 3")),
-				FString::Printf(TEXT("rev 5i: the first through: '1 / 3' ('%s')"), *Tutorial->GetCardView().Title.ToString()));
-			Check(State, Second->OrderMoveTo(State.HutPoint + FVector(0.f, 150.f, 0.f), false) == EOperativeOrderResult::Accepted,
-				TEXT("rev 5i: then the second one may go"));
-			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, Second);
+				FString::Printf(TEXT("the first through (the second ordered): '1 / 3' ('%s')"), *Tutorial->GetCardView().Title.ToString()));
+			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, First);
 			Check(State, Third->OrderMoveTo(State.HutPoint, false) == EOperativeOrderResult::Refused, TEXT("rev 5i: the third standing: refused"));
 			Third->DropProne();
 			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, Third);
 			Check(State, Tutorial->GetStepState(TEXT("A3_fence_crawl")) == ETutorialStepState::Completed && !Tutorial->IsConfining(),
 				TEXT("rev 5i: three through: the crossing done, the squad free"));
 			State.RefusalsBefore = Tutorial->GetLockedRefusalCount();
-			State.NotYetBefore = CountMessages(World, TEXT("Not yet - one by one."));
+			State.NotYetBefore = CountMessages(World, TEXT("Not yet - each operative crosses"));
 			PressKey(PC, EKeys::B, IE_Pressed);
 			Next(State);
 			return true;
@@ -1876,8 +1874,8 @@ namespace TutorialSmoke
 		{
 			PressKey(PC, EKeys::B, IE_Released);
 			Check(State, Squad->IsSoloMode() && Tutorial->GetLockedRefusalCount() == State.RefusalsBefore + 1
-				&& CountMessages(World, TEXT("Not yet - one by one.")) == State.NotYetBefore + 1,
-				TEXT("rev 5i: B (regroup) refused after the crossing - 'Not yet - one by one.', still in Solo"));
+				&& CountMessages(World, TEXT("Not yet - each operative crosses")) == State.NotYetBefore + 1,
+				TEXT("rev 5i: B (regroup) refused after the crossing - 'Not yet - each operative crosses ...', still in Solo"));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				Member->StopOperative();
@@ -2486,11 +2484,11 @@ namespace TutorialSmoke
 				Tutorial->LoadSteps(HoldData);
 				Tutorial->TriggerStep(TEXT("hold"));
 				const FVector Far = Leader->GetActorLocation() + FVector(5000.f, 0.f, 0.f);
-				Check(State, Tutorial->IsConfining() && Tutorial->JudgeMove(*Leader, Far, false) == ETutorialConfineVerdict::Outside,
+				Check(State, Tutorial->IsConfining() && Tutorial->JudgeMove(*Leader, Far) == ETutorialConfineVerdict::Outside,
 					FString::Printf(TEXT("rev 5i: an inline confinement holds the squad (%s)"), *HoldError));
 				Tutorial->SetTutorialEnabled(false);
 				Tutorial->SetTutorialEnabled(true);
-				Check(State, !Tutorial->IsConfining() && Tutorial->JudgeMove(*Leader, Far, false) == ETutorialConfineVerdict::Allowed,
+				Check(State, !Tutorial->IsConfining() && Tutorial->JudgeMove(*Leader, Far) == ETutorialConfineVerdict::Allowed,
 					TEXT("rev 5i: tutorial OFF releases the confinement (and it stays released when the tutorial is back on)"));
 			}
 			// The story dialogue window takes the same key: Enter tap = next line, Enter held = skip.

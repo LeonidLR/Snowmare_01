@@ -266,14 +266,14 @@
     },
     "TUT_A3_FENCE": {
       "title": "LOW FENCE - STOP",
-      "text": "Too low to walk under. We go one at a time: press {key:Squad.Solo} (Solo) - the others hold their spots."
+      "text": "Too low to walk under - you crawl it, each on his own order. Press {key:Squad.Solo} (Solo): the others hold their spots while you send them one by one."
     },
     "TUT_A3_FENCE_CRAWL": {
-      "title": "ONE BY ONE ({progress} / {count} through)",
-      "text": "Select an operative ({key:Select.Member}), go prone ({key:Stance.Prone}) and click beyond the gap: he crawls under. The next one goes when he is through."
+      "title": "UNDER THE FENCE ({progress} / {count} through)",
+      "text": "For each operative: select him ({key:Select.Member}), go prone ({key:Stance.Prone}) and click beyond the gap - he crawls under. Any order, at his own pace; several may crawl at once."
     },
     "TUT_A3_ONE_BY_ONE": {
-      "text": "Not yet - one by one."
+      "text": "Not yet - each operative crosses the fence and takes his own cover first."
     },
     "TUT_A3_COVER_EACH": {
       "title": "TAKE COVER ONE BY ONE ({progress} / {count} in cover)",

@@ -1477,7 +1477,6 @@ FTutorialProgress FTutorialStateMachine::ExportProgress() const
 			FTutorialConfineProgress& Saved = Progress.Confines.AddDefaulted_GetRef();
 			Saved.Owner = Data.Steps[Confine.Owner].Id;
 			Saved.bReleased = Confine.bReleased;
-			Saved.ExitHolder = Confine.ExitHolder;
 			Saved.Passed = Confine.Passed;
 		}
 	}
@@ -1528,7 +1527,6 @@ void FTutorialStateMachine::ImportProgress(const FTutorialProgress& Progress)
 			FConfineRuntime& Confine = Confines.AddDefaulted_GetRef();
 			Confine.Owner = Owner;
 			Confine.bReleased = Saved.bReleased;
-			Confine.ExitHolder = Saved.ExitHolder;
 			Confine.Passed = Saved.Passed;
 		}
 	}
@@ -1683,36 +1681,12 @@ bool FTutorialStateMachine::GetActiveConfine(FTutorialConfineView& Out) const
 			Out.Areas.AddUnique(Area);
 		}
 	}
-	Out.ExitHolder = Confine.ExitHolder;
 	Out.Passed = Confine.Passed;
 	if (Owner.Confine.bFreeFocus && FocusSubjectProvider)
 	{
 		Out.FreeOperative = FocusSubjectProvider(Owner.Id); // 2026-10-20: the operative who does the lesson alone
 	}
 	return true;
-}
-
-void FTutorialStateMachine::TakeConfineExitTurn(FName SubjectId)
-{
-	const int32 Active = FindActiveConfine();
-	if (Active == INDEX_NONE || SubjectId.IsNone())
-	{
-		return;
-	}
-	FConfineRuntime& Confine = Confines[Active];
-	if (!Data.Steps[Confine.Owner].Confine.ExitEvent.IsEmpty() && Confine.ExitHolder.IsNone() && !Confine.Passed.Contains(SubjectId))
-	{
-		Confine.ExitHolder = SubjectId;
-	}
-}
-
-void FTutorialStateMachine::ReturnConfineExitTurn(FName SubjectId)
-{
-	const int32 Active = FindActiveConfine();
-	if (Active != INDEX_NONE && !SubjectId.IsNone() && Confines[Active].ExitHolder == SubjectId)
-	{
-		Confines[Active].ExitHolder = NAME_None;
-	}
 }
 
 void FTutorialStateMachine::NoteConfineEvent(FName EventName, FName SubjectId)
@@ -1723,14 +1697,10 @@ void FTutorialStateMachine::NoteConfineEvent(FName EventName, FName SubjectId)
 		return;
 	}
 	FConfineRuntime& Confine = Confines[Active];
-	const FString& ExitEvent = Data.Steps[Confine.Owner].Confine.ExitEvent;
-	if (!ExitEvent.IsEmpty() && TutorialRules::MatchesName(ExitEvent, EventName))
+	const FString& ThroughEvent = Data.Steps[Confine.Owner].Confine.ThroughEvent;
+	if (!ThroughEvent.IsEmpty() && TutorialRules::MatchesName(ThroughEvent, EventName))
 	{
 		Confine.Passed.AddUnique(SubjectId); // through: free to move on
-		if (Confine.ExitHolder == SubjectId)
-		{
-			Confine.ExitHolder = NAME_None; // the next one may go
-		}
 	}
 }
 
