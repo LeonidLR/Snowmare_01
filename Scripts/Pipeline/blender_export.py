@@ -39,14 +39,22 @@ def body_material(paths, name):
     return mat
 
 
-def build_atlas_material(mat, paths, uv_name=ATLAS_UV, with_sheen=True):
+def first_variant(paths):
+    v = paths.inventory.get("variants") or []
+    return v[0]["name"] if v else None
+
+
+def build_atlas_material(mat, paths, uv_name=ATLAS_UV, with_sheen=True, variant="first"):
     nt = mat.node_tree
     nt.nodes.clear()
     uvn = nt.nodes.new("ShaderNodeUVMap")
     uvn.uv_map = uv_name
 
+    if variant == "first":
+        variant = first_variant(paths)
+
     def img(kind, colorspace):
-        path = paths.tex(kind)
+        path = paths.tex(kind, variant=variant)
         if not os.path.exists(path):
             return None
         n = nt.nodes.new("ShaderNodeTexImage")
@@ -62,7 +70,7 @@ def build_atlas_material(mat, paths, uv_name=ATLAS_UV, with_sheen=True):
     bc = img("BaseColor", "sRGB")
     orm = img("ORM", "Non-Color")
     nrm = img("Normal", "Non-Color")
-    em = None  # no Emissive map (designer decision 2026-10-20)
+    em = img("Emissive", "sRGB")  # only written by the bake when a real part glows (designer 2026-10-20)
     sheen = img("Sheen", "Non-Color") if with_sheen else None
     base = bc.outputs["Color"]
     if sheen is not None:  # BaseColor + Sheen * Fresnel(0.04 + 0.96 (1-NdotV)^5), as the Unreal materials did
@@ -96,6 +104,14 @@ def build_atlas_material(mat, paths, uv_name=ATLAS_UV, with_sheen=True):
         nt.links.new(k.outputs[0], add.inputs[1])
         base = add.outputs[0]
     nt.links.new(base, bsdf.inputs["Base Color"])
+    vinfo = pc.load_json(paths.report_path).get("bake", {}).get("variants", {}).get(variant or "default", {})
+    if vinfo.get("masked"):  # opacity mask in the BaseColor alpha, Unreal's clip 0.3333
+        bc.image.alpha_mode = "CHANNEL_PACKED"
+        clip = nt.nodes.new("ShaderNodeMath")
+        clip.operation = "GREATER_THAN"
+        clip.inputs[1].default_value = 0.3333
+        nt.links.new(bc.outputs["Alpha"], clip.inputs[0])
+        nt.links.new(clip.outputs[0], bsdf.inputs["Alpha"])
     sep = nt.nodes.new("ShaderNodeSeparateColor")
     nt.links.new(orm.outputs["Color"], sep.inputs[0])
     nt.links.new(sep.outputs["Green"], bsdf.inputs["Roughness"])
@@ -117,7 +133,7 @@ def build_atlas_material(mat, paths, uv_name=ATLAS_UV, with_sheen=True):
     nt.links.new(nm.outputs[0], bsdf.inputs["Normal"])
     if em is not None:
         nt.links.new(em.outputs["Color"], bsdf.inputs["Emission Color"])
-        bsdf.inputs["Emission Strength"].default_value = 1.0
+        bsdf.inputs["Emission Strength"].default_value = float(vinfo.get("emissive_strength", 1.0))
     return mat
 
 
@@ -229,8 +245,8 @@ def main():
         "fbx": os.path.basename(paths.export_fbx), "material_slot": args.slot, "uv0": ATLAS_UV,
         "skeleton": paths.inventory.get("skeleton"), "root_bone_added": root_name, "top_bones_reparented": tops,
         "blender_fbx_settings": settings, "roundtrip_checks": checks,
-        "textures": {k: os.path.basename(paths.tex(k)) for k in ("BaseColor", "Normal", "ORM", "Sheen")
-                     if os.path.exists(paths.tex(k))},
+        "textures": {k: os.path.basename(paths.tex(k, variant=first_variant(paths))) for k in ("BaseColor", "Normal", "ORM", "Sheen", "Emissive")
+                     if os.path.exists(paths.tex(k, variant=first_variant(paths)))},
         "unreal_import_notes": [
             "Import onto the SAME skeleton: %s" % paths.inventory.get("skeleton"),
             "Normals: Import Normals (custom split normals are in the FBX); tangents: MikkTSpace (same as the bake)",
@@ -238,7 +254,7 @@ def main():
             "ORM: sRGB off, TC_Masks; R=AO G=Roughness B=Metallic - values are FINAL (no Power / sRGB decode)",
             "BaseColor: sRGB on, TC_Default (no alpha -> BC1/DXT1)",
             "Sheen: BaseColor + Fresnel * Sheen reproduces the old cloth Fresnel rim (0.07)",
-            "No Emissive texture (designer decision 2026-10-20)",
+            "Emissive only when the bake found a real glow (see summary.json bake.variants); EmissiveStrength = emissive_strength",
         ]})
     pc.update_summary(paths, "export", {"fbx": os.path.relpath(paths.export_fbx, paths.root).replace("\\", "/"),
                                         "checks": checks})

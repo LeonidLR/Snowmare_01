@@ -313,7 +313,17 @@ class GraphBuilder:
             geo = self.node("ShaderNodeNewGeometry")
             normal = geo.outputs["Normal"]
 
+        # Masked materials: the opacity mask (cut-outs, ragged cloth); 1 for everything else.
+        opacity = 1.0
+        if "MASKED" in str(self.minfo.get("blend_mode", "")) and "opacity_mask" in graph:
+            self.y = -1400
+            opacity = self.eval(graph["opacity_mask"], "opacity_mask", 0.0)
+            if self.is_color(opacity):
+                sep = self.node("ShaderNodeSeparateColor")
+                self.nt.links.new(opacity, sep.inputs[0])
+                opacity = sep.outputs["Red"]
         sockets = {
+            "opacity": self.reroute("OUT_opacity", opacity),
             "base_color": self.reroute("OUT_base_color", self.to_color(out["base_color"])),
             "sheen": self.reroute("OUT_sheen", sheen),
             "roughness": self.reroute("OUT_roughness", out["roughness"]),
@@ -337,7 +347,8 @@ def connect_principled(mat, sockets=None, with_fresnel=True):
     nt = mat.node_tree
     if sockets is None:
         sockets = {k: nt.nodes["OUT_" + k].outputs[0] for k in
-                   ("base_color", "sheen", "roughness", "metallic", "ao", "emissive", "normal") if ("OUT_" + k) in nt.nodes}
+                   ("base_color", "sheen", "roughness", "metallic", "ao", "emissive", "normal", "opacity")
+                   if ("OUT_" + k) in nt.nodes}
     for n in [n for n in nt.nodes if n.type in ("BSDF_PRINCIPLED", "OUTPUT_MATERIAL", "EMISSION")
               or n.label.startswith("FRESNEL_")]:
         nt.nodes.remove(n)
@@ -389,6 +400,13 @@ def connect_principled(mat, sockets=None, with_fresnel=True):
     nt.links.new(sockets["roughness"], bsdf.inputs["Roughness"])
     nt.links.new(sockets["metallic"], bsdf.inputs["Metallic"])
     nt.links.new(sockets["normal"], bsdf.inputs["Normal"])
+    if "opacity" in sockets:
+        clip = nt.nodes.new("ShaderNodeMath")
+        clip.operation = "GREATER_THAN"
+        clip.label = "FRESNEL_clip"  # removed / rebuilt with the Fresnel nodes
+        clip.inputs[1].default_value = 0.3333
+        nt.links.new(sockets["opacity"], clip.inputs[0])
+        nt.links.new(clip.outputs[0], bsdf.inputs["Alpha"])
     if "emissive" in sockets:
         nt.links.new(sockets["emissive"], bsdf.inputs["Emission Color"])
         bsdf.inputs["Emission Strength"].default_value = 1.0

@@ -56,16 +56,19 @@ class Paths:
             os.makedirs(p, exist_ok=True)
         self.inventory_path = os.path.join(self.source, "inventory.json")
         self.inventory = load_json(self.inventory_path)
+        # Per-asset overrides (ArtPipeline/<...>/<Asset>/pipeline.json, tracked): keep_weights (reduce), texel_weights
+        # (atlas), notes. Command-line arguments win.
+        self.config = load_json(os.path.join(self.root, "pipeline.json"))
         self.mesh_name = name or self.inventory["name"]
-        # "SK_Post_Apo_Survivor_a" -> "Post_Apo_Survivor_a" for texture names
-        self.short = re.sub(r"^SK_", "", self.mesh_name)
+        # The asset name = the folder name (two packs may both call their mesh "SKM_baze_mesh"): T_<asset>_*, SK_<asset>_1slot
+        self.short = os.path.basename(self.root)
         self.source_fbx = os.path.join(self.root, self.inventory["exports"]["mesh_fbx"])
         self.clean_blend = os.path.join(self.blend, self.mesh_name + "_clean.blend")
         self.reduce_blend = os.path.join(self.blend, self.mesh_name + "_reduce.blend")
         self.atlas_blend = os.path.join(self.blend, self.mesh_name + "_atlas.blend")
         self.bake_blend = os.path.join(self.blend, self.mesh_name + "_bake.blend")
         self.original_blend = os.path.join(self.blend, self.mesh_name + "_original.blend")
-        self.export_fbx = os.path.join(self.export, self.mesh_name + "_1slot.fbx")
+        self.export_fbx = os.path.join(self.export, "SK_%s_1slot.fbx" % self.short)
         self.report_path = os.path.join(self.review, "summary.json")
 
     @property
@@ -73,8 +76,10 @@ class Paths:
         """The bake source kept next to a reduced mesh (blender_reduce.py)."""
         return self.mesh_name + "_high"
 
-    def tex(self, kind, ext="png"):
-        return os.path.join(self.baked, "T_%s_%s.%s" % (self.short, kind, ext))
+    def tex(self, kind, ext="png", variant=None):
+        """Baked map path; a look variant (texture set) gets its own name: T_<asset>_<variant>_<kind>."""
+        name = self.short if not variant else "%s_%s" % (self.short, variant)
+        return os.path.join(self.baked, "T_%s_%s.%s" % (name, kind, ext))
 
 
 def load_json(path, default=None):

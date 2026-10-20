@@ -1,0 +1,409 @@
+{
+  "_doc": "Ground truth: texture -> role. method=material_graph means the role was read from the Unreal material graph (which output / channel the texture feeds); name_guess is the suffix heuristic.",
+  "textures": {
+    "T_Arms_A_2nd_BaseColor": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_2nd_BaseColor.T_Arms_A_2nd_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Arms_A_2nd_Inst"
+      ],
+      "warnings": []
+    },
+    "T_Arms_A_Normal": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_Normal.T_Arms_A_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Arms_A_2nd_Inst"
+      ],
+      "warnings": []
+    },
+    "T_Arms_A_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_OcclusionRoughnessMetallic.T_Arms_A_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Arms_A_2nd_Inst"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Boot_A_1st_BaseColor": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_1st_BaseColor.T_Boot_A_1st_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MA_Boot_A_1st"
+      ],
+      "warnings": []
+    },
+    "T_Boot_A_Normal": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_Normal.T_Boot_A_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MA_Boot_A_1st"
+      ],
+      "warnings": []
+    },
+    "T_Boot_A_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_OcclusionRoughnessMetallic.T_Boot_A_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MA_Boot_A_1st"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Glove_A_1st_BaseColor": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_1st_BaseColor.T_Glove_A_1st_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MA_Glove_A_1st"
+      ],
+      "warnings": []
+    },
+    "T_Glove_A_Normal": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_Normal.T_Glove_A_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MA_Glove_A_1st"
+      ],
+      "warnings": []
+    },
+    "T_Glove_A_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_OcclusionRoughnessMetallic.T_Glove_A_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MA_Glove_A_1st"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Helmet_A_1st_BaseColor": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_BaseColor.T_Helmet_A_1st_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MA_Helmet_A_1st"
+      ],
+      "warnings": []
+    },
+    "T_Helmet_A_1st_Emissive": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_Emissive.T_Helmet_A_1st_Emissive",
+      "role": "emissive",
+      "channels": {
+        "emissive_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "emissive",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MA_Helmet_A_1st"
+      ],
+      "warnings": []
+    },
+    "T_Helmet_A_Normal": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_Normal.T_Helmet_A_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MA_Helmet_A_1st"
+      ],
+      "warnings": []
+    },
+    "T_Helmet_A_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_OcclusionRoughnessMetallic.T_Helmet_A_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MA_Helmet_A_1st"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Jacket_Body_A_4th_BaseColor": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_4th_BaseColor.T_Jacket_Body_A_4th_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Jacket_Body_A_4th_Inst"
+      ],
+      "warnings": []
+    },
+    "T_Jacket_Body_A_Normal": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_Normal.T_Jacket_Body_A_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Jacket_Body_A_4th_Inst"
+      ],
+      "warnings": []
+    },
+    "T_Jacket_Body_A_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_OcclusionRoughnessMetallic.T_Jacket_Body_A_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Jacket_Body_A_4th_Inst"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Pants_A_2nd_BaseColor": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_2nd_BaseColor.T_Pants_A_2nd_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Pants_A_2nd_Inst"
+      ],
+      "warnings": []
+    },
+    "T_Pants_A_Normal": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_Normal.T_Pants_A_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Pants_A_2nd_Inst"
+      ],
+      "warnings": []
+    },
+    "T_Pants_A_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_OcclusionRoughnessMetallic.T_Pants_A_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Pants_A_2nd_Inst"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    }
+  }
+}

@@ -36,24 +36,65 @@ def parse():
     p.add_argument("--dirs", type=int, default=80, help="ray directions on the sphere (about half are used)")
     p.add_argument("--anim-frames", type=int, default=2, help="frames sampled per exported animation")
     p.add_argument("--keep-ring", type=int, default=1, help="hidden triangles this close to a visible one are kept")
+    p.add_argument("--keep-translucent", action="store_true",
+                   help="keep translucent / additive slots (default: removed - glass shells, eye wet layers; what is behind shows)")
     return p.parse_args(pc.script_args())
 
 
 # --------------------------------------------------------------------------------------------- materials
 
+def material_of(inv, name):
+    """Material asset path of a Blender material name (= an Unreal slot name, or the material's own name for merged slots)."""
+    for s in inv["slots"]:
+        if s["slot_name"] == name:
+            return s["material"]
+    for s in inv["slots"]:
+        if s["material"] and s["material"].split(".")[-1] == name:
+            return s["material"]
+    return None
+
+
 def rebuild_materials(mesh, inv, paths):
+    """Rebuilds every slot's Unreal material and names it after the Unreal SLOT (later stages, the reduce budget and the
+    look variants address slots by name). The FBX names a slot either by its slot name or by its material asset name."""
     warnings = []
     uv_name = mesh.data.uv_layers[0].name
-    by_slot = {s["slot_name"]: s for s in inv["slots"]}
+    slots = inv["slots"]
+    used = set()
+    merged = {}
+
+    def match(i, fbx_name):
+        for s in slots:
+            if s["slot_name"] == fbx_name and s["index"] not in used:
+                return s
+        for s in slots:
+            if s["material"] and s["material"].split(".")[-1] == fbx_name and s["index"] not in used:
+                return s
+        return slots[i] if i < len(slots) and slots[i]["index"] not in used else None
+
     for i, slot in enumerate(mesh.material_slots):
-        name = slot.material.name if slot.material else None
-        info = by_slot.get(name)
+        fbx_name = slot.material.name if slot.material else ""
+        info = match(i, fbx_name)
         if not info or not info["material"]:
-            warnings.append("slot %d (%s) not in the inventory" % (i, name))
+            warnings.append("slot %d (%s) not in the inventory" % (i, fbx_name))
             continue
+        used.add(info["index"])
+        if fbx_name != info["slot_name"]:
+            print("[pipeline] slot %d: FBX material %s -> Unreal slot %s" % (i, fbx_name, info["slot_name"]))
         minfo = inv["materials"][info["material"]]
+        # Several Unreal slots with the SAME material arrive as one FBX material: name it after the material then (the slot
+        # name of the first one would mislead the per-name reduce / atlas weights), and record which slots it carries.
+        sharing = [s["slot_name"] for s in slots if s["material"] == info["material"]]
+        name = info["slot_name"] if len(sharing) == 1 else info["material"].split(".")[-1]
+        for s in slots:
+            if s["material"] == info["material"]:
+                used.add(s["index"])
+        merged[name] = sharing
+        if slot.material:
+            slot.material.name = "__fbx_" + fbx_name  # free the name for the rebuilt material
         mat = mg.build_material(name, minfo, inv, paths.tex_source, uv_name, warnings)
         slot.material = mat
+    inv["blender_material_slots"] = merged
     return warnings
 
 
@@ -184,9 +225,10 @@ def posed_geometry(mesh):
     return verts
 
 
-def visible_set(verts, polys, candidates, dirs, eps, maxdist):
-    """Indices of `candidates` that a viewer outside the mesh can see (single-sided rendering:
-    back faces do not occlude, so rays continue through them)."""
+def visible_set(verts, polys, candidates, dirs, eps, maxdist, two_sided=frozenset(), see_through=frozenset()):
+    """Indices of `candidates` that a viewer outside the mesh can see, rendered like Unreal: a single-sided face shows (and
+    occludes) only from its front, a two-sided one from both sides (it is visible / blocks from behind too); masked faces
+    (cut-outs) never count as blockers - what is behind a hole stays."""
     bvh = BVHTree.FromPolygons(verts, polys, all_triangles=True)
     visible = set()
     for t in candidates:
@@ -198,20 +240,24 @@ def visible_set(verts, polys, candidates, dirs, eps, maxdist):
         n.normalize()
         samples = ((a + b + c) / 3.0, a * 0.6 + b * 0.2 + c * 0.2, a * 0.2 + b * 0.6 + c * 0.2,
                    a * 0.2 + b * 0.2 + c * 0.6)
-        hemi = [n] + [d for d in dirs if d.dot(n) > 0.1]
+        sides = (n, -n) if t in two_sided else (n,)
         seen = False
-        for p in samples:
-            o0 = p + n * eps
-            for d in hemi:
-                o = o0
-                for _ in range(8):
-                    loc, nrm, idx, _dist = bvh.ray_cast(o, d, maxdist)
-                    if loc is None:
-                        seen = True
+        for side in sides:
+            hemi = [side] + [d for d in dirs if d.dot(side) > 0.1]
+            for p in samples:
+                o0 = p + side * eps
+                for d in hemi:
+                    o = o0
+                    for _ in range(10):
+                        loc, nrm, idx, _dist = bvh.ray_cast(o, d, maxdist)
+                        if loc is None:
+                            seen = True
+                            break
+                        if idx != t and idx not in see_through and (idx in two_sided or nrm.dot(d) > 0.0):
+                            break  # a face the viewer sees (its front, or either side of a two-sided one) blocks
+                        o = loc + d * eps  # own face / back face (culled in Unreal) / a masked cut-out: look through
+                    if seen:
                         break
-                    if idx != t and nrm.dot(d) > 0.0:
-                        break  # a face turned towards the viewer blocks the view
-                    o = loc + d * eps  # own face / back face (culled in Unreal): look through
                 if seen:
                     break
             if seen:
@@ -227,6 +273,12 @@ def hidden_faces(arm, mesh, inv, paths, args, exclude_mats):
     if any(len(p) != 3 for p in polys):
         raise RuntimeError("expected a triangulated mesh from Unreal")
     candidates = [i for i, p in enumerate(me.polygons) if p.material_index not in exclude_mats]
+    by_index = {}
+    for i, slot in enumerate(mesh.material_slots):
+        minfo = inv["materials"].get(material_of(inv, slot.material.name) or "", {})
+        by_index[i] = (bool(minfo.get("two_sided")), "MASKED" in str(minfo.get("blend_mode", "")))
+    two_sided = frozenset(p.index for p in me.polygons if by_index.get(p.material_index, (False, False))[0])
+    see_through = frozenset(p.index for p in me.polygons if by_index.get(p.material_index, (False, False))[1])
     dirs = [Vector(d) for d in pc.fibonacci_sphere(args.dirs)]
     fwd = forward_dir(arm, mesh, inv)
     log = []
@@ -235,7 +287,7 @@ def hidden_faces(arm, mesh, inv, paths, args, exclude_mats):
     def run(label):
         nonlocal candidates
         with pc.Timer("visibility %s (%d candidates)" % (label, len(candidates))) as t:
-            vis = visible_set(posed_geometry(mesh), polys, candidates, dirs, eps, maxdist)
+            vis = visible_set(posed_geometry(mesh), polys, candidates, dirs, eps, maxdist, two_sided, see_through)
         candidates = [c for c in candidates if c not in vis]
         log.append({"pose": label, "still_hidden": len(candidates), "seconds": round(t.seconds, 1)})
 
@@ -320,11 +372,24 @@ def main():
     hair_mats = [i for i, s in enumerate(mesh.material_slots)
                  if hair_re and s.material and hair_re.search(s.material.name)]
     hair_faces = {p.index for p in mesh.data.polygons if p.material_index in hair_mats}
+    by_slot0 = {s["slot_name"]: s for s in inv["slots"]}
+
+    def blend_of(i):
+        mi = inv["materials"].get(material_of(inv, mesh.material_slots[i].material.name) or "", {})
+        return str(mi.get("blend_mode", "BLEND_OPAQUE"))
+
+    transp_mats = [] if args.keep_translucent else [
+        i for i in range(len(mesh.material_slots)) if i not in hair_mats
+        and any(k in blend_of(i) for k in ("TRANSLUCENT", "ADDITIVE", "MODULATE"))]
+    transp_faces = {p.index for p in mesh.data.polygons if p.material_index in transp_mats}
+    # Hair and glass go BEFORE the visibility test: what they covered (scalp, eyes) must count as visible.
+    if hair_faces or transp_faces:
+        delete_faces(mesh, hair_faces | transp_faces)
 
     # --- hidden triangles
     excl_re = re.compile(args.hidden_exclude, re.I) if args.hidden_exclude else None
-    exclude = set(hair_mats) | {i for i, s in enumerate(mesh.material_slots)
-                                if excl_re and s.material and excl_re.search(s.material.name)}
+    exclude = set(hair_mats) | set(transp_mats) | {i for i, s in enumerate(mesh.material_slots)
+                                                   if excl_re and s.material and excl_re.search(s.material.name)}
     hidden, pose_log, fwd = (set(), [], None)
     if not args.no_hidden:
         hidden, pose_log, fwd = hidden_faces(arm, mesh, inv, paths, args, exclude)
@@ -336,10 +401,12 @@ def main():
     by_slot = {s["slot_name"]: s for s in inv["slots"]}
     for i, s in enumerate(mesh.material_slots):
         name = s.material.name
-        minfo = inv["materials"].get(by_slot.get(name, {}).get("material") or "", {})
+        minfo = inv["materials"].get(material_of(inv, name) or "", {})
         blend = str(minfo.get("blend_mode", "BLEND_OPAQUE"))
         if i in hair_mats:
             d, why = "remove-hair", "material name matches the hair regex '%s'" % args.hair_regex
+        elif i in transp_mats:
+            d, why = "remove-transparent", "blend mode %s: glass / overlay layer removed, what is behind shows" % blend
         elif "TRANSLUCENT" in blend or "ADDITIVE" in blend or "MODULATE" in blend:
             d, why = "separate-transparent", "blend mode %s cannot share an opaque atlas slot" % blend
         elif before[name] and hidden_by_mat.get(name, 0) >= before[name]:
@@ -353,18 +420,19 @@ def main():
                            "two_sided": minfo.get("two_sided"), "triangles": before[name],
                            "hidden_triangles_removed": hidden_by_mat.get(name, 0)}
     pc.save_json(os.path.join(paths.source, "slot_decisions.json"), {
-        "_doc": "Ground truth: slot -> keep / remove-hair / remove-hidden / separate-transparent with the reason. "
+        "_doc": "Ground truth: slot -> keep / remove-hair / remove-transparent / remove-hidden / separate-transparent with the reason. "
                 "Hidden = no ray from the triangle escapes to a viewer in the rest pose, %d procedural extreme poses "
                 "and the sampled animation frames (single-sided: back faces do not occlude)." % len(POSES),
         "hair_regex": args.hair_regex, "slots": decisions})
 
-    remove = hair_faces | hidden
-    if remove:
-        delete_faces(mesh, remove)
+    if hidden:
+        delete_faces(mesh, hidden)
     after = tri_counts(mesh)
     pc.update_summary(paths, "clean", {
         "hair_slots": [mesh.material_slots[i].material.name for i in hair_mats],
         "hair_triangles_removed": len(hair_faces),
+        "transparent_slots": [mesh.material_slots[i].material.name for i in transp_mats],
+        "transparent_triangles_removed": len(transp_faces),
         "hidden_triangles_removed": len(hidden),
         "hidden_triangles_by_slot": dict(hidden_by_mat),
         "triangles_after": sum(after.values()), "triangles_after_per_slot": after,

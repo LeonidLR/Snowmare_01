@@ -1,0 +1,224 @@
+{
+  "mesh": "/Game/mutant_monster_2/base_mesh/SK_base_mesh.SK_base_mesh",
+  "name": "SK_base_mesh",
+  "skeleton": "/Game/mutant_monster_2/base_mesh/SK_UE4_Mannequin_Skeleton.SK_UE4_Mannequin_Skeleton",
+  "physics_asset": "/Game/mutant_monster_2/base_mesh/PHYS_base_mesh_PhysicsAsset.PHYS_base_mesh_PhysicsAsset",
+  "bounds_extent": [
+    75.04087829589844,
+    17.679195404052734,
+    89.06621551513672
+  ],
+  "lods": [
+    {
+      "lod": 0,
+      "num_verts": 14097,
+      "num_sections": 1
+    }
+  ],
+  "slots": [
+    {
+      "index": 0,
+      "slot_name": "T_bodi",
+      "imported_slot_name": "T_bodi",
+      "material": "/Game/mutant_monster_2/material/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst"
+    }
+  ],
+  "materials": {
+    "/Game/mutant_monster_2/material/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst": {
+      "path": "/Game/mutant_monster_2/material/MI_bodi_set_4_Inst.MI_bodi_set_4_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "maxRough": 1.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/mutant_monster_2/texture/set_4/T_bodi_Normal.T_bodi_Normal",
+        "/Game/mutant_monster_2/texture/set_4/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering",
+        "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/mutant_monster_2/material/M_bodi_set_4.M_bodi_set_4",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/mutant_monster_2/texture/set_4/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/mutant_monster_2/texture/set_4/T_bodi_Normal.T_bodi_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "opacity": {
+          "node": "TextureSample",
+          "output": "A",
+          "texture": "/Game/mutant_monster_2/texture/set_4/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    }
+  },
+  "textures": {
+    "/Game/mutant_monster_2/texture/set_4/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": {
+      "path": "/Game/mutant_monster_2/texture/set_4/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/mutant_monster_2/texture/set_4/T_bodi_Normal.T_bodi_Normal": {
+      "path": "/Game/mutant_monster_2/texture/set_4/T_bodi_Normal.T_bodi_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": {
+      "path": "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    }
+  },
+  "morph_targets": [],
+  "referencers": [
+    "/Game/Characters/Enemies/Frostbitten/BP_Enemy_Frostbitten",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/IK_Frostbitten_Source",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/RTG_Frostbitten_To_FrozenPMC",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonIdle",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonJump_End",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonJump_Loop",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonJump_Start",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonRun",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonWalk",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPerson_Jump",
+    "/Game/mutant_monster_2/Maps/mutant_monster_2ExampleMap",
+    "/Game/mutant_monster_2/base_mesh/PHYS_base_mesh_PhysicsAsset",
+    "/Game/mutant_monster_2/base_mesh/SK_UE4_Mannequin_Skeleton"
+  ],
+  "skeleton_animations": [
+    "/Game/Animations_KnockDown/Frostbitten/Death_Back.Death_Back",
+    "/Game/Animations_KnockDown/Frostbitten/Death_Front.Death_Front",
+    "/Game/Animations_KnockDown/Frostbitten/Knocked_Back.Knocked_Back",
+    "/Game/Animations_KnockDown/Frostbitten/Knocked_Front.Knocked_Front",
+    "/Game/Animations_KnockDown/Frostbitten/Revive_Back.Revive_Back",
+    "/Game/Animations_KnockDown/Frostbitten/Revive_Front.Revive_Front",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonIdle.ThirdPersonIdle",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonJump_End.ThirdPersonJump_End",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonJump_Loop.ThirdPersonJump_Loop",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonJump_Start.ThirdPersonJump_Start",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonRun.ThirdPersonRun",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonWalk.ThirdPersonWalk",
+    "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPerson_Jump.ThirdPerson_Jump",
+    "/Game/mutant_monster_2/animation/anim_attack_1.anim_attack_1",
+    "/Game/mutant_monster_2/animation/anim_attack_2.anim_attack_2",
+    "/Game/mutant_monster_2/animation/anim_attack_3.anim_attack_3",
+    "/Game/mutant_monster_2/animation/anim_death.anim_death",
+    "/Game/mutant_monster_2/animation/anim_hit.anim_hit",
+    "/Game/mutant_monster_2/animation/anim_hysterics.anim_hysterics",
+    "/Game/mutant_monster_2/animation/anim_idle_1.anim_idle_1",
+    "/Game/mutant_monster_2/animation/anim_rage.anim_rage",
+    "/Game/mutant_monster_2/animation/anim_run.anim_run",
+    "/Game/mutant_monster_2/animation/anim_walking.anim_walking",
+    "/Game/mutant_monster_2/animation/walking_2.walking_2"
+  ],
+  "exports": {
+    "mesh_fbx": "01_Source/SK_base_mesh.fbx",
+    "textures": {
+      "/Game/mutant_monster_2/texture/set_4/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "02_Textures_Source/T_bodi_BaseColor_Scattering.png",
+      "/Game/mutant_monster_2/texture/set_4/T_bodi_Normal.T_bodi_Normal": "02_Textures_Source/T_bodi_Normal.png",
+      "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_OcclusionRoughnessMetallic.png"
+    },
+    "animations": {
+      "/Game/Animations_KnockDown/Frostbitten/Death_Back.Death_Back": "01_Source/anims/Death_Back.fbx",
+      "/Game/Animations_KnockDown/Frostbitten/Death_Front.Death_Front": "01_Source/anims/Death_Front.fbx",
+      "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPerson_Jump.ThirdPerson_Jump": "01_Source/anims/ThirdPerson_Jump.fbx",
+      "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonWalk.ThirdPersonWalk": "01_Source/anims/ThirdPersonWalk.fbx",
+      "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonRun.ThirdPersonRun": "01_Source/anims/ThirdPersonRun.fbx",
+      "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonJump_Start.ThirdPersonJump_Start": "01_Source/anims/ThirdPersonJump_Start.fbx",
+      "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonJump_Loop.ThirdPersonJump_Loop": "01_Source/anims/ThirdPersonJump_Loop.fbx",
+      "/Game/mutant_monster_2/Demo/Mannequin/Animations/ThirdPersonJump_End.ThirdPersonJump_End": "01_Source/anims/ThirdPersonJump_End.fbx"
+    }
+  },
+  "notes": "triangle counts per slot are filled in by blender_clean.py (FBX section counts)",
+  "lod0_section_material_slots": [
+    0
+  ],
+  "variants": []
+}

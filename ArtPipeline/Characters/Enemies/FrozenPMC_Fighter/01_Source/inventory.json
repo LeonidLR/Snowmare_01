@@ -1,0 +1,750 @@
+{
+  "mesh": "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Mesh/SKM_FrozenPMC_Fighter.SKM_FrozenPMC_Fighter",
+  "name": "SKM_FrozenPMC_Fighter",
+  "skeleton": "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/SK_FrozenPMC_Fighter_Skeleton.SK_FrozenPMC_Fighter_Skeleton",
+  "physics_asset": "/Game/Cyberpunk_Explorer_A/Meshes/Cyberpunk_Explorer_A_UE5_PhysicsAsset.Cyberpunk_Explorer_A_UE5_PhysicsAsset",
+  "bounds_extent": [
+    55.412797927856445,
+    26.260207176208496,
+    90.54860597103834
+  ],
+  "lods": [
+    {
+      "lod": 0,
+      "num_verts": 19406,
+      "num_sections": 6
+    }
+  ],
+  "slots": [
+    {
+      "index": 0,
+      "slot_name": "M_Jacket_Body_A",
+      "imported_slot_name": "M_Jacket_Body_A",
+      "material": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_4th_Inst.M_Jacket_Body_A_4th_Inst"
+    },
+    {
+      "index": 1,
+      "slot_name": "M_Arms_A",
+      "imported_slot_name": "M_Arms_A",
+      "material": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_2nd_Inst.M_Arms_A_2nd_Inst"
+    },
+    {
+      "index": 2,
+      "slot_name": "M_Boot_A",
+      "imported_slot_name": "M_Boot_A",
+      "material": "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st"
+    },
+    {
+      "index": 3,
+      "slot_name": "M_Pants_A",
+      "imported_slot_name": "M_Pants_A",
+      "material": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst"
+    },
+    {
+      "index": 4,
+      "slot_name": "M_Glove_A",
+      "imported_slot_name": "M_Glove_A",
+      "material": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st"
+    },
+    {
+      "index": 5,
+      "slot_name": "M_Helmet_A",
+      "imported_slot_name": "M_Helmet_A",
+      "material": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st"
+    }
+  ],
+  "materials": {
+    "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_4th_Inst.M_Jacket_Body_A_4th_Inst": {
+      "path": "/Game/Cyberpunk_Explorer_A/Materials/M_Jacket_Body_A_4th_Inst.M_Jacket_Body_A_4th_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {
+        "basecolor": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_4th_BaseColor.T_Jacket_Body_A_4th_BaseColor"
+      },
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_Normal.T_Jacket_Body_A_Normal",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_4th_BaseColor.T_Jacket_Body_A_4th_BaseColor",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_OcclusionRoughnessMetallic.T_Jacket_Body_A_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Cyberpunk_Explorer_A/Materials/MA_Jacket_Body_A_1st.MA_Jacket_Body_A_1st",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "graph": {
+        "base_color": {
+          "node": "TextureSampleParameter2D",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_4th_BaseColor.T_Jacket_Body_A_4th_BaseColor",
+          "parameter_name": "basecolor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_Normal.T_Jacket_Body_A_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_OcclusionRoughnessMetallic.T_Jacket_Body_A_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_OcclusionRoughnessMetallic.T_Jacket_Body_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_OcclusionRoughnessMetallic.T_Jacket_Body_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_2nd_Inst.M_Arms_A_2nd_Inst": {
+      "path": "/Game/Cyberpunk_Explorer_A/Materials/M_Arms_A_2nd_Inst.M_Arms_A_2nd_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {
+        "basecolor": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_2nd_BaseColor.T_Arms_A_2nd_BaseColor"
+      },
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_Normal.T_Arms_A_Normal",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_2nd_BaseColor.T_Arms_A_2nd_BaseColor",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_OcclusionRoughnessMetallic.T_Arms_A_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Cyberpunk_Explorer_A/Materials/MA_Arms_A_1st.MA_Arms_A_1st",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSampleParameter2D",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_2nd_BaseColor.T_Arms_A_2nd_BaseColor",
+          "parameter_name": "basecolor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_Normal.T_Arms_A_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_OcclusionRoughnessMetallic.T_Arms_A_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_OcclusionRoughnessMetallic.T_Arms_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_OcclusionRoughnessMetallic.T_Arms_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st": {
+      "path": "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st",
+      "class": "Material",
+      "texture_params": {
+        "basecolor": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_1st_BaseColor.T_Boot_A_1st_BaseColor"
+      },
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_Normal.T_Boot_A_Normal",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_1st_BaseColor.T_Boot_A_1st_BaseColor",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_OcclusionRoughnessMetallic.T_Boot_A_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Cyberpunk_Explorer_A/Materials/MA_Boot_A_1st.MA_Boot_A_1st",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSampleParameter2D",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_1st_BaseColor.T_Boot_A_1st_BaseColor",
+          "parameter_name": "basecolor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_Normal.T_Boot_A_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_OcclusionRoughnessMetallic.T_Boot_A_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_OcclusionRoughnessMetallic.T_Boot_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_OcclusionRoughnessMetallic.T_Boot_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst": {
+      "path": "/Game/Cyberpunk_Explorer_A/Materials/M_Pants_A_2nd_Inst.M_Pants_A_2nd_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {
+        "basecolor": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_2nd_BaseColor.T_Pants_A_2nd_BaseColor"
+      },
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_Normal.T_Pants_A_Normal",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_2nd_BaseColor.T_Pants_A_2nd_BaseColor",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_OcclusionRoughnessMetallic.T_Pants_A_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Cyberpunk_Explorer_A/Materials/MA_Pants_A_1st.MA_Pants_A_1st",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSampleParameter2D",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_2nd_BaseColor.T_Pants_A_2nd_BaseColor",
+          "parameter_name": "basecolor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_Normal.T_Pants_A_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_OcclusionRoughnessMetallic.T_Pants_A_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_OcclusionRoughnessMetallic.T_Pants_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_OcclusionRoughnessMetallic.T_Pants_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st": {
+      "path": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+      "class": "Material",
+      "texture_params": {
+        "basecolor": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_1st_BaseColor.T_Glove_A_1st_BaseColor"
+      },
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_Normal.T_Glove_A_Normal",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_1st_BaseColor.T_Glove_A_1st_BaseColor",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_OcclusionRoughnessMetallic.T_Glove_A_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Cyberpunk_Explorer_A/Materials/MA_Glove_A_1st.MA_Glove_A_1st",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSampleParameter2D",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_1st_BaseColor.T_Glove_A_1st_BaseColor",
+          "parameter_name": "basecolor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_Normal.T_Glove_A_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_OcclusionRoughnessMetallic.T_Glove_A_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_OcclusionRoughnessMetallic.T_Glove_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_OcclusionRoughnessMetallic.T_Glove_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st": {
+      "path": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st",
+      "class": "Material",
+      "texture_params": {
+        "basecolor": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_BaseColor.T_Helmet_A_1st_BaseColor",
+        "Emissive": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_Emissive.T_Helmet_A_1st_Emissive"
+      },
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_Normal.T_Helmet_A_Normal",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_Emissive.T_Helmet_A_1st_Emissive",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_BaseColor.T_Helmet_A_1st_BaseColor",
+        "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_OcclusionRoughnessMetallic.T_Helmet_A_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Cyberpunk_Explorer_A/Materials/MA_Helmet_A_1st.MA_Helmet_A_1st",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSampleParameter2D",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_BaseColor.T_Helmet_A_1st_BaseColor",
+          "parameter_name": "basecolor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_Normal.T_Helmet_A_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_OcclusionRoughnessMetallic.T_Helmet_A_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_OcclusionRoughnessMetallic.T_Helmet_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_OcclusionRoughnessMetallic.T_Helmet_A_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "emissive_color": {
+          "node": "TextureSampleParameter2D",
+          "output": "RGB",
+          "texture": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_Emissive.T_Helmet_A_1st_Emissive",
+          "parameter_name": "Emissive",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    }
+  },
+  "textures": {
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_2nd_BaseColor.T_Arms_A_2nd_BaseColor": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_2nd_BaseColor.T_Arms_A_2nd_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_Normal.T_Arms_A_Normal": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_Normal.T_Arms_A_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_OcclusionRoughnessMetallic.T_Arms_A_OcclusionRoughnessMetallic": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_OcclusionRoughnessMetallic.T_Arms_A_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_1st_BaseColor.T_Boot_A_1st_BaseColor": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_1st_BaseColor.T_Boot_A_1st_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_Normal.T_Boot_A_Normal": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_Normal.T_Boot_A_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_OcclusionRoughnessMetallic.T_Boot_A_OcclusionRoughnessMetallic": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_OcclusionRoughnessMetallic.T_Boot_A_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_1st_BaseColor.T_Glove_A_1st_BaseColor": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_1st_BaseColor.T_Glove_A_1st_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_Normal.T_Glove_A_Normal": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_Normal.T_Glove_A_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_OcclusionRoughnessMetallic.T_Glove_A_OcclusionRoughnessMetallic": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_OcclusionRoughnessMetallic.T_Glove_A_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_BaseColor.T_Helmet_A_1st_BaseColor": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_BaseColor.T_Helmet_A_1st_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_Emissive.T_Helmet_A_1st_Emissive": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_Emissive.T_Helmet_A_1st_Emissive",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_Normal.T_Helmet_A_Normal": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_Normal.T_Helmet_A_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_OcclusionRoughnessMetallic.T_Helmet_A_OcclusionRoughnessMetallic": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_OcclusionRoughnessMetallic.T_Helmet_A_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_4th_BaseColor.T_Jacket_Body_A_4th_BaseColor": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_4th_BaseColor.T_Jacket_Body_A_4th_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_Normal.T_Jacket_Body_A_Normal": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_Normal.T_Jacket_Body_A_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_OcclusionRoughnessMetallic.T_Jacket_Body_A_OcclusionRoughnessMetallic": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_OcclusionRoughnessMetallic.T_Jacket_Body_A_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_2nd_BaseColor.T_Pants_A_2nd_BaseColor": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_2nd_BaseColor.T_Pants_A_2nd_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_Normal.T_Pants_A_Normal": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_Normal.T_Pants_A_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_OcclusionRoughnessMetallic.T_Pants_A_OcclusionRoughnessMetallic": {
+      "path": "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_OcclusionRoughnessMetallic.T_Pants_A_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    }
+  },
+  "morph_targets": [],
+  "referencers": [
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/ABP_Enemy_FrozenPMC_Fighter",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/IK_FrozenPMC_Fighter",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/RTG_Frostbitten_To_FrozenPMC",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_attack_1",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_attack_2",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_death",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_hit",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_idle_1",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_run",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_walking",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/BP_Enemy_FrozenPMC_Fighter"
+  ],
+  "skeleton_animations": [
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_attack_1.anim_attack_1",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_attack_2.anim_attack_2",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_death.anim_death",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_hit.anim_hit",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_idle_1.anim_idle_1",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_run.anim_run",
+    "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_walking.anim_walking"
+  ],
+  "exports": {
+    "mesh_fbx": "01_Source/SKM_FrozenPMC_Fighter.fbx",
+    "textures": {
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_2nd_BaseColor.T_Arms_A_2nd_BaseColor": "02_Textures_Source/T_Arms_A_2nd_BaseColor.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_Normal.T_Arms_A_Normal": "02_Textures_Source/T_Arms_A_Normal.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Arms_A_OcclusionRoughnessMetallic.T_Arms_A_OcclusionRoughnessMetallic": "02_Textures_Source/T_Arms_A_OcclusionRoughnessMetallic.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_1st_BaseColor.T_Boot_A_1st_BaseColor": "02_Textures_Source/T_Boot_A_1st_BaseColor.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_Normal.T_Boot_A_Normal": "02_Textures_Source/T_Boot_A_Normal.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Boot_A_OcclusionRoughnessMetallic.T_Boot_A_OcclusionRoughnessMetallic": "02_Textures_Source/T_Boot_A_OcclusionRoughnessMetallic.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_1st_BaseColor.T_Glove_A_1st_BaseColor": "02_Textures_Source/T_Glove_A_1st_BaseColor.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_Normal.T_Glove_A_Normal": "02_Textures_Source/T_Glove_A_Normal.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Glove_A_OcclusionRoughnessMetallic.T_Glove_A_OcclusionRoughnessMetallic": "02_Textures_Source/T_Glove_A_OcclusionRoughnessMetallic.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_BaseColor.T_Helmet_A_1st_BaseColor": "02_Textures_Source/T_Helmet_A_1st_BaseColor.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_1st_Emissive.T_Helmet_A_1st_Emissive": "02_Textures_Source/T_Helmet_A_1st_Emissive.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_Normal.T_Helmet_A_Normal": "02_Textures_Source/T_Helmet_A_Normal.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Helmet_A_OcclusionRoughnessMetallic.T_Helmet_A_OcclusionRoughnessMetallic": "02_Textures_Source/T_Helmet_A_OcclusionRoughnessMetallic.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_4th_BaseColor.T_Jacket_Body_A_4th_BaseColor": "02_Textures_Source/T_Jacket_Body_A_4th_BaseColor.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_Normal.T_Jacket_Body_A_Normal": "02_Textures_Source/T_Jacket_Body_A_Normal.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Jacket_Body_A_OcclusionRoughnessMetallic.T_Jacket_Body_A_OcclusionRoughnessMetallic": "02_Textures_Source/T_Jacket_Body_A_OcclusionRoughnessMetallic.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_2nd_BaseColor.T_Pants_A_2nd_BaseColor": "02_Textures_Source/T_Pants_A_2nd_BaseColor.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_Normal.T_Pants_A_Normal": "02_Textures_Source/T_Pants_A_Normal.png",
+      "/Game/Cyberpunk_Explorer_A/Textures/T_Pants_A_OcclusionRoughnessMetallic.T_Pants_A_OcclusionRoughnessMetallic": "02_Textures_Source/T_Pants_A_OcclusionRoughnessMetallic.png"
+    },
+    "animations": {
+      "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_attack_1.anim_attack_1": "01_Source/anims/anim_attack_1.fbx",
+      "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_attack_2.anim_attack_2": "01_Source/anims/anim_attack_2.fbx",
+      "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_death.anim_death": "01_Source/anims/anim_death.fbx",
+      "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_hit.anim_hit": "01_Source/anims/anim_hit.fbx",
+      "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_idle_1.anim_idle_1": "01_Source/anims/anim_idle_1.fbx",
+      "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_run.anim_run": "01_Source/anims/anim_run.fbx",
+      "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/anim_walking.anim_walking": "01_Source/anims/anim_walking.fbx"
+    }
+  },
+  "notes": "triangle counts per slot are filled in by blender_clean.py (FBX section counts)",
+  "lod0_section_material_slots": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "variants": [],
+  "blender_material_slots": {
+    "M_Jacket_Body_A": [
+      "M_Jacket_Body_A"
+    ],
+    "M_Arms_A": [
+      "M_Arms_A"
+    ],
+    "M_Boot_A": [
+      "M_Boot_A"
+    ],
+    "M_Pants_A": [
+      "M_Pants_A"
+    ],
+    "M_Glove_A": [
+      "M_Glove_A"
+    ],
+    "M_Helmet_A": [
+      "M_Helmet_A"
+    ]
+  },
+  "lod0_section_triangles": {
+    "M_Jacket_Body_A": 7656,
+    "M_Arms_A": 3504,
+    "M_Boot_A": 7184,
+    "M_Pants_A": 3798,
+    "M_Glove_A": 6120,
+    "M_Helmet_A": 5351
+  }
+}

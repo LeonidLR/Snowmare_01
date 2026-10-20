@@ -1,0 +1,733 @@
+{
+  "asset": "SKM_FrozenPMC_Fighter",
+  "source": {
+    "slots": 6,
+    "triangles": 33613,
+    "vertices": 19406,
+    "triangles_per_slot": {
+      "M_Jacket_Body_A": 7656,
+      "M_Arms_A": 3504,
+      "M_Boot_A": 7184,
+      "M_Pants_A": 3798,
+      "M_Glove_A": 6120,
+      "M_Helmet_A": 5351
+    },
+    "bones": 161,
+    "uv_maps": [
+      "DiffuseUV"
+    ],
+    "material_warnings": []
+  },
+  "stage_times": {
+    "source": "2026-10-20 21:50:11",
+    "clean": "2026-10-20 21:50:28",
+    "reduce": "2026-10-20 21:50:33",
+    "atlas": "2026-10-20 21:51:43",
+    "bake": "2026-10-20 21:52:34",
+    "export": "2026-10-20 21:52:38",
+    "review": "2026-10-20 21:54:16",
+    "qa": "2026-10-20 21:54:16"
+  },
+  "clean": {
+    "hair_slots": [],
+    "hair_triangles_removed": 0,
+    "transparent_slots": [],
+    "transparent_triangles_removed": 0,
+    "hidden_triangles_removed": 493,
+    "hidden_triangles_by_slot": {
+      "M_Jacket_Body_A": 1,
+      "M_Boot_A": 34,
+      "M_Glove_A": 92,
+      "M_Pants_A": 331,
+      "M_Helmet_A": 35
+    },
+    "triangles_after": 33120,
+    "triangles_after_per_slot": {
+      "M_Jacket_Body_A": 7655,
+      "M_Arms_A": 3504,
+      "M_Boot_A": 7150,
+      "M_Pants_A": 3467,
+      "M_Glove_A": 6028,
+      "M_Helmet_A": 5316
+    },
+    "vertices_after": 19093,
+    "hidden_method": {
+      "rays_sphere": 80,
+      "samples_per_triangle": 4,
+      "keep_ring": 1,
+      "anim_frames_per_anim": 2,
+      "forward": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "poses": [
+        {
+          "pose": "rest",
+          "still_hidden": 2191,
+          "seconds": 1.3
+        },
+        {
+          "pose": "crouch_deep",
+          "still_hidden": 2076,
+          "seconds": 0.8
+        },
+        {
+          "pose": "kneel_aim",
+          "still_hidden": 1985,
+          "seconds": 0.7
+        },
+        {
+          "pose": "arms_up",
+          "still_hidden": 1958,
+          "seconds": 0.6
+        },
+        {
+          "pose": "arms_hug",
+          "still_hidden": 1929,
+          "seconds": 0.7
+        },
+        {
+          "pose": "twist_bend",
+          "still_hidden": 1915,
+          "seconds": 0.7
+        },
+        {
+          "pose": "twist_bend_other",
+          "still_hidden": 1892,
+          "seconds": 0.6
+        },
+        {
+          "pose": "prone_look_up",
+          "still_hidden": 1813,
+          "seconds": 0.6
+        },
+        {
+          "pose": "lunge_spread",
+          "still_hidden": 1767,
+          "seconds": 0.9
+        },
+        {
+          "pose": "sit_reach",
+          "still_hidden": 1753,
+          "seconds": 0.6
+        },
+        {
+          "pose": "anim_attack_1@30",
+          "still_hidden": 1577,
+          "seconds": 0.7
+        },
+        {
+          "pose": "anim_attack_1@88",
+          "still_hidden": 1530,
+          "seconds": 0.6
+        },
+        {
+          "pose": "anim_attack_2@26",
+          "still_hidden": 1404,
+          "seconds": 0.6
+        },
+        {
+          "pose": "anim_attack_2@78",
+          "still_hidden": 1384,
+          "seconds": 0.5
+        },
+        {
+          "pose": "anim_death@24",
+          "still_hidden": 1366,
+          "seconds": 0.6
+        },
+        {
+          "pose": "anim_death@68",
+          "still_hidden": 1343,
+          "seconds": 0.5
+        },
+        {
+          "pose": "anim_hit@16",
+          "still_hidden": 1321,
+          "seconds": 0.5
+        },
+        {
+          "pose": "anim_hit@47",
+          "still_hidden": 1303,
+          "seconds": 0.5
+        },
+        {
+          "pose": "anim_idle_1@47",
+          "still_hidden": 1296,
+          "seconds": 0.5
+        },
+        {
+          "pose": "anim_idle_1@139",
+          "still_hidden": 1294,
+          "seconds": 0.5
+        },
+        {
+          "pose": "anim_run@7",
+          "still_hidden": 1282,
+          "seconds": 0.5
+        },
+        {
+          "pose": "anim_run@20",
+          "still_hidden": 1267,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_walking@11",
+          "still_hidden": 1263,
+          "seconds": 0.4
+        },
+        {
+          "pose": "anim_walking@32",
+          "still_hidden": 1256,
+          "seconds": 0.4
+        }
+      ]
+    }
+  },
+  "reduce": {
+    "target_tris": 20000,
+    "triangles_before": 33120,
+    "triangles_after": 19914,
+    "vertices_welded": 16880,
+    "vertices_after": 10248,
+    "per_material": {
+      "M_Jacket_Body_A": {
+        "before": 7655,
+        "budget": 5954,
+        "after": 5907,
+        "keep_weight": 1.0,
+        "ratio": 0.772,
+        "passes": [
+          0.778
+        ]
+      },
+      "M_Arms_A": {
+        "before": 3504,
+        "budget": 2725,
+        "after": 2688,
+        "keep_weight": 1.0,
+        "ratio": 0.767,
+        "passes": [
+          0.778
+        ]
+      },
+      "M_Boot_A": {
+        "before": 7150,
+        "budget": 2503,
+        "after": 2502,
+        "keep_weight": 0.45,
+        "ratio": 0.35,
+        "passes": [
+          0.35
+        ]
+      },
+      "M_Pants_A": {
+        "before": 3467,
+        "budget": 2697,
+        "after": 2697,
+        "keep_weight": 1.0,
+        "ratio": 0.778,
+        "passes": [
+          0.778
+        ]
+      },
+      "M_Glove_A": {
+        "before": 6028,
+        "budget": 2813,
+        "after": 2812,
+        "keep_weight": 0.6,
+        "ratio": 0.466,
+        "passes": [
+          0.467
+        ]
+      },
+      "M_Helmet_A": {
+        "before": 5316,
+        "budget": 3308,
+        "after": 3308,
+        "keep_weight": 0.8,
+        "ratio": 0.622,
+        "passes": [
+          0.622
+        ]
+      }
+    },
+    "g": 0.7778,
+    "protect_factor": 2.0,
+    "protection": {
+      "uv_seam_edges": 1994,
+      "open_border_edges": 598,
+      "material_border_edges": 104,
+      "joint_blend_vertices": 7495
+    },
+    "degenerate_faces": 0,
+    "non_manifold_edges": 0,
+    "unweighted_vertices": 0,
+    "sharp_angle": 60.0,
+    "authored_normals_restored_loops": 0,
+    "seconds": 2.3,
+    "decimate_seconds": 0.6
+  },
+  "atlas": {
+    "source_blend": "reduce",
+    "packer": "uvpackmaster4",
+    "packer_note": "UVPackmaster result {'FINISHED', 'PASS_THROUGH'} retcode 0 (UVPackmaster Engine: 4.1.0 PRO)",
+    "pack_seconds": 62.7,
+    "resolution": 2048,
+    "margin_px": 8,
+    "border_px": 2,
+    "rotation_step": 90,
+    "islands": 79,
+    "clusters": 23,
+    "down_facing_clusters": 0,
+    "mirrored_stacked_clusters_rot180": {
+      "M_Jacket_Body_A": 1,
+      "M_Boot_A": 9,
+      "M_Glove_A": 1,
+      "M_Helmet_A": 2
+    },
+    "mirrored_stacked_faces": 14287,
+    "uv_area_sum": 0.7592,
+    "loops_out_of_0_1": 0,
+    "texel_density": {
+      "M_Jacket_Body_A": {
+        "atlas_px_per_cm": 10.78,
+        "source_px_per_cm": 29.39,
+        "ratio": 0.367,
+        "weight": 1.2,
+        "source_res": 4096
+      },
+      "M_Arms_A": {
+        "atlas_px_per_cm": 8.99,
+        "source_px_per_cm": 43.75,
+        "ratio": 0.205,
+        "weight": 1.0,
+        "source_res": 4096
+      },
+      "M_Boot_A": {
+        "atlas_px_per_cm": 6.29,
+        "source_px_per_cm": 35.9,
+        "ratio": 0.175,
+        "weight": 0.7,
+        "source_res": 2048
+      },
+      "M_Pants_A": {
+        "atlas_px_per_cm": 8.99,
+        "source_px_per_cm": 33.06,
+        "ratio": 0.272,
+        "weight": 1.0,
+        "source_res": 4096
+      },
+      "M_Glove_A": {
+        "atlas_px_per_cm": 7.19,
+        "source_px_per_cm": 56.84,
+        "ratio": 0.126,
+        "weight": 0.8,
+        "source_res": 2048
+      },
+      "M_Helmet_A": {
+        "atlas_px_per_cm": 14.38,
+        "source_px_per_cm": 34.97,
+        "ratio": 0.411,
+        "weight": 1.6,
+        "source_res": 2048
+      }
+    },
+    "cross_material_overlap_px_1k": 0,
+    "covered_px_1k": 759510,
+    "cross_material_overlap_percent": 0.0,
+    "layout_image": "06_Review/atlas_layout.png",
+    "layout_legend": {
+      "M_Jacket_Body_A": "#f25454",
+      "M_Arms_A": "#f2f254",
+      "M_Boot_A": "#54f254",
+      "M_Pants_A": "#54f2f2",
+      "M_Glove_A": "#5454f2",
+      "M_Helmet_A": "#f254f2"
+    },
+    "note": "coverage % is measured on the baked mask in blender_bake.py"
+  },
+  "bake": {
+    "mode": "project",
+    "device": "OPTIX",
+    "samples": 4,
+    "margin_px": 8,
+    "resolution": 2048,
+    "orm_resolution": 1024,
+    "cage_extrusion_cm": 0.6,
+    "max_ray_cm": 3.0,
+    "ray_miss_percent": 0.021,
+    "variants": {
+      "default": {
+        "outputs": {
+          "BaseColor": "T_FrozenPMC_Fighter_BaseColor.png",
+          "Normal": "T_FrozenPMC_Fighter_Normal.png",
+          "ORM": "T_FrozenPMC_Fighter_ORM.png",
+          "Sheen": "T_FrozenPMC_Fighter_Sheen.png"
+        },
+        "emissive_glow_percent": 0.024,
+        "emissive_written": false,
+        "emissive_strength": 1.0,
+        "masked": false,
+        "two_sided": true
+      }
+    },
+    "self_baked_slots": [],
+    "normal_back_facing_clamped_percent": 1.298,
+    "atlas_coverage_percent": 72.43,
+    "seconds": {
+      "coverage": 0.6,
+      "hit": 3.0,
+      "base_color": 8.0,
+      "normal": 10.5,
+      "ao": 5.0,
+      "roughness": 5.0,
+      "metallic": 5.0,
+      "emissive_probe": 2.8,
+      "sheen": 2.6
+    },
+    "orm_channel_stats": {
+      "ao": {
+        "min": 0.0,
+        "mean": 0.652,
+        "max": 1.0
+      },
+      "roughness": {
+        "min": 0.169,
+        "mean": 0.636,
+        "max": 1.0
+      },
+      "metallic": {
+        "min": 0.0,
+        "mean": 0.01,
+        "max": 1.0
+      }
+    },
+    "sheen_values": [
+      0.0
+    ],
+    "bake_warnings": [],
+    "outputs": {
+      "BaseColor": "04_Textures_Baked/T_FrozenPMC_Fighter_BaseColor.png",
+      "Normal": "04_Textures_Baked/T_FrozenPMC_Fighter_Normal.png",
+      "ORM": "04_Textures_Baked/T_FrozenPMC_Fighter_ORM.png",
+      "Sheen": "04_Textures_Baked/T_FrozenPMC_Fighter_Sheen.png"
+    }
+  },
+  "export": {
+    "fbx": "05_Export/SK_FrozenPMC_Fighter_1slot.fbx",
+    "checks": {
+      "one_mesh": true,
+      "armature_object": "Armature",
+      "material_slots": [
+        "M_Body"
+      ],
+      "uv_maps": [
+        "UV_Atlas"
+      ],
+      "triangles": 19914,
+      "vertices": 10248,
+      "vertex_groups": 112,
+      "shape_keys": 0,
+      "custom_normals": true,
+      "bones_source": 161,
+      "bones_export": 162,
+      "root_bone": true,
+      "bones_missing": [],
+      "bones_extra": [],
+      "parent_mismatch": [],
+      "max_bone_deviation_cm": 0.0003,
+      "leaf_bones": [],
+      "ok": true
+    }
+  },
+  "review": {
+    "pose_sheet": "pose_sheet.png",
+    "pose_sheet_poses": [
+      "crouch_deep",
+      "kneel_aim",
+      "arms_up",
+      "twist_bend",
+      "prone_look_up"
+    ],
+    "views": {
+      "front34": {
+        "rgb_rmse_0_255": 3.44,
+        "mean_delta_e76": 0.78,
+        "p95_delta_e76": 2.38,
+        "silhouette_iou": 0.998,
+        "pixels_compared": 137845,
+        "image": "compare_front34.png"
+      },
+      "back34": {
+        "rgb_rmse_0_255": 2.42,
+        "mean_delta_e76": 0.58,
+        "p95_delta_e76": 1.91,
+        "silhouette_iou": 0.9977,
+        "pixels_compared": 134213,
+        "image": "compare_back34.png"
+      },
+      "tactical": {
+        "rgb_rmse_0_255": 3.07,
+        "mean_delta_e76": 0.67,
+        "p95_delta_e76": 2.13,
+        "silhouette_iou": 0.998,
+        "pixels_compared": 107912,
+        "image": "compare_tactical.png"
+      },
+      "face": {
+        "rgb_rmse_0_255": 6.55,
+        "mean_delta_e76": 1.07,
+        "p95_delta_e76": 3.45,
+        "silhouette_iou": 0.9982,
+        "pixels_compared": 483610,
+        "image": "compare_face.png"
+      }
+    },
+    "texture_memory": {
+      "before_mb": 162.7,
+      "after_mb": 10.0,
+      "after_without_optional_mb": 8.7,
+      "before_textures": 19,
+      "before_detail": {
+        "T_Arms_A_2nd_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "base_color"
+        },
+        "T_Arms_A_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_Arms_A_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        },
+        "T_Boot_A_1st_BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "base_color"
+        },
+        "T_Boot_A_Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_Boot_A_OcclusionRoughnessMetallic": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "orm_packed"
+        },
+        "T_Glove_A_1st_BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "base_color"
+        },
+        "T_Glove_A_Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_Glove_A_OcclusionRoughnessMetallic": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "orm_packed"
+        },
+        "T_Helmet_A_1st_BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "base_color"
+        },
+        "T_Helmet_A_1st_Emissive": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "emissive"
+        },
+        "T_Helmet_A_Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33,
+          "role": "normal"
+        },
+        "T_Helmet_A_OcclusionRoughnessMetallic": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67,
+          "role": "orm_packed"
+        },
+        "T_Jacket_Body_A_4th_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "base_color"
+        },
+        "T_Jacket_Body_A_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_Jacket_Body_A_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        },
+        "T_Pants_A_2nd_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "base_color"
+        },
+        "T_Pants_A_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_Pants_A_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        }
+      },
+      "after_detail": {
+        "BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67
+        },
+        "Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33
+        },
+        "ORM": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "DXT1 (TC_Masks)",
+          "mb": 0.67
+        },
+        "Sheen": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "G8",
+          "mb": 1.33
+        }
+      },
+      "assumptions": "full mip chain (x4/3); Default -> DXT1 when the PNG alpha is opaque else DXT5; normal maps BC5; streaming / LOD bias not applied"
+    },
+    "render_samples": 64,
+    "resolution": 1024
+  },
+  "qa": {
+    "slots_before": 6,
+    "slots_after": 1,
+    "triangles_before": 33613,
+    "triangles_after": 19914,
+    "triangles_removed_hidden": 493,
+    "triangles_removed_hair": 0,
+    "triangles_removed_check_by_position": 491,
+    "atlas_coverage_percent": 72.43,
+    "texture_memory_before_mb": 162.7,
+    "texture_memory_after_mb": 10.0,
+    "hidden_in_all_poses_before_safety_ring": 1256,
+    "bake_warnings": [],
+    "emissive_texel_fraction": null,
+    "cross_material_overlap_percent": 0.0,
+    "export_roundtrip_ok": true,
+    "worst_view_mean_delta_e": 1.07,
+    "min_silhouette_iou": 0.9977,
+    "triangles_per_material_after": {
+      "M_Jacket_Body_A": 5907,
+      "M_Arms_A": 2688,
+      "M_Boot_A": 2502,
+      "M_Pants_A": 2697,
+      "M_Glove_A": 2812,
+      "M_Helmet_A": 3308
+    },
+    "ray_miss_percent": 0.021
+  }
+}

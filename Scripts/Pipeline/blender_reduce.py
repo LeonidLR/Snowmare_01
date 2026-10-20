@@ -40,8 +40,8 @@ GROUP = "PIPELINE_DECIMATE"
 def parse():
     p = argparse.ArgumentParser()
     p.add_argument("--asset-dir", required=True)
-    p.add_argument("--target-tris", type=int, default=50000)
-    p.add_argument("--keep-weights", default=DEFAULT_KEEP)
+    p.add_argument("--target-tris", type=int, default=0, help="default: pipeline.json target_tris, else 50000")
+    p.add_argument("--keep-weights", default=None, help="default: pipeline.json keep_weights, else DEFAULT_KEEP")
     p.add_argument("--protect-factor", type=float, default=2.0, help="decimate vertex group factor")
     p.add_argument("--weld", type=float, default=0.001, help="merge distance (cm) before decimating")
     p.add_argument("--sharp-angle", type=float, default=60.0, help="hard edges of the reduced mesh (degrees)")
@@ -203,7 +203,8 @@ def main():
         vg.add(idx, w, "REPLACE")
     low.vertex_groups.active = vg
 
-    rules = parse_rules(args.keep_weights)
+    rules = parse_rules(args.keep_weights or paths.config.get("keep_weights") or DEFAULT_KEEP)
+    args.target_tris = args.target_tris or int(paths.config.get("target_tris", 50000))
     weights = {m: keep_weight(m, rules) for m in before}
     ratios, g = solve_budgets(before, weights, args.target_tris, args.min_tris)
     budgets = {m: int(round(before[m] * ratios[m])) for m in before}

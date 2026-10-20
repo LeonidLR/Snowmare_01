@@ -1,0 +1,7 @@
+{
+  "category": "enemy (dog)",
+  "target_tris": 10000,
+  "res": 2048,
+  "keep_weights": "skin=1.0",
+  "texel_weights": "skin=1.0"
+}

@@ -1,0 +1,24 @@
+{
+  "_doc": "Ground truth: slot -> keep / remove-hair / remove-transparent / remove-hidden / separate-transparent with the reason. Hidden = no ray from the triangle escapes to a viewer in the rest pose, 9 procedural extreme poses and the sampled animation frames (single-sided: back faces do not occlude).",
+  "hair_regex": "hair|(^|_)fur($|_)|eyebrow|(^|_)brows?($|_)|eyelash|(^|_)lashes($|_)|beard|mustache|moustache|groom",
+  "slots": {
+    "M_head_set_2": {
+      "slot_index": 0,
+      "decision": "keep",
+      "reason": "opaque; 2768 of 9751 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "triangles": 9751,
+      "hidden_triangles_removed": 2768
+    },
+    "M_bodi_set_2": {
+      "slot_index": 1,
+      "decision": "keep",
+      "reason": "opaque; 0 of 9840 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "triangles": 9840,
+      "hidden_triangles_removed": 0
+    }
+  }
+}

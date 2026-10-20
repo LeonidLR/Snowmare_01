@@ -1,0 +1,7 @@
+{
+  "category": "enemy",
+  "target_tris": 20000,
+  "res": 2048,
+  "keep_weights": "bodi=1.0",
+  "texel_weights": "bodi=1.0"
+}

@@ -36,7 +36,7 @@ def parse():
     p.add_argument("--res", type=int, default=4096)
     p.add_argument("--margin-px", type=int, default=12)
     p.add_argument("--border-px", type=int, default=4)
-    p.add_argument("--weights", default=DEFAULT_WEIGHTS)
+    p.add_argument("--weights", default=None, help="default: pipeline.json texel_weights, else DEFAULT_WEIGHTS")
     p.add_argument("--rot-step", type=int, default=90)
     p.add_argument("--search-time", type=int, default=60, help="UVPackmaster heuristic search seconds")
     p.add_argument("--fill", type=float, default=0.72, help="expected coverage, for the source-density clamp")
@@ -253,7 +253,7 @@ def main():
         me.uv_layers.remove(me.uv_layers[ATLAS_UV])
     me.uv_layers.new(name=ATLAS_UV, do_init=True)  # copy of the source uv
     me.uv_layers[ATLAS_UV].data.foreach_set("uv", [c for l in me.uv_layers[src_uv].data for c in l.uv])
-    rules = parse_rules(args.weights)
+    rules = parse_rules(args.weights or paths.config.get("texel_weights") or DEFAULT_WEIGHTS)
 
     bm = bmesh.new()
     bm.from_mesh(me)

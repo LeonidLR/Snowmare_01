@@ -80,12 +80,47 @@ def set_master_defaults(mat, defaults):
         unreal.log_warning("master stats unavailable: %s" % exc)
 
 
-def master_material(directory, name, defaults):
+CHANGED_MASTERS = set()  # masters created / upgraded in this run: the only ones saved
+
+
+def ensure_emissive(mat):
+    """Adds the optional glow to the master (once): UseEmissive static switch (default off = no extra sampler for the bodies
+    that do not glow) -> Emissive texture * EmissiveStrength."""
+    mel = unreal.MaterialEditingLibrary
+    names = [str(e.get_editor_property("parameter_name")) for e in mel.get_material_expressions(mat)
+             if hasattr(e, "get_editor_property") and isinstance(e, (unreal.MaterialExpressionParameter,
+                                                                     unreal.MaterialExpressionTextureSampleParameter))]
+    if "Emissive" in names:
+        return False
+    tex = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameter2D, -900, 600)
+    tex.set_editor_property("parameter_name", "Emissive")
+    tex.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
+    tex.set_editor_property("texture", unreal.load_asset("/Engine/EngineResources/Black.Black"))
+    strength = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -900, 850)
+    strength.set_editor_property("parameter_name", "EmissiveStrength")
+    strength.set_editor_property("default_value", 1.0)
+    mul = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -600, 700)
+    mel.connect_material_expressions(tex, "RGB", mul, "A")
+    mel.connect_material_expressions(strength, "", mul, "B")
+    switch = mel.create_material_expression(mat, unreal.MaterialExpressionStaticSwitchParameter, -350, 700)
+    switch.set_editor_property("parameter_name", "UseEmissive")
+    switch.set_editor_property("default_value", False)
+    zero = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, -600, 900)
+    mel.connect_material_expressions(mul, "", switch, "True")
+    mel.connect_material_expressions(zero, "", switch, "False")
+    mel.connect_material_property(switch, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.recompile_material(mat)
+    CHANGED_MASTERS.add(mat.get_path_name())
+    return True
+
+
+def master_material(directory, name, defaults, masked=False, two_sided=False):
+    """M_CharacterMaster[_Masked][_TwoSided]: the same graph; masked = opacity mask from the BaseColor alpha (clip 0.3333),
+    two-sided when the original body had two-sided materials (single-layer cloth)."""
+    name = name + ("_Masked" if masked else "") + ("_TwoSided" if two_sided else "")
     path = "%s/%s" % (directory, name)
     if unreal.EditorAssetLibrary.does_asset_exist(path):
-        mat = unreal.load_asset(path)
-        set_master_defaults(mat, defaults)
-        return mat
+        return unreal.load_asset(path)  # shared by every body: never re-defaulted to this asset's textures
     mel = unreal.MaterialEditingLibrary
     mat = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, directory, unreal.Material,
                                                                   unreal.MaterialFactoryNew())
@@ -96,7 +131,14 @@ def master_material(directory, name, defaults):
         n.set_editor_property("sampler_type", sampler)
         return n
 
+    if masked:
+        mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+        mat.set_editor_property("opacity_mask_clip_value", 0.3333)
+    if two_sided:
+        mat.set_editor_property("two_sided", True)
     bc = tex_param("BaseColor", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, -900, -300)
+    if masked:
+        mel.connect_material_property(bc, "A", unreal.MaterialProperty.MP_OPACITY_MASK)
     nrm = tex_param("Normal", unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL, -900, 300)
     orm = tex_param("ORM", unreal.MaterialSamplerType.SAMPLERTYPE_MASKS, -900, 0)
     sheen = tex_param("Sheen", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_GRAYSCALE, -900, -600)
@@ -123,6 +165,7 @@ def master_material(directory, name, defaults):
     except Exception:
         mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH)
     set_master_defaults(mat, defaults)
+    CHANGED_MASTERS.add(mat.get_path_name())
     return mat
 
 
@@ -130,9 +173,9 @@ def main():
     args = parse()
     src = os.path.join(args.asset_dir, "01_Source")
     inv = json.load(open(os.path.join(src, "inventory.json"), encoding="utf-8"))
-    short = inv["name"].replace("SK_", "", 1)
+    short = os.path.basename(os.path.normpath(args.asset_dir))  # asset = folder name (pipeline_common.Paths.short)
     baked = os.path.join(args.asset_dir, "04_Textures_Baked")
-    fbx = os.path.join(args.asset_dir, "05_Export", inv["name"] + "_1slot.fbx")
+    fbx = os.path.join(args.asset_dir, "05_Export", "SK_%s_1slot.fbx" % short)
     # do no harm: refuse to run over existing assets unless asked to
     existing = [str(a) for a in unreal.EditorAssetLibrary.list_assets(args.dest, recursive=True)]         if unreal.EditorAssetLibrary.does_directory_exist(args.dest) else []
     master_path = "%s/%s" % (args.master_dir, args.master_name)
@@ -145,28 +188,51 @@ def main():
 
     tg = unreal.TextureGroup
     tc = unreal.TextureCompressionSettings
-    tex = {
-        "BaseColor": texture(os.path.join(baked, "T_%s_BaseColor.png" % short), args.dest, "T_%s_BaseColor" % short,
-                             True, tc.TC_DEFAULT, tg.TEXTUREGROUP_CHARACTER),
-        "Normal": texture(os.path.join(baked, "T_%s_Normal.png" % short), args.dest, "T_%s_Normal" % short,
-                          False, tc.TC_NORMALMAP, tg.TEXTUREGROUP_CHARACTER_NORMAL_MAP),
-        "ORM": texture(os.path.join(baked, "T_%s_ORM.png" % short), args.dest, "T_%s_ORM" % short,
-                       False, tc.TC_MASKS, tg.TEXTUREGROUP_CHARACTER_SPECULAR),
-        "Sheen": texture(os.path.join(baked, "T_%s_Sheen.png" % short), args.dest, "T_%s_Sheen" % short,
-                         False, tc.TC_GRAYSCALE, tg.TEXTUREGROUP_CHARACTER),
-    }
-
-    master = master_material(args.master_dir, args.master_name, tex)
-    mi_path = "%s/MI_%s" % (args.dest, short)
-    if unreal.EditorAssetLibrary.does_asset_exist(mi_path):
-        mi = unreal.load_asset(mi_path)
-    else:
-        mi = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
-            "MI_%s" % short, args.dest, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    # Look variants (texture sets, e.g. the Military Zombie): one texture set + one MI per variant on the same mesh;
+    # the mesh's slot gets the first variant's MI.
+    variant_names = [v["name"] for v in inv.get("variants") or []] or [None]
     mel = unreal.MaterialEditingLibrary
-    mel.set_material_instance_parent(mi, master)
-    for k, t in tex.items():
-        mel.set_material_instance_texture_parameter_value(mi, k, t)
+    master = None
+    masters, instances, all_textures = [], [], []
+    for vname in variant_names:
+        tag = short if not vname else "%s_%s" % (short, vname)
+        tex = {
+            "BaseColor": texture(os.path.join(baked, "T_%s_BaseColor.png" % tag), args.dest, "T_%s_BaseColor" % tag,
+                                 True, tc.TC_DEFAULT, tg.TEXTUREGROUP_CHARACTER),
+            "Normal": texture(os.path.join(baked, "T_%s_Normal.png" % tag), args.dest, "T_%s_Normal" % tag,
+                              False, tc.TC_NORMALMAP, tg.TEXTUREGROUP_CHARACTER_NORMAL_MAP),
+            "ORM": texture(os.path.join(baked, "T_%s_ORM.png" % tag), args.dest, "T_%s_ORM" % tag,
+                           False, tc.TC_MASKS, tg.TEXTUREGROUP_CHARACTER_SPECULAR),
+            "Sheen": texture(os.path.join(baked, "T_%s_Sheen.png" % tag), args.dest, "T_%s_Sheen" % tag,
+                             False, tc.TC_GRAYSCALE, tg.TEXTUREGROUP_CHARACTER),
+        }
+        all_textures += list(tex.values())
+        summary = json.load(open(os.path.join(args.asset_dir, "06_Review", "summary.json"), encoding="utf-8"))
+        flags = summary.get("bake", {}).get("variants", {}).get(vname or "default", {})
+        master = master_material(args.master_dir, args.master_name, tex, bool(flags.get("masked")), bool(flags.get("two_sided")))
+        masters.append(master)
+        mi_path = "%s/MI_%s" % (args.dest, tag)
+        if unreal.EditorAssetLibrary.does_asset_exist(mi_path):
+            mi = unreal.load_asset(mi_path)
+        else:
+            mi = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
+                "MI_%s" % tag, args.dest, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+        mel.set_material_instance_parent(mi, master)
+        for k, t in tex.items():
+            mel.set_material_instance_texture_parameter_value(mi, k, t)
+        em_png = os.path.join(baked, "T_%s_Emissive.png" % tag)
+        if os.path.exists(em_png):
+            if ensure_emissive(master):
+                unreal.log("PIPELINE_IMPORT master: optional emissive added")
+            em_tex = texture(em_png, args.dest, "T_%s_Emissive" % tag, True, tc.TC_DEFAULT, tg.TEXTUREGROUP_CHARACTER)
+            all_textures.append(em_tex)
+            strength = flags.get("emissive_strength", 1.0)
+            mel.set_material_instance_texture_parameter_value(mi, "Emissive", em_tex)
+            mel.set_material_instance_scalar_parameter_value(mi, "EmissiveStrength", float(strength))
+            mel.set_material_instance_static_switch_parameter_value(mi, "UseEmissive", True)
+            mel.update_material_instance(mi)
+        instances.append(mi)
+    mi = instances[0]
 
     ui = unreal.FbxImportUI()
     ui.set_editor_property("import_mesh", True)
@@ -176,7 +242,7 @@ def main():
     ui.set_editor_property("import_materials", False)
     ui.set_editor_property("import_textures", False)
     ui.set_editor_property("import_animations", False)
-    ui.set_editor_property("create_physics_asset", physics is None)
+    ui.set_editor_property("create_physics_asset", False)  # never create assets we would not save
     if physics:
         ui.set_editor_property("physics_asset", physics)
     sk = ui.get_editor_property("skeletal_mesh_import_data")
@@ -203,12 +269,14 @@ def main():
     unreal.log("PIPELINE_IMPORT lods %s skeleton %s" % (json.dumps(lods), mesh.skeleton.get_path_name()))
 
     saved = []
-    for a in [mesh, mi, master] + list(tex.values()):
+    changed = [m for m in {m.get_path_name(): m for m in masters}.values() if m.get_path_name() in CHANGED_MASTERS]
+    for a in [mesh] + changed + instances + all_textures:
         p = a.get_path_name().split(".")[0]
         if p.startswith(args.dest) or p.startswith(args.master_dir):
             unreal.EditorAssetLibrary.save_asset(p, only_if_is_dirty=False)
             saved.append(p)
-    unreal.log("PIPELINE_IMPORT_DONE %s" % json.dumps({"saved": saved, "slots": len(mesh.materials)}))
+    unreal.log("PIPELINE_IMPORT_DONE %s" % json.dumps({"saved": saved, "slots": len(mesh.materials),
+                                                       "variants": [v for v in variant_names if v]}))
 
 
 main()

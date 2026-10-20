@@ -44,6 +44,7 @@
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run; realTime = wall clock instead of the fixed step (smokeDefaults); fixedStepFps = this smoke's own fixed step; _why = the reason of an override",
     "SaveLoadSmoke": { "exclusive": true },
+    "OptimizedCharacterSmoke": { "timeout": 900, "_why": "art pipeline 2026-10-20: one case per optimized character body (operatives + enemies), ~25 s each" },
     "SaveRoundTripSmoke": { "exclusive": true },
     "SaveCoverageSmoke": { "exclusive": true, "map": "/Game/Maps/L_PatrolTest", "_why": "save audit 2026-10-19: live-world dump before F5 / after F9 on the placed-patrol map; Saved/SmokeSaves/Coverage" },
     "SaveCoverageLakeSmoke": { "exclusive": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "the same dump with the Demo 01 tutorial running" },

@@ -38,6 +38,8 @@ def parse_args():
     p.add_argument("--anim-root", default="/Game", help="only consider animations under this path")
     p.add_argument("--skip-mesh", action="store_true", help="inventory + textures only (no mesh FBX)")
     p.add_argument("--skip-textures", action="store_true", help="do not re-export the textures")
+    p.add_argument("--material-sets-file", default="",
+                   help="JSON [{slot name: material path}, ...]: look variants (texture sets) baked on the same atlas")
     return p.parse_args([a.strip('"') for a in argv])
 
 
@@ -270,6 +272,23 @@ def main():
         inv["slots"].append(slot)
         if mat and obj_path(mat) not in inv["materials"]:
             inv["materials"][obj_path(mat)] = material_info(mat)
+
+    # Look variants (enemy texture sets): slot name -> material; slots a set does not list keep the mesh's material.
+    inv["variants"] = []
+    if args.material_sets_file:
+        with open(args.material_sets_file, "r", encoding="utf-8") as f:
+            sets = json.load(f)
+        slot_names = [s["slot_name"] for s in inv["slots"]]
+        for index, mapping in enumerate(sets):
+            resolved = {}
+            for slot in inv["slots"]:
+                mpath = mapping.get(slot["slot_name"]) or slot["material"]
+                resolved[slot["slot_name"]] = mpath
+                mat = unreal.load_asset(mpath) if mpath else None
+                if mat and mpath not in inv["materials"]:
+                    inv["materials"][mpath] = material_info(mat)
+            inv["variants"].append({"name": "Set%d" % (index + 1), "slots": resolved,
+                                    "unknown_slots": sorted(k for k in mapping if k not in slot_names)})
 
     tex_paths = set()
     for m in inv["materials"].values():

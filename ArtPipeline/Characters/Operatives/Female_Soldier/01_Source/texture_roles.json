@@ -1,0 +1,1075 @@
+{
+  "_doc": "Ground truth: texture -> role. method=material_graph means the role was read from the Unreal material graph (which output / channel the texture feeds); name_guess is the suffix heuristic.",
+  "textures": {
+    "T_Female_Soldie_Camouflage_1_Colour": {
+      "asset": "/Game/Female_Soldier/Textures/Extra_Textures/T_Female_Soldie_Camouflage_1_Colour.T_Female_Soldie_Camouflage_1_Colour",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldeir_Torso",
+        "MI_Female_Soldier_Backpack",
+        "MI_Female_Soldier_Bodyoutfit",
+        "MI_Female_Soldier_Boot",
+        "MI_Female_Soldier_Hand",
+        "MI_Female_Soldier_Helmet",
+        "MI_Female_Soldier_Helmet_Outfit",
+        "MI_Female_Soldier_Trouthers"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldeir_Torso_BaseColor": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldeir_Torso_BaseColor.T_Female_Soldeir_Torso_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldeir_Torso"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldeir_Torso_ID": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldeir_Torso_ID.T_Female_Soldeir_Torso_ID",
+      "role": "base_color",
+      "channels": {
+        "base_color": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldeir_Torso"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldeir_Torso_ID_extra": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldeir_Torso_ID_extra.T_Female_Soldeir_Torso_ID_extra",
+      "role": "base_color",
+      "channels": {
+        "base_color": "G"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldeir_Torso"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldeir_Torso_Normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldeir_Torso_Normal.T_Female_Soldeir_Torso_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldeir_Torso"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldeir_Torso_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldeir_Torso_OcclusionRoughnessMetallic.T_Female_Soldeir_Torso_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldeir_Torso"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Backpack_BaseColor": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Backpack_BaseColor.T_Female_Soldier_Backpack_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Backpack"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Backpack_ID": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Backpack_ID.T_Female_Soldier_Backpack_ID",
+      "role": "base_color",
+      "channels": {
+        "base_color": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Backpack"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Backpack_Normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Backpack_Normal.T_Female_Soldier_Backpack_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Backpack"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Backpack_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Backpack_OcclusionRoughnessMetallic.T_Female_Soldier_Backpack_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Backpack"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Bodyoutfit_BaseColor": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Bodyoutfit_BaseColor.T_Female_Soldier_Bodyoutfit_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Bodyoutfit"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Bodyoutfit_ID": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Bodyoutfit_ID.T_Female_Soldier_Bodyoutfit_ID",
+      "role": "base_color",
+      "channels": {
+        "base_color": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Bodyoutfit"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Bodyoutfit_Normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Bodyoutfit_Normal.T_Female_Soldier_Bodyoutfit_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Bodyoutfit"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Bodyoutfit_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Bodyoutfit_OcclusionRoughnessMetallic.T_Female_Soldier_Bodyoutfit_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Bodyoutfit"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Boots_BaseColor": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Boots_BaseColor.T_Female_Soldier_Boots_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Boot"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Boots_ID": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Boots_ID.T_Female_Soldier_Boots_ID",
+      "role": "base_color",
+      "channels": {
+        "base_color": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Boot"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Boots_Normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Boots_Normal.T_Female_Soldier_Boots_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Boot"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Boots_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Boots_OcclusionRoughnessMetallic.T_Female_Soldier_Boots_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Boot"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Chevron_BaseColor": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Chevron_BaseColor.T_Female_Soldier_Chevron_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Chevron"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Chevron_Normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Chevron_Normal.T_Female_Soldier_Chevron_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Chevron"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Chevron_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Chevron_OcclusionRoughnessMetallic.T_Female_Soldier_Chevron_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Chevron"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Eye_BaseColor": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Eye_BaseColor.T_Female_Soldier_Eye_BaseColor",
+      "role": "mixed:base_color+opacity",
+      "channels": {
+        "base_color": "RGB",
+        "opacity": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Female_Soldier_Eyes"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Eye_Normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Eye_Normal.T_Female_Soldier_Eye_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Female_Soldier_Eyes"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Eye_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Eye_OcclusionRoughnessMetallic.T_Female_Soldier_Eye_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Female_Soldier_Eyes"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Hand_ID": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Hand_ID.T_Female_Soldier_Hand_ID",
+      "role": "base_color",
+      "channels": {
+        "base_color": "B"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Hand"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Hands_BaseColor": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Hands_BaseColor.T_Female_Soldier_Hands_BaseColor",
+      "role": "mixed:base_color+opacity",
+      "channels": {
+        "base_color": "RGB",
+        "opacity": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Hand"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Hands_Normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Hands_Normal.T_Female_Soldier_Hands_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Hand"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Hands_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Hands_OcclusionRoughnessMetallic.T_Female_Soldier_Hands_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Hand"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Head_BaseColor": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Head_BaseColor.T_Female_Soldier_Head_BaseColor",
+      "role": "mixed:base_color+opacity",
+      "channels": {
+        "base_color": "RGB",
+        "opacity": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Female_Soldier_Head"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Head_Normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Head_Normal.T_Female_Soldier_Head_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Female_Soldier_Head"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Head_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Head_OcclusionRoughnessMetallic.T_Female_Soldier_Head_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Female_Soldier_Head"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Helmet_outfit_BaseColor": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Helmet_outfit_BaseColor.T_Female_Soldier_Helmet_outfit_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Helmet_Outfit"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Helmet_outfit_ID": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Helmet_outfit_ID.T_Female_Soldier_Helmet_outfit_ID",
+      "role": "base_color",
+      "channels": {
+        "base_color": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Helmet_Outfit"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Helmet_outfit_Normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Helmet_outfit_Normal.T_Female_Soldier_Helmet_outfit_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Beacon_glass",
+        "MI_Female_Soldier_Helmet_Outfit"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Helmet_outfit_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Helmet_outfit_OcclusionRoughnessMetallic.T_Female_Soldier_Helmet_outfit_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Helmet_Outfit"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Trousers_BaseColor": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Trousers_BaseColor.T_Female_Soldier_Trousers_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Trouthers"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Trousers_ID": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Trousers_ID.T_Female_Soldier_Trousers_ID",
+      "role": "base_color",
+      "channels": {
+        "base_color": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Trouthers"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Trousers_ID_extra": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Trousers_ID_extra.T_Female_Soldier_Trousers_ID_extra",
+      "role": "base_color",
+      "channels": {
+        "base_color": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Trouthers"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Trousers_Normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Trousers_Normal.T_Female_Soldier_Trousers_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Trouthers"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_Trousers_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_Trousers_OcclusionRoughnessMetallic.T_Female_Soldier_Trousers_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Trouthers"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_hair_ao": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_ao.T_Female_Soldier_hair_ao",
+      "role": "mixed:base_color+metallic+roughness+specular",
+      "channels": {
+        "base_color": "RGB",
+        "roughness": "RGB",
+        "metallic": "RGB",
+        "specular": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "ambient_occlusion",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Eyes_Hair",
+        "MI_Female_Soldier_Hair"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_hair_diff": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_diff.T_Female_Soldier_hair_diff",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Eyes_Hair",
+        "MI_Female_Soldier_Hair"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_hair_flow": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_flow.T_Female_Soldier_hair_flow",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Hair"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Female_Soldier_hair_id": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_id.T_Female_Soldier_hair_id",
+      "role": "mixed:base_color+metallic+roughness+specular",
+      "channels": {
+        "base_color": "RGB",
+        "roughness": "RGB",
+        "metallic": "RGB",
+        "specular": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Eyes_Hair",
+        "MI_Female_Soldier_Hair"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_hair_normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_normal.T_Female_Soldier_hair_normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Eyes_Hair"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_hair_opacity": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_opacity.T_Female_Soldier_hair_opacity",
+      "role": "mixed:opacity+opacity_mask",
+      "channels": {
+        "opacity": "RGB",
+        "opacity_mask": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "opacity",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Eyes_Hair",
+        "MI_Female_Soldier_Hair"
+      ],
+      "warnings": []
+    },
+    "T_Female_Soldier_hair_root": {
+      "asset": "/Game/Female_Soldier/Textures/T_Female_Soldier_hair_root.T_Female_Soldier_hair_root",
+      "role": "mixed:base_color+metallic+roughness+specular",
+      "channels": {
+        "base_color": "RGB",
+        "roughness": "RGB",
+        "metallic": "RGB",
+        "specular": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Eyes_Hair",
+        "MI_Female_Soldier_Hair"
+      ],
+      "warnings": []
+    },
+    "T_Femele_Soldier_Helmet_BaseColor": {
+      "asset": "/Game/Female_Soldier/Textures/T_Femele_Soldier_Helmet_BaseColor.T_Femele_Soldier_Helmet_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Helmet"
+      ],
+      "warnings": []
+    },
+    "T_Femele_Soldier_Helmet_ID": {
+      "asset": "/Game/Female_Soldier/Textures/T_Femele_Soldier_Helmet_ID.T_Femele_Soldier_Helmet_ID",
+      "role": "base_color",
+      "channels": {
+        "base_color": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Helmet"
+      ],
+      "warnings": []
+    },
+    "T_Femele_Soldier_Helmet_Normal": {
+      "asset": "/Game/Female_Soldier/Textures/T_Femele_Soldier_Helmet_Normal.T_Femele_Soldier_Helmet_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Helmet"
+      ],
+      "warnings": []
+    },
+    "T_Femele_Soldier_Helmet_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Female_Soldier/Textures/T_Femele_Soldier_Helmet_OcclusionRoughnessMetallic.T_Femele_Soldier_Helmet_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_Female_Soldier_Helmet"
+      ],
+      "warnings": []
+    }
+  }
+}

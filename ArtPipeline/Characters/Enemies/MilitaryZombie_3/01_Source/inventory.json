@@ -1,0 +1,894 @@
+{
+  "mesh": "/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_3.SKM_base_mesh_set2_3",
+  "name": "SKM_base_mesh_set2_3",
+  "skeleton": "/Game/military_zombie_set2/Meshes/base_mesh/SK_Mannequin.SK_Mannequin",
+  "physics_asset": "/Game/military_zombie_set2/Meshes/base_mesh/PA_Mannequin.PA_Mannequin",
+  "bounds_extent": [
+    55.33980178833008,
+    20.661151885986328,
+    90.05371498316526
+  ],
+  "lods": [
+    {
+      "lod": 0,
+      "num_verts": 10871,
+      "num_sections": 2
+    }
+  ],
+  "slots": [
+    {
+      "index": 0,
+      "slot_name": "M_head_set_2",
+      "imported_slot_name": "M_head_set_2",
+      "material": "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst"
+    },
+    {
+      "index": 1,
+      "slot_name": "M_bodi_set_2",
+      "imported_slot_name": "M_bodi_set_2",
+      "material": "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst"
+    }
+  ],
+  "materials": {
+    "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst": {
+      "path": "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "maxRough": 1.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/military_zombie_set2/texture/set_1/T_head_set_2_Normal.T_head_set_2_Normal",
+        "/Game/military_zombie_set2/texture/set_1/T_head_set_2_BaseColor.T_head_set_2_BaseColor",
+        "/Game/military_zombie_set2/texture/set_1/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/military_zombie_set2/material/set_1/M_head_set_1.M_head_set_1",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/military_zombie_set2/texture/set_1/T_head_set_2_BaseColor.T_head_set_2_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/military_zombie_set2/texture/set_1/T_head_set_2_Normal.T_head_set_2_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/military_zombie_set2/texture/set_1/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/military_zombie_set2/texture/set_1/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/military_zombie_set2/texture/set_1/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
+    },
+    "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst": {
+      "path": "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "maxRough": 1.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_Normal.T_bodi_set_2_Normal",
+        "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor",
+        "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/military_zombie_set2/material/set_1/M_bodi_set_1.M_bodi_set_1",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_Normal.T_bodi_set_2_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
+    },
+    "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst": {
+      "path": "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "maxRough": 1.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/military_zombie_set2/texture/set_2/T_head_set_2_Normal.T_head_set_2_Normal",
+        "/Game/military_zombie_set2/texture/set_2/T_head_set_2_BaseColor.T_head_set_2_BaseColor",
+        "/Game/military_zombie_set2/texture/set_2/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/military_zombie_set2/material/set_2/M_head_set_2.M_head_set_2",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/military_zombie_set2/texture/set_2/T_head_set_2_BaseColor.T_head_set_2_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/military_zombie_set2/texture/set_2/T_head_set_2_Normal.T_head_set_2_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/military_zombie_set2/texture/set_2/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/military_zombie_set2/texture/set_2/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/military_zombie_set2/texture/set_2/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
+    },
+    "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst": {
+      "path": "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "maxRough": 1.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_Normal.T_bodi_set_2_Normal",
+        "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor",
+        "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/military_zombie_set2/material/set_2/M_bodi_set_2.M_bodi_set_2",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_Normal.T_bodi_set_2_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
+    },
+    "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst": {
+      "path": "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "maxRough": 1.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/military_zombie_set2/texture/set_3/T_head_set_2_Normal.T_head_set_2_Normal",
+        "/Game/military_zombie_set2/texture/set_3/T_head_set_2_BaseColor.T_head_set_2_BaseColor",
+        "/Game/military_zombie_set2/texture/set_3/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/military_zombie_set2/material/set_3/M_head_set_3.M_head_set_3",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/military_zombie_set2/texture/set_3/T_head_set_2_BaseColor.T_head_set_2_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/military_zombie_set2/texture/set_3/T_head_set_2_Normal.T_head_set_2_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/military_zombie_set2/texture/set_3/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/military_zombie_set2/texture/set_3/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/military_zombie_set2/texture/set_3/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
+    },
+    "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst": {
+      "path": "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst",
+      "class": "MaterialInstanceConstant",
+      "texture_params": {},
+      "scalar_params": {
+        "Brighness": 1.0,
+        "mixRough": 0.0,
+        "maxRough": 1.0
+      },
+      "vector_params": {},
+      "used_textures": [
+        "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_Normal.T_bodi_set_2_Normal",
+        "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor",
+        "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/military_zombie_set2/material/set_3/M_bodi_set_3.M_bodi_set_3",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": true,
+      "graph": {
+        "base_color": {
+          "node": "Multiply",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "Brighness",
+              "default_value": 1.0,
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_Normal.T_bodi_set_2_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "LinearInterpolate",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "mixRough",
+              "default_value": 0.0,
+              "input": "A"
+            },
+            {
+              "node": "ScalarParameter",
+              "output": "",
+              "parameter_name": "maxRough",
+              "default_value": 1.0,
+              "input": "B"
+            },
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>",
+              "input": "Alpha"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR: 6>"
+        }
+      }
+    }
+  },
+  "textures": {
+    "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor": {
+      "path": "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_Normal.T_bodi_set_2_Normal": {
+      "path": "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_Normal.T_bodi_set_2_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic": {
+      "path": "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_1/T_head_set_2_BaseColor.T_head_set_2_BaseColor": {
+      "path": "/Game/military_zombie_set2/texture/set_1/T_head_set_2_BaseColor.T_head_set_2_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_1/T_head_set_2_Normal.T_head_set_2_Normal": {
+      "path": "/Game/military_zombie_set2/texture/set_1/T_head_set_2_Normal.T_head_set_2_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_1/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic": {
+      "path": "/Game/military_zombie_set2/texture/set_1/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor": {
+      "path": "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_Normal.T_bodi_set_2_Normal": {
+      "path": "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_Normal.T_bodi_set_2_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic": {
+      "path": "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_2/T_head_set_2_BaseColor.T_head_set_2_BaseColor": {
+      "path": "/Game/military_zombie_set2/texture/set_2/T_head_set_2_BaseColor.T_head_set_2_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_2/T_head_set_2_Normal.T_head_set_2_Normal": {
+      "path": "/Game/military_zombie_set2/texture/set_2/T_head_set_2_Normal.T_head_set_2_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_2/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic": {
+      "path": "/Game/military_zombie_set2/texture/set_2/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor": {
+      "path": "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_Normal.T_bodi_set_2_Normal": {
+      "path": "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_Normal.T_bodi_set_2_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic": {
+      "path": "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_3/T_head_set_2_BaseColor.T_head_set_2_BaseColor": {
+      "path": "/Game/military_zombie_set2/texture/set_3/T_head_set_2_BaseColor.T_head_set_2_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_3/T_head_set_2_Normal.T_head_set_2_Normal": {
+      "path": "/Game/military_zombie_set2/texture/set_3/T_head_set_2_Normal.T_head_set_2_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/military_zombie_set2/texture/set_3/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic": {
+      "path": "/Game/military_zombie_set2/texture/set_3/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    }
+  },
+  "morph_targets": [],
+  "referencers": [
+    "/Game/Characters/Enemies/MilitaryZombie/BP_Enemy_MilitaryZombie",
+    "/Game/military_zombie_set2/map/military_zombie_set2"
+  ],
+  "skeleton_animations": [
+    "/Game/military_zombie_set2/Demo/anim_MF_Idle.anim_MF_Idle",
+    "/Game/military_zombie_set2/Demo/anim_MF_Run_Fwd.anim_MF_Run_Fwd",
+    "/Game/military_zombie_set2/Demo/anim_MF_Walk_Fwd.anim_MF_Walk_Fwd",
+    "/Game/military_zombie_set2/Demo/anim_MM_Fall_Loop.anim_MM_Fall_Loop",
+    "/Game/military_zombie_set2/Demo/anim_MM_Idle.anim_MM_Idle",
+    "/Game/military_zombie_set2/Demo/anim_MM_Jump.anim_MM_Jump",
+    "/Game/military_zombie_set2/Demo/anim_MM_Land.anim_MM_Land",
+    "/Game/military_zombie_set2/Demo/anim_MM_Run_Fwd.anim_MM_Run_Fwd",
+    "/Game/military_zombie_set2/Demo/anim_MM_Walk_Fwd.anim_MM_Walk_Fwd",
+    "/Game/military_zombie_set2/Demo/anim_MM_Walk_InPlace.anim_MM_Walk_InPlace",
+    "/Game/military_zombie_set2/animation/anim_Dying.anim_Dying",
+    "/Game/military_zombie_set2/animation/anim_attack_1.anim_attack_1",
+    "/Game/military_zombie_set2/animation/anim_attack_2.anim_attack_2",
+    "/Game/military_zombie_set2/animation/anim_attack_3.anim_attack_3",
+    "/Game/military_zombie_set2/animation/anim_attack_4.anim_attack_4",
+    "/Game/military_zombie_set2/animation/anim_devour.anim_devour",
+    "/Game/military_zombie_set2/animation/anim_hit.anim_hit",
+    "/Game/military_zombie_set2/animation/anim_idle_1.anim_idle_1",
+    "/Game/military_zombie_set2/animation/anim_idle_3.anim_idle_3",
+    "/Game/military_zombie_set2/animation/anim_idle_4.anim_idle_4",
+    "/Game/military_zombie_set2/animation/anim_idle_5.anim_idle_5",
+    "/Game/military_zombie_set2/animation/anim_idle_6.anim_idle_6",
+    "/Game/military_zombie_set2/animation/anim_rage.anim_rage",
+    "/Game/military_zombie_set2/animation/anim_run_1.anim_run_1",
+    "/Game/military_zombie_set2/animation/anim_run_2.anim_run_2",
+    "/Game/military_zombie_set2/animation/anim_transformation.anim_transformation",
+    "/Game/military_zombie_set2/animation/anim_walking_1.anim_walking_1",
+    "/Game/military_zombie_set2/animation/anim_walking_2.anim_walking_2",
+    "/Game/military_zombie_set2/animation/anim_walking_3.anim_walking_3",
+    "/Game/military_zombie_set2/animation/anim_walking_4.anim_walking_4"
+  ],
+  "exports": {
+    "mesh_fbx": "01_Source/SKM_base_mesh_set2_3.fbx",
+    "textures": {
+      "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor": "02_Textures_Source/T_bodi_set_2_BaseColor.png",
+      "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_Normal.T_bodi_set_2_Normal": "02_Textures_Source/T_bodi_set_2_Normal.png",
+      "/Game/military_zombie_set2/texture/set_1/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_set_2_OcclusionRoughnessMetallic.png",
+      "/Game/military_zombie_set2/texture/set_1/T_head_set_2_BaseColor.T_head_set_2_BaseColor": "02_Textures_Source/T_head_set_2_BaseColor.png",
+      "/Game/military_zombie_set2/texture/set_1/T_head_set_2_Normal.T_head_set_2_Normal": "02_Textures_Source/T_head_set_2_Normal.png",
+      "/Game/military_zombie_set2/texture/set_1/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic": "02_Textures_Source/T_head_set_2_OcclusionRoughnessMetallic.png",
+      "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor": "02_Textures_Source/T_bodi_set_2_BaseColor.png",
+      "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_Normal.T_bodi_set_2_Normal": "02_Textures_Source/T_bodi_set_2_Normal.png",
+      "/Game/military_zombie_set2/texture/set_2/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_set_2_OcclusionRoughnessMetallic.png",
+      "/Game/military_zombie_set2/texture/set_2/T_head_set_2_BaseColor.T_head_set_2_BaseColor": "02_Textures_Source/T_head_set_2_BaseColor.png",
+      "/Game/military_zombie_set2/texture/set_2/T_head_set_2_Normal.T_head_set_2_Normal": "02_Textures_Source/T_head_set_2_Normal.png",
+      "/Game/military_zombie_set2/texture/set_2/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic": "02_Textures_Source/T_head_set_2_OcclusionRoughnessMetallic.png",
+      "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_BaseColor.T_bodi_set_2_BaseColor": "02_Textures_Source/T_bodi_set_2_BaseColor.png",
+      "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_Normal.T_bodi_set_2_Normal": "02_Textures_Source/T_bodi_set_2_Normal.png",
+      "/Game/military_zombie_set2/texture/set_3/T_bodi_set_2_OcclusionRoughnessMetallic.T_bodi_set_2_OcclusionRoughnessMetallic": "02_Textures_Source/T_bodi_set_2_OcclusionRoughnessMetallic.png",
+      "/Game/military_zombie_set2/texture/set_3/T_head_set_2_BaseColor.T_head_set_2_BaseColor": "02_Textures_Source/T_head_set_2_BaseColor.png",
+      "/Game/military_zombie_set2/texture/set_3/T_head_set_2_Normal.T_head_set_2_Normal": "02_Textures_Source/T_head_set_2_Normal.png",
+      "/Game/military_zombie_set2/texture/set_3/T_head_set_2_OcclusionRoughnessMetallic.T_head_set_2_OcclusionRoughnessMetallic": "02_Textures_Source/T_head_set_2_OcclusionRoughnessMetallic.png"
+    },
+    "animations": {
+      "/Game/military_zombie_set2/Demo/anim_MM_Walk_InPlace.anim_MM_Walk_InPlace": "01_Source/anims/anim_MM_Walk_InPlace.fbx",
+      "/Game/military_zombie_set2/Demo/anim_MM_Walk_Fwd.anim_MM_Walk_Fwd": "01_Source/anims/anim_MM_Walk_Fwd.fbx",
+      "/Game/military_zombie_set2/Demo/anim_MM_Run_Fwd.anim_MM_Run_Fwd": "01_Source/anims/anim_MM_Run_Fwd.fbx",
+      "/Game/military_zombie_set2/Demo/anim_MM_Jump.anim_MM_Jump": "01_Source/anims/anim_MM_Jump.fbx",
+      "/Game/military_zombie_set2/Demo/anim_MM_Idle.anim_MM_Idle": "01_Source/anims/anim_MM_Idle.fbx",
+      "/Game/military_zombie_set2/Demo/anim_MF_Walk_Fwd.anim_MF_Walk_Fwd": "01_Source/anims/anim_MF_Walk_Fwd.fbx",
+      "/Game/military_zombie_set2/Demo/anim_MF_Run_Fwd.anim_MF_Run_Fwd": "01_Source/anims/anim_MF_Run_Fwd.fbx",
+      "/Game/military_zombie_set2/Demo/anim_MF_Idle.anim_MF_Idle": "01_Source/anims/anim_MF_Idle.fbx"
+    }
+  },
+  "notes": "triangle counts per slot are filled in by blender_clean.py (FBX section counts)",
+  "lod0_section_material_slots": [
+    0,
+    1
+  ],
+  "variants": [
+    {
+      "name": "Set1",
+      "slots": {
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_1/MI_head_set_1_Inst.MI_head_set_1_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_1/MI_bodi_set_1_Inst.MI_bodi_set_1_Inst"
+      },
+      "unknown_slots": [
+        "M_armor_set_2",
+        "M_blouse_set_2",
+        "M_bodi_kit_set_2",
+        "helmet_set_3"
+      ]
+    },
+    {
+      "name": "Set2",
+      "slots": {
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_2/MI_head_set_2_Inst.MI_head_set_2_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_2/MI_bodi_set_2_Inst.MI_bodi_set_2_Inst"
+      },
+      "unknown_slots": [
+        "M_armor_set_2",
+        "M_blouse_set_2",
+        "M_bodi_kit_set_2"
+      ]
+    },
+    {
+      "name": "Set3",
+      "slots": {
+        "M_head_set_2": "/Game/military_zombie_set2/material/set_3/MI_head_set_3_Inst.MI_head_set_3_Inst",
+        "M_bodi_set_2": "/Game/military_zombie_set2/material/set_3/MI_bodi_set_3_Inst.MI_bodi_set_3_Inst"
+      },
+      "unknown_slots": [
+        "M_armor_set_2",
+        "M_blouse_set_2",
+        "M_bodi_kit_set_2"
+      ]
+    }
+  ],
+  "blender_material_slots": {
+    "M_head_set_2": [
+      "M_head_set_2"
+    ],
+    "M_bodi_set_2": [
+      "M_bodi_set_2"
+    ]
+  },
+  "lod0_section_triangles": {
+    "M_head_set_2": 9751,
+    "M_bodi_set_2": 9840
+  }
+}

@@ -12,6 +12,7 @@ param(
     [int]$AnimMax = 12,
     [switch]$SkipMesh,
     [switch]$SkipTextures,
+    [string]$MaterialSetsFile = "",
     # The skeletal mesh FBX exporter builds a render proxy (asserts under -nullrhi): render offscreen by default.
     [switch]$NullRhi,
     [string]$Engine = "C:\Program Files\Epic Games\UE_5.8"
@@ -26,6 +27,8 @@ $pyArgs = @("--mesh", $Mesh, "--out", $Out, "--anim-root", $AnimRoot, "--anim-ma
 if ($AnimRegex) { $pyArgs += @("--anim-regex", $AnimRegex) }
 if ($SkipMesh) { $pyArgs += "--skip-mesh" }
 if ($SkipTextures) { $pyArgs += "--skip-textures" }
+if ($MaterialSetsFile) { $pyArgs += @("--material-sets-file", (Resolve-Path $MaterialSetsFile).Path) }
+if (Get-Process -Name "UnrealEditor" -ErrorAction SilentlyContinue) { Write-Host "The Unreal editor is running - close it first."; exit 1 }
 $rhi = if ($NullRhi) { "-nullrhi" } else { "-AllowCommandletRendering -RenderOffscreen" }
 $env:CODEX_PIPELINE_ARGS = ConvertTo-Json -Compress $pyArgs
 $log = Join-Path $Out "01_Source\unreal_export.log"

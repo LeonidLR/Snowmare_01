@@ -179,3 +179,33 @@ boot shafts / glove cuffs / mask back).
   LOD0 ~50k, >= 3 LODs, same skeleton + physics asset, bounds within 10 %, no warnings about the new assets, hands away
   from the reference pose in every state (no T-pose). Texture memory from the platform data (rendered run): original
   437.3 MB in 44 textures -> optimized 36.0 MB in 4. Under -nullrhi the platform data is not loaded (logged as 0).
+
+## Roll-out: every body the game uses (inventory 2026-10-20)
+
+Found by `Scripts/Pipeline/unreal_character_roster.py` (read-only: BP_CodexTacticsGameMode's operative Blueprint + Squad
+Roster, every BP_Operative* / BP_Enemy_* under /Game/Characters, the enemies' LookVariants) -> `ArtPipeline/Characters/roster.json`;
+triangle counts from the exported FBX (`roster_counts.json`). The roster of BP_CodexTacticsGameMode has no member Blueprint /
+body override today: all three squad members wear BP_Operative (SK_Post_Apo_Survivor_a); BP_Operative_FemaleSoldier is the
+alternative operative Blueprint.
+
+Budgets (user 2026-10-20): operatives ~50k triangles, 4K BaseColor / Normal, ORM 2K; enemies ~20k (below the operatives), 2K
+BaseColor / Normal, ORM 1K; dogs ~10k; big enemies (Brute) ~25k. No Emissive unless something really glows. Texture-set
+variants of one body: one reduced mesh + one atlas, one texture set + MI per variant.
+
+| Order | Asset (ArtPipeline / Optimized folder) | Body mesh | Used by | Tris | Slots | Target | Notes |
+|---|---|---|---|---|---|---|---|
+| done | Operatives/Post_Apo_Survivor_a | /Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a | BP_Operative (all 3 squad members) | 213 548 | 14 | 50k | pilot, imported |
+| 1 | Operatives/Female_Soldier | /Game/Female_Soldier/Mesh/SK_Female_soldier | BP_Operative_FemaleSoldier | 150 747 | 33 (21 materials) | 50k | hair / lashes (masked) removed; translucent glass + eye layers removed; glow sticks / beacon -> Emissive if it really glows |
+| 2 | Enemies/FrozenPMC_Fighter | /Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Mesh/SKM_FrozenPMC_Fighter | BP_Enemy_FrozenPMC_Fighter | 33 613 | 6 | 20k | |
+| 3 | Enemies/MilitaryZombie_1 | /Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1 | BP_Enemy_MilitaryZombie (LookVariants body 1) | 69 770 | 5 | 20k | 3 texture sets (Set1-3) |
+| 4 | Enemies/MilitaryZombie_2 | .../SKM_base_mesh_set2_2 | BP_Enemy_MilitaryZombie (body 2) | 51 559 | 5 | 20k | 3 texture sets; hair slot removed |
+| 5 | Enemies/MilitaryZombie_3 | .../SKM_base_mesh_set2_3 | BP_Enemy_MilitaryZombie (body 3) | 19 591 | 2 | 20k | 3 texture sets |
+| 6 | Enemies/Brute | /Game/Mutant_monster_1/Meshes/base_mesh/SK_base_mesh_1 | BP_Enemy_Brute | 25 186 | 2 | 25k | bare body: only truly hidden parts go |
+| 7 | Enemies/Marksman | /Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh | BP_Enemy_Marksman | 17 992 | 2 | 20k | already under budget: 1 slot + 2K maps |
+| 8 | Enemies/Cutter | /Game/Biochemical_Monster_2/baze_mech/ue4/SKM_baze_mesh | BP_Enemy_Cutter | 28 592 | 2 | 20k | |
+| 9 | Enemies/Hound | /Game/Combat_Dog/Mesh/SK_Combat_Dog | BP_Enemy_Hound | 13 904 | 1 | 10k | already 1 slot: reduction + 2K maps |
+| 10 | Enemies/Frostbitten | /Game/mutant_monster_2/base_mesh/SK_base_mesh | BP_Enemy_Frostbitten | 24 142 | 1 | 20k | already 1 slot: reduction + 2K maps |
+
+Per-asset settings live in `ArtPipeline/Characters/<Group>/<Asset>/pipeline.json` (target, keep / texel weights by material
+name). No Blueprint is switched to the optimized meshes (the user's call); `CodexTactics.OptimizedCharacterSmoke` swaps them at
+runtime, one case per asset.

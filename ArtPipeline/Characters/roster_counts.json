@@ -1,0 +1,149 @@
+{
+ "Brute": {
+  "tris": 25186,
+  "slots": 2,
+  "per_slot": {
+   "MI_head_set_2_Inst": 14308,
+   "MI_bodi_set_2_Inst": 10878
+  },
+  "bones": 54,
+  "textures": 6,
+  "variants": 0
+ },
+ "Cutter": {
+  "tris": 28592,
+  "slots": 2,
+  "per_slot": {
+   "M_bodi_set_3": 11532,
+   "M_head_set_3": 17060
+  },
+  "bones": 67,
+  "textures": 8,
+  "variants": 0
+ },
+ "Frostbitten": {
+  "tris": 24142,
+  "slots": 1,
+  "per_slot": {
+   "MI_bodi_set_4_Inst": 24142
+  },
+  "bones": 67,
+  "textures": 3,
+  "variants": 0
+ },
+ "FrozenPMC_Fighter": {
+  "tris": 33613,
+  "slots": 6,
+  "per_slot": {
+   "M_Jacket_Body_A_4th_Inst": 7656,
+   "M_Arms_A_2nd_Inst": 3504,
+   "MA_Boot_A_1st": 7184,
+   "M_Pants_A_2nd_Inst": 3798,
+   "MA_Glove_A_1st": 6120,
+   "MA_Helmet_A_1st": 5351
+  },
+  "bones": 161,
+  "textures": 19,
+  "variants": 0
+ },
+ "Hound": {
+  "tris": 13904,
+  "slots": 1,
+  "per_slot": {
+   "M_Combat_Dog_skin_1": 13904
+  },
+  "bones": 83,
+  "textures": 5,
+  "variants": 0
+ },
+ "Marksman": {
+  "tris": 17992,
+  "slots": 2,
+  "per_slot": {
+   "MI_head_set_1_Inst": 9482,
+   "MI_bodi_set_1_Inst": 8510
+  },
+  "bones": 67,
+  "textures": 8,
+  "variants": 0
+ },
+ "MilitaryZombie_1": {
+  "tris": 69770,
+  "slots": 5,
+  "per_slot": {
+   "MI_helmet_set_1_Inst": 5738,
+   "MI_body_kit_set_1_Inst": 13406,
+   "MI_armor_set_1_Inst": 31895,
+   "MI_head_set_1_Inst": 9751,
+   "MI_bodi_set_1_Inst": 8980
+  },
+  "bones": 160,
+  "textures": 39,
+  "variants": 3
+ },
+ "MilitaryZombie_2": {
+  "tris": 51559,
+  "slots": 5,
+  "per_slot": {
+   "MI_armor_set_1_Inst": 27773,
+   "MI_blouse_set_1_Inst": 3289,
+   "MI_head_set_1_Inst": 9751,
+   "MI_bodi_set_1_Inst": 8980,
+   "MI_hair_set_1_Inst": 1766
+  },
+  "bones": 160,
+  "textures": 39,
+  "variants": 3
+ },
+ "MilitaryZombie_3": {
+  "tris": 19591,
+  "slots": 2,
+  "per_slot": {
+   "MI_head_set_1_Inst": 9751,
+   "MI_bodi_set_1_Inst": 9840
+  },
+  "bones": 160,
+  "textures": 18,
+  "variants": 3
+ },
+ "Female_Soldier": {
+  "tris": 150747,
+  "slots": 33,
+  "per_slot": {
+   "MI_Female_Soldier_Trouthers": 13939,
+   "MI_Female_Soldier_Trouthers_1": 276,
+   "MI_Female_Soldier_Trouthers_2": 276,
+   "MI_Female_Soldier_Trouthers_3": 1379,
+   "MI_Female_Soldier_Trouthers_4": 180,
+   "MI_Female_Soldier_Trouthers_5": 180,
+   "MI_Female_Soldier_Trouthers_6": 2269,
+   "MI_Female_Soldier_Boot": 3572,
+   "MI_Female_Soldier_Bodyoutfit": 30784,
+   "MI_Female_Soldeir_Torso": 16026,
+   "MI_Female_Soldeir_Torso_10": 2834,
+   "MI_Female_Soldier_Backpack": 8520,
+   "MI_Female_Soldier_Hand": 6552,
+   "MI_Female_Soldier_Helmet_Outfit_15": 12887,
+   "MI_Female_Soldier_Beacon_glass": 653,
+   "MI_Female_Soldier_Helmet_Beacon_Light": 8,
+   "MI_Female_Soldier_flashlight_bulb": 186,
+   "MI_Female_Soldier_Glowstick": 216,
+   "MI_Female_Soldier_Glowstick_Light": 64,
+   "MI_Female_Soldier_Helmet": 11810,
+   "MI_Female_Soldier_Chevron": 568,
+   "MI_Female_Soldier_Chevron_23": 568,
+   "MI_Female_Soldier_Chevron_24": 568,
+   "MI_Female_Soldier_Chevron_25": 568,
+   "MI_Female_Soldier_Chevron_26": 568,
+   "MI_Female_Soldier_Chevron_27": 568,
+   "M_Female_Soldier_Head": 20438,
+   "M_Female_Soldier_Eyes": 3832,
+   "MI_Female_Soldier_Eyes_Hair": 5144,
+   "MI_Female_Soldier_Hair": 1482,
+   "MI_Female_Soldier_Eyes_sclera": 3832
+  },
+  "bones": 67,
+  "textures": 51,
+  "variants": 0
+ }
+}

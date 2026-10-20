@@ -1,0 +1,7 @@
+{
+  "category": "enemy",
+  "target_tris": 20000,
+  "res": 2048,
+  "keep_weights": "jacket|body=1.0,arms=1.0,pants=1.0,helmet=0.8,glove=0.6,boot=0.45",
+  "texel_weights": "helmet|head=1.6,jacket|body=1.2,arms|pants=1.0,glove=0.8,boot=0.7"
+}

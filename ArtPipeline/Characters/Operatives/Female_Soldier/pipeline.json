@@ -1,0 +1,7 @@
+{
+  "category": "operative",
+  "target_tris": 50000,
+  "res": 4096,
+  "keep_weights": "trouthers|bodyoutfit|torso|_hand$|boot|helmet_outfit|_head$=100,femele_soldier_helmet|_helmet$=0.9,backpack=0.7,chevron=0.5,glowstick|beacon|flashlight=0.6",
+  "texel_weights": "_head$|helmet|glasses=1.8,torso|bodyoutfit=1.3,trouthers|hand=1.0,boot=0.8,backpack=0.9,chevron=0.6,glowstick|beacon|flashlight=0.6"
+}

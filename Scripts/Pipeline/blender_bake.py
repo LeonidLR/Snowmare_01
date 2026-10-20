@@ -45,6 +45,9 @@ def parse():
     p.add_argument("--cage-extrusion", type=float, default=0.6, help="cm, project mode")
     p.add_argument("--max-ray", type=float, default=3.0, help="cm, project mode (0 = unlimited)")
     p.add_argument("--cpu", action="store_true")
+    p.add_argument("--emissive-threshold", type=float, default=0.1,
+                   help="write an Emissive map only when more than this %% of the atlas texels glow (designer 2026-10-20: "
+                        "no Emissive unless something really glows)")
     return p.parse_args(pc.script_args())
 
 
@@ -258,6 +261,39 @@ class Projector:
             bpy.data.meshes.remove(part.data)
 
 
+def look_materials(slot_names, var, inv):
+    """Material asset paths the mesh shows in this look (variant or the mesh's own)."""
+    merged = inv.get("blender_material_slots", {})
+    out = []
+    for name in slot_names:
+        keys = [name] + merged.get(name, [])
+        if var:
+            path = next((var["slots"].get(k) for k in keys if var["slots"].get(k)), None)
+        else:
+            path = next((s["material"] for s in inv["slots"] if s["slot_name"] in keys), None) or next(
+                (s["material"] for s in inv["slots"] if s["material"] and s["material"].split(".")[-1] == name), None)
+        if path:
+            out.append(path)
+    return out
+
+
+def apply_variant(mesh, high, slot_names, var, inv, paths, warnings):
+    """Look variant (texture set): every slot gets the variant's material, rebuilt from the inventory, on low and high."""
+    import material_graph as mg
+    uv_name = mesh.data.uv_layers[0].name
+    merged = inv.get("blender_material_slots", {})
+    for i, slot in enumerate(slot_names):
+        mpath = var["slots"].get(slot) or next((var["slots"].get(s) for s in merged.get(slot, []) if var["slots"].get(s)), None)
+        minfo = inv["materials"].get(mpath) if mpath else None
+        if not minfo:
+            warnings.append("variant %s: no material for slot %s" % (var["name"], slot))
+            continue
+        mat = mg.build_material("%s__%s" % (slot, var["name"]), minfo, inv, paths.tex_source, uv_name, warnings)
+        mesh.data.materials[i] = mat
+        if high:
+            high.data.materials[i] = mat
+
+
 def main():
     args = parse()
     paths = pc.Paths(args.asset_dir)
@@ -277,9 +313,8 @@ def main():
     m = args.margin_px
     scale = lambda r: max(2, int(round(m * r / float(args.res))))  # same dilation in uv space
     # stale outputs of earlier runs that this version does not produce
-    for kind in ("Emissive", "Emissive_preview"):
-        if os.path.exists(paths.tex(kind)):
-            os.remove(paths.tex(kind))
+    if os.path.exists(paths.tex("Emissive_preview")):
+        os.remove(paths.tex("Emissive_preview"))
 
     # low-mesh uv coverage (always a self bake, margin 0)
     if high:
@@ -298,85 +333,124 @@ def main():
         for n in [n for n in nt.nodes if n.label in ("BAKE_target", "BAKE_emit")]:
             nt.nodes.remove(n)
 
-    proj = None
-    self_slots = []
-    if mode == "project":
-        red = pc.load_json(paths.report_path).get("reduce", {}).get("per_material", {})
-        self_slots = [i for i, sl in enumerate(mesh.material_slots)
-                      if red.get(sl.material.name, {}).get("ratio", 0) >= 0.999]
-        proj = Projector(mesh, high, args, self_slots)
-
-    def bake_channel(label, res, socket_name, colorspace, kind="emit", dil=None):
-        """Returns the dilated float array (bottom row first)."""
-        img = new_image("BAKE_" + label, res, colorspace, (0, 0, 0, 0), float_buffer=True, alpha=True)
-        with pc.Timer("bake %s %dpx (%s)" % (label, res, mode)) as tm:
-            if proj:
-                proj.bake(img, socket_name, kind)
-            else:
-                self_target(mesh, img, socket_name)
-                run_bake(kind, dil if dil is not None else scale(res))
-        times[label] = tm.seconds
-        arr = pixels(img)
-        bpy.data.images.remove(img)
-        if proj:
-            filled = arr[..., 3] > 0.5
-            arr[..., :3] = dilate(arr[..., :3], filled, dil if dil is not None else scale(res))
-        if not np.isfinite(arr).all():
-            warnings.append("%s bake has NaN / inf texels" % label)
-            arr = np.nan_to_num(arr)
-        return arr
-
-    # ray misses: high hit mask vs the low mesh's own coverage
+    slot_names = [sl.material.name for sl in mesh.material_slots]  # = the Unreal slot names (blender_clean.py)
+    inv = paths.inventory
+    variants = inv.get("variants") or [None]
+    red = pc.load_json(paths.report_path).get("reduce", {}).get("per_material", {})
+    self_slots = [i for i, n in enumerate(slot_names) if red.get(n, {}).get("ratio", 0) >= 0.999] if high else []
+    per_variant = {}
     miss_pct = None
-    if proj:
-        hit = bake_channel("hit", args.aux_res, "HIT", "Non-Color", dil=0)
-        hit_mask = hit[..., 3] > 0.5
-        misses = covered & ~hit_mask
-        miss_pct = round(100.0 * misses.sum() / max(1, covered.sum()), 3)
-        if miss_pct > 0.5:
-            warnings.append("%.2f %% of the atlas texels found no high surface (raise --max-ray / --cage-extrusion)"
-                            % miss_pct)
-        pc.write_png(os.path.join(paths.review, "bake_misses.png"),
-                     np.stack([misses, covered & hit_mask, np.zeros_like(misses)], -1)[::-1].astype(np.float32), 8)
-
-    bc = bake_channel("base_color", args.res, "base_color", "Non-Color")
-    # the emit values are linear: encode sRGB for the 8-bit colour texture
-    lin = np.clip(bc[..., :3], 0, 1)
-    srgb = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * np.power(lin, 1 / 2.4) - 0.055)
-    pc.write_png(paths.tex("BaseColor"), srgb[::-1], 8)
-    preview(np.concatenate([srgb, np.ones_like(srgb[..., :1])], -1), paths.tex("BaseColor_preview"))
-
-    nrm = bake_channel("normal", args.res, "normal", "Non-Color", kind="normal")
-    # A ray that reaches the back of a thin high part (buckle, strap edge) returns a normal pointing INTO the low
-    # surface (tangent z < 0): renders black. Clamp to the front hemisphere and renormalise.
-    n = nrm[..., :3] * 2.0 - 1.0
-    flipped = n[..., 2] < 0.15
-    if proj:
-        n[..., 2] = np.maximum(n[..., 2], 0.15)
-        n /= np.maximum(np.linalg.norm(n, axis=-1, keepdims=True), 1e-6)
-        nrm[..., :3] = n * 0.5 + 0.5
-    normal_clamped_pct = round(100.0 * float((flipped & (np.kron(covered, np.ones((args.res // args.aux_res,) * 2,
-                                                                                   dtype=bool)))).sum())
-                               / max(1, covered.sum() * (args.res // args.aux_res) ** 2), 3)
-    pc.write_png(paths.tex("Normal"), np.clip(nrm[::-1, :, :3], 0, 1), 16)
-    preview(nrm, paths.tex("Normal_preview"))
-
+    normal_clamped_pct = None
     chans = {}
-    for key, sock in (("ao", "ao"), ("roughness", "roughness"), ("metallic", "metallic")):
-        chans[key] = bake_channel(key, orm_res, sock, "Non-Color")[..., 0].copy()
-    packed = np.clip(np.stack([chans["ao"], chans["roughness"], chans["metallic"]], axis=-1), 0, 1)
-    pc.write_png(paths.tex("ORM"), packed[::-1], 8)
-    preview(np.concatenate([packed, np.ones_like(packed[..., :1])], -1), paths.tex("ORM_preview"))
+    sheen_values = []
+    for vi, var in enumerate(variants):
+        vname = var["name"] if var else None
+        if var:
+            apply_variant(mesh, high, slot_names, var, inv, paths, warnings)
+        proj = Projector(mesh, high, args, self_slots) if mode == "project" else None
+        tex = lambda kind: paths.tex(kind, variant=vname)
 
-    sh = bake_channel("sheen", args.aux_res, "sheen", "Non-Color")
-    sp = np.clip(sh[..., :3].mean(-1), 0, 1)
-    pc.write_png(paths.tex("Sheen"), sp[::-1], 8)
-    sheen_values = sorted({round(float(v), 3) for v in np.unique(np.round(sp[covered], 3))})[:10]
+        def bake_channel(label, res, socket_name, colorspace, kind="emit", dil=None):
+            """Returns the dilated float array (bottom row first)."""
+            img = new_image("BAKE_" + label, res, colorspace, (0, 0, 0, 0), float_buffer=True, alpha=True)
+            with pc.Timer("bake %s %dpx (%s)" % (label, res, mode)) as tm:
+                if proj:
+                    proj.bake(img, socket_name, kind)
+                else:
+                    self_target(mesh, img, socket_name)
+                    run_bake(kind, dil if dil is not None else scale(res))
+            times[label] = tm.seconds
+            arr = pixels(img)
+            bpy.data.images.remove(img)
+            if proj:
+                filled = arr[..., 3] > 0.5
+                arr[..., :3] = dilate(arr[..., :3], filled, dil if dil is not None else scale(res))
+            if not np.isfinite(arr).all():
+                warnings.append("%s bake has NaN / inf texels" % label)
+                arr = np.nan_to_num(arr)
+            return arr
 
-    if proj:
-        proj.cleanup()
-        for s in mesh.material_slots:
-            wire_emission(s.material, "normal")  # back to the BSDF
+        # ray misses: high hit mask vs the low mesh's own coverage
+        if proj and vi == 0:
+            hit = bake_channel("hit", args.aux_res, "HIT", "Non-Color", dil=0)
+            hit_mask = hit[..., 3] > 0.5
+            misses = covered & ~hit_mask
+            miss_pct = round(100.0 * misses.sum() / max(1, covered.sum()), 3)
+            if miss_pct > 0.5:
+                warnings.append("%.2f %% of the atlas texels found no high surface (raise --max-ray / --cage-extrusion)"
+                                % miss_pct)
+            pc.write_png(os.path.join(paths.review, "bake_misses.png"),
+                         np.stack([misses, covered & hit_mask, np.zeros_like(misses)], -1)[::-1].astype(np.float32), 8)
+
+        mats = [inv["materials"].get(m_, {}) for m_ in look_materials(slot_names, var, inv)]
+        masked = any("MASKED" in str(m_.get("blend_mode", "")) for m_ in mats)
+        two_sided = any(m_.get("two_sided") for m_ in mats)
+        bc = bake_channel("base_color", args.res, "base_color", "Non-Color")
+        # the emit values are linear: encode sRGB for the 8-bit colour texture
+        lin = np.clip(bc[..., :3], 0, 1)
+        srgb = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * np.power(lin, 1 / 2.4) - 0.055)
+        if masked:
+            # Masked look (cut-outs): the opacity mask goes into the BaseColor alpha (Unreal: BC3, clip 0.3333).
+            op = bake_channel("opacity", args.res, "opacity", "Non-Color")
+            srgb = np.concatenate([srgb, np.clip(op[..., :1], 0, 1)], axis=-1)
+        pc.write_png(tex("BaseColor"), srgb[::-1], 8)
+        srgb = srgb[..., :3]
+        preview(np.concatenate([srgb, np.ones_like(srgb[..., :1])], -1), tex("BaseColor_preview"))
+
+        nrm = bake_channel("normal", args.res, "normal", "Non-Color", kind="normal")
+        # A ray that reaches the back of a thin high part (buckle, strap edge) returns a normal pointing INTO the low
+        # surface (tangent z < 0): renders black. Clamp to the front hemisphere and renormalise.
+        n = nrm[..., :3] * 2.0 - 1.0
+        flipped = n[..., 2] < 0.15
+        if proj:
+            n[..., 2] = np.maximum(n[..., 2], 0.15)
+            n /= np.maximum(np.linalg.norm(n, axis=-1, keepdims=True), 1e-6)
+            nrm[..., :3] = n * 0.5 + 0.5
+        normal_clamped_pct = round(100.0 * float((flipped & (np.kron(covered, np.ones((args.res // args.aux_res,) * 2,
+                                                                                       dtype=bool)))).sum())
+                                   / max(1, covered.sum() * (args.res // args.aux_res) ** 2), 3)
+        pc.write_png(tex("Normal"), np.clip(nrm[::-1, :, :3], 0, 1), 16)
+        preview(nrm, tex("Normal_preview"))
+
+        chans = {}
+        for key, sock in (("ao", "ao"), ("roughness", "roughness"), ("metallic", "metallic")):
+            chans[key] = bake_channel(key, orm_res, sock, "Non-Color")[..., 0].copy()
+        packed = np.clip(np.stack([chans["ao"], chans["roughness"], chans["metallic"]], axis=-1), 0, 1)
+        pc.write_png(tex("ORM"), packed[::-1], 8)
+        preview(np.concatenate([packed, np.ones_like(packed[..., :1])], -1), tex("ORM_preview"))
+
+        # Emissive: measured always (aux res); the map is written only if a real part of the body glows.
+        em = bake_channel("emissive_probe", args.aux_res, "emissive", "Non-Color")
+        glow = (em[..., :3].max(-1) > 0.05) & covered
+        glow_pct = round(100.0 * float(glow.sum()) / max(1, covered.sum()), 3)
+        emissive_written = False
+        emissive_scale = 1.0
+        if glow_pct >= args.emissive_threshold:
+            emf = bake_channel("emissive", orm_res, "emissive", "Non-Color")
+            # HDR emission (strength > 1): stored normalised, the MI's EmissiveStrength carries the scale
+            emissive_scale = max(1.0, float(emf[..., :3].max()))
+            linf = np.clip(emf[..., :3] / emissive_scale, 0, 1)
+            pc.write_png(tex("Emissive"), np.where(linf <= 0.0031308, linf * 12.92,
+                                                  1.055 * np.power(linf, 1 / 2.4) - 0.055)[::-1], 8)
+            emissive_written = True
+        elif os.path.exists(tex("Emissive")):
+            os.remove(tex("Emissive"))
+
+        sh = bake_channel("sheen", args.aux_res, "sheen", "Non-Color")
+        sp = np.clip(sh[..., :3].mean(-1), 0, 1)
+        pc.write_png(tex("Sheen"), sp[::-1], 8)
+        sheen_values = sorted({round(float(v), 3) for v in np.unique(np.round(sp[covered], 3))})[:10]
+
+        per_variant[vname or "default"] = {
+            "outputs": {k: os.path.basename(tex(k)) for k in ("BaseColor", "Normal", "ORM", "Sheen", "Emissive")
+                        if os.path.exists(tex(k))},
+            "emissive_glow_percent": glow_pct, "emissive_written": emissive_written,
+            "emissive_strength": round(emissive_scale, 3), "masked": masked, "two_sided": two_sided}
+        if proj:
+            proj.cleanup()
+            for sl in mesh.material_slots:
+                wire_emission(sl.material, "normal")  # back to the BSDF
+
     bpy.ops.wm.save_as_mainfile(filepath=paths.bake_blend, compress=True)
 
     stats = {}
@@ -387,13 +461,13 @@ def main():
                       "max": round(float(inside.max()), 3)}
     pc.update_summary(paths, "bake", {
         "mode": mode, "device": device, "samples": args.samples, "margin_px": m, "resolution": args.res,
-        "orm_resolution": orm_res, "cage_extrusion_cm": args.cage_extrusion if proj else None,
-        "max_ray_cm": args.max_ray if proj else None, "ray_miss_percent": miss_pct,
+        "orm_resolution": orm_res, "cage_extrusion_cm": args.cage_extrusion if high else None,
+        "max_ray_cm": args.max_ray if high else None, "ray_miss_percent": miss_pct, "variants": per_variant,
         "self_baked_slots": [mesh.material_slots[i].material.name for i in self_slots],
         "normal_back_facing_clamped_percent": normal_clamped_pct,
         "atlas_coverage_percent": round(coverage * 100, 2), "seconds": {k: round(v, 1) for k, v in times.items()},
-        "orm_channel_stats": stats, "emissive": None, "sheen_values": sheen_values, "bake_warnings": warnings,
-        "outputs": {k: os.path.relpath(paths.tex(k), paths.root).replace("\\", "/")
+        "orm_channel_stats": stats, "sheen_values": sheen_values, "bake_warnings": warnings,
+        "outputs": {k: os.path.relpath(paths.tex(k, variant=(variants[0] or {}).get("name")), paths.root).replace("\\", "/")
                     for k in ("BaseColor", "Normal", "ORM", "Sheen")}})
     print("[pipeline] BAKE_DONE mode=%s coverage=%.2f%% misses=%s%% device=%s" % (
         mode, coverage * 100, miss_pct, device))

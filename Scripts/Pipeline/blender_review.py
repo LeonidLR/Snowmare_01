@@ -236,8 +236,9 @@ def texture_memory(paths):
         detail[name] = {"size": [w, h], "format": fmt, "mb": round(mb, 2), "role": roles.get(name, {}).get("role")}
     after_detail = {}
     for kind, fmt, bpp in (("BaseColor", "DXT1", 0.5), ("Normal", "BC5", 1.0), ("ORM", "DXT1 (TC_Masks)", 0.5),
-                           ("Sheen", "BC4", 0.5)):
-        f = paths.tex(kind)
+                           ("Sheen", "G8", 1.0), ("Emissive", "DXT1", 0.5)):
+        v = paths.inventory.get("variants") or []
+        f = paths.tex(kind, variant=v[0]["name"] if v else None)
         if os.path.exists(f):
             w, h = png_size(f)
             after_detail[kind] = {"size": [w, h], "format": fmt, "mb": round(w * h * bpp * 4 / 3 / 2 ** 20, 2)}
