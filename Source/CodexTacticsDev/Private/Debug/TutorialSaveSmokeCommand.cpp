@@ -17,6 +17,7 @@
 //     no knockdown, no montage, the mesh on its place on the capsule (<= 5 cm), stance as saved - twice in a row; Solo ON + F5, the
 //     followers walk off, F9 -> Solo and the followers holding, a leader move leaves them in place; an Aggressive squad, a placed
 //     enemy (level enemy) detects it -> the fight starts (WaveCombat, Attack.* unlocked) and the squad shoots it, nobody panics / flees.
+//  6. 2026-10-20: the current navigation target (the bridge objective's marker at the crack) is the same after F9.
 
 #include "CoreMinimal.h"
 
@@ -74,6 +75,8 @@ namespace TutorialSaveSmoke
 		TWeakObjectPtr<AEnemyCharacter> Enemy;
 		float EnemyHealthAtContact = 0.f;
 		int32 RetriesChecked = 0;
+		/** 2026-10-20: the current navigation target at F5 ("markers:A1_bridge" at the crack). */
+		FString GuideAtSave;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What);
@@ -258,6 +261,8 @@ namespace TutorialSaveSmoke
 			HandedOver.Add(ETransferItem::HeatPack, 1);
 			Transfer->RestoreHandedOverCounts(HandedOver); // one heat pack handed between mates (the share lesson's counter)
 			State.ZoomUsesAtSave = Tutorial->GetMachine().GetCommandUse(PlayerCommands::CameraZoom).Count;
+			State.GuideAtSave = UTutorialSubsystem::DescribeGuide(Tutorial->GetGuideView().Guide);
+			Check(State, Tutorial->GetGuideView().bValid && !State.GuideAtSave.IsEmpty(), FString::Printf(TEXT("2026-10-20: a current target at F5 (%s)"), *State.GuideAtSave));
 			FPlatformProcess::Sleep(1.1f); // the save timestamps have whole seconds: the quicksave is newer than the checkpoint
 			Check(State, Saves->QuickSave(), TEXT("F5"));
 			// Mutate, then F9.
@@ -288,6 +293,11 @@ namespace TutorialSaveSmoke
 			Check(State, Tutorial->GetMachine().GetCommandUse(PlayerCommands::CameraZoom).Count == State.ZoomUsesAtSave && State.ZoomUsesAtSave > 0,
 				TEXT("fresh world: the precredit history"));
 			Check(State, Tutorial->IsCommandLocked(PlayerCommands::Sprint), TEXT("fresh world: sprint still locked"));
+			{
+				const FString GuideNow = UTutorialSubsystem::DescribeGuide(Tutorial->GetGuideView().Guide);
+				Check(State, Tutorial->GetGuideView().bValid && GuideNow == State.GuideAtSave,
+					FString::Printf(TEXT("2026-10-20: fresh world: the current target survived F5 / F9 (%s -> %s)"), *State.GuideAtSave, *GuideNow));
+			}
 			Check(State, FMath::IsNearlyEqual(Tutorial->GetConditionStat(TEXT("heat_packs_given")), 1.f), TEXT("fresh world: the heat pack hand-over counted"));
 			const ATutorialTriggerVolume* Beacon2 = FindVolume(World, TEXT("VOL_A1_BEACON2"));
 			const ATutorialTriggerVolume* Approach = FindVolume(World, TEXT("VOL_A1_HUT_APPROACH"));

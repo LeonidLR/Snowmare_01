@@ -22,6 +22,63 @@ locked on Demo 01 until the safety unlock-all - a wave / horde fight or the tuto
 
 ## Decision blocks, newest first (old §6 «Tutorial» section)
 
+**Demo 01 2026-10-20 d (game designer: "there's no flow - transitions feel forced, I keep waiting for the next instruction"): the pacing pass.**
+Content and order unchanged. (1) The card breather 1.5 -> **0.8 s** (engine, every level). (2) Delays: `A0_cam_pan` 2 -> 1 s (with the radio
+and the objective), `A1_heatpack_mate` / `A1_sprint` / `A1_obj_hut` + `A1_wt_resupply` / `A1_share` + `A1_share_card` / `A1_regroup` /
+`A3_peek` / `A3_posture_radio` / `A3_posture` / `A4_lure` -> 0.5 s, `A4_cones` 2 -> 0.5 s, the A4 posture twin 3 -> 1 s. (3) No card waits for a
+speech (checked: none is an `after_step` follower of a radio / walk-and-talk); objectives never wait for dialogue. (4) Cards that only listed
+keys now say the action: `TUT_A1_STANCE` ("Change stance twice now ..."), `TUT_A1_HUT_ENTER` / `TUT_A3_COVER_EACH` (+ the select key),
+`TUT_A1_LOOT_OPEN`, `TUT_A3_PEEK` (she), `OBJ_A3_OVERLOOK` ("Move up to the overlook - stay low, watch for traps"). (5) Instrumented: the scripted
+pacing test `CodexTactics.Tutorial.Flow.Pacing` (table in [tutorial-engine](tutorial-engine.md) section 18: chained card handovers 1.5-2 s ->
+<= 1 s, seconds without any instruction 14.2 -> 0) and the runtime telemetry `next_instruction` / `no_instruction`; TutorialSmoke stage 153
+checks no gap without an instruction on the guide course. (6) Engine: a `condition` hint card of a beat that is over is dropped when it becomes
+due (the A2 remedial heat pack card fired at the A3 fence in the smoke and held the fence lesson back).
+
+**Demo 01 2026-10-20 c (game designer): the low fence (A3) without the "one at a time" queue.** Solo stays (`A3_fence`), then
+`A3_fence_crawl`: each operative gets his own order to go prone and crawl under the gap - at his own pace, in any order, several at once; only
+the stance is required past the fence (standing: "Go prone first - then crawl under."); the card keeps "{progress} / {count} through"
+(`TUT_A3_FENCE_CRAWL` "UNDER THE FENCE"). One who is through (`CrawlGapPassed`) moves on freely. Engine: the `exit.one_at_a_time` queue
+(turn holder, `NotYourTurn`, "One at a time - wait until he is through.") is removed - no other step used it; `exit.through` names the event
+that frees an operative; saves no longer carry `holder`. The regroup refusal line reads "Not yet - each operative crosses the fence and takes
+his own cover first." Tests `Tutorial.Confine.FenceEachOnHisOwn` / `JudgeMove`, `Schema.DemoFileA0A1Flow`; TutorialSmoke stage 113 (two prone at once).
+
+**Demo 01 2026-10-20 b (game designer: "two stay in place, one sets up the ambush; now it doesn't work well"): the A4 ambush by ONE operative.**
+**Decision (Claude):** the ambusher is the **Medic-Sapper** - traps are her job (the A3 peek spot is hers too), a fixed role reads clearer than
+"whoever you select first after the card", and every card can name her (dead / missing: the leader at that moment). `A4_tripwire` (after the
+cone card) now carries `"focus": "role:MedicSapper"`, the action **`solo_focus`** (Solo ON with her selected), **`"confine": {"volume":
+"VOL_A4_OVERLOOK", "free": "focus", "until": "A4_lure", "stop": true}`** (the squad stops; the other two are held at the overlook: an order of
+theirs off it is refused with "Hold here - Medic-Sapper handles it."; she alone moves anywhere) and **`"guide": "@patrol_route"`** (the current
+target = the nearest point of the patrol routes: where the wire goes). Part 1 (`A4_trap_wait`, objective "{focus}: back behind the low cover -
+wait ...") and part 2 (`A4_lure`, "LURE - {focus}: ... throw a stone ...") guide to the overlook (the low cover); the hold ends when the lure is
+done (`until A4_lure`), a fight starts, the tutorial is switched off / skipped. `A4_lure_ambush` ("OPEN FIRE") tells the player the squad is free
+and the two at the overlook are the fire support. Texts `TUT_A4_TRIPWIRE` / `OBJ_A4_TRAP` / `TUT_A4_LURE` / `TUT_A4_AMBUSH` (draft). Engine (every
+level): focus kind `role:<role>` (chosen at the trigger), confine `free: focus` (verdict `HeldBack`), action `solo_focus`, guide spot
+`@patrol_route`. Tests `CodexTactics.Tutorial.AmbushLesson.OneOperative`; TutorialSmoke stage 130 (the card names her, Solo with her selected,
+the target on the patrol route, a mate's order refused with the line, hers accepted) and 133 (after the lure the pair may move again).
+**Map:** nothing new (the patrol routes are the wire spots; a marker with Step Id `A4_tripwire` would take precedence if the user wants a fixed spot).
+
+**Demo 01 2026-10-20 (the game designer's play-test of the lake): the bridge marker came back; nothing showed where to go after the hut.**
+**Root cause** (his telemetry, session `A6DB…`): `A1_bridge` (objective, triggered at `VOL_A1_BEACON2`, completed only by three
+`BridgeCrossed` events) was shown at 71 s, the squad got across without three bridge crossings, did the whole hut lesson - and the
+objective stayed ACTIVE (156 s, until he walked back and crossed at 227 s): an event objective of the SAME beat was never ended by the
+route (rev 5f only ended "go to X" steps behind the squad; a later beat starting does not end event objectives either), so its marker
+stayed shown and its screen-edge arrow kept pointing back; once the hut lesson's own markers were gone (after the regroup) it was the only
+arrow on screen - "the bridge marker came back". Nothing re-armed it (no step re-triggers, Regroup / Solo off change nothing). After he
+re-crossed, only the banter / gust followed: no marker existed for beacon 3 / the camp, so nothing showed where to go.
+**Fix (every level, engine; [tutorial-engine](tutorial-engine.md) section 17):** (1) exactly ONE current navigation target at any moment
+(the card's guide / markers / completion volume, else a shown objective's markers ahead, else the next route place - a runtime guide beacon
+stands at that volume -, else the place reached last); one edge arrow with the distance, one highlighted minimap icon; (2) a running
+objective whose place lies behind the route progress is finished when the squad moves on (the bridge objective at the hut approach);
+(3) new step key `"beyond"` + stat `squad_not_across.<volume>`: `A1_bridge` is passed the moment all three are across the crevasse, however
+they crossed (never shown / its marker gone for good), and the route moves past the bridge (the bridge lines are passed too); the next
+target is the hut approach; (4) new step key `"guide"` (`A3_low` -> `VOL_A3_RIDGE`, `A3_fence_crawl` -> `VOL_A3_FIELD`).
+**Other place-objectives checked (A0-A4):** `A0_obj_beacon`, `A1_obj_camp`, `A3_obj_overlook` complete in their volume (rev 5f rule);
+**`A1_obj_hut`** had the same trap (completed only by `ItemLooted.HeatPack`: after a late heat-pack lesson it would show the hut marker
+AFTER the packs were taken, forever) -> `"cancel_on": {"step": "A1_loot_take", "volume": "VOL_A1_BEACON3"}`; `A2_obj_warm` (in the ruin)
+now ends when the squad moves on to A3; beacon 3 / the camp / the A3 approach / the overlook have no markers - the route target shows a
+guide beacon there. **Map:** nothing to place (the lake's volumes are the targets; if a volume is missing the target skips it and the log
+says so). Tests `CodexTactics.Tutorial.Guide.*`; TutorialSmoke stages 140-153, TutorialSaveSmoke (target after F9), SaveCoverageLakeSmoke.
+
 **Demo 01 2026-10-19 b (the game designer's play-test of the lake; beat sheet decision block "2026-10-19 b"): the POSTURE lesson.**
 (1) **The squad enters the complex Defensive:** `A3_wt_approach` (the A3 beat-start lines) carries the new step action
 **`{"type": "set_posture", "posture": "passive" | "defensive" | "aggressive"}`** (`FTutorialAction::Posture`, `FirePostureRules::ParseName`,

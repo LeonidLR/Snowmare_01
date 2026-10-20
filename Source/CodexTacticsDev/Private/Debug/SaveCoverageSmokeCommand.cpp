@@ -382,6 +382,7 @@ namespace SaveCoverageSmoke
 			Out.Add(TEXT("tutorial.lock_shot"), Flag(Tutorial->IsCommandLocked(PlayerCommands::TargetedShot)));
 			Out.Add(TEXT("tutorial.heat_packs_given"), Num(Tutorial->GetConditionStat(TEXT("heat_packs_given"))));
 			Out.Add(TEXT("tutorial.precredited"), Num(Tutorial->GetPrecreditedCount()));
+			Out.Add(TEXT("tutorial.guide"), UTutorialSubsystem::DescribeGuide(Tutorial->GetGuideView().Guide)); // 2026-10-20: the current target
 		}
 		if (const UMinimapSubsystem* Minimap = World->GetSubsystem<UMinimapSubsystem>())
 		{

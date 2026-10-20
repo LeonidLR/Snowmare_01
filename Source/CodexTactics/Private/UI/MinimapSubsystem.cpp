@@ -42,6 +42,7 @@
 #include "NavigationSystem.h"
 #include "TextureResource.h"
 #include "Tutorial/TutorialMarkerActor.h"
+#include "Tutorial/TutorialSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 
 namespace MinimapSubsystemLocal
@@ -1189,6 +1190,11 @@ void UMinimapSubsystem::BuildIcons(TArray<FMinimapIcon>& OutIcons) const
 	}
 	const double Now = NowSeconds(World);
 	// Objectives first (under everything), then doors, traps, enemies, the squad on top.
+	// 2026-10-20: the tutorial's current navigation target is highlighted (exactly one; added when its marker is not listed yet - the
+	// runtime guide beacon appears between two static-list refreshes).
+	const UTutorialSubsystem* Tutorial = World->GetSubsystem<UTutorialSubsystem>();
+	const FTutorialGuideView* Guide = Tutorial && Tutorial->GetGuideView().bValid ? &Tutorial->GetGuideView() : nullptr;
+	bool bGuideListed = false;
 	for (const TWeakObjectPtr<ATutorialMarkerActor>& Marker : Markers)
 	{
 		if (Marker.IsValid() && Marker->IsMarkerShown())
@@ -1198,7 +1204,18 @@ void UMinimapSubsystem::BuildIcons(TArray<FMinimapIcon>& OutIcons) const
 			Icon.World = Marker->GetActorLocation();
 			Icon.Color = Marker->Color;
 			Icon.Actor = Marker.Get();
+			Icon.bHighlight = Guide && Guide->Marker.Get() == Marker.Get();
+			bGuideListed |= Icon.bHighlight;
 		}
+	}
+	if (Guide && !bGuideListed)
+	{
+		FMinimapIcon& Icon = OutIcons.AddDefaulted_GetRef();
+		Icon.Kind = EMinimapIconKind::Objective;
+		Icon.World = Guide->Location;
+		Icon.Color = Guide->Marker.IsValid() ? Guide->Marker->Color : FLinearColor(1.f, 0.55f, 0.08f);
+		Icon.Actor = Guide->Marker.Get();
+		Icon.bHighlight = true;
 	}
 	for (const FDoor& Door : Doors)
 	{

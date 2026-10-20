@@ -179,6 +179,46 @@ namespace TutorialRules
 	 */
 	CODEXTACTICS_API FName ParseNotLowInStat(FName Stat);
 
+	/**
+	 * 2026-10-20: "squad_not_across.<VolumeId>" -> VolumeId (else NAME_None): the condition stat counting the living squad members NOT
+	 * yet across the bridge nearest to that volume (ABridgeCrossingVolume, BridgeRules::IsAcrossFrom: still on the volume's side or on
+	 * the span); {"stat": "squad_not_across.VOL_A1_BEACON2", "below": 1} = the whole squad is on the far side, however it got there.
+	 * A level without a bridge: every living member counts as not across.
+	 */
+	CODEXTACTICS_API FName ParseNotAcrossStat(FName Stat);
+
+	// --- The current navigation target (2026-10-20) ---------------------------------------------------------------------
+
+	/**
+	 * The HUD edge arrow towards an off-screen target: Projected = the target's screen point (widget units) in a ViewSize view, bProjected
+	 * = it lies in front of the camera (behind: the projection is mirrored, the arrow points the other way). True when the target is
+	 * off-screen (outside the view inset by Margin): OutTip = the arrow tip on the inset rectangle, OutDirection = unit vector from the
+	 * view centre. False when on-screen (no arrow) or the view is too small.
+	 */
+	CODEXTACTICS_API bool ComputeEdgePointer(const FVector2D& ViewSize, const FVector2D& Projected, bool bProjected, float Margin, FVector2D& OutTip,
+		FVector2D& OutDirection);
+
+	/**
+	 * The perspective projection the edge arrow uses (the camera's view, X forward / Y right / Z up, HorizontalFovDegrees across
+	 * ViewSize.X - the same with or without a real viewport, so headless checks see what the player sees): OutScreen = World's point in
+	 * the view (widget units). A point behind the camera (or on its plane) gets a point far off-screen in its sideways direction, so
+	 * ComputeEdgePointer (bProjected = true) points the arrow towards the side it lies on. Returns true when World is in front.
+	 */
+	CODEXTACTICS_API bool ProjectToView(const FVector& CameraLocation, const FRotator& CameraRotation, float HorizontalFovDegrees, const FVector2D& ViewSize,
+		const FVector& World, FVector2D& OutScreen);
+
+	/** The runtime spots a "guide": "@<name>" may name (2026-10-20): "@patrol_route". */
+	CODEXTACTICS_API bool IsKnownGuideSpot(FName Guide);
+
+	/**
+	 * "focus": "role:<EOperativeRole>" (2026-10-20, the A4 ambusher) -> the role name ("MedicSapper"), else NAME_None. Chosen when the
+	 * step is triggered: the living operative of that role, else the leader.
+	 */
+	CODEXTACTICS_API FName ParseRoleFocus(FName Focus);
+
+	/** The arrow's distance label: "42 m" (rounded metres, never negative). */
+	CODEXTACTICS_API FString FormatGuideDistance(float DistanceCm);
+
 	/** "crouch" / "crouched" / "crouching" -> crouch, "prone", "stand" / "standing" -> stand; anything else NAME_None. */
 	CODEXTACTICS_API FName NormalizeStance(const FString& Text);
 
@@ -188,8 +228,8 @@ namespace TutorialRules
 	/**
 	 * May an operative (OperativeId, in OperativeStance) be sent to a destination under the confinement? bDestinationInside = the
 	 * destination (and the path end) lies in the allowed area (the runtime tests the geometry). Order of the rules: the confinement's
-	 * "stance" (every order) -> inside = allowed -> no "exit" = Outside -> got through already = allowed -> the exit stance -> the
-	 * one-at-a-time turn (another operative holds it = NotYourTurn). The caller takes the turn when an outside order is allowed.
+	 * "stance" (every order) -> inside = allowed -> no "exit" = Outside -> got through already = allowed -> the exit stance (each
+	 * operative on his own: no queue since 2026-10-20). "free": "focus": the free operative first = allowed; the others outside = HeldBack.
 	 */
 	CODEXTACTICS_API ETutorialConfineVerdict JudgeConfinedMove(const FTutorialConfineView& Confine, FName OperativeId, FName OperativeStance,
 		bool bDestinationInside);

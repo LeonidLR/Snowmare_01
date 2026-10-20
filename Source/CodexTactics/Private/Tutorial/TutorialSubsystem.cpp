@@ -1,4 +1,5 @@
 #include "Tutorial/TutorialSubsystem.h"
+#include "AI/PatrolRouteActor.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -18,6 +19,8 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/TrapSpotRules.h"
+#include "Level/BridgeCrossingVolume.h"
+#include "Level/LevelObstacleRules.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/App.h"
@@ -162,6 +165,33 @@ namespace TutorialSubsystemLocal
 		return Focus == FName(TEXT("wounded_operative"));
 	}
 
+	/** 2026-10-20: a focus chosen when the step is TRIGGERED (the wounded one, a role - the A4 ambusher), not when it shows. */
+	bool IsTriggerFocus(FName Focus)
+	{
+		return IsWoundedFocus(Focus) || !TutorialRules::ParseRoleFocus(Focus).IsNone();
+	}
+
+	/** The point of the polyline Points (closed when bLoop) nearest to From (2D distance; Z of the segment). */
+	FVector NearestOnRoute(const TArray<FVector>& Points, bool bLoop, const FVector& From)
+	{
+		FVector Best = Points.IsEmpty() ? From : Points[0];
+		double BestDistance = TNumericLimits<double>::Max();
+		const int32 Segments = Points.Num() < 2 ? Points.Num() : (bLoop ? Points.Num() : Points.Num() - 1);
+		for (int32 Index = 0; Index < Segments; ++Index)
+		{
+			const FVector A = Points[Index];
+			const FVector B = Points.Num() < 2 ? A : Points[(Index + 1) % Points.Num()];
+			const FVector Candidate = FMath::ClosestPointOnSegment(FVector(From.X, From.Y, A.Z), A, B);
+			const double Distance = FVector::DistSquared2D(Candidate, From);
+			if (Distance < BestDistance)
+			{
+				BestDistance = Distance;
+				Best = Candidate;
+			}
+		}
+		return Best;
+	}
+
 	/** A squad member that counts for the squad stats: present and not dead (no health component = alive). */
 	bool IsLivingOrUntracked(const AOperativeCharacter* Member)
 	{
@@ -285,6 +315,28 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 		}
 		return false; // not a squad member: no role, no spot
 	};
+	// 2026-10-20: the current navigation target needs to know which steps have markers and which volumes the level has.
+	Machine.StepMarkerProvider = [this](FName StepId)
+	{
+		return Markers.ContainsByPredicate([StepId](const TWeakObjectPtr<ATutorialMarkerActor>& Weak)
+		{
+			const ATutorialMarkerActor* Marker = Weak.Get();
+			return Marker && !Marker->bRuntimeGuide && Marker->StepId == StepId;
+		});
+	};
+	Machine.VolumeProvider = [this](FName VolumeId)
+	{
+		return GuideVolumes.ContainsByPredicate([VolumeId](const TWeakObjectPtr<ATutorialTriggerVolume>& Weak)
+		{
+			const ATutorialTriggerVolume* Volume = Weak.Get();
+			return Volume && Volume->Box && Volume->GetEffectiveVolumeId() == VolumeId;
+		});
+	};
+	Machine.SpotProvider = [this](FName Spot, FName StepId)
+	{
+		FVector Location;
+		return ResolveGuideSpot(Spot, StepId, Location);
+	};
 	Machine.Load(Data);
 	// Rev 5f (monotonic route): the place of every beat volume of the level (a volume that starts a beat lies at its start).
 	if (UWorld* World = GetWorld())
@@ -296,6 +348,8 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 	}
 	LockedRefusals = 0;
 	ConfinedRefusals = 0;
+	LastCardDoneAt = -1.0;
+	NoInstructionRun = NoInstructionTotal = MaxNextInstructionSeconds = 0.f;
 	ConfineLineTimes.Reset();
 	PrecreditedCount = 0;
 	LockHintFamilies.Reset();
@@ -421,6 +475,7 @@ void UTutorialSubsystem::Tick(float DeltaTime)
 	Machine.Tick(RealDelta);
 	CountRoleSpotPresence();
 	TickSpeech(RealDelta);
+	TickPacing(RealDelta);
 	FlashCardLeft = FMath::Max(0.f, FlashCardLeft - RealDelta);
 	for (auto It = FlashObjectives.CreateIterator(); It; ++It)
 	{
@@ -746,7 +801,7 @@ void UTutorialSubsystem::ProcessTransitions()
 			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s %s -> %s%s%s"), *Transition.StepId.ToString(), TutorialRules::StateName(Transition.From),
 				TutorialRules::StateName(Transition.To), Transition.bSilent ? TEXT(" (silent)") : TEXT(""),
 				Transition.bPassed ? TEXT(" (passed on the way: the squad reached a later place first)") : TEXT(""));
-			if (TutorialSubsystemLocal::IsWoundedFocus(Step->Focus) && !TutorialRules::IsRunning(Transition.From) && TutorialRules::IsRunning(Transition.To))
+			if (TutorialSubsystemLocal::IsTriggerFocus(Step->Focus) && !TutorialRules::IsRunning(Transition.From) && TutorialRules::IsRunning(Transition.To))
 			{
 				ChooseFocus(*Step); // rev 2026-10-19: the one who got hurt, fixed from the trigger (a medkit on him must count while it queues)
 			}
@@ -759,6 +814,14 @@ void UTutorialSubsystem::ProcessTransitions()
 			if (Transition.To == ETutorialStepState::Active)
 			{
 				WriteTelemetry(TEXT("shown"), Step->Id, Step->Beat, 0.f);
+				if ((Step->Kind == ETutorialStepKind::HintCard || Step->Kind == ETutorialStepKind::Objective) && LastCardDoneAt >= 0.0)
+				{
+					// Pacing: how long the player waited after his last card for the next instruction.
+					const float Wait = static_cast<float>(PacingClock - LastCardDoneAt);
+					MaxNextInstructionSeconds = FMath::Max(MaxNextInstructionSeconds, Wait);
+					WriteTelemetry(TEXT("next_instruction"), Step->Id, Step->Beat, Wait);
+					LastCardDoneAt = -1.0;
+				}
 				HandleStepShown(*Step);
 				if (Step->Kind == ETutorialStepKind::Radio || Step->Kind == ETutorialStepKind::WalkTalk)
 				{
@@ -783,6 +846,7 @@ void UTutorialSubsystem::ProcessTransitions()
 				{
 					if (Step->Kind == ETutorialStepKind::HintCard)
 					{
+						LastCardDoneAt = PacingClock;
 						FlashCard = Step->Id;
 						FlashCardLeft = FMath::Min(0.8f, Machine.CardBreatherSeconds);
 					}
@@ -836,6 +900,20 @@ void UTutorialSubsystem::HandleStepShown(const FTutorialStep& Step)
 				Percent, Focus->MedkitsCount);
 		}
 	}
+	else if (!TutorialRules::ParseRoleFocus(Step.Focus).IsNone())
+	{
+		// 2026-10-20: a role's operative (the A4 ambusher), chosen at the trigger; again only if he is gone.
+		AOperativeCharacter* Focus = GetFocusOperative(Step.Id);
+		if (!Focus || !TutorialSubsystemLocal::IsLivingOrUntracked(Focus))
+		{
+			Focus = ChooseFocus(Step);
+		}
+		if (Focus)
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(Focus, FString::Printf(TEXT("%s: YOUR TASK"), *Focus->DisplayName.ToString().ToUpper()), FLinearColor(1.f, 0.7f, 0.2f));
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s focuses %s (role %s)"), *Step.Id.ToString(), *Focus->DisplayName.ToString(), *GetRoleId(*Focus).ToString());
+		}
+	}
 	else if (!Step.Focus.IsNone())
 	{
 		AOperativeCharacter* Focus = ChooseFocus(Step);
@@ -876,6 +954,23 @@ void UTutorialSubsystem::RunActions(const FTutorialStep& Step)
 			Squad->SetSquadPosture(Posture);
 			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s set_posture %s"), *Step.Id.ToString(), *FirePostureRules::GetLabel(Posture));
 			WriteTelemetry(TEXT("action_set_posture"), Step.Id, Step.Beat, 0.f);
+			continue;
+		}
+		if (Action.Type == FName(TEXT("solo_focus")) && Squad)
+		{
+			// 2026-10-20 (the A4 ambush by ONE operative): Solo ON and the step's focus operative selected - he alone takes the orders.
+			if (!Squad->IsSoloMode())
+			{
+				Squad->EnterSoloMode();
+			}
+			AOperativeCharacter* Focus = GetFocusOperative(Step.Id);
+			if (Focus && Squad->GetLeader() != Focus)
+			{
+				Squad->SetLeader(Focus);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: %s solo_focus - Solo %d, selected %s"), *Step.Id.ToString(), Squad->IsSoloMode() ? 1 : 0,
+				Squad->GetLeader() ? *Squad->GetLeader()->DisplayName.ToString() : TEXT("-"));
+			WriteTelemetry(TEXT("action_solo_focus"), Step.Id, Step.Beat, 0.f);
 			continue;
 		}
 		if (Action.Type == FName(TEXT("cold_bump")) && Squad)
@@ -934,7 +1029,24 @@ AOperativeCharacter* UTutorialSubsystem::FindMostWoundedMember() const
 
 AOperativeCharacter* UTutorialSubsystem::ChooseFocus(const FTutorialStep& Step)
 {
-	AOperativeCharacter* Focus = TutorialSubsystemLocal::IsWoundedFocus(Step.Focus) ? FindMostWoundedMember() : FindColdestMember();
+	AOperativeCharacter* Focus = nullptr;
+	if (const FName Role = TutorialRules::ParseRoleFocus(Step.Focus); !Role.IsNone())
+	{
+		// 2026-10-20: the living operative of that role (the A4 ambusher = the Medic-Sapper: traps are her job), else the leader.
+		const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+		for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+		{
+			if (TutorialSubsystemLocal::IsLivingOrUntracked(Member) && GetRoleId(*Member) == Role)
+			{
+				Focus = Member;
+				break;
+			}
+		}
+		Focus = Focus ? Focus : (Squad ? Squad->GetLeader() : nullptr);
+		FocusOperatives.Add(Step.Id, Focus);
+		return Focus;
+	}
+	Focus = TutorialSubsystemLocal::IsWoundedFocus(Step.Focus) ? FindMostWoundedMember() : FindColdestMember();
 	FocusOperatives.Add(Step.Id, Focus);
 	return Focus;
 }
@@ -953,7 +1065,8 @@ FString UTutorialSubsystem::ResolveFocusToken(const FString& Text, FName StepId)
 	}
 	const AOperativeCharacter* Focus = GetFocusOperative(StepId);
 	const FTutorialStep* Step = Machine.GetData().FindStep(StepId);
-	const TCHAR* Fallback = Step && TutorialSubsystemLocal::IsWoundedFocus(Step->Focus) ? TEXT("the wounded operative") : TEXT("the coldest operative");
+	const TCHAR* Fallback = Step && TutorialSubsystemLocal::IsWoundedFocus(Step->Focus) ? TEXT("the wounded operative")
+		: (Step && !TutorialRules::ParseRoleFocus(Step->Focus).IsNone() ? TEXT("the chosen operative") : TEXT("the coldest operative"));
 	return Text.Replace(TEXT("{focus}"), Focus ? *Focus->DisplayName.ToString() : Fallback);
 }
 
@@ -982,6 +1095,31 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 			Spotted += It->SpotEventTag == TrapTag && !It->IsHiddenTrap() ? 1 : 0;
 		}
 		return static_cast<float>(Spotted);
+	}
+	if (const FName AcrossVolume = TutorialRules::ParseNotAcrossStat(Stat); !AcrossVolume.IsNone())
+	{
+		// 2026-10-20: the living members not yet across the bridge nearest to that volume (still on its side or on the span) - however
+		// they crossed. No bridge / no such volume: nobody counts as across.
+		const TArray<const ATutorialTriggerVolume*> NearVolumes = FindVolumes(AcrossVolume);
+		const FVector NearPoint = NearVolumes.IsEmpty() ? FVector::ZeroVector : NearVolumes[0]->GetActorLocation();
+		const ABridgeCrossingVolume* Bridge = nullptr;
+		for (TActorIterator<ABridgeCrossingVolume> It(GetWorld()); It && !NearVolumes.IsEmpty(); ++It)
+		{
+			if (It->Span && (!Bridge || FVector::DistSquared(It->GetActorLocation(), NearPoint) < FVector::DistSquared(Bridge->GetActorLocation(), NearPoint)))
+			{
+				Bridge = *It;
+			}
+		}
+		int32 NotAcross = 0;
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (TutorialSubsystemLocal::IsLivingOrUntracked(Member))
+			{
+				NotAcross += Bridge && BridgeRules::IsAcrossFrom(Bridge->Span->GetComponentTransform(), Bridge->Span->GetUnscaledBoxExtent().X, NearPoint,
+					Member->GetActorLocation()) ? 0 : 1;
+			}
+		}
+		return static_cast<float>(NotAcross);
 	}
 	if (const FName LowVolume = TutorialRules::ParseNotLowInStat(Stat); !LowVolume.IsNone())
 	{
@@ -1271,7 +1409,7 @@ bool UTutorialSubsystem::ClampIntoConfinement(FVector& InOutDestination) const
 	return true;
 }
 
-ETutorialConfineVerdict UTutorialSubsystem::JudgeMove(const AOperativeCharacter& Operative, const FVector& Destination, bool bTakeTurn)
+ETutorialConfineVerdict UTutorialSubsystem::JudgeMove(const AOperativeCharacter& Operative, const FVector& Destination)
 {
 	FTutorialConfineView Confine;
 	if (!IsTutorialActive() || !Machine.GetActiveConfine(Confine))
@@ -1281,19 +1419,7 @@ ETutorialConfineVerdict UTutorialSubsystem::JudgeMove(const AOperativeCharacter&
 	const bool bInside = IsInsideConfinement(Destination);
 	// A move along his own wall (a shimmy, the corner peek) is not a new position: only the area counts for it.
 	const FName Stance = Operative.bInCover && !Confine.Spec.Stance.IsNone() ? Confine.Spec.Stance : GetStanceName(Operative.GetStance());
-	const ETutorialConfineVerdict Verdict = TutorialRules::JudgeConfinedMove(Confine, Operative.GetFName(), Stance, bInside);
-	if (bTakeTurn && Verdict == ETutorialConfineVerdict::Allowed && Confine.Spec.HasExit())
-	{
-		if (!bInside)
-		{
-			Machine.TakeConfineExitTurn(Operative.GetFName());
-		}
-		else if (IsInsideConfinement(Operative.GetActorLocation()))
-		{
-			Machine.ReturnConfineExitTurn(Operative.GetFName()); // called back into the area before he got through
-		}
-	}
-	return Verdict;
+	return TutorialRules::JudgeConfinedMove(Confine, Operative.GetFName(), Stance, bInside);
 }
 
 void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, const AOperativeCharacter* Operative)
@@ -1326,9 +1452,13 @@ void UTutorialSubsystem::ReportConfinedRefusal(ETutorialConfineVerdict Verdict, 
 	case ETutorialConfineVerdict::ExitStance:
 		Line = bProne ? LOCTEXT("ConfineExitProne", "Go prone first - then crawl under.") : LOCTEXT("ConfineExitCrouch", "Crouch first - stay low.");
 		break;
-	case ETutorialConfineVerdict::NotYourTurn:
-		Line = LOCTEXT("ConfineTurn", "One at a time - wait until he is through.");
+	case ETutorialConfineVerdict::HeldBack:
+	{
+		// 2026-10-20: the A4 ambush - one operative does it, the others hold.
+		const AOperativeCharacter* Free = GetFocusOperative(Confine.Owner);
+		Line = FText::Format(LOCTEXT("ConfineHeldBack", "Hold here - {0} handles it."), Free ? Free->DisplayName : LOCTEXT("ConfineHeldBackSomeone", "the other one"));
 		break;
+	}
 	default:
 		Line = LOCTEXT("ConfineHold", "Hold here - follow the training.");
 		break;
@@ -1343,7 +1473,7 @@ bool UTutorialSubsystem::CheckConfinedOrder(const UObject* WorldContext, const A
 	{
 		return true;
 	}
-	const ETutorialConfineVerdict Verdict = Tutorial->JudgeMove(*Operative, Destination, /*bTakeTurn*/ true);
+	const ETutorialConfineVerdict Verdict = Tutorial->JudgeMove(*Operative, Destination);
 	if (Verdict == ETutorialConfineVerdict::Allowed)
 	{
 		return true;
@@ -1373,7 +1503,7 @@ void UTutorialSubsystem::HandleConfineChanged()
 			continue;
 		}
 		// "stop": everyone stops where he is; otherwise only a walk that would end outside the area (ordered before the squad arrived).
-		const bool bOutside = JudgeMove(*Member, Member->GetLastMoveDestination(), /*bTakeTurn*/ false) != ETutorialConfineVerdict::Allowed;
+		const bool bOutside = JudgeMove(*Member, Member->GetLastMoveDestination()) != ETutorialConfineVerdict::Allowed;
 		if (Confine.Spec.bStop || bOutside)
 		{
 			Member->StopOperative();
@@ -1471,19 +1601,218 @@ void UTutorialSubsystem::RefreshMarkers()
 	const bool bActive = IsTutorialActive();
 	const FName Beat = Machine.GetCurrentBeat();
 	Markers.RemoveAll([](const TWeakObjectPtr<ATutorialMarkerActor>& Marker) { return !Marker.IsValid(); });
+	RefreshGuide();
+	const ATutorialMarkerActor* GuideMarker = GuideView.bValid ? GuideView.Marker.Get() : nullptr;
 	for (const TWeakObjectPtr<ATutorialMarkerActor>& Weak : Markers)
 	{
 		ATutorialMarkerActor* Marker = Weak.Get();
 		bool bShow = false;
-		if (bActive)
+		if (bActive && !Marker->bRuntimeGuide)
 		{
 			bShow = !Marker->StepId.IsNone() ? Machine.GetState(Marker->StepId) == ETutorialStepState::Active
 				: (!Marker->BeatId.IsNone() && Marker->BeatId == Beat);
 			// A role spot whose operative is in place hides (2026-10-19: the others still show where to go).
 			bShow = bShow && !(!Marker->RoleId.IsNone() && !Marker->StepId.IsNone() && IsRoleSpotDone(Marker->StepId, Marker->RoleId));
 		}
-		Marker->SetMarkerShown(bShow);
+		// 2026-10-20: the current navigation target always shows (a "guide" may name another step's marker; the beacon at a volume).
+		Marker->SetMarkerShown(bActive && (bShow || Marker == GuideMarker));
 	}
+}
+
+void UTutorialSubsystem::TickPacing(float RealDelta)
+{
+	PacingClock += RealDelta;
+	const bool bNothing = Machine.GetActiveCard().IsNone() && Machine.GetActiveObjectives().IsEmpty() && !GuideView.bValid;
+	if (bNothing)
+	{
+		NoInstructionRun += RealDelta;
+		NoInstructionTotal += RealDelta;
+		return;
+	}
+	if (NoInstructionRun > 0.5f)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial pacing: %.1f s without any instruction on screen (beat %s)"), NoInstructionRun, *Machine.GetCurrentBeat().ToString());
+		WriteTelemetry(TEXT("no_instruction"), NAME_None, Machine.GetCurrentBeat(), NoInstructionRun);
+	}
+	NoInstructionRun = 0.f;
+}
+
+FString UTutorialSubsystem::DescribeGuide(const FTutorialGuide& Guide)
+{
+	if (!Guide.IsSet())
+	{
+		return FString();
+	}
+	return (Guide.Kind == ETutorialGuideKind::StepMarkers ? TEXT("markers:") : Guide.Kind == ETutorialGuideKind::Spot ? TEXT("spot:") : TEXT("volume:"))
+		+ Guide.Id.ToString();
+}
+
+void UTutorialSubsystem::RegisterVolume(ATutorialTriggerVolume* Volume)
+{
+	if (Volume)
+	{
+		GuideVolumes.AddUnique(Volume);
+	}
+}
+
+void UTutorialSubsystem::UnregisterVolume(ATutorialTriggerVolume* Volume)
+{
+	GuideVolumes.Remove(Volume);
+}
+
+const ATutorialTriggerVolume* UTutorialSubsystem::FindGuideVolume(FName VolumeId, const FVector& Near) const
+{
+	const ATutorialTriggerVolume* Best = nullptr;
+	for (const TWeakObjectPtr<ATutorialTriggerVolume>& Weak : GuideVolumes)
+	{
+		const ATutorialTriggerVolume* Volume = Weak.Get();
+		if (Volume && Volume->Box && Volume->GetEffectiveVolumeId() == VolumeId
+			&& (!Best || FVector::DistSquared2D(Volume->GetActorLocation(), Near) < FVector::DistSquared2D(Best->GetActorLocation(), Near)))
+		{
+			Best = Volume;
+		}
+	}
+	return Best;
+}
+
+FVector UTutorialSubsystem::GetVolumeGroundPoint(const ATutorialTriggerVolume& Volume) const
+{
+	const FVector Centre = Volume.Box->Bounds.Origin;
+	const float HalfHeight = Volume.Box->Bounds.BoxExtent.Z;
+	const FVector Top = Centre + FVector(0.f, 0.f, HalfHeight);
+	const FVector Bottom = Centre - FVector(0.f, 0.f, HalfHeight + 300.f);
+	FHitResult Hit;
+	const FCollisionQueryParams Params(SCENE_QUERY_STAT(TutorialGuideGround), false);
+	if (GetWorld() && GetWorld()->LineTraceSingleByObjectType(Hit, Top, Bottom, FCollisionObjectQueryParams(ECC_WorldStatic), Params))
+	{
+		return Hit.ImpactPoint + FVector(0.f, 0.f, 2.f);
+	}
+	return Centre - FVector(0.f, 0.f, HalfHeight - 2.f); // volumes stand on the ground: their bottom
+}
+
+bool UTutorialSubsystem::ResolveGuideSpot(FName Spot, FName StepId, FVector& OutLocation) const
+{
+	UWorld* World = GetWorld();
+	if (!World || Spot != FName(TEXT("@patrol_route")))
+	{
+		return false;
+	}
+	// The point of the level's patrol routes nearest to the step's focus operative (the ambusher), else to the leader: where the wire goes.
+	const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+	const AOperativeCharacter* From = GetFocusOperative(StepId);
+	From = From ? From : (Squad ? Squad->GetLeader() : nullptr);
+	if (!From)
+	{
+		return false;
+	}
+	bool bFound = false;
+	double BestDistance = TNumericLimits<double>::Max();
+	for (TActorIterator<APatrolRouteActor> It(World); It; ++It)
+	{
+		TArray<FVector> Points;
+		for (int32 Index = 0; Index < It->GetNumberOfWaypoints(); ++Index)
+		{
+			Points.Add(It->GetWaypointWorldLocation(Index));
+		}
+		if (Points.IsEmpty())
+		{
+			continue;
+		}
+		const FVector Candidate = TutorialSubsystemLocal::NearestOnRoute(Points, It->bIsLoop, From->GetActorLocation());
+		const double Distance = FVector::DistSquared2D(Candidate, From->GetActorLocation());
+		if (Distance < BestDistance)
+		{
+			BestDistance = Distance;
+			OutLocation = Candidate;
+			bFound = true;
+		}
+	}
+	return bFound;
+}
+
+void UTutorialSubsystem::RefreshGuide()
+{
+	if (bRefreshingGuide)
+	{
+		return; // the beacon's BeginPlay registers it while it is being spawned here
+	}
+	TGuardValue<bool> Refreshing(bRefreshingGuide, true);
+	FTutorialGuideView View;
+	View.Guide = IsTutorialActive() ? Machine.GetGuide() : FTutorialGuide();
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	const FVector From = Leader ? Leader->GetActorLocation() : FVector::ZeroVector;
+	if (View.Guide.Kind == ETutorialGuideKind::StepMarkers)
+	{
+		// The nearest of the step's markers (a role spot already taken does not count: the others still show where to go).
+		ATutorialMarkerActor* Best = nullptr;
+		for (const TWeakObjectPtr<ATutorialMarkerActor>& Weak : Markers)
+		{
+			ATutorialMarkerActor* Marker = Weak.Get();
+			if (!Marker || Marker->bRuntimeGuide || Marker->StepId != View.Guide.Id
+				|| (!Marker->RoleId.IsNone() && IsRoleSpotDone(Marker->StepId, Marker->RoleId)))
+			{
+				continue;
+			}
+			if (!Best || FVector::DistSquared2D(Marker->GetActorLocation(), From) < FVector::DistSquared2D(Best->GetActorLocation(), From))
+			{
+				Best = Marker;
+			}
+		}
+		if (Best)
+		{
+			View.Marker = Best;
+			View.Location = Best->GetActorLocation();
+			View.bEdgePointer = Best->bScreenEdgePointer;
+			View.bValid = true;
+		}
+	}
+	else if (View.Guide.Kind == ETutorialGuideKind::Volume || View.Guide.Kind == ETutorialGuideKind::Spot)
+	{
+		const ATutorialTriggerVolume* Volume = View.Guide.Kind == ETutorialGuideKind::Volume ? FindGuideVolume(View.Guide.Id, From) : nullptr;
+		FVector SpotLocation;
+		const bool bSpot = View.Guide.Kind == ETutorialGuideKind::Spot && ResolveGuideSpot(View.Guide.Id, View.Guide.SourceStep, SpotLocation);
+		if (Volume || bSpot)
+		{
+			const FVector Ground = Volume ? GetVolumeGroundPoint(*Volume) : SpotLocation + FVector(0.f, 0.f, 2.f);
+			ATutorialMarkerActor* Beacon = GuideBeacon.Get();
+			if (!Beacon && GetWorld())
+			{
+				// One beacon for every volume target (moved when the target changes); hidden unless it is the target.
+				const FTransform Spawn(FRotator::ZeroRotator, Ground);
+				Beacon = GetWorld()->SpawnActorDeferred<ATutorialMarkerActor>(ATutorialMarkerActor::StaticClass(), Spawn, nullptr, nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (Beacon)
+				{
+					Beacon->bRuntimeGuide = true;
+					GuideBeacon = Beacon; // before its BeginPlay registers it (RefreshMarkers -> here again: no second beacon)
+					Beacon->FinishSpawning(Spawn);
+				}
+			}
+			if (Beacon)
+			{
+				if (!Beacon->GetActorLocation().Equals(Ground, 1.f))
+				{
+					Beacon->SetActorLocation(Ground);
+				}
+				View.Marker = Beacon;
+				View.Location = Ground;
+				View.bValid = true;
+			}
+		}
+	}
+	if (View.Guide != GuideView.Guide)
+	{
+		const FString Described = DescribeGuide(View.Guide);
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: current target -> %s (asked by %s)%s"), Described.IsEmpty() ? TEXT("none") : *Described,
+			View.Guide.SourceStep.IsNone() ? TEXT("the route") : *View.Guide.SourceStep.ToString(),
+			View.Guide.IsSet() && !View.bValid ? TEXT(" - NOT in the level (no marker / volume to show)") : TEXT(""));
+		if (IsTutorialActive())
+		{
+			WriteTelemetry(TEXT("guide"), FName(*Described), Machine.GetCurrentBeat(), 0.f);
+		}
+	}
+	GuideView = View;
 }
 
 void UTutorialSubsystem::RegisterMarker(ATutorialMarkerActor* Marker)
@@ -1584,7 +1913,8 @@ FText UTutorialSubsystem::ObjectiveText(FName StepId) const
 		return FText::GetEmpty();
 	}
 	const FTutorialTextView Text = FNarrativeManifest::Get().GetTutorialText(Step->TextId.ToString());
-	return FText::FromString(PlayerCommands::ResolveKeyTokens(Text.Text.IsEmpty() ? Text.Title : Text.Text));
+	// 2026-10-20: {focus} in objectives too (the A4 ambusher waits behind the cover).
+	return FText::FromString(ResolveFocusToken(PlayerCommands::ResolveKeyTokens(Text.Text.IsEmpty() ? Text.Title : Text.Text), StepId));
 }
 
 TArray<FTutorialObjectiveView> UTutorialSubsystem::GetObjectiveViews() const
@@ -1921,6 +2251,8 @@ TSharedPtr<FJsonObject> UTutorialSubsystem::CaptureSaveState() const
 	}
 	Object->SetArrayField(TEXT("lock_hints"), Hints);
 	Object->SetBoolField(TEXT("skipped"), bSkipped); // rev 5i: SKIP TUTORIAL stays skipped after a load
+	// 2026-10-20: the current navigation target (informational: it is derived from the progress + "route" on load).
+	Object->SetStringField(TEXT("guide"), DescribeGuide(GuideView.Guide));
 	return Object;
 }
 

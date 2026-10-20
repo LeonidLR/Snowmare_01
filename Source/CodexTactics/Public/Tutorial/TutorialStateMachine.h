@@ -52,8 +52,11 @@ struct CODEXTACTICS_API FTutorialTransition
 class CODEXTACTICS_API FTutorialStateMachine
 {
 public:
-	/** Seconds between two hint cards (UX brief 03 §2.3: confirm, then a 1.5 s breather). */
-	float CardBreatherSeconds = 1.5f;
+	/**
+	 * Seconds between two hint cards (UX brief 03 §2.3: confirm, then a breather). 2026-10-20 (game designer: "I keep waiting for the next
+	 * instruction"): 0.8 s = the confirm flash, so the next card follows the action within ~1 s (was 1.5 s).
+	 */
+	float CardBreatherSeconds = 0.8f;
 	int32 MaxObjectives = 3;
 	/** At most one failure_retry (remedial) step per this many seconds. */
 	float RemedialCooldownSeconds = 60.f;
@@ -73,6 +76,15 @@ public:
 	 * step with his role, within its ring). Unset = every subject is at his spot.
 	 */
 	TFunction<bool(FName StepId, FName SubjectId)> RoleSpotProvider;
+	/**
+	 * The current navigation target (2026-10-20): the level has tutorial markers for this step (ATutorialMarkerActor::StepId). Set by
+	 * the runtime (UTutorialSubsystem) or by tests; unset = no step has markers.
+	 */
+	TFunction<bool(FName StepId)> StepMarkerProvider;
+	/** The level has a tutorial volume with this id (a guide target needs one). Unset = every volume exists. */
+	TFunction<bool(FName VolumeId)> VolumeProvider;
+	/** The runtime can show the spot "@<name>" for this step (ETutorialGuideKind::Spot). Unset = no spot can be shown. */
+	TFunction<bool(FName Spot, FName StepId)> SpotProvider;
 
 	/** Replaces the steps and resets all progress. */
 	void Load(const FTutorialStepsData& InData);
@@ -131,6 +143,29 @@ public:
 	 * registered beat, whichever is later. Invalid for a volume no step uses and no beat starts.
 	 */
 	FRoutePoint GetVolumeRoutePoint(FName VolumeId) const;
+	/**
+	 * 2026-10-20: the place of a step on the route - the first of its "guide" volume, "complete.volume", "complete.in_volume" and
+	 * trigger volume that lies on the route. Invalid for a step with no place.
+	 */
+	FRoutePoint GetStepPlace(FName StepId) const;
+	/**
+	 * 2026-10-20: how far the squad got on the route - the furthest place it reached (an arrival, or a step passed by its "beyond"),
+	 * at least the start of the current beat. INDEX_NONE before any beat.
+	 */
+	int32 GetRouteProgressKey() const;
+	/** The volume of that furthest place (none = only the beat's start). Saved ("route"). */
+	FName GetRouteProgressVolume() const { return RouteProgressVolume; }
+	/**
+	 * THE current navigation target (2026-10-20, game designer: "after the hut lesson nothing showed where to go next"; "a marker of a
+	 * place I had skipped called me back"): exactly one, derived from the data each time it is asked:
+	 * 1. the shown hint card (the lesson in hand): its "guide", else its markers, else the volume it completes in;
+	 * 2. else the shown objectives / talks with a "guide" or markers whose place is NOT behind the squad - the nearest place first;
+	 * 3. else the route: the next place ahead (the smallest route key beyond the progress) that the level has and some unfinished step
+	 *    or a later beat still uses - the next beacon / the next beat's start volume;
+	 * 4. else the place reached last (the data names nothing further: hold there).
+	 * "guide": "none" makes a step name nothing. None before the steps load / without any place.
+	 */
+	FTutorialGuide GetGuide() const;
 	/** Starts a beat (only forward unless bAllowBackwards). Returns true when the current beat changed. */
 	bool StartBeat(FName BeatId, bool bAllowBackwards = false);
 	/** Fires a step now (manual triggers, replay). False when it may not trigger (running, or once and finished). */
@@ -181,14 +216,10 @@ public:
 	 * completes in one of its "allow" areas counts only while it is SHOWN (the lesson's order: right of the door only after left).
 	 */
 	bool IsConfined() const;
-	/** The confinement in force: its spec, the areas open now, the exit turn; false when none. */
+	/** The confinement in force: its spec, the areas open now, who got through; false when none. */
 	bool GetActiveConfine(FTutorialConfineView& Out) const;
 	/** Ends the confinement in force (the tutorial was switched off / skipped, a fight started). False when none held. */
 	bool ReleaseConfines();
-	/** "exit.one_at_a_time": an order outside the area was allowed for SubjectId - his turn (no-op while another holds it). */
-	void TakeConfineExitTurn(FName SubjectId);
-	/** The turn holder was ordered back into the area: the turn is free again. */
-	void ReturnConfineExitTurn(FName SubjectId);
 	/** Changes whenever a confinement starts or ends (the runtime stops the squad when one starts). */
 	int32 GetConfineSerial() const { return ConfineSerial; }
 
@@ -241,6 +272,17 @@ private:
 	void PassRouteBefore(const FRoutePoint& Point);
 	/** Rev 5f: route keys of the steps' volumes (Load). */
 	void RebuildRoute();
+	/** 2026-10-20: GetStepPlace by index; OutVolume = the volume of that place. */
+	FRoutePoint GetStepPlaceAt(int32 Index, FName* OutVolume = nullptr) const;
+	/** 2026-10-20: the squad reached Point (VolumeId may be none: a beat start): the route progress moves forward, never back. */
+	void NoteRouteProgress(const FRoutePoint& Point, FName VolumeId);
+	/** 2026-10-20: the step's "guide" target for GetGuide (bInHand: the shown card - its completion volume counts, nothing is "behind"). */
+	bool GetStepGuide(int32 Index, bool bInHand, int32 Progress, FTutorialGuide& Out) const;
+	/** 2026-10-20: some step that is not finished uses VolumeId (trigger / completion / in_volume / guide), or it starts a later beat. */
+	bool IsVolumeStillUsed(FName VolumeId) const;
+	bool HasVolume(FName VolumeId) const;
+	/** 2026-10-20: "beyond" - every unfinished step of the current / an earlier beat whose clauses hold is passed (Tick). */
+	void PollBeyond();
 	/** The route point of the start of BeatIndex (before its first step). */
 	FRoutePoint GetBeatStartPoint(int32 BeatIndex) const;
 	/**
@@ -310,13 +352,15 @@ private:
 	/** Rev 5f: the place of each volume the steps use (RebuildRoute) and the beats volume actors start (RegisterVolumeBeat). */
 	TMap<FName, FRoutePoint> StepRoute;
 	TMap<FName, FName> VolumeBeats;
+	/** 2026-10-20: the furthest route place reached (GetRouteProgressKey) and its volume (saved as "route"). */
+	int32 RouteProgressKey = INDEX_NONE;
+	FName RouteProgressVolume;
 
 	/** Rev 5i: a started confinement (FTutorialConfine of the step Owner). At most one is not released. */
 	struct FConfineRuntime
 	{
 		int32 Owner = INDEX_NONE;
 		bool bReleased = false;
-		FName ExitHolder;
 		TArray<FName> Passed;
 	};
 	TArray<FConfineRuntime> Confines;
@@ -333,6 +377,6 @@ private:
 	void StartConfine(int32 Index);
 	/** Releases the confinement whose "until" step just finished. */
 	void ReleaseConfinesUntil(int32 FinishedIndex);
-	/** "exit.one_at_a_time": the exit event named SubjectId - he got through, the turn is free. */
+	/** "exit.through": the event named SubjectId - he got through (free to move on). */
 	void NoteConfineEvent(FName EventName, FName SubjectId);
 };

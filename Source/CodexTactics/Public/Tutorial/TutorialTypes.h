@@ -205,7 +205,7 @@ struct CODEXTACTICS_API FTutorialCancelOn
  * by "until" (default: the step itself) finishes, when a later beat starts, or when the tutorial is switched off / skipped / a fight
  * starts (UTutorialSubsystem). One confinement at a time (a new one replaces the old). JSON:
  *   "confine": { "volume": "VOL_A1_HUT_APPROACH", "allow": ["VOL_A1_DOOR_L", ...], "until": "A1_hut_enter", "stop": true,
- *                "span": true, "stance": "crouch", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } }
+ *                "span": true, "stance": "crouch", "exit": { "stance": "prone", "through": "CrawlGapPassed" } }
  */
 struct CODEXTACTICS_API FTutorialConfine
 {
@@ -225,16 +225,21 @@ struct CODEXTACTICS_API FTutorialConfine
 	bool bSpan = false;
 	/** "stance": "crouch" | "prone" - every move order needs the ordered operative in that stance (crouch: crouched or prone). */
 	FName Stance;
-	/** "exit.stance": an order OUTSIDE the allowed area is allowed for an operative in this stance (with "exit.one_at_a_time"). */
+	/** "exit.stance": an order OUTSIDE the allowed area is allowed for an operative in this stance - each at his own pace, any order. */
 	FName ExitStance;
 	/**
-	 * "exit.one_at_a_time": only one operative at a time may be sent outside (his turn starts with the first such order and ends when
-	 * this gameplay event names him - e.g. "CrawlGapPassed"; an operative who got through may move on freely).
+	 * "exit.through": this gameplay event names an operative who got through (e.g. "CrawlGapPassed") - he moves on freely, any stance.
+	 * (2026-10-20, game designer: the former "one_at_a_time" queue is gone - several may crawl under the fence at once.)
 	 */
-	FString ExitEvent;
+	FString ThroughEvent;
+	/**
+	 * "free": "focus" (2026-10-20, the A4 ambush by ONE operative): the confining step's focus operative is not held at all - he moves
+	 * anywhere, the others stay in the area ("Hold here - <Name> handles it.").
+	 */
+	bool bFreeFocus = false;
 
 	bool IsSet() const { return !Volume.IsNone(); }
-	bool HasExit() const { return !ExitStance.IsNone() || !ExitEvent.IsEmpty(); }
+	bool HasExit() const { return !ExitStance.IsNone() || !ThroughEvent.IsEmpty(); }
 };
 
 /** Why a move order is refused by a confinement (TutorialRules::JudgeConfinedMove). */
@@ -247,8 +252,8 @@ enum class ETutorialConfineVerdict : uint8
 	Stance,
 	/** Outside, and not in the exit stance ("Go prone first, then crawl under."). */
 	ExitStance,
-	/** Outside, and another operative's turn ("One at a time - wait until he is through."). */
-	NotYourTurn
+	/** Outside while the lesson belongs to another operative ("free": "focus"; "Hold here - <Name> handles it."). */
+	HeldBack
 };
 
 /** The confinement in force now (FTutorialStateMachine::GetActiveConfine; the runtime adds the geometry). */
@@ -258,18 +263,17 @@ struct CODEXTACTICS_API FTutorialConfineView
 	FTutorialConfine Spec;
 	/** The holding volume + the allowed volumes open now. */
 	TArray<FName> Areas;
-	/** The operative whose exit turn it is ("one_at_a_time"), none = free. */
-	FName ExitHolder;
-	/** Operatives who got through (the exit event named them). */
+	/** Operatives who got through (the "exit.through" event named them). */
 	TArray<FName> Passed;
+	/** "free": "focus" - the operative who is not held (the owner step's focus; none = not chosen yet / not free). */
+	FName FreeOperative;
 };
 
-/** A confinement as the save holds it ("confines": [{"step", "released", "holder", "passed"}]). */
+/** A confinement as the save holds it ("confines": [{"step", "released", "passed"}]; an older save's "holder" is ignored). */
 struct CODEXTACTICS_API FTutorialConfineProgress
 {
 	FName Owner;
 	bool bReleased = false;
-	FName ExitHolder;
 	TArray<FName> Passed;
 };
 
@@ -321,6 +325,52 @@ struct CODEXTACTICS_API FTutorialStep
 	FTutorialCancelOn CancelOn;
 	/** "confine" (rev 5i): keeps the squad in an area while the lesson runs (FTutorialConfine). */
 	FTutorialConfine Confine;
+	/**
+	 * "guide" (2026-10-20, game designer: "after the hut nothing showed where to go next"): where this step sends the squad while it
+	 * is shown - a tutorial volume id (the target is that volume's box on the ground) or a step id (that step's markers). Overrides the
+	 * automatic choice of the current navigation target (FTutorialStateMachine::GetGuide). None = automatic (own markers, the place
+	 * the step completes in, the route).
+	 */
+	FName Guide;
+	/** "guide": "none" - this step never names the current target (its markers still show; the next rule decides). */
+	bool bNoGuide = false;
+	/**
+	 * "beyond" (2026-10-20, the bridge skipped): world-state clauses (the "condition" syntax) meaning the squad is already BEYOND this
+	 * step's place - e.g. {"stat": "squad_not_across.VOL_A1_BEACON2", "below": 1} = all three are across the crevasse. Polled every
+	 * tick while the step is not finished (also never triggered), from its beat on: when they hold, the step is passed (an objective
+	 * completed, any other kind skipped, never shown again) and the route moves past the step's place, so nothing there calls the
+	 * squad back.
+	 */
+	TArray<FTutorialCondition> Beyond;
+};
+
+/** What the current navigation target ("guide") of the tutorial is (FTutorialStateMachine::GetGuide). */
+enum class ETutorialGuideKind : uint8
+{
+	None,
+	/** The level's markers of a step (ATutorialMarkerActor::StepId == Id; the runtime picks the nearest shown one). */
+	StepMarkers,
+	/** A tutorial volume (the runtime shows a guide beacon on the ground at its box). */
+	Volume,
+	/**
+	 * A spot the runtime computes ("guide": "@<name>", 2026-10-20): "@patrol_route" = the point of the level's patrol routes nearest
+	 * to the step's focus operative (where the A4 ambusher rigs the wire). The guide beacon stands there.
+	 */
+	Spot
+};
+
+/** The current navigation target: exactly one at a time - the HUD edge arrow and the highlighted minimap icon point at it. */
+struct CODEXTACTICS_API FTutorialGuide
+{
+	ETutorialGuideKind Kind = ETutorialGuideKind::None;
+	/** The marker step id or the volume id. */
+	FName Id;
+	/** The step that asked for it; none = the route chose it (the next place ahead / the last place reached). */
+	FName SourceStep;
+
+	bool IsSet() const { return Kind != ETutorialGuideKind::None && !Id.IsNone(); }
+	bool operator==(const FTutorialGuide& Other) const { return Kind == Other.Kind && Id == Other.Id && SourceStep == Other.SourceStep; }
+	bool operator!=(const FTutorialGuide& Other) const { return !(*this == Other); }
 };
 
 struct CODEXTACTICS_API FTutorialBeat
@@ -391,6 +441,11 @@ struct CODEXTACTICS_API FTutorialProgress
 	TMap<FName, FTutorialStepProgress> StepProgress;
 	/** Rev 5i: the confinements started so far (FTutorialConfineProgress; a released one stays released after a load). */
 	TArray<FTutorialConfineProgress> Confines;
+	/**
+	 * 2026-10-20 ("route"): the furthest place on the route the squad has reached (a tutorial volume id; none = only its beat's start).
+	 * The current navigation target is derived from it, so it survives a load.
+	 */
+	FName RouteVolume;
 
 	bool IsEmpty() const { return Finished.IsEmpty() && Pending.IsEmpty() && CurrentBeat.IsNone() && Locks.IsEmpty() && History.IsEmpty(); }
 };

@@ -20,6 +20,13 @@ namespace BridgeRules
 		return static_cast<float>(BridgeToWorld.InverseTransformPosition(WorldPoint).X);
 	}
 
+	bool IsAcrossFrom(const FTransform& BridgeToWorld, float HalfLengthCm, const FVector& NearPoint, const FVector& Point)
+	{
+		const float Near = SpanCoordinate(BridgeToWorld, NearPoint);
+		const float Here = SpanCoordinate(BridgeToWorld, Point);
+		return !FMath::IsNearlyZero(Near) && FMath::Sign(Near) != FMath::Sign(Here) && FMath::Abs(Here) > FMath::Max(0.f, HalfLengthCm);
+	}
+
 	bool DidCross(float EntryCoordinate, float ExitCoordinate)
 	{
 		return FMath::Sign(EntryCoordinate) != FMath::Sign(ExitCoordinate) && !FMath::IsNearlyZero(EntryCoordinate) && !FMath::IsNearlyZero(ExitCoordinate);

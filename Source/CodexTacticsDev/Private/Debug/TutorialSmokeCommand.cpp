@@ -43,19 +43,28 @@
 //     command history; (rev 5i) the A3 approach: the squad is held, a standing click to the ridge is refused ("Crouch first"), C
 //     crouches the leader, the click is accepted, beyond the ridge still refused, the followers copy the crouch and the card completes
 //     when all are low in VOL_A3_RIDGE; (rev 5i) the fence one by one: held, nobody past before Solo, B -> "one by one 0 / 3",
-//     standing refused ("Go prone first"), prone the first goes, a second refused meanwhile ("One at a time"), CrawlGapPassed frees
-//     the turn ("1 / 3"), three through -> free; B (regroup) refused "Not yet - one by one.", each into his own cover (3 distinct),
+//     standing refused ("Go prone first"), prone the first goes, (2026-10-20) a second prone goes at the same time (no queue), any order
+//     through ("1 / 3"), three through -> free; B (regroup) refused "Not yet - each operative crosses ...", each into his own cover (3 distinct),
 //     then the peek card frees Regroup; (rev 2026-10-19) a mine blast beside the engineer (everyone carries a medkit) -> the MEDKIT card
 //     focused on him (Item.Use / Inventory.Open free), H on a mate does not count, he presses H -> healed, the card completes; O is refused in A1 and toggles the enemy vision cones after the A4 cone card; C crouches after the stance
 //     lesson; Space stays refused in A4; tutorial OFF unlocks every command; the story dialogue window takes Enter the same way
 //     (tap = next line, hold = skip); (rev 5i) SKIP TUTORIAL from A0: the button shows in A0, the pause menu entry asks and No
 //     keeps it, the button asks with the world paused and Yes skips - no cards / strip / objectives, C and the inventory (locked at
-//     A0) work, every command free, one feed line; the save says skipped, RESET starts it again, loading the save skips it again.
+//     A0) work, every command free, one feed line; the save says skipped, RESET starts it again, loading the save skips it again;
+// 10. (2026-10-20, the current navigation target) stages 140-153 on a runtime course (the lake's volumes + a bridge + the bridge marker):
+//     the squad crosses the "crevasse" WITHOUT the bridge beacon (teleported across beside the bridge) -> the bridge objective is passed
+//     (never shown, its marker never appears), the target jumps to the hut approach; the whole hut lesson (Solo B, select 2, both door
+//     sides, the third goes in, loot, take, share, regroup B) -> no bridge marker / target ever, and right after the lesson the target
+//     is beacon 3 (the guide beacon stands there); at every check exactly one target, at most one edge arrow, the arrow (headless: the
+//     1920 x 1080 camera view) points at the target when it is off-screen (the camera looks away), its distance label in m, the minimap
+//     highlights exactly one objective icon; beacon 3 reached -> the camp.
 // Saves go to Saved/SmokeSaves/Tutorial (exclusive in Scripts/test_map.json).
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
+
+class APatrolRouteActor;
 
 #include "Characters/FirePostureRules.h"
 #include "Characters/EnemyCharacter.h"
@@ -109,6 +118,12 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Data/DialogueSequenceAsset.h"
 #include "UObject/Package.h"
+#include "Camera/PlayerCameraManager.h"
+#include "EngineUtils.h"
+#include "Camera/TacticalCameraPawn.h"
+#include "AI/PatrolRouteActor.h"
+#include "Level/BridgeCrossingVolume.h"
+#include "UI/MinimapSubsystem.h"
 
 namespace TutorialSmoke
 {
@@ -178,6 +193,16 @@ namespace TutorialSmoke
 		FVector HutPoint = FVector::ZeroVector;
 		int32 ConfinedBefore = 0;
 		int32 HoldLinesBefore = 0;
+		/** 2026-10-20 guide course (stages 140-153): its origin / axes, the bridge marker, checks made. */
+		FVector CourseOrigin = FVector::ZeroVector;
+		FVector CourseForward = FVector::ForwardVector;
+		FVector CourseRight = FVector::RightVector;
+		TWeakObjectPtr<ATutorialMarkerActor> BridgeMarker;
+		bool bBridgeMarkerEverShown = false;
+		int32 GuideArrowChecks = 0;
+		/** 2026-10-20 ambush by one operative: the patrol route of the wire spot, a held mate. */
+		TWeakObjectPtr<APatrolRouteActor> AmbushRoute;
+		TWeakObjectPtr<AOperativeCharacter> AmbushMate;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -317,6 +342,120 @@ namespace TutorialSmoke
 	{
 		PressKey(PC, Key, IE_Pressed);
 		State.PendingRelease = Key;
+	}
+
+
+	/** 2026-10-20 guide course: a lake volume at Location (box HalfSizeCm), Leader-activated and fire-once like the map's beacons. */
+	ATutorialTriggerVolume* SpawnCourseVolume(UWorld* World, const FVector& Location, FName VolumeId, FName BeatId, float HalfSizeCm)
+	{
+		const FTransform Transform(FRotator::ZeroRotator, Location);
+		ATutorialTriggerVolume* Volume = World->SpawnActorDeferred<ATutorialTriggerVolume>(ATutorialTriggerVolume::StaticClass(), Transform, nullptr, nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (!Volume)
+		{
+			return nullptr;
+		}
+		Volume->VolumeId = VolumeId;
+		Volume->BeatId = BeatId;
+		Volume->ActivatedBy = ETutorialVolumeFilter::Leader;
+		Volume->bFireOnce = true;
+		Volume->Box->SetBoxExtent(FVector(HalfSizeCm, HalfSizeCm, 150.f));
+		Volume->FinishSpawning(Transform);
+		return Volume;
+	}
+
+	/** Teleports the squad side by side (1.2 m apart along Right) to Point and stops everyone. */
+	void TeleportSquadTo(USquadSubsystem* Squad, const FVector& Point, const FVector& Right)
+	{
+		for (int32 Index = 0; Index < Squad->GetMembers().Num(); ++Index)
+		{
+			AOperativeCharacter* Member = Squad->GetMembers()[Index];
+			Member->StopOperative();
+			Member->SetActorLocation(Point + Right * ((Index - 1) * 120.f), false, nullptr, ETeleportType::TeleportPhysics);
+			Member->ColdLevel = 5.f; // no cold on this course: the heat pack lesson stays out of the way
+		}
+	}
+
+	/** The volume with this id that the leader stands in fires (the overlap may have fired on the teleport already). */
+	void FireCourseVolume(UWorld* World, FName VolumeId)
+	{
+		for (TActorIterator<ATutorialTriggerVolume> It(World); It; ++It)
+		{
+			if (It->GetEffectiveVolumeId() == VolumeId)
+			{
+				It->CheckOverlapping();
+			}
+		}
+	}
+
+	/**
+	 * 2026-10-20: exactly one current target (valid, the expected one when given), never the bridge, at most one edge arrow; the
+	 * bridge marker never shown; the minimap highlights exactly one objective icon (once it is set up).
+	 */
+	void CheckOneGuide(FState& State, UWorld* World, UTutorialSubsystem* Tutorial, UTutorialOverlayWidget* Overlay, const TCHAR* Where, FName Expect,
+		bool bBridgeAhead = false)
+	{
+		Overlay->Refresh();
+		const FTutorialGuideView& Guide = Tutorial->GetGuideView();
+		const FString Described = UTutorialSubsystem::DescribeGuide(Guide.Guide);
+		Check(State, Guide.bValid && (Expect.IsNone() || Guide.Guide.Id == Expect),
+			FString::Printf(TEXT("guide %s: exactly one current target %s (expected %s)"), Where, *Described, Expect.IsNone() ? TEXT("any") : *Expect.ToString()));
+		// Before the crossing the bridge approach IS the next place; once across it must never be the target again.
+		Check(State, (bBridgeAhead || (Guide.Guide.Id != FName(TEXT("A1_bridge")) && Guide.Guide.Id != FName(TEXT("VOL_A1_BEACON2")))) && Overlay->GetEdgePointerCount() <= 1,
+			FString::Printf(TEXT("guide %s: %s, %d edge arrow(s)"), Where, bBridgeAhead ? TEXT("the bridge lies ahead") : TEXT("never the bridge"), Overlay->GetEdgePointerCount()));
+		State.bBridgeMarkerEverShown |= State.BridgeMarker.IsValid() && State.BridgeMarker->IsMarkerShown();
+		Check(State, !State.bBridgeMarkerEverShown, FString::Printf(TEXT("guide %s: the bridge marker never appeared"), Where));
+		const UMinimapSubsystem* Minimap = World->GetSubsystem<UMinimapSubsystem>();
+		if (Minimap && Minimap->IsReady())
+		{
+			TArray<FMinimapIcon> Icons;
+			Minimap->BuildIcons(Icons);
+			int32 Highlighted = 0;
+			for (const FMinimapIcon& Icon : Icons)
+			{
+				Highlighted += Icon.Kind == EMinimapIconKind::Objective && Icon.bHighlight && FVector::Dist2D(Icon.World, Guide.Location) < 1.f ? 1 : 0;
+			}
+			Check(State, Highlighted == 1, FString::Printf(TEXT("guide %s: the minimap highlights the target (%d icon(s))"), Where, Highlighted));
+		}
+	}
+
+	/** 2026-10-20: the edge arrow agrees with the camera view - off-screen: one arrow along the target's direction from the centre. */
+	void CheckGuideArrow(FState& State, APlayerController* PC, UTutorialSubsystem* Tutorial, UTutorialOverlayWidget* Overlay, const TCHAR* Where)
+	{
+		Overlay->Refresh();
+		const FTutorialGuideView& Guide = Tutorial->GetGuideView();
+		const APlayerCameraManager* Camera = PC->PlayerCameraManager;
+		if (!Guide.bValid || !Camera)
+		{
+			Check(State, false, FString::Printf(TEXT("arrow %s: a target and a camera"), Where));
+			return;
+		}
+		FVector2D Screen;
+		const FVector2D View = Overlay->GetPointerViewSize();
+		TutorialRules::ProjectToView(Camera->GetCameraLocation(), Camera->GetCameraRotation(), Camera->GetFOVAngle(), View, Guide.Location, Screen);
+		FVector2D ExpectTip;
+		FVector2D ExpectDirection;
+		const bool bOffScreen = TutorialRules::ComputeEdgePointer(View, Screen, true, 48.f, ExpectTip, ExpectDirection);
+		FVector2D Tip;
+		FVector2D Direction;
+		FText Distance;
+		FVector2D ViewSize;
+		const bool bArrow = Overlay->GetGuidePointer(Tip, Direction, Distance, ViewSize);
+		// Independent of the projection: the target's side in the camera's own axes (right = +X on screen, up = -Y).
+		const FVector Local = Camera->GetCameraRotation().UnrotateVector(Guide.Location - Camera->GetCameraLocation());
+		const FVector2D Side = FVector2D(Local.Y, -Local.Z).GetSafeNormal();
+		if (bOffScreen)
+		{
+			++State.GuideArrowChecks;
+			Check(State, bArrow && FVector2D::DotProduct(Direction, ExpectDirection) > 0.99f && Distance.ToString().EndsWith(TEXT(" m"))
+				&& (Local.X > 0.f || FVector2D::DotProduct(Direction, Side) > 0.f),
+				FString::Printf(TEXT("arrow %s: off-screen -> one arrow towards the target (dir %.2f, %.2f; expected %.2f, %.2f; '%s')"), Where,
+					Direction.X, Direction.Y, ExpectDirection.X, ExpectDirection.Y, *Distance.ToString()));
+		}
+		else
+		{
+			Check(State, !bArrow, FString::Printf(TEXT("arrow %s: the target is on screen - no arrow"), Where));
+		}
 	}
 
 	AOperativeCharacter* FindRole(USquadSubsystem* Squad, EOperativeRole Role)
@@ -469,8 +608,9 @@ namespace TutorialSmoke
 			{
 				return true;
 			}
-			Check(State, Tutorial->GetStepState(TEXT("regroup_card")) == ETutorialStepState::Active && State.StageTime >= 0.8f,
-				FString::Printf(TEXT("next card after the breather (%.1f s)"), State.StageTime));
+			// 2026-10-20 pacing: the breather is 0.8 s (was 1.5 s) - the next card within ~1 s, but not in the same frame.
+			Check(State, Tutorial->GetStepState(TEXT("regroup_card")) == ETutorialStepState::Active && State.StageTime >= 0.1f && State.StageTime <= 1.2f,
+				FString::Printf(TEXT("next card after the 0.8 s breather (%.1f s after the stage)"), State.StageTime));
 			PressKey(PC, EKeys::B, IE_Pressed);
 			Next(State);
 			return true;
@@ -1647,8 +1787,8 @@ namespace TutorialSmoke
 			State.StageTime = 0.f;
 			return true;
 		}
-		// Rev 5i item 4 (game designer 2026-10-15): the low fence ONE BY ONE - stop, Solo, then each operative prone under the gap, one at
-		// a time; then each into his own cover; Regroup refused meanwhile. A real 8 x 8 m VOL_A3_FENCE round the squad, "past the fence"
+		// Rev 5i item 4 (game designer 2026-10-15): the low fence - stop, Solo, then each operative prone under the gap on his own order
+		// (2026-10-20: no "one at a time" queue - several at once, any order); then each into his own cover; Regroup refused meanwhile. A real 8 x 8 m VOL_A3_FENCE round the squad, "past the fence"
 		// 10 m ahead; the crawl-throughs are the fence actor's CrawlGapPassed events (raised here - the gap itself is CrawlGap / BridgeFence smokes' job).
 		case 110:
 		{
@@ -1687,7 +1827,7 @@ namespace TutorialSmoke
 				return true;
 			}
 			Check(State, Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A3_fence")) == ETutorialStepState::Completed
-				&& Tutorial->GetStepState(TEXT("A3_fence_crawl")) == ETutorialStepState::Active, TEXT("rev 5i: B - Solo on, then the 'one by one' card"));
+				&& Tutorial->GetStepState(TEXT("A3_fence_crawl")) == ETutorialStepState::Active, TEXT("rev 5i: B - Solo on, then the 'under the fence' card"));
 			Check(State, Tutorial->GetCardView().Title.ToString().Contains(TEXT("0 / 3")),
 				FString::Printf(TEXT("rev 5i: the card counts '0 / 3 through' ('%s')"), *Tutorial->GetCardView().Title.ToString()));
 			AOperativeCharacter* First = Squad->GetMembers()[0];
@@ -1711,24 +1851,22 @@ namespace TutorialSmoke
 			AOperativeCharacter* Second = Squad->GetMembers()[1];
 			AOperativeCharacter* Third = Squad->GetMembers()[2];
 			Check(State, First->GetStance() == EOperativeStance::Prone && First->OrderMoveTo(State.HutPoint, false) == EOperativeOrderResult::Accepted,
-				TEXT("rev 5i: prone, the first one may crawl past the fence (his turn)"));
-			State.HoldLinesBefore = CountMessages(World, TEXT("One at a time - wait until he is through."));
-			Check(State, Second->OrderMoveTo(State.HutPoint + FVector(0.f, 150.f, 0.f), false) == EOperativeOrderResult::Refused
-				&& CountMessages(World, TEXT("One at a time - wait until he is through.")) == State.HoldLinesBefore + 1,
-				TEXT("rev 5i: a second one prone is refused while the first crosses ('One at a time')"));
-			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, First);
+				TEXT("rev 5i: prone, the first one may crawl past the fence"));
+			// 2026-10-20 (game designer): no queue - the second one prone goes at the same time, on his own order.
+			Check(State, Second->OrderMoveTo(State.HutPoint + FVector(0.f, 150.f, 0.f), false) == EOperativeOrderResult::Accepted
+				&& CountMessages(World, TEXT("wait until he is through")) == 0,
+				TEXT("2026-10-20: a second one prone may crawl at the same time (no 'one at a time' queue)"));
+			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, Second); // the second one is through first: any order
 			Check(State, Tutorial->GetStepProgress(TEXT("A3_fence_crawl")) == 1 && Tutorial->GetCardView().Title.ToString().Contains(TEXT("1 / 3")),
-				FString::Printf(TEXT("rev 5i: the first through: '1 / 3' ('%s')"), *Tutorial->GetCardView().Title.ToString()));
-			Check(State, Second->OrderMoveTo(State.HutPoint + FVector(0.f, 150.f, 0.f), false) == EOperativeOrderResult::Accepted,
-				TEXT("rev 5i: then the second one may go"));
-			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, Second);
+				FString::Printf(TEXT("the first through (the second ordered): '1 / 3' ('%s')"), *Tutorial->GetCardView().Title.ToString()));
+			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, First);
 			Check(State, Third->OrderMoveTo(State.HutPoint, false) == EOperativeOrderResult::Refused, TEXT("rev 5i: the third standing: refused"));
 			Third->DropProne();
 			GameplayEvents::Raise(World, GameplayEvents::CrawlGapPassed, Third);
 			Check(State, Tutorial->GetStepState(TEXT("A3_fence_crawl")) == ETutorialStepState::Completed && !Tutorial->IsConfining(),
 				TEXT("rev 5i: three through: the crossing done, the squad free"));
 			State.RefusalsBefore = Tutorial->GetLockedRefusalCount();
-			State.NotYetBefore = CountMessages(World, TEXT("Not yet - one by one."));
+			State.NotYetBefore = CountMessages(World, TEXT("Not yet - each operative crosses"));
 			PressKey(PC, EKeys::B, IE_Pressed);
 			Next(State);
 			return true;
@@ -1737,8 +1875,8 @@ namespace TutorialSmoke
 		{
 			PressKey(PC, EKeys::B, IE_Released);
 			Check(State, Squad->IsSoloMode() && Tutorial->GetLockedRefusalCount() == State.RefusalsBefore + 1
-				&& CountMessages(World, TEXT("Not yet - one by one.")) == State.NotYetBefore + 1,
-				TEXT("rev 5i: B (regroup) refused after the crossing - 'Not yet - one by one.', still in Solo"));
+				&& CountMessages(World, TEXT("Not yet - each operative crosses")) == State.NotYetBefore + 1,
+				TEXT("rev 5i: B (regroup) refused after the crossing - 'Not yet - each operative crosses ...', still in Solo"));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				Member->StopOperative();
@@ -2011,6 +2149,14 @@ namespace TutorialSmoke
 		}
 		case 104:
 		{
+			// 2026-10-20: the overlook (the ambush holds the pair there) and a patrol route 12 m ahead (the ambusher's wire spot).
+			SpawnVolumeAt(World, Leader->GetActorLocation(), TEXT("VOL_A4_OVERLOOK"), 600.f);
+			{
+				const FVector RouteSpot = Leader->GetActorLocation() + Leader->GetActorForwardVector().GetSafeNormal2D() * 1200.f;
+				FActorSpawnParameters RouteParams;
+				RouteParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				State.AmbushRoute = World->SpawnActor<APatrolRouteActor>(APatrolRouteActor::StaticClass(), FTransform(RouteSpot), RouteParams);
+			}
 			Check(State, Tutorial->TriggerStep(TEXT("A4_cones")) && Tutorial->GetCurrentBeat() == FName(TEXT("A4")), TEXT("A4 started with the cone card"));
 			Check(State, Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Skipped || Tutorial->GetStepState(TEXT("A4_posture")) == ETutorialStepState::Waiting,
 				TEXT("the posture lesson was done in A3: its overlook twin is cancelled (or about to be)"));
@@ -2055,6 +2201,36 @@ namespace TutorialSmoke
 				FString::Printf(TEXT("part 1: the tripwire card (unlocks the wire; %s)"), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_tripwire")))));
 			Check(State, Tutorial->IsCommandLocked(PlayerCommands::StealthWhistle) && Tutorial->IsCommandLocked(PlayerCommands::StealthThrow),
 				TEXT("the lure is still locked"));
+			// 2026-10-20 (game designer): the ambush is done by ONE operative - the Medic-Sapper; Solo with her selected, the others held.
+			{
+				AOperativeCharacter* Ambusher = Tutorial->GetFocusOperative(TEXT("A4_tripwire"));
+				AOperativeCharacter* Mate = nullptr;
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					Mate = Mate ? Mate : (Member != Ambusher ? Member : nullptr);
+				}
+				Check(State, Ambusher && Ambusher->SquadRole == EOperativeRole::MedicSapper && Squad->IsSoloMode() && Squad->GetLeader() == Ambusher
+					&& Tutorial->IsConfining() && Tutorial->GetCardView().Title.ToString().Contains(Ambusher->DisplayName.ToString().ToUpper()),
+					FString::Printf(TEXT("ambush: the Medic-Sapper alone (%s), Solo on with her selected, the squad held, the card names her ('%s')"),
+						Ambusher ? *Ambusher->DisplayName.ToString() : TEXT("-"), *Tutorial->GetCardView().Title.ToString()));
+				const FTutorialGuideView& Guide = Tutorial->GetGuideView();
+				const APatrolRouteActor* Route = State.AmbushRoute.Get();
+				Check(State, Guide.bValid && Guide.Guide.Kind == ETutorialGuideKind::Spot && Route
+					&& FVector::Dist2D(Guide.Location, Route->GetActorLocation()) < 200.f,
+					FString::Printf(TEXT("ambush: the current target is the wire spot on the patrol route (%s, %.0f cm from the route)"),
+						*UTutorialSubsystem::DescribeGuide(Guide.Guide), Route ? FVector::Dist2D(Guide.Location, Route->GetActorLocation()) : -1.f));
+				const FVector Far = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Leader->GetActorForwardVector().GetSafeNormal2D() * 1000.f);
+				const int32 LinesBefore = CountMessages(World, TEXT("handles it"));
+				Check(State, Mate && Mate->OrderMoveTo(Far, false) == EOperativeOrderResult::Refused && CountMessages(World, TEXT("handles it")) == LinesBefore + 1,
+					FString::Printf(TEXT("ambush: %s's order off the overlook is refused ('Hold here - <Name> handles it.')"), Mate ? *Mate->DisplayName.ToString() : TEXT("-")));
+				Check(State, Ambusher && UTutorialSubsystem::CheckConfinedOrder(World, Ambusher, Far) && Ambusher->OrderMoveTo(Far, false) != EOperativeOrderResult::Refused,
+					TEXT("ambush: the Medic-Sapper may go anywhere"));
+				if (Ambusher)
+				{
+					Ambusher->StopOperative();
+				}
+				State.AmbushMate = Mate;
+			}
 			Tutorial->HandlePlayerCommand(PlayerCommands::DeployTripwire, FPlayerCommandContext()); // rigged (the anchors: Deployable smokes)
 			// The other patrol member: a guard 8 m ahead, placed in the map (on its post), deaf and blind (only the lure moves it).
 			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
@@ -2122,6 +2298,13 @@ namespace TutorialSmoke
 			Check(State, Guard && Guard->IsInvestigatingLure(), TEXT("the whistle: the guard leaves its post to investigate"));
 			Check(State, Tutorial->GetStepState(TEXT("A4_lure")) == ETutorialStepState::Completed, FString::Printf(TEXT("StealthLure.Heard completes the lure card (%s)"),
 				TutorialRules::StateName(Tutorial->GetStepState(TEXT("A4_lure")))));
+			// 2026-10-20: parts 1 + 2 done by her alone - the hold is released, the pair may move again (fire support).
+			if (AOperativeCharacter* Mate = State.AmbushMate.Get())
+			{
+				const FVector Far = SmokeUtils::ClearPoint(World, Mate->GetActorLocation(), Mate->GetActorLocation() + Mate->GetActorForwardVector().GetSafeNormal2D() * 1000.f);
+				Check(State, !Tutorial->IsConfining() && UTutorialSubsystem::CheckConfinedOrder(World, Mate, Far),
+					TEXT("ambush: the lure done - the hold is released, the others may move"));
+			}
 			Next(State);
 			return true;
 		}
@@ -2163,8 +2346,24 @@ namespace TutorialSmoke
 			// The squad holds fire again: an Aggressive squad would open fire on the next enemy it sees (the level is an ambush level
 			// since the guard was placed - "auto" + placed enemies) and the fight would unlock everything.
 			Squad->SetSquadPosture(ESquadFirePosture::Passive);
+			// 2026-10-20: the ambush left the Medic-Sapper selected (Solo): the sight check below is laid out round the first operative again.
+			Squad->SetLeaderByIndex(0);
+			Leader = Squad->GetLeader();
 			// 2026-10-19 b, symmetric sight: a 1.2 m wall 1 m ahead of the leader, a frozen enemy (senses off) 6 m beyond it.
 			const FVector Ahead = Leader->GetActorForwardVector().GetSafeNormal2D();
+			{
+				// The mates stand where the ambush left them (Solo): put them behind the leader, out of the enemy's line.
+				int32 Behind = 0;
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					if (Member != Leader)
+					{
+						Member->StopOperative();
+						const FVector Spot = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() - Ahead * (150.f * ++Behind));
+						Member->SetActorLocation(FVector(Spot.X, Spot.Y, Leader->GetActorLocation().Z), false, nullptr, ETeleportType::TeleportPhysics);
+					}
+				}
+			}
 			const float GroundZ = Leader->GetActorLocation().Z - Leader->GetSimpleCollisionHalfHeight();
 			const FVector WallSpot = Leader->GetActorLocation() + Ahead * 100.f;
 			if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
@@ -2299,11 +2498,11 @@ namespace TutorialSmoke
 				Tutorial->LoadSteps(HoldData);
 				Tutorial->TriggerStep(TEXT("hold"));
 				const FVector Far = Leader->GetActorLocation() + FVector(5000.f, 0.f, 0.f);
-				Check(State, Tutorial->IsConfining() && Tutorial->JudgeMove(*Leader, Far, false) == ETutorialConfineVerdict::Outside,
+				Check(State, Tutorial->IsConfining() && Tutorial->JudgeMove(*Leader, Far) == ETutorialConfineVerdict::Outside,
 					FString::Printf(TEXT("rev 5i: an inline confinement holds the squad (%s)"), *HoldError));
 				Tutorial->SetTutorialEnabled(false);
 				Tutorial->SetTutorialEnabled(true);
-				Check(State, !Tutorial->IsConfining() && Tutorial->JudgeMove(*Leader, Far, false) == ETutorialConfineVerdict::Allowed,
+				Check(State, !Tutorial->IsConfining() && Tutorial->JudgeMove(*Leader, Far) == ETutorialConfineVerdict::Allowed,
 					TEXT("rev 5i: tutorial OFF releases the confinement (and it stays released when the tutorial is back on)"));
 			}
 			// The story dialogue window takes the same key: Enter tap = next line, Enter held = skip.
@@ -2344,6 +2543,265 @@ namespace TutorialSmoke
 			}
 			Check(State, !World->GetSubsystem<UDialogueSubsystem>()->IsDialogueOpen(), TEXT("story dialogue: Enter held 0.6 s skips the rest"));
 			PressKey(PC, EKeys::Enter, IE_Released);
+			State.Stage = 140;
+			State.StageTime = 0.f;
+			return true;
+		}
+		// 2026-10-20 (game designer play-test): the current navigation target; the bridge skipped never calls the squad back.
+		case 140:
+		{
+			for (TActorIterator<ATutorialTriggerVolume> It(World); It; ++It)
+			{
+				It->Destroy(); // the earlier stages' stand-ins: the course below has its own
+			}
+			for (TActorIterator<ATutorialMarkerActor> It(World); It; ++It)
+			{
+				It->Destroy();
+			}
+			if (Squad->IsSoloMode())
+			{
+				Squad->ToggleSoloMode();
+			}
+			Squad->SetLeaderByIndex(0);
+			Leader = Squad->GetLeader();
+			State.CourseOrigin = Leader->GetActorLocation();
+			State.CourseForward = Leader->GetActorForwardVector().GetSafeNormal2D();
+			State.CourseRight = FVector::CrossProduct(FVector::UpVector, State.CourseForward).GetSafeNormal();
+			const FVector O = State.CourseOrigin;
+			const FVector F = State.CourseForward;
+			const FVector R = State.CourseRight;
+			SpawnCourseVolume(World, O + F * 800.f, TEXT("VOL_A0_BEACON1"), TEXT("A1"), 300.f);
+			SpawnCourseVolume(World, O + F * 2000.f, TEXT("VOL_A1_BEACON2"), NAME_None, 250.f);
+			SpawnCourseVolume(World, O + F * 4000.f + R * 1500.f, TEXT("VOL_A1_HUT_APPROACH"), NAME_None, 400.f);
+			SpawnCourseVolume(World, O + F * 6000.f, TEXT("VOL_A1_BEACON3"), NAME_None, 300.f);
+			SpawnCourseVolume(World, O + F * 8000.f, TEXT("VOL_A2_CAMP"), TEXT("A2"), 300.f);
+			// The bridge over the "crevasse" (local X along the course) and its marker at the near end, as on the lake.
+			const FTransform BridgeTransform(F.Rotation(), O + F * 2600.f);
+			ABridgeCrossingVolume* Bridge = World->SpawnActorDeferred<ABridgeCrossingVolume>(ABridgeCrossingVolume::StaticClass(), BridgeTransform, nullptr, nullptr,
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (Bridge)
+			{
+				Bridge->Span->SetBoxExtent(FVector(300.f, 100.f, 125.f));
+				Bridge->FinishSpawning(BridgeTransform);
+			}
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			Params.bDeferConstruction = true;
+			ATutorialMarkerActor* Marker = World->SpawnActor<ATutorialMarkerActor>(ATutorialMarkerActor::StaticClass(), FTransform(O + F * 2250.f), Params);
+			if (Marker)
+			{
+				Marker->StepId = TEXT("A1_bridge");
+				Marker->FinishSpawning(FTransform(O + F * 2250.f));
+				State.BridgeMarker = Marker;
+			}
+			State.bBridgeMarkerEverShown = false;
+			Check(State, Bridge && Marker && Tutorial->LoadStepsFile(TEXT("demo_01_steps.json")) && Tutorial->GetCurrentBeat() == FName(TEXT("A0")),
+				TEXT("guide course: the lake's volumes, a bridge, the bridge marker; the demo tutorial from A0"));
+			Next(State);
+			return true;
+		}
+		case 141:
+		{
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			CheckOneGuide(State, World, Tutorial, Overlay, TEXT("A0"), TEXT("VOL_A0_BEACON1"));
+			TeleportSquadTo(Squad, State.CourseOrigin + State.CourseForward * 800.f, State.CourseRight);
+			FireCourseVolume(World, TEXT("VOL_A0_BEACON1"));
+			Check(State, Tutorial->GetCurrentBeat() == FName(TEXT("A1")), TEXT("guide course: beacon 1 -> A1"));
+			Next(State);
+			return true;
+		}
+		case 142:
+		{
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			CheckOneGuide(State, World, Tutorial, Overlay, TEXT("A1 start"), TEXT("VOL_A1_BEACON2"), /*bBridgeAhead*/ true);
+			Check(State, Tutorial->GetStepState(TEXT("A1_bridge")) == ETutorialStepState::Idle && Tutorial->GetConditionStat(TEXT("squad_not_across.VOL_A1_BEACON2")) == 3.f,
+				TEXT("guide course: before the crossing - the bridge objective not started, nobody across"));
+			// Across the crevasse 20 m beside the bridge: the bridge beacon never fires.
+			TeleportSquadTo(Squad, State.CourseOrigin + State.CourseForward * 3300.f + State.CourseRight * 2000.f, State.CourseRight);
+			Next(State);
+			return true;
+		}
+		case 143:
+		{
+			if (!TutorialRules::IsFinished(Tutorial->GetStepState(TEXT("A1_bridge"))) && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetConditionStat(TEXT("squad_not_across.VOL_A1_BEACON2")) == 0.f, TEXT("guide course: all three across (stat squad_not_across = 0)"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_bridge")) == ETutorialStepState::Skipped && Tutorial->GetStepState(TEXT("A1_wt_bridge")) == ETutorialStepState::Skipped,
+				FString::Printf(TEXT("guide course: across without the bridge - the bridge objective and lines passed (%s, %s)"),
+					TutorialRules::StateName(Tutorial->GetStepState(TEXT("A1_bridge"))), TutorialRules::StateName(Tutorial->GetStepState(TEXT("A1_wt_bridge")))));
+			CheckOneGuide(State, World, Tutorial, Overlay, TEXT("across"), TEXT("VOL_A1_HUT_APPROACH"));
+			Tutorial->SkipStep(TEXT("A1_gust"));
+			Tutorial->SkipStep(TEXT("A1_wt_banter"));
+			TeleportSquadTo(Squad, State.CourseOrigin + State.CourseForward * 4000.f + State.CourseRight * 1500.f, State.CourseRight);
+			FireCourseVolume(World, TEXT("VOL_A1_HUT_APPROACH"));
+			Next(State);
+			return true;
+		}
+		case 144:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_solo")) != ETutorialStepState::Active && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A1_solo")) == ETutorialStepState::Active, TEXT("guide course: the hut approach - the Solo card"));
+			CheckOneGuide(State, World, Tutorial, Overlay, TEXT("Solo card"), NAME_None);
+			Tap(PC, State, EKeys::B);
+			Next(State);
+			return true;
+		}
+		case 145:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_select")) != ETutorialStepState::Active && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			Check(State, Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A1_select")) == ETutorialStepState::Active, TEXT("guide course: B - Solo, the select card"));
+			Tap(PC, State, EKeys::Two);
+			SpawnVolumeAround(World, Squad->GetMembers()[1], TEXT("VOL_A1_DOOR_L"));
+			Next(State);
+			return true;
+		}
+		case 146:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_hut_stack_l")) != ETutorialStepState::Active && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			AOperativeCharacter* Second = Squad->GetMembers()[1];
+			CheckOneGuide(State, World, Tutorial, Overlay, TEXT("left of the door"), TEXT("VOL_A1_DOOR_L"));
+			RaiseCoverEntered(World, Second);
+			SpawnVolumeAround(World, Squad->GetMembers()[0], TEXT("VOL_A1_DOOR_R"));
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_l")) == ETutorialStepState::Completed, TEXT("guide course: left of the door done"));
+			Next(State);
+			return true;
+		}
+		case 147:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_hut_stack_r")) != ETutorialStepState::Active && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			RaiseCoverEntered(World, Squad->GetMembers()[0]);
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_stack_r")) == ETutorialStepState::Completed, TEXT("guide course: right of the door done"));
+			Next(State);
+			return true;
+		}
+		case 148:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_hut_enter")) != ETutorialStepState::Active && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			if (ATutorialTriggerVolume* Hut = SpawnVolumeAround(World, Squad->GetMembers()[2], TEXT("VOL_A1_HUT"), 150.f))
+			{
+				Hut->CheckOverlapping();
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A1_hut_enter")) == ETutorialStepState::Completed && !Tutorial->IsConfining(),
+				TEXT("guide course: the third operative inside - the squad free"));
+			CheckOneGuide(State, World, Tutorial, Overlay, TEXT("inside the hut"), NAME_None);
+			Next(State);
+			return true;
+		}
+		case 149:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_loot_open")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Tutorial->HandlePlayerCommand(TEXT("Loot.Open"), FPlayerCommandContext());
+			Next(State);
+			return true;
+		}
+		case 150:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_loot_take")) != ETutorialStepState::Active && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Tutorial->NotifyEvent(TEXT("ItemLooted.HeatPack"), Squad->GetMembers()[0]->GetFName());
+			Check(State, Tutorial->GetStepState(TEXT("A1_loot_take")) == ETutorialStepState::Completed, TEXT("guide course: the heat packs taken"));
+			// The looter hands one to each mate (Shift + drag: into the kit).
+			AOperativeCharacter* Looter = Squad->GetMembers()[0];
+			Looter->HeatPacksCount = 3;
+			USquadTransferSubsystem* Transfer = World->GetSubsystem<USquadTransferSubsystem>();
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Transfer && Member != Looter)
+				{
+					Member->HeatPacksCount = 0;
+					FTransferRequest Give = FTransferRequest::MakeGive(Looter, Member, ETransferItem::HeatPack, 1);
+					Give.bHandOverOnly = true;
+					Transfer->Execute(Give);
+				}
+			}
+			Next(State);
+			return true;
+		}
+		case 151:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_regroup")) != ETutorialStepState::Active && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, Tutorial->GetStepState(TEXT("A1_share_card")) == ETutorialStepState::Completed && Tutorial->GetStepState(TEXT("A1_regroup")) == ETutorialStepState::Active,
+				TEXT("guide course: shared - the regroup card"));
+			CheckOneGuide(State, World, Tutorial, Overlay, TEXT("regroup card"), NAME_None);
+			Tap(PC, State, EKeys::B);
+			Next(State);
+			return true;
+		}
+		case 152:
+		{
+			if (Tutorial->GetStepState(TEXT("A1_box")) != ETutorialStepState::Active && !TutorialRules::IsFinished(Tutorial->GetStepState(TEXT("A1_box"))) && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			Check(State, !Squad->IsSoloMode() && Tutorial->GetStepState(TEXT("A1_regroup")) == ETutorialStepState::Completed, TEXT("guide course: B - Solo off, regrouped"));
+			Tutorial->SkipStep(TEXT("A1_box"));
+			// Right after the hut lesson: the next place is shown at once - beacon 3, with the guide beacon standing there.
+			CheckOneGuide(State, World, Tutorial, Overlay, TEXT("after the hut lesson"), TEXT("VOL_A1_BEACON3"));
+			const ATutorialMarkerActor* Beacon = Tutorial->GetGuideBeacon();
+			const FVector Beacon3 = State.CourseOrigin + State.CourseForward * 6000.f;
+			Check(State, Beacon && Beacon->IsMarkerShown() && FVector::Dist2D(Beacon->GetActorLocation(), Beacon3) < 50.f,
+				FString::Printf(TEXT("guide course: the guide beacon stands at beacon 3 (%.0f cm off)"), Beacon ? FVector::Dist2D(Beacon->GetActorLocation(), Beacon3) : -1.f));
+			CheckGuideArrow(State, PC, Tutorial, Overlay, TEXT("after the hut lesson"));
+			// The camera looks the other way: the target is off-screen, the arrow must point at it.
+			if (ATacticalCameraPawn* Camera = PC->GetPawn<ATacticalCameraPawn>())
+			{
+				Camera->LookAtPoint(State.CourseOrigin - State.CourseForward * 9000.f + State.CourseRight * 3000.f);
+			}
+			Next(State);
+			return true;
+		}
+		case 153:
+		{
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			CheckGuideArrow(State, PC, Tutorial, Overlay, TEXT("camera turned away"));
+			// 2026-10-20 pacing instrumentation (the scripted pacing table is CodexTactics.Tutorial.Flow.Pacing): the guide course run.
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke pacing (guide course): %.1f s without any instruction, longest wait after a card %.2f s"),
+				Tutorial->GetNoInstructionSeconds(), Tutorial->GetMaxNextInstructionSeconds());
+			Check(State, Tutorial->GetNoInstructionSeconds() <= 1.f, FString::Printf(TEXT("pacing: never without an instruction on screen since the course loaded (%.1f s)"),
+				Tutorial->GetNoInstructionSeconds()));
+			Check(State, State.GuideArrowChecks >= 1, FString::Printf(TEXT("guide course: the edge arrow was checked off-screen (%d)"), State.GuideArrowChecks));
+			TeleportSquadTo(Squad, State.CourseOrigin + State.CourseForward * 6000.f, State.CourseRight);
+			FireCourseVolume(World, TEXT("VOL_A1_BEACON3"));
+			Tutorial->SkipSpeech();
+			CheckOneGuide(State, World, Tutorial, Overlay, TEXT("beacon 3 reached"), TEXT("VOL_A2_CAMP"));
+			if (ATacticalCameraPawn* Camera = PC->GetPawn<ATacticalCameraPawn>())
+			{
+				Camera->LookAtPoint(Squad->GetLeader()->GetActorLocation());
+			}
 			State.Stage = 90;
 			State.StageTime = 0.f;
 			return true;

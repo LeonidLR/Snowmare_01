@@ -84,6 +84,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Tutorial")
 	TObjectPtr<UMaterialInterface> MarkerMaterial;
 
+	/**
+	 * 2026-10-20: the guide beacon UTutorialSubsystem spawns at a volume that is the current navigation target (no marker of its own
+	 * there: the next beacon / the next beat's start). Shown only while it is the target; never placed by hand.
+	 */
+	UPROPERTY(VisibleInstanceOnly, Transient, BlueprintReadOnly, Category = "CodexTactics|Tutorial")
+	bool bRuntimeGuide = false;
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tutorial")
 	bool IsMarkerShown() const { return bShown; }
 

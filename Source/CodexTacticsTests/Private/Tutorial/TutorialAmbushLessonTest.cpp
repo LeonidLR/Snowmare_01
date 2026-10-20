@@ -286,6 +286,80 @@ bool FTutorialAmbushLureFlowTest::RunTest(const FString&)
 	return true;
 }
 
+// 2026-10-20 (game designer: "two stay in place, one sets up the ambush"): the Medic-Sapper alone; the other two held at the overlook
+// until the lure is done; her targets are the wire spot on the patrol route, then the overlook.
+TUTORIAL_AMBUSH_TEST(FTutorialAmbushOneOperativeTest, "OneOperative")
+bool FTutorialAmbushOneOperativeTest::RunTest(const FString&)
+{
+	using namespace TutorialAmbushTestData;
+	FTutorialStepsData Data;
+	if (!LoadDemo(*this, Data))
+	{
+		return false;
+	}
+	const FTutorialStep* Wire = Data.FindStep(TEXT("A4_tripwire"));
+	TestTrue(TEXT("the wire card: the Medic-Sapper, Solo with her selected, held at the overlook, the wire spot as the target"), Wire
+		&& TutorialRules::ParseRoleFocus(Wire->Focus) == FName(TEXT("MedicSapper")) && Wire->Confine.bFreeFocus && Wire->Confine.Volume == FName(TEXT("VOL_A4_OVERLOOK"))
+		&& Wire->Confine.Until == FName(TEXT("A4_lure")) && Wire->Actions.ContainsByPredicate([](const FTutorialAction& Action) { return Action.Type == FName(TEXT("solo_focus")); })
+		&& Wire->Guide == FName(TEXT("@patrol_route")));
+	TestTrue(TEXT("role focus parse"), TutorialRules::ParseRoleFocus(TEXT("role:Engineer")) == FName(TEXT("Engineer")) && TutorialRules::ParseRoleFocus(TEXT("role:Nobody")).IsNone()
+		&& !TutorialRules::IsKnownFocus(TEXT("role:Nobody")) && TutorialRules::IsKnownFocus(TEXT("role:MedicSapper")));
+
+	// The pure judge: she is free, the others held whatever their stance (outside); inside the area they may move.
+	FTutorialConfineView View;
+	View.Spec = Wire ? Wire->Confine : FTutorialConfine();
+	View.FreeOperative = TEXT("Medic");
+	TestEqual(TEXT("the ambusher goes anywhere"), TutorialRules::JudgeConfinedMove(View, TEXT("Medic"), TEXT("stand"), false), ETutorialConfineVerdict::Allowed);
+	TestEqual(TEXT("a mate is held back"), TutorialRules::JudgeConfinedMove(View, TEXT("Engineer"), TEXT("prone"), false), ETutorialConfineVerdict::HeldBack);
+	TestEqual(TEXT("a mate may move inside the overlook"), TutorialRules::JudgeConfinedMove(View, TEXT("Engineer"), TEXT("stand"), true), ETutorialConfineVerdict::Allowed);
+	TestEqual(TEXT("verdict name"), FString(TutorialRules::ConfineVerdictName(ETutorialConfineVerdict::HeldBack)), FString(TEXT("held_back")));
+
+	FTutorialStateMachine Machine;
+	Machine.FocusSubjectProvider = [](FName) { return FName(TEXT("Medic")); };
+	bool bRouteInLevel = true;
+	Machine.SpotProvider = [&bRouteInLevel](FName Spot, FName) { return bRouteInLevel && Spot == FName(TEXT("@patrol_route")); };
+	Machine.VolumeProvider = [](FName VolumeId) { return VolumeId == FName(TEXT("VOL_A4_OVERLOOK")); };
+	Machine.Load(Data);
+	Machine.RegisterVolumeBeat(TEXT("VOL_A4_OVERLOOK"), TEXT("A4"));
+	IntoTheField(Machine);
+	Machine.HandleVolume(TEXT("VOL_A4_OVERLOOK"), NAME_None, TEXT("A4"), TEXT("Medic"));
+	Settle(Machine);
+	Machine.HandleCommand(PlayerCommands::ToggleVisionCones);
+	Settle(Machine);
+	Machine.HandleCommand(PlayerCommands::PosturePassive);
+	Settle(Machine);
+	FTutorialConfineView Held;
+	TestTrue(TEXT("the wire card holds the squad at the overlook, the Medic-Sapper free"), Machine.GetState(TEXT("A4_tripwire")) == ETutorialStepState::Active
+		&& Machine.GetActiveConfine(Held) && Held.Owner == FName(TEXT("A4_tripwire")) && Held.FreeOperative == FName(TEXT("Medic")));
+	FTutorialGuide Guide = Machine.GetGuide();
+	TestTrue(TEXT("her target: the wire spot on the patrol route"), Guide.Kind == ETutorialGuideKind::Spot && Guide.Id == FName(TEXT("@patrol_route")));
+	bRouteInLevel = false;
+	TestTrue(TEXT("no patrol route in the level: the overlook (the place reached last)"), Machine.GetGuide().Id == FName(TEXT("VOL_A4_OVERLOOK")));
+	bRouteInLevel = true;
+	Machine.HandleCommand(PlayerCommands::DeployTripwire);
+	Settle(Machine);
+	TestTrue(TEXT("part 1 waits - still held"), Machine.GetState(TEXT("A4_trap_wait")) == ETutorialStepState::Active && Machine.IsConfined());
+	TestEqual(TEXT("the wait: back to the overlook"), Machine.GetGuide().Id, FName(TEXT("VOL_A4_OVERLOOK")));
+	Machine.HandleEvent(GameplayEvents::TripwireTriggeredByEnemy, TEXT("BP_Enemy_Frostbitten_C_3"));
+	Settle(Machine);
+	TestTrue(TEXT("part 2: the lure - still held"), Machine.GetState(TEXT("A4_lure")) == ETutorialStepState::Active && Machine.IsConfined());
+	Machine.HandleEvent(GameplayEvents::LureHeard, TEXT("BP_Enemy_Hound_C_3"));
+	TestTrue(TEXT("the lure done: the hold is released"), Machine.GetState(TEXT("A4_lure")) == ETutorialStepState::Completed && !Machine.IsConfined());
+
+	// A fight releases the hold at once (the runtime's UnlockAll / ReleaseConfines).
+	FTutorialStateMachine Fight;
+	Fight.FocusSubjectProvider = Machine.FocusSubjectProvider;
+	Fight.Load(Data);
+	IntoTheField(Fight);
+	Fight.StartBeat(TEXT("A4"));
+	Settle(Fight);
+	Fight.HandleCommand(PlayerCommands::ToggleVisionCones);
+	Settle(Fight);
+	TestTrue(TEXT("held"), Fight.IsConfined());
+	TestTrue(TEXT("a fight: released"), Fight.ReleaseConfines() && !Fight.IsConfined());
+	return true;
+}
+
 // Symmetric sight (2026-10-19 b): "Prone behind cover they can't see you - but you can't see them either" - the first time someone
 // lies prone while an enemy is out of the squad's sight, from the overlook on.
 TUTORIAL_AMBUSH_TEST(FTutorialAmbushHiddenCardTest, "OutOfSightCard")

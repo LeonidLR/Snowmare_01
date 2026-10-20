@@ -106,7 +106,7 @@
     },
     "TUT_A1_HUT_ENTER": {
       "title": "GO IN",
-      "text": "Select the third operative and click inside the hut. The two at the door hold their positions."
+      "text": "Select the third operative ({key:Select.Member}) and click inside the hut: he walks in. The two at the door hold their positions."
     },
     "TUT_A1_BRIDGE_REFUSED": {
       "text": "One at a time on the bridge! The next one waits at the edge."
@@ -157,7 +157,7 @@
     },
     "TUT_A1_LOOT_OPEN": {
       "title": "SUPPLY CRATE",
-      "text": "Click the crate: the selected operative walks up and opens it."
+      "text": "Click the crate: the operative inside walks up and opens it."
     },
     "TUT_A1_LOOT_TAKE": {
       "title": "TAKE IT",
@@ -232,7 +232,7 @@
       "title": "THE APPROACH"
     },
     "OBJ_A3_OVERLOOK": {
-      "text": "Approach the complex carefully"
+      "text": "Move up to the overlook - stay low, watch for traps"
     },
     "WT_A3_01": {
       "text": "That's the complex. The PMC left in a hurry — expect mines and wires on the easy paths."
@@ -258,7 +258,7 @@
     },
     "TUT_A1_STANCE": {
       "title": "STANCE",
-      "text": "{key:Stance.Crouch} crouch, {key:Stance.Prone} prone, {key:Stance.Stand} stand. Hold Alt for the whole squad ({key:Stance.Squad.Prone}). Lower = less wind, harder to spot."
+      "text": "Change stance twice now: {key:Stance.Crouch} crouch, {key:Stance.Prone} prone, {key:Stance.Stand} stand (hold Alt for the whole squad, {key:Stance.Squad.Prone}). Lower = less wind, harder to spot."
     },
     "TUT_A1_VAULT": {
       "title": "LOW RIDGE",
@@ -266,18 +266,18 @@
     },
     "TUT_A3_FENCE": {
       "title": "LOW FENCE - STOP",
-      "text": "Too low to walk under. We go one at a time: press {key:Squad.Solo} (Solo) - the others hold their spots."
+      "text": "Too low to walk under - you crawl it, each on his own order. Press {key:Squad.Solo} (Solo): the others hold their spots while you send them one by one."
     },
     "TUT_A3_FENCE_CRAWL": {
-      "title": "ONE BY ONE ({progress} / {count} through)",
-      "text": "Select an operative ({key:Select.Member}), go prone ({key:Stance.Prone}) and click beyond the gap: he crawls under. The next one goes when he is through."
+      "title": "UNDER THE FENCE ({progress} / {count} through)",
+      "text": "For each operative: select him ({key:Select.Member}), go prone ({key:Stance.Prone}) and click beyond the gap - he crawls under. Any order, at his own pace; several may crawl at once."
     },
     "TUT_A3_ONE_BY_ONE": {
-      "text": "Not yet - one by one."
+      "text": "Not yet - each operative crosses the fence and takes his own cover first."
     },
     "TUT_A3_COVER_EACH": {
       "title": "TAKE COVER ONE BY ONE ({progress} / {count} in cover)",
-      "text": "Stay in Solo. Each one has his own spot - the rings: Medic-Sapper behind the tall slab (blue), Commander at the middle wall (red), Engineer behind the long wall in front (orange). Select him and click the wall at his ring."
+      "text": "Stay in Solo. Each one has his own spot - the rings: Medic-Sapper behind the tall slab (blue), Commander at the middle wall (red), Engineer behind the long wall in front (orange). Select him ({key:Select.Member}) and click the wall at his ring."
     },
     "TUT_A6_COVER": {
       "title": "COVER",
@@ -289,7 +289,7 @@
     },
     "TUT_A3_PEEK": {
       "title": "CHECK WHAT'S AHEAD",
-      "text": "Peek around the corner and check what's ahead. Medic-Sapper: in cover behind the slab, click the END of the wall ({key:Cover.CornerPeek}) - he leans out, rifle up; whatever his view cone covers is spotted - mines included, one by one."
+      "text": "Peek around the corner and check what's ahead. Medic-Sapper: in cover behind the slab, click the END of the wall ({key:Cover.CornerPeek}) - she leans out, rifle up; whatever her view cone covers is spotted - mines included, one by one."
     },
     "OBJ_A6_SQUAD_COVER": {
       "text": "Put every operative into cover"
@@ -335,26 +335,26 @@
       "text": "Press {key:View.VisionCones} to show the enemies' vision cones on the ground. Stay out of them — prone you are much harder to spot."
     },
     "TUT_A4_TRIPWIRE": {
-      "title": "AMBUSH",
-      "text": "Open the inventory ({key:Inventory.Open}) and rig a tripwire across the patrol's path: click anchor A, then anchor B. Costs two grenades."
+      "title": "AMBUSH - {focus} ALONE",
+      "text": "{focus} sets the ambush; the other two hold the overlook as fire support. She is selected (Solo): open the inventory ({key:Inventory.Open}), choose the tripwire and click anchor A, then anchor B across the patrol's path - the marker shows the nearest point of the route. Costs two grenades."
     },
     "TUT_A4_HIDDEN": {
       "title": "OUT OF SIGHT",
       "text": "Prone behind cover they can't see you - but you can't see them either. Peek ({key:Cover.CornerPeek}) or rise ({key:Stance.Crouch} / {key:Stance.Stand}) to look."
     },
     "OBJ_A4_TRAP": {
-      "text": "Wait until the patrol walks into the wire"
+      "text": "{focus}: back behind the low cover - wait until the patrol walks into the wire"
     },
     "WT_A4_04": {
       "text": "That's one. The other one is still out there."
     },
     "TUT_A4_LURE": {
-      "title": "LURE",
-      "text": "Whistle {key:Stealth.Whistle} from cover to call him to you, or throw a stone {key:Stealth.Throw} to send him where you want. A whistle carries about 12 m (less through cover): from here a stone near his path works best. Only while they have not spotted you."
+      "title": "LURE - {focus}",
+      "text": "Now the other one. {focus}: from behind the low cover at the overlook throw a stone {key:Stealth.Throw} near his path - he goes to the noise. A whistle {key:Stealth.Whistle} calls him to you (about 12 m, less through cover). Only while they have not spotted you."
     },
     "TUT_A4_AMBUSH": {
-      "title": "AMBUSH",
-      "text": "He's coming to check the noise. Switch to AGGRESSIVE (Alt + {key:Posture.Aggressive}): the squad opens fire the moment he is in sight - or Ctrl+click him yourself."
+      "title": "AMBUSH - OPEN FIRE",
+      "text": "He's coming to check the noise. The squad is free again - the two at the overlook are your fire support. Switch to AGGRESSIVE (Alt + {key:Posture.Aggressive}): everyone opens fire the moment he is in sight - or Ctrl+click him yourself."
     },
     "TUT_MEDKIT": {
       "title": "MEDKIT",

@@ -175,10 +175,10 @@ bool FTutorialDemoFileTest::RunTest(const FString&)
 	TestTrue(TEXT("rev 5i: A3 low fence: stop + Solo first (held at the fence)"), Fence && Fence->Trigger.Volume == FName(TEXT("VOL_A3_FENCE"))
 		&& Fence->Confine.Volume == FName(TEXT("VOL_A3_FENCE")) && Fence->Confine.bStop && Fence->Complete.Conditions.Num() == 1
 		&& Fence->Complete.Conditions[0].Stat == FName(TEXT("squad_solo")) && Fence->Lock.Contains(TEXT("Squad.Regroup")));
-	TestTrue(TEXT("rev 5i: then one by one: every operative crawls under (CrawlGapPassed x3 distinct), prone, one at a time"), Crawl
+	TestTrue(TEXT("rev 5i: then one by one: every operative crawls under (CrawlGapPassed x3 distinct), prone, each on his own order"), Crawl
 		&& Crawl->Complete.bDistinctSubjects && Crawl->Complete.Event == TEXT("CrawlGapPassed") && Crawl->Complete.Count == 3
 		&& Crawl->Trigger.Step == FName(TEXT("A3_fence")) && Crawl->Confine.ExitStance == FName(TEXT("prone"))
-		&& Crawl->Confine.ExitEvent == TEXT("CrawlGapPassed") && !Crawl->Keys.Contains(TEXT("Stance.Squad.Prone")));
+		&& Crawl->Confine.ThroughEvent == TEXT("CrawlGapPassed") && !Crawl->Keys.Contains(TEXT("Stance.Squad.Prone")));
 	TestTrue(TEXT("rev 5i: no second 'too low' line (the fence posts its own)"), !Data.FindStep(TEXT("A3_fence_refused")));
 	const FTutorialStep* Cones = Data.FindStep(TEXT("A4_cones"));
 	TestTrue(TEXT("A4 vision-cone toggle card (View.VisionCones)"), Cones && Cones->Complete.Commands.Contains(PlayerCommands::ToggleVisionCones.ToString()));
@@ -234,10 +234,10 @@ bool FTutorialTriggerCompleteTest::RunTest(const FString&)
 	Machine.HandleCommand(PlayerCommands::SoloOn);
 	TestEqual(TEXT("B completes card1"), Machine.GetState(TEXT("card1")), ETutorialStepState::Completed);
 	TestEqual(TEXT("card2 waits for the breather"), Machine.GetState(TEXT("card2")), ETutorialStepState::Queued);
-	Machine.Tick(1.f);
+	Machine.Tick(0.5f);
 	TestEqual(TEXT("still breathing"), Machine.GetActiveCard(), FName());
-	Machine.Tick(0.6f);
-	TestEqual(TEXT("card2 shown after 1.5 s"), Machine.GetActiveCard(), FName(TEXT("card2")));
+	Machine.Tick(0.4f);
+	TestEqual(TEXT("card2 shown after the 0.8 s breather (2026-10-20 pacing, was 1.5 s)"), Machine.GetActiveCard(), FName(TEXT("card2")));
 	Machine.HandleCommand(PlayerCommands::StanceCrouch);
 	TestEqual(TEXT("count 1 of 2"), Machine.GetProgress(TEXT("card2")), 1);
 	Machine.HandleCommand(PlayerCommands::SquadStanceProne);

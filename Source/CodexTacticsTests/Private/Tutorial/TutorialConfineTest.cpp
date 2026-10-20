@@ -67,7 +67,7 @@ bool FTutorialConfineParseTest::RunTest(const FString&)
 	const TCHAR* Json = TEXT(R"JSON({ "id": "p", "beats": [ { "id": "A" } ], "steps": [
 		{ "id": "s", "beat": "A", "kind": "hint_card", "trigger": { "type": "manual" }, "complete": { "commands": ["Squad.Solo"] },
 		  "confine": { "volume": "V", "allow": ["W", "X"], "until": "t", "stop": true, "span": true, "stance": "crouched",
-		    "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } } },
+		    "exit": { "stance": "prone", "through": "CrawlGapPassed" } } },
 		{ "id": "t", "beat": "A", "kind": "hint_card", "trigger": { "type": "manual" }, "complete": { "commands": ["Squad.Solo"] } } ] })JSON");
 	if (!TutorialConfineTestData::ParseConfineSteps(*this, Json, Data))
 	{
@@ -76,7 +76,7 @@ bool FTutorialConfineParseTest::RunTest(const FString&)
 	const FTutorialConfine& Confine = Data.Steps[0].Confine;
 	TestTrue(TEXT("every key read"), Confine.IsSet() && Confine.Volume == FName(TEXT("V")) && Confine.Allow == TutorialConfineTestData::Names({ TEXT("W"), TEXT("X") })
 		&& Confine.Until == FName(TEXT("t")) && Confine.bStop && Confine.bSpan && Confine.Stance == FName(TEXT("crouch"))
-		&& Confine.ExitStance == FName(TEXT("prone")) && Confine.ExitEvent == TEXT("CrawlGapPassed") && Confine.HasExit());
+		&& Confine.ExitStance == FName(TEXT("prone")) && Confine.ThroughEvent == TEXT("CrawlGapPassed") && Confine.HasExit());
 	TestFalse(TEXT("a step without confine has none"), Data.Steps[1].Confine.IsSet());
 
 	TArray<FString> Warnings;
@@ -116,16 +116,16 @@ bool FTutorialConfineJudgeTest::RunTest(const FString&)
 
 	FTutorialConfineView Fence = Hold;
 	Fence.Spec.ExitStance = Prone;
-	Fence.Spec.ExitEvent = TEXT("CrawlGapPassed");
+	Fence.Spec.ThroughEvent = TEXT("CrawlGapPassed");
 	TestEqual(TEXT("fence: standing inside allowed"), JudgeConfinedMove(Fence, TEXT("Op1"), Stand, true), ETutorialConfineVerdict::Allowed);
 	TestEqual(TEXT("fence: crouched past the fence refused (exit stance)"), JudgeConfinedMove(Fence, TEXT("Op1"), Crouch, false), ETutorialConfineVerdict::ExitStance);
 	TestEqual(TEXT("fence: prone past the fence, nobody crossing: allowed"), JudgeConfinedMove(Fence, TEXT("Op1"), Prone, false), ETutorialConfineVerdict::Allowed);
-	Fence.ExitHolder = TEXT("Op1");
-	TestEqual(TEXT("fence: Op1 crossing - Op2 must wait"), JudgeConfinedMove(Fence, TEXT("Op2"), Prone, false), ETutorialConfineVerdict::NotYourTurn);
+	// 2026-10-20 (game designer): no queue - Op1 and Op2 may crawl under at the same time, each on his own order.
+	TestEqual(TEXT("fence: Op1 crossing - Op2 prone may go too"), JudgeConfinedMove(Fence, TEXT("Op2"), Prone, false), ETutorialConfineVerdict::Allowed);
 	TestEqual(TEXT("fence: Op1 may go on"), JudgeConfinedMove(Fence, TEXT("Op1"), Prone, false), ETutorialConfineVerdict::Allowed);
 	Fence.Passed.Add(TEXT("Op3"));
 	TestEqual(TEXT("fence: one who got through moves freely, any stance"), JudgeConfinedMove(Fence, TEXT("Op3"), Stand, false), ETutorialConfineVerdict::Allowed);
-	TestEqual(TEXT("verdict names"), FString(ConfineVerdictName(ETutorialConfineVerdict::NotYourTurn)), FString(TEXT("not_your_turn")));
+	TestEqual(TEXT("verdict names"), FString(ConfineVerdictName(ETutorialConfineVerdict::ExitStance)), FString(TEXT("exit_stance")));
 	return true;
 }
 
@@ -209,47 +209,48 @@ bool FTutorialConfineFlowTest::RunTest(const FString&)
 	return true;
 }
 
-TUTORIAL_CONFINE_TEST(FTutorialConfineExitTurnTest, "ExitTurn")
-bool FTutorialConfineExitTurnTest::RunTest(const FString&)
+TUTORIAL_CONFINE_TEST(FTutorialConfineThroughTest, "FenceEachOnHisOwn")
+bool FTutorialConfineThroughTest::RunTest(const FString&)
 {
+	// 2026-10-20 (game designer): the low fence without the "one at a time" queue - each prone operative crawls under on his own order, in
+	// any order and at the same time; one who got through ("exit.through") moves on freely; three through complete the lesson.
 	using namespace TutorialConfineTestData;
 	const TCHAR* Json = TEXT(R"JSON({ "id": "fence", "start_beat": "A3", "beats": [ { "id": "A3" } ], "steps": [
 		{ "id": "crawl", "beat": "A3", "kind": "hint_card", "trigger": { "type": "volume", "volume": "FENCE" },
-		  "confine": { "volume": "FENCE", "stop": true, "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } },
+		  "confine": { "volume": "FENCE", "stop": true, "exit": { "stance": "prone", "through": "CrawlGapPassed" } },
 		  "complete": { "event": "CrawlGapPassed", "count": 3, "distinct_operatives": true } } ] })JSON");
 	FTutorialStepsData Data;
 	if (!ParseConfineSteps(*this, Json, Data))
 	{
 		return false;
 	}
+	TArray<FString> Warnings;
+	FString Error;
+	FTutorialStepsData Old;
+	TutorialRules::ParseSteps(TEXT(R"JSON({ "steps": [ { "id": "s", "text_id": "TUT_X", "complete": { "commands": ["Squad.Solo"] },
+		"confine": { "volume": "V", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } } } ] })JSON"), Old, Warnings, Error);
+	TestTrue(TEXT("the removed \"one_at_a_time\" key is warned about"), Warnings.ContainsByPredicate([](const FString& Warning) { return Warning.Contains(TEXT("one_at_a_time")); }));
 	FTutorialStateMachine Machine;
 	Machine.Load(Data);
 	Machine.StartBeat(TEXT("A3"));
 	Machine.HandleVolume(TEXT("FENCE"), NAME_None, NAME_None, TEXT("Op1"));
 	FTutorialConfineView View;
-	TestTrue(TEXT("held at the fence"), Machine.GetActiveConfine(View) && View.Spec.bStop && View.ExitHolder.IsNone());
-	Machine.TakeConfineExitTurn(TEXT("Op1"));
-	Machine.TakeConfineExitTurn(TEXT("Op2"));
+	TestTrue(TEXT("held at the fence"), Machine.GetActiveConfine(View) && View.Spec.bStop && View.Passed.IsEmpty());
+	TestTrue(TEXT("two prone operatives may go at once"), TutorialRules::JudgeConfinedMove(View, TEXT("Op1"), TEXT("prone"), false) == ETutorialConfineVerdict::Allowed
+		&& TutorialRules::JudgeConfinedMove(View, TEXT("Op2"), TEXT("prone"), false) == ETutorialConfineVerdict::Allowed);
+	TestEqual(TEXT("standing: go prone first"), TutorialRules::JudgeConfinedMove(View, TEXT("Op3"), TEXT("stand"), false), ETutorialConfineVerdict::ExitStance);
+	Machine.HandleEvent(TEXT("CrawlGapPassed"), TEXT("Op2")); // the second one is through first
 	Machine.GetActiveConfine(View);
-	TestEqual(TEXT("the first one ordered past takes the turn"), View.ExitHolder, FName(TEXT("Op1")));
-	TestEqual(TEXT("Op2 must wait"), TutorialRules::JudgeConfinedMove(View, TEXT("Op2"), TEXT("prone"), false), ETutorialConfineVerdict::NotYourTurn);
-	Machine.HandleEvent(TEXT("CrawlGapPassed"), TEXT("Op1"));
-	Machine.GetActiveConfine(View);
-	TestTrue(TEXT("Op1 through: the turn is free, he is listed"), View.ExitHolder.IsNone() && View.Passed.Contains(FName(TEXT("Op1"))));
-	Machine.TakeConfineExitTurn(TEXT("Op2"));
-	Machine.ReturnConfineExitTurn(TEXT("Op2"));
-	Machine.GetActiveConfine(View);
-	TestTrue(TEXT("Op2 called back into the area gives the turn back"), View.ExitHolder.IsNone());
-	Machine.TakeConfineExitTurn(TEXT("Op2"));
+	TestTrue(TEXT("Op2 through: listed, free to stand and move on"), View.Passed.Contains(FName(TEXT("Op2")))
+		&& TutorialRules::JudgeConfinedMove(View, TEXT("Op2"), TEXT("stand"), false) == ETutorialConfineVerdict::Allowed);
 	FTutorialProgress Loaded;
 	TutorialRules::LoadProgress(*TutorialRules::SaveProgress(Machine.ExportProgress(), true), Loaded);
 	FTutorialStateMachine Restored;
 	Restored.Load(Data);
 	Restored.ImportProgress(Loaded);
 	FTutorialConfineView RestoredView;
-	TestTrue(TEXT("the turn and who got through survive a save"), Restored.GetActiveConfine(RestoredView) && RestoredView.ExitHolder == FName(TEXT("Op2"))
-		&& RestoredView.Passed == TArray<FName>{ FName(TEXT("Op1")) });
-	Machine.HandleEvent(TEXT("CrawlGapPassed"), TEXT("Op2"));
+	TestTrue(TEXT("who got through survives a save"), Restored.GetActiveConfine(RestoredView) && RestoredView.Passed == TArray<FName>{ FName(TEXT("Op2")) });
+	Machine.HandleEvent(TEXT("CrawlGapPassed"), TEXT("Op1"));
 	Machine.HandleEvent(TEXT("CrawlGapPassed"), TEXT("Op3"));
 	TestEqual(TEXT("three through: the lesson completes"), Machine.GetState(TEXT("crawl")), ETutorialStepState::Completed);
 	TestFalse(TEXT("and the squad is free"), Machine.IsConfined());

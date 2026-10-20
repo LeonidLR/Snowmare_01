@@ -481,8 +481,8 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestTrue(TEXT("A0_radio_hq: HQ radio at the beat start, locks nothing (talk on the move)"), Radio && Radio->Kind == ETutorialStepKind::Radio
 		&& Radio->Trigger.Type == ETutorialTriggerType::BeatStart && Radio->Lock.IsEmpty() && Radio->Lines.Num() >= 4 && Radio->Lines[0].Speaker == TEXT("HQ"));
 	const FTutorialStep* Pan = Data.FindStep(TEXT("A0_cam_pan"));
-	TestTrue(TEXT("the camera lesson starts WITH the radio (beat start + 2 s), independent of it"), Pan && Pan->Trigger.Type == ETutorialTriggerType::BeatStart
-		&& Pan->Trigger.DelaySeconds > Radio->Trigger.DelaySeconds && Pan->Unlock.IsEmpty());
+	TestTrue(TEXT("the camera lesson starts WITH the radio (beat start + 1 s, 2026-10-20 pacing), independent of it"), Pan && Pan->Trigger.Type == ETutorialTriggerType::BeatStart
+		&& Pan->Trigger.DelaySeconds >= Radio->Trigger.DelaySeconds && Pan->Unlock.IsEmpty());
 	const FTutorialStep* Walk = Data.FindStep(TEXT("A0_move"));
 	TestTrue(TEXT("rev 5c: 'click to walk' right after the camera chain (no longer waits for the radio), done on a move order"), Walk
 		&& Walk->Trigger.Type == ETutorialTriggerType::AfterStep && Walk->Trigger.AfterSteps == TArray<FName>{ FName(TEXT("A0_cam_zoom")) }
@@ -866,11 +866,10 @@ bool FTutorialDemoFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("rev 5i: Solo on: the stop card done"), Machine.GetState(TEXT("A3_fence")), ETutorialStepState::Completed);
 	TestEqual(TEXT("rev 5i: then one by one"), Machine.GetActiveCard(), FName(TEXT("A3_fence_crawl")));
 	FTutorialConfineView Crossing;
-	TestTrue(TEXT("rev 5i: the crossing is held, prone one at a time"), Machine.GetActiveConfine(Crossing) && Crossing.Spec.ExitStance == FName(TEXT("prone")));
+	TestTrue(TEXT("rev 5i: the crossing is held, prone (each on his own)"), Machine.GetActiveConfine(Crossing) && Crossing.Spec.ExitStance == FName(TEXT("prone")));
 	for (const TCHAR* Op : { TEXT("Op1"), TEXT("Op2"), TEXT("Op3") })
 	{
-		Machine.TakeConfineExitTurn(Op);
-		Machine.HandleEvent(TEXT("CrawlGapPassed"), Op);
+		Machine.HandleEvent(TEXT("CrawlGapPassed"), Op); // 2026-10-20: each on his own order, no queue
 	}
 	TestEqual(TEXT("three crawl-throughs complete the crossing card"), Machine.GetState(TEXT("A3_fence_crawl")), ETutorialStepState::Completed);
 	TestFalse(TEXT("rev 5i: all through: no longer held"), Machine.IsConfined());
@@ -1572,7 +1571,7 @@ bool FTutorialArrivalCardsAtOnceTest::RunTest(const FString&)
 	TestEqual(TEXT("rev 5i: the Solo card shows at once"), Hut.GetActiveCard(), FName(TEXT("A1_solo")));
 	TestFalse(TEXT("sprint stays unlocked"), Hut.IsCommandLocked(PlayerCommands::Sprint));
 
-	// A card the player completes still gets the 1.5 s breather before the next one (UX brief).
+	// A card the player completes still gets the breather before the next one (UX brief; 0.8 s since the 2026-10-20 pacing pass).
 	FTutorialStateMachine Breather;
 	Breather.Load(Data);
 	Breather.StartBeat(TEXT("A1"));

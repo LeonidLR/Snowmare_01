@@ -27,6 +27,13 @@ namespace BridgeRules
 	/** Position along the span (the volume's local X, cm) of a world point. */
 	CODEXTACTICS_API float SpanCoordinate(const FTransform& BridgeToWorld, const FVector& WorldPoint);
 
+	/**
+	 * 2026-10-20 (the tutorial's "squad_not_across.<volume>"): Point is ACROSS the bridge from NearPoint - on the other side of the span's
+	 * middle and beyond its far end (|coordinate| > HalfLengthCm: off the span, not standing on it), whatever way he got there. False when
+	 * NearPoint lies on the middle line (no side to compare).
+	 */
+	CODEXTACTICS_API bool IsAcrossFrom(const FTransform& BridgeToWorld, float HalfLengthCm, const FVector& NearPoint, const FVector& Point);
+
 	/** He left on the other side from where he stepped on (both coordinates along the span, cm): a crossing, not a step back. */
 	CODEXTACTICS_API bool DidCross(float EntryCoordinate, float ExitCoordinate);
 

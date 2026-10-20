@@ -4,7 +4,7 @@
 > `TutorialRules` + `TutorialStateMachine` drive hint cards, objectives, radio lines and feed lines from `Content/Data/Tutorial/*.json`. The content of the
 > actual Demo 01 flow is in [demo01-lake](demo01-lake.md).
 >
-> **The top of this file (sections 1-16) is the authoritative reference of the steps JSON schema and the runtime semantics (current to 2026-10-19).**
+> **The top of this file (sections 1-18) is the authoritative reference of the steps JSON schema and the runtime semantics (current to 2026-10-20).**
 > The revision-by-revision notes it was distilled from are kept verbatim under [History](#history) at the end.
 >
 > Key files:
@@ -33,7 +33,7 @@ markers, feed lines, speech playback, world actions, checkpoints and telemetry. 
 
 | Rule | Detail |
 |---|---|
-| Display slots | one **hint card** at a time, then a 1.5 s breather (`CardBreatherSeconds`); up to 3 **objectives** (`MaxObjectives`); one **radio / walk_talk** speech; a **feed** step takes no slot. Queued steps are shown in the order they queued. |
+| Display slots | one **hint card** at a time, then a 0.8 s breather (`CardBreatherSeconds`; 1.5 s before the 2026-10-20 pacing pass); up to 3 **objectives** (`MaxObjectives`); one **radio / walk_talk** speech; a **feed** step takes no slot. Queued steps are shown in the order they queued. |
 | Counting before shown | Waiting and Queued steps count commands, events and volume entries too; reaching the completion there finishes the step **silently** (never shown). Hold time (`hold_s`) and timeouts run only while Active. |
 | Same input, one step | An input counts only for steps that were already running when it arrived; a follower started by that very input does not take it. |
 | Once | `"once": true` (default): never triggers again after it finished. `false`: may re-trigger after it finished (remedial hints). A running step is never re-triggered. |
@@ -44,6 +44,8 @@ markers, feed lines, speech playback, world actions, checkpoints and telemetry. 
 **When a step becomes due** (after its delay, entering Queued) these checks run in this order, the first that applies wins:
 
 1. an `after_step` follower whose beat is already over -> dropped (a card: precredited if the history satisfies it, else skipped; other kinds skipped);
+   since 2026-10-20 (pacing) also a `condition`-triggered **hint card** of a beat that is over (the A2 remedial heat pack card when the cold
+   rises at the A3 fence would stand in front of the fence lesson); event / volume / manual remedial cards of earlier beats still show;
 2. `cancel_on.step` already finished -> cancelled (Skipped);
 3. step `condition` does not hold -> Skipped silently;
 4. `precredit` from the command history satisfied -> Completed (precredited, not shown);
@@ -110,13 +112,15 @@ Beat-less steps are never "earlier": a later beat never drops them.
 | `condition` | clause object or array (AND) | [] | Gate checked when the step becomes due (section 2, step 3); for a `condition` trigger it is also the trigger. |
 | `lock` / `unlock` | string or array | [] | Applied once per trigger: when the step is shown, or when it finishes without ever showing (section 7). |
 | `action` / `actions` | object or array | [] | World actions run when the step is **shown** (section 10). Both keys may be used; they are merged. |
-| `focus` | `coldest_operative` / `wounded_operative` | none | The operative the step is about (section 10). |
+| `focus` | `coldest_operative` / `wounded_operative` / `role:<Commander \| Engineer \| MedicSapper \| Recruit>` | none | The operative the step is about (section 10). |
 | `once` | bool | true | See section 2. |
 | `skippable` | bool | true | The card's Skip button / `Codex.Tutorial.Skip` may skip it while running. |
 | `blocking` | bool | false | Forced false (warning when true): the tutorial never blocks the game. |
 | `precredit` | bool | true | Section 8. |
 | `cancel_on` | object | none | Section 11. |
 | `confine` | object | none | Section 12. |
+| `guide` | volume id / step id / `"none"` | none | Section 17: where this step sends the squad while it is shown (a volume = a guide beacon on its box; a step id = that step's markers). `"none"`: the step never names the current target. |
+| `beyond` | clause object or array (AND) | [] | Section 17: the squad is already past this step's place (e.g. all across the crevasse) - the step is passed, the route moves past its place. |
 
 | Kind | Slot | Shows | Ends on its own |
 |---|---|---|---|
@@ -250,13 +254,17 @@ neither comparator: error. Stats (`UTutorialSubsystem::GetConditionStat`, "livin
 | `enemies_unseen` | living enemies no operative sees now (0 while the squad's sight is off) |
 | `traps_spotted.<tag>` | traps with `SpotEventTag` = tag the squad knows of (spotted or dealt with) |
 | `squad_not_low_in.<volume>` | living members NOT crouched / prone within 3 m of that volume's box (`below 1` = all are down there) |
+| `squad_not_across.<volume>` | living members NOT across the bridge (`ABridgeCrossingVolume`) nearest to that volume: still on the volume's side of the span's middle, or on the span (`BridgeRules::IsAcrossFrom`); `below 1` = the whole squad is on the far side, however it got there. No bridge / no such volume: every living member counts. |
 
 **Actions** (run when the step is SHOWN; a walk_talk waits for the speech slot):
 `{"type": "cold_bump", "amount": 20, "min_level": 42}` - every squad member's cold + amount, raised to at least `min_level` (0-100; a cold shock, not
-scaled by the level's cold rate); `{"type": "set_posture", "posture": "passive" | "defensive" | "aggressive"}` - the whole squad's fire posture
+scaled by the level's cold rate); `{"type": "solo_focus"}` (2026-10-20) - Solo ON and the step's focus operative selected (he alone takes the orders);
+`{"type": "set_posture", "posture": "passive" | "defensive" | "aggressive"}` - the whole squad's fire posture
 (overrides cleared; missing / unknown posture: error). Unknown type: error.
 
-**Focus:** `coldest_operative` = the living member with the most cold, chosen when the step is shown; `wounded_operative` = the living member with the
+**Focus:** `role:<EOperativeRole>` (2026-10-20, the A4 ambusher) = the living operative of that role, chosen when the step is TRIGGERED (so a
+confinement's `free` operative is known at once), else the leader; a floating "<NAME>: YOUR TASK" over him when shown; `{focus}` also works in
+objective texts. `coldest_operative` = the living member with the most cold, chosen when the step is shown; `wounded_operative` = the living member with the
 lowest health share, chosen when the step starts running (so a medkit on him counts while the card queues) and re-chosen when shown if he is gone. The
 card shows him (`FTutorialCardView::FocusOperative / FocusName`), a floating line over him (`COLDEST` / `WOUNDED`), and `{focus}` in the card title /
 body and feed lines becomes his name (fallback "the coldest / wounded operative"). `"complete": {"subject": "focus"}` counts only his events.
@@ -277,7 +285,7 @@ had already finished when this step becomes due, it is cancelled immediately. It
 
 ```json
 "confine": { "volume": "VOL_A1_HUT_APPROACH", "allow": ["VOL_A1_DOOR_L", "VOL_A1_DOOR_R", "VOL_A1_HUT"], "until": "A1_hut_enter",
-             "stop": true, "span": true, "stance": "crouch", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } }
+             "stop": true, "span": true, "stance": "crouch", "exit": { "stance": "prone", "through": "CrawlGapPassed" } }
 ```
 
 | Key | Type | Default | Meaning |
@@ -289,7 +297,8 @@ had already finished when this step becomes due, it is cancelled immediately. It
 | `span` | bool | false | The allowed area is one box: the bounding box of the holding + open allowed volumes. |
 | `stance` | `crouch` / `prone` | none | Every move order needs the ordered operative that low (crouch = crouched or prone). An operative in cover counts as low enough (shimmy / peek). |
 | `exit.stance` | `crouch` / `prone` | none | Orders OUTSIDE the area are allowed for an operative in this stance. |
-| `exit.one_at_a_time` | event pattern | "" | Only one operative at a time may be outside; his turn ends when this event names him (he is then free to move on). |
+| `exit.through` | event pattern | "" | This event names an operative who got through (e.g. `CrawlGapPassed`): from then on he moves freely, any stance. (2026-10-20: the former `exit.one_at_a_time` queue was removed - several may cross at once, each on his own order; an old file gets the unknown-key warning and no queue.) |
+| `free` | `"focus"` | none | 2026-10-20: the step's focus operative is never held (he does the lesson alone, anywhere); everyone else may move only inside the areas - an order outside is refused with "Hold here - <Name> handles it." (verdict `HeldBack`). A `free` without a step `focus`: warning. |
 
 - **Starts** when the step is triggered (before its delay; a `volume` step: the moment the squad arrives) - unless its `until` step already finished.
   One at a time: a new confinement releases the old one.
@@ -298,7 +307,8 @@ had already finished when this step becomes due, it is cancelled immediately. It
   in one of its `allow` areas counts only while it is shown.
 - **Move orders** (player clicks, cover orders, walk-ups, autonomy: `UTutorialSubsystem::CheckConfinedOrder`) are judged by
   `TutorialRules::JudgeConfinedMove`: `stance` -> destination inside (50 cm margin, 3 m height) = allowed -> no `exit` = refused -> already through =
-  allowed -> `exit.stance` -> another operative holds the turn = refused. A refusal posts one feed line per verdict per second and raises
+  allowed -> `exit.stance` (each operative on his own, no queue) (with `free`: the free operative is always allowed first; the others
+  inside = allowed, outside = `HeldBack`). A refusal posts one feed line per verdict per second and raises
   `Tutorial.Confined`; formation moves are pulled into the area instead (`ClampIntoConfinement`, 60 cm inside).
 
 ### 13. Runtime features outside the JSON
@@ -306,7 +316,8 @@ had already finished when this step becomes due, it is cancelled immediately. It
 | Feature | Behaviour |
 |---|---|
 | Texts | `FNarrativeManifest::GetTutorialText`: manifest `"tutorial"` (`title_en`, `text_en`, `radio_en`, `speaker_en`) -> a one-line `sequences` entry -> `demo_01_texts_draft.json` -> `[EN missing: <id>]`. Tokens: `{key:<CommandId>}` (all texts: its key cap), `{focus}` (card title / body, feed lines), `{progress}` / `{count}` (card title / body: counted so far / `complete.count`). |
-| Markers | `ATutorialMarkerActor`: with `StepId` shown while that step is Active, else with `BeatId` while that beat is current; role spots see section 10; `Label` drawn by the overlay; `Screen Edge Pointer` arrow off-screen. Hidden while the tutorial is inactive. |
+| Markers | `ATutorialMarkerActor`: with `StepId` shown while that step is Active, else with `BeatId` while that beat is current, and always while it is the current navigation target (section 17); role spots see section 10; `Label` drawn by the overlay; `Screen Edge Pointer` = it may carry the edge arrow when it is the current target. Hidden while the tutorial is inactive. The runtime guide beacon (`bRuntimeGuide`) is spawned by the subsystem, never placed. |
+| Current target | Section 17: ONE edge arrow (small chevron + "42 m" from the leader, `UTutorialOverlayWidget`), ONE highlighted minimap icon (`UMinimapSubsystem::BuildIcons`, `bHighlight` on an Objective icon), telemetry event `guide` when it changes. |
 | Tutorial ON / OFF | `Codex.Tutorial.Enabled` + `Saved/Tutorial/profile.json` (player setting). OFF hides everything, stops counting and unlocks everything; ON again does not re-lock. |
 | SKIP TUTORIAL | `SkipTutorial()` (button offered while the start beat runs, pause menu; confirm first): off for this run, locks + confinement released, overlay cleared, no checkpoints, normal death rules; saved (`skipped`). RESET TUTORIAL starts it again. |
 | Reset | `ResetTutorial()` / `Codex.Tutorial.Reset`: every step, lock, history and confinement forgotten; the start beat starts again. |
@@ -324,9 +335,11 @@ had already finished when this step becomes due, it is cancelled immediately. It
 | `runtime` | `{step: {progress, held_s, subjects, contributors}}` | a pending step continues its count / hold / counted operatives; contributors are restored for every step (`distinct_from`) |
 | `locks` | entries in force | as saved; an older save without `locks` rebuilds them from the beats up to the current one + the finished steps |
 | `history` | `{command: {count, held_s}}` | precredit history |
-| `confines` | `[{step, released, holder, passed}]` | the confinement in force holds again; a released one stays released |
+| `confines` | `[{step, released, passed}]` | the confinement in force holds again; a released one stays released (an older save's `holder` is ignored) |
 | `enabled` | the player setting | informational (the setting lives in `profile.json`) |
 | `volumes_fired`, `lock_hints`, `skipped` | subsystem | used-up volumes (by actor name), families that already got the "Not yet" line, SKIP TUTORIAL |
+| `route` | the furthest place reached (a volume id; 2026-10-20) | the route progress (its key is recomputed from the volume; an older save: the saved beat's start) - the current target follows from it and the finished steps |
+| `guide` | the current target (`markers:<step>` / `volume:<id>`) | informational only (it is derived again after the load; `SaveCoverageLakeSmoke` dumps it as `tutorial.guide`) |
 
 Not saved (restart after a load): trigger event counts, the first-use memory, timeouts / state timers, the card breather and the remedial cooldown,
 the chosen focus operatives, the speech line position. A save applied before the steps are loaded is kept (`DeferredProgress`) and applied when they
@@ -340,7 +353,8 @@ load; while a load is pending the tutorial does not start (no checkpoint over th
   cancel_on, confine, confine exit, line), undeclared beat, `blocking: true`, a filter without its completion, a card without completion, an empty
   `cancel_on`, no text, unknown `start_beat`.
 - `TutorialRules::ValidateSteps` (run by `LoadStepsFile`): warnings for command patterns matching no registered command (`complete.commands`,
-  `trigger.command`, beat / step `lock` / `unlock`), dotted key caps that are not registered, `subject: focus` without `focus`, `after_step` cycles.
+  `trigger.command`, beat / step `lock` / `unlock`), dotted key caps that are not registered, `subject: focus` without `focus`, `after_step` cycles,
+  `beyond` on a step without a place (the route cannot move), a `guide` naming the step itself.
 - Tests: `Schema.UnknownKeys`, `Schema.References`; the shipped file must load with **zero** warnings (`Schema.DemoFile`, `Schema.DemoFileReferences`,
   which also checks that every `text_id` / line / beat title exists in the manifest or the draft texts and every `{key:...}` token names a command).
 
@@ -371,10 +385,95 @@ load; while a load is pending the tutorial does not start (no checkpoint over th
 { "id": "fence", "beat": "A3", "trigger": { "type": "volume", "volume": "VOL_FENCE" }, "confine": { "volume": "VOL_FENCE", "stop": true },
   "complete": { "condition": { "stat": "squad_solo", "at_least": 1 } } }
 { "id": "crawl", "beat": "A3", "trigger": { "type": "after_step", "step": "fence" },
-  "confine": { "volume": "VOL_FENCE", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } },
+  "confine": { "volume": "VOL_FENCE", "exit": { "stance": "prone", "through": "CrawlGapPassed" } },
   "complete": { "event": "CrawlGapPassed", "count": 3, "distinct_operatives": true } }
 { "id": "postures", "beat": "A4", "action": { "type": "set_posture", "posture": "defensive" }, "kind": "radio", "lines": [ { "text_id": "WT_P" } ] }
 ```
+
+### 17. The current navigation target (`"guide"`) and `"beyond"` (2026-10-20)
+
+**Rule: at any moment of the tutorial there is exactly ONE current navigation target** (`FTutorialStateMachine::GetGuide`, resolved by
+`UTutorialSubsystem::GetGuideView`, refreshed every tick). It is derived from the data, never stored as a step state, so the next target
+appears the moment an action completes. Priority, first match wins:
+
+1. **The shown hint card** (the lesson in hand): its `guide` (a volume or another step's markers), else its own markers, else the volume it
+   completes in (`complete.volume`, then `complete.in_volume`). Never filtered by the route (it is the lesson of the moment).
+2. **Shown objectives / talks** that name a spot: a `guide`, else their own markers - **only if their place is not behind the route
+   progress**; several: the nearest place on the route first (no place: after the placed ones, file order). An objective without markers /
+   guide (`A1_obj_camp`) names nothing here: its volume is a route place (rule 3).
+3. **The route**: the next place ahead = the smallest route key beyond the progress (section 9: the volumes the steps use and the
+   beat volumes) that the level has (`VolumeProvider`) and that something still uses (an unfinished step names it, or it starts a later
+   beat) - the next beacon, the next beat's start volume. A place whose steps are all done is skipped.
+4. **The place reached last** when the data names nothing further (A4: the overlook - hold there).
+
+`"guide": "none"` on a step: it names nothing (the next rule decides). `"guide": "@patrol_route"` (a **spot** the runtime computes,
+`ETutorialGuideKind::Spot`): the point of the level's patrol routes (`APatrolRouteActor` waypoints, a loop closed) nearest to the step's focus
+operative (else the leader) - where the A4 ambusher rigs the wire; no patrol route in the level: the automatic choice. Unknown `@` spots: warning. An explicit `guide` the level cannot show (no such volume /
+markers) falls back to the automatic choice (the log says `NOT in the level`).
+
+**Route progress** (`GetRouteProgressKey`): the furthest place reached - an arrival (`HandleVolume`, not while a confinement holds), a
+step passed by `beyond` (its place), at least the current beat's start. Never goes back. Saved as `"route"` (the volume id).
+
+**Places behind never call the squad back:**
+- When the route moves past a point (section 9), a RUNNING objective - or any step with a `guide` - whose place lies behind is finished
+  (objective: Completed, others: Skipped; `bPassed`, telemetry `passed`), not only "go to X" steps. A step's **place** = the first of its
+  `guide` volume, `complete.volume`, `complete.in_volume`, `trigger.volume` that has a route point. Example: `A1_bridge` (triggered at
+  `VOL_A1_BEACON2`, completed by `BridgeCrossed` x3) ends when the squad reaches the hut approach.
+- **`"beyond"`**: clauses (the condition syntax) polled every tick (not while confined) for every unfinished step of the current or an
+  earlier beat (beat-less: always); when they hold the step is passed - never started: Skipped (`bPassed`, its unlocks apply, its
+  followers fire), running: an objective Completed, others Skipped - and the route moves PAST its place (`NoteRouteProgress` +
+  `PassRouteBefore(place + 1)`: what waits at that place is passed too). `A1_bridge`: `"beyond": {"stat": "squad_not_across.VOL_A1_BEACON2",
+  "below": 1}` - all three across the crevasse, however they got there.
+- A finished once-step never shows again, so its markers never come back; the target is never a place behind the progress (rules 2/3).
+
+**What the player sees** (`UTutorialSubsystem::RefreshGuide`): a markers target -> the nearest of that step's markers to the leader (a
+taken role spot does not count) is shown (also when its step is not active, e.g. a `guide` naming another step); a volume target -> ONE
+runtime guide beacon (`ATutorialMarkerActor` with `bRuntimeGuide`, spawned once, moved to the volume's ground point: a trace down from
+the box top, else its bottom). Exactly one edge arrow (only the target's, when off-screen; `ATutorialMarkerActor::bScreenEdgePointer`)
+with the distance in metres, and the target's minimap icon drawn larger with a white frame. Other shown markers stay as rings without
+an arrow.
+
+**Pure helpers** (unit-tested): `TutorialRules::ProjectToView` (the camera's perspective view - the same rule headless, a 1920 x 1080 view,
+so smokes check the arrow), `ComputeEdgePointer`, `FormatGuideDistance`; `BridgeRules::IsAcrossFrom`. Tests `CodexTactics.Tutorial.Guide.*`
+(`Parse`, `NextTargetFromRoute`, `MarkersBehindDropped`, `LakeBridgeSkipped`, `SaveRoundTrip`, `EdgePointer`, `BridgeAcross`); smokes
+`TutorialSmoke` stages 140-153 (the guide course), `TutorialSaveSmoke` (the target survives F5 / F9), `SaveCoverageLakeSmoke` (`tutorial.guide`).
+
+```json
+{ "id": "A1_bridge", "beat": "A1", "kind": "objective", "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
+  "beyond": [ { "stat": "squad_not_across.VOL_A1_BEACON2", "below": 1 } ], "complete": { "event": "BridgeCrossed", "count": 3, "distinct_operatives": true } }
+{ "id": "A3_low", "beat": "A3", "guide": "VOL_A3_RIDGE", "trigger": { "type": "volume", "volume": "VOL_A3_APPROACH" }, ... }
+```
+
+### 18. Pacing rules (2026-10-20, game designer: "there's no flow - I keep waiting for the next instruction")
+
+Every steps file follows these; `CodexTactics.Tutorial.Flow.Pacing` checks the demo file with a scripted player (reaction 1 s, 6 s to walk to a
+target) and logs the table (handover = seconds from a completed card to the next card; no instruction = no card, objective or target):
+
+1. **The next instruction follows an action within ~1 s.** The card breather is 0.8 s (= the confirm flash); an `after_step` follower of a
+   card uses `delay_s` <= 0.5-1 (0.5 when it follows a card: the breather already passed). Arrival cards (`volume` / `beat_start`) show at once
+   (rev 5g) or within 0.5-1 s.
+2. **Dialogue never blocks an instruction.** Radios / walk-and-talks have their own slot and play ALONGSIDE the cards; no card or objective is
+   an `after_step` follower of a speech, and the talk about a place is dropped when it is over (`cancel_on`).
+3. **Never without an instruction.** At every moment a card, an objective or the current navigation target (section 17) is on screen
+   (`UTutorialSubsystem::GetNoInstructionSeconds` = 0); a gap of more than 0.5 s goes to the telemetry as `no_instruction`.
+4. **Every card states the concrete action:** a verb + the key (`{key:<CommandId>}`) or the click ("Select him ({key:Select.Member}) and click
+   ..."). Lists of keys without a verb are not a card.
+5. **A wait says why.** A step that makes the player wait names what he waits for ("wait until the patrol walks into the wire"); waits on the
+   world (cold rising before the heat pack lesson) keep the current target on screen.
+6. **Places behind never call back** (section 17), confinements end with their lesson (section 12).
+7. **A lesson of a beat that is over never interrupts the next one:** a `condition` card of an earlier beat becomes due -> dropped (section 2).
+
+Telemetry for play-tests (`Saved/Tutorial/tutorial.jsonl`): `next_instruction` (active_s = seconds from the last completed card to the next card /
+objective), `no_instruction` (a gap without any instruction), `guide` (the target changed).
+
+Pacing table (2026-10-20, the scripted player on the demo file; "baseline" = `54d68fa` with the 1.5 s breather and no current target,
+"before" = the file before this pass with the 1.5 s breather, "now" = this pass):
+
+| run | cards | handover avg | handover max (chained) | handovers > 1 s | no card / objective | no instruction at all |
+|---|---|---|---|---|---|---|
+| baseline | 32 | 3.91 s | 1.50 s (25.3 s incl. walks) | 28 | 14.2 s | 14.2 s |
+| before | 32 | 3.75 s | 1.50 s | 28 | 14.2 s | 0.0 s |
+| now | 32 | 3.30 s | 0.75-1.0 s | 6 (all walks to the next place, not chained cards) | 9.8 s | 0.0 s |
 
 ## History
 

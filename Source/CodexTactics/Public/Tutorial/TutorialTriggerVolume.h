@@ -34,6 +34,7 @@ public:
 	ATutorialTriggerVolume();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Tutorial")
 	TObjectPtr<UBoxComponent> Box;
