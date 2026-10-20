@@ -1,5 +1,7 @@
 #include "Combat/EncounterQueries.h"
 #include "Combat/EnemyRegistrySubsystem.h"
+#include "Characters/EnemyCharacter.h"
+#include "Combat/HealthComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
@@ -17,7 +19,21 @@ namespace CombatQueries
 		}
 		for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
 		{
-			if (Enemy->ActorHasTag(EnemyTag) && !Enemy->IsHidden() && FVector::Dist2D(Enemy->GetActorLocation(), Center) <= Radius)
+			if (!Enemy->ActorHasTag(EnemyTag) || FVector::Dist2D(Enemy->GetActorLocation(), Center) > Radius)
+			{
+				continue;
+			}
+			// A live enemy counts even while the squad's sight hides it (TacticalSightSubsystem::SetEnemyHidden, d380d83):
+			// presence is gameplay, not rendering (turn-based entry, encounter radius). Other tagged actors keep the old rule.
+			if (const AEnemyCharacter* Character = Cast<AEnemyCharacter>(Enemy))
+			{
+				const UHealthComponent* Health = Character->GetHealthComponent();
+				if (!Health || Health->IsAlive())
+				{
+					return true;
+				}
+			}
+			else if (!Enemy->IsHidden())
 			{
 				return true;
 			}
