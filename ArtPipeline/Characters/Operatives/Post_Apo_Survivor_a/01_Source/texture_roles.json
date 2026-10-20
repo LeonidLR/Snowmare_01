@@ -1,0 +1,943 @@
+{
+  "_doc": "Ground truth: texture -> role. method=material_graph means the role was read from the Unreal material graph (which output / channel the texture feeds); name_guess is the suffix heuristic.",
+  "textures": {
+    "T_Axe_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Axe_BaseColor.T_Axe_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Axe"
+      ],
+      "warnings": []
+    },
+    "T_Axe_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Axe_Normal.T_Axe_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Axe"
+      ],
+      "warnings": []
+    },
+    "T_Axe_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Axe_OcclusionRoughnessMetallic.T_Axe_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Axe"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Backpack_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Backpack_BaseColor.T_Backpack_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Backpack"
+      ],
+      "warnings": []
+    },
+    "T_Backpack_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Backpack_Normal.T_Backpack_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Backpack"
+      ],
+      "warnings": []
+    },
+    "T_Backpack_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Backpack_OcclusionRoughnessMetallic.T_Backpack_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Backpack"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Boot_Glove_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_BaseColor.T_Boot_Glove_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Boot_Glove"
+      ],
+      "warnings": []
+    },
+    "T_Boot_Glove_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_Normal.T_Boot_Glove_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Boot_Glove"
+      ],
+      "warnings": []
+    },
+    "T_Boot_Glove_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_OcclusionRoughnessMetallic.T_Boot_Glove_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Boot_Glove"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Carabiners_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Carabiners_BaseColor.T_Carabiners_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Carabiners"
+      ],
+      "warnings": []
+    },
+    "T_Carabiners_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Carabiners_Normal.T_Carabiners_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Carabiners"
+      ],
+      "warnings": []
+    },
+    "T_Carabiners_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Carabiners_OcclusionRoughnessMetallic.T_Carabiners_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Carabiners"
+      ],
+      "warnings": [
+        "scalar/colour data sampled with a Normal sampler in M_Carabiners (roughness): Unreal reconstructs Z / remaps to -1..1 - authoring error, baked as raw linear channel (intent)",
+        "scalar/colour data sampled with a Normal sampler in M_Carabiners (metallic): Unreal reconstructs Z / remaps to -1..1 - authoring error, baked as raw linear channel (intent)",
+        "scalar/colour data sampled with a Normal sampler in M_Carabiners (ambient_occlusion): Unreal reconstructs Z / remaps to -1..1 - authoring error, baked as raw linear channel (intent)"
+      ]
+    },
+    "T_Flashlight_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_BaseColor.T_Flashlight_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Flashlight"
+      ],
+      "warnings": []
+    },
+    "T_Flashlight_Emissive": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Emissive.T_Flashlight_Emissive",
+      "role": "emissive",
+      "channels": {
+        "emissive_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "emissive",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Flashlight"
+      ],
+      "warnings": []
+    },
+    "T_Flashlight_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Normal.T_Flashlight_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Flashlight"
+      ],
+      "warnings": []
+    },
+    "T_Flashlight_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_OcclusionRoughnessMetallic.T_Flashlight_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Flashlight"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Mask_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Mask_BaseColor.T_Mask_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Mask"
+      ],
+      "warnings": []
+    },
+    "T_Mask_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Mask_Normal.T_Mask_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Mask"
+      ],
+      "warnings": []
+    },
+    "T_Mask_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Mask_OcclusionRoughnessMetallic.T_Mask_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Mask"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Outfit_Hoodie_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_BaseColor.T_Outfit_Hoodie_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Outfit_Hoodie"
+      ],
+      "warnings": []
+    },
+    "T_Outfit_Hoodie_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_Normal.T_Outfit_Hoodie_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Outfit_Hoodie"
+      ],
+      "warnings": []
+    },
+    "T_Outfit_Hoodie_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_OcclusionRoughnessMetallic.T_Outfit_Hoodie_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Outfit_Hoodie"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Outfit_Pants_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_BaseColor.T_Outfit_Pants_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Outfit_Pants"
+      ],
+      "warnings": []
+    },
+    "T_Outfit_Pants_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_Normal.T_Outfit_Pants_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Outfit_Pants"
+      ],
+      "warnings": []
+    },
+    "T_Outfit_Pants_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_OcclusionRoughnessMetallic.T_Outfit_Pants_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Outfit_Pants"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Radio_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Radio_BaseColor.T_Radio_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Radio"
+      ],
+      "warnings": []
+    },
+    "T_Radio_Emissive": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Radio_Emissive.T_Radio_Emissive",
+      "role": "emissive",
+      "channels": {
+        "emissive_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "emissive",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Radio"
+      ],
+      "warnings": []
+    },
+    "T_Radio_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Radio_Normal.T_Radio_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Radio"
+      ],
+      "warnings": []
+    },
+    "T_Radio_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Radio_OcclusionRoughnessMetallic.T_Radio_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Radio"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Rope_a_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Rope_a_BaseColor.T_Rope_a_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Rope_a"
+      ],
+      "warnings": []
+    },
+    "T_Rope_a_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Rope_a_Normal.T_Rope_a_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Rope_a"
+      ],
+      "warnings": []
+    },
+    "T_Rope_a_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Rope_a_OcclusionRoughnessMetallic.T_Rope_a_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Rope_a"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Rope_b_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Rope_b_BaseColor.T_Rope_b_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Rope_b"
+      ],
+      "warnings": []
+    },
+    "T_Rope_b_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Rope_b_Normal.T_Rope_b_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Rope_b"
+      ],
+      "warnings": []
+    },
+    "T_Rope_b_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Rope_b_OcclusionRoughnessMetallic.T_Rope_b_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Rope_b"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Shovel_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Shovel_BaseColor.T_Shovel_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Shovel"
+      ],
+      "warnings": []
+    },
+    "T_Shovel_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Shovel_Normal.T_Shovel_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Shovel"
+      ],
+      "warnings": []
+    },
+    "T_Shovel_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Shovel_OcclusionRoughnessMetallic.T_Shovel_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Shovel"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Small_Bags_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_BaseColor.T_Small_Bags_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Small_Bags"
+      ],
+      "warnings": []
+    },
+    "T_Small_Bags_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_Normal.T_Small_Bags_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Small_Bags"
+      ],
+      "warnings": []
+    },
+    "T_Small_Bags_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_OcclusionRoughnessMetallic.T_Small_Bags_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Small_Bags"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    },
+    "T_Waist_Pack_BaseColor": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_BaseColor.T_Waist_Pack_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Waist_Pack"
+      ],
+      "warnings": []
+    },
+    "T_Waist_Pack_Normal": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_Normal.T_Waist_Pack_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Waist_Pack"
+      ],
+      "warnings": []
+    },
+    "T_Waist_Pack_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_OcclusionRoughnessMetallic.T_Waist_Pack_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Waist_Pack"
+      ],
+      "warnings": [
+        "sRGB is ON for a data texture: Unreal decodes it with the sRGB curve before use; the bake reproduces the decoded values"
+      ]
+    }
+  }
+}

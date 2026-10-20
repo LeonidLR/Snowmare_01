@@ -1,0 +1,132 @@
+{
+  "_doc": "Ground truth: slot -> keep / remove-hair / remove-hidden / separate-transparent with the reason. Hidden = no ray from the triangle escapes to a viewer in the rest pose, 9 procedural extreme poses and the sampled animation frames (single-sided: back faces do not occlude).",
+  "hair_regex": "hair|(^|_)fur($|_)|eyebrow|(^|_)brows?($|_)|eyelash|(^|_)lashes($|_)|beard|mustache|moustache|groom",
+  "slots": {
+    "M_Axe": {
+      "slot_index": 0,
+      "decision": "keep",
+      "reason": "opaque; 315 of 24779 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 24779,
+      "hidden_triangles_removed": 315
+    },
+    "M_Backpack": {
+      "slot_index": 1,
+      "decision": "keep",
+      "reason": "opaque; 501 of 48851 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 48851,
+      "hidden_triangles_removed": 501
+    },
+    "M_Boot_Glove": {
+      "slot_index": 2,
+      "decision": "keep",
+      "reason": "opaque; 157 of 6046 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 6046,
+      "hidden_triangles_removed": 157
+    },
+    "M_Carabiners": {
+      "slot_index": 3,
+      "decision": "keep",
+      "reason": "opaque; 165 of 10248 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 10248,
+      "hidden_triangles_removed": 165
+    },
+    "M_Flashlight": {
+      "slot_index": 4,
+      "decision": "keep",
+      "reason": "opaque; 3 of 1320 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 1320,
+      "hidden_triangles_removed": 3
+    },
+    "M_Mask": {
+      "slot_index": 5,
+      "decision": "keep",
+      "reason": "opaque; 197 of 3566 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 3566,
+      "hidden_triangles_removed": 197
+    },
+    "M_Outfit_Hoodie": {
+      "slot_index": 6,
+      "decision": "keep",
+      "reason": "opaque; 250 of 5585 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 5585,
+      "hidden_triangles_removed": 250
+    },
+    "M_Outfit_Pants": {
+      "slot_index": 7,
+      "decision": "keep",
+      "reason": "opaque; 32 of 4285 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 4285,
+      "hidden_triangles_removed": 32
+    },
+    "M_Radio": {
+      "slot_index": 8,
+      "decision": "keep",
+      "reason": "opaque; 32 of 3366 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 3366,
+      "hidden_triangles_removed": 32
+    },
+    "M_Rope_a": {
+      "slot_index": 9,
+      "decision": "keep",
+      "reason": "opaque; 647 of 20818 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 20818,
+      "hidden_triangles_removed": 647
+    },
+    "M_Rope_b": {
+      "slot_index": 10,
+      "decision": "keep",
+      "reason": "opaque; 1188 of 19546 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 19546,
+      "hidden_triangles_removed": 1188
+    },
+    "M_Shovel": {
+      "slot_index": 11,
+      "decision": "keep",
+      "reason": "opaque; 343 of 18260 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 18260,
+      "hidden_triangles_removed": 343
+    },
+    "M_Small_Bags": {
+      "slot_index": 12,
+      "decision": "keep",
+      "reason": "opaque; 225 of 26898 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 26898,
+      "hidden_triangles_removed": 225
+    },
+    "M_Waist_Pack": {
+      "slot_index": 13,
+      "decision": "keep",
+      "reason": "opaque; 356 of 19980 triangles hidden in every test pose and removed",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "triangles": 19980,
+      "hidden_triangles_removed": 356
+    }
+  }
+}

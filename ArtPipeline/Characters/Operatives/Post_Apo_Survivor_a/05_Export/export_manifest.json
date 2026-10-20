@@ -1,0 +1,78 @@
+{
+  "fbx": "SK_Post_Apo_Survivor_a_1slot.fbx",
+  "material_slot": "M_Body",
+  "uv0": "UV_Atlas",
+  "skeleton": "/Game/Post_Apo_Survivor/Demo/Mannequin/Character/Mesh/UE4_Mannequin_Skeleton.UE4_Mannequin_Skeleton",
+  "root_bone_added": "root",
+  "top_bones_reparented": [
+    "pelvis",
+    "ik_foot_root",
+    "ik_hand_root"
+  ],
+  "blender_fbx_settings": {
+    "use_selection": true,
+    "object_types": [
+      "ARMATURE",
+      "MESH"
+    ],
+    "apply_unit_scale": true,
+    "apply_scale_options": "FBX_SCALE_NONE",
+    "global_scale": 1.0,
+    "axis_forward": "-Z",
+    "axis_up": "Y",
+    "use_space_transform": true,
+    "bake_space_transform": false,
+    "use_mesh_modifiers": false,
+    "mesh_smooth_type": "FACE",
+    "use_tspace": true,
+    "use_custom_props": false,
+    "add_leaf_bones": false,
+    "primary_bone_axis": "Y",
+    "secondary_bone_axis": "X",
+    "use_armature_deform_only": false,
+    "armature_nodetype": "NULL",
+    "bake_anim": false,
+    "path_mode": "STRIP",
+    "embed_textures": false,
+    "use_triangles": true
+  },
+  "roundtrip_checks": {
+    "one_mesh": true,
+    "armature_object": "Armature",
+    "material_slots": [
+      "M_Body"
+    ],
+    "uv_maps": [
+      "UV_Atlas"
+    ],
+    "triangles": 209137,
+    "vertices": 127038,
+    "vertex_groups": 66,
+    "shape_keys": 0,
+    "custom_normals": true,
+    "bones_source": 70,
+    "bones_export": 71,
+    "root_bone": true,
+    "bones_missing": [],
+    "bones_extra": [],
+    "parent_mismatch": [],
+    "max_bone_deviation_cm": 0.0001,
+    "leaf_bones": [],
+    "ok": true
+  },
+  "textures": {
+    "BaseColor": "T_Post_Apo_Survivor_a_BaseColor.png",
+    "Normal": "T_Post_Apo_Survivor_a_Normal.png",
+    "ORM": "T_Post_Apo_Survivor_a_ORM.png",
+    "Emissive": "T_Post_Apo_Survivor_a_Emissive.png",
+    "Sheen": "T_Post_Apo_Survivor_a_Sheen.png"
+  },
+  "unreal_import_notes": [
+    "Import onto the SAME skeleton: /Game/Post_Apo_Survivor/Demo/Mannequin/Character/Mesh/UE4_Mannequin_Skeleton.UE4_Mannequin_Skeleton",
+    "Normals: Import Normals (custom split normals are in the FBX); tangents: MikkTSpace (same as the bake)",
+    "Normal map is DirectX (green down) - no Flip Green; compression TC_Normalmap (BC5), sRGB off",
+    "ORM: sRGB off, TC_Masks; R=AO G=Roughness B=Metallic - values are FINAL (no Power / sRGB decode)",
+    "BaseColor: sRGB on, TC_Default (no alpha -> BC1/DXT1)",
+    "Sheen (optional): BaseColor + Fresnel * Sheen reproduces the old cloth Fresnel rim (0.07)"
+  ]
+}

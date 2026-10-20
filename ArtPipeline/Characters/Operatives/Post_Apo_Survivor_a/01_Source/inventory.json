@@ -1,0 +1,1812 @@
+{
+  "mesh": "/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a.SK_Post_Apo_Survivor_a",
+  "name": "SK_Post_Apo_Survivor_a",
+  "skeleton": "/Game/Post_Apo_Survivor/Demo/Mannequin/Character/Mesh/UE4_Mannequin_Skeleton.UE4_Mannequin_Skeleton",
+  "physics_asset": "/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a_PhysicsAsset.SK_Post_Apo_Survivor_a_PhysicsAsset",
+  "bounds_extent": [
+    69.05848693847656,
+    39.372042655944824,
+    95.2333063967526
+  ],
+  "lods": [
+    {
+      "lod": 0,
+      "num_verts": 128851,
+      "num_sections": 14
+    }
+  ],
+  "slots": [
+    {
+      "index": 0,
+      "slot_name": "M_Axe",
+      "imported_slot_name": "M_Axe",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Axe.M_Axe"
+    },
+    {
+      "index": 1,
+      "slot_name": "M_Backpack",
+      "imported_slot_name": "M_Backpack",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Backpack.M_Backpack"
+    },
+    {
+      "index": 2,
+      "slot_name": "M_Boot_Glove",
+      "imported_slot_name": "M_Boot_Glove",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Boot_Glove.M_Boot_Glove"
+    },
+    {
+      "index": 3,
+      "slot_name": "M_Carabiners",
+      "imported_slot_name": "M_Carabiners",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Carabiners.M_Carabiners"
+    },
+    {
+      "index": 4,
+      "slot_name": "M_Flashlight",
+      "imported_slot_name": "M_Flashlight",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Flashlight.M_Flashlight"
+    },
+    {
+      "index": 5,
+      "slot_name": "M_Mask",
+      "imported_slot_name": "M_Mask",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Mask.M_Mask"
+    },
+    {
+      "index": 6,
+      "slot_name": "M_Outfit_Hoodie",
+      "imported_slot_name": "M_Outfit_Hoodie",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie.M_Outfit_Hoodie"
+    },
+    {
+      "index": 7,
+      "slot_name": "M_Outfit_Pants",
+      "imported_slot_name": "M_Outfit_Pants",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants.M_Outfit_Pants"
+    },
+    {
+      "index": 8,
+      "slot_name": "M_Radio",
+      "imported_slot_name": "M_Radio",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Radio.M_Radio"
+    },
+    {
+      "index": 9,
+      "slot_name": "M_Rope_a",
+      "imported_slot_name": "M_Rope_a",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Rope_a.M_Rope_a"
+    },
+    {
+      "index": 10,
+      "slot_name": "M_Rope_b",
+      "imported_slot_name": "M_Rope_b",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Rope_b.M_Rope_b"
+    },
+    {
+      "index": 11,
+      "slot_name": "M_Shovel",
+      "imported_slot_name": "M_Shovel",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Shovel.M_Shovel"
+    },
+    {
+      "index": 12,
+      "slot_name": "M_Small_Bags",
+      "imported_slot_name": "M_Small_Bags",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Small_Bags.M_Small_Bags"
+    },
+    {
+      "index": 13,
+      "slot_name": "M_Waist_Pack",
+      "imported_slot_name": "M_Waist_Pack",
+      "material": "/Game/Post_Apo_Survivor/Materials/M_Waist_Pack.M_Waist_Pack"
+    }
+  ],
+  "materials": {
+    "/Game/Post_Apo_Survivor/Materials/M_Axe.M_Axe": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Axe.M_Axe",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Axe_Normal.T_Axe_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Axe_BaseColor.T_Axe_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Axe_OcclusionRoughnessMetallic.T_Axe_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Axe.M_Axe",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Axe_BaseColor.T_Axe_BaseColor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Axe_Normal.T_Axe_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Axe_OcclusionRoughnessMetallic.T_Axe_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Axe_OcclusionRoughnessMetallic.T_Axe_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Axe_OcclusionRoughnessMetallic.T_Axe_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Backpack.M_Backpack": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Backpack.M_Backpack",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Backpack_Normal.T_Backpack_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Backpack_BaseColor.T_Backpack_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Backpack_OcclusionRoughnessMetallic.T_Backpack_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Backpack.M_Backpack",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "Add",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "Multiply",
+              "output": "",
+              "const_a": 0.0,
+              "const_b": 1.0,
+              "inputs": [
+                {
+                  "node": "Fresnel",
+                  "output": "",
+                  "input": "A"
+                },
+                {
+                  "node": "Constant",
+                  "output": "",
+                  "r": 0.07000000029802322,
+                  "input": "B"
+                }
+              ],
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Backpack_BaseColor.T_Backpack_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Backpack_Normal.T_Backpack_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Backpack_OcclusionRoughnessMetallic.T_Backpack_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Backpack_OcclusionRoughnessMetallic.T_Backpack_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Backpack_OcclusionRoughnessMetallic.T_Backpack_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Boot_Glove.M_Boot_Glove": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Boot_Glove.M_Boot_Glove",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_Normal.T_Boot_Glove_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_BaseColor.T_Boot_Glove_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_OcclusionRoughnessMetallic.T_Boot_Glove_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Boot_Glove.M_Boot_Glove",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_BaseColor.T_Boot_Glove_BaseColor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_Normal.T_Boot_Glove_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_OcclusionRoughnessMetallic.T_Boot_Glove_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.4000000059604645,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_OcclusionRoughnessMetallic.T_Boot_Glove_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_OcclusionRoughnessMetallic.T_Boot_Glove_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Carabiners.M_Carabiners": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Carabiners.M_Carabiners",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Carabiners_Normal.T_Carabiners_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Carabiners_BaseColor.T_Carabiners_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Carabiners_OcclusionRoughnessMetallic.T_Carabiners_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Carabiners.M_Carabiners",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Carabiners_BaseColor.T_Carabiners_BaseColor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Carabiners_Normal.T_Carabiners_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Carabiners_OcclusionRoughnessMetallic.T_Carabiners_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.699999988079071,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Carabiners_OcclusionRoughnessMetallic.T_Carabiners_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Carabiners_OcclusionRoughnessMetallic.T_Carabiners_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Flashlight.M_Flashlight": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Flashlight.M_Flashlight",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Normal.T_Flashlight_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Emissive.T_Flashlight_Emissive",
+        "/Game/Post_Apo_Survivor/Textures/T_Flashlight_BaseColor.T_Flashlight_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Flashlight_OcclusionRoughnessMetallic.T_Flashlight_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Flashlight.M_Flashlight",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_BaseColor.T_Flashlight_BaseColor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Normal.T_Flashlight_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_OcclusionRoughnessMetallic.T_Flashlight_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_OcclusionRoughnessMetallic.T_Flashlight_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_OcclusionRoughnessMetallic.T_Flashlight_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "emissive_color": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Emissive.T_Flashlight_Emissive",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Mask.M_Mask": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Mask.M_Mask",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Mask_Normal.T_Mask_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Mask_BaseColor.T_Mask_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Mask_OcclusionRoughnessMetallic.T_Mask_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Mask.M_Mask",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Mask_BaseColor.T_Mask_BaseColor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Mask_Normal.T_Mask_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Mask_OcclusionRoughnessMetallic.T_Mask_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.550000011920929,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Mask_OcclusionRoughnessMetallic.T_Mask_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Mask_OcclusionRoughnessMetallic.T_Mask_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie.M_Outfit_Hoodie": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie.M_Outfit_Hoodie",
+      "class": "Material",
+      "texture_params": {
+        "BaseColor": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_BaseColor.T_Outfit_Hoodie_BaseColor",
+        "OcclusionRoughnessMetallic": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_OcclusionRoughnessMetallic.T_Outfit_Hoodie_OcclusionRoughnessMetallic",
+        "Normal": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_Normal.T_Outfit_Hoodie_Normal"
+      },
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_Normal.T_Outfit_Hoodie_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_BaseColor.T_Outfit_Hoodie_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_OcclusionRoughnessMetallic.T_Outfit_Hoodie_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Hoodie.M_Outfit_Hoodie",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "Add",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "Multiply",
+              "output": "",
+              "const_a": 0.0,
+              "const_b": 1.0,
+              "inputs": [
+                {
+                  "node": "Fresnel",
+                  "output": "",
+                  "input": "A"
+                },
+                {
+                  "node": "Constant",
+                  "output": "",
+                  "r": 0.07000000029802322,
+                  "input": "B"
+                }
+              ],
+              "input": "A"
+            },
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "RGB",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_BaseColor.T_Outfit_Hoodie_BaseColor",
+              "parameter_name": "BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSampleParameter2D",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_Normal.T_Outfit_Hoodie_Normal",
+          "parameter_name": "Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_OcclusionRoughnessMetallic.T_Outfit_Hoodie_OcclusionRoughnessMetallic",
+              "parameter_name": "OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSampleParameter2D",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_OcclusionRoughnessMetallic.T_Outfit_Hoodie_OcclusionRoughnessMetallic",
+          "parameter_name": "OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSampleParameter2D",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_OcclusionRoughnessMetallic.T_Outfit_Hoodie_OcclusionRoughnessMetallic",
+          "parameter_name": "OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants.M_Outfit_Pants": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants.M_Outfit_Pants",
+      "class": "Material",
+      "texture_params": {
+        "Normal": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_Normal.T_Outfit_Pants_Normal",
+        "OcclusionRoughnessMetallic": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_OcclusionRoughnessMetallic.T_Outfit_Pants_OcclusionRoughnessMetallic",
+        "BaseColor": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_BaseColor.T_Outfit_Pants_BaseColor"
+      },
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_Normal.T_Outfit_Pants_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_BaseColor.T_Outfit_Pants_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_OcclusionRoughnessMetallic.T_Outfit_Pants_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Outfit_Pants.M_Outfit_Pants",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "Add",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "Multiply",
+              "output": "",
+              "const_a": 0.0,
+              "const_b": 1.0,
+              "inputs": [
+                {
+                  "node": "Fresnel",
+                  "output": "",
+                  "input": "A"
+                },
+                {
+                  "node": "Constant",
+                  "output": "",
+                  "r": 0.07000000029802322,
+                  "input": "B"
+                }
+              ],
+              "input": "A"
+            },
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "RGB",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_BaseColor.T_Outfit_Pants_BaseColor",
+              "parameter_name": "BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSampleParameter2D",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_Normal.T_Outfit_Pants_Normal",
+          "parameter_name": "Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSampleParameter2D",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_OcclusionRoughnessMetallic.T_Outfit_Pants_OcclusionRoughnessMetallic",
+              "parameter_name": "OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSampleParameter2D",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_OcclusionRoughnessMetallic.T_Outfit_Pants_OcclusionRoughnessMetallic",
+          "parameter_name": "OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSampleParameter2D",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_OcclusionRoughnessMetallic.T_Outfit_Pants_OcclusionRoughnessMetallic",
+          "parameter_name": "OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Radio.M_Radio": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Radio.M_Radio",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Radio_Normal.T_Radio_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Radio_Emissive.T_Radio_Emissive",
+        "/Game/Post_Apo_Survivor/Textures/T_Radio_BaseColor.T_Radio_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Radio_OcclusionRoughnessMetallic.T_Radio_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Radio.M_Radio",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Radio_BaseColor.T_Radio_BaseColor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Radio_Normal.T_Radio_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Radio_OcclusionRoughnessMetallic.T_Radio_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Radio_OcclusionRoughnessMetallic.T_Radio_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Radio_OcclusionRoughnessMetallic.T_Radio_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "emissive_color": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Radio_Emissive.T_Radio_Emissive",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Rope_a.M_Rope_a": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Rope_a.M_Rope_a",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Rope_a_Normal.T_Rope_a_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Rope_a_BaseColor.T_Rope_a_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Rope_a_OcclusionRoughnessMetallic.T_Rope_a_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Rope_a.M_Rope_a",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "Add",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "Multiply",
+              "output": "",
+              "const_a": 0.0,
+              "const_b": 1.0,
+              "inputs": [
+                {
+                  "node": "Fresnel",
+                  "output": "",
+                  "input": "A"
+                },
+                {
+                  "node": "Constant",
+                  "output": "",
+                  "r": 0.07000000029802322,
+                  "input": "B"
+                }
+              ],
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Rope_a_BaseColor.T_Rope_a_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Rope_a_Normal.T_Rope_a_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Rope_a_OcclusionRoughnessMetallic.T_Rope_a_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Rope_a_OcclusionRoughnessMetallic.T_Rope_a_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Rope_a_OcclusionRoughnessMetallic.T_Rope_a_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Rope_b.M_Rope_b": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Rope_b.M_Rope_b",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Rope_b_Normal.T_Rope_b_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Rope_b_BaseColor.T_Rope_b_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Rope_b_OcclusionRoughnessMetallic.T_Rope_b_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Rope_b.M_Rope_b",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "Add",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "Multiply",
+              "output": "",
+              "const_a": 0.0,
+              "const_b": 1.0,
+              "inputs": [
+                {
+                  "node": "Fresnel",
+                  "output": "",
+                  "input": "A"
+                },
+                {
+                  "node": "Constant",
+                  "output": "",
+                  "r": 0.07000000029802322,
+                  "input": "B"
+                }
+              ],
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Rope_b_BaseColor.T_Rope_b_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Rope_b_Normal.T_Rope_b_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Rope_b_OcclusionRoughnessMetallic.T_Rope_b_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Rope_b_OcclusionRoughnessMetallic.T_Rope_b_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Rope_b_OcclusionRoughnessMetallic.T_Rope_b_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Shovel.M_Shovel": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Shovel.M_Shovel",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Shovel_Normal.T_Shovel_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Shovel_BaseColor.T_Shovel_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Shovel_OcclusionRoughnessMetallic.T_Shovel_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Shovel.M_Shovel",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Shovel_BaseColor.T_Shovel_BaseColor",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Shovel_Normal.T_Shovel_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Shovel_OcclusionRoughnessMetallic.T_Shovel_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Shovel_OcclusionRoughnessMetallic.T_Shovel_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Shovel_OcclusionRoughnessMetallic.T_Shovel_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Small_Bags.M_Small_Bags": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Small_Bags.M_Small_Bags",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_Normal.T_Small_Bags_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_BaseColor.T_Small_Bags_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_OcclusionRoughnessMetallic.T_Small_Bags_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Small_Bags.M_Small_Bags",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "Add",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "Multiply",
+              "output": "",
+              "const_a": 0.0,
+              "const_b": 1.0,
+              "inputs": [
+                {
+                  "node": "Fresnel",
+                  "output": "",
+                  "input": "A"
+                },
+                {
+                  "node": "Constant",
+                  "output": "",
+                  "r": 0.07000000029802322,
+                  "input": "B"
+                }
+              ],
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_BaseColor.T_Small_Bags_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_Normal.T_Small_Bags_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_OcclusionRoughnessMetallic.T_Small_Bags_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_OcclusionRoughnessMetallic.T_Small_Bags_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_OcclusionRoughnessMetallic.T_Small_Bags_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    },
+    "/Game/Post_Apo_Survivor/Materials/M_Waist_Pack.M_Waist_Pack": {
+      "path": "/Game/Post_Apo_Survivor/Materials/M_Waist_Pack.M_Waist_Pack",
+      "class": "Material",
+      "texture_params": {},
+      "scalar_params": {},
+      "vector_params": {},
+      "used_textures": [
+        "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_Normal.T_Waist_Pack_Normal",
+        "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_BaseColor.T_Waist_Pack_BaseColor",
+        "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_OcclusionRoughnessMetallic.T_Waist_Pack_OcclusionRoughnessMetallic"
+      ],
+      "base_material": "/Game/Post_Apo_Survivor/Materials/M_Waist_Pack.M_Waist_Pack",
+      "blend_mode": "BLEND_OPAQUE",
+      "two_sided": false,
+      "graph": {
+        "base_color": {
+          "node": "Add",
+          "output": "",
+          "const_a": 0.0,
+          "const_b": 1.0,
+          "inputs": [
+            {
+              "node": "Multiply",
+              "output": "",
+              "const_a": 0.0,
+              "const_b": 1.0,
+              "inputs": [
+                {
+                  "node": "Fresnel",
+                  "output": "",
+                  "input": "A"
+                },
+                {
+                  "node": "Constant",
+                  "output": "",
+                  "r": 0.07000000029802322,
+                  "input": "B"
+                }
+              ],
+              "input": "A"
+            },
+            {
+              "node": "TextureSample",
+              "output": "RGB",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_BaseColor.T_Waist_Pack_BaseColor",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "B"
+            }
+          ]
+        },
+        "normal": {
+          "node": "TextureSample",
+          "output": "RGB",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_Normal.T_Waist_Pack_Normal",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_NORMAL: 3>"
+        },
+        "roughness": {
+          "node": "Power",
+          "output": "",
+          "inputs": [
+            {
+              "node": "TextureSample",
+              "output": "G",
+              "texture": "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_OcclusionRoughnessMetallic.T_Waist_Pack_OcclusionRoughnessMetallic",
+              "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>",
+              "input": "Base"
+            },
+            {
+              "node": "Constant",
+              "output": "",
+              "r": 0.5,
+              "input": "Exp"
+            }
+          ]
+        },
+        "metallic": {
+          "node": "TextureSample",
+          "output": "B",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_OcclusionRoughnessMetallic.T_Waist_Pack_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        },
+        "ambient_occlusion": {
+          "node": "TextureSample",
+          "output": "R",
+          "texture": "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_OcclusionRoughnessMetallic.T_Waist_Pack_OcclusionRoughnessMetallic",
+          "sampler_type": "<MaterialSamplerType.SAMPLERTYPE_COLOR: 0>"
+        }
+      }
+    }
+  },
+  "textures": {
+    "/Game/Post_Apo_Survivor/Textures/T_Axe_BaseColor.T_Axe_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Axe_BaseColor.T_Axe_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Axe_Normal.T_Axe_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Axe_Normal.T_Axe_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Axe_OcclusionRoughnessMetallic.T_Axe_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Axe_OcclusionRoughnessMetallic.T_Axe_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Backpack_BaseColor.T_Backpack_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Backpack_BaseColor.T_Backpack_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Backpack_Normal.T_Backpack_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Backpack_Normal.T_Backpack_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Backpack_OcclusionRoughnessMetallic.T_Backpack_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Backpack_OcclusionRoughnessMetallic.T_Backpack_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_BaseColor.T_Boot_Glove_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_BaseColor.T_Boot_Glove_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_Normal.T_Boot_Glove_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_Normal.T_Boot_Glove_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_OcclusionRoughnessMetallic.T_Boot_Glove_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_OcclusionRoughnessMetallic.T_Boot_Glove_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Carabiners_BaseColor.T_Carabiners_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Carabiners_BaseColor.T_Carabiners_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Carabiners_Normal.T_Carabiners_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Carabiners_Normal.T_Carabiners_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Carabiners_OcclusionRoughnessMetallic.T_Carabiners_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Carabiners_OcclusionRoughnessMetallic.T_Carabiners_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Flashlight_BaseColor.T_Flashlight_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_BaseColor.T_Flashlight_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Emissive.T_Flashlight_Emissive": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Emissive.T_Flashlight_Emissive",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Normal.T_Flashlight_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Normal.T_Flashlight_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Flashlight_OcclusionRoughnessMetallic.T_Flashlight_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Flashlight_OcclusionRoughnessMetallic.T_Flashlight_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Mask_BaseColor.T_Mask_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Mask_BaseColor.T_Mask_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Mask_Normal.T_Mask_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Mask_Normal.T_Mask_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Mask_OcclusionRoughnessMetallic.T_Mask_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Mask_OcclusionRoughnessMetallic.T_Mask_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_BaseColor.T_Outfit_Hoodie_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_BaseColor.T_Outfit_Hoodie_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_Normal.T_Outfit_Hoodie_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_Normal.T_Outfit_Hoodie_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_OcclusionRoughnessMetallic.T_Outfit_Hoodie_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_OcclusionRoughnessMetallic.T_Outfit_Hoodie_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_BaseColor.T_Outfit_Pants_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_BaseColor.T_Outfit_Pants_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_Normal.T_Outfit_Pants_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_Normal.T_Outfit_Pants_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_OcclusionRoughnessMetallic.T_Outfit_Pants_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_OcclusionRoughnessMetallic.T_Outfit_Pants_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Radio_BaseColor.T_Radio_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Radio_BaseColor.T_Radio_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Radio_Emissive.T_Radio_Emissive": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Radio_Emissive.T_Radio_Emissive",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Radio_Normal.T_Radio_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Radio_Normal.T_Radio_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Radio_OcclusionRoughnessMetallic.T_Radio_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Radio_OcclusionRoughnessMetallic.T_Radio_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Rope_a_BaseColor.T_Rope_a_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Rope_a_BaseColor.T_Rope_a_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Rope_a_Normal.T_Rope_a_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Rope_a_Normal.T_Rope_a_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Rope_a_OcclusionRoughnessMetallic.T_Rope_a_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Rope_a_OcclusionRoughnessMetallic.T_Rope_a_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Rope_b_BaseColor.T_Rope_b_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Rope_b_BaseColor.T_Rope_b_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Rope_b_Normal.T_Rope_b_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Rope_b_Normal.T_Rope_b_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Rope_b_OcclusionRoughnessMetallic.T_Rope_b_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Rope_b_OcclusionRoughnessMetallic.T_Rope_b_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Shovel_BaseColor.T_Shovel_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Shovel_BaseColor.T_Shovel_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Shovel_Normal.T_Shovel_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Shovel_Normal.T_Shovel_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Shovel_OcclusionRoughnessMetallic.T_Shovel_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Shovel_OcclusionRoughnessMetallic.T_Shovel_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_BaseColor.T_Small_Bags_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_BaseColor.T_Small_Bags_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_Normal.T_Small_Bags_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_Normal.T_Small_Bags_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_OcclusionRoughnessMetallic.T_Small_Bags_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_OcclusionRoughnessMetallic.T_Small_Bags_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_BaseColor.T_Waist_Pack_BaseColor": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_BaseColor.T_Waist_Pack_BaseColor",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_Normal.T_Waist_Pack_Normal": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_Normal.T_Waist_Pack_Normal",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "lod_group": "TEXTUREGROUP_WORLD_NORMAL_MAP",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    },
+    "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_OcclusionRoughnessMetallic.T_Waist_Pack_OcclusionRoughnessMetallic": {
+      "path": "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_OcclusionRoughnessMetallic.T_Waist_Pack_OcclusionRoughnessMetallic",
+      "class": "Texture2D",
+      "size_x": 32,
+      "size_y": 32,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "lod_group": "TEXTUREGROUP_WORLD",
+      "max_texture_size": 0,
+      "memory_bytes": 4096
+    }
+  },
+  "morph_targets": [],
+  "referencers": [
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_1Start",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_2Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_3Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_4Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_5Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_6End",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_1Start",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_2Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_3Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_4Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_5Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_6End",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_1Start",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_2Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_3Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_4Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_5Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_6End",
+    "/Game/Characters/Operatives/BP_Operative",
+    "/Game/Maps/L_MainMenu",
+    "/Game/Post_Apo_Survivor/Demo/ThirdPersonBP/Blueprints/ThirdPersonCharacter",
+    "/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a_PhysicsAsset",
+    "/Game/Post_Apo_Survivor/Scenes/Overview"
+  ],
+  "skeleton_animations": [
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_1Start.AS_He_Cold_1_1Start",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_2Loop.AS_He_Cold_1_2Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_3Tranzit.AS_He_Cold_1_3Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_4Loop.AS_He_Cold_1_4Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_5Tranzit.AS_He_Cold_1_5Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_6End.AS_He_Cold_1_6End",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_1Start.AS_He_Cold_Fire_1_1Start",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_2Loop.AS_He_Cold_Fire_1_2Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_3Tranzit.AS_He_Cold_Fire_1_3Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_4Loop.AS_He_Cold_Fire_1_4Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_5Tranzit.AS_He_Cold_Fire_1_5Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_6End.AS_He_Cold_Fire_1_6End",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_1Start.AS_He_Cold_Fire_2_1Start",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_2Loop.AS_He_Cold_Fire_2_2Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_3Tranzit.AS_He_Cold_Fire_2_3Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_4Loop.AS_He_Cold_Fire_2_4Loop",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_5Tranzit.AS_He_Cold_Fire_2_5Tranzit",
+    "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_6End.AS_He_Cold_Fire_2_6End",
+    "/Game/Post_Apo_Survivor/Demo/Mannequin/Animations/ThirdPersonIdle.ThirdPersonIdle",
+    "/Game/Post_Apo_Survivor/Demo/Mannequin/Animations/ThirdPersonJump_End.ThirdPersonJump_End",
+    "/Game/Post_Apo_Survivor/Demo/Mannequin/Animations/ThirdPersonJump_Loop.ThirdPersonJump_Loop",
+    "/Game/Post_Apo_Survivor/Demo/Mannequin/Animations/ThirdPersonJump_Start.ThirdPersonJump_Start",
+    "/Game/Post_Apo_Survivor/Demo/Mannequin/Animations/ThirdPersonRun.ThirdPersonRun",
+    "/Game/Post_Apo_Survivor/Demo/Mannequin/Animations/ThirdPersonWalk.ThirdPersonWalk",
+    "/Game/Post_Apo_Survivor/Demo/Mannequin/Animations/ThirdPerson_Jump.ThirdPerson_Jump"
+  ],
+  "exports": {
+    "mesh_fbx": "01_Source/SK_Post_Apo_Survivor_a.fbx",
+    "textures": {
+      "/Game/Post_Apo_Survivor/Textures/T_Axe_BaseColor.T_Axe_BaseColor": "02_Textures_Source/T_Axe_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Axe_Normal.T_Axe_Normal": "02_Textures_Source/T_Axe_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Axe_OcclusionRoughnessMetallic.T_Axe_OcclusionRoughnessMetallic": "02_Textures_Source/T_Axe_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Backpack_BaseColor.T_Backpack_BaseColor": "02_Textures_Source/T_Backpack_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Backpack_Normal.T_Backpack_Normal": "02_Textures_Source/T_Backpack_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Backpack_OcclusionRoughnessMetallic.T_Backpack_OcclusionRoughnessMetallic": "02_Textures_Source/T_Backpack_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_BaseColor.T_Boot_Glove_BaseColor": "02_Textures_Source/T_Boot_Glove_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_Normal.T_Boot_Glove_Normal": "02_Textures_Source/T_Boot_Glove_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Boot_Glove_OcclusionRoughnessMetallic.T_Boot_Glove_OcclusionRoughnessMetallic": "02_Textures_Source/T_Boot_Glove_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Carabiners_BaseColor.T_Carabiners_BaseColor": "02_Textures_Source/T_Carabiners_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Carabiners_Normal.T_Carabiners_Normal": "02_Textures_Source/T_Carabiners_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Carabiners_OcclusionRoughnessMetallic.T_Carabiners_OcclusionRoughnessMetallic": "02_Textures_Source/T_Carabiners_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Flashlight_BaseColor.T_Flashlight_BaseColor": "02_Textures_Source/T_Flashlight_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Emissive.T_Flashlight_Emissive": "02_Textures_Source/T_Flashlight_Emissive.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Flashlight_Normal.T_Flashlight_Normal": "02_Textures_Source/T_Flashlight_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Flashlight_OcclusionRoughnessMetallic.T_Flashlight_OcclusionRoughnessMetallic": "02_Textures_Source/T_Flashlight_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Mask_BaseColor.T_Mask_BaseColor": "02_Textures_Source/T_Mask_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Mask_Normal.T_Mask_Normal": "02_Textures_Source/T_Mask_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Mask_OcclusionRoughnessMetallic.T_Mask_OcclusionRoughnessMetallic": "02_Textures_Source/T_Mask_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_BaseColor.T_Outfit_Hoodie_BaseColor": "02_Textures_Source/T_Outfit_Hoodie_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_Normal.T_Outfit_Hoodie_Normal": "02_Textures_Source/T_Outfit_Hoodie_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Outfit_Hoodie_OcclusionRoughnessMetallic.T_Outfit_Hoodie_OcclusionRoughnessMetallic": "02_Textures_Source/T_Outfit_Hoodie_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_BaseColor.T_Outfit_Pants_BaseColor": "02_Textures_Source/T_Outfit_Pants_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_Normal.T_Outfit_Pants_Normal": "02_Textures_Source/T_Outfit_Pants_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Outfit_Pants_OcclusionRoughnessMetallic.T_Outfit_Pants_OcclusionRoughnessMetallic": "02_Textures_Source/T_Outfit_Pants_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Radio_BaseColor.T_Radio_BaseColor": "02_Textures_Source/T_Radio_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Radio_Emissive.T_Radio_Emissive": "02_Textures_Source/T_Radio_Emissive.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Radio_Normal.T_Radio_Normal": "02_Textures_Source/T_Radio_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Radio_OcclusionRoughnessMetallic.T_Radio_OcclusionRoughnessMetallic": "02_Textures_Source/T_Radio_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Rope_a_BaseColor.T_Rope_a_BaseColor": "02_Textures_Source/T_Rope_a_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Rope_a_Normal.T_Rope_a_Normal": "02_Textures_Source/T_Rope_a_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Rope_a_OcclusionRoughnessMetallic.T_Rope_a_OcclusionRoughnessMetallic": "02_Textures_Source/T_Rope_a_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Rope_b_BaseColor.T_Rope_b_BaseColor": "02_Textures_Source/T_Rope_b_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Rope_b_Normal.T_Rope_b_Normal": "02_Textures_Source/T_Rope_b_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Rope_b_OcclusionRoughnessMetallic.T_Rope_b_OcclusionRoughnessMetallic": "02_Textures_Source/T_Rope_b_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Shovel_BaseColor.T_Shovel_BaseColor": "02_Textures_Source/T_Shovel_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Shovel_Normal.T_Shovel_Normal": "02_Textures_Source/T_Shovel_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Shovel_OcclusionRoughnessMetallic.T_Shovel_OcclusionRoughnessMetallic": "02_Textures_Source/T_Shovel_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_BaseColor.T_Small_Bags_BaseColor": "02_Textures_Source/T_Small_Bags_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_Normal.T_Small_Bags_Normal": "02_Textures_Source/T_Small_Bags_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Small_Bags_OcclusionRoughnessMetallic.T_Small_Bags_OcclusionRoughnessMetallic": "02_Textures_Source/T_Small_Bags_OcclusionRoughnessMetallic.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_BaseColor.T_Waist_Pack_BaseColor": "02_Textures_Source/T_Waist_Pack_BaseColor.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_Normal.T_Waist_Pack_Normal": "02_Textures_Source/T_Waist_Pack_Normal.png",
+      "/Game/Post_Apo_Survivor/Textures/T_Waist_Pack_OcclusionRoughnessMetallic.T_Waist_Pack_OcclusionRoughnessMetallic": "02_Textures_Source/T_Waist_Pack_OcclusionRoughnessMetallic.png"
+    },
+    "animations": {
+      "/Game/Post_Apo_Survivor/Demo/Mannequin/Animations/ThirdPersonRun.ThirdPersonRun": "01_Source/anims/ThirdPersonRun.fbx",
+      "/Game/Post_Apo_Survivor/Demo/Mannequin/Animations/ThirdPersonJump_Loop.ThirdPersonJump_Loop": "01_Source/anims/ThirdPersonJump_Loop.fbx",
+      "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_2Loop.AS_He_Cold_1_2Loop": "01_Source/anims/AS_He_Cold_1_2Loop.fbx",
+      "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_1_4Loop.AS_He_Cold_1_4Loop": "01_Source/anims/AS_He_Cold_1_4Loop.fbx",
+      "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_2Loop.AS_He_Cold_Fire_1_2Loop": "01_Source/anims/AS_He_Cold_Fire_1_2Loop.fbx",
+      "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_1_4Loop.AS_He_Cold_Fire_1_4Loop": "01_Source/anims/AS_He_Cold_Fire_1_4Loop.fbx",
+      "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_2Loop.AS_He_Cold_Fire_2_2Loop": "01_Source/anims/AS_He_Cold_Fire_2_2Loop.fbx",
+      "/Game/Characters/Operatives/Anims/Weather/Male/AS_He_Cold_Fire_2_4Loop.AS_He_Cold_Fire_2_4Loop": "01_Source/anims/AS_He_Cold_Fire_2_4Loop.fbx"
+    }
+  },
+  "notes": "triangle counts per slot are filled in by blender_clean.py (FBX section counts)",
+  "lod0_section_material_slots": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "lod0_section_triangles": {
+    "M_Axe": 24779,
+    "M_Backpack": 48851,
+    "M_Boot_Glove": 6046,
+    "M_Carabiners": 10248,
+    "M_Flashlight": 1320,
+    "M_Mask": 3566,
+    "M_Outfit_Hoodie": 5585,
+    "M_Outfit_Pants": 4285,
+    "M_Radio": 3366,
+    "M_Rope_a": 20818,
+    "M_Rope_b": 19546,
+    "M_Shovel": 18260,
+    "M_Small_Bags": 26898,
+    "M_Waist_Pack": 19980
+  }
+}
