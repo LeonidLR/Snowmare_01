@@ -192,6 +192,11 @@ namespace TutorialSmoke
 		/** Rev 5i: the hut (a VOL_A1_HUT 10 m ahead, outside the approach area) and the confinement refusals before a check. */
 		FVector HutPoint = FVector::ZeroVector;
 		int32 ConfinedBefore = 0;
+		/** Bug 2026-10-20 (stage 107): per follower - stood up, sprinted, best speed / the leader's. */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> SprintProbe;
+		/** ... and where the squad stood before that sprint (put back after it: the later stages build round the squad). */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, FTransform> SprintHome;
+		TMap<TWeakObjectPtr<AOperativeCharacter>, float> SprintCold;
 		int32 HoldLinesBefore = 0;
 		/** 2026-10-20 guide course (stages 140-153): its origin / axes, the bridge marker, checks made. */
 		FVector CourseOrigin = FVector::ZeroVector;
@@ -1776,10 +1781,75 @@ namespace TutorialSmoke
 				FString::Printf(TEXT("rev 5i: the whole squad reached the ridge crouched (the followers copied the leader: %d / %d low, %.1f s, not low in the volume %.0f)"),
 					Low, Squad->GetMembers().Num(), State.StageTime, Tutorial->GetConditionStat(TEXT("squad_not_low_in.VOL_A3_RIDGE"))));
 			Check(State, !Tutorial->IsConfining(), TEXT("rev 5i: done - the squad is free"));
+			// Bug 2026-10-20: after a confinement released, the followers' crouch is the confinement's copy (not a stance key): the leader
+			// runs (a sprint order stands him up) and they stand up and run with him. Warm (cold blocks a sprint for anybody).
+			State.SprintProbe.Reset();
+			State.SprintHome.Reset();
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				State.SprintHome.Add(Member, Member->GetActorTransform());
+				State.SprintCold.Add(Member, Member->ColdLevel);
+				Member->ColdLevel = 0.f;
+				if (Member != Leader)
+				{
+					State.SprintProbe.Add(Member, FVector::ZeroVector);
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s after the confinement: %s, stance from the squad %d"), *Member->DisplayName.ToString(),
+						*UEnum::GetValueAsString(Member->GetStance()), Member->IsStanceFromSquad() ? 1 : 0);
+				}
+			}
+			Leader->OrderMoveTo(SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() - Leader->GetActorForwardVector().GetSafeNormal2D() * 2000.f), true);
+			State.Stage = 107;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case 107:
+		{
+			// Per follower: X = stood up, Y = sprinted, Z = best speed / the leader's while he sprints.
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->ColdLevel = 0.f;
+			}
+			const float LeaderSpeed = static_cast<float>(Leader->GetVelocity().Size2D());
+			for (TPair<TWeakObjectPtr<AOperativeCharacter>, FVector>& Probe : State.SprintProbe)
+			{
+				if (const AOperativeCharacter* Member = Probe.Key.Get())
+				{
+					Probe.Value.X = FMath::Max(Probe.Value.X, Member->GetStance() == EOperativeStance::Standing ? 1.f : 0.f);
+					Probe.Value.Y = FMath::Max(Probe.Value.Y, Member->IsSprinting() ? 1.f : 0.f);
+					if (Leader->IsSprinting() && LeaderSpeed > 300.f)
+					{
+						Probe.Value.Z = FMath::Max(Probe.Value.Z, static_cast<double>(Member->GetVelocity().Size2D() / LeaderSpeed));
+					}
+				}
+			}
+			if (Leader->IsSprinting() && State.StageTime < 4.f)
+			{
+				return true;
+			}
+			int32 Running = 0;
+			FString Who;
+			for (const TPair<TWeakObjectPtr<AOperativeCharacter>, FVector>& Probe : State.SprintProbe)
+			{
+				const bool bRan = Probe.Value.X > 0.5 && Probe.Value.Y > 0.5 && Probe.Value.Z >= 0.9;
+				Running += bRan ? 1 : 0;
+				Who += FString::Printf(TEXT(" %s: up %d sprint %d best %.0f %%;"), Probe.Key.IsValid() ? *Probe.Key->DisplayName.ToString() : TEXT("-"),
+					Probe.Value.X > 0.5 ? 1 : 0, Probe.Value.Y > 0.5 ? 1 : 0, Probe.Value.Z * 100.0);
+			}
+			Check(State, State.SprintProbe.Num() > 0 && Running == State.SprintProbe.Num(),
+				FString::Printf(TEXT("bug 2026-10-20: after the crouch confinement released the leader runs - the followers stand up and run with him (%d / %d:%s %.2f s)"),
+					Running, State.SprintProbe.Num(), *Who, State.StageTime));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				Member->StopOperative();
 				Member->SetStance(EOperativeStance::Standing);
+				if (const FTransform* Home = State.SprintHome.Find(Member))
+				{
+					Member->TeleportTo(Home->GetLocation(), Home->Rotator(), false, true);
+				}
+				if (const float* Cold = State.SprintCold.Find(Member))
+				{
+					Member->ColdLevel = *Cold; // the later lessons run as cold as before
+				}
 			}
 			Tutorial->SkipStep(TEXT("A3_stance"));
 			Tutorial->SkipStep(TEXT("A3_vault"));
@@ -1994,6 +2064,14 @@ namespace TutorialSmoke
 			if (AProximityMineActor* Mine = World->SpawnActor<AProximityMineActor>(Feet + Engineer->GetActorRightVector() * 200.f, FRotator::ZeroRotator, Params))
 			{
 				Mine->Detonate();
+			}
+			// Only HE is the wounded one (a mate standing near him caught the blast too in some runs - the squad's spots vary).
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Member != Engineer)
+				{
+					Member->HealthComponent->Heal(10000.f);
+				}
 			}
 			const float Share = Engineer->HealthComponent->GetCurrentHealth() / FMath::Max(1.f, Engineer->HealthComponent->GetMaxHealth());
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke medkit lesson: the blast left the engineer at %.0f%%"), Share * 100.f);
@@ -2215,10 +2293,36 @@ namespace TutorialSmoke
 						Ambusher ? *Ambusher->DisplayName.ToString() : TEXT("-"), *Tutorial->GetCardView().Title.ToString()));
 				const FTutorialGuideView& Guide = Tutorial->GetGuideView();
 				const APatrolRouteActor* Route = State.AmbushRoute.Get();
+				// The spot is the point of the level's patrol routes nearest to her: the smoke's route 12 m ahead, or a map route that happens to
+				// lie nearer to where she stands (the squad's spots vary a little from run to run).
+				FVector Nearest = FVector::ZeroVector;
+				double NearestDist = TNumericLimits<double>::Max();
+				for (TActorIterator<APatrolRouteActor> It(World); It && Ambusher; ++It)
+				{
+					TArray<FVector> Points;
+					for (int32 Index = 0; Index < It->GetNumberOfWaypoints(); ++Index)
+					{
+						Points.Add(It->GetWaypointWorldLocation(Index));
+					}
+					const int32 Segments = Points.Num() > 1 ? (It->bIsLoop ? Points.Num() : Points.Num() - 1) : Points.Num();
+					for (int32 Index = 0; Index < Segments; ++Index)
+					{
+						const FVector A = Points[Index];
+						const FVector B = Points.Num() > 1 ? Points[(Index + 1) % Points.Num()] : A;
+						const FVector From(Ambusher->GetActorLocation().X, Ambusher->GetActorLocation().Y, A.Z);
+						const FVector Candidate = FMath::ClosestPointOnSegment(From, A, FVector(B.X, B.Y, A.Z));
+						if (FVector::DistSquared2D(Candidate, From) < NearestDist)
+						{
+							NearestDist = FVector::DistSquared2D(Candidate, From);
+							Nearest = Candidate;
+						}
+					}
+				}
+				const float FromOwnRoute = Route ? static_cast<float>(FVector::Dist2D(Guide.Location, Route->GetActorLocation())) : -1.f;
 				Check(State, Guide.bValid && Guide.Guide.Kind == ETutorialGuideKind::Spot && Route
-					&& FVector::Dist2D(Guide.Location, Route->GetActorLocation()) < 200.f,
-					FString::Printf(TEXT("ambush: the current target is the wire spot on the patrol route (%s, %.0f cm from the route)"),
-						*UTutorialSubsystem::DescribeGuide(Guide.Guide), Route ? FVector::Dist2D(Guide.Location, Route->GetActorLocation()) : -1.f));
+					&& (FromOwnRoute < 200.f || FVector::Dist2D(Guide.Location, Nearest) < 50.f),
+					FString::Printf(TEXT("ambush: the current target is the wire spot on the patrol route nearest to her (%s, %.0f cm from the smoke's route, %.0f cm from the nearest route point)"),
+						*UTutorialSubsystem::DescribeGuide(Guide.Guide), FromOwnRoute, FVector::Dist2D(Guide.Location, Nearest)));
 				const FVector Far = SmokeUtils::ClearPoint(World, Leader->GetActorLocation(), Leader->GetActorLocation() + Leader->GetActorForwardVector().GetSafeNormal2D() * 1000.f);
 				const int32 LinesBefore = CountMessages(World, TEXT("handles it"));
 				Check(State, Mate && Mate->OrderMoveTo(Far, false) == EOperativeOrderResult::Refused && CountMessages(World, TEXT("handles it")) == LinesBefore + 1,

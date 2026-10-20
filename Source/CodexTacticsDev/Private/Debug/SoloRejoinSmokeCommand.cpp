@@ -11,6 +11,11 @@
 //  - followers in cover: B ordered into cover through a selection switch (his order runs on); group mode with the leader
 //    standing he stays at the wall; Solo on + the leader 6 m away: he stays; Solo off (Regroup): he leaves the cover and
 //    rejoins; back into cover, then the leader walks 15 m away in group mode: B leaves the cover and reaches the formation.
+// Bug 2026-10-20 (lake demo, after the hut lesson: Regroup, then the Commander RUNS - the two others followed WALKING; Solo on / off
+// again cured it): Solo, C stacked in cover at the wall, B (selected, crouched by Solo) walks "inside", Regroup with B leading (the
+// others copy his crouch), A selected and sent sprinting 15 m: B and C stand up and sprint too (speed >= 90 % of A's within 2.5 s).
+// Run twice: Codex.Squad.SprintStandUp 0 (the old rule) reproduces the bug (they stay crouched), 1 (default) is checked; then the
+// player's own squad crouch (Alt + C) is kept when the leader sprints.
 
 #include "CoreMinimal.h"
 
@@ -84,7 +89,21 @@ namespace SoloRejoinSmoke
 		FVector R = FVector::RightVector;
 		FCoverSlot Slot;
 		TWeakObjectPtr<AStaticMeshActor> Wall;
+
+		// Regroup + sprint (bug 2026-10-20): pass 0 with the old rule, pass 1 with the fix; when B / C first kept up with A.
+		int32 SprintPass = 0;
+		float FastAt[2] = { -1.f, -1.f };
+		float BestRatio[2] = { 0.f, 0.f };
+		bool bStoodUp[2] = { false, false };
 	};
+
+	void SetSprintStandUp(int32 Value)
+	{
+		if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Squad.SprintStandUp")))
+		{
+			CVar->Set(Value, ECVF_SetByConsole);
+		}
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -388,6 +407,148 @@ namespace SoloRejoinSmoke
 			Check(State, State.bFlag && !B->bInCover && Walked > 1000.f && ToA <= 600.f,
 				FString::Printf(TEXT("[cover] group mode: the leader walked %.0f cm away, B left the cover %d and reached the formation (%.0f cm from A)"),
 					Walked, State.bFlag ? 1 : 0, ToA));
+			State.SprintPass = 0;
+			NextStage(State);
+			return true;
+		}
+		case 117:
+			// Regroup + sprint (bug 2026-10-20): a fresh start at the wall; pass 0 = the old rule, pass 1 = the fix.
+			SetSprintStandUp(State.SprintPass == 0 ? 0 : 1);
+			ResetSquad(World, Squad, State);
+			NextStage(State);
+			return true;
+		case 118:
+		{
+			if (State.StageTime < SettleSeconds)
+			{
+				return true;
+			}
+			// Solo (B, C crouch as guards); C stacks at the wall (door), B is selected and walks 4 m "inside", still crouched.
+			Squad->EnterSoloMode();
+			Squad->SetLeader(C);
+			C->OrderTakeCover(State.Slot, false);
+			Squad->SetLeader(B);
+			State.Target = SmokeUtils::ClearPoint(World, B->GetActorLocation(), B->GetActorLocation() - State.F * 400.f);
+			B->OrderMoveTo(State.Target, false);
+			NextStage(State);
+			return true;
+		}
+		case 119:
+		{
+			if ((!C->bInCover || B->IsMoving() || State.StageTime < 2.f) && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, C->bInCover && B->GetStance() == EOperativeStance::Crouching && A->GetStance() == EOperativeStance::Crouching,
+				FString::Printf(TEXT("[regroup sprint %d] Solo: C stacked in cover %d, B (selected) crouched %d, A guards crouched %d"), State.SprintPass,
+					C->bInCover ? 1 : 0, B->GetStance() == EOperativeStance::Crouching ? 1 : 0, A->GetStance() == EOperativeStance::Crouching ? 1 : 0));
+			// Regroup (B) with B leading: A and C copy his crouch; then the Commander (A) is selected and runs (double-click = sprint).
+			Squad->ToggleSoloMode();
+			Check(State, !Squad->IsSoloMode() && A->GetStance() == EOperativeStance::Crouching && C->GetStance() == EOperativeStance::Crouching && !C->bInCover,
+				FString::Printf(TEXT("[regroup sprint %d] Regroup: A and C took the leader's crouch, C left the cover"), State.SprintPass));
+			NextStage(State);
+			return true;
+		}
+		case 120:
+		{
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			Squad->SetLeader(A);
+			State.Target = SmokeUtils::ClearPoint(World, A->GetActorLocation(), A->GetActorLocation() - State.F * 1500.f);
+			A->OrderMoveTo(State.Target, true);
+			Check(State, A->IsSprinting() && A->GetStance() == EOperativeStance::Standing,
+				FString::Printf(TEXT("[regroup sprint %d] A selected and sent sprinting: up and sprinting"), State.SprintPass));
+			for (int32 Index = 0; Index < 2; ++Index)
+			{
+				State.FastAt[Index] = -1.f;
+				State.BestRatio[Index] = 0.f;
+				State.bStoodUp[Index] = false;
+			}
+			NextStage(State);
+			return true;
+		}
+		case 121:
+		{
+			// Every frame: B and C keep up with the sprinting leader (>= 90 % of his speed) and sprint themselves.
+			const float LeaderSpeed = static_cast<float>(A->GetVelocity().Size2D());
+			AOperativeCharacter* Mates[2] = { B, C };
+			for (int32 Index = 0; Index < 2; ++Index)
+			{
+				State.bStoodUp[Index] |= Mates[Index]->GetStance() == EOperativeStance::Standing;
+				if (LeaderSpeed > 300.f && A->IsSprinting())
+				{
+					const float Ratio = static_cast<float>(Mates[Index]->GetVelocity().Size2D()) / LeaderSpeed;
+					State.BestRatio[Index] = FMath::Max(State.BestRatio[Index], Ratio);
+					if (State.FastAt[Index] < 0.f && Ratio >= 0.9f && Mates[Index]->IsSprinting())
+					{
+						State.FastAt[Index] = State.StageTime;
+					}
+				}
+			}
+			if (State.StageTime < 3.f && A->IsSprinting())
+			{
+				return true;
+			}
+			for (int32 Index = 0; Index < 2; ++Index)
+			{
+				const FString What = FString::Printf(TEXT("[regroup sprint, %s] %s: stood up %d, sprinting at >= 90 %% of the leader's speed after %.2f s (best %.0f %%)"),
+					State.SprintPass == 0 ? TEXT("old rule Codex.Squad.SprintStandUp 0") : TEXT("fix"), *Mates[Index]->DisplayName.ToString(),
+					State.bStoodUp[Index] ? 1 : 0, State.FastAt[Index], State.BestRatio[Index] * 100.f);
+				if (State.SprintPass == 0)
+				{
+					Check(State, !State.bStoodUp[Index] && State.FastAt[Index] < 0.f, What + TEXT(" - the bug reproduced (crouched, walking behind him)"));
+				}
+				else
+				{
+					Check(State, State.bStoodUp[Index] && State.FastAt[Index] >= 0.f && State.FastAt[Index] <= 2.5f, What);
+				}
+			}
+			if (State.SprintPass == 0)
+			{
+				State.SprintPass = 1;
+				State.Stage = 117;
+				State.StageTime = 0.f;
+				return true;
+			}
+			SetSprintStandUp(1);
+			State.bFlag = false;
+			NextStage(State);
+			return true;
+		}
+		case 122:
+		{
+			// A stance the player gave (Alt + C) is kept: the squad crouched by the player, the leader sprints - the others stay down.
+			if (State.StageTime < 0.5f)
+			{
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					Member->StopOperative();
+				}
+				return true;
+			}
+			if (State.StageTime < SettleSeconds)
+			{
+				if (A->GetStance() != EOperativeStance::Crouching)
+				{
+					Squad->SetSquadStance(EOperativeStance::Crouching);
+				}
+				return true;
+			}
+			if (!State.bFlag)
+			{
+				State.bFlag = true;
+				State.Target = SmokeUtils::ClearPoint(World, A->GetActorLocation(), A->GetActorLocation() + State.F * 1200.f);
+				A->OrderMoveTo(State.Target, true);
+				return true;
+			}
+			if (State.StageTime < SettleSeconds + 2.5f)
+			{
+				return true;
+			}
+			Check(State, B->GetStance() == EOperativeStance::Crouching && C->GetStance() == EOperativeStance::Crouching,
+				TEXT("[regroup sprint] the player's squad crouch (Alt + C) is kept when the leader sprints (user decision 2026-10-01)"));
 			return Finish(State, true);
 		}
 		default:
@@ -410,7 +571,7 @@ namespace SoloRejoinSmoke
 		}
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-		if (!Leader || Squad->GetMembers().Num() < 3 || State.Time > 330.f)
+		if (!Leader || Squad->GetMembers().Num() < 3 || State.Time > 420.f)
 		{
 			Check(State, false, FString::Printf(TEXT("squad / timeout (stage %d, variant %d)"), State.Stage, State.Variant));
 			return Finish(State, false);

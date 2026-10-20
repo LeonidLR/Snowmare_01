@@ -162,6 +162,15 @@ namespace VisionConeVisibility
 	/** The level the shape shows at a planar point of the cone frame (exactly the mesh's quads / split), 0 = not drawn. */
 	CODEXTACTICS_API uint8 LevelAtPoint(const TArray<FVisionConeRay>& Rays, float HalfAngleDeg, const FVector2D& Point);
 
+	/**
+	 * An operative's cone (game designer 2026-10-20: «the obstacle isn't cut out of the operatives' vision cones»): the squad's sight rule
+	 * (UTacticalSightSubsystem::CanOperativeSee - a clear line from HIS eye, EyeHeightCm for his stance or the peek eye, to the enemy's
+	 * profile point) drawn at two enemy profiles like the enemies' cones: level [0] a standing enemy (SightRules::ProfileHeight Standing,
+	 * 150 cm), level [1] a crouched one (Crouching, 90 cm), both to RangeCm. Full tone = he would see even a crouched enemy there, light
+	 * tone = only a standing one, cut = nobody. LevelCount 1 = the old single 150 cm level (Codex.VisionCones.SquadLevels 1, A/B).
+	 */
+	CODEXTACTICS_API FVisionConeSightSpec MakeOperativeSightSpec(float EyeHeightCm, float RangeCm, int32 LevelCount = 2);
+
 	/** Distance along the direction AngleDeg to the chord between (AngleA, DistanceA) and (AngleB, DistanceB), cm. */
 	CODEXTACTICS_API float ChordDistance(float AngleA, float DistanceA, float AngleB, float DistanceB, float AngleDeg);
 }

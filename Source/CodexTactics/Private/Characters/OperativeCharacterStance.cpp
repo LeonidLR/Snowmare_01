@@ -57,6 +57,7 @@ void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 	// carry their own timing through the anim instance).
 	StanceSettleUntil = GetWorld() && !bInCover ? GetWorld()->GetTimeSeconds() + GetStanceChangeDelay(OldStance, NewStance) : 0.f;
 	Stance = NewStance;
+	++StanceSerial; // a squad-given stance (IsStanceFromSquad) ends with any change
 	if (Stance != EOperativeStance::Standing)
 	{
 		bSprinting = false;

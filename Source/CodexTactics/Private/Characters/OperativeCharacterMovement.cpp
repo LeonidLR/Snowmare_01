@@ -128,6 +128,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		if (Stance == EOperativeStance::Crouching)
 		{
 			Stance = EOperativeStance::Standing;
+			++StanceSerial; // his own order's stance
 		}
 		bSprinting = true;
 	}
@@ -182,6 +183,7 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 				{
 					SetStance(Leader->GetStance());
 				}
+				MarkStanceFromSquad(); // the confinement's copy, not the player's stance key
 			}
 			return EOperativeOrderResult::Refused;
 		}

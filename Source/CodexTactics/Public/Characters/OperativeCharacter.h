@@ -179,6 +179,16 @@ public:
 	void ReleaseOwnMoveOrder() { bOwnMoveOrder = false; }
 
 	/**
+	 * The squad automation set his current stance (Regroup's copy of the leader's stance, Solo's guard crouch, a tutorial confinement's
+	 * copy), not the player's stance key: the formation may stand him up to sprint with the leader (SquadOrderRules::
+	 * ShouldStandToSprintWithLeader, bug 2026-10-20). Any later stance change (the player's) makes it his own again.
+	 */
+	void MarkStanceFromSquad() { SquadStanceSerial = StanceSerial; }
+	bool IsStanceFromSquad() const { return SquadStanceSerial == StanceSerial; }
+	/** The player's stance key / squad stance order (even one that changes nothing): his stance is his own. */
+	void ClearStanceFromSquad() { SquadStanceSerial = MAX_uint32; }
+
+	/**
 	 * Seconds he must stand still while a stance change plays (OperativeMovementRules::ComputeMoveHold): the settle time armed by
 	 * SetStance plus the stance clip already playing. Moves issued meanwhile wait (OrderMoveTo queues, FollowTo refuses).
 	 */
@@ -2085,6 +2095,9 @@ private:
 	bool bHasMoveOrder = false;
 	/** The running move is an order of his own (OrderMoveTo), not a formation move (HasOwnMoveOrder). */
 	bool bOwnMoveOrder = false;
+	/** Counts his stance changes; SquadStanceSerial = the count when the squad automation set it (IsStanceFromSquad). */
+	uint32 StanceSerial = 0;
+	uint32 SquadStanceSerial = MAX_uint32;
 	/** The last RequestMove destination (the walk resumes there after jumping off an obstacle top). */
 	FVector LastMoveDestination = FVector::ZeroVector;
 	uint32 MoveOrderSerial = 0;

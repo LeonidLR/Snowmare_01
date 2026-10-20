@@ -155,6 +155,18 @@ float FVisionConeSightSpec::GetLowTraceHeight() const
 	return Height;
 }
 
+FVisionConeSightSpec VisionConeVisibility::MakeOperativeSightSpec(float EyeHeightCm, float RangeCm, int32 LevelCount)
+{
+	FVisionConeSightSpec Spec;
+	Spec.EyeHeightCm = EyeHeightCm;
+	Spec.Levels.Add({ SightRules::ProfileHeight(EOperativeStance::Standing), RangeCm });
+	if (LevelCount >= 2)
+	{
+		Spec.Levels.Add({ SightRules::ProfileHeight(EOperativeStance::Crouching), RangeCm });
+	}
+	return Spec;
+}
+
 bool VisionConeVisibility::IsBlockedByFace(float EyeCm, float ProfileCm, float FaceCm, float TopCm, float TargetCm)
 {
 	if (TargetCm <= FaceCm)

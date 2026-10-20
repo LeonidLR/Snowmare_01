@@ -125,4 +125,18 @@ bool FSquadOrderGroupCoverJoinTest::RunTest(const FString&)
 	return true;
 }
 
+SQUAD_ORDER_TEST(FSquadOrderStandToSprintTest, "StandToSprintWithLeader")
+bool FSquadOrderStandToSprintTest::RunTest(const FString&)
+{
+	// Bug 2026-10-20 (lake demo, after the hut lesson): Regroup copied the leader's crouch (the Solo guard crouch) to the followers; the
+	// Commander's sprint order stood him up, the crouched followers could not copy the sprint and walked behind him.
+	using namespace SquadOrderRules;
+	TestTrue(TEXT("Regroup / Solo crouch (the squad's) + the leader sprints: he stands up to sprint"), ShouldStandToSprintWithLeader(true, true, true, true));
+	TestFalse(TEXT("The player crouched him (stance key / Alt + C): he keeps his stance (user decision 2026-10-01)"), ShouldStandToSprintWithLeader(true, true, false, true));
+	TestFalse(TEXT("The leader walks: nothing to copy"), ShouldStandToSprintWithLeader(false, true, true, true));
+	TestFalse(TEXT("Already standing: SetSprinting alone"), ShouldStandToSprintWithLeader(true, false, true, true));
+	TestFalse(TEXT("Too cold / wounded / carrying to sprint: stays down"), ShouldStandToSprintWithLeader(true, true, true, false));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
