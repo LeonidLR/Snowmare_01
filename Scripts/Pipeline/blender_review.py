@@ -24,6 +24,9 @@ sys.dont_write_bytecode = True  # no __pycache__ next to the tracked scripts
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pipeline_common as pc  # noqa: E402
 from blender_export import build_atlas_material  # noqa: E402
+from blender_clean import POSES, apply_pose, reset_pose  # noqa: E402
+
+POSE_SHEET = ("crouch_deep", "kneel_aim", "arms_up", "twist_bend", "prone_look_up")
 
 VIEWS = {  # name: (azimuth from the character's forward, elevation, framing)
     "front34": (35.0, 10.0, "body"),
@@ -144,6 +147,38 @@ def replace_file(src, dst):
     return alt
 
 
+def render_poses(arm, fwd, specs, sun_dir, sun, prefix, review_dir, res=512):
+    """The same camera (front 3/4) for every extreme pose of the pose sheet."""
+    scene = bpy.context.scene
+    keep = (scene.render.resolution_x, scene.cycles.samples)
+    scene.render.resolution_x = scene.render.resolution_y = res
+    scene.cycles.samples = 32
+    out = {}
+    for pose in POSE_SHEET:
+        apply_pose(arm, POSES[pose], fwd)
+        out[pose] = render_views({"front34": specs["front34"]}, sun_dir, sun, "%s_pose_%s" % (prefix, pose),
+                                 review_dir)["front34"]
+    reset_pose(arm)
+    scene.render.resolution_x = scene.render.resolution_y = keep[0]
+    scene.cycles.samples = keep[1]
+    return out
+
+
+def pose_sheet(orig, res, path):
+    """Columns = poses; top row original, bottom row reduced result."""
+    bg = np.array([0.5, 0.5, 0.5])
+    rows = []
+    for d in (orig, res):
+        tiles = []
+        for pose in POSE_SHEET:
+            a = pc.read_png_rgb(d[pose])
+            tiles.append(a[..., :3] * a[..., 3:4] + bg * (1 - a[..., 3:4]))
+        rows.append(np.concatenate(tiles, axis=1))
+    tmp = os.path.join(os.path.dirname(path), "_sheet_tmp.png")
+    pc.write_png(tmp, np.concatenate(rows, axis=0), 8)
+    return replace_file(tmp, path)
+
+
 def srgb_to_lab(rgb):
     c = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
     m = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]])
@@ -201,7 +236,7 @@ def texture_memory(paths):
         detail[name] = {"size": [w, h], "format": fmt, "mb": round(mb, 2), "role": roles.get(name, {}).get("role")}
     after_detail = {}
     for kind, fmt, bpp in (("BaseColor", "DXT1", 0.5), ("Normal", "BC5", 1.0), ("ORM", "DXT1 (TC_Masks)", 0.5),
-                           ("Emissive", "DXT1", 0.5), ("Sheen", "BC4", 0.5)):
+                           ("Sheen", "BC4", 0.5)):
         f = paths.tex(kind)
         if os.path.exists(f):
             w, h = png_size(f)
@@ -264,6 +299,8 @@ def main():
     tris_before = len(mesh.data.polygons)
     sun = setup_render(args)
     orig = render_views(specs, sun_dir, sun, "original", paths.review)
+    fwd, _ = forward_and_head(arm, mesh)
+    orig_poses = render_poses(arm, fwd, specs, sun_dir, sun, "original", paths.review)
     n_removed, _ = render_removed(mesh, keys, specs, sun_dir, sun, paths.review)
 
     # RESULT
@@ -279,6 +316,10 @@ def main():
     tris_after = len(m2.data.polygons)
     sun = setup_render(args)
     res = render_views(specs, sun_dir, sun, "result", paths.review)
+    res_poses = render_poses(a2, fwd, specs, sun_dir, sun, "result", paths.review)
+    sheet = pose_sheet(orig_poses, res_poses, os.path.join(paths.review, "pose_sheet.png"))
+    for f in list(orig_poses.values()) + list(res_poses.values()):
+        os.remove(f)
 
     views = {}
     for name in VIEWS:
@@ -306,7 +347,11 @@ def main():
         "worst_view_mean_delta_e": max(v["mean_delta_e76"] for v in views.values()),
         "min_silhouette_iou": min(v["silhouette_iou"] for v in views.values()),
     }
-    pc.update_summary(paths, "review", {"views": views, "texture_memory": mem, "render_samples": args.samples,
+    reduce = summary.get("reduce", {}).get("per_material", {})
+    numbers["triangles_per_material_after"] = {k: v["after"] for k, v in reduce.items()} or None
+    numbers["ray_miss_percent"] = summary.get("bake", {}).get("ray_miss_percent")
+    pc.update_summary(paths, "review", {"pose_sheet": os.path.basename(sheet), "pose_sheet_poses": list(POSE_SHEET),
+                                        "views": views, "texture_memory": mem, "render_samples": args.samples,
                                         "resolution": args.res})
     pc.update_summary(paths, "qa", numbers)
     print("[pipeline] REVIEW_DONE", numbers)

@@ -61,11 +61,17 @@ class Paths:
         self.short = re.sub(r"^SK_", "", self.mesh_name)
         self.source_fbx = os.path.join(self.root, self.inventory["exports"]["mesh_fbx"])
         self.clean_blend = os.path.join(self.blend, self.mesh_name + "_clean.blend")
+        self.reduce_blend = os.path.join(self.blend, self.mesh_name + "_reduce.blend")
         self.atlas_blend = os.path.join(self.blend, self.mesh_name + "_atlas.blend")
         self.bake_blend = os.path.join(self.blend, self.mesh_name + "_bake.blend")
         self.original_blend = os.path.join(self.blend, self.mesh_name + "_original.blend")
         self.export_fbx = os.path.join(self.export, self.mesh_name + "_1slot.fbx")
         self.report_path = os.path.join(self.review, "summary.json")
+
+    @property
+    def high_name(self):
+        """The bake source kept next to a reduced mesh (blender_reduce.py)."""
+        return self.mesh_name + "_high"
 
     def tex(self, kind, ext="png"):
         return os.path.join(self.baked, "T_%s_%s.%s" % (self.short, kind, ext))

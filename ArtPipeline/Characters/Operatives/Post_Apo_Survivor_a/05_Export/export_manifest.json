@@ -45,8 +45,8 @@
     "uv_maps": [
       "UV_Atlas"
     ],
-    "triangles": 209137,
-    "vertices": 127038,
+    "triangles": 49994,
+    "vertices": 26920,
     "vertex_groups": 66,
     "shape_keys": 0,
     "custom_normals": true,
@@ -64,7 +64,6 @@
     "BaseColor": "T_Post_Apo_Survivor_a_BaseColor.png",
     "Normal": "T_Post_Apo_Survivor_a_Normal.png",
     "ORM": "T_Post_Apo_Survivor_a_ORM.png",
-    "Emissive": "T_Post_Apo_Survivor_a_Emissive.png",
     "Sheen": "T_Post_Apo_Survivor_a_Sheen.png"
   },
   "unreal_import_notes": [
@@ -73,6 +72,7 @@
     "Normal map is DirectX (green down) - no Flip Green; compression TC_Normalmap (BC5), sRGB off",
     "ORM: sRGB off, TC_Masks; R=AO G=Roughness B=Metallic - values are FINAL (no Power / sRGB decode)",
     "BaseColor: sRGB on, TC_Default (no alpha -> BC1/DXT1)",
-    "Sheen (optional): BaseColor + Fresnel * Sheen reproduces the old cloth Fresnel rim (0.07)"
+    "Sheen: BaseColor + Fresnel * Sheen reproduces the old cloth Fresnel rim (0.07)",
+    "No Emissive texture (designer decision 2026-10-20)"
   ]
 }

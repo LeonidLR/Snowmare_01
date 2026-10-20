@@ -378,4 +378,5 @@ def main():
         sum(before.values()), sum(after.values()), len(hair_faces), len(hidden)))
 
 
-main()
+if __name__ == "__main__":
+    main()

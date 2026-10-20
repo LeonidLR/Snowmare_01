@@ -62,7 +62,7 @@ def build_atlas_material(mat, paths, uv_name=ATLAS_UV, with_sheen=True):
     bc = img("BaseColor", "sRGB")
     orm = img("ORM", "Non-Color")
     nrm = img("Normal", "Non-Color")
-    em = img("Emissive", "sRGB")
+    em = None  # no Emissive map (designer decision 2026-10-20)
     sheen = img("Sheen", "Non-Color") if with_sheen else None
     base = bc.outputs["Color"]
     if sheen is not None:  # BaseColor + Sheen * Fresnel(0.04 + 0.96 (1-NdotV)^5), as the Unreal materials did
@@ -229,7 +229,7 @@ def main():
         "fbx": os.path.basename(paths.export_fbx), "material_slot": args.slot, "uv0": ATLAS_UV,
         "skeleton": paths.inventory.get("skeleton"), "root_bone_added": root_name, "top_bones_reparented": tops,
         "blender_fbx_settings": settings, "roundtrip_checks": checks,
-        "textures": {k: os.path.basename(paths.tex(k)) for k in ("BaseColor", "Normal", "ORM", "Emissive", "Sheen")
+        "textures": {k: os.path.basename(paths.tex(k)) for k in ("BaseColor", "Normal", "ORM", "Sheen")
                      if os.path.exists(paths.tex(k))},
         "unreal_import_notes": [
             "Import onto the SAME skeleton: %s" % paths.inventory.get("skeleton"),
@@ -237,7 +237,8 @@ def main():
             "Normal map is DirectX (green down) - no Flip Green; compression TC_Normalmap (BC5), sRGB off",
             "ORM: sRGB off, TC_Masks; R=AO G=Roughness B=Metallic - values are FINAL (no Power / sRGB decode)",
             "BaseColor: sRGB on, TC_Default (no alpha -> BC1/DXT1)",
-            "Sheen (optional): BaseColor + Fresnel * Sheen reproduces the old cloth Fresnel rim (0.07)",
+            "Sheen: BaseColor + Fresnel * Sheen reproduces the old cloth Fresnel rim (0.07)",
+            "No Emissive texture (designer decision 2026-10-20)",
         ]})
     pc.update_summary(paths, "export", {"fbx": os.path.relpath(paths.export_fbx, paths.root).replace("\\", "/"),
                                         "checks": checks})

@@ -41,6 +41,8 @@ def parse():
     p.add_argument("--search-time", type=int, default=60, help="UVPackmaster heuristic search seconds")
     p.add_argument("--fill", type=float, default=0.72, help="expected coverage, for the source-density clamp")
     p.add_argument("--builtin", action="store_true")
+    p.add_argument("--source", choices=("auto", "clean", "reduce"), default="auto",
+                   help="auto: the reduced mesh when 03_Blender/<mesh>_reduce.blend exists")
     return p.parse_args(pc.script_args())
 
 
@@ -239,7 +241,11 @@ def run_builtin(mesh, args, no_rotation=False):
 def main():
     args = parse()
     paths = pc.Paths(args.asset_dir)
-    bpy.ops.wm.open_mainfile(filepath=paths.clean_blend)
+    src = args.source
+    if src == "auto":
+        src = "reduce" if os.path.exists(paths.reduce_blend) else "clean"
+    bpy.ops.wm.open_mainfile(filepath=paths.reduce_blend if src == "reduce" else paths.clean_blend)
+    print("[pipeline] atlas source:", src)
     mesh = bpy.data.objects[paths.mesh_name]
     me = mesh.data
     src_uv = me.uv_layers[0].name
@@ -383,7 +389,7 @@ def main():
     legend = write_layout(os.path.join(paths.review, "atlas_layout.png"), owner, slots)
     bpy.ops.wm.save_as_mainfile(filepath=paths.atlas_blend, compress=True)
     pc.update_summary(paths, "atlas", {
-        "packer": packer, "packer_note": note, "pack_seconds": round(t_pack.seconds, 1), "resolution": args.res,
+        "source_blend": src, "packer": packer, "packer_note": note, "pack_seconds": round(t_pack.seconds, 1), "resolution": args.res,
         "margin_px": args.margin_px, "border_px": args.border_px, "rotation_step": args.rot_step,
         "islands": len(isl), "clusters": len(clusters), "down_facing_clusters": down,
         "mirrored_stacked_clusters_rot180": dict(mixed_by_mat), "mirrored_stacked_faces": len(mixed_faces),

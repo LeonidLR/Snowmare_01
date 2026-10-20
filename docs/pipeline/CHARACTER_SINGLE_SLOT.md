@@ -67,16 +67,18 @@ Scripts (source of truth, re-runnable for any character; paths / names / resolut
 | Stage | Script | Run |
 |---|---|---|
 | 1 inventory + export (Unreal, read-only) | `Scripts/Pipeline/unreal_export_inventory.py` | `Scripts/Pipeline/run_unreal_export.ps1 -Mesh /Game/... -Out ArtPipeline/... [-AnimRegex ...]` |
-| 2 clean-up | `Scripts/Pipeline/blender_clean.py` | `Scripts/Pipeline/run_blender_pipeline.ps1 -AssetDir ArtPipeline/... [-Stages clean,atlas,bake,export,review]` |
+| 2 clean-up | `Scripts/Pipeline/blender_clean.py` | `Scripts/Pipeline/run_blender_pipeline.ps1 -AssetDir ArtPipeline/... [-Stages clean,reduce,atlas,bake,export,review]` |
+| 2b reduce (decimate) | `Scripts/Pipeline/blender_reduce.py` | same wrapper (`-ExtraArgs @{reduce="--target-tris 30000"}` for enemies) |
 | 3 atlas uv | `Scripts/Pipeline/blender_atlas.py` | same wrapper |
 | 4 bake | `Scripts/Pipeline/blender_bake.py` | same wrapper |
 | 5 export | `Scripts/Pipeline/blender_export.py` | same wrapper |
 | 6 review | `Scripts/Pipeline/blender_review.py` | same wrapper |
+| 7 import (prepared, not run yet) | `Scripts/Pipeline/unreal_import_optimized.py` | headless editor, needs the user's editor closed |
 | shared | `pipeline_common.py` (paths, FBX import in cm, PNG writer), `material_graph.py` (UE graph -> Blender nodes, texture roles) | |
 
 Outputs per asset folder: `01_Source/inventory.json` (+ `texture_roles.json`, `slot_decisions.json`: ground-truth
 tables for later automatic triage), `03_Blender/*.blend` + stage logs, `04_Textures_Baked/T_<Name>_{BaseColor,Normal,
-ORM,Emissive,Sheen}.png` (+ previews), `05_Export/<SK>_1slot.fbx` + `export_manifest.json`, `06_Review/` renders +
+ORM,Sheen}.png` (+ previews), `05_Export/<SK>_1slot.fbx` + `export_manifest.json`, `06_Review/` renders +
 `summary.json` (every stage merges its numbers; the `qa` block holds the triage numbers).
 
 What we learned:
@@ -121,22 +123,42 @@ What we learned:
   runs synchronously with the PRO engine. Pilot: 902 islands, 60 s heuristic search, 12 px margin + 4 px border at
   4K, rotation step 90 (45 gave the same coverage), coverage ~78 %. Blender's packer remains as the fallback
   (`--builtin`; no rotation when mirrored stacks exist).
-- **Bake** (Cycles, OptiX on the RTX 3080, ~45 s for all maps): emit passes for BaseColor (4K sRGB), AO / Roughness /
-  Metallic (2K each, packed into ORM), Emissive (2K; only ~0.008 % texels lit - candidate to drop), Sheen (1K); a real
-  tangent-space NORMAL bake in the `UV_Atlas` frame written DirectX (green down) as a 16-bit PNG; 16 px dilation
-  (adjacent faces). Source normal maps are DirectX and are flipped for Blender when sampled.
+- **Reduce** (`blender_reduce.py`, non-destructive: reads `_clean.blend`, writes `_reduce.blend` with the reduced
+  `<SK>` and an untouched `<SK>_high` bake source). Collapse decimation per material with a budget
+  `ratio = min(1, w * g)` solved for the target (default 50 000 for operatives). Weights: body / mask / gloves / boots
+  keep everything (they are already low-poly and deform), radio / flashlight 1.0, ropes 1.0 (thin coils fall apart
+  below ~20 %: first try at 0.35 gave noodles), backpack 0.8, pouches 0.7, carabiners 0.7, axe / shovel 0.6. Before
+  decimating, split render vertices are welded (0.001 cm, sharp edges kept). A vertex group steers the collapse away
+  from uv seams, material borders, open borders and skin-blend zones (Blender collapses HIGH group weights first, so
+  the group holds 1 - protection). Normals of the reduced mesh: smooth + sharp by angle 60 degrees, frozen as custom
+  normals so the bake, the per-material split and the FBX all use the same frame.
+- **Bake** (Cycles, OptiX on the RTX 3080). With a high mesh present the bake is a projection (selected-to-active,
+  cage extrusion 0.6 cm, max ray 3 cm): each material separately (only that material's high part is a ray target,
+  so straps do not paint the cloth under them), the low mesh's other faces bake into an 8 px dummy image; per-pass
+  margins would overwrite neighbours, so the 16 px dilation is a numpy pass afterwards. Ray misses are measured
+  against the low mesh's own coverage (`06_Review/bake_misses.png`, red = miss). Normals that come back pointing into
+  the surface (rays reaching the back of thin buckles; first try with a 1.5 cm cage rendered them black) are clamped
+  to the front hemisphere. Maps: BaseColor 4K sRGB, AO / Roughness / Metallic 2K each packed into ORM, Sheen 1K, a
+  tangent-space NORMAL in the `UV_Atlas` frame written DirectX (green down) as a 16-bit PNG. No Emissive map
+  (designer decision 2026-10-20). Without a high mesh the mesh bakes from itself (first pilot run).
 - **Export / skeleton.** Importing the Unreal FBX into a scene with unit scale 0.01 keeps everything in centimetres
   at object scale 1 (no x100 fix-ups). The importer turns the FBX `root` bone into the armature OBJECT; the exporter
   adds a real `root` bone back (identity, at the origin) and names the object `Armature` (Unreal drops that node), so
   the hierarchy is root -> pelvis / ik_foot_root / ik_hand_root as in `UE4_Mannequin_Skeleton`. A Blender round trip
   verifies bone names, parents and rest positions (max deviation 0.0001 cm), one slot, one uv map, no leaf bones.
-- **Review** (Cycles, neutral light, same cameras, original = untouched mesh with all 14 materials): mean CIE76 dE
-  ~1 per view, silhouette IoU 1.0; estimated texture memory 437 MB (44 source textures, full mips) -> 38 MB.
+- **Review** (Cycles, neutral light, same cameras, original = untouched mesh with all 14 materials) plus a pose sheet
+  (`06_Review/pose_sheet.png`: crouch, kneel-aim, arms up, twist, prone look-up; top row original, bottom row reduced)
+  for joint collapse / interpenetration. Pilot result (50k tris): mean CIE76 dE 1.07-1.43 per view (p95 3.8-5.9),
+  silhouette IoU >= 0.996, ray misses 0.04 %, 1.9 % of normal texels clamped; estimated texture memory 437 MB
+  (44 source textures, full mips) -> 35 MB. Materials the reduce stage leaves untouched (mask, hoodie, pants,
+  boots / gloves) bake from themselves inside the projection run and keep their authored normals (projection onto
+  identical geometry only added ray errors at the hood rim). Known soft spot: the backpack shoulder straps (reduced
+  to 17 %) show lighter patches in the face close-up.
 
 Stage 7+ (Unreal import) needs: import `05_Export/<SK>_1slot.fbx` onto `UE4_Mannequin_Skeleton` under
 `/Game/Characters/<owner>/Optimized/` (Import Normals, MikkTSpace tangents; check the facing direction and bone
 positions against the original), textures BaseColor sRGB BC1, Normal BC5 (DirectX, no Flip Green), ORM linear
-TC_Masks (final values), Sheen BC4 (optional), Emissive (optional); a character master material (Opaque:
+TC_Masks (final values), Sheen BC4, no Emissive; a character master material (Opaque:
 BaseColor + Fresnel * Sheen, ORM unpacked without Power, Normal); reuse `SK_Post_Apo_Survivor_a_PhysicsAsset`;
 regenerate LODs; then the in-game smoke (slot count, draw calls, animation poke-through especially at the removed
 boot shafts / glove cuffs / mask back).

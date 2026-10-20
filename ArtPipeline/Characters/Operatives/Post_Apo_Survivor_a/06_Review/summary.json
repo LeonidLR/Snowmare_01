@@ -30,11 +30,12 @@
   "stage_times": {
     "source": "2026-10-20 17:49:40",
     "clean": "2026-10-20 18:29:00",
-    "atlas": "2026-10-20 18:32:44",
-    "bake": "2026-10-20 18:34:03",
-    "export": "2026-10-20 18:34:18",
-    "review": "2026-10-20 18:40:12",
-    "qa": "2026-10-20 18:40:12"
+    "atlas": "2026-10-20 20:09:47",
+    "bake": "2026-10-20 20:18:45",
+    "export": "2026-10-20 20:18:54",
+    "review": "2026-10-20 20:21:45",
+    "qa": "2026-10-20 20:21:45",
+    "reduce": "2026-10-20 20:08:08"
   },
   "clean": {
     "hair_slots": [],
@@ -219,130 +220,134 @@
     }
   },
   "atlas": {
+    "source_blend": "reduce",
     "packer": "uvpackmaster4",
     "packer_note": "UVPackmaster result {'FINISHED', 'PASS_THROUGH'} retcode 0 (UVPackmaster Engine: 4.1.0 PRO)",
-    "pack_seconds": 123.9,
+    "pack_seconds": 70.2,
     "resolution": 4096,
     "margin_px": 12,
     "border_px": 4,
     "rotation_step": 90,
-    "islands": 902,
-    "clusters": 104,
-    "down_facing_clusters": 5,
+    "islands": 941,
+    "clusters": 105,
+    "down_facing_clusters": 8,
     "mirrored_stacked_clusters_rot180": {
-      "M_Axe": 1,
+      "M_Axe": 2,
       "M_Backpack": 9,
       "M_Boot_Glove": 1,
-      "M_Outfit_Pants": 1,
-      "M_Shovel": 2,
-      "M_Small_Bags": 1,
-      "M_Waist_Pack": 1
+      "M_Carabiners": 1,
+      "M_Radio": 1,
+      "M_Rope_a": 1,
+      "M_Rope_b": 1,
+      "M_Shovel": 4,
+      "M_Small_Bags": 2,
+      "M_Waist_Pack": 3
     },
-    "mirrored_stacked_faces": 100436,
-    "uv_area_sum": 0.9371,
+    "mirrored_stacked_faces": 35084,
+    "uv_area_sum": 0.9392,
     "loops_out_of_0_1": 0,
     "texel_density": {
       "M_Axe": {
-        "atlas_px_per_cm": 11.57,
-        "source_px_per_cm": 98.52,
-        "ratio": 0.117,
+        "atlas_px_per_cm": 11.61,
+        "source_px_per_cm": 98.25,
+        "ratio": 0.118,
         "weight": 0.8,
         "source_res": 4096
       },
       "M_Backpack": {
-        "atlas_px_per_cm": 13.02,
-        "source_px_per_cm": 27.37,
-        "ratio": 0.476,
+        "atlas_px_per_cm": 13.06,
+        "source_px_per_cm": 26.95,
+        "ratio": 0.485,
         "weight": 0.9,
         "source_res": 4096
       },
       "M_Boot_Glove": {
-        "atlas_px_per_cm": 13.02,
+        "atlas_px_per_cm": 13.06,
         "source_px_per_cm": 74.21,
-        "ratio": 0.175,
+        "ratio": 0.176,
         "weight": 0.9,
         "source_res": 4096
       },
       "M_Carabiners": {
-        "atlas_px_per_cm": 10.12,
-        "source_px_per_cm": 153.77,
-        "ratio": 0.066,
+        "atlas_px_per_cm": 10.15,
+        "source_px_per_cm": 151.19,
+        "ratio": 0.067,
         "weight": 0.7,
         "source_res": 4096
       },
       "M_Flashlight": {
-        "atlas_px_per_cm": 13.02,
-        "source_px_per_cm": 198.36,
+        "atlas_px_per_cm": 13.06,
+        "source_px_per_cm": 198.86,
         "ratio": 0.066,
         "weight": 0.9,
         "source_res": 2048
       },
       "M_Mask": {
-        "atlas_px_per_cm": 28.92,
+        "atlas_px_per_cm": 29.02,
         "source_px_per_cm": 80.52,
-        "ratio": 0.359,
+        "ratio": 0.36,
         "weight": 2.0,
         "source_res": 4096
       },
       "M_Outfit_Hoodie": {
-        "atlas_px_per_cm": 20.22,
+        "atlas_px_per_cm": 20.3,
         "source_px_per_cm": 29.68,
-        "ratio": 0.681,
+        "ratio": 0.684,
         "weight": 1.4,
         "source_res": 4096
       },
       "M_Outfit_Pants": {
-        "atlas_px_per_cm": 14.46,
+        "atlas_px_per_cm": 14.51,
         "source_px_per_cm": 30.34,
-        "ratio": 0.477,
+        "ratio": 0.478,
         "weight": 1.0,
         "source_res": 4096
       },
       "M_Radio": {
-        "atlas_px_per_cm": 13.02,
-        "source_px_per_cm": 104.39,
+        "atlas_px_per_cm": 13.06,
+        "source_px_per_cm": 104.26,
         "ratio": 0.125,
         "weight": 0.9,
         "source_res": 2048
       },
       "M_Rope_a": {
-        "atlas_px_per_cm": 10.12,
-        "source_px_per_cm": 320.86,
+        "atlas_px_per_cm": 10.16,
+        "source_px_per_cm": 318.95,
         "ratio": 0.032,
         "weight": 0.7,
         "source_res": 1024
       },
       "M_Rope_b": {
-        "atlas_px_per_cm": 10.12,
-        "source_px_per_cm": 371.01,
-        "ratio": 0.027,
+        "atlas_px_per_cm": 10.16,
+        "source_px_per_cm": 369.26,
+        "ratio": 0.028,
         "weight": 0.7,
         "source_res": 1024
       },
       "M_Shovel": {
-        "atlas_px_per_cm": 11.57,
-        "source_px_per_cm": 89.79,
-        "ratio": 0.129,
+        "atlas_px_per_cm": 11.61,
+        "source_px_per_cm": 88.99,
+        "ratio": 0.13,
         "weight": 0.8,
         "source_res": 4096
       },
       "M_Small_Bags": {
-        "atlas_px_per_cm": 13.02,
-        "source_px_per_cm": 61.62,
-        "ratio": 0.211,
+        "atlas_px_per_cm": 13.06,
+        "source_px_per_cm": 61.58,
+        "ratio": 0.212,
         "weight": 0.9,
         "source_res": 2048
       },
       "M_Waist_Pack": {
-        "atlas_px_per_cm": 13.02,
-        "source_px_per_cm": 74.19,
-        "ratio": 0.175,
+        "atlas_px_per_cm": 13.05,
+        "source_px_per_cm": 73.97,
+        "ratio": 0.176,
         "weight": 0.9,
         "source_res": 4096
       }
     },
     "cross_material_overlap_px_1k": 0,
-    "covered_px_1k": 817162,
+    "covered_px_1k": 825892,
     "cross_material_overlap_percent": 0.0,
     "layout_image": "06_Review/atlas_layout.png",
     "layout_legend": {
@@ -364,43 +369,51 @@
     "note": "coverage % is measured on the baked mask in blender_bake.py"
   },
   "bake": {
+    "mode": "project",
     "device": "OPTIX",
     "samples": 4,
     "margin_px": 16,
     "resolution": 4096,
     "orm_resolution": 2048,
-    "atlas_coverage_percent": 77.93,
+    "cage_extrusion_cm": 0.6,
+    "max_ray_cm": 3.0,
+    "ray_miss_percent": 0.036,
+    "self_baked_slots": [
+      "M_Boot_Glove",
+      "M_Mask",
+      "M_Outfit_Hoodie",
+      "M_Outfit_Pants"
+    ],
+    "normal_back_facing_clamped_percent": 1.908,
+    "atlas_coverage_percent": 78.76,
     "seconds": {
-      "coverage": 1.7,
-      "base_color": 14.1,
-      "normal": 16.4,
-      "ao": 4.2,
-      "roughness": 4.6,
-      "metallic": 5.0,
-      "emissive": 2.9,
-      "sheen": 3.4
+      "coverage": 0.9,
+      "hit": 14.0,
+      "base_color": 101.4,
+      "normal": 147.7,
+      "ao": 49.0,
+      "roughness": 42.9,
+      "metallic": 40.7,
+      "sheen": 31.7
     },
     "orm_channel_stats": {
       "ao": {
         "min": 0.0,
-        "mean": 0.8,
+        "mean": 0.806,
         "max": 1.0
       },
       "roughness": {
-        "min": 0.06,
-        "mean": 0.885,
+        "min": 0.0,
+        "mean": 0.884,
         "max": 1.0
       },
       "metallic": {
         "min": 0.0,
-        "mean": 0.016,
+        "mean": 0.015,
         "max": 1.0
       }
     },
-    "emissive": {
-      "nonzero_fraction": 0.0001785755157470703,
-      "res": 2048
-    },
+    "emissive": null,
     "sheen_values": [
       0.0,
       0.07
@@ -410,8 +423,7 @@
       "BaseColor": "04_Textures_Baked/T_Post_Apo_Survivor_a_BaseColor.png",
       "Normal": "04_Textures_Baked/T_Post_Apo_Survivor_a_Normal.png",
       "ORM": "04_Textures_Baked/T_Post_Apo_Survivor_a_ORM.png",
-      "Sheen": "04_Textures_Baked/T_Post_Apo_Survivor_a_Sheen.png",
-      "Emissive": "04_Textures_Baked/T_Post_Apo_Survivor_a_Emissive.png"
+      "Sheen": "04_Textures_Baked/T_Post_Apo_Survivor_a_Sheen.png"
     }
   },
   "export": {
@@ -425,8 +437,8 @@
       "uv_maps": [
         "UV_Atlas"
       ],
-      "triangles": 209137,
-      "vertices": 127038,
+      "triangles": 49994,
+      "vertices": 26920,
       "vertex_groups": 66,
       "shape_keys": 0,
       "custom_normals": true,
@@ -442,44 +454,52 @@
     }
   },
   "review": {
+    "pose_sheet": "pose_sheet.png",
+    "pose_sheet_poses": [
+      "crouch_deep",
+      "kneel_aim",
+      "arms_up",
+      "twist_bend",
+      "prone_look_up"
+    ],
     "views": {
       "front34": {
-        "rgb_rmse_0_255": 2.75,
-        "mean_delta_e76": 0.96,
-        "p95_delta_e76": 2.72,
-        "silhouette_iou": 1.0,
-        "pixels_compared": 144155,
+        "rgb_rmse_0_255": 4.74,
+        "mean_delta_e76": 1.14,
+        "p95_delta_e76": 4.35,
+        "silhouette_iou": 0.9983,
+        "pixels_compared": 144190,
         "image": "compare_front34.png"
       },
       "back34": {
-        "rgb_rmse_0_255": 2.74,
-        "mean_delta_e76": 0.94,
-        "p95_delta_e76": 2.61,
-        "silhouette_iou": 1.0,
-        "pixels_compared": 132849,
+        "rgb_rmse_0_255": 4.08,
+        "mean_delta_e76": 1.07,
+        "p95_delta_e76": 3.8,
+        "silhouette_iou": 0.9973,
+        "pixels_compared": 132962,
         "image": "compare_back34.png"
       },
       "tactical": {
-        "rgb_rmse_0_255": 3.76,
-        "mean_delta_e76": 1.24,
-        "p95_delta_e76": 3.54,
-        "silhouette_iou": 1.0,
-        "pixels_compared": 116172,
+        "rgb_rmse_0_255": 5.82,
+        "mean_delta_e76": 1.43,
+        "p95_delta_e76": 5.54,
+        "silhouette_iou": 0.9965,
+        "pixels_compared": 116242,
         "image": "compare_tactical.png"
       },
       "face": {
-        "rgb_rmse_0_255": 4.21,
-        "mean_delta_e76": 1.19,
-        "p95_delta_e76": 4.11,
-        "silhouette_iou": 1.0,
-        "pixels_compared": 561297,
+        "rgb_rmse_0_255": 7.41,
+        "mean_delta_e76": 1.43,
+        "p95_delta_e76": 5.93,
+        "silhouette_iou": 0.9977,
+        "pixels_compared": 561934,
         "image": "compare_face.png"
       }
     },
     "texture_memory": {
       "before_mb": 437.3,
-      "after_mb": 38.0,
-      "after_without_optional_mb": 37.3,
+      "after_mb": 35.3,
+      "after_without_optional_mb": 34.7,
       "before_textures": 44,
       "before_detail": {
         "T_Axe_BaseColor": {
@@ -904,14 +924,6 @@
           "format": "DXT1 (TC_Masks)",
           "mb": 2.67
         },
-        "Emissive": {
-          "size": [
-            2048,
-            2048
-          ],
-          "format": "DXT1",
-          "mb": 2.67
-        },
         "Sheen": {
           "size": [
             1024,
@@ -930,23 +942,196 @@
     "slots_before": 14,
     "slots_after": 1,
     "triangles_before": 213548,
-    "triangles_after": 209137,
+    "triangles_after": 49994,
     "triangles_removed_hidden": 4411,
     "triangles_removed_hair": 0,
     "triangles_removed_check_by_position": 4409,
-    "atlas_coverage_percent": 77.93,
+    "atlas_coverage_percent": 78.76,
     "texture_memory_before_mb": 437.3,
-    "texture_memory_after_mb": 38.0,
+    "texture_memory_after_mb": 35.3,
     "hidden_in_all_poses_before_safety_ring": 29272,
     "bake_warnings": [
       "T_Carabiners_OcclusionRoughnessMetallic: scalar/colour data sampled with a Normal sampler in M_Carabiners (roughness): Unreal reconstructs Z / remaps to -1..1 - authoring error, baked as raw linear channel (intent)",
       "T_Carabiners_OcclusionRoughnessMetallic: scalar/colour data sampled with a Normal sampler in M_Carabiners (metallic): Unreal reconstructs Z / remaps to -1..1 - authoring error, baked as raw linear channel (intent)",
       "T_Carabiners_OcclusionRoughnessMetallic: scalar/colour data sampled with a Normal sampler in M_Carabiners (ambient_occlusion): Unreal reconstructs Z / remaps to -1..1 - authoring error, baked as raw linear channel (intent)"
     ],
-    "emissive_texel_fraction": 0.0001785755157470703,
+    "emissive_texel_fraction": null,
     "cross_material_overlap_percent": 0.0,
     "export_roundtrip_ok": true,
-    "worst_view_mean_delta_e": 1.24,
-    "min_silhouette_iou": 1.0
+    "worst_view_mean_delta_e": 1.43,
+    "min_silhouette_iou": 0.9965,
+    "triangles_per_material_after": {
+      "M_Axe": 3115,
+      "M_Backpack": 8211,
+      "M_Boot_Glove": 5889,
+      "M_Carabiners": 1497,
+      "M_Flashlight": 280,
+      "M_Mask": 3369,
+      "M_Outfit_Hoodie": 5335,
+      "M_Outfit_Pants": 4251,
+      "M_Radio": 708,
+      "M_Rope_a": 4282,
+      "M_Rope_b": 3896,
+      "M_Shovel": 2282,
+      "M_Small_Bags": 3964,
+      "M_Waist_Pack": 2915
+    },
+    "ray_miss_percent": 0.036
+  },
+  "reduce": {
+    "target_tris": 50000,
+    "triangles_before": 209137,
+    "triangles_after": 49994,
+    "vertices_welded": 108146,
+    "vertices_after": 26920,
+    "per_material": {
+      "M_Axe": {
+        "before": 24464,
+        "budget": 3116,
+        "after": 3115,
+        "keep_weight": 0.6,
+        "ratio": 0.127,
+        "passes": [
+          0.127
+        ]
+      },
+      "M_Backpack": {
+        "before": 48350,
+        "budget": 8211,
+        "after": 8211,
+        "keep_weight": 0.8,
+        "ratio": 0.17,
+        "passes": [
+          0.17
+        ]
+      },
+      "M_Boot_Glove": {
+        "before": 5889,
+        "budget": 5889,
+        "after": 5889,
+        "keep_weight": 100.0,
+        "ratio": 1.0,
+        "passes": []
+      },
+      "M_Carabiners": {
+        "before": 10083,
+        "budget": 1498,
+        "after": 1497,
+        "keep_weight": 0.7,
+        "ratio": 0.148,
+        "passes": [
+          0.149
+        ]
+      },
+      "M_Flashlight": {
+        "before": 1317,
+        "budget": 280,
+        "after": 280,
+        "keep_weight": 1.0,
+        "ratio": 0.213,
+        "passes": [
+          0.213
+        ]
+      },
+      "M_Mask": {
+        "before": 3369,
+        "budget": 3369,
+        "after": 3369,
+        "keep_weight": 100.0,
+        "ratio": 1.0,
+        "passes": []
+      },
+      "M_Outfit_Hoodie": {
+        "before": 5335,
+        "budget": 5335,
+        "after": 5335,
+        "keep_weight": 100.0,
+        "ratio": 1.0,
+        "passes": []
+      },
+      "M_Outfit_Pants": {
+        "before": 4253,
+        "budget": 4253,
+        "after": 4251,
+        "keep_weight": 100.0,
+        "ratio": 1.0,
+        "passes": []
+      },
+      "M_Radio": {
+        "before": 3334,
+        "budget": 708,
+        "after": 708,
+        "keep_weight": 1.0,
+        "ratio": 0.212,
+        "passes": [
+          0.212
+        ]
+      },
+      "M_Rope_a": {
+        "before": 20171,
+        "budget": 4282,
+        "after": 4282,
+        "keep_weight": 1.0,
+        "ratio": 0.212,
+        "passes": [
+          0.212
+        ]
+      },
+      "M_Rope_b": {
+        "before": 18358,
+        "budget": 3897,
+        "after": 3896,
+        "keep_weight": 1.0,
+        "ratio": 0.212,
+        "passes": [
+          0.212
+        ]
+      },
+      "M_Shovel": {
+        "before": 17917,
+        "budget": 2282,
+        "after": 2282,
+        "keep_weight": 0.6,
+        "ratio": 0.127,
+        "passes": [
+          0.127
+        ]
+      },
+      "M_Small_Bags": {
+        "before": 26673,
+        "budget": 3964,
+        "after": 3964,
+        "keep_weight": 0.7,
+        "ratio": 0.149,
+        "passes": [
+          0.149
+        ]
+      },
+      "M_Waist_Pack": {
+        "before": 19624,
+        "budget": 2916,
+        "after": 2915,
+        "keep_weight": 0.7,
+        "ratio": 0.149,
+        "passes": [
+          0.149
+        ]
+      }
+    },
+    "g": 0.2123,
+    "protect_factor": 2.0,
+    "protection": {
+      "uv_seam_edges": 17707,
+      "open_border_edges": 7633,
+      "material_border_edges": 38,
+      "joint_blend_vertices": 3876
+    },
+    "degenerate_faces": 0,
+    "non_manifold_edges": 0,
+    "unweighted_vertices": 0,
+    "sharp_angle": 60.0,
+    "authored_normals_restored_loops": 56532,
+    "seconds": 30.1,
+    "decimate_seconds": 9.0
   }
 }
