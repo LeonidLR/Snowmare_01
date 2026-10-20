@@ -137,7 +137,7 @@ def build_atlas_material(mat, paths, uv_name=ATLAS_UV, with_sheen=True, variant=
     return mat
 
 
-def add_root_bone(arm):
+def add_root_bone(arm, root_matrix=None):
     """The Unreal skeleton root as a real bone; the object becomes `Armature` (dropped by Unreal's importer).
 
     Blender's FBX importer always turns the top node of the Unreal skeleton into the armature OBJECT - that node is the
@@ -157,6 +157,9 @@ def add_root_bone(arm):
         root.head = Vector((0, 0, 0))
         root.tail = Vector((0, 10.0, 0))  # identity rest matrix (bone Y axis = +Y), 10 cm long
         root.roll = 0.0
+        if root_matrix is not None:
+            # the FBX root node had a transform (e.g. a 3ds Max biped root, the Hound's Bip001): the bone carries it
+            root.matrix = root_matrix
         root.use_deform = False
         for b in tops:
             b.parent = root
@@ -180,10 +183,24 @@ def bone_table(arm):
 def main():
     args = parse()
     paths = pc.Paths(args.asset_dir)
+    # The rest placement of the armature object = the skeleton's root node in the source FBX. The clean stage's pose
+    # tests can leave an action on the object (Blender makes the root bone the OBJECT; the Hound's Bip001 carries root
+    # motion), so it is read from the source again and the object reset to it below.
+    pc.reset_scene()
+    arm_src, _meshes, _others = pc.import_fbx(paths.source_fbx)
+    rest_world = arm_src.matrix_world.copy() if arm_src else None
     bpy.ops.wm.open_mainfile(filepath=paths.bake_blend)
     mesh = bpy.data.objects[paths.mesh_name]
     arm = mesh.parent if mesh.parent and mesh.parent.type == "ARMATURE" else \
         next(o for o in bpy.data.objects if o.type == "ARMATURE")
+    if arm.animation_data:
+        arm.animation_data_clear()
+    for pb in arm.pose.bones:
+        pb.matrix_basis.identity()
+    if rest_world is not None and (arm.matrix_world.to_translation() - rest_world.to_translation()).length > 1e-3:
+        print("[pipeline] armature object reset to its rest placement (was %s)" % list(arm.matrix_world.to_translation()))
+        arm.matrix_world = rest_world
+    bpy.context.view_layer.update()
     src_bones = bone_table(arm)
     me = mesh.data
 
@@ -200,7 +217,22 @@ def main():
         p.material_index = 0
 
     source_object_world = [list(r) for r in arm.matrix_world]
-    root_name, root_added, tops = add_root_bone(arm)
+    root_matrix = None
+    if any(abs(source_object_world[i][j] - (1.0 if i == j else 0.0)) >= 1e-4 for i in range(4) for j in range(4)):
+        # The skeleton's root node has a transform: move it from the armature OBJECT into the bones (object -> identity,
+        # bones and skin keep their world placement) and give the re-added root bone that transform, so the FBX carries
+        # it on the root bone instead of on the `Armature` null Unreal drops.
+        root_matrix = arm.matrix_world.normalized().copy()
+        mesh_world = mesh.matrix_world.copy()
+        mesh.parent = None
+        mesh.matrix_world = mesh_world
+        for o in bpy.data.objects:
+            o.select_set(o in (mesh, arm))
+        bpy.context.view_layer.objects.active = arm
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        mesh.parent = arm
+        mesh.matrix_parent_inverse.identity()
+    root_name, root_added, tops = add_root_bone(arm, root_matrix)
     for o in bpy.data.objects:
         o.select_set(o in (mesh, arm))
     bpy.context.view_layer.objects.active = arm
@@ -255,10 +287,21 @@ def main():
     checks["source_armature_world"] = source_object_world
     checks["source_armature_identity"] = all(abs(source_object_world[i][j] - (1.0 if i == j else 0.0)) < 1e-4
                                              for i in range(4) for j in range(4))
+    # a non-identity root node is moved into the root bone (see above); the re-import must then show an identity object
+    checks["root_transform_in_root_bone"] = root_matrix is not None
+    checks["export_armature_identity"] = bool(a2) and all(abs(a2.matrix_world[i][j] - (1.0 if i == j else 0.0)) < 1e-4
+                                                         for i in range(4) for j in range(4))
+    if root_matrix is not None and a2 and root_name in a2.data.bones:
+        rb = a2.matrix_world @ a2.data.bones[root_name].matrix_local
+        checks["root_bone_deviation_cm"] = round((rb.to_translation() - root_matrix.to_translation()).length, 4)
+        checks["root_bone_rotation_deg"] = round(abs(rb.to_quaternion().rotation_difference(
+            root_matrix.to_quaternion()).angle) * 57.2958, 4)
     checks["leaf_bones"] = sorted(b for b in new_bones if b.endswith("_end"))
     ok = (checks["one_mesh"] and checks.get("material_slots") == [args.slot] and checks.get("uv_maps") == [ATLAS_UV]
           and not missing and not extra and not parent_mismatch and max_dev < 0.01 and max_rot < 0.1
-          and checks["root_bone"] and checks["source_armature_identity"]
+          and checks["root_bone"] and (checks["source_armature_identity"] or (
+              checks["root_transform_in_root_bone"] and checks.get("root_bone_deviation_cm", 1) < 0.01
+              and checks.get("root_bone_rotation_deg", 1) < 0.1))
           and not checks["leaf_bones"])
     checks["ok"] = ok
     settings = {k: (sorted(v) if isinstance(v, set) else v) for k, v in export_kwargs.items() if k != "filepath"}

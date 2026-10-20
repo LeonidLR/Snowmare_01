@@ -21,7 +21,9 @@
     "reduce": "2026-10-20 23:54:06",
     "atlas": "2026-10-20 23:55:25",
     "bake": "2026-10-20 23:57:30",
-    "export": "2026-10-20 23:57:34"
+    "export": "2026-10-21 00:24:48",
+    "review": "2026-10-21 00:26:06",
+    "qa": "2026-10-21 00:26:06"
   },
   "clean": {
     "hair_slots": [],
@@ -281,22 +283,22 @@
       "root_added": true,
       "source_armature_world": [
         [
-          7.549789415861596e-08,
-          0.9999998807907104,
-          -6.397577863026527e-07,
-          -5.630881787510589e-07
+          -4.371138828673793e-08,
+          1.0,
+          -2.821299744937278e-07,
+          -4.973816771780548e-07
         ],
         [
-          0.0,
-          -6.397577863026527e-07,
-          -0.9999998807907104,
-          32.198158264160156
+          -0.0,
+          -2.821299744937278e-07,
+          -1.0,
+          52.36404037475586
         ],
         [
-          -0.9999998807907104,
-          7.549789415861596e-08,
-          -4.8300366527545546e-14,
-          51.1554069519043
+          -1.0,
+          -4.371138828673793e-08,
+          1.2332293186320155e-14,
+          65.8160629272461
         ],
         [
           0.0,
@@ -306,8 +308,321 @@
         ]
       ],
       "source_armature_identity": false,
+      "root_transform_in_root_bone": true,
+      "export_armature_identity": true,
+      "root_bone_deviation_cm": 0.0,
+      "root_bone_rotation_deg": 0.0,
       "leaf_bones": [],
-      "ok": false
+      "ok": true
     }
+  },
+  "review": {
+    "pose_sheet": "pose_sheet.png",
+    "pose_sheet_poses": [
+      "crouch_deep",
+      "kneel_aim",
+      "arms_up",
+      "twist_bend",
+      "prone_look_up"
+    ],
+    "views": {
+      "front34": {
+        "rgb_rmse_0_255": 1.63,
+        "mean_delta_e76": 0.35,
+        "p95_delta_e76": 0.96,
+        "silhouette_iou": 0.9983,
+        "pixels_compared": 103632,
+        "image": "compare_front34.png"
+      },
+      "back34": {
+        "rgb_rmse_0_255": 1.16,
+        "mean_delta_e76": 0.27,
+        "p95_delta_e76": 0.91,
+        "silhouette_iou": 0.9985,
+        "pixels_compared": 117642,
+        "image": "compare_back34.png"
+      },
+      "tactical": {
+        "rgb_rmse_0_255": 0.99,
+        "mean_delta_e76": 0.22,
+        "p95_delta_e76": 0.89,
+        "silhouette_iou": 0.9993,
+        "pixels_compared": 102683,
+        "image": "compare_tactical.png"
+      },
+      "face": {
+        "rgb_rmse_0_255": 2.2,
+        "mean_delta_e76": 0.4,
+        "p95_delta_e76": 1.11,
+        "silhouette_iou": 0.9988,
+        "pixels_compared": 301748,
+        "image": "compare_face.png"
+      }
+    },
+    "texture_memory": {
+      "before_mb": 1068.0,
+      "after_mb": 10.0,
+      "after_without_optional_mb": 8.7,
+      "before_textures": 21,
+      "before_detail": {
+        "T_Combat_Dog_skin_1_RGB_AO_rg_m": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "orm_packed"
+        },
+        "T_Combat_Dog_skin_1_Scattering": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "opacity"
+        },
+        "T_Combat_Dog_skin_1_a": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "base_color"
+        },
+        "T_Combat_Dog_skin_1_n": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "BC5",
+          "mb": 85.33,
+          "role": "normal"
+        },
+        "T_Combat_Dog_skin_2_RGB_AO_rg_m": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "orm_packed"
+        },
+        "T_Combat_Dog_skin_2_Scattering": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "opacity"
+        },
+        "T_Combat_Dog_skin_2_a": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "base_color"
+        },
+        "T_Combat_Dog_skin_2_n": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "BC5",
+          "mb": 85.33,
+          "role": "normal"
+        },
+        "T_Combat_Dog_skin_3_RGB_AO_rg_m": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "orm_packed"
+        },
+        "T_Combat_Dog_skin_3_Scattering": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "opacity"
+        },
+        "T_Combat_Dog_skin_3_a": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "base_color"
+        },
+        "T_Combat_Dog_skin_3_n": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "BC5",
+          "mb": 85.33,
+          "role": "normal"
+        },
+        "T_Combat_Dog_skin_4_RGB_AO_rg_m": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "orm_packed"
+        },
+        "T_Combat_Dog_skin_4_Scattering": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "opacity"
+        },
+        "T_Combat_Dog_skin_4_a": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "base_color"
+        },
+        "T_Combat_Dog_skin_4_n": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "BC5",
+          "mb": 85.33,
+          "role": "normal"
+        },
+        "T_Combat_Dog_skin_5_RGB_AO_rg_m": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "orm_packed"
+        },
+        "T_Combat_Dog_skin_5_Scattering": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "opacity"
+        },
+        "T_Combat_Dog_skin_5_a": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "DXT1",
+          "mb": 42.67,
+          "role": "base_color"
+        },
+        "T_Combat_Dog_skin_5_n": {
+          "size": [
+            8192,
+            8192
+          ],
+          "format": "BC5",
+          "mb": 85.33,
+          "role": "normal"
+        },
+        "T_Detail": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "BC5",
+          "mb": 1.33,
+          "role": "normal"
+        }
+      },
+      "after_detail": {
+        "BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67
+        },
+        "Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33
+        },
+        "ORM": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "DXT1 (TC_Masks)",
+          "mb": 0.67
+        },
+        "Sheen": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "G8",
+          "mb": 1.33
+        }
+      },
+      "assumptions": "full mip chain (x4/3); Default -> DXT1 when the PNG alpha is opaque else DXT5; normal maps BC5; streaming / LOD bias not applied"
+    },
+    "render_samples": 64,
+    "resolution": 1024
+  },
+  "qa": {
+    "slots_before": 1,
+    "slots_after": 1,
+    "triangles_before": 13904,
+    "triangles_after": 9999,
+    "triangles_removed_hidden": 0,
+    "triangles_removed_hair": 0,
+    "triangles_removed_check_by_position": 0,
+    "atlas_coverage_percent": 59.68,
+    "texture_memory_before_mb": 1068.0,
+    "texture_memory_after_mb": 10.0,
+    "hidden_in_all_poses_before_safety_ring": 0,
+    "bake_warnings": [
+      "M_Combat_Dog_skin_1: normal input is not a plain texture sample (StaticSwitchParameter) - mesh normal used",
+      "M_Combat_Dog_skin_1__Set1: normal input is not a plain texture sample (StaticSwitchParameter) - mesh normal used",
+      "M_Combat_Dog_skin_1__Set2: normal input is not a plain texture sample (StaticSwitchParameter) - mesh normal used",
+      "M_Combat_Dog_skin_1__Set3: normal input is not a plain texture sample (StaticSwitchParameter) - mesh normal used",
+      "M_Combat_Dog_skin_1__Set4: normal input is not a plain texture sample (StaticSwitchParameter) - mesh normal used",
+      "M_Combat_Dog_skin_1__Set5: normal input is not a plain texture sample (StaticSwitchParameter) - mesh normal used",
+      "M_Combat_Dog_skin_1: normal input is not a plain texture sample (StaticSwitchParameter) - mesh normal used"
+    ],
+    "emissive_texel_fraction": null,
+    "cross_material_overlap_percent": 0.0,
+    "export_roundtrip_ok": true,
+    "worst_view_mean_delta_e": 0.4,
+    "min_silhouette_iou": 0.9983,
+    "triangles_per_material_after": {
+      "M_Combat_Dog_skin_1": 9999
+    },
+    "ray_miss_percent": 0.006
   }
 }

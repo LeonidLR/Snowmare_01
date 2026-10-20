@@ -71,14 +71,22 @@ def setup_render(args):
 
 
 def forward_and_head(arm, mesh):
-    head = arm.matrix_world @ arm.data.bones["head"].head_local
+    bones = arm.data.bones
+    hb = bones.get("head") or next((b for b in bones if b.name.lower().endswith("head")), None) or         next((b for b in bones if "head" in b.name.lower()), None) or max(bones, key=lambda b: b.head_local.z)
+    head = arm.matrix_world @ hb.head_local
+    pelvis = next((b for b in bones if "pelvis" in b.name.lower()), None)
     face = [i for i, s in enumerate(mesh.material_slots) if s.material and "mask" in s.material.name.lower()]
     acc, n = Vector(), 0
     for p in mesh.data.polygons:
         if p.material_index in face:
             acc += mesh.matrix_world @ p.center
             n += 1
-    f = (acc / n - head) if n else Vector((0, -1, 0))
+    if n:
+        f = acc / n - head
+    elif pelvis is not None:  # no face material (a quadruped): the body points from the pelvis to the head
+        f = head - arm.matrix_world @ pelvis.head_local
+    else:
+        f = Vector((0, -1, 0))
     f.z = 0
     return (f.normalized() if f.length > 1e-3 else Vector((0, -1, 0))), head
 

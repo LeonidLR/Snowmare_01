@@ -92,8 +92,8 @@
     "atlas": "2026-10-20 22:22:14",
     "bake": "2026-10-21 00:17:17",
     "export": "2026-10-21 00:17:29",
-    "review": "2026-10-20 23:57:30",
-    "qa": "2026-10-20 23:57:30"
+    "review": "2026-10-21 00:19:08",
+    "qa": "2026-10-21 00:19:08"
   },
   "clean": {
     "hair_slots": [
@@ -1066,33 +1066,33 @@
     ],
     "views": {
       "front34": {
-        "rgb_rmse_0_255": 4.87,
-        "mean_delta_e76": 0.86,
-        "p95_delta_e76": 2.96,
+        "rgb_rmse_0_255": 5.17,
+        "mean_delta_e76": 1.0,
+        "p95_delta_e76": 3.43,
         "silhouette_iou": 0.9938,
         "pixels_compared": 119389,
         "image": "compare_front34.png"
       },
       "back34": {
-        "rgb_rmse_0_255": 6.57,
-        "mean_delta_e76": 0.95,
-        "p95_delta_e76": 3.3,
+        "rgb_rmse_0_255": 6.59,
+        "mean_delta_e76": 1.07,
+        "p95_delta_e76": 3.57,
         "silhouette_iou": 0.9934,
         "pixels_compared": 115330,
         "image": "compare_back34.png"
       },
       "tactical": {
-        "rgb_rmse_0_255": 5.07,
-        "mean_delta_e76": 0.89,
-        "p95_delta_e76": 2.91,
+        "rgb_rmse_0_255": 5.13,
+        "mean_delta_e76": 1.03,
+        "p95_delta_e76": 3.36,
         "silhouette_iou": 0.9933,
         "pixels_compared": 87958,
         "image": "compare_tactical.png"
       },
       "face": {
-        "rgb_rmse_0_255": 8.01,
-        "mean_delta_e76": 1.31,
-        "p95_delta_e76": 5.05,
+        "rgb_rmse_0_255": 8.93,
+        "mean_delta_e76": 1.64,
+        "p95_delta_e76": 6.8,
         "silhouette_iou": 0.9957,
         "pixels_compared": 482756,
         "image": "compare_face.png"
@@ -1690,7 +1690,7 @@
     "emissive_texel_fraction": null,
     "cross_material_overlap_percent": 0.0,
     "export_roundtrip_ok": true,
-    "worst_view_mean_delta_e": 1.31,
+    "worst_view_mean_delta_e": 1.64,
     "min_silhouette_iou": 0.9933,
     "triangles_per_material_after": {
       "MI_Female_Soldier_Trouthers": 5414,

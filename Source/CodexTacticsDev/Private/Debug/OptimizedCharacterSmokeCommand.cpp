@@ -269,6 +269,17 @@ namespace OptimizedCharacterSmoke
 		}
 	}
 
+	/** Shaders requested by the first draws of a swapped look are compiled before a still (else a fallback is drawn). */
+	void FinishShaders()
+	{
+#if WITH_EDITOR
+		if (GShaderCompilingManager)
+		{
+			GShaderCompilingManager->FinishAllCompilation();
+		}
+#endif
+	}
+
 	/** Full-resolution textures for the stills: a freshly swapped look otherwise renders its lowest mips for a while. */
 	void Prestream(USkeletalMeshComponent* Mesh)
 	{
@@ -278,12 +289,7 @@ namespace OptimizedCharacterSmoke
 			Mesh->PrestreamTextures(60.f, true);
 		}
 		// a look swapped in at runtime may still compile its shaders (drawn with a fallback): finish before the stills
-#if WITH_EDITOR
-		if (GShaderCompilingManager)
-		{
-			GShaderCompilingManager->FinishAllCompilation();
-		}
-#endif
+		FinishShaders();
 	}
 
 	AOperativeCharacter* OpA() { return Cast<AOperativeCharacter>(Runner->Original.Get()); }
@@ -670,7 +676,7 @@ namespace OptimizedCharacterSmoke
 	/** Pose check + (when rendering) the tactical and the close still of the state. */
 	void AddShots(TArray<FStep>& S, FString State, float TargetZ = 0.f, float YawDeg = 0.f)
 	{
-		S.Add([State, YawDeg](UWorld*) { if (Runner->bSkip) { return 0; } CheckPose(*State); AimCamera(false, 0.f, YawDeg); return 3; });
+		S.Add([State, YawDeg](UWorld*) { if (Runner->bSkip) { return 0; } CheckPose(*State); AimCamera(false, 0.f, YawDeg); FinishShaders(); return 3; });
 		S.Add([State](UWorld*)
 		{
 			if (Runner->bSkip)
