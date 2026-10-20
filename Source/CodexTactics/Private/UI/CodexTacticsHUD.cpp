@@ -554,27 +554,51 @@ void ACodexTacticsHUD::DrawCoverSwitchPreview()
 {
 	// The dash of the wall-edge cover switch (game designer 2026-10-20): dashes a little above the ground from his feet to the slot,
 	// in the cover ghost's blue; a short cross bar marks the slot.
+	// 2026-10-20: the path as he will take it - the switch dash's navmesh path (diagonal corner to corner) or the wrap's perimeter path.
 	const ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayerController());
-	FVector From;
-	FVector To;
-	if (!PC || !PC->GetCoverSwitchPreviewLine(From, To))
+	TArray<FVector> Points;
+	if (!PC || !PC->GetCoverPreviewPath(Points) || Points.Num() < 2)
 	{
 		return;
 	}
-	From.Z += 8.f; // his feet / the slot (on the navmesh): a little above the ground
-	To.Z += 8.f;
-	const float Length = static_cast<float>(FVector::Dist(From, To));
-	const int32 Dashes = FMath::Clamp(FMath::RoundToInt(Length / 35.f), 2, 60);
-	const FLinearColor DashColor(0.45f, 0.8f, 1.f, 0.95f);
-	for (int32 Index = 0; Index < Dashes; Index += 2)
+	for (FVector& Point : Points)
 	{
-		const FVector A = Project(FMath::Lerp(From, To, static_cast<float>(Index) / Dashes), true);
-		const FVector B = Project(FMath::Lerp(From, To, static_cast<float>(Index + 1) / Dashes), true);
-		if (A.Z > 0.f && B.Z > 0.f)
+		Point.Z += 8.f; // his feet / the slot (on the navmesh): a little above the ground
+	}
+	const FLinearColor DashColor(0.45f, 0.8f, 1.f, 0.95f);
+	// Dashes of 17.5 cm with gaps of the same along the whole polyline.
+	constexpr float DashCm = 17.5f;
+	float Carry = 0.f;
+	bool bDrawOn = true;
+	for (int32 Segment = 1; Segment < Points.Num(); ++Segment)
+	{
+		const FVector SegStart = Points[Segment - 1];
+		const FVector SegEnd = Points[Segment];
+		const float SegLength = static_cast<float>(FVector::Dist(SegStart, SegEnd));
+		float At = 0.f;
+		while (At < SegLength)
 		{
-			DrawLine(A.X, A.Y, B.X, B.Y, DashColor, 3.f);
+			const float Step = FMath::Min(DashCm - Carry, SegLength - At);
+			if (bDrawOn)
+			{
+				const FVector A = Project(FMath::Lerp(SegStart, SegEnd, At / SegLength), true);
+				const FVector B = Project(FMath::Lerp(SegStart, SegEnd, (At + Step) / SegLength), true);
+				if (A.Z > 0.f && B.Z > 0.f)
+				{
+					DrawLine(A.X, A.Y, B.X, B.Y, DashColor, 3.f);
+				}
+			}
+			At += Step;
+			Carry += Step;
+			if (Carry >= DashCm - 0.01f)
+			{
+				Carry = 0.f;
+				bDrawOn = !bDrawOn;
+			}
 		}
 	}
+	const FVector From = Points[Points.Num() - 2];
+	const FVector To = Points.Last();
 	const FVector Across = FVector::CrossProduct((To - From).GetSafeNormal2D(), FVector::UpVector) * 30.f;
 	const FVector L = Project(To - Across, true);
 	const FVector R = Project(To + Across, true);

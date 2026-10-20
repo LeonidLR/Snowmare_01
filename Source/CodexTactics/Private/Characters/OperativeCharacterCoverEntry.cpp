@@ -15,6 +15,7 @@
 #include "Tactics/CoverRules.h"
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTraceRules.h"
+#include "Tactics/CoverWrapRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
 namespace
@@ -96,42 +97,99 @@ FCoverSwitchConfig AOperativeCharacter::GetCoverSwitchConfig() const
 
 ECoverSwitchVerdict AOperativeCharacter::EvaluateCoverSwitch(const FCoverSlot& Target) const
 {
-	const bool bSameWall = bInCover && Target.IsValid() && CoverTraceRules::IsSameWall(CoverSlot, Target);
+	// His own object's other faces are the wrap round it along its wall (2026-10-20), never a switch.
+	const bool bSameWall = bInCover && Target.IsValid() && (CoverTraceRules::IsSameWall(CoverSlot, Target) || CoverWrapWorld::IsSameObject(CoverSlot, Target));
 	return CoverSwitchRules::Evaluate(bInCover, bShimmying, CoverSlot, Target, bSameWall, GetCoverSwitchConfig());
 }
 
-FCoverSlot AOperativeCharacter::ResolveCoverSwitchSlot(const FCoverSlot& Target) const
+FCoverSlot AOperativeCharacter::ResolveCoverSwitchSlot(const FCoverSlot& Target, ECoverFacing* OutFacing) const
 {
-	// As the group cover order (2026-10-20): on a high wall the corner he would walk to right after entering (TrySnapToCoverCorner)
-	// is the slot at once - no side-step cutting the run-in clip short. A low cover is fired over anywhere: the clicked slot.
-	if (Target.Height != ECoverHeight::HighCover || !GetWorld())
+	UWorld* World = GetWorld();
+	// Corner to corner (game designer 2026-10-20, second pass): from the corner he stands at, the NEAREST corner of the other object on the
+	// protected side - the face whose normal agrees with his own wall's (wherever on the object the click was: its side face, the far end) -
+	// and he arrives facing that corner, back along the new wall towards the open side he came over (the mirrored pose).
+	FCoverFootprint Footprint;
+	int32 ClickedEdge = INDEX_NONE;
+	if (World && CoverWrapWorld::FootprintForSlot(Target, Footprint, ClickedEdge))
 	{
-		return Target;
+		const FVector2D Protected = FVector2D(bInCover ? CoverSlot.WallNormal : Target.WallNormal).GetSafeNormal();
+		const bool bCrouched = Target.Height == ECoverHeight::LowCover;
+		const FCoverFacingConfig FacingConfig = GetCoverFacingConfig();
+		const float Offset = FCoverTraceConfig().SlotOffsetCm;
+		FCoverSwitchCorner Corner;
+		if (CoverSwitchRules::ChooseSwitchCorner(Footprint, FVector2D(GetActorLocation()), Protected, ClickedEdge, Offset,
+			[&FacingConfig, bCrouched](ECoverFacing Facing) { return CoverFacingRules::CornerStandOff(Facing, bCrouched, FacingConfig); }, Corner))
+		{
+			const FVector2D FacePoint = Corner.SlotPoint - Corner.Normal * Offset;
+			FCoverSlot Slot;
+			if (CoverTraceRules::FindCoverSlotAt(World, FVector(FacePoint.X, FacePoint.Y, Target.WallPoint.Z), FVector(-Corner.Normal.X, -Corner.Normal.Y, 0.f), Slot)
+				&& CoverWrapWorld::IsSameObject(Slot, Target) && FVector2D::DotProduct(FVector2D(Slot.WallNormal).GetSafeNormal(), Corner.Normal) >= 0.9f)
+			{
+				if (OutFacing)
+				{
+					*OutFacing = Corner.Facing;
+				}
+				return Slot;
+			}
+		}
 	}
-	const ECoverFacing Facing = PredictCoverFacing(Target);
-	float Shift = 0.f;
-	FCoverSlot Corner;
-	if (CoverFacingRules::ShouldSnapToCorner(Target, Facing, Shift, GetCoverFacingConfig(), false)
-		&& CoverTraceRules::FindShimmySlot(GetWorld(), Target, Target.WallPoint + CoverFacingRules::AlongWallDirection(Target, Facing) * Shift, Corner)
-		&& (!Target.WallActor.IsValid() || Corner.WallActor == Target.WallActor))
+	// No footprint (a landscape / BSP / tilted wall): as the group cover order - on a high wall the corner he would walk to right after
+	// entering (TrySnapToCoverCorner) is the slot at once, no side-step cutting the run-in clip short; a low cover keeps the clicked slot.
+	FCoverSlot Result = Target;
+	if (Target.Height == ECoverHeight::HighCover && World)
 	{
-		return Corner;
+		const ECoverFacing Facing = PredictCoverFacing(Target);
+		float Shift = 0.f;
+		FCoverSlot Corner;
+		if (CoverFacingRules::ShouldSnapToCorner(Target, Facing, Shift, GetCoverFacingConfig(), false)
+			&& CoverTraceRules::FindShimmySlot(World, Target, Target.WallPoint + CoverFacingRules::AlongWallDirection(Target, Facing) * Shift, Corner)
+			&& (!Target.WallActor.IsValid() || Corner.WallActor == Target.WallActor))
+		{
+			Result = Corner;
+		}
 	}
-	return Target;
+	if (OutFacing)
+	{
+		*OutFacing = GetCoverSwitchArrivalFacing(Result);
+	}
+	return Result;
+}
+
+ECoverFacing AOperativeCharacter::GetCoverSwitchArrivalFacing(const FCoverSlot& Resolved) const
+{
+	return CoverSwitchRules::ArrivalFacing(Resolved, FCoverFacingConfig().CornerReachCm, PredictCoverFacing(Resolved));
+}
+
+void AOperativeCharacter::SetPendingCoverSwitch(bool bSwitch)
+{
+	bCoverSwitchPending = bSwitch && bHasPendingCover;
+	CoverSwitchProbeMismatchCm = TNumericLimits<float>::Max();
+	bCoverSwitchFacingPending = bCoverSwitchPending;
+	if (bCoverSwitchPending)
+	{
+		CoverSwitchArrivalFacing = GetCoverSwitchArrivalFacing(PendingCoverSlot);
+	}
 }
 
 EOperativeOrderResult AOperativeCharacter::OrderCoverSwitch(const FCoverSlot& Target)
 {
 	const ECoverSwitchVerdict Verdict = EvaluateCoverSwitch(Target);
-	const FCoverSlot Slot = ResolveCoverSwitchSlot(Target);
+	const ECoverFacing OldFacing = CoverFacing;
+	const bool bWasInCover = bInCover;
+	ECoverFacing Arrival = ECoverFacing::Right;
+	const FCoverSlot Slot = ResolveCoverSwitchSlot(Target, &Arrival);
+	const FVector From = GetActorLocation();
 	const EOperativeOrderResult Result = OrderTakeCover(Slot, true);
 	if (Result == EOperativeOrderResult::Accepted && bHasPendingCover)
 	{
 		bCoverSwitchPending = true;
 		CoverSwitchProbeMismatchCm = TNumericLimits<float>::Max();
-		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: cover switch - dashes %.0f cm to the other cover (%s, approach %d)"), *DisplayName.ToString(),
-			FVector::Dist2D(GetActorLocation(), Slot.WorldLocation), CoverSwitchRules::VerdictName(Verdict),
-			static_cast<int32>(CoverSwitchRules::ClassifyApproach(Slot, GetActorLocation())));
+		bCoverSwitchFacingPending = true;
+		CoverSwitchArrivalFacing = Arrival;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: cover switch - dashes %.0f cm to the other cover's corner (%s, approach %d), arrives facing %s%s"),
+			*DisplayName.ToString(), FVector::Dist2D(From, Slot.WorldLocation), CoverSwitchRules::VerdictName(Verdict),
+			static_cast<int32>(CoverSwitchRules::ClassifyApproach(Slot, From)), Arrival == ECoverFacing::Left ? TEXT("left") : TEXT("right"),
+			bWasInCover && Arrival == CoverSwitchRules::MirrorFacing(OldFacing) ? TEXT(" (mirrored)") : TEXT(""));
 	}
 	return Result;
 }
@@ -179,7 +237,7 @@ bool AOperativeCharacter::TryEnterCoverSwitchFromRun()
 		}
 		return CoverSwitchRules::ChooseClipStart(Tracks, Runner, CoverSwitchMinClipSeconds, RunDirection);
 	};
-	FCoverSwitchClipStart Choice = Choose(PredictCoverFacing(Slot), CoverFacingRules::FacingYaw(Slot, ECoverFacing::Right));
+	FCoverSwitchClipStart Choice = Choose(bCoverSwitchFacingPending ? CoverSwitchArrivalFacing : PredictCoverFacing(Slot), CoverFacingRules::FacingYaw(Slot, ECoverFacing::Right));
 	// The moment: the clip's body close to him, or the fit no longer improving (a diagonal run-in nears the clips' line until the clip's
 	// shortest allowed rest), at the latest CoverSwitchLastChanceCm out.
 	const bool bGoodFit = Choice.Approach != INDEX_NONE && Choice.MismatchCm <= CoverSwitchGoodFitCm;

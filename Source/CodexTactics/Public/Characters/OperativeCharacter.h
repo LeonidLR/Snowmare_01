@@ -16,6 +16,7 @@
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTypes.h"
+#include "Tactics/CoverWrapRules.h"
 #include "Combat/KnockdownRules.h"
 #include "Combat/KnockdownTypes.h"
 #include "Combat/SniperRules.h"
@@ -1009,20 +1010,27 @@ public:
 	 */
 	EOperativeOrderResult OrderCoverSwitch(const FCoverSlot& Target);
 
-	/** Marks the pending cover (SetPendingCover: a planned walk in the pause) as a switch: the arrival plays the run-in clip. */
-	void SetPendingCoverSwitch(bool bSwitch)
-	{
-		bCoverSwitchPending = bSwitch && bHasPendingCover;
-		CoverSwitchProbeMismatchCm = TNumericLimits<float>::Max();
-	}
+	/**
+	 * Marks the pending cover (SetPendingCover: a planned walk in the pause) as a switch: the arrival plays the run-in clip and he faces
+	 * the corner he was sent to (the mirrored pose, CoverSwitchRules::ArrivalFacing).
+	 */
+	void SetPendingCoverSwitch(bool bSwitch);
 	/** On his way into a cover he will enter through the switch run-in clip. */
 	bool HasPendingCoverSwitch() const { return bHasPendingCover && bCoverSwitchPending; }
 
 	/** Would a double-click on Target (another cover) be a switch now? (CoverSwitchRules::Evaluate with his slot and tunables.) */
 	ECoverSwitchVerdict EvaluateCoverSwitch(const FCoverSlot& Target) const;
 
-	/** Target moved to the wall's corner slot when he would walk there by himself right after entering (high cover); else Target. */
-	FCoverSlot ResolveCoverSwitchSlot(const FCoverSlot& Target) const;
+	/**
+	 * Corner-to-corner switch (game designer 2026-10-20, second pass): the slot at the NEAREST corner of Target's object on his protected
+	 * side (CoverSwitchRules::ChooseSwitchCorner on its footprint, the face whose normal agrees with his own wall's; traced there), and
+	 * OutFacing = the side of that corner (he arrives facing back towards the open side - the mirrored pose). An object without a footprint:
+	 * the corner of the clicked wall he would walk to right after entering (high cover), else Target, facing PredictCoverFacing.
+	 */
+	FCoverSlot ResolveCoverSwitchSlot(const FCoverSlot& Target, ECoverFacing* OutFacing = nullptr) const;
+
+	/** The side he faces after a switch into Resolved (a ResolveCoverSwitchSlot result): its nearest exposed edge within the corner reach. */
+	ECoverFacing GetCoverSwitchArrivalFacing(const FCoverSlot& Resolved) const;
 
 	/** The tunables below as the rules' config. */
 	FCoverSwitchConfig GetCoverSwitchConfig() const;
@@ -1075,6 +1083,55 @@ public:
 	/** At least this much of the run-in clip plays (its turn into the wall), s. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "0.1"))
 	float CoverSwitchMinClipSeconds = 0.6f;
+
+	// --- Wall-following round the cover object (game designer 2026-10-20, Tactics/CoverWrapRules; cluster file
+	// OperativeCharacterCoverWrap.cpp): in cover at an object, a click along the same object's outline (another face, the ground within
+	// ~1 m of it) sends him there hugging it - a shimmy along each face, round each corner, in cover all the way. ---
+
+	/** The wrap tunables below as the rules' config. */
+	FCoverWrapConfig GetCoverWrapConfig() const;
+
+	/** The wrap he would make to Click from where he is now (CoverWrapWorld::PlanWrap); NotInCover / Disabled / ... when none. */
+	ECoverWrapVerdict PlanCoverWrap(const FVector& Click, FCoverWrapPlan& OutPlan) const;
+
+	/**
+	 * The wrap order: walks Plan's waypoints at the shimmy pace, in cover all the way (the cover slot switches to each face as he turns
+	 * its corner, the body turning with the arc), and enters Plan.GoalSlot facing Plan.GoalFacing. A path round no corner is a plain shimmy
+	 * (OrderShimmyTo). Refused like a shimmy (raging, panicking, frostbitten prone); prone he gets up first.
+	 */
+	EOperativeOrderResult OrderCoverWrap(const FCoverWrapPlan& Plan);
+
+	/** The tactical pause: Plan is planned (after SetPendingCover(Plan.GoalSlot)); the release of the walk to its goal runs the wrap. */
+	void SetPendingCoverWrap(const FCoverWrapPlan& Plan);
+	bool HasPendingCoverWrap() const { return bCoverWrapPlanned && bHasPendingCover; }
+
+	/** On his way round the object now (smokes / HUD). */
+	bool IsCoverWrapping() const { return bCoverWrapActive; }
+	/** The running / last wrap's plan. */
+	const FCoverWrapPlan& GetCoverWrapPlan() const { return CoverWrapPlan; }
+	/** Wraps that reached their goal / corners turned on the way (smokes). */
+	int32 GetCoverWrapCount() const { return CoverWrapCount; }
+	int32 GetCoverWrapCornersTurned() const { return CoverWrapCornersTurned; }
+
+	/** Off: clicks round his cover object are the ordinary orders (a ground click leaves the cover). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Wrap")
+	bool bCoverWrapEnabled = true;
+
+	/** A ground click counts when it lies at most this far outside the cover object's outline, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Wrap", meta = (ClampMin = "0"))
+	float CoverWrapMaxSurfaceDistanceCm = 100.f;
+
+	/** Less travel than this along the outline is no wrap (the click leaves the cover as before), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Wrap", meta = (ClampMin = "0"))
+	float CoverWrapMinTravelCm = 60.f;
+
+	/** More travel than this is no wrap, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Wrap", meta = (ClampMin = "0"))
+	float CoverWrapMaxTravelCm = 3000.f;
+
+	/** A goal this close to a face's outer end becomes that corner's slot (facing it), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Wrap", meta = (ClampMin = "0"))
+	float CoverWrapCornerSnapCm = 100.f;
 
 	/** Snaps him to the slot's wall: facing along the normal, the default stance of the height, Cover_Enter. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
@@ -1968,6 +2025,37 @@ private:
 	float LastCoverSwitchMismatchCm = 0.f;
 	/** The best clip fit seen on this run-in so far (TryEnterCoverSwitchFromRun takes the clip when it stops improving), cm. */
 	float CoverSwitchProbeMismatchCm = TNumericLimits<float>::Max();
+	/** The side a switch arrival faces (the corner he was sent to; the mirrored pose), applied by the next EnterCover of another wall. */
+	bool bCoverSwitchFacingPending = false;
+	ECoverFacing CoverSwitchArrivalFacing = ECoverFacing::Right;
+	/** Wrap state (OrderCoverWrap -> waypoints -> the goal's EnterCover). */
+	bool bCoverWrapActive = false;
+	bool bCoverWrapPlanned = false;
+	FCoverWrapPlan CoverWrapPlan;
+	int32 CoverWrapNext = 0;
+	int32 CoverWrapSlotIndex = 0;
+	int32 CoverWrapCount = 0;
+	int32 CoverWrapCornersTurned = 0;
+	float CoverWrapStallSeconds = 0.f;
+	float CoverWrapElapsedSeconds = 0.f;
+	/** How far along the plan's path he is (never back), cm; the path distance of every plan point. */
+	float CoverWrapProgressCm = 0.f;
+	TArray<float> CoverWrapPointDistance;
+	/**
+	 * The running wrap (UpdateCover): steers along the plan's path (AddMovementInput at the point a little ahead - exactly on the offset line,
+	 * not the navmesh's distance off the wall), the next face at each corner, EnterCover at the goal; stuck -> in cover where he stands.
+	 */
+	void UpdateCoverWrap(float DeltaTime);
+	/** HandleMoveFinished during a wrap (the stop of an earlier path following): true = ignored, he steers himself. */
+	bool ContinueCoverWrapOnArrival();
+	/** Holds the plan's face SlotIndex from now on (the turn round a corner). */
+	void SetCoverWrapFace(int32 SlotIndex);
+	/** Ends the running wrap (another order, leaving the cover, a stall). */
+	void CancelCoverWrap(const TCHAR* Why);
+	/** A stuck / blocked wrap: in cover where he stands (the face he holds, traced there), else out of cover. */
+	void GiveUpCoverWrapHere(const TCHAR* Why);
+	/** The planned wrap is released (OrderMoveTo to its goal): it starts. */
+	EOperativeOrderResult StartPlannedCoverWrap();
 	/** Moves the mesh so the body stays continuous while the enter clip blends in (V = (1 - w) C + glide). */
 	void UpdateCoverEntryBlend(float DeltaTime);
 	/** The mesh push away from the wall that keeps every skin bone outside it (CoverWallClearanceCm), world cm along the normal. */

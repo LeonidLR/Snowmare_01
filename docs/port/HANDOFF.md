@@ -19,6 +19,7 @@ one-at-a-time queue, the pacing pass (breather 0.8 s, `Tutorial.Flow.Pacing`) - 
 2026-10-20 (`agents/pmcfighter`): the Frozen PMC Fighter (`/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/BP_Enemy_FrozenPMC_Fighter`, a Frostbitten variant on the user's Cyberpunk_Explorer_A body with a retargeted copy of the Frostbitten ABP; the pack mesh has a stray FBX root bone - see `docs/systems/animation-setup.md` "Frozen PMC Fighter").
 2026-10-20 (`agents/zombie2`): the Military Zombie (`/Game/Characters/Enemies/MilitaryZombie/BP_Enemy_MilitaryZombie`, a Frostbitten variant; `ABP_Enemy_MilitaryZombie` = a child of the Frostbitten ABP on the pack's own Manny-copy skeleton with its 20 clips; rage roar on alert, transformation entrance on wave spawns, devour idle, 3 bodies x 3 texture sets - see `docs/systems/animation-setup.md` "Military Zombie").
 2026-10-20 (`agents/coverswitch`): the wall-edge cover switch - in cover at a wall edge, a double-click on another cover within 8 m dashes there and arrives through the M4 pack's `std_jog_fwd[_L|_R]_to_cvr_*` run-in clip (`docs/systems/cover-and-peek.md` "Wall-edge cover switch").
+2026-10-20 (`agents/work`): corner-to-corner switch (the nearest corner of the other object, mirrored pose) and the wall-following round a cover object (click along the same object's outline -> round its corners in cover) - `docs/systems/cover-and-peek.md` "Corner to corner" / "Wall-following round a cover object".
 What is waiting for the user: section 7 (open questions) and `docs/port/NEXT_STEPS.md`.
 
 ---

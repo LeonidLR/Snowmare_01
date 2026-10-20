@@ -42,6 +42,8 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot
 	}
 	bHoldGroupCoverSlot = false; // a group cover order sets it again after this call
 	bCoverSwitchPending = false; // OrderCoverSwitch sets it again after this call
+	bCoverSwitchFacingPending = false;
+	CancelCoverWrap(TEXT("cover order"));
 	if (IsKnockedDown())
 	{
 		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
@@ -88,6 +90,8 @@ void AOperativeCharacter::SetPendingCover(const FCoverSlot& Slot)
 {
 	bHoldGroupCoverSlot = false; // a group cover order sets it again after this call
 	bCoverSwitchPending = false; // a planned switch sets it again after this call (SetPendingCoverSwitch)
+	bCoverSwitchFacingPending = false;
+	bCoverWrapPlanned = false; // a planned wrap sets it again after this call (SetPendingCoverWrap)
 	PendingCoverSlot = Slot;
 	bHasPendingCover = Slot.IsValid();
 }
@@ -101,6 +105,18 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	const bool bWasInCover = bInCover;
 	const bool bSameWall = bWasInCover && CoverTraceRules::IsSameWall(CoverSlot, Slot);
 	const bool bWasAutoSnap = bCoverAutoSnap; // the automatic walk to the threat-side corner is no player shimmy
+	// The goal of a wrap round the object (2026-10-20): he ends facing the side the plan says (the corner near the goal, else the way he walked).
+	const bool bWrapArrival = bCoverWrapActive;
+	const ECoverFacing WrapFacing = CoverWrapPlan.GoalFacing;
+	if (bWrapArrival)
+	{
+		bCoverWrapActive = false;
+		++CoverWrapCount;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: round the object - at the goal (%d corners turned, %.0f cm), facing %s"), *DisplayName.ToString(),
+			CoverWrapPlan.Path.CornerCount(), CoverWrapPlan.Path.LengthCm, WrapFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"));
+	}
+	const bool bSwitchFacing = bCoverSwitchFacingPending;
+	bCoverSwitchFacingPending = false;
 	StopOperative();
 	CoverSlot = Slot;
 	bInCover = true;
@@ -126,7 +142,8 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		bHasCoverThreat = false;
 		CoverThreatSeenTime = -1.0e9;
 		CoverShotTarget.Reset();
-		CoverFacing = PredictCoverFacing(Slot);
+		// A switch arrives facing the corner it was sent to (the mirrored pose); any other entry by the usual prediction.
+		CoverFacing = bSwitchFacing ? CoverSwitchArrivalFacing : PredictCoverFacing(Slot);
 		if (!bQuietCoverEntry)
 		{
 			bManualCornerPeek = false; // another wall: a manual peek belongs to the old one
@@ -136,6 +153,10 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	// Back to the wall, on the slot (the feet keep their ground height), facing along the wall towards the threat side.
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 	SetActorLocation(FVector(Slot.WorldLocation.X, Slot.WorldLocation.Y, Feet.Z + GetSimpleCollisionHalfHeight()), true);
+	if (bWrapArrival)
+	{
+		CoverFacing = WrapFacing;
+	}
 	CoverThreatTimer = 0.f;
 	UpdateCoverFacing(/*bAllowSnap*/ false);
 	if (!bSameWall)
@@ -257,6 +278,7 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 		RaiseCoverEvent(GameplayEvents::CoverLeft, CoverSlot, CurrentCoverHeight == ECoverHeight::HighCover ? FName(TEXT("High")) : FName(TEXT("Low")));
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: left the cover (%s)"), *DisplayName.ToString(), *Reason);
+	CancelCoverWrap(TEXT("left the cover"));
 	if (!bQuietCoverLeaveRequest)
 	{
 		bManualCornerPeek = false; // a move / another cover ends the manual corner peek (the open-shot step-off comes back to it)
@@ -295,6 +317,7 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 	{
 		return EOperativeOrderResult::Refused;
 	}
+	CancelCoverWrap(TEXT("shimmy order"));
 	// From where the body IS: while a shimmy runs CoverSlot is still the slot it started from (a reversing order whose
 	// target is on the old side of that slot used to get the old direction: right-moving body, left clip, no turn).
 	const float Along = CoverTraceRules::AlongWallDistanceFrom(CoverSlot, GetActorLocation(), Target.WorldLocation);
@@ -466,6 +489,7 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 		return;
 	}
 	UpdateCoverEnteredEvent(DeltaTime);
+	UpdateCoverWrap(DeltaTime);
 	UpdateCornerAim(DeltaTime);
 	// Corner hold (user decision 2026-10-07): at the exposed edge he steps out into the fire stance at once - also right
 	// after a reload - and holds it; only in a fight / with a known threat (2026-10-11: exploring he hugs the wall).

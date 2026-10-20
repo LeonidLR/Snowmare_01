@@ -56,6 +56,11 @@ void ACoverGhostActor::ShowFor(const AOperativeCharacter& InOperative, const FCo
 	ShowPose(InOperative, InSlot, InOperative.PredictCoverFacing(InSlot), false);
 }
 
+void ACoverGhostActor::ShowForFacing(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Facing)
+{
+	ShowPose(InOperative, InSlot, Facing, false);
+}
+
 void ACoverGhostActor::ShowCornerPeekFor(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Side)
 {
 	ShowPose(InOperative, InSlot, Side, true);
@@ -67,6 +72,7 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 	Slot = InSlot;
 	bShown = true;
 	bCornerPeekPose = bFireIdle;
+	ShownFacing = Facing;
 	UMaterialInterface* Base = ResolveBaseMaterial(InOperative);
 	if (Base && (!Material || Material->Parent != Base))
 	{

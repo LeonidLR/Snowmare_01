@@ -354,6 +354,11 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	{
 		return;
 	}
+	// 2026-10-20: in cover, the ground within ~1 m round the same object = along its wall to that point (round its corners), in cover.
+	if (TryHandleCoverWrapClick(Hit))
+	{
+		return;
+	}
 	HideCoverPreview();
 
 	// Godot main.gd plain-click rules during a fight (before the usual walk-up):

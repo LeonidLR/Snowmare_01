@@ -180,4 +180,78 @@ namespace CoverSwitchRules
 		}
 		return Best;
 	}
+
+	bool ChooseSwitchCorner(const FCoverFootprint& Target, const FVector2D& From, const FVector2D& ProtectedNormal, int32 ClickedEdge, float OffsetCm,
+		TFunctionRef<float(ECoverFacing)> StandOffCm, FCoverSwitchCorner& OutCorner, float MinNormalDot)
+	{
+		OutCorner = FCoverSwitchCorner();
+		if (!Target.IsValid())
+		{
+			return false;
+		}
+		const int32 Count = Target.Num();
+		const FVector2D Protected = ProtectedNormal.GetSafeNormal();
+		TArray<int32> Faces;
+		for (int32 Edge = 0; Edge < Count; ++Edge)
+		{
+			if (!Protected.IsNearlyZero() && FVector2D::DotProduct(CoverWrapRules::EdgeNormal(Target, Edge), Protected) >= MinNormalDot)
+			{
+				Faces.Add(Edge);
+			}
+		}
+		if (Faces.IsEmpty() && ClickedEdge >= 0 && ClickedEdge < Count)
+		{
+			Faces.Add(ClickedEdge);
+		}
+		float Best = TNumericLimits<float>::Max();
+		for (const int32 Edge : Faces)
+		{
+			const FVector2D A = Target.Vertices[Edge];
+			const FVector2D B = Target.Vertices[(Edge + 1) % Count];
+			const float Length = static_cast<float>(FVector2D::Distance(A, B));
+			if (Length < 1.f)
+			{
+				continue;
+			}
+			const FVector2D Along = (B - A) / Length; // = his right along a counter-clockwise face (+RightTangent)
+			const FVector2D Normal = CoverWrapRules::EdgeNormal(Target, Edge);
+			for (const ECoverFacing Facing : { ECoverFacing::Left, ECoverFacing::Right })
+			{
+				const int32 Vertex = Facing == ECoverFacing::Right ? (Edge + 1) % Count : Edge;
+				if (!CoverWrapRules::IsConvexVertex(Target, Vertex))
+				{
+					continue;
+				}
+				const float StandOff = FMath::Min(FMath::Max(StandOffCm(Facing), 0.f), Length * 0.5f);
+				const FVector2D Slot = (Facing == ECoverFacing::Right ? B - Along * StandOff : A + Along * StandOff) + Normal * OffsetCm;
+				// A tie (within 1 cm) keeps the clicked face.
+				const float Distance = static_cast<float>(FVector2D::Distance(From, Slot)) - (Edge == ClickedEdge ? 1.f : 0.f);
+				if (Distance < Best)
+				{
+					Best = Distance;
+					OutCorner.Edge = Edge;
+					OutCorner.Vertex = Vertex;
+					OutCorner.Corner = Target.Vertices[Vertex];
+					OutCorner.SlotPoint = Slot;
+					OutCorner.Normal = Normal;
+					OutCorner.Facing = Facing;
+					OutCorner.DistanceCm = static_cast<float>(FVector2D::Distance(From, Slot));
+				}
+			}
+		}
+		return OutCorner.IsValid();
+	}
+
+	ECoverFacing ArrivalFacing(const FCoverSlot& Slot, float ReachCm, ECoverFacing Fallback)
+	{
+		const float Left = CoverFacingRules::EdgeDistance(Slot, ECoverFacing::Left);
+		const float Right = CoverFacingRules::EdgeDistance(Slot, ECoverFacing::Right);
+		const bool bLeft = Left >= 0.f && Left <= ReachCm;
+		const bool bRight = Right >= 0.f && Right <= ReachCm;
+		if (bLeft && (!bRight || Left <= Right))
+		{
+			return ECoverFacing::Left;
+		}
+		return bRight ? ECoverFacing::Right : Fallback;
+	}
 }

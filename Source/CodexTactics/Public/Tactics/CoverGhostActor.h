@@ -35,6 +35,15 @@ public:
 	void ShowFor(const AOperativeCharacter& Operative, const FCoverSlot& Slot);
 
 	/**
+	 * The ghost at Slot in the cover idle of Facing's side - the arrival pose of an order that decides the side itself (the corner switch's
+	 * mirrored pose, the end of a wrap round the object; 2026-10-20).
+	 */
+	void ShowForFacing(const AOperativeCharacter& Operative, const FCoverSlot& Slot, ECoverFacing Facing);
+
+	/** The side the shown pose faces (smokes). */
+	ECoverFacing GetShownFacing() const { return ShownFacing; }
+
+	/**
 	 * The manual corner peek preview (rev 5c, hovering the edge of his own wall): the ghost at the corner stand point Slot in
 	 * the corner-aim pose of Side (cvr_*_fire_idle: leaning out, rifle up) - distinct from the cover-entry ghost.
 	 */
@@ -80,4 +89,5 @@ private:
 	FCoverSlot Slot;
 	bool bShown = false;
 	bool bCornerPeekPose = false;
+	ECoverFacing ShownFacing = ECoverFacing::Right;
 };
