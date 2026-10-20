@@ -40,10 +40,10 @@
         "Grenade.*", "Flare.*", "Weapon.*", "Time.*", "TB.*", "Vehicle.*", "View.*", "Stealth.*", "Order.WatchSector", "Order.Sprint"] },
     { "id": "A1", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A1" },
     { "id": "A2", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A2",
-      "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Order.Sprint"] },
+      "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Order.Sprint"], "lock": ["Cover.Switch"] },
     { "id": "A3", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A3",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Cover.*", "Object.Relocate", "Object.LightBarrel",
-        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Attack.QuickFire", "Order.Sprint"] },
+        "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Attack.QuickFire", "Order.Sprint"], "lock": ["Cover.Switch"] },
     { "id": "A4", "lesson": true, "checkpoint": true, "title_id": "TUT_BEAT_A4",
       "unlock": ["Squad.Solo", "Squad.Regroup", "Inventory.*", "Item.*", "Loot.*", "Object.Relocate", "Object.LightBarrel", "Stance.*", "Cover.*",
         "Trap.DisarmMine", "Trap.DisarmTripwire", "Attack.TargetedShot", "Attack.QuickFire", "Order.Sprint"] }
@@ -257,6 +257,8 @@
       "id": "A1_hut_stack_l", "beat": "A1", "kind": "hint_card", "text_id": "TUT_A1_HUT_STACK_L",
       "keys": ["Select.Member", "Cover.Preview", "Cover.Enter"],
       "unlock": ["Cover.*"],
+      "_comment_switch": "2026-10-20: the wall-edge cover switch (double-click another cover from a wall edge, Cover.Switch) stays locked until the A3 cover field (A3_cover unlocks Cover.*); a locked double-click is the ordinary cover order.",
+      "lock": ["Cover.Switch"],
       "trigger": { "type": "after_step", "step": "A1_select" },
       "complete": { "event": "CoverEntered", "in_volume": "VOL_A1_DOOR_L", "distinct_from": ["A1_hut_stack_r", "A1_hut_enter"] }
     },
@@ -477,7 +479,7 @@
       "_comment": "Rev 5i (game designer 2026-10-15): beyond the fence, still in Solo, each operative into his OWN cover - one order each, three different operatives (CoverEntered, distinct; the only operatives who can take cover now are past the fence). Replaces the rev 5c refresher (VOL_A3_FIELD card + squad card + squad-cover objective). The cover field lessons (bound, the peek that reveals the mines) follow only after it. '{progress} / {count} in cover'.",
       "_comment2": "2026-10-19 (game designer, marked screenshot): ROLE-SPECIFIC - each role has its own spot, a marker ring per role (ATutorialMarkerActor step A3_cover, RoleId + Label, map section AutoLayout_Demo01_5j): the Medic-Sapper (blue) behind the tall slab - the peek corner of A3_peek -, the Commander (red) at the middle low wall, the Engineer (orange) behind the long low wall in front. 'role_spots': an operative counts only in cover at HIS role's ring (any order, distinct; one already there counts too); his ring hides once he is in place. A map without role rings: any cover counts.",
       "id": "A3_cover", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_COVER_EACH",
-      "keys": ["Select.Member", "Cover.Enter"],
+      "keys": ["Select.Member", "Cover.Enter", "Cover.Switch"],
       "unlock": ["Cover.*"],
       "trigger": { "type": "after_step", "step": "A3_fence_crawl" },
       "complete": { "event": "CoverEntered", "count": 3, "distinct_operatives": true, "role_spots": true }

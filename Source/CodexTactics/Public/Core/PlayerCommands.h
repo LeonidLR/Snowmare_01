@@ -190,6 +190,11 @@ namespace PlayerCommands
 	 * (leaning out, rifle up) until another order, also with no enemy around (user request 2026-10-13, Demo 01 rev 5c).
 	 */
 	extern CODEXTACTICS_API const FName CoverCornerPeek;
+	/**
+	 * In cover at a wall EDGE, a double-click on ANOTHER cover within range: he dashes there and arrives through the run-in
+	 * transition (game designer 2026-10-20, Tactics/CoverSwitchRules). Locked -> the ordinary cover order (Cover.Enter).
+	 */
+	extern CODEXTACTICS_API const FName CoverSwitch;
 	/** N: corner lean / blind fire. */
 	extern CODEXTACTICS_API const FName CoverFireMode;
 

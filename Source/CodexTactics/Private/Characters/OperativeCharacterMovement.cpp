@@ -23,6 +23,7 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationData.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "Tactics/CoverTraceRules.h"
 #include "TimerManager.h"
 #include "Tutorial/TutorialRules.h"
 #include "Tutorial/TutorialSubsystem.h"
@@ -85,6 +86,12 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 			LeaveCover(TEXT("move order"));
 		}
 		bHasPendingCover = false;
+	}
+	else if (bToPendingSlot && bInCover && !bCoverMoveOrder && !CoverTraceRules::IsSameWall(CoverSlot, PendingCoverSlot))
+	{
+		// The pause's release of a planned walk to ANOTHER cover (2026-10-20, found with the cover switch): he leaves this wall and runs
+		// (before, he crossed to the other wall still "in cover" here: the cover pose slid along and the arrival played no enter clip).
+		LeaveCover(TEXT("another cover"));
 	}
 	// Commander Mode (Sprint 07-B): every player move order pins the anchor the autonomy fights around.
 	if (!bAutonomousOrder && !bPendingMoveReplay)

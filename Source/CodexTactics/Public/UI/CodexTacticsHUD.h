@@ -274,6 +274,8 @@ private:
 	void DrawHitChanceLabel();
 	/** The box being dragged to select squad members (Godot selection_box_canvas). */
 	void DrawSelectionBox();
+	/** Wall-edge cover switch preview (2026-10-20): the dashed run line from the operative to the other cover's slot. */
+	void DrawCoverSwitchPreview();
 	/** Sprint 10: a green shield «HOLD LINE» over every defended object / point (UDefenseMarkerSubsystem). */
 	void DrawDefenseMarkers();
 	UPROPERTY(Transient)

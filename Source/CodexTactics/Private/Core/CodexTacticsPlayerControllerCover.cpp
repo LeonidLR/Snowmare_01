@@ -1,5 +1,5 @@
 // ACodexTacticsPlayerController: cover clicks - cover ghost (find slot, show / hide / confirm), corner peek hover,
-// cover fire mode key.
+// cover fire mode key, the wall-edge cover switch (double-click on another cover from a wall edge, 2026-10-20).
 // Split out of CodexTacticsPlayerController.cpp verbatim (cleanup 2026-10-15; map: docs/port/REFACTOR_CONTROLLER_2026-10.md).
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
@@ -13,6 +13,7 @@
 #include "Tutorial/TutorialSubsystem.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverGhostActor.h"
+#include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/GroupCoverRules.h"
 #include "Characters/SquadOrderRules.h"
@@ -28,6 +29,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
+#include "Misc/App.h"
 #include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 
@@ -164,10 +166,17 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		const FVector Centre = Grid->GridToWorld(Cell);
 		Slot.WorldLocation = FVector(Centre.X, Centre.Y, Slot.WorldLocation.Z);
 	}
+	// The click time / place: a confirm within the double-click time of the click that showed the ghost is a double-click (the
+	// wall-edge cover switch, 2026-10-20; the same thresholds as the ground's double-click = sprint).
+	FVector2D CoverMouse = FVector2D::ZeroVector; // stays zero without a viewport (headless smokes)
+	GetMousePosition(CoverMouse.X, CoverMouse.Y);
+	const double CoverClickNow = FApp::GetCurrentTime();
 	// Second click on the previewed slot: confirm.
 	if (HasCoverPreview() && CoverPreviewOperative.Get() == Operative && FVector::Dist2D(Slot.WorldLocation, CoverPreviewSlot.WorldLocation) <= 100.f)
 	{
-		ConfirmCoverPreview();
+		const bool bDoubleClick = CoverPreviewClickTime >= 0.0 && CoverClickNow - CoverPreviewClickTime <= DoubleClickSeconds
+			&& FVector2D::Distance(CoverMouse, CoverPreviewClickPosition) <= DoubleClickPixels;
+		ConfirmCoverPreview(bDoubleClick);
 		return true;
 	}
 	// Along his own wall: shimmy at once (no preview).
@@ -188,6 +197,8 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	}
 	bCoverPreviewTurnBased = TurnBased != nullptr;
 	ShowCoverPreview(Operative, Slot);
+	CoverPreviewClickTime = CoverClickNow;
+	CoverPreviewClickPosition = CoverMouse;
 	ControllerCommands::Report(this, PlayerCommands::CoverPreview, nullptr, false, false, Operative, Slot.WorldLocation);
 	return true;
 }
@@ -306,7 +317,16 @@ void ACodexTacticsPlayerController::ShowCoverPreview(AOperativeCharacter* Operat
 	}
 	CoverPreviewSlot = Slot;
 	CoverPreviewOperative = Operative;
+	CoverPreviewClickTime = -1.0; // the click handler stamps the click that showed it
 	CoverGhost->ShowFor(*Operative, Slot);
+	// Wall-edge cover switch (2026-10-20): from a wall edge this cover is a double-click dash target (the HUD draws the dash line).
+	{
+		const UTutorialSubsystem* SwitchTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
+		bCoverPreviewSwitchable = !bCoverPreviewTurnBased && !GetActiveTurnBased() && Operative->EvaluateCoverSwitch(Slot) == ECoverSwitchVerdict::Switch
+			&& !(SwitchTutorial && SwitchTutorial->IsCommandLocked(PlayerCommands::CoverSwitch));
+		CoverPreviewSwitchTarget = bCoverPreviewSwitchable ? Operative->ResolveCoverSwitchSlot(Slot).WorldLocation : Slot.WorldLocation;
+		UpdateCoverSwitchHover(nullptr, nullptr); // the click ghost replaces the hover one
+	}
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		const FText Kind = Slot.Height == ECoverHeight::HighCover ? LOCTEXT("CoverHigh", "wall") : LOCTEXT("CoverLow", "low cover");
@@ -327,13 +347,99 @@ void ACodexTacticsPlayerController::HideCoverPreview()
 		CoverGhost->Hide();
 	}
 	CoverPreviewOperative.Reset();
+	bCoverPreviewSwitchable = false;
 }
 
-void ACodexTacticsPlayerController::ConfirmCoverPreview()
+bool ACodexTacticsPlayerController::UpdateCoverSwitchHover(AOperativeCharacter* Operative, const FHitResult* Hit)
+{
+	bool bShow = false;
+	AActor* HitActor = Hit ? Hit->GetActor() : nullptr;
+	const UTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
+	// The same surfaces a cover click takes (TryHandleCoverClick): a wall, not a body / enemy / floor; an object only with Alt. Not his
+	// own wall (a shimmy / the corner peek), not over the click ghost or the corner peek preview, not while it is locked.
+	if (Operative && HitActor && Operative->bInCover && !Operative->bShimmying && !GetActiveTurnBased() && !HasCoverPreview() && !bCornerPeekCursor
+		&& !(Tutorial && (Tutorial->IsCommandLocked(PlayerCommands::CoverSwitch) || Tutorial->IsCommandLocked(PlayerCommands::CoverPreview)))
+		&& HitActor != Operative->GetCoverSlot().WallActor.Get() && !HitActor->IsA<APawn>() && !HitActor->ActorHasTag(FName(TEXT("Enemy")))
+		&& (!HitActor->IsA<AInteractableActor>() || IsSquadWideModifierDown()) && FMath::Abs(Hit->ImpactNormal.Z) <= 0.3f)
+	{
+		ECoverFacing Edge = ECoverFacing::Right;
+		if (CoverSwitchRules::FindSwitchEdge(Operative->GetCoverSlot(), Hit->ImpactPoint, Operative->CoverSwitchEdgeReachCm, Edge))
+		{
+			// The slot probe traces only when the cursor moved over the wall (or he moved): cached while it rests.
+			if (HitActor != SwitchHoverActor.Get() || Operative != CoverSwitchHoverOperative.Get()
+				|| FVector::DistSquared(Hit->ImpactPoint, SwitchHoverPoint) > FMath::Square(5.f)
+				|| FVector::DistSquared2D(Operative->GetCoverSlot().WorldLocation, SwitchHoverSlotLocation) > FMath::Square(5.f))
+			{
+				SwitchHoverActor = HitActor;
+				CoverSwitchHoverOperative = Operative;
+				SwitchHoverPoint = Hit->ImpactPoint;
+				SwitchHoverSlotLocation = Operative->GetCoverSlot().WorldLocation;
+				FCoverSlot Probe;
+				bSwitchHoverValid = FindCoverSlotForHit(*Hit, Probe) && Operative->EvaluateCoverSwitch(Probe) == ECoverSwitchVerdict::Switch;
+				if (bSwitchHoverValid)
+				{
+					CoverSwitchHoverSlot = Operative->ResolveCoverSwitchSlot(Probe);
+				}
+			}
+			bShow = bSwitchHoverValid;
+		}
+	}
+	if (!bShow)
+	{
+		if (CoverSwitchGhost && CoverSwitchGhost->IsShown())
+		{
+			CoverSwitchGhost->Hide();
+		}
+		bCoverSwitchHoverShown = false;
+		return false;
+	}
+	if (!CoverSwitchGhost)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		CoverSwitchGhost = GetWorld()->SpawnActor<ACoverGhostActor>(CoverSwitchHoverSlot.WorldLocation, FRotator::ZeroRotator, Params);
+	}
+	if (CoverSwitchGhost && (!CoverSwitchGhost->IsShown() || CoverSwitchGhost->GetOperative() != Operative
+		|| FVector::DistSquared2D(CoverSwitchGhost->GetSlot().WorldLocation, CoverSwitchHoverSlot.WorldLocation) > 1.f))
+	{
+		CoverSwitchGhost->ShowFor(*Operative, CoverSwitchHoverSlot);
+	}
+	bCoverSwitchHoverShown = true;
+	return true;
+}
+
+bool ACodexTacticsPlayerController::IsCoverSwitchHoverShown() const
+{
+	return bCoverSwitchHoverShown && CoverSwitchGhost && CoverSwitchGhost->IsShown();
+}
+
+bool ACodexTacticsPlayerController::GetCoverSwitchPreviewLine(FVector& OutFrom, FVector& OutTo) const
+{
+	const AOperativeCharacter* Operative = nullptr;
+	if (IsCoverSwitchHoverShown() && CoverSwitchHoverOperative.IsValid())
+	{
+		Operative = CoverSwitchHoverOperative.Get();
+		OutTo = CoverSwitchHoverSlot.WorldLocation;
+	}
+	else if (HasCoverPreview() && bCoverPreviewSwitchable)
+	{
+		Operative = CoverPreviewOperative.Get();
+		OutTo = CoverPreviewSwitchTarget;
+	}
+	if (!Operative)
+	{
+		return false;
+	}
+	OutFrom = Operative->GetActorLocation() - FVector(0.f, 0.f, Operative->GetSimpleCollisionHalfHeight());
+	return true;
+}
+
+void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 {
 	AOperativeCharacter* Operative = CoverPreviewOperative.Get();
 	const FCoverSlot Slot = CoverPreviewSlot;
 	HideCoverPreview();
+	bLastCoverConfirmSwitch = false;
 	if (!Operative || !Slot.IsValid())
 	{
 		return;
@@ -366,28 +472,48 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const ECombatOrderDispatch Dispatch = Flow ? FCombatTimeModeRules::GetOrderDispatch(Flow->GetPhase(), Flow->GetCombatMode(),
 		OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) : ECombatOrderDispatch::Execute;
+	// Wall-edge cover switch (game designer 2026-10-20): a DOUBLE-click on another cover while he stands at a wall edge, within range;
+	// a single / slow confirm, or a double-click from anywhere else, stays the ordinary cover order (CoverSwitchRules::IsSwitchConfirm).
+	// Locked by the tutorial: the ordinary cover order (TutorialRules::ResolveLockedCommand degrades Cover.Switch to Cover.Enter).
+	const UTutorialSubsystem* SwitchTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
+	LastCoverSwitchVerdict = Operative->EvaluateCoverSwitch(Slot);
+	const bool bSwitch = CoverSwitchRules::IsSwitchConfirm(bDoubleClick, LastCoverSwitchVerdict,
+		SwitchTutorial && SwitchTutorial->IsCommandLocked(PlayerCommands::CoverSwitch));
+	bLastCoverConfirmSwitch = bSwitch;
+	if (bDoubleClick)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: double-click on another cover - %s -> %s"), *Operative->DisplayName.ToString(),
+			CoverSwitchRules::VerdictName(LastCoverSwitchVerdict), bSwitch ? TEXT("the cover switch") : TEXT("the ordinary cover order"));
+	}
 	// Game designer 2026-10-20: a box selection / group mode takes cover together (the others beside him or prone behind it).
-	if (OrderGroupCover(Operative, Slot, Dispatch == ECombatOrderDispatch::Queue, Flow ? Flow->GetPauseOrderRadius() : 1200.f))
+	if (OrderGroupCover(Operative, Slot, Dispatch == ECombatOrderDispatch::Queue, Flow ? Flow->GetPauseOrderRadius() : 1200.f, bSwitch))
 	{
 		return;
 	}
 	if (Dispatch == ECombatOrderDispatch::Queue)
 	{
-		// Tactical pause: the walk is planned, the slot entered on arrival.
-		Operative->SetPendingCover(Slot);
-		const FVector Planned = GetSquad()->PlanMove(Operative, Slot.WorldLocation, true, Flow ? Flow->GetPauseOrderRadius() : 1200.f);
+		// Tactical pause: the walk is planned, the slot entered on arrival (a switch: through the run-in clip after the release).
+		const FCoverSlot PlanSlot = bSwitch ? Operative->ResolveCoverSwitchSlot(Slot) : Slot;
+		Operative->SetPendingCover(PlanSlot);
+		Operative->SetPendingCoverSwitch(bSwitch);
+		const FVector Planned = GetSquad()->PlanMove(Operative, PlanSlot.WorldLocation, true, Flow ? Flow->GetPauseOrderRadius() : 1200.f);
 		if (Feedback)
 		{
 			Feedback->SpawnWaypointMarker(Planned);
 		}
 		if (Messages)
 		{
-			Messages->PostMessage(Operative->DisplayName, LOCTEXT("CoverPlanned", "📋 [PLAN] Take cover at the wall!"));
+			Messages->PostMessage(Operative->DisplayName, bSwitch ? LOCTEXT("CoverSwitchPlanned", "📋 [PLAN] Dash to the other cover!")
+				: LOCTEXT("CoverPlanned", "📋 [PLAN] Take cover at the wall!"));
 		}
-		ControllerCommands::Report(this, PlayerCommands::CoverEnter, nullptr, true, false, Operative, Slot.WorldLocation);
-		if (Slot.HasExposedEdge())
+		ControllerCommands::Report(this, PlayerCommands::CoverEnter, nullptr, true, false, Operative, PlanSlot.WorldLocation);
+		if (bSwitch)
 		{
-			ControllerCommands::Report(this, PlayerCommands::CoverCorner, nullptr, true, false, Operative, Slot.WorldLocation);
+			ControllerCommands::Report(this, PlayerCommands::CoverSwitch, nullptr, true, false, Operative, PlanSlot.WorldLocation);
+		}
+		if (PlanSlot.HasExposedEdge())
+		{
+			ControllerCommands::Report(this, PlayerCommands::CoverCorner, nullptr, true, false, Operative, PlanSlot.WorldLocation);
 		}
 		return;
 	}
@@ -395,21 +521,25 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 	{
 		Vehicles->CancelBoarding(Operative);
 	}
-	const EOperativeOrderResult Result = Operative->OrderTakeCover(Slot, true);
+	const EOperativeOrderResult Result = bSwitch ? Operative->OrderCoverSwitch(Slot) : Operative->OrderTakeCover(Slot, true);
 	if (Result == EOperativeOrderResult::Accepted)
 	{
 		ControllerCommands::Report(this, PlayerCommands::CoverEnter, nullptr, false, false, Operative, Slot.WorldLocation);
+		if (bSwitch)
+		{
+			ControllerCommands::Report(this, PlayerCommands::CoverSwitch, nullptr, false, false, Operative, Slot.WorldLocation);
+		}
 		if (Slot.HasExposedEdge())
 		{
 			ControllerCommands::Report(this, PlayerCommands::CoverCorner, nullptr, false, false, Operative, Slot.WorldLocation);
 		}
 		if (Feedback)
 		{
-			Feedback->SpawnMovePing(Slot.WorldLocation, true);
+			Feedback->SpawnMovePing(bSwitch && Operative->HasPendingCover() ? Operative->ResolveCoverSwitchSlot(Slot).WorldLocation : Slot.WorldLocation, true);
 		}
 		if (Messages)
 		{
-			Messages->PostMessage(Operative->DisplayName, LOCTEXT("CoverOrdered", "🏃 Take cover!"));
+			Messages->PostMessage(Operative->DisplayName, bSwitch ? LOCTEXT("CoverSwitchOrdered", "🏃 Dash to the other cover!") : LOCTEXT("CoverOrdered", "🏃 Take cover!"));
 		}
 	}
 	else if (Messages && Result == EOperativeOrderResult::Unreachable)
@@ -418,7 +548,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview()
 	}
 }
 
-bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct, const FCoverSlot& Slot, bool bPlan, float Radius)
+bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct, const FCoverSlot& Slot, bool bPlan, float Radius, bool bLeaderSwitch)
 {
 	USquadSubsystem* Squad = GetSquad();
 	UWorld* World = GetWorld();
@@ -435,7 +565,11 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	// The direct order's slot: the clicked one. On a high wall the corner he would walk to by himself right after entering
 	// (TrySnapToCoverCorner) is taken at once - the corner is his, and nobody is placed on that walk.
 	FCoverSlot DirectSlot = Slot;
-	if (Slot.Height == ECoverHeight::HighCover)
+	if (bLeaderSwitch)
+	{
+		DirectSlot = Direct->ResolveCoverSwitchSlot(Slot); // the same corner rule (the wall-edge switch, 2026-10-20)
+	}
+	else if (Slot.Height == ECoverHeight::HighCover)
 	{
 		const ECoverFacing Facing = Direct->PredictCoverFacing(Slot);
 		float Shift = 0.f;
@@ -571,11 +705,15 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	const bool bNeighbours = !ChosenSlots.IsEmpty();
 	const float FaceYaw = (-Normal).Rotation().Yaw;
 	// Into a slot: the same order as the single one (OrderTakeCover / the planned walk + SetPendingCover), always a run.
+	// The wall-edge cover switch (2026-10-20): the direct order's leader dashes in through the run-in clip, the others follow the
+	// group cover rules at that wall.
 	auto SendToSlot = [&](AOperativeCharacter* Member, const FCoverSlot& MemberSlot, bool bPrimary)
 	{
+		const bool bMemberSwitch = bPrimary && bLeaderSwitch;
 		if (bPlan)
 		{
 			Member->SetPendingCover(MemberSlot);
+			Member->SetPendingCoverSwitch(bMemberSwitch);
 			const FVector Planned = Squad->PlanMove(Member, MemberSlot.WorldLocation, true, Radius);
 			if (Feedback)
 			{
@@ -584,7 +722,7 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 		}
 		else
 		{
-			if (Member->OrderTakeCover(MemberSlot, true) != EOperativeOrderResult::Accepted)
+			if ((bMemberSwitch ? Member->OrderCoverSwitch(MemberSlot) : Member->OrderTakeCover(MemberSlot, true)) != EOperativeOrderResult::Accepted)
 			{
 				return false;
 			}
@@ -681,10 +819,15 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	}
 	LastGroupCoverSlots = InSlots;
 	LastGroupCoverProne = Prone;
-	UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s + %d: %d in the cover (%d free slots, %d probes per side), %d prone behind it%s; span %.0f..%.0f cm"),
-		*Direct->DisplayName.ToString(), Others.Num(), InSlots, Free.Num(), Probes, Prone, bPlan ? TEXT(" (planned)") : TEXT(""), Span.X, Span.Y);
+	UE_LOG(LogCodexTactics, Display, TEXT("[GroupCover] %s + %d: %d in the cover (%d free slots, %d probes per side), %d prone behind it%s%s; span %.0f..%.0f cm"),
+		*Direct->DisplayName.ToString(), Others.Num(), InSlots, Free.Num(), Probes, Prone, bPlan ? TEXT(" (planned)") : TEXT(""),
+		bLeaderSwitch ? TEXT(", the leader by the cover switch") : TEXT(""), Span.X, Span.Y);
 
 	ControllerCommands::Report(this, PlayerCommands::CoverEnter, nullptr, bPlan, true, Direct, DirectSlot.WorldLocation);
+	if (bLeaderSwitch)
+	{
+		ControllerCommands::Report(this, PlayerCommands::CoverSwitch, nullptr, bPlan, true, Direct, DirectSlot.WorldLocation);
+	}
 	if (DirectSlot.HasExposedEdge())
 	{
 		ControllerCommands::Report(this, PlayerCommands::CoverCorner, nullptr, bPlan, true, Direct, DirectSlot.WorldLocation);

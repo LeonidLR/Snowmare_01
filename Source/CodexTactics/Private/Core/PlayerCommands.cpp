@@ -48,6 +48,7 @@ namespace PlayerCommands
 	const FName CoverCorner(TEXT("Cover.Corner"));
 	const FName CoverShimmy(TEXT("Cover.Shimmy"));
 	const FName CoverCornerPeek(TEXT("Cover.CornerPeek"));
+	const FName CoverSwitch(TEXT("Cover.Switch"));
 	const FName CoverFireMode(TEXT("Cover.FireMode"));
 
 	const FName Relocate(TEXT("Object.Relocate"));
@@ -187,6 +188,7 @@ namespace PlayerCommands
 			{ CoverCorner, TEXT("Click corner"), TEXT("Combat"), TEXT("Take a corner slot") },
 			{ CoverShimmy, TEXT("Click along wall"), TEXT("Combat"), TEXT("Shimmy along the wall") },
 			{ CoverCornerPeek, TEXT("Click wall edge"), TEXT("Combat"), TEXT("In cover (high, or crouched at low cover): go to that corner and hold the aim round it") },
+			{ CoverSwitch, TEXT("Double-click other cover"), TEXT("Combat"), TEXT("Double-click another cover from a wall edge: dash to it") },
 			{ CoverFireMode, TEXT("N"), TEXT("Combat"), TEXT("Corner lean / blind fire") },
 			{ Relocate, TEXT("Click > Push"), TEXT("Items & traps"), TEXT("Push / relocate an object") },
 			{ LightBarrel, TEXT("Click > Light"), TEXT("Items & traps"), TEXT("Light a barrel with a match") },

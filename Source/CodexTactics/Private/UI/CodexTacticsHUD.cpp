@@ -436,6 +436,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawHordeWarning();
 	DrawHitChanceLabel();
 	DrawSelectionBox();
+	DrawCoverSwitchPreview();
 	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
 	// Minimap (2026-10-18): the top-right panel shows the feed or the map (F2 / its header), Tab the full-screen map.
 	UMinimapSubsystem* Minimap = GetWorld()->GetSubsystem<UMinimapSubsystem>();
@@ -546,6 +547,40 @@ void ACodexTacticsHUD::DrawSelectionBox()
 			DrawLine(Point.X, Point.Y, Point.X + DirX * Corner, Point.Y, CornerColor, 2.5f);
 			DrawLine(Point.X, Point.Y, Point.X, Point.Y + DirY * Corner, CornerColor, 2.5f);
 		}
+	}
+}
+
+void ACodexTacticsHUD::DrawCoverSwitchPreview()
+{
+	// The dash of the wall-edge cover switch (game designer 2026-10-20): dashes a little above the ground from his feet to the slot,
+	// in the cover ghost's blue; a short cross bar marks the slot.
+	const ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayerController());
+	FVector From;
+	FVector To;
+	if (!PC || !PC->GetCoverSwitchPreviewLine(From, To))
+	{
+		return;
+	}
+	From.Z += 8.f; // his feet / the slot (on the navmesh): a little above the ground
+	To.Z += 8.f;
+	const float Length = static_cast<float>(FVector::Dist(From, To));
+	const int32 Dashes = FMath::Clamp(FMath::RoundToInt(Length / 35.f), 2, 60);
+	const FLinearColor DashColor(0.45f, 0.8f, 1.f, 0.95f);
+	for (int32 Index = 0; Index < Dashes; Index += 2)
+	{
+		const FVector A = Project(FMath::Lerp(From, To, static_cast<float>(Index) / Dashes), true);
+		const FVector B = Project(FMath::Lerp(From, To, static_cast<float>(Index + 1) / Dashes), true);
+		if (A.Z > 0.f && B.Z > 0.f)
+		{
+			DrawLine(A.X, A.Y, B.X, B.Y, DashColor, 3.f);
+		}
+	}
+	const FVector Across = FVector::CrossProduct((To - From).GetSafeNormal2D(), FVector::UpVector) * 30.f;
+	const FVector L = Project(To - Across, true);
+	const FVector R = Project(To + Across, true);
+	if (L.Z > 0.f && R.Z > 0.f)
+	{
+		DrawLine(L.X, L.Y, R.X, R.Y, DashColor, 3.f);
 	}
 }
 

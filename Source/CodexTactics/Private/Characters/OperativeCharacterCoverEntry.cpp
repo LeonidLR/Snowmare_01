@@ -1,4 +1,5 @@
-// AOperativeCharacter: Running into cover, the enter-clip mesh blend, wall clearance, the body-yaw blend.
+// AOperativeCharacter: Running into cover, the enter-clip mesh blend, wall clearance, the body-yaw blend, the wall-edge cover switch
+// (game designer 2026-10-20, Tactics/CoverSwitchRules).
 // Split out of OperativeCharacter.cpp verbatim (cleanup day 2026-10-14; map: docs/port/REFACTOR_OPERATIVE_2026-10.md).
 // UE-only (user-found cover bugs 2026-10-07 / 2026-10-11; no Godot reference). Pure rules: Tactics/CoverFacingRules.
 
@@ -9,9 +10,18 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
+#include "HAL/IConsoleManager.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverRules.h"
+#include "Tactics/CoverSwitchRules.h"
+#include "Tactics/CoverTraceRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+
+namespace
+{
+	TAutoConsoleVariable<int32> CVarDebugCoverSwitch(TEXT("Codex.Debug.CoverSwitch"), 0,
+		TEXT("1: log every run-in probe of the wall-edge cover switch (distance, speed, heading, the best clip fit)."));
+}
 
 void AOperativeCharacter::TryEnterCoverFromRun()
 {
@@ -28,6 +38,12 @@ void AOperativeCharacter::TryEnterCoverFromRun()
 	if (!World || (TurnBased && TurnBased->IsActive()))
 	{
 		return; // grid walks end on their cell (UpdateCover enters there)
+	}
+	// Wall-edge cover switch: the pack's run-in transition takes over the last metres. While it waits for its moment the ordinary run-in
+	// stays off; only when the switch gives up (no clip / no fit: bCoverSwitchPending cleared) does the ordinary run-in below go on.
+	if (bCoverSwitchPending && (TryEnterCoverSwitchFromRun() || bCoverSwitchPending))
+	{
+		return;
 	}
 	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
 	const EOperativeStance EntryStance = CoverRules::DefaultStanceFor(PendingCoverSlot.Height) == EOperativeStance::Crouching
@@ -66,6 +82,153 @@ void AOperativeCharacter::TryEnterCoverFromRun()
 	CoverEntryBlendTime = 0.f;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: runs into the cover (%.0f cm out, speed %.0f, clip lead %.0f, glide %.0f)"), *DisplayName.ToString(),
 		Distance, Speed, ClipLead, CoverEntryGlide.Size2D());
+}
+
+FCoverSwitchConfig AOperativeCharacter::GetCoverSwitchConfig() const
+{
+	FCoverSwitchConfig Config;
+	Config.bEnabled = bCoverSwitchEnabled;
+	Config.MaxRangeCm = CoverSwitchMaxRangeCm;
+	Config.MinRangeCm = CoverSwitchMinRangeCm;
+	Config.EdgeReachCm = CoverSwitchEdgeReachCm;
+	return Config;
+}
+
+ECoverSwitchVerdict AOperativeCharacter::EvaluateCoverSwitch(const FCoverSlot& Target) const
+{
+	const bool bSameWall = bInCover && Target.IsValid() && CoverTraceRules::IsSameWall(CoverSlot, Target);
+	return CoverSwitchRules::Evaluate(bInCover, bShimmying, CoverSlot, Target, bSameWall, GetCoverSwitchConfig());
+}
+
+FCoverSlot AOperativeCharacter::ResolveCoverSwitchSlot(const FCoverSlot& Target) const
+{
+	// As the group cover order (2026-10-20): on a high wall the corner he would walk to right after entering (TrySnapToCoverCorner)
+	// is the slot at once - no side-step cutting the run-in clip short. A low cover is fired over anywhere: the clicked slot.
+	if (Target.Height != ECoverHeight::HighCover || !GetWorld())
+	{
+		return Target;
+	}
+	const ECoverFacing Facing = PredictCoverFacing(Target);
+	float Shift = 0.f;
+	FCoverSlot Corner;
+	if (CoverFacingRules::ShouldSnapToCorner(Target, Facing, Shift, GetCoverFacingConfig(), false)
+		&& CoverTraceRules::FindShimmySlot(GetWorld(), Target, Target.WallPoint + CoverFacingRules::AlongWallDirection(Target, Facing) * Shift, Corner)
+		&& (!Target.WallActor.IsValid() || Corner.WallActor == Target.WallActor))
+	{
+		return Corner;
+	}
+	return Target;
+}
+
+EOperativeOrderResult AOperativeCharacter::OrderCoverSwitch(const FCoverSlot& Target)
+{
+	const ECoverSwitchVerdict Verdict = EvaluateCoverSwitch(Target);
+	const FCoverSlot Slot = ResolveCoverSwitchSlot(Target);
+	const EOperativeOrderResult Result = OrderTakeCover(Slot, true);
+	if (Result == EOperativeOrderResult::Accepted && bHasPendingCover)
+	{
+		bCoverSwitchPending = true;
+		CoverSwitchProbeMismatchCm = TNumericLimits<float>::Max();
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: cover switch - dashes %.0f cm to the other cover (%s, approach %d)"), *DisplayName.ToString(),
+			FVector::Dist2D(GetActorLocation(), Slot.WorldLocation), CoverSwitchRules::VerdictName(Verdict),
+			static_cast<int32>(CoverSwitchRules::ClassifyApproach(Slot, GetActorLocation())));
+	}
+	return Result;
+}
+
+bool AOperativeCharacter::TryEnterCoverSwitchFromRun()
+{
+	// Called by TryEnterCoverFromRun once its checks passed (pending cover, running order, not in cover, not turn-based).
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	const bool bCrouch = CoverRules::DefaultStanceFor(PendingCoverSlot.Height) == EOperativeStance::Crouching || Stance == EOperativeStance::Crouching;
+	if (!Anim || !Anim->bUseNativeCoverClips || !Anim->HasCoverSwitchClips(bCrouch))
+	{
+		bCoverSwitchPending = false;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: cover switch without run-in clips - the ordinary entry"), *DisplayName.ToString());
+		return false;
+	}
+	const FVector Here = GetActorLocation();
+	const FVector Velocity2D = FVector(GetVelocity().X, GetVelocity().Y, 0.f);
+	const float Speed = static_cast<float>(Velocity2D.Size());
+	const float Distance = static_cast<float>(FVector::Dist2D(Here, PendingCoverSlot.WorldLocation));
+	if (Distance > CoverSwitchClipLeadCm || Distance < 1.f || Speed < 200.f)
+	{
+		return false; // not there yet, or not running (a hitch / a repath: wait; arriving standing: the ordinary entry)
+	}
+	const FVector ToSlot = (PendingCoverSlot.WorldLocation - Here).GetSafeNormal2D();
+	if (CVarDebugCoverSwitch.GetValueOnGameThread() > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: switch probe %.0f cm out, speed %.0f, heading %.2f, best fit so far %.0f cm"), *DisplayName.ToString(),
+			Distance, Speed, FVector::DotProduct(Velocity2D.GetSafeNormal(), ToSlot), CoverSwitchProbeMismatchCm);
+	}
+	if (FVector::DotProduct(Velocity2D.GetSafeNormal(), ToSlot) < 0.3f)
+	{
+		return false; // the path still bends round something: wait until he heads for the slot
+	}
+	const FCoverSlot Slot = PendingCoverSlot;
+	const FVector2D Runner(Here.X - Slot.WorldLocation.X, Here.Y - Slot.WorldLocation.Y);
+	// The clip's body as the mesh draws it at the slot (actor yaw = the wall normal, plus the Blueprint's mesh yaw).
+	const FVector2D RunDirection(Velocity2D.X, Velocity2D.Y);
+	auto Choose = [this, Anim, bCrouch, &Runner, &RunDirection](ECoverFacing Facing, float ActorYaw)
+	{
+		TArray<FCoverSwitchTrack> Tracks;
+		Tracks.SetNum(3);
+		for (int32 Approach = 0; Approach < 3; ++Approach)
+		{
+			Anim->GetCoverSwitchTrack(bCrouch, static_cast<ECoverSwitchApproach>(Approach), Facing, ActorYaw + MeshBaseYaw, Tracks[Approach]);
+		}
+		return CoverSwitchRules::ChooseClipStart(Tracks, Runner, CoverSwitchMinClipSeconds, RunDirection);
+	};
+	FCoverSwitchClipStart Choice = Choose(PredictCoverFacing(Slot), CoverFacingRules::FacingYaw(Slot, ECoverFacing::Right));
+	// The moment: the clip's body close to him, or the fit no longer improving (a diagonal run-in nears the clips' line until the clip's
+	// shortest allowed rest), at the latest CoverSwitchLastChanceCm out.
+	const bool bGoodFit = Choice.Approach != INDEX_NONE && Choice.MismatchCm <= CoverSwitchGoodFitCm;
+	const bool bWorse = Choice.Approach != INDEX_NONE && Choice.MismatchCm > CoverSwitchProbeMismatchCm + 1.f;
+	if (Choice.Approach != INDEX_NONE && !bGoodFit && !bWorse && Distance > CoverSwitchLastChanceCm)
+	{
+		CoverSwitchProbeMismatchCm = FMath::Min(CoverSwitchProbeMismatchCm, Choice.MismatchCm);
+		return false;
+	}
+	if (Choice.Approach == INDEX_NONE || Choice.MismatchCm > CoverSwitchMaxMismatchCm)
+	{
+		bCoverSwitchPending = false;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: no run-in clip fits the approach (%.0f cm off) - the ordinary entry"), *DisplayName.ToString(),
+			Choice.MismatchCm);
+		return false;
+	}
+	bHasPendingCover = false;
+	bCoverSwitchPending = false;
+	{
+		TGuardValue<bool> FromRun(bCoverEntryFromRunRequest, true);
+		TGuardValue<bool> Switch(bCoverSwitchEntryRequest, true);
+		EnterCover(Slot);
+	}
+	if (!bInCover)
+	{
+		return true;
+	}
+	// The facing he ended with decides the clip's end side (a threat may have turned him on entry): its tracks.
+	Choice = Choose(CoverFacing, GetActorRotation().Yaw);
+	if (Choice.Approach == INDEX_NONE)
+	{
+		bCoverSwitchEntry = false; // the ordinary enter clip plays; its start pose stands out in front of the wall
+		Choice.ClipOffset = FVector2D(Slot.WallNormal.GetSafeNormal2D() * (bCrouch ? CoverEnterClipLeadCrouchCm : CoverEnterClipLeadStandCm));
+	}
+	else
+	{
+		CoverSwitchApproach = static_cast<ECoverSwitchApproach>(Choice.Approach);
+		CoverSwitchStartSeconds = Choice.StartSeconds;
+		LastCoverSwitchMismatchCm = Choice.MismatchCm;
+		++CoverSwitchCount;
+	}
+	const FVector Delta = Here - GetActorLocation();
+	CoverEntryClipOffset = FVector(Choice.ClipOffset.X, Choice.ClipOffset.Y, 0.f);
+	CoverEntryGlide = FVector(Delta.X, Delta.Y, 0.f) - CoverEntryClipOffset;
+	CoverEntryBlendTime = 0.f;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: cover switch run-in %s from %.2f s (%.0f cm out, speed %.0f, clip body %.0f cm off the runner)"),
+		*DisplayName.ToString(), *CoverSwitchRules::ClipName(CoverSwitchApproach, CoverFacing, bCrouch), CoverSwitchStartSeconds, Distance, Speed,
+		Choice.MismatchCm);
+	return true;
 }
 
 float AOperativeCharacter::UpdateCoverWallClearance(float DeltaTime)

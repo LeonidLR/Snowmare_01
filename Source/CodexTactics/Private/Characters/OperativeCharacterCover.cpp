@@ -41,6 +41,7 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot
 		return EOperativeOrderResult::Unreachable;
 	}
 	bHoldGroupCoverSlot = false; // a group cover order sets it again after this call
+	bCoverSwitchPending = false; // OrderCoverSwitch sets it again after this call
 	if (IsKnockedDown())
 	{
 		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
@@ -86,6 +87,7 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot
 void AOperativeCharacter::SetPendingCover(const FCoverSlot& Slot)
 {
 	bHoldGroupCoverSlot = false; // a group cover order sets it again after this call
+	bCoverSwitchPending = false; // a planned switch sets it again after this call (SetPendingCoverSwitch)
 	PendingCoverSlot = Slot;
 	bHasPendingCover = Slot.IsValid();
 }
@@ -114,6 +116,7 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	bCornerAimActive = false;
 	bQuietCoverEntry = bQuietCoverEntryRequest; // the return after an open shot: no Cover_Enter clip
 	bCoverEntryFromRun = bCoverEntryFromRunRequest;
+	bCoverSwitchEntry = bCoverSwitchEntryRequest; // the wall-edge switch's run-in clip (TryEnterCoverSwitchFromRun)
 	bCoverLeftToMove = false;
 	// A fresh wall: walk to the threat-side edge on the next update if it is close (a player's shimmy is never undone).
 	bCoverSnapPending = !bSameWall;
@@ -152,7 +155,8 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		bBodyYawFree = false;
 		// With an enter clip and a big turn the clip comes in at once (CoverEnterTurnedBlendSeconds), one anim update later:
 		// until it plays, the old pose keeps its old yaw on the mesh (no frame of the run pose turned round).
-		bCoverEntryAwaitClip = bEnterClip && !bQuietCoverEntry && CoverEntryTurnDeg > 90.f;
+		// The switch's run-in clip starts mid-run, its body running the way he ran: the old yaw is held with the clip's weight at any turn.
+		bCoverEntryAwaitClip = bEnterClip && !bQuietCoverEntry && (CoverEntryTurnDeg > 90.f || bCoverSwitchEntry);
 		bCoverEntryClipSeen = false;
 		CoverEntryAwaitSeconds = 0.f;
 	}
@@ -274,6 +278,7 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	bCoverSnapPending = false;
 	bCornerAimActive = false; // the sustained corner aim ends with the cover
 	bCoverEntryFromRun = false;
+	bCoverSwitchEntry = false;
 	CoverShotTarget.Reset();
 	CoverSlot = FCoverSlot();
 	bQuietCoverEntry = false;

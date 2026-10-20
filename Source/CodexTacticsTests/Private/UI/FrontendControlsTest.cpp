@@ -29,7 +29,7 @@ namespace ControlsTest
 		PlayerCommands::SquadStanceStand, PlayerCommands::SquadStanceCrouch, PlayerCommands::SquadStanceProne, PlayerCommands::SoloOn,
 		PlayerCommands::Regroup, PlayerCommands::Guard, PlayerCommands::Autonomy, PlayerCommands::HoldLine,
 		PlayerCommands::PosturePassive, PlayerCommands::PostureDefensive, PlayerCommands::PostureAggressive, PlayerCommands::CoverPreview,
-		PlayerCommands::CoverEnter, PlayerCommands::CoverCorner, PlayerCommands::CoverShimmy, PlayerCommands::CoverCornerPeek, PlayerCommands::CoverFireMode,
+		PlayerCommands::CoverEnter, PlayerCommands::CoverCorner, PlayerCommands::CoverShimmy, PlayerCommands::CoverCornerPeek, PlayerCommands::CoverSwitch, PlayerCommands::CoverFireMode,
 		PlayerCommands::Relocate, PlayerCommands::LightBarrel, PlayerCommands::UseObject, PlayerCommands::UseHeatPack,
 		PlayerCommands::UseItem, PlayerCommands::LootCrate, PlayerCommands::LootTake, PlayerCommands::DisarmMine,
 		PlayerCommands::DisarmTrap, PlayerCommands::DisarmTripwire, PlayerCommands::SetTrap, PlayerCommands::DeployStart,

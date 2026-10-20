@@ -30,7 +30,7 @@
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
     "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
-    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke",
+    "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke"
   ],
   "smokeDefaults": {
@@ -123,7 +123,7 @@
       "name": "cover",
       "globs": ["Source/**/Tactics/Cover*", "Source/**/Characters/Cover*"],
       "tests": ["CodexTactics.Tactics.Cover"],
-      "smokes": ["GroupCoverSmoke", "CoverSmoke", "CoverEventSmoke", "CoverHugSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugMedicSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke", "LeanPoseSmoke"]
+      "smokes": ["GroupCoverSmoke", "CoverSmoke", "CoverEventSmoke", "CoverHugSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugMedicSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke", "LeanPoseSmoke", "CoverSwitchSmoke"]
     },
     {
       "name": "anim-operative",
@@ -325,7 +325,7 @@
       "name": "operative-cover-units",
       "globs": ["Source/**/Characters/OperativeCharacterCover*", "Source/**/Characters/OperativeCharacterCornerAim*"],
       "tests": ["CodexTactics.Tactics.Cover", "CodexTactics.Characters.OperativeUnits"],
-      "smokes": ["CoverSmoke", "CoverEventSmoke", "CoverHugSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugMedicSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke", "TurnBasedAimSmoke", "PeekMinesSmoke", "PeekSightSmoke", "LeanPoseSmoke"]
+      "smokes": ["CoverSmoke", "CoverEventSmoke", "CoverHugSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugMedicSmoke", "CoverCrouchSmoke", "CornerHoldSmoke", "CornerEntrySmoke", "CommanderModeSmoke", "TurnBasedAimSmoke", "PeekMinesSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke"]
     },
     {
       "name": "operative-combat-units",
@@ -502,10 +502,16 @@
       "smokes": ["GroupCoverSmoke", "CoverSmoke", "GroupSelectSmoke", "SoloRejoinSmoke"]
     },
     {
+      "name": "cover-switch",
+      "globs": ["Source/**/Tactics/CoverSwitch*", "Source/**/Debug/CoverSwitchSmoke*", "Source/**/Characters/OperativeCharacterCoverEntry*", "Scripts/Editor/measure_cover_switch_clips.py"],
+      "tests": ["CodexTactics.Tactics.CoverSwitch", "CodexTactics.Tactics.Cover"],
+      "smokes": ["CoverSwitchSmoke", "CornerEntrySmoke", "CoverSmoke", "GroupCoverSmoke"]
+    },
+    {
       "name": "controller-cover",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerCover*"],
       "tests": ["CodexTactics.Core.ControllerUnits", "CodexTactics.Tactics.GroupCover"],
-      "smokes": ["GroupCoverSmoke", "CoverSmoke", "CoverHugSmoke", "CornerEntrySmoke", "PeekMinesSmoke", "VehicleSmoke"]
+      "smokes": ["GroupCoverSmoke", "CoverSmoke", "CoverHugSmoke", "CornerEntrySmoke", "PeekMinesSmoke", "VehicleSmoke", "CoverSwitchSmoke"]
     },
     {
       "name": "event-bus",
