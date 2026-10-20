@@ -22,6 +22,13 @@
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/RadiusRingSubsystem.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "HAL/IConsoleManager.h"
+
+namespace OperativeVisionConeConsole
+{
+	static TAutoConsoleVariable<int32> CVarSquadConeLevels(TEXT("Codex.VisionCones.SquadLevels"), 2,
+		TEXT("Operatives' occluded vision cones: 2 (default) two tones like the enemies' - full = he would see even a crouched enemy (90 cm profile) there, light = only a standing one (150 cm), cut = nobody; 1 = the old single 150 cm level (one tone)."));
+}
 
 float AOperativeCharacter::GetVisionConeRange() const
 {
@@ -127,11 +134,11 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 		}
 	}
 	const FLinearColor Color = VisionConeRules::GetStateColor(bVisionConeSpotted ? EVisionConeState::Spotted : EVisionConeState::Clear);
-	// Occluded cone (game designer 2026-10-19): the squad's sight line (UTacticalSightSubsystem) from his eyes (stance height) to
-	// a man-sized enemy's profile (150 cm); one level, one tone.
-	FVisionConeSightSpec Sight;
-	Sight.EyeHeightCm = SightRules::EyeHeight(Stance);
+	// Occluded cone (game designer 2026-10-19 / 2026-10-20): the squad's sight line (UTacticalSightSubsystem::CanOperativeSee) from his
+	// eyes (stance height; the peek eye below) to an enemy's profile, two levels like the enemies' cones: full tone = he would see even a
+	// crouched enemy (90 cm) there, light tone = only a standing one (150 cm), cut = nobody (VisionConeVisibility::MakeOperativeSightSpec).
 	float Range = GetVisionConeRange();
+	float EyeHeight = SightRules::EyeHeight(Stance);
 	float HalfAngle = GetVisionConeHalfAngle();
 	// Peek sight (game designer 2026-10-19): leaned out round a corner / over a low wall the cone is the limited peek cone, drawn from
 	// the leaned-out eye point in the pose's aim (what UTacticalSightSubsystem::CanOperativeSee reveals).
@@ -141,7 +148,7 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 	{
 		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 		VisionCone->SetViewOverride(PeekEye - Feet, static_cast<float>(PeekDirection.Rotation().Yaw));
-		Sight.EyeHeightCm = static_cast<float>(PeekEye.Z - Feet.Z);
+		EyeHeight = static_cast<float>(PeekEye.Z - Feet.Z);
 		Range = PeekSightConfig.RangeCm;
 		HalfAngle = PeekSightConfig.HalfAngleDeg;
 	}
@@ -154,7 +161,8 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 	{
 		VisionCone->ClearViewOverride();
 	}
-	Sight.Levels.Add({ SightRules::ProfileHeight(EOperativeStance::Standing), Range });
+	const FVisionConeSightSpec Sight = VisionConeVisibility::MakeOperativeSightSpec(EyeHeight, Range,
+		OperativeVisionConeConsole::CVarSquadConeLevels.GetValueOnGameThread() >= 2 ? 2 : 1);
 	VisionCone->UpdateCone(bVisible, Range, HalfAngle, Color, DeltaTime, &Sight);
 }
 

@@ -16,6 +16,13 @@
 // trace sees (standing 150 cm / crouched 90 cm profiles at the perception ranges). Perf: 20 guards with cones on, turning
 // (look-around 2 s), the rebuild cost per frame logged ([VisionCone] perf ...). Shot: also the designer's scene - the
 // squad hiding behind the walls - Saved/Screenshots/vision_cone_occluded.png.
+// The squad's cones (game designer 2026-10-20: «the obstacle isn't cut out of the operatives' vision cones»), Shift+O on: the
+// leader crouched right behind a 0.8 m wall, a mate crouched right behind a 1.2 m wall, the third standing 5 m back, a 3 m wall
+// 5 m beyond the low ones: every cone draws 2 levels; behind the walls the drawn level = UTacticalSightSubsystem::CanOperativeSee at a crouched
+// (90 cm) and a standing (150 cm) enemy's profile (0.8 m: full for all - below every sight line; 1.2 m: cut for the crouched one,
+// light «standing enemy only» for the standing one; 3 m: cut), and on a 75 cm grid of each cone; the cost of the second level
+// (Codex.VisionCones.SquadLevels 1 vs 2) logged ([VisionCone] squad perf ...). Shot: also the designer's scene - one crouched
+// behind the barricade, two standing 5 m back - Saved/Screenshots/squad_cones_occluded.png.
 
 #include "CoreMinimal.h"
 
@@ -75,6 +82,12 @@ namespace VisionConeSmoke
 		uint64 PerfFrame = 0;
 		float PerfStart = 0.f;
 		int32 PerfMode = 0;
+		/** Squad-cone stage (2026-10-20): its walls, where the squad stood before, the level-cost measurement. */
+		TArray<TWeakObjectPtr<AActor>> SquadWalls;
+		TArray<FTransform> SavedSpots;
+		TArray<EOperativeStance> SavedStances;
+		int32 PerfLevels = 1;
+		int32 PerfStep = 0;
 	};
 
 	/** A blocking cube (BasicShapes, BlockAll: blocks ECC_Visibility like a level wall). */
@@ -145,6 +158,42 @@ namespace VisionConeSmoke
 				&& SightLineClear(World, Eye, Ground + FVector(0.f, 0.f, SightRules::ProfileHeight(Stance))) ? 1 : 0;
 		}
 		return Level;
+	}
+
+	/** What the squad's sight sees at a ground point: a standing enemy's profile (+1), a crouched one's (+1) - CanOperativeSee (FOV, trace, peek). */
+	int32 SquadSightLevel(const UTacticalSightSubsystem& Sight, const AOperativeCharacter& Operative, const FVector& Ground)
+	{
+		int32 Level = 0;
+		for (const EOperativeStance Stance : { EOperativeStance::Standing, EOperativeStance::Crouching })
+		{
+			Level += Sight.CanOperativeSee(Operative, Ground + FVector(0.f, 0.f, SightRules::ProfileHeight(Stance))) ? 1 : 0;
+		}
+		return Level;
+	}
+
+	/** Point inside a cone's drawn sector (its origin / heading), RangeMarginCm short of its range and AngleMarginDeg inside its edges. */
+	bool InsideDrawnSector(const UVisionConeComponent& Cone, const FVector& Point, float RangeMarginCm, float AngleMarginDeg)
+	{
+		const FVector Origin = Cone.GetComponentLocation();
+		const FVector Facing = FRotator(0.f, Cone.GetComponentRotation().Yaw, 0.f).Vector();
+		const FVector To = (Point - Origin).GetSafeNormal2D();
+		return FVector::Dist2D(Point, Origin) <= Cone.GetConeRangeCm() - RangeMarginCm
+			&& FVector::DotProduct(To, Facing) >= FMath::Cos(FMath::DegreesToRadians(Cone.GetConeHalfAngleDeg() - AngleMarginDeg));
+	}
+
+	/** The squad-cone stage's three: the leader, then the first two other members. */
+	TArray<AOperativeCharacter*> SquadScene(const USquadSubsystem& Squad, AOperativeCharacter* Leader)
+	{
+		TArray<AOperativeCharacter*> Members;
+		Members.Add(Leader);
+		for (AOperativeCharacter* Member : Squad.GetMembers())
+		{
+			if (Member && Member != Leader && Members.Num() < 3)
+			{
+				Members.Add(Member);
+			}
+		}
+		return Members;
 	}
 
 	/** Arena point: Along the arena's forward, Side to its right, from its origin. */
@@ -447,7 +496,7 @@ namespace VisionConeSmoke
 			Check(State, FMath::IsNearlyEqual(Brute->VisionCone->GetConeRangeCm(), State.BruteRange * 1.25f, 2.f),
 				TEXT("searching: the cone grows with the heightened perception (x1.25)"));
 			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("no fight started by the smoke"));
-			State.Stage = 6;
+			State.Stage = 40;
 			State.Time = 0.f;
 			return true;
 		}
@@ -680,6 +729,321 @@ namespace VisionConeSmoke
 			Parallel->Set(2, ECVF_SetByConsole);
 			return Finish(State);
 		}
+		case 40:
+		{
+			// The squad's cones (game designer 2026-10-20: «the obstacle isn't cut out of the operatives' vision cones»), Shift+O on: the
+			// leader crouched right behind a 0.8 m wall, a mate crouched right behind a 1.2 m wall, the third standing 5 m back between
+			// them, a 3 m wall 5 m beyond the low ones; all facing the arena's forward. Brute and hound out of the picture (no enemy: no fight).
+			for (AEnemyCharacter* Enemy : { Brute, Hound })
+			{
+				if (Enemy)
+				{
+					Enemy->Destroy();
+				}
+			}
+			State.Brute = nullptr;
+			State.Hound = nullptr;
+			const TArray<AOperativeCharacter*> Members = SquadScene(*Squad, Leader);
+			if (Members.Num() < 3)
+			{
+				Check(State, false, FString::Printf(TEXT("squad cones: three operatives (%d)"), Members.Num()));
+				State.Stage = 6;
+				return true;
+			}
+			SetGlobal(-1);
+			UVisionConeComponent::SetPlayerSquadCones(true);
+			Squad->SetFollowersHolding(true);
+			const float Yaw = static_cast<float>(State.F.Rotation().Yaw);
+			const FVector Spots[3] = { ArenaPoint(State, 300.f, -350.f), ArenaPoint(State, 300.f, 250.f), ArenaPoint(State, -250.f, -50.f) };
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				AOperativeCharacter* Member = Members[Index];
+				State.SavedSpots.Add(Member->GetActorTransform());
+				State.SavedStances.Add(Member->GetStance());
+				Member->StopOperative();
+				Member->TeleportTo(SmokeUtils::FreeSpot(World, Spots[Index], Member), State.F.Rotation(), false, true);
+				Member->SetStance(Index < 2 ? EOperativeStance::Crouching : EOperativeStance::Standing);
+			}
+			// The walls from where the crouched two really stand: front face 60 cm ahead of the capsule's centre, 30 cm thick, 3 m long.
+			for (int32 Index = 0; Index < 2; ++Index)
+			{
+				const float Height = Index == 0 ? 80.f : 120.f;
+				const FVector Feet = Members[Index]->GetActorLocation() - FVector(0.f, 0.f, Members[Index]->GetSimpleCollisionHalfHeight());
+				State.SquadWalls.Add(SpawnBlock(World, Feet + State.F * 75.f + FVector(0.f, 0.f, Height * 0.5f), FRotator(0.f, Yaw, 0.f), FVector(30.f, 300.f, Height)));
+			}
+			State.SquadWalls.Add(SpawnBlock(World, ArenaPoint(State, 800.f, -50.f) + FVector(0.f, 0.f, 150.f), FRotator(0.f, Yaw, 0.f), FVector(40.f, 400.f, 300.f)));
+			State.Stage = 41;
+			State.Time = 0.f;
+			return true;
+		}
+		case 41:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			for (AOperativeCharacter* Member : SquadScene(*Squad, Leader))
+			{
+				Member->VisionCone->RequestRebuild(); // traced with the walls in place
+			}
+			State.Stage = 42;
+			State.Time = 0.f;
+			return true;
+		}
+		case 42:
+		{
+			if (State.Time < 0.6f)
+			{
+				return true;
+			}
+			const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+			const TArray<AOperativeCharacter*> Members = SquadScene(*Squad, Leader);
+			if (!Sight || Members.Num() < 3)
+			{
+				Check(State, false, TEXT("squad cones: sight subsystem and three operatives"));
+				State.Stage = 43;
+				return true;
+			}
+			const TCHAR* Names[3] = { TEXT("crouched behind the 0.8 m wall"), TEXT("crouched behind the 1.2 m wall"), TEXT("standing 5 m back") };
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				const AOperativeCharacter* Member = Members[Index];
+				const UVisionConeComponent* Cone = Member->VisionCone;
+				Check(State, Shown(Member) && Cone->IsOccluded() && Cone->GetLevelCount() == 2
+					&& FMath::IsNearlyEqual(Cone->GetBuiltSpec().EyeHeightCm, SightRules::EyeHeight(Member->GetStance()), 1.f),
+					FString::Printf(TEXT("Shift+O, %s (%s, in cover %d): occluded cone, %d levels (standing / crouched enemy), eyes %.0f cm, %d rays, %d light vertices"),
+						Names[Index], *Member->GetName(), Member->bInCover ? 1 : 0, Cone->GetLevelCount(), Cone->GetBuiltSpec().EyeHeightCm, Cone->GetBuiltRays().Num(),
+						Cone->GetLightVertexCount()));
+			}
+			// Region checks: Expect = the drawn level and the squad's sight (CanOperativeSee at a crouched / standing enemy's profile) there.
+			auto Region = [&](int32 Who, float AlongFrom, float AlongTo, float SideFrom, float SideTo, int32 Expect, const TCHAR* What)
+			{
+				int32 Points = 0;
+				int32 Drawn = 0;
+				int32 Seen = 0;
+				for (float Along = AlongFrom; Along <= AlongTo + 0.1f; Along += 50.f)
+				{
+					for (float Side = SideFrom; Side <= SideTo + 0.1f; Side += 50.f)
+					{
+						FVector Ground;
+						if (!GroundAt(World, ArenaPoint(State, Along, Side), State.Feet.Z, Ground) || !InsideDrawnSector(*Members[Who]->VisionCone, Ground, 30.f, 3.f))
+						{
+							continue;
+						}
+						++Points;
+						Drawn += Members[Who]->VisionCone->GetDrawnLevelAt(Ground) == Expect ? 1 : 0;
+						Seen += SquadSightLevel(*Sight, *Members[Who], Ground) == Expect ? 1 : 0;
+					}
+				}
+				Check(State, Points >= 6 && Drawn == Points && Seen == Points,
+					FString::Printf(TEXT("%s: %s (%d points: %d drawn so, %d so by CanOperativeSee)"), Names[Who], What, Points, Drawn, Seen));
+			};
+			// Honest: a 0.8 m wall is below a crouched man's eyes (95 cm) and below both profiles - nothing behind it is hidden from him.
+			Region(0, 450.f, 740.f, -450.f, -250.f, 2, TEXT("behind the 0.8 m wall FULL (even a crouched enemy seen over it)"));
+			// The 1.2 m wall is above his eyes: a crouched enemy is hidden behind it, a standing one only right behind it shows his head.
+			Region(1, 450.f, 900.f, 150.f, 350.f, 0, TEXT("behind the 1.2 m wall CUT"));
+			// 5 m back his eyes are at 160: the 1.2 m wall hides a crouched enemy up to ~8.7 m beyond his feet, a standing one is seen.
+			Region(2, 460.f, 760.f, 250.f, 350.f, 1, TEXT("behind the 1.2 m wall LIGHT (only a standing enemy seen)"));
+			Region(2, 450.f, 740.f, -400.f, -250.f, 2, TEXT("behind the 0.8 m wall FULL"));
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				Region(Index, 900.f, 1100.f, -120.f, -20.f, 0, TEXT("behind the 3 m wall CUT"));
+			}
+			// Each cone on a 75 cm grid: the drawn level = the squad's sight rule (points within 25 cm of a change skipped).
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				const AOperativeCharacter* Member = Members[Index];
+				int32 Grid = 0;
+				int32 Mismatch = 0;
+				int32 Levels[3] = { 0, 0, 0 };
+				FString First;
+				for (float Along = -550.f; Along <= 1650.f; Along += 75.f)
+				{
+					for (float Side = -550.f; Side <= 1100.f; Side += 75.f)
+					{
+						FVector Ground;
+						if (!GroundAt(World, ArenaPoint(State, Along, Side), State.Feet.Z, Ground) || !InsideDrawnSector(*Member->VisionCone, Ground, 30.f, 3.f)
+							|| FVector::Dist2D(Ground, Member->VisionCone->GetComponentLocation()) < 100.f)
+						{
+							continue;
+						}
+						const int32 Drawn = Member->VisionCone->GetDrawnLevelAt(Ground);
+						const int32 Seen = SquadSightLevel(*Sight, *Member, Ground);
+						bool bStable = true;
+						for (const FVector& Offset : { State.F * 25.f, State.F * -25.f, State.R * 25.f, State.R * -25.f })
+						{
+							FVector Near;
+							bStable &= GroundAt(World, Ground + Offset, State.Feet.Z, Near) && Member->VisionCone->GetDrawnLevelAt(Near) == Drawn
+								&& SquadSightLevel(*Sight, *Member, Near) == Seen;
+						}
+						if (!bStable)
+						{
+							continue;
+						}
+						++Grid;
+						++Levels[FMath::Clamp(Seen, 0, 2)];
+						if (Drawn != Seen && Mismatch++ == 0)
+						{
+							First = FString::Printf(TEXT("(%.0f, %.0f): drawn %d, sight %d"), Along, Side, Drawn, Seen);
+						}
+					}
+				}
+				// The crouched one hugging the 1.2 m wall (it covers +-68 deg of his +-70 deg view, above his 95 cm eyes) sees nothing beyond it.
+				const bool bSpread = Index == 1 ? Levels[0] > 100 : Levels[0] > 0 && Levels[2] > 50 && (Index != 2 || Levels[1] > 0);
+				Check(State, Grid >= 100 && bSpread && Mismatch == 0,
+					FString::Printf(TEXT("%s: drawn cone = CanOperativeSee on a 75 cm grid: %d points (cut %d, standing only %d, full %d), %d mismatches %s"),
+						Names[Index], Grid, Levels[0], Levels[1], Levels[2], Mismatch, *First));
+			}
+			State.PerfLevels = 1;
+			State.PerfStep = 0;
+			State.Stage = 44;
+			State.Time = 0.f;
+			return true;
+		}
+		case 44:
+		{
+			// Cost of the second level: the three cones re-traced 10 times with 1 level (the old cone), then 10 times with 2.
+			IConsoleVariable* Levels = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.VisionCones.SquadLevels"));
+			const TArray<AOperativeCharacter*> Members = SquadScene(*Squad, Leader);
+			if (!Levels)
+			{
+				Check(State, false, TEXT("console variable Codex.VisionCones.SquadLevels"));
+				State.Stage = 43;
+				return true;
+			}
+			if (State.PerfStep == 0)
+			{
+				Levels->Set(State.PerfLevels, ECVF_SetByConsole);
+				State.PerfStep = 1;
+				return true; // the spec change rebuilds them once (not counted)
+			}
+			if (State.PerfStep == 1)
+			{
+				UVisionConeComponent::ResetBuildStats();
+			}
+			if (State.PerfStep <= 10)
+			{
+				for (AOperativeCharacter* Member : Members)
+				{
+					Member->VisionCone->RequestRebuild();
+				}
+				++State.PerfStep;
+				return true;
+			}
+			const FVisionConeBuildStats& Stats = UVisionConeComponent::GetBuildStats();
+			const double Builds = static_cast<double>(FMath::Max<int64>(Stats.Builds, 1));
+			UE_LOG(LogCodexTactics, Display, TEXT("[VisionCone] squad perf (Codex.VisionCones.SquadLevels %d): %lld rebuilds of 3 cones, %.0f rays / %.0f traces per rebuild, ray work %.3f ms per rebuild (task threads), game thread %.3f ms per rebuild (set-up + mesh upload %.3f)"),
+				State.PerfLevels, Stats.Builds, Stats.Rays / Builds, Stats.Traces / Builds, Stats.TaskSeconds * 1000.0 / Builds, Stats.Seconds * 1000.0 / Builds,
+				Stats.ApplySeconds * 1000.0 / Builds);
+			Check(State, Stats.Builds >= 15, FString::Printf(TEXT("squad perf (%d levels): %lld rebuilds measured"), State.PerfLevels, Stats.Builds));
+			bool bLevels = true;
+			for (const AOperativeCharacter* Member : Members)
+			{
+				bLevels &= Member->VisionCone->GetLevelCount() == State.PerfLevels;
+			}
+			Check(State, bLevels, FString::Printf(TEXT("Codex.VisionCones.SquadLevels %d: the squad's cones draw %d level(s)"), State.PerfLevels, State.PerfLevels));
+			if (State.PerfLevels == 1)
+			{
+				State.PerfLevels = 2;
+				State.PerfStep = 0;
+				return true;
+			}
+			State.Stage = State.bShot ? 45 : 43;
+			State.Time = 0.f;
+			return true;
+		}
+		case 45:
+		{
+			// The designer's scene (screenshot 2026-10-20): one operative crouched right behind the barricade (the 1.2 m wall), two standing
+			// ~5 m back facing it; the 0.8 m and the 3 m walls in view; Shift+O on, O off.
+			const TArray<AOperativeCharacter*> Members = SquadScene(*Squad, Leader);
+			if (Members.Num() >= 3)
+			{
+				Members[0]->StopOperative();
+				Members[0]->TeleportTo(SmokeUtils::FreeSpot(World, ArenaPoint(State, -250.f, 550.f), Members[0]), (ArenaPoint(State, 375.f, 250.f) - ArenaPoint(State, -250.f, 550.f)).Rotation(), false, true);
+				Members[0]->SetStance(EOperativeStance::Standing);
+				Members[2]->SetActorRotation((ArenaPoint(State, 375.f, 250.f) - Members[2]->GetActorLocation()).GetSafeNormal2D().Rotation());
+			}
+			if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
+			{
+				if (ATacticalCameraPawn* Camera = PC->GetPawn<ATacticalCameraPawn>())
+				{
+					Camera->SmoothFocusOnPosition(ArenaPoint(State, 450.f, 150.f), 0.2f, 2300.f);
+				}
+				if (PC->MyHUD)
+				{
+					PC->MyHUD->bShowHUD = false;
+				}
+			}
+			State.Stage = 46;
+			State.Time = 0.f;
+			return true;
+		}
+		case 46:
+		{
+			if (State.Time < 2.f)
+			{
+				// Held on the scene (the camera would otherwise follow the teleported leader).
+				if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
+				{
+					if (ATacticalCameraPawn* Camera = PC->GetPawn<ATacticalCameraPawn>())
+					{
+						Camera->SmoothFocusOnPosition(ArenaPoint(State, 450.f, 150.f), 0.2f, 2300.f);
+					}
+				}
+				return true;
+			}
+			const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("squad_cones_occluded.png");
+			FScreenshotRequest::RequestScreenshot(Path, false, false);
+			UE_LOG(LogCodexTactics, Display, TEXT("[VisionCone] screenshot requested: %s"), *Path);
+			State.Stage = 47;
+			State.Time = 0.f;
+			return true;
+		}
+		case 47:
+		{
+			if (State.Time < 1.5f)
+			{
+				return true;
+			}
+			State.Stage = 43;
+			return true;
+		}
+		case 43:
+		{
+			// Back to the set-up: walls gone, the squad where (and how) it stood, the toggle off, 2 levels.
+			if (IConsoleVariable* Levels = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.VisionCones.SquadLevels")))
+			{
+				Levels->Set(2, ECVF_SetByConsole);
+			}
+			UVisionConeComponent::SetPlayerSquadCones(false);
+			for (const TWeakObjectPtr<AActor>& Wall : State.SquadWalls)
+			{
+				if (Wall.IsValid())
+				{
+					Wall->Destroy();
+				}
+			}
+			State.SquadWalls.Reset();
+			const TArray<AOperativeCharacter*> Members = SquadScene(*Squad, Leader);
+			for (int32 Index = 0; Index < Members.Num() && Index < State.SavedSpots.Num(); ++Index)
+			{
+				Members[Index]->StopOperative();
+				Members[Index]->SetStance(State.SavedStances[Index]);
+				Members[Index]->TeleportTo(State.SavedSpots[Index].GetLocation(), State.SavedSpots[Index].Rotator(), false, true);
+			}
+			Squad->SetFollowersHolding(false);
+			if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
+			{
+				if (PC->MyHUD)
+				{
+					PC->MyHUD->bShowHUD = true;
+				}
+			}
+			State.Stage = 6;
+			State.Time = 0.f;
+			return true;
+		}
 		case 30:
 		{
 			// The designer's shot: the squad hides behind the walls - the leader and a mate behind the tall wall, the rest
@@ -780,7 +1144,7 @@ namespace VisionConeSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.VisionConeSmoke"),
-		TEXT("Dev check: vision cones of operatives and enemies (component, per-actor toggle, geometry from weapon / perception, colours, Codex.Debug.VisionCones, occlusion by walls = the sight trace, rebuild cost); arg Shot saves vision_cones.png + vision_cone_occluded.png; PASS / FAIL."),
+		TEXT("Dev check: vision cones of operatives and enemies (component, per-actor toggle, geometry from weapon / perception, colours, Codex.Debug.VisionCones, occlusion by walls = the sight trace, the squad's two-level cones = CanOperativeSee, rebuild cost); arg Shot saves vision_cones.png + vision_cone_occluded.png + squad_cones_occluded.png; PASS / FAIL."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

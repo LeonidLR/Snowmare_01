@@ -489,3 +489,157 @@ bool FVisionConeOcclusionShapeTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("open cone: one light quad per ray pair (both windings)"), OpenShape.Light.Triangles.Num(), 60 * 12);
 	return true;
 }
+
+namespace VisionConeOcclusionTest
+{
+	/**
+	 * Grid over the cone: the drawn level vs the exact 3D line test (points within 3 cm of a box / a level change skipped).
+	 * Returns the mismatches; OutLevels[0..2] = cut / light / full points checked.
+	 */
+	int32 CountOperativeGridMismatches(const FVisionConeSightSpec& Spec, const TArray<FBoxObstacle>& Boxes, const TArray<FVisionConeRay>& Rays,
+		int32 (&OutLevels)[3], FString& OutFirst)
+	{
+		auto Exact = [&Spec, &Boxes](const FVector2D& Point)
+		{
+			uint8 Level = 0;
+			for (int32 Index = 0; Index < Spec.Levels.Num(); ++Index)
+			{
+				Level += SeesExactly(Spec, Boxes, Index, Point) ? 1 : 0;
+			}
+			return Level;
+		};
+		int32 Mismatches = 0;
+		OutLevels[0] = OutLevels[1] = OutLevels[2] = 0;
+		for (float X = 20.f; X < Spec.GetMaxRange(); X += 31.f)
+		{
+			for (float Y = -1400.f; Y < 1400.f; Y += 29.f)
+			{
+				const FVector2D Point(X, Y);
+				if (FMath::Abs(FMath::RadiansToDegrees(FMath::Atan2(Y, X))) > Spec.HalfAngleDeg - 0.1f || Point.Size() > Spec.GetMaxRange() - 3.f)
+				{
+					continue;
+				}
+				bool bStable = true;
+				for (const FBoxObstacle& Box : Boxes)
+				{
+					bStable &= !Box.Box.ExpandBy(3.f).IsInside(Point);
+				}
+				const uint8 Level = Exact(Point);
+				for (const FVector2D& Offset : { FVector2D(3.f, 0.f), FVector2D(-3.f, 0.f), FVector2D(0.f, 3.f), FVector2D(0.f, -3.f) })
+				{
+					bStable &= Exact(Point + Offset) == Level;
+				}
+				if (!bStable)
+				{
+					continue;
+				}
+				++OutLevels[FMath::Min<int32>(Level, 2)];
+				const uint8 Drawn = VisionConeVisibility::LevelAtPoint(Rays, Spec.HalfAngleDeg, Point);
+				if (Drawn != Level && Mismatches++ == 0)
+				{
+					OutFirst = FString::Printf(TEXT("(%.0f, %.0f) drawn %d exact %d"), X, Y, Drawn, Level);
+				}
+			}
+		}
+		return Mismatches;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FVisionConeOcclusionOperativeLevelsTest, "CodexTactics.Combat.VisionCone.Occlusion.OperativeLevels",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FVisionConeOcclusionOperativeLevelsTest::RunTest(const FString& Parameters)
+{
+	// Game designer 2026-10-20: «the obstacle isn't cut out of the operatives' vision cones». An operative's cone draws the squad's sight
+	// rule (CanOperativeSee: his stance eye -> the enemy's profile) at two enemy profiles: full = even a crouched enemy (90 cm) is seen,
+	// light = only a standing one (150 cm), cut = nobody.
+	using namespace VisionConeVisibility;
+	using namespace VisionConeOcclusionTest;
+	const float CrouchEye = SightRules::EyeHeight(EOperativeStance::Crouching);
+	const float StandEye = SightRules::EyeHeight(EOperativeStance::Standing);
+	FVisionConeSightSpec Crouched = MakeOperativeSightSpec(CrouchEye, 1400.f);
+	Crouched.HalfAngleDeg = 70.f;
+	TestEqual(TEXT("two levels"), Crouched.Levels.Num(), 2);
+	TestEqual(TEXT("level 0: a standing enemy's profile"), Crouched.Levels[0].ProfileHeightCm, SightRules::ProfileHeight(EOperativeStance::Standing));
+	TestEqual(TEXT("level 1: a crouched enemy's profile"), Crouched.Levels[1].ProfileHeightCm, SightRules::ProfileHeight(EOperativeStance::Crouching));
+	TestEqual(TEXT("both to the cone range"), Crouched.Levels[1].RangeCm, 1400.f);
+	TestEqual(TEXT("crouched eye: low trace at the crouched profile (90)"), Crouched.GetLowTraceHeight(), 90.f);
+	TestEqual(TEXT("crouched eye: high trace at the standing profile (150)"), Crouched.GetHighTraceHeight(), 150.f);
+	TestEqual(TEXT("A/B: one level = the old 150 cm cone"), MakeOperativeSightSpec(CrouchEye, 1400.f, 1).Levels.Num(), 1);
+
+	auto CastFan = [](const FVisionConeSightSpec& Spec, const TArray<FBoxObstacle>& Boxes)
+	{
+		return CastRays(Spec, [&Spec, &Boxes](float Angle, FVisionConeRay& Ray) { SampleBoxes(Spec, Boxes, Angle, Ray); });
+	};
+	auto At = [](const FVisionConeSightSpec& Spec, const TArray<FVisionConeRay>& Rays, float X, float Y)
+	{
+		return static_cast<int32>(LevelAtPoint(Rays, Spec.HalfAngleDeg, FVector2D(X, Y)));
+	};
+
+	// 1. Crouched (eyes 95 cm) right behind a wall (front face 60 cm ahead, 30 cm thick, 3 m long).
+	const FBox2D Hug(FVector2D(60.f, -150.f), FVector2D(90.f, 150.f));
+	{
+		// 0.8 m: below his eyes and below both profiles - no sight line touches it: nothing hidden (honest: he does see over it).
+		const TArray<FBoxObstacle> Boxes = { { Hug, 80.f } };
+		const TArray<FVisionConeRay> Rays = CastFan(Crouched, Boxes);
+		TestEqual(TEXT("crouched behind a 0.8 m wall: 3 m beyond it full (even a crouched enemy seen)"), At(Crouched, Rays, 400.f, 0.f), 2);
+		TestTrue(TEXT("crouched behind a 0.8 m wall: = the exact sight test (crouched and standing profile)"),
+			SeesExactly(Crouched, Boxes, 0, FVector2D(400.f, 0.f)) && SeesExactly(Crouched, Boxes, 1, FVector2D(400.f, 0.f)));
+	}
+	{
+		// 1.2 m: above his eyes - a crouched enemy is hidden everywhere behind it, a standing one only beyond ~1.3 m (his line rises).
+		const TArray<FBoxObstacle> Boxes = { { Hug, 120.f } };
+		const TArray<FVisionConeRay> Rays = CastFan(Crouched, Boxes);
+		TestEqual(TEXT("crouched behind a 1.2 m wall: right behind it light (only a standing enemy's head)"), At(Crouched, Rays, 115.f, 0.f), 1);
+		TestEqual(TEXT("crouched behind a 1.2 m wall: 3 m beyond it cut"), At(Crouched, Rays, 400.f, 0.f), 0);
+		TestEqual(TEXT("crouched behind a 1.2 m wall: past its end (its corner at 68 deg) full again"), At(Crouched, Rays, 150.f, 390.f), 2);
+		int32 Levels[3];
+		FString First;
+		const int32 Mismatches = CountOperativeGridMismatches(Crouched, Boxes, Rays, Levels, First);
+		TestEqual(FString::Printf(TEXT("crouched + 1.2 m wall: drawn = exact on the grid (cut %d / light %d / full %d; first mismatch %s)"),
+			Levels[0], Levels[1], Levels[2], *First), Mismatches, 0);
+	}
+	{
+		const TArray<FBoxObstacle> Boxes = { { Hug, 300.f } };
+		const TArray<FVisionConeRay> Rays = CastFan(Crouched, Boxes);
+		TestEqual(TEXT("crouched behind a 3 m wall: cut"), At(Crouched, Rays, 400.f, 0.f), 0);
+		TestEqual(TEXT("crouched behind a 3 m wall: right behind it cut too"), At(Crouched, Rays, 115.f, 0.f), 0);
+	}
+
+	// 2. Standing (eyes 160 cm) 5 m back: a 0.8 m wall left, a 1.2 m wall right (5.6 m out), a 3 m wall ahead (9 m out).
+	FVisionConeSightSpec Standing = MakeOperativeSightSpec(StandEye, 1400.f);
+	Standing.HalfAngleDeg = 70.f;
+	TArray<FBoxObstacle> Boxes;
+	Boxes.Add({ FBox2D(FVector2D(560.f, -400.f), FVector2D(590.f, -100.f)), 80.f });
+	Boxes.Add({ FBox2D(FVector2D(560.f, 100.f), FVector2D(590.f, 400.f)), 120.f });
+	Boxes.Add({ FBox2D(FVector2D(900.f, -60.f), FVector2D(940.f, 60.f)), 300.f });
+	const TArray<FVisionConeRay> Rays = CastFan(Standing, Boxes);
+	TestEqual(TEXT("standing 5 m back, behind the 0.8 m wall: full (both lines pass over it)"), At(Standing, Rays, 800.f, -250.f), 2);
+	TestEqual(TEXT("standing 5 m back, just behind the 1.2 m wall: light (a crouched enemy hidden, a standing one seen)"), At(Standing, Rays, 700.f, 250.f), 1);
+	TestTrue(TEXT("... = the exact sight test"), SeesExactly(Standing, Boxes, 0, FVector2D(700.f, 250.f)) && !SeesExactly(Standing, Boxes, 1, FVector2D(700.f, 250.f)));
+	TestEqual(TEXT("standing 5 m back, far behind the 1.2 m wall: full again (his line comes down past it)"), At(Standing, Rays, 1300.f, 250.f), 2);
+	TestEqual(TEXT("standing 5 m back, behind the 3 m wall: cut"), At(Standing, Rays, 1100.f, 0.f), 0);
+	int32 Levels[3];
+	FString First;
+	const int32 Mismatches = CountOperativeGridMismatches(Standing, Boxes, Rays, Levels, First);
+	TestEqual(FString::Printf(TEXT("standing: drawn = exact on the grid (cut %d / light %d / full %d; first mismatch %s)"), Levels[0], Levels[1], Levels[2], *First),
+		Mismatches, 0);
+	TestTrue(FString::Printf(TEXT("standing grid covers every tone (cut %d / light %d / full %d)"), Levels[0], Levels[1], Levels[2]),
+		Levels[0] > 20 && Levels[1] > 20 && Levels[2] > 500);
+	// Nested levels: wherever a crouched enemy is seen a standing one is too (light never means «crouched only»).
+	bool bNested = true;
+	for (float X = 50.f; X < 1400.f; X += 47.f)
+	{
+		for (float Y = -1300.f; Y < 1300.f; Y += 53.f)
+		{
+			bNested &= !SeesExactly(Standing, Boxes, 1, FVector2D(X, Y)) || SeesExactly(Standing, Boxes, 0, FVector2D(X, Y));
+		}
+	}
+	TestTrue(TEXT("levels nested: crouched seen => standing seen"), bNested);
+	const FVisionConeShape Shape = BuildShape(Rays, Standing.Levels.Num(), Standing.HalfAngleDeg, 8.f);
+	TestTrue(TEXT("standing: full and light tones drawn"), Shape.Full.Vertices.Num() > 0 && Shape.Light.Vertices.Num() > 0);
+	// Open ground: both levels reach the same range - no light ring (unlike an enemy's shorter crouched range).
+	const TArray<FVisionConeRay> OpenRays = CastFan(Standing, {});
+	TestEqual(TEXT("open ground: no light tone"), BuildShape(OpenRays, Standing.Levels.Num(), Standing.HalfAngleDeg, 8.f).Light.Vertices.Num(), 0);
+	return true;
+}
