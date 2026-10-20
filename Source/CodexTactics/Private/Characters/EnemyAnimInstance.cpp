@@ -1,6 +1,7 @@
 #include "Characters/EnemyAnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequenceBase.h"
+#include "Characters/EnemyAnimRules.h"
 #include "Characters/EnemyCharacter.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/HealthComponent.h"
@@ -32,6 +33,10 @@ void UEnemyAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	if (!Enemy)
 	{
 		return;
+	}
+	if (!bVariantsPicked)
+	{
+		PickVariants(*Enemy);
 	}
 	const FVector Velocity = Enemy->GetVelocity();
 	Speed = Velocity.Size2D();
@@ -77,6 +82,8 @@ void UEnemyAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	HitTimer = FMath::Max(0.f, HitTimer - DeltaSeconds);
 	bIsAttacking = AttackTimer > 0.f && !bIsDead;
 	bIsHit = HitTimer > 0.f && !bIsDead;
+	bIsPerforming = IsPerformancePlaying();
+	TickIdleBreaks(*Enemy, DeltaSeconds, bTurnBased);
 }
 
 float UEnemyAnimInstance::NotifyAttack()
@@ -144,11 +151,11 @@ void UEnemyAnimInstance::NotifyDeath()
 	}
 }
 
-void UEnemyAnimInstance::PlayOneShot(UAnimSequenceBase* Clip, float PlayRate, float StartTime, bool bHold)
+UAnimMontage* UEnemyAnimInstance::PlayOneShot(UAnimSequenceBase* Clip, float PlayRate, float StartTime, bool bHold)
 {
 	if (!Clip)
 	{
-		return;
+		return nullptr;
 	}
 	UAnimMontage* Montage = PlaySlotAnimationAsDynamicMontage(Clip, OneShotSlot, 0.15f, bHold ? 0.f : 0.2f, PlayRate, 1, -1.f, StartTime);
 	// Stay on the last frame: the running instance copied bEnableAutoBlendOut from the montage when it started, so the
@@ -158,4 +165,153 @@ void UEnemyAnimInstance::PlayOneShot(UAnimSequenceBase* Clip, float PlayRate, fl
 	{
 		Instance->bEnableAutoBlendOut = false;
 	}
+	return Montage;
+}
+
+// --- Extras (game designer 2026-10-20, Military Zombie): variants, idle breaks, alert roar, spawn entrance. UE-only. ---
+
+namespace EnemyAnimExtrasLocal
+{
+	/** Salts of the per-instance picks (EnemyAnimRules::PickVariantIndex): each list varies on its own. */
+	constexpr uint32 IdleVariantSalt = 11;
+	constexpr uint32 WalkVariantSalt = 12;
+	constexpr uint32 RunVariantSalt = 13;
+	constexpr uint32 IdleBreakSalt = 14;
+
+	UAnimSequenceBase* RandomClipOf(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips)
+	{
+		return Clips.IsEmpty() ? nullptr : Clips[FMath::RandRange(0, Clips.Num() - 1)].Get();
+	}
+}
+
+void UEnemyAnimInstance::PickVariants(const AEnemyCharacter& Enemy)
+{
+	bVariantsPicked = true;
+	const uint32 Seed = Enemy.GetVariantSeed();
+	IdleBreakRandom.Initialize(static_cast<int32>(Seed ^ EnemyAnimExtrasLocal::IdleBreakSalt));
+	if (bSeededIdleVariant && !IdleAnimations.IsEmpty())
+	{
+		IdleAnimation = IdleAnimations[EnemyAnimRules::PickVariantIndex(Seed, EnemyAnimExtrasLocal::IdleVariantSalt, IdleAnimations.Num())].Get();
+	}
+	// From the class defaults each time (a re-pick after BeginPlay must not keep the first pick's clip speed).
+	const UEnemyAnimInstance* Defaults = GetClass()->GetDefaultObject<UEnemyAnimInstance>();
+	auto Apply = [Seed](const TArray<FEnemyLocomotionVariant>& Variants, uint32 Salt, UAnimSequenceBase* DefaultClip, float DefaultSpeed,
+		TObjectPtr<UAnimSequenceBase>& Clip, float& ClipSpeed)
+	{
+		const int32 Index = EnemyAnimRules::PickVariantIndex(Seed, Salt, Variants.Num());
+		const bool bVariant = Index >= 0 && Variants[Index].Clip;
+		Clip = bVariant ? Variants[Index].Clip.Get() : DefaultClip;
+		ClipSpeed = bVariant && Variants[Index].GroundSpeed > 0.f ? Variants[Index].GroundSpeed : DefaultSpeed;
+		return bVariant ? Index : -1;
+	};
+	WalkVariantIndex = Apply(WalkAnimationVariants, EnemyAnimExtrasLocal::WalkVariantSalt, Defaults->WalkAnimation, Defaults->WalkClipSpeed, WalkAnimation, WalkClipSpeed);
+	RunVariantIndex = Apply(RunAnimationVariants, EnemyAnimExtrasLocal::RunVariantSalt, Defaults->RunAnimation, Defaults->RunClipSpeed, RunAnimation, RunClipSpeed);
+	NextIdleBreakSeconds = EnemyAnimRules::NextIdleBreakDelay(IdleBreakRandom.FRand(), IdleBreakInterval.X, IdleBreakInterval.Y);
+}
+
+bool UEnemyAnimInstance::IsMontagePlaying(const UAnimMontage* Montage) const
+{
+	const FAnimMontageInstance* Instance = Montage ? GetActiveInstanceForMontage(Montage) : nullptr;
+	return Instance && Instance->IsActive() && Instance->IsPlaying() && !Instance->IsStopped();
+}
+
+void UEnemyAnimInstance::TickIdleBreaks(const AEnemyCharacter& Enemy, float DeltaSeconds, bool bTurnBased)
+{
+	if (IdleBreakAnimations.IsEmpty() && IdleActivityAnimations.IsEmpty())
+	{
+		return;
+	}
+	const bool bBreakPlaying = IsMontagePlaying(IdleBreakMontage);
+	const bool bKnockedDown = Enemy.IsKnockedDown();
+	// Anything but the calm idle cuts a running break (it starts to walk, the turn-based fight, death, a knockdown; an attack /
+	// hit / roar replaced the montage on the slot already).
+	if (bBreakPlaying && (bIsMoving || bIsDead || bKnockedDown || bTurnBased || (Enemy.IsHuntingSquad() && IdleActivityAnimations.Contains(IdleBreakClip))))
+	{
+		Montage_Stop(IdleBreakBlendSeconds, IdleBreakMontage);
+	}
+	bIsIdleBreak = IsMontagePlaying(IdleBreakMontage);
+	if (!bIsIdleBreak)
+	{
+		IdleBreakMontage = nullptr;
+		IdleBreakClip = nullptr;
+	}
+	const bool bOtherOneShot = !bIsIdleBreak && GetSlotMontageGlobalWeight(OneShotSlot) > 0.01f;
+	if (!EnemyAnimRules::IsCalmIdle(bIsMoving, bIsDead, bKnockedDown, bIsIdleBreak || bOtherOneShot || bIsPerforming, bTurnBased))
+	{
+		// A break that plays counts as idle time already spent; anything else starts the count again.
+		CalmIdleSeconds = bIsIdleBreak ? CalmIdleSeconds : 0.f;
+		return;
+	}
+	CalmIdleSeconds += DeltaSeconds;
+	if (CalmIdleSeconds < NextIdleBreakSeconds)
+	{
+		return;
+	}
+	CalmIdleSeconds = 0.f;
+	NextIdleBreakSeconds = EnemyAnimRules::NextIdleBreakDelay(IdleBreakRandom.FRand(), IdleBreakInterval.X, IdleBreakInterval.Y);
+	const EEnemyIdleBreak Choice = EnemyAnimRules::ChooseIdleBreak(IdleBreakRandom.FRand(), IdleActivityChance, IdleBreakAnimations.Num(),
+		IdleActivityAnimations.Num(), Enemy.IsHuntingSquad());
+	UAnimSequenceBase* Clip = nullptr;
+	if (Choice == EEnemyIdleBreak::Activity)
+	{
+		Clip = IdleActivityAnimations[IdleBreakRandom.RandRange(0, IdleActivityAnimations.Num() - 1)].Get();
+	}
+	else if (Choice == EEnemyIdleBreak::Fidget)
+	{
+		const int32 Current = IdleBreakAnimations.IndexOfByKey(IdleAnimation);
+		Clip = IdleBreakAnimations[EnemyAnimRules::PickFidget(IdleBreakRandom.FRand(), IdleBreakAnimations.Num(), Current)].Get();
+	}
+	if (Clip)
+	{
+		IdleBreakMontage = PlaySlotAnimationAsDynamicMontage(Clip, OneShotSlot, IdleBreakBlendSeconds, IdleBreakBlendSeconds, IdleBreakPlayRate);
+		IdleBreakClip = IdleBreakMontage ? Clip : nullptr;
+		bIsIdleBreak = IdleBreakMontage != nullptr;
+	}
+}
+
+UAnimSequenceBase* UEnemyAnimInstance::GetIdleBreakClip() const
+{
+	return IsMontagePlaying(IdleBreakMontage) ? IdleBreakClip.Get() : nullptr;
+}
+
+float UEnemyAnimInstance::NotifyAlert()
+{
+	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
+	UAnimSequenceBase* Clip = EnemyAnimExtrasLocal::RandomClipOf(AlertAnimations);
+	if (!Clip || bIsDead || bIsJumping || (Owner && (Owner->IsKnockedDown() || Owner->IsDying())))
+	{
+		return 0.f;
+	}
+	PerformanceMontage = PlayOneShot(Clip, AlertPlayRate);
+	bIsPerforming = PerformanceMontage != nullptr;
+	return bIsPerforming ? EnemyAnimRules::PerformanceLockSeconds(Clip->GetPlayLength(), AlertPlayRate, AlertMaxSeconds) : 0.f;
+}
+
+float UEnemyAnimInstance::NotifyEntrance()
+{
+	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
+	UAnimSequenceBase* Clip = EnemyAnimExtrasLocal::RandomClipOf(EntranceAnimations);
+	if (!Clip || bIsDead || (Owner && (Owner->IsKnockedDown() || Owner->IsDying())))
+	{
+		return 0.f;
+	}
+	const float Start = FMath::Clamp(EntranceStartOffset, 0.f, Clip->GetPlayLength() * 0.9f);
+	PerformanceMontage = PlayOneShot(Clip, EntrancePlayRate, Start);
+	bIsPerforming = PerformanceMontage != nullptr;
+	return bIsPerforming ? EnemyAnimRules::PerformanceLockSeconds(Clip->GetPlayLength() - Start, EntrancePlayRate, EntranceMaxSeconds) : 0.f;
+}
+
+bool UEnemyAnimInstance::IsPerformancePlaying() const
+{
+	return IsMontagePlaying(PerformanceMontage);
+}
+
+void UEnemyAnimInstance::StopPerformance(float BlendOutSeconds)
+{
+	if (IsMontagePlaying(PerformanceMontage))
+	{
+		Montage_Stop(BlendOutSeconds, PerformanceMontage);
+	}
+	PerformanceMontage = nullptr;
+	bIsPerforming = false;
 }

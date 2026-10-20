@@ -70,6 +70,7 @@ unchanged apart from the class comment, so no asset or Blueprint can notice the 
 | `EnemyCharacterPerception.cpp` | `GetPerception`, `GetPatrolPerception`, `FindVisibleOperative`, `CountHearingWalls`, `CountOccludersBetween`, `CountHearingWallsTo`, `TickPatrolPerception`, `GetVisionConeRange`, `GetVisionConeHalfAngle`, `UpdateVisionCone`, `NotifySquadNoise` |
 | `EnemyCharacterScent.cpp` | `CountScentWallsTo`, `TickScentPerception`, `TickScentBehavior`, `ResetScent` |
 | `EnemyCharacterSearch.cpp` | `IsHuntingSquad`, `StartPatrolSearch`, `StartPatrolSearchWith`, `ApplySearchNoise`, `GetHearingPathLengthTo`, `TickPatrolSearch`, `EndPatrolSearch`, `ResolveSearchPoint` |
+| `EnemyCharacterPerformance.cpp` (added 2026-10-20, Military Zombie) | `GetVariantSeed`, `ApplyLookVariants`, `PlaySpawnEntrance`, `StartAlertPerformance`, `TickPerformanceLock` |
 
 Where to put new code: the file of its cluster; a file-local helper one unit needs goes into a prefixed named namespace or
 an anonymous namespace with a FILE-UNIQUE name in that unit (unity blobs merge the units); a helper two units need goes into a

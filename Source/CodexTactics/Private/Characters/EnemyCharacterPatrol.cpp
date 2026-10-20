@@ -324,6 +324,8 @@ void AEnemyCharacter::BreakPatrol(EPatrolAlertCause Cause, const FVector& AlertL
 	if (!bIsDying)
 	{
 		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("❗ ALARM!"), FLinearColor(1.f, 0.35f, 0.2f));
+		// Game designer 2026-10-20: an ABP with an alert clip roars at the squad before it charges (Military Zombie).
+		StartAlertPerformance(AlertLocation);
 	}
 	PropagatePatrolBreak(AlertLocation);
 	// User request 2026-10-06: an enemy that engages the squad starts the fight on an ambush level.

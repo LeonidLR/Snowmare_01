@@ -256,6 +256,8 @@ AEnemyCharacter* UWaveSubsystem::SpawnEnemy(EEnemyArchetype Archetype, const FVe
 	if (Enemy)
 	{
 		Enemy->InitializeArchetype(Archetype);
+		// Game designer 2026-10-20: an ABP with an entrance clip plays it (Military Zombie transformation); others: no-op.
+		Enemy->PlaySpawnEntrance();
 		Enemy->OnEnemyDiedNative.AddUObject(this, &UWaveSubsystem::HandleEnemyDied);
 		AliveEnemies.Add(Enemy);
 

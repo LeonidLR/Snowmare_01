@@ -77,6 +77,35 @@ struct CODEXTACTICS_API FPatrolSearchSpec
 	float ListenSeconds = 0.f;
 };
 
+/** Materials of one look variant, by material SLOT NAME (slot order differs between meshes); slots not listed keep the mesh's. */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FEnemyMaterialSet
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy|Look")
+	TMap<FName, TObjectPtr<class UMaterialInterface>> SlotMaterials;
+};
+
+/**
+ * Per-instance look variants of one enemy Blueprint (game designer 2026-10-20, Military Zombie: 3 assembled bodies x 3 texture
+ * sets): BeginPlay picks one mesh and one material set by the spawn seed (AEnemyCharacter::GetVariantSeed, deterministic per
+ * spawn). The meshes must share the Blueprint mesh's skeleton (the ABP keeps running). Empty lists: the Blueprint's look.
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FEnemyLookVariants
+{
+	GENERATED_BODY()
+
+	/** Body meshes to pick from (one per instance); empty = the Blueprint's mesh. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy|Look")
+	TArray<TObjectPtr<class USkeletalMesh>> Meshes;
+
+	/** Material sets to pick from (one per instance, independent of the mesh); empty = the mesh's own materials. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy|Look")
+	TArray<FEnemyMaterialSet> MaterialSets;
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedDynamic, AEnemyCharacter*, Enemy);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedNative, AEnemyCharacter*);
 
@@ -90,7 +119,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedNative, AEnemyCharacter*);
  * Archetype (archetype defaults, wave modifiers, balance), Behavior (TickBehavior: fire fear, flank detour, melee close-in;
  * target selection), Combat (attacks, spitter, cutter jump), Health (knockdown hooks, damage, death), Patrol (routes, escorts,
  * guard posts, patrol break), Save (patrol snapshot), Perception (sight / hearing, vision cone, squad noise), Scent (hound
- * scent), Search (patrol search, stealth lure).
+ * scent), Search (patrol search, stealth lure), Performance (variant seed, look variants, alert roar / spawn entrance; 2026-10-20).
  */
 UCLASS()
 class CODEXTACTICS_API AEnemyCharacter : public ACharacter
@@ -127,6 +156,42 @@ public:
 
 	/** Placed in the level (not made by a spawner): the archetype came from ResolvePlacedArchetype (smokes). */
 	bool WasPlacedInLevel() const { return bPlacedInLevel; }
+
+	// --- Animation extras + look variants (game designer 2026-10-20, Military Zombie; UE-only) ---
+
+	/**
+	 * Seed of its per-instance variants (look, walk / run / idle clips, idle-break choices): EnemyAnimRules::MakeVariantSeed of its
+	 * name and the place it entered the world (cached on the first call), or VariantSeedOverride when >= 0.
+	 */
+	uint32 GetVariantSeed() const;
+
+	/**
+	 * The spawn / wake-up entrance: its ABP's EntranceAnimations clip (UEnemyAnimInstance::NotifyEntrance), standing still
+	 * meanwhile (no AI moves, no attacks). Called by UWaveSubsystem::SpawnEnemy for every wave / horde spawn and at BeginPlay for a
+	 * placed enemy with bPlayEntranceWhenPlaced. Returns the seconds it stands (0: no entrance clip - every other enemy).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Enemy")
+	float PlaySpawnEntrance();
+
+	/** Standing still for its alert roar / spawn entrance (smokes, Blueprints). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
+	bool IsPerforming() const { return PerformanceLockTimer > 0.f; }
+
+	/** Which look variant BeginPlay applied (-1 = the Blueprint's mesh / materials). */
+	int32 GetLookMeshIndex() const { return LookMeshIndex; }
+	int32 GetLookMaterialSetIndex() const { return LookMaterialSetIndex; }
+
+	/** Placed in the level: play the entrance clip at BeginPlay (wave / horde spawns always play it when the ABP has one). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy|Animation")
+	bool bPlayEntranceWhenPlaced = false;
+
+	/** Pins this enemy's variant seed (look, clip variants); -1 = derived from its name and spawn point. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy|Look")
+	int32 VariantSeedOverride = -1;
+
+	/** Per-instance look variants (mesh x material set) picked at BeginPlay by the variant seed. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Enemy|Look")
+	FEnemyLookVariants LookVariants;
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	EEnemyArchetype GetArchetype() const { return Archetype; }
@@ -720,6 +785,20 @@ protected:
 
 	/** Starts the attack clip and the stand-still lock; the cooldown lasts at least the clip (Godot _play_attack_animation). */
 	void StartAttackAnimation(AActor* Target);
+
+	/** Seconds it still stands for its alert roar / spawn entrance (TickBehavior holds it; a hit / knockdown that cuts the clip ends it). */
+	float PerformanceLockTimer = 0.f;
+	/** Where the roar faces (the alarm point); unset = keeps its facing (the entrance). */
+	TOptional<FVector> PerformanceFacePoint;
+	/** The alert roar when it notices the squad (BreakPatrol): UEnemyAnimInstance::NotifyAlert + the stand-still lock. */
+	void StartAlertPerformance(const FVector& AlertLocation);
+	/** TickBehavior's hold while performing: stops the moves, turns to the alarm point, ends with the clip. True while it holds. */
+	bool TickPerformanceLock(float DeltaTime);
+	/** BeginPlay: applies LookVariants (mesh / materials) by the variant seed. */
+	void ApplyLookVariants();
+	mutable TOptional<uint32> CachedVariantSeed;
+	int32 LookMeshIndex = -1;
+	int32 LookMaterialSetIndex = -1;
 
 	// --- Cutter jump (Godot enemy_cutter.gd; numbers from /Game/Data/Enemies/DA_EnemyAnim_cutter) ---
 	bool bJumpAttackEnabled = false;
