@@ -14,6 +14,7 @@
 #include "Interactables/TrapSpotRules.h"
 #include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverFacingRules.h"
+#include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTypes.h"
 #include "Combat/KnockdownRules.h"
 #include "Combat/KnockdownTypes.h"
@@ -987,6 +988,84 @@ public:
 	void ClearPendingCover() { bHasPendingCover = false; }
 	bool HasPendingCover() const { return bHasPendingCover; }
 
+	// --- Wall-edge cover switch (game designer 2026-10-20, Tactics/CoverSwitchRules; cluster file OperativeCharacterCoverEntry.cpp):
+	// in cover at a wall edge, a double-click on another cover within range sends him there at a run; out of cover on the way (enemy
+	// sight / fire apply as usual) and in through the M4 pack's run-in transition (std_jog_fwd[_L|_R]_to_cvr_*). ---
+
+	/**
+	 * The switch order: the ordinary running cover order to Target (on a high wall the corner slot when he would walk to it right after
+	 * entering, as the group cover order does: ResolveCoverSwitchSlot) marked as a switch, so the arrival plays the run-in clip.
+	 * Results as OrderTakeCover.
+	 */
+	EOperativeOrderResult OrderCoverSwitch(const FCoverSlot& Target);
+
+	/** Marks the pending cover (SetPendingCover: a planned walk in the pause) as a switch: the arrival plays the run-in clip. */
+	void SetPendingCoverSwitch(bool bSwitch)
+	{
+		bCoverSwitchPending = bSwitch && bHasPendingCover;
+		CoverSwitchProbeMismatchCm = TNumericLimits<float>::Max();
+	}
+	/** On his way into a cover he will enter through the switch run-in clip. */
+	bool HasPendingCoverSwitch() const { return bHasPendingCover && bCoverSwitchPending; }
+
+	/** Would a double-click on Target (another cover) be a switch now? (CoverSwitchRules::Evaluate with his slot and tunables.) */
+	ECoverSwitchVerdict EvaluateCoverSwitch(const FCoverSlot& Target) const;
+
+	/** Target moved to the wall's corner slot when he would walk there by himself right after entering (high cover); else Target. */
+	FCoverSlot ResolveCoverSwitchSlot(const FCoverSlot& Target) const;
+
+	/** The tunables below as the rules' config. */
+	FCoverSwitchConfig GetCoverSwitchConfig() const;
+
+	/** The current cover entry came from a switch dash: the AnimInstance plays the run-in clip (approach / start below). */
+	bool IsCoverSwitchEntry() const { return bInCover && bCoverSwitchEntry; }
+	ECoverSwitchApproach GetCoverSwitchApproach() const { return CoverSwitchApproach; }
+	/** Where the run-in clip starts, s (its body nearest to where he ran in from: CoverSwitchRules::ChooseClipStart). */
+	float GetCoverSwitchStartSeconds() const { return CoverSwitchStartSeconds; }
+	/** Switch arrivals through the run-in clip so far (smokes). */
+	int32 GetCoverSwitchCount() const { return CoverSwitchCount; }
+	/** The last switch run-in's mismatch between the runner and the clip body (eased out by the glide), cm (smokes / logs). */
+	float GetLastCoverSwitchMismatchCm() const { return LastCoverSwitchMismatchCm; }
+
+	/** Off: a double-click on another cover is always the ordinary running cover order. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch")
+	bool bCoverSwitchEnabled = true;
+
+	/** The other cover's slot lies at most this far from his slot (2D), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "0"))
+	float CoverSwitchMaxRangeCm = 800.f;
+
+	/** ... and at least this far (closer: the ordinary cover order), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "0"))
+	float CoverSwitchMinRangeCm = 120.f;
+
+	/** "At the wall edge": an exposed edge of his slot within this (the corner reach), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "0"))
+	float CoverSwitchEdgeReachCm = 100.f;
+
+	/**
+	 * The run-in clip may take over from this far from the target slot (the pack's clips run 4-5.5 m; only the last part plays, from
+	 * where its body meets the runner): from here on he looks for the moment the clip's body is closest to him, cm.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "50"))
+	float CoverSwitchClipLeadCm = 220.f;
+
+	/** Within the lead: the clip takes over as soon as its body is this close to him (else when the fit stops improving), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "0"))
+	float CoverSwitchGoodFitCm = 40.f;
+
+	/** ... and at the latest this far from the slot (a diagonal run-in meets the clip's line only close in), cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "30"))
+	float CoverSwitchLastChanceCm = 120.f;
+
+	/** The clip's body more than this from the runner (a run in from an odd direction): the ordinary run-in / enter clip instead, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "0"))
+	float CoverSwitchMaxMismatchCm = 110.f;
+
+	/** At least this much of the run-in clip plays (its turn into the wall), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Switch", meta = (ClampMin = "0.1"))
+	float CoverSwitchMinClipSeconds = 0.6f;
+
 	/** Snaps him to the slot's wall: facing along the normal, the default stance of the height, Cover_Enter. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
 	void EnterCover(const FCoverSlot& Slot);
@@ -1864,6 +1943,21 @@ private:
 	float CoverEntryAwaitSeconds = 0.f;
 	/** Enters the pending cover early when running in (the enter clip overlaps the last steps). */
 	void TryEnterCoverFromRun();
+	/**
+	 * The switch's run-in (TryEnterCoverFromRun with a pending switch): within CoverSwitchClipLeadCm, heading for the slot, enters and
+	 * picks the run-in clip + its start for the facing he ends with. False = not now (the ordinary run-in rules go on).
+	 */
+	bool TryEnterCoverSwitchFromRun();
+	/** Wall-edge cover switch state (OrderCoverSwitch -> the pending switch -> the run-in entry). */
+	bool bCoverSwitchPending = false;
+	bool bCoverSwitchEntry = false;
+	bool bCoverSwitchEntryRequest = false;
+	ECoverSwitchApproach CoverSwitchApproach = ECoverSwitchApproach::Front;
+	float CoverSwitchStartSeconds = 0.f;
+	int32 CoverSwitchCount = 0;
+	float LastCoverSwitchMismatchCm = 0.f;
+	/** The best clip fit seen on this run-in so far (TryEnterCoverSwitchFromRun takes the clip when it stops improving), cm. */
+	float CoverSwitchProbeMismatchCm = TNumericLimits<float>::Max();
 	/** Moves the mesh so the body stays continuous while the enter clip blends in (V = (1 - w) C + glide). */
 	void UpdateCoverEntryBlend(float DeltaTime);
 	/** The mesh push away from the wall that keeps every skin bone outside it (CoverWallClearanceCm), world cm along the normal. */

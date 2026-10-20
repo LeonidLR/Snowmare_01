@@ -1419,5 +1419,10 @@ FName TutorialRules::ResolveLockedCommand(const TArray<FString>& Locks, FName Co
 	{
 		return PlayerCommands::Move;
 	}
+	// Wall-edge cover switch (2026-10-20): locked, the double-click is the ordinary cover order (taught before it).
+	if (CommandId == PlayerCommands::CoverSwitch && !IsCommandLocked(Locks, PlayerCommands::CoverEnter))
+	{
+		return PlayerCommands::CoverEnter;
+	}
 	return NAME_None;
 }

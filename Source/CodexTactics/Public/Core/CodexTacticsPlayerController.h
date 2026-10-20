@@ -7,6 +7,7 @@
 #include "Interactables/DeployableRules.h"
 #include "Combat/SpaceInput.h"
 #include "Characters/FirePostureRules.h"
+#include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTypes.h"
 #include "CodexTacticsPlayerController.generated.h"
 
@@ -186,9 +187,12 @@ public:
 
 	/**
 	 * Orders the previewed cover: the walk now, planned in the pause, the grid walk in turn-based combat. A GROUP order
-	 * (OrderGroupCover) when others go along (a box selection, or group mode).
+	 * (OrderGroupCover) when others go along (a box selection, or group mode). bDoubleClick (the confirm came within the double-click
+	 * time of the click that showed the ghost): the wall-edge COVER SWITCH when CoverSwitchRules allows it (in cover at a wall edge,
+	 * another cover within range, not turn-based, Cover.Switch not locked) - the same order, arriving through the run-in clip
+	 * (AOperativeCharacter::OrderCoverSwitch); otherwise the ordinary cover order exactly as before.
 	 */
-	void ConfirmCoverPreview();
+	void ConfirmCoverPreview(bool bDoubleClick = false);
 
 	/**
 	 * Group cover order (game designer 2026-10-20; GroupCoverRules, USquadSubsystem::GetGroupCoverMembers): Direct (the leader)
@@ -197,7 +201,24 @@ public:
 	 * order); bPlan: planned in the tactical pause (Radius around where each stood). False when nobody goes along (the caller
 	 * then gives the single cover order). Not in turn-based combat (only the active unit moves there).
 	 */
-	bool OrderGroupCover(AOperativeCharacter* Direct, const FCoverSlot& Slot, bool bPlan, float Radius);
+	bool OrderGroupCover(AOperativeCharacter* Direct, const FCoverSlot& Slot, bool bPlan, float Radius, bool bLeaderSwitch = false);
+
+	/**
+	 * Wall-edge cover switch preview (game designer 2026-10-20; PlayerTick, smokes call it with their own hit): the leader in cover at
+	 * a wall edge, the cursor over ANOTHER cover within range -> its ghost at the slot he would dash to and the dash line from him
+	 * (the HUD draws it: GetCoverSwitchPreviewLine). Null Hit = clear. True while it is shown.
+	 */
+	bool UpdateCoverSwitchHover(AOperativeCharacter* Operative, const FHitResult* Hit);
+
+	/** The dash line of the switch preview (hover, or the click ghost of a switchable cover): from the operative to the slot. */
+	bool GetCoverSwitchPreviewLine(FVector& OutFrom, FVector& OutTo) const;
+
+	/** The switch hover ghost is up (smokes). */
+	bool IsCoverSwitchHoverShown() const;
+
+	/** The last cover confirm (smokes / log): its switch verdict and whether it became a switch. */
+	ECoverSwitchVerdict GetLastCoverSwitchVerdict() const { return LastCoverSwitchVerdict; }
+	bool WasLastCoverConfirmSwitch() const { return bLastCoverConfirmSwitch; }
 
 	/** The last group cover order (smokes / log): members sent into a slot (the direct one included) / prone behind the cover. */
 	int32 GetLastGroupCoverSlotCount() const { return LastGroupCoverSlots; }
@@ -496,6 +517,25 @@ private:
 	FCoverSlot CoverPreviewSlot;
 	TWeakObjectPtr<AOperativeCharacter> CoverPreviewOperative;
 	bool bCoverPreviewTurnBased = false;
+	/** The click that showed the cover ghost (the confirm within the double-click time is a double-click: the cover switch). */
+	double CoverPreviewClickTime = -1.0;
+	FVector2D CoverPreviewClickPosition = FVector2D::ZeroVector;
+	/** The previewed cover is a switch target for the previewed operative (decided at ShowCoverPreview; the dash line). */
+	bool bCoverPreviewSwitchable = false;
+	FVector CoverPreviewSwitchTarget = FVector::ZeroVector;
+	ECoverSwitchVerdict LastCoverSwitchVerdict = ECoverSwitchVerdict::NotInCover;
+	bool bLastCoverConfirmSwitch = false;
+
+	/** Wall-edge cover switch hover preview (2026-10-20): its own ghost, the slot, the last probe (cached while the cursor rests). */
+	UPROPERTY(Transient)
+	TObjectPtr<class ACoverGhostActor> CoverSwitchGhost;
+	bool bCoverSwitchHoverShown = false;
+	FCoverSlot CoverSwitchHoverSlot;
+	TWeakObjectPtr<AOperativeCharacter> CoverSwitchHoverOperative;
+	TWeakObjectPtr<AActor> SwitchHoverActor;
+	FVector SwitchHoverPoint = FVector(TNumericLimits<float>::Max());
+	FVector SwitchHoverSlotLocation = FVector::ZeroVector;
+	bool bSwitchHoverValid = false;
 
 	/** Rev 5c manual corner peek preview: its own ghost, the cursor, the last hover probe (cached while the cursor rests). */
 	UPROPERTY(Transient)

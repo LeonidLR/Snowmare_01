@@ -8,7 +8,9 @@
 #include "Characters/RifleLocomotionRules.h"
 #include "Survival/ColdRules.h"
 #include "Survival/WarmIdleRules.h"
+#include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTypes.h"
+#include "UObject/ObjectKey.h"
 #include "OperativeAnimInstance.generated.h"
 
 class AActor;
@@ -904,6 +906,42 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchEnter = { nullptr, nullptr };
 
+	/**
+	 * Wall-edge cover switch (game designer 2026-10-20, Tactics/CoverSwitchRules): the M4 pack's run-in transitions that end at the
+	 * wall, played instead of Cover_Enter when the operative arrives from a switch dash. Six per stance, index =
+	 * ECoverSwitchApproach * 2 + end side (CoverFacingRules::ClipIndex: 0 = _L, 1 = _R): std_jog_fwd_to_cvr_std_idle_L / _R
+	 * (straight at the wall), std_jog_fwd_L_to_cvr_std_idle_L / _R (along the wall from his own right), std_jog_fwd_R_to_... (from
+	 * his left). Empty entries are filled from /Game/M4_Cover_Pack at initialisation (nothing saved). Only the last metres play: the
+	 * montage starts where the clip's body is nearest to the runner (AOperativeCharacter::GetCoverSwitchStartSeconds).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverStandSwitchEnter = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+
+	/** The same ending crouched (low cover): std_jog_fwd[_L|_R]_to_cvr_crch_idle_L / _R (the pack's crouch folder). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", EditFixedSize)
+	TArray<TObjectPtr<UAnimSequenceBase>> CoverCrouchSwitchEnter = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+
+	/** Blend-in of the switch run-in clip over the running pose (its jog matches the run, so a plain eased blend), s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CoverSwitchBlendSeconds = 0.2f;
+
+	/** A switch run-in clip of the stance is assigned / loaded (any of the six). */
+	bool HasCoverSwitchClips(bool bCrouch) const;
+
+	/** The run-in clip for Approach ending facing ArrivalFacing; nullptr when that one is missing. */
+	UAnimSequenceBase* GetCoverSwitchClip(bool bCrouch, ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing) const;
+
+	/**
+	 * The clip's root track as world XY offsets from where it ends, for a mesh whose component yaw in the world is MeshWorldYaw
+	 * (actor yaw + the Blueprint's mesh yaw), sampled at 30 Hz (cached per clip). False when the clip is missing.
+	 */
+	bool GetCoverSwitchTrack(bool bCrouch, ECoverSwitchApproach Approach, ECoverFacing ArrivalFacing, float MeshWorldYaw, FCoverSwitchTrack& OutTrack) const;
+
+	/** Name of the last switch run-in clip started (smokes / logs), empty before the first one. */
+	const FString& GetLastCoverSwitchClip() const { return LastCoverSwitchClip; }
+	/** Where the last switch clip was started, s (smokes). */
+	float GetLastCoverSwitchStartSeconds() const { return LastCoverSwitchStart; }
+
 	/** Ground speed of the shimmy loops at rate 1, cm/s. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation", meta = (ClampMin = "1"))
 	float CoverShimmyClipSpeed = 90.f;
@@ -1342,7 +1380,12 @@ private:
 	 * Plays a cover clip on FullBodySlot without the engine's "one montage per group" stop (that stop shortens every
 	 * fade-out to the new clip's blend-in, which is what dipped the slot): the old ones fade out over FadeOutCoverMontages.
 	 */
-	UAnimMontage* PlayCoverMontage(UAnimSequenceBase* Clip, const FAlphaBlendArgs& BlendIn, float BlendOut, float PlayRate = 1.f, int32 LoopCount = 1);
+	UAnimMontage* PlayCoverMontage(UAnimSequenceBase* Clip, const FAlphaBlendArgs& BlendIn, float BlendOut, float PlayRate = 1.f, int32 LoopCount = 1,
+		float StartSeconds = 0.f);
+	/** Component-space root tracks of the switch clips (GetCoverSwitchTrack), sampled once per clip. */
+	mutable TMap<TObjectKey<UAnimSequenceBase>, FCoverSwitchTrack> CoverSwitchTrackCache;
+	FString LastCoverSwitchClip;
+	float LastCoverSwitchStart = 0.f;
 	/** The cover enter clip (from the open) is the one-shot playing: a shimmy ordered meanwhile cuts it short. */
 	bool bCoverEnterPlaying = false;
 	/** The cover was entered in this update (the stance switch clip yields to the enter clip). */

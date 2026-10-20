@@ -8,6 +8,7 @@
 > - `Private/Characters/OperativeCharacterCover.cpp`, `…CoverEntry.cpp`, `…CornerAim.cpp`; `Interactables/TrapSpotRules`; `Characters/SquadOrderRules`;
 > - `Combat/KnockdownRules::DecideCoverReturn`; smokes `CoverSmoke`, `CornerHoldSmoke`, `PeekMinesSmoke`, `KnockdownCoverSmoke`
 > - Group cover order (2026-10-20): `Tactics/GroupCoverRules`, `Characters/SquadSubsystemGroupCover.cpp`, `ACodexTacticsPlayerController::OrderGroupCover`; smoke `GroupCoverSmoke`
+> - Wall-edge cover switch (2026-10-20): `Tactics/CoverSwitchRules`, `OperativeCharacterCoverEntry.cpp` (`OrderCoverSwitch`, `TryEnterCoverSwitchFromRun`), `UOperativeAnimInstance::CoverStandSwitchEnter`, controller `ConfirmCoverPreview(bDoubleClick)` / `UpdateCoverSwitchHover`; smoke `CoverSwitchSmoke`
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
@@ -72,6 +73,72 @@
   the third stays; Solo single -> only he; a 1.5 m barricade in group mode -> leader in cover + two prone behind it, facing it, <= 45 cm
   off their spots, hidden from an eye 10 m beyond it, still there 2 s later, then the leader walks 8 m away -> they get up and follow;
   wave fight + tactical pause with a box of three -> only planned (3 planned moves), the release -> leader in cover, two prone).
+
+## Wall-edge cover switch (game designer 2026-10-20, every level)
+
+> "Standing at the left end of a wall in cover, I hover another wall across from me, DOUBLE-CLICK, and he runs over into that cover
+> with `anim_M4_std_jog_fwd_L_to_cvr_std_idle_L` / `anim_M4_std_jog_fwd_R_to_cvr_std_idle_R`." Defaults below are the designer's brief;
+> every number is a tunable (BP_Operative Class Defaults -> CodexTactics|Cover|Switch).
+
+- **Input rules (exact):** a click on ANOTHER cover = the cover ghost as before; the second click on the ghost = the ordinary cover order
+  (a run, unchanged). The second click counts as a **double-click** when it comes within the ground's double-click thresholds of the click
+  that showed the ghost (`DoubleClickSeconds` 0.35 s, `DoubleClickPixels` 30 px). A double-click is the **switch** only when
+  `CoverSwitchRules::Evaluate` says so: the operative is in cover, not side-stepping, **at a wall edge** (an exposed edge of his slot within
+  `CoverSwitchEdgeReachCm` 100 = the corner reach; high or low cover), the click is on a **different** wall (his own wall stays the shimmy /
+  corner peek), and the target slot is `CoverSwitchMinRangeCm` 120 .. `CoverSwitchMaxRangeCm` **800** cm away (2D). Anything else -
+  a double-click away from an edge, out of range, too close, locked by the tutorial, turn-based - is the ordinary cover order exactly as
+  before (a double-click on a wall always "ran into cover": the cover order is a run). A double-click on EMPTY ground stays the sprint move;
+  on an object (barricade, barrel) it stays the walk-up / interaction (Alt + click takes cover at objects, as before).
+- **Preview:** hovering another cover from a wall edge (real time, the leader, `UpdateCoverSwitchHover` in `PlayerTick`) shows the cover
+  ghost at the slot he would dash to plus a dashed run line from his feet (drawn by the HUD, `ACodexTacticsHUD::DrawCoverSwitchPreview`;
+  `GetCoverSwitchPreviewLine`); the click ghost of a switchable cover keeps the line. The probe traces only when the cursor moves (cached
+  like the corner peek hover).
+- **The order:** `AOperativeCharacter::OrderCoverSwitch` = the ordinary running `OrderTakeCover` (he leaves his cover at once: **out of
+  cover on the dash**, enemy sight and fire apply normally) to `ResolveCoverSwitchSlot` (on a high wall the corner slot when he would walk to
+  it right after entering - the group cover's corner rule, so no side-step cuts the clip short; a low cover keeps the clicked slot), marked
+  as a pending switch (`HasPendingCoverSwitch`).
+- **Arrival (`TryEnterCoverSwitchFromRun`, `OperativeCharacterCoverEntry.cpp`):** the pack's run-in clips have no root motion; their travel is
+  in the root bone, so - as the ordinary run-in - the capsule enters the slot and the tracked mesh offset (`CoverEntryClipOffset` + glide)
+  carries the body from where he runs. Measured (`Scripts/Editor/measure_cover_switch_clips.py`, read-only, writes
+  `Saved/Logs/measure_cover_switch_clips.txt`): `std_jog_fwd_to_cvr_*` comes straight at the wall from 4.6-5.5 m out; `std_jog_fwd_L_to_cvr_*`
+  runs along the wall line from the pack's L side = the operative's own RIGHT (+RightTangent) 4.2-5.2 m away, `_R_` from his left; the suffix
+  `_L` / `_R` is the cover idle he ends in = the side he faces (CoverFacingRules::ClipIndex: Right -> _L). The clip's root track is sampled
+  at runtime (30 Hz, cached, `UOperativeAnimInstance::GetCoverSwitchTrack`) and turned into world offsets from the slot. From
+  `CoverSwitchClipLeadCm` 220 cm out, running (>= 200 cm/s) and heading for the slot, every frame `CoverSwitchRules::ChooseClipStart` picks
+  the approach (front / from his right / from his left) and the start time whose clip body lies nearest to him **and moves the way he runs**
+  (a clip from the other side never qualifies), leaving at least `CoverSwitchMinClipSeconds` 0.6 s of the clip; the clip takes over when its
+  body is within `CoverSwitchGoodFitCm` 40, when the fit stops improving, or at the latest `CoverSwitchLastChanceCm` 120 cm out. A fit worse
+  than `CoverSwitchMaxMismatchCm` 110 -> the ordinary run-in / enter clip instead. While the switch waits for its moment the ordinary run-in is
+  off. The end side (_L / _R) follows the facing he ends with (the usual `PredictCoverFacing`: threat side, corner hold, else the nearest
+  exposed edge). The montage starts mid-clip (`PlayCoverMontage(..., StartSeconds)`, eased blend `CoverSwitchBlendSeconds` 0.2 s), the old
+  yaw is held on the mesh with the clip's weight at any turn, the glide (runner vs clip body) eases out over `CoverEnterDecelSeconds`; the rest
+  (wall clearance, `EnforceMeshBaseOffset`, the hand-off to the cover loop) is the ordinary entry.
+  In the designer's layout (`CoverSwitchSmoke`): from a wall end across the gap into the next wall's corner = `std_jog_fwd_L_to_cvr_std_idle_L`
+  (he comes from his right, faces back over the gap; a diagonal run-in: the clip takes over 1.1-1.2 m out, its body 55-80 cm off the runner,
+  eased by the glide), back again = `std_jog_fwd_R_to_cvr_std_idle_R` (1.8 m out, 38 cm); low cover = the crouched endings
+  (`std_jog_fwd_R_to_cvr_crch_idle_R`). The six clips per stance are loaded from `/Game/M4_Cover_Pack` when
+  `UOperativeAnimInstance::CoverStandSwitchEnter` / `CoverCrouchSwitchEnter` are empty (nothing saved, no .uasset touched).
+- **Group:** with a box selection / in group mode the switch is the group cover order (section above) with the **leader** dashing in through
+  the run-in clip; the others take their slots / prone spots at the target cover by the group rules (ordinary runs).
+- **Tactical pause:** planned like any cover order (`SetPendingCover` + `SetPendingCoverSwitch` + `PlanMove`; "[PLAN] Dash to the other
+  cover!"); the release runs the switch. Found on the way: the release of a planned walk to ANOTHER cover used to keep the old cover
+  (`OrderMoveTo` kept `bInCover` for any walk to the pending slot: the cover pose slid across, no enter clip) - it leaves it now (same wall =
+  unchanged).
+- **Turn-based:** no switch (the double-click is the ordinary grid cover move at its AP cost; grid walks stop on their cell, so a run-in clip
+  has nothing to blend from).
+- **Tutorial:** command `Cover.Switch` (F1 Controls row "Double-click other cover - Double-click another cover from a wall edge: dash to it").
+  Demo 01: locked from the hut lesson (A1, after its `Cover.*` unlock) and again at the A2 / A3 beat starts; the A3 cover field card
+  (`A3_cover`, its key chips now include it) unlocks `Cover.*` = the switch. A locked switch is the ordinary cover order
+  (`TutorialRules::ResolveLockedCommand`: Cover.Switch -> Cover.Enter; the controller checks the lock silently).
+- **Debug / log:** `[Cover] <name>: double-click on another cover - <verdict> -> ...`, `cover switch run-in <clip> from <t> s`,
+  `[CoverAnim] ... cover switch run-in`; `Codex.Debug.CoverSwitch 1` logs every run-in probe (distance, speed, heading, fit).
+- **Tests:** `CodexTactics.Tactics.CoverSwitch.EdgeEligibility` / `.TargetRange` / `.ClipChoiceFromGeometry` / `.ClipStartFromTracks` /
+  `.ClickRules`; smoke `CoverSwitchSmoke` (runtime arena: wall A 6 m, wall B 3 m and the low wall C 2.5 m beyond A's ends, 1.5 m further
+  out; A's end -> B by double-click: hover ghost + dash line, exposed + sprinting on the dash, `..._L_to_cvr_std_idle_L` started mid-clip,
+  on B's corner slot, facing back over the gap, run-in offset gone; B -> A `..._R_to_cvr_std_idle_R`; a slow confirm, the middle of A and
+  a 3 m range = the ordinary order; A's other end -> C crouched `..._R_to_cvr_crch_idle_R`; group mode: the leader switches, the others
+  join; pause: planned, released -> switch). `CodexTactics.CoverSwitchSmoke Shot` (rendered) writes `Saved/Screenshots/cover_switch_preview.png`,
+  `_dash`, `_arrival`, `_settled`, `_low`.
 
 ## Followers in cover (old §5)
 

@@ -349,6 +349,8 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		const bool bPeekHit = PeekOperative && PeekOperative->IsInPeekableCover() && !IsDialogueOpen() && !bRelocateSelectMode && !bOverMinimap
 			&& GetHitResultUnderCursor(ECC_Visibility, false, PeekHit);
 		UpdateCornerPeekHover(PeekOperative, bPeekHit ? &PeekHit : nullptr);
+		// 2026-10-20: from a wall edge, another cover under the cursor previews the cover switch (ghost + dash line; real time only).
+		UpdateCoverSwitchHover(PeekTurnBased ? nullptr : PeekOperative, bPeekHit && !PeekTurnBased ? &PeekHit : nullptr);
 		// Rev 5e: a spotted tripwire (or the ground right next to it) under the cursor: the hand cursor - a click opens its menu.
 		FHitResult TrapHit;
 		const bool bCursorHit = !bCornerPeekCursor && !IsDialogueOpen() && !bOverMinimap && GetHitResultUnderCursor(ECC_Visibility, false, TrapHit);
