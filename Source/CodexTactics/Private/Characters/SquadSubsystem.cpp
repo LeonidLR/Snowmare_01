@@ -32,6 +32,8 @@ namespace
 		TEXT("1: an attack on any squad member provokes every Defensive operative; 0: only the one attacked (user request 2026-10-06)"));
 	TAutoConsoleVariable<int32> CVarPostureAggressiveExplorationFire(TEXT("Codex.Posture.AggressiveExplorationFire"), 1,
 		TEXT("1: Aggressive operatives open fire on enemies they see while exploring an ambush level (starting the fight); 0: never"));
+	TAutoConsoleVariable<int32> CVarSquadFollowerSprintStandUp(TEXT("Codex.Squad.SprintStandUp"), 1,
+		TEXT("1 (default): a follower crouched by the squad (Regroup's copy, Solo's guard crouch, a confinement) stands up to sprint with the sprinting leader (bug 2026-10-20); 0: the old rule (he walks crouched behind him)."));
 }
 
 bool USquadSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -173,6 +175,7 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 				{
 					Operative->StopOperative();
 					Operative->SetStance(EOperativeStance::Crouching);
+					Operative->MarkStanceFromSquad(); // Solo's guard crouch (bug 2026-10-20)
 				}
 				Follower.bParked = true;
 				Follower.RepathTimeRemaining = 0.f;
@@ -218,6 +221,7 @@ void USquadSubsystem::SetSquadStance(EOperativeStance Stance)
 	for (AOperativeCharacter* Member : GetMembers())
 	{
 		Member->SetStance(Stance);
+		Member->ClearStanceFromSquad(); // a squad stance order is the player's
 	}
 }
 
@@ -391,6 +395,7 @@ void USquadSubsystem::EnterSoloModeInternal(bool bForTrap)
 			&& !HasGroupCoverProne(Operative)) // 2026-10-20: lying behind a cover on a group cover order: stays prone
 		{
 			Operative->SetStance(EOperativeStance::Crouching);
+			Operative->MarkStanceFromSquad(); // the guard crouch is the squad's, not the player's (ShouldStandToSprintWithLeader)
 			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🛡️ GUARD: CROUCHED"), FLinearColor(0.3f, 0.9f, 0.4f));
 		}
 	}
@@ -495,6 +500,9 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 				}
 				DropGroupCoverProne(Operative, TEXT("regroup")); // ... and one lying behind a cover after a group cover order
 				Operative->SetStance(LeaderRef->GetStance());
+				// Bug 2026-10-20: the copied stance is the squad's - crouched after the Solo guard crouch, he stands up to sprint with the
+				// leader (UpdateFollower; Solo on / off again used to be the only cure).
+				Operative->MarkStanceFromSquad();
 				UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🏃 REGROUPING"), FLinearColor(1.f, 0.85f, 0.2f));
 			}
 		}
@@ -899,6 +907,16 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 
 	// Followers copy the moving leader's sprint. Deviation (user decision 2026-10-01): every operative keeps the stance
 	// he was given — no copy of the leader's stance (Godot can_sync_stance); only Alt + Z / C / V sets the whole squad.
+	// Bug 2026-10-20: a crouch the SQUAD gave him (Regroup's copy, Solo's guard crouch, a confinement) does not keep him from running with
+	// the sprinting leader - he stands up (the clip defers the move below), then sprints.
+	if (CVarSquadFollowerSprintStandUp.GetValueOnGameThread() != 0
+		&& SquadOrderRules::ShouldStandToSprintWithLeader(LeaderRef.IsSprinting(), Operative->GetStance() == EOperativeStance::Crouching,
+			Operative->IsStanceFromSquad(), Operative->CanSprint()))
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Squad: %s stands up to sprint with the leader (squad-given crouch)"), *Operative->DisplayName.ToString());
+		Operative->SetStance(EOperativeStance::Standing);
+		Operative->MarkStanceFromSquad();
+	}
 	Operative->SetSprinting(LeaderRef.IsSprinting());
 
 	// Bug 2026-10-11 (solo off: prone followers slid towards the leader while still rising): a stance change in progress roots

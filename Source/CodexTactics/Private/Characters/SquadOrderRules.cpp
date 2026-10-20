@@ -17,6 +17,11 @@ namespace SquadOrderRules
 		return !bOnOwnOrder;
 	}
 
+	bool ShouldStandToSprintWithLeader(bool bLeaderSprinting, bool bFollowerCrouching, bool bStanceFromSquad, bool bCanSprint)
+	{
+		return bLeaderSprinting && bFollowerCrouching && bStanceFromSquad && bCanSprint;
+	}
+
 	bool ShouldLeaveCoverToFollow(const FCoverFollowFacts& Facts, float LeaveDistanceCm)
 	{
 		if (!Facts.bInCover || Facts.bOnOwnOrder || Facts.bFollowersHolding || Facts.bGuarding || !Facts.bFormationActive)

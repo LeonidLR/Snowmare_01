@@ -37,6 +37,7 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 		{
 			Member->SetStance(Stance);
 		}
+		Member->ClearStanceFromSquad(); // the player's order (Alt + Z / C / V): kept when the leader sprints
 		UFloatingTextSubsystem::SpawnAboveOperative(Member, FString::Printf(TEXT("👥 SQUAD: %s"), Name), FLinearColor(0.3f, 0.95f, 1.f));
 	}
 	if (Messages)
@@ -97,6 +98,7 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 	{
 		Leader->SetStance(Stance);
 	}
+	Leader->ClearStanceFromSquad();
 	ControllerCommands::Report(this, ControllerCommands::ForStance(Stance, false));
 
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
@@ -138,6 +140,7 @@ void ACodexTacticsPlayerController::CycleLeaderStance()
 	{
 		Leader->SetStance(Next);
 	}
+	Leader->ClearStanceFromSquad();
 	ControllerCommands::Report(this, ControllerCommands::ForStance(Next, false));
 }
 

@@ -42,6 +42,16 @@ namespace SquadOrderRules
 	 */
 	CODEXTACTICS_API bool ShouldHoldNow(bool bOnOwnOrder);
 
+	/**
+	 * Bug 2026-10-20 (game designer, lake demo: after the hut lesson Regroup, then the Commander RUNS - the two others followed in formation
+	 * but WALKED; Solo on / off again fixed it). Regroup gives the followers the leader's stance of that moment (often crouched: the Solo
+	 * guard crouch), and a crouched follower cannot copy the leader's sprint while the leader's own sprint order stood HIM up. A follower
+	 * whose current stance the SQUAD gave him (Regroup, Solo's guard crouch, a tutorial confinement's copy - not a stance key) stands up to
+	 * sprint with the sprinting leader; one the player crouched keeps his stance (user decision 2026-10-01: no copy of the leader's stance).
+	 * bCanSprint: nothing but the stance keeps him from sprinting (cold, wounds, a carried load).
+	 */
+	CODEXTACTICS_API bool ShouldStandToSprintWithLeader(bool bLeaderSprinting, bool bFollowerCrouching, bool bStanceFromSquad, bool bCanSprint);
+
 	// Regroup / Solo off ends the followers' own MOVE orders (AOperativeCharacter::ReleaseOwnMoveOrder): the formation takes
 	// everybody back at once; a running use / object task still finishes first.
 
