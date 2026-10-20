@@ -206,6 +206,14 @@ void ACodexTacticsHUD::DrawMapView(UMinimapSubsystem& Minimap, const FMinimapVie
 		switch (Icon.Kind)
 		{
 		case EMinimapIconKind::Objective:
+			if (Icon.bHighlight)
+			{
+				// 2026-10-20: the tutorial's current navigation target - larger, with a white frame.
+				HudMinimap::Diamond(Draw, P, 11.f * Scale, HudMinimap::WithAlpha(FLinearColor::White, 0.9f));
+				HudMinimap::Diamond(Draw, P, 9.f * Scale, HudMinimap::WithAlpha(FLinearColor::Black, 0.8f));
+				HudMinimap::Diamond(Draw, P, 7.f * Scale, HudMinimap::WithAlpha(Icon.Color, Alpha));
+				break;
+			}
 			HudMinimap::Diamond(Draw, P, 7.f * Scale, HudMinimap::WithAlpha(FLinearColor::Black, 0.7f));
 			HudMinimap::Diamond(Draw, P, 5.f * Scale, HudMinimap::WithAlpha(Icon.Color, Alpha));
 			break;

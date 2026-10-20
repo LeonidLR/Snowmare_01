@@ -47,7 +47,7 @@
     "SaveRoundTripSmoke": { "exclusive": true },
     "SaveCoverageSmoke": { "exclusive": true, "map": "/Game/Maps/L_PatrolTest", "_why": "save audit 2026-10-19: live-world dump before F5 / after F9 on the placed-patrol map; Saved/SmokeSaves/Coverage" },
     "SaveCoverageLakeSmoke": { "exclusive": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "the same dump with the Demo 01 tutorial running" },
-    "TutorialSmoke": { "exclusive": true },
+    "TutorialSmoke": { "exclusive": true, "timeout": 600, "_why": "realTime, ~170 s on a free machine (the A0-A4 demo flow + the guide course): the default 300 s is tight under load" },
     "TutorialSaveSmoke": { "exclusive": true, "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600 },
     "PMCTripwireSmoke": { "exclusive": true },
     "PauseMenuSmoke": { "exclusive": true },

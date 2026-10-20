@@ -163,15 +163,290 @@ void FTutorialStateMachine::PassRouteBefore(const FRoutePoint& Point)
 				PassStep(Index);
 			}
 		}
-		else if (TutorialRules::IsRunning(Runtime[Index].State) && !Step.Complete.Volume.IsNone())
+		else if (TutorialRules::IsRunning(Runtime[Index].State))
 		{
-			const FRoutePoint Goal = GetVolumeRoutePoint(Step.Complete.Volume);
-			if (Goal.IsValid() && Goal.Key < Point.Key)
+			// "Go to X" and the squad is already past X: an objective is done, a card is dropped.
+			FRoutePoint Behind = Step.Complete.Volume.IsNone() ? FRoutePoint() : GetVolumeRoutePoint(Step.Complete.Volume);
+			if (!Behind.IsValid() && (Step.Kind == ETutorialStepKind::Objective || !Step.Guide.IsNone()))
 			{
-				// "Go to X" and the squad is already past X: an objective is done, a card is dropped.
+				// 2026-10-20 (game designer: the bridge objective called the squad back from the hut): an objective - or a step with a
+				// "guide" - tied to a place the squad has left behind is over too (the bridge crossing objective once the squad reached
+				// the hut); its marker never shows again.
+				Behind = GetStepPlaceAt(Index);
+			}
+			if (Behind.IsValid() && Behind.Key < Point.Key)
+			{
 				FinishFlagged(Index, Step.Kind == ETutorialStepKind::Objective ? ETutorialStepState::Completed : ETutorialStepState::Skipped,
 					&FTutorialTransition::bPassed);
 			}
+		}
+	}
+}
+
+// --- 2026-10-20: the current navigation target ("guide") and "beyond" ----------------------------------------------
+
+FTutorialStateMachine::FRoutePoint FTutorialStateMachine::GetStepPlaceAt(int32 Index, FName* OutVolume) const
+{
+	if (!Data.Steps.IsValidIndex(Index))
+	{
+		return FRoutePoint();
+	}
+	const FTutorialStep& Step = Data.Steps[Index];
+	const FName GuideVolume = !Step.Guide.IsNone() && Data.FindStepIndex(Step.Guide) == INDEX_NONE ? Step.Guide : NAME_None;
+	for (const FName Volume : { GuideVolume, Step.Complete.Volume, Step.Complete.InVolume, Step.Trigger.Volume })
+	{
+		const FRoutePoint Point = Volume.IsNone() ? FRoutePoint() : GetVolumeRoutePoint(Volume);
+		if (Point.IsValid())
+		{
+			if (OutVolume)
+			{
+				*OutVolume = Volume;
+			}
+			return Point;
+		}
+	}
+	return FRoutePoint();
+}
+
+FTutorialStateMachine::FRoutePoint FTutorialStateMachine::GetStepPlace(FName StepId) const
+{
+	return GetStepPlaceAt(IndexOf(StepId));
+}
+
+int32 FTutorialStateMachine::GetRouteProgressKey() const
+{
+	int32 Key = RouteProgressKey;
+	if (!RouteProgressVolume.IsNone())
+	{
+		Key = FMath::Max(Key, GetVolumeRoutePoint(RouteProgressVolume).Key); // after a load only the volume is known
+	}
+	if (Data.Beats.IsValidIndex(CurrentBeatIndex))
+	{
+		Key = FMath::Max(Key, GetBeatStartPoint(CurrentBeatIndex).Key);
+	}
+	return Key;
+}
+
+void FTutorialStateMachine::NoteRouteProgress(const FRoutePoint& Point, FName VolumeId)
+{
+	// The places reached so far (not the beat start: a beat volume lies AT its beat's start and must still become the furthest place).
+	const int32 Reached = FMath::Max(RouteProgressKey, RouteProgressVolume.IsNone() ? INDEX_NONE : GetVolumeRoutePoint(RouteProgressVolume).Key);
+	if (!Point.IsValid() || Point.Key < Reached || (Point.Key == Reached && VolumeId.IsNone()))
+	{
+		return; // progress never goes back
+	}
+	RouteProgressKey = Point.Key;
+	if (!VolumeId.IsNone())
+	{
+		RouteProgressVolume = VolumeId;
+	}
+}
+
+bool FTutorialStateMachine::HasVolume(FName VolumeId) const
+{
+	return !VolumeId.IsNone() && (!VolumeProvider || VolumeProvider(VolumeId));
+}
+
+bool FTutorialStateMachine::IsVolumeStillUsed(FName VolumeId) const
+{
+	if (const FName* Beat = VolumeBeats.Find(VolumeId); Beat && Data.FindBeatIndex(*Beat) > CurrentBeatIndex)
+	{
+		return true; // it starts a beat still ahead
+	}
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		const FTutorialStep& Step = Data.Steps[Index];
+		const bool bUses = Step.Trigger.Volume == VolumeId || Step.Complete.Volume == VolumeId || Step.Complete.InVolume == VolumeId
+			|| Step.Guide == VolumeId;
+		const FRuntime& State = Runtime[Index];
+		if (bUses && (TutorialRules::IsRunning(State.State) || (State.State == ETutorialStepState::Idle && !State.bEverFinished)))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FTutorialStateMachine::GetStepGuide(int32 Index, bool bInHand, int32 Progress, FTutorialGuide& Out) const
+{
+	const FTutorialStep& Step = Data.Steps[Index];
+	if (Step.bNoGuide)
+	{
+		return false;
+	}
+	if (!bInHand)
+	{
+		// A place the squad has left behind never calls it back (the card in hand is the lesson of the moment: always shown).
+		const FRoutePoint Place = GetStepPlaceAt(Index);
+		if (Place.IsValid() && Progress != INDEX_NONE && Place.Key < Progress)
+		{
+			return false;
+		}
+	}
+	if (!Step.Guide.IsNone())
+	{
+		if (Data.FindStepIndex(Step.Guide) != INDEX_NONE)
+		{
+			if (StepMarkerProvider && StepMarkerProvider(Step.Guide))
+			{
+				Out = { ETutorialGuideKind::StepMarkers, Step.Guide, Step.Id };
+				return true;
+			}
+		}
+		else if (HasVolume(Step.Guide))
+		{
+			const FRoutePoint Point = GetVolumeRoutePoint(Step.Guide);
+			if (bInHand || !Point.IsValid() || Progress == INDEX_NONE || Point.Key >= Progress)
+			{
+				Out = { ETutorialGuideKind::Volume, Step.Guide, Step.Id };
+				return true;
+			}
+		}
+		// An explicit guide the level cannot show: the automatic choice below.
+	}
+	if (StepMarkerProvider && StepMarkerProvider(Step.Id))
+	{
+		Out = { ETutorialGuideKind::StepMarkers, Step.Id, Step.Id };
+		return true;
+	}
+	if (bInHand)
+	{
+		for (const FName Volume : { Step.Complete.Volume, Step.Complete.InVolume })
+		{
+			if (HasVolume(Volume))
+			{
+				Out = { ETutorialGuideKind::Volume, Volume, Step.Id };
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+FTutorialGuide FTutorialStateMachine::GetGuide() const
+{
+	FTutorialGuide Out;
+	if (!IsLoaded() || Runtime.Num() != Data.Steps.Num())
+	{
+		return Out;
+	}
+	const int32 Progress = GetRouteProgressKey();
+	// 1. The lesson in hand: the shown hint card.
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		if (Runtime[Index].State == ETutorialStepState::Active && Data.Steps[Index].Kind == ETutorialStepKind::HintCard)
+		{
+			if (GetStepGuide(Index, /*bInHand*/ true, Progress, Out))
+			{
+				return Out;
+			}
+			break;
+		}
+	}
+	// 2. The shown objectives / talks that name a spot (markers, a "guide") not behind the squad - the nearest place first.
+	int32 BestKey = MAX_int32;
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		const ETutorialStepKind Kind = Data.Steps[Index].Kind;
+		if (Runtime[Index].State != ETutorialStepState::Active || Kind == ETutorialStepKind::HintCard || Kind == ETutorialStepKind::Feed)
+		{
+			continue;
+		}
+		FTutorialGuide Candidate;
+		if (!GetStepGuide(Index, /*bInHand*/ false, Progress, Candidate))
+		{
+			continue;
+		}
+		const FRoutePoint Place = GetStepPlaceAt(Index);
+		const int32 Key = Place.IsValid() ? Place.Key : MAX_int32 - 1; // no place: after the placed ones, in file order
+		if (!Out.IsSet() || Key < BestKey)
+		{
+			Out = Candidate;
+			BestKey = Key;
+		}
+	}
+	if (Out.IsSet())
+	{
+		return Out;
+	}
+	// 3. The route: the next place ahead that the level has and the data still uses (the next beacon, the next beat's start).
+	FName Next;
+	int32 NextKey = MAX_int32;
+	auto Consider = [this, Progress, &Next, &NextKey](FName VolumeId)
+	{
+		const FRoutePoint Point = GetVolumeRoutePoint(VolumeId);
+		if (!Point.IsValid() || Point.Key <= Progress || Point.Key > NextKey || (Point.Key == NextKey && !VolumeId.LexicalLess(Next)))
+		{
+			return;
+		}
+		if (HasVolume(VolumeId) && IsVolumeStillUsed(VolumeId))
+		{
+			Next = VolumeId;
+			NextKey = Point.Key;
+		}
+	};
+	for (const TPair<FName, FRoutePoint>& Entry : StepRoute)
+	{
+		Consider(Entry.Key);
+	}
+	for (const TPair<FName, FName>& Entry : VolumeBeats)
+	{
+		Consider(Entry.Key);
+	}
+	if (!Next.IsNone())
+	{
+		Out = { ETutorialGuideKind::Volume, Next, NAME_None };
+		return Out;
+	}
+	// 4. Nothing further in the data: the place reached last (hold there).
+	if (HasVolume(RouteProgressVolume))
+	{
+		Out = { ETutorialGuideKind::Volume, RouteProgressVolume, NAME_None };
+	}
+	return Out;
+}
+
+void FTutorialStateMachine::PollBeyond()
+{
+	if (IsConfined())
+	{
+		return; // rev 5i: the route does not move while the squad is held
+	}
+	for (int32 Index = 0; Index < Data.Steps.Num(); ++Index)
+	{
+		const FTutorialStep& Step = Data.Steps[Index];
+		if (Step.Beyond.IsEmpty() || TutorialRules::IsFinished(Runtime[Index].State)
+			|| (Runtime[Index].State == ETutorialStepState::Idle && Runtime[Index].bEverFinished))
+		{
+			continue;
+		}
+		const int32 BeatIndex = Data.FindBeatIndex(Step.Beat);
+		if (BeatIndex != INDEX_NONE && BeatIndex > CurrentBeatIndex)
+		{
+			continue; // a later beat's place: the squad is not there yet
+		}
+		if (!TutorialRules::IsConditionMet(Step.Beyond, [this](FName Stat) { return ReadStat(Stat); }))
+		{
+			continue;
+		}
+		FName PlaceVolume;
+		const FRoutePoint Place = GetStepPlaceAt(Index, &PlaceVolume);
+		if (Runtime[Index].State == ETutorialStepState::Idle)
+		{
+			PassStep(Index); // never started: skipped (its unlocks apply, its followers fire), never shown
+		}
+		else
+		{
+			FinishFlagged(Index, Step.Kind == ETutorialStepKind::Objective ? ETutorialStepState::Completed : ETutorialStepState::Skipped,
+				&FTutorialTransition::bPassed);
+		}
+		if (Place.IsValid())
+		{
+			// The squad is beyond that place: the route moves past it (what waits there - the bridge lines - is passed too).
+			NoteRouteProgress(Place, PlaceVolume);
+			FRoutePoint Past = Place;
+			Past.Key += 1;
+			PassRouteBefore(Past);
 		}
 	}
 }
@@ -188,6 +463,7 @@ void FTutorialStateMachine::ApplyArrival(FName VolumeId, FName BeatId)
 	{
 		StartBeat(Data.Beats[Point.BeatIndex].Id); // a later beat's place reached from any earlier beat
 	}
+	NoteRouteProgress(Point, VolumeId); // 2026-10-20: the current navigation target is the next place beyond this one
 	PassRouteBefore(Point);
 }
 
@@ -205,6 +481,8 @@ void FTutorialStateMachine::ResetProgress()
 	History.Reset();
 	Confines.Reset();
 	++ConfineSerial;
+	RouteProgressKey = INDEX_NONE;
+	RouteProgressVolume = NAME_None;
 }
 
 FTutorialCommandUse FTutorialStateMachine::GetCommandUse(FName CommandId) const
@@ -1053,6 +1331,7 @@ void FTutorialStateMachine::Tick(float DeltaSeconds)
 	}
 	PollConditionTriggers();
 	PollConditionCompletions();
+	PollBeyond();
 	PumpQueues();
 }
 
@@ -1157,6 +1436,7 @@ FTutorialProgress FTutorialStateMachine::ExportProgress() const
 	Progress.Locks = Locks;
 	Progress.bHasLocks = true;
 	Progress.History = History;
+	Progress.RouteVolume = RouteProgressVolume;
 	for (int32 Index = 0; Index < Runtime.Num(); ++Index)
 	{
 		const FRuntime& State = Runtime[Index];
@@ -1200,6 +1480,7 @@ void FTutorialStateMachine::ImportProgress(const FTutorialProgress& Progress)
 	ResetProgress();
 	CurrentBeatIndex = Data.FindBeatIndex(Progress.CurrentBeat);
 	History = Progress.History;
+	RouteProgressVolume = Progress.RouteVolume; // 2026-10-20: the progress key follows from it (GetRouteProgressKey)
 	for (const TPair<FName, ETutorialStepState>& Entry : Progress.Finished)
 	{
 		const int32 Index = IndexOf(Entry.Key);

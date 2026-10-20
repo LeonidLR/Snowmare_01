@@ -17,6 +17,7 @@
     "'cancel_on' (rev 5e): a radio / walk-and-talk about a place or a moment is dropped when it is over (the bridge lines once the squad is across; never queued to play later).",
     "Leftover hint cards of an earlier beat are dropped when a later beat starts (beacon 1 reached during the camera lesson: precredited or skipped).",
     "'precredit' (default true): a command card the player already did before it was due is completed without showing it.",
+    "2026-10-20 (the current navigation target): exactly one target is shown at a time (edge arrow + highlighted minimap icon): the shown card's 'guide' / markers / completion volume, else a shown objective's markers, else the next place on the route (a guide beacon at that volume). 'guide' names it explicitly (A3_low -> the ridge, the fence crawl -> the field beyond it); 'beyond' passes a place the squad is already past (A1_bridge: all across the crevasse).",
     "Volume ids (VOL_*) are the VolumeId / StepId of ATutorialTriggerVolume actors placed in L_Demo01_A_FrozenLake:",
     "VOL_A0_BEACON1 (BeatId A1, at beacon 1), VOL_A1_BEACON2 (the crack / the bridge approach, kept), VOL_A1_HUT_APPROACH (rev 5c, Leader, ~10 m in front of",
     "the hut door), VOL_A1_DOOR_L / VOL_A1_DOOR_R (rev 5c: the wall left / right of the door, cover 'in_volume' filters), VOL_A1_HUT (the hut INTERIOR only, Any",
@@ -144,8 +145,10 @@
     },
     {
       "_comment": "Done when every operative has crossed (BridgeCrossed x3, distinct operatives; the bridge refuses a second body itself). Never precredited (event completion). The marker Step Id A1_bridge shows it.",
+      "_comment2": "2026-10-20 (game designer play-test: crossed without the bridge beacon, did the whole hut lesson, then a 'go back to the bridge' marker / arrow came back): 'beyond' = all three are ACROSS the crevasse however they got there (stat squad_not_across.VOL_A1_BEACON2: on the other side of the bridge from its approach volume) -> the objective is passed (never shown, or its marker hidden for good) and the route moves past the bridge (the bridge lines are passed too); the next target is the hut approach. Reaching a later place (the hut approach) also ends it (an objective tied to a place behind the squad).",
       "id": "A1_bridge", "beat": "A1", "kind": "objective", "text_id": "OBJ_A1_BRIDGE",
       "trigger": { "type": "volume", "volume": "VOL_A1_BEACON2" },
+      "beyond": [ { "stat": "squad_not_across.VOL_A1_BEACON2", "below": 1 } ],
       "complete": { "event": "BridgeCrossed", "count": 3, "distinct_operatives": true, "timeout_s": 240 }
     },
     {
@@ -213,8 +216,10 @@
       "lines": [ { "speaker": "Commander", "text_id": "WT_A1_RESUPPLY" } ]
     },
     {
+      "_comment2": "2026-10-20: the heat packs already taken (the sprint card came late: the bridge was skipped, the hut lesson ran first) -> never shown; beacon 3 reached -> dropped (its marker at the hut must never call the squad back).",
       "id": "A1_obj_hut", "beat": "A1", "kind": "objective", "text_id": "OBJ_A1_HUT",
       "trigger": { "type": "after_step", "step": "A1_sprint", "delay_s": 1 },
+      "cancel_on": { "step": "A1_loot_take", "volume": "VOL_A1_BEACON3" },
       "complete": { "event": "ItemLooted.HeatPack" }
     },
     {
@@ -411,6 +416,7 @@
       "_comment": "Rev 5i (game designer 2026-10-15): the complex comes into view ('That's the complex. The PMC left in a hurry ...') - the squad is STOPPED and held at the approach (VOL_A3_APPROACH, Beat A3, Leader) and moves up to the first low obstacle ahead, the vault ridge (VaultRidge_A3, 0.8 m; its approach side VOL_A3_RIDGE) only CROUCHED: every move order of a standing operative is refused ('Crouch first - stay low.'), followers copy the leader's low stance before they follow; the corridor approach -> ridge front is allowed (span), nothing beyond. Done when every living operative is crouched / prone inside VOL_A3_RIDGE (stat squad_not_low_in). Unlocks the stances here (they were locked until the wind card). A volume trigger, not the beat start: a squad that reached A3 another way (the fence first) passes it.",
       "id": "A3_low", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_LOW",
       "keys": ["Stance.Crouch", "Stance.Squad.Crouch"],
+      "guide": "VOL_A3_RIDGE",
       "unlock": ["Stance.*"],
       "trigger": { "type": "volume", "volume": "VOL_A3_APPROACH" },
       "confine": { "volume": "VOL_A3_APPROACH", "allow": ["VOL_A3_RIDGE"], "span": true, "stop": true, "stance": "crouch" },
@@ -454,6 +460,7 @@
       "_comment": "Rev 5i: then each operative: select him, go prone (V), crawl under the gap - one at a time. Held at the fence area; an order past the fence is allowed only for a PRONE operative and only when nobody else is crossing (his turn ends with his CrawlGapPassed); standing: 'Go prone first - then crawl under.', another crossing: 'One at a time - wait until he is through.'. Alt+V still works but every operative counts separately (3 distinct). The card shows '{progress} / {count} through'.",
       "id": "A3_fence_crawl", "beat": "A3", "kind": "hint_card", "text_id": "TUT_A3_FENCE_CRAWL",
       "keys": ["Select.Member", "Stance.Prone"],
+      "guide": "VOL_A3_FIELD",
       "trigger": { "type": "after_step", "step": "A3_fence" },
       "confine": { "volume": "VOL_A3_FENCE", "exit": { "stance": "prone", "one_at_a_time": "CrawlGapPassed" } },
       "complete": { "event": "CrawlGapPassed", "count": 3, "distinct_operatives": true }

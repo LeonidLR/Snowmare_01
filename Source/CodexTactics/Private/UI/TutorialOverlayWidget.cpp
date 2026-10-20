@@ -17,6 +17,9 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Rendering/SlateRenderer.h"
 #include "Styling/CoreStyle.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Rendering/DrawElements.h"
@@ -365,15 +368,9 @@ void UTutorialOverlayWidget::UpdateEdgePointers()
 	int32 SizeX = 0;
 	int32 SizeY = 0;
 	PC->GetViewportSize(SizeX, SizeY);
-	const float Scale = UWidgetLayoutLibrary::GetViewportScale(this);
-	if (SizeX <= 0 || SizeY <= 0 || Scale <= 0.f)
-	{
-		return;
-	}
-	const FVector2D Size(SizeX / Scale, SizeY / Scale);
-	const FVector2D Centre = Size * 0.5f;
-	constexpr float EdgeMargin = 48.f;
-	for (const ATutorialMarkerActor* Marker : Tutorial->GetVisibleMarkers())
+	const bool bHasViewport = SizeX > 0 && SizeY > 0;
+	const float Scale = bHasViewport ? UWidgetLayoutLibrary::GetViewportScale(this) : 1.f;
+	for (const ATutorialMarkerActor* Marker : bHasViewport && Scale > 0.f ? Tutorial->GetVisibleMarkers() : TArray<ATutorialMarkerActor*>())
 	{
 		if (!Marker->Label.IsEmpty())
 		{
@@ -388,35 +385,42 @@ void UTutorialOverlayWidget::UpdateEdgePointers()
 				Label.Color = FLinearColor(Marker->Color.R, Marker->Color.G, Marker->Color.B, 1.f);
 			}
 		}
-		if (!Marker->bScreenEdgePointer)
-		{
-			continue;
-		}
-		FVector2D Screen;
-		const bool bProjected = PC->ProjectWorldLocationToScreen(Marker->GetActorLocation(), Screen, true);
-		FVector2D Local = Screen / Scale;
-		const bool bOnScreen = bProjected && Local.X >= EdgeMargin && Local.Y >= EdgeMargin && Local.X <= Size.X - EdgeMargin && Local.Y <= Size.Y - EdgeMargin;
-		if (bOnScreen)
-		{
-			continue;
-		}
-		FVector2D Direction = (Local - Centre).GetSafeNormal();
-		if (!bProjected)
-		{
-			Direction = -Direction; // behind the camera: the projection is mirrored
-		}
-		if (Direction.IsNearlyZero())
-		{
-			Direction = FVector2D(0.f, 1.f);
-		}
-		// Clamp the ray from the centre to the inset screen rectangle.
-		const FVector2D Half = Centre - FVector2D(EdgeMargin, EdgeMargin);
-		const float TX = FMath::Abs(Direction.X) > KINDA_SMALL_NUMBER ? Half.X / FMath::Abs(Direction.X) : BIG_NUMBER;
-		const float TY = FMath::Abs(Direction.Y) > KINDA_SMALL_NUMBER ? Half.Y / FMath::Abs(Direction.Y) : BIG_NUMBER;
-		FEdgePointer& Pointer = EdgePointers.AddDefaulted_GetRef();
-		Pointer.Direction = Direction;
-		Pointer.Tip = Centre + Direction * FMath::Min(TX, TY);
 	}
+	// 2026-10-20: ONE arrow - towards the current navigation target while it is off-screen, with its distance from the leader.
+	// Headless (no viewport) the same rule runs for a 1920 x 1080 view of the camera (smokes check it).
+	PointerViewSize = bHasViewport && Scale > 0.f ? FVector2D(SizeX / Scale, SizeY / Scale) : FVector2D(1920.f, 1080.f);
+	const FTutorialGuideView& Guide = Tutorial->GetGuideView();
+	const APlayerCameraManager* Camera = PC->PlayerCameraManager;
+	if (!Guide.bValid || !Guide.bEdgePointer || !Camera)
+	{
+		return;
+	}
+	constexpr float EdgeMargin = 48.f;
+	FVector2D Screen;
+	TutorialRules::ProjectToView(Camera->GetCameraLocation(), Camera->GetCameraRotation(), Camera->GetFOVAngle(), PointerViewSize, Guide.Location, Screen);
+	FEdgePointer Pointer;
+	if (!TutorialRules::ComputeEdgePointer(PointerViewSize, Screen, /*bProjected*/ true, EdgeMargin, Pointer.Tip, Pointer.Direction))
+	{
+		return; // on screen: the beacon itself shows where to go
+	}
+	const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	const FVector From = Leader ? Leader->GetActorLocation() : Camera->GetCameraLocation();
+	Pointer.Distance = FText::FromString(TutorialRules::FormatGuideDistance(FVector::Dist2D(From, Guide.Location)));
+	EdgePointers.Add(Pointer);
+}
+
+bool UTutorialOverlayWidget::GetGuidePointer(FVector2D& OutTip, FVector2D& OutDirection, FText& OutDistance, FVector2D& OutViewSize) const
+{
+	OutViewSize = PointerViewSize;
+	if (EdgePointers.IsEmpty())
+	{
+		return false;
+	}
+	OutTip = EdgePointers[0].Tip;
+	OutDirection = EdgePointers[0].Direction;
+	OutDistance = EdgePointers[0].Distance;
+	return true;
 }
 
 int32 UTutorialOverlayWidget::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
@@ -435,13 +439,25 @@ int32 UTutorialOverlayWidget::NativePaint(const FPaintArgs& Args, const FGeometr
 		FSlateDrawElement::MakeText(OutDrawElements, MaxLayer + 2, AllottedGeometry.ToPaintGeometry(TextSize, FSlateLayoutTransform(TopLeft)),
 			Label.Text, LabelFont, ESlateDrawEffect::None, Label.Color);
 	}
+	const FSlateFontInfo DistanceFont = FCoreStyle::GetDefaultFontStyle("Bold", 11);
 	for (const FEdgePointer& Pointer : EdgePointers)
 	{
+		// Small and unobtrusive (2026-10-20): a 20 px chevron at the screen edge, the distance just inside it.
 		const FVector2D Side(-Pointer.Direction.Y, Pointer.Direction.X);
-		const FVector2D Base = Pointer.Tip - Pointer.Direction * 26.f;
-		TArray<FVector2D> Points = { Pointer.Tip, Base + Side * 13.f, Base - Side * 13.f, Pointer.Tip };
+		const FVector2D Base = Pointer.Tip - Pointer.Direction * 20.f;
+		TArray<FVector2D> Points = { Pointer.Tip, Base + Side * 10.f, Base - Side * 10.f, Pointer.Tip };
 		FSlateDrawElement::MakeLines(OutDrawElements, MaxLayer + 1, AllottedGeometry.ToPaintGeometry(), Points, ESlateDrawEffect::None,
-			PointerColor, true, 4.f);
+			PointerColor, true, 3.f);
+		if (Renderer && !Pointer.Distance.IsEmpty())
+		{
+			const TSharedRef<FSlateFontMeasure> FontMeasure = Renderer->GetFontMeasureService();
+			const FVector2D TextSize = FontMeasure->Measure(Pointer.Distance, DistanceFont);
+			const FVector2D TopLeft = Pointer.Tip - Pointer.Direction * (34.f + 0.5f * TextSize.Size()) - TextSize * 0.5f;
+			FSlateDrawElement::MakeText(OutDrawElements, MaxLayer + 1, AllottedGeometry.ToPaintGeometry(TextSize, FSlateLayoutTransform(TopLeft + FVector2D(1.f, 1.f))),
+				Pointer.Distance, DistanceFont, ESlateDrawEffect::None, FLinearColor(0.f, 0.f, 0.f, 0.75f));
+			FSlateDrawElement::MakeText(OutDrawElements, MaxLayer + 2, AllottedGeometry.ToPaintGeometry(TextSize, FSlateLayoutTransform(TopLeft)),
+				Pointer.Distance, DistanceFont, ESlateDrawEffect::None, PointerColor);
+		}
 	}
 	return MaxLayer + 2;
 }

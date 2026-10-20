@@ -22,6 +22,28 @@ locked on Demo 01 until the safety unlock-all - a wave / horde fight or the tuto
 
 ## Decision blocks, newest first (old §6 «Tutorial» section)
 
+**Demo 01 2026-10-20 (the game designer's play-test of the lake): the bridge marker came back; nothing showed where to go after the hut.**
+**Root cause** (his telemetry, session `A6DB…`): `A1_bridge` (objective, triggered at `VOL_A1_BEACON2`, completed only by three
+`BridgeCrossed` events) was shown at 71 s, the squad got across without three bridge crossings, did the whole hut lesson - and the
+objective stayed ACTIVE (156 s, until he walked back and crossed at 227 s): an event objective of the SAME beat was never ended by the
+route (rev 5f only ended "go to X" steps behind the squad; a later beat starting does not end event objectives either), so its marker
+stayed shown and its screen-edge arrow kept pointing back; once the hut lesson's own markers were gone (after the regroup) it was the only
+arrow on screen - "the bridge marker came back". Nothing re-armed it (no step re-triggers, Regroup / Solo off change nothing). After he
+re-crossed, only the banter / gust followed: no marker existed for beacon 3 / the camp, so nothing showed where to go.
+**Fix (every level, engine; [tutorial-engine](tutorial-engine.md) section 17):** (1) exactly ONE current navigation target at any moment
+(the card's guide / markers / completion volume, else a shown objective's markers ahead, else the next route place - a runtime guide beacon
+stands at that volume -, else the place reached last); one edge arrow with the distance, one highlighted minimap icon; (2) a running
+objective whose place lies behind the route progress is finished when the squad moves on (the bridge objective at the hut approach);
+(3) new step key `"beyond"` + stat `squad_not_across.<volume>`: `A1_bridge` is passed the moment all three are across the crevasse, however
+they crossed (never shown / its marker gone for good), and the route moves past the bridge (the bridge lines are passed too); the next
+target is the hut approach; (4) new step key `"guide"` (`A3_low` -> `VOL_A3_RIDGE`, `A3_fence_crawl` -> `VOL_A3_FIELD`).
+**Other place-objectives checked (A0-A4):** `A0_obj_beacon`, `A1_obj_camp`, `A3_obj_overlook` complete in their volume (rev 5f rule);
+**`A1_obj_hut`** had the same trap (completed only by `ItemLooted.HeatPack`: after a late heat-pack lesson it would show the hut marker
+AFTER the packs were taken, forever) -> `"cancel_on": {"step": "A1_loot_take", "volume": "VOL_A1_BEACON3"}`; `A2_obj_warm` (in the ruin)
+now ends when the squad moves on to A3; beacon 3 / the camp / the A3 approach / the overlook have no markers - the route target shows a
+guide beacon there. **Map:** nothing to place (the lake's volumes are the targets; if a volume is missing the target skips it and the log
+says so). Tests `CodexTactics.Tutorial.Guide.*`; TutorialSmoke stages 140-153, TutorialSaveSmoke (target after F9), SaveCoverageLakeSmoke.
+
 **Demo 01 2026-10-19 b (the game designer's play-test of the lake; beat sheet decision block "2026-10-19 b"): the POSTURE lesson.**
 (1) **The squad enters the complex Defensive:** `A3_wt_approach` (the A3 beat-start lines) carries the new step action
 **`{"type": "set_posture", "posture": "passive" | "defensive" | "aggressive"}`** (`FTutorialAction::Posture`, `FirePostureRules::ParseName`,

@@ -18,6 +18,8 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/TrapSpotRules.h"
+#include "Level/BridgeCrossingVolume.h"
+#include "Level/LevelObstacleRules.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/App.h"
@@ -284,6 +286,23 @@ void UTutorialSubsystem::LoadSteps(const FTutorialStepsData& Data)
 			}
 		}
 		return false; // not a squad member: no role, no spot
+	};
+	// 2026-10-20: the current navigation target needs to know which steps have markers and which volumes the level has.
+	Machine.StepMarkerProvider = [this](FName StepId)
+	{
+		return Markers.ContainsByPredicate([StepId](const TWeakObjectPtr<ATutorialMarkerActor>& Weak)
+		{
+			const ATutorialMarkerActor* Marker = Weak.Get();
+			return Marker && !Marker->bRuntimeGuide && Marker->StepId == StepId;
+		});
+	};
+	Machine.VolumeProvider = [this](FName VolumeId)
+	{
+		return GuideVolumes.ContainsByPredicate([VolumeId](const TWeakObjectPtr<ATutorialTriggerVolume>& Weak)
+		{
+			const ATutorialTriggerVolume* Volume = Weak.Get();
+			return Volume && Volume->Box && Volume->GetEffectiveVolumeId() == VolumeId;
+		});
 	};
 	Machine.Load(Data);
 	// Rev 5f (monotonic route): the place of every beat volume of the level (a volume that starts a beat lies at its start).
@@ -983,6 +1002,31 @@ float UTutorialSubsystem::GetConditionStat(FName Stat) const
 		}
 		return static_cast<float>(Spotted);
 	}
+	if (const FName AcrossVolume = TutorialRules::ParseNotAcrossStat(Stat); !AcrossVolume.IsNone())
+	{
+		// 2026-10-20: the living members not yet across the bridge nearest to that volume (still on its side or on the span) - however
+		// they crossed. No bridge / no such volume: nobody counts as across.
+		const TArray<const ATutorialTriggerVolume*> NearVolumes = FindVolumes(AcrossVolume);
+		const FVector NearPoint = NearVolumes.IsEmpty() ? FVector::ZeroVector : NearVolumes[0]->GetActorLocation();
+		const ABridgeCrossingVolume* Bridge = nullptr;
+		for (TActorIterator<ABridgeCrossingVolume> It(GetWorld()); It && !NearVolumes.IsEmpty(); ++It)
+		{
+			if (It->Span && (!Bridge || FVector::DistSquared(It->GetActorLocation(), NearPoint) < FVector::DistSquared(Bridge->GetActorLocation(), NearPoint)))
+			{
+				Bridge = *It;
+			}
+		}
+		int32 NotAcross = 0;
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			if (TutorialSubsystemLocal::IsLivingOrUntracked(Member))
+			{
+				NotAcross += Bridge && BridgeRules::IsAcrossFrom(Bridge->Span->GetComponentTransform(), Bridge->Span->GetUnscaledBoxExtent().X, NearPoint,
+					Member->GetActorLocation()) ? 0 : 1;
+			}
+		}
+		return static_cast<float>(NotAcross);
+	}
 	if (const FName LowVolume = TutorialRules::ParseNotLowInStat(Stat); !LowVolume.IsNone())
 	{
 		// Rev 5i: the living members NOT crouched / prone at that volume - inside its box or within 3 m of it, where followers in
@@ -1471,19 +1515,156 @@ void UTutorialSubsystem::RefreshMarkers()
 	const bool bActive = IsTutorialActive();
 	const FName Beat = Machine.GetCurrentBeat();
 	Markers.RemoveAll([](const TWeakObjectPtr<ATutorialMarkerActor>& Marker) { return !Marker.IsValid(); });
+	RefreshGuide();
+	const ATutorialMarkerActor* GuideMarker = GuideView.bValid ? GuideView.Marker.Get() : nullptr;
 	for (const TWeakObjectPtr<ATutorialMarkerActor>& Weak : Markers)
 	{
 		ATutorialMarkerActor* Marker = Weak.Get();
 		bool bShow = false;
-		if (bActive)
+		if (bActive && !Marker->bRuntimeGuide)
 		{
 			bShow = !Marker->StepId.IsNone() ? Machine.GetState(Marker->StepId) == ETutorialStepState::Active
 				: (!Marker->BeatId.IsNone() && Marker->BeatId == Beat);
 			// A role spot whose operative is in place hides (2026-10-19: the others still show where to go).
 			bShow = bShow && !(!Marker->RoleId.IsNone() && !Marker->StepId.IsNone() && IsRoleSpotDone(Marker->StepId, Marker->RoleId));
 		}
-		Marker->SetMarkerShown(bShow);
+		// 2026-10-20: the current navigation target always shows (a "guide" may name another step's marker; the beacon at a volume).
+		Marker->SetMarkerShown(bActive && (bShow || Marker == GuideMarker));
 	}
+}
+
+FString UTutorialSubsystem::DescribeGuide(const FTutorialGuide& Guide)
+{
+	if (!Guide.IsSet())
+	{
+		return FString();
+	}
+	return (Guide.Kind == ETutorialGuideKind::StepMarkers ? TEXT("markers:") : TEXT("volume:")) + Guide.Id.ToString();
+}
+
+void UTutorialSubsystem::RegisterVolume(ATutorialTriggerVolume* Volume)
+{
+	if (Volume)
+	{
+		GuideVolumes.AddUnique(Volume);
+	}
+}
+
+void UTutorialSubsystem::UnregisterVolume(ATutorialTriggerVolume* Volume)
+{
+	GuideVolumes.Remove(Volume);
+}
+
+const ATutorialTriggerVolume* UTutorialSubsystem::FindGuideVolume(FName VolumeId, const FVector& Near) const
+{
+	const ATutorialTriggerVolume* Best = nullptr;
+	for (const TWeakObjectPtr<ATutorialTriggerVolume>& Weak : GuideVolumes)
+	{
+		const ATutorialTriggerVolume* Volume = Weak.Get();
+		if (Volume && Volume->Box && Volume->GetEffectiveVolumeId() == VolumeId
+			&& (!Best || FVector::DistSquared2D(Volume->GetActorLocation(), Near) < FVector::DistSquared2D(Best->GetActorLocation(), Near)))
+		{
+			Best = Volume;
+		}
+	}
+	return Best;
+}
+
+FVector UTutorialSubsystem::GetVolumeGroundPoint(const ATutorialTriggerVolume& Volume) const
+{
+	const FVector Centre = Volume.Box->Bounds.Origin;
+	const float HalfHeight = Volume.Box->Bounds.BoxExtent.Z;
+	const FVector Top = Centre + FVector(0.f, 0.f, HalfHeight);
+	const FVector Bottom = Centre - FVector(0.f, 0.f, HalfHeight + 300.f);
+	FHitResult Hit;
+	const FCollisionQueryParams Params(SCENE_QUERY_STAT(TutorialGuideGround), false);
+	if (GetWorld() && GetWorld()->LineTraceSingleByObjectType(Hit, Top, Bottom, FCollisionObjectQueryParams(ECC_WorldStatic), Params))
+	{
+		return Hit.ImpactPoint + FVector(0.f, 0.f, 2.f);
+	}
+	return Centre - FVector(0.f, 0.f, HalfHeight - 2.f); // volumes stand on the ground: their bottom
+}
+
+void UTutorialSubsystem::RefreshGuide()
+{
+	if (bRefreshingGuide)
+	{
+		return; // the beacon's BeginPlay registers it while it is being spawned here
+	}
+	TGuardValue<bool> Refreshing(bRefreshingGuide, true);
+	FTutorialGuideView View;
+	View.Guide = IsTutorialActive() ? Machine.GetGuide() : FTutorialGuide();
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	const FVector From = Leader ? Leader->GetActorLocation() : FVector::ZeroVector;
+	if (View.Guide.Kind == ETutorialGuideKind::StepMarkers)
+	{
+		// The nearest of the step's markers (a role spot already taken does not count: the others still show where to go).
+		ATutorialMarkerActor* Best = nullptr;
+		for (const TWeakObjectPtr<ATutorialMarkerActor>& Weak : Markers)
+		{
+			ATutorialMarkerActor* Marker = Weak.Get();
+			if (!Marker || Marker->bRuntimeGuide || Marker->StepId != View.Guide.Id
+				|| (!Marker->RoleId.IsNone() && IsRoleSpotDone(Marker->StepId, Marker->RoleId)))
+			{
+				continue;
+			}
+			if (!Best || FVector::DistSquared2D(Marker->GetActorLocation(), From) < FVector::DistSquared2D(Best->GetActorLocation(), From))
+			{
+				Best = Marker;
+			}
+		}
+		if (Best)
+		{
+			View.Marker = Best;
+			View.Location = Best->GetActorLocation();
+			View.bEdgePointer = Best->bScreenEdgePointer;
+			View.bValid = true;
+		}
+	}
+	else if (View.Guide.Kind == ETutorialGuideKind::Volume)
+	{
+		if (const ATutorialTriggerVolume* Volume = FindGuideVolume(View.Guide.Id, From))
+		{
+			const FVector Ground = GetVolumeGroundPoint(*Volume);
+			ATutorialMarkerActor* Beacon = GuideBeacon.Get();
+			if (!Beacon && GetWorld())
+			{
+				// One beacon for every volume target (moved when the target changes); hidden unless it is the target.
+				const FTransform Spawn(FRotator::ZeroRotator, Ground);
+				Beacon = GetWorld()->SpawnActorDeferred<ATutorialMarkerActor>(ATutorialMarkerActor::StaticClass(), Spawn, nullptr, nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (Beacon)
+				{
+					Beacon->bRuntimeGuide = true;
+					GuideBeacon = Beacon; // before its BeginPlay registers it (RefreshMarkers -> here again: no second beacon)
+					Beacon->FinishSpawning(Spawn);
+				}
+			}
+			if (Beacon)
+			{
+				if (!Beacon->GetActorLocation().Equals(Ground, 1.f))
+				{
+					Beacon->SetActorLocation(Ground);
+				}
+				View.Marker = Beacon;
+				View.Location = Ground;
+				View.bValid = true;
+			}
+		}
+	}
+	if (View.Guide != GuideView.Guide)
+	{
+		const FString Described = DescribeGuide(View.Guide);
+		UE_LOG(LogCodexTactics, Display, TEXT("Tutorial: current target -> %s (asked by %s)%s"), Described.IsEmpty() ? TEXT("none") : *Described,
+			View.Guide.SourceStep.IsNone() ? TEXT("the route") : *View.Guide.SourceStep.ToString(),
+			View.Guide.IsSet() && !View.bValid ? TEXT(" - NOT in the level (no marker / volume to show)") : TEXT(""));
+		if (IsTutorialActive())
+		{
+			WriteTelemetry(TEXT("guide"), FName(*Described), Machine.GetCurrentBeat(), 0.f);
+		}
+	}
+	GuideView = View;
 }
 
 void UTutorialSubsystem::RegisterMarker(ATutorialMarkerActor* Marker)
@@ -1921,6 +2102,8 @@ TSharedPtr<FJsonObject> UTutorialSubsystem::CaptureSaveState() const
 	}
 	Object->SetArrayField(TEXT("lock_hints"), Hints);
 	Object->SetBoolField(TEXT("skipped"), bSkipped); // rev 5i: SKIP TUTORIAL stays skipped after a load
+	// 2026-10-20: the current navigation target (informational: it is derived from the progress + "route" on load).
+	Object->SetStringField(TEXT("guide"), DescribeGuide(GuideView.Guide));
 	return Object;
 }
 

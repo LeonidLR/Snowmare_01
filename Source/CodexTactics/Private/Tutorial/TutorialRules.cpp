@@ -119,6 +119,7 @@ namespace TutorialRulesLocal
 		}
 		Names.Add(TEXT("traps_spotted.<tag>"));
 		Names.Add(TEXT("squad_not_low_in.<volume>"));
+		Names.Add(TEXT("squad_not_across.<volume>"));
 		return FString::Join(Names, TEXT(" | "));
 	}
 
@@ -222,11 +223,11 @@ namespace TutorialRulesLocal
 
 	/** Parses "condition" clauses; false + OutError on a bad clause. */
 	bool ParseConditions(const TSharedPtr<FJsonObject>& Object, const FString& Where, TArray<FTutorialCondition>& OutConditions,
-		TArray<FString>& OutWarnings, FString& OutError)
+		TArray<FString>& OutWarnings, FString& OutError, const TCHAR* Key = TEXT("condition"))
 	{
-		for (const TSharedPtr<FJsonObject>& Clause : JsonObjects(Object, TEXT("condition")))
+		for (const TSharedPtr<FJsonObject>& Clause : JsonObjects(Object, Key))
 		{
-			WarnUnknownKeys(Clause, { TEXT("stat"), TEXT("at_least"), TEXT("below") }, Where + TEXT(" condition"), OutWarnings);
+			WarnUnknownKeys(Clause, { TEXT("stat"), TEXT("at_least"), TEXT("below") }, Where + TEXT(" ") + Key, OutWarnings);
 			FTutorialCondition Condition;
 			Condition.Stat = FName(*JsonString(Clause, TEXT("stat")));
 			if (!TutorialRules::IsKnownStat(Condition.Stat))
@@ -395,7 +396,7 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		const FString Where = TEXT("step ") + Id;
 		WarnUnknownKeys(Object, { TEXT("id"), TEXT("beat"), TEXT("kind"), TEXT("text_id"), TEXT("keys"), TEXT("trigger"), TEXT("complete"),
 			TEXT("once"), TEXT("skippable"), TEXT("blocking"), TEXT("lines"), TEXT("condition"), TEXT("lock"), TEXT("unlock"), TEXT("action"),
-			TEXT("actions"), TEXT("focus"), TEXT("precredit"), TEXT("cancel_on"), TEXT("confine") }, Where, OutWarnings);
+			TEXT("actions"), TEXT("focus"), TEXT("precredit"), TEXT("cancel_on"), TEXT("confine"), TEXT("guide"), TEXT("beyond") }, Where, OutWarnings);
 		FTutorialStep Step;
 		Step.Id = FName(*Id);
 		Step.Beat = FName(*JsonString(Object, TEXT("beat")));
@@ -507,6 +508,15 @@ bool TutorialRules::ParseSteps(const FString& Json, FTutorialStepsData& OutData,
 		}
 
 		if (!ParseConditions(Object, Where, Step.Conditions, OutWarnings, OutError))
+		{
+			return false;
+		}
+		// 2026-10-20: "guide" (the current navigation target while the step is shown; "none" = never) and "beyond" (the squad is past
+		// the step's place: it is passed and the route moves on).
+		const FString GuideText = JsonString(Object, TEXT("guide")).TrimStartAndEnd();
+		Step.bNoGuide = GuideText.Equals(TEXT("none"), ESearchCase::IgnoreCase);
+		Step.Guide = Step.bNoGuide || GuideText.IsEmpty() ? NAME_None : FName(*GuideText);
+		if (!ParseConditions(Object, Where, Step.Beyond, OutWarnings, OutError, TEXT("beyond")))
 		{
 			return false;
 		}
@@ -763,6 +773,16 @@ void TutorialRules::ValidateSteps(const FTutorialStepsData& Data, TArray<FString
 		{
 			OutWarnings.Add(Where + TEXT(": \"subject\": \"focus\" without a step \"focus\" - any operative counts"));
 		}
+		// 2026-10-20: "beyond" passes the step AND moves the route past its place - a step without any place only gets passed.
+		if (!Step.Beyond.IsEmpty() && Step.Trigger.Volume.IsNone() && Step.Complete.Volume.IsNone() && Step.Complete.InVolume.IsNone()
+			&& (Step.Guide.IsNone() || Data.FindStepIndex(Step.Guide) != INDEX_NONE))
+		{
+			OutWarnings.Add(Where + TEXT(": \"beyond\" on a step without a place (no volume trigger / completion / guide volume) - the route does not move"));
+		}
+		if (!Step.Guide.IsNone() && Step.Guide == Step.Id)
+		{
+			OutWarnings.Add(Where + TEXT(": \"guide\" names the step itself - its own markers are the default anyway"));
+		}
 		// after_step chains must not loop back to the step: such a step could never fire.
 		if (Step.Trigger.Type == ETutorialTriggerType::AfterStep)
 		{
@@ -901,6 +921,8 @@ TSharedRef<FJsonObject> TutorialRules::SaveProgress(const FTutorialProgress& Pro
 		Confines.Add(MakeShared<FJsonValueObject>(Entry));
 	}
 	Object->SetArrayField(TEXT("confines"), Confines);
+	// 2026-10-20: the furthest place reached on the route (the current navigation target is derived from it).
+	Object->SetStringField(TEXT("route"), Progress.RouteVolume.IsNone() ? FString() : Progress.RouteVolume.ToString());
 	return Object;
 }
 
@@ -985,6 +1007,11 @@ bool TutorialRules::LoadProgress(const FJsonObject& Object, FTutorialProgress& O
 			JsonUniqueNames(*Entry, TEXT("passed"), Stored.Passed);
 		}
 	}
+	FString Route;
+	if (Object.TryGetStringField(TEXT("route"), Route) && !Route.IsEmpty())
+	{
+		OutProgress.RouteVolume = FName(*Route); // an older save without it: the route starts at the saved beat's start
+	}
 	return true;
 }
 
@@ -993,6 +1020,69 @@ FName TutorialRules::ParseNotLowInStat(FName Stat)
 	static const FString Prefix(TEXT("squad_not_low_in."));
 	const FString Name = Stat.ToString();
 	return Name.StartsWith(Prefix) && Name.Len() > Prefix.Len() ? FName(*Name.Mid(Prefix.Len())) : NAME_None;
+}
+
+FName TutorialRules::ParseNotAcrossStat(FName Stat)
+{
+	static const FString Prefix(TEXT("squad_not_across."));
+	const FString Name = Stat.ToString();
+	return Name.StartsWith(Prefix) && Name.Len() > Prefix.Len() ? FName(*Name.Mid(Prefix.Len())) : NAME_None;
+}
+
+bool TutorialRules::ComputeEdgePointer(const FVector2D& ViewSize, const FVector2D& Projected, bool bProjected, float Margin, FVector2D& OutTip,
+	FVector2D& OutDirection)
+{
+	if (ViewSize.X <= 2.f * Margin || ViewSize.Y <= 2.f * Margin)
+	{
+		return false;
+	}
+	const bool bOnScreen = bProjected && Projected.X >= Margin && Projected.Y >= Margin && Projected.X <= ViewSize.X - Margin && Projected.Y <= ViewSize.Y - Margin;
+	if (bOnScreen)
+	{
+		return false;
+	}
+	const FVector2D Centre = ViewSize * 0.5f;
+	FVector2D Direction = (Projected - Centre).GetSafeNormal();
+	if (!bProjected)
+	{
+		Direction = -Direction; // behind the camera: the projection is mirrored
+	}
+	if (Direction.IsNearlyZero())
+	{
+		Direction = FVector2D(0.f, 1.f);
+	}
+	// The ray from the centre, clamped to the inset screen rectangle.
+	const FVector2D Half = Centre - FVector2D(Margin, Margin);
+	const float TX = FMath::Abs(Direction.X) > KINDA_SMALL_NUMBER ? Half.X / FMath::Abs(Direction.X) : BIG_NUMBER;
+	const float TY = FMath::Abs(Direction.Y) > KINDA_SMALL_NUMBER ? Half.Y / FMath::Abs(Direction.Y) : BIG_NUMBER;
+	OutDirection = Direction;
+	OutTip = Centre + Direction * FMath::Min(TX, TY);
+	return true;
+}
+
+bool TutorialRules::ProjectToView(const FVector& CameraLocation, const FRotator& CameraRotation, float HorizontalFovDegrees, const FVector2D& ViewSize,
+	const FVector& World, FVector2D& OutScreen)
+{
+	const FVector2D Centre = ViewSize * 0.5f;
+	const FVector Local = CameraRotation.UnrotateVector(World - CameraLocation);
+	constexpr float NearPlaneCm = 1.f;
+	if (Local.X > NearPlaneCm)
+	{
+		const float HalfFov = FMath::DegreesToRadians(FMath::Clamp(HorizontalFovDegrees, 5.f, 170.f) * 0.5f);
+		const float Focal = Centre.X / FMath::Tan(HalfFov);
+		OutScreen = Centre + FVector2D(Local.Y / Local.X, -Local.Z / Local.X) * Focal;
+		return true;
+	}
+	FVector2D Side(Local.Y, -Local.Z);
+	Side = Side.IsNearlyZero() ? FVector2D(0.f, 1.f) : Side.GetSafeNormal();
+	OutScreen = Centre + Side * (ViewSize.Size() * 4.f);
+	return false;
+}
+
+FString TutorialRules::FormatGuideDistance(float DistanceCm)
+{
+	const int32 Metres = FMath::Max(0, FMath::RoundToInt(DistanceCm / 100.f));
+	return FString::Printf(TEXT("%d m"), Metres);
 }
 
 FName TutorialRules::NormalizeStance(const FString& Text)
@@ -1135,7 +1225,7 @@ FString TutorialRules::FormatKeys(const TArray<FString>& Keys)
 bool TutorialRules::IsKnownStat(FName Stat)
 {
 	// Rev 5h: "traps_spotted.<SpotEventTag>" counts the spotted traps of a tagged group (TrapSpotRules::ParseSpottedStatTag).
-	if (!TrapSpotRules::ParseSpottedStatTag(Stat).IsNone() || !ParseNotLowInStat(Stat).IsNone())
+	if (!TrapSpotRules::ParseSpottedStatTag(Stat).IsNone() || !ParseNotLowInStat(Stat).IsNone() || !ParseNotAcrossStat(Stat).IsNone())
 	{
 		return true;
 	}

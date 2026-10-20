@@ -32,6 +32,20 @@ hover. HUD unit `CodexTacticsHUDMinimap.cpp` (image window, fog quad clipped by 
 `MinimapSmoke`. Perf: setup 4-7 ms, capture ~1 ms game thread per pass, update 20-80 us / 0.25 s, icons + canvas ~40-70 us a frame; GPU cost of
 the passes -> Gemini request #24.
 
+## Tutorial edge arrow and the highlighted target (2026-10-20)
+
+**The current navigation target** of the tutorial (rule: [tutorial-engine](tutorial-engine.md) section 17) is the only thing the HUD points
+at: `UTutorialOverlayWidget::UpdateEdgePointers` draws ONE small amber chevron (20 px, 3 px lines, `PointerColor`) at the screen edge
+(48 px inset) towards it while it is off-screen, with its 2D distance from the leader ("42 m", `TutorialRules::FormatGuideDistance`, bold 11)
+just inside the tip; on-screen: no arrow (the marker / guide beacon itself shows). The view is the player camera's perspective
+(`TutorialRules::ProjectToView`: camera location / rotation / horizontal FOV of `APlayerCameraManager`; a point behind the camera points
+the arrow to its side) in the viewport's widget units - headless (no viewport) a 1920 x 1080 view, so smokes check the same rule
+(`GetGuidePointer`, `GetPointerViewSize`). Other shown tutorial markers keep their rings / labels but no arrow (before 2026-10-20 every
+shown marker had one - the bridge objective's arrow kept pointing back from the hut). **Minimap:** `UMinimapSubsystem::BuildIcons` marks
+the target's objective icon `bHighlight` (exactly one; added at the target's location if its marker is not in the 1 s static list yet - the
+runtime guide beacon); the HUD unit draws it as a larger diamond with a white frame. Tests `CodexTactics.Tutorial.Guide.EdgePointer`;
+TutorialSmoke stages 152-153 (the camera turned away: one arrow along the target's direction, "n m"; the minimap highlights one icon).
+
 ## Camera, roof cutaway, building exits (old §5)
 
 **Camera** — `Camera/TacticalCameraPawn` (+Rules), `CameraZoneVolume`. Godot `camera.gd`, `camera_zone_trigger.gd`.

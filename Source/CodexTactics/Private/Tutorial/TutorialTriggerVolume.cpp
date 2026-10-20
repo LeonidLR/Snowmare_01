@@ -24,6 +24,19 @@ void ATutorialTriggerVolume::BeginPlay()
 {
 	Super::BeginPlay();
 	Box->OnComponentBeginOverlap.AddDynamic(this, &ATutorialTriggerVolume::HandleOverlap);
+	if (UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr)
+	{
+		Tutorial->RegisterVolume(this); // 2026-10-20: a navigation target ("guide") may be this volume
+	}
+}
+
+void ATutorialTriggerVolume::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr)
+	{
+		Tutorial->UnregisterVolume(this);
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 void ATutorialTriggerVolume::HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp,

@@ -321,6 +321,47 @@ struct CODEXTACTICS_API FTutorialStep
 	FTutorialCancelOn CancelOn;
 	/** "confine" (rev 5i): keeps the squad in an area while the lesson runs (FTutorialConfine). */
 	FTutorialConfine Confine;
+	/**
+	 * "guide" (2026-10-20, game designer: "after the hut nothing showed where to go next"): where this step sends the squad while it
+	 * is shown - a tutorial volume id (the target is that volume's box on the ground) or a step id (that step's markers). Overrides the
+	 * automatic choice of the current navigation target (FTutorialStateMachine::GetGuide). None = automatic (own markers, the place
+	 * the step completes in, the route).
+	 */
+	FName Guide;
+	/** "guide": "none" - this step never names the current target (its markers still show; the next rule decides). */
+	bool bNoGuide = false;
+	/**
+	 * "beyond" (2026-10-20, the bridge skipped): world-state clauses (the "condition" syntax) meaning the squad is already BEYOND this
+	 * step's place - e.g. {"stat": "squad_not_across.VOL_A1_BEACON2", "below": 1} = all three are across the crevasse. Polled every
+	 * tick while the step is not finished (also never triggered), from its beat on: when they hold, the step is passed (an objective
+	 * completed, any other kind skipped, never shown again) and the route moves past the step's place, so nothing there calls the
+	 * squad back.
+	 */
+	TArray<FTutorialCondition> Beyond;
+};
+
+/** What the current navigation target ("guide") of the tutorial is (FTutorialStateMachine::GetGuide). */
+enum class ETutorialGuideKind : uint8
+{
+	None,
+	/** The level's markers of a step (ATutorialMarkerActor::StepId == Id; the runtime picks the nearest shown one). */
+	StepMarkers,
+	/** A tutorial volume (the runtime shows a guide beacon on the ground at its box). */
+	Volume
+};
+
+/** The current navigation target: exactly one at a time - the HUD edge arrow and the highlighted minimap icon point at it. */
+struct CODEXTACTICS_API FTutorialGuide
+{
+	ETutorialGuideKind Kind = ETutorialGuideKind::None;
+	/** The marker step id or the volume id. */
+	FName Id;
+	/** The step that asked for it; none = the route chose it (the next place ahead / the last place reached). */
+	FName SourceStep;
+
+	bool IsSet() const { return Kind != ETutorialGuideKind::None && !Id.IsNone(); }
+	bool operator==(const FTutorialGuide& Other) const { return Kind == Other.Kind && Id == Other.Id && SourceStep == Other.SourceStep; }
+	bool operator!=(const FTutorialGuide& Other) const { return !(*this == Other); }
 };
 
 struct CODEXTACTICS_API FTutorialBeat
@@ -391,6 +432,11 @@ struct CODEXTACTICS_API FTutorialProgress
 	TMap<FName, FTutorialStepProgress> StepProgress;
 	/** Rev 5i: the confinements started so far (FTutorialConfineProgress; a released one stays released after a load). */
 	TArray<FTutorialConfineProgress> Confines;
+	/**
+	 * 2026-10-20 ("route"): the furthest place on the route the squad has reached (a tutorial volume id; none = only its beat's start).
+	 * The current navigation target is derived from it, so it survives a load.
+	 */
+	FName RouteVolume;
 
 	bool IsEmpty() const { return Finished.IsEmpty() && Pending.IsEmpty() && CurrentBeat.IsNone() && Locks.IsEmpty() && History.IsEmpty(); }
 };

@@ -131,6 +131,23 @@ struct CODEXTACTICS_API FTutorialRetryView
 };
 
 /**
+ * The current navigation target as the HUD shows it (2026-10-20, UTutorialSubsystem::GetGuideView): exactly one at a time - the edge
+ * arrow (with the distance) when it is off-screen and the highlighted minimap icon point at it. Resolved from FTutorialStateMachine::GetGuide:
+ * a step's markers -> the nearest shown one; a volume -> the runtime guide beacon on the ground at its box.
+ */
+struct CODEXTACTICS_API FTutorialGuideView
+{
+	bool bValid = false;
+	FTutorialGuide Guide;
+	/** Where the arrow / icon points (the marker's or the beacon's location). */
+	FVector Location = FVector::ZeroVector;
+	/** The marker actor shown there (a level marker, or the runtime guide beacon). */
+	TWeakObjectPtr<ATutorialMarkerActor> Marker;
+	/** The marker wants the off-screen edge arrow (ATutorialMarkerActor::bScreenEdgePointer). */
+	bool bEdgePointer = true;
+};
+
+/**
  * Demo 01 tutorial framework (producer plan C8, UX brief 03 §2): loads Content/Data/Tutorial/<file>.json (the level JSON
  * "demo" object names it), runs the per-step state machine (FTutorialStateMachine) on player commands
  * (UCodexEventBus::OnPlayerCommand, the PlayerCommands::Report choke point), gameplay events, tutorial volumes and time;
@@ -303,8 +320,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Tutorial")
 	static FText GetTutorialText(FName TextId);
 
-	/** Markers shown now (the overlay draws their screen-edge pointers). */
+	/** Markers shown now (the overlay draws their labels). */
 	TArray<ATutorialMarkerActor*> GetVisibleMarkers() const;
+	/**
+	 * THE current navigation target (2026-10-20): what FTutorialStateMachine::GetGuide names, resolved in the world (refreshed every
+	 * tick). Invalid with the tutorial inactive / nothing to show. The overlay draws its edge arrow, the minimap highlights it.
+	 */
+	const FTutorialGuideView& GetGuideView() const { return GuideView; }
+	/** The runtime guide beacon (shown at a volume target; smokes), null before the first volume target. */
+	ATutorialMarkerActor* GetGuideBeacon() const { return GuideBeacon.Get(); }
+	/** "markers:<step>" / "volume:<id>" / "" - the guide in one string (logs, telemetry, the save's informational "guide"). */
+	static FString DescribeGuide(const FTutorialGuide& Guide);
 
 	const FTutorialStateMachine& GetMachine() const { return Machine; }
 
@@ -405,6 +431,9 @@ public:
 
 	void RegisterMarker(ATutorialMarkerActor* Marker);
 	void UnregisterMarker(ATutorialMarkerActor* Marker);
+	/** The volumes of the world (ATutorialTriggerVolume BeginPlay / EndPlay): the guide's lookups without an actor iterator per tick. */
+	void RegisterVolume(ATutorialTriggerVolume* Volume);
+	void UnregisterVolume(ATutorialTriggerVolume* Volume);
 
 	/** The save's "tutorial" object (null when there is nothing to save). */
 	TSharedPtr<FJsonObject> CaptureSaveState() const;
@@ -514,6 +543,17 @@ private:
 	TMap<uint8, double> ConfineLineTimes;
 	/** A confinement started / ended: a start stops the walks that would leave the area (or the whole squad with "stop"). */
 	void HandleConfineChanged();
+	/** 2026-10-20: the current navigation target (RefreshGuide, every RefreshMarkers) and the beacon shown at a volume target. */
+	FTutorialGuideView GuideView;
+	TWeakObjectPtr<ATutorialMarkerActor> GuideBeacon;
+	TArray<TWeakObjectPtr<ATutorialTriggerVolume>> GuideVolumes;
+	bool bRefreshingGuide = false;
+	/** Resolves Machine.GetGuide() in the world (nearest marker / the beacon at the volume), logs + telemetry when it changes. */
+	void RefreshGuide();
+	/** The registered volume with this id nearest to Near, null when the level has none. */
+	const ATutorialTriggerVolume* FindGuideVolume(FName VolumeId, const FVector& Near) const;
+	/** Where the beacon of a volume target stands: the box's ground point (a trace down from its top, else its bottom). */
+	FVector GetVolumeGroundPoint(const ATutorialTriggerVolume& Volume) const;
 	/** The tutorial volumes of the world with this id. */
 	TArray<const ATutorialTriggerVolume*> FindVolumes(FName VolumeId) const;
 	/** "span": the bounding box of every volume of these areas (invalid when none is in the world). */

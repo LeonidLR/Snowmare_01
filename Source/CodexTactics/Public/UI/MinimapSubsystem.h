@@ -35,7 +35,7 @@ struct CODEXTACTICS_API FMinimapIcon
 	FVector2D MapFacing = FVector2D::ZeroVector;
 	FLinearColor Color = FLinearColor::White;
 	float Alpha = 1.f;
-	/** The selected operative (the leader). */
+	/** The selected operative (the leader); on an Objective icon: the tutorial's current navigation target (2026-10-20). */
 	bool bHighlight = false;
 	/** Part of a box selection. */
 	bool bSelected = false;

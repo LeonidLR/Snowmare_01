@@ -50,8 +50,16 @@ public:
 	bool IsRadioSkipShown() const;
 	/** Last laid-out rectangles of the card and the strip; false before both were laid out (headless runs). */
 	bool GetCardAndStripRects(FSlateRect& OutCard, FSlateRect& OutStrip) const;
-	/** Edge arrows drawn on the last refresh (smokes). */
+	/** Edge arrows drawn on the last refresh (smokes): 0 or 1 - only the current navigation target gets one (2026-10-20). */
 	int32 GetEdgePointerCount() const { return EdgePointers.Num(); }
+	/**
+	 * The current target's edge arrow of the last refresh (2026-10-20): tip + direction in widget units of a ViewSize view and its
+	 * distance label ("42 m"); false when the target is on-screen / there is none. Headless (no viewport) the arrow is computed for a
+	 * 1920 x 1080 view of the camera, so checks see the same rule.
+	 */
+	bool GetGuidePointer(FVector2D& OutTip, FVector2D& OutDirection, FText& OutDistance, FVector2D& OutViewSize) const;
+	/** The view the last refresh projected into (the viewport in widget units, or the headless 1920 x 1080). */
+	FVector2D GetPointerViewSize() const { return PointerViewSize; }
 	/** Rev 5i: the SKIP TUTORIAL button is shown (the start beat, smokes). */
 	bool IsSkipTutorialShown() const;
 	/**
@@ -121,7 +129,7 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "CodexTactics|Tutorial", meta = (BindWidgetOptional))
 	TObjectPtr<UButton> TutorialContinueButton;
 
-	/** Edge arrow colour (amber = the marker colour). */
+	/** Edge arrow colour (amber = the marker colour); it points at the current navigation target only. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Tutorial")
 	FLinearColor PointerColor = FLinearColor(1.f, 0.6f, 0.1f, 0.95f);
 
@@ -141,13 +149,15 @@ private:
 	UFUNCTION()
 	void HandleSkipAllClicked();
 
-	/** Arrow tip + direction in local widget space. */
+	/** Arrow tip + direction in local widget space, and the distance to the target ("42 m", 2026-10-20). */
 	struct FEdgePointer
 	{
 		FVector2D Tip = FVector2D::ZeroVector;
 		FVector2D Direction = FVector2D(1.f, 0.f);
+		FText Distance;
 	};
 	TArray<FEdgePointer> EdgePointers;
+	FVector2D PointerViewSize = FVector2D::ZeroVector;
 
 	/** A shown marker's label on screen (2026-10-19: the role spots of the A3 cover lesson name their operative). */
 	struct FMarkerLabel
