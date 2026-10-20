@@ -94,6 +94,15 @@ def material_info(mat):
         v = (mel.get_material_instance_vector_parameter_value(mat, name) if is_instance
              else mel.get_material_default_vector_parameter_value(mat, name))
         info["vector_params"][str(name)] = [v.r, v.g, v.b, v.a]
+    # static switches (StaticBoolParameter / StaticSwitchParameter): the instance's value, else the default
+    info["static_switch_params"] = {}
+    try:
+        for name in mel.get_static_switch_parameter_names(mat):
+            info["static_switch_params"][str(name)] = bool(
+                mel.get_material_instance_static_switch_parameter_value(mat, name) if is_instance
+                else mel.get_material_default_static_switch_parameter_value(mat, name))
+    except Exception as exc:
+        info["static_switch_error"] = str(exc)
     try:
         info["used_textures"] = [obj_path(t) for t in mel.get_material_used_textures(mat)]
     except Exception:
@@ -126,8 +135,9 @@ def walk_expression(material, expr, out_name, texture_overrides, depth):
     """Describe a material expression and its inputs (recursively, depth-limited)."""
     mel = unreal.MaterialEditingLibrary
     d = {"node": expr.get_class().get_name().replace("MaterialExpression", ""), "output": out_name}
-    for prop in ("texture", "parameter_name", "r", "constant", "default_value", "const_a", "const_b",
-                 "sampler_type", "coordinate_index"):
+    for prop in ("texture", "parameter_name", "r", "constant", "default_value", "const_a", "const_b", "const_alpha",
+                 "sampler_type", "coordinate_index", "u_tiling", "v_tiling", "const_exponent", "material_function",
+                 "default_value_a", "default_value_b"):
         try:
             v = expr.get_editor_property(prop)
         except Exception:
@@ -342,6 +352,8 @@ def main():
     with open(inv_path, "w", encoding="utf-8") as f:  # written early: the FBX export below may assert
         json.dump(inv, f, indent=2)
     fbx = os.path.join(out_src, mesh_name + ".fbx")
+    if args.skip_mesh and os.path.exists(fbx):  # inventory refresh: keep pointing at the FBX exported before
+        inv["exports"]["mesh_fbx"] = os.path.relpath(fbx, args.out).replace("\\", "/")
     if not args.skip_mesh and export(mesh, fbx, unreal.SkeletalMeshExporterFBX(), fbx_options()):
         inv["exports"]["mesh_fbx"] = os.path.relpath(fbx, args.out).replace("\\", "/")
 

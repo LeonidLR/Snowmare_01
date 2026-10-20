@@ -333,6 +333,8 @@ def main():
         for n in [n for n in nt.nodes if n.label in ("BAKE_target", "BAKE_emit")]:
             nt.nodes.remove(n)
 
+    import material_graph as mg
+    mg.rebuild_mesh_materials([o for o in (mesh, high) if o], paths.inventory, paths.tex_source, warnings)
     slot_names = [sl.material.name for sl in mesh.material_slots]  # = the Unreal slot names (blender_clean.py)
     inv = paths.inventory
     variants = inv.get("variants") or [None]

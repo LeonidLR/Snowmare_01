@@ -3,7 +3,8 @@
   "material_slot": "M_Body",
   "uv0": "UV_Atlas",
   "skeleton": "/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Anim/SK_FrozenPMC_Fighter_Skeleton.SK_FrozenPMC_Fighter_Skeleton",
-  "root_bone_added": "SKM_Cyberpunk_Explorer_A",
+  "root_bone": "SKM_Cyberpunk_Explorer_A",
+  "root_bone_added": true,
   "top_bones_reparented": [
     "root"
   ],
@@ -55,6 +56,35 @@
     "bones_extra": [],
     "parent_mismatch": [],
     "max_bone_deviation_cm": 0.0003,
+    "max_bone_rotation_deg": 0.056,
+    "root_added": true,
+    "source_armature_world": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        -6.123233601181349e-17,
+        0.0
+      ],
+      [
+        0.0,
+        6.123233601181349e-17,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "source_armature_identity": true,
     "leaf_bones": [],
     "ok": true
   },

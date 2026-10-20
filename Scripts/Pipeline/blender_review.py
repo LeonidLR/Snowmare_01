@@ -294,6 +294,8 @@ def main():
     bpy.ops.wm.open_mainfile(filepath=paths.original_blend)
     mesh = bpy.data.objects[paths.mesh_name]
     arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
+    import material_graph as mg
+    mg.rebuild_mesh_materials([mesh], paths.inventory, paths.tex_source, [])
     specs, sun_dir = camera_specs(mesh, arm)
     pc.save_json(os.path.join(paths.review, "cameras.json"), {"views": specs, "sun_dir": sun_dir})
     slots_before = len(mesh.material_slots)

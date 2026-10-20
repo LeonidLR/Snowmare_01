@@ -127,6 +127,12 @@ namespace OptimizedCharacterSmoke
 				return;
 			}
 			const FString Line(V);
+			// The game's hit-flash overlay (M_CombatFeedback, VFX) lacks the skeletal-mesh usage flag: it warns for the
+			// original bodies exactly the same way - not a problem of the optimized assets.
+			if (Line.Contains(TEXT("Overlay material with missing skel mesh usage")))
+			{
+				return;
+			}
 			if (Line.Contains(TEXT("_1slot")) || Line.Contains(TEXT("M_CharacterMaster")) || Line.Contains(TEXT("/Optimized/")))
 			{
 				Lines.Add(FString::Printf(TEXT("[%s] %s"), *Category.ToString(), *Line));
@@ -335,6 +341,22 @@ namespace OptimizedCharacterSmoke
 		Check(Slot0 && Slot0->GetPathName() == InstancePath(C, 0), FString::Printf(TEXT("slot 0 = %s"), *GetPathNameSafe(Slot0)));
 		Check(Optimized->GetSkeleton() && Optimized->GetSkeleton() == Original->GetSkeleton(),
 			FString::Printf(TEXT("same skeleton %s"), *GetPathNameSafe(Optimized->GetSkeleton())));
+		{
+			// the same bones in the same hierarchy as the original (no extra root above the skeleton)
+			const FReferenceSkeleton& RefA = Optimized->GetRefSkeleton();
+			const FReferenceSkeleton& RefB = Original->GetRefSkeleton();
+			bool bSame = RefA.GetNum() == RefB.GetNum();
+			for (int32 Bone = 0; bSame && Bone < RefA.GetNum(); ++Bone)
+			{
+				const int32 Other = RefB.FindBoneIndex(RefA.GetBoneName(Bone));
+				const int32 ParentA = RefA.GetParentIndex(Bone);
+				const int32 ParentB = Other == INDEX_NONE ? INDEX_NONE : RefB.GetParentIndex(Other);
+				bSame = Other != INDEX_NONE && (ParentA == INDEX_NONE ? ParentB == INDEX_NONE
+					: (ParentB != INDEX_NONE && RefA.GetBoneName(ParentA) == RefB.GetBoneName(ParentB)));
+			}
+			Check(bSame, FString::Printf(TEXT("same bones and hierarchy (%d bones, original %d, root %s)"), RefA.GetNum(), RefB.GetNum(),
+				RefA.GetNum() ? *RefA.GetBoneName(0).ToString() : TEXT("-")));
+		}
 		Check(Optimized->GetPhysicsAsset() == Original->GetPhysicsAsset(), FString::Printf(TEXT("physics asset %s"), *GetPathNameSafe(Optimized->GetPhysicsAsset())));
 		Check(Optimized->GetLODNum() >= 3, FString::Printf(TEXT("%d LODs (original %d)"), Optimized->GetLODNum(), Original->GetLODNum()));
 		for (int32 Lod = 0; Lod < Optimized->GetLODNum(); ++Lod)
@@ -498,7 +520,7 @@ namespace OptimizedCharacterSmoke
 			State, BoneB, BoneA, *GetNameSafe(AnimB ? AnimB->GetClass() : nullptr)));
 	}
 
-	void AimCamera(bool bClose, float TargetZ)
+	void AimCamera(bool bClose, float TargetZ, float YawDeg = 0.f)
 	{
 		const ACharacter* A = Runner->Original.Get();
 		const ACharacter* B = Runner->Optimized.Get();
@@ -510,7 +532,7 @@ namespace OptimizedCharacterSmoke
 		// Frame by the body size (a hound is small, a brute big); both bodies at the same distance (straight from the front).
 		const float Radius = FMath::Max(A->GetMesh()->Bounds.SphereRadius, 60.f);
 		const FVector Mid = (A->GetMesh()->Bounds.Origin + B->GetMesh()->Bounds.Origin) * 0.5f + FVector(0.f, 0.f, TargetZ);
-		const FVector F = Runner->Arena.Forward;
+		const FVector F = Runner->Arena.Forward.RotateAngleAxis(YawDeg, FVector::UpVector);
 		const float Pitch = bClose ? 12.f : 55.f;
 		const FVector Dir = F * FMath::Cos(FMath::DegreesToRadians(Pitch)) + FVector::UpVector * FMath::Sin(FMath::DegreesToRadians(Pitch));
 		const FVector Eye = Mid + Dir * (bClose ? FMath::Max(450.f, Radius * 4.2f) : 1300.f);
@@ -519,9 +541,9 @@ namespace OptimizedCharacterSmoke
 	}
 
 	/** Pose check + (when rendering) the tactical and the close still of the state. */
-	void AddShots(TArray<FStep>& S, FString State, float TargetZ = 0.f)
+	void AddShots(TArray<FStep>& S, FString State, float TargetZ = 0.f, float YawDeg = 0.f)
 	{
-		S.Add([State](UWorld*) { CheckPose(*State); AimCamera(false, 0.f); return 3; });
+		S.Add([State, YawDeg](UWorld*) { CheckPose(*State); AimCamera(false, 0.f, YawDeg); return 3; });
 		S.Add([State](UWorld*)
 		{
 			if (Runner->bRender)
@@ -530,7 +552,7 @@ namespace OptimizedCharacterSmoke
 			}
 			return 3;
 		});
-		S.Add([TargetZ](UWorld*) { AimCamera(true, TargetZ); return 3; });
+		S.Add([TargetZ, YawDeg](UWorld*) { AimCamera(true, TargetZ, YawDeg); return 3; });
 		S.Add([State](UWorld*)
 		{
 			if (Runner->bRender)
@@ -833,11 +855,19 @@ namespace OptimizedCharacterSmoke
 	{
 		ClearProps();
 		TArray<AOperativeCharacter*> Members = SortedMembers(World);
-		// The squad out of the way (the guards are deaf anyway): 25 m behind the arena.
+		// The squad 16 m ahead, facing the guards (behind the cameras): an enemy no operative sees is drawn as a faded ghost
+		// (tactical sight). The guards are deaf, the squad holds fire; no knockdowns from the scripted hits.
+		int32 Slot = -1;
 		for (AOperativeCharacter* Each : Members)
 		{
 			Each->StopOperative();
-			Each->TeleportTo(SmokeUtils::FreeSpot(World, Runner->Arena.Origin - Runner->Arena.Forward * 2500.f, Each), Runner->Arena.Forward.Rotation(), false, true);
+			Each->bTacticalCeaseFire = true;
+			const FVector Spot = Runner->Arena.Origin + Runner->Arena.Forward * 1600.f + Runner->Arena.Right * (200.f * Slot++);
+			Each->TeleportTo(SmokeUtils::FreeSpot(World, Spot, Each), (-Runner->Arena.Forward).Rotation(), false, true);
+		}
+		if (IConsoleVariable* Knockdown = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Knockdown.Chance")))
+		{
+			Knockdown->Set(0.f, ECVF_SetByConsole);
 		}
 		AEnemyCharacter* A = SpawnGuard(World, 0, false);
 		AEnemyCharacter* B = SpawnGuard(World, 1, true);
@@ -898,10 +928,16 @@ namespace OptimizedCharacterSmoke
 			}
 			return 15;
 		});
-		AddShots(S, TEXT("attack"));
-		// death
-		S.Add([](UWorld*)
+		AddShots(S, TEXT("attack"), 0.f, 90.f); // from the side: the operative in front would hide the blow
+		// death (the attack targets back to their place first: they would stand in the picture)
+		S.Add([](UWorld* World)
 		{
+			int32 Slot = -1;
+			for (AOperativeCharacter* Each : SortedMembers(World))
+			{
+				const FVector Spot = Runner->Arena.Origin + Runner->Arena.Forward * 1600.f + Runner->Arena.Right * (200.f * Slot++);
+				Each->TeleportTo(SmokeUtils::FreeSpot(World, Spot, Each), (-Runner->Arena.Forward).Rotation(), false, true);
+			}
 			for (AEnemyCharacter* Enemy : { EnA(), EnB() })
 			{
 				Enemy->GetHealthComponent()->ApplyDirectHealthLoss(1000000.f, TEXT("OptimizedCharacterSmoke"));

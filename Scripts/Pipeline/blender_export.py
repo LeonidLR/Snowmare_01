@@ -138,32 +138,43 @@ def build_atlas_material(mat, paths, uv_name=ATLAS_UV, with_sheen=True, variant=
 
 
 def add_root_bone(arm):
-    """Bring the `root` bone back as a real bone; the object becomes `Armature` (dropped by Unreal's importer)."""
-    root_name = arm.name.split(".")[0]  # the imported object carries the FBX root bone's name
+    """The Unreal skeleton root as a real bone; the object becomes `Armature` (dropped by Unreal's importer).
+
+    Blender's FBX importer always turns the top node of the Unreal skeleton into the armature OBJECT - that node is the
+    skeleton's root bone (`root` for the mannequins; SKM_Cyberpunk_Explorer_A above `root` for the PMC fighter), so a
+    bone with the object's name and (identity) transform is always added back. The smoke checks bone names / hierarchy
+    against the original mesh in Unreal. Returns (root bone name, added, top bones)."""
     bpy.context.view_layer.objects.active = arm
     arm.select_set(True)
     bpy.ops.object.mode_set(mode="EDIT")
     eb = arm.data.edit_bones
     tops = [b for b in eb if b.parent is None]
     top_names = [b.name for b in tops]  # edit bones are invalid after leaving edit mode
-    root = eb.new(root_name)
-    root.head = Vector((0, 0, 0))
-    root.tail = Vector((0, 10.0, 0))  # identity rest matrix (bone Y axis = +Y), 10 cm long
-    root.roll = 0.0
-    root.use_deform = False
-    for b in tops:
-        b.parent = root
-        b.use_connect = False
+    added = True
+    if added:
+        root_name = arm.name.split(".")[0]  # the imported object carries the FBX root bone's name
+        root = eb.new(root_name)
+        root.head = Vector((0, 0, 0))
+        root.tail = Vector((0, 10.0, 0))  # identity rest matrix (bone Y axis = +Y), 10 cm long
+        root.roll = 0.0
+        root.use_deform = False
+        for b in tops:
+            b.parent = root
+            b.use_connect = False
+    else:
+        root_name = top_names[0]
     bpy.ops.object.mode_set(mode="OBJECT")
     arm.name = "Armature"
     arm.data.name = "Armature"
-    return root_name, top_names
+    return root_name, added, top_names
 
 
 def bone_table(arm):
+    """Head position and rest rotation per bone (world). Tails are left out: Blender guesses the tail of a leaf bone on
+    import (Unreal has no tails), so they differ between two imports without any real change."""
     mw = arm.matrix_world
-    return {b.name: {"parent": b.parent.name if b.parent else None,
-                     "head": list(mw @ b.head_local), "tail": list(mw @ b.tail_local)} for b in arm.data.bones}
+    return {b.name: {"parent": b.parent.name if b.parent else None, "head": list(mw @ b.head_local),
+                     "rot": list((mw.to_3x3() @ b.matrix_local.to_3x3()).to_quaternion())} for b in arm.data.bones}
 
 
 def main():
@@ -188,7 +199,8 @@ def main():
     for p in me.polygons:
         p.material_index = 0
 
-    root_name, tops = add_root_bone(arm)
+    source_object_world = [list(r) for r in arm.matrix_world]
+    root_name, root_added, tops = add_root_bone(arm)
     for o in bpy.data.objects:
         o.select_set(o in (mesh, arm))
     bpy.context.view_layer.objects.active = arm
@@ -220,14 +232,17 @@ def main():
     new_bones = bone_table(a2) if a2 else {}
     # the source import had `root` as the object: compare everything else + root parenting
     missing = sorted(set(src_bones) - set(new_bones))
-    extra = sorted(set(new_bones) - set(src_bones) - {root_name})
+    extra = sorted(set(new_bones) - set(src_bones) - ({root_name} if root_added else set()))
     parent_mismatch = sorted(b for b in src_bones if b in new_bones and
-                             (src_bones[b]["parent"] or root_name) != new_bones[b]["parent"])
+                             (src_bones[b]["parent"] or (root_name if root_added else None)) != new_bones[b]["parent"])
+    from mathutils import Quaternion
     max_dev = 0.0
+    max_rot = 0.0
     for b in src_bones:
         if b in new_bones:
-            for k in ("head", "tail"):
-                max_dev = max(max_dev, (Vector(src_bones[b][k]) - Vector(new_bones[b][k])).length)
+            max_dev = max(max_dev, (Vector(src_bones[b]["head"]) - Vector(new_bones[b]["head"])).length)
+            q1, q2 = Quaternion(src_bones[b]["rot"]), Quaternion(new_bones[b]["rot"])
+            max_rot = max(max_rot, abs(q1.rotation_difference(q2).angle) * 57.2958)
     checks["bones_source"] = len(src_bones)
     checks["bones_export"] = len(new_bones)
     checks["root_bone"] = root_name in new_bones and new_bones[root_name]["parent"] is None
@@ -235,15 +250,21 @@ def main():
     checks["bones_extra"] = extra
     checks["parent_mismatch"] = parent_mismatch
     checks["max_bone_deviation_cm"] = round(max_dev, 4)
+    checks["max_bone_rotation_deg"] = round(max_rot, 4)
+    checks["root_added"] = root_added
+    checks["source_armature_world"] = source_object_world
+    checks["source_armature_identity"] = all(abs(source_object_world[i][j] - (1.0 if i == j else 0.0)) < 1e-4
+                                             for i in range(4) for j in range(4))
     checks["leaf_bones"] = sorted(b for b in new_bones if b.endswith("_end"))
     ok = (checks["one_mesh"] and checks.get("material_slots") == [args.slot] and checks.get("uv_maps") == [ATLAS_UV]
-          and not missing and not extra and not parent_mismatch and max_dev < 0.01 and checks["root_bone"]
+          and not missing and not extra and not parent_mismatch and max_dev < 0.01 and max_rot < 0.1
+          and checks["root_bone"] and checks["source_armature_identity"]
           and not checks["leaf_bones"])
     checks["ok"] = ok
     settings = {k: (sorted(v) if isinstance(v, set) else v) for k, v in export_kwargs.items() if k != "filepath"}
     pc.save_json(os.path.join(paths.export, "export_manifest.json"), {
         "fbx": os.path.basename(paths.export_fbx), "material_slot": args.slot, "uv0": ATLAS_UV,
-        "skeleton": paths.inventory.get("skeleton"), "root_bone_added": root_name, "top_bones_reparented": tops,
+        "skeleton": paths.inventory.get("skeleton"), "root_bone": root_name, "root_bone_added": root_added, "top_bones_reparented": tops,
         "blender_fbx_settings": settings, "roundtrip_checks": checks,
         "textures": {k: os.path.basename(paths.tex(k, variant=first_variant(paths))) for k in ("BaseColor", "Normal", "ORM", "Sheen", "Emissive")
                      if os.path.exists(paths.tex(k, variant=first_variant(paths)))},

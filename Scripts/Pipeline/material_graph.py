@@ -106,6 +106,7 @@ class GraphBuilder:
         self.x = -1600
         self.y = 0
         self.uv_node = None
+        self.uv_layers = []
 
     def node(self, kind, label=None):
         n = self.nt.nodes.new(kind)
@@ -121,8 +122,8 @@ class GraphBuilder:
             self.uv_node.uv_map = self.uv_name
         return self.uv_node
 
-    def image_node(self, tex_path, as_normal):
-        key = (tex_path, as_normal)
+    def image_node(self, tex_path, as_normal, uv_socket=None):
+        key = (tex_path, as_normal, uv_socket.node.name + "." + uv_socket.identifier if uv_socket is not None else None)
         if key in self.images:
             return self.images[key]
         import bpy
@@ -135,7 +136,7 @@ class GraphBuilder:
         n = self.node("ShaderNodeTexImage", name)
         n.image = img
         n.interpolation = "Linear"
-        self.nt.links.new(self.uv().outputs["UV"], n.inputs["Vector"])
+        self.nt.links.new(uv_socket if uv_socket is not None else self.uv().outputs["UV"], n.inputs["Vector"])
         self.images[key] = n
         return n
 
@@ -210,7 +211,12 @@ class GraphBuilder:
                 self.warnings.append("%s/%s: texture sample without texture" % (self.mat.name, prop))
                 return DEFAULTS.get(prop, 0.5)
             as_normal = sampler_is_normal(node) and prop == "normal"
-            img = self.image_node(tex, as_normal)
+            uv_in = inputs.get("UVs") or inputs.get("Coordinates")
+            uv_socket = None
+            if uv_in is not None:
+                uvv = self.eval(uv_in, prop, fresnel)
+                uv_socket = uvv if hasattr(uvv, "is_output") else None
+            img = self.image_node(tex, as_normal, uv_socket)
             out = (node.get("output") or "RGB").upper()
             if out in ("RGB", "RGBA", ""):
                 return img.outputs["Color"]
@@ -221,11 +227,51 @@ class GraphBuilder:
             return sep.outputs[CHANNELS.get(out, "Red")]
         if kind == "Constant":
             return float(node.get("r", 0.0))
+        if kind == "TextureCoordinate":
+            # the uv channel scaled by its tiling (camouflage / detail textures tile over the body)
+            index = int(node.get("coordinate_index") or 0)
+            uvn = self.node("ShaderNodeUVMap", "uv%d" % index)
+            layers = self.uv_layers or [self.uv_name]
+            uvn.uv_map = layers[min(index, len(layers) - 1)]
+            ut, vt = float(node.get("u_tiling") or 1.0), float(node.get("v_tiling") or 1.0)
+            if ut == 1.0 and vt == 1.0:
+                return uvn.outputs["UV"]
+            return self.vmath("MULTIPLY", uvn.outputs["UV"], (ut, vt, 1.0))
+        if kind == "StaticBoolParameter":
+            return bool(self.minfo.get("static_switch_params", {}).get(str(node.get("parameter_name")), node.get("default_value")))
+        if kind in ("StaticSwitch", "StaticSwitchParameter"):
+            if kind == "StaticSwitchParameter":
+                value = self.minfo.get("static_switch_params", {}).get(str(node.get("parameter_name")), node.get("default_value"))
+            elif "Value" in inputs:
+                value = self.eval(inputs["Value"], prop, fresnel)
+            else:
+                value = node.get("default_value")
+            branch = inputs.get("True") if value else inputs.get("False")
+            if branch is None:
+                branch = inputs.get("A") if value else inputs.get("B")
+            return self.eval(branch, prop, fresnel) if branch is not None else DEFAULTS.get(prop, 0.0)
+        if kind == "AppendVector":
+            a, b = arg("A", "_", 0.0), arg("B", "_", 0.0)
+            if hasattr(a, "is_output") or hasattr(b, "is_output"):
+                comb = self.node("ShaderNodeCombineXYZ")
+                if self.is_color(a):
+                    sep = self.node("ShaderNodeSeparateXYZ")
+                    self.nt.links.new(a, sep.inputs[0])
+                    self.nt.links.new(sep.outputs[0], comb.inputs[0])
+                    self.nt.links.new(sep.outputs[1], comb.inputs[1])
+                    self.feed(comb.inputs[2], b if not self.is_color(b) else 0.0)
+                else:
+                    self.feed(comb.inputs[0], a)
+                    self.feed(comb.inputs[1], b if not self.is_color(b) else 0.0)
+                return comb.outputs[0]
+            return (float(a), float(b), 0.0)
         if kind in ("Constant3Vector", "Constant4Vector", "VectorParameter"):
             c = node.get("constant") or node.get("default_value") or [0, 0, 0]
+            if kind == "VectorParameter":  # the material instance value wins
+                c = self.minfo.get("vector_params", {}).get(str(node.get("parameter_name")), c)
             return tuple(c[:3])
         if kind == "ScalarParameter":
-            return float(node.get("default_value", 0.0))
+            return float(self.minfo.get("scalar_params", {}).get(str(node.get("parameter_name")), node.get("default_value", 0.0)))
         if kind == "Fresnel":
             return fresnel
         if kind in ("Multiply", "Add", "Subtract"):
@@ -413,10 +459,48 @@ def connect_principled(mat, sockets=None, with_fresnel=True):
     return bsdf
 
 
-def build_material(name, minfo, inventory, tex_dir, uv_name, warnings):
+def material_of(inv, name):
+    """Unreal material path of a Blender material name: an Unreal slot name, or a material asset name (FBX); a Blender
+    duplicate suffix (_1, .001) is ignored."""
+    import re as _re
+    for candidate in (name, _re.sub(r"(_\d+|\.\d{3})$", "", name)):
+        for s_ in inv["slots"]:
+            if s_["slot_name"] == candidate:
+                return s_["material"]
+        for s_ in inv["slots"]:
+            if s_["material"] and s_["material"].split(".")[-1] == candidate:
+                return s_["material"]
+    return None
+
+
+def rebuild_mesh_materials(objects, inv, tex_dir, warnings):
+    """Rebuilds every slot material of these objects from the inventory (current translator, current parameters)."""
+    done = {}
+    for obj in objects:
+        uv_layers = [u.name for u in obj.data.uv_layers if u.name != "UV_Atlas"]
+        for slot in obj.material_slots:
+            if not slot.material:
+                continue
+            name = slot.material.name
+            if name in done:
+                slot.material = done[name]
+                continue
+            path = material_of(inv, name)
+            minfo = inv["materials"].get(path) if path else None
+            if not minfo:
+                warnings.append("rebuild: no inventory material for %s" % name)
+                continue
+            done[name] = build_material(name, minfo, inv, tex_dir, uv_layers[0], warnings, uv_layers)
+            slot.material = done[name]
+    return warnings
+
+
+def build_material(name, minfo, inventory, tex_dir, uv_name, warnings, uv_layers=None):
     import bpy
     mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
     mat.use_nodes = True
     mat.node_tree.nodes.clear()
-    GraphBuilder(mat, minfo, inventory, tex_dir, uv_name, warnings).build()
+    builder = GraphBuilder(mat, minfo, inventory, tex_dir, uv_name, warnings)
+    builder.uv_layers = uv_layers or [uv_name]
+    builder.build()
     return mat

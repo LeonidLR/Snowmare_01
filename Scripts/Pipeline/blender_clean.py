@@ -44,14 +44,7 @@ def parse():
 # --------------------------------------------------------------------------------------------- materials
 
 def material_of(inv, name):
-    """Material asset path of a Blender material name (= an Unreal slot name, or the material's own name for merged slots)."""
-    for s in inv["slots"]:
-        if s["slot_name"] == name:
-            return s["material"]
-    for s in inv["slots"]:
-        if s["material"] and s["material"].split(".")[-1] == name:
-            return s["material"]
-    return None
+    return mg.material_of(inv, name)
 
 
 def rebuild_materials(mesh, inv, paths):
@@ -63,7 +56,12 @@ def rebuild_materials(mesh, inv, paths):
     used = set()
     merged = {}
 
+    same_count = len(mesh.material_slots) == len(slots)
+
     def match(i, fbx_name):
+        # The FBX keeps one material per slot in slot order (Blender adds _1, _2 to repeated names): use the index.
+        if same_count and slots[i]["index"] not in used:
+            return slots[i]
         for s in slots:
             if s["slot_name"] == fbx_name and s["index"] not in used:
                 return s
