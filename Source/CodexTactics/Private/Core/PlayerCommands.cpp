@@ -99,6 +99,7 @@ namespace PlayerCommands
 	const FName InventoryOpen(TEXT("Inventory.Open"));
 	const FName GiveItem(TEXT("Item.Give"));
 	const FName ToggleVisionCones(TEXT("View.VisionCones"));
+	const FName ToggleSquadVisionCones(TEXT("View.SquadVisionCones"));
 	const FName DialogueNext(TEXT("Dialogue.Next"));
 	const FName DialogueSkip(TEXT("Dialogue.Skip"));
 	const FName SkipTutorial(TEXT("System.SkipTutorial"));
@@ -210,6 +211,7 @@ namespace PlayerCommands
 			{ QuickFire, TEXT("Ctrl+Click"), TEXT("Combat"), TEXT("Fire at the point: anywhere else the selected operative(s) turn and fire there at once") },
 			{ PriorityTarget, TEXT("Click enemy"), TEXT("Combat"), TEXT("Priority target") },
 			{ ToggleVisionCones, TEXT("O"), TEXT("Combat"), TEXT("Show / hide the enemies' vision cones on the ground") },
+			{ ToggleSquadVisionCones, TEXT("Shift+O"), TEXT("Combat"), TEXT("Show / hide your squad's vision cones: what your operatives can see") },
 			{ GrenadeAim, TEXT("G"), TEXT("Combat"), TEXT("Grenade") },
 			{ GrenadeThrow, TEXT("LMB"), TEXT("Combat"), TEXT("Throw the grenade") },
 			{ FlareAim, TEXT("Shift+G"), TEXT("Combat"), TEXT("Signal flare") },
@@ -388,6 +390,7 @@ namespace GameplayEvents
 	const FName CrawlGapRefused(TEXT("CrawlGapRefused"));
 	const FName CrawlGapPassed(TEXT("CrawlGapPassed"));
 	const FName VisionConesToggled(TEXT("VisionConesToggled"));
+	const FName SquadVisionConesToggled(TEXT("SquadVisionConesToggled"));
 
 	void Raise(const UObject* WorldContext, FName EventName, AActor* Subject)
 	{

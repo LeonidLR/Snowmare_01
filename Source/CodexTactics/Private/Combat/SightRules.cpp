@@ -14,6 +14,35 @@ bool SightRules::ShouldDropLastKnownGhost(bool bInFight, bool bHeard, float Seco
 	return !bInFight && !bHeard && SecondsSinceLastKnown >= LastKnownFadeSeconds;
 }
 
+float SightRules::FieldOfViewDeg(const FSightFovConfig& Config, EOperativeStance Stance)
+{
+	switch (Stance)
+	{
+	case EOperativeStance::Prone:
+		return Config.ProneDeg;
+	case EOperativeStance::Crouching:
+		return Config.CrouchingDeg;
+	default:
+		return Config.StandingDeg;
+	}
+}
+
+bool SightRules::IsInFieldOfView(const FVector& Eye, const FVector& Facing, const FVector& Target, float FovDeg)
+{
+	if (FovDeg >= 360.f)
+	{
+		return true;
+	}
+	const FVector Forward = Facing.GetSafeNormal2D();
+	const FVector ToTarget = (Target - Eye).GetSafeNormal2D();
+	if (Forward.IsNearlyZero() || ToTarget.IsNearlyZero())
+	{
+		return true;
+	}
+	const float CosHalf = FMath::Cos(FMath::DegreesToRadians(FMath::Max(FovDeg, 0.f) * 0.5f));
+	return FVector::DotProduct(Forward, ToTarget) >= CosHalf;
+}
+
 float SightRules::EyeHeight(EOperativeStance Stance)
 {
 	switch (Stance)

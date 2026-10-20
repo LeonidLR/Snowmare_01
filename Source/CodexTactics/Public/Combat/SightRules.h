@@ -57,6 +57,28 @@ namespace SightRules
 	/** An unheard last-known silhouette of an enemy lost while exploring goes after LastKnownFadeSeconds (kept in a fight). */
 	CODEXTACTICS_API bool ShouldDropLastKnownGhost(bool bInFight, bool bHeard, float SecondsSinceLastKnown);
 
+	/**
+	 * An operative's field of view (game designer 2026-10-20, screenshot: "the other two crawl away in the opposite direction, not looking
+	 * at the enemies - yet the enemies are fully visible"): his own eyes see only inside this planar angle round his facing, per stance, degrees
+	 * (total angle, not half). Data: the Codex.Sight.Fov* console variables (ai_tuning.json "cvars"). Inside SquadTouchRevealCm everything is
+	 * still noticed all round; the peek view (PeekSightRules) is its own cone and overrides this while he peeks.
+	 */
+	struct FSightFovConfig
+	{
+		float StandingDeg = 140.f;
+		float CrouchingDeg = 140.f;
+		float ProneDeg = 110.f;
+	};
+
+	/** The field of view of a stance, degrees (a stance beyond the three counts as standing). */
+	CODEXTACTICS_API float FieldOfViewDeg(const FSightFovConfig& Config, EOperativeStance Stance);
+
+	/**
+	 * Target lies inside the field of view: the PLANAR angle between Facing and the line Eye -> Target is at most FovDeg / 2. A target
+	 * straight above / below the eye (planar distance ~0) or a zero Facing counts as inside; FovDeg >= 360 sees all round.
+	 */
+	CODEXTACTICS_API bool IsInFieldOfView(const FVector& Eye, const FVector& Facing, const FVector& Target, float FovDeg);
+
 	/** Observer eye height above the feet: standing 160, crouching 95, prone 25 cm. */
 	CODEXTACTICS_API float EyeHeight(EOperativeStance Stance);
 	/** Target profile height above the feet (the point looked at): standing 150, crouching 90, prone 25 cm. */

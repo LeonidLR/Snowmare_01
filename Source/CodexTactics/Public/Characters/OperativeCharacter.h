@@ -656,13 +656,28 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone", meta = (ClampMin = "0"))
 	float VisionConeRangeCm = 1400.f;
 
-	/** Half angle of the cone, degrees (Godot vision_cone_angle 70 = +-35). Operatives fire all round; this is their watch sector. */
+	/**
+	 * Half angle of the cone, degrees (Godot vision_cone_angle 70 = +-35). Since 2026-10-20 the squad's sight has a real field of view
+	 * (UTacticalSightSubsystem::GetFovDeg: 140 standing / crouched, 110 prone) and the drawn cone uses it; this value is only the
+	 * cone of the old 360 degree sight (Codex.Sight.Fov 0, or no tactical sight running).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Vision Cone", meta = (ClampMin = "1", ClampMax = "180"))
 	float VisionConeHalfAngleDeg = 35.f;
 
 	/** Range the cone shows now, cm. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Vision Cone")
 	float GetVisionConeRange() const;
+
+	/** Half angle the cone shows now: half the stance's field of view while the FOV rule runs, else VisionConeHalfAngleDeg. */
+	float GetVisionConeHalfAngle() const;
+
+	/**
+	 * Where his own eyes look (planar unit vector), what UTacticalSightSubsystem::CanOperativeSee and his drawn cone centre on (2026-10-20):
+	 * out of cover his body's facing; in cover he looks ALONG the wall to the side he faces (CoverFacing; the clips' look-around pose) and, in
+	 * the fire-ready / corner aim, over the cover the way the corner stance aims (CoverFacingRules::CornerAimDirection). The peek cone
+	 * (GetPeekSight) stays separate.
+	 */
+	FVector GetSightFacing() const;
 
 	/** Godot _is_any_enemy_spotted: a combat / priority target, or a living enemy inside the cone with a clear line. */
 	bool IsEnemySpottedInCone() const;

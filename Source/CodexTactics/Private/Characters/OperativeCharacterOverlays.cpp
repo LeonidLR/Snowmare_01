@@ -14,6 +14,7 @@
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/VisionConeComponent.h"
 #include "Combat/VisionConeRules.h"
+#include "Tactics/CoverFacingRules.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -32,6 +33,25 @@ float AOperativeCharacter::GetVisionConeRange() const
 	return CurrentWeapon->AttackRangeCm * SquadFireRules::GetPostureRangeMultiplier(Stance);
 }
 
+float AOperativeCharacter::GetVisionConeHalfAngle() const
+{
+	const UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
+	return Sight && Sight->IsFovRuleActive() ? Sight->GetFovDeg(Stance) * 0.5f : VisionConeHalfAngleDeg;
+}
+
+FVector AOperativeCharacter::GetSightFacing() const
+{
+	if (bInCover && CurrentCoverHeight != ECoverHeight::None && !bShimmying)
+	{
+		if (bCornerAimActive || IsCoverFireReady())
+		{
+			return CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg); // over the cover, the way the stance aims
+		}
+		return CoverFacingRules::AlongWallDirection(CoverSlot, CoverFacing).GetSafeNormal2D(); // the look-around pose: along the wall
+	}
+	return GetActorForwardVector().GetSafeNormal2D();
+}
+
 bool AOperativeCharacter::IsEnemySpottedInCone() const
 {
 	if (GetCurrentCombatTarget() || GetManualPriorityTarget())
@@ -44,9 +64,9 @@ bool AOperativeCharacter::IsEnemySpottedInCone() const
 		return false;
 	}
 	float Range = GetVisionConeRange();
-	float HalfAngle = VisionConeHalfAngleDeg;
+	float HalfAngle = GetVisionConeHalfAngle();
 	FVector Origin = GetActorLocation();
-	FVector Forward = GetActorForwardVector();
+	FVector Forward = GetSightFacing();
 	FVector Eye = UTacticalSightSubsystem::EyePoint(*this);
 	// Peek sight (2026-10-19): peeking, the cone is the peek cone from the leaned-out eyes.
 	FVector PeekEye;
@@ -94,7 +114,9 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 		return;
 	}
 	const bool bAlive = HealthComponent && HealthComponent->IsAlive();
-	const bool bVisible = VisionConeRules::ResolveVisible(UVisionConeComponent::GetGlobalMode(), bShowVisionCone, bAlive);
+	// Shown by the BP / actor setting, or by the player's squad-cone toggle (Shift+O, 2026-10-20); the debug CVar 0 / 1 overrides both.
+	const bool bVisible = VisionConeRules::ResolveVisible(UVisionConeComponent::GetGlobalMode(), bShowVisionCone, bAlive,
+		UVisionConeComponent::IsPlayerSquadConesOn());
 	if (bVisible)
 	{
 		VisionConeCheckTimer -= DeltaTime;
@@ -110,7 +132,7 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 	FVisionConeSightSpec Sight;
 	Sight.EyeHeightCm = SightRules::EyeHeight(Stance);
 	float Range = GetVisionConeRange();
-	float HalfAngle = VisionConeHalfAngleDeg;
+	float HalfAngle = GetVisionConeHalfAngle();
 	// Peek sight (game designer 2026-10-19): leaned out round a corner / over a low wall the cone is the limited peek cone, drawn from
 	// the leaned-out eye point in the pose's aim (what UTacticalSightSubsystem::CanOperativeSee reveals).
 	FVector PeekEye;
@@ -122,6 +144,11 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 		Sight.EyeHeightCm = static_cast<float>(PeekEye.Z - Feet.Z);
 		Range = PeekSightConfig.RangeCm;
 		HalfAngle = PeekSightConfig.HalfAngleDeg;
+	}
+	else if (bVisible && bInCover && !GetSightFacing().Equals(GetActorForwardVector().GetSafeNormal2D(), 0.01f))
+	{
+		// In cover he looks along the wall / over it, not the way his back-to-the-wall body faces: the cone follows his sight (origin on the capsule).
+		VisionCone->SetViewOverride(FVector::ZeroVector, static_cast<float>(GetSightFacing().Rotation().Yaw));
 	}
 	else
 	{

@@ -27,6 +27,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/SightRules.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "Combat/VisionConeComponent.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Containers/Ticker.h"
@@ -58,7 +59,41 @@ namespace SightSmoke
 		/** The exploration part (2026-10-19): the 1.2 m wall and the frostbitten behind it. */
 		TWeakObjectPtr<AStaticMeshActor> Wall;
 		TWeakObjectPtr<AEnemyCharacter> Lurker;
+		/** Keys pressed by PressKey, released at the start of the next step. */
+		TWeakObjectPtr<ACodexTacticsPlayerController> HeldPC;
+		FKey HeldKey;
+		bool bHeldShift = false;
+		/** The facings held every step in the field of view part (stages 110-122): the AI turns idle mates to the leader on its own. */
+		bool bHoldFacing = false;
+		float LeaderYaw = 0.f;
+		float MateYaw = 0.f;
+		TWeakObjectPtr<AOperativeCharacter> TurnedMate;
 	};
+
+	void PressKey(ACodexTacticsPlayerController* PC, FState& State, const FKey& Key, bool bShift)
+	{
+		if (bShift)
+		{
+			PC->InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::LeftShift, IE_Pressed, 1.f));
+		}
+		PC->InputKey(FInputKeyEventArgs::CreateSimulated(Key, IE_Pressed, 1.f));
+		State.HeldPC = PC;
+		State.HeldKey = Key;
+		State.bHeldShift = bShift;
+	}
+
+	void ReleaseHeldKeys(FState& State)
+	{
+		if (ACodexTacticsPlayerController* PC = State.HeldPC.Get())
+		{
+			PC->InputKey(FInputKeyEventArgs::CreateSimulated(State.HeldKey, IE_Released, 0.f));
+			if (State.bHeldShift)
+			{
+				PC->InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::LeftShift, IE_Released, 0.f));
+			}
+		}
+		State.HeldPC.Reset();
+	}
 
 	AStaticMeshActor* SightSmokeSpawnWall(UWorld* World, const FVector& Centre, const FRotator& Rotation, const FVector& Scale)
 	{
@@ -75,6 +110,12 @@ namespace SightSmoke
 		Block->FinishSpawning(FTransform(Rotation, Centre, Scale));
 		return Block;
 	}
+
+	/**
+	 * Presses Key (with Shift held): the keys stay down until the next step (ReleaseHeldKeys) - the controller handles key events in its next tick, and a
+	 * chord (Shift + O) needs Shift still down then.
+	 */
+	void PressKey(ACodexTacticsPlayerController* PC, struct FState& State, const FKey& Key, bool bShift);
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -126,6 +167,18 @@ namespace SightSmoke
 		}
 		AMarksmanEnemyCharacter* Marksman = State.Marksman.Get();
 		AOperativeCharacter* Op = State.Op.Get();
+		ReleaseHeldKeys(State);
+		if (State.bHoldFacing && Op)
+		{
+			Op->SetActorRotation(FRotator(0.f, State.LeaderYaw, 0.f));
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Member != Op)
+				{
+					Member->SetActorRotation(FRotator(0.f, Member == State.TurnedMate.Get() ? State.MateYaw + 180.f : State.MateYaw, 0.f));
+				}
+			}
+		}
 		const auto Hidden = [&]() { return Marksman && !Sight->IsVisibleToSquad(Marksman); };
 		const auto Ghost = [&]() { return Marksman ? Sight->GetGhost(Marksman) : nullptr; };
 	const auto TickOption = [&]() { return Marksman && Marksman->GetMesh() ? Marksman->GetMesh()->VisibilityBasedAnimTickOption : State.AuthoredTickOption; };
@@ -264,7 +317,252 @@ namespace SightSmoke
 				Wall->Destroy();
 			}
 			Lurker->Destroy();
-			// The Sprint 08 fight part from its start.
+			// The field of view part (2026-10-20), then the Sprint 08 fight part from its start.
+			State.Stage = 110;
+			State.Time = 0.f;
+			return true;
+		}
+		case 110:
+		{
+			// The user's screenshot: one operative crouched behind a low wall facing it, the other two prone, crawling away - and the enemies
+			// 20 m behind all their backs were fully visible. Reproduced: the leader crouched facing the 0.8 m wall (+F), the mates prone 30 m
+			// ahead facing +F (away), a frozen frostbitten 20 m behind the leader (-F).
+			State.Wall = SightSmokeSpawnWall(World, FVector(State.P.X, State.P.Y, State.GroundZ + 40.f) + State.F * 100.f, State.F.Rotation(), FVector(0.3f, 5.f, 0.8f));
+			const FVector BehindSpot = State.P - State.F * 2000.f;
+			State.Lurker = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::Frostbitten, BehindSpot + FVector(0.f, 0.f, 100.f), State.F.Rotation());
+			Lurker = State.Lurker.Get();
+			if (!Lurker || !State.Wall.IsValid())
+			{
+				Check(State, false, TEXT("FOV part: wall and frostbitten spawned"));
+				return Finish(State);
+			}
+			Lurker->bOverridePerception = true;
+			Lurker->PerceptionOverride.SightRangeCm = 0.f;
+			Lurker->PerceptionOverride.ProximityCm = 0.f;
+			Lurker->PerceptionOverride.HearWalkCm = Lurker->PerceptionOverride.HearRunCm = 0.f;
+			Lurker->PerceptionOverride.HearCrouchWalkCm = Lurker->PerceptionOverride.HearCrawlCm = 0.f;
+			Lurker->PerceptionOverride.SmellRadiusCm = 0.f;
+			Lurker->CustomTimeDilation = 0.f;
+			Lurker->SetActorTickEnabled(false);
+			Lurker->SetActorLocation(FVector(BehindSpot.X, BehindSpot.Y, State.GroundZ + Lurker->GetSimpleCollisionHalfHeight() + 2.f));
+			int32 Index = 0;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->StopOperative();
+				if (Member != Op)
+				{
+					const FVector Ahead = State.P + State.F * 3000.f + State.R * (Index++ % 2 == 0 ? 200.f : -200.f);
+					Member->TeleportTo(FVector(Ahead.X, Ahead.Y, State.GroundZ + Member->GetSimpleCollisionHalfHeight() + 5.f), State.F.Rotation(), false, true);
+					Member->SetStance(EOperativeStance::Prone);
+				}
+			}
+			Op->SetStance(EOperativeStance::Crouching);
+			State.bHoldFacing = true;
+			State.LeaderYaw = State.F.Rotation().Yaw;
+			State.MateYaw = State.F.Rotation().Yaw;
+			State.Stage = 111;
+			State.Time = 0.f;
+			return true;
+		}
+		case 111:
+		{
+			if (State.Time < 1.5f)
+			{
+				return true;
+			}
+			Sight->Refresh();
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("SightSmoke FOV: %s stance %d fwd %s sightFacing %s dist %.0f sees %d cover %d"), *Member->DisplayName.ToString(), static_cast<int32>(Member->GetStance()),
+					*Member->GetActorForwardVector().ToCompactString(), *Member->GetSightFacing().ToCompactString(), FVector::Dist(Member->GetActorLocation(), Lurker->GetActorLocation()),
+					Sight->CanOperativeSee(*Member, UTacticalSightSubsystem::ProfilePoint(*Lurker)) ? 1 : 0, Member->bInCover ? 1 : 0);
+			}
+			Check(State, Sight->IsFovRuleActive() && FMath::IsNearlyEqual(Sight->GetFovDeg(EOperativeStance::Crouching), 140.f) && FMath::IsNearlyEqual(Sight->GetFovDeg(EOperativeStance::Prone), 110.f),
+				TEXT("the field of view rule runs: crouched 140 deg, prone 110 deg"));
+			Check(State, LurkerHidden() && Lurker->IsHidden(), TEXT("the screenshot: the enemy 20 m behind the squad's backs (crouched leader facing the wall, mates prone facing away) is NOT seen - no live plate"));
+			Check(State, !Sight->GetGhost(Lurker), TEXT("... and 20 m away, never seen, not heard: no silhouette either"));
+			Check(State, !Op->CanHitEnemy(Lurker) && Op->FindBestCombatTarget() == nullptr, TEXT("... not targetable"));
+			State.LeaderYaw = (-State.F).Rotation().Yaw; // he turns round to face them
+			State.Stage = 112;
+			State.Time = 0.f;
+			return true;
+		}
+		case 112:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			Sight->Refresh();
+			Check(State, !LurkerHidden() && !Lurker->IsHidden() && !Sight->GetGhost(Lurker), TEXT("the leader turns to face them: seen (a live enemy, no silhouette)"));
+			Check(State, Op->CanHitEnemy(Lurker), TEXT("... and targetable"));
+			State.LeaderYaw = State.F.Rotation().Yaw;
+			State.Stage = 113;
+			State.Time = 0.f;
+			return true;
+		}
+		case 113:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			Sight->Refresh();
+			Check(State, LurkerHidden() && Lurker->IsHidden() && Sight->GetGhost(Lurker) && !Sight->GetGhost(Lurker)->IsHeard(),
+				TEXT("he turns away again: hidden, only the faded last-known silhouette stays"));
+			// A prone mate 50 m from it turns round: 110 deg of view, the line is clear and within 60 m.
+			AOperativeCharacter* Mate = nullptr;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Mate = Member != Op ? Member : Mate;
+			}
+			if (Mate)
+			{
+				State.TurnedMate = Mate;
+			}
+			State.Stage = 114;
+			State.Time = 0.f;
+			return true;
+		}
+		case 114:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			Sight->Refresh();
+			Check(State, !LurkerHidden() && !Lurker->IsHidden(), TEXT("a prone mate 50 m away turns to face it: the squad's knowledge = the union of the views - seen"));
+			State.TurnedMate.Reset();
+			// 62 deg off the leader's facing, 20 m: outside a prone view (+-55), inside a crouched one (+-70).
+			const FVector Off = State.P + FRotator(0.f, State.F.Rotation().Yaw + 62.f, 0.f).Vector() * 2000.f;
+			Lurker->SetActorLocation(FVector(Off.X, Off.Y, State.GroundZ + Lurker->GetSimpleCollisionHalfHeight() + 2.f));
+			Op->SetStance(EOperativeStance::Prone);
+			State.Stage = 115;
+			State.Time = 0.f;
+			return true;
+		}
+		case 115:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			Sight->Refresh();
+			Check(State, LurkerHidden(), TEXT("62 deg off his facing, 20 m: a prone operative (+-55 deg) does not see it"));
+			Op->SetStance(EOperativeStance::Crouching);
+			State.Stage = 116;
+			State.Time = 0.f;
+			return true;
+		}
+		case 116:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			Sight->Refresh();
+			Check(State, !LurkerHidden(), TEXT("... a crouched one (+-70 deg) does"));
+			// The 2 m all-round awareness: right behind him, whatever his facing.
+			const FVector Close = State.P - State.F * 180.f;
+			Lurker->SetActorLocation(FVector(Close.X, Close.Y, State.GroundZ + Lurker->GetSimpleCollisionHalfHeight() + 2.f));
+			Sight->Refresh();
+			Check(State, !LurkerHidden(), TEXT("1.8 m right behind his back: noticed all round (touch reveal)"));
+			const FVector Far = State.P - State.F * 2000.f;
+			Lurker->SetActorLocation(FVector(Far.X, Far.Y, State.GroundZ + Lurker->GetSimpleCollisionHalfHeight() + 2.f));
+			State.Stage = 117;
+			State.Time = 0.f;
+			return true;
+		}
+		case 117:
+		{
+			// Shift + O = the squad's cones only, O = the enemies' only (the real keys).
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			if (!PC || !Op->VisionCone)
+			{
+				Check(State, false, TEXT("controller / cone for the toggles"));
+				return Finish(State);
+			}
+			Op->bShowVisionCone = false;
+			Check(State, !UVisionConeComponent::IsPlayerEnemyConesOn() && !UVisionConeComponent::IsPlayerSquadConesOn(), TEXT("both cone toggles start off"));
+			PressKey(PC, State, EKeys::O, true);
+			State.Stage = 118;
+			State.Time = 0.f;
+			return true;
+		}
+		case 118:
+		{
+			// (a key press is handled in the controller's next tick: every step below waits for it)
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			Check(State, UVisionConeComponent::IsPlayerSquadConesOn() && !UVisionConeComponent::IsPlayerEnemyConesOn(), TEXT("Shift+O: only the squad's cones are on"));
+			UVisionConeComponent* Cone = Op->VisionCone;
+			Check(State, Cone && Cone->IsConeShown() && FMath::IsNearlyEqual(Cone->GetConeHalfAngleDeg(), 70.f, 0.5f),
+				FString::Printf(TEXT("the leader's cone is drawn and is his crouched field of view (+-%.0f deg)"), Cone ? Cone->GetConeHalfAngleDeg() : -1.f));
+			PressKey(PC, State, EKeys::O, false);
+			State.Stage = 119;
+			State.Time = 0.f;
+			return true;
+		}
+		case 119:
+		{
+			if (State.Time < 0.5f)
+			{
+				return true;
+			}
+			Check(State, UVisionConeComponent::IsPlayerEnemyConesOn() && UVisionConeComponent::IsPlayerSquadConesOn(), TEXT("O: the enemies' cones on too, the squad's untouched"));
+			PressKey(Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController()), State, EKeys::O, true);
+			State.Stage = 120;
+			State.Time = 0.f;
+			return true;
+		}
+		case 120:
+		{
+			if (State.Time < 0.5f)
+			{
+				return true;
+			}
+			Check(State, !UVisionConeComponent::IsPlayerSquadConesOn() && UVisionConeComponent::IsPlayerEnemyConesOn(), TEXT("Shift+O again: the squad's off, the enemies' stay on"));
+			PressKey(Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController()), State, EKeys::O, false);
+			State.Stage = 121;
+			State.Time = 0.f;
+			return true;
+		}
+		case 121:
+		{
+			if (State.Time < 0.5f)
+			{
+				return true;
+			}
+			Check(State, !UVisionConeComponent::IsPlayerEnemyConesOn() && !UVisionConeComponent::IsPlayerSquadConesOn(), TEXT("O again: both off"));
+			Op->SetStance(EOperativeStance::Prone);
+			UVisionConeComponent::SetPlayerSquadCones(true);
+			State.Stage = 122;
+			State.Time = 0.f;
+			return true;
+		}
+		case 122:
+		{
+			if (State.Time < 1.f)
+			{
+				return true;
+			}
+			UVisionConeComponent* Cone = Op->VisionCone;
+			Check(State, Cone && Cone->IsConeShown() && FMath::IsNearlyEqual(Cone->GetConeHalfAngleDeg(), 55.f, 0.5f),
+				FString::Printf(TEXT("prone, the drawn cone narrows to his prone field of view (+-%.0f deg)"), Cone ? Cone->GetConeHalfAngleDeg() : -1.f));
+			UVisionConeComponent::SetPlayerSquadCones(false);
+			State.bHoldFacing = false;
+			if (AStaticMeshActor* Wall = State.Wall.Get())
+			{
+				Wall->Destroy();
+			}
+			Lurker->Destroy();
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->SetStance(EOperativeStance::Crouching);
+			}
 			State.Stage = 0;
 			State.Time = 3.f;
 			return true;

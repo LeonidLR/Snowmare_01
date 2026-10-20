@@ -290,6 +290,11 @@ namespace PlayerCommands
 	extern CODEXTACTICS_API const FName InventoryOpen;
 	/** "View.VisionCones": the player toggled the enemy vision cones (O / pause menu), Commandos style. */
 	extern CODEXTACTICS_API const FName ToggleVisionCones;
+	/**
+	 * "View.SquadVisionCones": the player toggled the OWN SQUAD's vision cones (Shift+O / pause menu, 2026-10-20). Locked exactly when O is (the
+	 * handler asks the lock of View.VisionCones: the Demo 01 tutorial unlocks both with the A4 cones card).
+	 */
+	extern CODEXTACTICS_API const FName ToggleSquadVisionCones;
 	/** Esc: the pause menu (listed here for the screen, never reported). */
 	extern CODEXTACTICS_API const FName PauseMenu;
 	/**
@@ -466,6 +471,8 @@ namespace GameplayEvents
 	extern CODEXTACTICS_API const FName CrawlGapPassed;
 	/** The player toggled the enemy vision cones ("VisionConesToggled.On" / ".Off" are raised too). */
 	extern CODEXTACTICS_API const FName VisionConesToggled;
+	/** The player toggled the squad's vision cones ("SquadVisionConesToggled.On" / ".Off" are raised too). */
+	extern CODEXTACTICS_API const FName SquadVisionConesToggled;
 
 	/** Broadcasts UCodexEventBus::OnGameplayEvent (no-op without a game instance) and logs it. */
 	CODEXTACTICS_API void Raise(const UObject* WorldContext, FName EventName, AActor* Subject = nullptr);

@@ -332,7 +332,12 @@ namespace VisionConeSmoke
 			Check(State, FMath::IsNearlyEqual(Cone->GetConeRangeCm(), ExpectedConeRange(Leader), 1.f),
 				FString::Printf(TEXT("operative cone range (range from weapon %d): %.0f cm, expected %.0f (weapon %s)"), State.bRangeFromWeapon ? 1 : 0,
 					Cone->GetConeRangeCm(), ExpectedConeRange(Leader), Leader->CurrentWeapon ? *Leader->CurrentWeapon->WeaponId : TEXT("-")));
-			Check(State, FMath::IsNearlyEqual(Cone->GetConeHalfAngleDeg(), 35.f, 0.01f), TEXT("operative cone +-35 deg (Godot 70 deg full)"));
+			// 2026-10-20: the operative's cone is his field of view while the squad's sight runs (stance FOV 140 / 110 deg: +-70 / +-55);
+			// the Godot +-35 deg (70 full) only without it.
+			const float ExpectedHalf = Leader->GetVisionConeHalfAngle();
+			Check(State, FMath::IsNearlyEqual(Cone->GetConeHalfAngleDeg(), ExpectedHalf, 0.01f)
+				&& (FMath::IsNearlyEqual(ExpectedHalf, Leader->VisionConeHalfAngleDeg, 0.01f) || FMath::IsNearlyEqual(ExpectedHalf, 70.f, 0.01f) || FMath::IsNearlyEqual(ExpectedHalf, 55.f, 0.01f)),
+				FString::Printf(TEXT("operative cone = his field of view: +-%.0f deg (Godot +-35 only without the FOV rule)"), Cone->GetConeHalfAngleDeg()));
 			// Occluded since 2026-10-19: a fan of rays every 1.5 deg (+-35 deg: 48 base rays, more at shadow edges), not Godot's 32 segments.
 			Check(State, Cone->IsOccluded() && Cone->GetBuiltRays().Num() >= 48 && Cone->GetFillVertexCount() > 0,
 				FString::Printf(TEXT("occluded cone: %d rays, %d fill vertices"), Cone->GetBuiltRays().Num(), Cone->GetFillVertexCount()));
