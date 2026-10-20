@@ -2289,5 +2289,13 @@
       },
       "unknown_slots": []
     }
-  ]
+  ],
+  "blender_material_slots": {
+    "M_Combat_Dog_skin_1": [
+      "M_Combat_Dog_skin_1"
+    ]
+  },
+  "lod0_section_triangles": {
+    "M_Combat_Dog_skin_1": 13904
+  }
 }

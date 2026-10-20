@@ -40,6 +40,9 @@
 #include "EngineUtils.h"
 #include "Dom/JsonObject.h"
 #include "Misc/FileHelper.h"
+#if WITH_EDITOR
+#include "ShaderCompiler.h"
+#endif
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
@@ -264,6 +267,23 @@ namespace OptimizedCharacterSmoke
 				Mesh->SetMaterialByName(Slot.Key, Material);
 			}
 		}
+	}
+
+	/** Full-resolution textures for the stills: a freshly swapped look otherwise renders its lowest mips for a while. */
+	void Prestream(USkeletalMeshComponent* Mesh)
+	{
+		if (Mesh)
+		{
+			Mesh->SetTextureForceResidentFlag(true);
+			Mesh->PrestreamTextures(60.f, true);
+		}
+		// a look swapped in at runtime may still compile its shaders (drawn with a fallback): finish before the stills
+#if WITH_EDITOR
+		if (GShaderCompilingManager)
+		{
+			GShaderCompilingManager->FinishAllCompilation();
+		}
+#endif
 	}
 
 	AOperativeCharacter* OpA() { return Cast<AOperativeCharacter>(Runner->Original.Get()); }
@@ -766,6 +786,7 @@ namespace OptimizedCharacterSmoke
 			}
 			Mesh->SetForcedLOD(1);
 			Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+			Prestream(Mesh);
 			++Lane;
 		}
 		Check(Second->GetMesh()->GetNumMaterials() == 1, FString::Printf(TEXT("the swapped body renders %d material(s) (original %d)"),
@@ -929,6 +950,8 @@ namespace OptimizedCharacterSmoke
 				UMaterialInterface* Look = LoadObject<UMaterialInterface>(nullptr, *Runner->Instances[Variant]);
 				OpB()->GetMesh()->SetMaterial(0, Look);
 				WearSourceLook(OpA()->GetMesh(), *Runner->Case, Variant);
+				Prestream(OpA()->GetMesh());
+				Prestream(OpB()->GetMesh());
 				UE_LOG(LogCodexTactics, Display, TEXT("OptimizedCharacterSmoke: [%s] variant %d = %s"), Runner->Case->Asset, Variant, *VariantLabel(Variant));
 				Check(Look != nullptr, FString::Printf(TEXT("variant %d loads"), Variant));
 				return 30;
@@ -980,6 +1003,7 @@ namespace OptimizedCharacterSmoke
 			Mesh->SetSkeletalMeshAsset(LoadObject<USkeletalMesh>(nullptr, C.Original));
 			WearSourceLook(Mesh, C, Runner->Variant); // the same texture set as the optimized MI
 		}
+		Prestream(Mesh);
 		Runner->Props.Add(Enemy);
 		return Enemy;
 	}

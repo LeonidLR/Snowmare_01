@@ -1,0 +1,68 @@
+{
+  "_doc": "Ground truth: texture -> role. method=material_graph means the role was read from the Unreal material graph (which output / channel the texture feeds); name_guess is the suffix heuristic.",
+  "textures": {
+    "T_bodi_BaseColor_Scattering": {
+      "asset": "/Game/mutant_monster_2/texture/set_4/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering",
+      "role": "mixed:base_color+opacity",
+      "channels": {
+        "base_color": "RGB",
+        "opacity": "A"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_bodi_set_4_Inst"
+      ],
+      "warnings": []
+    },
+    "T_bodi_Normal": {
+      "asset": "/Game/mutant_monster_2/texture/set_4/T_bodi_Normal.T_bodi_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_bodi_set_4_Inst"
+      ],
+      "warnings": []
+    },
+    "T_bodi_OcclusionRoughnessMetallic": {
+      "asset": "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_bodi_set_4_Inst"
+      ],
+      "warnings": []
+    }
+  }
+}

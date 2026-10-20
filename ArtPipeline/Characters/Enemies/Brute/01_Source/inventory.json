@@ -1156,5 +1156,17 @@
     "/Game/Mutant_monster_1/texture/set_4/T_head_BaseColor.T_head_BaseColor": "T_head_BaseColor__set_4",
     "/Game/Mutant_monster_1/texture/set_4/T_head_Normal.T_head_Normal": "T_head_Normal__set_4",
     "/Game/Mutant_monster_1/texture/set_4/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic": "T_head_OcclusionRoughnessMetallic__set_4"
+  },
+  "blender_material_slots": {
+    "T_head": [
+      "T_head"
+    ],
+    "T_bodi": [
+      "T_bodi"
+    ]
+  },
+  "lod0_section_triangles": {
+    "T_head": 14308,
+    "T_bodi": 10878
   }
 }

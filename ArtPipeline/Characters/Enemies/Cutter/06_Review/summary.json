@@ -1,0 +1,639 @@
+{
+  "asset": "SKM_baze_mesh",
+  "source": {
+    "slots": 2,
+    "triangles": 28592,
+    "vertices": 16693,
+    "triangles_per_slot": {
+      "T_bodi": 11532,
+      "T_head": 17060
+    },
+    "bones": 67,
+    "uv_maps": [
+      "DiffuseUV"
+    ],
+    "material_warnings": []
+  },
+  "stage_times": {
+    "source": "2026-10-20 23:47:29",
+    "clean": "2026-10-20 23:47:34",
+    "reduce": "2026-10-20 23:47:43",
+    "atlas": "2026-10-20 23:49:02",
+    "bake": "2026-10-20 23:51:34",
+    "export": "2026-10-20 23:51:43",
+    "review": "2026-10-20 23:53:47",
+    "qa": "2026-10-20 23:53:47"
+  },
+  "clean": {
+    "hair_slots": [],
+    "hair_triangles_removed": 0,
+    "transparent_slots": [],
+    "transparent_triangles_removed": 0,
+    "hidden_triangles_removed": 2,
+    "hidden_triangles_by_slot": {
+      "T_bodi": 2
+    },
+    "triangles_after": 28590,
+    "triangles_after_per_slot": {
+      "T_bodi": 11530,
+      "T_head": 17060
+    },
+    "vertices_after": 16693,
+    "hidden_method": {
+      "rays_sphere": 80,
+      "samples_per_triangle": 4,
+      "keep_ring": 1,
+      "anim_frames_per_anim": 2,
+      "forward": [
+        -0.0010427826782688498,
+        0.999999463558197,
+        0.0
+      ],
+      "poses": [
+        {
+          "pose": "rest",
+          "still_hidden": 225,
+          "seconds": 0.3
+        },
+        {
+          "pose": "crouch_deep",
+          "still_hidden": 207,
+          "seconds": 0.1
+        },
+        {
+          "pose": "kneel_aim",
+          "still_hidden": 187,
+          "seconds": 0.1
+        },
+        {
+          "pose": "arms_up",
+          "still_hidden": 177,
+          "seconds": 0.1
+        },
+        {
+          "pose": "arms_hug",
+          "still_hidden": 168,
+          "seconds": 0.1
+        },
+        {
+          "pose": "twist_bend",
+          "still_hidden": 163,
+          "seconds": 0.1
+        },
+        {
+          "pose": "twist_bend_other",
+          "still_hidden": 159,
+          "seconds": 0.1
+        },
+        {
+          "pose": "prone_look_up",
+          "still_hidden": 154,
+          "seconds": 0.1
+        },
+        {
+          "pose": "lunge_spread",
+          "still_hidden": 151,
+          "seconds": 0.1
+        },
+        {
+          "pose": "sit_reach",
+          "still_hidden": 150,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_Jumping@25",
+          "still_hidden": 130,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_Jumping@73",
+          "still_hidden": 126,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_attack_1@21",
+          "still_hidden": 125,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_attack_1@62",
+          "still_hidden": 121,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_attack_2@10",
+          "still_hidden": 119,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_attack_2@26",
+          "still_hidden": 117,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_idle_1@42",
+          "still_hidden": 116,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_idle_1@123",
+          "still_hidden": 112,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_idle_2@108",
+          "still_hidden": 111,
+          "seconds": 0.2
+        },
+        {
+          "pose": "anim_idle_2@322",
+          "still_hidden": 110,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_idle_3@32",
+          "still_hidden": 109,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_idle_3@92",
+          "still_hidden": 108,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_idle_4@36",
+          "still_hidden": 108,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_idle_4@107",
+          "still_hidden": 106,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_idle_5@170",
+          "still_hidden": 106,
+          "seconds": 0.1
+        },
+        {
+          "pose": "anim_idle_5@508",
+          "still_hidden": 106,
+          "seconds": 0.1
+        }
+      ]
+    }
+  },
+  "reduce": {
+    "target_tris": 20000,
+    "triangles_before": 28590,
+    "triangles_after": 19950,
+    "vertices_welded": 14808,
+    "vertices_after": 10488,
+    "per_material": {
+      "T_bodi": {
+        "before": 11530,
+        "budget": 9480,
+        "after": 9464,
+        "keep_weight": 1.0,
+        "ratio": 0.821,
+        "passes": [
+          0.822
+        ]
+      },
+      "T_head": {
+        "before": 17060,
+        "budget": 10520,
+        "after": 10486,
+        "keep_weight": 0.75,
+        "ratio": 0.615,
+        "passes": [
+          0.617
+        ]
+      }
+    },
+    "g": 0.8222,
+    "protect_factor": 2.0,
+    "protection": {
+      "uv_seam_edges": 1774,
+      "material_border_edges": 42,
+      "open_border_edges": 980,
+      "joint_blend_vertices": 2518
+    },
+    "degenerate_faces": 0,
+    "non_manifold_edges": 0,
+    "unweighted_vertices": 0,
+    "sharp_angle": 60.0,
+    "authored_normals_restored_loops": 0,
+    "seconds": 2.9,
+    "decimate_seconds": 0.4
+  },
+  "atlas": {
+    "source_blend": "reduce",
+    "packer": "uvpackmaster4",
+    "packer_note": "UVPackmaster result {'FINISHED', 'PASS_THROUGH'} retcode 0 (UVPackmaster Engine: 4.1.0 PRO)",
+    "pack_seconds": 66.9,
+    "resolution": 2048,
+    "margin_px": 8,
+    "border_px": 2,
+    "rotation_step": 90,
+    "islands": 99,
+    "clusters": 4,
+    "down_facing_clusters": 0,
+    "mirrored_stacked_clusters_rot180": {
+      "T_bodi": 1,
+      "T_head": 1
+    },
+    "mirrored_stacked_faces": 19926,
+    "uv_area_sum": 0.906,
+    "loops_out_of_0_1": 0,
+    "texel_density": {
+      "T_bodi": {
+        "atlas_px_per_cm": 8.79,
+        "source_px_per_cm": 22.11,
+        "ratio": 0.398,
+        "weight": 1.0,
+        "source_res": 4096
+      },
+      "T_head": {
+        "atlas_px_per_cm": 14.07,
+        "source_px_per_cm": 41.43,
+        "ratio": 0.34,
+        "weight": 1.6,
+        "source_res": 4096
+      }
+    },
+    "cross_material_overlap_px_1k": 0,
+    "covered_px_1k": 798006,
+    "cross_material_overlap_percent": 0.0,
+    "layout_image": "06_Review/atlas_layout.png",
+    "layout_legend": {
+      "T_bodi": "#f25454",
+      "T_head": "#54f2f2"
+    },
+    "note": "coverage % is measured on the baked mask in blender_bake.py"
+  },
+  "bake": {
+    "mode": "project",
+    "device": "OPTIX",
+    "samples": 4,
+    "margin_px": 8,
+    "resolution": 2048,
+    "orm_resolution": 1024,
+    "cage_extrusion_cm": 0.6,
+    "max_ray_cm": 3.0,
+    "ray_miss_percent": 0.006,
+    "variants": {
+      "Set3": {
+        "outputs": {
+          "BaseColor": "T_Cutter_Set3_BaseColor.png",
+          "Normal": "T_Cutter_Set3_Normal.png",
+          "ORM": "T_Cutter_Set3_ORM.png",
+          "Sheen": "T_Cutter_Set3_Sheen.png",
+          "Emissive": "T_Cutter_Set3_Emissive.png"
+        },
+        "emissive_glow_percent": 1.737,
+        "emissive_written": true,
+        "emissive_strength": 1.0,
+        "masked": false,
+        "two_sided": true,
+        "overlay_percent": null
+      },
+      "Set1": {
+        "outputs": {
+          "BaseColor": "T_Cutter_Set1_BaseColor.png",
+          "Normal": "T_Cutter_Set1_Normal.png",
+          "ORM": "T_Cutter_Set1_ORM.png",
+          "Sheen": "T_Cutter_Set1_Sheen.png",
+          "Emissive": "T_Cutter_Set1_Emissive.png"
+        },
+        "emissive_glow_percent": 1.563,
+        "emissive_written": true,
+        "emissive_strength": 1.0,
+        "masked": false,
+        "two_sided": true,
+        "overlay_percent": null
+      },
+      "Set2": {
+        "outputs": {
+          "BaseColor": "T_Cutter_Set2_BaseColor.png",
+          "Normal": "T_Cutter_Set2_Normal.png",
+          "ORM": "T_Cutter_Set2_ORM.png",
+          "Sheen": "T_Cutter_Set2_Sheen.png",
+          "Emissive": "T_Cutter_Set2_Emissive.png"
+        },
+        "emissive_glow_percent": 1.563,
+        "emissive_written": true,
+        "emissive_strength": 1.0,
+        "masked": false,
+        "two_sided": true,
+        "overlay_percent": null
+      },
+      "Set4": {
+        "outputs": {
+          "BaseColor": "T_Cutter_Set4_BaseColor.png",
+          "Normal": "T_Cutter_Set4_Normal.png",
+          "ORM": "T_Cutter_Set4_ORM.png",
+          "Sheen": "T_Cutter_Set4_Sheen.png",
+          "Emissive": "T_Cutter_Set4_Emissive.png"
+        },
+        "emissive_glow_percent": 1.836,
+        "emissive_written": true,
+        "emissive_strength": 1.0,
+        "masked": false,
+        "two_sided": true,
+        "overlay_percent": null
+      }
+    },
+    "self_baked_slots": [],
+    "normal_back_facing_clamped_percent": 0.617,
+    "atlas_coverage_percent": 76.1,
+    "seconds": {
+      "coverage": 0.9,
+      "hit": 2.1,
+      "base_color": 4.4,
+      "normal": 5.5,
+      "ao": 2.2,
+      "roughness": 2.2,
+      "metallic": 2.2,
+      "emissive_probe": 3.5,
+      "emissive": 2.9,
+      "sheen": 2.3
+    },
+    "orm_channel_stats": {
+      "ao": {
+        "min": 0.0,
+        "mean": 0.676,
+        "max": 1.0
+      },
+      "roughness": {
+        "min": 0.035,
+        "mean": 0.308,
+        "max": 1.0
+      },
+      "metallic": {
+        "min": 0.0,
+        "mean": 0.084,
+        "max": 1.0
+      }
+    },
+    "sheen_values": [
+      0.0
+    ],
+    "bake_warnings": [],
+    "outputs": {
+      "BaseColor": "04_Textures_Baked/T_Cutter_Set3_BaseColor.png",
+      "Normal": "04_Textures_Baked/T_Cutter_Set3_Normal.png",
+      "ORM": "04_Textures_Baked/T_Cutter_Set3_ORM.png",
+      "Sheen": "04_Textures_Baked/T_Cutter_Set3_Sheen.png"
+    }
+  },
+  "export": {
+    "fbx": "05_Export/SK_Cutter_1slot.fbx",
+    "checks": {
+      "one_mesh": true,
+      "armature_object": "Armature",
+      "material_slots": [
+        "M_Body"
+      ],
+      "uv_maps": [
+        "UV_Atlas"
+      ],
+      "triangles": 19950,
+      "vertices": 10488,
+      "vertex_groups": 60,
+      "shape_keys": 0,
+      "custom_normals": true,
+      "bones_source": 67,
+      "bones_export": 68,
+      "root_bone": true,
+      "bones_missing": [],
+      "bones_extra": [],
+      "parent_mismatch": [],
+      "max_bone_deviation_cm": 0.0001,
+      "max_bone_rotation_deg": 0.0,
+      "root_added": true,
+      "source_armature_world": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          -2.832769343193999e-16,
+          0.0
+        ],
+        [
+          0.0,
+          2.832769343193999e-16,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "source_armature_identity": true,
+      "leaf_bones": [],
+      "ok": true
+    }
+  },
+  "review": {
+    "pose_sheet": "pose_sheet.png",
+    "pose_sheet_poses": [
+      "crouch_deep",
+      "kneel_aim",
+      "arms_up",
+      "twist_bend",
+      "prone_look_up"
+    ],
+    "views": {
+      "front34": {
+        "rgb_rmse_0_255": 4.87,
+        "mean_delta_e76": 1.23,
+        "p95_delta_e76": 3.47,
+        "silhouette_iou": 0.9988,
+        "pixels_compared": 109083,
+        "image": "compare_front34.png"
+      },
+      "back34": {
+        "rgb_rmse_0_255": 6.51,
+        "mean_delta_e76": 1.22,
+        "p95_delta_e76": 3.52,
+        "silhouette_iou": 0.9986,
+        "pixels_compared": 102704,
+        "image": "compare_back34.png"
+      },
+      "tactical": {
+        "rgb_rmse_0_255": 5.97,
+        "mean_delta_e76": 1.39,
+        "p95_delta_e76": 4.14,
+        "silhouette_iou": 0.9984,
+        "pixels_compared": 89236,
+        "image": "compare_tactical.png"
+      },
+      "face": {
+        "rgb_rmse_0_255": 8.84,
+        "mean_delta_e76": 2.4,
+        "p95_delta_e76": 7.46,
+        "silhouette_iou": 0.9993,
+        "pixels_compared": 624000,
+        "image": "compare_face.png"
+      }
+    },
+    "texture_memory": {
+      "before_mb": 405.3,
+      "after_mb": 10.7,
+      "after_without_optional_mb": 9.3,
+      "before_textures": 8,
+      "before_detail": {
+        "T_bodi_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "base_color"
+        },
+        "T_bodi_Emissive": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "emissive"
+        },
+        "T_bodi_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_bodi_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        },
+        "T_head_BaseColor": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "base_color"
+        },
+        "T_head_Emissive": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "emissive"
+        },
+        "T_head_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_head_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        }
+      },
+      "after_detail": {
+        "BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67
+        },
+        "Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33
+        },
+        "ORM": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "DXT1 (TC_Masks)",
+          "mb": 0.67
+        },
+        "Sheen": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "G8",
+          "mb": 1.33
+        },
+        "Emissive": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "DXT1",
+          "mb": 0.67
+        }
+      },
+      "assumptions": "full mip chain (x4/3); Default -> DXT1 when the PNG alpha is opaque else DXT5; normal maps BC5; streaming / LOD bias not applied"
+    },
+    "render_samples": 64,
+    "resolution": 1024
+  },
+  "qa": {
+    "slots_before": 2,
+    "slots_after": 1,
+    "triangles_before": 28592,
+    "triangles_after": 19950,
+    "triangles_removed_hidden": 2,
+    "triangles_removed_hair": 0,
+    "triangles_removed_check_by_position": 2,
+    "atlas_coverage_percent": 76.1,
+    "texture_memory_before_mb": 405.3,
+    "texture_memory_after_mb": 10.7,
+    "hidden_in_all_poses_before_safety_ring": 106,
+    "bake_warnings": [],
+    "emissive_texel_fraction": null,
+    "cross_material_overlap_percent": 0.0,
+    "export_roundtrip_ok": true,
+    "worst_view_mean_delta_e": 2.4,
+    "min_silhouette_iou": 0.9984,
+    "triangles_per_material_after": {
+      "T_bodi": 9464,
+      "T_head": 10486
+    },
+    "ray_miss_percent": 0.006
+  }
+}

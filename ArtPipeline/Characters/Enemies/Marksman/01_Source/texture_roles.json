@@ -1,0 +1,169 @@
+{
+  "_doc": "Ground truth: texture -> role. method=material_graph means the role was read from the Unreal material graph (which output / channel the texture feeds); name_guess is the suffix heuristic.",
+  "textures": {
+    "T_bodi_BaseColor": {
+      "asset": "/Game/Biochemical_Monster_1/texture/set_5/T_bodi_BaseColor.T_bodi_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_bodi_set_5_Inst"
+      ],
+      "warnings": []
+    },
+    "T_bodi_Emissive": {
+      "asset": "/Game/Biochemical_Monster_1/texture/set_5/T_bodi_Emissive.T_bodi_Emissive",
+      "role": "emissive",
+      "channels": {
+        "emissive_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "emissive",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_bodi_set_5_Inst"
+      ],
+      "warnings": []
+    },
+    "T_bodi_Normal": {
+      "asset": "/Game/Biochemical_Monster_1/texture/set_5/T_bodi_Normal.T_bodi_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_bodi_set_5_Inst"
+      ],
+      "warnings": []
+    },
+    "T_bodi_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Biochemical_Monster_1/texture/set_5/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_bodi_set_5_Inst"
+      ],
+      "warnings": []
+    },
+    "T_head_BaseColor": {
+      "asset": "/Game/Biochemical_Monster_1/texture/set_5/T_head_BaseColor.T_head_BaseColor",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "base_color",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_head_set_5_Inst"
+      ],
+      "warnings": []
+    },
+    "T_head_Emissive": {
+      "asset": "/Game/Biochemical_Monster_1/texture/set_5/T_head_Emissive.T_head_Emissive",
+      "role": "emissive",
+      "channels": {
+        "emissive_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "emissive",
+      "name_guess_agrees": true,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_head_set_5_Inst"
+      ],
+      "warnings": []
+    },
+    "T_head_Normal": {
+      "asset": "/Game/Biochemical_Monster_1/texture/set_5/T_head_Normal.T_head_Normal",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_head_set_5_Inst"
+      ],
+      "warnings": []
+    },
+    "T_head_OcclusionRoughnessMetallic": {
+      "asset": "/Game/Biochemical_Monster_1/texture/set_5/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "orm_packed",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "MI_head_set_5_Inst"
+      ],
+      "warnings": []
+    }
+  }
+}

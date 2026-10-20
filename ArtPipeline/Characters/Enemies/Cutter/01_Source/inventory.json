@@ -1443,5 +1443,17 @@
     "/Game/Biochemical_Monster_2/texture/set_4/T_head_Emissive.T_head_Emissive": "T_head_Emissive__set_4",
     "/Game/Biochemical_Monster_2/texture/set_4/T_head_Normal.T_head_Normal": "T_head_Normal__set_4",
     "/Game/Biochemical_Monster_2/texture/set_4/T_head_OcclusionRoughnessMetallic.T_head_OcclusionRoughnessMetallic": "T_head_OcclusionRoughnessMetallic__set_4"
+  },
+  "blender_material_slots": {
+    "T_bodi": [
+      "T_bodi"
+    ],
+    "T_head": [
+      "T_head"
+    ]
+  },
+  "lod0_section_triangles": {
+    "T_bodi": 11532,
+    "T_head": 17060
   }
 }

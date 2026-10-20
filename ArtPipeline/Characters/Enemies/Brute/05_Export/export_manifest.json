@@ -1,0 +1,106 @@
+{
+  "fbx": "SK_Brute_1slot.fbx",
+  "material_slot": "M_Body",
+  "uv0": "UV_Atlas",
+  "skeleton": "/Game/Mutant_monster_1/Meshes/base_mesh/SK_UE4_Mannequin_Skeleton.SK_UE4_Mannequin_Skeleton",
+  "root_bone": "root",
+  "root_bone_added": true,
+  "top_bones_reparented": [
+    "pelvis"
+  ],
+  "blender_fbx_settings": {
+    "use_selection": true,
+    "object_types": [
+      "ARMATURE",
+      "MESH"
+    ],
+    "apply_unit_scale": true,
+    "apply_scale_options": "FBX_SCALE_NONE",
+    "global_scale": 1.0,
+    "axis_forward": "-Z",
+    "axis_up": "Y",
+    "use_space_transform": true,
+    "bake_space_transform": false,
+    "use_mesh_modifiers": false,
+    "mesh_smooth_type": "FACE",
+    "use_tspace": true,
+    "use_custom_props": false,
+    "add_leaf_bones": false,
+    "primary_bone_axis": "Y",
+    "secondary_bone_axis": "X",
+    "use_armature_deform_only": false,
+    "armature_nodetype": "NULL",
+    "bake_anim": false,
+    "path_mode": "STRIP",
+    "embed_textures": false,
+    "use_triangles": true
+  },
+  "roundtrip_checks": {
+    "one_mesh": true,
+    "armature_object": "Armature",
+    "material_slots": [
+      "M_Body"
+    ],
+    "uv_maps": [
+      "UV_Atlas"
+    ],
+    "triangles": 25186,
+    "vertices": 12876,
+    "vertex_groups": 42,
+    "shape_keys": 0,
+    "custom_normals": true,
+    "bones_source": 54,
+    "bones_export": 55,
+    "root_bone": true,
+    "bones_missing": [],
+    "bones_extra": [],
+    "parent_mismatch": [],
+    "max_bone_deviation_cm": 0.0,
+    "max_bone_rotation_deg": 0.0,
+    "root_added": true,
+    "source_armature_world": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "source_armature_identity": true,
+    "leaf_bones": [],
+    "ok": true
+  },
+  "textures": {
+    "BaseColor": "T_Brute_Set2_BaseColor.png",
+    "Normal": "T_Brute_Set2_Normal.png",
+    "ORM": "T_Brute_Set2_ORM.png",
+    "Sheen": "T_Brute_Set2_Sheen.png"
+  },
+  "unreal_import_notes": [
+    "Import onto the SAME skeleton: /Game/Mutant_monster_1/Meshes/base_mesh/SK_UE4_Mannequin_Skeleton.SK_UE4_Mannequin_Skeleton",
+    "Normals: Import Normals (custom split normals are in the FBX); tangents: MikkTSpace (same as the bake)",
+    "Normal map is DirectX (green down) - no Flip Green; compression TC_Normalmap (BC5), sRGB off",
+    "ORM: sRGB off, TC_Masks; R=AO G=Roughness B=Metallic - values are FINAL (no Power / sRGB decode)",
+    "BaseColor: sRGB on, TC_Default (no alpha -> BC1/DXT1)",
+    "Sheen: BaseColor + Fresnel * Sheen reproduces the old cloth Fresnel rim (0.07)",
+    "Emissive only when the bake found a real glow (see summary.json bake.variants); EmissiveStrength = emissive_strength"
+  ]
+}

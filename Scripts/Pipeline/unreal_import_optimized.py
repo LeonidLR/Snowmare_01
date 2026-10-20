@@ -244,6 +244,12 @@ def main():
             mel.set_material_instance_scalar_parameter_value(mi, "EmissiveStrength", float(strength))
             mel.set_material_instance_static_switch_parameter_value(mi, "UseEmissive", True)
             mel.update_material_instance(mi)
+        elif "Emissive" in [str(n) for n in mel.get_texture_parameter_names(master)]:
+            # a re-import without glow: switch off what an earlier import of this MI may have turned on
+            mel.set_material_instance_static_switch_parameter_value(mi, "UseEmissive", False)
+            mel.set_material_instance_texture_parameter_value(mi, "Emissive",
+                                                              unreal.load_asset("/Engine/EngineResources/Black.Black"))
+            mel.update_material_instance(mi)
         instances.append(mi)
     mi = instances[0]
     if only:

@@ -1,0 +1,439 @@
+{
+  "_doc": "Ground truth: texture -> role. method=material_graph means the role was read from the Unreal material graph (which output / channel the texture feeds); name_guess is the suffix heuristic.",
+  "textures": {
+    "T_Combat_Dog_skin_1_RGB_AO_rg_m": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_1_Standard/T_Combat_Dog_skin_1_RGB_AO_rg_m.T_Combat_Dog_skin_1_RGB_AO_rg_m",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "metallic",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_1"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_1_Scattering": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_1_Standard/T_Combat_Dog_skin_1_Scattering.T_Combat_Dog_skin_1_Scattering",
+      "role": "opacity",
+      "channels": {
+        "opacity": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_1"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_1_a": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_1_Standard/T_Combat_Dog_skin_1_a.T_Combat_Dog_skin_1_a",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_1"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_1_n": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_1_Standard/T_Combat_Dog_skin_1_n.T_Combat_Dog_skin_1_n",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_1"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_2_RGB_AO_rg_m": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_RGB_AO_rg_m.T_Combat_Dog_skin_2_RGB_AO_rg_m",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "metallic",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_2"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_2_Scattering": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_Scattering.T_Combat_Dog_skin_2_Scattering",
+      "role": "opacity",
+      "channels": {
+        "opacity": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_2"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_2_a": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_a.T_Combat_Dog_skin_2_a",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_2"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_2_n": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_2_Black/T_Combat_Dog_skin_2_n.T_Combat_Dog_skin_2_n",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_2"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_3_RGB_AO_rg_m": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_RGB_AO_rg_m.T_Combat_Dog_skin_3_RGB_AO_rg_m",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "metallic",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_3"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_3_Scattering": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_Scattering.T_Combat_Dog_skin_3_Scattering",
+      "role": "opacity",
+      "channels": {
+        "opacity": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_3"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_3_a": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_a.T_Combat_Dog_skin_3_a",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_3"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_3_n": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_3_Albino/T_Combat_Dog_skin_3_n.T_Combat_Dog_skin_3_n",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_3"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_4_RGB_AO_rg_m": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_RGB_AO_rg_m.T_Combat_Dog_skin_4_RGB_AO_rg_m",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "metallic",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_4"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_4_Scattering": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_Scattering.T_Combat_Dog_skin_4_Scattering",
+      "role": "opacity",
+      "channels": {
+        "opacity": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_4"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_4_a": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_a.T_Combat_Dog_skin_4_a",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_4"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_4_n": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_4_Venous/T_Combat_Dog_skin_4_n.T_Combat_Dog_skin_4_n",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_4"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_5_RGB_AO_rg_m": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_RGB_AO_rg_m.T_Combat_Dog_skin_5_RGB_AO_rg_m",
+      "role": "orm_packed",
+      "channels": {
+        "roughness": "G",
+        "metallic": "B",
+        "ambient_occlusion": "R"
+      },
+      "method": "material_graph",
+      "name_guess": "metallic",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_5"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_5_Scattering": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_Scattering.T_Combat_Dog_skin_5_Scattering",
+      "role": "opacity",
+      "channels": {
+        "opacity": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_5"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_5_a": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_a.T_Combat_Dog_skin_5_a",
+      "role": "base_color",
+      "channels": {
+        "base_color": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": true,
+      "compression": "TC_DEFAULT",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_5"
+      ],
+      "warnings": []
+    },
+    "T_Combat_Dog_skin_5_n": {
+      "asset": "/Game/Combat_Dog/Textures/Skin_5_Bloody/T_Combat_Dog_skin_5_n.T_Combat_Dog_skin_5_n",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "normal",
+      "name_guess_agrees": true,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_5"
+      ],
+      "warnings": []
+    },
+    "T_Detail": {
+      "asset": "/Game/Combat_Dog/Textures/T_Detail.T_Detail",
+      "role": "normal",
+      "channels": {
+        "normal": "RGB"
+      },
+      "method": "material_graph",
+      "name_guess": "unknown",
+      "name_guess_agrees": false,
+      "srgb": false,
+      "compression": "TC_NORMALMAP",
+      "size": [
+        32,
+        32
+      ],
+      "materials": [
+        "M_Combat_Dog_skin_1",
+        "M_Combat_Dog_skin_2",
+        "M_Combat_Dog_skin_3",
+        "M_Combat_Dog_skin_4",
+        "M_Combat_Dog_skin_5"
+      ],
+      "warnings": []
+    }
+  }
+}

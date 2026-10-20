@@ -1,0 +1,558 @@
+{
+  "asset": "SK_base_mesh",
+  "source": {
+    "slots": 1,
+    "triangles": 24142,
+    "vertices": 14097,
+    "triangles_per_slot": {
+      "T_bodi": 24142
+    },
+    "bones": 67,
+    "uv_maps": [
+      "DiffuseUV"
+    ],
+    "material_warnings": []
+  },
+  "stage_times": {
+    "source": "2026-10-20 23:57:42",
+    "clean": "2026-10-20 23:58:08",
+    "reduce": "2026-10-20 23:58:15",
+    "atlas": "2026-10-20 23:59:31",
+    "bake": "2026-10-21 00:07:00",
+    "export": "2026-10-21 00:07:12",
+    "review": "2026-10-21 00:09:03",
+    "qa": "2026-10-21 00:09:03"
+  },
+  "clean": {
+    "hair_slots": [],
+    "hair_triangles_removed": 0,
+    "transparent_slots": [],
+    "transparent_triangles_removed": 0,
+    "hidden_triangles_removed": 472,
+    "hidden_triangles_by_slot": {
+      "T_bodi": 472
+    },
+    "triangles_after": 23670,
+    "triangles_after_per_slot": {
+      "T_bodi": 23670
+    },
+    "vertices_after": 13933,
+    "hidden_method": {
+      "rays_sphere": 80,
+      "samples_per_triangle": 4,
+      "keep_ring": 1,
+      "anim_frames_per_anim": 2,
+      "forward": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "poses": [
+        {
+          "pose": "rest",
+          "still_hidden": 1597,
+          "seconds": 1.1
+        },
+        {
+          "pose": "crouch_deep",
+          "still_hidden": 1523,
+          "seconds": 0.7
+        },
+        {
+          "pose": "kneel_aim",
+          "still_hidden": 1474,
+          "seconds": 0.7
+        },
+        {
+          "pose": "arms_up",
+          "still_hidden": 1451,
+          "seconds": 0.6
+        },
+        {
+          "pose": "arms_hug",
+          "still_hidden": 1451,
+          "seconds": 0.6
+        },
+        {
+          "pose": "twist_bend",
+          "still_hidden": 1431,
+          "seconds": 0.6
+        },
+        {
+          "pose": "twist_bend_other",
+          "still_hidden": 1414,
+          "seconds": 0.6
+        },
+        {
+          "pose": "prone_look_up",
+          "still_hidden": 1395,
+          "seconds": 0.6
+        },
+        {
+          "pose": "lunge_spread",
+          "still_hidden": 1395,
+          "seconds": 0.6
+        },
+        {
+          "pose": "sit_reach",
+          "still_hidden": 1390,
+          "seconds": 0.7
+        },
+        {
+          "pose": "Death_Back@8",
+          "still_hidden": 1378,
+          "seconds": 0.6
+        },
+        {
+          "pose": "Death_Back@23",
+          "still_hidden": 1367,
+          "seconds": 0.8
+        },
+        {
+          "pose": "Death_Front@8",
+          "still_hidden": 1355,
+          "seconds": 1.4
+        },
+        {
+          "pose": "Death_Front@23",
+          "still_hidden": 1352,
+          "seconds": 1.7
+        },
+        {
+          "pose": "ThirdPersonJump_End@2",
+          "still_hidden": 1349,
+          "seconds": 0.8
+        },
+        {
+          "pose": "ThirdPersonJump_End@6",
+          "still_hidden": 1336,
+          "seconds": 0.7
+        },
+        {
+          "pose": "ThirdPersonJump_Loop@6",
+          "still_hidden": 1330,
+          "seconds": 1.5
+        },
+        {
+          "pose": "ThirdPersonJump_Loop@15",
+          "still_hidden": 1327,
+          "seconds": 1.6
+        },
+        {
+          "pose": "ThirdPersonJump_Start@4",
+          "still_hidden": 1325,
+          "seconds": 0.8
+        },
+        {
+          "pose": "ThirdPersonJump_Start@10",
+          "still_hidden": 1315,
+          "seconds": 0.7
+        },
+        {
+          "pose": "ThirdPersonRun@5",
+          "still_hidden": 1310,
+          "seconds": 1.6
+        },
+        {
+          "pose": "ThirdPersonRun@13",
+          "still_hidden": 1309,
+          "seconds": 1.6
+        },
+        {
+          "pose": "ThirdPersonWalk@7",
+          "still_hidden": 1301,
+          "seconds": 0.6
+        },
+        {
+          "pose": "ThirdPersonWalk@20",
+          "still_hidden": 1299,
+          "seconds": 0.6
+        },
+        {
+          "pose": "ThirdPerson_Jump@2",
+          "still_hidden": 1299,
+          "seconds": 0.5
+        },
+        {
+          "pose": "ThirdPerson_Jump@6",
+          "still_hidden": 1299,
+          "seconds": 1.4
+        }
+      ]
+    }
+  },
+  "reduce": {
+    "target_tris": 20000,
+    "triangles_before": 23670,
+    "triangles_after": 20000,
+    "vertices_welded": 11950,
+    "vertices_after": 10115,
+    "per_material": {
+      "T_bodi": {
+        "before": 23670,
+        "budget": 20000,
+        "after": 20000,
+        "keep_weight": 1.0,
+        "ratio": 0.845,
+        "passes": [
+          0.845
+        ]
+      }
+    },
+    "g": 0.845,
+    "protect_factor": 2.0,
+    "protection": {
+      "uv_seam_edges": 1895,
+      "open_border_edges": 386,
+      "joint_blend_vertices": 3376
+    },
+    "degenerate_faces": 0,
+    "non_manifold_edges": 0,
+    "unweighted_vertices": 0,
+    "sharp_angle": 60.0,
+    "authored_normals_restored_loops": 0,
+    "seconds": 1.7,
+    "decimate_seconds": 0.1
+  },
+  "atlas": {
+    "source_blend": "reduce",
+    "packer": "uvpackmaster4",
+    "packer_note": "UVPackmaster result {'FINISHED', 'PASS_THROUGH'} retcode 0 (UVPackmaster Engine: 4.1.0 PRO)",
+    "pack_seconds": 68.4,
+    "resolution": 2048,
+    "margin_px": 8,
+    "border_px": 2,
+    "rotation_step": 90,
+    "islands": 71,
+    "clusters": 3,
+    "down_facing_clusters": 0,
+    "mirrored_stacked_clusters_rot180": {
+      "T_bodi": 1
+    },
+    "mirrored_stacked_faces": 19832,
+    "uv_area_sum": 0.7464,
+    "loops_out_of_0_1": 0,
+    "texel_density": {
+      "T_bodi": {
+        "atlas_px_per_cm": 12.29,
+        "source_px_per_cm": 23.65,
+        "ratio": 0.52,
+        "weight": 1.0,
+        "source_res": 4096
+      }
+    },
+    "cross_material_overlap_px_1k": 0,
+    "covered_px_1k": 782572,
+    "cross_material_overlap_percent": 0.0,
+    "layout_image": "06_Review/atlas_layout.png",
+    "layout_legend": {
+      "T_bodi": "#f25454"
+    },
+    "note": "coverage % is measured on the baked mask in blender_bake.py"
+  },
+  "bake": {
+    "mode": "project",
+    "device": "OPTIX",
+    "samples": 4,
+    "margin_px": 8,
+    "resolution": 2048,
+    "orm_resolution": 1024,
+    "cage_extrusion_cm": 0.6,
+    "max_ray_cm": 3.0,
+    "ray_miss_percent": 0.0,
+    "variants": {
+      "Set4": {
+        "outputs": {
+          "BaseColor": "T_Frostbitten_Set4_BaseColor.png",
+          "Normal": "T_Frostbitten_Set4_Normal.png",
+          "ORM": "T_Frostbitten_Set4_ORM.png",
+          "Sheen": "T_Frostbitten_Set4_Sheen.png"
+        },
+        "emissive_glow_percent": 0.0,
+        "emissive_written": false,
+        "emissive_strength": 1.0,
+        "masked": false,
+        "two_sided": false,
+        "overlay_percent": null
+      },
+      "Set1": {
+        "outputs": {
+          "BaseColor": "T_Frostbitten_Set1_BaseColor.png",
+          "Normal": "T_Frostbitten_Set1_Normal.png",
+          "ORM": "T_Frostbitten_Set1_ORM.png",
+          "Sheen": "T_Frostbitten_Set1_Sheen.png"
+        },
+        "emissive_glow_percent": 0.0,
+        "emissive_written": false,
+        "emissive_strength": 1.0,
+        "masked": false,
+        "two_sided": false,
+        "overlay_percent": null
+      },
+      "Set2": {
+        "outputs": {
+          "BaseColor": "T_Frostbitten_Set2_BaseColor.png",
+          "Normal": "T_Frostbitten_Set2_Normal.png",
+          "ORM": "T_Frostbitten_Set2_ORM.png",
+          "Sheen": "T_Frostbitten_Set2_Sheen.png"
+        },
+        "emissive_glow_percent": 0.0,
+        "emissive_written": false,
+        "emissive_strength": 1.0,
+        "masked": false,
+        "two_sided": false,
+        "overlay_percent": null
+      },
+      "Set3": {
+        "outputs": {
+          "BaseColor": "T_Frostbitten_Set3_BaseColor.png",
+          "Normal": "T_Frostbitten_Set3_Normal.png",
+          "ORM": "T_Frostbitten_Set3_ORM.png",
+          "Sheen": "T_Frostbitten_Set3_Sheen.png"
+        },
+        "emissive_glow_percent": 0.0,
+        "emissive_written": false,
+        "emissive_strength": 1.0,
+        "masked": false,
+        "two_sided": false,
+        "overlay_percent": null
+      }
+    },
+    "self_baked_slots": [],
+    "normal_back_facing_clamped_percent": 0.411,
+    "atlas_coverage_percent": 74.63,
+    "seconds": {
+      "coverage": 0.6,
+      "hit": 0.6,
+      "base_color": 2.6,
+      "normal": 3.5,
+      "ao": 2.2,
+      "roughness": 1.9,
+      "metallic": 1.9,
+      "emissive_probe": 1.4,
+      "sheen": 1.3
+    },
+    "orm_channel_stats": {
+      "ao": {
+        "min": 0.0,
+        "mean": 0.721,
+        "max": 1.0
+      },
+      "roughness": {
+        "min": 0.004,
+        "mean": 0.499,
+        "max": 1.0
+      },
+      "metallic": {
+        "min": 0.0,
+        "mean": 0.009,
+        "max": 0.32
+      }
+    },
+    "sheen_values": [
+      0.0
+    ],
+    "bake_warnings": [],
+    "outputs": {
+      "BaseColor": "04_Textures_Baked/T_Frostbitten_Set4_BaseColor.png",
+      "Normal": "04_Textures_Baked/T_Frostbitten_Set4_Normal.png",
+      "ORM": "04_Textures_Baked/T_Frostbitten_Set4_ORM.png",
+      "Sheen": "04_Textures_Baked/T_Frostbitten_Set4_Sheen.png"
+    }
+  },
+  "export": {
+    "fbx": "05_Export/SK_Frostbitten_1slot.fbx",
+    "checks": {
+      "one_mesh": true,
+      "armature_object": "Armature",
+      "material_slots": [
+        "M_Body"
+      ],
+      "uv_maps": [
+        "UV_Atlas"
+      ],
+      "triangles": 20000,
+      "vertices": 10115,
+      "vertex_groups": 60,
+      "shape_keys": 0,
+      "custom_normals": true,
+      "bones_source": 67,
+      "bones_export": 68,
+      "root_bone": true,
+      "bones_missing": [],
+      "bones_extra": [],
+      "parent_mismatch": [],
+      "max_bone_deviation_cm": 0.0001,
+      "max_bone_rotation_deg": 0.0,
+      "root_added": true,
+      "source_armature_world": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "source_armature_identity": true,
+      "leaf_bones": [],
+      "ok": true
+    }
+  },
+  "review": {
+    "pose_sheet": "pose_sheet.png",
+    "pose_sheet_poses": [
+      "crouch_deep",
+      "kneel_aim",
+      "arms_up",
+      "twist_bend",
+      "prone_look_up"
+    ],
+    "views": {
+      "front34": {
+        "rgb_rmse_0_255": 2.65,
+        "mean_delta_e76": 0.68,
+        "p95_delta_e76": 1.63,
+        "silhouette_iou": 0.9996,
+        "pixels_compared": 87126,
+        "image": "compare_front34.png"
+      },
+      "back34": {
+        "rgb_rmse_0_255": 1.89,
+        "mean_delta_e76": 0.55,
+        "p95_delta_e76": 1.19,
+        "silhouette_iou": 0.9996,
+        "pixels_compared": 87340,
+        "image": "compare_back34.png"
+      },
+      "tactical": {
+        "rgb_rmse_0_255": 2.5,
+        "mean_delta_e76": 0.69,
+        "p95_delta_e76": 1.59,
+        "silhouette_iou": 0.9996,
+        "pixels_compared": 70088,
+        "image": "compare_tactical.png"
+      },
+      "face": {
+        "rgb_rmse_0_255": 5.66,
+        "mean_delta_e76": 1.64,
+        "p95_delta_e76": 4.52,
+        "silhouette_iou": 0.9998,
+        "pixels_compared": 533425,
+        "image": "compare_face.png"
+      }
+    },
+    "texture_memory": {
+      "before_mb": 213.3,
+      "after_mb": 10.0,
+      "after_without_optional_mb": 8.7,
+      "before_textures": 3,
+      "before_detail": {
+        "T_bodi_BaseColor_Scattering": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT5",
+          "mb": 21.33,
+          "role": "mixed:base_color+opacity"
+        },
+        "T_bodi_Normal": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "BC5",
+          "mb": 21.33,
+          "role": "normal"
+        },
+        "T_bodi_OcclusionRoughnessMetallic": {
+          "size": [
+            4096,
+            4096
+          ],
+          "format": "DXT1",
+          "mb": 10.67,
+          "role": "orm_packed"
+        }
+      },
+      "after_detail": {
+        "BaseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "DXT1",
+          "mb": 2.67
+        },
+        "Normal": {
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "BC5",
+          "mb": 5.33
+        },
+        "ORM": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "DXT1 (TC_Masks)",
+          "mb": 0.67
+        },
+        "Sheen": {
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "G8",
+          "mb": 1.33
+        }
+      },
+      "assumptions": "full mip chain (x4/3); Default -> DXT1 when the PNG alpha is opaque else DXT5; normal maps BC5; streaming / LOD bias not applied"
+    },
+    "render_samples": 64,
+    "resolution": 1024
+  },
+  "qa": {
+    "slots_before": 1,
+    "slots_after": 1,
+    "triangles_before": 24142,
+    "triangles_after": 20000,
+    "triangles_removed_hidden": 472,
+    "triangles_removed_hair": 0,
+    "triangles_removed_check_by_position": 472,
+    "atlas_coverage_percent": 74.63,
+    "texture_memory_before_mb": 213.3,
+    "texture_memory_after_mb": 10.0,
+    "hidden_in_all_poses_before_safety_ring": 1299,
+    "bake_warnings": [],
+    "emissive_texel_fraction": null,
+    "cross_material_overlap_percent": 0.0,
+    "export_roundtrip_ok": true,
+    "worst_view_mean_delta_e": 1.64,
+    "min_silhouette_iou": 0.9996,
+    "triangles_per_material_after": {
+      "T_bodi": 20000
+    },
+    "ray_miss_percent": 0.0
+  }
+}

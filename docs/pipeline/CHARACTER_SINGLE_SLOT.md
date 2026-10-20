@@ -194,12 +194,12 @@ variants of one body: one reduced mesh + one atlas, one texture set + MI per var
 
 | Order | Asset (ArtPipeline / Optimized folder) | Body mesh | Used by | Tris | Slots | Target | Notes |
 |---|---|---|---|---|---|---|---|
-| done | Operatives/Post_Apo_Survivor_a | /Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a | BP_Operative (all 3 squad members) | 213 548 | 14 | 50k | pilot, imported |
+| done | Operatives/Post_Apo_Survivor_a | /Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a | BP_Operative (all 3 squad members) | 213 548 | 14 | 50k | pilot, imported; looks Set1 (MI_Post_Apo_Survivor_a) + Set2 / Set3 (camouflage, navy) on the same mesh |
 | 1 | Operatives/Female_Soldier | /Game/Female_Soldier/Mesh/SK_Female_soldier | BP_Operative_FemaleSoldier | 150 747 | 33 (21 materials) | 50k | hair / lashes (masked) removed; translucent glass + eye layers removed; glow sticks / beacon -> Emissive if it really glows |
-| 2 | Enemies/FrozenPMC_Fighter | /Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Mesh/SKM_FrozenPMC_Fighter | BP_Enemy_FrozenPMC_Fighter | 33 613 | 6 | 20k | |
-| 3 | Enemies/MilitaryZombie_1 | /Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1 | BP_Enemy_MilitaryZombie (LookVariants body 1) | 69 770 | 5 | 20k | 3 texture sets (Set1-3) |
-| 4 | Enemies/MilitaryZombie_2 | .../SKM_base_mesh_set2_2 | BP_Enemy_MilitaryZombie (body 2) | 51 559 | 5 | 20k | 3 texture sets; hair slot removed |
-| 5 | Enemies/MilitaryZombie_3 | .../SKM_base_mesh_set2_3 | BP_Enemy_MilitaryZombie (body 3) | 19 591 | 2 | 20k | 3 texture sets |
+| done | Enemies/FrozenPMC_Fighter | /Game/Characters/Enemies/PMC/FrozenPMC_Fighter/Mesh/SKM_FrozenPMC_Fighter | BP_Enemy_FrozenPMC_Fighter | 33 613 | 6 | 20k | imported 19 914 tris; Default + Set1-5 |
+| done | Enemies/MilitaryZombie_1 | /Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1 | BP_Enemy_MilitaryZombie (LookVariants body 1) | 69 770 | 5 | 20k | imported 19 942 tris; 3 texture sets (Set1-3) |
+| done | Enemies/MilitaryZombie_2 | .../SKM_base_mesh_set2_2 | BP_Enemy_MilitaryZombie (body 2) | 51 559 | 5 | 20k | imported 19 953 tris; 3 texture sets; the mohawk stays (masked, user 2026-10-20) |
+| done | Enemies/MilitaryZombie_3 | .../SKM_base_mesh_set2_3 | BP_Enemy_MilitaryZombie (body 3) | 19 591 | 2 | 20k | imported 19 591 tris (no reduction); 3 texture sets |
 | 6 | Enemies/Brute | /Game/Mutant_monster_1/Meshes/base_mesh/SK_base_mesh_1 | BP_Enemy_Brute | 25 186 | 2 | 25k | bare body: only truly hidden parts go |
 | 7 | Enemies/Marksman | /Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh | BP_Enemy_Marksman | 17 992 | 2 | 20k | already under budget: 1 slot + 2K maps |
 | 8 | Enemies/Cutter | /Game/Biochemical_Monster_2/baze_mech/ue4/SKM_baze_mesh | BP_Enemy_Cutter | 28 592 | 2 | 20k | |

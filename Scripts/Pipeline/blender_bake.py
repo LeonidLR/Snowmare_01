@@ -317,7 +317,12 @@ def bake_overlay(mesh, ov, args, res, socket_name):
     for o in bpy.context.view_layer.objects:
         o.select_set(o is mesh or o is ov)
     bpy.context.view_layer.objects.active = mesh
-    run_bake("emit", 0, selected_to_active=True, args=args)
+    # brow cards float up to ~1.5 cm over the skin: start the rays further out than the body's cage
+    import copy
+    ov_args = copy.copy(args)
+    ov_args.cage_extrusion = max(args.cage_extrusion, 1.5)
+    ov_args.max_ray = max(args.max_ray, 3.0)
+    run_bake("emit", 0, selected_to_active=True, args=ov_args)
     for s_, m_ in enumerate(low_mats):
         mesh.data.materials[s_] = m_
     for m_ in own:
@@ -473,7 +478,8 @@ def main():
             # brows / lashes painted into the skin: overlay colour over the bake by the overlay's opacity
             oc = bake_overlay(mesh, overlay, args, args.res, "base_color")
             oa = bake_overlay(mesh, overlay, args, args.res, "opacity")
-            a = (np.clip(oa[..., 0], 0, 1) * (oa[..., 3] > 0.5) * (oc[..., 3] > 0.5))[..., None]
+            # strand masks average out at atlas resolution: sqrt keeps the brows as dense as they read on the original
+            a = (np.sqrt(np.clip(oa[..., 0], 0, 1)) * (oa[..., 3] > 0.5) * (oc[..., 3] > 0.5))[..., None]
             bc[..., :3] = bc[..., :3] * (1.0 - a) + oc[..., :3] * a
             overlay_pct = round(100.0 * float((a[..., 0] > 0.05).mean()), 3)
         # the emit values are linear: encode sRGB for the 8-bit colour texture

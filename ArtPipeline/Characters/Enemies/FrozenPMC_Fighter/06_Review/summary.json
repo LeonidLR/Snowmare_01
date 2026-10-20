@@ -23,7 +23,7 @@
     "clean": "2026-10-20 21:50:28",
     "reduce": "2026-10-20 21:50:33",
     "atlas": "2026-10-20 21:51:43",
-    "bake": "2026-10-20 23:09:12",
+    "bake": "2026-10-20 23:40:56",
     "export": "2026-10-20 22:10:08",
     "review": "2026-10-20 21:54:16",
     "qa": "2026-10-20 21:54:16",
@@ -378,14 +378,14 @@
           "BaseColor": "T_FrozenPMC_Fighter_Set1_BaseColor.png",
           "Normal": "T_FrozenPMC_Fighter_Set1_Normal.png",
           "ORM": "T_FrozenPMC_Fighter_Set1_ORM.png",
-          "Sheen": "T_FrozenPMC_Fighter_Set1_Sheen.png",
-          "Emissive": "T_FrozenPMC_Fighter_Set1_Emissive.png"
+          "Sheen": "T_FrozenPMC_Fighter_Set1_Sheen.png"
         },
-        "emissive_glow_percent": 14.508,
-        "emissive_written": true,
+        "emissive_glow_percent": 0.024,
+        "emissive_written": false,
         "emissive_strength": 1.0,
         "masked": false,
-        "two_sided": true
+        "two_sided": true,
+        "overlay_percent": null
       },
       "Set2": {
         "outputs": {
@@ -398,49 +398,50 @@
         "emissive_written": false,
         "emissive_strength": 1.0,
         "masked": false,
-        "two_sided": true
+        "two_sided": true,
+        "overlay_percent": null
       },
       "Set3": {
         "outputs": {
           "BaseColor": "T_FrozenPMC_Fighter_Set3_BaseColor.png",
           "Normal": "T_FrozenPMC_Fighter_Set3_Normal.png",
           "ORM": "T_FrozenPMC_Fighter_Set3_ORM.png",
-          "Sheen": "T_FrozenPMC_Fighter_Set3_Sheen.png",
-          "Emissive": "T_FrozenPMC_Fighter_Set3_Emissive.png"
+          "Sheen": "T_FrozenPMC_Fighter_Set3_Sheen.png"
         },
-        "emissive_glow_percent": 14.508,
-        "emissive_written": true,
+        "emissive_glow_percent": 0.024,
+        "emissive_written": false,
         "emissive_strength": 1.0,
         "masked": false,
-        "two_sided": true
+        "two_sided": true,
+        "overlay_percent": null
       },
       "Set4": {
         "outputs": {
           "BaseColor": "T_FrozenPMC_Fighter_Set4_BaseColor.png",
           "Normal": "T_FrozenPMC_Fighter_Set4_Normal.png",
           "ORM": "T_FrozenPMC_Fighter_Set4_ORM.png",
-          "Sheen": "T_FrozenPMC_Fighter_Set4_Sheen.png",
-          "Emissive": "T_FrozenPMC_Fighter_Set4_Emissive.png"
+          "Sheen": "T_FrozenPMC_Fighter_Set4_Sheen.png"
         },
-        "emissive_glow_percent": 14.508,
-        "emissive_written": true,
+        "emissive_glow_percent": 0.024,
+        "emissive_written": false,
         "emissive_strength": 1.0,
         "masked": false,
-        "two_sided": true
+        "two_sided": true,
+        "overlay_percent": null
       },
       "Set5": {
         "outputs": {
           "BaseColor": "T_FrozenPMC_Fighter_Set5_BaseColor.png",
           "Normal": "T_FrozenPMC_Fighter_Set5_Normal.png",
           "ORM": "T_FrozenPMC_Fighter_Set5_ORM.png",
-          "Sheen": "T_FrozenPMC_Fighter_Set5_Sheen.png",
-          "Emissive": "T_FrozenPMC_Fighter_Set5_Emissive.png"
+          "Sheen": "T_FrozenPMC_Fighter_Set5_Sheen.png"
         },
-        "emissive_glow_percent": 14.508,
-        "emissive_written": true,
+        "emissive_glow_percent": 0.024,
+        "emissive_written": false,
         "emissive_strength": 1.0,
         "masked": false,
-        "two_sided": true
+        "two_sided": true,
+        "overlay_percent": null
       }
     },
     "self_baked_slots": [],
@@ -485,6 +486,17 @@
       "Sheen": "04_Textures_Baked/T_FrozenPMC_Fighter_Sheen.png"
     },
     "extra_variant_runs": [
+      {
+        "variants": [
+          "Set1",
+          "Set2",
+          "Set3",
+          "Set4",
+          "Set5"
+        ],
+        "ray_miss_percent": 0.019,
+        "warnings": []
+      },
       {
         "variants": [
           "Set1",

@@ -658,5 +658,13 @@
     "/Game/mutant_monster_2/texture/set_4/T_bodi_BaseColor_Scattering.T_bodi_BaseColor_Scattering": "T_bodi_BaseColor_Scattering__set_4",
     "/Game/mutant_monster_2/texture/set_4/T_bodi_Normal.T_bodi_Normal": "T_bodi_Normal__set_4",
     "/Game/mutant_monster_2/texture/set_4/T_bodi_OcclusionRoughnessMetallic.T_bodi_OcclusionRoughnessMetallic": "T_bodi_OcclusionRoughnessMetallic__set_4"
+  },
+  "blender_material_slots": {
+    "T_bodi": [
+      "T_bodi"
+    ]
+  },
+  "lod0_section_triangles": {
+    "T_bodi": 24142
   }
 }

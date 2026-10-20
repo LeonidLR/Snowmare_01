@@ -142,6 +142,9 @@ class GraphBuilder:
             img = None
         img = img or bpy.data.images.load(file, check_existing=True)
         img.name = name
+        # Unreal samples RGB and A independently (A is often a packed mask, e.g. a scattering mask): no premultiply,
+        # else a near-zero alpha blackens the colour (Frostbitten T_bodi_BaseColor_Scattering)
+        img.alpha_mode = "CHANNEL_PACKED"
         tinfo = self.inventory["textures"].get(tex_path, {})
         img.colorspace_settings.name = "sRGB" if (tinfo.get("srgb") and not as_normal) else "Non-Color"
         n = self.node("ShaderNodeTexImage", name)
