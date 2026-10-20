@@ -1011,6 +1011,22 @@ public:
 	EOperativeOrderResult OrderCoverSwitch(const FCoverSlot& Target);
 
 	/**
+	 * The switch to an already resolved corner slot (ResolveCoverSwitchSlot's result, e.g. the one its preview ghost shows) arriving facing
+	 * ArrivalFacing - the committed target is exactly the previewed one (bug 2026-10-20: the confirm re-derived it from the clicked face).
+	 */
+	EOperativeOrderResult OrderCoverSwitchResolved(const FCoverSlot& Resolved, ECoverFacing ArrivalFacing);
+
+	/** The next cover entry of another wall faces Facing (the previewed corner pose of a switch target taken by a slow confirm). */
+	void SetCoverArrivalFacing(ECoverFacing Facing)
+	{
+		bCoverSwitchFacingPending = bHasPendingCover;
+		CoverSwitchArrivalFacing = Facing;
+	}
+
+	/** The slot he is on his way to (valid while HasPendingCover; smokes). */
+	const FCoverSlot& GetPendingCoverSlot() const { return PendingCoverSlot; }
+
+	/**
 	 * Marks the pending cover (SetPendingCover: a planned walk in the pause) as a switch: the arrival plays the run-in clip and he faces
 	 * the corner he was sent to (the mirrored pose, CoverSwitchRules::ArrivalFacing).
 	 */

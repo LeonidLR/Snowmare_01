@@ -186,7 +186,10 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	GetMousePosition(CoverMouse.X, CoverMouse.Y);
 	const double CoverClickNow = FApp::GetCurrentTime();
 	// Second click on the previewed slot: confirm.
-	if (HasCoverPreview() && CoverPreviewOperative.Get() == Operative && FVector::Dist2D(Slot.WorldLocation, CoverPreviewSlot.WorldLocation) <= 100.f)
+	// A switchable preview: any click on that same object (its ghost stands at the resolved corner, maybe on another face than the click).
+	const bool bOnPreviewed = FVector::Dist2D(Slot.WorldLocation, CoverPreviewSlot.WorldLocation) <= 100.f
+		|| (bCoverPreviewSwitchable && CoverWrapWorld::IsSameObject(Slot, CoverPreviewSlot));
+	if (HasCoverPreview() && CoverPreviewOperative.Get() == Operative && bOnPreviewed)
 	{
 		const bool bDoubleClick = CoverPreviewClickTime >= 0.0 && CoverClickNow - CoverPreviewClickTime <= DoubleClickSeconds
 			&& FVector2D::Distance(CoverMouse, CoverPreviewClickPosition) <= DoubleClickPixels;
@@ -332,16 +335,22 @@ void ACodexTacticsPlayerController::ShowCoverPreview(AOperativeCharacter* Operat
 	CoverPreviewSlot = Slot;
 	CoverPreviewOperative = Operative;
 	CoverPreviewClickTime = -1.0; // the click handler stamps the click that showed it
-	CoverGhost->ShowFor(*Operative, Slot);
-	// Wall-edge cover switch (2026-10-20): from a wall edge this cover is a double-click dash target (the HUD draws the dash line).
+	// Wall-edge cover switch (2026-10-20): from a wall edge this cover is a double-click dash target (the HUD draws the dash line). The ghost
+	// stands where the hover ghost stood - the other object's nearest corner in the mirrored pose - and the confirm commits exactly that.
 	{
 		const UTutorialSubsystem* SwitchTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
 		bCoverPreviewSwitchable = !bCoverPreviewTurnBased && !GetActiveTurnBased() && Operative->EvaluateCoverSwitch(Slot) == ECoverSwitchVerdict::Switch
 			&& !(SwitchTutorial && SwitchTutorial->IsCommandLocked(PlayerCommands::CoverSwitch));
-		CoverPreviewSwitchTarget = bCoverPreviewSwitchable ? Operative->ResolveCoverSwitchSlot(Slot).WorldLocation : Slot.WorldLocation;
+		CoverPreviewResolvedSlot = bCoverPreviewSwitchable ? Operative->ResolveCoverSwitchSlot(Slot, &CoverPreviewArrivalFacing) : Slot;
+		CoverPreviewSwitchTarget = CoverPreviewResolvedSlot.WorldLocation;
 		if (bCoverPreviewSwitchable)
 		{
 			UpdateCoverSwitchPath(Operative, CoverPreviewSwitchTarget);
+			CoverGhost->ShowForFacing(*Operative, CoverPreviewResolvedSlot, CoverPreviewArrivalFacing);
+		}
+		else
+		{
+			CoverGhost->ShowFor(*Operative, Slot);
 		}
 		UpdateCoverSwitchHover(nullptr, nullptr); // the click ghost replaces the hover one
 	}
@@ -458,6 +467,10 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 {
 	AOperativeCharacter* Operative = CoverPreviewOperative.Get();
 	const FCoverSlot Slot = CoverPreviewSlot;
+	// A switchable preview commits the slot its ghost shows (the resolved corner, its arrival side), double or slow confirm alike.
+	const bool bPreviewSwitchable = bCoverPreviewSwitchable;
+	const FCoverSlot Target = bPreviewSwitchable ? CoverPreviewResolvedSlot : Slot;
+	const ECoverFacing Arrival = CoverPreviewArrivalFacing;
 	HideCoverPreview();
 	bLastCoverConfirmSwitch = false;
 	if (!Operative || !Slot.IsValid())
@@ -497,7 +510,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 	// Locked by the tutorial: the ordinary cover order (TutorialRules::ResolveLockedCommand degrades Cover.Switch to Cover.Enter).
 	const UTutorialSubsystem* SwitchTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
 	LastCoverSwitchVerdict = Operative->EvaluateCoverSwitch(Slot);
-	const bool bSwitch = CoverSwitchRules::IsSwitchConfirm(bDoubleClick, LastCoverSwitchVerdict,
+	const bool bSwitch = bPreviewSwitchable && CoverSwitchRules::IsSwitchConfirm(bDoubleClick, LastCoverSwitchVerdict,
 		SwitchTutorial && SwitchTutorial->IsCommandLocked(PlayerCommands::CoverSwitch));
 	bLastCoverConfirmSwitch = bSwitch;
 	if (bDoubleClick)
@@ -506,16 +519,20 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 			CoverSwitchRules::VerdictName(LastCoverSwitchVerdict), bSwitch ? TEXT("the cover switch") : TEXT("the ordinary cover order"));
 	}
 	// Game designer 2026-10-20: a box selection / group mode takes cover together (the others beside him or prone behind it).
-	if (OrderGroupCover(Operative, Slot, Dispatch == ECombatOrderDispatch::Queue, Flow ? Flow->GetPauseOrderRadius() : 1200.f, bSwitch))
+	if (OrderGroupCover(Operative, Target, Dispatch == ECombatOrderDispatch::Queue, Flow ? Flow->GetPauseOrderRadius() : 1200.f, bSwitch))
 	{
 		return;
 	}
 	if (Dispatch == ECombatOrderDispatch::Queue)
 	{
 		// Tactical pause: the walk is planned, the slot entered on arrival (a switch: through the run-in clip after the release).
-		const FCoverSlot PlanSlot = bSwitch ? Operative->ResolveCoverSwitchSlot(Slot) : Slot;
+		const FCoverSlot PlanSlot = Target;
 		Operative->SetPendingCover(PlanSlot);
 		Operative->SetPendingCoverSwitch(bSwitch);
+		if (bPreviewSwitchable)
+		{
+			Operative->SetCoverArrivalFacing(Arrival);
+		}
 		const FVector Planned = GetSquad()->PlanMove(Operative, PlanSlot.WorldLocation, true, Flow ? Flow->GetPauseOrderRadius() : 1200.f);
 		if (Feedback)
 		{
@@ -541,21 +558,25 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 	{
 		Vehicles->CancelBoarding(Operative);
 	}
-	const EOperativeOrderResult Result = bSwitch ? Operative->OrderCoverSwitch(Slot) : Operative->OrderTakeCover(Slot, true);
+	const EOperativeOrderResult Result = bSwitch ? Operative->OrderCoverSwitchResolved(Target, Arrival) : Operative->OrderTakeCover(Target, true);
+	if (Result == EOperativeOrderResult::Accepted && !bSwitch && bPreviewSwitchable)
+	{
+		Operative->SetCoverArrivalFacing(Arrival); // the slow confirm of a switch target: the ordinary run, the previewed pose
+	}
 	if (Result == EOperativeOrderResult::Accepted)
 	{
-		ControllerCommands::Report(this, PlayerCommands::CoverEnter, nullptr, false, false, Operative, Slot.WorldLocation);
+		ControllerCommands::Report(this, PlayerCommands::CoverEnter, nullptr, false, false, Operative, Target.WorldLocation);
 		if (bSwitch)
 		{
-			ControllerCommands::Report(this, PlayerCommands::CoverSwitch, nullptr, false, false, Operative, Slot.WorldLocation);
+			ControllerCommands::Report(this, PlayerCommands::CoverSwitch, nullptr, false, false, Operative, Target.WorldLocation);
 		}
-		if (Slot.HasExposedEdge())
+		if (Target.HasExposedEdge())
 		{
-			ControllerCommands::Report(this, PlayerCommands::CoverCorner, nullptr, false, false, Operative, Slot.WorldLocation);
+			ControllerCommands::Report(this, PlayerCommands::CoverCorner, nullptr, false, false, Operative, Target.WorldLocation);
 		}
 		if (Feedback)
 		{
-			Feedback->SpawnMovePing(bSwitch && Operative->HasPendingCover() ? Operative->ResolveCoverSwitchSlot(Slot).WorldLocation : Slot.WorldLocation, true);
+			Feedback->SpawnMovePing(Target.WorldLocation, true);
 		}
 		if (Messages)
 		{
@@ -586,13 +607,9 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	// The direct order's slot: the clicked one. On a high wall the corner he would walk to by himself right after entering
 	// (TrySnapToCoverCorner) is taken at once - the corner is his, and nobody is placed on that walk.
 	FCoverSlot DirectSlot = Slot;
-	if (LeaderWrap)
+	if (LeaderWrap || bLeaderSwitch)
 	{
-		// The wrap round his object (2026-10-20): its goal is exact (the corner snap is the plan's).
-	}
-	else if (bLeaderSwitch)
-	{
-		DirectSlot = Direct->ResolveCoverSwitchSlot(Slot); // the same corner rule (the wall-edge switch, 2026-10-20)
+		// The wrap round his object / the switch (2026-10-20): the caller's slot is exact (the plan's goal / the previewed resolved corner).
 	}
 	else if (Slot.Height == ECoverHeight::HighCover)
 	{
@@ -760,7 +777,7 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 		else
 		{
 			const EOperativeOrderResult MemberResult = MemberWrap ? Member->OrderCoverWrap(*MemberWrap)
-				: bMemberSwitch ? Member->OrderCoverSwitch(MemberSlot) : Member->OrderTakeCover(MemberSlot, true);
+				: bMemberSwitch ? Member->OrderCoverSwitchResolved(MemberSlot, Member->GetCoverSwitchArrivalFacing(MemberSlot)) : Member->OrderTakeCover(MemberSlot, true);
 			if (MemberResult != EOperativeOrderResult::Accepted)
 			{
 				return false;

@@ -173,11 +173,16 @@ void AOperativeCharacter::SetPendingCoverSwitch(bool bSwitch)
 
 EOperativeOrderResult AOperativeCharacter::OrderCoverSwitch(const FCoverSlot& Target)
 {
-	const ECoverSwitchVerdict Verdict = EvaluateCoverSwitch(Target);
-	const ECoverFacing OldFacing = CoverFacing;
-	const bool bWasInCover = bInCover;
 	ECoverFacing Arrival = ECoverFacing::Right;
 	const FCoverSlot Slot = ResolveCoverSwitchSlot(Target, &Arrival);
+	return OrderCoverSwitchResolved(Slot, Arrival);
+}
+
+EOperativeOrderResult AOperativeCharacter::OrderCoverSwitchResolved(const FCoverSlot& Slot, ECoverFacing Arrival)
+{
+	const ECoverSwitchVerdict Verdict = EvaluateCoverSwitch(Slot);
+	const ECoverFacing OldFacing = CoverFacing;
+	const bool bWasInCover = bInCover;
 	const FVector From = GetActorLocation();
 	const EOperativeOrderResult Result = OrderTakeCover(Slot, true);
 	if (Result == EOperativeOrderResult::Accepted && bHasPendingCover)

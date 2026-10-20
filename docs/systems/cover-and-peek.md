@@ -164,6 +164,14 @@
   151 cm forward, 336 cm across, the clip takes over 1.1 m out, its body 69 cm off the runner).
 - **Preview:** the hover ghost stands at that corner slot in the mirrored pose (`ACoverGhostActor::ShowForFacing`); the HUD draws the dash's
   **navmesh path** (`FindPathToLocationSynchronously`, `GetCoverPreviewPath`; diagonal when nothing is in the way) instead of the straight line.
+- **Hovered = committed (user bug 2026-10-20: "the ghost is right, I click the point again - he ends on the OTHER side of that corner"):** the
+  first click's ghost stood at the CLICKED slot (B's end face) and a slow second click was the ordinary cover order to that slot - round the
+  corner. Now a switchable preview resolves once in `ShowCoverPreview` (`CoverPreviewResolvedSlot` / `CoverPreviewArrivalFacing`), the click
+  ghost stands exactly where the hover ghost stood (same corner, same pose), any second click on that object confirms, and the confirm commits
+  that slot: a double-click = the switch (`OrderCoverSwitchResolved`), a slow one = the ordinary run to the same slot, arriving in the same pose
+  (`SetCoverArrivalFacing`); the group / pause paths take it too. The first click never starts an order. `CoverSwitchSmoke` stage 10 (through
+  `HandleWorldHit`, real double-click timing): B's end face double, B's front face near the edge double, the same slow - the first click starts
+  nothing, its ghost 0 cm off the hover ghost, the committed slot 0 cm off, he ends there facing as the ghost did.
 - **Unchanged:** the double-click rule, range limits (1.2-8 m, measured to the clicked slot), edge reach, tutorial lock, group (the leader takes the
   corner slot; the others probe along that face - its end is a `NoWall` side, they fill the other side or go prone), pause (planned), turn-based (no
   switch). A click on ANOTHER face of his own object is never a switch (`EvaluateCoverSwitch`: same object = `SameWall`) - it is the wrap below.
