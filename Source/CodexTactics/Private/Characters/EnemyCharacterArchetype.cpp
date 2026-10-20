@@ -96,6 +96,11 @@ void AEnemyCharacter::ConfigureKnockdown()
 		KnockdownComponent->bCanBeKnockedDown = false;
 		break;
 	}
+	// A variant body on another skeleton (BP_Enemy_FrozenPMC_Fighter: a Frostbitten on the UE5 Manny) brings its own clips.
+	if (bOverrideKnockdownClipFolder && KnockdownComponent->bCanBeKnockedDown)
+	{
+		KnockdownComponent->SetClipFolder(EnemyAIRules::NormalizeKnockdownClipFolder(KnockdownClipFolder), false);
+	}
 }
 
 void AEnemyCharacter::ApplyArchetypeDefaults()
@@ -217,6 +222,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		Capsule = FVector2D(40.f, 90.f);
 		break;
 	}
+	EnemyDisplayName = EnemyAIRules::ResolveDisplayName(EnemyDisplayName, DisplayNameOverride);
 
 	// An art Blueprint (skeletal mesh set, e.g. BP_Enemy_Hound) owns its look: capsule, mesh offset / rotation / scale
 	// are authored in the Blueprint (Scripts/Editor/setup_enemy_animation.py filled them once with these per-type

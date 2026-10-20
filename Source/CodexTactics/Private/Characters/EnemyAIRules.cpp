@@ -78,6 +78,31 @@ EEnemyArchetype EnemyAIRules::ResolvePlacedArchetype(EEnemyArchetype InstanceVal
 	return ClassDefaultValue;
 }
 
+FString EnemyAIRules::ResolveDisplayName(const FString& ArchetypeName, const FString& Override)
+{
+	const FString Trimmed = Override.TrimStartAndEnd();
+	return Trimmed.IsEmpty() ? ArchetypeName : Trimmed;
+}
+
+FString EnemyAIRules::NormalizeKnockdownClipFolder(const FString& Folder)
+{
+	FString Result = Folder.TrimStartAndEnd().Replace(TEXT("\\"), TEXT("/"));
+	const FString Prefix = TEXT("/Game/Animations_KnockDown");
+	if (Result.StartsWith(Prefix, ESearchCase::IgnoreCase))
+	{
+		Result.RightChopInline(Prefix.Len());
+	}
+	while (Result.StartsWith(TEXT("/")))
+	{
+		Result.RightChopInline(1);
+	}
+	while (Result.EndsWith(TEXT("/")))
+	{
+		Result.LeftChopInline(1);
+	}
+	return Result;
+}
+
 int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy, const FVector& Enemy,
 	const TArray<FEnemyTargetCandidate>& Candidates, bool bLastAttackerTurret)
 {

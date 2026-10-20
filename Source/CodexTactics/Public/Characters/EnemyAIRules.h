@@ -74,6 +74,18 @@ namespace EnemyAIRules
 	CODEXTACTICS_API EEnemyArchetype ResolvePlacedArchetype(EEnemyArchetype InstanceValue, EEnemyArchetype ClassDefaultValue, const TArray<FString>& ClassChain,
 		const TArray<TPair<EEnemyArchetype, FString>>& Mapping, FString& OutSource);
 
+	/**
+	 * Nameplate / feed name: the Blueprint's DisplayNameOverride (trimmed) when it has one (a variant body of an archetype:
+	 * BP_Enemy_FrozenPMC_Fighter -> "Frozen PMC"), else the archetype's name.
+	 */
+	CODEXTACTICS_API FString ResolveDisplayName(const FString& ArchetypeName, const FString& Override);
+
+	/**
+	 * The knockdown clip sub-folder of /Game/Animations_KnockDown for a Blueprint's KnockdownClipFolder override: slashes
+	 * and a pasted "/Game/Animations_KnockDown" prefix are stripped ("" = the folder itself, the UE5 Manny clips).
+	 */
+	CODEXTACTICS_API FString NormalizeKnockdownClipFolder(const FString& Folder);
+
 	/** Hounds, cutters and frostbitten go for the generator / turrets first (Godot is_small_enemy). */
 	CODEXTACTICS_API bool IsSmallEnemy(EEnemyArchetype Archetype);
 

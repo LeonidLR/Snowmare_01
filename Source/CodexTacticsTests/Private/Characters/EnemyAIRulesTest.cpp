@@ -166,4 +166,32 @@ bool FEnemyMeleeCloseInDataTest::RunTest(const FString&)
 	return true;
 }
 
+// Game designer 2026-10-20: BP_Enemy_FrozenPMC_Fighter is a variant body of the Frostbitten (a child Blueprint on another
+// skeleton): it keeps the archetype through the class mapping, shows its own name and brings its own knockdown clips.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyVariantBodyTest, "CodexTactics.Characters.EnemyAI.VariantBody",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FEnemyVariantBodyTest::RunTest(const FString&)
+{
+	TestEqual(TEXT("no override -> the archetype's name"), EnemyAIRules::ResolveDisplayName(TEXT("Frostbitten"), FString()), FString(TEXT("Frostbitten")));
+	TestEqual(TEXT("blank override -> the archetype's name"), EnemyAIRules::ResolveDisplayName(TEXT("Frostbitten"), TEXT("   ")), FString(TEXT("Frostbitten")));
+	TestEqual(TEXT("override wins, trimmed"), EnemyAIRules::ResolveDisplayName(TEXT("Frostbitten"), TEXT(" Frozen PMC ")), FString(TEXT("Frozen PMC")));
+
+	TestEqual(TEXT("empty folder = /Game/Animations_KnockDown itself"), EnemyAIRules::NormalizeKnockdownClipFolder(FString()), FString());
+	TestEqual(TEXT("sub-folder kept"), EnemyAIRules::NormalizeKnockdownClipFolder(TEXT("Frostbitten")), FString(TEXT("Frostbitten")));
+	TestEqual(TEXT("slashes stripped"), EnemyAIRules::NormalizeKnockdownClipFolder(TEXT("/PMC/")), FString(TEXT("PMC")));
+	TestEqual(TEXT("pasted full path"), EnemyAIRules::NormalizeKnockdownClipFolder(TEXT("/Game/Animations_KnockDown/Brute")), FString(TEXT("Brute")));
+	TestEqual(TEXT("pasted root path"), EnemyAIRules::NormalizeKnockdownClipFolder(TEXT("/Game/Animations_KnockDown/")), FString());
+	TestEqual(TEXT("backslashes"), EnemyAIRules::NormalizeKnockdownClipFolder(TEXT("\\Frostbitten\\")), FString(TEXT("Frostbitten")));
+
+	const FString Frostbitten = TEXT("/Game/Characters/Enemies/Frostbitten/BP_Enemy_Frostbitten.BP_Enemy_Frostbitten_C");
+	const FString Pmc = TEXT("/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/BP_Enemy_FrozenPMC_Fighter.BP_Enemy_FrozenPMC_Fighter_C");
+	const TArray<TPair<EEnemyArchetype, FString>> Mapping = { { EEnemyArchetype::Frostbitten, Frostbitten } };
+	FString Source;
+	TestTrue(TEXT("a placed BP_Enemy_FrozenPMC_Fighter -> Frostbitten (its parent is mapped)"), EnemyAIRules::ResolvePlacedArchetype(
+		EEnemyArchetype::FrostHound, EEnemyArchetype::FrostHound, { Pmc, Frostbitten, TEXT("/Script/CodexTactics.EnemyCharacter") }, Mapping, Source)
+		== EEnemyArchetype::Frostbitten && Source == TEXT("class mapping"));
+	return true;
+}
+
 #endif

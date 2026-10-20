@@ -12,7 +12,7 @@
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
-    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyArchetypeSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyArchetypeSmoke", "PmcFighterSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
@@ -133,9 +133,9 @@
     },
     {
       "name": "anim-enemy",
-      "globs": ["Source/**/Characters/EnemyAnimInstance*", "Source/**/Characters/MarksmanAnimInstance*", "Content/Characters/Enemies/**"],
-      "tests": ["CodexTactics.Characters.EnemyAI"],
-      "smokes": ["EnemyHitLayerSmoke", "MarksmanSmoke", "EnemyDeathSmoke"]
+      "globs": ["Source/**/Characters/EnemyAnimInstance*", "Source/**/Characters/MarksmanAnimInstance*", "Content/Characters/Enemies/**", "Source/**/Debug/PmcFighterSmoke*", "Scripts/Editor/create_frozen_pmc_fighter.py"],
+      "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Characters.EnemyAssets"],
+      "smokes": ["EnemyHitLayerSmoke", "MarksmanSmoke", "EnemyDeathSmoke", "PmcFighterSmoke"]
     },
     {
       "name": "transfer-inventory",
@@ -271,7 +271,7 @@
       "name": "enemy",
       "globs": ["Source/**/Characters/EnemyCharacter*", "Source/**/Characters/EnemyAI*", "Source/**/Debug/EnemyArchetypeSmoke*", "Source/**/AI/RepathRules*", "Source/**/Debug/RepathProbe*", "Source/**/Data/AITuning*", "Source/**/Data/EnemyPerception*"],
       "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Characters.EnemyUnits", "CodexTactics.Combat.Enemy", "CodexTactics.AI"],
-      "smokes": ["EnemyAISmoke", "EnemyArchetypeSmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke", "PatrolAmbushSmoke"]
+      "smokes": ["EnemyAISmoke", "EnemyArchetypeSmoke", "EnemyHuntSmoke", "CutterSmoke", "EnemyDeathSmoke", "EnemyHitLayerSmoke", "EnemyTacticsSmoke", "PatrolAmbushSmoke", "PmcFighterSmoke"]
     },
     {
       "name": "enemy-combat-units",

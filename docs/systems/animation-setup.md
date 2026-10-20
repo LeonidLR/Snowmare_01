@@ -276,3 +276,53 @@ LootSmoke, DeployableSmoke, PMCTripwireSmoke, WarmIdleSmoke (rows in §3). Rende
 ... /Game/Maps/L_MovementTest -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound -benchmark -fps=30 -ExecCmds="CodexTactics.InteractionAnimShots"`)
 -> `Saved/Screenshots/anim_chest_open(_2).png`, `anim_chest_search(_2).png`, `anim_pickup_crouched_upper(_2).png`, `anim_pickup_standing.png`.
 
+
+## Frozen PMC Fighter: the Frostbitten's animation on the Cyberpunk_Explorer_A body (game designer 2026-10-20)
+
+**Skeleton check** (read-only, logged by `Scripts/Editor/create_frozen_pmc_fighter.py` into `Saved/Logs/create_frozen_pmc_fighter.txt`):
+
+| | Frostbitten `mutant_monster_2/base_mesh/SK_base_mesh` | PMC `Cyberpunk_Explorer_A/Meshes/Cyberpunk_Explorer_A_UE5` |
+|---|---|---|
+| Skeleton asset | `mutant_monster_2/base_mesh/SK_UE4_Mannequin_Skeleton` (UE4 mannequin, 68 bones; modes 9 Animation, 49 Skeleton, 10 AnimationRelative) | `/Game/Characters/Mannequins/Meshes/SK_Mannequin` (Epic UE5 Manny template, 161; 145 AnimationScaled) |
+| Mesh bones | 68 | **162**: the 161 + its FBX scene root `SKM_Cyberpunk_Explorer_A` ABOVE `root` - not in SK_Mannequin |
+| Names | all 68 also in the PMC | + 93: spine_04/05, neck_02, metacarpals, twist / corrective, weapon_l/r, interaction, center_of_mass |
+| Hierarchy | | 12 shared bones with another parent: clavicle_l/r + neck_01 on spine_05 (UE4: spine_03), head on neck_02, 8 finger roots on the metacarpals |
+| Reference pose | 177 cm, A-pose, arms ~34 deg down, faces +Y, feet at the origin | 181 cm (helmet), A-pose, arms ~55 deg down, faces +Y, feet at the origin |
+
+So **no direct use and no "Compatible Skeletons"**: `ABP_Enemy_Frostbitten` targets the UE4 skeleton (other hierarchy: bone-name playback would
+leave spine_04/05 / neck_02 at rest and drive the shoulders in the wrong parent frame), and a compatible-skeleton link would re-save the user's /
+Epic's skeleton without fixing the hierarchy. On top, the pack's mesh is **not compatible with its own skeleton**: `USkeleton::IsCompatibleMesh`
+fails on the extra root bone (nothing can merge a second root into SK_Mannequin), so `USkeletalMeshComponent::NeedToSpawnAnimScriptInstance`
+never spawns ANY Animation Blueprint on SK_Mannequin for it (T-pose, verified in `PmcFighterSmoke`: "anim none"); the editor logs "The Skeleton
+SK_Mannequin is missing bones that SkeletalMesh Cyberpunk_Explorer_A_UE5 needs ... Please save the Skeleton!" at every load and the Layered-blend node
+ensures (`AnimNode_LayeredBoneBlend.cpp:91`) on the unmapped bone.
+
+**Route = IK retarget onto Claude-owned assets** (`/Game/Characters/Enemies/PMC/FrozenPMC_Fighter/`, the user's mesh / clips / ABP / skeletons are only read):
+
+1. `Anim/SK_FrozenPMC_Fighter_Skeleton` - built from the pack mesh's own bone tree (`UOperativeAnimGraphLibrary::CreateSkeletonFromMesh` =
+   `MergeAllBonesToBoneTree` on a new skeleton, the mesh not re-pointed), SK_Mannequin's translation retargeting modes / slot groups copied by name,
+   SK_Mannequin in its compatible list (pickers).
+2. `Mesh/SKM_FrozenPMC_Fighter` - a copy of `Cyberpunk_Explorer_A_UE5` on that skeleton (`SetSkeletalMeshSkeleton`); the pack's materials and
+   physics asset by reference (editing those material instances still shows on him; a new material SLOT assignment on the pack mesh does not).
+3. `Anim/IK_Frostbitten_Source` (21 auto chains, auto FBIK) and `Anim/IK_FrozenPMC_Fighter` (29 chains incl. metacarpals), `Anim/RTG_Frostbitten_To_FrozenPMC`
+   (UE 5.8 default op stack Pelvis Motion / FK Chains / Run IK Rig / Root Motion / Remap Curves, chains auto-mapped (fuzzy), target retarget pose
+   auto-aligned chain-to-chain to the source - the arm angle difference).
+4. `IKRetargetBatchOperation.run_batch_retarget` on `ABP_Enemy_Frostbitten` (include referenced assets): `Anim/ABP_Enemy_FrozenPMC_Fighter` = the same
+   18-node graph (idle / walk / run players, upper-body hit layer from spine_01 on slot `UpperBody`, full-body `DefaultSlot`), the same class defaults
+   (rates 1.2 attack, run threshold 200, walk / run clip speeds 150 / 400, death decay 5 s) with the clips remapped to the retargeted copies
+   `Anim/anim_idle_1, anim_walking, anim_run, anim_attack_1, anim_attack_2, anim_hit, anim_death` (all on the PMC skeleton). Note: the batch returns only
+   the clips; the script saves everything new in `Anim/` (the duplicated ABP included).
+5. Hit / death / attack are sequences on the ABP class defaults (played as dynamic montages on `DefaultSlot` / `UpperBody` by `UEnemyAnimInstance`), so
+   they come with step 4. Knockdown: `KnockdownClipFolder` "" = the Manny originals of `/Game/Animations_KnockDown` (remapped by bone name like on the operatives).
+
+**Checked:** proportions of every retargeted clip on the body x1.00 (torso / legs / arms chain lengths), lowest toe -1.2..2.2 cm; in game
+(`PmcFighterSmoke`, fixed 60 fps step): idle 45 cm off the reference pose, toe 0.6 cm above the capsule bottom, walk toe -2.6..8 cm, attack clip on
+`DefaultSlot` (the leader loses 12 HP), hit clip, Manny `Knocked_Back` (pelvis 11 cm above the floor), `Death_Back` from the ground, `anim_death` held
+standing; no ensure / missing-bone error. Renders: `Saved/Screenshots/pmc_fighter_{idle,walk,attack,hit,knockdown,death_down,death}.png`
+(`UnrealEditor.exe ... -game -RenderOffscreen -ResX=1280 -ResY=720 -nosound -benchmark -fps=30 -ExecCmds="CodexTactics.PmcFighterSmoke shot"`).
+
+**For the user to check / decide:** (1) the Frostbitten's MONSTER clips (hunched idle, clawing attacks) on a human soldier is what was asked; a
+human set (e.g. the Manny / RifleAnims clips) would be one ABP class-default change. (2) Material variant: the copy uses the pack mesh's default slots
+(jacket 4th, arms 2nd, pants 2nd, boots / gloves / helmet 1st); other `M_*_Inst` variants go into the BP's Override Materials. (3) Fixing the pack mesh
+(Skeletal Mesh editor -> Skeleton Editing: delete `SKM_Cyberpunk_Explorer_A`, or re-import without the scene root) would let a body share SK_Mannequin
+directly; then re-run the batch with the pack mesh as the target and point the BP at it.
