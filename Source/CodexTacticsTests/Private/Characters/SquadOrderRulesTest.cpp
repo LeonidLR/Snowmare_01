@@ -72,4 +72,57 @@ bool FSquadOrderCoverFollowTest::RunTest(const FString&)
 	return true;
 }
 
+SQUAD_ORDER_TEST(FSquadOrderGroupCoverJoinTest, "GroupCoverJoin")
+bool FSquadOrderGroupCoverJoinTest::RunTest(const FString&)
+{
+	// Game designer 2026-10-20: a cover click given to a GROUP takes the others along (reverses the 2026-10-11 "no automatic
+	// cover stacking" for group orders only).
+	using namespace SquadOrderRules;
+	FGroupCoverJoinFacts Follower;
+	Follower.bFollower = true;
+	TestTrue(TEXT("Group mode (Solo off, exploration): a formation follower joins"), ShouldJoinGroupCover(Follower));
+
+	FGroupCoverJoinFacts Case = Follower;
+	Case.bSoloMode = true;
+	TestFalse(TEXT("Solo, single selection: only the direct order"), ShouldJoinGroupCover(Case));
+	Case = Follower;
+	Case.bFormationActive = false;
+	TestFalse(TEXT("A fight without a box selection: only the direct order"), ShouldJoinGroupCover(Case));
+	Case = Follower;
+	Case.bOnOwnOrder = true;
+	TestFalse(TEXT("Group mode: one busy with his own order finishes it"), ShouldJoinGroupCover(Case));
+	Case = Follower;
+	Case.bFollower = false;
+	TestFalse(TEXT("A guard is no follower"), ShouldJoinGroupCover(Case));
+	Case = Follower;
+	Case.bDirectOrder = true;
+	TestFalse(TEXT("The direct-order operative is not one of the others"), ShouldJoinGroupCover(Case));
+	Case = Follower;
+	Case.bAlive = false;
+	TestFalse(TEXT("The dead stay"), ShouldJoinGroupCover(Case));
+	Case = Follower;
+	Case.bUnavailable = true;
+	TestFalse(TEXT("Aboard / held at an obstacle"), ShouldJoinGroupCover(Case));
+
+	// A box selection is the group - in Solo and in a fight too, busy or not; the unselected stay.
+	FGroupCoverJoinFacts Boxed;
+	Boxed.bMultiSelection = true;
+	Boxed.bSelected = true;
+	Boxed.bSoloMode = true;
+	Boxed.bFormationActive = false;
+	Boxed.bOnOwnOrder = true;
+	TestTrue(TEXT("Box-selected (Solo, fight, busy): joins"), ShouldJoinGroupCover(Boxed));
+	Case = Boxed;
+	Case.bSelected = false;
+	Case.bSoloMode = false;
+	Case.bFormationActive = true;
+	Case.bFollower = true;
+	Case.bOnOwnOrder = false;
+	TestFalse(TEXT("A box selection without him: stays, even as a follower"), ShouldJoinGroupCover(Case));
+
+	TestTrue(TEXT("One joins: a group order"), IsGroupCoverOrder(1));
+	TestFalse(TEXT("Nobody joins: the single cover order"), IsGroupCoverOrder(0));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -40,6 +40,7 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot
 	{
 		return EOperativeOrderResult::Unreachable;
 	}
+	bHoldGroupCoverSlot = false; // a group cover order sets it again after this call
 	if (IsKnockedDown())
 	{
 		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
@@ -84,6 +85,7 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot
 
 void AOperativeCharacter::SetPendingCover(const FCoverSlot& Slot)
 {
+	bHoldGroupCoverSlot = false; // a group cover order sets it again after this call
 	PendingCoverSlot = Slot;
 	bHasPendingCover = Slot.IsValid();
 }

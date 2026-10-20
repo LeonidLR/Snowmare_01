@@ -12,6 +12,19 @@ class AOperativeCharacter;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSquadLeaderChanged, AOperativeCharacter*, NewLeader);
 
+/** Where a group cover member without a slot is in his "prone behind the cover" order (USquadSubsystem::OrderGroupCoverProne). */
+enum class ESquadGroupCoverPronePhase : uint8
+{
+	/** Tactical pause: the walk is planned, it starts on the release. */
+	Planned,
+	/** Running / walking to the spot. */
+	Moving,
+	/** At the spot: turning to face the cover before lying down. */
+	Facing,
+	/** Lying at the spot; held there like a follower in cover. */
+	Holding
+};
+
 /**
  * The player's squad: roster, current leader, and the triangle formation that followers keep in exploration.
  * Followers get a NavMesh move to their slot every RepathInterval; slot math lives in SquadFormation.
@@ -205,6 +218,31 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool IsFormationActive() const;
 
+	// --- Group cover order (game designer 2026-10-20; GroupCoverRules, SquadOrderRules::ShouldJoinGroupCover) -------------
+
+	/**
+	 * The operatives who go along when Direct (the direct-order operative = the leader) is ordered into cover: a box selection of
+	 * two or more -> the other selected ones; else group mode (Solo off, exploration formation) -> the formation followers not
+	 * busy with an order of their own. Empty = the single cover order (Solo, a single selection, a fight without a box). Roster
+	 * order.
+	 */
+	TArray<AOperativeCharacter*> GetGroupCoverMembers(const AOperativeCharacter* Direct) const;
+
+	/**
+	 * A group cover member without a slot on the cover (too short for all): he runs (bSprint) to Spot behind it, turns to FaceYaw
+	 * (towards the cover) and goes prone there, then holds it like a follower in cover - until the leader walks away in group mode,
+	 * Regroup, a new order to him or a stance change. bPlan: the tactical pause plans the walk (PlanMove within Radius, executed on
+	 * the release). OutDestination = where he will go. False when the move is refused.
+	 */
+	bool OrderGroupCoverProne(AOperativeCharacter* Operative, const FVector& Spot, float FaceYaw, bool bSprint, bool bPlan, float Radius,
+		FVector& OutDestination);
+
+	/** He has a group cover prone order (planned, on the way, turning or lying there); bHoldingOnly: lying at the spot only. */
+	bool HasGroupCoverProne(const AOperativeCharacter* Operative, bool bHoldingOnly = false) const;
+
+	/** The spot of his group cover prone order; false when he has none. */
+	bool GetGroupCoverProneSpot(const AOperativeCharacter* Operative, FVector& OutSpot) const;
+
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Squad")
 	FOnSquadLeaderChanged OnLeaderChanged;
 
@@ -249,6 +287,24 @@ private:
 		bool bParked = false;
 	};
 
+	struct FGroupCoverProneOrder
+	{
+		FVector Spot = FVector::ZeroVector;
+		float FaceYaw = 0.f;
+		/** AOperativeCharacter::GetMoveOrderSerial after this order's own move: another value = a new order to him. */
+		uint32 Serial = 0;
+		ESquadGroupCoverPronePhase Phase = ESquadGroupCoverPronePhase::Moving;
+		float PhaseSeconds = 0.f;
+		/** The one walk onto the spot after stopping short of it was issued. */
+		bool bRetried = false;
+	};
+
+	/** The group cover prone orders: arrival -> face the cover -> prone -> hold; dropped by a new order (SquadSubsystemGroupCover.cpp). */
+	void UpdateGroupCoverProne(float DeltaTime);
+	void DropGroupCoverProne(const AOperativeCharacter* Operative, const TCHAR* Why);
+	/** ExecutePlannedOrders: the planned prone walks just started (Planned -> Moving), the others dropped. */
+	void StartPlannedGroupCoverProne();
+
 	void RebuildFollowers();
 	void UpdateSlotSwap(float DeltaTime);
 	void UpdateFollower(FFollowerState& Follower, AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime, float TimeSeconds);
@@ -268,6 +324,7 @@ private:
 
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector> PauseOrigins;
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FPlannedOrder> PlannedOrders;
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FGroupCoverProneOrder> GroupCoverProneOrders;
 	/** Operatives with a deferred planned shot -> seconds of real-time fight since the release. */
 	TMap<TWeakObjectPtr<AOperativeCharacter>, float> DeferredShots;
 	ECodexCombatMode LastCombatMode = ECodexCombatMode::None;

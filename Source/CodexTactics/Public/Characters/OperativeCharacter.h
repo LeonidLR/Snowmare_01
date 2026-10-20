@@ -972,6 +972,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
 	EOperativeOrderResult OrderTakeCover(const FCoverSlot& Slot, bool bSprint);
 
+	/**
+	 * Group cover order (game designer 2026-10-20, GroupCoverRules): he holds exactly the slot that order gave him - no automatic
+	 * walk to the threat-side corner (TrySnapToCoverCorner), so neighbours shoulder to shoulder never walk into each other. Set
+	 * by the controller after OrderTakeCover / SetPendingCover; cleared by the next OrderTakeCover / SetPendingCover (any other
+	 * cover order). Kept over an open shot's return and a knockdown's return to the same slot.
+	 */
+	void SetHoldGroupCoverSlot(bool bHold) { bHoldGroupCoverSlot = bHold; }
+	/** In cover (or on his way into it) on a group cover order's slot. */
+	bool IsHoldingGroupCoverSlot() const { return bHoldGroupCoverSlot && (bInCover || bHasPendingCover); }
+
 	/** Remembers a slot to enter once he arrives there (planned walks, grid walks). */
 	void SetPendingCover(const FCoverSlot& Slot);
 	void ClearPendingCover() { bHasPendingCover = false; }
@@ -1774,6 +1784,8 @@ private:
 	bool bHasPendingCover = false;
 	/** Set while OrderTakeCover / OrderShimmyTo issue their move: the move does not leave the cover. */
 	bool bCoverMoveOrder = false;
+	/** SetHoldGroupCoverSlot: a group cover order's exact slot, no automatic corner walk. */
+	bool bHoldGroupCoverSlot = false;
 	float LeanTimer = 0.f;
 	float BlindFireTimer = 0.f;
 	int32 CoverLeanShots = 0;

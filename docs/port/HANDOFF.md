@@ -117,7 +117,7 @@ One doc per system in [docs/systems/](../systems/README.md); each starts with a 
 |---|---|
 | [squad-and-orders](../systems/squad-and-orders.md) | GameMode squad spawn, input (PlayerController), orders / who owns an operative's movement, formation, fire postures, per-member Blueprints. |
 | [stances-and-movement](../systems/stances-and-movement.md) | AOperativeCharacter overview: stances / capsule per stance, sprint, vault, carrying, inventory limits, source layout of the 16 cluster files. |
-| [cover-and-peek](../systems/cover-and-peek.md) | Cover slots / enter / leave / shimmy, followers leaving cover, corner peek that reveals traps (physically, one by one), return to cover after a knockdown. |
+| [cover-and-peek](../systems/cover-and-peek.md) | Cover slots / enter / leave / shimmy, followers leaving cover, the group cover order (others beside / prone behind), corner peek that reveals traps (physically, one by one), return to cover after a knockdown. |
 | [combat-and-fire](../systems/combat-and-fire.md) | Targeted shots, quick fire (Ctrl + click), fire postures / ROE, combat feedback, knockdown values, M16 range, turn-based combat manager and grid. |
 | [sight-and-vision-cones](../systems/sight-and-vision-cones.md) | Squad sight (symmetric, also while exploring), peek sight from the leaned-out eye, occluded vision cones, how to switch cones on. |
 | [enemy-ai-and-perception](../systems/enemy-ai-and-perception.md) | Enemy registry (no actor iterators in hot paths), pack flanking detour; parity notes for enemy AI live in KNOWN_GAPS. |
