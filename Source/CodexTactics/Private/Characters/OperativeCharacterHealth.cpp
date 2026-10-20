@@ -439,8 +439,14 @@ void AOperativeCharacter::ReturnToCoverAfterKnockdown()
 		UE_LOG(LogCodexTactics, Display, TEXT("[Knockdown] %s up again: %s (%d enemies within %.0f cm)"), *DisplayName.ToString(),
 			KnockdownRules::CoverReturnName(LastCoverReturn), Input.EnemiesClose, Config.CoverReturnThreatRadiusCm);
 	}
+	// A group cover slot stays one (2026-10-20): back at it he again does not walk to the corner past his neighbours.
+	const bool bGroupSlot = bHoldGroupCoverSlot;
 	if (LastCoverReturn == EKnockdownCoverReturn::Return && OrderTakeCover(KnockdownCoverSlot, false) != EOperativeOrderResult::Accepted)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Knockdown] %s: the way back to his cover is refused"), *DisplayName.ToString());
+	}
+	else if (LastCoverReturn == EKnockdownCoverReturn::Return)
+	{
+		bHoldGroupCoverSlot = bGroupSlot;
 	}
 }

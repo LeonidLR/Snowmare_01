@@ -167,8 +167,9 @@ bool USquadSubsystem::SetLeader(AOperativeCharacter* NewLeader, bool bResetGroup
 			// order finishes it first, then holds where it ended (bug: selecting another operative in Solo stopped him).
 			for (FFollowerState& Follower : Followers)
 			{
+				// (2026-10-20: one lying behind a cover on a group cover order keeps lying there.)
 				if (AOperativeCharacter* Operative = Follower.Operative.Get();
-					Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)))
+					Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)) && !HasGroupCoverProne(Operative))
 				{
 					Operative->StopOperative();
 					Operative->SetStance(EOperativeStance::Crouching);
@@ -386,7 +387,8 @@ void USquadSubsystem::EnterSoloModeInternal(bool bForTrap)
 	for (FFollowerState& Follower : Followers)
 	{
 		if (AOperativeCharacter* Operative = Follower.Operative.Get();
-			Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)) && !(bForTrap && Operative->bInCover))
+			Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)) && !(bForTrap && Operative->bInCover)
+			&& !HasGroupCoverProne(Operative)) // 2026-10-20: lying behind a cover on a group cover order: stays prone
 		{
 			Operative->SetStance(EOperativeStance::Crouching);
 			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🛡️ GUARD: CROUCHED"), FLinearColor(0.3f, 0.9f, 0.4f));
@@ -491,6 +493,7 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 				{
 					Operative->LeaveCoverToMove(TEXT("regroup"));
 				}
+				DropGroupCoverProne(Operative, TEXT("regroup")); // ... and one lying behind a cover after a group cover order
 				Operative->SetStance(LeaderRef->GetStance());
 				UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🏃 REGROUPING"), FLinearColor(1.f, 0.85f, 0.2f));
 			}
@@ -645,6 +648,13 @@ void USquadSubsystem::RetryPlannedShots(float DeltaTime)
 void USquadSubsystem::BeginOrderPlanning()
 {
 	PlannedOrders.Reset();
+	for (auto It = GroupCoverProneOrders.CreateIterator(); It; ++It)
+	{
+		if (It->Value.Phase == ESquadGroupCoverPronePhase::Planned)
+		{
+			It.RemoveCurrent(); // an old plan (never released): plans start fresh
+		}
+	}
 	PauseOrigins.Reset();
 	for (AOperativeCharacter* Member : GetMembers())
 	{
@@ -695,6 +705,7 @@ void USquadSubsystem::ExecutePlannedOrders()
 			Operative->OrderMoveTo(Entry.Value.Destination, Entry.Value.bSprint);
 		}
 	}
+	StartPlannedGroupCoverProne();
 	PlannedOrders.Reset();
 	PauseOrigins.Reset();
 }
@@ -775,6 +786,7 @@ void USquadSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	RetryPlannedShots(DeltaTime);
+	UpdateGroupCoverProne(DeltaTime); // fights too (the formation is off there, a prone order still lies down on arrival)
 
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	if (!LeaderRef)
@@ -958,7 +970,9 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	// Rev 5g (game designer 2026-10-14): in group mode a follower hugging a wall leaves the cover and follows once the leader walks
 	// away (Solo / holding returned above, guards are no followers, the formation is off in a fight - the autonomy / ROE rules
 	// decide there). A leader stacking up at cover himself keeps the ones already in cover where they are.
-	if (Operative->bInCover)
+	// Group cover order (2026-10-20): one lying behind the cover on that order holds it by the same rule as one in cover.
+	const bool bGroupCoverProne = HasGroupCoverProne(Operative);
+	if (Operative->bInCover || bGroupCoverProne)
 	{
 		SquadOrderRules::FCoverFollowFacts CoverFacts;
 		CoverFacts.bInCover = true;
@@ -975,6 +989,15 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: the leader walks away (slot %.0f cm off) - leaves the cover and follows"),
 			*Operative->DisplayName.ToString(), Distance);
 		Operative->LeaveCoverToMove(TEXT("follows the leader"));
+		if (bGroupCoverProne)
+		{
+			DropGroupCoverProne(Operative, TEXT("follows the leader"));
+			// He lay down for the cover, not by the player's stance key: up to the leader's stance to walk with him.
+			if (Operative->GetStance() == EOperativeStance::Prone && LeaderRef.GetStance() != EOperativeStance::Prone)
+			{
+				Operative->SetStance(LeaderRef.GetStance());
+			}
+		}
 		// Crouched at a low wall: he stands up to walk with a standing leader (the clip roots him, the next repath walks him).
 		if (Operative->GetStance() == EOperativeStance::Crouching && LeaderRef.GetStance() == EOperativeStance::Standing)
 		{

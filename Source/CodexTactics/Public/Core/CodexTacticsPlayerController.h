@@ -184,8 +184,24 @@ public:
 	bool HasCoverPreview() const;
 	const FCoverSlot& GetCoverPreviewSlot() const { return CoverPreviewSlot; }
 
-	/** Orders the previewed cover: the walk now, planned in the pause, the grid walk in turn-based combat. */
+	/**
+	 * Orders the previewed cover: the walk now, planned in the pause, the grid walk in turn-based combat. A GROUP order
+	 * (OrderGroupCover) when others go along (a box selection, or group mode).
+	 */
 	void ConfirmCoverPreview();
+
+	/**
+	 * Group cover order (game designer 2026-10-20; GroupCoverRules, USquadSubsystem::GetGroupCoverMembers): Direct (the leader)
+	 * takes Slot (on a high wall: the corner he would walk to by himself, at once), the others the nearest free slots along the
+	 * same wall on the same side, shoulder to shoulder; who does not fit goes prone behind the cover. All run (as any cover
+	 * order); bPlan: planned in the tactical pause (Radius around where each stood). False when nobody goes along (the caller
+	 * then gives the single cover order). Not in turn-based combat (only the active unit moves there).
+	 */
+	bool OrderGroupCover(AOperativeCharacter* Direct, const FCoverSlot& Slot, bool bPlan, float Radius);
+
+	/** The last group cover order (smokes / log): members sent into a slot (the direct one included) / prone behind the cover. */
+	int32 GetLastGroupCoverSlotCount() const { return LastGroupCoverSlots; }
+	int32 GetLastGroupCoverProneCount() const { return LastGroupCoverProne; }
 
 	/** N: lean / blind fire toggle of the selected operative(s). */
 	void ToggleCoverFireModeKey();
@@ -475,6 +491,8 @@ private:
 	/** Sprint 12 cover preview. */
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> CoverGhost;
+	int32 LastGroupCoverSlots = 0;
+	int32 LastGroupCoverProne = 0;
 	FCoverSlot CoverPreviewSlot;
 	TWeakObjectPtr<AOperativeCharacter> CoverPreviewOperative;
 	bool bCoverPreviewTurnBased = false;

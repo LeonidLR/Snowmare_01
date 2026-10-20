@@ -74,4 +74,43 @@ namespace SquadOrderRules
 
 	/** Group mode: the follower leaves the cover (the cover-exit to walk) and follows the leader in formation. */
 	CODEXTACTICS_API bool ShouldLeaveCoverToFollow(const FCoverFollowFacts& Facts, float LeaveDistanceCm = CoverLeaveSlotDistanceCm);
+
+	/**
+	 * Group cover order (game designer 2026-10-20, reverses the 2026-10-11 "no automatic cover stacking" for GROUP orders): who
+	 * goes along when the player orders the direct-order operative (the leader) into cover.
+	 */
+	struct FGroupCoverJoinFacts
+	{
+		/** He is the one the order was given to (he takes the clicked slot himself). */
+		bool bDirectOrder = false;
+		/** Alive and not knocked out of the squad (a knocked-down one is fine: the order waits until he is up). */
+		bool bAlive = true;
+		/** Two or more operatives are box-selected (USquadSubsystem::HasMultiSelection). */
+		bool bMultiSelection = false;
+		/** He is one of them. */
+		bool bSelected = false;
+		/** Solo mode is on (the followers hold where they are). */
+		bool bSoloMode = false;
+		/** The exploration formation is on (off in preparation / any fight). */
+		bool bFormationActive = true;
+		/** He is a formation follower (not the leader, not a guard). */
+		bool bFollower = false;
+		/** He executes an order of his own (IsOnOwnOrder): in group mode he finishes it (a box selection includes him anyway). */
+		bool bOnOwnOrder = false;
+		/** Aboard / boarding a vehicle, or held by a level obstacle (bridge, fence queue). */
+		bool bUnavailable = false;
+	};
+
+	/**
+	 * He joins: a box selection of two or more -> every selected one; else group mode (Solo off, the formation on) -> every
+	 * formation follower who is not busy with an order of his own. Never the direct-order operative himself, the dead, or one
+	 * aboard / held. Solo with a single selection, a fight without a box selection: nobody (only the direct order, as before).
+	 */
+	CODEXTACTICS_API bool ShouldJoinGroupCover(const FGroupCoverJoinFacts& Facts);
+
+	/**
+	 * Which order a cover click is: a GROUP cover order when at least one operative joins it (ShouldJoinGroupCover), else the
+	 * single cover order of the direct-order operative.
+	 */
+	CODEXTACTICS_API bool IsGroupCoverOrder(int32 JoiningCount);
 }

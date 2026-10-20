@@ -29,4 +29,22 @@ namespace SquadOrderRules
 		}
 		return Facts.DistanceToSlotCm > LeaveDistanceCm;
 	}
+
+	bool ShouldJoinGroupCover(const FGroupCoverJoinFacts& Facts)
+	{
+		if (Facts.bDirectOrder || !Facts.bAlive || Facts.bUnavailable)
+		{
+			return false;
+		}
+		if (Facts.bMultiSelection)
+		{
+			return Facts.bSelected; // the box selection is the group, Solo or not
+		}
+		return !Facts.bSoloMode && Facts.bFormationActive && Facts.bFollower && !Facts.bOnOwnOrder;
+	}
+
+	bool IsGroupCoverOrder(int32 JoiningCount)
+	{
+		return JoiningCount > 0;
+	}
 }

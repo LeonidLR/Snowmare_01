@@ -28,6 +28,18 @@
 - `Characters/SquadSubsystem`, `SquadFormation`, `OperativeMovementRules`, `OperativeAIController`.
 - **Who owns an operative's movement (rev 5g, game designer play-test 2026-10-14):** pure `Characters/SquadOrderRules` (`IsOnOwnOrder`, `ShouldStopOnBecomingLeader`, `ShouldHoldNow`; tests `CodexTactics.Squad.Orders.*`). `AOperativeCharacter::HasOwnMoveOrder` (`bOwnMoveOrder`: set by `OrderMoveTo` = player / interaction walk-up / relocation / autonomy / bot, cleared by arrival `HandleMoveFinished`, `StopOperative`, a formation `FollowTo`, `ReleaseOwnMoveOrder`); `USquadSubsystem::IsOnOwnOrder` = own move OR a running use order (`UInteractionSubsystem::HasUseOrder`) OR an object task (`URelocationSubsystem::HasActiveTask`). Root cause of "selecting B cancels A's order": `SetLeader` stopped the new leader unconditionally and, in Solo, stopped + crouched every follower (the old leader too); in group mode `UpdateFollower` re-pathed the old leader to his formation slot every 0.2 s (the formation had no notion of an own order). Now: the new leader is stopped only when he walked a formation move; Solo holds (`SetLeader` in Solo, `EnterSoloMode`, `SetFollowersHolding`) stop / crouch only idle followers; `UpdateFollower` skips a follower on his own order (he joins the formation on the first repath after it ended); `ExitSoloMode` (Regroup) releases the followers' own move orders. Smokes: `SoloRejoinSmoke` (stage 100+: group / Solo order keep), `RealtimeSelectSmoke` (real-time fight: A ordered, key 2, B ordered, key 1: both arrive), `GroupSelectSmoke` (exploration: a box-selected pair keeps its group move after the third is picked, then rejoins the formation).
 
+## Group cover order: the others go along (game designer 2026-10-20)
+
+- **Reverses the 2026-10-11 decision "Followers in cover: NO automatic stacking - cover is taught as manual orders per operative" for
+  GROUP orders:** a cover order (the confirm click on the cover ghost) given while two or more operatives are box-selected, or in group
+  mode (Solo off, exploration formation), takes the others into the same cover: the leader (the direct order) on the clicked slot, the
+  others shoulder to shoulder on the nearest free slots of the same wall, side, who does not fit prone right behind it. Solo with one
+  selected: only he (unchanged). Who joins: `SquadOrderRules::ShouldJoinGroupCover` (`USquadSubsystem::GetGroupCoverMembers`; group mode
+  skips followers busy with an order of their own, guards, the ones aboard / held; a box selection includes every selected one). The
+  orders are the usual own orders (`OrderTakeCover`, the prone walk = `OrderMoveTo`), so they survive selection changes; the group stays
+  selected; formation following resumes when the leader walks away (the followers-in-cover rule, also for the prone ones) or on Regroup.
+  Pause: planned; turn-based: only the active unit. Details: [cover-and-peek](cover-and-peek.md) "Group cover order".
+
 ## Operative assets (old §5)
 
 - Assets: `/Game/Characters/Operatives/BP_Operative`, `ABP_Operative`, `Explorer/…`, `Animations/…`, `/Game/Weapons/M16`.

@@ -235,6 +235,10 @@ void AOperativeCharacter::TrySnapToCoverCorner()
 	{
 		return; // (a manual corner peek walks to its own corner)
 	}
+	if (bHoldGroupCoverSlot)
+	{
+		return; // a group cover order's slot: his neighbours stand shoulder to shoulder (GroupCoverRules; 2026-10-20)
+	}
 	const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
 	if (TurnBased && TurnBased->IsActive())
 	{

@@ -7,7 +7,7 @@ Every doc starts with a short summary and key files, followed by the old text mo
 |---|---|
 | [squad-and-orders](squad-and-orders.md) | GameMode squad spawn, input (PlayerController), orders / who owns an operative's movement, formation, fire postures, per-member Blueprints. |
 | [stances-and-movement](stances-and-movement.md) | AOperativeCharacter overview: stances / capsule per stance, sprint, vault, carrying, inventory limits, source layout of the 16 cluster files. |
-| [cover-and-peek](cover-and-peek.md) | Cover slots / enter / leave / shimmy, followers leaving cover, corner peek that reveals traps (physically, one by one), return to cover after a knockdown. |
+| [cover-and-peek](cover-and-peek.md) | Cover slots / enter / leave / shimmy, followers leaving cover, the group cover order (others beside / prone behind), corner peek that reveals traps (physically, one by one), return to cover after a knockdown. |
 | [combat-and-fire](combat-and-fire.md) | Targeted shots, quick fire (Ctrl + click), fire postures / ROE, combat feedback, knockdown values, M16 range, turn-based combat manager and grid. |
 | [sight-and-vision-cones](sight-and-vision-cones.md) | Squad sight (symmetric, also while exploring), peek sight from the leaned-out eye, occluded vision cones, how to switch cones on. |
 | [enemy-ai-and-perception](enemy-ai-and-perception.md) | Enemy registry (no actor iterators in hot paths), pack flanking detour; parity notes for enemy AI live in KNOWN_GAPS. |
